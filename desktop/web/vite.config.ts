@@ -83,6 +83,8 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       environment: "jsdom",
+      // Test-only: MapLibre's TypeScript sources, for the camera contract test (view/camera-contract.test.ts). Builds never resolve it.
+      alias: { 'maplibre-gl-source': fileURLToPath(new URL('./node_modules/maplibre-gl/src', import.meta.url)) },
       // Playwright specs (e2e/) run under Playwright's own runner; its `test()` throws in vitest.
       exclude: [...configDefaults.exclude, "e2e/**"],
       // An unhandled error or rejection fails the run even when every test passes.

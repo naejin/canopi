@@ -83,7 +83,7 @@ describe('scene query snapshot reuse', () => {
     const { query } = setup()
     const selection = query.getDesignObjectSelection()
     Reflect.set(selection.editableTargets[0]!, 'id', 'escaped')
-    selection.bounds!.minX = 999
+    Reflect.set(selection.bounds!, 'minX', 999)
     query.getSceneSnapshot().plants[0]!.position.x = 999
     Reflect.set(query.capturePrintSnapshot()!.plants[0]!.position, 'x', 999)
     expect(query.getDesignObjectSelection().editableTargets).toEqual([{ kind: 'plant', id: '0' }])

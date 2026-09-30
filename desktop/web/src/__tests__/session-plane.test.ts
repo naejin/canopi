@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { mapZoomToStageScale } from '../canvas/projection'
 import {
   createSessionPlane,
-  geographicExtentOf,
+  extentOnOneWorld,
   geographicViewOf,
   mapZoomToFitExtent,
   roundGeoDegrees,
   SESSION_PLANE_REORIGIN_DISTANCE_METERS,
   sessionPlaneOriginForPoints,
 } from '../canvas/session-plane'
+import { planeViewportCornerBounds } from './support/plane-viewport-corners'
 
 const EARTH_RADIUS_METERS = 6371008.8
 
@@ -96,8 +97,13 @@ describe('geographic extent of a view', () => {
     return { viewport: { x: width / 2, y: height / 2, scale }, screenSize: { width, height } }
   }
 
+  /** The saved extent of a view, as the saved views take it: its corner bounds on one world, else none. */
+  function savedExtent(view: ReturnType<typeof frame>) {
+    return extentOnOneWorld(planeViewportCornerBounds(view, plane))
+  }
+
   it('is the ground the screen shows around the view centre', () => {
-    const extent = geographicExtentOf(frame(18, 800, 600), plane)!
+    const extent = savedExtent(frame(18, 800, 600))!
     expect(extent.west).toBeLessThan(origin.lon)
     expect(extent.east).toBeGreaterThan(origin.lon)
     expect(extent.south).toBeLessThan(origin.lat)
@@ -119,7 +125,7 @@ describe('geographic extent of a view', () => {
   })
 
   it('fits back into the same screen at the same zoom, and one zoom level closer on a screen twice as big', () => {
-    const extent = geographicExtentOf(frame(18, 800, 600), plane)!
+    const extent = savedExtent(frame(18, 800, 600))!
     expect(mapZoomToFitExtent(extent, { width: 800, height: 600 })).toBeCloseTo(18, 6)
     expect(mapZoomToFitExtent(extent, { width: 1600, height: 1200 })).toBeCloseTo(19, 6)
     // A wide screen is limited by its height.
@@ -128,7 +134,7 @@ describe('geographic extent of a view', () => {
   })
 
   it('is none when the screen shows more than one world or none at all', () => {
-    expect(geographicExtentOf(frame(0.5, 1600, 900), plane)).toBeNull()
-    expect(geographicExtentOf(frame(18, 0, 0), plane)).toBeNull()
+    expect(savedExtent(frame(0.5, 1600, 900))).toBeNull()
+    expect(savedExtent(frame(18, 0, 0))).toBeNull()
   })
 })

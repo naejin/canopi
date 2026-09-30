@@ -56,6 +56,9 @@ import {
   type SettledSceneReader,
 } from './transactions'
 import { runCanvasRuntimeCleanups } from '../cleanup'
+import { getRevealedAnnotationId } from '../annotation-layout'
+import { sceneExtentPoints, selectionExtentPoints } from '../scene-extent'
+import { createViewNavigation } from '../view/navigation'
 
 type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
 
@@ -139,6 +142,9 @@ export function createSceneRuntimeConstruction(
   const cameraOwner = options.camera ?? new CameraController()
   const camera = cameraOwner.frame
   const cameraNavigation = cameraOwner.navigation
+  // The shim wraps the runtime's one camera: its driver host feeds the view surfaces (0A to the end of 0D2).
+  const cameraHost = cameraOwner.host
+  const readViewScale = () => cameraHost.frames.viewFrame.peek().view.pixelsPerMetre
   const sceneRevision = signal(0)
   const plantNamesQueryRevision = signal(0)
   const transientHistoryRevision = signal(0)
@@ -174,6 +180,7 @@ export function createSceneRuntimeConstruction(
   })
   const chrome = new SceneRuntimeChromeCoordinator()
   const disposeEffects: Array<() => void> = []
+  disposeEffects.push(cameraOwner.followScenePlane(sceneStore.sessionPlaneSignal))
   const rendering = new SceneRuntimeRenderScheduler({
     getRenderer: () => renderer,
     getViewport: () => camera.viewport,
@@ -205,7 +212,8 @@ export function createSceneRuntimeConstruction(
       syncCanvasSignalsFromDocument(file, appAdapter.settings.layerProjections),
   })
   const inspection = new SceneCanvasInspectionOwner({
-    camera, revision,
+    camera: { snapshot: camera.snapshot, host: cameraHost },
+    revision,
     readSessionPlane: () => sceneStore.sessionPlane,
     getSnapshot: () => presentation.buildRendererSnapshot(),
     setHoveredTarget: callbacks.setHoveredTarget,
@@ -247,7 +255,7 @@ export function createSceneRuntimeConstruction(
     commandAdmission: sceneEdits,
     settledReader,
     presentation: {
-      getViewportScale: () => camera.viewport.scale,
+      getViewportScale: readViewScale,
       createPlantPresentationContext: (viewportScale) =>
         presentation.createPlantPresentationContext(viewportScale),
       getLocalizedCommonNames: () => presentation.getLocalizedCommonNames(),
@@ -262,7 +270,11 @@ export function createSceneRuntimeConstruction(
     commandAdmission: sceneEdits,
     cameraNavigation,
   })
-  disposeEffects.push(effect(() => reorigin.observe(camera.snapshot.value)))
+  // Each published camera snapshot re-reads the live frame's centre; a plane that only followed a hydration publishes none.
+  disposeEffects.push(effect(() => {
+    void camera.snapshot.value
+    reorigin.observe(cameraHost.frames.viewFrame.peek())
+  }))
   disposeEffects.push(() => reorigin.dispose())
   const focusSpecies = (canonicalName: string | null) => {
     if (!runtimeActive) return
@@ -274,6 +286,29 @@ export function createSceneRuntimeConstruction(
     callbacks.incrementSceneRevision()
     callbacks.invalidate('scene')
   }
+  const viewNavigation = createViewNavigation({
+    driver: cameraHost,
+    policy: cameraHost.driverDeps.policy,
+    clock: cameraHost.driverDeps.clock,
+    readScene: () => {
+      const persisted = sceneStore.persisted
+      const scale = readViewScale()
+      const plantContext = presentation.createPlantPresentationContext(scale)
+      // The objects the selection model frames (editable and locked), by their outlines at the live scale.
+      const { editableTargets, lockedTargets } = querySurface.getDesignObjectSelection()
+      return {
+        persisted,
+        selection: selectionExtentPoints(persisted, [...editableTargets, ...lockedTargets], {
+          plantContext,
+          revealedAnnotationId: getRevealedAnnotationId(sceneStore.session.selectedTargets),
+        })(scale),
+        bounds: {
+          extentPoints: sceneExtentPoints(persisted, plantContext),
+          emptySceneScale: readEmptySceneScale(),
+        },
+      }
+    },
+  })
   const commandSurface = createSceneCanvasCommandSurface({
     readEmptySceneScale,
     speciesFocus: {
@@ -282,6 +317,8 @@ export function createSceneRuntimeConstruction(
     sceneStore,
     camera,
     cameraNavigation,
+    viewNavigation,
+    readViewScale,
     history: sceneEdits,
     commandAdmission: sceneEdits,
     settledReader,
@@ -307,7 +344,8 @@ export function createSceneRuntimeConstruction(
   const querySurface = createSceneCanvasQuerySurface({
     revision,
     sceneStore,
-    camera,
+    camera: { snapshot: camera.snapshot, host: cameraHost },
+    readViewScale,
     settledReader,
     mutations,
     presentation,

@@ -1,5 +1,5 @@
 import type { CanvasQuerySurface } from '../../canvas/runtime/runtime'
-import type { MapFrame } from '../../canvas/maplibre-camera'
+import type { ViewDiagnostics } from '../../canvas/runtime/view/types'
 import type { MapLibreApi } from '../../maplibre/loader'
 import type { TerrainLayerState, TerrainProtocolSupport } from '../../maplibre/terrain'
 import type { RasterDisplay, RasterDisplayLayer, RasterDisplayMap, RasterDisplayOptions } from '../../maplibre/raster-display/adapter'
@@ -10,7 +10,8 @@ export interface WorkspaceMapContributionSnapshot {
   readonly lidar: readonly Readonly<RasterDisplayLayer>[]
   readonly terrain: TerrainLayerState
   readonly overlays: CanvasMapSurfaceOverlaySnapshot
-  readonly frame: MapFrame | null
+  /** Dev diagnostics of the settled camera. */
+  readonly frame: ViewDiagnostics | null
 }
 
 export interface WorkspaceMapContributionAdapter {
@@ -51,15 +52,11 @@ export function captureWorkspaceMapContributions(
       selectedTargets: Object.freeze(snapshot.overlays.selectedTargets.map((target) => Object.freeze({ ...target }))),
     }),
     frame: snapshot.frame && Object.freeze({
-      ...snapshot.frame,
-      center: Object.freeze([...snapshot.frame.center]) as readonly [number, number],
-      diagnostics: Object.freeze({
-        ...snapshot.frame.diagnostics,
-        viewportCenterWorld: Object.freeze({ ...snapshot.frame.diagnostics.viewportCenterWorld }),
-        viewportCornerGeo: Object.freeze(snapshot.frame.diagnostics.viewportCornerGeo.map(
-          (point) => Object.freeze({ ...point }),
-        )) as unknown as MapFrame['diagnostics']['viewportCornerGeo'],
-      }),
+      camera: Object.freeze({ ...snapshot.frame.camera, center: Object.freeze({ ...snapshot.frame.camera.center }) }),
+      centreWorld: Object.freeze({ ...snapshot.frame.centreWorld }),
+      groundQuadGeo: Object.freeze(snapshot.frame.groundQuadGeo.map(
+        (point) => Object.freeze({ ...point }),
+      )) as unknown as ViewDiagnostics['groundQuadGeo'],
     }),
   })
 }

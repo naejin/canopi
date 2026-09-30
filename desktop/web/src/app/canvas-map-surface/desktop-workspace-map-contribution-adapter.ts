@@ -9,7 +9,7 @@ import { theme } from '../settings/state'
 import { canvasPaintRevision } from '../../canvas/theme-refresh'
 import { loadMapLibreTerrainSupport } from '../../maplibre/terrain-loader'
 import { createRasterDisplay } from '../../maplibre/raster-display/adapter'
-import { resolveMapLibreSurfaceFrame } from '../../maplibre/canvas-surface-camera'
+import { resolveMapLibreSurfaceDiagnostics } from '../../maplibre/canvas-surface-camera'
 import { captureWorkspaceMapContributions, type WorkspaceMapContributionAdapter } from './workspace-map-contribution-adapter'
 
 export function createDesktopWorkspaceMapContributionAdapter(): WorkspaceMapContributionAdapter {
@@ -23,7 +23,10 @@ export function createDesktopWorkspaceMapContributionAdapter(): WorkspaceMapCont
       const plane = runtime.sessionPlane.value
       if (!plane) return null
       void runtime.revision.scene.value
-      const overview = runtime.viewport.value.mode === 'overview'
+      // Coarse view signals only: the contributions re-read when the camera settles or the mode changes, never on a camera frame
+      // alone (INV-ENT-22).
+      void runtime.view.settledCamera.value
+      const overview = runtime.view.mode.value === 'overview'
       const panelTargets = readPanelTargetOverlaySnapshot()
       const anchor = { lat: plane.origin.lat, lon: plane.origin.lon }
       return captureWorkspaceMapContributions({
@@ -40,7 +43,7 @@ export function createDesktopWorkspaceMapContributionAdapter(): WorkspaceMapCont
           selectedTargets: overview ? [] : panelTargets.selectedTargets,
           paintRevision: canvasPaintRevision.value,
         },
-        frame: resolveMapLibreSurfaceFrame(runtime, anchor),
+        frame: resolveMapLibreSurfaceDiagnostics(runtime),
       })
     },
   }

@@ -12,7 +12,7 @@ import { composeSavedView } from '../src/app/saved-views/model'
 import { mapLayers, type MapLayersState } from '../src/app/map-layers/state'
 import { locale } from '../src/app/settings/state'
 import { currentCanvasQuerySurface } from '../src/canvas/session'
-import { geographicViewOf } from '../src/canvas/session-plane'
+import { geographicViewOfCamera } from '../src/canvas/session-plane'
 import { createViewSnapshotMap } from '../src/maplibre/view-snapshot-map'
 import type { SavedView } from '../src/types/design'
 import styles from './gallery.module.css'
@@ -137,7 +137,7 @@ function describe(view: SavedView, size: { width: number; height: number }, sign
 function galleryViews(tiles: boolean): SavedView[] {
   const queries = currentCanvasQuerySurface.peek()
   const plane = queries?.sessionPlane.peek()
-  const current = queries && plane ? geographicViewOf(queries.viewport.peek(), plane) : null
+  const current = queries && plane ? geographicViewOfCamera(queries.view.captureView().camera) : null
   if (!queries || !current) return []
   const sceneLayers = queries.getSceneSnapshot().layers
   const species = queries.getSceneSnapshot().plants[0]?.canonicalName ?? null

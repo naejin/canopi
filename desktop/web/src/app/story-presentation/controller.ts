@@ -1,6 +1,6 @@
 import { computed, effect, signal, type ReadonlySignal } from '@preact/signals'
 import { currentCanvasQuerySurface, getCurrentCanvasCommandSurface } from '../../canvas/session'
-import { geographicViewOf, type GeographicView } from '../../canvas/session-plane'
+import { geographicViewOfCamera, type GeographicView } from '../../canvas/session-plane'
 import type { PlantLabelMode } from '../../canvas/runtime/plant-display'
 import type { PanelTarget, SavedView, Story, StoryStep } from '../../types/design'
 import { savedViewPlantLabels } from '../design-edit/views'
@@ -99,7 +99,7 @@ export function presentStory(storyId: string, index = 0, options: StoryPresentat
   reducedMotionOverride = options.reducedMotion
   returnFocus = { target: options.returnFocus ?? 'map', storyId }
   restore = {
-    camera: geographicViewOf(queries.viewport.peek(), plane),
+    camera: geographicViewOfCamera(queries.view.captureView().camera),
     speciesFocus: queries.getSpeciesFocus().canonicalName,
   }
   active.value = {

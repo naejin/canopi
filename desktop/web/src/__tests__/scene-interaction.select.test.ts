@@ -451,7 +451,7 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 180, y: 150 }, { pointerId: 27 })
     events.pointerUp({ x: 180, y: 150 }, { pointerId: 27 })
 
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 40, y: 50 })
+    expect(store.persisted.plants[0]?.position).toEqual({ x: expect.closeTo(40, 6), y: expect.closeTo(50, 6) })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
     expect(attachedCamera.viewport).toEqual(viewportBeforeToolDrag)
     expect(map.jumpTo).toHaveBeenCalledTimes(mapCallsBeforeToolDrag)

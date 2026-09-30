@@ -1,7 +1,7 @@
 import { effect, signal } from '@preact/signals'
 import type { CanvasInspectionHandle, CanvasInspectionState, InspectionPoint } from '../inspection'
 import type { CanvasQueryRevision } from './runtime'
-import type { WorkspaceCameraFrameReader } from './camera'
+import type { WorkspaceCameraFrameReader, WorkspaceCameraOwner } from './camera'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { SceneDesignObjectTarget } from './scene'
 import type { SessionPlane } from '../session-plane'
@@ -11,7 +11,8 @@ import { inspectionLayout } from './inspection-layout'
 import { runCanvasRuntimeCleanups } from './cleanup'
 
 interface InspectionOwnerOptions {
-  readonly camera: WorkspaceCameraFrameReader
+  /** The main camera: its snapshot repaints the lens and gives the zoom reference; its host's live frame places the lens (0A-2). */
+  readonly camera: Pick<WorkspaceCameraFrameReader, 'snapshot'> & Pick<WorkspaceCameraOwner, 'host'>
   readonly revision: CanvasQueryRevision
   /** The live session plane; the inspected point follows it across a re-origin. */
   readSessionPlane?(): SessionPlane | null
@@ -41,10 +42,14 @@ export class SceneCanvasInspectionOwner {
     let released = false
     const options = this.options
 
+    /** The ground under a point of the main screen, through the live frame; null above a horizon. */
+    function groundAt(screenPoint: InspectionPoint): InspectionPoint | null {
+      return options.camera.host.frames.viewFrame.peek().view.screenToWorld(screenPoint)
+    }
     function canvasCenter(): InspectionPoint {
-      const camera = options.camera.snapshot.peek()
-      return { x: (camera.screenSize.width / 2 - camera.viewport.x) / camera.viewport.scale,
-        y: (camera.screenSize.height / 2 - camera.viewport.y) / camera.viewport.scale }
+      const { screen } = options.camera.host.frames.viewFrame.peek().view
+      // The screen centre is the camera's own ground point, never above a horizon.
+      return groundAt({ x: screen.width / 2, y: screen.height / 2 })!
     }
     function setPoint(next: InspectionPoint | null) {
       point = next
@@ -150,9 +155,8 @@ export class SceneCanvasInspectionOwner {
       state,
       inspectAtScreenPoint: (screenPoint) => {
         if (released || !Number.isFinite(screenPoint.x) || !Number.isFinite(screenPoint.y)) return
-        const { viewport } = options.camera.snapshot.peek()
-        const next = { x: (screenPoint.x - viewport.x) / viewport.scale, y: (screenPoint.y - viewport.y) / viewport.scale }
-        if (point?.x === next.x && point.y === next.y) return
+        const next = groundAt(screenPoint)
+        if (!next || (point?.x === next.x && point.y === next.y)) return
         setPoint(next)
         schedule()
       },

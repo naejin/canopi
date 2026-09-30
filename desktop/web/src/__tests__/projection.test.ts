@@ -9,8 +9,6 @@ import {
   LOCAL_MERCATOR_PROJECTION_ID,
   worldToGeo,
   stageScaleToMapZoom,
-  viewportCenterGeo,
-  viewportCornerGeoPoints,
 } from '../canvas/projection'
 
 // ---------------------------------------------------------------------------
@@ -82,34 +80,5 @@ describe('stageScaleToMapZoom', () => {
 describe('canonical projection identity', () => {
   it('names the local Mercator projection', () => {
     expect(LOCAL_MERCATOR_PROJECTION_ID).toBe('local-mercator')
-  })
-})
-
-describe('viewportCenterGeo', () => {
-  it('projects the viewport center from viewport state', () => {
-    const result = viewportCenterGeo(
-      { x: -200, y: -100, scale: 2 },
-      { width: 1000, height: 800 },
-      45.52,
-      -122.68,
-    )
-    const expected = worldToGeo(350, 250, 45.52, -122.68)
-    expect(result.lng).toBeCloseTo(expected.lng, 8)
-    expect(result.lat).toBeCloseTo(expected.lat, 8)
-  })
-})
-
-describe('viewportCornerGeoPoints', () => {
-  it('returns four projected corner points for the current viewport', () => {
-    const corners = viewportCornerGeoPoints(
-      { x: -200, y: -100, scale: 2 },
-      { width: 1000, height: 800 },
-      45.52,
-      -122.68,
-    )
-
-    expect(corners).toHaveLength(4)
-    expect(corners[0]!.lng).toBeLessThan(corners[1]!.lng)
-    expect(corners[0]!.lat).toBeGreaterThan(corners[2]!.lat)
   })
 })

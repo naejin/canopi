@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { geoToMercator } from '../canvas/projection'
+import { geoToMercator, mercatorToGeo } from '../canvas/projection'
 import type { MapLibreMapConstructorOptions } from './loader'
 import type { MapBackgroundHandle, MapBackgroundOptions, MapBackgroundPresentation } from './map-background'
 import type { SharedMapSceneLayer, SharedMapSceneLayerOptions } from './shared-scene-layer'
@@ -16,6 +16,10 @@ const SECRET_KEY = 'AIza-snapshot-secret'
 
 type Listener = (event?: unknown) => void
 
+/**
+ * A consistent MapLibre fake: getCenter, getZoom, getBearing, project and unproject describe one camera in Web Mercator at 512-pixel
+ * tiles over the canvas' CSS size, which follows the container at construction and on resize; jumpTo fires 'move' synchronously.
+ */
 class FakeMap {
   static instances: FakeMap[] = []
   static autoLoad = true
@@ -26,6 +30,9 @@ class FakeMap {
   readonly jumps: { center: [number, number]; zoom: number }[] = []
   center: [number, number]
   zoom: number
+  bearing: number
+  cssWidth = 0
+  cssHeight = 0
   tilesLoaded = true
   resizes = 0
   redraws = 0
@@ -35,9 +42,14 @@ class FakeMap {
     FakeMap.instances.push(this)
     this.center = options.center ?? [0, 0]
     this.zoom = options.zoom ?? 0
+    this.bearing = options.bearing ?? 0
     this.canvas = document.createElement('canvas')
     ;(this.canvas as unknown as { getContext: (type: string) => unknown }).getContext = (type: string) =>
       type === 'webgl2' ? ({} as WebGL2RenderingContext) : null
+    Object.defineProperties(this.canvas, {
+      clientWidth: { get: () => this.cssWidth },
+      clientHeight: { get: () => this.cssHeight },
+    })
     this.syncCanvasSize()
     options.container.appendChild(this.canvas)
     const attribution = document.createElement('div')
@@ -50,10 +62,10 @@ class FakeMap {
   get pixelRatio(): number { return this.options.pixelRatio ?? 1 }
 
   syncCanvasSize(): void {
-    const width = parseInt(this.options.container.style.width, 10)
-    const height = parseInt(this.options.container.style.height, 10)
-    this.canvas.width = Math.round(width * this.pixelRatio)
-    this.canvas.height = Math.round(height * this.pixelRatio)
+    this.cssWidth = parseInt(this.options.container.style.width, 10)
+    this.cssHeight = parseInt(this.options.container.style.height, 10)
+    this.canvas.width = Math.round(this.cssWidth * this.pixelRatio)
+    this.canvas.height = Math.round(this.cssHeight * this.pixelRatio)
   }
 
   on(type: string, listener: Listener): void {
@@ -66,14 +78,19 @@ class FakeMap {
   }
   listenerCount(type: string): number { return this.listeners.get(type)?.size ?? 0 }
 
-  jumpTo(options: { center: [number, number]; zoom: number }): void {
+  jumpTo(options: { center: [number, number]; zoom: number; bearing?: number }): void {
     this.center = options.center
     this.zoom = options.zoom
+    if (options.bearing !== undefined) this.bearing = options.bearing
     this.jumps.push({ center: options.center, zoom: options.zoom })
+    this.fire('move')
   }
+  stop(): void {}
   resize(): void {
     this.resizes += 1
     this.syncCanvasSize()
+    this.fire('move')
+    this.fire('resize')
   }
   redraw(): void { this.redraws += 1 }
   remove(): void { this.removed = true }
@@ -84,6 +101,9 @@ class FakeMap {
   }
   getCanvas(): HTMLCanvasElement { return this.canvas }
   getPitch(): number { return 0 }
+  getCenter(): { lng: number; lat: number } { return { lng: this.center[0], lat: this.center[1] } }
+  getZoom(): number { return this.zoom }
+  getBearing(): number { return this.bearing }
   addLayer(layer: Record<string, unknown>): void { this.layers.set(String(layer.id), layer) }
   getLayer(id: string): unknown { return this.layers.get(id) }
   /** Web Mercator at 512-pixel tiles, like MapLibre. */
@@ -91,12 +111,24 @@ class FakeMap {
     const worldSize = 512 * 2 ** this.zoom
     const centre = geoToMercator(this.center[0], this.center[1])
     const target = geoToMercator(point.lng, point.lat)
-    const width = this.canvas.width / this.pixelRatio
-    const height = this.canvas.height / this.pixelRatio
+    const radians = this.bearing * Math.PI / 180
+    const dx = (target.x - centre.x) * worldSize
+    const dy = (target.y - centre.y) * worldSize
     return {
-      x: (target.x - centre.x) * worldSize + width / 2,
-      y: (target.y - centre.y) * worldSize + height / 2,
+      x: Math.cos(radians) * dx + Math.sin(radians) * dy + this.cssWidth / 2,
+      y: Math.cos(radians) * dy - Math.sin(radians) * dx + this.cssHeight / 2,
     }
+  }
+  unproject([x, y]: [number, number]): { lng: number; lat: number } {
+    const worldSize = 512 * 2 ** this.zoom
+    const centre = geoToMercator(this.center[0], this.center[1])
+    const radians = this.bearing * Math.PI / 180
+    const dx = x - this.cssWidth / 2
+    const dy = y - this.cssHeight / 2
+    return mercatorToGeo(
+      centre.x + (Math.cos(radians) * dx - Math.sin(radians) * dy) / worldSize,
+      centre.y + (Math.sin(radians) * dx + Math.cos(radians) * dy) / worldSize,
+    )
   }
 }
 
@@ -306,6 +338,8 @@ describe('view snapshot map', () => {
     await Promise.all([first, second])
     expect(order).toEqual(['thumbnail', 'export'])
     expect(FakeMap.instances).toHaveLength(1)
+    // The driver is the map's one resize owner: MapLibre never resizes itself behind it.
+    expect(FakeMap.instances[0]!.options.trackResize).toBe(false)
     expect(FakeMap.instances[0]!.resizes).toBe(1)
     expect(FakeMap.instances[0]!.options.container.style.width).toBe('1600px')
 

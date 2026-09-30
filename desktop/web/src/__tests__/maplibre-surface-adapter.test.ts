@@ -118,7 +118,7 @@ describe('MapLibre surface adapter', () => {
     expect(onMove).toHaveBeenCalledTimes(1)
 
     observers[0]!.callback([], {} as ResizeObserver)
-    expect(maps[0]!.resize).toHaveBeenCalled()
+    expect(maps[0]!.resize).not.toHaveBeenCalled()
     expect(onMove).toHaveBeenCalledTimes(2)
 
     adapter.destroy()

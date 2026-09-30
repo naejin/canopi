@@ -52,7 +52,7 @@ export function ToolCard({ canvasRef, stampChooser: StampChooser }: {
   const guidance = currentCanvasToolGuidance.value
   const source = readPlantStampSource()
   const savedStamp = readSavedStampSummary()
-  const overview = currentCanvasQuerySurface.value?.viewport.value.mode === 'overview'
+  const overview = currentCanvasQuerySurface.value?.view.mode.value === 'overview'
   const [changingSpecies, setChangingSpecies] = useState(false)
   const species = usePlantStampSpeciesName(source)
   const [choosingStamp, setChoosingStamp] = useState(false)

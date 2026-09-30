@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals'
-import { mapZoomToStageScale, viewportCenterWorld } from '../../canvas/projection'
+import { mapZoomToStageScale } from '../../canvas/projection'
 import {
   currentCanvasQuerySurface,
   getCurrentCanvasViewportCommandSurface,
@@ -92,16 +92,16 @@ export function inspectionPointForScenePoint(
 }
 
 /**
- * The scene point at the centre of the live viewport.
+ * The scene point at the centre of the live view: the ground under the screen centre, whatever the bearing.
  *
  * Read from the existing canvas query surface rather than from a second camera
  * owner, so "sample at view centre" reads exactly what the user is looking at.
  */
 export function inspectionViewCentreScenePoint(): { x: number; y: number } | null {
   const surface = currentCanvasQuerySurface.value
-  const snapshot = surface?.viewport.value
-  if (!snapshot) return null
-  const centre = viewportCenterWorld(snapshot.viewport, snapshot.screenSize)
+  const plane = surface?.sessionPlane.value
+  if (!surface || !plane) return null
+  const centre = plane.toPlane(surface.view.captureView().camera.center)
   if (!Number.isFinite(centre.x) || !Number.isFinite(centre.y)) return null
   return centre
 }

@@ -55,6 +55,16 @@ export interface GeographicView {
   readonly zoom: number
 }
 
+/** A camera's centre and zoom as a geographic view (ViewReadSurface.captureView), or null when they are not finite. */
+export function geographicViewOfCamera(
+  camera: { readonly center: GeoPosition; readonly zoom: number },
+): GeographicView | null {
+  const { center, zoom } = camera
+  return [center.lon, center.lat, zoom].every(Number.isFinite)
+    ? { lon: center.lon, lat: center.lat, zoom }
+    : null
+}
+
 /** The geographic view a plane viewport shows, or null when it is not finite. */
 export function geographicViewOf(
   frame: {
@@ -83,24 +93,10 @@ export interface GeographicExtent {
 const MERCATOR_MAX_LATITUDE_DEG = 85.0511287798066
 
 /**
- * The ground a plane viewport shows edge to edge, or null when the screen is
- * empty or shows more than one world (across the antimeridian or the poles).
+ * A lon/lat box as a saved extent, or null when it is not a box on one world (across the antimeridian or the poles, or empty):
+ * the check ViewReadSurface.captureView's raw corner bounds pass before they are saved.
  */
-export function geographicExtentOf(
-  frame: {
-    readonly viewport: { readonly x: number; readonly y: number; readonly scale: number }
-    readonly screenSize: { readonly width: number; readonly height: number }
-  },
-  plane: SessionPlane,
-): GeographicExtent | null {
-  const { viewport, screenSize } = frame
-  if (!(screenSize.width > 0 && screenSize.height > 0 && viewport.scale > 0)) return null
-  const northWest = plane.toGeo({ x: -viewport.x / viewport.scale, y: -viewport.y / viewport.scale })
-  const southEast = plane.toGeo({
-    x: (screenSize.width - viewport.x) / viewport.scale,
-    y: (screenSize.height - viewport.y) / viewport.scale,
-  })
-  const extent = { west: northWest.lon, south: southEast.lat, east: southEast.lon, north: northWest.lat }
+export function extentOnOneWorld(extent: GeographicExtent): GeographicExtent | null {
   const onOneWorld = Object.values(extent).every(Number.isFinite)
     && extent.west >= -180 && extent.east <= 180
     && extent.south >= -MERCATOR_MAX_LATITUDE_DEG && extent.north <= MERCATOR_MAX_LATITUDE_DEG

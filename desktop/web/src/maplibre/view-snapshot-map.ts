@@ -1,10 +1,26 @@
+import { signal } from '@preact/signals'
 import { logMapError } from './redact-credentials'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
 import type { SceneViewportState } from '../canvas/runtime/scene'
-import { WORKSPACE_MAP_MAX_ZOOM, WORKSPACE_MAP_MIN_ZOOM } from '../canvas/workspace-camera-policy'
+import type { CameraDriver } from '../canvas/runtime/view/camera-driver'
+import { createNavigationPolicy, type NavigationPolicy } from '../canvas/runtime/view/navigation-policy'
+import type { ViewTransform } from '../canvas/runtime/view/types'
+import { planarCameraOf } from '../canvas/runtime/view/view-transform'
+import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
+import {
+  createWorkspaceCameraPolicy,
+  WORKSPACE_MAP_MAX_ZOOM,
+  WORKSPACE_MAP_MIN_ZOOM,
+} from '../canvas/workspace-camera-policy'
 import { BasemapTileAuth } from './basemap-tile-auth'
+import { createMapLibreCameraDriver } from './camera-driver'
 import { createMapLibreEmptyStyle } from './config'
-import { loadMapLibreModule, type MapLibreMapConstructorOptions } from './loader'
+import {
+  loadMapLibreModule,
+  type MapLibreLngLat,
+  type MapLibreMapConstructorOptions,
+  type MapLibreTransformConstrain,
+} from './loader'
 import {
   mountMapBackground,
   type MapBackgroundHandle,
@@ -12,7 +28,6 @@ import {
   type MapBackgroundOptions,
   type MapBackgroundPresentation,
 } from './map-background'
-import { deriveSharedMapSceneViewport } from './scene-camera-transform'
 import {
   createSharedMapSceneLayer,
   type SharedMapSceneLayer,
@@ -30,6 +45,8 @@ const VIEW_SNAPSHOT_MAX_DEVICE_PIXELS = 4096
 const VIEW_SNAPSHOT_SETUP_TIMEOUT_MS = 15_000
 /** How long the encoder may take; a `toBlob` that never calls back must not hold the queue. */
 const VIEW_SNAPSHOT_ENCODE_TIMEOUT_MS = 10_000
+/** A snapshot is one still frame: its camera never animates. */
+const VIEW_SNAPSHOT_REDUCED_MOTION = signal(true)
 
 interface ViewSnapshotCamera {
   readonly lon: number
@@ -97,10 +114,16 @@ interface ViewSnapshotFrame {
   encode(type: ViewSnapshotImageType, quality: number | undefined): Promise<Blob>
 }
 
-/** What the snapshot owner needs from a MapLibre map. */
+/** What the snapshot owner needs from a MapLibre map; its camera driver moves and resizes it. */
 interface ViewSnapshotMapLibreMap extends SharedMapSceneMap {
-  jumpTo(options: { center: [number, number]; zoom: number; bearing: number }): void
+  jumpTo(options: { center: [number, number]; zoom: number; bearing: number; pitch?: number }): void
+  stop(): void
   resize(): void
+  getCenter(): MapLibreLngLat
+  getZoom(): number
+  getBearing(): number
+  unproject(point: [number, number]): MapLibreLngLat
+  setTransformConstrain?(constrain: MapLibreTransformConstrain | null): void
   redraw(): void
   remove(): void
   on(type: string, listener: (event?: unknown) => void): void
@@ -153,9 +176,18 @@ export interface ViewSnapshotMap {
   dispose(): Promise<void>
 }
 
+/** The plane and policy the snapshot's camera driver works in: the current capture's scene origin. */
+interface SnapshotView {
+  plane: SessionPlane
+  policy: NavigationPolicy
+}
+
 interface SnapshotInstance {
   readonly container: HTMLElement
   readonly map: ViewSnapshotMapLibreMap
+  readonly view: SnapshotView
+  /** The map's one camera owner, created once the map has loaded. */
+  driver: CameraDriver | null
   readonly tileAuth: BasemapTileAuth
   readonly pixelRatio: number
   readonly teardown: AbortController
@@ -249,6 +281,8 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
         minZoom: WORKSPACE_MAP_MIN_ZOOM,
         maxZoom: WORKSPACE_MAP_MAX_ZOOM,
         renderWorldCopies: false,
+        // The snapshot's camera driver resizes the map; MapLibre never resizes itself behind it.
+        trackResize: false,
         pixelRatio,
         // A snapshot is one frame: no tile or label fade to wait for.
         fadeDuration: 0,
@@ -268,6 +302,8 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
     const created: SnapshotInstance = {
       container,
       map,
+      view: snapshotView(request.scene.origin),
+      driver: null,
       tileAuth,
       pixelRatio,
       teardown: new AbortController(),
@@ -301,6 +337,17 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
         setupTimeoutMs,
         'The snapshot map did not load in time.',
       )
+      const { view } = created
+      created.driver = createMapLibreCameraDriver(map, view.plane, {
+        clock: now,
+        scheduleFrame: (callback) => {
+          const frame = requestAnimationFrame(callback)
+          return () => cancelAnimationFrame(frame)
+        },
+        policy: () => view.policy,
+      })
+      const refused = created.driver.failure.peek()
+      if (refused) throw new Error(`The snapshot map cannot place its camera: ${refused.message}`)
       created.background = mountBackground({
         map: map as unknown as MapBackgroundMap,
         maplibre,
@@ -346,6 +393,7 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
     }
     const current = instance
     const { map } = current
+    const driver = current.driver!
     const background = current.background!
     const sceneLayer = current.sceneLayer!
     throwIfAborted(request.signal)
@@ -355,21 +403,30 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
       current.container.style.height = `${request.height}px`
       current.width = request.width
       current.height = request.height
-      map.resize()
     }
     const settleStartedAt = now()
-    current.origin = request.scene.origin
+    const { origin } = request.scene
+    if (origin.lat !== current.view.plane.origin.lat || origin.lon !== current.view.plane.origin.lon) {
+      Object.assign(current.view, snapshotView(origin))
+      driver.planeChanged(current.view.plane)
+    }
+    current.origin = origin
     current.tileErrors = 0
-    map.jumpTo({ center: [request.camera.lon, request.camera.lat], zoom: clampZoom(request.camera.zoom), bearing: 0 })
-    background.update(request.background)
-    const transform = deriveSharedMapSceneViewport({
-      project: (point) => map.project(point),
-      anchor: request.scene.origin,
-      pitchDeg: 0,
+    // The driver resizes the map (an unchanged size does nothing) and jumps it: the snapshot's camera is north-up.
+    driver.setScreen({ width: request.width, height: request.height, devicePixelRatio: current.pixelRatio })
+    driver.apply({
+      kind: 'set',
+      target: { center: { lon: request.camera.lon, lat: request.camera.lat }, zoom: request.camera.zoom, bearingDeg: 0, pitchDeg: 0 },
+      animation: 'none',
     })
-    if (!transform.accepted) throw new Error(`The snapshot scene cannot be placed: ${transform.reason}.`)
+    const failure = driver.failure.peek()
+    if (failure) {
+      current.broken = new Error(`The snapshot map cannot place its camera: ${failure.message}`)
+      throw current.broken
+    }
+    background.update(request.background)
     const scenePresentedBefore = sceneLayer.diagnostics.sceneSyncCount
-    sceneLayer.setSnapshot(request.scene.build(transform.viewport))
+    sceneLayer.setSnapshot(request.scene.build(sceneViewportOf(driver.frames.viewFrame.peek().view)))
 
     const complete = () => background.isApplied()
       && map.loaded()
@@ -521,6 +578,12 @@ async function teardownInstance(instance: SnapshotInstance, timeoutMs: number): 
     errors.push(error)
   }
   instance.background = null
+  try {
+    instance.driver?.dispose()
+  } catch (error) {
+    errors.push(error)
+  }
+  instance.driver = null
   instance.tileAuth.clear()
   instance.releaseListeners()
   try {
@@ -545,6 +608,19 @@ function validateRequest(request: ViewSnapshotRequest): string | null {
   if (![lon, lat, zoom].every(Number.isFinite)) return 'Snapshot camera must be finite.'
   if (!Number.isFinite(request.timeoutMs) || request.timeoutMs < 0) return 'Snapshot timeout must be a finite, non-negative time.'
   return null
+}
+
+function snapshotView(origin: { readonly lat: number; readonly lon: number }): SnapshotView {
+  return {
+    plane: createSessionPlane(origin),
+    policy: createNavigationPolicy(createWorkspaceCameraPolicy(origin.lat), VIEW_SNAPSHOT_REDUCED_MOTION),
+  }
+}
+
+/** The scene's bearing-0 placement in today's terms, until the scene takes the ViewTransform itself (0D2). */
+function sceneViewportOf(view: ViewTransform): SceneViewportState {
+  const { x, y, scale } = planarCameraOf(view)
+  return { x, y, scale }
 }
 
 function clampZoom(zoom: number): number {

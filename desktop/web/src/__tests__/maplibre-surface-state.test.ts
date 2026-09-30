@@ -4,7 +4,7 @@ import {
   mapLibreCanvasSurfaceStateEquals,
   publishMapDiagnostics,
 } from '../maplibre/canvas-surface-state'
-import { LOCAL_MERCATOR_PROJECTION_ID } from '../canvas/projection'
+import type { ViewDiagnostics } from '../canvas/runtime/view/types'
 
 describe('maplibre surface state adapter', () => {
   afterEach(() => {
@@ -38,31 +38,28 @@ describe('maplibre surface state adapter', () => {
   })
 
   it('publishes the stable canonical projection diagnostics without backend selection', () => {
-    const frame = {
-      center: [2.3522, 48.8566],
-      zoom: 17,
-      bearing: 0,
-      diagnostics: {
-        projectionId: LOCAL_MERCATOR_PROJECTION_ID,
-        viewportCenterWorld: { x: 20, y: -10 },
-        viewportCornerGeo: [
-          { lng: 2.35, lat: 48.86 },
-          { lng: 2.36, lat: 48.86 },
-          { lng: 2.36, lat: 48.85 },
-          { lng: 2.35, lat: 48.85 },
-        ],
-      },
-    } as const
+    const frame: ViewDiagnostics = {
+      camera: { center: { lon: 2.3522, lat: 48.8566 }, zoom: 17, bearingDeg: 30, pitchDeg: 0 },
+      centreWorld: { x: 20, y: -10 },
+      groundQuadGeo: [
+        { lon: 2.35, lat: 48.86 },
+        { lon: 2.36, lat: 48.86 },
+        { lon: 2.36, lat: 48.85 },
+        { lon: 2.35, lat: 48.85 },
+      ],
+    }
 
     publishMapDiagnostics(frame)
     const published = (globalThis as { __CANOPI_MAP_DEBUG__?: unknown })
       .__CANOPI_MAP_DEBUG__ as Record<string, unknown>
+    // The live camera, bearing included (INV-CAM-32), and the ground it shows.
     expect(published).toMatchObject({
-      projectionId: 'local-mercator',
       center: [2.3522, 48.8566],
       zoom: 17,
-      bearing: 0,
-      viewportCenterWorld: { x: 20, y: -10 },
+      bearing: 30,
+      pitch: 0,
+      centreWorld: { x: 20, y: -10 },
+      groundQuadGeo: frame.groundQuadGeo,
     })
     expect(published).not.toHaveProperty('projectionBackendId')
     expect(published).not.toHaveProperty('precisionWarning')

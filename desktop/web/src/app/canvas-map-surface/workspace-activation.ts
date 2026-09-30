@@ -19,9 +19,11 @@ import {
 import type { SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
 import {
   type MapLibreWorkspaceCameraMap,
-  type MapLibreWorkspaceCameraFailure,
   type MapLibreWorkspaceCameraOwner,
 } from '../../maplibre/workspace-camera'
+import { createMapLibreCameraDriver } from '../../maplibre/camera-driver'
+import type { CameraDriverFailure } from '../../canvas/runtime/view/camera-driver'
+import { createSessionPlane } from '../../canvas/session-plane'
 import { createWorkspaceCameraPolicy } from '../../canvas/workspace-camera-policy'
 
 /**
@@ -82,6 +84,10 @@ export interface WorkspaceActivationRuntime {
 export interface WorkspaceActivationOptions {
   readonly container: HTMLElement
   readonly runtime: WorkspaceActivationRuntime | SceneCanvasRuntime
+  /**
+   * The runtime's camera shim (0A to the end of 0D2): the activation unwraps its CameraDriverHost and attaches each map to it as a
+   * camera driver (spec §1.1 Attachment).
+   */
   readonly camera: MapLibreWorkspaceCameraOwner
   readonly composition: SharedMapSceneRendererComposition
   readonly map: WorkspaceActivationMapControls
@@ -311,9 +317,13 @@ export class WorkspaceActivationCoordinator {
       try {
         unsubscribeCameraFailure = this.runOwnedCallback(
           'camera failure subscription',
-          () => this.options.camera.attachment.subscribeFailure(
-            (failure) => this.observeFailure(current, cameraFailureError(failure)),
-          ),
+          () => {
+            // A failure the host still holds from an earlier map is not this generation's.
+            const earlier = this.cameraHost().failure.peek()
+            return this.cameraHost().failure.subscribe((failure) => {
+              if (failure && failure !== earlier) this.observeFailure(current, cameraFailureError(failure))
+            })
+          },
         )
       } catch (error) {
         finishCameraFailureSubscription()
@@ -330,14 +340,14 @@ export class WorkspaceActivationCoordinator {
       const finishCameraAttachment = this.beginSetup(current)
       let attached: boolean
       try {
-        attached = this.runOwnedCallback(
-          'camera attachment',
-          () => this.options.camera.attachment.attach({
-            map,
-            readOrigin: this.options.readOrigin,
-            maximumWorldExtentMeters: current.snapshot.maximumWorldExtentMeters,
-          }),
-        )
+        attached = this.runOwnedCallback('camera attachment', () => {
+          // The map becomes the runtime's camera, in the plane of the Design's live origin. A map the driver cannot drive (a
+          // pitched camera, missing read-backs) never takes the camera: the host reports it as its failure.
+          const host = this.cameraHost()
+          const driver = createMapLibreCameraDriver(map, createSessionPlane(this.options.readOrigin()), host.driverDeps)
+          host.attach(driver)
+          return host.current() === driver
+        })
       } catch (error) {
         if (current.cameraAttached) current.cameraAttached = false
         finishCameraAttachment()
@@ -722,7 +732,7 @@ export class WorkspaceActivationCoordinator {
     if (current.cameraAttached) {
       current.cameraAttached = false
       try {
-        this.runOwnedCallback('camera detachment', () => this.options.camera.attachment.detach())
+        this.runOwnedCallback('camera detachment', () => this.cameraHost().detach())
       } catch (error) {
         errors.push(error)
       }
@@ -868,6 +878,11 @@ export class WorkspaceActivationCoordinator {
     }
   }
 
+  /** The runtime's one camera, which the shim wraps. */
+  private cameraHost() {
+    return this.options.camera.host
+  }
+
   private isCurrent(current: ActivationGeneration): boolean {
     return !current.cancelled && this.active === current && this.generation === current.id
   }
@@ -898,11 +913,7 @@ function captureMapSnapshot(snapshot: WorkspaceMapSnapshot): WorkspaceMapSnapsho
   })
 }
 
-function cameraFailureError(failure: MapLibreWorkspaceCameraFailure): Error {
-  if (failure.kind === 'attachment-error' && failure.error instanceof Error) return failure.error
-  return new Error(
-    failure.kind === 'invalid-projection'
-      ? `MapLibre workspace camera rejected its projection: ${failure.reason}.`
-      : 'MapLibre workspace camera attachment failed.',
-  )
+/** A turned camera is never a failure: the map is unavailable only when its driver fails. */
+function cameraFailureError(failure: CameraDriverFailure): Error {
+  return new Error(failure.message)
 }

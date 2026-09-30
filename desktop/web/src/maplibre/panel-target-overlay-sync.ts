@@ -18,6 +18,12 @@ export interface MapLibreOverlayMap {
   setPaintProperty?(layerId: string, name: string, value: unknown): void
 }
 
+/**
+ * The data each overlay source was last given, by source: a re-sync that projects the same ground (a settled camera, a repaint)
+ * leaves the source alone, so the overlays change only with their Targets, the Scene or the plane (INV-REN-20).
+ */
+const sourceData = new WeakMap<MapLibreGeoJsonSource, string>()
+
 export function panelTargetMapOverlayIds(variant: PanelTargetMapOverlayVariant) {
   const sourceId = `panel-target-${variant}-source`
   return {
@@ -52,13 +58,19 @@ export function syncPanelTargetMapOverlay(
     return
   }
 
+  const data = JSON.stringify(overlay.source.data)
   const existingSource = map.getSource(overlay.source.id)
   if (existingSource) {
-    existingSource.setData(overlay.source.data)
+    if (sourceData.get(existingSource) !== data) {
+      existingSource.setData(overlay.source.data)
+      sourceData.set(existingSource, data)
+    }
   } else {
     // The id names the source; MapLibre rejects it inside the specification.
     const { id, ...specification } = overlay.source
     map.addSource(id, specification as unknown as Record<string, unknown>)
+    const added = map.getSource(id)
+    if (added) sourceData.set(added, data)
   }
 
   for (const layer of overlay.layers) {

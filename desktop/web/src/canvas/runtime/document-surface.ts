@@ -11,6 +11,7 @@ import {
   type CanvasRuntimeDocumentMetadata,
 } from './runtime'
 import type { ScenePersistedState } from './scene'
+import { sceneExtentPoints } from './scene-extent'
 import type { SceneRuntimeChromeCoordinator } from './scene-runtime/chrome-coordinator'
 import type { SceneRuntimeDocumentBridge } from './scene-runtime/document'
 import type { SceneRuntimeRenderScheduler } from './scene-runtime/render-scheduler'
@@ -87,8 +88,9 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
   }
 
   zoomToFit(): void {
-    this.options.cameraNavigation.zoomToFit(this.options.getSceneSnapshot(), {
-      plantContext: this.options.createPlantPresentationContext(this.options.camera.viewport.scale),
+    const scene = this.options.getSceneSnapshot()
+    this.options.cameraNavigation.zoomToFit(scene, {
+      extentPoints: sceneExtentPoints(scene, this.options.createPlantPresentationContext(this.options.camera.viewport.scale)),
       emptySceneScale: this.options.readEmptySceneScale?.(),
     })
     this.options.invalidateViewport()

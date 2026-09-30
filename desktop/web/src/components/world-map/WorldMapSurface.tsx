@@ -69,6 +69,8 @@ export function WorldMapSurface({
         },
       ),
       captureViewState: (context) => readWorldMapViewState(context.map),
+      // The World map has no camera driver: its request owns the map's resize (spec §1.1 "Resize").
+      onResize: (context) => context.map.resize(),
       onCreate: (context) => {
         // The same background band owner as the workspace map: Basemap or
         // Satellite from the map layer store, with their attribution.

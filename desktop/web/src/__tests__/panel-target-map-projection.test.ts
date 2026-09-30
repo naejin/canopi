@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { MANUAL_TARGET, NONE_TARGET, speciesTarget } from '../target'
-import { createMapFrame } from '../canvas/maplibre-camera'
 import { geoToMercator } from '../canvas/projection'
+import type { ViewCamera } from '../canvas/runtime/view/types'
+import { createSessionPlane } from '../canvas/session-plane'
 import { targetIdentity } from '../target'
 import {
   projectTargetResolutionToMapFeatures,
@@ -9,6 +10,7 @@ import {
   type TargetMapProjectionScene,
 } from '../target'
 import type { PanelTarget } from '../types/design'
+import { createTestView } from './support/test-view'
 
 const LOCATION = { lat: 48.8566, lon: 2.3522 }
 const MAPLIBRE_WORLD_TILE_SIZE = 512
@@ -26,12 +28,12 @@ function projectWorldToCanvasScreen(
 function projectGeoToMapScreen(
   lng: number,
   lat: number,
-  frame: NonNullable<ReturnType<typeof createMapFrame>>,
+  camera: ViewCamera,
   screenSize: { width: number; height: number },
 ) {
   const point = geoToMercator(lng, lat)
-  const center = geoToMercator(frame.center[0], frame.center[1])
-  const worldSizePx = MAPLIBRE_WORLD_TILE_SIZE * (2 ** frame.zoom)
+  const center = geoToMercator(camera.center.lon, camera.center.lat)
+  const worldSizePx = MAPLIBRE_WORLD_TILE_SIZE * (2 ** camera.zoom)
   const deltaX = (point.x - center.x) * worldSizePx
   const deltaY = (point.y - center.y) * worldSizePx
 
@@ -342,14 +344,16 @@ describe('projectTargetsToMapFeatures', () => {
     const scene = createScene()
     const viewport = { x: -180, y: 64, scale: 2.4 }
     const screenSize = { width: 1200, height: 800 }
-    const frame = createMapFrame(viewport, screenSize, LOCATION)
+    // The map camera the canvas viewport corresponds to, on the session plane at the Design's location.
+    const view = createTestView({ screen: screenSize, viewport, plane: createSessionPlane(LOCATION) })
+    const { camera } = view.view()
+    view.dispose()
     const result = projectTargetsToMapFeatures(
       [{ kind: 'placed_plant', plant_id: 'plant-2' }],
       scene,
       LOCATION,
     )
 
-    expect(frame).not.toBeNull()
     expect(result.features).toHaveLength(1)
     const plant = scene.plants.find((entry) => entry.id === 'plant-2')
     const feature = result.features[0]
@@ -357,7 +361,7 @@ describe('projectTargetsToMapFeatures', () => {
     expect(feature?.geometry.type).toBe('Point')
     const coordinates = feature?.geometry.type === 'Point' ? feature.geometry.coordinates : null
     const mapScreen = coordinates
-      ? projectGeoToMapScreen(coordinates[0], coordinates[1], frame!, screenSize)
+      ? projectGeoToMapScreen(coordinates[0], coordinates[1], camera, screenSize)
       : null
     const canvasScreen = projectWorldToCanvasScreen(viewport, plant!.position)
 

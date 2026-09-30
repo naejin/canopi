@@ -26,6 +26,7 @@ import {
   type WorkspaceMapSnapshot,
 } from '../../maplibre/workspace-map'
 import type { MapLibreMapInstance } from '../../maplibre/loader'
+import type { ViewScreen } from '../../canvas/runtime/view/types'
 import {
   createMapLayerStackDescriptors,
   reconcileMapLayerStack,
@@ -70,6 +71,11 @@ export interface WorkspaceActivationMapControlsOptions {
   readonly surface?: MapLibreSurfaceAdapter<MapLibreMapInstance>
   readonly logError?: (message?: unknown, ...optionalParams: unknown[]) => void
   readonly canCreateWebGL2Context?: () => boolean
+  /**
+   * The workspace request's resize owner (spec §1.1 "Resize"): the map container's new size goes to the camera, whose driver
+   * resizes the map (CameraDriver.setScreen). The MapLibre host never resizes the map itself.
+   */
+  readonly setScreen?: (screen: ViewScreen) => void
 }
 
 /**
@@ -229,6 +235,10 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
           context.lifetime.on('error', reportMapError)
           context.lifetime.on('webglcontextlost', handleContextLoss)
           if (signal.aborted) abort()
+        },
+        onResize: (_context, size) => {
+          if (attempt.released) return
+          this.options.setScreen?.({ width: size.width, height: size.height, devicePixelRatio: window.devicePixelRatio })
         },
         onCreateError: (error) => this.rejectAttempt(attempt, error),
       })

@@ -48,15 +48,20 @@ export interface CameraDriver {
   planeChanged(plane: SessionPlane): void
   setScreen(screen: ViewScreen): void
   setInsets(insets: ScreenInsets): void
+  /** Set when the driver can no longer drive its camera (the MapLibre driver: 'map-lost', 'map-error'); the host it is attached to
+   *  detaches and reports it as its own failure. Always null on the headless driver. */
+  readonly failure: ReadonlySignal<CameraDriverFailure | null>
   dispose(): void
 }
 
-/** Injected into both drivers (P4: no clock or requestAnimationFrame in view/). */
+/** Injected into both drivers (P4: no clock, timer or requestAnimationFrame in view/). */
 export interface CameraDriverDeps {
   readonly clock: () => number
   /** One animation-frame callback; returns its canceller. Tests step it by hand. */
   readonly scheduleFrame: (cb: (nowMs: number) => void) => () => void
   readonly policy: () => NavigationPolicy
+  /** The frame source's settle timer. The MapLibre driver (outside view/) defaults to window timers; the headless driver takes them injected. */
+  readonly timers?: { readonly setTimeout: (cb: () => void, ms: number) => unknown; readonly clearTimeout: (handle: unknown) => void }
 }
 
 export interface CameraDriverFailure { readonly reason: 'map-lost' | 'agreement' | 'map-error'; readonly message: string }
@@ -74,6 +79,12 @@ export interface CameraDriverHost {
   detach(): void
   /** Today's replacePolicy (a new session-plane latitude): the host rebuilds its NavigationPolicy from it and re-constrains the current camera. */
   replacePolicy(policy: WorkspaceCameraPolicy): void
+  /** The Scene's plane on hydration and on a detached re-origin: a live headless driver keeps its plane placement and takes the new
+   *  plane (a headless re-origin is followPlane plus a 'place' move, the same numbers as planeChanged, which only the attached
+   *  refreshOrigin calls). The runtime calls it; without it the headless camera would report another plane's ground. */
+  followPlane(plane: SessionPlane): void
+  /** The deps the host built its drivers with; the activation builds the MapLibre driver with them. */
+  readonly driverDeps: CameraDriverDeps
   /** Set when the attached driver fails; the host has already detached. */
   readonly failure: ReadonlySignal<CameraDriverFailure | null>
 }

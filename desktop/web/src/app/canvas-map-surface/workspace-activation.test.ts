@@ -18,6 +18,8 @@ import {
 import { createSharedMapSceneRendererComposition, type SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
 import { WorkspaceGenerationReconciler } from './workspace-generation-reconciler'
 import type { MapBackgroundPresentation } from '../../maplibre/map-background'
+import { geoToScreen, screenToGeo } from '../../canvas/runtime/view/camera-math'
+import type { ViewCamera } from '../../canvas/runtime/view/types'
 
 function background(
   basemap: Partial<MapBackgroundPresentation['basemap']> = {},
@@ -62,10 +64,13 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
+/** A consistent MapLibre fake (plan §4, 0A "Attached-map fakes"): its read-backs describe one fixed camera, and jumpTo fires 'move'. */
 class FakeMap {
   readonly canvas = document.createElement('canvas')
   readonly context = {} as WebGL2RenderingContext
-  readonly jumpTo = vi.fn()
+  readonly camera: ViewCamera = { center: { lon: 0, lat: 0 }, zoom: 18, bearingDeg: 0, pitchDeg: 0 }
+  readonly jumpTo = vi.fn(() => this.emit('move'))
+  readonly stop = vi.fn()
   readonly resize = vi.fn()
   readonly remove = vi.fn()
   readonly listeners = new Map<string, Set<() => void>>()
@@ -106,11 +111,17 @@ class FakeMap {
 
   getCanvas() { return this.canvas }
   getPitch() { return this.pitch }
-  getZoom() { return 18 }
+  getBearing() { return this.camera.bearingDeg }
+  getZoom() { return this.camera.zoom }
   getMinZoom() { return 0 }
   getMaxZoom() { return 27 }
-  getCenter() { return { lng: 0, lat: 0 } }
-  project([lon, lat]: [number, number]) { return { x: 200 + lon * 4, y: 150 - lat * 4 } }
+  getCenter() { return { lng: this.camera.center.lon, lat: this.camera.center.lat } }
+  project([lon, lat]: [number, number]) { return geoToScreen(this.camera, this.screen(), { lon, lat }) }
+  unproject([x, y]: [number, number]) {
+    const ground = screenToGeo(this.camera, this.screen(), { x, y })
+    return { lng: ground.lon, lat: ground.lat }
+  }
+  private screen() { return { width: this.canvas.clientWidth, height: this.canvas.clientHeight, devicePixelRatio: 2 } }
   emit(type: string) { this.listeners.get(type)?.forEach((listener) => listener()) }
   clearStyleLayer(id: string) {
     const layer = this.layers.get(id)
@@ -280,7 +291,7 @@ describe('WorkspaceActivationCoordinator', () => {
       composition: composed.composition,
       readOrigin,
     })
-    const attach = vi.spyOn(camera.attachment, 'attach')
+    const attach = vi.spyOn(camera.host, 'attach')
     const snapshot: WorkspaceActivationSnapshot = {
       ...createActivationSnapshot({
         initialCenter: { lat: 10, lon: 20 },
@@ -307,11 +318,15 @@ describe('WorkspaceActivationCoordinator', () => {
       readOrigin,
       maximumWorldExtentMeters: 4000,
     }))
-    expect(attach).toHaveBeenCalledWith(expect.objectContaining({
-      map,
-      readOrigin,
-      maximumWorldExtentMeters: 4000,
-    }))
+    // The map's driver took the runtime's camera, in the plane of the live origin.
+    expect(attach).toHaveBeenCalledOnce()
+    expect(camera.host.current()).toBe(attach.mock.calls[0]![0])
+    const attached = camera.host.frames.viewFrame.peek()
+    expect(attached.attached).toBe(true)
+    const originPx = attached.view.worldToScreen({ x: 0, y: 0 })
+    const origin = map.unproject([originPx.x, originPx.y])
+    expect(origin.lng).toBeCloseTo(20, 6)
+    expect(origin.lat).toBeCloseTo(10, 6)
     expect(camera.policy.referenceLatitudeDeg).toBe(10)
   })
 
@@ -469,7 +484,7 @@ describe('WorkspaceActivationCoordinator', () => {
       composition: composed.composition,
       installStyleRestorer,
     })
-    const attach = vi.spyOn(camera.attachment, 'attach')
+    const attach = vi.spyOn(camera.host, 'attach')
 
     await expect(coordinator.activate()).resolves.toBe('shared-ready')
     expect(restore).not.toBeNull()
@@ -639,7 +654,7 @@ describe('WorkspaceActivationCoordinator', () => {
       installStyleRestorer: () => disposeStyleRestorer,
       watchFailure: () => unwatchFailure,
     })
-    const attach = vi.spyOn(camera.attachment, 'attach')
+    const attach = vi.spyOn(camera.host, 'attach')
     const snapshotA = createActivationSnapshot({
       initialCenter: { lat: 1, lon: 2 },
       background: background({ opacity: 0.2 }),
@@ -660,11 +675,11 @@ describe('WorkspaceActivationCoordinator', () => {
       readOrigin,
       maximumWorldExtentMeters: 4321,
     }))
-    expect(attach).toHaveBeenLastCalledWith(expect.objectContaining({
-      map: secondMap,
-      readOrigin,
-      maximumWorldExtentMeters: 4321,
-    }))
+    // B's map drives the camera now; A's driver released A's map.
+    expect(attach).toHaveBeenCalledTimes(2)
+    expect(camera.host.current()).toBe(attach.mock.calls[1]![0])
+    expect(camera.host.frames.viewFrame.peek().attached).toBe(true)
+    expect(secondMap.jumpTo).toHaveBeenCalled()
     expect(events).toEqual([
       'style-restorer',
       'failure-watcher',
@@ -813,19 +828,24 @@ describe('WorkspaceActivationCoordinator', () => {
       composition: createComposition({ initialize: async () => { throw new Error('Pixi init failed') } }).composition,
     })],
     ['camera attachment is rejected', () => {
+      // A pitched read-back fails the map's camera driver ('map-error'); it never takes the camera.
       const map = new FakeMap()
       vi.spyOn(map, 'getPitch').mockReturnValue(1)
       return { map }
     }],
-  ])('reports the map unavailable without mounting a renderer when %s', async (_reason, setup) => {
+  ])('reports the map unavailable without mounting a renderer when %s', async (reason, setup) => {
     const configured = setup()
-    const { coordinator, runtime, map } = createCoordinator(configured)
+    const { coordinator, runtime, map, camera } = createCoordinator(configured)
 
     await expect(coordinator.activate()).resolves.toBe('map-unavailable')
 
     expect(map.remove).toHaveBeenCalledOnce()
     expect(runtime.init).not.toHaveBeenCalled()
     expect(runtime.unmountRenderer).not.toHaveBeenCalled()
+    if (reason === 'camera attachment is rejected') {
+      expect(camera.host.failure.peek()).toMatchObject({ reason: 'map-error' })
+      expect(camera.host.frames.viewFrame.peek().attached).toBe(false)
+    }
   })
 
   it('reports the map unavailable when map acquisition rejects before a map is admitted', async () => {
@@ -876,11 +896,14 @@ describe('WorkspaceActivationCoordinator', () => {
   })
 
   it('observes a later camera projection failure and unmounts the renderer', async () => {
-    const { coordinator, runtime, map } = createCoordinator()
+    const { coordinator, runtime, map, camera } = createCoordinator()
     await expect(coordinator.activate()).resolves.toBe('shared-ready')
 
+    // A pitched read-back fails the driver: the host takes the camera back and reports it.
     map.pitch = 1
     map.emit('move')
+    expect(camera.host.failure.peek()).toMatchObject({ reason: 'map-error' })
+    expect(camera.host.frames.viewFrame.peek().attached).toBe(false)
 
     await vi.waitFor(() => expect(runtime.unmountRenderer).toHaveBeenCalledOnce())
     expect(runtime.unmountRenderer).toHaveBeenCalledOnce()
@@ -985,18 +1008,17 @@ describe('WorkspaceActivationCoordinator', () => {
         : undefined,
     })
     coordinator = created
-    const subscribeFailure = vi.spyOn(camera.attachment, 'subscribeFailure')
+    const subscribeFailure = vi.spyOn(camera.host.failure, 'subscribe')
     if (boundary === 'camera failure subscription') {
       subscribeFailure.mockImplementation(() => {
         coordinator.requestGenerationDisconnect()
         return subscriptionDisposer
       })
     }
-    const detach = vi.spyOn(camera.attachment, 'detach')
+    const detach = vi.spyOn(camera.host, 'detach')
     if (boundary === 'camera attachment') {
-      vi.spyOn(camera.attachment, 'attach').mockImplementation(() => {
+      vi.spyOn(camera.host, 'attach').mockImplementation(() => {
         coordinator.requestGenerationDisconnect()
-        return true
       })
     }
 
