@@ -31,6 +31,7 @@ const TARGETS: readonly TargetClass[] = [
   { kind: 'handle', id: 'rotate' as ToolHandleId },
   { kind: 'ruler', axis: 'v' },
   { kind: 'owned-chrome' },
+  { kind: 'owned-chrome', lockedAffordance: true },
   { kind: 'owned-text' },
   { kind: 'foreign' },
 ]
@@ -72,7 +73,8 @@ function sessionPans(gestures: readonly Gesture[], phase: 'start' | 'end'): numb
 /**
  * Replays random interleavings and checks each step against the sessions before and after it. A session starts with a
  * press or a pan start, and ends exactly once: an editing session with one tap, drag-end or cancel; a pan with one pan
- * end (then a cancel when a fence ended it, and a tap for a still Pan-tool click); a reject ends it with no gesture.
+ * end, then a cancel when a fence ended it; a reject ends it with no gesture. Every press the host sees ends once: a
+ * Pan-tool press with a tap after a still click, or with cancel('navigate') after its drag panned (fixture J1).
  */
 function checkSessionLifecycle(seed: number): void {
   const random = generator(seed)
@@ -107,7 +109,12 @@ function checkSessionLifecycle(seed: number): void {
       expect(gestures, `${at(index)}: a reject emits nothing`).toEqual([])
     } else if (endedSession.mode === 'pan') {
       expect(panEnds, at(index)).toBe(1)
-      expect(editingEnds, at(index)).toBeLessThanOrEqual(1)
+      // A press the host saw ends once, whatever ended its pan; a pan with no press ends silently on its release.
+      expect(editingEnds, at(index)).toBe(endedSession.pressed || input.kind !== 'up' ? 1 : 0)
+      if (endedSession.pressed && input.kind === 'up') {
+        const navigated = gestures.some((gesture) => gesture.kind === 'cancel' && gesture.reason === 'navigate')
+        expect(navigated, `${at(index)}: a Pan-tool press ends with a tap only when its drag did not pan`).toBe(endedSession.slopPassed)
+      }
     } else {
       expect({ editingEnds, panEnds }, at(index)).toEqual({ editingEnds: 1, panEnds: 0 })
     }

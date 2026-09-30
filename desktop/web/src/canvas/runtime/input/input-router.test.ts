@@ -37,9 +37,10 @@ function harness(outcome: GestureOutcome = {}) {
   }
   const gesture = vi.fn((_g: Gesture) => outcome)
   const menuAt = vi.fn(() => outcome)
-  const toolHost = { gesture, menuAt } as unknown as ToolHost
+  const notePointer = vi.fn()
+  const toolHost = { gesture, menuAt, notePointer } as unknown as ToolHost
   const deps: InputRouterDeps = { navigation, toolHost }
-  return { router: createInputRouter(deps), navigation, rotation, gesture, menuAt }
+  return { router: createInputRouter(deps), navigation, rotation, gesture, menuAt, notePointer }
 }
 
 describe('createInputRouter', () => {
@@ -63,6 +64,18 @@ describe('createInputRouter', () => {
     expect(navigation.panByPx).not.toHaveBeenCalled()
     expect(navigation.zoomAroundPx).not.toHaveBeenCalled()
     expect(navigation.beginRotation).not.toHaveBeenCalled()
+  })
+
+  it('a pointer pan notes the pointer, a wheel pan does not', () => {
+    const { router, navigation, gesture, notePointer } = harness()
+    router.route({ kind: 'pan', phase: 'start', deltaPx: { x: 0, y: 0 }, source: 'auxiliary-drag', at: { x: 10, y: 10 } })
+    router.route({ kind: 'pan', phase: 'move', deltaPx: { x: 4, y: 0 }, source: 'auxiliary-drag', at: { x: 14, y: 10 } })
+    router.route({ kind: 'pan', phase: 'end', deltaPx: { x: 0, y: 0 }, source: 'auxiliary-drag', at: { x: 14, y: 10 } })
+    router.route({ kind: 'pan', phase: 'move', deltaPx: { x: 0, y: -30 }, source: 'wheel' })
+    // The resting pointer follows a pointer pan; the host re-emits it on the next camera frame, not here.
+    expect(notePointer.mock.calls).toEqual([[{ x: 10, y: 10 }], [{ x: 14, y: 10 }], [{ x: 14, y: 10 }]])
+    expect(navigation.panByPx.mock.calls).toEqual([[{ x: 4, y: 0 }], [{ x: 0, y: -30 }]])
+    expect(gesture).not.toHaveBeenCalled()
   })
 
   it('route returns the host\'s outcome', () => {
