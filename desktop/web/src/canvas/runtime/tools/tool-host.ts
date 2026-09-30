@@ -12,7 +12,7 @@
 // (spec §1.4, "The legacy bridge"). Drops stay on the bridge until 0B-4. The module re-exports createToolScene and builds
 // the context-menu port, so interaction-session.ts imports nothing else from tools/ (P5b).
 
-import { signal } from '@preact/signals'
+import { signal, untracked } from '@preact/signals'
 import { runCanvasRuntimeCleanups } from '../cleanup'
 import type { Gesture, MenuSource, PressTarget } from '../input/gestures'
 import type { TargetClass } from '../input/raw-input'
@@ -162,6 +162,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   let live: LiveGesture | null = null
   let lastHover: StillPointer | null = null
   let pendingCancellation = false
+  /** A panel drag passed over the map: its drop preview replaces the tool's draft until the pointer next moves over the map
+   *  (today's one preview element, which a dragover took over and a pointermove gave back). */
+  let draftHiddenForDrop = false
   let nudging = false
   let nudgeTimer: number | null = null
   let callDepth = 0
@@ -193,19 +196,26 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   // ── Tool calls ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-  /** Every call into the tool: afterwards transient history bumps, and drafts, handles, guidance and redraws are flushed. */
+  /**
+   * Every call into the tool: afterwards transient history bumps, and drafts, handles, guidance and redraws are flushed.
+   * Calls run untracked: the runtime refreshes the session from inside its camera-frame effect, which must not come to
+   * depend on what the tool reads, nor re-run on the transient-history revision the call bumps.
+   */
   function callTool<T>(run: () => T): T {
-    callDepth += 1
-    try {
-      return run()
-    } finally {
-      callDepth -= 1
-      if (callDepth === 0) afterToolCall()
-    }
+    return untracked(() => {
+      callDepth += 1
+      try {
+        return run()
+      } finally {
+        callDepth -= 1
+        if (callDepth === 0) afterToolCall()
+      }
+    })
   }
 
   function afterToolCall(): void {
-    transientRevision.value += 1
+    // A write that reads nothing: a deferred commit may settle inside a caller's effect.
+    transientRevision.value = transientRevision.peek() + 1
     deps.transientHistoryChanged()
     flush()
   }
@@ -399,7 +409,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   // ── Drafts, handles, guidance, cursor ────────────────────────────────────────────────────────────────────────────
 
   function publishDraft(): void {
-    const shownToolDraft = activeTool ? toolDraft : null
+    const shownToolDraft = activeTool && !draftHiddenForDrop ? toolDraft : null
     const decorations = decorationShapes()
     const key = decorations.length > 0 ? JSON.stringify(decorations) : ''
     if (shownToolDraft === publishedToolDraft && key === publishedDecorations) return
@@ -512,6 +522,11 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       const world = frame().view.screenToWorld(g.at)
       if (world && insideScreen(g.at, frame().view.screen)) publishPointer(world)
     }
+    if (draftHiddenForDrop) {
+      // The pointer is back over the map after a drag: the tool's draft shows again, as today's next pointermove redrew it.
+      draftHiddenForDrop = false
+      changed()
+    }
     const tool = activeTool
     if (!tool) return NOTHING
     if (frame().mode === 'overview') {
@@ -580,11 +595,13 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     return claimed ? CLAIMED_PRESS : NOTHING
   }
 
-  /** Today's _pointerDownWhenSettled, in order: handles, the probe, the tool. Focus moved at the raw press (rawPress), so
-   *  an open text entry has committed on its blur. */
+  /** Today's _pointerDownWhenSettled, in order: the press's capture, handles, the probe, the tool. Focus moved at the raw
+   *  press (rawPress), so an open text entry has committed on its blur. A capture lost while it is taken (a synchronous
+   *  lostpointercapture) ended the press: nothing else happens, as today's check after capture. */
   function pressWhenSettled(g: Extract<Gesture, { kind: 'press' }>): boolean {
     const tool = activeTool
     if (!tool) return false
+    if (!deps.capturePress(g.id)) return true
     const handleDrag = g.target.kind === 'handle'
     const point = pointAt(g.at, g.mods, g.pointer, handleDrag)
     if (!point) return true
@@ -659,16 +676,34 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
    */
   function release(tool: CanvasTool, finish: () => void): GestureOutcome {
     if (!tool.settledRelease?.()) {
-      finish()
+      guardRelease(finish)
       return NOTHING
     }
     const admitted = deps.admission.runWhenSettled(() => {
-      finish()
+      guardRelease(finish)
       return true
     }, false, { resumePending: true })
     if (admitted) return NOTHING
     cancelTransientInteraction('tool-change')
     return QUARANTINE
+  }
+
+  /**
+   * A release whose tool call throws runs the cancellation at once, as today's pointerup ran it in its finally, so the
+   * tool's Scene Edit closes at the release. Only a cancellation that fails too with the edit open leaves it pending
+   * (guardCancellation), retried before the next event. The release's error is the one reported.
+   */
+  function guardRelease(finish: () => void): void {
+    try {
+      finish()
+    } catch (error) {
+      try {
+        cancelTransientInteraction('tool-change')
+      } catch {
+        // guardCancellation has left the cancellation pending; the release's failure is reported.
+      }
+      throw error
+    }
   }
 
   /** The drag at its last screen point, converted through the current frame; its start is the press's world point. */
@@ -712,6 +747,18 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         endLive({ screen: g.at, mods: g.mods, pointer: g.pointer })
       }
     })
+  }
+
+  /**
+   * Drops run through the legacy bridge until the host's drop route lands (0B-4), which draws the drop preview. Any
+   * dragover hides the tool's draft (a stamp's pick ghost), as today's dragover took over the one preview element the ghost
+   * shared; dragleave and drop leave it hidden, and the next hover over the map brings it back.
+   */
+  function drop(g: Extract<Gesture, { kind: 'drop' }>): GestureOutcome {
+    if (g.phase !== 'over' || draftHiddenForDrop) return NOTHING
+    draftHiddenForDrop = true
+    changed()
+    return NOTHING
   }
 
   function cancel(g: Extract<Gesture, { kind: 'cancel' }>): GestureOutcome {
@@ -916,6 +963,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   function activate(id: ToolId, source: ToolSource | null): void {
     currentId = id
     activeSource = source
+    draftHiddenForDrop = false
     toolDraft = null
     toolHandles = NO_HANDLES
     toolGuidance = null
@@ -1036,7 +1084,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         case 'drag-move':
         case 'drag-end': return drag(g)
         case 'cancel': return cancel(g)
-        // Drops run through the legacy bridge until the host's drop route lands (0B-4); navigation never reaches the host.
+        case 'drop': return drop(g)
+        // Navigation never reaches the host.
         default: return NOTHING
       }
     },

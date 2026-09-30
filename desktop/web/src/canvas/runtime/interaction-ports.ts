@@ -56,7 +56,8 @@ export interface DomInputSourceDeps {
   readonly listensToRulers: boolean
 }
 export interface DomInputSource {
-  /** Installs the listeners; returns the disposer that removes every listener it added (tested: exactly once each). A sink
+  /** Installs the listeners; returns the disposer that removes every listener it added (tested: exactly once each) and
+   *  releases every pointer capture the source still holds (a press live at disposal), after the sink is gone. A sink
    *  that throws on a press on the map, a release, a contextmenu, a dragover or a drop quarantines that event, then rethrows;
    *  on any other event it rethrows and the event goes on (today's handlers quarantined only around their admitted work). */
   attach(sink: (input: RawInput) => void): () => void
@@ -140,6 +141,13 @@ export interface ToolHostDeps {
   readonly hover: (target: SceneDesignObjectTarget | null) => void
   /** The raster inspection probe (CanvasRuntimeAppAdapter.tryInspectAt, passed by scene-runtime.ts); true claims the press. INV-ENT-24. */
   readonly inspect?: (world: WorldPoint) => boolean
+  /**
+   * Takes an admitted press's pointer capture (the recogniser's, which the session holds back until the host admits the
+   * press), before handles, the probe and the tool, as today's _pointerDownWhenSettled did; a refused press takes none.
+   * False when the capture was lost while it was taken (a synchronous lostpointercapture ended the press): the host stops
+   * the press before the tool hears it.
+   */
+  readonly capturePress: (pointerId: number) => boolean
   /** Today's notifyTransientHistoryChange: the runtime's transientHistory revision (Edit › Undo during a draft). */
   readonly transientHistoryChanged: () => void
 }
