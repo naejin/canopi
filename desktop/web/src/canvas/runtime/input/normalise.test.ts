@@ -89,7 +89,17 @@ describe('normalise', () => {
     expect(press(0, 'touch')).toBeNull()
     const backUp = normalise(event({ type: 'pointerup', button: 3 }), WINDOWS, LEGACY_BINDINGS, NO_CTRL, HOST)
     expect(backUp).toMatchObject({ kind: 'up', role: 'primary' })
-    expect(normalise(event({ type: 'pointerup', pointerType: 'pen', button: 5 }), WINDOWS, LEGACY_BINDINGS, NO_CTRL, HOST)).toBeNull()
+  })
+
+  it('never drops an up: a button it would not press with is a primary release for every pointer kind', () => {
+    const up = (pointerType: string, button: number) =>
+      normalise(event({ type: 'pointerup', pointerType, button, pointerId: 4 }), WINDOWS, LEGACY_BINDINGS, NO_CTRL, HOST)
+    // The pen's barrel under LEGACY (a drag whose tip lifted before the barrel) and its eraser end their session.
+    expect(up('pen', 2)).toMatchObject({ kind: 'up', id: 4, pointer: 'pen', role: 'primary' })
+    expect(up('pen', 5)).toMatchObject({ kind: 'up', pointer: 'pen', role: 'primary' })
+    expect(up('mouse', 3)).toMatchObject({ kind: 'up', pointer: 'mouse', role: 'primary' })
+    const barrel = normalise(event({ type: 'pointerup', pointerType: 'pen', button: 2 }), WINDOWS, { ...LEGACY_BINDINGS, penBarrel: 'secondary' }, NO_CTRL, HOST)
+    expect(barrel).toMatchObject({ kind: 'up', role: 'secondary' })
   })
 
   it('maps the pen tip to primary and drops the barrel under LEGACY and the eraser always', () => {

@@ -198,8 +198,9 @@ describe('recognise under LEGACY_BINDINGS: 5.3 keyboard menu', () => {
 describe('recognise under LEGACY_BINDINGS: 5.4 pen', () => {
   it('D1 Pen barrel tap: nothing from the barrel; the native menu', () => {
     const result = run(SEQUENCES.D1)
+    // The barrel's press is dropped; its up is kept (an up is never dropped) and ends no session.
     expect(result.steps[0]!.input).toBeNull()
-    expect(result.steps[1]!.input).toBeNull()
+    expect(result.steps[1]!.input).toMatchObject({ kind: 'up', pointer: 'pen', role: 'primary' })
     expect(kinds(result.gestures)).toEqual(['menu-request'])
   })
 
@@ -217,7 +218,7 @@ describe('recognise under LEGACY_BINDINGS: 5.4 pen', () => {
 
   it('D4 Eraser: nothing', () => {
     const result = run(SEQUENCES.D4)
-    expect(result.steps.map((step) => step.input)).toEqual([null, null])
+    expect(result.steps.map((step) => step.input?.kind ?? null)).toEqual([null, 'up'])
     expect(result.gestures).toEqual([])
   })
 

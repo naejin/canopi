@@ -520,6 +520,32 @@ describe('the interaction session', () => {
     expect(points).toHaveLength(3)
   })
 
+  it('a pen drag that ends on the barrel commits its move, as today', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const onSceneEditCommit = vi.fn()
+    const { session } = createSession(createInteractionDeps(container, store, camera, { onSceneEditCommit }))
+    session.setTool('select')
+    const pen = { pointerId: 40, pointerType: 'pen' } as const
+
+    events.pointerDown({ x: 20, y: 30 }, { ...pen, button: 0, buttons: 1 })
+    // The barrel goes down mid-drag and the tip lifts first: the pointerup reports the barrel (button 2), which
+    // LEGACY ignores as a press, yet today's pointerup ended the drag whatever its button.
+    events.pointerMove({ x: 35, y: 45 }, { ...pen, buttons: 3 })
+    events.pointerMove({ x: 35, y: 45 }, { ...pen, buttons: 2 })
+    events.pointerUp({ x: 35, y: 45 }, { ...pen, button: 2, buttons: 0 })
+    expect(onSceneEditCommit).toHaveBeenCalledOnce()
+    const released = { ...store.persisted.plants[0]!.position }
+    expect(released).not.toEqual({ x: 20, y: 30 })
+
+    // The pen hovers on, then the browser's implicit capture release arrives: the move stays where it was released.
+    events.pointerMove({ x: 80, y: 90 }, { ...pen, buttons: 0 })
+    events.lostPointerCapture(40)
+    expect(store.persisted.plants[0]?.position).toEqual(released)
+    expect(onSceneEditCommit).toHaveBeenCalledOnce()
+  })
+
   it('a session built with a stamp tool armed hands the tool its pick', () => {
     const sources: (ToolSource | null)[] = []
     const record = {
