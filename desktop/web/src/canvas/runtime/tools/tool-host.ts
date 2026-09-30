@@ -689,15 +689,19 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   /**
-   * A release whose tool call throws while the tool's Scene Edit is still open leaves the cancellation pending, retried
-   * before the next event (today's pointerup ran the cancellation in its finally, which left it pending on failure).
+   * A release whose tool call throws runs the cancellation at once, as today's pointerup ran it in its finally, so the
+   * tool's Scene Edit closes at the release. Only a cancellation that fails too with the edit open leaves it pending
+   * (guardCancellation), retried before the next event. The release's error is the one reported.
    */
   function guardRelease(finish: () => void): void {
     try {
       finish()
     } catch (error) {
-      pendingCancellation = hasActiveSceneEdit()
-      flush()
+      try {
+        cancelTransientInteraction('tool-change')
+      } catch {
+        // guardCancellation has left the cancellation pending; the release's failure is reported.
+      }
       throw error
     }
   }

@@ -643,15 +643,20 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       if (result.effects.length > 0) this._menu.close()
     }
     // A press the host hears takes its capture once admitted, before the tool (ToolHostDeps.capturePress), as today's
-    // order; a pan's press, which the host never hears, takes it with the rest.
-    const heldCapture = input.kind === 'down'
+    // order; a pan's press, which the host never hears, takes it with the rest. The effects before the held capture (the
+    // release of the same pointer's session whose up was lost) apply first, so they cannot undo the new press's capture.
+    const pressed = input.kind === 'down'
       && result.gestures.some((gesture) => gesture.kind === 'press' && gesture.id === input.id)
-      && result.effects.some((effect) => effect.kind === 'capture' && effect.pointerId === input.id)
-    const effects = heldCapture
-      ? result.effects.filter((effect) => effect.kind !== 'capture' || effect.pointerId !== input.id)
-      : result.effects
+      ? input.id
+      : null
+    const heldAt = pressed === null
+      ? -1
+      : result.effects.findIndex((effect) => effect.kind === 'capture' && effect.pointerId === pressed)
+    const heldCapture = heldAt >= 0
+    const effects = heldCapture ? result.effects.slice(heldAt + 1) : result.effects
+    if (heldCapture) this._source.apply(result.effects.slice(0, heldAt))
     let outcome: GestureOutcome = {}
-    this._pressCapture = heldCapture ? input.id : null
+    this._pressCapture = heldCapture ? pressed : null
     try {
       for (const gesture of result.gestures) {
         this._followNavigation(gesture)

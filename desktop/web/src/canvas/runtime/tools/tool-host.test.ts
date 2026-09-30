@@ -1213,22 +1213,47 @@ describe('ToolHost', () => {
     it.each([
       ['a drag', (h: ToolHarness) => h.drag({ x: 10, y: 10 }, { x: 40, y: 40 })],
       ['a click', (h: ToolHarness) => h.click({ x: 10, y: 10 })],
-    ] as const)('%s whose release throws with its Scene Edit open leaves the cancellation pending', (_name, gesture) => {
+    ] as const)('%s whose release throws runs the cancellation at once, so the next press is admitted', (_name, gesture) => {
       const { tool, open } = editingTool('rectangle', { release: () => { throw new Error('commit failed') } })
       useStubTools(tool)
       const h = harness({ tool: 'rectangle' })
 
       expect(() => gesture(h)).toThrow('commit failed')
-      expect(open()).toBe(true)
-      // Today's pointerup left the cancellation pending: the next press retries it and is swallowed.
-      expect(h.press({ x: 50, y: 50 })).toEqual({ quarantine: true, rejectSession: true })
+      // Today's pointerup ran the cancellation in its finally: the edit closes at the release.
       expect(tool.calls).toContain('cancelTransient:tool-change')
       expect(open()).toBe(false)
-      expect(h.press({ x: 60, y: 60 })).toEqual({})
+      expect(h.press({ x: 50, y: 50 })).toEqual({})
       expect(tool.count('press')).toBe(2)
     })
 
-    it('a settled release whose tool call throws with a Scene Edit open leaves the cancellation pending', () => {
+    it('a release whose tool call and cancellation both throw leaves the cancellation pending and reports the release', () => {
+      let failCancel = true
+      let edit: SceneEditTransaction | null = null
+      const rectangle: StubTool = stubTool('rectangle', {
+        gesture: (g) => {
+          if (g.kind === 'press') edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
+          if (g.kind === 'drag-end') throw new Error('commit failed')
+          return 'pass'
+        },
+        cancelTransient: () => {
+          if (failCancel) throw new Error('abort failed')
+          edit?.abort()
+          edit = null
+        },
+      })
+      useStubTools(rectangle)
+      const h = harness({ tool: 'rectangle' })
+
+      expect(() => h.drag({ x: 10, y: 10 }, { x: 40, y: 40 })).toThrow('commit failed')
+      expect(edit).not.toBeNull()
+      failCancel = false
+      // The failed cancellation is retried before the next press, which is swallowed, as today.
+      expect(h.press({ x: 50, y: 50 })).toEqual({ quarantine: true, rejectSession: true })
+      expect(edit).toBeNull()
+      expect(h.press({ x: 60, y: 60 })).toEqual({})
+    })
+
+    it('a settled release whose tool call throws runs the cancellation at once, so the next press is admitted', () => {
       let edit: SceneEditTransaction | null = null
       const band: StubTool = stubTool('select', {
         settledRelease: () => true,
@@ -1248,10 +1273,9 @@ describe('ToolHost', () => {
       const h = harness()
 
       expect(() => h.drag({ x: 10, y: 10 }, { x: 40, y: 40 })).toThrow('band failed')
-      expect(h.press({ x: 50, y: 50 })).toEqual({ quarantine: true, rejectSession: true })
       expect(band.calls).toContain('cancelTransient:tool-change')
       expect(edit).toBeNull()
-      expect(h.press({ x: 60, y: 60 })).toEqual({})
+      expect(h.press({ x: 50, y: 50 })).toEqual({})
     })
 
     it('an admitted press takes its capture before the tool hears it, and a refused press takes none', () => {

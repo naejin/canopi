@@ -915,6 +915,28 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
     busy.abort()
   })
 
+  it('a press whose pointer\'s last up was lost keeps the capture it takes; a refused one keeps neither capture', () => {
+    const rectangle = stubTool('rectangle')
+    useStubTools(rectangle)
+    const { session, deps } = createSession()
+    session.setTool('rectangle')
+
+    events.pointerDown({ x: 20, y: 20 }, { pointerId: 6 })
+    events.pointerMove({ x: 40, y: 40 }, { pointerId: 6 })
+    // The up is lost: pointer 6 presses again, ending its old session first.
+    events.pointerDown({ x: 60, y: 60 }, { pointerId: 6 })
+    expect(rectangle.count('press')).toBe(2)
+    expect(events.pointerCapture.has(6)).toBe(true)
+    events.pointerUp({ x: 60, y: 60 }, { pointerId: 6 })
+
+    events.pointerDown({ x: 20, y: 20 }, { pointerId: 8 })
+    const busy = deps.sceneEdits.begin('elsewhere')
+    events.pointerDown({ x: 60, y: 60 }, { pointerId: 8 })
+    expect(rectangle.count('press')).toBe(3)
+    expect(events.pointerCapture.has(8)).toBe(false)
+    busy.abort()
+  })
+
   it('a capture lost synchronously while it is taken stops the press before the tool, as today', () => {
     events.dispose()
     events = createSceneInteractionEventHarness(container, { pointerCapture: { synchronousLossOnSet: true } })
