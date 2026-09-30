@@ -719,6 +719,37 @@ describe('ToolHost', () => {
       expect(stamp.calls).toContain('viewChanged')
     })
 
+    it('a tool that switches to a bridged one on its release leaves no still pointer behind', () => {
+      // A saved stamp places on its release, then returns to Select, which the bridge runs.
+      const savedStamp: StubTool = stubTool('saved-object-stamp', {
+        gesture(g) {
+          if (g.kind !== 'tap' && g.kind !== 'drag-end') return 'pass'
+          savedStamp.ctx().effects.requestTool('select')
+          return 'handled'
+        },
+      })
+      const stamp = stubTool('plant-stamp')
+      useStubTools(savedStamp, stamp)
+      const h = harness({ tool: 'saved-object-stamp' })
+
+      h.click({ x: 100, y: 100 })
+      expect(h.host.activeTool.peek()).toBe('select')
+      // Under the bridged Select the host no longer follows the pointer.
+      h.hover({ x: 300, y: 250 })
+      h.arm('plant-stamp')
+      h.wheelZoom({ x: 300, y: 250 }, 2)
+      expect(stamp.count('hover')).toBe(0)
+      expect(stamp.calls).toContain('viewChanged')
+
+      h.arm('saved-object-stamp')
+      h.drag({ x: 50, y: 50 }, { x: 80, y: 60 })
+      expect(h.host.activeTool.peek()).toBe('select')
+      h.hover({ x: 300, y: 250 })
+      h.arm('plant-stamp')
+      h.view.navigation.zoomOut()
+      expect(stamp.count('hover')).toBe(0)
+    })
+
     it('the selected-zone chips wait until the zone tools are registered', () => {
       useStubTools(stubTool('rectangle'))
       const h = harness({ scene: { zones: [bed()] } })

@@ -708,11 +708,13 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   /**
    * After a press ends: today's pointerup clears the passive hover and resets the cursor to the tool's. A mouse or pen
    * rests where it was released, so the next camera frame re-emits a hover there (plan §1, exception 1); a lifted finger
-   * leaves nothing under it.
+   * leaves nothing under it. A tool that armed a bridged one on its release (a saved stamp returning to Select) left the
+   * pointer to the bridge, whose hovers the host does not follow.
    */
   function endLive(released: StillPointer | null = null): void {
     live = null
     lastHover = released
+      && activeTool
       && released.pointer !== 'touch'
       && frame().mode === 'site'
       && insideScreen(released.screen, frame().view.screen)
