@@ -1,1 +1,226 @@
-{}
+{
+  "src/__tests__/camera-controller.test.ts > CameraController > starts with one coherent unpublished viewport snapshot": {
+    "file": "src/canvas/runtime/view/headless-driver.test.ts",
+    "name": "headless camera driver > starts with one coherent unpublished viewport snapshot"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > publishes device-pixel ratio changes as part of the immutable frame": {
+    "file": "src/canvas/runtime/view/headless-driver.test.ts",
+    "name": "headless camera driver > publishes device-pixel ratio changes as part of the immutable frame"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > normalizes invalid screen metrics before publishing a frame": {
+    "file": "src/canvas/runtime/view/headless-driver.test.ts",
+    "name": "headless camera driver > normalizes invalid screen metrics before publishing a frame"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > increments once for each effective pan, zoom, resize, and reinitialization": {
+    "file": "src/canvas/runtime/view/headless-driver.test.ts",
+    "name": "headless camera driver > increments once for each effective pan, zoom, resize, and reinitialization"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > does not publish no-op viewport mutations": {
+    "file": "src/canvas/runtime/view/headless-driver.test.ts",
+    "name": "headless camera driver > does not publish no-op viewport mutations"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > owns immutable nested snapshot values": {
+    "file": "src/canvas/runtime/view/headless-driver.test.ts",
+    "name": "headless camera driver > owns immutable nested snapshot values"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > keeps imperative camera reads out of the caller reactive graph": {
+    "file": "src/canvas/runtime/view/headless-driver.test.ts",
+    "name": "headless camera driver > keeps imperative camera reads out of the caller reactive graph"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > publishes initialization state and revision atomically once": {
+    "file": "src/canvas/runtime/view/navigation.test.ts",
+    "name": "view navigation > publishes initialization state and revision atomically once"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > zooms around the provided screen point": {
+    "file": "src/canvas/runtime/view/navigation.test.ts",
+    "name": "view navigation > zooms around the provided screen point"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > clamps viewport scale to the configured map zoom range": {
+    "file": "src/canvas/runtime/view/navigation.test.ts",
+    "name": "view navigation > clamps viewport scale to the configured map zoom range"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > lets zoom-in reach the precision maximum without exceeding it": {
+    "file": "src/canvas/runtime/view/navigation.test.ts",
+    "name": "view navigation > lets zoom-in reach the precision maximum without exceeding it"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > derives overview below 0.1 while keeping the threshold editable": {
+    "file": "src/canvas/runtime/view/navigation.test.ts",
+    "name": "view navigation > derives overview below 0.1 while keeping the threshold editable"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > returns an empty overview to an origin-centred site frame": {
+    "file": "src/canvas/runtime/view/navigation.test.ts",
+    "name": "view navigation > returns an empty overview to an origin-centred site frame"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > returns ordinary content with the existing fit policy": {
+    "file": "src/canvas/runtime/view/navigation.test.ts",
+    "name": "view navigation > returns ordinary content with the existing fit policy"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > keeps Fit to content global while Return restores a usable site view": {
+    "file": "src/canvas/runtime/view/navigation.test.ts",
+    "name": "view navigation > keeps Fit to content global while Return restores a usable site view"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > rejects nonfinite zoom input without publishing": {
+    "file": "src/canvas/runtime/view/navigation.test.ts",
+    "name": "view navigation > rejects nonfinite zoom input without publishing"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > focuses temporary bounds with one retained bookmark and restores it once": {
+    "file": "src/canvas/runtime/view/navigation.test.ts",
+    "name": "view navigation > focuses temporary bounds with one retained bookmark and restores it once"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > rejects invalid temporary bounds without publishing a frame": {
+    "file": "src/canvas/runtime/view/navigation.test.ts",
+    "name": "view navigation > rejects invalid temporary bounds without publishing a frame"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > fits temporary bounds with CSS-pixel padding and both scale ceilings": {
+    "file": "src/canvas/runtime/view/navigation.test.ts",
+    "name": "view navigation > fits temporary bounds with CSS-pixel padding and both scale ceilings"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > clears a temporary bookmark during initialization and disposal": {
+    "file": "src/canvas/runtime/view/navigation.test.ts",
+    "name": "view navigation > clears a temporary bookmark during initialization and disposal"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > clears a temporary bookmark when the generation camera policy changes": {
+    "file": "src/canvas/runtime/view/navigation.test.ts",
+    "name": "view navigation > clears a temporary bookmark when the generation camera policy changes"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > fits to the scene bounds": {
+    "file": "src/canvas/runtime/view/navigation.test.ts",
+    "name": "view navigation > fits to the scene bounds"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > fits the full rotated note envelope consistently from marker and text scales": {
+    "file": "src/canvas/runtime/view/navigation.test.ts",
+    "name": "view navigation > fits the full rotated note envelope consistently from marker and text scales"
+  },
+  "src/__tests__/camera-controller.test.ts > CameraController > converges in a single call despite scale-dependent bounds": {
+    "file": "src/canvas/runtime/view/navigation.test.ts",
+    "name": "view navigation > converges in a single call despite scale-dependent bounds"
+  },
+  "src/__tests__/camera-controller.test.ts > computeSceneBounds > uses the symbolic Placed Plant Visual Footprint for plant-only bounds": {
+    "file": "src/canvas/runtime/view/fit.test.ts",
+    "name": "scene extent > uses the symbolic Placed Plant Visual Footprint for plant-only bounds"
+  },
+  "src/__tests__/camera-controller.test.ts > computeSceneBounds > includes both plant and zone geometry": {
+    "file": "src/canvas/runtime/view/fit.test.ts",
+    "name": "scene extent > includes both plant and zone geometry"
+  },
+  "src/__tests__/camera-controller.test.ts > computeSceneBounds > includes elliptical zone center and radii geometry": {
+    "file": "src/canvas/runtime/view/fit.test.ts",
+    "name": "scene extent > includes elliptical zone center and radii geometry"
+  },
+  "src/__tests__/camera-controller.test.ts > computeSceneBounds > includes oriented Elliptical Zone bounds": {
+    "file": "src/canvas/runtime/view/fit.test.ts",
+    "name": "scene extent > includes oriented Elliptical Zone bounds"
+  },
+  "src/__tests__/camera-controller.test.ts > computeSceneBounds > includes annotation extents instead of only the annotation anchor point": {
+    "file": "src/canvas/runtime/view/fit.test.ts",
+    "name": "scene extent > includes annotation extents instead of only the annotation anchor point"
+  },
+  "src/__tests__/maplibre-camera.test.ts > createMapFrame > returns null when location is missing": {
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > a placement becomes the north-up camera over the plane point at the screen centre"
+  },
+  "src/__tests__/maplibre-camera.test.ts > createMapFrame > returns null when screen size is invalid": {
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > a placement that is not finite or has no scale moves nothing"
+  },
+  "src/__tests__/maplibre-camera.test.ts > createMapFrame > projects viewport center into a north-up MapLibre camera": {
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > a placement becomes the north-up camera over the plane point at the screen centre"
+  },
+  "src/__tests__/maplibre-camera.test.ts > createMapFrame > clamps extreme zoom values at the configured zoom-27 ceiling": {
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > a placement past zoom 27 lands at zoom 27"
+  },
+  "src/__tests__/maplibre-camera.test.ts > createMapFrame > exposes viewport diagnostics through the canonical frame": {
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > the frame reads back the placed centre and the ground under the four corners"
+  },
+  "src/__tests__/maplibre-workspace-camera.test.ts > MapLibreWorkspaceCameraOwner > does not turn exhausted zoom into a centre-only map movement": {
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > zooming in at zoom 27 sends no jump and publishes nothing"
+  },
+  "src/__tests__/maplibre-workspace-camera.test.ts > MapLibreWorkspaceCameraOwner > makes repeated zoom-out an exact no-op at the single-world viewport limit": {
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > zooming out at the single-world floor sends no jump and publishes nothing"
+  },
+  "src/__tests__/maplibre-workspace-camera.test.ts > MapLibreWorkspaceCameraOwner > publishes the exact zoom-27 scale at a high-latitude session plane origin": {
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > publishes the exact zoom-27 scale at a high-latitude session plane origin"
+  },
+  "src/__tests__/maplibre-workspace-camera.test.ts > MapLibreWorkspaceCameraOwner > keeps one frame signal while a map publishes CSS-pixel camera facts": {
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > a camera change of the map's own publishes one frame in CSS pixels, and an unchanged move none"
+  },
+  "src/__tests__/maplibre-workspace-camera.test.ts > MapLibreWorkspaceCameraOwner > re-derives an attached view from the map when the session plane moves, never transforming it twice": {
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > planeChanged re-expresses the frame in the new plane and the map stays put"
+  },
+  "src/__tests__/maplibre-workspace-camera.test.ts > MapLibreWorkspaceCameraOwner > reprojects a detached view through the transform": {
+    "file": "src/canvas/runtime/view/reorigin.test.ts",
+    "name": "re-origin > planeChanged keeps the camera"
+  },
+  "src/__tests__/maplibre-workspace-camera.test.ts > MapLibreWorkspaceCameraOwner > routes attached navigation into the map and returns to the owned camera after detach": {
+    "file": "src/canvas/runtime/view/driver-host.test.ts",
+    "name": "camera driver host > attach hands the camera to the attached driver, and detach takes it back"
+  },
+  "src/__tests__/maplibre-workspace-camera.test.ts > MapLibreWorkspaceCameraOwner > retains overview and resolved limits without claiming geographic scale after fallback": {
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > detach keeps the attached placement, scale bounds and mode exactly"
+  },
+  "src/__tests__/maplibre-workspace-camera.test.ts > MapLibreWorkspaceCameraOwner > resizes the attached map and uses its backing-to-CSS-pixel density": {
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > a resize publishes one frame with the new screen size and keeps the camera"
+  },
+  "src/__tests__/maplibre-workspace-camera.test.ts > MapLibreWorkspaceCameraOwner > routes temporary focus and return through attached map jumps and clears it on initialize": {
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > temporary focus and its return reach the map as one jump each"
+  },
+  "src/__tests__/maplibre-workspace-camera.test.ts > MapLibreWorkspaceCameraOwner > replays a failed attached return through the owned camera": {
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > a map call that throws fails the driver, and the host takes the camera back where it was"
+  },
+  "src/__tests__/maplibre-workspace-camera.test.ts > MapLibreWorkspaceCameraOwner > removes listeners, restores the last valid frame, and reports an invalid map once": {
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > a read-back pitch other than 0 fails with map-error"
+  },
+  "src/__tests__/maplibre-workspace-camera.test.ts > MapLibreWorkspaceCameraOwner > keeps attachment failure observers outside the camera lifecycle boundary": {
+    "file": "src/canvas/runtime/view/driver-host.test.ts",
+    "name": "camera driver host > a driver failure detaches the host and reports it"
+  },
+  "src/__tests__/maplibre-workspace-camera.test.ts > MapLibreWorkspaceCameraOwner > notifies attachment subscribers and restores the last frame when listener removal fails": {
+    "file": "src/canvas/runtime/view/driver-host.test.ts",
+    "name": "camera driver host > a driver that cannot release its map still hands the camera back, and the error follows"
+  },
+  "src/__tests__/maplibre-workspace-camera.test.ts > MapLibreWorkspaceCameraOwner > surfaces listener cleanup errors from explicit detach after trying both removals": {
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > dispose tries every release and then throws"
+  },
+  "src/__tests__/maplibre-workspace-camera.test.ts > MapLibreWorkspaceCameraOwner > makes disposal idempotent and fences all late events": {
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > after dispose, late map events publish nothing and a second dispose does nothing"
+  },
+  "src/__tests__/maplibre-workspace-camera.test.ts > MapLibreWorkspaceCameraOwner > fences the active generation before removing listeners and replacing a map": {
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > a replaced map's late moves never reach the frame"
+  },
+  "src/__tests__/maplibre-workspace-camera.test.ts > MapLibreWorkspaceCameraOwner > flies an attached map to an animated centre and jumps otherwise": {
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > centerOn flies an attached map when asked to animate, and jumps otherwise"
+  },
+  "src/__tests__/maplibre-workspace-camera.test.ts > MapLibreWorkspaceCameraOwner > jumps a detached camera even when asked to animate": {
+    "file": "src/canvas/runtime/view/headless-driver.test.ts",
+    "name": "headless camera driver > jumpTo publishes one frame with the requested camera"
+  },
+  "src/__tests__/workspace-camera-refresh-origin.test.ts > MapLibreWorkspaceCameraOwner.attachment.refreshOrigin > republishes the plane viewport for a new origin while the map stays put": {
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > planeChanged re-expresses the frame in the new plane and the map stays put"
+  },
+  "src/__tests__/workspace-camera-refresh-origin.test.ts > MapLibreWorkspaceCameraOwner.attachment.refreshOrigin > keeps a temporary focus bookmark across a re-origin so the return lands on the original view": {
+    "file": "src/canvas/runtime/view/reorigin.test.ts",
+    "name": "re-origin > keeps a temporary focus bookmark across a re-origin so the return lands on the original view"
+  },
+  "src/__tests__/workspace-camera-refresh-origin.test.ts > MapLibreWorkspaceCameraOwner.attachment.refreshOrigin > is inert without an attached map": {
+    "file": "src/canvas/runtime/view/reorigin.test.ts",
+    "name": "re-origin > planeChanged to the plane it already has publishes nothing"
+  }
+}

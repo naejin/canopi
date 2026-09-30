@@ -12,6 +12,7 @@ import type {
   WorkspaceCameraFrameReader,
   WorkspaceCameraNavigation,
 } from './camera'
+import { sceneExtentPoints } from './scene-extent'
 import type { SceneRuntimePresentationController } from './scene-runtime/presentation'
 import { getDesignObjectSelectionModel } from './scene-runtime/selection'
 import type {
@@ -399,16 +400,18 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   }
 
   private zoomToFit(): void {
-    this.options.cameraNavigation.zoomToFit(this.options.sceneStore.persisted, {
-      plantContext: this.options.presentation.createPlantPresentationContext(this.options.camera.viewport.scale),
+    const scene = this.options.sceneStore.persisted
+    this.options.cameraNavigation.zoomToFit(scene, {
+      extentPoints: sceneExtentPoints(scene, this.options.presentation.createPlantPresentationContext(this.options.camera.viewport.scale)),
       emptySceneScale: this.options.readEmptySceneScale?.(),
     })
     this.options.invalidate('viewport')
   }
 
   private returnToDesign(): void {
-    this.options.cameraNavigation.returnToDesign(this.options.sceneStore.persisted, {
-      plantContext: this.options.presentation.createPlantPresentationContext(this.options.camera.viewport.scale),
+    const scene = this.options.sceneStore.persisted
+    this.options.cameraNavigation.returnToDesign(scene, {
+      extentPoints: sceneExtentPoints(scene, this.options.presentation.createPlantPresentationContext(this.options.camera.viewport.scale)),
     })
     this.options.invalidate('viewport')
   }

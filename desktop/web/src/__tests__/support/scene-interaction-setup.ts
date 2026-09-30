@@ -24,8 +24,11 @@ import { createTestCanvasQuerySurface } from './canvas-query-surface'
 import { snapToGridEnabled, snapToGuidesEnabled } from '../../app/canvas-settings/signals'
 import { plantSpacingIntervalM } from '../../app/settings/state'
 import { t } from '../../i18n'
-import { CameraController } from '../../canvas/runtime/camera'
+import type { CameraController } from '../../canvas/runtime/camera'
+import { planarToViewCamera, screenToGeo } from '../../canvas/runtime/view/camera-math'
+import { createSessionPlane } from '../../canvas/session-plane'
 import type { MapLibreWorkspaceCameraMap } from '../../maplibre/workspace-camera'
+import { createTestView, type TestView } from './test-view'
 import {
   SceneStore,
   roundGeoPosition,
@@ -77,22 +80,38 @@ export function createPlantPresentationContext(viewportScale: number) {
   }
 }
 
+/**
+ * A consistent MapLibre fake with a fixed camera: the geographic camera that shows today's attached viewport { x: 100, y: 50, scale: 2 }
+ * on the plane of the attached test's origin (Paris). jumpTo is recorded and fires 'move', and the read-backs stay put.
+ */
 export class AttachedInteractionMap implements MapLibreWorkspaceCameraMap {
   readonly canvas = document.createElement('canvas')
-  readonly jumpTo = vi.fn()
+  readonly listeners = new Map<string, Set<() => void>>()
+  readonly jumpTo = vi.fn(() => this.fire('move'))
   readonly resize = vi.fn()
-  readonly on = vi.fn()
-  readonly off = vi.fn()
-  readonly project = vi.fn(() => this.projection[this.projectIndex++ % this.projection.length]!)
+  readonly stop = vi.fn()
+  readonly on = vi.fn((type: string, listener: () => void) => {
+    this.listeners.set(type, (this.listeners.get(type) ?? new Set()).add(listener))
+  })
+  readonly off = vi.fn((type: string, listener: () => void) => {
+    this.listeners.get(type)?.delete(listener)
+  })
   readonly getPitch = vi.fn(() => 0)
-  readonly getZoom = vi.fn(() => 18)
-  readonly getMinZoom = vi.fn(() => 0)
-  readonly getMaxZoom = vi.fn(() => 27)
-  readonly getCenter = vi.fn(() => ({ lng: 2.3522, lat: 48.8566 }))
+  readonly getBearing = vi.fn(() => this.camera.bearingDeg)
+  readonly getZoom = vi.fn(() => this.camera.zoom)
+  readonly getCenter = vi.fn(() => ({ lng: this.camera.center.lon, lat: this.camera.center.lat }))
+  readonly unproject = vi.fn(([x, y]: [number, number]) => {
+    const ground = screenToGeo(this.camera, this.screen, { x, y })
+    return { lng: ground.lon, lat: ground.lat }
+  })
   readonly getCanvas = vi.fn(() => this.canvas)
 
-  private projectIndex = 0
-  private readonly projection = [{ x: 100, y: 50 }, { x: 102, y: 50 }, { x: 100, y: 52 }]
+  private readonly screen = { width: 400, height: 300, devicePixelRatio: 2 }
+  private readonly camera = planarToViewCamera(
+    { x: 100, y: 50, scale: 2, bearingDeg: 0 },
+    this.screen,
+    createSessionPlane({ lon: 2.3522, lat: 48.8566 }),
+  )
 
   constructor() {
     Object.defineProperties(this.canvas, {
@@ -101,6 +120,10 @@ export class AttachedInteractionMap implements MapLibreWorkspaceCameraMap {
       width: { configurable: true, value: 800 },
       height: { configurable: true, value: 600 },
     })
+  }
+
+  private fire(type: string): void {
+    for (const listener of [...(this.listeners.get(type) ?? [])]) listener()
   }
 }
 
@@ -645,6 +668,7 @@ export function pointsCenter(points: readonly ScenePoint[]): ScenePoint {
 /** The describe-scope state of the Scene Interaction suites, rebuilt before each test. */
 export interface SceneInteractionFixtureState {
   readonly container: HTMLDivElement
+  readonly testView: TestView
   readonly camera: CameraController
   readonly store: SceneStore
   readonly events: SceneInteractionEventHarness
@@ -664,6 +688,7 @@ export function installSceneInteractionFixture(
   live: () => { readonly events: SceneInteractionEventHarness },
 ) {
   let container: HTMLDivElement
+  let testView: TestView
   let camera: CameraController
   let store: SceneStore
   let events: SceneInteractionEventHarness
@@ -739,9 +764,8 @@ export function installSceneInteractionFixture(
     renderPreact(h(ToolCard, { canvasRef: { current: container } }), toolCardHost)
     contextMenuHost.reset()
 
-    camera = new CameraController()
-    camera.initialize({ width: 400, height: 300 })
-    camera.setViewport({ x: 0, y: 0, scale: 1 })
+    testView = createTestView({ screen: { width: 400, height: 300 }, viewport: { x: 0, y: 0, scale: 1 } })
+    camera = testView.legacyCamera
     store = new SceneStore()
     sessions = []
     selectedObjectIds.value = new Set()
@@ -750,7 +774,7 @@ export function installSceneInteractionFixture(
     snapToGridEnabled.value = false
     snapToGuidesEnabled.value = false
     plantSpacingIntervalM.value = 0.5
-    assign({ container, camera, store, events, sessions, toolCardHost, flushToolCard })
+    assign({ container, testView, camera, store, events, sessions, toolCardHost, flushToolCard })
   })
 
   afterEach(() => {

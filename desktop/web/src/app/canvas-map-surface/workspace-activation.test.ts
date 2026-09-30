@@ -18,6 +18,8 @@ import {
 import { createSharedMapSceneRendererComposition, type SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
 import { WorkspaceGenerationReconciler } from './workspace-generation-reconciler'
 import type { MapBackgroundPresentation } from '../../maplibre/map-background'
+import { geoToScreen, screenToGeo } from '../../canvas/runtime/view/camera-math'
+import type { ViewCamera } from '../../canvas/runtime/view/types'
 
 function background(
   basemap: Partial<MapBackgroundPresentation['basemap']> = {},
@@ -62,10 +64,13 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
+/** A consistent MapLibre fake (plan §4, 0A "Attached-map fakes"): its read-backs describe one fixed camera, and jumpTo fires 'move'. */
 class FakeMap {
   readonly canvas = document.createElement('canvas')
   readonly context = {} as WebGL2RenderingContext
-  readonly jumpTo = vi.fn()
+  readonly camera: ViewCamera = { center: { lon: 0, lat: 0 }, zoom: 18, bearingDeg: 0, pitchDeg: 0 }
+  readonly jumpTo = vi.fn(() => this.emit('move'))
+  readonly stop = vi.fn()
   readonly resize = vi.fn()
   readonly remove = vi.fn()
   readonly listeners = new Map<string, Set<() => void>>()
@@ -106,11 +111,17 @@ class FakeMap {
 
   getCanvas() { return this.canvas }
   getPitch() { return this.pitch }
-  getZoom() { return 18 }
+  getBearing() { return this.camera.bearingDeg }
+  getZoom() { return this.camera.zoom }
   getMinZoom() { return 0 }
   getMaxZoom() { return 27 }
-  getCenter() { return { lng: 0, lat: 0 } }
-  project([lon, lat]: [number, number]) { return { x: 200 + lon * 4, y: 150 - lat * 4 } }
+  getCenter() { return { lng: this.camera.center.lon, lat: this.camera.center.lat } }
+  project([lon, lat]: [number, number]) { return geoToScreen(this.camera, this.screen(), { lon, lat }) }
+  unproject([x, y]: [number, number]) {
+    const ground = screenToGeo(this.camera, this.screen(), { x, y })
+    return { lng: ground.lon, lat: ground.lat }
+  }
+  private screen() { return { width: this.canvas.clientWidth, height: this.canvas.clientHeight, devicePixelRatio: 2 } }
   emit(type: string) { this.listeners.get(type)?.forEach((listener) => listener()) }
   clearStyleLayer(id: string) {
     const layer = this.layers.get(id)

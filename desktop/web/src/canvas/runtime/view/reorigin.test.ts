@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { createTestView } from '../../../__tests__/support/test-view'
 import { createSessionPlane, type SessionPlane } from '../../session-plane'
 import { createWorkspaceCameraPolicy } from '../../workspace-camera-policy'
-import { CameraController } from '../camera'
 import type { ViewFrame, ViewTransform } from './types'
 import { planarCameraOf } from './view-transform'
 
@@ -43,14 +42,11 @@ describe('re-origin', () => {
       view.dispose()
     }
 
-    // In plane terms, never through lon/lat: at bearing 0, today's reprojection bit for bit.
+    // In plane terms, never through lon/lat: at bearing 0, today's reprojection bit for bit (today's CameraController's
+    // reprojectViewport(first.transformTo(next)) from the same viewport, recorded at 52cbff10).
     const view = createTestView({ plane: first, viewport: { x: -19_850.25, y: 5_100.5, scale: 1.25 } })
-    const camera = new CameraController()
-    camera.initialize({ width: 400, height: 300 })
-    camera.setViewport({ x: -19_850.25, y: 5_100.5, scale: 1.25 })
     view.host.current().planeChanged(next)
-    camera.reprojectViewport(first.transformTo(next))
-    expect(planarCameraOf(view.view())).toEqual({ ...camera.viewport, bearingDeg: 0 })
+    expect(planarCameraOf(view.view())).toEqual({ x: 5149.750000000808, y: -1149.4999999983747, scale: 1.2511237201432013, bearingDeg: 0 })
     view.dispose()
   })
 
@@ -75,6 +71,20 @@ describe('re-origin', () => {
     expect(returned.center.lon).toBeCloseTo(designView.center.lon, 7)
     expect(returned.center.lat).toBeCloseTo(designView.center.lat, 7)
     expect(returned.zoom).toBeCloseTo(designView.zoom, 7)
+    view.dispose()
+  })
+
+  it('planeChanged to the plane it already has publishes nothing', () => {
+    const plane = createSessionPlane({ lon: 2.3522, lat: 48.8566 })
+    const view = createTestView({ plane, viewport: { x: 12, y: -30, scale: 2 } })
+    const published: ViewFrame[] = []
+    view.frames.onViewFrame('overlays', (frame) => published.push(frame))
+    const before = view.frames.viewFrame.peek()
+
+    view.host.current().planeChanged(plane)
+
+    expect(published).toHaveLength(0)
+    expect(view.frames.viewFrame.peek()).toBe(before)
     view.dispose()
   })
 })

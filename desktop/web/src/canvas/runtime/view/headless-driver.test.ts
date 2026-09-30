@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import { createTestView, type TestView } from '../../../__tests__/support/test-view'
 import { mapZoomToStageScale } from '../../projection'
 import { createSessionPlane } from '../../session-plane'
-import { CameraController } from '../camera'
 import type { CameraDriver, CameraMove } from './camera-driver'
 import type { ViewCamera, ViewFrame } from './types'
 import { planarCameraOf } from './view-transform'
@@ -21,24 +20,28 @@ function driverOf(view: TestView): { driver: CameraDriver; published: ViewFrame[
   return { driver, published }
 }
 
-function today(width: number, height: number, viewport?: { x: number; y: number; scale: number }): CameraController {
-  const camera = new CameraController()
-  camera.initialize({ width, height })
-  if (viewport) camera.setViewport(viewport)
-  return camera
+/** What today's CameraController read back after a move: its viewport, screen, density and mode, bit for bit. */
+interface TodayReadback {
+  readonly viewport: { readonly x: number; readonly y: number; readonly scale: number }
+  readonly screen: { readonly width: number; readonly height: number; readonly devicePixelRatio: number }
+  readonly mode: 'site' | 'overview'
 }
 
-/** Readbacks bit for bit: the placement, both projections, the scale and the mode. */
-function expectReadsAsToday(frame: ViewFrame, camera: CameraController, compareMinimum = true): void {
-  const snapshot = camera.snapshot.value
-  expect(planarCameraOf(frame.view)).toEqual({ ...snapshot.viewport, bearingDeg: 0 })
-  expect(frame.view.pixelsPerMetre).toBe(snapshot.viewport.scale)
-  for (const point of WORLD_POINTS) expect(frame.view.worldToScreen(point)).toEqual(camera.worldToScreen(point))
-  for (const point of SCREEN_POINTS) expect(frame.view.screenToWorld(point)).toEqual(camera.screenToWorld(point))
-  expect(frame.view.screen).toEqual({ ...snapshot.screenSize, devicePixelRatio: snapshot.devicePixelRatio })
-  expect(frame.mode).toBe(snapshot.mode)
-  expect(frame.scaleBounds.max).toBe(snapshot.scaleBounds.maximum)
-  if (compareMinimum) expect(frame.scaleBounds.min).toBe(snapshot.scaleBounds.minimum)
+/** Readbacks bit for bit: the placement, both projections (today's p × scale + { x, y } and its inverse), the scale and the mode. */
+function expectReadsAsToday(frame: ViewFrame, today: TodayReadback, compareMinimum = true): void {
+  const { viewport } = today
+  expect(planarCameraOf(frame.view)).toEqual({ ...viewport, bearingDeg: 0 })
+  expect(frame.view.pixelsPerMetre).toBe(viewport.scale)
+  for (const point of WORLD_POINTS) {
+    expect(frame.view.worldToScreen(point)).toEqual({ x: point.x * viewport.scale + viewport.x, y: point.y * viewport.scale + viewport.y })
+  }
+  for (const point of SCREEN_POINTS) {
+    expect(frame.view.screenToWorld(point)).toEqual({ x: (point.x - viewport.x) / viewport.scale, y: (point.y - viewport.y) / viewport.scale })
+  }
+  expect(frame.view.screen).toEqual(today.screen)
+  expect(frame.mode).toBe(today.mode)
+  expect(frame.scaleBounds.max).toBe(EQUATOR_MAX_SCALE)
+  if (compareMinimum) expect(frame.scaleBounds.min).toBe(EQUATOR_MIN_SCALE)
 }
 
 describe('headless camera driver', () => {
@@ -106,50 +109,82 @@ describe('headless camera driver', () => {
   it('a still headless camera reproduces today\'s CameraController exactly', () => {
     const plane = createSessionPlane({ lon: 0, lat: 0 })
     const next = createSessionPlane(plane.toGeo({ x: 12_500, y: -4_000 }))
-    type Step = readonly [CameraMove | ((driver: CameraDriver) => void), (camera: CameraController) => void]
-    const steps: readonly Step[] = [
-      [{ kind: 'pan-by', deltaPx: { x: 17.25, y: -3.5 } }, (camera) => camera.panBy({ x: 17.25, y: -3.5 })],
-      [{ kind: 'zoom-around', anchorPx: { x: 140, y: 110 }, factor: 2.5 }, (camera) => camera.zoomAroundScreenPoint({ x: 140, y: 110 }, 2.5)],
-      [{ kind: 'zoom-around', anchorPx: { x: 200, y: 150 }, factor: 1.1 }, (camera) => camera.zoomIn()],
-      [{ kind: 'zoom-around', anchorPx: { x: 200, y: 150 }, factor: 1 / 1.1 }, (camera) => camera.zoomOut()],
-      [{ kind: 'place', planar: { x: -200.125, y: 91.75, scale: 3.3, bearingDeg: 0 } }, (camera) => camera.setViewport({ x: -200.125, y: 91.75, scale: 3.3 })],
-      [{ kind: 'zoom-around', anchorPx: { x: 10, y: 290 }, factor: 0.37 }, (camera) => camera.zoomAroundScreenPoint({ x: 10, y: 290 }, 0.37)],
-      [{ kind: 'pan-by', deltaPx: { x: 0, y: 0 } }, (camera) => camera.panBy({ x: 0, y: 0 })],
-      [{ kind: 'place', planar: { x: -200.125 * 0.37, y: 91.75, scale: 3.3, bearingDeg: 0 } }, (camera) => camera.setViewport({ x: -200.125 * 0.37, y: 91.75, scale: 3.3 })],
-      [{ kind: 'place', planar: { x: 5, y: 5, scale: 1e9, bearingDeg: 0 } }, (camera) => camera.setViewport({ x: 5, y: 5, scale: 1e9 })],
-      [{ kind: 'zoom-around', anchorPx: { x: 200, y: 150 }, factor: 1e-12 }, (camera) => camera.zoomAroundScreenPoint({ x: 200, y: 150 }, 1e-12)],
-      [{ kind: 'place', planar: { x: 31, y: -7, scale: 0.05, bearingDeg: 0 } }, (camera) => camera.setViewport({ x: 31, y: -7, scale: 0.05 })],
-      [{ kind: 'zoom-around', anchorPx: { x: 0.5, y: 299 }, factor: Number.NaN }, (camera) => camera.zoomAroundScreenPoint({ x: 0.5, y: 299 }, Number.NaN)],
-      [(driver) => driver.setScreen({ width: 300, height: 200, devicePixelRatio: 1 }), (camera) => camera.resize({ width: 300, height: 200 })],
-      [(driver) => driver.setScreen({ width: 300, height: 200, devicePixelRatio: 2 }), (camera) => camera.resize({ width: 300, height: 200, devicePixelRatio: 2 })],
-      [(driver) => driver.planeChanged(next), (camera) => camera.reprojectViewport(plane.transformTo(next))],
-      [{ kind: 'zoom-around', anchorPx: { x: 77, y: 12 }, factor: 3 }, (camera) => camera.zoomAroundScreenPoint({ x: 77, y: 12 }, 3)],
+    const steps: ReadonlyArray<CameraMove | ((driver: CameraDriver) => void)> = [
+      { kind: 'pan-by', deltaPx: { x: 17.25, y: -3.5 } },
+      { kind: 'zoom-around', anchorPx: { x: 140, y: 110 }, factor: 2.5 },
+      { kind: 'zoom-around', anchorPx: { x: 200, y: 150 }, factor: 1.1 },
+      { kind: 'zoom-around', anchorPx: { x: 200, y: 150 }, factor: 1 / 1.1 },
+      { kind: 'place', planar: { x: -200.125, y: 91.75, scale: 3.3, bearingDeg: 0 } },
+      { kind: 'zoom-around', anchorPx: { x: 10, y: 290 }, factor: 0.37 },
+      { kind: 'pan-by', deltaPx: { x: 0, y: 0 } },
+      { kind: 'place', planar: { x: -200.125 * 0.37, y: 91.75, scale: 3.3, bearingDeg: 0 } },
+      { kind: 'place', planar: { x: 5, y: 5, scale: 1e9, bearingDeg: 0 } },
+      { kind: 'zoom-around', anchorPx: { x: 200, y: 150 }, factor: 1e-12 },
+      { kind: 'place', planar: { x: 31, y: -7, scale: 0.05, bearingDeg: 0 } },
+      { kind: 'zoom-around', anchorPx: { x: 0.5, y: 299 }, factor: Number.NaN },
+      (driver) => driver.setScreen({ width: 300, height: 200, devicePixelRatio: 1 }),
+      (driver) => driver.setScreen({ width: 300, height: 200, devicePixelRatio: 2 }),
+      (driver) => driver.planeChanged(next),
+      { kind: 'zoom-around', anchorPx: { x: 77, y: 12 }, factor: 3 },
+    ]
+    const SCREEN_400 = { width: 400, height: 300, devicePixelRatio: 1 }
+    const SCREEN_300 = { width: 300, height: 200, devicePixelRatio: 1 }
+    const SCREEN_300_DENSE = { width: 300, height: 200, devicePixelRatio: 2 }
+    // Today's CameraController after the same calls (panBy, zoomAroundScreenPoint, zoomIn, zoomOut, setViewport, resize and
+    // reprojectViewport with plane.transformTo(next)), from { x: 0, y: 0, scale: 1 } on 400 × 300: its viewport, the frames it
+    // published, its mode and its screen, recorded at 52cbff10 before the class became the legacy shim.
+    const today: ReadonlyArray<readonly [number, number, number, number, 'site' | 'overview', TodayReadback['screen']]> = [
+      [17.25, -3.5, 1, 1, 'site', SCREEN_400],
+      [-166.875, -173.75, 2.5, 1, 'site', SCREEN_400],
+      [-203.5625, -206.125, 2.75, 1, 'site', SCREEN_400],
+      [-166.875, -173.75, 2.5, 1, 'site', SCREEN_400],
+      [-200.125, 91.75, 3.3, 1, 'site', SCREEN_400],
+      [-67.74625, 216.6475, 1.2209999999999999, 1, 'site', SCREEN_400],
+      [-67.74625, 216.6475, 1.2209999999999999, 0, 'site', SCREEN_400],
+      [-74.04625, 91.75, 3.3, 1, 'site', SCREEN_400],
+      [5, 5, 1716.6895781438734, 1, 'site', SCREEN_400],
+      [199.99999854713678, 149.9999989196658, 1.2790334061860095e-05, 1, 'overview', SCREEN_400],
+      [31, -7, 0.05, 1, 'overview', SCREEN_400],
+      [31, -7, 0.05, 0, 'overview', SCREEN_400],
+      [31, -7, 0.05, 1, 'overview', SCREEN_300],
+      [31, -7, 0.05, 1, 'overview', SCREEN_300_DENSE],
+      [656.0000000000174, -207.0000000000233, 0.050000009854704264, 1, 'overview', SCREEN_300_DENSE],
+      [1814.000000000052, -645.0000000000699, 0.1500000295641128, 1, 'site', SCREEN_300_DENSE],
     ]
 
     const view = createTestView({ plane })
     const { driver, published } = driverOf(view)
-    const camera = today(400, 300, { x: 0, y: 0, scale: 1 })
-    expectReadsAsToday(driver.frames.viewFrame.peek(), camera)
-    for (const [move, todayMove] of steps) {
-      const before = { frames: published.length, revision: camera.snapshot.value.revision }
+    expectReadsAsToday(driver.frames.viewFrame.peek(), { viewport: { x: 0, y: 0, scale: 1 }, screen: SCREEN_400, mode: 'site' })
+    for (const [index, move] of steps.entries()) {
+      const before = published.length
       if (typeof move === 'function') move(driver)
       else driver.apply(move)
-      todayMove(camera)
 
-      expect(published.length - before.frames).toBe(camera.snapshot.value.revision - before.revision)
-      expectReadsAsToday(driver.frames.viewFrame.peek(), camera)
+      const [x, y, scale, frames, mode, screen] = today[index]!
+      expect(published.length - before).toBe(frames)
+      expectReadsAsToday(driver.frames.viewFrame.peek(), { viewport: { x, y, scale }, screen, mode })
     }
     view.dispose()
 
-    // A larger screen: every scale above its single-world floor reads back as today's.
+    // A larger screen: every scale above its single-world floor reads back as today's (from today's 1000 × 800 initial frame).
     const wide = createTestView({ screen: { width: 1000, height: 800 }, viewport: { x: 100, y: 0, scale: 8 } })
     const wideDriver = wide.host.current()
-    const wideCamera = today(1000, 800)
-    for (const [move, todayMove] of [0, 1, 4, 5, 6, 7].map((index) => steps[index]!)) {
-      if (typeof move === 'function') continue
-      wideDriver.apply(move)
-      todayMove(wideCamera)
-      expectReadsAsToday(wideDriver.frames.viewFrame.peek(), wideCamera, false)
+    const wideToday: ReadonlyArray<readonly [number, number, number]> = [
+      [117.25, -3.5, 8],
+      [83.125, -173.75, 20],
+      [-200.125, 91.75, 3.3],
+      [-67.74625, 216.6475, 1.2209999999999999],
+      [-67.74625, 216.6475, 1.2209999999999999],
+      [-74.04625, 91.75, 3.3],
+    ]
+    for (const [index, stepIndex] of [0, 1, 4, 5, 6, 7].entries()) {
+      wideDriver.apply(steps[stepIndex] as CameraMove)
+      const [x, y, scale] = wideToday[index]!
+      expectReadsAsToday(wideDriver.frames.viewFrame.peek(), {
+        viewport: { x, y, scale },
+        screen: { width: 1000, height: 800, devicePixelRatio: 1 },
+        mode: 'site',
+      }, false)
     }
     wide.dispose()
   })

@@ -1,10 +1,11 @@
 // __tests__/support/test-view.ts  (test support)
 //
 // createTestView: the one way tests build a camera (spec §1.1b). A driver host starting on a HeadlessCameraDriver, built with the
-// production factories, the navigation over it, and one manual clock that the drivers' clock and animation frames and the frame
-// source's settle timers all read.
+// production factories, the navigation over it, one manual clock that the drivers' clock and animation frames and the frame
+// source's settle timers all read, and (0A to the end of 0D2) the legacy CameraController shim over the same host.
 
 import { signal } from '@preact/signals'
+import { CameraController } from '../../canvas/runtime/camera'
 import type { ScenePersistedState } from '../../canvas/runtime/scene'
 import type { CameraDriverHost } from '../../canvas/runtime/view/camera-driver'
 import { viewCameraToPlanar } from '../../canvas/runtime/view/camera-math'
@@ -46,6 +47,8 @@ export interface TestView {
   view(): ViewTransform                       // frames.viewFrame.peek().view
   setViewport(v: { readonly x: number; readonly y: number; readonly scale: number }): void   // an exact 'place' move, bearing kept
   setScene(scene: ScenePersistedState, bounds?: SceneBoundsOptions): void
+  /** 0A to the end of 0D2 only: the facade's CameraController shim over this same host. Deleted with the facade. */
+  readonly legacyCamera: CameraController
   dispose(): void
 }
 
@@ -63,11 +66,12 @@ export function createTestView(options: TestViewOptions = {}): TestView {
       pitchDeg: 0,
     }, screen, plane)
     : { ...(options.viewport ?? { x: 0, y: 0, scale: 1 }), bearingDeg: 0 }
+  const policy = options.policy ?? createWorkspaceCameraPolicy()
   const host = createCameraDriverHost({
     clock: clock.now,
     scheduleFrame: clock.scheduleFrame,
     timers: clock.timers,
-    policy: options.policy ?? createWorkspaceCameraPolicy(),
+    policy,
     reducedMotion: signal(false),
     plane: () => plane,
     screen,
@@ -95,6 +99,7 @@ export function createTestView(options: TestViewOptions = {}): TestView {
     setScene(persisted, bounds = {}) {
       scene = { persisted, bounds }
     },
+    legacyCamera: new CameraController(policy, { host, plane }),
     dispose() {
       host.dispose()
       clock.clear()

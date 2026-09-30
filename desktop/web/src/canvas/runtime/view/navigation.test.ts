@@ -4,7 +4,6 @@ import { createTestView, type TestView } from '../../../__tests__/support/test-v
 import { mapZoomToStageScale } from '../../projection'
 import { createWorkspaceCameraPolicy, singleWorldEffectiveMinimumZoom } from '../../workspace-camera-policy'
 import { getAnnotationWorldBounds } from '../annotation-layout'
-import { CameraController } from '../camera'
 import { getPlantWorldBounds } from '../plant-presentation'
 import type { ScenePersistedState } from '../scene'
 import { getZoneWorldBounds } from '../zone-geometry'
@@ -104,13 +103,6 @@ function placement(view: TestView): PlanarCamera {
   return planarCameraOf(view.view())
 }
 
-function today(width: number, height: number, viewport?: { x: number; y: number; scale: number }): CameraController {
-  const camera = new CameraController()
-  camera.initialize({ width, height })
-  if (viewport) camera.setViewport(viewport)
-  return camera
-}
-
 describe('view navigation', () => {
   // Moved from __tests__/camera-controller.test.ts (CameraController > …), on the navigation and its driver host.
 
@@ -204,8 +196,8 @@ describe('view navigation', () => {
 
     expect(placement(view)).toEqual(expected)
     expect(frameOf(view).mode).toBe('site')
-    // Today's CameraController lands on the same placement, bit for bit.
-    expect(expected).toEqual({ ...today(1000, 800).zoomToFit(scene), bearingDeg: 0 })
+    // Today's CameraController (zoomToFit from its 1000 × 800 initial frame) landed on the same placement, bit for bit.
+    expect(expected).toEqual({ x: 260, y: 80, scale: 16, bearingDeg: 0 })
     expectedView.dispose()
     view.dispose()
   })
@@ -395,39 +387,45 @@ describe('view navigation', () => {
       position: { x: -20, y: 70 }, text: 'Gate', fontSize: 16, rotationDeg: null }]
     const insets = { top: 40, right: 300, bottom: 20, left: 60 }
     const view = sceneView(1000, 800, scene, { x: 3, y: -7, scale: 2 })
-    const camera = today(1000, 800, { x: 3, y: -7, scale: 2 })
     view.navigation.setFramingInsets(insets)
-    camera.setFrameInsets(insets)
-    const expectSame = () => expect(placement(view)).toEqual({ ...camera.viewport, bearingDeg: 0 })
+    // Today's CameraController after the same calls on the same screen, placement and insets (zoomToFit, zoomIn and zoomOut twice,
+    // zoomAroundScreenPoint about the centre, panBy, focusTemporaryBounds, returnFromTemporaryFocus, centerOn, returnToDesign),
+    // recorded at 52cbff10 before the class became the legacy shim.
+    const today: ReadonlyArray<readonly [number, number, number]> = [
+      [339.14286269122294, 114, 8.171427461755401],
+      [353.7662388102027, 140, 7.428570419777637],
+      [-11.818164164290579, -510, 25.99999646922173],
+      [-52.31816416429058, -497.75, 25.99999646922173],
+      [181.31506849315068, 259.972602739726, 8.10958904109589],
+      [-52.31816416429058, -497.75, 25.99999646922173],
+      [-1128.25, 991.5, 6.5],
+      [339.1428708288235, 114, 8.171425834235297],
+    ]
+    let step = 0
+    const expectSame = () => {
+      const [x, y, scale] = today[step++]!
+      expect(placement(view)).toEqual({ x, y, scale, bearingDeg: 0 })
+    }
 
     view.navigation.zoomToFit(scene, boundsOf(scene))
-    camera.zoomToFit(scene)
     expectSame()
     view.navigation.zoomIn()
-    camera.zoomIn()
     view.navigation.zoomOut()
-    camera.zoomOut()
     view.navigation.zoomOut()
-    camera.zoomOut()
     expectSame()
     view.navigation.zoomBy(3.5)
-    camera.zoomAroundScreenPoint({ x: 500, y: 400 }, 3.5)
     expectSame()
     view.navigation.panByPx({ x: -40.5, y: 12.25 })
-    camera.panBy({ x: -40.5, y: 12.25 })
     expectSame()
     view.navigation.focusTemporaryBounds({ minX: -12, minY: 4, maxX: 61, maxY: 33 }, { paddingCssPx: 24 })
-    camera.focusTemporaryBounds({ minX: -12, minY: 4, maxX: 61, maxY: 33 }, { paddingCssPx: 24 })
     expectSame()
     view.navigation.returnFromTemporaryFocus()
-    camera.returnFromTemporaryFocus()
     expectSame()
     view.navigation.centerOn({ x: 250.5, y: -91 }, 6.5)
-    camera.centerOn({ x: 250.5, y: -91 }, 6.5)
     expectSame()
     view.navigation.returnToDesign()
-    camera.returnToDesign(scene)
     expectSame()
+    expect(step).toBe(today.length)
     view.dispose()
   })
 

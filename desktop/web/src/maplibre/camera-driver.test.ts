@@ -1,10 +1,15 @@
 import { signal } from '@preact/signals'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { geoToMercator, mercatorToGeo } from '../canvas/projection'
-import type { CameraDriver } from '../canvas/runtime/view/camera-driver'
-import { createNavigationPolicy, zoomFloorForArc } from '../canvas/runtime/view/navigation-policy'
+import { createTestView, type TestView } from '../__tests__/support/test-view'
+import { geoToMercator, mapZoomToStageScale, mercatorToGeo, stageScaleToMapZoom, worldToGeo } from '../canvas/projection'
+import type { ScenePersistedState } from '../canvas/runtime/scene'
+import { sceneExtentPoints } from '../canvas/runtime/scene-extent'
+import type { CameraDriver, CameraDriverDeps } from '../canvas/runtime/view/camera-driver'
+import type { CameraDriverHostController } from '../canvas/runtime/view/driver-host'
+import { createNavigationPolicy, zoomFloorForArc, type NavigationPolicy } from '../canvas/runtime/view/navigation-policy'
 import type { GeoPoint, ViewFrame, ViewScreen } from '../canvas/runtime/view/types'
-import { createSessionPlane } from '../canvas/session-plane'
+import { planarCameraOf } from '../canvas/runtime/view/view-transform'
+import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
 import { createWorkspaceCameraPolicy } from '../canvas/workspace-camera-policy'
 import { createMapLibreCameraDriver } from './camera-driver'
 import type { MapLibreLngLat, MapLibreTransformConstrain } from './loader'
@@ -188,9 +193,9 @@ function createManualFrames() {
 
 const drivers: CameraDriver[] = []
 
-function attach(map: ConsistentMap, policy = POLICY) {
+function attach(map: ConsistentMap, policy: NavigationPolicy = POLICY, plane: SessionPlane = PLANE) {
   const time = createManualFrames()
-  const driver = createMapLibreCameraDriver(map, PLANE, {
+  const driver = createMapLibreCameraDriver(map, plane, {
     clock: time.clock,
     scheduleFrame: time.scheduleFrame,
     policy: () => policy,
@@ -205,8 +210,43 @@ function screenOf(frame: ViewFrame): ViewScreen {
   return frame.view.screen
 }
 
+const views: TestView[] = []
+
+/** The deps every driver on a test view's host runs with (its manual clock and policy), as the workspace activation builds one. */
+function hostDeps(view: TestView): CameraDriverDeps {
+  return (view.host as CameraDriverHostController).driverDeps
+}
+
+/**
+ * A test view whose host drives `map` through a MapLibre driver: the navigation and the host over the attached map. The host hands
+ * the map its camera, `viewport` (default { x: 0, y: 0, scale: 1 }).
+ */
+function viewOn(map: ConsistentMap, viewport?: { x: number; y: number; scale: number }) {
+  const plane = PLANE
+  const view = createTestView({
+    plane,
+    policy: createWorkspaceCameraPolicy(plane.origin.lat),
+    screen: { ...map.size, devicePixelRatio: map.pixelRatio },
+    viewport,
+  })
+  views.push(view)
+  const driver = createMapLibreCameraDriver(map, plane, hostDeps(view), { timers: { set: () => 0, clear: () => {} } })
+  view.host.attach(driver)
+  return { view, driver }
+}
+
+/** The pixel MapLibre shows a plane point at, from the map's own camera (512-px Mercator tiles, north up). */
+function mapPixelOf(map: ConsistentMap, plane: SessionPlane, point: { x: number; y: number }) {
+  const geo = worldToGeo(point.x, point.y, plane.origin.lat, plane.origin.lon)
+  const ground = geoToMercator(geo.lng, geo.lat)
+  const centre = geoToMercator(map.getCenter().lng, map.getCenter().lat)
+  const worldSize = 512 * 2 ** map.getZoom()
+  return { x: map.size.width / 2 + (ground.x - centre.x) * worldSize, y: map.size.height / 2 + (ground.y - centre.y) * worldSize }
+}
+
 afterEach(() => {
   for (const driver of drivers.splice(0)) driver.dispose()
+  for (const view of views.splice(0)) view.dispose()
 })
 
 describe('MapLibre camera driver', () => {
@@ -439,5 +479,430 @@ describe('MapLibre camera driver', () => {
     expect(map.setTransformConstrain).toHaveBeenLastCalledWith(null)
     driver.apply({ kind: 'pan-by', deltaPx: { x: 10, y: 0 } })
     expect(map.jumpTo).not.toHaveBeenCalled()
+  })
+
+  // Moved from __tests__/maplibre-camera.test.ts (createMapFrame > …): a placement reaches the map as one explicit camera.
+
+  it('a placement becomes the north-up camera over the plane point at the screen centre', () => {
+    const plane = createSessionPlane({ lon: -122.68, lat: 45.52 })
+    const map = new ConsistentMap({ center: plane.origin, zoom: 16 }, { width: 1000, height: 800 })
+    const { driver, published } = attach(map, createNavigationPolicy(createWorkspaceCameraPolicy(45.52), signal(false)), plane)
+
+    driver.apply({ kind: 'place', planar: { x: -200, y: -100, scale: 2, bearingDeg: 0 } })
+
+    const centre = worldToGeo(350, 250, 45.52, -122.68)
+    const [options] = map.jumpTo.mock.calls.at(-1)!
+    expect(options.center[0]).toBeCloseTo(centre.lng, 8)
+    expect(options.center[1]).toBeCloseTo(centre.lat, 8)
+    expect(options.zoom).toBeCloseTo(stageScaleToMapZoom(2, 45.52), 8)
+    expect(options.bearing).toBe(0)
+    expect(published).toHaveLength(1)
+    expect(published[0]!.view.camera.bearingDeg).toBe(0)
+  })
+
+  it('a placement that is not finite or has no scale moves nothing', () => {
+    const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
+    const { driver, published } = attach(map)
+
+    for (const planar of [
+      { x: 0, y: 0, scale: 0, bearingDeg: 0 },
+      { x: 0, y: 0, scale: -2, bearingDeg: 0 },
+      { x: Number.NaN, y: 0, scale: 2, bearingDeg: 0 },
+      { x: 0, y: 0, scale: Number.POSITIVE_INFINITY, bearingDeg: 0 },
+    ]) driver.apply({ kind: 'place', planar })
+
+    expect(map.jumpTo).not.toHaveBeenCalled()
+    expect(published).toHaveLength(0)
+  })
+
+  it('a placement past zoom 27 lands at zoom 27', () => {
+    const plane = createSessionPlane({ lon: 0, lat: 0 })
+    const map = new ConsistentMap({ center: plane.origin, zoom: 18 }, { width: 1000, height: 800 })
+    const { driver, published } = attach(map, createNavigationPolicy(createWorkspaceCameraPolicy(0), signal(false)), plane)
+
+    driver.apply({ kind: 'place', planar: { x: 0, y: 0, scale: 5000, bearingDeg: 0 } })
+
+    expect(map.jumpTo.mock.calls.at(-1)![0]).toMatchObject({ zoom: 27, bearing: 0 })
+    expect(published.at(-1)!.view.camera.zoom).toBe(27)
+    expect(published.at(-1)!.view.pixelsPerMetre).toBe(published.at(-1)!.scaleBounds.max)
+  })
+
+  it('the frame reads back the placed centre and the ground under the four corners', () => {
+    const plane = createSessionPlane({ lon: -122.68, lat: 45.52 })
+    const map = new ConsistentMap({ center: plane.origin, zoom: 16 }, { width: 1000, height: 800 })
+    const { driver } = attach(map, createNavigationPolicy(createWorkspaceCameraPolicy(45.52), signal(false)), plane)
+
+    driver.apply({ kind: 'place', planar: { x: -200, y: -100, scale: 2, bearingDeg: 0 } })
+
+    const { view } = driver.frames.viewFrame.peek()
+    const centre = view.screenToWorld({ x: 500, y: 400 })!
+    expect(centre.x).toBeCloseTo(350, 8)
+    expect(centre.y).toBeCloseTo(250, 8)
+    const corners = view.visibleWorldQuad().map((corner) => plane.toGeo(corner))
+    expect(corners).toHaveLength(4)
+    expect(corners[0]!.lon).toBeLessThan(corners[1]!.lon)
+    expect(corners[0]!.lat).toBeGreaterThan(corners[2]!.lat)
+  })
+
+  // Moved from __tests__/maplibre-workspace-camera.test.ts (MapLibreWorkspaceCameraOwner > …): the attached camera is the driver's.
+
+  it('zooming in at zoom 27 sends no jump and publishes nothing', () => {
+    const map = new ConsistentMap({ center: PLANE.origin, zoom: 27 })
+    const { driver, published } = attach(map)
+    const boundary = driver.frames.viewFrame.peek()
+    expect(boundary.view.pixelsPerMetre).toBe(boundary.scaleBounds.max)
+
+    // Off-centre, so a clamped zoom that still moved the centre would show.
+    for (let input = 0; input < 100; input += 1) driver.apply({ kind: 'zoom-around', anchorPx: { x: 120, y: 90 }, factor: 1.1 })
+
+    expect(map.jumpTo).not.toHaveBeenCalled()
+    expect(published).toHaveLength(0)
+    expect(driver.frames.viewFrame.peek()).toBe(boundary)
+  })
+
+  it('zooming out at the single-world floor sends no jump and publishes nothing', () => {
+    const map = new ConsistentMap({ center: { lon: 2.35, lat: 0 }, zoom: 1 }, { width: 400, height: 1024 })
+    const { driver, published } = attach(map)
+    const boundary = driver.frames.viewFrame.peek()
+    expect(boundary.view.camera.zoom).toBe(1)
+    expect(boundary.scaleBounds.min).toBeCloseTo(boundary.view.pixelsPerMetre, 12)
+
+    for (let input = 0; input < 100; input += 1) driver.apply({ kind: 'zoom-around', anchorPx: { x: 200, y: 512 }, factor: 1 / 1.1 })
+
+    expect(map.jumpTo).not.toHaveBeenCalled()
+    expect(published).toHaveLength(0)
+    expect(driver.frames.viewFrame.peek()).toBe(boundary)
+  })
+
+  it('publishes the exact zoom-27 scale at a high-latitude session plane origin', () => {
+    const plane = createSessionPlane({ lon: 179.9, lat: 80 })
+    const map = new ConsistentMap({ center: plane.origin, zoom: 27 })
+    const { driver } = attach(map, createNavigationPolicy(createWorkspaceCameraPolicy(80), signal(false)), plane)
+
+    const frame = driver.frames.viewFrame.peek()
+    expect(frame.view.pixelsPerMetre).toBe(mapZoomToStageScale(27, 80))
+    expect(frame.scaleBounds.max).toBe(mapZoomToStageScale(27, 80))
+    expect(frame.mode).toBe('site')
+  })
+
+  it('a camera change of the map\'s own publishes one frame in CSS pixels, and an unchanged move none', () => {
+    const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
+    const { driver, published } = attach(map)
+    const frames = driver.frames.viewFrame
+    expect(frames.peek().view.screen).toEqual({ width: 400, height: 300, devicePixelRatio: 2 })
+
+    map.fire('move')
+    expect(published).toHaveLength(0)
+
+    map.camera = { ...map.camera, center: new FakeLngLat(2.3501, 48.8502), zoom: 18.5 }
+    map.fire('move')
+
+    expect(driver.frames.viewFrame).toBe(frames)
+    expect(published).toHaveLength(1)
+    expect(published[0]!.view.camera).toEqual({ center: { lon: 2.3501, lat: 48.8502 }, zoom: 18.5, bearingDeg: 0, pitchDeg: 0 })
+    expect(published[0]!.view.screen).toEqual({ width: 400, height: 300, devicePixelRatio: 2 })
+  })
+
+  it('planeChanged re-expresses the frame in the new plane and the map stays put', () => {
+    const map = new ConsistentMap({ center: { lon: 2.3522, lat: 48.8566 }, zoom: 18 })
+    const { driver, published } = attach(map)
+    const before = driver.frames.viewFrame.peek()
+    const screenPoints = [{ x: 0, y: 0 }, { x: 400, y: 300 }, { x: 200, y: 150 }, { x: 37.5, y: 211 }]
+    const groundBefore = screenPoints.map((point) => PLANE.toGeo(before.view.screenToWorld(point)!))
+    // A re-origin about 20 km east, as the runtime makes after panning away.
+    const next = createSessionPlane(PLANE.toGeo({ x: 20_000, y: -5_000 }))
+
+    driver.planeChanged(next)
+
+    expect(map.jumpTo).not.toHaveBeenCalled()
+    expect(published).toHaveLength(1)
+    const after = published[0]!
+    expect(after.view.planeRevision).toBe(before.view.planeRevision + 1)
+    expect(after.view.camera).toEqual(before.view.camera)
+    // The same ground under every screen point, expressed once in the next plane: its origin is where the map shows it.
+    for (const [index, point] of screenPoints.entries()) {
+      const ground = next.toGeo(after.view.screenToWorld(point)!)
+      expect(ground.lon).toBeCloseTo(groundBefore[index]!.lon, 9)
+      expect(ground.lat).toBeCloseTo(groundBefore[index]!.lat, 9)
+    }
+    const originPx = after.view.worldToScreen({ x: 0, y: 0 })
+    const origin = map.unproject([originPx.x, originPx.y])
+    expect(origin.lng).toBeCloseTo(next.origin.lon, 9)
+    expect(origin.lat).toBeCloseTo(next.origin.lat, 9)
+
+    // Never transformed twice: the same plane again changes nothing.
+    driver.planeChanged(next)
+    expect(published).toHaveLength(1)
+  })
+
+  it('detach keeps the attached placement, scale bounds and mode exactly', () => {
+    const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
+    const { view } = viewOn(map, { x: 200, y: 150, scale: 0.01 })
+    const attached = view.frames.viewFrame.peek()
+    expect(attached.attached).toBe(true)
+    expect(attached.mode).toBe('overview')
+
+    view.host.detach()
+
+    const detached = view.frames.viewFrame.peek()
+    expect(detached.attached).toBe(false)
+    expect(planarCameraOf(detached.view)).toEqual(planarCameraOf(attached.view))
+    expect(detached.scaleBounds).toEqual(attached.scaleBounds)
+    expect(detached.mode).toBe('overview')
+    // The map's later moves no longer reach the frame.
+    map.camera = { ...map.camera, zoom: 5 }
+    map.fire('move')
+    expect(view.frames.viewFrame.peek()).toBe(detached)
+  })
+
+  it('temporary focus and its return reach the map as one jump each', () => {
+    const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
+    const { view } = viewOn(map)
+    const jumps = map.jumpTo.mock.calls.length
+    const before = view.view().camera
+
+    expect(view.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 100, maxY: 50 }, { paddingCssPx: 48 })).toBe(true)
+    expect(view.navigation.returnFromTemporaryFocus()).toBe(true)
+
+    expect(map.jumpTo).toHaveBeenCalledTimes(jumps + 2)
+    const returned = view.view().camera
+    expect(returned.center.lon).toBeCloseTo(before.center.lon, 9)
+    expect(returned.center.lat).toBeCloseTo(before.center.lat, 9)
+    expect(returned.zoom).toBeCloseTo(before.zoom, 9)
+    // A new camera command drops the bookmark.
+    view.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 100, maxY: 50 }, { paddingCssPx: 48 })
+    view.navigation.centerOn({ x: 0, y: 0 }, 2)
+    expect(view.navigation.returnFromTemporaryFocus()).toBe(false)
+  })
+
+  it('a map call that throws fails the driver, and the host takes the camera back where it was', () => {
+    const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
+    const { view } = viewOn(map)
+    view.navigation.panByPx({ x: 10, y: 0 })
+    const last = view.view().camera
+    map.jumpTo.mockImplementationOnce(() => { throw new Error('map navigation failed') })
+
+    view.navigation.panByPx({ x: 25, y: 0 })
+
+    expect(view.host.failure.value).toMatchObject({ reason: 'map-error' })
+    expect(view.host.failure.value!.message).toContain('map navigation failed')
+    expect(view.frames.viewFrame.peek().attached).toBe(false)
+    expect(view.view().camera.center.lon).toBeCloseTo(last.center.lon, 9)
+    expect(view.view().camera.center.lat).toBeCloseTo(last.center.lat, 9)
+    // The headless camera takes the next move; the map is no longer driven.
+    const jumps = map.jumpTo.mock.calls.length
+    const x = planarCameraOf(view.view()).x
+    view.navigation.panByPx({ x: 10, y: 0 })
+    expect(planarCameraOf(view.view()).x).toBe(x + 10)
+    expect(map.jumpTo).toHaveBeenCalledTimes(jumps)
+  })
+
+  it('after dispose, late map events publish nothing and a second dispose does nothing', () => {
+    const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
+    const { driver, published } = attach(map)
+    const last = driver.frames.viewFrame.peek()
+
+    driver.dispose()
+    driver.dispose()
+    map.camera = { ...map.camera, zoom: 17 }
+    map.fire('move')
+    map.fire('resize')
+
+    expect(published).toHaveLength(0)
+    expect(driver.frames.viewFrame.peek()).toBe(last)
+    expect(map.off).toHaveBeenCalledTimes(2)
+  })
+
+  it('dispose tries every release and then throws', () => {
+    const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
+    const { driver } = attach(map)
+    map.off.mockImplementation(() => { throw new Error('off failed') })
+
+    expect(() => driver.dispose()).toThrow('could not release')
+    expect(map.off).toHaveBeenCalledTimes(2)
+    expect(map.setTransformConstrain).toHaveBeenLastCalledWith(null)
+  })
+
+  it('a replaced map\'s late moves never reach the frame', () => {
+    const first = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
+    const { view } = viewOn(first)
+    // MapLibre may still emit while the replaced driver removes its listeners.
+    first.off.mockImplementation((type: string, listener: (event?: unknown) => void) => {
+      first.camera = { ...first.camera, zoom: 12 }
+      first.fire('move')
+      first.listeners.get(type)?.delete(listener)
+    })
+    const second = new ConsistentMap({ center: { lon: 2.36, lat: 48.86 }, zoom: 17 })
+
+    view.host.attach(createMapLibreCameraDriver(second, PLANE, hostDeps(view), { timers: { set: () => 0, clear: () => {} } }))
+
+    const settled = view.frames.viewFrame.peek()
+    expect(settled.view.camera.zoom).toBeCloseTo(second.getZoom(), 12)
+    first.camera = { ...first.camera, zoom: 9 }
+    first.fire('move')
+    expect(view.frames.viewFrame.peek()).toBe(settled)
+  })
+
+  it('centerOn flies an attached map when asked to animate, and jumps otherwise', () => {
+    const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
+    const { view } = viewOn(map)
+    const jumps = map.jumpTo.mock.calls.length
+    const scale = mapZoomToStageScale(19, PLANE.origin.lat)
+    const target = PLANE.toGeo({ x: 40, y: 25 })
+
+    view.navigation.centerOn({ x: 40, y: 25 }, scale, { animate: true })
+
+    expect(map.flyTo).toHaveBeenCalledTimes(1)
+    const [flight] = map.flyTo.mock.calls[0]!
+    expect(flight.center[0]).toBeCloseTo(target.lon, 9)
+    expect(flight.center[1]).toBeCloseTo(target.lat, 9)
+    expect(flight.zoom).toBeCloseTo(19, 9)
+    expect(flight.bearing).toBe(0)
+    expect(map.jumpTo).toHaveBeenCalledTimes(jumps)
+
+    view.navigation.centerOn({ x: 40, y: 25 }, scale)
+    expect(map.flyTo).toHaveBeenCalledTimes(1)
+    expect(map.jumpTo).toHaveBeenCalledTimes(jumps + 1)
+  })
+})
+
+// Moved from __tests__/maplibre-camera.test.ts: a placement on the attached map keeps every plane point on the canvas pixel the
+// placement gives it (p × scale + { x, y }), through MapLibre's own Mercator camera.
+describe('screen-lock validation', () => {
+  const location = { lat: 48.8566, lon: 2.3522 }
+  const plane = createSessionPlane(location)
+  const worldPoints = [
+    { x: 0, y: 0 },
+    { x: 12.5, y: -6.25 },
+    { x: -50, y: 24 },
+    { x: 500, y: -250 },
+  ] as const
+
+  function placedOn(size: { width: number; height: number }, viewport: { x: number; y: number; scale: number }) {
+    const map = new ConsistentMap({ center: plane.origin, zoom: 16 }, size)
+    const { driver } = attach(map, createNavigationPolicy(createWorkspaceCameraPolicy(location.lat), signal(false)), plane)
+    driver.apply({ kind: 'place', planar: { ...viewport, bearingDeg: 0 } })
+    return map
+  }
+
+  function canvasPixelOf(viewport: { x: number; y: number; scale: number }, point: { x: number; y: number }) {
+    return { x: viewport.x + point.x * viewport.scale, y: viewport.y + point.y * viewport.scale }
+  }
+
+  /** Today's fit of the scene on a fresh screen, through the navigation (at bearing 0, today's CameraController fit). */
+  function fittedViewport(scene: ScenePersistedState, size: { width: number; height: number }) {
+    const view = createTestView({ screen: size, viewport: { x: size.width / 2 - 50 * 8, y: size.height / 2 - 50 * 8, scale: 8 } })
+    views.push(view)
+    view.navigation.zoomToFit(scene, { extentPoints: sceneExtentPoints(scene) })
+    const { x, y, scale } = planarCameraOf(view.view())
+    return { x, y, scale }
+  }
+
+  function screenLockScene(): ScenePersistedState {
+    return {
+      plantSpeciesColors: {},
+      plantSpeciesSymbols: {},
+      plantSpeciesCodes: {},
+      layers: [],
+      plants: [
+        {
+          kind: 'plant', locked: false, id: 'plant-1', canonicalName: 'Malus domestica', commonName: null, color: null,
+          stratum: null, canopySpreadM: null, position: { x: -40, y: 15 }, rotationDeg: null, notes: null, plantedDate: null, quantity: 1,
+        },
+        {
+          kind: 'plant', locked: false, id: 'plant-2', canonicalName: 'Prunus avium', commonName: null, color: null,
+          stratum: null, canopySpreadM: null, position: { x: 30, y: -20 }, rotationDeg: null, notes: null, plantedDate: null, quantity: 1,
+        },
+      ],
+      zones: [
+        {
+          kind: 'zone', locked: false, id: 'zone-1', name: null, zoneType: 'rect', rotationDeg: 0,
+          points: [{ x: -60, y: -30 }, { x: 60, y: -30 }, { x: 60, y: 50 }, { x: -60, y: 50 }], fillColor: null, notes: null,
+        },
+      ],
+      annotations: [],
+      measurementGuides: [],
+      groups: [],
+      guides: [],
+    }
+  }
+
+  it('keeps the same world point on the same screen pixel', () => {
+    const viewport = { x: -175.25, y: 92.5, scale: 3.75 }
+    const map = placedOn({ width: 1200, height: 800 }, viewport)
+
+    for (const point of worldPoints) {
+      const canvas = canvasPixelOf(viewport, point)
+      const onMap = mapPixelOf(map, plane, point)
+      expect(onMap.x).toBeCloseTo(canvas.x, 6)
+      expect(onMap.y).toBeCloseTo(canvas.y, 6)
+    }
+  })
+
+  it('preserves screen lock across tiny pan changes', () => {
+    const beforeViewport = { x: -200.125, y: 50.75, scale: 2.2 }
+    const afterViewport = { x: -200.0625, y: 50.6875, scale: 2.2 }
+    const world = { x: 42.5, y: -18.25 }
+    const beforeMap = mapPixelOf(placedOn({ width: 1200, height: 800 }, beforeViewport), plane, world)
+    const afterMap = mapPixelOf(placedOn({ width: 1200, height: 800 }, afterViewport), plane, world)
+    const beforeCanvas = canvasPixelOf(beforeViewport, world)
+    const afterCanvas = canvasPixelOf(afterViewport, world)
+
+    expect(afterMap.x - beforeMap.x).toBeCloseTo(afterCanvas.x - beforeCanvas.x, 6)
+    expect(afterMap.y - beforeMap.y).toBeCloseTo(afterCanvas.y - beforeCanvas.y, 6)
+  })
+
+  it('preserves screen lock across tiny zoom changes', () => {
+    const beforeViewport = { x: -80, y: 32, scale: 0.95 }
+    const afterViewport = { x: -80, y: 32, scale: 0.9505 }
+    const world = { x: -120, y: 75 }
+    const beforeMap = mapPixelOf(placedOn({ width: 1200, height: 800 }, beforeViewport), plane, world)
+    const afterMap = mapPixelOf(placedOn({ width: 1200, height: 800 }, afterViewport), plane, world)
+    const beforeCanvas = canvasPixelOf(beforeViewport, world)
+    const afterCanvas = canvasPixelOf(afterViewport, world)
+
+    expect(afterMap.x - beforeMap.x).toBeCloseTo(afterCanvas.x - beforeCanvas.x, 6)
+    expect(afterMap.y - beforeMap.y).toBeCloseTo(afterCanvas.y - beforeCanvas.y, 6)
+  })
+
+  it('keeps screen lock after viewport resize', () => {
+    const viewport = { x: -200, y: 80, scale: 2.1 }
+    const point = { x: 150, y: -45 }
+    const map = placedOn({ width: 1600, height: 900 }, viewport)
+
+    const canvas = canvasPixelOf(viewport, point)
+    const onMap = mapPixelOf(map, plane, point)
+    expect(onMap.x).toBeCloseTo(canvas.x, 6)
+    expect(onMap.y).toBeCloseTo(canvas.y, 6)
+  })
+
+  it('keeps screen lock for fit-to-content viewports', () => {
+    const scene = screenLockScene()
+    const size = { width: 1280, height: 820 }
+    const viewport = fittedViewport(scene, size)
+    const map = placedOn(size, viewport)
+    const point = scene.plants[1]!.position
+
+    const canvas = canvasPixelOf(viewport, point)
+    const onMap = mapPixelOf(map, plane, point)
+    expect(onMap.x).toBeCloseTo(canvas.x, 6)
+    expect(onMap.y).toBeCloseTo(canvas.y, 6)
+  })
+
+  it('keeps screen lock for document-open auto-fit viewports', () => {
+    const scene = screenLockScene()
+    scene.annotations.push({
+      kind: 'annotation', locked: false, id: 'annotation-1', annotationType: 'text',
+      position: { x: 95, y: -55 }, text: 'Open document', fontSize: 18, rotationDeg: null,
+    })
+    const size = { width: 1100, height: 760 }
+    const viewport = fittedViewport(scene, size)
+    const map = placedOn(size, viewport)
+    const point = scene.annotations[0]!.position
+
+    const canvas = canvasPixelOf(viewport, point)
+    const onMap = mapPixelOf(map, plane, point)
+    expect(onMap.x).toBeCloseTo(canvas.x, 6)
+    expect(onMap.y).toBeCloseTo(canvas.y, 6)
   })
 })

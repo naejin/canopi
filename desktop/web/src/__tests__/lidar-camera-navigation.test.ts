@@ -5,7 +5,7 @@ import {
   stageScaleToMapZoom,
 } from '../canvas/projection'
 import { setCurrentCanvasSession } from '../canvas/session'
-import { CameraController } from '../canvas/runtime/camera'
+import { planarCameraOf } from '../canvas/runtime/view/view-transform'
 import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
 import {
   lidarBoundsToLocalWorld,
@@ -17,16 +17,17 @@ import {
   createTestCanvasRuntimeSurfaces,
 } from './support/canvas-runtime-surfaces'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import { createTestView, type TestView } from './support/test-view'
 
 const plane = createSessionPlane({ lon: 2.3522, lat: 48.8566 })
 
-function surfacesFor(camera: CameraController, sessionPlane: SessionPlane | null) {
+function surfacesFor(view: TestView, sessionPlane: SessionPlane | null) {
   return createTestCanvasRuntimeSurfaces({
     queries: { ...createTestCanvasQuerySurface(), sessionPlane: signal(sessionPlane) },
     commands: createTestCanvasCommandSurface({
       viewport: {
-        focusTemporaryBounds: (bounds, options) => camera.focusTemporaryBounds(bounds, options),
-        returnFromTemporaryFocus: () => camera.returnFromTemporaryFocus(),
+        focusTemporaryBounds: (bounds, options) => view.navigation.focusTemporaryBounds(bounds, options),
+        returnFromTemporaryFocus: () => view.navigation.returnFromTemporaryFocus(),
       },
     }),
   })
@@ -63,19 +64,17 @@ describe('LiDAR workspace camera navigation', () => {
   })
 
   it('focuses and returns only the live Canvas viewport while retaining the first bookmark', () => {
-    const camera = new CameraController()
-    camera.initialize({ width: 800, height: 600 })
-    camera.setViewport({ x: 30, y: 40, scale: 2 })
-    const before = camera.snapshot.value.viewport
-    setCurrentCanvasSession(surfacesFor(camera, plane))
+    const view = createTestView({ screen: { width: 800, height: 600 }, viewport: { x: 30, y: 40, scale: 2 } })
+    const before = planarCameraOf(view.view())
+    setCurrentCanvasSession(surfacesFor(view, plane))
 
     expect(viewLidarCoverage([2.34, 48.85, 2.37, 48.87])).toBe(true)
-    expect(camera.viewport).not.toEqual(before)
-    const afterFirstFocus = camera.snapshot.value.revision
+    expect(planarCameraOf(view.view())).not.toEqual(before)
+    const afterFirstFocus = view.frames.viewFrame.value.revision
     expect(viewLidarCoverage([2.345, 48.852, 2.35, 48.858])).toBe(true)
-    expect(camera.snapshot.value.revision).toBeGreaterThan(afterFirstFocus)
+    expect(view.frames.viewFrame.value.revision).toBeGreaterThan(afterFirstFocus)
     expect(viewDesignLocation()).toBe(true)
-    expect(camera.viewport).toEqual(before)
+    expect(planarCameraOf(view.view())).toEqual(before)
     expect(viewDesignLocation()).toBe(false)
     const scaleAtMapZoom18 = mapZoomToStageScale(18, plane.origin.lat)
     expect(scaleAtMapZoom18).toBeGreaterThan(0.1)
@@ -83,16 +82,16 @@ describe('LiDAR workspace camera navigation', () => {
   })
 
   it('rejects invalid bounds, a missing session plane, and missing canvas commands without moving the camera', () => {
-    const camera = new CameraController()
-    camera.initialize({ width: 800, height: 600 })
-    const before = camera.snapshot.value
-    setCurrentCanvasSession(surfacesFor(camera, plane))
+    // Today's initial 800 × 600 frame.
+    const view = createTestView({ screen: { width: 800, height: 600 }, viewport: { x: 100, y: 0, scale: 6 } })
+    const before = view.frames.viewFrame.value
+    setCurrentCanvasSession(surfacesFor(view, plane))
 
     expect(viewLidarCoverage([2.37, 48.85, 2.34, 48.87])).toBe(false)
-    setCurrentCanvasSession(surfacesFor(camera, null))
+    setCurrentCanvasSession(surfacesFor(view, null))
     expect(viewLidarCoverage([2.34, 48.85, 2.37, 48.87])).toBe(false)
     setCurrentCanvasSession(null)
     expect(viewLidarCoverage([2.34, 48.85, 2.37, 48.87])).toBe(false)
-    expect(camera.snapshot.value).toBe(before)
+    expect(view.frames.viewFrame.value).toBe(before)
   })
 })

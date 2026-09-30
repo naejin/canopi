@@ -2,8 +2,7 @@ import { signal } from '@preact/signals'
 import { describe, expect, it } from 'vitest'
 import { createTestView } from '../../../__tests__/support/test-view'
 import { createSessionPlane, type SessionPlane } from '../../session-plane'
-import { createWorkspaceCameraPolicy } from '../../workspace-camera-policy'
-import { CameraController } from '../camera'
+import { cameraScaleBoundsForPolicy, createWorkspaceCameraPolicy } from '../../workspace-camera-policy'
 import type { CameraDriver, CameraDriverFailure } from './camera-driver'
 import { createHeadlessCameraDriver } from './headless-driver'
 import { createNavigationPolicy } from './navigation-policy'
@@ -153,19 +152,47 @@ describe('camera driver host', () => {
   it('replacePolicy re-constrains the camera to the new bounds about the screen centre', () => {
     const northern = createWorkspaceCameraPolicy(45)
     const equatorial = createWorkspaceCameraPolicy(0)
-    const camera = new CameraController(northern)
-    camera.initialize({ width: 400, height: 300 })
-    camera.setViewport({ x: 10, y: -20, scale: camera.snapshot.value.scaleBounds.maximum })
-    const view = createTestView({ policy: northern, viewport: camera.viewport })
+    const view = createTestView({ policy: northern, viewport: { x: 10, y: -20, scale: cameraScaleBoundsForPolicy(northern).maximum } })
 
     view.host.replacePolicy(equatorial)
-    camera.replacePolicy(equatorial)
 
-    expect(planarCameraOf(view.view())).toEqual({ ...camera.viewport, bearingDeg: 0 })
-    expect(view.frames.viewFrame.peek().scaleBounds).toEqual({
-      min: camera.snapshot.value.scaleBounds.minimum,
-      max: camera.snapshot.value.scaleBounds.maximum,
-    })
+    // Today's CameraController(northern).replacePolicy(equatorial) from the same placement, recorded at 52cbff10.
+    expect(planarCameraOf(view.view())).toEqual({ x: 65.64971157455597, y: 29.79184719828693, scale: 1716.6895781438734, bearingDeg: 0 })
+    const bounds = cameraScaleBoundsForPolicy(equatorial)
+    expect(view.frames.viewFrame.peek().scaleBounds).toEqual({ min: bounds.minimum, max: bounds.maximum })
+    view.dispose()
+  })
+
+  it('a driver that cannot release its map still hands the camera back, and the error follows', () => {
+    const plane = createSessionPlane({ lon: 2.35, lat: 48.85 })
+    const view = createTestView({ plane, viewport: { x: 40, y: -25, scale: 3 } })
+    const releaseError = new Error('off failed')
+    const leaky = (): CameraDriver => {
+      const driver = standInDriver(plane)
+      return { ...driver, dispose: () => { driver.dispose(); throw releaseError } }
+    }
+
+    // An explicit detach surfaces the release error after the camera is back on a headless driver.
+    const first = leaky()
+    view.host.attach(first)
+    const lastAttached = view.frames.viewFrame.peek().view.camera
+    expect(() => view.host.detach()).toThrow(releaseError)
+    expect(view.host.current()).not.toBe(first)
+    expect(view.frames.viewFrame.peek().attached).toBe(false)
+    expect(view.frames.viewFrame.peek().view.camera.zoom).toBeCloseTo(lastAttached.zoom, 9)
+    view.navigation.panByPx({ x: 5, y: 0 })
+    expect(view.frames.viewFrame.peek().attached).toBe(false)
+
+    // A failure is reported even when the failed driver cannot release its map; the release error is not the failure.
+    const failure = signal<CameraDriverFailure | null>(null)
+    const second: CameraDriver = { ...leaky(), failure }
+    view.host.attach(second)
+    expect(() => {
+      failure.value = { reason: 'map-error', message: 'The map could not move.' }
+    }).not.toThrow()
+    expect(view.host.failure.value).toEqual({ reason: 'map-error', message: 'The map could not move.' })
+    expect(view.host.current()).not.toBe(second)
+    expect(view.frames.viewFrame.peek().attached).toBe(false)
     view.dispose()
   })
 

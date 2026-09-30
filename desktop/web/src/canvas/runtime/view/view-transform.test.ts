@@ -172,3 +172,29 @@ describe('view transform', () => {
     expect(view.screen).toBe(screen)
   })
 })
+
+// Moved from __tests__/projection.test.ts: the centre and the corners of a ViewTransform at bearing 0, in place of
+// projection.ts's viewportCenterGeo and viewportCornerGeoPoints (deleted with canvas/maplibre-camera.ts at the end of 0A).
+describe('viewportCenterGeo', () => {
+  it('projects the viewport center from viewport state', () => {
+    const plane = createSessionPlane({ lon: -122.68, lat: 45.52 })
+    const view = fromPlane({ x: -200, y: -100, scale: 2, bearingDeg: 0 }, plane)
+
+    const expected = worldToGeo(350, 250, 45.52, -122.68)
+    expect(view.camera.center.lon).toBeCloseTo(expected.lng, 8)
+    expect(view.camera.center.lat).toBeCloseTo(expected.lat, 8)
+  })
+})
+
+describe('viewportCornerGeoPoints', () => {
+  it('returns four projected corner points for the current viewport', () => {
+    const plane = createSessionPlane({ lon: -122.68, lat: 45.52 })
+    const view = fromPlane({ x: -200, y: -100, scale: 2, bearingDeg: 0 }, plane)
+
+    const corners = view.visibleWorldQuad().map((corner) => plane.toGeo(corner))
+
+    expect(corners).toHaveLength(4)
+    expect(corners[0]!.lon).toBeLessThan(corners[1]!.lon)
+    expect(corners[0]!.lat).toBeGreaterThan(corners[2]!.lat)
+  })
+})
