@@ -35,6 +35,6 @@ Screen to world conversion was derived in several places (renderer, scene camera
 ## Consequences
 
 - The camera code, the shared-scene viewport derivation, `createMapFrame` (`bearing: 0`) and the clamp-learning path are deleted; policy tests keep one camera writer, one projection caller and a pure view module.
-- A headless/MapLibre contract test runs the same camera scripts through both drivers over MapLibre's real `MercatorTransform` and requires 1e-6 px agreement.
+- A headless/MapLibre contract test runs the same camera scripts through both drivers over MapLibre's real `MercatorTransform` and requires 1e-6 px agreement with its forward projection (its own inverse drifts by up to 8e-6 px above zoom 19; multi-move scripts stay below zoom 20).
 - The zoom floor depends on bearing, so the zoom-out button reads the floor for the live bearing.
 - Details: [`canvas-v2-spec.md`](../plans/canvas-v2-spec.md).
