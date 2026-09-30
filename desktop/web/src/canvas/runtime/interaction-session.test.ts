@@ -596,6 +596,39 @@ describe('ruler drags through the session', () => {
     expect(rulers.onGuideCreate).toHaveBeenCalledOnce()
   })
 
+  it('a pen drags a guide out of a ruler under a bridged and a registered tool; a touch press there drags none', () => {
+    const rulers = mountRulers(rulerCamera({ y: 20, scale: 4 }))
+    const pen = { pointerId: 7, pointerType: 'pen' } as const
+    const touch = { pointerId: 8, pointerType: 'touch' } as const
+    const penDrag = (): void => {
+      const down = events.pointerDown({ x: 180, y: 10 }, { ...pen, target: rulers.horizontal })
+      expect(down.defaultPrevented).toBe(true)
+      events.pointerMove({ x: 180, y: 60 }, { ...pen, buttons: 1 })
+      events.pointerUp({ x: 180, y: 100 }, pen)
+    }
+    const touchDrag = (): void => {
+      events.pointerDown({ x: 180, y: 10 }, { ...touch, target: rulers.horizontal })
+      events.pointerMove({ x: 180, y: 60 }, { ...touch, buttons: 1 })
+      events.pointerUp({ x: 180, y: 100 }, touch)
+    }
+
+    // Today's ruler heard the pen's compatibility mousedown and mouseup; a touch press sent none before its release.
+    const bridged = createSession().session
+    penDrag()
+    expect(rulers.onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 20)
+    touchDrag()
+    expect(rulers.onGuideCreate).toHaveBeenCalledOnce()
+    bridged.dispose()
+
+    useStubTools(stubTool('select'))
+    createSession()
+    penDrag()
+    expect(rulers.onGuideCreate).toHaveBeenCalledTimes(2)
+    expect(rulers.onGuideCreate).toHaveBeenLastCalledWith('h', 20)
+    touchDrag()
+    expect(rulers.onGuideCreate).toHaveBeenCalledTimes(2)
+  })
+
   it('a second ruler press replaces the first drag', () => {
     createSession()
     const rulers = mountRulers(rulerCamera({ x: 10, scale: 2 }))

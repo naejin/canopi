@@ -150,13 +150,15 @@ describe('createDomInputSource', () => {
     events.pointerDownClient({ x: 15, y: 120 }, { target: ruler, pointerType: 'pen', pointerId: 6 })
     events.pointerDownClient({ x: 15, y: 120 }, { target: ruler, pointerType: 'touch', pointerId: 7 })
 
+    // A pen press is one too (today's ruler heard its compatibility mousedown); a touch press is dropped.
     expect(received.map((input) => input.kind === 'down' && [input.role, input.target, input.at])).toEqual(
-      Array(5).fill(['primary', { kind: 'ruler', axis: 'v' }, { x: 5, y: 100 }]),
+      Array(6).fill(['primary', { kind: 'ruler', axis: 'v' }, { x: 5, y: 100 }]),
     )
+    expect(received[5]).toMatchObject({ pointer: 'pen', id: 6 })
     // A press inside the map is the host listener's alone.
     events.pointerDown({ x: 50, y: 50 })
-    expect(received).toHaveLength(6)
-    expect(received[5]).toMatchObject({ kind: 'down', target: { kind: 'surface' } })
+    expect(received).toHaveLength(7)
+    expect(received[6]).toMatchObject({ kind: 'down', target: { kind: 'surface' } })
     dispose()
   })
 

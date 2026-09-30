@@ -79,12 +79,13 @@ describe('normalise', () => {
     expect(role(4)).toBeNull()
   })
 
-  it('makes a mouse press of any button on a ruler primary and drops pen and touch presses there', () => {
+  it('makes a mouse or pen press of any button on a ruler primary and drops touch presses there', () => {
     const ruler: TargetClass = { kind: 'ruler', axis: 'v' }
     const press = (button: number, pointerType = 'mouse') =>
       normalise(event({ type: 'pointerdown', button, pointerType, target: ruler }), WINDOWS, LEGACY_BINDINGS, NO_CTRL, HOST)
     for (const button of [0, 1, 2, 3, 4]) expect(press(button)).toMatchObject({ kind: 'down', role: 'primary', target: ruler })
-    expect(press(0, 'pen')).toBeNull()
+    // Today's ruler heard the pen's compatibility mousedown, barrel included.
+    for (const button of [0, 2]) expect(press(button, 'pen')).toMatchObject({ kind: 'down', pointer: 'pen', role: 'primary', target: ruler })
     expect(press(0, 'touch')).toBeNull()
     const backUp = normalise(event({ type: 'pointerup', button: 3 }), WINDOWS, LEGACY_BINDINGS, NO_CTRL, HOST)
     expect(backUp).toMatchObject({ kind: 'up', role: 'primary' })

@@ -172,9 +172,12 @@ function pressRole(
   return null   // back and forward (3, 4)
 }
 
-/** Today's ruler drag: a mouse press of any button is a primary press; pen and touch presses are dropped (mousedown only). */
+/**
+ * Today's ruler drag listened for mousedown: a mouse or pen press of any button (a pen sends compatibility mouse events)
+ * is a primary press; a touch press is dropped, since a touch sends its mousedown only after it lifts.
+ */
 function rulerPressRole(pointer: PointerKind): { readonly role: ButtonRole; readonly ctrlConsumed: boolean } | null {
-  return pointer === 'mouse' ? { role: 'primary', ctrlConsumed: false } : null
+  return pointer === 'touch' ? null : { role: 'primary', ctrlConsumed: false }
 }
 
 function buttonRoles(buttons: number, pointer: PointerKind, bindings: Bindings): ReadonlySet<ButtonRole> {

@@ -711,7 +711,7 @@ Normalisation rules:
 - On `os: 'mac'` with `macCtrlClick: 'secondary'`, mouse button 0 with `ctrlKey && !metaKey` becomes secondary with `ctrlConsumed: true`. For that session the recogniser ignores `ctrl` in `move` mods and `key-state`.
 - Wheel `deltaMode` is read before the deltas (16 px per line; a page is the host width for `deltaX` and the host height for `deltaY`). A wheel with `ctrlKey` and no physical Ctrl reported by the KeyRouter becomes `pinch: true`.
 - Targets are classified from data attributes; the attribution control is `data-canvas-chrome` (`owned-chrome`).
-- Rulers sit beside the map host, so the source listens at document capture for `pointerdown` on `[data-canvas-ruler]`. Under LEGACY a mouse press of any button there is a primary `down` with a `ruler` target (today's ruler drag); pen and touch presses on a ruler are dropped (today: mousedown only).
+- Rulers sit beside the map host, so the source listens at document capture for `pointerdown` on `[data-canvas-ruler]`. Under LEGACY a mouse or pen press of any button there is a primary `down` with a `ruler` target (today's ruler drag heard `mousedown`, which a pen sends too); a touch press there is dropped (a touch sends its `mousedown` only once it lifts).
 
 ### 1.2a Shared vocabulary and interaction ports (`canvas/runtime/interaction-types.ts`, `interaction-ports.ts`)
 
