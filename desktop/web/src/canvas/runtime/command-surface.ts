@@ -41,7 +41,7 @@ import {
   captureSceneDragState,
   createSceneDragState,
   type SceneDragState,
-} from './interaction/drag-ops'
+} from './scene-runtime/drag-state'
 import { createSceneArrangementPlacement } from './scene-runtime/arrangement-placement'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../generated/canopi-design-format'
 import { DEFAULT_BUDGET_CURRENCY } from '../../generated/known-canopi-keys'

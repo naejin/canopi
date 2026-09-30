@@ -3,7 +3,7 @@ import type { CanvasRuntimeTranslator } from '../app-adapter'
 import type { WorkspaceCameraFrameReader } from '../camera'
 import type { ScenePoint, SceneStateReader } from '../scene'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
-import { appendTextAnnotationToDraft } from './tool-actions'
+import { appendTextAnnotationToDraft } from '../tools/tool-actions'
 import type { SceneToolAdapter } from './tool-adapter'
 import { isSceneLayerOpenForCreation } from './layer-guards'
 

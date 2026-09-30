@@ -3,7 +3,7 @@ import { clearPlantStampSource, readPlantStampSource, type PlantStampSource } fr
 import type { CanvasRuntimeTranslator } from '../app-adapter'
 import type { WorkspaceCameraFrameReader } from '../camera'
 import type { PlantPresentationContext } from '../plant-presentation'
-import { appendPlantStampSourceToDraft } from './tool-actions'
+import { appendPlantStampSourceToDraft } from '../tools/tool-actions'
 import type { ScenePoint, SceneStateReader } from '../scene'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import type { SceneToolAdapter } from './tool-adapter'

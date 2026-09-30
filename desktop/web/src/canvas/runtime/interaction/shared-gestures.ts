@@ -29,7 +29,7 @@ import {
   captureSceneDragState,
   createSceneDragState,
   resetSceneDragState,
-} from './drag-ops'
+} from '../scene-runtime/drag-state'
 import { hitTestTopLevel, queryRectTopLevel, type TopLevelTarget } from './hit-testing'
 import { showInteractionPreview, hideInteractionPreview } from './overlay-ui'
 import {
