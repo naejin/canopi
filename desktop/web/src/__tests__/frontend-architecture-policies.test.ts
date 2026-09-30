@@ -276,6 +276,7 @@ const FORBIDDEN_IMPORT_POLICIES = [
       'src/i18n/index.ts',
       'src/canvas/session.ts',
       'src/canvas/runtime/interaction/pointer-utils.ts',
+      'src/canvas/runtime/input/editable-target.ts',
       'src/app/shell/state.ts',
     ],
   },
