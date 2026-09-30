@@ -261,5 +261,9 @@
   "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps Scene Interaction listener and lifecycle ownership in the Session": {
     "file": "src/canvas/runtime/input/dom-input-source.test.ts",
     "name": "createDomInputSource > installs and removes each listener exactly once"
+  },
+  "src/__tests__/control-point-overlay.test.ts > Control Point Overlay owner > removes its root when adapter presentation construction fails": {
+    "file": "src/canvas/runtime/chrome/handle-layer.test.ts",
+    "name": "the handle layer > removes its root when it cannot follow the camera"
   }
 }

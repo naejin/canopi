@@ -112,7 +112,7 @@ const CHARACTER_WIDTH_FACTOR = 0.6
 const LINE_HEIGHT_FACTOR = 1.25
 const HIT_EPSILON = 0.000001
 
-function getAnnotationTextMetrics(annotation: SceneAnnotationEntity): AnnotationTextMetrics {
+function getAnnotationTextMetrics(annotation: Pick<SceneAnnotationEntity, 'text' | 'fontSize'>): AnnotationTextMetrics {
   const lines = annotation.text.split('\n')
   const maxLineLength = Math.max(...lines.map((line) => line.length), 1)
   const lineHeightPx = annotation.fontSize * LINE_HEIGHT_FACTOR
@@ -134,9 +134,17 @@ export function getAnnotationScreenFrame(
   annotation: SceneAnnotationEntity,
   viewport: SceneViewportState,
 ): AnnotationScreenFrame {
+  return annotationScreenFrameAt(annotation, worldToScreen(annotation.position, viewport))
+}
+
+/** A note's text frame at an origin already projected (the text-entry host projects through the view frame). */
+export function annotationScreenFrameAt(
+  annotation: Pick<SceneAnnotationEntity, 'text' | 'fontSize' | 'rotationDeg'>,
+  origin: ScenePoint,
+): AnnotationScreenFrame {
   const metrics = getAnnotationTextMetrics(annotation)
   return {
-    origin: worldToScreen(annotation.position, viewport),
+    origin,
     widthPx: metrics.widthPx,
     heightPx: metrics.heightPx,
     lineHeightPx: metrics.lineHeightPx,

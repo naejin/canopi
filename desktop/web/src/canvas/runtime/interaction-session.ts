@@ -7,12 +7,13 @@
 // otherwise, with the DOM event the source is handling (spec §1.4, "The legacy bridge"); the bridge's recogniser session
 // follows along so its hovers still reach the host for the lens. Drops stay on the bridge until 0B-4. The session keeps
 // today's SceneInteractionSession members: setOverviewMode is a mode override fed to the recogniser's configure and the
-// host's frames, refreshMeasurements reaches ToolHost.sceneChanged(). It lends the host its 0B-2 chrome (the bridge's
-// tooltip, Unlock affordance and note editor), bridges the plant and saved-stamp read models to a registered tool, reads
-// the snapping settings per point, calls ToolHost.rawPress for every raw press on the map host and ToolHost.interrupted()
-// after a window blur, owns the navigation cursor, and passes on no draft while a story is presented. Ruler presses reach
-// the source beside the map: the session finds the pressed ruler's overlay (chrome/rulers.ts) and runs today's ruler drag
-// under any tool (its cursor, its end on a blur, its guide at the release), whatever the tool's path does with the input.
+// host's frames, refreshMeasurements reaches ToolHost.sceneChanged(). It builds the host's chrome (chrome/: the handle
+// layer, the text entry, the plant tooltip and the Unlock affordance, whose Unlock it runs), bridges the plant and
+// saved-stamp read models to a registered tool, reads the snapping settings per point, calls ToolHost.rawPress for every
+// raw press on the map host and ToolHost.interrupted() after a window blur, owns the navigation cursor, and passes on no
+// draft or handles while a story is presented. Ruler presses reach the source beside the map: the session finds the
+// pressed ruler's overlay (chrome/rulers.ts) and runs today's ruler drag under any tool (its cursor, its end on a blur, its
+// guide at the release), whatever the tool's path does with the input.
 
 import { computed, effect, signal, type ReadonlySignal } from '@preact/signals'
 import { readPlantStampSource, clearPlantStampSource } from '../plant-stamp-source'
@@ -27,7 +28,11 @@ import type {
   CanvasScrollWheelSetting,
 } from './app-adapter'
 import type { WorkspaceCameraFrameReader, WorkspaceCameraNavigation } from './camera'
+import { createHandleLayer, type HandleLayer } from './chrome/handle-layer'
+import { createHoverTooltip, type HoverTooltipController } from './chrome/hover-tooltip'
+import { createLockedAffordance, type LockedAffordanceController } from './chrome/locked-affordance'
 import { pressRuler, type RulerPress } from './chrome/rulers'
+import { createTextEntryHost, type TextEntryHost } from './chrome/text-entry-host'
 import { runCanvasRuntimeCleanups, throwCanvasRuntimeCleanupErrors } from './cleanup'
 import { CURRENT_BINDINGS } from './input/bindings'
 import { createDomInputSource, outcomeEffects } from './input/dom-input-source'
@@ -50,6 +55,7 @@ import type {
   CanvasSceneEditCommandSurface,
 } from './runtime'
 import type { SceneDesignObjectSelection, SceneDesignObjectTarget, ScenePoint, SceneStateReader } from './scene'
+import { setSceneDesignObjectLocks } from './scene/locks'
 import { createLegacyInteractionBridge, type LegacyInteractionBridge } from './scene-interaction'
 import type { SceneCommandAdmission, SceneEditCoordinator, SettledSceneReader } from './scene-runtime/transactions'
 import type { SpeciesCacheEntry } from './species-cache'
@@ -65,11 +71,15 @@ const QUARANTINE: readonly AdapterEffect[] = Object.freeze([{ kind: 'prevent-def
 /** The host's types, read through it (P5b: this module imports nothing else from tools/). */
 type DraftPresentation = Parameters<ToolHostDeps['renderer']['setDraft']>[0]
 type ToolSource = Parameters<ToolHost['setTool']>[1]
+type HandleList = Parameters<ToolHostDeps['chrome']['setHandles']>[0]
+type HandleId = Parameters<ToolHostDeps['chrome']['setHandles']>[1]
+type PassiveHoverAt = NonNullable<Parameters<ToolHostDeps['chrome']['setTooltip']>[0]>
 
 const NO_DRAFTS: Pick<SceneRendererV2, 'setDraft' | 'setSelectionPreview'> = Object.freeze({
   setDraft() {},
   setSelectionPreview() {},
 })
+const NO_HANDLES: HandleList = Object.freeze([])
 
 let descriptionSequence = 0
 
@@ -196,6 +206,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private readonly _frames: ModeOverridingFrames
   private readonly _hostKeys: InteractionHostController
   private readonly _bridge: LegacyInteractionBridge
+  private readonly _handleLayer: HandleLayer
+  private readonly _textEntry: TextEntryHost
+  private readonly _tooltip: HoverTooltipController
+  private readonly _lockedAffordance: LockedAffordanceController
   private readonly _toolHost: ToolHost
   private readonly _menu: ReturnType<typeof createContextMenuPort>
   private readonly _port: ReturnType<typeof createCanvasKeyboardPort>
@@ -213,6 +227,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _navigationCursor: 'grab' | 'grabbing' | null = null
   private _toolCursor: string | null = null
   private _draft: DraftPresentation | null = null
+  private _handles: HandleList = NO_HANDLES
+  private _activeHandle: HandleId = null
   /** The ruler pressed now, and its pointer: today's ruler drag, whose guide the session lands at the release. */
   private _rulerPress: RulerPress | null = null
   private _rulerPointer: number | null = null
@@ -273,6 +289,19 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         isRegistered: (tool) => this._toolHost?.isRegistered(tool as ToolId) ?? false,
         switchTool: (name) => this._switchTool(name),
       }), (bridge) => bridge.dispose())
+      this._handleLayer = own(createHandleLayer({ container, frames: this._frames }), (layer) => layer.dispose())
+      this._textEntry = own(createTextEntryHost({
+        container,
+        frames: this._frames,
+        translate: _deps.translate,
+        focus,
+      }), (entry) => entry.dispose())
+      this._tooltip = own(createHoverTooltip(container), (tooltip) => tooltip.dispose())
+      this._lockedAffordance = own(createLockedAffordance({
+        container,
+        translate: _deps.translate,
+        onUnlock: (target) => this._unlock(target),
+      }), (affordance) => affordance.dispose())
       const scene = createToolScene({
         store: liveStoreReader(_deps),
         sceneRevision: _deps.sceneRevision ?? signal(0),
@@ -314,17 +343,16 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
           if (!this._refreshing) _deps.render('scene')
         },
         chrome: {
-          // No handle layer before D1's 0B-3 (only Select and Text call it); a presented story shows none then either.
-          setHandles: () => {},
+          setHandles: (handles, active) => this._setHandles(handles, active),
           setCursor: (cursor) => {
             this._toolCursor = cursor
             this._applyCursor()
           },
-          requestTextEntry: () => {},
-          closeTextEntry: () => {},
-          isTextEntryOpen: () => this._bridge.isTextEntryOpen(),
-          setTooltip: (tooltip) => this._bridge.setTooltip(tooltip),
-          setLockedAffordance: (affordance) => this._bridge.setLockedAffordance(affordance),
+          requestTextEntry: (request, submit) => this._textEntry.open(request, submit),
+          closeTextEntry: () => this._textEntry.close(),
+          isTextEntryOpen: () => this._textEntry.isOpen(),
+          setTooltip: (tooltip) => this._showTooltip(tooltip),
+          setLockedAffordance: (affordance) => this._showLockedAffordance(affordance),
         },
         menu: this._menu,
         focus,
@@ -484,6 +512,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (this._disposed) return
     this._hostKeys.refreshTranslations()
     this._bridge.refreshTranslations()
+    this._lockedAffordance.refreshTranslations()
     this._toolHost.refreshTranslations()
   }
 
@@ -537,6 +566,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     })
     attempt(() => this._bridge.dispose())
     attempt(() => this._toolHost.dispose())
+    attempt(() => this._lockedAffordance.dispose())
+    attempt(() => this._tooltip.dispose())
+    attempt(() => this._textEntry.dispose())
+    attempt(() => this._handleLayer.dispose())
     attempt(() => this._hostKeys.dispose())
     throwCanvasRuntimeCleanupErrors(errors, 'Scene Interaction Session disposal failed')
   }
@@ -860,14 +893,51 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._bridge.refreshMeasurements()
   }
 
-  // ── Drafts while a story is presented ───────────────────────────────────────────────────────────────────────────
+  // ── The host's chrome, and drafts and handles while a story is presented ─────────────────────────────────────────
 
   private _setDraft(draft: DraftPresentation | null): void {
     this._draft = draft
     this._renderer.setDraft(this._storyPresented ? null : draft)
   }
 
-  /** Today's CSS hid the DOM previews while a story is presented (html[data-story-presenting]); the draft follows it. */
+  private _setHandles(handles: HandleList, active: HandleId): void {
+    this._handles = handles
+    this._activeHandle = active
+    if (!this._storyPresented) this._handleLayer.setHandles(handles, active)
+  }
+
+  /** The plant tooltip names the hovered plant as today: its localised common name, else the stored one, and its species. */
+  private _showTooltip(tooltip: PassiveHoverAt | null): void {
+    const plant = tooltip?.target.kind === 'plant'
+      ? this._deps.getSceneStore().persisted.plants.find((entry) => entry.id === tooltip.target.id)
+      : undefined
+    if (!tooltip || !plant) {
+      this._tooltip.hide()
+      return
+    }
+    const commonName = this._deps.getLocalizedCommonNames().get(plant.canonicalName) ?? plant.commonName
+    this._tooltip.show(tooltip.at.x, tooltip.at.y, commonName, plant.canonicalName)
+  }
+
+  private _showLockedAffordance(affordance: PassiveHoverAt | null): void {
+    if (!affordance) {
+      this._lockedAffordance.hide()
+      return
+    }
+    this._lockedAffordance.show({ target: affordance.target, screenX: affordance.at.x, screenY: affordance.at.y })
+  }
+
+  /** The Unlock affordance's button: today's unlock edit, after which the affordance goes. */
+  private _unlock(target: SceneDesignObjectTarget): void {
+    this._deps.sceneEdits.run('unlock-design-object', (tx) => {
+      tx.mutate((draft) => setSceneDesignObjectLocks(draft, [target], false))
+    }, { onCommitted: () => this._lockedAffordance.hide() })
+  }
+
+  /**
+   * Today's CSS hid the DOM previews, the rotation handle and the control points while a story is presented
+   * (html[data-story-presenting]); the draft and the handles follow it.
+   */
   private _observeStoryPresentation(): MutationObserver | null {
     if (typeof MutationObserver === 'undefined') return null
     const observer = new MutationObserver(() => {
@@ -875,6 +945,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       if (presented === this._storyPresented || this._disposed) return
       this._storyPresented = presented
       this._renderer.setDraft(presented ? null : this._draft)
+      if (presented) this._handleLayer.setHandles(NO_HANDLES, null)
+      else this._handleLayer.setHandles(this._handles, this._activeHandle)
     })
     observer.observe(document.documentElement, { attributes: true, attributeFilter: [STORY_PRESENTING_ATTRIBUTE] })
     return observer
