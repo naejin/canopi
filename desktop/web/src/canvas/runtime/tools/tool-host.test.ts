@@ -1,4 +1,4 @@
-import { signal } from '@preact/signals'
+import { effect, signal } from '@preact/signals'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createToolHarness,
@@ -954,6 +954,151 @@ describe('ToolHost', () => {
       h.release()
       expect(h.store.persisted.zones.map((zone) => zone.id)).toEqual(['z2'])
       expect(h.record.guidance.at(-1)).toMatchObject({ gesture: false })
+    })
+  })
+
+  describe('Select\'s handles and edits', () => {
+    const ROTATE: ToolHandle = { id: 'rotate' as ToolHandleId, anchor: { x: 10, y: 10 }, hitRadiusPx: 14, glyph: 'rotate', label: 'Rotate' }
+
+    /** A Select stand-in that shows the rotate handle and opens a Scene Edit at a press, as a move or a handle drag does. */
+    function editingSelect(): StubTool {
+      let edit: SceneEditTransaction | null = null
+      const select: StubTool = stubTool('select', {
+        activate: (ctx) => ctx.effects.setHandles([ROTATE]),
+        gesture: (g) => {
+          const phase = g.kind === 'handle-drag' ? g.phase : null
+          if (g.kind === 'press' || phase === 'start') edit = select.ctx().effects.edits.begin('interaction-test')
+          if (g.kind === 'drag-move' || phase === 'move') {
+            const world = 'point' in g ? g.point.world : { x: 0, y: 0 }
+            edit?.mutate((draft) => {
+              draft.plants = [appleAt(world)]
+            })
+          }
+          if (g.kind === 'tap' || g.kind === 'drag-end' || g.kind === 'cancel' || phase === 'end') {
+            edit?.abort()
+            edit = null
+          }
+          return 'pass'
+        },
+      })
+      return select
+    }
+
+    it('Select\'s handles hide while a Scene Edit is open; a handle\'s own press keeps them until it changes the scene', () => {
+      useStubTools(editingSelect())
+      const h = harness()
+      expect(h.chrome.handles).toEqual([ROTATE])
+
+      // A press that opens an edit (a move): the handles hide at once and come back when it ends.
+      h.press({ x: 100, y: 100 })
+      expect(h.chrome.handles).toEqual([])
+      h.release()
+      expect(h.chrome.handles).toEqual([ROTATE])
+
+      // The handle's own press marks it active and keeps the handles until its edit first changes the scene, as today.
+      h.press({ x: 10, y: 10 }, { target: { kind: 'handle', id: ROTATE.id } })
+      expect(h.chrome.handles).toEqual([ROTATE])
+      expect(h.chrome.activeHandle).toBe(ROTATE.id)
+      h.move({ x: 30, y: 30 })
+      expect(h.chrome.handles).toEqual([])
+      h.release()
+      expect(h.chrome.handles).toEqual([ROTATE])
+      expect(h.chrome.activeHandle).toBeNull()
+    })
+
+    it('a press that opens a Scene Edit clears the passive hover', () => {
+      useStubTools(editingSelect())
+      const h = harness({ scene: { plants: [appleAt({ x: 50, y: 50 })] } })
+
+      h.hover({ x: 50, y: 50 })
+      expect(h.chrome.tooltip).toEqual({ target: P1, at: { x: 50, y: 50 } })
+      h.press({ x: 50, y: 50 })
+      expect(h.chrome.tooltip).toBeNull()
+      expect(h.record.hovers.at(-1)).toBeNull()
+      h.release()
+    })
+
+    it('an aborted Scene Edit redraws the scene it restored', () => {
+      useStubTools(editingSelect())
+      const h = harness()
+
+      h.press({ x: 100, y: 100 })
+      h.move({ x: 120, y: 120 })
+      h.move({ x: 140, y: 140 })
+      const before = h.record.invalidations
+      h.cancel('pointercancel')
+
+      expect(h.store.persisted.plants).toEqual([])
+      expect(h.record.invalidations).toBe(before + 1)
+    })
+
+    it('a text entry the tool\'s submit closes shows Select\'s handles again', () => {
+      const submitted: string[] = []
+      const select: StubTool = stubTool('select', {
+        activate: (ctx) => ctx.effects.setHandles([ROTATE]),
+        command: (c) => {
+          if (c.kind !== 'edit-text') return 'pass'
+          select.ctx().effects.requestTextEntry(
+            { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Old', placeholderKey: 'canvas.note', mode: 'edit' },
+            (text) => {
+              submitted.push(text)
+              return text.length > 0 ? 'close' : 'keep'
+            },
+          )
+          return 'handled'
+        },
+      })
+      useStubTools(select)
+      const h = harness()
+
+      expect(h.host.command({ kind: 'edit-text' })).toBe('handled')
+      expect(h.chrome.handles).toEqual([])
+      // A refused commit keeps the entry, and the handles stay hidden.
+      expect(h.chrome.textEntry!.submit('')).toBe('keep')
+      expect(h.chrome.textEntry).not.toBeNull()
+      expect(h.chrome.handles).toEqual([])
+
+      expect(h.chrome.textEntry!.submit('New')).toBe('close')
+      expect(submitted).toEqual(['', 'New'])
+      expect(h.chrome.textEntry).toBeNull()
+      expect(h.chrome.handles).toEqual([ROTATE])
+    })
+
+    it('the same handles again change nothing and redraw nothing', () => {
+      const select: StubTool = stubTool('select', {
+        activate: (ctx) => ctx.effects.setHandles([ROTATE]),
+        viewChanged: () => select.ctx().effects.setHandles([{ ...ROTATE }]),
+      })
+      useStubTools(select)
+      const h = harness()
+      const before = h.record.invalidations
+
+      // A camera frame with the pointer off the map: the tool refreshes its handles, which have not changed.
+      h.view.navigation.zoomIn()
+      h.advance(1000)
+
+      expect(select.calls).toContain('viewChanged')
+      expect(h.record.invalidations).toBe(before)
+      expect(h.chrome.handles).toEqual([ROTATE])
+    })
+
+    it('a tool call made from inside an effect leaves the effect independent of what the tool reads and bumps', () => {
+      const selectionRevision = signal(0)
+      const select = stubTool('select', { sceneChanged: () => void selectionRevision.value })
+      useStubTools(select)
+      const h = harness()
+      let runs = 0
+
+      // The runtime refreshes the session from inside its camera-frame effect.
+      const stop = effect(() => {
+        runs += 1
+        h.host.sceneChanged()
+      })
+      selectionRevision.value += 1
+      stop()
+
+      expect(runs).toBe(1)
+      expect(h.host.transientHistory.revision.peek()).toBeGreaterThan(0)
     })
   })
 

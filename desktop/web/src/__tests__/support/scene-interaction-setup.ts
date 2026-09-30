@@ -68,6 +68,17 @@ import {
   createSceneInteractionEventHarness,
   type SceneInteractionEventHarness,
 } from './scene-interaction-events'
+import { createRecordingRenderer, type RecordingRenderer } from './recording-renderer'
+import type { DraftShape } from '../../canvas/runtime/tools/draft'
+
+/**
+ * The session a default `render` refreshes: the runtime's render invalidates the scene and refreshes its own session's
+ * measurements (scene-runtime.ts `_invalidate`), which the ToolHost's handles and the legacy bridge's chips follow.
+ */
+let renderedSession: SceneInteractionSession | null = null
+
+/** The deps of a suite session: today's, plus the recording renderer the session's drafts reach. */
+export type SceneInteractionTestDeps = SceneInteractionSessionDeps & { readonly renderer: RecordingRenderer }
 
 /** The canonical lon/lat a changed plane position serializes to. */
 export function storedGeo(store: SceneStore, point: { x: number; y: number }) {
@@ -212,7 +223,7 @@ export function createInteractionDeps(
     | 'readSingleKeyShortcuts'
   >>
     & { onSceneEditCommit?: (type: string) => void } = {},
-): SceneInteractionSessionDeps {
+): SceneInteractionTestDeps {
   let selection: SceneDesignObjectTarget[] = []
   const setSelection = vi.fn((targets: Iterable<SceneDesignObjectTarget>) => {
     selection = [...targets].map((target) => ({ ...target }))
@@ -224,7 +235,9 @@ export function createInteractionDeps(
     store.setSelection(selection)
     selectedObjectIds.value = new Set()
   })
-  const render = (overrides.render ?? (() => {})) as SceneInteractionSessionDeps['render']
+  const render = (overrides.render ?? ((kind: 'scene' | 'viewport') => {
+    if (kind === 'scene' || kind === 'viewport') renderedSession?.refreshMeasurements()
+  })) as SceneInteractionSessionDeps['render']
   const history = new SceneHistory()
   if (overrides.onSceneEditCommit) {
     const record = history.record.bind(history)
@@ -309,6 +322,7 @@ export function createInteractionDeps(
     getLocalizedCommonNames: () => new Map(),
     publishToolGuidance: overrides.publishToolGuidance ?? setCanvasToolGuidance,
     nudge: overrides.nudge ?? { nudgeSelected: vi.fn(() => true), endNudge: vi.fn() },
+    renderer: createRecordingRenderer(),
   }
 }
 
@@ -365,14 +379,17 @@ export function createRecoveringCommandAdmission(): {
   return {
     admission: {
       revision: signal(0),
+      // As the scene's coordinator: a pending settlement answers busy to every admission, and only one that asks to
+      // resume it recovers it (the ToolHost's raw-press admission does not ask; the press's own admission does).
       runWhenSettled<T>(
         operation: () => T,
         busyResult: T,
         options: { resumePending?: boolean } = {},
       ): T {
         if (pendingSettlement) {
+          if (options.resumePending !== true) return busyResult
           pendingSettlement = false
-          recoveryCalls(options.resumePending === true)
+          recoveryCalls(true)
           return busyResult
         }
         return operation()
@@ -451,10 +468,16 @@ export function zoneMeasurementTexts(container: HTMLElement): string[] {
     .map((label) => label.textContent ?? '')
 }
 
+/** The plant tooltip the ToolHost's passive hover shows (chrome/hover-tooltip.ts); it joins the map at its first show. */
 export function plantHoverTooltip(container: HTMLElement): HTMLElement {
-  const tooltip = container.querySelector<HTMLElement>('[data-hover-tooltip]')
+  const tooltip = container.querySelector<HTMLElement>('[data-canvas-chrome="hover-tooltip"]')
   if (!tooltip) throw new Error('Expected Plant Hover Tooltip')
   return tooltip
+}
+
+/** The Unlock affordance the ToolHost's passive hover shows (chrome/locked-affordance.ts), once it has been shown. */
+export function lockedAffordance(container: HTMLElement): HTMLElement | null {
+  return container.querySelector<HTMLElement>('[data-canvas-chrome="locked-affordance"]')
 }
 
 export function nextAnimationFrame(): Promise<void> {
@@ -570,10 +593,14 @@ export function getDesignObjectSelectionFromStore(
   )
 }
 
+/** The rotation handle the ToolHost shows through the handle layer, or null while Select hides it. */
+export function rotationHandle(container: HTMLElement): HTMLElement | null {
+  return container.querySelector<HTMLElement>('[data-canvas-handle="rotate"]')
+}
+
 export function rotationHandleCenter(container: HTMLElement): ScenePoint {
-  const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')
+  const handle = rotationHandle(container)
   if (!handle) throw new Error('Expected rotation handle to be visible')
-  if (handle.style.display === 'none') throw new Error('Expected rotation handle to be visible')
   const left = Number.parseFloat(handle.style.left)
   const top = Number.parseFloat(handle.style.top)
   if (!Number.isFinite(left) || !Number.isFinite(top)) {
@@ -585,46 +612,58 @@ export function rotationHandleCenter(container: HTMLElement): ScenePoint {
   }
 }
 
-export function zoneControlPointCenter(container: HTMLElement, kind: string, index: number): ScenePoint {
-  const handle = container.querySelector<HTMLElement>(
-    `[data-zone-control-point-kind="${kind}"][data-zone-control-point-index="${index}"]`,
-  )
-  if (!handle) throw new Error(`Expected ${kind} Zone Control Point ${index}`)
-  const screenX = Number.parseFloat(handle.dataset.zoneControlPointScreenX ?? '')
-  const screenY = Number.parseFloat(handle.dataset.zoneControlPointScreenY ?? '')
-  if (Number.isFinite(screenX) && Number.isFinite(screenY)) {
-    return { x: screenX, y: screenY }
-  }
-  const left = Number.parseFloat(handle.style.left)
-  const top = Number.parseFloat(handle.style.top)
-  if (!Number.isFinite(left) || !Number.isFinite(top)) {
-    throw new Error('Expected Zone Control Point to be positioned')
-  }
-  return {
-    x: left + 10,
-    y: top + 10,
+/** The reshape handle id's prefix and last part for today's control-point `kind` and `index` (tools/select/reshape.ts). */
+function zoneControlPointId(kind: string, index: number): { readonly prefix: string; readonly suffix: string } {
+  switch (kind) {
+    case 'line-endpoint':
+    case 'polygon-vertex': return { prefix: 'vertex', suffix: String(index) }
+    case 'rect-corner': return { prefix: 'rect-corner', suffix: ['nw', 'ne', 'se', 'sw'][index] ?? '' }
+    case 'ellipse-east':
+    case 'ellipse-west':
+    case 'ellipse-north':
+    case 'ellipse-south': return { prefix: 'ellipse-axis', suffix: kind.slice('ellipse-'.length) }
+    default: throw new Error(`Unknown Zone Control Point kind ${kind}`)
   }
 }
 
+/** The selected zone's reshape handle of today's `kind` and `index`. */
+export function zoneControlPoint(container: HTMLElement, kind: string, index: number): HTMLElement | null {
+  const { prefix, suffix } = zoneControlPointId(kind, index)
+  return container.querySelector<HTMLElement>(`[data-canvas-handle^="${prefix}:"][data-canvas-handle$=":${suffix}"]`)
+}
+
+export function zoneControlPointCenter(container: HTMLElement, kind: string, index: number): ScenePoint {
+  const handle = zoneControlPoint(container, kind, index)
+  if (!handle) throw new Error(`Expected ${kind} Zone Control Point ${index}`)
+  return handleAnchor(handle)
+}
+
+/** The selected guide's end handle: 0 its start, 1 its end. */
+export function measurementGuideControlPoint(container: HTMLElement, index: number): HTMLElement | null {
+  return container.querySelector<HTMLElement>(`[data-canvas-handle^="guide-end:"][data-canvas-handle$=":${index === 0 ? 'a' : 'b'}"]`)
+}
+
 export function measurementGuideControlPointCenter(container: HTMLElement, index: number): ScenePoint {
-  const handle = container.querySelector<HTMLElement>(
-    `[data-measurement-guide-control-point-index="${index}"]`,
-  )
+  const handle = measurementGuideControlPoint(container, index)
   if (!handle) throw new Error(`Expected Measurement Guide Control Point ${index}`)
-  const screenX = Number.parseFloat(handle.dataset.measurementGuideControlPointScreenX ?? '')
-  const screenY = Number.parseFloat(handle.dataset.measurementGuideControlPointScreenY ?? '')
-  if (Number.isFinite(screenX) && Number.isFinite(screenY)) {
-    return { x: screenX, y: screenY }
-  }
-  const left = Number.parseFloat(handle.style.left)
-  const top = Number.parseFloat(handle.style.top)
-  if (!Number.isFinite(left) || !Number.isFinite(top)) {
-    throw new Error('Expected Measurement Guide Control Point to be positioned')
-  }
-  return {
-    x: left + 10,
-    y: top + 10,
-  }
+  return handleAnchor(handle)
+}
+
+function handleAnchor(handle: HTMLElement): ScenePoint {
+  const screenX = Number.parseFloat(handle.dataset.canvasHandleScreenX ?? '')
+  const screenY = Number.parseFloat(handle.dataset.canvasHandleScreenY ?? '')
+  if (!Number.isFinite(screenX) || !Number.isFinite(screenY)) throw new Error('Expected the handle to be positioned')
+  return { x: screenX, y: screenY }
+}
+
+/** The shapes of the last draft the session handed the renderer (drafts draw in Pixi, plan section 1, exception 2). */
+export function draftShapes(deps: SceneInteractionTestDeps): readonly DraftShape[] {
+  return deps.renderer.lastDraft()?.shapes ?? []
+}
+
+/** The chips of the last draft, in draw order. */
+export function draftLabelTexts(deps: SceneInteractionTestDeps): string[] {
+  return draftShapes(deps).flatMap((shape) => (shape.kind === 'label' ? [shape.text] : []))
 }
 
 export function selectionBoundsCenter(selection: CanvasDesignObjectSelectionModel): ScenePoint {
@@ -700,6 +739,7 @@ export function installSceneInteractionFixture(
 
   function createTestSession(deps: SceneInteractionSessionDeps): SceneInteractionSession {
     const session = createSceneInteractionSession(deps)
+    renderedSession = session
     // The runtime mirrors the session's tool for the tool card, as the command surface does.
     const setTool = session.setTool.bind(session)
     session.setTool = (name) => {
@@ -780,6 +820,7 @@ export function installSceneInteractionFixture(
   })
 
   afterEach(() => {
+    renderedSession = null
     const disposalErrors: unknown[] = []
     for (const session of sessions.reverse()) {
       try {

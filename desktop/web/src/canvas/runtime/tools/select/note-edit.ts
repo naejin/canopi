@@ -1,0 +1,91 @@
+// canvas/runtime/tools/select/note-edit.ts
+//
+// Owns the in-place editing of a text note under Select (today's interaction/annotation-inline-editor.ts, without its
+// textarea, which is the host's text entry in 'edit' mode): opening a note's entry, and its submit on Enter or blur. The
+// submit writes the text as one 'interaction-annotation-text' Scene Edit, deletes the note (and its group membership)
+// when the text is blank, and changes nothing for the same text or a note that can no longer be edited (gone, locked,
+// grouped, or on a hidden or locked layer), closing the entry in each case; while the scene refuses the edit the same
+// entry stays open with its text, as today.
+
+import { getSceneGroupedMemberKeys, sceneObjectGroupMemberKey } from '../../scene/group-members'
+import { isSceneDesignObjectLocked } from '../../scene/locks'
+import type { SceneAnnotationEntity, ScenePersistedState } from '../../scene/types'
+import type { TextEntryRequest, ToolContext } from '../tool'
+
+const EDIT_TYPE = 'interaction-annotation-text'
+
+/** The note Enter or F2 edits: the one editable text note selected, nothing locked or blocked. */
+export function selectedEditableNoteId(ctx: ToolContext): string | null {
+  const selection = ctx.scene.selectionModel()
+  if (
+    selection.editableTargets.length !== 1
+    || (selection.lockedTargets?.length ?? 0) > 0
+    || (selection.blockedTargets?.length ?? 0) > 0
+  ) return null
+  const target = selection.editableTargets[0]
+  return target?.kind === 'annotation' ? target.id : null
+}
+
+/** Opens the entry of the text note `annotationId`; false when there is no such note. */
+export function openNoteEntry(ctx: ToolContext, annotationId: string, onClosed: () => void): boolean {
+  const annotation = findAnnotation(ctx.scene.persisted, annotationId)
+  if (!annotation || annotation.annotationType !== 'text') return false
+  const request: TextEntryRequest = {
+    anchor: annotation.position,
+    rotationDeg: annotation.rotationDeg ?? 0,
+    initialText: annotation.text,
+    placeholderKey: 'canvas.textNote.placeholder',
+    mode: 'edit',
+    fontSizePx: annotation.fontSize,
+  }
+  ctx.effects.requestTextEntry(request, (text) => {
+    const reply = submitNote(ctx, annotationId, text)
+    if (reply === 'close') onClosed()
+    return reply
+  })
+  return true
+}
+
+/** True while the scene still holds the note (today's editor closed once its note was gone). */
+export function noteExists(scene: Readonly<ScenePersistedState>, annotationId: string): boolean {
+  return findAnnotation(scene, annotationId) !== null
+}
+
+function submitNote(ctx: ToolContext, annotationId: string, text: string): 'close' | 'keep' {
+  const scene = ctx.scene.persisted
+  const annotation = findAnnotation(scene, annotationId)
+  if (!annotation || !isNoteEditable(scene, annotation)) return 'close'
+  if (text.trim().length === 0) {
+    return ctx.effects.edits.run(EDIT_TYPE, (tx) => {
+      tx.mutate((draft) => {
+        draft.annotations = draft.annotations.filter((entry) => entry.id !== annotationId)
+        draft.groups = draft.groups
+          .map((group) => ({
+            ...group,
+            members: group.members.filter((member) => !(member.kind === 'annotation' && member.id === annotationId)),
+          }))
+          .filter((group) => group.members.length >= 2)
+      })
+      tx.setSelection([])
+    }) ? 'close' : 'keep'
+  }
+  if (text === annotation.text) return 'close'
+  return ctx.effects.edits.run(EDIT_TYPE, (tx) => {
+    tx.mutate((draft) => {
+      draft.annotations = draft.annotations.map((entry) => (entry.id === annotationId ? { ...entry, text } : entry))
+    })
+  }) ? 'close' : 'keep'
+}
+
+/** Today's canEditAnnotation: the note alone would be editable (not grouped, on a visible unlocked layer, not locked). */
+function isNoteEditable(scene: Readonly<ScenePersistedState>, annotation: SceneAnnotationEntity): boolean {
+  const target = { kind: 'annotation', id: annotation.id } as const
+  if (getSceneGroupedMemberKeys(scene).has(sceneObjectGroupMemberKey(target))) return false
+  const layer = scene.layers.find((entry) => entry.name === 'annotations')
+  if (layer?.visible === false || layer?.locked === true) return false
+  return !isSceneDesignObjectLocked(scene, target)
+}
+
+function findAnnotation(scene: Readonly<ScenePersistedState>, annotationId: string): SceneAnnotationEntity | null {
+  return scene.annotations.find((entry) => entry.id === annotationId) ?? null
+}

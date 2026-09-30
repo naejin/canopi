@@ -1,0 +1,95 @@
+import { afterEach, describe, expect, it } from 'vitest'
+import {
+  createToolHarness,
+  plantEntity,
+  textNote,
+  type ToolHarness,
+  type ToolHarnessOptions,
+} from '../../../../__tests__/support/tool-harness'
+import type { SceneDesignObjectTarget } from '../../scene/design-object-targets'
+
+const harnesses: ToolHarness[] = []
+
+function harness(options: ToolHarnessOptions = {}): ToolHarness {
+  const created = createToolHarness(options)
+  harnesses.push(created)
+  return created
+}
+
+afterEach(() => {
+  for (const created of harnesses.splice(0)) created.dispose()
+})
+
+const APPLE: SceneDesignObjectTarget = { kind: 'plant', id: 'apple' }
+const PEAR: SceneDesignObjectTarget = { kind: 'plant', id: 'pear' }
+
+function orchard() {
+  return {
+    plants: [
+      plantEntity('apple', 'Malus domestica', { x: 50, y: 50 }),
+      plantEntity('pear', 'Pyrus communis', { x: 150, y: 50 }),
+      plantEntity('locked', 'Malus domestica', { x: 250, y: 50 }, { locked: true }),
+    ],
+  }
+}
+
+describe('Select clicks', () => {
+  it('a click selects the hit object; empty ground clears', () => {
+    const h = harness({ scene: orchard() })
+
+    h.click({ x: 50, y: 50 })
+    expect(h.store.session.selectedTargets).toEqual([APPLE])
+
+    h.click({ x: 150, y: 50 })
+    expect(h.store.session.selectedTargets).toEqual([PEAR])
+
+    h.click({ x: 300, y: 250 })
+    expect(h.store.session.selectedTargets).toEqual([])
+  })
+
+  it('a click selection records no history', () => {
+    const h = harness({ scene: orchard() })
+
+    h.click({ x: 50, y: 50 })
+    h.click({ x: 150, y: 50 }, { mods: { shift: true } })
+    h.click({ x: 300, y: 250 })
+
+    expect(h.record.selections).toEqual([[APPLE], [APPLE, PEAR], []])
+    expect(h.history.canUndo.value).toBe(false)
+    expect(h.store.persisted.plants.map((plant) => plant.position)).toEqual([
+      { x: 50, y: 50 },
+      { x: 150, y: 50 },
+      { x: 250, y: 50 },
+    ])
+  })
+
+  it('an additive click toggles the hit and a directly locked object is selected without moving', () => {
+    const h = harness({ scene: orchard() })
+
+    h.click({ x: 50, y: 50 })
+    h.click({ x: 50, y: 50 }, { mods: { ctrl: true } })
+    expect(h.store.session.selectedTargets).toEqual([])
+
+    h.drag({ x: 250, y: 50 }, { x: 280, y: 80 })
+    expect(h.store.session.selectedTargets).toEqual([{ kind: 'plant', id: 'locked' }])
+    expect(h.store.persisted.plants[2]!.position).toEqual({ x: 250, y: 50 })
+    expect(h.history.canUndo.value).toBe(false)
+  })
+
+  it('a platform double-click on a plant selects its species; one on a note opens it for editing', () => {
+    const h = harness({
+      scene: {
+        ...orchard(),
+        annotations: [textNote('note', { x: 100, y: 150 }, 'Prune in March')],
+      },
+    })
+
+    h.click({ x: 50, y: 50 }, { clickCount: 2 })
+    // The locked apple is not selectable.
+    expect(h.store.session.selectedTargets).toEqual([APPLE])
+
+    h.click({ x: 104, y: 154 }, { clickCount: 2 })
+    expect(h.store.session.selectedTargets).toEqual([{ kind: 'annotation', id: 'note' }])
+    expect(h.chrome.textEntry?.request).toMatchObject({ mode: 'edit', initialText: 'Prune in March', fontSizePx: 16 })
+  })
+})

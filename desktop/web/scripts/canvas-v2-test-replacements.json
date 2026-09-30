@@ -265,5 +265,53 @@
   "src/__tests__/control-point-overlay.test.ts > Control Point Overlay owner > removes its root when adapter presentation construction fails": {
     "file": "src/canvas/runtime/chrome/handle-layer.test.ts",
     "name": "the handle layer > removes its root when it cannot follow the camera"
+  },
+  "src/__tests__/control-point-overlay.test.ts > 'Zone' Control Point adapter shared lifecycle > rolls back Scene Edit admission when drag presentation setup fails": {
+    "file": "src/canvas/runtime/tools/select/point-handle.test.ts",
+    "name": "'Zone' point handle drags > a handle the selection no longer owns begins no Scene Edit"
+  },
+  "src/__tests__/control-point-overlay.test.ts > 'Zone' Control Point adapter shared lifecycle > treats movement inside the screen-space threshold as a no-op": {
+    "file": "src/canvas/runtime/tools/select/point-handle.test.ts",
+    "name": "'Zone' point handle drags > a drag within 2 px of the press changes nothing and records no history"
+  },
+  "src/__tests__/control-point-overlay.test.ts > 'Zone' Control Point adapter shared lifecycle > applies the final pointer position and commits one changed edit": {
+    "file": "src/canvas/runtime/tools/select/point-handle.test.ts",
+    "name": "'Zone' point handle drags > the release point is applied and commits one changed edit"
+  },
+  "src/__tests__/control-point-overlay.test.ts > 'Zone' Control Point adapter shared lifecycle > cancels a live preview without committing history": {
+    "file": "src/canvas/runtime/tools/select/point-handle.test.ts",
+    "name": "'Zone' point handle drags > a cancelled drag rolls back its live change without history"
+  },
+  "src/__tests__/control-point-overlay.test.ts > 'Zone' Control Point adapter shared lifecycle > retains a failed abort for cancellation retry": {
+    "file": "src/canvas/runtime/tools/select/point-handle.test.ts",
+    "name": "'Zone' point handle drags > a failed abort is kept and retried before the next press"
+  },
+  "src/__tests__/control-point-overlay.test.ts > 'Zone' Control Point adapter shared lifecycle > aborts a live preview and removes every owned root on disposal": {
+    "file": "src/canvas/runtime/tools/select/point-handle.test.ts",
+    "name": "'Zone' point handle drags > disposing the host mid-drag rolls the object back and removes the handles"
+  },
+  "src/__tests__/control-point-overlay.test.ts > 'Measurement Guide' Control Point adapter shared lifecycle > rolls back Scene Edit admission when drag presentation setup fails": {
+    "file": "src/canvas/runtime/tools/select/point-handle.test.ts",
+    "name": "'Measurement Guide' point handle drags > a handle the selection no longer owns begins no Scene Edit"
+  },
+  "src/__tests__/control-point-overlay.test.ts > 'Measurement Guide' Control Point adapter shared lifecycle > treats movement inside the screen-space threshold as a no-op": {
+    "file": "src/canvas/runtime/tools/select/point-handle.test.ts",
+    "name": "'Measurement Guide' point handle drags > a drag within 2 px of the press changes nothing and records no history"
+  },
+  "src/__tests__/control-point-overlay.test.ts > 'Measurement Guide' Control Point adapter shared lifecycle > applies the final pointer position and commits one changed edit": {
+    "file": "src/canvas/runtime/tools/select/point-handle.test.ts",
+    "name": "'Measurement Guide' point handle drags > the release point is applied and commits one changed edit"
+  },
+  "src/__tests__/control-point-overlay.test.ts > 'Measurement Guide' Control Point adapter shared lifecycle > cancels a live preview without committing history": {
+    "file": "src/canvas/runtime/tools/select/point-handle.test.ts",
+    "name": "'Measurement Guide' point handle drags > a cancelled drag rolls back its live change without history"
+  },
+  "src/__tests__/control-point-overlay.test.ts > 'Measurement Guide' Control Point adapter shared lifecycle > retains a failed abort for cancellation retry": {
+    "file": "src/canvas/runtime/tools/select/point-handle.test.ts",
+    "name": "'Measurement Guide' point handle drags > a failed abort is kept and retried before the next press"
+  },
+  "src/__tests__/control-point-overlay.test.ts > 'Measurement Guide' Control Point adapter shared lifecycle > aborts a live preview and removes every owned root on disposal": {
+    "file": "src/canvas/runtime/tools/select/point-handle.test.ts",
+    "name": "'Measurement Guide' point handle drags > disposing the host mid-drag rolls the object back and removes the handles"
   }
 }

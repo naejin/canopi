@@ -7,9 +7,19 @@ import {
   createControlPointOverlay,
   type ControlPointOverlayAdapter,
   type ControlPointOverlayController,
-  type ControlPointOverlayPoint,
 } from './control-point-overlay'
 import { createZoneMeasurementOverlay } from './zone-measurement-overlay'
+import {
+  cloneMeasurementGuide,
+  draggableGuide,
+  guideEnds,
+  measurementGuidesEqual,
+  reshapeMeasurementGuide,
+  type GuideEnd,
+} from '../tools/select/guide-ends'
+
+// The legacy bridge's guide end points (0B, until scene-interaction.ts goes): the geometry is Select's
+// (tools/select/guide-ends.ts), which the ToolHost runs; the bridge holds these only while Select is unregistered.
 
 interface MeasurementGuideControlPointOptions {
   readonly container: HTMLElement
@@ -26,28 +36,21 @@ interface MeasurementGuideControlPointOptions {
 
 export type MeasurementGuideControlPointController = ControlPointOverlayController
 
-interface MeasurementGuideControlPoint extends ControlPointOverlayPoint {
-  readonly guideId: string
-  readonly index: 0 | 1
-}
-
-const MIN_MEASUREMENT_GUIDE_LENGTH_M = 0.5
-
 export function createMeasurementGuideControlPoints(
   options: MeasurementGuideControlPointOptions,
 ): MeasurementGuideControlPointController {
   const adapter: ControlPointOverlayAdapter<
     SceneMeasurementGuideEntity,
-    MeasurementGuideControlPoint
+    GuideEnd
   > = {
     editType: 'interaction-measurement-guide-control-point',
     rootDataAttribute: 'measurementGuideControlPoints',
     activeDataAttribute: 'measurementGuideControlPointActive',
-    getEligibleEntity: eligibleSelectedGuide,
+    getEligibleEntity: () => draggableGuide(options.getSceneStore().persisted, options.getSelection()),
     getEntityId: (guide) => guide.id,
     ownsControlPoint: (guide, point) => guide.id === point.guideId,
     cloneEntity: cloneMeasurementGuide,
-    createControlPoints: createControlPointsForGuide,
+    createControlPoints: guideEnds,
     reshape: (guide, point, dragged) => reshapeMeasurementGuide(guide, point.index, dragged),
     entitiesEqual: measurementGuidesEqual,
     writeDraft(draft, guideId, nextGuide) {
@@ -79,65 +82,4 @@ export function createMeasurementGuideControlPoints(
   }
 
   return createControlPointOverlay(options, adapter)
-
-  function eligibleSelectedGuide(): SceneMeasurementGuideEntity | null {
-    const selection = options.getSelection()
-    if (
-      selection.editableTargets.length !== 1
-      || (selection.lockedTargets?.length ?? 0) > 0
-      || selection.blockedTargets.length > 0
-    ) return null
-    const target = selection.editableTargets[0]
-    if (target?.kind !== 'measurement-guide') return null
-    return options.getSceneStore().persisted.measurementGuides
-      .find((guide) => guide.id === target.id) ?? null
-  }
-}
-
-function createControlPointsForGuide(guide: SceneMeasurementGuideEntity): MeasurementGuideControlPoint[] {
-  return [
-    {
-      id: `${guide.id}:start`,
-      guideId: guide.id,
-      index: 0,
-      world: guide.start,
-    },
-    {
-      id: `${guide.id}:end`,
-      guideId: guide.id,
-      index: 1,
-      world: guide.end,
-    },
-  ]
-}
-
-function reshapeMeasurementGuide(
-  guide: SceneMeasurementGuideEntity,
-  endpointIndex: 0 | 1,
-  point: ScenePoint,
-): SceneMeasurementGuideEntity | null {
-  const nextGuide = endpointIndex === 0
-    ? { ...guide, start: { ...point } }
-    : { ...guide, end: { ...point } }
-  if (measurementGuideLength(nextGuide) < MIN_MEASUREMENT_GUIDE_LENGTH_M) return null
-  return nextGuide
-}
-
-function measurementGuideLength(guide: SceneMeasurementGuideEntity): number {
-  return Math.hypot(guide.end.x - guide.start.x, guide.end.y - guide.start.y)
-}
-
-function measurementGuidesEqual(left: SceneMeasurementGuideEntity, right: SceneMeasurementGuideEntity): boolean {
-  return left.start.x === right.start.x
-    && left.start.y === right.start.y
-    && left.end.x === right.end.x
-    && left.end.y === right.end.y
-}
-
-function cloneMeasurementGuide(guide: SceneMeasurementGuideEntity): SceneMeasurementGuideEntity {
-  return {
-    ...guide,
-    start: { ...guide.start },
-    end: { ...guide.end },
-  }
 }

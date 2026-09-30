@@ -12,7 +12,7 @@
 // (spec §1.4, "The legacy bridge"). Drops stay on the bridge until 0B-4. The module re-exports createToolScene and builds
 // the context-menu port, so interaction-session.ts imports nothing else from tools/ (P5b).
 
-import { signal } from '@preact/signals'
+import { signal, untracked } from '@preact/signals'
 import type { CanvasContextMenuRequest } from '../app-adapter'
 import { runCanvasRuntimeCleanups } from '../cleanup'
 import type { Gesture, MenuSource, PressTarget } from '../input/gestures'
@@ -87,6 +87,8 @@ interface LiveGesture {
   lastScreen: ScreenPoint
   lastMods: Modifiers
   dragging: boolean
+  /** True once the tool changed the scene through its open Scene Edit during this press. */
+  mutated: boolean
 }
 
 /** Where the pointer rests on the map: the last hover, or where a press was released, moved by a pointer pan (notePointer).
@@ -208,15 +210,21 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   // ── Tool calls ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-  /** Every call into the tool: afterwards transient history bumps, and drafts, handles, guidance and redraws are flushed. */
+  /**
+   * Every call into the tool: afterwards transient history bumps, and drafts, handles, guidance and redraws are flushed.
+   * Calls run untracked: the runtime refreshes the session from inside its camera-frame effect, which must not come to
+   * depend on what the tool reads, nor re-run on the transient-history revision the call bumps.
+   */
   function callTool<T>(run: () => T): T {
-    callDepth += 1
-    try {
-      return run()
-    } finally {
-      callDepth -= 1
-      if (callDepth === 0) afterToolCall()
-    }
+    return untracked(() => {
+      callDepth += 1
+      try {
+        return run()
+      } finally {
+        callDepth -= 1
+        if (callDepth === 0) afterToolCall()
+      }
+    })
   }
 
   function afterToolCall(): void {
@@ -261,7 +269,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         changed()
       },
       setHandles(handles) {
-        if (!owns()) return
+        // The same handles again (a refresh after a camera frame or a scene change) change nothing and redraw nothing.
+        if (!owns() || sameHandles(toolHandles, handles)) return
         toolHandles = handles
         changed()
       },
@@ -279,7 +288,16 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         if (owns()) requestTool(id)
       },
       requestTextEntry(request, submit) {
-        if (owns()) deps.chrome.requestTextEntry(request, submit)
+        if (!owns()) return
+        deps.chrome.requestTextEntry(request, (text) => {
+          const reply = callTool(() => submit(text))
+          // A closed entry shows Select's handles again at once (today's editor refreshed them after its commit).
+          if (reply === 'close' && deps.chrome.isTextEntryOpen()) {
+            deps.chrome.closeTextEntry()
+            flush()
+          }
+          return reply
+        })
       },
       closeTextEntry() {
         if (owns()) closeTextEntry()
@@ -326,7 +344,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     return {
       mutate(edit) {
         tx.mutate(edit)
-        if (open) invalidateNeeded = true
+        if (!open) return
+        invalidateNeeded = true
+        if (live) live.mutated = true
       },
       setSelection: (targets) => tx.setSelection(targets),
       commit(options) {
@@ -337,6 +357,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       abort() {
         tx.abort()
         openEdits.delete(tx)
+        // The scene is back as it was before the edit: redraw it, as today's tools rendered after an abort.
+        if (open) invalidateNeeded = true
       },
       get changed() {
         return tx.changed
@@ -450,14 +472,18 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     deps.chrome.setHandles(handles, active)
   }
 
-  /** Select's handles show only while its affordances may (today's _canShowSelectAffordances); a handle keeps its own drag. */
+  /**
+   * Select's handles show only while its affordances may (today's _canShowSelectAffordances): in site mode, with no
+   * pending cancellation, the text entry closed and no Scene Edit open. A handle's own press keeps them until its edit
+   * first changes the scene, as today's handle hid them at its drag's first update.
+   */
   function shownHandles(): readonly ToolHandle[] {
     if (!activeTool) return NO_HANDLES
     if (currentId !== 'select') return toolHandles
     const affordancesShown = frame().mode === 'site'
       && !pendingCancellation
       && !deps.chrome.isTextEntryOpen()
-      && (!hasActiveSceneEdit() || live?.kind === 'handle')
+      && (!hasActiveSceneEdit() || (live?.kind === 'handle' && !live.mutated))
     return affordancesShown ? toolHandles : NO_HANDLES
   }
 
@@ -608,6 +634,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       live = liveGesture(g, 'handle', point, null)
       publishHandles()
       callTool(() => tool.gesture({ kind: 'handle-drag', phase: 'start', handle, point, start: point }))
+      clearPassiveHoverForEdit()
       return false
     }
     // Inspection owns the plain primary press, after handles and the pan check and before the tool; a Pan-tool press
@@ -616,7 +643,13 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const hit = hitAt(point.world)
     live = liveGesture(g, 'tool', point, hit)
     callTool(() => tool.gesture({ kind: 'press', point, hit, clickCount: g.clickCount }))
+    clearPassiveHoverForEdit()
     return false
+  }
+
+  /** A press that opened a Scene Edit (a move or a handle drag) clears the passive hover, as today's drag presentation did. */
+  function clearPassiveHoverForEdit(): void {
+    if (hasActiveSceneEdit()) clearPassiveHover()
   }
 
   function liveGesture(
@@ -636,6 +669,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       lastScreen: g.at,
       lastMods: g.mods,
       dragging: false,
+      mutated: false,
     }
   }
 
@@ -1212,6 +1246,10 @@ function cursorForTool(tool: ToolId): string {
     case 'plant-spacing': return 'crosshair'
     default: return 'default'
   }
+}
+
+function sameHandles(a: readonly ToolHandle[], b: readonly ToolHandle[]): boolean {
+  return a === b || (a.length === b.length && JSON.stringify(a) === JSON.stringify(b))
 }
 
 function insideScreen(at: ScreenPoint, screen: ViewScreen): boolean {
