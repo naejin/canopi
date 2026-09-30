@@ -478,7 +478,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         this._toolHost.endNudgeSeries(true)
         return
       case 'down':
-        this._toolHost.rawPress(input.role === 'auxiliary' ? 'middle' : input.role, input.target)
+        this._toolHost.rawPress(input.role === 'auxiliary' ? 'middle' : input.role, input.target, input.id)
         break
       case 'wheel':
         this._syncPointingDevice()

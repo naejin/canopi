@@ -16,6 +16,7 @@ import {
 import { setCanvasTool } from '../session-state'
 import type { CanvasFocusPort } from './app-adapter'
 import type { InputPlatform } from './input/platform'
+import type { ToolHost, ToolHostDeps } from './interaction-ports'
 import {
   createSceneInteractionSession,
   type SceneInteractionSession,
@@ -27,6 +28,20 @@ import type { DraftPresentation } from './tools/draft'
 import type { ToolSource } from './tools/tool'
 
 vi.mock('./tools/registry', () => ({ TOOL_REGISTRY: {} }))
+
+/** Each ToolHost the sessions build, so a test can watch the calls the session makes on it. */
+const builtHosts = vi.hoisted(() => [] as ToolHost[])
+vi.mock('./tools/tool-host', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./tools/tool-host')>()
+  return {
+    ...actual,
+    createToolHost: (deps: ToolHostDeps) => {
+      const host = actual.createToolHost(deps)
+      builtHosts.push(host)
+      return host
+    },
+  }
+})
 
 const PLATFORM: InputPlatform = { os: 'linux', engine: 'webkitgtk', gestureEvents: false }
 const SPECIES = { canonical_name: 'Malus domestica', common_name: 'Apple', stratum: 'mid', width_max_m: 4 }
@@ -51,6 +66,7 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const session of sessions.splice(0).reverse()) session.dispose()
+  builtHosts.length = 0
   events.dispose()
   container.remove()
   useStubTools()
@@ -146,6 +162,20 @@ describe('the interaction session', () => {
     order.length = 0
     events.pointerDown({ x: 30, y: 30 })
     expect(order).toEqual(['focus', 'press'])
+  })
+
+  it('a raw press carries its pointer id to rawPress', () => {
+    useStubTools(stubTool('select'))
+    createSession()
+    const rawPress = vi.spyOn(builtHosts.at(-1)!, 'rawPress')
+
+    events.pointerDown({ x: 30, y: 30 }, { pointerId: 7 })
+    events.pointerDown({ x: 60, y: 30 }, { pointerId: 9, button: 1 })
+    // The host skips the menu close and focus only for a live press from another pointer (today's _onPointerDown).
+    expect(rawPress.mock.calls).toEqual([
+      ['primary', { kind: 'surface' }, 7],
+      ['middle', { kind: 'surface' }, 9],
+    ])
   })
 
   it('a window blur feeds the recogniser, then calls interrupted', () => {
