@@ -196,6 +196,8 @@ export interface ToolContext {
 export interface CanvasTool {
   readonly id: ToolId
   readonly dragSlopPx?: number                    // per-tool threshold (Plant a row: 4), sent through `configure` on every tool change
+  /** True while the tool's next release must be admitted by the scene (Select's band: today's requiresSettledPointerUp). */
+  settledRelease?(): boolean
   readonly preservesTransientOnNavigate?: boolean // polygon draft survives pans
   readonly clampsToView?: boolean                 // the host clamps the screen point to the view before converting (Plant a row)
   /**
