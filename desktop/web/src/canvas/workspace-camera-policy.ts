@@ -51,7 +51,7 @@ export function cameraScaleBoundsForPolicy(
   })
 }
 
-/** Baseline for MapLibre 6.4.1's single-world viewport constraint. */
+/** Baseline for MapLibre 6.10.0's single-world viewport constraint. */
 export function singleWorldEffectiveMinimumZoom(
   cssWidth: number,
   cssHeight: number,

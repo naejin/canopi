@@ -413,11 +413,13 @@ describe('MapLibre camera driver', () => {
     const { driver, published } = attach(map)
     const before = driver.frames.viewFrame.peek()
     expect(screenOf(before)).toEqual({ width: 400, height: 300, devicePixelRatio: 2 })
+    // Once when the driver was created, to the container's size.
+    expect(map.resize).toHaveBeenCalledTimes(1)
 
     map.container = { width: 640, height: 480 }
     driver.setScreen({ width: 640, height: 480, devicePixelRatio: 2 })
 
-    expect(map.resize).toHaveBeenCalledTimes(1)
+    expect(map.resize).toHaveBeenCalledTimes(2)
     expect(published).toHaveLength(1)
     expect(screenOf(published[0]!)).toEqual({ width: 640, height: 480, devicePixelRatio: 2 })
     expect(published[0]!.view.camera).toEqual(before.view.camera)
@@ -425,8 +427,34 @@ describe('MapLibre camera driver', () => {
 
     // The second observer reports the same size: nothing happens.
     driver.setScreen({ width: 640, height: 480, devicePixelRatio: 2 })
-    expect(map.resize).toHaveBeenCalledTimes(1)
+    expect(map.resize).toHaveBeenCalledTimes(2)
     expect(published).toHaveLength(1)
+  })
+
+  it('a container resize reported before attach reaches the map when it attaches', () => {
+    const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
+    const view = createTestView({
+      plane: PLANE,
+      policy: createWorkspaceCameraPolicy(PLANE.origin.lat),
+      screen: { ...map.size, devicePixelRatio: map.pixelRatio },
+    })
+    views.push(view)
+    // The container grows while the style loads: the resize observers report it to the headless camera only.
+    const grown = { width: 800, height: 600, devicePixelRatio: 2 }
+    map.container = { width: grown.width, height: grown.height }
+    view.host.current().setScreen(grown)
+    expect(map.resize).not.toHaveBeenCalled()
+
+    view.host.attach(createMapLibreCameraDriver(map, PLANE, hostDeps(view)))
+
+    expect(map.resize).toHaveBeenCalledTimes(1)
+    expect(map.size).toEqual({ width: 800, height: 600 })
+    const attached = view.frames.viewFrame.peek()
+    expect(attached.attached).toBe(true)
+    expect(screenOf(attached)).toEqual(grown)
+    // Both observers report the size again: nothing happens.
+    view.host.current().setScreen(grown)
+    expect(map.resize).toHaveBeenCalledTimes(1)
   })
 
   it('resizing at 45 degrees near the world floor keeps zoom at or above zoomFloorForArc and keeps the bearing', () => {
@@ -832,6 +860,48 @@ describe('MapLibre workspace camera shim', () => {
       expect(after.view.camera).toEqual(before.view.camera)
       // The frame is expressed in the new plane: its origin is where the map shows the new plane's origin.
       const originPx = after.view.worldToScreen({ x: 0, y: 0 })
+      const shown = map.unproject([originPx.x, originPx.y])
+      expect(shown.lng).toBeCloseTo(next.origin.lon, 9)
+      expect(shown.lat).toBeCloseTo(next.origin.lat, 9)
+    } finally {
+      stopFollowing()
+      camera.dispose()
+    }
+  })
+
+  it('a re-origin during a flight keeps the flight running', () => {
+    const scenePlane = signal<SessionPlane | null>(PLANE)
+    const camera = new MapLibreWorkspaceCameraOwner({ policy: createWorkspaceCameraPolicy(PLANE.origin.lat) })
+    const stopFollowing = camera.followScenePlane(scenePlane)
+    const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
+    try {
+      // Attached on the host, as the workspace activation attaches each map.
+      camera.host.attach(createMapLibreCameraDriver(map, PLANE, { ...camera.host.driverDeps, timers: NO_TIMERS }))
+      const far = { x: 30_000, y: -60_000 }
+      const target = PLANE.toGeo(far)
+      camera.centerOn(far, mapZoomToStageScale(17, PLANE.origin.lat), { animate: true })
+      expect(map.flight).not.toBeNull()
+      map.flightFrame({ center: target, zoom: 14, bearing: 0 })
+
+      // The re-origin the flight triggered: the Scene's plane moves to a new latitude, then the composition refreshes the origin.
+      const next = createSessionPlane(target)
+      const stops = map.stop.mock.calls.length
+      scenePlane.value = next
+      camera.attachment.refreshOrigin()
+
+      expect(map.stop).toHaveBeenCalledTimes(stops)
+      expect(map.jumpTo).not.toHaveBeenCalledWith(expect.objectContaining({ zoom: 14 }))
+      expect(map.flight).not.toBeNull()
+      const during = camera.host.frames.viewFrame.peek()
+      expect(during.moving).toBe(true)
+      expect(during.view.camera.zoom).toBe(14)
+      map.endFlight()
+      const landed = camera.host.frames.viewFrame.peek()
+      expect(landed.moving).toBe(false)
+      expect(landed.view.camera.zoom).toBeCloseTo(17, 9)
+      // The landed frame carries the new latitude's scale bounds and is expressed in the new plane.
+      expect(landed.scaleBounds.max).toBeCloseTo(mapZoomToStageScale(27, next.origin.lat), 6)
+      const originPx = landed.view.worldToScreen({ x: 0, y: 0 })
       const shown = map.unproject([originPx.x, originPx.y])
       expect(shown.lng).toBeCloseTo(next.origin.lon, 9)
       expect(shown.lat).toBeCloseTo(next.origin.lat, 9)

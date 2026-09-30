@@ -58,6 +58,7 @@ type AgreementProbe = (map: Pick<MapLibreMapInstance, 'unproject'>, view: ViewTr
 
 const REQUIRED_READ_BACKS = ['getCenter', 'getZoom', 'getBearing', 'unproject'] as const
 const NO_INSETS: ScreenInsets = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 })
+const EMPTY_SCREEN: ViewScreen = Object.freeze({ width: 0, height: 0, devicePixelRatio: 1 })
 
 /** Development and test builds only (P12): production bundles drop the probe with this block. */
 let agreementProbe: AgreementProbe | null = null
@@ -88,8 +89,9 @@ interface Flight {
 
 /**
  * `createMapLibreCameraDriver(map, plane, deps)` (spec §1.1 Attachment). A map without getCenter, getZoom, getBearing or unproject,
- * or one whose read-back pitch is not 0, fails the driver with 'map-error'; its host then detaches it. The driver's screen starts at
- * the map canvas' CSS size and changes only through setScreen. Its frames settle on `deps.timers`, else on the window's.
+ * or one whose read-back pitch is not 0, fails the driver with 'map-error'; its host then detaches it. The driver resizes its map to
+ * the container once, starts at the map canvas' CSS size, and changes it only through setScreen. Its frames settle on `deps.timers`,
+ * else on the window's.
  */
 export function createMapLibreCameraDriver(
   map: MapLibreCameraDriverMap,
@@ -98,7 +100,7 @@ export function createMapLibreCameraDriver(
 ): CameraDriver {
   let plane = initialPlane
   let planeRevision = 0
-  let screen = canvasScreen(map)
+  let screen: ViewScreen = EMPTY_SCREEN
   let insets = NO_INSETS
   let tween: BearingTween | null = null
   let cancelFrame: (() => void) | null = null
@@ -122,6 +124,10 @@ export function createMapLibreCameraDriver(
 
   const missing = REQUIRED_READ_BACKS.filter((name) => typeof map[name] !== 'function')
   if (missing.length > 0) fail(`The map cannot be driven without ${missing.join(', ')}.`)
+  // The map never resizes itself (trackResize: false), and a container resize reported before this driver existed reached only
+  // the headless camera: the map takes its container's size once here, before the guard reads the screen.
+  if (live()) send(() => map.resize())
+  screen = canvasScreen(map)
   const attached = readCamera()
   if (attached) {
     arc = arcAt(attached.bearingDeg)

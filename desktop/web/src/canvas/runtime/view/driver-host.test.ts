@@ -164,6 +164,28 @@ describe('camera driver host', () => {
     view.dispose()
   })
 
+  it('replacePolicy during a tween moves nothing, and the tween\'s next frame takes the new bounds', () => {
+    const northern = createWorkspaceCameraPolicy(45)
+    const equatorial = createWorkspaceCameraPolicy(0)
+    const view = createTestView({ policy: northern, viewport: { x: 10, y: -20, scale: cameraScaleBoundsForPolicy(northern).maximum } })
+    view.host.current().apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 90, animation: 'ease' })
+    const turning = view.frames.viewFrame.peek()
+    expect(turning.moving).toBe(true)
+
+    view.host.replacePolicy(equatorial)
+
+    expect(view.frames.viewFrame.peek()).toBe(turning)
+    view.clock.advance(16)
+    const next = view.frames.viewFrame.peek()
+    expect(next.moving).toBe(true)
+    expect(next.scaleBounds.max).toBe(cameraScaleBoundsForPolicy(equatorial).maximum)
+    expect(next.view.pixelsPerMetre).toBeLessThanOrEqual(next.scaleBounds.max * (1 + 1e-12))
+    view.clock.advance(400)
+    expect(view.frames.viewFrame.peek().moving).toBe(false)
+    expect(view.host.current().bearingTarget()).toBe(90)
+    view.dispose()
+  })
+
   it('a headless camera follows a new runtime plane and keeps its plane placement; an attached one does not', () => {
     const first = createSessionPlane({ lon: 2.35, lat: 48.85 })
     let runtimePlane = first

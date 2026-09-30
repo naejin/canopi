@@ -200,8 +200,12 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
     replacePolicy(policy) {
       if (disposed) return
       navigationPolicy = createNavigationPolicy(policy, options.reducedMotion)
+      const last = frames.viewFrame.peek()
+      // A running tween or flight constrains each of its frames under driverDeps.policy and builds them with its bounds, so it takes
+      // the new policy on its next frame; a move now would stop a flight (a re-origin during a place-search flight).
+      if (last.moving) return
       // Today's applyPolicy: the scale clamps to the new bounds about the screen centre, and the frame takes the new bounds.
-      const { screen } = frames.viewFrame.peek().view
+      const { screen } = last.view
       live.apply({ kind: 'zoom-around', anchorPx: { x: screen.width / 2, y: screen.height / 2 }, factor: 1 })
     },
     dispose() {

@@ -338,9 +338,10 @@ describe('view snapshot map', () => {
     await Promise.all([first, second])
     expect(order).toEqual(['thumbnail', 'export'])
     expect(FakeMap.instances).toHaveLength(1)
-    // The driver is the map's one resize owner: MapLibre never resizes itself behind it.
+    // The driver is the map's one resize owner: MapLibre never resizes itself behind it. The driver resizes it once when it is
+    // created and once for the export's size.
     expect(FakeMap.instances[0]!.options.trackResize).toBe(false)
-    expect(FakeMap.instances[0]!.resizes).toBe(1)
+    expect(FakeMap.instances[0]!.resizes).toBe(2)
     expect(FakeMap.instances[0]!.options.container.style.width).toBe('1600px')
 
     const retina = await owner.capture(request({ pixelRatio: 2 }))
