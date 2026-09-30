@@ -7,7 +7,7 @@ import { runFindPlantsShortcut } from '../app/plant-finder/focus'
 import { runStoryUndoShortcut } from '../app/stories/actions'
 import { matchShellCommandShortcut, type ShellCommandState } from '../app/shell-commands'
 import { dispatchWorkspaceCanvasIntent } from '../app/workspace-commands/canvas-actions'
-import { isEditableTarget } from '../canvas/runtime/interaction/pointer-utils'
+import { isEditableTarget } from '../canvas/runtime/input/editable-target'
 import { BROWSER_RESERVED_SHORTCUTS, type BrowserShellCatalog } from './browser-shell-commands'
 
 interface WebCanvasShortcutInstallation {
