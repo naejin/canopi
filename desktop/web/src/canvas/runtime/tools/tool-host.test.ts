@@ -228,6 +228,52 @@ describe('ToolHost', () => {
       expect(stamp.calls).not.toContain('viewChanged')
     })
 
+    it('a click or a drag leaves a still pointer that the next camera frame re-emits; a touch tap does not', () => {
+      const stamp = stubTool('plant-stamp')
+      useStubTools(stamp)
+      const h = harness({ tool: 'plant-stamp' })
+
+      h.click({ x: 120, y: 90 })
+      h.view.navigation.zoomIn()
+      expect(stamp.count('hover')).toBe(1)
+      expect(stamp.last('hover')!.point.world).toEqual(h.world({ x: 120, y: 90 }))
+
+      h.drag({ x: 50, y: 50 }, { x: 80, y: 60 })
+      h.view.navigation.zoomOut()
+      expect(stamp.count('hover')).toBe(2)
+      expect(stamp.last('hover')!.point.world).toEqual(h.world({ x: 80, y: 60 }))
+      expect(stamp.calls).not.toContain('viewChanged')
+
+      // A finger that lifted leaves nothing under it.
+      h.click({ x: 30, y: 30 }, { pointer: 'touch' })
+      h.view.navigation.zoomIn()
+      expect(stamp.count('hover')).toBe(2)
+      expect(stamp.calls).toContain('viewChanged')
+    })
+
+    it('interrupted and a document replacement forget the still pointer', () => {
+      const stamp = stubTool('plant-stamp')
+      useStubTools(stamp)
+      const h = harness({ tool: 'plant-stamp', scene: { plants: [appleAt({ x: 100, y: 100 })] } })
+
+      h.hover({ x: 100, y: 100 })
+      expect(h.chrome.tooltip?.target).toEqual(P1)
+      h.blur()
+      const hovers = h.record.hovers.length
+      // The view moves while the pointer may be elsewhere (a resize, a focus fit): the hover stays cleared.
+      h.view.navigation.zoomIn()
+      expect(stamp.count('hover')).toBe(1)
+      expect(h.record.hovers).toHaveLength(hovers)
+      expect(h.chrome.tooltip).toBeNull()
+      expect(stamp.calls.filter((call) => call === 'viewChanged')).toHaveLength(1)
+
+      h.hover({ x: 100, y: 100 })
+      h.host.prepareForDocumentReplacement()
+      h.view.navigation.zoomOut()
+      expect(stamp.count('hover')).toBe(2)
+      expect(stamp.calls.filter((call) => call === 'viewChanged')).toHaveLength(2)
+    })
+
     it('a camera frame with the pointer off the map calls viewChanged', () => {
       const polygon = stubTool('polygon')
       useStubTools(polygon)
@@ -451,6 +497,21 @@ describe('ToolHost', () => {
       expect(h.record.focus).toEqual([])
       expect(h.record.guidance).toEqual([])
       expect(h.host.hasLiveGesture()).toBe(false)
+    })
+
+    it('a registered tool armed after a bridged one gets no stale hover on a camera frame', () => {
+      const stamp = stubTool('plant-stamp')
+      useStubTools(stamp)
+      const h = harness({ tool: 'plant-stamp' })
+
+      h.hover({ x: 100, y: 100 })
+      // Select is bridged: the host publishes its moves but no longer follows the pointer.
+      h.arm('select')
+      h.hover({ x: 300, y: 200 })
+      h.arm('plant-stamp')
+      h.view.navigation.zoomIn()
+      expect(stamp.count('hover')).toBe(1)
+      expect(stamp.calls).toContain('viewChanged')
     })
 
     it('the selected-zone chips wait until the zone tools are registered', () => {

@@ -86,7 +86,8 @@ interface LiveGesture {
   dragging: boolean
 }
 
-/** The last hover inside the map, re-emitted on a camera frame; null with the pointer off the map. */
+/** Where the pointer rests on the map: the last hover, or where a press was released. Re-emitted on a camera frame; null
+ *  with the pointer off the map or its place unknown (after a window blur, a document replacement or a bridged tool). */
 interface StillPointer {
   readonly screen: ScreenPoint
   readonly mods: Modifiers
@@ -629,7 +630,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     try {
       deliverDrag(tool, gesture, 'drag-end')
     } finally {
-      endLive()
+      endLive({ screen: g.at, mods: g.mods, pointer: gesture.pointer })
     }
     return NOTHING
   }
@@ -669,7 +670,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       }
       return NOTHING
     } finally {
-      endLive()
+      endLive(gesture.kind === 'ruler' ? null : { screen: g.at, mods: g.mods, pointer: g.pointer })
     }
   }
 
@@ -684,9 +685,19 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     return NOTHING
   }
 
-  /** After a press ends: today's pointerup clears the passive hover and resets the cursor to the tool's. */
-  function endLive(): void {
+  /**
+   * After a press ends: today's pointerup clears the passive hover and resets the cursor to the tool's. A mouse or pen
+   * rests where it was released, so the next camera frame re-emits a hover there (plan §1, exception 1); a lifted finger
+   * leaves nothing under it.
+   */
+  function endLive(released: StillPointer | null = null): void {
     live = null
+    lastHover = released
+      && released.pointer !== 'touch'
+      && frame().mode === 'site'
+      && insideScreen(released.screen, frame().view.screen)
+      ? released
+      : null
     clearPassiveHover()
     resetCursor()
     flush()
@@ -868,6 +879,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const tool = factory ? factory() : null
     activeTool = tool
     if (!tool) {
+      // The bridge runs a bridged tool's presses and drags, so the host no longer knows where the pointer rests.
+      lastHover = null
       flush()
       return
     }
@@ -1036,7 +1049,10 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       if (!disposed) endNudgeSeries(commit)
     },
     interrupted(): void {
-      if (disposed || !activeTool) return
+      if (disposed) return
+      // After a window blur the pointer may be anywhere: nothing is re-emitted until it hovers the map again.
+      lastHover = null
+      if (!activeTool) return
       cancelTransientInteraction('navigate')
     },
     transientHistory: {
@@ -1048,6 +1064,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     },
     prepareForDocumentReplacement(): void {
       if (disposed) return
+      lastHover = null
       runCanvasRuntimeCleanups([
         () => closeTextEntry(),
         () => cancelTransientInteraction('document-replaced'),
