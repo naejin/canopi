@@ -7,7 +7,7 @@ import type { CanvasFocusPort } from './app-adapter'
 import type { Bindings } from './input/bindings'
 import type { Gesture, MenuSource } from './input/gestures'
 import type { InputPlatform } from './input/platform'
-import type { AdapterEffect, RawInput } from './input/raw-input'
+import type { AdapterEffect, RawInput, TargetClass } from './input/raw-input'
 import type { ToolHandleId, ToolId } from './interaction-types'
 import type { PlantPresentationContext } from './plant-presentation'
 import type { SpeciesCacheEntry } from './presentation-data'
@@ -182,10 +182,11 @@ export interface ToolHost {
   /**
    * Presses the host never sees as gestures: the session calls it for every raw pointerdown on the map host before routing it
    * (from the source's raw input, not a gesture; the down's role, 'auxiliary' as 'middle'). Commits the nudge series for any
-   * button; for primary and middle it also closes the canvas menu and focuses the map (so an open text entry commits on its
-   * blur), as today's _onPointerDown does.
+   * button. For an admitted primary or middle press outside the text entry ('owned-text') and the Unlock affordance, with no
+   * other live session and no pending cancellation, it also closes the canvas menu and focuses the map (so an open text
+   * entry commits on its blur): today's _onPointerDown conditions.
    */
-  rawPress(button: 'primary' | 'secondary' | 'middle'): void
+  rawPress(button: 'primary' | 'secondary' | 'middle', target: TargetClass): void
   /**
    * Where the pointer is during a pointer-source pan (the router, from the pan's `at`): updates the host's stored resting
    * pointer and emits nothing; the next camera frame re-emits at the updated point, so a ghost stays under the pointer (today
