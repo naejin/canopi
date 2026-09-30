@@ -1,4 +1,4 @@
-import type { MapFrame } from '../canvas/maplibre-camera'
+import type { ViewDiagnostics } from '../canvas/runtime/view/types'
 
 type MapLibreCanvasSurfaceStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -32,16 +32,17 @@ export function mapLibreCanvasSurfaceStateEquals(
   )
 }
 
-export function publishMapDiagnostics(frame: MapFrame | null): void {
+/** Development builds: the settled camera, as the map shows it, for the console. */
+export function publishMapDiagnostics(frame: ViewDiagnostics | null): void {
   if (!import.meta.env.DEV) return
   ;(globalThis as { __CANOPI_MAP_DEBUG__?: unknown }).__CANOPI_MAP_DEBUG__ = frame
     ? {
-      projectionId: frame.diagnostics.projectionId,
-      center: frame.center,
-      zoom: frame.zoom,
-      bearing: frame.bearing,
-      viewportCenterWorld: frame.diagnostics.viewportCenterWorld,
-      viewportCornerGeo: frame.diagnostics.viewportCornerGeo,
+      center: [frame.camera.center.lon, frame.camera.center.lat],
+      zoom: frame.camera.zoom,
+      bearing: frame.camera.bearingDeg,
+      pitch: frame.camera.pitchDeg,
+      centreWorld: frame.centreWorld,
+      groundQuadGeo: frame.groundQuadGeo,
     }
     : null
 }

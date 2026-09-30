@@ -1,7 +1,7 @@
 // The current-view seam shared by saved views and stories: whether views can
 // be shown, what the map shows now as a view, and going to a view (camera only).
 
-import { geographicExtentOf, geographicViewOf, mapZoomToFitExtent } from '../../canvas/session-plane'
+import { extentOnOneWorld, geographicViewOfCamera, mapZoomToFitExtent } from '../../canvas/session-plane'
 import { WORKSPACE_MAP_MAX_ZOOM, WORKSPACE_MAP_MIN_ZOOM } from '../../canvas/workspace-camera-policy'
 import {
   currentCanvasQuerySurface,
@@ -46,8 +46,9 @@ export function captureCurrentView({ id, name, title = '' }: {
   const design = currentDesign.value
   const trimmed = name.trim()
   if (!queries || !plane || !design || trimmed.length === 0) return null
-  const frame = queries.viewport.value
-  const view = geographicViewOf(frame, plane)
+  // What is on screen now: the live frame, not the settled camera.
+  const capture = queries.view.captureView()
+  const view = geographicViewOfCamera(capture.camera)
   if (!view) return null
   return {
     view: composeSavedView({
@@ -55,7 +56,7 @@ export function captureCurrentView({ id, name, title = '' }: {
       name: trimmed,
       title: title.trim() || null,
       view,
-      extent: geographicExtentOf(frame, plane),
+      extent: extentOnOneWorld(capture.extent),
       mapLayers: mapLayers.value,
       sceneLayers: queries.getSceneSnapshot().layers,
       siteData: design.lidar?.entries ?? [],
@@ -83,7 +84,7 @@ export function goToSavedView(id: string, options: GoToSavedViewOptions = {}): b
   const commands = getCurrentCanvasCommandSurface()
   if (!view || !commands || !canShowSavedViews()) return false
   const reducedMotion = options.reducedMotion ?? prefersReducedMotion()
-  const screen = currentCanvasQuerySurface.peek()?.viewport.peek().screenSize
+  const screen = currentCanvasQuerySurface.peek()?.view.captureView().screen
   return commands.viewport.showPlace(
     { lon: view.camera.lon, lat: view.camera.lat },
     savedViewZoomFor(view, screen),

@@ -52,7 +52,7 @@ export function readWorkspaceCanvasProjectionState(): CanvasCommandProjectionSta
     canvasAvailable,
     // Choosing a tool before the canvas mounts primes the tool it starts with.
     toolSelectionAvailable: true,
-    spatialEditingAvailable: queries?.viewport.value.mode !== 'overview',
+    spatialEditingAvailable: queries?.view.mode.value !== 'overview',
     hasSelection,
     sameSpeciesSelectionAvailable: (selection?.sameSpeciesReferenceCanonicalName ?? null) !== null,
     rotateAvailable: selection !== null && selectionCommandAvailability(selection).rotate,

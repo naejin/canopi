@@ -40,7 +40,7 @@ interface SavedViewSnapshotOptions {
 export type SavedViewSnapshot = ViewSnapshotCapture
 
 export interface SavedViewSnapshotContext {
-  readonly queries: Pick<CanvasQuerySurface, 'sessionPlane' | 'viewport' | 'captureViewScene'>
+  readonly queries: Pick<CanvasQuerySurface, 'sessionPlane' | 'view' | 'captureViewScene'>
   readonly mapLayers: MapLayersState
   readonly locale: string
   /** The labels the view shows: its recorded choice, else the Design's current one. */
@@ -61,7 +61,7 @@ export function describeSavedViewSnapshot(
 ): ViewSnapshotRequest | null {
   const plane = context.queries.sessionPlane.peek()
   if (!plane) return null
-  const { screenSize } = context.queries.viewport.peek()
+  const { screen: screenSize } = context.queries.view.captureView()
   const visibleLayerNames = [...view.visible_layers.scene_layers]
   const focusedSpecies = view.highlighted.species[0] ?? null
   return {

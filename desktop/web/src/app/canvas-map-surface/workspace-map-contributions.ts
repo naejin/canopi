@@ -1,5 +1,5 @@
 import { logMapError } from '../../maplibre/redact-credentials'
-import type { MapFrame } from '../../canvas/maplibre-camera'
+import type { ViewDiagnostics } from '../../canvas/runtime/view/types'
 import type { MapLibreSurfaceContext } from '../../maplibre/surface-adapter'
 import type { MapLibreMapInstance } from '../../maplibre/loader'
 import {
@@ -30,7 +30,7 @@ export interface WorkspaceMapContributionsOptions {
   readonly createRasterDisplay?: WorkspaceMapContributionAdapter['createRasterDisplay']
   readonly publishViewBounds?: WorkspaceMapContributionAdapter['publishViewBounds']
   readonly onStateChange?: (state: MapLibreCanvasSurfaceState) => void
-  readonly publishDiagnostics?: (frame: MapFrame | null) => void
+  readonly publishDiagnostics?: (frame: ViewDiagnostics | null) => void
   readonly logError?: (message?: unknown, ...args: unknown[]) => void
 }
 
@@ -387,7 +387,7 @@ export class WorkspaceMapContributions {
     this.attempt('Map contribution state observer failed:', () => this.options.onStateChange?.(state))
   }
 
-  private publishDiagnostics(frame: MapFrame | null): void {
+  private publishDiagnostics(frame: ViewDiagnostics | null): void {
     this.attempt('Map contribution diagnostics observer failed:', () => {
       (this.options.publishDiagnostics ?? publishMapDiagnostics)(frame)
     })
