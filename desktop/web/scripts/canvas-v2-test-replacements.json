@@ -289,5 +289,81 @@
   "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > Place plants hover preview > updates the nearest plant after a placement": {
     "file": "src/canvas/runtime/tools/plant-stamp.test.ts",
     "name": "Place plants tool > the hover preview > follows a placement to the new nearest plant"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > keeps Plant Spacing in source-picking mode on missed clicks without clearing selection": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > a press that misses a plant keeps picking and leaves the selection alone"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > does not sample grouped or locked Plant Spacing source candidates": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > a grouped or locked plant is not picked"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > does not sample Plant Spacing sources on hidden or locked plant layers": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > a plant on a hidden or locked plants layer is not picked"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > clears Plant Spacing source state with Escape and exits when no source exists": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > Esc drops the row source first, then leaves"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > previews and commits a normal Plant Spacing sequence as one scene edit": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > a hover previews the row and a press commits it as one Scene Edit"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > does not commit Plant Spacing when the sampled source becomes unavailable before commit": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > a row whose source became unavailable commits nothing and returns to picking"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > caps dense Plant Spacing preview ghosts while keeping the generated count": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > a dense row previews at most 250 discs and counts them all"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > blocks Plant Spacing commits above the hard safety cap without creating plants": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > a row above 5000 plants is blocked"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > commits Plant Spacing at the hard safety cap without confirmation": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > a row of exactly 5000 plants commits"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > sizes Plant Spacing preview ghosts from the symbolic plant presentation": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > the row's discs take their size from the source's presentation"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > keeps Plant Spacing preview active without a scene edit when no plants fit": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > a row with no room for a plant previews and commits nothing"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > formats a zero-length Plant Spacing guide as 0 cm while preserving the interval input fallback": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > a zero-length row reads 0 cm and keeps the interval"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > commits a Plant Spacing click-hold drag from the latest Shift-constrained preview endpoint": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > a drag released without Shift on the spot of a Shift preview commits the constrained row"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > commits exactly 100 generated Plant Spacing plants without confirmation": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > a row of 100 plants commits without confirmation"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > emphasizes dense Plant Spacing counts and commits them directly": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > a row above 100 plants reads dense and commits directly"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > commits Plant Spacing click-hold drag from the pointerup endpoint when release moves past the preview": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > a drag commits the row at its release point"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > commits dense Plant Spacing from click-hold drag directly": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > a dense drag commits directly"
+  },
+  "src/__tests__/plant-spacing-tool.test.ts > Plant Spacing tool adapter > reads and commits Plant Spacing interval through tool dependencies": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > the spacing field's commands reach the row"
+  },
+  "src/__tests__/plant-spacing-tool.test.ts > Plant Spacing tool adapter > lays a row from the picked plant after the session plane re-origins": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > a picked source follows a re-origin"
   }
 }

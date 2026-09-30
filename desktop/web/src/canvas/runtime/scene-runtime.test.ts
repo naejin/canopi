@@ -872,7 +872,7 @@ describe('scene canvas runtime', () => {
     selection.mockRestore()
     clickAt(events, { x: 10, y: 10 })
 
-    expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
+    expect(currentCanvasToolGuidance.value.plantRow).toMatchObject({ phase: 'row' })
     events.dispose()
     runtime.destroy()
   })
