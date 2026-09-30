@@ -12,9 +12,9 @@ import {
   mercatorToGeo,
   stageScaleToMapZoom,
 } from '../../projection'
-import type { SessionPlane } from '../../session-plane'
+import type { SessionPlane, SessionPlaneTransform } from '../../session-plane'
 import { bearingCosSin, normaliseBearing } from './navigation-policy'
-import type { GeoPoint, PlanarCamera, ScreenPoint, ViewCamera, ViewScreen } from './types'
+import type { GeoPoint, PlanarCamera, ScreenPoint, ViewCamera, ViewScreen, WorldPoint } from './types'
 
 interface Vector { readonly x: number; readonly y: number }
 
@@ -108,16 +108,29 @@ export function planarToViewCamera(camera: PlanarCamera, screen: ViewScreen, pla
 }
 
 export function viewCameraToPlanar(camera: ViewCamera, screen: ViewScreen, plane: SessionPlane): PlanarCamera {
-  // At bearing 0 this is today's centredViewport: x = w/2 − p.x·scale.
-  const scale = mapZoomToStageScale(camera.zoom, plane.origin.lat)
-  const centreWorld = plane.toPlane(camera.center)
-  const centreOnScreen = planeToScreenAxes({ x: centreWorld.x * scale, y: centreWorld.y * scale }, camera.bearingDeg)
+  return planarCentredOn(screen, plane.toPlane(camera.center), mapZoomToStageScale(camera.zoom, plane.origin.lat), camera.bearingDeg)
+}
+
+/** The placement that puts a plane point at the screen centre: today's centredViewport (x = w/2 − p.x·scale) at bearing 0. */
+export function planarCentredOn(screen: ViewScreen, point: WorldPoint, scale: number, bearingDeg: number): PlanarCamera {
+  const onScreen = planeToScreenAxes({ x: point.x * scale, y: point.y * scale }, bearingDeg)
   return {
-    x: screen.width / 2 - centreOnScreen.x,
-    y: screen.height / 2 - centreOnScreen.y,
+    x: screen.width / 2 - onScreen.x,
+    y: screen.height / 2 - onScreen.y,
     scale,
-    bearingDeg: normaliseBearing(camera.bearingDeg),
+    bearingDeg: normaliseBearing(bearingDeg),
   }
+}
+
+/**
+ * The same placement in the next session plane (planeChanged: re-origin in plane terms, never through lon/lat). screen =
+ * turn(p × scale) + { x, y } must hold for p' = p × s + o, so the scale is divided by s and the offset, scaled and turned as plane
+ * points are, comes off the translation: today's reprojectPlaneViewport, bit for bit at bearing 0.
+ */
+export function reprojectPlanar(camera: PlanarCamera, transform: SessionPlaneTransform): PlanarCamera {
+  const scale = camera.scale / transform.scale
+  const offset = planeToScreenAxes({ x: transform.offsetX * scale, y: transform.offsetY * scale }, camera.bearingDeg)
+  return { x: camera.x - offset.x, y: camera.y - offset.y, scale, bearingDeg: camera.bearingDeg }
 }
 
 /** CSS px per Mercator unit at a zoom: MapLibre's worldSize. */

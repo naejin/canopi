@@ -48,6 +48,9 @@ export interface CameraDriver {
   planeChanged(plane: SessionPlane): void
   setScreen(screen: ViewScreen): void
   setInsets(insets: ScreenInsets): void
+  /** Set when the driver can no longer drive its camera (the MapLibre driver: 'map-lost', 'map-error'); the host it is attached to
+   *  detaches and reports it as its own failure. Always null on the headless driver. */
+  readonly failure: ReadonlySignal<CameraDriverFailure | null>
   dispose(): void
 }
 

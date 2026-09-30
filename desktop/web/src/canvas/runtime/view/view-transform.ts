@@ -50,7 +50,15 @@ export function buildViewTransformFromPlane(input: {
   readonly planeRevision: number
   readonly revision: number
 }): ViewTransform {
-  return similarityTransform(planarToViewCamera(input.planar, input.screen, input.plane), input.planar, input)
+  const camera = planarToViewCamera(input.planar, input.screen, input.plane)
+  return similarityTransform(Object.freeze({ ...camera, center: Object.freeze(camera.center) }), input.planar, input)
+}
+
+/** The PlanarCamera a pitch-0 transform places the plane with, from either builder: exact, since the builders keep its translation and scale. */
+export function planarCameraOf(view: ViewTransform): PlanarCamera {
+  const affine = view.planar?.affine
+  if (!affine) throw new Error('A pitched view has no planar camera.')
+  return { x: affine[4], y: affine[5], scale: view.pixelsPerMetre, bearingDeg: view.camera.bearingDeg }
 }
 
 // Pitch phase (not written now: no declaration, no stub; spec §6). When pitch ships, this module adds

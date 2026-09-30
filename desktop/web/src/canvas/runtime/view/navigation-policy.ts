@@ -6,7 +6,11 @@
 
 import type { ReadonlySignal } from '@preact/signals'
 import { MAPLIBRE_WORLD_TILE_SIZE, mercatorToGeo } from '../../projection'
-import { singleWorldEffectiveMinimumZoom, type WorkspaceCameraPolicy } from '../../workspace-camera-policy'
+import {
+  cameraScaleBoundsForPolicy,
+  singleWorldEffectiveMinimumZoom,
+  type WorkspaceCameraPolicy,
+} from '../../workspace-camera-policy'
 import type { ViewCamera, ViewScreen } from './types'
 
 /**
@@ -88,6 +92,21 @@ export function constrainCamera(camera: ViewCamera, screen: ViewScreen, policy: 
 export function zoomFloorForArc(screen: ViewScreen, policy: NavigationPolicy, fromDeg: number, toDeg: number): number {
   const extent = maximumRotatedExtent(screen, fromDeg, toDeg)
   return singleWorldEffectiveMinimumZoom(extent.width, extent.height, policy.minZoom)
+}
+
+/**
+ * ViewFrame.scaleBounds at a bearing (spec §1.1b): the policy's zoom range with the single-world floor for that bearing, in px/m at
+ * the reference latitude (cameraScaleBoundsForPolicy over the policy's own values). At bearing 0 on a screen whose larger side is at
+ * most 512 px, today's CameraController bounds.
+ */
+export function scaleBoundsAt(screen: ViewScreen, policy: NavigationPolicy, bearingDeg: number): { readonly min: number; readonly max: number } {
+  const bounds = cameraScaleBoundsForPolicy({
+    referenceLatitudeDeg: policy.referenceLatitudeDeg,
+    minimumMapZoom: policy.minZoom,
+    maximumMapZoom: policy.maxZoom,
+    overviewScaleThreshold: policy.overviewPixelsPerMetre,
+  }, zoomFloorForArc(screen, policy, bearingDeg, bearingDeg))
+  return Object.freeze({ min: bounds.minimum, max: bounds.maximum })
 }
 
 /** Any angle to [0, 360); results ≥ 360 − 1e-9 become 0 (so normaliseBearing(-1e-14) === 0). */
