@@ -1,0 +1,411 @@
+// canvas/runtime/input/dom-input-source.ts
+//
+// Owns every DOM listener for canvas input: the map host's pointer, wheel, contextmenu, drag and focus events, today's
+// window pointer, blur and (0B only, `legacyKeys`) key listeners, and the ruler presses at document capture. It turns
+// each event into host-relative, classified fields for `normalise`, hands the raw input to the sink, and applies the
+// effects the sink sends back to the event being handled: prevent-default, stop-propagation, pointer capture, the drop
+// effect. It is the one module of input/ that touches the browser (policy P7); the input core stays pure.
+
+import { hasPlantStampDragData, readPlantStampDropSource } from '../../plant-stamp-source'
+import {
+  hasSavedObjectStampDragData,
+  readSavedObjectStampDragPreviewSource,
+  readSavedObjectStampDropSource,
+} from '../../saved-object-stamp-source'
+import { runCanvasRuntimeCleanups } from '../cleanup'
+import type { DomInputSource, DomInputSourceDeps, GestureOutcome } from '../interaction-ports'
+import type { CanvasDropPayload, ToolHandleId } from '../interaction-types'
+import { isEditableTarget } from './editable-target'
+import { normalise, type DomEventLike } from './normalise'
+import type { AdapterEffect, RawInput, TargetClass } from './raw-input'
+import { DEFAULT_THRESHOLDS } from './thresholds'
+
+/** The note editor: D1's text-entry host, and today's inline annotation editor until it moves there. */
+const TEXT_ENTRY_SELECTOR = '[data-canvas-text-entry], [data-annotation-inline-editor]'
+/** The canvas's own controls and fields inside the map: the inspection lens's skip set, the chrome and the Unlock affordance. */
+const OWNED_CHROME_SELECTOR = [
+  '[data-canvas-chrome]',
+  '[data-locked-object-affordance]',
+  'button',
+  'input',
+  'select',
+  'textarea',
+  '[contenteditable="true"]',
+  '[data-preserve-overlays="true"]',
+].join(', ')
+const SURFACE: TargetClass = Object.freeze({ kind: 'surface' })
+const OWNED_TEXT: TargetClass = Object.freeze({ kind: 'owned-text' })
+const OWNED_CHROME: TargetClass = Object.freeze({ kind: 'owned-chrome' })
+const FOREIGN: TargetClass = Object.freeze({ kind: 'foreign' })
+const NO_RECT = Object.freeze({ left: 0, top: 0, width: 0, height: 0 })
+
+type HostRect = Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>
+
+interface HandledEvent {
+  readonly event: Event
+  /** The host rect this event's points were read against; a captured session keeps it until it ends (today). */
+  readonly rect: HostRect | null
+}
+
+/**
+ * Today's rule for keeping the browser's own context menu (and wheel): text fields, menus and dialogs. The canvas menu
+ * never opens over them.
+ */
+export function allowsNativeContextMenuTarget(target: EventTarget | null): boolean {
+  const element = target instanceof HTMLElement
+    ? target
+    : (target instanceof Node ? target.parentElement : null)
+  if (!element) return false
+  if (isEditableTarget(element)) return true
+  return element.closest('input, textarea, select, [contenteditable="true"], [role="menu"], [role="dialog"], dialog') !== null
+}
+
+/**
+ * The effects to apply for one handled event: the recogniser's, less the press's capture when the host rejected the
+ * press, plus the host's answer (a quarantine prevents and stops the event; a drop effect is written to dataTransfer).
+ */
+export function outcomeEffects(recognised: readonly AdapterEffect[], outcome: GestureOutcome): readonly AdapterEffect[] {
+  const effects = outcome.rejectSession ? recognised.filter((effect) => effect.kind !== 'capture') : [...recognised]
+  if (outcome.quarantine) effects.push({ kind: 'prevent-default' }, { kind: 'stop-propagation' })
+  if (outcome.dropEffect) effects.push({ kind: 'drop-effect', dropEffect: outcome.dropEffect })
+  return effects
+}
+
+export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
+  const { host } = deps
+  const handling: HandledEvent[] = []
+  /** Pointers whose capture the host holds; the loss of any other pointer's capture is stale. */
+  const captured = new Set<number>()
+  /** Covers the synchronous `lostpointercapture` a browser may dispatch while capture is being acquired. */
+  let acquiring: number | null = null
+  const sessionRects = new Map<number, HostRect>()
+  let sink: ((input: RawInput) => void) | null = null
+  let tickTimer: number | null = null
+
+  function deliver(event: Event, rect: HostRect | null, input: RawInput | null): void {
+    if (!input || !sink) return
+    handling.push({ event, rect })
+    try {
+      sink(input)
+    } catch (error) {
+      quarantine(event)
+      throw error
+    } finally {
+      handling.pop()
+    }
+  }
+
+  function pointerInput(event: PointerEvent, type: DomEventLike['type'], rect: HostRect): RawInput | null {
+    return normalise(domEventLike(event, type, rect, classifyTarget(event.target, host)), deps.platform, deps.bindings(), {
+      physicalCtrl: deps.keys.physicalCtrl(),
+    }, rect)
+  }
+
+  function sessionRect(pointerId: number): HostRect {
+    return sessionRects.get(pointerId) ?? host.getBoundingClientRect()
+  }
+
+  const onPointerDown = (event: PointerEvent): void => {
+    const rect = host.getBoundingClientRect()
+    deliver(event, rect, pointerInput(event, 'pointerdown', rect))
+  }
+  const onRulerPointerDown = (event: PointerEvent): void => {
+    // Presses inside the map are the host listener's; the rulers sit beside it.
+    if (event.target instanceof Node && host.contains(event.target)) return
+    if (classifyTarget(event.target, host).kind !== 'ruler') return
+    const rect = host.getBoundingClientRect()
+    deliver(event, rect, pointerInput(event, 'pointerdown', rect))
+  }
+  const onPointerMove = (event: PointerEvent): void => {
+    const rect = sessionRect(event.pointerId)
+    deliver(event, rect, pointerInput(event, 'pointermove', rect))
+  }
+  const onPointerUp = (event: PointerEvent): void => {
+    const rect = sessionRect(event.pointerId)
+    deliver(event, rect, pointerInput(event, 'pointerup', rect))
+  }
+  const onPointerCancel = (event: PointerEvent): void => {
+    deliver(event, null, pointerInput(event, 'pointercancel', NO_RECT))
+  }
+  const onLostPointerCapture = (event: PointerEvent): void => {
+    const id = event.pointerId
+    if (!captured.has(id) && acquiring !== id) return
+    // Fence first: a release may dispatch this event synchronously, after the session has already ended.
+    captured.delete(id)
+    if (acquiring === id) acquiring = null
+    sessionRects.delete(id)
+    deliver(event, null, pointerInput(event, 'lostpointercapture', NO_RECT))
+  }
+  const onPointerLeave = (event: PointerEvent): void => {
+    deliver(event, null, pointerInput(event, 'pointerleave', NO_RECT))
+  }
+  const onFocusOut = (event: FocusEvent): void => {
+    // Focus moving inside the map (to the note editor or a handle) does not leave it.
+    const next = event.relatedTarget
+    if (next instanceof Node && host.contains(next)) return
+    deliver(event, null, { kind: 'focus-out', t: event.timeStamp })
+  }
+  const onBlur = (event: Event): void => {
+    deliver(event, null, { kind: 'cancel', t: event.timeStamp, id: 'all', reason: 'blur' })
+  }
+  const onWheel = (event: WheelEvent): void => {
+    if (allowsNativeContextMenuTarget(event.target)) return
+    const rect = host.getBoundingClientRect()
+    deliver(event, rect, normalise(domEventLike(event, 'wheel', rect, classifyTarget(event.target, host)), deps.platform, deps.bindings(), {
+      physicalCtrl: deps.keys.physicalCtrl(),
+    }, rect))
+  }
+  const onContextMenu = (event: MouseEvent): void => {
+    if (allowsNativeContextMenuTarget(event.target)) return
+    const rect = host.getBoundingClientRect()
+    const lastKeyboardMenuAt = deps.keys.lastKeyboardMenuAt()
+    const like: DomEventLike = {
+      ...domEventLike(event, 'contextmenu', rect, classifyTarget(event.target, host)),
+      // The keyboard menu opened from keydown; its own contextmenu follows within the echo window.
+      fromKeyboard: lastKeyboardMenuAt !== null && event.timeStamp - lastKeyboardMenuAt < DEFAULT_THRESHOLDS.menuEchoMs,
+    }
+    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), { physicalCtrl: deps.keys.physicalCtrl() }, rect))
+  }
+  const dragHandler = (type: 'dragover' | 'dragleave' | 'drop') => (event: DragEvent): void => {
+    const rect = type === 'dragleave' ? NO_RECT : host.getBoundingClientRect()
+    const like: DomEventLike = { ...domEventLike(event, type, rect, classifyTarget(event.target, host)), dropPayload: dropPayloadOf(event, type) }
+    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), { physicalCtrl: deps.keys.physicalCtrl() }, rect))
+  }
+  const onDragOver = dragHandler('dragover')
+  const onDragLeave = dragHandler('dragleave')
+  const onDrop = dragHandler('drop')
+  const onKeyDown = (event: KeyboardEvent): void => {
+    handling.push({ event, rect: null })
+    try {
+      deps.legacyKeys?.keydown(event)
+    } finally {
+      handling.pop()
+    }
+  }
+  const onKeyUp = (event: KeyboardEvent): void => {
+    handling.push({ event, rect: null })
+    try {
+      deps.legacyKeys?.keyup(event)
+    } finally {
+      handling.pop()
+    }
+  }
+
+  function capture(pointerId: number, rect: HostRect | null): void {
+    if (rect) sessionRects.set(pointerId, rect)
+    if (typeof host.setPointerCapture !== 'function' || typeof host.hasPointerCapture !== 'function') return
+    acquiring = pointerId
+    try {
+      host.setPointerCapture(pointerId)
+      if (acquiring === pointerId && host.hasPointerCapture(pointerId)) captured.add(pointerId)
+    } catch {
+      // Capture is a delivery aid: the window listeners still follow the pointer when it is unavailable or refused.
+    } finally {
+      if (acquiring === pointerId) acquiring = null
+    }
+  }
+
+  function release(pointerId: number): void {
+    sessionRects.delete(pointerId)
+    // Clear ownership before release: a loss dispatched by the release itself is stale by design.
+    if (!captured.delete(pointerId)) return
+    try {
+      host.releasePointerCapture(pointerId)
+    } catch {
+      // The session has ended either way; a failed release cannot strand an edit.
+    }
+  }
+
+  function clearTickTimer(): void {
+    if (tickTimer === null) return
+    deps.timers.clear(tickTimer)
+    tickTimer = null
+  }
+
+  return {
+    attach(nextSink) {
+      if (sink) throw new Error('The DOM input source is already attached')
+      sink = nextSink
+      const previousTouchAction = host.style.touchAction
+      const removals: Array<() => void> = []
+      const listen = (
+        target: EventTarget,
+        type: string,
+        listener: EventListener,
+        options?: boolean | AddEventListenerOptions,
+      ): void => {
+        target.addEventListener(type, listener, options)
+        const removeOptions = typeof options === 'object' ? { capture: options.capture ?? false } : options
+        removals.push(() => target.removeEventListener(type, listener, removeOptions))
+      }
+      const detach = (): void => {
+        sink = null
+        clearTickTimer()
+        const pending = removals.splice(0)
+        runCanvasRuntimeCleanups([
+          ...pending,
+          () => {
+            if (host.style.touchAction !== previousTouchAction) host.style.touchAction = previousTouchAction
+          },
+        ], 'DOM input source listener removal failed')
+      }
+      try {
+        // Today's installation, in today's order (scene-interaction.ts until 0B-2).
+        listen(host, 'pointerdown', onPointerDown as EventListener, { capture: true })
+        listen(host, 'pointerleave', onPointerLeave as EventListener)
+        listen(host, 'lostpointercapture', onLostPointerCapture as EventListener)
+        listen(window, 'pointermove', onPointerMove as EventListener, { capture: true })
+        listen(window, 'pointerup', onPointerUp as EventListener, { capture: true })
+        listen(window, 'pointercancel', onPointerCancel as EventListener, { capture: true })
+        if (deps.legacyKeys) {
+          listen(window, 'keydown', onKeyDown as EventListener, { capture: true })
+          listen(window, 'keyup', onKeyUp as EventListener)
+        }
+        listen(window, 'blur', onBlur)
+        listen(host, 'contextmenu', onContextMenu as EventListener)
+        listen(host, 'wheel', onWheel as EventListener, { passive: false })
+        listen(host, 'dragover', onDragOver as EventListener)
+        listen(host, 'dragleave', onDragLeave as EventListener)
+        listen(host, 'drop', onDrop as EventListener)
+        listen(host, 'focusout', onFocusOut as EventListener)
+        if (deps.rulers) listen(document, 'pointerdown', onRulerPointerDown as EventListener, { capture: true })
+        if (deps.bindings().touch.hostTouchActionNone) host.style.touchAction = 'none'
+      } catch (error) {
+        try {
+          detach()
+        } catch {
+          // Preserve the installation failure after attempting every removal.
+        }
+        throw error
+      }
+      let detached = false
+      return () => {
+        if (detached) return
+        detached = true
+        detach()
+      }
+    },
+
+    apply(effects) {
+      const handled = handling.at(-1) ?? null
+      const event = handled?.event ?? null
+      for (const effect of effects) {
+        switch (effect.kind) {
+          case 'prevent-default':
+            if (event?.cancelable) event.preventDefault()
+            break
+          case 'stop-propagation':
+            event?.stopImmediatePropagation()
+            break
+          case 'capture':
+            if (effect.pointerId !== undefined) capture(effect.pointerId, handled?.rect ?? null)
+            break
+          case 'release-capture':
+            if (effect.pointerId !== undefined) release(effect.pointerId)
+            break
+          case 'drop-effect': {
+            const transfer = event && 'dataTransfer' in event ? (event as DragEvent).dataTransfer : null
+            if (transfer && effect.dropEffect) transfer.dropEffect = effect.dropEffect
+            break
+          }
+          case 'set-timer':
+            clearTickTimer()
+            if (effect.atMs !== undefined) {
+              tickTimer = deps.timers.set(effect.atMs, () => {
+                tickTimer = null
+                sink?.({ kind: 'tick', t: deps.clock() })
+              })
+            }
+            break
+          case 'clear-timer':
+            clearTickTimer()
+            break
+        }
+      }
+    },
+
+    currentEvent() {
+      return handling.at(-1)?.event ?? null
+    },
+  }
+}
+
+function quarantine(event: Event): void {
+  if (event.cancelable) event.preventDefault()
+  event.stopImmediatePropagation()
+}
+
+function domEventLike(event: MouseEvent, type: DomEventLike['type'], rect: HostRect, target: TargetClass): DomEventLike {
+  const pointer = event as Partial<PointerEvent>
+  const wheel = event as Partial<WheelEvent>
+  return {
+    type,
+    timeStamp: event.timeStamp,
+    clientX: event.clientX - rect.left,
+    clientY: event.clientY - rect.top,
+    pointerId: pointer.pointerId,
+    pointerType: pointer.pointerType,
+    button: event.button,
+    buttons: event.buttons,
+    detail: event.detail,
+    shiftKey: event.shiftKey,
+    ctrlKey: event.ctrlKey,
+    altKey: event.altKey,
+    metaKey: event.metaKey,
+    deltaX: wheel.deltaX,
+    deltaY: wheel.deltaY,
+    deltaMode: wheel.deltaMode,
+    target,
+  }
+}
+
+/** What a panel drag carries. On dragover the browser hides the data: a species drag is known by its type only. */
+function dropPayloadOf(event: DragEvent, type: 'dragover' | 'dragleave' | 'drop'): CanvasDropPayload {
+  if (type === 'dragleave') return { kind: 'unknown' }
+  if (type === 'dragover') {
+    if (hasSavedObjectStampDragData(event.dataTransfer)) {
+      const stamp = readSavedObjectStampDragPreviewSource(event.dataTransfer)
+      return stamp ? { kind: 'saved-stamp', stamp } : { kind: 'unknown' }
+    }
+    return hasPlantStampDragData(event.dataTransfer) ? { kind: 'species', species: null } : { kind: 'unknown' }
+  }
+  const stamp = readSavedObjectStampDropSource(event)
+  if (stamp) return { kind: 'saved-stamp', stamp }
+  const species = readPlantStampDropSource(event)
+  return species ? { kind: 'species', species } : { kind: 'unknown' }
+}
+
+/** Classifies an event target from data attributes (spec §1.2 `TargetClass`). */
+function classifyTarget(target: EventTarget | null, host: HTMLElement): TargetClass {
+  const element = elementOf(target)
+  if (!element) return FOREIGN
+  const ruler = element.closest('[data-canvas-ruler]')
+  const axis = ruler?.getAttribute('data-canvas-ruler')
+  if (axis === 'h' || axis === 'v') return { kind: 'ruler', axis }
+  if (!host.contains(element)) return FOREIGN
+  if (closestInside(element, TEXT_ENTRY_SELECTOR, host)) return OWNED_TEXT
+  const handle = handleIdOf(element, host)
+  if (handle) return { kind: 'handle', id: handle }
+  if (closestInside(element, OWNED_CHROME_SELECTOR, host)) return OWNED_CHROME
+  return SURFACE
+}
+
+/** D1's handle layer names its handles; today's rotation handle and control points are read until it does. */
+function handleIdOf(element: Element, host: HTMLElement): ToolHandleId | null {
+  const handle = closestInside(element, '[data-canvas-handle]', host)
+  if (handle) return handle.getAttribute('data-canvas-handle') as ToolHandleId
+  if (closestInside(element, '[data-rotation-handle]', host)) return 'rotate' as ToolHandleId
+  const point = closestInside(element, '[data-control-point-overlay-handle]', host)
+  if (point) return `control-point:${point.getAttribute('data-control-point-overlay-handle')}` as ToolHandleId
+  return null
+}
+
+function closestInside(element: Element, selector: string, host: HTMLElement): Element | null {
+  const match = element.closest(selector)
+  return match && host.contains(match) ? match : null
+}
+
+function elementOf(target: EventTarget | null): Element | null {
+  if (target instanceof Element) return target
+  return target instanceof Node ? target.parentElement : null
+}

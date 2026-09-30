@@ -22,7 +22,8 @@ import {
   hideInteractionPreview,
   showInteractionPreview,
 } from './interaction/overlay-ui'
-import { allowsNativeContextMenuTarget, cursorForTool, isEditableTarget } from './interaction/pointer-utils'
+import { cursorForTool, isEditableTarget } from './interaction/pointer-utils'
+import { allowsNativeContextMenuTarget } from './input/dom-input-source'
 import {
   appendPlantStampSourceToDraft,
 } from './interaction/tool-actions'

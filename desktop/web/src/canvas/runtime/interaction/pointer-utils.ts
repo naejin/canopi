@@ -1,5 +1,4 @@
 import type { ScenePoint } from '../scene'
-import { isEditableTarget } from '../input/editable-target'
 
 export function cursorForTool(tool: string): string {
   if (tool === 'hand') return 'grab'
@@ -21,15 +20,6 @@ export function hasAdditiveModifier(event: Pick<MouseEvent, 'shiftKey' | 'ctrlKe
 
 // The legacy tool modules still read DOM key targets until their streams port them (plan §4 0B).
 export { isEditableTarget } from '../input/editable-target'
-
-export function allowsNativeContextMenuTarget(target: EventTarget | null): boolean {
-  const element = target instanceof HTMLElement
-    ? target
-    : (target instanceof Node ? target.parentElement : null)
-  if (!element) return false
-  if (isEditableTarget(element)) return true
-  return element.closest('input, textarea, select, [contenteditable="true"], [role="menu"], [role="dialog"], dialog') !== null
-}
 
 /** Shift while drawing: the point along the nearest 45° direction from `origin`. */
 export function constrainPointTo45Degrees(origin: ScenePoint, point: ScenePoint): ScenePoint {
