@@ -49,8 +49,11 @@ export interface DraftScenePainters {
   screenPxToWorldPx(px: number, scale: number): number
   /** A zone as the stamp ghost draws it, in world units; false when nothing is drawable. */
   drawZoneGhost(graphics: Graphics, zone: SceneZoneEntity, scale: number): boolean
-  /** A plant's mark at the local origin in CSS px; false before the scene has a snapshot. */
-  drawPlantGhost(graphics: Graphics, plant: ScenePlantEntity, mark: 'symbol' | 'dot', scale: number): boolean
+  /**
+   * A plant's mark at the local origin in CSS px; false before the scene has a snapshot. A 'dot' takes its radius from the
+   * plant's presentation at `sizeFrom` when given, else at the plant's own position.
+   */
+  drawPlantGhost(graphics: Graphics, plant: ScenePlantEntity, mark: 'symbol' | 'dot', scale: number, sizeFrom?: WorldPoint): boolean
   /** A note's text and marker at the local origin, and the opacities the scene gives them at `scale`; null for a note without text. */
   drawNoteGhost(
     text: Text,
@@ -302,7 +305,7 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
   /** The ghost's entities are already where a click would put them; the layer only places them. */
   function drawGhost(entity: GhostEntity, opacity: number, scale: number): void {
     if (entity.kind === 'plant') {
-      drawPlantGhosts([entity.plant], entity.mark ?? 'symbol', opacity, scale)
+      drawPlantGhosts([entity.plant], entity.mark ?? 'symbol', opacity, scale, entity.sizeFrom)
       return
     }
     const { template } = entity
@@ -321,13 +324,19 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
     for (const { entity: note } of template.annotations) drawNoteGhost(note, opacity, scale)
   }
 
-  function drawPlantGhosts(plants: readonly ScenePlantEntity[], mark: 'symbol' | 'dot', opacity: number, scale: number): void {
+  function drawPlantGhosts(
+    plants: readonly ScenePlantEntity[],
+    mark: 'symbol' | 'dot',
+    opacity: number,
+    scale: number,
+    sizeFrom?: WorldPoint,
+  ): void {
     // Symbols composite once, as the scene's plant layers do: their contours
     // overlap. A dot is one flat disc, so its own alpha is exact.
     let composite: Container | null = null
     for (const plant of plants) {
       const graphics = new Graphics()
-      if (!painters.drawPlantGhost(graphics, plant, mark, scale)) {
+      if (!painters.drawPlantGhost(graphics, plant, mark, scale, sizeFrom)) {
         graphics.destroy()
         continue
       }

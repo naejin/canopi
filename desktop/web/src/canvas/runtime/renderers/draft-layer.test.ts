@@ -300,6 +300,30 @@ describe('draft layer', () => {
     expect(paints(dot as Graphics, 'stroke')).toEqual([])
   })
 
+  it('a dot ghost with sizeFrom takes the radius at that point', () => {
+    // Plant a row: the source sits close to a neighbour, so its presented radius is smaller than at an open row position.
+    const source = createPlant({ id: 'source', position: { x: 0, y: 0 } })
+    const neighbour = createPlant({ id: 'neighbour', position: { x: 0.2, y: 0 } })
+    const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [source, neighbour] } })
+    const layer = mountLayer(snapshot)
+    const ghost = { ...source, id: 'row-ghost', position: { x: 10, y: 0 } }
+    layer.setDraft({ shapes: [{ kind: 'ghost', entity: { kind: 'plant', plant: ghost, mark: 'dot', sizeFrom: source.position }, opacity: 0.35 }] })
+    layer.place({ x: 10, y: 20 }, 30)
+
+    const radiusAt = (plant: ScenePlantEntity) => buildPlantPresentationEntries([plant], {
+      plants: snapshot.scene.plants, viewport: { x: 0, y: 0, scale: 30 }, speciesCache: snapshot.speciesCache,
+    }, new Set())[0]!.radiusScreenPx
+    expect(radiusAt(source)).toBeLessThan(radiusAt(ghost))
+
+    const [dot, ...rest] = layer.screen.children
+    expect(rest).toEqual([])
+    // The disc stays at the ghost; only its size comes from sizeFrom.
+    expect(global(dot!)).toEqual({ x: 310, y: 20 })
+    const fills = paintInstructions(dot as Graphics, 'fill')
+    expect(fills).toHaveLength(1)
+    expect(pathSteps(fills[0]!).find((step) => step.action === 'circle')?.data.slice(0, 3)).toEqual([0, 0, radiusAt(source)])
+  })
+
   it('each label tone draws its chip style', () => {
     const cases = [
       { tone: 'measure', font: CANVAS_CHROME_MONO_FONT_FAMILY, weight: '600', text: 'chip-text', background: 'chip-surface-muted', placement: 'centre', padding: { x: 5, y: 2 } },

@@ -384,10 +384,12 @@ export function createDraftScenePainters(getSnapshot: () => SceneRendererSnapsho
       })
       return true
     },
-    drawPlantGhost(graphics, plant, mark, viewportScale) {
+    drawPlantGhost(graphics, plant, mark, viewportScale, sizeFrom) {
       const snapshot = getSnapshot()
       if (!snapshot) return false
-      const [entry] = buildPlantPresentationEntries([plant], {
+      // A dot's radius is the presentation at sizeFrom (Plant a row: the source plant's), so the whole row has one size.
+      const presented = mark === 'dot' && sizeFrom ? { ...plant, position: sizeFrom } : plant
+      const [entry] = buildPlantPresentationEntries([presented], {
         plants: snapshot.scene.plants,
         viewport: { x: 0, y: 0, scale: viewportScale },
         speciesCache: snapshot.speciesCache,
