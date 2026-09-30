@@ -292,6 +292,35 @@ describe('SceneRuntimeRenderScheduler', () => {
       scheduler.dispose()
     })
 
+    it('stays pending when an edit made while drawing queues its frame ahead of the older settle frame', async () => {
+      let draws = 0
+      const renderer = {
+        ...createRenderer(),
+        // The first draw raises a scene invalidation synchronously, before the scheduler asks
+        // for the frame that settles it, so the next render's frame runs first.
+        renderScene: vi.fn(() => { if (++draws === 1) scheduler.invalidate('scene') }),
+      }
+      const { scheduler, runFrame, prepare, frames } = await createControlledScheduler(renderer)
+
+      scheduler.invalidate('scene')
+      runFrame()
+      prepare(0)
+      await vi.waitFor(() => expect(renderer.renderScene).toHaveBeenCalledOnce())
+      expect(frames.size, 'the next render frame, then the settle frame of the first render').toBe(2)
+
+      runFrame()
+      expect(scheduler.scenePending.value, 'the next render is prepared').toBe(true)
+      runFrame()
+      expect(scheduler.scenePending.value, 'the older render settling does not end the newer one').toBe(true)
+
+      prepare(1)
+      await vi.waitFor(() => expect(renderer.renderScene).toHaveBeenCalledTimes(2))
+      expect(scheduler.scenePending.value, 'MapLibre draws the newer snapshot in its next frame').toBe(true)
+      runFrame()
+      expect(scheduler.scenePending.value).toBe(false)
+      scheduler.dispose()
+    })
+
     it('never reports a camera-only frame as a pending scene render', async () => {
       const { scheduler, renderer, runFrame } = await createControlledScheduler()
 

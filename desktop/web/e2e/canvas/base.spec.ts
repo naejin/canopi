@@ -1,8 +1,8 @@
 // The base scenario of the Web Edition browser checks (canvas v2 plan section 3.2): open the
 // base fixture through the file chooser, pan, zoom, Present, PDF. Every later phase runs it.
 // Real input only: page.mouse and page.keyboard (locator clicks are real mouse clicks too).
-// Screenshots are taken on settled states only, never mid-drag, and of the canvas only once it
-// has drawn the change the DOM checks saw (expectCanvasDrawn).
+// Screenshots are taken on settled states only, never mid-drag or mid-flight, and of the canvas
+// only once it has drawn the change the DOM checks saw (expectCanvasDrawn).
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { Page } from '@playwright/test'
@@ -100,6 +100,10 @@ test('open, pan, zoom, Present and PDF', async ({ page }) => {
   await test.step('Present the story', async () => {
     await page.getByRole('navigation', { name: 'Web Edition panels' }).getByRole('button', { name: 'Stories' }).click()
     await expect(page.getByRole('list', { name: 'Steps of Tour' }).getByRole('button', { name: 'Step 1: Overview' })).toBeVisible()
+    // Presenting flies the camera to the step's view (a MapLibre flight), and the canvas is never
+    // busy for a camera frame, so nothing could say when the flight has ended. Under reduced
+    // motion the camera jumps there instead, and the screenshot shows where it lands.
+    await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.getByRole('button', { name: 'Present' }).click()
     const presentation = page.getByRole('dialog', { name: 'Presenting Tour' })
     await expect(presentation).toBeVisible()
@@ -111,6 +115,7 @@ test('open, pan, zoom, Present and PDF', async ({ page }) => {
     await presentation.getByRole('button', { name: 'Leave presentation' }).click()
     await expect(presentation).toBeHidden()
     await expect(page.getByRole('toolbar', { name: 'Tools' })).toBeVisible()
+    await page.emulateMedia({ reducedMotion: null })
   })
 
   await test.step('export the planting plan as a PDF, then go back to the Design', async () => {

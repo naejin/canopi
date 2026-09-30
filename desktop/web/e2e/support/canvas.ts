@@ -1,7 +1,9 @@
 // Readiness of the canvas for the Web Edition browser checks. The DOM (chips, pressed tools,
 // Undo) changes as soon as the Design does; the canvas draws it a frame and an asynchronous
 // render step later. The runtime marks the Design map aria-busy from a Design change until
-// its renderer has drawn it (canvas/runtime/scene-runtime.ts), and never for a camera frame.
+// its renderer has drawn it (canvas/runtime/scene-runtime.ts), and never for a camera frame:
+// a step that flies the camera emulates reduced motion first, so the camera jumps instead
+// (page.emulateMedia({ reducedMotion: 'reduce' }), as base.spec.ts does to present a story).
 import type { Page } from '@playwright/test'
 import { expect } from './offline'
 
