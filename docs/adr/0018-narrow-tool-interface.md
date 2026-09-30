@@ -1,6 +1,6 @@
 # Narrow tool interface
 
-Status: Accepted (2026-09-29, Canopi v2)
+Status: Accepted (2026-09-29, Canopi v2); amended 2026-09-30
 
 Builds on [ADR 0016](0016-one-view-transform.md) and [ADR 0017](0017-input-pipeline-and-gestures.md). Product rules: [ADR 0015](0015-rotating-map-and-canvas-controls.md).
 
@@ -34,5 +34,16 @@ Tools implemented a wide `SceneToolAdapter`: raw pointer events, DOM predicates,
 
 - Every existing tool (Select with its band, move, rotate handle and reshape; Pan; plant stamp; text; line, rectangle, ellipse; polygon; measure; object and saved-object stamps; Plant a row) is ported behaviour-preserving first, then changed per ADR 0015.
 - Policy tests forbid the listed imports and DOM symbols in tool files. Tool modules are value-imported only inside `tools/` and by the composition root through the host (P5b).
-- Tools are tested with a fake host and a fake view at any bearing, without jsdom.
+- Tools are tested through a gesture harness over the real host, with a fake view at any bearing, without jsdom.
 - Details: [`canvas-v2-spec.md`](../plans/canvas-v2-spec.md).
+
+## Amended 2026-09-30
+
+Building phase 0B showed that the narrow contract could not carry several tested behaviours. The core stands (plain tools, world points, no DOM, MapLibre, Pixi, signals, input or camera imports, screen-to-world only in the host); the contract grows additively:
+
+- **Feedback to the DOM.** The router and the host answer each gesture with an outcome (quarantine, drop effect, reject the press), which the input source applies; the host asks the scene's admission itself and retries a failed cancellation before the next event, as today.
+- **The host owns drops and selection decorations.** One drop handler serves every tool (placement code from the plant and saved-stamp modules); the selected zone's chips and the handles belong to the host whichever tool is armed, and show as today (chips under every tool, handles while Select is armed).
+- **Tools gain** a history-free selection effect, the host's snapping of any point, a text entry that stays open while a commit is refused, a re-projection hook for re-origin, a view hook for frames with nothing to re-emit, a clamp-to-view flag, spacing-field commands, plant presentation reads and a handle readout. A tool's `'handled'` hover skips the host's passive hover.
+- **Phase 0B runs unported tools through a legacy bridge** in the interaction session, so every tool can be ported and merged alone; the host serves only registered tools, and each shared duty moves to it with the tool that owned it. The bridge goes at the end of 0B.
+
+Details: spec §1.2–1.4, plan §4 0B.

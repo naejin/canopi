@@ -1,4 +1,5 @@
 import type { ReadonlySignal } from '@preact/signals'
+import type { WorldPoint } from './runtime/view/types'
 
 export interface InspectionPoint { readonly x: number; readonly y: number }
 export interface InspectionLabel extends InspectionPoint {
@@ -29,6 +30,9 @@ export interface CanvasInspectionHandle {
   readonly state: ReadonlySignal<CanvasInspectionState | null>
   /** Coordinates in CSS pixels relative to the main canvas host. */
   inspectAtScreenPoint(point: InspectionPoint): void
+  /** Samples at a plane point from ToolHost.subscribePointerWorld, with no screen conversion of its own. Optional until 0B,
+   *  which implements it in canvas/runtime/inspection-lens.ts and makes it required. */
+  inspectAtWorldPoint?(point: WorldPoint): void
   centerOnCanvas(): void
   panBy(delta: InspectionPoint): void
   zoomBy(factor: number): void

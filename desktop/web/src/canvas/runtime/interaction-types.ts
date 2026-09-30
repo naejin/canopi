@@ -14,7 +14,7 @@ export type ToolId =
 export type ToolHandleId = string & { readonly __toolHandleId: true }
 /** What a panel drag carries, read from dataTransfer by the DOM source (today plant-stamp-source.ts and saved-object-stamp-source.ts). */
 export type CanvasDropPayload =
-  | { readonly kind: 'species'; readonly species: PlantStampSourceInput }
+  | { readonly kind: 'species'; readonly species: PlantStampSourceInput | null }   // null on dragover: the browser hides the data until the drop; the MIME type says species
   | { readonly kind: 'saved-stamp'; readonly stamp: SavedObjectStampPayload }
-  | { readonly kind: 'unknown' }                                // over the map but not ours: the tool shows no drop cue
+  | { readonly kind: 'unknown' }                                // over the map but not ours: no drop cue
 // PlantStampSourceInput (canvas/plant-stamp-source.ts) and SavedObjectStampPayload are type-only imports.
