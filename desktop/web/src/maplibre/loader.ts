@@ -17,6 +17,8 @@ export interface MapLibreMapConstructorOptions {
   pitchWithRotate: boolean
   dragRotate: boolean
   touchZoomRotate: boolean
+  /** False on the workspace and snapshot maps: their camera driver's setScreen is the one resize owner (spec §1.1 "Resize"). */
+  trackResize?: boolean
   /**
    * MapLibre's request seam, used to authenticate official provider tiles with
    * the live session. Set once at creation, because a map's transform is a

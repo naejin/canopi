@@ -199,7 +199,8 @@ describe('camera contract', () => {
         clock: () => 0,
         scheduleFrame: () => () => {},
         policy: () => navigationPolicy,
-      }, { timers: { set: () => 0, clear: () => {} } })
+        timers: { setTimeout: () => 0, clearTimeout: () => {} },
+      })
       expect(attached.failure.peek()).toBeNull()
       expectProjectsLikeMapLibre(headless.view(), shown.transform, plane)
       expectProjectsLikeMapLibre(attached.frames.viewFrame.peek().view, shown.transform, plane)

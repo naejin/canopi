@@ -215,7 +215,8 @@ export class CameraController implements
   followScenePlane(plane: ReadonlySignal<SessionPlane | null>): () => void {
     this.scenePlane = plane
     return effect(() => {
-      if (plane.value) untracked(() => this.host.followPlane())
+      const next = plane.value
+      if (next) untracked(() => this.host.followPlane(next))
     })
   }
 

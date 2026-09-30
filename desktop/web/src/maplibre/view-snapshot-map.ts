@@ -281,6 +281,8 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
         minZoom: WORKSPACE_MAP_MIN_ZOOM,
         maxZoom: WORKSPACE_MAP_MAX_ZOOM,
         renderWorldCopies: false,
+        // The snapshot's camera driver resizes the map; MapLibre never resizes itself behind it.
+        trackResize: false,
         pixelRatio,
         // A snapshot is one frame: no tile or label fade to wait for.
         fadeDuration: 0,

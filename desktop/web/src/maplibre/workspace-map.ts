@@ -30,6 +30,8 @@ export function createWorkspaceMapLibreMap(
     minZoom: WORKSPACE_MAP_MIN_ZOOM,
     maxZoom: WORKSPACE_MAP_MAX_ZOOM,
     renderWorldCopies: false,
+    // The camera driver's setScreen resizes the map; MapLibre never resizes itself behind it.
+    trackResize: false,
     canvasContextAttributes: { antialias: true },
     // Attribution is owned by the basemap mount's single control (E4).
     attributionControl: false,

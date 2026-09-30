@@ -54,11 +54,6 @@ export type MapLibreCameraDriverMap = Pick<MapLibreMapInstance,
   | 'getCanvas'
 >
 
-export interface MapLibreCameraDriverOptions {
-  /** The settle timer of the driver's own frames. Default: the window's timers, on deps.clock. */
-  readonly timers?: FrameSourceDeps['timers']
-}
-
 type AgreementProbe = (map: Pick<MapLibreMapInstance, 'unproject'>, view: ViewTransform, plane: SessionPlane) => { readonly maxErrorPx: number }
 
 const REQUIRED_READ_BACKS = ['getCenter', 'getZoom', 'getBearing', 'unproject'] as const
@@ -94,13 +89,12 @@ interface Flight {
 /**
  * `createMapLibreCameraDriver(map, plane, deps)` (spec §1.1 Attachment). A map without getCenter, getZoom, getBearing or unproject,
  * or one whose read-back pitch is not 0, fails the driver with 'map-error'; its host then detaches it. The driver's screen starts at
- * the map canvas' CSS size and changes only through setScreen.
+ * the map canvas' CSS size and changes only through setScreen. Its frames settle on `deps.timers`, else on the window's.
  */
 export function createMapLibreCameraDriver(
   map: MapLibreCameraDriverMap,
   initialPlane: SessionPlane,
   deps: CameraDriverDeps,
-  options: MapLibreCameraDriverOptions = {},
 ): CameraDriver {
   let plane = initialPlane
   let planeRevision = 0
@@ -144,7 +138,7 @@ export function createMapLibreCameraDriver(
   let published = frameState((guardInstalled ? readCamera() : attached) ?? placeholderCamera())
   const frames = createViewFrameSource(buildFrame(published), {
     clock: deps.clock,
-    timers: options.timers ?? windowTimers(deps.clock),
+    timers: settleTimers(deps),
   })
 
   const onMove = () => {
@@ -577,10 +571,31 @@ function finitePoint(point: ScreenPoint): boolean {
   return Number.isFinite(point.x) && Number.isFinite(point.y)
 }
 
-function windowTimers(clock: () => number): FrameSourceDeps['timers'] {
+const WINDOW_TIMERS: NonNullable<CameraDriverDeps['timers']> = {
+  setTimeout: (run, ms) => window.setTimeout(run, ms),
+  clearTimeout: (handle) => window.clearTimeout(handle as number),
+}
+
+/** The frame source's settle timers (a due time, a numeric id) over the deps' timers (a delay, an opaque handle). */
+function settleTimers(deps: CameraDriverDeps): FrameSourceDeps['timers'] {
+  const timers = deps.timers ?? WINDOW_TIMERS
+  const handles = new Map<number, unknown>()
+  let nextId = 1
   return {
-    set: (atMs, run) => window.setTimeout(run, Math.max(0, atMs - clock())),
-    clear: (id) => window.clearTimeout(id),
+    set(atMs, run) {
+      const id = nextId++
+      handles.set(id, timers.setTimeout(() => {
+        handles.delete(id)
+        run()
+      }, Math.max(0, atMs - deps.clock())))
+      return id
+    },
+    clear(id) {
+      if (!handles.has(id)) return
+      const handle = handles.get(id)
+      handles.delete(id)
+      timers.clearTimeout(handle)
+    },
   }
 }
 

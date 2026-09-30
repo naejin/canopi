@@ -274,6 +274,8 @@ describe('WorkspaceMapControls', () => {
       expect(setScreen).toHaveBeenCalledTimes(1)
       expect(setScreen).toHaveBeenCalledWith({ width: 640, height: 480, devicePixelRatio: window.devicePixelRatio })
       expect(map.resize).not.toHaveBeenCalled()
+      // Nor does MapLibre resize itself behind the camera driver.
+      expect(map.options.trackResize).toBe(false)
     } finally { controls.releaseMap(admitted) }
   })
 

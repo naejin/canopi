@@ -125,7 +125,8 @@ export function createWorkspaceRuntimeComposition(
   })
   const controls = dependencies.createControls({
     container: options.container,
-    // The map container's resizes reach the camera, the map's one resize owner.
+    // The map container's resizes reach the camera driver's setScreen through the shim's resize: the driver is the map's one
+    // resize owner (both maps are built with trackResize: false).
     setScreen: (screen) => {
       camera.resize(screen)
     },

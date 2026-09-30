@@ -32,15 +32,13 @@ export interface CameraDriverHostOptions {
   readonly insets?: ScreenInsets
 }
 
+/**
+ * The host as its creator holds it. Its `driverDeps` carry no timers: the host hands its own to its headless drivers, and a MapLibre
+ * driver built with them settles on the window's. `followPlane` takes the plane `options.plane` returns from then on: a headless
+ * camera keeps its plane placement, bit for bit, and reads its ground on that plane; nothing happens while an attached driver is live
+ * (only planeChanged moves the map's plane) or while the headless driver is already on it.
+ */
 export interface CameraDriverHostController extends CameraDriverHost {
-  /** What every driver on this host runs with: an attached driver is built with them, and navigation reads `policy` from them. */
-  readonly driverDeps: CameraDriverDeps
-  /**
-   * The runtime's plane was replaced without a re-origin (a hydration): a headless camera keeps its plane placement, bit for bit,
-   * and reads its ground on the new plane from now on (hydration keeps the plane camera). Attached, the map is the camera and
-   * only planeChanged moves its plane. Nothing happens while the headless driver is already on the runtime's plane.
-   */
-  followPlane(): void
   dispose(): void
 }
 
@@ -195,10 +193,8 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
       if (disposed || !attached) return
       detachTo()
     },
-    followPlane() {
-      if (disposed || attached || !headlessPlane) return
-      const plane = options.plane()
-      if (plane === headlessPlane) return
+    followPlane(plane) {
+      if (disposed || attached || !headlessPlane || plane === headlessPlane) return
       toHeadless(plane, planarCameraOf(frames.viewFrame.peek().view))
     },
     replacePolicy(policy) {

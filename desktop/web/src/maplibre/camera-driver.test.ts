@@ -5,7 +5,6 @@ import { geoToMercator, mapZoomToStageScale, mercatorToGeo, stageScaleToMapZoom,
 import type { ScenePersistedState } from '../canvas/runtime/scene'
 import { sceneExtentPoints } from '../canvas/runtime/scene-extent'
 import type { CameraDriver, CameraDriverDeps } from '../canvas/runtime/view/camera-driver'
-import type { CameraDriverHostController } from '../canvas/runtime/view/driver-host'
 import { createNavigationPolicy, zoomFloorForArc, type NavigationPolicy } from '../canvas/runtime/view/navigation-policy'
 import type { GeoPoint, ViewFrame, ViewScreen } from '../canvas/runtime/view/types'
 import { planarCameraOf } from '../canvas/runtime/view/view-transform'
@@ -16,6 +15,8 @@ import type { MapLibreLngLat, MapLibreTransformConstrain } from './loader'
 
 const PLANE = createSessionPlane({ lon: 2.35, lat: 48.85 })
 const POLICY = createNavigationPolicy(createWorkspaceCameraPolicy(PLANE.origin.lat), signal(false))
+/** Settle timers that never run, in place of the window's. */
+const NO_TIMERS: CameraDriverDeps['timers'] = { setTimeout: () => 0, clearTimeout: () => {} }
 
 /** MapLibre's LngLat class: the constrain must hand back the class it was given. */
 class FakeLngLat implements MapLibreLngLat {
@@ -199,7 +200,8 @@ function attach(map: ConsistentMap, policy: NavigationPolicy = POLICY, plane: Se
     clock: time.clock,
     scheduleFrame: time.scheduleFrame,
     policy: () => policy,
-  }, { timers: { set: () => 0, clear: () => {} } })
+    timers: NO_TIMERS,
+  })
   drivers.push(driver)
   const published: ViewFrame[] = []
   driver.frames.onViewFrame('overlays', (frame) => published.push(frame))
@@ -212,9 +214,12 @@ function screenOf(frame: ViewFrame): ViewScreen {
 
 const views: TestView[] = []
 
-/** The deps every driver on a test view's host runs with (its manual clock and policy), as the workspace activation builds one. */
+/**
+ * The deps every driver on a test view's host runs with (its manual clock and policy), as the workspace activation builds one, with
+ * settle timers that never run in place of the window's.
+ */
 function hostDeps(view: TestView): CameraDriverDeps {
-  return (view.host as CameraDriverHostController).driverDeps
+  return { ...view.host.driverDeps, timers: NO_TIMERS }
 }
 
 /**
@@ -230,7 +235,7 @@ function viewOn(map: ConsistentMap, viewport?: { x: number; y: number; scale: nu
     viewport,
   })
   views.push(view)
-  const driver = createMapLibreCameraDriver(map, plane, hostDeps(view), { timers: { set: () => 0, clear: () => {} } })
+  const driver = createMapLibreCameraDriver(map, plane, hostDeps(view))
   view.host.attach(driver)
   return { view, driver }
 }
@@ -275,6 +280,40 @@ describe('MapLibre camera driver', () => {
     expect(published[1]!.view.camera.bearingDeg).toBe(300)
     expect(published[3]!.view.camera).toEqual({ center: { lon: 2.36, lat: 48.86 }, zoom: 17.5, bearingDeg: 15, pitchDeg: 0 })
     expect(published.map((frame) => frame.revision)).toEqual([1, 2, 3, 4])
+  })
+
+  it('settles its frames on the timers of its deps', () => {
+    const pending = new Map<number, { readonly run: () => void; readonly ms: number }>()
+    let nextHandle = 1
+    const timers: CameraDriverDeps['timers'] = {
+      setTimeout: (run, ms) => {
+        const handle = nextHandle++
+        pending.set(handle, { run, ms })
+        return handle
+      },
+      clearTimeout: (handle) => { pending.delete(handle as number) },
+    }
+    const time = createManualFrames()
+    const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
+    const driver = createMapLibreCameraDriver(map, PLANE, { clock: time.clock, scheduleFrame: time.scheduleFrame, policy: () => POLICY, timers })
+    drivers.push(driver)
+    const unsettled = driver.frames.settledViewFrame.peek()
+
+    driver.apply({ kind: 'pan-by', deltaPx: { x: 10, y: 0 } })
+    driver.apply({ kind: 'pan-by', deltaPx: { x: 10, y: 0 } })
+
+    // Each frame restarts the one 150 ms settle timer.
+    expect([...pending.values()].map((timer) => timer.ms)).toEqual([150])
+    expect(driver.frames.settledViewFrame.peek()).toBe(unsettled)
+    const [handle, timer] = [...pending][0]!
+    pending.delete(handle)
+    timer.run()
+    expect(driver.frames.settledViewFrame.peek()).toBe(driver.frames.viewFrame.peek())
+
+    driver.apply({ kind: 'pan-by', deltaPx: { x: 10, y: 0 } })
+    expect(pending.size).toBe(1)
+    driver.dispose()
+    expect(pending.size).toBe(0)
   })
 
   it('a pan of +10 px moves the ground 10 px right', () => {
@@ -734,7 +773,7 @@ describe('MapLibre camera driver', () => {
     })
     const second = new ConsistentMap({ center: { lon: 2.36, lat: 48.86 }, zoom: 17 })
 
-    view.host.attach(createMapLibreCameraDriver(second, PLANE, hostDeps(view), { timers: { set: () => 0, clear: () => {} } }))
+    view.host.attach(createMapLibreCameraDriver(second, PLANE, hostDeps(view)))
 
     const settled = view.frames.viewFrame.peek()
     expect(settled.view.camera.zoom).toBeCloseTo(second.getZoom(), 12)

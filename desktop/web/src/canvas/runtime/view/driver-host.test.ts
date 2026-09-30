@@ -182,13 +182,13 @@ describe('camera driver host', () => {
     const before = host.frames.viewFrame.peek()
 
     // The same plane: nothing to follow.
-    host.followPlane()
+    host.followPlane(runtimePlane)
     expect(published).toHaveLength(0)
 
     // A hydration replaced the plane: the placement stays, bit for bit, and the ground is read on the new plane.
     const hydrated = createSessionPlane({ lon: 13, lat: 23 })
     runtimePlane = hydrated
-    host.followPlane()
+    host.followPlane(runtimePlane)
     expect(published).toHaveLength(1)
     const followed = published[0]!
     expect(followed.attached).toBe(false)
@@ -197,14 +197,14 @@ describe('camera driver host', () => {
     const centre = hydrated.toGeo(followed.view.screenToWorld({ x: 200, y: 150 })!)
     expect(followed.view.camera.center.lon).toBe(centre.lon)
     expect(followed.view.camera.center.lat).toBe(centre.lat)
-    host.followPlane()
+    host.followPlane(runtimePlane)
     expect(published).toHaveLength(1)
 
     // Attached, the map is the camera: only planeChanged moves its plane.
     host.attach(standInDriver(hydrated))
     const attachedFrames = published.length
     runtimePlane = createSessionPlane({ lon: 14, lat: 24 })
-    host.followPlane()
+    host.followPlane(runtimePlane)
     expect(published).toHaveLength(attachedFrames)
     host.dispose()
   })
