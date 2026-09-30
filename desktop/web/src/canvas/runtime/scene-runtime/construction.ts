@@ -56,9 +56,9 @@ import {
   type SettledSceneReader,
 } from './transactions'
 import { runCanvasRuntimeCleanups } from '../cleanup'
-import { sceneExtentPoints } from '../scene-extent'
+import { getRevealedAnnotationId } from '../annotation-layout'
+import { sceneExtentPoints, selectionExtentPoints } from '../scene-extent'
 import { createViewNavigation } from '../view/navigation'
-import type { SceneBounds, WorldPoint } from '../view/types'
 
 type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
 
@@ -212,7 +212,8 @@ export function createSceneRuntimeConstruction(
       syncCanvasSignalsFromDocument(file, appAdapter.settings.layerProjections),
   })
   const inspection = new SceneCanvasInspectionOwner({
-    camera, revision,
+    camera: { snapshot: camera.snapshot, host: cameraHost },
+    revision,
     readSessionPlane: () => sceneStore.sessionPlane,
     getSnapshot: () => presentation.buildRendererSnapshot(),
     setHoveredTarget: callbacks.setHoveredTarget,
@@ -291,12 +292,18 @@ export function createSceneRuntimeConstruction(
     clock: cameraHost.driverDeps.clock,
     readScene: () => {
       const persisted = sceneStore.persisted
-      const selected = querySurface.getDesignObjectSelection().bounds
+      const scale = readViewScale()
+      const plantContext = presentation.createPlantPresentationContext(scale)
+      // The objects the selection model frames (editable and locked), by their outlines at the live scale.
+      const { editableTargets, lockedTargets } = querySurface.getDesignObjectSelection()
       return {
         persisted,
-        selection: selected ? boundsCorners(selected) : [],
+        selection: selectionExtentPoints(persisted, [...editableTargets, ...lockedTargets], {
+          plantContext,
+          revealedAnnotationId: getRevealedAnnotationId(sceneStore.session.selectedTargets),
+        })(scale),
         bounds: {
-          extentPoints: sceneExtentPoints(persisted, presentation.createPlantPresentationContext(readViewScale())),
+          extentPoints: sceneExtentPoints(persisted, plantContext),
           emptySceneScale: readEmptySceneScale(),
         },
       }
@@ -369,13 +376,4 @@ export function createSceneRuntimeConstruction(
     panelTargetAdapter,
     disposeEffects,
   }
-}
-
-function boundsCorners(bounds: SceneBounds): readonly WorldPoint[] {
-  return [
-    { x: bounds.minX, y: bounds.minY },
-    { x: bounds.maxX, y: bounds.minY },
-    { x: bounds.maxX, y: bounds.maxY },
-    { x: bounds.minX, y: bounds.maxY },
-  ]
 }
