@@ -6,10 +6,12 @@
 
 import type { ToolId } from '../interaction-types'
 import { createPanTool } from './pan'
+import { createPlantStampTool } from './plant-stamp'
 import type { CanvasTool } from './tool'
 
 export type ToolFactory = () => CanvasTool
 
 export const TOOL_REGISTRY: Readonly<Partial<Record<ToolId, ToolFactory>>> = Object.freeze({
   hand: createPanTool,
+  'plant-stamp': createPlantStampTool,
 })

@@ -22,10 +22,6 @@ import {
   createPlantSpacingToolAdapter,
 } from './plant-spacing-tool'
 import {
-  createPlantStampTool,
-  createPlantStampToolAdapter,
-} from './plant-stamp-tool'
-import {
   createSavedObjectStampTool,
   createSavedObjectStampToolAdapter,
 } from './saved-object-stamp-tool'
@@ -108,18 +104,6 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
       notifyTransientHistoryChange: context.notifyTransientHistoryChange,
     }), (tool) => tool.dispose())
     const zoneDrawingAdapters = createZoneDrawingToolAdapters(zoneDrawingTool)
-    const plantStampTool = own(createPlantStampTool({
-      container: context.container,
-      camera: context.camera,
-      getSceneStore: context.getSceneStore,
-      getPlantPresentationContext: context.getPlantPresentationContext,
-      getLocalizedCommonNames: context.getLocalizedCommonNames,
-      translate: context.translate,
-      sceneEdits: context.sceneEdits,
-      applySnapping: context.applySnapping,
-      runWhenSettled: context.runWhenSettled,
-      notifyGuidanceChange: context.notifyGuidanceChange,
-    }), (tool) => tool.dispose())
     const objectStampTool = own(createObjectStampTool({
       preview: context.preview,
       getLocalizedCommonNames: context.getLocalizedCommonNames,
@@ -165,7 +149,6 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
     }), (tool) => tool.dispose())
 
     const registry = new DefaultSceneToolRegistry(new Map([
-      ['plant-stamp', createPlantStampToolAdapter(plantStampTool)],
       ['text', createTextAnnotationToolAdapter(textTool)],
       ['line', zoneDrawingAdapters.line],
       ['measurement-guide', createMeasurementGuideToolAdapter(measurementGuideTool)],

@@ -261,5 +261,33 @@
   "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps Scene Interaction listener and lifecycle ownership in the Session": {
     "file": "src/canvas/runtime/input/dom-input-source.test.ts",
     "name": "createDomInputSource > installs and removes each listener exactly once"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > places plant-stamp plants using species default color and symbol": {
+    "file": "src/canvas/runtime/tools/plant-stamp.test.ts",
+    "name": "Place plants tool > a press places one plant of the species at the snapped point, with its colour and symbol, selected"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > does not place Plant Stamp plants on a locked Plants Layer": {
+    "file": "src/canvas/runtime/tools/plant-stamp.test.ts",
+    "name": "Place plants tool > a press places nothing while the plants layer is locked"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > Place plants hover preview > shows the species symbol, its mature width and the nearest plant without changing the Design": {
+    "file": "src/canvas/runtime/tools/plant-stamp.test.ts",
+    "name": "Place plants tool > the hover preview > draws the symbol, the mature-width ring and the nearest plant's guide, and changes nothing"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > Place plants hover preview > shows only the symbol when the species has no width, and no line to a far plant": {
+    "file": "src/canvas/runtime/tools/plant-stamp.test.ts",
+    "name": "Place plants tool > the hover preview > has no ring without a mature width and no guide to a plant beyond 320 px"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > Place plants hover preview > shows nothing before a species is chosen": {
+    "file": "src/canvas/runtime/tools/plant-stamp.test.ts",
+    "name": "Place plants tool > the hover preview > draws nothing before a species is chosen, and the passive hover runs"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > Place plants hover preview > hides when the pointer leaves the map and when the tool changes": {
+    "file": "src/canvas/runtime/tools/plant-stamp.test.ts",
+    "name": "Place plants tool > the hover preview > hides when the pointer leaves the map and when the tool changes"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > Place plants hover preview > updates the nearest plant after a placement": {
+    "file": "src/canvas/runtime/tools/plant-stamp.test.ts",
+    "name": "Place plants tool > the hover preview > follows a placement to the new nearest plant"
   }
 }

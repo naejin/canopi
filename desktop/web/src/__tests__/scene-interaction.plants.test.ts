@@ -16,10 +16,7 @@ import { snapToGridEnabled } from '../app/canvas-settings/signals'
 import { plantSpacingIntervalM } from '../app/settings/state'
 import { CameraController } from '../canvas/runtime/camera'
 import { SceneStore } from '../canvas/runtime/scene'
-import type {
-  SceneInteractionSession,
-  SceneInteractionSessionDeps,
-} from '../canvas/runtime/scene-interaction'
+import type { SceneInteractionSessionDeps } from '../canvas/runtime/scene-interaction'
 import {
   createSceneInteractionEventHarness,
   type SceneInteractionEventHarness,
@@ -1587,68 +1584,6 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('places plant-stamp plants using species default color and symbol', () => {
-    store.updatePersisted((draft) => {
-      draft.plantSpeciesColors = {
-        'Malus domestica': '#C44230',
-      }
-      draft.plantSpeciesSymbols = {
-        'Malus domestica': 'canopy',
-      }
-    })
-    selectPlantStampSource({
-      canonical_name: 'Malus domestica',
-      common_name: 'Apple',
-      stratum: 'high',
-      width_max_m: 4,
-    })
-
-    const deps = createInteractionDeps(container, store, camera)
-    const session = createTestSession(deps)
-    session.setTool('plant-stamp')
-
-    events.pointerDown({ x: 50, y: 70 }, { button: 0 })
-
-    expect(store.persisted.plants).toHaveLength(1)
-    expect(store.persisted.plants[0]).toMatchObject({
-      canonicalName: 'Malus domestica',
-      commonName: 'Apple',
-      color: '#C44230',
-      symbol: 'canopy',
-      position: { x: 50, y: 70 },
-    })
-    expect(store.session.selectedTargets).toEqual([plantTarget(store.persisted.plants[0]!.id)])
-    expect(selectedObjectIds.value).toEqual(new Set([store.persisted.plants[0]!.id]))
-    session.dispose()
-  })
-
-  it('does not place Plant Stamp plants on a locked Plants Layer', () => {
-    store.updatePersisted((draft) => {
-      draft.layers = draft.layers.map((layer) => (
-        layer.name === 'plants' ? { ...layer, locked: true } : layer
-      ))
-    })
-    selectPlantStampSource({
-      canonical_name: 'Malus domestica',
-      common_name: 'Apple',
-      stratum: 'high',
-      width_max_m: 4,
-    })
-
-    const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
-    const session = createTestSession(deps)
-    session.setTool('plant-stamp')
-
-    events.pointerDown({ x: 50, y: 70 }, { button: 0 })
-
-    expect(store.persisted.plants).toHaveLength(0)
-    expect(store.session.selectedTargets).toEqual([])
-    expect(selectedObjectIds.value).toEqual(new Set())
-    expect(onSceneEditCommit).not.toHaveBeenCalled()
-    session.dispose()
-  })
-
   it('clears Plant Stamp source on session dispose without writing scene data', () => {
     selectPlantStampSource({
       canonical_name: 'Malus domestica',
@@ -1821,7 +1756,7 @@ describe('SceneInteractionSession', () => {
   )
 
   describe('Place plants without a species', () => {
-    it('places nothing and asks the tool card to point to the species chooser', () => {
+    it('places nothing and asks the tool card to point to the species chooser', async () => {
       const published: CanvasToolGuidance[] = []
       const deps = createInteractionDeps(container, store, camera, {
         publishToolGuidance: (guidance) => { published.push(guidance) },
@@ -1837,6 +1772,8 @@ describe('SceneInteractionSession', () => {
       expect(published.at(-1)?.promptSpecies).toBe(true)
 
       selectPlantStampSource({ canonical_name: 'Malus domestica', common_name: 'Apple', stratum: null, width_max_m: 6 })
+      // The pick reaches Place plants through the session's read model after a microtask (spec §1.4).
+      await Promise.resolve()
       events.pointerDown({ x: 40, y: 40 })
       events.pointerUp({ x: 40, y: 40 })
 
@@ -1907,101 +1844,6 @@ describe('SceneInteractionSession', () => {
       await Promise.resolve()
 
       expect(store.persisted.plants).toHaveLength(0)
-      session.dispose()
-    })
-  })
-
-  describe('Place plants hover preview', () => {
-    const APPLE = { canonical_name: 'Malus domestica', common_name: 'Apple', stratum: null, width_max_m: 6 }
-
-    function previewRoot(): HTMLElement | null {
-      return container.querySelector<HTMLElement>('[data-plant-placement-preview]')
-    }
-
-    function previewSession(): SceneInteractionSession {
-      camera.setViewport({ x: 0, y: 0, scale: 10 })
-      const session = createTestSession(createInteractionDeps(container, store, camera))
-      session.setTool('plant-stamp')
-      return session
-    }
-
-    it('shows the species symbol, its mature width and the nearest plant without changing the Design', () => {
-      store.updatePersisted((draft) => {
-        draft.plants = [
-          makePlant('pear', 'Pyrus communis', { x: 10, y: 10 }, { commonName: 'Pear' }),
-          makePlant('far', 'Prunus avium', { x: 90, y: 90 }),
-        ]
-      })
-      const before = store.snapshot().persisted
-      selectPlantStampSource(APPLE)
-      const session = previewSession()
-
-      events.pointerMove({ x: 130, y: 140 })
-
-      expect(previewRoot()?.style.display).toBe('block')
-      const glyph = container.querySelector('[data-plant-placement-glyph="Malus domestica"]')
-      expect(glyph?.querySelector('path, circle')).not.toBeNull()
-      expect(container.querySelector('[data-plant-placement-spread]')?.getAttribute('r')).toBe('30')
-      expect(container.querySelector('[data-plant-placement-label="mature-width"]')?.textContent)
-        .toBe('Mature width up to 6 m')
-      expect(container.querySelector('[data-plant-placement-nearest-label]')?.textContent).toBe('5 m to Pear')
-      expect(store.persisted).toEqual(before)
-      session.dispose()
-    })
-
-    it('shows only the symbol when the species has no width, and no line to a far plant', () => {
-      store.updatePersisted((draft) => {
-        draft.plants = [makePlant('far', 'Prunus avium', { x: 90, y: 90 })]
-      })
-      selectPlantStampSource({ ...APPLE, width_max_m: null })
-      const session = previewSession()
-
-      events.pointerMove({ x: 130, y: 140 })
-
-      expect(container.querySelector('[data-plant-placement-glyph]')).not.toBeNull()
-      expect(container.querySelector('[data-plant-placement-spread]')).toBeNull()
-      expect(container.querySelector('[data-plant-placement-label]')).toBeNull()
-      expect(container.querySelector('[data-plant-placement-nearest-label]')).toBeNull()
-      session.dispose()
-    })
-
-    it('shows nothing before a species is chosen', () => {
-      const session = previewSession()
-
-      events.pointerMove({ x: 130, y: 140 })
-
-      expect(previewRoot()?.style.display ?? 'none').toBe('none')
-      session.dispose()
-    })
-
-    it('hides when the pointer leaves the map and when the tool changes', () => {
-      selectPlantStampSource(APPLE)
-      const session = previewSession()
-      events.pointerMove({ x: 130, y: 140 })
-      expect(previewRoot()?.style.display).toBe('block')
-
-      container.dispatchEvent(new PointerEvent('pointerleave'))
-      expect(previewRoot()?.style.display).toBe('none')
-
-      events.pointerMove({ x: 130, y: 140 })
-      expect(previewRoot()?.style.display).toBe('block')
-      session.setTool('select')
-      expect(previewRoot()?.style.display).toBe('none')
-      session.dispose()
-    })
-
-    it('updates the nearest plant after a placement', () => {
-      selectPlantStampSource(APPLE)
-      const session = previewSession()
-
-      events.pointerDown({ x: 100, y: 100 })
-      events.pointerUp({ x: 100, y: 100 })
-      events.pointerMove({ x: 120, y: 100 })
-
-      expect(store.persisted.plants).toHaveLength(1)
-      events.pointerMove({ x: 130, y: 100 })
-      const labels = container.querySelectorAll('[data-plant-placement-nearest-label]')
-      expect([...labels].map((label) => label.textContent)).toEqual(['3 m to Apple'])
       session.dispose()
     })
   })
