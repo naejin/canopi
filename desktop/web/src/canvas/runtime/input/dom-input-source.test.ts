@@ -491,6 +491,25 @@ describe('createDomInputSource', () => {
     dispose()
   })
 
+  it('detach releases every capture the source holds, before its own loss can reach a sink', () => {
+    events.dispose()
+    events = createSceneInteractionEventHarness(host, { pointerCapture: { synchronousLossOnRelease: true } })
+    const source = createDomInputSource(deps())
+    const dispose = attachRecording(source, (input) => {
+      if (input.kind === 'down') source.apply([{ kind: 'capture', pointerId: input.id }])
+    })
+
+    events.pointerDown({ x: 10, y: 10 }, { pointerId: 5 })
+    events.pointerDown({ x: 20, y: 20 }, { pointerId: 6 })
+    source.apply([{ kind: 'release-capture', pointerId: 6 }])
+    expect(events.pointerCapture.has(5)).toBe(true)
+    dispose()
+
+    expect(events.pointerCapture.releaseCalls.mock.calls).toEqual([[6], [5]])
+    expect(events.pointerCapture.has(5)).toBe(false)
+    expect(received.map((input) => input.kind)).toEqual(['down', 'down'])
+  })
+
   it('hands the legacy key sink each key event as the current event', () => {
     const seen: Array<[string, Event | null]> = []
     const source = createDomInputSource(deps({

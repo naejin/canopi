@@ -21,6 +21,7 @@ import type { SessionPlane } from '../session-plane'
 import { getCanvasTool, IDLE_CANVAS_TOOL_GUIDANCE, type CanvasToolGuidance } from '../session-state'
 import type {
   CanvasContextMenuCommands,
+  CanvasContextMenuRequest,
   CanvasFocusPort,
   CanvasRuntimeContextMenuAdapter,
   CanvasRuntimeTranslator,
@@ -221,6 +222,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _buttonHeld = false
   /** Inside refreshMeasurements' ToolHost.sceneChanged(): the runtime is already redrawing. */
   private _refreshing = false
+  /** The pointer of the press being routed whose capture waits for the host's admission (ToolHostDeps.capturePress). */
+  private _pressCapture: number | null = null
   private _disposed = false
 
   constructor(private readonly _deps: SceneInteractionSessionDeps) {
@@ -259,7 +262,11 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
     try {
       this._hostKeys = own(prepareInteractionHost(container, _deps.translate), (host) => host.dispose())
-      this._bridge = own(createLegacyInteractionBridge(_deps, {
+      const bridgeDeps = {
+        ..._deps,
+        contextMenu: bridgedContextMenu(_deps.contextMenu, (world) => this._placePlantsThroughHost(world)),
+      }
+      this._bridge = own(createLegacyInteractionBridge(bridgeDeps, {
         pointerCapture: {
           capture: (pointerId) => this._source.apply([{ kind: 'capture', pointerId }]),
           release: (pointerId) => this._source.apply([{ kind: 'release-capture', pointerId }]),
@@ -355,6 +362,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         timers: { ...timers, clock },
         hover: (target) => _deps.setHoveredTarget(target),
         inspect: _deps.tryInspectAt,
+        capturePress: (pointerId) => this._capturePress(pointerId),
         transientHistoryChanged: () => _deps.notifyTransientHistoryChange?.(),
       }
       this._toolHost = own(createToolHost(hostDeps), (host) => host.dispose())
@@ -417,23 +425,35 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
   }
 
+  /**
+   * Arms a tool on the host and the bridge. The host leaves a registered tool first (its live press, its cursor), so a
+   * bridge that fails cannot strand them; entering a registered tool, the bridge goes first. A failure on either side
+   * rolls both back to the tool left and still ends the live presses, as today's setTool had cleared the pointer gesture
+   * before the step that failed; the tool left keeps its pick.
+   */
   setTool(name: string): void {
     if (this._disposed) return
     const id = name as ToolId
     const previous = this._tool.peek()
     const wasRegistered = this._toolHost.isRegistered(previous)
-    const leaving = previous !== id && wasRegistered ? previous : null
+    const source = this._toolHost.isRegistered(id) ? toolSourceFor(id) : null
     this._tool.value = id
+    this._navigationCursor = null
     try {
-      this._bridge.setTool(name)
+      if (wasRegistered) {
+        this._toolHost.setTool(id, source)
+        this._completeSwitch(() => this._bridge.setTool(name), previous)
+      } else {
+        this._bridge.setTool(name)
+        this._completeSwitch(() => this._toolHost.setTool(id, source), previous, () => this._bridge.setTool(previous))
+      }
     } catch (error) {
       this._tool.value = previous
+      this._endPressesAfterFailedSwitch(wasRegistered)
       throw error
     }
-    this._navigationCursor = null
-    this._toolHost.setTool(id, this._toolHost.isRegistered(id) ? toolSourceFor(id) : null)
     // The tool left drops its pick once it is deactivated, as today's tools did (the next tool never hears it).
-    if (leaving) clearToolSource(leaving)
+    if (wasRegistered && previous !== id) clearToolSource(previous)
     // The live presses belong to the tool left: a registered tool's end on the host's path and release their capture, a
     // bridged tool's were the bridge's, which ended them in its own setTool.
     this._configure(wasRegistered)
@@ -564,7 +584,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     switch (input.kind) {
       case 'drop':
         // The bridge serves every tool's drops until the host's drop route lands (0B-4).
-        this._drop(input.phase, event)
+        this._drop(input, event)
         return
       case 'focus-out':
         this._toolHost.endNudgeSeries(true)
@@ -612,23 +632,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   /** A registered tool's input: recognised, routed, and the recogniser's and the host's effects applied to the event. */
   private _routeToHost(input: RawInput): void {
-    if (retriesPendingCancellation(input)) {
-      let retried: boolean
-      try {
-        retried = this._toolHost.retryPendingCancellation()
-      } catch (error) {
-        // Today's retry quarantined the event before it retried.
-        this._source.apply(QUARANTINE)
-        throw error
-      }
-      if (retried) {
-        // Today's app-wide swallow while a failed cancellation is pending; the retry ended every live gesture.
-        const fenced = recognise(this._recogniser, { kind: 'escape', t: input.t }, this._config)
-        this._recogniser = fenced.state
-        this._source.apply([...QUARANTINE, ...fenced.effects.filter((effect) => effect.kind === 'release-capture')])
-        return
-      }
-    }
+    if (retriesPendingCancellation(input) && this._retryPendingCancellation(input.t)) return
     const result = recognise(this._recogniser, input, this._config)
     this._recogniser = result.state
     const wheel = input.kind === 'wheel'
@@ -638,17 +642,50 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       this._source.apply(result.effects)
       if (result.effects.length > 0) this._menu.close()
     }
+    // A press the host hears takes its capture once admitted, before the tool (ToolHostDeps.capturePress), as today's
+    // order; a pan's press, which the host never hears, takes it with the rest.
+    const heldCapture = input.kind === 'down'
+      && result.gestures.some((gesture) => gesture.kind === 'press' && gesture.id === input.id)
+      && result.effects.some((effect) => effect.kind === 'capture' && effect.pointerId === input.id)
+    const effects = heldCapture
+      ? result.effects.filter((effect) => effect.kind !== 'capture' || effect.pointerId !== input.id)
+      : result.effects
     let outcome: GestureOutcome = {}
-    for (const gesture of result.gestures) {
-      this._followNavigation(gesture)
-      outcome = mergeOutcomes(outcome, this._router.route(gesture))
+    this._pressCapture = heldCapture ? input.id : null
+    try {
+      for (const gesture of result.gestures) {
+        this._followNavigation(gesture)
+        outcome = mergeOutcomes(outcome, this._router.route(gesture))
+      }
+    } finally {
+      this._pressCapture = null
     }
-    this._source.apply(outcomeEffects(wheel ? [] : result.effects, outcome))
+    this._source.apply(outcomeEffects(wheel ? [] : effects, outcome))
     if (outcome.rejectSession && input.kind === 'down') {
       const rejected = recognise(this._recogniser, { kind: 'reject', t: input.t, id: input.id }, this._config)
       this._recogniser = rejected.state
       this._source.apply(rejected.effects)
     }
+  }
+
+  /**
+   * Today's retry before an event its handler retried on: true when a failed cancellation was pending and has now been
+   * retried, and the event is quarantined (today's app-wide swallow; the retry ended every live gesture, so the recogniser
+   * is fenced too). A retry that fails again quarantines the event first, as today's.
+   */
+  private _retryPendingCancellation(t: number): boolean {
+    let retried: boolean
+    try {
+      retried = this._toolHost.retryPendingCancellation()
+    } catch (error) {
+      this._source.apply(QUARANTINE)
+      throw error
+    }
+    if (!retried) return false
+    const fenced = recognise(this._recogniser, { kind: 'escape', t }, this._config)
+    this._recogniser = fenced.state
+    this._source.apply([...QUARANTINE, ...fenced.effects.filter((effect) => effect.kind === 'release-capture')])
+    return true
   }
 
   /**
@@ -712,8 +749,24 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._recogniser = recognise(this._recogniser, input, this._config).state
   }
 
-  private _drop(phase: 'over' | 'leave' | 'drop', event: Event | null): void {
+  /**
+   * A drag over the map, on the bridge until 0B-4. A dragover or a drop first retries the host's pending cancellation and
+   * is swallowed when it did (today's _onDragOver retried first; _onDrop cleared the preview, then retried). The host then
+   * hears it, so a dragover hides the tool's draft while the bridge's drop preview may show.
+   */
+  private _drop(input: Extract<RawInput, { kind: 'drop' }>, event: Event | null): void {
     if (!event) return
+    const { phase } = input
+    if (phase !== 'leave') {
+      let retried = true
+      try {
+        retried = this._retryPendingCancellation(input.t)
+      } finally {
+        if (retried && phase === 'drop') this._bridge.dragLeave()
+      }
+      if (retried) return
+    }
+    this._toolHost.gesture({ kind: 'drop', phase, at: input.at, payload: input.payload })
     if (phase === 'over') this._bridge.dragOver(event as DragEvent)
     else if (phase === 'leave') this._bridge.dragLeave()
     else this._bridge.drop(event as DragEvent)
@@ -773,7 +826,11 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   private _configure(registered = this._registered()): void {
-    this._feed({
+    this._feed(this._configureInput(), registered)
+  }
+
+  private _configureInput(): RawInput {
+    return {
       kind: 'configure',
       t: Date.now(),
       context: {
@@ -782,7 +839,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         pointingDevice: this._pointingDevice,
         dragSlopPx: this._toolHost.activeToolDragSlopPx() ?? undefined,
       },
-    }, registered)
+    }
   }
 
   /** Settings › Canvas › Scroll wheel, read before each wheel as today: 'pan' is the trackpad setting. */
@@ -801,6 +858,60 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _switchTool(name: string): void {
     this._deps.setTool(name)
     if (this._tool.peek() !== name) this.setTool(name)
+  }
+
+  /**
+   * setTool's second step. When it fails, the side that already switched goes back to the tool left: the host (re-arming
+   * a registered tool afresh, with its pick), or the bridge through `rollbackBridge`.
+   */
+  private _completeSwitch(step: () => void, previous: ToolId, rollbackBridge?: () => void): void {
+    try {
+      step()
+    } catch (error) {
+      const errors: unknown[] = [error]
+      this._tool.value = previous
+      try {
+        if (rollbackBridge) rollbackBridge()
+        else this._toolHost.setTool(previous, this._toolHost.isRegistered(previous) ? toolSourceFor(previous) : null)
+      } catch (rollbackError) {
+        errors.push(rollbackError)
+      }
+      throwCanvasRuntimeCleanupErrors(errors, 'Scene Interaction tool transition failed')
+    }
+  }
+
+  /**
+   * After a failed switch the recogniser still ends its live sessions, with their captures and pans (today's cancellation
+   * had cleared the pointer gesture before the step that failed). The tool's own cancel was the host's setTool, whose
+   * failure it left pending: it is not retried here.
+   */
+  private _endPressesAfterFailedSwitch(registered: boolean): void {
+    const result = recognise(this._recogniser, this._configureInput(), this._config)
+    this._recogniser = result.state
+    if (registered) {
+      for (const gesture of result.gestures) this._followNavigation(gesture)
+      this._source.apply(result.effects.filter((effect) => effect.kind === 'release-capture'))
+    }
+    this._applyCursor()
+  }
+
+  /**
+   * "Place plants here" from the bridge's menu (a bridged tool's right-click): once Place plants is registered, the host
+   * arms it and places (its place-at), which the bridge's own path can no longer reach. False leaves it to the bridge.
+   */
+  private _placePlantsThroughHost(world: WorldPoint): boolean {
+    if (this._disposed || !this._toolHost.isRegistered('plant-stamp')) return false
+    this._toolHost.command({ kind: 'place-at', world })
+    return true
+  }
+
+  /** ToolHostDeps.capturePress: applies the press's held-back capture; false when the press ended while it was taken. */
+  private _capturePress(pointerId: number): boolean {
+    if (this._pressCapture === pointerId) {
+      this._pressCapture = null
+      this._source.apply([{ kind: 'capture', pointerId }])
+    }
+    return this._recogniser.sessions.has(pointerId)
   }
 
   // ── Keys, the navigation cursor and camera moves ───────────────────────────────────────────────────────────────
@@ -1043,6 +1154,36 @@ function toolSourceFor(tool: ToolId): ToolSource | null {
     return stamp ? { kind: 'saved-stamp', stamp } : null
   }
   return null
+}
+
+/**
+ * The bridge's canvas menu through the app's adapter, with "Place plants here" offered to `placePlantsAt` first (the host,
+ * once Place plants is registered) and left to the bridge's own path otherwise. The app closes only the request it holds.
+ */
+function bridgedContextMenu(
+  adapter: CanvasRuntimeContextMenuAdapter | undefined,
+  placePlantsAt: (world: WorldPoint) => boolean,
+): CanvasRuntimeContextMenuAdapter | undefined {
+  if (!adapter) return undefined
+  let handed: { readonly built: CanvasContextMenuRequest; readonly held: CanvasContextMenuRequest } | null = null
+  return {
+    open(built) {
+      const bridgePlace = built.placePlantsAt
+      const held: CanvasContextMenuRequest = bridgePlace
+        ? {
+            ...built,
+            placePlantsAt: (world) => {
+              if (!placePlantsAt(world)) bridgePlace(world)
+            },
+          }
+        : built
+      handed = { built, held }
+      adapter.open(held)
+    },
+    close(built) {
+      adapter.close(handed?.built === built ? handed.held : built)
+    },
+  }
 }
 
 /** Leaving a registered stamp tool (or ending the session) drops its pick, as today's tools did on deactivation. */
