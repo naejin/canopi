@@ -42,9 +42,9 @@ describe('the runtime query surface', () => {
     const points: (WorldPoint | null)[] = []
     const stop = runtime.querySurface.subscribePointerWorld((point) => { points.push(point) })
 
-    // A move over the map itself (the harness dispatches moves on window, which is off the map).
-    events.pointerMove({ x: 100, y: 80 }, { target: container })
-    events.pointerMove({ x: 110, y: 80 })
+    // A button-less move over the map itself (the harness dispatches moves on window, which is off the map).
+    events.pointerMove({ x: 100, y: 80 }, { target: container, buttons: 0 })
+    events.pointerMove({ x: 110, y: 80 }, { buttons: 0 })
     const frames = (runtime as unknown as { _construction: { frames: ViewFrameSource } })._construction.frames
     const expected = frames.viewFrame.peek().view.screenToWorld({ x: 100, y: 80 })
     expect(points).toHaveLength(1)
@@ -56,7 +56,7 @@ describe('the runtime query surface', () => {
     expect(runtime.keyboardPort).not.toBeNull()
     await runtime.unmountRenderer()
     expect(runtime.keyboardPort).toBeNull()
-    events.pointerMove({ x: 120, y: 90 }, { target: container })
+    events.pointerMove({ x: 120, y: 90 }, { target: container, buttons: 0 })
     expect(points).toHaveLength(2)
     stop()
     runtime.destroy()

@@ -13,20 +13,12 @@
 import { getDesignObjectSelectionModel } from './scene-runtime/selection'
 import { gridInterval, snapToGrid } from '../grid'
 import { snapToGuides } from '../guides'
-import type {
-  SceneDesignObjectSelection,
-  SceneDesignObjectTarget,
-  ScenePoint,
-  SceneStateReader,
-} from './scene'
+import type { SceneDesignObjectTarget, ScenePoint } from './scene'
 import {
   includesSceneDesignObjectTarget,
   resolveSceneObjectGroupMembers,
   sceneObjectGroupMemberLayerName,
 } from './scene'
-import type { WorkspaceCameraFrameReader, WorkspaceCameraNavigation } from './camera'
-import type { PlantPresentationContext } from './plant-presentation'
-import type { SpeciesCacheEntry } from './species-cache'
 import { hitTestTopLevel, hitTestVisibleTopLevel, type TopLevelTarget } from './interaction/hit-testing'
 import { createHoverTooltip, type HoverTooltipController } from './interaction/hover-tooltip'
 import {
@@ -69,11 +61,6 @@ import {
   createAnnotationInlineEditor,
   type AnnotationInlineEditorController,
 } from './interaction/annotation-inline-editor'
-import type {
-  SceneCommandAdmission,
-  SceneEditCoordinator,
-  SettledSceneReader,
-} from './scene-runtime/transactions'
 import {
   createCanvasContextMenu,
   type CanvasContextMenuController,
@@ -89,13 +76,7 @@ import {
   createMeasurementGuideControlPoints,
 } from './interaction/measurement-guide-control-points'
 import type { ControlPointOverlayController } from './interaction/control-point-overlay'
-import type { CanvasDesignObjectSelectionModel, CanvasPlantRowSpacingField, CanvasSceneEditCommandSurface } from './runtime'
-import type {
-  CanvasContextMenuCommands,
-  CanvasRuntimeContextMenuAdapter,
-  CanvasRuntimeTranslator,
-  CanvasScrollWheelSetting,
-} from './app-adapter'
+import type { CanvasDesignObjectSelectionModel, CanvasPlantRowSpacingField } from './runtime'
 import {
   createLockedObjectAffordance,
   type LockedObjectAffordanceController,
@@ -106,15 +87,13 @@ import {
   setSceneDesignObjectLocks,
 } from './scene/locks'
 import type { ScenePersistedState } from './scene'
-import {
-  IDLE_CANVAS_TOOL_GUIDANCE,
-  type CanvasToolGuidance,
-} from '../session-state'
+import { IDLE_CANVAS_TOOL_GUIDANCE } from '../session-state'
 import {
   runCanvasRuntimeCleanups,
   throwCanvasRuntimeCleanupErrors,
 } from './cleanup'
 import type { LegacyKeyBridge } from './keyboard-port'
+import type { SceneInteractionSessionDeps } from './interaction-session'
 
 export {
   createSceneInteractionSession,
@@ -138,56 +117,14 @@ interface SceneInteractionCancellationOptions extends SceneToolTransientOptions 
   readonly releaseSpace?: boolean
 }
 
-/** Today's session dependencies, which the bridge runs on (interaction-session.ts adds the pipeline's). */
-export interface LegacyInteractionBridgeDeps {
-  container: HTMLElement
-  getSceneStore: () => SceneStateReader
-  camera: WorkspaceCameraFrameReader
-  cameraNavigation: Pick<WorkspaceCameraNavigation, 'panBy' | 'zoomAroundScreenPoint'>
-  getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
-  getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
-  getSelection: () => SceneDesignObjectSelection
-  setSelection: (targets: Iterable<SceneDesignObjectTarget>) => void
-  clearSelection: () => void
-  sceneEdits: SceneEditCoordinator
-  commandAdmission: SceneCommandAdmission
-  settledReader: SettledSceneReader
-  /**
-   * Numeric inspection hook, absent unless a surface is inspecting.
-   *
-   * Returning `true` claims the left click, which is what suspends drawing and
-   * selection for the duration of inspection. It is consulted *after* shared
-   * pan and the UI overlays, so pan/zoom and every control keep working while
-   * inspecting — the contract requires navigation to survive inspection, and
-   * the alternative (a second gesture owner) is what it forbids.
-   */
-  tryInspectAt?: (world: ScenePoint) => boolean
-  getDesignObjectSelection: () => CanvasDesignObjectSelectionModel
-  selectionCommands: CanvasContextMenuCommands
-  contextualCommands?: {
-    readonly saveSelectionAsObjectStamp?: () => void
-  }
-  /** Renders the right-click menu; absent in a detached runtime. */
-  contextMenu?: CanvasRuntimeContextMenuAdapter
-  setTool: (name: string) => void
-  render: (kind: 'scene' | 'viewport') => void
-  readSnapToGridEnabled: () => boolean
-  readSnapToGuidesEnabled: () => boolean
-  /** Settings › Keyboard › Single-key shortcuts; on when absent. */
-  readSingleKeyShortcuts?: () => boolean
-  /** Settings › Canvas › Scroll wheel; `zoom` when absent. Pinch and Ctrl wheel zoom either way. */
-  readScrollWheel?: () => CanvasScrollWheelSetting
-  readPlantSpacingIntervalMeters: () => number
-  commitPlantSpacingIntervalMeters: (meters: number) => void
-  translate: CanvasRuntimeTranslator
-  setHoveredTarget: (target: SceneDesignObjectTarget | null) => void
-  getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
-  notifyTransientHistoryChange?: () => void
-  /** Mirrors the active tool's gesture and stamp state for the tool card. */
-  publishToolGuidance?: (guidance: CanvasToolGuidance) => void
-  /** The arrow keys' nudges, through the runtime's scene-edit commands. */
-  nudge?: Pick<CanvasSceneEditCommandSurface, 'nudgeSelected' | 'endNudge'>
-}
+/**
+ * What the bridge runs on: the session's dependencies (interaction-session.ts declares them, today's and the pipeline's),
+ * less the pipeline's own.
+ */
+export type LegacyInteractionBridgeDeps = Omit<
+  SceneInteractionSessionDeps,
+  'frames' | 'viewNavigation' | 'renderer' | 'focus' | 'sceneRevision' | 'platform'
+>
 
 /** What the interaction session lends the bridge: the pipeline's state that today's session kept itself. */
 export interface LegacyInteractionBridgeHooks {

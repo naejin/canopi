@@ -27,6 +27,7 @@ import type { CameraController, CameraViewportSnapshot } from './camera'
 import { SceneStore } from './scene'
 import type { DraftPresentation } from './tools/draft'
 import type { ToolSource } from './tools/tool'
+import type { WorldPoint } from './view/types'
 
 vi.mock('./tools/registry', () => ({ TOOL_REGISTRY: {} }))
 
@@ -487,6 +488,92 @@ describe('the interaction session', () => {
     // North stays up under LEGACY: the view commands answer and leave the camera's bearing alone.
     expect(session.keyboard.command({ kind: 'reset-north' })).toBe(true)
     expect(session.keyboard.command({ kind: 'rotate-view', direction: 1 })).toBe(true)
+  })
+
+  it('a move with a button held and no press on the map publishes no pointer world point', () => {
+    const { session } = createSession()
+    const points: (WorldPoint | null)[] = []
+    session.subscribePointerWorld((point) => { points.push(point) })
+
+    events.pointerMove({ x: 100, y: 100 }, { target: container, buttons: 0 })
+    expect(points).toHaveLength(1)
+    // A press on a panel or a map control dragged across the map: today's lens skipped every move with a button held (the
+    // held-button move that inspection-lens-ui.test.tsx dispatched on the host before the lens read subscribePointerWorld).
+    events.pointerMove({ x: 120, y: 120 }, { target: container, buttons: 1 })
+    // Under LEGACY a right press opens no session, so its moves are hovers; the lens keeps its point through them too.
+    events.pointerDown({ x: 140, y: 140 }, { button: 2 })
+    events.pointerMove({ x: 180, y: 160 }, { target: container, buttons: 2 })
+    events.pointerUp({ x: 180, y: 160 }, { button: 2 })
+    expect(points).toHaveLength(1)
+    events.pointerMove({ x: 150, y: 150 }, { target: container, buttons: 0 })
+    expect(points).toHaveLength(2)
+
+    // A registered tool still hears such a move as a hover (today's hover ran), and the lens still keeps its point.
+    const rectangle = stubTool('rectangle')
+    useStubTools(rectangle)
+    session.setTool('rectangle')
+    events.pointerMove({ x: 160, y: 150 }, { target: container, buttons: 1 })
+    expect(rectangle.count('hover')).toBe(1)
+    expect(points).toHaveLength(2)
+    events.pointerMove({ x: 170, y: 150 }, { target: container, buttons: 0 })
+    expect(rectangle.count('hover')).toBe(2)
+    expect(points).toHaveLength(3)
+  })
+
+  it('a session built with a stamp tool armed hands the tool its pick', () => {
+    const sources: (ToolSource | null)[] = []
+    const record = {
+      activate: (_ctx: unknown, source: ToolSource | null) => { sources.push(source) },
+      sourceChanged: (source: ToolSource | null) => { sources.push(source) },
+    }
+    useStubTools(stubTool('plant-stamp', record), stubTool('saved-object-stamp', record))
+
+    // The map mounts (or mounts again) with Place plants armed and a species picked: today's tool read the pick live.
+    const chosen = selectPlantStampSource(SPECIES)
+    setCanvasTool('plant-stamp')
+    const { session } = createSession()
+    expect(sources.at(-1)).toEqual({ kind: 'species', species: chosen })
+    session.dispose()
+
+    const stamp = selectSavedObjectStampSourceForTests({
+      version: 2,
+      anchor: { x: 0, y: 0 },
+      plants: [],
+      zones: [],
+      annotations: [],
+      groups: [],
+    } as unknown as Parameters<typeof selectSavedObjectStampSourceForTests>[0])
+    setCanvasTool('saved-object-stamp')
+    createSession()
+    expect(sources.at(-1)).toEqual({ kind: 'saved-stamp', stamp })
+  })
+
+  it('arming a bridged tool during a registered tool\'s press ends the press with its capture and its pan', () => {
+    const rectangle = stubTool('rectangle')
+    useStubTools(rectangle)
+    const { session } = createSession()
+    session.setTool('rectangle')
+
+    events.pointerDown({ x: 20, y: 20 }, { pointerId: 4 })
+    events.pointerMove({ x: 60, y: 40 }, { pointerId: 4 })
+    expect(events.pointerCapture.has(4)).toBe(true)
+    // Ellipse is still on the bridge: the capture the host's press took goes at once, as today's tool change released it.
+    session.setTool('ellipse')
+    expect(events.pointerCapture.has(4)).toBe(false)
+    events.pointerUp({ x: 60, y: 40 }, { pointerId: 4 })
+
+    // A middle pan cut short the same way leaves no 'grabbing' behind for Space over the next registered tool.
+    session.setTool('rectangle')
+    events.pointerDown({ x: 100, y: 100 }, { pointerId: 5, button: 1 })
+    events.pointerMove({ x: 130, y: 110 }, { pointerId: 5, button: 1 })
+    expect(container.style.cursor).toBe('grabbing')
+    session.setTool('ellipse')
+    events.pointerUp({ x: 130, y: 110 }, { pointerId: 5, button: 1 })
+    session.setTool('rectangle')
+    container.focus()
+    events.holdSpace()
+    expect(container.style.cursor).toBe('grab')
+    events.releaseSpace()
   })
 })
 

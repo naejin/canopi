@@ -18,8 +18,15 @@ import { computed, effect, signal, type ReadonlySignal } from '@preact/signals'
 import { readPlantStampSource, clearPlantStampSource } from '../plant-stamp-source'
 import { clearSavedObjectStampSource, readSavedObjectStampSource } from '../saved-object-stamp-source'
 import type { SessionPlane } from '../session-plane'
-import { getCanvasTool, IDLE_CANVAS_TOOL_GUIDANCE } from '../session-state'
-import type { CanvasFocusPort, CanvasRuntimeTranslator } from './app-adapter'
+import { getCanvasTool, IDLE_CANVAS_TOOL_GUIDANCE, type CanvasToolGuidance } from '../session-state'
+import type {
+  CanvasContextMenuCommands,
+  CanvasFocusPort,
+  CanvasRuntimeContextMenuAdapter,
+  CanvasRuntimeTranslator,
+  CanvasScrollWheelSetting,
+} from './app-adapter'
+import type { WorkspaceCameraFrameReader, WorkspaceCameraNavigation } from './camera'
 import { pressRuler, type RulerPress } from './chrome/rulers'
 import { runCanvasRuntimeCleanups, throwCanvasRuntimeCleanupErrors } from './cleanup'
 import { CURRENT_BINDINGS } from './input/bindings'
@@ -34,14 +41,18 @@ import type { GestureOutcome, InputRouterDeps, RulerGuidePort, ToolHost, ToolHos
 import type { Modifiers, ToolId } from './interaction-types'
 import { isSceneLayerOpenForCreation, type SceneCreationLayerName } from './interaction/layer-guards'
 import { createCanvasKeyboardPort } from './keyboard-port'
+import type { PlantPresentationContext } from './plant-presentation'
 import type { SceneRendererV2 } from './renderers/scene-types'
-import type { CanvasKeyboardPort, CanvasPlantRowSpacingField } from './runtime'
-import type { SceneStateReader } from './scene/store'
-import {
-  createLegacyInteractionBridge,
-  type LegacyInteractionBridge,
-  type LegacyInteractionBridgeDeps,
-} from './scene-interaction'
+import type {
+  CanvasDesignObjectSelectionModel,
+  CanvasKeyboardPort,
+  CanvasPlantRowSpacingField,
+  CanvasSceneEditCommandSurface,
+} from './runtime'
+import type { SceneDesignObjectSelection, SceneDesignObjectTarget, ScenePoint, SceneStateReader } from './scene'
+import { createLegacyInteractionBridge, type LegacyInteractionBridge } from './scene-interaction'
+import type { SceneCommandAdmission, SceneEditCoordinator, SettledSceneReader } from './scene-runtime/transactions'
+import type { SpeciesCacheEntry } from './species-cache'
 import { createContextMenuPort, createToolHost, createToolScene } from './tools/tool-host'
 import type { ViewNavigation } from './view/navigation'
 import type { ScreenPoint, ViewFrame, ViewFrameSource, WorldPoint } from './view/types'
@@ -62,7 +73,58 @@ const NO_DRAFTS: Pick<SceneRendererV2, 'setDraft' | 'setSelectionPreview'> = Obj
 
 let descriptionSequence = 0
 
-export interface SceneInteractionSessionDeps extends LegacyInteractionBridgeDeps {
+/**
+ * The session's dependencies: today's, which the host, the chrome and (through 0B) the legacy bridge run on, then the
+ * pipeline's own (the bridge's deps are these less the pipeline's).
+ */
+export interface SceneInteractionSessionDeps {
+  container: HTMLElement
+  getSceneStore: () => SceneStateReader
+  camera: WorkspaceCameraFrameReader
+  cameraNavigation: Pick<WorkspaceCameraNavigation, 'panBy' | 'zoomAroundScreenPoint'>
+  getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
+  getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
+  getSelection: () => SceneDesignObjectSelection
+  setSelection: (targets: Iterable<SceneDesignObjectTarget>) => void
+  clearSelection: () => void
+  sceneEdits: SceneEditCoordinator
+  commandAdmission: SceneCommandAdmission
+  settledReader: SettledSceneReader
+  /**
+   * Numeric inspection hook, absent unless a surface is inspecting.
+   *
+   * Returning `true` claims the left click, which is what suspends drawing and
+   * selection for the duration of inspection. It is consulted *after* shared
+   * pan and the UI overlays, so pan/zoom and every control keep working while
+   * inspecting — the contract requires navigation to survive inspection, and
+   * the alternative (a second gesture owner) is what it forbids.
+   */
+  tryInspectAt?: (world: ScenePoint) => boolean
+  getDesignObjectSelection: () => CanvasDesignObjectSelectionModel
+  selectionCommands: CanvasContextMenuCommands
+  contextualCommands?: {
+    readonly saveSelectionAsObjectStamp?: () => void
+  }
+  /** Renders the right-click menu; absent in a detached runtime. */
+  contextMenu?: CanvasRuntimeContextMenuAdapter
+  setTool: (name: string) => void
+  render: (kind: 'scene' | 'viewport') => void
+  readSnapToGridEnabled: () => boolean
+  readSnapToGuidesEnabled: () => boolean
+  /** Settings › Keyboard › Single-key shortcuts; on when absent. */
+  readSingleKeyShortcuts?: () => boolean
+  /** Settings › Canvas › Scroll wheel; `zoom` when absent. Pinch and Ctrl wheel zoom either way. */
+  readScrollWheel?: () => CanvasScrollWheelSetting
+  readPlantSpacingIntervalMeters: () => number
+  commitPlantSpacingIntervalMeters: (meters: number) => void
+  translate: CanvasRuntimeTranslator
+  setHoveredTarget: (target: SceneDesignObjectTarget | null) => void
+  getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
+  notifyTransientHistoryChange?: () => void
+  /** Mirrors the active tool's gesture and stamp state for the tool card. */
+  publishToolGuidance?: (guidance: CanvasToolGuidance) => void
+  /** The arrow keys' nudges, through the runtime's scene-edit commands. */
+  nudge?: Pick<CanvasSceneEditCommandSurface, 'nudgeSelected' | 'endNudge'>
   /** The view's frames (scene-runtime/construction.ts); absent, the camera shim's own driver host's, as the split suites build it. */
   readonly frames?: ViewFrameSource
   /** The view's navigation (turn to an edge, key zoom and north); absent, the camera shim's. */
@@ -158,6 +220,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     createGuideAt: (axis, at) => this._rulerPress?.createGuideAt(axis, at),
   }
   private _storyPresented = false
+  /** Routing a move made with a button held: its hover reaches the host and the tool, not the lens (today's). */
+  private _buttonHeld = false
   /** Inside refreshMeasurements' ToolHost.sceneChanged(): the runtime is already redrawing. */
   private _refreshing = false
   private _disposed = false
@@ -342,6 +406,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       this._stopWatchingSources = own(this._watchToolSources(), (stop) => stop())
       this._storyObserver = own(this._observeStoryPresentation(), (observer) => observer?.disconnect())
       this.setTool(this._tool.peek())
+      this._handInitialSource()
       this._detachSource = this._source.attach((input) => this._receive(input))
       rollback.length = 0
     } catch (error) {
@@ -360,7 +425,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (this._disposed) return
     const id = name as ToolId
     const previous = this._tool.peek()
-    const leaving = previous !== id && this._toolHost.isRegistered(previous) ? previous : null
+    const wasRegistered = this._toolHost.isRegistered(previous)
+    const leaving = previous !== id && wasRegistered ? previous : null
     this._tool.value = id
     try {
       this._bridge.setTool(name)
@@ -372,7 +438,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._toolHost.setTool(id, this._toolHost.isRegistered(id) ? toolSourceFor(id) : null)
     // The tool left drops its pick once it is deactivated, as today's tools did (the next tool never hears it).
     if (leaving) clearToolSource(leaving)
-    this._configure()
+    // The live presses belong to the tool left: a registered tool's end on the host's path and release their capture, a
+    // bridged tool's were the bridge's, which ended them in its own setTool.
+    this._configure(wasRegistered)
   }
 
   setOverviewMode(enabled: boolean): void {
@@ -444,7 +512,11 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   subscribePointerWorld(listener: (point: WorldPoint | null) => void): () => void {
-    return this._toolHost.subscribePointerWorld(listener)
+    // Today's lens skipped every move made with a button held (a press off the map, or a right press, dragged across it).
+    return this._toolHost.subscribePointerWorld((point) => {
+      if (point && this._buttonHeld) return
+      listener(point)
+    })
   }
 
   dispose(): void {
@@ -481,6 +553,15 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   private _receive(input: RawInput): void {
     if (this._disposed) return
+    this._buttonHeld = input.kind === 'move' && input.buttons.size > 0
+    try {
+      this._dispatch(input)
+    } finally {
+      this._buttonHeld = false
+    }
+  }
+
+  private _dispatch(input: RawInput): void {
     const event = this._source.currentEvent()
     switch (input.kind) {
       case 'drop':
@@ -582,9 +663,12 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
   }
 
-  /** Raw input that does not come from an event (configure, key state, Esc): routed as the armed tool's input would be. */
-  private _feed(input: RawInput): void {
-    if (this._registered()) {
+  /**
+   * Raw input that does not come from an event (configure, key state, Esc): routed as the armed tool's input would be,
+   * or, for setTool's configure, as the input of the tool it leaves.
+   */
+  private _feed(input: RawInput, registered = this._registered()): void {
+    if (registered) {
       const result = recognise(this._recogniser, input, this._config)
       this._recogniser = result.state
       for (const gesture of result.gestures) {
@@ -655,7 +739,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (this._registered()) this._setNavigationCursor(this._panning ? 'grabbing' : null)
   }
 
-  private _configure(): void {
+  private _configure(registered = this._registered()): void {
     this._feed({
       kind: 'configure',
       t: Date.now(),
@@ -665,7 +749,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         pointingDevice: this._pointingDevice,
         dragSlopPx: this._toolHost.activeToolDragSlopPx() ?? undefined,
       },
-    })
+    }, registered)
   }
 
   /** Settings › Canvas › Scroll wheel, read before each wheel as today: 'pan' is the trackpad setting. */
@@ -797,6 +881,16 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       stopPlant()
       stopSaved()
     }
+  }
+
+  /**
+   * The host activated the first tool with no source, and the watchers start from the picks already made: a registered
+   * stamp tool armed with a pick when the map mounts (or mounts again) hears it now, as today's tools read it live.
+   */
+  private _handInitialSource(): void {
+    const tool = this._tool.peek()
+    const source = this._toolHost.isRegistered(tool) ? toolSourceFor(tool) : null
+    if (source) this._toolHost.sourceChanged(source)
   }
 
   private _spacing(bridged: (field: CanvasPlantRowSpacingField) => void, registered: () => void): void {
