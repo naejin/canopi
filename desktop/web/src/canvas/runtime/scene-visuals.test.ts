@@ -1,8 +1,22 @@
-import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { CANVAS_CHROME_FONT_FAMILY, CANVAS_CHROME_MONO_FONT_FAMILY } from '../chrome-fonts'
 import { getCanvasColor } from '../theme-refresh'
 import { getCanvasInteractionStrokeVisual, getDraftLabelVisual, getDraftVisual } from './scene-visuals'
+
+const GLOBAL_CSS = readFileSync('src/styles/global.css', 'utf8')
+const DOCUMENT_LANG = document.documentElement.lang
+
+/** `--text-xs` in px from the first global.css block that `opener` starts. */
+function textXsPx(opener: RegExp): number {
+  const block = GLOBAL_CSS.slice(GLOBAL_CSS.search(opener))
+  return Number.parseFloat(block.slice(0, block.indexOf('\n}')).match(/--text-xs:\s*([\d.]+)px/)![1]!)
+}
+
+afterEach(() => {
+  document.documentElement.lang = DOCUMENT_LANG
+})
 
 describe('scene visuals', () => {
   it('keeps selected, hover, and locked hover strokes visually distinct', () => {
@@ -52,5 +66,18 @@ describe('scene visuals', () => {
     })
     expect(getDraftLabelVisual('hint-primary')).toEqual({ ...hint, color: getCanvasColor('chip-primary'), paddingPx: { x: 8, y: 4 } })
     expect(getDraftLabelVisual('warning')).toEqual(hint)
+  })
+
+  it('sizes draft label chips as --text-xs in the page language', () => {
+    const latin = textXsPx(/\n:root \{/)
+    const cjk = textXsPx(/:root:lang\(zh\),\s*:root:lang\(ja\),\s*:root:lang\(ko\)\s*\{/)
+    expect([latin, cjk]).toEqual([12.5, 13])
+    for (const [lang, size] of [['en', latin], ['fr', latin], ['', latin], ['zh', cjk], ['ja', cjk], ['ko', cjk], ['zh-Hant', cjk]] as const) {
+      document.documentElement.lang = lang
+      for (const tone of ['measure', 'measure-quiet', 'hint', 'hint-primary', 'warning'] as const) {
+        expect(getDraftLabelVisual(tone).fontSizePx, `${lang} ${tone}`).toBe(size)
+      }
+      expect(getDraftLabelVisual('measure').lineHeightPx, lang).toBeCloseTo(size * 1.2)
+    }
   })
 })

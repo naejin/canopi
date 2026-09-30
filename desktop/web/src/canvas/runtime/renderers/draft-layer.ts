@@ -88,6 +88,8 @@ const MIN_OUTLINE_SEGMENTS = 48
 const MAX_OUTLINE_SEGMENTS = 720
 /** Rings that stand in for the chip shadow's blur. */
 const CHIP_SHADOW_STEPS = 4
+/** How far a shadow ring reaches past a side its step does not pass, so the chip stays a hole strictly inside it. */
+const CHIP_SHADOW_HAIRLINE_PX = 0.25
 
 export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
   const { createText, painters } = options
@@ -268,7 +270,13 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
     }, true)
   }
 
-  /** Rings from inside to outside the offset box whose alphas add up to the shadow's: a stepped stand-in for the CSS blur. */
+  /**
+   * A stepped stand-in for the CSS blur: the offset box grown by spreads from
+   * inside to outside, whose alphas add up to the shadow's where every step
+   * reaches. CSS clips an outer shadow to outside the border box, so each step
+   * is a ring around the chip, and a step that stays inside the chip draws
+   * nothing.
+   */
   function drawChipShadow(
     graphics: Graphics,
     shadow: CanvasShadowVisual | null,
@@ -280,13 +288,14 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
     const paint = painters.paint(shadow.color)
     for (let step = 0; step < CHIP_SHADOW_STEPS; step += 1) {
       const spread = shadow.blurPx * 1.5 * ((step + 0.5) / CHIP_SHADOW_STEPS - 0.5)
-      graphics.roundRect(
-        shadow.offsetXPx - spread,
-        shadow.offsetYPx - spread,
-        Math.max(0, width + 2 * spread),
-        Math.max(0, height + 2 * spread),
-        Math.max(0, radius + spread),
-      ).fill({ color: paint.color, alpha: paint.alpha / CHIP_SHADOW_STEPS })
+      // How far the step passes each side of the chip.
+      const reach = [spread - shadow.offsetXPx, spread - shadow.offsetYPx, spread + shadow.offsetXPx, spread + shadow.offsetYPx]
+      if (!reach.some((px) => px > 0)) continue
+      const [left, top, right, bottom] = reach.map((px) => Math.max(px, CHIP_SHADOW_HAIRLINE_PX)) as [number, number, number, number]
+      // No wider a corner than the chip's grown by the ring's narrowest side, so the ring holds the chip's corners.
+      graphics.roundRect(-left, -top, width + left + right, height + top + bottom, radius + Math.min(left, top, right, bottom))
+        .fill({ color: paint.color, alpha: paint.alpha / CHIP_SHADOW_STEPS })
+      graphics.roundRect(0, 0, width, height, radius).cut()
     }
   }
 

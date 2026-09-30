@@ -24,9 +24,11 @@ class MeasuredText extends Text {
 }
 
 const layers: DraftLayer[] = []
+const DOCUMENT_LANG = document.documentElement.lang
 
 afterEach(() => {
   for (const layer of layers.splice(0)) layer.dispose()
+  document.documentElement.lang = DOCUMENT_LANG
   vi.restoreAllMocks()
 })
 
@@ -58,6 +60,12 @@ function paints(graphics: Graphics, action: 'fill' | 'stroke'): PaintStyle[] {
 
 function pathSteps(instruction: PaintInstruction): PathStep[] {
   return (instruction.data as unknown as { path: { instructions: PathStep[] } }).path.instructions
+}
+
+/** The shapes cut out of a fill, without the moveTo Pixi opens each path with; empty when it has none. */
+function holeSteps(instruction: PaintInstruction): PathStep[] {
+  const hole = (instruction.data as unknown as { hole?: { instructions: PathStep[] } }).hole
+  return hole?.instructions.filter((step) => step.action !== 'moveTo') ?? []
 }
 
 /**
@@ -325,13 +333,41 @@ describe('draft layer', () => {
       const background = getCanvasColor(expected.background)
       const fills = paints(box, 'fill')
       expect(fills.at(-1), expected.tone).toMatchObject({ color: pixiColor(background), alpha: cssAlpha(background) })
-      const shadows = fills.slice(0, -1)
-      expect(shadows.length, expected.tone).toBeGreaterThan(0)
       const shadow = getDraftLabelVisual(expected.tone).shadow!
-      for (const layer of shadows) expect(layer).toMatchObject({ color: pixiColor(shadow.color) })
-      expect(shadows.reduce((sum, layer) => sum + layer.alpha, 0)).toBeCloseTo(cssAlpha(shadow.color))
+      const rings = paintInstructions(box, 'fill').slice(0, -1).map((fill) => ({
+        style: fill.data.style as unknown as PaintStyle,
+        outer: pathSteps(fill).find((step) => step.action === 'roundRect')!.data as [number, number, number, number, number],
+        hole: holeSteps(fill),
+      }))
+      expect(rings.length, expected.tone).toBeGreaterThan(0)
+      for (const ring of rings) {
+        expect(ring.style, expected.tone).toMatchObject({ color: pixiColor(shadow.color) })
+        // A CSS outer shadow is clipped to outside the border box: each step is a ring with the chip cut out.
+        expect(ring.hole.map(({ action, data }) => [action, ...data.slice(0, 5)]), expected.tone)
+          .toEqual([['roundRect', 0, 0, width, height, 5]])
+        const [x, y, ringWidth, ringHeight] = ring.outer
+        expect(x < 0 && y < 0 && x + ringWidth > width && y + ringHeight > height, expected.tone).toBe(true)
+      }
+      // The shadow falls 2 px down: darker just under the chip than just over it, and no step darker than the shadow.
+      const alphaAt = (pointY: number) => rings
+        .filter(({ outer: [, y, , ringHeight] }) => pointY > y && pointY < y + ringHeight)
+        .reduce((sum, ring) => sum + ring.style.alpha, 0)
+      expect(alphaAt(-1), expected.tone).toBeGreaterThan(0)
+      expect(alphaAt(height + 1), expected.tone).toBeGreaterThan(alphaAt(-1))
+      expect(alphaAt(height + 1), expected.tone).toBeLessThanOrEqual(cssAlpha(shadow.color) + 1e-9)
       const border = getCanvasColor('chip-border')
       expect(paints(box, 'stroke'), expected.tone).toEqual([expect.objectContaining({ color: pixiColor(border), alpha: cssAlpha(border), width: 1 })])
+    }
+
+    // --text-xs: 13 px under zh, ja and ko (global.css keeps CJK text at 13 px or more), 12.5 px in every other language.
+    for (const [lang, size] of [['zh', 13], ['ja', 13], ['ko', 13], ['fr', 12.5]] as const) {
+      document.documentElement.lang = lang
+      const layer = mountLayer()
+      layer.setDraft({
+        shapes: (['measure', 'hint'] as const).map((tone) => ({ kind: 'label', anchor: { x: 0, y: 0 }, offsetPx: { x: 0, y: 0 }, text: '4.2 m', tone })),
+      })
+      layer.place({ x: 200, y: 100 }, 1)
+      for (const chip of layer.screen.children) expect(((chip as Container).children[1] as Text).style.fontSize, lang).toBe(size)
     }
   })
 

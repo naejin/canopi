@@ -137,11 +137,18 @@ export interface DraftLabelVisual {
   readonly shadow: CanvasShadowVisual | null
 }
 
-// `--text-xs`, `--radius-sm` and `--space-1` in styles/global.css. The chips
-// keep the Latin `--text-xs` under zh, ja and ko (13 px in the DOM).
+// `--text-xs`, `--radius-sm` and `--space-1` in styles/global.css, where
+// `:root:lang(zh|ja|ko)` raises `--text-xs` to the 13 px CJK floor.
 const DRAFT_LABEL_FONT_SIZE_PX = 12.5
+const DRAFT_LABEL_CJK_FONT_SIZE_PX = 13
+const CJK_LANGUAGE = /^(zh|ja|ko)(-|$)/i
 const DRAFT_LABEL_RADIUS_PX = 5
 const DRAFT_LABEL_GAP_PX = 4
+
+/** `--text-xs` in the page language, which utils/theme.ts keeps on the root element. */
+function draftLabelFontSizePx(): number {
+  return CJK_LANGUAGE.test(document.documentElement.lang) ? DRAFT_LABEL_CJK_FONT_SIZE_PX : DRAFT_LABEL_FONT_SIZE_PX
+}
 
 /**
  * The chip each label tone names (canvas v2 spec §1.4, label tones), with
@@ -152,9 +159,10 @@ const DRAFT_LABEL_GAP_PX = 4
  * a colour.
  */
 export function getDraftLabelVisual(tone: DraftLabelTone): DraftLabelVisual {
+  const fontSizePx = draftLabelFontSizePx()
   const chip = {
     gapPx: DRAFT_LABEL_GAP_PX,
-    fontSizePx: DRAFT_LABEL_FONT_SIZE_PX,
+    fontSizePx,
     border: getCanvasColor('chip-border'),
     borderWidthPx: 1,
     radiusPx: DRAFT_LABEL_RADIUS_PX,
@@ -166,7 +174,7 @@ export function getDraftLabelVisual(tone: DraftLabelTone): DraftLabelVisual {
       placement: 'centre',
       fontFamily: CANVAS_CHROME_MONO_FONT_FAMILY,
       fontWeight: tone === 'measure' ? '600' : '400',
-      lineHeightPx: DRAFT_LABEL_FONT_SIZE_PX * 1.2,
+      lineHeightPx: fontSizePx * 1.2,
       paddingPx: { x: 5, y: 2 },
       color: getCanvasColor('chip-text'),
       background: getCanvasColor('chip-surface-muted'),
