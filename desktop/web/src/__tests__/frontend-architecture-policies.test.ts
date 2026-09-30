@@ -1321,6 +1321,15 @@ const SOURCE_TOMBSTONE_POLICIES = [
       'src/canvas/runtime/renderers/types.ts',
       'src/canvas/runtime/renderers/index.ts',
       'src/canvas/canvas2d-utils.ts',
+      // Canvas v2 (ADR 0016), end of 0A: MapFrame and its viewport diagnostics
+      // gave way to the view transform's frame (INV-XF-04).
+      'src/canvas/maplibre-camera.ts',
+    ],
+    symbols: [
+      {
+        from: ['src/**'],
+        names: ['LOCAL_MERCATOR_PROJECTION_ID', 'viewportCenterGeo', 'viewportCornerGeoPoints'],
+      },
     ],
   },
 ] satisfies readonly ArchitecturePolicy[]
@@ -1773,6 +1782,93 @@ const SYMBOL_OWNERSHIP_POLICIES = [
   },
 ] satisfies readonly ArchitecturePolicy[]
 
+/**
+ * Callee text of a call on a MapLibre map (`map.x`, `this.map!.x`, `map?.x`, `workspaceMap.x`), for the names that other
+ * objects also carry (P1's second rule and P2). Plan section 5 lists the first four; `*Map!.*` and `*Map?.*` give a
+ * `…Map` receiver the same non-null and optional forms.
+ */
+const MAP_RECEIVER_TARGETS = ['*map.*', '*map!.*', '*map?.*', '*Map.*', '*Map!.*', '*Map?.*'] as const
+
+/** The World map drives its own north-up map without a camera driver, so P1 and P2 exempt it. */
+const WORLD_MAP_SOURCES = ['src/maplibre/world-map.ts', 'src/components/world-map/**'] as const
+
+/**
+ * P2's named allowlist: each file that may still project through MapLibre, with its number of calls and the merge that
+ * removes it. The test "P2 allowlists each projecting file with its exact count" fails when a count changes, so an entry
+ * goes in the merge that removes its last call.
+ */
+const P2_PROJECTION_ALLOWLIST: Readonly<Record<string, number>> = {
+  // deriveSharedMapSceneViewport's map.project, run every render until 0D2 moves the layer onto the frame (INV-XF-25).
+  'src/maplibre/shared-scene-layer.ts': 1,
+}
+
+const P2_PROJECTION_POLICY = {
+  kind: 'forbid-calls',
+  name: 'P2 only the agreement probe projects through MapLibre',
+  from: ['src/**'],
+  exceptFrom: [
+    'src/maplibre/view-agreement.ts',
+    ...WORLD_MAP_SOURCES,
+    ...Object.keys(P2_PROJECTION_ALLOWLIST),
+    ...TEST_SOURCE_PATTERNS,
+  ],
+  targets: [...MAP_RECEIVER_TARGETS],
+  properties: ['project', 'unproject'],
+} satisfies ArchitecturePolicy
+
+/**
+ * Canvas v2 policies (docs/plans/canvas-v2-plan.md section 5). Each name starts with its P-id; the counting guard's
+ * replacement map (desktop/web/scripts/canvas-v2-test-replacements.json) refers to these exact strings.
+ */
+const CANVAS_V2_POLICIES = [
+  {
+    kind: 'forbid-calls',
+    name: 'P1 only the camera driver calls MapLibre camera methods',
+    from: ['src/**'],
+    exceptFrom: ['src/maplibre/camera-driver.ts', ...WORLD_MAP_SOURCES, ...TEST_SOURCE_PATTERNS],
+    properties: [
+      'jumpTo', 'easeTo', 'flyTo', 'panTo', 'rotateTo', 'setBearing', 'setPitch', 'snapToNorth', 'resetNorthPitch',
+      'fitScreenCoordinates', 'fitBounds', 'zoomTo', 'setCenter',
+      'setMaxBounds', 'setMinZoom', 'setMaxZoom', 'setPadding',
+    ],
+  },
+  {
+    // zoomIn, zoomOut and resetNorth are also ViewCommandSurface methods, so this rule matches map receivers only.
+    kind: 'forbid-calls',
+    name: 'P1 only the camera driver stops, pans, zooms, resizes or resets north a map',
+    from: ['src/**'],
+    exceptFrom: ['src/maplibre/camera-driver.ts', ...WORLD_MAP_SOURCES, ...TEST_SOURCE_PATTERNS],
+    targets: [...MAP_RECEIVER_TARGETS],
+    properties: ['stop', 'panBy', 'setZoom', 'zoomIn', 'zoomOut', 'resize', 'resetNorth'],
+  },
+  {
+    // Fails closed: if the driver moves or stops typing its map, the two rules above no longer name the camera's owner.
+    kind: 'require-imports',
+    name: 'P1 the camera driver imports the MapLibre map type',
+    from: ['src/maplibre/camera-driver.ts'],
+    targets: ['src/maplibre/loader.ts'],
+  },
+  P2_PROJECTION_POLICY,
+  {
+    // view/ reaches no DOM module, MapLibre, Pixi or scene barrel: outside its own files it imports the pure canvas
+    // modules and signals, and scene/types.ts type-only (ScenePersistedState, ScenePlantEntity). The legacy camera
+    // shims, which need the window, the clock and MapLibre, sit outside view/ (spec §1.1b).
+    kind: 'forbid-imports',
+    name: 'P4 the view module imports only its pure dependencies',
+    from: ['src/canvas/runtime/view/**'],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+    targets: ['**'],
+    exceptTargets: [
+      'src/canvas/runtime/view/**',
+      'src/canvas/projection.ts',
+      'src/canvas/session-plane.ts',
+      'src/canvas/workspace-camera-policy.ts',
+      '@preact/signals',
+    ],
+    allowTypeOnlyTargets: ['src/canvas/runtime/scene/types.ts'],
+  },
+] satisfies readonly ArchitecturePolicy[]
+
 const FRONTEND_ARCHITECTURE_POLICIES = [
   ...FORBIDDEN_IMPORT_POLICIES,
   ...CONFINED_IMPORTER_POLICIES,
@@ -1781,6 +1877,7 @@ const FRONTEND_ARCHITECTURE_POLICIES = [
   ...FORBIDDEN_EXPORT_POLICIES,
   ...SOURCE_TOMBSTONE_POLICIES,
   ...SYMBOL_OWNERSHIP_POLICIES,
+  ...CANVAS_V2_POLICIES,
 ] satisfies readonly ArchitecturePolicy[]
 
 /**
@@ -2240,6 +2337,153 @@ describe('declarative frontend architecture policies', () => {
       // A literal from is collectArchitecturePolicyViolations's missing-source check, not this one.
       { kind: 'forbid-exports', name: 'Planted literal from', from: ['src/app/gone.ts'], names: ['gone'] },
     ])).toEqual([])
+  })
+})
+
+function canvasV2Policies(id: string): readonly ArchitecturePolicy[] {
+  return CANVAS_V2_POLICIES.filter(({ name }) => name.startsWith(`${id} `))
+}
+
+function plantedSource(path: string, lines: readonly string[]) {
+  return { path, source: lines.join('\n') }
+}
+
+const P1_CAMERA_METHODS = '[P1 only the camera driver calls MapLibre camera methods]'
+const P1_MAP_RECEIVERS = '[P1 only the camera driver stops, pans, zooms, resizes or resets north a map]'
+const P1_MAP_TYPE = '[P1 the camera driver imports the MapLibre map type]'
+const P2 = '[P2 only the agreement probe projects through MapLibre]'
+const P4_IMPORTS = '[P4 the view module imports only its pure dependencies]'
+
+const PLANTED_MAP_LOADER = plantedSource('src/maplibre/loader.ts', ['export interface MapLibreMapInstance { stop(): void }'])
+const PLANTED_CAMERA_DRIVER = plantedSource('src/maplibre/camera-driver.ts', [
+  "import type { MapLibreMapInstance } from './loader'",
+  'export function drive(map: MapLibreMapInstance) { map.jumpTo({}); map.flyTo({}); map.stop(); map.resize() }',
+])
+
+describe('canvas v2 policies', () => {
+  it('P1 rejects camera moves and resizes on a map outside the camera driver and the World map', () => {
+    const graph = createTypeScriptSourceGraph([
+      PLANTED_MAP_LOADER,
+      PLANTED_CAMERA_DRIVER,
+      plantedSource('src/maplibre/planted.ts', [
+        'instance.easeTo({ zoom: 3 });',
+        'this.mapInstance.jumpTo({ zoom: 3 });',
+        'map.flyTo!({ zoom: 3 });',
+        'map.resetNorth();',
+        'this.map!.zoomIn();',
+        'workspaceMap?.resize();',
+        'map?.stop();',
+        'surface.resetNorth();',
+        'commands.viewport.zoomIn();',
+        'this.options.cameraNavigation.panBy(1, 2);',
+        'raster.stop();',
+      ]),
+      plantedSource('src/components/world-map/WorldMapSurface.tsx', ['map.flyTo({ zoom: 3 }); map.fitBounds(b); map.resize()']),
+      plantedSource('src/maplibre/world-map.ts', ['map.jumpTo({ zoom: 3 })']),
+      plantedSource('src/maplibre/camera-driver.test.ts', ['map.jumpTo({ zoom: 3 }); map.stop()']),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P1'))).toEqual([
+      `${P1_CAMERA_METHODS} src/maplibre/planted.ts:1 calls instance.easeTo`,
+      `${P1_CAMERA_METHODS} src/maplibre/planted.ts:2 calls this.mapInstance.jumpTo`,
+      `${P1_CAMERA_METHODS} src/maplibre/planted.ts:3 calls map.flyTo!`,
+      `${P1_MAP_RECEIVERS} src/maplibre/planted.ts:4 calls map.resetNorth`,
+      `${P1_MAP_RECEIVERS} src/maplibre/planted.ts:5 calls this.map!.zoomIn`,
+      `${P1_MAP_RECEIVERS} src/maplibre/planted.ts:6 calls workspaceMap?.resize`,
+      `${P1_MAP_RECEIVERS} src/maplibre/planted.ts:7 calls map?.stop`,
+    ])
+  })
+
+  it('P1 fails closed when the camera driver stops importing the map type or moves', () => {
+    const untyped = createTypeScriptSourceGraph([
+      PLANTED_MAP_LOADER,
+      plantedSource('src/maplibre/camera-driver.ts', ['export function drive(map: { stop(): void }) { map.stop() }']),
+    ])
+    const moved = createTypeScriptSourceGraph([
+      PLANTED_MAP_LOADER,
+      plantedSource('src/maplibre/map-camera.ts', ["import type { MapLibreMapInstance } from './loader'"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(untyped, canvasV2Policies('P1'))).toEqual([
+      `${P1_MAP_TYPE} src/maplibre/camera-driver.ts is missing required import matching src/maplibre/loader.ts`,
+    ])
+    expect(collectArchitecturePolicyViolations(moved, canvasV2Policies('P1'))).toEqual([
+      `${P1_MAP_TYPE} required policy source is missing: src/maplibre/camera-driver.ts`,
+    ])
+  })
+
+  it('P2 rejects map projections outside the agreement probe, the World map and its named allowlist', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/maplibre/planted.ts', [
+        'map.project([1, 2]);',
+        'this.map?.unproject([1, 2]);',
+        'workspaceMap!.project([1, 2]);',
+        'plane.project(point);',
+        'input.project(point);',
+      ]),
+      plantedSource('src/maplibre/view-agreement.ts', ['map.unproject([1, 2])']),
+      plantedSource('src/maplibre/shared-scene-layer.ts', ['map!.project([1, 2])']),
+      plantedSource('src/components/world-map/WorldMapSurface.tsx', ['map.project([1, 2])']),
+      plantedSource('src/maplibre/view-agreement.test.ts', ['map.unproject([1, 2])']),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P2'))).toEqual([
+      `${P2} src/maplibre/planted.ts:1 calls map.project`,
+      `${P2} src/maplibre/planted.ts:2 calls this.map?.unproject`,
+      `${P2} src/maplibre/planted.ts:3 calls workspaceMap!.project`,
+    ])
+  })
+
+  it('P2 allowlists each projecting file with its exact count', () => {
+    const unlisted = {
+      ...P2_PROJECTION_POLICY,
+      exceptFrom: P2_PROJECTION_POLICY.exceptFrom.filter((path) => !(path in P2_PROJECTION_ALLOWLIST)),
+    }
+    const counts: Record<string, number> = {}
+    for (const violation of collectArchitecturePolicyViolations(discoveredSourceGraph(), [unlisted])) {
+      const path = /^\[[^\]]+\] (\S+):\d+ calls /.exec(violation)?.[1] ?? violation
+      counts[path] = (counts[path] ?? 0) + 1
+    }
+
+    expect(counts).toEqual(P2_PROJECTION_ALLOWLIST)
+  }, 20_000)
+
+  it('P4 rejects view imports other than its pure dependencies', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/projection.ts', ['export const project = 1']),
+      plantedSource('src/canvas/session-plane.ts', ['export const plane = 1']),
+      plantedSource('src/canvas/workspace-camera-policy.ts', ['export const policy = 1']),
+      plantedSource('src/canvas/runtime/scene/types.ts', ['export interface ScenePlantEntity { readonly id: string }']),
+      plantedSource('src/canvas/runtime/scene/index.ts', ["export * from './types'"]),
+      plantedSource('src/maplibre/loader.ts', ['export const load = 1']),
+      plantedSource('src/canvas/runtime/view/types.ts', ['export const frame = 1']),
+      plantedSource('src/canvas/runtime/view/fit.ts', [
+        "import { project } from '../../projection'",
+        "import { plane } from '../../session-plane'",
+        "import { policy } from '../../workspace-camera-policy'",
+        "import type { ScenePlantEntity } from '../scene/types'",
+        "import { signal } from '@preact/signals'",
+        "import { frame } from './types'",
+      ]),
+      plantedSource('src/canvas/runtime/view/planted.ts', [
+        "import maplibregl from 'maplibre-gl'",
+        "import { load } from '../../../maplibre/loader'",
+        "import { ScenePlantEntity } from '../scene/types'",
+        "import type { ScenePlantEntity as Barrel } from '../scene'",
+        "import { Application } from 'pixi.js'",
+      ]),
+      plantedSource('src/canvas/runtime/view/camera-contract.test.ts', [
+        "import { MercatorTransform } from 'maplibre-gl-source/geo/projection/mercator_transform.ts'",
+      ]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P4'))).toEqual([
+      `${P4_IMPORTS} src/canvas/runtime/view/planted.ts:1:1 imports maplibre-gl via "maplibre-gl" (static)`,
+      `${P4_IMPORTS} src/canvas/runtime/view/planted.ts:2:1 imports src/maplibre/loader.ts via "../../../maplibre/loader" (static)`,
+      `${P4_IMPORTS} src/canvas/runtime/view/planted.ts:3:1 imports src/canvas/runtime/scene/types.ts via "../scene/types" (static)`,
+      `${P4_IMPORTS} src/canvas/runtime/view/planted.ts:4:1 imports src/canvas/runtime/scene/index.ts via "../scene" (static)`,
+      `${P4_IMPORTS} src/canvas/runtime/view/planted.ts:5:1 imports pixi.js via "pixi.js" (static)`,
+    ])
   })
 })
 

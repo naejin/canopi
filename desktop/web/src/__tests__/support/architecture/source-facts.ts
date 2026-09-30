@@ -192,7 +192,9 @@ function callFact(
   }
 }
 
+/** The member a callee names, through `!` and parentheses: `map.flyTo!(…)` and `(map.easeTo)(…)` call `flyTo` and `easeTo`. */
 function memberPropertyName(node: ts.Expression): string | null {
+  while (ts.isNonNullExpression(node) || ts.isParenthesizedExpression(node)) node = node.expression
   if (ts.isPropertyAccessExpression(node)) return node.name.text
   if (ts.isElementAccessExpression(node) && node.argumentExpression) {
     return stringLiteralText(node.argumentExpression) ?? null

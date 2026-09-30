@@ -6,7 +6,6 @@
  */
 import { describe, it, expect } from 'vitest'
 import {
-  LOCAL_MERCATOR_PROJECTION_ID,
   worldToGeo,
   stageScaleToMapZoom,
 } from '../canvas/projection'
@@ -74,11 +73,5 @@ describe('stageScaleToMapZoom', () => {
   it('at equator, stageScale=0.1 gives zoom ~12.93', () => {
     const zoom = stageScaleToMapZoom(0.1, 0)
     expect(zoom).toBeCloseTo(12.934, 1)
-  })
-})
-
-describe('canonical projection identity', () => {
-  it('names the local Mercator projection', () => {
-    expect(LOCAL_MERCATOR_PROJECTION_ID).toBe('local-mercator')
   })
 })

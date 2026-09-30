@@ -222,5 +222,8 @@
   "src/__tests__/workspace-camera-refresh-origin.test.ts > MapLibreWorkspaceCameraOwner.attachment.refreshOrigin > is inert without an attached map": {
     "file": "src/canvas/runtime/view/reorigin.test.ts",
     "name": "re-origin > planeChanged to the plane it already has publishes nothing"
+  },
+  "src/__tests__/projection.test.ts > canonical projection identity > names the local Mercator projection": {
+    "policy": "Retired frontend seams stay deleted"
   }
 }

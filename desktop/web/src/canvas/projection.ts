@@ -11,7 +11,6 @@ const EARTH_CIRCUMFERENCE_METERS = 2 * Math.PI * EARTH_RADIUS_METERS
 const DEGREES_TO_RADIANS = Math.PI / 180
 /** MapLibre's world is 512 CSS pixels wide at zoom 0. */
 export const MAPLIBRE_WORLD_TILE_SIZE = 512
-export const LOCAL_MERCATOR_PROJECTION_ID = 'local-mercator' as const
 
 export interface MapMercatorCoordinate {
   x: number
@@ -100,57 +99,4 @@ export function viewportCenterWorld(
     x: (screenSize.width / 2 - viewport.x) / viewport.scale,
     y: (screenSize.height / 2 - viewport.y) / viewport.scale,
   }
-}
-
-export function viewportCenterGeo(
-  viewport: { x: number; y: number; scale: number },
-  screenSize: { width: number; height: number },
-  originLat: number,
-  originLon: number,
-): { lng: number; lat: number } {
-  const center = viewportCenterWorld(viewport, screenSize)
-  return worldToGeo(center.x, center.y, originLat, originLon)
-}
-
-function viewportCornerWorldPoints(
-  viewport: { x: number; y: number; scale: number },
-  screenSize: { width: number; height: number },
-): readonly [
-  { x: number; y: number },
-  { x: number; y: number },
-  { x: number; y: number },
-  { x: number; y: number },
-] {
-  const screenPoints = [
-    { x: 0, y: 0 },
-    { x: screenSize.width, y: 0 },
-    { x: screenSize.width, y: screenSize.height },
-    { x: 0, y: screenSize.height },
-  ] as const
-
-  const [topLeft, topRight, bottomRight, bottomLeft] = screenPoints.map((point) => ({
-    x: (point.x - viewport.x) / viewport.scale,
-    y: (point.y - viewport.y) / viewport.scale,
-  }))
-  return [topLeft!, topRight!, bottomRight!, bottomLeft!]
-}
-
-export function viewportCornerGeoPoints(
-  viewport: { x: number; y: number; scale: number },
-  screenSize: { width: number; height: number },
-  originLat: number,
-  originLon: number,
-): readonly [
-  { lng: number; lat: number },
-  { lng: number; lat: number },
-  { lng: number; lat: number },
-  { lng: number; lat: number },
-] {
-  const [topLeft, topRight, bottomRight, bottomLeft] = viewportCornerWorldPoints(viewport, screenSize)
-  return [
-    worldToGeo(topLeft.x, topLeft.y, originLat, originLon),
-    worldToGeo(topRight.x, topRight.y, originLat, originLon),
-    worldToGeo(bottomRight.x, bottomRight.y, originLat, originLon),
-    worldToGeo(bottomLeft.x, bottomLeft.y, originLat, originLon),
-  ]
 }
