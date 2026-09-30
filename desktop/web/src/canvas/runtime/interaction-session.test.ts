@@ -849,6 +849,39 @@ describe('ruler drags through the session', () => {
     expect(rulers.onGuideCreate).not.toHaveBeenCalled()
   })
 
+  it('a ruler drag keeps its cursor, and a blur ends it without a guide, however the tool\'s move and blur fail', () => {
+    let broken = false
+    const failingHover = { setHoveredTarget: () => { if (broken) throw new Error('hover failed') } }
+    const rulers = mountRulers(rulerCamera({ y: 20, scale: 4 }))
+    rulers.host.style.cursor = 'crosshair'
+    const failingDrag = (): void => {
+      const interrupted = vi.spyOn(builtHosts.at(-1)!, 'interrupted')
+      events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal })
+      broken = true
+      try {
+        // Today's ruler heard its own mousemove and blur: the tool's failures left its drag to it.
+        captureWindowErrors(() => { events.pointerMove({ x: 180, y: 60 }) })
+        expect(rulers.host.style.cursor).toBe('s-resize')
+        expect(captureWindowErrors(() => { events.windowBlur() })).toHaveLength(1)
+      } finally {
+        broken = false
+      }
+      expect(rulers.host.style.cursor).toBe('crosshair')
+      // The rest of today's blur (Space, the keys, the host's interruption) still runs.
+      expect(interrupted).toHaveBeenCalledOnce()
+      events.pointerUp({ x: 180, y: 100 })
+      expect(rulers.onGuideCreate).not.toHaveBeenCalled()
+    }
+
+    const { session } = createSession(failingHover)
+    failingDrag()
+    session.dispose()
+
+    useStubTools(stubTool('select'))
+    createSession(failingHover)
+    failingDrag()
+  })
+
   it('a ruler guide lands with the rulers\' camera at its release', () => {
     createSession()
     const rulers = mountRulers(rulerCamera({ y: 10, scale: 2 }))

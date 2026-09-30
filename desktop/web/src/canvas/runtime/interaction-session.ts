@@ -582,22 +582,37 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       case 'wheel':
         this._syncPointingDevice()
         break
+      case 'cancel':
+        // Today's ruler heard the blur itself: its drag ends with no guide, however the tool's blur fails.
+        if (input.id === 'all') this._endRulerPress()
+        break
       default:
         break
     }
-    if (this._registered()) {
-      try {
-        this._routeToHost(input)
-      } finally {
-        // The rulers show the drag cursor, as for a bridged tool; the host landed the guide (or not) at the release, and
-        // the drag ends even when the release failed, as today's ruler mouseup did.
-        if (input.kind === 'move' && input.id === this._rulerPointer) this._rulerPress?.drag()
-        if (input.kind === 'up' && input.id === this._rulerPointer) this._endRulerPress()
-      }
-    } else {
-      this._routeToBridge(input, event)
+    if (input.kind !== 'cancel' || input.id !== 'all') {
+      this._route(input, event)
+      return
     }
-    if (input.kind === 'cancel' && input.id === 'all') this._interrupted()
+    // The rest of today's blur (Space, the keys, the host's interruption) runs even when the tool's blur fails.
+    runCanvasRuntimeCleanups([
+      () => this._route(input, event),
+      () => this._interrupted(),
+    ], 'Scene Interaction window blur failed')
+  }
+
+  private _route(input: RawInput, event: Event | null): void {
+    if (!this._registered()) {
+      this._routeToBridge(input, event)
+      return
+    }
+    try {
+      this._routeToHost(input)
+    } finally {
+      // The rulers show the drag cursor, as for a bridged tool; the host landed the guide (or not) at the release, and
+      // the drag ends even when the release failed, as today's ruler mouseup did.
+      if (input.kind === 'move' && input.id === this._rulerPointer) this._rulerPress?.drag()
+      if (input.kind === 'up' && input.id === this._rulerPointer) this._endRulerPress()
+    }
   }
 
   /** A registered tool's input: recognised, routed, and the recogniser's and the host's effects applied to the event. */
@@ -654,8 +669,12 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         else if (event) bridge.pointerDown(event as PointerEvent)
         break
       case 'move':
-        if (event) bridge.pointerMove(event as PointerEvent)
-        if (input.id === this._rulerPointer) this._rulerPress?.drag()
+        try {
+          if (event) bridge.pointerMove(event as PointerEvent)
+        } finally {
+          // Today's ruler heard its own mousemove: the drag cursor follows even when the tool's move fails.
+          if (input.id === this._rulerPointer) this._rulerPress?.drag()
+        }
         break
       case 'up':
         try {
@@ -739,10 +758,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     press?.end()
   }
 
-  /** After a window blur has reached the recogniser (Space released, live sessions ended) and the armed tool's path. */
+  /** After a window blur has reached the recogniser (Space released, live sessions ended) and the armed tool's path, even
+   *  when that path failed. */
   private _interrupted(): void {
-    // Today's ruler drag ends on a blur without a guide.
-    this._endRulerPress()
     this._spaceHeld = false
     this._port.releaseKeys()
     if (this._registered()) {
