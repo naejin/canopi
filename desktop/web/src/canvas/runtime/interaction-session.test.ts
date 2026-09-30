@@ -10,6 +10,7 @@ import { clearPlantStampSource, readPlantStampSource, selectPlantStampSource } f
 import {
   clearSavedObjectStampSource,
   readSavedObjectStampDragPreviewSource,
+  selectSavedObjectStampSourceForTests,
   writeSavedObjectStampDragData,
 } from '../saved-object-stamp-source'
 import { setCanvasTool } from '../session-state'
@@ -300,5 +301,106 @@ describe('the interaction session', () => {
 
     expect(store.persisted.plants).toHaveLength(1)
     expect(readSavedObjectStampDragPreviewSource(hiddenData)).toBeNull()
+  })
+
+  it('a registered tool\'s transient history and spacing field go through the host', () => {
+    const row = stubTool('plant-spacing', {
+      canUndoTransient: () => true,
+      canRedoTransient: () => false,
+      command: (command) => command.kind === 'undo-transient' ? 'handled' : 'pass',
+    })
+    useStubTools(row)
+    const { session } = createSession()
+    session.setTool('plant-spacing')
+
+    expect(session.canUndoTransientHistory()).toBe(true)
+    expect(session.canRedoTransientHistory()).toBe(false)
+    expect(session.undoTransientHistory()).toBe(true)
+    expect(session.redoTransientHistory()).toBe(false)
+    session.plantRowSpacing.input('2')
+    session.plantRowSpacing.commit('2.5')
+    session.plantRowSpacing.blur('3')
+    session.plantRowSpacing.cancel()
+    expect(row.commands).toEqual([
+      { kind: 'undo-transient' },
+      { kind: 'spacing-input', text: '2' },
+      { kind: 'spacing-input', text: '2.5' },
+      { kind: 'spacing-commit', via: 'enter' },
+      { kind: 'spacing-input', text: '3' },
+      { kind: 'spacing-commit', via: 'blur' },
+      { kind: 'spacing-cancel' },
+    ])
+  })
+
+  it('Space and a pointer pan show the navigation cursor over a registered tool\'s', () => {
+    useStubTools(stubTool('rectangle'))
+    const { session } = createSession()
+    session.setTool('rectangle')
+    expect(container.style.cursor).toBe('crosshair')
+
+    container.focus()
+    events.holdSpace()
+    expect(container.style.cursor).toBe('grab')
+    const before = camera.viewport
+    events.pointerDown({ x: 100, y: 100 })
+    expect(container.style.cursor).toBe('grabbing')
+    events.pointerMove({ x: 130, y: 110 })
+    expect(camera.viewport).toEqual({ x: before.x + 30, y: before.y + 10, scale: before.scale })
+    events.pointerUp({ x: 130, y: 110 })
+    // Today's cancel after a pan: the tool's cursor comes back even with Space still held.
+    expect(container.style.cursor).toBe('crosshair')
+    events.releaseSpace()
+    expect(container.style.cursor).toBe('crosshair')
+  })
+
+  it('Esc cancels a registered tool\'s live press after the tool passes it', () => {
+    const rectangle = stubTool('rectangle')
+    useStubTools(rectangle)
+    const { session } = createSession()
+    session.setTool('rectangle')
+    container.focus()
+
+    events.pointerDown({ x: 20, y: 20 })
+    events.pointerMove({ x: 60, y: 60 })
+    const escape = events.keyDown({ key: 'Escape', cancelable: true, target: container })
+    expect(escape.defaultPrevented).toBe(true)
+    expect(rectangle.commands).toEqual([{ kind: 'escape' }])
+    expect(rectangle.last('cancel')).toEqual({ kind: 'cancel', reason: 'escape' })
+    events.pointerUp({ x: 60, y: 60 })
+    expect(rectangle.count('drag-end')).toBe(0)
+  })
+
+  it('a saved stamp chosen while armed reaches sourceChanged at once', () => {
+    const sources: (ToolSource | null)[] = []
+    useStubTools(stubTool('saved-object-stamp', { sourceChanged: (source) => { sources.push(source) } }))
+    const { session } = createSession()
+    session.setTool('saved-object-stamp')
+
+    const stamp = selectSavedObjectStampSourceForTests({
+      version: 2,
+      anchor: { x: 0, y: 0 },
+      plants: [],
+      zones: [],
+      annotations: [],
+      groups: [],
+    } as unknown as Parameters<typeof selectSavedObjectStampSourceForTests>[0])
+    expect(sources).toEqual([{ kind: 'saved-stamp', stamp }])
+    session.setTool('select')
+    expect(sources).toHaveLength(1)
+  })
+
+  it('the keyboard port\'s zoom and view keys move the camera through today\'s navigation', () => {
+    const render = vi.fn()
+    const { session } = createSession({ render })
+    const scale = camera.viewport.scale
+
+    expect(session.keyboard.command({ kind: 'zoom-step', direction: 1 })).toBe(true)
+    expect(camera.viewport.scale).toBeGreaterThan(scale)
+    expect(render).toHaveBeenCalledWith('viewport')
+    session.keyboard.command({ kind: 'zoom-step', direction: -1 })
+    expect(camera.viewport.scale).toBeCloseTo(scale, 9)
+    // North stays up under LEGACY: the view commands answer and leave the camera's bearing alone.
+    expect(session.keyboard.command({ kind: 'reset-north' })).toBe(true)
+    expect(session.keyboard.command({ kind: 'rotate-view', direction: 1 })).toBe(true)
   })
 })

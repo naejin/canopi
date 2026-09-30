@@ -348,7 +348,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (this._disposed) return
     const id = name as ToolId
     const previous = this._tool.peek()
-    if (previous !== id && this._toolHost.isRegistered(previous)) clearToolSource(previous)
+    const leaving = previous !== id && this._toolHost.isRegistered(previous) ? previous : null
     this._tool.value = id
     try {
       this._bridge.setTool(name)
@@ -356,8 +356,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       this._tool.value = previous
       throw error
     }
+    this._navigationCursor = null
     this._toolHost.setTool(id, this._toolHost.isRegistered(id) ? toolSourceFor(id) : null)
-    if (!this._registered()) this._navigationCursor = null
+    // The tool left drops its pick once it is deactivated, as today's tools did (the next tool never hears it).
+    if (leaving) clearToolSource(leaving)
     this._configure()
   }
 
