@@ -3,7 +3,7 @@ import { join, relative } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { CANVAS_CHROME_FONT_FAMILY, CANVAS_CHROME_MONO_FONT_FAMILY } from '../canvas/chrome-fonts'
-import { createRulerOverlay } from '../canvas/rulers'
+import { createRulerOverlay } from '../canvas/runtime/chrome/rulers'
 import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
 import { createAnnotationInlineEditor } from '../canvas/runtime/interaction/annotation-inline-editor'
 import type { WorkspaceCameraFrameReader } from '../canvas/runtime/camera'

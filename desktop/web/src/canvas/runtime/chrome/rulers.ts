@@ -1,7 +1,7 @@
-import type { CameraViewportSnapshot } from './runtime/camera'
-import { NICE_DISTANCES } from './grid'
-import { CANVAS_CHROME_FONT_FAMILY } from './chrome-fonts'
-import { getCanvasColor } from './theme-refresh'
+import type { CameraViewportSnapshot } from '../camera'
+import { NICE_DISTANCES } from '../../grid'
+import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
+import { getCanvasColor } from '../../theme-refresh'
 
 /** Ruler band thickness in CSS px. */
 export const CANVAS_RULER_SIZE_PX = 24

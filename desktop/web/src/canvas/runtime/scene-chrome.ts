@@ -3,10 +3,10 @@ import { NICE_DISTANCES, gridInterval } from '../grid'
 import {
   createRulerOverlay,
   type RulerOverlay,
-} from '../rulers'
+} from './chrome/rulers'
 import type { CameraViewportSnapshot } from './camera'
 import { getGuideLineVisual, getMapBackdropInk, OVERLAY_CASING_EXTRA_PX } from './scene-visuals'
-import { CANVAS_RULER_SIZE_PX } from '../rulers'
+import { CANVAS_RULER_SIZE_PX } from './chrome/rulers'
 
 const RULER_SIZE = CANVAS_RULER_SIZE_PX
 const GRID_Z_INDEX = 4

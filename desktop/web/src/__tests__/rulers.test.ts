@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createRulerOverlay } from '../canvas/rulers'
+import { createRulerOverlay } from '../canvas/runtime/chrome/rulers'
 import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
 
 type RulerPart = 'horizontal' | 'vertical' | 'corner'
