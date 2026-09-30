@@ -225,5 +225,9 @@
   },
   "src/__tests__/projection.test.ts > canonical projection identity > names the local Mercator projection": {
     "policy": "Retired frontend seams stay deleted"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > installs and removes pointer-cancellation and focus-loss listeners exactly once": {
+    "file": "src/canvas/runtime/input/dom-input-source.test.ts",
+    "name": "createDomInputSource > installs and removes each listener exactly once"
   }
 }

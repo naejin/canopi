@@ -7,7 +7,7 @@ import { createUuid } from '../../utils/ids'
 import {
   createSceneInteractionSession,
   type SceneInteractionSession,
-} from './scene-interaction'
+} from './interaction-session'
 import {
   resetTransientRuntimeState,
   syncCanvasSignalsFromScene,
@@ -218,6 +218,14 @@ export class SceneCanvasRuntime {
         setHoveredTarget: (target) => {
           this._setHoveredTarget(target)
         },
+        frames: this._construction.frames,
+        viewNavigation: this._construction.viewNavigation,
+        renderer: {
+          setDraft: (draft) => this._rendering.setDraft(draft),
+          setSelectionPreview: (preview) => this._rendering.setSelectionPreview(preview),
+        },
+        ...(this._appAdapter.focus ? { focus: this._appAdapter.focus } : {}),
+        sceneRevision: this._sceneRevision,
       })
       this._interaction.setOverviewMode(this._camera.snapshot.peek().mode === 'overview')
       await this._rendering.renderScene()

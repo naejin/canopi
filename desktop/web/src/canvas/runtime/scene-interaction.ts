@@ -1,4 +1,16 @@
-import { getCanvasTool } from '../session-state'
+// canvas/runtime/scene-interaction.ts
+//
+// The legacy bridge (0B-2 to the end of 0B, plan §4 0B, spec §1.4 "The legacy bridge"): today's interaction session, which
+// interaction-session.ts runs for every tool not yet listed in tools/registry.ts. It owns no listener: the session hands it
+// the DOM event the DOM input source is handling (DomInputSource.currentEvent()), and it runs today's handlers on it with
+// the SceneToolAdapter hooks of the tools still in interaction/tool-modules.ts, and Select, Pan, the chrome and drops
+// through shared-gestures.ts. Its pointer capture goes through the source (which forwards the capture's loss), its keys
+// are keyboard-port.ts's (the hooks below are the steps a bridged tool keeps), and the arrow-nudge series is the
+// ToolHost's. While a registered tool is armed it idles: no adapter, no Select affordances, no passive hover, no guidance.
+// It also lends the ToolHost its tooltip, Unlock affordance and note editor (the session's 0B-2 chrome adapter).
+// The main agent deletes it at the end of 0B; the session is re-exported here for the suites that import it from here.
+
+import { getDesignObjectSelectionModel } from './scene-runtime/selection'
 import { gridInterval, snapToGrid } from '../grid'
 import { snapToGuides } from '../guides'
 import type {
@@ -22,7 +34,7 @@ import {
   hideInteractionPreview,
   showInteractionPreview,
 } from './interaction/overlay-ui'
-import { cursorForTool, isEditableTarget } from './interaction/pointer-utils'
+import { cursorForTool } from './interaction/pointer-utils'
 import { allowsNativeContextMenuTarget } from './input/dom-input-source'
 import {
   appendPlantStampSourceToDraft,
@@ -57,7 +69,6 @@ import {
   createAnnotationInlineEditor,
   type AnnotationInlineEditorController,
 } from './interaction/annotation-inline-editor'
-import { getDesignObjectSelectionModel } from './scene-runtime/selection'
 import type {
   SceneCommandAdmission,
   SceneEditCoordinator,
@@ -78,10 +89,6 @@ import {
   createMeasurementGuideControlPoints,
 } from './interaction/measurement-guide-control-points'
 import type { ControlPointOverlayController } from './interaction/control-point-overlay'
-import {
-  prepareInteractionHost,
-  type InteractionHostController,
-} from './interaction/interaction-host'
 import type { CanvasDesignObjectSelectionModel, CanvasPlantRowSpacingField, CanvasSceneEditCommandSurface } from './runtime'
 import type {
   CanvasContextMenuCommands,
@@ -107,6 +114,13 @@ import {
   runCanvasRuntimeCleanups,
   throwCanvasRuntimeCleanupErrors,
 } from './cleanup'
+import type { LegacyKeyBridge } from './keyboard-port'
+
+export {
+  createSceneInteractionSession,
+  type SceneInteractionSession,
+  type SceneInteractionSessionDeps,
+} from './interaction-session'
 
 /** A keyboard-opened menu ignores the contextmenu event the same key press sends. */
 const KEYBOARD_CONTEXT_MENU_ECHO_MS = 500
@@ -124,7 +138,8 @@ interface SceneInteractionCancellationOptions extends SceneToolTransientOptions 
   readonly releaseSpace?: boolean
 }
 
-export interface SceneInteractionSessionDeps {
+/** Today's session dependencies, which the bridge runs on (interaction-session.ts adds the pipeline's). */
+export interface LegacyInteractionBridgeDeps {
   container: HTMLElement
   getSceneStore: () => SceneStateReader
   camera: WorkspaceCameraFrameReader
@@ -174,44 +189,75 @@ export interface SceneInteractionSessionDeps {
   nudge?: Pick<CanvasSceneEditCommandSurface, 'nudgeSelected' | 'endNudge'>
 }
 
-/** Arrow-key nudge steps, in session-plane metres (y grows southward). */
-const NUDGE_STEP_M = 0.1
-const NUDGE_LARGE_STEP_M = 1
-/** Arrow-key pan steps with nothing selected, in screen pixels. */
-const ARROW_PAN_STEP_PX = 64
-const ARROW_PAN_LARGE_STEP_PX = 256
-/** A pause this long ends a nudge series, so its edit commits. */
-const NUDGE_SERIES_IDLE_MS = 800
-const NUDGE_DIRECTIONS: Readonly<Record<string, ScenePoint>> = {
-  ArrowLeft: { x: -1, y: 0 },
-  ArrowRight: { x: 1, y: 0 },
-  ArrowUp: { x: 0, y: -1 },
-  ArrowDown: { x: 0, y: 1 },
+/** What the interaction session lends the bridge: the pipeline's state that today's session kept itself. */
+export interface LegacyInteractionBridgeHooks {
+  /** Pointer capture through the DOM input source, which forwards the capture's loss (lost-capture) back here. */
+  readonly pointerCapture: { capture(pointerId: number): void; release(pointerId: number): void }
+  /** The ToolHost's arrow-nudge series: the bridge ends it where today's session ended its own. */
+  endNudgeSeries(options?: { readonly abort?: boolean }): void
+  /** When the keyboard last opened the canvas menu (event time), for the contextmenu echo. */
+  lastKeyboardMenuAt(): number | null
+  /** Space held for panning (the session's key state, which the keyboard port sets). */
+  readonly space: { held(): boolean; release(): void }
+  /** True while the tool runs on the ToolHost: the bridge idles. */
+  isRegistered(tool: string): boolean
+  /** Arms a tool through the session (the runtime's setTool, then the session), as today's _switchTool did. */
+  switchTool(name: string): void
 }
-const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'AltGraph', 'CapsLock'])
 
-export interface SceneInteractionSession {
-  setTool(name: string): void
-  /** Plant a row's spacing field in the tool card; does nothing under another tool. */
+/** The bridge the interaction session drives. */
+export interface LegacyInteractionBridge extends LegacyKeyBridge {
   readonly plantRowSpacing: CanvasPlantRowSpacingField
+  setTool(name: string): void
   setOverviewMode(enabled: boolean): void
   prepareForDocumentReplacement(): void
+  /** Today's refreshMeasurements: the viewport-dependent refresh after a camera change. */
   refreshMeasurements(): void
+  /** After the selection or the scene changed (a nudge, a series end). */
+  refreshSelectionDependent(): void
   refreshTranslations(): void
   canUndoTransientHistory(): boolean
   canRedoTransientHistory(): boolean
   undoTransientHistory(): boolean
   redoTransientHistory(): boolean
   dispose(): void
+
+  // Today's handlers, given the DOM event being handled.
+  pointerDown(event: PointerEvent): void
+  pointerMove(event: PointerEvent): void
+  pointerUp(event: PointerEvent): void
+  pointerCancel(event: PointerEvent): void
+  lostPointerCapture(event: PointerEvent): void
+  pointerLeave(): void
+  windowBlur(): void
+  wheel(event: WheelEvent): void
+  contextMenu(event: MouseEvent): void
+  dragOver(event: DragEvent): void
+  dragLeave(): void
+  drop(event: DragEvent): void
+
+  /** A pointer press or pan is live (today's _pointerGesture). */
+  hasPointerGesture(): boolean
+  /** Space went down or up: today's grab cursor, or the tool's again once no pan is live. */
+  spaceChanged(held: boolean): void
+  /** The rAF focus after a drop is dropped (a window blur). */
+  cancelPendingFocus(): void
+
+  // The ToolHost's chrome until D1's chrome/*.ts (0B-3): one element each.
+  isTextEntryOpen(): boolean
+  setTooltip(tooltip: { readonly target: SceneDesignObjectTarget; readonly at: ScenePoint } | null): void
+  setLockedAffordance(affordance: { readonly target: SceneDesignObjectTarget; readonly at: ScenePoint } | null): void
+  closeMenu(): void
 }
 
-export function createSceneInteractionSession(
-  deps: SceneInteractionSessionDeps,
-): SceneInteractionSession {
-  return new DefaultSceneInteractionSession(deps)
+export function createLegacyInteractionBridge(
+  deps: LegacyInteractionBridgeDeps,
+  hooks: LegacyInteractionBridgeHooks,
+): LegacyInteractionBridge {
+  return new DefaultLegacyInteractionBridge(deps, hooks)
 }
 
-class DefaultSceneInteractionSession implements SceneInteractionSession {
+class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
   private readonly _preview: HTMLDivElement
   private readonly _tooltip: HoverTooltipController
   private readonly _toolRegistry: SceneToolRegistry
@@ -221,25 +267,14 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private readonly _rotationHandle: SelectionRotationHandleController
   private readonly _controlPointOverlays: readonly ControlPointOverlayController[]
   private readonly _lockedAffordance: LockedObjectAffordanceController
-  private readonly _host: InteractionHostController
   private _tool: InteractionTool = 'select'
   private _pointerGesture: SceneInteractionPointerGesture | null = null
   private _toolPointerDrag: SceneToolPointerDrag | null = null
-  /** The container owns this admitted sequence; window listeners remain the fallback. */
-  private _capturedPointerId: number | null = null
-  /** Covers the synchronous `lostpointercapture` edge while capture is being acquired. */
-  private _captureAttemptPointerId: number | null = null
-  private _spaceHeld = false
-  private _attached = false
   private _disposed = false
   private _transientCancellationPending = false
   private _designObjectDragPresentationSuppressed = false
   private _pendingInteractionHostFocusFrame: number | null = null
   private _overviewMode = false
-  private _keyboardContextMenuAt = Number.NEGATIVE_INFINITY
-  /** A nudge series is open in the runtime until a pause, another input or leaving the map. */
-  private _nudging = false
-  private _nudgeIdleTimer: ReturnType<typeof setTimeout> | null = null
   readonly plantRowSpacing: CanvasPlantRowSpacingField = {
     input: (text) => this._runSpacingField((field) => field.input(text)),
     commit: (text) => this._runSpacingField((field) => field.commit(text)),
@@ -247,7 +282,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     cancel: () => this._runSpacingField((field) => field.cancel()),
   }
 
-  constructor(private readonly _deps: SceneInteractionSessionDeps) {
+  constructor(
+    private readonly _deps: LegacyInteractionBridgeDeps,
+    private readonly _hooks: LegacyInteractionBridgeHooks,
+  ) {
     const rollback: Array<() => void> = []
     const own = <T>(resource: T, dispose: (resource: T) => void): T => {
       rollback.push(() => dispose(resource))
@@ -255,10 +293,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
 
     try {
-      this._host = own(
-        prepareInteractionHost(this._deps.container, this._deps.translate),
-        (host) => host.dispose(),
-      )
       this._preview = own(
         createInteractionPreview(this._deps.container),
         (preview) => preview.remove(),
@@ -370,8 +404,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         translate: this._deps.translate,
         onUnlock: (target) => this._unlockLockedObject(target),
       }), (affordance) => affordance.dispose())
-      this.setTool(getCanvasTool())
-      this._attach()
       rollback.length = 0
     } catch (error) {
       for (const cleanup of rollback.reverse()) {
@@ -404,12 +436,13 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       }
 
       this._tool = name
-      nextAdapter = this._toolRegistry.select(name)
+      // A tool the ToolHost runs holds no legacy adapter here: the bridge idles.
+      nextAdapter = this._toolRegistry.select(this._idle() ? '' : name)
       if (changingTool) {
         nextActivationAttempted = true
         nextAdapter?.onActivate?.()
       }
-      this._deps.container.style.cursor = cursorForTool(name)
+      if (!this._idle()) this._deps.container.style.cursor = cursorForTool(name)
       this._refreshSelectionDependentMeasurements()
       this._publishToolGuidance()
     } catch (error) {
@@ -424,7 +457,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
       if (nextActivationAttempted) attempt(() => nextAdapter?.onDeactivate?.())
       this._tool = previousTool
-      this._toolRegistry.select(previousTool)
+      this._toolRegistry.select(this._idle() ? '' : previousTool)
       this._deps.container.style.cursor = previousCursor
       if (previousDeactivationAttempted) attempt(() => previousAdapter?.onActivate?.())
       attempt(() => this._refreshSelectionDependentMeasurements())
@@ -480,7 +513,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       }
     }
 
-    attempt(() => this._detach())
     attempt(() => this._cancelPendingInteractionHostFocus())
     attempt(() => this._cancelTransientInteraction())
     attempt(() => this._activeToolAdapter()?.onDeactivate?.())
@@ -494,7 +526,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     attempt(() => this._preview.remove())
     attempt(() => this._tooltip.dispose())
     attempt(() => this._deps.setHoveredTarget(null))
-    attempt(() => this._host.dispose())
     attempt(() => this._deps.publishToolGuidance?.(IDLE_CANVAS_TOOL_GUIDANCE))
 
     throwCanvasRuntimeCleanupErrors(errors, 'Scene Interaction Session disposal failed')
@@ -505,9 +536,13 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._refreshViewportDependentMeasurements()
   }
 
+  refreshSelectionDependent(): void {
+    if (this._disposed) return
+    this._refreshSelectionDependentMeasurements()
+  }
+
   refreshTranslations(): void {
     if (this._disposed) return
-    this._host.refreshTranslations()
     this._rotationHandle.refreshTranslations()
     this._lockedAffordance.refreshTranslations()
     this._forEachUniqueToolHook('refreshTranslations', (refresh) => refresh())
@@ -533,7 +568,104 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     return this._activeToolAdapter()?.redoTransientHistory?.() ?? false
   }
 
-  private readonly _onPointerDown = (event: PointerEvent): void => {
+  hasPointerGesture(): boolean {
+    return this._pointerGesture !== null
+  }
+
+  spaceChanged(held: boolean): void {
+    if (held) {
+      if (this._overviewMode || (!this._toolPointerDrag && this._tool !== 'hand')) {
+        this._deps.container.style.cursor = 'grab'
+      }
+      return
+    }
+    if (!this._sharedGestures.panning) {
+      this._deps.container.style.cursor = cursorForTool(this._tool)
+    }
+  }
+
+  cancelPendingFocus(): void {
+    this._cancelPendingInteractionHostFocus()
+  }
+
+  isTextEntryOpen(): boolean {
+    return this._annotationEditor.hasActiveEditor()
+  }
+
+  setTooltip(tooltip: { readonly target: SceneDesignObjectTarget; readonly at: ScenePoint } | null): void {
+    const plant = tooltip?.target.kind === 'plant'
+      ? this._deps.getSceneStore().persisted.plants.find((entry) => entry.id === tooltip.target.id)
+      : undefined
+    if (!tooltip || !plant) {
+      this._tooltip.hide()
+      return
+    }
+    const commonName = this._deps.getLocalizedCommonNames().get(plant.canonicalName) ?? plant.commonName
+    this._tooltip.show(tooltip.at.x, tooltip.at.y, commonName, plant.canonicalName)
+  }
+
+  setLockedAffordance(affordance: { readonly target: SceneDesignObjectTarget; readonly at: ScenePoint } | null): void {
+    if (!affordance) {
+      this._lockedAffordance.hide()
+      return
+    }
+    this._lockedAffordance.show({ target: affordance.target, screenX: affordance.at.x, screenY: affordance.at.y })
+  }
+
+  closeMenu(): void {
+    this._contextMenu.close()
+  }
+
+  // ── Keys the bridged tool keeps (keyboard-port.ts runs today's order) ─────────────────────────────────────────────
+
+  retryPendingCancellation(event: KeyboardEvent): boolean {
+    return this._retryPendingTransientCancellation(event)
+  }
+
+  cancelInterrupted(): void {
+    this._cancelInterruptedInteraction()
+  }
+
+  hasActiveSceneEdit(): boolean {
+    return this._hasActiveSceneEdit()
+  }
+
+  openMenuFromKeyboard(event: KeyboardEvent): void {
+    this._runAdmittedSceneEvent(event, () => {
+      if (this._annotationEditor.hasActiveEditor()) this._annotationEditor.commit()
+      this._contextMenu.openFromKeyboard(this._deps.getDesignObjectSelection())
+    }, { resumePending: true })
+  }
+
+  toolKeyDown(event: KeyboardEvent): boolean {
+    return this._activeToolAdapter()?.keyDown?.(event) ?? false
+  }
+
+  suppressesSharedKeyboard(event: KeyboardEvent): boolean {
+    return this._activeToolAdapter()?.shouldSuppressSharedKeyboard?.(event) ?? false
+  }
+
+  /** Enter or F2 with one editable note selected (the port checked the key, the tool and the target). */
+  editSelectedNote(): boolean {
+    const selection = this._deps.getDesignObjectSelection()
+    if (
+      selection.editableTargets.length !== 1
+      || (selection.lockedTargets?.length ?? 0) > 0
+      || (selection.blockedTargets?.length ?? 0) > 0
+    ) return false
+
+    const target = selection.editableTargets[0]
+    if (target?.kind !== 'annotation') return false
+    return this._beginAnnotationTextEdit(target.id)
+  }
+
+  publishGuidance(): void {
+    this._publishToolGuidance()
+  }
+
+  // ── Today's handlers ────────────────────────────────────────────────────────────────────────────────────────────
+
+  pointerDown(event: PointerEvent): void {
     this._endNudge()
     if (event.button !== 0 && event.button !== 1) return
     if (this._pointerGesture && this._pointerGesture.pointerId !== event.pointerId) return
@@ -568,7 +700,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
     this._toolPointerDrag = null
     // Publish the gesture before capture: a browser may synchronously report loss.
-    this._captureInteractionPointer(event.pointerId)
+    this._hooks.pointerCapture.capture(event.pointerId)
     if (this._pointerGesture?.pointerId !== event.pointerId) return
 
     if (this._overviewMode) {
@@ -604,7 +736,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       screen,
       world,
       tool: this._tool,
-      spaceHeld: this._spaceHeld,
+      spaceHeld: this._hooks.space.held(),
     })) return
 
     // Inspection owns the plain left click while it is active, so drawing and
@@ -631,11 +763,11 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       screen,
       world,
       tool: this._tool,
-      spaceHeld: this._spaceHeld,
+      spaceHeld: this._hooks.space.held(),
     })
   }
 
-  private readonly _onPointerLeave = (): void => {
+  pointerLeave(): void {
     this._clearPassiveHoverPresentation()
   }
 
@@ -680,7 +812,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
   }
 
-  private readonly _onPointerMove = (event: PointerEvent): void => {
+  pointerMove(event: PointerEvent): void {
     try {
       this._handlePointerMove(event)
     } finally {
@@ -729,7 +861,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
   }
 
-  private readonly _onPointerUp = (event: PointerEvent): void => {
+  pointerUp(event: PointerEvent): void {
     if (this._retryPendingTransientCancellation(event)) return
     if (this._overviewMode && !this._pointerGesture) {
       this._quarantineUnsettledSceneEvent(event)
@@ -792,27 +924,20 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
   }
 
-  private readonly _onPointerCancel = (event: PointerEvent): void => {
+  pointerCancel(event: PointerEvent): void {
     if (this._retryPendingTransientCancellation(event)) return
     if (!this._pointerGesture || this._pointerGesture.pointerId !== event.pointerId) return
     this._cancelInterruptedInteraction()
   }
 
-  private readonly _onLostPointerCapture = (event: PointerEvent): void => {
+  /** The source forwards only the loss of a capture it holds or is acquiring (it fences a release's own loss). */
+  lostPointerCapture(event: PointerEvent): void {
     const pointerGesture = this._pointerGesture
     if (!pointerGesture || pointerGesture.pointerId !== event.pointerId) return
-    if (
-      this._capturedPointerId !== event.pointerId
-      && this._captureAttemptPointerId !== event.pointerId
-    ) return
-
-    // Fence first: explicit release may synchronously dispatch this event after commit.
-    this._capturedPointerId = null
-    this._captureAttemptPointerId = null
     this._cancelInterruptedInteraction()
   }
 
-  private readonly _onWindowBlur = (): void => {
+  windowBlur(): void {
     this._cancelPendingInteractionHostFocus()
     this._cancelInterruptedInteraction()
   }
@@ -828,7 +953,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
   }
 
-  private readonly _onWheel = (event: WheelEvent): void => {
+  wheel(event: WheelEvent): void {
     if (allowsNativeContextMenuTarget(event.target) || this._isOwnedOverlayPointerTarget(event.target)) return
     if (this._retryPendingTransientCancellation(event)) return
     event.preventDefault()
@@ -856,13 +981,14 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._refreshViewportDependentMeasurements()
   }
 
-  private readonly _onContextMenu = (event: MouseEvent): void => {
+  contextMenu(event: MouseEvent): void {
     if (this._retryPendingTransientCancellation(event)) return
     if (allowsNativeContextMenuTarget(event.target)) return
     event.preventDefault()
     if (this._overviewMode) return
     // The Menu key already opened the menu from keydown; its trailing event has no pointer.
-    if (event.timeStamp - this._keyboardContextMenuAt < KEYBOARD_CONTEXT_MENU_ECHO_MS) return
+    const keyboardMenuAt = this._hooks.lastKeyboardMenuAt()
+    if (keyboardMenuAt !== null && event.timeStamp - keyboardMenuAt < KEYBOARD_CONTEXT_MENU_ECHO_MS) return
     this._runAdmittedSceneEvent(event, () => {
       this._showContextMenuWhenSettled(event)
     }, { resumePending: true })
@@ -879,24 +1005,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._contextMenu.openAtPointer(screen, this._retargetContextMenuSelection(world))
   }
 
-  /** Menu key or Shift F10 while the map has focus: the menu for the current selection. */
-  private _openContextMenuFromKeyboard(event: KeyboardEvent): boolean {
-    const menuKey = event.key === 'ContextMenu'
-      || (event.key === 'F10' && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey)
-    if (!menuKey || this._pointerGesture) return false
-    if (!isCanvasKeyboardShortcutTarget(event.target, this._deps.container)) return false
-    event.preventDefault()
-    event.stopPropagation()
-    if (this._hasActiveSceneEdit()) return true
-    this._keyboardContextMenuAt = event.timeStamp
-    this._runAdmittedSceneEvent(event, () => {
-      if (this._annotationEditor.hasActiveEditor()) this._annotationEditor.commit()
-      this._contextMenu.openFromKeyboard(this._deps.getDesignObjectSelection())
-    }, { resumePending: true })
-    return true
-  }
-
-  private readonly _onDragOver = (event: DragEvent): void => {
+  dragOver(event: DragEvent): void {
     if (this._retryPendingTransientCancellation(event)) return
     event.preventDefault()
     if (this._overviewMode) {
@@ -948,12 +1057,12 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     })
   }
 
-  private readonly _onDragLeave = (): void => {
+  dragLeave(): void {
     hideInteractionPreview(this._preview)
     clearSavedObjectStampGhosts(this._preview)
   }
 
-  private readonly _onDrop = (event: DragEvent): void => {
+  drop(event: DragEvent): void {
     event.preventDefault()
     hideInteractionPreview(this._preview)
     clearSavedObjectStampGhosts(this._preview)
@@ -1067,143 +1176,15 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     return this._deps.getDesignObjectSelection()
   }
 
-  private readonly _onKeyDown = (event: KeyboardEvent): void => {
-    try {
-      this._handleKeyDown(event)
-    } finally {
-      this._publishToolGuidance()
-    }
-  }
-
-  private _handleKeyDown(event: KeyboardEvent): void {
-    if (this._retryPendingTransientCancellation(event)) return
-    if (this._nudging && !(event.key in NUDGE_DIRECTIONS) && !MODIFIER_KEYS.has(event.key)) {
-      // Esc cancels the series like any gesture in progress; any other key keeps it.
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        this._endNudge({ abort: true })
-        return
-      }
-      this._endNudge()
-    }
-    if (this._nudgeFromKeyboard(event)) return
-    if (
-      !this._pointerGesture
-      && isKeyboardInteractiveEventTarget(event.target)
-    ) return
-    if (this._overviewMode) {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        this._cancelInterruptedInteraction()
-        return
-      }
-      if (event.code === 'Space' && !this._spaceHeld && !isEditableTarget(event.target)) {
-        event.preventDefault()
-        this._spaceHeld = true
-        this._deps.container.style.cursor = 'grab'
-      }
-      return
-    }
-    if (this._openContextMenuFromKeyboard(event)) return
-    if (this._activeToolAdapter()?.keyDown?.(event) ?? false) {
-      // A key the tool consumed is not also an app shortcut: Backspace in a
-      // polygon draft removes a vertex and must not delete the selection. The
-      // shortcut dispatchers honour defaultPrevented, so the event still
-      // propagates to listeners that only observe.
-      event.preventDefault()
-      return
-    }
-    if (event.key === 'Escape' && this._pointerGesture) {
-      event.preventDefault()
-      this._cancelInterruptedInteraction()
-      return
-    }
-
-    if (this._runEscapeChain(event)) return
-    if (this._beginSelectedAnnotationTextEditFromKeyboard(event)) return
-
-    if (
-      event.code !== 'Space'
-      || this._spaceHeld
-      || isEditableTarget(event.target)
-      || (this._activeToolAdapter()?.shouldSuppressSharedKeyboard?.(event) ?? false)
-    ) return
-    event.preventDefault()
-    this._spaceHeld = true
-    if (!this._toolPointerDrag && this._tool !== 'hand') {
-      this._deps.container.style.cursor = 'grab'
-    }
-  }
-
-  private readonly _onKeyUp = (event: KeyboardEvent): void => {
-    if (event.code !== 'Space') return
-    this._spaceHeld = false
-    if (!this._sharedGestures.panning) {
-      this._deps.container.style.cursor = cursorForTool(this._tool)
-    }
-  }
-
-  /**
-   * Arrow keys on the focused map: with nothing selected they pan the map (any
-   * tool, overview included); otherwise they move the editable selection
-   * (Select tool only). Fields and controls keep their own arrows.
-   */
-  private _nudgeFromKeyboard(event: KeyboardEvent): boolean {
-    const direction = NUDGE_DIRECTIONS[event.key]
-    if (!direction || event.ctrlKey || event.metaKey || event.altKey || this._pointerGesture) return false
-    const target = event.target
-    if (!(target instanceof Node) || !this._deps.container.contains(target) || isKeyboardInteractiveEventTarget(target)) return false
-    if (this._deps.getSelection().length === 0) {
-      event.preventDefault()
-      this._panFromKeyboard(direction, event.shiftKey)
-      return true
-    }
-    if (!this._deps.nudge || this._tool !== 'select' || this._overviewMode) return false
-    event.preventDefault()
-    const step = event.shiftKey ? NUDGE_LARGE_STEP_M : NUDGE_STEP_M
-    if (!this._deps.nudge.nudgeSelected({ x: direction.x * step, y: direction.y * step })) return true
-    this._nudging = true
-    if (this._nudgeIdleTimer !== null) clearTimeout(this._nudgeIdleTimer)
-    this._nudgeIdleTimer = setTimeout(() => {
-      this._nudgeIdleTimer = null
-      this._endNudge()
-    }, NUDGE_SERIES_IDLE_MS)
-    this._refreshSelectionDependentMeasurements()
-    return true
-  }
-
-  /** Pans one step in the arrow's direction, as a wheel pan does. */
-  private _panFromKeyboard(direction: ScenePoint, large: boolean): void {
-    const step = large ? ARROW_PAN_LARGE_STEP_PX : ARROW_PAN_STEP_PX
-    const beforeRevision = this._deps.camera.snapshot.peek().revision
-    this._deps.cameraNavigation.panBy({ x: -direction.x * step, y: -direction.y * step })
-    if (this._deps.camera.snapshot.peek().revision === beforeRevision) return
-    this._deps.render('viewport')
-    this._refreshViewportDependentMeasurements()
-  }
-
+  /** The ToolHost owns the series; ending it refreshes the selection-dependent chrome (the session's nudge wrapper). */
   private _endNudge(options?: { readonly abort?: boolean }): void {
-    if (this._nudgeIdleTimer !== null) {
-      clearTimeout(this._nudgeIdleTimer)
-      this._nudgeIdleTimer = null
-    }
-    if (!this._nudging) return
-    this._nudging = false
-    if (options) this._deps.nudge?.endNudge(options)
-    else this._deps.nudge?.endNudge()
-    this._refreshSelectionDependentMeasurements()
-  }
-
-  private readonly _onFocusOut = (event: FocusEvent): void => {
-    const next = event.relatedTarget
-    if (next instanceof Node && this._deps.container.contains(next)) return
-    this._endNudge()
+    this._hooks.endNudgeSeries(options)
   }
 
   private _cancelTransientInteraction(options: SceneInteractionCancellationOptions = {}): void {
     this._endNudge()
     this._clearPointerGesture()
-    if (options.releaseSpace) this._spaceHeld = false
+    if (options.releaseSpace) this._hooks.space.release()
     const activeAdapter = this._activeToolAdapter()
     try {
       runCanvasRuntimeCleanups([
@@ -1215,7 +1196,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         () => this._tooltip.hide(),
         () => this._lockedAffordance.hide(),
         () => {
-          this._deps.container.style.cursor = cursorForTool(this._tool)
+          if (!this._idle()) this._deps.container.style.cursor = cursorForTool(this._tool)
         },
       ], 'Scene Interaction cancellation failed')
       this._transientCancellationPending = false
@@ -1240,7 +1221,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   private _publishToolGuidance(): void {
     const publish = this._deps.publishToolGuidance
-    if (!publish || this._disposed || !this._toolRegistry) return
+    // A registered tool's guidance is the ToolHost's.
+    if (!publish || this._disposed || !this._toolRegistry || this._idle()) return
     const adapter = this._activeToolAdapter()
     const described = adapter?.describeGuidance?.() ?? {}
     publish({
@@ -1283,10 +1265,16 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   private _canShowSelectAffordances(): boolean {
     return this._tool === 'select'
+      && !this._idle()
       && !this._overviewMode
       && !this._transientCancellationPending
       && !this._hasActiveSceneEdit()
       && !this._annotationEditor.hasActiveEditor()
+  }
+
+  /** A registered tool is armed: the ToolHost runs it and the bridge holds nothing. */
+  private _idle(): boolean {
+    return this._hooks.isRegistered(this._tool)
   }
 
   private _beginDesignObjectDragPresentation(): void {
@@ -1335,8 +1323,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   private _switchTool(name: string): void {
-    this._deps.setTool(name)
-    if (this._tool !== name) this.setTool(name)
+    this._hooks.switchTool(name)
   }
 
   private _focusInteractionHost(): void {
@@ -1384,51 +1371,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (this._pendingInteractionHostFocusFrame === null) return
     window.cancelAnimationFrame(this._pendingInteractionHostFocusFrame)
     this._pendingInteractionHostFocusFrame = null
-  }
-
-  /**
-   * Esc on the map once the active tool has had its turn (a gesture in
-   * progress cancels first): leave the tool for Select, then clear the
-   * selection. Tools that keep a pick (a stamp, a row source) drop it first.
-   */
-  private _runEscapeChain(event: KeyboardEvent): boolean {
-    if (event.key !== 'Escape' || event.defaultPrevented) return false
-    if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return false
-    if (!isCanvasKeyboardShortcutTarget(event.target, this._deps.container)) return false
-    if (this._tool !== 'select') {
-      event.preventDefault()
-      this._switchTool('select')
-      return true
-    }
-    if (this._deps.getSelection().length === 0) return false
-    event.preventDefault()
-    this._deps.clearSelection()
-    this._deps.render('scene')
-    this._refreshSelectionDependentMeasurements()
-    return true
-  }
-
-  private _beginSelectedAnnotationTextEditFromKeyboard(event: KeyboardEvent): boolean {
-    if (this._tool !== 'select') return false
-    if (event.key !== 'Enter' && event.key !== 'F2') return false
-    if (!isCanvasKeyboardShortcutTarget(event.target, this._deps.container)) return false
-    if (isEditableTarget(event.target)) return false
-    if (this._activeToolAdapter()?.shouldSuppressSharedKeyboard?.(event) ?? false) return false
-
-    const selection = this._deps.getDesignObjectSelection()
-    if (
-      selection.editableTargets.length !== 1
-      || (selection.lockedTargets?.length ?? 0) > 0
-      || (selection.blockedTargets?.length ?? 0) > 0
-    ) return false
-
-    const target = selection.editableTargets[0]
-    if (target?.kind !== 'annotation') return false
-    if (!this._beginAnnotationTextEdit(target.id)) return false
-
-    event.preventDefault()
-    event.stopPropagation()
-    return true
   }
 
   private _beginAnnotationTextEdit(annotationId: string): boolean {
@@ -1516,42 +1458,11 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   private _clearPointerGesture(): void {
+    const pointerGesture = this._pointerGesture
     this._pointerGesture = null
     this._toolPointerDrag = null
-    this._captureAttemptPointerId = null
-    const capturedPointerId = this._capturedPointerId
-    // Clear ownership before release: loss dispatched from release is stale by design.
-    this._capturedPointerId = null
-    if (capturedPointerId === null) return
-    try {
-      this._deps.container.releasePointerCapture(capturedPointerId)
-    } catch {
-      // Pointer capture is an optional delivery aid. State is already fenced and
-      // window listeners retain ownership, so a failed release cannot strand an edit.
-    }
-  }
-
-  private _captureInteractionPointer(pointerId: number): void {
-    const container = this._deps.container
-    if (
-      typeof container.setPointerCapture !== 'function'
-      || typeof container.hasPointerCapture !== 'function'
-    ) return
-
-    this._captureAttemptPointerId = pointerId
-    try {
-      container.setPointerCapture(pointerId)
-      if (
-        this._pointerGesture?.pointerId === pointerId
-        && container.hasPointerCapture(pointerId)
-      ) {
-        this._capturedPointerId = pointerId
-      }
-    } catch {
-      // Window capture listeners are retained for unsupported or failed capture.
-    } finally {
-      if (this._captureAttemptPointerId === pointerId) this._captureAttemptPointerId = null
-    }
+    // The source clears its ownership before it releases: a loss dispatched by the release is stale by design.
+    if (pointerGesture) this._hooks.pointerCapture.release(pointerGesture.pointerId)
   }
 
   private _retryPendingTransientCancellation(event: Event): boolean {
@@ -1565,61 +1476,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
     return true
   }
-
-  private _attach(): void {
-    if (this._attached || this._disposed) return
-    const container = this._deps.container
-    try {
-      container.addEventListener('pointerdown', this._onPointerDown, { capture: true })
-      container.addEventListener('pointerleave', this._onPointerLeave)
-      container.addEventListener('lostpointercapture', this._onLostPointerCapture)
-      window.addEventListener('pointermove', this._onPointerMove, { capture: true })
-      window.addEventListener('pointerup', this._onPointerUp, { capture: true })
-      window.addEventListener('pointercancel', this._onPointerCancel, { capture: true })
-      window.addEventListener('keydown', this._onKeyDown, { capture: true })
-      window.addEventListener('keyup', this._onKeyUp)
-      window.addEventListener('blur', this._onWindowBlur)
-      container.addEventListener('contextmenu', this._onContextMenu)
-      container.addEventListener('wheel', this._onWheel, { passive: false })
-      container.addEventListener('dragover', this._onDragOver)
-      container.addEventListener('dragleave', this._onDragLeave)
-      container.addEventListener('drop', this._onDrop)
-      container.addEventListener('focusout', this._onFocusOut)
-      this._attached = true
-    } catch (error) {
-      this._attached = true
-      try {
-        this._detach()
-      } catch {
-        // Preserve the listener-installation failure after attempting every removal.
-      }
-      throw error
-    }
-  }
-
-  private _detach(): void {
-    if (!this._attached) return
-    this._attached = false
-    const container = this._deps.container
-    runCanvasRuntimeCleanups([
-      () => container.removeEventListener('pointerdown', this._onPointerDown, { capture: true }),
-      () => container.removeEventListener('pointerleave', this._onPointerLeave),
-      () => container.removeEventListener('lostpointercapture', this._onLostPointerCapture),
-      () => window.removeEventListener('pointermove', this._onPointerMove, { capture: true }),
-      () => window.removeEventListener('pointerup', this._onPointerUp, { capture: true }),
-      () => window.removeEventListener('pointercancel', this._onPointerCancel, { capture: true }),
-      () => window.removeEventListener('keydown', this._onKeyDown, { capture: true }),
-      () => window.removeEventListener('keyup', this._onKeyUp),
-      () => window.removeEventListener('blur', this._onWindowBlur),
-      () => container.removeEventListener('contextmenu', this._onContextMenu),
-      () => container.removeEventListener('wheel', this._onWheel),
-      () => container.removeEventListener('dragover', this._onDragOver),
-      () => container.removeEventListener('dragleave', this._onDragLeave),
-      () => container.removeEventListener('drop', this._onDrop),
-      () => container.removeEventListener('focusout', this._onFocusOut),
-    ], 'Scene Interaction listener removal failed')
-  }
-
 }
 
 function disposeSceneToolRegistry(registry: SceneToolRegistry): void {
@@ -1663,38 +1519,4 @@ function groupLayerNames(scene: ScenePersistedState, groupId: string): string[] 
   const group = scene.groups.find((entry) => entry.id === groupId)
   if (!group) return []
   return [...new Set(resolveSceneObjectGroupMembers(scene, group).map(sceneObjectGroupMemberLayerName))]
-}
-
-function isCanvasKeyboardShortcutTarget(target: EventTarget | null, container: HTMLElement): boolean {
-  if (target === window) return true
-  if (!(target instanceof Node)) return false
-  if (!container.contains(target)) return false
-  const element = target instanceof HTMLElement ? target : target.parentElement
-  if (!element) return false
-  if (isKeyboardInteractiveElement(element)) return false
-  return true
-}
-
-function isKeyboardInteractiveEventTarget(target: EventTarget | null): boolean {
-  const element = target instanceof HTMLElement
-    ? target
-    : target instanceof Node
-      ? target.parentElement
-      : null
-  return element ? isKeyboardInteractiveElement(element) : false
-}
-
-function isKeyboardInteractiveElement(element: HTMLElement): boolean {
-  return element.closest([
-    'button',
-    'a[href]',
-    'input',
-    'textarea',
-    'select',
-    '[contenteditable="true"]',
-    '[role="button"]',
-    '[role="menu"]',
-    '[role="dialog"]',
-    'dialog',
-  ].join(',')) !== null
 }

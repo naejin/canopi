@@ -11,7 +11,6 @@ import type { ToolHost } from './interaction-ports'
 import type { Modifiers, ToolId } from './interaction-types'
 import { isEditableTarget } from './input/editable-target'
 import type { CanvasEscapeLayer, CanvasKeyboardPort, CanvasKeyCommand } from './runtime'
-import type { ToolCommand } from './tools/tool'
 import type { ViewNavigation } from './view/navigation'
 import type { ScreenPoint, ViewFrameSource } from './view/types'
 
@@ -32,6 +31,7 @@ const DIRECTIONS: Readonly<Record<'left' | 'right' | 'up' | 'down', ScreenPoint>
   up: { x: 0, y: -1 },
   down: { x: 0, y: 1 },
 }
+type ToolCommand = Parameters<ToolHost['command']>[0]
 const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'AltGraph', 'CapsLock'])
 const KEYBOARD_INTERACTIVE_SELECTOR = [
   'button',
