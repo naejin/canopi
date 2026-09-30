@@ -1295,5 +1295,39 @@ describe('ToolHost', () => {
       expect(port.isOpen()).toBe(false)
       view.dispose()
     })
+
+    it('the menu port follows the app\'s own close, which gives focus back to the map', () => {
+      const source = createToolSceneSource(sceneStoreWith({}))
+      const opened: CanvasContextMenuRequest[] = []
+      const closed: CanvasContextMenuRequest[] = []
+      const returnFocus = vi.fn()
+      const view = createTestView()
+      const port = createContextMenuPort({
+        container: document.createElement('div'),
+        camera: view.legacyCamera,
+        adapter: { open: (request) => opened.push(request), close: (request) => closed.push(request) },
+        commands: {} as never,
+        returnFocus,
+        scene: createToolScene(source),
+        selectionModel: source.selectionModel,
+      })
+
+      port.open({ at: { x: 10, y: 10 }, source: 'mouse', screen: { x: 10, y: 10 }, hit: null })
+      const first = opened.at(-1)!
+      // Esc, Tab or a chosen command: the app closes its menu itself and hands focus back through the request.
+      first.returnFocus()
+      expect(returnFocus).toHaveBeenCalledTimes(1)
+      expect(port.isOpen()).toBe(false)
+
+      port.open({ at: { x: 20, y: 20 }, source: 'mouse', screen: { x: 20, y: 20 }, hit: null })
+      // A dialog the first menu opened hands focus back later: the second menu is still open.
+      first.returnFocus()
+      expect(port.isOpen()).toBe(true)
+
+      port.close()
+      expect(closed).toEqual([opened.at(-1)])
+      expect(port.isOpen()).toBe(false)
+      view.dispose()
+    })
   })
 })

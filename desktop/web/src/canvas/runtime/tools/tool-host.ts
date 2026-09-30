@@ -13,6 +13,7 @@
 // the context-menu port, so interaction-session.ts imports nothing else from tools/ (P5b).
 
 import { signal } from '@preact/signals'
+import type { CanvasContextMenuRequest } from '../app-adapter'
 import { runCanvasRuntimeCleanups } from '../cleanup'
 import type { Gesture, MenuSource, PressTarget } from '../input/gestures'
 import type { TargetClass } from '../input/raw-input'
@@ -115,15 +116,29 @@ export type ContextMenuPortOptions = Parameters<typeof createCanvasContextMenu>[
 export function createContextMenuPort(options: ContextMenuPortOptions): ContextMenuPort {
   const { scene, selectionModel, ...controllerOptions } = options
   const appAdapter = controllerOptions.adapter
+  /** The last request the app was handed, as the controller built it and as the app holds it. */
+  let handed: { readonly built: CanvasContextMenuRequest; readonly held: CanvasContextMenuRequest } | null = null
   let open = false
   const controller = createCanvasContextMenu({
     ...controllerOptions,
     adapter: appAdapter && {
-      open(request) {
+      open(built) {
+        // The app closes its own menu on Esc, Tab or a chosen command and then hands focus back through the request: the
+        // port follows that close. A close with no focus return (a press or focus elsewhere, a resize, a scroll) tells the
+        // runtime nothing; a press on the map closes the menu through the host (rawPress) first.
+        const held: CanvasContextMenuRequest = {
+          ...built,
+          returnFocus: () => {
+            if (handed?.held === held) open = false
+            built.returnFocus()
+          },
+        }
+        handed = { built, held }
         open = true
-        appAdapter.open(request)
+        appAdapter.open(held)
       },
-      close(request) {
+      close(built) {
+        const request = handed?.built === built ? handed.held : built
         open = false
         appAdapter.close(request)
       },
