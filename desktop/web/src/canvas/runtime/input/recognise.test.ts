@@ -612,13 +612,25 @@ describe('recognise: cancel fences', () => {
     expect(kinds(result.gestures)).toEqual(['pan:start', 'pan:move', 'pan:end', 'cancel'])
   })
 
-  it('a tool change cancels the live session; the same tool does not', () => {
-    const same = run(seq('same tool', WINDOWS, [
+  it('arming a tool cancels the live session, the armed tool included; a pointing-device change does not', () => {
+    // Today's setTool cancels the live gesture whatever the tool (scene-interaction.ts setTool → _cancelTransientInteraction):
+    // V during a band drag with Select armed drops the band, and the pointer's later moves are hovers.
+    const rearmed = run(seq('re-arm the armed tool', WINDOWS, [
+      down(100, 100),
+      move(120, 100, { buttons: 1 }),
+      configure({ tool: 'select', mode: 'site', pointingDevice: 'mouse' }),
+      move(130, 100, { buttons: 1 }),
+      up(130, 100),
+    ]))
+    expect(kinds(rearmed.gestures)).toEqual(['press', 'drag-start', 'cancel', 'hover'])
+    expect(rearmed.gestures[2]).toEqual({ kind: 'cancel', reason: 'tool-change' })
+    expect(rearmed.state.sessions.size).toBe(0)
+    const device = run(seq('pointing device', WINDOWS, [
       down(100, 100),
       configure({ tool: 'select', mode: 'site', pointingDevice: 'trackpad' }),
       up(100, 100),
     ]))
-    expect(kinds(same.gestures)).toEqual(['press', 'tap'])
+    expect(kinds(device.gestures)).toEqual(['press', 'tap'])
     const changed = run(seq('tool change', WINDOWS, [
       down(100, 100),
       configure({ tool: 'polygon', mode: 'site', pointingDevice: 'mouse' }),
