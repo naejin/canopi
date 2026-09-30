@@ -8,7 +8,7 @@
 // supplies the platform clock, animation frames, timers and device-pixel ratio, and speaks SceneViewportState (P4). It imports
 // nothing that reaches MapLibre or Pixi (P5c): the MapLibre shim (maplibre/workspace-camera.ts) extends it.
 
-import { signal, type ReadonlySignal, type Signal } from '@preact/signals'
+import { effect, signal, untracked, type ReadonlySignal, type Signal } from '@preact/signals'
 import { createSessionPlane, type SessionPlane, type SessionPlaneTransform } from '../session-plane'
 import {
   createWorkspaceCameraPolicy,
@@ -123,6 +123,14 @@ export interface CameraMoveOptions {
 export interface WorkspaceCameraOwner {
   readonly frame: WorkspaceCameraFrameReader
   readonly navigation: WorkspaceCameraNavigation
+  /** The driver host the shim wraps: the runtime that adopts the shim unwraps it for the view surfaces (0A-2). */
+  readonly host: CameraDriverHostController
+  /**
+   * The runtime that adopts the shim hands it the Scene's session plane: the host's headless drivers are built on it from then on,
+   * and a headless camera keeps its plane placement when a hydration replaces it, so the view reads the Design's ground as today's
+   * plane viewport did. Returns the watch's disposer.
+   */
+  followScenePlane(plane: ReadonlySignal<SessionPlane | null>): () => void
   /** Must detach owner-specific listeners and be safe to call during failed setup. */
   dispose(): void
 }
@@ -139,8 +147,9 @@ export class CameraController implements
   readonly frame: WorkspaceCameraFrameReader = this
   readonly navigation: WorkspaceCameraNavigation = this
 
-  /** The session plane the host's headless drivers are built on: its own, not the Scene's (INV-WR-07). */
-  protected plane: SessionPlane
+  /** The Scene's plane once a runtime adopted this shim (followScenePlane). */
+  private scenePlane: ReadonlySignal<SessionPlane | null> | null = null
+  private ownPlane: SessionPlane
   private readonly _snapshot: Signal<CameraViewportSnapshot>
   private _policy: WorkspaceCameraPolicy
   /** Today's temporary-focus bookmark, in the plane terms reprojectViewport moves it in. */
@@ -158,7 +167,7 @@ export class CameraController implements
   ) {
     this._policy = policy
     // The bare shim's plane shares the policy's latitude, so px/m and the policy's scale bounds use one Mercator factor (§1.1b).
-    this.plane = over?.plane ?? createSessionPlane({ lon: 0, lat: policy.referenceLatitudeDeg })
+    this.ownPlane = over?.plane ?? createSessionPlane({ lon: 0, lat: policy.referenceLatitudeDeg })
     const clock = over?.host.driverDeps.clock ?? platformClock()
     this.host = over?.host ?? createCameraDriverHost({
       clock,
@@ -185,6 +194,30 @@ export class CameraController implements
   }
 
   get policy(): WorkspaceCameraPolicy { return this._policy }
+
+  /**
+   * The session plane the host's headless drivers are built on: the Scene's once a runtime adopted this shim, else the shim's own
+   * (the bare shim's plane is not the Scene's, INV-WR-07).
+   */
+  protected get plane(): SessionPlane {
+    return this.scenePlane?.peek() ?? this.ownPlane
+  }
+
+  protected set plane(next: SessionPlane) {
+    this.ownPlane = next
+  }
+
+  /** The Scene's plane when a runtime adopted this shim, else null. */
+  protected get followedScenePlane(): SessionPlane | null {
+    return this.scenePlane?.peek() ?? null
+  }
+
+  followScenePlane(plane: ReadonlySignal<SessionPlane | null>): () => void {
+    this.scenePlane = plane
+    return effect(() => {
+      if (plane.value) untracked(() => this.host.followPlane())
+    })
+  }
 
   get viewport(): SceneViewportState {
     return { ...this._snapshot.peek().viewport }

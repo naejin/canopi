@@ -19,6 +19,7 @@ import type {
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
 import { TEST_GEO_ORIGIN } from './support/geo-design'
+import { createTestViewReadSurface } from './support/canvas-query-surface'
 import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/browser-app-data'
 import { createBrowserDesignSessionController, type BrowserDesignFileAdapter } from '../web/browser-design-session'
 import { WebCanvasWorkspace } from '../web/WebCanvasWorkspace'
@@ -881,6 +882,11 @@ function fakeCommandSurface(): CanvasCommandSurface {
       showPlace: vi.fn(() => false),
       zoomBy: vi.fn(),
       setFramingInsets: vi.fn(),
+      zoomToSelection: vi.fn(),
+      resetNorth: vi.fn(),
+      rotateBy: vi.fn(),
+      beginRotation: vi.fn(() => ({ update: vi.fn(), end: vi.fn(), cancel: vi.fn() })),
+      showCamera: vi.fn(),
     },
     history: {
       canUndo: signal(false),
@@ -955,6 +961,7 @@ function fakeQuerySurface(): CanvasQuerySurface {
       revision: 0,
     }),
     sessionPlane: signal<SessionPlane | null>(createSessionPlane(TEST_GEO_ORIGIN)),
+    view: createTestViewReadSurface(),
     getSpeciesFocus: () => ({ canonicalName: null }),
     getPlantLabelCoverage: () => ({ labelled: 0, inView: 0 }),
     capturePrintSnapshot: () => null,

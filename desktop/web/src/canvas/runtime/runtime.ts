@@ -17,13 +17,12 @@ import type { PlantSymbolId, SceneDesignObjectTarget, ScenePoint } from './scene
 import type {
   CameraViewportSnapshot,
   SceneBounds,
-  TemporaryBoundsFocusOptions,
-  CameraFrameInsets,
 } from './camera'
 import type { ScenePersistedState, SceneViewportState } from './scene'
 import type { PlantLabelMode } from './plant-display'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { Modifiers } from './interaction-types'
+import type { ViewCommandSurface, ViewReadSurface } from './view/read-surface'
 import type { WorldPoint } from './view/types'
 
 export interface CanvasRuntimeDocumentMetadata {
@@ -81,30 +80,11 @@ export interface CanvasToolCommandSurface {
   readonly plantRowSpacing: CanvasPlantRowSpacingField
 }
 
-export interface CanvasViewportCommandSurface {
-  zoomIn(): void
-  zoomOut(): void
-  /** Multiply the scale about the screen centre (camera only). */
-  zoomBy(factor: number): void
-  zoomToFit(): void
-  returnToDesign(): void
-  focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
-  returnFromTemporaryFocus(): boolean
-  /**
-   * Screen edges covered by the workspace's floating chrome. Fit to Design,
-   * Return to Design and temporary focus frame into the visible map area.
-   */
-  setFramingInsets(insets: CameraFrameInsets): void
-  /**
-   * Moves the view to a place; design objects never move. `fly` animates the
-   * move on the map; the default jumps.
-   */
-  showPlace(
-    place: { readonly lon: number; readonly lat: number },
-    zoom: number,
-    options?: { readonly motion?: 'fly' | 'jump' },
-  ): boolean
-}
+/**
+ * The viewport commands app code may give: the view's command surface (spec §1.1a). The name stays for `canvas/session.ts`
+ * (`currentCanvasViewportCommandSurface`).
+ */
+export type CanvasViewportCommandSurface = ViewCommandSurface
 
 export interface CanvasHistoryCommandSurface {
   readonly canUndo: ReadonlySignal<boolean>
@@ -239,7 +219,10 @@ export interface CanvasQuerySurface {
   /** Labels drawn for the plants in view; zero in overview and while nothing is mounted. */
   getPlantLabelCoverage(): CanvasPlantLabelCoverage
   readonly revision: CanvasQueryRevision
+  /** Legacy camera snapshot (0A to the end of 0D2): its last readers move to `view` in 0D2, and the field goes then. */
   readonly viewport: ReadonlySignal<CameraViewportSnapshot>
+  /** What app code observes of the view (spec §1.1a): coarse signals and the capture of what is on screen. */
+  readonly view: ViewReadSurface
   // The open Design's metre frame; null only before the first hydration.
   readonly sessionPlane: ReadonlySignal<SessionPlane | null>
   capturePrintSnapshot(): CanvasPrintSnapshot | null

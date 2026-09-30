@@ -14,6 +14,7 @@ import { createViewFrameSource } from './frame-source'
 import { createHeadlessCameraDriver } from './headless-driver'
 import { createNavigationPolicy, type NavigationPolicy } from './navigation-policy'
 import type { FrameSourceDeps, PlanarCamera, ScreenInsets, ViewFrame, ViewScreen } from './types'
+import { planarCameraOf } from './view-transform'
 
 export interface CameraDriverHostOptions {
   readonly clock: () => number
@@ -34,6 +35,12 @@ export interface CameraDriverHostOptions {
 export interface CameraDriverHostController extends CameraDriverHost {
   /** What every driver on this host runs with: an attached driver is built with them, and navigation reads `policy` from them. */
   readonly driverDeps: CameraDriverDeps
+  /**
+   * The runtime's plane was replaced without a re-origin (a hydration): a headless camera keeps its plane placement, bit for bit,
+   * and reads its ground on the new plane from now on (hydration keeps the plane camera). Attached, the map is the camera and
+   * only planeChanged moves its plane. Nothing happens while the headless driver is already on the runtime's plane.
+   */
+  followPlane(): void
   dispose(): void
 }
 
@@ -49,20 +56,23 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
   })
   const failure = signal<CameraDriverFailure | null>(null)
 
+  const initialPlane = options.plane()
   let live: CameraDriver = createHeadlessCameraDriver({
     deps: driverDeps,
     timers: options.timers,
-    plane: options.plane(),
+    plane: initialPlane,
     screen: options.screen ?? EMPTY_SCREEN,
     camera: options.camera ?? TODAY_UNPUBLISHED_CAMERA,
     insets: options.insets,
   })
   let attached = false
+  /** The plane the live headless driver places the camera in; null while an attached driver is live. */
+  let headlessPlane: SessionPlane | null = initialPlane
   let revision = 0
   let planeRevision = 0
   let relayedDriver = live
   let relayedDriverPlaneRevision = live.frames.viewFrame.peek().view.planeRevision
-  let relayedPlane = options.plane()
+  let relayedPlane = initialPlane
   let disposed = false
   let release = connect(live)
 
@@ -76,11 +86,11 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
   /** Relays one frame of the live driver. The plane revision moves when the driver re-origins, or when a swap finds a new plane. */
   function relay(driver: CameraDriver, frame: ViewFrame): void {
     if (disposed || driver !== live) return
-    const plane = options.plane()
-    const planeMoved = driver === relayedDriver
-      ? frame.view.planeRevision !== relayedDriverPlaneRevision
-      : plane !== relayedPlane
-    if (planeMoved) planeRevision += 1
+    const reoriginated = driver === relayedDriver && frame.view.planeRevision !== relayedDriverPlaneRevision
+    // A headless driver re-origins only through planeChanged, which the runtime calls with its own plane.
+    if (reoriginated && headlessPlane) headlessPlane = options.plane()
+    const plane = headlessPlane ?? options.plane()
+    if (reoriginated || (driver !== relayedDriver && plane !== relayedPlane)) planeRevision += 1
     relayedDriver = driver
     relayedDriverPlaneRevision = frame.view.planeRevision
     relayedPlane = plane
@@ -133,12 +143,18 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
     const last = frames.viewFrame.peek()
     const plane = options.plane()
     const { screen } = last.view
+    toHeadless(plane, viewCameraToPlanar(last.view.camera, screen, plane))
+  }
+
+  function toHeadless(plane: SessionPlane, camera: PlanarCamera): void {
+    const last = frames.viewFrame.peek()
+    headlessPlane = plane
     swapTo(createHeadlessCameraDriver({
       deps: driverDeps,
       timers: options.timers,
       plane,
-      screen,
-      camera: viewCameraToPlanar(last.view.camera, screen, plane),
+      screen: last.view.screen,
+      camera,
       insets: last.insets,
     }), false, () => {})
   }
@@ -169,6 +185,7 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
       }
       const last = frames.viewFrame.peek()
       failure.value = null
+      headlessPlane = null
       swapTo(driver, true, () => {
         driver.setInsets(last.insets)
         driver.apply({ kind: 'set', target: last.view.camera, animation: 'none' })
@@ -177,6 +194,12 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
     detach() {
       if (disposed || !attached) return
       detachTo()
+    },
+    followPlane() {
+      if (disposed || attached || !headlessPlane) return
+      const plane = options.plane()
+      if (plane === headlessPlane) return
+      toHeadless(plane, planarCameraOf(frames.viewFrame.peek().view))
     },
     replacePolicy(policy) {
       if (disposed) return

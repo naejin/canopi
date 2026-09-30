@@ -1,6 +1,6 @@
-import { viewportCenterWorld } from '../../projection'
-import type { CameraViewportSnapshot, WorkspaceCameraNavigation } from '../camera'
+import type { WorkspaceCameraNavigation } from '../camera'
 import type { SceneStateReader } from '../scene'
+import type { ViewFrame } from '../view/types'
 import type { SceneCommandAdmission, SceneRuntimeEditCoordinator } from './transactions'
 
 interface SceneRuntimeReoriginOptions {
@@ -22,10 +22,12 @@ export class SceneRuntimeReoriginController {
 
   constructor(private readonly options: SceneRuntimeReoriginOptions) {}
 
-  observe(frame: CameraViewportSnapshot): void {
+  observe(frame: ViewFrame): void {
     if (this.disposed || this.scheduled || frame.mode !== 'site') return
-    const centre = viewportCenterWorld(frame.viewport, frame.screenSize)
-    if (![centre.x, centre.y].every(Number.isFinite)) return
+    const { screen } = frame.view
+    // The ground under the screen centre, whatever the bearing.
+    const centre = frame.view.screenToWorld({ x: screen.width / 2, y: screen.height / 2 })
+    if (!centre || ![centre.x, centre.y].every(Number.isFinite)) return
     if (!this.options.sceneState.sessionPlane.needsReorigin(centre)) return
     this.scheduled = true
     queueMicrotask(() => {

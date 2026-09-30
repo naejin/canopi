@@ -120,14 +120,23 @@ export class MapLibreWorkspaceCameraOwner extends CameraController {
     this.host.detach()
   }
 
+  /**
+   * Re-expresses the attached map's frame in the session plane after its origin changed; the map stays put. An attachment made
+   * through this shim reads its own origin; one the workspace made on the host (0A-2) follows the Scene's plane.
+   */
   refreshOrigin(): void {
     const active = this.active
-    if (!active) return
+    const scenePlane = this.followedScenePlane
+    if (!active && !(scenePlane && this.frameNow().attached)) return
     this.withOneSnapshot(() => {
-      const origin = active.attachment.readOrigin()
+      const origin = active ? active.attachment.readOrigin() : scenePlane!.origin
       // A re-origin keeps the temporary focus; reprojectViewport moves it into
       // the new plane. A Document load clears it through its own surface.
       this.syncPolicyToOrigin(origin, { keepTemporaryFocus: true })
+      if (!active) {
+        this.driver().planeChanged(scenePlane!)
+        return
+      }
       if (this.plane.origin.lat === origin.lat && this.plane.origin.lon === origin.lon) return
       this.plane = createSessionPlane(origin)
       this.driver().planeChanged(this.plane)
@@ -141,11 +150,16 @@ export class MapLibreWorkspaceCameraOwner extends CameraController {
     this.detach()
   }
 
-  /** Today's owner replayed a move whose map call failed on the camera it fell back to; so does this shim. */
+  /**
+   * Today's owner replayed a move whose map call failed on the camera it fell back to; so does this shim, whichever side attached
+   * the map.
+   */
   protected override command<T>(run: () => T): T {
-    const active = this.active
+    const attached = this.frameNow().attached
+    const failureBefore = this.host.failure.peek()
     const result = run()
-    if (!active || !active.failureReported || this.active !== null || this.disposed) return result
+    const failure = this.host.failure.peek()
+    if (!attached || this.disposed || !failure || failure === failureBefore || this.frameNow().attached) return result
     return run()
   }
 

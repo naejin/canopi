@@ -1,7 +1,7 @@
 import { computeScenePhysicalExtentMeters } from '../../canvas/runtime/scene-physical-extent'
 import { buildCanvasPrintSnapshot } from '../../canvas/runtime/print-snapshot'
 import { createTestSceneRendererSnapshot } from './scene-renderer-snapshot'
-import { signal } from '@preact/signals'
+import { computed, signal, type ReadonlySignal } from '@preact/signals'
 import type { CameraViewportSnapshot } from '../../canvas/runtime/camera'
 import {
   createDefaultScenePersistedState,
@@ -14,6 +14,10 @@ import type {
   CanvasQuerySurface,
 } from '../../canvas/runtime/runtime'
 import type { PlacedPlant } from '../../types/design'
+import { createViewReadSurface } from '../../canvas/runtime/view/frame-source'
+import type { ViewReadSurface } from '../../canvas/runtime/view/read-surface'
+import type { ViewFrame, ViewFrameSource } from '../../canvas/runtime/view/types'
+import { buildViewTransformFromPlane } from '../../canvas/runtime/view/view-transform'
 import { createSessionPlane, type SessionPlane } from '../../canvas/session-plane'
 import { TEST_GEO_ORIGIN } from './geo-design'
 
@@ -78,6 +82,7 @@ export function createTestCanvasQuerySurface({
   return {
     revision,
     viewport: viewportSnapshot,
+    view: createBoundTestView(viewportSnapshot, sessionPlaneSignal),
     sessionPlane: sessionPlaneSignal,
     getSpeciesFocus: () => ({ canonicalName: null }),
     getPlantLabelCoverage: () => plantLabelCoverage,
@@ -166,5 +171,63 @@ export function createTestCanvasQuerySurface({
     setSelection: (nextSelection) => {
       currentSelection = nextSelection.map((target) => ({ ...target }))
     },
+  }
+}
+
+/** A view read surface over the default fake's camera (400 x 300 at the identity viewport), for literal fakes. */
+export function createTestViewReadSurface(): ViewReadSurface {
+  return createTestCanvasQuerySurface().view
+}
+
+interface TestViewBinding {
+  readonly snapshot: ReadonlySignal<CameraViewportSnapshot>
+  readonly plane: ReadonlySignal<SessionPlane | null>
+}
+
+const testViewBindings = new WeakMap<ViewReadSurface, ReturnType<typeof signal<TestViewBinding>>>()
+const NO_INSETS = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 })
+const FALLBACK_PLANE = createSessionPlane(TEST_GEO_ORIGIN)
+
+/**
+ * The fake's `view` follows its own `viewport` and `sessionPlane` signals live, as the runtime's view follows its camera: a
+ * bearing-0 frame at the snapshot's placement, settled at once.
+ */
+function createBoundTestView(
+  snapshot: ReadonlySignal<CameraViewportSnapshot>,
+  plane: ReadonlySignal<SessionPlane | null>,
+): ViewReadSurface {
+  const binding = signal<TestViewBinding>({ snapshot, plane })
+  const viewFrame = computed(() => {
+    const bound = binding.value
+    return testViewFrame(bound.snapshot.value, bound.plane.value ?? FALLBACK_PLANE)
+  })
+  const frames: ViewFrameSource = { viewFrame, settledViewFrame: viewFrame, onViewFrame: () => () => {} }
+  const view = createViewReadSurface(frames, () => binding.peek().plane.peek() ?? FALLBACK_PLANE)
+  testViewBindings.set(view, binding)
+  return view
+}
+
+/** A test that spreads a fake and replaces its `viewport` or `sessionPlane` gets a `view` that follows the replacements. */
+export function bindTestViewToSurface(queries: CanvasQuerySurface): void {
+  const binding = testViewBindings.get(queries.view)
+  if (binding) binding.value = { snapshot: queries.viewport, plane: queries.sessionPlane }
+}
+
+function testViewFrame(snapshot: CameraViewportSnapshot, plane: SessionPlane): ViewFrame {
+  const view = buildViewTransformFromPlane({
+    planar: { ...snapshot.viewport, bearingDeg: 0 },
+    screen: { ...snapshot.screenSize, devicePixelRatio: snapshot.devicePixelRatio },
+    plane,
+    planeRevision: 0,
+    revision: snapshot.revision,
+  })
+  return {
+    view,
+    mode: snapshot.mode,
+    scaleBounds: { min: snapshot.scaleBounds.minimum, max: snapshot.scaleBounds.maximum },
+    insets: NO_INSETS,
+    attached: false,
+    moving: false,
+    revision: snapshot.revision,
   }
 }

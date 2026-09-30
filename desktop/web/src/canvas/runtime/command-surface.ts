@@ -14,6 +14,7 @@ import type {
 } from './camera'
 import { sceneExtentPoints } from './scene-extent'
 import type { SceneRuntimePresentationController } from './scene-runtime/presentation'
+import type { ViewNavigation } from './view/navigation'
 import { getDesignObjectSelectionModel } from './scene-runtime/selection'
 import type {
   CanvasChromeCommandSurface,
@@ -67,11 +68,16 @@ interface SceneCanvasCommandSurfaceOptions {
   readonly readEmptySceneScale?: () => number
   readonly speciesFocus: SpeciesFocusCommands
   readonly sceneStore: SceneStateReader
-  readonly camera: Pick<WorkspaceCameraFrameReader, 'viewport' | 'screenSize'>
+  readonly camera: Pick<WorkspaceCameraFrameReader, 'screenSize'>
+  /** The legacy shim's navigation: the nine viewport commands app code gave before the view (0A to the end of 0D2). */
   readonly cameraNavigation: Pick<
     WorkspaceCameraNavigation,
-    'zoomIn' | 'zoomOut' | 'zoomAroundScreenPoint' | 'zoomToFit' | 'returnToDesign' | 'focusTemporaryBounds' | 'returnFromTemporaryFocus' | 'centerOn' | 'setFrameInsets'
+    'zoomIn' | 'zoomOut' | 'zoomAroundScreenPoint' | 'zoomToFit' | 'returnToDesign' | 'focusTemporaryBounds' | 'returnFromTemporaryFocus' | 'centerOn' | 'setFrameInsets' | 'clearTemporaryFocus'
   >
+  /** The view's navigation over the runtime's driver host: the commands the view adds (spec §1.1a). */
+  readonly viewNavigation: Pick<ViewNavigation, 'zoomToSelection' | 'resetNorth' | 'rotateBy' | 'beginRotation' | 'showCamera'>
+  /** The live frame's px/m, which sizes screen-sized notes and plants (INV-XF-27). */
+  readonly readViewScale: () => number
   readonly history: SceneHistoryCommands
   readonly commandAdmission: SceneCommandAdmission
   readonly settledReader: SettledSceneReader
@@ -192,6 +198,15 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
         // Chrome placed inside the visible map area (rulers) redraws against the new edges.
         this.options.invalidate('viewport')
       },
+      zoomToSelection: () => this.moveView(() => this.options.viewNavigation.zoomToSelection()),
+      resetNorth: () => this.moveView(() => this.options.viewNavigation.resetNorth()),
+      rotateBy: (direction) => this.moveView(() => this.options.viewNavigation.rotateBy(direction)),
+      beginRotation: (pivot) => this.options.viewNavigation.beginRotation(pivot),
+      showCamera: (camera, options) => this.moveView(() => {
+        // A new camera command drops the temporary focus, as showPlace does.
+        this.options.cameraNavigation.clearTemporaryFocus()
+        this.options.viewNavigation.showCamera(camera, options)
+      }),
     }
     this.history = {
       canUndo,
@@ -261,7 +276,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     if (!this.options.isSpatialEditingEnabled() || !Number.isFinite(delta.x) || !Number.isFinite(delta.y)) return false
     if (!this.nudge) {
       const scene = this.options.sceneStore.persisted
-      const viewportScale = this.options.camera.viewport.scale
+      const viewportScale = this.options.readViewScale()
       const selection = getDesignObjectSelectionModel(scene, this.options.sceneStore.session.selectedTargets, {
         annotationViewportScale: viewportScale,
         plantContext: this.options.presentation.createPlantPresentationContext(viewportScale),
@@ -307,7 +322,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       if (!savedObjectStamps) return
 
       const scene = this.options.sceneStore.persisted
-      const viewportScale = this.options.camera.viewport.scale
+      const viewportScale = this.options.readViewScale()
       const selection = getDesignObjectSelectionModel(
         scene,
         this.options.sceneStore.session.selectedTargets,
@@ -402,7 +417,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   private zoomToFit(): void {
     const scene = this.options.sceneStore.persisted
     this.options.cameraNavigation.zoomToFit(scene, {
-      extentPoints: sceneExtentPoints(scene, this.options.presentation.createPlantPresentationContext(this.options.camera.viewport.scale)),
+      extentPoints: sceneExtentPoints(scene, this.options.presentation.createPlantPresentationContext(this.options.readViewScale())),
       emptySceneScale: this.options.readEmptySceneScale?.(),
     })
     this.options.invalidate('viewport')
@@ -411,8 +426,14 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   private returnToDesign(): void {
     const scene = this.options.sceneStore.persisted
     this.options.cameraNavigation.returnToDesign(scene, {
-      extentPoints: sceneExtentPoints(scene, this.options.presentation.createPlantPresentationContext(this.options.camera.viewport.scale)),
+      extentPoints: sceneExtentPoints(scene, this.options.presentation.createPlantPresentationContext(this.options.readViewScale())),
     })
+    this.options.invalidate('viewport')
+  }
+
+  /** A view command: the chrome placed against the view redraws with it. */
+  private moveView(move: () => void): void {
+    move()
     this.options.invalidate('viewport')
   }
 

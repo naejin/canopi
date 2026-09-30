@@ -4,6 +4,7 @@ import { createTestView } from '../../../__tests__/support/test-view'
 import { createSessionPlane, type SessionPlane } from '../../session-plane'
 import { cameraScaleBoundsForPolicy, createWorkspaceCameraPolicy } from '../../workspace-camera-policy'
 import type { CameraDriver, CameraDriverFailure } from './camera-driver'
+import { createCameraDriverHost } from './driver-host'
 import { createHeadlessCameraDriver } from './headless-driver'
 import { createNavigationPolicy } from './navigation-policy'
 import type { ViewFrame } from './types'
@@ -161,6 +162,51 @@ describe('camera driver host', () => {
     const bounds = cameraScaleBoundsForPolicy(equatorial)
     expect(view.frames.viewFrame.peek().scaleBounds).toEqual({ min: bounds.minimum, max: bounds.maximum })
     view.dispose()
+  })
+
+  it('a headless camera follows a new runtime plane and keeps its plane placement; an attached one does not', () => {
+    const first = createSessionPlane({ lon: 2.35, lat: 48.85 })
+    let runtimePlane = first
+    const host = createCameraDriverHost({
+      clock: () => 0,
+      scheduleFrame: () => () => {},
+      timers: { set: () => 0, clear: () => {} },
+      policy: createWorkspaceCameraPolicy(),
+      reducedMotion: signal(false),
+      plane: () => runtimePlane,
+      screen: { width: 400, height: 300, devicePixelRatio: 1 },
+      camera: { x: 40, y: -25, scale: 3, bearingDeg: 0 },
+    })
+    const published: ViewFrame[] = []
+    host.frames.onViewFrame('overlays', (frame) => published.push(frame))
+    const before = host.frames.viewFrame.peek()
+
+    // The same plane: nothing to follow.
+    host.followPlane()
+    expect(published).toHaveLength(0)
+
+    // A hydration replaced the plane: the placement stays, bit for bit, and the ground is read on the new plane.
+    const hydrated = createSessionPlane({ lon: 13, lat: 23 })
+    runtimePlane = hydrated
+    host.followPlane()
+    expect(published).toHaveLength(1)
+    const followed = published[0]!
+    expect(followed.attached).toBe(false)
+    expect(planarCameraOf(followed.view)).toEqual(planarCameraOf(before.view))
+    expect(followed.view.planeRevision).toBe(before.view.planeRevision + 1)
+    const centre = hydrated.toGeo(followed.view.screenToWorld({ x: 200, y: 150 })!)
+    expect(followed.view.camera.center.lon).toBe(centre.lon)
+    expect(followed.view.camera.center.lat).toBe(centre.lat)
+    host.followPlane()
+    expect(published).toHaveLength(1)
+
+    // Attached, the map is the camera: only planeChanged moves its plane.
+    host.attach(standInDriver(hydrated))
+    const attachedFrames = published.length
+    runtimePlane = createSessionPlane({ lon: 14, lat: 24 })
+    host.followPlane()
+    expect(published).toHaveLength(attachedFrames)
+    host.dispose()
   })
 
   it('a driver that cannot release its map still hands the camera back, and the error follows', () => {

@@ -23,6 +23,7 @@ import type {
   CanvasRuntimeSurfaces,
 } from '../canvas/runtime/runtime'
 import { createCanvasDocumentReplacementToken } from '../canvas/runtime/runtime'
+import { createTestViewReadSurface } from './support/canvas-query-surface'
 
 function createQuerySurface() {
   return {
@@ -39,6 +40,7 @@ function createQuerySurface() {
       revision: 0,
     }),
     sessionPlane: signal(createSessionPlane(DEFAULT_NEW_DESIGN_VIEW)),
+    view: createTestViewReadSurface(),
     getSpeciesFocus: () => ({ canonicalName: null }),
     getPlantLabelCoverage: () => ({ labelled: 0, inView: 0 }),
     capturePrintSnapshot: () => null,
@@ -96,6 +98,11 @@ function createCommandSurface() {
       showPlace: () => false,
       zoomBy: () => {},
       setFramingInsets: () => {},
+      zoomToSelection: () => {},
+      resetNorth: () => {},
+      rotateBy: () => {},
+      beginRotation: () => ({ update: () => {}, end: () => {}, cancel: () => {} }),
+      showCamera: () => {},
     },
     history: {
       canUndo: signal(false),
