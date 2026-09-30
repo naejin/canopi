@@ -38,6 +38,7 @@ function deps(overrides: Partial<DomInputSourceDeps> = {}): DomInputSourceDeps {
     keys: { physicalCtrl: () => false, lastKeyboardMenuAt: () => null },
     clock: () => 1000,
     timers: { set: vi.fn(() => 1), clear: vi.fn() },
+    listensToRulers: false,
     ...overrides,
   }
 }
@@ -69,7 +70,7 @@ describe('createDomInputSource', () => {
     }
     const source = createDomInputSource(deps({
       legacyKeys: { keydown: vi.fn(), keyup: vi.fn() },
-      rulers: { createGuideAt: vi.fn() },
+      listensToRulers: true,
     }))
     const dispose = attachRecording(source)
 
@@ -113,7 +114,7 @@ describe('createDomInputSource', () => {
     for (const spy of Object.values(spies)) spy.mockRestore()
   })
 
-  it('installs no key or ruler listener without their sinks', () => {
+  it('installs no key listener without its sink, and no ruler listener unless told to listen', () => {
     const windowAdd = vi.spyOn(window, 'addEventListener')
     const documentAdd = vi.spyOn(document, 'addEventListener')
     const dispose = attachRecording(createDomInputSource(deps()))
@@ -144,7 +145,7 @@ describe('createDomInputSource', () => {
     const ruler = document.createElement('canvas')
     ruler.dataset.canvasRuler = 'v'
     document.body.appendChild(ruler)
-    const dispose = attachRecording(createDomInputSource(deps({ rulers: { createGuideAt: vi.fn() } })))
+    const dispose = attachRecording(createDomInputSource(deps({ listensToRulers: true })))
 
     for (const button of [0, 1, 2, 3, 4]) events.pointerDownClient({ x: 15, y: 120 }, { target: ruler, button, pointerId: 5 })
     events.pointerDownClient({ x: 15, y: 120 }, { target: ruler, pointerType: 'pen', pointerId: 6 })

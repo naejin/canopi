@@ -279,7 +279,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
         listen(host, 'dragleave', onDragLeave as EventListener)
         listen(host, 'drop', onDrop as EventListener)
         listen(host, 'focusout', onFocusOut as EventListener)
-        if (deps.rulers) listen(document, 'pointerdown', onRulerPointerDown as EventListener, { capture: true })
+        if (deps.listensToRulers) listen(document, 'pointerdown', onRulerPointerDown as EventListener, { capture: true })
         if (deps.bindings().touch.hostTouchActionNone) host.style.touchAction = 'none'
       } catch (error) {
         try {

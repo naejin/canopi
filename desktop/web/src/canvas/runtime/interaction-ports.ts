@@ -41,11 +41,6 @@ export interface GestureOutcome {
   readonly rejectSession?: boolean
 }
 
-/** Ruler guide creation, implemented by chrome/rulers.ts: today's gutter, overlay-origin and visibility checks. */
-export interface RulerGuidePort {
-  createGuideAt(axis: 'h' | 'v', at: ScreenPoint): void
-}
-
 export interface DomInputSourceDeps {
   readonly host: HTMLElement                                    // the map host; listeners attach here and on window (0B: from attach, as today; from F only during an owned session)
   readonly platform: InputPlatform
@@ -55,8 +50,10 @@ export interface DomInputSourceDeps {
   readonly timers: { set(atMs: number, cb: () => void): number; clear(id: number): void }
   /** 0B only: today's window keydown (capture) and keyup (bubble), handed to keyboard-port.ts; 0C removes it. */
   readonly legacyKeys?: { keydown(e: KeyboardEvent): void; keyup(e: KeyboardEvent): void }
-  /** Present when rulers are mounted: the source listens at document capture for ruler pointerdowns. */
-  readonly rulers?: RulerGuidePort
+  /** True when the session runs ruler drags: the source listens at document capture for ruler pointerdowns and hands them
+   *  on as presses on a 'ruler' target. The session finds the pressed ruler's overlay and lands its guide itself (north-up
+   *  only); the source carries no guide port. */
+  readonly listensToRulers: boolean
 }
 export interface DomInputSource {
   /** Installs the listeners; returns the disposer that removes every listener it added (tested: exactly once each). A sink

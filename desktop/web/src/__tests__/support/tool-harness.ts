@@ -15,7 +15,6 @@ import type { TargetClass } from '../../canvas/runtime/input/raw-input'
 import type {
   ContextMenuPort,
   GestureOutcome,
-  RulerGuidePort,
   ToolHost,
   ToolHostDeps,
   ToolSceneSource,
@@ -301,7 +300,6 @@ export interface ToolHarnessOptions {
   /** Default: the scene's edit coordinator over the harness's history. */
   readonly edits?: SceneEditCoordinator
   readonly inspect?: (world: WorldPoint) => boolean
-  readonly rulers?: RulerGuidePort
   /** Default: a series over the edit coordinator, one Scene Edit until endNudge, as the runtime's. */
   readonly nudge?: ToolHostDeps['nudge']
 }
@@ -518,7 +516,6 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       record.hovers.push(target)
     },
     ...(options.inspect ? { inspect: options.inspect } : {}),
-    ...(options.rulers ? { rulers: options.rulers } : {}),
     transientHistoryChanged: () => {
       record.transientHistoryChanges += 1
     },

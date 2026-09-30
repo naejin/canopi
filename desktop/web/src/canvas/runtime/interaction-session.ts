@@ -37,7 +37,7 @@ import { detectPlatform, type InputPlatform } from './input/platform'
 import type { AdapterEffect, RawInput, RecogniserConfig, RecogniserState } from './input/raw-input'
 import { initialRecogniserState, recognise } from './input/recognise'
 import { DEFAULT_THRESHOLDS } from './input/thresholds'
-import type { GestureOutcome, InputRouterDeps, RulerGuidePort, ToolHost, ToolHostDeps } from './interaction-ports'
+import type { GestureOutcome, InputRouterDeps, ToolHost, ToolHostDeps } from './interaction-ports'
 import type { Modifiers, ToolId } from './interaction-types'
 import { isSceneLayerOpenForCreation, type SceneCreationLayerName } from './interaction/layer-guards'
 import { createCanvasKeyboardPort } from './keyboard-port'
@@ -213,13 +213,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _navigationCursor: 'grab' | 'grabbing' | null = null
   private _toolCursor: string | null = null
   private _draft: DraftPresentation | null = null
-  /** The ruler pressed now, and its pointer: the forwarding port's target, and today's ruler drag. */
+  /** The ruler pressed now, and its pointer: today's ruler drag, whose guide the session lands at the release. */
   private _rulerPress: RulerPress | null = null
   private _rulerPointer: number | null = null
-  /** The source's ruler port: whichever overlay's ruler was pressed last. */
-  private readonly _rulers: RulerGuidePort = {
-    createGuideAt: (axis, at) => this._rulerPress?.createGuideAt(axis, at),
-  }
   private _storyPresented = false
   /** Routing a move made with a button held: its hover reaches the host and the tool, not the lens (today's). */
   private _buttonHeld = false
@@ -401,7 +397,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
           keydown: (event) => this._port.keydown(event),
           keyup: (event) => this._port.keyup(event),
         },
-        rulers: this._rulers,
+        listensToRulers: true,
       })
       this._stopWatchingSources = own(this._watchToolSources(), (stop) => stop())
       this._storyObserver = own(this._observeStoryPresentation(), (observer) => observer?.disconnect())

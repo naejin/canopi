@@ -37,8 +37,9 @@ export interface RulerOverlay {
 }
 
 /**
- * One press on a ruler: its overlay's guide port for that press, the RulerGuidePort (interaction-ports.ts) the session
- * forwards the input pipeline's to. A press made before the rulers hide, go to overview or are destroyed lands no guide.
+ * One press on a ruler: its overlay's guide port for that press, through which the session (interaction-session.ts) lands
+ * the guide at the drag's release, only while north is up. A press made before the rulers hide, go to overview or are
+ * destroyed lands no guide.
  */
 export interface RulerPress {
   readonly axis: RulerAxis

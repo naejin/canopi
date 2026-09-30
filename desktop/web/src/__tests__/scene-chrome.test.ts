@@ -222,7 +222,7 @@ describe('SceneChromeOverlay', () => {
     const horizontal = container.querySelector<HTMLCanvasElement>(
       '[data-ruler-overlay-part="horizontal"]',
     )
-    // The DOM input source's ruler port: the pressed ruler's guide port, handed the release in camera screen px
+    // What the session does with a ruler press: the pressed ruler's guide port, handed the release in camera screen px
     // (client 180, 150 on the map host at 100, 50).
     pressRuler(horizontal)?.createGuideAt('h', { x: 80, y: 100 })
 
