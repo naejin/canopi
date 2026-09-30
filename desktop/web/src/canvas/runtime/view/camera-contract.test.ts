@@ -1,29 +1,23 @@
-// The headless and MapLibre camera paths against MapLibre's own MercatorTransform (ADR 0016): the same camera script runs
-// through the PlanarCamera arithmetic the headless driver keeps and through the geographic targets the MapLibre driver sends,
-// and every frame must project like MapLibre's transform to 1e-6 px. The source is loaded through the test-only
-// `maplibre-gl-source` alias (desktop/web/vite.config.ts; plan 0A "Contract test source"). Float rounding sets the zooms:
-// MapLibre's own matrices round by up to 5e-7 px at zoom 22, and the geographic path rounds its centre to lon/lat doubles on
-// every move (about 1e-7 px per move at zoom 21.6, latitude 60), so single frames go up to zoom 22 and scripts stay under 20.
+// The headless and MapLibre camera drivers against MapLibre's own MercatorTransform (ADR 0016): the same camera scripts run through
+// the HeadlessCameraDriver (createTestView's host) and through the MapLibre camera driver on a map backed by that transform, and
+// every frame of both must project like the transform to 1e-6 px. The source is loaded through the test-only `maplibre-gl-source`
+// alias (desktop/web/vite.config.ts; plan 0A "Contract test source"). Float rounding sets the zooms: MapLibre's own matrices round
+// by up to 5e-7 px at zoom 22, and the geographic path rounds its centre to lon/lat doubles on every move (about 1e-7 px per move
+// at zoom 21.6, latitude 60), so single frames go up to zoom 22 and scripts stay at or below zoom 20.
 
 import { signal } from '@preact/signals'
 import { describe, expect, it } from 'vitest'
+import { createTestView } from '../../../__tests__/support/test-view'
+import { createMapLibreCameraDriver, type MapLibreCameraDriverMap } from '../../../maplibre/camera-driver'
 import { LngLat as SourceLngLatClass } from 'maplibre-gl-source/geo/lng_lat.ts'
 import { MercatorTransform as SourceMercatorTransform } from 'maplibre-gl-source/geo/projection/mercator_transform.ts'
 import { mapZoomToStageScale } from '../../projection'
 import { createSessionPlane, type SessionPlane } from '../../session-plane'
 import { createWorkspaceCameraPolicy } from '../../workspace-camera-policy'
-import {
-  cameraKeepingPoint,
-  panCamera,
-  panPlanar,
-  planarToViewCamera,
-  rotateCameraAround,
-  rotatePlanarAround,
-  zoomCameraAround,
-  zoomPlanarToScale,
-} from './camera-math'
+import type { CameraMove } from './camera-driver'
+import { cameraKeepingPoint, planarToViewCamera } from './camera-math'
 import { constrainCamera, createNavigationPolicy, normaliseBearing } from './navigation-policy'
-import type { PlanarCamera, ScreenPoint, ViewCamera, ViewScreen, ViewTransform, WorldPoint } from './types'
+import type { ScreenPoint, ViewCamera, ViewScreen, ViewTransform, WorldPoint } from './types'
 import { buildViewTransform, buildViewTransformFromPlane } from './view-transform'
 
 /** The members of MapLibre's LngLat and MercatorTransform this test calls. */
@@ -38,6 +32,8 @@ interface SourceTransform {
   readonly zoom: number
   readonly bearing: number
   locationToScreenPoint(location: SourceLngLat): ScreenPoint
+  /** Reads only the point's x and y. */
+  screenPointToLocation(point: ScreenPoint): SourceLngLat
 }
 const LngLat = SourceLngLatClass as new (lng: number, lat: number) => SourceLngLat
 const MercatorTransform = SourceMercatorTransform as new (options: {
@@ -113,72 +109,117 @@ function expectProjectsLikeMapLibre(view: ViewTransform, transform: SourceTransf
   }
 }
 
-type ScriptMove =
-  | { readonly kind: 'pan-by'; readonly deltaPx: ScreenPoint }
-  | { readonly kind: 'zoom-around'; readonly anchorPx: ScreenPoint; readonly factor: number }
-  | { readonly kind: 'rotate-around'; readonly anchorPx: ScreenPoint | 'centre'; readonly bearingDeg: number }
-
-const SCRIPT: readonly ScriptMove[] = [
+const SCRIPT: readonly CameraMove[] = [
   { kind: 'pan-by', deltaPx: { x: 10, y: -7 } },
   { kind: 'zoom-around', anchorPx: { x: 120, y: 80 }, factor: 1.5 },
-  { kind: 'rotate-around', anchorPx: { x: 300, y: 50 }, bearingDeg: 30 },
+  { kind: 'rotate-around', anchorPx: { x: 300, y: 50 }, bearingDeg: 30, animation: 'none' },
   { kind: 'pan-by', deltaPx: { x: -40.5, y: 25.25 } },
   { kind: 'zoom-around', anchorPx: { x: 50, y: 550 }, factor: 0.8 },
-  { kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 300 },
+  { kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 300, animation: 'none' },
   { kind: 'zoom-around', anchorPx: { x: 700, y: 20 }, factor: 3.2 },
-  { kind: 'rotate-around', anchorPx: { x: 10, y: 590 }, bearingDeg: 181.5 },
+  { kind: 'rotate-around', anchorPx: { x: 10, y: 590 }, bearingDeg: 181.5, animation: 'none' },
   { kind: 'pan-by', deltaPx: { x: 333, y: -111 } },
-  { kind: 'rotate-around', anchorPx: { x: 890, y: 300 }, bearingDeg: 0 },
+  { kind: 'rotate-around', anchorPx: { x: 890, y: 300 }, bearingDeg: 0, animation: 'none' },
   { kind: 'zoom-around', anchorPx: { x: 450, y: 300 }, factor: 0.5 },
 ]
 
-function movePlanar(camera: PlanarCamera, move: ScriptMove): PlanarCamera {
-  switch (move.kind) {
-    case 'pan-by': return panPlanar(camera, move.deltaPx)
-    case 'zoom-around': return zoomPlanarToScale(camera, move.anchorPx, camera.scale * move.factor)
-    case 'rotate-around': return rotatePlanarAround(camera, SCREEN, move.anchorPx, move.bearingDeg)
-  }
-}
+/**
+ * The clamps at 45°, where the headless driver clamps its scale and the MapLibre driver its zoom factor before anchoring: out to the
+ * single-world floor (then the one-world hold), a pan the hold stops, and in past CLAMP_MAX_ZOOM about an off-centre anchor.
+ */
+const CLAMP_SCRIPT: readonly CameraMove[] = [
+  { kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 45, animation: 'none' },
+  { kind: 'zoom-around', anchorPx: { x: 200, y: 150 }, factor: 1e-9 },
+  { kind: 'zoom-around', anchorPx: { x: 200, y: 150 }, factor: 4 },
+  { kind: 'pan-by', deltaPx: { x: 5_000, y: -3_000 } },
+  { kind: 'zoom-around', anchorPx: { x: 450, y: 300 }, factor: 2 ** 14 },
+  { kind: 'zoom-around', anchorPx: { x: 700, y: 120 }, factor: 2 ** 10 },
+  { kind: 'rotate-around', anchorPx: { x: 100, y: 500 }, bearingDeg: 0, animation: 'none' },
+]
+/** The clamp script's zoom ceiling: today's 27 is beyond the zooms MercatorTransform checks to 1e-6 px. */
+const CLAMP_MAX_ZOOM = 20
 
-function moveGeographic(camera: ViewCamera, move: ScriptMove): ViewCamera {
-  switch (move.kind) {
-    case 'pan-by': return panCamera(camera, SCREEN, move.deltaPx)
-    case 'zoom-around': return zoomCameraAround(camera, SCREEN, move.anchorPx, move.factor)
-    case 'rotate-around': return rotateCameraAround(camera, SCREEN, move.anchorPx, move.bearingDeg)
+/**
+ * A MapLibre map over the source MercatorTransform, in MapLibre's own order: jumpTo sets the zoom, then the centre (both through the
+ * installed constrain), then the bearing (ui/camera.ts jumpTo, mercator_camera_helper.ts handleJumpToCenterZoom), and fires 'move'
+ * synchronously; setTransformConstrain is setConstrainOverride; unproject is screenPointToLocation.
+ */
+function mapOnTransform(screen: ViewScreen, start: ViewCamera):
+  { readonly map: MapLibreCameraDriverMap; readonly transform: SourceTransform } {
+  const transform = new MercatorTransform({ minZoom: POLICY.minZoom, maxZoom: POLICY.maxZoom, renderWorldCopies: false })
+  transform.resize(screen.width, screen.height)
+  transform.setZoom(start.zoom)
+  transform.setCenter(new LngLat(start.center.lon, start.center.lat))
+  transform.setBearing(start.bearingDeg)
+  const moveListeners = new Set<(event?: unknown) => void>()
+  const canvas = { clientWidth: screen.width, clientHeight: screen.height, width: screen.width * screen.devicePixelRatio }
+  const map: MapLibreCameraDriverMap = {
+    jumpTo(options) {
+      if (transform.zoom !== options.zoom) transform.setZoom(options.zoom)
+      transform.setCenter(new LngLat(options.center[0], options.center[1]))
+      if (transform.bearing !== options.bearing) transform.setBearing(options.bearing)
+      for (const listener of [...moveListeners]) listener()
+    },
+    resize() {},
+    on(type, listener) {
+      if (type === 'move') moveListeners.add(listener)
+    },
+    off(type, listener) {
+      if (type === 'move') moveListeners.delete(listener)
+    },
+    getCenter: () => transform.center,
+    getZoom: () => transform.zoom,
+    getBearing: () => transform.bearing,
+    getPitch: () => 0,
+    unproject: ([x, y]) => transform.screenPointToLocation({ x, y }),
+    setTransformConstrain: (constrain) => transform.setConstrainOverride(constrain),
+    getCanvas: () => canvas as unknown as HTMLCanvasElement,
   }
+  return { map, transform }
 }
 
 describe('camera contract', () => {
   it('headless and MercatorTransform agree for pan, zoom and rotate moves', () => {
     const starts = [
-      { origin: { lon: 2.3522, lat: 48.8566 }, zoom: 18 },
-      { origin: { lon: -70.65, lat: -33.45 }, zoom: 16.4 },
-      { origin: { lon: 151.2, lat: 60 }, zoom: 17.2 },
+      { origin: { lon: 2.3522, lat: 48.8566 }, zoom: 18, script: SCRIPT },
+      { origin: { lon: -70.65, lat: -33.45 }, zoom: 16.4, script: SCRIPT },
+      { origin: { lon: 151.2, lat: 60 }, zoom: 17.2, script: SCRIPT },
+      { origin: { lon: 2.3522, lat: 48.8566 }, zoom: 18, script: CLAMP_SCRIPT, maximumMapZoom: CLAMP_MAX_ZOOM },
     ]
     for (const start of starts) {
       const plane = createSessionPlane(start.origin)
+      const today = createWorkspaceCameraPolicy(plane.origin.lat)
+      const policy = { ...today, maximumMapZoom: start.maximumMapZoom ?? today.maximumMapZoom }
       const scale = mapZoomToStageScale(start.zoom, plane.origin.lat)
-      let planar: PlanarCamera = { x: SCREEN.width / 2 - 25 * scale, y: SCREEN.height / 2 + 12 * scale, scale, bearingDeg: 0 }
-      let geographic = planarToViewCamera(planar, SCREEN, plane)
-      const map = mapLibreTransform(SCREEN)
+      const viewport = { x: SCREEN.width / 2 - 25 * scale, y: SCREEN.height / 2 + 12 * scale, scale }
+      const headless = createTestView({ screen: SCREEN, plane, policy, viewport })
+      const shown = mapOnTransform(SCREEN, planarToViewCamera({ ...viewport, bearingDeg: 0 }, SCREEN, plane))
+      const navigationPolicy = createNavigationPolicy(policy, signal(false))
+      const attached = createMapLibreCameraDriver(shown.map, plane, {
+        clock: () => 0,
+        scheduleFrame: () => () => {},
+        policy: () => navigationPolicy,
+      }, { timers: { set: () => 0, clear: () => {} } })
+      expect(attached.failure.peek()).toBeNull()
+      expectProjectsLikeMapLibre(headless.view(), shown.transform, plane)
+      expectProjectsLikeMapLibre(attached.frames.viewFrame.peek().view, shown.transform, plane)
 
-      for (const move of SCRIPT) {
-        planar = movePlanar(planar, move)
-        geographic = constrainCamera(moveGeographic(geographic, move), SCREEN, POLICY)
-        const shown = map.show(geographic)
+      for (const move of start.script) {
+        headless.host.current().apply(move)
+        attached.apply(move)
 
-        // MapLibre keeps the target the driver sends: it is already constrained.
-        expect(shown.center.lon).toBe(geographic.center.lon)
-        expect(shown.center.lat).toBe(geographic.center.lat)
-        expect(shown.zoom).toBe(geographic.zoom)
-        expect(Math.abs(shown.bearingDeg - geographic.bearingDeg)).toBeLessThan(1e-9)
-        expect(planar.bearingDeg).toBe(geographic.bearingDeg)
-
-        const headless = buildViewTransformFromPlane({ planar, screen: SCREEN, plane, planeRevision: 1, revision: 1 })
-        const attached = buildViewTransform({ camera: shown, screen: SCREEN, plane, planeRevision: 1, revision: 1 })
-        expectProjectsLikeMapLibre(headless, map.transform, plane)
-        expectProjectsLikeMapLibre(attached, map.transform, plane)
+        const fromHeadless = headless.view()
+        const fromMapLibre = attached.frames.viewFrame.peek().view
+        // The MapLibre driver's frame is built from what the map shows.
+        expect(fromMapLibre.camera.zoom).toBe(shown.transform.zoom)
+        expect(fromMapLibre.camera.center.lon).toBe(shown.transform.center.lng)
+        expect(fromMapLibre.camera.center.lat).toBe(shown.transform.center.lat)
+        expect(Math.abs(fromHeadless.camera.bearingDeg - fromMapLibre.camera.bearingDeg)).toBeLessThan(1e-9)
+        expectProjectsLikeMapLibre(fromHeadless, shown.transform, plane)
+        expectProjectsLikeMapLibre(fromMapLibre, shown.transform, plane)
       }
+      attached.dispose()
+      headless.dispose()
     }
   })
 
