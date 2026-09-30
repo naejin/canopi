@@ -1,3 +1,4 @@
+import { CANVAS_CHROME_FONT_FAMILY, CANVAS_CHROME_MONO_FONT_FAMILY } from '../chrome-fonts'
 import { getCanvasColor, isThemeManagedZoneFill, markCanvasPaintChanged } from '../theme-refresh'
 import { contrastRatio } from '../plant-colors'
 import { getCanvasPlantDisplay } from './plant-display'
@@ -5,6 +6,7 @@ import type {
   ScenePersistedState,
   SceneZoneEntity,
 } from './scene'
+import type { DraftFill, DraftShape, DraftStroke } from './tools/draft'
 
 export interface SceneLayerStyle {
   visible: boolean
@@ -69,6 +71,140 @@ export function resolveZoneVisual(zone: SceneZoneEntity): SceneZoneVisual {
 /** Guides and drawing previews over the map: a light stroke on a dark casing. */
 export function getGuideLineVisual(): { color: string; casing: string } {
   return { color: getCanvasColor('guide-line'), casing: getCanvasColor('overlay-casing') }
+}
+
+/** A draft stroke's colour over a casing `OVERLAY_CASING_EXTRA_PX` wider. */
+export interface DraftStrokeVisual {
+  readonly color: string
+  readonly casing: string
+}
+
+export interface DraftFillVisual {
+  readonly color: string
+}
+
+/**
+ * Draft tokens (tools/draft.ts) in the colours today's DOM previews use: a
+ * light draft on the dark overlay casing, the ochre band on the interaction
+ * casing and its translucent fill. `draft-muted` and `warning` (and
+ * `warning-fill`) draw as `draft` until the phase that first emits one gives
+ * it a canvas colour.
+ */
+export function getDraftVisual(token: DraftStroke['token']): DraftStrokeVisual
+export function getDraftVisual(token: DraftFill['token']): DraftFillVisual
+export function getDraftVisual(token: DraftStroke['token'] | DraftFill['token']): DraftStrokeVisual | DraftFillVisual {
+  switch (token) {
+    case 'selection':
+      return { color: getCanvasColor('selection-stroke'), casing: getCanvasColor('interaction-casing') }
+    case 'draft':
+    case 'draft-muted':
+    case 'warning':
+      return getGuideLineVisual()
+    case 'selection-fill':
+      return { color: getCanvasColor('selection-fill') }
+    case 'draft-fill':
+    case 'warning-fill':
+      return { color: getCanvasColor('zone-fill') }
+  }
+}
+
+export type DraftLabelTone = Extract<DraftShape, { kind: 'label' }>['tone']
+
+/** A CSS box shadow: offsets and blur in CSS px. */
+export interface CanvasShadowVisual {
+  readonly offsetXPx: number
+  readonly offsetYPx: number
+  readonly blurPx: number
+  readonly color: string
+}
+
+/** A draft label's chip: today's DOM chip, drawn upright in Pixi. */
+export interface DraftLabelVisual {
+  /** Centred on the point, or bottom-centre `gapPx` above it. */
+  readonly placement: 'centre' | 'above'
+  readonly gapPx: number
+  readonly fontFamily: string
+  readonly fontWeight: '400' | '600'
+  readonly fontSizePx: number
+  /** The text's line box; the chip's height is this plus padding and border. */
+  readonly lineHeightPx: number
+  readonly paddingPx: { readonly x: number; readonly y: number }
+  readonly color: string
+  readonly background: string
+  readonly border: string
+  readonly borderWidthPx: number
+  readonly radiusPx: number
+  readonly shadow: CanvasShadowVisual | null
+}
+
+// `--text-xs`, `--radius-sm` and `--space-1` in styles/global.css, where
+// `:root:lang(zh|ja|ko)` raises `--text-xs` to the 13 px CJK floor.
+const DRAFT_LABEL_FONT_SIZE_PX = 12.5
+const DRAFT_LABEL_CJK_FONT_SIZE_PX = 13
+const CJK_LANGUAGE = /^(zh|ja|ko)(-|$)/i
+const DRAFT_LABEL_RADIUS_PX = 5
+const DRAFT_LABEL_GAP_PX = 4
+// Today's hint chips set no line-height and sit in the map container, so they inherit the 20 px of
+// `.maplibregl-map { font: 12px/20px … }` (maplibre-gl.css) at every font size.
+const DRAFT_LABEL_HINT_LINE_HEIGHT_PX = 20
+
+/** `--text-xs` in the page language, which utils/theme.ts keeps on the root element. */
+function draftLabelFontSizePx(): number {
+  return CJK_LANGUAGE.test(document.documentElement.lang) ? DRAFT_LABEL_CJK_FONT_SIZE_PX : DRAFT_LABEL_FONT_SIZE_PX
+}
+
+/**
+ * The chip each label tone names (canvas v2 spec §1.4, label tones), with
+ * today's padding: measurements are centred mono chips on the muted surface
+ * (zone-measurement-overlay.ts), hints bottom-centre sans chips on the surface
+ * (plant-placement-preview.ts), Plant a row's length in the primary colour
+ * (plant-spacing-overlay.ts). `warning` draws as `hint` until a phase gives it
+ * a colour.
+ */
+export function getDraftLabelVisual(tone: DraftLabelTone): DraftLabelVisual {
+  const fontSizePx = draftLabelFontSizePx()
+  const chip = {
+    gapPx: DRAFT_LABEL_GAP_PX,
+    fontSizePx,
+    border: getCanvasColor('chip-border'),
+    borderWidthPx: 1,
+    radiusPx: DRAFT_LABEL_RADIUS_PX,
+    shadow: parseCanvasShadow(getCanvasColor('chip-shadow')),
+  }
+  if (tone === 'measure' || tone === 'measure-quiet') {
+    return {
+      ...chip,
+      placement: 'centre',
+      fontFamily: CANVAS_CHROME_MONO_FONT_FAMILY,
+      fontWeight: tone === 'measure' ? '600' : '400',
+      lineHeightPx: fontSizePx * 1.2,
+      paddingPx: { x: 5, y: 2 },
+      color: getCanvasColor('chip-text'),
+      background: getCanvasColor('chip-surface-muted'),
+    }
+  }
+  return {
+    ...chip,
+    placement: 'above',
+    fontFamily: CANVAS_CHROME_FONT_FAMILY,
+    fontWeight: '600',
+    lineHeightPx: DRAFT_LABEL_HINT_LINE_HEIGHT_PX,
+    paddingPx: tone === 'hint-primary' ? { x: 8, y: 4 } : { x: 6, y: 2 },
+    color: getCanvasColor(tone === 'hint-primary' ? 'chip-primary' : 'chip-text'),
+    background: getCanvasColor('chip-surface'),
+  }
+}
+
+/** The first shadow of a CSS `box-shadow` value (`x y blur [spread] colour`); null for `none` or anything else. */
+function parseCanvasShadow(value: string): CanvasShadowVisual | null {
+  const match = value.trim().match(/^(-?[\d.]+)(?:px)?\s+(-?[\d.]+)(?:px)?\s+([\d.]+)(?:px)?\s+(?:-?[\d.]+(?:px)?\s+)?(#[0-9a-f]+|rgba?\([^)]*\))/i)
+  if (!match) return null
+  return {
+    offsetXPx: Number.parseFloat(match[1]!),
+    offsetYPx: Number.parseFloat(match[2]!),
+    blurPx: Number.parseFloat(match[3]!),
+    color: match[4]!,
+  }
 }
 
 /**

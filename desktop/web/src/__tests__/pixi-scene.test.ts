@@ -1240,6 +1240,50 @@ describe('createPixiScenePresentation', () => {
     expect(selectedStroke.alpha).toBeGreaterThan(hoverStroke.alpha)
     renderer.dispose()
   })
+
+  it('a draft set on the presentation is drawn and cleared', () => {
+    interface MockNode {
+      children: MockNode[]
+      position: { set: ReturnType<typeof vi.fn> }
+      scale: { set: ReturnType<typeof vi.fn> }
+      moveTo: ReturnType<typeof vi.fn>
+      lineTo: ReturnType<typeof vi.fn>
+      stroke: ReturnType<typeof vi.fn>
+      destroy: ReturnType<typeof vi.fn>
+    }
+    const stage = new Container()
+    const renderer = createPixiScenePresentation({
+      stage,
+      createText: () => new Text({ resolution: 2 }),
+      viewSize: { width: 400, height: 300 },
+    })
+    // Drafts draw over plants, notes and every label layer: the last two stage children.
+    const children = (stage as unknown as MockNode).children
+    expect(children).toHaveLength(7)
+    const [draftWorld, draftScreen] = children.slice(-2) as [MockNode, MockNode]
+
+    renderer.renderScene(createRendererSnapshot({ viewport: { x: 5, y: 6, scale: 10 } }))
+    expect(draftWorld.position.set).toHaveBeenLastCalledWith(5, 6)
+    expect(draftWorld.scale.set).toHaveBeenLastCalledWith(10)
+    renderer.setDraft({ shapes: [{ kind: 'polyline', points: [{ x: 1, y: 2 }, { x: 3, y: 2 }], style: { token: 'draft', widthPx: 2 } }] })
+    const [line] = draftWorld.children
+    expect(line).toBeDefined()
+    expect(line!.moveTo).toHaveBeenCalledWith(1, 2)
+    expect(line!.lineTo).toHaveBeenCalledWith(3, 2)
+    // The 4 px casing under the 2 px stroke, in world units at scale 10.
+    expect(line!.stroke.mock.calls.map(([style]) => style.width)).toEqual([0.4, 0.2])
+    expect(draftScreen.children).toEqual([])
+
+    renderer.setViewport({ x: 15, y: 16, scale: 10 })
+    expect(draftWorld.position.set).toHaveBeenLastCalledWith(15, 16)
+    expect(draftWorld.children).toEqual([line])
+
+    renderer.setDraft(null)
+    expect(draftWorld.children).toEqual([])
+    expect(line!.destroy).toHaveBeenCalled()
+    renderer.setSelectionPreview({ translate: { x: 1, y: 0 }, rotateDeg: 0, pivot: { x: 0, y: 0 } })
+    renderer.dispose()
+  })
 })
 
 function createRendererSnapshot(overrides: {

@@ -1655,7 +1655,7 @@ describe('WorkspaceActivationCoordinator', () => {
       layer: {
         createRenderer: () => renderer,
         createStage: () => ({ destroy: vi.fn() }) as never,
-        createPresentation: () => ({ dispose() {}, resize() {}, setViewport() {}, renderScene() {} }),
+        createPresentation: () => ({ dispose() {}, resize() {}, setViewport() {}, setDraft() {}, setSelectionPreview() {}, renderScene() {} }),
       },
       readOrigin: () => ({ lat: 0, lon: 0 }),
     })

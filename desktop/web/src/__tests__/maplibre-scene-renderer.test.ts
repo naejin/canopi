@@ -110,7 +110,7 @@ describe('MapLibre scene renderer bridge', () => {
       createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
       createPresentation: () => ({
-        dispose() {}, resize() {}, setViewport() {},
+        dispose() {}, resize() {}, setViewport() {}, setDraft() {}, setSelectionPreview() {},
         renderScene() { throw new Error('shared scene failed') },
       }),
     })

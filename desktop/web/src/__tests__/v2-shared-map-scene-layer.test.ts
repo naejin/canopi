@@ -65,7 +65,7 @@ describe('createSharedMapSceneLayer', () => {
     const adapter = createSharedMapSceneLayer({
       id: 'v2-scene', readOrigin: () => ({ lat: 0, lon: 0 }), createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
-      createPresentation: () => ({ dispose: vi.fn(), resize: vi.fn(), renderScene: vi.fn(), setViewport: vi.fn() }),
+      createPresentation: () => ({ dispose: vi.fn(), resize: vi.fn(), renderScene: vi.fn(), setViewport: vi.fn(), setDraft: vi.fn(), setSelectionPreview: vi.fn() }),
     })
     Ticker.system.start()
     expect(Ticker.system.started).toBe(true)
@@ -82,7 +82,7 @@ describe('createSharedMapSceneLayer', () => {
     const canvas = createCanvas()
     const map = createMap(canvas)
     const renderer = createRenderer()
-    const presentation = { dispose: vi.fn(), resize: vi.fn(), renderScene: vi.fn(), setViewport: vi.fn() }
+    const presentation = { dispose: vi.fn(), resize: vi.fn(), renderScene: vi.fn(), setViewport: vi.fn(), setDraft: vi.fn(), setSelectionPreview: vi.fn() }
     const adapter = createSharedMapSceneLayer({
       id: 'v2-scene',
       readOrigin: () => ({ lat: 0, lon: 0 }),
@@ -124,7 +124,7 @@ describe('createSharedMapSceneLayer', () => {
       createStage: () => ({ destroy: vi.fn() }) as never,
       createPresentation: (input) => {
         createText = input.createText
-        return { dispose() {}, resize() {}, renderScene() {}, setViewport() {} }
+        return { dispose() {}, resize() {}, renderScene() {}, setViewport() {}, setDraft() {}, setSelectionPreview() {} }
       },
     })
 
@@ -139,7 +139,7 @@ describe('createSharedMapSceneLayer', () => {
     const canvas = createCanvas()
     const map = createMap(canvas)
     const renderer = createRenderer()
-    const presentation = { dispose: vi.fn(), resize: vi.fn(), renderScene: vi.fn(), setViewport: vi.fn() }
+    const presentation = { dispose: vi.fn(), resize: vi.fn(), renderScene: vi.fn(), setViewport: vi.fn(), setDraft: vi.fn(), setSelectionPreview: vi.fn() }
     const adapter = createSharedMapSceneLayer({
       id: 'v2-scene', readOrigin: () => ({ lat: 0, lon: 0 }), createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
@@ -172,7 +172,7 @@ describe('createSharedMapSceneLayer', () => {
     const adapter = createSharedMapSceneLayer({
       id: 'v2-scene', readOrigin: () => ({ lat: 0, lon: 0 }), createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
-      createPresentation: () => ({ dispose() {}, resize() {}, renderScene() {}, setViewport() {} }),
+      createPresentation: () => ({ dispose() {}, resize() {}, renderScene() {}, setViewport() {}, setDraft() {}, setSelectionPreview() {} }),
     })
     const gl = {} as WebGL2RenderingContext
 
@@ -200,7 +200,7 @@ describe('createSharedMapSceneLayer', () => {
     const adapter = createSharedMapSceneLayer({
       id: 'v2-scene', readOrigin: () => ({ lat: 0, lon: 0 }), createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
-      createPresentation: () => ({ dispose() {}, resize() {}, renderScene() {}, setViewport() {} }),
+      createPresentation: () => ({ dispose() {}, resize() {}, renderScene() {}, setViewport() {}, setDraft() {}, setSelectionPreview() {} }),
     })
     const canvas = createCanvas()
     const initialize = adapter.initialize(createMap(canvas), {} as WebGL2RenderingContext)
@@ -217,7 +217,7 @@ describe('createSharedMapSceneLayer', () => {
     const canvas = createCanvas()
     const map = createMap(canvas)
     const renderer = createRenderer()
-    const presentation = { dispose: vi.fn(), resize: vi.fn(), renderScene: vi.fn(), setViewport: vi.fn() }
+    const presentation = { dispose: vi.fn(), resize: vi.fn(), renderScene: vi.fn(), setViewport: vi.fn(), setDraft: vi.fn(), setSelectionPreview: vi.fn() }
     const adapter = createSharedMapSceneLayer({
       id: 'v2-scene', readOrigin: () => ({ lat: 0, lon: 0 }), createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
@@ -251,7 +251,7 @@ describe('createSharedMapSceneLayer', () => {
     const adapter = createSharedMapSceneLayer({
       id: 'v2-scene', readOrigin: () => ({ lat: 0, lon: 0 }), createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
-      createPresentation: () => ({ dispose() {}, resize() {}, renderScene() {}, setViewport() {} }),
+      createPresentation: () => ({ dispose() {}, resize() {}, renderScene() {}, setViewport() {}, setDraft() {}, setSelectionPreview() {} }),
     })
     await adapter.initialize(createMap(canvas), {} as WebGL2RenderingContext)
 
@@ -271,7 +271,7 @@ describe('createSharedMapSceneLayer', () => {
       createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
       createPresentation: () => ({
-        dispose() {}, resize() {}, setViewport() {},
+        dispose() {}, resize() {}, setViewport() {}, setDraft() {}, setSelectionPreview() {},
         renderScene() { throw new Error('presentation failed') },
       }),
       onFailure,
