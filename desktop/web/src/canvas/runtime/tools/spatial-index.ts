@@ -3,7 +3,9 @@
 // Owns createToolScene: the ToolScene tools and the ToolHost query (spec §1.2a, §1.4). In 0B it is a façade over today's
 // linear hit tests (interaction/hit-testing.ts) at the frame's pixelsPerMetre, read at every query; nothing is cached, and
 // an index is later work (INV-TOOL-24). hitAt without a filter is hitTestTopLevel exactly, object locks included (the tool
-// rejects them); `includeLocked` is hitTestVisibleTopLevel (the host's hover). tools/tool-host.ts re-exports the factory.
+// rejects them); `includeLocked` is hitTestVisibleTopLevel (the host's hover). nearestPlant is today's Place plants scan
+// (interaction/plant-placement-preview.ts): the first plant in scene order wins a tie. tools/tool-host.ts re-exports the
+// factory.
 
 import { computeQuadBoundsRect } from '../../operations'
 import { hitTestTopLevel, hitTestVisibleTopLevel, queryRectTopLevel } from '../interaction/hit-testing'
@@ -62,13 +64,7 @@ export function createToolScene(source: ToolSceneSource): ToolScene {
       for (const plant of scene.plants) {
         if (excluding?.has(plant.id)) continue
         const distanceM = Math.hypot(plant.position.x - world.x, plant.position.y - world.y)
-        if (
-          !best
-          || distanceM < best.distanceM
-          || (distanceM === best.distanceM && plant.id.localeCompare(best.plant.id) < 0)
-        ) {
-          best = { plant, distanceM }
-        }
+        if (!best || distanceM < best.distanceM) best = { plant, distanceM }
       }
       return best
     },

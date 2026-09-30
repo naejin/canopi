@@ -147,7 +147,7 @@ describe('ToolScene over today\'s hit tests', () => {
       .toEqual([{ kind: 'object', target: { kind: 'zone', id: 'z1' } }])
   })
 
-  it('nearestPlant orders by distance, then id, and skips excluded plants', () => {
+  it('nearestPlant keeps the first plant in scene order on a tie, as Place plants does today, and skips excluded plants', () => {
     const store = sceneStoreWith({
       plants: [
         plantEntity('b', 'Malus domestica', { x: 3, y: 4 }),
@@ -157,8 +157,8 @@ describe('ToolScene over today\'s hit tests', () => {
     })
     const scene = createToolScene(createToolSceneSource(store))
 
-    expect(scene.nearestPlant({ x: 0, y: 0 })).toEqual({ plant: store.persisted.plants[1], distanceM: 5 })
-    expect(scene.nearestPlant({ x: 0, y: 0 }, new Set(['a']))).toEqual({ plant: store.persisted.plants[0], distanceM: 5 })
+    expect(scene.nearestPlant({ x: 0, y: 0 })).toEqual({ plant: store.persisted.plants[0], distanceM: 5 })
+    expect(scene.nearestPlant({ x: 0, y: 0 }, new Set(['b']))).toEqual({ plant: store.persisted.plants[1], distanceM: 5 })
     expect(scene.nearestPlant({ x: 0, y: 0 }, new Set(['a', 'b', 'c']))).toBeNull()
 
     store.updatePersisted((draft) => {

@@ -41,6 +41,21 @@ describe('plant distance guides', () => {
     ])
   })
 
+  it('shows no guide while the plants layer is hidden, as today', () => {
+    const store = sceneStoreWith({
+      plants: [
+        plantEntity('dragged', 'Malus domestica', { x: 0, y: 0 }),
+        plantEntity('a', 'Malus domestica', { x: 3, y: 0 }),
+      ],
+    })
+    store.updatePersisted((draft) => {
+      draft.layers = draft.layers.map((layer) => layer.name === 'plants' ? { ...layer, visible: false } : layer)
+    })
+    const scene = createToolScene(createToolSceneSource(store))
+
+    expect(plantDragDistanceGuideShapes(scene, store.persisted.plants[0]!, new Set(['dragged']))).toEqual([])
+  })
+
   it('shows no guide when no plant is left behind', () => {
     const store = sceneStoreWith({ plants: [plantEntity('only', 'Malus domestica', { x: 0, y: 0 })] })
     const scene = createToolScene(createToolSceneSource(store))

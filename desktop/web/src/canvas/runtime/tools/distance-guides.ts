@@ -2,8 +2,9 @@
 //
 // Owns the plant distance guide as draft shapes: a dashed draft line from a plant to a neighbour with a `measure` chip, as
 // today's DOM guide drew it (interaction/plant-drag-distance-overlay.ts: 1.5 px dashed 4 4 over its casing, mono 600 chip).
-// The Select move-drag guides the dragged plant to the two nearest plants left behind, by distance then id, through
-// ToolScene.nearestPlant (a linear scan, as today); Place plants and the stamps draw their own guide with it.
+// The Select move-drag guides the dragged plant to the two nearest plants left behind, by distance then id, in a linear
+// scan of the scene as today (nothing while the plants layer is hidden); Place plants and the stamps draw their own guide
+// with ToolScene.nearestPlant, which keeps today's scene order on a tie instead.
 
 import type { ScenePlantEntity } from '../scene/types'
 import type { ScreenPoint, WorldPoint } from '../view/types'
@@ -36,18 +37,20 @@ export function distanceGuideShapes(
 
 /** The move-drag's guides from `active` (one of `dragged`) to the nearest plants outside `dragged`. */
 export function plantDragDistanceGuideShapes(
-  scene: Pick<ToolScene, 'nearestPlant'>,
+  scene: Pick<ToolScene, 'persisted'>,
   active: ScenePlantEntity,
   dragged: ReadonlySet<string>,
 ): DraftShape[] {
-  if (!dragged.has(active.id)) return []
-  const excluding = new Set(dragged)
-  const shapes: DraftShape[] = []
-  for (let index = 0; index < DRAG_DISTANCE_GUIDES; index += 1) {
-    const nearest = scene.nearestPlant(active.position, excluding)
-    if (!nearest) break
-    excluding.add(nearest.plant.id)
-    shapes.push(...distanceGuideShapes(active.position, nearest.plant.position, formatMetricDistance(nearest.distanceM)))
-  }
-  return shapes
+  const { layers, plants } = scene.persisted
+  if (!dragged.has(active.id) || layers.find((layer) => layer.name === 'plants')?.visible === false) return []
+  return plants
+    .filter((plant) => !dragged.has(plant.id))
+    .map((plant) => ({
+      plant,
+      distanceM: Math.hypot(plant.position.x - active.position.x, plant.position.y - active.position.y),
+    }))
+    .sort((left, right) => left.distanceM - right.distanceM || left.plant.id.localeCompare(right.plant.id))
+    .slice(0, DRAG_DISTANCE_GUIDES)
+    .flatMap(({ plant, distanceM }) =>
+      distanceGuideShapes(active.position, plant.position, formatMetricDistance(distanceM)))
 }
