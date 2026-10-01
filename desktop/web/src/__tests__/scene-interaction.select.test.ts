@@ -4188,20 +4188,6 @@ describe('SceneInteractionSession', () => {
       },
     },
     {
-      name: 'Plant Spacing tool',
-      failure: 'plant spacing overlay construction failed',
-      createFault() {
-        let targetReached = false
-        return {
-          shouldFail(node: Node) {
-            targetReached = node instanceof HTMLElement && node.dataset.plantSpacingLengthLabel === 'true'
-            return targetReached
-          },
-          wasTargetReached: () => targetReached,
-        }
-      },
-    },
-    {
       name: 'Measurement Guide Control Points',
       failure: 'measurement control point overlay construction failed',
       createFault() {

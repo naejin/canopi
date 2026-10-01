@@ -377,67 +377,6 @@ describe('Scene Interaction tool module boundaries', () => {
     }
   })
 
-  it('keeps Plant Stamp placement state behind the plant stamp tool module', () => {
-    const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
-    const toolModulesSource = readSource('../canvas/runtime/interaction/tool-modules.ts')
-    const plantStampSource = readSource('../canvas/runtime/interaction/plant-stamp-tool.ts')
-    const sourceSeam = readSource('../canvas/plant-stamp-source.ts')
-
-    expect(interactionSource).toContain('createSceneToolRegistry')
-    expect(interactionSource).not.toContain('createPlantStampTool')
-    expect(interactionSource).not.toContain('createPlantStampToolAdapter')
-    expect(toolModulesSource).toContain('createPlantStampTool')
-    expect(toolModulesSource).toContain('createPlantStampToolAdapter')
-    expect(interactionSource).not.toContain('plantStampSpecies')
-    expect(interactionSource).not.toContain('_placePlantFromStamp')
-    expect(interactionSource).not.toContain("this._tool === 'plant-stamp'")
-    expect(plantStampSource).toContain('readPlantStampSource')
-    expect(plantStampSource).toContain('appendPlantStampSourceToDraft')
-    expect(sourceSeam).toContain('selectedPlantStampSource')
-    expect(sourceSeam).toContain('writePlantStampDragData')
-    expect(sourceSeam).toContain('readPlantStampDragData')
-  })
-
-  it('keeps Plant Spacing source state behind the plant spacing tool module', () => {
-    const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
-    const toolModulesSource = readSource('../canvas/runtime/interaction/tool-modules.ts')
-    const plantSpacingSource = readSource('../canvas/runtime/interaction/plant-spacing-tool.ts')
-
-    expect(interactionSource).toContain('createSceneToolRegistry')
-    expect(interactionSource).not.toContain('createPlantSpacingTool')
-    expect(interactionSource).not.toContain('createPlantSpacingToolAdapter')
-    expect(toolModulesSource).toContain('createPlantSpacingTool')
-    expect(toolModulesSource).toContain('createPlantSpacingToolAdapter')
-    expect(interactionSource).not.toContain('_plantSpacingTool')
-    expect(interactionSource).not.toContain('shouldBeginDrag')
-    expect(interactionSource).not.toContain('updatePreviewFromEvent')
-    expect(interactionSource).not.toContain('commitDragFromEvent')
-    expect(interactionSource).not.toContain('_plantSpacingSource')
-    expect(interactionSource).not.toContain('_plantSpacingIntervalText')
-    expect(interactionSource).not.toContain('_plantSpacingGeneratedPositions')
-    expect(interactionSource).not.toContain('_commitPlantSpacingPreview')
-    expect(plantSpacingSource).toContain('PlantSpacingSource')
-    expect(plantSpacingSource).toContain('createPlantSpacingOverlay')
-    expect(plantSpacingSource).toContain('createPlantSpacingToolAdapter')
-    expect(plantSpacingSource).toContain('readPlantSpacingIntervalMeters')
-    expect(plantSpacingSource).toContain('commitPlantSpacingIntervalMeters')
-    expect(toolModulesSource).toContain('readPlantSpacingIntervalMeters: context.readPlantSpacingIntervalMeters')
-    expect(toolModulesSource).toContain('commitPlantSpacingIntervalMeters: context.commitPlantSpacingIntervalMeters')
-    expect(plantSpacingSource).not.toContain('../../../app/settings')
-    expect(plantSpacingSource).not.toContain('../../../app/canvas-settings')
-  })
-
-  it('keeps representative Plant Spacing behavior coverage in focused tool tests', () => {
-    const broadInteractionTestSource = sceneInteractionSuitesSource()
-
-    expect(sourceExists('plant-spacing-tool.test.ts')).toBe(true)
-    const plantSpacingToolTestSource = readSource('plant-spacing-tool.test.ts')
-    expect(plantSpacingToolTestSource).toContain('createPlantSpacingToolAdapter')
-    expect(broadInteractionTestSource).not.toContain(
-      'reads and commits Plant Spacing interval through interaction dependencies',
-    )
-  })
-
   it('keeps active tool drag state generic in the Scene Interaction Session', () => {
     const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
 

@@ -365,5 +365,21 @@
   "src/__tests__/plant-spacing-tool.test.ts > Plant Spacing tool adapter > lays a row from the picked plant after the session plane re-origins": {
     "file": "src/canvas/runtime/tools/plant-row.test.ts",
     "name": "Plant a row tool > a picked source follows a re-origin"
+  },
+  "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps Plant Stamp placement state behind the plant stamp tool module": {
+    "file": "src/canvas/runtime/tools/plant-stamp.test.ts",
+    "name": "Place plants tool > a press places one plant of the species at the snapped point, with its colour and symbol, selected"
+  },
+  "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps Plant Spacing source state behind the plant spacing tool module": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > a press that misses a plant keeps picking and leaves the selection alone"
+  },
+  "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps representative Plant Spacing behavior coverage in focused tool tests": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > a hover previews the row and a press commits it as one Scene Edit"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > rolls back partial 'Plant Spacing tool' resources when a later append fails": {
+    "file": "src/canvas/runtime/tools/plant-row.test.ts",
+    "name": "Plant a row tool > a hover previews the row and a press commits it as one Scene Edit"
   }
 }
