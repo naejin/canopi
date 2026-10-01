@@ -344,6 +344,28 @@ describe('draft layer', () => {
     expect(noteMarker!.alpha).toBeCloseTo(0.62 * markerOpacity)
   })
 
+  it('an objects ghost\'s note draws as its marker at an overview scale and as its turned text closer in', () => {
+    const layer = mountLayer()
+    layer.setDraft({ shapes: [objectsGhost(1)] })
+
+    // Far out the scene shows a note as its marker only, as today's drop ghost did.
+    layer.place({ x: 0, y: 0 }, 0.5)
+    expect(getAnnotationPresentation(createNote(), { x: 0, y: 0, scale: 0.5 }).textOpacity).toBe(0)
+    const [, marker, ...noTextFar] = layer.screen.children
+    expect(marker).toBeInstanceOf(Graphics)
+    expect(marker!.alpha).toBeCloseTo(1)
+    expect(noTextFar).toEqual([])
+
+    // Closer in it is the note's text, turned by its rotation, and no marker.
+    layer.place({ x: 0, y: 0 }, 40)
+    expect(getAnnotationPresentation(createNote(), { x: 0, y: 0, scale: 40 }).textOpacity).toBe(1)
+    const [, text, ...noMarkerNear] = layer.screen.children
+    expect(text).toBeInstanceOf(Text)
+    expect((text as Text).text).toBe('Pond edge')
+    expect(text!.rotation).toBeCloseTo(Math.PI / 6)
+    expect(noMarkerNear).toEqual([])
+  })
+
   it('a dot-mark plant ghost draws a disc in the plant\'s display colour', () => {
     const snapshot = createTestSceneRendererSnapshot()
     const layer = mountLayer(snapshot)

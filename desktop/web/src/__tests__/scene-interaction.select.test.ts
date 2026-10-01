@@ -3621,7 +3621,8 @@ describe('SceneInteractionSession', () => {
     expect(dataTransfer.dropEffect).toBe('copy')
     // The ghosts are the host's drop preview (spec §1.4 "Drops"): the bed and the apple in one 'objects' ghost, the note
     // in a second, each where the drop would put it, in full geometry; the draft layer draws them (a note as its marker
-    // or its text, by scale).
+    // or its text, by scale: renderers/draft-layer.test.ts "an objects ghost's note draws as its marker at an overview
+    // scale and as its turned text closer in").
     const ghosts = () => draftShapes(deps).flatMap((shape) =>
       shape.kind === 'ghost' && shape.entity.kind === 'objects' ? [shape.entity] : [])
     expect(ghosts().map((ghost) => ghost.anchor)).toEqual([{ x: 40, y: 45 }, { x: 40, y: 45 }])
