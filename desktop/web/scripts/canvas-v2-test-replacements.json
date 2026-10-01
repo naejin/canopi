@@ -509,5 +509,9 @@
   "src/__tests__/control-point-overlay.test.ts > 'Measurement Guide' Control Point adapter shared lifecycle > aborts a live preview and removes every owned root on disposal": {
     "file": "src/canvas/runtime/tools/select/point-handle.test.ts",
     "name": "'Measurement Guide' point handle drags > disposing the host mid-drag rolls the object back and removes the handles"
+  },
+  "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps Annotation Text creation editor state behind the text tool module": {
+    "file": "src/canvas/runtime/tools/text-note.test.ts",
+    "name": "the Text tool > a press opens a new note's entry where it lands; Enter writes the note as one edit and selects it"
   }
 }

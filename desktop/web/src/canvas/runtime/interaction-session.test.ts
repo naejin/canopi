@@ -30,6 +30,7 @@ import type { CanvasFocusPort } from './app-adapter'
 import { createRulerOverlay, type RulerOverlay } from './chrome/rulers'
 import type { InputPlatform } from './input/platform'
 import type { ToolHost, ToolHostDeps } from './interaction-ports'
+import type { SceneToolAdapter } from './interaction/tool-adapter'
 import {
   createSceneInteractionSession,
   type SceneInteractionSession,
@@ -43,6 +44,24 @@ import type { ToolSource } from './tools/tool'
 import type { WorldPoint } from './view/types'
 
 vi.mock('./tools/registry', () => ({ TOOL_REGISTRY: {} }))
+
+/** The legacy bridge's adapters while a test stubs them; with none set, interaction/tool-modules.ts builds its own. */
+const bridgeAdapters = vi.hoisted(() => new Map<string, SceneToolAdapter>())
+vi.mock('./interaction/tool-modules', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./interaction/tool-modules')>()
+  return {
+    ...actual,
+    createSceneToolRegistry: (context: Parameters<typeof actual.createSceneToolRegistry>[0]) => {
+      if (bridgeAdapters.size === 0) return actual.createSceneToolRegistry(context)
+      let active: SceneToolAdapter | null = null
+      return {
+        get activeAdapter() { return active },
+        select: (name: string) => (active = bridgeAdapters.get(name) ?? null),
+        forEachAdapter: (visit: (adapter: SceneToolAdapter) => void) => bridgeAdapters.forEach((adapter) => visit(adapter)),
+      }
+    },
+  }
+})
 
 /** Each ToolHost the sessions build, so a test can watch the calls the session makes on it. */
 const builtHosts = vi.hoisted(() => [] as ToolHost[])
@@ -84,6 +103,7 @@ beforeEach(() => {
 afterEach(() => {
   for (const session of sessions.splice(0).reverse()) session.dispose()
   builtHosts.length = 0
+  bridgeAdapters.clear()
   for (const rulers of mountedRulers.splice(0)) rulers.unmount()
   events.dispose()
   container.remove()
@@ -172,23 +192,26 @@ describe('the interaction session', () => {
   it('a registered armed tool\'s input goes to the host and a bridged one\'s to the bridge', () => {
     const rectangle = stubTool('rectangle')
     useStubTools(rectangle)
+    const bridgedPresses: string[] = []
+    for (const id of ['rectangle', 'line']) {
+      bridgeAdapters.set(id, { pointerDown: ({ screen }) => { bridgedPresses.push(`${id} ${screen.x},${screen.y}`); return true } })
+    }
     const { session } = createSession()
 
     session.setTool('rectangle')
     events.pointerDown({ x: 20, y: 20 })
     events.pointerMove({ x: 80, y: 60 })
     events.pointerUp({ x: 80, y: 60 })
-    // The host's tool drew it; the legacy rectangle adapter never ran.
+    // The host's tool drew it; the bridge's rectangle adapter (stubbed here) never ran.
     expect(rectangle.gestures.map((gesture) => gesture.kind)).toEqual(['press', 'drag-start', 'drag-end'])
+    expect(bridgedPresses).toEqual([])
     expect(store.persisted.zones).toHaveLength(0)
 
-    // Text stays on the bridge through every 0B-3 registry move: today's adapter opens its note field there, and the
-    // host's tool hears nothing more.
-    session.setTool('text')
-    expect(container.querySelector('textarea')).toBeNull()
+    // An unregistered tool's press goes to the bridge's adapter (stubbed here), and the host's tool hears nothing more.
+    session.setTool('line')
     events.pointerDown({ x: 120, y: 120 })
     events.pointerUp({ x: 120, y: 120 })
-    expect(container.querySelector('textarea')).not.toBeNull()
+    expect(bridgedPresses).toEqual(['line 120,120'])
     expect(rectangle.gestures).toHaveLength(3)
     expect(rectangle.calls).toContain('deactivate:switch')
   })
