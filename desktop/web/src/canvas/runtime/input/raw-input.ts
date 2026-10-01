@@ -4,7 +4,7 @@ import type { CanvasDropPayload, Modifiers, PointerKind, ToolHandleId, ToolId } 
 import type { ScreenPoint } from '../view/types'
 import type { Bindings } from './bindings'
 import type { InputPlatform } from './platform'
-import type { NestedNavigation, PointerSession, TouchPair } from './recognise'
+import type { PointerSession, TouchPair } from './recognise'
 import type { Thresholds } from './thresholds'
 
 export type ButtonRole = 'primary' | 'secondary' | 'auxiliary'
@@ -57,7 +57,6 @@ export interface AdapterEffect {
 /** Opaque to callers; the recogniser owns its shape. Plain data (structured-clone safe), so the property test can snapshot it. */
 export interface RecogniserState {
   readonly sessions: ReadonlyMap<number, PointerSession>        // by pointerId: pointer kind, role, mode ('pending' | 'primary' | 'pan' | 'rotate' | 'ignored'), start, last point, press target, slop passed, capture held
-  readonly nested: NestedNavigation | null                      // the secondary/auxiliary sub-session during a primary drag, with the frozen primary point
   readonly touchPair: TouchPair | null                          // two touch ids, their start centroid, distance and angle, twist arc accumulated
   readonly held: { readonly space: boolean; readonly mods: Modifiers }
   readonly trackpadTwistDeg: number                             // WebKit gesture rotation accumulated before the 10° threshold
