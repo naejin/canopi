@@ -2,8 +2,7 @@
 //
 // The legacy bridge's saved-stamp drop (scene-interaction.ts) until the ToolHost's drop route (0B-4): the dragover ghost
 // as DOM over the map and the drop's placement, both from tools/saved-object-stamp.ts's placement code at rotation 0.
-// The saved stamp tool itself runs on the ToolHost (tools/saved-object-stamp.ts). Also lends the Place plants preview
-// (plant-placement-preview.ts) its DOM plant symbol. Deleted with its last importer.
+// The saved stamp tool itself runs on the ToolHost (tools/saved-object-stamp.ts). Deleted with its last importer.
 
 import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 import type { SavedObjectStampPayload } from '../../saved-object-stamp-payload'
@@ -212,10 +211,10 @@ function appendPlantGhost(
 
 /**
  * Draws a plant as the map would, from the shared symbol contours, into
- * `group` at `opacity`: stamp ghosts and the Place plants preview. Returns
- * the symbol's screen radius, or null when the plant has no presentation.
+ * `group` at `opacity` for the dragover ghost. Returns the symbol's screen
+ * radius, or null when the plant has no presentation.
  */
-export function appendPlantSymbolGhost(
+function appendPlantSymbolGhost(
   group: SVGGElement,
   camera: WorkspaceCameraFrameReader,
   plant: ScenePlantEntity,
