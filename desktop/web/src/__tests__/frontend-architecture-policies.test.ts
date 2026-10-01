@@ -1243,6 +1243,8 @@ const SOURCE_TOMBSTONE_POLICIES = [
       'src/canvas/runtime/scene-interaction.ts',
       'src/canvas/runtime/interaction/saved-object-stamp-tool.ts',
       'src/canvas/runtime/interaction/overlay-ui.ts',
+      'src/canvas/runtime/interaction/selection-action-toolbar.ts',
+      'src/canvas/runtime/interaction/frame.ts',
       'src/app/adaptation/index.ts',
       'src/app/adaptation/controller.ts',
       'src/ipc/adaptation.ts',
