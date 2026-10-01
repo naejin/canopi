@@ -33,10 +33,10 @@ import {
   translateZonePoints,
 } from '../scene-runtime/arrangement-placement'
 import type { WorldPoint } from '../view/types'
-import { stampGhostShapes } from './stamp-ghost'
 import {
   rotateArrangementTemplate,
   rotateStampEntities,
+  stampGhostShapes,
   turnStampRotation,
   type StampEntities,
 } from './stamp-rotation'

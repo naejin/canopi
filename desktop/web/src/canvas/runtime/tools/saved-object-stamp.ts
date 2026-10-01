@@ -7,7 +7,7 @@
 // follows the pointer and stays when the pointer leaves the map. `[` and `]` turn it (rotate-held commands); another stamp
 // starts upright; Esc leaves for Select at once under LEGACY (spec §3.7). A release, another stamp and every cancellation
 // (a blur, the tool armed again, overview) hide the ghost until the next hover and keep the stamp, as today's pointerup and
-// cancellation hid the preview; a re-origin keeps a shown ghost on its ground. The ghosts come from tools/stamp-ghost.ts.
+// cancellation hid the preview; a re-origin keeps a shown ghost on its ground. The ghosts come from tools/stamp-rotation.ts.
 
 import type { SavedObjectStampPayload } from '../../saved-object-stamp-payload'
 import type { SceneAnnotationEntity, ScenePlantEntity, SceneZoneEntity } from '../scene/types'
@@ -20,10 +20,10 @@ import {
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import type { WorldPoint } from '../view/types'
 import type { DraftShape } from './draft'
-import { stampGhostShapes } from './stamp-ghost'
 import {
   rotateArrangementTemplate,
   rotateStampEntities,
+  stampGhostShapes,
   turnStampRotation,
   type StampEntities,
 } from './stamp-rotation'
