@@ -1,7 +1,7 @@
 // Source rules over the canvas runtime that no import policy expresses: the Settled Scene Authority's write and history
-// roles, typed Scene identity, the shared arrangement kernel, the interaction session's public seam and its single
-// listener owner, and the end-to-end suites' event harness. Kept from scene-interaction-tool-boundary.test.ts when the
-// legacy bridge went (end of 0B); its tool rules moved to the ToolHost's tests and the policies (plan §5).
+// roles, typed Scene identity, the shared arrangement kernel, the interaction session's public seam, and the
+// end-to-end suites' event harness. Kept from scene-interaction-tool-boundary.test.ts when the legacy bridge went (end
+// of 0B); its tool rules and its single listener owner moved to the ToolHost's tests and the policies (plan §5).
 import * as fs from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
@@ -222,15 +222,6 @@ describe('Scene runtime module boundaries', () => {
     ])
     expect(sessionSource).not.toMatch(/^export\s+(?:default|\*|(?:type\s+)?\{)/m)
     expect(sessionSource).not.toContain('SceneInteractionFrameHandlers')
-  })
-
-  it('prevents canvas runtime modules from acquiring a second host-listener or pointer-session owner', () => {
-    for (const { name, source } of runtimeModuleSources()) {
-      expect(source, name).not.toMatch(/window\.(?:add|remove)EventListener/)
-      expect(source, name).not.toMatch(/(?:\bcontainer|\.container)\.(?:add|remove)EventListener/)
-      expect(source, name).not.toContain('SceneInteractionFrame')
-      expect(source, name).not.toMatch(/from ['"][^'"]*interaction\/frame['"]/)
-    }
   })
 
   it('routes repeated Scene arrangement placement through the shared kernel', () => {

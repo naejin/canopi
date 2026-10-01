@@ -587,8 +587,7 @@
     "name": "Scene runtime module boundaries > keeps the public Scene Interaction seam limited to Session construction and lifecycle"
   },
   "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > prevents canvas runtime modules from acquiring a second host-listener or pointer-session owner": {
-    "file": "src/__tests__/scene-runtime-boundaries.test.ts",
-    "name": "Scene runtime module boundaries > prevents canvas runtime modules from acquiring a second host-listener or pointer-session owner"
+    "policy": "P6 only the DOM input source adds canvas listeners"
   },
   "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > routes repeated Scene arrangement placement through the shared kernel": {
     "file": "src/__tests__/scene-runtime-boundaries.test.ts",
