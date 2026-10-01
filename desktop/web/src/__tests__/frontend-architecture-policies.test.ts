@@ -650,11 +650,10 @@ const REQUIRED_IMPORT_POLICIES = [
   {
     kind: 'require-imports',
     name: 'Control Point adapters delegate shared lifecycle ownership',
-    from: [
-      'src/canvas/runtime/interaction/zone-control-points.ts',
-      'src/canvas/runtime/interaction/measurement-guide-control-points.ts',
-    ],
-    targets: ['src/canvas/runtime/interaction/control-point-overlay.ts'],
+    // Select's reshape and guide-end handles are ToolHandle data (tools/select/{reshape,guide-ends}.ts, no chrome);
+    // the session builds the one handle layer that shows them into ToolHostDeps.chrome.
+    from: ['src/canvas/runtime/interaction-session.ts'],
+    targets: ['src/canvas/runtime/chrome/handle-layer.ts'],
   },
   {
     kind: 'require-imports',

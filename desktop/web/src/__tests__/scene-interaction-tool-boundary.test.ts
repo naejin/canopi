@@ -225,7 +225,7 @@ describe('Scene Interaction tool module boundaries', () => {
     expect(interactionSource).toContain('_cancelPendingInteractionHostFocus')
     expect(interactionSource).toContain('prepareForDocumentReplacement')
     expect(interactionSource).toContain('_contextMenu.dispose()')
-    expect(interactionSource).toContain('_rotationHandle.dispose()')
+    expect(interactionSource).toContain('_lockedAffordance.dispose()')
     expect(sourceExists('../canvas/runtime/interaction/selection-action-toolbar.ts')).toBe(false)
     expect(sourceExists('../canvas/runtime/interaction/frame.ts')).toBe(false)
   })
@@ -259,19 +259,30 @@ describe('Scene Interaction tool module boundaries', () => {
   })
 
   it('keeps shared selection gesture algorithms behind the Session seam', () => {
-    const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
-    const sharedGesturesSource = readSource('../canvas/runtime/interaction/shared-gestures.ts')
+    // Select's move-drag and band run on the ToolHost (tools/select/**), behind the ToolScene's queries; the session,
+    // the legacy bridge and its pan (shared-gestures.ts) hold none of them.
+    const sessionSources = [
+      '../canvas/runtime/interaction-session.ts',
+      '../canvas/runtime/scene-interaction.ts',
+      '../canvas/runtime/interaction/shared-gestures.ts',
+    ].map((path) => ({ path, source: readSource(path) }))
+    const moveDragSource = readSource('../canvas/runtime/tools/select/move-drag.ts')
+    const bandSource = readSource('../canvas/runtime/tools/select/band.ts')
+    const spatialIndexSource = readSource('../canvas/runtime/tools/spatial-index.ts')
 
-    expect(interactionSource).toContain('createSceneInteractionSharedGestures')
-    expect(interactionSource).not.toContain("this._mode === 'dragging'")
-    expect(interactionSource).not.toContain("this._mode === 'band'")
-    expect(interactionSource).not.toContain("this._mode === 'panning'")
-    expect(interactionSource).not.toContain('captureSceneDragState')
-    expect(interactionSource).not.toContain('queryRectTopLevel')
-    expect(interactionSource).not.toContain('interaction-drag')
-    expect(sharedGesturesSource).toContain('captureSceneDragState')
-    expect(sharedGesturesSource).toContain('queryRectTopLevel')
-    expect(sharedGesturesSource).toContain('interaction-drag')
+    expect(readSource('../canvas/runtime/scene-interaction.ts')).toContain('createSceneInteractionSharedGestures')
+    for (const { path, source } of sessionSources) {
+      expect(source, path).not.toContain("this._mode === 'dragging'")
+      expect(source, path).not.toContain("this._mode === 'band'")
+      expect(source, path).not.toContain("this._mode === 'panning'")
+      expect(source, path).not.toContain('captureSceneDragState')
+      expect(source, path).not.toContain('queryRectTopLevel')
+      expect(source, path).not.toContain('interaction-drag')
+    }
+    expect(moveDragSource).toContain('captureSceneDragState')
+    expect(moveDragSource).toContain("'interaction-drag'")
+    expect(bandSource).toContain('ctx.scene.hitInQuad(')
+    expect(spatialIndexSource).toContain('queryRectTopLevel')
   })
 
   it('keeps the tool registry focused on adapter construction and identity', () => {

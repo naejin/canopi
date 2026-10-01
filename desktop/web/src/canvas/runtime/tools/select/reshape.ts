@@ -108,7 +108,7 @@ export function zoneReshapeSubject(zone: SceneZoneEntity, controlPoint: ZoneCont
 }
 
 /** The zone with `controlPoint` at `dragged`, or null where it would be smaller than the minimum. */
-export function reshapeZone(
+function reshapeZone(
   zone: SceneZoneEntity,
   controlPoint: Pick<ZoneControlPoint, 'kind' | 'index'>,
   dragged: WorldPoint,
@@ -120,11 +120,11 @@ export function reshapeZone(
   return null
 }
 
-export function cloneZone(zone: SceneZoneEntity): SceneZoneEntity {
+function cloneZone(zone: SceneZoneEntity): SceneZoneEntity {
   return { ...zone, points: zone.points.map((entry) => ({ ...entry })) }
 }
 
-export function zonesEqual(a: SceneZoneEntity, b: SceneZoneEntity): boolean {
+function zonesEqual(a: SceneZoneEntity, b: SceneZoneEntity): boolean {
   if (a.rotationDeg !== b.rotationDeg || a.points.length !== b.points.length) return false
   return a.points.every((entry, index) => pointsEqual(entry, b.points[index]!))
 }

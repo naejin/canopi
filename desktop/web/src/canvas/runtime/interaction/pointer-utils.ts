@@ -14,10 +14,6 @@ export function cursorForTool(tool: string): string {
   return 'default'
 }
 
-export function hasAdditiveModifier(event: Pick<MouseEvent, 'shiftKey' | 'ctrlKey' | 'metaKey'>): boolean {
-  return Boolean(event.shiftKey || event.ctrlKey || event.metaKey)
-}
-
 // The legacy tool modules still read DOM key targets until their streams port them (plan §4 0B).
 export { isEditableTarget } from '../input/editable-target'
 

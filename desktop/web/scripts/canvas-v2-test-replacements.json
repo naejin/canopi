@@ -513,5 +513,9 @@
   "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps Annotation Text creation editor state behind the text tool module": {
     "file": "src/canvas/runtime/tools/text-note.test.ts",
     "name": "the Text tool > a press opens a new note's entry where it lands; Enter writes the note as one edit and selects it"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > rolls back partial 'Measurement Guide Control Points' resources when a later append fails": {
+    "file": "src/canvas/runtime/chrome/handle-layer.test.ts",
+    "name": "the handle layer > removes its root when it cannot follow the camera"
   }
 }

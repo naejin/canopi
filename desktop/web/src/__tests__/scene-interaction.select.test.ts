@@ -4211,27 +4211,6 @@ describe('SceneInteractionSession', () => {
         }
       },
     },
-    {
-      name: 'Measurement Guide Control Points',
-      failure: 'measurement control point overlay construction failed',
-      createFault() {
-        let controlPointRootAppended = false
-        let targetReached = false
-        return {
-          shouldFail(node: Node) {
-            if (node instanceof HTMLElement && node.dataset.measurementGuideControlPoints === 'true') {
-              controlPointRootAppended = true
-              return false
-            }
-            targetReached = controlPointRootAppended
-              && node instanceof HTMLElement
-              && node.dataset.zoneMeasurementOverlay === 'true'
-            return targetReached
-          },
-          wasTargetReached: () => targetReached,
-        }
-      },
-    },
   ])('rolls back partial $name resources when a later append fails', ({ failure, createFault }) => {
     const { shouldFail, wasTargetReached } = createFault()
     const deps = createInteractionDeps(container, store, camera)

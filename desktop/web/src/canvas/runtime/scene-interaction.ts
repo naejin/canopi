@@ -3,14 +3,14 @@
 // The legacy bridge (0B-2 to the end of 0B, plan §4 0B, spec §1.4 "The legacy bridge"): today's interaction session, which
 // interaction-session.ts runs for every tool not yet listed in tools/registry.ts. It owns no listener: the session hands it
 // the DOM event the DOM input source is handling (DomInputSource.currentEvent()), and it runs today's handlers on it with
-// the SceneToolAdapter hooks of the tools still in interaction/tool-modules.ts, and Select, Pan, the chrome and drops
-// through shared-gestures.ts. Its pointer capture goes through the source (which forwards the capture's loss), its keys
-// are keyboard-port.ts's (the hooks below are the steps a bridged tool keeps), and the arrow-nudge series is the
-// ToolHost's. While a registered tool is armed it idles: no adapter, no Select affordances, no passive hover, no guidance.
-// It also lends the ToolHost its tooltip, Unlock affordance and note editor (the session's 0B-2 chrome adapter).
+// the SceneToolAdapter hooks of the tools still in interaction/tool-modules.ts: their presses and drags, their pans
+// (middle button, Space, overview) through shared-gestures.ts, their passive hover (the plant tooltip and the Unlock
+// affordance), wheel and canvas menu; and every tool's drops until the host's drop route (0B-4). Select, Pan and Text run
+// on the ToolHost. Its pointer capture goes through the source (which forwards the capture's loss), its keys are
+// keyboard-port.ts's (the hooks below are the steps a bridged tool keeps), and the arrow-nudge series is the ToolHost's.
+// While a registered tool is armed it idles: no adapter, no passive hover, no guidance.
 // The main agent deletes it at the end of 0B; the session is re-exported here for the suites that import it from here.
 
-import { getDesignObjectSelectionModel } from './scene-runtime/selection'
 import { gridInterval, snapToGrid } from '../grid'
 import { snapToGuides } from '../guides'
 import type { SceneDesignObjectTarget, ScenePoint } from './scene'
@@ -58,24 +58,9 @@ import {
   type SceneInteractionSharedGestures,
 } from './interaction/shared-gestures'
 import {
-  createAnnotationInlineEditor,
-  type AnnotationInlineEditorController,
-} from './interaction/annotation-inline-editor'
-import {
   createCanvasContextMenu,
   type CanvasContextMenuController,
 } from './interaction/canvas-context-menu'
-import {
-  createSelectionRotationHandle,
-  type SelectionRotationHandleController,
-} from './interaction/selection-rotation-handle'
-import {
-  createZoneControlPoints,
-} from './interaction/zone-control-points'
-import {
-  createMeasurementGuideControlPoints,
-} from './interaction/measurement-guide-control-points'
-import type { ControlPointOverlayController } from './interaction/control-point-overlay'
 import type { CanvasDesignObjectSelectionModel, CanvasPlantRowSpacingField } from './runtime'
 import {
   createLockedObjectAffordance,
@@ -179,12 +164,6 @@ export interface LegacyInteractionBridge extends LegacyKeyBridge {
   spaceChanged(held: boolean): void
   /** The rAF focus after a drop is dropped (a window blur). */
   cancelPendingFocus(): void
-
-  // The ToolHost's chrome until D1's chrome/*.ts (0B-3): one element each.
-  isTextEntryOpen(): boolean
-  setTooltip(tooltip: { readonly target: SceneDesignObjectTarget; readonly at: ScenePoint } | null): void
-  setLockedAffordance(affordance: { readonly target: SceneDesignObjectTarget; readonly at: ScenePoint } | null): void
-  closeMenu(): void
 }
 
 export function createLegacyInteractionBridge(
@@ -199,17 +178,13 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
   private readonly _tooltip: HoverTooltipController
   private readonly _toolRegistry: SceneToolRegistry
   private readonly _sharedGestures: SceneInteractionSharedGestures
-  private readonly _annotationEditor: AnnotationInlineEditorController
   private readonly _contextMenu: CanvasContextMenuController
-  private readonly _rotationHandle: SelectionRotationHandleController
-  private readonly _controlPointOverlays: readonly ControlPointOverlayController[]
   private readonly _lockedAffordance: LockedObjectAffordanceController
   private _tool: InteractionTool = 'select'
   private _pointerGesture: SceneInteractionPointerGesture | null = null
   private _toolPointerDrag: SceneToolPointerDrag | null = null
   private _disposed = false
   private _transientCancellationPending = false
-  private _designObjectDragPresentationSuppressed = false
   private _pendingInteractionHostFocusFrame: number | null = null
   private _overviewMode = false
   readonly plantRowSpacing: CanvasPlantRowSpacingField = {
@@ -247,46 +222,14 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
         getSelection: this._deps.getSelection,
         clearSelection: this._deps.clearSelection,
         render: this._deps.render,
-        getSpeciesCache: this._deps.getSpeciesCache,
-        getPlantPresentationContext: this._deps.getPlantPresentationContext,
-        getLocalizedCommonNames: this._deps.getLocalizedCommonNames,
-        translate: this._deps.translate,
-        switchTool: (name) => this._switchTool(name),
-        focusHost: () => this._focusInteractionHost(),
         applySnapping: (point) => this._applySnapping(point),
         notifyTransientHistoryChange: () => this._deps.notifyTransientHistoryChange?.(),
-        notifyGuidanceChange: () => this._publishToolGuidance(),
       }), disposeSceneToolRegistry)
-      this._annotationEditor = own(createAnnotationInlineEditor({
-        container: this._deps.container,
-        camera: this._deps.camera,
-        getSceneStore: this._deps.getSceneStore,
-        sceneEdits: this._deps.sceneEdits,
-        canEditAnnotation: (annotationId) => this._canEditAnnotation(annotationId),
-        focusHost: () => this._focusInteractionHost(),
-        translate: this._deps.translate,
-        refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
-      }), (editor) => editor.dispose())
       this._sharedGestures = own(createSceneInteractionSharedGestures({
         container: this._deps.container,
-        preview: this._preview,
-        camera: this._deps.camera,
         cameraNavigation: this._deps.cameraNavigation,
-        getSceneStore: this._deps.getSceneStore,
-        getSelection: this._deps.getSelection,
-        getDesignObjectSelection: this._deps.getDesignObjectSelection,
-        setSelection: this._deps.setSelection,
-        clearSelection: this._deps.clearSelection,
-        sceneEdits: this._deps.sceneEdits,
         render: this._deps.render,
-        getSpeciesCache: this._deps.getSpeciesCache,
-        getPlantPresentationContext: this._deps.getPlantPresentationContext,
-        applySnapping: (point) => this._applySnapping(point),
         refreshViewportDependent: () => this._refreshViewportDependentMeasurements(),
-        refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
-        beginDesignObjectDragPresentation: () => this._beginDesignObjectDragPresentation(),
-        endDesignObjectDragPresentation: () => this._endDesignObjectDragPresentation(),
-        beginAnnotationTextEdit: (annotationId) => this._beginAnnotationTextEdit(annotationId),
       }), (gestures) => gestures.dispose())
       this._contextMenu = own(createCanvasContextMenu({
         container: this._deps.container,
@@ -297,38 +240,6 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
         placePlantsAt: (world) => this._placePlantsAt(world),
         returnFocus: () => this._focusInteractionHost(),
       }), (menu) => menu.dispose())
-      this._rotationHandle = own(createSelectionRotationHandle({
-        container: this._deps.container,
-        camera: this._deps.camera,
-        getSceneStore: this._deps.getSceneStore,
-        getSelection: this._deps.getDesignObjectSelection,
-        sceneEdits: this._deps.sceneEdits,
-        render: this._deps.render,
-        translate: this._deps.translate,
-        refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
-      }), (handle) => handle.dispose())
-      const controlPointOverlayOptions = {
-        container: this._deps.container,
-        camera: this._deps.camera,
-        getSceneStore: this._deps.getSceneStore,
-        getSelection: this._deps.getDesignObjectSelection,
-        sceneEdits: this._deps.sceneEdits,
-        applySnapping: (point: ScenePoint) => this._applySnapping(point),
-        render: this._deps.render,
-        refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
-        beginDragPresentation: () => this._beginDesignObjectDragPresentation(),
-        endDragPresentation: () => this._endDesignObjectDragPresentation(),
-      }
-      this._controlPointOverlays = [
-        own(
-          createZoneControlPoints(controlPointOverlayOptions),
-          (controlPoints) => controlPoints.dispose(),
-        ),
-        own(
-          createMeasurementGuideControlPoints(controlPointOverlayOptions),
-          (controlPoints) => controlPoints.dispose(),
-        ),
-      ]
       this._lockedAffordance = own(createLockedObjectAffordance({
         container: this._deps.container,
         translate: this._deps.translate,
@@ -351,7 +262,6 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
     if (this._disposed) return
     const previousTool = this._tool
     const changingTool = this._tool !== name
-    if (changingTool) this._annotationEditor.cancel()
 
     const previousAdapter = this._activeToolAdapter()
     this._cancelTransientInteraction()
@@ -402,31 +312,23 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
       this._refreshSelectionDependentMeasurements()
       return
     }
-    this._designObjectDragPresentationSuppressed = false
     runCanvasRuntimeCleanups([
-      () => this._annotationEditor.cancel(),
       () => this._cancelTransientInteraction({ releaseSpace: true }),
       () => this._contextMenu.close(),
       () => hideInteractionPreview(this._preview),
       () => clearSavedObjectStampGhosts(this._preview),
-      () => this._rotationHandle.hide(),
-      ...this._controlPointOverlays.map((overlay) => () => overlay.hide()),
       () => this._clearPassiveHoverPresentation(),
     ], 'Scene Interaction overview transition failed')
   }
 
   prepareForDocumentReplacement(): void {
     if (this._disposed) return
-    this._designObjectDragPresentationSuppressed = false
     runCanvasRuntimeCleanups([
       () => this._cancelPendingInteractionHostFocus(),
-      () => this._annotationEditor.cancel(),
       () => this._cancelTransientInteraction({ releaseSpace: true }),
       () => this._contextMenu.close(),
       () => hideInteractionPreview(this._preview),
       () => clearSavedObjectStampGhosts(this._preview),
-      () => this._rotationHandle.hide(),
-      ...this._controlPointOverlays.map((overlay) => () => overlay.hide()),
       () => this._clearPassiveHoverPresentation(),
     ], 'Scene Interaction document replacement preparation failed')
   }
@@ -447,10 +349,7 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
     attempt(() => this._cancelTransientInteraction())
     attempt(() => this._activeToolAdapter()?.onDeactivate?.())
     attempt(() => this._contextMenu.dispose())
-    attempt(() => this._rotationHandle.dispose())
-    for (const overlay of this._controlPointOverlays) attempt(() => overlay.dispose())
     attempt(() => this._lockedAffordance.dispose())
-    attempt(() => this._annotationEditor.dispose())
     attempt(() => this._sharedGestures.dispose())
     attempt(() => this._forEachUniqueToolHook('dispose', (dispose) => attempt(dispose)))
     attempt(() => this._preview.remove())
@@ -473,7 +372,6 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
 
   refreshTranslations(): void {
     if (this._disposed) return
-    this._rotationHandle.refreshTranslations()
     this._lockedAffordance.refreshTranslations()
     this._forEachUniqueToolHook('refreshTranslations', (refresh) => refresh())
   }
@@ -518,34 +416,6 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
     this._cancelPendingInteractionHostFocus()
   }
 
-  isTextEntryOpen(): boolean {
-    return this._annotationEditor.hasActiveEditor()
-  }
-
-  setTooltip(tooltip: { readonly target: SceneDesignObjectTarget; readonly at: ScenePoint } | null): void {
-    const plant = tooltip?.target.kind === 'plant'
-      ? this._deps.getSceneStore().persisted.plants.find((entry) => entry.id === tooltip.target.id)
-      : undefined
-    if (!tooltip || !plant) {
-      this._tooltip.hide()
-      return
-    }
-    const commonName = this._deps.getLocalizedCommonNames().get(plant.canonicalName) ?? plant.commonName
-    this._tooltip.show(tooltip.at.x, tooltip.at.y, commonName, plant.canonicalName)
-  }
-
-  setLockedAffordance(affordance: { readonly target: SceneDesignObjectTarget; readonly at: ScenePoint } | null): void {
-    if (!affordance) {
-      this._lockedAffordance.hide()
-      return
-    }
-    this._lockedAffordance.show({ target: affordance.target, screenX: affordance.at.x, screenY: affordance.at.y })
-  }
-
-  closeMenu(): void {
-    this._contextMenu.close()
-  }
-
   // ── Keys the bridged tool keeps (keyboard-port.ts runs today's order) ─────────────────────────────────────────────
 
   retryPendingCancellation(event: KeyboardEvent): boolean {
@@ -562,7 +432,6 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
 
   openMenuFromKeyboard(event: KeyboardEvent): void {
     this._runAdmittedSceneEvent(event, () => {
-      if (this._annotationEditor.hasActiveEditor()) this._annotationEditor.commit()
       this._contextMenu.openFromKeyboard(this._deps.getDesignObjectSelection())
     }, { resumePending: true })
   }
@@ -573,20 +442,6 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
 
   suppressesSharedKeyboard(event: KeyboardEvent): boolean {
     return this._activeToolAdapter()?.shouldSuppressSharedKeyboard?.(event) ?? false
-  }
-
-  /** Enter or F2 with one editable note selected (the port checked the key, the tool and the target). */
-  editSelectedNote(): boolean {
-    const selection = this._deps.getDesignObjectSelection()
-    if (
-      selection.editableTargets.length !== 1
-      || (selection.lockedTargets?.length ?? 0) > 0
-      || (selection.blockedTargets?.length ?? 0) > 0
-    ) return false
-
-    const target = selection.editableTargets[0]
-    if (target?.kind !== 'annotation') return false
-    return this._beginAnnotationTextEdit(target.id)
   }
 
   publishGuidance(): void {
@@ -601,7 +456,6 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
     if (this._pointerGesture && this._pointerGesture.pointerId !== event.pointerId) return
     if (this._retryPendingTransientCancellation(event)) return
     this._contextMenu.close()
-    if (this._annotationEditor.contains(event.target)) return
     if (this._lockedAffordance.contains(event.target)) return
 
     try {
@@ -614,7 +468,6 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
   }
 
   private _pointerDownWhenSettled(event: PointerEvent): void {
-    if (this._annotationEditor.hasActiveEditor()) this._annotationEditor.commit()
     if (this._activeToolAdapter()?.shouldIgnorePointerEvent?.(event.target) ?? false) return
 
     this._claimInteractionPointerDown(event)
@@ -637,40 +490,21 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
       this._sharedGestures.beginPan({
         event,
         screen,
-        world,
         tool: 'hand',
         spaceHeld: true,
       })
       return
     }
 
-    if (event.button === 0 && this._rotationHandle.contains(event.target)) {
-      const rotationDrag = this._rotationHandle.pointerDown({ event, rawWorld: world })
-      if (rotationDrag) this._toolPointerDrag = rotationDrag
-      else this._clearPointerGesture()
-      return
-    }
-
-    if (event.button === 0) {
-      for (const overlay of this._controlPointOverlays) {
-        if (!overlay.contains(event.target)) continue
-        const controlPointDrag = overlay.pointerDown({ event, rawWorld: world })
-        if (controlPointDrag) this._toolPointerDrag = controlPointDrag
-        else this._clearPointerGesture()
-        return
-      }
-    }
-
     if (this._sharedGestures.beginPan({
       event,
       screen,
-      world,
       tool: this._tool,
       spaceHeld: this._hooks.space.held(),
     })) return
 
-    // Inspection owns the plain left click while it is active, so drawing and
-    // selection stay suspended without a second gesture owner.
+    // Inspection owns the plain left click while it is active, so drawing stays
+    // suspended without a second gesture owner.
     if (event.button === 0 && this._deps.tryInspectAt?.(world)) {
       this._clearPointerGesture()
       return
@@ -688,13 +522,8 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
       return
     }
 
-    this._sharedGestures.beginSelectionGesture({
-      event,
-      screen,
-      world,
-      tool: this._tool,
-      spaceHeld: this._hooks.space.held(),
-    })
+    // Select's clicks, band and move-drag run on the ToolHost: a press no bridged tool takes ends here.
+    this._clearPointerGesture()
   }
 
   pointerLeave(): void {
@@ -768,7 +597,7 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
     const screen = this._screenPoint(event)
     const rawWorld = this._deps.camera.screenToWorld(screen)
 
-    if (this._sharedGestures.active && this._sharedGestures.pointerMove({ screen, rawWorld })) return
+    if (this._sharedGestures.pointerMove({ screen })) return
 
     const toolDrag = this._toolPointerDrag
     if (toolDrag) {
@@ -802,20 +631,6 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
     if (!hasPointerGesture && (this._activeToolAdapter()?.shouldIgnorePointerUpWithoutCapture?.() ?? false)) return
     if (this._pointerGesture && this._pointerGesture.pointerId !== event.pointerId) return
 
-    if (this._sharedGestures.requiresSettledPointerUp) {
-      const admitted = this._runAdmittedSceneEvent(event, () => {
-        this._finishPointerUp(event)
-      }, { resumePending: true })
-      if (!admitted) {
-        try {
-          this._cancelTransientInteraction()
-        } finally {
-          this._refreshViewportDependentMeasurements()
-        }
-      }
-      return
-    }
-
     this._finishPointerUp(event)
   }
 
@@ -836,8 +651,6 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
       try {
         this._toolPointerDrag?.commit({ event, screen, rawWorld })
         const sharedResult = this._sharedGestures.pointerUp({
-          screen,
-          rawWorld,
           preserveActiveDraft: this._activeToolAdapter()?.shouldPreserveTransientOnPan?.() ?? false,
         })
         preserveActiveDraft = sharedResult.preserveActiveDraft
@@ -929,7 +742,6 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
       event.stopImmediatePropagation()
       return
     }
-    if (this._annotationEditor.hasActiveEditor()) this._annotationEditor.commit()
     const screen = this._screenPoint(event)
     const world = this._deps.camera.screenToWorld(screen)
     this._contextMenu.openAtPointer(screen, this._retargetContextMenuSelection(world))
@@ -1119,8 +931,8 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
     try {
       runCanvasRuntimeCleanups([
         () => this._sharedGestures.cancel(),
-        () => this._rotationHandle.cancelActiveDrag(),
-        ...this._controlPointOverlays.map((overlay) => () => overlay.cancelActiveDrag()),
+        // Today's shared-gesture cancel hid the preview with its band: a drop cue goes with any cancellation, as then.
+        () => hideInteractionPreview(this._preview),
         () => activeAdapter?.cancelTransient?.(options),
         () => this._deps.setHoveredTarget(null),
         () => this._tooltip.hide(),
@@ -1165,58 +977,18 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
   }
 
   private _refreshViewportDependentMeasurements(): void {
-    this._annotationEditor.refresh()
-    if (this._activeToolAdapter()?.refreshViewportDependent?.() === true) {
-      for (const overlay of this._controlPointOverlays) {
-        overlay.refresh(this._canShowSelectAffordances())
-      }
-      if (this._canShowSelectAffordances()) {
-        this._rotationHandle.refresh()
-      } else {
-        this._rotationHandle.hide()
-      }
-      return
-    }
-
+    if (this._activeToolAdapter()?.refreshViewportDependent?.() === true) return
     this._refreshSelectionDependentMeasurements()
   }
 
+  /** The selected-zone chips the polygon adapter draws under every tool until D2 registers it (spec §1.4). */
   private _refreshSelectionDependentMeasurements(): void {
-    this._annotationEditor.refresh()
     this._forEachUniqueToolHook('refreshSelectionDependent', (refresh) => refresh())
-    const canShowSelectAffordances = this._canShowSelectAffordances()
-    for (const overlay of this._controlPointOverlays) overlay.refresh(canShowSelectAffordances)
-    if (this._designObjectDragPresentationSuppressed || !canShowSelectAffordances) {
-      this._rotationHandle.hide()
-      return
-    }
-    this._rotationHandle.refresh()
-  }
-
-  private _canShowSelectAffordances(): boolean {
-    return this._tool === 'select'
-      && !this._idle()
-      && !this._overviewMode
-      && !this._transientCancellationPending
-      && !this._hasActiveSceneEdit()
-      && !this._annotationEditor.hasActiveEditor()
   }
 
   /** A registered tool is armed: the ToolHost runs it and the bridge holds nothing. */
   private _idle(): boolean {
     return this._hooks.isRegistered(this._tool)
-  }
-
-  private _beginDesignObjectDragPresentation(): void {
-    this._designObjectDragPresentationSuppressed = true
-    this._rotationHandle.hide()
-    this._clearPassiveHoverPresentation()
-  }
-
-  private _endDesignObjectDragPresentation(): void {
-    if (!this._designObjectDragPresentationSuppressed) return
-    this._designObjectDragPresentationSuppressed = false
-    this._refreshSelectionDependentMeasurements()
   }
 
   private _clearPassiveHoverPresentation(): void {
@@ -1303,29 +1075,6 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
     this._pendingInteractionHostFocusFrame = null
   }
 
-  private _beginAnnotationTextEdit(annotationId: string): boolean {
-    const started = this._annotationEditor.start(annotationId)
-    if (started) this._refreshSelectionDependentMeasurements()
-    return started
-  }
-
-  private _canEditAnnotation(annotationId: string): boolean {
-    const viewportScale = this._deps.camera.viewport.scale
-    const selection = getDesignObjectSelectionModel(
-      this._deps.getSceneStore().persisted,
-      [{ kind: 'annotation', id: annotationId }],
-      {
-        annotationViewportScale: viewportScale,
-        plantContext: this._deps.getPlantPresentationContext(viewportScale),
-      },
-    )
-    return selection.editableTargets.length === 1
-      && selection.editableTargets[0]?.kind === 'annotation'
-      && selection.editableTargets[0].id === annotationId
-      && selection.lockedTargets.length === 0
-      && selection.blockedTargets.length === 0
-  }
-
   private _syncLockedObjectAffordance(
     hit: TopLevelTarget | null,
     screen: ScenePoint,
@@ -1357,18 +1106,12 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
   }
 
   private _isOwnedOverlayPointerTarget(target: EventTarget | null): boolean {
-    return this._annotationEditor.contains(target)
-      || this._rotationHandle.contains(target)
-      || this._controlPointOverlays.some((overlay) => overlay.contains(target))
-      || this._lockedAffordance.contains(target)
+    return this._lockedAffordance.contains(target)
       || (this._activeToolAdapter()?.shouldIgnorePointerEvent?.(target) ?? false)
   }
 
   private _hasActiveSceneEdit(): boolean {
-    return this._sharedGestures.editActive
-      || this._rotationHandle.dragActive
-      || this._controlPointOverlays.some((overlay) => overlay.dragActive)
-      || (this._activeToolAdapter()?.hasActiveSceneEdit?.() ?? false)
+    return this._activeToolAdapter()?.hasActiveSceneEdit?.() ?? false
   }
 
   private _forEachUniqueToolHook(

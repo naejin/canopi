@@ -85,7 +85,7 @@ export function guideLengthShapes(
 }
 
 /** The guide with its end `index` at `dragged`, or null where it would be shorter than the minimum. */
-export function reshapeMeasurementGuide(
+function reshapeMeasurementGuide(
   guide: SceneMeasurementGuideEntity,
   index: 0 | 1,
   dragged: WorldPoint,
@@ -95,13 +95,13 @@ export function reshapeMeasurementGuide(
   return next
 }
 
-export function measurementGuidesEqual(left: SceneMeasurementGuideEntity, right: SceneMeasurementGuideEntity): boolean {
+function measurementGuidesEqual(left: SceneMeasurementGuideEntity, right: SceneMeasurementGuideEntity): boolean {
   return left.start.x === right.start.x
     && left.start.y === right.start.y
     && left.end.x === right.end.x
     && left.end.y === right.end.y
 }
 
-export function cloneMeasurementGuide(guide: SceneMeasurementGuideEntity): SceneMeasurementGuideEntity {
+function cloneMeasurementGuide(guide: SceneMeasurementGuideEntity): SceneMeasurementGuideEntity {
   return { ...guide, start: { ...guide.start }, end: { ...guide.end } }
 }

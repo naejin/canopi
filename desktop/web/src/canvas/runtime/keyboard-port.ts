@@ -98,8 +98,6 @@ export interface LegacyKeyBridge {
   toolKeyDown(event: KeyboardEvent): boolean
   /** The armed tool adapter keeps Space and Enter for itself. */
   suppressesSharedKeyboard(event: KeyboardEvent): boolean
-  /** Enter or F2 with one editable note selected under Select: the note editor opens. */
-  editSelectedNote(): boolean
   /** Today's tool guidance after every key. */
   publishGuidance(): void
 }
@@ -241,16 +239,13 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): LegacyCa
     return true
   }
 
-  function editSelectedNote(event: KeyboardEvent, isBridged: boolean): boolean {
+  /** Enter or F2 under Select, which runs on the ToolHost: its note-edit command. */
+  function editSelectedNote(event: KeyboardEvent): boolean {
     if (!toolHost.activeToolIsSelect()) return false
     if (event.key !== 'Enter' && event.key !== 'F2') return false
     if (!isCanvasKeyboardShortcutTarget(event.target, host)) return false
     if (isEditableTarget(event.target)) return false
-    if (isBridged) {
-      if (legacy.bridge.suppressesSharedKeyboard(event) || !legacy.bridge.editSelectedNote()) return false
-    } else if (toolHost.command({ kind: 'edit-text' }) !== 'handled') {
-      return false
-    }
+    if (toolHost.command({ kind: 'edit-text' }) !== 'handled') return false
     event.preventDefault()
     event.stopPropagation()
     return true
@@ -293,7 +288,7 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): LegacyCa
       return
     }
     if (escapeChain(event)) return
-    if (editSelectedNote(event, isBridged)) return
+    if (editSelectedNote(event)) return
     if (
       event.code !== 'Space'
       || legacy.spaceHeld()

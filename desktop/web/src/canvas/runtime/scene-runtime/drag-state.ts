@@ -25,7 +25,7 @@ export function createSceneDragState(): SceneDragState {
   }
 }
 
-export function resetSceneDragState(state: SceneDragState): void {
+function resetSceneDragState(state: SceneDragState): void {
   state.plantStarts.clear()
   state.zoneStarts.clear()
   state.annotationStarts.clear()

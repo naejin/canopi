@@ -1,13 +1,9 @@
 import type { WorkspaceCameraFrameReader } from '../camera'
 import type {
-  PlantPresentationContext,
-} from '../plant-presentation'
-import type {
   SceneDesignObjectSelection,
   ScenePoint,
   SceneStateReader,
 } from '../scene'
-import type { SpeciesCacheEntry } from '../species-cache'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import {
   createMeasurementGuideTool,
@@ -16,7 +12,6 @@ import {
 import type {
   SceneToolAdapter,
 } from './tool-adapter'
-import type { CanvasRuntimeTranslator } from '../app-adapter'
 import {
   createZoneDrawingTool,
   createZoneDrawingToolAdapters,
@@ -27,21 +22,12 @@ export interface SceneToolRegistryContext {
   readonly preview: HTMLDivElement
   readonly camera: WorkspaceCameraFrameReader
   readonly getSceneStore: () => SceneStateReader
-  readonly getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
-  readonly getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
-  readonly getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
-  readonly translate: CanvasRuntimeTranslator
   readonly getSelection: () => SceneDesignObjectSelection
   readonly clearSelection: () => void
   readonly sceneEdits: SceneEditCoordinator
   readonly render: (kind: 'scene' | 'viewport') => void
-  readonly switchTool: (name: string) => void
-  /** Focus the map host, as after a gesture ends from a field it opened. */
-  readonly focusHost: () => void
   readonly applySnapping: (point: ScenePoint) => ScenePoint
   readonly notifyTransientHistoryChange: () => void
-  /** A tool's guidance changed outside a map event (a note field closed). */
-  readonly notifyGuidanceChange: () => void
 }
 
 export interface SceneToolRegistry {

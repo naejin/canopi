@@ -405,14 +405,10 @@ function classifyTarget(target: EventTarget | null, host: HTMLElement): TargetCl
   return SURFACE
 }
 
-/** D1's handle layer names its handles; today's rotation handle and control points are read until it does. */
+/** The handle layer (chrome/handle-layer.ts) names each handle it shows. */
 function handleIdOf(element: Element, host: HTMLElement): ToolHandleId | null {
   const handle = closestInside(element, '[data-canvas-handle]', host)
-  if (handle) return handle.getAttribute('data-canvas-handle') as ToolHandleId
-  if (closestInside(element, '[data-rotation-handle]', host)) return 'rotate' as ToolHandleId
-  const point = closestInside(element, '[data-control-point-overlay-handle]', host)
-  if (point) return `control-point:${point.getAttribute('data-control-point-overlay-handle')}` as ToolHandleId
-  return null
+  return handle ? handle.getAttribute('data-canvas-handle') as ToolHandleId : null
 }
 
 function closestInside(element: Element, selector: string, host: HTMLElement): Element | null {

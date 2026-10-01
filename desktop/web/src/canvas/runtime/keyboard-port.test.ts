@@ -74,7 +74,6 @@ function fixture(options: { readonly tool?: ToolId; readonly registered?: readon
     openMenuFromKeyboard: vi.fn(),
     toolKeyDown: vi.fn(() => false),
     suppressesSharedKeyboard: vi.fn(() => false),
-    editSelectedNote: vi.fn(() => false),
     publishGuidance: vi.fn(),
   }
   const legacy = {
