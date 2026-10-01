@@ -79,8 +79,6 @@ export interface ViewCamera {
 export interface PlanarCamera { readonly x: number; readonly y: number; readonly scale: number; readonly bearingDeg: number }
 
 export interface ViewScreen { readonly width: number; readonly height: number; readonly devicePixelRatio: number }
-/** A screen size from the platform (0E): a missing density takes the host's platform read, CameraDriverHostOptions.devicePixelRatio. */
-export interface ScreenMetrics { readonly width: number; readonly height: number; readonly devicePixelRatio?: number }
 
 /** Renderer and bulk-projection fast path. Null for non-planar projections (globe). */
 export interface PlanarProjection {
@@ -211,8 +209,13 @@ export interface ViewCommandSurface {
   zoomToFit(): void                                    // Fit to Design, Home
   zoomToSelection(): void                              // Shift+2
   returnToDesign(): void                               // kept: "Back to my Design"
-  focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean          // kept: plant finder, LiDAR
-  returnFromTemporaryFocus(): boolean                  // kept
+  /** Kept: LiDAR's Fit to data. Bookmarks the current view (the latest focus wins), then frames the bounds as frameBounds does. */
+  focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
+  /** Kept: LiDAR's Return to Design. Restores the bookmark; false without one (the caller then calls returnToDesign, 0E). */
+  returnFromTemporaryFocus(): boolean
+  /** (0E) The plant finder's Zoom to them: today's fitTemporaryBounds maths, no bookmark. Not named fitBounds: P1 forbids that
+   *  MapLibre name as a call. */
+  frameBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
   setFramingInsets(insets: ScreenInsets): void         // kept: the visible-map-area seam
   resetNorth(): void
   rotateBy(direction: 1 | -1): void                    // next absolute 15° multiple in that direction
@@ -223,9 +226,9 @@ export interface ViewCommandSurface {
 }
 ```
 
-**How the view surfaces meet today's session surfaces (§1.1a).** `ViewCommandSurface` replaces today's `CanvasViewportCommandSurface` (`canvas/runtime/runtime.ts:84`), whose name stays as `export type CanvasViewportCommandSurface = ViewCommandSurface` so `canvas/session.ts` compiles unchanged, and is exposed as `CanvasCommandSurface.viewport`, so `currentCanvasViewportCommandSurface()` in `canvas/session.ts` keeps its name and returns it. Kept methods: `zoomIn`, `zoomOut`, `zoomBy`, `zoomToFit`, `returnToDesign`, `focusTemporaryBounds`, `returnFromTemporaryFocus`, `setFramingInsets`, `showPlace` (still boolean). New: `zoomToSelection`, `resetNorth`, `rotateBy`, `beginRotation`, `showCamera`. Removed: any method that returned or took a `SceneViewportState`. `ViewReadSurface` is added to `CanvasQuerySurface` as `view`, read through `currentCanvasQuerySurface()`. Readers of the query surface's `viewport` field move to `view` in 0A-2 (saved views, story controller, command projection, tool card, gallery snapshots, LiDAR request, map contributions); the four Components-0D2 files and `app/plant-display/coverage.ts` move in 0D2; 0E removes the field, after 0C and 0D2 merged. `CanvasViewSceneRequest` (`runtime.ts:221-229`) and `ViewSnapshotScene.build` (`maplibre/view-snapshot-map.ts:44`) take a `view: ViewTransform` instead of `viewport: SceneViewportState` from 0D2; the snapshot map's own driver supplies it, and `captureViewScene` (`query-surface.ts:70-75`) decides overview from `view.pixelsPerMetre`. `CanvasQuerySurface` also gains `subscribePointerWorld(listener: (point: WorldPoint | null) => void): () => void`, forwarding `ToolHost.subscribePointerWorld` (typed optional in the seams commit so no fake changes; `query-surface.ts` and `interaction-session.ts` implement it in 0B, which makes it required and fills the fakes), which the inspection lens component uses instead of its own map-host `pointermove` (INV-ENT-23). The lens handle contract in `canvas/inspection.ts` changes three times: in 0B `CanvasInspectionHandle` gains `inspectAtWorldPoint(point: WorldPoint)`, which the lens calls with the published point (Input implements it in `canvas/runtime/inspection-lens.ts`, with no screen conversion of its own; the lens ignores `null` and keeps its last sample, as today it skipped buttons, inputs and `[data-preserve-overlays]`); in 0D2 `CanvasInspectionHandle` gains `sourceQuad: ReadonlySignal<InspectionSourceQuad | null>`, the four screen corners of the lens footprint on the main map in `worldQuadToScreen` order (the 0C/0D2 hand-off adds the type with a `null` stub; Renderer computes it from the main `viewFrame` and the lens `ViewTransform`, so it moves with each published main frame and each lens paint; it is a signal of its own, read by the outline's own child component, and the panel still re-renders on each lens paint (INV-REN-18, INV-ENT-21); the component draws it instead of `point`, `scale` and `frame` arithmetic, a `<rect>` over the corners' bounds until phase 1 draws the turned quad, INV-XF-16), and in phase 1 `panBy(delta)` in world metres is replaced by `panByScreen(deltaPx: InspectionPoint)`, which the lens turns into ground at its bearing (INV-WR-17, INV-KEY-21; View). `CanvasOverview.tsx` places the overview pin from `ViewReadSurface.designPin` (INV-XF-17). App code (`app/**`, `components/**`, `web/**`) uses only these two surfaces, except the two modules that wire the driver host: `workspace-runtime-composition.ts` reads `SceneCanvasRuntime.cameraHost` and hands it on (the activation, the map container's resize hook), and `workspace-activation.ts` attaches each map to it (Attachment, below; until 0E the activation reaches the host through the MapLibre shim); `ViewFrameSource` stays inside `canvas/runtime/**` and `maplibre/**` (P10). Policy P15 names both accessors.
+**How the view surfaces meet today's session surfaces (§1.1a).** `ViewCommandSurface` replaces today's `CanvasViewportCommandSurface` (`canvas/runtime/runtime.ts:84`), whose name stays as `export type CanvasViewportCommandSurface = ViewCommandSurface` so `canvas/session.ts` compiles unchanged, and is exposed as `CanvasCommandSurface.viewport`, so `currentCanvasViewportCommandSurface()` in `canvas/session.ts` keeps its name and returns it. Kept methods: `zoomIn`, `zoomOut`, `zoomBy`, `zoomToFit`, `returnToDesign`, `focusTemporaryBounds`, `returnFromTemporaryFocus`, `setFramingInsets`, `showPlace` (still boolean). New: `zoomToSelection`, `resetNorth`, `rotateBy`, `beginRotation`, `showCamera`, and from 0E `frameBounds` (the plant finder's fit without a bookmark). Removed: any method that returned or took a `SceneViewportState`. `ViewReadSurface` is added to `CanvasQuerySurface` as `view`, read through `currentCanvasQuerySurface()`. Readers of the query surface's `viewport` field move to `view` in 0A-2 (saved views, story controller, command projection, tool card, gallery snapshots, LiDAR request, map contributions); the four Components-0D2 files and `app/plant-display/coverage.ts` move in 0D2; 0E removes the field, after 0C and 0D2 merged. `CanvasViewSceneRequest` (`runtime.ts:221-229`) and `ViewSnapshotScene.build` (`maplibre/view-snapshot-map.ts:44`) take a `view: ViewTransform` instead of `viewport: SceneViewportState` from 0D2; the snapshot map's own driver supplies it, and `captureViewScene` (`query-surface.ts:70-75`) decides overview from `view.pixelsPerMetre`. `CanvasQuerySurface` also gains `subscribePointerWorld(listener: (point: WorldPoint | null) => void): () => void`, forwarding `ToolHost.subscribePointerWorld` (typed optional in the seams commit so no fake changes; `query-surface.ts` and `interaction-session.ts` implement it in 0B, which makes it required and fills the fakes), which the inspection lens component uses instead of its own map-host `pointermove` (INV-ENT-23). The lens handle contract in `canvas/inspection.ts` changes three times: in 0B `CanvasInspectionHandle` gains `inspectAtWorldPoint(point: WorldPoint)`, which the lens calls with the published point (Input implements it in `canvas/runtime/inspection-lens.ts`, with no screen conversion of its own; the lens ignores `null` and keeps its last sample, as today it skipped buttons, inputs and `[data-preserve-overlays]`); in 0D2 `CanvasInspectionHandle` gains `sourceQuad: ReadonlySignal<InspectionSourceQuad | null>`, the four screen corners of the lens footprint on the main map in `worldQuadToScreen` order (the 0C/0D2 hand-off adds the type with a `null` stub; Renderer computes it from the main `viewFrame` and the lens `ViewTransform`, so it moves with each published main frame and each lens paint; it is a signal of its own, read by the outline's own child component, and the panel still re-renders on each lens paint (INV-REN-18, INV-ENT-21); the component draws it instead of `point`, `scale` and `frame` arithmetic, a `<rect>` over the corners' bounds until phase 1 draws the turned quad, INV-XF-16), and in phase 1 `panBy(delta)` in world metres is replaced by `panByScreen(deltaPx: InspectionPoint)`, which the lens turns into ground at its bearing (INV-WR-17, INV-KEY-21; View). `CanvasOverview.tsx` places the overview pin from `ViewReadSurface.designPin` (INV-XF-17). App code (`app/**`, `components/**`, `web/**`) uses only these two surfaces, except the two modules that wire the driver host: `workspace-runtime-composition.ts` reads `SceneCanvasRuntime.cameraHost` and hands it on (the activation, the map container's resize hook), and `workspace-activation.ts` attaches each map to it (Attachment, below; until 0E the activation reaches the host through the MapLibre shim); `ViewFrameSource` stays inside `canvas/runtime/**` and `maplibre/**` (P10). Policy P15 names both accessors.
 
-**Resize.** One owner changes the screen size. `maplibre/host.ts` also serves the World map, which has no driver, so its `resize()` (`:114-119`, driven by the `ResizeObserver` at `:323-331`) calls the surface request's own resize hook instead of `map.resize()`: the workspace request's hook calls `CameraDriver.setScreen(size)`, and the World map's (`components/world-map/WorldMapSurface.tsx`, exempt from P1) calls `map.resize()`. The MapLibre driver then calls `map.resize()`, re-runs `constrainCamera` at the live bearing (the zoom floor depends on the screen size and the bearing, §4.14) and publishes one frame. `setScreen` with an unchanged size does nothing, since two observers report each size while a map is attached. The workspace map and the snapshot map are built with `trackResize: false`, so MapLibre never resizes itself behind the driver; the host passes the container's CSS size to the hook, and a driver calls `map.resize()` once when it is created (a size reported before then reached only the headless driver) and starts at its map canvas's CSS size. The snapshot map's `resize()` (`maplibre/view-snapshot-map.ts:358`) becomes `setScreen` on its driver; the shim's goes with `maplibre/workspace-camera.ts` in 0E. The runtime's two resize entries call `CameraDriverHost.setScreen`, which fills a missing density from the platform (INV-WR-19): `documents.resize` (`canvas/runtime/document-surface.ts`, driven by `app/document-session/lifecycle.ts:119`, `web/WebCanvasWorkspace.tsx:239` and the gallery) and the workspace request's hook (`workspace-runtime-composition.ts`); until 0E both reach it through the shim's `resize`. P1 forbids `resize` on a map outside the driver.
+**Resize.** One owner changes the screen size. `maplibre/host.ts` also serves the World map, which has no driver, so its `resize()` (`:114-119`, driven by the `ResizeObserver` at `:323-331`) calls the surface request's own resize hook instead of `map.resize()`: the workspace request's hook calls `CameraDriver.setScreen(size)`, and the World map's (`components/world-map/WorldMapSurface.tsx`, exempt from P1) calls `map.resize()`. The MapLibre driver then calls `map.resize()`, re-runs `constrainCamera` at the live bearing (the zoom floor depends on the screen size and the bearing, §4.14) and publishes one frame. `setScreen` with an unchanged size does nothing, since two observers report each size while a map is attached. The workspace map and the snapshot map are built with `trackResize: false`, so MapLibre never resizes itself behind the driver; the host passes the container's CSS size to the hook, and a driver calls `map.resize()` once when it is created (a size reported before then reached only the headless driver) and starts at its map canvas's CSS size. The snapshot map's `resize()` (`maplibre/view-snapshot-map.ts:358`) becomes `setScreen` on its driver; the shim's goes with `maplibre/workspace-camera.ts` in 0E. From 0E the runtime's two resize entries call the live driver's `setScreen` (`cameraHost.current().setScreen`, INV-WR-19), each with a full `ViewScreen`: `documents.resize` (`canvas/runtime/document-surface.ts`, driven by `app/document-session/lifecycle.ts:119`, `web/WebCanvasWorkspace.tsx:239` and the gallery) passes `window.devicePixelRatio`, as the workspace request's hook (`workspace-runtime-composition.ts`, fed by `workspace-map-controls.ts`) already does, so the second report of a size is a no-op; until 0E both reach it through the shim's `resize`, whose density default did the same. P1 forbids `resize` on a map outside the driver.
 
 ```ts
 // canvas/runtime/view/camera-driver.ts  (types)
@@ -253,8 +256,8 @@ export type CameraMove =
       readonly durationMs?: number              // ease: 300 default
     }
   /**
-   * setViewport's exact placement (createTestView's setViewport and reproject, ViewNavigation.showStartFrame; until 0E the legacy
-   * facade's setViewport and reprojectViewport). The headless driver
+   * setViewport's exact placement (createTestView's setViewport and reproject, the navigation's fits; until 0E the legacy facade's
+   * setViewport and reprojectViewport). The headless driver
    * clamps the scale as today and adopts the rest bit for bit; the MapLibre driver converts it to a ViewCamera through the plane once
    * and jumps.
    */
@@ -267,8 +270,8 @@ export interface CameraDriver {
   /** The bearing a running tween or flight will end at, else the live bearing. */
   bearingTarget(): number
   stopAnimation(): void
-  /** A re-origin and the attached plane follow only (today's refreshOrigin; from 0E CameraDriverHost.followPlane and planeChanged;
-   *  a headless hydration keeps the plane camera): the MapLibre driver rebuilds against the new
+  /** A re-origin and the attached plane follow only (today's refreshOrigin; from 0E the runtime's plane effect on a re-origin and
+   *  CameraDriverHost.followPlane while attached; a headless hydration keeps the plane camera): the MapLibre driver rebuilds against the new
    *  plane; the headless driver applies old.transformTo(new) to its PlanarCamera in plane terms, no lon/lat (today's
    *  reprojectPlaneViewport, exact at bearing 0). */
   planeChanged(plane: SessionPlane): void
@@ -294,41 +297,27 @@ export interface CameraDriverFailure { readonly reason: 'map-lost' | 'agreement'
 
 /**
  * Owns the runtime's one camera across attach, detach and failure; replaces CameraController's detached mode.
- * The runtime starts on a HeadlessCameraDriver (tests, before attach). `frames` is stable across swaps. The members marked (0E)
- * arrive with the camera unwrap; until then the legacy facade and the MapLibre shim do their work (§1.1b).
+ * The runtime starts on a HeadlessCameraDriver (tests, before attach). `frames` is stable across swaps. Moves, resizes and re-origins
+ * go to the live driver, `current()`: ViewNavigation's moves (`apply`), the two resize entries (`setScreen`) and the runtime's plane
+ * effect on a re-origin (`planeChanged`, §1.1b "0E"). The members marked 0E change with the camera unwrap; until then the legacy
+ * facade and the MapLibre shim do their work (§1.1b).
  */
 export interface CameraDriverHost {
   readonly frames: ViewFrameSource
   readonly current: () => CameraDriver
-  /** (0E) The one path ViewNavigation's moves take. When the host was attached before the move, the attached driver reported a new
-   *  failure during it and the host is detached after it, the move is applied once more to the headless driver the host fell back
-   *  to, at the last camera (today's MapLibre-shim replay, now for every navigation move). A move a driver queued during a frame
-   *  dispatch is not replayed. attach and replacePolicy do not go through it. */
-  apply(move: CameraMove): void
-  /** (0E) The platform's resize entry (documents.resize, the map container's hook). A missing density reads
-   *  CameraDriverHostOptions.devicePixelRatio; the live driver normalises the rest (today's normalizeScreenMetrics). */
-  setScreen(screen: ScreenMetrics): void
   /** Hands the camera to an attached driver: it starts with a 'set'/'none' move to the current camera; ViewFrame.attached becomes true. */
   attach(driver: CameraDriver): void
-  /** Back to a HeadlessCameraDriver at the last camera; ViewFrame.attached becomes false. */
+  /** Back to a HeadlessCameraDriver at the last camera; ViewFrame.attached becomes false. An attached driver that fails ends here
+   *  too, before `failure` is set; the move that failed is not applied again (ADR 0004: nothing renders after a failure). */
   detach(): void
-  /** A new camera generation (the activation, once per map, with the session-plane latitude): rebuilds the NavigationPolicy and
-   *  re-constrains the current camera, sending no move while a tween or flight runs (the frame is moving: the driver constrains its
-   *  next frame under the new policy, so a re-origin during a flight never stops it), and, from 0E, increments policyGeneration,
-   *  which drops the navigation's temporary focus (today's replacePolicy). */
+  /** Until 0E only (the activation, once per map): rebuilds the NavigationPolicy at the given latitude and re-constrains the camera,
+   *  sending no move while a tween or flight runs. From 0E it is gone: the host's NavigationPolicy takes the reference latitude of
+   *  options.plane(), rebuilt once per plane, so a re-origin moves the scale bounds (and the zoom buttons' limits) with the plane. */
   replacePolicy(policy: WorkspaceCameraPolicy): void
-  /** (0E) Increments on replacePolicy only; the latitude follow of followPlane and planeChanged keeps it. */
-  readonly policyGeneration: number
-  /** The Scene's plane after a hydration (until 0E also after a detached re-origin, which the facade follows with a 'place' move).
-   *  Headless: the driver keeps its plane placement and takes the new plane. Attached (0E): when the plane's latitude differs from
-   *  the policy's, the policy follows it in the same generation (no move while moving), then the live driver's planeChanged runs and
-   *  the map stays put (today's refreshOrigin). The runtime calls it; without it the headless camera would report another plane's
-   *  ground. */
+  /** The Scene's plane after a hydration. Headless: the driver keeps its plane placement and takes the new plane. Attached (0E): the
+   *  live driver's planeChanged; the map stays put (today's refreshOrigin). The runtime's plane effect calls it; without it the
+   *  headless camera would report another plane's ground. */
   followPlane(plane: SessionPlane): void
-  /** (0E) The Scene's plane after a re-origin, in one frame: the live driver's planeChanged (headless: reprojectPlanar in plane
-   *  terms, today's followPlane-plus-place numbers). Attached, the latitude follows first, as in followPlane; headless it does not
-   *  (today's detached re-origin changed no policy). */
-  planeChanged(plane: SessionPlane): void
   /** The deps the host built its drivers with; the activation builds the MapLibre driver with them. */
   readonly driverDeps: CameraDriverDeps
   /** Set when the attached driver fails; the host has already detached. */
@@ -337,17 +326,17 @@ export interface CameraDriverHost {
 
 // canvas/runtime/view/driver-host.ts
 export interface CameraDriverHostOptions {
-  // … the 0A options (clock, scheduleFrame, timers, policy, reducedMotion, plane, screen?, camera?, insets?), and from 0E:
-  /** The density a ScreenMetrics without one takes. Default () => 1. */
-  readonly devicePixelRatio?: () => number
+  // … clock, scheduleFrame, timers, reducedMotion, plane, screen?, camera?, insets? (0A), and:
+  /** The zoom range and overview threshold. From 0E the host replaces its reference latitude with options.plane()'s. */
+  readonly policy: WorkspaceCameraPolicy
 }
 export interface CameraDriverHostController extends CameraDriverHost { dispose(): void }
 export function createCameraDriverHost(options: CameraDriverHostOptions): CameraDriverHostController
 ```
 
-Attachment (`app/canvas-map-surface/workspace-activation.ts`, INV-CAM-44): from 0E the composition passes `SceneCanvasRuntime.cameraHost` as the activation's `camera` option (until 0E it is the `MapLibreWorkspaceCameraOwner` shim, which exposes `camera.host`). The activation builds each map's driver with `createMapLibreCameraDriver(map, plane, host.driverDeps)` from `maplibre/camera-driver.ts` (`host` is the option itself from 0E, `camera.host` before) and calls `attach`; `replacePolicy(createWorkspaceCameraPolicy(lat))` starts the map's camera generation, which drops the temporary focus, as today. From 0E the runtime follows the Scene's plane itself (`ViewNavigation.followPlane`, from one effect in `scene-runtime/construction.ts`); no app module re-expresses the camera. The composition and the activation are the two app modules that use the driver host rather than the two surfaces below (P10 allows their type-only import of `camera-driver.ts`); `detach` on teardown; it subscribes to `failure` where it subscribes to `attachment.subscribeFailure` today and reports the map as unavailable with the failure's message. A rotated camera is never a failure: the old "rejected its projection" refusal is gone, and an agreement error above 0.01 px throws in tests and logs in dev builds only. A read-back pitch other than 0 is a driver failure (`'map-error'`), keeping today's pitched-camera refusal. The MapLibre driver listens to exactly two map events, `'move'` (frames for moves it did not cause) and `'moveend'` (the end of a flight); a `'set'` sends its `jumpTo` every time but publishes a frame only when the camera, screen or insets changed. A frame published while the frame source's listeners run is delivered after them, in order, so a listener that moves the camera during an attach, detach or failure frame never reorders frames.
+Attachment (`app/canvas-map-surface/workspace-activation.ts`, INV-CAM-44): from 0E the composition passes `SceneCanvasRuntime.cameraHost` as the activation's `camera` option (until 0E it is the `MapLibreWorkspaceCameraOwner` shim, which exposes `camera.host`). The activation builds each map's driver with `createMapLibreCameraDriver(map, plane, host.driverDeps)` from `maplibre/camera-driver.ts` (`host` is the option itself from 0E, `camera.host` before) and calls `attach`; until 0E `replacePolicy(createWorkspaceCameraPolicy(lat))` first starts the map's camera generation, which also drops the temporary focus; from 0E the host's policy already has the plane's latitude, and only a Design load or replace drops the focus. From 0E the runtime follows the Scene's plane itself (one plane effect in `scene-runtime/construction.ts`, §1.1b "0E"); no app module re-expresses the camera. The composition and the activation are the two app modules that use the driver host rather than the two surfaces below (P10 allows their type-only import of `camera-driver.ts`); `detach` on teardown; it subscribes to `failure` where it subscribes to `attachment.subscribeFailure` today and reports the map as unavailable with the failure's message. A rotated camera is never a failure: the old "rejected its projection" refusal is gone, and an agreement error above 0.01 px throws in tests and logs in dev builds only. A read-back pitch other than 0 is a driver failure (`'map-error'`), keeping today's pitched-camera refusal. The MapLibre driver listens to exactly two map events, `'move'` (frames for moves it did not cause) and `'moveend'` (the end of a flight); a `'set'` sends its `jumpTo` every time but publishes a frame only when the camera, screen or insets changed. A frame published while the frame source's listeners run is delivered after them, in order, so a listener that moves the camera during an attach, detach or failure frame never reorders frames.
 
-Driver rules: `MapLibreCameraDriver` (`maplibre/camera-driver.ts`) and `HeadlessCameraDriver` (`view/headless-driver.ts`) both implement `CameraDriver` with the same `camera-math`, `constrainCamera` and `BearingTween`, and both build their frames in `view/view-transform.ts`, from different sources of truth (ADR 0016, amended 2026-09-30). The MapLibre driver's truth is MapLibre's geographic camera; it builds with `buildViewTransform`. The headless driver's truth is a `PlanarCamera`, moved with today's `CameraController` arithmetic, bit for bit at bearing 0: a pan adds the delta, a zoom clamps the scale to `ViewFrame.scaleBounds` and then anchors (`camera.ts:491-518`), and `place` clamps the scale and adopts the rest. It builds with `buildViewTransformFromPlane` and derives its `ViewCamera` for readers. Geographic inputs (a `set` target, each tween step) convert to a `PlanarCamera` through the plane once; the latitude and longitude hold of `constrainCamera` runs on the derived camera and converts back only when it moves it. Re-origin never goes through lon/lat: `planeChanged` applies `old.transformTo(new)` to the `PlanarCamera` as today's `reprojectPlaneViewport` does (`camera.ts:782-792`): the scale is divided by the transform's scale, and the transform's offset times the new scale, turned by the bearing as plane points are, is subtracted from `{ x, y }`. `ViewNavigation.followPlane(plane, transform)` calls the host's `planeChanged` and moves the temporary-focus bookmark by the same arithmetic (INV-WR-07; until 0E the facade's `reprojectViewport(transform)` does it as a `place` move, since the bare shim's plane is not the store's). So a headless camera at bearing 0 reads back exactly what today's `CameraController` did (§1.1b), before and after a re-origin. The MapLibre driver is the only code that calls camera methods on the workspace and snapshot maps; it always sends explicit `jumpTo({ center, zoom, bearing, pitch: 0 })` values (one per tween frame) and `flyTo` only for long flights. Each `jumpTo` it sends publishes one frame when the call returns, built from the read-back `getCenter/getZoom/getBearing` (the bearing normalised to [0, 360); MapLibre returns (−180, 180]). The driver needs `getCenter`, `getZoom`, `getBearing` and `unproject` from the map it attaches; a map without them fails the attachment (`'map-error'`), and every fake that attaches a driver is a consistent MapLibre fake (plan §4, 0A "Attached-map fakes"). A `'move'` the driver did not cause by a `jumpTo` (a flight step, a MapLibre-internal change) rebuilds the frame from the read-backs. A read-back pitch other than 0 fails the driver with `'map-error'`; the agreement probe runs after each frame in development builds (P12). A `CameraDriver.apply` made while a frame dispatch runs is queued and applied once, after every listener ran, in the same task. The map stays `interactive: false`, `dragRotate: false`, `touchZoomRotate: false`; `MapLibreMapInstance` gains `getBearing`, `unproject`, `stop`, `setTransformConstrain` and a `pitch` in `jumpTo`'s options, each optional where fakes a stream does not own implement the type.
+Driver rules: `MapLibreCameraDriver` (`maplibre/camera-driver.ts`) and `HeadlessCameraDriver` (`view/headless-driver.ts`) both implement `CameraDriver` with the same `camera-math`, `constrainCamera` and `BearingTween`, and both build their frames in `view/view-transform.ts`, from different sources of truth (ADR 0016, amended 2026-09-30). The MapLibre driver's truth is MapLibre's geographic camera; it builds with `buildViewTransform`. The headless driver's truth is a `PlanarCamera`, moved with today's `CameraController` arithmetic, bit for bit at bearing 0: a pan adds the delta, a zoom clamps the scale to `ViewFrame.scaleBounds` and then anchors (`camera.ts:491-518`), and `place` clamps the scale and adopts the rest. It builds with `buildViewTransformFromPlane` and derives its `ViewCamera` for readers. Geographic inputs (a `set` target, each tween step) convert to a `PlanarCamera` through the plane once; the latitude and longitude hold of `constrainCamera` runs on the derived camera and converts back only when it moves it. Re-origin never goes through lon/lat: `planeChanged` applies `old.transformTo(new)` to the `PlanarCamera` as today's `reprojectPlaneViewport` does (`camera.ts:782-792`): the scale is divided by the transform's scale, and the transform's offset times the new scale, turned by the bearing as plane points are, is subtracted from `{ x, y }`. From 0E the runtime's plane effect calls the live driver's `planeChanged` on a re-origin (INV-WR-07; until 0E the facade's `reprojectViewport(transform)` applies the transform as a `place` move, since the bare shim's plane is not the store's); the temporary-focus bookmark is not moved: after a re-origin `restore` uses its `ViewCamera`. So a headless camera at bearing 0 reads back exactly what today's `CameraController` did (§1.1b), before and after a re-origin. The MapLibre driver is the only code that calls camera methods on the workspace and snapshot maps; it always sends explicit `jumpTo({ center, zoom, bearing, pitch: 0 })` values (one per tween frame) and `flyTo` only for long flights. Each `jumpTo` it sends publishes one frame when the call returns, built from the read-back `getCenter/getZoom/getBearing` (the bearing normalised to [0, 360); MapLibre returns (−180, 180]). The driver needs `getCenter`, `getZoom`, `getBearing` and `unproject` from the map it attaches; a map without them fails the attachment (`'map-error'`), and every fake that attaches a driver is a consistent MapLibre fake (plan §4, 0A "Attached-map fakes"). A `'move'` the driver did not cause by a `jumpTo` (a flight step, a MapLibre-internal change) rebuilds the frame from the read-backs. A read-back pitch other than 0 fails the driver with `'map-error'`; the agreement probe runs after each frame in development builds (P12). A `CameraDriver.apply` made while a frame dispatch runs is queued and applied once, after every listener ran, in the same task. The map stays `interactive: false`, `dragRotate: false`, `touchZoomRotate: false`; `MapLibreMapInstance` gains `getBearing`, `unproject`, `stop`, `setTransformConstrain` and a `pitch` in `jumpTo`'s options, each optional where fakes a stream does not own implement the type.
 
 | Move | Driver work | MapLibre call |
 |---|---|---|
@@ -370,7 +359,7 @@ The map's `transformConstrain` is an adapter over `constrainCamera` whose bearin
  * kept: pure, and P4 lets view/ import it). The reference latitude turns zooms into px/m (cameraScaleBoundsForPolicy → ViewFrame.scaleBounds).
  */
 export interface NavigationPolicy {
-  readonly referenceLatitudeDeg: number    // the session plane's latitude; replacePolicy changes it
+  readonly referenceLatitudeDeg: number    // the session plane's latitude (from 0E the host's, per plane; until 0E replacePolicy sets it)
   readonly minZoom: number                 // 0
   readonly maxZoom: number                 // 27
   readonly overviewPixelsPerMetre: number  // 0.1
@@ -441,7 +430,7 @@ export function startBearingTween(from: ViewCamera, move: { readonly bearingDeg:
 A tween frame rotates the live camera about the anchor to the interpolated bearing (ease-out cubic, shortest arc), plus, for a `set`/`ease` move, interpolated centre and zoom. Every tween frame goes through `constrainCamera` with that frame's bearing.
 
 ```ts
-// canvas/runtime/view/navigation.ts  (the camera policy; the only mover of the camera, through CameraDriverHost.apply from 0E;
+// canvas/runtime/view/navigation.ts  (the camera policy; the only mover of the camera, through the live driver, deps.driver.current();
 //   implements RotationSession from read-surface.ts)
 
 export interface ViewNavigationDeps {
@@ -457,21 +446,17 @@ export interface ViewNavigation extends ViewCommandSurface {
   /** Without arguments (the surface call) the navigation reads the current scene from its construction deps. */
   zoomToFit(scene?: ScenePersistedState, options?: SceneBoundsOptions): void   // keeps the bearing
   returnToDesign(scene?: ScenePersistedState, options?: SceneBoundsOptions): void
-  /** Oriented at the current bearing: the box's four corners are fitted, not the box on screen axes. */
+  /** LiDAR's Fit to data. The one bookmark (a Placement: camera, planar, plane revision) takes the current view, the latest focus
+   *  winning; then the bounds are framed as frameBounds frames them, oriented at the current bearing (the box's four corners are
+   *  fitted, not the box on screen axes). The plant finder calls frameBounds, which sets no bookmark (0E). */
   focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
-  returnFromTemporaryFocus(): boolean        // the bookmark's planar on its plane revision, else its ViewCamera; a new policy generation drops it
+  /** restore(bookmark): its planar on its plane revision, else its ViewCamera (a re-origin since, within 1e-7); false without one. */
+  returnFromTemporaryFocus(): boolean
+  /** Design load or replace (document-surface.ts); openAt, centerOn, showPlace and showCamera drop the bookmark too. */
   clearTemporaryFocus(): void
   centerOn(point: WorldPoint, pixelsPerMetre: number, options?: { readonly animate?: boolean; readonly bearingDeg?: number | 'keep' }): void
   /** Opening a Design: oriented fit at the given bearing. */
   openAt(scene: ScenePersistedState, bearingDeg: number): void
-  /** (0E) Today's CameraController.initialize, inside batch(): drops the temporary focus; host.setScreen(screen) unless a map is
-   *  attached (its resize hook reports the size); places 100 m across the shorter screen side with plane point (50, 50) at the
-   *  centre, the scale clamped to the frame's scaleBounds, the bearing kept. */
-  showStartFrame(screen: ScreenMetrics): void
-  /** (0E) The runtime's plane effect calls it on every Scene plane change. Without reorigin (a hydration): host.followPlane. With
-   *  it (old.transformTo(new)): host.planeChanged, then the bookmark's planar moves by reprojectPlanar and takes the frame's new
-   *  planeRevision, so a return lands where today's did, bit for bit. */
-  followPlane(plane: SessionPlane, reorigin?: SessionPlaneTransform): void
 
   // rotation
   turnToEdge(a: WorldPoint, b: WorldPoint): void   // smaller turn that makes a→b horizontal; never snapped
@@ -525,20 +510,6 @@ export function assertViewAgreement(map: Pick<MapLibreMapInstance, 'unproject'>,
   { readonly maxErrorPx: number }
 ```
 
-```ts
-// canvas/runtime/camera-platform.ts  (0E; outside view/, P4; value-imported by scene-runtime/construction.ts and tests only, P10)
-export interface PlatformCameraHostOptions {
-  readonly plane: () => SessionPlane
-  /** Default createWorkspaceCameraPolicy(). */
-  readonly policy?: WorkspaceCameraPolicy
-  /** Default a false signal (today's NO_REDUCED_MOTION); phase 1 passes the platform's. */
-  readonly reducedMotion?: ReadonlySignal<boolean>
-}
-/** createCameraDriverHost over performance.now (Date.now without it), requestAnimationFrame (a 16 ms timeout without it), window
- *  timers on that clock and window.devicePixelRatio (1 without a window): the facade's platform defaults, moved verbatim. */
-export function createPlatformCameraDriverHost(options: PlatformCameraHostOptions): CameraDriverHostController
-```
-
 ### 1.1b Test view and the legacy camera surface (0A to 0E)
 
 `createTestView` is the one way tests build a camera from 0A on. View writes it in 0A-1 with its self-test `__tests__/support/test-view.test.ts`; every 0B, 0D2 and later stream builds on this shape and does not change it without the main agent (a change is a spec edit).
@@ -556,7 +527,7 @@ export interface TestViewOptions {
   readonly camera?: Partial<ViewCamera>
   /** Default createSessionPlane({ lon: 0, lat: 0 }). */
   readonly plane?: SessionPlane
-  /** Default: the policy CameraController uses today when constructed without one. */
+  /** Default: the policy CameraController uses today when constructed without one. From 0E the host gives it the plane's latitude. */
   readonly policy?: WorkspaceCameraPolicy
   readonly insets?: ScreenInsets
 }
@@ -569,7 +540,7 @@ export interface TestView {
   /** Manual time: the drivers' clock and scheduleFrame and the frame source's timers all read it. */
   readonly clock: { now(): number; advance(ms: number): void }   // advance runs due frame callbacks, then due timers
   view(): ViewTransform                       // frames.viewFrame.peek().view
-  setViewport(v: { readonly x: number; readonly y: number; readonly scale: number }): void   // an exact 'place' move (host.apply from 0E), bearing kept
+  setViewport(v: { readonly x: number; readonly y: number; readonly scale: number }): void   // an exact 'place' move on the live driver, bearing kept
   /** (0E) The bearing-0 placement in today's terms (planarCameraOf(view()) without the bearing): the split suites' camera.viewport. */
   viewport(): { readonly x: number; readonly y: number; readonly scale: number }
   /** (0E) CameraController.reprojectViewport's numbers (INV-WR-07): a 'place' by a plane transform in plane terms; the plane stays. */
@@ -587,30 +558,33 @@ Readbacks (`view()`, `viewport()` from 0E, and until 0E `legacyCamera`'s `viewpo
 
 Until 0E, the legacy camera surface (plan §4, 0A "Legacy surface") is split by what it may import. `canvas/runtime/legacy-camera-facade.ts` sits outside `view/` because the `CameraController` shim, whose constructor takes only `policy?` as today, supplies the default clock (`performance.now`), `scheduleFrame` (`requestAnimationFrame`) and `window.devicePixelRatio`, and keeps `CameraViewportSnapshot` over `SceneViewportState` from the `scene` barrel, all of which P4 forbids in `view/**`. It imports nothing that reaches `maplibre-gl`, `pixi.js` or `src/maplibre/**`, because `tools/tool.ts` type-imports `runtime.ts`, which type-imports `./camera` until 0E, and P5c follows type-only edges. The `MapLibreWorkspaceCameraOwner` shim is declared in `maplibre/workspace-camera.ts`, extends the facade's `CameraController` shim and wraps `maplibre/camera-driver.ts`; nothing under `canvas/runtime/**` imports it. Neither P4 nor P5c carries an exemption for either shim.
 
-**The bare shim's plane and bounds (until 0E).** A shim built as today, `new CameraController(policy?)` with no plane (15 test files at `0f05d927`), puts its host on `createSessionPlane({ lon: 0, lat: policy.referenceLatitudeDeg })`: for the default policy that is `createTestView`'s default `{ lon: 0, lat: 0 }`, and in general the plane and the policy share one latitude, so `pixelsPerMetre` and the policy's scale bounds use the same Mercator factor, which today's plane-free controller assumes. Its screen before `initialize` is `{ width: 0, height: 0, devicePixelRatio: 1 }`, as today. There is one clamp, the driver's `constrainCamera`, whose zoom range the headless driver applies in px/m to `ViewFrame.scaleBounds` with today's arithmetic (§1.1 driver rules); the shim adds none (today's `normalizeViewport` clamp moves into that driver step, not beside it), because a second clamp would make the headless and MapLibre drivers disagree. `ViewFrame.scaleBounds` is `cameraScaleBoundsForPolicy(base, zoomFloorForArc(screen, navigationPolicy, b, b))` at the live bearing `b`, where `base` is the `WorkspaceCameraPolicy` the host keeps from its construction and `replacePolicy` (the two functions take different policy types), and the shim's `snapshot.scaleBounds` reports it. At bearing 0 that floor is `singleWorldEffectiveMinimumZoom(width, height)`: today's `minimumMapZoom` (0) whenever the larger screen side is at most 512 px or the screen is empty (the split files' 400 × 300, and every snapshot before `initialize`), and today's MapLibre-learned minimum otherwise. The centre is also held inside one world (latitude ±85.05°, longitude ±180°), which no test at `0f05d927` approaches at the plane's latitude. Checked at `0f05d927`: outside the camera suites no test with a screen wider than 512 px reads a scale below that floor (`new-design-view.test.ts:70` clamps a zoom-17 scale against `snapshot.scaleBounds`, so it follows the reported bounds); inside them, `camera-controller.test.ts:96` and `:212` (a 1000 × 800 screen expecting the zoom-0 minimum) move to `view/navigation.test.ts` with the single-world floor as the minimum, a named rewrite of 0A's camera-suite move (plan §4, 0A "Legacy surface"), names kept. Any other test that fails only because of the floor or the one-world hold (latitude or longitude) is a stop-and-amend, never a second clamp in the shim.
+**The bare shim's plane and bounds (until 0E).** A shim built as today, `new CameraController(policy?)` with no plane (15 test files at `0f05d927`), puts its host on `createSessionPlane({ lon: 0, lat: policy.referenceLatitudeDeg })`: for the default policy that is `createTestView`'s default `{ lon: 0, lat: 0 }`, and in general the plane and the policy share one latitude, so `pixelsPerMetre` and the policy's scale bounds use the same Mercator factor, which today's plane-free controller assumes. Its screen before `initialize` is `{ width: 0, height: 0, devicePixelRatio: 1 }`, as today. There is one clamp, the driver's `constrainCamera`, whose zoom range the headless driver applies in px/m to `ViewFrame.scaleBounds` with today's arithmetic (§1.1 driver rules); the shim adds none (today's `normalizeViewport` clamp moves into that driver step, not beside it), because a second clamp would make the headless and MapLibre drivers disagree. `ViewFrame.scaleBounds` is `cameraScaleBoundsForPolicy(base, zoomFloorForArc(screen, navigationPolicy, b, b))` at the live bearing `b`, where `base` is the `WorkspaceCameraPolicy` the host keeps from its construction and `replacePolicy` (from 0E: its construction's, at the plane's latitude; the two functions take different policy types), and the shim's `snapshot.scaleBounds` reports it. At bearing 0 that floor is `singleWorldEffectiveMinimumZoom(width, height)`: today's `minimumMapZoom` (0) whenever the larger screen side is at most 512 px or the screen is empty (the split files' 400 × 300, and every snapshot before `initialize`), and today's MapLibre-learned minimum otherwise. The centre is also held inside one world (latitude ±85.05°, longitude ±180°), which no test at `0f05d927` approaches at the plane's latitude. Checked at `0f05d927`: outside the camera suites no test with a screen wider than 512 px reads a scale below that floor (`new-design-view.test.ts:70` clamps a zoom-17 scale against `snapshot.scaleBounds`, so it follows the reported bounds); inside them, `camera-controller.test.ts:96` and `:212` (a 1000 × 800 screen expecting the zoom-0 minimum) move to `view/navigation.test.ts` with the single-world floor as the minimum, a named rewrite of 0A's camera-suite move (plan §4, 0A "Legacy surface"), names kept. Any other test that fails only because of the floor or the one-world hold (latitude or longitude) is a stop-and-amend, never a second clamp in the shim.
 
-**0E.** The facade, `camera.ts` and the MapLibre shim are deleted, and `createTestView` loses `legacyCamera`. The runtime builds its host with `createPlatformCameraDriverHost` in `scene-runtime/construction.ts` and exposes it as `SceneCanvasRuntime.cameraHost`; the construction's `camera` option is deleted, not retyped, since an injected host carries its caller's plane, never the Scene's. Two construction effects replace today's plane follow and re-origin trigger. The plane effect sits in the follow's slot; its first run returns before it reads `viewNavigation` or the re-origin controller, both declared later, and every later Scene plane calls `viewNavigation.followPlane(plane, reorigin.reoriginating ? previous.transformTo(plane) : undefined)` untracked. The frame effect calls the re-origin controller's `observe` on `cameraHost.frames.viewFrame`, which returns when the frame's planar placement (`x`, `y`, `scale`, `bearingDeg`), screen size and `mode` equal the last frame it saw (the facade snapshot's change filter). `reorigin.ts` sets `reoriginating` around `authority.reoriginSessionPlane` and no longer moves the camera. Each facade behaviour has one home:
+**0E.** The facade, `camera.ts` and the MapLibre shim are deleted, and `createTestView` loses `legacyCamera`. 0E keeps only the camera behaviour users need (decision 2026-10-01; plan §4 0E, "Kept and cut"): each facade behaviour below has one home or is dropped, with the reason. `scene-runtime/construction.ts` builds the runtime's host with `createCameraDriverHost` over `performance.now`, `requestAnimationFrame`/`cancelAnimationFrame` and `window.setTimeout` on that clock (about ten lines, in the shape of `maplibre/camera-driver.ts`'s `windowTimers`, not imported: nothing under `canvas/runtime/**` imports `src/maplibre/**`), with a false reduced-motion signal until phase 1 injects the platform's, and exposes it as `SceneCanvasRuntime.cameraHost`; the construction's `camera` option is deleted, not retyped, since an injected host carries its caller's plane, never the Scene's. Two construction effects replace today's plane follow and re-origin trigger. The plane effect sits in the follow's slot; its first run returns before it reads the re-origin controller, declared later, and every later Scene plane calls, untracked, `cameraHost.current().planeChanged(plane)` while `reorigin.reoriginating` (a re-origin: headless, the placement moves in plane terms and keeps its ground, in one frame; attached, the map stays put and frames in the new plane) and `cameraHost.followPlane(plane)` otherwise (a hydration). The frame effect calls the re-origin controller's `observe` on `cameraHost.frames.viewFrame`, which returns when the frame's planar placement (`x`, `y`, `scale`, `bearingDeg`), screen size and `mode` equal the last frame it saw (the facade snapshot's change filter). `reorigin.ts` sets `reoriginating` around `authority.reoriginSessionPlane` and no longer moves the camera. `runtime.init` calls `documentSurface.zoomToFit()` where it placed the 100 m start frame, so the first frame on a map is the Design fit, or the new-Design overview for an empty Design (`fit.ts`, `emptySceneScale`).
 
-| Today | Home from 0E |
+| Today | From 0E: a home, or dropped and why |
 |---|---|
-| `CameraController.initialize`: the 100 m start frame | `ViewNavigation.showStartFrame` |
-| the detached reproject (a follow, then a `place`: two frames) | `ViewNavigation.followPlane(plane, transform)`, through `CameraDriverHost.planeChanged` to the headless `planeChanged` (one frame) |
-| the planar temporary-focus bookmark across a re-origin | the navigation's one `Placement`, whose planar `followPlane` moves |
-| `replacePolicy` drops the temporary focus; the latitude follow keeps it | `CameraDriverHost.policyGeneration` against `Placement.generation` |
-| the re-origin trigger on snapshot changes; one snapshot per operation | the frame effect with `observe`'s filter; `batch()` in `showStartFrame`, and effect batching |
+| `CameraController.initialize`: the 100 m start frame; `CanvasDocumentSurface.initializeViewport` and the composition's first-ready pass (`viewportInitialized`, `viewportReady`) that fits again | dropped: no user settles on it, and it likely shows a close-up between two fits; `runtime.init` calls `zoomToFit` (plan §1, exception 3) |
+| the detached reproject (a follow, then a `place`: two frames) | no home of its own: the ordinary re-origin path, the headless driver's `planeChanged` (one frame) |
+| the temporary-focus bookmark: the facade's planar copy, moved across a re-origin, the first focus winning | the navigation's one `Placement`, set by `focusTemporaryBounds` (LiDAR's Fit to data) only, the latest focus winning; restored by `restore` (its `ViewCamera` after a re-origin, within 1e-7), so nothing moves it (plan §1, exception 3) |
+| the plant finder's Zoom to them through `focusTemporaryBounds` | `ViewCommandSurface.frameBounds`: the same `fitTemporaryBounds` maths, no bookmark (plan §1, exception 3) |
+| LiDAR's Return to Design with no bookmark: nothing moves, the button flips back | `app/lidar/camera-request.ts` calls `returnToDesign()` (plan §1, exception 3) |
+| `replacePolicy` (the activation's, the shim's `syncPolicyToOrigin`): the latitude, and dropping the temporary focus | dropped: the host's policy takes the plane's latitude, which keeps the zoom buttons' limits right; a Design load or replace drops the focus |
+| the re-origin trigger on snapshot changes | the frame effect with `observe`'s filter |
+| one snapshot per operation (`withOneSnapshot`) | dropped: nothing observes the count (render invalidation coalesces per animation frame; the re-origin commits inside `batch()`); a move that ever needs several frames runs them in one `batch()` |
 | the session renders once when a pan or zoom moved the camera (`_afterCameraMove`) | kept, comparing `frames.viewFrame.peek().revision`, over `view.navigation` |
 | mode reads of the snapshot; render invalidation per snapshot (`effects.ts`) | `frames.viewFrame.peek().mode`; an effect on `frames.viewFrame.value`, its initial skip kept |
-| the shim's replay of a failed command | `CameraDriverHost.apply` |
-| `normalizeScreenMetrics`; the facade's clock, animation frames, timers and density | `CameraDriverHost.setScreen` and the drivers' screen normalisation; `canvas/runtime/camera-platform.ts` |
-| the shim's `refreshOrigin`, from the composition's origin effect | the attached branch of `CameraDriverHost.followPlane` and `planeChanged`, from the runtime's plane effect |
-| dispose | runtime destroy: `viewNavigation.clearTemporaryFocus()`, `cameraHost.dispose()` |
+| the shim's replay of a failed command | dropped: nothing renders after a failure (ADR 0004); the host's return to the headless camera at the last frame and the map-unavailable path stay |
+| `normalizeScreenMetrics`; the facade's clock, animation frames, timers and density, with their non-browser fallbacks | the drivers' own screen normalisation; the clock, animation frames and timers in `construction.ts`; the fallbacks and the density default dropped: every supported webview and the tests' jsdom have the browser calls, and no production code reads the camera's density |
+| the shim's `refreshOrigin`, from the composition's origin effect | the runtime's plane effect: the live driver's `planeChanged` on a re-origin, and the attached branch of `CameraDriverHost.followPlane` |
+| dispose | runtime destroy: `cameraHost.dispose()`; the bookmark goes with the navigation |
 | `fitCameraViewport`, `cameraFramingRect` and the fit fallback | `view/fit.ts` with `sceneExtentPoints(scene)` (`scene-extent.ts`) |
 | `ZOOM_REFERENCE_SCALE` | the lens's 20 px/m reference (0D2); `NavigationPolicy.referencePixelsPerMetre` |
 | the last view, 750 ms after the last snapshot | `ViewReadSurface.settledCamera` and a 600 ms timer that writes only while `captureView().camera` still equals the settled camera |
 | `showPlace` through the facade's `centerOn` | `ViewNavigation.showPlace` |
-| resize: the facade's `resize`, the composition's hook, `documents.resize` | `CameraDriverHost.setScreen` |
+| resize: the facade's `resize`, the composition's hook, `documents.resize` | the live driver's `setScreen` (`cameraHost.current()`), with `window.devicePixelRatio` from `documents.resize` |
 | the chrome's `CameraViewportSnapshot` | `ViewFrame` (`planarCameraOf(frame.view)` for today's placement) |
-| `MapLibreWorkspaceCameraMap`; the shim's failure reports | declared in `WorkspaceActivationMap` with the same members; none (the activation watches `CameraDriverHost.failure`) |
+| `MapLibreWorkspaceCameraMap`; the shim's attach, detach and failure surface (`attachment`, `subscribeFailure`, `onAttachmentFailure`) | the map members declared in `WorkspaceActivationMap`; the rest dropped, since only `maplibre/camera-driver.test.ts` calls it (the activation attaches on the host and watches `CameraDriverHost.failure`) |
 | the viewport command wrappers | the same navigation calls with the same arguments, each with today's `invalidate('viewport')` |
 
 ### 1.2 Input (`canvas/runtime/input/`, pure except the DOM source)
@@ -1803,8 +1777,6 @@ desktop/web/src/
 ├─ canvas/runtime/interaction-ports.ts  §1.2a ToolHost, InputRouter, DomInputSource (types)
 ├─ canvas/runtime/keyboard-port.ts      CanvasKeyboardPort implementation (0B; fed by the key router from 0C)
 ├─ canvas/runtime/legacy-camera-facade.ts  0A–0E only: the CameraController shim and today's camera.ts names over the view drivers; outside view/ (§1.1b)
-├─ canvas/runtime/camera-platform.ts   the platform CameraDriverHost factory (clock, animation frames, timers, devicePixelRatio, reduced
-│                                       motion; 0E); outside view/ (P4); app/** never imports it (P10)
 ├─ canvas/runtime/scene-extent.ts      SceneBoundsOptions.extentPoints for the fits (0A): plant, zone and note footprints at a scale; outside view/ (P4)
 ├─ canvas/runtime/view/                 pure; imports only what policy P4 (plan §5, the authority) allows: own files, canvas/projection.ts,
 │                                       canvas/session-plane.ts, canvas/workspace-camera-policy.ts, @preact/signals, type-only scene/types.ts
@@ -1815,12 +1787,12 @@ desktop/web/src/
 │  ├─ bearing-tween.ts                  BearingTween
 │  ├─ view-transform.ts                 buildViewTransform (geographic: MapLibre driver) and buildViewTransformFromPlane (planar: headless driver), quads, projectAnchors
 │  ├─ navigation-policy.ts              constrainCamera, zoomFloorForArc, bearing helpers
-│  ├─ navigation.ts                     ViewNavigation, the RotationSession implementation, temporary focus, openAt, showStartFrame and followPlane (0E)
+│  ├─ navigation.ts                     ViewNavigation, the RotationSession implementation, LiDAR's temporary focus, frameBounds (0E), openAt
 │  ├─ fit.ts                            oriented fit of point sets inside insets
 │  ├─ frame-source.ts                   ViewFrameSource, ViewReadSurface implementation
 │  ├─ headless-driver.ts                HeadlessCameraDriver over a PlanarCamera (exact at bearing 0)
-│  ├─ driver-host.ts                    CameraDriverHost: headless ↔ attached swaps, failure signal; from 0E the move replay, setScreen,
-│  │                                    the policy generation and the attached plane follow
+│  ├─ driver-host.ts                    CameraDriverHost: headless ↔ attached swaps, failure signal; from 0E the policy at the plane's
+│  │                                    latitude and the attached plane follow
 │  └─ *.test.ts                         contract, round trips, constrain at bearing 45, navigation rules
 ├─ canvas/runtime/input/                pure except dom-input-source.ts
 │  ├─ platform.ts, thresholds.ts, raw-input.ts, gestures.ts, bindings.ts
@@ -1874,12 +1846,14 @@ desktop/web/src/
 | `canvas/maplibre-camera.ts` (`createMapFrame`) | `maplibre/camera-driver.ts` | 0A |
 | `maplibre/workspace-camera.ts` internals (incl. `recordResolvedMinimum`) | `maplibre/camera-driver.ts`; the module itself declares the constructible `MapLibreWorkspaceCameraOwner` shim (extending the facade's `CameraController` shim), `MapLibreWorkspaceCameraMap` and `MapLibreWorkspaceCameraFailure` until 0E (§1.1b) (plan §4 0A, "Legacy surface") | 0A; file deleted 0E |
 | `canvas/runtime/camera.ts` internals (`CameraController`) | `view/headless-driver.ts`, `view/navigation.ts`; the module re-exports the legacy surface of `canvas/runtime/legacy-camera-facade.ts` (§1.1b) until 0E: a constructible `CameraController` shim with today's constructor and public members, `WorkspaceCameraFrameReader`, `WorkspaceCameraNavigation`, `WorkspaceCameraOwner`, `CameraViewportSnapshot`, `CameraFrameInsets`, `fitCameraViewport`, `cameraFramingRect`, and `SceneBounds` with its option types from `view/types.ts` (the exact list and who moves each test off it: plan §4 0A, "Legacy surface") | 0A; file deleted 0E |
-| `canvas/runtime/legacy-camera-facade.ts` | `CameraDriverHost` (`apply`, `setScreen`, `followPlane`, `planeChanged`, `policyGeneration`), `ViewNavigation` (`showStartFrame`, `followPlane`), `canvas/runtime/camera-platform.ts` (§1.1b "0E") | 0E |
+| `canvas/runtime/legacy-camera-facade.ts` | `CameraDriverHost` (`followPlane`'s attached branch, the policy at the plane's latitude), `ViewNavigation` (the one bookmark, `frameBounds`), the clock, animation frames and timers in `scene-runtime/construction.ts`; the start frame, the replay, `withOneSnapshot`, `normalizeScreenMetrics` and the density default are dropped (§1.1b "0E") | 0E |
 | `SceneViewportState` (`scene/types.ts:101-105`), `worldToScreen` in `annotation-layout.ts:180-185`, `viewportCenterWorld` (`canvas/projection.ts:95-103`), `geographicViewOf` (`canvas/session-plane.ts`) and the inline copies | `ViewTransform` (tools stop reading it in 0B, the renderer in 0D2), `geographicViewOfCamera` | 0E |
 | `SceneRendererInstance` (`scene-types.ts:50-57`: `renderScene`, `setViewport`) | `SceneRenderer` (so named by the 0C/0D2 hand-off); `SceneRendererDefinition.initialize` returns it | 0D2 |
 | `__tests__/v2-shared-camera-transform.test.ts` | `view/view-transform.test.ts`, `view/camera-contract.test.ts`, `v2-shared-map-scene-layer.test.ts` "the layer never derives a transform" | 0D2, with `maplibre/scene-camera-transform.ts` (Renderer; its tests cover the derivation the shared scene layer runs until then) |
 | `CameraViewportSnapshot`, `CanvasQuerySurface.viewport` (`runtime.ts`, `query-surface.ts`) | `ViewFrame` (runtime, chrome), `ViewReadSurface` (app) | 0E |
-| the composition's origin effect (`workspace-runtime-composition.ts`) and the shim's `refreshOrigin` | the runtime's plane effect, `ViewNavigation.followPlane` | 0E |
+| the composition's origin effect (`workspace-runtime-composition.ts`) and the shim's `refreshOrigin` | the runtime's plane effect (the live driver's `planeChanged`, `CameraDriverHost.followPlane`) | 0E |
+| `CameraDriverHost.replacePolicy`, its activation call and the shim's `syncPolicyToOrigin` | the host's policy at the plane's latitude | 0E |
+| `CanvasDocumentSurface.initializeViewport`, the composition's first-ready pass (`initializeViewport`, `viewportInitialized`, `viewportReady`) and the reconciler's `onOutcome` | `zoomToFit` in `runtime.init` (plan §1, exception 3) | 0E |
 | `interaction-session.ts`'s `camera` and `cameraNavigation` deps and `viewOf` | `frames`, `viewNavigation` | 0E |
 | `SceneRuntimeConstructionOptions.camera` | `SceneCanvasRuntime.cameraHost` | 0E |
 | `TestView.legacyCamera`, `createTestCanvasQuerySurface({ viewport })`, `bindTestViewToSurface` | `viewport()`, `reproject()`, `view()`; the fake's `placement` option | 0E |
