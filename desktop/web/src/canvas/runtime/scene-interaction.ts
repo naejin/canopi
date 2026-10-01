@@ -19,7 +19,7 @@ import {
   resolveSceneObjectGroupMembers,
   sceneObjectGroupMemberLayerName,
 } from './scene'
-import { hitTestTopLevel, hitTestVisibleTopLevel, type TopLevelTarget } from './interaction/hit-testing'
+import { hitTestTopLevel, hitTestVisibleTopLevel, type TopLevelTarget } from './tools/hit-testing'
 import { createHoverTooltip, type HoverTooltipController } from './interaction/hover-tooltip'
 import {
   createInteractionPreview,

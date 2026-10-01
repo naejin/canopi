@@ -23,7 +23,7 @@ import {
   translateZonePoints,
 } from '../scene-runtime/arrangement-placement'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
-import { hitTestTopLevel } from './hit-testing'
+import { hitTestTopLevel } from '../tools/hit-testing'
 import { isEditableTarget } from './pointer-utils'
 import { clearSavedObjectStampGhosts, showStampGhosts } from './saved-object-stamp-tool'
 import {

@@ -25,7 +25,7 @@ import {
 } from '../scene'
 import type { SpeciesCacheEntry } from '../species-cache'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
-import { hitTestTopLevel } from './hit-testing'
+import { hitTestTopLevel } from '../tools/hit-testing'
 import {
   createPlantSpacingOverlay,
   type PlantSpacingOverlayController,

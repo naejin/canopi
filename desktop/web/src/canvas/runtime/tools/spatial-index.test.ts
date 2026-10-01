@@ -8,10 +8,10 @@ import {
   textNote,
 } from '../../../__tests__/support/tool-harness'
 import { computeSelectionRect } from '../../operations'
-import { hitTestTopLevel, hitTestVisibleTopLevel, queryRectTopLevel } from '../interaction/hit-testing'
 import { buildPlantPresentationEntries } from '../plant-presentation'
 import type { SceneStore } from '../scene'
 import type { WorldPoint, WorldQuad } from '../view/types'
+import { hitTestTopLevel, hitTestVisibleTopLevel, queryRectTopLevel } from './hit-testing'
 import { createToolScene } from './spatial-index'
 
 function orchardStore(): SceneStore {
