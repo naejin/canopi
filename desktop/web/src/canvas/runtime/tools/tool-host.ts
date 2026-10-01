@@ -1330,6 +1330,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     sceneChanged(): void {
       if (!disposed) notifySceneChanged()
     },
+    openTextEntryMode: () => (disposed ? null : openTextEntryMode()),
     hasLiveGesture: () => live !== null,
     activeToolHasTransient: () => activeTool?.hasTransient() ?? false,
     activeToolIsSelect: () => currentId === 'select',

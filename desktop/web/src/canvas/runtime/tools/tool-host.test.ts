@@ -521,6 +521,28 @@ describe('ToolHost', () => {
       expect(h.chrome.textEntry).toBeNull()
     })
 
+    it('openTextEntryMode answers the mode of the entry a tool opened, and null once it closes', () => {
+      const text: StubTool = stubTool('text', {
+        gesture: (g) => {
+          if (g.kind === 'tap') {
+            text.ctx().effects.requestTextEntry(
+              { anchor: g.point.snapped, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note', mode: 'create' },
+              () => 'close',
+            )
+          }
+          return 'pass'
+        },
+      })
+      useStubTools(text)
+      const h = harness({ tool: 'text' })
+
+      expect(h.host.openTextEntryMode()).toBeNull()
+      h.click({ x: 10, y: 10 })
+      expect(h.host.openTextEntryMode()).toBe('create')
+      h.enterText()
+      expect(h.host.openTextEntryMode()).toBeNull()
+    })
+
     it('the host reads the text entry\'s state live', () => {
       const handle: ToolHandle = { id: 'rotate' as ToolHandleId, anchor: { x: 10, y: 10 }, hitRadiusPx: 10, glyph: 'rotate', label: 'Rotate' }
       const select = stubTool('select', { activate: (ctx) => ctx.effects.setHandles([handle]) })

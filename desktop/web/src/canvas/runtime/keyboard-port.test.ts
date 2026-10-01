@@ -61,6 +61,7 @@ function fixture(options: { readonly tool?: ToolId; readonly reply?: (c: ToolCom
     hasNudgeSeries: () => state.nudging,
     activeToolIsSelect: () => tool.peek() === 'select',
     activeToolHasTransient: () => false,
+    openTextEntryMode: () => null,
   } as unknown as ToolHost
   const legacy = {
     pointerSessionLive: () => state.live,

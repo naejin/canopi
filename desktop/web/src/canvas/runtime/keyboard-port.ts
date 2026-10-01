@@ -245,6 +245,8 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): LegacyCa
     if (escapeChain(event)) return
     if (editSelectedNote(event)) return
     if (event.code !== 'Space' || legacy.spaceHeld() || isEditableTarget(event.target)) return
+    // A new note's field, focused or not, keeps Space from arming a pan, as today's Text adapter kept the shared keys.
+    if (toolHost.openTextEntryMode() === 'create') return
     holdSpace(event)
   }
 

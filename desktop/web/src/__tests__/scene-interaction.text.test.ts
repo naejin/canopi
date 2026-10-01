@@ -313,6 +313,33 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('keeps Space from starting canvas panning while a new note\'s field is open but not focused', () => {
+    const deps = createInteractionDeps(container, store, camera)
+    const session = createTestSession(deps)
+    session.setTool('text')
+    container.tabIndex = 0
+    container.focus()
+    const before = { ...camera.viewport }
+
+    events.pointerDown({ x: 24, y: 32 }, { button: 0 })
+    events.pointerUp({ x: 24, y: 32 }, { button: 0 })
+    // The field takes focus on the next frame: until then Space reaches the map, which today's open field kept from
+    // arming a pan (its Text adapter suppressed the shared keys while the field was open, focused or not).
+    expect(noteEntry()).not.toBeNull()
+    expect(document.activeElement).toBe(container)
+    events.keyDown({ key: ' ', code: 'Space', cancelable: true, target: container })
+    expect(container.style.cursor).toBe('text')
+    events.pointerDown({ x: 200, y: 200 }, { button: 0 })
+    events.pointerMove({ x: 260, y: 230 }, { button: 0 })
+    events.pointerUp({ x: 260, y: 230 }, { button: 0 })
+    events.keyUp({ key: ' ', code: 'Space', target: container })
+
+    expect(camera.viewport).toEqual(before)
+    expect(noteEntry()).toBeNull()
+    expect(store.persisted.annotations).toHaveLength(0)
+    session.dispose()
+  })
+
   describe('text note editor', () => {
     it('names the new note field and prompts for the text, as the tool card does', () => {
       const session = createTestSession(createInteractionDeps(container, store, camera))
