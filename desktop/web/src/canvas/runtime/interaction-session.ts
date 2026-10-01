@@ -2,20 +2,24 @@
 //
 // Owns the canvas's interaction session (spec §1.2–1.4, ADRs 0017 and 0018): it composes DomInputSource → normalise →
 // recognise → InputRouter → ToolHost, with the keyboard port on the source's legacy key sink, and prepares the map host
-// as a keyboard stop. Every tool runs on the host; through 0B the legacy bridge (scene-interaction.ts) still serves
-// drops, with the DOM event the source is handling, until the host's drop route lands (0B-4; spec §1.4, "The legacy
-// bridge"). The session keeps today's SceneInteractionSession members: setOverviewMode is a mode override fed to the
-// recogniser's configure and the host's frames, refreshMeasurements reaches ToolHost.sceneChanged(). It builds the
-// host's chrome (chrome/: the handle layer, the text entry, the plant tooltip and the Unlock affordance, whose Unlock
-// it runs), bridges the plant and saved-stamp read models to the armed tool, reads the snapping settings per point,
-// calls ToolHost.rawPress for every raw press on the map host and ToolHost.interrupted() after a window blur, owns the
-// navigation cursor, and passes on no draft or handles while a story is presented. Ruler presses reach the source
-// beside the map: the session finds the pressed ruler's overlay (chrome/rulers.ts) and runs today's ruler drag under
-// any tool (its cursor, its end on a blur, its guide at the release), whatever the host does with the input.
+// as a keyboard stop. Every tool and every drop runs on the host (spec §1.4, "Drops"). The session keeps today's
+// SceneInteractionSession members: setOverviewMode is a mode override fed to the recogniser's configure and the host's
+// frames, refreshMeasurements reaches ToolHost.sceneChanged(). It builds the host's chrome (chrome/: the handle layer,
+// the text entry, the plant tooltip and the Unlock affordance, whose Unlock it runs), bridges the plant and saved-stamp
+// read models to the armed tool, reads the snapping settings per point, calls ToolHost.rawPress for every raw press on
+// the map host and ToolHost.interrupted() after a window blur, follows a placed drop (the saved stamp's drag source, the
+// map's focus on the next frame), owns the navigation cursor, and passes on no draft or handles while a story is
+// presented. Ruler presses reach the source beside the map: the session finds the pressed ruler's overlay
+// (chrome/rulers.ts) and runs today's ruler drag under any tool (its cursor, its end on a blur, its guide at the
+// release), whatever the host does with the input.
 
 import { computed, effect, signal, type ReadonlySignal } from '@preact/signals'
 import { readPlantStampSource, clearPlantStampSource } from '../plant-stamp-source'
-import { clearSavedObjectStampSource, readSavedObjectStampSource } from '../saved-object-stamp-source'
+import {
+  clearSavedObjectStampDragSource,
+  clearSavedObjectStampSource,
+  readSavedObjectStampSource,
+} from '../saved-object-stamp-source'
 import type { SessionPlane } from '../session-plane'
 import { getCanvasTool, IDLE_CANVAS_TOOL_GUIDANCE, type CanvasToolGuidance } from '../session-state'
 import type {
@@ -54,7 +58,6 @@ import type {
 } from './runtime'
 import type { SceneDesignObjectSelection, SceneDesignObjectTarget, ScenePoint, SceneStateReader } from './scene'
 import { setSceneDesignObjectLocks } from './scene/locks'
-import { createLegacyInteractionBridge, type LegacyInteractionBridge } from './scene-interaction'
 import type { SceneCommandAdmission, SceneEditCoordinator, SettledSceneReader } from './scene-runtime/transactions'
 import type { SpeciesCacheEntry } from './species-cache'
 import { createContextMenuPort, createToolHost, createToolScene } from './tools/tool-host'
@@ -66,6 +69,7 @@ const HOST_ATTRIBUTES = ['tabindex', 'role', 'aria-label', 'aria-describedby'] a
 const STORY_PRESENTING_ATTRIBUTE = 'data-story-presenting'
 const NO_MODIFIERS: Modifiers = Object.freeze({ shift: false, ctrl: false, alt: false, meta: false })
 const QUARANTINE: readonly AdapterEffect[] = Object.freeze([{ kind: 'prevent-default' }, { kind: 'stop-propagation' }])
+const NO_DROP: readonly AdapterEffect[] = Object.freeze([{ kind: 'drop-effect', dropEffect: 'none' }])
 /** The host's types, read through it (P5b: this module imports nothing else from tools/). */
 type DraftPresentation = Parameters<ToolHostDeps['renderer']['setDraft']>[0]
 type ToolSource = Parameters<ToolHost['setTool']>[1]
@@ -81,10 +85,7 @@ const NO_HANDLES: HandleList = Object.freeze([])
 
 let descriptionSequence = 0
 
-/**
- * The session's dependencies: today's, which the host, the chrome and (through 0B) the legacy bridge's drops run on, then
- * the pipeline's own.
- */
+/** The session's dependencies: today's, which the host and the chrome run on, then the pipeline's own. */
 export interface SceneInteractionSessionDeps {
   container: HTMLElement
   getSceneStore: () => SceneStateReader
@@ -195,7 +196,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private readonly _overview = signal(false)
   private readonly _frames: ModeOverridingFrames
   private readonly _hostKeys: InteractionHostController
-  private readonly _bridge: LegacyInteractionBridge
+  private readonly _focus: CanvasFocusPort
   private readonly _handleLayer: HandleLayer
   private readonly _textEntry: TextEntryHost
   private readonly _tooltip: HoverTooltipController
@@ -229,6 +230,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _refreshing = false
   /** The pointer of the press being routed whose capture waits for the host's admission (ToolHostDeps.capturePress). */
   private _pressCapture: number | null = null
+  /** The map's focus again on the frame after a drop, once the browser's drag end has run (today's). */
+  private _dropFocusFrame: number | null = null
   private _disposed = false
 
   constructor(private readonly _deps: SceneInteractionSessionDeps) {
@@ -250,6 +253,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       // The tool card asks for its own field today (the Plant a row guidance's focus request).
       focusToolCardField: () => {},
     }
+    this._focus = focus
     this._navigation = {
       panByPx: (delta) => this._afterCameraMove(() => _deps.cameraNavigation.panBy(delta)),
       zoomAroundPx: (anchor, factor) => this._afterCameraMove(() => _deps.cameraNavigation.zoomAroundScreenPoint(anchor, factor)),
@@ -267,9 +271,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
     try {
       this._hostKeys = own(prepareInteractionHost(container, _deps.translate), (host) => host.dispose())
-      this._bridge = own(createLegacyInteractionBridge(_deps, {
-        switchTool: (name) => this._switchTool(name),
-      }), (bridge) => bridge.dispose())
       this._handleLayer = own(createHandleLayer({ container, frames: this._frames }), (layer) => layer.dispose())
       this._textEntry = own(createTextEntryHost({
         container,
@@ -361,6 +362,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         inspect: _deps.tryInspectAt,
         capturePress: (pointerId) => this._capturePress(pointerId),
         transientHistoryChanged: () => _deps.notifyTransientHistoryChange?.(),
+        dropped: (kind) => this._dropped(kind),
       }
       this._toolHost = own(createToolHost(hostDeps), (host) => host.dispose())
       this._router = createInputRouter({ navigation: this._navigation, toolHost: this._toolHost })
@@ -437,8 +439,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       this._endPressesAfterFailedSwitch()
       throw error
     }
-    // The bridge's drop cue goes with a tool change, as today's cancellation hid it.
-    this._bridge.toolChanged()
     // The tool left drops its pick once it is deactivated, as today's tools did (the next tool never hears it).
     if (previous !== id) clearToolSource(previous)
     // The live presses belong to the tool left: they end on the host's path, which releases their capture.
@@ -451,21 +451,16 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     // The host hears the mode on a 'tools' frame (today's overview transition for a registered tool).
     this._frames.modeChanged()
     this._configure()
-    runCanvasRuntimeCleanups([
-      () => this._bridge.setOverviewMode(enabled),
-      () => {
-        if (!enabled) return
-        this._releaseSpace()
-        this._menu.close()
-      },
-    ], 'Scene Interaction overview transition failed')
+    if (!enabled) return
+    this._releaseSpace()
+    this._menu.close()
   }
 
   prepareForDocumentReplacement(): void {
     if (this._disposed) return
     const tool = this._tool.peek()
     runCanvasRuntimeCleanups([
-      () => this._bridge.prepareForDocumentReplacement(),
+      () => this._cancelDropFocus(),
       () => this._toolHost.prepareForDocumentReplacement(),
       () => this._escapeGesture(),
       () => clearToolSource(tool),
@@ -531,7 +526,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     attempt(() => this._storyObserver?.disconnect())
     attempt(() => this._stopWatchingSources())
     attempt(() => clearToolSource(tool))
-    attempt(() => this._bridge.dispose())
+    attempt(() => this._cancelDropFocus())
     attempt(() => this._toolHost.dispose())
     attempt(() => this._lockedAffordance.dispose())
     attempt(() => this._tooltip.dispose())
@@ -558,8 +553,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     const event = this._source.currentEvent()
     switch (input.kind) {
       case 'drop':
-        // The bridge serves every tool's drops until the host's drop route lands (0B-4).
-        this._drop(input, event)
+        this._routeDrop(input)
         return
       case 'focus-out':
         this._toolHost.endNudgeSeries(true)
@@ -679,26 +673,38 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   /**
-   * A drag over the map, on the bridge until 0B-4. A dragover or a drop first retries the host's pending cancellation and
-   * is swallowed when it did (today's _onDragOver retried first; _onDrop cleared the preview, then retried). The host then
-   * hears it, so a dragover hides the tool's draft while the bridge's drop preview may show.
+   * A panel drag over the map, routed to the host's drop route, which retries a pending cancellation itself (a drop after
+   * clearing its preview). A dragover whose route throws answers 'none' as well as the source's quarantine, as today's
+   * rejected dragover did.
    */
-  private _drop(input: Extract<RawInput, { kind: 'drop' }>, event: Event | null): void {
-    if (!event) return
-    const { phase } = input
-    if (phase !== 'leave') {
-      let retried = true
-      try {
-        retried = this._retryPendingCancellation(input.t)
-      } finally {
-        if (retried && phase === 'drop') this._bridge.dragLeave()
-      }
-      if (retried) return
+  private _routeDrop(input: Extract<RawInput, { kind: 'drop' }>): void {
+    try {
+      this._routeToHost(input)
+    } catch (error) {
+      if (input.phase === 'over') this._source.apply(NO_DROP)
+      throw error
     }
-    this._toolHost.gesture({ kind: 'drop', phase, at: input.at, payload: input.payload })
-    if (phase === 'over') this._bridge.dragOver(event as DragEvent)
-    else if (phase === 'leave') this._bridge.dragLeave()
-    else this._bridge.drop(event as DragEvent)
+  }
+
+  /**
+   * After the host placed a drop (ToolHostDeps.dropped): a saved stamp's drag source is spent (the panel's dragend clears
+   * it too), and the map takes focus again on the next frame, after the browser's drag end, as today's drop did. A window
+   * blur, a document replacement and the session's end drop that focus.
+   */
+  private _dropped(kind: 'species' | 'saved-stamp'): void {
+    if (this._disposed) return
+    if (kind === 'saved-stamp') clearSavedObjectStampDragSource()
+    this._cancelDropFocus()
+    this._dropFocusFrame = window.requestAnimationFrame(() => {
+      this._dropFocusFrame = null
+      this._focus.focusMap('tool-requested')
+    })
+  }
+
+  private _cancelDropFocus(): void {
+    if (this._dropFocusFrame === null) return
+    window.cancelAnimationFrame(this._dropFocusFrame)
+    this._dropFocusFrame = null
   }
 
   // ── Rulers ──────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -735,7 +741,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _interrupted(): void {
     this._spaceHeld = false
     this._port.releaseKeys()
-    this._bridge.cancelPendingFocus()
+    this._cancelDropFocus()
     this._setNavigationCursor(null)
     this._toolHost.interrupted()
   }
@@ -1090,7 +1096,7 @@ function clearToolSource(tool: ToolId): void {
 /**
  * The inputs today's handlers retried a pending cancellation on, and swallowed: a primary or middle press on the map host
  * (a Mac Ctrl click is button 0), a pointerup, a pointercancel, a wheel and a native contextmenu; keys retry in the keyboard
- * port, and dragovers and drops on the legacy bridge until the host's drop route (0B-4), which must retry before admission.
+ * port, and dragovers and drops in the host's drop route, before their admission.
  * Moves, leaves, lost captures, blurs, other presses and ruler presses were never fenced, and neither was a wheel over
  * a handle, the note editor or the Unlock affordance (today's _onWheel returned before its retry). One accepted deviation: a
  * right-click inside the note editor's textarea now keeps its native menu, since the source drops a contextmenu over an

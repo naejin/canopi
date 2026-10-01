@@ -193,9 +193,9 @@ export function createToolSceneSource(store: SceneStore, options: ToolSceneSourc
 // createToolHarness runs gesture scripts through a real createToolHost, with the input router in front of it and a
 // recording ToolHostDeps behind it. The scripts send what the LEGACY recogniser emits (slop 0: any movement after a press
 // is a drag) and do what interaction-session.ts does around it: they report each raw press (a primary press, and the
-// right press before a mouse menu) through rawPress before routing, ask retryPendingCancellation before routing, take a
-// press's capture when the host asks (capturePress, recorded), end a session the host rejected, end the nudge series on
-// focus-out and call interrupted after a blur. Tools come from
+// right press before a mouse menu) through rawPress before routing, ask retryPendingCancellation before routing (drops
+// retry in the host's own drop route), take a press's capture when the host asks (capturePress, recorded), end a session
+// the host rejected, end the nudge series on focus-out and call interrupted after a blur. Tools come from
 // tools/registry.ts, which a test replaces through vi.mock('…/tools/registry', () => ({ TOOL_REGISTRY: {} })) and fills
 // with useStubTools.
 
@@ -334,6 +334,8 @@ export interface ToolHarnessRecord {
   readonly nudges: string[]
   /** The pointer ids whose press capture the host took (ToolHostDeps.capturePress), in order. */
   readonly captures: number[]
+  /** The drops the host placed (ToolHostDeps.dropped), in order. */
+  readonly drops: ('species' | 'saved-stamp')[]
 }
 
 /** The open text entry: its request, the host's submit and onCancel, the text typed into it (its initial text until typeText),
@@ -399,7 +401,7 @@ export interface ToolHarness {
   cancel(reason: CancelReason): GestureOutcome
   wheelZoom(at: ScreenPoint, factor: number): GestureOutcome
   menu(at: ScreenPoint | 'selection', source?: MenuSource): GestureOutcome
-  /** A panel drag over the map (dragover, dragleave, drop), as the session hands the host its drop gestures. */
+  /** A panel drag over the map (dragover, dragleave, drop), as the session routes it to the host's drop route. */
   drop(phase: 'over' | 'leave' | 'drop', at?: ScreenPoint, payload?: CanvasDropPayload): GestureOutcome
   /** An arrow key as the keyboard port sends it to the host. */
   arrow(key: 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown', large?: boolean): ReturnType<ToolHost['nudge']>
@@ -458,6 +460,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
     menus: [],
     nudges: [],
     captures: [],
+    drops: [],
   }
   const chrome = {
     handles: [] as readonly ToolHandle[],
@@ -567,6 +570,9 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
     transientHistoryChanged: () => {
       record.transientHistoryChanges += 1
     },
+    dropped(kind) {
+      record.drops.push(kind)
+    },
   })
   host.subscribePointerWorld((point) => {
     record.pointerWorld.push(point)
@@ -601,7 +607,8 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
   /**
    * The session's routing: a failed cancellation is retried (and the event quarantined) before the gesture of an event
    * today's handlers retried on is routed (a press on the map, a release, a pointercancel, a wheel, a menu); hovers, drags,
-   * blurs, lost captures and ruler presses go straight on (interaction-session.ts, retriesPendingCancellation).
+   * blurs, lost captures and ruler presses go straight on, and dragovers and drops retry in the host's drop route
+   * (interaction-session.ts, retriesPendingCancellation).
    */
   function route(g: Gesture): GestureOutcome {
     if (retriedOn(g) && host.retryPendingCancellation()) {
@@ -617,7 +624,6 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       case 'drag-end':
       case 'menu-request':
       case 'zoom': return true
-      case 'drop': return g.phase !== 'leave'
       case 'pan': return g.source === 'wheel'
       case 'cancel': return g.reason === 'pointercancel'
       default: return false

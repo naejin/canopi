@@ -3619,18 +3619,35 @@ describe('SceneInteractionSession', () => {
     container.dispatchEvent(dragOverEvent)
     expect(dragOverEvent.defaultPrevented).toBe(true)
     expect(dataTransfer.dropEffect).toBe('copy')
-    expect(container.querySelectorAll('[data-saved-object-stamp-ghost]')).toHaveLength(1)
-    expect(container.querySelector('[data-saved-object-stamp-part="zone"]')?.tagName.toLowerCase())
-      .toBe('polygon')
-    expect(container.querySelector('[data-saved-object-stamp-part="plant-symbol"] circle')).toBeTruthy()
-    expect(container.querySelector('[data-saved-object-stamp-part="annotation"]')).toBeNull()
-    expect(container.querySelector('[data-saved-object-stamp-part="annotation-marker"]')).not.toBeNull()
+    // The ghosts are the host's drop preview (spec §1.4 "Drops"): the bed and the apple in one 'objects' ghost, the note
+    // in a second, each where the drop would put it, in full geometry; the draft layer draws them (a note as its marker
+    // or its text, by scale).
+    const ghosts = () => draftShapes(deps).flatMap((shape) =>
+      shape.kind === 'ghost' && shape.entity.kind === 'objects' ? [shape.entity] : [])
+    expect(ghosts().map((ghost) => ghost.anchor)).toEqual([{ x: 40, y: 45 }, { x: 40, y: 45 }])
+    const [objects, notes] = ghosts()
+    expect(objects!.template.zones.map(({ entity }) => entity)).toEqual([expect.objectContaining({
+      zoneType: 'rect',
+      points: [{ x: 40, y: 45 }, { x: 50, y: 45 }, { x: 50, y: 51 }, { x: 40, y: 51 }],
+      rotationDeg: 30,
+      fillColor: '#CBA24A',
+    })])
+    expect(objects!.template.plants.map(({ entity }) => entity)).toEqual([expect.objectContaining({
+      symbol: 'canopy',
+      color: '#C44230',
+      position: { x: 36, y: 45 },
+    })])
+    expect(notes!.template.annotations.map(({ entity }) => entity)).toEqual([expect.objectContaining({
+      text: 'Guild',
+      fontSize: 11,
+      rotationDeg: 45,
+      position: { x: 42, y: 40 },
+    })])
     const overviewViewport = camera.viewport
     camera.setViewport({ ...overviewViewport, scale: 20 })
     container.dispatchEvent(dragOverEvent)
-    const annotationGhost = container.querySelector<SVGTextElement>('[data-saved-object-stamp-part="annotation"]')
-    expect(annotationGhost?.getAttribute('font-size')).toBe('11')
-    expect(annotationGhost?.getAttribute('transform')).toContain('rotate(45')
+    // Closer in, the ghosts follow the ground under the pointer.
+    expect(ghosts().map((ghost) => ghost.anchor)).toEqual([{ x: 4, y: 4.5 }, { x: 4, y: 4.5 }])
 
     camera.setViewport(overviewViewport)
     container.dispatchEvent(dragOverEvent)
@@ -3664,7 +3681,7 @@ describe('SceneInteractionSession', () => {
       store.persisted.zones[0]!.id,
       store.persisted.annotations[0]!.id,
     ]))
-    expect(container.querySelector('[data-saved-object-stamp-ghost]')).toBeNull()
+    expect(deps.renderer.lastDraft()).toBeNull()
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-saved-object-stamp')
     session.dispose()
   })
@@ -3724,7 +3741,7 @@ describe('SceneInteractionSession', () => {
 
     container.dispatchEvent(dragEvent('dragover'))
     expect(dataTransfer.dropEffect).toBe('none')
-    expect(container.querySelector('[data-saved-object-stamp-ghost]')).toBeNull()
+    expect(deps.renderer.lastDraft()).toBeNull()
 
     protectedDragData = false
     container.dispatchEvent(dragEvent('drop'))
@@ -3734,7 +3751,7 @@ describe('SceneInteractionSession', () => {
     protectedDragData = true
     container.dispatchEvent(dragEvent('dragover'))
     expect(dataTransfer.dropEffect).toBe('copy')
-    expect(container.querySelector('[data-saved-object-stamp-ghost]')).not.toBeNull()
+    expect(draftShapes(deps).map((shape) => shape.kind)).toEqual(['ghost'])
 
     protectedDragData = false
     container.dispatchEvent(dragEvent('drop'))
@@ -3802,7 +3819,7 @@ describe('SceneInteractionSession', () => {
 
     container.dispatchEvent(dragOverEvent)
     expect(dataTransfer.dropEffect).toBe('none')
-    expect(container.querySelector('[data-saved-object-stamp-ghost]')).toBeNull()
+    expect(deps.renderer.lastDraft()).toBeNull()
 
     container.dispatchEvent(dropEvent)
 
@@ -3856,13 +3873,11 @@ describe('SceneInteractionSession', () => {
         value: dataTransfer,
       },
     })
-    const preview = Array.from(container.children)
-      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
-
     container.dispatchEvent(dragOverEvent)
     expect(dragOverEvent.defaultPrevented).toBe(true)
     expect(dataTransfer.dropEffect).toBe('copy')
-    expect(preview?.style.display).toBe('block')
+    // The drop cue is the host's draft: today's band box at the pointer (spec §1.4 "Drops").
+    expect(draftShapes(deps).map((shape) => shape.kind)).toEqual(['quad'])
 
     protectedDragData = false
     container.dispatchEvent(dropEvent)
@@ -3875,7 +3890,7 @@ describe('SceneInteractionSession', () => {
       position: { x: 80, y: 90 },
       canopySpreadM: 3,
     })
-    expect(preview?.style.display).toBe('none')
+    expect(deps.renderer.lastDraft()).toBeNull()
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drop')
     session.dispose()
   })
@@ -3957,14 +3972,11 @@ describe('SceneInteractionSession', () => {
         value: dataTransfer,
       },
     })
-    const preview = Array.from(container.children)
-      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
-
     container.dispatchEvent(dragOverEvent)
 
     expect(dragOverEvent.defaultPrevented).toBe(true)
     expect(dataTransfer.dropEffect).toBe('none')
-    expect(preview?.style.display).toBe('none')
+    expect(deps.renderer.lastDraft()).toBeNull()
     session.dispose()
   })
 
@@ -4012,14 +4024,11 @@ describe('SceneInteractionSession', () => {
         value: dataTransfer,
       },
     })
-    const preview = Array.from(container.children)
-      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
-
     container.dispatchEvent(dragOverEvent)
     container.dispatchEvent(dropEvent)
 
     expect(store.persisted.plants).toHaveLength(0)
-    expect(preview?.style.display).toBe('none')
+    expect(deps.renderer.lastDraft()).toBeNull()
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     session.dispose()
   })

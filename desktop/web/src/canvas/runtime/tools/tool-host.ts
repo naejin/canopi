@@ -7,10 +7,11 @@
 // starts at the press's world point, and every camera frame re-emits the live drag or the resting pointer, which a
 // pointer pan moves (plan §1, exception 1). The text entry's state is the chrome's, read live. It owns the passive
 // hover, the selection decorations, the arrow-nudge series, transient history and the Esc queries, and merges the
-// tool's draft with its decorations for the renderer. Tools are plain objects listed in tools/registry.ts, which lists
-// every tool; an id it does not list arms none. Drops stay on the session's legacy bridge until 0B-4 (spec §1.4, "The
-// legacy bridge"). The module re-exports createToolScene and builds the context-menu port, so interaction-session.ts
-// imports nothing else from tools/ (P5b).
+// tool's draft with its decorations and the drop preview for the renderer. One drop route serves every tool (spec §1.4
+// "Drops"): a species drop places a plant with Place plants' placement, a saved stamp with the saved stamp's, then arms
+// Select. Tools are plain objects listed in tools/registry.ts, which lists every tool; an id it does not list arms none.
+// The module re-exports createToolScene and builds the context-menu port, so interaction-session.ts imports nothing else
+// from tools/ (P5b).
 
 import { signal, untracked } from '@preact/signals'
 import { runCanvasRuntimeCleanups } from '../cleanup'
@@ -18,7 +19,7 @@ import type { Gesture, MenuSource, PressTarget } from '../input/gestures'
 import type { TargetClass } from '../input/raw-input'
 import { createCanvasContextMenu } from '../interaction/canvas-context-menu'
 import type { ContextMenuPort, GestureOutcome, ToolHost, ToolHostDeps } from '../interaction-ports'
-import type { CancelReason, Modifiers, PointerKind, ToolHandleId, ToolId } from '../interaction-types'
+import type { CancelReason, CanvasDropPayload, Modifiers, PointerKind, ToolHandleId, ToolId } from '../interaction-types'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
 import {
   includesSceneDesignObjectTarget,
@@ -33,7 +34,10 @@ import type { ScreenPoint, ViewFrame, ViewScreen, ViewTransform, WorldPoint } fr
 import { applyToolConstraint, type ScreenAxes } from './constraints'
 import type { DraftPresentation, DraftShape, ToolHandle } from './draft'
 import { measureLabelShapes, selectedZoneMeasurementLabels } from './measure-labels'
+import { placePlantFromSpecies } from './plant-stamp'
 import { TOOL_REGISTRY } from './registry'
+import { placeSavedObjectStamp, savedObjectStampGhostShapes } from './saved-object-stamp'
+import { bandDraft } from './select/band'
 import { snapWorldPoint, type SnapSettings } from './snapping'
 import type {
   CanvasTool,
@@ -58,6 +62,12 @@ const QUARANTINE: GestureOutcome = Object.freeze({ quarantine: true })
 const REFUSED_PRESS: GestureOutcome = Object.freeze({ quarantine: true, rejectSession: true })
 /** A press the inspection probe sampled: nothing else happens until the next press (today's _clearPointerGesture). */
 const CLAIMED_PRESS: GestureOutcome = Object.freeze({ rejectSession: true })
+const DROP_COPY: GestureOutcome = Object.freeze({ dropEffect: 'copy' })
+const DROP_NONE: GestureOutcome = Object.freeze({ dropEffect: 'none' })
+/** A dragover in overview or while the scene is busy: today's rejected dragover. */
+const REFUSED_DRAGOVER: GestureOutcome = Object.freeze({ quarantine: true, dropEffect: 'none' })
+/** A species drag's cue: today's band box from the pointer, this many CSS px right and down. */
+const DROP_CUE_PX = 12
 const NO_HANDLES: readonly ToolHandle[] = Object.freeze([])
 const NO_SNAP: SnapSettings = Object.freeze({ grid: false, guides: false })
 /** Constraints turn against the world axes before phase 1 (spec §2.3); the screen axes from phase 1 are the same at bearing 0. */
@@ -160,6 +170,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   /** A panel drag passed over the map: its drop preview replaces the tool's draft until the pointer next hovers or presses
    *  over the map (today's one preview element, which a dragover took over and a pointermove gave back). */
   let draftHiddenForDrop = false
+  /** What a drop would place, while a panel drag is over the map: a species' band cue or a saved stamp's ghosts. */
+  let dropPreview: readonly DraftShape[] | null = null
   let nudging = false
   let nudgeTimer: number | null = null
   let callDepth = 0
@@ -167,6 +179,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   let plane = deps.plane()
   let mode = frame().mode
   let publishedToolDraft: DraftPresentation | null = null
+  let publishedDropPreview: readonly DraftShape[] | null = null
   let publishedDecorations = ''
   let publishedHandles: readonly ToolHandle[] = NO_HANDLES
   let publishedActiveHandle: ToolHandleId | null = null
@@ -422,14 +435,16 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   // ── Drafts, handles, guidance, cursor ────────────────────────────────────────────────────────────────────────────
 
+  /** The tool's draft, the drop preview and the host's decorations, merged for the renderer. */
   function publishDraft(): void {
     const shownToolDraft = activeTool && !draftHiddenForDrop ? toolDraft : null
     const decorations = decorationShapes()
     const key = decorations.length > 0 ? JSON.stringify(decorations) : ''
-    if (shownToolDraft === publishedToolDraft && key === publishedDecorations) return
+    if (shownToolDraft === publishedToolDraft && dropPreview === publishedDropPreview && key === publishedDecorations) return
     publishedToolDraft = shownToolDraft
+    publishedDropPreview = dropPreview
     publishedDecorations = key
-    const shapes = [...(shownToolDraft?.shapes ?? []), ...decorations]
+    const shapes = [...(shownToolDraft?.shapes ?? []), ...(dropPreview ?? []), ...decorations]
     deps.renderer.setDraft(shapes.length > 0 ? { shapes } : null)
   }
 
@@ -793,16 +808,110 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     })
   }
 
+  // ── Drops ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
   /**
-   * Drops run through the legacy bridge until the host's drop route lands (0B-4), which draws the drop preview. Any
-   * dragover hides the tool's draft (a stamp's pick ghost), as today's dragover took over the one preview element the ghost
-   * shared; dragleave and drop leave it hidden, and the next hover or press over the map brings it back.
+   * The one drop route, whatever tool is armed (today's _onDragOver, _onDragLeave and _onDrop): a dragover answers 'copy'
+   * or 'none' and shows the drop preview, a drop places its payload, a dragleave clears the preview. Any dragover hides the
+   * tool's draft (a stamp's pick ghost), as today's dragover took over the one preview element the ghost shared; dragleave
+   * and drop leave it hidden, and the next hover or press over the map brings it back.
    */
   function drop(g: Extract<Gesture, { kind: 'drop' }>): GestureOutcome {
-    if (g.phase !== 'over' || draftHiddenForDrop) return NOTHING
-    draftHiddenForDrop = true
+    switch (g.phase) {
+      case 'over': return dragOver(g.at, g.payload)
+      case 'drop': return dropAt(g.at, g.payload)
+      case 'leave':
+        setDropPreview(null)
+        return NOTHING
+    }
+  }
+
+  /**
+   * Today's _onDragOver: a failed cancellation is retried first and swallows the dragover; in overview or while the scene
+   * is busy the dragover is refused ('none', quarantined); otherwise its effect comes from the payload kind and the open
+   * layers, read when settled. Every refusal and every 'none' clears the preview.
+   */
+  function dragOver(at: ScreenPoint, payload: CanvasDropPayload): GestureOutcome {
+    if (!draftHiddenForDrop) {
+      draftHiddenForDrop = true
+      changed()
+    }
+    if (retryPendingCancellation()) {
+      setDropPreview(null)
+      return QUARANTINE
+    }
+    if (frame().mode === 'overview') return refuseDragOver()
+    let preview: readonly DraftShape[] | null | undefined
+    try {
+      preview = deps.settled.readWhenSettled<readonly DraftShape[] | null | undefined>(() => dropPreviewAt(at, payload), undefined)
+    } catch (error) {
+      setDropPreview(null)
+      throw error
+    }
+    if (preview === undefined) return refuseDragOver()
+    setDropPreview(preview)
+    return preview ? DROP_COPY : DROP_NONE
+  }
+
+  function refuseDragOver(): GestureOutcome {
+    setDropPreview(null)
+    return REFUSED_DRAGOVER
+  }
+
+  /**
+   * What a drop at `at` would place, drawn as the drop preview; null when it would place nothing. A species shows today's
+   * cue, a box from the pointer drawn as the band select's draft (its data is unreadable until the drop); a saved stamp shows
+   * its ghosts with the anchor at the snapped point (today's previewSavedObjectStampAt).
+   */
+  function dropPreviewAt(at: ScreenPoint, payload: CanvasDropPayload): readonly DraftShape[] | null {
+    const transform = frame().view
+    const world = transform.screenToWorld(at)
+    if (!world) return null
+    if (payload.kind === 'saved-stamp') return savedObjectStampGhostShapes(deps.scene, payload.stamp, snap(world, false))
+    if (payload.kind !== 'species' || !deps.scene.isLayerOpenForCreation('plants')) return null
+    const corner = transform.screenToWorld({ x: at.x + DROP_CUE_PX, y: at.y + DROP_CUE_PX })
+    return corner ? bandDraft(view, { start: world, additive: false }, corner).shapes : null
+  }
+
+  /**
+   * Today's _onDrop: the preview clears, then a failed cancellation is retried and swallows the drop; in overview, or
+   * while the scene does not admit it, the drop is quarantined.
+   */
+  function dropAt(at: ScreenPoint, payload: CanvasDropPayload): GestureOutcome {
+    setDropPreview(null)
+    if (retryPendingCancellation()) return QUARANTINE
+    if (frame().mode === 'overview') return QUARANTINE
+    const admitted = deps.admission.runWhenSettled(() => {
+      placeDrop(at, payload)
+      return true
+    }, false, { resumePending: true })
+    return admitted ? NOTHING : QUARANTINE
+  }
+
+  /** Today's _dropWhenSettled: the payload at the snapped point, as one Scene Edit that selects what it placed. */
+  function placeDrop(at: ScreenPoint, payload: CanvasDropPayload): void {
+    const world = frame().view.screenToWorld(at)
+    if (!world) return
+    const point = snap(world, false)
+    if (payload.kind === 'saved-stamp') {
+      placeSavedObjectStamp(deps.edits, deps.scene, payload.stamp, point, { onCommitted: () => dropped('saved-stamp') })
+    } else if (payload.kind === 'species' && payload.species) {
+      placePlantFromSpecies({ edits: deps.edits, scene: deps.scene }, payload.species, point, 'interaction-drop', () => dropped('species'))
+    }
+  }
+
+  /** Once a drop's edit commits: Select, the map's focus, then the session's own follow-up (ToolHostDeps.dropped), as today. */
+  function dropped(kind: 'species' | 'saved-stamp'): void {
+    if (disposed) return
+    requestTool('select')
+    deps.focus.focusMap('tool-requested')
+    deps.dropped(kind)
+  }
+
+  function setDropPreview(shapes: readonly DraftShape[] | null): void {
+    if (shapes === null && dropPreview === null) return
+    dropPreview = shapes
     changed()
-    return NOTHING
   }
 
   function cancel(g: Extract<Gesture, { kind: 'cancel' }>): GestureOutcome {
@@ -864,13 +973,17 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     }
   }
 
-  /** Today's _cancelTransientInteraction: the series, the live press, the passive hover, the tool's transient, the cursor. */
+  /**
+   * Today's _cancelTransientInteraction: the series, the live press, the drop preview (today's one preview element), the
+   * passive hover, the tool's transient, the cursor.
+   */
   function cancelTransientInteraction(reason: CancelTransientReason): void {
     guardCancellation(() => {
       const tool = activeTool
       runCanvasRuntimeCleanups([
         () => endNudgeSeries(true),
         () => cancelLive(reason === 'navigate' ? 'blur' : 'tool-change'),
+        () => setDropPreview(null),
         // With no tool armed there is no hover, transient or tool cursor to clear.
         ...(tool
           ? [
@@ -913,6 +1026,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
    *  transient. A new note's entry ('create') stays, as today's new-note field did: the next press commits it. */
   function enterOverview(): void {
     lastHover = null
+    setDropPreview(null)
     if (!activeTool) return
     runCanvasRuntimeCleanups([
       () => {
@@ -1267,7 +1381,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
           disposed = true
           activeTool = null
           pointerListeners.clear()
-          if (publishedToolDraft || publishedDecorations) deps.renderer.setDraft(null)
+          if (publishedToolDraft || publishedDropPreview || publishedDecorations) deps.renderer.setDraft(null)
           if (publishedHandles.length > 0) deps.chrome.setHandles(NO_HANDLES, null)
           if (tool) deps.guidance(null)
         },

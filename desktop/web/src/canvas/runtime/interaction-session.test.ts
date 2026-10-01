@@ -1000,7 +1000,7 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
     expect(open()).toBe(false)
   })
 
-  it('a pending cancellation is retried before a dragover or a drop reaches the bridge, and the event is swallowed', () => {
+  it('a pending cancellation is retried before a dragover or a drop is admitted, and the event is swallowed', () => {
     let failures = 3
     let edit: SceneEditTransaction | null = null
     const rectangle: StubTool = stubTool('rectangle', {
@@ -1050,7 +1050,7 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
       expect(store.persisted.plants).toHaveLength(0)
       expect(outside).not.toHaveBeenCalled()
 
-      // With nothing pending, the bridge's drop places the plant, as today.
+      // With nothing pending, the host's drop places the plant, as today.
       dispatchDrag('drop', { x: 60, y: 60 }, species)
       expect(store.persisted.plants).toHaveLength(1)
     } finally {
@@ -1076,8 +1076,9 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
     events.pointerMove({ x: 50, y: 50 }, { buttons: 0 })
     expect(renderer.lastDraft()).toEqual(ghost)
 
+    // The species' drop cue takes the ghost's place, as today's one preview element.
     dispatchDrag('dragover', { x: 60, y: 60 }, (transfer) => writePlantStampDragData(transfer, PEAR))
-    expect(renderer.lastDraft()).toBeNull()
+    expect(renderer.lastDraft()?.shapes.map((shape) => shape.kind)).toEqual(['quad'])
     dispatchDrag('dragleave', { x: 60, y: 60 })
     expect(renderer.lastDraft()).toBeNull()
     events.pointerMove({ x: 70, y: 70 }, { buttons: 0 })

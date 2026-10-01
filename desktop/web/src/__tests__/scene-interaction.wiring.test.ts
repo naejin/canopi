@@ -148,12 +148,12 @@ describe('SceneInteractionSession', () => {
       })
       return event
     }
-    const preview = Array.from(container.children)
-      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
+    // The drop preview is the host's draft (spec §1.4 "Drops"): a species' band cue, a saved stamp's ghosts.
+    const previewKinds = () => deps.renderer.lastDraft()?.shapes.map((shape) => shape.kind) ?? []
 
     container.dispatchEvent(dragOverEvent())
     expect(dataTransfer.dropEffect).toBe('copy')
-    expect(preview?.style.display).toBe('block')
+    expect(previewKinds()).toEqual(['quad'])
 
     failRead = true
     const downstreamDragOver = vi.fn()
@@ -167,8 +167,7 @@ describe('SceneInteractionSession', () => {
     expect(rejectedDragOver.defaultPrevented).toBe(true)
     expect(downstreamDragOver).not.toHaveBeenCalled()
     expect(dataTransfer.dropEffect).toBe('none')
-    expect(preview?.style.display).toBe('none')
-    expect(container.querySelector('[data-saved-object-stamp-ghost]')).toBeNull()
+    expect(deps.renderer.lastDraft()).toBeNull()
 
     container.removeEventListener('dragover', downstreamDragOver)
     failRead = false
@@ -197,7 +196,7 @@ describe('SceneInteractionSession', () => {
     })
     container.dispatchEvent(dragOverEvent())
     expect(dataTransfer.dropEffect).toBe('copy')
-    expect(container.querySelector('[data-saved-object-stamp-ghost]')).not.toBeNull()
+    expect(previewKinds()).toEqual(['ghost'])
 
     failRead = true
     const savedStampErrors = captureWindowErrors(() => {
@@ -205,7 +204,7 @@ describe('SceneInteractionSession', () => {
     })
     expect(savedStampErrors).toEqual([settledReadFailure])
     expect(dataTransfer.dropEffect).toBe('none')
-    expect(container.querySelector('[data-saved-object-stamp-ghost]')).toBeNull()
+    expect(deps.renderer.lastDraft()).toBeNull()
     session.dispose()
   })
 
@@ -222,15 +221,13 @@ describe('SceneInteractionSession', () => {
     expect(container.querySelector('[data-locked-object-affordance]')).not.toBeNull()
     expect(container.hasAttribute('tabindex')).toBe(true)
     expect(container.querySelector('[data-canvas-handle-layer]')).not.toBeNull()
-    // The bridge's drop preview (today's band element): the host, the chrome, the handle layer and the map host's keyboard
-    // stop are torn down after it.
-    const preview = [...container.children].find((child): child is HTMLElement =>
-      child instanceof HTMLElement && child.style.border.includes('--canvas-selection-stroke'))!
-    const removePreview = vi.spyOn(preview, 'remove').mockImplementation(() => {
-      throw new Error('drop preview removal failed')
+    // The story-presentation observer: the host, the chrome, the handle layer and the map host's keyboard stop are torn
+    // down after it.
+    const disconnect = vi.spyOn(MutationObserver.prototype, 'disconnect').mockImplementationOnce(() => {
+      throw new Error('story observer disconnect failed')
     })
 
-    expect(() => session.dispose()).toThrow('drop preview removal failed')
+    expect(() => session.dispose()).toThrow('story observer disconnect failed')
 
     expect(events.listenerLog?.containerRemoves('pointerdown')).toHaveLength(1)
     expect(events.listenerLog?.windowRemoves('pointermove')).toHaveLength(1)
@@ -238,7 +235,7 @@ describe('SceneInteractionSession', () => {
     expect(container.querySelector('[data-canvas-handle-layer]')).toBeNull()
     expect(container.hasAttribute('tabindex')).toBe(false)
     expect(() => session.dispose()).not.toThrow()
-    removePreview.mockRestore()
+    disconnect.mockRestore()
   })
 
   it('attempts every host-listener removal when one removal fails', () => {
