@@ -1,4 +1,4 @@
-import { signal } from '@preact/signals'
+import { effect, signal } from '@preact/signals'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createToolHarness,
@@ -1185,6 +1185,241 @@ describe('ToolHost', () => {
       expect(ellipse.calls).toEqual(['activate'])
       expect(h.host.hasLiveGesture()).toBe(false)
       expect(h.host.activeToolDragSlopPx()).toBeNull()
+    })
+
+    it('entering overview cancels the tool\'s transient with the overview reason', () => {
+      const stamp = stubTool('object-stamp')
+      useStubTools(stamp)
+      const h = harness({ tool: 'object-stamp' })
+
+      h.view.setViewport(OVERVIEW)
+      h.advance(0)
+      expect(stamp.calls).toContain('cancelTransient:overview')
+      expect(stamp.calls).not.toContain('cancelTransient:tool-change')
+    })
+  })
+
+  describe('registered tools against today\'s session (0B-3 host rulings)', () => {
+    /** A drag tool whose press opens a Scene Edit that its cancelTransient aborts. */
+    function editingTool(
+      id: 'rectangle' | 'select',
+      behaviour: { readonly settledRelease?: () => boolean, readonly release?: () => void } = {},
+    ): { readonly tool: StubTool, readonly open: () => boolean } {
+      let edit: SceneEditTransaction | null = null
+      const tool: StubTool = stubTool(id, {
+        ...(behaviour.settledRelease ? { settledRelease: behaviour.settledRelease } : {}),
+        gesture: (g) => {
+          if (g.kind === 'press') edit = tool.ctx().effects.edits.begin(`interaction-${id}`)
+          if (g.kind === 'drag-end' || g.kind === 'tap') behaviour.release?.()
+          return 'pass'
+        },
+        cancelTransient: () => {
+          edit?.abort()
+          edit = null
+        },
+      })
+      return { tool, open: () => edit !== null }
+    }
+
+    it.each([
+      ['a drag', (h: ToolHarness) => h.drag({ x: 10, y: 10 }, { x: 40, y: 40 })],
+      ['a click', (h: ToolHarness) => h.click({ x: 10, y: 10 })],
+    ] as const)('%s whose release throws runs the cancellation at once, so the next press is admitted', (_name, gesture) => {
+      const { tool, open } = editingTool('rectangle', { release: () => { throw new Error('commit failed') } })
+      useStubTools(tool)
+      const h = harness({ tool: 'rectangle' })
+
+      expect(() => gesture(h)).toThrow('commit failed')
+      // Today's pointerup ran the cancellation in its finally: the edit closes at the release.
+      expect(tool.calls).toContain('cancelTransient:tool-change')
+      expect(open()).toBe(false)
+      expect(h.press({ x: 50, y: 50 })).toEqual({})
+      expect(tool.count('press')).toBe(2)
+    })
+
+    it('a release whose tool call and cancellation both throw leaves the cancellation pending and reports the release', () => {
+      let failCancel = true
+      let edit: SceneEditTransaction | null = null
+      const rectangle: StubTool = stubTool('rectangle', {
+        gesture: (g) => {
+          if (g.kind === 'press') edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
+          if (g.kind === 'drag-end') throw new Error('commit failed')
+          return 'pass'
+        },
+        cancelTransient: () => {
+          if (failCancel) throw new Error('abort failed')
+          edit?.abort()
+          edit = null
+        },
+      })
+      useStubTools(rectangle)
+      const h = harness({ tool: 'rectangle' })
+
+      expect(() => h.drag({ x: 10, y: 10 }, { x: 40, y: 40 })).toThrow('commit failed')
+      expect(edit).not.toBeNull()
+      failCancel = false
+      // The failed cancellation is retried before the next press, which is swallowed, as today.
+      expect(h.press({ x: 50, y: 50 })).toEqual({ quarantine: true, rejectSession: true })
+      expect(edit).toBeNull()
+      expect(h.press({ x: 60, y: 60 })).toEqual({})
+    })
+
+    it('a settled release whose tool call throws runs the cancellation at once, so the next press is admitted', () => {
+      let edit: SceneEditTransaction | null = null
+      const band: StubTool = stubTool('select', {
+        settledRelease: () => true,
+        gesture: (g) => {
+          if (g.kind === 'drag-end') {
+            edit = band.ctx().effects.edits.begin('interaction-band')
+            throw new Error('band failed')
+          }
+          return 'pass'
+        },
+        cancelTransient: () => {
+          edit?.abort()
+          edit = null
+        },
+      })
+      useStubTools(band)
+      const h = harness()
+
+      expect(() => h.drag({ x: 10, y: 10 }, { x: 40, y: 40 })).toThrow('band failed')
+      expect(band.calls).toContain('cancelTransient:tool-change')
+      expect(edit).toBeNull()
+      expect(h.press({ x: 50, y: 50 })).toEqual({})
+    })
+
+    it('an admitted press takes its capture before the tool hears it, and a refused press takes none', () => {
+      const order: string[] = []
+      const rectangle = stubTool('rectangle', {
+        gesture: (g) => {
+          if (g.kind === 'press' || g.kind === 'handle-drag') order.push(g.kind)
+          return 'pass'
+        },
+      })
+      useStubTools(rectangle)
+      let busy = false
+      const h = harness({
+        tool: 'rectangle',
+        admission: { revision: signal(0), runWhenSettled: (operation, busyResult) => busy ? busyResult : operation() },
+        capturePress: (pointerId) => {
+          order.push(`capture:${pointerId}`)
+          return true
+        },
+      })
+
+      h.click({ x: 10, y: 10 }, { pointerId: 7 })
+      h.click({ x: 10, y: 10 }, { pointerId: 8, target: { kind: 'handle', id: 'rotate' as ToolHandleId } })
+      expect(order).toEqual(['capture:7', 'press', 'capture:8', 'handle-drag', 'handle-drag'])
+
+      busy = true
+      expect(h.press({ x: 20, y: 20 }, { pointerId: 9 })).toEqual({ quarantine: true, rejectSession: true })
+      expect(h.record.captures).toEqual([7, 8])
+    })
+
+    it('a press whose capture is lost while it is taken stops before the tool', () => {
+      const rectangle = stubTool('rectangle')
+      useStubTools(rectangle)
+      const h = harness({ tool: 'rectangle', capturePress: () => false })
+
+      expect(h.press({ x: 10, y: 10 }, { pointerId: 4 })).toEqual({ rejectSession: true })
+      expect(h.record.captures).toEqual([4])
+      expect(rectangle.count('press')).toBe(0)
+      expect(h.host.hasLiveGesture()).toBe(false)
+    })
+
+    it('a tool call inside an effect neither loops on the transient-history revision nor leaves the effect reading the tool\'s signals', () => {
+      const probe = signal(0)
+      const select = stubTool('select', {
+        sceneChanged: () => {
+          void probe.value
+        },
+      })
+      useStubTools(select)
+      const h = harness()
+      let runs = 0
+
+      const stop = effect(() => {
+        runs += 1
+        h.host.sceneChanged()
+      })
+      try {
+        expect(runs).toBe(1)
+        probe.value += 1
+        expect(runs).toBe(1)
+      } finally {
+        stop()
+      }
+    })
+
+    it('a deferred commit that settles inside an effect bumps the transient-history revision without looping', () => {
+      let settle: (() => void) | null = null
+      // A coordinator that holds the commit's continuation (today's retained publication) until the effect runs it.
+      const edits: SceneEditCoordinator = {
+        begin: () => {
+          throw new Error('unused')
+        },
+        run(_type, _edit, options) {
+          settle = options?.onCommitted ?? null
+          return true
+        },
+      }
+      const polygon: StubTool = stubTool('polygon', {
+        gesture: (g) => {
+          if (g.kind === 'tap') polygon.ctx().effects.edits.run('interaction-polygon', () => {}, { onCommitted: () => {} })
+          return 'pass'
+        },
+      })
+      useStubTools(polygon)
+      const h = harness({ tool: 'polygon', edits })
+      h.click({ x: 10, y: 10 })
+      const revision = h.host.transientHistory.revision.peek()
+
+      let runs = 0
+      const stop = effect(() => {
+        runs += 1
+        settle?.()
+      })
+      try {
+        expect(runs).toBe(1)
+        expect(h.host.transientHistory.revision.peek()).toBe(revision + 1)
+      } finally {
+        stop()
+      }
+    })
+
+    it('a dragover hides the tool\'s draft until the pointer next moves over the map, as today\'s one preview element', () => {
+      const ghost: DraftPresentation = {
+        shapes: [{ kind: 'circle-px', center: { x: 50, y: 50 }, radiusPx: 4, style: { token: 'draft', widthPx: 1 } }],
+      }
+      const stamp: StubTool = stubTool('object-stamp', {
+        gesture: (g) => {
+          if (g.kind === 'hover') stamp.ctx().effects.setDraft(ghost)
+          return 'handled'
+        },
+      })
+      useStubTools(stamp)
+      const h = harness({ tool: 'object-stamp' })
+      h.hover({ x: 50, y: 50 })
+      expect(h.renderer.lastDraft()).toEqual(ghost)
+
+      h.drop('over', { x: 60, y: 60 }, { kind: 'species', species: null })
+      expect(h.renderer.lastDraft()).toBeNull()
+      // A camera frame re-emits the resting pointer: the draft stays hidden while the drop preview may show.
+      h.wheelZoom({ x: 60, y: 60 }, 1.5)
+      h.advance(16)
+      expect(h.renderer.lastDraft()).toBeNull()
+      h.drop('leave')
+      expect(h.renderer.lastDraft()).toBeNull()
+
+      h.hover({ x: 70, y: 70 })
+      expect(h.renderer.lastDraft()).toEqual(ghost)
+
+      h.drop('over', { x: 60, y: 60 }, { kind: 'unknown' })
+      h.drop('drop', { x: 60, y: 60 }, { kind: 'unknown' })
+      expect(h.renderer.lastDraft()).toBeNull()
+      h.hover({ x: 80, y: 80 })
+      expect(h.renderer.lastDraft()).toEqual(ghost)
     })
   })
 
