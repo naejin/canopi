@@ -127,6 +127,10 @@ export function createPlantStampTool(): CanvasTool {
         case 'hover-end':
           hidePreview()
           return 'pass'
+        case 'drag-start':
+        case 'drag-move':
+          // Today's press kept its pointer gesture: no passive hover over the held moves.
+          return 'handled'
         default:
           return 'pass'
       }

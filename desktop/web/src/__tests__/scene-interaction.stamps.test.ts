@@ -136,7 +136,11 @@ describe('SceneInteractionSession', () => {
       const shape = drafts.at(-1)?.shapes.find((entry) => entry.kind === 'ghost')
       return shape?.kind === 'ghost' && shape.entity.kind === 'objects' ? shape.entity.anchor : null
     }
-    const domGhost = () => container.querySelector('[data-saved-object-stamp-ghost]')
+    /** Every ghost the last draft shows, by anchor and species. */
+    const ghosts = () => (drafts.at(-1)?.shapes ?? []).flatMap((shape) =>
+      shape.kind === 'ghost' && shape.entity.kind === 'objects'
+        ? [{ anchor: shape.entity.anchor, plants: shape.entity.template.plants.map(({ entity }) => entity.canonicalName) }]
+        : [])
     const session = createTestSession({
       ...createInteractionDeps(container, store, camera),
       renderer: { setDraft: (draft) => { drafts.push(draft) }, setSelectionPreview: () => {} },
@@ -146,13 +150,12 @@ describe('SceneInteractionSession', () => {
     expect(ghostAnchor()).toEqual({ x: 100, y: 100 })
 
     try {
-      // Another saved stamp dragged from Favorites: its preview takes the held stamp's place, as today's one preview element.
+      // Another saved stamp dragged from Favorites: its ghost, the host's drop preview, takes the held stamp's place, as
+      // today's one preview element.
       dispatchDrag('dragover', { x: 60, y: 60 }, (transfer) => writeSavedObjectStampDragData(transfer, PEAR_STAMP))
-      expect(drafts.at(-1)).toBeNull()
-      expect(domGhost()).not.toBeNull()
+      expect(ghosts()).toEqual([{ anchor: { x: 60, y: 60 }, plants: ['Pyrus communis'] }])
       dispatchDrag('dragleave', { x: 60, y: 60 })
       expect(drafts.at(-1)).toBeNull()
-      expect(domGhost()).toBeNull()
       events.pointerMove({ x: 120, y: 120 }, { buttons: 0 })
       expect(ghostAnchor()).toEqual({ x: 120, y: 120 })
 

@@ -18,8 +18,10 @@ import { createTestView } from '../../../__tests__/support/test-view'
 import { closeCanvasContextMenu, openCanvasContextMenu } from '../../../app/canvas-context-menu/state'
 import { CanvasContextMenu } from '../../../components/canvas/CanvasContextMenu'
 import { gridInterval, snapToGrid } from '../../grid'
+import type { PlantStampSourceInput } from '../../plant-stamp-source'
+import { normalizeSavedObjectStampPayload } from '../../saved-object-stamp-payload'
 import type { CanvasContextMenuCommands, CanvasContextMenuRequest } from '../app-adapter'
-import type { ToolHandleId } from '../interaction-types'
+import type { CanvasDropPayload, ToolHandleId } from '../interaction-types'
 import type { SceneDesignObjectTarget } from '../scene/design-object-targets'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
 import type { WorldPoint } from '../view/types'
@@ -517,6 +519,28 @@ describe('ToolHost', () => {
       h.click({ x: 300, y: 250 })
       expect(submitted).toHaveLength(7)
       expect(h.chrome.textEntry).toBeNull()
+    })
+
+    it('openTextEntryMode answers the mode of the entry a tool opened, and null once it closes', () => {
+      const text: StubTool = stubTool('text', {
+        gesture: (g) => {
+          if (g.kind === 'tap') {
+            text.ctx().effects.requestTextEntry(
+              { anchor: g.point.snapped, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note', mode: 'create' },
+              () => 'close',
+            )
+          }
+          return 'pass'
+        },
+      })
+      useStubTools(text)
+      const h = harness({ tool: 'text' })
+
+      expect(h.host.openTextEntryMode()).toBeNull()
+      h.click({ x: 10, y: 10 })
+      expect(h.host.openTextEntryMode()).toBe('create')
+      h.enterText()
+      expect(h.host.openTextEntryMode()).toBeNull()
     })
 
     it('the host reads the text entry\'s state live', () => {
@@ -1454,6 +1478,67 @@ describe('ToolHost', () => {
     })
   })
 
+  describe('releases the tool did not hear (today\'s pointerup cleanup)', () => {
+    it('released commits the nudge series, clears the passive hover and runs the tool\'s cancelTransient(\'navigate\')', () => {
+      const select = stubTool('select')
+      const stamp = stubTool('object-stamp', { gesture: (g) => (g.kind === 'hover' ? 'pass' : 'handled') })
+      useStubTools(select, stamp)
+      const h = harness({ scene: { plants: [appleAt({ x: 50, y: 50 })] } })
+
+      h.select(P1)
+      h.arrow('ArrowUp')
+      h.hover({ x: 50, y: 50 })
+      expect(h.chrome.tooltip?.target).toEqual(P1)
+      h.host.released()
+      expect(h.host.hasNudgeSeries()).toBe(false)
+      expect(h.record.nudges.at(-1)).toBe('end')
+      expect(h.chrome.tooltip).toBeNull()
+      expect(select.calls).toContain('cancelTransient:navigate')
+
+      h.arm('object-stamp')
+      h.host.released()
+      expect(stamp.calls).toContain('cancelTransient:navigate')
+    })
+
+    it('released does nothing while a press of the tool\'s is live: its own release ends it', () => {
+      const rectangle = stubTool('rectangle')
+      useStubTools(rectangle)
+      const h = harness({ tool: 'rectangle' })
+
+      h.press({ x: 10, y: 10 })
+      h.host.released()
+      expect(rectangle.calls.filter((call) => call.startsWith('cancelTransient'))).toEqual([])
+      expect(h.host.hasLiveGesture()).toBe(true)
+    })
+
+    it('the release of a press the tool never heard runs it: a new note\'s committing click, a ruler drag', () => {
+      const text = stubTool('text', {
+        gesture: (g) => {
+          if (g.kind === 'press') {
+            text.ctx().effects.requestTextEntry(
+              { anchor: g.point.world, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note', mode: 'create' },
+              () => 'close',
+            )
+          }
+          return 'pass'
+        },
+      })
+      useStubTools(text)
+      const h = harness({ tool: 'text' })
+      const navigates = (): number => text.calls.filter((call) => call === 'cancelTransient:navigate').length
+
+      h.click({ x: 10, y: 10 })
+      expect(h.chrome.textEntry).not.toBeNull()
+      expect(navigates()).toBe(0)
+      // The next click commits the note and reaches no tool (spec §3.2); its release is not the tool's.
+      h.click({ x: 40, y: 40 })
+      expect(text.count('press')).toBe(1)
+      expect(navigates()).toBe(1)
+      h.drag({ x: 10, y: 10 }, { x: 60, y: 60 }, { target: { kind: 'ruler', axis: 'h' } })
+      expect(navigates()).toBe(2)
+    })
+  })
+
   describe('cancellation', () => {
     it('a failed cancellation is retried before the next event', () => {
       let failures = 1
@@ -1743,15 +1828,17 @@ describe('ToolHost', () => {
       })
       useStubTools(stamp)
       const h = harness({ tool: 'object-stamp' })
+      const ghostShown = (): boolean => h.renderer.lastDraft()?.shapes.includes(ghost.shapes[0]!) ?? false
       h.hover({ x: 50, y: 50 })
       expect(h.renderer.lastDraft()).toEqual(ghost)
 
       h.drop('over', { x: 60, y: 60 }, { kind: 'species', species: null })
-      expect(h.renderer.lastDraft()).toBeNull()
-      // A camera frame re-emits the resting pointer: the draft stays hidden while the drop preview may show.
+      expect(ghostShown()).toBe(false)
+      expect(h.renderer.lastDraft()?.shapes.map((shape) => shape.kind)).toEqual(['quad'])
+      // A camera frame re-emits the resting pointer: the draft stays hidden while the drop preview shows.
       h.wheelZoom({ x: 60, y: 60 }, 1.5)
       h.advance(16)
-      expect(h.renderer.lastDraft()).toBeNull()
+      expect(ghostShown()).toBe(false)
       h.drop('leave')
       expect(h.renderer.lastDraft()).toBeNull()
 
@@ -1763,6 +1850,252 @@ describe('ToolHost', () => {
       expect(h.renderer.lastDraft()).toBeNull()
       h.hover({ x: 80, y: 80 })
       expect(h.renderer.lastDraft()).toEqual(ghost)
+    })
+
+    it('a press after a dragover shows the tool\'s draft again', () => {
+      const corners: DraftPresentation = {
+        shapes: [{ kind: 'circle-px', center: { x: 50, y: 50 }, radiusPx: 4, style: { token: 'draft', widthPx: 1 } }],
+      }
+      const polygon: StubTool = stubTool('polygon', {
+        gesture: (g) => {
+          if (g.kind === 'press') polygon.ctx().effects.setDraft(corners)
+          return 'handled'
+        },
+      })
+      useStubTools(polygon)
+      const h = harness({ tool: 'polygon' })
+      h.click({ x: 50, y: 50 }, { pointer: 'pen' })
+      expect(h.renderer.lastDraft()).toEqual(corners)
+
+      h.drop('over', { x: 60, y: 60 }, { kind: 'unknown' })
+      h.drop('leave')
+      expect(h.renderer.lastDraft()).toBeNull()
+      // A pen or a finger presses with no hover between: the press over the map shows the draft again, as a hover would.
+      h.press({ x: 70, y: 70 }, { pointer: 'pen' })
+      expect(h.renderer.lastDraft()).toEqual(corners)
+    })
+  })
+
+  describe('drops (spec §1.4 "Drops")', () => {
+    const PEAR: PlantStampSourceInput = { canonical_name: 'Pyrus communis', common_name: 'Pear', stratum: 'mid', width_max_m: 3 }
+    const PEAR_OVER: CanvasDropPayload = { kind: 'species', species: null }
+    const PEAR_DROP: CanvasDropPayload = { kind: 'species', species: PEAR }
+    /** A saved stamp of one bed and one apple, its anchor at the bed's corner. */
+    const GUILD = normalizeSavedObjectStampPayload({
+      version: 2,
+      anchor: { x: 0, y: 0 },
+      plants: [{
+        id: 'plant-1', canonicalName: 'Malus domestica', commonName: 'Apple', color: null, symbol: null,
+        position: { x: 4, y: 3 }, rotationDeg: null,
+      }],
+      zones: [{
+        id: 'zone-1', name: 'Bed', zoneType: 'rect', rotationDeg: 0, fillColor: null,
+        points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 6 }, { x: 0, y: 6 }],
+      }],
+      annotations: [],
+      groups: [],
+    })!
+    const GUILD_DRAG: CanvasDropPayload = { kind: 'saved-stamp', stamp: GUILD }
+    /** Today's band select draft: the selection stroke at 2 px over the selection fill. */
+    const BAND_STYLE = { style: { token: 'selection', widthPx: 2 }, fill: { token: 'selection-fill' } } as const
+
+    function lockLayer(h: ToolHarness, name: string): void {
+      h.store.updatePersisted((draft) => {
+        draft.layers = draft.layers.map((layer) => (layer.name === name ? { ...layer, locked: true } : layer))
+      })
+    }
+
+    /** The Scene Edits that committed, by history type. */
+    function committedEdits(h: ToolHarness): string[] {
+      const committed: string[] = []
+      const run = h.edits.run.bind(h.edits)
+      vi.spyOn(h.edits, 'run').mockImplementation((type, edit, options) => {
+        const done = run(type, edit, options)
+        if (done) committed.push(type)
+        return done
+      })
+      return committed
+    }
+
+    function ghostAnchors(h: ToolHarness): WorldPoint[] {
+      return (h.renderer.lastDraft()?.shapes ?? []).flatMap((shape) =>
+        shape.kind === 'ghost' && shape.entity.kind === 'objects' ? [shape.entity.anchor] : [])
+    }
+
+    it('a species drop places a plant and returns to Select in any tool', () => {
+      for (const id of ['select', 'polygon', 'text', 'object-stamp', 'plant-spacing'] as const) {
+        const armed = stubTool(id)
+        useStubTools(armed, ...(id === 'select' ? [] : [stubTool('select')]))
+        const h = harness({ tool: id, snapping: { grid: true, guides: false } })
+        const committed = committedEdits(h)
+        const at = { x: 53, y: 67 }
+        const interval = gridInterval(h.view.view().pixelsPerMetre).interval
+        const snapped = snapToGrid(53, 67, interval)
+
+        expect(h.drop('drop', at, PEAR_DROP), id).toEqual({})
+
+        expect(h.store.persisted.plants, id).toHaveLength(1)
+        const plant = h.store.persisted.plants[0]!
+        expect(plant, id).toMatchObject({ canonicalName: 'Pyrus communis', commonName: 'Pear', position: snapped, canopySpreadM: 3 })
+        expect(h.store.session.selectedTargets, id).toEqual([{ kind: 'plant', id: plant.id }])
+        expect(committed, id).toEqual(['interaction-drop'])
+        expect(h.host.activeTool.value, id).toBe('select')
+        expect(h.record.focus, id).toEqual(['map:tool-requested'])
+        expect(h.record.drops, id).toEqual(['species'])
+        // A drop is no tool gesture.
+        expect(armed.gestures, id).toEqual([])
+      }
+    })
+
+    it('a saved-stamp drop places its objects at the snapped point, selected, returns to Select and reports it', () => {
+      useStubTools(stubTool('rectangle'), stubTool('select'))
+      const h = harness({ tool: 'rectangle', snapping: { grid: true, guides: false } })
+      const committed = committedEdits(h)
+      const interval = gridInterval(h.view.view().pixelsPerMetre).interval
+      const anchor = snapToGrid(83, 91, interval)
+
+      h.drop('drop', { x: 83, y: 91 }, GUILD_DRAG)
+
+      expect(h.store.persisted.zones.map((zone) => zone.points[0])).toEqual([anchor])
+      expect(h.store.persisted.plants.map((plant) => plant.position)).toEqual([{ x: anchor.x + 4, y: anchor.y + 3 }])
+      expect(h.store.session.selectedTargets).toHaveLength(2)
+      expect(committed).toEqual(['interaction-saved-object-stamp'])
+      expect(h.host.activeTool.value).toBe('select')
+      expect(h.record.focus).toEqual(['map:tool-requested'])
+      expect(h.record.drops).toEqual(['saved-stamp'])
+
+      // A stamp whose layer is locked places nothing and is not reported: the drag source stays with the panel.
+      lockLayer(h, 'zones')
+      h.drop('drop', { x: 120, y: 120 }, GUILD_DRAG)
+      expect(h.store.persisted.zones).toHaveLength(1)
+      expect(h.record.drops).toEqual(['saved-stamp'])
+    })
+
+    it('dragover answers copy or none from the payload kind', () => {
+      useStubTools(stubTool('rectangle'))
+      const h = harness({ tool: 'rectangle' })
+      const at = { x: 80, y: 90 }
+
+      expect(h.drop('over', at, PEAR_OVER)).toEqual({ dropEffect: 'copy' })
+      expect(h.drop('over', at, GUILD_DRAG)).toEqual({ dropEffect: 'copy' })
+      // Not ours: an ordinary text drag, or a saved stamp whose drag source is gone.
+      expect(h.drop('over', at, { kind: 'unknown' })).toEqual({ dropEffect: 'none' })
+
+      // The open layers decide: a species needs the plants layer, a stamp every layer it adds to.
+      lockLayer(h, 'zones')
+      expect(h.drop('over', at, PEAR_OVER)).toEqual({ dropEffect: 'copy' })
+      expect(h.drop('over', at, GUILD_DRAG)).toEqual({ dropEffect: 'none' })
+      lockLayer(h, 'plants')
+      expect(h.drop('over', at, PEAR_OVER)).toEqual({ dropEffect: 'none' })
+    })
+
+    it('an unsettled dragover answers none and is quarantined, and an unsettled drop places nothing', () => {
+      useStubTools(stubTool('rectangle'), stubTool('select'))
+      const h = harness({ tool: 'rectangle' })
+      const at = { x: 80, y: 90 }
+      const external = h.edits.begin('external-preview')
+
+      expect(h.drop('over', at, PEAR_OVER)).toEqual({ quarantine: true, dropEffect: 'none' })
+      expect(h.drop('drop', at, PEAR_DROP)).toEqual({ quarantine: true })
+      expect(h.store.persisted.plants).toHaveLength(0)
+      expect(h.host.activeTool.value).toBe('rectangle')
+
+      external.abort()
+      expect(h.drop('over', at, PEAR_OVER)).toEqual({ dropEffect: 'copy' })
+      expect(h.drop('drop', at, PEAR_DROP)).toEqual({})
+      expect(h.store.persisted.plants).toHaveLength(1)
+    })
+
+    it('dragover shows the drop preview and dragleave, drop and overview clear it', () => {
+      useStubTools(stubTool('rectangle'), stubTool('select'))
+      const h = harness({ tool: 'rectangle', snapping: { grid: true, guides: false } })
+      const at = { x: 83, y: 91 }
+      const interval = gridInterval(h.view.view().pixelsPerMetre).interval
+
+      // A species: a box from the pointer to 12 px right and down, drawn as the band select's draft.
+      h.drop('over', at, PEAR_OVER)
+      expect(h.renderer.lastDraft()).toEqual({
+        shapes: [{
+          kind: 'quad',
+          corners: [h.world(at), h.world({ x: 95, y: 91 }), h.world({ x: 95, y: 103 }), h.world({ x: 83, y: 103 })],
+          ...BAND_STYLE,
+        }],
+      })
+      h.drop('leave')
+      expect(h.renderer.lastDraft()).toBeNull()
+
+      // A saved stamp: its ghosts with the anchor at the snapped point, as a placement would put them.
+      h.drop('over', at, GUILD_DRAG)
+      expect(ghostAnchors(h)).toEqual([snapToGrid(83, 91, interval)])
+      h.drop('drop', at, { kind: 'unknown' })
+      expect(h.renderer.lastDraft()).toBeNull()
+
+      // A refused dragover clears it: one that answers none, and one the scene is too busy to read.
+      h.drop('over', at, PEAR_OVER)
+      h.drop('over', at, { kind: 'unknown' })
+      expect(h.renderer.lastDraft()).toBeNull()
+      h.drop('over', at, PEAR_OVER)
+      const external = h.edits.begin('external-preview')
+      h.drop('over', at, PEAR_OVER)
+      expect(h.renderer.lastDraft()).toBeNull()
+      external.abort()
+
+      // Merged like the decorations: the selected zone's chips stay beside it.
+      h.store.updatePersisted((draft) => {
+        draft.zones = [bed()]
+      })
+      h.select(Z1)
+      const chips = h.renderer.lastDraft()!.shapes
+      h.drop('over', at, PEAR_OVER)
+      expect(h.renderer.lastDraft()!.shapes.map((shape) => shape.kind)).toEqual(['quad', ...chips.map((shape) => shape.kind)])
+
+      // Entering overview clears it, and a dragover there answers none, quarantined, and shows nothing.
+      h.view.setViewport(OVERVIEW)
+      expect(h.renderer.lastDraft()?.shapes.some((shape) => shape.kind === 'quad') ?? false).toBe(false)
+      expect(h.drop('over', at, PEAR_OVER)).toEqual({ quarantine: true, dropEffect: 'none' })
+      expect(h.renderer.lastDraft()?.shapes.some((shape) => shape.kind === 'quad') ?? false).toBe(false)
+      expect(h.drop('drop', at, PEAR_DROP)).toEqual({ quarantine: true })
+      expect(h.store.persisted.plants).toHaveLength(0)
+    })
+
+    it('a dragover or a drop retries a pending cancellation before its admission and is quarantined when it did', () => {
+      let failures = 1
+      let edit: SceneEditTransaction | null = null
+      const rectangle: StubTool = stubTool('rectangle', {
+        gesture: (g) => {
+          if (g.kind === 'press') edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
+          return 'pass'
+        },
+        cancelTransient: () => {
+          if (failures > 0) {
+            failures -= 1
+            throw new Error('cancel failed')
+          }
+          edit?.abort()
+          edit = null
+        },
+      })
+      useStubTools(rectangle, stubTool('select'))
+      const h = harness({ tool: 'rectangle' })
+      const at = { x: 80, y: 90 }
+      const pending = (): void => {
+        failures = 1
+        h.press({ x: 20, y: 20 })
+        expect(() => h.blur()).toThrow('cancel failed')
+      }
+
+      pending()
+      expect(h.drop('over', at, PEAR_OVER)).toEqual({ quarantine: true })
+      expect(edit).toBeNull()
+      expect(h.renderer.lastDraft()).toBeNull()
+      expect(h.drop('over', at, PEAR_OVER)).toEqual({ dropEffect: 'copy' })
+
+      pending()
+      expect(h.drop('drop', at, PEAR_DROP)).toEqual({ quarantine: true })
+      expect(h.renderer.lastDraft()).toBeNull()
+      expect(h.store.persisted.plants).toHaveLength(0)
+      expect(h.drop('drop', at, PEAR_DROP)).toEqual({})
+      expect(h.store.persisted.plants).toHaveLength(1)
     })
   })
 

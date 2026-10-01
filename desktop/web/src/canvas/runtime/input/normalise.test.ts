@@ -138,7 +138,7 @@ describe('normalise', () => {
   it('turns the other event types into their raw inputs', () => {
     const raw = (overrides: Partial<DomEventLike> & Pick<DomEventLike, 'type'>) =>
       normalise(event(overrides), WINDOWS, LEGACY_BINDINGS, NO_CTRL, HOST)
-    expect(raw({ type: 'pointerup', pointerId: 2, button: 0 })).toMatchObject({ kind: 'up', id: 2, role: 'primary' })
+    expect(raw({ type: 'pointerup', pointerId: 2, button: 0 })).toMatchObject({ kind: 'up', id: 2, role: 'primary', target: SURFACE })
     expect(raw({ type: 'pointercancel', pointerId: 2 })).toEqual({ kind: 'cancel', t: 10, id: 2, reason: 'pointercancel' })
     expect(raw({ type: 'lostpointercapture', pointerId: 2 })).toEqual({ kind: 'cancel', t: 10, id: 2, reason: 'lost-capture' })
     expect(raw({ type: 'pointerleave' })).toEqual({ kind: 'leave', t: 10 })

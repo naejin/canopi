@@ -153,6 +153,13 @@ export interface ToolHostDeps {
   readonly capturePress: (pointerId: number) => boolean
   /** Today's notifyTransientHistoryChange: the runtime's transientHistory revision (Edit › Undo during a draft). */
   readonly transientHistoryChanged: () => void
+  /**
+   * A drop the host placed, once its Scene Edit committed, Select is armed and the map has focus: the session clears the
+   * saved stamp's drag source after a saved-stamp drop (today's clearSavedObjectStampDragSource; the panel's dragend
+   * clears it too) and focuses the map again on the next animation frame, after the browser's drag end, as today's drop
+   * did.
+   */
+  readonly dropped: (kind: 'species' | 'saved-stamp') => void
 }
 
 /** What createToolScene reads (tools/tool-host.ts re-exports the factory). Hit tests need the scale and the plant presentation
@@ -182,10 +189,9 @@ export interface ToolHost {
   activeToolDragSlopPx(): number | null
   /** Asked by the session before it routes the events today's handlers retried on (a primary or middle press on the map, a
    *  pointerup, a pointercancel, a wheel not over a handle, the note editor or the Unlock affordance, a native contextmenu,
-   *  a dragover, a drop, a key): true while a failed cancellation was pending and has now been retried, so the event is
-   *  quarantined (today's app-wide swallow). Moves, leaves, lost captures, blurs and ruler presses are never fenced. Drops
-   *  stay on the legacy bridge until 0B-4, and the session retries before it hands the bridge one; the host's drop route must
-   *  retry before admission. */
+   *  a key): true while a failed cancellation was pending and has now been retried, so the event is quarantined (today's
+   *  app-wide swallow). Moves, leaves, lost captures, blurs and ruler presses are never fenced. A dragover and a drop retry
+   *  in the host's own drop route, before their admission (a drop after it has cleared the drop preview). */
   retryPendingCancellation(): boolean
   /**
    * Presses the host never sees as gestures: the session calls it for every raw pointerdown on the map host before routing it
@@ -203,6 +209,10 @@ export interface ToolHost {
   notePointer(screen: ScreenPoint | null): void
   /** Scene or selection changed outside a tool call (select all, undo, menu commands, nudges): refresh handles and decorations. */
   sceneChanged(): void
+  /** The open text entry's mode, from the request that opened it ('create': a new note's field, 'edit': the in-place
+   *  editor), or null with none open. The keyboard port's Space reads it: a new note's field, focused or not, arms no pan,
+   *  as today's Text adapter kept its shared keys while the field was open. */
+  openTextEntryMode(): 'create' | 'edit' | null
   // Esc chain queries (CanvasKeyboardPort reads these)
   hasLiveGesture(): boolean
   activeToolHasTransient(): boolean
@@ -218,6 +228,18 @@ export interface ToolHost {
   nudge(direction: ScreenPoint, large: boolean): 'handled' | 'refused' | 'pass'
   hasNudgeSeries(): boolean                                     // the Esc layer 65
   endNudgeSeries(commit: boolean): void                         // Esc aborts; idle, focusout, a press or another key commit
+  /**
+   * A pointer release that ended no press of the tool's, which the session reports after routing it: the end or cancel
+   * (pointercancel, lost capture, Esc) of a pointer pan (middle, Space, overview or the Pan tool's), or an up with no
+   * press of the map's (a right-click release, a release off the map, after a press the scene or the probe refused); not
+   * one while another pointer's press is live, in overview, or over the note editor, a handle or the Unlock affordance
+   * (today's _onPointerUp exceptions). The host's own tap and drag-end of a ruler drag, or of a press the tool never heard,
+   * do the same. Today's window pointerup ran _cancelTransientInteraction for each: the series commits, the drop preview
+   * and the passive hover clear, the active tool's cancelTransient('navigate') runs (a tool that
+   * preservesTransientOnNavigate keeps its draft, as after a pan) and the cursor returns to the tool's. A press of the
+   * tool's still live is left to its own release.
+   */
+  released(): void
   /**
    * Today's _cancelInterruptedInteraction, which the session calls on window blur after feeding the recogniser (which releases
    * Space and ends the live sessions): commits the nudge series, clears the passive hover, the tooltip and the locked

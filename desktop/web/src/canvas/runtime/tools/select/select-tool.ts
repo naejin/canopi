@@ -240,7 +240,8 @@ export function createSelectTool(): CanvasTool {
         case 'drag-start':
         case 'drag-move':
           dragTo(g.point)
-          break
+          // The press stays Select's to its release: no passive hover over its moves, as today.
+          return 'handled'
         case 'drag-end':
           release(g.point, true)
           break

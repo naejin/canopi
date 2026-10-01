@@ -34,6 +34,7 @@ import {
   zoneTarget,
   nextAnimationFrame,
   makePlant,
+  plantHoverTooltip,
   installSceneInteractionFixture,
 } from './support/scene-interaction-setup'
 
@@ -819,6 +820,68 @@ describe('SceneInteractionSession', () => {
     expect(rowLength()).toBe('6 m')
     expect(guideOnScreen()).not.toBe(widthBefore)
     session.dispose()
+  })
+
+  it('shows the plant tooltip and hover over moves held after a Plant a row press that missed', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 80, y: 30 }, { commonName: 'Apple' })]
+    })
+    const setHoveredTarget = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { setHoveredTarget })
+    const session = createTestSession(deps)
+    session.setTool('plant-spacing')
+
+    // The press finds no plant: no source, and today's miss ended the gesture (clearPointerGesture).
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    setHoveredTarget.mockClear()
+    events.pointerMove({ x: 50, y: 30 }, { button: 0 })
+    events.pointerMove({ x: 80, y: 30 }, { button: 0 })
+
+    // The held moves ran today's hover: the restyle and the plant tooltip.
+    expect(setHoveredTarget).toHaveBeenLastCalledWith(plantTarget('plant-1'))
+    expect(plantHoverTooltip(container).style.display).toBe('block')
+    events.pointerUp({ x: 80, y: 30 }, { button: 0 })
+    expect(rowSource('plant-1')).toBe(false)
+    session.dispose()
+  })
+
+  describe('a held press its tool keeps runs no hover', () => {
+    const cases = [
+      { name: 'a Select band drag from empty ground', tool: 'select', from: { x: 20, y: 30 } },
+      { name: 'a Select move drag of a plant', tool: 'select', from: { x: 20, y: 30 }, pressedPlant: true },
+      { name: 'a Text press on empty ground', tool: 'text', from: { x: 20, y: 30 } },
+      { name: 'a Place plants press with a species chosen', tool: 'plant-stamp', from: { x: 20, y: 30 }, species: true },
+    ] as const
+
+    for (const c of cases) {
+      it(`keeps the hover restyle and the plant tooltip off over the moves of ${c.name}`, () => {
+        store.updatePersisted((draft) => {
+          draft.plants = [
+            ...('pressedPlant' in c ? [makePlant('plant-0', 'Pyrus communis', c.from, { commonName: 'Pear' })] : []),
+            makePlant('plant-1', 'Malus domestica', { x: 120, y: 30 }, { commonName: 'Apple' }),
+          ]
+        })
+        if ('species' in c) {
+          selectPlantStampSource({ canonical_name: 'Pyrus communis', common_name: 'Pear', stratum: 'high', width_max_m: 4 })
+        }
+        const setHoveredTarget = vi.fn()
+        const deps = createInteractionDeps(container, store, camera, { setHoveredTarget })
+        const session = createTestSession(deps)
+        session.setTool(c.tool)
+
+        // Today's Select, Text and Place plants kept their pointer gesture: _updateHover never ran until the release.
+        events.pointerDown(c.from, { button: 0 })
+        setHoveredTarget.mockClear()
+        events.pointerMove({ x: 70, y: 30 }, { button: 0 })
+        events.pointerMove({ x: 120, y: 30 }, { button: 0 })
+
+        expect(setHoveredTarget).not.toHaveBeenCalled()
+        const tooltip = container.querySelector<HTMLElement>('[data-canvas-chrome="hover-tooltip"]')
+        expect(tooltip?.style.display ?? 'none').not.toBe('block')
+        events.pointerUp({ x: 120, y: 30 }, { button: 0 })
+        session.dispose()
+      })
+    }
   })
 
   it('does not commit Plant Spacing from minor source-click pointer jitter', () => {

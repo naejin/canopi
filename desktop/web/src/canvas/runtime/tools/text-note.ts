@@ -80,6 +80,8 @@ export function createTextNoteTool(): CanvasTool {
       c.effects.setGuidance({ gesture: false })
     },
     gesture(g): ToolReply {
+      // Today's press kept its pointer gesture: no passive hover over the held moves.
+      if (g.kind === 'drag-start' || g.kind === 'drag-move') return 'handled'
       // The host keeps the click that commits an open note from the tool; one that reaches it anyway places nothing.
       if (g.kind !== 'press' || anchor) return 'pass'
       if (ctx().scene.isLayerOpenForCreation('annotations')) open(g.point.world)

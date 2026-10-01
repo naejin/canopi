@@ -229,6 +229,17 @@ describe('createDomInputSource', () => {
       { kind: 'surface' },
       { kind: 'foreign' },
     ])
+
+    // An up carries its target too: the session keeps today's release cleanup off the note editor, a handle and the
+    // Unlock affordance by it.
+    received.length = 0
+    for (const target of [editor, plainHandle, unlock.lastElementChild!, surface]) events.pointerUp({ x: 5, y: 5 }, { target })
+    expect(received.map((input) => input.kind === 'up' && input.target)).toEqual([
+      { kind: 'owned-text' },
+      { kind: 'handle', id: 'vertex:zone-1:2' },
+      { kind: 'owned-chrome', lockedAffordance: true },
+      { kind: 'surface' },
+    ])
     dispose()
   })
 
