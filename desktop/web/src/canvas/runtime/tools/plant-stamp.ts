@@ -5,7 +5,8 @@
 // card asks for one, and "Place plants here" waits at its point for the pick (the species arrives through activate and
 // sourceChanged, which the session bridges from the plant read model). Its hover draws the read-only preview: the plant's
 // symbol where a click would place it, a dashed ring for the species' mature width when the catalog gives one (never
-// invented) and the distance to the nearest plant within 320 px on screen. The preview hides when the pointer leaves the map.
+// invented) and the distance to the nearest plant within 320 px on screen. The preview hides when the pointer leaves the map
+// and when the map enters overview.
 
 import type { PlantStampSourceInput } from '../../plant-stamp-source'
 import { formatMetricDistance } from '../zone-measurements'
@@ -154,8 +155,9 @@ export function createPlantStampTool(): CanvasTool {
     hasTransient: () => false,
     escapeHint: () => 'leave-tool',
     cancelTransient(reason) {
-      // A pan or a window blur keeps the preview under the pointer; a tool change or an overview entry hides it.
-      if (reason !== 'navigate') hidePreview()
+      // Only an overview entry hides the preview, as today's overview reset did. A pan, a blur, a re-arm of Place plants
+      // and a retried cancellation keep it under the pointer; a real tool change and a document replacement deactivate.
+      if (reason === 'overview') hidePreview()
     },
     deactivate() {
       speciesPrompted = false
@@ -186,11 +188,12 @@ function previewShapes(ctx: ToolContext, species: PlantStampSourceInput, world: 
     })
   }
 
+  const plant = plantEntityFromStampSource(scene.persisted, species, world, PREVIEW_PLANT_ID)
   const nearest = scene.nearestPlant(world)
   if (nearest && view.screenDistance(world, nearest.plant.position) <= NEAREST_PLANT_MAX_SCREEN_PX) {
     const name = scene.plantPresentation(nearest.plant)?.commonName ?? nearest.plant.commonName ?? nearest.plant.canonicalName
-    // Below the symbol, so a close neighbour's label never hides it.
-    const symbolRadiusPx = scene.plantPresentation(species.canonical_name)?.radiusPx ?? 0
+    // Below the symbol, so a close neighbour's label never hides it: the symbol's radius among the scene's plants (crowded).
+    const symbolRadiusPx = scene.plantPresentation(plant)?.radiusPx ?? 0
     const [line, label] = distanceGuideShapes(
       world,
       nearest.plant.position,
@@ -204,7 +207,7 @@ function previewShapes(ctx: ToolContext, species: PlantStampSourceInput, world: 
   // After the guide, so the symbol draws over the distance line.
   shapes.push({
     kind: 'ghost',
-    entity: { kind: 'plant', plant: plantEntityFromStampSource(scene.persisted, species, world, PREVIEW_PLANT_ID), mark: 'symbol' },
+    entity: { kind: 'plant', plant, mark: 'symbol' },
     opacity: PREVIEW_OPACITY,
   })
   return [...shapes, ...labels]

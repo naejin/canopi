@@ -210,6 +210,43 @@ describe('Place plants tool', () => {
       expect(h.renderer.lastDraft()).toBeNull()
     })
 
+    it('stays when Place plants is armed again', () => {
+      const h = stampHarness(APPLE, { scale: 10 })
+
+      h.hover({ x: 130, y: 140 })
+      // P while Place plants is armed: the host cancels the transient interaction, and the tool stays.
+      h.arm('plant-stamp', { kind: 'species', species: APPLE })
+
+      expect(ghostPlant(h)).toMatchObject({ position: { x: 13, y: 14 } })
+    })
+
+    it('hides on entering overview, and shows nothing on the way back until the next hover', () => {
+      const h = stampHarness(APPLE, { scale: 10 })
+
+      h.hover({ x: 130, y: 140 })
+      h.view.setViewport({ x: 200, y: 150, scale: 0.05 })
+      h.advance(0)
+      expect(h.renderer.lastDraft()).toBeNull()
+
+      h.view.setViewport({ x: 0, y: 0, scale: 10 })
+      h.advance(0)
+      expect(h.renderer.lastDraft()).toBeNull()
+      h.hover({ x: 130, y: 140 })
+      expect(ghostPlant(h)).not.toBeNull()
+    })
+
+    it('sets the nearest plant\'s label below the symbol at its crowded radius', () => {
+      // At 200 px/m the species' own radius is 6.3 px; 5 cm from a plant the symbol crowds to 4.2 px, under the 6 px floor.
+      const h = stampHarness(APPLE, { scale: 200, scene: { plants: [plantEntity('pear', 'Pyrus communis', { x: 0.55, y: 0.5 })] } })
+      const scene = createToolScene(createToolSceneSource(h.store, { pixelsPerMetre: () => 200 }))
+      expect(scene.plantPresentation('Malus domestica')!.radiusPx).toBeGreaterThan(6)
+
+      h.hover({ x: 100, y: 100 })
+
+      const nearest = shapesOf(h, 'label').find((label) => label.tone === 'measure')
+      expect(nearest?.offsetPx).toEqual({ x: 0, y: 6 + 16 })
+    })
+
     it('follows a placement to the new nearest plant', () => {
       const h = stampHarness(APPLE, { scale: 10 })
 
