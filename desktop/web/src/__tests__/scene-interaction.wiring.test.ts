@@ -214,19 +214,23 @@ describe('SceneInteractionSession', () => {
     events = createSceneInteractionEventHarness(container, { trackListeners: true })
     const deps = createInteractionDeps(container, store, camera)
     const session = createTestSession(deps)
-    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
-    const removeHandle = vi.spyOn(handle, 'remove').mockImplementation(() => {
-      throw new Error('rotation handle removal failed')
+    expect(container.hasAttribute('tabindex')).toBe(true)
+    expect(container.querySelector('[data-canvas-handle-layer]')).not.toBeNull()
+    // The bridge's plant tooltip: the handle layer and the map host's keyboard stop are torn down after it.
+    const tooltip = container.querySelector<HTMLElement>('[data-hover-tooltip]')!
+    const removeTooltip = vi.spyOn(tooltip, 'remove').mockImplementation(() => {
+      throw new Error('tooltip removal failed')
     })
 
-    expect(() => session.dispose()).toThrow('rotation handle removal failed')
+    expect(() => session.dispose()).toThrow('tooltip removal failed')
 
     expect(events.listenerLog?.containerRemoves('pointerdown')).toHaveLength(1)
     expect(events.listenerLog?.windowRemoves('pointermove')).toHaveLength(1)
     expect(container.querySelector('[data-locked-object-affordance]')).toBeNull()
-    expect(container.querySelector('[data-hover-tooltip]')).toBeNull()
+    expect(container.querySelector('[data-canvas-handle-layer]')).toBeNull()
+    expect(container.hasAttribute('tabindex')).toBe(false)
     expect(() => session.dispose()).not.toThrow()
-    removeHandle.mockRestore()
+    removeTooltip.mockRestore()
   })
 
   it('attempts every host-listener removal when one removal fails', () => {

@@ -214,7 +214,7 @@ describe('the session\'s chrome', () => {
       draft.plants = [makePlant('locked-plant', 'Malus domestica', { x: 20, y: 30 }, { locked: true })]
     })
     const { session } = createSession()
-    session.setTool('select')
+    session.setTool('line')
 
     events.pointerMove({ x: 20, y: 30 })
 

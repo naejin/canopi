@@ -192,8 +192,8 @@ describe('createDomInputSource', () => {
       return element
     }
     const plainHandle = child('<div data-canvas-handle="vertex:zone-1:2"></div>')
-    const rotation = child('<div data-rotation-handle="true"><span data-rotation-handle-readout="true">+15°</span></div>')
-    const controlPoint = child('<button data-control-point-overlay-handle="corner-1"></button>')
+    const rotation = child('<div data-canvas-handle="rotate"><span data-canvas-handle-readout="true">+15°</span></div>')
+    const controlPoint = child('<button data-canvas-handle="rect-corner:zone-1:ne"></button>')
     const editor = child('<textarea data-annotation-inline-editor="true" data-preserve-overlays="true"></textarea>')
     const unlock = child('<div data-locked-object-affordance="true"><span>Locked</span><button>Unlock</button></div>')
     const chrome = child('<div data-canvas-chrome><span>©</span></div>')
@@ -220,7 +220,7 @@ describe('createDomInputSource', () => {
     expect(received.map((input) => input.kind === 'move' && input.target)).toEqual([
       { kind: 'handle', id: 'vertex:zone-1:2' },
       { kind: 'handle', id: 'rotate' },
-      { kind: 'handle', id: 'control-point:corner-1' },
+      { kind: 'handle', id: 'rect-corner:zone-1:ne' },
       { kind: 'owned-text' },
       { kind: 'owned-chrome', lockedAffordance: true },
       { kind: 'owned-chrome', lockedAffordance: true },

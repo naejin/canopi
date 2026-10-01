@@ -4136,50 +4136,56 @@ describe('SceneInteractionSession', () => {
   it('rolls back earlier resources when a collaborator fails during Session construction', () => {
     const deps = createInteractionDeps(container, store, camera)
     const originalAppendChild = container.appendChild.bind(container)
+    let earlierResources = 0
     const appendChild = vi.spyOn(container, 'appendChild').mockImplementation(
       (<T extends Node>(node: T): T => {
-        if (node instanceof HTMLElement && node.dataset.rotationHandle === 'true') {
-          throw new Error('rotation handle construction failed')
+        // The handle layer comes after the bridge's preview, tooltip, tool overlays and Unlock affordance.
+        if (node instanceof HTMLElement && node.dataset.canvasHandleLayer === 'true') {
+          earlierResources = container.children.length
+          throw new Error('handle layer construction failed')
         }
         return originalAppendChild(node) as T
       }) as typeof container.appendChild,
     )
 
     try {
-      expect(() => createSceneInteractionSession(deps)).toThrow('rotation handle construction failed')
+      expect(() => createSceneInteractionSession(deps)).toThrow('handle layer construction failed')
     } finally {
       appendChild.mockRestore()
     }
 
+    expect(earlierResources).toBeGreaterThan(0)
     expect(container.children).toHaveLength(0)
   })
 
   it('removes an eager collaborator root when its initialization throws after append', () => {
-    let rotationRootAppended = false
+    let affordanceRootAppended = false
     const originalAppendChild = container.appendChild.bind(container)
     const appendChild = vi.spyOn(container, 'appendChild').mockImplementation(
       (<T extends Node>(node: T): T => {
         const appended = originalAppendChild(node) as T
-        if (node instanceof HTMLElement && node.dataset.rotationHandle === 'true') {
-          rotationRootAppended = true
+        if (node instanceof HTMLElement && node.dataset.lockedObjectAffordance === 'true') {
+          affordanceRootAppended = true
         }
         return appended
       }) as typeof container.appendChild,
     )
+    const base = createInteractionDeps(container, store, camera)
+    // The Unlock affordance appends its root, then reads its labels.
     const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => {
-        if (rotationRootAppended) throw new Error('rotation initialization failed')
-        return getDesignObjectSelectionFromStore(store, camera)
+      translate: (key, options) => {
+        if (affordanceRootAppended) throw new Error('locked affordance initialization failed')
+        return base.translate(key, options)
       },
     })
 
     try {
-      expect(() => createSceneInteractionSession(deps)).toThrow('rotation initialization failed')
+      expect(() => createSceneInteractionSession(deps)).toThrow('locked affordance initialization failed')
     } finally {
       appendChild.mockRestore()
     }
 
-    expect(rotationRootAppended).toBe(true)
+    expect(affordanceRootAppended).toBe(true)
     expect(container.children).toHaveLength(0)
   })
 

@@ -376,7 +376,7 @@ describe('the interaction session', () => {
   })
 
   it('a handled saved-stamp drop clears the drag source', () => {
-    createSession()
+    createSession().session.setTool('line')
     const dragData = new Map<string, string>()
     const dataTransfer = {
       effectAllowed: 'none',
@@ -528,6 +528,7 @@ describe('the interaction session', () => {
 
   it('a move with a button held and no press on the map publishes no pointer world point', () => {
     const { session } = createSession()
+    session.setTool('line')
     const points: (WorldPoint | null)[] = []
     session.subscribePointerWorld((point) => { points.push(point) })
 
@@ -561,12 +562,9 @@ describe('the interaction session', () => {
   })
 
   it('a pen drag that ends on the barrel commits its move, as today', () => {
-    store.updatePersisted((draft) => {
-      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
-    })
     const onSceneEditCommit = vi.fn()
     const { session } = createSession(createInteractionDeps(container, store, camera, { onSceneEditCommit }))
-    session.setTool('select')
+    session.setTool('line')
     const pen = { pointerId: 40, pointerType: 'pen' } as const
 
     events.pointerDown({ x: 20, y: 30 }, { ...pen, button: 0, buttons: 1 })
@@ -576,13 +574,15 @@ describe('the interaction session', () => {
     events.pointerMove({ x: 35, y: 45 }, { ...pen, buttons: 2 })
     events.pointerUp({ x: 35, y: 45 }, { ...pen, button: 2, buttons: 0 })
     expect(onSceneEditCommit).toHaveBeenCalledOnce()
-    const released = { ...store.persisted.plants[0]!.position }
-    expect(released).not.toEqual({ x: 20, y: 30 })
+    expect(store.persisted.zones).toHaveLength(1)
+    const released = store.persisted.zones[0]!.points.map((point) => ({ ...point }))
+    expect(released.at(-1)).not.toEqual(released[0])
 
-    // The pen hovers on, then the browser's implicit capture release arrives: the move stays where it was released.
+    // The pen hovers on, then the browser's implicit capture release arrives: the line stays as it was released.
     events.pointerMove({ x: 80, y: 90 }, { ...pen, buttons: 0 })
     events.lostPointerCapture(40)
-    expect(store.persisted.plants[0]?.position).toEqual(released)
+    expect(store.persisted.zones).toHaveLength(1)
+    expect(store.persisted.zones[0]?.points).toEqual(released)
     expect(onSceneEditCommit).toHaveBeenCalledOnce()
   })
 
@@ -596,6 +596,7 @@ describe('the interaction session', () => {
         if (broken) throw new Error('hover failed')
       },
     })
+    session.setTool('line')
     const panel = document.createElement('div')
     document.body.appendChild(panel)
     const panelMoves = vi.fn()
@@ -751,9 +752,9 @@ describe('the interaction session', () => {
     const { failing, retries } = pendingCancellation()
     failing.value = false
     const rotation = document.createElement('div')
-    rotation.setAttribute('data-rotation-handle', '')
+    rotation.setAttribute('data-canvas-handle', 'rotate')
     const controlPoint = document.createElement('div')
-    controlPoint.setAttribute('data-control-point-overlay-handle', '0')
+    controlPoint.setAttribute('data-canvas-handle', 'vertex:zone-1:0')
     const entry = document.createElement('div')
     entry.setAttribute('data-canvas-text-entry', '')
     const unlock = document.createElement('button')
@@ -983,7 +984,7 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
     useStubTools(stamp)
     const tools: string[] = []
     const { session } = createSession({ setTool: (name) => { tools.push(name) } })
-    session.setTool('select')
+    session.setTool('line')
     contextMenuHost.reset()
 
     dispatchContextMenu(container, events.clientPoint({ x: 120, y: 80 }))
@@ -994,7 +995,7 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
     expect(tools.at(-1)).toBe('plant-stamp')
     expect(stamp.commands).toEqual([{ kind: 'place-at', world: { x: 120, y: 80 } }])
     // The app closes the request it holds.
-    session.setTool('select')
+    session.setTool('line')
     dispatchContextMenu(container, events.clientPoint({ x: 60, y: 60 }))
     const reopened = contextMenuHost.current
     events.pointerDown({ x: 10, y: 10 })
@@ -1030,25 +1031,22 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
   it('a bridge that fails after the host left a registered tool re-arms it, and the tool\'s pan and cursor end', () => {
     const hand = stubTool('hand')
     useStubTools(hand)
-    store.updatePersisted((draft) => {
-      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
-    })
-    let failSelection = false
-    const base = createInteractionDeps(container, store, camera)
-    const { session } = createSession({
-      getDesignObjectSelection: () => {
-        if (failSelection) throw new Error('selection refresh failed')
-        return base.getDesignObjectSelection()
+    let failActivation = false
+    // Line on the bridge, whose activation fails once the host has left the Pan tool.
+    bridgeAdapters.set('line', {
+      onActivate: () => {
+        if (failActivation) throw new Error('bridge activation failed')
       },
     })
+    const { session } = createSession()
     session.setTool('hand')
     events.pointerDown({ x: 100, y: 100 }, { pointerId: 52 })
     events.pointerMove({ x: 110, y: 110 }, { pointerId: 52 })
     expect(container.style.cursor).toBe('grabbing')
 
-    failSelection = true
-    expect(() => session.setTool('select')).toThrow('selection refresh failed')
-    failSelection = false
+    failActivation = true
+    expect(() => session.setTool('line')).toThrow('bridge activation failed')
+    failActivation = false
     expect(builtHosts.at(-1)?.activeTool.value).toBe('hand')
     expect(container.style.cursor).toBe('grab')
     expect(events.pointerCapture.has(52)).toBe(false)
@@ -1068,19 +1066,18 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
       },
     })
     useStubTools(rectangle)
-    store.updatePersisted((draft) => {
-      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
-    })
-    const { session, deps } = createSession()
-    session.setTool('select')
+    const { session } = createSession()
+    session.setTool('line')
 
     expect(() => session.setTool('rectangle')).toThrow('activation failed')
     failActivation = false
-    expect(builtHosts.at(-1)?.activeTool.value).toBe('select')
-    // Select still runs on the bridge: a click selects the plant under it.
+    expect(builtHosts.at(-1)?.activeTool.value).toBe('line')
+    // Line still runs on the bridge: a drag draws a line.
     events.pointerDown({ x: 20, y: 30 })
-    events.pointerUp({ x: 20, y: 30 })
-    expect(deps.setSelection).toHaveBeenLastCalledWith([plantTarget('plant-1')])
+    events.pointerMove({ x: 60, y: 30 }, { buttons: 1 })
+    events.pointerUp({ x: 60, y: 30 })
+    expect(store.persisted.zones).toHaveLength(1)
+    expect(store.persisted.zones[0]?.zoneType).toBe('line')
     expect(rectangle.count('press')).toBe(0)
 
     session.setTool('rectangle')
@@ -1188,8 +1185,15 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
 })
 
 describe('ruler drags through the session', () => {
+  /** A session with Line armed: a tool the legacy bridge still runs. */
+  function bridgedSession(overrides: Partial<SceneInteractionSessionDeps> = {}): ReturnType<typeof createSession> {
+    const created = createSession(overrides)
+    created.session.setTool('line')
+    return created
+  }
+
   it('a ruler drag lands one guide at its release, and none inside the ruler\'s gutter', () => {
-    createSession()
+    bridgedSession()
     const rawPress = vi.spyOn(builtHosts.at(-1)!, 'rawPress')
     const rulers = mountRulers(rulerCamera({ y: 20, scale: 4 }))
 
@@ -1223,7 +1227,7 @@ describe('ruler drags through the session', () => {
     }
 
     // Today's ruler heard the pen's compatibility mousedown and mouseup; a touch press sent none before its release.
-    const bridged = createSession().session
+    const bridged = bridgedSession().session
     penDrag()
     expect(rulers.onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 20)
     touchDrag()
@@ -1241,7 +1245,7 @@ describe('ruler drags through the session', () => {
 
   it('a ruler guide lands at its release even when the tool\'s release fails, as today\'s separate mouseup did', () => {
     let broken = false
-    const { session } = createSession({
+    const { session } = bridgedSession({
       setHoveredTarget: () => {
         if (broken) throw new Error('release failed')
       },
@@ -1277,7 +1281,7 @@ describe('ruler drags through the session', () => {
   })
 
   it('a second ruler press replaces the first drag', () => {
-    createSession()
+    bridgedSession()
     const rulers = mountRulers(rulerCamera({ x: 10, scale: 2 }))
 
     events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal })
@@ -1290,7 +1294,7 @@ describe('ruler drags through the session', () => {
   })
 
   it('a ruler drag ends with its overlay: the exact cursor comes back and no guide lands', () => {
-    createSession()
+    bridgedSession()
     const rulers = mountRulers()
     rulers.host.style.cursor = 'crosshair'
 
@@ -1311,7 +1315,7 @@ describe('ruler drags through the session', () => {
   })
 
   it('a window blur ends a ruler drag without a guide', () => {
-    createSession()
+    bridgedSession()
     const rulers = mountRulers()
     rulers.host.style.cursor = 'grab'
 
@@ -1349,7 +1353,7 @@ describe('ruler drags through the session', () => {
       expect(rulers.onGuideCreate).not.toHaveBeenCalled()
     }
 
-    const { session } = createSession(failingHover)
+    const { session } = bridgedSession(failingHover)
     failingDrag()
     session.dispose()
 
@@ -1368,7 +1372,7 @@ describe('ruler drags through the session', () => {
     }
 
     try {
-      createSession({ frames: rotated.frames }).session
+      bridgedSession({ frames: rotated.frames })
       drag()
       sessions.pop()!.dispose()
       useStubTools(stubTool('select'))
@@ -1387,7 +1391,7 @@ describe('ruler drags through the session', () => {
   })
 
   it('a ruler guide lands with the rulers\' camera at its release', () => {
-    createSession()
+    bridgedSession()
     const rulers = mountRulers(rulerCamera({ y: 10, scale: 2 }))
 
     events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal })
@@ -1398,7 +1402,7 @@ describe('ruler drags through the session', () => {
   })
 
   it('a ruler drag started before the rulers hide lands no guide', () => {
-    createSession()
+    bridgedSession()
     const rulers = mountRulers()
     rulers.host.style.cursor = 'crosshair'
 
@@ -1417,7 +1421,7 @@ describe('ruler drags through the session', () => {
   })
 
   it('a ruler drag across overview entry lands no guide, and the rulers hide', () => {
-    createSession()
+    bridgedSession()
     const rulers = mountRulers()
     rulers.host.style.cursor = 'crosshair'
 
