@@ -802,7 +802,7 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
     expect(container.style.cursor).toBe('crosshair')
   })
 
-  it('entering a registered tool whose activation fails leaves the tool before it armed, as it was', () => {
+  it('entering a registered tool whose activation fails leaves Select armed', () => {
     let failActivation = true
     const rectangle = stubTool('rectangle', {
       activate: () => {
@@ -816,13 +816,12 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
 
     expect(() => session.setTool('rectangle')).toThrow('activation failed')
     failActivation = false
-    expect(builtHosts.at(-1)?.activeTool.value).toBe('line')
-    // Line is armed again: a drag draws a line.
+    expect(builtHosts.at(-1)?.activeTool.value).toBe('select')
+    // Select is armed again: a drag selects, it does not draw a line.
     events.pointerDown({ x: 20, y: 30 })
     events.pointerMove({ x: 60, y: 30 }, { buttons: 1 })
     events.pointerUp({ x: 60, y: 30 })
-    expect(store.persisted.zones).toHaveLength(1)
-    expect(store.persisted.zones[0]?.zoneType).toBe('line')
+    expect(store.persisted.zones).toHaveLength(0)
     expect(rectangle.count('press')).toBe(0)
 
     session.setTool('rectangle')

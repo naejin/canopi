@@ -1016,6 +1016,26 @@ describe('ToolHost', () => {
     })
   })
 
+  describe('activation rollback', () => {
+    it('a tool whose activation throws leaves Select armed and rethrows', () => {
+      const select = stubTool('select')
+      const hand = stubTool('hand')
+      const broken = stubTool('polygon', {
+        activate: () => {
+          throw new Error('boom')
+        },
+      })
+      useStubTools(select, hand, broken)
+      const h = harness({ tool: 'hand' })
+
+      expect(() => h.arm('polygon')).toThrow('boom')
+
+      expect(h.host.activeToolIsSelect()).toBe(true)
+      expect(hand.calls).toContain('deactivate:switch')
+      expect(select.calls).toContain('activate')
+    })
+  })
+
   describe('decorations', () => {
     it('a selected zone shows its chips under every tool', () => {
       useStubTools(stubTool('polygon'), stubTool('plant-stamp'))
@@ -1523,32 +1543,6 @@ describe('ToolHost', () => {
       expect(ellipse.calls).toEqual(['activate'])
       expect(h.host.hasLiveGesture()).toBe(false)
       expect(h.host.activeToolDragSlopPx()).toBeNull()
-    })
-
-    it('a tool whose activation fails is left, and the tool before it is armed again', () => {
-      let failActivation = true
-      const rectangle = stubTool('rectangle')
-      const ellipse = stubTool('ellipse', {
-        activate: () => {
-          if (failActivation) throw new Error('activation failed')
-        },
-      })
-      useStubTools(rectangle, ellipse)
-      const h = harness({ tool: 'rectangle' })
-
-      h.press({ x: 10, y: 10 })
-      h.move({ x: 30, y: 30 })
-      expect(() => h.arm('ellipse')).toThrow('activation failed')
-      // The live press ends with the tool left, which is armed again; the tool that failed is left.
-      expect(rectangle.last('cancel')).toEqual({ kind: 'cancel', reason: 'tool-change' })
-      expect(rectangle.calls).toEqual(['activate', 'cancelTransient:tool-change', 'deactivate:switch', 'activate'])
-      expect(ellipse.calls).toEqual(['activate', 'deactivate:switch'])
-      expect(h.host.hasLiveGesture()).toBe(false)
-
-      failActivation = false
-      h.click({ x: 50, y: 50 })
-      expect(rectangle.count('press')).toBe(2)
-      expect(ellipse.gestures).toEqual([])
     })
 
     it('entering overview cancels the tool\'s transient with the overview reason', () => {

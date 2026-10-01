@@ -1180,13 +1180,21 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     try {
       activate(id, source)
     } catch (error) {
+      // A tool whose activation throws leaves Select armed, not the tool left: that tool is already deactivated, and
+      // reactivating it risks the same failure (or a stale pick). Select is the one tool every mode falls back to, except
+      // when Select's own activation is what just failed: there is no further fallback, so the tool before it is armed
+      // again, as before.
       runCanvasRuntimeCleanups([
         () => activeTool?.deactivate('switch'),
         () => {
-          currentId = previousId
-          activeSource = previousSource
-          activeTool = previous
-          if (previous) callTool(() => previous.activate(contextFor(previous), previousSource))
+          if (id !== 'select') {
+            activate('select', null)
+          } else {
+            currentId = previousId
+            activeSource = previousSource
+            activeTool = previous
+            if (previous) callTool(() => previous.activate(contextFor(previous), previousSource))
+          }
         },
       ], 'Tool host activation rollback failed')
       throw error

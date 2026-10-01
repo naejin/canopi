@@ -412,8 +412,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   /**
-   * Arms a tool on the host. A failure leaves the host on the tool left (its own rollback) and still ends the live presses,
-   * as today's setTool had cleared the pointer gesture before the step that failed; the tool left keeps its pick.
+   * Arms a tool on the host. A failure leaves the host on Select (its own rollback, not the tool left: that tool is
+   * already deactivated, and reactivating it risks the same failure) and still ends the live presses, as today's setTool
+   * had cleared the pointer gesture before the step that failed.
    */
   setTool(name: string): void {
     if (this._disposed) return
@@ -424,7 +425,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     try {
       this._toolHost.setTool(id, toolSourceFor(id))
     } catch (error) {
-      this._tool.value = previous
+      // The host's own rollback only runs once activation starts; a failure before that (cancelling the tool left) leaves
+      // the host on `previous`, unchanged. Either way, activeToolIsSelect() names the host's real tool.
+      this._tool.value = this._toolHost.activeToolIsSelect() ? 'select' : previous
       this._endPressesAfterFailedSwitch()
       throw error
     }
