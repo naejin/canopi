@@ -52,7 +52,7 @@ function randomInput(random: () => number, t: number): RawInput {
     const buttonMask = (buttons.has('primary') ? 1 : 0) | (buttons.has('secondary') ? 2 : 0) | (buttons.has('auxiliary') ? 4 : 0)
     return { kind: 'move', t, id, pointer: 'mouse', at, mods, buttons, target: pick(TARGETS), buttonMask }
   }
-  if (roll < 0.58) return { kind: 'up', t, id, pointer: 'mouse', role: pick(ROLES), at, mods }
+  if (roll < 0.58) return { kind: 'up', t, id, pointer: 'mouse', role: pick(ROLES), at, mods, target: pick(TARGETS) }
   if (roll < 0.64) return { kind: 'cancel', t, id, reason: pick(['pointercancel', 'lost-capture'] as const) }
   if (roll < 0.68) return { kind: 'cancel', t, id: 'all', reason: 'blur' }
   if (roll < 0.74) return { kind: 'reject', t, id }

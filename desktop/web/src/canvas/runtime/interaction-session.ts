@@ -41,7 +41,7 @@ import { createDomInputSource, outcomeEffects } from './input/dom-input-source'
 import type { Gesture } from './input/gestures'
 import { createInputRouter } from './input/input-router'
 import { detectPlatform, type InputPlatform } from './input/platform'
-import type { AdapterEffect, RawInput, RecogniserConfig, RecogniserState } from './input/raw-input'
+import type { AdapterEffect, RawInput, RecogniserConfig, RecogniserState, TargetClass } from './input/raw-input'
 import { initialRecogniserState, recognise } from './input/recognise'
 import { DEFAULT_THRESHOLDS } from './input/thresholds'
 import type { GestureOutcome, InputRouterDeps, ToolHost, ToolHostDeps } from './interaction-ports'
@@ -72,7 +72,6 @@ const QUARANTINE: readonly AdapterEffect[] = Object.freeze([{ kind: 'prevent-def
 const NO_DROP: readonly AdapterEffect[] = Object.freeze([{ kind: 'drop-effect', dropEffect: 'none' }])
 /** Today's owned overlays, over which a release with no press ran no cleanup (_isOwnedOverlayPointerTarget): the note
  *  editor, a handle and the Unlock affordance. */
-const OWNED_OVERLAY_SELECTOR = '[data-canvas-text-entry], [data-canvas-handle], [data-locked-object-affordance]'
 /** The host's types, read through it (P5b: this module imports nothing else from tools/). */
 type DraftPresentation = Parameters<ToolHostDeps['renderer']['setDraft']>[0]
 type ToolSource = Parameters<ToolHost['setTool']>[1]
@@ -656,7 +655,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (gestures.some(endsPointerPan)) return input.kind === 'up' || (input.kind === 'cancel' && input.id !== 'all')
     if (input.kind !== 'up' || gestures.length > 0) return false
     if (this._recogniser.sessions.size > 0 || this._overview.peek()) return false
-    return !isOwnedOverlayTarget(this._source.currentEvent()?.target ?? null, this._deps.container)
+    return !isOwnedOverlay(input.target)
   }
 
   /**
@@ -1142,10 +1141,10 @@ function endsPointerPan(gesture: Gesture): boolean {
   return gesture.kind === 'pan' && gesture.phase === 'end' && gesture.source !== 'wheel'
 }
 
-function isOwnedOverlayTarget(target: EventTarget | null, host: HTMLElement): boolean {
-  const element = target instanceof Element ? target : target instanceof Node ? target.parentElement : null
-  const overlay = element?.closest(OWNED_OVERLAY_SELECTOR)
-  return overlay !== null && overlay !== undefined && host.contains(overlay)
+/** The note editor, a handle or the Unlock affordance: today's owned overlays, over which a release ran no cleanup. */
+function isOwnedOverlay(target: TargetClass): boolean {
+  if (target.kind === 'owned-chrome') return target.lockedAffordance === true
+  return target.kind === 'owned-text' || target.kind === 'handle'
 }
 
 function mergeOutcomes(a: GestureOutcome, b: GestureOutcome): GestureOutcome {

@@ -84,7 +84,16 @@ export function normalise(
       // An up is never dropped: it ends its pointer's session whatever the button, as today's pointerup did. A button no
       // press takes reads as primary: a mouse's back and forward (which only a ruler press accepts), and a pen's eraser or
       // its barrel under 'ignore' (a drag whose tip lifted before the barrel).
-      return { kind: 'up', t, id: e.pointerId ?? 0, pointer, role: release?.role ?? 'primary', at, mods: modifiersOf(e) }
+      return {
+        kind: 'up',
+        t,
+        id: e.pointerId ?? 0,
+        pointer,
+        role: release?.role ?? 'primary',
+        at,
+        mods: modifiersOf(e),
+        target: e.target,
+      }
     }
     case 'pointercancel':
       return { kind: 'cancel', t, id: e.pointerId ?? 0, reason: 'pointercancel' }

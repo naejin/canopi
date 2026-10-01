@@ -9,7 +9,7 @@ import type { Thresholds } from './thresholds'
 
 export type ButtonRole = 'primary' | 'secondary' | 'auxiliary'
 
-/** What was under the pointer at a down or a move (a hover carries it, §1.3), classified by the source from data attributes. */
+/** What was under the pointer at a down, a move or an up (a hover carries it, §1.3), classified by the source from data attributes. */
 export type TargetClass =
   | { readonly kind: 'surface' }                                   // host or [data-canvas-surface]
   | { readonly kind: 'handle'; readonly id: ToolHandleId }         // [data-canvas-handle] in the handle layer
@@ -26,7 +26,7 @@ export type RawInput =
   | At & { kind: 'down'; id: number; pointer: PointerKind; role: ButtonRole; at: ScreenPoint; mods: Modifiers; target: TargetClass; detail: number; ctrlConsumed: boolean }
   | At & { kind: 'move'; id: number; pointer: PointerKind; at: ScreenPoint; mods: Modifiers; buttons: ReadonlySet<ButtonRole>; target: TargetClass
       buttonMask: number }                                                    // PointerEvent.buttons as delivered, every bit: the lens's held-button rule (§1.4 "Hover")
-  | At & { kind: 'up'; id: number; pointer: PointerKind; role: ButtonRole; at: ScreenPoint; mods: Modifiers }
+  | At & { kind: 'up'; id: number; pointer: PointerKind; role: ButtonRole; at: ScreenPoint; mods: Modifiers; target: TargetClass }
   | At & { kind: 'cancel'; id: number | 'all'; reason: 'pointercancel' | 'lost-capture' | 'blur' | 'hidden' }
   | At & { kind: 'leave' }                                                    // host pointerleave: hover-end (the host's passive hover; the tool decides on its preview)
   | At & { kind: 'focus-out' }                                                // host focusout: the host ends the nudge series
