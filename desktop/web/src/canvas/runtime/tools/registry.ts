@@ -5,14 +5,17 @@
 // and the host's shared duties switch on it (spec §1.4, "The legacy bridge").
 
 import type { ToolId } from '../interaction-types'
+import { createMeasurementGuideTool } from './measurement-guide'
 import { createObjectStampTool } from './object-stamp'
 import { createPanTool } from './pan'
 import { createPlantRowTool } from './plant-row'
 import { createPlantStampTool } from './plant-stamp'
+import { createPolygonTool } from './polygon'
 import { createSavedObjectStampTool } from './saved-object-stamp'
 import { createSelectTool } from './select/select-tool'
 import { createTextNoteTool } from './text-note'
 import type { CanvasTool } from './tool'
+import { createZoneDragTool } from './zone-drag'
 
 export type ToolFactory = () => CanvasTool
 
@@ -24,4 +27,9 @@ export const TOOL_REGISTRY: Readonly<Partial<Record<ToolId, ToolFactory>>> = Obj
   'plant-spacing': createPlantRowTool,
   'object-stamp': createObjectStampTool,
   'saved-object-stamp': createSavedObjectStampTool,
+  line: () => createZoneDragTool('line'),
+  rectangle: () => createZoneDragTool('rectangle'),
+  ellipse: () => createZoneDragTool('ellipse'),
+  polygon: createPolygonTool,
+  'measurement-guide': createMeasurementGuideTool,
 })

@@ -517,5 +517,17 @@
   "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > rolls back partial 'Measurement Guide Control Points' resources when a later append fails": {
     "file": "src/canvas/runtime/chrome/handle-layer.test.ts",
     "name": "the handle layer > removes its root when it cannot follow the camera"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > creates a rectangle zone from the rectangle tool drag": {
+    "file": "src/canvas/runtime/tools/zone-drag.test.ts",
+    "name": "Zone drag tools > a rectangle drag commits one zone"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > creates a polygonal zone from clicked vertices and an Enter close action": {
+    "file": "src/canvas/runtime/tools/polygon.test.ts",
+    "name": "Polygon tool > each press adds a corner; Enter finishes with 3"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > removes the last polygonal zone draft vertex with Backspace": {
+    "file": "src/canvas/runtime/tools/polygon.test.ts",
+    "name": "Polygon tool > Backspace removes the last corner"
   }
 }

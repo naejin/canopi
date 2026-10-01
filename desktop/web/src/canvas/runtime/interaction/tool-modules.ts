@@ -5,17 +5,9 @@ import type {
   SceneStateReader,
 } from '../scene'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
-import {
-  createMeasurementGuideTool,
-  createMeasurementGuideToolAdapter,
-} from './measurement-guide-tool'
 import type {
   SceneToolAdapter,
 } from './tool-adapter'
-import {
-  createZoneDrawingTool,
-  createZoneDrawingToolAdapters,
-} from './zone-drawing-tool'
 
 export interface SceneToolRegistryContext {
   readonly container: HTMLElement
@@ -36,55 +28,8 @@ export interface SceneToolRegistry {
   forEachAdapter(visit: (adapter: SceneToolAdapter) => void): void
 }
 
-export function createSceneToolRegistry(context: SceneToolRegistryContext): SceneToolRegistry {
-  const rollback: Array<() => void> = []
-  const own = <T>(resource: T, dispose: (resource: T) => void): T => {
-    rollback.push(() => dispose(resource))
-    return resource
-  }
-
-  try {
-    const zoneDrawingTool = own(createZoneDrawingTool({
-      container: context.container,
-      preview: context.preview,
-      camera: context.camera,
-      getSceneStore: context.getSceneStore,
-      getSelection: context.getSelection,
-      clearSelection: context.clearSelection,
-      sceneEdits: context.sceneEdits,
-      render: context.render,
-      applySnapping: context.applySnapping,
-      notifyTransientHistoryChange: context.notifyTransientHistoryChange,
-    }), (tool) => tool.dispose())
-    const zoneDrawingAdapters = createZoneDrawingToolAdapters(zoneDrawingTool)
-    const measurementGuideTool = own(createMeasurementGuideTool({
-      container: context.container,
-      preview: context.preview,
-      camera: context.camera,
-      getSceneStore: context.getSceneStore,
-      sceneEdits: context.sceneEdits,
-      applySnapping: context.applySnapping,
-    }), (tool) => tool.dispose())
-
-    const registry = new DefaultSceneToolRegistry(new Map([
-      ['line', zoneDrawingAdapters.line],
-      ['measurement-guide', createMeasurementGuideToolAdapter(measurementGuideTool)],
-      ['rectangle', zoneDrawingAdapters.rectangle],
-      ['ellipse', zoneDrawingAdapters.ellipse],
-      ['polygon', zoneDrawingAdapters.polygon],
-    ]))
-    rollback.length = 0
-    return registry
-  } catch (error) {
-    for (const cleanup of rollback.reverse()) {
-      try {
-        cleanup()
-      } catch {
-        // Preserve the construction failure after best-effort tool cleanup.
-      }
-    }
-    throw error
-  }
+export function createSceneToolRegistry(_context: SceneToolRegistryContext): SceneToolRegistry {
+  return new DefaultSceneToolRegistry(new Map<string, SceneToolAdapter>())
 }
 
 class DefaultSceneToolRegistry implements SceneToolRegistry {
