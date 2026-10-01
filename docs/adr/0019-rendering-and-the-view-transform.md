@@ -15,7 +15,7 @@ The scene snapshot carried a north-up viewport and per-plant screen points, so e
 - **Upright billboards.** Plants, rings, badges, notes and labels live in an identity root (draft billboards in their own identity root above the world drafts) and are placed each frame by bulk projection of world anchors (typed arrays, visible set only). Nothing upright sits under a rotating container. Note text is drawn at `rotationDeg − bearing`, so notes turn with the map. A selection preview moves both: world shapes in the world root, selected anchors (and note angles) before projection in the billboard root.
 - **Stored angles are clockwise from true north**; a null note angle reads as 0, as today.
 - **DOM overlays** (selection handles, the text-entry host, hover tooltip, locked-object affordance) stay DOM for focus and `aria-label`, follow the frame in the overlays frame phase (by `translate` from phase R; phase 0 places them by `left` and `top`), and rebuild only when their set changes. Canvas2D rulers draw only when north is up.
-- **Label admission** runs on the settled frame and on zoom-band change, cached per scene revision, band and 15° bearing bucket (phase R; until then labels are admitted again on every scale change, as today).
+- **Label admission** runs on the settled frame and on zoom-band change, with no admission cache (phase R; until then labels are admitted again on every scale change, as today).
 - **Retained rendering may quantise** stroke widths and glyph sizes per zoom band (about 12 % drift) as the p32r fix (convention).
 - **Pitch** later adds a projective world root when the affine is null; nothing is built for it now.
 
@@ -30,6 +30,6 @@ The scene snapshot carried a north-up viewport and per-plant screen points, so e
 ## Consequences
 
 - Per camera frame: O(1) transform and root matrix, O(visible) anchor projection, `translate` of overlays (from phase R); the app does nothing unless a coarse signal's value changed. canopi-p32r and canopi-wx8w become fixable (retained geometry, cached selection model, selection preview instead of remapping arrays).
-- The renderer learns the camera one way; policy tests forbid `worldToScreen` in the world layers and the agreement probe in production paths.
-- PDF and the inspection lens stay renderer-neutral. The lens builds its own `ViewTransform` at the live bearing. PDF capture reads the camera on screen when the PDF workspace opens (`captureView`, the live frame, like saved views and the story restore point; only the last view uses the settled camera) and turns plan geometry with its own page frame (`PdfPageFrame`), not a view transform.
+- The renderer learns the camera one way; policy tests forbid `worldToScreen` in the world layers.
+- PDF and the inspection lens stay renderer-neutral. The lens builds its own `ViewTransform` at the live bearing, and its source outline on the main map is the turned quad from the start. PDF capture reads the camera on screen when the PDF workspace opens (`captureView`, the live frame, like saved views and the story restore point; only the last view uses the settled camera) and turns plan geometry with its own page frame (`PdfPageFrame`), not a view transform.
 - Details: [`canvas-v2-spec.md`](../plans/canvas-v2-spec.md).
