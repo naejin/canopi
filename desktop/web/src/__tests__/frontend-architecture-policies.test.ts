@@ -1242,6 +1242,9 @@ const SOURCE_TOMBSTONE_POLICIES = [
     files: [
       'src/canvas/runtime/scene-interaction.ts',
       'src/canvas/runtime/interaction/saved-object-stamp-tool.ts',
+      'src/canvas/runtime/interaction/overlay-ui.ts',
+      'src/canvas/runtime/interaction/selection-action-toolbar.ts',
+      'src/canvas/runtime/interaction/frame.ts',
       'src/app/adaptation/index.ts',
       'src/app/adaptation/controller.ts',
       'src/ipc/adaptation.ts',
@@ -1332,6 +1335,13 @@ const SOURCE_TOMBSTONE_POLICIES = [
       {
         from: ['src/**'],
         names: ['LOCAL_MERCATOR_PROJECTION_ID', 'viewportCenterGeo', 'viewportCornerGeoPoints'],
+      },
+      {
+        // P11, end of 0B (ADR 0018): tools run on the ToolHost; the adapter
+        // interface, its DOM pointer event and the frame's handlers are gone
+        // with scene-interaction.ts and interaction/frame.ts (files above).
+        from: ['src/**'],
+        names: ['SceneToolAdapter', 'SceneToolPointerEvent', 'SceneInteractionFrame', 'SceneInteractionFrameHandlers'],
       },
     ],
   },
@@ -1795,6 +1805,17 @@ const MAP_RECEIVER_TARGETS = ['*map.*', '*map!.*', '*map?.*', '*Map.*', '*Map!.*
 /** The World map drives its own north-up map without a camera driver, so P1 and P2 exempt it. */
 const WORLD_MAP_SOURCES = ['src/maplibre/world-map.ts', 'src/components/world-map/**'] as const
 
+/** P5's and P5c's scope: every tool module. */
+const TOOLS_SOURCES = 'src/canvas/runtime/tools/**'
+
+/** The tools' own seams, which P5 and P5c exempt: the host, the registry and the two scene indexes. */
+const TOOL_SEAM_SOURCES = [
+  'src/canvas/runtime/tools/tool-host.ts',
+  'src/canvas/runtime/tools/registry.ts',
+  'src/canvas/runtime/tools/snapping.ts',
+  'src/canvas/runtime/tools/spatial-index.ts',
+] as const
+
 /**
  * P2's named allowlist: each file that may still project through MapLibre, with its number of calls and the merge that
  * removes it. The test "P2 allowlists each projecting file with its exact count" fails when a count changes, so an entry
@@ -1882,6 +1903,105 @@ const CANVAS_V2_POLICIES = [
       'setInterval', 'Date', 'queueMicrotask', 'navigator',
     ],
     allowedFrom: [...TEST_SOURCE_PATTERNS],
+  },
+  {
+    // A tool reads the shared vocabulary from interaction-types.ts (type-only imports), never interaction-ports.ts;
+    // the host, the registry and the two scene indexes are the tools' own seams (ADR 0018).
+    kind: 'forbid-imports',
+    name: 'P5 tools import no MapLibre, DOM or Pixi',
+    from: [TOOLS_SOURCES],
+    exceptFrom: [...TOOL_SEAM_SOURCES, ...TEST_SOURCE_PATTERNS],
+    targets: [
+      'maplibre-gl', 'pixi.js', '@preact/signals',
+      'src/maplibre/**', 'src/app/**', 'src/components/**',
+      'src/canvas/runtime/view/**', 'src/canvas/runtime/input/**', 'src/canvas/runtime/renderers/**',
+      'src/canvas/runtime/chrome/**', 'src/canvas/runtime/interaction-ports.ts',
+    ],
+    allowTypeOnlyTargets: ['src/canvas/runtime/view/types.ts'],
+  },
+  {
+    // Only the host converts screen to world: a tool names no DOM event, element or camera.
+    kind: 'confine-symbols',
+    name: 'P5 tools name no DOM event, element or camera',
+    from: [TOOLS_SOURCES],
+    names: [
+      'document', 'window', 'HTMLElement', 'PointerEvent', 'KeyboardEvent', 'clientX', 'addEventListener',
+      'getBoundingClientRect', 'requestAnimationFrame', 'ViewTransform', 'CameraDriver', 'ViewNavigation',
+    ],
+    allowedFrom: ['src/canvas/runtime/tools/tool-host.ts', ...TEST_SOURCE_PATTERNS],
+  },
+  {
+    // Walks type-only edges too, so tools/tool.ts -> runtime.ts -> camera.ts -> legacy-camera-facade.ts is checked
+    // until 0E removes the facade (spec §1.1b); no exemption.
+    kind: 'forbid-transitive-imports',
+    name: 'P5c tools reach no MapLibre or Pixi through other modules',
+    from: [TOOLS_SOURCES],
+    exceptFrom: [...TOOL_SEAM_SOURCES, ...TEST_SOURCE_PATTERNS],
+    targets: ['maplibre-gl', 'pixi.js', 'src/maplibre/**'],
+  },
+  {
+    kind: 'confine-symbols',
+    name: 'P6 only the DOM input source captures the pointer',
+    from: ['src/canvas/**'],
+    names: ['setPointerCapture', 'releasePointerCapture'],
+    allowedFrom: ['src/canvas/runtime/input/dom-input-source.ts', ...TEST_SOURCE_PATTERNS],
+  },
+  {
+    // The chrome files listen on their own elements only (canvas-boundaries.test.ts forbids their host and container
+    // listeners); the lens listens to document.fonts.
+    kind: 'confine-symbols',
+    name: 'P6 only the DOM input source adds canvas listeners',
+    from: ['src/canvas/**'],
+    names: ['addEventListener'],
+    allowedFrom: [
+      'src/canvas/runtime/input/dom-input-source.ts',
+      'src/canvas/runtime/chrome/text-entry-host.ts',
+      'src/canvas/runtime/chrome/handle-layer.ts',
+      'src/canvas/runtime/chrome/locked-affordance.ts',
+      'src/canvas/runtime/inspection-lens.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+  },
+  {
+    // MapLibre's own events go through map.on; the listeners here are abort signals of snapshot and tile requests.
+    kind: 'confine-symbols',
+    name: 'P6 MapLibre modules add listeners only to abort signals',
+    from: ['src/maplibre/**'],
+    names: ['addEventListener'],
+    allowedFrom: [
+      'src/maplibre/view-snapshot-map.ts',
+      'src/maplibre/satellite-provider-session.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+  },
+  {
+    // normalise and recognise run without a browser: time and platform are inputs.
+    kind: 'confine-symbols',
+    name: 'P7 the input core reaches no browser global or DOM event',
+    from: ['src/canvas/runtime/input/**'],
+    names: ['window', 'document', 'Date', 'performance', 'setTimeout', 'navigator', 'PointerEvent', 'WheelEvent'],
+    allowedFrom: ['src/canvas/runtime/input/dom-input-source.ts', ...TEST_SOURCE_PATTERNS],
+  },
+] satisfies readonly ArchitecturePolicy[]
+
+/**
+ * P5b, checked on the runtime graph: type-only imports of tools/ (interaction-ports.ts, renderers/scene-types.ts and
+ * the chrome read tool.ts and draft.ts types) enter no bundle, so only value imports are confined.
+ */
+const TOOL_HOST_RUNTIME_GRAPH_POLICIES = [
+  {
+    kind: 'confine-importers',
+    name: 'P5b tool modules are value-imported only inside tools/ and by the interaction session',
+    targets: [TOOLS_SOURCES],
+    allowedFrom: [TOOLS_SOURCES, 'src/canvas/runtime/interaction-session.ts', ...TEST_SOURCE_PATTERNS],
+  },
+  {
+    // The session builds the ToolScene with createToolScene, which tool-host.ts re-exports (spec §1.2a).
+    kind: 'forbid-imports',
+    name: 'P5b the interaction session value-imports only the tool host',
+    from: ['src/canvas/runtime/interaction-session.ts'],
+    targets: [TOOLS_SOURCES],
+    exceptTargets: ['src/canvas/runtime/tools/tool-host.ts'],
   },
 ] satisfies readonly ArchitecturePolicy[]
 
@@ -2148,6 +2268,11 @@ describe('declarative frontend architecture policies', () => {
     expect(collectArchitecturePolicyViolations(graph, BROWSER_WORKSPACE_GRAPH_POLICIES)).toEqual([])
   }, 20_000)
 
+  it('keeps tool modules behind the one tool host in the runtime graph', () => {
+    const graph = runtimeGraph(discoveredSourceGraph())
+    expect(collectArchitecturePolicyViolations(graph, TOOL_HOST_RUNTIME_GRAPH_POLICIES)).toEqual([])
+  }, 20_000)
+
   it('keeps shared modules and the Web entry graph free of Desktop runtime dependencies', () => {
     const graph = runtimeGraph(discoveredSourceGraph())
     expect(collectArchitecturePolicyViolations(graph, SHARED_RUNTIME_GRAPH_POLICIES)).toEqual([])
@@ -2235,6 +2360,7 @@ describe('declarative frontend architecture policies', () => {
       ...SHARED_RUNTIME_GRAPH_POLICIES,
       ...WEB_EDITION_RUNTIME_GRAPH_POLICIES,
       ...BROWSER_WORKSPACE_GRAPH_POLICIES,
+      ...TOOL_HOST_RUNTIME_GRAPH_POLICIES,
     ])).toEqual([])
   }, 20_000)
 
@@ -2370,6 +2496,16 @@ const P1_MAP_TYPE = '[P1 the camera driver imports the MapLibre map type]'
 const P2 = '[P2 only the agreement probe projects through MapLibre]'
 const P4_IMPORTS = '[P4 the view module imports only its pure dependencies]'
 const P4_GLOBALS = '[P4 the view module reaches no DOM, timer, clock or media query]'
+const P5_IMPORTS = '[P5 tools import no MapLibre, DOM or Pixi]'
+const P5_SYMBOLS = '[P5 tools name no DOM event, element or camera]'
+const P5B_IMPORTERS = '[P5b tool modules are value-imported only inside tools/ and by the interaction session]'
+const P5B_SESSION = '[P5b the interaction session value-imports only the tool host]'
+const P5C = '[P5c tools reach no MapLibre or Pixi through other modules]'
+const P6_CAPTURE = '[P6 only the DOM input source captures the pointer]'
+const P6_LISTENERS = '[P6 only the DOM input source adds canvas listeners]'
+const P6_MAPLIBRE = '[P6 MapLibre modules add listeners only to abort signals]'
+const P7 = '[P7 the input core reaches no browser global or DOM event]'
+const P11 = '[Retired frontend seams stay deleted]'
 const TEST_SOURCES = TEST_SOURCE_PATTERNS.join(', ')
 
 const PLANTED_MAP_LOADER = plantedSource('src/maplibre/loader.ts', ['export interface MapLibreMapInstance { stop(): void }'])
@@ -2563,6 +2699,222 @@ describe('canvas v2 policies', () => {
           `${P4_GLOBALS} src/canvas/runtime/view/planted-globals.ts contains confined symbol ${name}; allowed sources: ${TEST_SOURCES}`,
       ),
     )
+  })
+})
+
+describe('canvas v2 policies, end of 0B', () => {
+  it('P5 rejects tool imports of MapLibre, Pixi, signals, the app, input, the view, renderers, chrome and the ports', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/maplibre/loader.ts', ['export const load = 1']),
+      plantedSource('src/app/keyboard/arming.ts', ['export const arm = 1']),
+      plantedSource('src/components/canvas/ToolCard.tsx', ['export const card = 1']),
+      plantedSource('src/canvas/runtime/view/types.ts', ['export interface ViewFrame { readonly scale: number }']),
+      plantedSource('src/canvas/runtime/view/navigation.ts', ['export const navigate = 1']),
+      plantedSource('src/canvas/runtime/input/input-router.ts', ['export const route = 1']),
+      plantedSource('src/canvas/runtime/renderers/draft-layer.ts', ['export const draw = 1']),
+      plantedSource('src/canvas/runtime/chrome/handle-layer.ts', ['export const handles = 1']),
+      plantedSource('src/canvas/runtime/interaction-ports.ts', ['export const ports = 1']),
+      plantedSource('src/canvas/runtime/interaction-types.ts', ['export interface ToolPoint { readonly x: number }']),
+      plantedSource('src/canvas/runtime/tools/planted.ts', [
+        "import maplibregl from 'maplibre-gl'",
+        "import { Graphics } from 'pixi.js'",
+        "import { signal } from '@preact/signals'",
+        "import { load } from '../../../maplibre/loader'",
+        "import { arm } from '../../../app/keyboard/arming'",
+        "import { card } from '../../../components/canvas/ToolCard'",
+        "import { navigate } from '../view/navigation'",
+        "import { ViewFrame } from '../view/types'",
+        "import { route } from '../input/input-router'",
+        "import { draw } from '../renderers/draft-layer'",
+        "import { handles } from '../chrome/handle-layer'",
+        "import { ports } from '../interaction-ports'",
+      ]),
+      plantedSource('src/canvas/runtime/tools/polygon.ts', [
+        "import type { ViewFrame } from '../view/types'",
+        "import type { ToolPoint } from '../interaction-types'",
+      ]),
+      plantedSource('src/canvas/runtime/tools/tool-host.ts', [
+        "import { signal } from '@preact/signals'",
+        "import { route } from '../input/input-router'",
+      ]),
+      plantedSource('src/canvas/runtime/tools/pan.test.ts', ["import { route } from '../input/input-router'"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P5'))).toEqual([
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:1:1 imports maplibre-gl via "maplibre-gl" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:2:1 imports pixi.js via "pixi.js" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:3:1 imports @preact/signals via "@preact/signals" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:4:1 imports src/maplibre/loader.ts via "../../../maplibre/loader" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:5:1 imports src/app/keyboard/arming.ts via "../../../app/keyboard/arming" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:6:1 imports src/components/canvas/ToolCard.tsx via "../../../components/canvas/ToolCard" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:7:1 imports src/canvas/runtime/view/navigation.ts via "../view/navigation" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:8:1 imports src/canvas/runtime/view/types.ts via "../view/types" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:9:1 imports src/canvas/runtime/input/input-router.ts via "../input/input-router" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:10:1 imports src/canvas/runtime/renderers/draft-layer.ts via "../renderers/draft-layer" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:11:1 imports src/canvas/runtime/chrome/handle-layer.ts via "../chrome/handle-layer" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:12:1 imports src/canvas/runtime/interaction-ports.ts via "../interaction-ports" (static)`,
+    ])
+  })
+
+  it('P5 confines DOM, event and camera names in tools to the tool host', () => {
+    // One tool reaching every name of plan §5 P5: dropping any name from the rule drops its line here.
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/tools/planted.ts', [
+        'export function planted(event: PointerEvent, key: KeyboardEvent, element: HTMLElement) {',
+        '  const box = element.getBoundingClientRect()',
+        '  window.addEventListener(key.type, () => requestAnimationFrame(() => document.title = `${event.clientX - box.x}`))',
+        '}',
+        'export interface Planted { readonly view: ViewTransform; readonly driver: CameraDriver; readonly nav: ViewNavigation }',
+      ]),
+      plantedSource('src/canvas/runtime/tools/tool-host.ts', [
+        'export function toWorld(event: PointerEvent, view: ViewTransform) { return event.clientX * view.scale }',
+      ]),
+      plantedSource('src/canvas/runtime/tools/polygon.test.ts', ['document.body.dispatchEvent(new PointerEvent("pointerdown"))']),
+    ])
+
+    const confined = [
+      'document', 'window', 'HTMLElement', 'PointerEvent', 'KeyboardEvent', 'clientX', 'addEventListener',
+      'getBoundingClientRect', 'requestAnimationFrame', 'ViewTransform', 'CameraDriver', 'ViewNavigation',
+    ]
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P5'))).toEqual(
+      confined.map(
+        (name) =>
+          `${P5_SYMBOLS} src/canvas/runtime/tools/planted.ts contains confined symbol ${name}; allowed sources: src/canvas/runtime/tools/tool-host.ts, ${TEST_SOURCES}`,
+      ),
+    )
+  })
+
+  it('P5b rejects value imports of a tool module outside tools/ and of a tool other than the host from the session', () => {
+    const graph = runtimeGraph(createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/tools/tool.ts', ['export interface Tool { readonly id: string }']),
+      plantedSource('src/canvas/runtime/tools/polygon.ts', ["import type { Tool } from './tool'", 'export const polygon = 1']),
+      plantedSource('src/canvas/runtime/tools/tool-host.ts', ["import { polygon } from './polygon'", 'export const host = 1']),
+      plantedSource('src/canvas/runtime/input/input-router.ts', [
+        "import { polygon } from '../tools/polygon'",
+        "import type { Tool } from '../tools/tool'",
+      ]),
+      plantedSource('src/canvas/runtime/interaction-session.ts', [
+        "import { host } from './tools/tool-host'",
+        "import { polygon } from './tools/polygon'",
+      ]),
+      plantedSource('src/canvas/runtime/tools/polygon.test.ts', ["import { polygon } from './polygon'"]),
+    ]))
+    const allowed = `src/canvas/runtime/tools/**, src/canvas/runtime/interaction-session.ts, ${TEST_SOURCES}`
+
+    expect(collectArchitecturePolicyViolations(graph, TOOL_HOST_RUNTIME_GRAPH_POLICIES)).toEqual([
+      `${P5B_IMPORTERS} src/canvas/runtime/input/input-router.ts:1:1 imports src/canvas/runtime/tools/polygon.ts via "../tools/polygon" (static); allowed importers: ${allowed}`,
+      `${P5B_SESSION} src/canvas/runtime/interaction-session.ts:2:1 imports src/canvas/runtime/tools/polygon.ts via "./tools/polygon" (static)`,
+    ])
+  })
+
+  it('P5c rejects MapLibre and Pixi reached from a tool through helpers, type-only edges included', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/maplibre/loader.ts', ['export interface MapLibreMapInstance { stop(): void }']),
+      plantedSource('src/canvas/runtime/helper.ts', ["import { Graphics } from 'pixi.js'", 'export const helper = 1']),
+      plantedSource('src/canvas/runtime/legacy-shim.ts', [
+        "import type { MapLibreMapInstance } from '../../maplibre/loader'",
+        'export type Shim = MapLibreMapInstance',
+      ]),
+      plantedSource('src/canvas/runtime/runtime.ts', ["export type { Shim } from './legacy-shim'"]),
+      plantedSource('src/canvas/runtime/tools/tool.ts', ["import type { Shim } from '../runtime'"]),
+      plantedSource('src/canvas/runtime/tools/polygon.ts', ["import { helper } from '../helper'"]),
+      plantedSource('src/canvas/runtime/tools/tool-host.ts', ["import type { MapLibreMapInstance } from '../../../maplibre/loader'"]),
+      plantedSource('src/canvas/runtime/tools/polygon.test.ts', ["import maplibregl from 'maplibre-gl'"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P5c'))).toEqual([
+      `${P5C} src/canvas/runtime/tools/tool.ts transitively imports src/maplibre/loader.ts via src/canvas/runtime/tools/tool.ts -> src/canvas/runtime/runtime.ts -> src/canvas/runtime/legacy-shim.ts -> src/maplibre/loader.ts`,
+      `${P5C} src/canvas/runtime/tools/polygon.ts transitively imports pixi.js via src/canvas/runtime/tools/polygon.ts -> src/canvas/runtime/helper.ts -> pixi.js`,
+    ])
+  })
+
+  it('P6 confines pointer capture and canvas listeners to the DOM input source and the named element owners', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/planted.ts', [
+        'export function planted(host: HTMLElement) {',
+        "  host.addEventListener('pointerdown', (event) => host.setPointerCapture(event.pointerId))",
+        '  host.releasePointerCapture(1)',
+        '}',
+      ]),
+      plantedSource('src/canvas/planted-source.ts', ["window.addEventListener('wheel', () => {})"]),
+      plantedSource('src/canvas/runtime/input/dom-input-source.ts', [
+        "host.addEventListener('pointerdown', () => {}); host.setPointerCapture(1); host.releasePointerCapture(1)",
+      ]),
+      plantedSource('src/canvas/runtime/chrome/handle-layer.ts', ["element.addEventListener('pointerenter', () => {})"]),
+      plantedSource('src/canvas/runtime/chrome/text-entry-host.ts', ["textarea.addEventListener('blur', () => {})"]),
+      plantedSource('src/canvas/runtime/chrome/locked-affordance.ts', ["button.addEventListener('click', () => {})"]),
+      plantedSource('src/canvas/runtime/inspection-lens.ts', ["document.fonts?.addEventListener('loadingdone', () => {})"]),
+      plantedSource('src/canvas/runtime/chrome/rulers.ts', ["element.addEventListener('pointerdown', () => {})"]),
+      plantedSource('src/maplibre/workspace-map.ts', ["container.addEventListener('pointerdown', () => {})"]),
+      plantedSource('src/maplibre/view-snapshot-map.ts', ["signal.addEventListener('abort', () => {})"]),
+      plantedSource('src/canvas/runtime/planted.test.ts', ['host.setPointerCapture(1); host.addEventListener("pointerup", () => {})']),
+    ])
+    const listenerOwners = [
+      'src/canvas/runtime/input/dom-input-source.ts',
+      'src/canvas/runtime/chrome/text-entry-host.ts',
+      'src/canvas/runtime/chrome/handle-layer.ts',
+      'src/canvas/runtime/chrome/locked-affordance.ts',
+      'src/canvas/runtime/inspection-lens.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ].join(', ')
+    const captureOwners = `src/canvas/runtime/input/dom-input-source.ts, ${TEST_SOURCES}`
+    const abortOwners = `src/maplibre/view-snapshot-map.ts, src/maplibre/satellite-provider-session.ts, ${TEST_SOURCES}`
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P6'))).toEqual([
+      `${P6_CAPTURE} src/canvas/runtime/planted.ts contains confined symbol setPointerCapture; allowed sources: ${captureOwners}`,
+      `${P6_CAPTURE} src/canvas/runtime/planted.ts contains confined symbol releasePointerCapture; allowed sources: ${captureOwners}`,
+      `${P6_LISTENERS} src/canvas/runtime/planted.ts contains confined symbol addEventListener; allowed sources: ${listenerOwners}`,
+      `${P6_LISTENERS} src/canvas/planted-source.ts contains confined symbol addEventListener; allowed sources: ${listenerOwners}`,
+      `${P6_LISTENERS} src/canvas/runtime/chrome/rulers.ts contains confined symbol addEventListener; allowed sources: ${listenerOwners}`,
+      `${P6_MAPLIBRE} src/maplibre/workspace-map.ts contains confined symbol addEventListener; allowed sources: ${abortOwners}`,
+    ])
+  })
+
+  it('P7 confines browser globals and DOM events in the input core to the DOM input source', () => {
+    // One input module reaching every name of plan §5 P7: dropping any name from the rule drops its line here.
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/input/recognise.ts', [
+        'export function recognise(event: PointerEvent | WheelEvent) {',
+        '  setTimeout(() => {}, Date.now() - performance.now())',
+        '  return window.devicePixelRatio + document.title.length + navigator.maxTouchPoints + event.timeStamp',
+        '}',
+      ]),
+      plantedSource('src/canvas/runtime/input/normalise.ts', [
+        '// Time arrives as an input: no Date, performance or setTimeout here.',
+        'export function normalise(raw: { readonly timeStamp: number }, now: () => number) { return now() - raw.timeStamp }',
+      ]),
+      plantedSource('src/canvas/runtime/input/dom-input-source.ts', [
+        "export function install(event: PointerEvent) { window.addEventListener('blur', () => performance.now()) }",
+      ]),
+      plantedSource('src/canvas/runtime/input/recognise.test.ts', ['new PointerEvent("pointerdown"); Date.now()']),
+    ])
+
+    const confined = ['window', 'document', 'Date', 'performance', 'setTimeout', 'navigator', 'PointerEvent', 'WheelEvent']
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P7'))).toEqual(
+      confined.map(
+        (name) =>
+          `${P7} src/canvas/runtime/input/recognise.ts contains confined symbol ${name}; allowed sources: src/canvas/runtime/input/dom-input-source.ts, ${TEST_SOURCES}`,
+      ),
+    )
+  })
+
+  it('P11 rejects the retired tool adapter seam, its symbols and scene-interaction.ts', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/scene-interaction.ts', ['export const session = 1']),
+      plantedSource('src/canvas/runtime/tools/planted.ts', [
+        'export interface SceneToolAdapter { onPointerDown(event: SceneToolPointerEvent): void }',
+        'export type SceneToolPointerEvent = { readonly x: number }',
+        'export type Frame = SceneInteractionFrame & SceneInteractionFrameHandlers',
+      ]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, SOURCE_TOMBSTONE_POLICIES)).toEqual([
+      `${P11} retired source still exists: src/canvas/runtime/scene-interaction.ts`,
+      `${P11} src/canvas/runtime/tools/planted.ts contains retired symbol SceneToolAdapter`,
+      `${P11} src/canvas/runtime/tools/planted.ts contains retired symbol SceneToolPointerEvent`,
+      `${P11} src/canvas/runtime/tools/planted.ts contains retired symbol SceneInteractionFrame`,
+      `${P11} src/canvas/runtime/tools/planted.ts contains retired symbol SceneInteractionFrameHandlers`,
+    ])
   })
 })
 

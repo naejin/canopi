@@ -205,7 +205,6 @@ export interface CanvasTool {
   readonly dragSlopPx?: number                    // per-tool threshold, sent through `configure` on every tool change (Plant a row: 0; it measures today's 4 px itself)
   /** True while the tool's next release must be admitted by the scene (Select's band: today's requiresSettledPointerUp). */
   settledRelease?(): boolean
-  readonly preservesTransientOnNavigate?: boolean // polygon draft survives pans
   readonly clampsToView?: boolean                 // the host clamps the screen point to the view before converting (Plant a row)
   /**
    * The constraint for the next point while Shift (modifiers.constrain) is held, or null. 'direction': the last polygon

@@ -549,5 +549,52 @@
   "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps active tool drag state generic in the Scene Interaction Session": {
     "file": "src/canvas/runtime/tools/tool-host.test.ts",
     "name": "ToolHost > the view moving under a still pointer (plan §1, exception 1) > re-emits the drag on a camera frame"
+  },
+  "src/__tests__/canvas-overlay-casing.test.ts > overlay stroke casing > draws the band selection box as an ochre stroke over a casing on both sides": {
+    "file": "src/canvas/runtime/renderers/draft-layer.test.ts",
+    "name": "draft layer > a band, zone, line and polygon draft has a casing stroke of the same colour and width under it"
+  },
+  "src/__tests__/canvas-overlay-casing.test.ts > overlay stroke casing > draws zone and measurement drafts as light strokes over a dark casing": {
+    "file": "src/canvas/runtime/renderers/draft-layer.test.ts",
+    "name": "draft layer > a band, zone, line and polygon draft has a casing stroke of the same colour and width under it"
+  },
+  "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps persisted Scene writes behind the Settled Scene Authority": {
+    "file": "src/__tests__/scene-runtime-boundaries.test.ts",
+    "name": "Scene runtime module boundaries > keeps persisted Scene writes behind the Settled Scene Authority"
+  },
+  "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > gives the runtime shell only explicit Scene read, session-write, and command roles": {
+    "file": "src/__tests__/scene-runtime-boundaries.test.ts",
+    "name": "Scene runtime module boundaries > gives the runtime shell only explicit Scene read, session-write, and command roles"
+  },
+  "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps typed Scene identity across production session and interaction boundaries": {
+    "file": "src/__tests__/scene-runtime-boundaries.test.ts",
+    "name": "Scene runtime module boundaries > keeps typed Scene identity across production session and interaction boundaries"
+  },
+  "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > separates Scene history commands from persistence authority": {
+    "file": "src/__tests__/scene-runtime-boundaries.test.ts",
+    "name": "Scene runtime module boundaries > separates Scene history commands from persistence authority"
+  },
+  "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > recognizes SceneHistory imports independently of relative depth": {
+    "file": "src/__tests__/scene-runtime-boundaries.test.ts",
+    "name": "Scene runtime module boundaries > recognizes SceneHistory imports independently of relative depth"
+  },
+  "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps broad Scene Interaction tests on the user-equivalent event harness": {
+    "file": "src/__tests__/scene-runtime-boundaries.test.ts",
+    "name": "Scene runtime module boundaries > keeps broad Scene Interaction tests on the user-equivalent event harness"
+  },
+  "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps the public Scene Interaction seam limited to Session construction and lifecycle": {
+    "file": "src/__tests__/scene-runtime-boundaries.test.ts",
+    "name": "Scene runtime module boundaries > keeps the public Scene Interaction seam limited to Session construction and lifecycle"
+  },
+  "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > prevents canvas runtime modules from acquiring a second host-listener or pointer-session owner": {
+    "policy": "P6 only the DOM input source adds canvas listeners"
+  },
+  "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > routes repeated Scene arrangement placement through the shared kernel": {
+    "file": "src/__tests__/scene-runtime-boundaries.test.ts",
+    "name": "Scene runtime module boundaries > routes repeated Scene arrangement placement through the shared kernel"
+  },
+  "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps shared selection gesture algorithms behind the Session seam": {
+    "file": "src/canvas/runtime/tools/select/move-drag.test.ts",
+    "name": "Select move-drag > a drag from a selected object moves the selection with one undo"
   }
 }

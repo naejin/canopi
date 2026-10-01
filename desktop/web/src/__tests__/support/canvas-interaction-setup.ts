@@ -1,7 +1,7 @@
-// Shared setup of the SceneInteractionSession suites (__tests__/scene-interaction.*.test.ts):
+// Shared setup of the canvas interaction end-to-end suites (__tests__/canvas-interaction-e2e.*.test.ts):
 // the fakes and helpers above the suites, and installSceneInteractionFixture, the
 // describe-scope fixture each suite installs. Split from scene-interaction.test.ts in the
-// canvas v2 seams commit; the helper bodies are unchanged.
+// canvas v2 seams commit; renamed with the suites at the end of 0B.
 import { signal } from '@preact/signals'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
 import { clearPlantStampSource } from '../../canvas/plant-stamp-source'
@@ -67,7 +67,7 @@ import {
 import {
   createSceneInteractionEventHarness,
   type SceneInteractionEventHarness,
-} from './scene-interaction-events'
+} from './canvas-interaction-events'
 import { createRecordingRenderer, type RecordingRenderer } from './recording-renderer'
 import type { DraftShape } from '../../canvas/runtime/tools/draft'
 

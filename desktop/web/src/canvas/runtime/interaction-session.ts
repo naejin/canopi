@@ -70,8 +70,6 @@ const STORY_PRESENTING_ATTRIBUTE = 'data-story-presenting'
 const NO_MODIFIERS: Modifiers = Object.freeze({ shift: false, ctrl: false, alt: false, meta: false })
 const QUARANTINE: readonly AdapterEffect[] = Object.freeze([{ kind: 'prevent-default' }, { kind: 'stop-propagation' }])
 const NO_DROP: readonly AdapterEffect[] = Object.freeze([{ kind: 'drop-effect', dropEffect: 'none' }])
-/** Today's owned overlays, over which a release with no press ran no cleanup (_isOwnedOverlayPointerTarget): the note
- *  editor, a handle and the Unlock affordance. */
 /** The host's types, read through it (P5b: this module imports nothing else from tools/). */
 type DraftPresentation = Parameters<ToolHostDeps['renderer']['setDraft']>[0]
 type ToolSource = Parameters<ToolHost['setTool']>[1]
@@ -1023,13 +1021,7 @@ function prepareInteractionHost(
     description.textContent = translate('canvas.map.description')
   }
 
-  container.appendChild(description)
-  container.tabIndex = 0
-  container.setAttribute('role', 'application')
-  container.setAttribute('aria-describedby', description.id)
-  refreshTranslations()
-
-  return {
+  const host: InteractionHostController = {
     refreshTranslations,
     dispose() {
       description.remove()
@@ -1039,6 +1031,18 @@ function prepareInteractionHost(
       }
     },
   }
+  try {
+    container.appendChild(description)
+    container.tabIndex = 0
+    container.setAttribute('role', 'application')
+    container.setAttribute('aria-describedby', description.id)
+    refreshTranslations()
+  } catch (error) {
+    // The session never owns a host whose name failed to translate: it is restored here.
+    host.dispose()
+    throw error
+  }
+  return host
 }
 
 /** The view the camera shim wraps, when the runtime does not pass its own (the split suites' CameraController). */

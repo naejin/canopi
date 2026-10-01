@@ -1,7 +1,11 @@
+// Source rules over the canvas runtime that no import policy expresses: the Settled Scene Authority's write and history
+// roles, typed Scene identity, the shared arrangement kernel, the interaction session's public seam, and the
+// end-to-end suites' event harness. Kept from scene-interaction-tool-boundary.test.ts when the legacy bridge went (end
+// of 0B); its tool rules and its single listener owner moved to the ToolHost's tests and the policies (plan §5).
 import * as fs from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const { existsSync, readFileSync } = fs
+const { readFileSync } = fs
 const fsWithDirectoryRead = fs as unknown as {
   readdirSync(
     path: URL,
@@ -13,21 +17,17 @@ function readSource(path: string): string {
   return readFileSync(new URL(path, import.meta.url), 'utf8')
 }
 
-function sourceExists(path: string): boolean {
-  return existsSync(new URL(path, import.meta.url))
-}
-
 function sourceUrl(path: string): URL {
   return new URL(path, import.meta.url)
 }
 
-/** The split Scene Interaction suites and their shared setup, read as one source. */
+/** The canvas interaction end-to-end suites and their shared setup, read as one source. */
 function sceneInteractionSuitesSource(): string {
   const suites = fsWithDirectoryRead.readdirSync(sourceUrl('./'), { withFileTypes: true })
-    .filter((entry) => entry.isFile() && /^scene-interaction\.[^.]+\.test\.ts$/.test(entry.name))
+    .filter((entry) => entry.isFile() && /^canvas-interaction-e2e\.[^.]+\.test\.ts$/.test(entry.name))
     .map((entry) => entry.name)
     .sort()
-  return [...suites, 'support/scene-interaction-setup.ts'].map(readSource).join('\n')
+  return [...suites, 'support/canvas-interaction-setup.ts'].map(readSource).join('\n')
 }
 
 function importSpecifiers(source: string): string[] {
@@ -60,7 +60,7 @@ function runtimeModuleSources(
     })
 }
 
-describe('Scene Interaction tool module boundaries', () => {
+describe('Scene runtime module boundaries', () => {
   it('keeps persisted Scene writes behind the Settled Scene Authority', () => {
     const runtimeSources = runtimeModuleSources()
     const authorityPath = '../canvas/runtime/scene-runtime/transactions.ts'
@@ -205,13 +205,6 @@ describe('Scene Interaction tool module boundaries', () => {
     }
   })
 
-  it('keeps the legacy bridge deleted now that drops run through the ToolHost', () => {
-    expect(sourceExists('../canvas/runtime/scene-interaction.ts')).toBe(false)
-    expect(sourceExists('../canvas/runtime/interaction/saved-object-stamp-tool.ts')).toBe(false)
-    expect(sourceExists('../canvas/runtime/interaction/selection-action-toolbar.ts')).toBe(false)
-    expect(sourceExists('../canvas/runtime/interaction/frame.ts')).toBe(false)
-  })
-
   it('keeps the public Scene Interaction seam limited to Session construction and lifecycle', () => {
     const sessionSource = readSource('../canvas/runtime/interaction-session.ts')
     const exportedNames = Array.from(
@@ -229,39 +222,6 @@ describe('Scene Interaction tool module boundaries', () => {
     ])
     expect(sessionSource).not.toMatch(/^export\s+(?:default|\*|(?:type\s+)?\{)/m)
     expect(sessionSource).not.toContain('SceneInteractionFrameHandlers')
-  })
-
-  it('prevents canvas runtime modules from acquiring a second host-listener or pointer-session owner', () => {
-    for (const { name, source } of runtimeModuleSources()) {
-      expect(source, name).not.toMatch(/window\.(?:add|remove)EventListener/)
-      expect(source, name).not.toMatch(/(?:\bcontainer|\.container)\.(?:add|remove)EventListener/)
-      expect(source, name).not.toContain('SceneInteractionFrame')
-      expect(source, name).not.toMatch(/from ['"][^'"]*interaction\/frame['"]/)
-    }
-  })
-
-  it('keeps shared selection gesture algorithms behind the Session seam', () => {
-    // Select's move-drag and band run on the ToolHost (tools/select/**), behind the ToolScene's queries; the session
-    // holds none of them.
-    const sessionSources = [
-      '../canvas/runtime/interaction-session.ts',
-    ].map((path) => ({ path, source: readSource(path) }))
-    const moveDragSource = readSource('../canvas/runtime/tools/select/move-drag.ts')
-    const bandSource = readSource('../canvas/runtime/tools/select/band.ts')
-    const spatialIndexSource = readSource('../canvas/runtime/tools/spatial-index.ts')
-
-    for (const { path, source } of sessionSources) {
-      expect(source, path).not.toContain("this._mode === 'dragging'")
-      expect(source, path).not.toContain("this._mode === 'band'")
-      expect(source, path).not.toContain("this._mode === 'panning'")
-      expect(source, path).not.toContain('captureSceneDragState')
-      expect(source, path).not.toContain('queryRectTopLevel')
-      expect(source, path).not.toContain('interaction-drag')
-    }
-    expect(moveDragSource).toContain('captureSceneDragState')
-    expect(moveDragSource).toContain("'interaction-drag'")
-    expect(bandSource).toContain('ctx.scene.hitInQuad(')
-    expect(spatialIndexSource).toContain('queryRectTopLevel')
   })
 
   it('routes repeated Scene arrangement placement through the shared kernel', () => {

@@ -4,10 +4,6 @@ import { getCanvasColor } from '../canvas/theme-refresh'
 import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
 import { SceneChromeOverlay } from '../canvas/runtime/scene-chrome'
 import { getCanvasInteractionStrokeVisual, resolveZoneVisual } from '../canvas/runtime/scene-visuals'
-import {
-  createInteractionPreview,
-  showInteractionPreview,
-} from '../canvas/runtime/interaction/overlay-ui'
 
 function cameraSnapshot(): CameraViewportSnapshot {
   return {
@@ -43,31 +39,6 @@ describe('overlay stroke casing', () => {
     })
     expect(visual.stroke).toBe(getCanvasColor('zone-stroke'))
     expect(visual.casing).toBe(getCanvasColor('overlay-casing'))
-  })
-
-  it('draws the band selection box as an ochre stroke over a casing on both sides', () => {
-    const host = document.createElement('div')
-    const preview = createInteractionPreview(host)
-    showInteractionPreview(preview, 'band', { x: 10, y: 10 }, { x: 60, y: 40 })
-
-    expect(preview.style.border).toBe('2px solid var(--canvas-selection-stroke)')
-    expect(preview.style.background).toBe('var(--canvas-selection)')
-    expect(preview.style.boxShadow).toContain('var(--canvas-interaction-casing)')
-    expect(preview.style.boxShadow).toContain('inset')
-  })
-
-  it('draws zone and measurement drafts as light strokes over a dark casing', () => {
-    const host = document.createElement('div')
-    const preview = createInteractionPreview(host)
-
-    showInteractionPreview(preview, 'rectangle', { x: 10, y: 10 }, { x: 60, y: 40 })
-    expect(preview.style.border).toBe('2px solid var(--canvas-guide-line)')
-    expect(preview.style.background).toBe('var(--canvas-zone-fill)')
-    expect(preview.style.boxShadow).toContain('var(--canvas-overlay-casing)')
-
-    showInteractionPreview(preview, 'line', { x: 10, y: 10 }, { x: 60, y: 40 })
-    expect(preview.style.borderTop).toBe('2px solid var(--canvas-guide-line)')
-    expect(preview.style.boxShadow).toContain('var(--canvas-overlay-casing)')
   })
 
   it('strokes ruler guides over a wider dark casing', () => {

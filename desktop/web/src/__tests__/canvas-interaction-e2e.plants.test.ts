@@ -1,6 +1,6 @@
-// SceneInteractionSession tests, split by the first tool a test arms (canvas v2 plan §4, Seams):
+// The canvas interaction end to end through the session, split by the first tool a test arms (canvas v2 plan §4):
 // tests that arm Plant stamp or Plant a row, and the three Place plants describes.
-// Shared fakes, helpers and fixture: support/scene-interaction-setup.ts.
+// Shared fakes, helpers and fixture: support/canvas-interaction-setup.ts.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   readPlantStampSource,
@@ -25,7 +25,7 @@ import { createRecordingRenderer, type RecordingRenderer } from './support/recor
 import {
   createSceneInteractionEventHarness,
   type SceneInteractionEventHarness,
-} from './support/scene-interaction-events'
+} from './support/canvas-interaction-events'
 import {
   contextMenuHost,
   contextMenuCommand,
@@ -36,7 +36,7 @@ import {
   makePlant,
   plantHoverTooltip,
   installSceneInteractionFixture,
-} from './support/scene-interaction-setup'
+} from './support/canvas-interaction-setup'
 
 describe('SceneInteractionSession', () => {
   let container: HTMLDivElement

@@ -1,17 +1,17 @@
-// SceneInteractionSession tests, split by the first tool a test arms (canvas v2 plan §4, Seams):
+// The canvas interaction end to end through the session, split by the first tool a test arms (canvas v2 plan §4):
 // tests that arm no tool and drive the wheel, and the Scroll wheel settings describe.
-// Shared fakes, helpers and fixture: support/scene-interaction-setup.ts.
+// Shared fakes, helpers and fixture: support/canvas-interaction-setup.ts.
 import { describe, expect, it, vi } from 'vitest'
 import { CameraController } from '../canvas/runtime/camera'
 import { SceneStore } from '../canvas/runtime/scene'
 import type { SceneInteractionSessionDeps } from '../canvas/runtime/interaction-session'
-import type { SceneInteractionEventHarness } from './support/scene-interaction-events'
+import type { SceneInteractionEventHarness } from './support/canvas-interaction-events'
 import {
   contextMenuHost,
   createInteractionDeps,
   expectPointCloseTo,
   installSceneInteractionFixture,
-} from './support/scene-interaction-setup'
+} from './support/canvas-interaction-setup'
 
 describe('SceneInteractionSession', () => {
   let container: HTMLDivElement

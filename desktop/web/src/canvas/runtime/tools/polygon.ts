@@ -144,7 +144,6 @@ export function createPolygonTool(): CanvasTool {
 
   return {
     id: 'polygon',
-    preservesTransientOnNavigate: true,
     constraint() {
       const last = corners[corners.length - 1]
       return last ? { kind: 'direction', origin: last, stepDeg: 45 } : null
