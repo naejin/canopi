@@ -612,6 +612,52 @@ describe('ToolHost', () => {
       expect(select.count('press')).toBe(1)
     })
 
+    it('a new note\'s entry, whichever tool opened it, keeps its committing press from the tool and survives overview; an in-place editor does neither', () => {
+      /** A stand-in whose edit-text command opens an entry of `mode`, so the mode and the tool that opened it disagree. */
+      function opener(id: 'select' | 'text', mode: 'create' | 'edit'): StubTool {
+        const tool: StubTool = stubTool(id, {
+          command: (c) => {
+            if (c.kind !== 'edit-text') return 'pass'
+            tool.ctx().effects.requestTextEntry(
+              { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Compost', placeholderKey: 'canvas.note', mode },
+              () => 'close',
+            )
+            return 'handled'
+          },
+        })
+        return tool
+      }
+      const select = opener('select', 'create')
+      const text = opener('text', 'edit')
+      useStubTools(select, text)
+      const h = harness()
+
+      // The press that commits a new note's entry reaches no tool (today's Text field took it), even under Select;
+      h.host.command({ kind: 'edit-text' })
+      h.click({ x: 300, y: 250 })
+      expect(h.chrome.textEntry).toBeNull()
+      expect(select.count('press')).toBe(0)
+      // and entering overview keeps the entry, as today's setOverviewMode kept Text's field.
+      h.host.command({ kind: 'edit-text' })
+      h.view.setViewport(OVERVIEW)
+      h.advance(0)
+      expect(h.chrome.textEntry?.request.mode).toBe('create')
+      h.view.setViewport({ x: 0, y: 0, scale: 1 })
+      h.advance(0)
+
+      // An in-place editor's committing press goes on to the tool, even under Text, and overview closes the editor, as
+      // today's setOverviewMode cancelled the annotation editor.
+      h.arm('text')
+      h.host.command({ kind: 'edit-text' })
+      h.click({ x: 300, y: 250 })
+      expect(h.chrome.textEntry).toBeNull()
+      expect(text.count('press')).toBe(1)
+      h.host.command({ kind: 'edit-text' })
+      h.view.setViewport(OVERVIEW)
+      h.advance(0)
+      expect(h.chrome.textEntry).toBeNull()
+    })
+
     it('the text entry\'s own Esc reaches the tool through onCancel, and what the tool publishes follows at once', () => {
       const cancels: number[] = []
       const text: StubTool = stubTool('text', {

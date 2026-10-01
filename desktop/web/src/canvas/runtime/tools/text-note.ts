@@ -6,9 +6,10 @@
 // once the edit has committed (a commit that settles later closes it then); blank text, or an Annotations layer hidden
 // or locked by then, writes nothing and closes it; while the scene refuses the edit the entry stays open with its text.
 // Esc in the entry discards it (onCancel). The tool card shows a gesture while the entry is open. The click that
-// commits an open note places nothing (spec §3.2): the host keeps that press from the tool (tool-host.ts, rawPress).
-// The entry survives the host's cancellations, overview included, as today's field did; a tool change or a document
-// replacement closes it.
+// commits an open note places nothing (spec §3.2): the host keeps a press that finds a new note's entry open from every
+// tool (tool-host.ts, rawPress). The entry survives the host's cancellations and overview, as today's field did; a tool
+// change closes it, and so does a document replacement, which today's field survived to commit into the new document
+// (a recorded tiny deviation).
 
 import { appendTextAnnotationToDraft } from './tool-actions'
 import type { CanvasTool, ToolContext, ToolReply } from './tool'
