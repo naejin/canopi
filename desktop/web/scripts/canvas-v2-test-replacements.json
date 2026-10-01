@@ -453,5 +453,9 @@
   "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > blocks Saved Object Stamp placement when any target Layer is locked": {
     "file": "src/canvas/runtime/tools/saved-object-stamp.test.ts",
     "name": "saved object stamp tool > blocks Saved Object Stamp placement when any target Layer is locked"
+  },
+  "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps Object Stamp source state behind the object stamp tool module": {
+    "file": "src/canvas/runtime/tools/object-stamp.test.ts",
+    "name": "object stamp tool > the first click picks, the next places"
   }
 }

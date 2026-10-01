@@ -334,31 +334,13 @@ describe('Scene Interaction tool module boundaries', () => {
     expect(zoneToolSource).toContain('createZoneDrawingToolAdapters')
   })
 
-  it('keeps Object Stamp source state behind the object stamp tool module', () => {
-    const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
-    const toolModulesSource = readSource('../canvas/runtime/interaction/tool-modules.ts')
-    const objectStampSource = readSource('../canvas/runtime/interaction/object-stamp-tool.ts')
-
-    expect(interactionSource).toContain('createSceneToolRegistry')
-    expect(interactionSource).not.toContain('createObjectStampTool')
-    expect(interactionSource).not.toContain('createObjectStampToolAdapter')
-    expect(toolModulesSource).toContain('createObjectStampTool')
-    expect(toolModulesSource).toContain('createObjectStampToolAdapter')
-    expect(interactionSource).not.toContain('_objectStampTool')
-    expect(interactionSource).not.toContain('_objectStampSource')
-    expect(interactionSource).not.toContain('_sampleObjectStampSource')
-    expect(interactionSource).not.toContain('_placeObjectStamp')
-    expect(objectStampSource).toContain('ObjectStampSource')
-    expect(objectStampSource).toContain('cloneGroupMembersForObjectStamp')
-    expect(objectStampSource).toContain('createObjectStampToolAdapter')
-  })
-
   it('routes repeated Scene arrangement placement through the shared kernel', () => {
     const placementSource = readSource('../canvas/runtime/scene-runtime/arrangement-placement.ts')
     const clipboardSource = readSource('../canvas/runtime/scene-runtime/clipboard.ts')
     const mutationsSource = readSource('../canvas/runtime/scene-runtime/mutations.ts')
-    const objectStampSource = readSource('../canvas/runtime/interaction/object-stamp-tool.ts')
-    const savedStampSource = readSource('../canvas/runtime/interaction/saved-object-stamp-tool.ts')
+    const objectStampSource = readSource('../canvas/runtime/tools/object-stamp.ts')
+    const savedStampSource = readSource('../canvas/runtime/tools/saved-object-stamp.ts')
+    const stampGhostSource = readSource('../canvas/runtime/tools/stamp-rotation.ts')
 
     expect(placementSource).toContain('createSceneArrangementPlacement')
     expect(new Set(importSpecifiers(placementSource))).toEqual(new Set([
@@ -370,7 +352,7 @@ describe('Scene Interaction tool module boundaries', () => {
     for (const source of [mutationsSource, objectStampSource, savedStampSource]) {
       expect(source).toContain('createSceneArrangementPlacement')
     }
-    for (const source of [clipboardSource, objectStampSource, savedStampSource]) {
+    for (const source of [clipboardSource, objectStampSource, savedStampSource, stampGhostSource]) {
       expect(source).not.toContain('uniqueZoneName')
       expect(source).not.toContain('sourceToCloneId')
       expect(source).not.toContain('selectedTopLevelIds')
