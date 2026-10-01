@@ -355,7 +355,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
             this._toolCursor = cursor
             this._applyCursor()
           },
-          requestTextEntry: (request, submit) => this._textEntry.open(request, submit),
+          requestTextEntry: (request, submit, onCancel) => this._textEntry.open(request, submit, onCancel),
           closeTextEntry: () => this._textEntry.close(),
           isTextEntryOpen: () => this._textEntry.isOpen(),
           setTooltip: (tooltip) => this._showTooltip(tooltip),

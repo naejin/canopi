@@ -263,7 +263,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       requestTool(id) {
         if (owns()) requestTool(id)
       },
-      requestTextEntry(request, submit) {
+      requestTextEntry(request, submit, onCancel) {
         if (!owns()) return
         deps.chrome.requestTextEntry(request, (text) => {
           const reply = callTool(() => submit(text))
@@ -273,7 +273,10 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
             flush()
           }
           return reply
-        })
+        }, onCancel && (() => {
+          // The entry's own Esc closed it: the tool follows, as a tool call.
+          if (owns()) callTool(onCancel)
+        }))
       },
       closeTextEntry() {
         if (owns()) closeTextEntry()

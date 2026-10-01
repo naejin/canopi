@@ -150,6 +150,35 @@ describe('the session\'s chrome', () => {
     expect(text.count('press')).toBe(2)
   })
 
+  it('Esc in a registered tool\'s text entry closes it and tells the tool through onCancel', () => {
+    const cancelled = vi.fn()
+    const text = stubTool('text', {
+      gesture: (gesture) => {
+        if (gesture.kind === 'press') {
+          text.ctx().effects.requestTextEntry({
+            anchor: gesture.point.world,
+            rotationDeg: 0,
+            initialText: '',
+            placeholderKey: 'canvas.textNote.placeholder',
+            mode: 'create',
+          }, () => 'close', cancelled)
+        }
+        return 'pass'
+      },
+    })
+    useStubTools(text)
+    const { session } = createSession()
+    session.setTool('text')
+
+    events.pointerDown({ x: 30, y: 40 })
+    events.pointerUp({ x: 30, y: 40 })
+    const entry = container.querySelector<HTMLTextAreaElement>('textarea[data-canvas-text-entry]')!
+    entry.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+
+    expect(container.querySelector('textarea')).toBeNull()
+    expect(cancelled).toHaveBeenCalledTimes(1)
+  })
+
   it('a registered tool\'s passive hover shows the plant tooltip and the Unlock affordance, whose Unlock unlocks', () => {
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('locked-plant', 'Malus domestica', { x: 20, y: 30 }, { locked: true, commonName: 'Apple' })]

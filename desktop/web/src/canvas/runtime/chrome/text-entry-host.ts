@@ -4,7 +4,8 @@
 // opens for a tool and whose state it reads live (isOpen). 'create' is today's new-note field, 'edit' today's in-place
 // editor of a note (its font size, its text's frame, select-all). Enter and a blur hand the text to the tool's submit, which
 // closes the entry or keeps the same field open while its commit is refused; Esc is the entry's own handler and discards
-// it before any canvas key handling hears it (spec §3.7). Closing a focused entry returns focus to the map
+// it before any canvas key handling hears it (spec §3.7), then tells the opener (onCancel), so a tool can follow the
+// cancel. Closing a focused entry returns focus to the map
 // (focusMap('text-entry-closed'), INV-FOC-04). The field stays on its anchor through camera moves ('overlays' frames). It
 // listens only on its own textarea (P6).
 
@@ -23,9 +24,9 @@ export interface TextEntryHostOptions {
 
 export interface TextEntryHost {
   /** Opens an entry; an open one is submitted first and stays open when its commit is refused. The same note asked again
-   *  keeps its field (today's start of an editor already open). */
-  open(request: TextEntryRequest, submit: (text: string) => 'close' | 'keep'): void
-  /** Discards the open entry without submitting it. */
+   *  keeps its field (today's start of an editor already open). onCancel runs after the entry's own Esc closed it. */
+  open(request: TextEntryRequest, submit: (text: string) => 'close' | 'keep', onCancel?: () => void): void
+  /** Discards the open entry without submitting it (no onCancel: the caller closed it). */
   close(): void
   isOpen(): boolean
   dispose(): void
@@ -34,6 +35,7 @@ export interface TextEntryHost {
 interface OpenEntry {
   readonly request: TextEntryRequest
   readonly submit: (text: string) => 'close' | 'keep'
+  readonly onCancel: (() => void) | undefined
   readonly textarea: HTMLTextAreaElement
 }
 
@@ -49,7 +51,7 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
     if (active) place(active, frame)
   })
 
-  function open(request: TextEntryRequest, submit: (text: string) => 'close' | 'keep'): void {
+  function open(request: TextEntryRequest, submit: (text: string) => 'close' | 'keep', onCancel?: () => void): void {
     if (disposed) return
     if (active && sameEntry(active.request, request)) {
       active.textarea.focus()
@@ -62,7 +64,7 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
     }
 
     const textarea = document.createElement('textarea')
-    const entry: OpenEntry = { request, submit, textarea }
+    const entry: OpenEntry = { request, submit, onCancel, textarea }
     textarea.dataset.canvasTextEntry = request.mode
     textarea.setAttribute('aria-label', options.translate('canvas.tools.text'))
     textarea.value = request.initialText
@@ -86,7 +88,9 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
       if (event.key === 'Escape') {
         event.preventDefault()
         event.stopPropagation()
-        if (active === entry) closeActive()
+        if (active !== entry) return
+        closeActive()
+        entry.onCancel?.()
       } else if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault()
         event.stopPropagation()

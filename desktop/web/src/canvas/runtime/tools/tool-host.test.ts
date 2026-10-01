@@ -515,6 +515,41 @@ describe('ToolHost', () => {
       expect(h.record.focus.at(-1)).toBe('map:tool-requested')
     })
 
+    it('the text entry\'s own Esc reaches the tool through onCancel, and what the tool publishes follows at once', () => {
+      const cancels: number[] = []
+      const text: StubTool = stubTool('text', {
+        gesture: (g) => {
+          if (g.kind !== 'press') return 'pass'
+          const effects = text.ctx().effects
+          effects.requestTextEntry(
+            { anchor: g.point.world, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note', mode: 'create' },
+            () => 'close',
+            () => {
+              cancels.push(h.record.guidance.length)
+              effects.setGuidance({ gesture: false })
+            },
+          )
+          effects.setGuidance({ gesture: true })
+          return 'pass'
+        },
+      })
+      useStubTools(text)
+      const h = harness({ tool: 'text' })
+
+      h.click({ x: 40, y: 40 })
+      expect(h.record.guidance.at(-1)?.gesture).toBe(true)
+      h.escapeTextEntry()
+      expect(cancels).toHaveLength(1)
+      expect(h.record.guidance.at(-1)?.gesture).toBe(false)
+
+      // An entry the host closes (here on a tool change) was not cancelled by its own Esc: no onCancel.
+      h.click({ x: 90, y: 90 })
+      expect(h.chrome.textEntry).not.toBeNull()
+      h.arm('select')
+      expect(h.chrome.textEntry).toBeNull()
+      expect(cancels).toHaveLength(1)
+    })
+
     it('a ruler drag reaches no tool, leaves the map\'s cursor alone and is never fenced by a pending cancellation', () => {
       let failing = true
       let edit: SceneEditTransaction | null = null

@@ -336,6 +336,14 @@ export interface ToolHarnessRecord {
   readonly captures: number[]
 }
 
+/** The open text entry: its request, the host's submit and onCancel, and the text typed into it (its initial text until typeText). */
+export interface ToolHarnessTextEntry {
+  readonly request: TextEntryRequest
+  readonly submit: (text: string) => 'close' | 'keep'
+  readonly onCancel: (() => void) | null
+  text: string
+}
+
 export interface ToolHarnessChrome {
   readonly handles: readonly ToolHandle[]
   readonly activeHandle: ToolHandleId | null
@@ -343,7 +351,7 @@ export interface ToolHarnessChrome {
   readonly tooltip: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null
   readonly lockedAffordance: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null
   /** The open text entry, which ToolHostDeps.chrome.isTextEntryOpen reports; it commits on the map's focus (its blur). */
-  readonly textEntry: { readonly request: TextEntryRequest; readonly submit: (text: string) => 'close' | 'keep' } | null
+  readonly textEntry: ToolHarnessTextEntry | null
 }
 
 export interface PressOptions {
@@ -403,7 +411,11 @@ export interface ToolHarness {
   undo(): boolean
   /** A text entry the host did not open (until D1's 0B-3, the bridge's note editor): the chrome reports it open. */
   openTextEntry(): void
-  /** Esc in the text entry: its own element handler closes it without a submit. */
+  /** Types into the open text entry, replacing its text. */
+  typeText(text: string): void
+  /** Enter in the text entry: its text goes to the submit, and the host closes the entry on 'close'. */
+  enterText(): 'close' | 'keep'
+  /** Esc in the text entry: its own element handler closes it without a submit, then runs the opener's onCancel. */
   escapeTextEntry(): void
   dispose(): void
 }
@@ -448,7 +460,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
     cursor: 'default',
     tooltip: null as ToolHarnessChrome['tooltip'],
     lockedAffordance: null as ToolHarnessChrome['lockedAffordance'],
-    textEntry: null as ToolHarnessChrome['textEntry'],
+    textEntry: null as ToolHarnessTextEntry | null,
   }
   let menuOpen = false
   const timers = createHarnessTimers(() => view.clock.now())
@@ -479,8 +491,8 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       setCursor(cursor) {
         chrome.cursor = cursor
       },
-      requestTextEntry(request, submit) {
-        chrome.textEntry = { request, submit }
+      requestTextEntry(request, submit, onCancel) {
+        chrome.textEntry = { request, submit, onCancel: onCancel ?? null, text: request.initialText }
       },
       closeTextEntry() {
         chrome.textEntry = null
@@ -508,7 +520,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
         record.focus.push(`map:${reason}`)
         // The text entry commits on its blur.
         const entry = chrome.textEntry
-        if (entry && entry.submit(entry.request.initialText) === 'close') chrome.textEntry = null
+        if (entry && entry.submit(entry.text) === 'close' && chrome.textEntry === entry) chrome.textEntry = null
       },
       focusToolCardField(reason) {
         record.focus.push(`tool-card-field:${reason}`)
@@ -702,10 +714,26 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       chrome.textEntry = {
         request: { anchor: { x: 0, y: 0 }, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note', mode: 'edit' },
         submit: () => 'close',
+        onCancel: null,
+        text: '',
       }
     },
+    typeText(text) {
+      const entry = chrome.textEntry
+      if (!entry) throw new Error('No text entry is open.')
+      entry.text = text
+    },
+    enterText() {
+      const entry = chrome.textEntry
+      if (!entry) throw new Error('No text entry is open.')
+      const reply = entry.submit(entry.text)
+      if (reply === 'close' && chrome.textEntry === entry) chrome.textEntry = null
+      return reply
+    },
     escapeTextEntry() {
+      const entry = chrome.textEntry
       chrome.textEntry = null
+      entry?.onCancel?.()
     },
     dispose() {
       host.dispose()

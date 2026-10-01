@@ -187,6 +187,30 @@ describe('the text-entry host', () => {
     expect(focusMap).toHaveBeenCalledWith('text-entry-closed')
   })
 
+  it('Esc tells the opener through onCancel, once the entry is gone; a submit, close() or dispose does not', async () => {
+    const entries = mount()
+    const cancelled: boolean[] = []
+    const onCancel = vi.fn(() => {
+      cancelled.push(entries.isOpen())
+    })
+    entries.open(NEW_NOTE, () => 'close', onCancel)
+    await nextAnimationFrame()
+
+    key(entry()!, { key: 'Escape' })
+    expect(onCancel).toHaveBeenCalledTimes(1)
+    expect(cancelled).toEqual([false])
+
+    entries.open(NEW_NOTE, () => 'close', onCancel)
+    await nextAnimationFrame()
+    key(entry()!, { key: 'Enter' })
+    entries.open(NEW_NOTE, () => 'close', onCancel)
+    entries.close()
+    entries.open(NEW_NOTE, () => 'close', onCancel)
+    entries.dispose()
+    host = null
+    expect(onCancel).toHaveBeenCalledTimes(1)
+  })
+
   it('close() discards the entry without submitting, and moves focus only when the entry held it', () => {
     const entries = mount()
     const submit = vi.fn(() => 'close' as const)
