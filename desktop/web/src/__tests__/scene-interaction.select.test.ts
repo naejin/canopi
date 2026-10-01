@@ -2137,6 +2137,35 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('commits an inline text Annotation edit whose blur commit was refused on the next click on the map', async () => {
+    store.updatePersisted((draft) => {
+      draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Before')]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const session = createTestSession(deps)
+    session.setTool('select')
+    container.tabIndex = 0
+    events.pointerDown({ x: 26, y: 34 }, { button: 0, detail: 2 })
+    events.pointerUp({ x: 26, y: 34 }, { button: 0, detail: 2 })
+    await nextAnimationFrame()
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+    expect(document.activeElement).toBe(textarea)
+    textarea.value = 'After'
+
+    // Focus leaves the editor while the scene is busy: its blur commit is refused, and the editor stays without focus.
+    const busy = deps.sceneEdits.begin('external-preview')
+    textarea.blur()
+    await nextAnimationFrame()
+    expect(container.querySelector('textarea')).toBe(textarea)
+    busy.abort()
+
+    events.pointerDown({ x: 200, y: 200 }, { button: 0 })
+    events.pointerUp({ x: 200, y: 200 }, { button: 0 })
+    expect(store.persisted.annotations[0]?.text).toBe('After')
+    expect(container.querySelector('textarea')).toBeNull()
+    session.dispose()
+  })
+
   it('detaches an inline Annotation draft before document replacement', () => {
     store.updatePersisted((draft) => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Old document')]

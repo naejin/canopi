@@ -169,6 +169,35 @@ describe('the text-entry host', () => {
     expect(submit).toHaveBeenCalledTimes(2)
   })
 
+  it('submitUnfocused submits an entry whose blur commit was refused; one that holds focus is left to its blur', async () => {
+    const entries = mount()
+    const submit = vi.fn<(text: string) => 'close' | 'keep'>(() => 'keep')
+    entries.open(NEW_NOTE, submit)
+    const textarea = entry()!
+    await nextAnimationFrame()
+    textarea.value = 'Rowan'
+
+    entries.submitUnfocused()
+    expect(submit).not.toHaveBeenCalled()
+
+    // Focus leaves for somewhere off the map while the commit is refused: the entry stays, without focus, and the map
+    // taking focus later cannot blur it again.
+    textarea.blur()
+    expect(submit).toHaveBeenCalledTimes(1)
+    container.focus()
+    expect(submit).toHaveBeenCalledTimes(1)
+
+    submit.mockReturnValue('close')
+    entries.submitUnfocused()
+    expect(submit).toHaveBeenLastCalledWith('Rowan')
+    expect(entries.isOpen()).toBe(false)
+    expect(entry()).toBeNull()
+    // The entry did not hold focus: closing it moves none.
+    expect(focusMap).not.toHaveBeenCalled()
+    entries.submitUnfocused()
+    expect(submit).toHaveBeenCalledTimes(2)
+  })
+
   it('Esc is the entry\'s own: it closes without submitting and never reaches the map', async () => {
     const entries = mount()
     const submit = vi.fn(() => 'close' as const)

@@ -3,9 +3,10 @@
 // Owns the note's text entry (ToolHostDeps.chrome.requestTextEntry, spec §1.4): one textarea over the map, which the host
 // opens for a tool and whose state it reads live (isOpen). 'create' is today's new-note field, 'edit' today's in-place
 // editor of a note (its font size, its text's frame, select-all). Enter and a blur hand the text to the tool's submit, which
-// closes the entry or keeps the same field open while its commit is refused; Esc is the entry's own handler and discards
-// it before any canvas key handling hears it (spec §3.7), then tells the opener (onCancel), so a tool can follow the
-// cancel. Closing a focused entry returns focus to the map
+// closes the entry or keeps the same field open while its commit is refused; an entry whose blur commit was refused no
+// longer holds focus, so the press or menu that would have blurred it submits it instead (submitUnfocused). Esc is the
+// entry's own handler and discards it before any canvas key handling hears it (spec §3.7), then tells the opener
+// (onCancel), so a tool can follow the cancel. Closing a focused entry returns focus to the map
 // (focusMap('text-entry-closed'), INV-FOC-04). The field stays on its anchor through camera moves ('overlays' frames). It
 // listens only on its own textarea (P6).
 
@@ -28,6 +29,8 @@ export interface TextEntryHost {
   open(request: TextEntryRequest, submit: (text: string) => 'close' | 'keep', onCancel?: () => void): void
   /** Discards the open entry without submitting it (no onCancel: the caller closed it). */
   close(): void
+  /** Submits an open entry that does not hold focus (its blur commit was refused); one that holds focus is left to its blur. */
+  submitUnfocused(): void
   isOpen(): boolean
   dispose(): void
 }
@@ -123,6 +126,9 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
   return {
     open,
     close: closeActive,
+    submitUnfocused() {
+      if (active && active.textarea !== document.activeElement) submitActive()
+    },
     isOpen: () => active !== null,
     dispose() {
       if (disposed) return

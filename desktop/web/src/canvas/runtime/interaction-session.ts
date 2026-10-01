@@ -357,6 +357,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
           },
           requestTextEntry: (request, submit, onCancel) => this._textEntry.open(request, submit, onCancel),
           closeTextEntry: () => this._textEntry.close(),
+          submitUnfocusedTextEntry: () => this._textEntry.submitUnfocused(),
           isTextEntryOpen: () => this._textEntry.isOpen(),
           setTooltip: (tooltip) => this._showTooltip(tooltip),
           setLockedAffordance: (affordance) => this._showLockedAffordance(affordance),

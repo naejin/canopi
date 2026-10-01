@@ -566,7 +566,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
    * Every raw pointerdown on the map host, reported by the session before it routes the press (today's _onPointerDown):
    * any button commits the nudge series. An admitted primary or middle press outside the text entry and the Unlock
    * affordance, with no live press from another pointer and no pending cancellation, also closes the menu and moves focus
-   * to the map, so an open text entry commits on its blur before the press reaches the tool; a click inside the entry keeps
+   * to the map, so an open text entry commits before the press reaches the tool (focusMap); a click inside the entry keeps
    * it open. Under Text the primary press that so commits the note places nothing (spec §3.2): Text never hears it. A press
    * on the live press's own pointer (its up was lost) counts, as today's. The host knows only its own live press: a pan
    * lives in the recogniser, which ignores a second pointer anyway.
@@ -615,9 +615,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   /** Today's _pointerDownWhenSettled, in order: the press's capture, handles, the probe, the tool. Focus moved at the raw
-   *  press (rawPress), so an open text entry has committed on its blur. A capture lost while it is taken (a synchronous
-   *  lostpointercapture) ended the press: nothing else happens, as today's check after capture. A press that committed
-   *  Text's note (`commitsNote`) ends where today's Text adapter took it: the tool hears none of it, nor its drag or release. */
+   *  press (rawPress), so an open text entry has committed. A capture lost while it is taken (a synchronous lostpointercapture)
+   *  ended the press: nothing else happens, as today's check after capture. A press that committed Text's note (`commitsNote`)
+   *  ends where today's Text adapter took it: the tool hears none of it, nor its drag or release. */
   function pressWhenSettled(g: Extract<Gesture, { kind: 'press' }>, commitsNote: boolean): boolean {
     const tool = activeTool
     if (!tool) return false
@@ -877,10 +877,13 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     return true
   }
 
+  /** A press or a menu moves focus to the map, which commits an open text entry as today's explicit commit did: one that
+   *  holds focus on the blur this causes, one whose blur commit was refused (it no longer holds focus) by its submit. */
   function focusMap(): void {
     const entryOpen = deps.chrome.isTextEntryOpen()
+    if (entryOpen) deps.chrome.submitUnfocusedTextEntry()
     deps.focus.focusMap(entryOpen ? 'text-entry-closed' : 'tool-requested')
-    // The entry commits on its blur: Select's handles, hidden while it was open, follow at once.
+    // Select's handles, hidden while the entry was open, follow at once.
     if (entryOpen) flush()
   }
 

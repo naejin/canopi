@@ -114,6 +114,9 @@ export interface ToolHostDeps {
   readonly chrome: {
     setHandles(h: readonly ToolHandle[], active: ToolHandleId | null): void; setCursor(c: string): void
     requestTextEntry(r: TextEntryRequest, submit: (text: string) => 'close' | 'keep', onCancel?: () => void): void; closeTextEntry(): void
+    /** Submits an open entry that no longer holds focus (its blur commit was refused), which the map taking focus cannot
+     *  blur again; an entry that holds focus is left to that blur. A press or a menu calls it before focusing the map. */
+    submitUnfocusedTextEntry(): void
     /** Today's hasActiveEditor(), read live wherever the host needs the entry's state (handles hidden while it is open, the
      *  'text-entry-closed' focus reason on the next press); the host keeps no flag of its own. Until D1's 0B-3 the session's
      *  adapter answers for the bridge's note editor. Esc in the entry stays the entry's own element handler. */

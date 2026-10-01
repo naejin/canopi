@@ -471,6 +471,54 @@ describe('ToolHost', () => {
       expect(h.chrome.textEntry).toBeNull()
     })
 
+    it('a press or a menu submits a text entry whose blur commit was refused, once; a focused one commits on its blur', () => {
+      let busy = true
+      const submitted: string[] = []
+      const select: StubTool = stubTool('select', {
+        command: (c) => {
+          if (c.kind !== 'edit-text') return 'pass'
+          select.ctx().effects.requestTextEntry(
+            { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Old', placeholderKey: 'canvas.note', mode: 'edit' },
+            (text) => {
+              submitted.push(text)
+              return busy ? 'keep' : 'close'
+            },
+          )
+          return 'handled'
+        },
+      })
+      useStubTools(select)
+      const h = harness()
+
+      // Focus leaves the entry while the scene refuses the edit: the entry stays open, without focus.
+      h.host.command({ kind: 'edit-text' })
+      h.typeText('New')
+      expect(h.blurTextEntry()).toBe('keep')
+      busy = false
+      // The map taking focus cannot blur it again: the press submits it, as today's press committed the editor.
+      h.click({ x: 300, y: 250 })
+      expect(submitted).toEqual(['New', 'New'])
+      expect(h.chrome.textEntry).toBeNull()
+      expect(select.count('press')).toBe(1)
+
+      // A menu, a keyboard one included, does the same.
+      for (const source of ['mouse', 'keyboard'] as const) {
+        busy = true
+        h.host.command({ kind: 'edit-text' })
+        h.blurTextEntry()
+        busy = false
+        h.menu(source === 'mouse' ? { x: 300, y: 250 } : 'selection', source)
+        expect(h.chrome.textEntry).toBeNull()
+      }
+      expect(submitted).toHaveLength(6)
+
+      // An entry that holds focus commits once, on the blur the map's focus causes.
+      h.host.command({ kind: 'edit-text' })
+      h.click({ x: 300, y: 250 })
+      expect(submitted).toHaveLength(7)
+      expect(h.chrome.textEntry).toBeNull()
+    })
+
     it('the host reads the text entry\'s state live', () => {
       const handle: ToolHandle = { id: 'rotate' as ToolHandleId, anchor: { x: 10, y: 10 }, hitRadiusPx: 10, glyph: 'rotate', label: 'Rotate' }
       const select = stubTool('select', { activate: (ctx) => ctx.effects.setHandles([handle]) })

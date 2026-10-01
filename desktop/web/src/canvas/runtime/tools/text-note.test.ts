@@ -143,6 +143,22 @@ describe('the Text tool', () => {
     expect(h.chrome.textEntry).toBeNull()
   })
 
+  it('a click commits a note whose blur commit was refused, and places nothing; the next click does', () => {
+    const h = harness()
+    h.click({ x: 24, y: 32 })
+    h.typeText('Busy note')
+    const external = h.edits.begin('external-preview')
+    expect(h.blurTextEntry()).toBe('keep')
+    external.abort()
+
+    h.click({ x: 80, y: 90 })
+    expect(h.store.persisted.annotations).toEqual([expect.objectContaining({ position: { x: 24, y: 32 }, text: 'Busy note' })])
+    expect(h.chrome.textEntry).toBeNull()
+
+    h.click({ x: 80, y: 90 })
+    expect(h.chrome.textEntry?.request.anchor).toEqual({ x: 80, y: 90 })
+  })
+
   it('a press on a note opens a new note there: Text never edits', () => {
     const h = harness({ scene: { annotations: [textNote('note', { x: 100, y: 150 }, 'Prune in March')] } })
 

@@ -176,6 +176,36 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('a click on the map commits a note whose blur commit was refused, and places nothing; the next click places a note', async () => {
+    const deps = createInteractionDeps(container, store, camera)
+    const session = createTestSession(deps)
+    session.setTool('text')
+    container.tabIndex = 0
+    events.pointerDown({ x: 24, y: 32 }, { button: 0 })
+    events.pointerUp({ x: 24, y: 32 }, { button: 0 })
+    await nextAnimationFrame()
+    const textarea = noteEntry()!
+    expect(document.activeElement).toBe(textarea)
+    textarea.value = 'Busy note'
+
+    // Focus leaves the field while the scene is busy: its blur commit is refused, and the field stays without focus.
+    const busy = deps.sceneEdits.begin('external-preview')
+    textarea.blur()
+    await nextAnimationFrame()
+    expect(noteEntry()).toBe(textarea)
+    expect(store.persisted.annotations).toHaveLength(0)
+    busy.abort()
+
+    events.pointerDown({ x: 80, y: 90 }, { button: 0 })
+    events.pointerUp({ x: 80, y: 90 }, { button: 0 })
+    expect(store.persisted.annotations).toEqual([expect.objectContaining({ position: { x: 24, y: 32 }, text: 'Busy note' })])
+    expect(container.querySelector('textarea')).toBeNull()
+
+    events.pointerDown({ x: 80, y: 90 }, { button: 0 })
+    expect(noteEntry()!.style.left).toBe('80px')
+    session.dispose()
+  })
+
   it('does not commit empty text Annotations', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
@@ -254,22 +284,32 @@ describe('SceneInteractionSession', () => {
     expect(container.querySelector('textarea')).toBeNull()
   })
 
-  it('keeps Space from starting canvas panning while a text Annotation editor is active', () => {
+  it('keeps Space from starting canvas panning while a text Annotation editor is active', async () => {
     const deps = createInteractionDeps(container, store, camera)
     const session = createTestSession(deps)
     session.setTool('text')
+    container.tabIndex = 0
+    const before = { ...camera.viewport }
 
     events.pointerDown({ x: 24, y: 32 }, { button: 0 })
-    expect(noteEntry()).not.toBeNull()
+    events.pointerUp({ x: 24, y: 32 }, { button: 0 })
+    await nextAnimationFrame()
+    const textarea = noteEntry()!
+    expect(document.activeElement).toBe(textarea)
     expect(container.style.cursor).toBe('text')
 
-    events.keyDown({
-      key: ' ',
-      code: 'Space',
-      cancelable: true,
-    })
-
+    // Space in the field arms no pan (spec §3.8, fixture G11): the drag that follows on the map pans nothing, and its
+    // press commits the blank field, which writes no note.
+    events.keyDown({ key: ' ', code: 'Space', cancelable: true, target: textarea })
     expect(container.style.cursor).toBe('text')
+    events.pointerDown({ x: 200, y: 200 }, { button: 0 })
+    events.pointerMove({ x: 260, y: 230 }, { button: 0 })
+    events.pointerUp({ x: 260, y: 230 }, { button: 0 })
+    events.keyUp({ key: ' ', code: 'Space', target: container })
+
+    expect(camera.viewport).toEqual(before)
+    expect(noteEntry()).toBeNull()
+    expect(store.persisted.annotations).toHaveLength(0)
     session.dispose()
   })
 
