@@ -250,19 +250,13 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
         getSpeciesCache: this._deps.getSpeciesCache,
         getPlantPresentationContext: this._deps.getPlantPresentationContext,
         getLocalizedCommonNames: this._deps.getLocalizedCommonNames,
-        readPlantSpacingIntervalMeters: this._deps.readPlantSpacingIntervalMeters,
-        commitPlantSpacingIntervalMeters: this._deps.commitPlantSpacingIntervalMeters,
         translate: this._deps.translate,
         switchTool: (name) => this._switchTool(name),
         focusHost: () => this._focusInteractionHost(),
         applySnapping: (point) => this._applySnapping(point),
         readSingleKeyShortcuts: () => this._deps.readSingleKeyShortcuts?.() ?? true,
-        getContainerRect: () => this._currentContainerRect(),
         notifyTransientHistoryChange: () => this._deps.notifyTransientHistoryChange?.(),
         notifyGuidanceChange: () => this._publishToolGuidance(),
-        runWhenSettled: (operation) => {
-          this._deps.commandAdmission.runWhenSettled(operation, undefined, { resumePending: true })
-        },
       }), disposeSceneToolRegistry)
       this._annotationEditor = own(createAnnotationInlineEditor({
         container: this._deps.container,

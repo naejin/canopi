@@ -42,8 +42,6 @@ export interface SceneToolRegistryContext {
   readonly getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
   readonly getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
   readonly getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
-  readonly readPlantSpacingIntervalMeters: () => number
-  readonly commitPlantSpacingIntervalMeters: (meters: number) => void
   readonly translate: CanvasRuntimeTranslator
   readonly getSelection: () => SceneDesignObjectSelection
   readonly clearSelection: () => void
@@ -55,12 +53,9 @@ export interface SceneToolRegistryContext {
   readonly applySnapping: (point: ScenePoint) => ScenePoint
   /** Settings › Keyboard › Single-key shortcuts, for the stamp's `[` and `]`. */
   readonly readSingleKeyShortcuts: () => boolean
-  readonly getContainerRect: () => DOMRect
   readonly notifyTransientHistoryChange: () => void
   /** A tool's guidance changed outside a map event (a note field closed). */
   readonly notifyGuidanceChange: () => void
-  /** Runs a Scene edit outside a map event once the Scene is settled. */
-  readonly runWhenSettled: (operation: () => void) => void
 }
 
 export interface SceneToolRegistry {
