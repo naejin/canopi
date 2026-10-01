@@ -7,6 +7,7 @@ import {
   type ToolHarnessOptions,
 } from '../../../__tests__/support/tool-harness'
 import type { SceneDesignObjectTarget } from '../scene/design-object-targets'
+import { roundGeoPosition } from '../scene/geo-frame'
 import type { WorldPoint } from '../view/types'
 import type { DraftShape } from './draft'
 import { createMeasurementGuideTool } from './measurement-guide'
@@ -59,6 +60,7 @@ function cornerMarkers(h: ToolHarness): WorldPoint[] {
 describe('Polygon tool', () => {
   it('each press adds a corner; Enter finishes with 3', () => {
     const h = harness()
+    const selectionWrites = vi.spyOn(h.store, 'setSelection')
 
     h.click({ x: 10, y: 10 })
     h.click({ x: 60, y: 10 })
@@ -76,8 +78,12 @@ describe('Polygon tool', () => {
       rotationDeg: 0,
       points: [{ x: 10, y: 10 }, { x: 60, y: 10 }, { x: 60, y: 50 }],
     })
-    // One Scene Edit selects the new zone; the draft goes and the zone's own chips show.
+    const stored = [{ x: 10, y: 10 }, { x: 60, y: 10 }, { x: 60, y: 50 }]
+      .map((point) => roundGeoPosition(h.store.sessionPlane.toGeo(point)))
+    expect(h.store.toCanopiFile().zones[0]).toMatchObject({ zone_type: 'polygon', rotation: 0, locked: false, points: stored })
+    // One Scene Edit selects the new zone, in one selection write; the draft goes and the zone's own chips show.
     expect(h.store.session.selectedTargets).toEqual([{ kind: 'zone', id: zone.id }])
+    expect(selectionWrites).toHaveBeenCalledTimes(1)
     expect(shapes(h).every((shape) => shape.kind === 'label')).toBe(true)
     expect(h.host.transientHistory.canUndo()).toBe(false)
     expect(h.host.activeToolHasTransient()).toBe(false)
@@ -276,6 +282,26 @@ describe('Polygon tool', () => {
     h.arm('select')
     expect(h.renderer.lastDraft()).toBeNull()
     expect(h.host.transientHistory.canUndo()).toBe(false)
+  })
+
+  it('a window blur keeps a redo beside corners and drops a redo-only history, as today', () => {
+    const h = harness()
+
+    // Corners left: the redo stays with them (today's preservePolygonDraft kept both).
+    h.click({ x: 10, y: 10 })
+    h.click({ x: 60, y: 10 })
+    expect(h.host.transientHistory.undo()).toBe(true)
+    h.blur()
+    expect(cornerMarkers(h)).toEqual([{ x: 10, y: 10 }])
+    expect(h.host.transientHistory.canRedo()).toBe(true)
+
+    // No corner left: today kept the draft only while it had corners (hasPolygonDraft), so the redo goes.
+    expect(h.host.transientHistory.undo()).toBe(true)
+    expect(h.host.transientHistory.canRedo()).toBe(true)
+    h.blur()
+    expect(h.host.transientHistory.canRedo()).toBe(false)
+    expect(h.host.activeToolHasTransient()).toBe(false)
+    expect(h.host.escapeHint()).toBe('leave-tool')
   })
 
   it('a closed Zones layer drops the draft and commits nothing', () => {

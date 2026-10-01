@@ -65,6 +65,7 @@ const ZONE_FILL = { token: 'draft-fill' } as const
 describe('Zone drag tools', () => {
   it('a rectangle drag commits one zone', () => {
     const h = harness({ tool: 'rectangle' })
+    const selectionWrites = vi.spyOn(h.store, 'setSelection')
 
     h.drag({ x: 10, y: 20 }, { x: 40, y: 60 })
 
@@ -75,7 +76,9 @@ describe('Zone drag tools', () => {
       rotationDeg: 0,
       points: [{ x: 10, y: 20 }, { x: 40, y: 20 }, { x: 40, y: 60 }, { x: 10, y: 60 }],
     })
+    // One selection write, the Scene Edit's.
     expect(h.store.session.selectedTargets).toEqual([{ kind: 'zone', id: zone.id }])
+    expect(selectionWrites).toHaveBeenCalledTimes(1)
     // The draft goes with the release; the new zone's own chips show.
     expect(shapes(h).every((shape) => shape.kind === 'label')).toBe(true)
     expect(h.undo()).toBe(true)

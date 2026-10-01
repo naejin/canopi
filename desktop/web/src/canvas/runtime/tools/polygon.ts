@@ -5,8 +5,9 @@
 // first corner closes a shape of 3 or more, tested on ToolPoint.free (today's snap(raw)), and Enter finishes it, in one
 // Scene Edit that selects the new zone. Hovers, and the drag after a press, move the rubber band and add nothing. The
 // first corner clears the selection without an undo step. Backspace and Edit › Undo take the last corner back onto a redo
-// stack (transient history, no Scene Edit); Esc drops the draft and its redo; a pan or an interruption keeps them
-// ('navigate'), overview, a tool change or a document replacement drops them, and a re-origin moves them through lon/lat.
+// stack (transient history, no Scene Edit); Esc drops the draft and its redo; an interruption ('navigate') keeps them while
+// the draft has corners and drops a redo-only history, as today; overview, a tool change or a document replacement drops
+// them, and a re-origin moves them through lon/lat.
 // The draft is a fill-only polygon of the corners, the rubber band, a disc per corner and the edge and area chips
 // (tools/measure-labels.ts), whose edge chips re-cull on every camera frame.
 
@@ -200,8 +201,9 @@ export function createPolygonTool(): CanvasTool {
     hasTransient,
     escapeHint: () => hasTransient() ? 'drop-transient' : 'leave-tool',
     cancelTransient(reason) {
-      if (reason === 'navigate' || !hasTransient()) return
-      drop()
+      // An interruption keeps the draft only while it has corners (today's hasPolygonDraft): a redo-only history goes.
+      if (reason === 'navigate' && corners.length > 0) return
+      if (hasTransient()) drop()
     },
     canUndoTransient: () => corners.length > 0,
     canRedoTransient: () => redo.length > 0,

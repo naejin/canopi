@@ -1044,6 +1044,25 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('clears redo-only polygonal zone draft history on window blur', () => {
+    const deps = createInteractionDeps(container, store, camera)
+    const session = createTestSession(deps)
+    session.setTool('polygon')
+
+    events.pointerDown({ x: 10, y: 10 }, { pointerId: 1 })
+    events.pointerUp({ x: 10, y: 10 }, { pointerId: 1 })
+    expect(session.undoTransientHistory()).toBe(true)
+    expect(session.canRedoTransientHistory()).toBe(true)
+
+    events.windowBlur()
+
+    // Today's interruption kept the draft only while it had corners (hasPolygonDraft).
+    expect(session.canRedoTransientHistory()).toBe(false)
+    expect(session.redoTransientHistory()).toBe(false)
+    expect(draftBand()).toBeNull()
+    session.dispose()
+  })
+
   it('clears polygonal zone draft redo when a new vertex branches the draft', () => {
     const deps = createInteractionDeps(container, store, camera)
     const session = createTestSession(deps)
