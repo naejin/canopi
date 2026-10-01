@@ -118,8 +118,8 @@ export interface ToolHostDeps {
      *  blur again; an entry that holds focus is left to that blur. A press or a menu calls it before focusing the map. */
     submitUnfocusedTextEntry(): void
     /** Today's hasActiveEditor(), read live wherever the host needs the entry's state (handles hidden while it is open, the
-     *  'text-entry-closed' focus reason on the next press); the host keeps no flag of its own. Until D1's 0B-3 the session's
-     *  adapter answers for the bridge's note editor. Esc in the entry stays the entry's own element handler. */
+     *  'text-entry-closed' focus reason on the next press); the host keeps no flag of its own. Esc in the entry stays the
+     *  entry's own element handler. */
     isTextEntryOpen(): boolean
     setTooltip(t: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null): void   // chrome/hover-tooltip.ts
     /** chrome/locked-affordance.ts; its factory takes onUnlock, wired by interaction-session.ts. */
