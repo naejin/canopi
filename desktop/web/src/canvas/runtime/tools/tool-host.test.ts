@@ -1,4 +1,6 @@
 import { effect, signal } from '@preact/signals'
+import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createToolHarness,
@@ -13,8 +15,10 @@ import {
   type ToolHarnessOptions,
 } from '../../../__tests__/support/tool-harness'
 import { createTestView } from '../../../__tests__/support/test-view'
+import { closeCanvasContextMenu, openCanvasContextMenu } from '../../../app/canvas-context-menu/state'
+import { CanvasContextMenu } from '../../../components/canvas/CanvasContextMenu'
 import { gridInterval, snapToGrid } from '../../grid'
-import type { CanvasContextMenuRequest } from '../app-adapter'
+import type { CanvasContextMenuCommands, CanvasContextMenuRequest } from '../app-adapter'
 import type { ToolHandleId } from '../interaction-types'
 import type { SceneDesignObjectTarget } from '../scene/design-object-targets'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
@@ -1676,38 +1680,68 @@ describe('ToolHost', () => {
       view.dispose()
     })
 
-    it('the menu port follows the app\'s own close, which gives focus back to the map', () => {
+    it("the menu port follows every close of the app's menu, with or without a focus return", async () => {
       const source = createToolSceneSource(sceneStoreWith({}))
-      const opened: CanvasContextMenuRequest[] = []
-      const closed: CanvasContextMenuRequest[] = []
       const returnFocus = vi.fn()
       const view = createTestView()
+      // The app's menu over its own state, which app/canvas-runtime/app-adapter.ts lends the runtime as its adapter.
+      const app = document.body.appendChild(document.createElement('div'))
+      await act(async () => render(h(CanvasContextMenu, null), app))
       const port = createContextMenuPort({
         container: document.createElement('div'),
         camera: view.legacyCamera,
-        adapter: { open: (request) => opened.push(request), close: (request) => closed.push(request) },
-        commands: {} as never,
+        adapter: { open: openCanvasContextMenu, close: closeCanvasContextMenu },
+        // No command runs here: each one does nothing.
+        commands: new Proxy({}, { get: () => () => false }) as CanvasContextMenuCommands,
         returnFocus,
         scene: createToolScene(source),
         selectionModel: source.selectionModel,
       })
+      const menu = () => document.querySelector<HTMLElement>('[role="menu"]')
+      const openMenu = async () => {
+        await act(async () => port.open({ at: { x: 10, y: 10 }, source: 'mouse', screen: { x: 10, y: 10 }, hit: null }))
+        expect(menu()).not.toBeNull()
+        expect(port.isOpen()).toBe(true)
+      }
 
-      port.open({ at: { x: 10, y: 10 }, source: 'mouse', screen: { x: 10, y: 10 }, hit: null })
-      const first = opened.at(-1)!
-      // Esc, Tab or a chosen command: the app closes its menu itself and hands focus back through the request.
-      first.returnFocus()
-      expect(returnFocus).toHaveBeenCalledTimes(1)
-      expect(port.isOpen()).toBe(false)
+      try {
+        // A press or focus elsewhere, a resize, a scroll: the app's menu closes itself and gives no focus back.
+        for (const closeElsewhere of [
+          () => document.body.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0 })),
+          () => app.dispatchEvent(new FocusEvent('focusin', { bubbles: true })),
+          () => window.dispatchEvent(new Event('resize')),
+          () => document.dispatchEvent(new Event('scroll')),
+        ]) {
+          await openMenu()
+          await act(async () => { closeElsewhere() })
+          expect(menu()).toBeNull()
+          expect(port.isOpen()).toBe(false)
+        }
+        expect(returnFocus).not.toHaveBeenCalled()
 
-      port.open({ at: { x: 20, y: 20 }, source: 'mouse', screen: { x: 20, y: 20 }, hit: null })
-      // A dialog the first menu opened hands focus back later: the second menu is still open.
-      first.returnFocus()
-      expect(port.isOpen()).toBe(true)
+        // Esc: the menu closes and gives focus back to the map.
+        await openMenu()
+        await act(async () => {
+          menu()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+        })
+        expect(menu()).toBeNull()
+        expect(returnFocus).toHaveBeenCalledOnce()
+        expect(port.isOpen()).toBe(false)
 
-      port.close()
-      expect(closed).toEqual([opened.at(-1)])
-      expect(port.isOpen()).toBe(false)
-      view.dispose()
+        // A newer menu replaces the open one, whose close leaves the newer one open until the runtime closes it.
+        await openMenu()
+        await openMenu()
+        await act(async () => port.close())
+        expect(menu()).toBeNull()
+        expect(port.isOpen()).toBe(false)
+      } finally {
+        await act(async () => {
+          closeCanvasContextMenu()
+          render(null, app)
+        })
+        app.remove()
+        view.dispose()
+      }
     })
   })
 })

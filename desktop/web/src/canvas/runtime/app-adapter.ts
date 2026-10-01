@@ -101,6 +101,13 @@ export interface CanvasContextMenuRequest {
   readonly placePlantsAt?: (world: ScenePoint) => void
   /** Gives keyboard focus back to the map. */
   returnFocus(): void
+  /**
+   * The app calls this once the request's menu has closed, however it
+   * closed: a command, Esc or Tab (before returnFocus), a press or focus
+   * elsewhere, a resize, a scroll, a newer request or the runtime's own
+   * close. The runtime's menu state follows it.
+   */
+  closed?(): void
 }
 
 /**
