@@ -1,13 +1,14 @@
 // canvas/runtime/tools/plant-row.ts
 //
 // Owns Plant a row ('plant-spacing', key W; spec §1.4, §3.2, §3.7): a press on a placed plant picks it as the row's source,
-// then a hover or a drag (4 px slop) previews the row from it and a press or a drag's release commits it, one Scene Edit
-// that selects the source and the new plants. The row's plants repeat the source at the spacing interval of the tool card's
-// field (the spacing commands; Settings keeps the interval). Shift turns the row to 45° steps from the source and turns
-// snapping off (the host's constraint and noSnap), and the host clamps the pointer to the view (clampsToView). A pan, a blur
-// and a tool re-arm keep the source; Esc drops it first, then leaves the tool (today's order, even mid-drag). The draft is
-// the source ring at the plant's presented radius, the dashed row guide, a disc for each plant the row would add (at most
-// 250) and the guide's length.
+// then every hover and every move of a held press previews the row from it, and a press or a drag's release commits it, one
+// Scene Edit that selects the source and the new plants. The recogniser reports a held press's moves at once (slop 0) and
+// the tool keeps today's 4 px itself: a move 4 px from the press on screen makes it a drag, else its release is a click.
+// The row's plants repeat the source at the spacing interval of the tool card's field (the spacing commands; Settings keeps
+// the interval). Shift turns the row to 45° steps from the source and turns snapping off (the host's constraint and
+// noSnap), and the host clamps the pointer to the view (clampsToView). A pan, a blur and a tool re-arm keep the source; Esc
+// drops it first, then leaves the tool (today's order, even mid-drag). The draft is the source ring at the plant's
+// presented radius, the dashed row guide, a disc for each plant the row would add (at most 250) and the guide's length.
 
 import {
   formatPlantSpacingGuideLength,
@@ -32,7 +33,8 @@ import type { CanvasTool, ToolCommand, ToolContext, ToolPoint } from './tool'
 const PLANT_ROW_DENSE_WARNING_THRESHOLD = 100
 const PLANT_ROW_PREVIEW_POSITION_LIMIT = 250
 const PLANT_ROW_COMMIT_POSITION_LIMIT = 5_000
-const PLANT_ROW_DRAG_SLOP_PX = 4
+/** Today's drag start, on screen from the press; the tool measures it, so the moves inside it still preview. */
+const PLANT_ROW_DRAG_PX = 4
 const PLANT_ROW_GHOST_OPACITY = 0.35
 /** Two points closer than this on screen are the same pointer position (today's 0.001 px). */
 const SAME_POINTER_SCREEN_PX = 0.001
@@ -67,6 +69,8 @@ export function createPlantRowTool(): CanvasTool {
   let missed = false
   let shownCount: { readonly count: number; readonly density: CanvasPlantRowGuidance['density'] } | null = null
   let focusRequest = 0
+  /** A move of the held press went PLANT_ROW_DRAG_PX out: its release commits (today's drag), else it is a click. */
+  let dragging = false
 
   function context(): ToolContext {
     if (!ctx) throw new Error('Plant a row is not active.')
@@ -209,6 +213,16 @@ export function createPlantRowTool(): CanvasTool {
     updatePreview(point.snapped)
   }
 
+  /** A move of the held press: the row follows it, and the first move 4 px out starts the drag and focuses the map. */
+  function followDrag(point: ToolPoint, start: ToolPoint): void {
+    const tool = context()
+    if (!dragging && tool.view.screenDistance(start.world, point.world) >= PLANT_ROW_DRAG_PX) {
+      dragging = true
+      tool.effects.requestFocus('map')
+    }
+    previewAt(point)
+  }
+
   function commitPreview(nextEndpoint: WorldPoint): void {
     if (!source) return
     if (!canUseSource(source)) {
@@ -303,7 +317,8 @@ export function createPlantRowTool(): CanvasTool {
 
   return {
     id: 'plant-spacing',
-    dragSlopPx: PLANT_ROW_DRAG_SLOP_PX,
+    // The recogniser reports the drag at once, so the moves inside today's 4 px preview too (followDrag measures them).
+    dragSlopPx: 0,
     // A pan keeps the row's source and preview.
     preservesTransientOnNavigate: true,
     clampsToView: true,
@@ -318,21 +333,19 @@ export function createPlantRowTool(): CanvasTool {
     gesture(g) {
       switch (g.kind) {
         case 'press':
+          dragging = false
           if (source) commitPreview(g.point.snapped)
           else pickSource(g.point)
           break
         case 'drag-start':
-          if (!source) return 'pass'
-          context().effects.requestFocus('map')
-          previewAt(g.point)
-          break
         case 'drag-move':
           if (!source) return 'pass'
-          previewAt(g.point)
+          followDrag(g.point, g.start)
           break
         case 'drag-end':
           if (!source) return 'pass'
-          commitPreview(dragCommitEndpoint(g.point))
+          // A release that never went 4 px out is a click: its press did all a click does, and the preview stays.
+          if (dragging) commitPreview(dragCommitEndpoint(g.point))
           break
         case 'hover':
           if (!source) return 'pass'

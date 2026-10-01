@@ -854,6 +854,31 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('previews Plant Spacing from moves inside its 4 px drag slop', () => {
+    plantSpacingIntervalM.value = 0.5
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('source', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const session = createTestSession(deps)
+    session.setTool('plant-spacing')
+
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    const input = spacingInput()!
+    events.pointerMove({ x: 22, y: 30 }, { button: 0 })
+
+    expect(draftShapes('polyline')[0]?.points).toEqual([{ x: 20, y: 30 }, { x: 22, y: 30 }])
+    expect(rowLength()).toBe('2 m')
+    expect(document.activeElement).toBe(input)
+    events.pointerUp({ x: 22, y: 30 }, { button: 0 })
+
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    expect(store.persisted.plants).toHaveLength(1)
+    expect(rowSource('source')).toBe(true)
+    session.dispose()
+  })
+
   it('commits Plant Spacing from click-hold drag without focusing the interval input mid-drag', () => {
     plantSpacingIntervalM.value = 2
     store.updatePersisted((draft) => {
