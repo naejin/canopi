@@ -105,6 +105,10 @@ describe('Calendar action editor', () => {
   let container: HTMLDivElement
 
   beforeEach(async () => {
+    // The calendar opens on the current month and marks today: pin the clock
+    // inside the fixture action's month so no test reads the real date.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-09-15T12:00:00'))
     vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
     vi.stubGlobal('scrollTo', () => {})
     if (!HTMLElement.prototype.scrollIntoView) HTMLElement.prototype.scrollIntoView = () => {}
@@ -112,9 +116,11 @@ describe('Calendar action editor', () => {
     document.body.appendChild(container)
     locale.value = 'en'
     disposePlanningViewState()
-    readPlanningViewState().calendarMonth.value = '2026-09-01'
     designSessionFixture.file = design()
     designSessionFixture.nonCanvasRevision = 0
+    // A new file starts a new session with fresh planning view state, so the
+    // month is set after it; set before, it was discarded.
+    readPlanningViewState().calendarMonth.value = '2026-09-01'
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       queries: createTestCanvasQuerySurface({
         plants,
@@ -136,6 +142,7 @@ describe('Calendar action editor', () => {
     sidePanel.value = null
     disposePlanningViewState()
     vi.unstubAllGlobals()
+    vi.useRealTimers()
   })
 
   async function openEdit(): Promise<HTMLElement> {
@@ -395,6 +402,7 @@ describe('Calendar action editor', () => {
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       queries: createTestCanvasQuerySurface({ scene, plants }),
     }))
+    readPlanningViewState().calendarMonth.value = '2026-09-01'
     await act(async () => { render(<CalendarPanel />, container) })
 
     expect(container.textContent).not.toMatch(/zone-[0-9a-f]{8}/)

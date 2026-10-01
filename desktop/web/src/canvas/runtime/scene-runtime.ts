@@ -405,7 +405,8 @@ export class SceneCanvasRuntime {
   }
 
   private _notifyTransientHistoryChanged(): void {
-    this._transientHistoryRevision.value += 1
+    // A write that reads nothing: the host bumps it from tool calls and settling commits inside the runtime's effects.
+    this._transientHistoryRevision.value = this._transientHistoryRevision.peek() + 1
   }
 
   private _renderChrome(): void {

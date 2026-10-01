@@ -1,12 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { stubTool, useStubTools, type StubTool } from '../../__tests__/support/tool-harness'
-import { captureWindowErrors, createInteractionDeps, makePlant, plantTarget } from '../../__tests__/support/scene-interaction-setup'
+import {
+  captureWindowErrors,
+  contextMenuHost,
+  createInteractionDeps,
+  dispatchContextMenu,
+  makePlant,
+  plantTarget,
+} from '../../__tests__/support/scene-interaction-setup'
 import {
   createSceneInteractionEventHarness,
   type SceneInteractionEventHarness,
 } from '../../__tests__/support/scene-interaction-events'
 import { createTestView } from '../../__tests__/support/test-view'
-import { clearPlantStampSource, readPlantStampSource, selectPlantStampSource } from '../plant-stamp-source'
+import {
+  clearPlantStampSource,
+  readPlantStampSource,
+  selectPlantStampSource,
+  writePlantStampDragData,
+} from '../plant-stamp-source'
 import {
   clearSavedObjectStampSource,
   readSavedObjectStampDragPreviewSource,
@@ -170,13 +182,13 @@ describe('the interaction session', () => {
     expect(rectangle.gestures.map((gesture) => gesture.kind)).toEqual(['press', 'drag-start', 'drag-end'])
     expect(store.persisted.zones).toHaveLength(0)
 
-    session.setTool('ellipse')
+    // Text stays on the bridge through every 0B-3 registry move: today's adapter opens its note field there, and the
+    // host's tool hears nothing more.
+    session.setTool('text')
+    expect(container.querySelector('textarea')).toBeNull()
     events.pointerDown({ x: 120, y: 120 })
-    events.pointerMove({ x: 180, y: 160 })
-    events.pointerUp({ x: 180, y: 160 })
-    // Ellipse is not registered: today's adapter on the bridge made the zone, and the host's tool heard nothing more.
-    expect(store.persisted.zones).toHaveLength(1)
-    expect(store.persisted.zones[0]?.zoneType).toBe('ellipse')
+    events.pointerUp({ x: 120, y: 120 })
+    expect(container.querySelector('textarea')).not.toBeNull()
     expect(rectangle.gestures).toHaveLength(3)
     expect(rectangle.calls).toContain('deactivate:switch')
   })
@@ -827,6 +839,328 @@ describe('the interaction session', () => {
     events.holdSpace()
     expect(container.style.cursor).toBe('grab')
     events.releaseSpace()
+  })
+})
+
+/** A panel drag event over the map at a container point, carrying `data` (a species, by default nothing of ours). */
+function dispatchDrag(type: 'dragover' | 'dragleave' | 'drop', at: { x: number, y: number }, data?: (transfer: DataTransferLike) => void): DragEvent {
+  const dragData = new Map<string, string>()
+  const dataTransfer: DataTransferLike = {
+    effectAllowed: 'none',
+    dropEffect: 'none',
+    get types() { return Array.from(dragData.keys()) },
+    setData(format: string, value: string) { dragData.set(format, value) },
+    getData(format: string) { return dragData.get(format) ?? '' },
+  }
+  data?.(dataTransfer)
+  const event = new Event(type, { bubbles: true, cancelable: true }) as DragEvent
+  const point = events.clientPoint(at)
+  Object.defineProperties(event, {
+    clientX: { configurable: true, value: point.x },
+    clientY: { configurable: true, value: point.y },
+    dataTransfer: { configurable: true, value: dataTransfer },
+  })
+  container.dispatchEvent(event)
+  return event
+}
+
+interface DataTransferLike {
+  effectAllowed: string
+  dropEffect: string
+  readonly types: readonly string[]
+  setData(format: string, value: string): void
+  getData(format: string): string
+}
+
+const PEAR = { canonical_name: 'Pyrus communis', common_name: 'Pear', stratum: 'mid', width_max_m: 3 }
+
+/** A registered tool whose press opens a Scene Edit that its cancelTransient aborts. */
+function editingTool(id: 'rectangle' | 'hand'): { readonly tool: StubTool, readonly open: () => boolean } {
+  let edit: SceneEditTransaction | null = null
+  const tool: StubTool = stubTool(id, {
+    gesture: (gesture) => {
+      if (gesture.kind === 'press') edit = tool.ctx().effects.edits.begin(`interaction-${id}`)
+      return 'pass'
+    },
+    cancelTransient: () => {
+      edit?.abort()
+      edit = null
+    },
+  })
+  return { tool, open: () => edit !== null }
+}
+
+describe('registered tools against today\'s session (0B-3 host rulings)', () => {
+  it('a registered tool\'s press takes its capture after admission and before the tool hears it', () => {
+    const captured: boolean[] = []
+    const rectangle = stubTool('rectangle', {
+      gesture: (gesture) => {
+        if (gesture.kind === 'press') captured.push(events.pointerCapture.has(6))
+        return 'pass'
+      },
+    })
+    useStubTools(rectangle)
+    const { session, deps } = createSession()
+    session.setTool('rectangle')
+
+    events.pointerDown({ x: 20, y: 20 }, { pointerId: 6 })
+    expect(captured).toEqual([true])
+    events.pointerUp({ x: 20, y: 20 }, { pointerId: 6 })
+
+    // A press the scene refuses takes no capture.
+    const busy = deps.sceneEdits.begin('elsewhere')
+    events.pointerDown({ x: 30, y: 30 }, { pointerId: 7 })
+    expect(events.pointerCapture.setCalls).not.toHaveBeenCalledWith(7)
+    expect(rectangle.count('press')).toBe(1)
+    busy.abort()
+  })
+
+  it('a press whose pointer\'s last up was lost keeps the capture it takes; a refused one keeps neither capture', () => {
+    const rectangle = stubTool('rectangle')
+    useStubTools(rectangle)
+    const { session, deps } = createSession()
+    session.setTool('rectangle')
+
+    events.pointerDown({ x: 20, y: 20 }, { pointerId: 6 })
+    events.pointerMove({ x: 40, y: 40 }, { pointerId: 6 })
+    // The up is lost: pointer 6 presses again, ending its old session first.
+    events.pointerDown({ x: 60, y: 60 }, { pointerId: 6 })
+    expect(rectangle.count('press')).toBe(2)
+    expect(events.pointerCapture.has(6)).toBe(true)
+    events.pointerUp({ x: 60, y: 60 }, { pointerId: 6 })
+
+    events.pointerDown({ x: 20, y: 20 }, { pointerId: 8 })
+    const busy = deps.sceneEdits.begin('elsewhere')
+    events.pointerDown({ x: 60, y: 60 }, { pointerId: 8 })
+    expect(rectangle.count('press')).toBe(3)
+    expect(events.pointerCapture.has(8)).toBe(false)
+    busy.abort()
+  })
+
+  it('a capture lost synchronously while it is taken stops the press before the tool, as today', () => {
+    events.dispose()
+    events = createSceneInteractionEventHarness(container, { pointerCapture: { synchronousLossOnSet: true } })
+    const { tool: rectangle, open } = editingTool('rectangle')
+    useStubTools(rectangle)
+    const { session } = createSession()
+    session.setTool('rectangle')
+
+    events.pointerDown({ x: 20, y: 30 }, { pointerId: 24 })
+    expect(events.pointerCapture.setCalls).toHaveBeenCalledWith(24)
+    expect(events.pointerCapture.has(24)).toBe(false)
+    expect(rectangle.count('press')).toBe(0)
+    expect(open()).toBe(false)
+    events.pointerMove({ x: 40, y: 50 }, { pointerId: 24 })
+    events.pointerUp({ x: 40, y: 50 }, { pointerId: 24 })
+    expect(rectangle.count('drag-start')).toBe(0)
+  })
+
+  it('Place plants here from a bridged tool\'s menu places through the host once Place plants is registered', () => {
+    const stamp = stubTool('plant-stamp', { command: (command) => command.kind === 'place-at' ? 'handled' : 'pass' })
+    useStubTools(stamp)
+    const tools: string[] = []
+    const { session } = createSession({ setTool: (name) => { tools.push(name) } })
+    session.setTool('select')
+    contextMenuHost.reset()
+
+    dispatchContextMenu(container, events.clientPoint({ x: 120, y: 80 }))
+    const request = contextMenuHost.current
+    expect(request?.placePlantsAt).toBeDefined()
+    request!.placePlantsAt!({ x: 120, y: 80 })
+
+    expect(tools.at(-1)).toBe('plant-stamp')
+    expect(stamp.commands).toEqual([{ kind: 'place-at', world: { x: 120, y: 80 } }])
+    // The app closes the request it holds.
+    session.setTool('select')
+    dispatchContextMenu(container, events.clientPoint({ x: 60, y: 60 }))
+    const reopened = contextMenuHost.current
+    events.pointerDown({ x: 10, y: 10 })
+    events.pointerUp({ x: 10, y: 10 })
+    expect(reopened).not.toBeNull()
+    expect(contextMenuHost.current).toBeNull()
+  })
+
+  it('leaving a registered tool cancels its press through the host even when the bridge\'s hover clear fails', () => {
+    const { tool: rectangle, open } = editingTool('rectangle')
+    useStubTools(rectangle)
+    let failHover = false
+    const { session } = createSession({
+      setHoveredTarget: () => {
+        if (failHover) throw new Error('hover cleanup failed')
+      },
+    })
+    session.setTool('rectangle')
+    events.pointerDown({ x: 20, y: 30 }, { pointerId: 15 })
+    events.pointerMove({ x: 35, y: 45 }, { pointerId: 15 })
+    expect(open()).toBe(true)
+
+    failHover = true
+    expect(() => session.setTool('ellipse')).toThrow('hover cleanup failed')
+    failHover = false
+    expect(rectangle.last('cancel')).toEqual({ kind: 'cancel', reason: 'tool-change' })
+    expect(open()).toBe(false)
+    expect(events.pointerCapture.has(15)).toBe(false)
+    expect(builtHosts.at(-1)?.activeTool.value).toBe('rectangle')
+    expect(container.style.cursor).toBe('crosshair')
+  })
+
+  it('a bridge that fails after the host left a registered tool re-arms it, and the tool\'s pan and cursor end', () => {
+    const hand = stubTool('hand')
+    useStubTools(hand)
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    let failSelection = false
+    const base = createInteractionDeps(container, store, camera)
+    const { session } = createSession({
+      getDesignObjectSelection: () => {
+        if (failSelection) throw new Error('selection refresh failed')
+        return base.getDesignObjectSelection()
+      },
+    })
+    session.setTool('hand')
+    events.pointerDown({ x: 100, y: 100 }, { pointerId: 52 })
+    events.pointerMove({ x: 110, y: 110 }, { pointerId: 52 })
+    expect(container.style.cursor).toBe('grabbing')
+
+    failSelection = true
+    expect(() => session.setTool('select')).toThrow('selection refresh failed')
+    failSelection = false
+    expect(builtHosts.at(-1)?.activeTool.value).toBe('hand')
+    expect(container.style.cursor).toBe('grab')
+    expect(events.pointerCapture.has(52)).toBe(false)
+
+    const before = camera.viewport
+    events.pointerDown({ x: 100, y: 100 }, { pointerId: 53 })
+    events.pointerMove({ x: 130, y: 120 }, { pointerId: 53 })
+    events.pointerUp({ x: 130, y: 120 }, { pointerId: 53 })
+    expect(camera.viewport).toEqual({ x: before.x + 30, y: before.y + 20, scale: before.scale })
+  })
+
+  it('entering a registered tool whose activation fails leaves the bridge and the tool as they were', () => {
+    let failActivation = true
+    const rectangle = stubTool('rectangle', {
+      activate: () => {
+        if (failActivation) throw new Error('activation failed')
+      },
+    })
+    useStubTools(rectangle)
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const { session, deps } = createSession()
+    session.setTool('select')
+
+    expect(() => session.setTool('rectangle')).toThrow('activation failed')
+    failActivation = false
+    expect(builtHosts.at(-1)?.activeTool.value).toBe('select')
+    // Select still runs on the bridge: a click selects the plant under it.
+    events.pointerDown({ x: 20, y: 30 })
+    events.pointerUp({ x: 20, y: 30 })
+    expect(deps.setSelection).toHaveBeenLastCalledWith([plantTarget('plant-1')])
+    expect(rectangle.count('press')).toBe(0)
+
+    session.setTool('rectangle')
+    expect(builtHosts.at(-1)?.activeTool.value).toBe('rectangle')
+  })
+
+  it('disposal releases the capture of a registered tool\'s live press and rolls its edit back', () => {
+    const { tool: rectangle, open } = editingTool('rectangle')
+    useStubTools(rectangle)
+    const { session } = createSession()
+    session.setTool('rectangle')
+    events.pointerDown({ x: 20, y: 30 }, { pointerId: 25 })
+    events.pointerMove({ x: 35, y: 45 }, { pointerId: 25 })
+    expect(events.pointerCapture.has(25)).toBe(true)
+
+    session.dispose()
+    expect(events.pointerCapture.releaseCalls).toHaveBeenCalledWith(25)
+    expect(events.pointerCapture.has(25)).toBe(false)
+    expect(open()).toBe(false)
+  })
+
+  it('a pending cancellation is retried before a dragover or a drop reaches the bridge, and the event is swallowed', () => {
+    let failures = 3
+    let edit: SceneEditTransaction | null = null
+    const rectangle: StubTool = stubTool('rectangle', {
+      gesture: (gesture) => {
+        if (gesture.kind === 'press') edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
+        return 'pass'
+      },
+      cancelTransient: () => {
+        if (failures > 0) {
+          failures -= 1
+          throw new Error('cancel failed')
+        }
+        edit?.abort()
+        edit = null
+      },
+    })
+    useStubTools(rectangle)
+    const { session } = createSession()
+    session.setTool('rectangle')
+    const retries = (): number => rectangle.calls.filter((call) => call === 'cancelTransient:tool-change').length
+    const species = (transfer: DataTransferLike) => writePlantStampDragData(transfer, PEAR)
+    const outside = vi.fn()
+    container.addEventListener('dragover', outside)
+    container.addEventListener('drop', outside)
+
+    try {
+      events.pointerDown({ x: 20, y: 20 })
+      expect(captureWindowErrors(() => { events.windowBlur() })).toHaveLength(1)
+
+      // Today's _onDragOver retried first: a retry that fails again still swallows the dragover.
+      let over: DragEvent | null = null
+      expect(captureWindowErrors(() => { over = dispatchDrag('dragover', { x: 60, y: 60 }, species) })).toHaveLength(1)
+      expect(retries()).toBe(1)
+      expect(over!.defaultPrevented).toBe(true)
+      expect(over!.dataTransfer!.dropEffect).toBe('none')
+
+      let drop: DragEvent | null = null
+      expect(captureWindowErrors(() => { drop = dispatchDrag('drop', { x: 60, y: 60 }, species) })).toHaveLength(1)
+      expect(retries()).toBe(2)
+      expect(drop!.defaultPrevented).toBe(true)
+      expect(store.persisted.plants).toHaveLength(0)
+
+      // The retry that succeeds swallows its drop too: no plant is placed.
+      drop = dispatchDrag('drop', { x: 60, y: 60 }, species)
+      expect(retries()).toBe(3)
+      expect(drop.defaultPrevented).toBe(true)
+      expect(store.persisted.plants).toHaveLength(0)
+      expect(outside).not.toHaveBeenCalled()
+
+      // With nothing pending, the bridge's drop places the plant, as today.
+      dispatchDrag('drop', { x: 60, y: 60 }, species)
+      expect(store.persisted.plants).toHaveLength(1)
+    } finally {
+      container.removeEventListener('dragover', outside)
+      container.removeEventListener('drop', outside)
+    }
+  })
+
+  it('a dragover hides a registered tool\'s draft until the pointer moves over the map again', () => {
+    const ghost: DraftPresentation = {
+      shapes: [{ kind: 'circle-px', center: { x: 50, y: 50 }, radiusPx: 4, style: { token: 'draft', widthPx: 1 } }],
+    }
+    const stamp: StubTool = stubTool('object-stamp', {
+      gesture: (gesture) => {
+        if (gesture.kind === 'hover') stamp.ctx().effects.setDraft(ghost)
+        return 'handled'
+      },
+    })
+    useStubTools(stamp)
+    const renderer = recordingRenderer()
+    const { session } = createSession({ renderer })
+    session.setTool('object-stamp')
+    events.pointerMove({ x: 50, y: 50 }, { buttons: 0 })
+    expect(renderer.lastDraft()).toEqual(ghost)
+
+    dispatchDrag('dragover', { x: 60, y: 60 }, (transfer) => writePlantStampDragData(transfer, PEAR))
+    expect(renderer.lastDraft()).toBeNull()
+    dispatchDrag('dragleave', { x: 60, y: 60 })
+    expect(renderer.lastDraft()).toBeNull()
+    events.pointerMove({ x: 70, y: 70 }, { buttons: 0 })
+    expect(renderer.lastDraft()).toEqual(ghost)
   })
 })
 

@@ -19,7 +19,14 @@ import type {
   ToolHostDeps,
   ToolSceneSource,
 } from '../../canvas/runtime/interaction-ports'
-import type { CancelReason, Modifiers, PointerKind, ToolHandleId, ToolId } from '../../canvas/runtime/interaction-types'
+import type {
+  CancelReason,
+  CanvasDropPayload,
+  Modifiers,
+  PointerKind,
+  ToolHandleId,
+  ToolId,
+} from '../../canvas/runtime/interaction-types'
 import type { PlantPresentationContext } from '../../canvas/runtime/plant-presentation'
 import type { SpeciesCacheEntry } from '../../canvas/runtime/presentation-data'
 import {
@@ -55,6 +62,7 @@ import type {
   ToolCommand,
   ToolContext,
   ToolGesture,
+  ToolSettingsPort,
   ToolSource,
 } from '../../canvas/runtime/tools/tool'
 import { createToolHost, createToolScene } from '../../canvas/runtime/tools/tool-host'
@@ -185,8 +193,9 @@ export function createToolSceneSource(store: SceneStore, options: ToolSceneSourc
 // createToolHarness runs gesture scripts through a real createToolHost, with the input router in front of it and a
 // recording ToolHostDeps behind it. The scripts send what the LEGACY recogniser emits (slop 0: any movement after a press
 // is a drag) and do what interaction-session.ts does around it: they report each raw press (a primary press, and the
-// right press before a mouse menu) through rawPress before routing, ask retryPendingCancellation before routing, end a
-// session the host rejected, end the nudge series on focus-out and call interrupted after a blur. Tools come from
+// right press before a mouse menu) through rawPress before routing, ask retryPendingCancellation before routing, take a
+// press's capture when the host asks (capturePress, recorded), end a session the host rejected, end the nudge series on
+// focus-out and call interrupted after a blur. Tools come from
 // tools/registry.ts, which a test replaces through vi.mock('…/tools/registry', () => ({ TOOL_REGISTRY: {} })) and fills
 // with useStubTools.
 
@@ -302,6 +311,15 @@ export interface ToolHarnessOptions {
   readonly inspect?: (world: WorldPoint) => boolean
   /** Default: a series over the edit coordinator, one Scene Edit until endNudge, as the runtime's. */
   readonly nudge?: ToolHostDeps['nudge']
+  /**
+   * ToolHostDeps.capturePress after the harness records it: false when the capture was lost while it was taken (a
+   * synchronous lostpointercapture). Default: the capture holds.
+   */
+  readonly capturePress?: (pointerId: number) => boolean
+  /** The tools' settings port; default a 1 m row interval whose commits go nowhere. */
+  readonly settings?: ToolSettingsPort
+  /** The tools' translator; default the key itself. */
+  readonly translate?: ToolHostDeps['translate']
 }
 
 export interface ToolHarnessRecord {
@@ -314,6 +332,8 @@ export interface ToolHarnessRecord {
   readonly focus: string[]
   readonly menus: Parameters<ContextMenuPort['open']>[0][]
   readonly nudges: string[]
+  /** The pointer ids whose press capture the host took (ToolHostDeps.capturePress), in order. */
+  readonly captures: number[]
 }
 
 export interface ToolHarnessChrome {
@@ -368,6 +388,8 @@ export interface ToolHarness {
   cancel(reason: CancelReason): GestureOutcome
   wheelZoom(at: ScreenPoint, factor: number): GestureOutcome
   menu(at: ScreenPoint | 'selection', source?: MenuSource): GestureOutcome
+  /** A panel drag over the map (dragover, dragleave, drop), as the session hands the host its drop gestures. */
+  drop(phase: 'over' | 'leave' | 'drop', at?: ScreenPoint, payload?: CanvasDropPayload): GestureOutcome
   /** An arrow key as the keyboard port sends it to the host. */
   arrow(key: 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown', large?: boolean): ReturnType<ToolHost['nudge']>
   focusOut(): void
@@ -418,6 +440,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
     focus: [],
     menus: [],
     nudges: [],
+    captures: [],
   }
   const chrome = {
     handles: [] as readonly ToolHandle[],
@@ -500,12 +523,12 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
         toolState.value = id
       },
     },
-    settings: {
+    settings: options.settings ?? {
       plantSpacingIntervalM: () => 1,
       commitPlantSpacingIntervalM: () => {},
     },
     snapping: () => snapping,
-    translate: (key) => key,
+    translate: options.translate ?? ((key) => key),
     bindings: () => LEGACY_BINDINGS,
     platform: { os: 'linux', engine: 'chromium', gestureEvents: false },
     navigation: view.navigation,
@@ -516,6 +539,10 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       record.hovers.push(target)
     },
     ...(options.inspect ? { inspect: options.inspect } : {}),
+    capturePress(pointerId) {
+      record.captures.push(pointerId)
+      return options.capturePress?.(pointerId) ?? true
+    },
     transientHistoryChanged: () => {
       record.transientHistoryChanges += 1
     },
@@ -557,6 +584,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       case 'drag-end':
       case 'menu-request':
       case 'zoom': return true
+      case 'drop': return g.phase !== 'leave'
       case 'pan': return g.source === 'wheel'
       case 'cancel': return g.reason === 'pointercancel'
       default: return false
@@ -651,6 +679,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       if (source === 'mouse') host.rawPress('secondary', { kind: 'surface' })
       return route({ kind: 'menu-request', at, source })
     },
+    drop: (phase, at = { x: 0, y: 0 }, payload = { kind: 'unknown' }) => route({ kind: 'drop', phase, at, payload }),
     arrow: (key, large = false) => host.nudge(ARROW_DIRECTIONS[key], large),
     focusOut() {
       host.endNudgeSeries(true)
