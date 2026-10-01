@@ -175,7 +175,7 @@ describe('view transform', () => {
 
 // Moved from __tests__/projection.test.ts: the centre and the corners of a ViewTransform at bearing 0, in place of
 // projection.ts's viewportCenterGeo and viewportCornerGeoPoints (deleted with canvas/maplibre-camera.ts at the end of 0A).
-describe('viewportCenterGeo', () => {
+describe('ViewTransform.camera center', () => {
   it('projects the viewport center from viewport state', () => {
     const plane = createSessionPlane({ lon: -122.68, lat: 45.52 })
     const view = fromPlane({ x: -200, y: -100, scale: 2, bearingDeg: 0 }, plane)
@@ -186,7 +186,7 @@ describe('viewportCenterGeo', () => {
   })
 })
 
-describe('viewportCornerGeoPoints', () => {
+describe('ViewTransform.visibleWorldQuad corners', () => {
   it('returns four projected corner points for the current viewport', () => {
     const plane = createSessionPlane({ lon: -122.68, lat: 45.52 })
     const view = fromPlane({ x: -200, y: -100, scale: 2, bearingDeg: 0 }, plane)

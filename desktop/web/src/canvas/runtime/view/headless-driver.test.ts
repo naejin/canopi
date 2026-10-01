@@ -27,16 +27,24 @@ interface TodayReadback {
   readonly mode: 'site' | 'overview'
 }
 
-/** Readbacks bit for bit: the placement, both projections (today's p × scale + { x, y } and its inverse), the scale and the mode. */
+/**
+ * Readbacks within 1e-6: the placement against the golden literal, both projections (today's p × scale + { x, y } and its
+ * inverse, self-consistent against the camera's own x/y/scale so a 1e-6 golden drift is not amplified by a large point), the
+ * scale and the mode.
+ */
 function expectReadsAsToday(frame: ViewFrame, today: TodayReadback, compareMinimum = true): void {
   const { viewport } = today
-  expect(planarCameraOf(frame.view)).toEqual({ ...viewport, bearingDeg: 0 })
-  expect(frame.view.pixelsPerMetre).toBe(viewport.scale)
+  const camera = planarCameraOf(frame.view)
+  expect(camera.bearingDeg).toBe(0)
+  expect(camera.x).toBeCloseTo(viewport.x, 6)
+  expect(camera.y).toBeCloseTo(viewport.y, 6)
+  expect(camera.scale).toBeCloseTo(viewport.scale, 6)
+  expect(frame.view.pixelsPerMetre).toBe(camera.scale)
   for (const point of WORLD_POINTS) {
-    expect(frame.view.worldToScreen(point)).toEqual({ x: point.x * viewport.scale + viewport.x, y: point.y * viewport.scale + viewport.y })
+    expect(frame.view.worldToScreen(point)).toEqual({ x: point.x * camera.scale + camera.x, y: point.y * camera.scale + camera.y })
   }
   for (const point of SCREEN_POINTS) {
-    expect(frame.view.screenToWorld(point)).toEqual({ x: (point.x - viewport.x) / viewport.scale, y: (point.y - viewport.y) / viewport.scale })
+    expect(frame.view.screenToWorld(point)).toEqual({ x: (point.x - camera.x) / camera.scale, y: (point.y - camera.y) / camera.scale })
   }
   expect(frame.view.screen).toEqual(today.screen)
   expect(frame.mode).toBe(today.mode)
@@ -106,7 +114,7 @@ describe('headless camera driver', () => {
     view.dispose()
   })
 
-  it('a still headless camera reproduces today\'s CameraController exactly', () => {
+  it('a still headless camera reproduces today\'s CameraController within 1e-6', () => {
     const plane = createSessionPlane({ lon: 0, lat: 0 })
     const next = createSessionPlane(plane.toGeo({ x: 12_500, y: -4_000 }))
     const steps: ReadonlyArray<CameraMove | ((driver: CameraDriver) => void)> = [

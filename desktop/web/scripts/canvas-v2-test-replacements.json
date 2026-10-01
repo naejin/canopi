@@ -226,6 +226,14 @@
   "src/__tests__/projection.test.ts > canonical projection identity > names the local Mercator projection": {
     "policy": "Retired frontend seams stay deleted"
   },
+  "src/__tests__/projection.test.ts > viewportCenterGeo > projects the viewport center from viewport state": {
+    "file": "src/canvas/runtime/view/view-transform.test.ts",
+    "name": "ViewTransform.camera center > projects the viewport center from viewport state"
+  },
+  "src/__tests__/projection.test.ts > viewportCornerGeoPoints > returns four projected corner points for the current viewport": {
+    "file": "src/canvas/runtime/view/view-transform.test.ts",
+    "name": "ViewTransform.visibleWorldQuad corners > returns four projected corner points for the current viewport"
+  },
   "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > installs and removes pointer-cancellation and focus-loss listeners exactly once": {
     "file": "src/canvas/runtime/input/dom-input-source.test.ts",
     "name": "createDomInputSource > installs and removes each listener exactly once"
