@@ -76,7 +76,7 @@ export function createSelectTool(): CanvasTool {
 
   function press(point: ToolPoint, hit: HitTarget | null, clickCount: number): void {
     const c = ctx()
-    const result = pressSelection(c, point, hit, clickCount, lastClick, performance.now())
+    const result = pressSelection(c, point, hit, clickCount, lastClick, c.now())
     switch (result.kind) {
       case 'band': {
         const band: Band = { start: point.world, additive: result.additive }
@@ -130,7 +130,7 @@ export function createSelectTool(): CanvasTool {
           commitMoveDrag(current.drag)
         } else {
           abortMoveDrag(current.drag)
-          clickCandidate = { ...current.click, atMs: performance.now() }
+          clickCandidate = { ...current.click, atMs: c.now() }
         }
       }
     } finally {

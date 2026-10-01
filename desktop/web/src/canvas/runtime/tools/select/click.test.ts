@@ -92,4 +92,18 @@ describe('Select clicks', () => {
     expect(h.store.session.selectedTargets).toEqual([{ kind: 'annotation', id: 'note' }])
     expect(h.chrome.textEntry?.request).toMatchObject({ mode: 'edit', initialText: 'Prune in March', fontSizePx: 16 })
   })
+
+  it("Select's own note double-click is two clicks within 500 ms on the host's clock", () => {
+    const h = harness({ scene: { annotations: [textNote('note', { x: 100, y: 150 }, 'Prune in March')] } })
+
+    h.click({ x: 104, y: 154 })
+    h.advance(600)
+    h.click({ x: 104, y: 154 })
+    expect(h.store.session.selectedTargets).toEqual([{ kind: 'annotation', id: 'note' }])
+    expect(h.chrome.textEntry).toBeNull()
+
+    h.advance(400)
+    h.click({ x: 105, y: 155 })
+    expect(h.chrome.textEntry?.request).toMatchObject({ mode: 'edit', initialText: 'Prune in March' })
+  })
 })
