@@ -5,8 +5,17 @@
 // and the host's shared duties switch on it (spec §1.4, "The legacy bridge").
 
 import type { ToolId } from '../interaction-types'
+import { createMeasurementGuideTool } from './measurement-guide'
+import { createPolygonTool } from './polygon'
 import type { CanvasTool } from './tool'
+import { createZoneDragTool } from './zone-drag'
 
 export type ToolFactory = () => CanvasTool
 
-export const TOOL_REGISTRY: Readonly<Partial<Record<ToolId, ToolFactory>>> = Object.freeze({})
+export const TOOL_REGISTRY: Readonly<Partial<Record<ToolId, ToolFactory>>> = Object.freeze({
+  line: () => createZoneDragTool('line'),
+  rectangle: () => createZoneDragTool('rectangle'),
+  ellipse: () => createZoneDragTool('ellipse'),
+  polygon: createPolygonTool,
+  'measurement-guide': createMeasurementGuideTool,
+})

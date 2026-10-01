@@ -261,5 +261,17 @@
   "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps Scene Interaction listener and lifecycle ownership in the Session": {
     "file": "src/canvas/runtime/input/dom-input-source.test.ts",
     "name": "createDomInputSource > installs and removes each listener exactly once"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > creates a rectangle zone from the rectangle tool drag": {
+    "file": "src/canvas/runtime/tools/zone-drag.test.ts",
+    "name": "Zone drag tools > a rectangle drag commits one zone"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > creates a polygonal zone from clicked vertices and an Enter close action": {
+    "file": "src/canvas/runtime/tools/polygon.test.ts",
+    "name": "Polygon tool > each press adds a corner; Enter finishes with 3"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > removes the last polygonal zone draft vertex with Backspace": {
+    "file": "src/canvas/runtime/tools/polygon.test.ts",
+    "name": "Polygon tool > Backspace removes the last corner"
   }
 }

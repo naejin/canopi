@@ -5,9 +5,10 @@
 // point redraws the draft between the drag's start, which the host keeps on the ground (plan §1, exception 1), and the
 // snapped pointer, with its measure chips (tools/measure-labels.ts); the release adds the object and selects it in that
 // edit, and a cancel, a tool change or a closed layer aborts it. Rectangles and ellipses are world boxes until phase 1
-// (INV-TOOL-03), and Shift does nothing here until phase 2. A release that did not commit its edit aborts it, as today's
-// cancellation after every pointerup did, which also retries a commit whose continuation failed; an abort that fails keeps
-// the drag for the host's retry before the next event.
+// (INV-TOOL-03), and Shift does nothing here until phase 2. A release that adds nothing aborts its edit, as today's
+// cancellation after every pointerup did; a release whose commit throws leaves the edit to the host's cancellation after
+// the failed release, whose abort retries the commit; an abort that fails keeps the drag for the host's retry before the
+// next event.
 
 import { computeSelectionRect } from '../../operations'
 import type { ToolId } from '../interaction-types'
@@ -166,12 +167,10 @@ export function createDragShapeTool(spec: DragShapeSpec): CanvasTool {
   function release(end: WorldPoint): void {
     const current = drag
     if (!current) return
-    try {
-      commit(current, end)
-    } finally {
-      if (drag === current) cancelDrag()
-      else clearDraft()
-    }
+    // A commit that throws keeps the drag: the host's cancellation after the failed release aborts it, retrying the commit.
+    commit(current, end)
+    if (drag === current) cancelDrag()
+    else clearDraft()
   }
 
   /** Adds the shape and selects it in the drag's edit; a closed layer or a shape too small leaves it to the abort. */

@@ -14,10 +14,6 @@ import {
   createObjectStampToolAdapter,
 } from './object-stamp-tool'
 import {
-  createMeasurementGuideTool,
-  createMeasurementGuideToolAdapter,
-} from './measurement-guide-tool'
-import {
   createPlantSpacingTool,
   createPlantSpacingToolAdapter,
 } from './plant-spacing-tool'
@@ -37,10 +33,6 @@ import {
   createTextAnnotationTool,
   createTextAnnotationToolAdapter,
 } from './text-annotation-tool'
-import {
-  createZoneDrawingTool,
-  createZoneDrawingToolAdapters,
-} from './zone-drawing-tool'
 
 export interface SceneToolRegistryContext {
   readonly container: HTMLElement
@@ -95,19 +87,6 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
       getSceneStore: context.getSceneStore,
       sceneEdits: context.sceneEdits,
     }), (tool) => tool.dispose())
-    const zoneDrawingTool = own(createZoneDrawingTool({
-      container: context.container,
-      preview: context.preview,
-      camera: context.camera,
-      getSceneStore: context.getSceneStore,
-      getSelection: context.getSelection,
-      clearSelection: context.clearSelection,
-      sceneEdits: context.sceneEdits,
-      render: context.render,
-      applySnapping: context.applySnapping,
-      notifyTransientHistoryChange: context.notifyTransientHistoryChange,
-    }), (tool) => tool.dispose())
-    const zoneDrawingAdapters = createZoneDrawingToolAdapters(zoneDrawingTool)
     const plantStampTool = own(createPlantStampTool({
       container: context.container,
       camera: context.camera,
@@ -155,23 +134,10 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
       applySnapping: context.applySnapping,
       getContainerRect: context.getContainerRect,
     }), (tool) => tool.dispose())
-    const measurementGuideTool = own(createMeasurementGuideTool({
-      container: context.container,
-      preview: context.preview,
-      camera: context.camera,
-      getSceneStore: context.getSceneStore,
-      sceneEdits: context.sceneEdits,
-      applySnapping: context.applySnapping,
-    }), (tool) => tool.dispose())
 
     const registry = new DefaultSceneToolRegistry(new Map([
       ['plant-stamp', createPlantStampToolAdapter(plantStampTool)],
       ['text', createTextAnnotationToolAdapter(textTool)],
-      ['line', zoneDrawingAdapters.line],
-      ['measurement-guide', createMeasurementGuideToolAdapter(measurementGuideTool)],
-      ['rectangle', zoneDrawingAdapters.rectangle],
-      ['ellipse', zoneDrawingAdapters.ellipse],
-      ['polygon', zoneDrawingAdapters.polygon],
       ['object-stamp', createObjectStampToolAdapter(objectStampTool, {
         switchTool: context.switchTool,
         rotationKeys,

@@ -1,21 +1,25 @@
 // SceneInteractionSession tests, split by the first tool a test arms (canvas v2 plan §4, Seams):
 // tests that arm Polygon, Rectangle, Ellipse, Line or Measure.
-// Shared fakes, helpers and fixture: support/scene-interaction-setup.ts.
-import { describe, expect, it, vi } from 'vitest'
+// Shared fakes, helpers and fixture: support/scene-interaction-setup.ts. The session draws its drafts into a recording
+// renderer (the draft sink scene-runtime.ts passes); the tools' own behaviour is tested in canvas/runtime/tools/*.test.ts.
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { selectPlantStampSource } from '../canvas/plant-stamp-source'
 import { selectedObjectIds } from '../canvas/session-state'
 import { snapToGridEnabled, snapToGuidesEnabled } from '../app/canvas-settings/signals'
 import { CameraController } from '../canvas/runtime/camera'
-import { SceneStore } from '../canvas/runtime/scene'
+import { SceneStore, type ScenePoint } from '../canvas/runtime/scene'
 import type {
   SceneInteractionSession,
   SceneInteractionSessionDeps,
-} from '../canvas/runtime/scene-interaction'
+} from '../canvas/runtime/interaction-session'
 import { SceneHistory } from '../canvas/runtime/scene-history'
 import {
   SceneRuntimeEditCoordinator,
+  type SceneEditCoordinator,
   type SceneEditTransaction,
 } from '../canvas/runtime/scene-runtime/transactions'
+import type { DraftShape } from '../canvas/runtime/tools/draft'
+import { createRecordingRenderer, type RecordingRenderer } from './support/recording-renderer'
 import type { SceneInteractionEventHarness } from './support/scene-interaction-events'
 import {
   storedGeo,
@@ -25,7 +29,6 @@ import {
   plantTarget,
   createAbortFailingSceneEdits,
   withoutNativeRandomUUID,
-  zoneMeasurementTexts,
   captureWindowErrors,
   makePlant,
   installSceneInteractionFixture,
@@ -36,13 +39,65 @@ describe('SceneInteractionSession', () => {
   let camera: CameraController
   let store: SceneStore
   let events: SceneInteractionEventHarness
+  let renderer: RecordingRenderer
 
-  const { createTestSession, openContextMenu } = installSceneInteractionFixture(
+  const fixture = installSceneInteractionFixture(
     (f) => {
       ({ container, camera, store, events } = f)
     },
     () => ({ events }),
   )
+  const { openContextMenu } = fixture
+
+  beforeEach(() => {
+    renderer = createRecordingRenderer()
+  })
+
+  /** A session whose drafts reach the recording renderer, unless the test brings its own. */
+  function createTestSession(deps: SceneInteractionSessionDeps): SceneInteractionSession {
+    return fixture.createTestSession({ renderer, ...deps })
+  }
+
+  function draftShapes(): readonly DraftShape[] {
+    return renderer.lastDraft()?.shapes ?? []
+  }
+
+  /** The first shape of the draft: the drag's rectangle, ellipse or line. */
+  function draftOutline(): DraftShape | undefined {
+    return draftShapes()[0]
+  }
+
+  /** The polygon draft's rubber band (today's SVG draft line), in world points; null without one. */
+  function draftBand(): readonly ScenePoint[] | null {
+    const band = draftShapes().find((shape) => shape.kind === 'polyline')
+    return band?.kind === 'polyline' ? band.points : null
+  }
+
+  /** The draft's chips (today's zone measurement labels). */
+  function draftChips(): string[] {
+    return draftShapes().flatMap((shape) => shape.kind === 'label' ? [shape.text] : [])
+  }
+
+  /**
+   * The drag's Scene Edit with `hook` run first in its commit continuation, where the tool clears its draft (today the
+   * measurement overlay's replaceChildren): the fault point of the retained-cleanup tests.
+   */
+  function withCommitContinuation(base: SceneEditCoordinator, type: string, hook: () => void): SceneEditCoordinator {
+    return {
+      run: (runType, edit, options) => base.run(runType, edit, options),
+      begin(beginType, options) {
+        if (beginType !== type) return base.begin(beginType, options)
+        const onCommitted = options?.onCommitted
+        return base.begin(beginType, {
+          ...options,
+          onCommitted: () => {
+            hook()
+            onCommitted?.()
+          },
+        })
+      },
+    }
+  }
 
   it('opens the context menu during a drawing gesture without committing the draft', () => {
     const pasteAt = vi.fn()
@@ -63,7 +118,7 @@ describe('SceneInteractionSession', () => {
 
     expect(pasteAt).toHaveBeenCalledWith({ x: 200, y: 180 })
     expect(store.persisted.zones).toHaveLength(0)
-    expect(container.querySelector('[data-polygon-draft-line]')).not.toBeNull()
+    expect(draftBand()).not.toBeNull()
     session.dispose()
   })
 
@@ -99,33 +154,6 @@ describe('SceneInteractionSession', () => {
 
     expect(store.persisted.zones).toEqual([])
     expect(onSceneEditCommit).not.toHaveBeenCalled()
-    session.dispose()
-  })
-
-  it('creates a rectangle zone from the rectangle tool drag', () => {
-    const render = vi.fn()
-    const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { render, onSceneEditCommit })
-    const session = createTestSession(deps)
-    session.setTool('rectangle')
-
-    events.pointerDown({ x: 10, y: 20 })
-    events.pointerMove({ x: 40, y: 60 })
-    events.pointerUp({ x: 40, y: 60 })
-
-    expect(store.persisted.zones).toHaveLength(1)
-    expect(store.persisted.zones[0]).toMatchObject({
-      zoneType: 'rect',
-      rotationDeg: 0,
-      points: [
-        { x: 10, y: 20 },
-        { x: 40, y: 20 },
-        { x: 40, y: 60 },
-        { x: 10, y: 60 },
-      ],
-    })
-    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-rectangle')
-    expect(deps.setSelection).toHaveBeenCalledTimes(1)
     session.dispose()
   })
 
@@ -327,35 +355,22 @@ describe('SceneInteractionSession', () => {
       syncCanvasSignalsFromScene: () => {},
       invalidate: () => {},
     })
+    let cleanupFailures = 2
     const session = createTestSession({
       ...baseDeps,
-      sceneEdits: coordinator,
+      sceneEdits: withCommitContinuation(coordinator, `interaction-${tool}`, () => {
+        if (cleanupFailures > 0) {
+          cleanupFailures -= 1
+          throw new Error(`${tool} cleanup failed`)
+        }
+      }),
       commandAdmission: coordinator,
     })
     session.setTool(tool)
 
     events.pointerDown({ x: 10, y: 20 }, { pointerId: 91 })
     events.pointerMove({ x: 40, y: 60 }, { pointerId: 91 })
-    const measurementOverlay = Array.from(
-      container.querySelectorAll<HTMLElement>('[data-zone-measurement-overlay]'),
-    ).find((overlay) => overlay.childElementCount > 0 && overlay.style.display === 'block')
-    if (!measurementOverlay) throw new Error(`Expected ${tool} draft measurements`)
-    const originalReplaceChildrenDescriptor = Object.getOwnPropertyDescriptor(
-      measurementOverlay,
-      'replaceChildren',
-    )
-    const originalReplaceChildren = measurementOverlay.replaceChildren.bind(measurementOverlay)
-    let cleanupFailures = 2
-    Object.defineProperty(measurementOverlay, 'replaceChildren', {
-      configurable: true,
-      value: (...nodes: (Node | string)[]) => {
-        if (cleanupFailures > 0) {
-          cleanupFailures -= 1
-          throw new Error(`${tool} cleanup failed`)
-        }
-        originalReplaceChildren(...nodes)
-      },
-    })
+    if (draftChips().length === 0) throw new Error(`Expected ${tool} draft measurements`)
 
     try {
       const errors = captureWindowErrors(() => {
@@ -400,15 +415,6 @@ describe('SceneInteractionSession', () => {
       }
       expect(coordinator.undo()).toBe(false)
     } finally {
-      if (originalReplaceChildrenDescriptor) {
-        Object.defineProperty(
-          measurementOverlay,
-          'replaceChildren',
-          originalReplaceChildrenDescriptor,
-        )
-      } else {
-        Reflect.deleteProperty(measurementOverlay, 'replaceChildren')
-      }
       session.dispose()
     }
   })
@@ -439,41 +445,27 @@ describe('SceneInteractionSession', () => {
         }
       },
     })
+    let enqueueBackfill = true
     const session = createTestSession({
       ...baseDeps,
-      sceneEdits: coordinator,
+      sceneEdits: withCommitContinuation(coordinator, `interaction-${tool}`, () => {
+        if (!enqueueBackfill) return
+        enqueueBackfill = false
+        const ticket = coordinator.issueTicket()
+        expect(coordinator.applyBackfills(ticket, [{
+          plantId: 'plant-1',
+          canonicalName: 'Malus domestica',
+          stratum: 'canopy',
+          canopySpreadM: 4,
+        }])).toBe('deferred')
+      }),
       commandAdmission: coordinator,
     })
     session.setTool(tool)
 
     events.pointerDown({ x: 10, y: 20 }, { pointerId: 94 })
     events.pointerMove({ x: 40, y: 60 }, { pointerId: 94 })
-    const measurementOverlay = Array.from(
-      container.querySelectorAll<HTMLElement>('[data-zone-measurement-overlay]'),
-    ).find((overlay) => overlay.childElementCount > 0 && overlay.style.display === 'block')
-    if (!measurementOverlay) throw new Error(`Expected ${tool} draft measurements`)
-    const originalReplaceChildrenDescriptor = Object.getOwnPropertyDescriptor(
-      measurementOverlay,
-      'replaceChildren',
-    )
-    const originalReplaceChildren = measurementOverlay.replaceChildren.bind(measurementOverlay)
-    let enqueueBackfill = true
-    Object.defineProperty(measurementOverlay, 'replaceChildren', {
-      configurable: true,
-      value: (...nodes: (Node | string)[]) => {
-        if (enqueueBackfill) {
-          enqueueBackfill = false
-          const ticket = coordinator.issueTicket()
-          expect(coordinator.applyBackfills(ticket, [{
-            plantId: 'plant-1',
-            canonicalName: 'Malus domestica',
-            stratum: 'canopy',
-            canopySpreadM: 4,
-          }])).toBe('deferred')
-        }
-        originalReplaceChildren(...nodes)
-      },
-    })
+    if (draftChips().length === 0) throw new Error(`Expected ${tool} draft measurements`)
 
     try {
       const errors = captureWindowErrors(() => {
@@ -515,15 +507,6 @@ describe('SceneInteractionSession', () => {
       expect(coordinator.undo()).toBe(true)
       expect(coordinator.undo()).toBe(false)
     } finally {
-      if (originalReplaceChildrenDescriptor) {
-        Object.defineProperty(
-          measurementOverlay,
-          'replaceChildren',
-          originalReplaceChildrenDescriptor,
-        )
-      } else {
-        Reflect.deleteProperty(measurementOverlay, 'replaceChildren')
-      }
       session.dispose()
     }
   })
@@ -557,11 +540,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 10, y: 20 }, { button: 0 })
     events.pointerMove({ x: 40, y: 60 }, { button: 0 })
 
-    const preview = Array.from(container.children)
-      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
-    expect(preview?.style.left).toBe('10px')
-    expect(preview?.style.top).toBe('20px')
-    expect(preview?.style.width).toBe('50px')
+    expect(draftOutline()).toMatchObject({ kind: 'polyline', points: [{ x: 10, y: 20 }, { x: 40, y: 60 }] })
 
     events.pointerUp({ x: 40, y: 60 }, { button: 0 })
 
@@ -617,7 +596,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 10, y: 20 }, { button: 0 })
     events.pointerMove({ x: 70, y: 20 }, { button: 0 })
 
-    expect(zoneMeasurementTexts(container)).toEqual(['60 m'])
+    expect(draftChips()).toEqual(['60 m'])
     expect(store.persisted.zones).toHaveLength(0)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     session.dispose()
@@ -635,10 +614,8 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 43, y: 87 }, { button: 0 })
     events.pointerMove({ x: 148, y: 254 }, { button: 0 })
 
-    const preview = Array.from(container.children)
-      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
-    expect(preview?.style.left).toBe('40px')
-    expect(preview?.style.top).toBe('80px')
+    // Screen (40, 80) to (140, 260) at 4 px/m.
+    expect(draftOutline()).toMatchObject({ kind: 'polyline', points: [{ x: 10, y: 20 }, { x: 35, y: 65 }] })
 
     events.pointerUp({ x: 148, y: 254 }, { button: 0 })
 
@@ -677,9 +654,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 10, y: 20 }, { button: 0 })
     events.pointerMove({ x: 70, y: 100 }, { button: 0 })
 
-    const preview = Array.from(container.children)
-      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
-    expect(preview?.style.borderRadius).toBe('50%')
+    expect(draftOutline()).toMatchObject({ kind: 'ellipse', center: { x: 40, y: 60 }, radiusX: 30, radiusY: 40 })
 
     events.pointerUp({ x: 70, y: 100 }, { button: 0 })
 
@@ -759,13 +734,8 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 43, y: 87 }, { button: 0 })
     events.pointerMove({ x: 148, y: 254 }, { button: 0 })
 
-    const preview = Array.from(container.children)
-      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
-    expect(preview?.style.left).toBe('40px')
-    expect(preview?.style.top).toBe('80px')
-    expect(preview?.style.width).toBe('100px')
-    expect(preview?.style.height).toBe('180px')
-    expect(preview?.style.borderRadius).toBe('50%')
+    // Screen (40, 80) to (140, 260) at 4 px/m.
+    expect(draftOutline()).toMatchObject({ kind: 'ellipse', center: { x: 22.5, y: 42.5 }, radiusX: 12.5, radiusY: 22.5 })
 
     events.pointerUp({ x: 148, y: 254 }, { button: 0 })
 
@@ -789,7 +759,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 10, y: 20 }, { button: 0 })
     events.pointerMove({ x: 70, y: 100 }, { button: 0 })
 
-    expect(zoneMeasurementTexts(container)).toEqual([
+    expect(draftChips()).toEqual([
       'W 60 m',
       'H 80 m',
       '3770 m²',
@@ -814,47 +784,6 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('creates a polygonal zone from clicked vertices and an Enter close action', () => {
-    const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
-    const session = createTestSession(deps)
-    session.setTool('polygon')
-
-    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
-    events.pointerMove({ x: 60, y: 10 }, { button: 0 })
-
-    const line = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
-    expect(line?.getAttribute('points')).toBe('10,10 60,10')
-
-    events.pointerDown({ x: 60, y: 10 }, { button: 0 })
-    events.pointerDown({ x: 60, y: 50 }, { button: 0 })
-    events.keyDown({ key: 'Enter' })
-
-    expect(store.persisted.zones).toHaveLength(1)
-    expect(store.persisted.zones[0]).toMatchObject({
-      zoneType: 'polygon',
-      rotationDeg: 0,
-      points: [
-        { x: 10, y: 10 },
-        { x: 60, y: 10 },
-        { x: 60, y: 50 },
-      ],
-    })
-    expect(store.toCanopiFile().zones[0]).toMatchObject({
-      zone_type: 'polygon',
-      rotation: 0,
-      locked: false,
-      points: [
-        storedGeo(store, { x: 10, y: 10 }),
-        storedGeo(store, { x: 60, y: 10 }),
-        storedGeo(store, { x: 60, y: 50 }),
-      ],
-    })
-    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-polygon')
-    expect(deps.setSelection).toHaveBeenCalledTimes(1)
-    session.dispose()
-  })
-
   it('does not create polygonal zones on a locked Zones Layer', () => {
     store.updatePersisted((draft) => {
       draft.layers = draft.layers.map((layer) => (
@@ -872,7 +801,7 @@ describe('SceneInteractionSession', () => {
     events.keyDown({ key: 'Enter', cancelable: true })
 
     expect(store.persisted.zones).toHaveLength(0)
-    expect(container.querySelector('[data-polygon-draft-line]')).toBeNull()
+    expect(draftBand()).toBeNull()
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     session.dispose()
   })
@@ -889,8 +818,8 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 43, y: 87 }, { button: 0 })
     events.pointerMove({ x: 148, y: 254 }, { button: 0 })
 
-    const line = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
-    expect(line?.getAttribute('points')).toBe('40,80 140,260')
+    // Screen (40, 80) to (140, 260) at 4 px/m.
+    expect(draftBand()).toEqual([{ x: 10, y: 20 }, { x: 35, y: 65 }])
     session.dispose()
   })
 
@@ -902,7 +831,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 10, y: 10 }, { button: 0 })
     events.pointerMove({ x: 60, y: 10 }, { button: 0 })
 
-    expect(zoneMeasurementTexts(container)).toEqual(['50 m'])
+    expect(draftChips()).toEqual(['50 m'])
     session.dispose()
   })
 
@@ -932,7 +861,9 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 10, y: 10 }, { button: 0 })
 
     expect(selectedObjectIds.value.size).toBe(0)
-    expect(deps.clearSelection).toHaveBeenCalledTimes(1)
+    // History-free, through the session's selection (ToolEffects.setSelection).
+    expect(deps.setSelection).toHaveBeenCalledTimes(2)
+    expect(deps.setSelection).toHaveBeenLastCalledWith([])
     session.dispose()
   })
 
@@ -945,7 +876,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 60, y: 10 }, { button: 0 })
     events.pointerMove({ x: 60, y: 50 }, { button: 0 })
 
-    expect(zoneMeasurementTexts(container)).toEqual([
+    expect(draftChips()).toEqual([
       '50 m',
       '40 m',
       '64 m',
@@ -989,25 +920,7 @@ describe('SceneInteractionSession', () => {
     events.keyDown({ key: 'Escape' })
 
     expect(store.persisted.zones).toHaveLength(0)
-    expect(container.querySelector('[data-polygon-draft-line]')).toBeNull()
-    expect(onSceneEditCommit).not.toHaveBeenCalled()
-    session.dispose()
-  })
-
-  it('removes the last polygonal zone draft vertex with Backspace', () => {
-    const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
-    const session = createTestSession(deps)
-    session.setTool('polygon')
-
-    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
-    events.pointerDown({ x: 60, y: 10 }, { button: 0 })
-    events.pointerMove({ x: 60, y: 50 }, { button: 0 })
-    events.keyDown({ key: 'Backspace' })
-
-    const line = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
-    expect(line?.getAttribute('points')).toBe('10,10 60,50')
-    expect(store.persisted.zones).toHaveLength(0)
+    expect(draftBand()).toBeNull()
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     session.dispose()
   })
@@ -1079,14 +992,12 @@ describe('SceneInteractionSession', () => {
     expect(session.canUndoTransientHistory()).toBe(true)
     expect(session.undoTransientHistory()).toBe(true)
 
-    const afterUndo = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
-    expect(afterUndo?.getAttribute('points')).toBe('10,10 60,50')
+    expect(draftBand()).toEqual([{ x: 10, y: 10 }, { x: 60, y: 50 }])
     expect(session.canRedoTransientHistory()).toBe(true)
 
     expect(session.redoTransientHistory()).toBe(true)
 
-    const afterRedo = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
-    expect(afterRedo?.getAttribute('points')).toBe('10,10 60,10 60,50')
+    expect(draftBand()).toEqual([{ x: 10, y: 10 }, { x: 60, y: 10 }, { x: 60, y: 50 }])
     expect(store.persisted.zones).toHaveLength(0)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     session.dispose()
@@ -1101,14 +1012,13 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 10, y: 10 }, { button: 0 })
 
     expect(session.undoTransientHistory()).toBe(true)
-    expect(container.querySelector('[data-polygon-draft-line]')).toBeNull()
+    expect(draftBand()).toBeNull()
     expect(session.canUndoTransientHistory()).toBe(false)
     expect(session.canRedoTransientHistory()).toBe(true)
 
     expect(session.redoTransientHistory()).toBe(true)
 
-    const afterRedo = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
-    expect(afterRedo?.getAttribute('points')).toBe('10,10 10,10')
+    expect(draftBand()).toEqual([{ x: 10, y: 10 }, { x: 10, y: 10 }])
     expect(store.persisted.zones).toHaveLength(0)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     session.dispose()
@@ -1128,7 +1038,7 @@ describe('SceneInteractionSession', () => {
 
     expect(session.canRedoTransientHistory()).toBe(false)
     expect(session.redoTransientHistory()).toBe(false)
-    expect(container.querySelector('[data-polygon-draft-line]')).toBeNull()
+    expect(draftBand()).toBeNull()
     expect(store.persisted.zones).toHaveLength(0)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     session.dispose()
@@ -1211,7 +1121,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 10, y: 10 }, { button: 0 })
     events.pointerMove({ x: 60, y: 10 }, { button: 0 })
 
-    expect(container.querySelector('[data-polygon-draft-line]')).not.toBeNull()
+    expect(draftBand()).not.toBeNull()
 
     events.keyDown({ code: 'Space' })
     events.pointerDown({ x: 200, y: 150 }, { button: 0 })
@@ -1219,7 +1129,7 @@ describe('SceneInteractionSession', () => {
     events.pointerUp({ x: 220, y: 150 }, { button: 0 })
     events.keyUp({ code: 'Space' })
 
-    expect(container.querySelector('[data-polygon-draft-line]')).not.toBeNull()
+    expect(draftBand()).not.toBeNull()
     expect(store.persisted.zones).toHaveLength(0)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     session.dispose()
@@ -1235,6 +1145,8 @@ describe('SceneInteractionSession', () => {
 
       events.pointerDown({ x: 10, y: 10 }, { pointerId: 1 })
       events.pointerMove({ x: 60, y: 10 }, { pointerId: 1 })
+      // The corner's press ends before the pan: one pointer session at a time (ADR 0017).
+      events.pointerUp({ x: 60, y: 10 }, { pointerId: 1 })
       events.holdSpace()
       events.pointerDown({ x: 200, y: 150 }, { pointerId: 2 })
       events.pointerMove({ x: 220, y: 150 }, { pointerId: 2 })
@@ -1244,7 +1156,7 @@ describe('SceneInteractionSession', () => {
         events.windowBlur()
       }
 
-      expect(container.querySelector('[data-polygon-draft-line]')).not.toBeNull()
+      expect(draftBand()).not.toBeNull()
       expect(store.persisted.zones).toHaveLength(0)
       expect(onSceneEditCommit).not.toHaveBeenCalled()
 
@@ -1268,7 +1180,7 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 220, y: 150 }, { button: 1 })
     events.pointerUp({ x: 220, y: 150 }, { button: 1 })
 
-    expect(container.querySelector('[data-polygon-draft-line]')).not.toBeNull()
+    expect(draftBand()).not.toBeNull()
     expect(store.persisted.zones).toHaveLength(0)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     session.dispose()
@@ -1282,13 +1194,12 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 10, y: 10 }, { button: 0 })
     events.pointerMove({ x: 60, y: 10 }, { button: 0 })
 
-    expect(container.querySelector('[data-polygon-draft-line]')).not.toBeNull()
-    expect(zoneMeasurementTexts(container)).toEqual(['50 m'])
+    expect(draftBand()).not.toBeNull()
+    expect(draftChips()).toEqual(['50 m'])
 
     session.dispose()
 
-    expect(container.querySelector('[data-polygon-draft-line]')).toBeNull()
-    expect(zoneMeasurementTexts(container)).toEqual([])
+    expect(renderer.lastDraft()).toBeNull()
   })
 
   it('does not commit degenerate polygonal zones', () => {
@@ -1320,12 +1231,11 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 43, y: 87 }, { button: 0 })
     events.pointerMove({ x: 148, y: 254 }, { button: 0 })
 
-    const preview = Array.from(container.children)
-      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
-    expect(preview?.style.left).toBe('40px')
-    expect(preview?.style.top).toBe('80px')
-    expect(preview?.style.width).toBe('100px')
-    expect(preview?.style.height).toBe('180px')
+    // Screen (40, 80) to (140, 260) at 4 px/m.
+    expect(draftOutline()).toMatchObject({
+      kind: 'polygon',
+      points: [{ x: 10, y: 20 }, { x: 35, y: 20 }, { x: 35, y: 65 }, { x: 10, y: 65 }],
+    })
 
     events.pointerUp({ x: 148, y: 254 }, { button: 0 })
 
@@ -1363,12 +1273,11 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 49, y: 85 }, { button: 0 })
     events.pointerMove({ x: 142, y: 243 }, { button: 0 })
 
-    const preview = Array.from(container.children)
-      .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
-    expect(preview?.style.left).toBe('48px')
-    expect(preview?.style.top).toBe('88px')
-    expect(preview?.style.width).toBe('96px')
-    expect(preview?.style.height).toBe('156px')
+    // Screen (48, 88) to (144, 244) at 4 px/m.
+    expect(draftOutline()).toMatchObject({
+      kind: 'polygon',
+      points: [{ x: 12, y: 22 }, { x: 36, y: 22 }, { x: 36, y: 61 }, { x: 12, y: 61 }],
+    })
 
     events.pointerUp({ x: 142, y: 243 }, { button: 0 })
 
@@ -1394,7 +1303,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 10, y: 20 }, { button: 0 })
     events.pointerMove({ x: 70, y: 100 }, { button: 0 })
 
-    expect(zoneMeasurementTexts(container)).toEqual([
+    expect(draftChips()).toEqual([
       '60 m',
       '80 m',
       '60 m',

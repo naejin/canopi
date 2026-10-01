@@ -221,6 +221,33 @@ describe('Zone drag tools', () => {
     expect(h.store.persisted.zones).toEqual([])
   })
 
+  it('a release whose commit fails leaves its edit to the host\'s cancellation, retried before the next press', () => {
+    const h = harness({ tool: 'rectangle' })
+    const record = h.history.record.bind(h.history)
+    let failures = 2
+    vi.spyOn(h.history, 'record').mockImplementation((command, transaction) => {
+      const recorded = record(command, transaction)
+      if (command.type === 'interaction-rectangle' && failures > 0) {
+        failures -= 1
+        throw new Error('rectangle publication failed')
+      }
+      return recorded
+    })
+
+    // Today's count: the commit fails, then the cancellation after the release, whose abort retries the commit, fails too.
+    expect(() => h.drag({ x: 10, y: 20 }, { x: 40, y: 60 })).toThrow('rectangle publication failed')
+    expect(failures).toBe(0)
+    expect(shapes(h).some((shape) => shape.kind === 'polygon')).toBe(false)
+    // The pending cancellation finishes the commit before the next press, which is swallowed.
+    expect(h.press({ x: 50, y: 70 })).toEqual({ quarantine: true, rejectSession: true })
+    expect(h.store.persisted.zones).toHaveLength(1)
+    h.drag({ x: 50, y: 70 }, { x: 80, y: 100 })
+    expect(h.store.persisted.zones).toHaveLength(2)
+    expect(h.undo()).toBe(true)
+    expect(h.undo()).toBe(true)
+    expect(h.undo()).toBe(false)
+  })
+
   it('a tool change aborts a live drag', () => {
     const h = harness({ tool: 'ellipse' })
 
