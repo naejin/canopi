@@ -1456,6 +1456,67 @@ describe('ToolHost', () => {
     })
   })
 
+  describe('releases the tool did not hear (today\'s pointerup cleanup)', () => {
+    it('released commits the nudge series, clears the passive hover and runs the tool\'s cancelTransient(\'navigate\')', () => {
+      const select = stubTool('select')
+      const stamp = stubTool('object-stamp', { gesture: (g) => (g.kind === 'hover' ? 'pass' : 'handled') })
+      useStubTools(select, stamp)
+      const h = harness({ scene: { plants: [appleAt({ x: 50, y: 50 })] } })
+
+      h.select(P1)
+      h.arrow('ArrowUp')
+      h.hover({ x: 50, y: 50 })
+      expect(h.chrome.tooltip?.target).toEqual(P1)
+      h.host.released()
+      expect(h.host.hasNudgeSeries()).toBe(false)
+      expect(h.record.nudges.at(-1)).toBe('end')
+      expect(h.chrome.tooltip).toBeNull()
+      expect(select.calls).toContain('cancelTransient:navigate')
+
+      h.arm('object-stamp')
+      h.host.released()
+      expect(stamp.calls).toContain('cancelTransient:navigate')
+    })
+
+    it('released does nothing while a press of the tool\'s is live: its own release ends it', () => {
+      const rectangle = stubTool('rectangle')
+      useStubTools(rectangle)
+      const h = harness({ tool: 'rectangle' })
+
+      h.press({ x: 10, y: 10 })
+      h.host.released()
+      expect(rectangle.calls.filter((call) => call.startsWith('cancelTransient'))).toEqual([])
+      expect(h.host.hasLiveGesture()).toBe(true)
+    })
+
+    it('the release of a press the tool never heard runs it: a new note\'s committing click, a ruler drag', () => {
+      const text = stubTool('text', {
+        gesture: (g) => {
+          if (g.kind === 'press') {
+            text.ctx().effects.requestTextEntry(
+              { anchor: g.point.world, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note', mode: 'create' },
+              () => 'close',
+            )
+          }
+          return 'pass'
+        },
+      })
+      useStubTools(text)
+      const h = harness({ tool: 'text' })
+      const navigates = (): number => text.calls.filter((call) => call === 'cancelTransient:navigate').length
+
+      h.click({ x: 10, y: 10 })
+      expect(h.chrome.textEntry).not.toBeNull()
+      expect(navigates()).toBe(0)
+      // The next click commits the note and reaches no tool (spec §3.2); its release is not the tool's.
+      h.click({ x: 40, y: 40 })
+      expect(text.count('press')).toBe(1)
+      expect(navigates()).toBe(1)
+      h.drag({ x: 10, y: 10 }, { x: 60, y: 60 }, { target: { kind: 'ruler', axis: 'h' } })
+      expect(navigates()).toBe(2)
+    })
+  })
+
   describe('cancellation', () => {
     it('a failed cancellation is retried before the next event', () => {
       let failures = 1

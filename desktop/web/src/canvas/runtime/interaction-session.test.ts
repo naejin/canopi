@@ -37,6 +37,8 @@ import type { CameraController, CameraViewportSnapshot } from './camera'
 import { SceneStore } from './scene'
 import type { SceneEditTransaction } from './scene-runtime/transactions'
 import type { DraftPresentation } from './tools/draft'
+import { createPolygonTool } from './tools/polygon'
+import { createSavedObjectStampTool } from './tools/saved-object-stamp'
 import type { ToolSource } from './tools/tool'
 import { createZoneDragTool } from './tools/zone-drag'
 import type { WorldPoint } from './view/types'
@@ -1083,6 +1085,139 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
     expect(renderer.lastDraft()).toBeNull()
     events.pointerMove({ x: 70, y: 70 }, { buttons: 0 })
     expect(renderer.lastDraft()).toEqual(ghost)
+  })
+})
+
+describe('releases the tool did not hear (today\'s pointerup cleanup)', () => {
+  /** A saved stamp of one apple, held through the read model as Favorites arms it. */
+  function holdAppleStamp(): void {
+    selectSavedObjectStampSourceForTests({
+      version: 2,
+      anchor: { x: 0, y: 0 },
+      plants: [{
+        id: 'plant-1', canonicalName: 'Malus domestica', commonName: 'Apple', color: null, symbol: null,
+        position: { x: 0, y: 0 }, rotationDeg: null, scale: null,
+      }],
+      zones: [],
+      annotations: [],
+      groups: [],
+    } as unknown as Parameters<typeof selectSavedObjectStampSourceForTests>[0])
+  }
+
+  function ghostShown(renderer: ReturnType<typeof recordingRenderer>): boolean {
+    return renderer.lastDraft()?.shapes.some((shape) => shape.kind === 'ghost') ?? false
+  }
+
+  it('a middle-button or Space pan drops a redo-only polygon history at its release or cancel and keeps a draft with corners', () => {
+    useStubTools(createPolygonTool())
+    const { session } = createSession()
+    session.setTool('polygon')
+    const corner = (at: { x: number, y: number }): void => {
+      events.pointerDown(at)
+      events.pointerUp(at)
+    }
+    const pans: readonly [string, () => void][] = [
+      ['a middle drag', () => {
+        events.pointerDown({ x: 100, y: 100 }, { button: 1 })
+        events.pointerMove({ x: 140, y: 120 }, { button: 1 })
+        events.pointerUp({ x: 140, y: 120 }, { button: 1 })
+      }],
+      ['a Space drag', () => {
+        events.holdSpace()
+        events.pointerDown({ x: 100, y: 100 })
+        events.pointerMove({ x: 140, y: 120 })
+        events.pointerUp({ x: 140, y: 120 })
+        events.releaseSpace()
+      }],
+      ['a cancelled middle drag', () => {
+        events.pointerDown({ x: 100, y: 100 }, { button: 1 })
+        events.pointerMove({ x: 140, y: 120 }, { button: 1 })
+        events.pointerCancel({ x: 140, y: 120 })
+      }],
+    ]
+
+    for (const [name, pan] of pans) {
+      corner({ x: 20, y: 20 })
+      expect(session.undoTransientHistory(), name).toBe(true)
+      expect(session.canRedoTransientHistory(), name).toBe(true)
+      // Today's pointerup ran the cancellation, keeping the draft after a pan only while it had corners.
+      pan()
+      expect(session.canRedoTransientHistory(), name).toBe(false)
+
+      corner({ x: 20, y: 20 })
+      corner({ x: 60, y: 20 })
+      expect(session.undoTransientHistory(), name).toBe(true)
+      pan()
+      expect(session.canUndoTransientHistory(), name).toBe(true)
+      expect(session.canRedoTransientHistory(), name).toBe(true)
+      events.keyDown({ key: 'Escape', target: container })
+      expect(session.canUndoTransientHistory(), name).toBe(false)
+    }
+  })
+
+  it('a right-click release and a pointerup off the map hide a held stamp\'s ghost until the next hover', () => {
+    holdAppleStamp()
+    useStubTools(createSavedObjectStampTool())
+    const renderer = recordingRenderer()
+    const { session } = createSession({ renderer })
+    session.setTool('saved-object-stamp')
+    const panel = document.createElement('button')
+    document.body.appendChild(panel)
+
+    try {
+      events.pointerMove({ x: 100, y: 100 }, { buttons: 0 })
+      expect(ghostShown(renderer)).toBe(true)
+      events.pointerDown({ x: 100, y: 100 }, { button: 2 })
+      events.pointerUp({ x: 100, y: 100 }, { button: 2 })
+      expect(ghostShown(renderer)).toBe(false)
+
+      events.pointerMove({ x: 110, y: 110 }, { buttons: 0 })
+      expect(ghostShown(renderer)).toBe(true)
+      // A click on a panel: its press never reaches the map, its release still reaches the window.
+      events.pointerDown({ x: 500, y: 400 }, { target: panel })
+      events.pointerUp({ x: 500, y: 400 }, { target: panel })
+      expect(ghostShown(renderer)).toBe(false)
+
+      events.pointerMove({ x: 120, y: 120 }, { buttons: 0 })
+      expect(ghostShown(renderer)).toBe(true)
+    } finally {
+      panel.remove()
+    }
+  })
+
+  it('a release over the note editor, a handle or the Unlock affordance, of another pointer, or in overview runs nothing', () => {
+    const rectangle = stubTool('rectangle')
+    useStubTools(rectangle)
+    const { session } = createSession()
+    session.setTool('rectangle')
+    const owned = ['data-canvas-text-entry', 'data-canvas-handle', 'data-locked-object-affordance'].map((attribute) => {
+      const element = document.createElement('div')
+      element.setAttribute(attribute, 'create')
+      container.appendChild(element)
+      return element
+    })
+    const navigates = (): number => rectangle.calls.filter((call) => call === 'cancelTransient:navigate').length
+
+    for (const target of owned) events.pointerUp({ x: 50, y: 50 }, { target })
+    expect(navigates()).toBe(0)
+
+    // A press of the tool's is live: another pointer's release is not the tool's to end (today's pointerId check).
+    events.pointerDown({ x: 20, y: 20 }, { pointerId: 3 })
+    events.pointerUp({ x: 50, y: 50 }, { pointerId: 4 })
+    expect(navigates()).toBe(0)
+    events.pointerUp({ x: 20, y: 20 }, { pointerId: 3 })
+    expect(navigates()).toBe(0)
+
+    // Overview swallows a release with no press instead.
+    session.setOverviewMode(true)
+    const before = rectangle.calls.length
+    events.pointerUp({ x: 50, y: 50 })
+    expect(rectangle.calls.slice(before)).toEqual([])
+    session.setOverviewMode(false)
+
+    // Anywhere else, a release with no press of the map's runs the cleanup, as today.
+    events.pointerUp({ x: 50, y: 50 })
+    expect(navigates()).toBe(1)
   })
 })
 

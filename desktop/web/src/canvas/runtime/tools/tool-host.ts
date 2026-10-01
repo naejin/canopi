@@ -702,7 +702,12 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     g: Extract<Gesture, { kind: 'drag-start' | 'drag-move' | 'drag-end' }>,
   ): GestureOutcome {
     const gesture = live
-    if (!gesture || gesture.id !== g.id) return NOTHING
+    if (!gesture) {
+      // The drag of a press the tool never heard (a new note's committing click): its release is none of the tool's.
+      if (g.kind === 'drag-end') releasedOutsideTool()
+      return NOTHING
+    }
+    if (gesture.id !== g.id) return NOTHING
     if (g.kind === 'drag-end' && retryPendingCancellation()) return QUARANTINE
     gesture.dragging = true
     gesture.lastScreen = g.at
@@ -710,7 +715,10 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const tool = activeTool
     if (gesture.kind === 'ruler' || !tool) {
       // A ruler drag's cursor and guide are the session's (its RulerPress): the map keeps the tool's cursor, as today.
-      if (g.kind === 'drag-end') endLive()
+      if (g.kind === 'drag-end') {
+        endLive()
+        releasedOutsideTool()
+      }
       return NOTHING
     }
     if (g.kind !== 'drag-end') {
@@ -785,11 +793,17 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   function tap(g: Extract<Gesture, { kind: 'tap' }>): GestureOutcome {
     const gesture = live
-    if (!gesture || gesture.id !== g.id) return NOTHING
+    if (!gesture) {
+      // A press the tool never heard (a new note's committing click, no tool armed): its release is none of the tool's.
+      releasedOutsideTool()
+      return NOTHING
+    }
+    if (gesture.id !== g.id) return NOTHING
     if (retryPendingCancellation()) return QUARANTINE
     const tool = activeTool
     if (gesture.kind === 'ruler' || !tool) {
       endLive()
+      releasedOutsideTool()
       return NOTHING
     }
     return release(tool, () => {
@@ -996,6 +1010,18 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
           : []),
       ], 'Tool host cancellation failed')
     })
+  }
+
+  /**
+   * Today's pointerup cleanup after a release that ended no press of the tool's (ToolHost.released): the end or cancel of
+   * a pointer pan, a right-click release, a release off the map, a ruler drag's, a press the tool never heard. The series
+   * commits, the drop preview and the passive hover clear, the tool's cancelTransient('navigate') runs, as after a pan
+   * (Polygon keeps a draft with corners and drops a redo-only history; a stamp hides its ghost until the next hover), and
+   * the cursor returns to the tool's. A press of the tool's that is still live ends on its own release instead.
+   */
+  function releasedOutsideTool(): void {
+    if (live) return
+    cancelTransientInteraction('navigate')
   }
 
   function retryPendingCancellation(): boolean {
@@ -1312,6 +1338,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     hasNudgeSeries: () => nudging,
     endNudgeSeries(commit: boolean): void {
       if (!disposed) endNudgeSeries(commit)
+    },
+    released(): void {
+      if (!disposed) releasedOutsideTool()
     },
     interrupted(): void {
       if (disposed) return

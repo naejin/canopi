@@ -7,9 +7,9 @@
 // frames, refreshMeasurements reaches ToolHost.sceneChanged(). It builds the host's chrome (chrome/: the handle layer,
 // the text entry, the plant tooltip and the Unlock affordance, whose Unlock it runs), bridges the plant and saved-stamp
 // read models to the armed tool, reads the snapping settings per point, calls ToolHost.rawPress for every raw press on
-// the map host and ToolHost.interrupted() after a window blur, follows a placed drop (the saved stamp's drag source, the
-// map's focus on the next frame), owns the navigation cursor, and passes on no draft or handles while a story is
-// presented. Ruler presses reach the source beside the map: the session finds the pressed ruler's overlay
+// the map host, ToolHost.released() after a release that ended no press of the tool's and ToolHost.interrupted() after a
+// window blur, follows a placed drop (the saved stamp's drag source, the map's focus on the next frame), owns the
+// navigation cursor, and passes on no draft or handles while a story is presented. Ruler presses reach the source beside the map: the session finds the pressed ruler's overlay
 // (chrome/rulers.ts) and runs today's ruler drag under any tool (its cursor, its end on a blur, its guide at the
 // release), whatever the host does with the input.
 
@@ -70,6 +70,9 @@ const STORY_PRESENTING_ATTRIBUTE = 'data-story-presenting'
 const NO_MODIFIERS: Modifiers = Object.freeze({ shift: false, ctrl: false, alt: false, meta: false })
 const QUARANTINE: readonly AdapterEffect[] = Object.freeze([{ kind: 'prevent-default' }, { kind: 'stop-propagation' }])
 const NO_DROP: readonly AdapterEffect[] = Object.freeze([{ kind: 'drop-effect', dropEffect: 'none' }])
+/** Today's owned overlays, over which a release with no press ran no cleanup (_isOwnedOverlayPointerTarget): the note
+ *  editor, a handle and the Unlock affordance. */
+const OWNED_OVERLAY_SELECTOR = '[data-canvas-text-entry], [data-canvas-handle], [data-locked-object-affordance]'
 /** The host's types, read through it (P5b: this module imports nothing else from tools/). */
 type DraftPresentation = Parameters<ToolHostDeps['renderer']['setDraft']>[0]
 type ToolSource = Parameters<ToolHost['setTool']>[1]
@@ -639,6 +642,21 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       this._recogniser = rejected.state
       this._source.apply(rejected.effects)
     }
+    if (this._releasesOutsideTool(input, result.gestures)) this._toolHost.released()
+  }
+
+  /**
+   * Whether this input ended no press of the tool's, so today's window pointerup (or a pan's pointercancel or lost
+   * capture) would have run the cancellation (ToolHost.released): the up, cancel or Esc that ends a pointer pan, or an up
+   * with no press of the map's at all. Today's exceptions hold for the latter: nothing while another pointer's press is
+   * live, in overview (the recogniser swallows the up), or over the note editor, a handle or the Unlock affordance. The
+   * host handles the tap or drag-end of a ruler drag or of a press the tool never heard itself.
+   */
+  private _releasesOutsideTool(input: RawInput, gestures: readonly Gesture[]): boolean {
+    if (gestures.some(endsPointerPan)) return input.kind === 'up' || (input.kind === 'cancel' && input.id !== 'all')
+    if (input.kind !== 'up' || gestures.length > 0) return false
+    if (this._recogniser.sessions.size > 0 || this._overview.peek()) return false
+    return !isOwnedOverlayTarget(this._source.currentEvent()?.target ?? null, this._deps.container)
   }
 
   /**
@@ -662,7 +680,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   /** Raw input that does not come from an event (configure, key state, Esc), routed as an event's would be. */
-  private _feed(input: RawInput): void {
+  private _feed(input: RawInput): readonly Gesture[] {
     const result = recognise(this._recogniser, input, this._config)
     this._recogniser = result.state
     for (const gesture of result.gestures) {
@@ -670,6 +688,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       this._router.route(gesture)
     }
     this._source.apply(result.effects.filter((effect) => effect.kind === 'release-capture'))
+    return result.gestures
   }
 
   /**
@@ -750,10 +769,12 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     return this._recogniser.sessions.size > 0 || this._toolHost.hasLiveGesture()
   }
 
+  /** Esc with a pointer session live: the recogniser cancels it; a pan it ends runs today's cancellation (released). */
   private _escapeGesture(): void {
-    this._feed({ kind: 'escape', t: Date.now() })
+    const gestures = this._feed({ kind: 'escape', t: Date.now() })
     this._spaceHeld = false
     this._setNavigationCursor(this._panning ? 'grabbing' : null)
+    if (gestures.some(endsPointerPan)) this._toolHost.released()
   }
 
   private _configure(): void {
@@ -1114,6 +1135,17 @@ function retriesPendingCancellation(input: RawInput): boolean {
     case 'cancel': return input.reason === 'pointercancel'
     default: return false
   }
+}
+
+/** The end of a pan that a pointer drove (middle, Space, overview, the Pan tool), not a wheel's. */
+function endsPointerPan(gesture: Gesture): boolean {
+  return gesture.kind === 'pan' && gesture.phase === 'end' && gesture.source !== 'wheel'
+}
+
+function isOwnedOverlayTarget(target: EventTarget | null, host: HTMLElement): boolean {
+  const element = target instanceof Element ? target : target instanceof Node ? target.parentElement : null
+  const overlay = element?.closest(OWNED_OVERLAY_SELECTOR)
+  return overlay !== null && overlay !== undefined && host.contains(overlay)
 }
 
 function mergeOutcomes(a: GestureOutcome, b: GestureOutcome): GestureOutcome {

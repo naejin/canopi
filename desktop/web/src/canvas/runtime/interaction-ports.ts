@@ -224,6 +224,18 @@ export interface ToolHost {
   hasNudgeSeries(): boolean                                     // the Esc layer 65
   endNudgeSeries(commit: boolean): void                         // Esc aborts; idle, focusout, a press or another key commit
   /**
+   * A pointer release that ended no press of the tool's, which the session reports after routing it: the end or cancel
+   * (pointercancel, lost capture, Esc) of a pointer pan (middle, Space, overview or the Pan tool's), or an up with no
+   * press of the map's (a right-click release, a release off the map, after a press the scene or the probe refused); not
+   * one while another pointer's press is live, in overview, or over the note editor, a handle or the Unlock affordance
+   * (today's _onPointerUp exceptions). The host's own tap and drag-end of a ruler drag, or of a press the tool never heard,
+   * do the same. Today's window pointerup ran _cancelTransientInteraction for each: the series commits, the drop preview
+   * and the passive hover clear, the active tool's cancelTransient('navigate') runs (a tool that preservesTransientOnNavigate
+   * keeps its draft, as after a pan) and the cursor returns to the tool's. A press of the tool's still live is left to its
+   * own release.
+   */
+  released(): void
+  /**
    * Today's _cancelInterruptedInteraction, which the session calls on window blur after feeding the recogniser (which releases
    * Space and ends the live sessions): commits the nudge series, clears the passive hover, the tooltip and the locked
    * affordance, calls the active tool's cancelTransient('navigate') (a tool that preservesTransientOnNavigate keeps its draft,
