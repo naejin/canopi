@@ -1,0 +1,276 @@
+// canvas/runtime/chrome/handle-layer.ts
+//
+// Owns the DOM handles the ToolHost publishes (ToolHostDeps.chrome.setHandles, spec §1.4): each ToolHandle is drawn at its
+// anchor projected through the view frame plus its screen offset, and moves with every camera frame ('overlays'). The
+// points (zone corners and vertices, guide ends) keep today's control-point look (interaction/control-point-overlay.ts):
+// a 20 px hit box around an 8 px mark that grows under the pointer; the rotate handle keeps today's 28 px button
+// (interaction/selection-rotation-handle.ts), kept inside the visible map area, with its key swallow and click stop
+// (INV-LSN-13). A handle's readout shows as a chip under it, and the handle being dragged is marked active. Presses on a
+// handle are the DOM input source's, which reads data-canvas-handle (input/dom-input-source.ts); the layer listens only on
+// its own elements (P6).
+
+import { runCanvasRuntimeCleanups } from '../cleanup'
+import type { ToolHandleId } from '../interaction-types'
+import type { ToolHandle } from '../tools/draft'
+import type { ViewFrame, ViewFrameSource } from '../view/types'
+
+export interface HandleLayerOptions {
+  readonly container: HTMLElement
+  readonly frames: ViewFrameSource
+}
+
+export interface HandleLayer {
+  setHandles(handles: readonly ToolHandle[], active: ToolHandleId | null): void
+  dispose(): void
+}
+
+interface DrawnHandle {
+  handle: ToolHandle
+  readonly element: HTMLElement
+  readonly readout: HTMLElement
+}
+
+const POINT_MARK_SIZE_PX = 8
+const POINT_Z_INDEX = 29
+const ROTATE_SIZE_PX = 28
+const ROTATE_Z_INDEX = 27
+/** The rotate button's distance from the visible map area's edge. */
+const ROTATE_MARGIN_PX = 8
+const SVG_NS = 'http://www.w3.org/2000/svg'
+
+export function createHandleLayer(options: HandleLayerOptions): HandleLayer {
+  const root = document.createElement('div')
+  root.dataset.canvasHandleLayer = 'true'
+  Object.assign(root.style, {
+    position: 'absolute',
+    inset: '0',
+    display: 'none',
+    pointerEvents: 'none',
+  })
+  const drawn = new Map<string, DrawnHandle>()
+  let active: ToolHandleId | null = null
+  let stopFollowing: () => void
+  options.container.appendChild(root)
+  try {
+    stopFollowing = options.frames.onViewFrame('overlays', (frame) => placeAll(frame))
+  } catch (error) {
+    root.remove()
+    throw error
+  }
+
+  function setHandles(handles: readonly ToolHandle[], next: ToolHandleId | null): void {
+    active = next
+    const kept = new Set(handles.map((handle) => handle.id as string))
+    for (const [handleId, entry] of drawn) {
+      if (kept.has(handleId)) continue
+      entry.element.remove()
+      drawn.delete(handleId)
+    }
+    const frame = options.frames.viewFrame.peek()
+    for (const handle of handles) {
+      const existing = drawn.get(handle.id)
+      const entry = existing && isRotate(existing.handle) === isRotate(handle) ? existing : draw(handle)
+      if (entry !== existing) {
+        existing?.element.remove()
+        drawn.set(handle.id, entry)
+      }
+      entry.handle = handle
+      decorate(entry)
+      place(entry, frame)
+      if (entry.element.parentNode !== root) root.appendChild(entry.element)
+    }
+    root.style.display = handles.length > 0 ? 'block' : 'none'
+  }
+
+  function placeAll(frame: ViewFrame): void {
+    for (const entry of drawn.values()) place(entry, frame)
+  }
+
+  function decorate({ handle, element, readout }: DrawnHandle): void {
+    element.dataset.canvasHandle = handle.id
+    element.dataset.canvasHandleGlyph = handle.glyph
+    element.setAttribute('aria-label', handle.label)
+    const isActive = handle.id === active
+    if (isActive) element.dataset.canvasHandleActive = 'true'
+    else delete element.dataset.canvasHandleActive
+    if (isRotate(handle)) element.style.cursor = isActive ? 'grabbing' : 'grab'
+    readout.textContent = handle.readout ?? ''
+    readout.style.display = handle.readout ? 'inline-flex' : 'none'
+  }
+
+  return {
+    setHandles,
+    dispose() {
+      runCanvasRuntimeCleanups([
+        () => stopFollowing(),
+        () => root.remove(),
+      ], 'Handle layer disposal failed')
+      drawn.clear()
+    },
+  }
+}
+
+function draw(handle: ToolHandle): DrawnHandle {
+  return isRotate(handle) ? drawRotate(handle) : drawPoint(handle)
+}
+
+/** Today's control point: a transparent hit box around a mark that grows under the pointer. */
+function drawPoint(handle: ToolHandle): DrawnHandle {
+  const element = document.createElement('div')
+  element.setAttribute('role', 'button')
+  Object.assign(element.style, {
+    position: 'absolute',
+    zIndex: String(POINT_Z_INDEX),
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxSizing: 'border-box',
+    border: '0',
+    borderRadius: 'var(--radius-full)',
+    background: 'transparent',
+    cursor: 'grab',
+    pointerEvents: 'auto',
+    touchAction: 'none',
+    userSelect: 'none',
+  })
+  const mark = document.createElement('span')
+  Object.assign(mark.style, {
+    width: `${POINT_MARK_SIZE_PX}px`,
+    height: `${POINT_MARK_SIZE_PX}px`,
+    display: 'block',
+    border: '2px solid var(--color-surface)',
+    borderRadius: 'var(--radius-full)',
+    background: 'var(--color-primary)',
+    boxSizing: 'border-box',
+  })
+  element.appendChild(mark)
+  element.addEventListener('pointerenter', () => {
+    mark.style.transform = 'scale(1.35)'
+  })
+  element.addEventListener('pointerleave', () => {
+    mark.style.transform = ''
+  })
+  const readout = createReadout()
+  element.appendChild(readout)
+  return { handle, element, readout }
+}
+
+/** Today's rotation handle: a round button that swallows keys and clicks, so neither reaches the map. */
+function drawRotate(handle: ToolHandle): DrawnHandle {
+  const element = document.createElement('div')
+  element.setAttribute('role', 'button')
+  element.tabIndex = -1
+  Object.assign(element.style, {
+    position: 'absolute',
+    zIndex: String(ROTATE_Z_INDEX),
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '0',
+    background: 'var(--color-primary)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--color-primary-hover)',
+    borderRadius: 'var(--radius-full)',
+    boxShadow: 'var(--shadow-md)',
+    boxSizing: 'border-box',
+    color: 'var(--color-primary-contrast)',
+    cursor: 'grab',
+    outlineWidth: '2px',
+    outlineStyle: 'solid',
+    outlineColor: 'var(--color-surface)',
+    outlineOffset: '1px',
+    pointerEvents: 'auto',
+    touchAction: 'none',
+    userSelect: 'none',
+  })
+  element.appendChild(createRotateIcon())
+  const readout = createReadout()
+  element.appendChild(readout)
+  element.addEventListener('click', (event) => event.stopPropagation())
+  element.addEventListener('keydown', (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+  })
+  return { handle, element, readout }
+}
+
+/** Today's rotation readout chip ('+15°'), under its handle. */
+function createReadout(): HTMLElement {
+  const readout = document.createElement('span')
+  readout.dataset.canvasHandleReadout = 'true'
+  readout.setAttribute('aria-hidden', 'true')
+  Object.assign(readout.style, {
+    position: 'absolute',
+    left: '50%',
+    top: 'calc(100% + var(--space-1))',
+    display: 'none',
+    minWidth: '42px',
+    justifyContent: 'center',
+    padding: 'var(--space-1) var(--space-2)',
+    background: 'var(--color-surface)',
+    border: '1px solid var(--color-border-strong, var(--color-border))',
+    borderRadius: 'var(--radius-sm)',
+    boxShadow: 'var(--shadow-sm)',
+    boxSizing: 'border-box',
+    color: 'var(--color-text)',
+    fontFamily: 'var(--font-mono)',
+    fontSize: 'var(--text-xs)',
+    fontWeight: '600',
+    lineHeight: '1.2',
+    transform: 'translateX(-50%)',
+    whiteSpace: 'nowrap',
+    pointerEvents: 'none',
+  })
+  return readout
+}
+
+/** Centred on the anchor's screen point plus its offset; the rotate button stays inside the visible map area, as today. */
+function place({ handle, element }: DrawnHandle, frame: ViewFrame): void {
+  const anchor = frame.view.worldToScreen(handle.anchor)
+  const centre = { x: anchor.x + (handle.offsetPx?.x ?? 0), y: anchor.y + (handle.offsetPx?.y ?? 0) }
+  const size = isRotate(handle) ? Math.max(ROTATE_SIZE_PX, handle.hitRadiusPx * 2) : handle.hitRadiusPx * 2
+  let left = centre.x - size / 2
+  let top = centre.y - size / 2
+  if (isRotate(handle)) {
+    const { insets, view } = frame
+    const minLeft = insets.left + ROTATE_MARGIN_PX
+    const minTop = insets.top + ROTATE_MARGIN_PX
+    left = clamp(left, minLeft, Math.max(minLeft, view.screen.width - insets.right - size - ROTATE_MARGIN_PX))
+    top = clamp(top, minTop, Math.max(minTop, view.screen.height - insets.bottom - size - ROTATE_MARGIN_PX))
+  }
+  element.dataset.canvasHandleScreenX = String(anchor.x)
+  element.dataset.canvasHandleScreenY = String(anchor.y)
+  Object.assign(element.style, {
+    left: `${left}px`,
+    top: `${top}px`,
+    width: `${size}px`,
+    height: `${size}px`,
+  })
+}
+
+function isRotate(handle: ToolHandle): boolean {
+  return handle.glyph === 'rotate'
+}
+
+function createRotateIcon(): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, 'svg')
+  svg.setAttribute('viewBox', '0 0 20 20')
+  svg.setAttribute('width', '16')
+  svg.setAttribute('height', '16')
+  svg.setAttribute('aria-hidden', 'true')
+  svg.setAttribute('focusable', 'false')
+  const path = document.createElementNS(SVG_NS, 'path')
+  path.setAttribute('d', 'M15 8a5 5 0 10-1.5 3.6M15 8h-4M15 8V4')
+  path.setAttribute('fill', 'none')
+  path.setAttribute('stroke', 'currentColor')
+  path.setAttribute('stroke-width', '1.8')
+  path.setAttribute('stroke-linecap', 'round')
+  path.setAttribute('stroke-linejoin', 'round')
+  svg.appendChild(path)
+  return svg
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max)
+}

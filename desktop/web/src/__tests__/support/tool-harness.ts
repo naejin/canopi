@@ -336,14 +336,25 @@ export interface ToolHarnessRecord {
   readonly captures: number[]
 }
 
+/** The open text entry: its request, the host's submit and onCancel, the text typed into it (its initial text until typeText),
+ *  and whether it holds focus (from its opening; it loses focus when its blur commit is refused). */
+export interface ToolHarnessTextEntry {
+  readonly request: TextEntryRequest
+  readonly submit: (text: string) => 'close' | 'keep'
+  readonly onCancel: (() => void) | null
+  text: string
+  focused: boolean
+}
+
 export interface ToolHarnessChrome {
   readonly handles: readonly ToolHandle[]
   readonly activeHandle: ToolHandleId | null
   readonly cursor: string
   readonly tooltip: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null
   readonly lockedAffordance: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null
-  /** The open text entry, which ToolHostDeps.chrome.isTextEntryOpen reports; it commits on the map's focus (its blur). */
-  readonly textEntry: { readonly request: TextEntryRequest; readonly submit: (text: string) => 'close' | 'keep' } | null
+  /** The open text entry, which ToolHostDeps.chrome.isTextEntryOpen reports; it commits on the map's focus (its blur) while it
+   *  holds focus, and on submitUnfocusedTextEntry once it has lost it. */
+  readonly textEntry: ToolHarnessTextEntry | null
 }
 
 export interface PressOptions {
@@ -401,10 +412,16 @@ export interface ToolHarness {
   advance(ms: number): void
   /** Edit › Undo on the scene's history (not the transient history). */
   undo(): boolean
-  /** A text entry the host did not open (until D1's 0B-3, the bridge's note editor): the chrome reports it open. */
+  /** An open, focused 'edit' entry that no tool asked for, whose submit closes it: the chrome reports it open. */
   openTextEntry(): void
-  /** Esc in the text entry: its own element handler closes it without a submit. */
+  /** Types into the open text entry, replacing its text. */
+  typeText(text: string): void
+  /** Enter in the text entry: its text goes to the submit, and the host closes the entry on 'close'. */
+  enterText(): 'close' | 'keep'
+  /** Esc in the text entry: its own element handler closes it without a submit, then runs the opener's onCancel. */
   escapeTextEntry(): void
+  /** Focus leaves the text entry for somewhere off the map: it submits, and on 'keep' stays open without focus. */
+  blurTextEntry(): 'close' | 'keep'
   dispose(): void
 }
 
@@ -448,7 +465,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
     cursor: 'default',
     tooltip: null as ToolHarnessChrome['tooltip'],
     lockedAffordance: null as ToolHarnessChrome['lockedAffordance'],
-    textEntry: null as ToolHarnessChrome['textEntry'],
+    textEntry: null as ToolHarnessTextEntry | null,
   }
   let menuOpen = false
   const timers = createHarnessTimers(() => view.clock.now())
@@ -479,11 +496,15 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       setCursor(cursor) {
         chrome.cursor = cursor
       },
-      requestTextEntry(request, submit) {
-        chrome.textEntry = { request, submit }
+      requestTextEntry(request, submit, onCancel) {
+        chrome.textEntry = { request, submit, onCancel: onCancel ?? null, text: request.initialText, focused: true }
       },
       closeTextEntry() {
         chrome.textEntry = null
+      },
+      submitUnfocusedTextEntry() {
+        const entry = chrome.textEntry
+        if (entry && !entry.focused) submitTextEntry(entry)
       },
       isTextEntryOpen: () => chrome.textEntry !== null,
       setTooltip(tooltip) {
@@ -506,9 +527,9 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
     focus: {
       focusMap(reason) {
         record.focus.push(`map:${reason}`)
-        // The text entry commits on its blur.
+        // A text entry that holds focus commits on its blur; one that has lost it hears nothing.
         const entry = chrome.textEntry
-        if (entry && entry.submit(entry.request.initialText) === 'close') chrome.textEntry = null
+        if (entry?.focused) blurTextEntry(entry)
       },
       focusToolCardField(reason) {
         record.focus.push(`tool-card-field:${reason}`)
@@ -564,6 +585,18 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
   } | null = null
 
   const mods = (partial: Partial<Modifiers> = {}): Modifiers => ({ ...NO_MODIFIERS, ...partial })
+
+  /** The entry's submit, as the chrome runs it: a 'close' closes the entry, a 'keep' leaves it open with its text. */
+  function submitTextEntry(entry: ToolHarnessTextEntry): 'close' | 'keep' {
+    const reply = entry.submit(entry.text)
+    if (reply === 'close' && chrome.textEntry === entry) chrome.textEntry = null
+    return reply
+  }
+
+  function blurTextEntry(entry: ToolHarnessTextEntry): 'close' | 'keep' {
+    entry.focused = false
+    return submitTextEntry(entry)
+  }
 
   /**
    * The session's routing: a failed cancellation is retried (and the event quarantined) before the gesture of an event
@@ -702,10 +735,30 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       chrome.textEntry = {
         request: { anchor: { x: 0, y: 0 }, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note', mode: 'edit' },
         submit: () => 'close',
+        onCancel: null,
+        text: '',
+        focused: true,
       }
     },
+    typeText(text) {
+      const entry = chrome.textEntry
+      if (!entry) throw new Error('No text entry is open.')
+      entry.text = text
+    },
+    enterText() {
+      const entry = chrome.textEntry
+      if (!entry) throw new Error('No text entry is open.')
+      return submitTextEntry(entry)
+    },
     escapeTextEntry() {
+      const entry = chrome.textEntry
       chrome.textEntry = null
+      entry?.onCancel?.()
+    },
+    blurTextEntry() {
+      const entry = chrome.textEntry
+      if (!entry?.focused) throw new Error('No focused text entry is open.')
+      return blurTextEntry(entry)
     },
     dispose() {
       host.dispose()

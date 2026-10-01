@@ -18,10 +18,6 @@ import type {
 } from './tool-adapter'
 import type { CanvasRuntimeTranslator } from '../app-adapter'
 import {
-  createTextAnnotationTool,
-  createTextAnnotationToolAdapter,
-} from './text-annotation-tool'
-import {
   createZoneDrawingTool,
   createZoneDrawingToolAdapters,
 } from './zone-drawing-tool'
@@ -62,15 +58,6 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
   }
 
   try {
-    const textTool = own(createTextAnnotationTool({
-      container: context.container,
-      focusHost: context.focusHost,
-      notifyGuidanceChange: context.notifyGuidanceChange,
-      translate: context.translate,
-      camera: context.camera,
-      getSceneStore: context.getSceneStore,
-      sceneEdits: context.sceneEdits,
-    }), (tool) => tool.dispose())
     const zoneDrawingTool = own(createZoneDrawingTool({
       container: context.container,
       preview: context.preview,
@@ -94,7 +81,6 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
     }), (tool) => tool.dispose())
 
     const registry = new DefaultSceneToolRegistry(new Map([
-      ['text', createTextAnnotationToolAdapter(textTool)],
       ['line', zoneDrawingAdapters.line],
       ['measurement-guide', createMeasurementGuideToolAdapter(measurementGuideTool)],
       ['rectangle', zoneDrawingAdapters.rectangle],

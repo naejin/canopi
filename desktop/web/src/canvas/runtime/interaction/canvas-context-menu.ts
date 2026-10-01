@@ -27,6 +27,8 @@ export interface CanvasContextMenuController {
   openAtPointer(screen: ScenePoint, selection: CanvasDesignObjectSelectionModel | null): void
   /** Menu key or Shift F10: beside the selection's bounds, else mid-map (the empty-map menu without a selection). */
   openFromKeyboard(selection: CanvasDesignObjectSelectionModel): void
+  /** True from an open until the app closes the menu (the request's `closed`) or close() closes it. */
+  isOpen(): boolean
   close(): void
   dispose(): void
 }
@@ -51,6 +53,9 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
         : {}),
       ...(options.placePlantsAt ? { placePlantsAt: options.placePlantsAt } : {}),
       returnFocus: options.returnFocus,
+      closed: () => {
+        if (openRequest === request) openRequest = null
+      },
     }
     openRequest = request
     adapter.open(request)
@@ -93,6 +98,7 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
         selection,
       )
     },
+    isOpen: () => openRequest !== null,
     close() {
       const request = openRequest
       openRequest = null

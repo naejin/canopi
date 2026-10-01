@@ -4,11 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { CANVAS_CHROME_FONT_FAMILY, CANVAS_CHROME_MONO_FONT_FAMILY } from '../canvas/chrome-fonts'
 import { createRulerOverlay } from '../canvas/runtime/chrome/rulers'
+import { createTextEntryHost } from '../canvas/runtime/chrome/text-entry-host'
 import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
-import { createAnnotationInlineEditor } from '../canvas/runtime/interaction/annotation-inline-editor'
-import type { WorkspaceCameraFrameReader } from '../canvas/runtime/camera'
-import type { SceneStateReader } from '../canvas/runtime/scene'
-import type { SceneEditCoordinator } from '../canvas/runtime/scene-runtime/transactions'
+import { createTestView } from './support/test-view'
 
 const GLOBAL_CSS = readFileSync('src/styles/global.css', 'utf8')
 const LIGHT_TOKENS = readDeclarations(GLOBAL_CSS, '\n:root {')
@@ -118,25 +116,26 @@ describe('canvas chrome fonts', () => {
 
   it('edits Text notes in the font Pixi draws them with', () => {
     const container = document.createElement('div')
-    const annotation = {
-      kind: 'annotation' as const, id: 'note', locked: false, annotationType: 'text',
-      position: { x: 1, y: 1 }, text: 'Pond edge', fontSize: 16, rotationDeg: null,
-    }
-    const editor = createAnnotationInlineEditor({
+    const view = createTestView({ viewport: { x: 0, y: 0, scale: 10 } })
+    const entries = createTextEntryHost({
       container,
-      camera: { viewport: { x: 0, y: 0, scale: 10 } } as unknown as WorkspaceCameraFrameReader,
-      getSceneStore: () => ({ persisted: { annotations: [annotation] } }) as unknown as SceneStateReader,
-      sceneEdits: { run: vi.fn() } as unknown as SceneEditCoordinator,
-      canEditAnnotation: () => true,
-      refreshSelectionDependent: vi.fn(),
-      focusHost: vi.fn(),
+      frames: view.frames,
       translate: (key) => key,
+      focus: { focusMap: vi.fn() },
     })
-    expect(editor.start('note')).toBe(true)
+    entries.open({
+      anchor: { x: 1, y: 1 },
+      rotationDeg: 0,
+      initialText: 'Pond edge',
+      placeholderKey: 'canvas.textNote.placeholder',
+      mode: 'edit',
+      fontSizePx: 16,
+    }, () => 'close')
 
     const textarea = container.querySelector<HTMLTextAreaElement>('[data-annotation-inline-editor="true"]')!
     expect(textarea.style.fontFamily.replace(/"/g, "'")).toBe(CANVAS_CHROME_FONT_FAMILY)
-    editor.dispose()
+    entries.dispose()
+    view.dispose()
   })
 })
 

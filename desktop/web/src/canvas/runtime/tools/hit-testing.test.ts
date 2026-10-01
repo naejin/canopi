@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { hitTestTopLevel, hitTestVisibleTopLevel, queryRectTopLevel } from '../canvas/runtime/interaction/hit-testing'
-import type { PlantPresentationContext } from '../canvas/runtime/plant-presentation'
-import type { ScenePersistedState } from '../canvas/runtime/scene'
+import type { PlantPresentationContext } from '../plant-presentation'
+import type { ScenePersistedState } from '../scene'
+import { hitTestTopLevel, hitTestVisibleTopLevel, queryRectTopLevel } from './hit-testing'
 
 function createScene(): ScenePersistedState {
   return {

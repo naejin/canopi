@@ -1,4 +1,6 @@
 import { effect, signal } from '@preact/signals'
+import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createToolHarness,
@@ -13,8 +15,10 @@ import {
   type ToolHarnessOptions,
 } from '../../../__tests__/support/tool-harness'
 import { createTestView } from '../../../__tests__/support/test-view'
+import { closeCanvasContextMenu, openCanvasContextMenu } from '../../../app/canvas-context-menu/state'
+import { CanvasContextMenu } from '../../../components/canvas/CanvasContextMenu'
 import { gridInterval, snapToGrid } from '../../grid'
-import type { CanvasContextMenuRequest } from '../app-adapter'
+import type { CanvasContextMenuCommands, CanvasContextMenuRequest } from '../app-adapter'
 import type { ToolHandleId } from '../interaction-types'
 import type { SceneDesignObjectTarget } from '../scene/design-object-targets'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
@@ -467,6 +471,54 @@ describe('ToolHost', () => {
       expect(h.chrome.textEntry).toBeNull()
     })
 
+    it('a press or a menu submits a text entry whose blur commit was refused, once; a focused one commits on its blur', () => {
+      let busy = true
+      const submitted: string[] = []
+      const select: StubTool = stubTool('select', {
+        command: (c) => {
+          if (c.kind !== 'edit-text') return 'pass'
+          select.ctx().effects.requestTextEntry(
+            { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Old', placeholderKey: 'canvas.note', mode: 'edit' },
+            (text) => {
+              submitted.push(text)
+              return busy ? 'keep' : 'close'
+            },
+          )
+          return 'handled'
+        },
+      })
+      useStubTools(select)
+      const h = harness()
+
+      // Focus leaves the entry while the scene refuses the edit: the entry stays open, without focus.
+      h.host.command({ kind: 'edit-text' })
+      h.typeText('New')
+      expect(h.blurTextEntry()).toBe('keep')
+      busy = false
+      // The map taking focus cannot blur it again: the press submits it, as today's press committed the editor.
+      h.click({ x: 300, y: 250 })
+      expect(submitted).toEqual(['New', 'New'])
+      expect(h.chrome.textEntry).toBeNull()
+      expect(select.count('press')).toBe(1)
+
+      // A menu, a keyboard one included, does the same.
+      for (const source of ['mouse', 'keyboard'] as const) {
+        busy = true
+        h.host.command({ kind: 'edit-text' })
+        h.blurTextEntry()
+        busy = false
+        h.menu(source === 'mouse' ? { x: 300, y: 250 } : 'selection', source)
+        expect(h.chrome.textEntry).toBeNull()
+      }
+      expect(submitted).toHaveLength(6)
+
+      // An entry that holds focus commits once, on the blur the map's focus causes.
+      h.host.command({ kind: 'edit-text' })
+      h.click({ x: 300, y: 250 })
+      expect(submitted).toHaveLength(7)
+      expect(h.chrome.textEntry).toBeNull()
+    })
+
     it('the host reads the text entry\'s state live', () => {
       const handle: ToolHandle = { id: 'rotate' as ToolHandleId, anchor: { x: 10, y: 10 }, hitRadiusPx: 10, glyph: 'rotate', label: 'Rotate' }
       const select = stubTool('select', { activate: (ctx) => ctx.effects.setHandles([handle]) })
@@ -485,7 +537,7 @@ describe('ToolHost', () => {
       const h = harness()
       expect(h.chrome.handles).toEqual([handle])
 
-      // An entry the host did not open (until 0B-3, the bridge's note editor): Select's handles hide while it is open,
+      // An entry no tool asked for: Select's handles hide while it is open,
       h.openTextEntry()
       h.host.sceneChanged()
       expect(h.chrome.handles).toEqual([])
@@ -509,6 +561,136 @@ describe('ToolHost', () => {
       h.escapeTextEntry()
       h.click({ x: 90, y: 90 })
       expect(h.record.focus.at(-1)).toBe('map:tool-requested')
+    })
+
+    it('under Text, the click whose raw press finds the note entry open commits it and reaches no tool', () => {
+      const text: StubTool = stubTool('text', {
+        gesture: (g) => {
+          if (g.kind === 'press') {
+            text.ctx().effects.requestTextEntry(
+              { anchor: g.point.world, rotationDeg: 0, initialText: 'Compost', placeholderKey: 'canvas.note', mode: 'create' },
+              () => 'close',
+            )
+          }
+          return 'pass'
+        },
+      })
+      const select: StubTool = stubTool('select', {
+        command: (c) => {
+          if (c.kind !== 'edit-text') return 'pass'
+          select.ctx().effects.requestTextEntry(
+            { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Old', placeholderKey: 'canvas.note', mode: 'edit' },
+            () => 'close',
+          )
+          return 'handled'
+        },
+      })
+      useStubTools(text, select)
+      const h = harness({ tool: 'text' })
+
+      h.click({ x: 40, y: 40 })
+      const heard = text.gestures.length
+      // The press's focus move commits the entry on its blur, and the click places nothing (spec §3.2, as today).
+      expect(h.click({ x: 90, y: 90 })).toEqual({})
+      expect(h.record.focus.at(-1)).toBe('map:text-entry-closed')
+      expect(h.chrome.textEntry).toBeNull()
+      expect(text.gestures).toHaveLength(heard)
+      // The next click is the tool's again, and so is one after a middle press committed the entry.
+      h.click({ x: 120, y: 120 })
+      expect(text.count('press')).toBe(2)
+      h.host.rawPress('middle', { kind: 'surface' })
+      expect(h.chrome.textEntry).toBeNull()
+      h.click({ x: 150, y: 150 })
+      expect(text.count('press')).toBe(3)
+
+      // Select's in-place editor commits on the press too, and the press goes on to Select, as today.
+      h.arm('select')
+      h.host.command({ kind: 'edit-text' })
+      expect(h.chrome.textEntry?.request.mode).toBe('edit')
+      h.click({ x: 200, y: 200 })
+      expect(h.chrome.textEntry).toBeNull()
+      expect(select.count('press')).toBe(1)
+    })
+
+    it('a new note\'s entry, whichever tool opened it, keeps its committing press from the tool and survives overview; an in-place editor does neither', () => {
+      /** A stand-in whose edit-text command opens an entry of `mode`, so the mode and the tool that opened it disagree. */
+      function opener(id: 'select' | 'text', mode: 'create' | 'edit'): StubTool {
+        const tool: StubTool = stubTool(id, {
+          command: (c) => {
+            if (c.kind !== 'edit-text') return 'pass'
+            tool.ctx().effects.requestTextEntry(
+              { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Compost', placeholderKey: 'canvas.note', mode },
+              () => 'close',
+            )
+            return 'handled'
+          },
+        })
+        return tool
+      }
+      const select = opener('select', 'create')
+      const text = opener('text', 'edit')
+      useStubTools(select, text)
+      const h = harness()
+
+      // The press that commits a new note's entry reaches no tool (today's Text field took it), even under Select;
+      h.host.command({ kind: 'edit-text' })
+      h.click({ x: 300, y: 250 })
+      expect(h.chrome.textEntry).toBeNull()
+      expect(select.count('press')).toBe(0)
+      // and entering overview keeps the entry, as today's setOverviewMode kept Text's field.
+      h.host.command({ kind: 'edit-text' })
+      h.view.setViewport(OVERVIEW)
+      h.advance(0)
+      expect(h.chrome.textEntry?.request.mode).toBe('create')
+      h.view.setViewport({ x: 0, y: 0, scale: 1 })
+      h.advance(0)
+
+      // An in-place editor's committing press goes on to the tool, even under Text, and overview closes the editor, as
+      // today's setOverviewMode cancelled the annotation editor.
+      h.arm('text')
+      h.host.command({ kind: 'edit-text' })
+      h.click({ x: 300, y: 250 })
+      expect(h.chrome.textEntry).toBeNull()
+      expect(text.count('press')).toBe(1)
+      h.host.command({ kind: 'edit-text' })
+      h.view.setViewport(OVERVIEW)
+      h.advance(0)
+      expect(h.chrome.textEntry).toBeNull()
+    })
+
+    it('the text entry\'s own Esc reaches the tool through onCancel, and what the tool publishes follows at once', () => {
+      const cancels: number[] = []
+      const text: StubTool = stubTool('text', {
+        gesture: (g) => {
+          if (g.kind !== 'press') return 'pass'
+          const effects = text.ctx().effects
+          effects.requestTextEntry(
+            { anchor: g.point.world, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note', mode: 'create' },
+            () => 'close',
+            () => {
+              cancels.push(h.record.guidance.length)
+              effects.setGuidance({ gesture: false })
+            },
+          )
+          effects.setGuidance({ gesture: true })
+          return 'pass'
+        },
+      })
+      useStubTools(text)
+      const h = harness({ tool: 'text' })
+
+      h.click({ x: 40, y: 40 })
+      expect(h.record.guidance.at(-1)?.gesture).toBe(true)
+      h.escapeTextEntry()
+      expect(cancels).toHaveLength(1)
+      expect(h.record.guidance.at(-1)?.gesture).toBe(false)
+
+      // An entry the host closes (here on a tool change) was not cancelled by its own Esc: no onCancel.
+      h.click({ x: 90, y: 90 })
+      expect(h.chrome.textEntry).not.toBeNull()
+      h.arm('select')
+      expect(h.chrome.textEntry).toBeNull()
+      expect(cancels).toHaveLength(1)
     })
 
     it('a ruler drag reaches no tool, leaves the map\'s cursor alone and is never fenced by a pending cancellation', () => {
@@ -954,6 +1136,151 @@ describe('ToolHost', () => {
       h.release()
       expect(h.store.persisted.zones.map((zone) => zone.id)).toEqual(['z2'])
       expect(h.record.guidance.at(-1)).toMatchObject({ gesture: false })
+    })
+  })
+
+  describe('Select\'s handles and edits', () => {
+    const ROTATE: ToolHandle = { id: 'rotate' as ToolHandleId, anchor: { x: 10, y: 10 }, hitRadiusPx: 14, glyph: 'rotate', label: 'Rotate' }
+
+    /** A Select stand-in that shows the rotate handle and opens a Scene Edit at a press, as a move or a handle drag does. */
+    function editingSelect(): StubTool {
+      let edit: SceneEditTransaction | null = null
+      const select: StubTool = stubTool('select', {
+        activate: (ctx) => ctx.effects.setHandles([ROTATE]),
+        gesture: (g) => {
+          const phase = g.kind === 'handle-drag' ? g.phase : null
+          if (g.kind === 'press' || phase === 'start') edit = select.ctx().effects.edits.begin('interaction-test')
+          if (g.kind === 'drag-move' || phase === 'move') {
+            const world = 'point' in g ? g.point.world : { x: 0, y: 0 }
+            edit?.mutate((draft) => {
+              draft.plants = [appleAt(world)]
+            })
+          }
+          if (g.kind === 'tap' || g.kind === 'drag-end' || g.kind === 'cancel' || phase === 'end') {
+            edit?.abort()
+            edit = null
+          }
+          return 'pass'
+        },
+      })
+      return select
+    }
+
+    it('Select\'s handles hide while a Scene Edit is open; a handle\'s own press keeps them until it changes the scene', () => {
+      useStubTools(editingSelect())
+      const h = harness()
+      expect(h.chrome.handles).toEqual([ROTATE])
+
+      // A press that opens an edit (a move): the handles hide at once and come back when it ends.
+      h.press({ x: 100, y: 100 })
+      expect(h.chrome.handles).toEqual([])
+      h.release()
+      expect(h.chrome.handles).toEqual([ROTATE])
+
+      // The handle's own press marks it active and keeps the handles until its edit first changes the scene, as today.
+      h.press({ x: 10, y: 10 }, { target: { kind: 'handle', id: ROTATE.id } })
+      expect(h.chrome.handles).toEqual([ROTATE])
+      expect(h.chrome.activeHandle).toBe(ROTATE.id)
+      h.move({ x: 30, y: 30 })
+      expect(h.chrome.handles).toEqual([])
+      h.release()
+      expect(h.chrome.handles).toEqual([ROTATE])
+      expect(h.chrome.activeHandle).toBeNull()
+    })
+
+    it('a press that opens a Scene Edit clears the passive hover', () => {
+      useStubTools(editingSelect())
+      const h = harness({ scene: { plants: [appleAt({ x: 50, y: 50 })] } })
+
+      h.hover({ x: 50, y: 50 })
+      expect(h.chrome.tooltip).toEqual({ target: P1, at: { x: 50, y: 50 } })
+      h.press({ x: 50, y: 50 })
+      expect(h.chrome.tooltip).toBeNull()
+      expect(h.record.hovers.at(-1)).toBeNull()
+      h.release()
+    })
+
+    it('an aborted Scene Edit redraws the scene it restored', () => {
+      useStubTools(editingSelect())
+      const h = harness()
+
+      h.press({ x: 100, y: 100 })
+      h.move({ x: 120, y: 120 })
+      h.move({ x: 140, y: 140 })
+      const before = h.record.invalidations
+      h.cancel('pointercancel')
+
+      expect(h.store.persisted.plants).toEqual([])
+      expect(h.record.invalidations).toBe(before + 1)
+    })
+
+    it('a text entry the tool\'s submit closes shows Select\'s handles again', () => {
+      const submitted: string[] = []
+      const select: StubTool = stubTool('select', {
+        activate: (ctx) => ctx.effects.setHandles([ROTATE]),
+        command: (c) => {
+          if (c.kind !== 'edit-text') return 'pass'
+          select.ctx().effects.requestTextEntry(
+            { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Old', placeholderKey: 'canvas.note', mode: 'edit' },
+            (text) => {
+              submitted.push(text)
+              return text.length > 0 ? 'close' : 'keep'
+            },
+          )
+          return 'handled'
+        },
+      })
+      useStubTools(select)
+      const h = harness()
+
+      expect(h.host.command({ kind: 'edit-text' })).toBe('handled')
+      expect(h.chrome.handles).toEqual([])
+      // A refused commit keeps the entry, and the handles stay hidden.
+      expect(h.chrome.textEntry!.submit('')).toBe('keep')
+      expect(h.chrome.textEntry).not.toBeNull()
+      expect(h.chrome.handles).toEqual([])
+
+      expect(h.chrome.textEntry!.submit('New')).toBe('close')
+      expect(submitted).toEqual(['', 'New'])
+      expect(h.chrome.textEntry).toBeNull()
+      expect(h.chrome.handles).toEqual([ROTATE])
+    })
+
+    it('the same handles again change nothing and redraw nothing', () => {
+      const select: StubTool = stubTool('select', {
+        activate: (ctx) => ctx.effects.setHandles([ROTATE]),
+        viewChanged: () => select.ctx().effects.setHandles([{ ...ROTATE }]),
+      })
+      useStubTools(select)
+      const h = harness()
+      const before = h.record.invalidations
+
+      // A camera frame with the pointer off the map: the tool refreshes its handles, which have not changed.
+      h.view.navigation.zoomIn()
+      h.advance(1000)
+
+      expect(select.calls).toContain('viewChanged')
+      expect(h.record.invalidations).toBe(before)
+      expect(h.chrome.handles).toEqual([ROTATE])
+    })
+
+    it('a tool call made from inside an effect leaves the effect independent of what the tool reads and bumps', () => {
+      const selectionRevision = signal(0)
+      const select = stubTool('select', { sceneChanged: () => void selectionRevision.value })
+      useStubTools(select)
+      const h = harness()
+      let runs = 0
+
+      // The runtime refreshes the session from inside its camera-frame effect.
+      const stop = effect(() => {
+        runs += 1
+        h.host.sceneChanged()
+      })
+      selectionRevision.value += 1
+      stop()
+
+      expect(runs).toBe(1)
+      expect(h.host.transientHistory.revision.peek()).toBeGreaterThan(0)
     })
   })
 
@@ -1529,6 +1856,70 @@ describe('ToolHost', () => {
       port.close()
       expect(port.isOpen()).toBe(false)
       view.dispose()
+    })
+
+    it("the menu port follows every close of the app's menu, with or without a focus return", async () => {
+      const source = createToolSceneSource(sceneStoreWith({}))
+      const returnFocus = vi.fn()
+      const view = createTestView()
+      // The app's menu over its own state, which app/canvas-runtime/app-adapter.ts lends the runtime as its adapter.
+      const app = document.body.appendChild(document.createElement('div'))
+      await act(async () => render(h(CanvasContextMenu, null), app))
+      const port = createContextMenuPort({
+        container: document.createElement('div'),
+        camera: view.legacyCamera,
+        adapter: { open: openCanvasContextMenu, close: closeCanvasContextMenu },
+        // No command runs here: each one does nothing.
+        commands: new Proxy({}, { get: () => () => false }) as CanvasContextMenuCommands,
+        returnFocus,
+        scene: createToolScene(source),
+        selectionModel: source.selectionModel,
+      })
+      const menu = () => document.querySelector<HTMLElement>('[role="menu"]')
+      const openMenu = async () => {
+        await act(async () => port.open({ at: { x: 10, y: 10 }, source: 'mouse', screen: { x: 10, y: 10 }, hit: null }))
+        expect(menu()).not.toBeNull()
+        expect(port.isOpen()).toBe(true)
+      }
+
+      try {
+        // A press or focus elsewhere, a resize, a scroll: the app's menu closes itself and gives no focus back.
+        for (const closeElsewhere of [
+          () => document.body.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0 })),
+          () => app.dispatchEvent(new FocusEvent('focusin', { bubbles: true })),
+          () => window.dispatchEvent(new Event('resize')),
+          () => document.dispatchEvent(new Event('scroll')),
+        ]) {
+          await openMenu()
+          await act(async () => { closeElsewhere() })
+          expect(menu()).toBeNull()
+          expect(port.isOpen()).toBe(false)
+        }
+        expect(returnFocus).not.toHaveBeenCalled()
+
+        // Esc: the menu closes and gives focus back to the map.
+        await openMenu()
+        await act(async () => {
+          menu()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+        })
+        expect(menu()).toBeNull()
+        expect(returnFocus).toHaveBeenCalledOnce()
+        expect(port.isOpen()).toBe(false)
+
+        // A newer menu replaces the open one, whose close leaves the newer one open until the runtime closes it.
+        await openMenu()
+        await openMenu()
+        await act(async () => port.close())
+        expect(menu()).toBeNull()
+        expect(port.isOpen()).toBe(false)
+      } finally {
+        await act(async () => {
+          closeCanvasContextMenu()
+          render(null, app)
+        })
+        app.remove()
+        view.dispose()
+      }
     })
   })
 })

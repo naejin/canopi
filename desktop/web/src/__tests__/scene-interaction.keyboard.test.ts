@@ -23,6 +23,7 @@ import {
   makeTextAnnotation,
   getDesignObjectSelectionFromStore,
   installSceneInteractionFixture,
+  rotationHandle,
 } from './support/scene-interaction-setup'
 
 describe('SceneInteractionSession', () => {
@@ -56,7 +57,7 @@ describe('SceneInteractionSession', () => {
     deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
 
-    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
+    const handle = rotationHandle(container)!
     const start = {
       x: Number.parseFloat(handle.style.left) + 14,
       y: Number.parseFloat(handle.style.top) + 14,
@@ -71,7 +72,7 @@ describe('SceneInteractionSession', () => {
 
     expect(store.persisted.zones[0]?.rotationDeg).toBe(0)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
-    expect(container.querySelector<HTMLElement>('[data-rotation-handle-readout]')?.style.display).toBe('none')
+    expect(rotationHandle(container)?.querySelector<HTMLElement>('[data-canvas-handle-readout]')?.style.display).toBe('none')
     session.dispose()
   })
 

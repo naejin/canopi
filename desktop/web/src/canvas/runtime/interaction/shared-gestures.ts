@@ -30,7 +30,7 @@ import {
   createSceneDragState,
   resetSceneDragState,
 } from '../scene-runtime/drag-state'
-import { hitTestTopLevel, queryRectTopLevel, type TopLevelTarget } from './hit-testing'
+import { hitTestTopLevel, queryRectTopLevel, type TopLevelTarget } from '../tools/hit-testing'
 import { showInteractionPreview, hideInteractionPreview } from './overlay-ui'
 import {
   createPlantDragDistanceOverlay,
