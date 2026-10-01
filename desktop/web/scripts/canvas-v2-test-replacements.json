@@ -548,7 +548,7 @@
   },
   "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > quarantines pointer-up while a drag commit finishes retained publication": {
     "file": "src/__tests__/canvas-interaction-e2e.zone-drawing.test.ts",
-    "name": "SceneInteractionSession > a pointer-up whose commit fails finishes publication at once, inside the same quarantined event"
+    "name": "SceneInteractionSession > a pointer-up whose commit fails finishes publication at once, then reaches the app"
   },
   "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > retries retained 'Rectangle' cleanup before admitting another drag": {
     "file": "src/__tests__/canvas-interaction-e2e.zone-drawing.test.ts",
@@ -593,6 +593,14 @@
   "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > quarantines failed cancellation before earlier global keyboard shortcuts": {
     "file": "src/__tests__/canvas-interaction-e2e.select.test.ts",
     "name": "SceneInteractionSession > a failed cancellation is rolled back at once, with no key swallowed for a later shortcut"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > quarantines Scene events when admission recovery throws": {
+    "file": "src/__tests__/canvas-interaction-e2e.wiring.test.ts",
+    "name": "SceneInteractionSession > quarantines a press when admission recovery throws, but lets a context menu or a drop reach the app"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > clears and quarantines accepted dragover feedback when the settled read fails": {
+    "file": "src/__tests__/canvas-interaction-e2e.wiring.test.ts",
+    "name": "SceneInteractionSession > clears accepted dragover feedback and reaches the app when the settled read fails"
   },
   "src/__tests__/canvas-overlay-casing.test.ts > overlay stroke casing > draws a dark casing under the polygon draft line before the light stroke": {
     "file": "src/canvas/runtime/renderers/draft-layer.test.ts",

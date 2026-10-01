@@ -280,7 +280,7 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('a pointer-up whose commit fails finishes publication at once, inside the same quarantined event', () => {
+  it('a pointer-up whose commit fails finishes publication at once, then reaches the app', () => {
     const history = new SceneHistory()
     const record = history.record.bind(history)
     let publicationFailures = 2
@@ -318,10 +318,11 @@ describe('SceneInteractionSession', () => {
         pointerUpEvents.push(events.pointerUp({ x: 40, y: 60 }, { pointerId: 81 }))
       })
 
-      // The host's own retry inside the cancellation failure has already finished the commit and recorded it.
+      // The host's own retry inside the cancellation failure has already finished the commit and recorded it. A
+      // pointerup is not a press on the map host, so it rethrows and reaches the app rather than being quarantined.
       expect(errors).toHaveLength(1)
-      expect(pointerUpEvents[0]?.defaultPrevented).toBe(true)
-      expect(downstreamPointerUp).not.toHaveBeenCalled()
+      expect(pointerUpEvents[0]?.defaultPrevented).toBe(false)
+      expect(downstreamPointerUp).toHaveBeenCalled()
       expect(store.persisted.zones).toHaveLength(1)
       expect(coordinator.canUndo.value).toBe(true)
       expect(coordinator.undo()).toBe(true)

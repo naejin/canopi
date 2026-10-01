@@ -365,7 +365,7 @@ describe('createDomInputSource', () => {
     dispose()
   })
 
-  it('a throwing sink quarantines, then rethrows', () => {
+  it('a throwing sink rethrows, and only a press on the map host is quarantined', () => {
     const failure = new Error('sink failed')
     const dispose = createDomInputSource(deps()).attach(() => {
       throw failure
@@ -385,7 +385,7 @@ describe('createDomInputSource', () => {
     dispose()
   })
 
-  it('a sink that throws on any other event rethrows and leaves the event to the app, as today', () => {
+  it('a sink that throws on any other event rethrows and leaves the event to the app', () => {
     const failure = new Error('sink failed')
     const dispose = createDomInputSource(deps()).attach(() => {
       throw failure
@@ -404,6 +404,10 @@ describe('createDomInputSource', () => {
     listen(host, 'pointerleave')
     listen(host, 'wheel')
     listen(window, 'blur')
+    listen(window, 'pointerup')
+    listen(host, 'contextmenu')
+    listen(host, 'dragover')
+    listen(host, 'drop')
 
     let errors: unknown[] = []
     try {
@@ -413,6 +417,10 @@ describe('createDomInputSource', () => {
         events.pointerLeave({ x: 10, y: 10 })
         events.wheel({ x: 10, y: 10 }, { deltaY: 4 })
         events.windowBlur()
+        events.pointerUp({ x: 10, y: 10 })
+        for (const type of ['contextmenu', 'dragover', 'drop']) {
+          host.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: 20, clientY: 30 }))
+        }
       })
     } finally {
       for (const remove of removals) remove()
@@ -420,38 +428,19 @@ describe('createDomInputSource', () => {
       dispose()
     }
 
-    // Today only a press on the map, a release, the context menu, dragover and drop were quarantined when they failed.
-    expect(errors).toEqual([failure, failure, failure, failure, failure])
-    expect(heard).toEqual(['pointermove:false', 'pointercancel:false', 'pointerleave:false', 'wheel:false', 'blur:false'])
-  })
-
-  it('a sink that throws on a release, a menu, a dragover or a drop quarantines it, then rethrows', () => {
-    const failure = new Error('sink failed')
-    const dispose = createDomInputSource(deps()).attach(() => {
-      throw failure
-    })
-    const downstream = vi.fn()
-    for (const type of ['pointerup', 'contextmenu', 'dragover', 'drop']) window.addEventListener(type, downstream)
-
-    const handled: Event[] = []
-    let errors: unknown[] = []
-    try {
-      errors = captureWindowErrors(() => {
-        handled.push(events.pointerUp({ x: 10, y: 10 }))
-        for (const type of ['contextmenu', 'dragover', 'drop']) {
-          const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: 20, clientY: 30 })
-          host.dispatchEvent(event)
-          handled.push(event)
-        }
-      })
-    } finally {
-      for (const type of ['pointerup', 'contextmenu', 'dragover', 'drop']) window.removeEventListener(type, downstream)
-      dispose()
-    }
-
-    expect(errors).toEqual([failure, failure, failure, failure])
-    expect(handled.map((event) => event.defaultPrevented)).toEqual([true, true, true, true])
-    expect(downstream).not.toHaveBeenCalled()
+    // The one rule: rethrow on every event kind; only a press on the map host (covered above) is quarantined.
+    expect(errors).toEqual([failure, failure, failure, failure, failure, failure, failure, failure, failure])
+    expect(heard).toEqual([
+      'pointermove:false',
+      'pointercancel:false',
+      'pointerleave:false',
+      'wheel:false',
+      'blur:false',
+      'pointerup:false',
+      'contextmenu:false',
+      'dragover:false',
+      'drop:false',
+    ])
   })
 
   it('an overview pointerup elsewhere still reaches the page', () => {
