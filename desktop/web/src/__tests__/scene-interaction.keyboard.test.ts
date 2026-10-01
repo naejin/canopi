@@ -10,6 +10,7 @@ import type {
   SceneInteractionSession,
   SceneInteractionSessionDeps,
 } from '../canvas/runtime/interaction-session'
+import { createRecordingRenderer } from './support/recording-renderer'
 import type { SceneInteractionEventHarness } from './support/scene-interaction-events'
 import {
   contextMenuHost,
@@ -163,10 +164,12 @@ describe('SceneInteractionSession', () => {
       return events.keyDown({ key: 'Escape', target: container })
     }
 
-    function sessionWithToolLog(): { session: SceneInteractionSession, deps: SceneInteractionSessionDeps, tools: string[] } {
+    function sessionWithToolLog(
+      renderer?: SceneInteractionSessionDeps['renderer'],
+    ): { session: SceneInteractionSession, deps: SceneInteractionSessionDeps, tools: string[] } {
       const tools: string[] = []
       const deps = createInteractionDeps(container, store, camera, { setTool: (name: string) => { tools.push(name) } })
-      return { session: createTestSession(deps), deps, tools }
+      return { session: createTestSession(renderer ? { ...deps, renderer } : deps), deps, tools }
     }
 
     it.each([
@@ -324,16 +327,19 @@ describe('SceneInteractionSession', () => {
       store.updatePersisted((draft) => {
         draft.plants = [makePlant('source', 'Malus domestica', { x: 20, y: 30 })]
       })
-      const { session, tools } = sessionWithToolLog()
+      // The row's source ring draws in the session's draft sink (plan §1, exception 2), not the DOM.
+      const drafts = createRecordingRenderer()
+      const { session, tools } = sessionWithToolLog(drafts)
       session.setTool('plant-spacing')
       events.pointerDown({ x: 20, y: 30 })
       events.pointerUp({ x: 20, y: 30 })
+      expect(drafts.lastDraft()?.shapes.some((shape) => shape.kind === 'circle-px')).toBe(true)
       const input = spacingInput()!
       input.focus()
 
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
 
-      expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
+      expect(drafts.lastDraft()).toBeNull()
       expect(document.activeElement).toBe(container)
       expect(tools).not.toContain('select')
       escapeOnMap()
