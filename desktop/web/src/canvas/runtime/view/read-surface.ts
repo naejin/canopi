@@ -64,7 +64,7 @@ export interface ViewCommandSurface {
   resetNorth(): void
   rotateBy(direction: 1 | -1): void                    // next absolute 15° multiple in that direction
   beginRotation(pivot: 'centre'): RotationSession      // compass drag
-  showCamera(camera: ViewCamera, options?: { readonly motion?: 'fly' | 'jump' | 'ease' }): void   // saved views, stories
+  showCamera(camera: ViewCamera, options?: { readonly motion?: 'fly' | 'jump' }): void   // saved views, stories
   /** Place search. Returns false when the place cannot be shown (today's boolean `showPlace`). */
   showPlace(place: GeoPoint, zoom: number, options?: { readonly motion?: 'fly' | 'jump' }): boolean
 }

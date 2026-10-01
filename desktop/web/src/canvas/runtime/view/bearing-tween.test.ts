@@ -23,18 +23,6 @@ describe('bearing tween', () => {
     expect(last.camera).toEqual({ ...START, bearingDeg: 20 })
     expect(last.camera.center).toBe(START.center)
 
-    const target = { center: { lon: 2.36, lat: 48.84 }, zoom: 19.5 }
-    const ease = startBearingTween(START, { bearingDeg: 0, anchorPx: 'centre', durationMs: 300, centerTarget: target.center, zoomTarget: target.zoom }, 0)
-    let live = START
-    for (const now of [0, 16, 100, 250]) {
-      const frame = ease.step(live, SCREEN, now)
-      expect(frame.done).toBe(false)
-      live = frame.camera
-    }
-    const end = ease.step(live, SCREEN, 300)
-    expect(end.done).toBe(true)
-    expect(end.camera).toEqual({ center: target.center, zoom: target.zoom, bearingDeg: 0, pitchDeg: 0 })
-
     const instant = startBearingTween(START, { bearingDeg: 90, anchorPx: { x: 10, y: 10 }, durationMs: 0 }, 5)
     expect(instant.step(START, SCREEN, 5).done).toBe(true)
   })
@@ -64,13 +52,5 @@ describe('bearing tween', () => {
     expect(next.center).toBe(panned.center)
     expect(last.center).toBe(panned.center)
     expect(last.bearingDeg).toBe(20)
-
-    const target = { center: { lon: 2.36, lat: 48.84 }, zoom: 19.5 }
-    const ease = startBearingTween(START, { bearingDeg: 0, anchorPx: 'centre', durationMs: 300, centerTarget: target.center, zoomTarget: target.zoom }, 0)
-    const halfway = ease.step(START, SCREEN, 150).camera
-    const zoomedOut = { ...halfway, zoom: halfway.zoom - 1 }
-    const end = ease.step(zoomedOut, SCREEN, 300).camera
-    expect(end.zoom).toBeCloseTo(target.zoom - 1, 12)
-    expect(end.bearingDeg).toBe(0)
   })
 })

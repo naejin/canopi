@@ -21,12 +21,11 @@ export type CameraMove =
       readonly animation: 'none' | 'ease'
       readonly durationMs?: number
     }
-  /** Go to a full camera. The centre is an input; no anchor. 'ease' is a driver tween; 'fly' is MapLibre flyTo. */
+  /** Go to a full camera. The centre is an input; no anchor. 'fly' is MapLibre flyTo; without a map it jumps. */
   | {
       readonly kind: 'set'
       readonly target: ViewCamera               // pitchDeg: 0 by type
-      readonly animation: 'none' | 'ease' | 'fly'
-      readonly durationMs?: number              // ease: 300 default
+      readonly animation: 'none' | 'fly'
     }
   /**
    * setViewport's exact placement (createTestView, and the legacy facade's setViewport and reprojectViewport). The headless driver

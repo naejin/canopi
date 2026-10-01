@@ -199,16 +199,6 @@ export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions)
       case 'set': {
         const { target } = move
         if (![target.center.lon, target.center.lat, target.zoom, target.bearingDeg].every(Number.isFinite)) return
-        if (move.animation === 'ease' && !reducedMotion()) {
-          startTween(startBearingTween(liveCamera(), {
-            bearingDeg: target.bearingDeg,
-            anchorPx: 'centre',
-            durationMs: move.durationMs ?? VIEW_EASE_MS,
-            centerTarget: target.center,
-            zoomTarget: target.zoom,
-          }, deps.clock()))
-          return
-        }
         // Without a map there is no flight: 'fly' jumps, as today's detached camera did.
         stopTween()
         commit(viewCameraToPlanar(target, screen, plane))

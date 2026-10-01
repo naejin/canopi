@@ -401,16 +401,6 @@ export function createMapLibreCameraDriver(
         const start = startingCamera(false)
         if (!start) return
         const normalised: ViewCamera = { ...target, bearingDeg: normaliseBearing(target.bearingDeg), pitchDeg: 0 }
-        if (move.animation === 'ease' && !deps.policy().reducedMotion.peek()) {
-          startTween(startBearingTween(start.camera, {
-            bearingDeg: normalised.bearingDeg,
-            anchorPx: 'centre',
-            durationMs: move.durationMs ?? VIEW_EASE_MS,
-            centerTarget: normalised.center,
-            zoomTarget: normalised.zoom,
-          }, deps.clock()))
-          return
-        }
         stopTween()
         if (move.animation === 'fly') fly(normalised, start.camera)
         else jumpTo(constrainCamera(normalised, screen, deps.policy()))
