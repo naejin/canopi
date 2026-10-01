@@ -43,9 +43,6 @@ export interface SceneToolRegistryContext {
   /** Focus the map host, as after a gesture ends from a field it opened. */
   readonly focusHost: () => void
   readonly applySnapping: (point: ScenePoint) => ScenePoint
-  /** Unread since the stamps left for tools/registry.ts (their `[` and `]` are the keyboard port's); scene-interaction.ts
-   *  passes it until it goes at the end of 0B. */
-  readonly readSingleKeyShortcuts: () => boolean
   readonly notifyTransientHistoryChange: () => void
   /** A tool's guidance changed outside a map event (a note field closed). */
   readonly notifyGuidanceChange: () => void

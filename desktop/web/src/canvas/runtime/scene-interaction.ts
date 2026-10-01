@@ -254,7 +254,6 @@ class DefaultLegacyInteractionBridge implements LegacyInteractionBridge {
         switchTool: (name) => this._switchTool(name),
         focusHost: () => this._focusInteractionHost(),
         applySnapping: (point) => this._applySnapping(point),
-        readSingleKeyShortcuts: () => this._deps.readSingleKeyShortcuts?.() ?? true,
         notifyTransientHistoryChange: () => this._deps.notifyTransientHistoryChange?.(),
         notifyGuidanceChange: () => this._publishToolGuidance(),
       }), disposeSceneToolRegistry)
