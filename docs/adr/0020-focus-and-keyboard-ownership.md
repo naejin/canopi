@@ -17,6 +17,7 @@ Thirteen key listeners (shell shortcuts, Web canvas shortcuts, focus regions, th
 - **One Esc, one thing.** An open text entry handles its own Esc first. Layers register with a priority: popover, canvas menu, live gesture (a rotate drag restores the starting camera), nudge series, tool transient, tool to Select, selection, raster inspection, dock panel. The top active layer runs; the tool card's Esc hint reads the same chain. Canvas layers are live from any non-text focus while a tool is armed.
 - **One `FocusOwner`** moves focus between regions (title bar, tool rail, map, dock), focuses the map host itself, and lets a component focus its first field only when a user action opened it. Content-derived UI cannot take focus. Closing a modal returns focus through `useModalLayer`, the one modal exception.
 - **One `armCanvasTool`** is the only way app code arms a tool; it moves focus to the map for every source except a shortcut.
+- **Built once** (user, 2026-10-01). Since v2 ships as one release, the router, the Esc chain, the focus owner and arming are built in this target form directly, with no step that first rebuilds today's key order.
 - **The canvas runtime adds no window or document key listeners**; it exposes a keyboard port (Esc layers, commands, key state). Only its own focusable chrome (the text-entry host, handles, the locked-object affordance) handles its own keys at element level; every other key reaches it through the port.
 
 ## Options considered
@@ -30,6 +31,6 @@ Thirteen key listeners (shell shortcuts, Web canvas shortcuts, focus regions, th
 ## Consequences
 
 - ADR 0010's shortcut rule, `system.md`, `frontend.md` and the Rules board say "anywhere except text fields and dialogs"; the F1 copy and the Settings hint, both read inside a dialog, keep the shorter "anywhere except text fields".
-- Policy tests keep one owner of window key listeners, one arming path, one focus mover (with an explicit allowlist for dialogs and roving widgets) and Esc comparisons inside the chain; `app/keyboard/` imports no commands, platform, Web or component code.
+- Policy tests keep one owner of window key listeners and one arming path; `app/keyboard/` imports no commands, platform, Web or component code. One focus mover and one Esc for one thing are held by behaviour tests (the focus owner, arming and Start card tests, the Esc fixtures), not by regexes whose allowlists would grow with every dialog (2026-10-01).
 - canopi-28w8's focus part lands through `FocusOwner`; its state and chrome parts ship first on their own.
 - Details: [`canvas-v2-spec.md`](../plans/canvas-v2-spec.md).

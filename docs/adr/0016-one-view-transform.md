@@ -1,10 +1,10 @@
 # One view transform
 
-Status: Accepted (2026-09-29, Canopi v2)
+Status: Accepted (2026-09-29, Canopi v2); amended 2026-09-30 and 2026-10-01
 
 Amends [ADR 0004](0004-one-renderer.md) (camera ownership) and [ADR 0001](0001-geolocated-map-canvas.md) (bearing is a view property). Product rules: [ADR 0015](0015-rotating-map-and-canvas-controls.md).
 
-Amended 2026-09-30 (before phase 0A): one `ViewTransform` type and one module that builds it, with two anchors. The headless driver anchors it on a planar camera (today's `x, y, scale` plus a bearing, moved with today's arithmetic), because a plane → lon/lat → plane round trip is never exact and today's tests compare readbacks exactly; the attached driver anchors it on MapLibre's geographic camera. The two builders agree at bearing 0 within the contract tolerance, and re-origin moves the planar camera by the plane change in plane terms, as today's reprojection does, never through lon/lat.
+Amended 2026-09-30 and 2026-10-01: one `ViewTransform` type and one module that builds it. From phase 0A to 0E the headless driver anchors it on a planar camera (today's `x, y, scale` plus a bearing), so tests written against the old camera keep exact readbacks while the legacy facade lives. From 0E (user, 2026-10-01) both drivers hold a geographic camera and build through the one builder: no user sees bit-for-bit numbers, so tests compare within a tolerance, and a re-origin keeps the camera's ground through lon/lat.
 
 ## Context
 
@@ -14,10 +14,10 @@ Screen to world conversion was derived in several places (renderer, scene camera
 
 - **MapLibre's transform holds the camera state** the map renders from. Canopi computes every camera target itself (pure camera maths shared by the MapLibre and headless drivers), constrains it for the target bearing, and applies it through one `CameraDriver` with explicit `jumpTo` (and `flyTo` for long flights). The map stays non-interactive.
 - **One writer.** The driver is the only code that calls camera methods on the workspace and snapshot maps; the World map is exempt. A `transformConstrain` guard over the same constrain function covers MapLibre-internal changes (flight steps) with the bearing arc the driver sets. A resize is a driver move too: the host reports the new size and the driver resizes the map, constrains at the live bearing and publishes one frame.
-- **Short animations** (≤ 300 ms: keys, compass, snap to north, eases to saved views) are driver-owned tweens that start from the live camera each frame, so a pan or zoom during a tween composes with it instead of cancelling it. Repeated steps compute from the tween's target bearing.
-- **One `ViewTransform`.** At pitch 0 one module builds it analytically for both drivers, from centre, zoom, bearing and the session plane (headless: a planar camera, as amended). `map.unproject` is only a dev and test assertion (0.01 px). Everything else (renderer, tools, overlays, rulers, re-origin, fit, lens) reads this transform; nobody else projects to the screen. PDF capture reads the live frame when the PDF workspace opens (`captureView`, like saved views; only the last view reads the settled camera) and turns plan geometry with its own page frame, which maps page to ground, not a view.
-- **Frames.** The runtime publishes a per-frame `viewFrame`, synchronous ordered `onViewFrame` phases (tools, then overlays), and a `settledViewFrame` after 150 ms. App code and components see only coarse signals (`ViewReadSurface`: mode, zoom band, bearing, north-up, scale, zoom limit, moving, and, in overview only, the Design pin's screen point) and command through `ViewCommandSurface`.
-- **Pitch slot.** `ViewCamera.pitchDeg` is the literal 0; `screenToWorld` returns `WorldPoint | null`; the transform carries a nullable affine beside a homography. The literal forbids a non-zero pitch today; it does not list consumers, since widening it changes no return type. When pitch ships, making `worldToScreen` and the visible-area queries nullable gives the compiler that list (spec §6).
+- **Short animations** (≤ 300 ms: keys, compass, snap to north, "Turn view to this edge") are driver-owned rotation tweens that start from the live camera each frame, so a pan or zoom during a tween composes with it instead of cancelling it. Repeated steps compute from the tween's target bearing. Saved views and stories jump or fly; nothing eases centre and zoom.
+- **One `ViewTransform`.** At pitch 0 one module builds it analytically for both drivers, from centre, zoom, bearing and the session plane. Nobody calls `map.project` or `map.unproject`; a contract test holds the builder to MapLibre's `MercatorTransform`. Everything else (renderer, tools, overlays, rulers, re-origin, fit, lens) reads this transform. PDF capture reads the live frame when the PDF workspace opens (`captureView`, like saved views; only the last view reads the settled camera) and turns plan geometry with its own page frame, which maps page to ground, not a view.
+- **Frames.** The runtime publishes a per-frame `viewFrame`, synchronous ordered `onViewFrame` phases (tools, then overlays), and a `settledViewFrame` after 150 ms. App code and components see only coarse signals (`ViewReadSurface`: mode, zoom band, bearing, north-up, scale, zoom limit, and, in overview only, the Design pin's screen point) and command through `ViewCommandSurface`.
+- **Pitch slot.** `ViewCamera.pitchDeg` is the literal 0, and nothing else is carried for pitch (2026-10-01: pitch is not on the roadmap): `screenToWorld`, the planar projection and its affine are non-null from 0E. When pitch ships, widening them gives the compiler the list of consumers; the recipe is kept on the pitch bead (spec §6).
 - **Session plane stays north-aligned** (x east, y south) whatever the bearing; re-origin runs on the settled frame and keeps the camera's ground (MapLibre's camera is geographic; the headless driver applies the plane change in plane terms).
 
 ## Options considered
@@ -34,7 +34,7 @@ Screen to world conversion was derived in several places (renderer, scene camera
 
 ## Consequences
 
-- The camera code, the shared-scene viewport derivation, `createMapFrame` (`bearing: 0`) and the clamp-learning path are deleted; policy tests keep one camera writer, one projection caller and a pure view module.
+- The camera code, the shared-scene viewport derivation, `createMapFrame` (`bearing: 0`) and the clamp-learning path are deleted; policy tests keep one camera writer, no projection caller outside the World map and a view module that imports no MapLibre, Pixi or DOM node.
 - A headless/MapLibre contract test runs the same camera scripts through both drivers over MapLibre's real `MercatorTransform` and requires 1e-6 px agreement with its forward projection (its own inverse drifts by up to 8e-6 px above zoom 19; multi-move scripts stay below zoom 20).
 - The zoom floor depends on bearing, so the zoom-out button reads the floor for the live bearing.
 - Details: [`canvas-v2-spec.md`](../plans/canvas-v2-spec.md).
