@@ -633,10 +633,10 @@ The current constant's values, by the phase that sets them (each phase rewrites 
 | `touch` (all three flags) | false | same | same | same | true |
 | `penBarrel` | `ignore` | same | same | `secondary` | same |
 | `trackpadGestures` | false | same | true | same | same |
-| `dragSlopPx` | 0 for mouse, pen and touch | same | same | same | touch 8 |
+| `dragSlopPx` | 0 for mouse, pen and touch | mouse and pen 3 (U6) | same | same | touch 8 |
 | `ownedHover` | `legacy` | `end` (U6) | same | same | same |
 
-Primary slop compares `d >= slop && d > 0`, so under 0 any movement is a drag, as today; the tools keep today's own thresholds (band and handles more than 2 px, measured at release through `ToolView.screenDistance`). Secondary slop is 3 px wherever the secondary drag pans (MapLibre's `clickTolerance`). A tool may override the primary slop through `configure`, which the session sends with `ToolHost.activeToolDragSlopPx()` on every tool change; Plant a row keeps slop 0 and measures today's 4 px itself through `ToolView.screenDistance`, like the band and handles, so the moves inside it still preview the row. In phase 2 `'overview'` leaves `PanContext`; `LEGACY_BINDINGS` is folded into `CURRENT_BINDINGS` and tombstoned in F's first Input commit; each LEGACY expectation is deleted or rewritten by the commit that changes its field, never kept to the release close.
+Primary slop compares `d >= slop && d > 0`, so under 0 any movement is a drag, as today; from F the mouse and pen slop is 3 px (U6, user 2026-10-01), so a click with a little jitter stays a click; the tools keep today's own thresholds (band and handles more than 2 px, measured at release through `ToolView.screenDistance`). Secondary slop is 3 px wherever the secondary drag pans (MapLibre's `clickTolerance`). A tool may override the primary slop through `configure`, which the session sends with `ToolHost.activeToolDragSlopPx()` on every tool change; Plant a row keeps slop 0 and measures today's 4 px itself through `ToolView.screenDistance`, like the band and handles, so the moves inside it still preview the row. In phase 2 `'overview'` leaves `PanContext`; `LEGACY_BINDINGS` is folded into `CURRENT_BINDINGS` and tombstoned in F's first Input commit; each LEGACY expectation is deleted or rewritten by the commit that changes its field, never kept to the release close.
 
 ```ts
 // canvas/runtime/input/thresholds.ts  (plain numbers; tests may pass others)
