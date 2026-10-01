@@ -549,5 +549,13 @@
   "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps active tool drag state generic in the Scene Interaction Session": {
     "file": "src/canvas/runtime/tools/tool-host.test.ts",
     "name": "ToolHost > the view moving under a still pointer (plan §1, exception 1) > re-emits the drag on a camera frame"
+  },
+  "src/__tests__/canvas-overlay-casing.test.ts > overlay stroke casing > draws the band selection box as an ochre stroke over a casing on both sides": {
+    "file": "src/canvas/runtime/renderers/draft-layer.test.ts",
+    "name": "draft layer > a band, zone, line and polygon draft has a casing stroke of the same colour and width under it"
+  },
+  "src/__tests__/canvas-overlay-casing.test.ts > overlay stroke casing > draws zone and measurement drafts as light strokes over a dark casing": {
+    "file": "src/canvas/runtime/renderers/draft-layer.test.ts",
+    "name": "draft layer > a band, zone, line and polygon draft has a casing stroke of the same colour and width under it"
   }
 }
