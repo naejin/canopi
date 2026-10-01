@@ -634,9 +634,11 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (g.target.kind === 'handle') {
       const handle = g.target.id
       live = liveGesture(g, 'handle', point, null)
-      publishHandles()
-      callTool(() => tool.gesture({ kind: 'handle-drag', phase: 'start', handle, point, start: point }))
-      clearPassiveHoverForEdit()
+      cancelOnFailure(() => {
+        publishHandles()
+        callTool(() => tool.gesture({ kind: 'handle-drag', phase: 'start', handle, point, start: point }))
+        clearPassiveHoverForEdit()
+      })
       return false
     }
     // Inspection owns the plain primary press, after handles and the pan check and before the tool; a Pan-tool press
@@ -711,11 +713,11 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
    */
   function release(tool: CanvasTool, finish: () => void): GestureOutcome {
     if (!tool.settledRelease?.()) {
-      guardRelease(finish)
+      cancelOnFailure(finish)
       return NOTHING
     }
     const admitted = deps.admission.runWhenSettled(() => {
-      guardRelease(finish)
+      cancelOnFailure(finish)
       return true
     }, false, { resumePending: true })
     if (admitted) return NOTHING
@@ -725,17 +727,19 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   /**
    * A release whose tool call throws runs the cancellation at once, as today's pointerup ran it in its finally, so the
-   * tool's Scene Edit closes at the release. Only a cancellation that fails too with the edit open leaves it pending
-   * (guardCancellation), retried before the next event. The release's error is the one reported.
+   * tool's Scene Edit closes at the release; so does a handle press whose start or presentation throws once the drag has
+   * opened its Scene Edit, as today's control points rolled back a drag whose presentation failed (rollbackDragSetup), so
+   * the next press is admitted. Only a cancellation that fails too with the edit open leaves it pending
+   * (guardCancellation), retried before the next event. The gesture's error is the one reported.
    */
-  function guardRelease(finish: () => void): void {
+  function cancelOnFailure(run: () => void): void {
     try {
-      finish()
+      run()
     } catch (error) {
       try {
         cancelTransientInteraction('tool-change')
       } catch {
-        // guardCancellation has left the cancellation pending; the release's failure is reported.
+        // guardCancellation has left the cancellation pending; the gesture's failure is reported.
       }
       throw error
     }

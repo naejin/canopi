@@ -268,7 +268,7 @@
   },
   "src/__tests__/control-point-overlay.test.ts > 'Zone' Control Point adapter shared lifecycle > rolls back Scene Edit admission when drag presentation setup fails": {
     "file": "src/canvas/runtime/tools/select/point-handle.test.ts",
-    "name": "'Zone' point handle drags > a handle the selection no longer owns begins no Scene Edit"
+    "name": "'Zone' point handle drags > a press whose drag presentation fails after its Scene Edit opened rolls the edit back at once, and a retried press is admitted"
   },
   "src/__tests__/control-point-overlay.test.ts > 'Zone' Control Point adapter shared lifecycle > treats movement inside the screen-space threshold as a no-op": {
     "file": "src/canvas/runtime/tools/select/point-handle.test.ts",
@@ -292,7 +292,7 @@
   },
   "src/__tests__/control-point-overlay.test.ts > 'Measurement Guide' Control Point adapter shared lifecycle > rolls back Scene Edit admission when drag presentation setup fails": {
     "file": "src/canvas/runtime/tools/select/point-handle.test.ts",
-    "name": "'Measurement Guide' point handle drags > a handle the selection no longer owns begins no Scene Edit"
+    "name": "'Measurement Guide' point handle drags > a press whose drag presentation fails after its Scene Edit opened rolls the edit back at once, and a retried press is admitted"
   },
   "src/__tests__/control-point-overlay.test.ts > 'Measurement Guide' Control Point adapter shared lifecycle > treats movement inside the screen-space threshold as a no-op": {
     "file": "src/canvas/runtime/tools/select/point-handle.test.ts",

@@ -82,6 +82,49 @@ describe.each(cases)('$label point handle drags', ({ handle, start, editType, cr
     expect(draggedPoint(h)).toEqual(start)
   })
 
+  it('a press whose drag presentation fails after its Scene Edit opened rolls the edit back at once, and a retried press is admitted', () => {
+    const h = harness()
+    const coordinator: SceneEditCoordinator = h.edits
+    const beginEdit = coordinator.begin.bind(coordinator)
+    let open = false
+    vi.spyOn(coordinator, 'begin').mockImplementation((type, options) => {
+      const transaction = beginEdit(type, options)
+      open = true
+      return {
+        mutate: (edit) => transaction.mutate(edit),
+        setSelection: (targets) => transaction.setSelection(targets),
+        commit(commitOptions) {
+          const committed = transaction.commit(commitOptions)
+          open = false
+          return committed
+        },
+        get changed() {
+          return transaction.changed
+        },
+        abort() {
+          transaction.abort()
+          open = false
+        },
+      }
+    })
+    // The press's presentation (here clearing the passive hover, as today's drag presentation did) fails once the drag
+    // has opened its Scene Edit.
+    vi.spyOn(h.store, 'setHoveredTarget').mockImplementationOnce(() => {
+      throw new Error('presentation setup failed')
+    })
+
+    expect(() => pressHandle(h)).toThrow('presentation setup failed')
+    expect(open).toBe(false)
+    expect(h.host.hasLiveGesture()).toBe(false)
+    expect(draggedPoint(h)).toEqual(start)
+
+    pressHandle(h)
+    h.move({ x: 90, y: 70 })
+    h.release({ x: 90, y: 70 })
+    expect(draggedPoint(h)).toEqual({ x: 90, y: 70 })
+    expect(h.history.canUndo.value).toBe(true)
+  })
+
   it('a drag within 2 px of the press changes nothing and records no history', () => {
     const h = harness()
 
