@@ -1,4 +1,5 @@
 import type { SceneRendererSnapshot } from './renderers/scene-types'
+import type { DraftPresentation } from './tools/draft'
 import { effect } from '@preact/signals'
 import { stageScaleToMapZoom } from '../projection'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -242,8 +243,38 @@ function createRendererStub() {
     id: 'test',
     renderScene: vi.fn(),
     setViewport: vi.fn(),
+    // The draft sink the runtime hands the session (ToolHostDeps.renderer): drafts and the host's chips draw in Pixi.
+    setDraft: vi.fn<(draft: DraftPresentation | null) => void>(),
+    setSelectionPreview: vi.fn(),
     dispose: vi.fn(),
   }
+}
+
+type RendererStub = ReturnType<typeof createRendererStub>
+
+/** The last draft the runtime handed its renderer, or null. */
+function lastDraft(renderer: RendererStub): DraftPresentation | null {
+  return renderer.setDraft.mock.calls.at(-1)?.[0] ?? null
+}
+
+/** The chips of the last draft (today's zone measurement labels), in draw order. */
+function draftLabelTexts(renderer: RendererStub): string[] {
+  return lastDraft(renderer)?.shapes.flatMap((shape) => (shape.kind === 'label' ? [shape.text] : [])) ?? []
+}
+
+/** The polygon draft's rubber band (today's SVG draft line), in plane metres; null without one. */
+function draftBand(renderer: RendererStub): readonly { x: number; y: number }[] | null {
+  const band = lastDraft(renderer)?.shapes.find((shape) => shape.kind === 'polyline')
+  return band?.kind === 'polyline' ? band.points : null
+}
+
+function expectBandNear(
+  runtime: SceneCanvasRuntime,
+  band: readonly { x: number; y: number }[] | null,
+  points: readonly (readonly [number, number])[],
+): void {
+  expect(band).toHaveLength(points.length)
+  points.forEach(([x, y], index) => expectPointNear(band?.[index], planeAt(runtime, x, y)))
 }
 
 function createRuntimeContainer(): HTMLDivElement {
@@ -320,11 +351,6 @@ function clickAt(
 ): void {
   events.pointerDown(point)
   events.pointerUp(point)
-}
-
-function zoneMeasurementTexts(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll('[data-zone-measurement-label]'))
-    .map((label) => label.textContent ?? '')
 }
 
 function createRuntimeWithAppPanelTargets(appAdapter?: CanvasRuntimeAppAdapter): SceneCanvasRuntime {
@@ -2096,11 +2122,11 @@ describe('scene canvas runtime', () => {
       locked: false,
     }]
     runtime.documentSurface.loadDocument(fileWithOnlyZone(file.zones[0]!))
-    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
     runtime.commandSurface.sceneEdits.selectAll()
 
-    expect(zoneMeasurementTexts(container)).toEqual([
+    expect(draftLabelTexts(renderer)).toEqual([
       '100 m',
       '80 m',
       '100 m',
@@ -2114,7 +2140,7 @@ describe('scene canvas runtime', () => {
       () => {},
     )
 
-    expect(zoneMeasurementTexts(container)).toEqual([])
+    expect(draftLabelTexts(renderer)).toEqual([])
     runtime.destroy()
   })
 
@@ -2762,7 +2788,7 @@ describe('scene canvas runtime', () => {
 
   it('records Measurement Guide creation as one undoable scene edit', async () => {
     const runtime = new SceneCanvasRuntime()
-    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const { container, renderer } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     const file = makeFile()
     file.layers = [
@@ -2777,7 +2803,7 @@ describe('scene canvas runtime', () => {
     events.pointerDown({ x: 10, y: 10 })
     events.pointerMove({ x: 40, y: 10 })
 
-    expect(zoneMeasurementTexts(container)).toEqual(['30 m'])
+    expect(draftLabelTexts(renderer)).toEqual(['30 m'])
 
     events.pointerUp({ x: 40, y: 10 })
 
@@ -3044,7 +3070,7 @@ describe('scene canvas runtime', () => {
 
   it('does not create Measurement Guides when their layer is locked or hidden', async () => {
     const lockedRuntime = new SceneCanvasRuntime()
-    const { container: lockedContainer } = await initRuntimeWithStubbedRenderer(lockedRuntime)
+    const { container: lockedContainer, renderer: lockedRenderer } = await initRuntimeWithStubbedRenderer(lockedRuntime)
     const lockedEvents = createSceneInteractionEventHarness(lockedContainer)
     const lockedFile = makeFile()
     lockedFile.layers = [
@@ -3065,7 +3091,7 @@ describe('scene canvas runtime', () => {
     lockedEvents.pointerMove({ x: 40, y: 10 })
     lockedEvents.pointerUp({ x: 40, y: 10 })
 
-    expect(zoneMeasurementTexts(lockedContainer)).toEqual([])
+    expect(draftLabelTexts(lockedRenderer)).toEqual([])
     expect(lockedRuntime.querySurface.getSceneSnapshot().measurementGuides).toHaveLength(0)
     expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
     expect(lockedRuntime.commandSurface.history.canUndo.value).toBe(false)
@@ -3073,7 +3099,7 @@ describe('scene canvas runtime', () => {
     lockedRuntime.destroy()
 
     const hiddenRuntime = new SceneCanvasRuntime()
-    const { container: hiddenContainer } = await initRuntimeWithStubbedRenderer(hiddenRuntime)
+    const { container: hiddenContainer, renderer: hiddenRenderer } = await initRuntimeWithStubbedRenderer(hiddenRuntime)
     const hiddenEvents = createSceneInteractionEventHarness(hiddenContainer)
     const hiddenFile = makeFile()
     hiddenFile.layers = [
@@ -3094,7 +3120,7 @@ describe('scene canvas runtime', () => {
     hiddenEvents.pointerMove({ x: 40, y: 10 })
     hiddenEvents.pointerUp({ x: 40, y: 10 })
 
-    expect(zoneMeasurementTexts(hiddenContainer)).toEqual([])
+    expect(draftLabelTexts(hiddenRenderer)).toEqual([])
     expect(hiddenRuntime.querySurface.getSceneSnapshot().measurementGuides).toHaveLength(0)
     expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
     expect(hiddenRuntime.commandSurface.history.canUndo.value).toBe(false)
@@ -3104,7 +3130,7 @@ describe('scene canvas runtime', () => {
 
   it('routes history commands through polygonal zone draft vertices before scene history', async () => {
     const runtime = new SceneCanvasRuntime()
-    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const { container, renderer } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     runtime.documentSurface.loadDocument(makeFile())
     setInteractionViewport(runtime)
@@ -3119,15 +3145,13 @@ describe('scene canvas runtime', () => {
 
     runtime.commandSurface.history.undo()
 
-    const afterUndo = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
-    expect(afterUndo?.getAttribute('points')).toBe('10,10 60,50')
+    expectBandNear(runtime, draftBand(renderer), [[10, 10], [60, 50]])
     expect(runtime.querySurface.getSceneSnapshot().zones).toHaveLength(1)
     expect(runtime.commandSurface.history.canRedo.value).toBe(true)
 
     runtime.commandSurface.history.redo()
 
-    const afterRedo = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
-    expect(afterRedo?.getAttribute('points')).toBe('10,10 60,10 60,50')
+    expectBandNear(runtime, draftBand(renderer), [[10, 10], [60, 10], [60, 50]])
     expect(runtime.querySurface.getSceneSnapshot().zones).toHaveLength(1)
     events.dispose()
     runtime.destroy()

@@ -8,8 +8,6 @@ import {
   createInteractionPreview,
   showInteractionPreview,
 } from '../canvas/runtime/interaction/overlay-ui'
-import { createPolygonDraftOverlay } from '../canvas/runtime/interaction/polygon-draft-overlay'
-import type { WorkspaceCameraFrameReader } from '../canvas/runtime/camera'
 
 function cameraSnapshot(): CameraViewportSnapshot {
   return {
@@ -70,23 +68,6 @@ describe('overlay stroke casing', () => {
     showInteractionPreview(preview, 'line', { x: 10, y: 10 }, { x: 60, y: 40 })
     expect(preview.style.borderTop).toBe('2px solid var(--canvas-guide-line)')
     expect(preview.style.boxShadow).toContain('var(--canvas-overlay-casing)')
-  })
-
-  it('draws a dark casing under the polygon draft line before the light stroke', () => {
-    const host = document.createElement('div')
-    const overlay = createPolygonDraftOverlay(host)
-    const camera = { worldToScreen: (point: { x: number; y: number }) => point } as unknown as WorkspaceCameraFrameReader
-    overlay.update([{ x: 0, y: 0 }, { x: 40, y: 0 }], { x: 40, y: 30 }, camera)
-
-    const polylines = [...host.querySelectorAll('polyline')]
-    expect(polylines.map((line) => line.getAttribute('stroke'))).toEqual([
-      'var(--canvas-overlay-casing)',
-      'var(--canvas-guide-line)',
-    ])
-    expect(Number(polylines[0]!.getAttribute('stroke-width')))
-      .toBeGreaterThan(Number(polylines[1]!.getAttribute('stroke-width')))
-    expect(polylines[0]!.getAttribute('points')).toBe(polylines[1]!.getAttribute('points'))
-    overlay.dispose()
   })
 
   it('strokes ruler guides over a wider dark casing', () => {

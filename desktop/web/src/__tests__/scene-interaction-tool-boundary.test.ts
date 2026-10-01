@@ -299,30 +299,6 @@ describe('Scene Interaction tool module boundaries', () => {
     expect(interactionSource).toContain('this._activeToolAdapter()?.pointerMoveWithCapture?.(')
   })
 
-  it('keeps Zone drawing draft state behind the zone drawing tool module', () => {
-    const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
-    const toolModulesSource = readSource('../canvas/runtime/interaction/tool-modules.ts')
-    const zoneToolSource = readSource('../canvas/runtime/interaction/zone-drawing-tool.ts')
-
-    expect(interactionSource).toContain('createSceneToolRegistry')
-    expect(interactionSource).not.toContain('createZoneDrawingTool')
-    expect(interactionSource).not.toContain('createZoneDrawingToolAdapters')
-    expect(toolModulesSource).toContain('createZoneDrawingTool')
-    expect(toolModulesSource).toContain('createZoneDrawingToolAdapters')
-    expect(interactionSource).not.toContain('_zoneDrawing')
-    expect(interactionSource).not.toContain('hasPolygonDraft')
-    expect(interactionSource).not.toContain('preservePolygonDraft')
-    expect(interactionSource).not.toContain('_polygonDraftVertices')
-    expect(interactionSource).not.toContain('_polygonActiveWorld')
-    expect(interactionSource).not.toContain('appendRectangleZoneToDraft')
-    expect(interactionSource).not.toContain('appendEllipseZoneToDraft')
-    expect(interactionSource).not.toContain('appendPolygonZoneToDraft')
-    expect(zoneToolSource).toContain('appendRectangleZoneToDraft')
-    expect(zoneToolSource).toContain('appendEllipseZoneToDraft')
-    expect(zoneToolSource).toContain('appendPolygonZoneToDraft')
-    expect(zoneToolSource).toContain('createZoneDrawingToolAdapters')
-  })
-
   it('routes repeated Scene arrangement placement through the shared kernel', () => {
     const placementSource = readSource('../canvas/runtime/scene-runtime/arrangement-placement.ts')
     const clipboardSource = readSource('../canvas/runtime/scene-runtime/clipboard.ts')

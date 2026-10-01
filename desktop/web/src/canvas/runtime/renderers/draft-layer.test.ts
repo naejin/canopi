@@ -8,7 +8,7 @@ import { CANVAS_CHROME_FONT_FAMILY, CANVAS_CHROME_MONO_FONT_FAMILY } from '../..
 import { getCanvasColor } from '../../theme-refresh'
 import { getAnnotationPresentation } from '../annotation-layout'
 import { buildPlantPresentationEntries, resolvePlantDisplayColor } from '../plant-presentation'
-import { getDraftLabelVisual } from '../scene-visuals'
+import { getDraftLabelVisual, OVERLAY_CASING_EXTRA_PX } from '../scene-visuals'
 import type { SceneAnnotationEntity, ScenePlantEntity, SceneZoneEntity } from '../scene'
 import type { DraftPresentation, DraftShape } from '../tools/draft'
 import { createDraftLayer, type DraftLayer } from './draft-layer'
@@ -245,6 +245,74 @@ describe('draft layer', () => {
     expect(layer.world.children[0]).toBe(line)
     expect(line.context.instructions).toEqual(instructions)
     expect(global(layer.world)).toEqual({ x: 30, y: 40 })
+  })
+
+  it('a band, zone, line and polygon draft has a casing stroke of the same colour and width under it', () => {
+    // Today's (a4c86d39) DOM previews: overlay-ui.ts drew the band in the selection stroke over the interaction casing and
+    // the zone and measurement drafts in the guide line over the overlay casing; polygon-draft-overlay.ts drew the polygon's
+    // draft line over the same dark casing, wider, along the same points. The shapes below carry the tools' styles
+    // (tools/select/band.ts, and zone-drag.ts's DRAFT_STROKE and ZONE_DRAFT_FILL, which polygon.ts and measurement-guide.ts share).
+    const draft = { token: 'draft', widthPx: 2 } as const
+    const zoneFill = { token: 'draft-fill' } as const
+    const cases: ReadonlyArray<{
+      readonly name: string
+      readonly shape: DraftShape
+      readonly stroke: 'selection-stroke' | 'guide-line'
+      readonly casing: 'interaction-casing' | 'overlay-casing'
+    }> = [
+      {
+        name: 'band',
+        shape: {
+          kind: 'quad', corners: [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 4 }, { x: 0, y: 4 }],
+          style: { token: 'selection', widthPx: 2 }, fill: { token: 'selection-fill' },
+        },
+        stroke: 'selection-stroke',
+        casing: 'interaction-casing',
+      },
+      {
+        name: 'rectangle',
+        shape: { kind: 'polygon', points: [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 4 }, { x: 0, y: 4 }], style: draft, fill: zoneFill },
+        stroke: 'guide-line',
+        casing: 'overlay-casing',
+      },
+      {
+        name: 'ellipse',
+        shape: { kind: 'ellipse', center: { x: 5, y: 5 }, radiusX: 3, radiusY: 2, rotationDeg: 0, style: draft, fill: zoneFill },
+        stroke: 'guide-line',
+        casing: 'overlay-casing',
+      },
+      {
+        name: 'line and measurement guide',
+        shape: { kind: 'polyline', points: [{ x: 0, y: 0 }, { x: 6, y: 0 }], style: draft },
+        stroke: 'guide-line',
+        casing: 'overlay-casing',
+      },
+      {
+        name: 'polygon draft line',
+        shape: { kind: 'polyline', points: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }], style: draft },
+        stroke: 'guide-line',
+        casing: 'overlay-casing',
+      },
+    ]
+    const scale = 4
+
+    for (const { name, shape, stroke, casing } of cases) {
+      const layer = mountLayer()
+      layer.setDraft({ shapes: [shape] })
+      layer.place({ x: 0, y: 0 }, scale)
+      const [casingPaint, strokePaint, ...more] = paintInstructions(layer.world.children[0] as Graphics, 'stroke')
+      expect(more, name).toEqual([])
+      const casingStyle = casingPaint!.data.style as unknown as PaintStyle
+      const strokeStyle = strokePaint!.data.style as unknown as PaintStyle
+      // The casing first, in the dark contrast colour, then the light stroke; both in CSS px at any scale.
+      expect(casingStyle.color, name).toBe(pixiColor(getCanvasColor(casing)))
+      expect(strokeStyle.color, name).toBe(pixiColor(getCanvasColor(stroke)))
+      expect(strokeStyle.width! * scale, name).toBeCloseTo(2)
+      expect(casingStyle.width! * scale, name).toBeCloseTo(2 + OVERLAY_CASING_EXTRA_PX)
+      // Along the same points.
+      expect(tracedPoints(casingPaint!).length, name).toBeGreaterThan(1)
+      expect(tracedPoints(casingPaint!), name).toEqual(tracedPoints(strokePaint!))
+    }
   })
 
   it('a plant ghost and an objects ghost draw at the shape\'s opacity', () => {

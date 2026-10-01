@@ -2,7 +2,7 @@
 //
 // Owns the zone measurement chips as draft shapes (spec §1.4, label tones): the selected zone's W/H, edge and area chips
 // that the ToolHost draws under every tool, and the chips of the shape tools' drafts. The area is `measure`; edges and
-// dimensions are `measure-quiet`; an edge shorter than 36 px on screen gets no chip, as today's overlay
+// dimensions are `measure-quiet`; an edge shorter than 36 px on screen gets no chip, as today's (a4c86d39) overlay
 // (interaction/zone-measurement-overlay.ts). The measurements themselves are zone-measurements.ts's.
 
 import type { SceneDesignObjectSelection } from '../scene/design-object-targets'
@@ -45,7 +45,7 @@ export function measureLabelShapes(
 
 /**
  * The measurements of the one selected zone: nothing unless exactly one zone is selected, its layer is visible and no
- * group holds it (today's refreshSelectedZoneMeasurements, interaction/zone-drawing-tool.ts).
+ * group holds it (today's (a4c86d39) refreshSelectedZoneMeasurements, interaction/zone-drawing-tool.ts).
  */
 export function selectedZoneMeasurementLabels(
   scene: Readonly<ScenePersistedState>,

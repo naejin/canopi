@@ -216,8 +216,9 @@ describe('SceneInteractionSession', () => {
     expect(rowSource('plant-1')).toBe(true)
 
     failSceneRead = true
+    // Re-arming runs on the ToolHost, whose draft flush reads the scene for the selected zone's chips: its error, as thrown.
     expect(() => session.setTool('plant-spacing'))
-      .toThrow('Scene Interaction tool transition failed')
+      .toThrow('selection scene read failed')
     failSceneRead = false
 
     expect(rowSource('plant-1')).toBe(true)

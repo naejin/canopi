@@ -529,5 +529,17 @@
   "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > removes the last polygonal zone draft vertex with Backspace": {
     "file": "src/canvas/runtime/tools/polygon.test.ts",
     "name": "Polygon tool > Backspace removes the last corner"
+  },
+  "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps Zone drawing draft state behind the zone drawing tool module": {
+    "file": "src/canvas/runtime/tools/polygon.test.ts",
+    "name": "Polygon tool > a window blur keeps a redo beside corners and drops a redo-only history, as today"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > rolls back partial 'Zone Drawing tool' resources when a later append fails": {
+    "file": "src/canvas/runtime/tools/zone-drag.test.ts",
+    "name": "Zone drag tools > a tool change aborts a live drag"
+  },
+  "src/__tests__/canvas-overlay-casing.test.ts > overlay stroke casing > draws a dark casing under the polygon draft line before the light stroke": {
+    "file": "src/canvas/runtime/renderers/draft-layer.test.ts",
+    "name": "draft layer > a band, zone, line and polygon draft has a casing stroke of the same colour and width under it"
   }
 }

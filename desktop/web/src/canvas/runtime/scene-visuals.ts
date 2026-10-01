@@ -156,7 +156,7 @@ function draftLabelFontSizePx(): number {
 /**
  * The chip each label tone names (canvas v2 spec §1.4, label tones), with
  * today's padding: measurements are centred mono chips on the muted surface
- * (zone-measurement-overlay.ts), hints bottom-centre sans chips on the surface
+ * (today's (a4c86d39) zone-measurement-overlay.ts), hints bottom-centre sans chips on the surface
  * (today's (a4c86d39) plant-placement-preview.ts), Plant a row's length in the
  * primary colour (today's (a4c86d39) plant-spacing-overlay.ts). `warning`
  * draws as `hint` until a phase gives it a colour.

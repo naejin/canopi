@@ -463,11 +463,6 @@ export function withoutNativeRandomUUID(action: () => void): void {
   }
 }
 
-export function zoneMeasurementTexts(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll('[data-zone-measurement-label]'))
-    .map((label) => label.textContent ?? '')
-}
-
 /** The plant tooltip the ToolHost's passive hover shows (chrome/hover-tooltip.ts); it joins the map at its first show. */
 export function plantHoverTooltip(container: HTMLElement): HTMLElement {
   const tooltip = container.querySelector<HTMLElement>('[data-canvas-chrome="hover-tooltip"]')

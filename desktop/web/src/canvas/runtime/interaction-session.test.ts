@@ -41,6 +41,7 @@ import { SceneStore } from './scene'
 import type { SceneEditTransaction } from './scene-runtime/transactions'
 import type { DraftPresentation } from './tools/draft'
 import type { ToolSource } from './tools/tool'
+import { createZoneDragTool } from './tools/zone-drag'
 import type { WorldPoint } from './view/types'
 
 vi.mock('./tools/registry', () => ({ TOOL_REGISTRY: {} }))
@@ -562,6 +563,8 @@ describe('the interaction session', () => {
   })
 
   it('a pen drag that ends on the barrel commits its move, as today', () => {
+    // Today's Line, on the host as the app registers it.
+    useStubTools(createZoneDragTool('line'))
     const onSceneEditCommit = vi.fn()
     const { session } = createSession(createInteractionDeps(container, store, camera, { onSceneEditCommit }))
     session.setTool('line')
@@ -1058,21 +1061,22 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
     expect(camera.viewport).toEqual({ x: before.x + 30, y: before.y + 20, scale: before.scale })
   })
 
-  it('entering a registered tool whose activation fails leaves the bridge and the tool as they were', () => {
+  it('entering a registered tool whose activation fails leaves the tool before it armed, as it was', () => {
     let failActivation = true
     const rectangle = stubTool('rectangle', {
       activate: () => {
         if (failActivation) throw new Error('activation failed')
       },
     })
-    useStubTools(rectangle)
+    // Today's Line, on the host as the app registers it.
+    useStubTools(rectangle, createZoneDragTool('line'))
     const { session } = createSession()
     session.setTool('line')
 
     expect(() => session.setTool('rectangle')).toThrow('activation failed')
     failActivation = false
     expect(builtHosts.at(-1)?.activeTool.value).toBe('line')
-    // Line still runs on the bridge: a drag draws a line.
+    // Line is armed again: a drag draws a line.
     events.pointerDown({ x: 20, y: 30 })
     events.pointerMove({ x: 60, y: 30 }, { buttons: 1 })
     events.pointerUp({ x: 60, y: 30 })

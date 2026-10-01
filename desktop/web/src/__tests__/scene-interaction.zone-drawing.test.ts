@@ -53,9 +53,9 @@ describe('SceneInteractionSession', () => {
     renderer = createRecordingRenderer()
   })
 
-  /** A session whose drafts reach the recording renderer, unless the test brings its own. */
+  /** A session whose drafts reach this suite's recording renderer, in place of the one createInteractionDeps brings. */
   function createTestSession(deps: SceneInteractionSessionDeps): SceneInteractionSession {
-    return fixture.createTestSession({ renderer, ...deps })
+    return fixture.createTestSession({ ...deps, renderer })
   }
 
   function draftShapes(): readonly DraftShape[] {

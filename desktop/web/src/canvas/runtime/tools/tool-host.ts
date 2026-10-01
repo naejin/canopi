@@ -409,7 +409,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       return { world, free, constrained, snapped: constrained, modifiers, pointer }
     }
     // Today's order, keyed by tool id: Polygon snaps, then constrains, so a Shift corner may be off the grid
-    // (zone-drawing-tool.ts:226); Plant a row constrains the raw point, and its Shift is also no-snap.
+    // (today's (a4c86d39) zone-drawing-tool.ts:226); Plant a row constrains the raw point, and its Shift is also no-snap.
     const snapped = currentId === 'polygon'
       ? applyToolConstraint(constraint, free, WORLD_AXES)
       : snap(constrained, modifiers.noSnap)

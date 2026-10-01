@@ -38,7 +38,6 @@ import {
   groupTarget,
   createRecoveringCommandAdmission,
   createAbortFailingSceneEdits,
-  zoneMeasurementTexts,
   plantHoverTooltip,
   nextAnimationFrame,
   captureWindowErrors,
@@ -2624,7 +2623,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 80, y: 60 }, { button: 0 })
     events.pointerUp({ x: 80, y: 60 }, { button: 0 })
 
-    expect(zoneMeasurementTexts(container)).toEqual([
+    expect(draftLabelTexts(deps)).toEqual([
       'W 60 m',
       'H 40 m',
       '1885 m²',
@@ -2670,12 +2669,12 @@ describe('SceneInteractionSession', () => {
 
     events.pointerDown({ x: 80, y: 60 }, { button: 0 })
     events.pointerUp({ x: 80, y: 60 }, { button: 0 })
-    expect(zoneMeasurementTexts(container)).not.toEqual([])
+    expect(draftLabelTexts(deps)).not.toEqual([])
 
     events.pointerDown({ x: 180, y: 60 }, { button: 0, shiftKey: true })
     events.pointerUp({ x: 180, y: 60 }, { button: 0 })
 
-    expect(zoneMeasurementTexts(container)).toEqual([])
+    expect(draftLabelTexts(deps)).toEqual([])
     session.dispose()
   })
 
@@ -2768,7 +2767,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 40, y: 10 }, { button: 0 })
     events.pointerUp({ x: 40, y: 10 }, { button: 0 })
 
-    expect(zoneMeasurementTexts(container)).toEqual([
+    expect(draftLabelTexts(deps)).toEqual([
       '50 m',
       '40 m',
       '64 m',
@@ -2817,12 +2816,12 @@ describe('SceneInteractionSession', () => {
 
     events.pointerDown({ x: 40, y: 10 }, { button: 0 })
     events.pointerUp({ x: 40, y: 10 }, { button: 0 })
-    expect(zoneMeasurementTexts(container)).not.toEqual([])
+    expect(draftLabelTexts(deps)).not.toEqual([])
 
     events.pointerDown({ x: 130, y: 10 }, { button: 0, shiftKey: true })
     events.pointerUp({ x: 130, y: 10 }, { button: 0 })
 
-    expect(zoneMeasurementTexts(container)).toEqual([])
+    expect(draftLabelTexts(deps)).toEqual([])
     session.dispose()
   })
 
@@ -2852,7 +2851,7 @@ describe('SceneInteractionSession', () => {
     events.pointerUp({ x: 15, y: 45 }, { button: 0 })
 
     expect(selectedObjectIds.value.size).toBe(0)
-    expect(zoneMeasurementTexts(container)).toEqual([])
+    expect(draftLabelTexts(deps)).toEqual([])
     session.dispose()
   })
 
@@ -2881,7 +2880,7 @@ describe('SceneInteractionSession', () => {
     events.pointerUp({ x: 50, y: 13 }, { button: 0 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['line-1']))
-    expect(zoneMeasurementTexts(container)).toEqual(['100 m'])
+    expect(draftLabelTexts(deps)).toEqual(['100 m'])
     session.dispose()
   })
 
@@ -2910,7 +2909,7 @@ describe('SceneInteractionSession', () => {
     events.pointerUp({ x: 60, y: 60 }, { button: 0 })
 
     expect(selectedObjectIds.value.size).toBe(0)
-    expect(zoneMeasurementTexts(container)).toEqual([])
+    expect(draftLabelTexts(deps)).toEqual([])
     session.dispose()
   })
 
@@ -3007,7 +3006,7 @@ describe('SceneInteractionSession', () => {
     events.pointerUp({ x: 10, y: 20 }, { button: 0 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['zone-1']))
-    expect(zoneMeasurementTexts(container)).toEqual([
+    expect(draftLabelTexts(deps)).toEqual([
       '100 m',
       '80 m',
       '100 m',
@@ -3059,13 +3058,13 @@ describe('SceneInteractionSession', () => {
 
     events.pointerDown({ x: 10, y: 20 }, { button: 0 })
     events.pointerUp({ x: 10, y: 20 }, { button: 0 })
-    expect(zoneMeasurementTexts(container)).not.toEqual([])
+    expect(draftLabelTexts(deps)).not.toEqual([])
 
     events.pointerDown({ x: 150, y: 20 }, { button: 0, shiftKey: true })
     events.pointerUp({ x: 150, y: 20 }, { button: 0 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['zone-1', 'zone-2']))
-    expect(zoneMeasurementTexts(container)).toEqual([])
+    expect(draftLabelTexts(deps)).toEqual([])
     session.dispose()
   })
 
@@ -3103,7 +3102,7 @@ describe('SceneInteractionSession', () => {
     events.pointerUp({ x: 10, y: 20 }, { button: 0 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['group-1']))
-    expect(zoneMeasurementTexts(container)).toEqual([])
+    expect(draftLabelTexts(deps)).toEqual([])
     session.dispose()
   })
 
@@ -3133,7 +3132,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 10, y: 20 }, { button: 0 })
     events.pointerUp({ x: 10, y: 20 }, { button: 0 })
 
-    expect(zoneMeasurementTexts(container)).toEqual([
+    expect(draftLabelTexts(deps)).toEqual([
       '100 m',
       '100 m',
       '2000 m²',
@@ -3168,7 +3167,7 @@ describe('SceneInteractionSession', () => {
 
     session.refreshMeasurements()
 
-    expect(zoneMeasurementTexts(container)).toEqual([])
+    expect(draftLabelTexts(deps)).toEqual([])
     session.dispose()
   })
 
@@ -3249,7 +3248,7 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 80, y: 10 }, { button: 0 })
 
     expect(store.persisted.zones[0]?.points[1]).toEqual({ x: 80, y: 10 })
-    expect(zoneMeasurementTexts(container)).toEqual(['70 m'])
+    expect(draftLabelTexts(deps)).toEqual(['70 m'])
 
     events.pointerUp({ x: 80, y: 10 }, { button: 0 })
 
@@ -3291,7 +3290,7 @@ describe('SceneInteractionSession', () => {
       { x: 10, y: 10 },
       { x: 60, y: 10 },
     ])
-    expect(zoneMeasurementTexts(container)).toEqual(['50 m'])
+    expect(draftLabelTexts(deps)).toEqual(['50 m'])
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     session.dispose()
   })
@@ -3400,7 +3399,7 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 80, y: 10 }, { button: 0 })
 
     expect(store.persisted.zones[0]?.points[1]).toEqual({ x: 80, y: 10 })
-    expect(zoneMeasurementTexts(container)).toContain('1750 m²')
+    expect(draftLabelTexts(deps)).toContain('1750 m²')
 
     events.pointerUp({ x: 80, y: 10 }, { button: 0 })
 
@@ -3436,7 +3435,7 @@ describe('SceneInteractionSession', () => {
       { x: 90, y: 70 },
       { x: 10, y: 70 },
     ])
-    expect(zoneMeasurementTexts(container)).toContain('4800 m²')
+    expect(draftLabelTexts(deps)).toContain('4800 m²')
 
     events.pointerUp({ x: 90, y: 70 }, { button: 0 })
 
@@ -3477,7 +3476,7 @@ describe('SceneInteractionSession', () => {
       { x: 60, y: 50 },
       { x: 30, y: 10 },
     ])
-    expect(zoneMeasurementTexts(container)).toEqual(['W 60 m', 'H 20 m', '942 m²'])
+    expect(draftLabelTexts(deps)).toEqual(['W 60 m', 'H 20 m', '942 m²'])
 
     events.pointerUp({ x: 90, y: 50 }, { button: 0 })
 
@@ -4189,49 +4188,6 @@ describe('SceneInteractionSession', () => {
     expect(container.children).toHaveLength(0)
   })
 
-  it.each([
-    {
-      name: 'Zone Drawing tool',
-      failure: 'zone measurement construction failed',
-      createFault() {
-        let polygonOverlayAppended = false
-        let targetReached = false
-        return {
-          shouldFail(node: Node) {
-            if (node instanceof SVGElement && node.dataset.polygonDraftOverlay === 'true') {
-              polygonOverlayAppended = true
-              return false
-            }
-            targetReached = polygonOverlayAppended
-              && node instanceof HTMLElement
-              && node.dataset.zoneMeasurementOverlay === 'true'
-            return targetReached
-          },
-          wasTargetReached: () => targetReached,
-        }
-      },
-    },
-  ])('rolls back partial $name resources when a later append fails', ({ failure, createFault }) => {
-    const { shouldFail, wasTargetReached } = createFault()
-    const deps = createInteractionDeps(container, store, camera)
-    const originalAppendChild = container.appendChild.bind(container)
-    const appendChild = vi.spyOn(container, 'appendChild').mockImplementation(
-      (<T extends Node>(node: T): T => {
-        if (shouldFail(node)) throw new Error(failure)
-        return originalAppendChild(node) as T
-      }) as typeof container.appendChild,
-    )
-
-    try {
-      expect(() => createSceneInteractionSession(deps)).toThrow(failure)
-    } finally {
-      appendChild.mockRestore()
-    }
-
-    expect(wasTargetReached()).toBe(true)
-    expect(container.children).toHaveLength(0)
-  })
-
   it('refreshes presentation after pointer-up cancellation reports an error', () => {
     const getDesignObjectSelection = vi.fn(() => getDesignObjectSelectionFromStore(store, camera))
     let failHoveredWrite = false
@@ -4545,6 +4501,8 @@ describe('SceneInteractionSession', () => {
 
       events.pointerDown(start, { pointerId: 27, target: handle })
       events.pointerMove({ x: 150, y: 170 }, { pointerId: 27 })
+      // The selected zone's chips, or the dragged guide's length chip, are the host's draft (today's measurement overlay).
+      expect(baseDeps.renderer.lastDraft()).not.toBeNull()
 
       // The ToolHost disposes the tool: both failed aborts (the live drag's cancel, then the tool's transient) are its failure.
       expect(() => session.dispose()).toThrow('Tool host disposal failed')
@@ -4553,7 +4511,7 @@ describe('SceneInteractionSession', () => {
       expect(container.querySelector('[data-rotation-handle]')).toBeNull()
       expect(container.querySelector('[data-zone-control-points]')).toBeNull()
       expect(container.querySelector('[data-measurement-guide-control-points]')).toBeNull()
-      expect(container.querySelector('[data-zone-measurement-overlay]')).toBeNull()
+      expect(baseDeps.renderer.lastDraft()).toBeNull()
     },
   )
 
