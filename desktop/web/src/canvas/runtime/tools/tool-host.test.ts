@@ -1451,7 +1451,6 @@ describe('ToolHost', () => {
         shapes: [{ kind: 'polyline', points: [{ x: 0, y: 0 }, { x: 5, y: 0 }], style: { token: 'draft', widthPx: 2 } }],
       }
       const polygon: StubTool = stubTool('polygon', {
-        preservesTransientOnNavigate: true,
         cancelTransient: (reason) => {
           if (reason !== 'navigate') polygon.ctx().effects.setDraft(null)
         },

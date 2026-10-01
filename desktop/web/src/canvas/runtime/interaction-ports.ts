@@ -64,7 +64,7 @@ export interface DomInputSource {
   /** Applies effects to the event being handled: the recogniser's, and a GestureOutcome's as 'prevent-default',
    *  'stop-propagation' and 'drop-effect'. */
   apply(effects: readonly AdapterEffect[]): void
-  /** 0B only, for the legacy bridge: the DOM event being handled, or null (removed at the end of 0B). */
+  /** The DOM event being handled, or null: the session finds the pressed ruler's overlay from its target. */
   currentEvent(): Event | null
 }
 
@@ -235,16 +235,16 @@ export interface ToolHost {
    * one while another pointer's press is live, in overview, or over the note editor, a handle or the Unlock affordance
    * (today's _onPointerUp exceptions). The host's own tap and drag-end of a ruler drag, or of a press the tool never heard,
    * do the same. Today's window pointerup ran _cancelTransientInteraction for each: the series commits, the drop preview
-   * and the passive hover clear, the active tool's cancelTransient('navigate') runs (a tool that
-   * preservesTransientOnNavigate keeps its draft, as after a pan) and the cursor returns to the tool's. A press of the
-   * tool's still live is left to its own release.
+   * and the passive hover clear, the active tool's cancelTransient('navigate') runs (a tool that keeps its draft through a
+   * pan keeps it here too) and the cursor returns to the tool's. A press of the tool's still live is left to its own
+   * release.
    */
   released(): void
   /**
    * Today's _cancelInterruptedInteraction, which the session calls on window blur after feeding the recogniser (which releases
    * Space and ends the live sessions): commits the nudge series, clears the passive hover, the tooltip and the locked
-   * affordance, calls the active tool's cancelTransient('navigate') (a tool that preservesTransientOnNavigate keeps its draft,
-   * as through a pan) and resets the cursor to the tool's. A failure leaves the cancellation pending (retryPendingCancellation).
+   * affordance, calls the active tool's cancelTransient('navigate') (a tool that keeps its draft through a pan keeps it
+   * here too) and resets the cursor to the tool's. A failure leaves the cancellation pending (retryPendingCancellation).
    */
   interrupted(): void
   /** Transient history (today's canUndo/…TransientHistory): sends the active tool the 'undo-transient' and 'redo-transient' commands and

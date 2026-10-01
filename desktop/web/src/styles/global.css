@@ -399,12 +399,10 @@ mark {
   font-style: italic;
 }
 
-/* A presented story shows the map without the editing overlays the runtime
-   places on it (app/story-presentation/controller.ts sets the attribute): the
-   saved stamp's drop ghost and the hover chrome. The interaction session passes
-   on no handles or drafts (the selection's measurements, any drawing in
-   progress) while a story is shown. */
-html[data-story-presenting] [data-saved-object-stamp-ghost],
+/* A presented story shows the map without the hover chrome the runtime places
+   on it (app/story-presentation/controller.ts sets the attribute). The
+   interaction session passes on no handles or drafts (the selection's
+   measurements, any drawing or drop in progress) while a story is shown. */
 html[data-story-presenting] [data-locked-object-affordance],
 html[data-story-presenting] [data-hover-tooltip] {
   display: none !important;

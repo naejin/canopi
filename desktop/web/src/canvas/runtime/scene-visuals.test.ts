@@ -34,7 +34,7 @@ describe('scene visuals', () => {
   })
 
   it('resolves each draft token to the canvas colour today\'s DOM previews use', () => {
-    // overlay-ui.ts and today's (a4c86d39) polygon-draft-overlay.ts: light drafts on the dark overlay casing, the ochre band on the interaction casing.
+    // Today's (a4c86d39) overlay-ui.ts and polygon-draft-overlay.ts: light drafts on the dark overlay casing, the ochre band on the interaction casing.
     expect(getDraftVisual('draft')).toEqual({ color: getCanvasColor('guide-line'), casing: getCanvasColor('overlay-casing') })
     expect(getDraftVisual('selection'))
       .toEqual({ color: getCanvasColor('selection-stroke'), casing: getCanvasColor('interaction-casing') })

@@ -319,8 +319,6 @@ export function createPlantRowTool(): CanvasTool {
     id: 'plant-spacing',
     // The recogniser reports the drag at once, so the moves inside today's 4 px preview too (followDrag measures them).
     dragSlopPx: 0,
-    // A pan keeps the row's source and preview.
-    preservesTransientOnNavigate: true,
     clampsToView: true,
     constraint() {
       return source ? { kind: 'direction', origin: source.plant.position, stepDeg: 45 } : null
