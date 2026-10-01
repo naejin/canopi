@@ -12,6 +12,19 @@ import type { SceneArrangementTemplate } from '../scene-runtime/arrangement-plac
 import type { ScenePersistedState } from '../scene/types'
 import type { WorldPoint } from '../view/types'
 import type { DraftShape } from './draft'
+import type { CanvasTool } from './tool'
+
+/** The tools the registry built, newest last: a test calls one as the host does. */
+const builtTools = vi.hoisted(() => [] as CanvasTool[])
+vi.mock('./registry', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./registry')>()
+  const recording = Object.entries(actual.TOOL_REGISTRY).map(([id, factory]) => [id, () => {
+    const tool = factory!()
+    builtTools.push(tool)
+    return tool
+  }])
+  return { ...actual, TOOL_REGISTRY: Object.freeze(Object.fromEntries(recording)) }
+})
 
 const harnesses: ToolHarness[] = []
 
@@ -24,6 +37,7 @@ function stampHarness(scene: Partial<ScenePersistedState>, options: ToolHarnessO
 
 afterEach(() => {
   for (const created of harnesses.splice(0)) created.dispose()
+  builtTools.length = 0
 })
 
 /** The Scene Edits that committed, by history type (today's onSceneEditCommit). */
@@ -188,6 +202,60 @@ describe('object stamp tool', () => {
     expect(ghosts(h)).toHaveLength(1)
     h.click({ x: 120, y: 120 })
     expect(h.store.persisted.plants).toHaveLength(2)
+  })
+
+  it('only the overview reason hides the ghost; no cancellation drops the pick', () => {
+    const h = stampHarness({ plants: [smallApple({ x: 40, y: 40 })] })
+    h.click({ x: 40, y: 40 })
+    h.hover({ x: 90, y: 90 })
+    const shown = h.renderer.lastDraft()
+    const tool = builtTools.at(-1)!
+
+    for (const reason of ['tool-change', 'navigate', 'escape', 'document-replaced'] as const) {
+      tool.cancelTransient(reason)
+      expect(h.renderer.lastDraft()).toEqual(shown)
+    }
+    // The tool reads the reason the host sends on entering overview, not the frame's mode (still 'site' here).
+    tool.cancelTransient('overview')
+    expect(ghosts(h)).toEqual([])
+
+    h.hover({ x: 120, y: 120 })
+    expect(ghosts(h)).toHaveLength(1)
+    h.click({ x: 120, y: 120 })
+    expect(h.store.persisted.plants).toHaveLength(2)
+  })
+
+  it('keeps the ghost on its ground through a re-origin with the pointer off the map', () => {
+    const h = stampHarness({ plants: [smallApple({ x: 40, y: 40 })] })
+    h.click({ x: 40, y: 40 })
+    h.hover({ x: 90, y: 90 })
+    h.leave()
+    const before = h.plane
+    const anchor = objectsGhost(ghosts(h)[0]).anchor
+    const plant = objectsGhost(ghosts(h)[0]).template.plants[0]!.entity.position
+
+    h.reorigin({ lon: 0.01, lat: 0.005 })
+    h.advance(0)
+
+    const moved = h.plane.toPlane(before.toGeo(anchor))
+    expect(Math.hypot(moved.x - anchor.x, moved.y - anchor.y)).toBeGreaterThan(100)
+    const ghost = objectsGhost(ghosts(h)[0])
+    expect(ghost.anchor.x).toBeCloseTo(moved.x, 6)
+    expect(ghost.anchor.y).toBeCloseTo(moved.y, 6)
+    // The pick keeps its offset from the anchor.
+    expect(ghost.template.plants[0]!.entity.position.x - ghost.anchor.x).toBeCloseTo(plant.x - anchor.x, 6)
+    expect(ghost.template.plants[0]!.entity.position.y - ghost.anchor.y).toBeCloseTo(plant.y - anchor.y, 6)
+    // `]` turns it where it now stands.
+    h.host.command({ kind: 'rotate-held', stepDeg: 15 })
+    expect(objectsGhost(ghosts(h)[0]).anchor.x).toBeCloseTo(moved.x, 6)
+    expect(objectsGhost(ghosts(h)[0]).anchor.y).toBeCloseTo(moved.y, 6)
+
+    // In overview the ghost stays hidden through a re-origin.
+    h.view.setViewport({ x: 200, y: 150, scale: 0.05 })
+    h.advance(0)
+    h.reorigin({ lon: 0.02, lat: 0.01 })
+    h.advance(0)
+    expect(ghosts(h)).toEqual([])
   })
 
   it('Esc returns to Select at once under LEGACY, pick and all', () => {

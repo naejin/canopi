@@ -1,12 +1,18 @@
 // SceneInteractionSession tests, split by the first tool a test arms (canvas v2 plan §4, Seams):
-// the Object and saved stamps end to end through the session: Esc and `[` `]` through the keyboard port, and the
-// saved-stamp read model through the session's source bridge. The stamp tools' own behaviour is tested through the
-// ToolHarness in canvas/runtime/tools/{object-stamp,saved-object-stamp}.test.ts (0B-3 D4).
+// the Object and saved stamps end to end through the session: Esc and `[` `]` through the keyboard port, the
+// saved-stamp read model through the session's source bridge, and a Favorites drag over a held stamp. The stamp tools' own
+// behaviour is tested through the ToolHarness in canvas/runtime/tools/{object-stamp,saved-object-stamp}.test.ts (0B-3 D4).
 // Shared fakes, helpers and fixture: support/scene-interaction-setup.ts.
 import { describe, expect, it, vi } from 'vitest'
-import { readSavedObjectStampSource, selectSavedObjectStampSourceForTests } from '../canvas/saved-object-stamp-source'
+import {
+  clearSavedObjectStampDragSource,
+  readSavedObjectStampSource,
+  selectSavedObjectStampSourceForTests,
+  writeSavedObjectStampDragData,
+} from '../canvas/saved-object-stamp-source'
 import type { CanvasToolGuidance } from '../canvas/session-state'
 import { CameraController } from '../canvas/runtime/camera'
+import type { DraftPresentation } from '../canvas/runtime/tools/draft'
 import { SceneStore } from '../canvas/runtime/scene'
 import type { SceneInteractionEventHarness } from './support/scene-interaction-events'
 import {
@@ -26,6 +32,27 @@ describe('SceneInteractionSession', () => {
     },
     () => ({ events }),
   )
+
+  /** A panel drag event over the map at a container point, carrying `data` (by default nothing of ours). */
+  function dispatchDrag(type: 'dragover' | 'dragleave' | 'drop', at: { x: number, y: number }, data?: (transfer: DragDataLike) => void): void {
+    const dragData = new Map<string, string>()
+    const dataTransfer: DragDataLike = {
+      effectAllowed: 'none',
+      dropEffect: 'none',
+      get types() { return Array.from(dragData.keys()) },
+      setData(format: string, value: string) { dragData.set(format, value) },
+      getData(format: string) { return dragData.get(format) ?? '' },
+    }
+    data?.(dataTransfer)
+    const event = new Event(type, { bubbles: true, cancelable: true }) as DragEvent
+    const point = events.clientPoint(at)
+    Object.defineProperties(event, {
+      clientX: { configurable: true, value: point.x },
+      clientY: { configurable: true, value: point.y },
+      dataTransfer: { configurable: true, value: dataTransfer },
+    })
+    container.dispatchEvent(event)
+  }
 
   it('clears loaded Object Stamp source and returns to select on Escape', () => {
     store.updatePersisted((draft) => {
@@ -88,6 +115,60 @@ describe('SceneInteractionSession', () => {
     events.pointerUp({ x: 150, y: 150 }, { button: 0 })
     expect(store.persisted.plants).toHaveLength(1)
     session.dispose()
+  })
+
+  it('a Favorites drag over the map hides the held stamp\'s ghost until the pointer moves over the map again', () => {
+    selectSavedObjectStampSourceForTests({
+      version: 2,
+      anchor: { x: 0, y: 0 },
+      plants: [{
+        id: 'plant-1', canonicalName: 'Malus domestica', commonName: 'Apple', color: null, symbol: null,
+        position: { x: 0, y: 0 }, rotationDeg: null, scale: null,
+      }],
+      zones: [],
+      annotations: [],
+      groups: [],
+    })
+    const drafts: (DraftPresentation | null)[] = []
+    const ghostAnchor = () => {
+      const shape = drafts.at(-1)?.shapes.find((entry) => entry.kind === 'ghost')
+      return shape?.kind === 'ghost' && shape.entity.kind === 'objects' ? shape.entity.anchor : null
+    }
+    const domGhost = () => container.querySelector('[data-saved-object-stamp-ghost]')
+    const session = createTestSession({
+      ...createInteractionDeps(container, store, camera),
+      renderer: { setDraft: (draft) => { drafts.push(draft) }, setSelectionPreview: () => {} },
+    })
+    session.setTool('saved-object-stamp')
+    events.pointerMove({ x: 100, y: 100 }, { buttons: 0 })
+    expect(ghostAnchor()).toEqual({ x: 100, y: 100 })
+
+    try {
+      // Another saved stamp dragged from Favorites: its preview takes the held stamp's place, as today's one preview element.
+      dispatchDrag('dragover', { x: 60, y: 60 }, (transfer) => writeSavedObjectStampDragData(transfer, PEAR_STAMP))
+      expect(drafts.at(-1)).toBeNull()
+      expect(domGhost()).not.toBeNull()
+      dispatchDrag('dragleave', { x: 60, y: 60 })
+      expect(drafts.at(-1)).toBeNull()
+      expect(domGhost()).toBeNull()
+      events.pointerMove({ x: 120, y: 120 }, { buttons: 0 })
+      expect(ghostAnchor()).toEqual({ x: 120, y: 120 })
+
+      // A drop that places nothing leaves the stamp armed: the next move shows its ghost again too.
+      dispatchDrag('dragover', { x: 60, y: 60 })
+      expect(drafts.at(-1)).toBeNull()
+      dispatchDrag('drop', { x: 60, y: 60 })
+      expect(drafts.at(-1)).toBeNull()
+      expect(store.persisted.plants).toHaveLength(0)
+      events.pointerMove({ x: 140, y: 140 }, { buttons: 0 })
+      expect(ghostAnchor()).toEqual({ x: 140, y: 140 })
+      events.pointerDown({ x: 140, y: 140 }, { button: 0 })
+      events.pointerUp({ x: 140, y: 140 }, { button: 0 })
+      expect(store.persisted.plants.map((plant) => plant.position)).toEqual([{ x: 140, y: 140 }])
+    } finally {
+      clearSavedObjectStampDragSource()
+      session.dispose()
+    }
   })
 
   describe('stamp rotation', () => {
@@ -186,3 +267,31 @@ describe('SceneInteractionSession', () => {
     })
   })
 })
+
+/** A saved stamp record as Favorites drags it. */
+const PEAR_STAMP = {
+  id: 'stamp-pear',
+  name: 'Pear',
+  sort_order: 0,
+  created_at: '2026-06-19T09:00:00Z',
+  updated_at: '2026-06-19T09:00:00Z',
+  payload_json: JSON.stringify({
+    version: 2,
+    anchor: { x: 0, y: 0 },
+    plants: [{
+      id: 'plant-1', canonicalName: 'Pyrus communis', commonName: 'Pear', color: null, symbol: null,
+      position: { x: 0, y: 0 }, rotationDeg: null,
+    }],
+    zones: [],
+    annotations: [],
+    groups: [],
+  }),
+}
+
+interface DragDataLike {
+  effectAllowed: string
+  dropEffect: string
+  readonly types: readonly string[]
+  setData(format: string, value: string): void
+  getData(format: string): string
+}

@@ -5,8 +5,8 @@
 // places it once with its anchor at the snapped point, turned by the held angle, as one 'interaction-saved-object-stamp'
 // edit that selects the copies, then returns to Select, whose leaving drops the stamp from the read model. Its ghost
 // follows the pointer and stays when the pointer leaves the map. `[` and `]` turn it (rotate-held commands); another stamp
-// starts upright; Esc leaves for Select at once under LEGACY (spec §3.7). The stamps' ghosts are drafts: zones and plants
-// in one 'objects' ghost at 0.62 and notes in a second at 0.68, today's opacities, already where a press would put them.
+// starts upright; Esc leaves for Select at once under LEGACY (spec §3.7). Overview hides the ghost until the next hover and
+// keeps the stamp, as today; a re-origin keeps the ghost on its ground. The ghosts come from tools/stamp-ghost.ts.
 
 import type { SavedObjectStampPayload } from '../../saved-object-stamp-payload'
 import type { SceneAnnotationEntity, ScenePlantEntity, SceneZoneEntity } from '../scene/types'
@@ -19,6 +19,7 @@ import {
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import type { WorldPoint } from '../view/types'
 import type { DraftShape } from './draft'
+import { stampGhostShapes } from './stamp-ghost'
 import {
   rotateArrangementTemplate,
   rotateStampEntities,
@@ -27,9 +28,6 @@ import {
 } from './stamp-rotation'
 import type { CanvasTool, ToolContext, ToolScene, ToolSource } from './tool'
 
-const STAMP_GHOST_OPACITY = 0.62
-/** Notes draw a little less faint than zones and plants (the draft layer multiplies each note's own opacities). */
-const STAMP_GHOST_NOTE_OPACITY = 0.68
 const ORIGIN: WorldPoint = Object.freeze({ x: 0, y: 0 })
 
 type StampScene = Pick<ToolScene, 'isLayerOpenForCreation'>
@@ -40,6 +38,8 @@ export function createSavedObjectStampTool(): CanvasTool {
   let rotationDeg = 0
   /** Where the ghost's anchor was last drawn: `[` and `]` redraw it there. */
   let lastAnchor: WorldPoint | null = null
+  /** Whether the ghost is drawn now (overview hides it until the next hover). */
+  let ghostShown = false
 
   function context(): ToolContext {
     if (!ctx) throw new Error('The saved stamp tool is not active.')
@@ -61,7 +61,13 @@ export function createSavedObjectStampTool(): CanvasTool {
     lastAnchor = at
     const { effects, scene } = context()
     const shapes = stamp ? savedObjectStampGhostShapes(scene, stamp, at, rotationDeg) : null
+    ghostShown = shapes !== null
     effects.setDraft(shapes ? { shapes } : null)
+  }
+
+  function hideGhost(): void {
+    ghostShown = false
+    context().effects.setDraft(null)
   }
 
   function place(at: WorldPoint): void {
@@ -74,7 +80,7 @@ export function createSavedObjectStampTool(): CanvasTool {
         // One placement, then Select: leaving the tool drops the stamp from the read model (the session's).
         stamp = null
         lastAnchor = null
-        effects.setDraft(null)
+        hideGhost()
         effects.requestTool('select')
       },
     })
@@ -84,6 +90,7 @@ export function createSavedObjectStampTool(): CanvasTool {
     stamp = null
     rotationDeg = 0
     lastAnchor = null
+    ghostShown = false
   }
 
   return {
@@ -97,7 +104,7 @@ export function createSavedObjectStampTool(): CanvasTool {
     sourceChanged(source) {
       hold(source)
       // The ghost follows the next pointer move, as today; with no stamp there is nothing to show.
-      if (!stamp) context().effects.setDraft(null)
+      if (!stamp) hideGhost()
       publishGuidance()
     },
     gesture(g) {
@@ -132,11 +139,19 @@ export function createSavedObjectStampTool(): CanvasTool {
       }
       return 'pass'
     },
+    planeChanged(reproject) {
+      // A re-origin moves the ground under the last anchor: the ghost stays where it stood, also with the pointer off the
+      // map, where the host re-emits nothing. The stamp's objects are placed by their offsets from its anchor.
+      if (!lastAnchor) return
+      lastAnchor = reproject(lastAnchor)
+      if (ghostShown) showGhostAt(lastAnchor)
+    },
     hasTransient: () => false,
     escapeHint: () => 'leave-tool',
-    cancelTransient() {
-      // The stamp and its angle outlive every cancellation, as today; overview hides the ghost until the map comes back.
-      if (context().view.mode === 'overview') context().effects.setDraft(null)
+    cancelTransient(reason) {
+      // The stamp and its angle outlive every cancellation, as today. Entering overview hides the ghost until the next
+      // hover (today's setOverviewMode cleared only the preview element).
+      if (reason === 'overview') hideGhost()
     },
     deactivate() {
       reset()
@@ -201,32 +216,6 @@ export function placeSavedObjectStamp(
     historyType: 'interaction-saved-object-stamp',
     onCommitted: options.onCommitted,
   }).committed
-}
-
-/**
- * A stamp's ghosts as drafts: zones and plants in one 'objects' ghost at 0.62, notes in a second at 0.68 (today's
- * opacities). The entities are already where a press would put them; `anchor` and `rotationDeg` describe the pick.
- */
-export function stampGhostShapes(entities: StampEntities, anchor: WorldPoint, rotationDeg: number): DraftShape[] {
-  const shapes: DraftShape[] = []
-  if (entities.plants.length + entities.zones.length > 0) {
-    shapes.push(ghostOf({ ...entities, annotations: [] }, anchor, rotationDeg, STAMP_GHOST_OPACITY))
-  }
-  if (entities.annotations.length > 0) {
-    shapes.push(ghostOf({ plants: [], zones: [], annotations: entities.annotations }, anchor, rotationDeg, STAMP_GHOST_NOTE_OPACITY))
-  }
-  return shapes
-}
-
-function ghostOf(entities: StampEntities, anchor: WorldPoint, rotationDeg: number, opacity: number): DraftShape {
-  const template: SceneArrangementTemplate = {
-    plants: entities.plants.map((entity) => ({ sourceId: entity.id, entity })),
-    zones: entities.zones.map((entity) => ({ sourceId: entity.id, entity })),
-    annotations: entities.annotations.map((entity) => ({ sourceId: entity.id, entity })),
-    measurementGuides: [],
-    groups: [],
-  }
-  return { kind: 'ghost', opacity, entity: { kind: 'objects', anchor, rotationDeg, template } }
 }
 
 function requiredLayers(stamp: SavedObjectStampPayload): string[] {

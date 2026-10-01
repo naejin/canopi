@@ -6,7 +6,8 @@
 // 'interaction-object-stamp' edit that selects the copies, while the source is still unlocked on open layers. The ghost of
 // what a press would place follows the pointer from the pick on and stays when the pointer leaves the map; the tool card
 // names the pick. A pick starts level (today's rule; phase 1 starts it at the bearing); `[` and `]` turn it (rotate-held
-// commands); Esc leaves for Select at once under LEGACY (spec §3.7).
+// commands); Esc leaves for Select at once under LEGACY (spec §3.7). Overview hides the ghost until the next hover and
+// keeps the pick, as today; a re-origin keeps the ghost on its ground.
 
 import type { CanvasStampGuidance } from '../../session-state'
 import type { SceneDesignObjectTarget } from '../scene/design-object-targets'
@@ -31,14 +32,14 @@ import {
   translateZonePoints,
 } from '../scene-runtime/arrangement-placement'
 import type { WorldPoint } from '../view/types'
-import { stampGhostShapes } from './saved-object-stamp'
+import { stampGhostShapes } from './stamp-ghost'
 import {
   rotateArrangementTemplate,
   rotateStampEntities,
   turnStampRotation,
   type StampEntities,
 } from './stamp-rotation'
-import type { CanvasTool, ToolContext } from './tool'
+import type { CanvasTool, HitTarget, ToolContext } from './tool'
 
 interface ObjectStampPlantSource {
   kind: 'plant'
@@ -87,18 +88,19 @@ export function createObjectStampTool(): CanvasTool {
   let rotationDeg = 0
   /** Where the ghost's anchor was last drawn: `[` and `]` redraw it there. */
   let lastAnchor: WorldPoint | null = null
+  /** Whether the ghost is drawn now (overview hides it until the next hover). */
+  let ghostShown = false
 
   function context(): ToolContext {
     if (!ctx) throw new Error('The Object stamp is not active.')
     return ctx
   }
 
-  function sampleObjectStampSource(world: WorldPoint): void {
+  /** A press with nothing picked: `hit` is the host's unfiltered hit under the raw point (today's hitTestTopLevel). */
+  function sampleObjectStampSource(world: WorldPoint, hit: HitTarget | null): void {
     rotationDeg = 0
-    const { scene } = context()
-    const hit = scene.hitAt(world)
     if (hit?.kind !== 'object') return
-    const persisted = scene.persisted
+    const persisted = context().scene.persisted
     if (isSceneDesignObjectLocked(persisted, hit.target)) return
     const source = objectStampSourceAt(persisted, hit.target, world)
     if (!source) return
@@ -134,12 +136,18 @@ export function createObjectStampTool(): CanvasTool {
     lastAnchor = anchorWorld
     const source = objectStampSource
     if (!source) {
-      context().effects.setDraft(null)
+      hideGhost()
       return
     }
     const entities = objectStampEntities(source, objectStampDelta(source, anchorWorld))
     const shapes = stampGhostShapes(rotateStampEntities(entities, anchorWorld, rotationDeg), anchorWorld, rotationDeg)
+    ghostShown = true
     context().effects.setDraft({ shapes })
+  }
+
+  function hideGhost(): void {
+    ghostShown = false
+    context().effects.setDraft(null)
   }
 
   function describeSource(): CanvasStampGuidance | null {
@@ -173,6 +181,7 @@ export function createObjectStampTool(): CanvasTool {
     objectStampSource = null
     rotationDeg = 0
     lastAnchor = null
+    ghostShown = false
   }
 
   return {
@@ -187,7 +196,7 @@ export function createObjectStampTool(): CanvasTool {
         case 'press':
           // Every press acts, so a double-click places twice (today).
           if (objectStampSource) placeObjectStamp(g.point.snapped)
-          else sampleObjectStampSource(g.point.world)
+          else sampleObjectStampSource(g.point.world, g.hit)
           return 'handled'
         case 'hover':
         case 'drag-start':
@@ -220,11 +229,19 @@ export function createObjectStampTool(): CanvasTool {
       // The tool card names the pick in the scene's current language.
       if (objectStampSource) publishGuidance()
     },
+    planeChanged(reproject) {
+      // A re-origin moves the ground under the last anchor: the ghost stays where it stood, also with the pointer off the
+      // map, where the host re-emits nothing. The pick's objects are placed by their offsets from its anchor.
+      if (!lastAnchor) return
+      lastAnchor = reproject(lastAnchor)
+      if (ghostShown) showGhostAt(lastAnchor)
+    },
     hasTransient: () => false,
     escapeHint: () => 'leave-tool',
-    cancelTransient() {
-      // The pick and its angle outlive every cancellation, as today; overview hides the ghost until the map comes back.
-      if (context().view.mode === 'overview') context().effects.setDraft(null)
+    cancelTransient(reason) {
+      // The pick and its angle outlive every cancellation, as today. Entering overview hides the ghost until the next hover
+      // (today's setOverviewMode cleared only the preview element).
+      if (reason === 'overview') hideGhost()
     },
     deactivate() {
       clear()

@@ -15,7 +15,20 @@ import {
   placeSavedObjectStamp,
   savedObjectStampGhostShapes,
 } from './saved-object-stamp'
+import type { CanvasTool } from './tool'
 import { createToolScene } from './tool-host'
+
+/** The tools the registry built, newest last: a test calls one as the host does. */
+const builtTools = vi.hoisted(() => [] as CanvasTool[])
+vi.mock('./registry', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./registry')>()
+  const recording = Object.entries(actual.TOOL_REGISTRY).map(([id, factory]) => [id, () => {
+    const tool = factory!()
+    builtTools.push(tool)
+    return tool
+  }])
+  return { ...actual, TOOL_REGISTRY: Object.freeze(Object.fromEntries(recording)) }
+})
 
 const harnesses: ToolHarness[] = []
 
@@ -27,6 +40,7 @@ function harness(): ToolHarness {
 
 afterEach(() => {
   for (const created of harnesses.splice(0)) created.dispose()
+  builtTools.length = 0
 })
 
 /** A saved stamp as the read model holds it (normalised, as selectSavedObjectStampSourceForTests stores it). */
@@ -303,6 +317,75 @@ describe('saved object stamp tool', () => {
       h.click({ x: 120, y: 100 })
       expect(h.store.persisted.plants).toHaveLength(0)
     })
+  })
+
+  it('hides the ghost in overview and keeps the stamp for when the map comes back', () => {
+    const h = harness()
+    holding(h, mulchStamp())
+    h.hover({ x: 100, y: 100 })
+    h.host.command({ kind: 'rotate-held', stepDeg: 15 })
+    expect(ghosts(h)).toHaveLength(2)
+
+    h.view.setViewport({ x: 200, y: 150, scale: 0.05 })
+    h.advance(0)
+    expect(ghosts(h)).toEqual([])
+
+    h.view.setViewport({ x: 0, y: 0, scale: 1 })
+    h.advance(0)
+    h.hover({ x: 120, y: 120 })
+    expect(ghosts(h)[0]!.entity).toMatchObject({ anchor: { x: 120, y: 120 }, rotationDeg: 15 })
+    h.click({ x: 120, y: 120 })
+    expect(h.store.persisted.plants).toHaveLength(1)
+  })
+
+  it('only the overview reason hides the ghost; no cancellation drops the stamp', () => {
+    const h = harness()
+    holding(h, mulchStamp())
+    h.hover({ x: 100, y: 100 })
+    const shown = h.renderer.lastDraft()
+    const tool = builtTools.at(-1)!
+
+    for (const reason of ['tool-change', 'navigate', 'escape', 'document-replaced'] as const) {
+      tool.cancelTransient(reason)
+      expect(h.renderer.lastDraft()).toEqual(shown)
+    }
+    // The tool reads the reason the host sends on entering overview, not the frame's mode (still 'site' here).
+    tool.cancelTransient('overview')
+    expect(ghosts(h)).toEqual([])
+
+    h.hover({ x: 120, y: 120 })
+    expect(ghosts(h)).toHaveLength(2)
+    h.click({ x: 120, y: 120 })
+    expect(h.store.persisted.plants).toHaveLength(1)
+  })
+
+  it('keeps the ghost on its ground through a re-origin with the pointer off the map', () => {
+    const h = harness()
+    holding(h, mulchStamp())
+    h.hover({ x: 100, y: 100 })
+    h.leave()
+    const before = h.plane
+    const anchor = { x: 100, y: 100 }
+
+    h.reorigin({ lon: 0.01, lat: 0.005 })
+    h.advance(0)
+
+    const moved = h.plane.toPlane(before.toGeo(anchor))
+    expect(Math.hypot(moved.x - anchor.x, moved.y - anchor.y)).toBeGreaterThan(100)
+    const ghost = ghosts(h)[0]!.entity as { readonly anchor: { x: number; y: number } }
+    expect(ghost.anchor.x).toBeCloseTo(moved.x, 6)
+    expect(ghost.anchor.y).toBeCloseTo(moved.y, 6)
+    // The plant 10 m east of the anchor still shows 10 m east of it.
+    const ghostPlant = templateOf(ghosts(h)[0]).plants[0]!.entity
+    expect(ghostPlant.position.x).toBeCloseTo(moved.x + 10, 6)
+    expect(ghostPlant.position.y).toBeCloseTo(moved.y, 6)
+
+    // In overview the ghost stays hidden through a re-origin.
+    h.view.setViewport({ x: 200, y: 150, scale: 0.05 })
+    h.advance(0)
+    h.reorigin({ lon: 0.02, lat: 0.01 })
+    h.advance(0)
+    expect(ghosts(h)).toEqual([])
   })
 
   it('Esc returns to Select at once under LEGACY', () => {
