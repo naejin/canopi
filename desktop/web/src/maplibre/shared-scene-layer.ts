@@ -78,14 +78,7 @@ interface SharedMapSceneDiagnostics {
   readonly initializeCount: number
   readonly renderCount: number
   readonly sceneSyncCount: number
-  readonly viewportSyncCount: number
-  readonly resizeCount: number
-  readonly repaintCount: number
-  readonly skippedRenderCount: number
-  readonly resetStateCount: number
   readonly disposeCount: number
-  readonly disposeInRenderCount: number
-  readonly recentRenderDurationsMs: readonly number[]
   readonly lastFailure: string | null
 }
 
@@ -152,14 +145,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
   let initializeCount = 0
   let renderCount = 0
   let sceneSyncCount = 0
-  let viewportSyncCount = 0
-  let resizeCount = 0
-  let repaintCount = 0
-  let skippedRenderCount = 0
-  let resetStateCount = 0
   let disposeCount = 0
-  let disposeInRenderCount = 0
-  const recentRenderDurationsMs: number[] = []
   let lastFailure: string | null = null
   let failureReported = false
 
@@ -168,14 +154,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
     initializeCount,
     renderCount,
     sceneSyncCount,
-    viewportSyncCount,
-    resizeCount,
-    repaintCount,
-    skippedRenderCount,
-    resetStateCount,
     disposeCount,
-    disposeInRenderCount,
-    recentRenderDurationsMs: [...recentRenderDurationsMs],
     lastFailure,
   })
 
@@ -216,28 +195,19 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
       phase = disposeRequested ? 'disposing' : 'detached'
     },
     render(gl: WebGL2RenderingContext, _input: CustomRenderMethodInput) {
-      if (gl !== context || !renderer) {
-        skippedRenderCount += 1
-        return
-      }
+      if (gl !== context || !renderer) return
       if (disposeRequested) {
-        disposeInRenderCount += 1
         destroyOwnedResources()
         finishDispose()
         return
       }
-      if (phase !== 'attached' || !map || !stage || !presentation || (!pendingSnapshot && !renderedSnapshot)) {
-        skippedRenderCount += 1
-        return
-      }
+      if (phase !== 'attached' || !map || !stage || !presentation || (!pendingSnapshot && !renderedSnapshot)) return
       const nextSize = syncMapLibreOwnedSize(canvas, renderer, rendererSize)
       if (!nextSize) {
-        skippedRenderCount += 1
         fail('MapLibre canvas backing size changed outside the shared renderer contract.')
         return
       }
       const sizeChanged = !sameRendererSize(rendererSize, nextSize)
-      if (sizeChanged) resizeCount += 1
       rendererSize = nextSize
       const transform = deriveSharedMapSceneViewport({
         project: point => map!.project(point),
@@ -246,14 +216,11 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
         maximumWorldExtentMeters: options.maximumWorldExtentMeters ?? 10_000,
       })
       if (!transform.accepted) {
-        skippedRenderCount += 1
         fail(`Shared map scene cannot render: ${transform.reason}.`)
         return
       }
       try {
-        const startedAt = performance.now()
         renderer.resetState()
-        resetStateCount += 1
         presentation.resize(rendererSize.width, rendererSize.height)
         if (pendingSnapshot) {
           renderedSnapshot = pendingSnapshot
@@ -264,15 +231,11 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
         } else if (sizeChanged || !sameViewport(presentedViewport, transform.viewport)) {
           presentation.setViewport(transform.viewport)
           presentedViewport = transform.viewport
-          viewportSyncCount += 1
         }
         renderer.render({ container: stage, clear: false })
         renderCount += 1
-        recentRenderDurationsMs.push(performance.now() - startedAt)
-        if (recentRenderDurationsMs.length > 512) recentRenderDurationsMs.shift()
       } catch (error) {
         fail(error instanceof Error ? error : 'Shared map scene rendering failed.')
-        skippedRenderCount += 1
       }
     },
   } satisfies CustomLayerInterface
@@ -389,7 +352,6 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
   function requestRepaint(): void {
     if (!map) return
     map.triggerRepaint()
-    repaintCount += 1
   }
 
   function destroyOwnedResources(): void {
