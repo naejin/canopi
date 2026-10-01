@@ -1,5 +1,11 @@
+// canvas/runtime/interaction/saved-object-stamp-tool.ts  (0B legacy bridge only)
+//
+// The legacy bridge's saved-stamp drop (scene-interaction.ts) until the ToolHost's drop route (0B-4): the dragover ghost
+// as DOM over the map and the drop's placement, both from tools/saved-object-stamp.ts's placement code at rotation 0.
+// The saved stamp tool itself runs on the ToolHost (tools/saved-object-stamp.ts). Also lends the Place plants preview
+// (plant-placement-preview.ts) its DOM plant symbol. Deleted with its last importer.
+
 import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
-import { clearSavedObjectStampSource, readSavedObjectStampSource } from '../../saved-object-stamp-source'
 import type { SavedObjectStampPayload } from '../../saved-object-stamp-payload'
 import { getAnnotationPresentation, ANNOTATION_MARKER_PATHS, ANNOTATION_MARKER_STROKE_PX } from '../annotation-layout'
 import type { WorkspaceCameraFrameReader } from '../camera'
@@ -15,32 +21,21 @@ import {
 import type {
   PlantSymbolId,
   SceneAnnotationEntity,
-  ScenePersistedState,
   ScenePlantEntity,
   ScenePoint,
   SceneStateReader,
   SceneZoneEntity,
 } from '../scene'
-import {
-  createSceneArrangementPlacement,
-  type SceneArrangementTemplate,
-  translatePoint,
-  translateZonePoints,
-} from '../scene-runtime/arrangement-placement'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import { getAnnotationTextColor, getLabelHalo, getPlantSymbolEdgeColor, getPlantSymbolEdgeWidth, resolveZoneVisual } from '../scene-visuals'
+import {
+  canPlaceSavedObjectStamp,
+  placeSavedObjectStamp,
+  savedObjectStampEntities,
+} from '../tools/saved-object-stamp'
+import type { StampEntities } from '../tools/stamp-rotation'
 import { getEllipticalZonePolygon, getRectangularZoneCorners } from '../zone-geometry'
 import { isSceneLayerOpenForCreation, type SceneCreationLayerName } from './layer-guards'
-import { isEditableTarget } from './pointer-utils'
-import {
-  rotateArrangementTemplate,
-  rotateStampEntities,
-  stampRotationStep,
-  turnStampRotation,
-  type StampEntities,
-  type StampRotationKeys,
-} from './stamp-rotation'
-import type { SceneToolAdapter } from './tool-adapter'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 const STAMP_GHOST_OPACITY = 0.62
@@ -56,201 +51,45 @@ export interface SavedObjectStampPlacementContext {
   readonly applySnapping: (point: ScenePoint) => ScenePoint
 }
 
-export interface SavedObjectStampToolContext extends SavedObjectStampPlacementContext {
-  readonly switchTool: (name: string) => void
-  readonly rotationKeys: StampRotationKeys
-}
-
-export interface SavedObjectStampTool {
-  readonly hasSource: () => boolean
-  /** The held stamp's angle in degrees, clockwise; 0 for a new stamp. */
-  readonly rotationDeg: () => number
-  /** Turns the held stamp and its preview by `degrees`. */
-  readonly rotateBy: (degrees: number) => void
-  readonly pointerDown: (world: ScenePoint) => void
-  readonly updatePreview: (world: ScenePoint) => void
-  readonly clear: () => void
-  readonly dispose: () => void
-}
-
-export function createSavedObjectStampTool(context: SavedObjectStampToolContext): SavedObjectStampTool {
-  let rotation = { source: null as SavedObjectStampPayload | null, degrees: 0 }
-  let lastPreviewWorld: ScenePoint | null = null
-
-  function hasSource(): boolean {
-    return readSavedObjectStampSource() !== null
-  }
-
-  /** The angle of the stamp held now; choosing another stamp starts it upright. */
-  function rotationDeg(): number {
-    const source = readSavedObjectStampSource()
-    if (rotation.source !== source) rotation = { source, degrees: 0 }
-    return rotation.degrees
-  }
-
-  function rotateBy(degrees: number): void {
-    const source = readSavedObjectStampSource()
-    if (!source) return
-    rotation = { source, degrees: turnStampRotation(rotationDeg(), degrees) }
-    if (lastPreviewWorld) updatePreview(lastPreviewWorld)
-  }
-
-  function pointerDown(world: ScenePoint): void {
-    const source = readSavedObjectStampSource()
-    if (!source || !canPlaceSavedObjectStamp(context.getSceneStore().persisted, source)) return
-    placeSavedObjectStampAt(context, source, world, () => {
-      clear()
-      context.switchTool('select')
-    }, rotationDeg())
-  }
-
-  function updatePreview(world: ScenePoint): void {
-    lastPreviewWorld = world
-    const source = readSavedObjectStampSource()
-    if (!source) clearSavedObjectStampGhosts(context.preview)
-    else previewSavedObjectStampAt(context, source, world, rotationDeg())
-  }
-
-  function clear(): void {
-    clearSavedObjectStampSource()
-    clearSavedObjectStampGhosts(context.preview)
-    rotation = { source: null, degrees: 0 }
-    lastPreviewWorld = null
-  }
-
-  return {
-    hasSource,
-    rotationDeg,
-    rotateBy,
-    pointerDown,
-    updatePreview,
-    clear,
-    dispose: clear,
-  }
-}
-
-export function createSavedObjectStampToolAdapter(
-  tool: SavedObjectStampTool,
-  context: Pick<SavedObjectStampToolContext, 'switchTool' | 'rotationKeys'>,
-): SceneToolAdapter {
-  return {
-    onDeactivate: tool.clear,
-    shouldSuppressHover: tool.hasSource,
-    describeGuidance: () => ({ stampRotationDeg: tool.hasSource() ? tool.rotationDeg() : null }),
-    pointerDown({ event, rawWorld, clearPointerGesture }) {
-      event.preventDefault()
-      tool.pointerDown(rawWorld)
-      clearPointerGesture()
-      return true
-    },
-    pointerMoveWithoutCapture({ rawWorld }) {
-      if (!tool.hasSource()) return false
-      tool.updatePreview(rawWorld)
-      return true
-    },
-    keyDown(event) {
-      const step = tool.hasSource() ? stampRotationStep(event, context.rotationKeys) : null
-      if (step !== null) {
-        // `[` and `]` otherwise send to back and bring to front; while a stamp is held they only turn it.
-        event.preventDefault()
-        event.stopPropagation()
-        tool.rotateBy(step)
-        return true
-      }
-      if (event.key !== 'Escape' || isEditableTarget(event.target)) return false
-      event.preventDefault()
-      tool.clear()
-      context.switchTool('select')
-      return true
-    },
-    dispose: tool.dispose,
-  }
-}
-
+/** Places a dropped saved stamp level, its anchor at the snapped drop point. */
 export function placeSavedObjectStampAt(
   context: SavedObjectStampPlacementContext,
   source: SavedObjectStampPayload,
   rawAnchorWorld: ScenePoint,
   onCommitted?: () => void,
-  rotationDeg = 0,
 ): boolean {
-  if (!canPlaceSavedObjectStamp(context.getSceneStore().persisted, source)) return false
-  const delta = stampDelta(source, context.applySnapping(rawAnchorWorld))
-  return createSceneArrangementPlacement({ sceneEdits: context.sceneEdits }).place({
-    template: rotateArrangementTemplate(savedObjectStampArrangementTemplate(source), source.anchor, rotationDeg),
-    translateBy: delta,
-    historyType: 'interaction-saved-object-stamp',
-    onCommitted,
-  }).committed
+  return placeSavedObjectStamp(
+    context.sceneEdits,
+    openLayers(context),
+    source,
+    context.applySnapping(rawAnchorWorld),
+    onCommitted ? { onCommitted } : {},
+  )
 }
 
-function savedObjectStampArrangementTemplate(source: SavedObjectStampPayload): SceneArrangementTemplate {
-  const origin = { x: 0, y: 0 }
-  return {
-    plants: source.plants.map((plant) => ({
-      sourceId: plant.id,
-      entity: {
-        ...scenePlantFromSavedPlant(plant, origin),
-        pinnedName: false,
-      },
-    })),
-    zones: source.zones.map((zone) => ({
-      sourceId: zone.id,
-      entity: sceneZoneFromSavedZone(zone, origin),
-    })),
-    annotations: source.annotations.map((annotation) => ({
-      sourceId: annotation.id,
-      entity: sceneAnnotationFromSavedAnnotation(annotation, origin),
-    })),
-    measurementGuides: [],
-    groups: source.groups.map((group) => ({
-      sourceId: group.id,
-      entity: {
-        kind: 'group',
-        id: group.id,
-        locked: false,
-        name: group.name,
-        members: group.members.map((member) => ({ ...member })),
-      },
-    })),
-  }
-}
-
+/** The dragover ghost of a saved stamp, level, its anchor at the snapped point; false when it cannot be dropped. */
 export function previewSavedObjectStampAt(
   context: SavedObjectStampPlacementContext,
   source: SavedObjectStampPayload,
   rawAnchorWorld: ScenePoint,
-  rotationDeg = 0,
 ): boolean {
-  if (!canPlaceSavedObjectStamp(context.getSceneStore().persisted, source)) {
+  if (!canPlaceSavedObjectStamp(openLayers(context), source)) {
     clearSavedObjectStampGhosts(context.preview)
     return false
   }
-  const anchor = context.applySnapping(rawAnchorWorld)
-  const delta = stampDelta(source, anchor)
-  showStampGhosts(context, rotateStampEntities({
-    plants: source.plants.map((plant) => scenePlantFromSavedPlant(plant, delta)),
-    zones: source.zones.map((zone) => sceneZoneFromSavedZone(zone, delta)),
-    annotations: source.annotations.map((annotation) => sceneAnnotationFromSavedAnnotation(annotation, delta)),
-  }, anchor, rotationDeg))
+  showStampGhosts(context, savedObjectStampEntities(source, context.applySnapping(rawAnchorWorld)))
   return true
 }
 
-function canPlaceSavedObjectStamp(scene: ScenePersistedState, source: SavedObjectStampPayload): boolean {
-  if (source.plants.length + source.zones.length + source.annotations.length === 0) return false
-  return requiredLayers(source).every((layerName) => isSceneLayerOpenForCreation(scene, layerName))
-}
-
-function requiredLayers(source: SavedObjectStampPayload): SceneCreationLayerName[] {
-  const layers: SceneCreationLayerName[] = []
-  if (source.plants.length > 0) layers.push('plants')
-  if (source.zones.length > 0) layers.push('zones')
-  if (source.annotations.length > 0) layers.push('annotations')
-  return layers
+function openLayers(context: Pick<SavedObjectStampPlacementContext, 'getSceneStore'>) {
+  return {
+    isLayerOpenForCreation: (layer: string) =>
+      isSceneLayerOpenForCreation(context.getSceneStore().persisted, layer as SceneCreationLayerName),
+  }
 }
 
 /** Draws a stamp's objects where a click would place them, as translucent ghosts over the map. */
-export function showStampGhosts(
+function showStampGhosts(
   context: Pick<SavedObjectStampPlacementContext, 'preview' | 'camera' | 'getPlantPresentationContext'>,
   entities: StampEntities,
 ): void {
@@ -514,66 +353,3 @@ function formatNumber(value: number): string {
   if (Math.abs(value) < 0.000001) return '0'
   return Number(value.toFixed(3)).toString()
 }
-
-function scenePlantFromSavedPlant(
-  plant: SavedObjectStampPayload['plants'][number],
-  delta: ScenePoint,
-): ScenePlantEntity {
-  return {
-    kind: 'plant',
-    id: plant.id,
-    locked: false,
-    canonicalName: plant.canonicalName,
-    commonName: plant.commonName,
-    color: plant.color,
-    symbol: plant.symbol ?? null,
-    stratum: null,
-    canopySpreadM: plant.scale,
-    position: translatePoint(plant.position, delta),
-    rotationDeg: plant.rotationDeg,
-    notes: null,
-    plantedDate: null,
-    quantity: null,
-  }
-}
-
-function sceneZoneFromSavedZone(
-  zone: SavedObjectStampPayload['zones'][number],
-  delta: ScenePoint,
-): SceneZoneEntity {
-  return {
-    kind: 'zone',
-    id: zone.id,
-    name: zone.name,
-    locked: false,
-    zoneType: zone.zoneType,
-    points: translateZonePoints(zone, delta),
-    rotationDeg: zone.rotationDeg,
-    fillColor: zone.fillColor,
-    notes: null,
-  }
-}
-
-function sceneAnnotationFromSavedAnnotation(
-  annotation: SavedObjectStampPayload['annotations'][number],
-  delta: ScenePoint,
-): SceneAnnotationEntity {
-  return {
-    kind: 'annotation',
-    id: annotation.id,
-    locked: false,
-    annotationType: annotation.annotationType,
-    position: translatePoint(annotation.position, delta),
-    text: annotation.text,
-    fontSize: annotation.fontSize,
-    rotationDeg: annotation.rotationDeg,
-  }
-}
-
-function stampDelta(source: SavedObjectStampPayload, anchorWorld: ScenePoint): ScenePoint {
-  return {
-    x: anchorWorld.x - source.anchor.x,
-    y: anchorWorld.y - source.anchor.y,
-  }
-}
-

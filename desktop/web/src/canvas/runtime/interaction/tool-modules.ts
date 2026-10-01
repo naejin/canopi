@@ -10,17 +10,9 @@ import type {
 import type { SpeciesCacheEntry } from '../species-cache'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import {
-  createObjectStampTool,
-  createObjectStampToolAdapter,
-} from './object-stamp-tool'
-import {
   createMeasurementGuideTool,
   createMeasurementGuideToolAdapter,
 } from './measurement-guide-tool'
-import {
-  createSavedObjectStampTool,
-  createSavedObjectStampToolAdapter,
-} from './saved-object-stamp-tool'
 import type {
   SceneToolAdapter,
 } from './tool-adapter'
@@ -51,7 +43,8 @@ export interface SceneToolRegistryContext {
   /** Focus the map host, as after a gesture ends from a field it opened. */
   readonly focusHost: () => void
   readonly applySnapping: (point: ScenePoint) => ScenePoint
-  /** Settings › Keyboard › Single-key shortcuts, for the stamp's `[` and `]`. */
+  /** Unread since the stamps left for tools/registry.ts (their `[` and `]` are the keyboard port's); scene-interaction.ts
+   *  passes it until it goes at the end of 0B. */
   readonly readSingleKeyShortcuts: () => boolean
   readonly notifyTransientHistoryChange: () => void
   /** A tool's guidance changed outside a map event (a note field closed). */
@@ -72,7 +65,6 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
   }
 
   try {
-    const rotationKeys = { container: context.container, readSingleKeyShortcuts: context.readSingleKeyShortcuts }
     const textTool = own(createTextAnnotationTool({
       container: context.container,
       focusHost: context.focusHost,
@@ -95,26 +87,6 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
       notifyTransientHistoryChange: context.notifyTransientHistoryChange,
     }), (tool) => tool.dispose())
     const zoneDrawingAdapters = createZoneDrawingToolAdapters(zoneDrawingTool)
-    const objectStampTool = own(createObjectStampTool({
-      preview: context.preview,
-      getLocalizedCommonNames: context.getLocalizedCommonNames,
-      camera: context.camera,
-      getSceneStore: context.getSceneStore,
-      getSpeciesCache: context.getSpeciesCache,
-      getPlantPresentationContext: context.getPlantPresentationContext,
-      sceneEdits: context.sceneEdits,
-      applySnapping: context.applySnapping,
-    }), (tool) => tool.dispose())
-    const savedObjectStampTool = own(createSavedObjectStampTool({
-      preview: context.preview,
-      camera: context.camera,
-      getSceneStore: context.getSceneStore,
-      getPlantPresentationContext: context.getPlantPresentationContext,
-      sceneEdits: context.sceneEdits,
-      applySnapping: context.applySnapping,
-      switchTool: context.switchTool,
-      rotationKeys,
-    }), (tool) => tool.dispose())
     const measurementGuideTool = own(createMeasurementGuideTool({
       container: context.container,
       preview: context.preview,
@@ -131,14 +103,6 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
       ['rectangle', zoneDrawingAdapters.rectangle],
       ['ellipse', zoneDrawingAdapters.ellipse],
       ['polygon', zoneDrawingAdapters.polygon],
-      ['object-stamp', createObjectStampToolAdapter(objectStampTool, {
-        switchTool: context.switchTool,
-        rotationKeys,
-      })],
-      ['saved-object-stamp', createSavedObjectStampToolAdapter(savedObjectStampTool, {
-        switchTool: context.switchTool,
-        rotationKeys,
-      })],
     ]))
     rollback.length = 0
     return registry

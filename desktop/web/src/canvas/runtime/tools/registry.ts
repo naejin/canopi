@@ -5,9 +5,11 @@
 // and the host's shared duties switch on it (spec §1.4, "The legacy bridge").
 
 import type { ToolId } from '../interaction-types'
+import { createObjectStampTool } from './object-stamp'
 import { createPanTool } from './pan'
 import { createPlantRowTool } from './plant-row'
 import { createPlantStampTool } from './plant-stamp'
+import { createSavedObjectStampTool } from './saved-object-stamp'
 import type { CanvasTool } from './tool'
 
 export type ToolFactory = () => CanvasTool
@@ -16,4 +18,6 @@ export const TOOL_REGISTRY: Readonly<Partial<Record<ToolId, ToolFactory>>> = Obj
   hand: createPanTool,
   'plant-stamp': createPlantStampTool,
   'plant-spacing': createPlantRowTool,
+  'object-stamp': createObjectStampTool,
+  'saved-object-stamp': createSavedObjectStampTool,
 })

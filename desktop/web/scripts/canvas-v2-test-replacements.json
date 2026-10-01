@@ -381,5 +381,77 @@
   "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > rolls back partial 'Plant Spacing tool' resources when a later append fails": {
     "file": "src/canvas/runtime/tools/plant-row.test.ts",
     "name": "Plant a row tool > a hover previews the row and a press commits it as one Scene Edit"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > ignores Measurement Guides in Object Stamp sampling and placement": {
+    "file": "src/canvas/runtime/tools/object-stamp.test.ts",
+    "name": "object stamp tool > ignores Measurement Guides in Object Stamp sampling and placement"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > samples a placed plant with Object Stamp and places anchored clones": {
+    "file": "src/canvas/runtime/tools/object-stamp.test.ts",
+    "name": "object stamp tool > the first click picks, the next places"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > snaps Object Stamp placement by the sampled plant anchor": {
+    "file": "src/canvas/runtime/tools/object-stamp.test.ts",
+    "name": "object stamp tool > snaps Object Stamp placement by the sampled plant anchor"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > clears loaded Object Stamp source when changing tools": {
+    "file": "src/canvas/runtime/tools/object-stamp.test.ts",
+    "name": "object stamp tool > clears loaded Object Stamp source when changing tools"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > clears loaded Object Stamp preview on session dispose": {
+    "file": "src/canvas/runtime/tools/object-stamp.test.ts",
+    "name": "object stamp tool > clears loaded Object Stamp preview on dispose"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > blocks Object Stamp sampling and placement for locked or hidden plant sources": {
+    "file": "src/canvas/runtime/tools/object-stamp.test.ts",
+    "name": "object stamp tool > blocks Object Stamp sampling and placement for locked or hidden plant sources"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > samples a zone with Object Stamp and places anchored collision-safe clones": {
+    "file": "src/canvas/runtime/tools/object-stamp.test.ts",
+    "name": "object stamp tool > samples a zone with Object Stamp and places anchored collision-safe clones"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > samples a linear zone with Object Stamp and places anchored clones": {
+    "file": "src/canvas/runtime/tools/object-stamp.test.ts",
+    "name": "object stamp tool > samples a linear zone with Object Stamp and places anchored clones"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > samples an annotation with Object Stamp and places anchored clones with fresh ids": {
+    "file": "src/canvas/runtime/tools/object-stamp.test.ts",
+    "name": "object stamp tool > samples an annotation with Object Stamp and places anchored clones with fresh ids"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > snaps Object Stamp placement by the sampled annotation anchor": {
+    "file": "src/canvas/runtime/tools/object-stamp.test.ts",
+    "name": "object stamp tool > snaps Object Stamp placement by the sampled annotation anchor"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > preserves elliptical zone radii when stamping zones": {
+    "file": "src/canvas/runtime/tools/object-stamp.test.ts",
+    "name": "object stamp tool > preserves elliptical zone radii when stamping zones"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > blocks Object Stamp sampling and placement for locked or hidden zone and annotation sources": {
+    "file": "src/canvas/runtime/tools/object-stamp.test.ts",
+    "name": "object stamp tool > blocks Object Stamp sampling and placement for locked or hidden zone and annotation sources"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > samples an object group with Object Stamp and places cloned members with remapped group membership": {
+    "file": "src/canvas/runtime/tools/object-stamp.test.ts",
+    "name": "object stamp tool > samples an object group with Object Stamp and places cloned members with remapped group membership"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > blocks Object Stamp sampling and placement for locked group sources or locked group layers": {
+    "file": "src/canvas/runtime/tools/object-stamp.test.ts",
+    "name": "object stamp tool > blocks Object Stamp sampling and placement for locked group sources or locked group layers"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > blocks Object Stamp sampling and placement for group sources containing locked members": {
+    "file": "src/canvas/runtime/tools/object-stamp.test.ts",
+    "name": "object stamp tool > blocks Object Stamp sampling and placement for group sources containing locked members"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > places Saved Object Stamps with full ghost preview and selected unlocked copies": {
+    "file": "src/canvas/runtime/tools/saved-object-stamp.test.ts",
+    "name": "saved object stamp tool > places Saved Object Stamps with full ghost preview and selected unlocked copies"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > stamp rotation > turns a held saved stamp by 15° with ] and [, in its preview and in the objects it places": {
+    "file": "src/canvas/runtime/tools/saved-object-stamp.test.ts",
+    "name": "saved object stamp tool > stamp rotation > turns a held saved stamp by 15° with ] and [, in its preview and in the objects it places"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > blocks Saved Object Stamp placement when any target Layer is locked": {
+    "file": "src/canvas/runtime/tools/saved-object-stamp.test.ts",
+    "name": "saved object stamp tool > blocks Saved Object Stamp placement when any target Layer is locked"
   }
 }

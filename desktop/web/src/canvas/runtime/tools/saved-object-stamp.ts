@@ -1,0 +1,328 @@
+// canvas/runtime/tools/saved-object-stamp.ts
+//
+// Owns the saved stamp tool (spec §3.2) and the placement code the ToolHost's drop route calls for a Favorites drop (spec
+// §1.4 "Drops", 0B-4). The stamp arrives as the tool's source (the session bridges the saved-stamp read model); a press
+// places it once with its anchor at the snapped point, turned by the held angle, as one 'interaction-saved-object-stamp'
+// edit that selects the copies, then returns to Select, whose leaving drops the stamp from the read model. Its ghost
+// follows the pointer and stays when the pointer leaves the map. `[` and `]` turn it (rotate-held commands); another stamp
+// starts upright; Esc leaves for Select at once under LEGACY (spec §3.7). A release, another stamp and every cancellation
+// (a blur, the tool armed again, overview) hide the ghost until the next hover and keep the stamp, as today's pointerup and
+// cancellation hid the preview; a re-origin keeps a shown ghost on its ground. The ghosts come from tools/stamp-rotation.ts.
+
+import type { SavedObjectStampPayload } from '../../saved-object-stamp-payload'
+import type { SceneAnnotationEntity, ScenePlantEntity, SceneZoneEntity } from '../scene/types'
+import {
+  createSceneArrangementPlacement,
+  type SceneArrangementTemplate,
+  translatePoint,
+  translateZonePoints,
+} from '../scene-runtime/arrangement-placement'
+import type { SceneEditCoordinator } from '../scene-runtime/transactions'
+import type { WorldPoint } from '../view/types'
+import type { DraftShape } from './draft'
+import {
+  rotateArrangementTemplate,
+  rotateStampEntities,
+  stampGhostShapes,
+  turnStampRotation,
+  type StampEntities,
+} from './stamp-rotation'
+import type { CanvasTool, ToolContext, ToolScene, ToolSource } from './tool'
+
+const ORIGIN: WorldPoint = Object.freeze({ x: 0, y: 0 })
+
+type StampScene = Pick<ToolScene, 'isLayerOpenForCreation'>
+
+export function createSavedObjectStampTool(): CanvasTool {
+  let ctx: ToolContext | null = null
+  let stamp: SavedObjectStampPayload | null = null
+  let rotationDeg = 0
+  /** Where the ghost's anchor was last drawn: `[` and `]` redraw it there. */
+  let lastAnchor: WorldPoint | null = null
+  /** Whether the ghost is drawn now (a release or a cancellation hides it until the next hover). */
+  let ghostShown = false
+
+  function context(): ToolContext {
+    if (!ctx) throw new Error('The saved stamp tool is not active.')
+    return ctx
+  }
+
+  /** The stamp held now; choosing another stamp starts it upright. True when the stamp changed. */
+  function hold(source: ToolSource | null): boolean {
+    const next = source?.kind === 'saved-stamp' ? source.stamp : null
+    if (next === stamp) return false
+    rotationDeg = 0
+    stamp = next
+    return true
+  }
+
+  function publishGuidance(): void {
+    context().effects.setGuidance({ stampRotationDeg: stamp ? rotationDeg : null })
+  }
+
+  function showGhostAt(at: WorldPoint): void {
+    lastAnchor = at
+    const { effects, scene } = context()
+    const shapes = stamp ? savedObjectStampGhostShapes(scene, stamp, at, rotationDeg) : null
+    ghostShown = shapes !== null
+    effects.setDraft(shapes ? { shapes } : null)
+  }
+
+  function hideGhost(): void {
+    ghostShown = false
+    context().effects.setDraft(null)
+  }
+
+  function place(at: WorldPoint): void {
+    const held = stamp
+    if (!held) return
+    const { effects, scene } = context()
+    placeSavedObjectStamp(effects.edits, scene, held, at, {
+      rotationDeg,
+      onCommitted: () => {
+        // One placement, then Select: leaving the tool drops the stamp from the read model (the session's).
+        stamp = null
+        lastAnchor = null
+        hideGhost()
+        effects.requestTool('select')
+      },
+    })
+  }
+
+  function reset(): void {
+    stamp = null
+    rotationDeg = 0
+    lastAnchor = null
+    ghostShown = false
+  }
+
+  return {
+    id: 'saved-object-stamp',
+    activate(next, source) {
+      ctx = next
+      reset()
+      hold(source)
+      publishGuidance()
+    },
+    sourceChanged(source) {
+      // A ghost shows only the stamp it was drawn for: the new one shows at the next hover (Favorites arms the tool again,
+      // whose cancellation hid today's preview). `[` and `]` still draw it at the last anchor, as today's rotateBy did.
+      if (hold(source) && ghostShown) hideGhost()
+      publishGuidance()
+    },
+    gesture(g) {
+      switch (g.kind) {
+        case 'press':
+          place(g.point.snapped)
+          return 'handled'
+        case 'hover':
+        case 'drag-start':
+        case 'drag-move':
+          // While a stamp is held the ghost is the hover: the passive hover stays off.
+          if (!stamp) return 'pass'
+          showGhostAt(g.point.snapped)
+          return 'handled'
+        case 'tap':
+        case 'drag-end':
+          // A press that placed nothing keeps the stamp; the release hides the ghost until the next hover (today's
+          // pointerup ran the cancellation).
+          if (ghostShown) hideGhost()
+          return 'pass'
+        default:
+          // The ghost stays when the pointer leaves the map, and a cancelled press leaves it too: today's stamp press let
+          // go of the pointer gesture, so a pointercancel or a lost capture after it cancelled nothing.
+          return 'pass'
+      }
+    },
+    command(c) {
+      if (c.kind === 'rotate-held') {
+        if (!stamp) return 'pass'
+        rotationDeg = turnStampRotation(rotationDeg, c.stepDeg)
+        if (lastAnchor) showGhostAt(lastAnchor)
+        publishGuidance()
+        return 'handled'
+      }
+      if (c.kind === 'escape') {
+        // Under LEGACY Esc leaves for Select at once, even mid-press (spec §3.7; phase 2 drops the stamp first).
+        context().effects.requestTool('select')
+        return 'handled'
+      }
+      return 'pass'
+    },
+    planeChanged(reproject) {
+      // A re-origin moves the ground under the last anchor: the ghost stays where it stood, also with the pointer off the
+      // map, where the host re-emits nothing. The stamp's objects are placed by their offsets from its anchor.
+      if (!lastAnchor) return
+      lastAnchor = reproject(lastAnchor)
+      if (ghostShown) showGhostAt(lastAnchor)
+    },
+    hasTransient: () => false,
+    escapeHint: () => 'leave-tool',
+    cancelTransient() {
+      // The stamp and its angle outlive every cancellation, as today; each hides the ghost until the next hover, as today's
+      // cancellation and overview reset hid the preview element.
+      if (ghostShown) hideGhost()
+    },
+    deactivate() {
+      reset()
+      ctx?.effects.setDraft(null)
+    },
+  }
+}
+
+/** Whether the saved stamp can be placed now: it holds an object, and every layer it adds to is visible and unlocked. */
+export function canPlaceSavedObjectStamp(scene: StampScene, stamp: SavedObjectStampPayload): boolean {
+  if (stamp.plants.length + stamp.zones.length + stamp.annotations.length === 0) return false
+  return requiredLayers(stamp).every((layer) => scene.isLayerOpenForCreation(layer))
+}
+
+/**
+ * The saved stamp's objects with its anchor at `at`, turned by `rotationDeg` about it: where a placement puts them (the
+ * ghosts draw these).
+ */
+export function savedObjectStampEntities(
+  stamp: SavedObjectStampPayload,
+  at: WorldPoint,
+  rotationDeg = 0,
+): StampEntities {
+  const delta = stampDelta(stamp, at)
+  return rotateStampEntities({
+    plants: stamp.plants.map((plant) => scenePlantFromSavedPlant(plant, delta)),
+    zones: stamp.zones.map((zone) => sceneZoneFromSavedZone(zone, delta)),
+    annotations: stamp.annotations.map((annotation) => sceneAnnotationFromSavedAnnotation(annotation, delta)),
+  }, at, rotationDeg)
+}
+
+/**
+ * The saved stamp's ghosts with its anchor at `at` (a snapped point), turned by `rotationDeg`; null when it cannot be
+ * placed there. The tool's preview, and the drop route's dragover preview (a drop is level in phase 0).
+ */
+export function savedObjectStampGhostShapes(
+  scene: StampScene,
+  stamp: SavedObjectStampPayload,
+  at: WorldPoint,
+  rotationDeg = 0,
+): DraftShape[] | null {
+  if (!canPlaceSavedObjectStamp(scene, stamp)) return null
+  return stampGhostShapes(savedObjectStampEntities(stamp, at, rotationDeg), at, rotationDeg)
+}
+
+/**
+ * Places the saved stamp with its anchor at `at` (snapped by the caller), turned by `rotationDeg`, as one
+ * 'interaction-saved-object-stamp' edit that selects the copies; false when it cannot be placed or the edit did not
+ * commit. The tool's press, and the drop route's drop (level in phase 0).
+ */
+export function placeSavedObjectStamp(
+  edits: SceneEditCoordinator,
+  scene: StampScene,
+  stamp: SavedObjectStampPayload,
+  at: WorldPoint,
+  options: { readonly rotationDeg?: number; readonly onCommitted?: () => void } = {},
+): boolean {
+  if (!canPlaceSavedObjectStamp(scene, stamp)) return false
+  return createSceneArrangementPlacement({ sceneEdits: edits }).place({
+    template: rotateArrangementTemplate(savedObjectStampArrangementTemplate(stamp), stamp.anchor, options.rotationDeg ?? 0),
+    translateBy: stampDelta(stamp, at),
+    historyType: 'interaction-saved-object-stamp',
+    onCommitted: options.onCommitted,
+  }).committed
+}
+
+function requiredLayers(stamp: SavedObjectStampPayload): string[] {
+  const layers: string[] = []
+  if (stamp.plants.length > 0) layers.push('plants')
+  if (stamp.zones.length > 0) layers.push('zones')
+  if (stamp.annotations.length > 0) layers.push('annotations')
+  return layers
+}
+
+function savedObjectStampArrangementTemplate(stamp: SavedObjectStampPayload): SceneArrangementTemplate {
+  return {
+    plants: stamp.plants.map((plant) => ({
+      sourceId: plant.id,
+      entity: scenePlantFromSavedPlant(plant, ORIGIN),
+    })),
+    zones: stamp.zones.map((zone) => ({
+      sourceId: zone.id,
+      entity: sceneZoneFromSavedZone(zone, ORIGIN),
+    })),
+    annotations: stamp.annotations.map((annotation) => ({
+      sourceId: annotation.id,
+      entity: sceneAnnotationFromSavedAnnotation(annotation, ORIGIN),
+    })),
+    measurementGuides: [],
+    groups: stamp.groups.map((group) => ({
+      sourceId: group.id,
+      entity: {
+        kind: 'group',
+        id: group.id,
+        locked: false,
+        name: group.name,
+        members: group.members.map((member) => ({ ...member })),
+      },
+    })),
+  }
+}
+
+function scenePlantFromSavedPlant(
+  plant: SavedObjectStampPayload['plants'][number],
+  delta: WorldPoint,
+): ScenePlantEntity {
+  return {
+    kind: 'plant',
+    id: plant.id,
+    locked: false,
+    canonicalName: plant.canonicalName,
+    commonName: plant.commonName,
+    color: plant.color,
+    symbol: plant.symbol ?? null,
+    stratum: null,
+    canopySpreadM: plant.scale,
+    position: translatePoint(plant.position, delta),
+    rotationDeg: plant.rotationDeg,
+    notes: null,
+    plantedDate: null,
+    quantity: null,
+    pinnedName: false,
+  }
+}
+
+function sceneZoneFromSavedZone(
+  zone: SavedObjectStampPayload['zones'][number],
+  delta: WorldPoint,
+): SceneZoneEntity {
+  return {
+    kind: 'zone',
+    id: zone.id,
+    name: zone.name,
+    locked: false,
+    zoneType: zone.zoneType,
+    points: translateZonePoints(zone, delta),
+    rotationDeg: zone.rotationDeg,
+    fillColor: zone.fillColor,
+    notes: null,
+  }
+}
+
+function sceneAnnotationFromSavedAnnotation(
+  annotation: SavedObjectStampPayload['annotations'][number],
+  delta: WorldPoint,
+): SceneAnnotationEntity {
+  return {
+    kind: 'annotation',
+    id: annotation.id,
+    locked: false,
+    annotationType: annotation.annotationType,
+    position: translatePoint(annotation.position, delta),
+    text: annotation.text,
+    fontSize: annotation.fontSize,
+    rotationDeg: annotation.rotationDeg,
+  }
+}
+
+function stampDelta(stamp: SavedObjectStampPayload, at: WorldPoint): WorldPoint {
+  return {
+    x: at.x - stamp.anchor.x,
+    y: at.y - stamp.anchor.y,
+  }
+}
