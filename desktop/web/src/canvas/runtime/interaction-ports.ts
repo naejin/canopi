@@ -187,17 +187,11 @@ export interface ToolHost {
   readonly activeTool: ReadonlySignal<ToolId>
   /** The active tool's dragSlopPx, sent in the recogniser's configure on every tool change. */
   activeToolDragSlopPx(): number | null
-  /** Asked by the session before it routes the events today's handlers retried on (a primary or middle press on the map, a
-   *  pointerup, a pointercancel, a wheel not over a handle, the note editor or the Unlock affordance, a native contextmenu,
-   *  a key): true while a failed cancellation was pending and has now been retried, so the event is quarantined (today's
-   *  app-wide swallow). Moves, leaves, lost captures, blurs and ruler presses are never fenced. A dragover and a drop retry
-   *  in the host's own drop route, before their admission (a drop after it has cleared the drop preview). */
-  retryPendingCancellation(): boolean
   /**
    * Presses the host never sees as gestures: the session calls it for every raw pointerdown on the map host before routing it
    * (from the source's raw input, not a gesture; the down's role, 'auxiliary' as 'middle'). Commits the nudge series for any
    * button. For an admitted primary or middle press outside the text entry ('owned-text') and the Unlock affordance, with no
-   * live press from another pointer id and no pending cancellation, it also closes the canvas menu and focuses the map (so an open text
+   * live press from another pointer id, it also closes the canvas menu and focuses the map (so an open text
    * entry commits on its blur): today's _onPointerDown conditions.
    */
   rawPress(button: 'primary' | 'secondary' | 'middle', target: TargetClass, pointerId?: number): void
@@ -244,7 +238,7 @@ export interface ToolHost {
    * Today's _cancelInterruptedInteraction, which the session calls on window blur after feeding the recogniser (which releases
    * Space and ends the live sessions): commits the nudge series, clears the passive hover, the tooltip and the locked
    * affordance, calls the active tool's cancelTransient('navigate') (a tool that keeps its draft through a pan keeps it
-   * here too) and resets the cursor to the tool's. A failure leaves the cancellation pending (retryPendingCancellation).
+   * here too) and resets the cursor to the tool's. A failure aborts whatever Scene Edit was still open.
    */
   interrupted(): void
   /** Transient history (today's canUndo/…TransientHistory): sends the active tool the 'undo-transient' and 'redo-transient' commands and

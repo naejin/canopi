@@ -31,7 +31,6 @@ interface Fixture {
     menuAt: ReturnType<typeof vi.fn>
     endNudgeSeries: ReturnType<typeof vi.fn>
     interrupted: ReturnType<typeof vi.fn>
-    retryPendingCancellation: ReturnType<typeof vi.fn>
   }
   readonly legacy: LegacyKeySession & { [K in keyof LegacyKeySession]: LegacyKeySession[K] }
   readonly navigation: { panByPx: ReturnType<typeof vi.fn>; zoomIn: ReturnType<typeof vi.fn>; zoomOut: ReturnType<typeof vi.fn>; resetNorth: ReturnType<typeof vi.fn>; rotateBy: ReturnType<typeof vi.fn> }
@@ -53,7 +52,6 @@ function fixture(options: { readonly tool?: ToolId; readonly reply?: (c: ToolCom
       state.nudging = false
     }),
     interrupted: vi.fn(),
-    retryPendingCancellation: vi.fn(() => false),
   }
   const hostFake = {
     ...toolHost,
@@ -220,20 +218,6 @@ describe('createCanvasKeyboardPort', () => {
     key(f.port, { key: 'Escape' })
     expect(f.legacy.clearSelection).toHaveBeenCalledTimes(1)
     expect(key(f.port, { key: 'Escape' }).defaultPrevented).toBe(false)
-  })
-
-  it('a pending failed cancellation swallows the key before anything else for a registered tool', () => {
-    const f = fixture()
-    f.selected = true
-    f.toolHost.retryPendingCancellation.mockReturnValueOnce(true)
-    const listener = vi.fn()
-    host.addEventListener('keydown', listener)
-    const event = new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true })
-    host.addEventListener('keydown', (e) => f.port.keydown(e), { capture: true })
-    host.dispatchEvent(event)
-    expect(event.defaultPrevented).toBe(true)
-    expect(listener).not.toHaveBeenCalled()
-    expect(f.toolHost.nudge).not.toHaveBeenCalled()
   })
 
   it('Space holds for panning once, keeps it in fields, and keyup releases it', () => {

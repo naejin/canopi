@@ -4374,7 +4374,7 @@ describe('SceneInteractionSession', () => {
   )
 
   it.each(['Rotation Handle', 'Zone Control Point', 'Measurement Guide Control Point'] as const)(
-    'keeps the %s transaction reachable when abort fails',
+    'rolls the %s transaction back at once when its first abort fails',
     (kind) => {
       const designObjectId = kind === 'Measurement Guide Control Point' ? 'measurement-guide-1' : 'zone-1'
       if (kind !== 'Measurement Guide Control Point') {
@@ -4436,42 +4436,28 @@ describe('SceneInteractionSession', () => {
 
       expect(errors).toHaveLength(1)
       expect(errors[0]).toEqual(expect.objectContaining({ message: `${kind} abort failed` }))
-      expect(abortFailure.abortCalls()).toBe(1)
-      expect(abortFailure.beginCalls()).toBe(1)
-      expect(abortFailure.beginTypes()).toEqual([editType])
-      expect(store.persisted).not.toEqual(persistedBefore)
-      // While the failed cancellation is pending, Select shows no handles (today's _canShowSelectAffordances).
-      expect(container.querySelector('[data-canvas-handle]')).toBeNull()
-
-      events.pointerDown(start, { pointerId: 25 })
-
+      // The host's own retry inside the same cancellation has already rolled the edit back: nothing is left open.
       expect(abortFailure.abortCalls()).toBe(2)
       expect(abortFailure.beginCalls()).toBe(1)
       expect(abortFailure.beginTypes()).toEqual([editType])
       expect(store.persisted).toEqual(persistedBefore)
-      // The retry settled it: the handles are back, none marked as dragged.
+      // The handles are back at once, none marked as dragged.
       expect(container.querySelector('[data-canvas-handle]')).not.toBeNull()
       expect(container.querySelector('[data-canvas-handle-active]')).toBeNull()
 
-      events.pointerMove(end, { pointerId: 25 })
-      events.pointerUp(end, { pointerId: 25 })
-
-      expect(abortFailure.beginTypes()).toEqual([editType])
-      expect(store.persisted).toEqual(persistedBefore)
-
+      // A fresh drag on the restored handle is an ordinary press: no retry fencing left to admit it through.
       const freshHandle = kind === 'Rotation Handle'
         ? rotationHandle(container)!
         : kind === 'Zone Control Point'
           ? zoneControlPoint(container, 'rect-corner', 2)!
           : measurementGuideControlPoint(container, 1)!
-      events.pointerDown(start, { pointerId: 26, target: freshHandle })
-
+      events.pointerDown(start, { pointerId: 25, target: freshHandle })
       expect(abortFailure.beginTypes()).toEqual([editType, editType])
-      events.pointerCancel(start, { pointerId: 26 })
-      expect(abortFailure.abortCalls()).toBe(3)
-      expect(store.persisted).toEqual(persistedBefore)
+      events.pointerMove(end, { pointerId: 25 })
+      events.pointerUp(end, { pointerId: 25 })
+      expect(store.persisted).not.toEqual(persistedBefore)
       session.dispose()
-      expect(abortFailure.abortCalls()).toBe(3)
+      expect(abortFailure.abortCalls()).toBe(2)
     },
   )
 
@@ -4542,7 +4528,7 @@ describe('SceneInteractionSession', () => {
     },
   )
 
-  it('retries failed shared-drag cancellation before admitting another pointerdown', () => {
+  it('a failed shared-drag cancellation is rolled back at once, admitting another pointerdown normally', () => {
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
@@ -4567,20 +4553,19 @@ describe('SceneInteractionSession', () => {
 
     expect(errors).toHaveLength(1)
     expect(errors[0]).toEqual(expect.objectContaining({ message: 'shared drag abort failed' }))
-    expect(abortFailure.abortCalls()).toBe(1)
+    // The host's own retry inside the same cancellation has already rolled the edit back.
+    expect(abortFailure.abortCalls()).toBe(2)
     expect(abortFailure.beginCalls()).toBe(1)
-    expect(store.persisted).not.toEqual(persistedBefore)
+    expect(store.persisted).toEqual(persistedBefore)
 
     events.pointerDown({ x: 40, y: 50 }, { pointerId: 27 })
 
     expect(abortFailure.abortCalls()).toBe(2)
-    expect(abortFailure.beginCalls()).toBe(1)
-    expect(store.persisted).toEqual(persistedBefore)
     session.dispose()
     expect(abortFailure.abortCalls()).toBe(2)
   })
 
-  it('retries failed shared-drag cancellation instead of committing on a later pointerup', () => {
+  it('a failed shared-drag cancellation is rolled back at once, admitting a later pointerup normally', () => {
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
@@ -4605,19 +4590,21 @@ describe('SceneInteractionSession', () => {
 
     expect(errors).toHaveLength(1)
     expect(errors[0]).toEqual(expect.objectContaining({ message: 'shared drag abort failed' }))
-    expect(abortFailure.abortCalls()).toBe(1)
-    expect(abortFailure.beginCalls()).toBe(1)
-
-    events.pointerUp({ x: 40, y: 50 }, { pointerId: 28 })
-
     expect(abortFailure.abortCalls()).toBe(2)
     expect(abortFailure.beginCalls()).toBe(1)
     expect(store.persisted).toEqual(persistedBefore)
+
+    events.pointerUp({ x: 40, y: 50 }, { pointerId: 28 })
+
+    // The tool's own transaction reference survived its first, throwing abort; released outside the tool, it is
+    // asked to cancel again, and this abort is a harmless no-op on the already-closed transaction.
+    expect(abortFailure.abortCalls()).toBe(3)
+    expect(store.persisted).toEqual(persistedBefore)
     session.dispose()
-    expect(abortFailure.abortCalls()).toBe(2)
+    expect(abortFailure.abortCalls()).toBe(3)
   })
 
-  it('retries failed shared-drag cancellation instead of admitting a plant drop', () => {
+  it('a failed shared-drag cancellation is rolled back at once, admitting a later plant drop normally', () => {
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
@@ -4638,6 +4625,8 @@ describe('SceneInteractionSession', () => {
       events.pointerCancel({ x: 40, y: 50 }, { pointerId: 29 })
     })
     expect(errors).toHaveLength(1)
+    expect(abortFailure.abortCalls()).toBe(2)
+    expect(store.persisted).toEqual(persistedBefore)
 
     const dragData = new Map<string, string>()
     const dataTransfer = {
@@ -4668,49 +4657,42 @@ describe('SceneInteractionSession', () => {
 
     container.dispatchEvent(dropEvent)
 
+    // Nothing is left pending: the drop is admitted and places the pear.
     expect(dropEvent.defaultPrevented).toBe(true)
     expect(abortFailure.abortCalls()).toBe(2)
     expect(abortFailure.beginCalls()).toBe(1)
-    expect(store.persisted).toEqual(persistedBefore)
+    expect(store.persisted.plants).toHaveLength(2)
+    // The tool's own transaction reference survived its first, throwing abort; disposal asks it to cancel again, a
+    // harmless no-op on the already-closed transaction.
     session.dispose()
-    expect(abortFailure.abortCalls()).toBe(2)
+    expect(abortFailure.abortCalls()).toBe(3)
   })
 
-  it('quarantines failed cancellation before earlier global keyboard shortcuts', () => {
+  it('a failed cancellation is rolled back at once, with no key swallowed for a later shortcut', () => {
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
-    const shortcut = vi.fn()
-    window.addEventListener('keydown', shortcut)
-    try {
-      const baseDeps = createInteractionDeps(container, store, camera)
-      const abortFailure = createAbortFailingSceneEdits(
-        baseDeps.sceneEdits,
-        'interaction-drag',
-        'shared drag abort failed',
-      )
-      const deps: SceneInteractionSessionDeps = { ...baseDeps, sceneEdits: abortFailure.sceneEdits }
-      const session = createTestSession(deps)
-      session.setTool('select')
-      const persistedBefore = store.snapshot().persisted
+    const baseDeps = createInteractionDeps(container, store, camera)
+    const abortFailure = createAbortFailingSceneEdits(
+      baseDeps.sceneEdits,
+      'interaction-drag',
+      'shared drag abort failed',
+    )
+    const deps: SceneInteractionSessionDeps = { ...baseDeps, sceneEdits: abortFailure.sceneEdits }
+    const session = createTestSession(deps)
+    session.setTool('select')
+    const persistedBefore = store.snapshot().persisted
 
-      events.pointerDown({ x: 20, y: 30 }, { pointerId: 30 })
-      events.pointerMove({ x: 40, y: 50 }, { pointerId: 30 })
-      const errors = captureWindowErrors(() => {
-        events.pointerCancel({ x: 40, y: 50 }, { pointerId: 30 })
-      })
-      expect(errors).toHaveLength(1)
-
-      const keydown = events.keyDown({ key: 'Delete', code: 'Delete' })
-
-      expect(keydown.defaultPrevented).toBe(true)
-      expect(shortcut).not.toHaveBeenCalled()
-      expect(abortFailure.abortCalls()).toBe(2)
-      expect(store.persisted).toEqual(persistedBefore)
-      session.dispose()
-    } finally {
-      window.removeEventListener('keydown', shortcut)
-    }
+    events.pointerDown({ x: 20, y: 30 }, { pointerId: 30 })
+    events.pointerMove({ x: 40, y: 50 }, { pointerId: 30 })
+    const errors = captureWindowErrors(() => {
+      events.pointerCancel({ x: 40, y: 50 }, { pointerId: 30 })
+    })
+    expect(errors).toHaveLength(1)
+    // The host's own retry inside the same cancellation has already rolled the edit back: no key needs swallowing.
+    expect(abortFailure.abortCalls()).toBe(2)
+    expect(store.persisted).toEqual(persistedBefore)
+    session.dispose()
   })
 
   it('clears hover when disposed', () => {

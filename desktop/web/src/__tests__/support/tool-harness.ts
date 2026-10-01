@@ -193,9 +193,9 @@ export function createToolSceneSource(store: SceneStore, options: ToolSceneSourc
 // createToolHarness runs gesture scripts through a real createToolHost, with the input router in front of it and a
 // recording ToolHostDeps behind it. The scripts send what the LEGACY recogniser emits (slop 0: any movement after a press
 // is a drag) and do what interaction-session.ts does around it: they report each raw press (a primary press, and the
-// right press before a mouse menu) through rawPress before routing, ask retryPendingCancellation before routing (drops
-// retry in the host's own drop route), take a press's capture when the host asks (capturePress, recorded), end a session
-// the host rejected, end the nudge series on focus-out and call interrupted after a blur. Tools come from
+// right press before a mouse menu) through rawPress before routing, take a press's capture when the host asks
+// (capturePress, recorded), end a session the host rejected, end the nudge series on focus-out and call interrupted
+// after a blur. Tools come from
 // tools/registry.ts, which a test replaces through vi.mock('…/tools/registry', () => ({ TOOL_REGISTRY: {} })) and fills
 // with useStubTools.
 
@@ -604,30 +604,9 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
     return submitTextEntry(entry)
   }
 
-  /**
-   * The session's routing: a failed cancellation is retried (and the event quarantined) before the gesture of an event
-   * today's handlers retried on is routed (a press on the map, a release, a pointercancel, a wheel, a menu); hovers, drags,
-   * blurs, lost captures and ruler presses go straight on, and dragovers and drops retry in the host's drop route
-   * (interaction-session.ts, retriesPendingCancellation).
-   */
+  /** The session's routing: every gesture goes straight to the router. */
   function route(g: Gesture): GestureOutcome {
-    if (retriedOn(g) && host.retryPendingCancellation()) {
-      return g.kind === 'press' ? { quarantine: true, rejectSession: true } : { quarantine: true }
-    }
     return router.route(g)
-  }
-
-  function retriedOn(g: Gesture): boolean {
-    switch (g.kind) {
-      case 'press': return g.target.kind !== 'ruler'
-      case 'tap':
-      case 'drag-end':
-      case 'menu-request':
-      case 'zoom': return true
-      case 'pan': return g.source === 'wheel'
-      case 'cancel': return g.reason === 'pointercancel'
-      default: return false
-    }
   }
 
   const harness: ToolHarness = {

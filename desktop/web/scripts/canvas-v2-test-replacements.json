@@ -446,9 +446,9 @@
     "file": "src/canvas/runtime/tools/saved-object-stamp.test.ts",
     "name": "saved object stamp tool > places Saved Object Stamps with full ghost preview and selected unlocked copies"
   },
-  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > stamp rotation > turns a held saved stamp by 15° with ] and [, in its preview and in the objects it places": {
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > stamp rotation > turns a held saved stamp by 15\u00b0 with ] and [, in its preview and in the objects it places": {
     "file": "src/canvas/runtime/tools/saved-object-stamp.test.ts",
-    "name": "saved object stamp tool > stamp rotation > turns a held saved stamp by 15° with ] and [, in its preview and in the objects it places"
+    "name": "saved object stamp tool > stamp rotation > turns a held saved stamp by 15\u00b0 with ] and [, in its preview and in the objects it places"
   },
   "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > blocks Saved Object Stamp placement when any target Layer is locked": {
     "file": "src/canvas/runtime/tools/saved-object-stamp.test.ts",
@@ -480,7 +480,7 @@
   },
   "src/__tests__/control-point-overlay.test.ts > 'Zone' Control Point adapter shared lifecycle > retains a failed abort for cancellation retry": {
     "file": "src/canvas/runtime/tools/select/point-handle.test.ts",
-    "name": "'Zone' point handle drags > a failed abort is kept and retried before the next press"
+    "name": "'Zone' point handle drags > a failed abort is retried at once, so the edit is rolled back before the cancellation reports its error"
   },
   "src/__tests__/control-point-overlay.test.ts > 'Zone' Control Point adapter shared lifecycle > aborts a live preview and removes every owned root on disposal": {
     "file": "src/canvas/runtime/tools/select/point-handle.test.ts",
@@ -504,7 +504,7 @@
   },
   "src/__tests__/control-point-overlay.test.ts > 'Measurement Guide' Control Point adapter shared lifecycle > retains a failed abort for cancellation retry": {
     "file": "src/canvas/runtime/tools/select/point-handle.test.ts",
-    "name": "'Measurement Guide' point handle drags > a failed abort is kept and retried before the next press"
+    "name": "'Measurement Guide' point handle drags > a failed abort is retried at once, so the edit is rolled back before the cancellation reports its error"
   },
   "src/__tests__/control-point-overlay.test.ts > 'Measurement Guide' Control Point adapter shared lifecycle > aborts a live preview and removes every owned root on disposal": {
     "file": "src/canvas/runtime/tools/select/point-handle.test.ts",
@@ -538,6 +538,62 @@
     "file": "src/canvas/runtime/tools/zone-drag.test.ts",
     "name": "Zone drag tools > a tool change aborts a live drag"
   },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > retries a failed 'Rectangle' drag abort before admitting another gesture": {
+    "file": "src/__tests__/canvas-interaction-e2e.zone-drawing.test.ts",
+    "name": "SceneInteractionSession > a failed 'Rectangle' drag abort is retried at once, admitting the next gesture normally"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > retries a failed 'Measurement Guide' drag abort before admitting another gesture": {
+    "file": "src/__tests__/canvas-interaction-e2e.zone-drawing.test.ts",
+    "name": "SceneInteractionSession > a failed 'Measurement Guide' drag abort is retried at once, admitting the next gesture normally"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > quarantines pointer-up while a drag commit finishes retained publication": {
+    "file": "src/__tests__/canvas-interaction-e2e.zone-drawing.test.ts",
+    "name": "SceneInteractionSession > a pointer-up whose commit fails finishes publication at once, inside the same quarantined event"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > retries retained 'Rectangle' cleanup before admitting another drag": {
+    "file": "src/__tests__/canvas-interaction-e2e.zone-drawing.test.ts",
+    "name": "SceneInteractionSession > a retained 'Rectangle' cleanup is retried at once, leaving nothing open for the next drag"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > retries retained 'Measurement Guide' cleanup before admitting another drag": {
+    "file": "src/__tests__/canvas-interaction-e2e.zone-drawing.test.ts",
+    "name": "SceneInteractionSession > a retained 'Measurement Guide' cleanup is retried at once, leaving nothing open for the next drag"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > keeps the 'Rectangle' handle through retained post-commit backfill publication": {
+    "file": "src/__tests__/canvas-interaction-e2e.zone-drawing.test.ts",
+    "name": "SceneInteractionSession > a 'Rectangle' retained post-commit backfill failure is finished at once, with nothing left for a retry"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > keeps the 'Measurement Guide' handle through retained post-commit backfill publication": {
+    "file": "src/__tests__/canvas-interaction-e2e.zone-drawing.test.ts",
+    "name": "SceneInteractionSession > a 'Measurement Guide' retained post-commit backfill failure is finished at once, with nothing left for a retry"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > keeps the Rotation Handle transaction reachable when abort fails": {
+    "file": "src/__tests__/canvas-interaction-e2e.select.test.ts",
+    "name": "SceneInteractionSession > rolls the Rotation Handle transaction back at once when its first abort fails"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > keeps the Zone Control Point transaction reachable when abort fails": {
+    "file": "src/__tests__/canvas-interaction-e2e.select.test.ts",
+    "name": "SceneInteractionSession > rolls the Zone Control Point transaction back at once when its first abort fails"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > keeps the Measurement Guide Control Point transaction reachable when abort fails": {
+    "file": "src/__tests__/canvas-interaction-e2e.select.test.ts",
+    "name": "SceneInteractionSession > rolls the Measurement Guide Control Point transaction back at once when its first abort fails"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > retries failed shared-drag cancellation before admitting another pointerdown": {
+    "file": "src/__tests__/canvas-interaction-e2e.select.test.ts",
+    "name": "SceneInteractionSession > a failed shared-drag cancellation is rolled back at once, admitting another pointerdown normally"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > retries failed shared-drag cancellation instead of committing on a later pointerup": {
+    "file": "src/__tests__/canvas-interaction-e2e.select.test.ts",
+    "name": "SceneInteractionSession > a failed shared-drag cancellation is rolled back at once, admitting a later pointerup normally"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > retries failed shared-drag cancellation instead of admitting a plant drop": {
+    "file": "src/__tests__/canvas-interaction-e2e.select.test.ts",
+    "name": "SceneInteractionSession > a failed shared-drag cancellation is rolled back at once, admitting a later plant drop normally"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > quarantines failed cancellation before earlier global keyboard shortcuts": {
+    "file": "src/__tests__/canvas-interaction-e2e.select.test.ts",
+    "name": "SceneInteractionSession > a failed cancellation is rolled back at once, with no key swallowed for a later shortcut"
+  },
   "src/__tests__/canvas-overlay-casing.test.ts > overlay stroke casing > draws a dark casing under the polygon draft line before the light stroke": {
     "file": "src/canvas/runtime/renderers/draft-layer.test.ts",
     "name": "draft layer > a band, zone, line and polygon draft has a casing stroke of the same colour and width under it"
@@ -548,7 +604,7 @@
   },
   "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps active tool drag state generic in the Scene Interaction Session": {
     "file": "src/canvas/runtime/tools/tool-host.test.ts",
-    "name": "ToolHost > the view moving under a still pointer (plan §1, exception 1) > re-emits the drag on a camera frame"
+    "name": "ToolHost > the view moving under a still pointer (plan \u00a71, exception 1) > re-emits the drag on a camera frame"
   },
   "src/__tests__/canvas-overlay-casing.test.ts > overlay stroke casing > draws the band selection box as an ochre stroke over a casing on both sides": {
     "file": "src/canvas/runtime/renderers/draft-layer.test.ts",
