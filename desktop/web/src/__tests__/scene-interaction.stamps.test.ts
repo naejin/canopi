@@ -5,11 +5,13 @@
 // Shared fakes, helpers and fixture: support/scene-interaction-setup.ts.
 import { describe, expect, it, vi } from 'vitest'
 import {
+  beginSavedObjectStampPlacement,
   clearSavedObjectStampDragSource,
   readSavedObjectStampSource,
   selectSavedObjectStampSourceForTests,
   writeSavedObjectStampDragData,
 } from '../canvas/saved-object-stamp-source'
+import type { CanvasToolCommandSurface } from '../canvas/runtime/runtime'
 import type { CanvasToolGuidance } from '../canvas/session-state'
 import { CameraController } from '../canvas/runtime/camera'
 import type { DraftPresentation } from '../canvas/runtime/tools/draft'
@@ -169,6 +171,44 @@ describe('SceneInteractionSession', () => {
       clearSavedObjectStampDragSource()
       session.dispose()
     }
+  })
+
+  it('choosing another saved stamp in Favorites hides the held stamp\'s turned ghost until the next move, which shows the new one upright', () => {
+    selectSavedObjectStampSourceForTests({
+      version: 2,
+      anchor: { x: 0, y: 0 },
+      plants: [{
+        id: 'plant-1', canonicalName: 'Malus domestica', commonName: 'Apple', color: null, symbol: null,
+        position: { x: 10, y: 0 }, rotationDeg: null, scale: null,
+      }],
+      zones: [],
+      annotations: [],
+      groups: [],
+    })
+    const drafts: (DraftPresentation | null)[] = []
+    const ghost = () => {
+      const shape = drafts.at(-1)?.shapes.find((entry) => entry.kind === 'ghost')
+      if (shape?.kind !== 'ghost' || shape.entity.kind !== 'objects') return null
+      const { anchor, rotationDeg, template } = shape.entity
+      return { anchor, rotationDeg, plants: template.plants.map(({ entity }) => entity.canonicalName) }
+    }
+    const session = createTestSession({
+      ...createInteractionDeps(container, store, camera),
+      renderer: { setDraft: (draft) => { drafts.push(draft) }, setSelectionPreview: () => {} },
+    })
+    session.setTool('saved-object-stamp')
+    events.pointerMove({ x: 100, y: 100 }, { buttons: 0 })
+    events.keyDown({ key: ']', target: container })
+    expect(ghost()).toEqual({ anchor: { x: 100, y: 100 }, rotationDeg: 15, plants: ['Malus domestica'] })
+
+    // Favorites' click: the read model takes the stamp, then arms the tool again (today's setTool ran the cancellation).
+    const commands = { setTool: (name: string) => session.setTool(name) } as CanvasToolCommandSurface
+    expect(beginSavedObjectStampPlacement(PEAR_STAMP, commands)).toBe(true)
+    expect(ghost()).toBeNull()
+
+    events.pointerMove({ x: 120, y: 120 }, { buttons: 0 })
+    expect(ghost()).toEqual({ anchor: { x: 120, y: 120 }, rotationDeg: 0, plants: ['Pyrus communis'] })
+    session.dispose()
   })
 
   describe('stamp rotation', () => {

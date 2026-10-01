@@ -306,6 +306,8 @@ describe('saved object stamp tool', () => {
 
       h.host.sourceChanged({ kind: 'saved-stamp', stamp: mulchStamp() })
       expect(h.record.guidance.at(-1)?.stampRotationDeg).toBe(0)
+      // The turned ghost of the stamp it held goes; the new stamp shows at the next hover.
+      expect(ghosts(h)).toEqual([])
       h.hover({ x: 100, y: 100 })
       expect(ghosts(h)[0]!.entity).toMatchObject({ rotationDeg: 0 })
 
@@ -338,24 +340,52 @@ describe('saved object stamp tool', () => {
     expect(h.store.persisted.plants).toHaveLength(1)
   })
 
-  it('only the overview reason hides the ghost; no cancellation drops the stamp', () => {
+  it('every cancellation reason hides the ghost until the next hover; none drops the stamp', () => {
     const h = harness()
     holding(h, mulchStamp())
-    h.hover({ x: 100, y: 100 })
-    const shown = h.renderer.lastDraft()
     const tool = builtTools.at(-1)!
 
-    for (const reason of ['tool-change', 'navigate', 'escape', 'document-replaced'] as const) {
+    for (const reason of ['tool-change', 'navigate', 'escape', 'document-replaced', 'overview'] as const) {
+      h.hover({ x: 100, y: 100 })
+      expect(ghosts(h)).toHaveLength(2)
       tool.cancelTransient(reason)
-      expect(h.renderer.lastDraft()).toEqual(shown)
+      expect(ghosts(h)).toEqual([])
     }
-    // The tool reads the reason the host sends on entering overview, not the frame's mode (still 'site' here).
-    tool.cancelTransient('overview')
-    expect(ghosts(h)).toEqual([])
 
     h.hover({ x: 120, y: 120 })
     expect(ghosts(h)).toHaveLength(2)
     h.click({ x: 120, y: 120 })
+    expect(h.store.persisted.plants).toHaveLength(1)
+  })
+
+  it('hides the ghost on a window blur or the tool armed again, until the next hover, and keeps the stamp and its angle', () => {
+    const h = harness()
+    holding(h, mulchStamp())
+    h.hover({ x: 100, y: 100 })
+    h.host.command({ kind: 'rotate-held', stepDeg: 15 })
+    expect(ghosts(h)).toHaveLength(2)
+
+    h.blur()
+    expect(ghosts(h)).toEqual([])
+    h.hover({ x: 110, y: 100 })
+    expect(ghosts(h)[0]!.entity).toMatchObject({ anchor: { x: 110, y: 100 }, rotationDeg: 15 })
+
+    // Today's setTool to the same tool ran the cancellation.
+    h.arm('saved-object-stamp')
+    expect(ghosts(h)).toEqual([])
+    // A press that places nothing (an edit that does not commit) leaves the stamp; its release hides the ghost again.
+    h.hover({ x: 120, y: 100 })
+    expect(ghosts(h)[0]!.entity).toMatchObject({ anchor: { x: 120, y: 100 }, rotationDeg: 15 })
+    vi.spyOn(h.edits, 'run').mockReturnValueOnce(false)
+    h.press({ x: 120, y: 100 })
+    expect(h.store.persisted.plants).toHaveLength(0)
+    expect(ghosts(h)).toHaveLength(2)
+    h.release()
+    expect(ghosts(h)).toEqual([])
+    expect(h.host.activeTool.value).toBe('saved-object-stamp')
+
+    h.hover({ x: 130, y: 100 })
+    h.click({ x: 130, y: 100 })
     expect(h.store.persisted.plants).toHaveLength(1)
   })
 

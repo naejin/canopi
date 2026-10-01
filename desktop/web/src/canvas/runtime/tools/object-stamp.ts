@@ -6,8 +6,9 @@
 // 'interaction-object-stamp' edit that selects the copies, while the source is still unlocked on open layers. The ghost of
 // what a press would place follows the pointer from the pick on and stays when the pointer leaves the map; the tool card
 // names the pick. A pick starts level (today's rule; phase 1 starts it at the bearing); `[` and `]` turn it (rotate-held
-// commands); Esc leaves for Select at once under LEGACY (spec §3.7). Overview hides the ghost until the next hover and
-// keeps the pick, as today; a re-origin keeps the ghost on its ground.
+// commands); Esc leaves for Select at once under LEGACY (spec §3.7). A release and every cancellation (a blur, K again,
+// overview) hide the ghost until the next hover and keep the pick, as today's pointerup and cancellation hid the preview;
+// a re-origin keeps a shown ghost on its ground.
 
 import type { CanvasStampGuidance } from '../../session-state'
 import type { SceneDesignObjectTarget } from '../scene/design-object-targets'
@@ -88,7 +89,7 @@ export function createObjectStampTool(): CanvasTool {
   let rotationDeg = 0
   /** Where the ghost's anchor was last drawn: `[` and `]` redraw it there. */
   let lastAnchor: WorldPoint | null = null
-  /** Whether the ghost is drawn now (overview hides it until the next hover). */
+  /** Whether the ghost is drawn now (a release or a cancellation hides it until the next hover). */
   let ghostShown = false
 
   function context(): ToolContext {
@@ -205,8 +206,14 @@ export function createObjectStampTool(): CanvasTool {
           if (!objectStampSource) return 'pass'
           showGhostAt(g.point.snapped)
           return 'handled'
+        case 'tap':
+        case 'drag-end':
+          // The press acted; the release hides the ghost until the next hover (today's pointerup ran the cancellation).
+          if (ghostShown) hideGhost()
+          return 'pass'
         default:
-          // The press acted; the ghost stays when the pointer leaves the map or a gesture is cancelled.
+          // The ghost stays when the pointer leaves the map, and a cancelled press leaves it too: today's stamp press let
+          // go of the pointer gesture, so a pointercancel or a lost capture after it cancelled nothing.
           return 'pass'
       }
     },
@@ -238,10 +245,10 @@ export function createObjectStampTool(): CanvasTool {
     },
     hasTransient: () => false,
     escapeHint: () => 'leave-tool',
-    cancelTransient(reason) {
-      // The pick and its angle outlive every cancellation, as today. Entering overview hides the ghost until the next hover
-      // (today's setOverviewMode cleared only the preview element).
-      if (reason === 'overview') hideGhost()
+    cancelTransient() {
+      // The pick and its angle outlive every cancellation, as today; each hides the ghost until the next hover, as today's
+      // cancellation and overview reset hid the preview element.
+      if (ghostShown) hideGhost()
     },
     deactivate() {
       clear()

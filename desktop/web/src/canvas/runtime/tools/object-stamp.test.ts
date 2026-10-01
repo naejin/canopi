@@ -89,7 +89,7 @@ describe('object stamp tool', () => {
     const h = stampHarness({ plants: [APPLE] })
     const commits = committedEdits(h)
 
-    h.click({ x: 54, y: 63 })
+    h.press({ x: 54, y: 63 })
     expect(h.store.persisted.plants).toHaveLength(1)
     expect(commits).toEqual([])
     // The pick's ghost sits on the picked plant, anchored where it was pressed, level.
@@ -101,12 +101,16 @@ describe('object stamp tool', () => {
       stamp: { kind: 'plant', name: 'Apple', plants: 1, species: 1 },
       stampRotationDeg: 0,
     })
+    // The release hides it until the next hover, as today's pointerup hid the preview; the pick is held.
+    h.release()
+    expect(ghosts(h)).toEqual([])
+    expect(h.record.guidance.at(-1)?.stamp).toMatchObject({ kind: 'plant', name: 'Apple' })
 
     // The ghost follows the pointer with the pick's offset.
     h.hover({ x: 100, y: 120 })
     expect(objectsGhost(ghosts(h)[0]).template.plants[0]!.entity).toMatchObject({ position: { x: 96, y: 117 }, pinnedName: false })
 
-    h.click({ x: 100, y: 120 })
+    h.press({ x: 100, y: 120 })
 
     expect(h.store.persisted.plants).toHaveLength(2)
     const clone = h.store.persisted.plants[1]!
@@ -126,8 +130,11 @@ describe('object stamp tool', () => {
     })
     expect(selected(h)).toEqual([{ kind: 'plant', id: clone.id }])
     expect(commits).toEqual(['interaction-object-stamp'])
-    // Each later click places again: the pick is still held.
+    // The ghost stands on the copy while the button is down; the release hides it.
     expect(objectsGhost(ghosts(h)[0]).anchor).toEqual({ x: 100, y: 120 })
+    h.release()
+    expect(ghosts(h)).toEqual([])
+    // Each later click places again: the pick is still held.
     h.click({ x: 140, y: 120 })
     expect(h.store.persisted.plants).toHaveLength(3)
     expect(commits).toEqual(['interaction-object-stamp', 'interaction-object-stamp'])
@@ -142,7 +149,7 @@ describe('object stamp tool', () => {
     h.click({ x: 54, y: 63 })
     expect(h.host.command({ kind: 'rotate-held', stepDeg: 15 })).toBe('handled')
     expect(h.record.guidance.at(-1)?.stampRotationDeg).toBe(15)
-    // The ghost turns where it stands, about the pick's anchor.
+    // The release hid the ghost; the turn draws it again where it stood, about the pick's anchor (today's rotateBy).
     expect(objectsGhost(ghosts(h)[0])).toMatchObject({ anchor: { x: 54, y: 63 }, rotationDeg: 15 })
 
     for (let turn = 0; turn < 6; turn += 1) h.host.command({ kind: 'rotate-held', stepDeg: 15 })
@@ -170,7 +177,7 @@ describe('object stamp tool', () => {
     expect(h.record.hovers.at(-1)).toBeNull()
   })
 
-  it('keeps the pick and its ghost when the pointer leaves the map or the window loses focus', () => {
+  it('keeps the pick and its ghost when the pointer leaves the map or a press is cancelled', () => {
     const h = stampHarness({ plants: [smallApple({ x: 40, y: 40 })] })
 
     h.click({ x: 40, y: 40 })
@@ -178,11 +185,51 @@ describe('object stamp tool', () => {
     const shown = h.renderer.lastDraft()
     h.leave()
     expect(h.renderer.lastDraft()).toEqual(shown)
-    h.blur()
-    expect(h.renderer.lastDraft()).toEqual(shown)
 
-    h.click({ x: 120, y: 120 })
+    // Today's stamp press let go of the pointer gesture, so a pointercancel or a lost capture after it cancelled nothing.
+    h.press({ x: 120, y: 120 })
     expect(h.store.persisted.plants).toHaveLength(2)
+    const placed = h.renderer.lastDraft()
+    expect(objectsGhost(ghosts(h)[0]).anchor).toEqual({ x: 120, y: 120 })
+    h.cancel('pointercancel')
+    expect(h.renderer.lastDraft()).toEqual(placed)
+  })
+
+  it('hides the ghost on a release, a window blur or the tool armed again, until the next hover, and keeps the pick', () => {
+    const h = stampHarness({ plants: [smallApple({ x: 40, y: 40 })] })
+    const hoverShows = (at: { x: number; y: number }) => {
+      h.hover(at)
+      expect(objectsGhost(ghosts(h)[0]).anchor).toEqual(at)
+    }
+
+    h.click({ x: 40, y: 40 })
+    expect(ghosts(h)).toEqual([])
+    hoverShows({ x: 90, y: 90 })
+
+    // A drag after a placing press: the ghost follows the pointer, and the release hides it.
+    h.press({ x: 90, y: 90 })
+    h.move({ x: 110, y: 100 })
+    expect(objectsGhost(ghosts(h)[0]).anchor).toEqual({ x: 110, y: 100 })
+    h.release()
+    expect(ghosts(h)).toEqual([])
+    hoverShows({ x: 100, y: 130 })
+
+    h.blur()
+    expect(ghosts(h)).toEqual([])
+    hoverShows({ x: 130, y: 100 })
+
+    // K again while armed (today's setTool to the same tool ran the cancellation).
+    h.arm('object-stamp')
+    expect(ghosts(h)).toEqual([])
+
+    // The pick outlived them all.
+    hoverShows({ x: 150, y: 150 })
+    h.click({ x: 150, y: 150 })
+    expect(h.store.persisted.plants.map((plant) => plant.position)).toEqual([
+      { x: 40, y: 40 },
+      { x: 90, y: 90 },
+      { x: 150, y: 150 },
+    ])
   })
 
   it('hides the ghost in overview and keeps the pick for when the map comes back', () => {
@@ -204,20 +251,29 @@ describe('object stamp tool', () => {
     expect(h.store.persisted.plants).toHaveLength(2)
   })
 
-  it('only the overview reason hides the ghost; no cancellation drops the pick', () => {
+  it('shows the ghost again under a mouse resting where it was released at the next camera frame (plan §1, exception 1)', () => {
     const h = stampHarness({ plants: [smallApple({ x: 40, y: 40 })] })
     h.click({ x: 40, y: 40 })
-    h.hover({ x: 90, y: 90 })
-    const shown = h.renderer.lastDraft()
+    expect(ghosts(h)).toEqual([])
+
+    h.wheelZoom({ x: 40, y: 40 }, 2)
+    h.advance(0)
+    // The zoom keeps the ground under the pointer: the ghost stands where the pick was pressed.
+    expect(objectsGhost(ghosts(h)[0]).anchor.x).toBeCloseTo(40, 9)
+    expect(objectsGhost(ghosts(h)[0]).anchor.y).toBeCloseTo(40, 9)
+  })
+
+  it('every cancellation reason hides the ghost until the next hover; none drops the pick', () => {
+    const h = stampHarness({ plants: [smallApple({ x: 40, y: 40 })] })
+    h.click({ x: 40, y: 40 })
     const tool = builtTools.at(-1)!
 
-    for (const reason of ['tool-change', 'navigate', 'escape', 'document-replaced'] as const) {
+    for (const reason of ['tool-change', 'navigate', 'escape', 'document-replaced', 'overview'] as const) {
+      h.hover({ x: 90, y: 90 })
+      expect(ghosts(h)).toHaveLength(1)
       tool.cancelTransient(reason)
-      expect(h.renderer.lastDraft()).toEqual(shown)
+      expect(ghosts(h)).toEqual([])
     }
-    // The tool reads the reason the host sends on entering overview, not the frame's mode (still 'site' here).
-    tool.cancelTransient('overview')
-    expect(ghosts(h)).toEqual([])
 
     h.hover({ x: 120, y: 120 })
     expect(ghosts(h)).toHaveLength(1)

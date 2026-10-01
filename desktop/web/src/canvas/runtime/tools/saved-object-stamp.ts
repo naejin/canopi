@@ -5,8 +5,9 @@
 // places it once with its anchor at the snapped point, turned by the held angle, as one 'interaction-saved-object-stamp'
 // edit that selects the copies, then returns to Select, whose leaving drops the stamp from the read model. Its ghost
 // follows the pointer and stays when the pointer leaves the map. `[` and `]` turn it (rotate-held commands); another stamp
-// starts upright; Esc leaves for Select at once under LEGACY (spec §3.7). Overview hides the ghost until the next hover and
-// keeps the stamp, as today; a re-origin keeps the ghost on its ground. The ghosts come from tools/stamp-ghost.ts.
+// starts upright; Esc leaves for Select at once under LEGACY (spec §3.7). A release, another stamp and every cancellation
+// (a blur, the tool armed again, overview) hide the ghost until the next hover and keep the stamp, as today's pointerup and
+// cancellation hid the preview; a re-origin keeps a shown ghost on its ground. The ghosts come from tools/stamp-ghost.ts.
 
 import type { SavedObjectStampPayload } from '../../saved-object-stamp-payload'
 import type { SceneAnnotationEntity, ScenePlantEntity, SceneZoneEntity } from '../scene/types'
@@ -38,7 +39,7 @@ export function createSavedObjectStampTool(): CanvasTool {
   let rotationDeg = 0
   /** Where the ghost's anchor was last drawn: `[` and `]` redraw it there. */
   let lastAnchor: WorldPoint | null = null
-  /** Whether the ghost is drawn now (overview hides it until the next hover). */
+  /** Whether the ghost is drawn now (a release or a cancellation hides it until the next hover). */
   let ghostShown = false
 
   function context(): ToolContext {
@@ -46,11 +47,13 @@ export function createSavedObjectStampTool(): CanvasTool {
     return ctx
   }
 
-  /** The stamp held now; choosing another stamp starts it upright. */
-  function hold(source: ToolSource | null): void {
+  /** The stamp held now; choosing another stamp starts it upright. True when the stamp changed. */
+  function hold(source: ToolSource | null): boolean {
     const next = source?.kind === 'saved-stamp' ? source.stamp : null
-    if (next !== stamp) rotationDeg = 0
+    if (next === stamp) return false
+    rotationDeg = 0
     stamp = next
+    return true
   }
 
   function publishGuidance(): void {
@@ -102,9 +105,9 @@ export function createSavedObjectStampTool(): CanvasTool {
       publishGuidance()
     },
     sourceChanged(source) {
-      hold(source)
-      // The ghost follows the next pointer move, as today; with no stamp there is nothing to show.
-      if (!stamp) hideGhost()
+      // A ghost shows only the stamp it was drawn for: the new one shows at the next hover (Favorites arms the tool again,
+      // whose cancellation hid today's preview). `[` and `]` still draw it at the last anchor, as today's rotateBy did.
+      if (hold(source) && ghostShown) hideGhost()
       publishGuidance()
     },
     gesture(g) {
@@ -119,8 +122,15 @@ export function createSavedObjectStampTool(): CanvasTool {
           if (!stamp) return 'pass'
           showGhostAt(g.point.snapped)
           return 'handled'
+        case 'tap':
+        case 'drag-end':
+          // A press that placed nothing keeps the stamp; the release hides the ghost until the next hover (today's
+          // pointerup ran the cancellation).
+          if (ghostShown) hideGhost()
+          return 'pass'
         default:
-          // The press placed; the ghost stays when the pointer leaves the map or a gesture is cancelled.
+          // The ghost stays when the pointer leaves the map, and a cancelled press leaves it too: today's stamp press let
+          // go of the pointer gesture, so a pointercancel or a lost capture after it cancelled nothing.
           return 'pass'
       }
     },
@@ -148,10 +158,10 @@ export function createSavedObjectStampTool(): CanvasTool {
     },
     hasTransient: () => false,
     escapeHint: () => 'leave-tool',
-    cancelTransient(reason) {
-      // The stamp and its angle outlive every cancellation, as today. Entering overview hides the ghost until the next
-      // hover (today's setOverviewMode cleared only the preview element).
-      if (reason === 'overview') hideGhost()
+    cancelTransient() {
+      // The stamp and its angle outlive every cancellation, as today; each hides the ghost until the next hover, as today's
+      // cancellation and overview reset hid the preview element.
+      if (ghostShown) hideGhost()
     },
     deactivate() {
       reset()
