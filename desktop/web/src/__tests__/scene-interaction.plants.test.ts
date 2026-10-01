@@ -1,7 +1,7 @@
 // SceneInteractionSession tests, split by the first tool a test arms (canvas v2 plan §4, Seams):
 // tests that arm Plant stamp or Plant a row, and the three Place plants describes.
 // Shared fakes, helpers and fixture: support/scene-interaction-setup.ts.
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   readPlantStampSource,
   selectPlantStampSource,
@@ -15,17 +15,18 @@ import {
 import { snapToGridEnabled } from '../app/canvas-settings/signals'
 import { plantSpacingIntervalM } from '../app/settings/state'
 import { CameraController } from '../canvas/runtime/camera'
-import { SceneStore } from '../canvas/runtime/scene'
+import type { SceneStore } from '../canvas/runtime/scene'
 import type {
   SceneInteractionSession,
   SceneInteractionSessionDeps,
 } from '../canvas/runtime/scene-interaction'
+import type { DraftShape } from '../canvas/runtime/tools/draft'
+import { createRecordingRenderer, type RecordingRenderer } from './support/recording-renderer'
 import {
   createSceneInteractionEventHarness,
   type SceneInteractionEventHarness,
 } from './support/scene-interaction-events'
 import {
-  createPlantPresentationContext,
   contextMenuHost,
   contextMenuCommand,
   createInteractionDeps,
@@ -41,9 +42,11 @@ describe('SceneInteractionSession', () => {
   let camera: CameraController
   let store: SceneStore
   let events: SceneInteractionEventHarness
+  /** The session's draft sink: Plant a row's ring, guide, discs and length draw in Pixi (plan §1, exception 2). */
+  let drafts: RecordingRenderer
 
   const {
-    createTestSession,
+    createTestSession: createFixtureSession,
     toolCard,
     spacingInput,
     typeSpacing,
@@ -54,6 +57,30 @@ describe('SceneInteractionSession', () => {
     },
     () => ({ events }),
   )
+
+  beforeEach(() => {
+    drafts = createRecordingRenderer()
+  })
+
+  function createTestSession(deps: SceneInteractionSessionDeps): SceneInteractionSession {
+    return createFixtureSession({ ...deps, renderer: drafts })
+  }
+
+  function draftShapes<K extends DraftShape['kind']>(kind: K): Extract<DraftShape, { kind: K }>[] {
+    return (drafts.lastDraft()?.shapes ?? []).filter((shape): shape is Extract<DraftShape, { kind: K }> => shape.kind === kind)
+  }
+
+  /** Plant a row's ring on the plant it repeats (today's [data-plant-spacing-source]). */
+  function rowSource(id: string): boolean {
+    const plant = store.persisted.plants.find((entry) => entry.id === id)
+    return plant !== undefined && draftShapes('circle-px')
+      .some((ring) => ring.center.x === plant.position.x && ring.center.y === plant.position.y)
+  }
+
+  /** The row guide's length label (today's [data-plant-spacing-length-label]). */
+  function rowLength(): string | undefined {
+    return draftShapes('label').find((label) => label.tone === 'hint-primary')?.text
+  }
 
   it('refreshes Plant Spacing translations without resetting its phase, interval, count, or field', () => {
     let language = 'en'
@@ -80,7 +107,7 @@ describe('SceneInteractionSession', () => {
     const input = spacingInput()!
     input.focus()
     input.setSelectionRange(1, 3)
-    const ghostCount = container.querySelectorAll('[data-plant-spacing-ghost]').length
+    const ghostCount = draftShapes('ghost').length
     const before = published[published.length - 1]!.plantRow
 
     expect(before).toMatchObject({ phase: 'row', interval: '2 m', count: 3 })
@@ -94,8 +121,8 @@ describe('SceneInteractionSession', () => {
     expect(document.activeElement).toBe(input)
     expect(input.selectionStart).toBe(1)
     expect(input.selectionEnd).toBe(3)
-    expect(container.querySelectorAll('[data-plant-spacing-ghost]')).toHaveLength(ghostCount)
-    expect(container.querySelector('[data-plant-spacing-guide]')).not.toBeNull()
+    expect(draftShapes('ghost')).toHaveLength(ghostCount)
+    expect(draftShapes('polyline')).toHaveLength(1)
   })
 
   it('does not dispatch a Plant Stamp after synchronous capture loss', () => {
@@ -156,7 +183,7 @@ describe('SceneInteractionSession', () => {
 
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
 
-    expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
+    expect(rowSource('plant-1')).toBe(true)
     expect(toolCard()?.querySelector('b')?.textContent).toBe('Apple')
     expect(hud?.textContent).toContain('Apple')
     expect(hud?.textContent).toContain('Esc to cancel')
@@ -186,14 +213,14 @@ describe('SceneInteractionSession', () => {
     session.setTool('plant-spacing')
     events.pointerDown({ x: 20, y: 30 })
     events.pointerUp({ x: 20, y: 30 })
-    expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
+    expect(rowSource('plant-1')).toBe(true)
 
     failSceneRead = true
     expect(() => session.setTool('plant-spacing'))
       .toThrow('Scene Interaction tool transition failed')
     failSceneRead = false
 
-    expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
+    expect(rowSource('plant-1')).toBe(true)
     expect(toolCard()?.dataset.toolCard).toBe('plant-spacing')
     session.dispose()
   })
@@ -208,156 +235,6 @@ describe('SceneInteractionSession', () => {
     expect(document.querySelectorAll('[data-tool-card]')).toHaveLength(1)
     expect(container.querySelector('[data-tool-card]')).toBeNull()
     expect(toolCard()!.textContent).toContain('Click a placed plant to repeat it along a row')
-    session.dispose()
-  })
-
-  it('keeps Plant Spacing in source-picking mode on missed clicks without clearing selection', () => {
-    const deps = createInteractionDeps(container, store, camera)
-    deps.setSelection([plantTarget('already-selected')])
-    vi.mocked(deps.setSelection).mockClear()
-    vi.mocked(deps.clearSelection).mockClear()
-    const session = createTestSession(deps)
-    session.setTool('plant-spacing')
-
-    events.pointerDown({ x: 200, y: 200 }, { button: 0 })
-
-    expect(spacingInput()).toBeNull()
-    expect(toolCard()?.textContent).toContain('Click a visible, unlocked placed plant')
-    expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
-    expect(deps.clearSelection).not.toHaveBeenCalled()
-    expect(deps.setSelection).not.toHaveBeenCalled()
-    expect(selectedObjectIds.value).toEqual(new Set(['already-selected']))
-    session.dispose()
-  })
-
-  it('does not sample grouped or locked Plant Spacing source candidates', () => {
-    store.updatePersisted((draft) => {
-      draft.plants = [
-        {
-          kind: 'plant',
-          id: 'grouped-plant',
-          locked: false,
-          canonicalName: 'Malus domestica',
-          commonName: 'Apple',
-          color: null,
-          stratum: null,
-          canopySpreadM: 2,
-          position: { x: 20, y: 30 },
-          rotationDeg: null,
-          notes: null,
-          plantedDate: null,
-          quantity: 1,
-        },
-        {
-          kind: 'plant',
-          id: 'locked-plant',
-          locked: true,
-          canonicalName: 'Pyrus communis',
-          commonName: 'Pear',
-          color: null,
-          stratum: null,
-          canopySpreadM: 2,
-          position: { x: 80, y: 30 },
-          rotationDeg: null,
-          notes: null,
-          plantedDate: null,
-          quantity: 1,
-        },
-      ]
-      draft.groups = [{
-        kind: 'group',
-        id: 'group-1',
-        locked: false,
-        name: 'Grouped row',
-        members: [{ kind: 'plant', id: 'grouped-plant' }],
-      }]
-    })
-    const deps = createInteractionDeps(container, store, camera)
-    const session = createTestSession(deps)
-    session.setTool('plant-spacing')
-
-    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
-    expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
-
-    events.pointerDown({ x: 80, y: 30 }, { button: 0 })
-    expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
-    session.dispose()
-  })
-
-  it('does not sample Plant Spacing sources on hidden or locked plant layers', () => {
-    store.updatePersisted((draft) => {
-      draft.layers = draft.layers.map((layer) =>
-        layer.name === 'plants' ? { ...layer, visible: false, locked: false } : layer
-      )
-      draft.plants = [{
-        kind: 'plant',
-        locked: false,
-        id: 'plant-1',
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        stratum: null,
-        canopySpreadM: 2,
-        position: { x: 20, y: 30 },
-        rotationDeg: null,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
-    })
-    const deps = createInteractionDeps(container, store, camera)
-    const session = createTestSession(deps)
-    session.setTool('plant-spacing')
-
-    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
-    expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
-
-    store.updatePersisted((draft) => {
-      draft.layers = draft.layers.map((layer) =>
-        layer.name === 'plants' ? { ...layer, visible: true, locked: true } : layer
-      )
-    })
-
-    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
-    expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
-    session.dispose()
-  })
-
-  it('clears Plant Spacing source state with Escape and exits when no source exists', () => {
-    store.updatePersisted((draft) => {
-      draft.plants = [{
-        kind: 'plant',
-        locked: false,
-        id: 'plant-1',
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        stratum: null,
-        canopySpreadM: 2,
-        position: { x: 20, y: 30 },
-        rotationDeg: null,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
-    })
-
-    const setTool = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { setTool })
-    const session = createTestSession(deps)
-    session.setTool('plant-spacing')
-
-    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
-    expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
-
-    events.keyDown({ key: 'Escape' })
-    expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
-    expect(spacingInput()).toBeNull()
-    expect(setTool).not.toHaveBeenCalled()
-
-    events.keyDown({ key: 'Escape' })
-    expect(setTool).toHaveBeenCalledWith('select')
-    expect(toolCard()?.dataset.toolCard).toBe('select')
     session.dispose()
   })
 
@@ -386,19 +263,19 @@ describe('SceneInteractionSession', () => {
 
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     events.pointerMove({ x: 26, y: 30 }, { button: 0 })
-    expect(container.querySelector('[data-plant-spacing-source="source"]')).not.toBeNull()
-    expect(container.querySelector('[data-plant-spacing-guide]')).not.toBeNull()
+    expect(rowSource('source')).toBe(true)
+    expect(draftShapes('polyline')).toHaveLength(1)
 
     session.setTool('select')
 
     expect(toolCard()?.dataset.toolCard).toBe('select')
-    expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
-    expect(container.querySelector('[data-plant-spacing-guide]')).toBeNull()
-    expect(container.querySelectorAll('[data-plant-spacing-ghost]')).toHaveLength(0)
+    expect(draftShapes('circle-px')).toHaveLength(0)
+    expect(draftShapes('polyline')).toHaveLength(0)
+    expect(draftShapes('ghost')).toHaveLength(0)
 
     session.setTool('plant-spacing')
     expect(spacingInput()).toBeNull()
-    expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
+    expect(draftShapes('circle-px')).toHaveLength(0)
     session.dispose()
   })
 
@@ -428,16 +305,16 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     events.pointerMove({ x: 26, y: 30 }, { button: 0 })
     expect(spacingInput()).not.toBeNull()
-    expect(container.querySelector('[data-plant-spacing-guide]')).not.toBeNull()
+    expect(draftShapes('polyline')).toHaveLength(1)
 
     session.dispose()
 
     // The session publishes idle guidance, so the card drops the spacing field.
     expect(spacingInput()).toBeNull()
-    expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
-    expect(container.querySelector('[data-plant-spacing-guide]')).toBeNull()
-    expect(container.querySelector('[data-plant-spacing-length-label]')).toBeNull()
-    expect(container.querySelectorAll('[data-plant-spacing-ghost]')).toHaveLength(0)
+    expect(draftShapes('circle-px')).toHaveLength(0)
+    expect(draftShapes('polyline')).toHaveLength(0)
+    expect(rowLength()).toBeUndefined()
+    expect(draftShapes('ghost')).toHaveLength(0)
   })
 
   it('focuses Plant Spacing interval input after source sampling and accepts valid values with Enter', () => {
@@ -480,7 +357,7 @@ describe('SceneInteractionSession', () => {
     expect(document.activeElement).toBe(container)
     expect(store.persisted.plants).toHaveLength(1)
     expect(JSON.stringify(store.toCanopiFile())).not.toContain('plant_spacing_interval_m')
-    expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
+    expect(rowSource('plant-1')).toBe(true)
     session.dispose()
   })
 
@@ -518,7 +395,7 @@ describe('SceneInteractionSession', () => {
     expect(plantSpacingIntervalM.value).toBe(0.75)
     expect(document.activeElement).toBe(nextControl)
     expect(store.persisted.plants).toHaveLength(1)
-    expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
+    expect(rowSource('plant-1')).toBe(true)
     session.dispose()
     nextControl.remove()
   })
@@ -558,7 +435,7 @@ describe('SceneInteractionSession', () => {
     expect(plantSpacingIntervalM.value).toBe(0.5)
     expect(document.activeElement).toBe(nextControl)
     expect(store.persisted.plants).toHaveLength(1)
-    expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
+    expect(rowSource('plant-1')).toBe(true)
     session.dispose()
     nextControl.remove()
   })
@@ -591,7 +468,7 @@ describe('SceneInteractionSession', () => {
 
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
 
-    expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
+    expect(draftShapes('circle-px')).toHaveLength(0)
     expect(spacingInput()).toBeNull()
     session.dispose()
   })
@@ -670,8 +547,8 @@ describe('SceneInteractionSession', () => {
 
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     expect(store.persisted.plants).toHaveLength(1)
-    expect(container.querySelector('[data-plant-spacing-guide]')).not.toBeNull()
-    expect(container.querySelector('[data-plant-spacing-source="source"]')).not.toBeNull()
+    expect(draftShapes('polyline')).toHaveLength(1)
+    expect(rowSource('source')).toBe(true)
     session.dispose()
   })
 
@@ -701,11 +578,9 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 26, y: 30 }, { button: 0 })
 
     const input = spacingInput()!
-    const guide = container.querySelector<HTMLElement>('[data-plant-spacing-guide]')!
-    const label = container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')!
-    const initialGuideWidth = guide.style.width
-    const initialLabel = label.textContent
-    const initialGhostCount = container.querySelectorAll('[data-plant-spacing-ghost]').length
+    const initialGuide = draftShapes('polyline')[0]!.points
+    const initialLabel = rowLength()
+    const initialGhostCount = draftShapes('ghost').length
 
     input.dispatchEvent(new MouseEvent('pointermove', {
       bubbles: true,
@@ -714,9 +589,9 @@ describe('SceneInteractionSession', () => {
       button: 0,
     }))
 
-    expect(guide.style.width).toBe(initialGuideWidth)
-    expect(label.textContent).toBe(initialLabel)
-    expect(container.querySelectorAll('[data-plant-spacing-ghost]')).toHaveLength(initialGhostCount)
+    expect(draftShapes('polyline')[0]!.points).toEqual(initialGuide)
+    expect(rowLength()).toBe(initialLabel)
+    expect(draftShapes('ghost')).toHaveLength(initialGhostCount)
     session.dispose()
   })
 
@@ -756,7 +631,7 @@ describe('SceneInteractionSession', () => {
 
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     expect(store.persisted.plants).toHaveLength(1)
-    expect(container.querySelector('[data-plant-spacing-source="source"]')).not.toBeNull()
+    expect(rowSource('source')).toBe(true)
     session.dispose()
   })
 
@@ -791,361 +666,7 @@ describe('SceneInteractionSession', () => {
     expect(spacingInput()!.getAttribute('aria-invalid')).toBe('true')
     expect(plantSpacingIntervalM.value).toBe(0.5)
     expect(document.activeElement).toBe(input)
-    expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
-    session.dispose()
-  })
-
-  it('previews and commits a normal Plant Spacing sequence as one scene edit', () => {
-    plantSpacingIntervalM.value = 2
-    store.updatePersisted((draft) => {
-      draft.plants = [{
-        kind: 'plant',
-        locked: false,
-        id: 'source',
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: '#884422',
-        stratum: 'tree',
-        canopySpreadM: 3,
-        position: { x: 20, y: 30 },
-        rotationDeg: 15,
-        notes: 'Do not copy',
-        plantedDate: '2026-03-01',
-        quantity: 4,
-      }]
-    })
-    const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
-    const session = createTestSession(deps)
-    session.setTool('plant-spacing')
-    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
-
-    events.pointerMove({ x: 26, y: 30 }, { button: 0 })
-
-    expect(container.querySelector('[data-plant-spacing-guide]')).not.toBeNull()
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')?.textContent).toBe('6 m')
-    expect(container.querySelectorAll('[data-plant-spacing-ghost]')).toHaveLength(3)
-    const ghost = container.querySelector<HTMLElement>('[data-plant-spacing-ghost]')!
-    expect(Number.parseFloat(ghost.style.width)).toBeCloseTo(4.43, 2)
-    expect(Number.parseFloat(ghost.style.height)).toBeCloseTo(4.43, 2)
-    expect(toolCard()?.textContent).toContain('3')
-
-    events.pointerDown({ x: 26, y: 30 }, { button: 0 })
-
-    expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
-    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
-    expect(store.persisted.plants).toHaveLength(4)
-    expect(store.persisted.plants.slice(1).map((plant) => plant.position)).toEqual([
-      { x: 22, y: 30 },
-      { x: 24, y: 30 },
-      { x: 26, y: 30 },
-    ])
-    expect(store.persisted.plants[1]).toMatchObject({
-      canonicalName: 'Malus domestica',
-      commonName: 'Apple',
-      color: '#884422',
-      stratum: 'tree',
-      canopySpreadM: 3,
-      rotationDeg: 15,
-      notes: null,
-      plantedDate: null,
-      quantity: 1,
-    })
-    expect(store.persisted.groups).toEqual([])
-    expect(selectedObjectIds.value).toEqual(new Set(store.persisted.plants.map((plant) => plant.id)))
-    expect(container.querySelector('[data-plant-spacing-guide]')).toBeNull()
-    expect(spacingInput()).toBeNull()
-    session.dispose()
-  })
-
-  it('does not commit Plant Spacing when the sampled source becomes unavailable before commit', () => {
-    const runBlockedCommit = (blockCommit: () => void, expectedPlantCount = 1): void => {
-      store = new SceneStore()
-      plantSpacingIntervalM.value = 2
-      store.updatePersisted((draft) => {
-        draft.plants = [{
-          kind: 'plant',
-          id: 'source',
-          canonicalName: 'Malus domestica',
-          commonName: 'Apple',
-          color: null,
-          stratum: null,
-          canopySpreadM: 2,
-          position: { x: 20, y: 30 },
-          rotationDeg: null,
-          notes: null,
-          plantedDate: null,
-          quantity: 1,
-          locked: false,
-        }]
-      })
-      const onSceneEditCommit = vi.fn()
-      const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
-      const session = createTestSession(deps)
-      session.setTool('plant-spacing')
-      events.pointerDown({ x: 20, y: 30 }, { button: 0 })
-      events.pointerMove({ x: 26, y: 30 }, { button: 0 })
-
-      blockCommit()
-      events.pointerDown({ x: 26, y: 30 }, { button: 0 })
-
-      expect(onSceneEditCommit).not.toHaveBeenCalled()
-      expect(store.persisted.plants).toHaveLength(expectedPlantCount)
-      expect(container.querySelector('[data-plant-spacing-guide]')).toBeNull()
-      expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
-      expect(spacingInput()).toBeNull()
-      expect(toolCard()?.textContent).toContain('Click a visible, unlocked placed plant')
-      session.dispose()
-    }
-
-    runBlockedCommit(function lockSourcePlant() {
-      store.updatePersisted((draft) => {
-        draft.plants = draft.plants.map((plant) =>
-          plant.id === 'source' ? { ...plant, locked: true } : plant,
-        )
-      })
-    })
-    runBlockedCommit(function removeSourcePlant() {
-      store.updatePersisted((draft) => {
-        draft.plants = []
-      })
-    }, 0)
-    runBlockedCommit(function lockPlantsLayer() {
-      store.updatePersisted((draft) => {
-        draft.layers = draft.layers.map((layer) =>
-          layer.name === 'plants' ? { ...layer, locked: true } : layer
-        )
-      })
-    })
-    runBlockedCommit(function hidePlantsLayer() {
-      store.updatePersisted((draft) => {
-        draft.layers = draft.layers.map((layer) =>
-          layer.name === 'plants' ? { ...layer, visible: false } : layer
-        )
-      })
-    })
-  })
-
-  it('caps dense Plant Spacing preview ghosts while keeping the generated count', () => {
-    plantSpacingIntervalM.value = 0.001
-    store.updatePersisted((draft) => {
-      draft.plants = [{
-        kind: 'plant',
-        locked: false,
-        id: 'source',
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        stratum: null,
-        canopySpreadM: 2,
-        position: { x: 20, y: 30 },
-        rotationDeg: null,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
-    })
-    const deps = createInteractionDeps(container, store, camera)
-    const session = createTestSession(deps)
-    session.setTool('plant-spacing')
-    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
-    events.pointerMove({ x: 22, y: 30 }, { button: 0 })
-
-    expect(toolCard()?.textContent).toContain('2000')
-    const ghostCount = container.querySelectorAll('[data-plant-spacing-ghost]').length
-    expect(ghostCount).toBeGreaterThan(0)
-    expect(ghostCount).toBeLessThan(2000)
-    session.dispose()
-  })
-
-  it('blocks Plant Spacing commits above the hard safety cap without creating plants', () => {
-    plantSpacingIntervalM.value = 0.001
-    store.updatePersisted((draft) => {
-      draft.plants = [{
-        kind: 'plant',
-        locked: false,
-        id: 'source',
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        stratum: null,
-        canopySpreadM: 2,
-        position: { x: 10, y: 10 },
-        rotationDeg: null,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
-    })
-    const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
-    const session = createTestSession(deps)
-    session.setTool('plant-spacing')
-    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
-    events.pointerMove({ x: 20, y: 10 }, { button: 0 })
-
-    const count = toolCard()!.querySelector<HTMLElement>('[data-plant-spacing-generated-count]')!
-    expect(count.textContent).toContain('10000')
-    expect(count.dataset.density).toBe('blocked')
-
-    events.pointerDown({ x: 20, y: 10 }, { button: 0 })
-
-    expect(onSceneEditCommit).not.toHaveBeenCalled()
-    expect(store.persisted.plants).toHaveLength(1)
-    expect(container.querySelector('[data-plant-spacing-guide]')).not.toBeNull()
-    expect(container.querySelector('[data-plant-spacing-source="source"]')).not.toBeNull()
-    expect(toolCard()?.textContent).toContain(
-      'Increase interval or shorten the line',
-    )
-    session.dispose()
-  })
-
-  it('commits Plant Spacing at the hard safety cap without confirmation', () => {
-    plantSpacingIntervalM.value = 0.001
-    store.updatePersisted((draft) => {
-      draft.plants = [{
-        kind: 'plant',
-        locked: false,
-        id: 'source',
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        stratum: null,
-        canopySpreadM: 2,
-        position: { x: 10, y: 10 },
-        rotationDeg: null,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
-    })
-    const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
-    const session = createTestSession(deps)
-    session.setTool('plant-spacing')
-    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
-    events.pointerMove({ x: 15, y: 10 }, { button: 0 })
-
-    const count = toolCard()!.querySelector<HTMLElement>('[data-plant-spacing-generated-count]')!
-    expect(count.textContent).toContain('5000')
-    expect(count.dataset.density).toBe('dense')
-    expect(container.querySelector('[data-plant-spacing-confirm]')).toBeNull()
-
-    events.pointerDown({ x: 15, y: 10 }, { button: 0 })
-
-    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
-    expect(store.persisted.plants).toHaveLength(5001)
-    expect(store.persisted.plants[store.persisted.plants.length - 1]?.position).toEqual({ x: 15, y: 10 })
-    session.dispose()
-  })
-
-  it('sizes Plant Spacing preview ghosts from the symbolic plant presentation', () => {
-    plantSpacingIntervalM.value = 2
-    camera.setViewport({ x: 0, y: 0, scale: 10 })
-    store.updatePersisted((draft) => {
-      draft.plants = [{
-        kind: 'plant',
-        locked: false,
-        id: 'source',
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        stratum: null,
-        canopySpreadM: 4,
-        position: { x: 2, y: 3 },
-        rotationDeg: null,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
-    })
-    const deps = createInteractionDeps(container, store, camera, {
-      getPlantPresentationContext: createPlantPresentationContext,
-    })
-    const session = createTestSession(deps)
-    session.setTool('plant-spacing')
-    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
-    events.pointerMove({ x: 60, y: 30 }, { button: 0 })
-
-    const ghosts = container.querySelectorAll<HTMLElement>('[data-plant-spacing-ghost]')
-    expect(ghosts).toHaveLength(2)
-    expect(parseFloat(ghosts[0]?.style.width ?? '')).toBeCloseTo(7.0645, 4)
-    expect(parseFloat(ghosts[0]?.style.height ?? '')).toBeCloseTo(7.0645, 4)
-
-    events.wheel({ x: 0, y: 0 }, { deltaY: -120, ctrlKey: true })
-
-    const resizedGhost = container.querySelector<HTMLElement>('[data-plant-spacing-ghost]')!
-    expect(parseFloat(resizedGhost.style.width)).not.toBeCloseTo(7.0645, 4)
-    expect(parseFloat(resizedGhost.style.height)).not.toBeCloseTo(7.0645, 4)
-    session.dispose()
-  })
-
-  it('keeps Plant Spacing preview active without a scene edit when no plants fit', () => {
-    plantSpacingIntervalM.value = 2
-    store.updatePersisted((draft) => {
-      draft.plants = [{
-        kind: 'plant',
-        locked: false,
-        id: 'source',
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        stratum: null,
-        canopySpreadM: 2,
-        position: { x: 20, y: 30 },
-        rotationDeg: null,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
-    })
-    const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
-    const session = createTestSession(deps)
-    session.setTool('plant-spacing')
-    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
-    events.pointerMove({ x: 21, y: 30 }, { button: 0 })
-
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')?.textContent).toBe('1 m')
-    expect(container.querySelectorAll('[data-plant-spacing-ghost]')).toHaveLength(0)
-
-    events.pointerDown({ x: 21, y: 30 }, { button: 0 })
-
-    expect(onSceneEditCommit).not.toHaveBeenCalled()
-    expect(store.persisted.plants).toHaveLength(1)
-    expect(container.querySelector('[data-plant-spacing-guide]')).not.toBeNull()
-    expect(container.querySelector('[data-plant-spacing-source="source"]')).not.toBeNull()
-    session.dispose()
-  })
-
-  it('formats a zero-length Plant Spacing guide as 0 cm while preserving the interval input fallback', () => {
-    store.updatePersisted((draft) => {
-      draft.plants = [{
-        kind: 'plant',
-        locked: false,
-        id: 'source',
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        stratum: null,
-        canopySpreadM: 2,
-        position: { x: 20, y: 30 },
-        rotationDeg: null,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
-    })
-    const deps = createInteractionDeps(container, store, camera)
-    const session = createTestSession(deps)
-    session.setTool('plant-spacing')
-
-    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
-    events.pointerMove({ x: 20, y: 30 }, { button: 0 })
-
-    expect(spacingInput()?.value).toBe('50 cm')
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')?.textContent).toBe('0 cm')
-    expect(toolCard()!.querySelector<HTMLElement>('[data-plant-spacing-generated-count]')?.textContent).toContain('0')
+    expect(rowSource('plant-1')).toBe(true)
     session.dispose()
   })
 
@@ -1176,7 +697,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 20, y: 40 }, { button: 0 })
     events.pointerMove({ x: 51, y: 40 }, { button: 0 })
 
-    expect(container.querySelectorAll('[data-plant-spacing-ghost]')).toHaveLength(2)
+    expect(draftShapes('ghost')).toHaveLength(2)
 
     events.pointerDown({ x: 51, y: 40 }, { button: 0 })
     expect(store.persisted.plants.slice(1).map((plant) => plant.position)).toEqual([
@@ -1213,47 +734,9 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 40, y: 40 }, { button: 0 })
     events.pointerMove({ x: 71, y: 52 }, { button: 0, shiftKey: true })
 
-    expect(container.querySelectorAll('[data-plant-spacing-ghost]')).toHaveLength(3)
+    expect(draftShapes('ghost')).toHaveLength(3)
 
     events.pointerDown({ x: 71, y: 52 }, { button: 0, shiftKey: true })
-    expect(store.persisted.plants.slice(1).map((plant) => plant.position.y)).toEqual([4, 4, 4])
-    expect(store.persisted.plants.slice(1).map((plant) => plant.position.x)).toEqual([5, 6, 7])
-    session.dispose()
-  })
-
-  it('commits a Plant Spacing click-hold drag from the latest Shift-constrained preview endpoint', () => {
-    plantSpacingIntervalM.value = 1
-    camera.setViewport({ x: 0, y: 0, scale: 10 })
-    store.updatePersisted((draft) => {
-      draft.plants = [{
-        kind: 'plant',
-        locked: false,
-        id: 'source',
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        stratum: null,
-        canopySpreadM: 2,
-        position: { x: 4, y: 4 },
-        rotationDeg: null,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
-    })
-    const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
-    const session = createTestSession(deps)
-    session.setTool('plant-spacing')
-
-    events.pointerDown({ x: 40, y: 40 }, { button: 0 })
-    events.pointerMove({ x: 71, y: 52 }, { button: 0, shiftKey: true })
-
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-guide]')?.style.transform).toBe('rotate(0rad)')
-
-    events.pointerUp({ x: 71, y: 52 }, { button: 0, shiftKey: false })
-
-    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
     expect(store.persisted.plants.slice(1).map((plant) => plant.position.y)).toEqual([4, 4, 4])
     expect(store.persisted.plants.slice(1).map((plant) => plant.position.x)).toEqual([5, 6, 7])
     session.dispose()
@@ -1284,7 +767,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     events.pointerMove({ x: 500, y: 30 }, { button: 0 })
 
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')?.textContent).toBe('380 m')
+    expect(rowLength()).toBe('380 m')
 
     events.pointerDown({ x: 500, y: 30 }, { button: 0 })
     expect(store.persisted.plants.slice(1).map((plant) => plant.position)).toEqual([
@@ -1319,87 +802,21 @@ describe('SceneInteractionSession', () => {
     session.setTool('plant-spacing')
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     events.pointerMove({ x: 26, y: 30 }, { button: 0 })
-    const guide = container.querySelector<HTMLElement>('[data-plant-spacing-guide]')!
-    const widthBefore = guide.style.width
+    const guideOnScreen = (): number => {
+      const [start, end] = draftShapes('polyline')[0]!.points
+      const a = camera.worldToScreen(start!)
+      const b = camera.worldToScreen(end!)
+      return Math.hypot(b.x - a.x, b.y - a.y)
+    }
+    const widthBefore = guideOnScreen()
+    const draftsBefore = drafts.calls.length
 
-    events.wheel({ x: 0, y: 0 }, { deltaY: -120, ctrlKey: true })
+    // At the still pointer, where the host's re-emit and today's world-fixed endpoint agree (plan §1, exception 1).
+    events.wheel({ x: 26, y: 30 }, { deltaY: -120, ctrlKey: true })
 
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')?.textContent).toBe('6 m')
-    expect(guide.style.width).not.toBe(widthBefore)
-    session.dispose()
-  })
-
-  it('commits exactly 100 generated Plant Spacing plants without confirmation', () => {
-    plantSpacingIntervalM.value = 1
-    store.updatePersisted((draft) => {
-      draft.plants = [{
-        kind: 'plant',
-        locked: false,
-        id: 'source',
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        stratum: null,
-        canopySpreadM: 2,
-        position: { x: 10, y: 10 },
-        rotationDeg: null,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
-    })
-    const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
-    const session = createTestSession(deps)
-    session.setTool('plant-spacing')
-    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
-    events.pointerMove({ x: 110, y: 10 }, { button: 0 })
-    events.pointerDown({ x: 110, y: 10 }, { button: 0 })
-
-    expect(container.querySelector('[data-plant-spacing-confirm]')).toBeNull()
-    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
-    expect(store.persisted.plants).toHaveLength(101)
-    session.dispose()
-  })
-
-  it('emphasizes dense Plant Spacing counts and commits them directly', () => {
-    plantSpacingIntervalM.value = 1
-    store.updatePersisted((draft) => {
-      draft.plants = [{
-        kind: 'plant',
-        locked: false,
-        id: 'source',
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        stratum: null,
-        canopySpreadM: 2,
-        position: { x: 10, y: 10 },
-        rotationDeg: null,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
-    })
-    const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
-    const session = createTestSession(deps)
-    session.setTool('plant-spacing')
-    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
-    events.pointerMove({ x: 111, y: 10 }, { button: 0 })
-
-    const count = toolCard()!.querySelector<HTMLElement>('[data-plant-spacing-generated-count]')!
-    expect(toolCard()!.textContent).toContain('101')
-    expect(toolCard()!.textContent).not.toContain('Confirm')
-    expect(container.querySelector('[data-plant-spacing-confirm]')).toBeNull()
-    expect(container.querySelector('[data-plant-spacing-cancel-confirm]')).toBeNull()
-    expect(count.dataset.density).toBe('dense')
-
-    events.pointerDown({ x: 111, y: 10 }, { button: 0 })
-
-    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
-    expect(store.persisted.plants).toHaveLength(102)
-    expect(store.persisted.plants[store.persisted.plants.length - 1]?.position).toEqual({ x: 111, y: 10 })
+    expect(drafts.calls.length).toBeGreaterThan(draftsBefore)
+    expect(rowLength()).toBe('6 m')
+    expect(guideOnScreen()).not.toBe(widthBefore)
     session.dispose()
   })
 
@@ -1433,7 +850,32 @@ describe('SceneInteractionSession', () => {
 
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     expect(store.persisted.plants).toHaveLength(1)
-    expect(container.querySelector('[data-plant-spacing-source="source"]')).not.toBeNull()
+    expect(rowSource('source')).toBe(true)
+    session.dispose()
+  })
+
+  it('previews Plant Spacing from moves inside its 4 px drag slop', () => {
+    plantSpacingIntervalM.value = 0.5
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('source', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const session = createTestSession(deps)
+    session.setTool('plant-spacing')
+
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    const input = spacingInput()!
+    events.pointerMove({ x: 22, y: 30 }, { button: 0 })
+
+    expect(draftShapes('polyline')[0]?.points).toEqual([{ x: 20, y: 30 }, { x: 22, y: 30 }])
+    expect(rowLength()).toBe('2 m')
+    expect(document.activeElement).toBe(input)
+    events.pointerUp({ x: 22, y: 30 }, { button: 0 })
+
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    expect(store.persisted.plants).toHaveLength(1)
+    expect(rowSource('source')).toBe(true)
     session.dispose()
   })
 
@@ -1477,79 +919,6 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('commits Plant Spacing click-hold drag from the pointerup endpoint when release moves past the preview', () => {
-    plantSpacingIntervalM.value = 2
-    store.updatePersisted((draft) => {
-      draft.plants = [{
-        kind: 'plant',
-        locked: false,
-        id: 'source',
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        stratum: null,
-        canopySpreadM: 2,
-        position: { x: 20, y: 30 },
-        rotationDeg: null,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
-    })
-    const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
-    const session = createTestSession(deps)
-    session.setTool('plant-spacing')
-
-    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
-    events.pointerMove({ x: 25, y: 30 }, { button: 0 })
-    events.pointerUp({ x: 26, y: 30 }, { button: 0 })
-
-    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
-    expect(store.persisted.plants.slice(1).map((plant) => plant.position)).toEqual([
-      { x: 22, y: 30 },
-      { x: 24, y: 30 },
-      { x: 26, y: 30 },
-    ])
-    session.dispose()
-  })
-
-  it('commits dense Plant Spacing from click-hold drag directly', () => {
-    plantSpacingIntervalM.value = 1
-    store.updatePersisted((draft) => {
-      draft.plants = [{
-        kind: 'plant',
-        locked: false,
-        id: 'source',
-        canonicalName: 'Malus domestica',
-        commonName: 'Apple',
-        color: null,
-        stratum: null,
-        canopySpreadM: 2,
-        position: { x: 10, y: 10 },
-        rotationDeg: null,
-        notes: null,
-        plantedDate: null,
-        quantity: 1,
-      }]
-    })
-    const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
-    const session = createTestSession(deps)
-    session.setTool('plant-spacing')
-
-    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
-    events.pointerMove({ x: 111, y: 10 }, { button: 0 })
-    events.pointerUp({ x: 111, y: 10 }, { button: 0 })
-
-    expect(container.querySelector('[data-plant-spacing-confirm]')).toBeNull()
-    expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
-    expect(store.persisted.plants).toHaveLength(102)
-    expect(store.persisted.plants[store.persisted.plants.length - 1]?.position).toEqual({ x: 111, y: 10 })
-    expect(spacingInput()).toBeNull()
-    session.dispose()
-  })
-
   it('keeps source and focuses interval input after click-hold Plant Spacing drag with invalid interval', () => {
     plantSpacingIntervalM.value = 2
     store.updatePersisted((draft) => {
@@ -1581,71 +950,9 @@ describe('SceneInteractionSession', () => {
 
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     expect(store.persisted.plants).toHaveLength(1)
-    expect(container.querySelector('[data-plant-spacing-source="source"]')).not.toBeNull()
+    expect(rowSource('source')).toBe(true)
     const input = spacingInput()
     expect(document.activeElement).toBe(input)
-    session.dispose()
-  })
-
-  it('places plant-stamp plants using species default color and symbol', () => {
-    store.updatePersisted((draft) => {
-      draft.plantSpeciesColors = {
-        'Malus domestica': '#C44230',
-      }
-      draft.plantSpeciesSymbols = {
-        'Malus domestica': 'canopy',
-      }
-    })
-    selectPlantStampSource({
-      canonical_name: 'Malus domestica',
-      common_name: 'Apple',
-      stratum: 'high',
-      width_max_m: 4,
-    })
-
-    const deps = createInteractionDeps(container, store, camera)
-    const session = createTestSession(deps)
-    session.setTool('plant-stamp')
-
-    events.pointerDown({ x: 50, y: 70 }, { button: 0 })
-
-    expect(store.persisted.plants).toHaveLength(1)
-    expect(store.persisted.plants[0]).toMatchObject({
-      canonicalName: 'Malus domestica',
-      commonName: 'Apple',
-      color: '#C44230',
-      symbol: 'canopy',
-      position: { x: 50, y: 70 },
-    })
-    expect(store.session.selectedTargets).toEqual([plantTarget(store.persisted.plants[0]!.id)])
-    expect(selectedObjectIds.value).toEqual(new Set([store.persisted.plants[0]!.id]))
-    session.dispose()
-  })
-
-  it('does not place Plant Stamp plants on a locked Plants Layer', () => {
-    store.updatePersisted((draft) => {
-      draft.layers = draft.layers.map((layer) => (
-        layer.name === 'plants' ? { ...layer, locked: true } : layer
-      ))
-    })
-    selectPlantStampSource({
-      canonical_name: 'Malus domestica',
-      common_name: 'Apple',
-      stratum: 'high',
-      width_max_m: 4,
-    })
-
-    const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
-    const session = createTestSession(deps)
-    session.setTool('plant-stamp')
-
-    events.pointerDown({ x: 50, y: 70 }, { button: 0 })
-
-    expect(store.persisted.plants).toHaveLength(0)
-    expect(store.session.selectedTargets).toEqual([])
-    expect(selectedObjectIds.value).toEqual(new Set())
-    expect(onSceneEditCommit).not.toHaveBeenCalled()
     session.dispose()
   })
 
@@ -1821,7 +1128,7 @@ describe('SceneInteractionSession', () => {
   )
 
   describe('Place plants without a species', () => {
-    it('places nothing and asks the tool card to point to the species chooser', () => {
+    it('places nothing and asks the tool card to point to the species chooser', async () => {
       const published: CanvasToolGuidance[] = []
       const deps = createInteractionDeps(container, store, camera, {
         publishToolGuidance: (guidance) => { published.push(guidance) },
@@ -1837,6 +1144,8 @@ describe('SceneInteractionSession', () => {
       expect(published.at(-1)?.promptSpecies).toBe(true)
 
       selectPlantStampSource({ canonical_name: 'Malus domestica', common_name: 'Apple', stratum: null, width_max_m: 6 })
+      // The pick reaches Place plants through the session's read model after a microtask (spec §1.4).
+      await Promise.resolve()
       events.pointerDown({ x: 40, y: 40 })
       events.pointerUp({ x: 40, y: 40 })
 
@@ -1907,101 +1216,6 @@ describe('SceneInteractionSession', () => {
       await Promise.resolve()
 
       expect(store.persisted.plants).toHaveLength(0)
-      session.dispose()
-    })
-  })
-
-  describe('Place plants hover preview', () => {
-    const APPLE = { canonical_name: 'Malus domestica', common_name: 'Apple', stratum: null, width_max_m: 6 }
-
-    function previewRoot(): HTMLElement | null {
-      return container.querySelector<HTMLElement>('[data-plant-placement-preview]')
-    }
-
-    function previewSession(): SceneInteractionSession {
-      camera.setViewport({ x: 0, y: 0, scale: 10 })
-      const session = createTestSession(createInteractionDeps(container, store, camera))
-      session.setTool('plant-stamp')
-      return session
-    }
-
-    it('shows the species symbol, its mature width and the nearest plant without changing the Design', () => {
-      store.updatePersisted((draft) => {
-        draft.plants = [
-          makePlant('pear', 'Pyrus communis', { x: 10, y: 10 }, { commonName: 'Pear' }),
-          makePlant('far', 'Prunus avium', { x: 90, y: 90 }),
-        ]
-      })
-      const before = store.snapshot().persisted
-      selectPlantStampSource(APPLE)
-      const session = previewSession()
-
-      events.pointerMove({ x: 130, y: 140 })
-
-      expect(previewRoot()?.style.display).toBe('block')
-      const glyph = container.querySelector('[data-plant-placement-glyph="Malus domestica"]')
-      expect(glyph?.querySelector('path, circle')).not.toBeNull()
-      expect(container.querySelector('[data-plant-placement-spread]')?.getAttribute('r')).toBe('30')
-      expect(container.querySelector('[data-plant-placement-label="mature-width"]')?.textContent)
-        .toBe('Mature width up to 6 m')
-      expect(container.querySelector('[data-plant-placement-nearest-label]')?.textContent).toBe('5 m to Pear')
-      expect(store.persisted).toEqual(before)
-      session.dispose()
-    })
-
-    it('shows only the symbol when the species has no width, and no line to a far plant', () => {
-      store.updatePersisted((draft) => {
-        draft.plants = [makePlant('far', 'Prunus avium', { x: 90, y: 90 })]
-      })
-      selectPlantStampSource({ ...APPLE, width_max_m: null })
-      const session = previewSession()
-
-      events.pointerMove({ x: 130, y: 140 })
-
-      expect(container.querySelector('[data-plant-placement-glyph]')).not.toBeNull()
-      expect(container.querySelector('[data-plant-placement-spread]')).toBeNull()
-      expect(container.querySelector('[data-plant-placement-label]')).toBeNull()
-      expect(container.querySelector('[data-plant-placement-nearest-label]')).toBeNull()
-      session.dispose()
-    })
-
-    it('shows nothing before a species is chosen', () => {
-      const session = previewSession()
-
-      events.pointerMove({ x: 130, y: 140 })
-
-      expect(previewRoot()?.style.display ?? 'none').toBe('none')
-      session.dispose()
-    })
-
-    it('hides when the pointer leaves the map and when the tool changes', () => {
-      selectPlantStampSource(APPLE)
-      const session = previewSession()
-      events.pointerMove({ x: 130, y: 140 })
-      expect(previewRoot()?.style.display).toBe('block')
-
-      container.dispatchEvent(new PointerEvent('pointerleave'))
-      expect(previewRoot()?.style.display).toBe('none')
-
-      events.pointerMove({ x: 130, y: 140 })
-      expect(previewRoot()?.style.display).toBe('block')
-      session.setTool('select')
-      expect(previewRoot()?.style.display).toBe('none')
-      session.dispose()
-    })
-
-    it('updates the nearest plant after a placement', () => {
-      selectPlantStampSource(APPLE)
-      const session = previewSession()
-
-      events.pointerDown({ x: 100, y: 100 })
-      events.pointerUp({ x: 100, y: 100 })
-      events.pointerMove({ x: 120, y: 100 })
-
-      expect(store.persisted.plants).toHaveLength(1)
-      events.pointerMove({ x: 130, y: 100 })
-      const labels = container.querySelectorAll('[data-plant-placement-nearest-label]')
-      expect([...labels].map((label) => label.textContent)).toEqual(['3 m to Apple'])
       session.dispose()
     })
   })

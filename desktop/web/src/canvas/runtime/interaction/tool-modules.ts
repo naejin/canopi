@@ -18,14 +18,6 @@ import {
   createMeasurementGuideToolAdapter,
 } from './measurement-guide-tool'
 import {
-  createPlantSpacingTool,
-  createPlantSpacingToolAdapter,
-} from './plant-spacing-tool'
-import {
-  createPlantStampTool,
-  createPlantStampToolAdapter,
-} from './plant-stamp-tool'
-import {
   createSavedObjectStampTool,
   createSavedObjectStampToolAdapter,
 } from './saved-object-stamp-tool'
@@ -108,18 +100,6 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
       notifyTransientHistoryChange: context.notifyTransientHistoryChange,
     }), (tool) => tool.dispose())
     const zoneDrawingAdapters = createZoneDrawingToolAdapters(zoneDrawingTool)
-    const plantStampTool = own(createPlantStampTool({
-      container: context.container,
-      camera: context.camera,
-      getSceneStore: context.getSceneStore,
-      getPlantPresentationContext: context.getPlantPresentationContext,
-      getLocalizedCommonNames: context.getLocalizedCommonNames,
-      translate: context.translate,
-      sceneEdits: context.sceneEdits,
-      applySnapping: context.applySnapping,
-      runWhenSettled: context.runWhenSettled,
-      notifyGuidanceChange: context.notifyGuidanceChange,
-    }), (tool) => tool.dispose())
     const objectStampTool = own(createObjectStampTool({
       preview: context.preview,
       getLocalizedCommonNames: context.getLocalizedCommonNames,
@@ -140,21 +120,6 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
       switchTool: context.switchTool,
       rotationKeys,
     }), (tool) => tool.dispose())
-    const plantSpacingTool = own(createPlantSpacingTool({
-      container: context.container,
-      camera: context.camera,
-      getSceneStore: context.getSceneStore,
-      getSpeciesCache: context.getSpeciesCache,
-      getPlantPresentationContext: context.getPlantPresentationContext,
-      getLocalizedCommonNames: context.getLocalizedCommonNames,
-      readPlantSpacingIntervalMeters: context.readPlantSpacingIntervalMeters,
-      commitPlantSpacingIntervalMeters: context.commitPlantSpacingIntervalMeters,
-      sceneEdits: context.sceneEdits,
-      switchTool: context.switchTool,
-      focusHost: context.focusHost,
-      applySnapping: context.applySnapping,
-      getContainerRect: context.getContainerRect,
-    }), (tool) => tool.dispose())
     const measurementGuideTool = own(createMeasurementGuideTool({
       container: context.container,
       preview: context.preview,
@@ -165,7 +130,6 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
     }), (tool) => tool.dispose())
 
     const registry = new DefaultSceneToolRegistry(new Map([
-      ['plant-stamp', createPlantStampToolAdapter(plantStampTool)],
       ['text', createTextAnnotationToolAdapter(textTool)],
       ['line', zoneDrawingAdapters.line],
       ['measurement-guide', createMeasurementGuideToolAdapter(measurementGuideTool)],
@@ -180,7 +144,6 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
         switchTool: context.switchTool,
         rotationKeys,
       })],
-      ['plant-spacing', createPlantSpacingToolAdapter(plantSpacingTool)],
     ]))
     rollback.length = 0
     return registry
