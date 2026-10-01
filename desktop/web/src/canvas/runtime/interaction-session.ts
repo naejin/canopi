@@ -427,8 +427,11 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     } catch (error) {
       // The host's own rollback only runs once activation starts; a failure before that (cancelling the tool left) leaves
       // the host on `previous`, unchanged. Either way, activeToolIsSelect() names the host's real tool.
-      this._tool.value = this._toolHost.activeToolIsSelect() ? 'select' : previous
+      const fellBackToSelect = this._toolHost.activeToolIsSelect()
+      this._tool.value = fellBackToSelect ? 'select' : previous
       this._endPressesAfterFailedSwitch()
+      // A fallback deactivates the tool left (unlike a re-arm of the same `previous`): its pick must not outlive it.
+      if (fellBackToSelect && previous !== 'select') clearToolSource(previous)
       throw error
     }
     // The tool left drops its pick once it is deactivated, as today's tools did (the next tool never hears it).

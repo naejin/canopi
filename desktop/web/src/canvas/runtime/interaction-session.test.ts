@@ -828,6 +828,25 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
     expect(builtHosts.at(-1)?.activeTool.value).toBe('rectangle')
   })
 
+  it('a fallback to Select after a failed activation clears the tool left\'s source', () => {
+    let failActivation = true
+    const rectangle = stubTool('rectangle', {
+      activate: () => {
+        if (failActivation) throw new Error('activation failed')
+      },
+    })
+    useStubTools(stubTool('plant-stamp'), rectangle)
+    const { session } = createSession()
+    selectPlantStampSource(SPECIES)
+    session.setTool('plant-stamp')
+    expect(readPlantStampSource()).not.toBeNull()
+
+    expect(() => session.setTool('rectangle')).toThrow('activation failed')
+    failActivation = false
+    expect(builtHosts.at(-1)?.activeTool.value).toBe('select')
+    expect(readPlantStampSource()).toBeNull()
+  })
+
   it('disposal releases the capture of a registered tool\'s live press and rolls its edit back', () => {
     const { tool: rectangle, open } = editingTool('rectangle')
     useStubTools(rectangle)
