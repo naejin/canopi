@@ -196,8 +196,6 @@ export interface CanvasRuntimeAppAdapter {
 /** How a tool's focus request (ToolEffects.requestFocus) leaves the runtime. The FocusOwner implements it. */
 export interface CanvasFocusPort {
   focusMap(reason: 'tool-requested' | 'text-entry-closed'): void
-  /** The tool card's field (the Plant a row spacing field), registered by ToolCard.tsx through FocusOwner.registerToolCardField. */
-  focusToolCardField(reason: 'tool-requested'): void
 }
 
 export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter {

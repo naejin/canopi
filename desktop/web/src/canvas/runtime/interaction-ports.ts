@@ -81,8 +81,6 @@ export interface ContextMenuPort {
     readonly screen: ScreenPoint | null
     readonly hit: HitTarget | null
     readonly turnViewToEdge?: () => void                        // a zone-edge hit within the source's tolerance (§4.16)
-    readonly highlightEdge?: (on: boolean) => void              // while the entry is highlighted: the ochre trace (a draft)
-    readonly finishShape?: () => void                           // ToolHost.command({ kind: 'finish-shape' }) during a 3+ corner draft
   }): void
   close(): void
   readonly isOpen: () => boolean
@@ -108,7 +106,7 @@ export interface ToolHostDeps {
   /** History-free, dirty-free selection (today's deps.setSelection/clearSelection); backs ToolEffects.setSelection and the menu retarget. */
   readonly setSelection: (targets: readonly SceneDesignObjectTarget[]) => void
   readonly plane: () => SessionPlane                            // CanvasTool.planeChanged when its identity changes
-  readonly renderer: Pick<SceneRendererV2, 'setDraft' | 'setSelectionPreview'>
+  readonly renderer: Pick<SceneRendererV2, 'setDraft'>
   /** Redraw request after a tool call that mutated an open transaction or changed its draft or handles. */
   readonly invalidate: () => void
   readonly chrome: {
@@ -125,7 +123,7 @@ export interface ToolHostDeps {
     /** chrome/locked-affordance.ts; its factory takes onUnlock, wired by interaction-session.ts. */
     setLockedAffordance(a: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null): void
   }
-  readonly menu: ContextMenuPort                                // opened only by the host (menuAt, ToolEffects.requestMenu)
+  readonly menu: ContextMenuPort                                // opened only by the host (menuAt)
   readonly focus: CanvasFocusPort                               // ToolEffects.requestFocus
   readonly guidance: (g: Partial<CanvasToolGuidance> | null) => void
   readonly toolState: { readonly active: ReadonlySignal<ToolId>; set(id: ToolId): void }   // the session's tool signal
@@ -134,9 +132,6 @@ export interface ToolHostDeps {
    *  adapter's readSnapToGridEnabled and readSnapToGuidesEnabled); the shape tools/snapping.ts takes. */
   readonly snapping: () => { readonly grid: boolean; readonly guides: boolean }
   readonly translate: ToolContext['translate']
-  readonly bindings: () => Bindings                             // modifier resolution (§2.3)
-  readonly platform: InputPlatform
-  readonly navigation: Pick<ViewNavigation, 'turnToEdge'>       // the "Turn view to this edge" entry
   /** Today's deps.nudge (the runtime's scene-edit commands); the host owns the series (nudge below). */
   readonly nudge: Pick<CanvasSceneEditCommandSurface, 'nudgeSelected' | 'endNudge'>
   readonly timers: { set(atMs: number, cb: () => void): number; clear(id: number): void; readonly clock: () => number }
@@ -166,7 +161,6 @@ export interface ToolHostDeps {
  *  for screen-sized plants and notes; the hovered note comes from store.session.hoveredTarget, as today. Nothing is cached in 0B. */
 export interface ToolSceneSource {
   readonly store: SceneStateReader                              // the runtime's scene store
-  readonly sceneRevision: ReadonlySignal<number>                // unread in 0B (nothing is cached); a later index would rebuild on it
   readonly selection: () => SceneDesignObjectSelection
   readonly isLayerOpenForCreation: (layer: SceneLayerKind) => boolean
   readonly pixelsPerMetre: () => number                         // frame.view.pixelsPerMetre: exact at bearing 0 (metresPerPixelAt is not)

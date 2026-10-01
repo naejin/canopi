@@ -8,7 +8,6 @@
 import { signal } from '@preact/signals'
 import type { CanvasToolGuidance } from '../../canvas/session-state'
 import { createSessionPlane, type GeoPosition, type SessionPlane } from '../../canvas/session-plane'
-import { LEGACY_BINDINGS } from '../../canvas/runtime/input/bindings'
 import type { Gesture, MenuSource, PressTarget } from '../../canvas/runtime/input/gestures'
 import { createInputRouter } from '../../canvas/runtime/input/input-router'
 import type { TargetClass } from '../../canvas/runtime/input/raw-input'
@@ -169,7 +168,6 @@ export function createToolSceneSource(store: SceneStore, options: ToolSceneSourc
   const pixelsPerMetre = options.pixelsPerMetre ?? (() => 1)
   return {
     store,
-    sceneRevision: signal(0),
     selection: () => store.session.selectedTargets,
     isLayerOpenForCreation: options.isLayerOpenForCreation ?? ((layer) => {
       const entry = store.persisted.layers.find((candidate) => candidate.name === layer)
@@ -534,9 +532,6 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
         const entry = chrome.textEntry
         if (entry?.focused) blurTextEntry(entry)
       },
-      focusToolCardField(reason) {
-        record.focus.push(`tool-card-field:${reason}`)
-      },
     },
     guidance: (guidance) => {
       record.guidance.push(guidance)
@@ -553,9 +548,6 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
     },
     snapping: () => snapping,
     translate: options.translate ?? ((key) => key),
-    bindings: () => LEGACY_BINDINGS,
-    platform: { os: 'linux', engine: 'chromium', gestureEvents: false },
-    navigation: view.navigation,
     nudge: options.nudge ?? createNudgeSeries(store, edits, record),
     timers: { ...timers, clock: () => view.clock.now() },
     hover(target) {

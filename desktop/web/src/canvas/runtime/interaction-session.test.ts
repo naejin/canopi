@@ -181,7 +181,6 @@ describe('the interaction session', () => {
     useStubTools(select)
     const focus: CanvasFocusPort = {
       focusMap: vi.fn(() => { order.push('focus') }),
-      focusToolCardField: vi.fn(),
     }
     const nudge = { nudgeSelected: vi.fn(() => true), endNudge: vi.fn() }
     store.updatePersisted((draft) => {

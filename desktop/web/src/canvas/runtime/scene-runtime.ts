@@ -225,10 +225,8 @@ export class SceneCanvasRuntime {
         viewNavigation: this._construction.viewNavigation,
         renderer: {
           setDraft: (draft) => this._rendering.setDraft(draft),
-          setSelectionPreview: (preview) => this._rendering.setSelectionPreview(preview),
         },
         ...(this._appAdapter.focus ? { focus: this._appAdapter.focus } : {}),
-        sceneRevision: this._sceneRevision,
       })
       const interaction = this._interaction
       bindQuerySurfacePointerWorld(this._querySurface, (listener) => interaction.subscribePointerWorld(listener))

@@ -1,7 +1,7 @@
 // canvas/runtime/tools/tool.ts  (the tool contract; with interaction-types.ts, where tool implementations get their shared types)
 // Every import below is `import type`, each from the module that defines the type, never from a barrel (scene/index.ts):
 //   ../interaction-types.ts: ToolId, PointerKind, CancelReason, ToolHandleId (§1.2a)
-//   ./draft.ts: DraftPresentation, SelectionPreview, ToolHandle
+//   ./draft.ts: DraftPresentation, ToolHandle
 //   ../view/types.ts: WorldPoint, WorldVector, WorldQuad
 //   ../scene/types.ts: ScenePersistedState, ScenePlantEntity, SceneLayerEntity
 //   ../scene/design-object-targets.ts: SceneDesignObjectTarget, SceneDesignObjectSelection
@@ -19,7 +19,7 @@
 // import these types from tool.ts, draft.ts or the same defining modules. Any later type import must keep P5c true.
 
 import type { CancelReason, PointerKind, ToolHandleId, ToolId } from '../interaction-types'
-import type { DraftPresentation, SelectionPreview, ToolHandle } from './draft'
+import type { DraftPresentation, ToolHandle } from './draft'
 import type { WorldPoint, WorldQuad, WorldVector } from '../view/types'
 import type { ScenePersistedState, ScenePlantEntity, SceneLayerEntity } from '../scene/types'
 import type { SceneDesignObjectSelection, SceneDesignObjectTarget } from '../scene/design-object-targets'
@@ -121,7 +121,6 @@ export type ToolCommand =
   | { readonly kind: 'remove-last' }                               // Backspace
   | { readonly kind: 'rotate-held'; readonly stepDeg: 15 | -15 }   // [ ] while a stamp is held
   | { readonly kind: 'place-at'; readonly world: WorldPoint }      // context menu "Place plants here": snapped by the host; dropped in overview
-  | { readonly kind: 'finish-shape' }                              // context menu "Finish shape" during a polygon draft
   | { readonly kind: 'delete-handle' }                             // Delete on a focused or selected zone corner (phase 2)
   | { readonly kind: 'edit-text' }                                 // Enter / F2 on one selected note
   | { readonly kind: 'undo-transient' } | { readonly kind: 'redo-transient' }
@@ -170,7 +169,6 @@ export interface ToolEffects {
   /** History-free, dirty-free selection: click, band, clearing (today's session setSelection; a transaction's setSelection records an undo step). */
   setSelection(targets: readonly SceneDesignObjectTarget[]): void
   setDraft(draft: DraftPresentation | null): void           // world-space; drawn by the renderer
-  setSelectionPreview(preview: SelectionPreview | null): void
   setHandles(handles: readonly ToolHandle[]): void          // DOM handle layer; hit by the source
   setGuidance(guidance: Partial<CanvasToolGuidance> | null): void
   setCursor(cursor: 'default' | 'crosshair' | 'copy' | 'move' | 'not-allowed' | 'rotate' | 'grab' | 'grabbing'): void
@@ -179,8 +177,7 @@ export interface ToolEffects {
    *  onCancel runs when the entry closes without a submit (its own Esc), so the tool can follow the cancel. */
   requestTextEntry(request: TextEntryRequest, submit: (text: string) => 'close' | 'keep', onCancel?: () => void): void
   closeTextEntry(): void
-  requestMenu(at: WorldPoint | 'selection'): void
-  requestFocus(target: 'map' | 'tool-card-field'): void     // ToolHostDeps.focus (CanvasFocusPort, §1.6), implemented by the FocusOwner
+  requestFocus(target: 'map'): void                         // ToolHostDeps.focus (CanvasFocusPort, §1.6), implemented by the FocusOwner
 }
 
 export interface ToolSettingsPort {

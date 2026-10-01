@@ -128,7 +128,7 @@ describe('the session\'s chrome', () => {
       },
     })
     useStubTools(text)
-    const focus: CanvasFocusPort = { focusMap: vi.fn(() => container.focus()), focusToolCardField: vi.fn() }
+    const focus: CanvasFocusPort = { focusMap: vi.fn(() => container.focus()) }
     const { session } = createSession({ focus, translate: (key) => `en:${key}` })
     container.tabIndex = 0
     session.setTool('text')

@@ -257,11 +257,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         toolDraft = draft
         changed()
       },
-      setSelectionPreview(preview) {
-        if (!owns()) return
-        deps.renderer.setSelectionPreview(preview)
-        changed()
-      },
       setHandles(handles) {
         // The same handles again (a refresh after a camera frame or a scene change) change nothing and redraw nothing.
         if (!owns() || sameHandles(toolHandles, handles)) return
@@ -300,18 +295,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       closeTextEntry() {
         if (owns()) closeTextEntry()
       },
-      requestMenu(at) {
-        if (!owns()) return
-        if (at === 'selection') {
-          deps.menu.open({ at, source: 'keyboard', screen: null, hit: null })
-          return
-        }
-        openMenuAt(frame().view.worldToScreen(at), 'mouse')
-      },
-      requestFocus(target) {
-        if (!owns()) return
-        if (target === 'map') deps.focus.focusMap('tool-requested')
-        else deps.focus.focusToolCardField('tool-requested')
+      requestFocus() {
+        if (owns()) deps.focus.focusMap('tool-requested')
       },
     }
     return {
