@@ -72,26 +72,21 @@ function similarityTransform(
   const { screen, plane } = input
   const { x: tx, y: ty, scale } = planar
   const [cos, sin] = bearingCosSin(planar.bearingDeg)
-  // At bearing 0 every read below is today's CameraController expression, so readbacks match it bit for bit.
-  const level = cos === 1 && sin === 0
-  const a = level ? scale : scale * cos
-  const b = level ? 0 : 0 - scale * sin
-  const c = level ? 0 : scale * sin
+  // At bearing 0, cos = 1 and sin = 0, so this is today's CameraController expression bit for bit.
+  const a = scale * cos
+  const b = 0 - scale * sin
+  const c = scale * sin
   const d = a
 
-  const worldToScreen = level
-    ? (p: WorldPoint): ScreenPoint => ({ x: p.x * scale + tx, y: p.y * scale + ty })
-    : (p: WorldPoint): ScreenPoint => ({ x: a * p.x + c * p.y + tx, y: b * p.x + d * p.y + ty })
-  const screenToWorld = level
-    ? (s: ScreenPoint): WorldPoint => ({ x: (s.x - tx) / scale, y: (s.y - ty) / scale })
-    : (s: ScreenPoint): WorldPoint => {
-        const across = (s.x - tx) / scale
-        const down = (s.y - ty) / scale
-        return { x: cos * across - sin * down, y: sin * across + cos * down }
-      }
+  const worldToScreen = (p: WorldPoint): ScreenPoint => ({ x: a * p.x + c * p.y + tx, y: b * p.x + d * p.y + ty })
+  const screenToWorld = (s: ScreenPoint): WorldPoint => {
+    const across = (s.x - tx) / scale
+    const down = (s.y - ty) / scale
+    return { x: cos * across - sin * down, y: sin * across + cos * down }
+  }
   const axes = Object.freeze({
-    right: Object.freeze<WorldVector>({ x: level ? 1 : cos, y: level ? 0 : sin }),
-    down: Object.freeze<WorldVector>({ x: level ? 0 : 0 - sin, y: level ? 1 : cos }),
+    right: Object.freeze<WorldVector>({ x: cos, y: sin }),
+    down: Object.freeze<WorldVector>({ x: 0 - sin, y: cos }),
   })
 
   const screenCorners = (insets: ScreenInsets): WorldQuad => {
@@ -121,8 +116,8 @@ function similarityTransform(
       for (let index = 0; index < count; index++) {
         const x = world[index * 2]!
         const y = world[index * 2 + 1]!
-        out[index * 2] = level ? x * scale + tx : a * x + c * y + tx
-        out[index * 2 + 1] = level ? y * scale + ty : b * x + d * y + ty
+        out[index * 2] = a * x + c * y + tx
+        out[index * 2 + 1] = b * x + d * y + ty
       }
     },
     metresPerPixelAt(p?: WorldPoint): number {
