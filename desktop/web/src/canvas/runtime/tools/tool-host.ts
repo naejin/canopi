@@ -888,12 +888,15 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (deps.chrome.isTextEntryOpen()) deps.chrome.closeTextEntry()
   }
 
-  /** Entering overview drops what today's setOverviewMode(true) dropped: the text entry, the menu and every transient. */
+  /** Entering overview drops what today's setOverviewMode(true) dropped: the text entry, the menu and every transient. Text's
+   *  new-note entry stays, as today's new-note field did: the next press commits it on its blur. */
   function enterOverview(): void {
     lastHover = null
     if (!activeTool) return
     runCanvasRuntimeCleanups([
-      () => closeTextEntry(),
+      () => {
+        if (currentId !== 'text') closeTextEntry()
+      },
       () => cancelTransientInteraction('overview'),
       () => deps.menu.close(),
     ], 'Tool host overview transition failed')

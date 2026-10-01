@@ -6,10 +6,12 @@
 
 import type { ToolId } from '../interaction-types'
 import { createSelectTool } from './select/select-tool'
+import { createTextNoteTool } from './text-note'
 import type { CanvasTool } from './tool'
 
 export type ToolFactory = () => CanvasTool
 
 export const TOOL_REGISTRY: Readonly<Partial<Record<ToolId, ToolFactory>>> = Object.freeze({
   select: createSelectTool,
+  text: createTextNoteTool,
 })

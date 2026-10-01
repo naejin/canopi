@@ -1,5 +1,7 @@
 // SceneInteractionSession tests, split by the first tool a test arms (canvas v2 plan §4, Seams):
-// tests that arm Text, and the text note editor describe.
+// tests that arm Text, and the text note editor describe. Text runs on the ToolHost (tools/text-note.ts, whose own tests
+// drive it through the ToolHarness); these stay end to end, and the note field is the host's text entry
+// (chrome/text-entry-host.ts).
 // Shared fakes, helpers and fixture: support/scene-interaction-setup.ts.
 import { describe, expect, it, vi } from 'vitest'
 import { t } from '../i18n'
@@ -30,6 +32,11 @@ describe('SceneInteractionSession', () => {
     () => ({ events }),
   )
 
+  /** The host's text entry: a new note's field, or a note's in-place editor. */
+  function noteEntry(): HTMLTextAreaElement | null {
+    return container.querySelector<HTMLTextAreaElement>('textarea[data-canvas-text-entry]')
+  }
+
   it('commits a text Annotation with Enter and selects it', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
@@ -37,7 +44,7 @@ describe('SceneInteractionSession', () => {
     session.setTool('text')
 
     events.pointerDown({ x: 24, y: 32 }, { button: 0 })
-    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+    const textarea = noteEntry()!
     textarea.value = 'Guild note'
     textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
 
@@ -62,7 +69,7 @@ describe('SceneInteractionSession', () => {
     session.setTool('text')
 
     events.pointerDown({ x: 24, y: 32 }, { button: 0 })
-    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+    const textarea = noteEntry()!
     textarea.value = 'Deferred guild note'
     const active = deps.sceneEdits.begin('external-preview')
 
@@ -70,7 +77,7 @@ describe('SceneInteractionSession', () => {
 
     expect(store.persisted.annotations).toHaveLength(0)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
-    expect(container.querySelector('textarea')).toBe(textarea)
+    expect(noteEntry()).toBe(textarea)
     expect(textarea.value).toBe('Deferred guild note')
 
     active.abort()
@@ -114,7 +121,7 @@ describe('SceneInteractionSession', () => {
     session.setTool('text')
 
     events.pointerDown({ x: 24, y: 32 }, { button: 0 })
-    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+    const textarea = noteEntry()!
     textarea.value = 'Draft note'
     textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
 
@@ -132,7 +139,7 @@ describe('SceneInteractionSession', () => {
 
     events.pointerDown({ x: 24, y: 32 }, { button: 0 })
     await nextAnimationFrame()
-    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+    const textarea = noteEntry()!
     textarea.value = 'Blurred note'
     textarea.dispatchEvent(new FocusEvent('blur'))
     await nextAnimationFrame()
@@ -147,6 +154,28 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('commits an open note on the click that leaves it, which places nothing; the next click places a note', async () => {
+    const session = createTestSession(createInteractionDeps(container, store, camera))
+    session.setTool('text')
+    container.tabIndex = 0
+    events.pointerDown({ x: 24, y: 32 }, { button: 0 })
+    events.pointerUp({ x: 24, y: 32 }, { button: 0 })
+    await nextAnimationFrame()
+    const textarea = noteEntry()!
+    expect(document.activeElement).toBe(textarea)
+    textarea.value = 'Left behind'
+
+    events.pointerDown({ x: 80, y: 90 }, { button: 0 })
+    events.pointerUp({ x: 80, y: 90 }, { button: 0 })
+    expect(store.persisted.annotations).toEqual([expect.objectContaining({ position: { x: 24, y: 32 }, text: 'Left behind' })])
+    expect(container.querySelector('textarea')).toBeNull()
+
+    events.pointerDown({ x: 80, y: 90 }, { button: 0 })
+    expect(noteEntry()).not.toBeNull()
+    expect(noteEntry()!.style.left).toBe('80px')
+    session.dispose()
+  })
+
   it('does not commit empty text Annotations', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
@@ -154,7 +183,7 @@ describe('SceneInteractionSession', () => {
     session.setTool('text')
 
     events.pointerDown({ x: 24, y: 32 }, { button: 0 })
-    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+    const textarea = noteEntry()!
     textarea.value = '   '
     textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
 
@@ -187,7 +216,7 @@ describe('SceneInteractionSession', () => {
     })
     session.setTool('text')
     events.pointerDown({ x: 24, y: 32 }, { button: 0 })
-    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+    const textarea = noteEntry()!
     textarea.value = 'Retained note'
 
     const errors = captureWindowErrors(() => {
@@ -196,7 +225,7 @@ describe('SceneInteractionSession', () => {
 
     expect(errors).toHaveLength(1)
     expect(store.persisted.annotations).toHaveLength(1)
-    expect(container.querySelector('textarea')).toBe(textarea)
+    expect(noteEntry()).toBe(textarea)
 
     const recoveryPointerDown = events.pointerDown({ x: 80, y: 90 }, { button: 0 })
 
@@ -214,13 +243,13 @@ describe('SceneInteractionSession', () => {
     session.setTool('text')
 
     events.pointerDown({ x: 24, y: 32 }, { button: 0 })
-    expect(container.querySelector('textarea')).not.toBeNull()
+    expect(noteEntry()).not.toBeNull()
     session.setTool('select')
     expect(container.querySelector('textarea')).toBeNull()
 
     session.setTool('text')
     events.pointerDown({ x: 48, y: 64 }, { button: 0 })
-    expect(container.querySelector('textarea')).not.toBeNull()
+    expect(noteEntry()).not.toBeNull()
     session.dispose()
     expect(container.querySelector('textarea')).toBeNull()
   })
@@ -231,7 +260,7 @@ describe('SceneInteractionSession', () => {
     session.setTool('text')
 
     events.pointerDown({ x: 24, y: 32 }, { button: 0 })
-    expect(container.querySelector('textarea')).not.toBeNull()
+    expect(noteEntry()).not.toBeNull()
     expect(container.style.cursor).toBe('text')
 
     events.keyDown({
@@ -251,7 +280,7 @@ describe('SceneInteractionSession', () => {
 
       events.pointerDown({ x: 24, y: 32 }, { button: 0 })
 
-      const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+      const textarea = noteEntry()!
       expect(textarea.getAttribute('aria-label')).toBe(t('canvas.tools.text'))
       expect(textarea.placeholder).toBe(t('canvas.textNote.placeholder'))
       expect(t('canvas.tools.text')).toBe('Text note')
@@ -271,7 +300,7 @@ describe('SceneInteractionSession', () => {
 
       events.keyDown({ key: 'Enter', target: container })
 
-      expect(container.querySelector('textarea')?.getAttribute('aria-label')).toBe(t('canvas.tools.text'))
+      expect(noteEntry()?.getAttribute('aria-label')).toBe(t('canvas.tools.text'))
       session.dispose()
     })
   })
