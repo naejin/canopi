@@ -325,7 +325,8 @@ describe('draft layer', () => {
   })
 
   it('a dot ghost is never smaller than its 2 px border', () => {
-    // Today's disc is a border-box div with a 2 px border (plant-spacing-overlay.ts), which CSS never draws under 4 px across.
+    // Today's disc is a border-box div with a 2 px border (today's (a4c86d39) plant-spacing-overlay.ts), which CSS never draws under
+    // 4 px across.
     const source = createPlant({ id: 'source', position: { x: 0, y: 0 } })
     const neighbour = createPlant({ id: 'neighbour', position: { x: 0.1, y: 0 } })
     const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [source, neighbour] } })

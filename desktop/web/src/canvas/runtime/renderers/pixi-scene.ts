@@ -58,7 +58,7 @@ import { isSceneObjectGroupMemberTarget } from '../scene'
 
 const ZONE_STROKE_PX = 2
 const MEASUREMENT_GUIDE_STROKE_PX = 1.5
-/** Plant a row's disc: today's 2 px border-box border keeps it at least 4 px across (plant-spacing-overlay.ts). */
+/** Plant a row's disc: today's 2 px border-box border keeps it at least 4 px across (today's (a4c86d39) plant-spacing-overlay.ts). */
 const DOT_GHOST_MIN_RADIUS_PX = 2
 const graphicsKeys = new WeakMap<Graphics, string>()
 

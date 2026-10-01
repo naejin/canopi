@@ -1,7 +1,8 @@
 // canvas/runtime/input/thresholds.ts  (plain numbers; tests may pass others)
 //
 // Owns the recogniser's timing and distance thresholds. Tools keep their own (the band and handles act past 2 px at
-// release, Plant a row at 4 px through `configure`); the recogniser's drag slop is per binding (`Bindings.dragSlopPx`).
+// release; Plant a row runs at slop 0 and measures its own 4 px); the recogniser's drag slop is per binding
+// (`Bindings.dragSlopPx`).
 
 export interface Thresholds {
   readonly longPressMs: number               // 500
