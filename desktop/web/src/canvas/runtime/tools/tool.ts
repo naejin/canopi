@@ -171,8 +171,9 @@ export interface ToolEffects {
   setGuidance(guidance: Partial<CanvasToolGuidance> | null): void
   setCursor(cursor: 'default' | 'crosshair' | 'copy' | 'move' | 'not-allowed' | 'rotate' | 'grab' | 'grabbing'): void
   requestTool(id: ToolId): void
-  /** Opens the host's text entry; submit runs on Enter and on blur and keeps the field open on 'keep' (a refused commit). */
-  requestTextEntry(request: TextEntryRequest, submit: (text: string) => 'close' | 'keep'): void
+  /** Opens the host's text entry; submit runs on Enter and on blur and keeps the field open on 'keep' (a refused commit);
+   *  onCancel runs when the entry closes without a submit (its own Esc), so the tool can follow the cancel. */
+  requestTextEntry(request: TextEntryRequest, submit: (text: string) => 'close' | 'keep', onCancel?: () => void): void
   closeTextEntry(): void
   requestMenu(at: WorldPoint | 'selection'): void
   requestFocus(target: 'map' | 'tool-card-field'): void     // ToolHostDeps.focus (CanvasFocusPort, §1.6), implemented by the FocusOwner
@@ -190,6 +191,8 @@ export interface ToolContext {
   readonly settings: ToolSettingsPort
   /** The host's grid and guide snapping of any world point (the move-drag snaps the dragged object's reference point, not the pointer). */
   snap(point: WorldPoint): WorldPoint
+  /** The host's clock in ms (ToolHostDeps.timers.clock): for double-click and similar windows; tests inject it. */
+  now(): number
   readonly translate: (key: string, options?: Readonly<Record<string, unknown>>) => string
 }
 
@@ -224,7 +227,7 @@ export interface CanvasTool {
   hasTransient(): boolean
   /** Esc hint for the tool card, read by describeEscape. */
   escapeHint(): 'drop-transient' | 'leave-tool' | 'clear-selection' | null
-  cancelTransient(reason: 'escape' | 'tool-change' | 'document-replaced' | 'navigate'): void
+  cancelTransient(reason: 'escape' | 'tool-change' | 'document-replaced' | 'navigate' | 'overview'): void   // 'overview': the map entered overview; drop picks and drafts as today's overview reset did
   /** Transient history (polygon corners), read by ToolHost.transientHistory; the tool acts on the undo-transient and redo-transient commands. */
   canUndoTransient?(): boolean
   canRedoTransient?(): boolean

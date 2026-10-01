@@ -4,7 +4,7 @@
 // window pointer, blur and (0B only, `legacyKeys`) key listeners, and the ruler presses at document capture. It turns
 // each event into host-relative, classified fields for `normalise`, hands the raw input to the sink, and applies the
 // effects the sink sends back to the event being handled: prevent-default, stop-propagation, pointer capture, the drop
-// effect. A sink that throws on a press on the map, a release, a context menu, a dragover or a drop quarantines that event
+// effect. Detaching releases every capture it still holds. A sink that throws on a press on the map, a release, a context menu, a dragover or a drop quarantines that event
 // first, as today's handlers did around their admitted work; any other event's error leaves the event to the app. It is
 // the one module of input/ that touches the browser (policy P7); the input core stays pure.
 
@@ -254,6 +254,9 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
         clearTickTimer()
         const pending = removals.splice(0)
         runCanvasRuntimeCleanups([
+          // Every capture the source still holds goes with it (a live press at disposal, today's _clearPointerGesture);
+          // the sink is gone first, so the loss a release dispatches reaches nobody.
+          ...[...captured].map((pointerId) => () => release(pointerId)),
           ...pending,
           () => {
             if (host.style.touchAction !== previousTouchAction) host.style.touchAction = previousTouchAction
