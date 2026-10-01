@@ -156,7 +156,8 @@ export interface ToolHostDeps {
   /**
    * A drop the host placed, once its Scene Edit committed, Select is armed and the map has focus: the session clears the
    * saved stamp's drag source after a saved-stamp drop (today's clearSavedObjectStampDragSource; the panel's dragend
-   * clears it too) and focuses the map again on the next animation frame, after the browser's drag end, as today's drop did.
+   * clears it too) and focuses the map again on the next animation frame, after the browser's drag end, as today's drop
+   * did.
    */
   readonly dropped: (kind: 'species' | 'saved-stamp') => void
 }
@@ -234,9 +235,9 @@ export interface ToolHost {
    * one while another pointer's press is live, in overview, or over the note editor, a handle or the Unlock affordance
    * (today's _onPointerUp exceptions). The host's own tap and drag-end of a ruler drag, or of a press the tool never heard,
    * do the same. Today's window pointerup ran _cancelTransientInteraction for each: the series commits, the drop preview
-   * and the passive hover clear, the active tool's cancelTransient('navigate') runs (a tool that preservesTransientOnNavigate
-   * keeps its draft, as after a pan) and the cursor returns to the tool's. A press of the tool's still live is left to its
-   * own release.
+   * and the passive hover clear, the active tool's cancelTransient('navigate') runs (a tool that
+   * preservesTransientOnNavigate keeps its draft, as after a pan) and the cursor returns to the tool's. A press of the
+   * tool's still live is left to its own release.
    */
   released(): void
   /**

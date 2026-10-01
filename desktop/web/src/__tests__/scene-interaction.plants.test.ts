@@ -34,6 +34,7 @@ import {
   zoneTarget,
   nextAnimationFrame,
   makePlant,
+  plantHoverTooltip,
   installSceneInteractionFixture,
 } from './support/scene-interaction-setup'
 
@@ -818,6 +819,29 @@ describe('SceneInteractionSession', () => {
     expect(drafts.calls.length).toBeGreaterThan(draftsBefore)
     expect(rowLength()).toBe('6 m')
     expect(guideOnScreen()).not.toBe(widthBefore)
+    session.dispose()
+  })
+
+  it('shows the plant tooltip and hover over moves held after a Plant a row press that missed', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 80, y: 30 }, { commonName: 'Apple' })]
+    })
+    const setHoveredTarget = vi.fn()
+    const deps = createInteractionDeps(container, store, camera, { setHoveredTarget })
+    const session = createTestSession(deps)
+    session.setTool('plant-spacing')
+
+    // The press finds no plant: no source, and today's miss ended the gesture (clearPointerGesture).
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    setHoveredTarget.mockClear()
+    events.pointerMove({ x: 50, y: 30 }, { button: 0 })
+    events.pointerMove({ x: 80, y: 30 }, { button: 0 })
+
+    // The held moves ran today's hover: the restyle and the plant tooltip.
+    expect(setHoveredTarget).toHaveBeenLastCalledWith(plantTarget('plant-1'))
+    expect(plantHoverTooltip(container).style.display).toBe('block')
+    events.pointerUp({ x: 80, y: 30 }, { button: 0 })
+    expect(rowSource('plant-1')).toBe(false)
     session.dispose()
   })
 

@@ -541,9 +541,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       return
     }
     const reply = callTool(() => tool.gesture({ kind: 'hover', point, hit: hitAt(point.world) }))
-    const world = frame().view.screenToWorld(at)
-    if (reply === 'handled' || !world || !insideScreen(at, frame().view.screen)) clearPassiveHover()
-    else passiveHover(world, at)
+    if (reply === 'handled') clearPassiveHover()
+    else passiveHoverAt(at)
   }
 
   // ── Gestures ──────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -555,7 +554,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       const world = frame().view.screenToWorld(g.at)
       if (world && insideScreen(g.at, frame().view.screen)) publishPointer(world)
     }
-    // The pointer is back over the map after a panel drag: the tool's draft shows again, as today's next pointermove redrew it.
+    // The pointer is back over the map after a panel drag: the tool's draft shows again, as today's next pointermove
+    // redrew it.
     showDraftAfterDrop()
     const tool = activeTool
     if (!tool) return NOTHING
@@ -787,8 +787,18 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       const phase = kind === 'drag-end' ? 'end' : 'move'
       callTool(() => tool.gesture({ kind: 'handle-drag', phase, handle: gesture.handle!, point, start }))
     } else {
-      callTool(() => tool.gesture({ kind, point, start, startHit: gesture.startHit }))
+      const reply = callTool(() => tool.gesture({ kind, point, start, startHit: gesture.startHit }))
+      // A move the tool passes is none of its press's (Plant a row's missed press, a stamp with nothing held): it is a
+      // hover with the button down, as today's press that cleared its gesture left the next moves to _updateHover.
+      if (kind !== 'drag-end' && reply === 'pass') passiveHoverAt(gesture.lastScreen)
     }
+  }
+
+  /** The passive hover at a screen point, cleared off the map. */
+  function passiveHoverAt(at: ScreenPoint): void {
+    const world = frame().view.screenToWorld(at)
+    if (world && insideScreen(at, frame().view.screen)) passiveHover(world, at)
+    else clearPassiveHover()
   }
 
   function tap(g: Extract<Gesture, { kind: 'tap' }>): GestureOutcome {
@@ -857,7 +867,11 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (frame().mode === 'overview') return refuseDragOver()
     let preview: readonly DraftShape[] | null | undefined
     try {
-      preview = deps.settled.readWhenSettled<readonly DraftShape[] | null | undefined>(() => dropPreviewAt(at, payload), undefined)
+      // undefined: the scene was too busy to read.
+      preview = deps.settled.readWhenSettled<readonly DraftShape[] | null | undefined>(
+        () => dropPreviewAt(at, payload),
+        undefined,
+      )
     } catch (error) {
       setDropPreview(null)
       throw error
@@ -874,8 +888,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   /**
    * What a drop at `at` would place, drawn as the drop preview; null when it would place nothing. A species shows today's
-   * cue, a box from the pointer drawn as the band select's draft (its data is unreadable until the drop); a saved stamp shows
-   * its ghosts with the anchor at the snapped point (today's previewSavedObjectStampAt).
+   * cue, a box from the pointer drawn as the band select's draft (its data is unreadable until the drop); a saved stamp
+   * shows its ghosts with the anchor at the snapped point (today's previewSavedObjectStampAt).
    */
   function dropPreviewAt(at: ScreenPoint, payload: CanvasDropPayload): readonly DraftShape[] | null {
     const transform = frame().view
@@ -910,11 +924,12 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (payload.kind === 'saved-stamp') {
       placeSavedObjectStamp(deps.edits, deps.scene, payload.stamp, point, { onCommitted: () => dropped('saved-stamp') })
     } else if (payload.kind === 'species' && payload.species) {
-      placePlantFromSpecies({ edits: deps.edits, scene: deps.scene }, payload.species, point, 'interaction-drop', () => dropped('species'))
+      const target = { edits: deps.edits, scene: deps.scene }
+      placePlantFromSpecies(target, payload.species, point, 'interaction-drop', () => dropped('species'))
     }
   }
 
-  /** Once a drop's edit commits: Select, the map's focus, then the session's own follow-up (ToolHostDeps.dropped), as today. */
+  /** Once a drop's edit commits: Select, the map's focus, then the session's follow-up (ToolHostDeps.dropped), as today. */
   function dropped(kind: 'species' | 'saved-stamp'): void {
     if (disposed) return
     requestTool('select')

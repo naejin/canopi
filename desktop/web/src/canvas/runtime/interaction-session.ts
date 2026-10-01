@@ -9,9 +9,9 @@
 // read models to the armed tool, reads the snapping settings per point, calls ToolHost.rawPress for every raw press on
 // the map host, ToolHost.released() after a release that ended no press of the tool's and ToolHost.interrupted() after a
 // window blur, follows a placed drop (the saved stamp's drag source, the map's focus on the next frame), owns the
-// navigation cursor, and passes on no draft or handles while a story is presented. Ruler presses reach the source beside the map: the session finds the pressed ruler's overlay
-// (chrome/rulers.ts) and runs today's ruler drag under any tool (its cursor, its end on a blur, its guide at the
-// release), whatever the host does with the input.
+// navigation cursor, and passes on no draft or handles while a story is presented. Ruler presses reach the source
+// beside the map: the session finds the pressed ruler's overlay (chrome/rulers.ts) and runs today's ruler drag under
+// any tool (its cursor, its end on a blur, its guide at the release), whatever the host does with the input.
 
 import { computed, effect, signal, type ReadonlySignal } from '@preact/signals'
 import { readPlantStampSource, clearPlantStampSource } from '../plant-stamp-source'
