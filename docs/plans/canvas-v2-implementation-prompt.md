@@ -146,6 +146,8 @@ At the end of every phase, from `AGENTS.md`:
 
 Add: the conventions and "(spec)" details this phase shipped (plan section 8), any design amendment made under section 9, the inventory rows cleared, the Web-check engines and limits, the pre-push review outcome, any planned behaviour dropped because no user path or roadmap item needed it, and the phase's entries for the release close (Web steps, docs to check, gallery, release-note lines).
 
+**Retrospective (every phase close).** The bead receipt carries a "Process" section of a few lines: tokens spent and calendar days; stop-and-amend and fix rounds; review findings that were real bugs versus noise, per review lens; what the live or Web check caught that unit tests missed. Then one or two changes, each made permanent rather than remembered: a rule in `AGENTS.md` or plan section 1 (rewritten, not appended), a script, or a test. Tune by results: a review lens that finds nothing real for two phases goes; a stage whose Sonnet output needs repeated fix rounds moves to Opus; a step that stops on design questions gets a deeper design check first. Delete the finished parts of the plan and spec, so later briefs stay short. Batch the user's questions at the start of the next phase, after its design check. Every few phases, check each rule in `AGENTS.md` and plan section 1 still earns its cost.
+
 ## 13. Definition of done (verbatim)
 
 - Behaviour-preserving refactor merged first; the full gates in AGENTS.md pass at every phase.
