@@ -11,7 +11,7 @@ import type { ScenePlantEntity } from '../scene/types'
 import type { ScreenPoint, WorldPoint } from '../view/types'
 import type { DraftShape } from './draft'
 import { createPlantRowTool } from './plant-row'
-import type { CanvasTool, ToolContext, ToolSettingsPort } from './tool'
+import type { ToolSettingsPort } from './tool'
 
 vi.mock('./registry', () => ({ TOOL_REGISTRY: {} }))
 
@@ -37,13 +37,6 @@ function rowSettings(intervalM: number): RowSettings {
   return settings
 }
 
-/** The real tool, reading the spacing interval from `settings` (the harness's own settings answer 1 m). */
-function withSettings(tool: CanvasTool, settings: ToolSettingsPort): CanvasTool {
-  const activate = tool.activate.bind(tool)
-  tool.activate = (ctx, source) => activate({ ...ctx, settings } as ToolContext, source)
-  return tool
-}
-
 function sourcePlant(position: WorldPoint = { x: 20, y: 30 }, overrides: Partial<ScenePlantEntity> = {}): ScenePlantEntity {
   return plantEntity('source', 'Malus domestica', position, { commonName: 'Apple', ...overrides })
 }
@@ -55,9 +48,9 @@ function rowHarness(options: ToolHarnessOptions & {
   readonly plants?: readonly ScenePlantEntity[]
 } = {}): { readonly h: ToolHarness; readonly settings: RowSettings } {
   const settings = rowSettings(options.intervalM ?? 0.5)
-  useStubTools(withSettings(createPlantRowTool(), settings))
+  useStubTools(createPlantRowTool())
   const { scale = 1, intervalM: _intervalM, plants = [sourcePlant()], scene, ...rest } = options
-  const h = createToolHarness({ viewport: { x: 0, y: 0, scale }, scene: { plants: [...plants], ...scene }, ...rest })
+  const h = createToolHarness({ viewport: { x: 0, y: 0, scale }, scene: { plants: [...plants], ...scene }, settings, ...rest })
   harnesses.push(h)
   h.arm('plant-spacing')
   return { h, settings }

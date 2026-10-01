@@ -12,7 +12,6 @@ import type { PlantStampSourceInput } from '../../plant-stamp-source'
 import type { WorldPoint } from '../view/types'
 import type { DraftShape } from './draft'
 import { createPlantStampTool, placePlantFromSpecies } from './plant-stamp'
-import type { CanvasTool, ToolContext } from './tool'
 import { createToolScene } from './tool-host'
 
 vi.mock('./registry', () => ({ TOOL_REGISTRY: {} }))
@@ -25,21 +24,14 @@ afterEach(() => {
   for (const h of harnesses.splice(0)) h.dispose()
 })
 
-/** The real tool, translated as the app translates it (the harness's own translator returns the key). */
-function withAppTranslator(tool: CanvasTool): CanvasTool {
-  const activate = tool.activate.bind(tool)
-  tool.activate = (ctx, source) => activate({ ...ctx, translate: t } as ToolContext, source)
-  return tool
-}
-
-/** Place plants armed on a harness at `scale` px/m, with `species` chosen (or none). */
+/** Place plants armed on a harness at `scale` px/m, with `species` chosen (or none), translated as the app translates it. */
 function stampHarness(
   species: PlantStampSourceInput | null = APPLE,
   options: ToolHarnessOptions & { readonly scale?: number } = {},
 ): ToolHarness {
-  useStubTools(withAppTranslator(createPlantStampTool()))
+  useStubTools(createPlantStampTool())
   const { scale = 1, ...rest } = options
-  const h = createToolHarness({ viewport: { x: 0, y: 0, scale }, ...rest })
+  const h = createToolHarness({ viewport: { x: 0, y: 0, scale }, translate: t, ...rest })
   harnesses.push(h)
   h.arm('plant-stamp', species ? { kind: 'species', species } : null)
   return h
