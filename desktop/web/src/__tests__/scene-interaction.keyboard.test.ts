@@ -118,6 +118,23 @@ describe('SceneInteractionSession', () => {
       expect(container.getAttribute('aria-label')).toBe('Before')
     })
 
+    it('restores the host when its accessible name fails to translate', () => {
+      container.setAttribute('aria-label', 'Before')
+      const translate = (key: string): string => {
+        if (key === 'canvas.map.description') throw new Error('translation failed')
+        return key
+      }
+
+      expect(() => createTestSession(createInteractionDeps(container, store, camera, { translate })))
+        .toThrow('translation failed')
+
+      expect(container.querySelector('[data-map-keys-description]')).toBeNull()
+      expect(container.hasAttribute('tabindex')).toBe(false)
+      expect(container.hasAttribute('role')).toBe(false)
+      expect(container.hasAttribute('aria-describedby')).toBe(false)
+      expect(container.getAttribute('aria-label')).toBe('Before')
+    })
+
     it('refreshes the accessible name and description in place on a locale change', () => {
       let language = 'en'
       const translate = (key: string): string => `${language}:${key}`

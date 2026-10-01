@@ -1023,13 +1023,7 @@ function prepareInteractionHost(
     description.textContent = translate('canvas.map.description')
   }
 
-  container.appendChild(description)
-  container.tabIndex = 0
-  container.setAttribute('role', 'application')
-  container.setAttribute('aria-describedby', description.id)
-  refreshTranslations()
-
-  return {
+  const host: InteractionHostController = {
     refreshTranslations,
     dispose() {
       description.remove()
@@ -1039,6 +1033,18 @@ function prepareInteractionHost(
       }
     },
   }
+  try {
+    container.appendChild(description)
+    container.tabIndex = 0
+    container.setAttribute('role', 'application')
+    container.setAttribute('aria-describedby', description.id)
+    refreshTranslations()
+  } catch (error) {
+    // The session never owns a host whose name failed to translate: it is restored here.
+    host.dispose()
+    throw error
+  }
+  return host
 }
 
 /** The view the camera shim wraps, when the runtime does not pass its own (the split suites' CameraController). */
