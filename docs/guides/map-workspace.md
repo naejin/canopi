@@ -13,7 +13,7 @@ Canvas v2 ([plan](../plans/canvas-v2-plan.md), [spec](../plans/canvas-v2-spec.md
 - **One camera writer.** The camera has centre, zoom and bearing (degrees clockwise from true north); pitch is 0 but no module assumes it ([ADR 0016](../adr/0016-one-view-transform.md)). MapLibre's transform holds the state; one camera driver computes, constrains and applies every move (today `maplibre/workspace-camera.ts`, bearing 0 until rotation ships). Camera moves, turning included, never move objects; editing stays top-down.
 - **The session plane** (`canvas/session-plane.ts`: local Mercator metres, x east, y south, north-aligned whatever the view's bearing) is the runtime's only geometry; files store lon/lat. `canvas/runtime/view/` holds the only projection and camera maths (today `canvas/projection.ts`). `reorigin.ts` rebuilds the plane when the view centre is over 10 km from the origin, re-projecting from stored lon/lat without dirtying anything.
 - **The map is a derived visualisation.** Map layers (`app/map-layers/state.ts`) are device settings, never Design data or undoable. Contributions (LiDAR, terrain, Target overlays) render scene and Design state, never mutate it. LiDAR display: [Data library](data-library.md).
-- **One of each per workspace generation**: map, WebGL2 context (MapLibre's), renderer, camera driver, view transform, DOM input owner ([ADR 0017](../adr/0017-input-pipeline-and-gestures.md); today `canvas/runtime/scene-interaction.ts`), tool host, place-search controller, hidden snapshot map. No fallbacks.
+- **One of each per workspace generation**: map, WebGL2 context (MapLibre's), renderer, camera driver, view transform, DOM input owner ([ADR 0017](../adr/0017-input-pipeline-and-gestures.md); today `canvas/runtime/interaction-session.ts`), tool host, place-search controller, hidden snapshot map. No fallbacks.
 - **Design Edit** owns budget, timeline, consortiums, views, stories and plant display ([Design document](design-document.md)). Story overrides, Species Focus, thumbnails and tool guidance are session state, never saved.
 
 ## Rules
@@ -64,7 +64,7 @@ Canvas v2 ([plan](../plans/canvas-v2-plan.md), [spec](../plans/canvas-v2-spec.md
 | Runtime roles, authority | `canvas/runtime/runtime.ts`, `*-surface.ts`, `scene/`, `scene-runtime/` | `__tests__/canvas-runtime-surfaces`, `scene-runtime.test.ts` |
 | Renderer | `canvas/runtime/renderers/`, `maplibre/shared-scene-layer.ts` | `__tests__/pixi-scene`, `maplibre-scene-renderer` |
 | Presentation | `canvas/runtime/scene-visuals.ts`, `plant-*.ts`, `automatic-detail.ts` | `__tests__/plant-*`, `automatic-detail` |
-| Interaction, geometry, lens | `canvas/runtime/scene-interaction.ts`, `interaction/`, `zone-geometry.ts`, `inspection-lens*.ts` | `__tests__/scene-interaction*`, `hit-testing`, `inspection-*` |
+| Interaction, geometry, lens | `canvas/runtime/interaction-session.ts`, `tools/`, `interaction/`, `zone-geometry.ts`, `inspection-lens*.ts` | `__tests__/scene-interaction*`, `hit-testing`, `inspection-*` |
 
 ## Open decisions
 

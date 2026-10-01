@@ -458,7 +458,9 @@ const FORBIDDEN_IMPORT_POLICIES = [
       'src/canvas/runtime/scene-runtime.ts',
       'src/canvas/runtime/scene-runtime/effects.ts',
       'src/canvas/runtime/scene-runtime/scene-sync.ts',
-      'src/canvas/runtime/scene-interaction.ts',
+      'src/canvas/runtime/interaction-session.ts',
+      'src/canvas/runtime/input/**',
+      'src/canvas/runtime/tools/**',
     ],
     targets: ['src/app/settings/**', 'src/app/canvas-settings/**'],
   },
@@ -1238,6 +1240,8 @@ const SOURCE_TOMBSTONE_POLICIES = [
     kind: 'source-tombstones',
     name: 'Retired frontend seams stay deleted',
     files: [
+      'src/canvas/runtime/scene-interaction.ts',
+      'src/canvas/runtime/interaction/saved-object-stamp-tool.ts',
       'src/app/adaptation/index.ts',
       'src/app/adaptation/controller.ts',
       'src/ipc/adaptation.ts',
@@ -1378,7 +1382,7 @@ const SYMBOL_OWNERSHIP_POLICIES = [
   {
     kind: 'forbid-source-symbols',
     name: 'Scene Interaction uses the Control Point Overlay collection',
-    from: ['src/canvas/runtime/scene-interaction.ts'],
+    from: ['src/canvas/runtime/tools/tool-host.ts', 'src/canvas/runtime/tools/select/**'],
     names: ['_zoneControlPoints', '_measurementGuideControlPoints'],
   },
   {

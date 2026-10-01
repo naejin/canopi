@@ -44,7 +44,7 @@ import {
   createSceneInteractionSession,
   type SceneInteractionSession,
   type SceneInteractionSessionDeps,
-} from '../../canvas/runtime/scene-interaction'
+} from '../../canvas/runtime/interaction-session'
 import type { CanvasDesignObjectSelectionModel } from '../../canvas/runtime/runtime'
 import type {
   CanvasContextMenuRequest,

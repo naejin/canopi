@@ -19,7 +19,7 @@ import type { SceneStore } from '../canvas/runtime/scene'
 import type {
   SceneInteractionSession,
   SceneInteractionSessionDeps,
-} from '../canvas/runtime/scene-interaction'
+} from '../canvas/runtime/interaction-session'
 import type { DraftShape } from '../canvas/runtime/tools/draft'
 import { createRecordingRenderer, type RecordingRenderer } from './support/recording-renderer'
 import {

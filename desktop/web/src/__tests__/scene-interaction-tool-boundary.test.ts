@@ -55,7 +55,6 @@ function runtimeModuleSources(
         !entry.isFile()
         || !entry.name.endsWith('.ts')
         || entry.name.endsWith('.test.ts')
-        || childPath === '../canvas/runtime/scene-interaction.ts'
       ) return []
       return [{ name: childPath, source: readSource(childPath) }]
     })
@@ -63,13 +62,7 @@ function runtimeModuleSources(
 
 describe('Scene Interaction tool module boundaries', () => {
   it('keeps persisted Scene writes behind the Settled Scene Authority', () => {
-    const runtimeSources = [
-      ...runtimeModuleSources(),
-      {
-        name: '../canvas/runtime/scene-interaction.ts',
-        source: readSource('../canvas/runtime/scene-interaction.ts'),
-      },
-    ]
+    const runtimeSources = runtimeModuleSources()
     const authorityPath = '../canvas/runtime/scene-runtime/transactions.ts'
     const concreteStoreOwners = [
       '../canvas/runtime/scene/store.ts',
@@ -169,13 +162,7 @@ describe('Scene Interaction tool module boundaries', () => {
       'selectedTopLevelIds',
     ]
 
-    const typedIdentitySources = [
-      ...runtimeModuleSources(),
-      {
-        name: '../canvas/runtime/scene-interaction.ts',
-        source: readSource('../canvas/runtime/scene-interaction.ts'),
-      },
-    ]
+    const typedIdentitySources = runtimeModuleSources()
 
     for (const { name, source } of typedIdentitySources) {
       for (const forbidden of forbiddenRawIdentityNames) {
@@ -218,12 +205,9 @@ describe('Scene Interaction tool module boundaries', () => {
     }
   })
 
-  it('keeps the drops\' teardown in the legacy bridge', () => {
-    const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
-
-    expect(interactionSource).toContain('_cancelPendingInteractionHostFocus')
-    expect(interactionSource).toContain('prepareForDocumentReplacement')
-    expect(interactionSource).toContain('this._preview.remove()')
+  it('keeps the legacy bridge deleted now that drops run through the ToolHost', () => {
+    expect(sourceExists('../canvas/runtime/scene-interaction.ts')).toBe(false)
+    expect(sourceExists('../canvas/runtime/interaction/saved-object-stamp-tool.ts')).toBe(false)
     expect(sourceExists('../canvas/runtime/interaction/selection-action-toolbar.ts')).toBe(false)
     expect(sourceExists('../canvas/runtime/interaction/frame.ts')).toBe(false)
   })
@@ -257,11 +241,10 @@ describe('Scene Interaction tool module boundaries', () => {
   })
 
   it('keeps shared selection gesture algorithms behind the Session seam', () => {
-    // Select's move-drag and band run on the ToolHost (tools/select/**), behind the ToolScene's queries; the session and
-    // the legacy bridge's drops hold none of them.
+    // Select's move-drag and band run on the ToolHost (tools/select/**), behind the ToolScene's queries; the session
+    // holds none of them.
     const sessionSources = [
       '../canvas/runtime/interaction-session.ts',
-      '../canvas/runtime/scene-interaction.ts',
     ].map((path) => ({ path, source: readSource(path) }))
     const moveDragSource = readSource('../canvas/runtime/tools/select/move-drag.ts')
     const bandSource = readSource('../canvas/runtime/tools/select/band.ts')
