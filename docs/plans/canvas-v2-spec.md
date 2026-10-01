@@ -35,14 +35,14 @@ export interface GeoPoint { readonly lon: number; readonly lat: number }
 export interface GeoBounds { readonly west: number; readonly south: number; readonly east: number; readonly north: number }
 
 /** World-axis box in plane metres. Declared here by the seams commit; camera.ts keeps its own copies of the three bounds types
- *  until 0A-1 replaces them with a re-export from this file (plan, Seams "Types only"), and re-exports them until 0D2 ends. */
+ *  until 0A-1 replaces them with a re-export from this file (plan, Seams "Types only"), and re-exports them until 0E. */
 export interface SceneBounds { readonly minX: number; readonly minY: number; readonly maxX: number; readonly maxY: number }
 export interface SceneBoundsOptions {
   /** The scene's extent at a candidate scale: corner points of every plant, zone and note footprint, in plane metres.
    *  Notes and default-mode plants are screen-sized, so the extent depends on the scale (today camera.ts:521-565,
    *  :640-670). The runtime supplies it (command-surface.ts, document-surface.ts) through canvas/runtime/scene-extent.ts, from
    *  plant-presentation.ts, annotation-layout.ts and zone-geometry.ts, so view/ imports none of them (P4). Replaces camera.ts's
-   *  plantContext; when it is absent the legacy facade falls back to today's computeSceneBounds (0A to the end of 0D2). */
+   *  plantContext; when it is absent the legacy facade falls back to today's computeSceneBounds (0A to 0E). */
   readonly extentPoints?: (pixelsPerMetre: number) => readonly WorldPoint[]
   /** Scale that frames an empty Design, centred on the session plane origin. */
   readonly emptySceneScale?: number
@@ -79,6 +79,8 @@ export interface ViewCamera {
 export interface PlanarCamera { readonly x: number; readonly y: number; readonly scale: number; readonly bearingDeg: number }
 
 export interface ViewScreen { readonly width: number; readonly height: number; readonly devicePixelRatio: number }
+/** A screen size from the platform (0E): a missing density takes the host's platform read, CameraDriverHostOptions.devicePixelRatio. */
+export interface ScreenMetrics { readonly width: number; readonly height: number; readonly devicePixelRatio?: number }
 
 /** Renderer and bulk-projection fast path. Null for non-planar projections (globe). */
 export interface PlanarProjection {
@@ -187,8 +189,10 @@ export interface ViewReadSurface {
    *  The one read that changes during a pan (the overview pin must track the Design); it updates per frame only in overview,
    *  where nothing else re-renders, and is the named exception to the coarse-signal rule (P10). */
   readonly designPin: ReadonlySignal<ScreenPoint | null>
-  /** The camera after 150 ms without change (the settled frame's camera): last view, map contributions, coverage. Never a user-triggered capture (captureView). */
+  /** The camera after 150 ms without change (the settled frame's camera): last view, map contributions. Never a user-triggered capture (captureView). */
   readonly settledCamera: ReadonlySignal<ViewCamera>
+  /** The settled frame's revision: changes once per settle, whatever settled (camera, screen, insets, re-origin). The labels count. */
+  readonly settledRevision: ReadonlySignal<number>
   /**
    * Saved-view capture, saved-view snapshot, PDF capture, story restore point: the LIVE frame's camera (viewFrame.peek(),
    * not the settled one), its four-corner ground extent and the screen it was seen on. User-triggered captures record what
@@ -219,9 +223,9 @@ export interface ViewCommandSurface {
 }
 ```
 
-**How the view surfaces meet today's session surfaces (§1.1a).** `ViewCommandSurface` replaces today's `CanvasViewportCommandSurface` (`canvas/runtime/runtime.ts:84`), whose name stays as `export type CanvasViewportCommandSurface = ViewCommandSurface` so `canvas/session.ts` compiles unchanged, and is exposed as `CanvasCommandSurface.viewport`, so `currentCanvasViewportCommandSurface()` in `canvas/session.ts` keeps its name and returns it. Kept methods: `zoomIn`, `zoomOut`, `zoomBy`, `zoomToFit`, `returnToDesign`, `focusTemporaryBounds`, `returnFromTemporaryFocus`, `setFramingInsets`, `showPlace` (still boolean). New: `zoomToSelection`, `resetNorth`, `rotateBy`, `beginRotation`, `showCamera`. Removed: any method that returned or took a `SceneViewportState`. `ViewReadSurface` is added to `CanvasQuerySurface` as `view`, read through `currentCanvasQuerySurface()`. Readers of the query surface's `viewport` field move to `view` in 0A-2 (saved views, story controller, command projection, tool card, gallery snapshots, LiDAR request, map contributions); the four Components-0D2 files and `app/plant-display/coverage.ts` move in 0D2; the main agent removes the field at the end of 0D2, after those streams merged. `CanvasViewSceneRequest` (`runtime.ts:221-229`) and `ViewSnapshotScene.build` (`maplibre/view-snapshot-map.ts:44`) take a `view: ViewTransform` instead of `viewport: SceneViewportState` from 0D2; the snapshot map's own driver supplies it, and `captureViewScene` (`query-surface.ts:70-75`) decides overview from `view.pixelsPerMetre`. `CanvasQuerySurface` also gains `subscribePointerWorld(listener: (point: WorldPoint | null) => void): () => void`, forwarding `ToolHost.subscribePointerWorld` (typed optional in the seams commit so no fake changes; `query-surface.ts` and `interaction-session.ts` implement it in 0B, which makes it required and fills the fakes), which the inspection lens component uses instead of its own map-host `pointermove` (INV-ENT-23). The lens handle contract in `canvas/inspection.ts` changes three times: in 0B `CanvasInspectionHandle` gains `inspectAtWorldPoint(point: WorldPoint)`, which the lens calls with the published point (Input implements it in `canvas/runtime/inspection-lens.ts`, with no screen conversion of its own; the lens ignores `null` and keeps its last sample, as today it skipped buttons, inputs and `[data-preserve-overlays]`); in 0D2 `CanvasInspectionState` gains `sourceQuad: readonly [ScreenPoint, ScreenPoint, ScreenPoint, ScreenPoint]` (the lens source outline on the main map, from the lens `ViewTransform`; the component draws it instead of `point`, `scale` and `frame` arithmetic, INV-XF-16; Renderer), and in phase 1 `panBy(delta)` in world metres is replaced by `panByScreen(deltaPx: InspectionPoint)`, which the lens turns into ground at its bearing (INV-WR-17, INV-KEY-21; View). `CanvasOverview.tsx` places the overview pin from `ViewReadSurface.designPin` (INV-XF-17). App code (`app/**`, `components/**`, `web/**`) uses only these two surfaces, except `workspace-activation.ts`, which attaches the driver (Attachment, below); `ViewFrameSource` stays inside `canvas/runtime/**` and `maplibre/**` (P10). Policy P15 names both accessors.
+**How the view surfaces meet today's session surfaces (§1.1a).** `ViewCommandSurface` replaces today's `CanvasViewportCommandSurface` (`canvas/runtime/runtime.ts:84`), whose name stays as `export type CanvasViewportCommandSurface = ViewCommandSurface` so `canvas/session.ts` compiles unchanged, and is exposed as `CanvasCommandSurface.viewport`, so `currentCanvasViewportCommandSurface()` in `canvas/session.ts` keeps its name and returns it. Kept methods: `zoomIn`, `zoomOut`, `zoomBy`, `zoomToFit`, `returnToDesign`, `focusTemporaryBounds`, `returnFromTemporaryFocus`, `setFramingInsets`, `showPlace` (still boolean). New: `zoomToSelection`, `resetNorth`, `rotateBy`, `beginRotation`, `showCamera`. Removed: any method that returned or took a `SceneViewportState`. `ViewReadSurface` is added to `CanvasQuerySurface` as `view`, read through `currentCanvasQuerySurface()`. Readers of the query surface's `viewport` field move to `view` in 0A-2 (saved views, story controller, command projection, tool card, gallery snapshots, LiDAR request, map contributions); the four Components-0D2 files and `app/plant-display/coverage.ts` move in 0D2; 0E removes the field, after 0C and 0D2 merged. `CanvasViewSceneRequest` (`runtime.ts:221-229`) and `ViewSnapshotScene.build` (`maplibre/view-snapshot-map.ts:44`) take a `view: ViewTransform` instead of `viewport: SceneViewportState` from 0D2; the snapshot map's own driver supplies it, and `captureViewScene` (`query-surface.ts:70-75`) decides overview from `view.pixelsPerMetre`. `CanvasQuerySurface` also gains `subscribePointerWorld(listener: (point: WorldPoint | null) => void): () => void`, forwarding `ToolHost.subscribePointerWorld` (typed optional in the seams commit so no fake changes; `query-surface.ts` and `interaction-session.ts` implement it in 0B, which makes it required and fills the fakes), which the inspection lens component uses instead of its own map-host `pointermove` (INV-ENT-23). The lens handle contract in `canvas/inspection.ts` changes three times: in 0B `CanvasInspectionHandle` gains `inspectAtWorldPoint(point: WorldPoint)`, which the lens calls with the published point (Input implements it in `canvas/runtime/inspection-lens.ts`, with no screen conversion of its own; the lens ignores `null` and keeps its last sample, as today it skipped buttons, inputs and `[data-preserve-overlays]`); in 0D2 `CanvasInspectionHandle` gains `sourceQuad: ReadonlySignal<InspectionSourceQuad | null>`, the four screen corners of the lens footprint on the main map in `worldQuadToScreen` order (the 0C/0D2 hand-off adds the type with a `null` stub; Renderer computes it from the main `viewFrame` and the lens `ViewTransform`, so it moves with each published main frame and each lens paint; it is a signal of its own, read by the outline's own child component, and the panel still re-renders on each lens paint (INV-REN-18, INV-ENT-21); the component draws it instead of `point`, `scale` and `frame` arithmetic, a `<rect>` over the corners' bounds until phase 1 draws the turned quad, INV-XF-16), and in phase 1 `panBy(delta)` in world metres is replaced by `panByScreen(deltaPx: InspectionPoint)`, which the lens turns into ground at its bearing (INV-WR-17, INV-KEY-21; View). `CanvasOverview.tsx` places the overview pin from `ViewReadSurface.designPin` (INV-XF-17). App code (`app/**`, `components/**`, `web/**`) uses only these two surfaces, except the two modules that wire the driver host: `workspace-runtime-composition.ts` reads `SceneCanvasRuntime.cameraHost` and hands it on (the activation, the map container's resize hook), and `workspace-activation.ts` attaches each map to it (Attachment, below; until 0E the activation reaches the host through the MapLibre shim); `ViewFrameSource` stays inside `canvas/runtime/**` and `maplibre/**` (P10). Policy P15 names both accessors.
 
-**Resize.** One owner changes the screen size. `maplibre/host.ts` also serves the World map, which has no driver, so its `resize()` (`:114-119`, driven by the `ResizeObserver` at `:323-331`) calls the surface request's own resize hook instead of `map.resize()`: the workspace request's hook calls `CameraDriver.setScreen(size)`, and the World map's (`components/world-map/WorldMapSurface.tsx`, exempt from P1) calls `map.resize()`. The MapLibre driver then calls `map.resize()`, re-runs `constrainCamera` at the live bearing (the zoom floor depends on the screen size and the bearing, §4.14) and publishes one frame. `setScreen` with an unchanged size does nothing, since two observers report each size while a map is attached. The workspace map and the snapshot map are built with `trackResize: false`, so MapLibre never resizes itself behind the driver; the host passes the container's CSS size to the hook, and a driver calls `map.resize()` once when it is created (a size reported before then reached only the headless driver) and starts at its map canvas's CSS size. The other map `resize()` calls (`maplibre/workspace-camera.ts:237`, `maplibre/view-snapshot-map.ts:358`) become `setScreen` on their driver or go with their module; the camera's own `resize` path (`workspace-camera.ts:193`'s `super.resize`, `documents.resize` at `canvas/runtime/document-surface.ts:149`, driven by `app/document-session/lifecycle.ts:119`, `web/WebCanvasWorkspace.tsx:239` and the gallery) reaches `setScreen` through the shim (INV-WR-19). P1 forbids `resize` on a map outside the driver.
+**Resize.** One owner changes the screen size. `maplibre/host.ts` also serves the World map, which has no driver, so its `resize()` (`:114-119`, driven by the `ResizeObserver` at `:323-331`) calls the surface request's own resize hook instead of `map.resize()`: the workspace request's hook calls `CameraDriver.setScreen(size)`, and the World map's (`components/world-map/WorldMapSurface.tsx`, exempt from P1) calls `map.resize()`. The MapLibre driver then calls `map.resize()`, re-runs `constrainCamera` at the live bearing (the zoom floor depends on the screen size and the bearing, §4.14) and publishes one frame. `setScreen` with an unchanged size does nothing, since two observers report each size while a map is attached. The workspace map and the snapshot map are built with `trackResize: false`, so MapLibre never resizes itself behind the driver; the host passes the container's CSS size to the hook, and a driver calls `map.resize()` once when it is created (a size reported before then reached only the headless driver) and starts at its map canvas's CSS size. The snapshot map's `resize()` (`maplibre/view-snapshot-map.ts:358`) becomes `setScreen` on its driver; the shim's goes with `maplibre/workspace-camera.ts` in 0E. The runtime's two resize entries call `CameraDriverHost.setScreen`, which fills a missing density from the platform (INV-WR-19): `documents.resize` (`canvas/runtime/document-surface.ts`, driven by `app/document-session/lifecycle.ts:119`, `web/WebCanvasWorkspace.tsx:239` and the gallery) and the workspace request's hook (`workspace-runtime-composition.ts`); until 0E both reach it through the shim's `resize`. P1 forbids `resize` on a map outside the driver.
 
 ```ts
 // canvas/runtime/view/camera-driver.ts  (types)
@@ -249,7 +253,8 @@ export type CameraMove =
       readonly durationMs?: number              // ease: 300 default
     }
   /**
-   * setViewport's exact placement (createTestView, and the legacy facade's setViewport and reprojectViewport). The headless driver
+   * setViewport's exact placement (createTestView's setViewport and reproject, ViewNavigation.showStartFrame; until 0E the legacy
+   * facade's setViewport and reprojectViewport). The headless driver
    * clamps the scale as today and adopts the rest bit for bit; the MapLibre driver converts it to a ViewCamera through the plane once
    * and jumps.
    */
@@ -262,7 +267,8 @@ export interface CameraDriver {
   /** The bearing a running tween or flight will end at, else the live bearing. */
   bearingTarget(): number
   stopAnimation(): void
-  /** Re-origin and the attached refreshOrigin only (hydration keeps the plane camera): the MapLibre driver rebuilds against the new
+  /** A re-origin and the attached plane follow only (today's refreshOrigin; from 0E CameraDriverHost.followPlane and planeChanged;
+   *  a headless hydration keeps the plane camera): the MapLibre driver rebuilds against the new
    *  plane; the headless driver applies old.transformTo(new) to its PlanarCamera in plane terms, no lon/lat (today's
    *  reprojectPlaneViewport, exact at bearing 0). */
   planeChanged(plane: SessionPlane): void
@@ -288,33 +294,60 @@ export interface CameraDriverFailure { readonly reason: 'map-lost' | 'agreement'
 
 /**
  * Owns the runtime's one camera across attach, detach and failure; replaces CameraController's detached mode.
- * The runtime starts on a HeadlessCameraDriver (tests, before attach). `frames` is stable across swaps.
+ * The runtime starts on a HeadlessCameraDriver (tests, before attach). `frames` is stable across swaps. The members marked (0E)
+ * arrive with the camera unwrap; until then the legacy facade and the MapLibre shim do their work (§1.1b).
  */
 export interface CameraDriverHost {
   readonly frames: ViewFrameSource
   readonly current: () => CameraDriver
+  /** (0E) The one path ViewNavigation's moves take. When the host was attached before the move, the attached driver reported a new
+   *  failure during it and the host is detached after it, the move is applied once more to the headless driver the host fell back
+   *  to, at the last camera (today's MapLibre-shim replay, now for every navigation move). A move a driver queued during a frame
+   *  dispatch is not replayed. attach and replacePolicy do not go through it. */
+  apply(move: CameraMove): void
+  /** (0E) The platform's resize entry (documents.resize, the map container's hook). A missing density reads
+   *  CameraDriverHostOptions.devicePixelRatio; the live driver normalises the rest (today's normalizeScreenMetrics). */
+  setScreen(screen: ScreenMetrics): void
   /** Hands the camera to an attached driver: it starts with a 'set'/'none' move to the current camera; ViewFrame.attached becomes true. */
   attach(driver: CameraDriver): void
   /** Back to a HeadlessCameraDriver at the last camera; ViewFrame.attached becomes false. */
   detach(): void
-  /** Today's replacePolicy (a new session-plane latitude): the host rebuilds its NavigationPolicy from it and re-constrains the current camera.
-   *  While a tween or flight runs (the frame is moving) it sends no move: the driver constrains its next frame under the new policy,
-   *  so a re-origin during a flight never stops it. */
+  /** A new camera generation (the activation, once per map, with the session-plane latitude): rebuilds the NavigationPolicy and
+   *  re-constrains the current camera, sending no move while a tween or flight runs (the frame is moving: the driver constrains its
+   *  next frame under the new policy, so a re-origin during a flight never stops it), and, from 0E, increments policyGeneration,
+   *  which drops the navigation's temporary focus (today's replacePolicy). */
   replacePolicy(policy: WorkspaceCameraPolicy): void
-  /** The Scene's plane on hydration and on a detached re-origin: a live headless driver keeps its plane placement and takes the new
-   *  plane (a headless re-origin is followPlane plus a 'place' move, the same numbers as planeChanged, which only the attached
-   *  refreshOrigin calls). The runtime calls it; without it the headless camera would report another plane's ground. */
+  /** (0E) Increments on replacePolicy only; the latitude follow of followPlane and planeChanged keeps it. */
+  readonly policyGeneration: number
+  /** The Scene's plane after a hydration (until 0E also after a detached re-origin, which the facade follows with a 'place' move).
+   *  Headless: the driver keeps its plane placement and takes the new plane. Attached (0E): when the plane's latitude differs from
+   *  the policy's, the policy follows it in the same generation (no move while moving), then the live driver's planeChanged runs and
+   *  the map stays put (today's refreshOrigin). The runtime calls it; without it the headless camera would report another plane's
+   *  ground. */
   followPlane(plane: SessionPlane): void
+  /** (0E) The Scene's plane after a re-origin, in one frame: the live driver's planeChanged (headless: reprojectPlanar in plane
+   *  terms, today's followPlane-plus-place numbers). Attached, the latitude follows first, as in followPlane; headless it does not
+   *  (today's detached re-origin changed no policy). */
+  planeChanged(plane: SessionPlane): void
   /** The deps the host built its drivers with; the activation builds the MapLibre driver with them. */
   readonly driverDeps: CameraDriverDeps
   /** Set when the attached driver fails; the host has already detached. */
   readonly failure: ReadonlySignal<CameraDriverFailure | null>
 }
+
+// canvas/runtime/view/driver-host.ts
+export interface CameraDriverHostOptions {
+  // … the 0A options (clock, scheduleFrame, timers, policy, reducedMotion, plane, screen?, camera?, insets?), and from 0E:
+  /** The density a ScreenMetrics without one takes. Default () => 1. */
+  readonly devicePixelRatio?: () => number
+}
+export interface CameraDriverHostController extends CameraDriverHost { dispose(): void }
+export function createCameraDriverHost(options: CameraDriverHostOptions): CameraDriverHostController
 ```
 
-Attachment (`app/canvas-map-surface/workspace-activation.ts`, INV-CAM-44): the activation reaches the runtime's `CameraDriverHost` through its `camera` option, which stays the `MapLibreWorkspaceCameraOwner` shim until the end of 0D2 (the frozen `workspace-runtime-composition.test.ts` pins that object) and exposes `camera.host`, builds the driver with `createMapLibreCameraDriver(map, plane, host.driverDeps)` from `maplibre/camera-driver.ts`, and calls `attach`; `replacePolicy(createWorkspaceCameraPolicy(lat))` stays as today (`:175`). It is the one app module that uses the driver host rather than the two surfaces below (P10 allows its type-only import of `camera-driver.ts`); `detach` on teardown; it subscribes to `failure` where it subscribes to `attachment.subscribeFailure` today and reports the map as unavailable with the failure's message. A rotated camera is never a failure: the old "rejected its projection" refusal is gone, and an agreement error above 0.01 px throws in tests and logs in dev builds only. A read-back pitch other than 0 is a driver failure (`'map-error'`), keeping today's pitched-camera refusal. The MapLibre driver listens to exactly two map events, `'move'` (frames for moves it did not cause) and `'moveend'` (the end of a flight); a `'set'` sends its `jumpTo` every time but publishes a frame only when the camera, screen or insets changed. A frame published while the frame source's listeners run is delivered after them, in order, so a listener that moves the camera during an attach, detach or failure frame never reorders frames.
+Attachment (`app/canvas-map-surface/workspace-activation.ts`, INV-CAM-44): from 0E the composition passes `SceneCanvasRuntime.cameraHost` as the activation's `camera` option (until 0E it is the `MapLibreWorkspaceCameraOwner` shim, which exposes `camera.host`). The activation builds each map's driver with `createMapLibreCameraDriver(map, plane, host.driverDeps)` from `maplibre/camera-driver.ts` (`host` is the option itself from 0E, `camera.host` before) and calls `attach`; `replacePolicy(createWorkspaceCameraPolicy(lat))` starts the map's camera generation, which drops the temporary focus, as today. From 0E the runtime follows the Scene's plane itself (`ViewNavigation.followPlane`, from one effect in `scene-runtime/construction.ts`); no app module re-expresses the camera. The composition and the activation are the two app modules that use the driver host rather than the two surfaces below (P10 allows their type-only import of `camera-driver.ts`); `detach` on teardown; it subscribes to `failure` where it subscribes to `attachment.subscribeFailure` today and reports the map as unavailable with the failure's message. A rotated camera is never a failure: the old "rejected its projection" refusal is gone, and an agreement error above 0.01 px throws in tests and logs in dev builds only. A read-back pitch other than 0 is a driver failure (`'map-error'`), keeping today's pitched-camera refusal. The MapLibre driver listens to exactly two map events, `'move'` (frames for moves it did not cause) and `'moveend'` (the end of a flight); a `'set'` sends its `jumpTo` every time but publishes a frame only when the camera, screen or insets changed. A frame published while the frame source's listeners run is delivered after them, in order, so a listener that moves the camera during an attach, detach or failure frame never reorders frames.
 
-Driver rules: `MapLibreCameraDriver` (`maplibre/camera-driver.ts`) and `HeadlessCameraDriver` (`view/headless-driver.ts`) both implement `CameraDriver` with the same `camera-math`, `constrainCamera` and `BearingTween`, and both build their frames in `view/view-transform.ts`, from different sources of truth (ADR 0016, amended 2026-09-30). The MapLibre driver's truth is MapLibre's geographic camera; it builds with `buildViewTransform`. The headless driver's truth is a `PlanarCamera`, moved with today's `CameraController` arithmetic, bit for bit at bearing 0: a pan adds the delta, a zoom clamps the scale to `ViewFrame.scaleBounds` and then anchors (`camera.ts:491-518`), and `place` clamps the scale and adopts the rest. It builds with `buildViewTransformFromPlane` and derives its `ViewCamera` for readers. Geographic inputs (a `set` target, each tween step) convert to a `PlanarCamera` through the plane once; the latitude and longitude hold of `constrainCamera` runs on the derived camera and converts back only when it moves it. Re-origin never goes through lon/lat: `planeChanged` applies `old.transformTo(new)` to the `PlanarCamera` as today's `reprojectPlaneViewport` does (`camera.ts:782-792`): the scale is divided by the transform's scale, and the transform's offset times the new scale, turned by the bearing as plane points are, is subtracted from `{ x, y }`. The facade's `reprojectViewport(transform)` applies the transform it is given with the same arithmetic, as a `place` move, and moves the focus bookmark with it, as today (the bare shim's plane is not the store's, INV-WR-07). So a headless camera at bearing 0 reads back exactly what today's `CameraController` did (§1.1b), before and after a re-origin. The MapLibre driver is the only code that calls camera methods on the workspace and snapshot maps; it always sends explicit `jumpTo({ center, zoom, bearing, pitch: 0 })` values (one per tween frame) and `flyTo` only for long flights. Each `jumpTo` it sends publishes one frame when the call returns, built from the read-back `getCenter/getZoom/getBearing` (the bearing normalised to [0, 360); MapLibre returns (−180, 180]). The driver needs `getCenter`, `getZoom`, `getBearing` and `unproject` from the map it attaches; a map without them fails the attachment (`'map-error'`), and every fake that attaches a driver is a consistent MapLibre fake (plan §4, 0A "Attached-map fakes"). A `'move'` the driver did not cause by a `jumpTo` (a flight step, a MapLibre-internal change) rebuilds the frame from the read-backs. A read-back pitch other than 0 fails the driver with `'map-error'`; the agreement probe runs after each frame in development builds (P12). A `CameraDriver.apply` made while a frame dispatch runs is queued and applied once, after every listener ran, in the same task. The map stays `interactive: false`, `dragRotate: false`, `touchZoomRotate: false`; `MapLibreMapInstance` gains `getBearing`, `unproject`, `stop`, `setTransformConstrain` and a `pitch` in `jumpTo`'s options, each optional where fakes a stream does not own implement the type.
+Driver rules: `MapLibreCameraDriver` (`maplibre/camera-driver.ts`) and `HeadlessCameraDriver` (`view/headless-driver.ts`) both implement `CameraDriver` with the same `camera-math`, `constrainCamera` and `BearingTween`, and both build their frames in `view/view-transform.ts`, from different sources of truth (ADR 0016, amended 2026-09-30). The MapLibre driver's truth is MapLibre's geographic camera; it builds with `buildViewTransform`. The headless driver's truth is a `PlanarCamera`, moved with today's `CameraController` arithmetic, bit for bit at bearing 0: a pan adds the delta, a zoom clamps the scale to `ViewFrame.scaleBounds` and then anchors (`camera.ts:491-518`), and `place` clamps the scale and adopts the rest. It builds with `buildViewTransformFromPlane` and derives its `ViewCamera` for readers. Geographic inputs (a `set` target, each tween step) convert to a `PlanarCamera` through the plane once; the latitude and longitude hold of `constrainCamera` runs on the derived camera and converts back only when it moves it. Re-origin never goes through lon/lat: `planeChanged` applies `old.transformTo(new)` to the `PlanarCamera` as today's `reprojectPlaneViewport` does (`camera.ts:782-792`): the scale is divided by the transform's scale, and the transform's offset times the new scale, turned by the bearing as plane points are, is subtracted from `{ x, y }`. `ViewNavigation.followPlane(plane, transform)` calls the host's `planeChanged` and moves the temporary-focus bookmark by the same arithmetic (INV-WR-07; until 0E the facade's `reprojectViewport(transform)` does it as a `place` move, since the bare shim's plane is not the store's). So a headless camera at bearing 0 reads back exactly what today's `CameraController` did (§1.1b), before and after a re-origin. The MapLibre driver is the only code that calls camera methods on the workspace and snapshot maps; it always sends explicit `jumpTo({ center, zoom, bearing, pitch: 0 })` values (one per tween frame) and `flyTo` only for long flights. Each `jumpTo` it sends publishes one frame when the call returns, built from the read-back `getCenter/getZoom/getBearing` (the bearing normalised to [0, 360); MapLibre returns (−180, 180]). The driver needs `getCenter`, `getZoom`, `getBearing` and `unproject` from the map it attaches; a map without them fails the attachment (`'map-error'`), and every fake that attaches a driver is a consistent MapLibre fake (plan §4, 0A "Attached-map fakes"). A `'move'` the driver did not cause by a `jumpTo` (a flight step, a MapLibre-internal change) rebuilds the frame from the read-backs. A read-back pitch other than 0 fails the driver with `'map-error'`; the agreement probe runs after each frame in development builds (P12). A `CameraDriver.apply` made while a frame dispatch runs is queued and applied once, after every listener ran, in the same task. The map stays `interactive: false`, `dragRotate: false`, `touchZoomRotate: false`; `MapLibreMapInstance` gains `getBearing`, `unproject`, `stop`, `setTransformConstrain` and a `pitch` in `jumpTo`'s options, each optional where fakes a stream does not own implement the type.
 
 | Move | Driver work | MapLibre call |
 |---|---|---|
@@ -408,7 +441,8 @@ export function startBearingTween(from: ViewCamera, move: { readonly bearingDeg:
 A tween frame rotates the live camera about the anchor to the interpolated bearing (ease-out cubic, shortest arc), plus, for a `set`/`ease` move, interpolated centre and zoom. Every tween frame goes through `constrainCamera` with that frame's bearing.
 
 ```ts
-// canvas/runtime/view/navigation.ts  (the camera policy; the only user of CameraDriver; implements RotationSession from read-surface.ts)
+// canvas/runtime/view/navigation.ts  (the camera policy; the only mover of the camera, through CameraDriverHost.apply from 0E;
+//   implements RotationSession from read-surface.ts)
 
 export interface ViewNavigationDeps {
   readonly driver: CameraDriverHost                   // the only CameraDriver user
@@ -425,11 +459,19 @@ export interface ViewNavigation extends ViewCommandSurface {
   returnToDesign(scene?: ScenePersistedState, options?: SceneBoundsOptions): void
   /** Oriented at the current bearing: the box's four corners are fitted, not the box on screen axes. */
   focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
-  returnFromTemporaryFocus(): boolean        // bookmark is a ViewCamera: re-origin cannot invalidate it
+  returnFromTemporaryFocus(): boolean        // the bookmark's planar on its plane revision, else its ViewCamera; a new policy generation drops it
   clearTemporaryFocus(): void
   centerOn(point: WorldPoint, pixelsPerMetre: number, options?: { readonly animate?: boolean; readonly bearingDeg?: number | 'keep' }): void
   /** Opening a Design: oriented fit at the given bearing. */
   openAt(scene: ScenePersistedState, bearingDeg: number): void
+  /** (0E) Today's CameraController.initialize, inside batch(): drops the temporary focus; host.setScreen(screen) unless a map is
+   *  attached (its resize hook reports the size); places 100 m across the shorter screen side with plane point (50, 50) at the
+   *  centre, the scale clamped to the frame's scaleBounds, the bearing kept. */
+  showStartFrame(screen: ScreenMetrics): void
+  /** (0E) The runtime's plane effect calls it on every Scene plane change. Without reorigin (a hydration): host.followPlane. With
+   *  it (old.transformTo(new)): host.planeChanged, then the bookmark's planar moves by reprojectPlanar and takes the frame's new
+   *  planeRevision, so a return lands where today's did, bit for bit. */
+  followPlane(plane: SessionPlane, reorigin?: SessionPlaneTransform): void
 
   // rotation
   turnToEdge(a: WorldPoint, b: WorldPoint): void   // smaller turn that makes a→b horizontal; never snapped
@@ -447,7 +489,7 @@ Fit is oriented: it projects the point set onto `screenAxesInWorld()` at the tar
 // canvas/runtime/view/view-transform.ts  (pure)
 
 /** Pitch 0, geographic: centre, zoom and bearing + plane.mercatorOrigin / mercatorUnitsPerMeter → similarity. The MapLibre driver
- *  (whose truth is MapLibre's camera), the snapshot map's driver and the lens call this. */
+ *  (whose truth is MapLibre's camera) and the snapshot map's driver call this. */
 export function buildViewTransform(input: {
   readonly camera: ViewCamera
   readonly screen: ViewScreen
@@ -457,7 +499,7 @@ export function buildViewTransform(input: {
 }): ViewTransform
 
 /**
- * Pitch 0, planar: the headless driver's builder (ADR 0016, amended 2026-09-30). The similarity comes straight from the PlanarCamera;
+ * Pitch 0, planar: the headless driver's and the inspection lens's builder (ADR 0016, amended 2026-09-30). The similarity comes straight from the PlanarCamera;
  * at bearing 0 it is today's arithmetic (worldToScreen p × scale + { x, y }, screenToWorld (s − { x, y }) / scale, affine
  * [scale, 0, 0, scale, x, y], pixelsPerMetre = scale), so readbacks are bit for bit today's. `camera` is planarToViewCamera's.
  * At bearing 0 it agrees with buildViewTransform for the same camera within the contract tolerance (view/camera-contract.test.ts).
@@ -483,13 +525,27 @@ export function assertViewAgreement(map: Pick<MapLibreMapInstance, 'unproject'>,
   { readonly maxErrorPx: number }
 ```
 
-### 1.1b Test view and the legacy camera surface (0A to the end of 0D2)
+```ts
+// canvas/runtime/camera-platform.ts  (0E; outside view/, P4; value-imported by scene-runtime/construction.ts and tests only, P10)
+export interface PlatformCameraHostOptions {
+  readonly plane: () => SessionPlane
+  /** Default createWorkspaceCameraPolicy(). */
+  readonly policy?: WorkspaceCameraPolicy
+  /** Default a false signal (today's NO_REDUCED_MOTION); phase 1 passes the platform's. */
+  readonly reducedMotion?: ReadonlySignal<boolean>
+}
+/** createCameraDriverHost over performance.now (Date.now without it), requestAnimationFrame (a 16 ms timeout without it), window
+ *  timers on that clock and window.devicePixelRatio (1 without a window): the facade's platform defaults, moved verbatim. */
+export function createPlatformCameraDriverHost(options: PlatformCameraHostOptions): CameraDriverHostController
+```
+
+### 1.1b Test view and the legacy camera surface (0A to 0E)
 
 `createTestView` is the one way tests build a camera from 0A on. View writes it in 0A-1 with its self-test `__tests__/support/test-view.test.ts`; every 0B, 0D2 and later stream builds on this shape and does not change it without the main agent (a change is a spec edit).
 
 ```ts
 // __tests__/support/test-view.ts  (test support; P3 lets it call buildViewTransform)
-import type { CameraController } from '../../canvas/runtime/camera'   // the legacy shim, 0A to the end of 0D2 only
+import type { CameraController } from '../../canvas/runtime/camera'   // the legacy shim, 0A to 0E only
 
 export interface TestViewOptions {
   /** Default { width: 400, height: 300, devicePixelRatio: 1 }: the split files' camera today. */
@@ -513,9 +569,13 @@ export interface TestView {
   /** Manual time: the drivers' clock and scheduleFrame and the frame source's timers all read it. */
   readonly clock: { now(): number; advance(ms: number): void }   // advance runs due frame callbacks, then due timers
   view(): ViewTransform                       // frames.viewFrame.peek().view
-  setViewport(v: { readonly x: number; readonly y: number; readonly scale: number }): void   // an exact 'place' move, bearing kept
+  setViewport(v: { readonly x: number; readonly y: number; readonly scale: number }): void   // an exact 'place' move (host.apply from 0E), bearing kept
+  /** (0E) The bearing-0 placement in today's terms (planarCameraOf(view()) without the bearing): the split suites' camera.viewport. */
+  viewport(): { readonly x: number; readonly y: number; readonly scale: number }
+  /** (0E) CameraController.reprojectViewport's numbers (INV-WR-07): a 'place' by a plane transform in plane terms; the plane stays. */
+  reproject(transform: SessionPlaneTransform): void
   setScene(scene: ScenePersistedState, bounds?: SceneBoundsOptions): void
-  /** 0A to the end of 0D2 only: the facade's CameraController shim over this same host. Deleted with the facade. */
+  /** 0A to 0E only: the facade's CameraController shim over this same host. Deleted with the facade (0E). */
   readonly legacyCamera: CameraController
   dispose(): void
 }
@@ -523,11 +583,35 @@ export interface TestView {
 export function createTestView(options?: TestViewOptions): TestView
 ```
 
-Readbacks through `legacyCamera` (`viewport`, `snapshot`, `worldToScreen`, `screenToWorld`) come from the host's frame, so they agree with `view()`. While the host is headless at bearing 0 they are exact: for a camera inside `constrainCamera`'s bounds (below) they equal, bit for bit, what today's `CameraController` returned, because the headless driver keeps a `PlanarCamera` moved with today's arithmetic and `setViewport` is an exact `place` move (§1.1 driver rules; test "a still headless camera reproduces today's CameraController exactly"). Attached, they come from MapLibre's camera and agree with it within the view-agreement tolerance (0.01 px, ADR 0016). One split-file assertion is edited for precision, and only because it runs attached: `AttachedInteractionMap` keeps a fixed geographic camera that reproduces `{ x: 100, y: 50, scale: 2 }` to floating-point precision (built with `planarToViewCamera`), not bit for bit, so `scene-interaction.select.test.ts:454` compares the dragged position per axis with `expect.closeTo(…, 6)`. In 0A only the fixture's construction, its `AttachedInteractionMap` fake and that line change (plan §4, 0A-1 and "Legacy surface"); in 0D1, `__tests__/support/recording-renderer.test.ts` passes a hand-built stub (`{ revision: 1 } as unknown as ViewTransform`) to `setView`, since the recorder stores the reference and reads nothing from it, so 0D1 does not wait for this file.
+Readbacks (`view()`, `viewport()` from 0E, and until 0E `legacyCamera`'s `viewport`, `snapshot`, `worldToScreen` and `screenToWorld`) come from the host's frame, so they agree with each other. While the host is headless at bearing 0 they are exact: for a camera inside `constrainCamera`'s bounds (below) they equal, bit for bit, what today's `CameraController` returned, because the headless driver keeps a `PlanarCamera` moved with today's arithmetic and `setViewport` is an exact `place` move (§1.1 driver rules; test "a still headless camera reproduces today's CameraController exactly"). Attached, they come from MapLibre's camera and agree with it within the view-agreement tolerance (0.01 px, ADR 0016). One split-file assertion is edited for precision, and only because it runs attached: `AttachedInteractionMap` keeps a fixed geographic camera that reproduces `{ x: 100, y: 50, scale: 2 }` to floating-point precision (built with `planarToViewCamera`), not bit for bit, so `scene-interaction.select.test.ts:454` compares the dragged position per axis with `expect.closeTo(…, 6)`. In 0A only the fixture's construction, its `AttachedInteractionMap` fake and that line change (plan §4, 0A-1 and "Legacy surface"); in 0D1, `__tests__/support/recording-renderer.test.ts` passes a hand-built stub (`{ revision: 1 } as unknown as ViewTransform`) to `setView`, since the recorder stores the reference and reads nothing from it, so 0D1 does not wait for this file.
 
-The legacy camera surface (plan §4, 0A "Legacy surface") is split by what it may import. `canvas/runtime/legacy-camera-facade.ts` sits outside `view/` because the `CameraController` shim, whose constructor takes only `policy?` as today, supplies the default clock (`performance.now`), `scheduleFrame` (`requestAnimationFrame`) and `window.devicePixelRatio`, and keeps `CameraViewportSnapshot` over `SceneViewportState` from the `scene` barrel, all of which P4 forbids in `view/**`. It imports nothing that reaches `maplibre-gl`, `pixi.js` or `src/maplibre/**`, because `tools/tool.ts` type-imports `runtime.ts`, which type-imports `./camera` until 0D2, and P5c follows type-only edges. The `MapLibreWorkspaceCameraOwner` shim is declared in `maplibre/workspace-camera.ts`, extends the facade's `CameraController` shim and wraps `maplibre/camera-driver.ts`; nothing under `canvas/runtime/**` imports it. Neither P4 nor P5c carries an exemption for either shim.
+Until 0E, the legacy camera surface (plan §4, 0A "Legacy surface") is split by what it may import. `canvas/runtime/legacy-camera-facade.ts` sits outside `view/` because the `CameraController` shim, whose constructor takes only `policy?` as today, supplies the default clock (`performance.now`), `scheduleFrame` (`requestAnimationFrame`) and `window.devicePixelRatio`, and keeps `CameraViewportSnapshot` over `SceneViewportState` from the `scene` barrel, all of which P4 forbids in `view/**`. It imports nothing that reaches `maplibre-gl`, `pixi.js` or `src/maplibre/**`, because `tools/tool.ts` type-imports `runtime.ts`, which type-imports `./camera` until 0E, and P5c follows type-only edges. The `MapLibreWorkspaceCameraOwner` shim is declared in `maplibre/workspace-camera.ts`, extends the facade's `CameraController` shim and wraps `maplibre/camera-driver.ts`; nothing under `canvas/runtime/**` imports it. Neither P4 nor P5c carries an exemption for either shim.
 
-**The bare shim's plane and bounds.** A shim built as today, `new CameraController(policy?)` with no plane (15 test files at `0f05d927`), puts its host on `createSessionPlane({ lon: 0, lat: policy.referenceLatitudeDeg })`: for the default policy that is `createTestView`'s default `{ lon: 0, lat: 0 }`, and in general the plane and the policy share one latitude, so `pixelsPerMetre` and the policy's scale bounds use the same Mercator factor, which today's plane-free controller assumes. Its screen before `initialize` is `{ width: 0, height: 0, devicePixelRatio: 1 }`, as today. There is one clamp, the driver's `constrainCamera`, whose zoom range the headless driver applies in px/m to `ViewFrame.scaleBounds` with today's arithmetic (§1.1 driver rules); the shim adds none (today's `normalizeViewport` clamp moves into that driver step, not beside it), because a second clamp would make the headless and MapLibre drivers disagree. `ViewFrame.scaleBounds` is `cameraScaleBoundsForPolicy(base, zoomFloorForArc(screen, navigationPolicy, b, b))` at the live bearing `b`, where `base` is the `WorkspaceCameraPolicy` the host keeps from its construction and `replacePolicy` (the two functions take different policy types), and the shim's `snapshot.scaleBounds` reports it. At bearing 0 that floor is `singleWorldEffectiveMinimumZoom(width, height)`: today's `minimumMapZoom` (0) whenever the larger screen side is at most 512 px or the screen is empty (the split files' 400 × 300, and every snapshot before `initialize`), and today's MapLibre-learned minimum otherwise. The centre is also held inside one world (latitude ±85.05°, longitude ±180°), which no test at `0f05d927` approaches at the plane's latitude. Checked at `0f05d927`: outside the camera suites no test with a screen wider than 512 px reads a scale below that floor (`new-design-view.test.ts:70` clamps a zoom-17 scale against `snapshot.scaleBounds`, so it follows the reported bounds); inside them, `camera-controller.test.ts:96` and `:212` (a 1000 × 800 screen expecting the zoom-0 minimum) move to `view/navigation.test.ts` with the single-world floor as the minimum, a named rewrite of 0A's camera-suite move (plan §4, 0A "Legacy surface"), names kept. Any other test that fails only because of the floor or the one-world hold (latitude or longitude) is a stop-and-amend, never a second clamp in the shim.
+**The bare shim's plane and bounds (until 0E).** A shim built as today, `new CameraController(policy?)` with no plane (15 test files at `0f05d927`), puts its host on `createSessionPlane({ lon: 0, lat: policy.referenceLatitudeDeg })`: for the default policy that is `createTestView`'s default `{ lon: 0, lat: 0 }`, and in general the plane and the policy share one latitude, so `pixelsPerMetre` and the policy's scale bounds use the same Mercator factor, which today's plane-free controller assumes. Its screen before `initialize` is `{ width: 0, height: 0, devicePixelRatio: 1 }`, as today. There is one clamp, the driver's `constrainCamera`, whose zoom range the headless driver applies in px/m to `ViewFrame.scaleBounds` with today's arithmetic (§1.1 driver rules); the shim adds none (today's `normalizeViewport` clamp moves into that driver step, not beside it), because a second clamp would make the headless and MapLibre drivers disagree. `ViewFrame.scaleBounds` is `cameraScaleBoundsForPolicy(base, zoomFloorForArc(screen, navigationPolicy, b, b))` at the live bearing `b`, where `base` is the `WorkspaceCameraPolicy` the host keeps from its construction and `replacePolicy` (the two functions take different policy types), and the shim's `snapshot.scaleBounds` reports it. At bearing 0 that floor is `singleWorldEffectiveMinimumZoom(width, height)`: today's `minimumMapZoom` (0) whenever the larger screen side is at most 512 px or the screen is empty (the split files' 400 × 300, and every snapshot before `initialize`), and today's MapLibre-learned minimum otherwise. The centre is also held inside one world (latitude ±85.05°, longitude ±180°), which no test at `0f05d927` approaches at the plane's latitude. Checked at `0f05d927`: outside the camera suites no test with a screen wider than 512 px reads a scale below that floor (`new-design-view.test.ts:70` clamps a zoom-17 scale against `snapshot.scaleBounds`, so it follows the reported bounds); inside them, `camera-controller.test.ts:96` and `:212` (a 1000 × 800 screen expecting the zoom-0 minimum) move to `view/navigation.test.ts` with the single-world floor as the minimum, a named rewrite of 0A's camera-suite move (plan §4, 0A "Legacy surface"), names kept. Any other test that fails only because of the floor or the one-world hold (latitude or longitude) is a stop-and-amend, never a second clamp in the shim.
+
+**0E.** The facade, `camera.ts` and the MapLibre shim are deleted, and `createTestView` loses `legacyCamera`. The runtime builds its host with `createPlatformCameraDriverHost` in `scene-runtime/construction.ts` and exposes it as `SceneCanvasRuntime.cameraHost`; the construction's `camera` option is deleted, not retyped, since an injected host carries its caller's plane, never the Scene's. Two construction effects replace today's plane follow and re-origin trigger. The plane effect sits in the follow's slot; its first run returns before it reads `viewNavigation` or the re-origin controller, both declared later, and every later Scene plane calls `viewNavigation.followPlane(plane, reorigin.reoriginating ? previous.transformTo(plane) : undefined)` untracked. The frame effect calls the re-origin controller's `observe` on `cameraHost.frames.viewFrame`, which returns when the frame's planar placement (`x`, `y`, `scale`, `bearingDeg`), screen size and `mode` equal the last frame it saw (the facade snapshot's change filter). `reorigin.ts` sets `reoriginating` around `authority.reoriginSessionPlane` and no longer moves the camera. Each facade behaviour has one home:
+
+| Today | Home from 0E |
+|---|---|
+| `CameraController.initialize`: the 100 m start frame | `ViewNavigation.showStartFrame` |
+| the detached reproject (a follow, then a `place`: two frames) | `ViewNavigation.followPlane(plane, transform)`, through `CameraDriverHost.planeChanged` to the headless `planeChanged` (one frame) |
+| the planar temporary-focus bookmark across a re-origin | the navigation's one `Placement`, whose planar `followPlane` moves |
+| `replacePolicy` drops the temporary focus; the latitude follow keeps it | `CameraDriverHost.policyGeneration` against `Placement.generation` |
+| the re-origin trigger on snapshot changes; one snapshot per operation | the frame effect with `observe`'s filter; `batch()` in `showStartFrame`, and effect batching |
+| the session renders once when a pan or zoom moved the camera (`_afterCameraMove`) | kept, comparing `frames.viewFrame.peek().revision`, over `view.navigation` |
+| mode reads of the snapshot; render invalidation per snapshot (`effects.ts`) | `frames.viewFrame.peek().mode`; an effect on `frames.viewFrame.value`, its initial skip kept |
+| the shim's replay of a failed command | `CameraDriverHost.apply` |
+| `normalizeScreenMetrics`; the facade's clock, animation frames, timers and density | `CameraDriverHost.setScreen` and the drivers' screen normalisation; `canvas/runtime/camera-platform.ts` |
+| the shim's `refreshOrigin`, from the composition's origin effect | the attached branch of `CameraDriverHost.followPlane` and `planeChanged`, from the runtime's plane effect |
+| dispose | runtime destroy: `viewNavigation.clearTemporaryFocus()`, `cameraHost.dispose()` |
+| `fitCameraViewport`, `cameraFramingRect` and the fit fallback | `view/fit.ts` with `sceneExtentPoints(scene)` (`scene-extent.ts`) |
+| `ZOOM_REFERENCE_SCALE` | the lens's 20 px/m reference (0D2); `NavigationPolicy.referencePixelsPerMetre` |
+| the last view, 750 ms after the last snapshot | `ViewReadSurface.settledCamera` and a 600 ms timer that writes only while `captureView().camera` still equals the settled camera |
+| `showPlace` through the facade's `centerOn` | `ViewNavigation.showPlace` |
+| resize: the facade's `resize`, the composition's hook, `documents.resize` | `CameraDriverHost.setScreen` |
+| the chrome's `CameraViewportSnapshot` | `ViewFrame` (`planarCameraOf(frame.view)` for today's placement) |
+| `MapLibreWorkspaceCameraMap`; the shim's failure reports | declared in `WorkspaceActivationMap` with the same members; none (the activation watches `CameraDriverHost.failure`) |
+| the viewport command wrappers | the same navigation calls with the same arguments, each with today's `invalidate('viewport')` |
 
 ### 1.2 Input (`canvas/runtime/input/`, pure except the DOM source)
 
@@ -539,7 +623,8 @@ export interface InputPlatform {
   readonly gestureEvents: boolean          // WKWebView / Safari gesturestart/change/end
 }
 export function detectPlatform(nav: Pick<Navigator, 'userAgent' | 'platform'>, win: { readonly GestureEvent?: unknown }): InputPlatform
-// 0B calls it once in interaction-session.ts; 0C moves the call to platform/desktop.ts and platform/browser.ts. Injected everywhere else.
+// 0B calls it once in interaction-session.ts, where it stays through phase 0; F moves the call to platform/desktop.ts and
+// platform/browser.ts with KeyRouterDeps.platform. Injected everywhere else.
 
 // canvas/runtime/input/bindings.ts  (data: the single phase switch)
 export type PanContext = 'hand-tool' | 'overview'
@@ -755,7 +840,7 @@ export interface DomInputSourceDeps {
   readonly host: HTMLElement                                    // the map host; listeners attach here and on window (0B: from attach, as today; from F only during an owned session)
   readonly platform: InputPlatform
   readonly bindings: () => Bindings                             // CURRENT_BINDINGS in production
-  readonly keys: { readonly physicalCtrl: () => boolean; readonly lastKeyboardMenuAt: () => number | null }   // from the KeyRouter
+  readonly keys: { readonly physicalCtrl: () => boolean; readonly lastKeyboardMenuAt: () => number | null }   // the session's keyboard port, fed by the key router's keyState from 0C
   readonly clock: () => number
   readonly timers: { set(atMs: number, cb: () => void): number; clear(id: number): void }
   /** 0B only: today's window keydown (capture) and keyup (bubble), handed to keyboard-port.ts; 0C removes it. */
@@ -818,7 +903,7 @@ export interface ToolHostDeps {
   /** History-free, dirty-free selection (today's deps.setSelection/clearSelection); backs ToolEffects.setSelection and the menu retarget. */
   readonly setSelection: (targets: readonly SceneDesignObjectTarget[]) => void
   readonly plane: () => SessionPlane                            // CanvasTool.planeChanged when its identity changes
-  readonly renderer: Pick<SceneRendererV2, 'setDraft' | 'setSelectionPreview'>
+  readonly renderer: Pick<SceneRenderer, 'setDraft' | 'setSelectionPreview'>
   /** Redraw request after a tool call that mutated an open transaction or changed its draft or handles. */
   readonly invalidate: () => void
   readonly chrome: {
@@ -962,7 +1047,8 @@ export interface ToolHost {
 // setOverviewMode → through 0B a mode override the session feeds to the recogniser's configure and to the host's frames;
 // prepareForDocumentReplacement, refreshTranslations and dispose → the same names. interaction-session.ts keeps the old session
 // interface over these, and bridges the plant and saved-stamp read models to setTool and sourceChanged.
-// canvas/runtime/keyboard-port.ts  (0B Input writes this whole sub-block, types and function; not a seams file, since no seams type refers to it)
+// canvas/runtime/keyboard-port.ts  (0B Input writes this whole sub-block, types and function; not a seams file, since no seams type
+// refers to it. From 0C its deps are 0B's `legacy` group without the bridge, flattened.)
 export interface CanvasKeyboardPortDeps {
   readonly host: HTMLElement
   readonly toolHost: ToolHost
@@ -972,11 +1058,24 @@ export interface CanvasKeyboardPortDeps {
   /** Arrow pans (64 or 256 px), + / −, N, Shift+N and Shift+←/→/↑. */
   readonly navigation: Pick<ViewNavigation, 'panByPx' | 'zoomIn' | 'zoomOut' | 'resetNorth' | 'rotateBy'>
   readonly frames: ViewFrameSource
+  pointerSessionLive(): boolean              // arrows and the Menu key wait; Esc cancels it; keyState's hold and 'pass-live'
+  overview(): boolean                        // Esc runs the interrupted cancel; the Menu key and the tool keys do nothing
+  spaceHeld(): boolean
+  setHeldKeys(state: { readonly space: boolean; readonly mods: Modifiers }): void   // the recogniser's key state and the navigation cursor
+  escapeGesture(): void                      // the recogniser's 'escape': cancels a live pointer session, releases Space
+  requestTool(id: ToolId): void              // the Esc chain's Select (the runtime's setTool, as a tool's own request)
+  clearSelection(): void                     // the Esc chain's last step: history-free, redrawn
 }
-export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): CanvasKeyboardPort
+/** The session's own view of the port: DomInputSourceDeps.keys and the blur release. */
+export interface SessionCanvasKeyboardPort extends CanvasKeyboardPort {
+  physicalCtrl(): boolean
+  lastKeyboardMenuAt(): number | null
+  releaseKeys(): void
+}
+export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionCanvasKeyboardPort
 ```
 
-The keyboard port in 0B is today's canvas key handling behind `CanvasKeyboardPort`, fed by the source's `legacyKeys` (§1.2). It keeps today's gating: `[` and `]` become `ToolHost.command({ kind: 'rotate-held', stepDeg: -15 | 15 })` under today's editable-target and single-key rules, and the key is default-prevented and stopped only on a `'handled'` reply; an arrow asks `ToolHost.nudge` first (never while a pointer session is live, fixture H25): `'handled'` and `'refused'` consume the key (a refused nudge is swallowed, as today), and on `'pass'` the port applies the arrow's rule (§3.6): with nothing selected (`deps.hasSelection()` false) it pans 64 or 256 px, otherwise the key is not consumed; Esc keeps today's order (a tool's Esc runs before the live-gesture cancel, so Plant a row drops its source even mid-drag and, with none, requests Select itself, as today), and its `'selection'` layer is live while `deps.hasSelection()` holds. Because the surfaces are built before `runtime.init` creates the session, `workspace-runtime-composition.ts` exposes a forwarding `keyboard` port that reaches the session's port once it exists and consumes nothing before; its `host` is the container the composition already holds.
+The keyboard port in 0B is today's canvas key handling behind `CanvasKeyboardPort`, fed by the source's `legacyKeys` (§1.2). From 0C the key router feeds it (§1.6 "Phase 0 order"): `keyState` first for every key, then `command()` and `legacyEscape()` under today's gates; the router applies the target gates, including the `[` `]` single-key gate (`KeyRouterDeps.singleKeys`), and the port the state gates (pointer session, overview, Select). It keeps today's gating: `[` and `]` become `ToolHost.command({ kind: 'rotate-held', stepDeg: -15 | 15 })` under today's editable-target and single-key rules, and the key is default-prevented and stopped only on a `'handled'` reply; an arrow asks `ToolHost.nudge` first (never while a pointer session is live, fixture H25): `'handled'` and `'refused'` consume the key (a refused nudge is swallowed, as today), and on `'pass'` the port applies the arrow's rule (§3.6): with nothing selected (`deps.hasSelection()` false) it pans 64 or 256 px, otherwise the key is not consumed; Esc keeps today's order (a tool's Esc runs before the live-gesture cancel, so Plant a row drops its source even mid-drag and, with none, requests Select itself, as today), and its `'selection'` layer is live while `deps.hasSelection()` holds. Because the surfaces are built before `runtime.init` creates the session, `workspace-runtime-composition.ts` exposes a forwarding `keyboard` port that reaches the session's port once it exists and consumes nothing before; its `host` is the container the composition already holds.
 
 ### 1.3 Gestures (`canvas/runtime/input/gestures.ts`)
 
@@ -1250,7 +1349,9 @@ export type ToolConstraint =
 /** Arming payloads that today arrive through module-level signals. */
 export type ToolSource =
   | { readonly kind: 'species'; readonly species: PlantStampSourceInput }
-  | { readonly kind: 'saved-stamp'; readonly stamp: SavedObjectStampPayload }
+  /** name (from the 0C/0D2 hand-off): armCanvasTool writes it for the tool card (readSavedObjectStampName); the tool ignores it;
+   *  sources the session rebuilds from the read models omit it. */
+  | { readonly kind: 'saved-stamp'; readonly stamp: SavedObjectStampPayload; readonly name?: string | null }
 ```
 
 ```ts
@@ -1325,7 +1426,7 @@ interaction-session.ts composes the rest: it bridges the plant and saved-stamp r
 
 ### 1.5 Renderer (`canvas/runtime/renderers/scene-types.ts`)
 
-The seams commit adds these to the existing `scene-types.ts`, beside today's renderer interface, which the code names `SceneRendererInstance` (`scene-types.ts:50-57`, `renderScene` and `setViewport`; `SceneRendererDefinition.initialize` at `:60-63` returns it), under the distinct name `SceneRendererV2`. There is no `SceneRenderer` type today. At the end of 0D2, `SceneRendererInstance` is deleted, `SceneRendererV2` is renamed `SceneRenderer` (the final name this document uses), and `SceneRendererDefinition.initialize` returns `SceneRenderer`. Until then `SceneRendererV2.syncScene` takes today's `SceneRendererSnapshot`, `viewport` field included; nothing implements `SceneRendererV2` before 0D2, and 0D2 deletes `viewport` in the commit that makes the renderer implement it.
+The seams commit adds these to the existing `scene-types.ts`, beside today's renderer interface, which the code names `SceneRendererInstance` (`scene-types.ts:50-57`, `renderScene` and `setViewport`; `SceneRendererDefinition.initialize` at `:60-63` returns it), under the distinct name `SceneRendererV2`. The 0C/0D2 hand-off commit renames `SceneRendererV2` to `SceneRenderer` (types only; the final name this document uses); 0D2 deletes `SceneRendererInstance` and makes `SceneRendererDefinition.initialize` return `SceneRenderer`. Until then `SceneRenderer.syncScene` takes today's `SceneRendererSnapshot`, `viewport` field included; nothing implements `SceneRenderer` before 0D2, and 0D2 deletes `viewport` in the commit that makes the renderer implement it.
 
 ```ts
 export interface SceneChangeSet {
@@ -1333,10 +1434,10 @@ export interface SceneChangeSet {
   readonly selection: boolean
   readonly hover: readonly SceneDesignObjectTarget[]        // old and new hover target only: a two-node restyle
   readonly style: boolean                                   // theme, backdrop, plant display settings
-  readonly labels: boolean                                  // label admission recomputed (settled or band change)
+  readonly labels: boolean                                  // label admission recomputed (each scale change; from phase R, settle or band change)
 }
 
-export interface SceneRendererV2 {   // renamed SceneRenderer at the end of 0D2
+export interface SceneRenderer {   // SceneRendererV2 from the seams to the 0C/0D2 hand-off
   readonly id: 'maplibre-pixi'
   /** Data, selection, hover, style or label admission changed. Never called for a pan. No camera in the snapshot. */
   syncScene(snapshot: SceneRendererSnapshot, changes: SceneChangeSet): void
@@ -1356,12 +1457,12 @@ The contract split: data goes through `syncScene`, the camera through `setView`,
 | `billboardRoot` | identity (CSS px) | plants, rings, badges, notes (text at `rotationDeg − bearing`), labels; positions from `view.projectAnchors` |
 | `worldDraftRoot` (`world-layers.ts`) | the same `view.planar.affine`, written in the same `setView` | world drafts (polylines, polygons, quads, ellipses) and the zone shapes of an `objects` ghost |
 | `billboardDraftRoot` (`billboard-layer.ts`) | identity (CSS px) | pixel-sized drafts (`circle-px`, `label`) and the plants and note text of a ghost (a plant is a billboard); positions from `view.projectAnchors` |
-| DOM overlay host (`canvas/runtime/chrome/`) | `translate` only, in `onViewFrame('overlays')` | handle layer, text-entry host, hover tooltip, locked affordance |
+| DOM overlay host (`canvas/runtime/chrome/`) | placed in `onViewFrame('overlays')`, no element created per frame (0B: `left`/`top`); `translate` only, from phase R | handle layer, text-entry host, hover tooltip, locked affordance |
 | Canvas2D rulers (`chrome/rulers.ts`) | redrawn in `onViewFrame('overlays')` | shown only while `northUp` |
 
 `SelectionPreview` spans both roots: `world-layers.ts` applies it to the selected world shapes (zones, guides) as a transform of their retained geometry, and `billboard-layer.ts` applies it to the anchors of selected plants and notes before `projectAnchors` (and adds `rotateDeg` to a selected note's text angle), so a move-drag moves everything selected without `syncScene` (test `renderers/billboard-layer.test.ts`: "a selection preview moves selected plants and notes without syncScene", phase R).
 
-Culling uses `visibleWorldBounds`. Label admission is computed on `settledViewFrame` and on zoom-band change, cached per (scene revision, band, 15° bearing bucket). The layer (`maplibre/shared-scene-layer.ts`) reads `viewFrame.peek()` in `render` and calls `setView` only when `revision` changed; it never derives a transform.
+Culling uses `visibleWorldBounds`. From phase R, label admission is computed on `settledViewFrame` and on zoom-band change, cached per (scene revision, band, 15° bearing bucket); mid-zoom, the labels admitted for the previous band move with their plants until the band changes or the view settles (convention, plan §8). Until then `renderers/label-admission.ts` keeps today's cadence: a pan translates the admitted labels and any scale change admits again. The labels count (`app/plant-display/coverage.ts`) re-reads on `ViewReadSurface.settledRevision` and `zoomBand` from 0D2 (a by-eye convention, plan §1). The layer (`maplibre/shared-scene-layer.ts`) reads `viewFrame.peek()` in `render` and calls `setView` only when `revision` changed; it never derives a transform.
 
 ### 1.6 Keyboard and focus (`app/keyboard/`, neutral)
 
@@ -1374,9 +1475,41 @@ export interface CanvasKeyboardPort {
   escape(layer: CanvasEscapeLayer): void
   /** What the next Esc will do, for the tool-card hint (same source as behaviour). */
   describeEscape(): CanvasEscapeLayer | null
-  command(c: CanvasKeyCommand): boolean                   // false when nothing consumed it
-  keyState(s: { readonly space: boolean; readonly mods: Modifiers }): void
+  /** False when nothing consumed it. 0C: confirm, remove-last, rotate-held, edit-text and context-menu return false in overview
+   *  (today's overview branch, keyboard-port.ts:278-286); edit-text only under Select; the other kinds are unchanged. context-menu
+   *  stamps the keyboard-menu echo (lastKeyboardMenuAt) with the time keyState recorded for a Menu key or Shift+F10, and only when
+   *  that was the last keydown, so a non-key caller never stamps a stale key. */
+  command(c: CanvasKeyCommand): boolean
+  /** The key router's first call for every keydown (capture) and keyup: today's swallow while a cancellation is pending, the nudge
+   *  commit on any key but an arrow, a modifier or Esc, the physical Ctrl, the Menu key's time and the Space hold (code Space, not
+   *  text, and a live pointer session or not a control, read with the port's own pointerSessionLive()); 'held' has called
+   *  consume.prevent() before the hold, as today. */
+  keyState(k: CanvasKeyState, consume: KeyConsumer): CanvasKeyVerdict
+  /** 0C only (F replaces it with the §3.7 layers): today's canvas Esc in today's order (§3.7 "Phase 0"); true when it consumed the
+   *  key. It calls consume.prevent() before the work wherever today's handler did (nudge abort, overview cancel, live cancel, Select,
+   *  clear) and after a 'handled' reply for the tool's own Esc, and reads pointerSessionLive() again after that reply. */
+  legacyEscape(at: CanvasEscapeTarget, consume: KeyConsumer): boolean
   readonly host: HTMLElement
+}
+/** The event being dispatched, bound by the key router, so the port prevents where today's handler did: before the work. */
+export interface KeyConsumer { prevent(): void; stop(): void }
+export interface CanvasKeyState {
+  readonly type: 'keydown' | 'keyup'
+  readonly key: string             // 'Control' sets the physical Ctrl; arrows, modifiers and Escape keep a nudge series
+  readonly code: string            // 'Space'
+  readonly mods: Modifiers
+  readonly timeStamp: number       // KeyboardEvent.timeStamp: the clock of the contextmenu echo
+  readonly text: boolean           // the target is a text field (isEditableTarget)
+  readonly control: boolean        // the target is inside a control, field, menu or dialog (app/keyboard/target-class.ts)
+}
+/** quarantine: the router prevents (if cancelable), stops immediate propagation and runs no other step; held: Space is held for
+ *  panning and nothing else runs; pass-live and pass: the router goes on, with a pointer session live or not. */
+export type CanvasKeyVerdict = 'quarantine' | 'held' | 'pass-live' | 'pass'
+/** 0C only: where an Esc landed, as today's gates read it (app/keyboard/target-class.ts). */
+export interface CanvasEscapeTarget {
+  readonly control: boolean    // inside a control, field, menu or dialog (keyboard-port.ts:36-47)
+  readonly mapFocus: boolean   // the window, or inside the map host and not a control (:423-430)
+  readonly modified: boolean   // Ctrl, Cmd, Alt or Shift down (:231)
 }
 
 /** The router reaches the live session's port here. 0B (Input) implements it in keyboard-port.ts, exposes it from
@@ -1393,8 +1526,8 @@ export interface CanvasRuntimeSurfaces {
 // canvas/runtime/app-adapter.ts  (seams commit: the field; absent in a detached runtime)
 export interface CanvasRuntimeAppAdapter {
   // … today's fields …
-  /** How ToolHostDeps.focus leaves the runtime. 0B: interaction-session.ts falls back to today's host focus when absent;
-   *  0C: app/canvas-runtime/app-adapter.ts passes the FocusOwner (Keyboard). */
+  /** How ToolHostDeps.focus leaves the runtime. Unset through phase 0, so interaction-session.ts focuses the host as today;
+   *  F: app/canvas-runtime/app-adapter.ts passes the FocusOwner (Keyboard). */
   readonly focus?: CanvasFocusPort
 }
 
@@ -1409,7 +1542,8 @@ export interface CanvasFocusPort {
 // canvas/runtime/runtime.ts, continued (CanvasToolCommandSurface: the hand-off commit after 0B; CanvasKeyCommand: the seams commit)
 /** The tool surface on the canvas session (today setTool(name: string), runtime.ts:78). Typed by the main agent's hand-off commit after 0B, before 0C and 0D2 start. */
 export interface CanvasToolCommandSurface {
-  setTool(id: ToolId, source?: ToolSource | null): void    // forwards to ToolHost.setTool; only armCanvasTool calls it (P9)
+  setTool(id: ToolId, source?: ToolSource | null): void    // only armCanvasTool calls it (P9); phase 0 does not forward source:
+                                                           // the session reads the read models armCanvasTool writes first
   readonly plantRowSpacing: CanvasPlantRowSpacingField
 }
 
@@ -1426,24 +1560,19 @@ export type CanvasKeyCommand =
 // app/keyboard/key-router.ts
 export interface KeyRouterDeps {
   readonly target: Pick<Window, 'addEventListener' | 'removeEventListener'>   // window in production
-  readonly document: Pick<Document, 'addEventListener' | 'removeEventListener' | 'visibilityState'>
-  readonly platform: InputPlatform
-  readonly keymap: readonly KeymapRow[]            // KEYMAP, filtered for the Web edition's reserved keys
-  readonly commands: CommandSink                   // Desktop commands/registry.ts, Web web/browser-shell-commands.ts
-  readonly canvas: () => CanvasKeyboardPort | null // the live canvas session's port
+  readonly keymap: readonly KeymapRow[]            // composed per edition: its shellKeymapRows(…), then CANVAS_KEYMAP_ROWS
+  readonly commands: CommandSink                   // Desktop: private to commands/registry.ts; Web: web/browser-shell-commands.ts
+  readonly canvas: () => CanvasKeyboardPort | null // canvas/session.ts currentCanvasKeyboardPort
   readonly singleKeys: ReadonlySignal<boolean>     // Settings › Keyboard
   readonly focus: FocusOwner
-  readonly isModalOpen: () => boolean              // useModalLayer's stack
-  readonly clock: () => number
+  readonly isModalOpen: () => boolean              // modalLayerOpen, saveProblem, savedViewDialogOpen (equal in practice: every modal holds the layer)
+  // F adds `platform: InputPlatform` (the Mac chord rule; detectPlatform then runs in the platforms) and `document` (visibilitychange)
 }
-export interface KeyRouterHandle {
-  /** For normalise (pinch vs real Ctrl+wheel) and DomInputSourceDeps.keys. */
-  readonly physicalCtrl: () => boolean
-  /** The last Menu key or Shift+F10 time, for the recogniser's keyboard-menu echo. */
-  readonly lastKeyboardMenuAt: () => number | null
-  dispose(): void
-}
-/** Owns the only window keydown/keyup listeners (one capture, one bubble each). Installed once by app/shell/bootstrap.ts (Desktop) and main.web.tsx (Web). */
+export interface KeyRouterHandle { dispose(): void }
+/** Owns the only window key listeners: keydown in capture and bubble, keyup in capture. Installed once per edition: Desktop's
+ *  platform/desktop.ts passes it to commands/registry.ts installDesktopKeyRouter(installKeyRouter, deps), which composes the Desktop
+ *  keymap and keeps its sink private; Web's web/browser-shell-commands.ts installWebKeyRouter, which main.web.tsx calls (main.web.tsx
+ *  may not import src/app/**). The keyboard port, not the router, keeps the physical Ctrl and the keyboard-menu time. */
 export function installKeyRouter(deps: KeyRouterDeps): KeyRouterHandle
 
 // app/keyboard/key-chord.ts
@@ -1453,40 +1582,60 @@ export interface KeyboardEventLike {
   readonly key: string; readonly code: string; readonly keyCode: number
   readonly shiftKey: boolean; readonly ctrlKey: boolean; readonly altKey: boolean; readonly metaKey: boolean
   readonly repeat: boolean; readonly isComposing: boolean; readonly defaultPrevented: boolean
+  readonly cancelable: boolean; readonly timeStamp: number
   readonly target: EventTarget | null
   preventDefault(): void
   stopPropagation(): void
+  stopImmediatePropagation(): void
 }
 /** mod = Cmd on Mac, Ctrl elsewhere. A physical Ctrl on Mac is `ctrl`, never `mod`. */
 export interface KeyChord { readonly key: string; readonly mod: boolean; readonly ctrl: boolean; readonly shift: boolean; readonly alt: boolean }
-/** Null for AltGr (Ctrl+Alt without Meta on Windows/Linux) and while composing. */
-export function chordOf(e: KeyboardEventLike, platform: Pick<InputPlatform, 'os'>): KeyChord | null
+/** 0C (no platform): Ctrl and Cmd are one modifier on every OS, as matchesShortcut (shortcut-text.ts:88-101, Plus, Minus and the
+ *  ⌥ letter by code included). F (with platform): the Mac rule above; null for AltGr and while composing. */
+export function chordOf(e: KeyboardEventLike, platform?: Pick<InputPlatform, 'os'>): KeyChord | null
 
 // app/keyboard/keymap.ts
+/** The scopes apply from F. 0C ("Phase 0 order" below): shell rows run as `global` in every class but modal, text included;
+ *  canvas catalogue rows as `command`; no `view-arrows` or `canvas-focus` row exists, the canvas key commands running in the
+ *  capture steps. */
 export type KeyScope =
   | 'global'          // every focus class except modal; in text only with worksInTextFields (Ctrl+K, Ctrl+S, F1, F6)
   | 'command'         // anywhere except text fields and dialogs: tool letters, Delete, [ ], N, Shift+N, Shift+L, Ctrl+Z…
   | 'view-arrows'     // Shift+←/→/↑: like 'command', but not inside an arrow-owning widget
   | 'canvas-focus'    // focus on the map host (not text inside it) or <body>: plain and mod arrows, Enter, Space, Backspace, F2, + / −, Menu
-/** A shell command id (`app/shell-commands/index.ts`, e.g. 'edit.undo') or a canvas key command ('canvas.<CanvasKeyCommand kind>'). */
-export type KeyCommandId = ShellCommandId | `canvas.${CanvasKeyCommand['kind']}`
+/** A shell command (app/shell-commands), a canvas catalogue command (CanvasCommandId, app/canvas-commands/index.ts: tool letters,
+ *  edit.undo, canvas.deleteSelected, view.zoomIn …) or, from F, a canvas key command ('canvas.<CanvasKeyCommand kind>'). */
+export type KeyCommandId = ShellCommandId | CanvasCommandId | `canvas.${CanvasKeyCommand['kind']}`
 export interface KeymapRow {
   readonly command: KeyCommandId
   readonly chords: readonly KeyChord[]
   readonly scope: KeyScope
   readonly singleKey: 'follows-switch' | 'always-on' | 'n/a'  // the single-key shortcut setting
-  readonly worksInTextFields?: boolean        // 'global' rows only: Ctrl+K, Ctrl+S, F1, F6, Ctrl+F (finder)
-  readonly worksInModal?: boolean             // F1 only today
-  /** A canvas row whose port command() returns false runs this shell command instead (F2: edit the note, else rename the Design). */
-  readonly fallback?: ShellCommandId
+  readonly worksInTextFields?: boolean        // 0C: every shell row (today) and the canvas rows whose definition says so (Ctrl+K);
+                                              // F: 'global' rows only: Ctrl+K, Ctrl+S, F1, F6, Ctrl+F (finder)
+  readonly worksInModal?: boolean             // Desktop's help.commandPalette only: its sink closes the open palette and refuses it
+                                              // under any other modal; F1 does not run in a modal
+  /** From F: a canvas row whose port command() returns false runs this instead (F2 → file.rename; Backspace's remove-last →
+   *  canvas.deleteSelected). */
+  readonly fallback?: ShellCommandId | CanvasCommandId
 }
-export const KEYMAP: readonly KeymapRow[]    // canvas and shell catalogues contribute rows; F1 renders it
+/** Both editions' canvas catalogue rows, from each definition's `shortcuts` through the switch, never from its key hint (so no
+ *  row has Escape). */
+export const CANVAS_KEYMAP_ROWS: readonly KeymapRow[]
+/** One edition's shell rows from its own catalogue (capability-filtered; Web omits BROWSER_RESERVED_SHORTCUTS, none of which is a
+ *  canvas chord). Each edition composes [...shellKeymapRows(…), ...CANVAS_KEYMAP_ROWS] (P14 holds); F1 (F) renders the result. */
+export function shellKeymapRows(catalog: readonly ShellCommandCatalogEntry[], options?: { readonly omit?: ReadonlySet<string> }): readonly KeymapRow[]
 
-/** Where a shell row goes: Desktop `commands/registry.ts`, Web `web/browser-shell-commands.ts`. Injected, so app/keyboard stays neutral (P14). */
+/** Where a keymap row runs: Desktop's sink, private to commands/registry.ts; Web web/browser-shell-commands.ts. Injected, so
+ *  app/keyboard stays neutral (P14). */
 export interface CommandSink {
-  run(command: ShellCommandId): boolean      // false when the command is unavailable (the key is not consumed)
+  /** False when the key is not consumed. consume() prevents the key; each sink calls it where today's dispatcher prevented:
+   *  Desktop before running every row it consumes (a shell row, a tool row, and another canvas row while a canvas exists,
+   *  disabled or not: commands/graph/shortcuts.ts); Web before a shell row and after a canvas row that ran
+   *  (web/canvas-shortcuts.ts). */
+  run(command: ShellCommandId | CanvasCommandId, consume: () => void): boolean
 }
-/** Pushed scopes: surfaces that own keys while open. A scope pushed by a surface that holds the modal layer (story-presenter, pdf-page-editor) runs as that modal's own handler (step 4); stories-undo-toast is not modal (step 6). */
+/** Pushed scopes: surfaces that own keys while open. A scope pushed by a surface that holds the modal layer (story-presenter, pdf-page-editor) runs as that modal's own handler (step 4); stories-undo-toast is not modal (step 6). The story presenter's handle returns false unless its root holds the target, as today's root handler (fixture I12b). */
 export interface KeyScopeHandle { dispose(): void }
 export function pushKeyScope(scope: { readonly id: 'story-presenter' | 'pdf-page-editor' | 'stories-undo-toast'; handle(e: KeyboardEventLike, chord: KeyChord): boolean }): KeyScopeHandle
 
@@ -1495,22 +1644,30 @@ export interface EscapeLayer {
   readonly id: string
   readonly priority: number          // higher runs first
   isActive(): boolean
-  escape(): void
+  /** The Esc being dispatched; false when it consumed nothing and the next active layer runs. */
+  escape(key: EscapeKey): boolean
 }
+export interface EscapeKey { readonly event: KeyboardEventLike; readonly target: CanvasEscapeTarget; readonly consume: KeyConsumer }
 export function registerEscapeLayer(layer: EscapeLayer): () => void
-/** The layer the next Esc would run; the tool card renders its hint from this. */
+/** The router's Esc step: active layers by priority until one consumes the key. 0C: one layer, which the router registers for the
+ *  canvas: { id: 'canvas', priority: 60, isActive: () => canvas() !== null, escape: (k) => canvas()!.legacyEscape(k.target, k.consume) }. */
+export function runEscape(key: EscapeKey): boolean
+/** The layer the next Esc would run; the tool card renders its hint from this (from F: the 0C canvas layer refuses per focus and
+ *  modifier, so nothing reads it before then). */
 export function describeEscape(): EscapeLayer | null
 
 // app/keyboard/arming.ts  (the one way app code arms a canvas tool; P9)
 export function armCanvasTool(
   tool: ToolId,
   options: {
-    readonly from: 'rail' | 'menu' | 'palette' | 'panel' | 'card' | 'shortcut' | 'start-card' | 'drop'
+    /** 'command' (0C only): rail, menus, palette and both editions' keys, which share workspaceCanvasIntentAdapter.selectTool
+     *  (app/workspace-commands/canvas-actions.ts); F threads the real caller and deletes it. */
+    readonly from: 'rail' | 'menu' | 'palette' | 'panel' | 'card' | 'shortcut' | 'start-card' | 'drop' | 'command'
     readonly source?: ToolSource
-    /** 0C only: keep this caller's focus behaviour of today (arming.ts records it per `from`). Deleted in F. */
+    /** 0C only: today's outcome per caller (the table below); arming moves no focus. Deleted in F. */
     readonly focus?: 'legacy'
   },
-): boolean
+): boolean   // true when a canvas session took the tool
 
 // app/keyboard/focus-owner.ts
 export type FocusReason = 'tool-armed' | 'drop' | 'chooser-closed' | 'text-entry-closed' | 'menu-closed' | 'story-exit' | 'region-cycle' | 'user-opened' | 'tool-requested'
@@ -1522,22 +1679,52 @@ export interface FocusOwner extends CanvasFocusPort {
   /** Replaces app/shell/focus-regions.ts registerFocusRegion (components/shared/useFocusRegion.ts re-points here in 0C). */
   registerRegion(region: 'title-bar' | 'tool-rail' | 'map' | 'dock', el: HTMLElement): () => void
   registerToolCardField(el: HTMLElement): () => void
+  /** F6 and Shift+F6 (today's cycleFocusRegion); false while the modal layer is held. */
+  cycleRegion(step: 1 | -1): boolean
 }
 ```
 
-`KeyRouter` (`key-router.ts`) owns the only window `keydown`/`keyup` listeners. `armCanvasTool` selects the canvas panel if needed, writes the source to the module read models (`canvas/plant-stamp-source.ts`, `canvas/saved-object-stamp-source.ts`: they stay, as what the tool card, recents and choosers display, and their `begin…` helpers call `armCanvasTool`), calls `CanvasToolCommandSurface.setTool(id, source)`, focuses the map for every `from` except `shortcut` (from phase F; in 0C every caller passes `focus: 'legacy'`), and records rail learning.
+`KeyRouter` (`key-router.ts`) owns the only window key listeners. `armCanvasTool` writes the source to the module read models (`canvas/plant-stamp-source.ts`, `canvas/saved-object-stamp-source.ts`: they stay, as what the tool card, recents and choosers display; their `begin…` helpers are deleted in 0C, so the runtime, which value-imports both modules, never reaches `app/keyboard/**`), selects the canvas panel for the command and Start-card callers, and calls `CanvasToolCommandSurface.setTool(id, source)`. In 0C every caller passes `focus: 'legacy'`: arming keeps today's outcome per caller and moves no focus, and the caller's UI does what it does today. From F it focuses the map for every `from` except `shortcut`, and F decides whether it records rail learning, which through phase 0 stays an effect on every tool change (`app/tool-rail/learning.ts`).
+
+| `from` (callers, 0C) | Source | Canvas panel | No canvas session | Focus today (by the caller's UI) |
+|---|---|---|---|---|
+| `command`: the rail (`ToolRail.tsx`), menus (`menus.ts`), the palette (`CommandPalette.tsx`), Desktop and Web keys (their sinks) | — | selected unless active | primes the tool mirror (`canvas/session.ts`) | none; the More menu and menus return focus to their trigger (`ActionMenu.tsx`, `MenuBar.tsx`), the palette restores the previous focus |
+| `start-card`: `SiteOnboarding.tsx` | — | selected unless active | primes | none; the focused button unmounts with the card (`<body>`); no disabled gate (arms Polygon in overview, as today) |
+| `panel`: `place-species.ts` | species | — | writes the source and recents, arms nothing | `focusMapSurface()` when the caller had a surface |
+| `panel`: `FavoritesPanel.tsx`; `card`: `StampChooser.tsx` (both through `workbench.placeStamp(stamp, from)`) | saved-stamp | — | writes nothing, false | Favorites: `focusMapSurface()` when true; card: `ToolCard.closeChooser` focuses the host |
+| `card`: `StampChooser.tsx`'s `select`, then `object-stamp` (never short-circuits a same-id arm) | — | — | nothing | `closeChooser`, always |
+| `drop` | — | — | — | no app caller in phase 0 (the runtime arms at a drop) |
+
+`focus-owner.ts` also exports, until F replaces their calls (P9b), today's `focusRegion(id)` (`app/story-presentation/controller.ts`) and `focusMapSurface()` (the registered, showing `'map'` region; `place-species.ts`, `FavoritesPanel.tsx`). The 0C/0D2 hand-off starts the file as a re-export of `app/shell/focus-regions.ts`; Keyboard replaces it with the bodies and deletes `focus-regions.ts`.
 
 An **arrow-owning widget** is an element with role `listbox`, `menu`, `menubar`, `slider`, `spinbutton`, `tablist`, `tree`, `grid`, `radiogroup` or `toolbar`, a focusable `separator` (one that can take focus: the dock and Favorites splitters; the rail's decorative separators are not focusable and do not count), or an element with `data-owns-keys` listing arrows. Widgets that handle arrows without such a role declare `data-owns-keys="arrows"` on their root, each in its phase: the inspection lens preview (`InspectionLens.tsx`), the phone sheet handle (`PhoneSheet.tsx`), the calendar's date grid (`components/panels/CalendarPanel.tsx:301-330`, a plain `<table>`) the plant photo carousel (`components/species-detail/PhotoViewer.tsx:64-80`) and the World map container (`components/world-map/WorldMapSurface.tsx`, whose MapLibre keyboard handler pans with arrows), all phase 1, Components. The tool rail (`role="toolbar"`, `ToolRail.tsx:90-101`), the dock splitter (`SidePanelDock.tsx:105-124`) and the Favorites splitter (`FavoritesPanel.tsx:501-511`) are covered by their roles. A widget that must keep a `command` key opts in with `data-owns-keys="Delete"` (or the key it needs) on its root.
 
-**Listener phases.** `installKeyRouter` adds, for `keydown` and `keyup`, one window capture listener and one window bubble listener; together they are the only window key listeners (P8). Capture keeps what runs before element handlers today (`scene-interaction.ts:1578` and `focus-regions.ts:106` listen in capture); bubble keeps the shell rows' rule (`shortcuts/manager.ts:26`, bubble, skips `defaultPrevented`).
+**Listener phases.** `installKeyRouter` adds a window capture and a window bubble listener for `keydown` and a window capture listener for `keyup`; they are the only window key listeners (P8). Capture keeps what runs before element handlers today (`focus-regions.ts:106`, then `dom-input-source.ts:275`); bubble keeps the shell rows' rule (`shortcuts/manager.ts:26`, `web/canvas-shortcuts.ts:69`, both skipping `defaultPrevented`); today's keyup listener (`dom-input-source.ts:276`, bubble) moves to capture, which changes no order, since no other keyup listener exists in `src/`.
 
-Resolution order for one keydown. Capture listener:
+**Phase 0 order (0C, until F).** 0C keeps today's scopes, gates and Esc order; the scopes, the `worksInTextFields` list and the §3.7 priorities of the F order below arrive in F. Target classes are today's, moved verbatim to `app/keyboard/target-class.ts`, which imports `isEditableTarget` from `canvas/runtime/input/editable-target.ts` (it stays there for its runtime users): `withinMap` (a node inside `port.host`), `control` (inside `button, a[href], input, textarea, select, [contenteditable="true"], [role="button"], [role="menu"], [role="dialog"], dialog`, `keyboard-port.ts:36-47`), `mapFocus` (the window, or `withinMap` and not `control`, `:423-430`) and `text` (`isEditableTarget`). The router binds a `KeyConsumer` to the event for each port call, so the port prevents where today's handler did, before the work; a key whose work throws is prevented exactly where today's was.
+
+Capture, keydown:
+1. F6, Shift+F6 (no Ctrl, Alt or Cmd; not prevented): `focus.cycleRegion(±1)`; prevent when it moved focus; go on (`focus-regions.ts:94-99`; the modal test is `modalLayerOpen`, as at `focus-regions.ts:97`, which every modal holds: `WorkspaceDialog.tsx:26`, `SaveProblemDialog.tsx:27`, `CommandPalette.tsx:25`).
+2. No canvas port: stop.
+3. `port.keyState({ type, key, code, mods, timeStamp, text, control }, consume)`: `'quarantine'` → prevent if cancelable, `stopImmediatePropagation`, stop; `'held'` → stop (the port has prevented); `'pass-live'` or `'pass'` → go on, `live` being `'pass-live'`.
+4. Esc: `runEscape({ event, target: { control, mapFocus, modified }, consume })` (0C: the canvas layer, `legacyEscape`). Stop.
+5. An arrow without Ctrl, Cmd or Alt, `withinMap && !control`: `command({ kind: 'arrow', dir, large: shiftKey })`; true → prevent (`:143-152`). Stop.
+6. `control && !live`: stop (`:277`).
+7. `ContextMenu`, or F10 with Shift and no Ctrl, Cmd or Alt, with `mapFocus`: `command({ kind: 'context-menu' })`; true → prevent and stop propagation; a throw → prevent, stop propagation and rethrow, which equals today's prevent before opening, since the gates ahead of it cannot throw (`:173-190`). Stop.
+8. Enter → `confirm`; Backspace → `remove-last`; `[` or `]` without Ctrl, Cmd or Alt, not `text`, `withinMap` or `singleKeys()` → `rotate-held` (`[` −15, `]` +15): true → prevent (`rotate-held`: and stop propagation) and stop (`:192-223`).
+9. Enter or F2, `mapFocus && !text`: `command({ kind: 'edit-text' })`; true → prevent and stop propagation (`:244-257`).
+
+Capture, keyup: `port.keyState(…)` only.
+
+Bubble, keydown: (1) prevented: stop (Web `canvas-shortcuts.ts:41`; Desktop checks after (2)–(4), `shortcuts.ts:31`, which no handler or capture step reaches with Ctrl F, Ctrl Z or Ctrl Shift P prevented); (2) `runFindPlantsShortcut` (self-gated on a modal, `plant-finder/focus.ts:40`); (3) `runStoryUndoShortcut` (self-gated on a modal and text, `stories/actions.ts:125-126`); (4) `isModalOpen()`: the pushed scope of the surface holding the modal layer (0C: the story presenter, gated by its root), then `worksInModal` rows; stop; (5) shell rows, in every focus class, text included: `commands.run(id, consume)`, stop when matched; (6) canvas catalogue rows, character keys only with the switch on, not in `text` unless `worksInTextFields`: `commands.run(id, consume)`. Each of (2)–(6) stops when it consumed the key.
+
+From F, resolution order for one keydown. Capture listener:
 1. Composition (`isComposing || keyCode === 229`): return (phase F).
 2. Classify focus: `modal`, `text` (input, textarea, select, contenteditable, the text-entry host), `map` (map host or inside it), `body`, `other` (rail buttons, dock lists, menus, the compass).
 3. Held keys: track modifiers in every class (for `physicalCtrl`); track Space as held only in `map` and `body`, or while a canvas gesture is live; send `keyState` to the canvas port; clear on blur, `visibilitychange` and Meta keyup.
-4. While a pointer gesture or nudge series is live, the canvas port takes the key first whatever the focus (today `scene-interaction.ts:1077-1092`): Esc runs the `gesture` or `nudge-series` layer. F6 and Shift+F6 cycle regions (today in capture).
+4. While a pointer gesture or nudge series is live, the canvas port takes the key first whatever the focus (today `keyboard-port.ts:260-277`): Esc runs the `gesture` or `nudge-series` layer. F6 and Shift+F6 cycle regions (today in capture).
 
-Bubble listener, skipped for a key already `defaultPrevented` (an element handler of a focused widget handled it; a widget that calls `stopPropagation` hides the key from these steps, as it hides it from the shell rows today; today's widgets stop propagation only on Escape: `InspectionLens.tsx:121`, `PlantColorMenu.tsx:243`, `PlantSymbolMenu.tsx:122`, `PdfPageEditor.tsx:105`):
+Bubble listener, skipped for a key already `defaultPrevented` (an element handler of a focused widget handled it; a widget that calls `stopPropagation` hides the key from these steps, as it hides it from the shell rows today; today's widgets stop propagation on Escape (`InspectionLens.tsx:119`, `PlantColorMenu.tsx:243`, `PlantSymbolMenu.tsx:122`, `PdfPageEditor.tsx:105` and about 15 more, P13's allowlist), `ToolCard.tsx:240` also on Enter, `SegmentedControl.tsx:52-53` on arrows, Home and End):
 5. Modal: the pushed scope of the surface holding the modal layer (story presenter, PDF page editor inside the PDF workspace), then `worksInModal` rows; nothing else. The modal's element handlers have already run.
 6. `global` rows (in every class but `modal`; in `text` only with `worksInTextFields`). Ctrl F is a global row whose command asks the open panel's plant finder first and otherwise opens Edit › Find plants (today `shortcuts/manager.ts:15-20`).
 7. Non-modal pushed scopes: the Stories Undo toast (Ctrl Z while the toast is on screen, today `app/stories/actions.ts` `runStoryUndoShortcut`). Popovers and menus are not scopes: their Esc is an Esc layer (step 8), and their arrows are handled by their own element (arrow-owning widgets).
@@ -1545,7 +1732,7 @@ Bubble listener, skipped for a key already `defaultPrevented` (an element handle
 9. Keymap match: `command` rows in `map`, `body` and `other`; `view-arrows` the same except in an arrow-owning widget; `canvas-focus` only in `map` and `body`.
 10. Dispatch: `preventDefault` and `stopPropagation`; canvas commands through the port; a port `command()` that returns false runs the row's `fallback` through the platform's `CommandSink` (Desktop `commands/registry.ts`, Web `web/browser-shell-commands.ts`), and without a fallback the key is not consumed. Each chord has one row per scope; rows are never tried in turn (fixture H27).
 
-Canvas-focus rows run only with focus on the map host or `<body>`, where no widget handler runs, so moving them from today's capture listener to bubble changes no outcome. A focused widget without a role that handles arrows (the scale button, `ZoomControls.tsx:138-143`) runs first and prevents the default, so Shift+↑ on it opens the scale menu and does not reset north. Fixtures run under 0C: I10 "Esc during a drag with focus in the inspection lens aborts the drag and leaves the lens open"; I11 "F6 from a widget that stops propagation still cycles regions"; H23 "Shift+↑ on the focused scale button opens the menu and does not reset north".
+From F, canvas-focus rows run only with focus on the map host or `<body>`, where no widget handler runs, so moving them from today's capture listener to bubble changes no outcome. A focused widget without a role that handles arrows (the scale button, `ZoomControls.tsx:138-143`) runs first and prevents the default, so Shift+↑ on it opens the scale menu and does not reset north. Fixtures run under 0C with today's outcomes (§5.8): I10, I11, I12, I12b, H23, H24, H25, H27.
 
 Focus after a modal closes stays with `useModalLayer` (it restores the previously focused element, `useModalLayer.ts:25`); it is the one focus mover outside the FocusOwner that P9b allows for modals.
 
@@ -1612,7 +1799,9 @@ desktop/web/src/
 ├─ canvas/runtime/interaction-types.ts  §1.2a shared vocabulary (types)
 ├─ canvas/runtime/interaction-ports.ts  §1.2a ToolHost, InputRouter, DomInputSource (types)
 ├─ canvas/runtime/keyboard-port.ts      CanvasKeyboardPort implementation (0B; fed by the key router from 0C)
-├─ canvas/runtime/legacy-camera-facade.ts  0A–0D2 only: the CameraController shim and today's camera.ts names over the view drivers; outside view/ (§1.1b)
+├─ canvas/runtime/legacy-camera-facade.ts  0A–0E only: the CameraController shim and today's camera.ts names over the view drivers; outside view/ (§1.1b)
+├─ canvas/runtime/camera-platform.ts   the platform CameraDriverHost factory (clock, animation frames, timers, devicePixelRatio, reduced
+│                                       motion; 0E); outside view/ (P4); app/** never imports it (P10)
 ├─ canvas/runtime/scene-extent.ts      SceneBoundsOptions.extentPoints for the fits (0A): plant, zone and note footprints at a scale; outside view/ (P4)
 ├─ canvas/runtime/view/                 pure; imports only what policy P4 (plan §5, the authority) allows: own files, canvas/projection.ts,
 │                                       canvas/session-plane.ts, canvas/workspace-camera-policy.ts, @preact/signals, type-only scene/types.ts
@@ -1623,11 +1812,12 @@ desktop/web/src/
 │  ├─ bearing-tween.ts                  BearingTween
 │  ├─ view-transform.ts                 buildViewTransform (geographic: MapLibre driver) and buildViewTransformFromPlane (planar: headless driver), quads, projectAnchors
 │  ├─ navigation-policy.ts              constrainCamera, zoomFloorForArc, bearing helpers
-│  ├─ navigation.ts                     ViewNavigation, the RotationSession implementation, temporary focus, openAt
+│  ├─ navigation.ts                     ViewNavigation, the RotationSession implementation, temporary focus, openAt, showStartFrame and followPlane (0E)
 │  ├─ fit.ts                            oriented fit of point sets inside insets
 │  ├─ frame-source.ts                   ViewFrameSource, ViewReadSurface implementation
 │  ├─ headless-driver.ts                HeadlessCameraDriver over a PlanarCamera (exact at bearing 0)
-│  ├─ driver-host.ts                    CameraDriverHost: headless ↔ attached swaps, failure signal
+│  ├─ driver-host.ts                    CameraDriverHost: headless ↔ attached swaps, failure signal; from 0E the move replay, setScreen,
+│  │                                    the policy generation and the attached plane follow
 │  └─ *.test.ts                         contract, round trips, constrain at bearing 45, navigation rules
 ├─ canvas/runtime/input/                pure except dom-input-source.ts
 │  ├─ platform.ts, thresholds.ts, raw-input.ts, gestures.ts, bindings.ts
@@ -1651,9 +1841,9 @@ desktop/web/src/
 ├─ canvas/runtime/scene-runtime/drag-state.ts  scene drag-state helpers from interaction/drag-ops.ts (D4, 0B); command-surface.ts and the move tools import it
 ├─ canvas/runtime/chrome/               overlay DOM: handle-layer.ts, text-entry-host.ts, hover-tooltip.ts, locked-affordance.ts, rulers.ts (moved from canvas/rulers.ts)
 ├─ canvas/runtime/renderers/
-│  ├─ scene-types.ts                    §1.5 (SceneRendererV2 beside today's SceneRendererInstance until 0D2)
+│  ├─ scene-types.ts                    §1.5 (SceneRenderer, so named from the 0C/0D2 hand-off, beside today's SceneRendererInstance until 0D2)
 │  ├─ pixi-scene.ts                     composition only
-│  ├─ draft-layer.ts                    Pixi drafts, 0D1 to the end of 0D2 only; then dissolved into the two layers below
+│  ├─ draft-layer.ts                    Pixi drafts, 0D1 to 0D2 only; then dissolved into the two layers below
 │  ├─ world-layers.ts                   zones, guides, grid (phase 1), selection preview; worldDraftRoot (world draft shapes, from 0D2)
 │  ├─ billboard-layer.ts                plants, rings, badges, notes, labels; billboardDraftRoot (upright draft shapes, from 0D2)
 │  └─ label-admission.ts
@@ -1661,7 +1851,7 @@ desktop/web/src/
 │                                       the read-model bridge; in 0B also the legacy bridge (plan §4 0B)
 ├─ maplibre/
 │  ├─ camera-driver.ts                  MapLibreCameraDriver; transformConstrain guard adapter
-│  ├─ workspace-camera.ts               0A–0D2 only: the MapLibreWorkspaceCameraOwner shim over camera-driver.ts (§1.1b)
+│  ├─ workspace-camera.ts               0A–0E only: the MapLibreWorkspaceCameraOwner shim over camera-driver.ts (§1.1b)
 │  ├─ view-agreement.ts                 the only map.project/unproject caller in the workspace (assertion)
 │  ├─ shared-scene-layer.ts             reads the frame (from 0D2; until then today's derivation, P2's named allowlist entry)
 │  └─ view-snapshot-map.ts              own driver; applies saved-view bearing
@@ -1677,23 +1867,30 @@ desktop/web/src/
 
 | File or symbol | Replaced by | Phase |
 |---|---|---|
-| `maplibre/scene-camera-transform.ts` | `view/view-transform.ts`, `maplibre/view-agreement.ts` | end of 0D2 (`maplibre/shared-scene-layer.ts` keeps its derivation until 0D2 moves the layer onto the frame) |
+| `maplibre/scene-camera-transform.ts` | `view/view-transform.ts`, `maplibre/view-agreement.ts` | 0D2 (Renderer, in the commit that moves `maplibre/shared-scene-layer.ts`, its last importer, onto the frame; P11 tombstones it at the end of 0E) |
 | `canvas/maplibre-camera.ts` (`createMapFrame`) | `maplibre/camera-driver.ts` | 0A |
-| `maplibre/workspace-camera.ts` internals (incl. `recordResolvedMinimum`) | `maplibre/camera-driver.ts`; the module itself declares the constructible `MapLibreWorkspaceCameraOwner` shim (extending the facade's `CameraController` shim), `MapLibreWorkspaceCameraMap` and `MapLibreWorkspaceCameraFailure` until 0D2 ends (§1.1b) (plan §4 0A, "Legacy surface") | 0A; file deleted end of 0D2 |
-| `canvas/runtime/camera.ts` internals (`CameraController`) | `view/headless-driver.ts`, `view/navigation.ts`; the module re-exports the legacy surface of `canvas/runtime/legacy-camera-facade.ts` (§1.1b) until 0D2 ends: a constructible `CameraController` shim with today's constructor and public members, `WorkspaceCameraFrameReader`, `WorkspaceCameraNavigation`, `WorkspaceCameraOwner`, `CameraViewportSnapshot`, `CameraFrameInsets`, `fitCameraViewport`, `cameraFramingRect`, and `SceneBounds` with its option types from `view/types.ts` (the exact list and who moves each test off it: plan §4 0A, "Legacy surface") | 0A; file deleted end of 0D2 |
-| `canvas/runtime/legacy-camera-facade.ts` | direct `ViewFrameSource`/`ViewNavigation` use | end of 0D2 |
-| `SceneViewportState` (`scene/types.ts:101-105`), `worldToScreen` in `annotation-layout.ts:180-185`, `viewportCenterWorld` (`canvas/projection.ts:95-103`) and the inline copies | `ViewTransform` (tools stop reading it in 0B; the renderer, the last reader, in 0D2) | end of 0D2 |
-| `SceneRendererInstance` (`scene-types.ts:50-57`: `renderScene`, `setViewport`) | `SceneRendererV2`, renamed `SceneRenderer`; `SceneRendererDefinition.initialize` returns it | end of 0D2 |
-| `__tests__/v2-shared-camera-transform.test.ts` | `view/view-transform.test.ts`, `view/camera-contract.test.ts` | end of 0D2, with `maplibre/scene-camera-transform.ts` (its tests cover the derivation the shared scene layer runs until then) |
+| `maplibre/workspace-camera.ts` internals (incl. `recordResolvedMinimum`) | `maplibre/camera-driver.ts`; the module itself declares the constructible `MapLibreWorkspaceCameraOwner` shim (extending the facade's `CameraController` shim), `MapLibreWorkspaceCameraMap` and `MapLibreWorkspaceCameraFailure` until 0E (§1.1b) (plan §4 0A, "Legacy surface") | 0A; file deleted 0E |
+| `canvas/runtime/camera.ts` internals (`CameraController`) | `view/headless-driver.ts`, `view/navigation.ts`; the module re-exports the legacy surface of `canvas/runtime/legacy-camera-facade.ts` (§1.1b) until 0E: a constructible `CameraController` shim with today's constructor and public members, `WorkspaceCameraFrameReader`, `WorkspaceCameraNavigation`, `WorkspaceCameraOwner`, `CameraViewportSnapshot`, `CameraFrameInsets`, `fitCameraViewport`, `cameraFramingRect`, and `SceneBounds` with its option types from `view/types.ts` (the exact list and who moves each test off it: plan §4 0A, "Legacy surface") | 0A; file deleted 0E |
+| `canvas/runtime/legacy-camera-facade.ts` | `CameraDriverHost` (`apply`, `setScreen`, `followPlane`, `planeChanged`, `policyGeneration`), `ViewNavigation` (`showStartFrame`, `followPlane`), `canvas/runtime/camera-platform.ts` (§1.1b "0E") | 0E |
+| `SceneViewportState` (`scene/types.ts:101-105`), `worldToScreen` in `annotation-layout.ts:180-185`, `viewportCenterWorld` (`canvas/projection.ts:95-103`), `geographicViewOf` (`canvas/session-plane.ts`) and the inline copies | `ViewTransform` (tools stop reading it in 0B, the renderer in 0D2), `geographicViewOfCamera` | 0E |
+| `SceneRendererInstance` (`scene-types.ts:50-57`: `renderScene`, `setViewport`) | `SceneRenderer` (so named by the 0C/0D2 hand-off); `SceneRendererDefinition.initialize` returns it | 0D2 |
+| `__tests__/v2-shared-camera-transform.test.ts` | `view/view-transform.test.ts`, `view/camera-contract.test.ts`, `v2-shared-map-scene-layer.test.ts` "the layer never derives a transform" | 0D2, with `maplibre/scene-camera-transform.ts` (Renderer; its tests cover the derivation the shared scene layer runs until then) |
+| `CameraViewportSnapshot`, `CanvasQuerySurface.viewport` (`runtime.ts`, `query-surface.ts`) | `ViewFrame` (runtime, chrome), `ViewReadSurface` (app) | 0E |
+| the composition's origin effect (`workspace-runtime-composition.ts`) and the shim's `refreshOrigin` | the runtime's plane effect, `ViewNavigation.followPlane` | 0E |
+| `interaction-session.ts`'s `camera` and `cameraNavigation` deps and `viewOf` | `frames`, `viewNavigation` | 0E |
+| `SceneRuntimeConstructionOptions.camera` | `SceneCanvasRuntime.cameraHost` | 0E |
+| `TestView.legacyCamera`, `createTestCanvasQuerySurface({ viewport })`, `bindTestViewToSurface` | `viewport()`, `reproject()`, `view()`; the fake's `placement` option | 0E |
+| `readSingleKeyShortcuts` (the session's deps, the app adapter's `settings` reader), unread after 0C; a named exception to deleting in the change that kills it: dropping the session's dep breaks `scene-runtime.ts`'s deps literal and the `settings` member of both app adapters, which no 0C row owns, so 0E's E2 deletes the chain in one commit | `KeyRouterDeps.singleKeys` | 0E |
 | `canvas/runtime/scene-interaction.ts` (1,699 lines) | `interaction-session.ts`, `input/**`, `tools/tool-host.ts` | 0B |
 | `interaction/{tool-adapter,tool-modules,shared-gestures,pointer-utils,overlay-ui,polygon-draft-overlay,plant-spacing-overlay,plant-placement-preview,plant-drag-distance-overlay,zone-measurement-overlay,control-point-overlay,selection-rotation-handle,annotation-inline-editor,text-annotation-tool,zone-drawing-tool,measurement-guide-tool,plant-stamp-tool,plant-spacing-tool,object-stamp-tool,saved-object-stamp-tool,stamp-rotation,hover-tooltip,locked-object-affordance}.ts` | `tools/**`, `chrome/**`, draft shapes (`pointer-utils.ts`: `isEditableTarget` → `input/editable-target.ts`, `allowsNativeContextMenuTarget` → `input/dom-input-source.ts`, `constrainPointTo45Degrees` → `tools/constraints.ts`, `hasAdditiveModifier` and `cursorForTool` → `tools/tool-host.ts`); each in the commit that removes its last importer (plan §4 0B) | 0B |
 | `interaction/interaction-host.ts` (`prepareInteractionHost`) | `interaction-session.ts` | 0B |
 | `interaction/zone-control-points.ts`, `interaction/measurement-guide-control-points.ts` | `tools/select/reshape.ts` and `tools/select/guide-ends.ts` (both D1: the handles show while Select is armed), emitting `ToolHandle` data; the host draws them through `ToolHostDeps.chrome.setHandles` (`chrome/handle-layer.ts`) | 0B |
 | `interaction/drag-ops.ts` | `scene-runtime/drag-state.ts` (outside `tools/`, since `command-surface.ts` value-imports it) | 0B |
-| `renderers/draft-layer.ts` | `renderers/world-layers.ts` (world shapes, a ghost's zones), `renderers/billboard-layer.ts` (upright `circle-px` and `label` shapes, a ghost's plants and note text) | end of 0D2 |
+| `renderers/draft-layer.ts` | `renderers/world-layers.ts` (world shapes, a ghost's zones), `renderers/billboard-layer.ts` (upright `circle-px` and `label` shapes, a ghost's plants and note text) | 0D2 |
 | `__tests__/scene-interaction-tool-boundary.test.ts` (exact source strings) | P5, P6 | 0B |
 | `canvas/rulers.ts` listeners | `input/dom-input-source.ts`; file moves to `chrome/rulers.ts` | 0B |
 | `shortcuts/manager.ts`, `web/canvas-shortcuts.ts`, `app/shell/focus-regions.ts` | `app/keyboard/**` | 0C |
+| `beginPlantStampFromSpecies` (`canvas/plant-stamp-source.ts`), `beginSavedObjectStampPlacement` (`canvas/saved-object-stamp-source.ts`), `selectCanvasTool` (`app/workspace-commands/canvas-actions.ts`) | `armCanvasTool` | 0C |
 | `renderers/viewport-presentation.ts` | `renderers/label-admission.ts` | 0D2 |
 | `canvas/runtime/scene-chrome.ts` (grid and guides Canvas2D) | `renderers/world-layers.ts` | 1 |
 | `'overview'` in `primaryDragPansIn`, `LEGACY_BINDINGS`, `ROTATION_BINDINGS` | nothing | 2 |
@@ -1887,6 +2084,8 @@ A Wacom that Firefox on Linux reports as a mouse is handled as a mouse (document
 
 Scope and switch are defined in §1.6. "Switch" is Settings › Keyboard › single-key shortcuts: `follows` rows stop when it is off; `always` rows keep working. Mac chords replace Ctrl with Cmd for every mod row.
 
+The Scope column applies from F. Phase 0 (0C) keeps today's gates (§1.6 "Phase 0 order"): every shell row works in text fields; arrows (Shift: the large step) act with focus inside the map host and not on a control (not the window, not `<body>`); the Menu key, Enter or F2 on a note and the Esc chain act with focus on the map host or the window; the armed tool's Enter, Backspace and Esc act with any focus but a control (any focus while a pointer session is live); a held Space likewise, but never in a text field; `[` `]` like Space and, outside the map host, only with the switch on.
+
 | Key | Action | Scope | Switch | Phase |
 |---|---|---|---|---|
 | V, H, P, W, K, Z, R, E, L, T, M | arm Select, Pan, Plant stamp, Plant a row, Object stamp, Polygon, Rectangle, Ellipse, Line, Text, Measure | `command` | follows | unchanged |
@@ -1896,12 +2095,12 @@ Scope and switch are defined in §1.6. "Switch" is Settings › Keyboard › sin
 | Shift+← / Shift+→ | turn the view to the next 15° multiple left / right (300 ms, about the centre): from 22°, Shift+→ ends at 30°, not 37° (spec: the user said "rotates 15 degrees"; landing on the 15° grid is this document's reading) | `view-arrows` | n/a | 1 (was large nudge or large pan) |
 | Shift+↑ | reset north | `view-arrows` | n/a | 1 (was large nudge or large pan) |
 | Shift+↓ | unbound, reserved for tilt | — | — | 1 (convention) |
-| ← → ↑ ↓ | with a selection, the Select tool armed and site mode: nudge 10 cm along the screen direction (from 1; before: world axes); with a selection in another tool or in overview: nothing (today, every phase); with none: pan 64 px along the screen, in any tool and in overview. Never while a pointer session (drag, band, move, handle drag, pan or rotate) is live: the arrow does nothing (today, `scene-interaction.ts:1152`; every phase; fixture H25) | `canvas-focus` | n/a | 1 |
+| ← → ↑ ↓ | with a selection, the Select tool armed and site mode: nudge 10 cm along the screen direction (from 1; before: world axes); with a selection in another tool or in overview: nothing (today, every phase); with none: pan 64 px along the screen, in any tool and in overview. Never while a pointer session (drag, band, move, handle drag, pan or rotate) is live: the arrow does nothing (today, `keyboard-port.ts:146`; every phase; fixture H25) | `canvas-focus` | n/a | 1 |
 | mod+arrows | as the arrows, 1 m or 256 px, along the screen | `canvas-focus` | n/a | 1 (was Shift+arrows) |
 | Alt+arrows | unbound | — | — | — |
 | macOS Ctrl+arrows | not bound (Mission Control) | — | — | — |
 | Shift+G, Shift+S, Shift+R | grid, snap to grid, rulers (rulers while rotated: on, hidden, with the hint) | `command` | follows | unchanged |
-| [ / ] | a held stamp: turn it −15° / +15°; otherwise send to back / bring to front | `command` | follows, except that a held stamp's turn also works on map focus with the switch off (today, `stamp-rotation.ts:22-31`; fixture H24) | unchanged |
+| [ / ] | a held stamp: turn it −15° / +15°; otherwise send to back / bring to front | `command` | follows, except that a held stamp's turn also works on map focus with the switch off (today, `keyboard-port.ts:198-206`; fixture H24) | unchanged |
 | Delete, Backspace | delete the selection. Backspace during a polygon draft removes the last corner instead. Delete on a focused or selected corner handle removes that corner (from 2) | `command` (Backspace in a draft: `canvas-focus`) | n/a | unchanged, corner from 2 |
 | Enter | Polygon draft: finish (3+ corners). One selected note: edit its text. Compass focused: reset north | `canvas-focus` | n/a | unchanged; compass 1 |
 | F2 | one selected note with map focus: edit its text; otherwise rename the Design | `canvas-focus`, then shell | n/a | unchanged |
@@ -1957,6 +2156,8 @@ The text entry (note editor, spacing field) is not a layer: its element handler 
 | 10 | dock panel or phone sheet → close | open |
 
 The canvas layers are active from every focus class except `text` and `modal` whenever a tool is armed, a gesture is live or a transient exists (phase F; phase 0 keeps today's behaviour). One Esc runs one layer. In overview only layers 100, 70 (a live pan or rotate, or today's interrupted gesture), 30 (from 2, the overview selection), 25 and 10 run; 65, 60 and 50 never run there, so Esc never leaves the tool in overview (today), and the per-tool table below applies in site mode only.
+
+Phase 0 (0C): the priority table applies from F. The router runs one canvas layer, `legacyEscape`, in today's order (`keyboard-port.ts:267-295`, `:229-242`): a live nudge series aborts (any focus); on a control or field with no live pointer session nothing more runs; in overview, today's interrupted cancel; otherwise the armed tool's own Esc, then, if a pointer session is still live, its cancel; then, with map-host focus and no modifier, the tool leaves for Select, else the selection clears. No canvas row matches Esc: `deselect` carries only a key hint (`app/canvas-commands/index.ts:351`) and the canvas rows come from `definition.shortcuts`. An Esc the canvas did not consume reaches element and document handlers and matches no row in bubble, as today. Popovers keep their document listeners until F.
 
 | Tool | 1st Esc | 2nd Esc | 3rd Esc |
 |---|---|---|---|
@@ -2290,14 +2491,15 @@ These run in `app/keyboard/*.test.ts` with `KeyboardEventLike` literals.
 | I7 Blur mid-gesture | down(0) → move → blur | `cancel('blur')`; Space released |
 | I8 One Esc, one thing (spec) | popover open over an armed polygon draft: Esc, Esc, Esc | popover closes; draft drops; Select |
 | I9 Esc during a compass drag (spec) | Select with a selection; compass drag in progress; Esc | the starting camera returns; the selection stays |
-| I10 Esc during a drag, focus in the lens (0C) | left drag live; focus in the inspection lens panel; Esc | the drag aborts (capture step 4); the lens stays open |
+| I10 Esc during a drag, focus in the lens (0C, F) | left drag live; focus in the inspection lens panel; Esc | 0C: the drag aborts in the capture listener and the key is prevented, not stopped, so the lens's own handler also closes the lens (`InspectionLens.tsx:119` ignores `defaultPrevented`, today); F: the drag aborts and the lens stays open |
 | I11 F6 past a widget that stops propagation (0C) | focus inside the inspection lens; F6 | the next region takes focus (capture listener) |
 | I12 Presenter scope inside its modal (0C) | story presenter open (modal layer held): ArrowRight; N | the next step; nothing |
-| H23 Scale button owns its arrows (0C, again in phase 1) | focus the scale button (`ZoomControls.tsx:138-143`): Shift+↑ | the scale menu opens; the bearing is unchanged |
+| I12b Presenter keys need its focus (0C) | story presenter open, focus on `<body>`: ArrowRight; Space; Esc | nothing (today: the presenter hears only keys inside its root) |
+| H23 Scale button owns its arrows (0C, again in phase 1) | focus the scale button (`ZoomControls.tsx:138-143`): Shift+↑ | the scale menu opens; 0C: no nudge or pan (the button is a `control`); 1: the bearing is unchanged |
 | H24 Held stamp turns with the switch off (0C) | single-key shortcuts off, map focused, Object stamp holding a pick: `]`; then focus the body: `]` | the pick turns +15° on the map; nothing on the body |
 | H25 Arrows during a live drag | Select with a selection; a move-drag in progress: → | nothing: no nudge and no pan (today) |
 | H26 The World map owns its arrows (1) | focus the World map canvas (`data-owns-keys="arrows"`): Shift+→, Shift+↑ | the workspace view neither turns nor resets; MapLibre's rotation is off (INV-CAM-46) |
-| H27 F2 falls through to the shell (0C) | map focus with nothing selected: F2; map focus with one note selected: F2 | rename the Design (the port returns false, the row's `fallback` runs); edit the note |
+| H27 F2 falls through to the shell (0C) | map focus with nothing selected: F2; map focus with one note selected: F2 | rename the Design (0C: the capture F2 step's `edit-text` returns false and the shell row runs in bubble; F: the row's `fallback`); edit the note (0C: the capture step stops the key) |
 
 ### 5.9 Precedence
 

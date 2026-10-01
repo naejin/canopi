@@ -1,6 +1,6 @@
 # Focus and keyboard ownership
 
-Status: Accepted (2026-09-29, Canopi v2)
+Status: Accepted (2026-09-29, Canopi v2); amended 2026-10-01
 
 Amends [ADR 0010](0010-map-first-interface.md) (single-key shortcut scope). Product rules: [ADR 0015](0015-rotating-map-and-canvas-controls.md).
 
@@ -10,7 +10,7 @@ Thirteen key listeners (shell shortcuts, Web canvas shortcuts, focus regions, th
 
 ## Decision
 
-- **One `KeyRouter`** in the neutral `app/keyboard/` module owns the only window key listeners: one capture and one bubble listener per `keydown`/`keyup`. Capture: skip IME composition, classify focus (modal, text, map, body, other), track modifiers and (on the map or body) Space, give a live canvas gesture the key first, F6. Bubble, skipped for a key a widget handled: a modal gets only its pushed scope (story presenter, PDF page editor) and `worksInModal` rows; `global` rows; the Stories Undo toast; Esc runs the Esc chain, where popovers are layers, not scopes; then the keymap.
+- **One `KeyRouter`** in the neutral `app/keyboard/` module owns the only window key listeners: `keydown` in capture and bubble, `keyup` in capture. Capture: skip IME composition, classify focus (modal, text, map, body, other), track modifiers and (on the map or body) Space, give a live canvas gesture the key first, F6. Bubble, skipped for a key a widget handled: a modal gets only its pushed scope (story presenter, PDF page editor) and `worksInModal` rows; `global` rows; the Stories Undo toast; Esc runs the Esc chain, where popovers are layers, not scopes; then the keymap.
 - **Scopes.** `global` rows work everywhere except modals (a few also in text fields: Ctrl+K, Ctrl+S, F1, F6). `command` rows (tool letters, Delete, `[` `]`, N, Shift+N, Shift+L, undo) work anywhere except text fields and dialogs; a held stamp's `[` `]` also work on map focus with single keys off, as today. `view-arrows` (Shift+←/→/↑) likewise, except inside an arrow-owning widget (a list, menu, slider, tab list, toolbar, focusable splitter, or an element that declares `data-owns-keys`).
 - **Map-focus rows.** `canvas-focus` rows (plain and Ctrl/Cmd arrows, Enter, Space, Backspace, F2, `+` `−`, Menu) need the map or body. A widget keeps a `command` key only by declaring it (`data-owns-keys`).
 - **The keymap is data**: each row names its chords, scope and whether it follows the single-key switch; F1 renders it. `mod` means Cmd on Mac and Ctrl elsewhere; AltGr never matches; non-Latin layouts fall back to `event.code` for letters, digits and brackets.
