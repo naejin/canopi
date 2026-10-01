@@ -242,13 +242,22 @@ describe('SceneChromeOverlay', () => {
     const horizontal = container.querySelector<HTMLCanvasElement>(
       '[data-ruler-overlay-part="horizontal"]',
     )
-    horizontal?.dispatchEvent(new MouseEvent('mousedown', { clientX: 180, clientY: 60 }))
+    // A ruler drag under way, as the session runs it: the pressed ruler's guide port, dragged.
+    const press = pressRuler(horizontal)
+    expect(press).not.toBeNull()
+    press!.drag()
+    expect(container.style.cursor).toBe('s-resize')
 
     overlay.destroy()
-    document.dispatchEvent(new MouseEvent('mouseup', { clientX: 180, clientY: 150 }))
+    // The drag ends with the overlay: its cursor comes back, and its release lands no guide.
+    expect(container.style.cursor).toBe('')
+    press!.drag()
+    press!.createGuideAt('h', { x: 80, y: 100 })
 
     expect(container.childElementCount).toBe(0)
+    expect(container.style.cursor).toBe('')
     expect(onGuideCreate).not.toHaveBeenCalled()
+    expect(pressRuler(horizontal)).toBeNull()
   })
 
   it('rolls back the grid when ruler construction fails', () => {
