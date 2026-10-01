@@ -1805,11 +1805,7 @@ const MAP_RECEIVER_TARGETS = ['*map.*', '*map!.*', '*map?.*', '*Map.*', '*Map!.*
 /** The World map drives its own north-up map without a camera driver, so P1 and P2 exempt it. */
 const WORLD_MAP_SOURCES = ['src/maplibre/world-map.ts', 'src/components/world-map/**'] as const
 
-/**
- * P2's named allowlist: each file that may still project through MapLibre, with its number of calls and the merge that
- * removes it. The test "P2 allowlists each projecting file with its exact count" fails when a count changes, so an entry
- * goes in the merge that removes its last call.
- */
+/** P5's and P5c's scope: every tool module. */
 const TOOLS_SOURCES = 'src/canvas/runtime/tools/**'
 
 /** The tools' own seams, which P5 and P5c exempt: the host, the registry and the two scene indexes. */
@@ -1820,6 +1816,11 @@ const TOOL_SEAM_SOURCES = [
   'src/canvas/runtime/tools/spatial-index.ts',
 ] as const
 
+/**
+ * P2's named allowlist: each file that may still project through MapLibre, with its number of calls and the merge that
+ * removes it. The test "P2 allowlists each projecting file with its exact count" fails when a count changes, so an entry
+ * goes in the merge that removes its last call.
+ */
 const P2_PROJECTION_ALLOWLIST: Readonly<Record<string, number>> = {
   // deriveSharedMapSceneViewport's map.project, run every render until 0D2 moves the layer onto the frame (INV-XF-25).
   'src/maplibre/shared-scene-layer.ts': 1,

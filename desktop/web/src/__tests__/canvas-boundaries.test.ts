@@ -99,7 +99,8 @@ function productionSources(): readonly Source[] {
 function blankComments(path: string, text: string): string {
   const kind = path.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
   const file = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, kind)
-  const chars = [...text]
+  // UTF-16 code units, as the comment positions count them; spreading the string would split by code point.
+  const chars = text.split('')
   const blank = (ranges: readonly ts.CommentRange[] | undefined): void => {
     for (const { pos, end } of ranges ?? []) {
       for (let index = pos; index < end; index += 1) if (chars[index] !== '\n' && chars[index] !== '\r') chars[index] = ' '
@@ -183,6 +184,19 @@ describe('canvas v2 regex policies', () => {
       'src/components/canvas/PlantedSurface.tsx': 6,
       'src/components/shared/MenuBar.tsx': 2,
     })
+  })
+
+  it('P6 blanks the right comment range after astral characters', () => {
+    const policy = policyNamed('P6 app modules add no raw pointer, mouse, wheel, contextmenu, gesture or touch listener')
+    // Comment positions are UTF-16 offsets, so each emoji ahead of a comment takes two places, not one. Read by code
+    // point, sixty emoji would shift the blanking past the commented listener and onto the padding line.
+    const text = [
+      `const label = '${'\u{1F333}'.repeat(60)}'`,
+      "// host.addEventListener('pointerdown', press)",
+      `const padding = '${'x'.repeat(70)}'`,
+      "host.addEventListener('wheel', zoom)",
+    ].join('\n')
+    expect(regexHits(policy, [{ path: 'src/app/planted/emoji.ts', text }])).toEqual({ 'src/app/planted/emoji.ts': 1 })
   })
 
   it('P6 rejects a planted raw listener in an app module', () => {
