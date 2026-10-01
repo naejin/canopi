@@ -215,3 +215,24 @@ describe.each(cases)('$label point handle drags', ({ handle, start, editType, cr
     expect(h.chrome.handles).toEqual([])
   })
 })
+
+describe('the rotation handle during a zone corner press', () => {
+  it('a corner press hides the rotation handle at once and keeps the corners; its release shows it again', () => {
+    const h = cases[0].create()
+    harnesses.push(h)
+    cases[0].select(h)
+    const shown = h.chrome.handles.map((entry) => entry.id)
+    expect(shown).toContain('rotate')
+
+    // Today's control-point press hid the rotation handle in its drag presentation, before any move.
+    h.press(cases[0].start, { target: { kind: 'handle', id: cases[0].handle } })
+    expect(h.chrome.handles.map((entry) => entry.id)).toEqual(shown.filter((id) => id !== 'rotate'))
+    expect(h.chrome.activeHandle).toBe(cases[0].handle)
+    h.release()
+    expect(h.chrome.handles.map((entry) => entry.id)).toEqual(shown)
+
+    h.press(cases[0].start, { target: { kind: 'handle', id: cases[0].handle } })
+    h.cancel('pointercancel')
+    expect(h.chrome.handles.map((entry) => entry.id)).toEqual(shown)
+  })
+})
