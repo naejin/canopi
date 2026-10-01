@@ -537,7 +537,7 @@ describe('ToolHost', () => {
       const h = harness()
       expect(h.chrome.handles).toEqual([handle])
 
-      // An entry the host did not open (until 0B-3, the bridge's note editor): Select's handles hide while it is open,
+      // An entry no tool asked for: Select's handles hide while it is open,
       h.openTextEntry()
       h.host.sceneChanged()
       expect(h.chrome.handles).toEqual([])
