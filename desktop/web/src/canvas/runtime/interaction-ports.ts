@@ -178,16 +178,14 @@ export interface ToolHost {
   /** A new source for the armed tool (the session's read-model bridge): forwards to CanvasTool.sourceChanged. */
   sourceChanged(source: ToolSource | null): void
   readonly activeTool: ReadonlySignal<ToolId>
-  /** 0B only (goes with the legacy bridge): true when tools/registry.ts lists the tool. The session routes a registered armed
-   *  tool's input to the host and every other tool's to the bridge; the host's shared duties switch on it (§1.4). */
-  isRegistered(id: ToolId): boolean
   /** The active tool's dragSlopPx, sent in the recogniser's configure on every tool change. */
   activeToolDragSlopPx(): number | null
   /** Asked by the session before it routes the events today's handlers retried on (a primary or middle press on the map, a
    *  pointerup, a pointercancel, a wheel not over a handle, the note editor or the Unlock affordance, a native contextmenu,
    *  a dragover, a drop, a key): true while a failed cancellation was pending and has now been retried, so the event is
    *  quarantined (today's app-wide swallow). Moves, leaves, lost captures, blurs and ruler presses are never fenced. Drops
-   *  stay on the legacy bridge, which retries its own, until 0B-4; the host's drop route must retry before admission. */
+   *  stay on the legacy bridge until 0B-4, and the session retries before it hands the bridge one; the host's drop route must
+   *  retry before admission. */
   retryPendingCancellation(): boolean
   /**
    * Presses the host never sees as gestures: the session calls it for every raw pointerdown on the map host before routing it

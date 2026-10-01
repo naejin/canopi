@@ -2,9 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { stubTool, useStubTools, type StubTool } from '../../__tests__/support/tool-harness'
 import {
   captureWindowErrors,
-  contextMenuHost,
   createInteractionDeps,
-  dispatchContextMenu,
   makePlant,
   plantTarget,
 } from '../../__tests__/support/scene-interaction-setup'
@@ -30,7 +28,6 @@ import type { CanvasFocusPort } from './app-adapter'
 import { createRulerOverlay, type RulerOverlay } from './chrome/rulers'
 import type { InputPlatform } from './input/platform'
 import type { ToolHost, ToolHostDeps } from './interaction-ports'
-import type { SceneToolAdapter } from './interaction/tool-adapter'
 import {
   createSceneInteractionSession,
   type SceneInteractionSession,
@@ -45,24 +42,6 @@ import { createZoneDragTool } from './tools/zone-drag'
 import type { WorldPoint } from './view/types'
 
 vi.mock('./tools/registry', () => ({ TOOL_REGISTRY: {} }))
-
-/** The legacy bridge's adapters while a test stubs them; with none set, interaction/tool-modules.ts builds its own. */
-const bridgeAdapters = vi.hoisted(() => new Map<string, SceneToolAdapter>())
-vi.mock('./interaction/tool-modules', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./interaction/tool-modules')>()
-  return {
-    ...actual,
-    createSceneToolRegistry: (context: Parameters<typeof actual.createSceneToolRegistry>[0]) => {
-      if (bridgeAdapters.size === 0) return actual.createSceneToolRegistry(context)
-      let active: SceneToolAdapter | null = null
-      return {
-        get activeAdapter() { return active },
-        select: (name: string) => (active = bridgeAdapters.get(name) ?? null),
-        forEachAdapter: (visit: (adapter: SceneToolAdapter) => void) => bridgeAdapters.forEach((adapter) => visit(adapter)),
-      }
-    },
-  }
-})
 
 /** Each ToolHost the sessions build, so a test can watch the calls the session makes on it. */
 const builtHosts = vi.hoisted(() => [] as ToolHost[])
@@ -104,7 +83,6 @@ beforeEach(() => {
 afterEach(() => {
   for (const session of sessions.splice(0).reverse()) session.dispose()
   builtHosts.length = 0
-  bridgeAdapters.clear()
   for (const rulers of mountedRulers.splice(0)) rulers.unmount()
   events.dispose()
   container.remove()
@@ -190,33 +168,6 @@ async function afterPick(): Promise<void> {
 }
 
 describe('the interaction session', () => {
-  it('a registered armed tool\'s input goes to the host and a bridged one\'s to the bridge', () => {
-    const rectangle = stubTool('rectangle')
-    useStubTools(rectangle)
-    const bridgedPresses: string[] = []
-    for (const id of ['rectangle', 'line']) {
-      bridgeAdapters.set(id, { pointerDown: ({ screen }) => { bridgedPresses.push(`${id} ${screen.x},${screen.y}`); return true } })
-    }
-    const { session } = createSession()
-
-    session.setTool('rectangle')
-    events.pointerDown({ x: 20, y: 20 })
-    events.pointerMove({ x: 80, y: 60 })
-    events.pointerUp({ x: 80, y: 60 })
-    // The host's tool drew it; the bridge's rectangle adapter (stubbed here) never ran.
-    expect(rectangle.gestures.map((gesture) => gesture.kind)).toEqual(['press', 'drag-start', 'drag-end'])
-    expect(bridgedPresses).toEqual([])
-    expect(store.persisted.zones).toHaveLength(0)
-
-    // An unregistered tool's press goes to the bridge's adapter (stubbed here), and the host's tool hears nothing more.
-    session.setTool('line')
-    events.pointerDown({ x: 120, y: 120 })
-    events.pointerUp({ x: 120, y: 120 })
-    expect(bridgedPresses).toEqual(['line 120,120'])
-    expect(rectangle.gestures).toHaveLength(3)
-    expect(rectangle.calls).toContain('deactivate:switch')
-  })
-
   it('every raw pointerdown on the map host reaches rawPress before it is routed', () => {
     const order: string[] = []
     const select = stubTool('select', {
@@ -589,10 +540,11 @@ describe('the interaction session', () => {
     expect(onSceneEditCommit).toHaveBeenCalledOnce()
   })
 
-  it('a hover that throws leaves the move to the rest of the app, under a bridged and a registered tool', () => {
+  it('a hover that throws leaves the move to the rest of the app, under today\'s Line and a stub tool', () => {
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 100, y: 100 })]
     })
+    useStubTools(createZoneDragTool('line'))
     let broken = false
     const { session } = createSession({
       setHoveredTarget: () => {
@@ -840,16 +792,16 @@ describe('the interaction session', () => {
     expect(sources.at(-1)).toEqual({ kind: 'saved-stamp', stamp })
   })
 
-  it('arming a bridged tool during a registered tool\'s press ends the press with its capture and its pan', () => {
+  it('arming another tool during a registered tool\'s press ends the press with its capture and its pan', () => {
     const rectangle = stubTool('rectangle')
-    useStubTools(rectangle)
+    useStubTools(rectangle, stubTool('ellipse'))
     const { session } = createSession()
     session.setTool('rectangle')
 
     events.pointerDown({ x: 20, y: 20 }, { pointerId: 4 })
     events.pointerMove({ x: 60, y: 40 }, { pointerId: 4 })
     expect(events.pointerCapture.has(4)).toBe(true)
-    // Ellipse is still on the bridge: the capture the host's press took goes at once, as today's tool change released it.
+    // The capture the host's press took goes at once, as today's tool change released it.
     session.setTool('ellipse')
     expect(events.pointerCapture.has(4)).toBe(false)
     events.pointerUp({ x: 60, y: 40 }, { pointerId: 4 })
@@ -982,32 +934,7 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
     expect(rectangle.count('drag-start')).toBe(0)
   })
 
-  it('Place plants here from a bridged tool\'s menu places through the host once Place plants is registered', () => {
-    const stamp = stubTool('plant-stamp', { command: (command) => command.kind === 'place-at' ? 'handled' : 'pass' })
-    useStubTools(stamp)
-    const tools: string[] = []
-    const { session } = createSession({ setTool: (name) => { tools.push(name) } })
-    session.setTool('line')
-    contextMenuHost.reset()
-
-    dispatchContextMenu(container, events.clientPoint({ x: 120, y: 80 }))
-    const request = contextMenuHost.current
-    expect(request?.placePlantsAt).toBeDefined()
-    request!.placePlantsAt!({ x: 120, y: 80 })
-
-    expect(tools.at(-1)).toBe('plant-stamp')
-    expect(stamp.commands).toEqual([{ kind: 'place-at', world: { x: 120, y: 80 } }])
-    // The app closes the request it holds.
-    session.setTool('line')
-    dispatchContextMenu(container, events.clientPoint({ x: 60, y: 60 }))
-    const reopened = contextMenuHost.current
-    events.pointerDown({ x: 10, y: 10 })
-    events.pointerUp({ x: 10, y: 10 })
-    expect(reopened).not.toBeNull()
-    expect(contextMenuHost.current).toBeNull()
-  })
-
-  it('leaving a registered tool cancels its press through the host even when the bridge\'s hover clear fails', () => {
+  it('leaving a registered tool cancels its press through the host even when the hover clear fails', () => {
     const { tool: rectangle, open } = editingTool('rectangle')
     useStubTools(rectangle)
     let failHover = false
@@ -1029,36 +956,6 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
     expect(events.pointerCapture.has(15)).toBe(false)
     expect(builtHosts.at(-1)?.activeTool.value).toBe('rectangle')
     expect(container.style.cursor).toBe('crosshair')
-  })
-
-  it('a bridge that fails after the host left a registered tool re-arms it, and the tool\'s pan and cursor end', () => {
-    const hand = stubTool('hand')
-    useStubTools(hand)
-    let failActivation = false
-    // Line on the bridge, whose activation fails once the host has left the Pan tool.
-    bridgeAdapters.set('line', {
-      onActivate: () => {
-        if (failActivation) throw new Error('bridge activation failed')
-      },
-    })
-    const { session } = createSession()
-    session.setTool('hand')
-    events.pointerDown({ x: 100, y: 100 }, { pointerId: 52 })
-    events.pointerMove({ x: 110, y: 110 }, { pointerId: 52 })
-    expect(container.style.cursor).toBe('grabbing')
-
-    failActivation = true
-    expect(() => session.setTool('line')).toThrow('bridge activation failed')
-    failActivation = false
-    expect(builtHosts.at(-1)?.activeTool.value).toBe('hand')
-    expect(container.style.cursor).toBe('grab')
-    expect(events.pointerCapture.has(52)).toBe(false)
-
-    const before = camera.viewport
-    events.pointerDown({ x: 100, y: 100 }, { pointerId: 53 })
-    events.pointerMove({ x: 130, y: 120 }, { pointerId: 53 })
-    events.pointerUp({ x: 130, y: 120 }, { pointerId: 53 })
-    expect(camera.viewport).toEqual({ x: before.x + 30, y: before.y + 20, scale: before.scale })
   })
 
   it('entering a registered tool whose activation fails leaves the tool before it armed, as it was', () => {
@@ -1189,15 +1086,16 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
 })
 
 describe('ruler drags through the session', () => {
-  /** A session with Line armed: a tool the legacy bridge still runs. */
-  function bridgedSession(overrides: Partial<SceneInteractionSessionDeps> = {}): ReturnType<typeof createSession> {
+  /** A session with today's Line armed, on the host as the app registers it. */
+  function lineSession(overrides: Partial<SceneInteractionSessionDeps> = {}): ReturnType<typeof createSession> {
+    useStubTools(createZoneDragTool('line'))
     const created = createSession(overrides)
     created.session.setTool('line')
     return created
   }
 
   it('a ruler drag lands one guide at its release, and none inside the ruler\'s gutter', () => {
-    bridgedSession()
+    lineSession()
     const rawPress = vi.spyOn(builtHosts.at(-1)!, 'rawPress')
     const rulers = mountRulers(rulerCamera({ y: 20, scale: 4 }))
 
@@ -1214,7 +1112,7 @@ describe('ruler drags through the session', () => {
     expect(rulers.onGuideCreate).toHaveBeenCalledOnce()
   })
 
-  it('a pen drags a guide out of a ruler under a bridged and a registered tool; a touch press there drags none', () => {
+  it('a pen drags a guide out of a ruler under Line and under Select; a touch press there drags none', () => {
     const rulers = mountRulers(rulerCamera({ y: 20, scale: 4 }))
     const pen = { pointerId: 7, pointerType: 'pen' } as const
     const touch = { pointerId: 8, pointerType: 'touch' } as const
@@ -1231,12 +1129,12 @@ describe('ruler drags through the session', () => {
     }
 
     // Today's ruler heard the pen's compatibility mousedown and mouseup; a touch press sent none before its release.
-    const bridged = bridgedSession().session
+    const line = lineSession().session
     penDrag()
     expect(rulers.onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 20)
     touchDrag()
     expect(rulers.onGuideCreate).toHaveBeenCalledOnce()
-    bridged.dispose()
+    line.dispose()
 
     useStubTools(stubTool('select'))
     createSession()
@@ -1249,7 +1147,7 @@ describe('ruler drags through the session', () => {
 
   it('a ruler guide lands at its release even when the tool\'s release fails, as today\'s separate mouseup did', () => {
     let broken = false
-    const { session } = bridgedSession({
+    const { session } = lineSession({
       setHoveredTarget: () => {
         if (broken) throw new Error('release failed')
       },
@@ -1271,7 +1169,7 @@ describe('ruler drags through the session', () => {
     expect(rulers.onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 20)
     expect(rulers.host.style.cursor).toBe('crosshair')
 
-    // A registered tool's release that fails still ends the rulers' drag.
+    // Another tool's release that fails still ends the rulers' drag.
     useStubTools(stubTool('select'))
     session.dispose()
     createSession({
@@ -1285,7 +1183,7 @@ describe('ruler drags through the session', () => {
   })
 
   it('a second ruler press replaces the first drag', () => {
-    bridgedSession()
+    lineSession()
     const rulers = mountRulers(rulerCamera({ x: 10, scale: 2 }))
 
     events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal })
@@ -1298,7 +1196,7 @@ describe('ruler drags through the session', () => {
   })
 
   it('a ruler drag ends with its overlay: the exact cursor comes back and no guide lands', () => {
-    bridgedSession()
+    lineSession()
     const rulers = mountRulers()
     rulers.host.style.cursor = 'crosshair'
 
@@ -1319,7 +1217,7 @@ describe('ruler drags through the session', () => {
   })
 
   it('a window blur ends a ruler drag without a guide', () => {
-    bridgedSession()
+    lineSession()
     const rulers = mountRulers()
     rulers.host.style.cursor = 'grab'
 
@@ -1357,7 +1255,7 @@ describe('ruler drags through the session', () => {
       expect(rulers.onGuideCreate).not.toHaveBeenCalled()
     }
 
-    const { session } = bridgedSession(failingHover)
+    const { session } = lineSession(failingHover)
     failingDrag()
     session.dispose()
 
@@ -1366,7 +1264,7 @@ describe('ruler drags through the session', () => {
     failingDrag()
   })
 
-  it('a ruler guide lands only while north is up, under a bridged and a registered tool', () => {
+  it('a ruler guide lands only while north is up, under Line and under Select', () => {
     const rotated = createTestView({ screen: { width: 400, height: 300 }, camera: { bearingDeg: 30 } })
     const rulers = mountRulers(rulerCamera({ y: 20, scale: 4 }))
     const drag = (): void => {
@@ -1376,7 +1274,7 @@ describe('ruler drags through the session', () => {
     }
 
     try {
-      bridgedSession({ frames: rotated.frames })
+      lineSession({ frames: rotated.frames })
       drag()
       sessions.pop()!.dispose()
       useStubTools(stubTool('select'))
@@ -1395,7 +1293,7 @@ describe('ruler drags through the session', () => {
   })
 
   it('a ruler guide lands with the rulers\' camera at its release', () => {
-    bridgedSession()
+    lineSession()
     const rulers = mountRulers(rulerCamera({ y: 10, scale: 2 }))
 
     events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal })
@@ -1406,7 +1304,7 @@ describe('ruler drags through the session', () => {
   })
 
   it('a ruler drag started before the rulers hide lands no guide', () => {
-    bridgedSession()
+    lineSession()
     const rulers = mountRulers()
     rulers.host.style.cursor = 'crosshair'
 
@@ -1425,7 +1323,7 @@ describe('ruler drags through the session', () => {
   })
 
   it('a ruler drag across overview entry lands no guide, and the rulers hide', () => {
-    bridgedSession()
+    lineSession()
     const rulers = mountRulers()
     rulers.host.style.cursor = 'crosshair'
 

@@ -16,6 +16,7 @@ import {
   type SceneInteractionSessionDeps,
 } from '../canvas/runtime/scene-interaction'
 import type { CanvasDesignObjectSelectionModel } from '../canvas/runtime/runtime'
+import type { ViewFrameSource } from '../canvas/runtime/view/types'
 import type {
   SceneCommandAdmission,
   SettledSceneReader,
@@ -691,7 +692,11 @@ describe('SceneInteractionSession', () => {
 
   it('keeps active drag and rotation gestures moving through runtime overlay propagation guards', () => {
     store.updatePersisted((draft) => {
-      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
+      draft.plants = [
+        makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }),
+        // Directly locked: hovering it brings the session's Unlock affordance, which stops the moves made on it, onto the map.
+        makePlant('locked-plant', 'Malus domestica', { x: 300, y: 250 }, { locked: true }),
+      ]
       draft.zones = [makeRectZone('zone-1', [
         { x: 80, y: 80 },
         { x: 140, y: 80 },
@@ -706,10 +711,12 @@ describe('SceneInteractionSession', () => {
     })
     const session = createTestSession(deps)
     session.setTool('select')
+    events.pointerMove({ x: 300, y: 250 })
+    events.pointerMove({ x: 360, y: 280 })
 
     deps.setSelection([plantTarget('plant-1')])
     session.refreshMeasurements()
-    const overlay = container.querySelector<HTMLElement>('[data-locked-object-affordance]')!
+    const overlay = lockedAffordance(container)!
 
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     const overlayMove = events.pointerMove(
@@ -725,7 +732,7 @@ describe('SceneInteractionSession', () => {
     deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
     const handle = rotationHandle(container)!
-    const affordanceElement = container.querySelector<HTMLElement>('[data-locked-object-affordance]')!
+    const affordanceElement = lockedAffordance(container)!
     const pivot = selectionBoundsCenter(getDesignObjectSelectionFromStore(store, camera))
     const start = rotationHandleCenter(container)
     const end = quarterTurnClockwise(pivot, start)
@@ -746,16 +753,23 @@ describe('SceneInteractionSession', () => {
 
   it('ends middle-button panning when pointer continuation targets a runtime overlay', () => {
     store.updatePersisted((draft) => {
-      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
+      draft.plants = [
+        makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }),
+        // Directly locked: hovering it brings the session's Unlock affordance onto the map.
+        makePlant('locked-plant', 'Malus domestica', { x: 300, y: 250 }, { locked: true }),
+      ]
     })
     const deps = createInteractionDeps(container, store, camera, {
       getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
     })
     const session = createTestSession(deps)
     session.setTool('select')
+    events.pointerMove({ x: 300, y: 250 })
+    events.pointerMove({ x: 360, y: 280 })
     deps.setSelection([plantTarget('plant-1')])
     session.refreshMeasurements()
-    const overlay = container.querySelector<HTMLElement>('[data-locked-object-affordance]')!
+    const overlay = lockedAffordance(container)!
+    expect(overlay).not.toBeNull()
 
     events.pointerDown({ x: 200, y: 150 }, { pointerId: 41, button: 1 })
     events.pointerMove(
@@ -4138,7 +4152,7 @@ describe('SceneInteractionSession', () => {
     let earlierResources = 0
     const appendChild = vi.spyOn(container, 'appendChild').mockImplementation(
       (<T extends Node>(node: T): T => {
-        // The handle layer comes after the bridge's preview, tooltip, tool overlays and Unlock affordance.
+        // The handle layer comes after the map host's key description and the bridge's drop preview.
         if (node instanceof HTMLElement && node.dataset.canvasHandleLayer === 'true') {
           earlierResources = container.children.length
           throw new Error('handle layer construction failed')
@@ -4158,33 +4172,36 @@ describe('SceneInteractionSession', () => {
   })
 
   it('removes an eager collaborator root when its initialization throws after append', () => {
-    let affordanceRootAppended = false
+    let handleLayerAppended = false
     const originalAppendChild = container.appendChild.bind(container)
     const appendChild = vi.spyOn(container, 'appendChild').mockImplementation(
       (<T extends Node>(node: T): T => {
         const appended = originalAppendChild(node) as T
-        if (node instanceof HTMLElement && node.dataset.lockedObjectAffordance === 'true') {
-          affordanceRootAppended = true
-        }
+        if (node instanceof HTMLElement && node.dataset.canvasHandleLayer === 'true') handleLayerAppended = true
         return appended
       }) as typeof container.appendChild,
     )
-    const base = createInteractionDeps(container, store, camera)
-    // The Unlock affordance appends its root, then reads its labels.
-    const deps = createInteractionDeps(container, store, camera, {
-      translate: (key, options) => {
-        if (affordanceRootAppended) throw new Error('locked affordance initialization failed')
-        return base.translate(key, options)
-      },
-    })
+    // The handle layer appends its root, then follows the camera's overlay frames.
+    const frames = (camera as unknown as { readonly host: { readonly frames: ViewFrameSource } }).host.frames
+    const deps = {
+      ...createInteractionDeps(container, store, camera),
+      frames: {
+        viewFrame: frames.viewFrame,
+        settledViewFrame: frames.settledViewFrame,
+        onViewFrame: (phase, listener) => {
+          if (handleLayerAppended && phase === 'overlays') throw new Error('handle layer initialization failed')
+          return frames.onViewFrame(phase, listener)
+        },
+      } satisfies ViewFrameSource,
+    }
 
     try {
-      expect(() => createSceneInteractionSession(deps)).toThrow('locked affordance initialization failed')
+      expect(() => createSceneInteractionSession(deps)).toThrow('handle layer initialization failed')
     } finally {
       appendChild.mockRestore()
     }
 
-    expect(affordanceRootAppended).toBe(true)
+    expect(handleLayerAppended).toBe(true)
     expect(container.children).toHaveLength(0)
   })
 

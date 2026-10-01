@@ -1,16 +1,16 @@
 // canvas/runtime/tools/tool-host.ts
 //
 // Owns the ToolHost (spec §1.4, ADR 0018), the only code that builds ToolGestures. It converts the recogniser's screen
-// gestures to world points at event time, resolves modifiers (§2.3), applies the active tool's constraint and the grid and
-// guide snapping, and runs the interceptors (admission, handles, the inspection probe) before the tool; every raw press
-// first commits the nudge series and, as today's pointerdown, closes the menu and moves focus to the map. A drag starts
-// at the press's world point, and every camera frame re-emits the live drag or the resting pointer, which a pointer pan
-// moves (plan §1, exception 1). The text entry's state is the chrome's, read live. It
-// owns the passive hover, the selection decorations, the arrow-nudge series, transient history and the Esc queries, and
-// merges the tool's draft with its decorations for the renderer. Tools are plain objects listed in tools/registry.ts; an armed tool
-// that is not listed runs through the session's legacy bridge (0B), and the host's shared duties switch on isRegistered
-// (spec §1.4, "The legacy bridge"). Drops stay on the bridge until 0B-4. The module re-exports createToolScene and builds
-// the context-menu port, so interaction-session.ts imports nothing else from tools/ (P5b).
+// gestures to world points at event time, resolves modifiers (§2.3), applies the active tool's constraint and the grid
+// and guide snapping, and runs the interceptors (admission, handles, the inspection probe) before the tool; every raw
+// press first commits the nudge series and, as today's pointerdown, closes the menu and moves focus to the map. A drag
+// starts at the press's world point, and every camera frame re-emits the live drag or the resting pointer, which a
+// pointer pan moves (plan §1, exception 1). The text entry's state is the chrome's, read live. It owns the passive
+// hover, the selection decorations, the arrow-nudge series, transient history and the Esc queries, and merges the
+// tool's draft with its decorations for the renderer. Tools are plain objects listed in tools/registry.ts, which lists
+// every tool; an id it does not list arms none. Drops stay on the session's legacy bridge until 0B-4 (spec §1.4, "The
+// legacy bridge"). The module re-exports createToolScene and builds the context-menu port, so interaction-session.ts
+// imports nothing else from tools/ (P5b).
 
 import { signal, untracked } from '@preact/signals'
 import { runCanvasRuntimeCleanups } from '../cleanup'
@@ -93,7 +93,7 @@ interface LiveGesture {
 
 /** Where the pointer rests on the map: the last hover, or where a press was released, moved by a pointer pan (notePointer).
  *  Re-emitted on a camera frame while it is on the map; null with the pointer off the map or its place unknown (after a
- *  window blur, a document replacement or a bridged tool). */
+ *  window blur, a document replacement or an id that arms no tool). */
 interface StillPointer {
   readonly screen: ScreenPoint
   readonly mods: Modifiers
@@ -434,12 +434,12 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   /**
-   * The selection decorations the host draws whatever tool is armed: the single selected zone's W/H, edge and area chips.
-   * They switch from the legacy overlay once the zone tools are registered (the polygon adapter draws them until then), and
-   * hide while the armed Line, Rectangle, Ellipse or Polygon draft carries measure labels.
+   * The selection decorations the host draws whatever tool is armed: the single selected zone's W/H, edge and area chips
+   * (today's (a4c86d39) zone tool drew them under every tool). They hide while the armed Line, Rectangle, Ellipse or Polygon
+   * draft carries measure labels.
    */
   function decorationShapes(): DraftShape[] {
-    if (!isRegistered('polygon') || zoneDraftHidesChips()) return []
+    if (zoneDraftHidesChips()) return []
     const labels = selectedZoneMeasurementLabels(deps.scene.persisted, deps.scene.selection())
     return labels.length > 0 ? measureLabelShapes(labels, (a, b) => frame().view.screenDistance(a, b)) : []
   }
@@ -581,7 +581,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (disposed) return
     pressCommitsNote = false
     endNudgeSeries(true)
-    // A bridged tool's presses are the bridge's.
     if (!activeTool || button === 'secondary' || pendingCancellation) return
     if (live && live.id !== pointerId) return
     if (target.kind === 'owned-text' || (target.kind === 'owned-chrome' && target.lockedAffordance)) return
@@ -816,8 +815,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   /**
    * After a press ends: today's pointerup clears the passive hover and resets the cursor to the tool's. A mouse or pen
    * rests where it was released, so the next camera frame re-emits a hover there (plan §1, exception 1); a lifted finger
-   * leaves nothing under it. A tool that armed a bridged one on its release (a saved stamp returning to Select) left the
-   * pointer to the bridge, whose hovers the host does not follow.
+   * leaves nothing under it.
    */
   function endLive(released: StillPointer | null = null): void {
     live = null
@@ -867,7 +865,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       runCanvasRuntimeCleanups([
         () => endNudgeSeries(true),
         () => cancelLive(reason === 'navigate' ? 'blur' : 'tool-change'),
-        // A bridged tool's hover, transient and cursor are the bridge's.
+        // With no tool armed there is no hover, transient or tool cursor to clear.
         ...(tool
           ? [
               () => clearPassiveHover(),
@@ -1022,7 +1020,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const tool = factory ? factory() : null
     activeTool = tool
     if (!tool) {
-      // The bridge runs a bridged tool's presses and drags, so the host no longer knows where the pointer rests.
+      // No tool hears the pointer, so the host forgets where it rests.
       lastHover = null
       flush()
       return
@@ -1111,10 +1109,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     }, 'pass' as ToolReply, { resumePending: true })
   }
 
-  function isRegistered(id: ToolId): boolean {
-    return TOOL_REGISTRY[id] !== undefined
-  }
-
   // ── The host ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
   const unsubscribeFrames = deps.frames.onViewFrame('tools', onFrame)
@@ -1177,7 +1171,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       if (tool?.sourceChanged) callTool(() => tool.sourceChanged!(source))
     },
     activeTool: deps.toolState.active,
-    isRegistered,
     activeToolDragSlopPx: () => activeTool?.dragSlopPx ?? null,
     retryPendingCancellation,
     rawPress,
@@ -1280,7 +1273,10 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
 // ── Pure helpers ───────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** Today's cursors per tool (pointer-utils.ts cursorForTool); a tool may set its own through ToolEffects.setCursor. */
+/**
+ * Today's cursors per tool (today's (a4c86d39) pointer-utils.ts cursorForTool); a tool may set its own through
+ * ToolEffects.setCursor.
+ */
 function cursorForTool(tool: ToolId): string {
   switch (tool) {
     case 'hand': return 'grab'

@@ -5,7 +5,6 @@ import type { ToolId } from './interaction-types'
 import {
   createCanvasKeyboardPort,
   createForwardingCanvasKeyboardPort,
-  type LegacyKeyBridge,
   type LegacyKeySession,
 } from './keyboard-port'
 import type { ToolCommand, ToolReply } from './tools/tool'
@@ -26,7 +25,6 @@ afterEach(() => {
 
 interface Fixture {
   readonly tool: ReturnType<typeof signal<ToolId>>
-  readonly registered: Set<ToolId>
   readonly toolHost: {
     nudge: ReturnType<typeof vi.fn>
     command: ReturnType<typeof vi.fn>
@@ -36,7 +34,6 @@ interface Fixture {
     retryPendingCancellation: ReturnType<typeof vi.fn>
   }
   readonly legacy: LegacyKeySession & { [K in keyof LegacyKeySession]: LegacyKeySession[K] }
-  readonly bridge: { [K in keyof LegacyKeyBridge]: ReturnType<typeof vi.fn> }
   readonly navigation: { panByPx: ReturnType<typeof vi.fn>; zoomIn: ReturnType<typeof vi.fn>; zoomOut: ReturnType<typeof vi.fn>; resetNorth: ReturnType<typeof vi.fn>; rotateBy: ReturnType<typeof vi.fn> }
   selected: boolean
   nudging: boolean
@@ -45,9 +42,8 @@ interface Fixture {
   port: ReturnType<typeof createCanvasKeyboardPort>
 }
 
-function fixture(options: { readonly tool?: ToolId; readonly registered?: readonly ToolId[]; readonly reply?: (c: ToolCommand) => ToolReply } = {}): Fixture {
+function fixture(options: { readonly tool?: ToolId; readonly reply?: (c: ToolCommand) => ToolReply } = {}): Fixture {
   const tool = signal<ToolId>(options.tool ?? 'select')
-  const registered = new Set<ToolId>(options.registered ?? ['select', 'polygon', 'object-stamp'])
   const state = { selected: false, nudging: false, live: false, space: false }
   const toolHost = {
     nudge: vi.fn((): 'handled' | 'refused' | 'pass' => 'pass'),
@@ -62,22 +58,11 @@ function fixture(options: { readonly tool?: ToolId; readonly registered?: readon
   const hostFake = {
     ...toolHost,
     activeTool: tool,
-    isRegistered: (id: ToolId) => registered.has(id),
     hasNudgeSeries: () => state.nudging,
     activeToolIsSelect: () => tool.peek() === 'select',
     activeToolHasTransient: () => false,
   } as unknown as ToolHost
-  const bridge = {
-    retryPendingCancellation: vi.fn(() => false),
-    cancelInterrupted: vi.fn(),
-    hasActiveSceneEdit: vi.fn(() => false),
-    openMenuFromKeyboard: vi.fn(),
-    toolKeyDown: vi.fn(() => false),
-    suppressesSharedKeyboard: vi.fn(() => false),
-    publishGuidance: vi.fn(),
-  }
   const legacy = {
-    bridge,
     pointerSessionLive: () => state.live,
     overview: vi.fn(() => false),
     spaceHeld: () => state.space,
@@ -96,10 +81,8 @@ function fixture(options: { readonly tool?: ToolId; readonly registered?: readon
   const navigation = { panByPx: vi.fn(), zoomIn: vi.fn(), zoomOut: vi.fn(), resetNorth: vi.fn(), rotateBy: vi.fn() }
   const result = {
     tool,
-    registered,
     toolHost,
     legacy,
-    bridge,
     navigation,
     get selected() { return state.selected },
     set selected(value: boolean) { state.selected = value },
@@ -236,25 +219,6 @@ describe('createCanvasKeyboardPort', () => {
     key(f.port, { key: 'Escape' })
     expect(f.legacy.clearSelection).toHaveBeenCalledTimes(1)
     expect(key(f.port, { key: 'Escape' }).defaultPrevented).toBe(false)
-  })
-
-  it('a bridged tool keeps its own keys, Esc cancel and guidance on the legacy bridge', () => {
-    const f = fixture({ tool: 'rectangle' })
-    f.bridge.toolKeyDown.mockReturnValueOnce(true)
-    const consumed = key(f.port, { key: 'Backspace' })
-    expect(consumed.defaultPrevented).toBe(true)
-    expect(f.bridge.toolKeyDown).toHaveBeenCalledTimes(1)
-    expect(f.toolHost.command).not.toHaveBeenCalled()
-
-    f.live = true
-    key(f.port, { key: 'Escape' })
-    expect(f.bridge.cancelInterrupted).toHaveBeenCalledTimes(1)
-    expect(f.legacy.escapeGesture).not.toHaveBeenCalled()
-    expect(f.bridge.publishGuidance).toHaveBeenCalledTimes(2)
-
-    f.bridge.retryPendingCancellation.mockReturnValueOnce(true)
-    key(f.port, { key: 'Escape' })
-    expect(f.bridge.cancelInterrupted).toHaveBeenCalledTimes(1)
   })
 
   it('a pending failed cancellation swallows the key before anything else for a registered tool', () => {

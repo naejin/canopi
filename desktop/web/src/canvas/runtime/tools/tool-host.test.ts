@@ -906,7 +906,7 @@ describe('ToolHost', () => {
       h.leave()
       expect(h.record.pointerWorld).toEqual([h.world({ x: 50, y: 50 }), h.world({ x: 90, y: 90 }), null])
 
-      // A bridged tool's moves reach the lens by the same rule.
+      // An id that arms no tool sends its moves to the lens by the same rule.
       h.arm('select')
       h.hover({ x: 60, y: 60 }, {}, { kind: 'owned-chrome' })
       h.hover({ x: 20, y: 30 })
@@ -983,14 +983,13 @@ describe('ToolHost', () => {
     })
   })
 
-  describe('the legacy bridge', () => {
-    it('a bridged tool gets no hover, interceptor or re-emit from the host', () => {
+  describe('an id the registry does not list', () => {
+    it('arms no tool: it gets no hover, interceptor or re-emit from the host', () => {
       useStubTools(stubTool('polygon'))
       const inspect = vi.fn(() => true)
-      // Select is not registered: the session's legacy bridge runs it.
+      // Select is not listed here: the host arms no tool for it.
       const h = harness({ scene: { plants: [appleAt({ x: 50, y: 50 })] }, inspect })
-      expect(h.host.isRegistered('select')).toBe(false)
-      expect(h.host.isRegistered('polygon')).toBe(true)
+      expect(h.host.activeTool.peek()).toBe('select')
 
       h.hover({ x: 50, y: 50 })
       expect(h.record.pointerWorld).toEqual([h.world({ x: 50, y: 50 })])
@@ -1006,13 +1005,13 @@ describe('ToolHost', () => {
       expect(h.host.hasLiveGesture()).toBe(false)
     })
 
-    it('a registered tool armed after a bridged one gets no stale hover on a camera frame', () => {
+    it('a tool armed after it gets no stale hover on a camera frame', () => {
       const stamp = stubTool('plant-stamp')
       useStubTools(stamp)
       const h = harness({ tool: 'plant-stamp' })
 
       h.hover({ x: 100, y: 100 })
-      // Select is bridged: the host publishes its moves but no longer follows the pointer.
+      // Select is not listed here: the host publishes its moves but no longer follows the pointer.
       h.arm('select')
       h.hover({ x: 300, y: 200 })
       h.arm('plant-stamp')
@@ -1021,8 +1020,8 @@ describe('ToolHost', () => {
       expect(stamp.calls).toContain('viewChanged')
     })
 
-    it('a tool that switches to a bridged one on its release leaves no still pointer behind', () => {
-      // A saved stamp places on its release, then returns to Select, which the bridge runs.
+    it('a tool that switches to it on its release leaves no still pointer behind', () => {
+      // A saved stamp places on its release, then returns to Select, which is not listed here.
       const savedStamp: StubTool = stubTool('saved-object-stamp', {
         gesture(g) {
           if (g.kind !== 'tap' && g.kind !== 'drag-end') return 'pass'
@@ -1036,7 +1035,7 @@ describe('ToolHost', () => {
 
       h.click({ x: 100, y: 100 })
       expect(h.host.activeTool.peek()).toBe('select')
-      // Under the bridged Select the host no longer follows the pointer.
+      // Under the unlisted Select the host no longer follows the pointer.
       h.hover({ x: 300, y: 250 })
       h.arm('plant-stamp')
       h.wheelZoom({ x: 300, y: 250 }, 2)
@@ -1050,15 +1049,6 @@ describe('ToolHost', () => {
       h.arm('plant-stamp')
       h.view.navigation.zoomOut()
       expect(stamp.count('hover')).toBe(0)
-    })
-
-    it('the selected-zone chips wait until the zone tools are registered', () => {
-      useStubTools(stubTool('rectangle'))
-      const h = harness({ scene: { zones: [bed()] } })
-
-      h.select(Z1)
-      h.wheelZoom({ x: 50, y: 50 }, 1.5)
-      expect(h.renderer.calls).toEqual([])
     })
   })
 
@@ -1512,6 +1502,32 @@ describe('ToolHost', () => {
       expect(ellipse.calls).toEqual(['activate'])
       expect(h.host.hasLiveGesture()).toBe(false)
       expect(h.host.activeToolDragSlopPx()).toBeNull()
+    })
+
+    it('a tool whose activation fails is left, and the tool before it is armed again', () => {
+      let failActivation = true
+      const rectangle = stubTool('rectangle')
+      const ellipse = stubTool('ellipse', {
+        activate: () => {
+          if (failActivation) throw new Error('activation failed')
+        },
+      })
+      useStubTools(rectangle, ellipse)
+      const h = harness({ tool: 'rectangle' })
+
+      h.press({ x: 10, y: 10 })
+      h.move({ x: 30, y: 30 })
+      expect(() => h.arm('ellipse')).toThrow('activation failed')
+      // The live press ends with the tool left, which is armed again; the tool that failed is left.
+      expect(rectangle.last('cancel')).toEqual({ kind: 'cancel', reason: 'tool-change' })
+      expect(rectangle.calls).toEqual(['activate', 'cancelTransient:tool-change', 'deactivate:switch', 'activate'])
+      expect(ellipse.calls).toEqual(['activate', 'deactivate:switch'])
+      expect(h.host.hasLiveGesture()).toBe(false)
+
+      failActivation = false
+      h.click({ x: 50, y: 50 })
+      expect(rectangle.count('press')).toBe(2)
+      expect(ellipse.gestures).toEqual([])
     })
 
     it('entering overview cancels the tool\'s transient with the overview reason', () => {

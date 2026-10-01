@@ -55,7 +55,7 @@ interface HandledEvent {
  * Today's rule for keeping the browser's own context menu (and wheel): text fields, menus and dialogs. The canvas menu
  * never opens over them.
  */
-export function allowsNativeContextMenuTarget(target: EventTarget | null): boolean {
+function allowsNativeContextMenuTarget(target: EventTarget | null): boolean {
   const element = target instanceof HTMLElement
     ? target
     : (target instanceof Node ? target.parentElement : null)

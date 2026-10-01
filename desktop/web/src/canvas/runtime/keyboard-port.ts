@@ -3,9 +3,9 @@
 // Owns the canvas's key handling behind CanvasKeyboardPort (spec §1.2a, ADR 0020): the arrow nudge and pan, the Menu key,
 // the armed tool's keys, Esc (the nudge series, the tool, a live pointer session, then the chain back to Select and an
 // empty selection), Enter or F2 on a note and Space for panning. In 0B it is today's window key handling in today's order,
-// fed by the DOM input source's `legacyKeys` through `keydown` and `keyup`: a registered tool's keys become ToolCommands,
-// and a tool still on the legacy bridge keeps its own key hook (`legacy.bridge`). 0C feeds the same port from the key
-// router and removes the legacy half. The arrow nudge series is the ToolHost's; the port only reads its outcome.
+// fed by the DOM input source's `legacyKeys` through `keydown` and `keyup`: the armed tool's keys become ToolCommands.
+// 0C feeds the same port from the key router and removes the legacy half. The arrow nudge series is the ToolHost's; the
+// port only reads its outcome.
 
 import type { ToolHost } from './interaction-ports'
 import type { Modifiers, ToolId } from './interaction-types'
@@ -59,13 +59,8 @@ export interface CanvasKeyboardPortDeps {
   readonly legacy: LegacyKeySession
 }
 
-/**
- * 0B only: what today's key handling needs from the interaction session. The session answers for the recogniser (a
- * registered tool) or the legacy bridge (a bridged one).
- */
+/** 0B only: what today's key handling needs from the interaction session (its recogniser and the ToolHost). */
 export interface LegacyKeySession {
-  /** A tool still on the legacy bridge keeps its own keys there. */
-  readonly bridge: LegacyKeyBridge
   /** A pointer press or pan is live: the arrows and the Menu key wait, Esc cancels it. */
   pointerSessionLive(): boolean
   /** The map is in overview (the session's mode). */
@@ -74,7 +69,7 @@ export interface LegacyKeySession {
   spaceHeld(): boolean
   /** Space and the modifiers as the keys left them: the recogniser's key state and the navigation cursor. */
   keyState(state: { readonly space: boolean; readonly mods: Modifiers }): void
-  /** Esc with a registered tool's pointer session live: the recogniser's 'escape' cancels it and releases Space. */
+  /** Esc with a pointer session live: the recogniser's 'escape' cancels it and releases Space. */
   escapeGesture(): void
   /** The Esc chain leaves the armed tool for Select (the runtime's setTool, as a tool's own request). */
   requestTool(id: ToolId): void
@@ -82,24 +77,6 @@ export interface LegacyKeySession {
   clearSelection(): void
   /** Settings › Keyboard › Single-key shortcuts: with them off, `[` and `]` work only while the map has focus. */
   readSingleKeyShortcuts(): boolean
-}
-
-/** 0B only: the legacy bridge's key hooks for the tool it runs (today's scene-interaction.ts key steps). */
-export interface LegacyKeyBridge {
-  /** Today's _retryPendingTransientCancellation: true when it swallowed the key. */
-  retryPendingCancellation(event: KeyboardEvent): boolean
-  /** Today's _cancelInterruptedInteraction (Esc in overview or with a live pointer session). */
-  cancelInterrupted(): void
-  /** A Scene Edit is live: the keyboard menu is swallowed. */
-  hasActiveSceneEdit(): boolean
-  /** The selection's menu from the keyboard, admitted when the scene is settled, the note editor committed first. */
-  openMenuFromKeyboard(event: KeyboardEvent): void
-  /** The armed tool adapter's own key; true when it consumed the key. */
-  toolKeyDown(event: KeyboardEvent): boolean
-  /** The armed tool adapter keeps Space and Enter for itself. */
-  suppressesSharedKeyboard(event: KeyboardEvent): boolean
-  /** Today's tool guidance after every key. */
-  publishGuidance(): void
 }
 
 /** 0B only: the source's `legacyKeys` sink and the physical keys it reports. */
@@ -118,10 +95,6 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): LegacyCa
   const { host, toolHost, legacy } = deps
   let physicalCtrl = false
   let lastMenuAt: number | null = null
-
-  function bridged(): boolean {
-    return !toolHost.isRegistered(toolHost.activeTool.peek())
-  }
 
   function modifiersOf(event: KeyboardEvent): Modifiers {
     return { shift: event.shiftKey, ctrl: event.ctrlKey, alt: event.altKey, meta: event.metaKey }
@@ -154,12 +127,8 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): LegacyCa
     legacy.keyState({ space: true, mods: modifiersOf(event) })
   }
 
-  /** Esc in overview or with a live pointer session: today's interrupted-gesture cancel, Space released. */
-  function cancelInterrupted(isBridged: boolean): void {
-    if (isBridged) {
-      legacy.bridge.cancelInterrupted()
-      return
-    }
+  /** Esc in overview: today's interrupted-gesture cancel, Space released. */
+  function cancelInterrupted(): void {
     legacy.escapeGesture()
     toolHost.interrupted()
   }
@@ -169,25 +138,19 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): LegacyCa
   }
 
   /** Menu key or Shift F10 while the map has focus: the menu for the current selection. */
-  function menuFromKeyboard(event: KeyboardEvent, isBridged: boolean): boolean {
+  function menuFromKeyboard(event: KeyboardEvent): boolean {
     const menuKey = event.key === 'ContextMenu'
       || (event.key === 'F10' && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey)
     if (!menuKey || legacy.pointerSessionLive()) return false
     if (!isCanvasKeyboardShortcutTarget(event.target, host)) return false
     event.preventDefault()
     event.stopPropagation()
-    if (isBridged) {
-      if (legacy.bridge.hasActiveSceneEdit()) return true
-      lastMenuAt = event.timeStamp
-      legacy.bridge.openMenuFromKeyboard(event)
-      return true
-    }
     lastMenuAt = event.timeStamp
     if (!openMenu()) quarantine(event)
     return true
   }
 
-  /** A registered tool's key as a command (spec §3.6): Esc, Enter, Backspace, and `[` `]` under today's gating. */
+  /** The armed tool's key as a command (spec §3.6): Esc, Enter, Backspace, and `[` `]` under today's gating. */
   function toolCommandFor(event: KeyboardEvent): ToolCommand | null {
     switch (event.key) {
       case 'Escape': return { kind: 'escape' }
@@ -207,12 +170,7 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): LegacyCa
   }
 
   /** The armed tool's own key; a consumed key is not also an app shortcut (Backspace in a draft must not delete). */
-  function toolKey(event: KeyboardEvent, isBridged: boolean): boolean {
-    if (isBridged) {
-      if (!legacy.bridge.toolKeyDown(event)) return false
-      event.preventDefault()
-      return true
-    }
+  function toolKey(event: KeyboardEvent): boolean {
     const command = toolCommandFor(event)
     if (!command || toolHost.command(command) !== 'handled') return false
     event.preventDefault()
@@ -252,10 +210,8 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): LegacyCa
   }
 
   /** Today's _handleKeyDown, step by step. */
-  function handleKeyDown(event: KeyboardEvent, isBridged: boolean): void {
-    if (isBridged) {
-      if (legacy.bridge.retryPendingCancellation(event)) return
-    } else if (toolHost.retryPendingCancellation()) {
+  function handleKeyDown(event: KeyboardEvent): void {
+    if (toolHost.retryPendingCancellation()) {
       quarantine(event)
       return
     }
@@ -273,28 +229,22 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): LegacyCa
     if (legacy.overview()) {
       if (event.key === 'Escape') {
         event.preventDefault()
-        cancelInterrupted(isBridged)
+        cancelInterrupted()
         return
       }
       if (event.code === 'Space' && !legacy.spaceHeld() && !isEditableTarget(event.target)) holdSpace(event)
       return
     }
-    if (menuFromKeyboard(event, isBridged)) return
-    if (toolKey(event, isBridged)) return
+    if (menuFromKeyboard(event)) return
+    if (toolKey(event)) return
     if (event.key === 'Escape' && legacy.pointerSessionLive()) {
       event.preventDefault()
-      if (isBridged) legacy.bridge.cancelInterrupted()
-      else legacy.escapeGesture()
+      legacy.escapeGesture()
       return
     }
     if (escapeChain(event)) return
     if (editSelectedNote(event)) return
-    if (
-      event.code !== 'Space'
-      || legacy.spaceHeld()
-      || isEditableTarget(event.target)
-      || (isBridged && legacy.bridge.suppressesSharedKeyboard(event))
-    ) return
+    if (event.code !== 'Space' || legacy.spaceHeld() || isEditableTarget(event.target)) return
     holdSpace(event)
   }
 
@@ -314,8 +264,7 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): LegacyCa
     escape(layer) {
       switch (layer) {
         case 'gesture':
-          if (bridged()) legacy.bridge.cancelInterrupted()
-          else legacy.escapeGesture()
+          legacy.escapeGesture()
           return
         case 'nudge-series':
           toolHost.endNudgeSeries(false)
@@ -367,12 +316,7 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): LegacyCa
     },
     keydown(event) {
       if (event.key === 'Control') physicalCtrl = true
-      const isBridged = bridged()
-      try {
-        handleKeyDown(event, isBridged)
-      } finally {
-        if (isBridged) legacy.bridge.publishGuidance()
-      }
+      handleKeyDown(event)
     },
     keyup(event) {
       if (event.key === 'Control') physicalCtrl = false

@@ -1,8 +1,7 @@
 // canvas/runtime/tools/registry.ts
 //
-// Owns which tools the ToolHost runs: one factory per tool id. A tool that is not listed runs through the legacy bridge
-// (interaction/tool-modules.ts) until its stream moves it here in 0B-3 (plan §4 0B); ToolHost.isRegistered reads this list,
-// and the host's shared duties switch on it (spec §1.4, "The legacy bridge").
+// Owns which tools the ToolHost runs: one factory per tool id, every tool id listed since the 0B-3 streams moved their tools
+// here (plan §4 0B). An id it does not list arms no tool.
 
 import type { ToolId } from '../interaction-types'
 import { createMeasurementGuideTool } from './measurement-guide'

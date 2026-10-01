@@ -14,7 +14,7 @@ vi.mock('./registry', () => ({ TOOL_REGISTRY: {} }))
 const harnesses: ToolHarness[] = []
 
 beforeEach(() => {
-  // The shape tools; every other tool stays on the legacy bridge.
+  // The shape tools; no other tool is listed here.
   useStubTools(
     createZoneDragTool('line'),
     createZoneDragTool('rectangle'),

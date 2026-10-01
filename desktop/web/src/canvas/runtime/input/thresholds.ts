@@ -16,7 +16,8 @@ export interface Thresholds {
 
 export const DEFAULT_THRESHOLDS: Thresholds = Object.freeze({
   longPressMs: 500,
-  // interaction/shared-gestures.ts DOUBLE_CLICK_INTERVAL_MS and DOUBLE_CLICK_DISTANCE_PX (Select's note-edit rule).
+  // today's (a4c86d39) interaction/shared-gestures.ts DOUBLE_CLICK_INTERVAL_MS and DOUBLE_CLICK_DISTANCE_PX (Select's
+  // note-edit rule).
   multiClickMs: 500,
   multiClickSlopPx: 6,
   // scene-interaction.ts KEYBOARD_CONTEXT_MENU_ECHO_MS.

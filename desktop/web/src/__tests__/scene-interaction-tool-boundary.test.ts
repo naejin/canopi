@@ -218,14 +218,12 @@ describe('Scene Interaction tool module boundaries', () => {
     }
   })
 
-  it('keeps transient cancellation and teardown in the legacy bridge', () => {
+  it('keeps the drops\' teardown in the legacy bridge', () => {
     const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
 
-    expect(interactionSource).toContain('_cancelTransientInteraction')
     expect(interactionSource).toContain('_cancelPendingInteractionHostFocus')
     expect(interactionSource).toContain('prepareForDocumentReplacement')
-    expect(interactionSource).toContain('_contextMenu.dispose()')
-    expect(interactionSource).toContain('_lockedAffordance.dispose()')
+    expect(interactionSource).toContain('this._preview.remove()')
     expect(sourceExists('../canvas/runtime/interaction/selection-action-toolbar.ts')).toBe(false)
     expect(sourceExists('../canvas/runtime/interaction/frame.ts')).toBe(false)
   })
@@ -259,18 +257,16 @@ describe('Scene Interaction tool module boundaries', () => {
   })
 
   it('keeps shared selection gesture algorithms behind the Session seam', () => {
-    // Select's move-drag and band run on the ToolHost (tools/select/**), behind the ToolScene's queries; the session,
-    // the legacy bridge and its pan (shared-gestures.ts) hold none of them.
+    // Select's move-drag and band run on the ToolHost (tools/select/**), behind the ToolScene's queries; the session and
+    // the legacy bridge's drops hold none of them.
     const sessionSources = [
       '../canvas/runtime/interaction-session.ts',
       '../canvas/runtime/scene-interaction.ts',
-      '../canvas/runtime/interaction/shared-gestures.ts',
     ].map((path) => ({ path, source: readSource(path) }))
     const moveDragSource = readSource('../canvas/runtime/tools/select/move-drag.ts')
     const bandSource = readSource('../canvas/runtime/tools/select/band.ts')
     const spatialIndexSource = readSource('../canvas/runtime/tools/spatial-index.ts')
 
-    expect(readSource('../canvas/runtime/scene-interaction.ts')).toContain('createSceneInteractionSharedGestures')
     for (const { path, source } of sessionSources) {
       expect(source, path).not.toContain("this._mode === 'dragging'")
       expect(source, path).not.toContain("this._mode === 'band'")
@@ -283,20 +279,6 @@ describe('Scene Interaction tool module boundaries', () => {
     expect(moveDragSource).toContain("'interaction-drag'")
     expect(bandSource).toContain('ctx.scene.hitInQuad(')
     expect(spatialIndexSource).toContain('queryRectTopLevel')
-  })
-
-  it('keeps the tool registry focused on adapter construction and identity', () => {
-    const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
-    const registrySource = readSource('../canvas/runtime/interaction/tool-modules.ts')
-
-    expect(registrySource).toContain('createSceneToolRegistry')
-    expect(registrySource).toContain('activeAdapter')
-    expect(registrySource).toContain('select(toolName: string)')
-    expect(registrySource).not.toContain('SceneToolModules')
-    expect(registrySource).not.toContain('transitionTo(')
-    expect(registrySource).not.toContain('pointerMoveWithCapture(context')
-    expect(interactionSource).toContain('this._activeToolAdapter()?.pointerDown?.(')
-    expect(interactionSource).toContain('this._activeToolAdapter()?.pointerMoveWithCapture?.(')
   })
 
   it('routes repeated Scene arrangement placement through the shared kernel', () => {
@@ -322,16 +304,5 @@ describe('Scene Interaction tool module boundaries', () => {
       expect(source).not.toContain('sourceToCloneId')
       expect(source).not.toContain('selectedTopLevelIds')
     }
-  })
-
-  it('keeps active tool drag state generic in the Scene Interaction Session', () => {
-    const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
-
-    expect(interactionSource).toContain('ToolPointerDrag')
-    expect(interactionSource).not.toContain("'plant-spacing-drag'")
-    expect(interactionSource).not.toContain("this._mode = 'rectangle'")
-    expect(interactionSource).not.toContain("this._mode = 'ellipse'")
-    expect(interactionSource).not.toContain("this._mode === 'rectangle'")
-    expect(interactionSource).not.toContain("this._mode === 'ellipse'")
   })
 })

@@ -212,17 +212,25 @@ describe('SceneInteractionSession', () => {
   it('continues Session teardown after one owned resource fails', () => {
     events.dispose()
     events = createSceneInteractionEventHarness(container, { trackListeners: true })
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('locked-plant', 'Malus domestica', { x: 300, y: 250 }, { locked: true })]
+    })
     const deps = createInteractionDeps(container, store, camera)
     const session = createTestSession(deps)
+    // Hovering a directly locked plant brings the session's Unlock affordance onto the map.
+    events.pointerMove({ x: 300, y: 250 })
+    expect(container.querySelector('[data-locked-object-affordance]')).not.toBeNull()
     expect(container.hasAttribute('tabindex')).toBe(true)
     expect(container.querySelector('[data-canvas-handle-layer]')).not.toBeNull()
-    // The bridge's plant tooltip: the handle layer and the map host's keyboard stop are torn down after it.
-    const tooltip = container.querySelector<HTMLElement>('[data-hover-tooltip]')!
-    const removeTooltip = vi.spyOn(tooltip, 'remove').mockImplementation(() => {
-      throw new Error('tooltip removal failed')
+    // The bridge's drop preview (today's band element): the host, the chrome, the handle layer and the map host's keyboard
+    // stop are torn down after it.
+    const preview = [...container.children].find((child): child is HTMLElement =>
+      child instanceof HTMLElement && child.style.border.includes('--canvas-selection-stroke'))!
+    const removePreview = vi.spyOn(preview, 'remove').mockImplementation(() => {
+      throw new Error('drop preview removal failed')
     })
 
-    expect(() => session.dispose()).toThrow('tooltip removal failed')
+    expect(() => session.dispose()).toThrow('drop preview removal failed')
 
     expect(events.listenerLog?.containerRemoves('pointerdown')).toHaveLength(1)
     expect(events.listenerLog?.windowRemoves('pointermove')).toHaveLength(1)
@@ -230,7 +238,7 @@ describe('SceneInteractionSession', () => {
     expect(container.querySelector('[data-canvas-handle-layer]')).toBeNull()
     expect(container.hasAttribute('tabindex')).toBe(false)
     expect(() => session.dispose()).not.toThrow()
-    removeTooltip.mockRestore()
+    removePreview.mockRestore()
   })
 
   it('attempts every host-listener removal when one removal fails', () => {

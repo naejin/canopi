@@ -541,5 +541,13 @@
   "src/__tests__/canvas-overlay-casing.test.ts > overlay stroke casing > draws a dark casing under the polygon draft line before the light stroke": {
     "file": "src/canvas/runtime/renderers/draft-layer.test.ts",
     "name": "draft layer > a band, zone, line and polygon draft has a casing stroke of the same colour and width under it"
+  },
+  "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps the tool registry focused on adapter construction and identity": {
+    "file": "src/canvas/runtime/tools/tool-host.test.ts",
+    "name": "ToolHost > an id the registry does not list > arms no tool: it gets no hover, interceptor or re-emit from the host"
+  },
+  "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps active tool drag state generic in the Scene Interaction Session": {
+    "file": "src/canvas/runtime/tools/tool-host.test.ts",
+    "name": "ToolHost > the view moving under a still pointer (plan §1, exception 1) > re-emits the drag on a camera frame"
   }
 }

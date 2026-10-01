@@ -191,7 +191,9 @@ describe('the session\'s chrome', () => {
 
     events.pointerMove({ x: 20, y: 30 })
 
-    // The legacy bridge keeps its own hidden copies until 0B ends; the host's are the chrome's.
+    // The host's are the chrome's, and the map carries one of each.
+    expect(container.querySelectorAll('[data-hover-tooltip]')).toHaveLength(1)
+    expect(container.querySelectorAll('[data-locked-object-affordance]')).toHaveLength(1)
     const tooltip = container.querySelector<HTMLElement>('[data-canvas-chrome="hover-tooltip"][data-hover-tooltip]')!
     expect(tooltip.style.display).toBe('block')
     expect(tooltip.textContent).toBe('AppleMalus domestica')
@@ -207,21 +209,6 @@ describe('the session\'s chrome', () => {
     unlock.click()
     expect(store.persisted.plants[0]?.locked).toBe(false)
     expect(affordance.style.display).toBe('none')
-  })
-
-  it('a bridged tool keeps today\'s own tooltip and Unlock affordance: the map carries one of each', () => {
-    store.updatePersisted((draft) => {
-      draft.plants = [makePlant('locked-plant', 'Malus domestica', { x: 20, y: 30 }, { locked: true })]
-    })
-    const { session } = createSession()
-    session.setTool('line')
-
-    events.pointerMove({ x: 20, y: 30 })
-
-    expect(container.querySelectorAll('[data-hover-tooltip]')).toHaveLength(1)
-    expect(container.querySelectorAll('[data-locked-object-affordance]')).toHaveLength(1)
-    expect(container.querySelector('[data-canvas-chrome]')).toBeNull()
-    expect(container.querySelector<HTMLElement>('[data-locked-object-affordance]')!.style.display).toBe('inline-flex')
   })
 
   it('the chrome goes with the session', async () => {
