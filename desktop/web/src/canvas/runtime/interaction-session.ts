@@ -68,7 +68,6 @@ import type { ScreenPoint, ViewFrame, ViewFrameSource, WorldPoint } from './view
 const HOST_ATTRIBUTES = ['tabindex', 'role', 'aria-label', 'aria-describedby'] as const
 const STORY_PRESENTING_ATTRIBUTE = 'data-story-presenting'
 const NO_MODIFIERS: Modifiers = Object.freeze({ shift: false, ctrl: false, alt: false, meta: false })
-const QUARANTINE: readonly AdapterEffect[] = Object.freeze([{ kind: 'prevent-default' }, { kind: 'stop-propagation' }])
 const NO_DROP: readonly AdapterEffect[] = Object.freeze([{ kind: 'drop-effect', dropEffect: 'none' }])
 /** The host's types, read through it (P5b: this module imports nothing else from tools/). */
 type DraftPresentation = Parameters<ToolHostDeps['renderer']['setDraft']>[0]
@@ -77,9 +76,8 @@ type HandleList = Parameters<ToolHostDeps['chrome']['setHandles']>[0]
 type HandleId = Parameters<ToolHostDeps['chrome']['setHandles']>[1]
 type PassiveHoverAt = NonNullable<Parameters<ToolHostDeps['chrome']['setTooltip']>[0]>
 
-const NO_DRAFTS: Pick<SceneRendererV2, 'setDraft' | 'setSelectionPreview'> = Object.freeze({
+const NO_DRAFTS: Pick<SceneRendererV2, 'setDraft'> = Object.freeze({
   setDraft() {},
-  setSelectionPreview() {},
 })
 const NO_HANDLES: HandleList = Object.freeze([])
 
@@ -139,11 +137,9 @@ export interface SceneInteractionSessionDeps {
   /** The view's navigation (turn to an edge, key zoom and north); absent, the camera shim's. */
   readonly viewNavigation?: ViewNavigation
   /** The mounted renderer's draft sink (scene-runtime.ts, over the render scheduler); absent, drafts go nowhere. */
-  readonly renderer?: Pick<SceneRendererV2, 'setDraft' | 'setSelectionPreview'>
+  readonly renderer?: Pick<SceneRendererV2, 'setDraft'>
   /** The app's focus port (CanvasRuntimeAppAdapter.focus); absent, the session focuses the map host itself, as today. */
   readonly focus?: CanvasFocusPort
-  /** Unread in 0B (ToolSceneSource.sceneRevision: nothing is cached yet). */
-  readonly sceneRevision?: ReadonlySignal<number>
   /** Injected for tests; detected from the browser otherwise (0C moves the call to the platform modules). */
   readonly platform?: InputPlatform
 }
@@ -207,7 +203,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private readonly _navigation: InputRouterDeps['navigation'] & Pick<ViewNavigation, 'zoomIn' | 'zoomOut' | 'resetNorth' | 'rotateBy'>
   private readonly _router: ReturnType<typeof createInputRouter>
   private readonly _source: ReturnType<typeof createDomInputSource>
-  private readonly _renderer: Pick<SceneRendererV2, 'setDraft' | 'setSelectionPreview'>
+  private readonly _renderer: Pick<SceneRendererV2, 'setDraft'>
   private readonly _detachSource: () => void
   private readonly _stopWatchingSources: () => void
   private readonly _storyObserver: MutationObserver | null
@@ -250,8 +246,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
     const focus: CanvasFocusPort = _deps.focus ?? {
       focusMap: () => container.focus({ preventScroll: true }),
-      // The tool card asks for its own field today (the Plant a row guidance's focus request).
-      focusToolCardField: () => {},
     }
     this._focus = focus
     this._navigation = {
@@ -286,7 +280,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       }), (affordance) => affordance.dispose())
       const scene = createToolScene({
         store: liveStoreReader(_deps),
-        sceneRevision: _deps.sceneRevision ?? signal(0),
         selection: _deps.getSelection,
         isLayerOpenForCreation: (layer) =>
           isSceneLayerOpenForCreation(_deps.getSceneStore().persisted, layer as SceneCreationLayerName),
@@ -317,7 +310,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         plane: (): SessionPlane => _deps.getSceneStore().sessionPlane,
         renderer: {
           setDraft: (draft) => this._setDraft(draft),
-          setSelectionPreview: (preview) => this._renderer.setSelectionPreview(preview),
         },
         // The runtime's scene render asks the session to refresh (refreshMeasurements → sceneChanged): a redraw the host
         // requests from inside that refresh is the one already under way.
@@ -347,9 +339,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         },
         snapping: () => ({ grid: _deps.readSnapToGridEnabled(), guides: _deps.readSnapToGuidesEnabled() }),
         translate: _deps.translate as ToolHostDeps['translate'],
-        bindings: () => CURRENT_BINDINGS,
-        platform,
-        navigation: { turnToEdge: (a, b) => view.navigation.turnToEdge(a, b) },
         nudge: {
           nudgeSelected: (delta) => nudge?.nudgeSelected(delta) ?? false,
           endNudge: (options) => {
@@ -423,8 +412,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   /**
-   * Arms a tool on the host. A failure leaves the host on the tool left (its own rollback) and still ends the live presses,
-   * as today's setTool had cleared the pointer gesture before the step that failed; the tool left keeps its pick.
+   * Arms a tool on the host. A failure leaves the host on Select (its own rollback, not the tool left: that tool is
+   * already deactivated, and reactivating it risks the same failure) and still ends the live presses, as today's setTool
+   * had cleared the pointer gesture before the step that failed.
    */
   setTool(name: string): void {
     if (this._disposed) return
@@ -435,8 +425,13 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     try {
       this._toolHost.setTool(id, toolSourceFor(id))
     } catch (error) {
-      this._tool.value = previous
+      // The host's own rollback only runs once activation starts; a failure before that (cancelling the tool left) leaves
+      // the host on `previous`, unchanged. Either way, activeToolIsSelect() names the host's real tool.
+      const fellBackToSelect = this._toolHost.activeToolIsSelect()
+      this._tool.value = fellBackToSelect ? 'select' : previous
       this._endPressesAfterFailedSwitch()
+      // A fallback deactivates the tool left (unlike a re-arm of the same `previous`): its pick must not outlive it.
+      if (fellBackToSelect && previous !== 'select') clearToolSource(previous)
       throw error
     }
     // The tool left drops its pick once it is deactivated, as today's tools did (the next tool never hears it).
@@ -586,8 +581,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   /**
    * The host's path, then today's ruler drag, which heard its own mousemove and mouseup: the drag cursor follows the
-   * pointer and the guide lands at the release whatever the tool did with the event (a failure, or a pending
-   * cancellation's swallow).
+   * pointer and the guide lands at the release whatever the tool did with the event, failure included.
    */
   private _route(input: RawInput): void {
     try {
@@ -600,7 +594,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   /** The input: recognised, routed, and the recogniser's and the host's effects applied to the event. */
   private _routeToHost(input: RawInput): void {
-    if (retriesPendingCancellation(input) && this._retryPendingCancellation(input.t)) return
     const result = recognise(this._recogniser, input, this._config)
     this._recogniser = result.state
     const wheel = input.kind === 'wheel'
@@ -656,26 +649,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     return !isOwnedOverlay(input.target)
   }
 
-  /**
-   * Today's retry before an event its handler retried on: true when a failed cancellation was pending and has now been
-   * retried, and the event is quarantined (today's app-wide swallow; the retry ended every live gesture, so the recogniser
-   * is fenced too). A retry that fails again quarantines the event first, as today's.
-   */
-  private _retryPendingCancellation(t: number): boolean {
-    let retried: boolean
-    try {
-      retried = this._toolHost.retryPendingCancellation()
-    } catch (error) {
-      this._source.apply(QUARANTINE)
-      throw error
-    }
-    if (!retried) return false
-    const fenced = recognise(this._recogniser, { kind: 'escape', t }, this._config)
-    this._recogniser = fenced.state
-    this._source.apply([...QUARANTINE, ...fenced.effects.filter((effect) => effect.kind === 'release-capture')])
-    return true
-  }
-
   /** Raw input that does not come from an event (configure, key state, Esc), routed as an event's would be. */
   private _feed(input: RawInput): readonly Gesture[] {
     const result = recognise(this._recogniser, input, this._config)
@@ -689,9 +662,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   /**
-   * A panel drag over the map, routed to the host's drop route, which retries a pending cancellation itself (a drop after
-   * clearing its preview). A dragover whose route throws answers 'none' as well as the source's quarantine, as today's
-   * rejected dragover did.
+   * A panel drag over the map, routed to the host's drop route. A dragover whose route throws answers 'none' as well as
+   * the source's quarantine, as today's rejected dragover did.
    */
   private _routeDrop(input: Extract<RawInput, { kind: 'drop' }>): void {
     try {
@@ -1115,29 +1087,6 @@ function toolSourceFor(tool: ToolId): ToolSource | null {
 function clearToolSource(tool: ToolId): void {
   if (tool === 'plant-stamp') clearPlantStampSource()
   else if (tool === 'saved-object-stamp') clearSavedObjectStampSource()
-}
-
-/**
- * The inputs today's handlers retried a pending cancellation on, and swallowed: a primary or middle press on the map host
- * (a Mac Ctrl click is button 0), a pointerup, a pointercancel, a wheel and a native contextmenu; keys retry in the keyboard
- * port, and dragovers and drops in the host's drop route, before their admission.
- * Moves, leaves, lost captures, blurs, other presses and ruler presses were never fenced, and neither was a wheel over
- * a handle, the note editor or the Unlock affordance (today's _onWheel returned before its retry). One accepted deviation: a
- * right-click inside the note editor's textarea now keeps its native menu, since the source drops a contextmenu over an
- * editable target before the session hears it; today's _onContextMenu retried, and swallowed, before that check.
- */
-function retriesPendingCancellation(input: RawInput): boolean {
-  switch (input.kind) {
-    case 'down': return input.target.kind !== 'ruler' && (input.role !== 'secondary' || input.ctrlConsumed)
-    case 'wheel':
-      return !(input.target.kind === 'handle'
-        || input.target.kind === 'owned-text'
-        || (input.target.kind === 'owned-chrome' && input.target.lockedAffordance === true))
-    case 'up':
-    case 'native-contextmenu': return true
-    case 'cancel': return input.reason === 'pointercancel'
-    default: return false
-  }
 }
 
 /** The end of a pan that a pointer drove (middle, Space, overview, the Pan tool), not a wheel's. */

@@ -164,7 +164,7 @@ describe.each(cases)('$label point handle drags', ({ handle, start, editType, cr
     expect(h.host.hasLiveGesture()).toBe(false)
   })
 
-  it('a failed abort is kept and retried before the next press', () => {
+  it('a failed abort is retried at once, so the edit is rolled back before the cancellation reports its error', () => {
     const h = harness()
     const coordinator: SceneEditCoordinator = h.edits
     const beginEdit = coordinator.begin.bind(coordinator)
@@ -190,15 +190,13 @@ describe.each(cases)('$label point handle drags', ({ handle, start, editType, cr
     pressHandle(h)
     h.move({ x: 90, y: 70 })
     expect(() => h.cancel('pointercancel')).toThrow('abort failed')
-    expect(draggedPoint(h)).toEqual({ x: 90, y: 70 })
-    // While it is pending Select shows no handles.
-    expect(h.chrome.handles).toEqual([])
-
-    expect(h.press({ x: 200, y: 200 })).toEqual({ quarantine: true, rejectSession: true })
+    // No edit is left open to wait for: the host's own retry has already rolled it back.
     expect(abortCalls).toBe(2)
     expect(begin).toHaveBeenCalledTimes(1)
     expect(draggedPoint(h)).toEqual(start)
     expect(h.chrome.handles.map((entry) => entry.id)).toContain(handle)
+
+    expect(h.press({ x: 200, y: 200 })).not.toEqual({ quarantine: true, rejectSession: true })
   })
 
   it('disposing the host mid-drag rolls the object back and removes the handles', () => {

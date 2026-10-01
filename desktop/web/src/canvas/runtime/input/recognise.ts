@@ -1,9 +1,9 @@
-// canvas/runtime/input/recognise.ts  (the recogniser: its three state types and its two functions)
+// canvas/runtime/input/recognise.ts  (the recogniser: its two state types and its two functions)
 //
 // Owns gesture recognition: a pure reducer from one RawInput to gestures and the effects the DOM source applies to the
 // event it is handling. No clock, timer or DOM: time is `RawInput.t`, the platform and bindings come in the config.
-// PointerSession, NestedNavigation and TouchPair are type exports imported only inside input/; RecogniserState is opaque
-// to callers. raw-input.ts and recognise.ts import each other's types with `import type` only (no runtime cycle).
+// PointerSession and TouchPair are type exports imported only inside input/; RecogniserState is opaque to callers.
+// raw-input.ts and recognise.ts import each other's types with `import type` only (no runtime cycle).
 //
 // It implements today's input (LEGACY_BINDINGS, spec §2.2 and the LEGACY columns of §5): one pointer session at a time;
 // the right button inert and the native contextmenu opening the menu at once (except in overview and for a keyboard
@@ -11,8 +11,8 @@
 // first), a pointer pan carrying the pointer's point and a Pan-tool press ending with cancel('navigate') after its drag;
 // a button-less move over the text entry, a handle or the Unlock affordance emits nothing; wheels zoom or pan by the
 // pointing-device setting; no touch gestures, pen barrel or trackpad gesture events.
-// The other binding values arrive with their constants: the trackpad gestures and Shift+middle rotation in phase 1, the
-// secondary drag, the nested sub-session and the menu on release in phase 2, touch gestures and the long press in phase 3.
+// The other binding values arrive with their constants: the trackpad gestures and Shift+middle rotation in phase 1,
+// the secondary drag and the menu on release in phase 2, touch gestures and the long press in phase 3.
 
 import type { CancelReason, Modifiers, PointerKind } from '../interaction-types'
 import type { ScreenPoint } from '../view/types'
@@ -41,15 +41,6 @@ export interface PointerSession {
   readonly clickCount: number
 }
 
-export interface NestedNavigation {
-  readonly pointerId: number
-  readonly role: ButtonRole
-  readonly mode: 'pending' | 'pan' | 'rotate'
-  readonly start: ScreenPoint
-  readonly last: ScreenPoint
-  readonly frozenPrimary: ScreenPoint
-}
-
 export interface TouchPair {
   readonly ids: readonly [number, number]
   readonly startCentroid: ScreenPoint
@@ -66,7 +57,6 @@ const WHEEL_ZOOM_PER_PX = 0.002
 export function initialRecogniserState(): RecogniserState {
   return {
     sessions: new Map(),
-    nested: null,
     touchPair: null,
     held: { space: false, mods: NO_MODIFIERS },
     trackpadTwistDeg: 0,
@@ -235,14 +225,7 @@ function move(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void 
 
 function up(step: Step, input: RawOf<'up'>): void {
   const session = step.state.sessions.get(input.id)
-  if (!session) {
-    if (step.state.sessions.size > 0) return
-    // Legacy overview swallows every pointerup with no live session, anywhere in the app (0B until phase F).
-    if (step.state.context.mode === 'overview') {
-      step.effects.push({ kind: 'prevent-default' }, { kind: 'stop-propagation' })
-    }
-    return
-  }
+  if (!session) return
   dropSession(step, session)
   if (session.mode === 'pan') {
     if (session.navigation) step.gestures.push(panEndOf(session))

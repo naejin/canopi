@@ -224,7 +224,7 @@ describe('Zone drag tools', () => {
     expect(h.store.persisted.zones).toEqual([])
   })
 
-  it('a release whose commit fails leaves its edit to the host\'s cancellation, retried before the next press', () => {
+  it('a release whose commit fails leaves the host\'s own retry to finish it, with nothing left open for a later press', () => {
     const h = harness({ tool: 'rectangle' })
     const record = h.history.record.bind(h.history)
     let failures = 2
@@ -237,13 +237,14 @@ describe('Zone drag tools', () => {
       return recorded
     })
 
-    // Today's count: the commit fails, then the cancellation after the release, whose abort retries the commit, fails too.
+    // The commit fails, then the cancellation after the release (which retries the commit) fails too; the host's own
+    // retry inside that failure finishes the commit, so nothing is left open for a later press to resume.
     expect(() => h.drag({ x: 10, y: 20 }, { x: 40, y: 60 })).toThrow('rectangle publication failed')
     expect(failures).toBe(0)
     expect(shapes(h).some((shape) => shape.kind === 'polygon')).toBe(false)
-    // The pending cancellation finishes the commit before the next press, which is swallowed.
-    expect(h.press({ x: 50, y: 70 })).toEqual({ quarantine: true, rejectSession: true })
     expect(h.store.persisted.zones).toHaveLength(1)
+
+    expect(h.press({ x: 50, y: 70 })).not.toEqual({ quarantine: true, rejectSession: true })
     h.drag({ x: 50, y: 70 }, { x: 80, y: 100 })
     expect(h.store.persisted.zones).toHaveLength(2)
     expect(h.undo()).toBe(true)

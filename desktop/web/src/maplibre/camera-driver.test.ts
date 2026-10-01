@@ -16,8 +16,6 @@ import type { MapLibreLngLat, MapLibreTransformConstrain } from './loader'
 
 const PLANE = createSessionPlane({ lon: 2.35, lat: 48.85 })
 const POLICY = createNavigationPolicy(createWorkspaceCameraPolicy(PLANE.origin.lat), signal(false))
-/** Settle timers that never run, in place of the window's. */
-const NO_TIMERS: CameraDriverDeps['timers'] = { set: () => 0, clear: () => {} }
 
 /** MapLibre's LngLat class: the constrain must hand back the class it was given. */
 class FakeLngLat implements MapLibreLngLat {
@@ -201,11 +199,10 @@ function attach(map: ConsistentMap, policy: NavigationPolicy = POLICY, plane: Se
     clock: time.clock,
     scheduleFrame: time.scheduleFrame,
     policy: () => policy,
-    timers: NO_TIMERS,
   })
   drivers.push(driver)
   const published: ViewFrame[] = []
-  driver.frames.onViewFrame('overlays', (frame) => published.push(frame))
+  driver.frames.onViewFrame((frame) => published.push(frame))
   return { driver, published, time }
 }
 
@@ -215,12 +212,9 @@ function screenOf(frame: ViewFrame): ViewScreen {
 
 const views: TestView[] = []
 
-/**
- * The deps every driver on a test view's host runs with (its manual clock and policy), as the workspace activation builds one, with
- * settle timers that never run in place of the window's.
- */
+/** The deps every driver on a test view's host runs with (its manual clock and policy), as the workspace activation builds one. */
 function hostDeps(view: TestView): CameraDriverDeps {
-  return { ...view.host.driverDeps, timers: NO_TIMERS }
+  return view.host.driverDeps
 }
 
 /**
@@ -283,61 +277,6 @@ describe('MapLibre camera driver', () => {
     expect(published.map((frame) => frame.revision)).toEqual([1, 2, 3, 4])
   })
 
-  it('settles its frames on the timers of its deps', () => {
-    const pending = new Map<number, { readonly run: () => void; readonly atMs: number }>()
-    let nextId = 1
-    const timers: CameraDriverDeps['timers'] = {
-      set: (atMs, run) => {
-        const id = nextId++
-        pending.set(id, { run, atMs })
-        return id
-      },
-      clear: (id) => { pending.delete(id) },
-    }
-    const time = createManualFrames()
-    const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
-    const driver = createMapLibreCameraDriver(map, PLANE, { clock: time.clock, scheduleFrame: time.scheduleFrame, policy: () => POLICY, timers })
-    drivers.push(driver)
-    const unsettled = driver.frames.settledViewFrame.peek()
-    time.advance(40)
-
-    driver.apply({ kind: 'pan-by', deltaPx: { x: 10, y: 0 } })
-    driver.apply({ kind: 'pan-by', deltaPx: { x: 10, y: 0 } })
-
-    // Each frame restarts the one settle timer, due 150 ms after it on the deps' clock.
-    expect([...pending.values()].map((timer) => timer.atMs)).toEqual([190])
-    expect(driver.frames.settledViewFrame.peek()).toBe(unsettled)
-    const [handle, timer] = [...pending][0]!
-    pending.delete(handle)
-    timer.run()
-    expect(driver.frames.settledViewFrame.peek()).toBe(driver.frames.viewFrame.peek())
-
-    driver.apply({ kind: 'pan-by', deltaPx: { x: 10, y: 0 } })
-    expect(pending.size).toBe(1)
-    driver.dispose()
-    expect(pending.size).toBe(0)
-  })
-
-  it('settles its frames on the window timers when its deps carry none', () => {
-    vi.useFakeTimers()
-    const time = createManualFrames()
-    const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
-    const driver = createMapLibreCameraDriver(map, PLANE, { clock: time.clock, scheduleFrame: time.scheduleFrame, policy: () => POLICY })
-    try {
-      time.advance(40)
-      driver.apply({ kind: 'pan-by', deltaPx: { x: 10, y: 0 } })
-
-      // Due at 190 ms on the deps' clock, which reads 40: the window waits the 150 ms between.
-      vi.advanceTimersByTime(149)
-      expect(driver.frames.settledViewFrame.peek()).not.toBe(driver.frames.viewFrame.peek())
-      vi.advanceTimersByTime(1)
-      expect(driver.frames.settledViewFrame.peek()).toBe(driver.frames.viewFrame.peek())
-    } finally {
-      driver.dispose()
-      vi.useRealTimers()
-    }
-  })
-
   it('a pan of +10 px moves the ground 10 px right', () => {
     for (const bearing of [0, 30]) {
       const map = new ConsistentMap({ center: { lon: 2.351, lat: 48.852 }, zoom: 19.3, bearing })
@@ -364,8 +303,8 @@ describe('MapLibre camera driver', () => {
     const { driver } = attach(map)
     const seen: Array<readonly [string, number]> = []
     let panned = false
-    driver.frames.onViewFrame('tools', (frame) => {
-      seen.push(['tools', frame.revision])
+    driver.frames.onViewFrame((frame) => {
+      seen.push(['frame', frame.revision])
       if (panned) return
       panned = true
       driver.apply({ kind: 'pan-by', deltaPx: { x: 10, y: 0 } })
@@ -373,18 +312,15 @@ describe('MapLibre camera driver', () => {
       seen.push(['after the move', driver.frames.viewFrame.peek().revision])
       seen.push(['jumps', map.jumpTo.mock.calls.length])
     })
-    driver.frames.onViewFrame('overlays', (frame) => seen.push(['overlays', frame.revision]))
     const ground = map.unproject([200, 150])
 
     driver.apply({ kind: 'pan-by', deltaPx: { x: 1, y: 0 } })
 
     expect(seen).toEqual([
-      ['tools', 1],
+      ['frame', 1],
       ['after the move', 1],
       ['jumps', 1],
-      ['overlays', 1],
-      ['tools', 2],
-      ['overlays', 2],
+      ['frame', 2],
     ])
     const moved = map.unproject([211, 150])
     expect(moved.lng).toBeCloseTo(ground.lng, 10)
@@ -517,8 +453,8 @@ describe('MapLibre camera driver', () => {
     expect(map.jumpTo).not.toHaveBeenCalled()
   })
 
-  it('a map without getCenter, getZoom, getBearing or unproject fails with map-error', () => {
-    for (const missing of ['getCenter', 'getZoom', 'getBearing', 'unproject'] as const) {
+  it('a map without getCenter, getZoom or getBearing fails with map-error', () => {
+    for (const missing of ['getCenter', 'getZoom', 'getBearing'] as const) {
       const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
       Object.defineProperty(map, missing, { value: undefined })
       const { driver } = attach(map)
@@ -543,17 +479,6 @@ describe('MapLibre camera driver', () => {
     expect(map.jumpTo).toHaveBeenLastCalledWith(expect.objectContaining({ bearing: 60, zoom: 13 }))
     expect(published.at(-1)!.moving).toBe(false)
     expect(driver.bearingTarget()).toBe(60)
-  })
-
-  it('an attached map that disagrees with the frame fails the move in tests', async () => {
-    await vi.dynamicImportSettled()
-    const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
-    const { driver } = attach(map)
-    driver.apply({ kind: 'pan-by', deltaPx: { x: 3, y: 0 } })
-
-    const unproject = map.unproject.bind(map)
-    map.unproject = ([x, y]) => unproject([x + 0.5, y])
-    expect(() => driver.apply({ kind: 'pan-by', deltaPx: { x: 3, y: 0 } })).toThrow('agree')
   })
 
   it('dispose releases its map listeners and the guard', () => {
@@ -859,45 +784,14 @@ describe('MapLibre camera driver', () => {
 // placement gives it (p × scale + { x, y }), through MapLibre's own Mercator camera.
 // The legacy MapLibre shim (maplibre/workspace-camera.ts, deleted with it at the end of 0D2) over this driver.
 describe('MapLibre workspace camera shim', () => {
-  it('an adopted shim moves the map it attached itself into the Scene\'s new plane', () => {
-    const scenePlane = signal<SessionPlane | null>(PLANE)
-    let origin = PLANE.origin
-    const camera = new MapLibreWorkspaceCameraOwner({ policy: createWorkspaceCameraPolicy(PLANE.origin.lat) })
-    const stopFollowing = camera.followScenePlane(scenePlane)
-    const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
-    try {
-      expect(camera.attachment.attach({ map, readOrigin: () => origin })).toBe(true)
-      const before = camera.host.frames.viewFrame.peek()
-
-      // A re-origin: the Scene's plane moves, then the composition refreshes the attachment's origin.
-      const next = createSessionPlane(PLANE.toGeo({ x: 20_000, y: -5_000 }))
-      origin = next.origin
-      scenePlane.value = next
-      camera.attachment.refreshOrigin()
-
-      const after = camera.host.frames.viewFrame.peek()
-      expect(after.attached).toBe(true)
-      expect(after.view.planeRevision).toBe(before.view.planeRevision + 1)
-      expect(after.view.camera).toEqual(before.view.camera)
-      // The frame is expressed in the new plane: its origin is where the map shows the new plane's origin.
-      const originPx = after.view.worldToScreen({ x: 0, y: 0 })
-      const shown = map.unproject([originPx.x, originPx.y])
-      expect(shown.lng).toBeCloseTo(next.origin.lon, 9)
-      expect(shown.lat).toBeCloseTo(next.origin.lat, 9)
-    } finally {
-      stopFollowing()
-      camera.dispose()
-    }
-  })
-
   it('a re-origin during a flight keeps the flight running', () => {
     const scenePlane = signal<SessionPlane | null>(PLANE)
-    const camera = new MapLibreWorkspaceCameraOwner({ policy: createWorkspaceCameraPolicy(PLANE.origin.lat) })
+    const camera = new MapLibreWorkspaceCameraOwner(createWorkspaceCameraPolicy(PLANE.origin.lat))
     const stopFollowing = camera.followScenePlane(scenePlane)
     const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
     try {
       // Attached on the host, as the workspace activation attaches each map.
-      camera.host.attach(createMapLibreCameraDriver(map, PLANE, { ...camera.host.driverDeps, timers: NO_TIMERS }))
+      camera.host.attach(createMapLibreCameraDriver(map, PLANE, camera.host.driverDeps))
       const far = { x: 30_000, y: -60_000 }
       const target = PLANE.toGeo(far)
       camera.centerOn(far, mapZoomToStageScale(17, PLANE.origin.lat), { animate: true })

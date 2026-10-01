@@ -113,8 +113,7 @@ describe('createSharedMapSceneLayer', () => {
     expect(presentation.renderScene).toHaveBeenCalledOnce()
     expect(presentation.setViewport).not.toHaveBeenCalled()
     expect(adapter.diagnostics).toMatchObject({
-      phase: 'attached', initializeCount: 1, renderCount: 2,
-      sceneSyncCount: 1, viewportSyncCount: 0, repaintCount: 2,
+      phase: 'attached', initializeCount: 1, renderCount: 2, sceneSyncCount: 1,
     })
   })
 
@@ -161,7 +160,7 @@ describe('createSharedMapSceneLayer', () => {
     adapter.layer.render(gl, {} as never)
 
     expect(presentation.setViewport).toHaveBeenCalledOnce()
-    expect(adapter.diagnostics).toMatchObject({ renderCount: 2, sceneSyncCount: 1, viewportSyncCount: 1, resizeCount: 1 })
+    expect(adapter.diagnostics).toMatchObject({ renderCount: 2, sceneSyncCount: 1 })
     const disposal = adapter.dispose()
     adapter.layer.render(gl, {} as never)
     await disposal
@@ -241,8 +240,6 @@ describe('createSharedMapSceneLayer', () => {
     expect(canvas.width).toBe(600)
     expect(canvas.height).toBe(300)
     expect(presentation.resize).toHaveBeenCalledWith(300, 150)
-    expect(adapter.diagnostics.resizeCount).toBe(1)
-
     const disposal = adapter.dispose()
     adapter.layer.render(gl, {} as never)
     await disposal
@@ -292,7 +289,6 @@ describe('createSharedMapSceneLayer', () => {
     }))
     expect(adapter.diagnostics).toMatchObject({
       phase: 'failed',
-      skippedRenderCount: 2,
       lastFailure: 'presentation failed',
     })
     await adapter.dispose({ mapWillBeRemoved: true })

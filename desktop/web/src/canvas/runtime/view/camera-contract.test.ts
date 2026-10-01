@@ -142,7 +142,7 @@ const CLAMP_MAX_ZOOM = 20
 /**
  * A MapLibre map over the source MercatorTransform, in MapLibre's own order: jumpTo sets the zoom, then the centre (both through the
  * installed constrain), then the bearing (ui/camera.ts jumpTo, mercator_camera_helper.ts handleJumpToCenterZoom), and fires 'move'
- * synchronously; setTransformConstrain is setConstrainOverride; unproject is screenPointToLocation.
+ * synchronously; setTransformConstrain is setConstrainOverride.
  */
 function mapOnTransform(screen: ViewScreen, start: ViewCamera):
   { readonly map: MapLibreCameraDriverMap; readonly transform: SourceTransform } {
@@ -171,7 +171,6 @@ function mapOnTransform(screen: ViewScreen, start: ViewCamera):
     getZoom: () => transform.zoom,
     getBearing: () => transform.bearing,
     getPitch: () => 0,
-    unproject: ([x, y]) => transform.screenPointToLocation({ x, y }),
     setTransformConstrain: (constrain) => transform.setConstrainOverride(constrain),
     getCanvas: () => canvas as unknown as HTMLCanvasElement,
   }
@@ -199,7 +198,6 @@ describe('camera contract', () => {
         clock: () => 0,
         scheduleFrame: () => () => {},
         policy: () => navigationPolicy,
-        timers: { set: () => 0, clear: () => {} },
       })
       expect(attached.failure.peek()).toBeNull()
       expectProjectsLikeMapLibre(headless.view(), shown.transform, plane)

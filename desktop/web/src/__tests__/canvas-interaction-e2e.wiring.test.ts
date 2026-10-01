@@ -58,7 +58,7 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('quarantines Scene events when admission recovery throws', () => {
+  it('quarantines a press when admission recovery throws, but lets a context menu or a drop reach the app', () => {
     const admissionFailure = new Error('admission recovery failed')
     const deps = createInteractionDeps(container, store, camera, {
       commandAdmission: {
@@ -98,16 +98,15 @@ describe('SceneInteractionSession', () => {
       container.dispatchEvent(drop)
     })
 
+    // Only a press on the map host is quarantined; a context menu and a drop rethrow and reach the app.
     expect(errors).toEqual([admissionFailure, admissionFailure, admissionFailure])
     expect(pointerDown.defaultPrevented).toBe(true)
-    expect(contextMenu.defaultPrevented).toBe(true)
-    expect(drop.defaultPrevented).toBe(true)
     expect(downstreamPointerDown).not.toHaveBeenCalled()
-    expect(downstreamContextMenu).not.toHaveBeenCalled()
-    expect(downstreamDrop).not.toHaveBeenCalled()
+    expect(downstreamContextMenu).toHaveBeenCalled()
+    expect(downstreamDrop).toHaveBeenCalled()
   })
 
-  it('clears and quarantines accepted dragover feedback when the settled read fails', () => {
+  it('clears accepted dragover feedback and reaches the app when the settled read fails', () => {
     const settledReadFailure = new Error('dragover settled read failed')
     let failRead = false
     const settledReader: SettledSceneReader = {
@@ -163,9 +162,11 @@ describe('SceneInteractionSession', () => {
       container.dispatchEvent(rejectedDragOver)
     })
 
+    // A dragover is not a press on the map host, so it rethrows and reaches the app rather than being quarantined;
+    // the host's own catch still clears the preview and the drop effect before the error leaves it.
     expect(errors).toEqual([settledReadFailure])
-    expect(rejectedDragOver.defaultPrevented).toBe(true)
-    expect(downstreamDragOver).not.toHaveBeenCalled()
+    expect(rejectedDragOver.defaultPrevented).toBe(false)
+    expect(downstreamDragOver).toHaveBeenCalled()
     expect(dataTransfer.dropEffect).toBe('none')
     expect(deps.renderer.lastDraft()).toBeNull()
 

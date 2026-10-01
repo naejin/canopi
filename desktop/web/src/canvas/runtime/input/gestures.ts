@@ -6,7 +6,6 @@ import type { TargetClass } from './raw-input'
 
 export type NavigationSource =
   | 'secondary-drag' | 'auxiliary-drag' | 'space-drag' | 'primary-drag'   // primary-drag: the Pan tool (and legacy overview)
-  | 'nested-drag'                                                          // secondary/auxiliary added during a primary drag
   | 'wheel' | 'trackpad-pinch' | 'trackpad-twist' | 'touch-two-finger'
 
 export type MenuSource = 'mouse' | 'ctrl-click' | 'pen-barrel' | 'long-press' | 'keyboard' | 'native'

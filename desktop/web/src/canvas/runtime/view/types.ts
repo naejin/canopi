@@ -61,8 +61,6 @@ export interface ViewScreen { readonly width: number; readonly height: number; r
 
 /** Renderer and bulk-projection fast path. Null for non-planar projections (globe). */
 export interface PlanarProjection {
-  /** Row-major 3x3 homography, plane metres → CSS px (homogeneous), Float64. */
-  readonly matrix: Float64Array
   /** 2x3 affine in Pixi order [a, b, c, d, tx, ty]. Always set while pitchDeg is 0; null only for a pitched homography. */
   readonly affine: readonly [number, number, number, number, number, number] | null
 }
@@ -87,8 +85,6 @@ export interface ViewTransform {
   screenAxesInWorld(at?: WorldPoint): { readonly right: WorldVector; readonly down: WorldVector }
 
   visibleWorldQuad(insets?: ScreenInsets): WorldQuad
-  visibleWorldBounds(insets?: ScreenInsets): SceneBounds
-  screenRectToWorldQuad(a: ScreenPoint, b: ScreenPoint): WorldQuad | null
   /** Four projected corners, never two (rotation-handle anchor, menu anchor). */
   worldQuadToScreen(q: WorldQuad): readonly [ScreenPoint, ScreenPoint, ScreenPoint, ScreenPoint]
 
@@ -115,6 +111,15 @@ export interface ViewFrameSource {
   readonly settledViewFrame: ReadonlySignal<ViewFrame>
   /** Synchronous per-frame callbacks; never effects, so per-frame work cannot fan out into Preact. */
   onViewFrame(phase: FramePhase, listener: (frame: ViewFrame) => void): () => void
+}
+
+/**
+ * A driver's own frames: nobody reads a driver's settled frame or its overlays phase (only the host's own frame source, which
+ * relays 'tools' and keeps its own settle, is read for either), so a driver publishes one unphased listener list and no settle.
+ */
+export interface DriverFrameSource {
+  readonly viewFrame: ReadonlySignal<ViewFrame>
+  onViewFrame(listener: (frame: ViewFrame) => void): () => void
 }
 
 /** Injected time for the frame source (P4: view/ names no timer or clock itself). */

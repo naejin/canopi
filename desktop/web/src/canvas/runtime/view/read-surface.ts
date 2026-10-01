@@ -33,7 +33,6 @@ export interface ViewReadSurface {
   readonly northUp: ReadonlySignal<boolean>              // rulers and their hint; never hides the compass
   readonly groundMetresPerPixel: ReadonlySignal<number>  // at the screen centre, 3 significant figures (scale bar, ratio)
   readonly zoomLimit: ReadonlySignal<'min' | 'max' | null>
-  readonly moving: ReadonlySignal<boolean>
   /** Overview only: the Design origin's screen point, rounded to whole pixels, or null in site mode or within 24 px of an edge.
    *  The one read that changes during a pan (the overview pin must track the Design); it updates per frame only in overview,
    *  where nothing else re-renders, and is the named exception to the coarse-signal rule (P10). */
@@ -64,7 +63,7 @@ export interface ViewCommandSurface {
   resetNorth(): void
   rotateBy(direction: 1 | -1): void                    // next absolute 15° multiple in that direction
   beginRotation(pivot: 'centre'): RotationSession      // compass drag
-  showCamera(camera: ViewCamera, options?: { readonly motion?: 'fly' | 'jump' | 'ease' }): void   // saved views, stories
+  showCamera(camera: ViewCamera, options?: { readonly motion?: 'fly' | 'jump' }): void   // saved views, stories
   /** Place search. Returns false when the place cannot be shown (today's boolean `showPlace`). */
   showPlace(place: GeoPoint, zoom: number, options?: { readonly motion?: 'fly' | 'jump' }): boolean
 }

@@ -181,7 +181,6 @@ describe('the interaction session', () => {
     useStubTools(select)
     const focus: CanvasFocusPort = {
       focusMap: vi.fn(() => { order.push('focus') }),
-      focusToolCardField: vi.fn(),
     }
     const nudge = { nudgeSelected: vi.fn(() => true), endNudge: vi.fn() }
     store.updatePersisted((draft) => {
@@ -585,44 +584,6 @@ describe('the interaction session', () => {
     }
   })
 
-  it('a retried cancellation that fails again still quarantines the event it was retried for, as today', () => {
-    let failures = 2
-    let edit: SceneEditTransaction | null = null
-    const rectangle: StubTool = stubTool('rectangle', {
-      gesture: (gesture) => {
-        if (gesture.kind === 'press') edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
-        return 'pass'
-      },
-      cancelTransient: () => {
-        if (failures > 0) {
-          failures -= 1
-          throw new Error('cancel failed')
-        }
-        edit?.abort()
-        edit = null
-      },
-    })
-    useStubTools(rectangle)
-    const { session } = createSession()
-    session.setTool('rectangle')
-    events.pointerDown({ x: 20, y: 20 })
-    // The blur's cancellation fails with the press's Scene Edit open: it is left pending.
-    expect(captureWindowErrors(() => { events.windowBlur() })).toHaveLength(1)
-
-    // Today's retry quarantined the event before it retried, so a wheel whose retry fails again moves nothing.
-    const outside = vi.fn()
-    container.addEventListener('wheel', outside)
-    let wheel: WheelEvent | null = null
-    expect(captureWindowErrors(() => { wheel = events.wheel({ x: 50, y: 50 }, { deltaY: 4 }) })).toHaveLength(1)
-    expect(wheel!.defaultPrevented).toBe(true)
-    expect(outside).not.toHaveBeenCalled()
-    // The next retry succeeds, and its event is quarantined too.
-    wheel = events.wheel({ x: 50, y: 50 }, { deltaY: 4 })
-    expect(wheel.defaultPrevented).toBe(true)
-    expect(outside).not.toHaveBeenCalled()
-    container.removeEventListener('wheel', outside)
-  })
-
   it('a wheel whose zoom or pan fails under a registered tool is still default-prevented, as today', () => {
     useStubTools(stubTool('rectangle'))
     let broken = false
@@ -644,125 +605,6 @@ describe('the interaction session', () => {
       expect(pan!.defaultPrevented).toBe(true)
     } finally {
       broken = false
-    }
-  })
-
-  /** A registered Rectangle whose press opens a Scene Edit, left with a pending cancellation by a blur whose cancel fails. */
-  function pendingCancellation(): { readonly rectangle: StubTool, readonly failing: { value: boolean }, readonly retries: () => number } {
-    const failing = { value: true }
-    let edit: SceneEditTransaction | null = null
-    const rectangle: StubTool = stubTool('rectangle', {
-      gesture: (gesture) => {
-        if (gesture.kind === 'press') edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
-        return 'pass'
-      },
-      cancelTransient: () => {
-        if (failing.value) throw new Error('cancel failed')
-        edit?.abort()
-        edit = null
-      },
-    })
-    useStubTools(rectangle)
-    const { session } = createSession()
-    session.setTool('rectangle')
-    events.pointerDown({ x: 20, y: 20 }, { pointerId: 3 })
-    expect(captureWindowErrors(() => { events.windowBlur() })).toHaveLength(1)
-    const retries = (): number => rectangle.calls.filter((call) => call === 'cancelTransient:tool-change').length
-    return { rectangle, failing, retries }
-  }
-
-  it('a pending cancellation is retried only on the events today\'s handlers retried on; hovers and ruler drags go on', () => {
-    const { failing, retries } = pendingCancellation()
-    failing.value = false
-    const panel = document.createElement('div')
-    document.body.appendChild(panel)
-    const panelMoves = vi.fn()
-    panel.addEventListener('pointermove', panelMoves)
-    const rulers = mountRulers(rulerCamera({ y: 20, scale: 4 }))
-    const rulerPresses = vi.fn()
-    rulers.horizontal.addEventListener('pointerdown', rulerPresses)
-
-    try {
-      // Today's pointermove and pointerleave never retried: a hover over a panel, or leaving the map, reaches the app.
-      events.pointerMove({ x: 10, y: 10 }, { target: panel, buttons: 0, pointerId: 30 })
-      events.pointerMove({ x: 60, y: 60 }, { buttons: 0, pointerId: 30 })
-      events.pointerLeave({ x: 60, y: 60 }, { pointerId: 30 })
-      expect(panelMoves).toHaveBeenCalledOnce()
-      expect(retries()).toBe(0)
-
-      // Today's ruler listened beside the map: its press is never fenced, and its release, which today's pointerup retried
-      // and swallowed, still lands the guide (its own mouseup).
-      events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal, pointerId: 40 })
-      expect(rulerPresses).toHaveBeenCalledOnce()
-      events.pointerMove({ x: 180, y: 60 }, { pointerId: 40, buttons: 1 })
-      expect(retries()).toBe(0)
-      const release = events.pointerUp({ x: 180, y: 100 }, { pointerId: 40 })
-      expect(retries()).toBe(1)
-      expect(release.defaultPrevented).toBe(true)
-      expect(rulers.onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 20)
-    } finally {
-      panel.remove()
-    }
-  })
-
-  it('a wheel over a handle, the note editor or the Unlock affordance leaves a pending cancellation alone, as today', () => {
-    const { failing, retries } = pendingCancellation()
-    failing.value = false
-    const rotation = document.createElement('div')
-    rotation.setAttribute('data-canvas-handle', 'rotate')
-    const controlPoint = document.createElement('div')
-    controlPoint.setAttribute('data-canvas-handle', 'vertex:zone-1:0')
-    const entry = document.createElement('div')
-    entry.setAttribute('data-canvas-text-entry', '')
-    const unlock = document.createElement('button')
-    unlock.setAttribute('data-locked-object-affordance', '')
-    container.append(rotation, controlPoint, entry, unlock)
-    const outside = vi.fn()
-    container.addEventListener('wheel', outside)
-
-    try {
-      // Today's _onWheel returned before its retry over the note editor, the rotation handle, a control point and the
-      // Unlock affordance: the wheel is neither retried nor prevented, and reaches the app.
-      for (const target of [rotation, controlPoint, entry, unlock]) {
-        const wheel = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 4, clientX: 50, clientY: 50 })
-        target.dispatchEvent(wheel)
-        expect(wheel.defaultPrevented).toBe(false)
-      }
-      expect(retries()).toBe(0)
-      expect(outside).toHaveBeenCalledTimes(4)
-
-      // A wheel over the map retries it, and is swallowed.
-      const surface = events.wheel({ x: 50, y: 50 }, { deltaY: 4 })
-      expect(retries()).toBe(1)
-      expect(surface.defaultPrevented).toBe(true)
-      expect(outside).toHaveBeenCalledTimes(4)
-    } finally {
-      container.removeEventListener('wheel', outside)
-      for (const element of [rotation, controlPoint, entry, unlock]) element.remove()
-    }
-  })
-
-  it('a window blur while a cancellation is pending goes on to the app, as today\'s blur handlers let it', () => {
-    const { failing } = pendingCancellation()
-    const blurs = vi.fn()
-    window.addEventListener('blur', blurs)
-    const rulers = mountRulers(rulerCamera({ y: 20, scale: 4 }))
-
-    try {
-      // The interruption's own cancellation fails again: its error is the blur's only one.
-      expect(captureWindowErrors(() => { events.windowBlur() })).toHaveLength(1)
-      expect(blurs).toHaveBeenCalledOnce()
-
-      // A blur that ends a ruler drag retries the cancellation for the drag's host press, and is not swallowed either.
-      failing.value = false
-      events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal, pointerId: 40 })
-      events.pointerMove({ x: 180, y: 60 }, { pointerId: 40, buttons: 1 })
-      events.windowBlur()
-      expect(blurs).toHaveBeenCalledTimes(2)
-      events.pointerUp({ x: 180, y: 100 }, { pointerId: 40 })
-      expect(rulers.onGuideCreate).not.toHaveBeenCalled()
-    } finally {
-      window.removeEventListener('blur', blurs)
     }
   })
 
@@ -960,7 +802,7 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
     expect(container.style.cursor).toBe('crosshair')
   })
 
-  it('entering a registered tool whose activation fails leaves the tool before it armed, as it was', () => {
+  it('entering a registered tool whose activation fails leaves Select armed', () => {
     let failActivation = true
     const rectangle = stubTool('rectangle', {
       activate: () => {
@@ -974,17 +816,35 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
 
     expect(() => session.setTool('rectangle')).toThrow('activation failed')
     failActivation = false
-    expect(builtHosts.at(-1)?.activeTool.value).toBe('line')
-    // Line is armed again: a drag draws a line.
+    expect(builtHosts.at(-1)?.activeTool.value).toBe('select')
+    // Select is armed again: a drag selects, it does not draw a line.
     events.pointerDown({ x: 20, y: 30 })
     events.pointerMove({ x: 60, y: 30 }, { buttons: 1 })
     events.pointerUp({ x: 60, y: 30 })
-    expect(store.persisted.zones).toHaveLength(1)
-    expect(store.persisted.zones[0]?.zoneType).toBe('line')
+    expect(store.persisted.zones).toHaveLength(0)
     expect(rectangle.count('press')).toBe(0)
 
     session.setTool('rectangle')
     expect(builtHosts.at(-1)?.activeTool.value).toBe('rectangle')
+  })
+
+  it('a fallback to Select after a failed activation clears the tool left\'s source', () => {
+    let failActivation = true
+    const rectangle = stubTool('rectangle', {
+      activate: () => {
+        if (failActivation) throw new Error('activation failed')
+      },
+    })
+    useStubTools(stubTool('plant-stamp'), rectangle)
+    const { session } = createSession()
+    selectPlantStampSource(SPECIES)
+    session.setTool('plant-stamp')
+    expect(readPlantStampSource()).not.toBeNull()
+
+    expect(() => session.setTool('rectangle')).toThrow('activation failed')
+    failActivation = false
+    expect(builtHosts.at(-1)?.activeTool.value).toBe('select')
+    expect(readPlantStampSource()).toBeNull()
   })
 
   it('disposal releases the capture of a registered tool\'s live press and rolls its edit back', () => {
@@ -1002,8 +862,8 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
     expect(open()).toBe(false)
   })
 
-  it('a pending cancellation is retried before a dragover or a drop is admitted, and the event is swallowed', () => {
-    let failures = 3
+  it('a dragover or a drop is admitted right after a cancellation failure, with no edit left open to wait for', () => {
+    let failing = true
     let edit: SceneEditTransaction | null = null
     const rectangle: StubTool = stubTool('rectangle', {
       gesture: (gesture) => {
@@ -1011,10 +871,7 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
         return 'pass'
       },
       cancelTransient: () => {
-        if (failures > 0) {
-          failures -= 1
-          throw new Error('cancel failed')
-        }
+        if (failing) throw new Error('cancel failed')
         edit?.abort()
         edit = null
       },
@@ -1022,43 +879,17 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
     useStubTools(rectangle)
     const { session } = createSession()
     session.setTool('rectangle')
-    const retries = (): number => rectangle.calls.filter((call) => call === 'cancelTransient:tool-change').length
     const species = (transfer: DataTransferLike) => writePlantStampDragData(transfer, PEAR)
-    const outside = vi.fn()
-    container.addEventListener('dragover', outside)
-    container.addEventListener('drop', outside)
 
-    try {
-      events.pointerDown({ x: 20, y: 20 })
-      expect(captureWindowErrors(() => { events.windowBlur() })).toHaveLength(1)
+    events.pointerDown({ x: 20, y: 20 })
+    expect(captureWindowErrors(() => { events.windowBlur() })).toHaveLength(1)
+    failing = false
 
-      // Today's _onDragOver retried first: a retry that fails again still swallows the dragover.
-      let over: DragEvent | null = null
-      expect(captureWindowErrors(() => { over = dispatchDrag('dragover', { x: 60, y: 60 }, species) })).toHaveLength(1)
-      expect(retries()).toBe(1)
-      expect(over!.defaultPrevented).toBe(true)
-      expect(over!.dataTransfer!.dropEffect).toBe('none')
+    const over = dispatchDrag('dragover', { x: 60, y: 60 }, species)
+    expect(over.dataTransfer!.dropEffect).toBe('copy')
 
-      let drop: DragEvent | null = null
-      expect(captureWindowErrors(() => { drop = dispatchDrag('drop', { x: 60, y: 60 }, species) })).toHaveLength(1)
-      expect(retries()).toBe(2)
-      expect(drop!.defaultPrevented).toBe(true)
-      expect(store.persisted.plants).toHaveLength(0)
-
-      // The retry that succeeds swallows its drop too: no plant is placed.
-      drop = dispatchDrag('drop', { x: 60, y: 60 }, species)
-      expect(retries()).toBe(3)
-      expect(drop.defaultPrevented).toBe(true)
-      expect(store.persisted.plants).toHaveLength(0)
-      expect(outside).not.toHaveBeenCalled()
-
-      // With nothing pending, the host's drop places the plant, as today.
-      dispatchDrag('drop', { x: 60, y: 60 }, species)
-      expect(store.persisted.plants).toHaveLength(1)
-    } finally {
-      container.removeEventListener('dragover', outside)
-      container.removeEventListener('drop', outside)
-    }
+    dispatchDrag('drop', { x: 60, y: 60 }, species)
+    expect(store.persisted.plants).toHaveLength(1)
   })
 
   it('a dragover hides a registered tool\'s draft until the pointer moves over the map again', () => {

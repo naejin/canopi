@@ -211,10 +211,6 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): LegacyCa
 
   /** Today's _handleKeyDown, step by step. */
   function handleKeyDown(event: KeyboardEvent): void {
-    if (toolHost.retryPendingCancellation()) {
-      quarantine(event)
-      return
-    }
     if (toolHost.hasNudgeSeries() && !(event.key in ARROW_DIRECTIONS) && !MODIFIER_KEYS.has(event.key)) {
       // Esc cancels the series like any gesture in progress; any other key keeps it.
       if (event.key === 'Escape') {

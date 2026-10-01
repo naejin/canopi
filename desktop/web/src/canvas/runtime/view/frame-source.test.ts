@@ -66,7 +66,7 @@ describe('view frame source', () => {
   it('the read surface signals change only with their own values', () => {
     const view = createTestView({ screen: { width: 400, height: 300 }, viewport: { x: 0, y: 0, scale: 2 } })
     const surface = createViewReadSurface(view.frames, () => createSessionPlane({ lon: 0, lat: 0 }))
-    const runs = { mode: 0, zoomBand: 0, bearingDeg: 0, northUp: 0, groundMetresPerPixel: 0, zoomLimit: 0, moving: 0, designPin: 0 }
+    const runs = { mode: 0, zoomBand: 0, bearingDeg: 0, northUp: 0, groundMetresPerPixel: 0, zoomLimit: 0, designPin: 0 }
     const disposers = (Object.keys(runs) as Array<keyof typeof runs>).map((name) => effect(() => {
       void surface[name].value
       runs[name] += 1
@@ -74,7 +74,7 @@ describe('view frame source', () => {
 
     view.navigation.panByPx({ x: 25, y: -10 })
     view.navigation.panByPx({ x: -3, y: 4 })
-    expect(runs).toEqual({ mode: 1, zoomBand: 1, bearingDeg: 1, northUp: 1, groundMetresPerPixel: 1, zoomLimit: 1, moving: 1, designPin: 1 })
+    expect(runs).toEqual({ mode: 1, zoomBand: 1, bearingDeg: 1, northUp: 1, groundMetresPerPixel: 1, zoomLimit: 1, designPin: 1 })
 
     expect(surface.zoomBand.value).toBe(Math.floor(Math.log(2) / Math.log(1.25)))
     expect(surface.groundMetresPerPixel.value).toBe(0.5)

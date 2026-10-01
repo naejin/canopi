@@ -161,7 +161,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   let toolCursor: string | null = null
   let live: LiveGesture | null = null
   let lastHover: StillPointer | null = null
-  let pendingCancellation = false
   /** The mode of the text entry a tool last asked for, read only while the chrome reports an entry open: each tool asks for
    *  one mode (Text 'create', Select 'edit'), and a tool change closes the entry. */
   let textEntryMode: TextEntryRequest['mode'] | null = null
@@ -258,11 +257,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         toolDraft = draft
         changed()
       },
-      setSelectionPreview(preview) {
-        if (!owns()) return
-        deps.renderer.setSelectionPreview(preview)
-        changed()
-      },
       setHandles(handles) {
         // The same handles again (a refresh after a camera frame or a scene change) change nothing and redraw nothing.
         if (!owns() || sameHandles(toolHandles, handles)) return
@@ -301,18 +295,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       closeTextEntry() {
         if (owns()) closeTextEntry()
       },
-      requestMenu(at) {
-        if (!owns()) return
-        if (at === 'selection') {
-          deps.menu.open({ at, source: 'keyboard', screen: null, hit: null })
-          return
-        }
-        openMenuAt(frame().view.worldToScreen(at), 'mouse')
-      },
-      requestFocus(target) {
-        if (!owns()) return
-        if (target === 'map') deps.focus.focusMap('tool-requested')
-        else deps.focus.focusToolCardField('tool-requested')
+      requestFocus() {
+        if (owns()) deps.focus.focusMap('tool-requested')
       },
     }
     return {
@@ -475,15 +459,14 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   /**
-   * Select's handles show only while its affordances may (today's _canShowSelectAffordances): in site mode, with no
-   * pending cancellation, the text entry closed and no Scene Edit open. A handle's own press keeps them until its edit
-   * first changes the scene, as today's handle hid them at its drag's first update.
+   * Select's handles show only while its affordances may (today's _canShowSelectAffordances): in site mode, with the
+   * text entry closed and no Scene Edit open. A handle's own press keeps them until its edit first changes the scene,
+   * as today's handle hid them at its drag's first update.
    */
   function shownHandles(): readonly ToolHandle[] {
     if (!activeTool) return NO_HANDLES
     if (currentId !== 'select') return toolHandles
     const affordancesShown = frame().mode === 'site'
-      && !pendingCancellation
       && !deps.chrome.isTextEntryOpen()
       && (!hasActiveSceneEdit() || (live?.kind === 'handle' && !live.mutated))
     return affordancesShown ? toolHandles : NO_HANDLES
@@ -589,7 +572,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   /**
    * Every raw pointerdown on the map host, reported by the session before it routes the press (today's _onPointerDown):
    * any button commits the nudge series. An admitted primary or middle press outside the text entry and the Unlock
-   * affordance, with no live press from another pointer and no pending cancellation, also closes the menu and moves focus
+   * affordance, with no live press from another pointer, also closes the menu and moves focus
    * to the map, so an open text entry commits before the press reaches the tool (focusMap); a click inside the entry keeps
    * it open. A primary press that so commits a new note's entry ('create') places nothing: no tool hears it, as today's Text
    * field took that click (spec §3.2); an in-place editor's ('edit') press goes on, as today's. A press on the live press's
@@ -600,7 +583,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (disposed) return
     pressCommitsNote = false
     endNudgeSeries(true)
-    if (!activeTool || button === 'secondary' || pendingCancellation) return
+    if (!activeTool || button === 'secondary') return
     if (live && live.id !== pointerId) return
     if (target.kind === 'owned-text' || (target.kind === 'owned-chrome' && target.lockedAffordance)) return
     // Admission without resuming a pending edit: the press that follows resumes it, once, as today's one admission did.
@@ -618,8 +601,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     pressCommitsNote = false
     // A pen or a finger reaches the map with no hover after a panel drag: its press shows the tool's draft again.
     if (g.target.kind !== 'ruler') showDraftAfterDrop()
-    // Today's ruler drag listened beside the map: a pending cancellation never fenced its press.
-    if (g.target.kind !== 'ruler' && retryPendingCancellation()) return REFUSED_PRESS
     if (!activeTool) return NOTHING
     if (live) cancelLive('pointercancel')
     // The pointer is pressed now: a frame re-emits its drag, not the hover before it.
@@ -708,7 +689,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       return NOTHING
     }
     if (gesture.id !== g.id) return NOTHING
-    if (g.kind === 'drag-end' && retryPendingCancellation()) return QUARANTINE
     gesture.dragging = true
     gesture.lastScreen = g.at
     gesture.lastMods = g.mods
@@ -757,8 +737,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
    * A release whose tool call throws runs the cancellation at once, as today's pointerup ran it in its finally, so the
    * tool's Scene Edit closes at the release; so does a handle press whose start or presentation throws once the drag has
    * opened its Scene Edit, as today's control points rolled back a drag whose presentation failed (rollbackDragSetup), so
-   * the next press is admitted. Only a cancellation that fails too with the edit open leaves it pending
-   * (guardCancellation), retried before the next event. The gesture's error is the one reported.
+   * the next press is admitted. A cancellation that fails too still leaves no edit open (guardCancellation aborts it).
+   * The gesture's error is the one reported.
    */
   function cancelOnFailure(run: () => void): void {
     try {
@@ -767,7 +747,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       try {
         cancelTransientInteraction('tool-change')
       } catch {
-        // guardCancellation has left the cancellation pending; the gesture's failure is reported.
+        // guardCancellation has already aborted the open edit; the gesture's failure is reported.
       }
       throw error
     }
@@ -810,7 +790,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       return NOTHING
     }
     if (gesture.id !== g.id) return NOTHING
-    if (retryPendingCancellation()) return QUARANTINE
     const tool = activeTool
     if (gesture.kind === 'ruler' || !tool) {
       endLive()
@@ -852,18 +831,14 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   /**
-   * Today's _onDragOver: a failed cancellation is retried first and swallows the dragover; in overview or while the scene
-   * is busy the dragover is refused ('none', quarantined); otherwise its effect comes from the payload kind and the open
-   * layers, read when settled. Every refusal and every 'none' clears the preview.
+   * Today's _onDragOver: in overview or while the scene is busy the dragover is refused ('none', quarantined);
+   * otherwise its effect comes from the payload kind and the open layers, read when settled. Every refusal and every
+   * 'none' clears the preview.
    */
   function dragOver(at: ScreenPoint, payload: CanvasDropPayload): GestureOutcome {
     if (!draftHiddenForDrop) {
       draftHiddenForDrop = true
       changed()
-    }
-    if (retryPendingCancellation()) {
-      setDropPreview(null)
-      return QUARANTINE
     }
     if (frame().mode === 'overview') return refuseDragOver()
     let preview: readonly DraftShape[] | null | undefined
@@ -903,12 +878,10 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   /**
-   * Today's _onDrop: the preview clears, then a failed cancellation is retried and swallows the drop; in overview, or
-   * while the scene does not admit it, the drop is quarantined.
+   * Today's _onDrop: the preview clears; in overview, or while the scene does not admit it, the drop is quarantined.
    */
   function dropAt(at: ScreenPoint, payload: CanvasDropPayload): GestureOutcome {
     setDropPreview(null)
-    if (retryPendingCancellation()) return QUARANTINE
     if (frame().mode === 'overview') return QUARANTINE
     const admitted = deps.admission.runWhenSettled(() => {
       placeDrop(at, payload)
@@ -945,9 +918,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   function cancel(g: Extract<Gesture, { kind: 'cancel' }>): GestureOutcome {
-    // Today's pointercancel retried a pending cancellation and was swallowed; a blur or a lost capture ran the cancellation
-    // and went on to the app.
-    if (retryPendingCancellation()) return g.reason === 'blur' || g.reason === 'lost-capture' ? NOTHING : QUARANTINE
     if (!live) return NOTHING
     guardCancellation(() => {
       cancelLive(g.reason)
@@ -991,15 +961,27 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   // ── Cancellation and interruption ────────────────────────────────────────────────────────────────────────────────
 
   /** Runs a cancellation; a failure while a Scene Edit is still open leaves it pending, retried before the next event. */
+  /** A cancellation that fails leaves no edit open: whatever `run` left behind is aborted before its error reaches the
+   *  caller, so the scene is clean and the next press is admitted with nothing to retry. */
   function guardCancellation(run: () => void): void {
     try {
       run()
-      pendingCancellation = false
     } catch (error) {
-      pendingCancellation = hasActiveSceneEdit()
+      abortOpenEdits()
       throw error
     } finally {
       flush()
+    }
+  }
+
+  function abortOpenEdits(): void {
+    for (const tx of [...openEdits]) {
+      openEdits.delete(tx)
+      try {
+        tx.abort()
+      } finally {
+        invalidateNeeded = true
+      }
     }
   }
 
@@ -1038,12 +1020,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   function releasedOutsideTool(): void {
     if (live) return
     cancelTransientInteraction('navigate')
-  }
-
-  function retryPendingCancellation(): boolean {
-    if (!pendingCancellation || disposed) return false
-    cancelTransientInteraction('tool-change')
-    return true
   }
 
   /** A press or a menu moves focus to the map, which commits an open text entry as today's explicit commit did: one that
@@ -1204,13 +1180,21 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     try {
       activate(id, source)
     } catch (error) {
+      // A tool whose activation throws leaves Select armed, not the tool left: that tool is already deactivated, and
+      // reactivating it risks the same failure (or a stale pick). Select is the one tool every mode falls back to, except
+      // when Select's own activation is what just failed: there is no further fallback, so the tool before it is armed
+      // again, as before.
       runCanvasRuntimeCleanups([
         () => activeTool?.deactivate('switch'),
         () => {
-          currentId = previousId
-          activeSource = previousSource
-          activeTool = previous
-          if (previous) callTool(() => previous.activate(contextFor(previous), previousSource))
+          if (id !== 'select') {
+            activate('select', null)
+          } else {
+            currentId = previousId
+            activeSource = previousSource
+            activeTool = previous
+            if (previous) callTool(() => previous.activate(contextFor(previous), previousSource))
+          }
         },
       ], 'Tool host activation rollback failed')
       throw error
@@ -1306,7 +1290,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     },
     menuAt(at: ScreenPoint | 'selection', source: MenuSource): GestureOutcome {
       if (disposed) return NOTHING
-      if (retryPendingCancellation()) return QUARANTINE
       // A menu commits the nudge series first, or its open Scene Edit would quarantine the menu: a mouse menu's right
       // press has already committed it (rawPress); a keyboard menu has no press, and today its key committed the series.
       endNudgeSeries(true)
@@ -1334,7 +1317,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     },
     activeTool: deps.toolState.active,
     activeToolDragSlopPx: () => activeTool?.dragSlopPx ?? null,
-    retryPendingCancellation,
     rawPress,
     notePointer(screen: ScreenPoint | null): void {
       if (disposed) return

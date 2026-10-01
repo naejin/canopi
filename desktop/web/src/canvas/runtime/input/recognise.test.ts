@@ -603,9 +603,9 @@ describe('recognise: sessions', () => {
     expect(result.state.sessions.size).toBe(0)
   })
 
-  it('in overview a pointerup with no session is quarantined', () => {
+  it('in overview a pointerup with no session passes untouched', () => {
     const overview = run(seq('stray up in overview', WINDOWS, [up(100, 100, { target: FOREIGN })], { mode: 'overview' }))
-    expect(overview.effects).toEqual([{ kind: 'prevent-default' }, { kind: 'stop-propagation' }])
+    expect(overview.effects).toEqual([])
     expect(overview.gestures).toEqual([])
     const site = run(seq('stray up on site', WINDOWS, [up(100, 100, { target: FOREIGN })]))
     expect(site.effects).toEqual([])

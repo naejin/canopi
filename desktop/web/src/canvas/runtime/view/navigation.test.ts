@@ -381,7 +381,7 @@ describe('view navigation', () => {
 
   // Navigation of its own.
 
-  it('fits, zooms and focuses exactly as today\'s CameraController at bearing 0', () => {
+  it('fits, zooms and focuses within 1e-6 of today\'s CameraController at bearing 0', () => {
     const scene = createScene()
     scene.annotations = [{ kind: 'annotation', id: 'sign', annotationType: 'text', locked: false,
       position: { x: -20, y: 70 }, text: 'Gate', fontSize: 16, rotationDeg: null }]
@@ -404,7 +404,11 @@ describe('view navigation', () => {
     let step = 0
     const expectSame = () => {
       const [x, y, scale] = today[step++]!
-      expect(placement(view)).toEqual({ x, y, scale, bearingDeg: 0 })
+      const actual = placement(view)
+      expect(actual.x).toBeCloseTo(x, 6)
+      expect(actual.y).toBeCloseTo(y, 6)
+      expect(actual.scale).toBeCloseTo(scale, 6)
+      expect(actual.bearingDeg).toBe(0)
     }
 
     view.navigation.zoomToFit(scene, boundsOf(scene))

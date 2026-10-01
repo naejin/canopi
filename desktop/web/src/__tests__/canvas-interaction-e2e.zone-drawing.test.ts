@@ -237,7 +237,7 @@ describe('SceneInteractionSession', () => {
       tool: 'measurement-guide',
       editType: 'interaction-measurement-guide',
     },
-  ])('retries a failed $label drag abort before admitting another gesture', ({
+  ])('a failed $label drag abort is retried at once, admitting the next gesture normally', ({
     tool,
     editType,
   }) => {
@@ -262,18 +262,14 @@ describe('SceneInteractionSession', () => {
     expect(errors).toEqual([
       expect.objectContaining({ message: `${editType} abort failed` }),
     ])
-    expect(abortFailure.abortCalls()).toBe(1)
+    // The host's own retry inside the same cancellation has already rolled the edit back.
+    expect(abortFailure.abortCalls()).toBe(2)
     expect(abortFailure.beginTypes()).toEqual([editType])
 
     events.pointerDown({ x: 10, y: 20 }, { pointerId: 72 })
     expect(abortFailure.abortCalls()).toBe(2)
-    expect(abortFailure.beginTypes()).toEqual([editType])
     events.pointerMove({ x: 40, y: 60 }, { pointerId: 72 })
     events.pointerUp({ x: 40, y: 60 }, { pointerId: 72 })
-
-    events.pointerDown({ x: 10, y: 20 }, { pointerId: 73 })
-    events.pointerMove({ x: 40, y: 60 }, { pointerId: 73 })
-    events.pointerUp({ x: 40, y: 60 }, { pointerId: 73 })
 
     expect(abortFailure.beginTypes()).toEqual([editType, editType])
     if (tool === 'rectangle') {
@@ -284,7 +280,7 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('quarantines pointer-up while a drag commit finishes retained publication', () => {
+  it('a pointer-up whose commit fails finishes publication at once, then reaches the app', () => {
     const history = new SceneHistory()
     const record = history.record.bind(history)
     let publicationFailures = 2
@@ -322,14 +318,11 @@ describe('SceneInteractionSession', () => {
         pointerUpEvents.push(events.pointerUp({ x: 40, y: 60 }, { pointerId: 81 }))
       })
 
+      // The host's own retry inside the cancellation failure has already finished the commit and recorded it. A
+      // pointerup is not a press on the map host, so it rethrows and reaches the app rather than being quarantined.
       expect(errors).toHaveLength(1)
-      expect(pointerUpEvents[0]?.defaultPrevented).toBe(true)
-      expect(downstreamPointerUp).not.toHaveBeenCalled()
-      expect(store.persisted.zones).toHaveLength(1)
-      expect(coordinator.canUndo.value).toBe(false)
-
-      events.pointerDown({ x: 10, y: 20 }, { pointerId: 82 })
-
+      expect(pointerUpEvents[0]?.defaultPrevented).toBe(false)
+      expect(downstreamPointerUp).toHaveBeenCalled()
       expect(store.persisted.zones).toHaveLength(1)
       expect(coordinator.canUndo.value).toBe(true)
       expect(coordinator.undo()).toBe(true)
@@ -344,7 +337,7 @@ describe('SceneInteractionSession', () => {
   it.each([
     { label: 'Rectangle', tool: 'rectangle' },
     { label: 'Measurement Guide', tool: 'measurement-guide' },
-  ])('retries retained $label cleanup before admitting another drag', ({ tool }) => {
+  ])('a retained $label cleanup is retried at once, leaving nothing open for the next drag', ({ tool }) => {
     const history = new SceneHistory()
     const baseDeps = createInteractionDeps(container, store, camera)
     const coordinator = new SceneRuntimeEditCoordinator({
@@ -377,18 +370,9 @@ describe('SceneInteractionSession', () => {
         events.pointerUp({ x: 40, y: 60 }, { pointerId: 91 })
       })
 
+      // The host's own retry inside the failure has already finished the cleanup: nothing is left open.
       expect(errors).toHaveLength(1)
       expect(cleanupFailures).toBe(0)
-      expect(coordinator.canUndo.value).toBe(false)
-      if (tool === 'rectangle') {
-        expect(store.persisted.zones).toHaveLength(1)
-      } else {
-        expect(store.persisted.measurementGuides).toHaveLength(1)
-      }
-
-      const retryEvent = events.pointerDown({ x: 10, y: 20 }, { pointerId: 92 })
-
-      expect(retryEvent.defaultPrevented).toBe(true)
       expect(coordinator.canUndo.value).toBe(true)
       if (tool === 'rectangle') {
         expect(store.persisted.zones).toHaveLength(1)
@@ -422,7 +406,7 @@ describe('SceneInteractionSession', () => {
   it.each([
     { label: 'Rectangle', tool: 'rectangle' },
     { label: 'Measurement Guide', tool: 'measurement-guide' },
-  ])('keeps the $label handle through retained post-commit backfill publication', ({ tool }) => {
+  ])('a $label retained post-commit backfill failure is finished at once, with nothing left for a retry', ({ tool }) => {
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 150, y: 150 }, {
         stratum: null,
@@ -472,21 +456,12 @@ describe('SceneInteractionSession', () => {
         events.pointerUp({ x: 40, y: 60 }, { pointerId: 94 })
       })
 
+      // The host's own retry inside the cancellation failure has already finished the backfill publication.
       expect(errors).toHaveLength(1)
       expect(store.persisted.plants[0]).toMatchObject({
         stratum: 'canopy',
         canopySpreadM: 4,
       })
-      expect(coordinator.canUndo.value).toBe(false)
-      if (tool === 'rectangle') {
-        expect(store.persisted.zones).toHaveLength(1)
-      } else {
-        expect(store.persisted.measurementGuides).toHaveLength(1)
-      }
-
-      const retryEvent = events.pointerDown({ x: 10, y: 20 }, { pointerId: 95 })
-
-      expect(retryEvent.defaultPrevented).toBe(true)
       expect(coordinator.canUndo.value).toBe(true)
       if (tool === 'rectangle') {
         expect(store.persisted.zones).toHaveLength(1)

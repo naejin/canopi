@@ -15,7 +15,7 @@ import {
   rotateCameraAround,
   zoomCameraAround,
 } from '../canvas/runtime/view/camera-math'
-import { createViewFrameSource } from '../canvas/runtime/view/frame-source'
+import { createDriverFrameSource } from '../canvas/runtime/view/frame-source'
 import {
   constrainCamera,
   normaliseBearing,
@@ -24,18 +24,16 @@ import {
   zoomFloorForArc,
 } from '../canvas/runtime/view/navigation-policy'
 import type {
-  FrameSourceDeps,
   GeoPoint,
   ScreenInsets,
   ScreenPoint,
   ViewCamera,
   ViewFrame,
   ViewScreen,
-  ViewTransform,
 } from '../canvas/runtime/view/types'
 import { buildViewTransform } from '../canvas/runtime/view/view-transform'
 import type { MapLibreLngLat, MapLibreMapInstance, MapLibreTransformConstrain } from './loader'
-import { logMapError, redactCredentials } from './redact-credentials'
+import { redactCredentials } from './redact-credentials'
 
 /** The map operations the driver uses; the four read-backs it cannot work without are checked when it is created. */
 export type MapLibreCameraDriverMap = Pick<MapLibreMapInstance,
@@ -49,24 +47,13 @@ export type MapLibreCameraDriverMap = Pick<MapLibreMapInstance,
   | 'getZoom'
   | 'getBearing'
   | 'getPitch'
-  | 'unproject'
   | 'setTransformConstrain'
   | 'getCanvas'
 >
 
-type AgreementProbe = (map: Pick<MapLibreMapInstance, 'unproject'>, view: ViewTransform, plane: SessionPlane) => { readonly maxErrorPx: number }
-
-const REQUIRED_READ_BACKS = ['getCenter', 'getZoom', 'getBearing', 'unproject'] as const
+const REQUIRED_READ_BACKS = ['getCenter', 'getZoom', 'getBearing'] as const
 const NO_INSETS: ScreenInsets = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 })
 const EMPTY_SCREEN: ViewScreen = Object.freeze({ width: 0, height: 0, devicePixelRatio: 1 })
-
-/** Development and test builds only (P12): production bundles drop the probe with this block. */
-let agreementProbe: AgreementProbe | null = null
-if (import.meta.env.DEV) {
-  void import('./view-agreement')
-    .then((module) => { agreementProbe = module.assertViewAgreement })
-    .catch((error: unknown) => logMapError('The view agreement probe did not load:', error))
-}
 
 /** Everything a frame is built from; a change publishes only when one of these moved. */
 interface FrameState {
@@ -88,10 +75,9 @@ interface Flight {
 }
 
 /**
- * `createMapLibreCameraDriver(map, plane, deps)` (spec §1.1 Attachment). A map without getCenter, getZoom, getBearing or unproject,
+ * `createMapLibreCameraDriver(map, plane, deps)` (spec §1.1 Attachment). A map without getCenter, getZoom or getBearing,
  * or one whose read-back pitch is not 0, fails the driver with 'map-error'; its host then detaches it. The driver resizes its map to
- * the container once, starts at the map canvas' CSS size, and changes it only through setScreen. Its frames settle on `deps.timers`,
- * else on the window's, adapted to the frame source's shape.
+ * the container once, starts at the map canvas' CSS size, and changes it only through setScreen.
  */
 export function createMapLibreCameraDriver(
   map: MapLibreCameraDriverMap,
@@ -142,10 +128,7 @@ export function createMapLibreCameraDriver(
   }
   // MapLibre applies the guard as soon as it is installed, so the first frame is read after it.
   let published = frameState((guardInstalled ? readCamera() : attached) ?? placeholderCamera())
-  const frames = createViewFrameSource(buildFrame(published), {
-    clock: deps.clock,
-    timers: deps.timers ?? windowTimers(deps.clock),
-  })
+  const frames = createDriverFrameSource(buildFrame(published))
 
   const onMove = () => {
     if (ownCalls > 0 || !live()) return
@@ -247,7 +230,7 @@ export function createMapLibreCameraDriver(
     })
   }
 
-  /** Publishes one frame when anything in it changed, probes it (development builds), then runs the calls queued meanwhile. */
+  /** Publishes one frame when anything in it changed, then runs the calls queued meanwhile. */
   function commit(camera: ViewCamera): void {
     const state = frameState(camera)
     if (sameFrameState(published, state)) return
@@ -255,7 +238,6 @@ export function createMapLibreCameraDriver(
     revision += 1
     const frame = buildFrame(state)
     frames.publish(frame)
-    if (agreementProbe && live()) agreementProbe(map, frame.view, plane)
     while (!frames.dispatching && queued.length > 0 && live()) queued.shift()!()
   }
 
@@ -419,16 +401,6 @@ export function createMapLibreCameraDriver(
         const start = startingCamera(false)
         if (!start) return
         const normalised: ViewCamera = { ...target, bearingDeg: normaliseBearing(target.bearingDeg), pitchDeg: 0 }
-        if (move.animation === 'ease' && !deps.policy().reducedMotion.peek()) {
-          startTween(startBearingTween(start.camera, {
-            bearingDeg: normalised.bearingDeg,
-            anchorPx: 'centre',
-            durationMs: move.durationMs ?? VIEW_EASE_MS,
-            centerTarget: normalised.center,
-            zoomTarget: normalised.zoom,
-          }, deps.clock()))
-          return
-        }
         stopTween()
         if (move.animation === 'fly') fly(normalised, start.camera)
         else jumpTo(constrainCamera(normalised, screen, deps.policy()))
@@ -575,14 +547,6 @@ function finiteSize(value: number | undefined): number {
 
 function finitePoint(point: ScreenPoint): boolean {
   return Number.isFinite(point.x) && Number.isFinite(point.y)
-}
-
-/** The window's timers in the frame source's shape: a due time on the deps' clock becomes a delay. */
-function windowTimers(clock: () => number): FrameSourceDeps['timers'] {
-  return {
-    set: (atMs, run) => window.setTimeout(run, Math.max(0, atMs - clock())),
-    clear: (id) => window.clearTimeout(id),
-  }
 }
 
 function messageOf(error: unknown): string {

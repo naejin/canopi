@@ -143,7 +143,7 @@ describe('SceneInteractionSession', () => {
         : [])
     const session = createTestSession({
       ...createInteractionDeps(container, store, camera),
-      renderer: { setDraft: (draft) => { drafts.push(draft) }, setSelectionPreview: () => {} },
+      renderer: { setDraft: (draft) => { drafts.push(draft) } },
     })
     session.setTool('saved-object-stamp')
     events.pointerMove({ x: 100, y: 100 }, { buttons: 0 })
@@ -197,7 +197,7 @@ describe('SceneInteractionSession', () => {
     }
     const session = createTestSession({
       ...createInteractionDeps(container, store, camera),
-      renderer: { setDraft: (draft) => { drafts.push(draft) }, setSelectionPreview: () => {} },
+      renderer: { setDraft: (draft) => { drafts.push(draft) } },
     })
     session.setTool('saved-object-stamp')
     events.pointerMove({ x: 100, y: 100 }, { buttons: 0 })

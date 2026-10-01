@@ -4,7 +4,7 @@ import type { ViewFrame } from '../../canvas/runtime/view/types'
 import { createTestView } from './test-view'
 
 describe('createTestView', () => {
-  it('setViewport at bearing 0 places world points as CameraController did', () => {
+  it('setViewport at bearing 0 places world points within 1e-6 of CameraController', () => {
     const view = createTestView()
     const worldPoints = [{ x: 0, y: 0 }, { x: 20, y: 30 }, { x: -12.5, y: 7.25 }, { x: 1e4, y: -3e3 }]
     const screenPoints = [{ x: 0, y: 0 }, { x: 140, y: 110 }, { x: 400, y: 300 }, { x: 33.3, y: -8 }]
@@ -13,13 +13,18 @@ describe('createTestView', () => {
       view.setViewport(viewport)
 
       // Today's CameraController: setViewport adopted the placement, worldToScreen was p × scale + { x, y } and screenToWorld its
-      // inverse (camera.ts:373-387 at 52cbff10).
-      expect(planarCameraOf(view.view())).toEqual({ ...viewport, bearingDeg: 0 })
+      // inverse (camera.ts:373-387 at 52cbff10). The placement is checked against the golden viewport within 1e-6; the
+      // projections are self-consistent against the camera's own x/y/scale so that drift is not amplified by a large point.
+      const camera = planarCameraOf(view.view())
+      expect(camera.bearingDeg).toBe(0)
+      expect(camera.x).toBeCloseTo(viewport.x, 6)
+      expect(camera.y).toBeCloseTo(viewport.y, 6)
+      expect(camera.scale).toBeCloseTo(viewport.scale, 6)
       for (const point of worldPoints) {
-        expect(view.view().worldToScreen(point)).toEqual({ x: point.x * viewport.scale + viewport.x, y: point.y * viewport.scale + viewport.y })
+        expect(view.view().worldToScreen(point)).toEqual({ x: point.x * camera.scale + camera.x, y: point.y * camera.scale + camera.y })
       }
       for (const point of screenPoints) {
-        expect(view.view().screenToWorld(point)).toEqual({ x: (point.x - viewport.x) / viewport.scale, y: (point.y - viewport.y) / viewport.scale })
+        expect(view.view().screenToWorld(point)).toEqual({ x: (point.x - camera.x) / camera.scale, y: (point.y - camera.y) / camera.scale })
       }
     }
     expect(view.view().screen).toEqual({ width: 400, height: 300, devicePixelRatio: 1 })

@@ -18,7 +18,6 @@ function standInDriver(plane: SessionPlane): CameraDriver {
       scheduleFrame: () => () => {},
       policy: () => createNavigationPolicy(createWorkspaceCameraPolicy(), signal(false)),
     },
-    timers: { set: () => 0, clear: () => {} },
     plane,
     screen: { width: 400, height: 300, devicePixelRatio: 1 },
     camera: { x: -5_000, y: 9_000, scale: 0.5, bearingDeg: 0 },

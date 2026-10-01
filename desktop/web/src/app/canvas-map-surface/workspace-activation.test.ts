@@ -165,9 +165,7 @@ function createComposition(options: {
     get diagnostics() {
       return {
         phase, initializeCount: 0, renderCount: 0, sceneSyncCount: 0,
-        viewportSyncCount: 0, resizeCount: 0, repaintCount: 0, skippedRenderCount: 0,
-        resetStateCount: 0, disposeCount: 0, disposeInRenderCount: 0,
-        recentRenderDurationsMs: [], lastFailure: null,
+        disposeCount: 0, lastFailure: null,
       }
     },
     initialize: vi.fn(async () => {

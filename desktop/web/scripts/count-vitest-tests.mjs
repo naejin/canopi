@@ -17,6 +17,7 @@
 //   { "src/__tests__/camera-controller.test.ts > CameraController > zooms in":
 //       { "file": "src/canvas/runtime/view/navigation.test.ts", "name": "ViewNavigation > zooms in" } }
 //   <target> = { "file": "<new file>", "name": "<new full name>" } | { "policy": "<exact policy name>" }
+//     | { "retired": "<why no user sees it>" }
 // The key names the file the baseline recorded, not where the test lives now: a
 // test of the split files is keyed by src/__tests__/scene-interaction.test.ts.
 // Each target replaces one baseline row with that key; when several rows share
@@ -461,8 +462,10 @@ function check() {
       } else if (typeof target?.policy === 'string') {
         present = policies.has(target.policy);
         if (!present) failures.push(`REPLACEMENT POLICY MISSING\n    baseline: ${oldKey}\n    policy:   "${target.policy}"`);
+      } else if (typeof target?.retired === 'string' && target.retired.length > 0) {
+        present = true;
       } else {
-        failures.push(`MALFORMED MAP ENTRY (want { file, name } or { policy }, or an array of them)\n    ${oldKey}: ${JSON.stringify(target)}`);
+        failures.push(`MALFORMED MAP ENTRY (want { file, name }, { policy } or { retired }, or an array of them)\n    ${oldKey}: ${JSON.stringify(target)}`);
       }
       if (present) replacedRows.set(oldKey, (replacedRows.get(oldKey) ?? 0) + 1);
     }

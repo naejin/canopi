@@ -19,8 +19,6 @@ export interface Bindings {
   /** Contexts in which a primary drag pans. */
   readonly primaryDragPansIn: readonly PanContext[]
   readonly macCtrlClick: 'primary' | 'secondary'
-  /** A secondary or auxiliary button added during a primary drag opens a nested navigation sub-session. */
-  readonly navigateDuringPrimaryDrag: boolean
   readonly touch: { readonly gestures: boolean; readonly longPressMenu: boolean; readonly hostTouchActionNone: boolean }
   readonly penBarrel: 'ignore' | 'secondary'
   readonly trackpadGestures: boolean                       // WebKit gesture* rotate and scale
@@ -44,7 +42,6 @@ export const LEGACY_BINDINGS: Bindings = Object.freeze({
   auxiliaryShiftDrag: 'pan',
   primaryDragPansIn: Object.freeze(['hand-tool', 'overview'] as const),
   macCtrlClick: 'primary',
-  navigateDuringPrimaryDrag: false,
   touch: Object.freeze({ gestures: false, longPressMenu: false, hostTouchActionNone: false }),
   penBarrel: 'ignore',
   trackpadGestures: false,

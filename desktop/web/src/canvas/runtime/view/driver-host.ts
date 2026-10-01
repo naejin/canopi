@@ -19,7 +19,7 @@ import { planarCameraOf } from './view-transform'
 export interface CameraDriverHostOptions {
   readonly clock: () => number
   readonly scheduleFrame: CameraDriverDeps['scheduleFrame']
-  /** The settle timers of the host's frames and of its headless drivers. */
+  /** The settle timer of the host's own frames (its drivers settle nothing: nobody reads a driver's own settled frame). */
   readonly timers: FrameSourceDeps['timers']
   readonly policy: WorkspaceCameraPolicy
   readonly reducedMotion: ReadonlySignal<boolean>
@@ -57,7 +57,6 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
   const initialPlane = options.plane()
   let live: CameraDriver = createHeadlessCameraDriver({
     deps: driverDeps,
-    timers: options.timers,
     plane: initialPlane,
     screen: options.screen ?? EMPTY_SCREEN,
     camera: options.camera ?? TODAY_UNPUBLISHED_CAMERA,
@@ -97,7 +96,7 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
   }
 
   function connect(driver: CameraDriver): () => void {
-    const stopRelay = driver.frames.onViewFrame('tools', (frame) => relay(driver, frame))
+    const stopRelay = driver.frames.onViewFrame((frame) => relay(driver, frame))
     let connecting = true
     const stopFailure = driver.failure.subscribe((reported) => {
       if (!connecting && reported && driver === live && attached) fail(reported)
@@ -149,7 +148,6 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
     headlessPlane = plane
     swapTo(createHeadlessCameraDriver({
       deps: driverDeps,
-      timers: options.timers,
       plane,
       screen: last.view.screen,
       camera,

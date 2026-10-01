@@ -4,7 +4,7 @@ import type { ReadonlySignal } from '@preact/signals'
 import type { SessionPlane } from '../../session-plane'
 import type { WorkspaceCameraPolicy } from '../../workspace-camera-policy'
 import type { NavigationPolicy } from './navigation-policy'
-import type { FrameSourceDeps, PlanarCamera, ScreenInsets, ScreenPoint, ViewCamera, ViewFrameSource, ViewScreen } from './types'
+import type { DriverFrameSource, PlanarCamera, ScreenInsets, ScreenPoint, ViewCamera, ViewFrameSource, ViewScreen } from './types'
 
 export type CameraMove =
   /** deltaPx is content movement: the ground under the pointer moves by deltaPx. New centre = unproject(screenCentre − deltaPx). */
@@ -21,12 +21,11 @@ export type CameraMove =
       readonly animation: 'none' | 'ease'
       readonly durationMs?: number
     }
-  /** Go to a full camera. The centre is an input; no anchor. 'ease' is a driver tween; 'fly' is MapLibre flyTo. */
+  /** Go to a full camera. The centre is an input; no anchor. 'fly' is MapLibre flyTo; without a map it jumps. */
   | {
       readonly kind: 'set'
       readonly target: ViewCamera               // pitchDeg: 0 by type
-      readonly animation: 'none' | 'ease' | 'fly'
-      readonly durationMs?: number              // ease: 300 default
+      readonly animation: 'none' | 'fly'
     }
   /**
    * setViewport's exact placement (createTestView, and the legacy facade's setViewport and reprojectViewport). The headless driver
@@ -36,7 +35,7 @@ export type CameraMove =
   | { readonly kind: 'place'; readonly planar: PlanarCamera }
 
 export interface CameraDriver {
-  readonly frames: ViewFrameSource
+  readonly frames: DriverFrameSource
   /** Synchronous for 'none' moves and the incremental kinds: `frames.viewFrame` is current on return (unless queued). */
   apply(move: CameraMove): void
   /** The bearing a running tween or flight will end at, else the live bearing. */
@@ -60,12 +59,9 @@ export interface CameraDriverDeps {
   /** One animation-frame callback; returns its canceller. Tests step it by hand. */
   readonly scheduleFrame: (cb: (nowMs: number) => void) => () => void
   readonly policy: () => NavigationPolicy
-  /** The frame source's settle timers, in its shape (a due time on `clock`, a numeric id). The MapLibre driver (outside view/) adapts
-   *  the window's timers to it by default; the headless driver takes them injected. */
-  readonly timers?: FrameSourceDeps['timers']
 }
 
-export interface CameraDriverFailure { readonly reason: 'map-lost' | 'agreement' | 'map-error'; readonly message: string }
+export interface CameraDriverFailure { readonly reason: 'map-error'; readonly message: string }
 
 /**
  * Owns the runtime's one camera across attach, detach and failure; replaces CameraController's detached mode.

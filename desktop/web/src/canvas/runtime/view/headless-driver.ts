@@ -19,15 +19,13 @@ import {
   viewCameraToPlanar,
   zoomPlanarToScale,
 } from './camera-math'
-import { createViewFrameSource } from './frame-source'
+import { createDriverFrameSource } from './frame-source'
 import { constrainCamera, normaliseBearing, scaleBoundsAt, VIEW_EASE_MS } from './navigation-policy'
-import type { FrameSourceDeps, PlanarCamera, ScreenInsets, ScreenPoint, ViewCamera, ViewFrame, ViewScreen } from './types'
+import type { PlanarCamera, ScreenInsets, ScreenPoint, ViewCamera, ViewFrame, ViewScreen } from './types'
 import { buildViewTransformFromPlane } from './view-transform'
 
 export interface HeadlessCameraDriverOptions {
   readonly deps: CameraDriverDeps
-  /** The frame source's settle timer. */
-  readonly timers: FrameSourceDeps['timers']
   readonly plane: SessionPlane
   /** Invalid sizes read as 0 and an invalid density as 1, as today's CameraController normalised them. */
   readonly screen: ViewScreen
@@ -68,7 +66,7 @@ export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions)
 
   let planar = settle(validPlanar(options.camera) ?? TODAY_UNPUBLISHED_CAMERA)
   let published = frameState()
-  const frames = createViewFrameSource(buildFrame(published), { clock: deps.clock, timers: options.timers })
+  const frames = createDriverFrameSource(buildFrame(published))
 
   /** Today's normalizeViewport clamp, in px/m against the frame's scale bounds, then the one-world hold. */
   function settle(candidate: PlanarCamera): PlanarCamera {
@@ -201,16 +199,6 @@ export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions)
       case 'set': {
         const { target } = move
         if (![target.center.lon, target.center.lat, target.zoom, target.bearingDeg].every(Number.isFinite)) return
-        if (move.animation === 'ease' && !reducedMotion()) {
-          startTween(startBearingTween(liveCamera(), {
-            bearingDeg: target.bearingDeg,
-            anchorPx: 'centre',
-            durationMs: move.durationMs ?? VIEW_EASE_MS,
-            centerTarget: target.center,
-            zoomTarget: target.zoom,
-          }, deps.clock()))
-          return
-        }
         // Without a map there is no flight: 'fly' jumps, as today's detached camera did.
         stopTween()
         commit(viewCameraToPlanar(target, screen, plane))

@@ -717,28 +717,12 @@ describe('ToolHost', () => {
       expect(cancels).toHaveLength(1)
     })
 
-    it('a ruler drag reaches no tool, leaves the map\'s cursor alone and is never fenced by a pending cancellation', () => {
-      let failing = true
-      let edit: SceneEditTransaction | null = null
-      const rectangle: StubTool = stubTool('rectangle', {
-        gesture: (g) => {
-          if (g.kind === 'press') edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
-          return 'pass'
-        },
-        cancelTransient: () => {
-          if (failing) throw new Error('cancel failed')
-          edit?.abort()
-          edit = null
-        },
-      })
+    it('a ruler drag reaches no tool and leaves the map\'s cursor alone', () => {
+      const rectangle: StubTool = stubTool('rectangle')
       useStubTools(rectangle)
       const h = harness()
       h.arm('rectangle')
-      h.press({ x: 10, y: 10 })
-      expect(() => h.blur()).toThrow('cancel failed')
-      failing = false
       const pressesBefore = rectangle.count('press')
-      const retries = (): number => rectangle.calls.filter((call) => call === 'cancelTransient:tool-change').length
       const cursor = h.chrome.cursor
 
       // The session runs the drag and lands its guide (today's ruler listened beside the map).
@@ -746,48 +730,15 @@ describe('ToolHost', () => {
       expect(h.host.hasLiveGesture()).toBe(true)
       h.move({ x: 5, y: 40 })
       h.move({ x: 5, y: 60 })
-      expect(retries()).toBe(0)
       // Today's drag cursor was the rulers' own: the map keeps the tool's.
       expect(h.chrome.cursor).toBe(cursor)
-      // Its release is a pointerup, which today's handler retried and swallowed.
-      expect(h.release({ x: 5, y: 90 })).toEqual({ quarantine: true })
-      expect(retries()).toBe(1)
+      expect(h.release({ x: 5, y: 90 })).toEqual({})
       expect(h.host.hasLiveGesture()).toBe(false)
       expect(rectangle.count('press')).toBe(pressesBefore)
       expect(rectangle.count('drag-start')).toBe(0)
       expect(h.chrome.cursor).toBe(cursor)
     })
 
-    it('a blur or a lost capture that retries a pending cancellation goes on to the app; a pointercancel is swallowed', () => {
-      let failing = true
-      let edit: SceneEditTransaction | null = null
-      const rectangle: StubTool = stubTool('rectangle', {
-        gesture: (g) => {
-          if (g.kind === 'press') edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
-          return 'pass'
-        },
-        cancelTransient: () => {
-          if (failing) throw new Error('cancel failed')
-          edit?.abort()
-          edit = null
-        },
-      })
-      useStubTools(rectangle)
-      const h = harness()
-      h.arm('rectangle')
-      const pendingWith = (reason: 'blur' | 'lost-capture' | 'pointercancel') => {
-        failing = true
-        h.press({ x: 10, y: 10 })
-        expect(() => h.blur()).toThrow('cancel failed')
-        failing = false
-        return h.host.gesture({ kind: 'cancel', reason })
-      }
-
-      expect(pendingWith('blur')).toEqual({})
-      expect(pendingWith('lost-capture')).toEqual({})
-      expect(pendingWith('pointercancel')).toEqual({ quarantine: true })
-      expect(h.host.retryPendingCancellation()).toBe(false)
-    })
   })
 
   describe('raw presses', () => {
@@ -836,22 +787,12 @@ describe('ToolHost', () => {
       expect(h.history.canUndo.value).toBe(true)
     })
 
-    it('a raw press moves nothing during another live press, a busy scene or a pending cancellation', () => {
+    it('a raw press moves nothing during another live press or a busy scene', () => {
       let busy = false
-      let failures = 1
-      let edit: SceneEditTransaction | null = null
+      let failing = false
       const rectangle: StubTool = stubTool('rectangle', {
-        gesture: (g) => {
-          if (g.kind === 'press') edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
-          return 'pass'
-        },
         cancelTransient: () => {
-          if (failures > 0) {
-            failures -= 1
-            throw new Error('cancel failed')
-          }
-          edit?.abort()
-          edit = null
+          if (failing) throw new Error('cancel failed')
         },
       })
       useStubTools(stubTool('select'), rectangle)
@@ -879,14 +820,13 @@ describe('ToolHost', () => {
       expect(h.record.focus).toEqual(['map:tool-requested', 'map:tool-requested'])
       busy = false
 
-      // A failed cancellation waits for its retry.
+      // A failed cancellation leaves no edit open to wait for: the next raw press moves focus at once.
       h.arm('rectangle')
+      failing = true
       h.press({ x: 10, y: 10 })
       expect(() => h.blur()).toThrow('cancel failed')
+      failing = false
       const focus = h.record.focus.length
-      h.host.rawPress('primary', SURFACE)
-      expect(h.record.focus).toHaveLength(focus)
-      expect(h.host.retryPendingCancellation()).toBe(true)
       h.host.rawPress('primary', SURFACE)
       expect(h.record.focus).toHaveLength(focus + 1)
     })
@@ -1073,6 +1013,26 @@ describe('ToolHost', () => {
       h.arm('plant-stamp')
       h.view.navigation.zoomOut()
       expect(stamp.count('hover')).toBe(0)
+    })
+  })
+
+  describe('activation rollback', () => {
+    it('a tool whose activation throws leaves Select armed and rethrows', () => {
+      const select = stubTool('select')
+      const hand = stubTool('hand')
+      const broken = stubTool('polygon', {
+        activate: () => {
+          throw new Error('boom')
+        },
+      })
+      useStubTools(select, hand, broken)
+      const h = harness({ tool: 'hand' })
+
+      expect(() => h.arm('polygon')).toThrow('boom')
+
+      expect(h.host.activeToolIsSelect()).toBe(true)
+      expect(hand.calls).toContain('deactivate:switch')
+      expect(select.calls).toContain('activate')
     })
   })
 
@@ -1539,36 +1499,33 @@ describe('ToolHost', () => {
   })
 
   describe('cancellation', () => {
-    it('a failed cancellation is retried before the next event', () => {
-      let failures = 1
+    it('a cancellation that throws with an edit open aborts the edit and the next press is admitted', () => {
       let edit: SceneEditTransaction | null = null
+      let failing = true
       const rectangle: StubTool = stubTool('rectangle', {
         gesture: (g) => {
-          if (g.kind === 'press') edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
+          if (g.kind === 'press') {
+            edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
+            edit.mutate((draft) => {
+              draft.zones = [rectZone('z2', [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }, { x: 0, y: 5 }])]
+            })
+          }
           return 'pass'
         },
         cancelTransient: () => {
-          if (failures > 0) {
-            failures -= 1
-            throw new Error('cancel failed')
-          }
-          edit?.abort()
-          edit = null
+          if (failing) throw new Error('cancel failed')
         },
       })
       useStubTools(rectangle)
       const h = harness({ tool: 'rectangle' })
 
       h.press({ x: 10, y: 10 })
+      expect(h.store.persisted.zones.map((zone) => zone.id)).toEqual(['z2'])
       expect(() => h.blur()).toThrow('cancel failed')
-      expect(h.press({ x: 20, y: 20 })).toEqual({ quarantine: true, rejectSession: true })
-      expect(rectangle.count('press')).toBe(1)
-      expect(rectangle.calls.filter((call) => call.startsWith('cancelTransient'))).toEqual([
-        'cancelTransient:navigate',
-        'cancelTransient:tool-change',
-      ])
-
-      expect(h.press({ x: 30, y: 30 })).toEqual({})
+      // The edit is aborted whether or not the tool's own cancelTransient succeeded: nothing is left open to retry.
+      expect(h.store.persisted.zones).toEqual([])
+      failing = false
+      expect(h.press({ x: 20, y: 20 })).toEqual({})
       expect(rectangle.count('press')).toBe(2)
     })
 
@@ -1586,32 +1543,6 @@ describe('ToolHost', () => {
       expect(ellipse.calls).toEqual(['activate'])
       expect(h.host.hasLiveGesture()).toBe(false)
       expect(h.host.activeToolDragSlopPx()).toBeNull()
-    })
-
-    it('a tool whose activation fails is left, and the tool before it is armed again', () => {
-      let failActivation = true
-      const rectangle = stubTool('rectangle')
-      const ellipse = stubTool('ellipse', {
-        activate: () => {
-          if (failActivation) throw new Error('activation failed')
-        },
-      })
-      useStubTools(rectangle, ellipse)
-      const h = harness({ tool: 'rectangle' })
-
-      h.press({ x: 10, y: 10 })
-      h.move({ x: 30, y: 30 })
-      expect(() => h.arm('ellipse')).toThrow('activation failed')
-      // The live press ends with the tool left, which is armed again; the tool that failed is left.
-      expect(rectangle.last('cancel')).toEqual({ kind: 'cancel', reason: 'tool-change' })
-      expect(rectangle.calls).toEqual(['activate', 'cancelTransient:tool-change', 'deactivate:switch', 'activate'])
-      expect(ellipse.calls).toEqual(['activate', 'deactivate:switch'])
-      expect(h.host.hasLiveGesture()).toBe(false)
-
-      failActivation = false
-      h.click({ x: 50, y: 50 })
-      expect(rectangle.count('press')).toBe(2)
-      expect(ellipse.gestures).toEqual([])
     })
 
     it('entering overview cancels the tool\'s transient with the overview reason', () => {
@@ -1664,9 +1595,9 @@ describe('ToolHost', () => {
       expect(tool.count('press')).toBe(2)
     })
 
-    it('a release whose tool call and cancellation both throw leaves the cancellation pending and reports the release', () => {
-      let failCancel = true
+    it('a release whose tool call and cancellation both throw reports the release and still aborts the edit', () => {
       let edit: SceneEditTransaction | null = null
+      let failCancel = true
       const rectangle: StubTool = stubTool('rectangle', {
         gesture: (g) => {
           if (g.kind === 'press') edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
@@ -1685,10 +1616,8 @@ describe('ToolHost', () => {
       expect(() => h.drag({ x: 10, y: 10 }, { x: 40, y: 40 })).toThrow('commit failed')
       expect(edit).not.toBeNull()
       failCancel = false
-      // The failed cancellation is retried before the next press, which is swallowed, as today.
-      expect(h.press({ x: 50, y: 50 })).toEqual({ quarantine: true, rejectSession: true })
-      expect(edit).toBeNull()
-      expect(h.press({ x: 60, y: 60 })).toEqual({})
+      // No edit is left open to wait for: the next press is admitted at once.
+      expect(h.press({ x: 50, y: 50 })).toEqual({})
     })
 
     it('a settled release whose tool call throws runs the cancellation at once, so the next press is admitted', () => {
@@ -2057,19 +1986,16 @@ describe('ToolHost', () => {
       expect(h.store.persisted.plants).toHaveLength(0)
     })
 
-    it('a dragover or a drop retries a pending cancellation before its admission and is quarantined when it did', () => {
-      let failures = 1
+    it('a dragover or a drop is admitted after a cancellation failure, with no edit left open', () => {
       let edit: SceneEditTransaction | null = null
+      let failing = false
       const rectangle: StubTool = stubTool('rectangle', {
         gesture: (g) => {
           if (g.kind === 'press') edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
           return 'pass'
         },
         cancelTransient: () => {
-          if (failures > 0) {
-            failures -= 1
-            throw new Error('cancel failed')
-          }
+          if (failing) throw new Error('cancel failed')
           edit?.abort()
           edit = null
         },
@@ -2077,22 +2003,17 @@ describe('ToolHost', () => {
       useStubTools(rectangle, stubTool('select'))
       const h = harness({ tool: 'rectangle' })
       const at = { x: 80, y: 90 }
-      const pending = (): void => {
-        failures = 1
+      const failedCancellation = (): void => {
+        failing = true
         h.press({ x: 20, y: 20 })
         expect(() => h.blur()).toThrow('cancel failed')
+        failing = false
       }
 
-      pending()
-      expect(h.drop('over', at, PEAR_OVER)).toEqual({ quarantine: true })
-      expect(edit).toBeNull()
-      expect(h.renderer.lastDraft()).toBeNull()
+      failedCancellation()
       expect(h.drop('over', at, PEAR_OVER)).toEqual({ dropEffect: 'copy' })
 
-      pending()
-      expect(h.drop('drop', at, PEAR_DROP)).toEqual({ quarantine: true })
-      expect(h.renderer.lastDraft()).toBeNull()
-      expect(h.store.persisted.plants).toHaveLength(0)
+      failedCancellation()
       expect(h.drop('drop', at, PEAR_DROP)).toEqual({})
       expect(h.store.persisted.plants).toHaveLength(1)
     })

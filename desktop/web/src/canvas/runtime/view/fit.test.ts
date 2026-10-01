@@ -62,10 +62,18 @@ function fitFrame(width: number, height: number, placement: Placement, insets?: 
   return { screen: { width, height }, insets, scaleBounds: TODAY_SCALE_BOUNDS, current: { x, y, scale, bearingDeg: 0 } }
 }
 
-function placed(placement: Placement | null): PlanarCamera | null {
-  if (!placement) return null
-  const [x, y, scale] = placement
-  return { x, y, scale, bearingDeg: 0 }
+/** Checks a fit's placement against a tolerant golden literal (precision 6: close, not bit for bit). */
+function expectPlacement(actual: PlanarCamera | null, expected: Placement | null, precision = 6): void {
+  if (!expected) {
+    expect(actual).toBeNull()
+    return
+  }
+  expect(actual).not.toBeNull()
+  const [x, y, scale] = expected
+  expect(actual!.x).toBeCloseTo(x, precision)
+  expect(actual!.y).toBeCloseTo(y, precision)
+  expect(actual!.scale).toBeCloseTo(scale, precision)
+  expect(actual!.bearingDeg).toBe(0)
 }
 
 /** A world-axis box around points, as computeSceneBounds returned it. */
@@ -196,7 +204,7 @@ describe('fit', () => {
         [0.05, 1, 14, 1000].forEach((scale, start) => {
           const frame = fitFrame(1000, 800, [3, -7, scale], insets)
 
-          expect(fitScene(frame, { extentPoints: sceneExtentPoints(design) }, 0)).toEqual(placed(today[name]![insetCase]![start]!))
+          expectPlacement(fitScene(frame, { extentPoints: sceneExtentPoints(design) }, 0), today[name]![insetCase]![start]!)
         })
       })
     }
@@ -206,7 +214,7 @@ describe('fit', () => {
     const frame = fitFrame(1000, 800, [3, -7, 2])
     const todayEmpty: readonly Placement[] = [[3, -7, 2], [3, -7, 2], [500, 400, 25], [500, 400, 1716.6895781438734]]
     ;[undefined, 0, 25, 1e9].forEach((emptySceneScale, index) => {
-      expect(fitScene(frame, { extentPoints: sceneExtentPoints(empty), emptySceneScale }, 0)).toEqual(placed(todayEmpty[index]!))
+      expectPlacement(fitScene(frame, { extentPoints: sceneExtentPoints(empty), emptySceneScale }, 0), todayEmpty[index]!)
     })
     const unsized = fitFrame(0, 0, [3, -7, 2])
     expect(fitScene(unsized, { extentPoints: sceneExtentPoints(scene()) }, 0)).toBe(unsized.current)
@@ -272,7 +280,7 @@ describe('fit', () => {
       const frame = fitFrame(400, 300, [10, 20, 2], insets)
       boxes.forEach((box, boxIndex) => {
         options.forEach((option, optionIndex) => {
-          expect(fitTemporaryBounds(frame, box, option, 0)).toEqual(placed(today[insetCase]![boxIndex]![optionIndex]!))
+          expectPlacement(fitTemporaryBounds(frame, box, option, 0), today[insetCase]![boxIndex]![optionIndex]!)
         })
       })
     })

@@ -8,9 +8,12 @@ import { writePlantStampDragData } from '../../plant-stamp-source'
 import type { DomInputSourceDeps } from '../interaction-ports'
 import { LEGACY_BINDINGS, type Bindings } from './bindings'
 import { createDomInputSource, outcomeEffects } from './dom-input-source'
-import type { RawInput } from './raw-input'
+import type { RawInput, RecogniserConfig } from './raw-input'
+import { initialRecogniserState, recognise } from './recognise'
+import { DEFAULT_THRESHOLDS } from './thresholds'
 
 const PLATFORM = { os: 'linux', engine: 'webkitgtk', gestureEvents: false } as const
+const RECOGNISER_CONFIG: RecogniserConfig = { platform: PLATFORM, bindings: LEGACY_BINDINGS, thresholds: DEFAULT_THRESHOLDS }
 
 let host: HTMLDivElement
 let events: SceneInteractionEventHarness
@@ -362,7 +365,7 @@ describe('createDomInputSource', () => {
     dispose()
   })
 
-  it('a throwing sink quarantines, then rethrows', () => {
+  it('a throwing sink rethrows, and only a press on the map host is quarantined', () => {
     const failure = new Error('sink failed')
     const dispose = createDomInputSource(deps()).attach(() => {
       throw failure
@@ -382,7 +385,7 @@ describe('createDomInputSource', () => {
     dispose()
   })
 
-  it('a sink that throws on any other event rethrows and leaves the event to the app, as today', () => {
+  it('a sink that throws on any other event rethrows and leaves the event to the app', () => {
     const failure = new Error('sink failed')
     const dispose = createDomInputSource(deps()).attach(() => {
       throw failure
@@ -401,6 +404,10 @@ describe('createDomInputSource', () => {
     listen(host, 'pointerleave')
     listen(host, 'wheel')
     listen(window, 'blur')
+    listen(window, 'pointerup')
+    listen(host, 'contextmenu')
+    listen(host, 'dragover')
+    listen(host, 'drop')
 
     let errors: unknown[] = []
     try {
@@ -410,6 +417,10 @@ describe('createDomInputSource', () => {
         events.pointerLeave({ x: 10, y: 10 })
         events.wheel({ x: 10, y: 10 }, { deltaY: 4 })
         events.windowBlur()
+        events.pointerUp({ x: 10, y: 10 })
+        for (const type of ['contextmenu', 'dragover', 'drop']) {
+          host.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: 20, clientY: 30 }))
+        }
       })
     } finally {
       for (const remove of removals) remove()
@@ -417,38 +428,47 @@ describe('createDomInputSource', () => {
       dispose()
     }
 
-    // Today only a press on the map, a release, the context menu, dragover and drop were quarantined when they failed.
-    expect(errors).toEqual([failure, failure, failure, failure, failure])
-    expect(heard).toEqual(['pointermove:false', 'pointercancel:false', 'pointerleave:false', 'wheel:false', 'blur:false'])
+    // The one rule: rethrow on every event kind; only a press on the map host (covered above) is quarantined.
+    expect(errors).toEqual([failure, failure, failure, failure, failure, failure, failure, failure, failure])
+    expect(heard).toEqual([
+      'pointermove:false',
+      'pointercancel:false',
+      'pointerleave:false',
+      'wheel:false',
+      'blur:false',
+      'pointerup:false',
+      'contextmenu:false',
+      'dragover:false',
+      'drop:false',
+    ])
   })
 
-  it('a sink that throws on a release, a menu, a dragover or a drop quarantines it, then rethrows', () => {
-    const failure = new Error('sink failed')
-    const dispose = createDomInputSource(deps()).attach(() => {
-      throw failure
+  it('an overview pointerup elsewhere still reaches the page', () => {
+    let state = recognise(
+      initialRecogniserState(),
+      { kind: 'configure', t: 0, context: { tool: 'select', mode: 'overview', pointingDevice: 'mouse' } },
+      RECOGNISER_CONFIG,
+    ).state
+    const source = createDomInputSource(deps())
+    const dispose = source.attach((input) => {
+      const result = recognise(state, input, RECOGNISER_CONFIG)
+      state = result.state
+      source.apply(result.effects)
     })
     const downstream = vi.fn()
-    for (const type of ['pointerup', 'contextmenu', 'dragover', 'drop']) window.addEventListener(type, downstream)
+    window.addEventListener('pointerup', downstream)
 
-    const handled: Event[] = []
-    let errors: unknown[] = []
+    let handled: PointerEvent | undefined
     try {
-      errors = captureWindowErrors(() => {
-        handled.push(events.pointerUp({ x: 10, y: 10 }))
-        for (const type of ['contextmenu', 'dragover', 'drop']) {
-          const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: 20, clientY: 30 })
-          host.dispatchEvent(event)
-          handled.push(event)
-        }
-      })
+      handled = new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerId: 7, clientX: 999, clientY: 999 })
+      document.body.dispatchEvent(handled)
     } finally {
-      for (const type of ['pointerup', 'contextmenu', 'dragover', 'drop']) window.removeEventListener(type, downstream)
+      window.removeEventListener('pointerup', downstream)
       dispose()
     }
 
-    expect(errors).toEqual([failure, failure, failure, failure])
-    expect(handled.map((event) => event.defaultPrevented)).toEqual([true, true, true, true])
-    expect(downstream).not.toHaveBeenCalled()
+    expect(handled.defaultPrevented).toBe(false)
+    expect(downstream).toHaveBeenCalledTimes(1)
   })
 
   it('pointerleave becomes leave and focusout becomes focus-out', () => {
