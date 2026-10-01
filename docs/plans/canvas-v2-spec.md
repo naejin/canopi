@@ -677,7 +677,7 @@ The constants' values:
 | `dragSlopPx` | 0 for mouse, pen and touch | same | same | touch 8 |
 | `ownedHover` | `legacy` | `legacy` | `end` | `end` |
 
-Primary slop compares `d >= slop && d > 0`, so under 0 any movement is a drag, as today; the tools keep today's own thresholds (band and handles more than 2 px, measured at release through `ToolView.screenDistance`). Secondary slop is 3 px in every constant that uses it (MapLibre's `clickTolerance`). Plant a row overrides the primary slop to 4 px through `configure`, which the session sends with `ToolHost.activeToolDragSlopPx()` on every tool change. After phase 2 `LEGACY_BINDINGS` and `ROTATION_BINDINGS` are deleted and tombstoned; `'overview'` leaves `PanContext`.
+Primary slop compares `d >= slop && d > 0`, so under 0 any movement is a drag, as today; the tools keep today's own thresholds (band and handles more than 2 px, measured at release through `ToolView.screenDistance`). Secondary slop is 3 px in every constant that uses it (MapLibre's `clickTolerance`). A tool may override the primary slop through `configure`, which the session sends with `ToolHost.activeToolDragSlopPx()` on every tool change; Plant a row keeps slop 0 and measures today's 4 px itself through `ToolView.screenDistance`, like the band and handles, so the moves inside it still preview the row. After phase 2 `LEGACY_BINDINGS` and `ROTATION_BINDINGS` are deleted and tombstoned; `'overview'` leaves `PanContext`.
 
 ```ts
 // canvas/runtime/input/thresholds.ts  (plain numbers; tests may pass others)
@@ -1306,7 +1306,7 @@ export interface ToolContext {
 
 export interface CanvasTool {
   readonly id: ToolId
-  readonly dragSlopPx?: number                    // per-tool threshold (Plant a row: 4), sent through `configure` on every tool change
+  readonly dragSlopPx?: number                    // per-tool threshold, sent through `configure` on every tool change (Plant a row: 0; it measures today's 4 px itself)
   /** True while the tool's next release must be admitted by the scene (Select's band: today's requiresSettledPointerUp). */
   settledRelease?(): boolean
   readonly preservesTransientOnNavigate?: boolean // polygon draft survives pans
@@ -1981,7 +1981,7 @@ Rotation from the pointer is never available without Shift (user: deliberate ges
 | Select (V) | selects the hit object; empty ground clears; a locked object is selected and shows Unlock. From 2: a click inside a zone's fill selects the zone when no plant or note is on top | from empty ground: band select; the band is a screen rectangle and hits in its world quad (from 1). From an object or the outline of a selected zone: moves the selection. From 2 a drag that starts inside a zone's fill bands, never moves the zone. From a handle: rotate, reshape corner or vertex, guide end | on a plant: selects every plant of that species; on a note: edits its text; on a zone edge: adds a corner (from 2) | click toggles the hit; drag from empty: adds the band to the selection (never box zoom); a drag that starts on an object toggles it on press and moves nothing (today, `shared-gestures.ts:233-237`); on the rotate handle: 15° object steps from the press angle (today, every phase) | as Shift for click and band (on Mac, Cmd) | click removes the hit from the selection (from 2); Alt+click on a selected corner handle removes the corner, minimum 3 (from 2); Alt+drag bands as without Alt (spec) |
 | Pan (H) | nothing | pans (mouse, pen, touch); no handles show while Pan is armed (as today; only Select shows them), so a press never lands on one | nothing | ignored (a session's mode is fixed) | ignored | ignored |
 | Plant stamp (P) | places one plant of the chosen species at the snapped point; with no species the card asks to choose one | the press already placed; the drag does nothing more (today) | places a second plant (each press places one, today) | none | none | none |
-| Plant a row (W) | on a placed plant: chooses it as the row source | draws the row from the source along the drag (slop 4 px); plants at the spacing interval | nothing | 45° steps against the screen axes (from 1; before: world axes). Before 2 Shift also turns snapping off | no snapping while held (from 2) | none |
+| Plant a row (W) | on a placed plant: chooses it as the row source | draws the row from the source along the drag (4 px, measured by the tool); plants at the spacing interval | nothing | 45° steps against the screen axes (from 1; before: world axes). Before 2 Shift also turns snapping off | no snapping while held (from 2) | none |
 | Object stamp (K) | first click on a plant, zone, note or group copies it (the pick); later clicks place the pick, level to the screen at the current bearing (from 1) | nothing more than the click | places twice | none | none | none |
 | Saved object stamp (no key) | places the saved stamp, level to the screen (from 1), then returns to Select (today); a drop from Favorites places it the same way (from 1) | nothing more | places once; the second press reaches Select (today) | none | none | none |
 | Text (T) | places a note and opens text entry; a note created on a rotated map is level to the screen (from 1) | nothing more | nothing more | none | none | none |
