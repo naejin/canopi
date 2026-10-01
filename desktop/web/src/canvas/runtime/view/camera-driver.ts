@@ -61,7 +61,7 @@ export interface CameraDriverDeps {
   readonly policy: () => NavigationPolicy
 }
 
-export interface CameraDriverFailure { readonly reason: 'map-lost' | 'agreement' | 'map-error'; readonly message: string }
+export interface CameraDriverFailure { readonly reason: 'map-error'; readonly message: string }
 
 /**
  * Owns the runtime's one camera across attach, detach and failure; replaces CameraController's detached mode.

@@ -174,7 +174,6 @@ export function createViewReadSurface(frames: ViewFrameSource, plane: () => Sess
       if (current.pixelsPerMetre >= scaleBounds.max) return 'max'
       return null
     }),
-    moving: computed(() => frames.viewFrame.value.moving),
     designPin: coarse(() => designPin(frames.viewFrame.value), samePoint),
     settledCamera: coarse(() => frames.settledViewFrame.value.view.camera, sameCamera),
     captureView() {
