@@ -8,6 +8,7 @@ import type { SessionPlane } from '../../session-plane'
 import { normaliseBearing } from './navigation-policy'
 import type { ViewReadSurface } from './read-surface'
 import type {
+  DriverFrameSource,
   FramePhase,
   FrameSourceDeps,
   GeoBounds,
@@ -97,6 +98,60 @@ export function createViewFrameSource(initial: ViewFrame, deps: FrameSourceDeps)
       deferred.length = 0
       listeners.tools = []
       listeners.overlays = []
+    },
+  }
+}
+
+export interface DriverFramePublisher extends DriverFrameSource {
+  /** True while publish runs, listeners included: a move made then is queued. */
+  readonly dispatching: boolean
+  /** Sets viewFrame and runs the listeners synchronously. A frame published while listeners run is dispatched after them, in order. */
+  publish(frame: ViewFrame): void
+  /** Later publishes are ignored. */
+  dispose(): void
+}
+
+/** A driver's own frame stream (headless-driver.ts, maplibre/camera-driver.ts): one unphased listener list, no settle timer. */
+export function createDriverFrameSource(initial: ViewFrame): DriverFramePublisher {
+  const viewFrame = signal(initial)
+  let listeners: FrameListener[] = []
+  let dispatching = false
+  let disposed = false
+  const deferred: ViewFrame[] = []
+
+  return {
+    viewFrame,
+    get dispatching() {
+      return dispatching
+    },
+    onViewFrame(listener) {
+      const entry: FrameListener = { run: listener }
+      listeners = [...listeners, entry]
+      return () => {
+        listeners = listeners.filter((candidate) => candidate !== entry)
+      }
+    },
+    publish(frame) {
+      if (disposed) return
+      if (dispatching) {
+        deferred.push(frame)
+        return
+      }
+      dispatching = true
+      try {
+        for (let next: ViewFrame | undefined = frame; next && !disposed; next = deferred.shift()) {
+          viewFrame.value = next
+          for (const listener of listeners) listener.run(next)
+        }
+      } finally {
+        dispatching = false
+        deferred.length = 0
+      }
+    },
+    dispose() {
+      disposed = true
+      deferred.length = 0
+      listeners = []
     },
   }
 }

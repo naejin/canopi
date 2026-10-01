@@ -15,7 +15,7 @@ import {
   rotateCameraAround,
   zoomCameraAround,
 } from '../canvas/runtime/view/camera-math'
-import { createViewFrameSource } from '../canvas/runtime/view/frame-source'
+import { createDriverFrameSource } from '../canvas/runtime/view/frame-source'
 import {
   constrainCamera,
   normaliseBearing,
@@ -24,7 +24,6 @@ import {
   zoomFloorForArc,
 } from '../canvas/runtime/view/navigation-policy'
 import type {
-  FrameSourceDeps,
   GeoPoint,
   ScreenInsets,
   ScreenPoint,
@@ -78,8 +77,7 @@ interface Flight {
 /**
  * `createMapLibreCameraDriver(map, plane, deps)` (spec §1.1 Attachment). A map without getCenter, getZoom or getBearing,
  * or one whose read-back pitch is not 0, fails the driver with 'map-error'; its host then detaches it. The driver resizes its map to
- * the container once, starts at the map canvas' CSS size, and changes it only through setScreen. Its frames settle on `deps.timers`,
- * else on the window's, adapted to the frame source's shape.
+ * the container once, starts at the map canvas' CSS size, and changes it only through setScreen.
  */
 export function createMapLibreCameraDriver(
   map: MapLibreCameraDriverMap,
@@ -130,10 +128,7 @@ export function createMapLibreCameraDriver(
   }
   // MapLibre applies the guard as soon as it is installed, so the first frame is read after it.
   let published = frameState((guardInstalled ? readCamera() : attached) ?? placeholderCamera())
-  const frames = createViewFrameSource(buildFrame(published), {
-    clock: deps.clock,
-    timers: deps.timers ?? windowTimers(deps.clock),
-  })
+  const frames = createDriverFrameSource(buildFrame(published))
 
   const onMove = () => {
     if (ownCalls > 0 || !live()) return
@@ -562,14 +557,6 @@ function finiteSize(value: number | undefined): number {
 
 function finitePoint(point: ScreenPoint): boolean {
   return Number.isFinite(point.x) && Number.isFinite(point.y)
-}
-
-/** The window's timers in the frame source's shape: a due time on the deps' clock becomes a delay. */
-function windowTimers(clock: () => number): FrameSourceDeps['timers'] {
-  return {
-    set: (atMs, run) => window.setTimeout(run, Math.max(0, atMs - clock())),
-    clear: (id) => window.clearTimeout(id),
-  }
 }
 
 function messageOf(error: unknown): string {

@@ -117,6 +117,15 @@ export interface ViewFrameSource {
   onViewFrame(phase: FramePhase, listener: (frame: ViewFrame) => void): () => void
 }
 
+/**
+ * A driver's own frames: nobody reads a driver's settled frame or its overlays phase (only the host's own frame source, which
+ * relays 'tools' and keeps its own settle, is read for either), so a driver publishes one unphased listener list and no settle.
+ */
+export interface DriverFrameSource {
+  readonly viewFrame: ReadonlySignal<ViewFrame>
+  onViewFrame(listener: (frame: ViewFrame) => void): () => void
+}
+
 /** Injected time for the frame source (P4: view/ names no timer or clock itself). */
 export interface FrameSourceDeps {
   readonly clock: () => number

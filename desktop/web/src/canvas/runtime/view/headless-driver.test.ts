@@ -16,7 +16,7 @@ const SCREEN_POINTS = [{ x: 0, y: 0 }, { x: 140, y: 110 }, { x: 399.5, y: 3 }, {
 function driverOf(view: TestView): { driver: CameraDriver; published: ViewFrame[] } {
   const driver = view.host.current()
   const published: ViewFrame[] = []
-  driver.frames.onViewFrame('overlays', (frame) => published.push(frame))
+  driver.frames.onViewFrame((frame) => published.push(frame))
   return { driver, published }
 }
 
