@@ -21,13 +21,13 @@ function sourceUrl(path: string): URL {
   return new URL(path, import.meta.url)
 }
 
-/** The split Scene Interaction suites and their shared setup, read as one source. */
+/** The canvas interaction end-to-end suites and their shared setup, read as one source. */
 function sceneInteractionSuitesSource(): string {
   const suites = fsWithDirectoryRead.readdirSync(sourceUrl('./'), { withFileTypes: true })
-    .filter((entry) => entry.isFile() && /^scene-interaction\.[^.]+\.test\.ts$/.test(entry.name))
+    .filter((entry) => entry.isFile() && /^canvas-interaction-e2e\.[^.]+\.test\.ts$/.test(entry.name))
     .map((entry) => entry.name)
     .sort()
-  return [...suites, 'support/scene-interaction-setup.ts'].map(readSource).join('\n')
+  return [...suites, 'support/canvas-interaction-setup.ts'].map(readSource).join('\n')
 }
 
 function importSpecifiers(source: string): string[] {

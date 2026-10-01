@@ -5,11 +5,11 @@ import {
   createInteractionDeps,
   makePlant,
   plantTarget,
-} from '../../__tests__/support/scene-interaction-setup'
+} from '../../__tests__/support/canvas-interaction-setup'
 import {
   createSceneInteractionEventHarness,
   type SceneInteractionEventHarness,
-} from '../../__tests__/support/scene-interaction-events'
+} from '../../__tests__/support/canvas-interaction-events'
 import { createTestView } from '../../__tests__/support/test-view'
 import {
   clearPlantStampSource,

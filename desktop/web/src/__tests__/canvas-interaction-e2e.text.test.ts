@@ -1,15 +1,15 @@
-// SceneInteractionSession tests, split by the first tool a test arms (canvas v2 plan §4, Seams):
+// The canvas interaction end to end through the session, split by the first tool a test arms (canvas v2 plan §4):
 // tests that arm Text, and the text note editor describe. Text runs on the ToolHost (tools/text-note.ts, whose own tests
 // drive it through the ToolHarness); these stay end to end, and the note field is the host's text entry
 // (chrome/text-entry-host.ts).
-// Shared fakes, helpers and fixture: support/scene-interaction-setup.ts.
+// Shared fakes, helpers and fixture: support/canvas-interaction-setup.ts.
 import { describe, expect, it, vi } from 'vitest'
 import { t } from '../i18n'
 import { CameraController } from '../canvas/runtime/camera'
 import { SceneStore } from '../canvas/runtime/scene'
 import { SceneHistory } from '../canvas/runtime/scene-history'
 import { SceneRuntimeEditCoordinator } from '../canvas/runtime/scene-runtime/transactions'
-import type { SceneInteractionEventHarness } from './support/scene-interaction-events'
+import type { SceneInteractionEventHarness } from './support/canvas-interaction-events'
 import {
   createInteractionDeps,
   annotationTarget,
@@ -17,7 +17,7 @@ import {
   captureWindowErrors,
   makeTextAnnotation,
   installSceneInteractionFixture,
-} from './support/scene-interaction-setup'
+} from './support/canvas-interaction-setup'
 
 describe('SceneInteractionSession', () => {
   let container: HTMLDivElement

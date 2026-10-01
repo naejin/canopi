@@ -1,7 +1,7 @@
-// SceneInteractionSession tests, split by the first tool a test arms (canvas v2 plan §4, Seams):
+// The canvas interaction end to end through the session, split by the first tool a test arms (canvas v2 plan §4):
 // tests that arm no tool and drive keys, and the keyboard access, Esc chain and
 // arrow-key nudge describes.
-// Shared fakes, helpers and fixture: support/scene-interaction-setup.ts.
+// Shared fakes, helpers and fixture: support/canvas-interaction-setup.ts.
 import { describe, expect, it, vi } from 'vitest'
 import { t } from '../i18n'
 import { CameraController } from '../canvas/runtime/camera'
@@ -11,7 +11,7 @@ import type {
   SceneInteractionSessionDeps,
 } from '../canvas/runtime/interaction-session'
 import { createRecordingRenderer } from './support/recording-renderer'
-import type { SceneInteractionEventHarness } from './support/scene-interaction-events'
+import type { SceneInteractionEventHarness } from './support/canvas-interaction-events'
 import {
   contextMenuHost,
   createInteractionDeps,
@@ -24,7 +24,7 @@ import {
   getDesignObjectSelectionFromStore,
   installSceneInteractionFixture,
   rotationHandle,
-} from './support/scene-interaction-setup'
+} from './support/canvas-interaction-setup'
 
 describe('SceneInteractionSession', () => {
   let container: HTMLDivElement

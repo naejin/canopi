@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { captureWindowErrors } from '../../../__tests__/support/scene-interaction-setup'
+import { captureWindowErrors } from '../../../__tests__/support/canvas-interaction-setup'
 import {
   createSceneInteractionEventHarness,
   type SceneInteractionEventHarness,
-} from '../../../__tests__/support/scene-interaction-events'
+} from '../../../__tests__/support/canvas-interaction-events'
 import { writePlantStampDragData } from '../../plant-stamp-source'
 import type { DomInputSourceDeps } from '../interaction-ports'
 import { LEGACY_BINDINGS, type Bindings } from './bindings'

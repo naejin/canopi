@@ -73,7 +73,7 @@ import type {
 } from './app-adapter'
 import { getCommonNames } from '../../ipc/species'
 import { t } from '../../i18n'
-import { createSceneInteractionEventHarness } from '../../__tests__/support/scene-interaction-events'
+import { createSceneInteractionEventHarness } from '../../__tests__/support/canvas-interaction-events'
 import { CameraController } from './camera'
 
 // Fixtures are authored in metres around the equator, where Mercator scale is

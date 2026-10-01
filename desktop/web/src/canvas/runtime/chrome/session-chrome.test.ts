@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { stubTool, useStubTools } from '../../../__tests__/support/tool-harness'
-import { createInteractionDeps, makePlant } from '../../../__tests__/support/scene-interaction-setup'
+import { createInteractionDeps, makePlant } from '../../../__tests__/support/canvas-interaction-setup'
 import {
   createSceneInteractionEventHarness,
   type SceneInteractionEventHarness,
-} from '../../../__tests__/support/scene-interaction-events'
+} from '../../../__tests__/support/canvas-interaction-events'
 import { createTestView } from '../../../__tests__/support/test-view'
 import { setCanvasTool } from '../../session-state'
 import type { CanvasFocusPort } from '../app-adapter'

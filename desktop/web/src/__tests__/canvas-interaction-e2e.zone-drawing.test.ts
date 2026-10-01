@@ -1,6 +1,6 @@
-// SceneInteractionSession tests, split by the first tool a test arms (canvas v2 plan §4, Seams):
+// The canvas interaction end to end through the session, split by the first tool a test arms (canvas v2 plan §4):
 // tests that arm Polygon, Rectangle, Ellipse, Line or Measure.
-// Shared fakes, helpers and fixture: support/scene-interaction-setup.ts. The session draws its drafts into a recording
+// Shared fakes, helpers and fixture: support/canvas-interaction-setup.ts. The session draws its drafts into a recording
 // renderer (the draft sink scene-runtime.ts passes); the tools' own behaviour is tested in canvas/runtime/tools/*.test.ts.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { selectPlantStampSource } from '../canvas/plant-stamp-source'
@@ -20,7 +20,7 @@ import {
 } from '../canvas/runtime/scene-runtime/transactions'
 import type { DraftShape } from '../canvas/runtime/tools/draft'
 import { createRecordingRenderer, type RecordingRenderer } from './support/recording-renderer'
-import type { SceneInteractionEventHarness } from './support/scene-interaction-events'
+import type { SceneInteractionEventHarness } from './support/canvas-interaction-events'
 import {
   storedGeo,
   contextMenuCommand,
@@ -32,7 +32,7 @@ import {
   captureWindowErrors,
   makePlant,
   installSceneInteractionFixture,
-} from './support/scene-interaction-setup'
+} from './support/canvas-interaction-setup'
 
 describe('SceneInteractionSession', () => {
   let container: HTMLDivElement
