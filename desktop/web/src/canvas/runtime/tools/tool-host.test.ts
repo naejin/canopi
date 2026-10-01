@@ -1186,6 +1186,17 @@ describe('ToolHost', () => {
       expect(h.host.hasLiveGesture()).toBe(false)
       expect(h.host.activeToolDragSlopPx()).toBeNull()
     })
+
+    it('entering overview cancels the tool\'s transient with the overview reason', () => {
+      const stamp = stubTool('object-stamp')
+      useStubTools(stamp)
+      const h = harness({ tool: 'object-stamp' })
+
+      h.view.setViewport(OVERVIEW)
+      h.advance(0)
+      expect(stamp.calls).toContain('cancelTransient:overview')
+      expect(stamp.calls).not.toContain('cancelTransient:tool-change')
+    })
   })
 
   describe('registered tools against today\'s session (0B-3 host rulings)', () => {

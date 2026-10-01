@@ -299,6 +299,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       effects,
       settings: deps.settings,
       snap: (point) => snap(point, false),
+      now: () => deps.timers.clock(),
       translate: deps.translate,
     }
   }
@@ -865,7 +866,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (!activeTool) return
     runCanvasRuntimeCleanups([
       () => closeTextEntry(),
-      () => cancelTransientInteraction('tool-change'),
+      () => cancelTransientInteraction('overview'),
       () => deps.menu.close(),
     ], 'Tool host overview transition failed')
   }
