@@ -515,6 +515,55 @@ describe('ToolHost', () => {
       expect(h.record.focus.at(-1)).toBe('map:tool-requested')
     })
 
+    it('under Text, the click whose raw press finds the note entry open commits it and reaches no tool', () => {
+      const text: StubTool = stubTool('text', {
+        gesture: (g) => {
+          if (g.kind === 'press') {
+            text.ctx().effects.requestTextEntry(
+              { anchor: g.point.world, rotationDeg: 0, initialText: 'Compost', placeholderKey: 'canvas.note', mode: 'create' },
+              () => 'close',
+            )
+          }
+          return 'pass'
+        },
+      })
+      const select: StubTool = stubTool('select', {
+        command: (c) => {
+          if (c.kind !== 'edit-text') return 'pass'
+          select.ctx().effects.requestTextEntry(
+            { anchor: { x: 20, y: 20 }, rotationDeg: 0, initialText: 'Old', placeholderKey: 'canvas.note', mode: 'edit' },
+            () => 'close',
+          )
+          return 'handled'
+        },
+      })
+      useStubTools(text, select)
+      const h = harness({ tool: 'text' })
+
+      h.click({ x: 40, y: 40 })
+      const heard = text.gestures.length
+      // The press's focus move commits the entry on its blur, and the click places nothing (spec §3.2, as today).
+      expect(h.click({ x: 90, y: 90 })).toEqual({})
+      expect(h.record.focus.at(-1)).toBe('map:text-entry-closed')
+      expect(h.chrome.textEntry).toBeNull()
+      expect(text.gestures).toHaveLength(heard)
+      // The next click is the tool's again, and so is one after a middle press committed the entry.
+      h.click({ x: 120, y: 120 })
+      expect(text.count('press')).toBe(2)
+      h.host.rawPress('middle', { kind: 'surface' })
+      expect(h.chrome.textEntry).toBeNull()
+      h.click({ x: 150, y: 150 })
+      expect(text.count('press')).toBe(3)
+
+      // Select's in-place editor commits on the press too, and the press goes on to Select, as today.
+      h.arm('select')
+      h.host.command({ kind: 'edit-text' })
+      expect(h.chrome.textEntry?.request.mode).toBe('edit')
+      h.click({ x: 200, y: 200 })
+      expect(h.chrome.textEntry).toBeNull()
+      expect(select.count('press')).toBe(1)
+    })
+
     it('the text entry\'s own Esc reaches the tool through onCancel, and what the tool publishes follows at once', () => {
       const cancels: number[] = []
       const text: StubTool = stubTool('text', {

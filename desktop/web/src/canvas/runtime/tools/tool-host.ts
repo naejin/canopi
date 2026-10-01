@@ -151,6 +151,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   let live: LiveGesture | null = null
   let lastHover: StillPointer | null = null
   let pendingCancellation = false
+  /** The raw press found Text's note entry open: its focus move committed the note, and the press places nothing. */
+  let pressCommitsNote = false
   /** A panel drag passed over the map: its drop preview replaces the tool's draft until the pointer next moves over the map
    *  (today's one preview element, which a dragover took over and a pointermove gave back). */
   let draftHiddenForDrop = false
@@ -565,11 +567,13 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
    * any button commits the nudge series. An admitted primary or middle press outside the text entry and the Unlock
    * affordance, with no live press from another pointer and no pending cancellation, also closes the menu and moves focus
    * to the map, so an open text entry commits on its blur before the press reaches the tool; a click inside the entry keeps
-   * it open. A press on the live press's own pointer (its up was lost) counts, as today's. The host knows only its own live
-   * press: a pan lives in the recogniser, which ignores a second pointer anyway.
+   * it open. Under Text the primary press that so commits the note places nothing (spec §3.2): Text never hears it. A press
+   * on the live press's own pointer (its up was lost) counts, as today's. The host knows only its own live press: a pan
+   * lives in the recogniser, which ignores a second pointer anyway.
    */
   function rawPress(button: 'primary' | 'secondary' | 'middle', target: TargetClass, pointerId?: number): void {
     if (disposed) return
+    pressCommitsNote = false
     endNudgeSeries(true)
     // A bridged tool's presses are the bridge's.
     if (!activeTool || button === 'secondary' || pendingCancellation) return
@@ -578,12 +582,16 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     // Admission without resuming a pending edit: the press that follows resumes it, once, as today's one admission did.
     deps.admission.runWhenSettled(() => {
       deps.menu.close()
+      // Today's Text took the click that found its note field open to commit the note, and placed nothing (spec §3.2).
+      pressCommitsNote = button === 'primary' && currentId === 'text' && deps.chrome.isTextEntryOpen()
       focusMap()
       return true
     }, false)
   }
 
   function press(g: Extract<Gesture, { kind: 'press' }>): GestureOutcome {
+    const commitsNote = pressCommitsNote
+    pressCommitsNote = false
     // Today's ruler drag listened beside the map: a pending cancellation never fenced its press.
     if (g.target.kind !== 'ruler' && retryPendingCancellation()) return REFUSED_PRESS
     if (!activeTool) return NOTHING
@@ -599,7 +607,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (frame().mode === 'overview') return NOTHING
     let claimed = false
     const admitted = deps.admission.runWhenSettled(() => {
-      claimed = pressWhenSettled(g)
+      claimed = pressWhenSettled(g, commitsNote)
       return true
     }, false, { resumePending: true })
     if (!admitted) return REFUSED_PRESS
@@ -608,8 +616,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   /** Today's _pointerDownWhenSettled, in order: the press's capture, handles, the probe, the tool. Focus moved at the raw
    *  press (rawPress), so an open text entry has committed on its blur. A capture lost while it is taken (a synchronous
-   *  lostpointercapture) ended the press: nothing else happens, as today's check after capture. */
-  function pressWhenSettled(g: Extract<Gesture, { kind: 'press' }>): boolean {
+   *  lostpointercapture) ended the press: nothing else happens, as today's check after capture. A press that committed
+   *  Text's note (`commitsNote`) ends where today's Text adapter took it: the tool hears none of it, nor its drag or release. */
+  function pressWhenSettled(g: Extract<Gesture, { kind: 'press' }>, commitsNote: boolean): boolean {
     const tool = activeTool
     if (!tool) return false
     if (!deps.capturePress(g.id)) return true
@@ -627,6 +636,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     // Inspection owns the plain primary press, after handles and the pan check and before the tool; a Pan-tool press
     // never samples (spec §3.8, fixture J10).
     if (currentId !== 'hand' && deps.inspect?.(point.world)) return true
+    if (commitsNote) return false
     const hit = hitAt(point.world)
     live = liveGesture(g, 'tool', point, hit)
     callTool(() => tool.gesture({ kind: 'press', point, hit, clickCount: g.clickCount }))

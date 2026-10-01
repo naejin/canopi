@@ -142,12 +142,13 @@ describe('the session\'s chrome', () => {
     expect(document.activeElement).toBe(entry)
     entry.value = 'Pond edge'
 
-    // The press moves focus to the map with the entry's own reason, and the entry commits on its blur before the tool hears it.
+    // The press moves focus to the map with the entry's own reason, and the entry commits on its blur; under Text that
+    // click places nothing (spec §3.2), so the tool never hears it.
     events.pointerDown({ x: 200, y: 200 })
     expect(focus.focusMap).toHaveBeenCalledWith('text-entry-closed')
     expect(submitted).toEqual(['Pond edge'])
     expect(container.querySelector('textarea')).toBeNull()
-    expect(text.count('press')).toBe(2)
+    expect(text.count('press')).toBe(1)
   })
 
   it('Esc in a registered tool\'s text entry closes it and tells the tool through onCancel', () => {
