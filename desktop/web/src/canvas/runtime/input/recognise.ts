@@ -235,14 +235,7 @@ function move(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void 
 
 function up(step: Step, input: RawOf<'up'>): void {
   const session = step.state.sessions.get(input.id)
-  if (!session) {
-    if (step.state.sessions.size > 0) return
-    // Legacy overview swallows every pointerup with no live session, anywhere in the app (0B until phase F).
-    if (step.state.context.mode === 'overview') {
-      step.effects.push({ kind: 'prevent-default' }, { kind: 'stop-propagation' })
-    }
-    return
-  }
+  if (!session) return
   dropSession(step, session)
   if (session.mode === 'pan') {
     if (session.navigation) step.gestures.push(panEndOf(session))

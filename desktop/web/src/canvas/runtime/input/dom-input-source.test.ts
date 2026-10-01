@@ -8,9 +8,12 @@ import { writePlantStampDragData } from '../../plant-stamp-source'
 import type { DomInputSourceDeps } from '../interaction-ports'
 import { LEGACY_BINDINGS, type Bindings } from './bindings'
 import { createDomInputSource, outcomeEffects } from './dom-input-source'
-import type { RawInput } from './raw-input'
+import type { RawInput, RecogniserConfig } from './raw-input'
+import { initialRecogniserState, recognise } from './recognise'
+import { DEFAULT_THRESHOLDS } from './thresholds'
 
 const PLATFORM = { os: 'linux', engine: 'webkitgtk', gestureEvents: false } as const
+const RECOGNISER_CONFIG: RecogniserConfig = { platform: PLATFORM, bindings: LEGACY_BINDINGS, thresholds: DEFAULT_THRESHOLDS }
 
 let host: HTMLDivElement
 let events: SceneInteractionEventHarness
@@ -449,6 +452,34 @@ describe('createDomInputSource', () => {
     expect(errors).toEqual([failure, failure, failure, failure])
     expect(handled.map((event) => event.defaultPrevented)).toEqual([true, true, true, true])
     expect(downstream).not.toHaveBeenCalled()
+  })
+
+  it('an overview pointerup elsewhere still reaches the page', () => {
+    let state = recognise(
+      initialRecogniserState(),
+      { kind: 'configure', t: 0, context: { tool: 'select', mode: 'overview', pointingDevice: 'mouse' } },
+      RECOGNISER_CONFIG,
+    ).state
+    const source = createDomInputSource(deps())
+    const dispose = source.attach((input) => {
+      const result = recognise(state, input, RECOGNISER_CONFIG)
+      state = result.state
+      source.apply(result.effects)
+    })
+    const downstream = vi.fn()
+    window.addEventListener('pointerup', downstream)
+
+    let handled: PointerEvent | undefined
+    try {
+      handled = new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerId: 7, clientX: 999, clientY: 999 })
+      document.body.dispatchEvent(handled)
+    } finally {
+      window.removeEventListener('pointerup', downstream)
+      dispose()
+    }
+
+    expect(handled.defaultPrevented).toBe(false)
+    expect(downstream).toHaveBeenCalledTimes(1)
   })
 
   it('pointerleave becomes leave and focusout becomes focus-out', () => {
