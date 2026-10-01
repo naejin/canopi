@@ -788,8 +788,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       callTool(() => tool.gesture({ kind: 'handle-drag', phase, handle: gesture.handle!, point, start }))
     } else {
       const reply = callTool(() => tool.gesture({ kind, point, start, startHit: gesture.startHit }))
-      // A move the tool passes is none of its press's (Plant a row's missed press, a stamp with nothing held): it is a
-      // hover with the button down, as today's press that cleared its gesture left the next moves to _updateHover.
+      // A move the tool passes is none of its press's (Plant a row's missed press, a stamp with nothing held, a polygon
+      // press that added no corner): it is a hover with the button down, as today's press that cleared its gesture left
+      // the next moves to _updateHover. A tool that keeps its press answers 'handled' (ToolReply).
       if (kind !== 'drag-end' && reply === 'pass') passiveHoverAt(gesture.lastScreen)
     }
   }

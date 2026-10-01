@@ -130,7 +130,11 @@ export type ToolCommand =
   | { readonly kind: 'spacing-commit'; readonly via: 'enter' | 'blur' }       // keeps a valid spacing; Enter returns focus to the map, blur moves none
   | { readonly kind: 'spacing-cancel' }                                       // Esc in the field: drops the source, focus to the map
 
-/** A 'handled' hover clears and skips the host's passive hover (restyle, tooltip, Unlock affordance); 'pass' lets it run. */
+/**
+ * A 'handled' hover clears and skips the host's passive hover (restyle, tooltip, Unlock affordance); 'pass' lets it run.
+ * A drag-start or drag-move is a hover with the button down unless the tool answers 'handled': a tool that keeps its press
+ * to the release answers 'handled' (Select, Text, Place plants), one whose press let go of it answers 'pass'.
+ */
 export type ToolReply = 'handled' | 'pass'
 
 /** Read-only view queries: everything a tool may know about the camera. */
