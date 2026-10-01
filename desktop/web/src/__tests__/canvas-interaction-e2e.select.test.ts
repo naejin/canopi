@@ -8,7 +8,9 @@ import { writeSavedObjectStampDragData } from '../canvas/saved-object-stamp-sour
 import { selectedObjectIds } from '../canvas/session-state'
 import { snapToGridEnabled } from '../app/canvas-settings/signals'
 import { CameraController } from '../canvas/runtime/camera'
+import { createMapLibreCameraDriver } from '../maplibre/camera-driver'
 import { MapLibreWorkspaceCameraOwner } from '../maplibre/workspace-camera'
+import { createSessionPlane } from '../canvas/session-plane'
 import { SceneStore, type ScenePoint } from '../canvas/runtime/scene'
 import {
   createSceneInteractionSession,
@@ -424,10 +426,10 @@ describe('SceneInteractionSession', () => {
     const attachedCamera = new MapLibreWorkspaceCameraOwner()
     attachedCamera.initialize({ width: 400, height: 300 })
     const map = new AttachedInteractionMap()
-    expect(attachedCamera.attach({
-      map,
-      readOrigin: () => ({ lat: 48.8566, lon: 2.3522 }),
-    })).toBe(true)
+    const plane = createSessionPlane({ lat: 48.8566, lon: 2.3522 })
+    const driver = createMapLibreCameraDriver(map, plane, attachedCamera.host.driverDeps)
+    expect(driver.failure.peek()).toBeNull()
+    attachedCamera.host.attach(driver)
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
@@ -462,7 +464,7 @@ describe('SceneInteractionSession', () => {
     expect(attachedCamera.viewport).toEqual(viewportBeforeToolDrag)
     expect(map.jumpTo).toHaveBeenCalledTimes(mapCallsBeforeToolDrag)
 
-    attachedCamera.detach()
+    attachedCamera.host.detach()
     const mapCallsBeforeDetachPan = map.jumpTo.mock.calls.length
     const viewportBeforeDetachPan = attachedCamera.viewport
     events.pointerDown({ x: 200, y: 150 }, { button: 1, pointerId: 28 })
