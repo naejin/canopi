@@ -1335,7 +1335,7 @@ export interface CanvasTool {
   hasTransient(): boolean
   /** Esc hint for the tool card, read by describeEscape. */
   escapeHint(): 'drop-transient' | 'leave-tool' | 'clear-selection' | null
-  cancelTransient(reason: 'escape' | 'tool-change' | 'document-replaced' | 'navigate' | 'overview'): void   // 'overview': the map entered overview; drop picks and drafts as today's overview reset did
+  cancelTransient(reason: 'escape' | 'tool-change' | 'document-replaced' | 'navigate' | 'overview'): void   // 'overview': the map entered overview; drop what today's overview reset dropped (a stamp keeps its pick and hides only its ghost)
   /** Transient history (polygon corners), read by ToolHost.transientHistory; the tool acts on the undo-transient and redo-transient commands. */
   canUndoTransient?(): boolean
   canRedoTransient?(): boolean
