@@ -157,8 +157,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   let textEntryMode: TextEntryRequest['mode'] | null = null
   /** The raw press found a new note's entry open: its focus move committed the note, and the press places nothing. */
   let pressCommitsNote = false
-  /** A panel drag passed over the map: its drop preview replaces the tool's draft until the pointer next moves over the map
-   *  (today's one preview element, which a dragover took over and a pointermove gave back). */
+  /** A panel drag passed over the map: its drop preview replaces the tool's draft until the pointer next hovers or presses
+   *  over the map (today's one preview element, which a dragover took over and a pointermove gave back). */
   let draftHiddenForDrop = false
   let nudging = false
   let nudgeTimer: number | null = null
@@ -540,11 +540,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       const world = frame().view.screenToWorld(g.at)
       if (world && insideScreen(g.at, frame().view.screen)) publishPointer(world)
     }
-    if (draftHiddenForDrop) {
-      // The pointer is back over the map after a drag: the tool's draft shows again, as today's next pointermove redrew it.
-      draftHiddenForDrop = false
-      changed()
-    }
+    // The pointer is back over the map after a panel drag: the tool's draft shows again, as today's next pointermove redrew it.
+    showDraftAfterDrop()
     const tool = activeTool
     if (!tool) return NOTHING
     if (frame().mode === 'overview') {
@@ -555,6 +552,13 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     lastHover = insideScreen(g.at, frame().view.screen) ? { screen: g.at, mods: g.mods, pointer: g.pointer } : null
     deliverHover(tool, g.at, g.mods, g.pointer)
     return NOTHING
+  }
+
+  /** The tool's draft, hidden since a panel drag passed over the map, shows again. */
+  function showDraftAfterDrop(): void {
+    if (!draftHiddenForDrop) return
+    draftHiddenForDrop = false
+    changed()
   }
 
   function hoverEnd(): GestureOutcome {
@@ -597,6 +601,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   function press(g: Extract<Gesture, { kind: 'press' }>): GestureOutcome {
     const commitsNote = pressCommitsNote
     pressCommitsNote = false
+    // A pen or a finger reaches the map with no hover after a panel drag: its press shows the tool's draft again.
+    if (g.target.kind !== 'ruler') showDraftAfterDrop()
     // Today's ruler drag listened beside the map: a pending cancellation never fenced its press.
     if (g.target.kind !== 'ruler' && retryPendingCancellation()) return REFUSED_PRESS
     if (!activeTool) return NOTHING
@@ -790,7 +796,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   /**
    * Drops run through the legacy bridge until the host's drop route lands (0B-4), which draws the drop preview. Any
    * dragover hides the tool's draft (a stamp's pick ghost), as today's dragover took over the one preview element the ghost
-   * shared; dragleave and drop leave it hidden, and the next hover over the map brings it back.
+   * shared; dragleave and drop leave it hidden, and the next hover or press over the map brings it back.
    */
   function drop(g: Extract<Gesture, { kind: 'drop' }>): GestureOutcome {
     if (g.phase !== 'over' || draftHiddenForDrop) return NOTHING

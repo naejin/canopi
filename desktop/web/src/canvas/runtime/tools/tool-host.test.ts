@@ -1764,6 +1764,29 @@ describe('ToolHost', () => {
       h.hover({ x: 80, y: 80 })
       expect(h.renderer.lastDraft()).toEqual(ghost)
     })
+
+    it('a press after a dragover shows the tool\'s draft again', () => {
+      const corners: DraftPresentation = {
+        shapes: [{ kind: 'circle-px', center: { x: 50, y: 50 }, radiusPx: 4, style: { token: 'draft', widthPx: 1 } }],
+      }
+      const polygon: StubTool = stubTool('polygon', {
+        gesture: (g) => {
+          if (g.kind === 'press') polygon.ctx().effects.setDraft(corners)
+          return 'handled'
+        },
+      })
+      useStubTools(polygon)
+      const h = harness({ tool: 'polygon' })
+      h.click({ x: 50, y: 50 }, { pointer: 'pen' })
+      expect(h.renderer.lastDraft()).toEqual(corners)
+
+      h.drop('over', { x: 60, y: 60 }, { kind: 'unknown' })
+      h.drop('leave')
+      expect(h.renderer.lastDraft()).toBeNull()
+      // A pen or a finger presses with no hover between: the press over the map shows the draft again, as a hover would.
+      h.press({ x: 70, y: 70 }, { pointer: 'pen' })
+      expect(h.renderer.lastDraft()).toEqual(corners)
+    })
   })
 
   describe('menus', () => {
