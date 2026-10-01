@@ -61,8 +61,6 @@ export interface ViewScreen { readonly width: number; readonly height: number; r
 
 /** Renderer and bulk-projection fast path. Null for non-planar projections (globe). */
 export interface PlanarProjection {
-  /** Row-major 3x3 homography, plane metres → CSS px (homogeneous), Float64. */
-  readonly matrix: Float64Array
   /** 2x3 affine in Pixi order [a, b, c, d, tx, ty]. Always set while pitchDeg is 0; null only for a pitched homography. */
   readonly affine: readonly [number, number, number, number, number, number] | null
 }
@@ -87,8 +85,6 @@ export interface ViewTransform {
   screenAxesInWorld(at?: WorldPoint): { readonly right: WorldVector; readonly down: WorldVector }
 
   visibleWorldQuad(insets?: ScreenInsets): WorldQuad
-  visibleWorldBounds(insets?: ScreenInsets): SceneBounds
-  screenRectToWorldQuad(a: ScreenPoint, b: ScreenPoint): WorldQuad | null
   /** Four projected corners, never two (rotation-handle anchor, menu anchor). */
   worldQuadToScreen(q: WorldQuad): readonly [ScreenPoint, ScreenPoint, ScreenPoint, ScreenPoint]
 

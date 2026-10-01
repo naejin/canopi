@@ -43,7 +43,6 @@ describe('view transform', () => {
           expect(view.screenToWorld(point)).toEqual({ x: (point.x - x) / scale, y: (point.y - y) / scale })
         }
         expect(view.planar?.affine).toEqual([scale, 0, 0, scale, x, y])
-        expect(Array.from(view.planar!.matrix)).toEqual([scale, 0, x, 0, scale, y, 0, 0, 1])
         expect(view.pixelsPerMetre).toBe(scale)
         expect(view.northUp).toBe(true)
         expect(view.screenAxesInWorld()).toEqual({ right: { x: 1, y: 0 }, down: { x: 0, y: 1 } })
@@ -114,22 +113,8 @@ describe('view transform', () => {
     expect(view.visibleWorldQuad({ top: 20, right: 100, bottom: 0, left: 40 })).toEqual([
       { x: 120, y: 60 }, { x: 550, y: 60 }, { x: 550, y: 450 }, { x: 120, y: 450 },
     ])
-    expect(view.visibleWorldBounds()).toEqual({ minX: 100, minY: 50, maxX: 600, maxY: 450 })
-    expect(view.screenRectToWorldQuad({ x: 400, y: 300 }, { x: 0, y: 100 })).toEqual([
-      { x: 100, y: 100 }, { x: 300, y: 100 }, { x: 300, y: 200 }, { x: 100, y: 200 },
-    ])
     const quad = view.visibleWorldQuad()
     expect(view.worldQuadToScreen(quad)).toEqual([{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 1000, y: 800 }, { x: 0, y: 800 }])
-
-    const turned = fromPlane({ x: -200, y: -100, scale: 2, bearingDeg: 30 }, plane)
-    const bounds = turned.visibleWorldBounds()
-    for (const corner of turned.visibleWorldQuad()) {
-      expect(corner.x).toBeGreaterThanOrEqual(bounds.minX)
-      expect(corner.x).toBeLessThanOrEqual(bounds.maxX)
-      expect(corner.y).toBeGreaterThanOrEqual(bounds.minY)
-      expect(corner.y).toBeLessThanOrEqual(bounds.maxY)
-    }
-    expect(bounds.maxX - bounds.minX).toBeCloseTo((1000 * Math.cos(Math.PI / 6) + 800 * Math.sin(Math.PI / 6)) / 2, 9)
   })
 
   it('reads the ground resolution at a point, not the plane scale', () => {

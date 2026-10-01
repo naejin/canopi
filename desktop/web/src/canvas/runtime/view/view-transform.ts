@@ -10,7 +10,6 @@ import { planarToViewCamera, viewCameraToPlanar } from './camera-math'
 import { angularDistanceToNorth, bearingCosSin } from './navigation-policy'
 import type {
   PlanarCamera,
-  SceneBounds,
   ScreenInsets,
   ScreenPoint,
   ViewCamera,
@@ -114,7 +113,6 @@ function similarityTransform(
     camera,
     screen,
     planar: Object.freeze({
-      matrix: Float64Array.of(a, c, tx, b, d, ty, 0, 0, 1),
       affine: Object.freeze([a, b, c, d, tx, ty] as const),
     }),
     worldToScreen,
@@ -139,24 +137,6 @@ function similarityTransform(
     },
     visibleWorldQuad(insets: ScreenInsets = NO_INSETS): WorldQuad {
       return screenCorners(insets)
-    },
-    visibleWorldBounds(insets: ScreenInsets = NO_INSETS): SceneBounds {
-      const quad = screenCorners(insets)
-      const xs = quad.map((corner) => corner.x)
-      const ys = quad.map((corner) => corner.y)
-      return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) }
-    },
-    screenRectToWorldQuad(from: ScreenPoint, to: ScreenPoint): WorldQuad {
-      const left = Math.min(from.x, to.x)
-      const right = Math.max(from.x, to.x)
-      const top = Math.min(from.y, to.y)
-      const bottom = Math.max(from.y, to.y)
-      return [
-        screenToWorld({ x: left, y: top }),
-        screenToWorld({ x: right, y: top }),
-        screenToWorld({ x: right, y: bottom }),
-        screenToWorld({ x: left, y: bottom }),
-      ]
     },
     worldQuadToScreen(q: WorldQuad): readonly [ScreenPoint, ScreenPoint, ScreenPoint, ScreenPoint] {
       return [worldToScreen(q[0]), worldToScreen(q[1]), worldToScreen(q[2]), worldToScreen(q[3])]
