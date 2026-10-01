@@ -613,8 +613,9 @@ export interface Bindings {
    *  the hover; the Unlock affordance keeps it under both. */
   readonly ownedHover: 'legacy' | 'end'
 }
-export const LEGACY_BINDINGS: Bindings      // phase 0's values; from F the one constant below is edited in place
 export const CURRENT_BINDINGS: Bindings     // the one constant; no ROTATION_BINDINGS, V2_BINDINGS or TOUCH_BINDINGS (audit 1.2)
+// LEGACY_BINDINGS (phase 0's values, `CURRENT_BINDINGS` points at it today) is folded into CURRENT_BINDINGS by F's first Input
+// commit, its importers re-pointed and the name tombstoned (P11); from F there is one bindings constant, no frozen LEGACY copy.
 // F1's gesture rows are a static list with three platform notes (Linux pinch, Mac Control-click, the pen button; §9.3), not generated
 // from the bindings (audit 1.7); GestureHelpRow and describeBindings are not written.
 ```
@@ -635,7 +636,7 @@ The current constant's values, by the phase that sets them (each phase rewrites 
 | `dragSlopPx` | 0 for mouse, pen and touch | same | same | same | touch 8 |
 | `ownedHover` | `legacy` | `end` (U6) | same | same | same |
 
-Primary slop compares `d >= slop && d > 0`, so under 0 any movement is a drag, as today; the tools keep today's own thresholds (band and handles more than 2 px, measured at release through `ToolView.screenDistance`). Secondary slop is 3 px wherever the secondary drag pans (MapLibre's `clickTolerance`). A tool may override the primary slop through `configure`, which the session sends with `ToolHost.activeToolDragSlopPx()` on every tool change; Plant a row keeps slop 0 and measures today's 4 px itself through `ToolView.screenDistance`, like the band and handles, so the moves inside it still preview the row. In phase 2 `'overview'` leaves `PanContext`; at the release close `LEGACY_BINDINGS` is deleted and tombstoned.
+Primary slop compares `d >= slop && d > 0`, so under 0 any movement is a drag, as today; the tools keep today's own thresholds (band and handles more than 2 px, measured at release through `ToolView.screenDistance`). Secondary slop is 3 px wherever the secondary drag pans (MapLibre's `clickTolerance`). A tool may override the primary slop through `configure`, which the session sends with `ToolHost.activeToolDragSlopPx()` on every tool change; Plant a row keeps slop 0 and measures today's 4 px itself through `ToolView.screenDistance`, like the band and handles, so the moves inside it still preview the row. In phase 2 `'overview'` leaves `PanContext`; `LEGACY_BINDINGS` is folded into `CURRENT_BINDINGS` and tombstoned in F's first Input commit; each LEGACY expectation is deleted or rewritten by the commit that changes its field, never kept to the release close.
 
 ```ts
 // canvas/runtime/input/thresholds.ts  (plain numbers; tests may pass others)
@@ -871,8 +872,8 @@ export interface ToolHostDeps {
      *  'text-entry-closed' focus reason on the next press); the host keeps no flag of its own. Esc in the entry stays the
      *  entry's own element handler, which calls the request's onCancel once the entry is gone. */
     isTextEntryOpen(): boolean
-    setTooltip(t: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null): void   // chrome/hover-tooltip.ts; from phase R
-    // the tooltip takes lines of text, a plant under the pointer winning over a layer readout (R2), so analysis readouts reuse it
+    setTooltip(t: { readonly at: ScreenPoint; readonly lines: readonly string[] } | null): void   // chrome/hover-tooltip.ts; this shape from phase R
+    // R2: the tooltip takes lines of text, a plant under the pointer winning over a layer readout, so analysis readouts reuse it
     /** chrome/locked-affordance.ts; its factory takes onUnlock, wired by interaction-session.ts. */
     setLockedAffordance(a: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null): void
   }
@@ -1695,7 +1696,7 @@ pub struct LastView {
 }
 ```
 
-Stored data: `.canopi` does not change (`SavedViewCamera.bearing` exists; writers normalise to [0, 360)). Settings gain `LastView.bearing` with a one-line default. PDF setups are not persisted, so Map orientation and the layout angle live in memory only; `PdfPrintArea` gains no angle (U3; plan §8 asks the user to confirm). `scroll_wheel` keeps its field and values; only its UI is relabelled.
+Stored data: `.canopi` does not change (`SavedViewCamera.bearing` exists; writers normalise to [0, 360)). Settings gain `LastView.bearing` with a one-line default. PDF setups are not persisted, so Map orientation and the layout angle live in memory only; `PdfPrintArea` gains no angle (U3; decided with the user, 2026-10-01). `scroll_wheel` keeps its field and values; only its UI is relabelled.
 
 ### 1.8 Module layout: new and rewritten
 
@@ -1801,7 +1802,8 @@ desktop/web/src/
 | `renderers/viewport-presentation.ts` | `renderers/label-admission.ts` | 0D2 |
 | `canvas/runtime/scene-chrome.ts` (grid and guides Canvas2D) | `renderers/world-layers.ts` | 1 |
 | `'overview'` in `primaryDragPansIn` | nothing | 2 |
-| `LEGACY_BINDINGS` and the `Bindings` fields that end with one value | the end values, hard-coded in the recogniser (no `ROTATION_BINDINGS`, `V2_BINDINGS` or `TOUCH_BINDINGS` is written: each phase edits the current constant in place) | release close |
+| `LEGACY_BINDINGS` | `CURRENT_BINDINGS` (the one constant; its importers re-pointed) | F |
+| The `Bindings` fields that end with one value | the end values, hard-coded in the recogniser (no `ROTATION_BINDINGS`, `V2_BINDINGS` or `TOUCH_BINDINGS` is written: each phase edits the current constant in place) | release close |
 | `settings.scrollWheel*` UI strings | `settings.pointingDevice*` | 2 |
 
 ## 2. Gesture vocabulary
@@ -1843,7 +1845,7 @@ Pinch and twist are sources, not kinds. Keys are not gestures: key-driven naviga
 
 ### 2.3 Modifier resolution (ToolHost)
 
-| Meaning | LEGACY and ROTATION | V2 and TOUCH |
+| Meaning | Phase 0 to 1 | From phase 2 |
 |---|---|---|
 | `additive` | Shift, Ctrl or Cmd (today) | Shift or mod (on Mac: Shift or Cmd; Ctrl+click is a right click) |
 | `subtractive` | never | Alt |
@@ -1956,7 +1958,7 @@ The Select tool card hint differs by setting (phase 2 copy in §9.3): Mouse "…
 
 Before phase 3 one touch is a primary pointer exactly as today (so it selects, draws or, in legacy overview and with the Pan tool, pans) and a second touch is ignored.
 
-| Input (phase 3, `TOUCH_BINDINGS`) | Every tool | Pan tool | Overview |
+| Input (from phase 3: the current constant's touch fields) | Every tool | Pan tool | Overview |
 |---|---|---|---|
 | One-finger tap | `tap` as the left-click column of §3.2 | nothing | selects a zone or note, or clears |
 | One-finger drag | `drag` as the left-drag column of §3.2 (8 px slop) | pans | band select |
@@ -1965,7 +1967,7 @@ Before phase 3 one touch is a primary pointer exactly as today (so it selects, d
 | Two-finger pan | pans by the centroid | same | same |
 | Two-finger pinch | zooms about the centroid | same | same |
 | Two-finger twist | turns the view after 25 px of arc, threshold subtracted; release within 7° of north snaps | same | same |
-| Held press (tools that act on `press`: Plant stamp places a plant, Polygon adds a corner) | under TOUCH the ToolHost holds a finger's `press` until the finger passes slop (then `press` and the drag), lifts (then `press` and `tap`), or the 500 ms long-press window ends still (then the menu, and the press is dropped); so a withdrawn press never reached the tool and nothing needs undoing | same | same |
+| Held press (tools that act on `press`: Plant stamp places a plant, Polygon adds a corner) | from phase 3 (`touch.gestures`) the ToolHost holds a finger's `press` until the finger passes slop (then `press` and the drag), lifts (then `press` and `tap`), or the 500 ms long-press window ends still (then the menu, and the press is dropped); so a withdrawn press never reached the tool and nothing needs undoing | same | same |
 | Second finger before the first passed slop | the held press is withdrawn (`cancel('multitouch')`) before the tool saw it; the two-finger gesture starts | same | same |
 | Second finger after a one-finger drag started | the drag is cancelled and its edit aborted; a polygon draft keeps its corners; the two-finger gesture starts | same | same |
 | One finger lifted from two | nothing resumes until every finger is up | same | same |
@@ -1973,7 +1975,7 @@ Before phase 3 one touch is a primary pointer exactly as today (so it selects, d
 | Handles | 44 px targets (`hitRadiusPx` 22) | — | — |
 | Touch on the text entry (`owned-text`: the note editor, a child of the map host) | no canvas session: a tap moves the caret, a long press selects text with the native callout, a drag scrolls or selects inside the entry; the 500 ms timer never runs there, so no canvas menu | same | — |
 
-Host CSS under `TOUCH_BINDINGS` only: `touch-action: none; -webkit-touch-callout: none; overscroll-behavior: none` on the map host, and `touch-action: auto; -webkit-touch-callout: default` on the text-entry host (the callout is inherited), both asserted by a DOM test.
+Host CSS only when `touch.hostTouchActionNone` (from phase 3): `touch-action: none; -webkit-touch-callout: none; overscroll-behavior: none` on the map host, and `touch-action: auto; -webkit-touch-callout: default` on the text-entry host (the callout is inherited), both asserted by a DOM test.
 
 ### 3.5 Pen
 
@@ -2095,7 +2097,7 @@ The tool card's "Esc …" line is rendered from `describeEscape()`. Phase 0 keep
 | Arrow-owning widgets (lists, sliders, tabs, menus) | Plain and Shift+arrows stay with the widget; N, Shift+N and other `command` keys act on the canvas unless the widget claims them with `data-owns-keys`. |
 | Inspection lens preview | Arrow-owning: arrows move the lens along the screen; mod+arrow moves farther (spec, matching the canvas; was Shift); Shift+arrows move by the plain step (from 1). Drag is screen-relative. |
 | World map (template and place picker) | Its own MapLibre map: north-up, left-drag pans, wheel zooms, no rotation, no compass; `boxZoom: false` from 2 (convention). Its keyboard handler keeps arrow pans and +/− zoom but `disableRotation()` stops Shift+arrows turning and tilting it (from F, INV-CAM-46); its container declares `data-owns-keys="arrows"`, so Shift+←/→/↑ never reach the workspace view from it (from 1, fixture H26). |
-| Inspecting a raster (Desktop LiDAR inspection) | A plain primary press (mouse left, pen tip, and a one-finger tap) anywhere on the map samples the point instead of reaching the tool, after handles and the pan check and before the tool (today, `scene-interaction.ts:609-614`; ToolHost `deps.inspect`, fixture J10). Shift, mod or Alt at the press still samples (today: the probe reads no modifier); the sampled press starts no drag, band or move. Space+drag and a Pan-tool drag pan (the pan check comes first), and a Pan-tool click does not sample (today); under TOUCH the probe runs when the held press resolves to a tap, never on a drag, a long press or a second finger. In overview the probe never runs (today: overview presses pan before 2; from 2 they select, convention). Right, middle and pen-barrel input, the canvas menu, wheel and every rotation input are unchanged; Esc layer 25 ends inspecting. |
+| Inspecting a raster (Desktop LiDAR inspection) | A plain primary press (mouse left, pen tip, and a one-finger tap) anywhere on the map samples the point instead of reaching the tool, after handles and the pan check and before the tool (today, `scene-interaction.ts:609-614`; ToolHost `deps.inspect`, fixture J10). Shift, mod or Alt at the press still samples (today: the probe reads no modifier); the sampled press starts no drag, band or move. Space+drag and a Pan-tool drag pan (the pan check comes first), and a Pan-tool click does not sample (today); from phase 3 (`touch.gestures`) a touch probe runs when the held press resolves to a tap, never on a drag, a long press or a second finger. In overview the probe never runs (today: overview presses pan before 2; from 2 they select, convention). Right, middle and pen-barrel input, the canvas menu, wheel and every rotation input are unchanged; Esc layer 25 ends inspecting. |
 | Compass, zoom group, attribution | `owned-chrome`: a press there never starts a canvas gesture; the attribution no longer starts a band (phase F). |
 
 PDF page editor, every phase unless marked (today: `PdfPageEditor.tsx:60` accepts only button 0; `:106-107` arrows):
@@ -2305,19 +2307,19 @@ B5 is not used.
 | Id | Sequence | Expect |
 |---|---|---|
 | E1 One-finger tap | touch down → up | `tap`; no hover left behind |
-| E2 One-finger drag | touch down → moves → up | TOUCH: primary drag (band or draw), never pan; host `touch-action: none` asserted by a DOM test |
+| E2 One-finger drag | touch down → moves → up | from phase 3: primary drag (band or draw), never pan; host `touch-action: none` asserted by a DOM test |
 | E3 Browser steals the touch | touch down → 2 moves → pointercancel | `cancel('pointercancel')`; no half band committed |
-| E4 Two-finger pan, zoom, turn | id1 down, id2 down, both move, id2 up, id1 up | TOUCH: id1 cancelled (`multitouch`) before any commit; `pan` by centroid, `zoom` by distance ratio, `rotate` after 25 px of arc; after id2 up the remaining finger does not resume |
-| E5 Second finger after a drag started | one-finger draw past slop, then id2 down | TOUCH: the draw is cancelled, not committed; a polygon draft keeps its corners |
-| E6 Long press on Android | touch down, hold 600 ms, contextmenu, up | TOUCH: exactly one `menu-request(long-press)` whichever arrives first; contextmenu prevented |
-| E7 Long press on iOS | touch down, hold 600 ms, up | TOUCH: `menu-request(long-press)` from the timer; no tap |
+| E4 Two-finger pan, zoom, turn | id1 down, id2 down, both move, id2 up, id1 up | from phase 3: id1 cancelled (`multitouch`) before any commit; `pan` by centroid, `zoom` by distance ratio, `rotate` after 25 px of arc; after id2 up the remaining finger does not resume |
+| E5 Second finger after a drag started | one-finger draw past slop, then id2 down | from phase 3: the draw is cancelled, not committed; a polygon draft keeps its corners |
+| E6 Long press on Android | touch down, hold 600 ms, contextmenu, up | from phase 3: exactly one `menu-request(long-press)` whichever arrives first; contextmenu prevented |
+| E7 Long press on iOS | touch down, hold 600 ms, up | from phase 3: `menu-request(long-press)` from the timer; no tap |
 | E8 Long press with movement | move past slop at 200 ms, hold, up | drag; no menu |
 | E9 Trackpad pinch with rotation drift | mac/webkit, ROTATION on: gesturestart → changes with scale 1.2, 1.5 and rotation ±4° → gestureend | `zoom` only; no `rotate` |
 | E10 Deliberate trackpad twist | mac/webkit: rotation 5°, 12°, 20° (WebKit `rotation` is clockwise-positive) | nothing at 5°; `rotate` starts at 12° with `totalDeltaDeg` −2°, then −10° (the ground follows the fingers: a clockwise twist lowers the bearing); snap on end if within 7° of north; defaults prevented |
 | E11 Touch under V2 behaves like today, except overview (a one-finger drag bands from 2, G7) | V2: one touch down → moves → up; a second touch meanwhile | primary drag as today; the second touch is ignored; no long press |
-| E13 Press-acting tools under a pinch | TOUCH, Plant stamp armed: id1 down, id2 down 40 ms later, both move; Polygon armed: same | no plant placed; no corner added; `pan`/`zoom` only |
-| E14 Press-acting tools under a long press | TOUCH, Plant stamp armed, then Polygon armed: touch down, hold 600 ms, up | the menu opens; no plant placed; no corner added |
-| E12 iOS gesture events alongside pointers | TOUCH, ios: id1, id2 down → gesturestart → gesturechange(1.5, 10°) → pointer moves → gestureend | one source of truth (the pointer recogniser); `gesture*` prevented, not counted twice |
+| E13 Press-acting tools under a pinch | from phase 3, Plant stamp armed: id1 down, id2 down 40 ms later, both move; Polygon armed: same | no plant placed; no corner added; `pan`/`zoom` only |
+| E14 Press-acting tools under a long press | from phase 3, Plant stamp armed, then Polygon armed: touch down, hold 600 ms, up | the menu opens; no plant placed; no corner added |
+| E12 iOS gesture events alongside pointers | from phase 3, ios: id1, id2 down → gesturestart → gesturechange(1.5, 10°) → pointer moves → gestureend | one source of truth (the pointer recogniser); `gesture*` prevented, not counted twice |
 
 ### 5.6 Wheel and trackpad
 
@@ -2355,7 +2357,7 @@ B5 is not used.
 | G5 Stale Space | Space down → hidden → down(0) | `visibilitychange` clears Space; primary drag. LEGACY: no `visibilitychange` listener, so only blur clears Space (today) |
 | G6 X11 autorepeat pairs | Space down, up, down in the same ms during a drag | pan continues (a keyup followed by keydown within 30 ms counts as repeat) |
 | G7 V2 overview left drag | V2, mode overview: down(0) → moves → up | `drag-start` (band), not `pan` |
-| G8 Pan tool under V2 | V2 and TOUCH, tool hand: pen tip drag; touch drag | `pan` (`primary-drag`) |
+| G8 Pan tool under V2 | V2 (touch from phase 3), tool hand: pen tip drag; touch drag | `pan` (`primary-drag`) |
 | G9 Shift+middle-drag rotates (spec) | ROTATION: down(1, Shift) → moves 20 px right → up | `rotate` about the press point with `totalDeltaDeg` +16 (rightward raises the bearing); LEGACY: `pan` |
 | G10 Space while a rail button has focus | focus rail button; Space down → down(0) on the map → drag → Space up | the press moves focus to the host; primary drag; no button click |
 | G11 Space in the text entry | focus text; Space down | no pan arming |
