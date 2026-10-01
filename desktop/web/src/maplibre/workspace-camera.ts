@@ -32,7 +32,6 @@ export type MapLibreWorkspaceCameraMap = Required<Pick<MapLibreMapInstance,
   | 'getZoom'
   | 'getBearing'
   | 'getPitch'
-  | 'unproject'
   | 'getCanvas'
 >> & Pick<MapLibreMapInstance, 'flyTo' | 'stop' | 'setTransformConstrain'>
 

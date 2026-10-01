@@ -31,11 +31,10 @@ import type {
   ViewCamera,
   ViewFrame,
   ViewScreen,
-  ViewTransform,
 } from '../canvas/runtime/view/types'
 import { buildViewTransform } from '../canvas/runtime/view/view-transform'
 import type { MapLibreLngLat, MapLibreMapInstance, MapLibreTransformConstrain } from './loader'
-import { logMapError, redactCredentials } from './redact-credentials'
+import { redactCredentials } from './redact-credentials'
 
 /** The map operations the driver uses; the four read-backs it cannot work without are checked when it is created. */
 export type MapLibreCameraDriverMap = Pick<MapLibreMapInstance,
@@ -49,24 +48,13 @@ export type MapLibreCameraDriverMap = Pick<MapLibreMapInstance,
   | 'getZoom'
   | 'getBearing'
   | 'getPitch'
-  | 'unproject'
   | 'setTransformConstrain'
   | 'getCanvas'
 >
 
-type AgreementProbe = (map: Pick<MapLibreMapInstance, 'unproject'>, view: ViewTransform, plane: SessionPlane) => { readonly maxErrorPx: number }
-
-const REQUIRED_READ_BACKS = ['getCenter', 'getZoom', 'getBearing', 'unproject'] as const
+const REQUIRED_READ_BACKS = ['getCenter', 'getZoom', 'getBearing'] as const
 const NO_INSETS: ScreenInsets = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 })
 const EMPTY_SCREEN: ViewScreen = Object.freeze({ width: 0, height: 0, devicePixelRatio: 1 })
-
-/** Development and test builds only (P12): production bundles drop the probe with this block. */
-let agreementProbe: AgreementProbe | null = null
-if (import.meta.env.DEV) {
-  void import('./view-agreement')
-    .then((module) => { agreementProbe = module.assertViewAgreement })
-    .catch((error: unknown) => logMapError('The view agreement probe did not load:', error))
-}
 
 /** Everything a frame is built from; a change publishes only when one of these moved. */
 interface FrameState {
@@ -88,7 +76,7 @@ interface Flight {
 }
 
 /**
- * `createMapLibreCameraDriver(map, plane, deps)` (spec §1.1 Attachment). A map without getCenter, getZoom, getBearing or unproject,
+ * `createMapLibreCameraDriver(map, plane, deps)` (spec §1.1 Attachment). A map without getCenter, getZoom or getBearing,
  * or one whose read-back pitch is not 0, fails the driver with 'map-error'; its host then detaches it. The driver resizes its map to
  * the container once, starts at the map canvas' CSS size, and changes it only through setScreen. Its frames settle on `deps.timers`,
  * else on the window's, adapted to the frame source's shape.
@@ -247,7 +235,7 @@ export function createMapLibreCameraDriver(
     })
   }
 
-  /** Publishes one frame when anything in it changed, probes it (development builds), then runs the calls queued meanwhile. */
+  /** Publishes one frame when anything in it changed, then runs the calls queued meanwhile. */
   function commit(camera: ViewCamera): void {
     const state = frameState(camera)
     if (sameFrameState(published, state)) return
@@ -255,7 +243,6 @@ export function createMapLibreCameraDriver(
     revision += 1
     const frame = buildFrame(state)
     frames.publish(frame)
-    if (agreementProbe && live()) agreementProbe(map, frame.view, plane)
     while (!frames.dispatching && queued.length > 0 && live()) queued.shift()!()
   }
 

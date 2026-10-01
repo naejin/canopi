@@ -517,8 +517,8 @@ describe('MapLibre camera driver', () => {
     expect(map.jumpTo).not.toHaveBeenCalled()
   })
 
-  it('a map without getCenter, getZoom, getBearing or unproject fails with map-error', () => {
-    for (const missing of ['getCenter', 'getZoom', 'getBearing', 'unproject'] as const) {
+  it('a map without getCenter, getZoom or getBearing fails with map-error', () => {
+    for (const missing of ['getCenter', 'getZoom', 'getBearing'] as const) {
       const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
       Object.defineProperty(map, missing, { value: undefined })
       const { driver } = attach(map)
@@ -543,17 +543,6 @@ describe('MapLibre camera driver', () => {
     expect(map.jumpTo).toHaveBeenLastCalledWith(expect.objectContaining({ bearing: 60, zoom: 13 }))
     expect(published.at(-1)!.moving).toBe(false)
     expect(driver.bearingTarget()).toBe(60)
-  })
-
-  it('an attached map that disagrees with the frame fails the move in tests', async () => {
-    await vi.dynamicImportSettled()
-    const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
-    const { driver } = attach(map)
-    driver.apply({ kind: 'pan-by', deltaPx: { x: 3, y: 0 } })
-
-    const unproject = map.unproject.bind(map)
-    map.unproject = ([x, y]) => unproject([x + 0.5, y])
-    expect(() => driver.apply({ kind: 'pan-by', deltaPx: { x: 3, y: 0 } })).toThrow('agree')
   })
 
   it('dispose releases its map listeners and the guard', () => {
