@@ -4,8 +4,8 @@
 // A key that is part of an IME composition runs nothing (WebKit sends the composition's Enter with keyCode 229).
 // Capture hands every other key to the canvas keyboard port first (keyState: the nudge commit, the physical Ctrl, the Menu
 // key's time, the Space hold), cycles the F6 regions and runs Esc on the canvas. It also keeps the keys held down and
-// lets them go (a keyup to the port): those pressed under Cmd when Meta comes up, since macOS sends no keyup for them
-// (a Space held from before Cmd keeps its pan), and every key on a window blur or a visibility change. Bubble skips a key an element handler
+// lets every one go (a keyup to the port) when Meta comes up, on a window blur and on a visibility change: macOS drops the
+// keyup of any key released while Cmd is down, so Meta's keyup releases every held key. Bubble skips a key an element handler
 // already took, then runs, by focus class, the modal rows, the global rows, the pushed scopes and the keymap's
 // canvas-focus, view-arrows and command rows, each chord's one row per scope, through the canvas port or the edition's
 // CommandSink. Installed once per edition: Desktop's platform/desktop.ts passes installKeyRouter to commands/registry.ts
@@ -43,22 +43,20 @@ export interface KeyRouterHandle { dispose(): void }
 const KEYMAP_SCOPES: readonly Exclude<KeyScope, 'global'>[] = ['canvas-focus', 'view-arrows', 'command']
 
 export function installKeyRouter(deps: KeyRouterDeps): KeyRouterHandle {
-  /** The keys down now, by code: what a lost keyup would leave held in the port, and whether Cmd was down at the press. */
-  const held = new Map<string, { readonly key: string, readonly underCmd: boolean }>()
-  const letGo = (timeStamp: number, onlyUnderCmd: boolean): void => {
-    const keys = [...held].filter(([, down]) => !onlyUnderCmd || down.underCmd)
-    for (const [code] of keys) held.delete(code)
+  /** The keys down now, by code: what a lost keyup would leave held in the port. */
+  const held = new Map<string, string>()
+  const letGo = (timeStamp: number): void => {
+    const keys = [...held]
+    held.clear()
     const port = deps.canvas()
     if (!port) return
-    for (const [code, down] of keys) port.keyState(releasedKey(down.key, code, timeStamp))
+    for (const [code, key] of keys) port.keyState(releasedKey(key, code, timeStamp))
   }
   // The listeners are registered for keydown and keyup only, so a KeyboardEvent here is a KeyboardEventLike.
   const onKeyDownCapture = (event: KeyboardEvent): void => {
     // Step 1: a key that is part of a composition is the IME's.
     if (isComposing(event)) return
-    const code = event.code || event.key
-    // A repeat keeps the press's own answer: a key held from before Cmd still sends its keyup.
-    if (!held.has(code)) held.set(code, { key: event.key, underCmd: event.metaKey })
+    held.set(event.code || event.key, event.key)
     keyDownCapture(deps, event as KeyboardEventLike)
   }
   const onKeyDownBubble = (event: KeyboardEvent): void => keyDownBubble(deps, event as KeyboardEventLike)
@@ -66,9 +64,9 @@ export function installKeyRouter(deps: KeyRouterDeps): KeyRouterHandle {
     held.delete(event.code || event.key)
     const port = deps.canvas()
     if (port) port.keyState(keyState(event as KeyboardEventLike, 'keyup', where(deps, port, event as KeyboardEventLike)))
-    if (event.key === 'Meta') letGo(event.timeStamp, true)
+    if (event.key === 'Meta') letGo(event.timeStamp)
   }
-  const onLeave = (event: Event): void => letGo(event.timeStamp, false)
+  const onLeave = (event: Event): void => letGo(event.timeStamp)
   deps.target.addEventListener('keydown', onKeyDownCapture as EventListener, true)
   deps.target.addEventListener('keydown', onKeyDownBubble as EventListener)
   deps.target.addEventListener('keyup', onKeyUpCapture as EventListener, true)

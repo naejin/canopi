@@ -327,7 +327,7 @@ describe('key router', () => {
     expect(fake.port.escape).toHaveBeenCalledExactlyOnceWith('gesture')
   })
 
-  it('lets go of the keys held under Cmd when Meta comes up, on blur and when the page hides (H10)', () => {
+  it('lets go of every held key when Meta comes up, on blur and when the page hides (H10)', () => {
     const save: KeymapRow = { command: 'file.save', chords: [{ key: 's', mod: true, ctrl: false, shift: false, alt: false }], scope: 'global', singleKey: 'n/a', worksInTextFields: true }
     install({ keymap: [save], platform: { os: 'mac', engine: 'webkit', gestureEvents: false } })
     host.focus()
@@ -356,7 +356,7 @@ describe('key router', () => {
     expect(released()).toEqual(['Space'])
   })
 
-  it('keeps a Space held from before Cmd when Meta comes up, so the pan stays armed', () => {
+  it('lets go of a Space held from before Cmd when Meta comes up, since its keyup may be lost', () => {
     install({ platform: { os: 'mac', engine: 'webkit', gestureEvents: false } })
     host.focus()
     const up = (key: string, code: string) => host.dispatchEvent(new KeyboardEvent('keyup', { key, code, bubbles: true }))
@@ -365,11 +365,10 @@ describe('key router', () => {
     press({ key: ' ', code: 'Space' }, host)
     press({ key: 'Meta', code: 'MetaLeft', metaKey: true }, host)
     press({ key: '=', code: 'Equal', metaKey: true }, host)
+    // Space is released first, while Cmd is down: macOS drops its keyup, so the router sees only Meta's.
     up('Meta', 'MetaLeft')
-    // Only the key pressed under Cmd lost its keyup; Space still waits for its own.
-    expect(released()).toEqual(['MetaLeft', 'Equal'])
-    up(' ', 'Space')
-    expect(released()).toEqual(['MetaLeft', 'Equal', 'Space'])
+    // No order of keyups tells "still held" from "released under Cmd", so Space is let go too and the next drag selects.
+    expect(released()).toEqual(['MetaLeft', 'Space', 'Equal'])
   })
 
   it('a composing keydown runs nothing (H11, G12)', () => {
