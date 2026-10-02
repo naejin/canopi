@@ -19,3 +19,13 @@ export function designMap(page: Page) {
 export async function expectCanvasDrawn(page: Page): Promise<void> {
   await expect(designMap(page), 'the canvas has drawn the latest change').not.toHaveAttribute('aria-busy')
 }
+
+/**
+ * Presses a `mod` shortcut as the page's own platform spells it: Cmd where the user agent names a Mac, Ctrl elsewhere
+ * (app/keyboard/key-chord.ts; a physical Ctrl on a Mac is `ctrl`, never `mod`). Playwright's WebKit reports a Mac
+ * user agent on every host, and its `ControlOrMeta` follows the host, not the page.
+ */
+export async function pressMod(page: Page, key: string): Promise<void> {
+  const mac = await page.evaluate(() => /Macintosh|Mac OS X|iPhone|iPad/.test(navigator.userAgent))
+  await page.keyboard.press(`${mac ? 'Meta' : 'Control'}+${key}`)
+}

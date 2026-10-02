@@ -9,7 +9,7 @@
 // one the canvas has drawn the change the DOM checks saw (expectCanvasDrawn).
 import { fileURLToPath } from 'node:url'
 import type { Page } from '@playwright/test'
-import { designMap, expectCanvasDrawn } from '../support/canvas'
+import { designMap, expectCanvasDrawn, pressMod } from '../support/canvas'
 import { expect, test } from '../support/offline'
 
 const FIXTURE = fileURLToPath(new URL('../fixtures/canvas-base.canopi', import.meta.url))
@@ -184,7 +184,7 @@ test('step 5: P places a plant, Ctrl+Z removes it; R draws a rectangle; Esc, Esc
   await expectCanvasDrawn(page)
   await expect(page).toHaveScreenshot('phase0-05a-plant-placed.png')
 
-  await page.keyboard.press('Control+z')
+  await pressMod(page, 'z')
   await expect(tool(page, 'Undo'), 'Ctrl+Z undid the only edit').toBeDisabled()
   await expect(tool(page, 'Redo')).toBeEnabled()
   await expect(selection(page), 'the removed plant is no longer selected').toHaveCount(0)
@@ -253,7 +253,7 @@ test('step 6: ArrowRight nudges a selected zone 10 cm east, Shift+ArrowRight 1 m
   await expectCanvasDrawn(page)
   await expect(page).toHaveScreenshot('phase0-06c-nudge-1m.png')
 
-  await page.keyboard.press('Control+z')
+  await pressMod(page, 'z')
   await expect.poll(async () => (await firstCorner(page)).x - shifted.x, 'Ctrl+Z moves the zone back').toBeLessThan(-LAYOUT_TOLERANCE_PX)
   const undone = await firstCorner(page)
   expectPx(undone.x - nudged.x, 0, 'Ctrl+Z undoes the 1 m series alone: the zone is back 10 cm east of its start')
