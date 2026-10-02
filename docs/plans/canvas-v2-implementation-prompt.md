@@ -69,7 +69,7 @@ One file has one owner per phase. No two agents edit the same file, and streams 
 | 3 | Input, D1, D3, Components ("Phase 3" table) | the bindings constant's touch fields, handle targets, one-finger Pan, phone Fit |
 | R | Renderer ("Phase R"), between phases | `renderers/**`, presentation, the selection-model cache, the tooltip's lines (R2); `move-drag.ts`, `scene-runtime/drag-state.ts` and `chrome/**` while no phase is open |
 
-You own: `__tests__/frontend-architecture-policies.test.ts`, `__tests__/canvas-boundaries.test.ts` (the policy tests of plan section 5; P9b, P13 and P15 are not written), `__tests__/unused-code.test.ts` with its ratchet, locale integration, every `bd` write and the worktree's `.beads/issues.jsonl` (plan section 7, "JSONL"), the Playwright scenarios (`desktop/web/e2e/**`, the release close's `v2.spec.ts` included) and every end-of-phase deletion. R runs between phases, never beside one (plan section 2).
+You own: `__tests__/frontend-architecture-policies.test.ts`, `__tests__/canvas-boundaries.test.ts` (the policy tests of plan section 5; P9b, P13 and P15 are not written), `__tests__/unused-code.test.ts` with its snapshot, locale integration, every `bd` write and the worktree's `.beads/issues.jsonl` (plan section 7, "JSONL"), the Playwright scenarios (`desktop/web/e2e/**`, the release close's `v2.spec.ts` included) and every end-of-phase deletion. R runs between phases, never beside one (plan section 2).
 
 ## 6. Gates at every phase
 
