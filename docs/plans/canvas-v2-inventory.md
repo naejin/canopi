@@ -191,7 +191,7 @@ Counts recorded for the policy allowlists (re-counted 2026-09-29, non-test files
 
 ## 9. Stored data that touches bearing (INV-DATA)
 
-None of these changes the `.canopi` format. Settings gain one defaulted field, `LastView.bearing` (phase 1; ADR 0021: new settings fields have defaults, which is not a migration); the per-area PDF angle was dropped (U3). Any other stored-format change is a new decision with the user (ADR 0021).
+None of these changes the `.canopi` format. Settings gain one defaulted field, `LastView.bearing` (phase 1; ADR 0021: new settings fields have defaults, which is not a migration); the per-area PDF angle was dropped (U3). Any other stored-format change may be made when it improves the project and is named in the handoff (ADR 0021, "Later format changes").
 
 | ID | Where | Today | Fate | Phase |
 |---|---|---|---|---|

@@ -6,7 +6,7 @@ Status: Accepted (2026-10-02, Canopi 2.0)
 
 ADR 0013 kept a migration ladder: `.canopi` files from v7 and user databases from schema 8 were upgraded on open, with a Web mirror of every step, corpus fixtures on both trust boundaries, a one-off "Saved as Canopi 2 format" notice and an in-memory upgrade for saved stamps. Every format change cost a step in two languages.
 
-Canopi has two users, and the maintainer converts their `.canopi` files by hand. The user decided (2026-10-02): "Don't worry about migrations. This is a breaking release. You can drop all file migration code except the error message saying old versions are not supported by canopi v2.0 and onward." For local data they chose to move old data aside rather than refuse it or delete it.
+Canopi has two users, and the maintainer converts their `.canopi` files by hand. The user decided (2026-10-02): "Don't worry about migrations. This is a breaking release. You can drop all file migration code except the error message saying old versions are not supported by canopi v2.0 and onward." For local data they chose to move old data aside rather than refuse it or delete it. The same day they widened it: "You can modify the .canopi files or the user local data if it's necessary to improve our project. But don't change the plant database."
 
 ## Decision
 
@@ -20,7 +20,7 @@ Canopi has two users, and the maintainer converts their `.canopi` files by hand.
   - No backup ever overwrites another; a taken name gets `-1`, `-2`…
 - **Saved stamps.** Only payload version 2 is read.
 - **Settings.** New fields have defaults; an unreadable record is set aside under `settings.set-aside`. That is not a migration and stays.
-- **Later format changes.** A future change to a stored format is a new decision with the user: it either breaks the same way (refuse files, move local data aside) or brings back a migration under its own ADR.
+- **Later format changes.** The `.canopi` format and local data (user database, Drafts, Web storage, LiDAR catalogue, settings) may change when that improves the project, without asking the user first; each change is named in the handoff. Before 2.0 ships, a change moves the current version and older files are refused as above. After 2.0, each format change decides, case by case, between refusing older files (local data moved aside, as above) and a migration; there is no ladder by default. The plant catalog database (`canopi-core.db`) never changes.
 
 ## Consequences
 
