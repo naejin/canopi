@@ -1,5 +1,5 @@
 import type { SceneViewportState } from '../scene'
-import type { DraftPresentation, SelectionPreview } from '../tools/draft'
+import type { DraftPresentation } from '../tools/draft'
 import type {
   SceneRendererDefinition,
   SceneRendererInstance,
@@ -17,7 +17,6 @@ export interface MapLibreSceneRenderTarget {
   requestRender(): void
   /** The shared scene layer hands these to its Pixi draft layer; optional for targets that draw no drafts (test fakes). */
   setDraft?(draft: DraftPresentation | null): void
-  setSelectionPreview?(preview: SelectionPreview | null): void
 }
 
 export interface MapLibreSceneRenderTargetConnection {
@@ -37,7 +36,6 @@ export class MapLibreSceneRendererBridge {
   private activeBackendGeneration: number | null = null
   private latestSnapshot: SceneRendererSnapshot | null = null
   private latestDraft: DraftPresentation | null = null
-  private latestSelectionPreview: SelectionPreview | null = null
 
   connect(target: MapLibreSceneRenderTarget): MapLibreSceneRenderTargetConnection {
     const generation = ++this.targetGeneration
@@ -47,9 +45,6 @@ export class MapLibreSceneRendererBridge {
     }
     // A draft set before this target connected (a style reload rebuilds the layer) is still live.
     if (this.activeBackendGeneration !== null && this.latestDraft) target.setDraft?.(this.latestDraft)
-    if (this.activeBackendGeneration !== null && this.latestSelectionPreview) {
-      target.setSelectionPreview?.(this.latestSelectionPreview)
-    }
 
     return {
       disconnect: () => {
@@ -77,7 +72,6 @@ export class MapLibreSceneRendererBridge {
             this.activeBackendGeneration = null
             this.latestSnapshot = null
             this.latestDraft = null
-            this.latestSelectionPreview = null
           },
           renderScene: (snapshot) => {
             this.assertBackendCurrent(generation)
@@ -92,11 +86,6 @@ export class MapLibreSceneRendererBridge {
             this.assertBackendCurrent(generation)
             this.latestDraft = draft
             this.target?.setDraft?.(draft)
-          },
-          setSelectionPreview: (preview) => {
-            this.assertBackendCurrent(generation)
-            this.latestSelectionPreview = preview
-            this.target?.setSelectionPreview?.(preview)
           },
         }
         return instance

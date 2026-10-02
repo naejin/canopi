@@ -8,7 +8,7 @@ import { Container, Text, Ticker, WebGLRenderer, type WebGLOptions } from 'pixi.
 import type { CustomLayerInterface, CustomRenderMethodInput } from 'maplibre-gl'
 import { createPixiScenePresentation, type PixiScenePresentation } from '../canvas/runtime/renderers/pixi-scene'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
-import type { DraftPresentation, SelectionPreview } from '../canvas/runtime/tools/draft'
+import type { DraftPresentation } from '../canvas/runtime/tools/draft'
 import { deriveSharedMapSceneViewport, type SharedMapProjector } from './scene-camera-transform'
 
 /** The one production custom layer which all map-owned raster bands sit below. */
@@ -115,12 +115,11 @@ export interface SharedMapSceneLayer {
 }
 
 /**
- * What the MapLibre scene bridge forwards to the layer for the Pixi draft layer (0B): the ToolHost's draft and selection
- * preview. The layer keeps the latest of each until its presentation exists, and drops them on dispose.
+ * What the MapLibre scene bridge forwards to the layer for the Pixi draft layer (0B): the ToolHost's draft. The layer
+ * keeps the latest until its presentation exists, and drops it on dispose.
  */
 export interface SharedMapSceneDraftSink {
   setDraft(draft: DraftPresentation | null): void
-  setSelectionPreview(preview: SelectionPreview | null): void
 }
 
 type Phase = SharedMapSceneDiagnostics['phase']
@@ -137,7 +136,6 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
   let renderedSnapshot: SceneRendererSnapshot | null = null
   let presentedViewport: SceneRendererSnapshot['viewport'] | null = null
   let draft: DraftPresentation | null = null
-  let selectionPreview: SelectionPreview | null = null
   let initializePromise: Promise<void> | null = null
   let disposePromise: Promise<void> | null = null
   let resolveDispose: (() => void) | null = null
@@ -290,7 +288,6 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
         )
         // A draft set while the layer initialized is still live.
         if (draft) presentation.setDraft(draft)
-        if (selectionPreview) presentation.setSelectionPreview(selectionPreview)
         phase = 'initialized'
       }).catch((error: unknown) => {
         fail(error instanceof Error ? error : 'Shared map scene initialization failed.')
@@ -311,12 +308,6 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
       if (phase === 'disposed') return
       draft = nextDraft
       presentation?.setDraft(nextDraft)
-      requestRepaint()
-    },
-    setSelectionPreview(nextPreview) {
-      if (phase === 'disposed') return
-      selectionPreview = nextPreview
-      presentation?.setSelectionPreview(nextPreview)
       requestRepaint()
     },
     dispose(disposeOptions = {}) {
@@ -387,7 +378,6 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
     renderedSnapshot = null
     presentedViewport = null
     draft = null
-    selectionPreview = null
     map = null
     context = null
     canvas = null

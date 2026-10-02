@@ -1,7 +1,7 @@
 // canvas/runtime/tools/draft.ts  (world-space presentations)
 
 import type { ToolHandleId } from '../interaction-types'
-import type { ScreenPoint, WorldPoint, WorldQuad, WorldVector } from '../view/types'
+import type { ScreenPoint, WorldPoint, WorldQuad } from '../view/types'
 import type { GhostEntity } from './tool'
 
 export type DraftShape =
@@ -20,9 +20,6 @@ export type DraftStroke = { readonly token: 'draft' | 'draft-muted' | 'selection
 export type DraftFill = { readonly token: 'draft-fill' | 'selection-fill' | 'warning-fill' }
 // Draft tokens resolve to canvas colours in canvas/runtime/scene-visuals.ts (getDraftVisual, beside the overlay visuals; plan 0D1).
 export interface DraftPresentation { readonly shapes: readonly DraftShape[] }
-
-/** Move/rotate preview of the selection while dragging: a renderer transform until commit. */
-export interface SelectionPreview { readonly translate: WorldVector; readonly rotateDeg: number; readonly pivot: WorldPoint }
 
 export interface ToolHandle {
   readonly id: ToolHandleId              // unique across objects: 'rotate', 'vertex:<zone id>:<index>', 'rect-corner:<id>:ne', 'guide-end:<id>:a', 'edge-mid:<zone id>:<index>'

@@ -5,7 +5,7 @@ import type {
   SceneRendererSnapshot,
 } from '../renderers/scene-types'
 import type { SceneViewportState } from '../scene'
-import type { DraftPresentation, SelectionPreview } from '../tools/draft'
+import type { DraftPresentation } from '../tools/draft'
 
 export type SceneRuntimeRenderKind = 'scene' | 'viewport' | 'chrome'
 
@@ -140,10 +140,6 @@ export class SceneRuntimeRenderScheduler {
    */
   setDraft(draft: DraftPresentation | null): void {
     this._renderer?.setDraft?.(draft)
-  }
-
-  setSelectionPreview(preview: SelectionPreview | null): void {
-    this._renderer?.setSelectionPreview?.(preview)
   }
 
   /** MapLibre owns the drawing surface size; a resize is a camera-only update. */

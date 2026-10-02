@@ -1,6 +1,6 @@
 import type { SpeciesFocus } from '../species-key'
 import type { SceneDesignObjectTarget, ScenePersistedState, SceneViewportState } from '../scene'
-import type { DraftPresentation, SelectionPreview } from '../tools/draft'
+import type { DraftPresentation } from '../tools/draft'
 import type { ViewTransform } from '../view/types'
 import type { PlantNameLabel, SelectionLabel } from '../selection-labels'
 import type { SpeciesCacheEntry } from '../species-cache'
@@ -56,11 +56,10 @@ export interface SceneRendererInstance {
   // Camera-only update. Must not assume the runtime will provide a fresh scene snapshot.
   setViewport(viewport: SceneViewportState): void
   /**
-   * Tool drafts and the selection preview (the ToolHost's renderer sink), for the Pixi draft layer. Optional in 0B because
-   * test fakes build this interface as a literal; SceneRenderer (end of 0D2) requires both.
+   * Tool drafts (the ToolHost's renderer sink), for the Pixi draft layer. Optional in 0B because test fakes build
+   * this interface as a literal; SceneRenderer (end of 0D2) requires it.
    */
   setDraft?(draft: DraftPresentation | null): void
-  setSelectionPreview?(preview: SelectionPreview | null): void
   dispose(): void | PromiseLike<void>
 }
 
@@ -85,6 +84,5 @@ export interface SceneRendererV2 {   // renamed SceneRenderer at the end of 0D2
   /** The only per-frame entry: world-root matrix, visible set, billboard anchors, zoom-band re-key. */
   setView(view: ViewTransform): void
   setDraft(draft: DraftPresentation | null): void
-  setSelectionPreview(preview: SelectionPreview | null): void
   dispose(): void | PromiseLike<void>
 }

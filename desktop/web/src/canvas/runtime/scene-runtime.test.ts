@@ -262,7 +262,6 @@ function createRendererStub() {
     setViewport: vi.fn(),
     // The draft sink the runtime hands the session (ToolHostDeps.renderer): drafts and the host's chips draw in Pixi.
     setDraft: vi.fn<(draft: DraftPresentation | null) => void>(),
-    setSelectionPreview: vi.fn(),
     dispose: vi.fn(),
   }
 }

@@ -101,7 +101,6 @@ function recordingRenderer() {
     drafts,
     lastDraft: () => drafts.at(-1) ?? null,
     setDraft: (draft: DraftPresentation | null) => { drafts.push(draft) },
-    setSelectionPreview: () => {},
   }
 }
 
