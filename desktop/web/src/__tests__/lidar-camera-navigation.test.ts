@@ -4,6 +4,7 @@ import {
   stageScaleToMapZoom,
 } from '../canvas/projection'
 import { setCurrentCanvasSession } from '../canvas/session'
+import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { planarCameraOf } from '../canvas/runtime/view/view-transform'
 import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
 import {
@@ -27,6 +28,7 @@ function surfacesFor(view: TestView, sessionPlane: SessionPlane | null) {
       viewport: {
         focusTemporaryBounds: (bounds, options) => view.navigation.focusTemporaryBounds(bounds, options),
         returnFromTemporaryFocus: () => view.navigation.returnFromTemporaryFocus(),
+        returnToDesign: () => view.navigation.returnToDesign(),
       },
     }),
   })
@@ -76,10 +78,31 @@ describe('LiDAR workspace camera navigation', () => {
     // Return to Design lands on the view the latest fit left: here the first fit's coverage.
     expect(viewDesignLocation()).toBe(true)
     expect(planarCameraOf(view.view())).toEqual(afterFirstFocus)
-    expect(viewDesignLocation()).toBe(false)
+    // The bookmark is spent: a second Return to Design frames the Design.
+    expect(viewDesignLocation()).toBe(true)
     const scaleAtMapZoom18 = mapZoomToStageScale(18, plane.origin.lat)
     expect(scaleAtMapZoom18).toBeGreaterThan(0.1)
     expect(stageScaleToMapZoom(scaleAtMapZoom18, plane.origin.lat)).toBeCloseTo(18, 12)
+  })
+
+  it('Return to Design without a bookmark frames the Design', () => {
+    const design = { extentPoints: () => [{ x: -60, y: -25 }, { x: 60, y: 25 }] }
+    const view = createTestView({ screen: { width: 800, height: 600 }, viewport: { x: 30, y: 40, scale: 0.5 } })
+    view.setScene(createDefaultScenePersistedState(), design)
+    const before = planarCameraOf(view.view())
+    setCurrentCanvasSession(surfacesFor(view, plane))
+
+    // No Fit to data left a bookmark (a place search, a story step or a saved view dropped it): the Design is framed.
+    expect(viewDesignLocation()).toBe(true)
+
+    const framed = planarCameraOf(view.view())
+    expect(framed).not.toEqual(before)
+    const backToMyDesign = createTestView({ screen: { width: 800, height: 600 }, viewport: { x: 30, y: 40, scale: 0.5 } })
+    backToMyDesign.setScene(createDefaultScenePersistedState(), design)
+    backToMyDesign.navigation.returnToDesign()
+    expect(framed).toEqual(planarCameraOf(backToMyDesign.view()))
+    backToMyDesign.dispose()
+    view.dispose()
   })
 
   it('rejects invalid bounds, a missing session plane, and missing canvas commands without moving the camera', () => {
