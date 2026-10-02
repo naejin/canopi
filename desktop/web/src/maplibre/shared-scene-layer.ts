@@ -1,6 +1,9 @@
 // Production CSP rejects Pixi's generated functions; its shim avoids eval.
 import { logMapError } from './redact-credentials'
 import 'pixi.js/unsafe-eval'
+// The one extension the layer registers itself (skipExtensionImports leaves it out): the plant
+// layer's opacity and species dim and the placement ghosts draw through an AlphaFilter.
+import 'pixi.js/filters'
 import { Container, Text, Ticker, WebGLRenderer, type WebGLOptions } from 'pixi.js'
 import type { CustomLayerInterface, CustomRenderMethodInput } from 'maplibre-gl'
 import { createPixiScenePresentation, type PixiScenePresentation } from '../canvas/runtime/renderers/pixi-scene'
@@ -41,7 +44,7 @@ export interface SharedPixiRendererView {
 
 /**
  * Pixi draws inside MapLibre's context and frame loop (ADR 0004): it imports
- * no extensions, clears nothing, collects no GPU resources on a schedule of
+ * no extensions but the filters (registered above), clears nothing, collects no GPU resources on a schedule of
  * its own, and its containers take no events. Pixi still installs its
  * EventSystem on the canvas and its scheduler on `Ticker.system` during
  * `init`; `detachPixiFromHost` undoes both right after.
@@ -94,6 +97,7 @@ export interface SharedMapSceneLayerOptions {
     readonly stage: Container
     readonly createText: () => Text
     readonly viewSize: { width: number; height: number }
+    readonly requestRepaint: () => void
   }) => PixiScenePresentation
 }
 
@@ -277,7 +281,12 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
         if (disposeRequested) return
         stage = (options.createStage ?? (() => new Container()))()
         presentation = (options.createPresentation ?? createPixiScenePresentation)(
-          { stage, createText: () => new Text({ resolution: size.resolution * 2 }), viewSize: { width: size.width, height: size.height } },
+          {
+            stage,
+            createText: () => new Text({ resolution: size.resolution * 2 }),
+            viewSize: { width: size.width, height: size.height },
+            requestRepaint,
+          },
         )
         // A draft set while the layer initialized is still live.
         if (draft) presentation.setDraft(draft)

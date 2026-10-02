@@ -67,6 +67,8 @@ export interface DraftLayerOptions {
   readonly createText: () => Text
   readonly viewSize: { readonly width: number; readonly height: number }
   readonly painters: DraftScenePainters
+  /** Asks for a frame after the layer redrew its draft on its own (a chip's font arrived). */
+  readonly requestRepaint?: () => void
 }
 
 interface UprightPart {
@@ -107,6 +109,7 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
   const drawn: Container[] = []
   const filters: AlphaFilter[] = []
   const upright: UprightPart[] = []
+  const requestedFonts = new Set<string>()
 
   function clear(): void {
     for (const node of drawn.splice(0)) {
@@ -243,6 +246,7 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
 
   function drawLabel(shape: Extract<DraftShape, { kind: 'label' }>): void {
     const visual = getDraftLabelVisual(shape.tone)
+    requestFont(`${visual.fontWeight} ${visual.fontSizePx}px ${visual.fontFamily}`)
     const text = createText()
     text.text = shape.text
     text.style = new TextStyle({
@@ -271,6 +275,23 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
       x: shape.offsetPx.x - width / 2,
       y: shape.offsetPx.y - (visual.placement === 'centre' ? height / 2 : visual.gapPx + height),
     }, true)
+  }
+
+  /**
+   * Canvas text drawn while its web font is still loading keeps the fallback font, and nothing in the DOM asks for a
+   * chip's font (the mono chips' IBM Plex Mono may be used nowhere else). So the layer asks the browser for it, once per
+   * font, and redraws the live draft and asks for a frame when it has loaded.
+   */
+  function requestFont(font: string): void {
+    if (requestedFonts.has(font)) return
+    requestedFonts.add(font)
+    const fonts = globalThis.document?.fonts
+    if (!fonts || fonts.check(font)) return
+    fonts.load(font).then(() => {
+      if (!draft || placedScale === null) return
+      trace(draft, placedScale)
+      options.requestRepaint?.()
+    }, () => {})
   }
 
   /**
