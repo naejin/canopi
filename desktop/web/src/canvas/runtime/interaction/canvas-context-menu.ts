@@ -70,7 +70,6 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
   return {
     openAtPointer(screen, selection) {
       const world = options.view().screenToWorld(screen)
-      if (!world) return
       const origin = containerOrigin()
       const x = origin.left + screen.x
       const y = origin.top + screen.y
@@ -84,7 +83,6 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
       if (!bounds) {
         const centre = { x: view.screen.width / 2, y: view.screen.height / 2 }
         const world = view.screenToWorld(centre)
-        if (!world) return
         const x = origin.left + centre.x
         const y = origin.top + centre.y
         open({ left: x, top: y, right: x, bottom: y }, world, target)

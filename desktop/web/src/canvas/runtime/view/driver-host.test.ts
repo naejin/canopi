@@ -218,7 +218,7 @@ describe('camera driver host', () => {
     expect(placement.y).toBeCloseTo(placementBefore.y, 6)
     expect(placement.scale).toBeCloseTo(placementBefore.scale, 9)
     expect(followed.view.planeRevision).toBe(before.view.planeRevision + 1)
-    const centre = hydrated.toGeo(followed.view.screenToWorld({ x: 200, y: 150 })!)
+    const centre = hydrated.toGeo(followed.view.screenToWorld({ x: 200, y: 150 }))
     expect(followed.view.camera.center.lon).toBeCloseTo(centre.lon, 9)
     expect(followed.view.camera.center.lat).toBeCloseTo(centre.lat, 9)
     host.followPlane(runtimePlane)

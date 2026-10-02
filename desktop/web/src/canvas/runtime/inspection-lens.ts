@@ -54,14 +54,13 @@ export class SceneCanvasInspectionOwner {
     let released = false
     const options = this.options
 
-    /** The ground under a point of the main screen, through the live frame; null above a horizon. */
-    function groundAt(screenPoint: InspectionPoint): InspectionPoint | null {
+    /** The ground under a point of the main screen, through the live frame. */
+    function groundAt(screenPoint: InspectionPoint): InspectionPoint {
       return options.frames.viewFrame.peek().view.screenToWorld(screenPoint)
     }
     function canvasCenter(): InspectionPoint {
       const { screen } = options.frames.viewFrame.peek().view
-      // The screen centre is the camera's own ground point, never above a horizon.
-      return groundAt({ x: screen.width / 2, y: screen.height / 2 })!
+      return groundAt({ x: screen.width / 2, y: screen.height / 2 })
     }
     function setPoint(next: InspectionPoint | null) {
       point = next
@@ -183,8 +182,7 @@ export class SceneCanvasInspectionOwner {
       sourceQuad,
       inspectAtScreenPoint: (screenPoint) => {
         if (released || !Number.isFinite(screenPoint.x) || !Number.isFinite(screenPoint.y)) return
-        const next = groundAt(screenPoint)
-        if (next) inspectAtWorldPoint(next)
+        inspectAtWorldPoint(groundAt(screenPoint))
       },
       inspectAtWorldPoint,
       centerOnCanvas: () => { if (!released) { setPoint(canvasCenter()); schedule() } },

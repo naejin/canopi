@@ -57,10 +57,10 @@ export interface PlanarCamera { readonly x: number; readonly y: number; readonly
 
 export interface ViewScreen { readonly width: number; readonly height: number; readonly devicePixelRatio: number }
 
-/** Renderer and bulk-projection fast path. Null for non-planar projections (globe). */
+/** Renderer and bulk-projection fast path. Pitch re-derives a nullable one (spec §6). */
 export interface PlanarProjection {
-  /** 2x3 affine in Pixi order [a, b, c, d, tx, ty]. Always set while pitchDeg is 0; null only for a pitched homography. */
-  readonly affine: readonly [number, number, number, number, number, number] | null
+  /** 2x3 affine in Pixi order [a, b, c, d, tx, ty]. */
+  readonly affine: readonly [number, number, number, number, number, number]
 }
 
 export interface ViewTransform {
@@ -68,11 +68,11 @@ export interface ViewTransform {
   readonly planeRevision: number     // session-plane identity; stale transforms are refused after re-origin
   readonly camera: ViewCamera
   readonly screen: ViewScreen
-  readonly planar: PlanarProjection | null
+  readonly planar: PlanarProjection
 
   worldToScreen(p: WorldPoint): ScreenPoint
-  /** Null only above the horizon (pitch) or off a globe; never null at pitch 0. */
-  screenToWorld(s: ScreenPoint): WorldPoint | null
+  /** The ground under a screen point. Pitch widens it to null above the horizon (spec §6). */
+  screenToWorld(s: ScreenPoint): WorldPoint
   /** Bulk billboard projection: reads [x0,y0,x1,y1,…] metres, writes CSS px. No allocation. */
   projectAnchors(world: Float64Array, out: Float32Array, count: number): void
 

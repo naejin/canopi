@@ -951,7 +951,7 @@ describe('SceneInteractionSession', () => {
     const near = (geo: { lon: number; lat: number }) => ({ lon: expect.closeTo(geo.lon, 8), lat: expect.closeTo(geo.lat, 8) })
     expect(plane.toGeo(zone.points[0]!)).toEqual(near(firstVertexGeo))
     expect(plane.toGeo(zone.points[1]!)).toEqual(near(secondVertexGeo))
-    expect(plane.toGeo(zone.points[2]!)).toEqual(near(plane.toGeo(testView.view().screenToWorld({ x: 60, y: 50 })!)))
+    expect(plane.toGeo(zone.points[2]!)).toEqual(near(plane.toGeo(testView.view().screenToWorld({ x: 60, y: 50 }))))
     session.dispose()
   })
 

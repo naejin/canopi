@@ -698,7 +698,7 @@ describe('draft layer', () => {
       for (const root of [worldRoot!, worldDraftRoot!]) {
         root.updateLocalTransform()
         const { a, b, c, d, tx, ty } = root.localTransform
-        for (const [index, value] of [a, b, c, d, tx, ty].entries()) expect(value).toBeCloseTo(view.planar!.affine![index]!, 9)
+        for (const [index, value] of [a, b, c, d, tx, ty].entries()) expect(value).toBeCloseTo(view.planar.affine[index]!, 9)
       }
       expect(billboardRoot!.children.length).toBeGreaterThan(0)
       expect(worldDraftRoot!.children).toHaveLength(1)

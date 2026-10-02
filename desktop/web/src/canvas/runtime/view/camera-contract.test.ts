@@ -80,7 +80,7 @@ function samplePoints(view: ViewTransform): WorldPoint[] {
   const points: WorldPoint[] = []
   for (const x of [-0.5, 0, 0.25, 0.5, 0.75, 1, 1.1]) {
     for (const y of [-0.2, 0, 0.3, 0.5, 1]) {
-      points.push(view.screenToWorld({ x: x * view.screen.width, y: y * view.screen.height })!)
+      points.push(view.screenToWorld({ x: x * view.screen.width, y: y * view.screen.height }))
     }
   }
   return points
@@ -102,7 +102,7 @@ function expectProjectsLikeMapLibre(view: ViewTransform, transform: SourceTransf
     expect(Math.abs(actual.y - expected.y)).toBeLessThanOrEqual(TOLERANCE_PX)
 
     const screenPoint = { x: actual.x + 0.375, y: actual.y - 0.625 }
-    const underIt = project(view.screenToWorld(screenPoint)!)
+    const underIt = project(view.screenToWorld(screenPoint))
     expect(Math.abs(underIt.x - screenPoint.x)).toBeLessThanOrEqual(TOLERANCE_PX)
     expect(Math.abs(underIt.y - screenPoint.y)).toBeLessThanOrEqual(TOLERANCE_PX)
   }

@@ -60,15 +60,15 @@ describe('SceneInteractionSession', () => {
   it('zooms with an unmodified mouse wheel around the pointer without changing Design content', () => {
     const session = createTestSession(createInteractionDeps(container, store, testView))
     const pointer = { x: 200, y: 150 }
-    const anchor = testView.view().screenToWorld(pointer)!
+    const anchor = testView.view().screenToWorld(pointer)
     const scene = structuredClone(store.persisted)
 
     events.wheel(pointer, { deltaY: -120 })
     expect(testView.viewport().scale).toBeCloseTo(1.271249, 6)
-    expectPointCloseTo(testView.view().screenToWorld(pointer)!, anchor)
+    expectPointCloseTo(testView.view().screenToWorld(pointer), anchor)
     events.wheel(pointer, { deltaY: 120 })
     expect(testView.viewport().scale).toBeCloseTo(1, 10)
-    expectPointCloseTo(testView.view().screenToWorld(pointer)!, anchor)
+    expectPointCloseTo(testView.view().screenToWorld(pointer), anchor)
     expect(store.persisted).toEqual(scene)
     session.dispose()
   })
@@ -95,17 +95,17 @@ describe('SceneInteractionSession', () => {
     const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     const pointer = { x: 200, y: 150 }
-    const anchor = testView.view().screenToWorld(pointer)!
+    const anchor = testView.view().screenToWorld(pointer)
 
     events.wheel(pointer, { deltaY: -1, ...modifiers })
     expect(testView.viewport().scale).toBeCloseTo(1.002002, 6)
-    expectPointCloseTo(testView.view().screenToWorld(pointer)!, anchor)
+    expectPointCloseTo(testView.view().screenToWorld(pointer), anchor)
     events.wheel(pointer, { deltaY: -119, ...modifiers })
     expect(testView.viewport().scale).toBeCloseTo(1.271249, 6)
-    expectPointCloseTo(testView.view().screenToWorld(pointer)!, anchor)
+    expectPointCloseTo(testView.view().screenToWorld(pointer), anchor)
     events.wheel(pointer, { deltaY: 120, ...modifiers })
     expect(testView.viewport().scale).toBeCloseTo(1, 10)
-    expectPointCloseTo(testView.view().screenToWorld(pointer)!, anchor)
+    expectPointCloseTo(testView.view().screenToWorld(pointer), anchor)
     session.dispose()
   })
 
@@ -126,10 +126,10 @@ describe('SceneInteractionSession', () => {
   ])('normalizes unmodified wheel zoom units for deltaMode $mode', ({ mode, deltaY }) => {
     const session = createTestSession(createInteractionDeps(container, store, testView))
     const pointer = { x: 200, y: 150 }
-    const anchor = testView.view().screenToWorld(pointer)!
+    const anchor = testView.view().screenToWorld(pointer)
     events.wheel(pointer, { deltaMode: mode, deltaY })
     expect(testView.viewport().scale).toBeCloseTo(1.100759, 6)
-    expectPointCloseTo(testView.view().screenToWorld(pointer)!, anchor)
+    expectPointCloseTo(testView.view().screenToWorld(pointer), anchor)
     session.dispose()
   })
 

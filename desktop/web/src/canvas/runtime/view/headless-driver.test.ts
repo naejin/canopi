@@ -126,8 +126,8 @@ describe('headless camera driver', () => {
     expect(driver.bearingTarget()).toBe(90)
     // The ground under the screen centre stayed put.
     const centre = { x: 200, y: 150 }
-    const startCentre = published[0]!.view.screenToWorld(centre)!
-    const endCentre = landed.view.screenToWorld(centre)!
+    const startCentre = published[0]!.view.screenToWorld(centre)
+    const endCentre = landed.view.screenToWorld(centre)
     expect(endCentre.x).toBeCloseTo(startCentre.x, 6)
     expect(endCentre.y).toBeCloseTo(startCentre.y, 6)
 

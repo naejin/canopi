@@ -46,8 +46,7 @@ export function buildViewTransform(input: {
 
 /** The PlanarCamera a pitch-0 transform places the plane with (the chrome and the test view read it). */
 export function planarCameraOf(view: ViewTransform): PlanarCamera {
-  const affine = view.planar?.affine
-  if (!affine) throw new Error('A pitched view has no planar camera.')
+  const { affine } = view.planar
   return { x: affine[4], y: affine[5], scale: view.pixelsPerMetre, bearingDeg: view.camera.bearingDeg }
 }
 

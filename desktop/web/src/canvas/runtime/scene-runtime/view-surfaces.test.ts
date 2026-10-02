@@ -126,7 +126,7 @@ describe('the runtime view surfaces', () => {
       expect(hydrated.planeRevision).toBeGreaterThan(beforeHydration)
       expect(placementOf(runtime).x).toBeCloseTo(120.5, 6)
       expect(placementOf(runtime).scale).toBeCloseTo(3.5, 6)
-      const centre = boston.toGeo(hydrated.screenToWorld({ x: SCREEN.width / 2, y: SCREEN.height / 2 })!)
+      const centre = boston.toGeo(hydrated.screenToWorld({ x: SCREEN.width / 2, y: SCREEN.height / 2 }))
       expect(hydrated.camera.center.lon).toBeCloseTo(centre.lon, 9)
       expect(hydrated.camera.center.lat).toBeCloseTo(centre.lat, 9)
 

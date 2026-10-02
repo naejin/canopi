@@ -7,7 +7,7 @@ import { planarCameraOf } from './view-transform'
 const SCREEN_POINTS = [{ x: 0, y: 0 }, { x: 400, y: 0 }, { x: 400, y: 300 }, { x: 0, y: 300 }, { x: 200, y: 150 }, { x: 37.5, y: 211 }]
 
 function groundUnder(view: ViewTransform, plane: SessionPlane) {
-  return SCREEN_POINTS.map((point) => plane.toGeo(view.screenToWorld(point)!))
+  return SCREEN_POINTS.map((point) => plane.toGeo(view.screenToWorld(point)))
 }
 
 describe('re-origin', () => {
@@ -65,7 +65,7 @@ describe('re-origin', () => {
     )).toBe(true)
 
     // The settled frame re-origins at the new centre.
-    const next = createSessionPlane(first.toGeo(view.view().screenToWorld({ x: 200, y: 150 })!))
+    const next = createSessionPlane(first.toGeo(view.view().screenToWorld({ x: 200, y: 150 })))
     view.host.current().planeChanged(next)
 
     expect(view.navigation.returnFromTemporaryFocus()).toBe(true)

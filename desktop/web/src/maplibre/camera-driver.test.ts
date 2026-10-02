@@ -534,7 +534,7 @@ describe('MapLibre camera driver', () => {
     placeOn(driver, plane, { x: -200, y: -100, scale: 2, bearingDeg: 0 })
 
     const { view } = driver.frames.viewFrame.peek()
-    const centre = view.screenToWorld({ x: 500, y: 400 })!
+    const centre = view.screenToWorld({ x: 500, y: 400 })
     expect(centre.x).toBeCloseTo(350, 8)
     expect(centre.y).toBeCloseTo(250, 8)
     const corners = view.visibleWorldQuad().map((corner) => plane.toGeo(corner))
@@ -607,7 +607,7 @@ describe('MapLibre camera driver', () => {
     const { driver, published } = attach(map)
     const before = driver.frames.viewFrame.peek()
     const screenPoints = [{ x: 0, y: 0 }, { x: 400, y: 300 }, { x: 200, y: 150 }, { x: 37.5, y: 211 }]
-    const groundBefore = screenPoints.map((point) => PLANE.toGeo(before.view.screenToWorld(point)!))
+    const groundBefore = screenPoints.map((point) => PLANE.toGeo(before.view.screenToWorld(point)))
     // A re-origin about 20 km east, as the runtime makes after panning away.
     const next = createSessionPlane(PLANE.toGeo({ x: 20_000, y: -5_000 }))
 
@@ -620,7 +620,7 @@ describe('MapLibre camera driver', () => {
     expect(after.view.camera).toEqual(before.view.camera)
     // The same ground under every screen point, expressed once in the next plane: its origin is where the map shows it.
     for (const [index, point] of screenPoints.entries()) {
-      const ground = next.toGeo(after.view.screenToWorld(point)!)
+      const ground = next.toGeo(after.view.screenToWorld(point))
       expect(ground.lon).toBeCloseTo(groundBefore[index]!.lon, 9)
       expect(ground.lat).toBeCloseTo(groundBefore[index]!.lat, 9)
     }
@@ -801,7 +801,7 @@ describe('the runtime camera on an attached map', () => {
     const camera = runtimeCameraOn(map)
     try {
       const before = camera.host.frames.viewFrame.peek()
-      const groundAtCentre = PLANE.toGeo(before.view.screenToWorld({ x: 200, y: 150 })!)
+      const groundAtCentre = PLANE.toGeo(before.view.screenToWorld({ x: 200, y: 150 }))
       const jumps = map.jumpTo.mock.calls.length
       const next = createSessionPlane(PLANE.toGeo({ x: 20_000, y: -5_000 }))
 
@@ -812,7 +812,7 @@ describe('the runtime camera on an attached map', () => {
       expect(after.attached).toBe(true)
       expect(after.view.planeRevision).toBeGreaterThan(before.view.planeRevision)
       expect(after.view.camera).toEqual(before.view.camera)
-      const ground = next.toGeo(after.view.screenToWorld({ x: 200, y: 150 })!)
+      const ground = next.toGeo(after.view.screenToWorld({ x: 200, y: 150 }))
       expect(ground.lon).toBeCloseTo(groundAtCentre.lon, 9)
       expect(ground.lat).toBeCloseTo(groundAtCentre.lat, 9)
       // The new latitude's scale bounds.

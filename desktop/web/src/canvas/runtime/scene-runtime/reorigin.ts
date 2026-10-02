@@ -49,7 +49,7 @@ export class SceneRuntimeReoriginController {
     const { screen } = frame.view
     // The ground under the screen centre, whatever the bearing.
     const centre = frame.view.screenToWorld({ x: screen.width / 2, y: screen.height / 2 })
-    if (!centre || ![centre.x, centre.y].every(Number.isFinite)) return
+    if (![centre.x, centre.y].every(Number.isFinite)) return
     if (!this.options.sceneState.sessionPlane.needsReorigin(centre)) return
     this.scheduled = true
     queueMicrotask(() => {

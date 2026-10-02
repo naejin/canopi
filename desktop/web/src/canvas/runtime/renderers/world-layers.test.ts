@@ -35,7 +35,7 @@ describe('world layers', () => {
     expect(traced.map((graphics) => graphics.context.instructions.length)).toEqual(instructions)
     layers.root.updateLocalTransform()
     const { a, b, c, d, tx, ty } = layers.root.localTransform
-    expect([a, b, c, d, tx, ty]).toEqual([...panned.planar!.affine!])
+    expect([a, b, c, d, tx, ty]).toEqual([...panned.planar.affine])
 
     // A zoom traces the CSS-px strokes again at the new scale.
     layers.setView(createTestRendererView({ x: 10, y: 20, scale: 60 }))

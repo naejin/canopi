@@ -262,8 +262,7 @@ function drawStackBadge(
 
 /** World metres to the backing store: the device-pixel scale already set, then the view's affine. */
 function applyView(ctx: CanvasRenderingContext2D, view: ViewTransform): void {
-  const affine = view.planar?.affine
-  if (!affine) throw new Error('The inspection lens draws only planar views.')
+  const { affine } = view.planar
   const current = ctx.getTransform()
   ctx.setTransform(current.a, current.b, current.c, current.d, 0, 0)
   ctx.transform(affine[0], affine[1], affine[2], affine[3], affine[4], affine[5])

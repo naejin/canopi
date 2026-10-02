@@ -388,12 +388,11 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     }
   }
 
-  /** The tool's point at a screen point of the current frame, or null where the screen has no ground. */
-  function pointAt(screen: ScreenPoint, mods: Modifiers, pointer: PointerKind, handleDrag = false): ToolPoint | null {
+  /** The tool's point at a screen point of the current frame. */
+  function pointAt(screen: ScreenPoint, mods: Modifiers, pointer: PointerKind, handleDrag = false): ToolPoint {
     const view = frame().view
     const at = activeTool?.clampsToView ? clampToScreen(screen, view.screen) : screen
-    const world = view.screenToWorld(at)
-    return world ? resolvePoint(world, mods, pointer, handleDrag) : null
+    return resolvePoint(view.screenToWorld(at), mods, pointer, handleDrag)
   }
 
   function resolvePoint(world: WorldPoint, mods: Modifiers, pointer: PointerKind, handleDrag: boolean): ToolPoint {
@@ -519,10 +518,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   /** The tool's hover, then the passive hover unless the tool handled it. */
   function deliverHover(tool: CanvasTool, at: ScreenPoint, mods: Modifiers, pointer: PointerKind): void {
     const point = pointAt(at, mods, pointer)
-    if (!point) {
-      clearPassiveHover()
-      return
-    }
     const reply = callTool(() => tool.gesture({ kind: 'hover', point, hit: hitAt(point.world) }))
     if (reply === 'handled') clearPassiveHover()
     else passiveHoverAt(at)
@@ -534,8 +529,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     // The lens hears only moves over the map: not over the canvas's own chrome or a ruler, nor off the map (today's lens
     // skips buttons, inputs, textareas, contenteditable and [data-preserve-overlays], and hears no move off the host).
     if (g.target.kind === 'surface') {
-      const world = frame().view.screenToWorld(g.at)
-      if (world && insideScreen(g.at, frame().view.screen)) publishPointer({ world, screen: g.at })
+      if (insideScreen(g.at, frame().view.screen)) publishPointer({ world: frame().view.screenToWorld(g.at), screen: g.at })
     }
     // The pointer is back over the map after a panel drag: the tool's draft shows again, as today's next pointermove
     // redrew it.
@@ -631,7 +625,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (!deps.capturePress(g.id)) return true
     const handleDrag = g.target.kind === 'handle'
     const point = pointAt(g.at, g.mods, g.pointer, handleDrag)
-    if (!point) return true
     if (g.target.kind === 'handle') {
       const handle = g.target.id
       live = liveGesture(g, 'handle', point, null)
@@ -756,11 +749,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   /** The drag at its last screen point, converted through the current frame; its start is the press's world point. */
   function deliverDrag(tool: CanvasTool, gesture: LiveGesture, kind: 'drag-start' | 'drag-move' | 'drag-end'): void {
     const point = pointAt(gesture.lastScreen, gesture.lastMods, gesture.pointer, gesture.kind === 'handle')
-    if (!point) {
-      // No ground under the pointer: the drag is cancelled.
-      guardCancellation(() => cancelLive('pointercancel'))
-      return
-    }
     if (kind === 'drag-end') live = null
     const start = gesture.start!
     if (gesture.kind === 'handle') {
@@ -777,8 +765,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   /** The passive hover at a screen point, cleared off the map. */
   function passiveHoverAt(at: ScreenPoint): void {
-    const world = frame().view.screenToWorld(at)
-    if (world && insideScreen(at, frame().view.screen)) passiveHover(world, at)
+    if (insideScreen(at, frame().view.screen)) passiveHover(frame().view.screenToWorld(at), at)
     else clearPassiveHover()
   }
 
@@ -800,7 +787,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       live = null
       try {
         const point = pointAt(g.at, g.mods, g.pointer, gesture.kind === 'handle')
-        if (!point) return
         if (gesture.kind === 'handle') {
           callTool(() => tool.gesture({ kind: 'handle-drag', phase: 'end', handle: gesture.handle!, point, start: gesture.start! }))
         } else {
@@ -870,11 +856,10 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   function dropPreviewAt(at: ScreenPoint, payload: CanvasDropPayload): readonly DraftShape[] | null {
     const transform = frame().view
     const world = transform.screenToWorld(at)
-    if (!world) return null
     if (payload.kind === 'saved-stamp') return savedObjectStampGhostShapes(deps.scene, payload.stamp, snap(world, false))
     if (payload.kind !== 'species' || !deps.scene.isLayerOpenForCreation('plants')) return null
     const corner = transform.screenToWorld({ x: at.x + DROP_CUE_PX, y: at.y + DROP_CUE_PX })
-    return corner ? bandDraft(view, { start: world, additive: false }, corner).shapes : null
+    return bandDraft(view, { start: world, additive: false }, corner).shapes
   }
 
   /**
@@ -892,9 +877,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   /** Today's _dropWhenSettled: the payload at the snapped point, as one Scene Edit that selects what it placed. */
   function placeDrop(at: ScreenPoint, payload: CanvasDropPayload): void {
-    const world = frame().view.screenToWorld(at)
-    if (!world) return
-    const point = snap(world, false)
+    const point = snap(frame().view.screenToWorld(at), false)
     if (payload.kind === 'saved-stamp') {
       placeSavedObjectStamp(deps.edits, deps.scene, payload.stamp, point, { onCommitted: () => dropped('saved-stamp') })
     } else if (payload.kind === 'species' && payload.species) {
@@ -1123,7 +1106,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   /** Hit, retarget the selection to the object under the pointer (history-free), then open the menu. */
   function openMenuAt(at: ScreenPoint, source: MenuSource): void {
     const world = frame().view.screenToWorld(at)
-    if (!world) return
     const { visible, target } = contextMenuTargetAt(deps.scene, world)
     if (target && !includesSceneDesignObjectTarget(deps.scene.selection(), target)) {
       deps.setSelection([target])

@@ -124,9 +124,9 @@ describe('view navigation', () => {
     const view = createTestView({ screen: { width: 1000, height: 800 }, viewport: { x: 100, y: 0, scale: 8 } })
 
     const pointer = { x: 250, y: 200 }
-    const before = view.view().screenToWorld(pointer)!
+    const before = view.view().screenToWorld(pointer)
     view.navigation.zoomAroundPx(pointer, 2)
-    const after = view.view().screenToWorld(pointer)!
+    const after = view.view().screenToWorld(pointer)
 
     expect(view.view().pixelsPerMetre).toBeCloseTo(16, 9)
     expect(after.x).toBeCloseTo(before.x)

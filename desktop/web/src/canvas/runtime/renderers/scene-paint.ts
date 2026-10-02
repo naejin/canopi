@@ -23,8 +23,7 @@ const affine = new Matrix()
 
 /** A world root's transform: the view's affine, so world shapes keep their metres (spec §1.5). One write per frame. */
 export function writeWorldAffine(root: Container, view: ViewTransform): void {
-  const values = view.planar?.affine
-  if (!values) throw new Error('The scene renderer draws only planar views.')
+  const values = view.planar.affine
   root.setFromMatrix(affine.set(values[0], values[1], values[2], values[3], values[4], values[5]))
 }
 
