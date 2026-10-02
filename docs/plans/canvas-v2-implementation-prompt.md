@@ -116,7 +116,7 @@ Every canvas sub-phase runs the Frontend row. Phases 1 and 2 add the Rust and Sh
 
 ## 9. Stop and amend
 
-If building shows that the design is wrong (an interface cannot carry a case, a MapLibre assumption fails, a policy cannot be written, a phase cannot ship alone), the agent that finds it stops, does not work around it in code, and reports to you. You amend the ADR and the spec in one docs commit, say what changed and why, and tell the user before work resumes. A change that touches the user's data or files (formats, defaults, deletions) is the user's decision, not yours. Under the user's standing permission (2026-09-28), a process rule in `AGENTS.md`, a guide or an ADR that blocks a better fix is rewritten in the same change and named in the handoff; safety rules (preserve user work, plant catalog data, secrets, test first) stay.
+If building shows that the design is wrong (an interface cannot carry a case, a MapLibre assumption fails, a policy cannot be written, a phase cannot ship alone), the agent that finds it stops, does not work around it in code, and reports to you. You amend the ADR and the spec in one docs commit, say what changed and why, and tell the user before work resumes. A change to the `.canopi` format or the user's local data (user DB, settings, LiDAR catalogue) may be made when it improves the project (user, 2026-10-02), through ADR 0013 migrations, and is named in the handoff; the plant catalog (`canopi-core.db`) never changes. Under the user's standing permission (2026-09-28), a process rule in `AGENTS.md`, a guide or an ADR that blocks a better fix is rewritten in the same change and named in the handoff; safety rules (preserve user work, plant catalog data, secrets, test first) stay.
 
 ## 10. Beads
 
