@@ -5,13 +5,13 @@
 // PointerSession and TouchPair are type exports imported only inside input/; RecogniserState is opaque to callers.
 // raw-input.ts and recognise.ts import each other's types with `import type` only (no runtime cycle).
 //
-// It implements today's input (LEGACY_BINDINGS, spec §2.2 and the LEGACY columns of §5): one pointer session at a time;
+// It implements the input of CURRENT_BINDINGS (spec §2.2 and §5): one pointer session at a time;
 // the right button inert and the native contextmenu opening the menu at once (except in overview and for a keyboard
 // menu's echo); a middle drag, a Space press, overview and the Pan tool pan (a primary press on a handle drags the handle
 // first), a pointer pan carrying the pointer's point and a Pan-tool press ending with cancel('navigate') after its drag;
-// a button-less move over the text entry, a handle or the Unlock affordance emits nothing; wheels zoom or pan by the
+// a button-less move over owned chrome, the text entry or a handle ends the hover; wheels zoom or pan by the
 // pointing-device setting; no touch gestures, pen barrel or trackpad gesture events.
-// The other binding values arrive with their constants: the trackpad gestures and Shift+middle rotation in phase 1,
+// The other binding values arrive in later phases: the trackpad gestures and Shift+middle rotation in phase 1,
 // the secondary drag and the menu on release in phase 2, touch gestures and the long press in phase 3.
 
 import type { CancelReason, Modifiers, PointerKind } from '../interaction-types'
@@ -189,7 +189,7 @@ function move(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void 
   const session = step.state.sessions.get(input.id)
   if (!session) {
     if (step.state.sessions.size > 0) return
-    hover(step, input, config)
+    hover(step, input)
     return
   }
 
@@ -313,20 +313,17 @@ function wheel(step: Step, input: RawOf<'wheel'>): void {
 
 /**
  * A move with no live session (buttons or not) is a hover wherever the pointer is: off the map the tool's hover still
- * runs and the host clears its own. Over the canvas's own things the bindings decide (spec §2.2 "Hover"): under 'legacy'
- * the text entry and a handle emit nothing (today's early return keeps the passive hover, the tooltip, the Unlock
- * affordance and the Place plants preview) while the map's other buttons and fields hover what is beneath them; under
- * 'end' all three end the hover. The Unlock affordance keeps the hover under both.
+ * runs and the host clears its own. Over the canvas's own things (owned chrome such as the attribution, the text entry,
+ * a handle) it ends the hover and its tooltip (spec §2.2 "Hover", U6); the Unlock affordance emits nothing, so the hover
+ * it belongs to stays until it is clicked.
  */
-function hover(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void {
+function hover(step: Step, input: RawOf<'move'>): void {
   const { target } = input
   if (target.kind === 'owned-chrome' && target.lockedAffordance) return
-  const owned = target.kind === 'owned-text' || target.kind === 'handle'
-  if (config.bindings.ownedHover === 'end' && (owned || target.kind === 'owned-chrome')) {
+  if (target.kind === 'owned-text' || target.kind === 'handle' || target.kind === 'owned-chrome') {
     step.gestures.push({ kind: 'hover-end' })
     return
   }
-  if (owned) return
   step.gestures.push({ kind: 'hover', at: input.at, pointer: input.pointer, mods: input.mods, target })
 }
 

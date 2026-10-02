@@ -6,14 +6,14 @@ import {
 } from '../../../__tests__/support/canvas-interaction-events'
 import { writePlantStampDragData } from '../../plant-stamp-source'
 import type { DomInputSourceDeps } from '../interaction-ports'
-import { LEGACY_BINDINGS, type Bindings } from './bindings'
+import { CURRENT_BINDINGS, type Bindings } from './bindings'
 import { createDomInputSource, outcomeEffects } from './dom-input-source'
 import type { RawInput, RecogniserConfig } from './raw-input'
 import { initialRecogniserState, recognise } from './recognise'
 import { DEFAULT_THRESHOLDS } from './thresholds'
 
 const PLATFORM = { os: 'linux', engine: 'webkitgtk', gestureEvents: false } as const
-const RECOGNISER_CONFIG: RecogniserConfig = { platform: PLATFORM, bindings: LEGACY_BINDINGS, thresholds: DEFAULT_THRESHOLDS }
+const RECOGNISER_CONFIG: RecogniserConfig = { platform: PLATFORM, bindings: CURRENT_BINDINGS, thresholds: DEFAULT_THRESHOLDS }
 
 let host: HTMLDivElement
 let events: SceneInteractionEventHarness
@@ -37,7 +37,7 @@ function deps(overrides: Partial<DomInputSourceDeps> = {}): DomInputSourceDeps {
   return {
     host,
     platform: PLATFORM,
-    bindings: () => LEGACY_BINDINGS,
+    bindings: () => CURRENT_BINDINGS,
     keys: { physicalCtrl: () => false, lastKeyboardMenuAt: () => null },
     clock: () => 1000,
     timers: { set: vi.fn(() => 1), clear: vi.fn() },
@@ -553,7 +553,7 @@ describe('createDomInputSource', () => {
     dispose()
   })
 
-  it('host CSS is unchanged under LEGACY', () => {
+  it('host CSS is unchanged while touch gestures are off', () => {
     const before = host.getAttribute('style')
     const source = createDomInputSource(deps())
     const dispose = attachRecording(source, (input) => {
@@ -569,7 +569,7 @@ describe('createDomInputSource', () => {
     expect(host.getAttribute('style')).toBe(before)
 
     // A binding with touch gestures takes the host's touch-action for the time it is attached.
-    const touch: Bindings = { ...LEGACY_BINDINGS, touch: { gestures: true, longPressMenu: true, hostTouchActionNone: true } }
+    const touch: Bindings = { ...CURRENT_BINDINGS, touch: { gestures: true, longPressMenu: true, hostTouchActionNone: true } }
     const detach = createDomInputSource(deps({ bindings: () => touch })).attach(() => {})
     expect(host.style.touchAction).toBe('none')
     detach()
