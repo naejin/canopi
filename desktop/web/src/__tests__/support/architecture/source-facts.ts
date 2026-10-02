@@ -377,6 +377,14 @@ export function discoverTypeScriptSourceGraph(
   rootUrl: URL,
   rootPath: string,
 ): TypeScriptSourceFact[] {
+  return createTypeScriptSourceGraph(readTypeScriptSources(rootUrl, rootPath))
+}
+
+/** The TypeScript files under `rootUrl`, keyed as `rootPath/<relative path>` and sorted, for a graph that spans several roots. */
+export function readTypeScriptSources(
+  rootUrl: URL,
+  rootPath: string,
+): TypeScriptSourceInput[] {
   const fileSystemRoot = fileUrlPath(rootUrl)
   const normalizedRoot = trimTrailingSlash(normalizePath(fileSystemRoot))
   const normalizedRootPath = trimSlashes(normalizePath(rootPath))
@@ -398,7 +406,7 @@ export function discoverTypeScriptSourceGraph(
   })
 
   sources.sort((left, right) => left.path.localeCompare(right.path))
-  return createTypeScriptSourceGraph(sources)
+  return sources
 }
 
 function importDeclarationFact(
@@ -818,7 +826,12 @@ function resolveImportTarget(
   if (!specifier.startsWith('.')) return specifier
 
   const unresolvedTarget = normalizePath(`${directoryName(importerPath)}/${specifier}`)
-  for (const candidate of resolutionCandidates(unresolvedTarget)) {
+  // A Vite query (`./worker?worker&inline`) loads the same module another way.
+  const query = specifier.indexOf('?')
+  const modulePath = query < 0
+    ? unresolvedTarget
+    : normalizePath(`${directoryName(importerPath)}/${specifier.slice(0, query)}`)
+  for (const candidate of resolutionCandidates(modulePath)) {
     if (sourcePaths.has(candidate)) return candidate
   }
   return unresolvedTarget
