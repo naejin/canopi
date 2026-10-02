@@ -17,6 +17,7 @@ export interface WorldMapLibreMap extends MapLibreMapInstance {
   }): void
   getCenter(): { lng: number; lat: number }
   getZoom(): number
+  readonly keyboard: { disableRotation(): void }
 }
 
 export interface WorldMapMarker {
@@ -72,6 +73,10 @@ export function createWorldMapLibreMap(
   // session. Every World map error is passive (tiles, sources), so it is only
   // logged, redacted.
   map.on('error', (event) => logMapError('Passive MapLibre World map error:', event))
+
+  // The World map stays north-up: its keyboard handler keeps arrow pans and
+  // +/- zoom, but Shift+arrows neither turn nor tilt it (INV-CAM-46).
+  map.keyboard.disableRotation()
 
   try {
     const NavigationControl = (maplibre as WorldMapLibreApi).NavigationControl

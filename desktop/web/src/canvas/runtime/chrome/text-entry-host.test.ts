@@ -217,6 +217,61 @@ describe('the text-entry host', () => {
     expect(focusMap).toHaveBeenCalledWith('text-entry-closed')
   })
 
+  it('Enter and Esc while composing do nothing', async () => {
+    const entries = mount()
+    const submit = vi.fn(() => 'close' as const)
+    const onCancel = vi.fn()
+    entries.open(NEW_NOTE, submit, onCancel)
+    const textarea = entry()!
+    await nextAnimationFrame()
+
+    // Chromium and Firefox mark keys inside a composition isComposing; WebKit
+    // sends the Enter that ends one with keyCode 229 (fixture H11). Either way
+    // the key belongs to the IME, so the entry neither commits nor cancels and
+    // leaves its default to the IME.
+    const pressed = [
+      key(textarea, { key: 'Enter', isComposing: true }),
+      key(textarea, { key: 'Escape', isComposing: true }),
+      key(textarea, { key: 'Enter', keyCode: 229 }),
+      key(textarea, { key: 'Escape', keyCode: 229 }),
+    ]
+
+    expect(pressed.map((event) => event.defaultPrevented)).toEqual([false, false, false, false])
+    expect(submit).not.toHaveBeenCalled()
+    expect(onCancel).not.toHaveBeenCalled()
+    expect(entries.isOpen()).toBe(true)
+    expect(entry()).toBe(textarea)
+
+    key(textarea, { key: 'Enter' })
+    expect(submit).toHaveBeenCalledTimes(1)
+  })
+
+  it('Enter and Esc while composing stay in the entry: no document listener acts on the IME\'s key', async () => {
+    const entries = mount()
+    entries.open(NEW_NOTE, vi.fn(() => 'close' as const))
+    const textarea = entry()!
+    await nextAnimationFrame()
+    // Document-level Esc listeners (the inspection readout, open menus) check
+    // only key and defaultPrevented, so a composing key that bubbles out would
+    // end inspection or close a menu while the user is still typing.
+    const documentKeys = vi.fn()
+    document.addEventListener('keydown', documentKeys)
+    try {
+      const pressed = [
+        key(textarea, { key: 'Escape', isComposing: true }),
+        key(textarea, { key: 'Escape', keyCode: 229 }),
+        key(textarea, { key: 'Enter', isComposing: true }),
+        key(textarea, { key: 'Enter', keyCode: 229 }),
+      ]
+
+      expect(documentKeys).not.toHaveBeenCalled()
+      expect(pressed.map((event) => event.defaultPrevented)).toEqual([false, false, false, false])
+      expect(entries.isOpen()).toBe(true)
+    } finally {
+      document.removeEventListener('keydown', documentKeys)
+    }
+  })
+
   it('Esc tells the opener through onCancel, once the entry is gone; a submit, close() or dispose does not', async () => {
     const entries = mount()
     const cancelled: boolean[] = []

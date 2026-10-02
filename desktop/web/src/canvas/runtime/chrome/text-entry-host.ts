@@ -88,6 +88,13 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
       if (active === entry) submitActive()
     })
     textarea.addEventListener('keydown', (event) => {
+      // A key inside an IME composition (WebKit's closing Enter has keyCode 229) is the IME's: it neither commits nor
+      // cancels, and its default stays. Its Enter and Esc still stop here, so document-level Esc listeners (which
+      // check only key and defaultPrevented) never act on the IME's key.
+      if (event.isComposing || event.keyCode === 229) {
+        if (event.key === 'Escape' || event.key === 'Enter') event.stopPropagation()
+        return
+      }
       if (event.key === 'Escape') {
         event.preventDefault()
         event.stopPropagation()
