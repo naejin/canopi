@@ -751,11 +751,10 @@ const REQUIRED_IMPORT_POLICIES = [
   },
   {
     kind: 'require-imports',
-    name: 'Target barrel exposes identity, resolution, and map projection',
+    name: 'Target barrel exposes identity and map projection',
     from: ['src/target/index.ts'],
     targets: [
       'src/target/identity.ts',
-      'src/target/resolution.ts',
       'src/target/map-projection.ts',
     ],
     edgeKinds: ['reexport'],
