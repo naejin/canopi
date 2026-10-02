@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CANVAS_CHROME_FONT_FAMILY, CANVAS_CHROME_MONO_FONT_FAMILY } from '../canvas/chrome-fonts'
 import { createRulerOverlay } from '../canvas/runtime/chrome/rulers'
 import { createTextEntryHost } from '../canvas/runtime/chrome/text-entry-host'
-import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
+import type { ViewFrame } from '../canvas/runtime/view/types'
+import { testViewFrame } from './support/test-view'
 import { createTestView } from './support/test-view'
 
 const GLOBAL_CSS = readFileSync('src/styles/global.css', 'utf8')
@@ -48,18 +49,8 @@ function listSourceFiles(directory: string): string[] {
   })
 }
 
-function cameraSnapshot(): CameraViewportSnapshot {
-  return {
-    viewport: { x: 12, y: 34, scale: 8 },
-    screenSize: { width: 424, height: 324 },
-    devicePixelRatio: 1,
-    referenceScale: 8,
-    scaleBounds: { minimum: 0.00001, maximum: 2000 },
-    overviewScaleThreshold: 0.1,
-    mode: 'site',
-    groundMetersPerCssPixel: 0.125,
-    revision: 1,
-  }
+function cameraFrame(): ViewFrame {
+  return testViewFrame({ screen: { width: 424, height: 324 }, viewport: { x: 12, y: 34, scale: 8 } })
 }
 
 async function loadFreshThemeRefresh() {
@@ -106,7 +97,7 @@ describe('canvas chrome fonts', () => {
     })
     const host = document.createElement('div')
     const overlay = createRulerOverlay(host, { onGuideCreate: vi.fn() })
-    overlay.update({ camera: cameraSnapshot(), chromeVisible: true, rulersVisible: true })
+    overlay.update({ frame: cameraFrame(), chromeVisible: true, rulersVisible: true })
 
     const fonts = contexts.map((context) => context.font).filter(Boolean)
     expect(fonts.length).toBeGreaterThan(0)

@@ -1,5 +1,5 @@
-import type { CameraViewportSnapshot } from '../camera'
-import type { ScreenPoint } from '../view/types'
+import type { ScreenPoint, ViewFrame } from '../view/types'
+import { planarCameraOf } from '../view/view-transform'
 import { NICE_DISTANCES } from '../../grid'
 import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 import { getCanvasColor } from '../../theme-refresh'
@@ -15,7 +15,7 @@ const RULER_LABEL_GAP_PX = 6
 type RulerAxis = 'h' | 'v'
 
 interface RulerOverlaySnapshot {
-  readonly camera: CameraViewportSnapshot
+  readonly frame: ViewFrame
   readonly chromeVisible: boolean
   readonly rulersVisible: boolean
 }
@@ -121,7 +121,7 @@ class HtmlRulerOverlay implements RulerOverlay {
     if (this._destroyed) return
     this._snapshot = snapshot
 
-    const siteMode = snapshot.camera.mode === 'site'
+    const siteMode = snapshot.frame.mode === 'site'
     const shown = snapshot.chromeVisible && snapshot.rulersVisible && siteMode
     const rulerDisplay = shown ? 'block' : 'none'
     this._horizontalCanvas.style.display = rulerDisplay
@@ -137,8 +137,8 @@ class HtmlRulerOverlay implements RulerOverlay {
 
     if (siteMode) {
       const origin = this._overlayOrigin()
-      drawHorizontalRuler(this._horizontalCanvas, snapshot.camera, this._palette, origin)
-      drawVerticalRuler(this._verticalCanvas, snapshot.camera, this._palette, origin)
+      drawHorizontalRuler(this._horizontalCanvas, snapshot.frame, this._palette, origin)
+      drawVerticalRuler(this._verticalCanvas, snapshot.frame, this._palette, origin)
     }
   }
 
@@ -154,14 +154,14 @@ class HtmlRulerOverlay implements RulerOverlay {
   createGuideAt(axis: RulerAxis, at: ScreenPoint): void {
     if (this._destroyed) return
     const snapshot = this._snapshot
-    if (!snapshot || !snapshot.chromeVisible || !snapshot.rulersVisible || snapshot.camera.mode !== 'site') return
+    if (!snapshot || !snapshot.chromeVisible || !snapshot.rulersVisible || snapshot.frame.mode !== 'site') return
     const origin = this._overlayOrigin()
     const screenX = at.x
     const screenY = at.y
     if (axis === 'h' && screenY <= origin.y + RULER_SIZE) return
     if (axis === 'v' && screenX <= origin.x + RULER_SIZE) return
 
-    const viewport = snapshot.camera.viewport
+    const viewport = planarCameraOf(snapshot.frame.view)
     const screenPosition = axis === 'h' ? screenY : screenX
     const viewportOffset = axis === 'h' ? viewport.y : viewport.x
     this._options.onGuideCreate(axis, (screenPosition - viewportOffset) / viewport.scale)
@@ -284,12 +284,12 @@ interface RulerOverlayOrigin {
 
 function drawHorizontalRuler(
   canvas: HTMLCanvasElement,
-  camera: CameraViewportSnapshot,
+  frame: ViewFrame,
   palette: RulerPalette,
   origin: RulerOverlayOrigin,
 ): void {
   const dpr = window.devicePixelRatio || 1
-  const cssWidth = Math.max(0, camera.screenSize.width - origin.x - RULER_SIZE)
+  const cssWidth = Math.max(0, frame.view.screen.width - origin.x - RULER_SIZE)
   const cssHeight = RULER_SIZE
   if (cssWidth <= 0) return
 
@@ -302,7 +302,7 @@ function drawHorizontalRuler(
   if (!context) return
   context.setTransform(dpr, 0, 0, dpr, 0, 0)
 
-  const viewport = camera.viewport
+  const viewport = planarCameraOf(frame.view)
   const scale = viewport.scale
   context.fillStyle = palette.background
   context.fillRect(0, 0, cssWidth, cssHeight)
@@ -346,13 +346,13 @@ function drawHorizontalRuler(
 
 function drawVerticalRuler(
   canvas: HTMLCanvasElement,
-  camera: CameraViewportSnapshot,
+  frame: ViewFrame,
   palette: RulerPalette,
   origin: RulerOverlayOrigin,
 ): void {
   const dpr = window.devicePixelRatio || 1
   const cssWidth = RULER_SIZE
-  const cssHeight = Math.max(0, camera.screenSize.height - origin.y - RULER_SIZE)
+  const cssHeight = Math.max(0, frame.view.screen.height - origin.y - RULER_SIZE)
   if (cssHeight <= 0) return
 
   const newWidth = Math.round(cssWidth * dpr)
@@ -364,7 +364,7 @@ function drawVerticalRuler(
   if (!context) return
   context.setTransform(dpr, 0, 0, dpr, 0, 0)
 
-  const viewport = camera.viewport
+  const viewport = planarCameraOf(frame.view)
   const scale = viewport.scale
   context.fillStyle = palette.background
   context.fillRect(0, 0, cssWidth, cssHeight)

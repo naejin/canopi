@@ -1,36 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRulerOverlay, pressRuler } from '../canvas/runtime/chrome/rulers'
-import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
+import type { ViewFrame } from '../canvas/runtime/view/types'
+import { testViewFrame } from './support/test-view'
 
 type RulerPart = 'horizontal' | 'vertical' | 'corner'
 
-function cameraSnapshot(overrides: {
+function cameraFrame(overrides: {
   x?: number
   y?: number
   scale?: number
   width?: number
   height?: number
-  revision?: number
-  groundMetersPerCssPixel?: number | null
-} = {}): CameraViewportSnapshot {
-  return {
-    viewport: {
-      x: overrides.x ?? 12,
-      y: overrides.y ?? 34,
-      scale: overrides.scale ?? 8,
-    },
-    screenSize: {
-      width: overrides.width ?? 424,
-      height: overrides.height ?? 324,
-    },
-    devicePixelRatio: 1,
-    referenceScale: 8,
-    scaleBounds: { minimum: 0.00001, maximum: 2000 },
-    overviewScaleThreshold: 0.1,
-    mode: (overrides.scale ?? 8) < 0.1 ? 'overview' : 'site',
-    groundMetersPerCssPixel: overrides.groundMetersPerCssPixel ?? null,
-    revision: overrides.revision ?? 1,
-  }
+} = {}): ViewFrame {
+  return testViewFrame({
+    screen: { width: overrides.width ?? 424, height: overrides.height ?? 324 },
+    viewport: { x: overrides.x ?? 12, y: overrides.y ?? 34, scale: overrides.scale ?? 8 },
+  })
 }
 
 function findPart<T extends HTMLElement>(host: HTMLElement, part: RulerPart): T {
@@ -105,7 +90,7 @@ describe('RulerOverlay', () => {
     overlay.createGuideAt('h', { x: 80, y: 100 })
     expect(onGuideCreate).not.toHaveBeenCalled()
 
-    overlay.update({ camera: cameraSnapshot({ x: 12, y: 20, scale: 4 }), chromeVisible: true, rulersVisible: true })
+    overlay.update({ frame: cameraFrame({ x: 12, y: 20, scale: 4 }), chromeVisible: true, rulersVisible: true })
     overlay.createGuideAt('h', { x: 80, y: 100 })
     overlay.createGuideAt('v', { x: 52, y: 10 })
     overlay.createGuideAt('h', { x: 80, y: 24 })
@@ -114,7 +99,7 @@ describe('RulerOverlay', () => {
     expect(findPart<HTMLCanvasElement>(host, 'horizontal').dataset.canvasRuler).toBe('h')
     expect(findPart<HTMLCanvasElement>(host, 'vertical').dataset.canvasRuler).toBe('v')
 
-    overlay.update({ camera: cameraSnapshot({ x: 12, y: 20, scale: 4 }), chromeVisible: true, rulersVisible: false })
+    overlay.update({ frame: cameraFrame({ x: 12, y: 20, scale: 4 }), chromeVisible: true, rulersVisible: false })
     overlay.createGuideAt('h', { x: 80, y: 100 })
     overlay.destroy()
     overlay.createGuideAt('h', { x: 80, y: 100 })
@@ -126,11 +111,11 @@ describe('RulerOverlay', () => {
     const onGuideCreate = vi.fn()
     const overlay = createRulerOverlay(host, { onGuideCreate })
 
-    overlay.update({ camera: cameraSnapshot({ scale: 0.01 }), chromeVisible: true, rulersVisible: true })
+    overlay.update({ frame: cameraFrame({ scale: 0.01 }), chromeVisible: true, rulersVisible: true })
     overlay.createGuideAt('h', { x: 80, y: 100 })
     expect(onGuideCreate).not.toHaveBeenCalled()
 
-    overlay.update({ camera: cameraSnapshot({ y: 20, scale: 4 }), chromeVisible: true, rulersVisible: true })
+    overlay.update({ frame: cameraFrame({ y: 20, scale: 4 }), chromeVisible: true, rulersVisible: true })
     overlay.createGuideAt('h', { x: 80, y: 100 })
     expect(onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 20)
     overlay.destroy()
@@ -143,8 +128,8 @@ describe('RulerOverlay', () => {
     const secondGuide = vi.fn()
     const firstOverlay = createRulerOverlay(first, { onGuideCreate: firstGuide })
     const secondOverlay = createRulerOverlay(second, { onGuideCreate: secondGuide })
-    firstOverlay.update({ camera: cameraSnapshot({ x: 12, y: 20, scale: 4 }), chromeVisible: true, rulersVisible: true })
-    secondOverlay.update({ camera: cameraSnapshot({ x: 10, y: 20, scale: 2 }), chromeVisible: true, rulersVisible: true })
+    firstOverlay.update({ frame: cameraFrame({ x: 12, y: 20, scale: 4 }), chromeVisible: true, rulersVisible: true })
+    secondOverlay.update({ frame: cameraFrame({ x: 10, y: 20, scale: 2 }), chromeVisible: true, rulersVisible: true })
 
     const vertical = pressRuler(findPart<HTMLCanvasElement>(second, 'vertical'))
     expect(vertical?.axis).toBe('v')
@@ -165,14 +150,14 @@ describe('RulerOverlay', () => {
     const host = document.createElement('div')
     const onGuideCreate = vi.fn()
     const overlay = createRulerOverlay(host, { onGuideCreate })
-    const visible = { camera: cameraSnapshot({ y: 20, scale: 4 }), chromeVisible: true, rulersVisible: true }
+    const visible = { frame: cameraFrame({ y: 20, scale: 4 }), chromeVisible: true, rulersVisible: true }
     overlay.update(visible)
     const horizontal = findPart<HTMLCanvasElement>(host, 'horizontal')
 
     for (const hidden of [
       { ...visible, rulersVisible: false },
       { ...visible, chromeVisible: false },
-      { ...visible, camera: cameraSnapshot({ scale: 0.01 }) },
+      { ...visible, frame: cameraFrame({ scale: 0.01 }) },
     ]) {
       const press = pressRuler(horizontal)
       overlay.update(hidden)
@@ -183,7 +168,7 @@ describe('RulerOverlay', () => {
 
     // A press after the rulers came back lands, and so does one across an update that keeps them shown.
     const press = pressRuler(horizontal)
-    overlay.update({ ...visible, camera: cameraSnapshot({ y: 40, scale: 4, revision: 2 }) })
+    overlay.update({ ...visible, frame: cameraFrame({ y: 40, scale: 4 }) })
     press?.createGuideAt('h', { x: 80, y: 100 })
     expect(onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 15)
 
@@ -197,7 +182,7 @@ describe('RulerOverlay', () => {
     const host = document.createElement('div')
     host.style.cursor = 'crosshair'
     const overlay = createRulerOverlay(host, { onGuideCreate: vi.fn() })
-    const visible = { camera: cameraSnapshot(), chromeVisible: true, rulersVisible: true }
+    const visible = { frame: cameraFrame(), chromeVisible: true, rulersVisible: true }
     overlay.update(visible)
     const horizontal = findPart<HTMLCanvasElement>(host, 'horizontal')
     const vertical = findPart<HTMLCanvasElement>(host, 'vertical')
@@ -238,7 +223,7 @@ describe('RulerOverlay', () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context as never)
     const onGuideCreate = vi.fn()
     const overlay = createRulerOverlay(host, { onGuideCreate })
-    overlay.update({ camera: cameraSnapshot({ y: 0, scale: 10 }), chromeVisible: true, rulersVisible: true })
+    overlay.update({ frame: cameraFrame({ y: 0, scale: 10 }), chromeVisible: true, rulersVisible: true })
 
     const vertical = findPart<HTMLCanvasElement>(host, 'vertical')
     expect(vertical.height).toBe((324 - 64 - 24) * 2)
@@ -268,7 +253,7 @@ describe('RulerOverlay', () => {
       vi.mocked(context.fillText).mockClear()
       fonts.length = 0
       overlay.update({
-        camera: cameraSnapshot({ scale, width: 1400, revision: scale }),
+        frame: cameraFrame({ scale, width: 1400 }),
         chromeVisible: true,
         rulersVisible: true,
       })
@@ -292,7 +277,7 @@ describe('RulerOverlay', () => {
     const overlay = createRulerOverlay(host, { onGuideCreate: vi.fn() })
 
     overlay.update({
-      camera: cameraSnapshot({ width: 424, height: 324, scale: 8 }),
+      frame: cameraFrame({ width: 424, height: 324, scale: 8 }),
       chromeVisible: true,
       rulersVisible: false,
     })
@@ -310,7 +295,7 @@ describe('RulerOverlay', () => {
     expect(ctx.setTransform).toHaveBeenCalledWith(2, 0, 0, 2, 0, 0)
 
     overlay.update({
-      camera: cameraSnapshot(),
+      frame: cameraFrame(),
       chromeVisible: false,
       rulersVisible: true,
     })
@@ -329,7 +314,7 @@ describe('RulerOverlay', () => {
     overlay.destroy()
     overlay.refreshTheme()
     overlay.update({
-      camera: cameraSnapshot(),
+      frame: cameraFrame(),
       chromeVisible: true,
       rulersVisible: true,
     })

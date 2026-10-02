@@ -16,6 +16,7 @@ import type {
   SceneBoundsOptions,
   ScreenInsets,
   ViewCamera,
+  ViewFrame,
   ViewFrameSource,
   ViewScreen,
   ViewTransform,
@@ -108,6 +109,14 @@ export function createTestView(options: TestViewOptions = {}): TestView {
       host.dispose()
     },
   }
+}
+
+/** The frame a test view built with these options shows: for chrome that takes one frame (the rulers, the grid). */
+export function testViewFrame(options: TestViewOptions = {}): ViewFrame {
+  const view = createTestView(options)
+  const frame = view.frames.viewFrame.peek()
+  view.dispose()
+  return frame
 }
 
 function emptyScene(): ScenePersistedState {
