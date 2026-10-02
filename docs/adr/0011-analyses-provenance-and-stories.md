@@ -23,6 +23,6 @@ v2.0 ships one analysis (slope) wired directly into the LiDAR workflow. Planned 
 
 ## Consequences
 
-- The LiDAR slope path is refactored into the registry before new analyses land; the library catalogue gains kind and provenance fields (no migration ladder: an older catalogue is set aside and rebuilt from the originals per [ADR 0013](0013-stored-data-migrations.md)).
+- The LiDAR slope path is refactored into the registry before new analyses land; the library catalogue gains kind and provenance fields (no migration ladder: an older catalogue is set aside and rebuilt from the originals per [ADR 0021](0021-canopi-2-breaks-stored-data.md)).
 - `.canopi` gains `views` and `stories` before v2.0 ships; the format version bumps and older files are refused. Landing them later would refuse every v2.0 Design.
 - Hydrology (canopi-5ys2.1) and canopy analysis (canopi-5ys2.2, per ADR 0012) and story maps (canopi-5ys2.3) build on these seams only.

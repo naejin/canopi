@@ -11,8 +11,8 @@ Check every section in light and dark, English and French, and a 720 px tall win
 3. Place a plant, wait two seconds: the save status changes without a prompt. Reopen the app: the Draft is on the Start screen with its sketch and counts.
 4. Save as… to a `.canopi` file, close (Ctrl W), reopen from Recent Designs: objects are where they were; two files with one name show their folders.
 5. Edit the open file outside Canopi, then change something: "Changed outside Canopi" offers a choice; nothing is written silently.
-6. Open a Canopi 1.2 Design (format 6 or older): "Can’t open this Design · Made with an older version of Canopi; it can’t be opened" and the file is unchanged. Open a 2.0 preview Design (format 7 or 8): it opens; after one edit the save status reads "Saved as Canopi 2 format" once.
-7. Start on a Canopi 1.2 profile (user DB schema 8): Favorites, Recent Designs, the Design notebook and saved stamps are there; a profile from before 1.0 or from a newer Canopi is refused at start with a message and left unchanged.
+6. Open a Design from Canopi 1.2 or a 2.0 preview (format 8 or older): "Can’t open this Design · Made with Canopi before 2.0; Canopi 2.0 and later can’t open it", and the file is unchanged.
+7. Start on a Canopi 1.2 or 2.0 preview profile: one dismissible notice says earlier data was set aside; `user.db.before-2.0-…` and `drafts.before-2.0-…` sit in the data folder; the next start shows none. A newer Canopi's profile is refused at start, unchanged.
 8. Recent Designs › More: Show in folder opens the folder; Remove from list forgets the row and keeps the file.
 9. File › Revert to the version when opened…: confirms, then restores the opened version as one Undo step.
 

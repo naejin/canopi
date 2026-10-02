@@ -5,7 +5,7 @@ Read the [design system](../system.md) first. Boards: DesignSystem, DesignSystem
 ## Title bar and menus
 
 - The place field searches on Enter; while a name waits, its popup says "Press Enter to search". The Design name is a button that renames (F2).
-- Save status is a live region: Saved, Saving… (not announced), "Saved as Canopi 2 format" once after a migrated Design's first save, Draft with Save as…, Couldn't save (alert) with Details… (the reason and Retry / Save as…), Changed outside Canopi (alert) with Resolve…. Web shows "Saved in this browser" and Download a copy.
+- Save status is a live region: Saved, Saving… (not announced), Draft with Save as…, Couldn't save (alert) with Details… (the reason and Retry / Save as…), Changed outside Canopi (alert) with Resolve…. Web shows "Saved in this browser" and Download a copy.
 - Menus (native on macOS): File (new, open, recent, rename, save, revert, Add data… and Data library… on Desktop, Import GeoJSON…, Export ▸, Settings…, Close, Quit), Edit (history, clipboard, Find plants, selection, species commands, Arrange ▸, Rotate…, locks, stamps), View (zoom, fit, Reset north, Turn view left/right 15°, Pan, place search, saved views, Grid/Snap/Rulers, Labels ▸, Tool names, panels Ctrl 1–9, Background, Theme), Tools (every tool with its key), Help (Command palette… Ctrl Shift P, Keyboard shortcuts F1, Getting started, Report a problem…, About).
 - Checkable items are `menuitemcheckbox` (Labels are radio items); a check column is reserved when a menu has any. Plant color, Plant symbol, Species details, Add to calendar… and Set unit cost… live in the right-click menu, not Edit. Below 760 px the menubar is one Menu button with submenus inline, holding Help, Settings and the Web file icons.
 
@@ -22,7 +22,7 @@ Read the [design system](../system.md) first. Boards: DesignSystem, DesignSystem
 - Dialogs: Literata 20 title, body 14.5, footer actions right-aligned and wrapping, a leading ghost action aligned with the text. Modal, focus-trapped, Esc closes and returns focus. Everything under the scrim is inert: no press, focus, key or shortcut reaches it.
 - Saved views: Save current view… has Name (selected, default "View n") and an optional Title. Manage views… lists each view with its thumbnail (64 × 44), Go to, Rename in place (Enter keeps, Esc cancels only the rename) and Delete.
 - Notices: info (surface-alt), warning (amber), error (red, alert). Toasts are dark, carry Undo when it applies, and do not time out while hovered or focused.
-- Notices never cover controls. An app-wide notice (catalog database missing or damaged; Data library refused; a Web shell notice) takes its own row under the title bar and lowers `--chrome-rail-top` while it shows.
+- Notices never cover controls. An app-wide notice (catalog database missing or damaged; Data library refused; earlier data set aside, dismissible; a Web shell notice) takes its own row under the title bar and lowers `--chrome-rail-top` while it shows.
 - Empty states say what goes here and give the one action to start. Loading keeps the frame: inline "Searching…", row skeletons, a progress bar for long opens. Errors say what happened, what is safe and the next step.
 
 ## Settings

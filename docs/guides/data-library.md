@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Boundaries for Canopi Desktop's local store of LiDAR terrain rasters (imported sources and derived analysis results), their display on the map and the analysis registry. Why: [ADR 0002](../adr/0002-geolibre-module-reuse.md), [ADR 0013](../adr/0013-stored-data-migrations.md), [ADR 0011](../adr/0011-analyses-provenance-and-stories.md), [ADR 0012](../adr/0012-vegetation-analysis.md), [ADR 0014](../adr/0014-pure-rust-raster-engine.md). Rust paths are under `desktop/src/services/lidar/`, frontend paths under `desktop/web/src/`; each rule ends with its enforcing test, or "(advice)".
+Boundaries for Canopi Desktop's local store of LiDAR terrain rasters (imported sources and derived analysis results), their display on the map and the analysis registry. Why: [ADR 0002](../adr/0002-geolibre-module-reuse.md), [ADR 0021](../adr/0021-canopi-2-breaks-stored-data.md), [ADR 0011](../adr/0011-analyses-provenance-and-stories.md), [ADR 0012](../adr/0012-vegetation-analysis.md), [ADR 0014](../adr/0014-pure-rust-raster-engine.md). Rust paths are under `desktop/src/services/lidar/`, frontend paths under `desktop/web/src/`; each rule ends with its enforcing test, or "(advice)".
 
 ## Authorities and boundaries
 

@@ -7,7 +7,7 @@ Canopi is a desktop (Tauri) and Web app for designing agroecological sites on a 
 1. **The map is the canvas.** Basemap, satellite, LiDAR and terrain are the background of the design surface. There is no separate local canvas and no Design location ([ADR 0001](adr/0001-geolocated-map-canvas.md)).
 2. **Every design object is geolocated.** Files store WGS84 longitude/latitude; metres exist only in the runtime's session plane ([ADR 0001](adr/0001-geolocated-map-canvas.md)).
 3. **Reuse GeoLibre before writing code.** Generic GIS pieces are copied with attribution or depended on as light packages; Canopi never forks the GeoLibre app or imports its React code ([ADR 0002](adr/0002-geolibre-module-reuse.md)).
-4. **Stored data migrates forward, in one module per store.** Nothing outside the migration modules reads an older format ([ADR 0013](adr/0013-stored-data-migrations.md)); each store's rule is under [Persistence of app data](#persistence-of-app-data).
+4. **Canopi 2.0 breaks stored data.** No code reads an older format; old files are refused, old local data is moved aside ([ADR 0021](adr/0021-canopi-2-breaks-stored-data.md), [Persistence of app data](#persistence-of-app-data)).
 5. **Delete, don't deprecate.** Dead code, docs, tests, scripts and dependencies go in the change that makes them dead.
 
 ## Stack
@@ -83,9 +83,9 @@ Every `#[tauri::command]` is registered once and is executor-backed async or one
 
 ## Persistence of app data
 
-[ADR 0013](adr/0013-stored-data-migrations.md) decides every store; the floor is `.canopi` v7 and user-DB schema 8, older data is refused with a message:
+[ADR 0021](adr/0021-canopi-2-breaks-stored-data.md) decides every store: no migrations; what is moved aside is never deleted and the user is told once.
 
-- Designs: formats v7 to current open and upgrade in memory; older (Canopi 1.2 and earlier) or newer files are refused with a typed `DesignLoadFailure` that says which.
-- Desktop user DB: a database from Canopi 1.0 to 1.2 (schema 8) upgrades in place through `desktop/src/db/user_db_migrations.rs` (one transaction, integrity check before commit); an older or newer one is refused with a typed error and left untouched; only a damaged one is renamed `<file>.corrupt-<unix-seconds>` and replaced.
+- Designs: only the current format opens; an older or newer file is refused unchanged with a typed `DesignLoadFailure` that says which.
+- Desktop user DB and Drafts: a database or Draft from before 2.0 is renamed `….before-2.0-<unix-seconds>` and Canopi starts fresh; a newer database is refused untouched; a damaged one is renamed `<file>.corrupt-<unix-seconds>`.
 - LiDAR library: an older or corrupt catalogue is set aside and rebuilt from the originals and their `meta.json`; a newer one is refused and the library runs empty and read-only. Originals are never deleted by recovery.
-- Web: independent browser-local records (drafts, settings, species activity, stamps); data from an older Canopi is ignored.
+- Web: independent browser-local records (drafts, settings, species activity, stamps); older data is copied to `before-2.0` backup keys at startup.
