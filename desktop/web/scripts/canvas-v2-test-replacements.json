@@ -12,8 +12,7 @@
     "name": "headless camera driver > normalizes invalid screen metrics before publishing a frame"
   },
   "src/__tests__/camera-controller.test.ts > CameraController > increments once for each effective pan, zoom, resize, and reinitialization": {
-    "file": "src/canvas/runtime/view/headless-driver.test.ts",
-    "name": "headless camera driver > increments once for each effective pan, zoom, resize, and reinitialization"
+    "retired": "revision counts: nothing observes them"
   },
   "src/__tests__/camera-controller.test.ts > CameraController > does not publish no-op viewport mutations": {
     "file": "src/canvas/runtime/view/headless-driver.test.ts",
@@ -28,8 +27,8 @@
     "name": "headless camera driver > keeps imperative camera reads out of the caller reactive graph"
   },
   "src/__tests__/camera-controller.test.ts > CameraController > publishes initialization state and revision atomically once": {
-    "file": "src/canvas/runtime/view/navigation.test.ts",
-    "name": "view navigation > publishes initialization state and revision atomically once"
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > a resize publishes one frame with the new screen size and keeps the camera"
   },
   "src/__tests__/camera-controller.test.ts > CameraController > zooms around the provided screen point": {
     "file": "src/canvas/runtime/view/navigation.test.ts",
@@ -683,7 +682,7 @@
   },
   "src/__tests__/v2-shared-camera-transform.test.ts > deriveSharedMapSceneViewport > derives the existing viewport from pinned MapLibre CSS-pixel points": {
     "file": "src/canvas/runtime/view/camera-contract.test.ts",
-    "name": "camera contract > the planar and geographic builders agree at bearing 0"
+    "name": "camera contract > headless and MercatorTransform agree for pan, zoom and rotate moves"
   },
   "src/__tests__/v2-shared-camera-transform.test.ts > deriveSharedMapSceneViewport > refuses pitch and non-affine local axes": {
     "file": "src/__tests__/v2-shared-map-scene-layer.test.ts",
@@ -699,7 +698,7 @@
   },
   "src/__tests__/v2-shared-camera-transform.test.ts > deriveSharedMapSceneViewport > bounds the discarded affine residual over the qualified local extent": {
     "file": "src/canvas/runtime/view/camera-contract.test.ts",
-    "name": "camera contract > the planar and geographic builders agree at bearing 0"
+    "name": "camera contract > headless and MercatorTransform agree for pan, zoom and rotate moves"
   },
   "src/canvas/runtime/scene-runtime.test.ts > scene canvas runtime > publishes zoom and effective resize updates exactly once": {
     "file": "src/canvas/runtime/scene-runtime.test.ts",

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import '../../../__tests__/support/camera-tolerance'
 
 vi.mock('../../../ipc/species', () => ({
   getSpeciesBatch: vi.fn(async () => []),
@@ -10,7 +11,7 @@ import { geoAt } from '../../../__tests__/support/geo-design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-format'
 import type { CanopiFile } from '../../../types/design'
 import { createSessionPlane, type SessionPlane } from '../../session-plane'
-import { createTestView } from '../../../__tests__/support/test-view'
+import { createTestView, placeOnHost } from '../../../__tests__/support/test-view'
 import { createDetachedCanvasRuntimeAppAdapter } from '../app-adapter'
 import { SceneCanvasRuntime } from '../scene-runtime'
 import { SceneRuntimeReoriginController } from './reorigin'
@@ -132,10 +133,8 @@ function frameOf(runtime: SceneCanvasRuntime): ViewFrame {
 
 /** Centres the view on a session-plane point at the given scale. */
 function centreViewOn(runtime: SceneCanvasRuntime, point: { x: number; y: number }, scale = 1): void {
-  runtime.cameraHost.current().apply({
-    kind: 'place',
-    planar: { x: SCREEN.width / 2 - point.x * scale, y: SCREEN.height / 2 - point.y * scale, scale, bearingDeg: 0 },
-  })
+  placeOnHost(runtime.cameraHost, runtime.querySurface.sessionPlane.peek()!,
+    { x: SCREEN.width / 2 - point.x * scale, y: SCREEN.height / 2 - point.y * scale, scale })
 }
 
 function sceneEdits(runtime: SceneCanvasRuntime): SceneEditCoordinator {

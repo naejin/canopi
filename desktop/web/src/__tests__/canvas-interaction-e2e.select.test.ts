@@ -63,6 +63,7 @@ import {
   installSceneInteractionFixture,
 } from './support/canvas-interaction-setup'
 import { createTestView, type TestView } from './support/test-view'
+import './support/camera-tolerance'
 
 describe('SceneInteractionSession', () => {
   let container: HTMLDivElement
@@ -166,8 +167,8 @@ describe('SceneInteractionSession', () => {
     session.refreshMeasurements()
     const handle = rotationHandle(container)!
     // Without chrome it sits centred above the selection.
-    expect(Number.parseFloat(handle.style.left)).toBe(26)
-    expect(Number.parseFloat(handle.style.top)).toBe(8)
+    expect(Number.parseFloat(handle.style.left)).toBeCloseTo(26, 6)
+    expect(Number.parseFloat(handle.style.top)).toBeCloseTo(8, 6)
 
     // The labelled tool rail covers 240 px on the left, the title bar 60 px on top.
     testView.navigation.setFramingInsets({ top: 60, right: 0, bottom: 0, left: 240 })
@@ -532,8 +533,8 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 220, y: 150 }, { pointerId: 4 })
     events.pointerUp({ x: 220, y: 150 }, { pointerId: 4 })
 
-    expect(testView.viewport().x).toBe(0)
-    expect(testView.viewport().y).toBe(0)
+    expect(testView.viewport().x).toBeCloseTo(0, 6)
+    expect(testView.viewport().y).toBeCloseTo(0, 6)
     session.dispose()
   })
 
@@ -4103,8 +4104,8 @@ describe('SceneInteractionSession', () => {
     events.pointerUp({ x: 130, y: 120 })
     events.releaseSpace()
 
-    expect(testView.viewport().x).toBe(30)
-    expect(testView.viewport().y).toBe(20)
+    expect(testView.viewport().x).toBeCloseTo(30, 6)
+    expect(testView.viewport().y).toBeCloseTo(20, 6)
     expect(render).toHaveBeenCalled()
     session.dispose()
   })

@@ -4,6 +4,7 @@ import type { ToolHandleId } from '../interaction-types'
 import type { ToolHandle } from '../tools/draft'
 import type { ScreenInsets, ViewFrameSource } from '../view/types'
 import { createHandleLayer, type HandleLayer } from './handle-layer'
+import { expectScreenPx } from '../../../__tests__/support/camera-tolerance'
 
 const id = (value: string) => value as ToolHandleId
 
@@ -61,17 +62,17 @@ describe('the handle layer', () => {
     expect(vertex.dataset.canvasHandleGlyph).toBe('vertex')
     expect(vertex.getAttribute('role')).toBe('button')
     expect(vertex.getAttribute('aria-label')).toBe('Zone control point 3')
-    expect(vertex.dataset.canvasHandleScreenX).toBe('25')
-    expect(vertex.dataset.canvasHandleScreenY).toBe('47')
-    expect(vertex.style.left).toBe('15px')
-    expect(vertex.style.top).toBe('37px')
+    expectScreenPx(vertex.dataset.canvasHandleScreenX, 25)
+    expectScreenPx(vertex.dataset.canvasHandleScreenY, 47)
+    expectScreenPx(vertex.style.left, 15)
+    expectScreenPx(vertex.style.top, 37)
     expect(vertex.style.width).toBe('20px')
     expect(vertex.style.height).toBe('20px')
     expect(vertex.style.zIndex).toBe('29')
     const mark = vertex.firstElementChild as HTMLElement
     expect(mark.style.width).toBe('8px')
     expect(mark.style.background).toBe('var(--color-primary)')
-    expect(handle('rect-corner:zone-1:ne')!.style.left).toBe('75px')
+    expectScreenPx(handle('rect-corner:zone-1:ne')!.style.left, 75)
   })
 
   it('draws the rotate handle as today\'s 28 px button centred on its offset anchor', () => {
@@ -84,8 +85,8 @@ describe('the handle layer', () => {
     expect(rotate.style.width).toBe('28px')
     expect(rotate.style.zIndex).toBe('27')
     // (100, 50) is (205, 107) on screen; 28 px above is the button's centre.
-    expect(rotate.style.left).toBe('191px')
-    expect(rotate.style.top).toBe('65px')
+    expectScreenPx(rotate.style.left, 191)
+    expectScreenPx(rotate.style.top, 65)
     expect(rotate.querySelector('svg')).not.toBeNull()
   })
 
@@ -93,8 +94,8 @@ describe('the handle layer', () => {
     mount({ top: 40, right: 0, bottom: 0, left: 60 }).setHandles([{ ...ROTATE, anchor: { x: 0, y: 0 } }], null)
 
     const rotate = handle('rotate')!
-    expect(rotate.style.left).toBe('68px')
-    expect(rotate.style.top).toBe('48px')
+    expectScreenPx(rotate.style.left, 68)
+    expectScreenPx(rotate.style.top, 48)
   })
 
   it('marks the active handle and shows its readout', () => {
@@ -124,7 +125,7 @@ describe('the handle layer', () => {
     handles.setHandles([{ ...VERTEX, anchor: { x: 20, y: 20 }, label: 'Moved' }], null)
 
     expect(handle('vertex:zone-1:2')).toBe(vertex)
-    expect(vertex.style.left).toBe('35px')
+    expectScreenPx(vertex.style.left, 35)
     expect(vertex.getAttribute('aria-label')).toBe('Moved')
     expect(rotate.isConnected).toBe(false)
     expect(handle('rotate')).toBeNull()
@@ -136,9 +137,9 @@ describe('the handle layer', () => {
     view.setViewport({ x: 0, y: 0, scale: 1 })
 
     const vertex = handle('vertex:zone-1:2')!
-    expect(vertex.style.left).toBe('0px')
-    expect(vertex.style.top).toBe('10px')
-    expect(vertex.dataset.canvasHandleScreenX).toBe('10')
+    expectScreenPx(vertex.style.left, 0)
+    expectScreenPx(vertex.style.top, 10)
+    expectScreenPx(vertex.dataset.canvasHandleScreenX, 10)
   })
 
   it('a frame moves handles and creates no element', () => {
@@ -154,8 +155,8 @@ describe('the handle layer', () => {
     view.setViewport({ x: 45, y: -13, scale: 2 })
     view.setViewport({ x: 0, y: 0, scale: 1 })
 
-    expect(handle('vertex:zone-1:2')!.style.left).toBe('0px')
-    expect(handle('rotate')!.style.left).toBe('86px')
+    expectScreenPx(handle('vertex:zone-1:2')!.style.left, 0)
+    expectScreenPx(handle('rotate')!.style.left, 86)
     expect([...root.querySelectorAll('*')]).toEqual(elements)
     expect(created).not.toHaveBeenCalled()
     expect(createdNs).not.toHaveBeenCalled()
@@ -206,7 +207,7 @@ describe('the handle layer', () => {
     layer = null
     view.setViewport({ x: 0, y: 0, scale: 1 })
     expect(root.isConnected).toBe(false)
-    expect(vertex.style.left).toBe('15px')
+    expectScreenPx(vertex.style.left, 15)
   })
 
   it('removes its root when it cannot follow the camera', () => {

@@ -19,10 +19,12 @@ describe('createTestView', () => {
       // Today's CameraController: setViewport adopted the placement, worldToScreen was p × scale + { x, y } and screenToWorld its
       // inverse (camera.ts:373-387 at 52cbff10). The placement is checked against the golden viewport within 1e-6; the
       // projections are self-consistent against the camera's own x/y/scale so that drift is not amplified by a large point.
+      // The camera holds its centre in lon/lat: at 1500 px/m its last bits are a few micropixels.
+      const digits = viewport.scale > 100 ? 4 : 6
       const camera = planarCameraOf(view.view())
       expect(camera.bearingDeg).toBe(0)
-      expect(camera.x).toBeCloseTo(viewport.x, 6)
-      expect(camera.y).toBeCloseTo(viewport.y, 6)
+      expect(camera.x).toBeCloseTo(viewport.x, digits)
+      expect(camera.y).toBeCloseTo(viewport.y, digits)
       expect(camera.scale).toBeCloseTo(viewport.scale, 6)
       for (const point of worldPoints) {
         expect(view.view().worldToScreen(point)).toEqual({ x: point.x * camera.scale + camera.x, y: point.y * camera.scale + camera.y })

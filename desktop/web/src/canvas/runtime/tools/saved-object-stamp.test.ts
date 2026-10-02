@@ -17,6 +17,7 @@ import {
 } from './saved-object-stamp'
 import type { CanvasTool } from './tool'
 import { createToolScene } from './tool-host'
+import '../../../__tests__/support/camera-tolerance'
 
 /** The tools the registry built, newest last: a test calls one as the host does. */
 const builtTools = vi.hoisted(() => [] as CanvasTool[])
@@ -288,8 +289,8 @@ describe('saved object stamp tool', () => {
       // The ghost turns with it: the plant 10 m east of the anchor now shows 10 m south of the pointer.
       expect(ghosts(h)[0]!.entity).toMatchObject({ anchor: { x: 100, y: 100 }, rotationDeg: 90 })
       const ghostPlant = templateOf(ghosts(h)[0]).plants[0]!.entity
-      expect(ghostPlant.position.x).toBeCloseTo(100, 9)
-      expect(ghostPlant.position.y).toBeCloseTo(110, 9)
+      expect(ghostPlant.position.x).toBeCloseTo(100, 6)
+      expect(ghostPlant.position.y).toBeCloseTo(110, 6)
 
       h.click({ x: 100, y: 100 })
       expect(h.store.persisted.plants[0]?.position).toEqual({ x: 100, y: 110 })

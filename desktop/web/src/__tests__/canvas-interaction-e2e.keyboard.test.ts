@@ -25,6 +25,7 @@ import {
   installSceneInteractionFixture,
   rotationHandle,
 } from './support/canvas-interaction-setup'
+import './support/camera-tolerance'
 
 describe('SceneInteractionSession', () => {
   let container: HTMLDivElement
@@ -405,7 +406,7 @@ describe('SceneInteractionSession', () => {
       session.setOverviewMode(true)
       events.keyDown({ key: 'ArrowRight', target: container })
       session.setOverviewMode(false)
-      expect(testView.viewport().x).toBe(before.x - 128)
+      expect(testView.viewport().x).toBeCloseTo(before.x - 128, 6)
 
       const field = document.createElement('textarea')
       container.append(field)
@@ -416,12 +417,12 @@ describe('SceneInteractionSession', () => {
       container.focus()
       events.keyDown({ key: 'ArrowRight', ctrlKey: true, target: container })
       events.keyDown({ key: 'ArrowRight', altKey: true, target: container })
-      expect(testView.viewport().x).toBe(before.x - 128)
+      expect(testView.viewport().x).toBeCloseTo(before.x - 128, 6)
 
       // With a selection the same key nudges instead.
       deps.setSelection([plantTarget('plant-1')])
       events.keyDown({ key: 'ArrowRight', target: container })
-      expect(testView.viewport().x).toBe(before.x - 128)
+      expect(testView.viewport().x).toBeCloseTo(before.x - 128, 6)
       expect(deps.nudge!.nudgeSelected).toHaveBeenCalledExactlyOnceWith({ x: 0.1, y: 0 })
     })
 

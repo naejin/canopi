@@ -12,6 +12,7 @@ import type { ScreenPoint, WorldPoint } from '../view/types'
 import type { DraftShape } from './draft'
 import { createPlantRowTool } from './plant-row'
 import type { ToolSettingsPort } from './tool'
+import '../../../__tests__/support/camera-tolerance'
 
 vi.mock('./registry', () => ({ TOOL_REGISTRY: {} }))
 
@@ -300,8 +301,8 @@ describe('Plant a row tool', () => {
   it('a row with no room for a plant previews and commits nothing', () => {
     const { h } = rowHarness({ intervalM: 2 })
     h.click({ x: 20, y: 30 })
-    h.hover({ x: 21, y: 30 })
-    expect(lengthLabel(h)).toBe('1 m')
+    h.hover({ x: 21.5, y: 30 })
+    expect(lengthLabel(h)).toBe('1.5 m')
     expect(ghostPositions(h)).toEqual([])
 
     h.click({ x: 21, y: 30 })

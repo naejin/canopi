@@ -8,6 +8,7 @@ import { mapZoomToStageScale } from '../canvas/projection'
 import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
 import type { CanopiFile } from '../types/design'
 import { createTestView } from './support/test-view'
+import './support/camera-tolerance'
 
 function emptyDesign(): CanopiFile {
   return {

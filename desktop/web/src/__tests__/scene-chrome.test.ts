@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import './support/camera-tolerance'
 
 import { SceneChromeOverlay } from '../canvas/runtime/scene-chrome'
 import { pressRuler } from '../canvas/runtime/chrome/rulers'

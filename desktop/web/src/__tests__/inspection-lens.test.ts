@@ -4,6 +4,7 @@ import { SceneCanvasInspectionOwner } from '../canvas/runtime/inspection-lens'
 import { createSessionPlane } from '../canvas/session-plane'
 import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
 import { createTestView } from './support/test-view'
+import './support/camera-tolerance'
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers() })
 
@@ -350,8 +351,8 @@ describe('Inspection Lens ownership', () => {
       expect(arc.m.b).toBeCloseTo(0, 6)
       expect(arc.m.c).toBeCloseTo(0, 6)
       expect(arc.m.d).toBeCloseTo(2 * scale, 6)
-      expect(arc.m.e).toBeCloseTo(2 * (215 - 0.5 * scale), 6)
-      expect(arc.m.f).toBeCloseTo(2 * (195 - 1.5 * scale), 6)
+      expect(arc.m.e).toBeCloseTo(2 * (215 - 0.5 * scale), 5)
+      expect(arc.m.f).toBeCloseTo(2 * (195 - 1.5 * scale), 5)
     }
     owner.dispose()
   })

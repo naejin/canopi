@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRulerOverlay, pressRuler } from '../canvas/runtime/chrome/rulers'
 import type { ViewFrame } from '../canvas/runtime/view/types'
 import { testViewFrame } from './support/test-view'
+import './support/camera-tolerance'
 
 type RulerPart = 'horizontal' | 'vertical' | 'corner'
 
@@ -229,7 +230,7 @@ describe('RulerOverlay', () => {
     expect(vertical.height).toBe((324 - 64 - 24) * 2)
     // World 10 m sits at camera y 100, which is 12 px into the vertical ruler below the inset.
     const drawnYs = vi.mocked(context.moveTo).mock.calls.map(([, y]) => y)
-    expect(drawnYs).toContain(100 - 64 - 24)
+    expect(drawnYs.some((y) => Math.abs(y - (100 - 64 - 24)) < 1e-6)).toBe(true)
 
     // A guide released at camera y 100 (the map host's screen) lands at world 10; the gutter ends below the inset.
     const press = pressRuler(findPart<HTMLCanvasElement>(host, 'horizontal'))

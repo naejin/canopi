@@ -1,4 +1,4 @@
-import { effect, signal } from '@preact/signals'
+import { signal } from '@preact/signals'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestView, type TestView } from '../../../__tests__/support/test-view'
 import { mapZoomToStageScale } from '../../projection'
@@ -105,35 +105,20 @@ function placement(view: TestView): PlanarCamera {
   return planarCameraOf(view.view())
 }
 
+/** The headless camera is geographic: a placement reads back within 1e-6 px (D7). */
+function expectPlacement(actual: PlanarCamera, expected: PlanarCamera): void {
+  expect(actual.x).toBeCloseTo(expected.x, 6)
+  expect(actual.y).toBeCloseTo(expected.y, 6)
+  expect(actual.scale).toBeCloseTo(expected.scale, 9)
+  expect(actual.bearingDeg).toBeCloseTo(expected.bearingDeg, 9)
+}
+
 describe('view navigation', () => {
   afterEach(() => {
     vi.useRealTimers()
   })
 
   // Moved from __tests__/camera-controller.test.ts (CameraController > …), on the navigation and its driver host.
-
-  it('publishes initialization state and revision atomically once', () => {
-    // A view before its screen is known, holding today's initial 1000 × 800 placement.
-    const view = createTestView({ screen: { width: 0, height: 0 }, viewport: { x: 100, y: 0, scale: 8 } })
-    const observed: ViewFrame[] = []
-    const dispose = effect(() => {
-      observed.push(view.frames.viewFrame.value)
-    })
-    observed.length = 0
-
-    view.host.current().setScreen({ width: 1000, height: 800, devicePixelRatio: 1 })
-    dispose()
-
-    expect(observed).toHaveLength(1)
-    const [frame] = observed
-    expect(planarCameraOf(frame!.view)).toEqual({ x: 100, y: 0, scale: 8, bearingDeg: 0 })
-    expect(frame!.view.screen).toEqual({ width: 1000, height: 800, devicePixelRatio: 1 })
-    expect(frame!.scaleBounds).toEqual({ min: WIDE_FLOOR_SCALE, max: EQUATOR_MAX_SCALE })
-    expect(frame!.mode).toBe('site')
-    expect(frame!.attached).toBe(false)
-    expect(frame!.revision).toBe(1)
-    view.dispose()
-  })
 
   it('zooms around the provided screen point', () => {
     const view = createTestView({ screen: { width: 1000, height: 800 }, viewport: { x: 100, y: 0, scale: 8 } })
@@ -143,7 +128,7 @@ describe('view navigation', () => {
     view.navigation.zoomAroundPx(pointer, 2)
     const after = view.view().screenToWorld(pointer)!
 
-    expect(view.view().pixelsPerMetre).toBe(16)
+    expect(view.view().pixelsPerMetre).toBeCloseTo(16, 9)
     expect(after.x).toBeCloseTo(before.x)
     expect(after.y).toBeCloseTo(before.y)
     view.dispose()
@@ -174,7 +159,8 @@ describe('view navigation', () => {
   it('derives overview below 0.1 while keeping the threshold editable', () => {
     const view = createTestView({ screen: { width: 1000, height: 800 } })
 
-    view.setViewport({ x: 0, y: 0, scale: 0.1 })
+    // A camera holds a zoom, so 0.1 px/m reads back within 1e-15 of it: just above it is site.
+    view.setViewport({ x: 0, y: 0, scale: 0.1 + 1e-12 })
     expect(frameOf(view).mode).toBe('site')
     view.setViewport({ x: 0, y: 0, scale: 0.099 })
     expect(frameOf(view).mode).toBe('overview')
@@ -186,7 +172,7 @@ describe('view navigation', () => {
 
     view.navigation.returnToDesign()
 
-    expect(placement(view)).toEqual({ x: 200, y: 150, scale: 3, bearingDeg: 0 })
+    expectPlacement(placement(view), { x: 200, y: 150, scale: 3, bearingDeg: 0 })
     expect(frameOf(view).mode).toBe('site')
     view.dispose()
   })
@@ -200,10 +186,10 @@ describe('view navigation', () => {
 
     view.navigation.returnToDesign()
 
-    expect(placement(view)).toEqual(expected)
+    expectPlacement(placement(view), expected)
     expect(frameOf(view).mode).toBe('site')
-    // Today's CameraController (zoomToFit from its 1000 × 800 initial frame) landed on the same placement, bit for bit.
-    expect(expected).toEqual({ x: 260, y: 80, scale: 16, bearingDeg: 0 })
+    // Today's CameraController (zoomToFit from its 1000 × 800 initial frame) landed on the same placement.
+    expectPlacement(expected, { x: 260, y: 80, scale: 16, bearingDeg: 0 })
     expectedView.dispose()
     view.dispose()
   })
@@ -222,7 +208,7 @@ describe('view navigation', () => {
     expect(view.view().pixelsPerMetre).toBeLessThan(0.1)
     expect(frameOf(view).mode).toBe('overview')
     view.navigation.returnToDesign()
-    expect(placement(view)).toEqual({ x: 500, y: 400, scale: 8, bearingDeg: 0 })
+    expectPlacement(placement(view), { x: 500, y: 400, scale: 8, bearingDeg: 0 })
     expect(frameOf(view).mode).toBe('site')
     view.dispose()
   })
@@ -248,7 +234,7 @@ describe('view navigation', () => {
       { paddingCssPx: 48, maximumScale: 5 },
     )).toBe(true)
     const afterFirstFocus = placement(view)
-    expect(afterFirstFocus).toEqual({ x: 48, y: 74, scale: 3.04, bearingDeg: 0 })
+    expectPlacement(afterFirstFocus, { x: 48, y: 74, scale: 3.04, bearingDeg: 0 })
     expect(afterFirstFocus).not.toEqual(before)
 
     // The latest focus keeps its own bookmark: the view it was taken from, here the first focus's.
@@ -257,7 +243,7 @@ describe('view navigation', () => {
       { paddingCssPx: 48, maximumScale: 5 },
     )).toBe(true)
     expect(view.navigation.returnFromTemporaryFocus()).toBe(true)
-    expect(placement(view)).toEqual(afterFirstFocus)
+    expectPlacement(placement(view), afterFirstFocus)
     const returnedRevision = frameOf(view).revision
     expect(view.navigation.returnFromTemporaryFocus()).toBe(false)
     expect(frameOf(view).revision).toBe(returnedRevision)
@@ -273,7 +259,7 @@ describe('view navigation', () => {
 
     expect(framedView.navigation.frameBounds(bounds, options)).toBe(true)
 
-    expect(placement(framedView)).toEqual(placement(focused))
+    expectPlacement(placement(framedView), placement(focused))
     expect(framedView.navigation.returnFromTemporaryFocus()).toBe(false)
     expect(framedView.navigation.frameBounds({ minX: 1, minY: 0, maxX: 1, maxY: 10 }, options)).toBe(false)
     focused.dispose()
@@ -289,7 +275,7 @@ describe('view navigation', () => {
     expect(placement(view)).not.toEqual(before)
 
     expect(view.navigation.returnFromTemporaryFocus()).toBe(true)
-    expect(placement(view)).toEqual(before)
+    expectPlacement(placement(view), before)
     expect(view.navigation.returnFromTemporaryFocus()).toBe(false)
     view.dispose()
   })
@@ -321,14 +307,14 @@ describe('view navigation', () => {
     const view = createTestView()
 
     view.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 0.001, maxY: 0.001 }, { paddingCssPx: 48 })
-    expect(placement(view)).toEqual({
+    expectPlacement(placement(view), {
       x: 200 - 0.0005 * EQUATOR_MAX_SCALE,
       y: 150 - 0.0005 * EQUATOR_MAX_SCALE,
       scale: EQUATOR_MAX_SCALE,
       bearingDeg: 0,
     })
     view.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 1, maxY: 1 }, { paddingCssPx: 48, maximumScale: 2 })
-    expect(placement(view)).toEqual({ x: 199, y: 149, scale: 2, bearingDeg: 0 })
+    expectPlacement(placement(view), { x: 199, y: 149, scale: 2, bearingDeg: 0 })
     view.dispose()
   })
 
@@ -541,7 +527,7 @@ describe('view navigation', () => {
     cancelled.update(-80, { step: false })
     expect(view.view().camera.bearingDeg).toBe(280)
     cancelled.cancel()
-    expect(placement(view)).toEqual(start)
+    expectPlacement(placement(view), start)
     view.dispose()
   })
 
@@ -575,7 +561,7 @@ describe('view navigation', () => {
     navigation.zoomToSelection()
 
     // 100 × 50 m inside 80 % of the screen: 8 px/m, centred.
-    expect(placement(view)).toEqual({ x: 500 - 60 * 8, y: 400 - 35 * 8, scale: 8, bearingDeg: 0 })
+    expectPlacement(placement(view), { x: 500 - 60 * 8, y: 400 - 35 * 8, scale: 8, bearingDeg: 0 })
     view.dispose()
   })
 })

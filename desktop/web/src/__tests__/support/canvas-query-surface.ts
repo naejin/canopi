@@ -16,7 +16,8 @@ import type { PlacedPlant } from '../../types/design'
 import { createViewReadSurface } from '../../canvas/runtime/view/frame-source'
 import type { ViewReadSurface } from '../../canvas/runtime/view/read-surface'
 import type { ViewFrame, ViewFrameSource, ViewScreen } from '../../canvas/runtime/view/types'
-import { buildViewTransformFromPlane } from '../../canvas/runtime/view/view-transform'
+import { planarToViewCamera } from '../../canvas/runtime/view/camera-math'
+import { buildViewTransform } from '../../canvas/runtime/view/view-transform'
 import { createSessionPlane, type SessionPlane } from '../../canvas/session-plane'
 import { TEST_GEO_ORIGIN } from './geo-design'
 
@@ -211,8 +212,8 @@ function createFollowingTestView(
 }
 
 function testViewFrame(placement: TestPlacement, screen: ViewScreen, plane: SessionPlane, revision: number): ViewFrame {
-  const view = buildViewTransformFromPlane({
-    planar: { ...placement, bearingDeg: 0 },
+  const view = buildViewTransform({
+    camera: planarToViewCamera({ ...placement, bearingDeg: 0 }, screen, plane),
     screen,
     plane,
     planeRevision: 0,

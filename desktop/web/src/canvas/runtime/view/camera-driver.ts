@@ -3,7 +3,7 @@
 import type { ReadonlySignal } from '@preact/signals'
 import type { SessionPlane } from '../../session-plane'
 import type { NavigationPolicy } from './navigation-policy'
-import type { DriverFrameSource, PlanarCamera, ScreenInsets, ScreenPoint, ViewCamera, ViewFrameSource, ViewScreen } from './types'
+import type { DriverFrameSource, ScreenInsets, ScreenPoint, ViewCamera, ViewFrameSource, ViewScreen } from './types'
 
 export type CameraMove =
   /** deltaPx is content movement: the ground under the pointer moves by deltaPx. New centre = unproject(screenCentre − deltaPx). */
@@ -26,12 +26,6 @@ export type CameraMove =
       readonly target: ViewCamera               // pitchDeg: 0 by type
       readonly animation: 'none' | 'fly'
     }
-  /**
-   * setViewport's exact placement (createTestView, and the legacy facade's setViewport and reprojectViewport). The headless driver
-   * clamps the scale as today and adopts the rest bit for bit; the MapLibre driver converts it to a ViewCamera through the plane once
-   * and jumps.
-   */
-  | { readonly kind: 'place'; readonly planar: PlanarCamera }
 
 export interface CameraDriver {
   readonly frames: DriverFrameSource
@@ -40,9 +34,8 @@ export interface CameraDriver {
   /** The bearing a running tween or flight will end at, else the live bearing. */
   bearingTarget(): number
   stopAnimation(): void
-  /** The runtime's plane effect calls it on a re-origin, and on any plane change while a map is attached: the MapLibre driver
-   *  re-expresses the map's frame in the new plane with the map left still; the headless driver applies old.transformTo(new) to its
-   *  PlanarCamera in plane terms, so its ground is kept, in one frame. */
+  /** The runtime's plane effect calls it on a re-origin, and on any plane change while a map is attached: either driver keeps its
+   *  geographic camera (the map left still) and re-expresses its frame in the new plane, so its ground is kept, in one frame. */
   planeChanged(plane: SessionPlane): void
   setScreen(screen: ViewScreen): void
   setInsets(insets: ScreenInsets): void

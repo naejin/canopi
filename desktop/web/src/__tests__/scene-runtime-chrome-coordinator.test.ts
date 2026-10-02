@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import './support/camera-tolerance'
 
 import type { ViewFrame } from '../canvas/runtime/view/types'
 import { testViewFrame } from './support/test-view'

@@ -8,6 +8,7 @@ import {
 import type { ToolHandleId } from '../../interaction-types'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../../scene-runtime/transactions'
 import type { ScreenPoint, WorldPoint } from '../../view/types'
+import '../../../../__tests__/support/camera-tolerance'
 
 const harnesses: ToolHarness[] = []
 

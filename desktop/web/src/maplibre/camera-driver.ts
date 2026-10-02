@@ -11,7 +11,6 @@ import { startBearingTween, type BearingTween } from '../canvas/runtime/view/bea
 import type { CameraDriver, CameraDriverDeps, CameraDriverFailure, CameraMove } from '../canvas/runtime/view/camera-driver'
 import {
   panCamera,
-  planarToViewCamera,
   rotateCameraAround,
   zoomCameraAround,
 } from '../canvas/runtime/view/camera-math'
@@ -91,7 +90,6 @@ export function createMapLibreCameraDriver(
   let tween: BearingTween | null = null
   let frameRequest: number | null = null
   let flight: Flight | null = null
-  let revision = 0
   let disposed = false
   /** Depth of the driver's own map calls: the 'move' and 'moveend' events they fire are not MapLibre's own changes. */
   let ownCalls = 0
@@ -217,7 +215,7 @@ export function createMapLibreCameraDriver(
       screen: state.screen,
       plane: state.plane,
       planeRevision: state.planeRevision,
-      revision,
+      revision: 0,
     })
     return Object.freeze<ViewFrame>({
       view,
@@ -226,7 +224,7 @@ export function createMapLibreCameraDriver(
       insets: state.insets,
       attached: true,
       moving: state.moving,
-      revision,
+      revision: 0,
     })
   }
 
@@ -235,7 +233,6 @@ export function createMapLibreCameraDriver(
     const state = frameState(camera)
     if (sameFrameState(published, state)) return
     published = state
-    revision += 1
     const frame = buildFrame(state)
     frames.publish(frame)
     while (!frames.dispatching && queued.length > 0 && live()) queued.shift()!()
@@ -404,15 +401,6 @@ export function createMapLibreCameraDriver(
         stopTween()
         if (move.animation === 'fly') fly(normalised, start.camera)
         else jumpTo(constrainCamera(normalised, screen, deps.policy()))
-        return
-      }
-      case 'place': {
-        const { planar } = move
-        if (![planar.x, planar.y, planar.scale, planar.bearingDeg].every(Number.isFinite) || planar.scale <= 0) return
-        if (!startingCamera(false)) return
-        stopTween()
-        // Converted through the plane once; MapLibre holds a geographic camera.
-        jumpTo(constrainCamera(planarToViewCamera(planar, screen, plane), screen, deps.policy()))
         return
       }
     }

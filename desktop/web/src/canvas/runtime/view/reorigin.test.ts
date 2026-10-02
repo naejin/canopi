@@ -41,11 +41,15 @@ describe('re-origin', () => {
       view.dispose()
     }
 
-    // In plane terms, never through lon/lat: at bearing 0, today's reprojection bit for bit (today's CameraController's
-    // reprojectViewport(first.transformTo(next)) from the same viewport, recorded at 52cbff10).
+    // The camera keeps its ground through lon/lat (D7): at bearing 0 the placement is today's reprojection within 1e-6 px (today's
+    // CameraController's reprojectViewport(first.transformTo(next)) from the same viewport, recorded at 52cbff10).
     const view = createTestView({ plane: first, viewport: { x: -19_850.25, y: 5_100.5, scale: 1.25 } })
     view.host.current().planeChanged(next)
-    expect(planarCameraOf(view.view())).toEqual({ x: 5149.750000000808, y: -1149.4999999983747, scale: 1.2511237201432013, bearingDeg: 0 })
+    const placement = planarCameraOf(view.view())
+    expect(placement.x).toBeCloseTo(5149.750000000808, 6)
+    expect(placement.y).toBeCloseTo(-1149.4999999983747, 6)
+    expect(placement.scale).toBeCloseTo(1.2511237201432013, 9)
+    expect(placement.bearingDeg).toBe(0)
     view.dispose()
   })
 

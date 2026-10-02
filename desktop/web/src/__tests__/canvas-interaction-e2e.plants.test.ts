@@ -37,6 +37,7 @@ import {
   plantHoverTooltip,
   installSceneInteractionFixture,
 } from './support/canvas-interaction-setup'
+import './support/camera-tolerance'
 
 describe('SceneInteractionSession', () => {
   let container: HTMLDivElement

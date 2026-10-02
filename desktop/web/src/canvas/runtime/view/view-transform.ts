@@ -1,12 +1,10 @@
 // canvas/runtime/view/view-transform.ts  (pure)
 //
 // Owns the one ViewTransform (ADR 0016): the world-to-screen similarity every reader projects with, its inverse, quads, bulk
-// anchors and ground resolution. Two builders anchor it: on MapLibre's geographic camera, or on the headless driver's
-// PlanarCamera. At pitch 0 both are the same similarity, and at bearing 0 the planar one is today's arithmetic bit for bit.
+// anchors and ground resolution, built from a geographic camera (both drivers' truth) and the session plane.
 
 import { mapZoomToStageScale } from '../../projection'
 import type { SessionPlane } from '../../session-plane'
-import { planarToViewCamera, viewCameraToPlanar } from './camera-math'
 import { angularDistanceToNorth, bearingCosSin } from './navigation-policy'
 import type {
   PlanarCamera,
@@ -24,8 +22,8 @@ import type {
 const NORTH_UP_TOLERANCE_DEG = 0.05
 const NO_INSETS: ScreenInsets = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 })
 
-/** Pitch 0, geographic: centre, zoom and bearing + plane.mercatorOrigin / mercatorUnitsPerMeter → similarity. The MapLibre driver
- *  (whose truth is MapLibre's camera), the snapshot map's driver and the lens call this. */
+/** Pitch 0: centre, zoom and bearing + plane.mercatorOrigin / mercatorUnitsPerMeter → similarity. Both drivers, the snapshot map's
+ *  driver and the lens call this. The plane origin lands at turn(−centre × scale, bearing) + the screen centre. */
 export function buildViewTransform(input: {
   readonly camera: ViewCamera
   readonly screen: ViewScreen
@@ -33,27 +31,20 @@ export function buildViewTransform(input: {
   readonly planeRevision: number
   readonly revision: number
 }): ViewTransform {
-  return similarityTransform(input.camera, viewCameraToPlanar(input.camera, input.screen, input.plane), input)
+  const { camera, screen, plane } = input
+  const scale = mapZoomToStageScale(camera.zoom, plane.origin.lat)
+  const centre = plane.toPlane(camera.center)
+  const [cos, sin] = bearingCosSin(camera.bearingDeg)
+  const placement: PlanarCamera = {
+    x: screen.width / 2 - (cos * centre.x + sin * centre.y) * scale,
+    y: screen.height / 2 - (cos * centre.y - sin * centre.x) * scale,
+    scale,
+    bearingDeg: camera.bearingDeg,
+  }
+  return similarityTransform(camera, placement, input)
 }
 
-/**
- * Pitch 0, planar: the headless driver's builder (ADR 0016, amended 2026-09-30). The similarity comes straight from the PlanarCamera;
- * at bearing 0 it is today's arithmetic (worldToScreen p × scale + { x, y }, screenToWorld (s − { x, y }) / scale, affine
- * [scale, 0, 0, scale, x, y], pixelsPerMetre = scale), so readbacks are bit for bit today's. `camera` is planarToViewCamera's.
- * At bearing 0 it agrees with buildViewTransform for the same camera within the contract tolerance (view/camera-contract.test.ts).
- */
-export function buildViewTransformFromPlane(input: {
-  readonly planar: PlanarCamera
-  readonly screen: ViewScreen
-  readonly plane: SessionPlane
-  readonly planeRevision: number
-  readonly revision: number
-}): ViewTransform {
-  const camera = planarToViewCamera(input.planar, input.screen, input.plane)
-  return similarityTransform(Object.freeze({ ...camera, center: Object.freeze(camera.center) }), input.planar, input)
-}
-
-/** The PlanarCamera a pitch-0 transform places the plane with, from either builder: exact, since the builders keep its translation and scale. */
+/** The PlanarCamera a pitch-0 transform places the plane with (the chrome and the test view read it). */
 export function planarCameraOf(view: ViewTransform): PlanarCamera {
   const affine = view.planar?.affine
   if (!affine) throw new Error('A pitched view has no planar camera.')
@@ -72,7 +63,6 @@ function similarityTransform(
   const { screen, plane } = input
   const { x: tx, y: ty, scale } = planar
   const [cos, sin] = bearingCosSin(planar.bearingDeg)
-  // At bearing 0, cos = 1 and sin = 0, so this is today's CameraController expression bit for bit.
   const a = scale * cos
   const b = 0 - scale * sin
   const c = scale * sin

@@ -8,6 +8,7 @@ vi.mock('../ipc/species', () => ({
 }))
 
 import { geoAt } from '../__tests__/support/geo-design'
+import { placeOnHost } from '../__tests__/support/test-view'
 import type { WorkspaceMapContributionSnapshot } from '../app/canvas-map-surface/workspace-map-contribution-adapter'
 import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
 import { SETTLE_MS } from '../canvas/runtime/view/frame-source'
@@ -51,7 +52,7 @@ function cameraOf(runtime: SceneCanvasRuntime) {
   const driver = () => runtime.cameraHost.current()
   return {
     setViewport: (placement: { x: number; y: number; scale: number }) =>
-      driver().apply({ kind: 'place', planar: { ...placement, bearingDeg: 0 } }),
+      placeOnHost(runtime.cameraHost, runtime.querySurface.sessionPlane.peek()!, placement),
     panBy: (deltaPx: { x: number; y: number }) => driver().apply({ kind: 'pan-by', deltaPx }),
     zoomIn: () => runtime.commandSurface.viewport.zoomIn(),
   }

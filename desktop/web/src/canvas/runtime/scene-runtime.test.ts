@@ -6,6 +6,7 @@ import { effect } from '@preact/signals'
 import { stageScaleToMapZoom } from '../projection'
 import { DEFAULT_NEW_DESIGN_VIEW } from '../session-plane'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import '../../__tests__/support/camera-tolerance'
 
 vi.mock('../../ipc/species', async (importOriginal) => ({
   ...await importOriginal<typeof import('../../ipc/species')>(),
@@ -55,6 +56,7 @@ import { locale, plantSpacingIntervalM } from '../../app/settings/state'
 import type { CanopiFile, PanelTarget } from '../../types/design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../generated/canopi-design-format'
 import { geoAt } from '../../__tests__/support/geo-design'
+import { placeOnHost } from '../../__tests__/support/test-view'
 import { createTestRendererView } from '../../__tests__/support/scene-renderer-snapshot'
 import { speciesTarget } from '../../target'
 import {
@@ -290,9 +292,9 @@ function frameOf(runtime: SceneCanvasRuntime): ViewFrame {
   return runtime.cameraHost.frames.viewFrame.peek()
 }
 
-/** An exact placement on the runtime's live camera, bearing 0. */
+/** A placement on the runtime's live camera, bearing 0, through the runtime's plane. */
 function placeOn(runtime: SceneCanvasRuntime, placement: { x: number; y: number; scale: number }): void {
-  runtime.cameraHost.current().apply({ kind: 'place', planar: { ...placement, bearingDeg: 0 } })
+  placeOnHost(runtime.cameraHost, runtime.querySurface.sessionPlane.peek()!, placement)
 }
 
 /** A pan of the runtime's live camera, as a map gesture moves it. */

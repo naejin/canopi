@@ -18,6 +18,7 @@ import {
 import { SceneStore } from '../scene'
 import type { ToolHandle } from '../tools/draft'
 import type { TextEntryRequest } from '../tools/tool'
+import { expectScreenPx } from '../../../__tests__/support/camera-tolerance'
 
 vi.mock('../tools/registry', () => ({ TOOL_REGISTRY: {} }))
 
@@ -76,8 +77,8 @@ describe('the session\'s chrome', () => {
     session.setTool('rectangle')
     const handle = drawnHandle()!
     expect(handle.getAttribute('aria-label')).toBe('Zone control point 1')
-    expect(handle.dataset.canvasHandleScreenX).toBe('40')
-    expect(handle.dataset.canvasHandleScreenY).toBe('60')
+    expectScreenPx(handle.dataset.canvasHandleScreenX, 40)
+    expectScreenPx(handle.dataset.canvasHandleScreenY, 60)
 
     events.pointerDown({ x: 40, y: 60 }, { target: handle })
     expect(rectangle.last('handle-drag')?.handle).toBe(CORNER.id)
@@ -135,7 +136,7 @@ describe('the session\'s chrome', () => {
     events.pointerDown({ x: 30, y: 40 })
     events.pointerUp({ x: 30, y: 40 })
     const entry = container.querySelector<HTMLTextAreaElement>('textarea[data-canvas-text-entry]')!
-    expect(entry.style.left).toBe('30px')
+    expectScreenPx(entry.style.left, 30)
     expect(entry.placeholder).toBe('en:canvas.textNote.placeholder')
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     expect(document.activeElement).toBe(entry)

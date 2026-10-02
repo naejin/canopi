@@ -18,7 +18,6 @@ import type { CameraMove } from './camera-driver'
 import { cameraKeepingPoint, planarToViewCamera } from './camera-math'
 import { constrainCamera, createNavigationPolicy, normaliseBearing } from './navigation-policy'
 import type { ScreenPoint, ViewCamera, ViewScreen, ViewTransform, WorldPoint } from './types'
-import { buildViewTransform, buildViewTransformFromPlane } from './view-transform'
 
 /** The members of MapLibre's LngLat and MercatorTransform this test calls. */
 interface SourceLngLat { readonly lng: number; readonly lat: number }
@@ -233,34 +232,6 @@ describe('camera contract', () => {
         const underPoint = map.transform.locationToScreenPoint(new LngLat(ground.lon, ground.lat))
         expect(Math.abs(underPoint.x - screenPoint.x)).toBeLessThanOrEqual(TOLERANCE_PX)
         expect(Math.abs(underPoint.y - screenPoint.y)).toBeLessThanOrEqual(TOLERANCE_PX)
-      }
-    }
-  })
-
-  it('the planar and geographic builders agree at bearing 0', () => {
-    const origins = [{ lon: 0, lat: 0 }, { lon: 2.3522, lat: 48.8566 }, { lon: -58.4, lat: -34.6 }, { lon: 24.9, lat: 60.2 }]
-    for (const origin of origins) {
-      const plane = createSessionPlane(origin)
-      for (const zoom of [3, 10.5, 16.25, 20, 22]) {
-        const scale = mapZoomToStageScale(zoom, origin.lat)
-        for (const offset of [{ x: 0, y: 0 }, { x: 83.05, y: -41.25 }, { x: -270, y: 180 }]) {
-          const planar = { x: SCREEN.width / 2 + offset.x, y: SCREEN.height / 2 + offset.y, scale, bearingDeg: 0 }
-          const headless = buildViewTransformFromPlane({ planar, screen: SCREEN, plane, planeRevision: 1, revision: 1 })
-          const geographic = buildViewTransform({ camera: headless.camera, screen: SCREEN, plane, planeRevision: 1, revision: 1 })
-
-          expect(geographic.camera).toBe(headless.camera)
-          expect(Math.abs(geographic.pixelsPerMetre / headless.pixelsPerMetre - 1)).toBeLessThan(1e-12)
-          for (const point of samplePoints(headless)) {
-            const fromPlane = headless.worldToScreen(point)
-            const fromCamera = geographic.worldToScreen(point)
-            expect(Math.abs(fromPlane.x - fromCamera.x)).toBeLessThanOrEqual(TOLERANCE_PX)
-            expect(Math.abs(fromPlane.y - fromCamera.y)).toBeLessThanOrEqual(TOLERANCE_PX)
-          }
-          const map = mapLibreTransform(SCREEN)
-          map.show(headless.camera)
-          expectProjectsLikeMapLibre(headless, map.transform, plane)
-          expectProjectsLikeMapLibre(geographic, map.transform, plane)
-        }
       }
     }
   })

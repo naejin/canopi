@@ -42,6 +42,7 @@ import { createSavedObjectStampTool } from './tools/saved-object-stamp'
 import type { ToolSource } from './tools/tool'
 import { createZoneDragTool } from './tools/zone-drag'
 import type { ViewFrame } from './view/types'
+import '../../__tests__/support/camera-tolerance'
 
 vi.mock('./tools/registry', () => ({ TOOL_REGISTRY: {} }))
 

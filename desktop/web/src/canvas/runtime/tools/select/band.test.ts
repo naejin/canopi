@@ -6,6 +6,7 @@ import {
   type ToolHarnessOptions,
 } from '../../../../__tests__/support/tool-harness'
 import type { SceneDesignObjectTarget } from '../../scene/design-object-targets'
+import '../../../../__tests__/support/camera-tolerance'
 
 const harnesses: ToolHarness[] = []
 

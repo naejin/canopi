@@ -13,15 +13,13 @@ export interface ScreenInsets { readonly top: number; readonly right: number; re
 export interface GeoPoint { readonly lon: number; readonly lat: number }
 export interface GeoBounds { readonly west: number; readonly south: number; readonly east: number; readonly north: number }
 
-/** World-axis box in plane metres. Declared here by the seams commit; camera.ts keeps its own copies of the three bounds types
- *  until 0A-1 replaces them with a re-export from this file (plan, Seams "Types only"), and re-exports them until 0D2 ends. */
+/** World-axis box in plane metres. */
 export interface SceneBounds { readonly minX: number; readonly minY: number; readonly maxX: number; readonly maxY: number }
 export interface SceneBoundsOptions {
   /** The scene's extent at a candidate scale: corner points of every plant, zone and note footprint, in plane metres.
-   *  Notes and default-mode plants are screen-sized, so the extent depends on the scale (today camera.ts:521-565,
-   *  :640-670). The runtime supplies it (command-surface.ts, document-surface.ts) through canvas/runtime/scene-extent.ts, from
-   *  plant-presentation.ts, annotation-layout.ts and zone-geometry.ts, so view/ imports none of them (P4). Replaces camera.ts's
-   *  plantContext; when it is absent the legacy facade falls back to today's computeSceneBounds (0A to the end of 0D2). */
+   *  Notes and default-mode plants are screen-sized, so the extent depends on the scale. The runtime supplies it
+   *  (command-surface.ts, document-surface.ts) through canvas/runtime/scene-extent.ts, from plant-presentation.ts,
+   *  annotation-layout.ts and zone-geometry.ts, so view/ imports none of them (P4). Without it a fit sees an empty scene. */
   readonly extentPoints?: (pixelsPerMetre: number) => readonly WorldPoint[]
   /** Scale that frames an empty Design, centred on the session plane origin. */
   readonly emptySceneScale?: number
@@ -49,11 +47,11 @@ export interface ViewCamera {
 }
 
 /**
- * The headless driver's camera (ADR 0016, amended 2026-09-30): today's CameraController placement plus a bearing, in CSS px and
- * session-plane metres. A plane point p lands on screen at turn(p × scale, bearingDeg) + { x, y }: scaled, turned counter-clockwise
- * on screen by bearingDeg about the screen origin (so the compass direction bearingDeg points up), then translated, so { x, y } is the
- * plane origin's screen point; at bearing 0 it is today's viewport. The headless driver moves it with today's arithmetic, bit for
- * bit at bearing 0, and derives its ViewCamera from it for readers; the MapLibre driver never holds one.
+ * A plane placement: a plane point p lands on screen at turn(p × scale, bearingDeg) + { x, y }: scaled, turned counter-clockwise
+ * on screen by bearingDeg about the screen origin (so the compass direction bearingDeg points up), then translated, so { x, y } is
+ * the plane origin's screen point; at bearing 0 it is today's CameraController viewport. No driver holds one (both hold a
+ * ViewCamera): it is what a fit computes (fit.ts), what planarCameraOf reads off a transform for the chrome, and how tests place
+ * the test view. A placement read back from a camera matches within 1e-6 px, not bit for bit.
  */
 export interface PlanarCamera { readonly x: number; readonly y: number; readonly scale: number; readonly bearingDeg: number }
 

@@ -2,6 +2,7 @@
 import 'pixi.js/unsafe-eval'
 import { AlphaFilter, Container, Graphics, Text, type GraphicsContext } from 'pixi.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import '../../../__tests__/support/camera-tolerance'
 
 import { createTestRendererView, createTestSceneRendererSnapshot } from '../../../__tests__/support/scene-renderer-snapshot'
 import { CANVAS_CHROME_FONT_FAMILY, CANVAS_CHROME_MONO_FONT_FAMILY } from '../../chrome-fonts'
@@ -190,7 +191,7 @@ describe('draft layer', () => {
 
     // The world container carries the placement; world shapes keep their metres.
     expect(global(layer.worldDraftRoot)).toEqual({ x: 100, y: 50 })
-    expect(layer.worldDraftRoot.scale.x).toBe(10)
+    expect(layer.worldDraftRoot.scale.x).toBeCloseTo(10, 9)
     const [polyline, polygon, quad, ellipse, zoneGhost, ...extraWorld] = layer.worldDraftRoot.children as Graphics[]
     expect(extraWorld).toEqual([])
     expect(tracedPoints(paintInstructions(polyline!, 'stroke')[1]!)).toEqual([{ x: 1, y: 2 }, { x: 3, y: 2 }])

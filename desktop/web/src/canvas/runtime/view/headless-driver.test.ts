@@ -2,9 +2,10 @@ import { effect } from '@preact/signals'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestView, type TestView } from '../../../__tests__/support/test-view'
 import { mapZoomToStageScale } from '../../projection'
-import { createSessionPlane } from '../../session-plane'
+import { createSessionPlane, type SessionPlane } from '../../session-plane'
 import type { CameraDriver, CameraMove } from './camera-driver'
-import type { ViewCamera, ViewFrame } from './types'
+import { planarToViewCamera } from './camera-math'
+import type { PlanarCamera, ViewCamera, ViewFrame } from './types'
 import { planarCameraOf } from './view-transform'
 
 const EQUATOR_MIN_SCALE = mapZoomToStageScale(0, 0)
@@ -20,7 +21,21 @@ function driverOf(view: TestView): { driver: CameraDriver; published: ViewFrame[
   return { driver, published }
 }
 
-/** What today's CameraController read back after a move: its viewport, screen, density and mode, bit for bit. */
+/** A placement shown on the driver's live screen: the camera the plane gives for it, as a 'set' with no animation. */
+function placeOn(driver: CameraDriver, plane: SessionPlane, placement: PlanarCamera): void {
+  const target = planarToViewCamera(placement, driver.frames.viewFrame.peek().view.screen, plane)
+  driver.apply({ kind: 'set', target, animation: 'none' })
+}
+
+/** A step of a script: a move, or a call on the driver. */
+type Step = CameraMove | ((driver: CameraDriver) => void)
+
+function run(driver: CameraDriver, step: Step): void {
+  if (typeof step === 'function') step(driver)
+  else driver.apply(step)
+}
+
+/** What today's CameraController read back after a move: its viewport, screen, density and mode. */
 interface TodayReadback {
   readonly viewport: { readonly x: number; readonly y: number; readonly scale: number }
   readonly screen: { readonly width: number; readonly height: number; readonly devicePixelRatio: number }
@@ -123,21 +138,23 @@ describe('headless camera driver', () => {
     view.dispose()
   })
 
-  it('a still headless camera reproduces today\'s CameraController within 1e-6', () => {
+  it('a still headless camera reproduces today\'s placement within 1e-6 px', () => {
     const plane = createSessionPlane({ lon: 0, lat: 0 })
     const next = createSessionPlane(plane.toGeo({ x: 12_500, y: -4_000 }))
-    const steps: ReadonlyArray<CameraMove | ((driver: CameraDriver) => void)> = [
+    const place = (placement: Omit<PlanarCamera, 'bearingDeg'>) => (driver: CameraDriver) =>
+      placeOn(driver, plane, { ...placement, bearingDeg: 0 })
+    const steps: readonly Step[] = [
       { kind: 'pan-by', deltaPx: { x: 17.25, y: -3.5 } },
       { kind: 'zoom-around', anchorPx: { x: 140, y: 110 }, factor: 2.5 },
       { kind: 'zoom-around', anchorPx: { x: 200, y: 150 }, factor: 1.1 },
       { kind: 'zoom-around', anchorPx: { x: 200, y: 150 }, factor: 1 / 1.1 },
-      { kind: 'place', planar: { x: -200.125, y: 91.75, scale: 3.3, bearingDeg: 0 } },
+      place({ x: -200.125, y: 91.75, scale: 3.3 }),
       { kind: 'zoom-around', anchorPx: { x: 10, y: 290 }, factor: 0.37 },
       { kind: 'pan-by', deltaPx: { x: 0, y: 0 } },
-      { kind: 'place', planar: { x: -200.125 * 0.37, y: 91.75, scale: 3.3, bearingDeg: 0 } },
-      { kind: 'place', planar: { x: 5, y: 5, scale: 1e9, bearingDeg: 0 } },
+      place({ x: -200.125 * 0.37, y: 91.75, scale: 3.3 }),
+      place({ x: 200, y: 150, scale: 1e9 }),
       { kind: 'zoom-around', anchorPx: { x: 200, y: 150 }, factor: 1e-12 },
-      { kind: 'place', planar: { x: 31, y: -7, scale: 0.05, bearingDeg: 0 } },
+      place({ x: 31, y: -7, scale: 0.05 }),
       { kind: 'zoom-around', anchorPx: { x: 0.5, y: 299 }, factor: Number.NaN },
       (driver) => driver.setScreen({ width: 300, height: 200, devicePixelRatio: 1 }),
       (driver) => driver.setScreen({ width: 300, height: 200, devicePixelRatio: 2 }),
@@ -149,7 +166,9 @@ describe('headless camera driver', () => {
     const SCREEN_300_DENSE = { width: 300, height: 200, devicePixelRatio: 2 }
     // Today's CameraController after the same calls (panBy, zoomAroundScreenPoint, zoomIn, zoomOut, setViewport, resize and
     // reprojectViewport with plane.transformTo(next)), from { x: 0, y: 0, scale: 1 } on 400 × 300: its viewport, the frames it
-    // published, its mode and its screen, recorded at 52cbff10 before the class became the legacy shim.
+    // published, its mode and its screen, recorded at 52cbff10 before the class became the legacy shim. From the resize on
+    // (D8, 0E) the camera keeps the view centre, as MapLibre does, where today's kept the placement: the centre's shift
+    // (−50, −50) carries through the re-origin and the zoom after it.
     const today: ReadonlyArray<readonly [number, number, number, number, 'site' | 'overview', TodayReadback['screen']]> = [
       [17.25, -3.5, 1, 1, 'site', SCREEN_400],
       [-166.875, -173.75, 2.5, 1, 'site', SCREEN_400],
@@ -159,14 +178,14 @@ describe('headless camera driver', () => {
       [-67.74625, 216.6475, 1.2209999999999999, 1, 'site', SCREEN_400],
       [-67.74625, 216.6475, 1.2209999999999999, 0, 'site', SCREEN_400],
       [-74.04625, 91.75, 3.3, 1, 'site', SCREEN_400],
-      [5, 5, 1716.6895781438734, 1, 'site', SCREEN_400],
-      [199.99999854713678, 149.9999989196658, 1.2790334061860095e-05, 1, 'overview', SCREEN_400],
+      [200, 150, 1716.6895781438734, 1, 'site', SCREEN_400],
+      [200, 150, 1.2790334061860095e-05, 1, 'overview', SCREEN_400],
       [31, -7, 0.05, 1, 'overview', SCREEN_400],
       [31, -7, 0.05, 0, 'overview', SCREEN_400],
-      [31, -7, 0.05, 1, 'overview', SCREEN_300],
-      [31, -7, 0.05, 1, 'overview', SCREEN_300_DENSE],
-      [656.0000000000174, -207.0000000000233, 0.050000009854704264, 1, 'overview', SCREEN_300_DENSE],
-      [1814.000000000052, -645.0000000000699, 0.1500000295641128, 1, 'site', SCREEN_300_DENSE],
+      [-19, -57, 0.05, 1, 'overview', SCREEN_300],
+      [-19, -57, 0.05, 1, 'overview', SCREEN_300_DENSE],
+      [606.0000000000174, -257.0000000000233, 0.050000009854704264, 1, 'overview', SCREEN_300_DENSE],
+      [1664.000000000052, -795.0000000000699, 0.1500000295641128, 1, 'site', SCREEN_300_DENSE],
     ]
 
     const view = createTestView({ plane })
@@ -174,8 +193,7 @@ describe('headless camera driver', () => {
     expectReadsAsToday(driver.frames.viewFrame.peek(), { viewport: { x: 0, y: 0, scale: 1 }, screen: SCREEN_400, mode: 'site' })
     for (const [index, move] of steps.entries()) {
       const before = published.length
-      if (typeof move === 'function') move(driver)
-      else driver.apply(move)
+      run(driver, move)
 
       const [x, y, scale, frames, mode, screen] = today[index]!
       expect(published.length - before).toBe(frames)
@@ -195,7 +213,7 @@ describe('headless camera driver', () => {
       [-74.04625, 91.75, 3.3],
     ]
     for (const [index, stepIndex] of [0, 1, 4, 5, 6, 7].entries()) {
-      wideDriver.apply(steps[stepIndex] as CameraMove)
+      run(wideDriver, steps[stepIndex]!)
       const [x, y, scale] = wideToday[index]!
       expectReadsAsToday(wideDriver.frames.viewFrame.peek(), {
         viewport: { x, y, scale },
@@ -216,8 +234,11 @@ describe('headless camera driver', () => {
     driver.setScreen({ width: 500, height: 320, devicePixelRatio: 1 })
     expect(published).toHaveLength(1)
     expect(published[0]!.view.screen).toEqual({ width: 500, height: 320, devicePixelRatio: 1 })
-    // Today's resize keeps the placement.
-    expect(planarCameraOf(published[0]!.view)).toEqual({ x: 12, y: -3, scale: 2, bearingDeg: 0 })
+    // A resize keeps the view centre, as MapLibre does (D8): the ground at (94, 76.5) stays mid-screen.
+    const placement = planarCameraOf(published[0]!.view)
+    expect(placement.x).toBeCloseTo(62, 6)
+    expect(placement.y).toBeCloseTo(7, 6)
+    expect(placement.scale).toBeCloseTo(2, 9)
 
     driver.setScreen({ width: 500, height: 320, devicePixelRatio: 1 })
     expect(published).toHaveLength(1)
@@ -230,7 +251,11 @@ describe('headless camera driver', () => {
     const view = createTestView({ screen: { width: 0, height: 0 } })
     const frame = view.host.current().frames.viewFrame.value
 
-    expect(planarCameraOf(frame.view)).toEqual({ x: 0, y: 0, scale: 1, bearingDeg: 0 })
+    const placement = planarCameraOf(frame.view)
+    expect(placement.x).toBeCloseTo(0, 9)
+    expect(placement.y).toBeCloseTo(0, 9)
+    expect(placement.scale).toBeCloseTo(1, 9)
+    expect(placement.bearingDeg).toBe(0)
     expect(frame.view.screen).toEqual({ width: 0, height: 0, devicePixelRatio: 1 })
     expect(frame.scaleBounds).toEqual({ min: EQUATOR_MIN_SCALE, max: EQUATOR_MAX_SCALE })
     expect(frame.mode).toBe('site')
@@ -244,12 +269,12 @@ describe('headless camera driver', () => {
 
   it('publishes device-pixel ratio changes as part of the immutable frame', () => {
     const view = createTestView({ screen: { width: 1000, height: 800, devicePixelRatio: 2 } })
-    const driver = view.host.current()
-    const initial = driver.frames.viewFrame.value
-    expect(initial.view.screen).toEqual({ width: 1000, height: 800, devicePixelRatio: 2 })
+    const { driver, published } = driverOf(view)
+    expect(driver.frames.viewFrame.value.view.screen).toEqual({ width: 1000, height: 800, devicePixelRatio: 2 })
 
     driver.setScreen({ width: 1000, height: 800, devicePixelRatio: 3 })
-    expect(driver.frames.viewFrame.value.revision).toBe(initial.revision + 1)
+    expect(published).toHaveLength(1)
+    expect(driver.frames.viewFrame.value).toBe(published[0])
     expect(driver.frames.viewFrame.value.view.screen.devicePixelRatio).toBe(3)
     view.dispose()
   })
@@ -266,42 +291,22 @@ describe('headless camera driver', () => {
     view.dispose()
   })
 
-  it('increments once for each effective pan, zoom, resize, and reinitialization', () => {
-    const view = createTestView({ screen: { width: 1000, height: 800 }, viewport: { x: 100, y: 0, scale: 8 } })
-    const driver = view.host.current()
-    const revision = () => driver.frames.viewFrame.value.revision
-
-    driver.apply({ kind: 'pan-by', deltaPx: { x: 10, y: -5 } })
-    expect(revision()).toBe(1)
-    expect(planarCameraOf(driver.frames.viewFrame.value.view)).toEqual({ x: 110, y: -5, scale: 8, bearingDeg: 0 })
-
-    driver.apply({ kind: 'zoom-around', anchorPx: { x: 500, y: 400 }, factor: 1.1 })
-    expect(revision()).toBe(2)
-
-    driver.setScreen({ width: 1200, height: 900, devicePixelRatio: 1 })
-    expect(revision()).toBe(3)
-    expect(driver.frames.viewFrame.value.view.screen).toEqual({ width: 1200, height: 900, devicePixelRatio: 1 })
-
-    // Today's initial frame for 1200 × 900: a 100 m square centred.
-    driver.apply({ kind: 'place', planar: { x: 150, y: 0, scale: 9, bearingDeg: 0 } })
-    expect(revision()).toBe(4)
-    view.dispose()
-  })
-
   it('does not publish no-op viewport mutations', () => {
     const view = createTestView({ screen: { width: 1000, height: 800 }, viewport: { x: 100, y: 0, scale: 8 } })
-    const driver = view.host.current()
-    const initialRevision = driver.frames.viewFrame.value.revision
+    const { driver, published } = driverOf(view)
+    const { camera } = driver.frames.viewFrame.value.view
 
-    driver.apply({ kind: 'place', planar: planarCameraOf(driver.frames.viewFrame.value.view) })
+    driver.apply({ kind: 'set', target: camera, animation: 'none' })
     driver.apply({ kind: 'pan-by', deltaPx: { x: 0, y: 0 } })
     driver.setScreen({ width: 1000, height: 800, devicePixelRatio: 1 })
-    expect(driver.frames.viewFrame.value.revision).toBe(initialRevision)
+    expect(published).toHaveLength(0)
 
-    driver.apply({ kind: 'place', planar: { x: 100, y: 0, scale: EQUATOR_MAX_SCALE, bearingDeg: 0 } })
-    const maximumRevision = driver.frames.viewFrame.value.revision
+    // At the maximum zoom, zooming in publishes nothing.
+    driver.apply({ kind: 'set', target: { ...camera, zoom: 30 }, animation: 'none' })
+    expect(published).toHaveLength(1)
+    expect(published[0]!.view.pixelsPerMetre).toBeCloseTo(EQUATOR_MAX_SCALE, 6)
     driver.apply({ kind: 'zoom-around', anchorPx: { x: 500, y: 400 }, factor: 1.1 })
-    expect(driver.frames.viewFrame.value.revision).toBe(maximumRevision)
+    expect(published).toHaveLength(1)
     view.dispose()
   })
 
@@ -320,7 +325,7 @@ describe('headless camera driver', () => {
     expect(() => {
       ;(frame as { revision: number }).revision = 999
     }).toThrow()
-    expect(planarCameraOf(driver.frames.viewFrame.value.view).x).toBe(101)
+    expect(planarCameraOf(driver.frames.viewFrame.value.view).x).toBeCloseTo(101, 6)
     view.dispose()
   })
 

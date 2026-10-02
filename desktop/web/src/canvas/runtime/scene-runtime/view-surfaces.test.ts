@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import '../../../__tests__/support/camera-tolerance'
 
 vi.mock('../../../ipc/species', async (importOriginal) => ({
   ...await importOriginal<typeof import('../../../ipc/species')>(),
@@ -14,6 +15,7 @@ import { planeViewportCornerBounds } from '../../../__tests__/support/plane-view
 import { stageScaleToMapZoom } from '../../projection'
 import type { GeoPosition } from '../../session-plane'
 import { AttachedInteractionMap } from '../../../__tests__/support/canvas-interaction-setup'
+import { placeOnHost } from '../../../__tests__/support/test-view'
 import { createMapLibreCameraDriver } from '../../../maplibre/camera-driver'
 import { planarCameraOf } from '../view/view-transform'
 import { SceneCanvasRuntime } from '../scene-runtime'
@@ -61,9 +63,9 @@ function placementOf(runtime: SceneCanvasRuntime) {
   return { x, y, scale }
 }
 
-/** An exact placement on the runtime's live camera, bearing 0. */
+/** A placement on the runtime's live camera, bearing 0, through the runtime's plane. */
 function placeAt(runtime: SceneCanvasRuntime, placement: { x: number; y: number; scale: number }): void {
-  runtime.cameraHost.current().apply({ kind: 'place', planar: { ...placement, bearingDeg: 0 } })
+  placeOnHost(runtime.cameraHost, runtime.querySurface.sessionPlane.peek()!, placement)
 }
 
 /** Today's reads: the plane viewport interpreted on the Scene's plane (current-view.ts, controller.ts before 0A-2). */
@@ -90,7 +92,7 @@ describe('the runtime view surfaces', () => {
         if (design) runtime.documentSurface.loadDocument(design)
         const today = todaysCapture(runtime)
         const captured = runtime.querySurface.view.captureView()
-        // At bearing 0 the headless camera is today's arithmetic, bit for bit.
+        // At bearing 0 the headless camera reads as today's arithmetic, within the camera tolerance.
         expect(captured.camera).toEqual({
           center: { lon: today.view.lon, lat: today.view.lat },
           zoom: today.view.zoom,

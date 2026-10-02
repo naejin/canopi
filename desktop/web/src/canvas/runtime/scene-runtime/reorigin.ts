@@ -10,6 +10,10 @@ interface SceneRuntimeReoriginOptions {
 }
 
 /** What the controller last looked at: a frame that keeps all of it (a hydration, an inset change) is not observed. */
+/** Placements this close are the same: a micropixel, and a billionth of the scale. */
+const SAME_PLACEMENT_PX = 1e-6
+const SAME_SCALE_RATIO = 1e-9
+
 interface ObservedFrame {
   readonly x: number
   readonly y: number
@@ -59,7 +63,10 @@ export class SceneRuntimeReoriginController {
     this.disposed = true
   }
 
-  /** Records the frame and says whether it keeps the placement, screen size and mode of the last one seen. */
+  /**
+   * Records the frame and says whether it keeps the placement, screen size and mode of the last one seen. The placement is read
+   * back from a geographic camera, so a frame that keeps it (a hydration in another plane) can differ in its last bits.
+   */
   private unchanged(frame: ViewFrame): boolean {
     const { x, y, scale, bearingDeg } = planarCameraOf(frame.view)
     const { width, height } = frame.view.screen
@@ -67,9 +74,9 @@ export class SceneRuntimeReoriginController {
     const last = this.last
     this.last = next
     return last !== null
-      && last.x === next.x
-      && last.y === next.y
-      && last.scale === next.scale
+      && Math.abs(last.x - next.x) <= SAME_PLACEMENT_PX
+      && Math.abs(last.y - next.y) <= SAME_PLACEMENT_PX
+      && Math.abs(last.scale - next.scale) <= SAME_SCALE_RATIO * last.scale
       && last.bearingDeg === next.bearingDeg
       && last.width === next.width
       && last.height === next.height

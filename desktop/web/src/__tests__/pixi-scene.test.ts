@@ -7,6 +7,7 @@ import { LabelCollisionIndex } from '../canvas/label-collision'
 import { Container, Text } from 'pixi.js'
 import { createPixiScenePresentation } from '../canvas/runtime/renderers/pixi-scene'
 import { CANVAS_CHROME_FONT_FAMILY } from '../canvas/chrome-fonts'
+import './support/camera-tolerance'
 
 vi.mock('pixi.js', () => {
   const state = {
@@ -572,7 +573,7 @@ describe('createPixiScenePresentation', () => {
       const labels = pixi.__pixiMockState.texts.filter((text) => text.text === 'Apple' && !text.destroy.mock.calls.length)
       expect(labels).toHaveLength(opacity === 0 ? 0 : 1)
       if (opacity) {
-        expect(labels[0]?.alpha).toBe(opacity)
+        expect(labels[0]?.alpha).toBeCloseTo(opacity, 9)
         expect(labels[0]?.style.options.fontSize).toBe(12)
       }
     }
@@ -593,7 +594,7 @@ describe('createPixiScenePresentation', () => {
     for (const [scale, opacity] of [[20, 1], [14, 0.5], [8, 0], [14, 0.5], [20, 1]]) {
       renderer.setView(view({ x: 0, y: 0, scale: scale! }))
       const text = pixi.__pixiMockState.texts.find((entry) => entry.text === 'First\nSecond')!
-      expect(text.alpha).toBe(opacity)
+      expect(text.alpha).toBeCloseTo(opacity!, 9)
       expect(text.visible).toBe(opacity! > 0)
       expect(text.style.options.fontSize).toBe(16)
       if (scale === 8) expect(pixi.__pixiMockState.graphics.some((graphics) => graphics.stroke.mock.calls.some(([stroke]) => stroke.width === 1.5 && stroke.alpha === 1))).toBe(true)
