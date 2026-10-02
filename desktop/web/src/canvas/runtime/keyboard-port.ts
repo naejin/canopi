@@ -357,7 +357,7 @@ function quarantine(event: KeyboardEvent): void {
 }
 
 /** Keys on the map itself (or the window): not from a control, a field, a menu or a dialog inside it. */
-export function isCanvasKeyboardShortcutTarget(target: EventTarget | null, host: HTMLElement): boolean {
+function isCanvasKeyboardShortcutTarget(target: EventTarget | null, host: HTMLElement): boolean {
   if (typeof window !== 'undefined' && target === window) return true
   if (!(target instanceof Node)) return false
   if (!host.contains(target)) return false
@@ -367,7 +367,7 @@ export function isCanvasKeyboardShortcutTarget(target: EventTarget | null, host:
 }
 
 /** A control, a field, a menu or a dialog keeps its own keys. */
-export function isKeyboardInteractiveEventTarget(target: EventTarget | null): boolean {
+function isKeyboardInteractiveEventTarget(target: EventTarget | null): boolean {
   const element = target instanceof HTMLElement
     ? target
     : target instanceof Node
