@@ -1,7 +1,10 @@
 // canvas/runtime/input/dom-input-source.ts
 //
-// Owns every DOM listener for canvas input: the map host's pointer, wheel, contextmenu, drag and focus events, today's
-// window pointer and blur listeners, and the ruler presses at document capture (keys are the key router's, app/keyboard). It turns
+// Owns every DOM listener for canvas input: the map host's pointer (hover moves included), wheel, contextmenu, drag and
+// focus events, the window blur, the window pointer listeners while it owns a pointer, the ruler presses at document
+// capture and the copied GeoLibre selection-drag guard on the host (keys are the key router's, app/keyboard). A press it delivers, on the map or a ruler, owns that pointer until
+// its release, its cancel or a window blur: only then does it listen on window, and only to that pointer, so presses,
+// moves and releases that start elsewhere in the app reach the page untouched. It turns
 // each event into host-relative, classified fields for `normalise`, hands the raw input to the sink, and applies the
 // effects the sink sends back to the event being handled: prevent-default, stop-propagation, pointer capture, the drop
 // effect. Detaching releases every capture it still holds. A sink that throws on a press on the map, a release, a context menu, a dragover or a drop quarantines that event
@@ -20,6 +23,7 @@ import type { CanvasDropPayload, ToolHandleId } from '../interaction-types'
 import { isEditableTarget } from './editable-target'
 import { normalise, type DomEventLike } from './normalise'
 import type { AdapterEffect, RawInput, TargetClass } from './raw-input'
+import { installSelectionDragGuard } from './selection-drag-guard'
 import { DEFAULT_THRESHOLDS } from './thresholds'
 
 /** The note editor: D1's text-entry host, and today's inline annotation editor until it moves there. */
@@ -34,6 +38,9 @@ const OWNED_CHROME_SELECTOR = [
   '[contenteditable="true"]',
   '[data-preserve-overlays="true"]',
 ].join(', ')
+/** MapLibre's controls in the host (the attribution): owned chrome for presses and hovers, so a press opens it or follows
+ *  its link and never starts a band, and a hover moving onto it ends; a wheel or pinch over it still zooms the map. */
+const MAP_CONTROL_SELECTOR = '.maplibregl-ctrl'
 const SURFACE: TargetClass = Object.freeze({ kind: 'surface' })
 const OWNED_TEXT: TargetClass = Object.freeze({ kind: 'owned-text' })
 const OWNED_CHROME: TargetClass = Object.freeze({ kind: 'owned-chrome' })
@@ -85,6 +92,25 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   const sessionRects = new Map<number, HostRect>()
   let sink: ((input: RawInput) => void) | null = null
   let tickTimer: number | null = null
+  /** Pointers pressed on the map or a ruler, until their release or cancel: the window listeners follow only these. */
+  const owned = new Set<number>()
+  /** Installs the window pointer listeners (set while attached); returns their removal. */
+  let listenOnWindow: (() => () => void) | null = null
+  let removeWindowListeners: (() => void) | null = null
+
+  function own(pointerId: number): void {
+    owned.add(pointerId)
+    if (!removeWindowListeners && listenOnWindow) removeWindowListeners = listenOnWindow()
+  }
+
+  function disown(pointerId: number | 'all'): void {
+    if (pointerId === 'all') owned.clear()
+    else owned.delete(pointerId)
+    if (owned.size > 0 || !removeWindowListeners) return
+    const remove = removeWindowListeners
+    removeWindowListeners = null
+    remove()
+  }
 
   /**
    * Hands one input to the sink while its event is the one being handled. `onError` is the one rule for a failure:
@@ -116,6 +142,8 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
 
   const onPointerDown = (event: PointerEvent): void => {
     const rect = host.getBoundingClientRect()
+    // Owned first: a sink that fails on the press may still have opened its session, whose release must reach it.
+    own(event.pointerId)
     deliver(event, rect, pointerInput(event, 'pointerdown', rect), 'quarantine')
   }
   const onRulerPointerDown = (event: PointerEvent): void => {
@@ -123,19 +151,37 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     if (event.target instanceof Node && host.contains(event.target)) return
     if (classifyTarget(event.target, host).kind !== 'ruler') return
     const rect = host.getBoundingClientRect()
+    own(event.pointerId)
     // Today's ruler drag had no quarantine: a failure left its press to the app.
     deliver(event, rect, pointerInput(event, 'pointerdown', rect))
   }
+  /** A move of a pointer the source does not own, over the map: a hover (an owned pointer's moves come from window). */
+  const onHostPointerMove = (event: PointerEvent): void => {
+    if (owned.has(event.pointerId)) return
+    const rect = host.getBoundingClientRect()
+    deliver(event, rect, pointerInput(event, 'pointermove', rect))
+  }
   const onPointerMove = (event: PointerEvent): void => {
+    if (!owned.has(event.pointerId)) return
     const rect = sessionRect(event.pointerId)
     deliver(event, rect, pointerInput(event, 'pointermove', rect))
   }
   const onPointerUp = (event: PointerEvent): void => {
+    if (!owned.has(event.pointerId)) return
     const rect = sessionRect(event.pointerId)
-    deliver(event, rect, pointerInput(event, 'pointerup', rect))
+    try {
+      deliver(event, rect, pointerInput(event, 'pointerup', rect))
+    } finally {
+      disown(event.pointerId)
+    }
   }
   const onPointerCancel = (event: PointerEvent): void => {
-    deliver(event, null, pointerInput(event, 'pointercancel', NO_RECT))
+    if (!owned.has(event.pointerId)) return
+    try {
+      deliver(event, null, pointerInput(event, 'pointercancel', NO_RECT))
+    } finally {
+      disown(event.pointerId)
+    }
   }
   const onLostPointerCapture = (event: PointerEvent): void => {
     const id = event.pointerId
@@ -146,8 +192,23 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     sessionRects.delete(id)
     deliver(event, null, pointerInput(event, 'lostpointercapture', NO_RECT))
   }
+  /**
+   * The move that takes a hover off the map lands beside it, where the host no longer hears it; the leave carries its
+   * point (classified by where it landed), so a tool's preview follows the pointer there before the hover ends, rather
+   * than staying at the last move the map heard (a coalesced move can lie well inside it). An owned pointer's moves come
+   * from window, and a touch has no hover.
+   */
   const onPointerLeave = (event: PointerEvent): void => {
-    deliver(event, null, pointerInput(event, 'pointerleave', NO_RECT))
+    try {
+      if (!owned.has(event.pointerId) && event.pointerType !== 'touch') {
+        const rect = host.getBoundingClientRect()
+        deliver(event, rect, normalise(domEventLike(event, 'pointermove', rect, classifyTarget(event.relatedTarget, host)), deps.platform, deps.bindings(), {
+          physicalCtrl: deps.keys.physicalCtrl(),
+        }, rect))
+      }
+    } finally {
+      deliver(event, null, pointerInput(event, 'pointerleave', NO_RECT))
+    }
   }
   const onFocusOut = (event: FocusEvent): void => {
     // Focus moving inside the map (to the note editor or a handle) does not leave it.
@@ -156,12 +217,17 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     deliver(event, null, { kind: 'focus-out', t: event.timeStamp })
   }
   const onBlur = (event: Event): void => {
-    deliver(event, null, { kind: 'cancel', t: event.timeStamp, id: 'all', reason: 'blur' })
+    // The blur ends every session, so the source owns no pointer after it.
+    try {
+      deliver(event, null, { kind: 'cancel', t: event.timeStamp, id: 'all', reason: 'blur' })
+    } finally {
+      disown('all')
+    }
   }
   const onWheel = (event: WheelEvent): void => {
     if (allowsNativeContextMenuTarget(event.target)) return
     const rect = host.getBoundingClientRect()
-    deliver(event, rect, normalise(domEventLike(event, 'wheel', rect, classifyTarget(event.target, host)), deps.platform, deps.bindings(), {
+    deliver(event, rect, normalise(domEventLike(event, 'wheel', rect, classifyTarget(event.target, host, 'surface')), deps.platform, deps.bindings(), {
       physicalCtrl: deps.keys.physicalCtrl(),
     }, rect))
   }
@@ -234,7 +300,9 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
       }
       const detach = (): void => {
         sink = null
+        listenOnWindow = null
         clearTickTimer()
+        disown('all')
         const pending = removals.splice(0)
         runCanvasRuntimeCleanups([
           // Every capture the source still holds goes with it (a live press at disposal, today's _clearPointerGesture);
@@ -247,13 +315,10 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
         ], 'DOM input source listener removal failed')
       }
       try {
-        // Today's installation, in today's order (scene-interaction.ts until 0B-2).
         listen(host, 'pointerdown', onPointerDown as EventListener, { capture: true })
+        listen(host, 'pointermove', onHostPointerMove as EventListener)
         listen(host, 'pointerleave', onPointerLeave as EventListener)
         listen(host, 'lostpointercapture', onLostPointerCapture as EventListener)
-        listen(window, 'pointermove', onPointerMove as EventListener, { capture: true })
-        listen(window, 'pointerup', onPointerUp as EventListener, { capture: true })
-        listen(window, 'pointercancel', onPointerCancel as EventListener, { capture: true })
         listen(window, 'blur', onBlur)
         listen(host, 'contextmenu', onContextMenu as EventListener)
         listen(host, 'wheel', onWheel as EventListener, { passive: false })
@@ -262,7 +327,26 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
         listen(host, 'drop', onDrop as EventListener)
         listen(host, 'focusout', onFocusOut as EventListener)
         if (deps.listensToRulers) listen(document, 'pointerdown', onRulerPointerDown as EventListener, { capture: true })
+        // A map drag never selects or drags page text; the note editor and the map's fields keep their own.
+        removals.push(installSelectionDragGuard(host, (target) => keepsTextSelection(target, host)))
         if (deps.bindings().touch.hostTouchActionNone) host.style.touchAction = 'none'
+        listenOnWindow = () => {
+          const windowRemovals: Array<() => void> = []
+          const listenWindow = (type: string, listener: EventListener): void => {
+            window.addEventListener(type, listener, { capture: true })
+            windowRemovals.push(() => window.removeEventListener(type, listener, { capture: true }))
+          }
+          const remove = (): void => runCanvasRuntimeCleanups(windowRemovals.splice(0), 'DOM input source window listener removal failed')
+          try {
+            listenWindow('pointermove', onPointerMove as EventListener)
+            listenWindow('pointerup', onPointerUp as EventListener)
+            listenWindow('pointercancel', onPointerCancel as EventListener)
+          } catch (error) {
+            remove()
+            throw error
+          }
+          return remove
+        }
       } catch (error) {
         try {
           detach()
@@ -368,8 +452,15 @@ function dropPayloadOf(event: DragEvent, type: 'dragover' | 'dragleave' | 'drop'
   return species ? { kind: 'species', species } : { kind: 'unknown' }
 }
 
-/** Classifies an event target from data attributes (spec §1.2 `TargetClass`). */
-function classifyTarget(target: EventTarget | null, host: HTMLElement): TargetClass {
+/** A text field in the map, the note editor included: its own selection and text drags stay the browser's. */
+function keepsTextSelection(target: EventTarget | null, host: HTMLElement): boolean {
+  const element = elementOf(target)
+  if (!element) return false
+  return isEditableTarget(element) || closestInside(element, `${TEXT_ENTRY_SELECTOR}, input, textarea, [contenteditable="true"]`, host) !== null
+}
+
+/** Classifies an event target from data attributes (spec §1.2 `TargetClass`); a wheel reads MapLibre's controls as surface. */
+function classifyTarget(target: EventTarget | null, host: HTMLElement, mapControls: 'chrome' | 'surface' = 'chrome'): TargetClass {
   const element = elementOf(target)
   if (!element) return FOREIGN
   const ruler = element.closest('[data-canvas-ruler]')
@@ -381,6 +472,7 @@ function classifyTarget(target: EventTarget | null, host: HTMLElement): TargetCl
   if (handle) return { kind: 'handle', id: handle }
   if (closestInside(element, UNLOCK_AFFORDANCE_SELECTOR, host)) return UNLOCK_AFFORDANCE
   if (closestInside(element, OWNED_CHROME_SELECTOR, host)) return OWNED_CHROME
+  if (mapControls === 'chrome' && closestInside(element, MAP_CONTROL_SELECTOR, host)) return OWNED_CHROME
   return SURFACE
 }
 

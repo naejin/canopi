@@ -13,7 +13,7 @@ import {
 } from '../../../__tests__/support/tool-harness'
 import { setCurrentCanvasSession } from '../../session'
 import { activeTool } from '../../session-state'
-import { LEGACY_BINDINGS } from '../input/bindings'
+import { CURRENT_BINDINGS } from '../input/bindings'
 import type { Gesture } from '../input/gestures'
 import { createInputRouter } from '../input/input-router'
 import { LINUX_CHROMIUM, down, move, runSequence, seq, up } from '../input/__fixtures__/sequences'
@@ -72,7 +72,7 @@ describe('Pan tool', () => {
       move(110, 104, { buttons: 1 }),
       move(130, 120, { buttons: 1 }),
       up(130, 120),
-    ], { tool: h.host.activeTool.peek() }), LEGACY_BINDINGS)
+    ], { tool: h.host.activeTool.peek() }), CURRENT_BINDINGS)
     h.host.rawPress('primary', { kind: 'surface' }, 1)
     for (const gesture of run.gestures as readonly Gesture[]) router.route(gesture)
 

@@ -6,14 +6,14 @@ import {
 } from '../../../__tests__/support/canvas-interaction-events'
 import { writePlantStampDragData } from '../../plant-stamp-source'
 import type { DomInputSourceDeps } from '../interaction-ports'
-import { LEGACY_BINDINGS, type Bindings } from './bindings'
+import { CURRENT_BINDINGS, type Bindings } from './bindings'
 import { createDomInputSource, outcomeEffects } from './dom-input-source'
 import type { RawInput, RecogniserConfig } from './raw-input'
 import { initialRecogniserState, recognise } from './recognise'
 import { DEFAULT_THRESHOLDS } from './thresholds'
 
 const PLATFORM = { os: 'linux', engine: 'webkitgtk', gestureEvents: false } as const
-const RECOGNISER_CONFIG: RecogniserConfig = { platform: PLATFORM, bindings: LEGACY_BINDINGS, thresholds: DEFAULT_THRESHOLDS }
+const RECOGNISER_CONFIG: RecogniserConfig = { platform: PLATFORM, bindings: CURRENT_BINDINGS, thresholds: DEFAULT_THRESHOLDS }
 
 let host: HTMLDivElement
 let events: SceneInteractionEventHarness
@@ -37,7 +37,7 @@ function deps(overrides: Partial<DomInputSourceDeps> = {}): DomInputSourceDeps {
   return {
     host,
     platform: PLATFORM,
-    bindings: () => LEGACY_BINDINGS,
+    bindings: () => CURRENT_BINDINGS,
     keys: { physicalCtrl: () => false, lastKeyboardMenuAt: () => null },
     clock: () => 1000,
     timers: { set: vi.fn(() => 1), clear: vi.fn() },
@@ -77,6 +77,7 @@ describe('createDomInputSource', () => {
     const hostAdds = listenerCalls(spies.hostAdd)
     expect(hostAdds.map(([type, , options]) => [type, captureFlag(options)])).toEqual([
       ['pointerdown', true],
+      ['pointermove', false],
       ['pointerleave', false],
       ['lostpointercapture', false],
       ['contextmenu', false],
@@ -85,16 +86,22 @@ describe('createDomInputSource', () => {
       ['dragleave', false],
       ['drop', false],
       ['focusout', false],
+      // The selection-drag guard (selection-drag-guard.test.ts).
+      ['pointerdown', true],
+      ['dragstart', true],
+      ['selectstart', true],
     ])
     expect(hostAdds.find(([type]) => type === 'wheel')?.[2]).toEqual({ passive: false })
-    const windowAdds = listenerCalls(spies.windowAdd)
-    expect(windowAdds.map(([type, , options]) => [type, captureFlag(options)])).toEqual([
+    expect(listenerCalls(spies.windowAdd).map(([type, , options]) => [type, captureFlag(options)])).toEqual([['blur', false]])
+    expect(listenerCalls(spies.documentAdd).map(([type, , options]) => [type, captureFlag(options)])).toEqual([['pointerdown', true]])
+    // A press on the map owns its pointer: the window listeners follow it, and detach removes them with the rest.
+    events.pointerDown({ x: 10, y: 10 })
+    expect(listenerCalls(spies.windowAdd).map(([type, , options]) => [type, captureFlag(options)])).toEqual([
+      ['blur', false],
       ['pointermove', true],
       ['pointerup', true],
       ['pointercancel', true],
-      ['blur', false],
     ])
-    expect(listenerCalls(spies.documentAdd).map(([type, , options]) => [type, captureFlag(options)])).toEqual([['pointerdown', true]])
 
     dispose()
     dispose()
@@ -104,10 +111,11 @@ describe('createDomInputSource', () => {
       [spies.windowAdd, spies.windowRemove],
       [spies.documentAdd, spies.documentRemove],
     ] as const) {
-      const added = listenerCalls(add)
-      const removed = listenerCalls(remove)
-      expect(removed.map(([type, listener, options]) => [type, listener, captureFlag(options)]))
-        .toEqual(added.map(([type, listener, options]) => [type, listener, captureFlag(options)]))
+      // Each removed once, in any order (the window's session listeners go first).
+      const byType = (calls: Array<[string, unknown, unknown]>) => calls
+        .map(([type, listener, options]) => [type, listener, captureFlag(options)] as const)
+        .sort(([a], [b]) => a.localeCompare(b))
+      expect(byType(listenerCalls(remove))).toEqual(byType(listenerCalls(add)))
     }
     for (const spy of Object.values(spies)) spy.mockRestore()
   })
@@ -116,7 +124,7 @@ describe('createDomInputSource', () => {
     const windowAdd = vi.spyOn(window, 'addEventListener')
     const documentAdd = vi.spyOn(document, 'addEventListener')
     const dispose = attachRecording(createDomInputSource(deps()))
-    expect(listenerCalls(windowAdd).map(([type]) => type)).toEqual(['pointermove', 'pointerup', 'pointercancel', 'blur'])
+    expect(listenerCalls(windowAdd).map(([type]) => type)).toEqual(['blur'])
     expect(listenerCalls(documentAdd)).toEqual([])
     dispose()
     windowAdd.mockRestore()
@@ -134,9 +142,108 @@ describe('createDomInputSource', () => {
     const hostRemove = vi.spyOn(host, 'removeEventListener')
 
     expect(() => createDomInputSource(deps()).attach(() => {})).toThrow(failure)
-    expect(listenerCalls(hostRemove).map(([type]) => type)).toEqual(['pointerdown', 'pointerleave', 'lostpointercapture', 'contextmenu'])
-    expect(listenerCalls(windowRemove).map(([type]) => type)).toEqual(['pointermove', 'pointerup', 'pointercancel', 'blur'])
+    expect(listenerCalls(hostRemove).map(([type]) => type)).toEqual(['pointerdown', 'pointermove', 'pointerleave', 'lostpointercapture', 'contextmenu'])
+    expect(listenerCalls(windowRemove).map(([type]) => type)).toEqual(['blur'])
     for (const spy of [hostAdd, windowRemove, hostRemove]) spy.mockRestore()
+  })
+
+  it('window listeners exist only during an owned session', () => {
+    const downstream = vi.fn((event: Event) => event.defaultPrevented)
+    window.addEventListener('pointerup', downstream)
+    const windowAdd = vi.spyOn(window, 'addEventListener')
+    const windowRemove = vi.spyOn(window, 'removeEventListener')
+    const types = (spy: typeof windowAdd): string[] => listenerCalls(spy).map(([type]) => type).filter((type) => type !== 'blur')
+    const source = createDomInputSource(deps())
+    const dispose = attachRecording(source, (input) => {
+      if (input.kind === 'down') source.apply([{ kind: 'prevent-default' }, { kind: 'capture', pointerId: input.id }])
+      if (input.kind === 'up') source.apply([{ kind: 'release-capture', pointerId: input.id }])
+    })
+    const panel = document.createElement('div')
+    document.body.appendChild(panel)
+
+    try {
+      // A press, move and release that start outside the map belong to the page: nothing is installed, heard or stopped.
+      events.pointerDown({ x: 10, y: 10 }, { target: panel, pointerId: 3 })
+      events.pointerMove({ x: 20, y: 10 }, { target: panel, pointerId: 3, buttons: 1 })
+      const foreignUp = events.pointerUp({ x: 20, y: 10 }, { target: panel, pointerId: 3 })
+      expect(types(windowAdd)).toEqual([])
+      expect(received).toEqual([])
+      expect(foreignUp.defaultPrevented).toBe(false)
+      expect(downstream).toHaveBeenCalledTimes(1)
+
+      // A press on the map owns its pointer until its release: the window follows it there, and only it.
+      events.pointerDown({ x: 10, y: 10 }, { pointerId: 4 })
+      expect(types(windowAdd)).toEqual(['pointermove', 'pointerup', 'pointercancel'])
+      events.pointerMove({ x: 500, y: 10 }, { target: panel, pointerId: 4, buttons: 1 })
+      events.pointerMove({ x: 30, y: 10 }, { target: panel, pointerId: 3 })
+      events.pointerUp({ x: 500, y: 10 }, { target: panel, pointerId: 4 })
+      expect(received.map((input) => `${input.kind}:${'id' in input ? input.id : ''}`)).toEqual(['down:4', 'move:4', 'up:4'])
+      expect(types(windowRemove)).toEqual(['pointermove', 'pointerup', 'pointercancel'])
+      expect(downstream).toHaveBeenCalledTimes(2)
+
+      // A cancel and a window blur end the ownership too.
+      events.pointerDown({ x: 10, y: 10 }, { pointerId: 5 })
+      events.pointerCancel({ x: 10, y: 10 }, { pointerId: 5 })
+      events.pointerDown({ x: 10, y: 10 }, { pointerId: 6 })
+      events.windowBlur()
+      expect(types(windowAdd)).toHaveLength(9)
+      expect(types(windowRemove)).toHaveLength(9)
+    } finally {
+      panel.remove()
+      dispose()
+      windowAdd.mockRestore()
+      windowRemove.mockRestore()
+      window.removeEventListener('pointerup', downstream)
+    }
+  })
+
+  it('a hover move on the host reaches the recogniser', () => {
+    const dispose = attachRecording(createDomInputSource(deps()))
+    const inside = document.createElement('canvas')
+    host.appendChild(inside)
+    const panel = document.createElement('div')
+    document.body.appendChild(panel)
+
+    events.pointerMove({ x: 30, y: 40 }, { target: inside })
+    events.pointerMove({ x: 30, y: 40 }, { target: panel })
+
+    expect(received).toEqual([expect.objectContaining({ kind: 'move', at: { x: 30, y: 40 }, target: { kind: 'surface' } })])
+    panel.remove()
+    dispose()
+  })
+
+  it('a hover leaving the map reaches the point where it left before it ends', () => {
+    let state = initialRecogniserState()
+    const gestures: string[] = []
+    const dispose = attachRecording(createDomInputSource(deps()), (input) => {
+      const result = recognise(state, input, RECOGNISER_CONFIG)
+      state = result.state
+      gestures.push(...result.gestures.map((gesture) => gesture.kind === 'hover' ? `hover:${gesture.at.x},${gesture.at.y}` : gesture.kind))
+    })
+    const panel = document.createElement('div')
+    document.body.appendChild(panel)
+
+    try {
+      // A quick flick: the last move the map heard is well inside it; the move that left lands on the panel, which the map
+      // never hears, so the leave carries its point. A tool's preview (a rubber band, a row, a stamp's ghost) follows the
+      // pointer to it, as the window's moves once carried it, and only then does the hover end.
+      events.pointerMove({ x: 200, y: 150 })
+      events.pointerLeave({ x: 430, y: 150 }, { relatedTarget: panel })
+      expect(received.map((input) => input.kind === 'move' ? `move:${input.at.x},${input.at.y}:${input.target.kind}` : input.kind))
+        .toEqual(['move:200,150:surface', 'move:430,150:foreign', 'leave'])
+      expect(gestures).toEqual(['hover:200,150', 'hover:430,150', 'hover-end'])
+
+      // A pointer the map owns (a press on it) follows on window, so its leave adds no move; a touch has no hover.
+      received.length = 0
+      events.pointerDown({ x: 10, y: 10 }, { pointerId: 4 })
+      events.pointerLeave({ x: 430, y: 10 }, { pointerId: 4, relatedTarget: panel })
+      events.pointerUp({ x: 430, y: 10 }, { pointerId: 4, target: panel })
+      events.pointerLeave({ x: 430, y: 10 }, { pointerId: 5, pointerType: 'touch', relatedTarget: panel })
+      expect(received.map((input) => input.kind)).toEqual(['down', 'leave', 'up', 'leave'])
+    } finally {
+      panel.remove()
+      dispose()
+    }
   })
 
   it('a ruler press of any mouse button becomes a ruler target', () => {
@@ -210,7 +317,6 @@ describe('createDomInputSource', () => {
       chrome.firstElementChild!,
       surface,
       host,
-      outside,
     ]) {
       events.pointerMove({ x: 5, y: 5 }, { target })
     }
@@ -225,19 +331,94 @@ describe('createDomInputSource', () => {
       { kind: 'owned-chrome' },
       { kind: 'surface' },
       { kind: 'surface' },
-      { kind: 'foreign' },
     ])
 
     // An up carries its target too: the session keeps today's release cleanup off the note editor, a handle and the
-    // Unlock affordance by it.
+    // Unlock affordance by it, and a release outside the map is foreign.
     received.length = 0
-    for (const target of [editor, plainHandle, unlock.lastElementChild!, surface]) events.pointerUp({ x: 5, y: 5 }, { target })
-    expect(received.map((input) => input.kind === 'up' && input.target)).toEqual([
+    for (const target of [editor, plainHandle, unlock.lastElementChild!, surface, outside]) {
+      events.pointerDown({ x: 5, y: 5 })
+      events.pointerUp({ x: 5, y: 5 }, { target })
+    }
+    expect(received.flatMap((input) => input.kind === 'up' ? [input.target] : [])).toEqual([
       { kind: 'owned-text' },
       { kind: 'handle', id: 'vertex:zone-1:2' },
       { kind: 'owned-chrome', lockedAffordance: true },
       { kind: 'surface' },
+      { kind: 'foreign' },
     ])
+    dispose()
+  })
+
+  it('a press on the attribution is not a canvas press', () => {
+    // MapLibre's attribution control sits inside the map host (the zoom group and compass sit beside it).
+    host.insertAdjacentHTML('beforeend', [
+      '<div class="maplibregl-control-container"><div class="maplibregl-ctrl-bottom-right">',
+      '<details class="maplibregl-ctrl maplibregl-ctrl-attrib maplibregl-compact" open>',
+      '<summary class="maplibregl-ctrl-attrib-button" title="Toggle attribution"></summary>',
+      '<div class="maplibregl-ctrl-attrib-inner"><a href="https://maplibre.org/">MapLibre</a> <span>© OpenStreetMap</span></div>',
+      '</details></div></div>',
+    ].join(''))
+    const attribution = host.querySelector('details')!
+    let state = initialRecogniserState()
+    const gestures: string[] = []
+    const source = createDomInputSource(deps())
+    const dispose = attachRecording(source, (input) => {
+      const result = recognise(state, input, RECOGNISER_CONFIG)
+      state = result.state
+      gestures.push(...result.gestures.map((gesture) => gesture.kind))
+      source.apply(result.effects)
+    })
+
+    const presses = [
+      attribution.querySelector('summary')!,
+      attribution.querySelector('a')!,
+      attribution.querySelector('span')!,
+      attribution.querySelector('.maplibregl-ctrl-attrib-inner')!,
+    ].map((target) => {
+      const press = events.pointerDown({ x: 380, y: 290 }, { target })
+      events.pointerMove({ x: 300, y: 200 }, { target, buttons: 1 })
+      events.pointerUp({ x: 300, y: 200 }, { target })
+      return press
+    })
+
+    expect(received.filter((input) => input.kind === 'down').map((input) => input.kind === 'down' && input.target))
+      .toEqual(Array(4).fill({ kind: 'owned-chrome' }))
+    // No band starts, and the press keeps its default (the summary opens and the link follows).
+    expect(gestures.filter((kind) => kind !== 'hover' && kind !== 'hover-end')).toEqual([])
+    expect(presses.map((press) => press.defaultPrevented)).toEqual([false, false, false, false])
+    expect(events.pointerCapture.setCalls).not.toHaveBeenCalled()
+    dispose()
+  })
+
+  it('a wheel or pinch over the attribution zooms the map, not the page', () => {
+    host.insertAdjacentHTML('beforeend', [
+      '<div class="maplibregl-control-container"><div class="maplibregl-ctrl-bottom-right">',
+      '<details class="maplibregl-ctrl maplibregl-ctrl-attrib" open>',
+      '<summary class="maplibregl-ctrl-attrib-button" title="Toggle attribution"></summary>',
+      '<div class="maplibregl-ctrl-attrib-inner"><a href="https://maplibre.org/">MapLibre</a> <span>© OpenStreetMap</span></div>',
+      '</details></div></div>',
+    ].join(''))
+    let state = initialRecogniserState()
+    const gestures: string[] = []
+    const source = createDomInputSource(deps())
+    const dispose = attachRecording(source, (input) => {
+      const result = recognise(state, input, RECOGNISER_CONFIG)
+      state = result.state
+      gestures.push(...result.gestures.map((gesture) => gesture.kind))
+      source.apply(result.effects)
+    })
+
+    // Only presses and hovers treat the attribution as the map's own chrome; a wheel there is a map wheel.
+    const wheels = [...host.querySelectorAll('summary, a, span')].flatMap((target) => [false, true].map((ctrlKey) => {
+      const wheel = new WheelEvent('wheel', { bubbles: true, cancelable: true, clientX: 380, clientY: 300, deltaY: 10, ctrlKey })
+      target.dispatchEvent(wheel)
+      return wheel
+    }))
+
+    expect(received.map((input) => input.kind === 'wheel' && input.target)).toEqual(Array(6).fill({ kind: 'surface' }))
+    expect(gestures).toEqual(Array(6).fill('zoom'))
+    expect(wheels.map((wheel) => wheel.defaultPrevented)).toEqual(Array(6).fill(true))
     dispose()
   })
 
@@ -407,12 +588,15 @@ describe('createDomInputSource', () => {
     let errors: unknown[] = []
     try {
       errors = captureWindowErrors(() => {
+        // The press is quarantined (above); its pointer is owned all the same, so the window hears its moves and release.
+        events.pointerDown({ x: 10, y: 10 })
         events.pointerMove({ x: 10, y: 10 }, { target: panel })
         events.pointerCancel({ x: 10, y: 10 }, { target: panel })
         events.pointerLeave({ x: 10, y: 10 })
         events.wheel({ x: 10, y: 10 }, { deltaY: 4 })
-        events.windowBlur()
+        events.pointerDown({ x: 10, y: 10 })
         events.pointerUp({ x: 10, y: 10 })
+        events.windowBlur()
         for (const type of ['contextmenu', 'dragover', 'drop']) {
           host.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: 20, clientY: 30 }))
         }
@@ -424,14 +608,14 @@ describe('createDomInputSource', () => {
     }
 
     // The one rule: rethrow on every event kind; only a press on the map host (covered above) is quarantined.
-    expect(errors).toEqual([failure, failure, failure, failure, failure, failure, failure, failure, failure])
+    expect(errors).toEqual(Array(11).fill(failure))
     expect(heard).toEqual([
       'pointermove:false',
       'pointercancel:false',
       'pointerleave:false',
       'wheel:false',
-      'blur:false',
       'pointerup:false',
+      'blur:false',
       'contextmenu:false',
       'dragover:false',
       'drop:false',
@@ -466,7 +650,7 @@ describe('createDomInputSource', () => {
     expect(downstream).toHaveBeenCalledTimes(1)
   })
 
-  it('pointerleave becomes leave and focusout becomes focus-out', () => {
+  it('pointerleave becomes its last move and a leave, and focusout becomes focus-out', () => {
     const dispose = attachRecording(createDomInputSource(deps()))
     const inside = document.createElement('button')
     host.appendChild(inside)
@@ -478,7 +662,7 @@ describe('createDomInputSource', () => {
     window.dispatchEvent(new Event('blur'))
 
     expect(received.map((input) => input.kind === 'cancel' ? `${input.kind}:${String(input.id)}:${input.reason}` : input.kind))
-      .toEqual(['leave', 'focus-out', 'cancel:all:blur'])
+      .toEqual(['move', 'leave', 'focus-out', 'cancel:all:blur'])
     dispose()
   })
 
@@ -553,7 +737,7 @@ describe('createDomInputSource', () => {
     dispose()
   })
 
-  it('host CSS is unchanged under LEGACY', () => {
+  it('host CSS is unchanged while touch gestures are off', () => {
     const before = host.getAttribute('style')
     const source = createDomInputSource(deps())
     const dispose = attachRecording(source, (input) => {
@@ -569,7 +753,7 @@ describe('createDomInputSource', () => {
     expect(host.getAttribute('style')).toBe(before)
 
     // A binding with touch gestures takes the host's touch-action for the time it is attached.
-    const touch: Bindings = { ...LEGACY_BINDINGS, touch: { gestures: true, longPressMenu: true, hostTouchActionNone: true } }
+    const touch: Bindings = { ...CURRENT_BINDINGS, touch: { gestures: true, longPressMenu: true, hostTouchActionNone: true } }
     const detach = createDomInputSource(deps({ bindings: () => touch })).attach(() => {})
     expect(host.style.touchAction).toBe('none')
     detach()

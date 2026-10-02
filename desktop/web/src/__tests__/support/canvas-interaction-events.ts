@@ -82,6 +82,9 @@ export function createSceneInteractionEventHarness(
 ): SceneInteractionEventHarness {
   let bounds = options.bounds ?? DEFAULT_BOUNDS
   let boundsReadCount = 0
+  // A pointer over the map is over a page: the host's events reach the window only from a connected element.
+  const appended = !container.isConnected
+  if (appended) document.body.appendChild(container)
   const originalGetBoundingClientRect = container.getBoundingClientRect
   Object.defineProperty(container, 'getBoundingClientRect', {
     configurable: true,
@@ -124,12 +127,14 @@ export function createSceneInteractionEventHarness(
     return dispatchPointer(container, 'pointerdown', client, eventOptions)
   }
 
+  // A move is dispatched on the map host unless it names its target: the host hears a hover, and the window's capture
+  // listener a pointer the canvas owns (a press on the map), as a browser delivers them.
   function pointerMove(screen: ScenePoint, eventOptions: SceneInteractionPointerOptions = {}): PointerEvent {
-    return dispatchPointer(window, 'pointermove', clientPoint(screen), eventOptions)
+    return dispatchPointer(container, 'pointermove', clientPoint(screen), eventOptions)
   }
 
   function pointerMoveClient(client: ScenePoint, eventOptions: SceneInteractionPointerOptions = {}): PointerEvent {
-    return dispatchPointer(window, 'pointermove', client, eventOptions)
+    return dispatchPointer(container, 'pointermove', client, eventOptions)
   }
 
   function pointerUp(screen: ScenePoint, eventOptions: SceneInteractionPointerOptions = {}): PointerEvent {
@@ -204,6 +209,7 @@ export function createSceneInteractionEventHarness(
     releaseSpace,
     windowBlur,
     dispose: () => {
+      if (appended) container.remove()
       listenerSpies?.restore()
       pointerCapture.restore()
       Object.defineProperty(container, 'getBoundingClientRect', {

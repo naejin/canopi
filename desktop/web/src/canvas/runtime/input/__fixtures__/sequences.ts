@@ -290,7 +290,7 @@ export function runSequence(sequence: Sequence, bindings: Bindings, thresholds: 
 
 const SPECIES_PAYLOAD: CanvasDropPayload = Object.freeze({ kind: 'species', species: null })
 
-/** Every sequence of spec §5 that exists under LEGACY_BINDINGS, keyed by its id. */
+/** Every sequence of spec §5 that exists under CURRENT_BINDINGS, keyed by its id. */
 export const SEQUENCES = {
   // 5.1 Secondary button
   A1: seq('A1 Windows right-click', WINDOWS, [

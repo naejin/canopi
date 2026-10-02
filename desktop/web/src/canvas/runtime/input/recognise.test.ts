@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LEGACY_BINDINGS, type Bindings } from './bindings'
+import { CURRENT_BINDINGS } from './bindings'
 import type { Gesture } from './gestures'
 import {
   FOREIGN,
@@ -27,9 +27,7 @@ import {
   type Sequence,
 } from './__fixtures__/sequences'
 
-const run = (sequence: Sequence) => runSequence(sequence, LEGACY_BINDINGS)
-/** LEGACY with phase 2's hover rule: a button-less move over owned chrome, the text entry or a handle ends the hover. */
-const OWNED_HOVER_ENDS: Bindings = { ...LEGACY_BINDINGS, ownedHover: 'end' }
+const run = (sequence: Sequence) => runSequence(sequence, CURRENT_BINDINGS)
 
 /** Gesture kinds, pans with their phase. */
 function kinds(gestures: readonly Gesture[]): string[] {
@@ -58,7 +56,7 @@ function zoomsOf(gestures: readonly Gesture[]) {
   return gestures.flatMap((gesture) => gesture.kind === 'zoom' ? [gesture] : [])
 }
 
-describe('recognise under LEGACY_BINDINGS: 5.1 secondary button', () => {
+describe('recognise: 5.1 secondary button', () => {
   it('A1 Windows right-click: the button is inert and the contextmenu opens the menu', () => {
     const result = run(SEQUENCES.A1)
     expect(result.gestures).toEqual([{ kind: 'menu-request', at: { x: 101, y: 100 }, source: 'native' }])
@@ -132,7 +130,7 @@ describe('recognise under LEGACY_BINDINGS: 5.1 secondary button', () => {
   })
 })
 
-describe('recognise under LEGACY_BINDINGS: 5.2 macOS Ctrl+click', () => {
+describe('recognise: 5.2 macOS Ctrl+click', () => {
   it.each([
     ['WebKit', SEQUENCES.B1_WEBKIT],
     ['Chromium', SEQUENCES.B1_CHROMIUM],
@@ -171,7 +169,7 @@ describe('recognise under LEGACY_BINDINGS: 5.2 macOS Ctrl+click', () => {
   })
 })
 
-describe('recognise under LEGACY_BINDINGS: 5.3 keyboard menu', () => {
+describe('recognise: 5.3 keyboard menu', () => {
   it.each([
     ['C1 Menu key on Windows', SEQUENCES.C1],
     ['C2 Shift+F10, contextmenu before keyup', SEQUENCES.C2_BEFORE_KEYUP],
@@ -195,7 +193,7 @@ describe('recognise under LEGACY_BINDINGS: 5.3 keyboard menu', () => {
   })
 })
 
-describe('recognise under LEGACY_BINDINGS: 5.4 pen', () => {
+describe('recognise: 5.4 pen', () => {
   it('D1 Pen barrel tap: nothing from the barrel; the native menu', () => {
     const result = run(SEQUENCES.D1)
     // The barrel's press is dropped; its up is kept (an up is never dropped) and ends no session.
@@ -239,7 +237,7 @@ describe('recognise under LEGACY_BINDINGS: 5.4 pen', () => {
   })
 })
 
-describe('recognise under LEGACY_BINDINGS: 5.5 touch and trackpad gestures', () => {
+describe('recognise: 5.5 touch and trackpad gestures', () => {
   it('E1 One-finger tap: a tap, no hover left behind', () => {
     const result = run(SEQUENCES.E1)
     expect(kinds(result.gestures)).toEqual(['press', 'tap'])
@@ -312,7 +310,7 @@ describe('recognise under LEGACY_BINDINGS: 5.5 touch and trackpad gestures', () 
   })
 })
 
-describe('recognise under LEGACY_BINDINGS: 5.6 wheel and trackpad', () => {
+describe('recognise: 5.6 wheel and trackpad', () => {
   it('F1 Windows wheel notch, Mouse: zoom about the pointer', () => {
     const result = run(SEQUENCES.F1)
     expect(result.gestures).toEqual([{ kind: 'zoom', anchorPx: { x: 120, y: 80 }, factor: Math.exp(-0.2), source: 'wheel' }])
@@ -402,7 +400,7 @@ describe('recognise under LEGACY_BINDINGS: 5.6 wheel and trackpad', () => {
   })
 })
 
-describe('recognise under LEGACY_BINDINGS: 5.7 middle button and Space', () => {
+describe('recognise: 5.7 middle button and Space', () => {
   it('G1 Middle-drag: pan, pointerdown default-prevented', () => {
     const result = run(SEQUENCES.G1)
     expect(kinds(result.gestures)).toEqual(['pan:start', 'pan:move', 'pan:move', 'pan:move', 'pan:end'])
@@ -458,7 +456,7 @@ describe('recognise under LEGACY_BINDINGS: 5.7 middle button and Space', () => {
   })
 })
 
-describe('recognise under LEGACY_BINDINGS: 5.9 precedence', () => {
+describe('recognise: 5.9 precedence', () => {
   it('J1 Left-drag never pans: Select bands, the Pan tool pans', () => {
     const select = run(SEQUENCES.J1_SELECT)
     expectNoNavigation(select.gestures)
@@ -525,51 +523,62 @@ describe('recognise: sessions', () => {
     ])
   })
 
-  it('under LEGACY a move over the text entry, a handle or the Unlock affordance keeps the hover', () => {
-    // Today's early return (scene-interaction.ts _handlePointerMove): the passive hover, the tooltip, the Unlock affordance
-    // and the Place plants preview stay as they were.
-    const result = run(seq('owned targets', WINDOWS, [
-      move(50, 60),
-      move(54, 60, { target: OWNED_TEXT }),
-      move(56, 60, { target: ROTATE_HANDLE }),
-      move(57, 60, { target: UNLOCK_AFFORDANCE }),
-      move(58, 60, { target: FOREIGN }),
-    ]))
-    expect(result.steps.map((step) => kinds(step.gestures))).toEqual([['hover'], [], [], [], ['hover']])
-  })
-
-  it('under LEGACY a move over a map button is a hover', () => {
-    // Today's hover runs over the map's other buttons and fields and hit-tests what is beneath them.
-    const result = run(seq('map button', WINDOWS, [move(52, 60, { target: OWNED_CHROME })]))
-    expect(result.gestures).toEqual([
-      { kind: 'hover', at: { x: 52, y: 60 }, pointer: 'mouse', mods: { shift: false, ctrl: false, alt: false, meta: false }, target: OWNED_CHROME },
-    ])
-  })
-
   it('a hover carries the target class it saw', () => {
     const result = run(seq('hover targets', WINDOWS, [
       move(50, 60),
-      move(52, 60, { target: OWNED_CHROME }),
       move(54, 60, { target: HORIZONTAL_RULER }),
       move(56, 60, { target: FOREIGN }),
     ]))
     expect(result.gestures.map((gesture) => gesture.kind === 'hover' ? gesture.target : null)).toEqual([
-      SURFACE, OWNED_CHROME, HORIZONTAL_RULER, FOREIGN,
+      SURFACE, HORIZONTAL_RULER, FOREIGN,
     ])
   })
 
-  it('with ownedHover end a move over owned chrome, the text entry or a handle ends the hover; the Unlock affordance keeps it', () => {
-    const result = runSequence(seq('owned targets, phase 2', WINDOWS, [
+  it('a move over owned chrome ends the hover, with the Unlock affordance keeping it', () => {
+    // Owned chrome (a map button, the attribution), the text entry and a handle end the hover and its tooltip (U6); the
+    // Unlock affordance emits nothing, so the hover it belongs to stays until it is clicked.
+    const result = run(seq('owned targets', WINDOWS, [
       move(50, 60),
       move(52, 60, { target: OWNED_CHROME }),
       move(54, 60, { target: OWNED_TEXT }),
       move(56, 60, { target: ROTATE_HANDLE }),
       move(57, 60, { target: UNLOCK_AFFORDANCE }),
       move(58, 60, { target: FOREIGN }),
-    ]), OWNED_HOVER_ENDS)
+    ]))
     expect(result.steps.map((step) => kinds(step.gestures))).toEqual([
       ['hover'], ['hover-end'], ['hover-end'], ['hover-end'], [], ['hover'],
     ])
+  })
+
+  it('a 2 px mouse or pen jitter is a tap; 3 px starts a drag', () => {
+    for (const pointer of ['mouse', 'pen'] as const) {
+      const jitter = run(seq(`${pointer} jitter`, WINDOWS, [
+        down(100, 100, { pointer }),
+        move(102, 100, { pointer, buttons: 1 }),
+        move(100, 102, { pointer, buttons: 1 }),
+        up(101, 101, { pointer }),
+      ]))
+      expect(kinds(jitter.gestures)).toEqual(['press', 'tap'])
+      const dragged = run(seq(`${pointer} drag`, WINDOWS, [
+        down(100, 100, { pointer }),
+        move(102, 100, { pointer, buttons: 1 }),
+        move(103, 100, { pointer, buttons: 1 }),
+        up(103, 100, { pointer }),
+      ]))
+      expect(kinds(dragged.gestures)).toEqual(['press', 'drag-start', 'drag-end'])
+      // The drag starts where the press was, at the move that passed the threshold.
+      expect(dragged.gestures[1]).toMatchObject({ from: { x: 100, y: 100 }, at: { x: 103, y: 100 } })
+    }
+  })
+
+  it('Plant a row keeps slop 0 through configure', () => {
+    const result = run(seq('plant a row', WINDOWS, [
+      { raw: { kind: 'configure', context: { tool: 'plant-spacing', mode: 'site', pointingDevice: 'mouse', dragSlopPx: 0 } } },
+      down(100, 100),
+      move(101, 100, { buttons: 1 }),
+      up(101, 100),
+    ]))
+    expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'drag-end'])
   })
 
   it('a pointer-source pan carries the pointer\'s point and a wheel pan does not', () => {

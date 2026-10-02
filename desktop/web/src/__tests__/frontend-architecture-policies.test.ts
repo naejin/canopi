@@ -1983,6 +1983,8 @@ const CANVAS_V2_POLICIES = [
     names: ['addEventListener'],
     allowedFrom: [
       'src/canvas/runtime/input/dom-input-source.ts',
+      // The copied GeoLibre guard the DOM source installs on the map host (phase F).
+      'src/canvas/runtime/input/selection-drag-guard.ts',
       'src/canvas/runtime/chrome/text-entry-host.ts',
       'src/canvas/runtime/chrome/handle-layer.ts',
       'src/canvas/runtime/chrome/locked-affordance.ts',
@@ -2008,7 +2010,7 @@ const CANVAS_V2_POLICIES = [
     name: 'P7 the input core reaches no browser global or DOM event',
     from: ['src/canvas/runtime/input/**'],
     names: ['window', 'document', 'Date', 'performance', 'setTimeout', 'navigator', 'PointerEvent', 'WheelEvent'],
-    allowedFrom: ['src/canvas/runtime/input/dom-input-source.ts', ...TEST_SOURCE_PATTERNS],
+    allowedFrom: ['src/canvas/runtime/input/dom-input-source.ts', 'src/canvas/runtime/input/selection-drag-guard.ts', ...TEST_SOURCE_PATTERNS],
   },
   {
     // Per-frame view data stays in the runtime and the map layer; the overview pin's ViewReadSurface.designPin is the
@@ -2918,6 +2920,7 @@ describe('canvas v2 policies, end of 0B', () => {
     ])
     const listenerOwners = [
       'src/canvas/runtime/input/dom-input-source.ts',
+      'src/canvas/runtime/input/selection-drag-guard.ts',
       'src/canvas/runtime/chrome/text-entry-host.ts',
       'src/canvas/runtime/chrome/handle-layer.ts',
       'src/canvas/runtime/chrome/locked-affordance.ts',
@@ -2960,7 +2963,7 @@ describe('canvas v2 policies, end of 0B', () => {
     expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P7'))).toEqual(
       confined.map(
         (name) =>
-          `${P7} src/canvas/runtime/input/recognise.ts contains confined symbol ${name}; allowed sources: src/canvas/runtime/input/dom-input-source.ts, ${TEST_SOURCES}`,
+          `${P7} src/canvas/runtime/input/recognise.ts contains confined symbol ${name}; allowed sources: src/canvas/runtime/input/dom-input-source.ts, src/canvas/runtime/input/selection-drag-guard.ts, ${TEST_SOURCES}`,
       ),
     )
   })
