@@ -1328,7 +1328,7 @@ const SOURCE_TOMBSTONE_POLICIES = [
       'src/canvas/runtime/renderers/index.ts',
       'src/canvas/canvas2d-utils.ts',
       // Canvas v2 (ADR 0016), end of 0A: MapFrame and its viewport diagnostics
-      // gave way to the view transform's frame (INV-XF-04).
+      // gave way to the view transform's frame.
       'src/canvas/maplibre-camera.ts',
       // Canvas v2 0B-5 and 0D2 (ADR 0016, 0019): the view agreement probe went
       // (camera-contract.test.ts is the projection guard), and the layer stopped

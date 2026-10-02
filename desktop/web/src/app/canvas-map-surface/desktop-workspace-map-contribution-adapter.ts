@@ -24,7 +24,7 @@ export function createDesktopWorkspaceMapContributionAdapter(): WorkspaceMapCont
       if (!plane) return null
       void runtime.revision.scene.value
       // Coarse view signals only: the contributions re-read when the camera settles or the mode changes, never on a camera frame
-      // alone (INV-ENT-22).
+      // alone.
       void runtime.view.settledCamera.value
       const overview = runtime.view.mode.value === 'overview'
       const panelTargets = readPanelTargetOverlaySnapshot()

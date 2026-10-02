@@ -2,7 +2,7 @@
 //
 // Owns createToolScene: the ToolScene tools and the ToolHost query (spec §1.2a, §1.4). In 0B it is a façade over today's
 // linear hit tests (hit-testing.ts) at the frame's pixelsPerMetre, read at every query; nothing is cached, and
-// an index is later work (INV-TOOL-24). hitAt without a filter is hitTestTopLevel exactly, object locks included (the tool
+// an index is later work. hitAt without a filter is hitTestTopLevel exactly, object locks included (the tool
 // rejects them); `includeLocked` is hitTestVisibleTopLevel (the host's hover). nearestPlant is today's Place plants scan
 // (today's (a4c86d39) interaction/plant-placement-preview.ts): the first plant in scene order wins a tie.
 // tools/tool-host.ts re-exports the factory.

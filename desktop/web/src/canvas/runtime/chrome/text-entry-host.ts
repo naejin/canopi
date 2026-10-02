@@ -7,7 +7,7 @@
 // longer holds focus, so the press or menu that would have blurred it submits it instead (submitUnfocused). Esc is the
 // entry's own handler and discards it before any canvas key handling hears it (spec §3.7), then tells the opener
 // (onCancel), so a tool can follow the cancel. Closing a focused entry returns focus to the map
-// (focusMap('text-entry-closed'), INV-FOC-04). The field stays on its anchor through camera moves ('overlays' frames). It
+// (focusMap('text-entry-closed')). The field stays on its anchor through camera moves ('overlays' frames). It
 // listens only on its own textarea (P6).
 
 import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'

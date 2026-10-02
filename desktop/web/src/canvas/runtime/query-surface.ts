@@ -40,7 +40,7 @@ interface SceneCanvasQuerySurfaceOptions {
   readonly sceneStore: SceneStateReader & SceneDocumentReader
   /** The runtime camera's frames: `view`, the label coverage and the frame's scale read them. */
   readonly frames: ViewFrameSource
-  /** The live frame's px/m, which sizes screen-sized notes in the selection model (INV-XF-27). Default: the host's frame. */
+  /** The live frame's px/m, which sizes screen-sized notes in the selection model. Default: the host's frame. */
   readonly readViewScale?: () => number
   readonly settledReader: SettledSceneReader
   readonly mutations: Pick<

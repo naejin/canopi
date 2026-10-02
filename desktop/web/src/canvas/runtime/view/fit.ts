@@ -3,7 +3,7 @@
 // Owns framing: the screen rectangle the chrome leaves, and the oriented fits that place a PlanarCamera inside it (Fit to Design
 // over a scale-dependent point set, temporary focus on a box). A fit projects its points onto the screen axes at the target bearing
 // and fits that extent, never a world-axis box; at bearing 0 each fit is today's CameraController fit, bit for bit (INV-CAM-09,
-// INV-CAM-10, INV-CAM-12).
+// INV-CAM-10).
 
 import { bearingCosSin, normaliseBearing } from './navigation-policy'
 import type { PlanarCamera, SceneBounds, ScreenInsets, TemporaryBoundsFocusOptions, WorldPoint } from './types'

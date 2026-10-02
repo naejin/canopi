@@ -68,7 +68,7 @@ interface SceneCanvasCommandSurfaceOptions {
     | 'zoomIn' | 'zoomOut' | 'zoomBy' | 'zoomToFit' | 'returnToDesign' | 'focusTemporaryBounds' | 'frameBounds' | 'returnFromTemporaryFocus'
     | 'showPlace' | 'setFramingInsets' | 'zoomToSelection' | 'resetNorth' | 'rotateBy' | 'beginRotation' | 'showCamera'
   >
-  /** The live frame's px/m, which sizes screen-sized notes and plants (INV-XF-27). */
+  /** The live frame's px/m, which sizes screen-sized notes and plants. */
   readonly readViewScale: () => number
   readonly history: SceneHistoryCommands
   readonly commandAdmission: SceneCommandAdmission

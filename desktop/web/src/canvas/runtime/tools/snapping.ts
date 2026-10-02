@@ -1,7 +1,7 @@
 // canvas/runtime/tools/snapping.ts  (pure)
 //
-// Owns the ToolHost's grid and guide snapping (INV-TOOL-05): the grid first, then the ruler guides, both on world axes (user),
-// at the frame's pixelsPerMetre, which is exact at bearing 0 where metresPerPixelAt is not (INV-XF-21). The host feeds
+// Owns the ToolHost's grid and guide snapping: the grid first, then the ruler guides, both on world axes (user),
+// at the frame's pixelsPerMetre, which is exact at bearing 0 where metresPerPixelAt is not. The host feeds
 // ToolPoint.free, ToolPoint.snapped and ToolContext.snap from here. canvas/grid.ts and canvas/guides.ts keep the arithmetic,
 // which the scene chrome and the rulers read too.
 
