@@ -153,7 +153,7 @@ describe('Keyboard shortcuts dialog', () => {
 
     const sections = [...container.querySelectorAll('section section')]
     expect(sections.map((section) => section.querySelector('h3')?.textContent)).toEqual([
-      'Tools (while the map has focus)',
+      'Tools (anywhere except text fields)',
       'File',
       'Map and workspace',
     ])
@@ -182,7 +182,7 @@ describe('Keyboard shortcuts dialog', () => {
     await act(async () => { render(<KeyboardShortcutsDialog menus={menus} />, container) })
     await act(async () => { openKeyboardShortcutsDialog() })
     const footnote = () => container.querySelector('[data-single-key-shortcuts]')!
-    expect(footnote().textContent).toBe('Tool keys work while the map has focus. Single-key shortcuts can be turned off in Settings › Keyboard.')
+    expect(footnote().textContent).toBe('Tool keys work anywhere except text fields. Single-key shortcuts can be turned off in Settings › Keyboard.')
     await act(async () => { singleKeyShortcuts.value = false })
     try {
       expect(footnote().getAttribute('data-single-key-shortcuts')).toBe('off')
