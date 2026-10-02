@@ -8,6 +8,8 @@ export interface UnusedCodeOptions {
   readonly consumers: readonly string[]
   /** Globs never reported: tests, declarations, generated code. */
   readonly ignored: readonly string[]
+  /** Test files (globs): what only they import is reported as test-only. */
+  readonly tests: readonly string[]
   /** Files loaded from outside the import graph (HTML entries, `new Worker(new URL(…))`), each with the reason. */
   readonly entryPoints: Readonly<Record<string, string>>
   /** Module aliases (Vite `resolve.alias`, tsconfig `paths`) to every file they can resolve to. */
@@ -21,15 +23,21 @@ export interface UnusedCodeReport {
   readonly exports: readonly string[]
   /** The same for type-only exports (interfaces, type aliases, `export type`). */
   readonly typeExports: readonly string[]
+  /** `path#name` for each value export only tests import. */
+  readonly testOnlyExports: readonly string[]
+  /** The same for type-only exports. */
+  readonly testOnlyTypeExports: readonly string[]
 }
 
 /**
  * Lists files no production import chain reaches from an entry point or a
- * consumer, and exports no other module imports (tests included).
+ * consumer, exports no other module imports, and exports only tests import.
  * An import of a name credits that name, following named and `*` re-exports to
  * the declaring file; a namespace, dynamic or `import('…')` type import credits
- * every export of its target. A re-export alone credits nothing: the barrel's
- * own name is what another module must import.
+ * the members the importer reads (`ns.member`, destructured names, a type
+ * qualifier), and every export only when the module object escapes. A
+ * re-export alone credits nothing: the barrel's own name is what another
+ * module must import.
  */
 export function findUnusedCode(
   graph: readonly TypeScriptSourceFact[],
@@ -60,11 +68,13 @@ export function findUnusedCode(
   }
 
   const used = new Set<string>()
+  const testUsed = new Set<string>()
+  let into = used
   const credit = (path: string, name: string, seen = new Set<string>()): void => {
     const key = `${path}#${name}`
     if (seen.has(key)) return
     seen.add(key)
-    used.add(key)
+    into.add(key)
     const source = byPath.get(path)
     if (!source) return
     let declared = false
@@ -100,15 +110,19 @@ export function findUnusedCode(
   }
 
   for (const source of graph) {
+    into = matches(source.path, options.tests) ? testUsed : used
     for (const edge of source.imports) {
       if (edge.kind === 'reexport') continue
+      const wholeModule = edge.kind !== 'static'
+        || edge.bindings.some((binding) => binding.importedName === '*')
       for (const target of targetsOf(edge)) {
         if (target === source.path) continue
-        if (edge.kind !== 'static' || edge.bindings.some((binding) => binding.importedName === '*')) {
-          creditAll(target)
-          continue
+        for (const binding of edge.bindings) {
+          if (binding.importedName !== '*') credit(target, binding.importedName)
         }
-        for (const binding of edge.bindings) credit(target, binding.importedName)
+        if (!wholeModule) continue
+        if (edge.members === null) creditAll(target)
+        else for (const member of edge.members) credit(target, member)
       }
     }
   }
@@ -117,16 +131,25 @@ export function findUnusedCode(
   const files = checkedSources
     .filter((source) => !reached.has(source.path))
     .map((source) => source.path)
-  const unusedExports = (typeOnly: boolean) => checkedSources.flatMap((source) => {
-    const names = new Map<string, boolean>()
-    for (const fact of source.exportFacts) {
-      if (fact.kind === 'star-reexport' || !fact.exportedName) continue
-      names.set(fact.exportedName, (names.get(fact.exportedName) ?? true) && fact.typeOnly)
-    }
-    return [...names]
-      .filter(([name, isType]) => isType === typeOnly && !used.has(`${source.path}#${name}`))
-      .map(([name]) => `${source.path}#${name}`)
-  }).sort()
+  const exportsWhere = (typeOnly: boolean, unused: (key: string) => boolean) =>
+    checkedSources.flatMap((source) => {
+      const names = new Map<string, boolean>()
+      for (const fact of source.exportFacts) {
+        if (fact.kind === 'star-reexport' || !fact.exportedName) continue
+        names.set(fact.exportedName, (names.get(fact.exportedName) ?? true) && fact.typeOnly)
+      }
+      return [...names]
+        .filter(([name, isType]) => isType === typeOnly && unused(`${source.path}#${name}`))
+        .map(([name]) => `${source.path}#${name}`)
+    }).sort()
+  const unused = (key: string) => !used.has(key) && !testUsed.has(key)
+  const testOnly = (key: string) => !used.has(key) && testUsed.has(key)
 
-  return { files: files.sort(), exports: unusedExports(false), typeExports: unusedExports(true) }
+  return {
+    files: files.sort(),
+    exports: exportsWhere(false, unused),
+    typeExports: exportsWhere(true, unused),
+    testOnlyExports: exportsWhere(false, testOnly),
+    testOnlyTypeExports: exportsWhere(true, testOnly),
+  }
 }
