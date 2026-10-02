@@ -235,7 +235,6 @@
     "src/app/consortium/time-model.ts#DEFAULT_CONSORTIUM_END_PHASE",
     "src/app/consortium/time-model.ts#DEFAULT_CONSORTIUM_START_PHASE",
     "src/app/consortium/time-model.ts#DEFAULT_CONSORTIUM_STRATUM",
-    "src/app/contracts/canopi-design-errors.ts#describeDesignLoadError",
     "src/app/contracts/design-ingestion.ts#CanopiDesignIngestionError",
     "src/app/contracts/document.ts#DOCUMENT_FILE_FIELD_OWNERS",
     "src/app/contracts/document.ts#extractDocumentExtra",
