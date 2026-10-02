@@ -124,12 +124,11 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
   getSceneSnapshot(): ScenePersistedState { return this.options.sceneStore.persisted }
   getSpeciesFocus() { return this.options.sceneStore.session.speciesFocus }
   getPlantLabelCoverage(): CanvasPlantLabelCoverage {
-    const frame = this.options.camera.snapshot.peek()
-    const { width, height } = frame.screenSize
-    if (frame.mode === 'overview' || width <= 0 || height <= 0) return { labelled: 0, inView: 0 }
+    const { view, mode } = this.options.camera.host.frames.viewFrame.peek()
+    const { width, height } = view.screen
+    if (mode === 'overview' || width <= 0 || height <= 0) return { labelled: 0, inView: 0 }
     const snapshot = this.options.presentation.buildRendererSnapshot()
     if (!getSceneLayerStyle(snapshot.scene, 'plants').visible) return { labelled: 0, inView: 0 }
-    const { view } = this.options.camera.host.frames.viewFrame.peek()
     const inView = new Set<string>()
     for (const plant of snapshot.scene.plants) {
       const point = view.worldToScreen(plant.position)
