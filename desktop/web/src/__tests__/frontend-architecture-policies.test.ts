@@ -2013,6 +2013,29 @@ const CANVAS_V2_POLICIES = [
     allowedFrom: ['src/canvas/runtime/input/dom-input-source.ts', ...TEST_SOURCE_PATTERNS],
   },
   {
+    // Per-frame view data stays in the runtime and the map layer; the overview pin's ViewReadSurface.designPin is the
+    // one per-frame read components get (spec §1.1).
+    kind: 'confine-symbols',
+    name: 'P10 only the runtime and the map layer read per-frame view signals',
+    from: ['src/**'],
+    names: ['viewFrame', 'settledViewFrame', 'onViewFrame'],
+    allowedFrom: ['src/canvas/runtime/**', 'src/maplibre/**', ...TEST_SOURCE_PATTERNS],
+  },
+  {
+    // Type-only: the read surface and view types, and the driver host types the composition and the activation wire
+    // (spec §1.1a); no value import, so no app module can build a camera.
+    kind: 'forbid-imports',
+    name: 'P10 the app, components and Web import view types only',
+    from: ['src/app/**', 'src/components/**', 'src/web/**'],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+    targets: ['src/canvas/runtime/view/**'],
+    allowTypeOnlyTargets: [
+      'src/canvas/runtime/view/read-surface.ts',
+      'src/canvas/runtime/view/types.ts',
+      'src/canvas/runtime/view/camera-driver.ts',
+    ],
+  },
+  {
     // World content moves by the world-root matrix, never per-point projection (world-layers.test.ts "a pan
     // re-tessellates no zone" is the behavioural half). Upright billboards, the billboard drafts and label admission
     // project anchors; overlays live in chrome/, outside the rule.
@@ -2552,6 +2575,8 @@ const P6_CAPTURE = '[P6 only the DOM input source captures the pointer]'
 const P6_LISTENERS = '[P6 only the DOM input source adds canvas listeners]'
 const P6_MAPLIBRE = '[P6 MapLibre modules add listeners only to abort signals]'
 const P7 = '[P7 the input core reaches no browser global or DOM event]'
+const P10_SIGNALS = '[P10 only the runtime and the map layer read per-frame view signals]'
+const P10_IMPORTS = '[P10 the app, components and Web import view types only]'
 const P12 = '[P12 the renderer learns the camera one way]'
 const P11 = '[Retired frontend seams stay deleted]'
 const TEST_SOURCES = TEST_SOURCE_PATTERNS.join(', ')
@@ -2971,6 +2996,50 @@ describe('canvas v2 policies, end of 0B', () => {
         (name) => `${P12} src/canvas/runtime/renderers/world-layers.ts contains confined symbol ${name}; allowed sources: ${allowed}`,
       ),
     )
+  })
+
+  it('P10 confines per-frame view signals to the runtime, the map layer and tests', () => {
+    const allowed = ['src/canvas/runtime/**', 'src/maplibre/**', ...TEST_SOURCE_PATTERNS].join(', ')
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/scene-runtime/effects.ts', ['export const read = frames.viewFrame.value']),
+      plantedSource('src/maplibre/shared-scene-layer.ts', ['export const read = frames.viewFrame.value']),
+      plantedSource('src/components/canvas/Planted.tsx', ['export const read = query.viewFrame.value']),
+      plantedSource('src/app/planted.ts', ['export const off = frames.onViewFrame(() => frames.settledViewFrame.value)']),
+      plantedSource('src/components/canvas/Planted.test.tsx', ['export const read = query.viewFrame.value']),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P10'))).toEqual([
+      `${P10_SIGNALS} src/components/canvas/Planted.tsx contains confined symbol viewFrame; allowed sources: ${allowed}`,
+      `${P10_SIGNALS} src/app/planted.ts contains confined symbol settledViewFrame; allowed sources: ${allowed}`,
+      `${P10_SIGNALS} src/app/planted.ts contains confined symbol onViewFrame; allowed sources: ${allowed}`,
+    ])
+  })
+
+  it('P10 rejects value imports of the view module and type imports beyond its read surface, types and driver host', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/view/types.ts', ['export interface ViewScreen { readonly width: number }']),
+      plantedSource('src/canvas/runtime/view/read-surface.ts', ['export interface ViewReadSurface { readonly x: number }']),
+      plantedSource('src/canvas/runtime/view/camera-driver.ts', ['export interface CameraDriverHost { readonly x: number }']),
+      plantedSource('src/canvas/runtime/view/driver-host.ts', ['export function createCameraDriverHost() {}']),
+      plantedSource('src/canvas/runtime/view/camera-math.ts', ['export interface Placement { readonly x: number }']),
+      plantedSource('src/app/canvas-map-surface/workspace-activation.ts', [
+        "import type { CameraDriverHost } from '../../canvas/runtime/view/camera-driver'",
+        "import type { ViewScreen } from '../../canvas/runtime/view/types'",
+        "import type { ViewReadSurface } from '../../canvas/runtime/view/read-surface'",
+      ]),
+      plantedSource('src/app/canvas-map-surface/planted.ts', [
+        "import { createCameraDriverHost } from '../../canvas/runtime/view/driver-host'",
+        "import type { Placement } from '../../canvas/runtime/view/camera-math'",
+      ]),
+      plantedSource('src/components/canvas/Planted.tsx', ["import { ViewScreen } from '../../canvas/runtime/view/types'"]),
+      plantedSource('src/web/planted.test.ts', ["import { createCameraDriverHost } from '../canvas/runtime/view/driver-host'"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P10'))).toEqual([
+      `${P10_IMPORTS} src/app/canvas-map-surface/planted.ts:1:1 imports src/canvas/runtime/view/driver-host.ts via "../../canvas/runtime/view/driver-host" (static)`,
+      `${P10_IMPORTS} src/app/canvas-map-surface/planted.ts:2:1 imports src/canvas/runtime/view/camera-math.ts via "../../canvas/runtime/view/camera-math" (static)`,
+      `${P10_IMPORTS} src/components/canvas/Planted.tsx:1:1 imports src/canvas/runtime/view/types.ts via "../../canvas/runtime/view/types" (static)`,
+    ])
   })
 
   it('P11 rejects the retired tool adapter seam, its symbols and scene-interaction.ts', () => {
