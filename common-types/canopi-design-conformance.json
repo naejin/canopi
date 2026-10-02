@@ -2,7 +2,6 @@
   "contract_version": 1,
   "facts": {
     "current_version": 9,
-    "minimum_supported_version": 7,
     "missing_version": 1,
     "future_version_policy": "reject",
     "error_kinds": [
@@ -308,241 +307,6 @@
       "created_at": "2026-09-25T00:00:00.000Z",
       "updated_at": "2026-09-25T00:00:00.000Z",
       "extra": {}
-    },
-    "migrated-from-v7": {
-      "annotations": [],
-      "budget": [],
-      "budget_currency": "EUR",
-      "consortiums": [],
-      "created_at": "2026-09-25T00:00:00.000Z",
-      "description": null,
-      "extra": {},
-      "groups": [],
-      "layers": [],
-      "measurement_guides": [],
-      "name": "Preview garden",
-      "plant_species_codes": {},
-      "plant_species_colors": {},
-      "plant_species_symbols": {},
-      "plants": [
-        {
-          "canonical_name": "Malus domestica",
-          "color": null,
-          "common_name": null,
-          "id": "plant-1",
-          "locked": false,
-          "notes": null,
-          "pinned_name": false,
-          "planted_date": null,
-          "position": {
-            "lat": 48.858370123,
-            "lon": 2.294481234
-          },
-          "quantity": null,
-          "rotation": null,
-          "scale": null,
-          "symbol": null
-        }
-      ],
-      "stories": [],
-      "timeline": [
-        {
-          "action_type": "prune",
-          "completed": false,
-          "depends_on": null,
-          "description": "Prune",
-          "end_date": null,
-          "id": "action-1",
-          "order": 0,
-          "recurrence": null,
-          "start_date": null,
-          "targets": [
-            {
-              "kind": "zone",
-              "zone_id": "Hedge"
-            }
-          ]
-        }
-      ],
-      "updated_at": "2026-09-25T00:00:00.000Z",
-      "version": 9,
-      "views": [],
-      "zones": [
-        {
-          "fill_color": null,
-          "id": "Hedge",
-          "locked": false,
-          "name": "Hedge",
-          "notes": null,
-          "points": [
-            {
-              "lat": 23.0,
-              "lon": 13.0
-            },
-            {
-              "lat": 23.0,
-              "lon": 13.0001
-            }
-          ],
-          "rotation": 0.0,
-          "zone_type": "line"
-        }
-      ]
-    },
-    "migrated-from-v8": {
-      "annotations": [],
-      "budget": [
-        {
-          "category": "plants",
-          "currency": "EUR",
-          "description": "Bed",
-          "quantity": 1.0,
-          "target": {
-            "kind": "zone",
-            "zone_id": "North bed"
-          },
-          "unit_cost": 1.0
-        }
-      ],
-      "budget_currency": "EUR",
-      "consortiums": [],
-      "created_at": "2026-09-27T00:00:00.000Z",
-      "description": null,
-      "extra": {},
-      "groups": [],
-      "layers": [],
-      "lidar": {
-        "entries": [
-          {
-            "id": "slope-1",
-            "kind": "Derived",
-            "opacity": 1.0,
-            "order": 0,
-            "style": null,
-            "visible": true
-          },
-          {
-            "id": "dem-1",
-            "kind": "Source",
-            "opacity": 0.5,
-            "order": 1,
-            "style": null,
-            "visible": true
-          }
-        ],
-        "schema_version": 1
-      },
-      "measurement_guides": [],
-      "name": "Story garden",
-      "plant_species_codes": {},
-      "plant_species_colors": {},
-      "plant_species_symbols": {},
-      "plants": [],
-      "stories": [],
-      "timeline": [],
-      "updated_at": "2026-09-27T00:00:00.000Z",
-      "version": 9,
-      "views": [
-        {
-          "camera": {
-            "bearing": 0.0,
-            "lat": 23.0,
-            "lon": 13.0,
-            "zoom": 18.0
-          },
-          "highlighted": {
-            "objects": [
-              {
-                "id": "North bed",
-                "kind": "zone"
-              }
-            ],
-            "species": []
-          },
-          "id": "view-1",
-          "name": "Beds",
-          "text": [],
-          "title": null,
-          "visible_layers": {
-            "background": {
-              "kind": "satellite"
-            },
-            "scene_layers": [
-              "zones"
-            ],
-            "site_data": [],
-            "terrain": {
-              "contours": false,
-              "hillshade": false
-            }
-          },
-          "extent": {
-            "west": 12.999,
-            "south": 22.999,
-            "east": 13.001,
-            "north": 23.001
-          }
-        }
-      ],
-      "zones": [
-        {
-          "fill_color": null,
-          "id": "North bed",
-          "locked": false,
-          "name": "North bed",
-          "notes": null,
-          "points": [
-            {
-              "lat": 23.0,
-              "lon": 13.0
-            },
-            {
-              "lat": 22.9999,
-              "lon": 13.0001
-            }
-          ],
-          "rotation": 0.0,
-          "zone_type": "rect"
-        },
-        {
-          "fill_color": null,
-          "id": "zone-0ba8349a-6cff-46cc-8b53-a357fc976eee",
-          "locked": false,
-          "name": null,
-          "notes": null,
-          "points": [
-            {
-              "lat": 23.0,
-              "lon": 13.0
-            },
-            {
-              "lat": 22.9999,
-              "lon": 13.0001
-            }
-          ],
-          "rotation": 0.0,
-          "zone_type": "rect"
-        },
-        {
-          "fill_color": null,
-          "id": "North bed (2)",
-          "locked": false,
-          "name": "North bed",
-          "notes": null,
-          "points": [
-            {
-              "lat": 23.0,
-              "lon": 13.0
-            },
-            {
-              "lat": 22.9999,
-              "lon": 13.0001
-            }
-          ],
-          "rotation": 0.0,
-          "zone_type": "ellipse"
-        }
-      ]
     },
     "generated-ids": {
       "version": 9,
@@ -1112,7 +876,7 @@
       "accepted": "generated-ids-before-explicit-ids"
     },
     {
-      "id": "migrate-v7",
+      "id": "reject-v7-preview-as-older-version",
       "input": {
         "version": 7,
         "name": "Preview garden",
@@ -1162,10 +926,10 @@
         "created_at": "2026-09-25T00:00:00.000Z",
         "updated_at": "2026-09-25T00:00:00.000Z"
       },
-      "accepted": "migrated-from-v7"
+      "error_kind": "unsupported_version"
     },
     {
-      "id": "migrate-v8",
+      "id": "reject-v8-preview-as-older-version",
       "input": {
         "version": 8,
         "name": "Story garden",
@@ -1296,7 +1060,7 @@
         "created_at": "2026-09-27T00:00:00.000Z",
         "updated_at": "2026-09-27T00:00:00.000Z"
       },
-      "accepted": "migrated-from-v8"
+      "error_kind": "unsupported_version"
     },
     {
       "id": "reject-missing-version",
@@ -1311,7 +1075,7 @@
       "error_kind": "unsupported_version"
     },
     {
-      "id": "reject-version-below-the-ladder",
+      "id": "reject-version-four-as-older-version",
       "input": {
         "version": 4
       },
@@ -1331,7 +1095,7 @@
           }
         },
         "name": "Canopi 1.2 garden",
-        "description": "Kept through the ladder",
+        "description": "Refused, never read past its version",
         "plant_species_colors": {
           "Malus domestica": "#70814B"
         },

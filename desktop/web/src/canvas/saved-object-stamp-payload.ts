@@ -1,4 +1,3 @@
-import { isGeneratedZoneName } from '../app/contracts/design-migrations'
 import type {
   SceneObjectGroupMember,
   ScenePoint,
@@ -6,12 +5,11 @@ import type {
 
 /**
  * Payload format of a saved stamp. Version 2 separates a zone's display name
- * from its identity (`.canopi` v9). A version 1 payload is upgraded in memory
- * when read (ADR 0013) and always written as version 2; anything older or
- * newer is refused.
+ * from its identity (`.canopi` v9). Canopi 2.0 breaks stored data (ADR 0021):
+ * only version 2 is read; a version 1 payload from before 2.0 and anything
+ * newer are refused.
  */
 export const SAVED_OBJECT_STAMP_PAYLOAD_VERSION = 2
-const OLDEST_READABLE_STAMP_PAYLOAD_VERSION = 1
 
 export interface SavedObjectStampPayload {
   readonly version: typeof SAVED_OBJECT_STAMP_PAYLOAD_VERSION
@@ -70,17 +68,14 @@ export function parseSavedObjectStampPayload(raw: string): SavedObjectStampPaylo
 
 export function normalizeSavedObjectStampPayload(raw: unknown): SavedObjectStampPayload | null {
   if (!isRecord(raw)) return null
-  if (typeof raw.version !== 'number' || raw.version < OLDEST_READABLE_STAMP_PAYLOAD_VERSION) return null
-  if (raw.version > SAVED_OBJECT_STAMP_PAYLOAD_VERSION) return null
-  const data = raw.version === 1 ? upgradeStampPayloadV1(raw) : raw
-  if (!data) return null
-  const anchor = pointFromUnknown(data.anchor)
+  if (raw.version !== SAVED_OBJECT_STAMP_PAYLOAD_VERSION) return null
+  const anchor = pointFromUnknown(raw.anchor)
   if (!anchor) return null
 
-  const plants = arrayFromUnknown(data.plants, plantFromUnknown)
-  const zones = arrayFromUnknown(data.zones, zoneFromUnknown)
-  const annotations = arrayFromUnknown(data.annotations, annotationFromUnknown)
-  const groups = arrayFromUnknown(data.groups, groupFromUnknown)
+  const plants = arrayFromUnknown(raw.plants, plantFromUnknown)
+  const zones = arrayFromUnknown(raw.zones, zoneFromUnknown)
+  const annotations = arrayFromUnknown(raw.annotations, annotationFromUnknown)
+  const groups = arrayFromUnknown(raw.groups, groupFromUnknown)
   if (!plants || !zones || !annotations || !groups) return null
 
   return {
@@ -91,37 +86,6 @@ export function normalizeSavedObjectStampPayload(raw: unknown): SavedObjectStamp
     annotations,
     groups,
   }
-}
-
-/**
- * Version 1 → 2: a zone's name was its identity. The name becomes the id (as
- * `.canopi` v8 → v9 does), a generated name becomes no name, and group
- * members that named the zone's scene id follow it.
- */
-function upgradeStampPayloadV1(data: Record<string, unknown>): Record<string, unknown> | null {
-  if (!Array.isArray(data.zones) || !Array.isArray(data.groups)) return null
-  const renamed = new Map<string, string>()
-  const zones: unknown[] = []
-  for (const zone of data.zones) {
-    if (!isRecord(zone)) return null
-    const name = stringFromUnknown(zone.name)
-    const oldId = stringFromUnknown(zone.id)
-    if (!name || !oldId) return null
-    renamed.set(oldId, name)
-    zones.push({ ...zone, id: name, name: isGeneratedZoneName(name) ? null : name })
-  }
-  const groups = data.groups.map((group) => {
-    if (!isRecord(group) || !Array.isArray(group.members)) return group
-    return {
-      ...group,
-      members: group.members.map((member) => (
-        isRecord(member) && member.kind === 'zone' && typeof member.id === 'string' && renamed.has(member.id)
-          ? { ...member, id: renamed.get(member.id) }
-          : member
-      )),
-    }
-  })
-  return { ...data, version: SAVED_OBJECT_STAMP_PAYLOAD_VERSION, zones, groups }
 }
 
 function plantFromUnknown(data: unknown): SavedObjectStampPlant | null {

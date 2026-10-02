@@ -32,8 +32,6 @@ export const designSaveStatus = computed(() => designContinuousSave.status.value
 
 /** Why the last continuous save failed; null unless the status is `error`. */
 export const designSaveFailureReason = computed(() => designContinuousSave.failureReason.value);
-/** The opened older-format file has been written in the current format (ADR 0013). */
-export const designUpgradedFormatWritten = computed(() => designContinuousSave.upgradedFormatWritten.value);
 
 /** The current Design changed since it was opened or created. */
 export const designRevertAvailable = computed(() => designContinuousSave.revertAvailable.value);

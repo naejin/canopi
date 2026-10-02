@@ -25,6 +25,16 @@ const mocks = vi.hoisted(() => ({
   disposePlaceSearchSession: vi.fn(),
   installToolRailLearning: vi.fn(),
   disposeToolRailLearning: vi.fn(),
+  setAsideDataFromBefore2_0: vi.fn(),
+  showBrowserShellNotice: vi.fn(),
+}));
+
+vi.mock("../web/browser-app-data", () => ({
+  browserAppDataStore: { setAsideDataFromBefore2_0: mocks.setAsideDataFromBefore2_0 },
+}));
+
+vi.mock("../web/browser-shell-notice", () => ({
+  showBrowserShellNotice: mocks.showBrowserShellNotice,
 }));
 
 vi.mock("../app/tool-rail/learning", () => ({
@@ -87,6 +97,7 @@ describe("settings platform bootstrap", () => {
     mocks.invoke.mockReset().mockResolvedValue({
       plant_db: "missing",
       lidar_library: { kind: "recovered", items: 2, generated: 1 },
+      local_data: { kind: "moved_aside" },
     });
     mocks.registerCloseGuard.mockReset().mockReturnValue({
       dispose: mocks.disposeCloseGuard,
@@ -98,6 +109,8 @@ describe("settings platform bootstrap", () => {
     mocks.installPlaceSearchSession.mockReset().mockReturnValue(mocks.disposePlaceSearchSession);
     mocks.disposeToolRailLearning.mockReset();
     mocks.installToolRailLearning.mockReset().mockReturnValue(mocks.disposeToolRailLearning);
+    mocks.setAsideDataFromBefore2_0.mockReset().mockReturnValue({ movedAside: false, keptInPlace: false, error: null });
+    mocks.showBrowserShellNotice.mockReset();
   });
 
   afterEach(() => {
@@ -145,6 +158,59 @@ describe("settings platform bootstrap", () => {
     expect(mocks.installToolRailLearning).toHaveBeenCalledTimes(2);
     expect(mocks.disposeToolRailLearning).toHaveBeenCalledOnce();
     expect(mocks.installContinuousSave).toHaveBeenCalledTimes(2);
+  });
+
+  it("moves browser data from before Canopi 2.0 aside before restoring a Draft, and says so once", async () => {
+    mocks.setAsideDataFromBefore2_0.mockReturnValue({ movedAside: true, keptInPlace: false, error: null });
+    const { t } = await import("../i18n");
+    const { bootstrapPlatform } = await import("../platform/browser");
+
+    bootstrapPlatform();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mocks.setAsideDataFromBefore2_0).toHaveBeenCalledOnce();
+    expect(mocks.setAsideDataFromBefore2_0.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.restoreLatestDraft.mock.invocationCallOrder[0]!,
+    );
+    expect(mocks.showBrowserShellNotice).toHaveBeenCalledOnce();
+    expect(mocks.showBrowserShellNotice).toHaveBeenCalledWith({
+      tone: "info",
+      title: t("health.localDataMovedAsideTitle"),
+      message: t("health.localDataMovedAside"),
+    });
+  });
+
+  it("says once that earlier browser data stays in place when it could not be moved aside", async () => {
+    const error = new Error("quota");
+    mocks.setAsideDataFromBefore2_0.mockReturnValue({ movedAside: true, keptInPlace: true, error });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { t } = await import("../i18n");
+    const { bootstrapPlatform } = await import("../platform/browser");
+
+    bootstrapPlatform();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mocks.showBrowserShellNotice).toHaveBeenCalledOnce();
+    expect(mocks.showBrowserShellNotice).toHaveBeenCalledWith({
+      tone: "info",
+      title: t("health.localDataKeptInPlaceTitle"),
+      message: t("health.localDataKeptInPlace"),
+    });
+    expect(mocks.restoreLatestDraft).toHaveBeenCalledOnce();
+  });
+
+  it("says nothing when no browser data from before Canopi 2.0 was found", async () => {
+    const error = new Error("quota");
+    mocks.setAsideDataFromBefore2_0.mockReturnValue({ movedAside: false, keptInPlace: false, error });
+    const logError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { bootstrapPlatform } = await import("../platform/browser");
+
+    bootstrapPlatform();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mocks.showBrowserShellNotice).not.toHaveBeenCalled();
+    expect(logError).toHaveBeenCalledWith("Failed to set aside browser data from before Canopi 2.0:", error);
+    expect(mocks.restoreLatestDraft).toHaveBeenCalledOnce();
   });
 
   it("still saves continuously when restoring the newest Draft fails", async () => {
@@ -222,6 +288,7 @@ describe("settings platform bootstrap", () => {
     expect(mocks.invoke).toHaveBeenCalledWith("get_health");
     expect(healthState.plantDbStatus.value).toBe("missing");
     expect(healthState.lidarLibraryStatus.value).toEqual({ kind: "recovered", items: 2, generated: 1 });
+    expect(healthState.localDataStatus.value).toEqual({ kind: "moved_aside" });
 
     bootstrap.dispose();
 

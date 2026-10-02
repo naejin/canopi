@@ -1,5 +1,6 @@
 import {
   CANOPI_FILE_SCHEMA,
+  CURRENT_CANOPI_FILE_VERSION,
   MISSING_CANOPI_FILE_VERSION,
   OBSOLETE_CANOPI_ROOT_KEYS,
 } from '../../generated/canopi-design-format'
@@ -8,31 +9,26 @@ import { viewsAndStoriesProblem } from './views-admission'
 import { normalizeLoadedDocument } from './document'
 import { decodeCanopiFileSchema } from './canopi-design-schema-decoder'
 import { asCanopiDesignIngestionError, CanopiDesignIngestionError } from './canopi-design-errors'
-import { migrateToCurrent, type JsonObject } from './design-migrations'
 import { designIdentitiesAndRangesProblem } from './design-admission'
 
 export { CanopiDesignIngestionError }
 
-/** What admitting a Design's JSON produced (the Web mirror of `LoadedDesign`'s payload). */
-export interface CanopiDesignDecodeOutcome {
-  readonly file: CanopiFile
-  /** The file's format version when it was older and upgraded in memory. */
-  readonly migratedFrom: number | null
-}
-
-/** Admit a Design; an older supported format is upgraded in memory. */
+/**
+ * Admit a Design: the Web mirror of `decode_design_value`. Canopi 2.0 breaks
+ * stored data (ADR 0021): there is no migration ladder, and any version other
+ * than the current one is refused as `unsupported_version`.
+ */
 export function decodeCanopiDesign(value: unknown): CanopiFile {
-  return decodeCanopiDesignOutcome(value).file
-}
-
-export function decodeCanopiDesignOutcome(value: unknown): CanopiDesignDecodeOutcome {
   try {
     const version = admitDesignVersion(value)
-    const migrated = migrateToCurrent(value, version)
-    return {
-      file: admitCurrentDesignValue(migrated.value),
-      migratedFrom: migrated.migratedFrom,
+    if (version !== CURRENT_CANOPI_FILE_VERSION) {
+      throw new CanopiDesignIngestionError(
+        'unsupported_version',
+        `$.version: unsupported Canopi Design version ${version}; Canopi 2.0 and later open only version ${CURRENT_CANOPI_FILE_VERSION}`,
+        version,
+      )
     }
+    return admitCurrentDesignValue(value as Record<string, unknown>)
   } catch (error) {
     throw asCanopiDesignIngestionError(error)
   }
@@ -53,8 +49,8 @@ function admitDesignVersion(value: unknown): number {
   return version
 }
 
-/** Current-format admission, after the migration ladder. */
-function admitCurrentDesignValue(value: JsonObject): CanopiFile {
+/** Current-format admission. */
+function admitCurrentDesignValue(value: Record<string, unknown>): CanopiFile {
   const obsolete = OBSOLETE_CANOPI_ROOT_KEYS.find((key) => Object.prototype.hasOwnProperty.call(value, key))
   if (obsolete) {
     throw new CanopiDesignIngestionError(

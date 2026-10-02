@@ -9,7 +9,6 @@ pub(crate) mod species_search_normalization;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub mod user_db;
-pub(crate) mod user_db_migrations;
 
 use common_types::health::PlantDbStatus;
 use rusqlite::{Connection, InterruptHandle};
@@ -88,35 +87,71 @@ impl Deref for PlantDbConnectionGuard<'_> {
 #[derive(Clone)]
 pub struct UserDb(Arc<Mutex<Connection>>);
 
+/// How [`UserDb::open`] found the file it opened.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UserDbOpened {
+    /// A current database, or a new one where there was none.
+    Ready,
+    /// A database from before Canopi 2.0 was moved aside (ADR 0021); the user
+    /// is told once.
+    MovedAside,
+    /// A damaged database was set aside as corrupt.
+    ReplacedCorrupt,
+}
+
+/// Why a database file is set aside: the suffix its new name carries.
+#[derive(Debug, Clone, Copy)]
+enum SetAsideReason {
+    Before2_0,
+    Corrupt,
+}
+
+impl SetAsideReason {
+    fn suffix(self) -> &'static str {
+        match self {
+            Self::Before2_0 => "before-2.0",
+            Self::Corrupt => "corrupt",
+        }
+    }
+}
+
 impl UserDb {
     /// Open the user database at `path`.
     ///
-    /// A database from an older Canopi is upgraded in place (ADR 0013); a
-    /// failed upgrade rolls back, leaves the file untouched and is reported.
+    /// Canopi 2.0 breaks stored data (ADR 0021): a database from before 2.0
+    /// is renamed to `<file>.before-2.0-<unix-seconds>` and replaced by an
+    /// empty current one. A file that is not a SQLite database, is damaged
+    /// or fails its integrity checks is renamed to
+    /// `<file>.corrupt-<unix-seconds>` the same way. Neither rename
+    /// overwrites an earlier one, and companion files move with the database.
     /// A newer database is refused as-is with
-    /// [`UserDbInitError::NewerSchemaVersion`]. Only a file that is not a
-    /// SQLite database, is damaged or fails its integrity checks is renamed to
-    /// `<file>.corrupt-<unix-seconds>` (never overwriting an earlier one) and
-    /// replaced by an empty current database.
-    pub fn open(path: impl AsRef<Path>) -> Result<Self, UserDbInitError> {
+    /// [`UserDbInitError::NewerSchemaVersion`].
+    pub fn open(path: impl AsRef<Path>) -> Result<(Self, UserDbOpened), UserDbInitError> {
         let path = path.as_ref();
         let error = match Self::initialize(Connection::open(path).map_err(UserDbInitError::Open)?) {
-            Ok(user_db) => return Ok(user_db),
+            Ok(user_db) => return Ok((user_db, UserDbOpened::Ready)),
             Err(error) => error,
         };
-        if !error.sets_aside_as_corrupt() {
-            return Err(error);
-        }
-        let aside = set_aside_user_db(path, &corrupt_set_aside_name(path))
+        let (reason, opened) = match error {
+            UserDbInitError::OlderSchemaVersion { .. } => {
+                (SetAsideReason::Before2_0, UserDbOpened::MovedAside)
+            }
+            _ if error.sets_aside_as_corrupt() => {
+                (SetAsideReason::Corrupt, UserDbOpened::ReplacedCorrupt)
+            }
+            _ => return Err(error),
+        };
+        let aside = set_aside_user_db(path, &set_aside_name(path, reason))
             .map_err(|source| UserDbInitError::SetAside { source })?;
         tracing::warn!(
-            "Set aside the damaged user database ({error}) as {}; starting with an empty one",
+            "Set aside the user database ({error}) as {}; starting with an empty one",
             aside
                 .file_name()
                 .map(|name| name.to_string_lossy())
                 .unwrap_or_default()
         );
-        Self::initialize(Connection::open(path).map_err(UserDbInitError::Open)?)
+        let user_db = Self::initialize(Connection::open(path).map_err(UserDbInitError::Open)?)?;
+        Ok((user_db, opened))
     }
 
     pub fn initialize(connection: Connection) -> Result<Self, UserDbInitError> {
@@ -134,7 +169,7 @@ impl UserDb {
 /// another tool switched the file to WAL.
 const USER_DB_COMPANION_SUFFIXES: [&str; 3] = ["-journal", "-wal", "-shm"];
 
-fn corrupt_set_aside_name(path: &Path) -> String {
+fn set_aside_name(path: &Path, reason: SetAsideReason) -> String {
     let file_name = path
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
@@ -143,7 +178,7 @@ fn corrupt_set_aside_name(path: &Path) -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
-    format!("{file_name}.corrupt-{seconds}")
+    format!("{file_name}.{}-{seconds}", reason.suffix())
 }
 
 /// Rename the database at `path` and its companion files to `base`, or to
@@ -279,7 +314,8 @@ mod tests {
         std::fs::write(&path, b"damaged database").unwrap();
         std::fs::write(with_suffix(&path, "-journal"), b"rollback journal").unwrap();
 
-        let aside = set_aside_user_db(&path, &corrupt_set_aside_name(&path)).unwrap();
+        let aside =
+            set_aside_user_db(&path, &set_aside_name(&path, SetAsideReason::Corrupt)).unwrap();
 
         assert!(!path.exists());
         assert!(

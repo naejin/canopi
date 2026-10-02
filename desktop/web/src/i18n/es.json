@@ -110,7 +110,12 @@
   },
   "health": {
     "plantDbMissing": "Falta el archivo de base de datos del catálogo de plantas, así que la búsqueda y las fichas de plantas no están disponibles. Tus diseños están a salvo. Reinstala Canopi para restaurarlo.",
-    "plantDbCorrupt": "El archivo de base de datos del catálogo de plantas está dañado, así que la búsqueda y las fichas de plantas no están disponibles. Tus diseños están a salvo. Reinstala Canopi para restaurarlo."
+    "plantDbCorrupt": "El archivo de base de datos del catálogo de plantas está dañado, así que la búsqueda y las fichas de plantas no están disponibles. Tus diseños están a salvo. Reinstala Canopi para restaurarlo.",
+    "localDataMovedAsideTitle": "Datos anteriores apartados",
+    "localDataMovedAside": "Canopi 2.0 no puede leer los datos guardados por versiones anteriores, así que los ha apartado sin cambios y ha empezado de cero.",
+    "localDataKeptInPlaceTitle": "Datos anteriores conservados en su sitio",
+    "localDataKeptInPlace": "Canopi 2.0 no puede leer los datos guardados por versiones anteriores, y este navegador no tiene espacio para apartarlos, así que se quedan sin cambios y ocultos. Elimina los borradores que ya no necesites y vuelve a cargar la página.",
+    "dismiss": "Cerrar"
   },
   "canvas": {
     "inspection": {
@@ -1514,7 +1519,6 @@
     "detailsSafe": "Tu trabajo está a salvo en Canopi mientras siga abierto. Reintenta o guárdalo en otro lugar.",
     "saveAs": "Guardar como…",
     "resolve": "Resolver…",
-    "savedUpgraded": "Guardado en formato Canopi 2",
     "conflictAnotherTab": "Cambiado en otra pestaña"
   },
   "saveProblem": {
@@ -1708,7 +1712,7 @@
     "cantRead": "No se puede leer este archivo",
     "inFolder": "En {{folder}}",
     "cantReadMissing": "No se encuentra el archivo: se movió o se eliminó",
-    "cantReadOlderVersion": "Creado con una versión anterior de Canopi; no se puede abrir",
+    "cantReadOlderVersion": "Creado con una versión de Canopi anterior a la 2.0; Canopi 2.0 y posteriores no pueden abrirlo",
     "cantReadNewerVersion": "Creado con una versión más reciente de Canopi; actualiza Canopi para abrirlo",
     "cantReadDamaged": "No se puede leer el archivo: está dañado"
   },

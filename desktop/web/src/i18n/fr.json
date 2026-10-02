@@ -110,7 +110,12 @@
   },
   "health": {
     "plantDbMissing": "Le fichier de base de données du catalogue des plantes est introuvable : la recherche et les fiches des plantes sont indisponibles. Vos Designs ne sont pas touchés. Réinstallez Canopi pour le rétablir.",
-    "plantDbCorrupt": "Le fichier de base de données du catalogue des plantes est endommagé : la recherche et les fiches des plantes sont indisponibles. Vos Designs ne sont pas touchés. Réinstallez Canopi pour le rétablir."
+    "plantDbCorrupt": "Le fichier de base de données du catalogue des plantes est endommagé : la recherche et les fiches des plantes sont indisponibles. Vos Designs ne sont pas touchés. Réinstallez Canopi pour le rétablir.",
+    "localDataMovedAsideTitle": "Données antérieures mises de côté",
+    "localDataMovedAside": "Canopi 2.0 ne peut pas lire les données enregistrées par les versions précédentes : il les a mises de côté sans les modifier et repart de zéro.",
+    "localDataKeptInPlaceTitle": "Données antérieures laissées en place",
+    "localDataKeptInPlace": "Canopi 2.0 ne peut pas lire les données enregistrées par les versions précédentes, et ce navigateur manque de place pour les mettre de côté : elles restent inchangées et masquées. Supprimez les brouillons dont vous n’avez plus besoin, puis rechargez la page.",
+    "dismiss": "Fermer"
   },
   "canvas": {
     "inspection": {
@@ -1514,7 +1519,6 @@
     "detailsSafe": "Votre travail reste en sécurité dans Canopi tant qu’il est ouvert. Réessayez, ou enregistrez-le ailleurs.",
     "saveAs": "Enregistrer sous…",
     "resolve": "Résoudre…",
-    "savedUpgraded": "Enregistré au format Canopi 2",
     "conflictAnotherTab": "Modifié dans un autre onglet"
   },
   "saveProblem": {
@@ -1708,7 +1712,7 @@
     "cantRead": "Impossible de lire ce fichier",
     "inFolder": "Dans {{folder}}",
     "cantReadMissing": "Fichier introuvable : il a été déplacé ou supprimé",
-    "cantReadOlderVersion": "Créé avec une version plus ancienne de Canopi ; impossible de l’ouvrir",
+    "cantReadOlderVersion": "Créé avec une version de Canopi antérieure à la 2.0 ; Canopi 2.0 et les versions suivantes ne peuvent pas l’ouvrir",
     "cantReadNewerVersion": "Créé avec une version plus récente de Canopi ; mettez Canopi à jour pour l’ouvrir",
     "cantReadDamaged": "Impossible de lire ce fichier : il est endommagé"
   },

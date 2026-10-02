@@ -3,14 +3,12 @@ import { describe, expect, it } from 'vitest'
 import {
   CanopiDesignIngestionError,
   decodeCanopiDesign,
-  decodeCanopiDesignOutcome,
 } from '../app/contracts/design-ingestion'
 import { encodeCanopiDesign } from '../app/contracts/canopi-design-wire'
 import {
   CANOPI_DESIGN_INGESTION_ERROR_KINDS,
   CURRENT_CANOPI_FILE_VERSION,
   FUTURE_CANOPI_FILE_VERSION_POLICY,
-  MINIMUM_SUPPORTED_CANOPI_FILE_VERSION,
   MISSING_CANOPI_FILE_VERSION,
 } from '../generated/canopi-design-format'
 
@@ -25,7 +23,6 @@ interface ConformanceCorpus {
   readonly contract_version: number
   readonly facts: {
     readonly current_version: number
-    readonly minimum_supported_version: number
     readonly missing_version: number
     readonly future_version_policy: string
     readonly error_kinds: readonly string[]
@@ -44,7 +41,6 @@ describe('shared Canopi Design conformance corpus', () => {
     expect(corpus.contract_version).toBe(1)
     expect(corpus.facts).toEqual({
       current_version: CURRENT_CANOPI_FILE_VERSION,
-      minimum_supported_version: MINIMUM_SUPPORTED_CANOPI_FILE_VERSION,
       missing_version: MISSING_CANOPI_FILE_VERSION,
       future_version_policy: FUTURE_CANOPI_FILE_VERSION_POLICY,
       error_kinds: CANOPI_DESIGN_INGESTION_ERROR_KINDS,
@@ -54,11 +50,7 @@ describe('shared Canopi Design conformance corpus', () => {
   it.each(corpus.cases)('$id', ({ accepted, error_kind: errorKind, input }) => {
     if (accepted) {
       const expected = corpus.accepted_documents[accepted]
-      const inputVersion = (input as { version?: number }).version
-      const { file: decoded, migratedFrom } = decodeCanopiDesignOutcome(input)
-      expect(migratedFrom).toBe(
-        inputVersion === undefined || inputVersion === CURRENT_CANOPI_FILE_VERSION ? null : inputVersion,
-      )
+      const decoded = decodeCanopiDesign(input)
       expect(decoded).toEqual(expected)
       expect(decodeCanopiDesign(encodeCanopiDesign(decoded))).toEqual(expected)
       return

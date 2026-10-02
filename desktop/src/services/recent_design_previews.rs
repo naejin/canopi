@@ -16,7 +16,7 @@ use common_types::design::{
     RecentDesignPreview, RecentDesignSummary, RecentDesignUnreadableReason,
 };
 
-use crate::design::format::{self, DecodedDesign, DesignLoadError};
+use crate::design::format::{self, DesignLoadError};
 
 /// Files larger than this are not read for a preview; the row shows the name only.
 pub(crate) const RECENT_PREVIEW_MAX_BYTES: u64 = 16 * 1024 * 1024;
@@ -105,7 +105,7 @@ fn read_preview(path: &Path, len: u64) -> (RecentDesignPreview, bool) {
         return (RecentDesignPreview::TooLarge, true);
     }
     match format::load_within(path, RECENT_PREVIEW_MAX_BYTES) {
-        Ok(DecodedDesign { file, .. }) => (crate::design::preview::preview_of(&file), true),
+        Ok(file) => (crate::design::preview::preview_of(&file), true),
         Err(DesignLoadError::TooLarge { .. }) => (RecentDesignPreview::TooLarge, true),
         Err(DesignLoadError::Read { source, .. }) => {
             tracing::warn!("A Recent Design could not be read for its preview");
@@ -259,55 +259,35 @@ mod tests {
         assert!(!logs.contains(&*root.to_string_lossy()), "{logs}");
     }
 
+    /// The 2.0 previews' formats (v7, v8) are not read through any ladder:
+    /// their Recent Design cards say the file is older (ADR 0021).
     #[test]
-    fn older_formats_preview_through_the_ladder() {
-        let root = scratch("migrated");
-        let v8 = root.join("v8.canopi");
-        let mut value = serde_json::to_value(with_plants(2)).unwrap();
-        value["version"] = serde_json::json!(8);
-        value["zones"] = serde_json::json!([{
-            "name": "North bed",
-            "zone_type": "rect",
-            "points": [{ "lon": 0.1, "lat": 47.0 }, { "lon": 0.1001, "lat": 46.9999 }]
-        }]);
-        std::fs::write(&v8, serde_json::to_string(&value).unwrap()).unwrap();
-        // The oldest supported format: no views or stories, zones named only.
-        let v7 = root.join("v7.canopi");
-        let mut value = serde_json::to_value(with_plants(1)).unwrap();
-        value["version"] = serde_json::json!(7);
-        value.as_object_mut().unwrap().remove("views");
-        value.as_object_mut().unwrap().remove("stories");
-        value["zones"] = serde_json::json!([{
-            "name": "Z",
-            "zone_type": "rect",
-            "points": [{ "lon": 0.1, "lat": 47.0 }, { "lon": 0.1001, "lat": 46.9999 }]
-        }]);
-        std::fs::write(&v7, serde_json::to_string(&value).unwrap()).unwrap();
+    fn designs_from_before_2_0_preview_as_older_version() {
+        let root = scratch("before-2-0");
+        let paths: Vec<String> = [
+            CURRENT_CANOPI_FILE_VERSION - 2,
+            CURRENT_CANOPI_FILE_VERSION - 1,
+        ]
+        .into_iter()
+        .map(|version| {
+            let path = root.join(format!("v{version}.canopi"));
+            let mut value = serde_json::to_value(with_plants(2)).unwrap();
+            value["version"] = serde_json::json!(version);
+            std::fs::write(&path, serde_json::to_string(&value).unwrap()).unwrap();
+            path.to_string_lossy().into_owned()
+        })
+        .collect();
         let previews = RecentDesignPreviews::default();
 
-        let result = previews.previews(&[
-            v8.to_string_lossy().into_owned(),
-            v7.to_string_lossy().into_owned(),
-        ]);
+        let result = previews.previews(&paths);
 
-        assert_eq!(plant_count(&result[0].preview), Some(2));
-        assert!(matches!(
-            &result[0].preview,
-            RecentDesignPreview::Read {
-                zone_count: 1,
-                bounds: Some(_),
-                ..
-            }
-        ));
-        assert_eq!(plant_count(&result[1].preview), Some(1));
-        assert!(matches!(
-            &result[1].preview,
-            RecentDesignPreview::Read {
-                zone_count: 1,
-                bounds: Some(_),
-                ..
-            }
-        ));
+        assert_eq!(
+            result
+                .iter()
+                .map(|summary| summary.preview.clone())
+                .collect::<Vec<_>>(),
+            [RecentDesignUnreadableReason::OlderVersion; 2].map(unreadable)
+        );
     }
 
     #[test]

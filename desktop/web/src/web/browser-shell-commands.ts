@@ -79,8 +79,6 @@ export interface BrowserShellDesignIdentity {
   readonly name: string
   readonly saveStatus: DesignSaveStatus
   readonly saveFailureReason: string | null
-  /** An older-format file has been written in the current format (ADR 0013). */
-  readonly upgradedFormatWritten?: boolean
 }
 
 export interface BrowserShellCapabilities {

@@ -455,10 +455,10 @@ pub fn validate_design_geometry(file: &CanopiFile) -> Result<(), String> {
     Ok(())
 }
 
-/// Identities and ranges of an admitted Design, checked after the migration
-/// ladder. Zones, annotations and groups need unique, non-empty ids because
+/// Identities and ranges of an admitted Design, checked after version
+/// admission. Zones, annotations and groups need unique, non-empty ids because
 /// targets, groups and saved views refer to them. A plant or measurement
-/// guide without an id (Canopi 1.x wrote none) is repaired with a generated
+/// guide without an id (an id is optional in the file) is repaired with a generated
 /// one that no other entry uses, wherever it appears; a duplicate explicit id
 /// is refused. Opacities, scales and font sizes must be
 /// finite and in range, and the LiDAR section must be the schema this build
@@ -904,7 +904,8 @@ pub enum RecentDesignPreview {
 pub enum RecentDesignUnreadableReason {
     /// Nothing is at the path any more: the file was moved, renamed or deleted.
     Missing,
-    /// A Design from an older file version, which this build does not open.
+    /// A Design older than the current format (written before Canopi 2.0),
+    /// which Canopi 2.0 and later do not open (ADR 0021).
     OlderVersion,
     /// A Design from a newer file version than this build knows.
     NewerVersion,
@@ -952,11 +953,6 @@ pub struct DesignNotebookSnapshot {
 pub struct LoadedDesign {
     pub file: CanopiFile,
     pub fingerprint: String,
-    /// The file's format version when it was older than the current one and
-    /// was upgraded in memory (ADR 0013); the next save writes the current
-    /// format. `None` for a current-format file.
-    #[serde(default)]
-    pub migrated_from: Option<u32>,
 }
 
 /// Why a Design file could not be opened. `kind` is what the interface maps
@@ -977,7 +973,8 @@ pub enum DesignLoadFailureKind {
     Unreadable,
     TooLarge,
     InvalidJson,
-    /// Older than the oldest format this build migrates (Canopi 1.2 and earlier).
+    /// Older than the current format (written before Canopi 2.0), which
+    /// Canopi 2.0 and later do not open (ADR 0021).
     OlderVersion,
     /// Newer than this build.
     NewerVersion,

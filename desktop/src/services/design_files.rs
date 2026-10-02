@@ -54,32 +54,17 @@ pub fn export_design_file(path: String, content: CanopiFile) -> Result<String, S
     Ok(path)
 }
 
-/// Open a Design file. An older format is upgraded in memory and marked
-/// (`migrated_from`); the file is not rewritten until an edit saves it.
+/// Open a Design file. Only the current format opens; an older one is
+/// refused as `OlderVersion` (ADR 0021).
 pub fn load_design(user_db: &UserDb, path: String) -> Result<LoadedDesign, DesignLoadFailure> {
     let dest = std::path::PathBuf::from(&path);
-    let (decoded, fingerprint) = format::load_with_fingerprint(&dest).map_err(|error| {
+    let (file, fingerprint) = format::load_with_fingerprint(&dest).map_err(|error| {
         tracing::info!(kind = ?error.failure().kind, "Design could not be opened");
         error.failure()
     })?;
-    let format::DecodedDesign {
-        file,
-        migrated_from,
-    } = decoded;
     try_record_recent(user_db, &path, &file.name);
-    if let Some(version) = migrated_from {
-        tracing::info!(
-            from_version = version,
-            "Design loaded and upgraded in memory"
-        );
-    } else {
-        tracing::info!("Design loaded");
-    }
-    Ok(LoadedDesign {
-        file,
-        fingerprint,
-        migrated_from,
-    })
+    tracing::info!("Design loaded");
+    Ok(LoadedDesign { file, fingerprint })
 }
 
 pub fn load_design_file(path: String) -> Result<CanopiFile, String> {
@@ -363,7 +348,6 @@ mod tests {
         let recent = get_recent_files(&user_db).unwrap();
 
         assert_eq!(loaded.file.name, "Service Demo");
-        assert_eq!(loaded.migrated_from, None);
         assert_eq!(loaded.fingerprint, fingerprint);
         assert_eq!(recent.len(), 1);
         assert_eq!(recent[0].path, saved_path);

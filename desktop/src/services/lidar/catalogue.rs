@@ -9,7 +9,7 @@ use rusqlite::{Connection, OptionalExtension};
 /// The only catalogue shape this binary reads (Canopi v2).
 ///
 /// There is no migration ladder: an older or corrupt catalogue is set aside
-/// and rebuilt from the originals (`recovery.rs`, ADR 0013), and a newer one
+/// and rebuilt from the originals (`recovery.rs`, ADR 0021), and a newer one
 /// is refused so an older binary never writes rows it does not understand.
 pub const CATALOGUE_VERSION: i32 = 21;
 

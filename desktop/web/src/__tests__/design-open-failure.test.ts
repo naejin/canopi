@@ -39,7 +39,7 @@ describe('a Design that cannot be opened is told to the user', () => {
     expect(designOpenFailureNoticeOf(olderVersion)).toEqual({
       tone: 'error',
       title: 'Can’t open this Design',
-      message: 'Made with an older version of Canopi; it can’t be opened',
+      message: 'Made with Canopi before 2.0; Canopi 2.0 and later can’t open it',
     })
     expect(designOpenFailureNoticeOf(new Error('/home/someone/garden.canopi: boom'))).toEqual({
       tone: 'error',

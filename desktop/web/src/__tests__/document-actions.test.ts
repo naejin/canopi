@@ -118,7 +118,7 @@ function makeFile(name: string): CanopiFile {
 }
 
 function loaded(file: CanopiFile, fingerprint = 'fp-loaded') {
-  return { file, fingerprint, migrated_from: null }
+  return { file, fingerprint }
 }
 
 function makeEngine() {

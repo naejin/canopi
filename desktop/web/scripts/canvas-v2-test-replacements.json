@@ -453,9 +453,9 @@
     "file": "src/canvas/runtime/tools/saved-object-stamp.test.ts",
     "name": "saved object stamp tool > places Saved Object Stamps with full ghost preview and selected unlocked copies"
   },
-  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > stamp rotation > turns a held saved stamp by 15\u00b0 with ] and [, in its preview and in the objects it places": {
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > stamp rotation > turns a held saved stamp by 15° with ] and [, in its preview and in the objects it places": {
     "file": "src/canvas/runtime/tools/saved-object-stamp.test.ts",
-    "name": "saved object stamp tool > stamp rotation > turns a held saved stamp by 15\u00b0 with ] and [, in its preview and in the objects it places"
+    "name": "saved object stamp tool > stamp rotation > turns a held saved stamp by 15° with ] and [, in its preview and in the objects it places"
   },
   "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > blocks Saved Object Stamp placement when any target Layer is locked": {
     "file": "src/canvas/runtime/tools/saved-object-stamp.test.ts",
@@ -619,7 +619,7 @@
   },
   "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps active tool drag state generic in the Scene Interaction Session": {
     "file": "src/canvas/runtime/tools/tool-host.test.ts",
-    "name": "ToolHost > the view moving under a still pointer (plan \u00a71, exception 1) > re-emits the drag on a camera frame"
+    "name": "ToolHost > the view moving under a still pointer (plan §1, exception 1) > re-emits the drag on a camera frame"
   },
   "src/__tests__/canvas-overlay-casing.test.ts > overlay stroke casing > draws the band selection box as an ochre stroke over a casing on both sides": {
     "file": "src/canvas/runtime/renderers/draft-layer.test.ts",
@@ -747,5 +747,23 @@
   "src/__tests__/lidar-camera-navigation.test.ts > LiDAR workspace camera navigation > focuses and returns only the live Canvas viewport while retaining the first bookmark": {
     "file": "src/__tests__/lidar-camera-navigation.test.ts",
     "name": "LiDAR workspace camera navigation > focuses and returns only the live Canvas viewport; the latest fit's bookmark wins"
+  },
+  "src/__tests__/continuous-save-ui.test.tsx > SaveStatusLabel > says once that a Design from an older format was saved in the current one": {
+    "retired": "2.0 breaks stored data (ADR 0021)"
+  },
+  "src/__tests__/file-format-round-trip.test.ts > file format round-trip > refuses a Design older than the migration ladder and upgrades one inside it": {
+    "file": "src/__tests__/file-format-round-trip.test.ts",
+    "name": "file format round-trip > refuses a Design written before Canopi 2.0 instead of upgrading it"
+  },
+  "src/__tests__/saved-object-stamp-source.test.ts > Saved Object Stamp source > keeps a zone's display name apart from its id, and upgrades version 1 stamps in memory": {
+    "file": "src/__tests__/saved-object-stamp-source.test.ts",
+    "name": "Saved Object Stamp source > keeps a zone's display name apart from its id, and reads only the current payload version"
+  },
+  "src/__tests__/web-design-session.test.ts > browser Design Session lifecycle > rejects 'a Design older than the migration lad…' before replacing the active session": {
+    "file": "src/__tests__/web-design-session.test.ts",
+    "name": "browser Design Session lifecycle > rejects 'a Design from before Canopi 2.0 (v4)' before replacing the active session"
+  },
+  "src/__tests__/web-design-session.test.ts > browser Design Session lifecycle > opens an older-format Design through the migration ladder into a current-format Draft": {
+    "retired": "2.0 breaks stored data (ADR 0021)"
   }
 }

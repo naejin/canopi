@@ -1,6 +1,7 @@
 # Stored data migrates forward
 
-Status: Accepted (2026-09-28, Canopi v2)
+Status: Superseded (2026-10-02)
+superseded_by: 0021-canopi-2-breaks-stored-data.md
 
 ## Context
 
@@ -24,3 +25,4 @@ ADR 0003 refused every older stored format: Designs, the Desktop user database, 
 - A format change now costs a migration step with fixtures instead of a user-facing break. That is the intended pressure: change formats rarely, additively where possible.
 - The one-off conversion scripts under `.rq-scratch/converted/` became unnecessary and are not maintained.
 - History: accepted with a v5 floor (Canopi 1.2) and an interactive "Where is your site?" step for Designs without a site. Amended 2026-09-28 by user decision ("support back to v7 is enough; otherwise display an error message"): the `.canopi` ladder starts at v7 and the user-DB ladder at schema 8; the v5→v7 steps, the Canopi 1.2 frame projection, the interactive site step and user-DB steps 2→8 were deleted.
+- Superseded by [ADR 0021](0021-canopi-2-breaks-stored-data.md) (user decision, 2026-10-02): Canopi 2.0 has no migration ladder; an older `.canopi` is refused and older local data is moved aside.

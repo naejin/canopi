@@ -166,13 +166,12 @@ describe('file format round-trip', () => {
     expect(save(first)).toBe(first)
   })
 
-  it('refuses a Design older than the migration ladder and upgrades one inside it', () => {
+  it('refuses a Design written before Canopi 2.0 instead of upgrading it', () => {
     const { extra: _extra, ...wire } = conformance.accepted_documents['views-and-stories']
-    expect(() => decodeCanopiDesign({ ...wire, version: 4 })).toThrow(
-      '$.version: unsupported Canopi Design version 4; this build opens versions 7 to 9',
-    )
-    const previous = { ...wire, version: 8 } as Record<string, unknown>
-    previous.zones = (wire.zones as { id: string; name: string | null }[]).map(({ id, ...zone }) => ({ ...zone, name: id }))
-    expect(decodeCanopiDesign(previous)).toEqual(conformance.accepted_documents['views-and-stories'])
+    for (const version of [4, 7, 8]) {
+      expect(() => decodeCanopiDesign({ ...wire, version })).toThrow(
+        `$.version: unsupported Canopi Design version ${version}; Canopi 2.0 and later open only version 9`,
+      )
+    }
   })
 })

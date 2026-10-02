@@ -4,7 +4,6 @@ import { currentDesign, designName } from '../../app/document-session/store'
 import {
   designSaveFailureReason,
   designSaveStatus,
-  designUpgradedFormatWritten,
   resolveDesignConflict,
   retryDesignSave,
   saveAsCurrentDesign,
@@ -55,7 +54,6 @@ export function TitleBar() {
           <SaveStatusLabel
             status={designSaveStatus.value}
             failureReason={designSaveFailureReason.value}
-            upgradedFormatWritten={designUpgradedFormatWritten.value}
             draftLabel={t('saveStatus.draft')}
             draftAction={{ label: t('saveStatus.saveAs'), style: 'button', run: saveAs }}
             saveElsewhere={{ label: t('saveStatus.saveAs'), run: saveAs }}

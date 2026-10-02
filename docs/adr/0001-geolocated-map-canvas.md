@@ -31,6 +31,6 @@ Canopi v1 drew Designs in local metres on a canvas and attached them to the Eart
 - Designs have no site metadata to confirm or undo; the map is always meaningful.
 - Stored lon/lat is the only authority, so re-origin and save are lossless and precise to about 0.1 mm.
 - Metre-based features keep working unchanged inside the session plane.
-- v6 and older files are refused (see [ADR 0013](0013-stored-data-migrations.md)).
+- Files older than the current format are refused (see [ADR 0021](0021-canopi-2-breaks-stored-data.md)).
 - Saved object stamps stay relative metre arrangements; templates are current-format `.canopi` files placed relative to the view.
 - Altitude is no longer Design metadata; terrain comes from LiDAR data.

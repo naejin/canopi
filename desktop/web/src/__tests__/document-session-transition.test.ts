@@ -341,7 +341,6 @@ describe("continuous save conflicts", () => {
     mocks.loadDesign.mockResolvedValueOnce({
       file: { ...makeFile("From Disk"), description: "external" },
       fingerprint: "fp-disk",
-      migrated_from: null,
     });
 
     await expect(machine.resolveSaveConflict()).resolves.toMatchObject({ status: "applied" });
@@ -2509,7 +2508,6 @@ describe("document session transition", () => {
     mocks.loadDesign.mockResolvedValue({
       file: makeFile("Queued"),
       fingerprint: "fp-queued",
-      migrated_from: null,
     });
 
     const cancel = machine.consumeQueuedDocumentLoad(session, {

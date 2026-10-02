@@ -3,7 +3,6 @@ import {
   type CanopiDesignIngestionErrorKind,
 } from '../../generated/canopi-design-format'
 import type { DesignLoadFailure, DesignLoadFailureKind } from '../../types/design'
-import { DesignMigrationError } from './design-migrations'
 
 export class CanopiDesignIngestionError extends Error {
   constructor(
@@ -19,9 +18,6 @@ export class CanopiDesignIngestionError extends Error {
 
 export function asCanopiDesignIngestionError(error: unknown): CanopiDesignIngestionError {
   if (error instanceof CanopiDesignIngestionError) return error
-  if (error instanceof DesignMigrationError) {
-    return new CanopiDesignIngestionError(error.kind, error.message, error.unsupportedVersion)
-  }
   return new CanopiDesignIngestionError(
     'invalid_document',
     error instanceof Error ? error.message : String(error),

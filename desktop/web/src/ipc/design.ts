@@ -113,7 +113,7 @@ async function saveDesign(
 
 /**
  * Load a design from a known path (e.g. recent files) with its fingerprint;
- * an older supported format arrives upgraded in memory (`migrated_from`).
+ * only the current format opens (ADR 0021).
  * Rejects with a `DesignLoadFailure` (`app/contracts/canopi-design-errors.ts`).
  */
 export async function loadDesign(path: string): Promise<LoadedDesign> {

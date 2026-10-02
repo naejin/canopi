@@ -180,7 +180,7 @@ mod tests {
     }
 
     fn test_user_db_at(path: &std::path::Path) -> UserDb {
-        UserDb::open(path).unwrap()
+        UserDb::open(path).unwrap().0
     }
 
     fn temp_design_path(scratch: &TestScratch, name: &str) -> PathBuf {

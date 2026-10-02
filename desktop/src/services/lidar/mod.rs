@@ -2515,7 +2515,7 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
-    // -- Catalogue recovery (ADR 0013) -------------------------------------
+    // -- Catalogue recovery (ADR 0021) -------------------------------------
 
     fn write_original(
         lidar: &std::path::Path,

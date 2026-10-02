@@ -110,7 +110,12 @@
   },
   "health": {
     "plantDbMissing": "Het databasebestand van de plantencatalogus ontbreekt, dus zoeken en plantdetails zijn niet beschikbaar. Je ontwerpen zijn veilig. Installeer Canopi opnieuw om het te herstellen.",
-    "plantDbCorrupt": "Het databasebestand van de plantencatalogus is beschadigd, dus zoeken en plantdetails zijn niet beschikbaar. Je ontwerpen zijn veilig. Installeer Canopi opnieuw om het te herstellen."
+    "plantDbCorrupt": "Het databasebestand van de plantencatalogus is beschadigd, dus zoeken en plantdetails zijn niet beschikbaar. Je ontwerpen zijn veilig. Installeer Canopi opnieuw om het te herstellen.",
+    "localDataMovedAsideTitle": "Eerdere gegevens apart gezet",
+    "localDataMovedAside": "Canopi 2.0 kan gegevens van eerdere versies niet lezen. Die gegevens zijn ongewijzigd apart gezet en Canopi is opnieuw begonnen.",
+    "localDataKeptInPlaceTitle": "Eerdere gegevens op hun plaats gelaten",
+    "localDataKeptInPlace": "Canopi 2.0 kan gegevens van eerdere versies niet lezen, en deze browser heeft geen ruimte om ze apart te zetten. Ze blijven ongewijzigd en verborgen. Verwijder concepten die je niet meer nodig hebt en laad de pagina opnieuw.",
+    "dismiss": "Sluiten"
   },
   "canvas": {
     "inspection": {
@@ -1514,7 +1519,6 @@
     "detailsSafe": "Je werk blijft veilig in Canopi zolang het open blijft. Probeer het opnieuw of sla het elders op.",
     "saveAs": "Opslaan als…",
     "resolve": "Oplossen…",
-    "savedUpgraded": "Opgeslagen in Canopi 2-indeling",
     "conflictAnotherTab": "Gewijzigd in een ander tabblad"
   },
   "saveProblem": {
@@ -1708,7 +1712,7 @@
     "cantRead": "Dit bestand kan niet worden gelezen",
     "inFolder": "In {{folder}}",
     "cantReadMissing": "Bestand niet gevonden: het is verplaatst of verwijderd",
-    "cantReadOlderVersion": "Gemaakt met een oudere versie van Canopi; kan niet worden geopend",
+    "cantReadOlderVersion": "Gemaakt met Canopi vóór 2.0; Canopi 2.0 en later kan het niet openen",
     "cantReadNewerVersion": "Gemaakt met een nieuwere versie van Canopi; werk Canopi bij om het te openen",
     "cantReadDamaged": "Bestand kan niet worden gelezen: het is beschadigd"
   },

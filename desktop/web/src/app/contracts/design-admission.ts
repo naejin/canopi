@@ -4,11 +4,10 @@ import type { CanopiFile } from '../../types/design'
 const LIDAR_PRESENTATION_SCHEMA_VERSION = 1
 
 /**
- * Identities and ranges of an admitted Design, checked after the migration
- * ladder: the Web mirror of `admit_design_identities_and_ranges` in
- * `common-types/src/design.rs`, same rules and same messages. Returns the
- * problem, or null after repairing a plant or measurement guide without an
- * id (Canopi 1.x wrote none).
+ * Identities and ranges of an admitted current-format Design: the Web mirror
+ * of `admit_design_identities_and_ranges` in `common-types/src/design.rs`,
+ * same rules and same messages. Returns the problem, or null after repairing
+ * a plant or measurement guide without an id (an id is optional in the file).
  */
 export function designIdentitiesAndRangesProblem(file: CanopiFile): string | null {
   const plantIds = explicitIds('plants', file.plants.map((plant) => plant.id))
