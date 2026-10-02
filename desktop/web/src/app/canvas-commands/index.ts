@@ -408,12 +408,6 @@ export function canvasCommandDefinitionForShortcut(
   ) ?? null
 }
 
-export function canvasCommandIdForShortcut(
-  input: CanvasCommandShortcutInput,
-): CanvasCommandId | null {
-  return canvasCommandDefinitionForShortcut(input)?.commandId ?? null
-}
-
 const SELECTION_EDITS: ReadonlySet<CanvasEditAction> = new Set([
   'deselect',
   'cut',
@@ -583,11 +577,4 @@ export function createCanvasCommandProjection({
       .filter((definition): definition is CanvasViewCommandDefinition => definition.kind === 'view')
       .map(projectAction),
   }
-}
-
-/** Every tool, in rail order. */
-export function projectedCanvasTools(
-  projection: CanvasCommandProjection,
-): readonly CanvasToolbarToolCommand[] {
-  return projection.toolGroups.flatMap((group) => group.tools)
 }

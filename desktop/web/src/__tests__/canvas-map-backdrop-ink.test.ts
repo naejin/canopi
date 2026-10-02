@@ -7,7 +7,6 @@ import { getCanvasColor, refreshCanvasColorCache, CANVAS_COLOR_CSS_VARS } from '
 import {
   CANVAS_MAP_BACKDROP_COLORS,
   getAnnotationTextColor,
-  getCanvasMapBackdrop,
   getLabelHalo,
   getPlantLabelColor,
   getPlantSymbolEdgeColor,
@@ -56,7 +55,6 @@ describe('canvas label ink follows the map backdrop, not the UI theme', () => {
         setCanvasMapBackdrop(backdrop)
         const background = CANVAS_MAP_BACKDROP_COLORS[backdrop]
 
-        expect(getCanvasMapBackdrop()).toBe(backdrop)
         for (const ink of [getAnnotationTextColor(), getPlantLabelColor()]) {
           expect(contrastRatio(ink, background), `ink ${ink} on ${background}`).toBeGreaterThanOrEqual(4.5)
           expect(contrastRatio(ink, getLabelHalo(12).color), 'halo under the ink').toBeGreaterThanOrEqual(4.5)

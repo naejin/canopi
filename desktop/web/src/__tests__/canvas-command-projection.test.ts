@@ -1,12 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  canvasCommandIdForShortcut,
+  canvasCommandDefinitionForShortcut,
   createCanvasCommandProjection,
-  projectedCanvasTools,
   type CanvasCommandIntentAdapter,
+  type CanvasCommandProjection,
   type CanvasCommandProjectionState,
+  type CanvasCommandShortcutInput,
 } from '../app/canvas-commands'
 import { ariaKeyShortcuts, formatShortcut } from '../app/shell-commands/shortcut-text'
+
+const canvasCommandIdForShortcut = (input: CanvasCommandShortcutInput) =>
+  canvasCommandDefinitionForShortcut(input)?.commandId ?? null
+
+/** Every tool, in rail order. */
+const projectedCanvasTools = (projection: CanvasCommandProjection) =>
+  projection.toolGroups.flatMap((group) => group.tools)
 
 function intentAdapter(): CanvasCommandIntentAdapter {
   return {

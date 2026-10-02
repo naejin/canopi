@@ -267,10 +267,6 @@ export function setCanvasMapBackdrop(backdrop: CanvasMapBackdrop): boolean {
   return true
 }
 
-export function getCanvasMapBackdrop(): CanvasMapBackdrop {
-  return mapBackdrop
-}
-
 /** The ink that contrasts more with `background` (a #RRGGBB colour). */
 export function resolveBackdropInk(background: string): CanvasBackdropInk {
   return contrastRatio(INK_FOR_LIGHT_BACKDROP.text, background) >= contrastRatio(INK_FOR_DARK_BACKDROP.text, background)

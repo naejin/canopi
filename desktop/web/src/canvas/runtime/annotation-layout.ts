@@ -23,8 +23,8 @@ export interface AnnotationScreenFrame {
 }
 
 const ANNOTATION_MARKER_SIZE_PX = 8
-export const ANNOTATION_MARKER_STROKE_PX = 1.5
-export const ANNOTATION_MARKER_PATHS: readonly (readonly ScenePoint[])[] = [
+const ANNOTATION_MARKER_STROKE_PX = 1.5
+const ANNOTATION_MARKER_PATHS: readonly (readonly ScenePoint[])[] = [
   [{ x: -4, y: -4 }, { x: 4, y: -4 }, { x: 4, y: 4 }, { x: -4, y: 4 }, { x: -4, y: -4 }],
   [{ x: -2, y: -1 }, { x: 2, y: -1 }],
   [{ x: -2, y: 1 }, { x: 1, y: 1 }],

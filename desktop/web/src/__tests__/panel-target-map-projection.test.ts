@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { MANUAL_TARGET, NONE_TARGET, speciesTarget } from '../target'
+import { MANUAL_TARGET, speciesTarget } from '../target'
+
+const NONE_TARGET = { kind: 'none' } as const
 import { geoToMercator } from '../canvas/projection'
 import type { ViewCamera } from '../canvas/runtime/view/types'
 import { createSessionPlane } from '../canvas/session-plane'

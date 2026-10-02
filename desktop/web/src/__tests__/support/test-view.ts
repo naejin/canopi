@@ -49,7 +49,7 @@ export interface TestView {
   setViewport(v: { readonly x: number; readonly y: number; readonly scale: number }): void   // a 'set' to the camera the plane gives, bearing kept
   /** The bearing-0 placement in today's terms (planarCameraOf(view()) without the bearing): the split suites' camera.viewport. */
   viewport(): { readonly x: number; readonly y: number; readonly scale: number }
-  /** CameraController.reprojectViewport's numbers (INV-WR-07): the placement moved by a plane transform in plane terms, shown
+  /** CameraController.reprojectViewport's numbers: the placement moved by a plane transform in plane terms, shown
    *  through the plane, which stays. */
   reproject(transform: SessionPlaneTransform): void
   setScene(scene: ScenePersistedState, bounds?: SceneBoundsOptions): void

@@ -48,6 +48,11 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
+      - name: Unused crates
+        run: |
+          python3 -m unittest scripts.test_check_unused_crates
+          python3 scripts/check_unused_crates.py
+
       - name: Species Catalog contract tests
         run: python3 -m unittest scripts.test_species_search_normalization scripts.test_species_catalog_contract scripts.test_prepare_db scripts.test_web_catalog_artifact_contract scripts.test_generate_web_catalog
 

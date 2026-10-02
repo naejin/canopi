@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { MANUAL_TARGET, NONE_TARGET, speciesTarget } from '../target'
-import { resolveTargets, type TargetResolutionScene } from '../target'
+import { MANUAL_TARGET, speciesTarget } from '../target'
+import { indexTargetScene, resolveTargetsInScene, type TargetSceneInput } from '../target/identity'
 import type { PanelTarget } from '../types/design'
 
-function createScene(overrides: Partial<TargetResolutionScene> = {}): TargetResolutionScene {
+const NONE_TARGET = { kind: 'none' } as const
+
+/** The resolution the canvas overlays project, without its resolved references. */
+function resolveTargets(values: readonly PanelTarget[], scene: TargetSceneInput) {
+  const { plantIds, zoneIds, sceneIds, unresolvedTargets } = resolveTargetsInScene(values, indexTargetScene(scene))
+  return { plantIds, zoneIds, sceneIds, unresolvedTargets }
+}
+
+function createScene(overrides: Partial<TargetSceneInput> = {}): TargetSceneInput {
   return {
     plants: [
       { id: 'plant-1', canonicalName: 'Malus domestica' },

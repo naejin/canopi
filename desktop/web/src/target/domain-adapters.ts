@@ -1,5 +1,5 @@
 import { isSpeciesTarget, speciesTarget } from './identity'
-import type { BudgetItem, Consortium, PanelTarget, SpeciesPanelTarget, TimelineAction } from '../types/design'
+import type { BudgetItem, Consortium, PanelTarget, SpeciesPanelTarget } from '../types/design'
 
 export function consortiumTarget(canonicalName: string): SpeciesPanelTarget {
   return speciesTarget(canonicalName)
@@ -11,10 +11,6 @@ export function speciesBudgetTarget(canonicalName: string): SpeciesPanelTarget {
 
 export function getBudgetHoverTarget(item: BudgetItem | null | undefined, canonicalName: string): PanelTarget {
   return item?.target ?? speciesBudgetTarget(canonicalName)
-}
-
-export function getTimelineHoverTargets(action: TimelineAction): readonly PanelTarget[] {
-  return action.targets
 }
 
 export function getBudgetSpeciesTarget(item: BudgetItem): SpeciesPanelTarget | null {

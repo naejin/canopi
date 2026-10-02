@@ -16,7 +16,7 @@ import { readWorkspaceBackgroundPresentation } from '../app/canvas-map-surface/w
 import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
 import {
   buildPlantPresentationEntries,
-  getPlantScreenHitBounds,
+  hitTestPlant,
   resolvePlantDisplayColor,
 } from '../canvas/runtime/plant-presentation'
 import {
@@ -146,7 +146,14 @@ describe('plant display rules', () => {
     const plants = [plant('a', 'Malus domestica', 0), plant('b', 'Mentha spicata', 40)]
     const context = { plants, pixelsPerMetre: 20, speciesCache: new Map() }
     const before = buildPlantPresentationEntries(plants, context, new Set())
-    const hitBefore = getPlantScreenHitBounds(plants[0]!, context, plants[0]!.position).radiusPx
+    // The scaled symbol's hit radius: its drawn radius plus the 4 px padding.
+    const scaledHitMetres = (before[0]!.radiusScreenPx * 1.5 + 4) / context.pixelsPerMetre
+    const hitsAt = (distance: number) => hitTestPlant(
+      plants[0]!,
+      { x: plants[0]!.position.x + distance, y: plants[0]!.position.y },
+      context,
+    )
+    expect(hitsAt(scaledHitMetres * 0.999)).toBe(false)
 
     const display: PlantDisplay = normalizePlantDisplay({
       colorBy: 'stratum',
@@ -159,7 +166,8 @@ describe('plant display rules', () => {
     expect(after.map((entry) => entry.color)).toEqual([STRATUM_DISPLAY_COLORS.emergent, NO_STRATUM_DISPLAY_COLOR])
     expect(after.map((entry) => entry.baseColor)).toEqual(['#3E8E4E', '#3E8E4E'])
     expect(after[0]!.radiusScreenPx).toBeCloseTo(before[0]!.radiusScreenPx * 1.5)
-    expect(getPlantScreenHitBounds(plants[0]!, context, plants[0]!.position).radiusPx - 4).toBeCloseTo((hitBefore - 4) * 1.5)
+    expect(hitsAt(scaledHitMetres * 0.999)).toBe(true)
+    expect(hitsAt(scaledHitMetres * 1.001)).toBe(false)
     expect(plants.every((entry) => entry.color === '#3E8E4E')).toBe(true)
     expect(resolvePlantDisplayColor(plants[1]!, new Map())).toBe(NO_STRATUM_DISPLAY_COLOR)
 

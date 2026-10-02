@@ -106,6 +106,7 @@ describe('TypeScript architecture source facts', () => {
           import '../shared/module'
           import './settings.browser'
           import '#platform'
+          import Worker from './worker?worker&inline'
         `,
       },
       { path: 'src/canvas/command.ts', source: 'export const command = 1' },
@@ -113,6 +114,7 @@ describe('TypeScript architecture source facts', () => {
       { path: 'src/shared/lazy.tsx', source: 'export const lazy = 1' },
       { path: 'src/shared/module.mts', source: 'export const moduleValue = 1' },
       { path: 'src/app/settings.browser.ts', source: 'export const settings = 1' },
+      { path: 'src/app/worker.ts', source: 'export {}' },
     ])
 
     expect(graph[0]?.imports.map((edge) => edge.target)).toEqual([
@@ -122,6 +124,7 @@ describe('TypeScript architecture source facts', () => {
       'src/shared/module.mts',
       'src/app/settings.browser.ts',
       '#platform',
+      'src/app/worker.ts',
     ])
   })
 

@@ -137,7 +137,7 @@ export interface ToolHostDeps {
   readonly timers: { set(atMs: number, cb: () => void): number; clear(id: number): void; readonly clock: () => number }
   /** Hover restyle and the locked-object affordance: today's deps.setHoveredTarget. */
   readonly hover: (target: SceneDesignObjectTarget | null) => void
-  /** The raster inspection probe (CanvasRuntimeAppAdapter.tryInspectAt, passed by scene-runtime.ts); true claims the press. INV-ENT-24. */
+  /** The raster inspection probe (CanvasRuntimeAppAdapter.tryInspectAt, passed by scene-runtime.ts); true claims the press. */
   readonly inspect?: (world: WorldPoint) => boolean
   /**
    * Takes an admitted press's pointer capture (the recogniser's, which the session holds back until the host admits the

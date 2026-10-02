@@ -180,7 +180,7 @@ export function canPlaceSavedObjectStamp(scene: StampScene, stamp: SavedObjectSt
  * The saved stamp's objects with its anchor at `at`, turned by `rotationDeg` about it: where a placement puts them (the
  * ghosts draw these).
  */
-export function savedObjectStampEntities(
+function savedObjectStampEntities(
   stamp: SavedObjectStampPayload,
   at: WorldPoint,
   rotationDeg = 0,

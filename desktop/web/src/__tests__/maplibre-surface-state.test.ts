@@ -52,7 +52,7 @@ describe('maplibre surface state adapter', () => {
     publishMapDiagnostics(frame)
     const published = (globalThis as { __CANOPI_MAP_DEBUG__?: unknown })
       .__CANOPI_MAP_DEBUG__ as Record<string, unknown>
-    // The live camera, bearing included (INV-CAM-32), and the ground it shows.
+    // The live camera, bearing included, and the ground it shows.
     expect(published).toMatchObject({
       center: [2.3522, 48.8566],
       zoom: 17,

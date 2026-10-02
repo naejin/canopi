@@ -20,7 +20,7 @@ export interface MapLibreOverlayMap {
 
 /**
  * The data each overlay source was last given, by source: a re-sync that projects the same ground (a settled camera, a repaint)
- * leaves the source alone, so the overlays change only with their Targets, the Scene or the plane (INV-REN-20).
+ * leaves the source alone, so the overlays change only with their Targets, the Scene or the plane.
  */
 const sourceData = new WeakMap<MapLibreGeoJsonSource, string>()
 

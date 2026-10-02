@@ -4,7 +4,6 @@ import {
   decodeCanopiDesign,
 } from '../app/contracts/design-ingestion'
 import {
-  describeDesignLoadError,
   designLoadFailureMessageKey,
   designLoadFailureOf,
 } from '../app/contracts/canopi-design-errors'
@@ -312,8 +311,6 @@ describe('Design ingestion outcomes and typed load failures', () => {
     expect(designLoadFailureMessageKey('invalid_document')).toBe('start.cantReadDamaged')
     expect(designLoadFailureMessageKey('too_large')).toBe('start.cantRead')
     expect(designLoadFailureMessageKey('internal')).toBe('start.cantRead')
-    expect(describeDesignLoadError({ kind: 'missing', message: 'gone' })).toBe('gone')
-    expect(describeDesignLoadError(new Error('boom'))).toBe('boom')
   })
 })
 

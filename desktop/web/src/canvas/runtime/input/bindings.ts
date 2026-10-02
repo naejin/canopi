@@ -28,9 +28,6 @@ export interface Bindings {
   readonly ownedHover: 'legacy' | 'end'
 }
 
-/** Help rows for F1 and tool cards, generated from the bindings (never hand-written). */
-export interface GestureHelpRow { readonly inputKey: string; readonly actionKey: string; readonly platformNote?: string }
-
 /**
  * Today's input. The right button is inert and the native contextmenu opens the canvas menu at once; a middle drag pans
  * (Shift too); the Pan tool and overview pan on a primary drag; no touch gestures, pen barrel or trackpad gesture events.

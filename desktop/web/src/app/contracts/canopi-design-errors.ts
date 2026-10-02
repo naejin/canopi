@@ -81,10 +81,3 @@ export function designLoadFailureMessageKey(kind: DesignLoadFailureKind): string
       return 'start.cantRead'
   }
 }
-
-/** A one-line description of a load error for logs and fallback messages; never a path. */
-export function describeDesignLoadError(error: unknown): string {
-  const failure = designLoadFailureOf(error)
-  if (failure) return failure.message
-  return error instanceof Error ? error.message : String(error)
-}

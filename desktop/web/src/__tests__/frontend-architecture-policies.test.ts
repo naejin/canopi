@@ -751,11 +751,10 @@ const REQUIRED_IMPORT_POLICIES = [
   },
   {
     kind: 'require-imports',
-    name: 'Target barrel exposes identity, resolution, and map projection',
+    name: 'Target barrel exposes identity and map projection',
     from: ['src/target/index.ts'],
     targets: [
       'src/target/identity.ts',
-      'src/target/resolution.ts',
       'src/target/map-projection.ts',
     ],
     edgeKinds: ['reexport'],
@@ -1328,7 +1327,7 @@ const SOURCE_TOMBSTONE_POLICIES = [
       'src/canvas/runtime/renderers/index.ts',
       'src/canvas/canvas2d-utils.ts',
       // Canvas v2 (ADR 0016), end of 0A: MapFrame and its viewport diagnostics
-      // gave way to the view transform's frame (INV-XF-04).
+      // gave way to the view transform's frame.
       'src/canvas/maplibre-camera.ts',
       // Canvas v2 0B-5 and 0D2 (ADR 0016, 0019): the view agreement probe went
       // (camera-contract.test.ts is the projection guard), and the layer stopped
@@ -1849,8 +1848,7 @@ const P2_PROJECTION_POLICY = {
 } satisfies ArchitecturePolicy
 
 /**
- * Canvas v2 policies (docs/plans/canvas-v2-plan.md section 5). Each name starts with its P-id; the counting guard's
- * replacement map (desktop/web/scripts/canvas-v2-test-replacements.json) refers to these exact strings.
+ * Canvas v2 policies (docs/plans/canvas-v2-plan.md section 5). Each name starts with its P-id.
  */
 const CANVAS_V2_POLICIES = [
   {

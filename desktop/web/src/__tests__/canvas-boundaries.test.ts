@@ -4,7 +4,7 @@
 // such as which element a listener is added to or which event type it names. Each policy walks every non-test
 // .ts/.tsx file under src/, blanks comments, applies its regex to the files of its scope and compares the matches per
 // file with its named allowlist, so a coupling reintroduced in a new file, or a new match in a listed one, fails. Each
-// `it` title of a real-tree check is the policy's exact name, which the counting guard's map refers to.
+// `it` title of a real-tree check is the policy's exact name.
 
 import { readdirSync, readFileSync } from 'node:fs'
 import ts from 'typescript'
@@ -43,7 +43,7 @@ const RAW_POINTER_LISTENER = /addEventListener\(\s*['"](pointer\w*|mouse\w*|whee
 /**
  * P6's components allowlist (inventory at the end of 0B, recorded in the 0B bead). Every entry is permanent: each
  * listens on its own element, or on the document for the rest of a press that began on its own element, never on the
- * map host (INV-ENT-23).
+ * map host.
  */
 const P6_COMPONENT_POINTER_LISTENERS: Readonly<Record<string, number>> = {
   // The lens drags its own frame: the press on the frame, then the document's move, up and cancel.
