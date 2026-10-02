@@ -407,6 +407,33 @@ describe('Plant a row tool', () => {
     expect(added(h)).toEqual([{ x: 20.5, y: 30 }, { x: 21, y: 30 }, { x: 21.5, y: 30 }, { x: 22, y: 30 }])
   })
 
+  it('the spacing field asks for focus on the release of the press that picked the source, never during its drag', () => {
+    const { h } = rowHarness({ intervalM: 2 })
+
+    // A fast press and drag: the field would take focus after the map did, and Esc, Enter and letters would go to it.
+    h.press({ x: 20, y: 30 })
+    expect(row(h)).toMatchObject({ phase: 'row', focusRequest: 0 })
+    const focus = h.record.focus.length
+    h.move({ x: 25, y: 30 })
+    expect(h.record.focus.slice(focus)).toEqual(['map:tool-requested'])
+    h.release({ x: 26, y: 30 })
+    expect(added(h)).toEqual([{ x: 22, y: 30 }, { x: 24, y: 30 }, { x: 26, y: 30 }])
+    expect(row(h).focusRequest).toBe(0)
+
+    // A tap picks the source and the field takes focus on its release, as today.
+    h.press({ x: 20, y: 30 })
+    expect(row(h).focusRequest).toBe(0)
+    h.release({ x: 20, y: 30 })
+    expect(row(h)).toMatchObject({ phase: 'row', focusRequest: 1 })
+    // So does a press that jitters inside 4 px.
+    h.host.command({ kind: 'spacing-cancel' })
+    h.press({ x: 20, y: 30 })
+    h.move({ x: 22, y: 30 })
+    expect(row(h).focusRequest).toBe(1)
+    h.release({ x: 22, y: 30 })
+    expect(row(h).focusRequest).toBe(2)
+  })
+
   it('a drag from the source takes the map\'s focus', () => {
     const { h } = rowHarness({ intervalM: 2 })
 
