@@ -41,7 +41,6 @@ describe('readWorkspaceActivationSnapshot', () => {
     })
     expect(snapshot).toEqual(expect.objectContaining({
       sessionIdentity: identity,
-      maximumWorldExtentMeters: undefined,
       map: expect.objectContaining({
         initialCenter: { lat: 48.86, lon: 2.35 },
         background: {

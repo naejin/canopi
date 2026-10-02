@@ -255,7 +255,8 @@ describe('view snapshot map', () => {
     expect(origin.y).toBeCloseTo(100, 6)
     expect(map!.layers.has(VIEW_SNAPSHOT_SCENE_LAYER_ID)).toBe(true)
     expect(backgrounds[0]!.presentations).toEqual([BASEMAP])
-    expect(layers[0]!.options.readOrigin()).toEqual(ORIGIN)
+    // The scene layer draws from the snapshot map's own driver, whose view the scene was built at.
+    expect(layers[0]!.options.frames.viewFrame.peek().view).toBe(build.mock.calls[0]![0])
     const container = map!.options.container
     expect(container.getAttribute('aria-hidden')).toBe('true')
     expect(container.style.visibility).toBe('hidden')

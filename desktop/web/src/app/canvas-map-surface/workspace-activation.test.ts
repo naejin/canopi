@@ -290,13 +290,10 @@ describe('WorkspaceActivationCoordinator', () => {
       readOrigin,
     })
     const attach = vi.spyOn(camera.host, 'attach')
-    const snapshot: WorkspaceActivationSnapshot = {
-      ...createActivationSnapshot({
-        initialCenter: { lat: 10, lon: 20 },
-        background: background({ opacity: 0.3 }),
-      }),
-      maximumWorldExtentMeters: 4000,
-    }
+    const snapshot: WorkspaceActivationSnapshot = createActivationSnapshot({
+      initialCenter: { lat: 10, lon: 20 },
+      background: background({ opacity: 0.3 }),
+    })
 
     const activation = coordinator.activate(snapshot)
     ;(snapshot.map.initialCenter as { lat: number; lon: number }).lat = 90
@@ -308,14 +305,11 @@ describe('WorkspaceActivationCoordinator', () => {
 
     ;(snapshot.map.initialCenter as { lat: number; lon: number }).lon = 91
     ;(snapshot.map.background.basemap as { opacity: number }).opacity = 0.92
-    ;(snapshot as { maximumWorldExtentMeters?: number }).maximumWorldExtentMeters = 9300
     created.resolve(map as unknown as WorkspaceActivationMap)
 
     await expect(activation).resolves.toBe('shared-ready')
-    expect(composed.composition.createLayer).toHaveBeenCalledWith(expect.objectContaining({
-      readOrigin,
-      maximumWorldExtentMeters: 4000,
-    }))
+    // The layer draws from the runtime's camera frames.
+    expect(composed.composition.createLayer).toHaveBeenCalledWith(expect.objectContaining({ frames: camera.host.frames }))
     // The map's driver took the runtime's camera, in the plane of the live origin.
     expect(attach).toHaveBeenCalledOnce()
     expect(camera.host.current()).toBe(attach.mock.calls[0]![0])
@@ -646,7 +640,7 @@ describe('WorkspaceActivationCoordinator', () => {
     })
     const disposeStyleRestorer = vi.fn(() => { events.push('style-restorer') })
     const unwatchFailure = vi.fn(() => { events.push('failure-watcher') })
-    const { coordinator, camera, runtime, readOrigin } = createCoordinator({
+    const { coordinator, camera, runtime } = createCoordinator({
       createMap,
       composition,
       installStyleRestorer: () => disposeStyleRestorer,
@@ -657,22 +651,16 @@ describe('WorkspaceActivationCoordinator', () => {
       initialCenter: { lat: 1, lon: 2 },
       background: background({ opacity: 0.2 }),
     })
-    const snapshotB: WorkspaceActivationSnapshot = {
-      ...createActivationSnapshot({
-        initialCenter: { lat: 40, lon: -70 },
-        background: background({ opacity: 0.8 }),
-      }),
-      maximumWorldExtentMeters: 4321,
-    }
+    const snapshotB: WorkspaceActivationSnapshot = createActivationSnapshot({
+      initialCenter: { lat: 40, lon: -70 },
+      background: background({ opacity: 0.8 }),
+    })
 
     await expect(coordinator.activate(snapshotA)).resolves.toBe('shared-ready')
     await expect(coordinator.activate(snapshotB)).resolves.toBe('shared-ready')
 
     expect(snapshots).toEqual([snapshotA.map, snapshotB.map])
-    expect(composition.createLayer).toHaveBeenLastCalledWith(expect.objectContaining({
-      readOrigin,
-      maximumWorldExtentMeters: 4321,
-    }))
+    expect(composition.createLayer).toHaveBeenLastCalledWith(expect.objectContaining({ frames: camera.host.frames }))
     // B's map drives the camera now; A's driver released A's map.
     expect(attach).toHaveBeenCalledTimes(2)
     expect(camera.host.current()).toBe(attach.mock.calls[1]![0])

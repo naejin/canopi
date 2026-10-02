@@ -1816,24 +1816,13 @@ const TOOL_SEAM_SOURCES = [
   'src/canvas/runtime/tools/spatial-index.ts',
 ] as const
 
-/**
- * P2's named allowlist: each file that may still project through MapLibre, with its number of calls and the merge that
- * removes it. The test "P2 allowlists each projecting file with its exact count" fails when a count changes, so an entry
- * goes in the merge that removes its last call.
- */
-const P2_PROJECTION_ALLOWLIST: Readonly<Record<string, number>> = {
-  // deriveSharedMapSceneViewport's map.project, run every render until 0D2 moves the layer onto the frame (INV-XF-25).
-  'src/maplibre/shared-scene-layer.ts': 1,
-}
-
+/** P2: screen positions come from the view transform (`view/camera-contract.test.ts` guards it against MapLibre). */
 const P2_PROJECTION_POLICY = {
   kind: 'forbid-calls',
-  name: 'P2 only the agreement probe projects through MapLibre',
+  name: 'P2 nobody projects through MapLibre',
   from: ['src/**'],
   exceptFrom: [
-    'src/maplibre/view-agreement.ts',
     ...WORLD_MAP_SOURCES,
-    ...Object.keys(P2_PROJECTION_ALLOWLIST),
     ...TEST_SOURCE_PATTERNS,
   ],
   targets: [...MAP_RECEIVER_TARGETS],
@@ -2493,7 +2482,7 @@ function plantedSource(path: string, lines: readonly string[]) {
 const P1_CAMERA_METHODS = '[P1 only the camera driver calls MapLibre camera methods]'
 const P1_MAP_RECEIVERS = '[P1 only the camera driver stops, pans, zooms, resizes or resets north a map]'
 const P1_MAP_TYPE = '[P1 the camera driver imports the MapLibre map type]'
-const P2 = '[P2 only the agreement probe projects through MapLibre]'
+const P2 = '[P2 nobody projects through MapLibre]'
 const P4_IMPORTS = '[P4 the view module imports only its pure dependencies]'
 const P4_GLOBALS = '[P4 the view module reaches no DOM, timer, clock or media query]'
 const P5_IMPORTS = '[P5 tools import no MapLibre, DOM or Pixi]'
@@ -2566,7 +2555,7 @@ describe('canvas v2 policies', () => {
     ])
   })
 
-  it('P2 rejects map projections outside the agreement probe, the World map and its named allowlist', () => {
+  it('P2 rejects map projections outside the World map', () => {
     const graph = createTypeScriptSourceGraph([
       plantedSource('src/maplibre/planted.ts', [
         'map.project([1, 2]);',
@@ -2575,32 +2564,18 @@ describe('canvas v2 policies', () => {
         'plane.project(point);',
         'input.project(point);',
       ]),
-      plantedSource('src/maplibre/view-agreement.ts', ['map.unproject([1, 2])']),
       plantedSource('src/maplibre/shared-scene-layer.ts', ['map!.project([1, 2])']),
       plantedSource('src/components/world-map/WorldMapSurface.tsx', ['map.project([1, 2])']),
-      plantedSource('src/maplibre/view-agreement.test.ts', ['map.unproject([1, 2])']),
+      plantedSource('src/maplibre/camera-driver.test.ts', ['map.unproject([1, 2])']),
     ])
 
     expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P2'))).toEqual([
       `${P2} src/maplibre/planted.ts:1 calls map.project`,
       `${P2} src/maplibre/planted.ts:2 calls this.map?.unproject`,
       `${P2} src/maplibre/planted.ts:3 calls workspaceMap!.project`,
+      `${P2} src/maplibre/shared-scene-layer.ts:1 calls map!.project`,
     ])
   })
-
-  it('P2 allowlists each projecting file with its exact count', () => {
-    const unlisted = {
-      ...P2_PROJECTION_POLICY,
-      exceptFrom: P2_PROJECTION_POLICY.exceptFrom.filter((path) => !(path in P2_PROJECTION_ALLOWLIST)),
-    }
-    const counts: Record<string, number> = {}
-    for (const violation of collectArchitecturePolicyViolations(discoveredSourceGraph(), [unlisted])) {
-      const path = /^\[[^\]]+\] (\S+):\d+ calls /.exec(violation)?.[1] ?? violation
-      counts[path] = (counts[path] ?? 0) + 1
-    }
-
-    expect(counts).toEqual(P2_PROJECTION_ALLOWLIST)
-  }, 20_000)
 
   it('P4 rejects view imports other than its pure dependencies', () => {
     const graph = createTypeScriptSourceGraph([

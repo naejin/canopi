@@ -680,5 +680,25 @@
   "src/__tests__/scene-viewport-presentation.test.ts > retained viewport presentation > ignores camera updates before a scene and releases retained data on disposal": {
     "file": "src/canvas/runtime/renderers/label-admission.test.ts",
     "name": "label admission > admits nothing before a scene or after disposal"
+  },
+  "src/__tests__/v2-shared-camera-transform.test.ts > deriveSharedMapSceneViewport > derives the existing viewport from pinned MapLibre CSS-pixel points": {
+    "file": "src/canvas/runtime/view/camera-contract.test.ts",
+    "name": "camera contract > the planar and geographic builders agree at bearing 0"
+  },
+  "src/__tests__/v2-shared-camera-transform.test.ts > deriveSharedMapSceneViewport > refuses pitch and non-affine local axes": {
+    "file": "src/__tests__/v2-shared-map-scene-layer.test.ts",
+    "name": "createSharedMapSceneLayer > the layer never derives a transform"
+  },
+  "src/__tests__/v2-shared-camera-transform.test.ts > deriveSharedMapSceneViewport > uses CSS pixels, so device-pixel ratio cannot change the viewport": {
+    "file": "src/__tests__/v2-shared-map-scene-layer.test.ts",
+    "name": "createSharedMapSceneLayer > the layer never derives a transform"
+  },
+  "src/__tests__/v2-shared-camera-transform.test.ts > deriveSharedMapSceneViewport > tracks pinned pan and zoom projection changes": {
+    "file": "src/canvas/runtime/view/camera-contract.test.ts",
+    "name": "camera contract > headless and MercatorTransform agree for pan, zoom and rotate moves"
+  },
+  "src/__tests__/v2-shared-camera-transform.test.ts > deriveSharedMapSceneViewport > bounds the discarded affine residual over the qualified local extent": {
+    "file": "src/canvas/runtime/view/camera-contract.test.ts",
+    "name": "camera contract > the planar and geographic builders agree at bearing 0"
   }
 }

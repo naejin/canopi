@@ -191,7 +191,6 @@ interface SnapshotInstance {
   readonly teardown: AbortController
   background: MapBackgroundHandle | null
   sceneLayer: SharedMapSceneLayer | null
-  origin: { readonly lat: number; readonly lon: number }
   width: number
   height: number
   broken: Error | null
@@ -307,7 +306,6 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
       teardown: new AbortController(),
       background: null,
       sceneLayer: null,
-      origin: request.scene.origin,
       width: request.width,
       height: request.height,
       broken: null,
@@ -356,7 +354,7 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
       if (!context) throw new Error('The snapshot map did not expose a WebGL2 context.')
       const sceneLayer = createSceneLayer({
         id: VIEW_SNAPSHOT_SCENE_LAYER_ID,
-        readOrigin: () => created.origin,
+        frames: created.driver.frames,
         onFailure: (error) => { created.broken = error },
       })
       created.sceneLayer = sceneLayer
@@ -408,7 +406,6 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
       Object.assign(current.view, snapshotView(origin))
       driver.planeChanged(current.view.plane)
     }
-    current.origin = origin
     current.tileErrors = 0
     // The driver resizes the map (an unchanged size does nothing) and jumps it: the snapshot's camera is north-up.
     driver.setScreen({ width: request.width, height: request.height, devicePixelRatio: current.pixelRatio })

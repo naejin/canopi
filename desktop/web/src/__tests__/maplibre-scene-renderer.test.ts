@@ -8,6 +8,7 @@ import type { SceneChangeSet, SceneRendererSnapshot } from '../canvas/runtime/re
 import { createSharedMapSceneRendererComposition } from '../maplibre/shared-scene-renderer'
 import type { SharedMapSceneMap, SharedPixiRenderer } from '../maplibre/shared-scene-layer'
 import { createTestRendererView, createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
+import { createTestView } from './support/test-view'
 
 const WHOLE_SCENE: SceneChangeSet = { scene: true, selection: true, hover: [], style: true, labels: true }
 
@@ -96,19 +97,15 @@ describe('MapLibre scene renderer bridge', () => {
     })
     const map = {
       getCanvas: () => canvas,
-      getPitch: () => 0,
       triggerRepaint: vi.fn(),
-      project: vi.fn()
-        .mockReturnValueOnce({ x: 40, y: 30 })
-        .mockReturnValueOnce({ x: 44, y: 30 })
-        .mockReturnValueOnce({ x: 40, y: 34 }),
     } satisfies SharedMapSceneMap
     const renderer: SharedPixiRenderer = {
       init: vi.fn(async () => {}), render: vi.fn(), resize: vi.fn(), resetState: vi.fn(),
       destroy: vi.fn(), context: { extensions: { loseContext: { loseContext: vi.fn() } } },
     }
     const layer = composition.createLayer({
-      id: 'design', readOrigin: () => ({ lat: 0, lon: 0 }), onFailure,
+      id: 'design', onFailure,
+      frames: createTestView({ screen: { width: 200, height: 100, devicePixelRatio: 2 }, viewport: { x: 40, y: 30, scale: 4 } }).frames,
       createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
       createPresentation: () => ({
