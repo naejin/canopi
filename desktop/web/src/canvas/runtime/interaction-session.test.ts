@@ -566,13 +566,14 @@ describe('the interaction session', () => {
     }
 
     try {
-      // Today's pointermove had no quarantine: a failing hover never stopped the app's other pointer listeners.
-      expect(failingHover(100)).toHaveLength(2)
+      // A failing hover over the map is reported without a quarantine, and the move over the panel never reaches the
+      // canvas (no window listener without a press on the map): the panel hears it either way.
+      expect(failingHover(100)).toHaveLength(1)
       expect(panelMoves).toHaveBeenCalledOnce()
 
       useStubTools(stubTool('rectangle'))
       session.setTool('rectangle')
-      expect(failingHover(101)).toHaveLength(2)
+      expect(failingHover(101)).toHaveLength(1)
       expect(panelMoves).toHaveBeenCalledTimes(2)
     } finally {
       panel.remove()
@@ -1006,7 +1007,7 @@ describe('releases the tool did not hear (today\'s pointerup cleanup)', () => {
     }
   })
 
-  it('a right-click release and a pointerup off the map hide a held stamp\'s ghost until the next hover', () => {
+  it('a right-click release hides a held stamp\'s ghost until the next hover, and a click on a panel leaves it', () => {
     holdAppleStamp()
     useStubTools(createSavedObjectStampTool())
     const renderer = recordingRenderer()
@@ -1024,19 +1025,16 @@ describe('releases the tool did not hear (today\'s pointerup cleanup)', () => {
 
       events.pointerMove({ x: 110, y: 110 }, { buttons: 0 })
       expect(ghostShown(renderer)).toBe(true)
-      // A click on a panel: its press never reaches the map, its release still reaches the window.
+      // A click on a panel is the page's: neither its press nor its release reaches the map (phase F).
       events.pointerDown({ x: 500, y: 400 }, { target: panel })
       events.pointerUp({ x: 500, y: 400 }, { target: panel })
-      expect(ghostShown(renderer)).toBe(false)
-
-      events.pointerMove({ x: 120, y: 120 }, { buttons: 0 })
       expect(ghostShown(renderer)).toBe(true)
     } finally {
       panel.remove()
     }
   })
 
-  it('a release over the note editor, a handle or the Unlock affordance, of another pointer, or in overview runs nothing', () => {
+  it('a release over the note editor, a handle or the Unlock affordance, of another pointer, in overview or off the map runs nothing', () => {
     const rectangle = stubTool('rectangle')
     useStubTools(rectangle)
     const { session } = createSession()
@@ -1049,25 +1047,39 @@ describe('releases the tool did not hear (today\'s pointerup cleanup)', () => {
     })
     const navigates = (): number => rectangle.calls.filter((call) => call === 'cancelTransient:navigate').length
 
-    for (const target of owned) events.pointerUp({ x: 50, y: 50 }, { target })
+    for (const target of owned) {
+      events.pointerDown({ x: 50, y: 50 }, { target, pointerId: 2 })
+      events.pointerUp({ x: 50, y: 50 }, { target, pointerId: 2 })
+    }
     expect(navigates()).toBe(0)
 
     // A press of the tool's is live: another pointer's release is not the tool's to end (today's pointerId check).
     events.pointerDown({ x: 20, y: 20 }, { pointerId: 3 })
-    events.pointerUp({ x: 50, y: 50 }, { pointerId: 4 })
+    events.pointerDown({ x: 50, y: 50 }, { pointerId: 4, button: 2 })
+    events.pointerUp({ x: 50, y: 50 }, { pointerId: 4, button: 2 })
     expect(navigates()).toBe(0)
     events.pointerUp({ x: 20, y: 20 }, { pointerId: 3 })
     expect(navigates()).toBe(0)
 
-    // Overview swallows a release with no press instead.
+    // Overview swallows a release with no session instead.
     session.setOverviewMode(true)
     const before = rectangle.calls.length
-    events.pointerUp({ x: 50, y: 50 })
+    events.pointerDown({ x: 50, y: 50 }, { button: 2 })
+    events.pointerUp({ x: 50, y: 50 }, { button: 2 })
     expect(rectangle.calls.slice(before)).toEqual([])
     session.setOverviewMode(false)
 
-    // Anywhere else, a release with no press of the map's runs the cleanup, as today.
-    events.pointerUp({ x: 50, y: 50 })
+    // A press and release beside the map are the page's (phase F: no window listener without a press on the map).
+    const panel = document.createElement('div')
+    document.body.appendChild(panel)
+    events.pointerDown({ x: 500, y: 50 }, { target: panel })
+    events.pointerUp({ x: 500, y: 50 }, { target: panel })
+    panel.remove()
+    expect(navigates()).toBe(0)
+
+    // A right-click on the map, a release with no press of the tool's, runs the cleanup, as today.
+    events.pointerDown({ x: 50, y: 50 }, { button: 2 })
+    events.pointerUp({ x: 50, y: 50 }, { button: 2 })
     expect(navigates()).toBe(1)
   })
 })

@@ -1,7 +1,10 @@
 // canvas/runtime/input/dom-input-source.ts
 //
-// Owns every DOM listener for canvas input: the map host's pointer, wheel, contextmenu, drag and focus events, today's
-// window pointer and blur listeners, and the ruler presses at document capture (keys are the key router's, app/keyboard). It turns
+// Owns every DOM listener for canvas input: the map host's pointer (hover moves included), wheel, contextmenu, drag and
+// focus events, the window blur, the window pointer listeners while it owns a pointer, and the ruler presses at document
+// capture (keys are the key router's, app/keyboard). A press it delivers, on the map or a ruler, owns that pointer until
+// its release, its cancel or a window blur: only then does it listen on window, and only to that pointer, so presses,
+// moves and releases that start elsewhere in the app reach the page untouched. It turns
 // each event into host-relative, classified fields for `normalise`, hands the raw input to the sink, and applies the
 // effects the sink sends back to the event being handled: prevent-default, stop-propagation, pointer capture, the drop
 // effect. Detaching releases every capture it still holds. A sink that throws on a press on the map, a release, a context menu, a dragover or a drop quarantines that event
@@ -85,6 +88,25 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   const sessionRects = new Map<number, HostRect>()
   let sink: ((input: RawInput) => void) | null = null
   let tickTimer: number | null = null
+  /** Pointers pressed on the map or a ruler, until their release or cancel: the window listeners follow only these. */
+  const owned = new Set<number>()
+  /** Installs the window pointer listeners (set while attached); returns their removal. */
+  let listenOnWindow: (() => () => void) | null = null
+  let removeWindowListeners: (() => void) | null = null
+
+  function own(pointerId: number): void {
+    owned.add(pointerId)
+    if (!removeWindowListeners && listenOnWindow) removeWindowListeners = listenOnWindow()
+  }
+
+  function disown(pointerId: number | 'all'): void {
+    if (pointerId === 'all') owned.clear()
+    else owned.delete(pointerId)
+    if (owned.size > 0 || !removeWindowListeners) return
+    const remove = removeWindowListeners
+    removeWindowListeners = null
+    remove()
+  }
 
   /**
    * Hands one input to the sink while its event is the one being handled. `onError` is the one rule for a failure:
@@ -116,6 +138,8 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
 
   const onPointerDown = (event: PointerEvent): void => {
     const rect = host.getBoundingClientRect()
+    // Owned first: a sink that fails on the press may still have opened its session, whose release must reach it.
+    own(event.pointerId)
     deliver(event, rect, pointerInput(event, 'pointerdown', rect), 'quarantine')
   }
   const onRulerPointerDown = (event: PointerEvent): void => {
@@ -123,19 +147,37 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     if (event.target instanceof Node && host.contains(event.target)) return
     if (classifyTarget(event.target, host).kind !== 'ruler') return
     const rect = host.getBoundingClientRect()
+    own(event.pointerId)
     // Today's ruler drag had no quarantine: a failure left its press to the app.
     deliver(event, rect, pointerInput(event, 'pointerdown', rect))
   }
+  /** A move of a pointer the source does not own, over the map: a hover (an owned pointer's moves come from window). */
+  const onHostPointerMove = (event: PointerEvent): void => {
+    if (owned.has(event.pointerId)) return
+    const rect = host.getBoundingClientRect()
+    deliver(event, rect, pointerInput(event, 'pointermove', rect))
+  }
   const onPointerMove = (event: PointerEvent): void => {
+    if (!owned.has(event.pointerId)) return
     const rect = sessionRect(event.pointerId)
     deliver(event, rect, pointerInput(event, 'pointermove', rect))
   }
   const onPointerUp = (event: PointerEvent): void => {
+    if (!owned.has(event.pointerId)) return
     const rect = sessionRect(event.pointerId)
-    deliver(event, rect, pointerInput(event, 'pointerup', rect))
+    try {
+      deliver(event, rect, pointerInput(event, 'pointerup', rect))
+    } finally {
+      disown(event.pointerId)
+    }
   }
   const onPointerCancel = (event: PointerEvent): void => {
-    deliver(event, null, pointerInput(event, 'pointercancel', NO_RECT))
+    if (!owned.has(event.pointerId)) return
+    try {
+      deliver(event, null, pointerInput(event, 'pointercancel', NO_RECT))
+    } finally {
+      disown(event.pointerId)
+    }
   }
   const onLostPointerCapture = (event: PointerEvent): void => {
     const id = event.pointerId
@@ -156,7 +198,12 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     deliver(event, null, { kind: 'focus-out', t: event.timeStamp })
   }
   const onBlur = (event: Event): void => {
-    deliver(event, null, { kind: 'cancel', t: event.timeStamp, id: 'all', reason: 'blur' })
+    // The blur ends every session, so the source owns no pointer after it.
+    try {
+      deliver(event, null, { kind: 'cancel', t: event.timeStamp, id: 'all', reason: 'blur' })
+    } finally {
+      disown('all')
+    }
   }
   const onWheel = (event: WheelEvent): void => {
     if (allowsNativeContextMenuTarget(event.target)) return
@@ -234,7 +281,9 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
       }
       const detach = (): void => {
         sink = null
+        listenOnWindow = null
         clearTickTimer()
+        disown('all')
         const pending = removals.splice(0)
         runCanvasRuntimeCleanups([
           // Every capture the source still holds goes with it (a live press at disposal, today's _clearPointerGesture);
@@ -247,13 +296,10 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
         ], 'DOM input source listener removal failed')
       }
       try {
-        // Today's installation, in today's order (scene-interaction.ts until 0B-2).
         listen(host, 'pointerdown', onPointerDown as EventListener, { capture: true })
+        listen(host, 'pointermove', onHostPointerMove as EventListener)
         listen(host, 'pointerleave', onPointerLeave as EventListener)
         listen(host, 'lostpointercapture', onLostPointerCapture as EventListener)
-        listen(window, 'pointermove', onPointerMove as EventListener, { capture: true })
-        listen(window, 'pointerup', onPointerUp as EventListener, { capture: true })
-        listen(window, 'pointercancel', onPointerCancel as EventListener, { capture: true })
         listen(window, 'blur', onBlur)
         listen(host, 'contextmenu', onContextMenu as EventListener)
         listen(host, 'wheel', onWheel as EventListener, { passive: false })
@@ -263,6 +309,23 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
         listen(host, 'focusout', onFocusOut as EventListener)
         if (deps.listensToRulers) listen(document, 'pointerdown', onRulerPointerDown as EventListener, { capture: true })
         if (deps.bindings().touch.hostTouchActionNone) host.style.touchAction = 'none'
+        listenOnWindow = () => {
+          const windowRemovals: Array<() => void> = []
+          const listenWindow = (type: string, listener: EventListener): void => {
+            window.addEventListener(type, listener, { capture: true })
+            windowRemovals.push(() => window.removeEventListener(type, listener, { capture: true }))
+          }
+          const remove = (): void => runCanvasRuntimeCleanups(windowRemovals.splice(0), 'DOM input source window listener removal failed')
+          try {
+            listenWindow('pointermove', onPointerMove as EventListener)
+            listenWindow('pointerup', onPointerUp as EventListener)
+            listenWindow('pointercancel', onPointerCancel as EventListener)
+          } catch (error) {
+            remove()
+            throw error
+          }
+          return remove
+        }
       } catch (error) {
         try {
           detach()

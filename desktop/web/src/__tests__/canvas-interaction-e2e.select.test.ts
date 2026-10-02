@@ -4603,10 +4603,11 @@ describe('SceneInteractionSession', () => {
     expect(abortFailure.beginCalls()).toBe(1)
     expect(store.persisted).toEqual(persistedBefore)
 
-    events.pointerUp({ x: 40, y: 50 }, { pointerId: 28 })
+    // A right-click on the map, a release outside the tool: the tool's own transaction reference survived its first,
+    // throwing abort, so it is asked to cancel again, and this abort is a harmless no-op on the already-closed transaction.
+    events.pointerDown({ x: 40, y: 50 }, { pointerId: 29, button: 2 })
+    events.pointerUp({ x: 40, y: 50 }, { pointerId: 29, button: 2 })
 
-    // The tool's own transaction reference survived its first, throwing abort; released outside the tool, it is
-    // asked to cancel again, and this abort is a harmless no-op on the already-closed transaction.
     expect(abortFailure.abortCalls()).toBe(3)
     expect(store.persisted).toEqual(persistedBefore)
     session.dispose()

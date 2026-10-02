@@ -77,6 +77,7 @@ describe('createDomInputSource', () => {
     const hostAdds = listenerCalls(spies.hostAdd)
     expect(hostAdds.map(([type, , options]) => [type, captureFlag(options)])).toEqual([
       ['pointerdown', true],
+      ['pointermove', false],
       ['pointerleave', false],
       ['lostpointercapture', false],
       ['contextmenu', false],
@@ -87,14 +88,16 @@ describe('createDomInputSource', () => {
       ['focusout', false],
     ])
     expect(hostAdds.find(([type]) => type === 'wheel')?.[2]).toEqual({ passive: false })
-    const windowAdds = listenerCalls(spies.windowAdd)
-    expect(windowAdds.map(([type, , options]) => [type, captureFlag(options)])).toEqual([
+    expect(listenerCalls(spies.windowAdd).map(([type, , options]) => [type, captureFlag(options)])).toEqual([['blur', false]])
+    expect(listenerCalls(spies.documentAdd).map(([type, , options]) => [type, captureFlag(options)])).toEqual([['pointerdown', true]])
+    // A press on the map owns its pointer: the window listeners follow it, and detach removes them with the rest.
+    events.pointerDown({ x: 10, y: 10 })
+    expect(listenerCalls(spies.windowAdd).map(([type, , options]) => [type, captureFlag(options)])).toEqual([
+      ['blur', false],
       ['pointermove', true],
       ['pointerup', true],
       ['pointercancel', true],
-      ['blur', false],
     ])
-    expect(listenerCalls(spies.documentAdd).map(([type, , options]) => [type, captureFlag(options)])).toEqual([['pointerdown', true]])
 
     dispose()
     dispose()
@@ -104,10 +107,11 @@ describe('createDomInputSource', () => {
       [spies.windowAdd, spies.windowRemove],
       [spies.documentAdd, spies.documentRemove],
     ] as const) {
-      const added = listenerCalls(add)
-      const removed = listenerCalls(remove)
-      expect(removed.map(([type, listener, options]) => [type, listener, captureFlag(options)]))
-        .toEqual(added.map(([type, listener, options]) => [type, listener, captureFlag(options)]))
+      // Each removed once, in any order (the window's session listeners go first).
+      const byType = (calls: Array<[string, unknown, unknown]>) => calls
+        .map(([type, listener, options]) => [type, listener, captureFlag(options)] as const)
+        .sort(([a], [b]) => a.localeCompare(b))
+      expect(byType(listenerCalls(remove))).toEqual(byType(listenerCalls(add)))
     }
     for (const spy of Object.values(spies)) spy.mockRestore()
   })
@@ -116,7 +120,7 @@ describe('createDomInputSource', () => {
     const windowAdd = vi.spyOn(window, 'addEventListener')
     const documentAdd = vi.spyOn(document, 'addEventListener')
     const dispose = attachRecording(createDomInputSource(deps()))
-    expect(listenerCalls(windowAdd).map(([type]) => type)).toEqual(['pointermove', 'pointerup', 'pointercancel', 'blur'])
+    expect(listenerCalls(windowAdd).map(([type]) => type)).toEqual(['blur'])
     expect(listenerCalls(documentAdd)).toEqual([])
     dispose()
     windowAdd.mockRestore()
@@ -134,9 +138,74 @@ describe('createDomInputSource', () => {
     const hostRemove = vi.spyOn(host, 'removeEventListener')
 
     expect(() => createDomInputSource(deps()).attach(() => {})).toThrow(failure)
-    expect(listenerCalls(hostRemove).map(([type]) => type)).toEqual(['pointerdown', 'pointerleave', 'lostpointercapture', 'contextmenu'])
-    expect(listenerCalls(windowRemove).map(([type]) => type)).toEqual(['pointermove', 'pointerup', 'pointercancel', 'blur'])
+    expect(listenerCalls(hostRemove).map(([type]) => type)).toEqual(['pointerdown', 'pointermove', 'pointerleave', 'lostpointercapture', 'contextmenu'])
+    expect(listenerCalls(windowRemove).map(([type]) => type)).toEqual(['blur'])
     for (const spy of [hostAdd, windowRemove, hostRemove]) spy.mockRestore()
+  })
+
+  it('window listeners exist only during an owned session', () => {
+    const downstream = vi.fn((event: Event) => event.defaultPrevented)
+    window.addEventListener('pointerup', downstream)
+    const windowAdd = vi.spyOn(window, 'addEventListener')
+    const windowRemove = vi.spyOn(window, 'removeEventListener')
+    const types = (spy: typeof windowAdd): string[] => listenerCalls(spy).map(([type]) => type).filter((type) => type !== 'blur')
+    const source = createDomInputSource(deps())
+    const dispose = attachRecording(source, (input) => {
+      if (input.kind === 'down') source.apply([{ kind: 'prevent-default' }, { kind: 'capture', pointerId: input.id }])
+      if (input.kind === 'up') source.apply([{ kind: 'release-capture', pointerId: input.id }])
+    })
+    const panel = document.createElement('div')
+    document.body.appendChild(panel)
+
+    try {
+      // A press, move and release that start outside the map belong to the page: nothing is installed, heard or stopped.
+      events.pointerDown({ x: 10, y: 10 }, { target: panel, pointerId: 3 })
+      events.pointerMove({ x: 20, y: 10 }, { target: panel, pointerId: 3, buttons: 1 })
+      const foreignUp = events.pointerUp({ x: 20, y: 10 }, { target: panel, pointerId: 3 })
+      expect(types(windowAdd)).toEqual([])
+      expect(received).toEqual([])
+      expect(foreignUp.defaultPrevented).toBe(false)
+      expect(downstream).toHaveBeenCalledTimes(1)
+
+      // A press on the map owns its pointer until its release: the window follows it there, and only it.
+      events.pointerDown({ x: 10, y: 10 }, { pointerId: 4 })
+      expect(types(windowAdd)).toEqual(['pointermove', 'pointerup', 'pointercancel'])
+      events.pointerMove({ x: 500, y: 10 }, { target: panel, pointerId: 4, buttons: 1 })
+      events.pointerMove({ x: 30, y: 10 }, { target: panel, pointerId: 3 })
+      events.pointerUp({ x: 500, y: 10 }, { target: panel, pointerId: 4 })
+      expect(received.map((input) => `${input.kind}:${'id' in input ? input.id : ''}`)).toEqual(['down:4', 'move:4', 'up:4'])
+      expect(types(windowRemove)).toEqual(['pointermove', 'pointerup', 'pointercancel'])
+      expect(downstream).toHaveBeenCalledTimes(2)
+
+      // A cancel and a window blur end the ownership too.
+      events.pointerDown({ x: 10, y: 10 }, { pointerId: 5 })
+      events.pointerCancel({ x: 10, y: 10 }, { pointerId: 5 })
+      events.pointerDown({ x: 10, y: 10 }, { pointerId: 6 })
+      events.windowBlur()
+      expect(types(windowAdd)).toHaveLength(9)
+      expect(types(windowRemove)).toHaveLength(9)
+    } finally {
+      panel.remove()
+      dispose()
+      windowAdd.mockRestore()
+      windowRemove.mockRestore()
+      window.removeEventListener('pointerup', downstream)
+    }
+  })
+
+  it('a hover move on the host reaches the recogniser', () => {
+    const dispose = attachRecording(createDomInputSource(deps()))
+    const inside = document.createElement('canvas')
+    host.appendChild(inside)
+    const panel = document.createElement('div')
+    document.body.appendChild(panel)
+
+    events.pointerMove({ x: 30, y: 40 }, { target: inside })
+    events.pointerMove({ x: 30, y: 40 }, { target: panel })
+
+    expect(received).toEqual([expect.objectContaining({ kind: 'move', at: { x: 30, y: 40 }, target: { kind: 'surface' } })])
+    panel.remove()
+    dispose()
   })
 
   it('a ruler press of any mouse button becomes a ruler target', () => {
@@ -210,7 +279,6 @@ describe('createDomInputSource', () => {
       chrome.firstElementChild!,
       surface,
       host,
-      outside,
     ]) {
       events.pointerMove({ x: 5, y: 5 }, { target })
     }
@@ -225,18 +293,21 @@ describe('createDomInputSource', () => {
       { kind: 'owned-chrome' },
       { kind: 'surface' },
       { kind: 'surface' },
-      { kind: 'foreign' },
     ])
 
     // An up carries its target too: the session keeps today's release cleanup off the note editor, a handle and the
-    // Unlock affordance by it.
+    // Unlock affordance by it, and a release outside the map is foreign.
     received.length = 0
-    for (const target of [editor, plainHandle, unlock.lastElementChild!, surface]) events.pointerUp({ x: 5, y: 5 }, { target })
-    expect(received.map((input) => input.kind === 'up' && input.target)).toEqual([
+    for (const target of [editor, plainHandle, unlock.lastElementChild!, surface, outside]) {
+      events.pointerDown({ x: 5, y: 5 })
+      events.pointerUp({ x: 5, y: 5 }, { target })
+    }
+    expect(received.flatMap((input) => input.kind === 'up' ? [input.target] : [])).toEqual([
       { kind: 'owned-text' },
       { kind: 'handle', id: 'vertex:zone-1:2' },
       { kind: 'owned-chrome', lockedAffordance: true },
       { kind: 'surface' },
+      { kind: 'foreign' },
     ])
     dispose()
   })
@@ -407,12 +478,15 @@ describe('createDomInputSource', () => {
     let errors: unknown[] = []
     try {
       errors = captureWindowErrors(() => {
+        // The press is quarantined (above); its pointer is owned all the same, so the window hears its moves and release.
+        events.pointerDown({ x: 10, y: 10 })
         events.pointerMove({ x: 10, y: 10 }, { target: panel })
         events.pointerCancel({ x: 10, y: 10 }, { target: panel })
         events.pointerLeave({ x: 10, y: 10 })
         events.wheel({ x: 10, y: 10 }, { deltaY: 4 })
-        events.windowBlur()
+        events.pointerDown({ x: 10, y: 10 })
         events.pointerUp({ x: 10, y: 10 })
+        events.windowBlur()
         for (const type of ['contextmenu', 'dragover', 'drop']) {
           host.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: 20, clientY: 30 }))
         }
@@ -424,14 +498,14 @@ describe('createDomInputSource', () => {
     }
 
     // The one rule: rethrow on every event kind; only a press on the map host (covered above) is quarantined.
-    expect(errors).toEqual([failure, failure, failure, failure, failure, failure, failure, failure, failure])
+    expect(errors).toEqual(Array(11).fill(failure))
     expect(heard).toEqual([
       'pointermove:false',
       'pointercancel:false',
       'pointerleave:false',
       'wheel:false',
-      'blur:false',
       'pointerup:false',
+      'blur:false',
       'contextmenu:false',
       'dragover:false',
       'drop:false',

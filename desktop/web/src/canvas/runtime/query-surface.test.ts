@@ -42,9 +42,9 @@ describe('the runtime query surface', () => {
     const points: (PointerWorld | null)[] = []
     const stop = runtime.querySurface.subscribePointerWorld((point) => { points.push(point) })
 
-    // A button-less move over the map itself (the harness dispatches moves on window, which is off the map).
+    // A button-less move over the map itself is heard; one over the page beside it is not.
     events.pointerMove({ x: 100, y: 80 }, { target: container, buttons: 0 })
-    events.pointerMove({ x: 110, y: 80 }, { buttons: 0 })
+    events.pointerMove({ x: 110, y: 80 }, { target: document.body, buttons: 0 })
     const { frames } = runtime.cameraHost
     const expected = frames.viewFrame.peek().view.screenToWorld({ x: 100, y: 80 })
     expect(points).toHaveLength(1)

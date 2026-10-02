@@ -231,7 +231,8 @@ describe('SceneInteractionSession', () => {
     expect(() => session.dispose()).toThrow('story observer disconnect failed')
 
     expect(events.listenerLog?.containerRemoves('pointerdown')).toHaveLength(1)
-    expect(events.listenerLog?.windowRemoves('pointermove')).toHaveLength(1)
+    expect(events.listenerLog?.containerRemoves('pointermove')).toHaveLength(1)
+    expect(events.listenerLog?.windowRemoves('blur')).toHaveLength(1)
     expect(container.querySelector('[data-locked-object-affordance]')).toBeNull()
     expect(container.querySelector('[data-canvas-handle-layer]')).toBeNull()
     expect(container.hasAttribute('tabindex')).toBe(false)
@@ -242,18 +243,21 @@ describe('SceneInteractionSession', () => {
   it('attempts every host-listener removal when one removal fails', () => {
     const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
-    const originalRemoveEventListener = window.removeEventListener.bind(window)
-    const removeWindowListener = vi.spyOn(window, 'removeEventListener').mockImplementation(
+    const originalRemoveEventListener = container.removeEventListener.bind(container)
+    const removeHostListener = vi.spyOn(container, 'removeEventListener').mockImplementation(
       ((type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions) => {
         originalRemoveEventListener(type, listener, options)
         if (type === 'pointermove') throw new Error('pointermove removal failed')
-      }) as typeof window.removeEventListener,
+      }) as typeof container.removeEventListener,
     )
+    const removeWindowListener = vi.spyOn(window, 'removeEventListener')
 
     try {
       expect(() => session.dispose()).toThrow('pointermove removal failed')
+      expect(removeHostListener.mock.calls.filter(([type]) => type === 'focusout')).toHaveLength(1)
       expect(removeWindowListener.mock.calls.filter(([type]) => type === 'blur')).toHaveLength(1)
     } finally {
+      removeHostListener.mockRestore()
       removeWindowListener.mockRestore()
     }
   })
@@ -279,7 +283,8 @@ describe('SceneInteractionSession', () => {
     }
 
     expect(removeContainerListener.mock.calls.filter(([type]) => type === 'pointerdown')).toHaveLength(1)
-    expect(removeWindowListener.mock.calls.filter(([type]) => type === 'pointermove')).toHaveLength(1)
+    expect(removeContainerListener.mock.calls.filter(([type]) => type === 'pointermove')).toHaveLength(1)
+    expect(removeWindowListener.mock.calls.filter(([type]) => type === 'pointermove')).toHaveLength(0)
     expect(container.children).toHaveLength(0)
     removeContainerListener.mockRestore()
     removeWindowListener.mockRestore()

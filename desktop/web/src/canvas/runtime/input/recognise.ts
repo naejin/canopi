@@ -312,8 +312,9 @@ function wheel(step: Step, input: RawOf<'wheel'>): void {
 }
 
 /**
- * A move with no live session (buttons or not) is a hover wherever the pointer is: off the map the tool's hover still
- * runs and the host clears its own. Over the canvas's own things (owned chrome such as the attribution, the text entry,
+ * A move with no live session (buttons or not) is a hover wherever the source heard it: over the map, or off it while the
+ * source still follows a pressed pointer whose session ended (an Esc mid-press), where the host clears its own hover and
+ * the tool's still runs. Over the canvas's own things (owned chrome such as the attribution, the text entry,
  * a handle) it ends the hover and its tooltip (spec §2.2 "Hover", U6); the Unlock affordance emits nothing, so the hover
  * it belongs to stays until it is clicked.
  */
