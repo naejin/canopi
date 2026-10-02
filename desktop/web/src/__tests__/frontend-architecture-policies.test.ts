@@ -1330,6 +1330,11 @@ const SOURCE_TOMBSTONE_POLICIES = [
       // Canvas v2 (ADR 0016), end of 0A: MapFrame and its viewport diagnostics
       // gave way to the view transform's frame (INV-XF-04).
       'src/canvas/maplibre-camera.ts',
+      // Canvas v2 0B-5 and 0D2 (ADR 0016, 0019): the view agreement probe went
+      // (camera-contract.test.ts is the projection guard), and the layer stopped
+      // deriving its transform from MapLibre's camera.
+      'src/maplibre/view-agreement.ts',
+      'src/maplibre/scene-camera-transform.ts',
     ],
     symbols: [
       {
