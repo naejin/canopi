@@ -322,6 +322,23 @@ describe('Desktop keys', () => {
     expect(ungroupSelected).toHaveBeenCalledTimes(1)
     expect(placeSearchFocusRequest.value).toBe(focusRequest + 1)
   })
+  it('leaves a disabled canvas edit\'s key to the browser, as the Web sink does', () => {
+    const copy = vi.fn()
+    mountCanvasCommandSurface({ sceneEdits: { copy } })
+    const press = () => {
+      const event = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true, cancelable: true })
+      window.dispatchEvent(event)
+      return event
+    }
+
+    // No map selection: Copy is disabled, so the page's own copy (a panel's selected text) runs.
+    expect(press().defaultPrevented).toBe(false)
+    expect(copy).not.toHaveBeenCalled()
+    selectedObjectIds.value = new Set(['plant-1'])
+    expect(press().defaultPrevented).toBe(true)
+    expect(copy).toHaveBeenCalledOnce()
+  })
+
   it('opens Rotate… with Ctrl Alt R only for a selection that can turn', () => {
     const rotateSelected = vi.fn()
     const queries = createTestCanvasQuerySurface()

@@ -29,7 +29,8 @@ const canvasDefinitionById = new Map<CanvasCommandId, CanvasCommandDefinition>(
 
 /**
  * Where a Desktop keymap row runs. A shell shortcut takes its key even when its command is disabled; a canvas command
- * needs a canvas, except a tool key, which before the canvas mounts primes the tool it starts with. The palette's own
+ * needs a canvas, except a tool key, which before the canvas mounts primes the tool it starts with, and a disabled one
+ * (Copy with nothing selected on the map) leaves its key to the page, as the Web sink does. The palette's own
  * key is the one row that runs in a modal: it closes the open palette and opens none over another dialog.
  */
 export function createDesktopCommandSink(isModalOpen: () => boolean): CommandSink {
@@ -45,8 +46,8 @@ export function createDesktopCommandSink(isModalOpen: () => boolean): CommandSin
       const canvas = canvasDefinitionById.get(command as CanvasCommandId)
       if (canvas && canvas.kind !== 'tool' && !getCurrentCanvasCommandSurface()) return false
       // The Desktop keymap names only Desktop commands: its own catalogue's and the canvas rows'.
-      runCatalogCommand(command as AppCommandId, 'shortcut')
-      return true
+      const ran = runCatalogCommand(command as AppCommandId, 'shortcut')
+      return canvas ? ran : true
     },
   }
 }
