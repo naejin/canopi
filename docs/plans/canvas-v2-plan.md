@@ -71,7 +71,7 @@ Everything else a user could notice (the GeoLibre selection-drag guard, the Wind
 ## 2. Order
 
 ```
-28w8 fix ─▶ seams + 9x95 ─▶ 0A ∥ 0D1 ─▶ 0B ─▶ 0B-5 ─▶ hand-off ─▶ 0D2 ─▶ 0E ─▶ F ─▶ 1 ─▶ 2 ─▶ 3 ─▶ release close
+28w8 fix ─▶ seams + 9x95 ─▶ 0A ∥ 0D1 ─▶ 0B ─▶ 0B-5 ─▶ hand-off ─▶ 0D2 ─▶ 0E ─▶ F ─▶ 1 ─▶ 2 ─▶ 3 ─▶ 2.0 release close
                                                                                  R: between F, 1, 2 and 3 (after 0E)
 ```
 
@@ -414,18 +414,22 @@ Renderer merges first, then Components-0D2 (the lens outline reads Renderer's `s
 - **Inventory.** Rows with phase `R` (`INV-REN` per-frame costs, INV-ENT-14's cache line).
 - **Beads.** Closes canopi-f47t.8 and canopi-p32r; closes canopi-wx8w for its camera-frame costs and names the follow-up canopi-f47t.9 ("Select all and delete all are slow on large Designs").
 
-### Release close (main agent, after phases 3 and R)
+### 2.0 bug fixes (outside the canvas phases; after F)
 
-- **Goal.** The per-phase release tasks, run once (U1), and the last cuts that wait for the end state.
+2.0 ships the canvas phases plus the open bugs of the other 2.0 work, and no other feature (user, 2026-10-02): every open feature or task bead outside canopi-f47t waits for after 2.0. In 2.0, each fixed test first in its own commit, scheduled between canvas phases from F on (they share no canvas files): canopi-h90p.67 (the lens's per-shape opacity; its bracket-key part is F's), canopi-h90p.68 (stamps from earlier previews fail silently), canopi-0p2n (a failed basemap fetch shows blank paper with no notice; whether a lost WebGL context offers Retry), canopi-e3ym (the native policy visitor misses method-form thread spawns), canopi-dfc0 (a regression since GDAL left: rasters above 25 M cells no longer import; streaming conversion), canopi-pj62 (the WebKitGTK segfault on quit with NVIDIA: fixed if the cause is Canopi's, otherwise recorded as a known issue). canopi-wx8w and canopi-p32r are phase R's.
+
+### 2.0 release close (main agent, after phases 3 and R and the 2.0 bug fixes)
+
+- **Goal.** The release tasks for all of 2.0 (the canvas phases, the 2.0 bug fixes and what the branch already holds since 1.x), run once (U1), and the last cuts that wait for the end state.
 - **Steps.**
   1. **Bindings.** The `Bindings` fields that end with one value are deleted and their end values hard-coded in the recogniser (audit section 3, "phase-3 close"); P11 tombstones any constant name left (`LEGACY_BINDINGS` went in F).
   2. **The 2.0 Web scenario.** `desktop/web/e2e/canvas/v2.spec.ts` automates the Web-check steps of F, 1, 2 and 3 in Chromium and WebKit, phone-sized and CDP-touch checks included, on the base fixture; the CI job is green on the pushed commit. Recorded limits: multi-touch is Chromium-only; WebKit trackpad `gesture*` events are covered by fixtures E9 and E10; Mac Ctrl+click is checked by hand on a Mac.
   3. **Docs against the code, once.** The guides, patterns, boards and review checklist the planning change wrote (section 6) are checked against what shipped and corrected, the "today" module names replaced (0E's list included), and the tests each rule cites added; `docs/guides/ui-glossary.md` (compass, Reset north, turn the view, Pointing device, Map orientation); `docs/guides/editions.md` (phones) and the StoryPhone board (Fit in the zoom column); budgets as in section 6.
   4. **Gallery.** The entries each phase bead listed (F, 1, 2, 3).
-  5. **Release notes.** `docs/release-notes/v2.0.0.md` once, for users, from the lists the phase beads hold (section 6).
+  5. **Release notes.** `docs/release-notes/v2.0.0.md` once, for users, covering all of 2.0: the canvas phases' lists (section 6), the 2.0 bug fixes, and what the branch shipped since 1.x.
   6. **Deletions.** This plan, the spec, the inventory and the implementation prompt are deleted; canopi-f47t.11 already holds spec §6's recipe (R3).
-- **Exit.** The prompt's definition of done; every child bead of canopi-f47t closed or re-homed; gates green; the review recorded.
-- **Beads.** canopi-f47t (the epic).
+- **Exit.** The prompt's definition of done; every child bead of canopi-f47t and every 2.0 bug-fix bead closed or re-homed; gates green; the review recorded.
+- **Beads.** canopi-f47t (the epic) and the 2.0 bug-fix beads above.
 
 ### Later: pitch (not scheduled)
 
