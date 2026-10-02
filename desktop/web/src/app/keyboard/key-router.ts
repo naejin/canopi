@@ -19,14 +19,13 @@ import type { ShellCommandId } from '../shell-commands'
 import type { InputPlatform } from '../../canvas/runtime/input/platform'
 import type { CanvasKeyboardPort, CanvasKeyState, CanvasKeyVerdict } from '../../canvas/runtime/runtime'
 import { registerCanvasEscapeLayers, runEscape } from './escape-chain'
+import type { FocusOwner } from './focus-owner'
 import { chordMatches, chordOf, digitChordOf, type KeyboardEventLike, type KeyChord } from './key-chord'
 import { pushedKeyScopes, type CommandSink, type KeymapRow, type KeyScope } from './keymap'
 import { classifyKeyTarget, ownsArrows, type KeyTarget } from './target-class'
 
-/** F6 and Shift+F6 move between the workspace regions (app/shell/focus-regions.ts). */
-interface KeyRouterFocus {
-  cycleRegion(step: 1 | -1): boolean
-}
+/** F6 and Shift+F6 move between the workspace regions through the focus owner. */
+type KeyRouterFocus = Pick<FocusOwner, 'cycleRegion'>
 
 export interface KeyRouterDeps {
   readonly target: Pick<Window, 'addEventListener' | 'removeEventListener'>   // window in production
@@ -34,7 +33,7 @@ export interface KeyRouterDeps {
   readonly commands: CommandSink
   readonly canvas: () => CanvasKeyboardPort | null // canvas/session.ts currentCanvasKeyboardPort
   readonly singleKeys: ReadonlySignal<boolean>     // Settings › Keyboard
-  readonly focus: KeyRouterFocus
+  readonly focus: KeyRouterFocus                  // app/keyboard/focus-owner.ts focusOwner
   readonly isModalOpen: () => boolean              // modalLayerOpen, saveProblem, savedViewDialogOpen
   readonly platform: InputPlatform                 // the Mac chord rule; detectPlatform runs in the platforms
   readonly document: Pick<Document, 'addEventListener' | 'removeEventListener'>   // visibilitychange

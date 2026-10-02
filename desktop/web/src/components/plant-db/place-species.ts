@@ -1,4 +1,4 @@
-import { focusMapSurface } from '../../app/shell/focus-regions'
+import { focusOwner } from '../../app/keyboard/focus-owner'
 import {
   beginPlantStampFromSpecies,
   type PlantStampSourceInput,
@@ -15,5 +15,5 @@ export function placeSpeciesOnMap(
   commandSurface: Pick<CanvasToolCommandSurface, 'setTool'> | null | undefined,
 ): void {
   beginPlantStampFromSpecies(source, commandSurface)
-  if (commandSurface) focusMapSurface()
+  if (commandSurface) focusOwner.focusMap('tool-armed')
 }

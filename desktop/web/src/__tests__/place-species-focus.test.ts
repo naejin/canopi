@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { focusMapSurface, registerFocusRegion } from '../app/shell/focus-regions'
+import { focusOwner } from '../app/keyboard/focus-owner'
 import { placeSpeciesOnMap } from '../components/plant-db/place-species'
 import { clearPlantStampSource, readPlantStampSource } from '../canvas/plant-stamp-source'
 
@@ -19,7 +19,7 @@ describe('Place moves focus to the map so Esc reaches the armed tool', () => {
     mapControl = map.querySelector('button')!
     placeButton = document.createElement('button')
     document.body.append(map, placeButton)
-    release = registerFocusRegion('map', map)
+    release = focusOwner.registerRegion('map', map)
   })
 
   afterEach(() => {
@@ -31,7 +31,7 @@ describe('Place moves focus to the map so Esc reaches the armed tool', () => {
   it('focuses the map surface itself, not the control last used inside it', () => {
     mapControl.focus()
     placeButton.focus()
-    expect(focusMapSurface()).toBe(true)
+    focusOwner.focusMap('tool-armed')
     expect(document.activeElement).toBe(map)
   })
 

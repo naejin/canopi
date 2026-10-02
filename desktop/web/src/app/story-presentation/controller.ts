@@ -9,7 +9,7 @@ import { mapLayers, type MapLayersState } from '../map-layers/state'
 import { currentPlantDisplay } from '../plant-display/state'
 import { goToSavedView } from '../saved-views/current-view'
 import { isBasemapStyle } from '../saved-views/snapshot'
-import { focusRegion } from '../shell/focus-regions'
+import { focusOwner } from '../keyboard/focus-owner'
 import {
   setStoryPresentationHidesEditingAids,
   setStoryPresentationOverrides,
@@ -180,7 +180,7 @@ function scheduleReturnFocus(sameDesign: boolean): void {
       button.focus({ preventScroll: true })
       if (document.activeElement === button) return
     }
-    focusRegion('map')
+    focusOwner.focusRegion('map', 'story-exit')
   }, 0)
 }
 

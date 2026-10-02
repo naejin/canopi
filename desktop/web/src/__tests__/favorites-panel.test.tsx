@@ -368,8 +368,8 @@ describe('FavoritesPanel', () => {
     map.tabIndex = 0
     document.body.append(map)
     // The panel is imported after vi.resetModules, so register through the same module copy.
-    const { registerFocusRegion } = await import('../app/shell/focus-regions')
-    const releaseMap = registerFocusRegion('map', map)
+    const { focusOwner } = await import('../app/keyboard/focus-owner')
+    const releaseMap = focusOwner.registerRegion('map', map)
     placeButton!.focus()
 
     await act(async () => {

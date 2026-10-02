@@ -1,9 +1,14 @@
+// The focus owner (spec §1.6, ADR 0020): the F6 regions, the map's focus and the focus a user-opened component takes.
+import { h, render } from 'preact'
+import { useRef } from 'preact/hooks'
+import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { registerFocusRegion } from '../app/shell/focus-regions'
-import { installDesktopKeys } from './support/desktop-key-router'
-import { holdModalLayer } from '../app/shell/modal-layer'
+import { installDesktopKeys } from '../../__tests__/support/desktop-key-router'
+import { useFocusRegion } from '../../components/shared/useFocusRegion'
+import { holdModalLayer } from '../shell/modal-layer'
+import { focusOwner } from './focus-owner'
 
-describe('F6 focus regions', () => {
+describe('F6 regions through the focus owner', () => {
   let releases: (() => void)[]
   let keys: ReturnType<typeof installDesktopKeys>
   let titleBar: HTMLElement
@@ -39,12 +44,12 @@ describe('F6 focus regions', () => {
     dockField = dock.querySelector('input')!
     releases = [
       // Registered out of order: the cycle follows title bar, tools, map, panel.
-      registerFocusRegion('dock', dock),
-      registerFocusRegion('map', map),
-      registerFocusRegion('title-bar', titleBar),
-      registerFocusRegion('tool-rail', rail),
+      focusOwner.registerRegion('dock', dock),
+      focusOwner.registerRegion('map', map),
+      focusOwner.registerRegion('title-bar', titleBar),
+      focusOwner.registerRegion('tool-rail', rail),
     ]
-    // F6 runs in the key router's capture listener (app/keyboard/key-router.ts).
+    // F6 runs in the key router's capture listener (app/keyboard/key-router.ts), which calls the owner.
     keys = installDesktopKeys()
   })
 
@@ -54,7 +59,7 @@ describe('F6 focus regions', () => {
     document.body.innerHTML = ''
   })
 
-  it('cycles the title bar, tool rail, map and open panel with F6, and back with Shift F6', () => {
+  it('F6 cycles title bar, tools, map and dock', () => {
     map.focus()
     const event = press()
     expect(event.defaultPrevented).toBe(true)
@@ -97,6 +102,7 @@ describe('F6 focus regions', () => {
     map.focus()
     const release = holdModalLayer()
     try {
+      expect(focusOwner.cycleRegion(1)).toBe(false)
       expect(press().defaultPrevented).toBe(false)
       expect(document.activeElement).toBe(map)
     } finally {
@@ -104,5 +110,27 @@ describe('F6 focus regions', () => {
     }
     map.dispatchEvent(new KeyboardEvent('keydown', { key: 'F6', ctrlKey: true, bubbles: true }))
     expect(document.activeElement).toBe(map)
+  })
+
+  it('registerRegion replaces registerFocusRegion for its five users', async () => {
+    // The title bar, tool rail, map, dock and phone sheet register through useFocusRegion, which registers with the owner.
+    for (const release of releases.splice(0)) release()
+    const host = document.createElement('div')
+    document.body.append(host)
+    function Rail() {
+      const ref = useRef<HTMLDivElement>(null)
+      useFocusRegion(ref, 'tool-rail')
+      return h('div', { ref }, h('button', { type: 'button', 'data-rail-tool': '' }, 'Select'))
+    }
+    await act(async () => { render(h(Rail, null), host) })
+    const tool = host.querySelector<HTMLButtonElement>('[data-rail-tool]')!
+    document.body.focus()
+    focusOwner.focusRegion('tool-rail', 'region-cycle')
+    expect(document.activeElement).toBe(tool)
+
+    await act(async () => { render(null, host) })
+    document.body.focus()
+    focusOwner.focusRegion('tool-rail', 'region-cycle')
+    expect(document.activeElement).toBe(document.body)
   })
 })

@@ -51,7 +51,7 @@ import { ControlIcon } from '../shared/ControlIcon'
 import row from '../shared/species-row.module.css'
 import styles from './FavoritesPanel.module.css'
 import { placeSpeciesOnMap } from '../plant-db/place-species'
-import { focusMapSurface } from '../../app/shell/focus-regions'
+import { focusOwner } from '../../app/keyboard/focus-owner'
 
 const SAVED_STAMP_PREVIEW_DELAY_MS = 120
 const SAVED_STAMP_PREVIEW_GAP = 8
@@ -921,7 +921,7 @@ function SavedObjectStampRow({
           <>
             <SavedStampIconButton
               label={t('savedObjectStamps.placeNamed', { name: stamp.name })}
-              onClick={() => { if (savedObjectStampWorkbench.placeStamp(stamp)) focusMapSurface() }}
+              onClick={() => { if (savedObjectStampWorkbench.placeStamp(stamp)) focusOwner.focusMap('tool-armed') }}
               onFocus={(anchor) => onPreviewRequest(stamp, anchor)}
               onBlur={onPreviewClear}
             >

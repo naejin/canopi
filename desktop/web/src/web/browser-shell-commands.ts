@@ -20,7 +20,7 @@ import { CANVAS_KEYMAP_ROWS, shellKeymapRows, type CommandSink } from '../app/ke
 import { saveProblem } from '../app/document-session/save-problem'
 import { savedViewDialogOpen } from '../app/saved-views/dialogs'
 import { singleKeyShortcuts } from '../app/settings/state'
-import { cycleFocusRegion } from '../app/shell/focus-regions'
+import { focusOwner } from '../app/keyboard/focus-owner'
 import { modalLayerOpen } from '../app/shell/modal-layer'
 import { dispatchWorkspaceCanvasIntent } from '../app/workspace-commands/canvas-actions'
 import { currentCanvasKeyboardPort } from '../canvas/session'
@@ -277,7 +277,7 @@ export function installWebKeyRouter(
     commands,
     canvas: currentCanvasKeyboardPort,
     singleKeys: singleKeyShortcuts,
-    focus: { cycleRegion: cycleFocusRegion },
+    focus: focusOwner,
     isModalOpen: () => saveProblem.peek() !== null || savedViewDialogOpen.peek() || modalLayerOpen.peek(),
     platform,
     document,

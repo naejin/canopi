@@ -28,7 +28,7 @@ import { createDefaultScenePersistedState } from '../canvas/runtime/scene/defaul
 import type { ScenePlantEntity } from '../canvas/runtime/scene'
 import { locale } from '../app/settings/state'
 import { gridVisible, rulersVisible } from '../app/canvas-settings/signals'
-import { registerFocusRegion } from '../app/shell/focus-regions'
+import { focusOwner } from '../app/keyboard/focus-owner'
 import { currentCanvasQuerySurface } from '../canvas/session'
 import type { CanopiFile, SavedView, Story } from '../types/design'
 import { createTestCanvasCommandSurface, createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
@@ -274,7 +274,7 @@ describe('presenting a story', () => {
     const map = document.createElement('div')
     map.tabIndex = 0
     document.body.append(map)
-    const release = registerFocusRegion('map', map)
+    const release = focusOwner.registerRegion('map', map)
     try {
       presentStory('tour', 0, { reducedMotion: true })
       leaveStoryPresentation()
