@@ -2,7 +2,7 @@
 
 Trimmed 2026-10-02 at the phase-0 close; the full earlier text is at commit 76bd08a659d916069a340fc06e670e54e32f54c7.
 
-Status: agreed (2026-09-29); scope amended 2026-10-01 (one release; section 1, "Decisions of 2026-10-01"); phase 0 done (2026-10-02); phase F amended after its design check (2026-10-02; section 1, "Decisions of 2026-10-02"); phase F next
+Status: agreed (2026-09-29); scope amended 2026-10-01 (one release; section 1, "Decisions of 2026-10-01"); phase 0 done (2026-10-02); phase F done (2026-10-02; its decisions in section 1, "Decisions of 2026-10-02"); phase 1 next
 
 Start here: [`canvas-v2-implementation-prompt.md`](canvas-v2-implementation-prompt.md) (definition of done, operational notes, first steps).
 
@@ -71,7 +71,7 @@ Paths are relative to `desktop/web/src/` unless they start with `docs/`, `.inter
 ## 2. Order
 
 ```
-phase 0 (done) ─▶ F ─▶ 1 ─▶ 2 ─▶ 3 ─▶ 2.0 release close
+phase 0 (done) ─▶ F (done) ─▶ 1 ─▶ 2 ─▶ 3 ─▶ 2.0 release close
                   R: between F, 1, 2 and 3
                   2.0 bug fixes: between canvas phases, from F on
 ```
