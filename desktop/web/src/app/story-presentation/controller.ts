@@ -180,7 +180,7 @@ function scheduleReturnFocus(sameDesign: boolean): void {
       button.focus({ preventScroll: true })
       if (document.activeElement === button) return
     }
-    focusOwner.focusRegion('map', 'story-exit')
+    focusOwner.focusMap('story-exit')
   }, 0)
 }
 

@@ -1,11 +1,23 @@
 // The focus owner (spec §1.6, ADR 0020): the F6 regions, the map's focus and the focus a user-opened component takes.
-import { h, render } from 'preact'
+import { createRef, h, render } from 'preact'
 import { useRef } from 'preact/hooks'
 import { act } from 'preact/test-utils'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createTestCanvasQuerySurface } from '../../__tests__/support/canvas-query-surface'
+import { createTestCanvasRuntimeSurfaces } from '../../__tests__/support/canvas-runtime-surfaces'
+import { replaceCurrentDesignState } from '../../__tests__/support/design-session-state'
 import { installDesktopKeys } from '../../__tests__/support/desktop-key-router'
+import { TEST_GEO_ORIGIN } from '../../__tests__/support/geo-design'
+import { plantColorMenuOpen } from '../../canvas/plant-color-menu-state'
+import { setCurrentCanvasSession } from '../../canvas/session'
+import { createSessionPlane } from '../../canvas/session-plane'
+import { selectedObjectIds } from '../../canvas/session-state'
+import { PlantAppearancePopovers } from '../../components/canvas/PlantAppearancePopovers'
 import { useFocusRegion } from '../../components/shared/useFocusRegion'
+import type { CanopiFile } from '../../types/design'
+import { createDesignSessionStoreTestFixture, designSessionStore } from '../document-session/store'
 import { holdModalLayer } from '../shell/modal-layer'
+import { leaveStoryPresentation, presentStory } from '../story-presentation'
 import { focusOwner } from './focus-owner'
 
 describe('F6 regions through the focus owner', () => {
@@ -155,3 +167,94 @@ describe('F6 regions through the focus owner', () => {
     expect(document.activeElement).toBe(document.body)
   })
 })
+
+describe('focus moves go through the focus owner', () => {
+  let map: HTMLDivElement
+  let elsewhere: HTMLButtonElement
+  let release: () => void
+
+  beforeEach(() => {
+    map = document.createElement('div')
+    map.tabIndex = 0
+    elsewhere = document.createElement('button')
+    document.body.append(map, elsewhere)
+    release = focusOwner.registerRegion('map', map)
+  })
+
+  afterEach(() => {
+    release()
+    vi.restoreAllMocks()
+    setCurrentCanvasSession(null)
+    document.body.innerHTML = ''
+  })
+
+  it('leaving a story returns focus to the map through the owner', async () => {
+    replaceCurrentDesignState(storyDesign(), null, 'Stories')
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: createTestCanvasQuerySurface({ sessionPlane: createSessionPlane(TEST_GEO_ORIGIN) }),
+    }))
+    const focusMap = vi.spyOn(focusOwner, 'focusMap')
+    try {
+      expect(presentStory('tour', 0, { reducedMotion: true })).toBe(true)
+      elsewhere.focus()
+      leaveStoryPresentation()
+      await vi.waitFor(() => expect(focusMap).toHaveBeenCalledWith('story-exit'))
+      expect(document.activeElement).toBe(map)
+    } finally {
+      leaveStoryPresentation()
+      createDesignSessionStoreTestFixture(designSessionStore).reset()
+    }
+  })
+
+  it('a plant popover opened with no anchor gives focus back to the map through the owner', async () => {
+    vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+    const container = document.createElement('div')
+    document.body.append(container)
+    selectedObjectIds.value = new Set(['plant-1'])
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: {
+        ...createTestCanvasQuerySurface(),
+        getSelectedPlantColorContext: () => ({
+          plantIds: ['plant-1'],
+          singleSpeciesCanonicalName: 'Malus domestica',
+          singleSpeciesCommonName: 'Apple',
+          sharedCurrentColor: null,
+          suggestedColor: null,
+          singleSpeciesDefaultColor: null,
+        }),
+      },
+    }))
+    const canvasRef = createRef<HTMLDivElement>()
+    canvasRef.current = map
+    const focusMap = vi.spyOn(focusOwner, 'focusMap')
+    try {
+      plantColorMenuOpen.value = true
+      await act(async () => { render(h(PlantAppearancePopovers, { canvasRef }), container) })
+      const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
+      await act(async () => {
+        dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+      })
+      expect(plantColorMenuOpen.value).toBe(false)
+      expect(focusMap).toHaveBeenCalledWith('menu-closed')
+      expect(document.activeElement).toBe(map)
+    } finally {
+      plantColorMenuOpen.value = false
+      selectedObjectIds.value = new Set()
+      await act(async () => { render(null, container) })
+      vi.unstubAllGlobals()
+    }
+  })
+})
+
+/** A Design with one story of one step, enough to present and leave it. */
+function storyDesign(): CanopiFile {
+  return {
+    version: 9, name: 'Stories', description: null, plant_species_colors: {},
+    layers: [], plants: [], zones: [], annotations: [], consortiums: [], groups: [],
+    timeline: [], budget: [], budget_currency: 'EUR',
+    views: [],
+    stories: [{ id: 'tour', name: 'Client visit', steps: [{ id: 's1', view_id: 'missing', title: 'The site', text: [], images: [] }] }],
+    created_at: '', updated_at: '',
+    extra: {},
+  }
+}
