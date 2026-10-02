@@ -437,6 +437,35 @@ describe('draft layer', () => {
     expect(pathSteps(fills[0]!).find((step) => step.action === 'circle')?.data.slice(0, 3)).toEqual([0, 0, 2])
   })
 
+  it('a chip whose font has not loaded asks the browser to load it, once per font', () => {
+    // Canvas text draws a font that is still loading in a fallback and is never redrawn by itself (the shared layer
+    // redraws the draft on the document's loadingdone), so the layer asks for the chip's own font.
+    const load = vi.fn(async () => [])
+    const fonts = { check: vi.fn(() => false), load }
+    Object.defineProperty(document, 'fonts', { configurable: true, value: fonts })
+    try {
+      const layer = mountLayer()
+      layer.place({ x: 0, y: 0 }, 1)
+      const chip = (text: string, tone: 'measure' | 'measure-quiet') => ({ kind: 'label', anchor: { x: 0, y: 0 }, offsetPx: { x: 0, y: 0 }, text, tone }) as const
+      layer.setDraft({ shapes: [chip('112 m²', 'measure'), chip('14 m', 'measure-quiet'), chip('8 m', 'measure-quiet')] })
+      layer.setDraft({ shapes: [chip('113 m²', 'measure')] })
+
+      const size = getDraftLabelVisual('measure').fontSizePx
+      expect(load.mock.calls).toEqual([
+        [`600 ${size}px ${CANVAS_CHROME_MONO_FONT_FAMILY}`],
+        [`400 ${size}px ${CANVAS_CHROME_MONO_FONT_FAMILY}`],
+      ])
+
+      fonts.check.mockReturnValue(true)
+      const loaded = mountLayer()
+      loaded.place({ x: 0, y: 0 }, 1)
+      loaded.setDraft({ shapes: [chip('4 m', 'measure')] })
+      expect(load).toHaveBeenCalledTimes(2)
+    } finally {
+      Reflect.deleteProperty(document, 'fonts')
+    }
+  })
+
   it('each label tone draws its chip style', () => {
     const cases = [
       { tone: 'measure', font: CANVAS_CHROME_MONO_FONT_FAMILY, weight: '600', lineHeight: 15, text: 'chip-text', background: 'chip-surface-muted', placement: 'centre', padding: { x: 5, y: 2 } },

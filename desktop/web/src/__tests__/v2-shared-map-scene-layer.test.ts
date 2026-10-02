@@ -306,6 +306,40 @@ describe('createSharedMapSceneLayer', () => {
     await adapter.dispose({ mapWillBeRemoved: true })
   })
 
+  it('a font that finishes loading redraws the live draft, so its chips leave the fallback font', async () => {
+    const fonts = new EventTarget()
+    Object.defineProperty(document, 'fonts', { configurable: true, value: fonts })
+    try {
+      const canvas = createCanvas()
+      const map = createMap(canvas)
+      const presentation = { dispose: vi.fn(), resize: vi.fn(), renderScene: vi.fn(), setViewport: vi.fn(), setDraft: vi.fn(), setSelectionPreview: vi.fn() }
+      const adapter = createSharedMapSceneLayer({
+        id: 'v2-scene',
+        readOrigin: () => ({ lat: 0, lon: 0 }),
+        createRenderer: () => createRenderer(),
+        createStage: () => ({ destroy: vi.fn() }) as never,
+        createPresentation: () => presentation,
+      })
+      await adapter.initialize(map, {} as WebGL2RenderingContext)
+      fonts.dispatchEvent(new Event('loadingdone'))
+      expect(presentation.setDraft, 'no draft, nothing to redraw').not.toHaveBeenCalled()
+
+      const draft: DraftPresentation = { shapes: [{ kind: 'label', anchor: { x: 0, y: 0 }, offsetPx: { x: 0, y: 0 }, text: '112 m²', tone: 'measure' }] }
+      adapter.setDraft(draft)
+      vi.mocked(map.triggerRepaint).mockClear()
+      fonts.dispatchEvent(new Event('loadingdone'))
+      expect(presentation.setDraft).toHaveBeenCalledTimes(2)
+      expect(presentation.setDraft).toHaveBeenLastCalledWith(draft)
+      expect(map.triggerRepaint).toHaveBeenCalledOnce()
+
+      await adapter.dispose({ mapWillBeRemoved: true })
+      fonts.dispatchEvent(new Event('loadingdone'))
+      expect(presentation.setDraft, 'a disposed layer no longer listens').toHaveBeenCalledTimes(2)
+    } finally {
+      Reflect.deleteProperty(document, 'fonts')
+    }
+  })
+
   it('a tool draft set on the mounted renderer reaches the Pixi draft layer', async () => {
     const composition = createSharedMapSceneRendererComposition()
     const presentation = {
