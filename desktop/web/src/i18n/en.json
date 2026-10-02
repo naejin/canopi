@@ -110,7 +110,10 @@
   },
   "health": {
     "plantDbMissing": "The plant catalog's database file is missing, so plant search and details are unavailable. Your Designs are safe. Reinstall Canopi to restore it.",
-    "plantDbCorrupt": "The plant catalog's database file is damaged, so plant search and details are unavailable. Your Designs are safe. Reinstall Canopi to restore it."
+    "plantDbCorrupt": "The plant catalog's database file is damaged, so plant search and details are unavailable. Your Designs are safe. Reinstall Canopi to restore it.",
+    "localDataMovedAsideTitle": "Earlier data set aside",
+    "localDataMovedAside": "Canopi 2.0 can’t read data saved by earlier versions, so it set that data aside unchanged and started fresh.",
+    "dismiss": "Dismiss"
   },
   "canvas": {
     "inspection": {
@@ -1514,7 +1517,6 @@
     "detailsSafe": "Your work is safe in Canopi while it stays open. Retry, or save it to another place.",
     "saveAs": "Save as…",
     "resolve": "Resolve…",
-    "savedUpgraded": "Saved as Canopi 2 format",
     "conflictAnotherTab": "Changed in another tab"
   },
   "saveProblem": {
@@ -1708,7 +1710,7 @@
     "cantRead": "Can’t read this file",
     "inFolder": "In {{folder}}",
     "cantReadMissing": "Can’t find this file: it was moved or deleted",
-    "cantReadOlderVersion": "Made with an older version of Canopi; it can’t be opened",
+    "cantReadOlderVersion": "Made with Canopi before 2.0; Canopi 2.0 and later can’t open it",
     "cantReadNewerVersion": "Made with a newer version of Canopi; update Canopi to open it",
     "cantReadDamaged": "Can’t read this file: it is damaged"
   },

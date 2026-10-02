@@ -700,5 +700,23 @@
   "src/__tests__/v2-shared-camera-transform.test.ts > deriveSharedMapSceneViewport > bounds the discarded affine residual over the qualified local extent": {
     "file": "src/canvas/runtime/view/camera-contract.test.ts",
     "name": "camera contract > the planar and geographic builders agree at bearing 0"
+  },
+  "src/__tests__/continuous-save-ui.test.tsx > SaveStatusLabel > says once that a Design from an older format was saved in the current one": {
+    "retired": "2.0 breaks stored data (ADR 0021)"
+  },
+  "src/__tests__/file-format-round-trip.test.ts > file format round-trip > refuses a Design older than the migration ladder and upgrades one inside it": {
+    "file": "src/__tests__/file-format-round-trip.test.ts",
+    "name": "file format round-trip > refuses a Design written before Canopi 2.0 instead of upgrading it"
+  },
+  "src/__tests__/saved-object-stamp-source.test.ts > Saved Object Stamp source > keeps a zone's display name apart from its id, and upgrades version 1 stamps in memory": {
+    "file": "src/__tests__/saved-object-stamp-source.test.ts",
+    "name": "Saved Object Stamp source > keeps a zone's display name apart from its id, and reads only the current payload version"
+  },
+  "src/__tests__/web-design-session.test.ts > browser Design Session lifecycle > rejects 'a Design older than the migration lad…' before replacing the active session": {
+    "file": "src/__tests__/web-design-session.test.ts",
+    "name": "browser Design Session lifecycle > rejects 'a Design from before Canopi 2.0 (v4)' before replacing the active session"
+  },
+  "src/__tests__/web-design-session.test.ts > browser Design Session lifecycle > opens an older-format Design through the migration ladder into a current-format Draft": {
+    "retired": "2.0 breaks stored data (ADR 0021)"
   }
 }

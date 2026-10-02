@@ -18,3 +18,19 @@
 .banner .notice[data-notice-tone="error"] {
   background: linear-gradient(var(--color-danger-bg), var(--color-danger-bg)), var(--color-surface);
 }
+
+/* The info tint is opaque already; the Dismiss button matches the other notice buttons. */
+.dismiss {
+  min-height: var(--control-size-sm);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.dismiss:hover {
+  background: var(--color-control-hover);
+}

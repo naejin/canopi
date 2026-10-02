@@ -66,8 +66,6 @@ export interface DocumentTransitionLoadResult {
   fingerprint?: string | null;
   /** The home does not hold this content yet. */
   writePending?: boolean;
-  /** The file's older format version, upgraded in memory (ADR 0013). */
-  migratedFrom?: number | null;
 }
 
 interface DocumentLoadTransitionRequest {
@@ -337,7 +335,7 @@ export class DesignSessionStateMachine {
     }
   }
 
-  /** Open the Design at `path`; an older supported format arrives upgraded in memory. */
+  /** Open the Design at `path`; a format from before Canopi 2.0 is refused (ADR 0021). */
   loadDesignFromPath(path: string): Promise<DocumentTransitionLoadResult> {
     return this.deps.loadDesign(path).then((design) => loadResultOf(design, path));
   }
@@ -628,7 +626,6 @@ export class DesignSessionStateMachine {
             draftId: loaded.path ? null : loaded.draftId ?? null,
             fingerprint: loaded.path ? loaded.fingerprint ?? null : null,
             writePending: loaded.writePending ?? false,
-            migratedFrom: loaded.migratedFrom ?? null,
           };
           replacementInput = {
             file: loaded.file,
@@ -1010,7 +1007,6 @@ export function loadResultOf(design: LoadedDesign, path: string): DocumentTransi
     path,
     name: design.file.name,
     fingerprint: design.fingerprint,
-    migratedFrom: design.migrated_from ?? null,
   };
 }
 

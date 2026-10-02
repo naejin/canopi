@@ -58,6 +58,4 @@ export interface CanopiFile extends Omit<
 export interface LoadedDesign {
   file: CanopiFile
   fingerprint: string
-  /** The file's format version when it was older and upgraded in memory (ADR 0013). */
-  migrated_from: number | null
 }

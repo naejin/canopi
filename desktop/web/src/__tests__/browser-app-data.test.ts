@@ -99,6 +99,122 @@ describe('browser app data store', () => {
     expect(storage.values.has(V1_KEY)).toBe(true)
   })
 
+  describe('data from before Canopi 2.0', () => {
+    const NOW = '2026-10-02T12:00:00.000Z'
+    const BACKUP = 'canopi:web-app-data:before-2.0-20261002T120000Z'
+
+    function seedEarlierData(storage: MemoryStorage) {
+      const v1 = JSON.stringify({
+        drafts: [{ id: 'draft-1', name: 'Draft', updatedAt: '2026-07-04T12:00:00.000Z' }],
+        draftFiles: { 'draft-1': { ...makeDesign({ name: 'Draft' }), version: 6 } },
+        settings: { locale: 'fr' },
+      })
+      storage.values.set(V1_KEY, v1)
+      // The released Web Edition stored Drafts at version 6 with a root
+      // `extra`; a Canopi 2 preview stored version 8.
+      const released = { ...makeDesign({ name: 'Orchard' }), version: 6, extra: {}, spatial_frame: null }
+      const preview = { ...makeDesign({ name: 'Hedge' }), version: 8 }
+      const damaged = { ...makeDesign({ name: 'Pond' }), plants: 'not-an-array' }
+      const newer = { ...makeDesign({ name: 'Future' }), version: 10 }
+      const current = makeDesign({ name: 'Terrace' })
+      const summaries = {
+        orchard: { id: 'orchard', name: 'Orchard', updatedAt: '2026-07-04T12:00:00.000Z' },
+        hedge: { id: 'hedge', name: 'Hedge', updatedAt: '2026-09-20T12:00:00.000Z' },
+        pond: { id: 'pond', name: 'Pond', updatedAt: '2026-07-04T11:00:00.000Z' },
+        future: { id: 'future', name: 'Future', updatedAt: '2026-10-01T11:00:00.000Z' },
+        terrace: { id: 'terrace', name: 'Terrace', updatedAt: '2026-10-01T12:00:00.000Z' },
+      }
+      storage.values.set(V2_KEYS.drafts, JSON.stringify({
+        version: 2,
+        drafts: Object.values(summaries),
+        draftFiles: { orchard: released, hedge: preview, pond: damaged, future: newer, terrace: current },
+      }))
+      return { v1, released, preview, damaged, newer, current, summaries }
+    }
+
+    it('moves them to dated backup keys, byte for byte, and keeps the rest in place', () => {
+      const storage = memoryStorage()
+      seedV2Partitions(storage)
+      const seeded = seedEarlierData(storage)
+      const store = createBrowserAppDataStore({ storage })
+
+      expect(store.setAsideDataFromBefore2_0(NOW)).toEqual({ movedAside: true, error: null })
+
+      expect(storage.values.has(V1_KEY)).toBe(false)
+      expect(storage.values.get(`${BACKUP}:v1`)).toBe(seeded.v1)
+      expect(JSON.parse(storage.values.get(`${BACKUP}:v2:drafts`)!)).toEqual({
+        version: 2,
+        drafts: [seeded.summaries.orchard, seeded.summaries.hedge],
+        draftFiles: { orchard: seeded.released, hedge: seeded.preview },
+      })
+      const kept = JSON.parse(storage.values.get(V2_KEYS.drafts)!) as { drafts: unknown[]; draftFiles: Record<string, unknown> }
+      expect(kept.drafts).toEqual([seeded.summaries.pond, seeded.summaries.future, seeded.summaries.terrace])
+      expect(kept.draftFiles).toEqual({ pond: seeded.damaged, future: seeded.newer, terrace: seeded.current })
+      expect(store.listDrafts().map((draft) => draft.id)).toEqual(['terrace'])
+      expect(store.loadSettings()).toEqual({ locale: 'fr' })
+    })
+
+    it('moves nothing the second time, so the notice shows once', () => {
+      const storage = memoryStorage()
+      seedEarlierData(storage)
+      const store = createBrowserAppDataStore({ storage })
+      expect(store.setAsideDataFromBefore2_0(NOW)).toEqual({ movedAside: true, error: null })
+      const after = new Map(storage.values)
+      storage.writes.length = 0
+
+      expect(store.setAsideDataFromBefore2_0('2026-10-03T12:00:00.000Z')).toEqual({ movedAside: false, error: null })
+      expect(storage.writes).toEqual([])
+      expect(storage.values).toEqual(after)
+    })
+
+    it('writes nothing in a browser without earlier data', () => {
+      const storage = memoryStorage()
+      seedV2Partitions(storage)
+      const store = createBrowserAppDataStore({ storage })
+
+      expect(store.setAsideDataFromBefore2_0(NOW)).toEqual({ movedAside: false, error: null })
+      expect(storage.writes).toEqual([])
+    })
+
+    it('never replaces an earlier backup with the same date', () => {
+      const storage = memoryStorage()
+      const seeded = seedEarlierData(storage)
+      storage.values.set(`${BACKUP}:v1`, 'an earlier backup')
+      const store = createBrowserAppDataStore({ storage })
+
+      expect(store.setAsideDataFromBefore2_0(NOW)).toEqual({ movedAside: true, error: null })
+      expect(storage.values.get(`${BACKUP}:v1`)).toBe('an earlier backup')
+      expect(storage.values.get(`${BACKUP}-1:v1`)).toBe(seeded.v1)
+    })
+
+    it('leaves the data where it is when its backup cannot be written', () => {
+      const storage = memoryStorage()
+      const seeded = seedEarlierData(storage)
+      const draftsBefore = storage.values.get(V2_KEYS.drafts)
+      storage.failWrites = true
+      const store = createBrowserAppDataStore({ storage })
+
+      expect(store.setAsideDataFromBefore2_0(NOW)).toMatchObject({ movedAside: false, error: expect.any(Error) })
+      expect(storage.values.get(V1_KEY)).toBe(seeded.v1)
+      expect(storage.values.get(V2_KEYS.drafts)).toBe(draftsBefore)
+      expect([...storage.values.keys()].filter((key) => key.includes('before-2.0'))).toEqual([])
+    })
+
+    it('keeps the earlier Drafts in place when their backup lands but the Drafts record cannot be rewritten', () => {
+      const storage = memoryStorage()
+      seedEarlierData(storage)
+      const draftsBefore = storage.values.get(V2_KEYS.drafts)
+      storage.failWriteKeys.add(V2_KEYS.drafts)
+      const store = createBrowserAppDataStore({ storage })
+
+      // The browser data of the released Web Edition still moves and is reported.
+      expect(store.setAsideDataFromBefore2_0(NOW)).toMatchObject({ movedAside: true, error: expect.any(Error) })
+      expect(storage.values.has(V1_KEY)).toBe(false)
+      expect(storage.values.get(V2_KEYS.drafts)).toBe(draftsBefore)
+      expect(storage.values.has(`${BACKUP}:v2:drafts`)).toBe(false)
+    })
+  })
+
   it('saves Settings without reading or serializing the Draft partition', () => {
     const storage = memoryStorage()
     storage.values.set(V2_KEYS.drafts, JSON.stringify({

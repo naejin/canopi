@@ -1,5 +1,5 @@
 import { useRef } from 'preact/hooks'
-import { lidarLibraryStatus, plantDbStatus } from '../../app/health/state'
+import { lidarLibraryStatus, localDataStatus, plantDbStatus } from '../../app/health/state'
 import { t } from '../../i18n'
 import { Notice } from './Notice'
 import { useChromeRow } from './useMapChrome'
@@ -10,7 +10,8 @@ import styles from './DegradedBanner.module.css'
  * One line per subsystem that is unusable for the session: the plant catalog
  * when its database is missing or damaged, the Data library when it is refused
  * or could not be opened. A recovered library is not degraded and is explained
- * in the Data library itself.
+ * in the Data library itself. On the start that moved local data from before
+ * Canopi 2.0 aside (ADR 0021), one dismissible line says so.
  */
 export function DegradedBanner() {
   const messages: string[] = []
@@ -20,13 +21,17 @@ export function DegradedBanner() {
   const library = lidarLibraryStatus.value.kind
   if (library === 'refused_newer') messages.push(t('canvas.lidar.library.refusedNewer'))
   if (library === 'unavailable') messages.push(t('canvas.lidar.library.unavailable'))
-  if (messages.length === 0) return null
+  const movedAside = localDataStatus.value.kind === 'moved_aside'
+  if (messages.length === 0 && !movedAside) return null
 
-  return <DegradedNotice messages={messages} />
+  return <DegradedNotice messages={messages} movedAside={movedAside} />
 }
 
 /** A row of its own below the title bar (`useChromeRow`). */
-function DegradedNotice({ messages }: { readonly messages: readonly string[] }) {
+function DegradedNotice({ messages, movedAside }: {
+  readonly messages: readonly string[]
+  readonly movedAside: boolean
+}) {
   const ref = useRef<HTMLDivElement>(null)
   useChromeRow(ref)
   useModalInertRegion(ref)
@@ -39,6 +44,23 @@ function DegradedNotice({ messages }: { readonly messages: readonly string[] }) 
           {message}
         </Notice>
       ))}
+      {movedAside && (
+        <Notice
+          tone="info"
+          className={styles.notice}
+          action={(
+            <button
+              type="button"
+              className={styles.dismiss}
+              onClick={() => { localDataStatus.value = { kind: 'current' } }}
+            >
+              {t('health.dismiss')}
+            </button>
+          )}
+        >
+          {t('health.localDataMovedAside')}
+        </Notice>
+      )}
     </div>
   )
 }

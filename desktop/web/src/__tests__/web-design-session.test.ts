@@ -4,6 +4,7 @@ import { effect } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
 import { composeDocumentForSave } from '../app/contracts/document'
 import { decodeCanopiDesign } from '../app/contracts/design-ingestion'
+import { designLoadFailureOf } from '../app/contracts/canopi-design-errors'
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
 import { CONTINUOUS_SAVE_DELAY_MS } from '../app/document-session/continuous-save'
 import {
@@ -245,15 +246,15 @@ describe('browser Design Session lifecycle', () => {
 
   it.each([
     {
-      label: 'a Design older than the migration ladder',
+      label: 'a Design from before Canopi 2.0 (v4)',
       content: () => ({ ...makeCanopiFile(), version: 4 }),
-      message: '$.version: unsupported Canopi Design version 4; this build opens versions 7 to 9',
+      message: '$.version: unsupported Canopi Design version 4; Canopi 2.0 and later open only version 9',
       kind: 'unsupported_version',
     },
     {
       label: 'a Design newer than this build',
       content: () => ({ ...makeCanopiFile(), version: 10 }),
-      message: '$.version: unsupported Canopi Design version 10; this build opens versions 7 to 9',
+      message: '$.version: unsupported Canopi Design version 10; Canopi 2.0 and later open only version 9',
       kind: 'unsupported_version',
     },
     {
@@ -264,7 +265,7 @@ describe('browser Design Session lifecycle', () => {
         spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'confirmed' },
         plants: [{ ...plantAt({ lon: 0, lat: 0 }), position: { x: 10, y: 20 } }],
       }),
-      message: '$.version: unsupported Canopi Design version 6; this build opens versions 7 to 9',
+      message: '$.version: unsupported Canopi Design version 6; Canopi 2.0 and later open only version 9',
       kind: 'unsupported_version',
     },
     {
@@ -393,7 +394,7 @@ describe('browser Design Session lifecycle', () => {
     expect(store.readCurrentDesign()).not.toHaveProperty('spatial_frame')
   })
 
-  it('opens an older-format Design through the migration ladder into a current-format Draft', async () => {
+  it('refuses a Design from a Canopi 2 preview (version 7) instead of upgrading it', async () => {
     const openedFile = {
       ...makeCanopiFile({ name: 'Preview Garden', plants: [plantAt({ lon: 2.3522, lat: 48.8566 })] }),
       version: 7,
@@ -402,6 +403,7 @@ describe('browser Design Session lifecycle', () => {
     delete openedFile.views
     delete openedFile.stories
     const store = createMemoryDesignSessionStore()
+    const presentOpenFailure = vi.fn()
     const controller = createBrowserDesignSessionController({
       store,
       fileAdapter: testFileAdapter({
@@ -411,15 +413,13 @@ describe('browser Design Session lifecycle', () => {
         })),
       }),
       now: () => NOW,
+      presentOpenFailure,
     })
 
-    await controller.openCanopi()
+    await expect(controller.openCanopi()).resolves.toBe(false)
 
-    const current = store.readCurrentDesign()
-    expect(current?.version).toBe(9)
-    expect(current?.zones[0]).toMatchObject({ id: 'Hedge', name: 'Hedge' })
-    expect(current?.views).toEqual([])
-    expect(current?.stories).toEqual([])
+    expect(store.hasCurrentDesign()).toBe(false)
+    expect(designLoadFailureOf(presentOpenFailure.mock.calls[0]?.[0])).toMatchObject({ kind: 'older_version' })
   })
 
   it('does not let an older pending Open overwrite a later New Design', async () => {

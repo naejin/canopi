@@ -110,7 +110,10 @@
   },
   "health": {
     "plantDbMissing": "Manca il file di database del catalogo delle piante, quindi la ricerca e le schede delle piante non sono disponibili. I tuoi progetti sono al sicuro. Reinstalla Canopi per ripristinarlo.",
-    "plantDbCorrupt": "Il file di database del catalogo delle piante è danneggiato, quindi la ricerca e le schede delle piante non sono disponibili. I tuoi progetti sono al sicuro. Reinstalla Canopi per ripristinarlo."
+    "plantDbCorrupt": "Il file di database del catalogo delle piante è danneggiato, quindi la ricerca e le schede delle piante non sono disponibili. I tuoi progetti sono al sicuro. Reinstalla Canopi per ripristinarlo.",
+    "localDataMovedAsideTitle": "Dati precedenti messi da parte",
+    "localDataMovedAside": "Canopi 2.0 non può leggere i dati salvati dalle versioni precedenti, quindi li ha messi da parte senza modificarli ed è ripartito da zero.",
+    "dismiss": "Chiudi"
   },
   "canvas": {
     "inspection": {
@@ -1514,7 +1517,6 @@
     "detailsSafe": "Il tuo lavoro è al sicuro in Canopi finché resta aperto. Riprova o salvalo altrove.",
     "saveAs": "Salva con nome…",
     "resolve": "Risolvi…",
-    "savedUpgraded": "Salvato nel formato Canopi 2",
     "conflictAnotherTab": "Modificato in un’altra scheda"
   },
   "saveProblem": {
@@ -1708,7 +1710,7 @@
     "cantRead": "Impossibile leggere questo file",
     "inFolder": "In {{folder}}",
     "cantReadMissing": "File non trovato: è stato spostato o eliminato",
-    "cantReadOlderVersion": "Creato con una versione precedente di Canopi; non si può aprire",
+    "cantReadOlderVersion": "Creato con una versione di Canopi precedente alla 2.0; Canopi 2.0 e successive non possono aprirlo",
     "cantReadNewerVersion": "Creato con una versione più recente di Canopi; aggiorna Canopi per aprirlo",
     "cantReadDamaged": "Impossibile leggere il file: è danneggiato"
   },

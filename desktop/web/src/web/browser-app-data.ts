@@ -1,10 +1,18 @@
 import { encodeCanopiDesign } from "../app/contracts/canopi-design-wire";
 import { decodeCanopiDesign } from "../app/contracts/design-ingestion";
+import {
+  CURRENT_CANOPI_FILE_VERSION,
+  MISSING_CANOPI_FILE_VERSION,
+} from "../generated/canopi-design-format";
 import type { CanopiFile } from "../types/design";
 
-// Canopi v2 reads only these records. Browser data written by an older Canopi
-// (the single `canopi:web-app-data:v1` document) is not migrated and is ignored.
+// Canopi 2.0 reads only these records and migrates nothing (ADR 0021). Browser
+// data from before 2.0 (the single `canopi:web-app-data:v1` document of the
+// released Web Edition, and Drafts in an older `.canopi` format) is moved to
+// dated backup keys by `setAsideDataFromBefore2_0`, never deleted.
 const RECORD_VERSION = 2 as const;
+const V1_KEY = "canopi:web-app-data:v1";
+const BACKUP_KEY_PREFIX = "canopi:web-app-data:before-2.0-";
 const STORAGE_KEYS = {
   drafts: "canopi:web-app-data:v2:drafts",
   settings: "canopi:web-app-data:v2:settings",
@@ -21,6 +29,12 @@ export interface BrowserStorageAdapter {
 export type BrowserAppDataWriteResult<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly error: unknown };
+
+/** What `setAsideDataFromBefore2_0` did; `error` is the first step that failed. */
+export interface BrowserSetAsideOutcome {
+  readonly movedAside: boolean;
+  readonly error: unknown;
+}
 
 export interface BrowserDraftSummary {
   readonly id: string;
@@ -40,8 +54,9 @@ interface BrowserDraftsRecord {
   readonly drafts: readonly BrowserDraftSummary[];
   readonly draftFiles: Record<string, CanopiFile>;
   /**
-   * Drafts this Canopi refuses to open (an older or damaged Design), kept as
-   * their stored values so a write of another Draft never erases them.
+   * Drafts this Canopi refuses to open (a damaged or newer Design, or an older
+   * one not yet set aside), kept as their stored values so a write of another
+   * Draft never erases them.
    */
   readonly refused: RefusedDrafts;
 }
@@ -140,6 +155,15 @@ export interface BrowserAppDataStore {
   listRecentlyViewedSpecies(): readonly string[];
   saveSavedObjectStamps(records: readonly BrowserSavedObjectStampRecord[]): BrowserAppDataWriteResult<readonly BrowserSavedObjectStampRecord[]>;
   listSavedObjectStamps(): readonly BrowserSavedObjectStampRecord[];
+  /**
+   * Move browser data from before Canopi 2.0 to dated backup keys
+   * (`canopi:web-app-data:before-2.0-<UTC stamp>:<original key suffix>`): the
+   * v1 document as it is, and older-format Drafts as a Drafts record of their
+   * own. A backup never replaces another one, and nothing leaves its key until
+   * its copy is written. Current, newer and damaged Drafts stay. Once moved,
+   * nothing is left to move, so the caller's notice shows once.
+   */
+  setAsideDataFromBefore2_0(now: string): BrowserSetAsideOutcome;
 }
 
 export function createBrowserAppDataStore({
@@ -315,7 +339,122 @@ export function createBrowserAppDataStore({
     listSavedObjectStamps() {
       return readPartition(PARTITIONS.stamps).savedObjectStamps;
     },
+
+    setAsideDataFromBefore2_0(now) {
+      let base: string | null = null;
+      const backupKey = (suffix: string) => {
+        base ??= freeBackupBase(storage, backupStamp(now));
+        return `${base}:${suffix}`;
+      };
+      let movedAside = false;
+      let error: unknown = null;
+      for (const step of [setAsideV1Document, setAsideOlderDrafts]) {
+        try {
+          if (step(storage, backupKey)) movedAside = true;
+        } catch (cause) {
+          error ??= cause;
+        }
+      }
+      return { movedAside, error };
+    },
   };
+}
+
+const BACKUP_SUFFIXES = { v1: "v1", drafts: "v2:drafts" } as const;
+
+/** `2026-10-02T12:00:00.000Z` → `20261002T120000Z`. */
+function backupStamp(now: string): string {
+  return new Date(now).toISOString().replace(/\.\d+Z$/, "Z").replace(/[-:]/g, "");
+}
+
+function freeBackupBase(storage: BrowserStorageAdapter, stamp: string): string {
+  for (let n = 0; ; n += 1) {
+    const base = `${BACKUP_KEY_PREFIX}${stamp}${n === 0 ? "" : `-${n}`}`;
+    const taken = Object.values(BACKUP_SUFFIXES)
+      .some((suffix) => storage.getItem(`${base}:${suffix}`) !== null);
+    if (!taken) return base;
+  }
+}
+
+/** Write `value` under `key` and read it back; throws when the copy did not land. */
+function writeBackup(storage: BrowserStorageAdapter, key: string, value: string): void {
+  storage.setItem(key, value);
+  if (storage.getItem(key) !== value) throw new Error(`The backup ${key} could not be verified`);
+}
+
+function setAsideV1Document(
+  storage: BrowserStorageAdapter,
+  backupKey: (suffix: string) => string,
+): boolean {
+  const raw = storage.getItem(V1_KEY);
+  if (raw === null) return false;
+  writeBackup(storage, backupKey(BACKUP_SUFFIXES.v1), raw);
+  storage.removeItem(V1_KEY);
+  return true;
+}
+
+function setAsideOlderDrafts(
+  storage: BrowserStorageAdapter,
+  backupKey: (suffix: string) => string,
+): boolean {
+  const raw = storage.getItem(STORAGE_KEYS.drafts);
+  if (raw === null) return false;
+  let record: unknown;
+  try {
+    record = JSON.parse(raw);
+  } catch {
+    return false; // A damaged record stays where it is.
+  }
+  if (!isSupportedDraftsRecord(record)) return false;
+  const supported = record as Record<string, unknown> & {
+    drafts: readonly unknown[];
+    draftFiles: Record<string, unknown>;
+  };
+  const { drafts, draftFiles } = supported;
+  const older: Record<string, unknown> = {};
+  const kept: Record<string, unknown> = {};
+  for (const [id, file] of Object.entries(draftFiles)) {
+    defineOwn(isFromBefore2_0(file) ? older : kept, id, file);
+  }
+  if (Object.keys(older).length === 0) return false;
+  const isOlder = (draft: unknown) => (
+    isRecord(draft) && typeof draft.id === "string" && Object.prototype.hasOwnProperty.call(older, draft.id)
+  );
+
+  const key = backupKey(BACKUP_SUFFIXES.drafts);
+  writeBackup(storage, key, JSON.stringify({
+    version: RECORD_VERSION,
+    drafts: drafts.filter(isOlder),
+    draftFiles: older,
+  }));
+  try {
+    storage.setItem(STORAGE_KEYS.drafts, JSON.stringify({
+      ...supported,
+      drafts: drafts.filter((draft) => !isOlder(draft)),
+      draftFiles: kept,
+    }));
+  } catch (error) {
+    // The Drafts stay where they were; drop the copy so a retry is not doubled.
+    try {
+      storage.removeItem(key);
+    } catch {
+      // A leftover copy is harmless: the originals are untouched.
+    }
+    throw error;
+  }
+  return true;
+}
+
+/** A Design whose `.canopi` version is older than the current one (a missing version counts as 1). */
+function isFromBefore2_0(file: unknown): boolean {
+  if (!isRecord(file)) return false;
+  const version = Object.prototype.hasOwnProperty.call(file, "version")
+    ? file.version
+    : MISSING_CANOPI_FILE_VERSION;
+  return typeof version === "number"
+    && Number.isInteger(version)
+    && version >= 1
+    && version < CURRENT_CANOPI_FILE_VERSION;
 }
 
 export const browserAppDataStore = createBrowserAppDataStore();
@@ -461,8 +600,8 @@ function decodeDraftFiles(value: unknown): {
     try {
       defineOwn(decoded, id, decodeCanopiDesign(rawFile));
     } catch {
-      // An older or damaged Draft does not open and is not listed, but its
-      // stored value is kept: it is the user's Design, not ours to erase.
+      // A Draft that does not open is not listed, but its stored value is
+      // kept: it is the user's Design, not ours to erase.
       defineOwn(refused, id, rawFile);
     }
   }

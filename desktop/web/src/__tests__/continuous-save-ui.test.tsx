@@ -48,21 +48,6 @@ describe('SaveStatusLabel', () => {
     <SaveStatusLabel draftLabel="Draft" draftAction={draftAction} saveElsewhere={saveElsewhere} onRetry={vi.fn()} {...props} />
   )
 
-  it('says once that a Design from an older format was saved in the current one', async () => {
-    await act(async () => { render(label({ status: 'saving', upgradedFormatWritten: false }), container) })
-    await act(async () => { render(label({ status: 'saved', upgradedFormatWritten: true }), container) })
-    expect(container.querySelector('[role="status"]')?.textContent).toBe('Saved as Canopi 2 format')
-
-    // The next save cycle is an ordinary one.
-    await act(async () => { render(label({ status: 'saving', upgradedFormatWritten: true }), container) })
-    await act(async () => { render(label({ status: 'saved', upgradedFormatWritten: true }), container) })
-    expect(container.textContent).toBe('Saved')
-
-    // A current-format Design never says it.
-    await act(async () => { render(label({ status: 'saved', upgradedFormatWritten: false }), container) })
-    expect(container.textContent).toBe('Saved')
-  })
-
   it('shows quiet saving and saved text, and never announces Saving', async () => {
     await act(async () => { render(label({ status: 'saving' }), container) })
     expect(container.textContent).toBe('Saving…')

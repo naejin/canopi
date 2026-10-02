@@ -110,7 +110,10 @@
   },
   "health": {
     "plantDbMissing": "식물 카탈로그의 데이터베이스 파일이 없어 식물 검색과 상세 정보를 사용할 수 없습니다. 디자인은 안전합니다. Canopi를 다시 설치하여 복원하세요.",
-    "plantDbCorrupt": "식물 카탈로그의 데이터베이스 파일이 손상되어 식물 검색과 상세 정보를 사용할 수 없습니다. 디자인은 안전합니다. Canopi를 다시 설치하여 복원하세요."
+    "plantDbCorrupt": "식물 카탈로그의 데이터베이스 파일이 손상되어 식물 검색과 상세 정보를 사용할 수 없습니다. 디자인은 안전합니다. Canopi를 다시 설치하여 복원하세요.",
+    "localDataMovedAsideTitle": "이전 데이터를 따로 보관했습니다",
+    "localDataMovedAside": "Canopi 2.0은 이전 버전에서 저장한 데이터를 읽을 수 없어 해당 데이터를 변경 없이 따로 보관하고 새로 시작했습니다.",
+    "dismiss": "닫기"
   },
   "canvas": {
     "inspection": {
@@ -1514,7 +1517,6 @@
     "detailsSafe": "Canopi가 열려 있는 동안 작업은 안전합니다. 다시 시도하거나 다른 위치에 저장하세요.",
     "saveAs": "다른 이름으로 저장…",
     "resolve": "해결…",
-    "savedUpgraded": "Canopi 2 형식으로 저장됨",
     "conflictAnotherTab": "다른 탭에서 변경됨"
   },
   "saveProblem": {
@@ -1708,7 +1710,7 @@
     "cantRead": "이 파일을 읽을 수 없습니다",
     "inFolder": "{{folder}} 폴더",
     "cantReadMissing": "파일을 찾을 수 없습니다: 이동되었거나 삭제되었습니다",
-    "cantReadOlderVersion": "이전 버전의 Canopi로 만든 파일이라 열 수 없습니다",
+    "cantReadOlderVersion": "Canopi 2.0 이전 버전으로 만든 파일이라 Canopi 2.0 이상에서는 열 수 없습니다",
     "cantReadNewerVersion": "최신 버전의 Canopi로 만든 파일입니다. 열려면 Canopi를 업데이트하세요",
     "cantReadDamaged": "파일을 읽을 수 없습니다: 손상되었습니다"
   },

@@ -144,7 +144,7 @@ describe('Desktop recent Designs', () => {
 
     const rowOf = (name: string) => Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes(name))!
     expect(rowOf('Garden missing').textContent).toContain('moved or deleted')
-    expect(rowOf('Garden older_version').textContent).toContain('older version of Canopi')
+    expect(rowOf('Garden older_version').textContent).toContain('Made with Canopi before 2.0')
     expect(rowOf('Garden newer_version').textContent).toContain('newer version of Canopi')
     expect(rowOf('Garden damaged').textContent).toContain('damaged')
   })

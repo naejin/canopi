@@ -110,7 +110,10 @@
   },
   "health": {
     "plantDbMissing": "植物目录的数据库文件缺失，因此无法搜索和查看植物详情。您的设计不受影响。请重新安装 Canopi 以恢复该文件。",
-    "plantDbCorrupt": "植物目录的数据库文件已损坏，因此无法搜索和查看植物详情。您的设计不受影响。请重新安装 Canopi 以恢复该文件。"
+    "plantDbCorrupt": "植物目录的数据库文件已损坏，因此无法搜索和查看植物详情。您的设计不受影响。请重新安装 Canopi 以恢复该文件。",
+    "localDataMovedAsideTitle": "已将旧数据另行保存",
+    "localDataMovedAside": "Canopi 2.0 无法读取旧版本保存的数据，因此已将这些数据原样另行保存，并重新开始。",
+    "dismiss": "关闭"
   },
   "canvas": {
     "inspection": {
@@ -1514,7 +1517,6 @@
     "detailsSafe": "Canopi 保持打开时，您的工作是安全的。请重试，或保存到其他位置。",
     "saveAs": "另存为…",
     "resolve": "解决…",
-    "savedUpgraded": "已按 Canopi 2 格式保存",
     "conflictAnotherTab": "已在另一个标签页中更改"
   },
   "saveProblem": {
@@ -1708,7 +1710,7 @@
     "cantRead": "无法读取此文件",
     "inFolder": "位于 {{folder}}",
     "cantReadMissing": "找不到此文件：已被移动或删除",
-    "cantReadOlderVersion": "由旧版 Canopi 创建，无法打开",
+    "cantReadOlderVersion": "由 Canopi 2.0 之前的版本创建，Canopi 2.0 及更高版本无法打开",
     "cantReadNewerVersion": "由新版 Canopi 创建，请更新 Canopi 后打开",
     "cantReadDamaged": "无法读取此文件：文件已损坏"
   },

@@ -110,7 +110,10 @@
   },
   "health": {
     "plantDbMissing": "O arquivo de banco de dados do catálogo de plantas está ausente, por isso a pesquisa e os detalhes das plantas estão indisponíveis. Seus designs estão seguros. Reinstale o Canopi para restaurá-lo.",
-    "plantDbCorrupt": "O arquivo de banco de dados do catálogo de plantas está danificado, por isso a pesquisa e os detalhes das plantas estão indisponíveis. Seus designs estão seguros. Reinstale o Canopi para restaurá-lo."
+    "plantDbCorrupt": "O arquivo de banco de dados do catálogo de plantas está danificado, por isso a pesquisa e os detalhes das plantas estão indisponíveis. Seus designs estão seguros. Reinstale o Canopi para restaurá-lo.",
+    "localDataMovedAsideTitle": "Dados anteriores guardados à parte",
+    "localDataMovedAside": "O Canopi 2.0 não consegue ler dados salvos por versões anteriores, por isso guardou esses dados à parte, sem alterações, e começou do zero.",
+    "dismiss": "Fechar"
   },
   "canvas": {
     "inspection": {
@@ -1514,7 +1517,6 @@
     "detailsSafe": "Seu trabalho está seguro no Canopi enquanto ele estiver aberto. Tente novamente ou salve em outro lugar.",
     "saveAs": "Salvar como…",
     "resolve": "Resolver…",
-    "savedUpgraded": "Salvo no formato Canopi 2",
     "conflictAnotherTab": "Alterado em outra aba"
   },
   "saveProblem": {
@@ -1708,7 +1710,7 @@
     "cantRead": "Não é possível ler este arquivo",
     "inFolder": "Em {{folder}}",
     "cantReadMissing": "Arquivo não encontrado: foi movido ou excluído",
-    "cantReadOlderVersion": "Criado com uma versão anterior do Canopi; não pode ser aberto",
+    "cantReadOlderVersion": "Criado com uma versão do Canopi anterior à 2.0; o Canopi 2.0 e posteriores não podem abri-lo",
     "cantReadNewerVersion": "Criado com uma versão mais recente do Canopi; atualize o Canopi para abri-lo",
     "cantReadDamaged": "Não é possível ler o arquivo: está danificado"
   },

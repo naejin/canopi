@@ -110,7 +110,10 @@
   },
   "health": {
     "plantDbMissing": "植物カタログのデータベースファイルが見つからないため、植物の検索と詳細は利用できません。デザインは安全です。Canopi を再インストールして復元してください。",
-    "plantDbCorrupt": "植物カタログのデータベースファイルが破損しているため、植物の検索と詳細は利用できません。デザインは安全です。Canopi を再インストールして復元してください。"
+    "plantDbCorrupt": "植物カタログのデータベースファイルが破損しているため、植物の検索と詳細は利用できません。デザインは安全です。Canopi を再インストールして復元してください。",
+    "localDataMovedAsideTitle": "以前のデータを別に保管しました",
+    "localDataMovedAside": "Canopi 2.0 は以前のバージョンで保存されたデータを読み込めないため、そのデータを変更せずに別に保管し、新しい状態で開始しました。",
+    "dismiss": "閉じる"
   },
   "canvas": {
     "inspection": {
@@ -1514,7 +1517,6 @@
     "detailsSafe": "Canopi を開いている間、作業内容は失われません。再試行するか、別の場所に保存してください。",
     "saveAs": "名前を付けて保存…",
     "resolve": "解決…",
-    "savedUpgraded": "Canopi 2 形式で保存しました",
     "conflictAnotherTab": "別のタブで変更されました"
   },
   "saveProblem": {
@@ -1708,7 +1710,7 @@
     "cantRead": "このファイルを読み込めません",
     "inFolder": "{{folder}} 内",
     "cantReadMissing": "ファイルが見つかりません：移動または削除されました",
-    "cantReadOlderVersion": "古いバージョンの Canopi で作成されたため開けません",
+    "cantReadOlderVersion": "Canopi 2.0 より前のバージョンで作成されたため、Canopi 2.0 以降では開けません",
     "cantReadNewerVersion": "新しいバージョンの Canopi で作成されました。開くには Canopi を更新してください",
     "cantReadDamaged": "ファイルを読み込めません：破損しています"
   },

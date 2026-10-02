@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   CanopiDesignIngestionError,
   decodeCanopiDesign,
-  decodeCanopiDesignOutcome,
 } from '../app/contracts/design-ingestion'
+import {
+  describeDesignLoadError,
+  designLoadFailureMessageKey,
+  designLoadFailureOf,
+} from '../app/contracts/canopi-design-errors'
 import {
   STORY_IMAGE_MAX_BYTES,
   STORY_IMAGES_MAX_TOTAL_BYTES,
@@ -38,30 +42,32 @@ describe('Canopi Design decoder', () => {
     { version: undefined, displayed: 1 },
     { version: 1, displayed: 1 },
     { version: 6, displayed: 6 },
+    { version: 7, displayed: 7 },
+    { version: 8, displayed: 8 },
     { version: 10, displayed: 10 },
-  ])('rejects a version below the ladder, missing, or future version $displayed', ({ version, displayed }) => {
+  ])('refuses any version but the current one: $displayed', ({ version, displayed }) => {
     const input = currentDesign()
     if (version === undefined) delete input.version
     else input.version = version
 
     expect(() => decodeCanopiDesign(input)).toThrow(
-      `$.version: unsupported Canopi Design version ${displayed}; this build opens versions 7 to 9`,
+      `$.version: unsupported Canopi Design version ${displayed}; Canopi 2.0 and later open only version 9`,
     )
     expectKind(() => decodeCanopiDesign(input), 'unsupported_version')
   })
 
-  it('upgrades a v8 Design in memory and reports the version it came from', () => {
-    const input = currentDesign({
-      version: 8,
-      zones: [{ name: 'Bed', zone_type: 'rect', points: [{ lon: 13, lat: 23 }, { lon: 13.0001, lat: 22.9999 }] }],
-    })
-
-    const outcome = decodeCanopiDesignOutcome(input)
-
-    expect(outcome.migratedFrom).toBe(8)
-    expect(outcome.file.version).toBe(9)
-    expect(outcome.file.zones[0]).toMatchObject({ id: 'Bed', name: 'Bed' })
-    expect(decodeCanopiDesignOutcome(currentDesign())).toMatchObject({ migratedFrom: null })
+  it.each([
+    { version: 7, kind: 'older_version' },
+    { version: 8, kind: 'older_version' },
+    { version: 10, kind: 'newer_version' },
+  ])('tells a Design from before Canopi 2.0 apart from a newer one: v$version', ({ version, kind }) => {
+    try {
+      decodeCanopiDesign(currentDesign({ version }))
+      expect.fail('expected the version to be refused')
+    } catch (error) {
+      expect(designLoadFailureOf(error)?.kind).toBe(kind)
+    }
+    expect(designLoadFailureMessageKey('older_version')).toBe('start.cantReadOlderVersion')
   })
 
   it('refuses a Canopi 1.2 Design (v6 with a spatial frame) as an older version, never as damaged', () => {
@@ -70,7 +76,7 @@ describe('Canopi Design decoder', () => {
       spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'confirmed' },
     })
     expect(() => decodeCanopiDesign(canopi12)).toThrow(
-      '$.version: unsupported Canopi Design version 6; this build opens versions 7 to 9',
+      '$.version: unsupported Canopi Design version 6; Canopi 2.0 and later open only version 9',
     )
     expectKind(() => decodeCanopiDesign(canopi12), 'unsupported_version')
   })
@@ -283,6 +289,31 @@ describe('Canopi Design decoder', () => {
     },
   ])('enforces generated Rust numeric bounds at runtime', ({ input, message }) => {
     expect(() => decodeCanopiDesign(input())).toThrow(message)
+  })
+})
+
+describe('Design ingestion outcomes and typed load failures', () => {
+  it('maps every load error to a kind and a Start-screen string, never "invalid" for an older file', () => {
+    expect(designLoadFailureOf({ kind: 'older_version', message: 'too old' })).toEqual({ kind: 'older_version', message: 'too old' })
+    expect(designLoadFailureOf({ kind: 'bogus', message: 'x' })).toBeNull()
+    expect(designLoadFailureOf(new Error('Dialog cancelled'))).toBeNull()
+    expect(designLoadFailureOf('Dialog cancelled')).toBeNull()
+    const tooOld = (() => { try { decodeCanopiDesign(currentDesign({ version: 8 })) } catch (error) { return error } })()
+    expect(tooOld).toBeInstanceOf(CanopiDesignIngestionError)
+    expect(designLoadFailureOf(tooOld)).toMatchObject({ kind: 'older_version' })
+    const tooNew = (() => { try { decodeCanopiDesign({ version: 10 }) } catch (error) { return error } })()
+    expect(designLoadFailureOf(tooNew)).toMatchObject({ kind: 'newer_version' })
+    expect(designLoadFailureOf(new CanopiDesignIngestionError('invalid_document', '$.plants'))).toMatchObject({ kind: 'invalid_document' })
+
+    expect(designLoadFailureMessageKey('older_version')).toBe('start.cantReadOlderVersion')
+    expect(designLoadFailureMessageKey('newer_version')).toBe('start.cantReadNewerVersion')
+    expect(designLoadFailureMessageKey('missing')).toBe('start.cantReadMissing')
+    expect(designLoadFailureMessageKey('invalid_json')).toBe('start.cantReadDamaged')
+    expect(designLoadFailureMessageKey('invalid_document')).toBe('start.cantReadDamaged')
+    expect(designLoadFailureMessageKey('too_large')).toBe('start.cantRead')
+    expect(designLoadFailureMessageKey('internal')).toBe('start.cantRead')
+    expect(describeDesignLoadError({ kind: 'missing', message: 'gone' })).toBe('gone')
+    expect(describeDesignLoadError(new Error('boom'))).toBe('boom')
   })
 })
 
