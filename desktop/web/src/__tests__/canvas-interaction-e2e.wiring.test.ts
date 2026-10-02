@@ -7,7 +7,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { writePlantStampDragData } from '../canvas/plant-stamp-source'
 import { writeSavedObjectStampDragData } from '../canvas/saved-object-stamp-source'
 import { selectedObjectIds, type CanvasToolGuidance } from '../canvas/session-state'
-import { CameraController } from '../canvas/runtime/camera'
 import { SceneStore } from '../canvas/runtime/scene'
 import {
   createSceneInteractionSession,
@@ -25,16 +24,17 @@ import {
   makePlant,
   installSceneInteractionFixture,
 } from './support/canvas-interaction-setup'
+import type { TestView } from './support/test-view'
 
 describe('SceneInteractionSession', () => {
   let container: HTMLDivElement
-  let camera: CameraController
+  let testView: TestView
   let store: SceneStore
   let events: SceneInteractionEventHarness
 
   const { createTestSession } = installSceneInteractionFixture(
     (f) => {
-      ({ container, camera, store, events } = f)
+      ({ container, testView, store, events } = f)
     },
     () => ({ events }),
   )
@@ -46,7 +46,7 @@ describe('SceneInteractionSession', () => {
         makePlant('apple-2', 'Malus domestica', { x: 80, y: 30 }),
       ]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('hand')
 
@@ -60,7 +60,7 @@ describe('SceneInteractionSession', () => {
 
   it('quarantines a press when admission recovery throws, but lets a context menu or a drop reach the app', () => {
     const admissionFailure = new Error('admission recovery failed')
-    const deps = createInteractionDeps(container, store, camera, {
+    const deps = createInteractionDeps(container, store, testView, {
       commandAdmission: {
         revision: signal(0),
         runWhenSettled: () => {
@@ -116,7 +116,7 @@ describe('SceneInteractionSession', () => {
         return operation()
       },
     }
-    const deps = createInteractionDeps(container, store, camera, { settledReader })
+    const deps = createInteractionDeps(container, store, testView, { settledReader })
     const session = createTestSession(deps)
     const dragData = new Map<string, string>()
     const dataTransfer = {
@@ -215,7 +215,7 @@ describe('SceneInteractionSession', () => {
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('locked-plant', 'Malus domestica', { x: 300, y: 250 }, { locked: true })]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     // Hovering a directly locked plant brings the session's Unlock affordance onto the map.
     events.pointerMove({ x: 300, y: 250 })
@@ -240,7 +240,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('attempts every host-listener removal when one removal fails', () => {
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     const originalRemoveEventListener = window.removeEventListener.bind(window)
     const removeWindowListener = vi.spyOn(window, 'removeEventListener').mockImplementation(
@@ -261,7 +261,7 @@ describe('SceneInteractionSession', () => {
   it('rolls back installed listeners and resources when Session construction fails', () => {
     events.dispose()
     events = createSceneInteractionEventHarness(container)
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const removeContainerListener = vi.spyOn(container, 'removeEventListener')
     const removeWindowListener = vi.spyOn(window, 'removeEventListener')
     const originalAddEventListener = window.addEventListener.bind(window)
@@ -288,7 +288,7 @@ describe('SceneInteractionSession', () => {
   describe('tool guidance for the tool card', () => {
     function guidedSession(): { session: SceneInteractionSession, deps: SceneInteractionSessionDeps, latest: () => CanvasToolGuidance } {
       const published: CanvasToolGuidance[] = []
-      const deps = createInteractionDeps(container, store, camera, {
+      const deps = createInteractionDeps(container, store, testView, {
         publishToolGuidance: (guidance) => { published.push(guidance) },
       })
       return { session: createTestSession(deps), deps, latest: () => published.at(-1)! }

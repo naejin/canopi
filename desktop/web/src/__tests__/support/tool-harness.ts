@@ -592,7 +592,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
     },
   })
   host.subscribePointerWorld((point) => {
-    record.pointerWorld.push(point)
+    record.pointerWorld.push(point && point.world)
   })
   const router = createInputRouter({ navigation: view.navigation, toolHost: host })
 

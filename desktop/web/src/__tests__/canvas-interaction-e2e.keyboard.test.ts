@@ -4,7 +4,6 @@
 // Shared fakes, helpers and fixture: support/canvas-interaction-setup.ts.
 import { describe, expect, it, vi } from 'vitest'
 import { t } from '../i18n'
-import { CameraController } from '../canvas/runtime/camera'
 import { SceneStore } from '../canvas/runtime/scene'
 import type {
   SceneInteractionSession,
@@ -12,6 +11,7 @@ import type {
 } from '../canvas/runtime/interaction-session'
 import { createRecordingRenderer } from './support/recording-renderer'
 import type { SceneInteractionEventHarness } from './support/canvas-interaction-events'
+import type { TestView } from './support/test-view'
 import {
   contextMenuHost,
   createInteractionDeps,
@@ -28,13 +28,13 @@ import {
 
 describe('SceneInteractionSession', () => {
   let container: HTMLDivElement
-  let camera: CameraController
+  let testView: TestView
   let store: SceneStore
   let events: SceneInteractionEventHarness
 
   const { createTestSession, spacingInput } = installSceneInteractionFixture(
     (f) => {
-      ({ container, camera, store, events } = f)
+      ({ container, testView, store, events } = f)
     },
     () => ({ events }),
   )
@@ -49,8 +49,8 @@ describe('SceneInteractionSession', () => {
       ])]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
       onSceneEditCommit,
     })
     const session = createTestSession(deps)
@@ -77,7 +77,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('opens the empty-map menu mid-map from the keyboard without a selection', () => {
-    const session = createTestSession(createInteractionDeps(container, store, camera))
+    const session = createTestSession(createInteractionDeps(container, store, testView))
     container.tabIndex = -1
     container.focus()
 
@@ -92,7 +92,7 @@ describe('SceneInteractionSession', () => {
 
   describe('keyboard access to the map', () => {
     it('puts the map host in the Tab order with an accessible name and a description of its keys', () => {
-      const session = createTestSession(createInteractionDeps(container, store, camera))
+      const session = createTestSession(createInteractionDeps(container, store, testView))
 
       expect(container.tabIndex).toBe(0)
       expect(container.getAttribute('role')).toBe('application')
@@ -108,7 +108,7 @@ describe('SceneInteractionSession', () => {
 
     it('restores the host when the session ends', () => {
       container.setAttribute('aria-label', 'Before')
-      const session = createTestSession(createInteractionDeps(container, store, camera))
+      const session = createTestSession(createInteractionDeps(container, store, testView))
 
       session.dispose()
 
@@ -125,7 +125,7 @@ describe('SceneInteractionSession', () => {
         return key
       }
 
-      expect(() => createTestSession(createInteractionDeps(container, store, camera, { translate })))
+      expect(() => createTestSession(createInteractionDeps(container, store, testView, { translate })))
         .toThrow('translation failed')
 
       expect(container.querySelector('[data-map-keys-description]')).toBeNull()
@@ -138,7 +138,7 @@ describe('SceneInteractionSession', () => {
     it('refreshes the accessible name and description in place on a locale change', () => {
       let language = 'en'
       const translate = (key: string): string => `${language}:${key}`
-      const session = createTestSession(createInteractionDeps(container, store, camera, { translate }))
+      const session = createTestSession(createInteractionDeps(container, store, testView, { translate }))
       const description = document.getElementById(container.getAttribute('aria-describedby')!)
 
       language = 'fr'
@@ -154,7 +154,7 @@ describe('SceneInteractionSession', () => {
       store.updatePersisted((draft) => {
         draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
       })
-      const deps = createInteractionDeps(container, store, camera)
+      const deps = createInteractionDeps(container, store, testView)
       const session = createTestSession(deps)
       deps.setSelection([plantTarget('plant-1')])
 
@@ -167,7 +167,7 @@ describe('SceneInteractionSession', () => {
     })
 
     it('keeps focusing the host on a pointer press', () => {
-      const session = createTestSession(createInteractionDeps(container, store, camera))
+      const session = createTestSession(createInteractionDeps(container, store, testView))
       session.setTool('select')
 
       events.pointerDown({ x: 40, y: 40 })
@@ -186,7 +186,7 @@ describe('SceneInteractionSession', () => {
       renderer?: SceneInteractionSessionDeps['renderer'],
     ): { session: SceneInteractionSession, deps: SceneInteractionSessionDeps, tools: string[] } {
       const tools: string[] = []
-      const deps = createInteractionDeps(container, store, camera, { setTool: (name: string) => { tools.push(name) } })
+      const deps = createInteractionDeps(container, store, testView, { setTool: (name: string) => { tools.push(name) } })
       return { session: createTestSession(renderer ? { ...deps, renderer } : deps), deps, tools }
     }
 
@@ -291,7 +291,7 @@ describe('SceneInteractionSession', () => {
       store.updatePersisted((draft) => {
         draft.annotations = [makeTextAnnotation('note-1', { x: 40, y: 40 }, 'Old')]
       })
-      const deps = createInteractionDeps(container, store, camera)
+      const deps = createInteractionDeps(container, store, testView)
       const session = createTestSession(deps)
       session.setTool('select')
       deps.setSelection([annotationTarget('note-1')])
@@ -370,7 +370,7 @@ describe('SceneInteractionSession', () => {
     function nudgeSession(selected = true): { nudge: { nudgeSelected: ReturnType<typeof vi.fn>, endNudge: ReturnType<typeof vi.fn> }, session: SceneInteractionSession, deps: SceneInteractionSessionDeps, render: ReturnType<typeof vi.fn> } {
       const nudge = { nudgeSelected: vi.fn(() => true), endNudge: vi.fn() }
       const render = vi.fn()
-      const deps = createInteractionDeps(container, store, camera, { nudge, render })
+      const deps = createInteractionDeps(container, store, testView, { nudge, render })
       const session = createTestSession(deps)
       if (selected) deps.setSelection([plantTarget('plant-1')])
       container.tabIndex = 0
@@ -380,32 +380,32 @@ describe('SceneInteractionSession', () => {
 
     it('pans the map 64 px per arrow, 256 px with Shift, when nothing is selected', () => {
       const { nudge, render } = nudgeSession(false)
-      const before = camera.viewport
+      const before = testView.viewport()
       render.mockClear()
 
       const right = events.keyDown({ key: 'ArrowRight', cancelable: true, target: container })
       expect(right.defaultPrevented).toBe(true)
-      expect(camera.viewport).toEqual({ x: before.x - 64, y: before.y, scale: before.scale })
+      expect(testView.viewport()).toEqual({ x: before.x - 64, y: before.y, scale: before.scale })
       expect(render).toHaveBeenCalledWith('viewport')
 
       events.keyDown({ key: 'ArrowDown', shiftKey: true, target: container })
       events.keyDown({ key: 'ArrowLeft', target: container })
       events.keyDown({ key: 'ArrowUp', target: container })
-      expect(camera.viewport).toEqual({ x: before.x, y: before.y - 256 + 64, scale: before.scale })
+      expect(testView.viewport()).toEqual({ x: before.x, y: before.y - 256 + 64, scale: before.scale })
       expect(nudge.nudgeSelected).not.toHaveBeenCalled()
       expect(nudge.endNudge).not.toHaveBeenCalled()
     })
 
     it('pans with an empty selection under any tool and in overview, but not from a field or with Ctrl', () => {
       const { session, deps } = nudgeSession(false)
-      const before = camera.viewport
+      const before = testView.viewport()
       session.setTool('polygon')
       events.keyDown({ key: 'ArrowRight', target: container })
       session.setTool('select')
       session.setOverviewMode(true)
       events.keyDown({ key: 'ArrowRight', target: container })
       session.setOverviewMode(false)
-      expect(camera.viewport.x).toBe(before.x - 128)
+      expect(testView.viewport().x).toBe(before.x - 128)
 
       const field = document.createElement('textarea')
       container.append(field)
@@ -416,12 +416,12 @@ describe('SceneInteractionSession', () => {
       container.focus()
       events.keyDown({ key: 'ArrowRight', ctrlKey: true, target: container })
       events.keyDown({ key: 'ArrowRight', altKey: true, target: container })
-      expect(camera.viewport.x).toBe(before.x - 128)
+      expect(testView.viewport().x).toBe(before.x - 128)
 
       // With a selection the same key nudges instead.
       deps.setSelection([plantTarget('plant-1')])
       events.keyDown({ key: 'ArrowRight', target: container })
-      expect(camera.viewport.x).toBe(before.x - 128)
+      expect(testView.viewport().x).toBe(before.x - 128)
       expect(deps.nudge!.nudgeSelected).toHaveBeenCalledExactlyOnceWith({ x: 0.1, y: 0 })
     })
 

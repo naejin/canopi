@@ -18,7 +18,7 @@ import { runCanvasRuntimeCleanups } from '../cleanup'
 import type { Gesture, MenuSource, PressTarget } from '../input/gestures'
 import type { TargetClass } from '../input/raw-input'
 import { createCanvasContextMenu } from '../interaction/canvas-context-menu'
-import type { ContextMenuPort, GestureOutcome, ToolHost, ToolHostDeps } from '../interaction-ports'
+import type { ContextMenuPort, GestureOutcome, PointerWorld, ToolHost, ToolHostDeps } from '../interaction-ports'
 import type { CancelReason, CanvasDropPayload, Modifiers, PointerKind, ToolHandleId, ToolId } from '../interaction-types'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
 import {
@@ -136,7 +136,7 @@ export function createContextMenuPort(options: ContextMenuPortOptions): ContextM
         controller.openFromKeyboard(selectionModel())
         return
       }
-      const screen = request.screen ?? controllerOptions.camera.worldToScreen(request.at)
+      const screen = request.screen ?? controllerOptions.view().worldToScreen(request.at)
       const { visible, target } = contextMenuTargetAt(scene, request.at)
       controller.openAtPointer(screen, target ? selectionModel() : visible ? disabledContextMenuSelection() : null)
     },
@@ -147,7 +147,7 @@ export function createContextMenuPort(options: ContextMenuPortOptions): ContextM
 
 export function createToolHost(deps: ToolHostDeps): ToolHost {
   const transientRevision = signal(0)
-  const pointerListeners = new Set<(point: WorldPoint | null) => void>()
+  const pointerListeners = new Set<(point: PointerWorld | null) => void>()
   /** Transactions a tool began and has not committed or aborted: its Scene Edit is open. */
   const openEdits = new Set<SceneEditTransaction>()
 
@@ -493,7 +493,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   // ── Passive hover and the pointer's world point ─────────────────────────────────────────────────────────────────
 
-  function publishPointer(point: WorldPoint | null): void {
+  function publishPointer(point: PointerWorld | null): void {
     for (const listener of [...pointerListeners]) listener(point)
   }
 
@@ -535,7 +535,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     // skips buttons, inputs, textareas, contenteditable and [data-preserve-overlays], and hears no move off the host).
     if (g.target.kind === 'surface') {
       const world = frame().view.screenToWorld(g.at)
-      if (world && insideScreen(g.at, frame().view.screen)) publishPointer(world)
+      if (world && insideScreen(g.at, frame().view.screen)) publishPointer({ world, screen: g.at })
     }
     // The pointer is back over the map after a panel drag: the tool's draft shows again, as today's next pointermove
     // redrew it.

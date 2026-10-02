@@ -8,9 +8,10 @@ import { signal } from '@preact/signals'
 import { CameraController } from '../../canvas/runtime/camera'
 import type { ScenePersistedState } from '../../canvas/runtime/scene'
 import type { CameraDriverHost } from '../../canvas/runtime/view/camera-driver'
-import { viewCameraToPlanar } from '../../canvas/runtime/view/camera-math'
+import { reprojectPlanar, viewCameraToPlanar } from '../../canvas/runtime/view/camera-math'
 import { createCameraDriverHost } from '../../canvas/runtime/view/driver-host'
 import { createViewNavigation, type ViewNavigation } from '../../canvas/runtime/view/navigation'
+import { planarCameraOf } from '../../canvas/runtime/view/view-transform'
 import type {
   SceneBoundsOptions,
   ScreenInsets,
@@ -20,7 +21,7 @@ import type {
   ViewTransform,
 } from '../../canvas/runtime/view/types'
 import { stageScaleToMapZoom } from '../../canvas/projection'
-import { createSessionPlane, type SessionPlane } from '../../canvas/session-plane'
+import { createSessionPlane, type SessionPlane, type SessionPlaneTransform } from '../../canvas/session-plane'
 import { createWorkspaceCameraPolicy, type WorkspaceCameraPolicy } from '../../canvas/workspace-camera-policy'
 
 export interface TestViewOptions {
@@ -44,6 +45,10 @@ export interface TestView {
   readonly navigation: ViewNavigation         // readScene returns an empty scene unless the test passes one to setScene
   view(): ViewTransform                       // frames.viewFrame.peek().view
   setViewport(v: { readonly x: number; readonly y: number; readonly scale: number }): void   // an exact 'place' move, bearing kept
+  /** The bearing-0 placement in today's terms (planarCameraOf(view()) without the bearing): the split suites' camera.viewport. */
+  viewport(): { readonly x: number; readonly y: number; readonly scale: number }
+  /** CameraController.reprojectViewport's numbers (INV-WR-07): a 'place' by a plane transform in plane terms; the plane stays. */
+  reproject(transform: SessionPlaneTransform): void
   setScene(scene: ScenePersistedState, bounds?: SceneBoundsOptions): void
   /** 0A to the end of 0D2 only: the facade's CameraController shim over this same host. Deleted with the facade. */
   readonly legacyCamera: CameraController
@@ -87,6 +92,13 @@ export function createTestView(options: TestViewOptions = {}): TestView {
     setViewport(v) {
       const bearingDeg = host.frames.viewFrame.peek().view.camera.bearingDeg
       host.current().apply({ kind: 'place', planar: { x: v.x, y: v.y, scale: v.scale, bearingDeg } })
+    },
+    viewport() {
+      const { x, y, scale } = planarCameraOf(host.frames.viewFrame.peek().view)
+      return { x, y, scale }
+    },
+    reproject(transform) {
+      host.current().apply({ kind: 'place', planar: reprojectPlanar(planarCameraOf(host.frames.viewFrame.peek().view), transform) })
     },
     setScene(persisted, bounds = {}) {
       scene = { persisted, bounds }

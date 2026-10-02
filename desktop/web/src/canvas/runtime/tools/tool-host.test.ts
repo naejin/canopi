@@ -851,6 +851,18 @@ describe('ToolHost', () => {
       expect(overview.record.pointerWorld.at(-1)).toBeNull()
     })
 
+    it('the pointer is published with its screen point, so a readout can query the map there (R1)', () => {
+      useStubTools(stubTool('plant-stamp'))
+      const h = harness({ tool: 'plant-stamp', viewport: { x: 10, y: -20, scale: 2 } })
+      const points: unknown[] = []
+      h.host.subscribePointerWorld((point) => { points.push(point) })
+
+      h.hover({ x: 50, y: 60 })
+      h.leave()
+
+      expect(points).toEqual([{ world: h.world({ x: 50, y: 60 }), screen: { x: 50, y: 60 } }, null])
+    })
+
     it('the lens is fed only over the map', () => {
       const stamp = stubTool('plant-stamp')
       useStubTools(stamp)
@@ -2181,7 +2193,7 @@ describe('ToolHost', () => {
       const view = createTestView()
       const port = createContextMenuPort({
         container: document.createElement('div'),
-        camera: view.legacyCamera,
+        view: view.view,
         adapter: { open: (request) => opened.push(request), close: () => {} },
         commands: {} as never,
         returnFocus: () => {},
@@ -2220,7 +2232,7 @@ describe('ToolHost', () => {
       await act(async () => render(h(CanvasContextMenu, null), app))
       const port = createContextMenuPort({
         container: document.createElement('div'),
-        camera: view.legacyCamera,
+        view: view.view,
         adapter: { open: openCanvasContextMenu, close: closeCanvasContextMenu },
         // No command runs here: each one does nothing.
         commands: new Proxy({}, { get: () => () => false }) as CanvasContextMenuCommands,

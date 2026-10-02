@@ -21,9 +21,10 @@ import type {
 import type { ScenePersistedState } from './scene'
 import type { PlantLabelMode } from './plant-display'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
+import type { PointerWorld } from './interaction-ports'
 import type { Modifiers } from './interaction-types'
 import type { ViewCommandSurface, ViewReadSurface } from './view/read-surface'
-import type { ViewTransform, WorldPoint } from './view/types'
+import type { ViewTransform } from './view/types'
 
 export interface CanvasRuntimeDocumentMetadata {
   name: string
@@ -250,10 +251,10 @@ export interface CanvasQuerySurface {
    */
   getEnglishFallbackNames(): ReadonlyMap<string, string>
   /**
-   * Forwards ToolHost.subscribePointerWorld (§1.1a): the pointer's world point over the map, null when it leaves. The
-   * inspection lens reads it instead of its own map-host pointermove. Before the interaction session exists it hears nothing.
+   * Forwards ToolHost.subscribePointerWorld (§1.1a): the pointer's world and screen points over the map, null when it leaves.
+   * The inspection lens reads it instead of its own map-host pointermove. Before the interaction session exists it hears nothing.
    */
-  subscribePointerWorld(listener: (point: WorldPoint | null) => void): () => void
+  subscribePointerWorld(listener: (point: PointerWorld | null) => void): () => void
 }
 
 export interface CanvasDocumentReplacementReceipt {

@@ -5,11 +5,11 @@
 // Shared fakes, helpers and fixture: support/canvas-interaction-setup.ts.
 import { describe, expect, it, vi } from 'vitest'
 import { t } from '../i18n'
-import { CameraController } from '../canvas/runtime/camera'
 import { SceneStore } from '../canvas/runtime/scene'
 import { SceneHistory } from '../canvas/runtime/scene-history'
 import { SceneRuntimeEditCoordinator } from '../canvas/runtime/scene-runtime/transactions'
 import type { SceneInteractionEventHarness } from './support/canvas-interaction-events'
+import type { TestView } from './support/test-view'
 import {
   createInteractionDeps,
   annotationTarget,
@@ -21,13 +21,13 @@ import {
 
 describe('SceneInteractionSession', () => {
   let container: HTMLDivElement
-  let camera: CameraController
+  let testView: TestView
   let store: SceneStore
   let events: SceneInteractionEventHarness
 
   const { createTestSession } = installSceneInteractionFixture(
     (f) => {
-      ({ container, camera, store, events } = f)
+      ({ container, testView, store, events } = f)
     },
     () => ({ events }),
   )
@@ -39,7 +39,7 @@ describe('SceneInteractionSession', () => {
 
   it('commits a text Annotation with Enter and selects it', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('text')
 
@@ -64,7 +64,7 @@ describe('SceneInteractionSession', () => {
 
   it('keeps a new text Annotation draft recoverable while the Scene is busy', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('text')
 
@@ -102,7 +102,7 @@ describe('SceneInteractionSession', () => {
       ))
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('text')
 
@@ -116,7 +116,7 @@ describe('SceneInteractionSession', () => {
 
   it('cancels a pending text Annotation with Escape', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('text')
 
@@ -133,7 +133,7 @@ describe('SceneInteractionSession', () => {
 
   it('commits a pending text Annotation on blur', async () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('text')
 
@@ -155,7 +155,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('commits an open note on the click that leaves it, which places nothing; the next click places a note', async () => {
-    const session = createTestSession(createInteractionDeps(container, store, camera))
+    const session = createTestSession(createInteractionDeps(container, store, testView))
     session.setTool('text')
     container.tabIndex = 0
     events.pointerDown({ x: 24, y: 32 }, { button: 0 })
@@ -177,7 +177,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('a click on the map commits a note whose blur commit was refused, and places nothing; the next click places a note', async () => {
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('text')
     container.tabIndex = 0
@@ -208,7 +208,7 @@ describe('SceneInteractionSession', () => {
 
   it('does not commit empty text Annotations', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('text')
 
@@ -225,7 +225,7 @@ describe('SceneInteractionSession', () => {
 
   it('clears a committed text draft when a later event settles retained publication', () => {
     let invalidationFailures = 2
-    const baseDeps = createInteractionDeps(container, store, camera)
+    const baseDeps = createInteractionDeps(container, store, testView)
     const sceneEdits = new SceneRuntimeEditCoordinator({
       sceneStore: store,
       history: new SceneHistory(),
@@ -268,7 +268,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('cleans up pending text Annotation editors on tool change and disposal', () => {
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('text')
 
@@ -285,11 +285,11 @@ describe('SceneInteractionSession', () => {
   })
 
   it('keeps Space from starting canvas panning while a text Annotation editor is active', async () => {
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('text')
     container.tabIndex = 0
-    const before = { ...camera.viewport }
+    const before = { ...testView.viewport() }
 
     events.pointerDown({ x: 24, y: 32 }, { button: 0 })
     events.pointerUp({ x: 24, y: 32 }, { button: 0 })
@@ -307,19 +307,19 @@ describe('SceneInteractionSession', () => {
     events.pointerUp({ x: 260, y: 230 }, { button: 0 })
     events.keyUp({ key: ' ', code: 'Space', target: container })
 
-    expect(camera.viewport).toEqual(before)
+    expect(testView.viewport()).toEqual(before)
     expect(noteEntry()).toBeNull()
     expect(store.persisted.annotations).toHaveLength(0)
     session.dispose()
   })
 
   it('keeps Space from starting canvas panning while a new note\'s field is open but not focused', () => {
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('text')
     container.tabIndex = 0
     container.focus()
-    const before = { ...camera.viewport }
+    const before = { ...testView.viewport() }
 
     events.pointerDown({ x: 24, y: 32 }, { button: 0 })
     events.pointerUp({ x: 24, y: 32 }, { button: 0 })
@@ -334,7 +334,7 @@ describe('SceneInteractionSession', () => {
     events.pointerUp({ x: 260, y: 230 }, { button: 0 })
     events.keyUp({ key: ' ', code: 'Space', target: container })
 
-    expect(camera.viewport).toEqual(before)
+    expect(testView.viewport()).toEqual(before)
     expect(noteEntry()).toBeNull()
     expect(store.persisted.annotations).toHaveLength(0)
     session.dispose()
@@ -342,7 +342,7 @@ describe('SceneInteractionSession', () => {
 
   describe('text note editor', () => {
     it('names the new note field and prompts for the text, as the tool card does', () => {
-      const session = createTestSession(createInteractionDeps(container, store, camera))
+      const session = createTestSession(createInteractionDeps(container, store, testView))
       session.setTool('text')
 
       events.pointerDown({ x: 24, y: 32 }, { button: 0 })
@@ -359,7 +359,7 @@ describe('SceneInteractionSession', () => {
       store.updatePersisted((draft) => {
         draft.annotations = [makeTextAnnotation('note-1', { x: 40, y: 40 }, 'Old')]
       })
-      const deps = createInteractionDeps(container, store, camera)
+      const deps = createInteractionDeps(container, store, testView)
       const session = createTestSession(deps)
       session.setTool('select')
       deps.setSelection([annotationTarget('note-1')])

@@ -5,10 +5,9 @@ import {
   createSceneInteractionEventHarness,
   type SceneInteractionEventHarness,
 } from '../../../__tests__/support/canvas-interaction-events'
-import { createTestView } from '../../../__tests__/support/test-view'
+import { createTestView, type TestView } from '../../../__tests__/support/test-view'
 import { setCanvasTool } from '../../session-state'
 import type { CanvasFocusPort } from '../app-adapter'
-import type { CameraController } from '../camera'
 import type { InputPlatform } from '../input/platform'
 import type { ToolHandleId } from '../interaction-types'
 import {
@@ -33,7 +32,7 @@ const CORNER: ToolHandle = {
 
 let container: HTMLDivElement
 let events: SceneInteractionEventHarness
-let camera: CameraController
+let testView: TestView
 let store: SceneStore
 let sessions: SceneInteractionSession[]
 
@@ -41,7 +40,7 @@ beforeEach(() => {
   container = document.createElement('div')
   document.body.appendChild(container)
   events = createSceneInteractionEventHarness(container)
-  camera = createTestView({ screen: { width: 400, height: 300 }, viewport: { x: 0, y: 0, scale: 1 } }).legacyCamera
+  testView = createTestView({ screen: { width: 400, height: 300 }, viewport: { x: 0, y: 0, scale: 1 } })
   store = new SceneStore()
   sessions = []
 })
@@ -56,7 +55,7 @@ afterEach(() => {
 })
 
 function createSession(overrides: Partial<SceneInteractionSessionDeps> = {}): { session: SceneInteractionSession, deps: SceneInteractionSessionDeps } {
-  const deps: SceneInteractionSessionDeps = { ...createInteractionDeps(container, store, camera), platform: PLATFORM, ...overrides }
+  const deps: SceneInteractionSessionDeps = { ...createInteractionDeps(container, store, testView), platform: PLATFORM, ...overrides }
   const session = createSceneInteractionSession(deps)
   sessions.push(session)
   return { session, deps }

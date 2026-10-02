@@ -13,10 +13,10 @@ import {
 } from '../canvas/saved-object-stamp-source'
 import type { CanvasToolCommandSurface } from '../canvas/runtime/runtime'
 import type { CanvasToolGuidance } from '../canvas/session-state'
-import { CameraController } from '../canvas/runtime/camera'
 import type { DraftPresentation } from '../canvas/runtime/tools/draft'
 import { SceneStore } from '../canvas/runtime/scene'
 import type { SceneInteractionEventHarness } from './support/canvas-interaction-events'
+import type { TestView } from './support/test-view'
 import {
   createInteractionDeps,
   installSceneInteractionFixture,
@@ -24,13 +24,13 @@ import {
 
 describe('SceneInteractionSession', () => {
   let container: HTMLDivElement
-  let camera: CameraController
+  let testView: TestView
   let store: SceneStore
   let events: SceneInteractionEventHarness
 
   const { createTestSession } = installSceneInteractionFixture(
     (f) => {
-      ({ container, camera, store, events } = f)
+      ({ container, testView, store, events } = f)
     },
     () => ({ events }),
   )
@@ -76,7 +76,7 @@ describe('SceneInteractionSession', () => {
     })
 
     const setTool = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { setTool })
+    const deps = createInteractionDeps(container, store, testView, { setTool })
     const session = createTestSession(deps)
     session.setTool('object-stamp')
 
@@ -102,7 +102,7 @@ describe('SceneInteractionSession', () => {
       groups: [],
     })
     const setTool = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { setTool })
+    const deps = createInteractionDeps(container, store, testView, { setTool })
     const session = createTestSession(deps)
     session.setTool('saved-object-stamp')
 
@@ -142,7 +142,7 @@ describe('SceneInteractionSession', () => {
         ? [{ anchor: shape.entity.anchor, plants: shape.entity.template.plants.map(({ entity }) => entity.canonicalName) }]
         : [])
     const session = createTestSession({
-      ...createInteractionDeps(container, store, camera),
+      ...createInteractionDeps(container, store, testView),
       renderer: { setDraft: (draft) => { drafts.push(draft) } },
     })
     session.setTool('saved-object-stamp')
@@ -196,7 +196,7 @@ describe('SceneInteractionSession', () => {
       return { anchor, rotationDeg, plants: template.plants.map(({ entity }) => entity.canonicalName) }
     }
     const session = createTestSession({
-      ...createInteractionDeps(container, store, camera),
+      ...createInteractionDeps(container, store, testView),
       renderer: { setDraft: (draft) => { drafts.push(draft) } },
     })
     session.setTool('saved-object-stamp')
@@ -236,7 +236,7 @@ describe('SceneInteractionSession', () => {
 
     function rotationSession(overrides: Parameters<typeof createInteractionDeps>[3] = {}) {
       const published: CanvasToolGuidance[] = []
-      const deps = createInteractionDeps(container, store, camera, {
+      const deps = createInteractionDeps(container, store, testView, {
         publishToolGuidance: (guidance) => { published.push(guidance) },
         ...overrides,
       })

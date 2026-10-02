@@ -35,6 +35,40 @@ describe('createTestView', () => {
     view.dispose()
   })
 
+  it('viewport() reads the placement setViewport made', () => {
+    const view = createTestView({ camera: { bearingDeg: 30 } })
+    for (const viewport of [{ x: 0, y: 0, scale: 1 }, { x: 100, y: 50, scale: 2 }, { x: -3.75, y: 12.5, scale: 1 / 3 }]) {
+      view.setViewport(viewport)
+      const read = view.viewport()
+      expect(Object.keys(read).sort()).toEqual(['scale', 'x', 'y'])
+      expect(read.x).toBeCloseTo(viewport.x, 6)
+      expect(read.y).toBeCloseTo(viewport.y, 6)
+      expect(read.scale).toBeCloseTo(viewport.scale, 6)
+    }
+    view.dispose()
+  })
+
+  it('reproject moves the placement as CameraController.reprojectViewport did', () => {
+    const view = createTestView({ viewport: { x: 100, y: 50, scale: 2 } })
+    const transform = { scale: 1.25, offsetX: -20, offsetY: 8 }
+    const before = [{ x: 0, y: 0 }, { x: 20, y: 30 }, { x: -7.5, y: 3.25 }].map((point) => ({ point, screen: view.view().worldToScreen(point) }))
+
+    view.reproject(transform)
+
+    // Today's reprojectPlaneViewport: scale / s, and the offset at the new scale off the translation.
+    const placement = view.viewport()
+    expect(placement.scale).toBeCloseTo(1.6, 6)
+    expect(placement.x).toBeCloseTo(132, 6)
+    expect(placement.y).toBeCloseTo(37.2, 6)
+    // A plane point p is p × s + o in the new terms, on the same pixel.
+    for (const { point, screen } of before) {
+      const moved = view.view().worldToScreen({ x: point.x * 1.25 - 20, y: point.y * 1.25 + 8 })
+      expect(moved.x).toBeCloseTo(screen.x, 6)
+      expect(moved.y).toBeCloseTo(screen.y, 6)
+    }
+    view.dispose()
+  })
+
   it('legacyCamera and view() read the same host', () => {
     const view = createTestView({ viewport: { x: 12, y: -4, scale: 2 } })
     const camera = view.legacyCamera

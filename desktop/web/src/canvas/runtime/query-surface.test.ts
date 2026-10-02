@@ -12,7 +12,8 @@ import {
   type SceneInteractionEventHarness,
 } from '../../__tests__/support/canvas-interaction-events'
 import { SceneCanvasRuntime } from './scene-runtime'
-import type { ViewFrameSource, WorldPoint } from './view/types'
+import type { PointerWorld } from './interaction-ports'
+import type { ViewFrameSource } from './view/types'
 
 const harnesses: SceneInteractionEventHarness[] = []
 
@@ -39,7 +40,7 @@ async function mountedRuntime(): Promise<{ runtime: SceneCanvasRuntime, containe
 describe('the runtime query surface', () => {
   it('subscribePointerWorld hears the live interaction session over the map, and nothing once the map unmounts', async () => {
     const { runtime, container, events } = await mountedRuntime()
-    const points: (WorldPoint | null)[] = []
+    const points: (PointerWorld | null)[] = []
     const stop = runtime.querySurface.subscribePointerWorld((point) => { points.push(point) })
 
     // A button-less move over the map itself (the harness dispatches moves on window, which is off the map).
@@ -48,8 +49,9 @@ describe('the runtime query surface', () => {
     const frames = (runtime as unknown as { _construction: { frames: ViewFrameSource } })._construction.frames
     const expected = frames.viewFrame.peek().view.screenToWorld({ x: 100, y: 80 })
     expect(points).toHaveLength(1)
-    expect(points[0]!.x).toBeCloseTo(expected!.x, 9)
-    expect(points[0]!.y).toBeCloseTo(expected!.y, 9)
+    expect(points[0]!.world.x).toBeCloseTo(expected!.x, 9)
+    expect(points[0]!.world.y).toBeCloseTo(expected!.y, 9)
+    expect(points[0]!.screen).toEqual({ x: 100, y: 80 })
     events.pointerLeave({ x: 100, y: 80 })
     expect(points.at(-1)).toBeNull()
 

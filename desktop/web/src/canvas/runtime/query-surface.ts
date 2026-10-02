@@ -20,18 +20,18 @@ import type {
   ScenePersistedState,
   SceneStateReader,
 } from './scene'
+import type { PointerWorld } from './interaction-ports'
 import type { SceneRuntimeMutationController } from './scene-runtime/mutations'
 import type { SceneRuntimePresentationController } from './scene-runtime/presentation'
 import { getDesignObjectSelectionModel } from './scene-runtime/selection'
 import type { SettledSceneReader } from './scene-runtime/transactions'
 import { createViewReadSurface } from './view/frame-source'
 import type { ViewReadSurface } from './view/read-surface'
-import type { WorldPoint } from './view/types'
 
 /** Overview starts below the policy's threshold, the same at every latitude. */
 const OVERVIEW_POLICY = createWorkspaceCameraPolicy()
 
-type PointerWorldListener = (point: WorldPoint | null) => void
+type PointerWorldListener = (point: PointerWorld | null) => void
 /** The interaction session's ToolHost.subscribePointerWorld. */
 export type PointerWorldSource = (listener: PointerWorldListener) => () => void
 

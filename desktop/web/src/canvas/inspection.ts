@@ -34,7 +34,7 @@ export interface CanvasInspectionHandle {
   readonly sourceQuad: ReadonlySignal<InspectionSourceQuad | null>
   /** Coordinates in CSS pixels relative to the main canvas host. */
   inspectAtScreenPoint(point: InspectionPoint): void
-  /** Samples at a plane point from ToolHost.subscribePointerWorld, with no screen conversion of its own. */
+  /** Samples at the plane point ToolHost.subscribePointerWorld publishes (its `world`), with no screen conversion of its own. */
   inspectAtWorldPoint(point: WorldPoint): void
   centerOnCanvas(): void
   panBy(delta: InspectionPoint): void

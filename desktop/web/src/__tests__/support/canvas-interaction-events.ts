@@ -1,5 +1,4 @@
 import { vi } from 'vitest'
-import type { CameraController } from '../../canvas/runtime/camera'
 import type { ScenePoint } from '../../canvas/runtime/scene'
 
 interface SceneInteractionBounds {
@@ -52,11 +51,6 @@ export interface SceneInteractionEventHarness {
   boundsReads(): number
   clientPoint(screen: ScenePoint): ScenePoint
   screenPointFrom(event: Pick<MouseEvent, 'clientX' | 'clientY'>, rect?: DOMRect): ScenePoint
-  worldPointFrom(
-    camera: CameraController,
-    event: Pick<MouseEvent, 'clientX' | 'clientY'>,
-    rect?: DOMRect,
-  ): ScenePoint
   pointerDown(screen: ScenePoint, options?: SceneInteractionPointerOptions): PointerEvent
   pointerDownClient(client: ScenePoint, options?: SceneInteractionPointerOptions): PointerEvent
   pointerMove(screen: ScenePoint, options?: SceneInteractionPointerOptions): PointerEvent
@@ -120,14 +114,6 @@ export function createSceneInteractionEventHarness(
       x: event.clientX - rect.left,
       y: event.clientY - rect.top,
     }
-  }
-
-  function worldPointFrom(
-    camera: CameraController,
-    event: Pick<MouseEvent, 'clientX' | 'clientY'>,
-    rect = currentRect(),
-  ): ScenePoint {
-    return camera.screenToWorld(screenPointFrom(event, rect))
   }
 
   function pointerDown(screen: ScenePoint, eventOptions: SceneInteractionPointerOptions = {}): PointerEvent {
@@ -202,7 +188,6 @@ export function createSceneInteractionEventHarness(
     boundsReads: () => boundsReadCount,
     clientPoint,
     screenPointFrom,
-    worldPointFrom,
     pointerDown,
     pointerDownClient,
     pointerMove,

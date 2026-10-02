@@ -4,13 +4,14 @@ import type {
   CanvasContextMenuRequest,
   CanvasRuntimeContextMenuAdapter,
 } from '../app-adapter'
-import type { WorkspaceCameraFrameReader } from '../camera'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
 import type { ScenePoint } from '../scene'
+import type { ViewTransform } from '../view/types'
 
 interface CanvasContextMenuOptions {
   readonly container: HTMLElement
-  readonly camera: WorkspaceCameraFrameReader
+  /** The live frame's view, read when the menu opens. */
+  readonly view: () => ViewTransform
   readonly adapter: CanvasRuntimeContextMenuAdapter | undefined
   readonly commands: CanvasContextMenuCommands
   readonly saveSelectionAsObjectStamp?: () => void
@@ -68,25 +69,29 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
 
   return {
     openAtPointer(screen, selection) {
+      const world = options.view().screenToWorld(screen)
+      if (!world) return
       const origin = containerOrigin()
       const x = origin.left + screen.x
       const y = origin.top + screen.y
-      open({ left: x, top: y, right: x, bottom: y }, options.camera.screenToWorld(screen), selection)
+      open({ left: x, top: y, right: x, bottom: y }, world, selection)
     },
     openFromKeyboard(selection) {
       const origin = containerOrigin()
       const target = hasSelectedObjects(selection) ? selection : null
       const bounds = target?.bounds ?? null
+      const view = options.view()
       if (!bounds) {
-        const size = options.camera.screenSize
-        const centre = { x: size.width / 2, y: size.height / 2 }
+        const centre = { x: view.screen.width / 2, y: view.screen.height / 2 }
+        const world = view.screenToWorld(centre)
+        if (!world) return
         const x = origin.left + centre.x
         const y = origin.top + centre.y
-        open({ left: x, top: y, right: x, bottom: y }, options.camera.screenToWorld(centre), target)
+        open({ left: x, top: y, right: x, bottom: y }, world, target)
         return
       }
-      const a = options.camera.worldToScreen({ x: bounds.minX, y: bounds.minY })
-      const b = options.camera.worldToScreen({ x: bounds.maxX, y: bounds.maxY })
+      const a = view.worldToScreen({ x: bounds.minX, y: bounds.minY })
+      const b = view.worldToScreen({ x: bounds.maxX, y: bounds.maxY })
       open(
         {
           left: origin.left + Math.min(a.x, b.x),

@@ -172,8 +172,6 @@ export class SceneCanvasRuntime {
       this._interaction = createSceneInteractionSession({
         container,
         getSceneStore: () => this._sceneState,
-        camera: this._camera,
-        cameraNavigation: this._cameraNavigation,
         getSpeciesCache: () => this._presentation.getSpeciesCache(),
         getPlantPresentationContext: (viewportScale) =>
           this._presentation.createPlantPresentationContext(viewportScale),
@@ -231,7 +229,7 @@ export class SceneCanvasRuntime {
       })
       const interaction = this._interaction
       bindQuerySurfacePointerWorld(this._querySurface, (listener) => interaction.subscribePointerWorld(listener))
-      this._interaction.setOverviewMode(this._camera.snapshot.peek().mode === 'overview')
+      this._interaction.setOverviewMode(this._construction.frames.viewFrame.peek().mode === 'overview')
       await this._rendering.renderScene()
     } catch (error) {
       const errors: unknown[] = [error]

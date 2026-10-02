@@ -10,7 +10,7 @@ import {
   createSceneInteractionEventHarness,
   type SceneInteractionEventHarness,
 } from '../../__tests__/support/canvas-interaction-events'
-import { createTestView } from '../../__tests__/support/test-view'
+import { createTestView, type TestView } from '../../__tests__/support/test-view'
 import {
   clearPlantStampSource,
   readPlantStampSource,
@@ -33,7 +33,8 @@ import {
   type SceneInteractionSession,
   type SceneInteractionSessionDeps,
 } from './interaction-session'
-import type { CameraController, CameraViewportSnapshot } from './camera'
+import type { CameraViewportSnapshot } from './camera'
+import type { PointerWorld } from './interaction-ports'
 import { SceneStore } from './scene'
 import type { SceneEditCoordinator, SceneEditTransaction } from './scene-runtime/transactions'
 import type { DraftPresentation } from './tools/draft'
@@ -41,7 +42,6 @@ import { createPolygonTool } from './tools/polygon'
 import { createSavedObjectStampTool } from './tools/saved-object-stamp'
 import type { ToolSource } from './tools/tool'
 import { createZoneDragTool } from './tools/zone-drag'
-import type { WorldPoint } from './view/types'
 
 vi.mock('./tools/registry', () => ({ TOOL_REGISTRY: {} }))
 
@@ -65,7 +65,7 @@ const SAVED_STAMP_MIME = 'application/x.canopi.saved-object-stamp+json'
 
 let container: HTMLDivElement
 let events: SceneInteractionEventHarness
-let camera: CameraController
+let testView: TestView
 let store: SceneStore
 let sessions: SceneInteractionSession[]
 let mountedRulers: MountedRulers[]
@@ -74,7 +74,7 @@ beforeEach(() => {
   container = document.createElement('div')
   document.body.appendChild(container)
   events = createSceneInteractionEventHarness(container)
-  camera = createTestView({ screen: { width: 400, height: 300 }, viewport: { x: 0, y: 0, scale: 1 } }).legacyCamera
+  testView = createTestView({ screen: { width: 400, height: 300 }, viewport: { x: 0, y: 0, scale: 1 } })
   store = new SceneStore()
   sessions = []
   mountedRulers = []
@@ -105,7 +105,7 @@ function recordingRenderer() {
 }
 
 function createSession(overrides: Partial<SceneInteractionSessionDeps> = {}): { session: SceneInteractionSession, deps: SceneInteractionSessionDeps } {
-  const deps: SceneInteractionSessionDeps = { ...createInteractionDeps(container, store, camera), platform: PLATFORM, ...overrides }
+  const deps: SceneInteractionSessionDeps = { ...createInteractionDeps(container, store, testView), platform: PLATFORM, ...overrides }
   const session = createSceneInteractionSession(deps)
   sessions.push(session)
   return { session, deps }
@@ -241,11 +241,11 @@ describe('the interaction session', () => {
     // Space held before the blur is released by it: the next primary drag draws instead of panning.
     events.holdSpace()
     events.windowBlur()
-    const before = camera.viewport
+    const before = testView.viewport()
     events.pointerDown({ x: 100, y: 100 })
     events.pointerMove({ x: 140, y: 120 })
     expect(rectangle.last('drag-start')).toBeDefined()
-    expect(camera.viewport).toEqual(before)
+    expect(testView.viewport()).toEqual(before)
   })
 
   it('the active tool\'s slop reaches configure', () => {
@@ -415,11 +415,11 @@ describe('the interaction session', () => {
     container.focus()
     events.holdSpace()
     expect(container.style.cursor).toBe('grab')
-    const before = camera.viewport
+    const before = testView.viewport()
     events.pointerDown({ x: 100, y: 100 })
     expect(container.style.cursor).toBe('grabbing')
     events.pointerMove({ x: 130, y: 110 })
-    expect(camera.viewport).toEqual({ x: before.x + 30, y: before.y + 10, scale: before.scale })
+    expect(testView.viewport()).toEqual({ x: before.x + 30, y: before.y + 10, scale: before.scale })
     events.pointerUp({ x: 130, y: 110 })
     // Today's cancel after a pan: the tool's cursor comes back even with Space still held.
     expect(container.style.cursor).toBe('crosshair')
@@ -466,13 +466,13 @@ describe('the interaction session', () => {
   it('the keyboard port\'s zoom and view keys move the camera through today\'s navigation', () => {
     const render = vi.fn()
     const { session } = createSession({ render })
-    const scale = camera.viewport.scale
+    const scale = testView.viewport().scale
 
     expect(session.keyboard.command({ kind: 'zoom-step', direction: 1 })).toBe(true)
-    expect(camera.viewport.scale).toBeGreaterThan(scale)
+    expect(testView.viewport().scale).toBeGreaterThan(scale)
     expect(render).toHaveBeenCalledWith('viewport')
     session.keyboard.command({ kind: 'zoom-step', direction: -1 })
-    expect(camera.viewport.scale).toBeCloseTo(scale, 9)
+    expect(testView.viewport().scale).toBeCloseTo(scale, 9)
     // North stays up under LEGACY: the view commands answer and leave the camera's bearing alone.
     expect(session.keyboard.command({ kind: 'reset-north' })).toBe(true)
     expect(session.keyboard.command({ kind: 'rotate-view', direction: 1 })).toBe(true)
@@ -481,7 +481,7 @@ describe('the interaction session', () => {
   it('a move with a button held and no press on the map publishes no pointer world point', () => {
     const { session } = createSession()
     session.setTool('line')
-    const points: (WorldPoint | null)[] = []
+    const points: (PointerWorld | null)[] = []
     session.subscribePointerWorld((point) => { points.push(point) })
 
     events.pointerMove({ x: 100, y: 100 }, { target: container, buttons: 0 })
@@ -517,7 +517,7 @@ describe('the interaction session', () => {
     // Today's Line, on the host as the app registers it.
     useStubTools(createZoneDragTool('line'))
     const onSceneEditCommit = vi.fn()
-    const { session } = createSession(createInteractionDeps(container, store, camera, { onSceneEditCommit }))
+    const { session } = createSession(createInteractionDeps(container, store, testView, { onSceneEditCommit }))
     session.setTool('line')
     const pen = { pointerId: 40, pointerType: 'pen' } as const
 
@@ -892,7 +892,7 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
   })
 
   it('a drop whose route throws still prevents the browser\'s own drop', () => {
-    const baseDeps = createInteractionDeps(container, store, camera)
+    const baseDeps = createInteractionDeps(container, store, testView)
     const realEdits = baseDeps.sceneEdits
     const dropFails: SceneEditCoordinator = {
       begin: (type, options) => realEdits.begin(type, options),
