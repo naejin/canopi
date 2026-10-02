@@ -111,9 +111,15 @@ function createFocusOwner(deps: FocusOwnerDeps): FocusOwner {
   }
 }
 
+/** Rendered and not inert: an ancestor's display:none hides a control too (the compact title bar's Menu button). */
 function showing(element: HTMLElement): boolean {
-  return element.isConnected && !element.hidden && element.closest('[inert]') === null
-    && getComputedStyle(element).display !== 'none'
+  if (!element.isConnected || element.closest('[inert]') !== null) return false
+  if (typeof element.checkVisibility === 'function') return element.checkVisibility()
+  // Engines without checkVisibility (and jsdom): no element up to the root is hidden or display:none.
+  for (let node: HTMLElement | null = element; node; node = node.parentElement) {
+    if (node.hidden || getComputedStyle(node).display === 'none') return false
+  }
+  return true
 }
 
 /** The app's focus owner; both editions' key routers and the canvas runtime share it. */
