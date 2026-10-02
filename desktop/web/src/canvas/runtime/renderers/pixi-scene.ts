@@ -188,6 +188,8 @@ export interface PixiScenePresentationOptions {
   readonly stage: Container
   readonly createText: () => Text
   readonly viewSize: { width: number; height: number }
+  /** Asks the host for a frame when the presentation changed outside a render (a draft chip's font arrived). */
+  readonly requestRepaint?: () => void
 }
 
 export function createPixiScenePresentation(options: PixiScenePresentationOptions): PixiScenePresentation {
@@ -222,6 +224,7 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
   const draftLayer = createDraftLayer({
     createText,
     viewSize,
+    requestRepaint: options.requestRepaint,
     painters: createDraftScenePainters(() => presentation.current?.snapshot ?? null),
   })
   stage.addChild(draftLayer.world)

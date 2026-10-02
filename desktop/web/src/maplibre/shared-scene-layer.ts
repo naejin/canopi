@@ -97,6 +97,7 @@ export interface SharedMapSceneLayerOptions {
     readonly stage: Container
     readonly createText: () => Text
     readonly viewSize: { width: number; height: number }
+    readonly requestRepaint: () => void
   }) => PixiScenePresentation
 }
 
@@ -280,11 +281,15 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
         if (disposeRequested) return
         stage = (options.createStage ?? (() => new Container()))()
         presentation = (options.createPresentation ?? createPixiScenePresentation)(
-          { stage, createText: () => new Text({ resolution: size.resolution * 2 }), viewSize: { width: size.width, height: size.height } },
+          {
+            stage,
+            createText: () => new Text({ resolution: size.resolution * 2 }),
+            viewSize: { width: size.width, height: size.height },
+            requestRepaint,
+          },
         )
         // A draft set while the layer initialized is still live.
         if (draft) presentation.setDraft(draft)
-        globalThis.document?.fonts?.addEventListener('loadingdone', redrawDraftWithLoadedFonts)
         if (selectionPreview) presentation.setSelectionPreview(selectionPreview)
         phase = 'initialized'
       }).catch((error: unknown) => {
@@ -358,18 +363,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
     map.triggerRepaint()
   }
 
-  /**
-   * A chip drawn while its font loaded is in the fallback font until the draft is drawn again (the draft layer asks for
-   * its chips' fonts), so a finished font load redraws the live draft.
-   */
-  function redrawDraftWithLoadedFonts(): void {
-    if (!draft || !presentation) return
-    presentation.setDraft(draft)
-    requestRepaint()
-  }
-
   function destroyOwnedResources(): void {
-    globalThis.document?.fonts?.removeEventListener('loadingdone', redrawDraftWithLoadedFonts)
     presentation?.dispose()
     presentation = null
     stage?.destroy({ children: true })

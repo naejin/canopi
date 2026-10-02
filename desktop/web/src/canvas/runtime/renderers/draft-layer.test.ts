@@ -437,14 +437,23 @@ describe('draft layer', () => {
     expect(pathSteps(fills[0]!).find((step) => step.action === 'circle')?.data.slice(0, 3)).toEqual([0, 0, 2])
   })
 
-  it('a chip whose font has not loaded asks the browser to load it, once per font', () => {
-    // Canvas text draws a font that is still loading in a fallback and is never redrawn by itself (the shared layer
-    // redraws the draft on the document's loadingdone), so the layer asks for the chip's own font.
-    const load = vi.fn(async () => [])
+  it('a chip whose font has not loaded asks the browser for it once per font, then redraws the draft and asks for a frame', async () => {
+    // Canvas text drawn while its web font loads keeps the fallback and is never redrawn by itself.
+    let finishLoad!: () => void
+    const load = vi.fn(() => new Promise<FontFace[]>((resolve) => { finishLoad = () => resolve([]) }))
     const fonts = { check: vi.fn(() => false), load }
     Object.defineProperty(document, 'fonts', { configurable: true, value: fonts })
     try {
-      const layer = mountLayer()
+      const requestRepaint = vi.fn()
+      const stage = new Container()
+      const layer = createDraftLayer({
+        createText: () => new MeasuredText(),
+        viewSize: { width: 400, height: 300 },
+        painters: createDraftScenePainters(() => createTestSceneRendererSnapshot()),
+        requestRepaint,
+      })
+      stage.addChild(layer.world, layer.screen)
+      layers.push(layer)
       layer.place({ x: 0, y: 0 }, 1)
       const chip = (text: string, tone: 'measure' | 'measure-quiet') => ({ kind: 'label', anchor: { x: 0, y: 0 }, offsetPx: { x: 0, y: 0 }, text, tone }) as const
       layer.setDraft({ shapes: [chip('112 m²', 'measure'), chip('14 m', 'measure-quiet'), chip('8 m', 'measure-quiet')] })
@@ -455,12 +464,19 @@ describe('draft layer', () => {
         [`600 ${size}px ${CANVAS_CHROME_MONO_FONT_FAMILY}`],
         [`400 ${size}px ${CANVAS_CHROME_MONO_FONT_FAMILY}`],
       ])
-
+      const before = layer.screen.children[0]
       fonts.check.mockReturnValue(true)
+      finishLoad()
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(requestRepaint).toHaveBeenCalledOnce()
+      expect(layer.screen.children, 'the live draft is drawn again').toHaveLength(1)
+      expect(layer.screen.children[0]).not.toBe(before)
+
       const loaded = mountLayer()
       loaded.place({ x: 0, y: 0 }, 1)
       loaded.setDraft({ shapes: [chip('4 m', 'measure')] })
-      expect(load).toHaveBeenCalledTimes(2)
+      expect(load, 'a loaded font is not asked for').toHaveBeenCalledTimes(2)
     } finally {
       Reflect.deleteProperty(document, 'fonts')
     }
