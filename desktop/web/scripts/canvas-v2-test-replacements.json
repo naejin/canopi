@@ -740,5 +740,9 @@
   "src/app/canvas-map-surface/workspace-generation-reconciler.test.ts > WorkspaceGenerationReconciler > downgrades initial readiness when its outcome callback fails": {
     "file": "src/canvas/runtime/scene-runtime.test.ts",
     "name": "scene canvas runtime > the start frame (plan §1, exception 3) > init frames a Design opened before it: the first frame is the fit, with no 100 m frame between two fits"
+  },
+  "src/__tests__/workspace-camera-refresh-origin.test.ts > workspace runtime composition origin effect > refreshes the camera origin whenever the runtime session plane changes, until disposal": {
+    "file": "src/canvas/runtime/scene-runtime/view-surfaces.test.ts",
+    "name": "the runtime view surfaces > follow every Scene plane change on the runtime's camera until it is destroyed"
   }
 }

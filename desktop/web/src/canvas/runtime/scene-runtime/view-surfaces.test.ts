@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../../ipc/species', () => ({
+vi.mock('../../../ipc/species', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../../ipc/species')>(),
   getSpeciesBatch: vi.fn(async () => []),
   getFlowerColorBatch: vi.fn(async () => []),
   getCommonNames: vi.fn(async () => ({})),
@@ -12,7 +13,9 @@ import type { CanopiFile } from '../../../types/design'
 import { planeViewportCornerBounds } from '../../../__tests__/support/plane-viewport-corners'
 import { stageScaleToMapZoom } from '../../projection'
 import type { GeoPosition } from '../../session-plane'
-import type { CameraController } from '../camera'
+import { AttachedInteractionMap } from '../../../__tests__/support/canvas-interaction-setup'
+import { createMapLibreCameraDriver } from '../../../maplibre/camera-driver'
+import { planarCameraOf } from '../view/view-transform'
 import { SceneCanvasRuntime } from '../scene-runtime'
 
 const SCREEN = { width: 400, height: 300 }
@@ -52,13 +55,15 @@ function designAt(origin: GeoPosition, name: string, zones: readonly DesignZone[
   }
 }
 
-function legacyCamera(runtime: SceneCanvasRuntime): CameraController {
-  return (runtime as unknown as { _camera: CameraController })._camera
-}
-
 /** The runtime camera's bearing-0 placement in today's terms. */
 function placementOf(runtime: SceneCanvasRuntime) {
-  return legacyCamera(runtime).viewport
+  const { x, y, scale } = planarCameraOf(runtime.cameraHost.frames.viewFrame.peek().view)
+  return { x, y, scale }
+}
+
+/** An exact placement on the runtime's live camera, bearing 0. */
+function placeAt(runtime: SceneCanvasRuntime, placement: { x: number; y: number; scale: number }): void {
+  runtime.cameraHost.current().apply({ kind: 'place', planar: { ...placement, bearingDeg: 0 } })
 }
 
 /** Today's reads: the plane viewport interpreted on the Scene's plane (current-view.ts, controller.ts before 0A-2). */
@@ -79,7 +84,7 @@ describe('the runtime view surfaces', () => {
     try {
       runtime.documentSurface.loadDocument(designAt({ lon: 2.35, lat: 48.85 }, 'Paris'))
       runtime.documentSurface.resize(SCREEN.width, SCREEN.height)
-      legacyCamera(runtime).setViewport({ x: 120.5, y: -40.25, scale: 3.5 })
+      placeAt(runtime, { x: 120.5, y: -40.25, scale: 3.5 })
 
       for (const design of [null, designAt({ lon: -71.06, lat: 42.36 }, 'Boston')]) {
         if (design) runtime.documentSurface.loadDocument(design)
@@ -98,6 +103,70 @@ describe('the runtime view surfaces', () => {
       }
       // The hydration kept the plane placement.
       expect(placementOf(runtime)).toEqual({ x: 120.5, y: -40.25, scale: 3.5 })
+    } finally {
+      runtime.destroy()
+    }
+  })
+
+  it('follow every Scene plane change on the runtime\'s camera until it is destroyed', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { frames } = runtime.cameraHost
+    try {
+      runtime.documentSurface.loadDocument(designAt({ lon: 2.35, lat: 48.85 }, 'Paris'))
+      runtime.documentSurface.resize(SCREEN.width, SCREEN.height)
+      placeAt(runtime, { x: 120.5, y: -40.25, scale: 3.5 })
+
+      // A detached hydration: the camera keeps its plane placement and reads its ground on the Design's plane.
+      const beforeHydration = frames.viewFrame.peek().view.planeRevision
+      runtime.documentSurface.loadDocument(designAt({ lon: -71.06, lat: 42.36 }, 'Boston'))
+      const boston = runtime.querySurface.sessionPlane.peek()!
+      const hydrated = frames.viewFrame.peek().view
+      expect(hydrated.planeRevision).toBeGreaterThan(beforeHydration)
+      expect(placementOf(runtime).x).toBeCloseTo(120.5, 6)
+      expect(placementOf(runtime).scale).toBeCloseTo(3.5, 6)
+      const centre = boston.toGeo(hydrated.screenToWorld({ x: SCREEN.width / 2, y: SCREEN.height / 2 })!)
+      expect(hydrated.camera.center.lon).toBeCloseTo(centre.lon, 9)
+      expect(hydrated.camera.center.lat).toBeCloseTo(centre.lat, 9)
+
+      // A re-origin: the camera keeps its ground in the new plane.
+      placeAt(runtime, { x: SCREEN.width / 2 - 20_000 * 3.5, y: SCREEN.height / 2, scale: 3.5 })
+      const shown = runtime.querySurface.view.captureView().camera
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(runtime.querySurface.sessionPlane.peek()).not.toBe(boston)
+      const kept = runtime.querySurface.view.captureView().camera
+      expect(kept.center.lon).toBeCloseTo(shown.center.lon, 9)
+      expect(kept.center.lat).toBeCloseTo(shown.center.lat, 9)
+      expect(kept.zoom).toBeCloseTo(shown.zoom, 9)
+    } finally {
+      runtime.destroy()
+    }
+    // Destroyed with the runtime: no late frame.
+    const last = frames.viewFrame.peek()
+    runtime.cameraHost.current().apply({ kind: 'zoom-around', anchorPx: { x: 0, y: 0 }, factor: 2 })
+    expect(frames.viewFrame.peek()).toBe(last)
+  })
+
+  it('a Design loaded while the map is attached frames in the Design\'s plane', () => {
+    const runtime = new SceneCanvasRuntime()
+    const map = new AttachedInteractionMap()
+    try {
+      runtime.documentSurface.loadDocument(designAt({ lon: 2.35, lat: 48.85 }, 'Paris'))
+      const paris = runtime.querySurface.sessionPlane.peek()!
+      runtime.cameraHost.attach(createMapLibreCameraDriver(map, paris, runtime.cameraHost.driverDeps))
+      const centre = runtime.querySurface.view.captureView().camera.center
+      map.jumpTo.mockClear()
+
+      runtime.documentSurface.loadDocument(designAt({ lon: 2.4, lat: 48.9 }, 'Vincennes'))
+
+      // The map stays put; the frame reads it in the Design's plane.
+      const vincennes = runtime.querySurface.sessionPlane.peek()!
+      expect(map.jumpTo).not.toHaveBeenCalled()
+      const { view, attached } = runtime.cameraHost.frames.viewFrame.peek()
+      expect(attached).toBe(true)
+      const atCentre = view.worldToScreen(vincennes.toPlane(centre))
+      expect(atCentre.x).toBeCloseTo(view.screen.width / 2, 6)
+      expect(atCentre.y).toBeCloseTo(view.screen.height / 2, 6)
     } finally {
       runtime.destroy()
     }

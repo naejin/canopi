@@ -8,7 +8,8 @@ import {
   type WorkspaceActivationSnapshot,
   type WorkspaceActivationRuntime,
 } from './workspace-activation'
-import { MapLibreWorkspaceCameraOwner } from '../../maplibre/workspace-camera'
+import { createTestView } from '../../__tests__/support/test-view'
+import { planarCameraOf } from '../../canvas/runtime/view/view-transform'
 import { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'
 import {
   MAPLIBRE_SHARED_SCENE_LAYER_ID,
@@ -194,8 +195,8 @@ function createCoordinator(input: {
   readOrigin?: () => { readonly lat: number; readonly lon: number }
 } = {}) {
   const map = input.map ?? new FakeMap()
-  const camera = new MapLibreWorkspaceCameraOwner()
-  camera.initialize({ width: 400, height: 300 })
+  // The runtime's camera, at the start frame today's runtime placed: 100 m across the 300 px side.
+  const camera = createTestView({ viewport: { x: 50, y: 0, scale: 3 } }).host
   const runtime = input.runtime ?? createRuntime()
   const composition = input.composition ?? createComposition().composition
   const mapControls: WorkspaceActivationMapControls = {
@@ -289,7 +290,7 @@ describe('WorkspaceActivationCoordinator', () => {
       composition: composed.composition,
       readOrigin,
     })
-    const attach = vi.spyOn(camera.host, 'attach')
+    const attach = vi.spyOn(camera, 'attach')
     const snapshot: WorkspaceActivationSnapshot = createActivationSnapshot({
       initialCenter: { lat: 10, lon: 20 },
       background: background({ opacity: 0.3 }),
@@ -309,11 +310,11 @@ describe('WorkspaceActivationCoordinator', () => {
 
     await expect(activation).resolves.toBe('shared-ready')
     // The layer draws from the runtime's camera frames.
-    expect(composed.composition.createLayer).toHaveBeenCalledWith(expect.objectContaining({ frames: camera.host.frames }))
+    expect(composed.composition.createLayer).toHaveBeenCalledWith(expect.objectContaining({ frames: camera.frames }))
     // The map's driver took the runtime's camera, in the plane of the live origin.
     expect(attach).toHaveBeenCalledOnce()
-    expect(camera.host.current()).toBe(attach.mock.calls[0]![0])
-    const attached = camera.host.frames.viewFrame.peek()
+    expect(camera.current()).toBe(attach.mock.calls[0]![0])
+    const attached = camera.frames.viewFrame.peek()
     expect(attached.attached).toBe(true)
     const originPx = attached.view.worldToScreen({ x: 0, y: 0 })
     const origin = map.unproject([originPx.x, originPx.y])
@@ -475,7 +476,7 @@ describe('WorkspaceActivationCoordinator', () => {
       composition: composed.composition,
       installStyleRestorer,
     })
-    const attach = vi.spyOn(camera.host, 'attach')
+    const attach = vi.spyOn(camera, 'attach')
 
     await expect(coordinator.activate()).resolves.toBe('shared-ready')
     expect(restore).not.toBeNull()
@@ -645,7 +646,7 @@ describe('WorkspaceActivationCoordinator', () => {
       installStyleRestorer: () => disposeStyleRestorer,
       watchFailure: () => unwatchFailure,
     })
-    const attach = vi.spyOn(camera.host, 'attach')
+    const attach = vi.spyOn(camera, 'attach')
     const snapshotA = createActivationSnapshot({
       initialCenter: { lat: 1, lon: 2 },
       background: background({ opacity: 0.2 }),
@@ -659,11 +660,11 @@ describe('WorkspaceActivationCoordinator', () => {
     await expect(coordinator.activate(snapshotB)).resolves.toBe('shared-ready')
 
     expect(snapshots).toEqual([snapshotA.map, snapshotB.map])
-    expect(composition.createLayer).toHaveBeenLastCalledWith(expect.objectContaining({ frames: camera.host.frames }))
+    expect(composition.createLayer).toHaveBeenLastCalledWith(expect.objectContaining({ frames: camera.frames }))
     // B's map drives the camera now; A's driver released A's map.
     expect(attach).toHaveBeenCalledTimes(2)
-    expect(camera.host.current()).toBe(attach.mock.calls[1]![0])
-    expect(camera.host.frames.viewFrame.peek().attached).toBe(true)
+    expect(camera.current()).toBe(attach.mock.calls[1]![0])
+    expect(camera.frames.viewFrame.peek().attached).toBe(true)
     expect(secondMap.jumpTo).toHaveBeenCalled()
     expect(events).toEqual([
       'style-restorer',
@@ -828,8 +829,8 @@ describe('WorkspaceActivationCoordinator', () => {
     expect(runtime.init).not.toHaveBeenCalled()
     expect(runtime.unmountRenderer).not.toHaveBeenCalled()
     if (reason === 'camera attachment is rejected') {
-      expect(camera.host.failure.peek()).toMatchObject({ reason: 'map-error' })
-      expect(camera.host.frames.viewFrame.peek().attached).toBe(false)
+      expect(camera.failure.peek()).toMatchObject({ reason: 'map-error' })
+      expect(camera.frames.viewFrame.peek().attached).toBe(false)
     }
   })
 
@@ -864,18 +865,21 @@ describe('WorkspaceActivationCoordinator', () => {
   it('unmounts the renderer on map failure and retains the spatial camera frame', async () => {
     const { coordinator, runtime, camera, map } = createCoordinator()
     await expect(coordinator.activate()).resolves.toBe('shared-ready')
-    const attachedFrame = camera.snapshot.value
+    const attachedFrame = camera.frames.viewFrame.peek()
 
     await expect(coordinator.reportFailure(new Error('context lost'))).resolves.toBe('map-unavailable')
 
     expect(runtime.unmountRenderer).toHaveBeenCalledOnce()
-    expect(camera.snapshot.value).toEqual({
-      ...attachedFrame,
-      groundMetersPerCssPixel: null,
-      revision: attachedFrame.revision + 1,
-    })
-    expect(camera.snapshot.value.viewport).toStrictEqual(attachedFrame.viewport)
-    expect(camera.snapshot.value.scaleBounds).toStrictEqual(attachedFrame.scaleBounds)
+    const retained = camera.frames.viewFrame.peek()
+    expect(retained.attached).toBe(false)
+    expect(retained.mode).toBe(attachedFrame.mode)
+    expect(retained.view.screen).toEqual(attachedFrame.view.screen)
+    expect(retained.scaleBounds).toStrictEqual(attachedFrame.scaleBounds)
+    const kept = planarCameraOf(retained.view)
+    const attachedPlacement = planarCameraOf(attachedFrame.view)
+    expect(kept.x).toBeCloseTo(attachedPlacement.x, 6)
+    expect(kept.y).toBeCloseTo(attachedPlacement.y, 6)
+    expect(kept.scale).toBeCloseTo(attachedPlacement.scale, 6)
     expect(map.off).toHaveBeenCalledTimes(2)
     expect(map.remove).toHaveBeenCalledOnce()
   })
@@ -887,8 +891,8 @@ describe('WorkspaceActivationCoordinator', () => {
     // A pitched read-back fails the driver: the host takes the camera back and reports it.
     map.pitch = 1
     map.emit('move')
-    expect(camera.host.failure.peek()).toMatchObject({ reason: 'map-error' })
-    expect(camera.host.frames.viewFrame.peek().attached).toBe(false)
+    expect(camera.failure.peek()).toMatchObject({ reason: 'map-error' })
+    expect(camera.frames.viewFrame.peek().attached).toBe(false)
 
     await vi.waitFor(() => expect(runtime.unmountRenderer).toHaveBeenCalledOnce())
     expect(runtime.unmountRenderer).toHaveBeenCalledOnce()
@@ -993,16 +997,16 @@ describe('WorkspaceActivationCoordinator', () => {
         : undefined,
     })
     coordinator = created
-    const subscribeFailure = vi.spyOn(camera.host.failure, 'subscribe')
+    const subscribeFailure = vi.spyOn(camera.failure, 'subscribe')
     if (boundary === 'camera failure subscription') {
       subscribeFailure.mockImplementation(() => {
         coordinator.requestGenerationDisconnect()
         return subscriptionDisposer
       })
     }
-    const detach = vi.spyOn(camera.host, 'detach')
+    const detach = vi.spyOn(camera, 'detach')
     if (boundary === 'camera attachment') {
-      vi.spyOn(camera.host, 'attach').mockImplementation(() => {
+      vi.spyOn(camera, 'attach').mockImplementation(() => {
         coordinator.requestGenerationDisconnect()
       })
     }
@@ -1617,10 +1621,10 @@ describe('WorkspaceActivationCoordinator', () => {
 
   it('uses a real SceneCanvasRuntime and shared composition without adding a runtime canvas', async () => {
     const map = new FakeMap()
-    const camera = new MapLibreWorkspaceCameraOwner()
-    camera.initialize({ width: 400, height: 300 })
     const composition = createSharedMapSceneRendererComposition()
-    const runtime = new SceneCanvasRuntime({ camera, renderer: composition.renderer })
+    const runtime = new SceneCanvasRuntime({ renderer: composition.renderer })
+    runtime.documentSurface.resize(400, 300)
+    const camera = runtime.cameraHost
     const container = document.createElement('div')
     Object.defineProperties(container, { clientWidth: { value: 400 }, clientHeight: { value: 300 } })
     const renderer: SharedPixiRenderer = {

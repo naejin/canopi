@@ -2,16 +2,17 @@ import { signal } from '@preact/signals'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestView, type TestView } from '../__tests__/support/test-view'
 import { geoToMercator, mapZoomToStageScale, mercatorToGeo, stageScaleToMapZoom, worldToGeo } from '../canvas/projection'
-import type { ScenePersistedState } from '../canvas/runtime/scene'
+import { createDefaultScenePersistedState, type ScenePersistedState } from '../canvas/runtime/scene'
 import { sceneExtentPoints } from '../canvas/runtime/scene-extent'
 import type { CameraDriver, CameraDriverDeps } from '../canvas/runtime/view/camera-driver'
+import { createCameraDriverHost } from '../canvas/runtime/view/driver-host'
+import { createViewNavigation } from '../canvas/runtime/view/navigation'
 import { createNavigationPolicy, zoomFloorForArc, type NavigationPolicy } from '../canvas/runtime/view/navigation-policy'
 import type { GeoPoint, ViewFrame, ViewScreen } from '../canvas/runtime/view/types'
 import { planarCameraOf } from '../canvas/runtime/view/view-transform'
 import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
 import { createWorkspaceCameraPolicy } from '../canvas/workspace-camera-policy'
 import { createMapLibreCameraDriver } from './camera-driver'
-import { MapLibreWorkspaceCameraOwner } from './workspace-camera'
 import type { MapLibreLngLat, MapLibreTransformConstrain } from './loader'
 
 const PLANE = createSessionPlane({ lon: 2.35, lat: 48.85 })
@@ -757,27 +758,75 @@ describe('MapLibre camera driver', () => {
 
 // Moved from __tests__/maplibre-camera.test.ts: a placement on the attached map keeps every plane point on the canvas pixel the
 // placement gives it (p × scale + { x, y }), through MapLibre's own Mercator camera.
-// The legacy MapLibre shim (maplibre/workspace-camera.ts, deleted with it at the end of 0D2) over this driver.
-describe('MapLibre workspace camera shim', () => {
-  it('a re-origin during a flight keeps the flight running', () => {
-    const scenePlane = signal<SessionPlane | null>(PLANE)
-    const camera = new MapLibreWorkspaceCameraOwner(createWorkspaceCameraPolicy(PLANE.origin.lat))
-    const stopFollowing = camera.followScenePlane(scenePlane)
+/** The runtime's camera as the runtime builds it: a host on the runtime's plane, with the navigation over it and one attached map. */
+function runtimeCameraOn(map: ConsistentMap) {
+  let runtimePlane = PLANE
+  const host = createCameraDriverHost({
+    policy: createWorkspaceCameraPolicy(),
+    reducedMotion: signal(false),
+    plane: () => runtimePlane,
+    screen: { width: 400, height: 300, devicePixelRatio: 1 },
+  })
+  const navigation = createViewNavigation({
+    driver: host,
+    policy: host.driverDeps.policy,
+    readScene: () => ({ persisted: createDefaultScenePersistedState(), selection: [], bounds: {} }),
+  })
+  // Attached on the host, as the workspace activation attaches each map.
+  host.attach(createMapLibreCameraDriver(map, PLANE, host.driverDeps))
+  return {
+    host,
+    navigation,
+    /** The runtime's plane effect on a re-origin: the Scene's plane moves, then the live driver is re-expressed in it. */
+    reorigin(next: SessionPlane) {
+      runtimePlane = next
+      host.current().planeChanged(next)
+    },
+  }
+}
+
+// The attached re-origin, which the runtime's plane effect makes (it was the MapLibre shim's refreshOrigin before 0E).
+describe('the runtime camera on an attached map', () => {
+  it('an attached re-origin keeps the map still and frames in the new plane', () => {
     const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
+    const camera = runtimeCameraOn(map)
     try {
-      // Attached on the host, as the workspace activation attaches each map.
-      camera.host.attach(createMapLibreCameraDriver(map, PLANE, camera.host.driverDeps))
+      const before = camera.host.frames.viewFrame.peek()
+      const groundAtCentre = PLANE.toGeo(before.view.screenToWorld({ x: 200, y: 150 })!)
+      const jumps = map.jumpTo.mock.calls.length
+      const next = createSessionPlane(PLANE.toGeo({ x: 20_000, y: -5_000 }))
+
+      camera.reorigin(next)
+
+      expect(map.jumpTo).toHaveBeenCalledTimes(jumps)
+      const after = camera.host.frames.viewFrame.peek()
+      expect(after.attached).toBe(true)
+      expect(after.view.planeRevision).toBeGreaterThan(before.view.planeRevision)
+      expect(after.view.camera).toEqual(before.view.camera)
+      const ground = next.toGeo(after.view.screenToWorld({ x: 200, y: 150 })!)
+      expect(ground.lon).toBeCloseTo(groundAtCentre.lon, 9)
+      expect(ground.lat).toBeCloseTo(groundAtCentre.lat, 9)
+      // The new latitude's scale bounds.
+      expect(after.scaleBounds.max).toBeCloseTo(mapZoomToStageScale(27, next.origin.lat), 6)
+    } finally {
+      camera.host.dispose()
+    }
+  })
+
+  it('a re-origin during a flight keeps the flight running', () => {
+    const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
+    const camera = runtimeCameraOn(map)
+    try {
       const far = { x: 30_000, y: -60_000 }
       const target = PLANE.toGeo(far)
-      camera.centerOn(far, mapZoomToStageScale(17, PLANE.origin.lat), { animate: true })
+      camera.navigation.centerOn(far, mapZoomToStageScale(17, PLANE.origin.lat), { animate: true })
       expect(map.flight).not.toBeNull()
       map.flightFrame({ center: target, zoom: 14, bearing: 0 })
 
-      // The re-origin the flight triggered: the Scene's plane moves to a new latitude, then the composition refreshes the origin.
+      // The re-origin the flight triggered: the Scene's plane moves to a new latitude, and the runtime re-expresses the camera.
       const next = createSessionPlane(target)
       const stops = map.stop.mock.calls.length
-      scenePlane.value = next
-      camera.attachment.refreshOrigin()
+      camera.reorigin(next)
 
       expect(map.stop).toHaveBeenCalledTimes(stops)
       expect(map.jumpTo).not.toHaveBeenCalledWith(expect.objectContaining({ zoom: 14 }))
@@ -796,8 +845,7 @@ describe('MapLibre workspace camera shim', () => {
       expect(shown.lng).toBeCloseTo(next.origin.lon, 9)
       expect(shown.lat).toBeCloseTo(next.origin.lat, 9)
     } finally {
-      stopFollowing()
-      camera.dispose()
+      camera.host.dispose()
     }
   })
 })

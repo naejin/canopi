@@ -247,9 +247,7 @@ describe('visible map area', () => {
 
 
   it('Zoom to them and Fit to Design frame the Design into the visible map area', () => {
-    const camera = new CameraController()
-    camera.initialize({ width: 1280, height: 800 })
-    const host = createLiveTestCanvasRuntimeHost({ camera })
+    const host = createLiveTestCanvasRuntimeHost({ screen: { width: 1280, height: 800 } })
     const at = (x: number, y: number) => geoAt(x, y, { lon: 0, lat: 0 })
     const plant = (id: string, x: number, y: number, canonical: string): CanopiFile['plants'][number] => ({
       id, canonical_name: canonical, common_name: null, color: null, position: at(x, y), rotation: null,
@@ -268,7 +266,7 @@ describe('visible map area', () => {
       const visibleCentre = { x: 236 + 588 / 2, y: 60 + 684 / 2 }
       const onScreen = (x: number, y: number) => {
         const point = host.surfaces.queries.sessionPlane.value!.toPlane(at(x, y))
-        return camera.worldToScreen(point)
+        return host.cameraHost.frames.viewFrame.peek().view.worldToScreen(point)
       }
 
       plantFinderMapMatches.value = { query: 'pomm', canonicalNames: ['Malus domestica'] }

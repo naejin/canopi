@@ -17,12 +17,9 @@ import {
   type SharedMapSceneMap,
 } from '../../maplibre/shared-scene-layer'
 import type { SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
-import {
-  type MapLibreWorkspaceCameraMap,
-  type MapLibreWorkspaceCameraOwner,
-} from '../../maplibre/workspace-camera'
+import type { MapLibreWorkspaceCameraMap } from '../../maplibre/workspace-camera'
 import { createMapLibreCameraDriver } from '../../maplibre/camera-driver'
-import type { CameraDriverFailure } from '../../canvas/runtime/view/camera-driver'
+import type { CameraDriverFailure, CameraDriverHost } from '../../canvas/runtime/view/camera-driver'
 import { createSessionPlane } from '../../canvas/session-plane'
 
 /**
@@ -82,11 +79,8 @@ export interface WorkspaceActivationRuntime {
 export interface WorkspaceActivationOptions {
   readonly container: HTMLElement
   readonly runtime: WorkspaceActivationRuntime | SceneCanvasRuntime
-  /**
-   * The runtime's camera shim (0A to the end of 0D2): the activation unwraps its CameraDriverHost and attaches each map to it as a
-   * camera driver (spec §1.1 Attachment).
-   */
-  readonly camera: MapLibreWorkspaceCameraOwner
+  /** The runtime's one camera: the activation attaches each map to it as a camera driver (spec §1.1 Attachment). */
+  readonly camera: CameraDriverHost
   readonly composition: SharedMapSceneRendererComposition
   readonly map: WorkspaceActivationMapControls
   readonly layer: Omit<
@@ -874,9 +868,9 @@ export class WorkspaceActivationCoordinator {
     }
   }
 
-  /** The runtime's one camera, which the shim wraps. */
-  private cameraHost() {
-    return this.options.camera.host
+  /** The runtime's one camera. */
+  private cameraHost(): CameraDriverHost {
+    return this.options.camera
   }
 
   private isCurrent(current: ActivationGeneration): boolean {

@@ -6,7 +6,6 @@ import { MAPLIBRE_SCENE_RENDERER_ID } from '../../canvas/runtime/renderers/mapli
 import { createDetachedSceneRuntimePanelTargetAdapter } from '../../canvas/runtime/scene-runtime/panel-target-adapter'
 import type { SceneCanvasRuntimeOptions } from '../../canvas/runtime/scene-runtime'
 import type { CanvasDocumentSurface } from '../../canvas/runtime/runtime'
-import { MapLibreWorkspaceCameraOwner } from '../../maplibre/workspace-camera'
 import type { WorkspaceMapContributionSnapshot, WorkspaceMapContributionAdapter } from './workspace-map-contribution-adapter'
 import type { MapBackgroundPresentation } from '../../maplibre/map-background'
 import type { SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
@@ -44,13 +43,13 @@ describe('createWorkspaceRuntimeComposition', () => {
 
     expect(fixture.createRuntime).toHaveBeenCalledOnce()
     const runtimeOptions = fixture.createRuntime.mock.calls[0]![0]
-    expect(runtimeOptions.camera).toBe(fixture.camera)
     // Renderer selection has one outcome: the composition's MapLibre renderer.
     expect(runtimeOptions.renderer).toBe(fixture.rendererComposition.renderer)
     expect(runtimeOptions.renderer?.id).toBe(MAPLIBRE_SCENE_RENDERER_ID)
     const workspaceOptions = fixture.createWorkspace.mock.calls[0]![0]
     expect(workspaceOptions.runtime).toBe(fixture.runtime)
-    expect(workspaceOptions.camera).toBe(fixture.camera)
+    // The one camera is the runtime's.
+    expect(workspaceOptions.camera).toBe(fixture.runtime.cameraHost)
     expect(workspaceOptions.composition).toBe(fixture.rendererComposition)
     expect(workspaceOptions.map).toBe(fixture.controls)
     expect(fixture.workspace.activate).toHaveBeenCalledExactlyOnceWith(snapshot)
@@ -151,9 +150,8 @@ describe('createWorkspaceRuntimeComposition', () => {
   })
 
   it('publishes memoized disposal before cleanup, joins teardown, and aggregates failures', async () => {
-    const originEffectError = new Error('origin effect cleanup failed')
     const presentationEffectError = new Error('presentation effect cleanup failed')
-    const effectErrors = [originEffectError, presentationEffectError]
+    const effectErrors = [presentationEffectError]
     const teardownError = new Error('workspace teardown failed')
     let reentered: Promise<void> | null = null
     let fixture!: ReturnType<typeof compositionFixture>
@@ -180,9 +178,9 @@ describe('createWorkspaceRuntimeComposition', () => {
     expect(fixture.workspace.teardown).toHaveBeenCalledOnce()
     const error = await first.catch((reason: unknown) => reason)
     expect(error).toBeInstanceOf(CanvasRuntimeCleanupError)
-    expect(installed).toBe(2)
+    expect(installed).toBe(1)
     expect((error as CanvasRuntimeCleanupError).errors)
-      .toEqual([originEffectError, presentationEffectError, teardownError])
+      .toEqual([presentationEffectError, teardownError])
     await expect(fixture.composition.start()).resolves.toBe('cancelled')
   })
 
@@ -324,6 +322,7 @@ function compositionFixture(options: CompositionFixtureOptions) {
     queries: { ...queries, view: createViewReadSurface(view.frames, () => sessionPlane.peek() ?? SETTLE_PLANE) },
   })
   const runtime = {
+    cameraHost: view.host,
     commandSurface: surfaces.commands,
     querySurface: surfaces.queries,
     documentSurface: surfaces.documents,
@@ -331,7 +330,6 @@ function compositionFixture(options: CompositionFixtureOptions) {
     unmountRenderer: vi.fn(async () => {}),
     destroy: vi.fn(),
   }
-  const camera = new MapLibreWorkspaceCameraOwner()
   const rendererComposition = {
     renderer: {
       id: MAPLIBRE_SCENE_RENDERER_ID,
@@ -362,7 +360,6 @@ function compositionFixture(options: CompositionFixtureOptions) {
   const createWorkspace = vi.fn((_input: WorkspaceActivationOptions) => workspace)
   const dependencies = {
     createRendererComposition: () => rendererComposition,
-    createCamera: () => camera,
     createRuntime,
     createControls: () => controls,
     createWorkspace,
@@ -385,7 +382,6 @@ function compositionFixture(options: CompositionFixtureOptions) {
     controls,
     createRuntime,
     createWorkspace,
-    camera,
     documents: documents as CanvasDocumentSurface & {
       zoomToFit: ReturnType<typeof vi.fn>
     },

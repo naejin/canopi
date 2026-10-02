@@ -9,7 +9,6 @@ vi.mock('../ipc/species', () => ({
 
 import { geoAt } from '../__tests__/support/geo-design'
 import type { WorkspaceMapContributionSnapshot } from '../app/canvas-map-surface/workspace-map-contribution-adapter'
-import type { CameraController } from '../canvas/runtime/camera'
 import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
 import { SETTLE_MS } from '../canvas/runtime/view/frame-source'
 import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
@@ -47,6 +46,17 @@ function design(): CanopiFile {
   }
 }
 
+/** Moves of the runtime's live camera, as a map gesture or a command makes them. */
+function cameraOf(runtime: SceneCanvasRuntime) {
+  const driver = () => runtime.cameraHost.current()
+  return {
+    setViewport: (placement: { x: number; y: number; scale: number }) =>
+      driver().apply({ kind: 'place', planar: { ...placement, bearingDeg: 0 } }),
+    panBy: (deltaPx: { x: number; y: number }) => driver().apply({ kind: 'pan-by', deltaPx }),
+    zoomIn: () => runtime.commandSurface.viewport.zoomIn(),
+  }
+}
+
 describe('browser workspace map contribution reads', () => {
   it('re-read on a settled camera or a mode change, never on a camera frame alone', () => {
     vi.useFakeTimers()
@@ -54,7 +64,7 @@ describe('browser workspace map contribution reads', () => {
     try {
       runtime.documentSurface.loadDocument(design())
       runtime.documentSurface.resize(400, 300)
-      const camera = (runtime as unknown as { _camera: CameraController })._camera
+      const camera = cameraOf(runtime)
       camera.setViewport({ x: 0, y: 0, scale: 2 })
       vi.advanceTimersByTime(SETTLE_MS)
       const adapter = createBrowserWorkspaceMapContributionAdapter({ sessionIdentity: signal({}), hasCurrentDesign: () => true })
@@ -90,7 +100,7 @@ describe('browser workspace map contribution reads', () => {
     try {
       runtime.documentSurface.loadDocument(design())
       runtime.documentSurface.resize(400, 300)
-      const camera = (runtime as unknown as { _camera: CameraController })._camera
+      const camera = cameraOf(runtime)
       camera.setViewport({ x: 0, y: 0, scale: 2 })
       vi.advanceTimersByTime(SETTLE_MS)
       const captureView = vi.spyOn(runtime.querySurface.view, 'captureView')

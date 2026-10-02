@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { CameraController } from './camera'
+import { createTestView, type TestView } from '../../__tests__/support/test-view'
 import { createSceneCanvasDocumentSurface } from './document-surface'
 import {
   CanvasAuthorityBusyError,
@@ -14,7 +14,7 @@ function createTestDocumentSurface(
   renderingOverrides: Partial<
     Parameters<typeof createSceneCanvasDocumentSurface>[0]['rendering']
   > & { invalidate?: (kind: 'scene' | 'viewport' | 'chrome') => void } = {},
-  camera = new CameraController(),
+  camera: TestView = createTestView(),
 ): CanvasDocumentSurface {
   const rendering = {
     container: null,
@@ -26,8 +26,8 @@ function createTestDocumentSurface(
   return createSceneCanvasDocumentSurface({
     inspection: { mount: () => { throw new Error('Inspection is not used by this fixture.') }, reset: () => {}, dispose: () => {} },
     documents,
-    camera,
-    cameraNavigation: camera,
+    cameraHost: camera.host,
+    viewNavigation: camera.navigation,
     chrome: {
       attach: vi.fn(),
       show: vi.fn(),
@@ -50,8 +50,7 @@ function createTestDocumentSurface(
 
 describe('Scene Canvas document surface lifecycle', () => {
   it('clears a temporary focus after successful load or replacement but retains it when replacement is rejected', () => {
-    const camera = new CameraController()
-    camera.initialize({ width: 400, height: 300 })
+    const camera = createTestView()
     const file = new SceneStore().toCanopiFile()
     const surface = createTestDocumentSurface({
       loadDocument: vi.fn(),
@@ -66,13 +65,13 @@ describe('Scene Canvas document surface lifecycle', () => {
       })),
     }, {}, camera)
 
-    camera.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
+    camera.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
     surface.loadDocument(file)
-    expect(camera.returnFromTemporaryFocus()).toBe(false)
+    expect(camera.navigation.returnFromTemporaryFocus()).toBe(false)
 
-    camera.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
+    camera.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
     surface.replaceDocument(file, createCanvasDocumentReplacementToken(), vi.fn())
-    expect(camera.returnFromTemporaryFocus()).toBe(false)
+    expect(camera.navigation.returnFromTemporaryFocus()).toBe(false)
 
     const rejected = createTestDocumentSurface({
       loadDocument: vi.fn(),
@@ -85,14 +84,14 @@ describe('Scene Canvas document surface lifecycle', () => {
         acknowledgeSaved: () => 'applied' as const,
       })),
     }, {}, camera)
-    camera.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
+    camera.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
     expect(() => rejected.replaceDocument(file, createCanvasDocumentReplacementToken(), vi.fn())).toThrow('not admitted')
-    expect(camera.returnFromTemporaryFocus()).toBe(true)
+    expect(camera.navigation.returnFromTemporaryFocus()).toBe(true)
   })
 
   it('continues destroying every owner after interaction disposal fails', () => {
     const calls: string[] = []
-    const camera = new CameraController()
+    const camera = createTestView()
     const surface = createSceneCanvasDocumentSurface({
     inspection: { mount: () => { throw new Error('Inspection is not used by this fixture.') }, reset: () => {}, dispose: () => {} },
       documents: {
@@ -107,8 +106,8 @@ describe('Scene Canvas document surface lifecycle', () => {
           acknowledgeSaved: () => 'applied',
         })),
       },
-      camera,
-      cameraNavigation: camera,
+      cameraHost: camera.host,
+      viewNavigation: camera.navigation,
       chrome: {
         attach: vi.fn(),
         show: vi.fn(),

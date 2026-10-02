@@ -1,6 +1,6 @@
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { DraftPresentation } from './tools/draft'
-import type { ViewFrame, ViewFrameSource, ViewTransform } from './view/types'
+import type { ViewFrame, ViewTransform } from './view/types'
 import { planarCameraOf } from './view/view-transform'
 import { effect } from '@preact/signals'
 import { stageScaleToMapZoom } from '../projection'
@@ -100,7 +100,7 @@ vi.mock('./tools/registry', async (importOriginal) => {
 })
 import { t } from '../../i18n'
 import { createSceneInteractionEventHarness } from '../../__tests__/support/canvas-interaction-events'
-import { CameraController } from './camera'
+import type { CameraDriverHostController } from './view/driver-host'
 
 // Fixtures are authored in metres around the equator, where Mercator scale is
 // stationary, so re-centring the session plane on them keeps their metre
@@ -287,17 +287,22 @@ function lastRenderedViewport(renderer: RendererStub): { x: number; y: number; s
 
 /** The runtime camera's live frame. */
 function frameOf(runtime: SceneCanvasRuntime): ViewFrame {
-  return (runtime as unknown as { _construction: { frames: ViewFrameSource } })._construction.frames.viewFrame.peek()
+  return runtime.cameraHost.frames.viewFrame.peek()
+}
+
+/** An exact placement on the runtime's live camera, bearing 0. */
+function placeOn(runtime: SceneCanvasRuntime, placement: { x: number; y: number; scale: number }): void {
+  runtime.cameraHost.current().apply({ kind: 'place', planar: { ...placement, bearingDeg: 0 } })
+}
+
+/** A pan of the runtime's live camera, as a map gesture moves it. */
+function panOn(runtime: SceneCanvasRuntime, deltaPx: { x: number; y: number }): void {
+  runtime.cameraHost.current().apply({ kind: 'pan-by', deltaPx })
 }
 
 /** The runtime camera's bearing-0 placement in today's terms. */
 function placementOf(runtime: SceneCanvasRuntime): { x: number; y: number; scale: number } {
   const { x, y, scale } = planarCameraOf(frameOf(runtime).view)
-  return { x, y, scale }
-}
-
-function viewportOf(camera: CameraController): { x: number; y: number; scale: number } {
-  const { x, y, scale } = camera.viewport
   return { x, y, scale }
 }
 
@@ -356,7 +361,7 @@ function setInteractionViewport(
   viewport: { x: number; y: number; scale: number } = { x: 0, y: 0, scale: 1 },
 ): void {
   const offset = authoringOffset(runtime)
-  ;(runtime as any)._camera.setViewport({
+  placeOn(runtime, {
     x: viewport.x - offset.x * viewport.scale,
     y: viewport.y - offset.y * viewport.scale,
     scale: viewport.scale,
@@ -551,10 +556,6 @@ describe('scene canvas runtime', () => {
   })
 
   describe('the start frame (plan §1, exception 3)', () => {
-    function framesOf(runtime: SceneCanvasRuntime): ViewFrameSource {
-      return (runtime as unknown as { _construction: { frames: ViewFrameSource } })._construction.frames
-    }
-
     /**
      * Fits the runtime's camera again; a frame that already shows the fit stays where it is. Plants and notes are sized at the
      * scale a fit starts from, so a second fit can land a few micro-pixels from the first: 1e-3 px tells a fit from any other frame.
@@ -573,7 +574,7 @@ describe('scene canvas runtime', () => {
       runtime.documentSurface.resize(400, 300)
       runtime.documentSurface.loadDocument(makeFile())
       const seen: ViewFrame[] = []
-      const stop = effect(() => { seen.push(framesOf(runtime).viewFrame.value) })
+      const stop = effect(() => { seen.push(runtime.cameraHost.frames.viewFrame.value) })
       try {
         await initRuntimeWithStubbedRenderer(runtime)
         stop()
@@ -641,6 +642,33 @@ describe('scene canvas runtime', () => {
     })
   })
 
+  it('a zoom with a selected plant keeps the rotation handle above the plant\'s top', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    try {
+      // Two plants, since one plant alone does not rotate; the top plant's footprint is sized at the live scale.
+      runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1', 'plant-2'))
+      setInteractionViewport(runtime, { x: 100, y: 120, scale: 4 })
+      runtime.commandSurface.tools.setTool('select')
+      runtime.commandSurface.sceneEdits.selectAll()
+
+      // Zoom about the screen centre, away from the plants: they move on screen, and the handle with them (INV-REN-11).
+      for (let step = 0; step < 3; step += 1) runtime.commandSurface.viewport.zoomIn()
+
+      const bounds = runtime.querySurface.getDesignObjectSelection().bounds!
+      const { view } = frameOf(runtime)
+      const top = view.worldToScreen({ x: (bounds.minX + bounds.maxX) / 2, y: bounds.minY })
+      const handle = container.querySelector<HTMLElement>('[data-canvas-handle="rotate"]')!
+      // The handle is anchored on the selection's top edge at the new scale, and its 28 px button sits wholly above it.
+      expect(handle.style.display).not.toBe('none')
+      expect(Number(handle.dataset.canvasHandleScreenX)).toBeCloseTo(top.x, 6)
+      expect(Number(handle.dataset.canvasHandleScreenY)).toBeCloseTo(top.y, 6)
+      expect(Number.parseFloat(handle.style.top) + 28).toBeLessThanOrEqual(top.y)
+    } finally {
+      runtime.destroy()
+    }
+  })
+
   it('routes locale subscriptions through the mounted interaction translation refresh', async () => {
     let language = 'en'
     let notifyLocale = (): void => {}
@@ -674,8 +702,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('marks the Design map aria-busy until a scene change is drawn, never for a camera frame', async () => {
-    const camera = new CameraController()
-    const runtime = new SceneCanvasRuntime({ camera })
+    const runtime = new SceneCanvasRuntime()
     const { container, renderer } = await initRuntimeWithStubbedRenderer(runtime)
     const busyWhenDrawn: Array<string | null> = []
     renderer.syncScene.mockImplementation(() => { busyWhenDrawn.push(container.getAttribute('aria-busy')) })
@@ -687,9 +714,9 @@ describe('scene canvas runtime', () => {
     await vi.waitFor(() => expect(container.hasAttribute('aria-busy')).toBe(false))
     expect(busyWhenDrawn, 'busy until the renderer drew the loaded Design').toEqual(['true'])
 
-    camera.panBy({ x: 12, y: -8 })
+    panOn(runtime, { x: 12, y: -8 })
     expect(container.hasAttribute('aria-busy'), 'a camera frame moves the drawing, it does not redraw it').toBe(false)
-    await vi.waitFor(() => expect(lastRenderedViewport(renderer)).toEqual(viewportOf(camera)))
+    await vi.waitFor(() => expect(lastRenderedViewport(renderer)).toEqual(placementOf(runtime)))
     expect(container.hasAttribute('aria-busy')).toBe(false)
 
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
@@ -1287,16 +1314,13 @@ describe('scene canvas runtime', () => {
   it('asks the camera to fly to a place only for fly motion', () => {
     const runtime = new SceneCanvasRuntime()
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
-    const navigation = (runtime as unknown as {
-      _cameraNavigation: { centerOn(point: unknown, scale: number, options?: { animate?: boolean }): unknown }
-    })._cameraNavigation
-    const centerOn = vi.spyOn(navigation, 'centerOn')
+    const apply = vi.spyOn(runtime.cameraHost.current(), 'apply')
     const place = runtime.querySurface.sessionPlane.value!.toGeo({ x: 40, y: 10 })
 
     runtime.commandSurface.viewport.showPlace(place, 18, { motion: 'fly' })
     runtime.commandSurface.viewport.showPlace(place, 18)
 
-    expect(centerOn.mock.calls.map((call) => call[2])).toEqual([{ animate: true }, { animate: false }])
+    expect(apply.mock.calls.map(([move]) => move.kind === 'set' ? move.animation : move.kind)).toEqual(['fly', 'none'])
     runtime.destroy()
   })
 
@@ -1382,11 +1406,7 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1', 'plant-2'))
     runtime.commandSurface.sceneEdits.selectAll()
     runtime.commandSurface.sceneEdits.copy()
-    ;(runtime as unknown as { _camera: CameraController })._camera.setViewport({
-      x: 0,
-      y: 0,
-      scale: 0.01,
-    })
+    placeOn(runtime, { x: 0, y: 0, scale: 0.01 })
     const before = runtime.querySurface.getSceneSnapshot()
 
     expect(frameOf(runtime).mode).toBe('overview')
@@ -1747,23 +1767,22 @@ describe('scene canvas runtime', () => {
   })
 
   it('renders externally published camera frames and releases the owner on destroy', async () => {
-    const camera = new CameraController()
-    const disposeCamera = vi.spyOn(camera, 'dispose')
-    const runtime = new SceneCanvasRuntime({ camera })
+    const runtime = new SceneCanvasRuntime()
+    const disposeCamera = vi.spyOn(runtime.cameraHost as CameraDriverHostController, 'dispose')
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
     renderer.setView.mockClear()
 
-    camera.panBy({ x: 12, y: -8 })
+    panOn(runtime, { x: 12, y: -8 })
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     await Promise.resolve()
 
-    expect(lastRenderedViewport(renderer)).toEqual(viewportOf(camera))
+    expect(lastRenderedViewport(renderer)).toEqual(placementOf(runtime))
 
     runtime.destroy()
     expect(disposeCamera).toHaveBeenCalledOnce()
     renderer.setView.mockClear()
 
-    camera.panBy({ x: 1, y: 1 })
+    panOn(runtime, { x: 1, y: 1 })
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
 
     expect(renderer.setView).not.toHaveBeenCalled()
@@ -2658,8 +2677,7 @@ describe('scene canvas runtime', () => {
   it('uses the viewport-only renderer path for zoom updates', async () => {
     const runtime = new SceneCanvasRuntime()
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
-    const viewport = (runtime as any)._camera.initialize({ width: 400, height: 300 })
-    setInteractionViewport(runtime, viewport)
+    setInteractionViewport(runtime, { x: 50, y: 0, scale: 3 })
 
     renderer.syncScene.mockClear()
     runtime.commandSurface.viewport.zoomIn()

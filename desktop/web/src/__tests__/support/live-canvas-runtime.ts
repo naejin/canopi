@@ -1,8 +1,12 @@
 import { SceneCanvasRuntime, type SceneCanvasRuntimeOptions } from '../../canvas/runtime/scene-runtime'
 import type { CanvasRuntimeSurfaces } from '../../canvas/runtime/runtime'
 import { createForwardingCanvasKeyboardPort } from '../../canvas/runtime/keyboard-port'
+import type { CameraDriverHost } from '../../canvas/runtime/view/camera-driver'
 
-export type TestCanvasRuntimeHostOptions = SceneCanvasRuntimeOptions
+export interface TestCanvasRuntimeHostOptions extends SceneCanvasRuntimeOptions {
+  /** The map's size in CSS px: the runtime is resized to it before init, as the map container reports its size. */
+  readonly screen?: { readonly width: number; readonly height: number }
+}
 
 /**
  * A live scene runtime without the map workspace, for scene-level tests.
@@ -11,15 +15,19 @@ export type TestCanvasRuntimeHostOptions = SceneCanvasRuntimeOptions
  */
 export interface CanvasRuntimeHost {
   readonly surfaces: CanvasRuntimeSurfaces
+  /** The runtime's camera, for tests that read where the view puts a point. */
+  readonly cameraHost: CameraDriverHost
   init(container: HTMLElement): Promise<void>
   destroy(): Promise<void>
 }
 
 export function createLiveTestCanvasRuntimeHost(
-  options: TestCanvasRuntimeHostOptions = {},
+  { screen, ...options }: TestCanvasRuntimeHostOptions = {},
 ): CanvasRuntimeHost {
   const runtime = new SceneCanvasRuntime(options)
+  if (screen) runtime.documentSurface.resize(screen.width, screen.height)
   return {
+    cameraHost: runtime.cameraHost,
     surfaces: {
       commands: runtime.commandSurface,
       queries: runtime.querySurface,

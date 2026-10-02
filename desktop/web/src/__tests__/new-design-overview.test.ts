@@ -5,7 +5,6 @@ import { createDesignSessionReplacement } from '../app/document-session/replacem
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
 import { resetSettingsProjectionForTests } from '../app/settings/projection'
 import { lastView } from '../app/settings/state'
-import { CameraController } from '../canvas/runtime/camera'
 import { geographicViewOfCamera } from '../canvas/session-plane'
 import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
 import type { CanopiFile } from '../types/design'
@@ -51,10 +50,8 @@ afterEach(async () => {
 
 /** New Design (Ctrl N) over an open Design, through the Design Session replacement. */
 function newDesignOverOpenDesign(): { lon: number; lat: number; zoom: number } {
-  const camera = new CameraController()
-  camera.initialize({ width: 1200, height: 800 })
   const host = createLiveTestCanvasRuntimeHost({
-    camera,
+    screen: { width: 1200, height: 800 },
     appAdapter: createAppCanvasRuntimeAppAdapter({ presentationData: {} }),
   })
   hosts.push(host)

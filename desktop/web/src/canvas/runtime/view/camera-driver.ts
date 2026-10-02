@@ -40,9 +40,9 @@ export interface CameraDriver {
   /** The bearing a running tween or flight will end at, else the live bearing. */
   bearingTarget(): number
   stopAnimation(): void
-  /** Re-origin and the attached refreshOrigin only (hydration keeps the plane camera): the MapLibre driver rebuilds against the new
-   *  plane; the headless driver applies old.transformTo(new) to its PlanarCamera in plane terms, no lon/lat (today's
-   *  reprojectPlaneViewport, exact at bearing 0). */
+  /** The runtime's plane effect calls it on a re-origin, and on any plane change while a map is attached: the MapLibre driver
+   *  re-expresses the map's frame in the new plane with the map left still; the headless driver applies old.transformTo(new) to its
+   *  PlanarCamera in plane terms, so its ground is kept, in one frame. */
   planeChanged(plane: SessionPlane): void
   setScreen(screen: ViewScreen): void
   setInsets(insets: ScreenInsets): void
@@ -70,9 +70,8 @@ export interface CameraDriverHost {
   attach(driver: CameraDriver): void
   /** Back to a HeadlessCameraDriver at the last camera; ViewFrame.attached becomes false. */
   detach(): void
-  /** The Scene's plane on hydration and on a detached re-origin: a live headless driver keeps its plane placement and takes the new
-   *  plane (a headless re-origin is followPlane plus a 'place' move, the same numbers as planeChanged, which only the attached
-   *  refreshOrigin calls). The runtime calls it; without it the headless camera would report another plane's ground. */
+  /** The Scene's plane on a detached hydration: a live headless driver keeps its plane placement and takes the new plane. The
+   *  runtime's plane effect calls it; without it the headless camera would report another plane's ground. */
   followPlane(plane: SessionPlane): void
   /** The deps the host built its drivers with; the activation builds the MapLibre driver with them. */
   readonly driverDeps: CameraDriverDeps

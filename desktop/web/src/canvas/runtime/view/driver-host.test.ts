@@ -179,7 +179,7 @@ describe('camera driver host', () => {
     host.dispose()
   })
 
-  it('a headless camera follows a new runtime plane and keeps its plane placement; an attached one does not', () => {
+  it('a headless camera follows a new runtime plane and keeps its plane placement; an attached one stays put, re-expressed in the plane', () => {
     const first = createSessionPlane({ lon: 2.35, lat: 48.85 })
     let runtimePlane = first
     const host = createCameraDriverHost({
@@ -212,12 +212,22 @@ describe('camera driver host', () => {
     host.followPlane(runtimePlane)
     expect(published).toHaveLength(1)
 
-    // Attached, the map is the camera: only planeChanged moves its plane.
+    // Attached, the map is the camera: followPlane leaves it alone, and the runtime's planeChanged re-expresses it in the new plane
+    // with its ground kept.
     host.attach(standInDriver(hydrated))
     const attachedFrames = published.length
-    runtimePlane = createSessionPlane({ lon: 14, lat: 24 })
+    const attachedBefore = host.frames.viewFrame.peek()
+    runtimePlane = createSessionPlane({ lon: 13.01, lat: 23.01 })
     host.followPlane(runtimePlane)
     expect(published).toHaveLength(attachedFrames)
+    host.current().planeChanged(runtimePlane)
+    expect(published).toHaveLength(attachedFrames + 1)
+    const reexpressed = published.at(-1)!
+    expect(reexpressed.attached).toBe(true)
+    expect(reexpressed.view.planeRevision).toBe(attachedBefore.view.planeRevision + 1)
+    expect(reexpressed.view.camera.center.lon).toBeCloseTo(attachedBefore.view.camera.center.lon, 9)
+    expect(reexpressed.view.camera.center.lat).toBeCloseTo(attachedBefore.view.camera.center.lat, 9)
+    expect(reexpressed.view.camera.zoom).toBeCloseTo(attachedBefore.view.camera.zoom, 9)
     host.dispose()
   })
 
