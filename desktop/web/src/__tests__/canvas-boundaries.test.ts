@@ -17,6 +17,8 @@ interface RegexPolicy {
   readonly pattern: RegExp
   /** Globs relative to desktop/web, as the declarative policies write them. */
   readonly scope: readonly string[]
+  /** Globs inside the scope that the policy exempts. */
+  readonly except?: readonly string[]
   /** Each file allowed to match, with its exact number of matches. */
   readonly allowlist: Readonly<Record<string, number>>
 }
@@ -83,6 +85,63 @@ const P6_REGEX_POLICIES = [
   },
 ] as const satisfies readonly RegexPolicy[]
 
+/**
+ * P3b's regexes (plan §5): the scale-and-offset projection in the old spelling (`.scale`, `viewport.x`) and the new
+ * (`pixelsPerMetre`, `metresPerPixelAt`, the operator on either side), a scale copied into a local and a destructured
+ * scale. One alternation, so a line is counted once per match.
+ */
+const HAND_ROLLED_PROJECTION = new RegExp([
+  /\.scale\s*[*+/]/,
+  /viewport\.(x|y)\b/,
+  /\bpixelsPerMetre\s*[*/]/,
+  /[*/]\s*[\w.]*\bpixelsPerMetre\b/,
+  /metresPerPixelAt\([^)]*\)\s*[*/]/,
+  /[*/]\s*[\w.]*\bmetresPerPixelAt\(/,
+  /=\s*[\w.]*\.pixelsPerMetre\s*[;,\n]/,
+  /=\s*[\w.]*\.metresPerPixelAt\([^)]*\)\s*[;,\n]/,
+  /const\s*\{[^}]*\bscale\b[^}]*\}\s*=/,
+].map(({ source }) => `(?:${source})`).join('|'), 'g')
+
+/**
+ * P3b's phase-1 allowlist (counted at the end of 0E, comments blanked, recorded in canopi-f47t.5): the chrome that
+ * still projects from a planar camera read off the frame. Each entry goes in phase 1.
+ */
+const P3B_PHASE_1: Readonly<Record<string, number>> = {
+  // Deleted in phase 1.
+  'src/canvas/runtime/scene-chrome.ts': 8,
+  // Phase 1 takes the origin from worldToScreen and keeps pixelsPerMetre for tick spacing only (8 matches, 7 lines).
+  'src/canvas/runtime/chrome/rulers.ts': 8,
+}
+
+/** P3b's permanent allowlist: sizes, never positions (counted at the end of 0E, recorded in canopi-f47t.5). */
+const P3B_SIZE_ONLY: Readonly<Record<string, number>> = {
+  // The lens's stroke widths and its plants' presentation scale.
+  'src/canvas/runtime/inspection-lens-drawing.ts': 3,
+  // A plant's hit radius in pixels.
+  'src/canvas/runtime/plant-presentation.ts': 1,
+  // The plants' and text annotations' presentation scale.
+  'src/canvas/runtime/renderers/billboard-layer.ts': 2,
+  // The drafts' stroke scale.
+  'src/canvas/runtime/renderers/draft-layer.ts': 1,
+  // The zone re-tessellation threshold.
+  'src/canvas/runtime/renderers/world-layers.ts': 1,
+  // A selection label's radius in pixels.
+  'src/canvas/runtime/selection-labels.ts': 1,
+  // A tolerance: whether a frame keeps the last frame's scale.
+  'src/canvas/runtime/scene-runtime/reorigin.ts': 1,
+}
+
+const P3B_POLICY = {
+  name: 'P3b no hand-rolled projection outside the view module, apart from the named allowlists',
+  pattern: HAND_ROLLED_PROJECTION,
+  scope: ['src/**'],
+  // The PDF's paper projection maps a page to the ground, not the view (ADR 0008).
+  except: ['src/canvas/runtime/view/**', 'src/app/canvas-pdf/**'],
+  allowlist: { ...P3B_PHASE_1, ...P3B_SIZE_ONLY },
+} as const satisfies RegexPolicy
+
+const REGEX_POLICIES = [...P6_REGEX_POLICIES, P3B_POLICY] as const satisfies readonly RegexPolicy[]
+
 let sourcesCache: readonly Source[] | null = null
 
 /** Every non-test .ts/.tsx file under src/, read once per run. */
@@ -121,6 +180,7 @@ function regexHits(policy: RegexPolicy, sources: readonly Source[]): Record<stri
   const hits: Record<string, number> = {}
   for (const { path, text } of sources) {
     if (!policy.scope.some((pattern) => matchesPathPattern(path, pattern))) continue
+    if (policy.except?.some((pattern) => matchesPathPattern(path, pattern))) continue
     if (!new RegExp(policy.pattern.source).test(text)) continue
     const count = blankComments(path, text).match(new RegExp(policy.pattern.source, 'g'))?.length ?? 0
     if (count > 0) hits[path] = count
@@ -129,7 +189,7 @@ function regexHits(policy: RegexPolicy, sources: readonly Source[]): Record<stri
 }
 
 function policyNamed(name: string): RegexPolicy {
-  const policy = P6_REGEX_POLICIES.find((candidate) => candidate.name === name)
+  const policy = (REGEX_POLICIES as readonly RegexPolicy[]).find((candidate) => candidate.name === name)
   if (!policy) throw new Error(`no regex policy named ${name}`)
   return policy
 }
@@ -141,9 +201,10 @@ describe('canvas v2 regex policies', () => {
     expect(paths).toEqual(expect.arrayContaining([...CHROME_ELEMENT_LISTENERS]))
     expect(paths.some((path) => TEST_SOURCE.test(path))).toBe(false)
     for (const path of Object.keys(P6_COMPONENT_POINTER_LISTENERS)) expect(paths).toContain(path)
+    for (const path of Object.keys(P3B_POLICY.allowlist)) expect(paths).toContain(path)
   })
 
-  for (const policy of P6_REGEX_POLICIES) {
+  for (const policy of REGEX_POLICIES) {
     it(policy.name, () => {
       expect(regexHits(policy, productionSources())).toEqual(policy.allowlist)
     }, 20_000)
@@ -205,5 +266,31 @@ describe('canvas v2 regex policies', () => {
       { path: 'src/app/canvas-map-surface/planted.ts', text: "container.addEventListener('pointerdown', press, { capture: true })" },
       { path: 'src/app/keyboard/planted.ts', text: "window.addEventListener('keydown', keys)" },
     ])).toEqual({ 'src/app/canvas-map-surface/planted.ts': 1 })
+  })
+
+  it('P3b rejects each planted hand-rolled projection, not a comment, the view module or the PDF', () => {
+    const policy = policyNamed('P3b no hand-rolled projection outside the view module, apart from the named allowlists')
+    const planted = [
+      'const x = p.x * viewport.scale + 4',
+      'const y = viewport.y',
+      'const sx = (p.x - c.x) * view.pixelsPerMetre + w / 2',
+      'const sy = h / 2 - dy * view.pixelsPerMetre',
+      'const metres = view.metresPerPixelAt(p) * dx',
+      'const dm = dx / view.metresPerPixelAt()',
+      'const ppm = view.pixelsPerMetre;',
+      'const mpp = view.metresPerPixelAt(p)\n',
+      'const { x, scale } = camera',
+    ]
+    const sources = planted.map((text, index) => ({ path: `src/app/planted/projection-${index + 1}.ts`, text }))
+    expect(regexHits(policy, [
+      ...sources,
+      { path: 'src/canvas/runtime/chrome/planted-comment.ts', text: '// p.x * view.pixelsPerMetre\n/* viewport.x */' },
+      { path: 'src/canvas/runtime/view/planted.ts', text: 'const sx = (p.x - c.x) * view.pixelsPerMetre + w / 2' },
+      { path: 'src/app/canvas-pdf/planted.ts', text: 'const sx = frame.x + (p.x - ground.x) * scale.pixelsPerMetre' },
+      { path: 'src/canvas/runtime/scene-chrome.ts', text: 'const sx = viewport.x + x * scale' },
+    ])).toEqual({
+      ...Object.fromEntries(sources.map(({ path }) => [path, 1])),
+      'src/canvas/runtime/scene-chrome.ts': 1,
+    })
   })
 })

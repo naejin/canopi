@@ -90,7 +90,7 @@ export class SceneCanvasInspectionOwner {
       if (ctx) ctx.font = `600 12px ${getComputedStyle(container).fontFamily || 'sans-serif'}`
       const layout = inspectionLayout(visible, centre, { width, height }, snapshot.localizedCommonNames,
         value => ctx ? ctx.measureText(value).width : Array.from(value).length * 12, magnification)
-      const { scale } = layout
+      const scale = layout.scale
       if (highlightedId && !layout.plants.some(plant => plant.id === highlightedId)) clearHighlight()
       const dpr = Math.max(window.devicePixelRatio || 1, 1)
       // The lens's own view: the inspected point at its centre, at bearing 0 (spec §4.13).
@@ -105,8 +105,10 @@ export class SceneCanvasInspectionOwner {
       footprint.value = lensView.visibleWorldQuad()
       if (ctx) {
         canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr)
-        const plants = visible.filter((plant) => Math.abs(plant.position.x - centre.x) * scale <= width / 2 + 20
-          && Math.abs(plant.position.y - centre.y) * scale <= height / 2 + 20)
+        const plants = visible.filter((plant) => {
+          const onLens = lensView.worldToScreen(plant.position)
+          return Math.abs(onLens.x - width / 2) <= width / 2 + 20 && Math.abs(onLens.y - height / 2) <= height / 2 + 20
+        })
         const lensSnapshot: SceneRendererSnapshot = {
           ...snapshot,
           scene: { ...snapshot.scene, plants, annotations: [], measurementGuides: [], groups: [] },
