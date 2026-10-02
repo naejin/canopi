@@ -363,24 +363,14 @@ describe('FavoritesPanel', () => {
 
     const placeButton = container.querySelector<HTMLButtonElement>('button[aria-label^="Place stamp "]')
     expect(placeButton).toBeTruthy()
-    // Placing hands focus to the map so Esc cancels the armed stamp (canopi-agjl).
-    const map = document.createElement('div')
-    map.tabIndex = 0
-    document.body.append(map)
-    // The panel is imported after vi.resetModules, so register through the same module copy.
-    const { focusOwner } = await import('../app/keyboard/focus-owner')
-    const releaseMap = focusOwner.registerRegion('map', map)
-    placeButton!.focus()
 
     await act(async () => {
       placeButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await flushEffects()
     })
 
-    expect(placeStampMock).toHaveBeenCalledWith(stampLibrary.value.items[0])
-    expect(document.activeElement).toBe(map)
-    releaseMap()
-    map.remove()
+    // Arming focuses the map (app/keyboard/arming.test.ts); the panel passes its caller.
+    expect(placeStampMock).toHaveBeenCalledWith(stampLibrary.value.items[0], 'panel')
 
     await openStampActions()
     const exportButton = document.querySelector<HTMLButtonElement>('button[aria-label="Export stamp…"]')

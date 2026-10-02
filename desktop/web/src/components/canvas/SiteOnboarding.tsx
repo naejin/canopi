@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from 'preact/hooks'
 import { placeSearch } from '../../app/geocoding/place-search-session'
 import { PLACE_SEARCH_ZOOM } from '../../app/geocoding/place-search-ui'
+import { armCanvasTool } from '../../app/keyboard/arming'
 import { focusOwner } from '../../app/keyboard/focus-owner'
 import { selectPanel } from '../../app/shell/state'
 import {
@@ -11,7 +12,6 @@ import {
   siteLocateOpen,
   startDesignCardOpen,
 } from '../../app/site-onboarding/state'
-import { selectCanvasTool } from '../../app/workspace-commands/canvas-actions'
 import { currentCanvasViewportCommandSurface } from '../../canvas/session'
 import { t } from '../../i18n'
 import { ControlIcon } from '../shared/ControlIcon'
@@ -119,7 +119,7 @@ function StartDesignCard() {
           data-start-primary
           onClick={() => {
             closeStartDesignCard()
-            selectCanvasTool('polygon')
+            armCanvasTool('polygon', { from: 'start-card' })
           }}
         >
           {t('siteOnboarding.drawZone')}

@@ -259,6 +259,6 @@ function canvasAction(command: CanvasProjectedCommand, checked?: boolean): MenuA
     ariaShortcut: command.ariaShortcut,
     disabled: command.disabled,
     ...(checked === undefined ? {} : { check: 'checkbox' as const, checked }),
-    action: () => command.action(),
+    action: () => command.action('menu'),
   }
 }

@@ -1153,7 +1153,8 @@ const NAMED_IMPORT_POLICIES = [
     name: 'Plant database rows use tool commands only',
     from: ['src/components/plant-db/PlantRow.tsx'],
     target: 'src/canvas/session.ts',
-    requiredNames: ['currentCanvasToolCommandSurface'],
+    // Place arms through armCanvasTool (placeSpeciesOnMap), so the row needs no session import.
+    requiredNames: [],
     allowedNames: ['currentCanvasToolCommandSurface'],
   },
   {

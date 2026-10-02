@@ -30,7 +30,7 @@ import { ButtonTooltip } from '../shared/ButtonTooltip'
 import { usePointerResize } from '../shared/usePointerResize'
 import { usePointerReorder } from '../shared/usePointerReorder'
 import plantDetailStyles from '../plant-detail/PlantDetail.module.css'
-import { currentCanvasQuerySurface, currentCanvasToolCommandSurface } from '../../canvas/session'
+import { currentCanvasQuerySurface } from '../../canvas/session'
 import { resolvePlantSymbolId } from '../../canvas/runtime/scene'
 import {
   writePlantStampDragData,
@@ -51,7 +51,6 @@ import { ControlIcon } from '../shared/ControlIcon'
 import row from '../shared/species-row.module.css'
 import styles from './FavoritesPanel.module.css'
 import { placeSpeciesOnMap } from '../plant-db/place-species'
-import { focusOwner } from '../../app/keyboard/focus-owner'
 
 const SAVED_STAMP_PREVIEW_DELAY_MS = 120
 const SAVED_STAMP_PREVIEW_GAP = 8
@@ -637,7 +636,7 @@ function FavoriteSpeciesRow({ plant, englishName, code, color, symbol, highlight
         type="button"
         className={styles.placeButton}
         aria-label={t('favorites.place', { name })}
-        onClick={() => placeSpeciesOnMap(plant, currentCanvasToolCommandSurface.value)}
+        onClick={() => placeSpeciesOnMap(plant)}
       >{t('savedObjectStamps.place')}</button>
     </div>
   )
@@ -921,7 +920,7 @@ function SavedObjectStampRow({
           <>
             <SavedStampIconButton
               label={t('savedObjectStamps.placeNamed', { name: stamp.name })}
-              onClick={() => { if (savedObjectStampWorkbench.placeStamp(stamp)) focusOwner.focusMap('tool-armed') }}
+              onClick={() => { savedObjectStampWorkbench.placeStamp(stamp, 'panel') }}
               onFocus={(anchor) => onPreviewRequest(stamp, anchor)}
               onBlur={onPreviewClear}
             >

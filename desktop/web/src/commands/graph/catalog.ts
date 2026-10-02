@@ -6,6 +6,7 @@ import {
   dispatchCanvasCommandIntent,
   isCanvasCommandDisabled,
   type CanvasCommandDefinition,
+  type CanvasCommandFrom,
   type CanvasCommandId,
   type CanvasCommandProjection,
 } from '../../app/canvas-commands'
@@ -97,7 +98,8 @@ export interface AppCommandDefinition {
   /** Display text, e.g. "Ctrl Shift S". */
   readonly shortcut?: string
   readonly palette: boolean
-  readonly run: (state: AppCommandState) => void
+  /** `from` is the surface that ran it; a canvas tool arms with it. */
+  readonly run: (state: AppCommandState, from: CanvasCommandFrom) => void
   readonly disabled?: (state: AppCommandState) => boolean
 }
 
@@ -122,7 +124,7 @@ function canvasAppCommandDefinition(
       return shortcut ? formatShortcut(shortcut, t) : undefined
     },
     palette: definition.palette,
-    run: () => dispatchCanvasCommandIntent(definition.intent, workspaceCanvasIntentAdapter),
+    run: (_state, from) => dispatchCanvasCommandIntent(definition.intent, workspaceCanvasIntentAdapter, from),
     disabled: () => isCanvasCommandDisabled(definition.intent, readWorkspaceCanvasProjectionState()),
   }
 }
@@ -263,11 +265,11 @@ export function isCatalogCommandDisabled(id: AppCommandId): boolean {
   return command.disabled?.(state) ?? false
 }
 
-export function runCatalogCommand(id: AppCommandId): boolean {
+export function runCatalogCommand(id: AppCommandId, from: CanvasCommandFrom): boolean {
   const command = getAppCommandDefinition(id)
   if (!command) return false
   const state = readAppCommandState()
   if (command.disabled?.(state)) return false
-  command.run(state)
+  command.run(state, from)
   return true
 }

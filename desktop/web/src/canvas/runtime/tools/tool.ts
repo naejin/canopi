@@ -241,4 +241,6 @@ export type ToolConstraint =
 /** Arming payloads that today arrive through module-level signals. */
 export type ToolSource =
   | { readonly kind: 'species'; readonly species: PlantStampSourceInput }
-  | { readonly kind: 'saved-stamp'; readonly stamp: SavedObjectStampPayload }
+  /** name: armCanvasTool writes it for the tool card (readSavedObjectStampName); the tool ignores it; sources the session
+   *  rebuilds from the read models omit it. */
+  | { readonly kind: 'saved-stamp'; readonly stamp: SavedObjectStampPayload; readonly name?: string | null }

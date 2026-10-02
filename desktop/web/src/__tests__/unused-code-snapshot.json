@@ -323,7 +323,6 @@
     "src/canvas/runtime/view/frame-source.ts#SETTLE_MS",
     "src/canvas/runtime/zone-measurements.ts#formatMetricArea",
     "src/canvas/saved-object-stamp-source.ts#readSavedObjectStampDragData",
-    "src/canvas/saved-object-stamp-source.ts#selectSavedObjectStampSourceForTests",
     "src/canvas/session-plane.ts#SESSION_PLANE_REORIGIN_DISTANCE_METERS",
     "src/canvas/session-state.ts#activeTool",
     "src/canvas/session-state.ts#selectedObjectIds",

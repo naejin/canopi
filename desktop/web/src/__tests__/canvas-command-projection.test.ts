@@ -86,8 +86,8 @@ describe('Canvas Command Projection', () => {
     const ellipse = projectedCanvasTools(projection).find((tool) => tool.tool === 'ellipse')!
 
     expect(ellipse).toMatchObject({ commandId: 'canvas.tool.ellipse', label: 't:canvas.tools.ellipse', active: true, disabled: false })
-    ellipse.action()
-    expect(intents.selectTool).toHaveBeenCalledWith('ellipse')
+    ellipse.action('rail')
+    expect(intents.selectTool).toHaveBeenCalledWith('ellipse', 'rail')
   })
 
   it('keeps Select and Pan while overview disables every editing tool and mutating edit', () => {
@@ -100,7 +100,7 @@ describe('Canvas Command Projection', () => {
     const tools = projectedCanvasTools(projection)
 
     expect(tools.filter((tool) => !tool.disabled).map((tool) => tool.tool)).toEqual(['select', 'hand'])
-    tools.find((tool) => tool.tool === 'polygon')!.action()
+    tools.find((tool) => tool.tool === 'polygon')!.action('menu')
     expect(intents.selectTool).not.toHaveBeenCalled()
     const edits = Object.fromEntries(projection.editActions.map((edit) => [edit.id, edit.disabled]))
     expect(edits).toMatchObject({ copy: false, 'select-all': false, cut: true, paste: true, delete: true, group: true, lock: true })

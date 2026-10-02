@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { speciesCatalogWorkbench } from '../app/plant-browser'
 import { useEnglishFallbackNames } from '../app/plant-finder/catalog-names'
-import { currentCanvasToolCommandSurface } from '../canvas/session'
 import {
   writePlantStampDragData,
 } from '../canvas/plant-stamp-source'
@@ -183,7 +182,6 @@ function SpeciesList({
  * name in the interface language shows its English catalog name marked "(en)".
  */
 function SpeciesRow({ item, englishName }: { readonly item: SpeciesListItem; readonly englishName?: string }) {
-  const commandSurface = currentCanvasToolCommandSurface.value
   const localized = item.common_name?.trim() ?? ''
   const english = localized ? '' : englishName ?? ''
   const commonName = localized || english
@@ -216,7 +214,7 @@ function SpeciesRow({ item, englishName }: { readonly item: SpeciesListItem; rea
   }
   const handlePlace = (event: MouseEvent) => {
     event.stopPropagation()
-    placeSpeciesOnMap(item, commandSurface)
+    placeSpeciesOnMap(item)
   }
 
   return (

@@ -5,13 +5,15 @@
 // Shared fakes, helpers and fixture: support/canvas-interaction-setup.ts.
 import { describe, expect, it, vi } from 'vitest'
 import {
-  beginSavedObjectStampPlacement,
   clearSavedObjectStampDragSource,
   readSavedObjectStampSource,
-  selectSavedObjectStampSourceForTests,
+  selectSavedObjectStampSource,
   writeSavedObjectStampDragData,
 } from '../canvas/saved-object-stamp-source'
-import type { CanvasToolCommandSurface } from '../canvas/runtime/runtime'
+import { armCanvasTool } from '../app/keyboard/arming'
+import { parseSavedObjectStampPayload } from '../canvas/saved-object-stamp-payload'
+import { setCanvasRuntimeSurfaces } from '../canvas/session'
+import { createTestCanvasCommandSurface, createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 import type { CanvasToolGuidance } from '../canvas/session-state'
 import type { DraftPresentation } from '../canvas/runtime/tools/draft'
 import { SceneStore } from '../canvas/runtime/scene'
@@ -93,7 +95,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('places a held saved stamp once, then returns to Select and drops the stamp', () => {
-    selectSavedObjectStampSourceForTests({
+    selectSavedObjectStampSource({
       version: 2,
       anchor: { x: 0, y: 0 },
       plants: [{
@@ -123,7 +125,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('a Favorites drag over the map hides the held stamp\'s ghost until the pointer moves over the map again', () => {
-    selectSavedObjectStampSourceForTests({
+    selectSavedObjectStampSource({
       version: 2,
       anchor: { x: 0, y: 0 },
       plants: [{
@@ -180,7 +182,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('choosing another saved stamp in Favorites hides the held stamp\'s turned ghost until the next move, which shows the new one upright', () => {
-    selectSavedObjectStampSourceForTests({
+    selectSavedObjectStampSource({
       version: 2,
       anchor: { x: 0, y: 0 },
       plants: [{
@@ -207,9 +209,12 @@ describe('SceneInteractionSession', () => {
     events.keyDown({ key: ']', target: container })
     expect(ghost()).toEqual({ anchor: { x: 100, y: 100 }, rotationDeg: 15, plants: ['Malus domestica'] })
 
-    // Favorites' click: the read model takes the stamp, then arms the tool again (today's setTool ran the cancellation).
-    const commands = { setTool: (name: string) => session.setTool(name) } as CanvasToolCommandSurface
-    expect(beginSavedObjectStampPlacement(PEAR_STAMP, commands)).toBe(true)
+    // Favorites' click: arming writes the read model, then arms the tool again (the session's setTool runs the cancellation).
+    setCanvasRuntimeSurfaces(createTestCanvasRuntimeSurfaces({
+      commands: createTestCanvasCommandSurface({ tools: { setTool: (name) => session.setTool(name) } }),
+    }))
+    const pear = parseSavedObjectStampPayload(PEAR_STAMP.payload_json)!
+    expect(armCanvasTool('saved-object-stamp', { from: 'panel', source: { kind: 'saved-stamp', stamp: pear, name: PEAR_STAMP.name } })).toBe(true)
     expect(ghost()).toBeNull()
 
     events.pointerMove({ x: 120, y: 120 }, { buttons: 0 })
@@ -219,7 +224,7 @@ describe('SceneInteractionSession', () => {
 
   describe('stamp rotation', () => {
     function holdSavedStamp(): void {
-      selectSavedObjectStampSourceForTests({
+      selectSavedObjectStampSource({
         version: 2,
         anchor: { x: 0, y: 0 },
         plants: [{

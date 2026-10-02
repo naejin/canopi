@@ -1,5 +1,6 @@
-import type { FunctionComponent, RefObject } from 'preact'
+import type { FunctionComponent } from 'preact'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { focusOwner } from '../../app/keyboard/focus-owner'
 import { useEnglishFallbackNames } from '../../app/plant-finder/catalog-names'
 import { toolCardContent, type SavedStampSummary } from '../../app/tool-card/content'
 import { siteLocateOpen } from '../../app/site-onboarding/state'
@@ -42,9 +43,7 @@ export interface StampChooserProps {
  * stamp opens its saved stamps with Change stamp; Plant a row carries its
  * spacing field and the row's count once a plant is picked.
  */
-export function ToolCard({ canvasRef, stampChooser: StampChooser }: {
-  /** The map host, which takes focus back once a species is chosen. */
-  readonly canvasRef: RefObject<HTMLElement>
+export function ToolCard({ stampChooser: StampChooser }: {
   /** Place a stamp's saved-stamp chooser; editions without saved stamps offer none. */
   readonly stampChooser?: FunctionComponent<StampChooserProps>
 }) {
@@ -84,7 +83,8 @@ export function ToolCard({ canvasRef, stampChooser: StampChooser }: {
   function closeChooser(): void {
     setChangingSpecies(false)
     setChoosingStamp(false)
-    canvasRef.current?.focus({ preventScroll: true })
+    // The map takes focus back once a species or stamp is chosen, or the chooser closes.
+    focusOwner.focusMap('chooser-closed')
   }
 
   return (

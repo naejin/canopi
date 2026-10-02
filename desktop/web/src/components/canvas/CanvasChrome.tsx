@@ -50,7 +50,7 @@ function CanvasChromeContent({ projection, canvasRef, stampChooser, children }: 
   return (
     <>
       {!locating && <ToolRail projection={projection} showNames={toolRailShowsNamesOnMap.value} />}
-      <ToolCard canvasRef={canvasRef} stampChooser={stampChooser} />
+      <ToolCard stampChooser={stampChooser} />
       {/* Phones leave Grid, Snap and Rulers to the View menu. */}
       {!phoneLayout.value && <ViewChip toggles={projection.settingsToggles} />}
       <ZoomControls viewActions={projection.viewActions} />

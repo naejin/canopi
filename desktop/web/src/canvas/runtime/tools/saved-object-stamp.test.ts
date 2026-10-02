@@ -44,7 +44,7 @@ afterEach(() => {
   builtTools.length = 0
 })
 
-/** A saved stamp as the read model holds it (normalised, as selectSavedObjectStampSourceForTests stores it). */
+/** A saved stamp as the read model holds it (normalised, as selectSavedObjectStampSource stores it). */
 function stamp(payload: Omit<SavedObjectStampPayload, 'version'>): SavedObjectStampPayload {
   const normalized = normalizeSavedObjectStampPayload({ version: 2, ...payload })
   if (!normalized) throw new Error('The test stamp does not normalise.')

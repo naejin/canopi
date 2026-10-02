@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  beginPlantStampFromSpecies,
   clearPlantStampSource,
   hasPlantStampDragData,
   readPlantStampDragData,
@@ -49,19 +48,6 @@ describe('Plant Stamp source', () => {
 
     clearPlantStampSource()
     expect(readPlantStampSource()).toBeNull()
-  })
-
-  it('begins Plant Stamp through a command surface', () => {
-    const calls: string[] = []
-
-    beginPlantStampFromSpecies(species({ canonical_name: 'Pyrus communis' }), {
-      setTool(tool) {
-        calls.push(tool)
-      },
-    })
-
-    expect(readPlantStampSource()?.canonical_name).toBe('Pyrus communis')
-    expect(calls).toEqual(['plant-stamp'])
   })
 
   it('centralizes drag data serialization and parsing', () => {

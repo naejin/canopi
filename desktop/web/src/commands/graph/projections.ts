@@ -85,7 +85,7 @@ function commandProjection(command: AppCommandDefinition): Command {
     get shortcut() { return command.shortcut },
     disabled: () => isCatalogCommandDisabled(command.id),
     action: () => {
-      runCatalogCommand(command.id)
+      runCatalogCommand(command.id, 'palette')
     },
   }
 }
@@ -157,8 +157,9 @@ function panelCommandProjection(
     ariaShortcut: command.ariaShortcut,
     disabled: command.disabled,
     active: command.active ?? false,
+    // The panel rail runs navigation commands only.
     action: () => {
-      runCatalogCommand(command.id)
+      runCatalogCommand(command.id, 'rail')
     },
   }
 }

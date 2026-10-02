@@ -113,8 +113,11 @@ export interface CanvasCommandProjectionState {
   readonly rulersVisible: boolean
 }
 
+/** Which surface ran a canvas command: armCanvasTool focuses the map after every one but a shortcut. */
+export type CanvasCommandFrom = 'rail' | 'menu' | 'palette' | 'shortcut'
+
 export interface CanvasCommandIntentAdapter {
-  selectTool(tool: CanvasToolId): void
+  selectTool(tool: CanvasToolId, from: CanvasCommandFrom): void
   undo(): void
   redo(): void
   toggleGrid(): void
@@ -133,7 +136,8 @@ export interface CanvasProjectedCommand {
   /** `aria-keyshortcuts` value. */
   readonly ariaShortcut?: string
   readonly disabled: boolean
-  readonly action: () => void
+  /** Runs the command for the surface that shows it (a tool arms with this `from`). */
+  readonly action: (from: CanvasCommandFrom) => void
 }
 
 export interface CanvasToolbarToolCommand extends CanvasProjectedCommand {
@@ -145,6 +149,8 @@ export interface CanvasToolbarToolCommand extends CanvasProjectedCommand {
 export interface CanvasToolbarActionCommand extends CanvasProjectedCommand {
   readonly id: string
   readonly pressed?: boolean
+  /** Arms no tool, so it needs no caller. */
+  readonly action: () => void
 }
 
 interface CanvasToolGroupProjection {
@@ -460,14 +466,21 @@ function isNavigationTool(toolId: CanvasToolId): boolean {
   return toolId === 'select' || toolId === 'hand'
 }
 
+/** Runs one intent; `from` reaches arming for a tool and is unused by the rest. */
 export function dispatchCanvasCommandIntent(
   intent: CanvasCommandIntent,
   adapter: CanvasCommandIntentAdapter,
+  from: CanvasCommandFrom,
+): void {
+  if (intent.type === 'select-tool') adapter.selectTool(intent.tool, from)
+  else dispatchCanvasActionIntent(intent, adapter)
+}
+
+function dispatchCanvasActionIntent(
+  intent: Exclude<CanvasCommandIntent, { readonly type: 'select-tool' }>,
+  adapter: CanvasCommandIntentAdapter,
 ): void {
   switch (intent.type) {
-    case 'select-tool':
-      adapter.selectTool(intent.tool)
-      return
     case 'undo':
       adapter.undo()
       return
@@ -508,15 +521,16 @@ export function createCanvasCommandProjection({
   const project = (definition: CanvasCommandDefinition): CanvasProjectedCommand => {
     const disabled = isCanvasCommandDisabled(definition.intent, state)
     const shortcut = canvasCommandDisplayKey(definition, shortcuts)
+    const { intent } = definition
     return {
       commandId: definition.commandId,
       label: translate(definition.labelKey),
       shortcut: shortcut ? formatShortcut(shortcut, translate) : undefined,
       ariaShortcut: canvasCommandAriaKeys(definition, shortcuts),
       disabled,
-      action: () => {
+      action: (from) => {
         if (disabled) return
-        dispatchCanvasCommandIntent(definition.intent, intents)
+        dispatchCanvasCommandIntent(intent, intents, from)
       },
     }
   }
@@ -525,11 +539,19 @@ export function createCanvasCommandProjection({
       | CanvasSettingsCommandDefinition
       | CanvasEditCommandDefinition
       | CanvasViewCommandDefinition,
-  ): CanvasToolbarActionCommand => ({
-    ...project(definition),
-    id: definition.id,
-    ...(definition.kind === 'settings' ? { pressed: state[definition.stateKey] } : {}),
-  })
+  ): CanvasToolbarActionCommand => {
+    const command = project(definition)
+    const { intent } = definition
+    return {
+      ...command,
+      action: () => {
+        if (command.disabled || intent.type === 'select-tool') return
+        dispatchCanvasActionIntent(intent, intents)
+      },
+      id: definition.id,
+      ...(definition.kind === 'settings' ? { pressed: state[definition.stateKey] } : {}),
+    }
+  }
   const toolDefinitions = canvasCommandDefinitions.filter(
     (definition): definition is CanvasToolCommandDefinition => definition.kind === 'tool',
   )

@@ -6,6 +6,7 @@ import {
 import type { CanvasRuntimeSavedObjectStampCapture } from '../canvas/runtime/app-adapter'
 import type { CanvasQuerySurface } from '../canvas/runtime/runtime'
 import { createSavedObjectStampWorkbench } from '../app/saved-object-stamps/workbench'
+import { parseSavedObjectStampPayload } from '../canvas/saved-object-stamp-payload'
 import type { CanopiFile } from '../types/design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
 import { geoAt } from './support/geo-design'
@@ -697,18 +698,30 @@ describe('Saved Object Stamp Workbench', () => {
     expect(workbench.library.value.items[0]?.name).toBe('Initial')
   })
 
-  it('arms placement through the canvas placement adapter', () => {
-    const stamp = makeStamp('stamp-1', 'Guild', 0)
-    const beginPlacement = vi.fn(() => true)
+  it('arms Place a stamp with the stamp and its caller through armCanvasTool', () => {
+    const stamp: SavedObjectStamp = {
+      ...makeStamp('stamp-1', ' Guild ', 0),
+      payload_json: JSON.stringify({ version: 2, anchor: { x: 0, y: 0 }, plants: [], zones: [], annotations: [], groups: [] }),
+    }
+    expect(parseSavedObjectStampPayload(stamp.payload_json)).not.toBeNull()
+    const arm = vi.fn(() => true)
     const workbench = createSavedObjectStampWorkbench({
       getSavedObjectStamps: async () => [stamp],
       createSavedObjectStamp: async () => stamp,
       getCanvasQuerySurface: () => null,
-      beginPlacement,
+      arm,
     })
 
-    expect(workbench.placeStamp(stamp)).toBe(true)
-    expect(beginPlacement).toHaveBeenCalledWith(stamp)
+    expect(workbench.placeStamp(stamp, 'panel')).toBe(true)
+    expect(arm).toHaveBeenCalledWith('saved-object-stamp', {
+      from: 'panel',
+      source: { kind: 'saved-stamp', stamp: parseSavedObjectStampPayload(stamp.payload_json), name: 'Guild' },
+    })
+    // A stamp whose payload cannot be read arms nothing.
+    expect(workbench.placeStamp({ ...stamp, payload_json: '{' }, 'card')).toBe(false)
+    expect(arm).toHaveBeenCalledTimes(1)
+    workbench.dispose()
+    expect(workbench.placeStamp(stamp, 'card')).toBe(false)
   })
 
   it('exports a saved stamp as a Canopi file without touching the Design Session', async () => {

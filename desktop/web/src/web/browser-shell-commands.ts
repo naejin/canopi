@@ -268,7 +268,7 @@ export function installWebKeyRouter(
         return true
       }
       const definition = canvasCommandDefinitions.find((candidate) => candidate.commandId === command)
-      return definition ? dispatchWorkspaceCanvasIntent(definition.intent) : false
+      return definition ? dispatchWorkspaceCanvasIntent(definition.intent, 'shortcut') : false
     },
   }
   const router = installKeyRouter({

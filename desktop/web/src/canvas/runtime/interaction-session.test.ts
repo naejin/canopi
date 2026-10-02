@@ -22,7 +22,7 @@ import {
 import {
   clearSavedObjectStampSource,
   readSavedObjectStampDragPreviewSource,
-  selectSavedObjectStampSourceForTests,
+  selectSavedObjectStampSource,
   writeSavedObjectStampDragData,
 } from '../saved-object-stamp-source'
 import { setCanvasTool } from '../session-state'
@@ -446,14 +446,14 @@ describe('the interaction session', () => {
     const { session } = createSession()
     session.setTool('saved-object-stamp')
 
-    const stamp = selectSavedObjectStampSourceForTests({
+    const stamp = selectSavedObjectStampSource({
       version: 2,
       anchor: { x: 0, y: 0 },
       plants: [],
       zones: [],
       annotations: [],
       groups: [],
-    } as unknown as Parameters<typeof selectSavedObjectStampSourceForTests>[0])
+    } as unknown as Parameters<typeof selectSavedObjectStampSource>[0])
     expect(sources).toEqual([{ kind: 'saved-stamp', stamp }])
     session.setTool('select')
     expect(sources).toHaveLength(1)
@@ -618,14 +618,14 @@ describe('the interaction session', () => {
     expect(sources.at(-1)).toEqual({ kind: 'species', species: chosen })
     session.dispose()
 
-    const stamp = selectSavedObjectStampSourceForTests({
+    const stamp = selectSavedObjectStampSource({
       version: 2,
       anchor: { x: 0, y: 0 },
       plants: [],
       zones: [],
       annotations: [],
       groups: [],
-    } as unknown as Parameters<typeof selectSavedObjectStampSourceForTests>[0])
+    } as unknown as Parameters<typeof selectSavedObjectStampSource>[0])
     setCanvasTool('saved-object-stamp')
     createSession()
     expect(sources.at(-1)).toEqual({ kind: 'saved-stamp', stamp })
@@ -942,7 +942,7 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
 describe('releases the tool did not hear (today\'s pointerup cleanup)', () => {
   /** A saved stamp of one apple, held through the read model as Favorites arms it. */
   function holdAppleStamp(): void {
-    selectSavedObjectStampSourceForTests({
+    selectSavedObjectStampSource({
       version: 2,
       anchor: { x: 0, y: 0 },
       plants: [{
@@ -952,7 +952,7 @@ describe('releases the tool did not hear (today\'s pointerup cleanup)', () => {
       zones: [],
       annotations: [],
       groups: [],
-    } as unknown as Parameters<typeof selectSavedObjectStampSourceForTests>[0])
+    } as unknown as Parameters<typeof selectSavedObjectStampSource>[0])
   }
 
   function ghostShown(renderer: ReturnType<typeof recordingRenderer>): boolean {

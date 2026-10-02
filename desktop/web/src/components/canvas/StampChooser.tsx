@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import type { JSX } from 'preact'
 import { savedObjectStampWorkbench } from '../../app/saved-object-stamps'
 import { parseSavedObjectStampPayload } from '../../canvas/saved-object-stamp-payload'
-import { currentCanvasToolCommandSurface } from '../../canvas/session'
+import { armCanvasTool } from '../../app/keyboard/arming'
 import { t } from '../../i18n'
 import type { SavedObjectStamp } from '../../types/saved-object-stamps'
 import type { StampChooserProps } from './ToolCard'
@@ -35,14 +35,13 @@ export function StampChooser({ onChosen, onEscape }: StampChooserProps) {
   }, [loaded])
 
   function choose(stamp: SavedObjectStamp): void {
-    if (savedObjectStampWorkbench.placeStamp(stamp)) onChosen()
+    if (savedObjectStampWorkbench.placeStamp(stamp, 'card')) onChosen()
   }
 
   function copyFromMap(): void {
-    const tools = currentCanvasToolCommandSurface.peek()
     // Leaving and re-arming Place a stamp drops what it held, so the next click picks an object.
-    tools?.setTool('select')
-    tools?.setTool('object-stamp')
+    armCanvasTool('select', { from: 'card' })
+    armCanvasTool('object-stamp', { from: 'card' })
     onChosen()
   }
 

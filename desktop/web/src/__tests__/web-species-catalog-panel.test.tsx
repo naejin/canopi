@@ -18,6 +18,7 @@ const mockCanvasSession = vi.hoisted(() => {
     toolSurface,
     currentToolCommandSurface: {
       value: toolSurface as typeof toolSurface | null,
+      peek() { return this.value },
     },
   }
 })
@@ -126,6 +127,7 @@ vi.mock('../canvas/session', () => ({
   currentCanvasQuerySurface: { value: null },
   currentCanvasTool: { value: 'select' },
   currentCanvasKeyboardPort: () => null,
+  setCurrentCanvasTool: (name: string) => mockCanvasSession.currentToolCommandSurface.value?.setTool(name),
 }))
 
 import { WebSpeciesCatalogPanel } from '../web/WebSpeciesCatalogPanel'
