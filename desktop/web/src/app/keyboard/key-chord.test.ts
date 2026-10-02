@@ -115,6 +115,7 @@ describe('layouts (spec §5.8)', () => {
     ['macOS Ctrl+Z is not Cmd+Z', { key: 'z', code: 'KeyZ', ctrlKey: true }, { platform: MAC }, null],
     ['Windows key+Z is no shortcut', { key: 'z', code: 'KeyZ', metaKey: true }, {}, null],
     ['ja direct input Ctrl+Z', { key: 'z', code: 'KeyZ', ctrlKey: true }, {}, 'edit.undo'],
+    ['ja IME composing', { key: 'z', code: 'KeyZ', isComposing: true }, {}, null],
     ['H12 single keys off', { key: 'v', code: 'KeyV' }, { singleKeys: false }, null],
     ['H13 Web reserved Ctrl+1', { key: '1', code: 'Digit1', ctrlKey: true }, { web: true }, null],
     ['Russian bracket', { key: 'ъ', code: 'BracketRight' }, {}, 'canvas.bringToFront'],

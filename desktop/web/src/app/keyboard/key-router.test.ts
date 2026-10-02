@@ -356,6 +356,36 @@ describe('key router', () => {
     expect(released()).toEqual(['Space'])
   })
 
+  it('a composing keydown runs nothing (H11, G12)', () => {
+    install()
+    host.focus()
+    const composing = (init: KeyboardEventInit, keyCode = 229): KeyboardEvent => {
+      const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })
+      Object.defineProperty(event, 'keyCode', { value: keyCode })
+      host.dispatchEvent(event)
+      return event
+    }
+    // H11: WebKit commits a composition, then sends its Enter with keyCode 229 and isComposing false.
+    host.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
+    composing({ key: 'Process', code: 'KeyK', isComposing: true })
+    host.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }))
+    const enter = composing({ key: 'Enter', code: 'Enter' })
+    // G12: Space while composing arms no pan.
+    fake.state.verdict = 'held'
+    const space = composing({ key: ' ', code: 'Space', isComposing: true }, 0)
+    composing({ key: 'v', code: 'KeyV', isComposing: true }, 0)
+    composing({ key: 'Escape', code: 'Escape', isComposing: true }, 0)
+    composing({ key: 'F6', code: 'F6', isComposing: true }, 0)
+
+    expect(fake.port.keyState).not.toHaveBeenCalled()
+    expect(fake.port.command).not.toHaveBeenCalled()
+    expect(fake.port.escape).not.toHaveBeenCalled()
+    expect(cycleRegion).not.toHaveBeenCalled()
+    expect(run).not.toHaveBeenCalled()
+    expect(enter.defaultPrevented).toBe(false)
+    expect(space.defaultPrevented).toBe(false)
+  })
+
   it('without a canvas, canvas rows fall back to the shell and the rest run nowhere', () => {
     install({ canvas: () => null })
     expect(press({ key: 'F2' }, document.body).defaultPrevented).toBe(true)

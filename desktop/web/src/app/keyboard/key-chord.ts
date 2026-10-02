@@ -3,8 +3,8 @@
 // Owns what a key press names (spec §1.6, fixtures H1–H13): the KeyboardEvent fields the key router reads, as a
 // literal-friendly interface, and the chord a press or a catalogue shortcut string (`Ctrl+Shift+Z`, see
 // shell-commands/shortcut-text.ts) stands for. `mod` is Cmd on a Mac and Ctrl elsewhere; a non-Latin layout's letters
-// and brackets fall back to the physical key, a layout's digit row to its digits, and AltGr typing a character names
-// no shortcut.
+// and brackets fall back to the physical key, a layout's digit row to its digits, and AltGr typing a character or a
+// key of an IME composition names no shortcut.
 
 import type { InputPlatform } from '../../canvas/runtime/input/platform'
 
@@ -32,11 +32,12 @@ const SHIFT_FREE_KEYS: ReadonlySet<string> = new Set(['+', '='])
 const CODE_KEYS: Readonly<Record<string, string>> = { BracketLeft: '[', BracketRight: ']' }
 
 /**
- * The chord a press names. Letters and brackets typed in a non-Latin script fall back to `event.code` (Russian Ctrl+я
+ * The chord a press names; null while an IME composes. Letters and brackets typed in a non-Latin script fall back to `event.code` (Russian Ctrl+я
  * is Ctrl+Z; macOS Option's ® on R is R); a Latin label wins over its position (AZERTY's Z key is Z). Null for the OS key
  * outside a Mac and for AltGr (Ctrl+Alt) typing a symbol.
  */
 export function chordOf(e: KeyboardEventLike, platform: Pick<InputPlatform, 'os'>): KeyChord | null {
+  if (e.isComposing || e.keyCode === 229) return null
   const mac = platform.os === 'mac' || platform.os === 'ios'
   if (!mac && e.metaKey) return null
   if (!mac && e.ctrlKey && e.altKey && [...e.key].length === 1 && !/[\p{L}\p{N}]/u.test(e.key)) return null

@@ -1,7 +1,8 @@
 // app/keyboard/key-router.ts
 //
 // Owns the only window key listeners (spec §1.6, ADR 0020; policy P8): keydown in capture and bubble, keyup in capture.
-// Capture hands every key to the canvas keyboard port first (keyState: the nudge commit, the physical Ctrl, the Menu
+// A key that is part of an IME composition runs nothing (WebKit sends the composition's Enter with keyCode 229).
+// Capture hands every other key to the canvas keyboard port first (keyState: the nudge commit, the physical Ctrl, the Menu
 // key's time, the Space hold), cycles the F6 regions and runs Esc on the canvas. It also keeps the keys held down and
 // lets them go (a keyup to the port) when Meta comes up, since macOS sends no keyup for a key pressed under Cmd, and on
 // a window blur or a visibility change. Bubble skips a key an element handler
@@ -53,6 +54,8 @@ export function installKeyRouter(deps: KeyRouterDeps): KeyRouterHandle {
   }
   // The listeners are registered for keydown and keyup only, so a KeyboardEvent here is a KeyboardEventLike.
   const onKeyDownCapture = (event: KeyboardEvent): void => {
+    // Step 1: a key that is part of a composition is the IME's.
+    if (isComposing(event)) return
     held.set(event.code || event.key, event.key)
     keyDownCapture(deps, event as KeyboardEventLike)
   }
@@ -167,6 +170,10 @@ function keyDownBubble(deps: KeyRouterDeps, event: KeyboardEventLike): void {
       return
     }
   }
+}
+
+function isComposing(event: Pick<KeyboardEventLike, 'isComposing' | 'keyCode'>): boolean {
+  return event.isComposing || event.keyCode === 229
 }
 
 function rowsFor(keymap: readonly KeymapRow[], chord: KeyChord): readonly KeymapRow[] {
