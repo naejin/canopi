@@ -1,4 +1,4 @@
-//! Opening a catalogue that cannot simply be opened (ADR 0013).
+//! Opening a catalogue that cannot simply be opened (ADR 0021).
 //!
 //! An older or corrupt `lidar-library.sqlite` is set aside, byte for byte,
 //! under `lidar-library.set-aside/` and a fresh catalogue is rebuilt from the

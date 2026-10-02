@@ -190,6 +190,7 @@ mod tests {
                     health: SubsystemHealth {
                         plant_db: PlantDbStatus::Available,
                         lidar_library: LidarLibraryStatus::Ready,
+                        local_data: common_types::health::LocalDataStatus::Current,
                     },
                 },
             )

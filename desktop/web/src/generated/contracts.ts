@@ -175,7 +175,10 @@ export type DesignLoadFailureKind =
 "missing" |
 // The file exists but could not be read (permissions, a folder, an I/O error).
 "unreadable" | "too_large" | "invalid_json" |
-// Older than the oldest format this build migrates (Canopi 1.2 and earlier).
+/**
+ *  Older than the current format (written before Canopi 2.0), which
+ *  Canopi 2.0 and later do not open (ADR 0021).
+ */
 "older_version" |
 // Newer than this build.
 "newer_version" | "invalid_document" |
@@ -634,13 +637,22 @@ export type LidarSampleUnavailableReason =
 export type LoadedDesign = {
 	file: CanopiFile,
 	fingerprint: string,
-	/**
-	 *  The file's format version when it was older than the current one and
-	 *  was upgraded in memory (ADR 0013); the next save writes the current
-	 *  format. `None` for a current-format file.
-	 */
-	migrated_from?: number | null,
 };
+
+/**
+ *  What startup did with the local data of an earlier Canopi (ADR 0021).
+ *  `MovedAside` is shown to the user once: the next start finds only
+ *  current data and reports `Current`.
+ */
+export type LocalDataStatus =
+// Nothing from before Canopi 2.0 was found.
+{ kind: "current" } |
+/**
+ *  User data (favourites, saved stamps, settings, recent files), Design
+ *  drafts or the retired autosave from before Canopi 2.0 were moved
+ *  aside, never deleted, and Canopi started fresh.
+ */
+{ kind: "moved_aside" };
 
 export type Locale = "en" | "fr" | "es" | "pt" | "it" | "zh" | "de" | "ja" | "ko" | "nl" | "ru";
 
@@ -807,7 +819,10 @@ export type RecentDesignSummary = {
 export type RecentDesignUnreadableReason =
 // Nothing is at the path any more: the file was moved, renamed or deleted.
 "missing" |
-// A Design from an older file version, which this build does not open.
+/**
+ *  A Design older than the current format (written before Canopi 2.0),
+ *  which Canopi 2.0 and later do not open (ADR 0021).
+ */
 "older_version" |
 // A Design from a newer file version than this build knows.
 "newer_version" |
@@ -1222,6 +1237,7 @@ export type StoryStep = {
 export type SubsystemHealth = {
 	plant_db: PlantDbStatus,
 	lidar_library: LidarLibraryStatus,
+	local_data: LocalDataStatus,
 };
 
 export type Theme = "light" | "dark";

@@ -12,10 +12,11 @@
 // Formats before v7 held local metres and are refused as `unsupported_version`
 // (user decision of 2026-09-28: support back to v7, refuse older with a message).
 
-import {
-  CURRENT_CANOPI_FILE_VERSION,
-  MINIMUM_SUPPORTED_CANOPI_FILE_VERSION,
-} from '../../generated/canopi-design-format'
+import { CURRENT_CANOPI_FILE_VERSION } from '../../generated/canopi-design-format'
+
+// Transitional: the generated constant went with the native ladder (ADR 0021);
+// this whole module goes when the Web side drops its ladder.
+const MINIMUM_SUPPORTED_CANOPI_FILE_VERSION = 7
 
 export type JsonObject = Record<string, unknown>
 

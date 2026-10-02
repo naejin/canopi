@@ -1,12 +1,11 @@
 use rusqlite::Connection;
 use std::fmt;
 
-use super::user_db_migrations::{self, UserDbMigrationFailure};
-
-/// The user database shape this build writes (Canopi v2).
+/// The user database shape this build writes (Canopi 2.0).
 ///
-/// An older database is upgraded in place by the migration ladder in
-/// `user_db_migrations` (ADR 0013); a newer one is refused untouched.
+/// Canopi 2.0 breaks stored data (ADR 0021): there is no migration ladder.
+/// An older database is moved aside whole by `UserDb::open` and replaced by
+/// an empty one; a newer one is refused untouched.
 pub(crate) const CURRENT_USER_DB_VERSION: i32 = 9;
 
 const SCHEMA: &str = include_str!("user_db_schema.sql");
@@ -15,24 +14,16 @@ const SCHEMA: &str = include_str!("user_db_schema.sql");
 pub enum UserDbInitError {
     Open(rusqlite::Error),
     ReadSchemaVersion(rusqlite::Error),
-    /// Written by a Canopi older than the migration ladder reaches. It is
-    /// refused and left untouched.
-    UnsupportedSchemaVersion {
+    /// Written before Canopi 2.0 (an older schema, or tables without a
+    /// schema version). `UserDb::open` moves it aside and starts fresh.
+    OlderSchemaVersion {
         found: i32,
-        oldest_supported: i32,
     },
     /// Written by a newer Canopi. It is refused and left untouched; the user
     /// must run that newer Canopi (or move the file) to continue.
     NewerSchemaVersion {
         found: i32,
         supported: i32,
-    },
-    /// The upgrade from `from` to `to` failed and rolled back; the file is
-    /// exactly as it was and is never set aside.
-    Migration {
-        from: i32,
-        to: i32,
-        source: UserDbMigrationFailure,
     },
     SetAside {
         source: std::io::Error,
@@ -52,8 +43,8 @@ pub enum UserDbInitError {
 impl UserDbInitError {
     /// Whether the file should be kept aside as corrupt and replaced by an
     /// empty database: it is not a SQLite database, is damaged, or a current
-    /// database fails its integrity checks. Older and newer databases and
-    /// failed upgrades are never set aside.
+    /// database fails its integrity checks. Older databases are moved aside
+    /// under their own name; newer ones are never set aside.
     pub(crate) fn sets_aside_as_corrupt(&self) -> bool {
         match self {
             Self::ForeignKeyViolation { .. } => true,
@@ -62,9 +53,8 @@ impl UserDbInitError {
             | Self::CreateSchema(error)
             | Self::VerifyIntegrity(error) => is_corrupt_database_error(error),
             Self::Open(_)
-            | Self::UnsupportedSchemaVersion { .. }
+            | Self::OlderSchemaVersion { .. }
             | Self::NewerSchemaVersion { .. }
-            | Self::Migration { .. }
             | Self::SetAside { .. }
             | Self::ForeignKeysDisabled => false,
         }
@@ -90,24 +80,17 @@ impl fmt::Display for UserDbInitError {
                 formatter,
                 "failed to read user database schema version: {error}"
             ),
-            Self::UnsupportedSchemaVersion {
-                found,
-                oldest_supported,
-            } => write!(
+            Self::OlderSchemaVersion { found } => write!(
                 formatter,
-                "user database schema version {found} is older than this Canopi can upgrade (oldest supported {oldest_supported})"
+                "user database schema version {found} was written before Canopi 2.0, which starts with an empty one"
             ),
             Self::NewerSchemaVersion { found, supported } => write!(
                 formatter,
                 "user database schema version {found} was written by a newer Canopi (this version reads {supported}); open it with that newer Canopi"
             ),
-            Self::Migration { from, to, source } => write!(
-                formatter,
-                "failed to upgrade the user database from schema {from} to {to}; it was left unchanged: {source}"
-            ),
             Self::SetAside { source } => write!(
                 formatter,
-                "failed to set aside the damaged user database: {source}"
+                "failed to move the user database aside: {source}"
             ),
             Self::ConfigureForeignKeys(error) => write!(
                 formatter,
@@ -147,9 +130,8 @@ impl std::error::Error for UserDbInitError {
             | Self::ConfigureForeignKeys(error)
             | Self::CreateSchema(error)
             | Self::VerifyIntegrity(error) => Some(error),
-            Self::Migration { source, .. } => Some(source),
             Self::SetAside { source } => Some(source),
-            Self::UnsupportedSchemaVersion { .. }
+            Self::OlderSchemaVersion { .. }
             | Self::NewerSchemaVersion { .. }
             | Self::ForeignKeysDisabled
             | Self::ForeignKeyViolation { .. } => None,
@@ -173,25 +155,41 @@ pub(super) fn schema_version(conn: &Connection) -> Result<i32, UserDbInitError> 
         .map_err(UserDbInitError::ReadSchemaVersion)
 }
 
-/// Create the schema in an empty database, accept a current one, or upgrade
-/// an older one in place through the migration ladder. A newer database is
-/// refused. Every path ends in the same integrity check.
+/// Create the schema in an empty database or accept a current one. An older
+/// database (including tables without a schema version) is refused as
+/// [`UserDbInitError::OlderSchemaVersion`] and a newer one as
+/// [`UserDbInitError::NewerSchemaVersion`]; neither is modified. Both
+/// accepted paths end in the same integrity check.
 pub(super) fn initialize_connection(conn: &Connection) -> Result<(), UserDbInitError> {
     let version = schema_version(conn)?;
-    conn.pragma_update(None, "foreign_keys", true)
-        .map_err(UserDbInitError::ConfigureForeignKeys)?;
     match version {
-        0 => create_schema(conn)?,
-        CURRENT_USER_DB_VERSION => {}
+        0 if has_tables(conn)? => {
+            return Err(UserDbInitError::OlderSchemaVersion { found: 0 });
+        }
+        0 | CURRENT_USER_DB_VERSION => {}
         found if found > CURRENT_USER_DB_VERSION => {
             return Err(UserDbInitError::NewerSchemaVersion {
                 found,
                 supported: CURRENT_USER_DB_VERSION,
             });
         }
-        found => user_db_migrations::upgrade(conn, found)?,
+        found => return Err(UserDbInitError::OlderSchemaVersion { found }),
+    }
+    conn.pragma_update(None, "foreign_keys", true)
+        .map_err(UserDbInitError::ConfigureForeignKeys)?;
+    if version == 0 {
+        create_schema(conn)?;
     }
     verify_integrity(conn)
+}
+
+fn has_tables(conn: &Connection) -> Result<bool, UserDbInitError> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table')",
+        [],
+        |row| row.get(0),
+    )
+    .map_err(UserDbInitError::ReadSchemaVersion)
 }
 
 fn create_schema(conn: &Connection) -> Result<(), UserDbInitError> {
@@ -204,9 +202,8 @@ fn create_schema(conn: &Connection) -> Result<(), UserDbInitError> {
     create().map_err(UserDbInitError::CreateSchema)
 }
 
-/// Foreign keys are enforced and no row violates them. Runs on every open and,
-/// inside the upgrade transaction, before a migrated database is committed.
-pub(super) fn verify_integrity(conn: &Connection) -> Result<(), UserDbInitError> {
+/// Foreign keys are enforced and no row violates them. Runs on every open.
+fn verify_integrity(conn: &Connection) -> Result<(), UserDbInitError> {
     let foreign_keys_enabled: i32 = conn
         .pragma_query_value(None, "foreign_keys", |row| row.get(0))
         .map_err(UserDbInitError::VerifyIntegrity)?;
@@ -614,8 +611,9 @@ mod tests {
         let path = temp_user_db_path(&scratch, "corrupt");
         std::fs::write(&path, b"this is not a SQLite database, it is just text").unwrap();
 
-        let user_db =
+        let (user_db, opened) =
             crate::db::UserDb::open(&path).expect("a corrupt user DB must not stop startup");
+        assert_eq!(opened, crate::db::UserDbOpened::ReplacedCorrupt);
         {
             let conn = user_db.acquire();
             assert_eq!(schema_version(&conn).unwrap(), CURRENT_USER_DB_VERSION);
@@ -651,7 +649,7 @@ mod tests {
             .unwrap();
         }
 
-        let user_db =
+        let (user_db, _) =
             crate::db::UserDb::open(&path).expect("an FK-violating user DB must not stop startup");
         {
             let conn = user_db.acquire();
@@ -668,6 +666,68 @@ mod tests {
         assert_eq!(files_starting_with(&path, ".corrupt-").len(), 1);
 
         remove_all_starting_with(&path);
+    }
+
+    /// Canopi 2.0 breaks stored data (ADR 0021): a user database from before
+    /// 2.0, at any older schema (including an unversioned one that already
+    /// holds tables), is moved aside whole, never deleted or upgraded, and
+    /// the app starts with an empty current database.
+    #[test]
+    fn a_database_from_before_2_0_is_moved_aside_and_the_app_starts_fresh() {
+        let scratch = TestScratch::new("user-db-a-database-from-before-2-0-is-moved-aside");
+        for version in [0, 1, CURRENT_USER_DB_VERSION - 1] {
+            let path = temp_user_db_path(&scratch, &format!("before_2_0_{version}"));
+            {
+                let conn = Connection::open(&path).unwrap();
+                conn.execute_batch(&format!(
+                    "CREATE TABLE favorites (canonical_name TEXT PRIMARY KEY, added_at TEXT NOT NULL);
+                     INSERT INTO favorites VALUES ('Malus domestica', '2026-05-01T10:00:00Z');
+                     PRAGMA user_version = {version};"
+                ))
+                .unwrap();
+            }
+            let before = std::fs::read(&path).unwrap();
+
+            let (user_db, opened) = crate::db::UserDb::open(&path)
+                .unwrap_or_else(|error| panic!("schema {version} must not stop startup: {error}"));
+
+            assert_eq!(
+                opened,
+                crate::db::UserDbOpened::MovedAside,
+                "schema {version}"
+            );
+            {
+                let conn = user_db.acquire();
+                assert_eq!(schema_version(&conn).unwrap(), CURRENT_USER_DB_VERSION);
+                assert!(get_favorite_names(&conn).unwrap().is_empty());
+            }
+            drop(user_db);
+            let aside = files_starting_with(&path, ".before-2.0-");
+            assert_eq!(aside.len(), 1, "schema {version}: {aside:?}");
+            assert_eq!(
+                std::fs::read(&aside[0]).unwrap(),
+                before,
+                "schema {version}: the earlier database is kept byte for byte"
+            );
+            assert!(files_starting_with(&path, ".corrupt-").is_empty());
+            remove_all_starting_with(&path);
+        }
+    }
+
+    #[test]
+    fn a_new_or_current_database_opens_in_place() {
+        let scratch = TestScratch::new("user-db-a-new-or-current-database-opens-in-place");
+        let path = temp_user_db_path(&scratch, "in_place");
+
+        let (first, created) = crate::db::UserDb::open(&path).unwrap();
+        drop(first);
+        let (second, reopened) = crate::db::UserDb::open(&path).unwrap();
+        drop(second);
+
+        assert_eq!(created, crate::db::UserDbOpened::Ready);
+        assert_eq!(reopened, crate::db::UserDbOpened::Ready);
+        assert!(files_starting_with(&path, ".").is_empty(), "nothing moved");
+        std::fs::remove_file(path).unwrap();
     }
 
     /// A newer database is refused with a typed error and left exactly where it is.
@@ -712,7 +772,7 @@ mod tests {
         let path = temp_user_db_path(&scratch, "reopen_foreign_keys");
         drop(crate::db::UserDb::open(&path).unwrap());
 
-        let user_db = crate::db::UserDb::open(&path).unwrap();
+        let (user_db, _) = crate::db::UserDb::open(&path).unwrap();
         let conn = user_db.acquire();
         let enabled: i32 = conn
             .pragma_query_value(None, "foreign_keys", |row| row.get(0))
