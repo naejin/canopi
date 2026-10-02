@@ -36,7 +36,6 @@ export type WorkspaceActivationOutcome = 'shared-ready' | 'map-unavailable' | 'c
 export interface WorkspaceActivationSnapshot {
   readonly sessionIdentity: object
   readonly map: WorkspaceMapSnapshot
-  readonly maximumWorldExtentMeters?: number
 }
 
 /** One map that is suitable for both the shared graphics layer and camera owner. */
@@ -93,7 +92,7 @@ export interface WorkspaceActivationOptions {
   readonly map: WorkspaceActivationMapControls
   readonly layer: Omit<
     SharedMapSceneLayerOptions,
-    'id' | 'readOrigin' | 'maximumWorldExtentMeters' | 'onFailure'
+    'id' | 'frames' | 'onFailure'
   >
   /** Live session plane origin of the runtime's open Design. */
   readonly readOrigin: () => { readonly lat: number; readonly lon: number }
@@ -269,8 +268,7 @@ export class WorkspaceActivationCoordinator {
           () => this.options.composition.createLayer({
             ...this.options.layer,
             id: MAPLIBRE_SHARED_SCENE_LAYER_ID,
-            readOrigin: this.options.readOrigin,
-            maximumWorldExtentMeters: current.snapshot.maximumWorldExtentMeters,
+            frames: this.cameraHost().frames,
             onFailure: (error) => {
               this.observeFailure(current, error)
             },
@@ -899,7 +897,6 @@ function captureActivationSnapshot(
   return Object.freeze({
     sessionIdentity: snapshot.sessionIdentity,
     map,
-    maximumWorldExtentMeters: snapshot.maximumWorldExtentMeters,
   })
 }
 

@@ -228,6 +228,5 @@ function snapshotsEqual(
   right: WorkspaceActivationSnapshot,
 ): boolean {
   if (!left || left.sessionIdentity !== right.sessionIdentity) return false
-  return left.maximumWorldExtentMeters === right.maximumWorldExtentMeters
-    && mapBackgroundPresentationsEqual(left.map.background, right.map.background)
+  return mapBackgroundPresentationsEqual(left.map.background, right.map.background)
 }

@@ -2,7 +2,7 @@ import { signal } from '@preact/signals'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { CanvasInspectionHandle } from '../canvas/inspection'
+import type { CanvasInspectionHandle, InspectionSourceQuad } from '../canvas/inspection'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { InspectionLens } from '../components/canvas/InspectionLens'
 import { createTestCanvasDocumentSurface, createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
@@ -17,6 +17,8 @@ it('opens the optional lens, identifies plants and releases the view on Escape',
     state: signal({ point: { x: 0, y: 0 }, scale: 10, zoomPercent: 700, previewAvailable: true, frame: { width: 430, height: 390 },
       plants: [{ id: 'mint', name: 'Menthe verte', position: { x: 0, y: 0 }, distanceM: 0,
         screenPosition: { x: 215, y: 195 }, label: { x: 160, y: 208, width: 110, height: 24, lines: ['Menthe verte'] } }] }),
+    // Today's rect at the identity main view: the 430 x 390 px preview at 10 px/m is 43 x 39 m about the origin.
+    sourceQuad: signal<InspectionSourceQuad | null>([{ x: -21.5, y: -19.5 }, { x: 21.5, y: -19.5 }, { x: 21.5, y: 19.5 }, { x: -21.5, y: 19.5 }]),
     inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panBy: vi.fn(), zoomBy: vi.fn(), highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
   }
   const host = document.createElement('div')
@@ -41,7 +43,7 @@ it('opens the optional lens, identifies plants and releases the view on Escape',
   expect(view.inspectAtScreenPoint).not.toHaveBeenCalled()
   expect(view.panBy).not.toHaveBeenCalled()
   expect(view.centerOnCanvas).not.toHaveBeenCalled()
-  expect(host.querySelector('[data-inspection-source] rect')?.getAttribute('width')).toBe('43')
+  expect(host.querySelector('[data-inspection-source] polygon')?.getAttribute('points')).toBe('-21.5,-19.5 21.5,-19.5 21.5,19.5 -21.5,19.5')
   const frame = root.querySelector<HTMLElement>('[data-inspection-frame]')!
   await act(async () => { frame.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })) })
   expect(view.panBy).toHaveBeenCalledWith({ x: 2, y: 0 })
@@ -93,4 +95,38 @@ it('opens the optional lens, identifies plants and releases the view on Escape',
   host.remove()
   expect(root.querySelector('button[aria-expanded="false"]')).not.toBeNull()
   expect(document.activeElement).toBe(launcher)
+})
+
+it("draws the source outline from the lens handle's sourceQuad", async () => {
+  document.body.appendChild(root)
+  const sourceQuad = signal<InspectionSourceQuad | null>(null)
+  const view: CanvasInspectionHandle = {
+    state: signal({ point: { x: 0, y: 0 }, scale: 10, zoomPercent: 700, previewAvailable: true, frame: { width: 430, height: 390 }, plants: [] }),
+    sourceQuad,
+    inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panBy: vi.fn(), zoomBy: vi.fn(), highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
+  }
+  const host = document.createElement('div')
+  document.body.appendChild(host)
+  setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+    queries: createTestCanvasQuerySurface(),
+    documents: createTestCanvasDocumentSurface({ attachInspectionTo: vi.fn(() => view) }),
+  }))
+  await act(async () => render(<InspectionLens canvasRef={{ current: host }} />, root))
+  await act(async () => root.querySelector<HTMLButtonElement>('button[aria-expanded]')!.click())
+  const outline = () => host.querySelector('[data-inspection-source] polygon')
+
+  // No footprint yet: nothing is drawn on the map.
+  expect(outline()).toBeNull()
+
+  // The four corners as published, in order; at bearing 0 they are the bounding rectangle's.
+  await act(async () => { sourceQuad.value = [{ x: 100, y: 50 }, { x: 143, y: 50 }, { x: 143, y: 89 }, { x: 100, y: 89 }] })
+  expect(outline()?.getAttribute('points')).toBe('100,50 143,50 143,89 100,89')
+
+  // A main-map frame moves the outline with no lens repaint, and a turned quad draws as published.
+  await act(async () => { sourceQuad.value = [{ x: 120, y: 40 }, { x: 160, y: 60 }, { x: 140, y: 100 }, { x: 100, y: 80 }] })
+  expect(outline()?.getAttribute('points')).toBe('120,40 160,60 140,100 100,80')
+
+  await act(async () => { sourceQuad.value = null })
+  expect(outline()).toBeNull()
+  host.remove()
 })

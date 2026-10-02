@@ -13,7 +13,7 @@ import {
   tracePlantSymbolContours,
 } from './plant-symbol-recipes'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
-import type { SceneViewportState, SceneZoneEntity } from './scene'
+import type { SceneZoneEntity } from './scene'
 import {
   getCanvasInteractionStrokeVisual,
   getPlantSymbolEdgeColor,
@@ -24,6 +24,7 @@ import {
   OVERLAY_CASING_EXTRA_PX,
   resolveZoneVisual,
 } from './scene-visuals'
+import type { ViewTransform } from './view/types'
 import { getRectangularZoneCorners } from './zone-geometry'
 import { getCanvasColor } from '../theme-refresh'
 
@@ -42,12 +43,14 @@ export interface InspectionLensDrawOptions {
 
 /**
  * Paints the inspection lens preview: Zones and Plant Symbols of a lens
- * snapshot on a Canvas2D context. This is renderer-neutral preview output
- * (ADR 0004), not a scene renderer; it never mounts on the workspace.
+ * snapshot on a Canvas2D context, through the lens's own view. This is
+ * renderer-neutral preview output (ADR 0004), not a scene renderer; it never
+ * mounts on the workspace.
  */
 export function drawInspectionLensScene(
   ctx: CanvasRenderingContext2D,
   snapshot: SceneRendererSnapshot,
+  view: ViewTransform,
   options: InspectionLensDrawOptions,
 ): void {
   const dpr = Math.max(options.dpr ?? 1, 1)
@@ -56,12 +59,12 @@ export function drawInspectionLensScene(
 
   applyScreenSpaceTransform(ctx, dpr)
   ctx.clearRect(0, 0, widthPx, heightPx)
-  applyViewport(ctx, snapshot.viewport)
-  drawZones(ctx, snapshot)
-  drawPlants(ctx, snapshot, dpr, widthPx, heightPx)
+  applyView(ctx, view)
+  drawZones(ctx, snapshot, view.pixelsPerMetre)
+  drawPlants(ctx, snapshot, view, dpr, widthPx, heightPx)
 }
 
-function drawZones(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnapshot): void {
+function drawZones(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnapshot, pixelsPerMetre: number): void {
   const layer = getSceneLayerStyle(snapshot.scene, 'zones')
   if (!layer.visible) return
 
@@ -74,10 +77,10 @@ function drawZones(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnapsho
     if (zone.zoneType !== 'line') ctx.fill()
     ctx.globalAlpha = layer.opacity
     ctx.strokeStyle = visual.casing
-    ctx.lineWidth = (ZONE_STROKE_PX + OVERLAY_CASING_EXTRA_PX) / snapshot.viewport.scale
+    ctx.lineWidth = (ZONE_STROKE_PX + OVERLAY_CASING_EXTRA_PX) / pixelsPerMetre
     ctx.stroke()
     ctx.strokeStyle = visual.stroke
-    ctx.lineWidth = ZONE_STROKE_PX / snapshot.viewport.scale
+    ctx.lineWidth = ZONE_STROKE_PX / pixelsPerMetre
     ctx.stroke()
   }
 
@@ -137,6 +140,7 @@ function traceClosedPath(ctx: CanvasRenderingContext2D, points: readonly { x: nu
 function drawPlants(
   ctx: CanvasRenderingContext2D,
   snapshot: SceneRendererSnapshot,
+  view: ViewTransform,
   dpr: number,
   widthPx: number,
   heightPx: number,
@@ -146,24 +150,24 @@ function drawPlants(
 
   // Symbolic footprints are bounded in CSS pixels; include rings and stack badges.
   const margin = 32
+  const scale = view.pixelsPerMetre
   const visiblePlants = snapshot.scene.plants.filter((plant) => {
-    const x = plant.position.x * snapshot.viewport.scale + snapshot.viewport.x
-    const y = plant.position.y * snapshot.viewport.scale + snapshot.viewport.y
+    const { x, y } = view.worldToScreen(plant.position)
     return x >= -margin && y >= -margin && x <= widthPx + margin && y <= heightPx + margin
   })
   const entries = buildPlantPresentationEntries(visiblePlants, {
     plants: snapshot.scene.plants,
-    viewport: snapshot.viewport,
+    viewport: { x: 0, y: 0, scale },
     speciesCache: snapshot.speciesCache,
     plantSpeciesSymbols: snapshot.scene.plantSpeciesSymbols,
     localizedCommonNames: snapshot.localizedCommonNames,
   }, new Set())
-  const layout = layoutPlantPresentation(entries, snapshot.viewport.scale)
+  const layout = layoutPlantPresentation(entries, scale)
   const hoverTarget = snapshot.hoverTarget
   const hoveredPlantId = hoverTarget?.kind === 'plant' ? hoverTarget.id : null
 
   for (const entry of entries) {
-    drawPlantSymbolGlyph(ctx, entry, layer.opacity, snapshot.viewport.scale)
+    drawPlantSymbolGlyph(ctx, entry, layer.opacity, scale)
 
     if (hoverTarget && entry.plant.id === hoveredPlantId) {
       const ring = getCanvasInteractionStrokeVisual(hoverTarget.state)
@@ -171,15 +175,15 @@ function drawPlants(
       ctx.arc(entry.plant.position.x, entry.plant.position.y, entry.radiusWorld * 1.4, 0, Math.PI * 2)
       ctx.globalAlpha = ring.alpha * layer.opacity
       ctx.strokeStyle = ring.casingColor
-      ctx.lineWidth = ring.casingWidthPx / snapshot.viewport.scale
+      ctx.lineWidth = ring.casingWidthPx / scale
       ctx.stroke()
       ctx.strokeStyle = ring.color
-      ctx.lineWidth = ring.widthPx / snapshot.viewport.scale
+      ctx.lineWidth = ring.widthPx / scale
       ctx.stroke()
     }
 
     const stackCount = layout.stackCounts.get(entry.plant.id)
-    if (stackCount) drawStackBadge(ctx, entry, stackCount, layer.opacity, dpr)
+    if (stackCount) drawStackBadge(ctx, entry, view.worldToScreen(entry.plant.position), stackCount, layer.opacity, dpr)
   }
 
   ctx.globalAlpha = 1
@@ -232,6 +236,7 @@ function drawPlantSymbolGlyph(
 function drawStackBadge(
   ctx: CanvasRenderingContext2D,
   entry: PlantPresentationEntry,
+  at: { readonly x: number; readonly y: number },
   count: number,
   opacity: number,
   dpr: number,
@@ -239,8 +244,8 @@ function drawStackBadge(
   ctx.save()
   applyScreenSpaceTransform(ctx, dpr)
   const offset = getStackBadgeOffsetPx(entry.radiusScreenPx)
-  const x = entry.screenPoint.x + offset.x
-  const y = entry.screenPoint.y + offset.y
+  const x = at.x + offset.x
+  const y = at.y + offset.y
   ctx.globalAlpha = opacity
   ctx.fillStyle = getStackBadgeBackgroundColor(lensPaper())
   const size = getStackBadgeSizePx(String(count))
@@ -255,11 +260,13 @@ function drawStackBadge(
   ctx.restore()
 }
 
-function applyViewport(ctx: CanvasRenderingContext2D, viewport: SceneViewportState): void {
+/** World metres to the backing store: the device-pixel scale already set, then the view's affine. */
+function applyView(ctx: CanvasRenderingContext2D, view: ViewTransform): void {
+  const affine = view.planar?.affine
+  if (!affine) throw new Error('The inspection lens draws only planar views.')
   const current = ctx.getTransform()
   ctx.setTransform(current.a, current.b, current.c, current.d, 0, 0)
-  ctx.translate(viewport.x, viewport.y)
-  ctx.scale(viewport.scale, viewport.scale)
+  ctx.transform(affine[0], affine[1], affine[2], affine[3], affine[4], affine[5])
 }
 
 function applyScreenSpaceTransform(ctx: CanvasRenderingContext2D, dpr: number): void {

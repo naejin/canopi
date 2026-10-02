@@ -176,6 +176,7 @@ export function createViewReadSurface(frames: ViewFrameSource, plane: () => Sess
     }),
     designPin: coarse(() => designPin(frames.viewFrame.value), samePoint),
     settledCamera: coarse(() => frames.settledViewFrame.value.view.camera, sameCamera),
+    settledRevision: computed(() => frames.settledViewFrame.value.revision),
     captureView() {
       const current = frames.viewFrame.peek().view
       const onPlane = plane()

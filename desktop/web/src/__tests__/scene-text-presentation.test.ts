@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { getAnnotationPresentation, getAnnotationVisualWorldBounds } from '../canvas/runtime/annotation-layout'
 import { SceneStore, type SceneDesignObjectSelection } from '../canvas/runtime/scene'
 import { SceneRuntimePresentationController } from '../canvas/runtime/scene-runtime/presentation'
+import { projectScenePlantLabels } from '../canvas/runtime/selection-labels'
 import { createZoomCalibrationScene } from './support/zoom-calibration-scenes'
 
 describe('scene text presentation', () => {
@@ -17,7 +18,7 @@ describe('scene text presentation', () => {
     const store = new SceneStore()
     store.updatePersisted((scene) => Object.assign(scene, createZoomCalibrationScene('garden')))
     const presentation = new SceneRuntimePresentationController({ sceneStore: store,
-      getViewport: () => ({ x: 0, y: 0, scale: 4 }), getLocale: () => 'en',
+      readPixelsPerMetre: () => 4, getLocale: () => 'en',
       resolveHighlightedTargets: () => ({ plantIds: [], zoneIds: [] }), onPlantNamesChanged: () => {},
     })
     for (const selection of [
@@ -35,7 +36,7 @@ describe('scene text presentation', () => {
     store.updatePersisted((scene) => Object.assign(scene, createZoomCalibrationScene('garden')))
     const before = store.persisted
     const presentation = new SceneRuntimePresentationController({
-      sceneStore: store, getViewport: () => ({ x: 0, y: 0, scale: 4 }),
+      sceneStore: store, readPixelsPerMetre: () => 4,
       getLocale: () => 'en', resolveHighlightedTargets: () => ({ plantIds: [], zoneIds: [] }),
       onPlantNamesChanged: () => {},
     })
@@ -50,9 +51,10 @@ describe('scene text presentation', () => {
       store.setSelection(selection)
       return presentation.buildRendererSnapshot()
     })
-    expect(snapshots.map((snapshot) => snapshot.pinnedPlantNameLabels.map((label) => label.plantId)))
+    const labels = snapshots.map((snapshot) => projectScenePlantLabels(snapshot, 4))
+    expect(labels.map(({ pinnedPlantNameLabels }) => pinnedPlantNameLabels.map((label) => label.plantId)))
       .toEqual([['plant-1'], [], [], ['plant-2'], []])
-    expect(snapshots.map((snapshot) => snapshot.selectionLabels.length)).toEqual([0, 0, 0, 0, 1])
+    expect(labels.map(({ selectionLabels }) => selectionLabels.length)).toEqual([0, 0, 0, 0, 1])
     expect(store.persisted).toEqual(before)
     expect(store.session.documentRevision).toBe(0)
   })

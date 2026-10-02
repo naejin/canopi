@@ -1,8 +1,7 @@
 import { buildCanvasPrintSnapshot } from './print-snapshot'
 import { getCanvasPlantNameLabels } from './automatic-detail'
-import { worldToScreen } from './annotation-layout'
 import { getSceneLayerStyle } from './scene-visuals'
-import { isWorkspaceOverviewScale } from '../workspace-camera-policy'
+import { createWorkspaceCameraPolicy, isWorkspaceOverviewScale } from '../workspace-camera-policy'
 import type { PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import type { SelectedPlantSymbolContext } from '../plant-symbol-context'
@@ -28,6 +27,9 @@ import type { SettledSceneReader } from './scene-runtime/transactions'
 import { createViewReadSurface } from './view/frame-source'
 import type { ViewReadSurface } from './view/read-surface'
 import type { WorldPoint } from './view/types'
+
+/** Overview starts below the policy's threshold, the same at every latitude. */
+const OVERVIEW_POLICY = createWorkspaceCameraPolicy()
 
 type PointerWorldListener = (point: WorldPoint | null) => void
 /** The interaction session's ToolHost.subscribePointerWorld. */
@@ -111,9 +113,10 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
   }
   captureViewScene(request: CanvasViewSceneRequest) {
     void this.options.settledReader.revision.value
-    const overview = isWorkspaceOverviewScale(request.viewport.scale, this.options.camera.snapshot.peek())
+    const { view, ...layers } = request
+    const overview = isWorkspaceOverviewScale(view.pixelsPerMetre, OVERVIEW_POLICY)
     return this.options.settledReader.readWhenSettled(
-      () => this.options.presentation.buildViewCaptureSnapshot({ ...request, overview }),
+      () => this.options.presentation.buildViewCaptureSnapshot({ ...layers, overview }),
       null,
     )
   }
@@ -121,17 +124,17 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
   getSceneSnapshot(): ScenePersistedState { return this.options.sceneStore.persisted }
   getSpeciesFocus() { return this.options.sceneStore.session.speciesFocus }
   getPlantLabelCoverage(): CanvasPlantLabelCoverage {
-    const frame = this.options.camera.snapshot.peek()
-    const { width, height } = frame.screenSize
-    if (frame.mode === 'overview' || width <= 0 || height <= 0) return { labelled: 0, inView: 0 }
+    const { view, mode } = this.options.camera.host.frames.viewFrame.peek()
+    const { width, height } = view.screen
+    if (mode === 'overview' || width <= 0 || height <= 0) return { labelled: 0, inView: 0 }
     const snapshot = this.options.presentation.buildRendererSnapshot()
     if (!getSceneLayerStyle(snapshot.scene, 'plants').visible) return { labelled: 0, inView: 0 }
     const inView = new Set<string>()
     for (const plant of snapshot.scene.plants) {
-      const point = worldToScreen(plant.position, snapshot.viewport)
+      const point = view.worldToScreen(plant.position)
       if (point.x >= 0 && point.y >= 0 && point.x <= width && point.y <= height) inView.add(plant.id)
     }
-    const labelled = new Set(getCanvasPlantNameLabels(snapshot)
+    const labelled = new Set(getCanvasPlantNameLabels(snapshot, view.pixelsPerMetre)
       .filter((label) => inView.has(label.plantId))
       .map((label) => label.plantId))
     return { labelled: labelled.size, inView: inView.size }

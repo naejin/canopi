@@ -1,11 +1,12 @@
 import { signal, type ReadonlySignal } from '@preact/signals'
 import type {
+  SceneChangeSet,
+  SceneRenderer,
   SceneRendererDefinition,
-  SceneRendererInstance,
   SceneRendererSnapshot,
 } from '../renderers/scene-types'
-import type { SceneViewportState } from '../scene'
 import type { DraftPresentation } from '../tools/draft'
+import type { ViewTransform } from '../view/types'
 
 export type SceneRuntimeRenderKind = 'scene' | 'viewport' | 'chrome'
 
@@ -13,9 +14,13 @@ interface SceneRuntimePreparedRender {
   publish(): SceneRendererSnapshot
 }
 
+/** Every scene render publishes a whole snapshot; the change set says so until phase R narrows it. */
+const WHOLE_SCENE: SceneChangeSet = Object.freeze({ scene: true, selection: true, hover: [], style: true, labels: true })
+
 interface SceneRuntimeRenderSchedulerOptions {
   getRenderer(): SceneRendererDefinition | null
-  getViewport(): SceneViewportState
+  /** The live frame's view, handed to the renderer on every camera frame. */
+  getView(): ViewTransform
   prepareSceneRender(): Promise<SceneRuntimePreparedRender>
   renderChrome(): void
 }
@@ -37,7 +42,7 @@ export class SceneRendererMountCancelledError extends Error {
  */
 export class SceneRuntimeRenderScheduler {
   private _container: HTMLElement | null = null
-  private _renderer: SceneRendererInstance | null = null
+  private _renderer: SceneRenderer | null = null
   private _mounting = false
   private _mountEpoch = 0
   private _renderEpoch = 0
@@ -69,7 +74,7 @@ export class SceneRuntimeRenderScheduler {
     }
     this._mounting = true
     const mountEpoch = ++this._mountEpoch
-    let renderer: SceneRendererInstance
+    let renderer: SceneRenderer
     try {
       renderer = await definition.initialize({ container })
     } finally {
@@ -116,7 +121,7 @@ export class SceneRuntimeRenderScheduler {
       if (renderEpoch !== this._renderEpoch || renderer !== this._renderer) return
       const snapshot = prepared.publish()
       if (renderEpoch !== this._renderEpoch || renderer !== this._renderer) return
-      renderer.renderScene(snapshot)
+      renderer.syncScene(snapshot, WHOLE_SCENE)
       this._options.renderChrome()
     } catch (error) {
       this._settleSceneRender(renderEpoch)
@@ -130,7 +135,7 @@ export class SceneRuntimeRenderScheduler {
   async renderViewport(): Promise<void> {
     const renderer = this._renderer
     if (!renderer) return
-    renderer.setViewport(this._options.getViewport())
+    renderer.setView(this._options.getView())
     this._options.renderChrome()
   }
 
@@ -139,7 +144,7 @@ export class SceneRuntimeRenderScheduler {
    * frame without a scene render. With nothing mounted there is nothing to draw on.
    */
   setDraft(draft: DraftPresentation | null): void {
-    this._renderer?.setDraft?.(draft)
+    this._renderer?.setDraft(draft)
   }
 
   /** MapLibre owns the drawing surface size; a resize is a camera-only update. */
@@ -191,7 +196,7 @@ export class SceneRuntimeRenderScheduler {
   }
 }
 
-async function disposeRenderer(renderer: SceneRendererInstance): Promise<void> {
+async function disposeRenderer(renderer: SceneRenderer): Promise<void> {
   try {
     await renderer.dispose()
   } catch (error) {

@@ -1,4 +1,4 @@
-import type { SceneBounds } from '../camera'
+import type { SceneBounds } from '../view/types'
 import { pointsBounds } from '../zone-geometry'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
 import {

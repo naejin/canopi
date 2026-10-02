@@ -1816,24 +1816,13 @@ const TOOL_SEAM_SOURCES = [
   'src/canvas/runtime/tools/spatial-index.ts',
 ] as const
 
-/**
- * P2's named allowlist: each file that may still project through MapLibre, with its number of calls and the merge that
- * removes it. The test "P2 allowlists each projecting file with its exact count" fails when a count changes, so an entry
- * goes in the merge that removes its last call.
- */
-const P2_PROJECTION_ALLOWLIST: Readonly<Record<string, number>> = {
-  // deriveSharedMapSceneViewport's map.project, run every render until 0D2 moves the layer onto the frame (INV-XF-25).
-  'src/maplibre/shared-scene-layer.ts': 1,
-}
-
+/** P2: screen positions come from the view transform (`view/camera-contract.test.ts` guards it against MapLibre). */
 const P2_PROJECTION_POLICY = {
   kind: 'forbid-calls',
-  name: 'P2 only the agreement probe projects through MapLibre',
+  name: 'P2 nobody projects through MapLibre',
   from: ['src/**'],
   exceptFrom: [
-    'src/maplibre/view-agreement.ts',
     ...WORLD_MAP_SOURCES,
-    ...Object.keys(P2_PROJECTION_ALLOWLIST),
     ...TEST_SOURCE_PATTERNS,
   ],
   targets: [...MAP_RECEIVER_TARGETS],
@@ -1981,6 +1970,21 @@ const CANVAS_V2_POLICIES = [
     from: ['src/canvas/runtime/input/**'],
     names: ['window', 'document', 'Date', 'performance', 'setTimeout', 'navigator', 'PointerEvent', 'WheelEvent'],
     allowedFrom: ['src/canvas/runtime/input/dom-input-source.ts', ...TEST_SOURCE_PATTERNS],
+  },
+  {
+    // World content moves by the world-root matrix, never per-point projection (world-layers.test.ts "a pan
+    // re-tessellates no zone" is the behavioural half). Upright billboards, the billboard drafts and label admission
+    // project anchors; overlays live in chrome/, outside the rule.
+    kind: 'confine-symbols',
+    name: 'P12 the renderer learns the camera one way',
+    from: ['src/canvas/runtime/renderers/**'],
+    names: ['worldToScreen', 'projectAnchors', 'worldQuadToScreen'],
+    allowedFrom: [
+      'src/canvas/runtime/renderers/billboard-layer.ts',
+      'src/canvas/runtime/renderers/draft-layer.ts',
+      'src/canvas/runtime/renderers/label-admission.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
   },
 ] satisfies readonly ArchitecturePolicy[]
 
@@ -2493,7 +2497,7 @@ function plantedSource(path: string, lines: readonly string[]) {
 const P1_CAMERA_METHODS = '[P1 only the camera driver calls MapLibre camera methods]'
 const P1_MAP_RECEIVERS = '[P1 only the camera driver stops, pans, zooms, resizes or resets north a map]'
 const P1_MAP_TYPE = '[P1 the camera driver imports the MapLibre map type]'
-const P2 = '[P2 only the agreement probe projects through MapLibre]'
+const P2 = '[P2 nobody projects through MapLibre]'
 const P4_IMPORTS = '[P4 the view module imports only its pure dependencies]'
 const P4_GLOBALS = '[P4 the view module reaches no DOM, timer, clock or media query]'
 const P5_IMPORTS = '[P5 tools import no MapLibre, DOM or Pixi]'
@@ -2505,6 +2509,7 @@ const P6_CAPTURE = '[P6 only the DOM input source captures the pointer]'
 const P6_LISTENERS = '[P6 only the DOM input source adds canvas listeners]'
 const P6_MAPLIBRE = '[P6 MapLibre modules add listeners only to abort signals]'
 const P7 = '[P7 the input core reaches no browser global or DOM event]'
+const P12 = '[P12 the renderer learns the camera one way]'
 const P11 = '[Retired frontend seams stay deleted]'
 const TEST_SOURCES = TEST_SOURCE_PATTERNS.join(', ')
 
@@ -2566,7 +2571,7 @@ describe('canvas v2 policies', () => {
     ])
   })
 
-  it('P2 rejects map projections outside the agreement probe, the World map and its named allowlist', () => {
+  it('P2 rejects map projections outside the World map', () => {
     const graph = createTypeScriptSourceGraph([
       plantedSource('src/maplibre/planted.ts', [
         'map.project([1, 2]);',
@@ -2575,32 +2580,18 @@ describe('canvas v2 policies', () => {
         'plane.project(point);',
         'input.project(point);',
       ]),
-      plantedSource('src/maplibre/view-agreement.ts', ['map.unproject([1, 2])']),
       plantedSource('src/maplibre/shared-scene-layer.ts', ['map!.project([1, 2])']),
       plantedSource('src/components/world-map/WorldMapSurface.tsx', ['map.project([1, 2])']),
-      plantedSource('src/maplibre/view-agreement.test.ts', ['map.unproject([1, 2])']),
+      plantedSource('src/maplibre/camera-driver.test.ts', ['map.unproject([1, 2])']),
     ])
 
     expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P2'))).toEqual([
       `${P2} src/maplibre/planted.ts:1 calls map.project`,
       `${P2} src/maplibre/planted.ts:2 calls this.map?.unproject`,
       `${P2} src/maplibre/planted.ts:3 calls workspaceMap!.project`,
+      `${P2} src/maplibre/shared-scene-layer.ts:1 calls map!.project`,
     ])
   })
-
-  it('P2 allowlists each projecting file with its exact count', () => {
-    const unlisted = {
-      ...P2_PROJECTION_POLICY,
-      exceptFrom: P2_PROJECTION_POLICY.exceptFrom.filter((path) => !(path in P2_PROJECTION_ALLOWLIST)),
-    }
-    const counts: Record<string, number> = {}
-    for (const violation of collectArchitecturePolicyViolations(discoveredSourceGraph(), [unlisted])) {
-      const path = /^\[[^\]]+\] (\S+):\d+ calls /.exec(violation)?.[1] ?? violation
-      counts[path] = (counts[path] ?? 0) + 1
-    }
-
-    expect(counts).toEqual(P2_PROJECTION_ALLOWLIST)
-  }, 20_000)
 
   it('P4 rejects view imports other than its pure dependencies', () => {
     const graph = createTypeScriptSourceGraph([
@@ -2894,6 +2885,37 @@ describe('canvas v2 policies, end of 0B', () => {
       confined.map(
         (name) =>
           `${P7} src/canvas/runtime/input/recognise.ts contains confined symbol ${name}; allowed sources: src/canvas/runtime/input/dom-input-source.ts, ${TEST_SOURCES}`,
+      ),
+    )
+  })
+
+  it('P12 confines per-point projection in the renderers to the billboards, the billboard drafts and label admission', () => {
+    // One world-layer module reaching every name of plan §5 P12: dropping any name from the rule drops its line here.
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/renderers/world-layers.ts', [
+        'export function paint(view: RendererView, quad: WorldQuad, out: Float64Array) {',
+        '  view.projectAnchors(new Float64Array(2), out, 1)',
+        '  return [view.worldToScreen({ x: 0, y: 0 }), view.worldQuadToScreen(quad)]',
+        '}',
+      ]),
+      plantedSource('src/canvas/runtime/renderers/billboard-layer.ts', [
+        'export function place(view: RendererView, out: Float64Array) { view.projectAnchors(out, out, 1); view.worldToScreen({ x: 0, y: 0 }) }',
+      ]),
+      plantedSource('src/canvas/runtime/renderers/draft-layer.ts', ['export function draft(at: RendererView, out: Float64Array) { at.projectAnchors(out, out, 1) }']),
+      plantedSource('src/canvas/runtime/renderers/label-admission.ts', ['export function admit(view: RendererView) { return view.worldToScreen({ x: 0, y: 0 }) }']),
+      plantedSource('src/canvas/runtime/renderers/world-layers.test.ts', ['view.worldToScreen({ x: 0, y: 0 })']),
+      plantedSource('src/canvas/runtime/chrome/handle-layer.ts', ['export function place(view: RendererView) { return view.worldToScreen({ x: 0, y: 0 }) }']),
+    ])
+    const allowed = [
+      'src/canvas/runtime/renderers/billboard-layer.ts',
+      'src/canvas/runtime/renderers/draft-layer.ts',
+      'src/canvas/runtime/renderers/label-admission.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ].join(', ')
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P12'))).toEqual(
+      ['worldToScreen', 'projectAnchors', 'worldQuadToScreen'].map(
+        (name) => `${P12} src/canvas/runtime/renderers/world-layers.ts contains confined symbol ${name}; allowed sources: ${allowed}`,
       ),
     )
   })

@@ -1,11 +1,9 @@
 import { signal } from '@preact/signals'
 import { logMapError } from './redact-credentials'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
-import type { SceneViewportState } from '../canvas/runtime/scene'
 import type { CameraDriver } from '../canvas/runtime/view/camera-driver'
 import { createNavigationPolicy, type NavigationPolicy } from '../canvas/runtime/view/navigation-policy'
 import type { ViewTransform } from '../canvas/runtime/view/types'
-import { planarCameraOf } from '../canvas/runtime/view/view-transform'
 import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
 import {
   createWorkspaceCameraPolicy,
@@ -57,8 +55,8 @@ interface ViewSnapshotCamera {
 interface ViewSnapshotScene {
   /** Session plane origin that the scene's metres are measured from. */
   readonly origin: { readonly lat: number; readonly lon: number }
-  /** Scene state at the snapshot's viewport. Throwing fails the capture. */
-  build(viewport: SceneViewportState): SceneRendererSnapshot
+  /** Scene state at the snapshot's view (its own driver's frame). Throwing fails the capture. */
+  build(view: ViewTransform): SceneRendererSnapshot
 }
 
 export type ViewSnapshotImageType = 'image/png' | 'image/jpeg' | 'image/webp'
@@ -193,7 +191,6 @@ interface SnapshotInstance {
   readonly teardown: AbortController
   background: MapBackgroundHandle | null
   sceneLayer: SharedMapSceneLayer | null
-  origin: { readonly lat: number; readonly lon: number }
   width: number
   height: number
   broken: Error | null
@@ -309,7 +306,6 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
       teardown: new AbortController(),
       background: null,
       sceneLayer: null,
-      origin: request.scene.origin,
       width: request.width,
       height: request.height,
       broken: null,
@@ -358,7 +354,7 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
       if (!context) throw new Error('The snapshot map did not expose a WebGL2 context.')
       const sceneLayer = createSceneLayer({
         id: VIEW_SNAPSHOT_SCENE_LAYER_ID,
-        readOrigin: () => created.origin,
+        frames: created.driver.frames,
         onFailure: (error) => { created.broken = error },
       })
       created.sceneLayer = sceneLayer
@@ -410,7 +406,6 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
       Object.assign(current.view, snapshotView(origin))
       driver.planeChanged(current.view.plane)
     }
-    current.origin = origin
     current.tileErrors = 0
     // The driver resizes the map (an unchanged size does nothing) and jumps it: the snapshot's camera is north-up.
     driver.setScreen({ width: request.width, height: request.height, devicePixelRatio: current.pixelRatio })
@@ -426,7 +421,7 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
     }
     background.update(request.background)
     const scenePresentedBefore = sceneLayer.diagnostics.sceneSyncCount
-    sceneLayer.setSnapshot(request.scene.build(sceneViewportOf(driver.frames.viewFrame.peek().view)))
+    sceneLayer.setSnapshot(request.scene.build(driver.frames.viewFrame.peek().view))
 
     const complete = () => background.isApplied()
       && map.loaded()
@@ -615,12 +610,6 @@ function snapshotView(origin: { readonly lat: number; readonly lon: number }): S
     plane: createSessionPlane(origin),
     policy: createNavigationPolicy(createWorkspaceCameraPolicy(origin.lat), VIEW_SNAPSHOT_REDUCED_MOTION),
   }
-}
-
-/** The scene's bearing-0 placement in today's terms, until the scene takes the ViewTransform itself (0D2). */
-function sceneViewportOf(view: ViewTransform): SceneViewportState {
-  const { x, y, scale } = planarCameraOf(view)
-  return { x, y, scale }
 }
 
 function clampZoom(zoom: number): number {

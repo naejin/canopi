@@ -1,6 +1,6 @@
 import { getCanvasDetailLayout } from '../automatic-detail'
 import { getAnnotationVisualWorldBounds, getRevealedAnnotationId } from '../annotation-layout'
-import type { SceneBounds } from '../camera'
+import type { SceneBounds } from '../view/types'
 import {
   getPlantWorldBounds,
   type PlantPresentationContext,

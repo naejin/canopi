@@ -44,7 +44,7 @@ Canvas v2 ([plan](../plans/canvas-v2-plan.md), [spec](../plans/canvas-v2-spec.md
 
 - Publish a raw `SceneCanvasRuntime` or cast it to a role; tests use `createTestCanvasRuntimeSurfaces()`.
 - Read the plane origin from the document; use `CanvasQuerySurface.sessionPlane`.
-- Fit with a map-only `fitBounds`, call MapLibre camera methods outside the camera driver or `project` outside `maplibre/view-agreement.ts`, or convert world to screen outside the view transform.
+- Fit with a map-only `fitBounds`, call MapLibre camera methods outside the camera driver, project through a workspace map (P2), or convert world to screen outside the view transform.
 - Await an owner operation from a child setup or disposal promise.
 - Claim a contribution was omitted while parts remain (a failed rollback is a core failure).
 - Mirror Target geometry or layer rows into map state.

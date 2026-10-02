@@ -76,9 +76,9 @@ export function describeSavedViewSnapshot(
     background: savedViewBackgroundPresentation(view, context.mapLayers, context.locale),
     scene: {
       origin: plane.origin,
-      build(viewport) {
+      build(view) {
         const snapshot = context.queries.captureViewScene({
-          viewport, visibleLayerNames, focusedSpecies, plantLabels: context.plantLabels,
+          view, visibleLayerNames, focusedSpecies, plantLabels: context.plantLabels,
         })
         if (!snapshot) throw new ViewSnapshotSceneBusyError()
         return snapshot

@@ -4,10 +4,13 @@ import {
   MapLibreSceneRendererBridge,
   type MapLibreSceneRenderTarget,
 } from '../canvas/runtime/renderers/maplibre-scene'
-import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
+import type { SceneChangeSet, SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
 import { createSharedMapSceneRendererComposition } from '../maplibre/shared-scene-renderer'
 import type { SharedMapSceneMap, SharedPixiRenderer } from '../maplibre/shared-scene-layer'
-import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
+import { createTestRendererView, createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
+import { createTestView } from './support/test-view'
+
+const WHOLE_SCENE: SceneChangeSet = { scene: true, selection: true, hover: [], style: true, labels: true }
 
 function createTarget() {
   const target = {
@@ -26,11 +29,11 @@ describe('MapLibre scene renderer bridge', () => {
     )
     const first = createTestSceneRendererSnapshot()
     const latest = createTestSceneRendererSnapshot({
-      viewport: { x: 30, y: 40, scale: 5 },
+      speciesFocus: { canonicalName: 'Malus domestica' },
     })
 
-    instance.renderScene(first)
-    instance.renderScene(latest)
+    instance.syncScene(first, WHOLE_SCENE)
+    instance.syncScene(latest, WHOLE_SCENE)
     const target = createTarget()
     bridge.connect(target)
 
@@ -48,8 +51,8 @@ describe('MapLibre scene renderer bridge', () => {
     )
     const snapshot = createTestSceneRendererSnapshot()
 
-    instance.renderScene(snapshot)
-    instance.setViewport({ x: 80, y: 90, scale: 10 })
+    instance.syncScene(snapshot, WHOLE_SCENE)
+    instance.setView(createTestRendererView({ x: 80, y: 90, scale: 10 }))
 
     expect(target.setSnapshot).toHaveBeenCalledExactlyOnceWith(snapshot)
     expect(target.requestRender).toHaveBeenCalledOnce()
@@ -69,7 +72,7 @@ describe('MapLibre scene renderer bridge', () => {
 
     firstConnection.disconnect()
     const snapshot = createTestSceneRendererSnapshot()
-    instance.renderScene(snapshot)
+    instance.syncScene(snapshot, WHOLE_SCENE)
 
     expect(firstTarget.setSnapshot).not.toHaveBeenCalled()
     expect(secondTarget.setSnapshot).toHaveBeenCalledExactlyOnceWith(snapshot)
@@ -94,24 +97,20 @@ describe('MapLibre scene renderer bridge', () => {
     })
     const map = {
       getCanvas: () => canvas,
-      getPitch: () => 0,
       triggerRepaint: vi.fn(),
-      project: vi.fn()
-        .mockReturnValueOnce({ x: 40, y: 30 })
-        .mockReturnValueOnce({ x: 44, y: 30 })
-        .mockReturnValueOnce({ x: 40, y: 34 }),
     } satisfies SharedMapSceneMap
     const renderer: SharedPixiRenderer = {
       init: vi.fn(async () => {}), render: vi.fn(), resize: vi.fn(), resetState: vi.fn(),
       destroy: vi.fn(), context: { extensions: { loseContext: { loseContext: vi.fn() } } },
     }
     const layer = composition.createLayer({
-      id: 'design', readOrigin: () => ({ lat: 0, lon: 0 }), onFailure,
+      id: 'design', onFailure,
+      frames: createTestView({ screen: { width: 200, height: 100, devicePixelRatio: 2 }, viewport: { x: 40, y: 30, scale: 4 } }).frames,
       createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
       createPresentation: () => ({
-        dispose() {}, resize() {}, setViewport() {}, setDraft() {},
-        renderScene() { throw new Error('shared scene failed') },
+        dispose() {}, resize() {}, setView() {}, setDraft() {},
+        syncScene() { throw new Error('shared scene failed') },
       }),
     })
     const gl = {} as WebGL2RenderingContext
@@ -119,12 +118,12 @@ describe('MapLibre scene renderer bridge', () => {
     layer.layer.onAdd!(map as never, gl)
     const active = await composition.renderer.initialize({ container: document.createElement('div') })
     const snapshot = createTestSceneRendererSnapshot()
-    active.renderScene(snapshot)
+    active.syncScene(snapshot, WHOLE_SCENE)
     layer.layer.render(gl, {} as never)
 
     expect(onFailure).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ message: 'shared scene failed' }))
     // The renderer keeps publishing; the workspace coordinator owns unmounting it.
-    expect(() => active.renderScene(snapshot)).not.toThrow()
+    expect(() => active.syncScene(snapshot, WHOLE_SCENE)).not.toThrow()
     await layer.dispose({ mapWillBeRemoved: true })
     await active.dispose()
   })
@@ -137,7 +136,7 @@ describe('MapLibre scene renderer bridge', () => {
     const instance = await bridge.createRenderer().initialize(
       { container: document.createElement('div') },
     )
-    instance.renderScene(createTestSceneRendererSnapshot())
+    instance.syncScene(createTestSceneRendererSnapshot(), WHOLE_SCENE)
 
     await instance.dispose()
     const replacement = createTarget()

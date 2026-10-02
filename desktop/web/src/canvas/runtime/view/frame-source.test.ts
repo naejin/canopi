@@ -111,6 +111,34 @@ describe('view frame source', () => {
     view.dispose()
   })
 
+  it('settledRevision changes once per settle, a resize included', () => {
+    const view = createTestView()
+    const surface = createViewReadSurface(view.frames, () => createSessionPlane({ lon: 0, lat: 0 }))
+    const seen: number[] = []
+    const stop = effect(() => { seen.push(surface.settledRevision.value) })
+
+    view.navigation.panByPx({ x: 25, y: -10 })
+    view.clock.advance(SETTLE_MS - 1)
+    view.navigation.panByPx({ x: -3, y: 4 })
+    view.clock.advance(SETTLE_MS - 1)
+    expect(seen).toHaveLength(1)
+    view.clock.advance(1)
+    expect(seen).toHaveLength(2)
+    expect(seen[1]).toBe(view.frames.viewFrame.peek().revision)
+
+    view.host.current().setScreen({ width: 640, height: 480, devicePixelRatio: 1 })
+    view.clock.advance(SETTLE_MS)
+    expect(seen).toHaveLength(3)
+    expect(seen[2]).toBe(view.frames.viewFrame.peek().revision)
+    expect(view.frames.settledViewFrame.peek().view.screen.width).toBe(640)
+
+    // Nothing new published: no further settle.
+    view.clock.advance(SETTLE_MS * 4)
+    expect(seen).toHaveLength(3)
+    stop()
+    view.dispose()
+  })
+
   it('captureView returns the live camera and the four-corner extent', () => {
     const plane = createSessionPlane({ lon: 2.3522, lat: 48.8566 })
     const view = createTestView({ plane, viewport: { x: -130.5, y: 42.25, scale: 1.75 } })

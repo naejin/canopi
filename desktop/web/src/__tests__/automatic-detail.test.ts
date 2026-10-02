@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { getCanvasDetailLayout, getCanvasPlantNameLabels } from '../canvas/runtime/automatic-detail'
 import { getAnnotationPresentation, isPointInAnnotationPresentation } from '../canvas/runtime/annotation-layout'
 import type { ScenePlantEntity } from '../canvas/runtime/scene'
-import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
+import { createTestRendererView, createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
 
 function plant(id: string, x: number, y: number): ScenePlantEntity {
   return { kind: 'plant', id, position: { x, y }, canonicalName: 'Mentha spicata', commonName: 'Menthe verte',
@@ -33,49 +33,55 @@ describe('Automatic Detail', () => {
 
   it('identifies unpinned plants when local space allows without changing their saved name choices', () => {
     const snapshot = createTestSceneRendererSnapshot({
-      scene: { plants: [plant('a', 0, 0), plant('b', .27, 0)] }, viewport: { x: 0, y: 0, scale: 400 },
+      scene: { plants: [plant('a', 0, 0), plant('b', .27, 0)] },
     })
     const before = JSON.stringify(snapshot.scene)
-    const labels = getCanvasPlantNameLabels(snapshot)
+    const labels = getCanvasPlantNameLabels(snapshot, 400)
     expect(labels.map((label) => label.text)).toEqual(['Menthe verte', 'Menthe verte'])
     expect(JSON.stringify(snapshot.scene)).toBe(before)
-    expect(getCanvasPlantNameLabels({ ...snapshot, viewport: { x: 0, y: 0, scale: 10 } })).toEqual([])
+    expect(getCanvasPlantNameLabels(snapshot, 10)).toEqual([])
   })
 
   it('draws the labels a snapshot asks for over the workspace choice (a saved view)', () => {
     const snapshot = createTestSceneRendererSnapshot({
       scene: { plants: [plant('a', 0, 0), plant('b', .27, 0)], plantSpeciesCodes: { 'Mentha spicata': 'MSP' } },
-      viewport: { x: 0, y: 0, scale: 400 },
     })
-    expect(getCanvasPlantNameLabels({ ...snapshot, plantLabels: 'none' })).toEqual([])
-    expect(getCanvasPlantNameLabels({ ...snapshot, plantLabels: 'codes' }).map((label) => label.text)).toEqual(['MSP', 'MSP'])
-    expect(getCanvasPlantNameLabels({ ...snapshot, plantLabels: 'names' }).map((label) => label.text))
+    const pixelsPerMetre = 400
+    expect(getCanvasPlantNameLabels({ ...snapshot, plantLabels: 'none' }, pixelsPerMetre)).toEqual([])
+    expect(getCanvasPlantNameLabels({ ...snapshot, plantLabels: 'codes' }, pixelsPerMetre).map((label) => label.text)).toEqual(['MSP', 'MSP'])
+    expect(getCanvasPlantNameLabels({ ...snapshot, plantLabels: 'names' }, pixelsPerMetre).map((label) => label.text))
       .toEqual(['Menthe verte', 'Menthe verte'])
   })
 
   it('keeps collision admission stable during panning and a round trip through overview zoom', () => {
     const snapshot = createTestSceneRendererSnapshot({
       scene: { plants: [plant('a', 0, 0), plant('b', .4, 0), plant('c', .8, 0)] },
-      viewport: { x: 0, y: 0, scale: 100 },
     })
-    const labels = getCanvasPlantNameLabels(snapshot)
+    const labels = getCanvasPlantNameLabels(snapshot, 100)
     expect(labels.length).toBeGreaterThan(0)
     expect(labels.length).toBeLessThan(3)
-    expect(getCanvasPlantNameLabels({ ...snapshot, viewport: { x: 113, y: -27, scale: 100 } }))
-      .toEqual(labels.map(label => ({ ...label, screenPoint: { x: label.screenPoint.x + 113, y: label.screenPoint.y - 27 } })))
-    getCanvasPlantNameLabels({ ...snapshot, viewport: { x: 0, y: 0, scale: 10 } })
-    expect(getCanvasPlantNameLabels(snapshot)).toEqual(labels)
+    // A pan moves where the admitted labels land in the frame, by the pan.
+    const landing = (viewport: { x: number; y: number; scale: number }) => labels.map((label) => {
+      const anchor = createTestRendererView(viewport).worldToScreen(label.anchor)
+      return { x: anchor.x + label.offsetPx.x, y: anchor.y + label.offsetPx.y }
+    })
+    const panned = landing({ x: 113, y: -27, scale: 100 })
+    for (const [index, point] of landing({ x: 0, y: 0, scale: 100 }).entries()) {
+      expect(panned[index]!.x).toBeCloseTo(point.x + 113, 6)
+      expect(panned[index]!.y).toBeCloseTo(point.y - 27, 6)
+    }
+    getCanvasPlantNameLabels(snapshot, 10)
+    expect(getCanvasPlantNameLabels(snapshot, 100)).toEqual(labels)
   })
 
   it('prioritizes an authored pin in a crowded label area and never reveals a hidden plant layer', () => {
     const snapshot = createTestSceneRendererSnapshot({
       scene: { plants: [plant('a', 0, 0), plant('b', 0, 0), { ...plant('z', 0, 0), pinnedName: true }] },
-      viewport: { x: 0, y: 0, scale: 100 },
-      pinnedPlantNameLabels: [{ plantId: 'z', text: 'Menthe verte', fontStyle: 'normal', opacity: 1, screenPoint: { x: 0, y: 10 } }],
     })
-    expect(getCanvasPlantNameLabels(snapshot).map(label => label.plantId)).toEqual(['z', 'a'])
+    const pixelsPerMetre = 100
+    expect(getCanvasPlantNameLabels(snapshot, pixelsPerMetre).map(label => label.plantId)).toEqual(['z', 'a'])
     const hidden = { ...snapshot, scene: { ...snapshot.scene,
       layers: [{ kind: 'layer' as const, name: 'plants', visible: false, locked: false, opacity: 1 }] } }
-    expect(getCanvasPlantNameLabels(hidden)).toEqual([])
+    expect(getCanvasPlantNameLabels(hidden, pixelsPerMetre)).toEqual([])
   })
 })

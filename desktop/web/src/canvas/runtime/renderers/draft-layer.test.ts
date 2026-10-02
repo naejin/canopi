@@ -3,7 +3,7 @@ import 'pixi.js/unsafe-eval'
 import { AlphaFilter, Container, Graphics, Text, type GraphicsContext } from 'pixi.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { createTestSceneRendererSnapshot } from '../../../__tests__/support/scene-renderer-snapshot'
+import { createTestRendererView, createTestSceneRendererSnapshot } from '../../../__tests__/support/scene-renderer-snapshot'
 import { CANVAS_CHROME_FONT_FAMILY, CANVAS_CHROME_MONO_FONT_FAMILY } from '../../chrome-fonts'
 import { getCanvasColor } from '../../theme-refresh'
 import { getAnnotationPresentation } from '../annotation-layout'
@@ -12,7 +12,7 @@ import { getDraftLabelVisual, OVERLAY_CASING_EXTRA_PX } from '../scene-visuals'
 import type { SceneAnnotationEntity, ScenePlantEntity, SceneZoneEntity } from '../scene'
 import type { DraftPresentation, DraftShape } from '../tools/draft'
 import { createDraftLayer, type DraftLayer } from './draft-layer'
-import { createDraftScenePainters } from './pixi-scene'
+import { createDraftScenePainters, createPixiScenePresentation } from './pixi-scene'
 import type { SceneRendererSnapshot } from './scene-types'
 
 /** jsdom has no canvas to measure glyphs, so chip text has a fixed size. */
@@ -40,7 +40,7 @@ function mountLayer(snapshot: SceneRendererSnapshot | null = createTestSceneRend
     painters: createDraftScenePainters(() => snapshot),
   })
   // As pixi-scene.ts mounts it: the last two children of an untransformed stage.
-  stage.addChild(layer.world, layer.screen)
+  stage.addChild(layer.worldDraftRoot, layer.billboardDraftRoot)
   layers.push(layer)
   return layer
 }
@@ -105,6 +105,11 @@ function pixiColor(css: string): number {
 
 function cssAlpha(css: string): number {
   return Number.parseFloat(css.match(/rgba\([^)]*,\s*([\d.]+)\)/i)?.[1] ?? '1')
+}
+
+/** The view that places the plane origin at `origin` at `scale` px per metre, at bearing 0. */
+function at(origin: { x: number; y: number }, scale: number) {
+  return createTestRendererView({ ...origin, scale })
 }
 
 function global(node: Container): { x: number; y: number } {
@@ -181,12 +186,12 @@ describe('draft layer', () => {
   it('each draft shape renders in world units', () => {
     const layer = mountLayer()
     layer.setDraft(everyShape())
-    layer.place({ x: 100, y: 50 }, 10)
+    layer.setView(at({ x: 100, y: 50 }, 10))
 
     // The world container carries the placement; world shapes keep their metres.
-    expect(global(layer.world)).toEqual({ x: 100, y: 50 })
-    expect(layer.world.scale.x).toBe(10)
-    const [polyline, polygon, quad, ellipse, zoneGhost, ...extraWorld] = layer.world.children as Graphics[]
+    expect(global(layer.worldDraftRoot)).toEqual({ x: 100, y: 50 })
+    expect(layer.worldDraftRoot.scale.x).toBe(10)
+    const [polyline, polygon, quad, ellipse, zoneGhost, ...extraWorld] = layer.worldDraftRoot.children as Graphics[]
     expect(extraWorld).toEqual([])
     expect(tracedPoints(paintInstructions(polyline!, 'stroke')[1]!)).toEqual([{ x: 1, y: 2 }, { x: 3, y: 2 }])
     expect(tracedPoints(paintInstructions(polygon!, 'fill')[0]!)).toEqual([{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 2 }])
@@ -202,7 +207,7 @@ describe('draft layer', () => {
       .toEqual([0, 0, 2, 1])
 
     // Upright parts sit at the global point of their world anchor, in CSS px.
-    const [marker, label, plantGhost, stampPlants, noteMarker, noteText, ...extraScreen] = layer.screen.children
+    const [marker, label, plantGhost, stampPlants, noteMarker, noteText, ...extraScreen] = layer.billboardDraftRoot.children
     expect(extraScreen).toEqual([])
     expect(global(marker!)).toEqual({ x: 120, y: 70 })
     expect(pathSteps(paintInstructions(marker as Graphics, 'stroke')[0]!).find((step) => step.action === 'circle')?.data.slice(0, 3))
@@ -225,8 +230,8 @@ describe('draft layer', () => {
     }] })
 
     for (const scale of [2, 8]) {
-      layer.place({ x: 0, y: 0 }, scale)
-      const line = layer.world.children[0] as Graphics
+      layer.setView(at({ x: 0, y: 0 }, scale))
+      const line = layer.worldDraftRoot.children[0] as Graphics
       const [casing, stroke] = paintInstructions(line, 'stroke')
       expect((stroke!.data.style as unknown as PaintStyle).width! * scale).toBeCloseTo(1.5)
       expect((casing!.data.style as unknown as PaintStyle).width! * scale).toBeCloseTo(3.5)
@@ -239,12 +244,12 @@ describe('draft layer', () => {
     }
 
     // A place that only moves re-positions and keeps the traced geometry.
-    const line = layer.world.children[0] as Graphics
+    const line = layer.worldDraftRoot.children[0] as Graphics
     const instructions = [...line.context.instructions]
-    layer.place({ x: 30, y: 40 }, 8)
-    expect(layer.world.children[0]).toBe(line)
+    layer.setView(at({ x: 30, y: 40 }, 8))
+    expect(layer.worldDraftRoot.children[0]).toBe(line)
     expect(line.context.instructions).toEqual(instructions)
-    expect(global(layer.world)).toEqual({ x: 30, y: 40 })
+    expect(global(layer.worldDraftRoot)).toEqual({ x: 30, y: 40 })
   })
 
   it('a band, zone, line and polygon draft has a casing stroke of the same colour and width under it', () => {
@@ -299,8 +304,8 @@ describe('draft layer', () => {
     for (const { name, shape, stroke, casing } of cases) {
       const layer = mountLayer()
       layer.setDraft({ shapes: [shape] })
-      layer.place({ x: 0, y: 0 }, scale)
-      const [casingPaint, strokePaint, ...more] = paintInstructions(layer.world.children[0] as Graphics, 'stroke')
+      layer.setView(at({ x: 0, y: 0 }, scale))
+      const [casingPaint, strokePaint, ...more] = paintInstructions(layer.worldDraftRoot.children[0] as Graphics, 'stroke')
       expect(more, name).toEqual([])
       const casingStyle = casingPaint!.data.style as unknown as PaintStyle
       const strokeStyle = strokePaint!.data.style as unknown as PaintStyle
@@ -321,16 +326,16 @@ describe('draft layer', () => {
       { kind: 'ghost', entity: { kind: 'plant', plant: createPlant() }, opacity: 0.85 },
       objectsGhost(0.62),
     ] })
-    layer.place({ x: 0, y: 0 }, 14)
+    layer.setView(at({ x: 0, y: 0 }, 14))
 
     // A symbol composites once, as today's SVG group opacity does.
-    const [plantGhost, stampPlants, noteMarker, noteText] = layer.screen.children
+    const [plantGhost, stampPlants, noteMarker, noteText] = layer.billboardDraftRoot.children
     expect(plantGhost!.filters).toEqual([expect.any(AlphaFilter)])
     expect((plantGhost!.filters as AlphaFilter[])[0]!.alpha).toBe(0.85)
     expect((plantGhost as Container).children[0]!.alpha).toBe(1)
     expect((stampPlants!.filters as AlphaFilter[])[0]!.alpha).toBe(0.62)
 
-    const zoneGhost = layer.world.children[0] as Graphics
+    const zoneGhost = layer.worldDraftRoot.children[0] as Graphics
     expect(zoneGhost.alpha).toBe(0.62)
     // The scene's zone look: its fill at a fifth, the zone stroke, no casing.
     const zoneFill = getCanvasColor('zone-fill')
@@ -349,17 +354,17 @@ describe('draft layer', () => {
     layer.setDraft({ shapes: [objectsGhost(1)] })
 
     // Far out the scene shows a note as its marker only, as today's drop ghost did.
-    layer.place({ x: 0, y: 0 }, 0.5)
+    layer.setView(at({ x: 0, y: 0 }, 0.5))
     expect(getAnnotationPresentation(createNote(), { x: 0, y: 0, scale: 0.5 }).textOpacity).toBe(0)
-    const [, marker, ...noTextFar] = layer.screen.children
+    const [, marker, ...noTextFar] = layer.billboardDraftRoot.children
     expect(marker).toBeInstanceOf(Graphics)
     expect(marker!.alpha).toBeCloseTo(1)
     expect(noTextFar).toEqual([])
 
     // Closer in it is the note's text, turned by its rotation, and no marker.
-    layer.place({ x: 0, y: 0 }, 40)
+    layer.setView(at({ x: 0, y: 0 }, 40))
     expect(getAnnotationPresentation(createNote(), { x: 0, y: 0, scale: 40 }).textOpacity).toBe(1)
-    const [, text, ...noMarkerNear] = layer.screen.children
+    const [, text, ...noMarkerNear] = layer.billboardDraftRoot.children
     expect(text).toBeInstanceOf(Text)
     expect((text as Text).text).toBe('Pond edge')
     expect(text!.rotation).toBeCloseTo(Math.PI / 6)
@@ -371,9 +376,9 @@ describe('draft layer', () => {
     const layer = mountLayer(snapshot)
     const plant = createPlant({ color: '#AA3311' })
     layer.setDraft({ shapes: [{ kind: 'ghost', entity: { kind: 'plant', plant, mark: 'dot' }, opacity: 0.35 }] })
-    layer.place({ x: 10, y: 20 }, 30)
+    layer.setView(at({ x: 10, y: 20 }, 30))
 
-    const [dot, ...rest] = layer.screen.children
+    const [dot, ...rest] = layer.billboardDraftRoot.children
     expect(rest).toEqual([])
     expect(dot).toBeInstanceOf(Graphics)
     expect(global(dot!)).toEqual({ x: 130, y: 110 })
@@ -398,14 +403,14 @@ describe('draft layer', () => {
     const layer = mountLayer(snapshot)
     const ghost = { ...source, id: 'row-ghost', position: { x: 10, y: 0 } }
     layer.setDraft({ shapes: [{ kind: 'ghost', entity: { kind: 'plant', plant: ghost, mark: 'dot', sizeFrom: source.position }, opacity: 0.35 }] })
-    layer.place({ x: 10, y: 20 }, 30)
+    layer.setView(at({ x: 10, y: 20 }, 30))
 
     const radiusAt = (plant: ScenePlantEntity) => buildPlantPresentationEntries([plant], {
       plants: snapshot.scene.plants, viewport: { x: 0, y: 0, scale: 30 }, speciesCache: snapshot.speciesCache,
     }, new Set())[0]!.radiusScreenPx
     expect(radiusAt(source)).toBeLessThan(radiusAt(ghost))
 
-    const [dot, ...rest] = layer.screen.children
+    const [dot, ...rest] = layer.billboardDraftRoot.children
     expect(rest).toEqual([])
     // The disc stays at the ghost; only its size comes from sizeFrom.
     expect(global(dot!)).toEqual({ x: 310, y: 20 })
@@ -423,14 +428,14 @@ describe('draft layer', () => {
     const layer = mountLayer(snapshot)
     const ghost = { ...source, id: 'row-ghost', position: { x: 10, y: 0 } }
     layer.setDraft({ shapes: [{ kind: 'ghost', entity: { kind: 'plant', plant: ghost, mark: 'dot', sizeFrom: source.position }, opacity: 0.35 }] })
-    layer.place({ x: 10, y: 20 }, 30)
+    layer.setView(at({ x: 10, y: 20 }, 30))
 
     const presented = buildPlantPresentationEntries([source], {
       plants: snapshot.scene.plants, viewport: { x: 0, y: 0, scale: 30 }, speciesCache: snapshot.speciesCache,
     }, new Set())[0]!.radiusScreenPx
     expect(presented).toBeLessThan(2)
 
-    const [dot, ...rest] = layer.screen.children
+    const [dot, ...rest] = layer.billboardDraftRoot.children
     expect(rest).toEqual([])
     const fills = paintInstructions(dot as Graphics, 'fill')
     expect(fills).toHaveLength(1)
@@ -452,9 +457,9 @@ describe('draft layer', () => {
         painters: createDraftScenePainters(() => createTestSceneRendererSnapshot()),
         requestRepaint,
       })
-      stage.addChild(layer.world, layer.screen)
+      stage.addChild(layer.worldDraftRoot, layer.billboardDraftRoot)
       layers.push(layer)
-      layer.place({ x: 0, y: 0 }, 1)
+      layer.setView(at({ x: 0, y: 0 }, 1))
       const chip = (text: string, tone: 'measure' | 'measure-quiet') => ({ kind: 'label', anchor: { x: 0, y: 0 }, offsetPx: { x: 0, y: 0 }, text, tone }) as const
       layer.setDraft({ shapes: [chip('112 m²', 'measure'), chip('14 m', 'measure-quiet'), chip('8 m', 'measure-quiet')] })
       layer.setDraft({ shapes: [chip('113 m²', 'measure')] })
@@ -464,17 +469,17 @@ describe('draft layer', () => {
         [`600 ${size}px ${CANVAS_CHROME_MONO_FONT_FAMILY}`],
         [`400 ${size}px ${CANVAS_CHROME_MONO_FONT_FAMILY}`],
       ])
-      const before = layer.screen.children[0]
+      const before = layer.billboardDraftRoot.children[0]
       fonts.check.mockReturnValue(true)
       finishLoad()
       await Promise.resolve()
       await Promise.resolve()
       expect(requestRepaint).toHaveBeenCalledOnce()
-      expect(layer.screen.children, 'the live draft is drawn again').toHaveLength(1)
-      expect(layer.screen.children[0]).not.toBe(before)
+      expect(layer.billboardDraftRoot.children, 'the live draft is drawn again').toHaveLength(1)
+      expect(layer.billboardDraftRoot.children[0]).not.toBe(before)
 
       const loaded = mountLayer()
-      loaded.place({ x: 0, y: 0 }, 1)
+      loaded.setView(at({ x: 0, y: 0 }, 1))
       loaded.setDraft({ shapes: [chip('4 m', 'measure')] })
       expect(load, 'a loaded font is not asked for').toHaveBeenCalledTimes(2)
     } finally {
@@ -493,9 +498,9 @@ describe('draft layer', () => {
     for (const expected of cases) {
       const layer = mountLayer()
       layer.setDraft({ shapes: [{ kind: 'label', anchor: { x: 0, y: 0 }, offsetPx: { x: 0, y: 0 }, text: '4.2 m', tone: expected.tone }] })
-      layer.place({ x: 200, y: 100 }, 1)
+      layer.setView(at({ x: 200, y: 100 }, 1))
 
-      const chip = layer.screen.children[0] as Container
+      const chip = layer.billboardDraftRoot.children[0] as Container
       const [box, text] = chip.children as [Graphics, Text]
       expect(text.text, expected.tone).toBe('4.2 m')
       expect(text.style.fontFamily, expected.tone).toBe(expected.font)
@@ -550,8 +555,8 @@ describe('draft layer', () => {
       layer.setDraft({
         shapes: (['measure', 'hint'] as const).map((tone) => ({ kind: 'label', anchor: { x: 0, y: 0 }, offsetPx: { x: 0, y: 0 }, text: '4.2 m', tone })),
       })
-      layer.place({ x: 200, y: 100 }, 1)
-      const [measure, hint] = layer.screen.children.map((chip) => (chip as Container).children[1] as Text)
+      layer.setView(at({ x: 200, y: 100 }, 1))
+      const [measure, hint] = layer.billboardDraftRoot.children.map((chip) => (chip as Container).children[1] as Text)
       expect([measure!.style.fontSize, hint!.style.fontSize], lang).toEqual([size, size])
       expect(measure!.style.lineHeight, lang).toBeCloseTo(size * 1.2)
       expect(hint!.style.lineHeight, lang).toBe(20)
@@ -562,29 +567,29 @@ describe('draft layer', () => {
     const destroyFilter = vi.spyOn(AlphaFilter.prototype, 'destroy')
     const layer = mountLayer()
     layer.setDraft(everyShape())
-    layer.place({ x: 100, y: 50 }, 10)
-    const drawn = [...layer.world.children, ...layer.screen.children]
+    layer.setView(at({ x: 100, y: 50 }, 10))
+    const drawn = [...layer.worldDraftRoot.children, ...layer.billboardDraftRoot.children]
     expect(drawn.length).toBeGreaterThan(0)
 
     layer.setDraft(null)
-    expect(layer.world.children).toEqual([])
-    expect(layer.screen.children).toEqual([])
+    expect(layer.worldDraftRoot.children).toEqual([])
+    expect(layer.billboardDraftRoot.children).toEqual([])
     for (const node of drawn) expect(node.destroyed).toBe(true)
     // The two composites (the plant ghost and the stamp's plants) release their filters.
     expect(destroyFilter).toHaveBeenCalledTimes(2)
 
     // A later place draws nothing until the next draft.
-    layer.place({ x: 0, y: 0 }, 4)
-    expect(layer.world.children).toEqual([])
-    expect(layer.screen.children).toEqual([])
+    layer.setView(at({ x: 0, y: 0 }, 4))
+    expect(layer.worldDraftRoot.children).toEqual([])
+    expect(layer.billboardDraftRoot.children).toEqual([])
   })
 
   it('draws a draft set before the first place at that place', () => {
     const layer = mountLayer()
     layer.setDraft({ shapes: [{ kind: 'polyline', points: [{ x: 0, y: 0 }, { x: 1, y: 0 }], style: { token: 'selection', widthPx: 2 } }] })
-    expect(layer.world.children).toEqual([])
-    layer.place({ x: 5, y: 5 }, 4)
-    const [casing, stroke] = paints(layer.world.children[0] as Graphics, 'stroke')
+    expect(layer.worldDraftRoot.children).toEqual([])
+    layer.setView(at({ x: 5, y: 5 }, 4))
+    const [casing, stroke] = paints(layer.worldDraftRoot.children[0] as Graphics, 'stroke')
     expect(stroke).toMatchObject({ color: pixiColor(getCanvasColor('selection-stroke')), width: 0.5, cap: 'round', join: 'round' })
     expect(casing).toMatchObject({ color: pixiColor(getCanvasColor('interaction-casing')), width: 1 })
   })
@@ -595,11 +600,11 @@ describe('draft layer', () => {
       { kind: 'circle-px', center: { x: 1, y: 1 }, radiusPx: 4, style: { token: 'draft', widthPx: 1, dash: [2, 2] } },
       { kind: 'ghost', entity: { kind: 'plant', plant: createPlant({ position: { x: 2, y: 2 } }) }, opacity: 0.5 },
     ] })
-    layer.place({ x: 0, y: 0 }, 10)
-    const [marker, plantGhost] = layer.screen.children
+    layer.setView(at({ x: 0, y: 0 }, 10))
+    const [marker, plantGhost] = layer.billboardDraftRoot.children
     const plant = (plantGhost as Container).children[0]!
-    layer.place({ x: 7, y: 9 }, 10)
-    expect(layer.screen.children[0]).toBe(marker)
+    layer.setView(at({ x: 7, y: 9 }, 10))
+    expect(layer.billboardDraftRoot.children[0]).toBe(marker)
     expect(global(marker!)).toEqual({ x: 17, y: 19 })
     expect(global(plant)).toEqual({ x: 27, y: 29 })
 
@@ -607,10 +612,10 @@ describe('draft layer', () => {
     const dashes = subPathLengths(paintInstructions(marker as Graphics, 'stroke')[1]!)
     for (const dash of dashes.slice(0, -1)) expect(dash).toBeCloseTo(2, 1)
 
-    layer.place({ x: 7, y: 9 }, 20)
-    expect(layer.screen.children[0]).not.toBe(marker)
+    layer.setView(at({ x: 7, y: 9 }, 20))
+    expect(layer.billboardDraftRoot.children[0]).not.toBe(marker)
     expect(marker!.destroyed).toBe(true)
-    expect(global(layer.screen.children[0]!)).toEqual({ x: 27, y: 29 })
+    expect(global(layer.billboardDraftRoot.children[0]!)).toEqual({ x: 27, y: 29 })
   })
 
   it('draws a fill-only polygon and a solid stroke for an unusable dash', () => {
@@ -621,8 +626,8 @@ describe('draft layer', () => {
       { kind: 'polyline', points: [{ x: 0, y: 0 }], style: { token: 'draft-muted', widthPx: 2 } },
       { kind: 'quad', corners: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }], style: { token: 'draft', widthPx: 1, dash: [3] }, fill: { token: 'warning-fill' } },
     ] })
-    layer.place({ x: 0, y: 0 }, 1)
-    const [fillOnly, undashed, single, dashedQuad] = layer.world.children as Graphics[]
+    layer.setView(at({ x: 0, y: 0 }, 1))
+    const [fillOnly, undashed, single, dashedQuad] = layer.worldDraftRoot.children as Graphics[]
     expect(paints(fillOnly!, 'stroke')).toEqual([])
     expect(paints(fillOnly!, 'fill')).toHaveLength(1)
     expect(subPathLengths(paintInstructions(undashed!, 'stroke')[1]!)).toEqual([4])
@@ -637,13 +642,13 @@ describe('draft layer', () => {
   it('draws no plant ghost before the scene has a snapshot, and keeps a ghost filter the size of the view', () => {
     const blind = mountLayer(null)
     blind.setDraft({ shapes: [{ kind: 'ghost', entity: { kind: 'plant', plant: createPlant() }, opacity: 0.5 }] })
-    blind.place({ x: 0, y: 0 }, 10)
-    expect(blind.screen.children).toEqual([])
+    blind.setView(at({ x: 0, y: 0 }, 10))
+    expect(blind.billboardDraftRoot.children).toEqual([])
 
     const layer = mountLayer()
     layer.setDraft({ shapes: [{ kind: 'ghost', entity: { kind: 'plant', plant: createPlant() }, opacity: 0.5 }] })
-    layer.place({ x: 0, y: 0 }, 10)
-    const ghost = layer.screen.children[0]!
+    layer.setView(at({ x: 0, y: 0 }, 10))
+    const ghost = layer.billboardDraftRoot.children[0]!
     expect(ghost.filterArea).toMatchObject({ x: 0, y: 0, width: 400, height: 300 })
     layer.resize(640, 480)
     expect(ghost.filterArea).toMatchObject({ width: 640, height: 480 })
@@ -659,19 +664,48 @@ describe('draft layer', () => {
       groups: [],
     }
     layer.setDraft({ shapes: [{ kind: 'ghost', entity: { kind: 'objects', anchor: { x: 0, y: 0 }, rotationDeg: 0, template }, opacity: 0.62 }] })
-    layer.place({ x: 0, y: 0 }, 20)
-    expect(layer.world.children).toEqual([])
-    expect(layer.screen.children).toEqual([])
+    layer.setView(at({ x: 0, y: 0 }, 20))
+    expect(layer.worldDraftRoot.children).toEqual([])
+    expect(layer.billboardDraftRoot.children).toEqual([])
   })
 
   it('dispose releases the draft but leaves the containers to the stage', () => {
     const layer = mountLayer()
     layer.setDraft(everyShape())
-    layer.place({ x: 0, y: 0 }, 10)
+    layer.setView(at({ x: 0, y: 0 }, 10))
     layer.dispose()
-    expect(layer.world.children).toEqual([])
-    expect(layer.screen.children).toEqual([])
-    expect(layer.world.destroyed).toBe(false)
-    expect(layer.screen.destroyed).toBe(false)
+    expect(layer.worldDraftRoot.children).toEqual([])
+    expect(layer.billboardDraftRoot.children).toEqual([])
+    expect(layer.worldDraftRoot.destroyed).toBe(false)
+    expect(layer.billboardDraftRoot.destroyed).toBe(false)
+  })
+
+  it('the world drafts share the world root\'s affine and both draft roots sit above the billboards', () => {
+    const stage = new Container()
+    const presentation = createPixiScenePresentation({ stage, createText: () => new MeasuredText(), viewSize: { width: 400, height: 300 } })
+    presentation.syncScene(createTestSceneRendererSnapshot({ scene: { plants: [createPlant()] } }))
+    presentation.setDraft({ shapes: [
+      { kind: 'polyline', points: [{ x: 1, y: 2 }, { x: 3, y: 2 }], style: { token: 'draft', widthPx: 2 } },
+      { kind: 'circle-px', center: { x: 2, y: 2 }, radiusPx: 1.75, style: { token: 'draft', widthPx: 3.5 } },
+    ] })
+    // The stage's order (spec §1.5): world root, billboard root, then the world and billboard draft roots on top.
+    const [worldRoot, billboardRoot, worldDraftRoot, billboardDraftRoot, ...more] = stage.children
+    expect(more).toEqual([])
+    for (const bearingDeg of [0, 45]) {
+      const view = createTestRendererView({ x: 100, y: 50, scale: 10 }, { bearingDeg })
+      presentation.setView(view)
+      for (const root of [worldRoot!, worldDraftRoot!]) {
+        root.updateLocalTransform()
+        const { a, b, c, d, tx, ty } = root.localTransform
+        for (const [index, value] of [a, b, c, d, tx, ty].entries()) expect(value).toBeCloseTo(view.planar!.affine![index]!, 9)
+      }
+      expect(billboardRoot!.children.length).toBeGreaterThan(0)
+      expect(worldDraftRoot!.children).toHaveLength(1)
+      const [marker] = billboardDraftRoot!.children
+      const centre = view.worldToScreen({ x: 2, y: 2 })
+      expect(marker!.position.x).toBeCloseTo(centre.x, 3)
+      expect(marker!.position.y).toBeCloseTo(centre.y, 3)
+    }
+    presentation.dispose()
   })
 })

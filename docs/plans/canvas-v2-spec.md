@@ -1397,7 +1397,7 @@ Every tool, drop and piece of chrome runs on the host and `chrome/*.ts` (built, 
 
 ### 1.5 Renderer (`canvas/runtime/renderers/scene-types.ts`)
 
-`scene-types.ts` carries this interface, still named `SceneRendererV2`, beside today's `SceneRendererInstance` (`renderScene`, `setViewport`). **Still to land (0D2 hand-off then 0D2):** rename `SceneRendererV2` to `SceneRenderer`; delete `SceneRendererInstance`, make `SceneRendererDefinition.initialize` return `SceneRenderer`, and drop `viewport` from `SceneRendererSnapshot` in the same commit that makes the renderer implement it. Nothing implements `SceneRenderer` before 0D2.
+`scene-types.ts` carries this interface (renamed from `SceneRendererV2` by the 0D2 hand-off) beside today's `SceneRendererInstance` (`renderScene`, `setViewport`). **Still to land (0D2):** delete `SceneRendererInstance`, make `SceneRendererDefinition.initialize` return `SceneRenderer`, and drop `viewport` from `SceneRendererSnapshot` in the same commit that makes the renderer implement it. Nothing implements `SceneRenderer` before 0D2.
 
 ```ts
 export interface SceneChangeSet {
@@ -1408,7 +1408,7 @@ export interface SceneChangeSet {
   readonly labels: boolean                                  // label admission recomputed (each scale change; from phase R, settle or band change)
 }
 
-export interface SceneRenderer {   // SceneRendererV2 from the seams to the 0D2 hand-off
+export interface SceneRenderer {
   readonly id: 'maplibre-pixi'
   /** Data, selection, hover, style or label admission changed. Never called for a pan. No camera in the snapshot. */
   syncScene(snapshot: SceneRendererSnapshot, changes: SceneChangeSet): void

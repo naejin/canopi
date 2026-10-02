@@ -141,6 +141,29 @@ describe('the handle layer', () => {
     expect(vertex.dataset.canvasHandleScreenX).toBe('10')
   })
 
+  it('a frame moves handles and creates no element', () => {
+    mount().setHandles([VERTEX, ROTATE], null)
+    const root = container.querySelector<HTMLElement>('[data-canvas-handle-layer]')!
+    const elements = [...root.querySelectorAll('*')]
+    const created = vi.spyOn(document, 'createElement')
+    const createdNs = vi.spyOn(document, 'createElementNS')
+    const added = vi.fn()
+    const observer = new MutationObserver((records) => added(records.flatMap((record) => [...record.addedNodes])))
+    observer.observe(root, { childList: true, subtree: true })
+
+    view.setViewport({ x: 45, y: -13, scale: 2 })
+    view.setViewport({ x: 0, y: 0, scale: 1 })
+
+    expect(handle('vertex:zone-1:2')!.style.left).toBe('0px')
+    expect(handle('rotate')!.style.left).toBe('86px')
+    expect([...root.querySelectorAll('*')]).toEqual(elements)
+    expect(created).not.toHaveBeenCalled()
+    expect(createdNs).not.toHaveBeenCalled()
+    observer.takeRecords().forEach((record) => expect(record.addedNodes).toHaveLength(0))
+    observer.disconnect()
+    expect(added).not.toHaveBeenCalled()
+  })
+
   it('keeps today\'s key swallow and click stop on the rotate handle', () => {
     mount().setHandles([ROTATE], null)
     const rotate = handle('rotate')!

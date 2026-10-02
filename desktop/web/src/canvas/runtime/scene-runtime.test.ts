@@ -1,5 +1,7 @@
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { DraftPresentation } from './tools/draft'
+import type { ViewTransform } from './view/types'
+import { planarCameraOf } from './view/view-transform'
 import { effect } from '@preact/signals'
 import { stageScaleToMapZoom } from '../projection'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -52,13 +54,14 @@ import { locale, plantSpacingIntervalM } from '../../app/settings/state'
 import type { CanopiFile, PanelTarget } from '../../types/design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../generated/canopi-design-format'
 import { geoAt } from '../../__tests__/support/geo-design'
+import { createTestRendererView } from '../../__tests__/support/scene-renderer-snapshot'
 import { speciesTarget } from '../../target'
 import {
   CanvasDocumentReplacementNotAdmittedError,
   createCanvasDocumentReplacementToken,
 } from './runtime'
 import { SceneCanvasRuntime } from './scene-runtime.ts'
-import type { PlantNameLabel } from './selection-labels'
+import { projectScenePlantLabels } from './selection-labels'
 import type { SceneRuntimePanelTargetAdapter } from './scene-runtime/panel-target-adapter'
 import type { ScenePresentationRefreshResult } from './scene-runtime/presentation'
 import {
@@ -263,8 +266,8 @@ function fileWithGroupedPair(): CanopiFile {
 function createRendererStub() {
   return {
     id: 'test',
-    renderScene: vi.fn(),
-    setViewport: vi.fn(),
+    syncScene: vi.fn(),
+    setView: vi.fn<(view: ViewTransform) => void>(),
     // The draft sink the runtime hands the session (ToolHostDeps.renderer): drafts and the host's chips draw in Pixi.
     setDraft: vi.fn<(draft: DraftPresentation | null) => void>(),
     dispose: vi.fn(),
@@ -272,6 +275,19 @@ function createRendererStub() {
 }
 
 type RendererStub = ReturnType<typeof createRendererStub>
+
+/** Where the last view handed to the renderer placed the plane, in the camera's viewport terms; null before one. */
+function lastRenderedViewport(renderer: RendererStub): { x: number; y: number; scale: number } | null {
+  const view = renderer.setView.mock.calls.at(-1)?.[0]
+  if (!view) return null
+  const { x, y, scale } = planarCameraOf(view)
+  return { x, y, scale }
+}
+
+function viewportOf(camera: CameraController): { x: number; y: number; scale: number } {
+  const { x, y, scale } = camera.viewport
+  return { x, y, scale }
+}
 
 /** The last draft the runtime handed its renderer, or null. */
 function lastDraft(renderer: RendererStub): DraftPresentation | null {
@@ -559,7 +575,7 @@ describe('scene canvas runtime', () => {
     const runtime = new SceneCanvasRuntime({ camera })
     const { container, renderer } = await initRuntimeWithStubbedRenderer(runtime)
     const busyWhenDrawn: Array<string | null> = []
-    renderer.renderScene.mockImplementation(() => { busyWhenDrawn.push(container.getAttribute('aria-busy')) })
+    renderer.syncScene.mockImplementation(() => { busyWhenDrawn.push(container.getAttribute('aria-busy')) })
     expect(container.getAttribute('aria-busy'), 'the opening render draws in the next frame').toBe('true')
     await vi.waitFor(() => expect(container.hasAttribute('aria-busy')).toBe(false))
 
@@ -570,7 +586,7 @@ describe('scene canvas runtime', () => {
 
     camera.panBy({ x: 12, y: -8 })
     expect(container.hasAttribute('aria-busy'), 'a camera frame moves the drawing, it does not redraw it').toBe(false)
-    await vi.waitFor(() => expect(renderer.setViewport).toHaveBeenCalledWith(camera.viewport))
+    await vi.waitFor(() => expect(lastRenderedViewport(renderer)).toEqual(viewportOf(camera)))
     expect(container.hasAttribute('aria-busy')).toBe(false)
 
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
@@ -1068,20 +1084,19 @@ describe('scene canvas runtime', () => {
     const scene = runtime.querySurface.getSceneSnapshot()
     const layerNames = scene.layers.map((layer) => layer.name)
     expect(selection.length).toBeGreaterThan(0)
-    const viewport = { x: 100, y: 80, scale: 4 }
+    const view = createTestRendererView({ x: 100, y: 80, scale: 4 })
 
     const capture = runtime.querySurface.captureViewScene({
-      viewport,
+      view,
       visibleLayerNames: [layerNames[0]!],
       focusedSpecies: 'Malus domestica',
     })
 
-    expect(capture?.viewport).toEqual(viewport)
     expect(capture?.scene.layers.map((layer) => layer.visible)).toEqual(layerNames.map((_, index) => index === 0))
     expect(capture?.speciesFocus).toEqual({ canonicalName: 'Malus domestica' })
     expect(capture?.selectedPlantIds.size).toBe(0)
     expect(capture?.hoverTarget).toBeNull()
-    expect(runtime.querySurface.captureViewScene({ viewport: { x: 0, y: 0, scale: 0.001 }, visibleLayerNames: [], focusedSpecies: null })
+    expect(runtime.querySurface.captureViewScene({ view: createTestRendererView({ x: 0, y: 0, scale: 0.001 }), visibleLayerNames: [], focusedSpecies: null })
       ?.scene.layers.every((layer) => !layer.visible)).toBe(true)
     expect(runtime.querySurface.getSelection()).toEqual(selection)
     expect(runtime.querySurface.getSceneSnapshot()).toEqual(scene)
@@ -1091,7 +1106,7 @@ describe('scene canvas runtime', () => {
     const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
     const active = sceneEdits.begin('interaction-drag')
     active.mutate((draft) => { draft.plants[0]!.position.x = 30 })
-    expect(runtime.querySurface.captureViewScene({ viewport, visibleLayerNames: layerNames, focusedSpecies: null })).toBeNull()
+    expect(runtime.querySurface.captureViewScene({ view, visibleLayerNames: layerNames, focusedSpecies: null })).toBeNull()
     active.abort()
     runtime.destroy()
   })
@@ -1628,22 +1643,22 @@ describe('scene canvas runtime', () => {
     const disposeCamera = vi.spyOn(camera, 'dispose')
     const runtime = new SceneCanvasRuntime({ camera })
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
-    renderer.setViewport.mockClear()
+    renderer.setView.mockClear()
 
     camera.panBy({ x: 12, y: -8 })
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     await Promise.resolve()
 
-    expect(renderer.setViewport).toHaveBeenCalledWith(camera.viewport)
+    expect(lastRenderedViewport(renderer)).toEqual(viewportOf(camera))
 
     runtime.destroy()
     expect(disposeCamera).toHaveBeenCalledOnce()
-    renderer.setViewport.mockClear()
+    renderer.setView.mockClear()
 
     camera.panBy({ x: 1, y: 1 })
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
 
-    expect(renderer.setViewport).not.toHaveBeenCalled()
+    expect(renderer.setView).not.toHaveBeenCalled()
   })
 
   it('does not publish a viewport change when document hydration leaves the camera unchanged', async () => {
@@ -1886,7 +1901,7 @@ describe('scene canvas runtime', () => {
     const container = createRuntimeContainer()
     const events = createSceneInteractionEventHarness(container, { trackListeners: true })
     const renderer = createRendererStub()
-    renderer.renderScene.mockImplementation(() => {
+    renderer.syncScene.mockImplementation(() => {
       throw new Error('initial render failed')
     })
     ;(runtime as any)._construction.replaceRenderer({ id: 'test', initialize: () => renderer })
@@ -2022,7 +2037,7 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
     const plantNamesRevision = runtime.querySurface.revision.plantNames.value
-    const initialRenderCount = renderer.renderScene.mock.calls.length
+    const initialRenderCount = renderer.syncScene.mock.calls.length
     activeLocale = 'fr'
     failSpeciesRefresh = true
 
@@ -2031,10 +2046,10 @@ describe('scene canvas runtime', () => {
       'fr',
     )).rejects.toBe(speciesFailure)
     await vi.waitFor(() => {
-      expect(renderer.renderScene.mock.calls.length).toBeGreaterThan(initialRenderCount)
+      expect(renderer.syncScene.mock.calls.length).toBeGreaterThan(initialRenderCount)
     })
 
-    const rendered = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    const rendered = renderer.syncScene.mock.calls[renderer.syncScene.mock.calls.length - 1]?.[0]
     expect(rendered?.localizedCommonNames.get('Malus domestica')).toBe('Pommier')
     expect(runtime.querySurface.getLocalizedCommonNames().get('Malus domestica')).toBe('Pommier')
     expect(runtime.querySurface.revision.plantNames.value).toBe(plantNamesRevision + 1)
@@ -2212,7 +2227,7 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
-    renderer.renderScene.mockClear()
+    renderer.syncScene.mockClear()
     hoveredPanelTargets.value = [
       speciesTarget('Malus domestica'),
       { kind: 'zone', zone_id: 'zone-1' },
@@ -2220,10 +2235,10 @@ describe('scene canvas runtime', () => {
     ]
 
     await vi.waitFor(() => {
-      expect(renderer.renderScene).toHaveBeenCalled()
+      expect(renderer.syncScene).toHaveBeenCalled()
     })
 
-    const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    const snapshot = renderer.syncScene.mock.calls[renderer.syncScene.mock.calls.length - 1]?.[0]
     expect(snapshot?.highlightedPlantIds).toEqual(new Set(['plant-1', 'plant-2']))
     expect(snapshot?.highlightedZoneIds).toEqual(new Set(['zone-1']))
     expect(runtime.querySurface.getSelection().length).toBe(0)
@@ -2238,17 +2253,17 @@ describe('scene canvas runtime', () => {
     cleanState.setCanvasClean.mockClear()
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
-    renderer.renderScene.mockClear()
+    renderer.syncScene.mockClear()
     selectedPanelTargets.value = [
       speciesTarget('Malus domestica'),
       { kind: 'zone', zone_id: 'zone-1' },
     ]
 
     await vi.waitFor(() => {
-      expect(renderer.renderScene).toHaveBeenCalled()
+      expect(renderer.syncScene).toHaveBeenCalled()
     })
 
-    const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    const snapshot = renderer.syncScene.mock.calls[renderer.syncScene.mock.calls.length - 1]?.[0]
     expect(snapshot?.highlightedPlantIds).toEqual(new Set(['plant-1', 'plant-2']))
     expect(snapshot?.highlightedZoneIds).toEqual(new Set(['zone-1']))
     expect(runtime.querySurface.getSelection().length).toBe(0)
@@ -2278,14 +2293,14 @@ describe('scene canvas runtime', () => {
     })
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
-    renderer.renderScene.mockClear()
+    renderer.syncScene.mockClear()
     hoveredPanelTargets.value = [{ kind: 'zone', zone_id: 'colliding-id' }]
 
     await vi.waitFor(() => {
-      expect(renderer.renderScene).toHaveBeenCalled()
+      expect(renderer.syncScene).toHaveBeenCalled()
     })
 
-    const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    const snapshot = renderer.syncScene.mock.calls[renderer.syncScene.mock.calls.length - 1]?.[0]
     expect(snapshot?.highlightedPlantIds).toEqual(new Set())
     expect(snapshot?.highlightedZoneIds).toEqual(new Set(['colliding-id']))
     runtime.destroy()
@@ -2296,12 +2311,12 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
-    renderer.renderScene.mockClear()
+    renderer.syncScene.mockClear()
     selectedPanelTargets.value = [speciesTarget('Malus domestica')]
     hoveredPanelTargets.value = [{ kind: 'zone', zone_id: 'zone-1' }]
 
     await vi.waitFor(() => {
-      const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+      const snapshot = renderer.syncScene.mock.calls[renderer.syncScene.mock.calls.length - 1]?.[0]
       expect(snapshot?.highlightedPlantIds).toEqual(new Set(['plant-1', 'plant-2']))
       expect(snapshot?.highlightedZoneIds).toEqual(new Set(['zone-1']))
     })
@@ -2317,14 +2332,14 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
-    renderer.renderScene.mockClear()
+    renderer.syncScene.mockClear()
     panelTargetProbe.setPanelOriginTargets([speciesTarget('Malus domestica')])
 
     await vi.waitFor(() => {
-      expect(renderer.renderScene).toHaveBeenCalled()
+      expect(renderer.syncScene).toHaveBeenCalled()
     })
 
-    const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    const snapshot = renderer.syncScene.mock.calls[renderer.syncScene.mock.calls.length - 1]?.[0]
     expect(snapshot?.highlightedPlantIds).toEqual(new Set(['plant-1', 'plant-2']))
 
     ;(runtime as any)._interaction._deps.setHoveredTarget(plantTarget('plant-1'))
@@ -2518,11 +2533,11 @@ describe('scene canvas runtime', () => {
     ;(runtime as any)._interaction._deps.setHoveredTarget(plantTarget('plant-1'))
     expect(hoveredCanvasTargets.value).toEqual([speciesTarget('Malus domestica')])
 
-    renderer.renderScene.mockClear()
+    renderer.syncScene.mockClear()
     runtime.destroy()
 
     expect(hoveredCanvasTargets.value).toEqual([])
-    expect(renderer.renderScene).not.toHaveBeenCalled()
+    expect(renderer.syncScene).not.toHaveBeenCalled()
   })
 
   it('uses the viewport-only renderer path for zoom updates', async () => {
@@ -2531,13 +2546,13 @@ describe('scene canvas runtime', () => {
     const viewport = (runtime as any)._camera.initialize({ width: 400, height: 300 })
     setInteractionViewport(runtime, viewport)
 
-    renderer.renderScene.mockClear()
+    renderer.syncScene.mockClear()
     runtime.commandSurface.viewport.zoomIn()
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(renderer.setViewport).toHaveBeenCalled()
-    expect(renderer.renderScene).not.toHaveBeenCalled()
+    expect(renderer.setView).toHaveBeenCalled()
+    expect(renderer.syncScene).not.toHaveBeenCalled()
     runtime.destroy()
   })
 
@@ -2577,7 +2592,7 @@ describe('scene canvas runtime', () => {
     selectedPanelTargets.value = [{ kind: 'zone', zone_id: 'zone-1' }]
     runtime.commandSurface.sceneEdits.selectAll()
 
-    renderer.renderScene.mockClear()
+    renderer.syncScene.mockClear()
     runtime.documentSurface.replaceDocument(
       makeFile(),
       createCanvasDocumentReplacementToken(),
@@ -3371,16 +3386,16 @@ describe('scene canvas runtime', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    const initialSnapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    const initialSnapshot = renderer.syncScene.mock.calls[renderer.syncScene.mock.calls.length - 1]?.[0]
     expect(initialSnapshot?.localizedCommonNames.get('Malus domestica')).toBe('Apple')
-    const initialRenderCount = renderer.renderScene.mock.calls.length
+    const initialRenderCount = renderer.syncScene.mock.calls.length
 
     locale.value = 'fr'
     await vi.waitFor(() => {
-      expect(renderer.renderScene.mock.calls.length).toBeGreaterThan(initialRenderCount)
+      expect(renderer.syncScene.mock.calls.length).toBeGreaterThan(initialRenderCount)
     })
 
-    const localizedSnapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    const localizedSnapshot = renderer.syncScene.mock.calls[renderer.syncScene.mock.calls.length - 1]?.[0]
     expect(localizedSnapshot?.localizedCommonNames.get('Malus domestica')).toBe('Pommier')
     runtime.destroy()
   })
@@ -3396,25 +3411,27 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
     setInteractionViewport(runtime, { x: 0, y: 0, scale: 20 })
+    const pinnedNames = (snapshot: SceneRendererSnapshot) => projectScenePlantLabels(snapshot, 20)
+      .pinnedPlantNameLabels.map((label) => label.text)
     runtime.commandSurface.sceneEdits.selectAll()
     runtime.commandSurface.sceneEdits.toggleSelectedPlantNamePins()
     expect(runtime.querySurface.getSceneSnapshot().plants.map((plant) => plant.pinnedName)).toEqual([true, true])
 
     await vi.waitFor(() => {
-      const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+      const snapshot = renderer.syncScene.mock.calls[renderer.syncScene.mock.calls.length - 1]?.[0]
       if (!snapshot) throw new Error('Expected a renderer snapshot')
-      expect(snapshot.pinnedPlantNameLabels.map((label: PlantNameLabel) => label.text)).toEqual(['Apple', 'Apple'])
+      expect(pinnedNames(snapshot)).toEqual(['Apple', 'Apple'])
     })
-    const initialRenderCount = renderer.renderScene.mock.calls.length
+    const initialRenderCount = renderer.syncScene.mock.calls.length
 
     locale.value = 'fr'
     await vi.waitFor(() => {
-      expect(renderer.renderScene.mock.calls.length).toBeGreaterThan(initialRenderCount)
+      expect(renderer.syncScene.mock.calls.length).toBeGreaterThan(initialRenderCount)
     })
 
-    const localizedSnapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    const localizedSnapshot = renderer.syncScene.mock.calls[renderer.syncScene.mock.calls.length - 1]?.[0]
     if (!localizedSnapshot) throw new Error('Expected a localized renderer snapshot')
-    expect(localizedSnapshot.pinnedPlantNameLabels.map((label: PlantNameLabel) => label.text)).toEqual(['Pommier', 'Pommier'])
+    expect(pinnedNames(localizedSnapshot)).toEqual(['Pommier', 'Pommier'])
     runtime.destroy()
   })
 

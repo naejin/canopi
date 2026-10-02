@@ -20,7 +20,6 @@ vi.mock('../app/lidar/inspection', async () => {
 })
 
 import type { CanvasInspectionHandle } from '../canvas/inspection'
-import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
 import { setCurrentCanvasSession } from '../canvas/session'
 import type { CanvasLayerPresentationRow } from '../app/canvas-layer-presentation/presentation'
 import { ToolRail } from '../components/canvas/ToolRail'
@@ -65,18 +64,6 @@ function expectIconButtonsFollowRules(root: ParentNode, minimum: number): void {
   }
 }
 
-const viewport = signal<CameraViewportSnapshot>({
-  viewport: { x: 200, y: 150, scale: 0.01 },
-  screenSize: { width: 400, height: 300 },
-  devicePixelRatio: 1,
-  referenceScale: 20,
-  scaleBounds: { minimum: 0.00001, maximum: 2000 },
-  overviewScaleThreshold: 0.1,
-  mode: 'overview',
-  groundMetersPerCssPixel: 100,
-  revision: 1,
-})
-
 function row(id: string, overrides: Partial<CanvasLayerPresentationRow>): CanvasLayerPresentationRow {
   return {
     id, label: id, authority: 'scene', group: 'design', active: false, visible: true, opacity: 1, locked: false,
@@ -99,14 +86,15 @@ describe('canvas icon-only buttons', () => {
     const view: CanvasInspectionHandle = {
       state: signal({ point: { x: 0, y: 0 }, scale: 10, zoomPercent: 700, previewAvailable: true,
         frame: { width: 430, height: 390 }, plants: [] }),
+      sourceQuad: signal(null),
       inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panBy: vi.fn(), zoomBy: vi.fn(),
       highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
     }
-    const queries = createTestCanvasQuerySurface()
+    // In overview, so the overview chip shows; its view follows this viewport.
+    const queries = createTestCanvasQuerySurface({ viewport: { x: 200, y: 150, scale: 0.01 } })
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       queries: {
         ...queries,
-        viewport,
         getSpeciesFocus: () => ({ canonicalName: 'Malus domestica' }),
       } as typeof queries,
       documents: createTestCanvasDocumentSurface({ attachInspectionTo: vi.fn(() => view) }),

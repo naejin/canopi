@@ -1,4 +1,4 @@
-import type { SceneRendererV2 } from '../../canvas/runtime/renderers/scene-types'
+import type { SceneRenderer } from '../../canvas/runtime/renderers/scene-types'
 import type { DraftPresentation } from '../../canvas/runtime/tools/draft'
 import type { ViewTransform } from '../../canvas/runtime/view/types'
 
@@ -10,7 +10,7 @@ export type RecordedRendererCall =
  * The renderer's tool-facing entries, recorded in call order for tool and
  * ToolHost tests; it keeps each argument by reference and reads nothing from it.
  */
-export interface RecordingRenderer extends Pick<SceneRendererV2, 'setDraft' | 'setView'> {
+export interface RecordingRenderer extends Pick<SceneRenderer, 'setDraft' | 'setView'> {
   readonly calls: readonly RecordedRendererCall[]
   /** The last draft set, or null when none was set since the start or the last `clear`. */
   lastDraft(): DraftPresentation | null

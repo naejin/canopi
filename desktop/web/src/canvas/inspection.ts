@@ -15,6 +15,8 @@ export interface InspectedPlant {
   readonly screenPosition: InspectionPoint
   readonly label: InspectionLabel | null
 }
+/** The lens footprint's four corners in main-map CSS pixels, in `worldQuadToScreen` order. */
+export type InspectionSourceQuad = readonly [InspectionPoint, InspectionPoint, InspectionPoint, InspectionPoint]
 export interface CanvasInspectionState {
   readonly point: InspectionPoint
   /** Preview pixels per world metre, for an accurate source footprint. */
@@ -28,6 +30,8 @@ export interface CanvasInspectionState {
 /** A view-only Canvas resource. Its owner also releases it on runtime teardown. */
 export interface CanvasInspectionHandle {
   readonly state: ReadonlySignal<CanvasInspectionState | null>
+  /** Where the lens samples, drawn on the main map: follows the main camera's frames, not only the lens's own repaints. */
+  readonly sourceQuad: ReadonlySignal<InspectionSourceQuad | null>
   /** Coordinates in CSS pixels relative to the main canvas host. */
   inspectAtScreenPoint(point: InspectionPoint): void
   /** Samples at a plane point from ToolHost.subscribePointerWorld, with no screen conversion of its own. */

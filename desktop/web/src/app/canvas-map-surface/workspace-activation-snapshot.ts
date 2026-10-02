@@ -43,6 +43,5 @@ export function readWorkspaceActivationSnapshot(
       initialCenter: Object.freeze({ lat: center.lat, lon: center.lon }),
       background: readWorkspaceBackgroundPresentation(options),
     }),
-    maximumWorldExtentMeters: undefined,
   })
 }

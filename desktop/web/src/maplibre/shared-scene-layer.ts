@@ -9,14 +9,13 @@ import type { CustomLayerInterface, CustomRenderMethodInput } from 'maplibre-gl'
 import { createPixiScenePresentation, type PixiScenePresentation } from '../canvas/runtime/renderers/pixi-scene'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
 import type { DraftPresentation } from '../canvas/runtime/tools/draft'
-import { deriveSharedMapSceneViewport, type SharedMapProjector } from './scene-camera-transform'
+import type { ViewFrameSource } from '../canvas/runtime/view/types'
 
 /** The one production custom layer which all map-owned raster bands sit below. */
 export const MAPLIBRE_SHARED_SCENE_LAYER_ID = 'canopi-shared-scene'
 
-export interface SharedMapSceneMap extends SharedMapProjector {
+export interface SharedMapSceneMap {
   getCanvas(): HTMLCanvasElement
-  getPitch(): number
   triggerRepaint(): void
 }
 
@@ -66,9 +65,9 @@ export function sharedPixiRendererInitOptions(view: SharedPixiRendererView): Sha
 }
 
 /**
- * MapLibre owns the canvas's pointer events (touch-action, preventDefault,
- * document listeners) and the only frame loop. Pixi's canvas listeners go,
- * and `Ticker.system`, which Pixi's scheduler started, stops; nothing of
+ * Canvas input belongs to `DomInputSource`, the only DOM listener on the map
+ * (ADR 0017), and MapLibre runs the only frame loop. Pixi's canvas listeners
+ * go, and `Ticker.system`, which Pixi's scheduler started, stops; nothing of
  * ours listens on it.
  */
 function detachPixiFromHost(renderer: SharedPixiRenderer): void {
@@ -87,9 +86,11 @@ interface SharedMapSceneDiagnostics {
 
 export interface SharedMapSceneLayerOptions {
   readonly id: string
-  /** Live session plane origin, read on every render. */
-  readonly readOrigin: () => { readonly lat: number; readonly lon: number }
-  readonly maximumWorldExtentMeters?: number
+  /**
+   * The camera's frames: the runtime's host for the workspace map, the snapshot map's own driver. The layer reads the latest
+   * frame in `render` and never derives a transform from the map (spec §1.5).
+   */
+  readonly frames: Pick<ViewFrameSource, 'viewFrame'>
   readonly onFailure?: (error: Error) => void
   readonly createRenderer?: () => SharedPixiRenderer
   readonly createStage?: () => Container
@@ -134,7 +135,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
   let presentation: PixiScenePresentation | null = null
   let pendingSnapshot: SceneRendererSnapshot | null = null
   let renderedSnapshot: SceneRendererSnapshot | null = null
-  let presentedViewport: SceneRendererSnapshot['viewport'] | null = null
+  let presentedViewRevision: number | null = null
   let draft: DraftPresentation | null = null
   let initializePromise: Promise<void> | null = null
   let disposePromise: Promise<void> | null = null
@@ -209,30 +210,21 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
         fail('MapLibre canvas backing size changed outside the shared renderer contract.')
         return
       }
-      const sizeChanged = !sameRendererSize(rendererSize, nextSize)
       rendererSize = nextSize
-      const transform = deriveSharedMapSceneViewport({
-        project: point => map!.project(point),
-        anchor: options.readOrigin(),
-        pitchDeg: map.getPitch(),
-        maximumWorldExtentMeters: options.maximumWorldExtentMeters ?? 10_000,
-      })
-      if (!transform.accepted) {
-        fail(`Shared map scene cannot render: ${transform.reason}.`)
-        return
-      }
+      // The camera published this frame before MapLibre drew (its driver reads the map on 'move'); a resize publishes one too.
+      const { view } = options.frames.viewFrame.peek()
       try {
         renderer.resetState()
         presentation.resize(rendererSize.width, rendererSize.height)
+        if (view.revision !== presentedViewRevision) {
+          presentation.setView(view)
+          presentedViewRevision = view.revision
+        }
         if (pendingSnapshot) {
           renderedSnapshot = pendingSnapshot
           pendingSnapshot = null
-          presentation.renderScene({ ...renderedSnapshot, viewport: transform.viewport })
-          presentedViewport = transform.viewport
+          presentation.syncScene(renderedSnapshot)
           sceneSyncCount += 1
-        } else if (sizeChanged || !sameViewport(presentedViewport, transform.viewport)) {
-          presentation.setViewport(transform.viewport)
-          presentedViewport = transform.viewport
         }
         renderer.render({ container: stage, clear: false })
         renderCount += 1
@@ -376,7 +368,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
     renderer = null
     pendingSnapshot = null
     renderedSnapshot = null
-    presentedViewport = null
+    presentedViewRevision = null
     draft = null
     map = null
     context = null
@@ -387,15 +379,6 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
     rejectDispose = null
   }
 }
-
-function sameViewport(
-  left: SceneRendererSnapshot['viewport'] | null,
-  right: SceneRendererSnapshot['viewport'],
-): boolean {
-  return left?.x === right.x && left.y === right.y && left.scale === right.scale
-}
-
-
 
 function getMapLibreCanvasSize(canvas: HTMLCanvasElement): { width: number; height: number; resolution: number } | null {
   const width = canvas.clientWidth

@@ -103,23 +103,20 @@ it('admits short codes at detail scale while keeping dense labels collision-free
   setCanvasPlantDisplay({ ...DEFAULT_PLANT_DISPLAY, labels: 'codes' })
   const snapshot = createTestSceneRendererSnapshot({
     scene: { plants, plantSpeciesCodes: { 'Mentha spicata': 'MSP' } },
-    viewport: { x: 0, y: 0, scale: 60 },
   })
-  const labels = getCanvasPlantNameLabels(snapshot)
+  const pixelsPerMetre = 60
+  const labels = getCanvasPlantNameLabels(snapshot, pixelsPerMetre)
   expect(labels.length).toBeGreaterThan(0)
   expect(labels.length).toBeLessThanOrEqual(2)
   expect(labels.every((label) => label.text === 'MSP')).toBe(true)
   expect(
-    getCanvasPlantNameLabels({
-      ...snapshot,
-      viewport: { x: 0, y: 0, scale: 10 },
-    }),
+    getCanvasPlantNameLabels(snapshot, 10),
   ).toEqual([])
   // Names need 100 px/m; Labels › None admits no automatic label at any scale.
   setCanvasPlantDisplay({ ...DEFAULT_PLANT_DISPLAY, labels: 'names' })
-  expect(getCanvasPlantNameLabels(snapshot)).toEqual([])
+  expect(getCanvasPlantNameLabels(snapshot, pixelsPerMetre)).toEqual([])
   setCanvasPlantDisplay({ ...DEFAULT_PLANT_DISPLAY, labels: 'none' })
-  expect(getCanvasPlantNameLabels({ ...snapshot, viewport: { x: 0, y: 0, scale: 400 } })).toEqual([])
+  expect(getCanvasPlantNameLabels(snapshot, 400)).toEqual([])
   setCanvasPlantDisplay({ ...DEFAULT_PLANT_DISPLAY, labels: 'codes' })
   expect(
     getCanvasPlantNameLabels({
@@ -136,6 +133,6 @@ it('admits short codes at detail scale while keeping dense labels collision-free
           },
         ],
       },
-    }),
+    }, pixelsPerMetre),
   ).toEqual([])
 })

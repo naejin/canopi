@@ -19,7 +19,7 @@ vi.mock('../maplibre/view-snapshot-map', async (importOriginal) => {
       return {
         capture: async (request: ViewSnapshotRequest): Promise<ViewSnapshotCapture> => {
           snapshotOwner.requests.push(request)
-          request.scene.build({ x: 160, y: 100, scale: 2 })
+          request.scene.build(createTestRendererView({ x: 160, y: 100, scale: 2 }))
           return {
             blob: new Blob(['png'], { type: 'image/png' }),
             width: request.width,
@@ -52,6 +52,7 @@ import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import type { CanopiFile, SavedView } from '../types/design'
 import { createTestCanvasCommandSurface, createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import { createTestRendererView } from './support/scene-renderer-snapshot'
 import { replaceCurrentDesignState } from './support/design-session-state'
 import { TEST_GEO_ORIGIN } from './support/geo-design'
 
@@ -133,10 +134,10 @@ describe('saved view snapshot request', () => {
     expect(request.scene.origin).toEqual(TEST_GEO_ORIGIN)
     expect(request.background).toMatchObject({ satellite: { visible: true }, basemap: { visible: false }, locale: 'fr' })
 
-    const viewport = { x: 1, y: 2, scale: 3 }
-    const scene = request.scene.build(viewport)
+    const view = createTestRendererView({ x: 1, y: 2, scale: 3 })
+    const scene = request.scene.build(view)
     expect(build).toHaveBeenCalledWith({
-      viewport, visibleLayerNames: ['plants'], focusedSpecies: 'Rubus idaeus', plantLabels: 'codes',
+      view, visibleLayerNames: ['plants'], focusedSpecies: 'Rubus idaeus', plantLabels: 'codes',
     })
     expect(scene.scene.layers.map((layer) => [layer.name, layer.visible])).toEqual([['plants', true], ['zones', false]])
   })
@@ -157,7 +158,7 @@ describe('saved view snapshot request', () => {
     const context = { queries: surface, mapLayers: createDefaultMapLayers(), locale: 'en', plantLabels: 'names' as const }
     const request = describeSavedViewSnapshot(VIEW, VIEW_SNAPSHOT_THUMBNAIL, context)!
     surface.setSettled(false)
-    expect(() => request.scene.build({ x: 0, y: 0, scale: 1 })).toThrow(ViewSnapshotSceneBusyError)
+    expect(() => request.scene.build(createTestRendererView({ x: 0, y: 0, scale: 1 }))).toThrow(ViewSnapshotSceneBusyError)
     ;(surface.sessionPlane as Signal<SessionPlane | null>).value = null
     expect(describeSavedViewSnapshot(VIEW, VIEW_SNAPSHOT_THUMBNAIL, context)).toBeNull()
   })

@@ -1,17 +1,17 @@
 /**
- * The active tool's draft in the Pixi scene (canvas v2 plan 0D1, ADR 0019),
- * mounted as the last two stage children so it draws over plants, notes and
- * labels. `world` holds the world shapes and a ghost's zones and is placed
- * with the numbers pixi-scene.ts gives its own world container; `screen` holds
- * the upright parts in CSS px (a `circle-px`, a label's chip, a ghost's plants
- * and note text), each at the global point of its world anchor. Stroke widths,
- * casings and dashes are CSS px at every scale: they are traced in world units
- * at the placed scale and traced again when it changes, while a place that only
- * moves repositions the upright parts. Colours come from scene-visuals.ts and
- * ghosts from the scene's own painters. Convention: open polylines have round
- * caps and joins, closed shapes mitred corners and butt dash ends, as today's
- * SVG and CSS previews. 0D2 splits this module into world-layers.ts and
- * billboard-layer.ts.
+ * The active tool's draft in the Pixi scene (ADR 0019, spec §1.5), mounted as
+ * the last two stage children so it draws over plants, notes and labels.
+ * `worldDraftRoot` holds the world shapes and a ghost's zones under the view's
+ * affine, written in the same `setView` as the scene's world root;
+ * `billboardDraftRoot` holds the upright parts in CSS px (a `circle-px`, a
+ * label's chip, a ghost's plants and note text), each at its world anchor
+ * projected through `view.projectAnchors`. Stroke widths, casings and dashes
+ * are CSS px at every scale: they are traced in world units at the view's scale
+ * and traced again when it changes, while a view that only moves repositions
+ * the upright parts. Colours come from scene-visuals.ts and ghosts from the
+ * scene's own painters. Convention: open polylines have round caps and joins,
+ * closed shapes mitred corners and butt dash ends, as today's SVG and CSS
+ * previews.
  */
 
 // Production CSP rejects Pixi's generated functions; its shim avoids eval.
@@ -26,15 +26,16 @@ import {
 } from '../scene-visuals'
 import type { DraftFill, DraftPresentation, DraftShape, DraftStroke } from '../tools/draft'
 import type { GhostEntity } from '../tools/tool'
-import type { ScreenPoint, WorldPoint } from '../view/types'
+import type { ScreenPoint, ViewTransform, WorldPoint } from '../view/types'
+import { writeWorldAffine } from './scene-paint'
 
-/** Where the scene draws the active tool's draft; placed by pixi-scene.ts. */
+/** Where the scene draws the active tool's draft; mounted by pixi-scene.ts. */
 export interface DraftLayer {
-  /** World shapes and a ghost's zones; placed like the scene's world container. */
-  readonly world: Container
+  /** World shapes and a ghost's zones, under the view's affine like the scene's world root. */
+  readonly worldDraftRoot: Container
   /** Upright parts in CSS px; stays untransformed. */
-  readonly screen: Container
-  place(position: { readonly x: number; readonly y: number }, scale: number): void
+  readonly billboardDraftRoot: Container
+  setView(view: ViewTransform): void
   setDraft(draft: DraftPresentation | null): void
   resize(width: number, height: number): void
   /** Releases the draft; the stage destroys the two containers. */
@@ -78,6 +79,8 @@ interface UprightPart {
   readonly offset: ScreenPoint
   /** Chips land on whole pixels so their text stays sharp. */
   readonly snap: boolean
+  /** A note's text turns with the map: its drawn angle, less the bearing. Null for parts that stay upright. */
+  readonly turn: number | null
 }
 
 interface StrokeEnds {
@@ -104,8 +107,10 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
   let viewHeight = options.viewSize.height
   let ghostFilterArea: Rectangle | null = null
   let draft: DraftPresentation | null = null
-  let placedScale: number | null = null
+  let view: ViewTransform | null = null
   let tracedScale: number | null = null
+  let anchors = new Float64Array(0)
+  let anchorsOnScreen = new Float32Array(0)
   const drawn: Container[] = []
   const filters: AlphaFilter[] = []
   const upright: UprightPart[] = []
@@ -121,20 +126,31 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
     tracedScale = null
   }
 
-  function trace(next: DraftPresentation, scale: number): void {
+  function trace(next: DraftPresentation, at: ViewTransform): void {
     clear()
+    const scale = at.pixelsPerMetre
     for (const shape of next.shapes) drawShape(shape, scale)
     tracedScale = scale
-    positionUpright()
+    if (anchors.length < upright.length * 2) {
+      anchors = new Float64Array(upright.length * 2)
+      anchorsOnScreen = new Float32Array(upright.length * 2)
+    }
+    upright.forEach((part, index) => {
+      anchors[index * 2] = part.anchor.x
+      anchors[index * 2 + 1] = part.anchor.y
+    })
+    positionUpright(at)
   }
 
-  function positionUpright(): void {
-    for (const part of upright) {
-      const at = world.toGlobal(part.anchor)
-      const x = at.x + part.offset.x
-      const y = at.y + part.offset.y
+  function positionUpright(at: ViewTransform): void {
+    at.projectAnchors(anchors, anchorsOnScreen, upright.length)
+    const bearingRad = (at.camera.bearingDeg * Math.PI) / 180
+    upright.forEach((part, index) => {
+      const x = anchorsOnScreen[index * 2]! + part.offset.x
+      const y = anchorsOnScreen[index * 2 + 1]! + part.offset.y
       part.node.position.set(part.snap ? Math.round(x) : x, part.snap ? Math.round(y) : y)
-    }
+      if (part.turn !== null) part.node.rotation = part.turn - bearingRad
+    })
   }
 
   function add<T extends Container>(parent: Container, node: T): T {
@@ -143,8 +159,8 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
     return node
   }
 
-  function addUpright(node: Container, anchor: WorldPoint, offset: ScreenPoint = { x: 0, y: 0 }, snap = false): void {
-    upright.push({ node, anchor, offset, snap })
+  function addUpright(node: Container, anchor: WorldPoint, offset: ScreenPoint = { x: 0, y: 0 }, snap = false, turns = false): void {
+    upright.push({ node, anchor, offset, snap, turn: turns ? node.rotation : null })
   }
 
   function drawShape(shape: DraftShape, scale: number): void {
@@ -288,8 +304,8 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
     const fonts = globalThis.document?.fonts
     if (!fonts || fonts.check(font)) return
     fonts.load(font).then(() => {
-      if (!draft || placedScale === null) return
-      trace(draft, placedScale)
+      if (!draft || !view) return
+      trace(draft, view)
       options.requestRepaint?.()
     }, () => {})
   }
@@ -396,25 +412,24 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
       }
       node.alpha = opacity * nodeOpacity
       add(screen, node)
-      addUpright(node, note.position)
+      addUpright(node, note.position, undefined, false, node === text)
     }
   }
 
   return {
-    world,
-    screen,
-    place(position, scale) {
-      world.position.set(position.x, position.y)
-      world.scale.set(scale)
-      placedScale = scale
+    worldDraftRoot: world,
+    billboardDraftRoot: screen,
+    setView(next) {
+      writeWorldAffine(world, next)
+      view = next
       if (!draft) return
-      if (scale === tracedScale) positionUpright()
-      else trace(draft, scale)
+      if (next.pixelsPerMetre === tracedScale) positionUpright(next)
+      else trace(draft, next)
     },
     setDraft(next) {
       draft = next
       clear()
-      if (next && placedScale !== null) trace(next, placedScale)
+      if (next && view) trace(next, view)
     },
     resize(width, height) {
       viewWidth = width
