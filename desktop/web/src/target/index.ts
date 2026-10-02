@@ -5,13 +5,7 @@ export {
   speciesTarget,
   targetIdentity,
 } from './identity'
-export type {
-  TargetResolution,
-  TargetSceneIndex,
-  TargetSceneInput,
-  TargetScenePoint,
-  TargetZoneRef,
-} from './identity'
+export type { TargetSceneInput } from './identity'
 export {
   consortiumTarget,
   getBudgetHoverTarget,
