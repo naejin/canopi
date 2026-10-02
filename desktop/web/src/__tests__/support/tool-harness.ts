@@ -5,7 +5,7 @@
 // frame scale, the species cache and the localised names through injected functions, as interaction-session.ts passes
 // the runtime's.
 
-import { signal } from '@preact/signals'
+import { computed, signal } from '@preact/signals'
 import type { CanvasToolGuidance } from '../../canvas/session-state'
 import { createSessionPlane, type GeoPosition, type SessionPlane } from '../../canvas/session-plane'
 import type { Gesture, MenuSource, PressTarget } from '../../canvas/runtime/input/gestures'
@@ -65,7 +65,7 @@ import type {
   ToolSource,
 } from '../../canvas/runtime/tools/tool'
 import { createToolHost, createToolScene } from '../../canvas/runtime/tools/tool-host'
-import type { ScreenPoint, WorldPoint } from '../../canvas/runtime/view/types'
+import type { ScreenPoint, ViewFrame, ViewFrameSource, WorldPoint } from '../../canvas/runtime/view/types'
 import { createRecordingRenderer, type RecordingRenderer } from './recording-renderer'
 import { createTestView, type TestView } from './test-view'
 
@@ -383,6 +383,9 @@ export interface ToolHarness {
   readonly plane: SessionPlane
   /** The world point under a screen point of the current frame. */
   world(at: ScreenPoint): WorldPoint
+  /** Makes the view's screenToWorld answer null (no ground, today's pitched-view case) at points `blocked` accepts;
+   *  null restores the real ground everywhere. */
+  setNoGroundAt(blocked: ((at: ScreenPoint) => boolean) | null): void
   /** Arms a tool as the session does: its tool signal, then ToolHost.setTool. */
   arm(id: ToolId, source?: ToolSource | null): void
   select(...targets: SceneDesignObjectTarget[]): void
@@ -474,8 +477,29 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
   const scene = createToolScene(createToolSceneSource(store, { pixelsPerMetre: () => view.view().pixelsPerMetre }))
   let snapping: SnapSettings = options.snapping ?? { grid: false, guides: false }
 
+  // The real view's screenToWorld never answers null at pitch 0 (today's one similarity transform); a test forces the
+  // pitched-view "no ground" case by naming points to black out, through setNoGroundAt.
+  const noGroundAt = signal<((at: ScreenPoint) => boolean) | null>(null)
+  const withNoGround = (frame: ViewFrame): ViewFrame => {
+    const blocked = noGroundAt.value
+    if (!blocked) return frame
+    const realView = frame.view
+    return {
+      ...frame,
+      view: {
+        ...realView,
+        screenToWorld: (s) => (blocked(s) ? null : realView.screenToWorld(s)),
+      },
+    }
+  }
+  const frames: ViewFrameSource = {
+    viewFrame: computed(() => withNoGround(view.frames.viewFrame.value)),
+    settledViewFrame: computed(() => withNoGround(view.frames.settledViewFrame.value)),
+    onViewFrame: (phase, listener) => view.frames.onViewFrame(phase, (frame) => listener(withNoGround(frame))),
+  }
+
   const host = createToolHost({
-    frames: view.frames,
+    frames,
     scene,
     edits,
     admission: options.admission ?? coordinator,
@@ -626,6 +650,9 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       const world = view.view().screenToWorld(at)
       if (!world) throw new Error('The test view has no ground under that point.')
       return world
+    },
+    setNoGroundAt(blocked) {
+      noGroundAt.value = blocked
     },
     arm(id, source = null) {
       toolState.value = id
