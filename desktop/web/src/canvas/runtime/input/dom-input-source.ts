@@ -28,11 +28,9 @@ import { DEFAULT_THRESHOLDS } from './thresholds'
 
 /** The note editor: D1's text-entry host, and today's inline annotation editor until it moves there. */
 const TEXT_ENTRY_SELECTOR = '[data-canvas-text-entry], [data-annotation-inline-editor]'
-/** The canvas's own controls and fields inside the map: the inspection lens's skip set, the chrome, the Unlock affordance and
- *  MapLibre's controls in the host (the attribution: a press there opens it or follows its link, and never starts a band). */
+/** The canvas's own controls and fields inside the map: the inspection lens's skip set, the chrome and the Unlock affordance. */
 const OWNED_CHROME_SELECTOR = [
   '[data-canvas-chrome]',
-  '.maplibregl-ctrl',
   'button',
   'input',
   'select',
@@ -40,6 +38,9 @@ const OWNED_CHROME_SELECTOR = [
   '[contenteditable="true"]',
   '[data-preserve-overlays="true"]',
 ].join(', ')
+/** MapLibre's controls in the host (the attribution): owned chrome for presses and hovers, so a press opens it or follows
+ *  its link and never starts a band, and a hover moving onto it ends; a wheel or pinch over it still zooms the map. */
+const MAP_CONTROL_SELECTOR = '.maplibregl-ctrl'
 const SURFACE: TargetClass = Object.freeze({ kind: 'surface' })
 const OWNED_TEXT: TargetClass = Object.freeze({ kind: 'owned-text' })
 const OWNED_CHROME: TargetClass = Object.freeze({ kind: 'owned-chrome' })
@@ -226,7 +227,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   const onWheel = (event: WheelEvent): void => {
     if (allowsNativeContextMenuTarget(event.target)) return
     const rect = host.getBoundingClientRect()
-    deliver(event, rect, normalise(domEventLike(event, 'wheel', rect, classifyTarget(event.target, host)), deps.platform, deps.bindings(), {
+    deliver(event, rect, normalise(domEventLike(event, 'wheel', rect, classifyTarget(event.target, host, 'surface')), deps.platform, deps.bindings(), {
       physicalCtrl: deps.keys.physicalCtrl(),
     }, rect))
   }
@@ -458,8 +459,8 @@ function keepsTextSelection(target: EventTarget | null, host: HTMLElement): bool
   return isEditableTarget(element) || closestInside(element, `${TEXT_ENTRY_SELECTOR}, input, textarea, [contenteditable="true"]`, host) !== null
 }
 
-/** Classifies an event target from data attributes (spec §1.2 `TargetClass`). */
-function classifyTarget(target: EventTarget | null, host: HTMLElement): TargetClass {
+/** Classifies an event target from data attributes (spec §1.2 `TargetClass`); a wheel reads MapLibre's controls as surface. */
+function classifyTarget(target: EventTarget | null, host: HTMLElement, mapControls: 'chrome' | 'surface' = 'chrome'): TargetClass {
   const element = elementOf(target)
   if (!element) return FOREIGN
   const ruler = element.closest('[data-canvas-ruler]')
@@ -471,6 +472,7 @@ function classifyTarget(target: EventTarget | null, host: HTMLElement): TargetCl
   if (handle) return { kind: 'handle', id: handle }
   if (closestInside(element, UNLOCK_AFFORDANCE_SELECTOR, host)) return UNLOCK_AFFORDANCE
   if (closestInside(element, OWNED_CHROME_SELECTOR, host)) return OWNED_CHROME
+  if (mapControls === 'chrome' && closestInside(element, MAP_CONTROL_SELECTOR, host)) return OWNED_CHROME
   return SURFACE
 }
 
