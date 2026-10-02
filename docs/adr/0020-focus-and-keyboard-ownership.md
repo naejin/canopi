@@ -1,6 +1,6 @@
 # Focus and keyboard ownership
 
-Status: Accepted (2026-09-29, Canopi v2); amended 2026-10-01
+Status: Accepted (2026-09-29, Canopi v2); amended 2026-10-01 and 2026-10-02
 
 Amends [ADR 0010](0010-map-first-interface.md) (single-key shortcut scope). Product rules: [ADR 0015](0015-rotating-map-and-canvas-controls.md).
 
@@ -15,7 +15,7 @@ Thirteen key listeners (shell shortcuts, Web canvas shortcuts, focus regions, th
 - **Map-focus rows.** `canvas-focus` rows (plain and Ctrl/Cmd arrows, Enter, Space, Backspace in a polygon draft, F2, `+` `−`, Menu) need the map, or body after a press on the map or focus in it. A widget keeps a `command` key only by declaring it (`data-owns-keys`).
 - **Selection edits.** `outside-dock` rows, the edits of the map's selection (cut, copy, select all, same species, duplicate, Delete, group, rotate, lock), work like `command` rows except from the side-panel dock or the phone sheet (focus there, or body after a press or focus there): a panel keeps the browser's copy and select all, and the map, its floating chrome, the rail and the title bar keep the edits.
 - **The keymap is data**: each row names its chords, scope and whether it follows the single-key switch; F1 renders it. `mod` means Cmd on Mac and Ctrl elsewhere; AltGr never matches; non-Latin layouts fall back to `event.code` for letters, digits and brackets.
-- **One Esc, one thing.** An open text entry handles its own Esc first. Layers register with a priority: popover, canvas menu, live gesture (a rotate drag restores the starting camera), nudge series, tool transient, tool to Select, selection, raster inspection, dock panel. The top active layer runs; the tool card's Esc hint reads the same chain. Canvas layers are live from any non-text focus while a tool is armed.
+- **One Esc, one thing.** An open text entry handles its own Esc first. Layers register with a priority: popover, canvas menu, live gesture (a rotate drag restores the starting camera), nudge series, tool transient, tool to Select, selection, raster inspection. The top active layer runs; the tool card's Esc hint reads the same chain. The gesture, nudge, transient and tool layers are live from any focus but text fields and dialogs; the selection layer needs the map or no focus, so Esc in a side panel keeps the map selection; no Esc closes the side panel (user, 2026-10-02).
 - **One `FocusOwner`** moves focus between regions (title bar, tool rail, map, dock), focuses the map host itself, and lets a component focus its first field only when a user action opened it. Content-derived UI cannot take focus. Closing a modal returns focus through `useModalLayer`, the one modal exception.
 - **One `armCanvasTool`** is the only way app code arms a tool; it moves focus to the map for every source except a shortcut.
 - **Built once** (user, 2026-10-01). Since v2 ships as one release, the router, the Esc chain, the focus owner and arming are built in this target form directly, with no step that first rebuilds today's key order.
@@ -34,4 +34,5 @@ Thirteen key listeners (shell shortcuts, Web canvas shortcuts, focus regions, th
 - ADR 0010's shortcut rule, `system.md`, `frontend.md` and the Rules board say "anywhere except text fields and dialogs"; the F1 copy and the Settings hint, both read inside a dialog, keep the shorter "anywhere except text fields".
 - Policy tests keep one owner of window key listeners and one arming path; `app/keyboard/` imports no commands, platform, Web or component code. One focus mover and one Esc for one thing are held by behaviour tests (the focus owner, arming and Start card tests, the Esc fixtures), not by regexes whose allowlists would grow with every dialog (2026-10-01).
 - canopi-28w8's focus part lands through `FocusOwner`; its state and chrome parts ship first on their own.
+- The PDF page editor's arrows keep moving the page content as a drag does, under its pushed scope; only its large step moves to Ctrl/Cmd (user, 2026-10-02).
 - Details: [`canvas-v2-spec.md`](../plans/canvas-v2-spec.md).
