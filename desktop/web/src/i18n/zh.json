@@ -113,6 +113,8 @@
     "plantDbCorrupt": "植物目录的数据库文件已损坏，因此无法搜索和查看植物详情。您的设计不受影响。请重新安装 Canopi 以恢复该文件。",
     "localDataMovedAsideTitle": "已将旧数据另行保存",
     "localDataMovedAside": "Canopi 2.0 无法读取旧版本保存的数据，因此已将这些数据原样另行保存，并重新开始。",
+    "localDataKeptInPlaceTitle": "旧数据保留在原处",
+    "localDataKeptInPlace": "Canopi 2.0 无法读取旧版本保存的数据，而此浏览器没有空间将其另行保存，因此这些数据保持不变并被隐藏。请删除不再需要的草稿，然后重新加载页面。",
     "dismiss": "关闭"
   },
   "canvas": {

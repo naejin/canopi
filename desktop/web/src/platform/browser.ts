@@ -27,14 +27,22 @@ export function bootstrapPlatform(): void {
   if (setAside.error !== null) {
     console.error("Failed to set aside browser data from before Canopi 2.0:", setAside.error);
   }
-  if (setAside.movedAside) {
+  // Earlier data whose copy did not fit stays in place, hidden; saying so
+  // (once) takes precedence over saying the rest moved.
+  if (setAside.keptInPlace || setAside.movedAside) {
     void settingsInstallation.ready.catch(() => undefined).then(() => {
       if (disposed) return;
-      showBrowserShellNotice({
-        tone: "info",
-        title: t("health.localDataMovedAsideTitle"),
-        message: t("health.localDataMovedAside"),
-      });
+      showBrowserShellNotice(setAside.keptInPlace
+        ? {
+          tone: "info",
+          title: t("health.localDataKeptInPlaceTitle"),
+          message: t("health.localDataKeptInPlace"),
+        }
+        : {
+          tone: "info",
+          title: t("health.localDataMovedAsideTitle"),
+          message: t("health.localDataMovedAside"),
+        });
     });
   }
   // Web application lifetime: the newest Draft reopens before first render,

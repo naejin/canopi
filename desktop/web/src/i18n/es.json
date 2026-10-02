@@ -113,6 +113,8 @@
     "plantDbCorrupt": "El archivo de base de datos del catálogo de plantas está dañado, así que la búsqueda y las fichas de plantas no están disponibles. Tus diseños están a salvo. Reinstala Canopi para restaurarlo.",
     "localDataMovedAsideTitle": "Datos anteriores apartados",
     "localDataMovedAside": "Canopi 2.0 no puede leer los datos guardados por versiones anteriores, así que los ha apartado sin cambios y ha empezado de cero.",
+    "localDataKeptInPlaceTitle": "Datos anteriores conservados en su sitio",
+    "localDataKeptInPlace": "Canopi 2.0 no puede leer los datos guardados por versiones anteriores, y este navegador no tiene espacio para apartarlos, así que se quedan sin cambios y ocultos. Elimina los borradores que ya no necesites y vuelve a cargar la página.",
     "dismiss": "Cerrar"
   },
   "canvas": {

@@ -16,7 +16,7 @@ Canopi has two users, and the maintainer converts their `.canopi` files by hand.
   - Desktop user database (Favorites, Recent Designs, Design notebook, saved stamps, settings): schema 1 to 8, or tables without a version, is renamed `<file>.before-2.0-<unix-seconds>` with its journal files. A newer schema is refused untouched; a damaged file is renamed `<file>.corrupt-<unix-seconds>`.
   - Desktop Drafts in an older format move to `drafts.before-2.0-<unix-seconds>/`; the retired 1.x autosave store moves to `autosave.before-2.0-<unix-seconds>`. Nothing moves when the user database is refused.
   - LiDAR library: an older or damaged catalogue is set aside under `lidar-library.set-aside/` and rebuilt from the originals it keeps (recovery, not migration); a newer one is refused.
-  - Web: the 1.x record and older-format Drafts are copied to `canopi:web-app-data:before-2.0-<UTC yyyymmddThhmmssZ>:<key>`, read back, and only then removed, at startup only.
+  - Web: the 1.x record and older-format Drafts are copied to `canopi:web-app-data:before-2.0-<UTC yyyymmddThhmmssZ>:<key>`, read back, and only then removed, at startup only. When the copy does not fit the storage quota, the data stays in place, hidden, the user is told once that it was kept, and it moves on a later start once there is room.
   - No backup ever overwrites another; a taken name gets `-1`, `-2`…
 - **Saved stamps.** Only payload version 2 is read.
 - **Settings.** New fields have defaults; an unreadable record is set aside under `settings.set-aside`. That is not a migration and stays.

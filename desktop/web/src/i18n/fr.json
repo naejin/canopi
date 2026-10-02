@@ -113,6 +113,8 @@
     "plantDbCorrupt": "Le fichier de base de données du catalogue des plantes est endommagé : la recherche et les fiches des plantes sont indisponibles. Vos Designs ne sont pas touchés. Réinstallez Canopi pour le rétablir.",
     "localDataMovedAsideTitle": "Données antérieures mises de côté",
     "localDataMovedAside": "Canopi 2.0 ne peut pas lire les données enregistrées par les versions précédentes : il les a mises de côté sans les modifier et repart de zéro.",
+    "localDataKeptInPlaceTitle": "Données antérieures laissées en place",
+    "localDataKeptInPlace": "Canopi 2.0 ne peut pas lire les données enregistrées par les versions précédentes, et ce navigateur manque de place pour les mettre de côté : elles restent inchangées et masquées. Supprimez les brouillons dont vous n’avez plus besoin, puis rechargez la page.",
     "dismiss": "Fermer"
   },
   "canvas": {

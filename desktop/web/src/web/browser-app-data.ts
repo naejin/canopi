@@ -13,6 +13,8 @@ import type { CanopiFile } from "../types/design";
 const RECORD_VERSION = 2 as const;
 const V1_KEY = "canopi:web-app-data:v1";
 const BACKUP_KEY_PREFIX = "canopi:web-app-data:before-2.0-";
+/** Set once the user has been told that earlier data could not be moved aside. */
+const KEPT_IN_PLACE_NOTICE_KEY = "canopi:web-app-data:before-2.0-kept-in-place-notice";
 const STORAGE_KEYS = {
   drafts: "canopi:web-app-data:v2:drafts",
   settings: "canopi:web-app-data:v2:settings",
@@ -30,9 +32,14 @@ export type BrowserAppDataWriteResult<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly error: unknown };
 
-/** What `setAsideDataFromBefore2_0` did; `error` is the first step that failed. */
+/**
+ * What `setAsideDataFromBefore2_0` did; `error` is the first step that failed.
+ * `keptInPlace` is true when earlier data was found but could not be moved
+ * (its copy did not fit) and the user has not yet been told so.
+ */
 export interface BrowserSetAsideOutcome {
   readonly movedAside: boolean;
+  readonly keptInPlace: boolean;
   readonly error: unknown;
 }
 
@@ -161,7 +168,10 @@ export interface BrowserAppDataStore {
    * v1 document as it is, and older-format Drafts as a Drafts record of their
    * own. A backup never replaces another one, and nothing leaves its key until
    * its copy is written. Current, newer and damaged Drafts stay. Once moved,
-   * nothing is left to move, so the caller's notice shows once.
+   * nothing is left to move, so the caller's notice shows once. Data whose copy
+   * does not fit (near the storage quota the data is briefly held twice) stays
+   * in place, is reported once as `keptInPlace`, and moves on a later start
+   * once there is room.
    */
   setAsideDataFromBefore2_0(now: string): BrowserSetAsideOutcome;
 }
@@ -347,15 +357,21 @@ export function createBrowserAppDataStore({
         return `${base}:${suffix}`;
       };
       let movedAside = false;
+      let kept = false;
       let error: unknown = null;
       for (const step of [setAsideV1Document, setAsideOlderDrafts]) {
         try {
-          if (step(storage, backupKey)) movedAside = true;
+          const outcome = step(storage, backupKey);
+          if (outcome === "moved") movedAside = true;
+          if (typeof outcome === "object") {
+            kept = true;
+            error ??= outcome.keptInPlace;
+          }
         } catch (cause) {
-          error ??= cause;
+          error ??= cause; // Nothing was found to move, or reading failed.
         }
       }
-      return { movedAside, error };
+      return { movedAside, keptInPlace: noteKeptInPlace(storage, kept, now), error };
     },
   };
 }
@@ -376,36 +392,79 @@ function freeBackupBase(storage: BrowserStorageAdapter, stamp: string): string {
   }
 }
 
-/** Write `value` under `key` and read it back; throws when the copy did not land. */
+/** "moved", "nothing" to move, or found but `keptInPlace` because its copy failed. */
+type SetAsideStepOutcome = "moved" | "nothing" | { readonly keptInPlace: unknown };
+
+/**
+ * True when the user should now be told that earlier data stays in place:
+ * the first time it is kept. The marker is cleared once nothing is kept, and
+ * when it cannot be written the user is told again on the next start.
+ */
+function noteKeptInPlace(storage: BrowserStorageAdapter, kept: boolean, now: string): boolean {
+  try {
+    const told = storage.getItem(KEPT_IN_PLACE_NOTICE_KEY) !== null;
+    if (!kept) {
+      if (told) storage.removeItem(KEPT_IN_PLACE_NOTICE_KEY);
+      return false;
+    }
+    if (told) return false;
+  } catch {
+    return kept;
+  }
+  try {
+    storage.setItem(KEPT_IN_PLACE_NOTICE_KEY, now);
+  } catch {
+    // No room even for the marker: the notice repeats until there is.
+  }
+  return true;
+}
+
+/**
+ * Write `value` under the free `key` and read it back; throws when the copy
+ * did not land, after removing whatever part of it did.
+ */
 function writeBackup(storage: BrowserStorageAdapter, key: string, value: string): void {
-  storage.setItem(key, value);
-  if (storage.getItem(key) !== value) throw new Error(`The backup ${key} could not be verified`);
+  try {
+    storage.setItem(key, value);
+    if (storage.getItem(key) !== value) throw new Error(`The backup ${key} could not be verified`);
+  } catch (error) {
+    try {
+      storage.removeItem(key);
+    } catch {
+      // A leftover copy is harmless: the originals are untouched.
+    }
+    throw error;
+  }
 }
 
 function setAsideV1Document(
   storage: BrowserStorageAdapter,
   backupKey: (suffix: string) => string,
-): boolean {
+): SetAsideStepOutcome {
   const raw = storage.getItem(V1_KEY);
-  if (raw === null) return false;
-  writeBackup(storage, backupKey(BACKUP_SUFFIXES.v1), raw);
+  if (raw === null) return "nothing";
+  try {
+    writeBackup(storage, backupKey(BACKUP_SUFFIXES.v1), raw);
+  } catch (cause) {
+    return { keptInPlace: cause };
+  }
   storage.removeItem(V1_KEY);
-  return true;
+  return "moved";
 }
 
 function setAsideOlderDrafts(
   storage: BrowserStorageAdapter,
   backupKey: (suffix: string) => string,
-): boolean {
+): SetAsideStepOutcome {
   const raw = storage.getItem(STORAGE_KEYS.drafts);
-  if (raw === null) return false;
+  if (raw === null) return "nothing";
   let record: unknown;
   try {
     record = JSON.parse(raw);
   } catch {
-    return false; // A damaged record stays where it is.
+    return "nothing"; // A damaged record stays where it is.
   }
-  if (!isSupportedDraftsRecord(record)) return false;
+  if (!isSupportedDraftsRecord(record)) return "nothing";
   const supported = record as Record<string, unknown> & {
     drafts: readonly unknown[];
     draftFiles: Record<string, unknown>;
@@ -416,33 +475,37 @@ function setAsideOlderDrafts(
   for (const [id, file] of Object.entries(draftFiles)) {
     defineOwn(isFromBefore2_0(file) ? older : kept, id, file);
   }
-  if (Object.keys(older).length === 0) return false;
+  if (Object.keys(older).length === 0) return "nothing";
   const isOlder = (draft: unknown) => (
     isRecord(draft) && typeof draft.id === "string" && Object.prototype.hasOwnProperty.call(older, draft.id)
   );
 
   const key = backupKey(BACKUP_SUFFIXES.drafts);
-  writeBackup(storage, key, JSON.stringify({
-    version: RECORD_VERSION,
-    drafts: drafts.filter(isOlder),
-    draftFiles: older,
-  }));
+  try {
+    writeBackup(storage, key, JSON.stringify({
+      version: RECORD_VERSION,
+      drafts: drafts.filter(isOlder),
+      draftFiles: older,
+    }));
+  } catch (cause) {
+    return { keptInPlace: cause };
+  }
   try {
     storage.setItem(STORAGE_KEYS.drafts, JSON.stringify({
       ...supported,
       drafts: drafts.filter((draft) => !isOlder(draft)),
       draftFiles: kept,
     }));
-  } catch (error) {
+  } catch (cause) {
     // The Drafts stay where they were; drop the copy so a retry is not doubled.
     try {
       storage.removeItem(key);
     } catch {
       // A leftover copy is harmless: the originals are untouched.
     }
-    throw error;
+    return { keptInPlace: cause };
   }
-  return true;
+  return "moved";
 }
 
 /** A Design whose `.canopi` version is older than the current one (a missing version counts as 1). */

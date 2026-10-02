@@ -113,6 +113,8 @@
     "plantDbCorrupt": "Die Datenbankdatei des Pflanzenkatalogs ist beschädigt, daher sind Pflanzensuche und Pflanzendetails nicht verfügbar. Ihre Designs sind sicher. Installieren Sie Canopi neu, um sie wiederherzustellen.",
     "localDataMovedAsideTitle": "Frühere Daten beiseitegelegt",
     "localDataMovedAside": "Canopi 2.0 kann von früheren Versionen gespeicherte Daten nicht lesen. Sie wurden unverändert beiseitegelegt, und Canopi beginnt neu.",
+    "localDataKeptInPlaceTitle": "Frühere Daten an Ort und Stelle belassen",
+    "localDataKeptInPlace": "Canopi 2.0 kann von früheren Versionen gespeicherte Daten nicht lesen, und in diesem Browser ist kein Platz, sie beiseitezulegen. Sie bleiben unverändert und ausgeblendet. Löschen Sie nicht mehr benötigte Skizzen und laden Sie die Seite neu.",
     "dismiss": "Schließen"
   },
   "canvas": {

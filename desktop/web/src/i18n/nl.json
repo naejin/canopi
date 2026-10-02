@@ -113,6 +113,8 @@
     "plantDbCorrupt": "Het databasebestand van de plantencatalogus is beschadigd, dus zoeken en plantdetails zijn niet beschikbaar. Je ontwerpen zijn veilig. Installeer Canopi opnieuw om het te herstellen.",
     "localDataMovedAsideTitle": "Eerdere gegevens apart gezet",
     "localDataMovedAside": "Canopi 2.0 kan gegevens van eerdere versies niet lezen. Die gegevens zijn ongewijzigd apart gezet en Canopi is opnieuw begonnen.",
+    "localDataKeptInPlaceTitle": "Eerdere gegevens op hun plaats gelaten",
+    "localDataKeptInPlace": "Canopi 2.0 kan gegevens van eerdere versies niet lezen, en deze browser heeft geen ruimte om ze apart te zetten. Ze blijven ongewijzigd en verborgen. Verwijder concepten die je niet meer nodig hebt en laad de pagina opnieuw.",
     "dismiss": "Sluiten"
   },
   "canvas": {

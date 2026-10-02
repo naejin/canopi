@@ -109,7 +109,7 @@ describe("settings platform bootstrap", () => {
     mocks.installPlaceSearchSession.mockReset().mockReturnValue(mocks.disposePlaceSearchSession);
     mocks.disposeToolRailLearning.mockReset();
     mocks.installToolRailLearning.mockReset().mockReturnValue(mocks.disposeToolRailLearning);
-    mocks.setAsideDataFromBefore2_0.mockReset().mockReturnValue({ movedAside: false, error: null });
+    mocks.setAsideDataFromBefore2_0.mockReset().mockReturnValue({ movedAside: false, keptInPlace: false, error: null });
     mocks.showBrowserShellNotice.mockReset();
   });
 
@@ -161,7 +161,7 @@ describe("settings platform bootstrap", () => {
   });
 
   it("moves browser data from before Canopi 2.0 aside before restoring a Draft, and says so once", async () => {
-    mocks.setAsideDataFromBefore2_0.mockReturnValue({ movedAside: true, error: null });
+    mocks.setAsideDataFromBefore2_0.mockReturnValue({ movedAside: true, keptInPlace: false, error: null });
     const { t } = await import("../i18n");
     const { bootstrapPlatform } = await import("../platform/browser");
 
@@ -180,9 +180,28 @@ describe("settings platform bootstrap", () => {
     });
   });
 
+  it("says once that earlier browser data stays in place when it could not be moved aside", async () => {
+    const error = new Error("quota");
+    mocks.setAsideDataFromBefore2_0.mockReturnValue({ movedAside: true, keptInPlace: true, error });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { t } = await import("../i18n");
+    const { bootstrapPlatform } = await import("../platform/browser");
+
+    bootstrapPlatform();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mocks.showBrowserShellNotice).toHaveBeenCalledOnce();
+    expect(mocks.showBrowserShellNotice).toHaveBeenCalledWith({
+      tone: "info",
+      title: t("health.localDataKeptInPlaceTitle"),
+      message: t("health.localDataKeptInPlace"),
+    });
+    expect(mocks.restoreLatestDraft).toHaveBeenCalledOnce();
+  });
+
   it("says nothing when no browser data from before Canopi 2.0 was found", async () => {
     const error = new Error("quota");
-    mocks.setAsideDataFromBefore2_0.mockReturnValue({ movedAside: false, error });
+    mocks.setAsideDataFromBefore2_0.mockReturnValue({ movedAside: false, keptInPlace: false, error });
     const logError = vi.spyOn(console, "error").mockImplementation(() => {});
     const { bootstrapPlatform } = await import("../platform/browser");
 

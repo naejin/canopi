@@ -138,7 +138,7 @@ describe('browser app data store', () => {
       const seeded = seedEarlierData(storage)
       const store = createBrowserAppDataStore({ storage })
 
-      expect(store.setAsideDataFromBefore2_0(NOW)).toEqual({ movedAside: true, error: null })
+      expect(store.setAsideDataFromBefore2_0(NOW)).toEqual({ movedAside: true, keptInPlace: false, error: null })
 
       expect(storage.values.has(V1_KEY)).toBe(false)
       expect(storage.values.get(`${BACKUP}:v1`)).toBe(seeded.v1)
@@ -158,11 +158,11 @@ describe('browser app data store', () => {
       const storage = memoryStorage()
       seedEarlierData(storage)
       const store = createBrowserAppDataStore({ storage })
-      expect(store.setAsideDataFromBefore2_0(NOW)).toEqual({ movedAside: true, error: null })
+      expect(store.setAsideDataFromBefore2_0(NOW)).toEqual({ movedAside: true, keptInPlace: false, error: null })
       const after = new Map(storage.values)
       storage.writes.length = 0
 
-      expect(store.setAsideDataFromBefore2_0('2026-10-03T12:00:00.000Z')).toEqual({ movedAside: false, error: null })
+      expect(store.setAsideDataFromBefore2_0('2026-10-03T12:00:00.000Z')).toEqual({ movedAside: false, keptInPlace: false, error: null })
       expect(storage.writes).toEqual([])
       expect(storage.values).toEqual(after)
     })
@@ -172,7 +172,7 @@ describe('browser app data store', () => {
       seedV2Partitions(storage)
       const store = createBrowserAppDataStore({ storage })
 
-      expect(store.setAsideDataFromBefore2_0(NOW)).toEqual({ movedAside: false, error: null })
+      expect(store.setAsideDataFromBefore2_0(NOW)).toEqual({ movedAside: false, keptInPlace: false, error: null })
       expect(storage.writes).toEqual([])
     })
 
@@ -182,7 +182,7 @@ describe('browser app data store', () => {
       storage.values.set(`${BACKUP}:v1`, 'an earlier backup')
       const store = createBrowserAppDataStore({ storage })
 
-      expect(store.setAsideDataFromBefore2_0(NOW)).toEqual({ movedAside: true, error: null })
+      expect(store.setAsideDataFromBefore2_0(NOW)).toEqual({ movedAside: true, keptInPlace: false, error: null })
       expect(storage.values.get(`${BACKUP}:v1`)).toBe('an earlier backup')
       expect(storage.values.get(`${BACKUP}-1:v1`)).toBe(seeded.v1)
     })
@@ -194,7 +194,8 @@ describe('browser app data store', () => {
       storage.failWrites = true
       const store = createBrowserAppDataStore({ storage })
 
-      expect(store.setAsideDataFromBefore2_0(NOW)).toMatchObject({ movedAside: false, error: expect.any(Error) })
+      // The notice marker cannot be written either, so the user is told again next time.
+      expect(store.setAsideDataFromBefore2_0(NOW)).toMatchObject({ movedAside: false, keptInPlace: true, error: expect.any(Error) })
       expect(storage.values.get(V1_KEY)).toBe(seeded.v1)
       expect(storage.values.get(V2_KEYS.drafts)).toBe(draftsBefore)
       expect([...storage.values.keys()].filter((key) => key.includes('before-2.0'))).toEqual([])
@@ -208,10 +209,62 @@ describe('browser app data store', () => {
       const store = createBrowserAppDataStore({ storage })
 
       // The browser data of the released Web Edition still moves and is reported.
-      expect(store.setAsideDataFromBefore2_0(NOW)).toMatchObject({ movedAside: true, error: expect.any(Error) })
+      expect(store.setAsideDataFromBefore2_0(NOW)).toMatchObject({ movedAside: true, keptInPlace: true, error: expect.any(Error) })
       expect(storage.values.has(V1_KEY)).toBe(false)
       expect(storage.values.get(V2_KEYS.drafts)).toBe(draftsBefore)
       expect(storage.values.has(`${BACKUP}:v2:drafts`)).toBe(false)
+    })
+
+    it('says once that earlier Drafts stay in place when the browser has no room for their copy', () => {
+      const storage = memoryStorage()
+      const older = { ...makeDesign({ name: 'x'.repeat(3_000) }), version: 8 }
+      const draftsBefore = JSON.stringify({
+        version: 2,
+        drafts: [{ id: 'hedge', name: 'Hedge', updatedAt: '2026-09-20T12:00:00.000Z' }],
+        draftFiles: { hedge: older },
+      })
+      storage.values.set(V2_KEYS.drafts, draftsBefore)
+      storage.maxTotalLength = 5_000
+      const store = createBrowserAppDataStore({ storage })
+
+      expect(store.setAsideDataFromBefore2_0(NOW)).toMatchObject({ movedAside: false, keptInPlace: true, error: expect.any(Error) })
+      expect(storage.values.get(V2_KEYS.drafts)).toBe(draftsBefore)
+      expect(store.listDrafts()).toEqual([])
+
+      // Told once: the next start, still without room, says nothing.
+      expect(store.setAsideDataFromBefore2_0('2026-10-03T12:00:00.000Z')).toMatchObject({ movedAside: false, keptInPlace: false, error: expect.any(Error) })
+      expect(storage.values.get(V2_KEYS.drafts)).toBe(draftsBefore)
+
+      // Once there is room, the Drafts move aside and that is said too.
+      storage.maxTotalLength = null
+      expect(store.setAsideDataFromBefore2_0('2026-10-04T12:00:00.000Z')).toEqual({ movedAside: true, keptInPlace: false, error: null })
+      expect(JSON.parse(storage.values.get('canopi:web-app-data:before-2.0-20261004T120000Z:v2:drafts')!).draftFiles).toEqual({ hedge: older })
+      expect([...storage.values.keys()].sort()).toEqual([
+        'canopi:web-app-data:before-2.0-20261004T120000Z:v2:drafts',
+        V2_KEYS.drafts,
+      ])
+    })
+
+    it('says once that the 1.x document stays in place when the browser has no room for its copy', () => {
+      const storage = memoryStorage()
+      const v1 = JSON.stringify({ settings: { locale: 'fr' }, padding: 'x'.repeat(3_000) })
+      storage.values.set(V1_KEY, v1)
+      storage.maxTotalLength = 5_000
+      const store = createBrowserAppDataStore({ storage })
+
+      expect(store.setAsideDataFromBefore2_0(NOW)).toMatchObject({ movedAside: false, keptInPlace: true, error: expect.any(Error) })
+      expect(storage.values.get(V1_KEY)).toBe(v1)
+      expect(store.setAsideDataFromBefore2_0('2026-10-03T12:00:00.000Z')).toMatchObject({ movedAside: false, keptInPlace: false })
+      expect(storage.values.get(V1_KEY)).toBe(v1)
+    })
+
+    it('does not claim earlier data stays in place when browser storage cannot be read', () => {
+      const storage = memoryStorage()
+      storage.forbiddenReadKeys.add(V1_KEY)
+      storage.forbiddenReadKeys.add(V2_KEYS.drafts)
+      const store = createBrowserAppDataStore({ storage })
+
+      expect(store.setAsideDataFromBefore2_0(NOW)).toMatchObject({ movedAside: false, keptInPlace: false, error: expect.any(Error) })
     })
   })
 

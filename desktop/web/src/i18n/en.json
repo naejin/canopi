@@ -113,6 +113,8 @@
     "plantDbCorrupt": "The plant catalog's database file is damaged, so plant search and details are unavailable. Your Designs are safe. Reinstall Canopi to restore it.",
     "localDataMovedAsideTitle": "Earlier data set aside",
     "localDataMovedAside": "Canopi 2.0 can’t read data saved by earlier versions, so it set that data aside unchanged and started fresh.",
+    "localDataKeptInPlaceTitle": "Earlier data kept in place",
+    "localDataKeptInPlace": "Canopi 2.0 can’t read data saved by earlier versions, and this browser had no room to set it aside, so it stays unchanged and hidden. Delete Drafts you no longer need, then reload.",
     "dismiss": "Dismiss"
   },
   "canvas": {
