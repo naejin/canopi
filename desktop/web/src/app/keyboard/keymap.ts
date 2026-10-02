@@ -15,7 +15,7 @@ import type { CanvasKeyCommand } from '../../canvas/runtime/runtime'
 import { chordsOfShortcut, type KeyboardEventLike, type KeyChord } from './key-chord'
 
 export type KeyScope =
-  | 'global'          // every focus class except modal; in text only with worksInTextFields (Ctrl+K, Ctrl+S, F1, F6)
+  | 'global'          // every focus class except modal; in text only with worksInTextFields (every shell chord, Ctrl+K)
   | 'command'         // anywhere except text fields and dialogs: tool letters, Delete, [ ], N, Ctrl+Z…
   | 'view-arrows'     // like 'command', but not inside an arrow-owning widget
   | 'canvas-focus'    // focus on the map host (not text or a control inside it) or <body>: arrows, Enter, Backspace, F2, Menu
@@ -32,7 +32,8 @@ export interface KeymapRow {
   /** The single-key shortcut switch: 'follows-switch' rows stop when it is off; a canvas key row that follows it still runs
    *  its port command, without its fallback, while the map host has focus (a held stamp's `[` `]`, spec §3.6). */
   readonly singleKey: 'follows-switch' | 'always-on' | 'n/a'
-  readonly worksInTextFields?: boolean        // 'global' rows only: Ctrl+K, Ctrl+S, F1, Ctrl+F
+  /** Also runs while a text field has focus: every shell row but a single key (F2 too), and Ctrl+K. */
+  readonly worksInTextFields?: boolean
   readonly worksInModal?: boolean             // Desktop's help.commandPalette only: its sink closes the open palette
   /** A canvas row whose port command() returns false runs this instead (F2 → file.rename; Backspace → delete). */
   readonly fallback?: ShellCommandId | CanvasCommandId
@@ -80,19 +81,13 @@ export const CANVAS_KEYMAP_ROWS: readonly KeymapRow[] = [
   })),
 ]
 
-/** Shell rows that also work while a text field has focus (spec §3.6). */
-const SHELL_ROWS_IN_TEXT_FIELDS: ReadonlySet<ShellCommandId> = new Set([
-  'file.save',
-  'file.downloadCanopi',
-  'help.shortcuts',
-  'edit.findPlants',
-])
 /** F2 asks the map first (edit the selected note), so its shell row waits for the command step. */
 const SHELL_COMMAND_SCOPE_ROWS: ReadonlySet<ShellCommandId> = new Set(['file.rename'])
 
 /**
  * One edition's shell rows from its own catalogue (capability-filtered; Web omits the shortcuts a browser keeps). Each
- * edition composes [...shellKeymapRows(…), ...CANVAS_KEYMAP_ROWS].
+ * edition composes [...shellKeymapRows(…), ...CANVAS_KEYMAP_ROWS]. Shell shortcuts work everywhere but a modal, text
+ * fields included (a single key there types, so it would not).
  */
 export function shellKeymapRows(
   catalog: readonly ShellCommandCatalogEntry[],
@@ -101,12 +96,13 @@ export function shellKeymapRows(
   return catalog.flatMap((command): KeymapRow[] => {
     const shortcut = command.shortcut
     if (!shortcut || options.omit?.has(shortcut)) return []
+    const singleKey = isCharacterKeyShortcut(shortcut)
     return [{
       command: command.id,
       chords: chordsOfShortcut(shortcut),
       scope: SHELL_COMMAND_SCOPE_ROWS.has(command.id) ? 'command' : 'global',
-      singleKey: isCharacterKeyShortcut(shortcut) ? 'follows-switch' : 'n/a',
-      ...(SHELL_ROWS_IN_TEXT_FIELDS.has(command.id) ? { worksInTextFields: true } : {}),
+      singleKey: singleKey ? 'follows-switch' : 'n/a',
+      ...(singleKey ? {} : { worksInTextFields: true }),
       ...(command.id === 'help.commandPalette' ? { worksInModal: true } : {}),
     }]
   })

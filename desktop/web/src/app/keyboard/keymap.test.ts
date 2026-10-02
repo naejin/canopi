@@ -90,6 +90,49 @@ describe('keymap', () => {
     expect(run).toHaveBeenCalledTimes(3)
   })
 
+  it('shell shortcuts run from text fields and controls too; canvas rows stay out of text fields', () => {
+    const ran: string[] = []
+    router = installKeyRouter({
+      target: window,
+      keymap: DESKTOP_KEYMAP,
+      commands: { run: (command) => { ran.push(command); return true } },
+      canvas: () => null,
+      singleKeys: signal(true),
+      focus: { cycleRegion: () => false },
+      isModalOpen: () => false,
+      platform: TEST_KEY_PLATFORM,
+      document,
+    })
+    const search = document.createElement('input')
+    const slider = Object.assign(document.createElement('input'), { type: 'range' })
+    const notes = document.createElement('textarea')
+    document.body.append(search, slider, notes)
+    const press = (target: HTMLElement, init: KeyboardEventInit) => {
+      target.focus()
+      const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })
+      target.dispatchEvent(event)
+      return event.defaultPrevented
+    }
+
+    expect(press(search, { key: 'P', ctrlKey: true, shiftKey: true })).toBe(true)
+    expect(press(slider, { key: '3', code: 'Digit3', ctrlKey: true })).toBe(true)
+    expect(press(search, { key: 'o', ctrlKey: true })).toBe(true)
+    expect(press(notes, { key: 'n', ctrlKey: true })).toBe(true)
+    expect(press(search, { key: ',', ctrlKey: true })).toBe(true)
+    expect(press(search, { key: 'F2' })).toBe(true)
+    expect(press(search, { key: 's', ctrlKey: true })).toBe(true)
+    expect(ran).toEqual(['help.commandPalette', 'nav.plantDb', 'file.open', 'file.new', 'app.settings', 'file.rename', 'file.save'])
+
+    // A text field keeps its letters, its undo and its arrows.
+    ran.length = 0
+    expect([
+      press(search, { key: 'v' }),
+      press(notes, { key: 'z', ctrlKey: true }),
+      press(search, { key: 'ArrowLeft' }),
+    ]).toEqual([false, false, false])
+    expect(ran).toEqual([])
+  })
+
   it('each platform\'s keymap has one row per chord', () => {
     for (const keymap of [DESKTOP_KEYMAP, webKeymap()]) {
       const seen = new Map<string, string>()
@@ -146,7 +189,7 @@ describe('keymap', () => {
     expect(canvasCommandFor(keyLike('Escape'))).toBeNull()
   })
 
-  it('composes an edition\'s shell rows from its catalogue, F2 after the map and the text-field rows marked', () => {
+  it('composes an edition\'s shell rows from its catalogue, F2 after the map, every row working in text fields', () => {
     const execute = () => undefined
     const catalog = composeShellCommandCatalog({
       saveDesignAs: { execute },
@@ -166,7 +209,7 @@ describe('keymap', () => {
     expect(command(keyLike('s', { ctrlKey: true, metaKey: true }))).toEqual([])
     expect(command(keyLike('3'))).toEqual([])
     expect(rows.find((row) => row.command === 'file.rename')?.scope).toBe('command')
-    expect(rows.filter((row) => row.worksInTextFields).map((row) => row.command)).toEqual(['file.save', 'help.shortcuts'])
+    expect(rows.every((row) => row.worksInTextFields)).toBe(true)
     expect(rows.every((row) => !row.worksInModal)).toBe(true)
   })
 })

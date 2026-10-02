@@ -145,13 +145,17 @@ function keyDownBubble(deps: KeyRouterDeps, event: KeyboardEventLike): void {
     if (row) dispatch(deps, port, event, row, true)
     return
   }
-  // Step 6: global rows, in a text field only those that work there.
-  const global = rows.find((row) => row.scope === 'global' && (at.focus !== 'text' || row.worksInTextFields))
+  // Step 6: in a text field only the rows that work there (the shell's, F2 included); elsewhere the global rows.
+  if (at.focus === 'text') {
+    const row = rows.find((candidate) => candidate.worksInTextFields)
+    if (row) dispatch(deps, port, event, row, true)
+    return
+  }
+  const global = rows.find((row) => row.scope === 'global')
   if (global) {
     dispatch(deps, port, event, global, true)
     return
   }
-  if (at.focus === 'text') return
   // Step 7: the pushed scopes, the latest first.
   for (const scope of pushedKeyScopes()) {
     if (!scope.handle(event, chord)) continue
