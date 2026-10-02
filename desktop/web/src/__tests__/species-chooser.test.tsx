@@ -16,6 +16,7 @@ import { SceneStore } from '../canvas/runtime/scene/store'
 import { setCanvasRuntimeSurfaces } from '../canvas/session'
 import {
   IDLE_CANVAS_TOOL_GUIDANCE,
+  getCanvasTool,
   setCanvasTool,
   setCanvasToolGuidance,
 } from '../canvas/session-state'
@@ -302,6 +303,25 @@ describe('Place plants species chooser', () => {
 
     await act(() => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })) })
     expect(options()).toHaveLength(0)
+    expect(readPlantStampSource()?.canonical_name).toBe('Ficus carica')
+    expect(document.activeElement).toBe(map)
+  })
+
+  it('closes with Esc from a species option, keeping the tool and its species', async () => {
+    await act(() => {
+      selectPlantStampSource({ canonical_name: 'Ficus carica', common_name: 'Fig', stratum: null, width_max_m: 4 })
+    })
+    const change = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Change species')!
+    await act(() => change.click())
+    const option = options()[0]!
+    option.focus()
+
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    await act(() => { option.dispatchEvent(escape) })
+
+    expect(escape.defaultPrevented).toBe(true)
+    expect(options()).toHaveLength(0)
+    expect(getCanvasTool()).toBe('plant-stamp')
     expect(readPlantStampSource()?.canonical_name).toBe('Ficus carica')
     expect(document.activeElement).toBe(map)
   })
