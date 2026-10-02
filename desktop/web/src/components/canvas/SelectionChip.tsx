@@ -24,7 +24,7 @@ const SELECT_SAME_SPECIES = canvasCommandDefinitions.find((definition) =>
 export function SelectionChip() {
   const summary = useMapSelectionSummary()
   const queries = currentCanvasQuerySurface.value
-  const overview = queries?.viewport.value.mode === 'overview'
+  const overview = queries?.view.mode.value === 'overview'
   if (!summary || overview) return null
   const { head, headEnglishFallback, details } = describeMapSelection(summary, locale.value)
   const [only] = summary.species

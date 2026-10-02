@@ -5,7 +5,6 @@ import { phoneLayout } from '../../app/shell/phone-layout'
 import {
   COMMON_MAP_SCALES,
   formatMapScale,
-  groundMetersPerCssPixel,
   mapScaleDenominator,
   roundScaleDenominator,
   zoomFactorForScale,
@@ -36,15 +35,17 @@ export function ZoomControls({ viewActions }: { readonly viewActions: readonly C
   const phone = phoneLayout.value !== null
   useMapOccluder(group, 'bottom', !phone)
   useUnderRail(group, 'panel')
-  const frame = currentCanvasQuerySurface.value?.viewport.value
+  const view = currentCanvasQuerySurface.value?.view
   const command = (id: string) => viewActions.find((action) => action.id === id)
   const zoomIn = command('zoom-in')
   const zoomOut = command('zoom-out')
   const fit = command('fit-to-design')
-  const atMinimum = frame ? frame.viewport.scale <= frame.scaleBounds.minimum : false
-  const atMaximum = frame ? frame.viewport.scale >= frame.scaleBounds.maximum : false
-  const denominator = frame ? mapScaleDenominator(frame) : null
-  const bar = frame ? getScaleBarDisplay(1 / groundMetersPerCssPixel(frame)) : null
+  const zoomLimit = view?.zoomLimit.value ?? null
+  const atMinimum = zoomLimit === 'min'
+  const atMaximum = zoomLimit === 'max'
+  const groundMetresPerPixel = view?.groundMetresPerPixel.value
+  const denominator = groundMetresPerPixel === undefined ? null : mapScaleDenominator(groundMetresPerPixel)
+  const bar = groundMetresPerPixel === undefined ? null : getScaleBarDisplay(1 / groundMetresPerPixel)
 
   // The attribution pill is placed against this group's measured width.
   usePublishedWidth(group, '--zoom-group-width')

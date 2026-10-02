@@ -7,21 +7,6 @@ import {
   roundScaleDenominator,
   zoomFactorForScale,
 } from '../canvas/map-scale'
-import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
-
-function frame(scale: number, groundMetersPerCssPixel: number | null = null): CameraViewportSnapshot {
-  return {
-    viewport: { x: 0, y: 0, scale },
-    screenSize: { width: 800, height: 600 },
-    devicePixelRatio: 1,
-    referenceScale: 20,
-    scaleBounds: { minimum: 0.00001, maximum: 2000 },
-    overviewScaleThreshold: 0.1,
-    mode: scale < 0.1 ? 'overview' : 'site',
-    groundMetersPerCssPixel,
-    revision: 1,
-  }
-}
 
 describe('scale bar metrics', () => {
   it('picks a round 1/2/5 ground distance whose bar fits the zoom group', () => {
@@ -35,12 +20,16 @@ describe('scale bar metrics', () => {
 
 describe('map scale ratio', () => {
   it('reads 1:190 at 20 CSS px per metre, the Design default', () => {
-    expect(mapScaleDenominator(frame(20))).toBeCloseTo(189, 0)
-    expect(formatMapScale(mapScaleDenominator(frame(20)), 'en')).toBe('1:190')
+    expect(mapScaleDenominator(1 / 20)).toBeCloseTo(189, 0)
+    expect(formatMapScale(mapScaleDenominator(1 / 20), 'en')).toBe('1:190')
   })
 
   it('uses the map ground resolution when a map is attached', () => {
-    expect(formatMapScale(mapScaleDenominator(frame(0.001, 13.2)), 'en')).toBe('1:50,000')
+    expect(formatMapScale(mapScaleDenominator(13.2), 'en')).toBe('1:50,000')
+    // A ground resolution that is not a positive number reads as one metre per pixel, never 1:0 or 1:NaN.
+    for (const unusable of [0, -5, Number.NaN]) {
+      expect(mapScaleDenominator(unusable)).toBeCloseTo(mapScaleDenominator(1), 6)
+    }
   })
 
   it('rounds to two significant figures and formats digits through Intl', () => {

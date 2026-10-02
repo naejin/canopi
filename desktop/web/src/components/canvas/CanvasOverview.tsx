@@ -5,22 +5,16 @@ import { visibleDesignName } from '../shared/DesignNameField'
 import { ControlIcon } from '../shared/ControlIcon'
 import styles from './CanvasOverview.module.css'
 
-const MARKER_EDGE_MARGIN_PX = 24
-
 /**
  * Overview (below 0.1 px/m): a top-centre chip explains that plants are
  * hidden and offers the one Return to Design action; the Design shows as a
- * named pin at its origin.
+ * named pin at its origin, where the view publishes it (none near an edge).
  */
 export function CanvasOverview() {
-  const frame = currentCanvasQuerySurface.value?.viewport.value
-  if (!frame || frame.mode !== 'overview') return null
+  const view = currentCanvasQuerySurface.value?.view
+  if (!view || view.mode.value !== 'overview') return null
 
-  const marker = { x: frame.viewport.x, y: frame.viewport.y }
-  const markerVisible = marker.x >= MARKER_EDGE_MARGIN_PX
-    && marker.x <= frame.screenSize.width - MARKER_EDGE_MARGIN_PX
-    && marker.y >= MARKER_EDGE_MARGIN_PX
-    && marker.y <= frame.screenSize.height - MARKER_EDGE_MARGIN_PX
+  const marker = view.designPin.value
   const name = visibleDesignName(designName.value)
 
   return (
@@ -35,7 +29,7 @@ export function CanvasOverview() {
           {t('canvas.overview.returnToDesign')}
         </button>
       </div>
-      {markerVisible && (
+      {marker && (
         <div
           className={styles.pin}
           style={{ left: `${marker.x}px`, top: `${marker.y}px` }}

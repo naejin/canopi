@@ -1,9 +1,10 @@
 import { createPortal } from 'preact/compat'
 import { SurfaceHeader } from '../shared/SurfaceHeader'
+import type { ReadonlySignal } from '@preact/signals'
 import type { RefObject } from 'preact'
 import { useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
-import type { CanvasInspectionHandle } from '../../canvas/inspection'
+import type { CanvasInspectionHandle, InspectionSourceQuad } from '../../canvas/inspection'
 import type { CanvasDocumentSurface, CanvasQuerySurface } from '../../canvas/runtime/runtime'
 import { currentCanvasDocumentSurface, currentCanvasQuerySurface } from '../../canvas/session'
 import { t } from '../../i18n'
@@ -107,14 +108,8 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
   }, [documents, queries])
   const state = handle.value?.state.value
   const expandLabel = t(expanded ? 'canvas.inspection.compact' : 'canvas.inspection.expand')
-  const viewport = queries.viewport.value.viewport
   return <>
-    {state && canvasRef.current && createPortal(<svg className={styles.source} aria-hidden="true" data-inspection-source>
-      <rect x={viewport.x + (state.point.x - state.frame.width / state.scale / 2) * viewport.scale}
-        y={viewport.y + (state.point.y - state.frame.height / state.scale / 2) * viewport.scale}
-        width={state.frame.width / state.scale * viewport.scale}
-        height={state.frame.height / state.scale * viewport.scale} />
-    </svg>, canvasRef.current)}
+    {handle.value && canvasRef.current && <SourceOutline quad={handle.value.sourceQuad} host={canvasRef.current} />}
     <section ref={panel} id={id} className={styles.panel} data-expanded={expanded} aria-label={t('canvas.inspection.title')}
     onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose() } }}>
     <SurfaceHeader title={t('canvas.inspection.title')} closeLabel={t('canvas.inspection.close')} onClose={onClose}
@@ -175,4 +170,16 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
     {state?.plants.length === 0 && <p>{t('canvas.inspection.empty')}</p>}
     <p>{t('canvas.inspection.hint')}</p>
   </section></>
+}
+
+/**
+ * Where the lens samples, outlined on the main map. Its own component: the quad follows every main-map frame, and only this
+ * outline re-renders for it. The four corners are drawn as published, so a turned view needs no change here.
+ */
+function SourceOutline({ quad, host }: { quad: ReadonlySignal<InspectionSourceQuad | null>; host: HTMLElement }) {
+  const corners = quad.value
+  if (!corners) return null
+  return createPortal(<svg className={styles.source} aria-hidden="true" data-inspection-source>
+    <polygon points={corners.map((corner) => `${corner.x},${corner.y}`).join(' ')} />
+  </svg>, host)
 }

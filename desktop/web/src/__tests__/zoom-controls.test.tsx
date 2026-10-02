@@ -5,29 +5,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '../app/settings/state'
 import { workspaceCanvasCommandProjection } from '../app/workspace-commands/canvas-actions'
 import { setCurrentCanvasSession } from '../canvas/session'
-import { CameraController, type CameraViewportSnapshot } from '../canvas/runtime/camera'
+import type { ViewReadSurface } from '../canvas/runtime/view/read-surface'
+import { createViewReadSurface } from '../canvas/runtime/view/frame-source'
+import { createSessionPlane } from '../canvas/session-plane'
 import { ZoomControls } from '../components/canvas/ZoomControls'
 import { phoneLayout } from '../app/shell/phone-layout'
 import { registerMapArea, visibleMapFrame } from '../app/shell/visible-map-area'
-import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import { createTestCanvasQuerySurface, createTestViewReadSurface } from './support/canvas-query-surface'
 import {
   createTestCanvasCommandSurface,
   createTestCanvasRuntimeSurfaces,
 } from './support/canvas-runtime-surfaces'
+import { createTestView } from './support/test-view'
 
-function frame(overrides: Partial<CameraViewportSnapshot> = {}): CameraViewportSnapshot {
-  return {
-    viewport: { x: 0, y: 0, scale: 20 },
-    screenSize: { width: 800, height: 600 },
-    devicePixelRatio: 1,
-    referenceScale: 20,
-    scaleBounds: { minimum: 0.00001, maximum: 2000 },
-    overviewScaleThreshold: 0.1,
-    mode: 'site',
-    groundMetersPerCssPixel: null,
-    revision: 1,
-    ...overrides,
-  }
+/** The view at the Design default, 20 CSS px per metre, unless the test overrides its signals. */
+function view(overrides: Partial<ViewReadSurface> = {}): ViewReadSurface {
+  return { ...createTestViewReadSurface(), groundMetresPerPixel: signal(1 / 20), ...overrides }
 }
 
 describe('ZoomControls', () => {
@@ -48,8 +41,7 @@ describe('ZoomControls', () => {
   })
 
   it('stands as a column of zoom in, zoom out and the ratio on a phone, covering no edge of the map', async () => {
-    const viewport = signal(frame())
-    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries: { ...createTestCanvasQuerySurface(), viewport } }))
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries: { ...createTestCanvasQuerySurface(), view: view() } }))
     const area = document.createElement('div')
     document.body.appendChild(area)
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
@@ -84,30 +76,29 @@ describe('ZoomControls', () => {
   const button = (label: string) => container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!
 
   it('shows the map scale as a ratio and a scale bar, the same whatever the window size', async () => {
-    const camera = new CameraController()
-    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
-      queries: { ...createTestCanvasQuerySurface(), viewport: camera.snapshot },
-    }))
+    const plane = createSessionPlane({ lon: 0, lat: 0 })
     for (const screen of [{ width: 1000, height: 800 }, { width: 600, height: 400 }]) {
-      await act(async () => {
-        camera.initialize(screen)
-        camera.setViewport({ x: 0, y: 0, scale: 20 })
-      })
+      const camera = createTestView({ plane, screen, viewport: { x: 0, y: 0, scale: 20 } })
+      setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+        queries: { ...createTestCanvasQuerySurface(), view: createViewReadSurface(camera.frames, () => plane) },
+      }))
       await mount()
       expect(ratio().textContent).toBe('1:190')
       expect(ratio().getAttribute('aria-label')).toBe('Map scale 1:190. Choose a scale')
       expect(container.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe('Scale bar: 5 m')
       await act(async () => {
-        camera.resize({ width: 1200, height: 900 })
+        camera.host.current().setScreen({ width: 1200, height: 900, devicePixelRatio: 1 })
         camera.setViewport({ x: 0, y: 0, scale: 10 })
       })
       expect(ratio().textContent).toBe('1:380')
+      camera.dispose()
     }
   })
 
   it('formats the ratio and distance for the interface language', async () => {
-    const viewport = signal(frame({ viewport: { x: 0, y: 0, scale: 0.0025 }, groundMetersPerCssPixel: 400 }))
-    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries: { ...createTestCanvasQuerySurface(), viewport } }))
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: { ...createTestCanvasQuerySurface(), view: view({ groundMetresPerPixel: signal(400) }) },
+    }))
     locale.value = 'de'
     await mount()
     expect(ratio().textContent).toBe('1:1.500.000')
@@ -116,9 +107,8 @@ describe('ZoomControls', () => {
 
   it('offers common scales as a menu and zooms about the centre to the chosen one', async () => {
     const zoomBy = vi.fn()
-    const viewport = signal(frame())
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
-      queries: { ...createTestCanvasQuerySurface(), viewport },
+      queries: { ...createTestCanvasQuerySurface(), view: view() },
       commands: createTestCanvasCommandSurface({ viewport: { zoomBy } }),
     }))
     await mount()
@@ -142,7 +132,7 @@ describe('ZoomControls', () => {
     const zoomOut = vi.fn()
     const zoomToFit = vi.fn()
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
-      queries: { ...createTestCanvasQuerySurface(), viewport: signal(frame()) },
+      queries: { ...createTestCanvasQuerySurface(), view: view() },
       commands: createTestCanvasCommandSurface({ viewport: { zoomIn, zoomOut, zoomToFit } }),
     }))
     await mount()
@@ -159,14 +149,11 @@ describe('ZoomControls', () => {
 
   it('shows the world scale in overview and disables exhausted navigation', async () => {
     const zoomOut = vi.fn()
-    const viewport = signal(frame({
-      viewport: { x: 100, y: 50, scale: 0.00002 },
-      scaleBounds: { minimum: 0.00002, maximum: 2000 },
-      mode: 'overview',
-      groundMetersPerCssPixel: 50_000,
-    }))
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
-      queries: { ...createTestCanvasQuerySurface(), viewport },
+      queries: {
+        ...createTestCanvasQuerySurface(),
+        view: view({ mode: signal('overview'), groundMetresPerPixel: signal(50_000), zoomLimit: signal('min') }),
+      },
       commands: createTestCanvasCommandSurface({ viewport: { zoomOut } }),
     }))
     await mount()
