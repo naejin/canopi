@@ -1849,8 +1849,7 @@ const P2_PROJECTION_POLICY = {
 } satisfies ArchitecturePolicy
 
 /**
- * Canvas v2 policies (docs/plans/canvas-v2-plan.md section 5). Each name starts with its P-id; the counting guard's
- * replacement map (desktop/web/scripts/canvas-v2-test-replacements.json) refers to these exact strings.
+ * Canvas v2 policies (docs/plans/canvas-v2-plan.md section 5). Each name starts with its P-id.
  */
 const CANVAS_V2_POLICIES = [
   {

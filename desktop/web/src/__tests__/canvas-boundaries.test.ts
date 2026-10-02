@@ -4,7 +4,7 @@
 // such as which element a listener is added to or which event type it names. Each policy walks every non-test
 // .ts/.tsx file under src/, blanks comments, applies its regex to the files of its scope and compares the matches per
 // file with its named allowlist, so a coupling reintroduced in a new file, or a new match in a listed one, fails. Each
-// `it` title of a real-tree check is the policy's exact name, which the counting guard's map refers to.
+// `it` title of a real-tree check is the policy's exact name.
 
 import { readdirSync, readFileSync } from 'node:fs'
 import ts from 'typescript'
