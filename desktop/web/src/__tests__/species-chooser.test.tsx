@@ -335,4 +335,19 @@ describe('Place plants species chooser', () => {
     expect(document.activeElement).toBe(map)
     expect(options().length).toBeGreaterThan(0)
   })
+
+  it('leaves an Esc that is part of an IME composition to the IME', async () => {
+    const input = container.querySelector<HTMLInputElement>('input[type="search"]')!
+    input.focus()
+    const composing = new KeyboardEvent('keydown', { key: 'Escape', isComposing: true, bubbles: true, cancelable: true })
+    await act(() => { input.dispatchEvent(composing) })
+    // WebKit sends the key that ends a composition with keyCode 229.
+    const committing = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    Object.defineProperty(committing, 'keyCode', { value: 229 })
+    await act(() => { input.dispatchEvent(committing) })
+
+    expect(composing.defaultPrevented).toBe(false)
+    expect(committing.defaultPrevented).toBe(false)
+    expect(document.activeElement).toBe(input)
+  })
 })

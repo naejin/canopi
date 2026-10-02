@@ -452,6 +452,17 @@ describe('Tool card', () => {
         window.removeEventListener('keydown', onWindowKeyDown)
       }
 
+      // Enter and Esc that end an IME composition are the IME's (keyCode 229 is WebKit's commit).
+      const commits = spacing.commit.mock.calls.length
+      const composing = new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true, cancelable: true })
+      const committing = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+      Object.defineProperty(committing, 'keyCode', { value: 229 })
+      await act(() => { input.dispatchEvent(composing) })
+      await act(() => { input.dispatchEvent(committing) })
+      expect([composing.defaultPrevented, committing.defaultPrevented]).toEqual([false, false])
+      expect(spacing.commit).toHaveBeenCalledTimes(commits)
+      expect(spacing.cancel).toHaveBeenCalledOnce()
+
       // Leaving the field keeps a valid spacing without moving focus.
       const typed = input.value
       await act(() => { input.blur() })

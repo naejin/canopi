@@ -235,7 +235,8 @@ function SpacingField({ row }: { readonly row: CanvasPlantRowGuidance }) {
         onInput={(event) => field?.input(event.currentTarget.value)}
         onKeyDown={(event) => {
           if (event.key !== 'Enter' && event.key !== 'Escape') return
-          if (event.isComposing) return
+          // Enter and Esc inside an IME composition are the IME's (WebKit sends the key that ends one with keyCode 229).
+          if (event.isComposing || event.keyCode === 229) return
           event.preventDefault()
           event.stopPropagation()
           if (event.key === 'Enter') field?.commit(event.currentTarget.value)

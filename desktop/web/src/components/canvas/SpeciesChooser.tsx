@@ -85,6 +85,8 @@ export function SpeciesChooser({ autoFocus, focusRequest, onChosen, onEscape }: 
   /** Esc anywhere in the chooser closes it, as in the stamp chooser; in the search field it first clears the query. */
   function handleKeyDown(event: JSX.TargetedKeyboardEvent<HTMLDivElement>): void {
     if (event.key !== 'Escape') return
+    // An Esc inside an IME composition is the IME's (WebKit sends the key that ends one with keyCode 229).
+    if (event.isComposing || event.keyCode === 229) return
     event.preventDefault()
     event.stopPropagation()
     if (query && event.target === input.current) setQuery('')
