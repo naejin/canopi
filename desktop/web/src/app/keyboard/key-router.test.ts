@@ -89,10 +89,11 @@ describe('key router', () => {
       // The held keys go on a blur, as on a visibility change.
       ['blur', false],
     ])
-    // The held keys go when the page hides; a press records whether it landed on the map.
+    // The held keys go when the page hides; a press or a focus move records whether it landed on the map.
     expect(documentAdd.mock.calls.map(([type, , options]) => [type, capture(options)])).toEqual([
       ['visibilitychange', false],
       ['pointerdown', true],
+      ['focusin', true],
     ])
     handle.dispose()
     handle.dispose()
@@ -158,6 +159,35 @@ describe('key router', () => {
     expect(fake.port.escape).toHaveBeenCalledExactlyOnceWith('selection')
     press({ key: ' ', code: 'Space' }, document.body)
     expect(fake.port.keyState.mock.lastCall?.[0].onCanvas).toBe(true)
+  })
+
+  it('focus leaving the map by keyboard takes <body> off the map, and focus entering it puts <body> back', () => {
+    install()
+    const dock = document.createElement('section')
+    const control = document.createElement('button')
+    dock.append(control)
+    document.body.append(dock)
+    fake.state.layers = ['selection']
+    const arrow = () => press({ key: 'ArrowDown' }, document.body).defaultPrevented
+    // A press on the map, then F6 or Tab to a dock control that unmounts: focus falls to <body>.
+    host.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    host.focus()
+    control.focus()
+    control.remove()
+    expect(document.activeElement).toBe(document.body)
+    expect(arrow()).toBe(false)
+    expect(press({ key: 'Escape' }, document.body).defaultPrevented).toBe(false)
+    expect(fake.port.command).not.toHaveBeenCalled()
+    expect(fake.port.escape).not.toHaveBeenCalled()
+
+    // F6 back to the map, then its focused control unmounts: <body> is the map's again, with no press.
+    const unlock = document.createElement('button')
+    host.append(unlock)
+    unlock.focus()
+    unlock.remove()
+    expect(document.activeElement).toBe(document.body)
+    expect(arrow()).toBe(true)
+    expect(fake.port.command).toHaveBeenCalledExactlyOnceWith({ kind: 'arrow', dir: 'down', large: false })
   })
 
   it('runs canvas-focus rows on the map and <body> after a press on the map, never from a control', () => {

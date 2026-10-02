@@ -10,8 +10,9 @@
 // runs, by focus class, the modal rows, the global rows, the pushed scopes, the Esc chain and the keymap's canvas-focus,
 // view-arrows and command rows, each chord's one row per scope, through the canvas port or the edition's CommandSink.
 // The router registers the canvas port's Esc layers for as long as it is installed, and records at document capture
-// whether the last pointer press landed in the map host: with nothing focused, only then are the keys the map's
-// (app/keyboard/target-class.ts). Installed once per edition:
+// whether the last pointer press or focus move landed in the map host: with nothing focused, only then are the keys the
+// map's (app/keyboard/target-class.ts). The focus move counts so a dock control that F6 or Tab reached and that then
+// unmounts leaves <body> off the map. Installed once per edition:
 // Desktop's platform/desktop.ts passes installKeyRouter to commands/registry.ts installDesktopKeyRouter; Web's
 // main.web.tsx calls web/browser-shell-commands.ts installWebKeyRouter.
 
@@ -38,7 +39,7 @@ export interface KeyRouterDeps {
   readonly focus: KeyRouterFocus                  // app/keyboard/focus-owner.ts focusOwner
   readonly isModalOpen: () => boolean              // modalLayerOpen, saveProblem, savedViewDialogOpen
   readonly platform: InputPlatform                 // the Mac chord rule; detectPlatform runs in the platforms
-  readonly document: Pick<Document, 'addEventListener' | 'removeEventListener'>   // visibilitychange, pointerdown
+  readonly document: Pick<Document, 'addEventListener' | 'removeEventListener'>   // visibilitychange, pointerdown, focusin
 }
 
 export interface KeyRouterHandle { dispose(): void }
@@ -47,10 +48,10 @@ export interface KeyRouterHandle { dispose(): void }
 const KEYMAP_SCOPES: readonly Exclude<KeyScope, 'global'>[] = ['canvas-focus', 'view-arrows', 'command']
 
 export function installKeyRouter(deps: KeyRouterDeps): KeyRouterHandle {
-  /** The last pointer press in the document landed in the map host; none yet is a press elsewhere. */
-  let pressedOnMap = false
+  /** The last pointer press or focus move in the document landed in the map host; none yet is one elsewhere. */
+  let lastOnMap = false
   const at = (port: CanvasKeyboardPort | null, event: KeyboardEventLike): KeyTarget =>
-    classifyKeyTarget(event.target, port?.host ?? null, deps.isModalOpen(), pressedOnMap)
+    classifyKeyTarget(event.target, port?.host ?? null, deps.isModalOpen(), lastOnMap)
   /** The keys down now, by code: what a lost keyup would leave held in the port. */
   const held = new Map<string, string>()
   const letGo = (timeStamp: number): void => {
@@ -75,9 +76,9 @@ export function installKeyRouter(deps: KeyRouterDeps): KeyRouterHandle {
     if (event.key === 'Meta') letGo(event.timeStamp)
   }
   const onLeave = (event: Event): void => letGo(event.timeStamp)
-  const onPress = (event: Event): void => {
+  const onPressOrFocus = (event: Event): void => {
     const host = deps.canvas()?.host
-    pressedOnMap = !!host && event.target instanceof Node && host.contains(event.target)
+    lastOnMap = !!host && event.target instanceof Node && host.contains(event.target)
   }
   const disposeEscapeLayers = registerCanvasEscapeLayers(deps.canvas)
   deps.target.addEventListener('keydown', onKeyDownCapture as EventListener, true)
@@ -85,7 +86,8 @@ export function installKeyRouter(deps: KeyRouterDeps): KeyRouterHandle {
   deps.target.addEventListener('keyup', onKeyUpCapture as EventListener, true)
   deps.target.addEventListener('blur', onLeave)
   deps.document.addEventListener('visibilitychange', onLeave)
-  deps.document.addEventListener('pointerdown', onPress, true)
+  deps.document.addEventListener('pointerdown', onPressOrFocus, true)
+  deps.document.addEventListener('focusin', onPressOrFocus, true)
   let disposed = false
   return {
     dispose() {
@@ -97,12 +99,13 @@ export function installKeyRouter(deps: KeyRouterDeps): KeyRouterHandle {
       deps.target.removeEventListener('keyup', onKeyUpCapture as EventListener, true)
       deps.target.removeEventListener('blur', onLeave)
       deps.document.removeEventListener('visibilitychange', onLeave)
-      deps.document.removeEventListener('pointerdown', onPress, true)
+      deps.document.removeEventListener('pointerdown', onPressOrFocus, true)
+      deps.document.removeEventListener('focusin', onPressOrFocus, true)
     },
   }
 }
 
-/** Classifies a key's target for the canvas port's host, with the last press. */
+/** Classifies a key's target for the canvas port's host, with the last press or focus move. */
 type Where = (port: CanvasKeyboardPort | null, event: KeyboardEventLike) => KeyTarget
 
 function keyDownCapture(deps: KeyRouterDeps, where: Where, event: KeyboardEventLike): void {

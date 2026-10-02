@@ -2,7 +2,8 @@
 //
 // Owns where a key press comes from (spec §1.6, step 2): the focus class the key router's scopes read, and whether the
 // target is a control, which keeps its own keys. With nothing focused (<body>) the key is the map's only when the last
-// pointer press landed in the map host: a click on a dock panel's text also leaves focus on <body>.
+// pointer press or focus move landed in the map host: a click on a dock panel's text also leaves focus on <body>, and so
+// does a dock control that unmounts while focused.
 
 import { isEditableTarget } from '../../canvas/runtime/input/editable-target'
 
@@ -52,12 +53,12 @@ export interface KeyTarget {
   readonly unfocused: boolean
 }
 
-/** `pressedOnMap`: the last pointer press in the document landed inside the map host. */
+/** `lastOnMap`: the last pointer press or focus move in the document landed inside the map host. */
 export function classifyKeyTarget(
   target: EventTarget | null,
   host: HTMLElement | null,
   modal: boolean,
-  pressedOnMap: boolean,
+  lastOnMap: boolean,
 ): KeyTarget {
   const element = elementOf(target)
   // jsdom leaves isContentEditable undefined on plain elements.
@@ -66,7 +67,7 @@ export function classifyKeyTarget(
   const unfocused = !element || element === document.body || element === document.documentElement
   if (modal) return { focus: 'modal', control, text, unfocused: false }
   if (text) return { focus: 'text', control, text, unfocused }
-  if (unfocused) return { focus: host && pressedOnMap ? 'map' : 'other', control, text, unfocused }
+  if (unfocused) return { focus: host && lastOnMap ? 'map' : 'other', control, text, unfocused }
   if (host && host.contains(element) && !control) return { focus: 'map', control, text, unfocused }
   return { focus: 'other', control, text, unfocused }
 }
