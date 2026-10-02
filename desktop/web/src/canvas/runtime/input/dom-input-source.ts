@@ -27,9 +27,11 @@ import { DEFAULT_THRESHOLDS } from './thresholds'
 
 /** The note editor: D1's text-entry host, and today's inline annotation editor until it moves there. */
 const TEXT_ENTRY_SELECTOR = '[data-canvas-text-entry], [data-annotation-inline-editor]'
-/** The canvas's own controls and fields inside the map: the inspection lens's skip set, the chrome and the Unlock affordance. */
+/** The canvas's own controls and fields inside the map: the inspection lens's skip set, the chrome, the Unlock affordance and
+ *  MapLibre's controls in the host (the attribution: a press there opens it or follows its link, and never starts a band). */
 const OWNED_CHROME_SELECTOR = [
   '[data-canvas-chrome]',
+  '.maplibregl-ctrl',
   'button',
   'input',
   'select',

@@ -312,6 +312,47 @@ describe('createDomInputSource', () => {
     dispose()
   })
 
+  it('a press on the attribution is not a canvas press', () => {
+    // MapLibre's attribution control sits inside the map host (the zoom group and compass sit beside it).
+    host.insertAdjacentHTML('beforeend', [
+      '<div class="maplibregl-control-container"><div class="maplibregl-ctrl-bottom-right">',
+      '<details class="maplibregl-ctrl maplibregl-ctrl-attrib maplibregl-compact" open>',
+      '<summary class="maplibregl-ctrl-attrib-button" title="Toggle attribution"></summary>',
+      '<div class="maplibregl-ctrl-attrib-inner"><a href="https://maplibre.org/">MapLibre</a> <span>© OpenStreetMap</span></div>',
+      '</details></div></div>',
+    ].join(''))
+    const attribution = host.querySelector('details')!
+    let state = initialRecogniserState()
+    const gestures: string[] = []
+    const source = createDomInputSource(deps())
+    const dispose = attachRecording(source, (input) => {
+      const result = recognise(state, input, RECOGNISER_CONFIG)
+      state = result.state
+      gestures.push(...result.gestures.map((gesture) => gesture.kind))
+      source.apply(result.effects)
+    })
+
+    const presses = [
+      attribution.querySelector('summary')!,
+      attribution.querySelector('a')!,
+      attribution.querySelector('span')!,
+      attribution.querySelector('.maplibregl-ctrl-attrib-inner')!,
+    ].map((target) => {
+      const press = events.pointerDown({ x: 380, y: 290 }, { target })
+      events.pointerMove({ x: 300, y: 200 }, { target, buttons: 1 })
+      events.pointerUp({ x: 300, y: 200 }, { target })
+      return press
+    })
+
+    expect(received.filter((input) => input.kind === 'down').map((input) => input.kind === 'down' && input.target))
+      .toEqual(Array(4).fill({ kind: 'owned-chrome' }))
+    // No band starts, and the press keeps its default (the summary opens and the link follows).
+    expect(gestures.filter((kind) => kind !== 'hover' && kind !== 'hover-end')).toEqual([])
+    expect(presses.map((press) => press.defaultPrevented)).toEqual([false, false, false, false])
+    expect(events.pointerCapture.setCalls).not.toHaveBeenCalled()
+    dispose()
+  })
+
   it('leaves text fields, menus and dialogs their own contextmenu and wheel', () => {
     const field = document.createElement('input')
     const dialog = document.createElement('div')
