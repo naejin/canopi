@@ -1971,6 +1971,21 @@ const CANVAS_V2_POLICIES = [
     names: ['window', 'document', 'Date', 'performance', 'setTimeout', 'navigator', 'PointerEvent', 'WheelEvent'],
     allowedFrom: ['src/canvas/runtime/input/dom-input-source.ts', ...TEST_SOURCE_PATTERNS],
   },
+  {
+    // World content moves by the world-root matrix, never per-point projection (world-layers.test.ts "a pan
+    // re-tessellates no zone" is the behavioural half). Upright billboards, the billboard drafts and label admission
+    // project anchors; overlays live in chrome/, outside the rule.
+    kind: 'confine-symbols',
+    name: 'P12 the renderer learns the camera one way',
+    from: ['src/canvas/runtime/renderers/**'],
+    names: ['worldToScreen', 'projectAnchors', 'worldQuadToScreen'],
+    allowedFrom: [
+      'src/canvas/runtime/renderers/billboard-layer.ts',
+      'src/canvas/runtime/renderers/draft-layer.ts',
+      'src/canvas/runtime/renderers/label-admission.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+  },
 ] satisfies readonly ArchitecturePolicy[]
 
 /**
@@ -2494,6 +2509,7 @@ const P6_CAPTURE = '[P6 only the DOM input source captures the pointer]'
 const P6_LISTENERS = '[P6 only the DOM input source adds canvas listeners]'
 const P6_MAPLIBRE = '[P6 MapLibre modules add listeners only to abort signals]'
 const P7 = '[P7 the input core reaches no browser global or DOM event]'
+const P12 = '[P12 the renderer learns the camera one way]'
 const P11 = '[Retired frontend seams stay deleted]'
 const TEST_SOURCES = TEST_SOURCE_PATTERNS.join(', ')
 
@@ -2869,6 +2885,37 @@ describe('canvas v2 policies, end of 0B', () => {
       confined.map(
         (name) =>
           `${P7} src/canvas/runtime/input/recognise.ts contains confined symbol ${name}; allowed sources: src/canvas/runtime/input/dom-input-source.ts, ${TEST_SOURCES}`,
+      ),
+    )
+  })
+
+  it('P12 confines per-point projection in the renderers to the billboards, the billboard drafts and label admission', () => {
+    // One world-layer module reaching every name of plan §5 P12: dropping any name from the rule drops its line here.
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/renderers/world-layers.ts', [
+        'export function paint(view: RendererView, quad: WorldQuad, out: Float64Array) {',
+        '  view.projectAnchors(new Float64Array(2), out, 1)',
+        '  return [view.worldToScreen({ x: 0, y: 0 }), view.worldQuadToScreen(quad)]',
+        '}',
+      ]),
+      plantedSource('src/canvas/runtime/renderers/billboard-layer.ts', [
+        'export function place(view: RendererView, out: Float64Array) { view.projectAnchors(out, out, 1); view.worldToScreen({ x: 0, y: 0 }) }',
+      ]),
+      plantedSource('src/canvas/runtime/renderers/draft-layer.ts', ['export function draft(at: RendererView, out: Float64Array) { at.projectAnchors(out, out, 1) }']),
+      plantedSource('src/canvas/runtime/renderers/label-admission.ts', ['export function admit(view: RendererView) { return view.worldToScreen({ x: 0, y: 0 }) }']),
+      plantedSource('src/canvas/runtime/renderers/world-layers.test.ts', ['view.worldToScreen({ x: 0, y: 0 })']),
+      plantedSource('src/canvas/runtime/chrome/handle-layer.ts', ['export function place(view: RendererView) { return view.worldToScreen({ x: 0, y: 0 }) }']),
+    ])
+    const allowed = [
+      'src/canvas/runtime/renderers/billboard-layer.ts',
+      'src/canvas/runtime/renderers/draft-layer.ts',
+      'src/canvas/runtime/renderers/label-admission.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ].join(', ')
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P12'))).toEqual(
+      ['worldToScreen', 'projectAnchors', 'worldQuadToScreen'].map(
+        (name) => `${P12} src/canvas/runtime/renderers/world-layers.ts contains confined symbol ${name}; allowed sources: ${allowed}`,
       ),
     )
   })
