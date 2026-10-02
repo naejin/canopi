@@ -166,7 +166,8 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
       const bearing = driver().bearingTarget()
       const focused = fitTemporaryBounds(fitFrame(bearing), bounds, options, bearing)
       if (!focused) return false
-      if (!bookmark) bookmark = placementNow()
+      // The latest focus wins: a return lands on the view this focus left.
+      bookmark = placementNow()
       place(focused)
       return true
     },

@@ -62,18 +62,20 @@ describe('LiDAR workspace camera navigation', () => {
     expect(lidarBoundsToLocalWorld([2.34, 48.85, 2.37, 48.87], null)).toBeNull()
   })
 
-  it('focuses and returns only the live Canvas viewport while retaining the first bookmark', () => {
+  it('focuses and returns only the live Canvas viewport; the latest fit\'s bookmark wins', () => {
     const view = createTestView({ screen: { width: 800, height: 600 }, viewport: { x: 30, y: 40, scale: 2 } })
     const before = planarCameraOf(view.view())
     setCurrentCanvasSession(surfacesFor(view, plane))
 
     expect(viewLidarCoverage([2.34, 48.85, 2.37, 48.87])).toBe(true)
-    expect(planarCameraOf(view.view())).not.toEqual(before)
-    const afterFirstFocus = view.frames.viewFrame.value.revision
+    const afterFirstFocus = planarCameraOf(view.view())
+    expect(afterFirstFocus).not.toEqual(before)
+    const firstFocusRevision = view.frames.viewFrame.value.revision
     expect(viewLidarCoverage([2.345, 48.852, 2.35, 48.858])).toBe(true)
-    expect(view.frames.viewFrame.value.revision).toBeGreaterThan(afterFirstFocus)
+    expect(view.frames.viewFrame.value.revision).toBeGreaterThan(firstFocusRevision)
+    // Return to Design lands on the view the latest fit left: here the first fit's coverage.
     expect(viewDesignLocation()).toBe(true)
-    expect(planarCameraOf(view.view())).toEqual(before)
+    expect(planarCameraOf(view.view())).toEqual(afterFirstFocus)
     expect(viewDesignLocation()).toBe(false)
     const scaleAtMapZoom18 = mapZoomToStageScale(18, plane.origin.lat)
     expect(scaleAtMapZoom18).toBeGreaterThan(0.1)

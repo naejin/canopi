@@ -247,14 +247,17 @@ describe('view navigation', () => {
       { minX: 0, minY: 0, maxX: 100, maxY: 50 },
       { paddingCssPx: 48, maximumScale: 5 },
     )).toBe(true)
-    expect(placement(view)).toEqual({ x: 48, y: 74, scale: 3.04, bearingDeg: 0 })
+    const afterFirstFocus = placement(view)
+    expect(afterFirstFocus).toEqual({ x: 48, y: 74, scale: 3.04, bearingDeg: 0 })
+    expect(afterFirstFocus).not.toEqual(before)
 
+    // The latest focus keeps its own bookmark: the view it was taken from, here the first focus's.
     expect(view.navigation.focusTemporaryBounds(
       { minX: 300, minY: 100, maxX: 350, maxY: 150 },
       { paddingCssPx: 48, maximumScale: 5 },
     )).toBe(true)
     expect(view.navigation.returnFromTemporaryFocus()).toBe(true)
-    expect(placement(view)).toEqual(before)
+    expect(placement(view)).toEqual(afterFirstFocus)
     const returnedRevision = frameOf(view).revision
     expect(view.navigation.returnFromTemporaryFocus()).toBe(false)
     expect(frameOf(view).revision).toBe(returnedRevision)
