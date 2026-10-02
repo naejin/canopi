@@ -95,11 +95,7 @@ export class SceneRuntimePresentationController {
   ): PlantPresentationContext {
     return {
       plants,
-      viewport: {
-        x: 0,
-        y: 0,
-        scale: viewportScale,
-      },
+      pixelsPerMetre: viewportScale,
       speciesCache: this._speciesCache.getCache(),
       localizedCommonNames: this.getLocalizedCommonNames(),
     }

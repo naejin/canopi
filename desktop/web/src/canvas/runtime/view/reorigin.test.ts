@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { createTestView } from '../../../__tests__/support/test-view'
 import { createSessionPlane, type SessionPlane } from '../../session-plane'
-import { createWorkspaceCameraPolicy } from '../../workspace-camera-policy'
 import type { ViewFrame, ViewTransform } from './types'
 import { planarCameraOf } from './view-transform'
 
 const SCREEN_POINTS = [{ x: 0, y: 0 }, { x: 400, y: 0 }, { x: 400, y: 300 }, { x: 0, y: 300 }, { x: 200, y: 150 }, { x: 37.5, y: 211 }]
 
 function groundUnder(view: ViewTransform, plane: SessionPlane) {
-  return SCREEN_POINTS.map((point) => plane.toGeo(view.screenToWorld(point)!))
+  return SCREEN_POINTS.map((point) => plane.toGeo(view.screenToWorld(point)))
 }
 
 describe('re-origin', () => {
@@ -42,11 +41,15 @@ describe('re-origin', () => {
       view.dispose()
     }
 
-    // In plane terms, never through lon/lat: at bearing 0, today's reprojection bit for bit (today's CameraController's
-    // reprojectViewport(first.transformTo(next)) from the same viewport, recorded at 52cbff10).
+    // The camera keeps its ground through lon/lat (D7): at bearing 0 the placement is today's reprojection within 1e-6 px (today's
+    // CameraController's reprojectViewport(first.transformTo(next)) from the same viewport, recorded at 52cbff10).
     const view = createTestView({ plane: first, viewport: { x: -19_850.25, y: 5_100.5, scale: 1.25 } })
     view.host.current().planeChanged(next)
-    expect(planarCameraOf(view.view())).toEqual({ x: 5149.750000000808, y: -1149.4999999983747, scale: 1.2511237201432013, bearingDeg: 0 })
+    const placement = planarCameraOf(view.view())
+    expect(placement.x).toBeCloseTo(5149.750000000808, 6)
+    expect(placement.y).toBeCloseTo(-1149.4999999983747, 6)
+    expect(placement.scale).toBeCloseTo(1.2511237201432013, 9)
+    expect(placement.bearingDeg).toBe(0)
     view.dispose()
   })
 
@@ -61,10 +64,9 @@ describe('re-origin', () => {
       { paddingCssPx: 24 },
     )).toBe(true)
 
-    // The settled frame re-origins at the new centre, and the policy follows the plane's latitude.
-    const next = createSessionPlane(first.toGeo(view.view().screenToWorld({ x: 200, y: 150 })!))
+    // The settled frame re-origins at the new centre.
+    const next = createSessionPlane(first.toGeo(view.view().screenToWorld({ x: 200, y: 150 })))
     view.host.current().planeChanged(next)
-    view.host.replacePolicy(createWorkspaceCameraPolicy(next.origin.lat))
 
     expect(view.navigation.returnFromTemporaryFocus()).toBe(true)
     const returned = view.view().camera

@@ -1,22 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { getCanvasColor } from '../canvas/theme-refresh'
-import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
+import type { ViewFrame } from '../canvas/runtime/view/types'
+import { testViewFrame } from './support/test-view'
 import { SceneChromeOverlay } from '../canvas/runtime/scene-chrome'
 import { getCanvasInteractionStrokeVisual, resolveZoneVisual } from '../canvas/runtime/scene-visuals'
 
-function cameraSnapshot(): CameraViewportSnapshot {
-  return {
-    viewport: { x: 0, y: 0, scale: 8 },
-    screenSize: { width: 320, height: 240 },
-    devicePixelRatio: 1,
-    referenceScale: 8,
-    scaleBounds: { minimum: 0.00001, maximum: 2000 },
-    overviewScaleThreshold: 0.1,
-    mode: 'site',
-    groundMetersPerCssPixel: null,
-    revision: 1,
-  }
+function cameraFrame(): ViewFrame {
+  return testViewFrame({ screen: { width: 320, height: 240 }, viewport: { x: 0, y: 0, scale: 8 } })
 }
 
 describe('overlay stroke casing', () => {
@@ -59,7 +50,7 @@ describe('overlay stroke casing', () => {
     const overlay = new SceneChromeOverlay(container, vi.fn())
     gridCanvas = container.querySelector<HTMLCanvasElement>('[data-scene-chrome-part="grid"]')
     overlay.update({
-      camera: cameraSnapshot(),
+      frame: cameraFrame(),
       chromeVisible: true,
       rulersVisible: false,
       gridVisible: false,

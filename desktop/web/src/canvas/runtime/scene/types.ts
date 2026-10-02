@@ -98,12 +98,6 @@ export interface ScenePersistedState {
   guides: SceneGuide[]
 }
 
-export interface SceneViewportState {
-  x: number
-  y: number
-  scale: number
-}
-
 export interface SceneSessionState {
   speciesFocus: SpeciesFocus
   selectedTargets: SceneDesignObjectSelection

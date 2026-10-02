@@ -1,5 +1,5 @@
-import { effect, signal } from '@preact/signals'
-import { describe, expect, it } from 'vitest'
+import { signal } from '@preact/signals'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestView, type TestView } from '../../../__tests__/support/test-view'
 import { mapZoomToStageScale } from '../../projection'
 import { createWorkspaceCameraPolicy, singleWorldEffectiveMinimumZoom } from '../../workspace-camera-policy'
@@ -13,6 +13,8 @@ import type { PlanarCamera, SceneBoundsOptions, ViewFrame, WorldPoint } from './
 import { planarCameraOf } from './view-transform'
 
 const EQUATOR_MAX_SCALE = mapZoomToStageScale(27, 0)
+/** A 300 ms turn lands on the first animation frame (16 ms apart under fake timers) after its duration. */
+const TURN_MS = 320
 /** The single-world floor of a 1000 × 800 screen at bearing 0 (spec §1.1b): the named rewrite of camera-controller.test.ts:96, :212. */
 const WIDE_FLOOR_SCALE = mapZoomToStageScale(singleWorldEffectiveMinimumZoom(1000, 800), 0)
 
@@ -77,7 +79,7 @@ function boundsOf(scene: ScenePersistedState, emptySceneScale?: number): SceneBo
         points.push({ x: box.x, y: box.y }, { x: box.x + box.width, y: box.y + box.height })
       }
       for (const plant of scene.plants) {
-        corners(getPlantWorldBounds(plant, { viewport: { x: 0, y: 0, scale: pixelsPerMetre }, speciesCache: new Map(), plants: scene.plants }))
+        corners(getPlantWorldBounds(plant, { pixelsPerMetre, speciesCache: new Map(), plants: scene.plants }))
       }
       for (const zone of scene.zones) {
         const box = getZoneWorldBounds(zone)
@@ -103,41 +105,30 @@ function placement(view: TestView): PlanarCamera {
   return planarCameraOf(view.view())
 }
 
+/** The headless camera is geographic: a placement reads back within 1e-6 px (D7). */
+function expectPlacement(actual: PlanarCamera, expected: PlanarCamera): void {
+  expect(actual.x).toBeCloseTo(expected.x, 6)
+  expect(actual.y).toBeCloseTo(expected.y, 6)
+  expect(actual.scale).toBeCloseTo(expected.scale, 9)
+  expect(actual.bearingDeg).toBeCloseTo(expected.bearingDeg, 9)
+}
+
 describe('view navigation', () => {
-  // Moved from __tests__/camera-controller.test.ts (CameraController > …), on the navigation and its driver host.
-
-  it('publishes initialization state and revision atomically once', () => {
-    // A view before its screen is known, holding today's initial 1000 × 800 placement.
-    const view = createTestView({ screen: { width: 0, height: 0 }, viewport: { x: 100, y: 0, scale: 8 } })
-    const observed: ViewFrame[] = []
-    const dispose = effect(() => {
-      observed.push(view.frames.viewFrame.value)
-    })
-    observed.length = 0
-
-    view.host.current().setScreen({ width: 1000, height: 800, devicePixelRatio: 1 })
-    dispose()
-
-    expect(observed).toHaveLength(1)
-    const [frame] = observed
-    expect(planarCameraOf(frame!.view)).toEqual({ x: 100, y: 0, scale: 8, bearingDeg: 0 })
-    expect(frame!.view.screen).toEqual({ width: 1000, height: 800, devicePixelRatio: 1 })
-    expect(frame!.scaleBounds).toEqual({ min: WIDE_FLOOR_SCALE, max: EQUATOR_MAX_SCALE })
-    expect(frame!.mode).toBe('site')
-    expect(frame!.attached).toBe(false)
-    expect(frame!.revision).toBe(1)
-    view.dispose()
+  afterEach(() => {
+    vi.useRealTimers()
   })
+
+  // Moved from __tests__/camera-controller.test.ts (CameraController > …), on the navigation and its driver host.
 
   it('zooms around the provided screen point', () => {
     const view = createTestView({ screen: { width: 1000, height: 800 }, viewport: { x: 100, y: 0, scale: 8 } })
 
     const pointer = { x: 250, y: 200 }
-    const before = view.view().screenToWorld(pointer)!
+    const before = view.view().screenToWorld(pointer)
     view.navigation.zoomAroundPx(pointer, 2)
-    const after = view.view().screenToWorld(pointer)!
+    const after = view.view().screenToWorld(pointer)
 
-    expect(view.view().pixelsPerMetre).toBe(16)
+    expect(view.view().pixelsPerMetre).toBeCloseTo(16, 9)
     expect(after.x).toBeCloseTo(before.x)
     expect(after.y).toBeCloseTo(before.y)
     view.dispose()
@@ -168,7 +159,8 @@ describe('view navigation', () => {
   it('derives overview below 0.1 while keeping the threshold editable', () => {
     const view = createTestView({ screen: { width: 1000, height: 800 } })
 
-    view.setViewport({ x: 0, y: 0, scale: 0.1 })
+    // A camera holds a zoom, so 0.1 px/m reads back within 1e-15 of it: just above it is site.
+    view.setViewport({ x: 0, y: 0, scale: 0.1 + 1e-12 })
     expect(frameOf(view).mode).toBe('site')
     view.setViewport({ x: 0, y: 0, scale: 0.099 })
     expect(frameOf(view).mode).toBe('overview')
@@ -180,7 +172,7 @@ describe('view navigation', () => {
 
     view.navigation.returnToDesign()
 
-    expect(placement(view)).toEqual({ x: 200, y: 150, scale: 3, bearingDeg: 0 })
+    expectPlacement(placement(view), { x: 200, y: 150, scale: 3, bearingDeg: 0 })
     expect(frameOf(view).mode).toBe('site')
     view.dispose()
   })
@@ -194,10 +186,10 @@ describe('view navigation', () => {
 
     view.navigation.returnToDesign()
 
-    expect(placement(view)).toEqual(expected)
+    expectPlacement(placement(view), expected)
     expect(frameOf(view).mode).toBe('site')
-    // Today's CameraController (zoomToFit from its 1000 × 800 initial frame) landed on the same placement, bit for bit.
-    expect(expected).toEqual({ x: 260, y: 80, scale: 16, bearingDeg: 0 })
+    // Today's CameraController (zoomToFit from its 1000 × 800 initial frame) landed on the same placement.
+    expectPlacement(expected, { x: 260, y: 80, scale: 16, bearingDeg: 0 })
     expectedView.dispose()
     view.dispose()
   })
@@ -216,7 +208,7 @@ describe('view navigation', () => {
     expect(view.view().pixelsPerMetre).toBeLessThan(0.1)
     expect(frameOf(view).mode).toBe('overview')
     view.navigation.returnToDesign()
-    expect(placement(view)).toEqual({ x: 500, y: 400, scale: 8, bearingDeg: 0 })
+    expectPlacement(placement(view), { x: 500, y: 400, scale: 8, bearingDeg: 0 })
     expect(frameOf(view).mode).toBe('site')
     view.dispose()
   })
@@ -241,17 +233,50 @@ describe('view navigation', () => {
       { minX: 0, minY: 0, maxX: 100, maxY: 50 },
       { paddingCssPx: 48, maximumScale: 5 },
     )).toBe(true)
-    expect(placement(view)).toEqual({ x: 48, y: 74, scale: 3.04, bearingDeg: 0 })
+    const afterFirstFocus = placement(view)
+    expectPlacement(afterFirstFocus, { x: 48, y: 74, scale: 3.04, bearingDeg: 0 })
+    expect(afterFirstFocus).not.toEqual(before)
 
+    // The latest focus keeps its own bookmark: the view it was taken from, here the first focus's.
     expect(view.navigation.focusTemporaryBounds(
       { minX: 300, minY: 100, maxX: 350, maxY: 150 },
       { paddingCssPx: 48, maximumScale: 5 },
     )).toBe(true)
     expect(view.navigation.returnFromTemporaryFocus()).toBe(true)
-    expect(placement(view)).toEqual(before)
+    expectPlacement(placement(view), afterFirstFocus)
     const returnedRevision = frameOf(view).revision
     expect(view.navigation.returnFromTemporaryFocus()).toBe(false)
     expect(frameOf(view).revision).toBe(returnedRevision)
+    view.dispose()
+  })
+
+  it('frameBounds frames as a temporary focus does and leaves no bookmark', () => {
+    const bounds = { minX: 0, minY: 0, maxX: 100, maxY: 50 }
+    const options = { paddingCssPx: 48, maximumScale: 5 }
+    const focused = createTestView({ viewport: { x: 10, y: 20, scale: 2 } })
+    expect(focused.navigation.focusTemporaryBounds(bounds, options)).toBe(true)
+    const framedView = createTestView({ viewport: { x: 10, y: 20, scale: 2 } })
+
+    expect(framedView.navigation.frameBounds(bounds, options)).toBe(true)
+
+    expectPlacement(placement(framedView), placement(focused))
+    expect(framedView.navigation.returnFromTemporaryFocus()).toBe(false)
+    expect(framedView.navigation.frameBounds({ minX: 1, minY: 0, maxX: 1, maxY: 10 }, options)).toBe(false)
+    focused.dispose()
+    framedView.dispose()
+  })
+
+  it('a return lands before the latest focus, whatever frameBounds did in between', () => {
+    const view = createTestView({ viewport: { x: 10, y: 20, scale: 2 } })
+    const before = placement(view)
+    expect(view.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 100, maxY: 50 }, { paddingCssPx: 48 })).toBe(true)
+
+    expect(view.navigation.frameBounds({ minX: 300, minY: 100, maxX: 350, maxY: 150 }, { paddingCssPx: 48 })).toBe(true)
+    expect(placement(view)).not.toEqual(before)
+
+    expect(view.navigation.returnFromTemporaryFocus()).toBe(true)
+    expectPlacement(placement(view), before)
+    expect(view.navigation.returnFromTemporaryFocus()).toBe(false)
     view.dispose()
   })
 
@@ -282,14 +307,14 @@ describe('view navigation', () => {
     const view = createTestView()
 
     view.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 0.001, maxY: 0.001 }, { paddingCssPx: 48 })
-    expect(placement(view)).toEqual({
+    expectPlacement(placement(view), {
       x: 200 - 0.0005 * EQUATOR_MAX_SCALE,
       y: 150 - 0.0005 * EQUATOR_MAX_SCALE,
       scale: EQUATOR_MAX_SCALE,
       bearingDeg: 0,
     })
     view.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 1, maxY: 1 }, { paddingCssPx: 48, maximumScale: 2 })
-    expect(placement(view)).toEqual({ x: 199, y: 149, scale: 2, bearingDeg: 0 })
+    expectPlacement(placement(view), { x: 199, y: 149, scale: 2, bearingDeg: 0 })
     view.dispose()
   })
 
@@ -303,21 +328,6 @@ describe('view navigation', () => {
     view.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
     view.navigation.clearTemporaryFocus()
     expect(view.navigation.returnFromTemporaryFocus()).toBe(false)
-    view.dispose()
-  })
-
-  it('clears a temporary bookmark when the generation camera policy changes', () => {
-    const view = createTestView()
-    view.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
-
-    view.host.replacePolicy(createWorkspaceCameraPolicy(45))
-
-    expect(view.navigation.returnFromTemporaryFocus()).toBe(false)
-    // A new focus after the change bookmarks the view it starts from.
-    const before = placement(view)
-    view.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
-    expect(view.navigation.returnFromTemporaryFocus()).toBe(true)
-    expect(placement(view)).toEqual(before)
     view.dispose()
   })
 
@@ -458,30 +468,32 @@ describe('view navigation', () => {
   })
 
   it('turns by key steps from the bearing a running turn ends at', () => {
+    vi.useFakeTimers()
     const view = createTestView()
 
     view.navigation.rotateBy(1)
     view.navigation.rotateBy(1)
     view.navigation.rotateBy(1)
     expect(view.host.current().bearingTarget()).toBe(45)
-    view.clock.advance(300)
+    vi.advanceTimersByTime(TURN_MS)
     expect(view.view().camera.bearingDeg).toBe(45)
 
     view.navigation.rotateBy(-1)
-    view.clock.advance(300)
+    vi.advanceTimersByTime(TURN_MS)
     expect(view.view().camera.bearingDeg).toBe(30)
     view.navigation.resetNorth()
-    view.clock.advance(300)
+    vi.advanceTimersByTime(TURN_MS)
     expect(view.view().camera.bearingDeg).toBe(0)
     view.dispose()
   })
 
   it('turns an edge level on screen by the smaller turn', () => {
+    vi.useFakeTimers()
     const view = createTestView()
 
     // An edge running south-east: level at 45° or at 225°; from north, 45° is the smaller turn.
     view.navigation.turnToEdge({ x: 0, y: 0 }, { x: 10, y: 10 })
-    view.clock.advance(300)
+    vi.advanceTimersByTime(TURN_MS)
     const turned = view.view()
     expect(turned.camera.bearingDeg).toBeCloseTo(45, 9)
     const a = turned.worldToScreen({ x: 0, y: 0 })
@@ -491,6 +503,7 @@ describe('view navigation', () => {
   })
 
   it('a rotation session steps, snaps to north on release, and cancel restores the start', () => {
+    vi.useFakeTimers()
     const view = createTestView()
     const session = view.navigation.beginRotation('centre')
 
@@ -503,7 +516,7 @@ describe('view navigation', () => {
     expect(view.host.current().bearingTarget()).toBe(15)
     session.update(-5, { step: false })
     session.end()
-    view.clock.advance(300)
+    vi.advanceTimersByTime(TURN_MS)
     expect(view.view().camera.bearingDeg).toBe(0)
     // Esc after the release does not restore the pre-release bearing.
     session.cancel()
@@ -514,7 +527,7 @@ describe('view navigation', () => {
     cancelled.update(-80, { step: false })
     expect(view.view().camera.bearingDeg).toBe(280)
     cancelled.cancel()
-    expect(placement(view)).toEqual(start)
+    expectPlacement(placement(view), start)
     view.dispose()
   })
 
@@ -542,14 +555,13 @@ describe('view navigation', () => {
     const navigation = createViewNavigation({
       driver: view.host,
       policy: () => createNavigationPolicy(createWorkspaceCameraPolicy(), signal(false)),
-      clock: view.clock.now,
       readScene: () => ({ persisted: emptyScene(), selection: [{ x: 10, y: 10 }, { x: 110, y: 60 }], bounds: {} }),
     })
 
     navigation.zoomToSelection()
 
     // 100 × 50 m inside 80 % of the screen: 8 px/m, centred.
-    expect(placement(view)).toEqual({ x: 500 - 60 * 8, y: 400 - 35 * 8, scale: 8, bearingDeg: 0 })
+    expectPlacement(placement(view), { x: 500 - 60 * 8, y: 400 - 35 * 8, scale: 8, bearingDeg: 0 })
     view.dispose()
   })
 })

@@ -2,12 +2,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { persistLastView } from '../app/canvas-map-surface/last-view'
 import { resetSettingsProjectionForTests } from '../app/settings/projection'
 import { lastView } from '../app/settings/state'
-import { CameraController, fitCameraViewport } from '../canvas/runtime/camera'
 import { createDefaultScenePersistedState, SceneStore } from '../canvas/runtime/scene'
 import { DEFAULT_NEW_DESIGN_VIEW } from '../canvas/session-plane'
 import { mapZoomToStageScale } from '../canvas/projection'
 import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
 import type { CanopiFile } from '../types/design'
+import { createTestView } from './support/test-view'
+import './support/camera-tolerance'
 
 function emptyDesign(): CanopiFile {
   return {
@@ -28,6 +29,9 @@ function emptyDesign(): CanopiFile {
     updated_at: '2026-09-25T00:00:00.000Z',
   }
 }
+
+/** The 100 m start frame the camera used to place on an 800 x 600 screen. */
+const START = { screen: { width: 800, height: 600 }, viewport: { x: 100, y: 0, scale: 6 } }
 
 afterEach(() => {
   resetSettingsProjectionForTests()
@@ -60,21 +64,20 @@ describe('new Design view', () => {
   })
 
   it('fits an empty Design to the plane origin at the requested scale', () => {
-    const camera = new CameraController()
-    camera.initialize({ width: 800, height: 600 })
-    const snapshot = camera.snapshot.peek()
+    const camera = createTestView(START)
+    const { scaleBounds } = camera.frames.viewFrame.peek()
     const scale = mapZoomToStageScale(17, 47.2184)
-    const viewport = fitCameraViewport(snapshot, createDefaultScenePersistedState(), { emptySceneScale: scale })
+    camera.navigation.zoomToFit(createDefaultScenePersistedState(), { emptySceneScale: scale })
+    const viewport = camera.viewport()
     expect(viewport.x).toBe(400)
     expect(viewport.y).toBe(300)
-    expect(viewport.scale).toBeCloseTo(Math.min(Math.max(scale, snapshot.scaleBounds.minimum), snapshot.scaleBounds.maximum), 12)
+    expect(viewport.scale).toBeCloseTo(Math.min(Math.max(scale, scaleBounds.min), scaleBounds.max), 12)
   })
 
   it('keeps the current view when an empty Design has no requested scale', () => {
-    const camera = new CameraController()
-    camera.initialize({ width: 800, height: 600 })
-    const snapshot = camera.snapshot.peek()
-    expect(fitCameraViewport(snapshot, createDefaultScenePersistedState())).toEqual(snapshot.viewport)
+    const camera = createTestView(START)
+    camera.navigation.zoomToFit(createDefaultScenePersistedState(), {})
+    expect(camera.viewport()).toEqual(START.viewport)
   })
 
   it('remembers the settled view as the last view', () => {

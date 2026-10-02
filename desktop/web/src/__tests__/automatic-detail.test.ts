@@ -24,11 +24,11 @@ describe('Automatic Detail', () => {
   it('keeps a crowded note discoverable with a compact marker and matching pointer allowance', () => {
     const note = { kind: 'annotation' as const, id: 'note', annotationType: 'text', position: { x: 0, y: 0 },
       text: 'Planting note', fontSize: 16, rotationDeg: 0, locked: false }
-    const presentation = getAnnotationPresentation(note, { x: 0, y: 0, scale: 20 }, false, false)
+    const presentation = getAnnotationPresentation(note, 20, false, false)
     expect(presentation.frame.widthPx).toBe(4)
     expect(isPointInAnnotationPresentation(note, { x: 6 / 20, y: 0 }, 20, false, false)).toBe(true)
     expect(isPointInAnnotationPresentation(note, { x: 7 / 20, y: 0 }, 20, false, false)).toBe(false)
-    expect(getAnnotationPresentation(note, { x: 0, y: 0, scale: 20 }, true, false).textOpacity).toBe(1)
+    expect(getAnnotationPresentation(note, 20, true, false).textOpacity).toBe(1)
   })
 
   it('identifies unpinned plants when local space allows without changing their saved name choices', () => {

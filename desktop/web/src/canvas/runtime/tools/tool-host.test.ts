@@ -30,6 +30,7 @@ import type { DraftPresentation, DraftShape, ToolHandle } from './draft'
 import { measureLabelShapes, selectedZoneMeasurementLabels } from './measure-labels'
 import type { ToolReply } from './tool'
 import { createContextMenuPort, createToolScene } from './tool-host'
+import '../../../__tests__/support/camera-tolerance'
 
 vi.mock('./registry', () => ({ TOOL_REGISTRY: {} }))
 
@@ -851,6 +852,18 @@ describe('ToolHost', () => {
       expect(overview.record.pointerWorld.at(-1)).toBeNull()
     })
 
+    it('the pointer is published with its screen point, so a readout can query the map there (R1)', () => {
+      useStubTools(stubTool('plant-stamp'))
+      const h = harness({ tool: 'plant-stamp', viewport: { x: 10, y: -20, scale: 2 } })
+      const points: unknown[] = []
+      h.host.subscribePointerWorld((point) => { points.push(point) })
+
+      h.hover({ x: 50, y: 60 })
+      h.leave()
+
+      expect(points).toEqual([{ world: h.world({ x: 50, y: 60 }), screen: { x: 50, y: 60 } }, null])
+    })
+
     it('the lens is fed only over the map', () => {
       const stamp = stubTool('plant-stamp')
       useStubTools(stamp)
@@ -1558,37 +1571,6 @@ describe('ToolHost', () => {
       expect(rectangle.count('press')).toBe(2)
     })
 
-    it('a drag move with no ground under the pointer cancels the live gesture; a cancel that throws aborts the edit', () => {
-      let edit: SceneEditTransaction | null = null
-      let failing = true
-      const rectangle: StubTool = stubTool('rectangle', {
-        gesture: (g) => {
-          if (g.kind === 'press') {
-            edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
-            edit.mutate((draft) => {
-              draft.zones = [rectZone('z2', [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }, { x: 0, y: 5 }])]
-            })
-          }
-          if (g.kind === 'cancel' && failing) throw new Error('cancel failed')
-          return 'pass'
-        },
-      })
-      useStubTools(rectangle)
-      const h = harness({ tool: 'rectangle' })
-
-      h.press({ x: 10, y: 10 })
-      h.move({ x: 40, y: 40 })
-      expect(h.store.persisted.zones.map((zone) => zone.id)).toEqual(['z2'])
-      h.setNoGroundAt((at) => at.x === 70 && at.y === 70)
-      // No ground under the pointer cancels the drag (today's pitched-view case); its cancel throws.
-      expect(() => h.move({ x: 70, y: 70 })).toThrow('cancel failed')
-      expect(h.store.persisted.zones).toEqual([])
-      failing = false
-      h.setNoGroundAt(null)
-      expect(h.press({ x: 20, y: 20 })).toEqual({})
-      expect(rectangle.count('press')).toBe(2)
-    })
-
     it('a tool cancel that throws during dispose still aborts the open edit', () => {
       let edit: SceneEditTransaction | null = null
       const rectangle: StubTool = stubTool('rectangle', {
@@ -2181,7 +2163,7 @@ describe('ToolHost', () => {
       const view = createTestView()
       const port = createContextMenuPort({
         container: document.createElement('div'),
-        camera: view.legacyCamera,
+        view: view.view,
         adapter: { open: (request) => opened.push(request), close: () => {} },
         commands: {} as never,
         returnFocus: () => {},
@@ -2220,7 +2202,7 @@ describe('ToolHost', () => {
       await act(async () => render(h(CanvasContextMenu, null), app))
       const port = createContextMenuPort({
         container: document.createElement('div'),
-        camera: view.legacyCamera,
+        view: view.view,
         adapter: { open: openCanvasContextMenu, close: closeCanvasContextMenu },
         // No command runs here: each one does nothing.
         commands: new Proxy({}, { get: () => () => false }) as CanvasContextMenuCommands,

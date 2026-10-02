@@ -44,7 +44,7 @@ export interface ViewReadSurface {
   /**
    * Saved-view capture, saved-view snapshot, PDF capture, story restore point: the LIVE frame's camera (viewFrame.peek(),
    * not the settled one), its four-corner ground extent and the screen it was seen on. User-triggered captures record what
-   * is on screen now, as today's `queries.viewport` reads do (current-view.ts:49, :86, snapshot.ts:64, controller.ts:102),
+   * is on screen now, as the camera snapshot's reads did before 0E (current-view.ts:49, :86, snapshot.ts:64, controller.ts:102),
    * so a capture within 150 ms of a pan, zoom or key pan, or during a flight, never records the previous camera. The last
    * view (settings) keeps `settledCamera`, as today.
    */
@@ -59,7 +59,9 @@ export interface ViewCommandSurface {
   zoomToFit(): void                                    // Fit to Design, Home
   zoomToSelection(): void                              // Shift+2
   returnToDesign(): void                               // kept: "Back to my Design"
-  focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean          // kept: plant finder, LiDAR
+  focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean          // kept: LiDAR's Fit to data
+  /** The plant finder's Zoom to them: a temporary focus's framing that sets no bookmark (false when nothing could be framed). */
+  frameBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
   returnFromTemporaryFocus(): boolean                  // kept
   setFramingInsets(insets: ScreenInsets): void         // kept: the visible-map-area seam
   resetNorth(): void

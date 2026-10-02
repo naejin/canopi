@@ -12,8 +12,7 @@
     "name": "headless camera driver > normalizes invalid screen metrics before publishing a frame"
   },
   "src/__tests__/camera-controller.test.ts > CameraController > increments once for each effective pan, zoom, resize, and reinitialization": {
-    "file": "src/canvas/runtime/view/headless-driver.test.ts",
-    "name": "headless camera driver > increments once for each effective pan, zoom, resize, and reinitialization"
+    "retired": "revision counts: nothing observes them"
   },
   "src/__tests__/camera-controller.test.ts > CameraController > does not publish no-op viewport mutations": {
     "file": "src/canvas/runtime/view/headless-driver.test.ts",
@@ -28,8 +27,8 @@
     "name": "headless camera driver > keeps imperative camera reads out of the caller reactive graph"
   },
   "src/__tests__/camera-controller.test.ts > CameraController > publishes initialization state and revision atomically once": {
-    "file": "src/canvas/runtime/view/navigation.test.ts",
-    "name": "view navigation > publishes initialization state and revision atomically once"
+    "file": "src/maplibre/camera-driver.test.ts",
+    "name": "MapLibre camera driver > a resize publishes one frame with the new screen size and keeps the camera"
   },
   "src/__tests__/camera-controller.test.ts > CameraController > zooms around the provided screen point": {
     "file": "src/canvas/runtime/view/navigation.test.ts",
@@ -80,8 +79,8 @@
     "name": "view navigation > clears a temporary bookmark during initialization and disposal"
   },
   "src/__tests__/camera-controller.test.ts > CameraController > clears a temporary bookmark when the generation camera policy changes": {
-    "file": "src/canvas/runtime/view/navigation.test.ts",
-    "name": "view navigation > clears a temporary bookmark when the generation camera policy changes"
+    "file": "src/canvas/runtime/document-surface.test.ts",
+    "name": "Scene Canvas document surface lifecycle > clears a temporary focus after successful load or replacement but retains it when replacement is rejected"
   },
   "src/__tests__/camera-controller.test.ts > CameraController > fits to the scene bounds": {
     "file": "src/canvas/runtime/view/navigation.test.ts",
@@ -683,7 +682,7 @@
   },
   "src/__tests__/v2-shared-camera-transform.test.ts > deriveSharedMapSceneViewport > derives the existing viewport from pinned MapLibre CSS-pixel points": {
     "file": "src/canvas/runtime/view/camera-contract.test.ts",
-    "name": "camera contract > the planar and geographic builders agree at bearing 0"
+    "name": "camera contract > headless and MercatorTransform agree for pan, zoom and rotate moves"
   },
   "src/__tests__/v2-shared-camera-transform.test.ts > deriveSharedMapSceneViewport > refuses pitch and non-affine local axes": {
     "file": "src/__tests__/v2-shared-map-scene-layer.test.ts",
@@ -699,6 +698,54 @@
   },
   "src/__tests__/v2-shared-camera-transform.test.ts > deriveSharedMapSceneViewport > bounds the discarded affine residual over the qualified local extent": {
     "file": "src/canvas/runtime/view/camera-contract.test.ts",
-    "name": "camera contract > the planar and geographic builders agree at bearing 0"
+    "name": "camera contract > headless and MercatorTransform agree for pan, zoom and rotate moves"
+  },
+  "src/canvas/runtime/scene-runtime.test.ts > scene canvas runtime > publishes zoom and effective resize updates exactly once": {
+    "file": "src/canvas/runtime/scene-runtime.test.ts",
+    "name": "scene canvas runtime > publishes viewport-only camera changes through the canonical snapshot"
+  },
+  "src/app/canvas-map-surface/workspace-runtime-composition.test.ts > createWorkspaceRuntimeComposition > initializes and fits hydrated content once for shared-ready": {
+    "file": "src/canvas/runtime/scene-runtime.test.ts",
+    "name": "scene canvas runtime > the start frame (plan §1, exception 3) > init frames a Design opened before it: the first frame is the fit, with no 100 m frame between two fits"
+  },
+  "src/app/canvas-map-surface/workspace-runtime-composition.test.ts > createWorkspaceRuntimeComposition > initializes and fits hydrated content once for map-unavailable": {
+    "file": "src/app/canvas-map-surface/workspace-activation.test.ts",
+    "name": "WorkspaceActivationCoordinator > unmounts the renderer on map failure and retains the spatial camera frame"
+  },
+  "src/app/canvas-map-surface/workspace-runtime-composition.test.ts > createWorkspaceRuntimeComposition > initializes and fits the first replacement after an empty start": {
+    "file": "src/canvas/runtime/scene-runtime.test.ts",
+    "name": "scene canvas runtime > the start frame (plan §1, exception 3) > init frames a Design opened before it: the first frame is the fit, with no 100 m frame between two fits"
+  },
+  "src/app/canvas-map-surface/workspace-runtime-composition.test.ts > createWorkspaceRuntimeComposition > retries only the incomplete viewport phase after a first-ready callback fails": {
+    "file": "src/canvas/runtime/scene-runtime.test.ts",
+    "name": "scene canvas runtime > the start frame (plan §1, exception 3) > init frames a Design opened before it: the first frame is the fit, with no 100 m frame between two fits"
+  },
+  "src/app/canvas-map-surface/workspace-runtime-composition.test.ts > createWorkspaceRuntimeComposition > cancels initial readiness and retries viewport initialization on a later generation": {
+    "file": "src/canvas/runtime/scene-runtime.test.ts",
+    "name": "scene canvas runtime > the start frame (plan §1, exception 3) > init frames a Design opened before it: the first frame is the fit, with no 100 m frame between two fits"
+  },
+  "src/app/canvas-map-surface/workspace-runtime-composition.test.ts > createWorkspaceRuntimeComposition > cancels initial readiness and retries only hydrated fit on a later generation": {
+    "file": "src/canvas/runtime/scene-runtime.test.ts",
+    "name": "scene canvas runtime > the start frame (plan §1, exception 3) > init frames a Design opened before it: the first frame is the fit, with no 100 m frame between two fits"
+  },
+  "src/canvas/runtime/document-surface.test.ts > Scene Canvas document surface lifecycle > routes viewport initialization rendering through contained invalidation": {
+    "file": "src/canvas/runtime/scene-runtime.test.ts",
+    "name": "scene canvas runtime > the start frame (plan §1, exception 3) > init frames a Design opened before it: the first frame is the fit, with no 100 m frame between two fits"
+  },
+  "src/app/canvas-map-surface/workspace-generation-reconciler.test.ts > WorkspaceGenerationReconciler > routes a queued outcome callback failure once without leaking its microtask": {
+    "file": "src/canvas/runtime/scene-runtime.test.ts",
+    "name": "scene canvas runtime > the start frame (plan §1, exception 3) > init frames a Design opened before it: the first frame is the fit, with no 100 m frame between two fits"
+  },
+  "src/app/canvas-map-surface/workspace-generation-reconciler.test.ts > WorkspaceGenerationReconciler > downgrades initial readiness when its outcome callback fails": {
+    "file": "src/canvas/runtime/scene-runtime.test.ts",
+    "name": "scene canvas runtime > the start frame (plan §1, exception 3) > init frames a Design opened before it: the first frame is the fit, with no 100 m frame between two fits"
+  },
+  "src/__tests__/workspace-camera-refresh-origin.test.ts > workspace runtime composition origin effect > refreshes the camera origin whenever the runtime session plane changes, until disposal": {
+    "file": "src/canvas/runtime/scene-runtime/view-surfaces.test.ts",
+    "name": "the runtime view surfaces > follow every Scene plane change on the runtime's camera until it is destroyed"
+  },
+  "src/__tests__/lidar-camera-navigation.test.ts > LiDAR workspace camera navigation > focuses and returns only the live Canvas viewport while retaining the first bookmark": {
+    "file": "src/__tests__/lidar-camera-navigation.test.ts",
+    "name": "LiDAR workspace camera navigation > focuses and returns only the live Canvas viewport; the latest fit's bookmark wins"
   }
 }

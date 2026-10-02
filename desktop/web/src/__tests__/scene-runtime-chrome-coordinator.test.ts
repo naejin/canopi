@@ -1,21 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import './support/camera-tolerance'
 
-import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
+import type { ViewFrame } from '../canvas/runtime/view/types'
+import { testViewFrame } from './support/test-view'
 import { pressRuler } from '../canvas/runtime/chrome/rulers'
 import { SceneRuntimeChromeCoordinator } from '../canvas/runtime/scene-runtime/chrome-coordinator'
 
-function cameraSnapshot(): CameraViewportSnapshot {
-  return {
-    viewport: { x: 10, y: 20, scale: 2 },
-    screenSize: { width: 320, height: 240 },
-    devicePixelRatio: 1,
-    referenceScale: 2,
-    scaleBounds: { minimum: 0.00001, maximum: 2000 },
-    overviewScaleThreshold: 0.1,
-    mode: 'site',
-    groundMetersPerCssPixel: null,
-    revision: 1,
-  }
+function cameraFrame(): ViewFrame {
+  return testViewFrame({ screen: { width: 320, height: 240 }, viewport: { x: 10, y: 20, scale: 2 } })
 }
 
 function createContextStub() {
@@ -70,7 +62,7 @@ describe('SceneRuntimeChromeCoordinator', () => {
     coordinator.attach(firstHost, firstGuideCreate)
     coordinator.show()
     coordinator.update({
-      camera: cameraSnapshot(),
+      frame: cameraFrame(),
       rulersVisible: true,
       gridVisible: false,
       guidesVisible: true,
@@ -92,7 +84,7 @@ describe('SceneRuntimeChromeCoordinator', () => {
     expect(firstGuideCreate).not.toHaveBeenCalled()
 
     coordinator.update({
-      camera: cameraSnapshot(),
+      frame: cameraFrame(),
       rulersVisible: true,
       gridVisible: false,
       guidesVisible: true,
@@ -117,10 +109,10 @@ describe('SceneRuntimeChromeCoordinator', () => {
     const grid = () => host.querySelector<HTMLCanvasElement>('[data-scene-chrome-part="grid"]')!
     const guides = [{ id: 'guide-v', axis: 'v' as const, position: 10 }]
 
-    coordinator.update({ camera: cameraSnapshot(), rulersVisible: false, gridVisible: false, guidesVisible: false, guides })
+    coordinator.update({ frame: cameraFrame(), rulersVisible: false, gridVisible: false, guidesVisible: false, guides })
     expect(grid().style.display).toBe('none')
 
-    coordinator.update({ camera: cameraSnapshot(), rulersVisible: false, gridVisible: false, guidesVisible: true, guides })
+    coordinator.update({ frame: cameraFrame(), rulersVisible: false, gridVisible: false, guidesVisible: true, guides })
     expect(grid().style.display).toBe('block')
     coordinator.destroy()
   })

@@ -1,4 +1,4 @@
-// canvas/runtime/view/frame-source.ts  (pure; the clock and timers are injected)
+// canvas/runtime/view/frame-source.ts  (the settle runs on the window's timers)
 //
 // Owns the published view (ADR 0016): the per-frame ViewFrame signal with its synchronous phases (tools, then overlays), the settled
 // frame 150 ms after the last one, and ViewReadSurface, the coarse signals app code observes instead of frames (P10).
@@ -10,7 +10,6 @@ import type { ViewReadSurface } from './read-surface'
 import type {
   DriverFrameSource,
   FramePhase,
-  FrameSourceDeps,
   GeoBounds,
   ScreenPoint,
   ViewCamera,
@@ -42,11 +41,11 @@ export interface ViewFramePublisher extends ViewFrameSource {
 
 interface FrameListener { readonly run: (frame: ViewFrame) => void }
 
-export function createViewFrameSource(initial: ViewFrame, deps: FrameSourceDeps): ViewFramePublisher {
+export function createViewFrameSource(initial: ViewFrame): ViewFramePublisher {
   const viewFrame = signal(initial)
   const settledViewFrame = signal(initial)
   const listeners: Record<FramePhase, FrameListener[]> = { tools: [], overlays: [] }
-  let settleTimer: number | null = null
+  let settleTimer: ReturnType<typeof setTimeout> | null = null
   let dispatching = false
   let disposed = false
   const deferred: ViewFrame[] = []
@@ -78,8 +77,8 @@ export function createViewFrameSource(initial: ViewFrame, deps: FrameSourceDeps)
       dispatching = true
       try {
         for (let next: ViewFrame | undefined = frame; next && !disposed; next = deferred.shift()) {
-          if (settleTimer !== null) deps.timers.clear(settleTimer)
-          settleTimer = deps.timers.set(deps.clock() + SETTLE_MS, settle)
+          if (settleTimer !== null) clearTimeout(settleTimer)
+          settleTimer = setTimeout(settle, SETTLE_MS)
           viewFrame.value = next
           for (const phase of FRAME_PHASES) {
             for (const listener of listeners[phase]) listener.run(next)
@@ -93,7 +92,7 @@ export function createViewFrameSource(initial: ViewFrame, deps: FrameSourceDeps)
     },
     dispose() {
       disposed = true
-      if (settleTimer !== null) deps.timers.clear(settleTimer)
+      if (settleTimer !== null) clearTimeout(settleTimer)
       settleTimer = null
       deferred.length = 0
       listeners.tools = []

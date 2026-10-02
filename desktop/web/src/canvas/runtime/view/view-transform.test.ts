@@ -3,16 +3,22 @@ import { mapZoomToStageScale, worldToGeo } from '../../projection'
 import { createSessionPlane, type SessionPlane } from '../../session-plane'
 import { planarToViewCamera } from './camera-math'
 import type { PlanarCamera, ViewCamera, ViewScreen, WorldPoint } from './types'
-import { buildViewTransform, buildViewTransformFromPlane } from './view-transform'
+import { buildViewTransform, planarCameraOf } from './view-transform'
 
 const SCREEN: ViewScreen = { width: 1000, height: 800, devicePixelRatio: 1 }
 
+/** The view of a placement: its camera through the plane. */
 function fromPlane(planar: PlanarCamera, plane: SessionPlane, screen: ViewScreen = SCREEN) {
-  return buildViewTransformFromPlane({ planar, screen, plane, planeRevision: 3, revision: 7 })
+  return fromCamera(planarToViewCamera(planar, screen, plane), plane, screen)
 }
 
 function fromCamera(camera: ViewCamera, plane: SessionPlane, screen: ViewScreen = SCREEN) {
   return buildViewTransform({ camera, screen, plane, planeRevision: 3, revision: 7 })
+}
+
+function expectClose(actual: WorldPoint | null, expected: WorldPoint, digits = 6): void {
+  expect(actual!.x).toBeCloseTo(expected.x, digits)
+  expect(actual!.y).toBeCloseTo(expected.y, digits)
 }
 
 function expectNear(actual: WorldPoint, expected: WorldPoint, tolerance: number): void {
@@ -34,16 +40,18 @@ describe('view transform', () => {
       for (const { x, y, scale } of placements) {
         const view = fromPlane({ x, y, scale, bearingDeg: 0 }, plane)
 
-        // Today's CameraController arithmetic, bit for bit.
+        // Today's CameraController arithmetic, within 1e-5 px (the camera holds the centre in lon/lat: at 1500 px/m its last bits
+        // are a few micropixels).
         for (const point of worldPoints) {
-          expect(view.worldToScreen(point)).toEqual({ x: point.x * scale + x, y: point.y * scale + y })
-          expectNear(view.screenToWorld(view.worldToScreen(point))!, point, 1e-9 * Math.max(1, Math.abs(point.x), Math.abs(point.y)))
+          expectNear(view.worldToScreen(point), { x: point.x * scale + x, y: point.y * scale + y }, 1e-5)
+          expectNear(view.screenToWorld(view.worldToScreen(point)), point, 1e-9 * Math.max(1, Math.abs(point.x), Math.abs(point.y)))
         }
         for (const point of screenPoints) {
-          expect(view.screenToWorld(point)).toEqual({ x: (point.x - x) / scale, y: (point.y - y) / scale })
+          expectClose(view.screenToWorld(point), { x: (point.x - x) / scale, y: (point.y - y) / scale })
         }
-        expect(view.planar?.affine).toEqual([scale, 0, 0, scale, x, y])
-        expect(view.pixelsPerMetre).toBe(scale)
+        const affine = view.planar.affine
+        ;[scale, 0, 0, scale, x, y].forEach((value, index) => expect(Math.abs(affine[index]! - value)).toBeLessThanOrEqual(1e-5))
+        expect(view.pixelsPerMetre).toBeCloseTo(scale, 9)
         expect(view.northUp).toBe(true)
         expect(view.screenAxesInWorld()).toEqual({ right: { x: 1, y: 0 }, down: { x: 0, y: 1 } })
         expect(view.revision).toBe(7)
@@ -52,7 +60,7 @@ describe('view transform', () => {
         const geographic = fromCamera(view.camera, plane)
         for (const point of worldPoints) {
           const tolerance = 1e-9 * Math.max(1, Math.abs(point.x), Math.abs(point.y))
-          expectNear(geographic.screenToWorld(geographic.worldToScreen(point))!, point, tolerance)
+          expectNear(geographic.screenToWorld(geographic.worldToScreen(point)), point, tolerance)
         }
       }
     }
@@ -62,17 +70,16 @@ describe('view transform', () => {
     const plane = createSessionPlane({ lon: 10, lat: 60 })
     for (const bearingDeg of [0, 37]) {
       const view = fromCamera({ center: { lon: 10.001, lat: 60.0005 }, zoom: 27, bearingDeg, pitchDeg: 0 }, plane)
-      const affine = view.planar?.affine
+      const { affine } = view.planar
 
-      expect(affine).not.toBeNull()
-      expect(affine!.every(Number.isFinite)).toBe(true)
-      expect(Math.hypot(affine![0], affine![1])).toBeCloseTo(mapZoomToStageScale(27, 60), 9)
+      expect(affine.every(Number.isFinite)).toBe(true)
+      expect(Math.hypot(affine[0], affine[1])).toBeCloseTo(mapZoomToStageScale(27, 60), 9)
       expect(view.pixelsPerMetre).toBeCloseTo(mapZoomToStageScale(27, 60), 9)
-      const centre = view.screenToWorld({ x: 500, y: 400 })!
+      const centre = view.screenToWorld({ x: 500, y: 400 })
       for (const point of [centre, { x: centre.x + 0.01, y: centre.y - 0.02 }, { x: centre.x - 0.1, y: centre.y + 0.07 }]) {
-        const [a, b, c, d, tx, ty] = affine!
+        const [a, b, c, d, tx, ty] = affine
         expectNear(view.worldToScreen(point), { x: a * point.x + c * point.y + tx, y: b * point.x + d * point.y + ty }, 1e-6)
-        expectNear(view.screenToWorld(view.worldToScreen(point))!, point, 1e-9)
+        expectNear(view.screenToWorld(view.worldToScreen(point)), point, 1e-9)
       }
       expectNear(view.worldToScreen(centre), { x: 500, y: 400 }, 1e-6)
     }
@@ -82,11 +89,11 @@ describe('view transform', () => {
     const plane = createSessionPlane({ lon: 0, lat: 0 })
     const view = fromPlane({ x: 300, y: 200, scale: 4, bearingDeg: 90 }, plane)
 
-    expect(view.worldToScreen({ x: 0, y: 0 })).toEqual({ x: 300, y: 200 })
-    expect(view.worldToScreen({ x: 1, y: 0 })).toEqual({ x: 300, y: 196 })  // east is up
-    expect(view.worldToScreen({ x: 0, y: -1 })).toEqual({ x: 296, y: 200 }) // north is left
+    expectClose(view.worldToScreen({ x: 0, y: 0 }), { x: 300, y: 200 })
+    expectClose(view.worldToScreen({ x: 1, y: 0 }), { x: 300, y: 196 })  // east is up
+    expectClose(view.worldToScreen({ x: 0, y: -1 }), { x: 296, y: 200 }) // north is left
     expect(view.screenAxesInWorld()).toEqual({ right: { x: 0, y: 1 }, down: { x: -1, y: 0 } })
-    expect(view.planar?.affine).toEqual([0, -4, 4, 0, 300, 200])
+    ;[0, -4, 4, 0, 300, 200].forEach((value, index) => expect(view.planar.affine[index]).toBeCloseTo(value, 6))
     expect(view.northUp).toBe(false)
     expect(view.camera.bearingDeg).toBe(90)
     expect(fromPlane({ x: 300, y: 200, scale: 4, bearingDeg: 359.98 }, plane).northUp).toBe(true)
@@ -107,14 +114,16 @@ describe('view transform', () => {
     expect(view.camera.center.lon).toBeCloseTo(centre.lng, 10)
     expect(view.camera.center.lat).toBeCloseTo(centre.lat, 10)
     expect(view.camera.zoom).toBeCloseTo(Math.log2(mapZoomToStageScale(0, 45.52) ** -1 * 2), 12)
-    expect(view.visibleWorldQuad()).toEqual([
+    view.visibleWorldQuad().forEach((corner, index) => expectClose(corner, [
       { x: 100, y: 50 }, { x: 600, y: 50 }, { x: 600, y: 450 }, { x: 100, y: 450 },
-    ])
-    expect(view.visibleWorldQuad({ top: 20, right: 100, bottom: 0, left: 40 })).toEqual([
+    ][index]!))
+    view.visibleWorldQuad({ top: 20, right: 100, bottom: 0, left: 40 }).forEach((corner, index) => expectClose(corner, [
       { x: 120, y: 60 }, { x: 550, y: 60 }, { x: 550, y: 450 }, { x: 120, y: 450 },
-    ])
+    ][index]!))
     const quad = view.visibleWorldQuad()
-    expect(view.worldQuadToScreen(quad)).toEqual([{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 1000, y: 800 }, { x: 0, y: 800 }])
+    view.worldQuadToScreen(quad).forEach((corner, index) => expectClose(corner, [
+      { x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 1000, y: 800 }, { x: 0, y: 800 },
+    ][index]!))
   })
 
   it('reads the ground resolution at a point, not the plane scale', () => {
@@ -146,15 +155,21 @@ describe('view transform', () => {
     }
   })
 
-  it('builds the camera it publishes from the planar camera', () => {
+  it('reads back the placement of the camera it was built from', () => {
     const plane = createSessionPlane({ lon: 2.35, lat: 48.85 })
     const planar = { x: 12, y: 34, scale: 6, bearingDeg: -30 }
     const screen = { width: 640, height: 480, devicePixelRatio: 2 }
-    const view = fromPlane(planar, plane, screen)
+    const camera = planarToViewCamera(planar, screen, plane)
+    const view = fromCamera(camera, plane, screen)
 
-    expect(view.camera).toEqual(planarToViewCamera(planar, screen, plane))
+    expect(view.camera).toBe(camera)
     expect(view.camera.bearingDeg).toBe(330)
     expect(view.screen).toBe(screen)
+    const placement = planarCameraOf(view)
+    expect(placement.x).toBeCloseTo(12, 6)
+    expect(placement.y).toBeCloseTo(34, 6)
+    expect(placement.scale).toBeCloseTo(6, 9)
+    expect(placement.bearingDeg).toBe(330)
   })
 })
 

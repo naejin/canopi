@@ -1,10 +1,12 @@
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { DraftPresentation } from './tools/draft'
-import type { ViewTransform } from './view/types'
+import type { ViewFrame, ViewTransform } from './view/types'
 import { planarCameraOf } from './view/view-transform'
 import { effect } from '@preact/signals'
 import { stageScaleToMapZoom } from '../projection'
+import { DEFAULT_NEW_DESIGN_VIEW } from '../session-plane'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import '../../__tests__/support/camera-tolerance'
 
 vi.mock('../../ipc/species', async (importOriginal) => ({
   ...await importOriginal<typeof import('../../ipc/species')>(),
@@ -54,6 +56,7 @@ import { locale, plantSpacingIntervalM } from '../../app/settings/state'
 import type { CanopiFile, PanelTarget } from '../../types/design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../generated/canopi-design-format'
 import { geoAt } from '../../__tests__/support/geo-design'
+import { placeOnHost } from '../../__tests__/support/test-view'
 import { createTestRendererView } from '../../__tests__/support/scene-renderer-snapshot'
 import { speciesTarget } from '../../target'
 import {
@@ -99,7 +102,7 @@ vi.mock('./tools/registry', async (importOriginal) => {
 })
 import { t } from '../../i18n'
 import { createSceneInteractionEventHarness } from '../../__tests__/support/canvas-interaction-events'
-import { CameraController } from './camera'
+import type { CameraDriverHostController } from './view/driver-host'
 
 // Fixtures are authored in metres around the equator, where Mercator scale is
 // stationary, so re-centring the session plane on them keeps their metre
@@ -284,8 +287,24 @@ function lastRenderedViewport(renderer: RendererStub): { x: number; y: number; s
   return { x, y, scale }
 }
 
-function viewportOf(camera: CameraController): { x: number; y: number; scale: number } {
-  const { x, y, scale } = camera.viewport
+/** The runtime camera's live frame. */
+function frameOf(runtime: SceneCanvasRuntime): ViewFrame {
+  return runtime.cameraHost.frames.viewFrame.peek()
+}
+
+/** A placement on the runtime's live camera, bearing 0, through the runtime's plane. */
+function placeOn(runtime: SceneCanvasRuntime, placement: { x: number; y: number; scale: number }): void {
+  placeOnHost(runtime.cameraHost, runtime.querySurface.sessionPlane.peek()!, placement)
+}
+
+/** A pan of the runtime's live camera, as a map gesture moves it. */
+function panOn(runtime: SceneCanvasRuntime, deltaPx: { x: number; y: number }): void {
+  runtime.cameraHost.current().apply({ kind: 'pan-by', deltaPx })
+}
+
+/** The runtime camera's bearing-0 placement in today's terms. */
+function placementOf(runtime: SceneCanvasRuntime): { x: number; y: number; scale: number } {
+  const { x, y, scale } = planarCameraOf(frameOf(runtime).view)
   return { x, y, scale }
 }
 
@@ -344,7 +363,7 @@ function setInteractionViewport(
   viewport: { x: number; y: number; scale: number } = { x: 0, y: 0, scale: 1 },
 ): void {
   const offset = authoringOffset(runtime)
-  ;(runtime as any)._camera.setViewport({
+  placeOn(runtime, {
     x: viewport.x - offset.x * viewport.scale,
     y: viewport.y - offset.y * viewport.scale,
     scale: viewport.scale,
@@ -538,6 +557,120 @@ describe('scene canvas runtime', () => {
     vi.mocked(getCommonNames).mockResolvedValue({})
   })
 
+  describe('the start frame (plan §1, exception 3)', () => {
+    /**
+     * Fits the runtime's camera again; a frame that already shows the fit stays where it is. Plants and notes are sized at the
+     * scale a fit starts from, so a second fit can land a few micro-pixels from the first: 1e-3 px tells a fit from any other frame.
+     */
+    function expectShowsTheFit(runtime: SceneCanvasRuntime): void {
+      const shown = placementOf(runtime)
+      runtime.documentSurface.zoomToFit()
+      const fitted = placementOf(runtime)
+      expect(shown.x).toBeCloseTo(fitted.x, 3)
+      expect(shown.y).toBeCloseTo(fitted.y, 3)
+      expect(shown.scale).toBeCloseTo(fitted.scale, 3)
+    }
+
+    it('init frames a Design opened before it: the first frame is the fit, with no 100 m frame between two fits', async () => {
+      const runtime = new SceneCanvasRuntime()
+      runtime.documentSurface.resize(400, 300)
+      runtime.documentSurface.loadDocument(makeFile())
+      const seen: ViewFrame[] = []
+      const stop = effect(() => { seen.push(runtime.cameraHost.frames.viewFrame.value) })
+      try {
+        await initRuntimeWithStubbedRenderer(runtime)
+        stop()
+
+        // One frame during init, and it is the Design's fit: 100 m across the shorter side (3 px/m here) is never shown.
+        expect(seen).toHaveLength(2)
+        expect(seen[1]).toBe(frameOf(runtime))
+        expect(placementOf(runtime).scale).not.toBeCloseTo(3, 3)
+        expectShowsTheFit(runtime)
+      } finally {
+        stop()
+        runtime.destroy()
+      }
+    })
+
+    it('init frames a Design loaded before the screen had a size', async () => {
+      const runtime = new SceneCanvasRuntime()
+      runtime.documentSurface.loadDocument(makeFile())
+      try {
+        await initRuntimeWithStubbedRenderer(runtime)
+
+        expect(frameOf(runtime).view.screen).toMatchObject({ width: 400, height: 300 })
+        expectShowsTheFit(runtime)
+      } finally {
+        runtime.destroy()
+      }
+    })
+
+    it('init shows the new-Design overview for an empty Design', async () => {
+      const runtime = new SceneCanvasRuntime()
+      try {
+        await initRuntimeWithStubbedRenderer(runtime)
+
+        // The empty Design's fit: the plane origin at the screen centre, at the new-Design overview's scale.
+        const { view } = frameOf(runtime)
+        const origin = view.worldToScreen({ x: 0, y: 0 })
+        expect(origin.x).toBeCloseTo(200, 6)
+        expect(origin.y).toBeCloseTo(150, 6)
+        const plane = runtime.querySurface.sessionPlane.value!
+        expect(stageScaleToMapZoom(view.pixelsPerMetre, plane.origin.lat)).toBeCloseTo(DEFAULT_NEW_DESIGN_VIEW.zoom, 6)
+        expect(frameOf(runtime).mode).toBe('overview')
+      } finally {
+        runtime.destroy()
+      }
+    })
+
+    it('a Design loaded after init: the last frame before its first scene render is the load\'s fit', async () => {
+      const runtime = new SceneCanvasRuntime()
+      try {
+        const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
+        const atSceneRender: Array<{ x: number; y: number; scale: number }> = []
+        renderer.syncScene.mockImplementation(() => { atSceneRender.push(placementOf(runtime)) })
+
+        runtime.documentSurface.loadDocument(makeFile())
+        runtime.documentSurface.zoomToFit()
+        const fitted = placementOf(runtime)
+        await vi.waitFor(() => expect(atSceneRender).not.toHaveLength(0))
+
+        expect(atSceneRender[0]!.x).toBeCloseTo(fitted.x, 6)
+        expect(atSceneRender[0]!.y).toBeCloseTo(fitted.y, 6)
+        expect(atSceneRender[0]!.scale).toBeCloseTo(fitted.scale, 6)
+      } finally {
+        runtime.destroy()
+      }
+    })
+  })
+
+  it('a zoom with a selected plant keeps the rotation handle above the plant\'s top', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    try {
+      // Two plants, since one plant alone does not rotate; the top plant's footprint is sized at the live scale.
+      runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1', 'plant-2'))
+      setInteractionViewport(runtime, { x: 100, y: 120, scale: 4 })
+      runtime.commandSurface.tools.setTool('select')
+      runtime.commandSurface.sceneEdits.selectAll()
+
+      // Zoom about the screen centre, away from the plants: they move on screen, and the handle with them (INV-REN-11).
+      for (let step = 0; step < 3; step += 1) runtime.commandSurface.viewport.zoomIn()
+
+      const bounds = runtime.querySurface.getDesignObjectSelection().bounds!
+      const { view } = frameOf(runtime)
+      const top = view.worldToScreen({ x: (bounds.minX + bounds.maxX) / 2, y: bounds.minY })
+      const handle = container.querySelector<HTMLElement>('[data-canvas-handle="rotate"]')!
+      // The handle is anchored on the selection's top edge at the new scale, and its 28 px button sits wholly above it.
+      expect(handle.style.display).not.toBe('none')
+      expect(Number(handle.dataset.canvasHandleScreenX)).toBeCloseTo(top.x, 6)
+      expect(Number(handle.dataset.canvasHandleScreenY)).toBeCloseTo(top.y, 6)
+      expect(Number.parseFloat(handle.style.top) + 28).toBeLessThanOrEqual(top.y)
+    } finally {
+      runtime.destroy()
+    }
+  })
+
   it('routes locale subscriptions through the mounted interaction translation refresh', async () => {
     let language = 'en'
     let notifyLocale = (): void => {}
@@ -571,8 +704,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('marks the Design map aria-busy until a scene change is drawn, never for a camera frame', async () => {
-    const camera = new CameraController()
-    const runtime = new SceneCanvasRuntime({ camera })
+    const runtime = new SceneCanvasRuntime()
     const { container, renderer } = await initRuntimeWithStubbedRenderer(runtime)
     const busyWhenDrawn: Array<string | null> = []
     renderer.syncScene.mockImplementation(() => { busyWhenDrawn.push(container.getAttribute('aria-busy')) })
@@ -584,9 +716,9 @@ describe('scene canvas runtime', () => {
     await vi.waitFor(() => expect(container.hasAttribute('aria-busy')).toBe(false))
     expect(busyWhenDrawn, 'busy until the renderer drew the loaded Design').toEqual(['true'])
 
-    camera.panBy({ x: 12, y: -8 })
+    panOn(runtime, { x: 12, y: -8 })
     expect(container.hasAttribute('aria-busy'), 'a camera frame moves the drawing, it does not redraw it').toBe(false)
-    await vi.waitFor(() => expect(lastRenderedViewport(renderer)).toEqual(viewportOf(camera)))
+    await vi.waitFor(() => expect(lastRenderedViewport(renderer)).toEqual(placementOf(runtime)))
     expect(container.hasAttribute('aria-busy')).toBe(false)
 
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
@@ -941,12 +1073,12 @@ describe('scene canvas runtime', () => {
     expect(container.style.cursor).toBe('grab')
 
     selection.mockRestore()
-    const beforeFreshPan = runtime.querySurface.viewport.value.viewport
+    const beforeFreshPan = placementOf(runtime)
     events.pointerDown({ x: 100, y: 100 }, { pointerId: 53 })
     events.pointerMove({ x: 130, y: 120 }, { pointerId: 53 })
     events.pointerUp({ x: 130, y: 120 }, { pointerId: 53 })
 
-    expect(runtime.querySurface.viewport.value.viewport).toMatchObject({
+    expect(placementOf(runtime)).toMatchObject({
       x: beforeFreshPan.x + 30,
       y: beforeFreshPan.y + 20,
     })
@@ -1154,12 +1286,12 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
     const scene = runtime.querySurface.getSceneSnapshot()
     const plane = runtime.querySurface.sessionPlane.value!
-    const before = runtime.querySurface.viewport.value.viewport
+    const before = placementOf(runtime)
     const place = plane.toGeo({ x: 250, y: -120 })
 
     expect(runtime.commandSurface.viewport.showPlace(place, 17)).toBe(true)
 
-    const after = runtime.querySurface.viewport.value.viewport
+    const after = placementOf(runtime)
     expect(after).not.toEqual(before)
     expect(runtime.querySurface.getSceneSnapshot()).toEqual(scene)
     expect(runtime.querySurface.sessionPlane.value).toBe(plane)
@@ -1176,7 +1308,7 @@ describe('scene canvas runtime', () => {
 
     expect(runtime.commandSurface.viewport.showPlace(oslo, 17)).toBe(true)
 
-    const scale = runtime.querySurface.viewport.value.viewport.scale
+    const scale = placementOf(runtime).scale
     expect(stageScaleToMapZoom(scale, plane.origin.lat)).toBeCloseTo(17, 9)
     runtime.destroy()
   })
@@ -1184,16 +1316,13 @@ describe('scene canvas runtime', () => {
   it('asks the camera to fly to a place only for fly motion', () => {
     const runtime = new SceneCanvasRuntime()
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
-    const navigation = (runtime as unknown as {
-      _cameraNavigation: { centerOn(point: unknown, scale: number, options?: { animate?: boolean }): unknown }
-    })._cameraNavigation
-    const centerOn = vi.spyOn(navigation, 'centerOn')
+    const apply = vi.spyOn(runtime.cameraHost.current(), 'apply')
     const place = runtime.querySurface.sessionPlane.value!.toGeo({ x: 40, y: 10 })
 
     runtime.commandSurface.viewport.showPlace(place, 18, { motion: 'fly' })
     runtime.commandSurface.viewport.showPlace(place, 18)
 
-    expect(centerOn.mock.calls.map((call) => call[2])).toEqual([{ animate: true }, { animate: false }])
+    expect(apply.mock.calls.map(([move]) => move.kind === 'set' ? move.animation : move.kind)).toEqual(['fly', 'none'])
     runtime.destroy()
   })
 
@@ -1279,14 +1408,10 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1', 'plant-2'))
     runtime.commandSurface.sceneEdits.selectAll()
     runtime.commandSurface.sceneEdits.copy()
-    ;(runtime as unknown as { _camera: CameraController })._camera.setViewport({
-      x: 0,
-      y: 0,
-      scale: 0.01,
-    })
+    placeOn(runtime, { x: 0, y: 0, scale: 0.01 })
     const before = runtime.querySurface.getSceneSnapshot()
 
-    expect(runtime.querySurface.viewport.value.mode).toBe('overview')
+    expect(frameOf(runtime).mode).toBe('overview')
     expect(runtime.commandSurface.sceneEdits.canPaste()).toBe(false)
     runtime.commandSurface.sceneEdits.paste()
     runtime.commandSurface.sceneEdits.pasteAt({ x: 30, y: 40 })
@@ -1357,6 +1482,8 @@ describe('scene canvas runtime', () => {
     })
     const withoutStampsMount = await initRuntimeWithStubbedRenderer(withoutStamps)
     withoutStamps.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    // A load after init takes its own fit, as Design loads do (init showed the empty Design's overview).
+    withoutStamps.documentSurface.zoomToFit()
     withoutStamps.commandSurface.sceneEdits.selectAll()
     openContextMenuFromKeyboard(withoutStampsMount.container)
 
@@ -1373,6 +1500,8 @@ describe('scene canvas runtime', () => {
     })
     const withStampsMount = await initRuntimeWithStubbedRenderer(withStamps)
     withStamps.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    // A load after init takes its own fit, as Design loads do (init showed the empty Design's overview).
+    withStamps.documentSurface.zoomToFit()
     withStamps.commandSurface.sceneEdits.selectAll()
     openContextMenuFromKeyboard(withStampsMount.container)
 
@@ -1626,36 +1755,36 @@ describe('scene canvas runtime', () => {
   })
 
   it('publishes viewport-only camera changes through the canonical snapshot', async () => {
-    const camera = new CameraController()
-    const runtime = new SceneCanvasRuntime({ camera })
+    const runtime = new SceneCanvasRuntime()
     await initRuntimeWithStubbedRenderer(runtime)
-    expect(runtime.querySurface.viewport).toBe(camera.snapshot)
+    const before = frameOf(runtime)
 
-    const before = runtime.querySurface.viewport.value.revision
     runtime.commandSurface.viewport.zoomIn()
 
-    expect(runtime.querySurface.viewport.value.revision).toBe(before + 1)
+    const after = frameOf(runtime)
+    expect(after).not.toBe(before)
+    expect(after.view.pixelsPerMetre).toBeGreaterThan(before.view.pixelsPerMetre)
+    expect(after.view.screen).toEqual(before.view.screen)
     runtime.destroy()
   })
 
   it('renders externally published camera frames and releases the owner on destroy', async () => {
-    const camera = new CameraController()
-    const disposeCamera = vi.spyOn(camera, 'dispose')
-    const runtime = new SceneCanvasRuntime({ camera })
+    const runtime = new SceneCanvasRuntime()
+    const disposeCamera = vi.spyOn(runtime.cameraHost as CameraDriverHostController, 'dispose')
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
     renderer.setView.mockClear()
 
-    camera.panBy({ x: 12, y: -8 })
+    panOn(runtime, { x: 12, y: -8 })
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     await Promise.resolve()
 
-    expect(lastRenderedViewport(renderer)).toEqual(viewportOf(camera))
+    expect(lastRenderedViewport(renderer)).toEqual(placementOf(runtime))
 
     runtime.destroy()
     expect(disposeCamera).toHaveBeenCalledOnce()
     renderer.setView.mockClear()
 
-    camera.panBy({ x: 1, y: 1 })
+    panOn(runtime, { x: 1, y: 1 })
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
 
     expect(renderer.setView).not.toHaveBeenCalled()
@@ -1664,11 +1793,18 @@ describe('scene canvas runtime', () => {
   it('does not publish a viewport change when document hydration leaves the camera unchanged', async () => {
     const runtime = new SceneCanvasRuntime()
     await initRuntimeWithStubbedRenderer(runtime)
-    const before = runtime.querySurface.viewport.value.revision
+    // The scale bounds follow the plane's latitude: a first load moves them to the Design's, a second one finds them unchanged.
+    runtime.documentSurface.loadDocument(makeFile())
+    const before = frameOf(runtime)
 
     runtime.documentSurface.loadDocument(makeFile())
 
-    expect(runtime.querySurface.viewport.value.revision).toBe(before)
+    // The hydration's new plane may publish a frame (a viewport render, coalesced per animation frame); it shows the same view.
+    const after = frameOf(runtime)
+    expect(after.view.camera).toEqual(before.view.camera)
+    expect(after.view.screen).toEqual(before.view.screen)
+    expect(after.mode).toBe(before.mode)
+    expect(after.scaleBounds).toEqual(before.scaleBounds)
     runtime.destroy()
   })
 
@@ -2543,8 +2679,7 @@ describe('scene canvas runtime', () => {
   it('uses the viewport-only renderer path for zoom updates', async () => {
     const runtime = new SceneCanvasRuntime()
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
-    const viewport = (runtime as any)._camera.initialize({ width: 400, height: 300 })
-    setInteractionViewport(runtime, viewport)
+    setInteractionViewport(runtime, { x: 50, y: 0, scale: 3 })
 
     renderer.syncScene.mockClear()
     runtime.commandSurface.viewport.zoomIn()
@@ -2553,22 +2688,6 @@ describe('scene canvas runtime', () => {
 
     expect(renderer.setView).toHaveBeenCalled()
     expect(renderer.syncScene).not.toHaveBeenCalled()
-    runtime.destroy()
-  })
-
-  it('publishes zoom and effective resize updates exactly once', async () => {
-    const runtime = new SceneCanvasRuntime()
-    await initRuntimeWithStubbedRenderer(runtime)
-    const initialRevision = runtime.querySurface.viewport.value.revision
-
-    runtime.commandSurface.viewport.zoomIn()
-    expect(runtime.querySurface.viewport.value.revision).toBe(initialRevision + 1)
-
-    runtime.documentSurface.resize(600, 450)
-    expect(runtime.querySurface.viewport.value.revision).toBe(initialRevision + 2)
-
-    runtime.documentSurface.resize(600, 450)
-    expect(runtime.querySurface.viewport.value.revision).toBe(initialRevision + 2)
     runtime.destroy()
   })
 

@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { selectPlantStampSource } from '../canvas/plant-stamp-source'
 import { selectedObjectIds } from '../canvas/session-state'
 import { snapToGridEnabled, snapToGuidesEnabled } from '../app/canvas-settings/signals'
-import { CameraController } from '../canvas/runtime/camera'
 import { SceneStore, type ScenePoint } from '../canvas/runtime/scene'
 import type {
   SceneInteractionSession,
@@ -21,6 +20,7 @@ import {
 import type { DraftShape } from '../canvas/runtime/tools/draft'
 import { createRecordingRenderer, type RecordingRenderer } from './support/recording-renderer'
 import type { SceneInteractionEventHarness } from './support/canvas-interaction-events'
+import type { TestView } from './support/test-view'
 import {
   storedGeo,
   contextMenuCommand,
@@ -33,17 +33,18 @@ import {
   makePlant,
   installSceneInteractionFixture,
 } from './support/canvas-interaction-setup'
+import './support/camera-tolerance'
 
 describe('SceneInteractionSession', () => {
   let container: HTMLDivElement
-  let camera: CameraController
+  let testView: TestView
   let store: SceneStore
   let events: SceneInteractionEventHarness
   let renderer: RecordingRenderer
 
   const fixture = installSceneInteractionFixture(
     (f) => {
-      ({ container, camera, store, events } = f)
+      ({ container, testView, store, events } = f)
     },
     () => ({ events }),
   )
@@ -101,7 +102,7 @@ describe('SceneInteractionSession', () => {
 
   it('opens the context menu during a drawing gesture without committing the draft', () => {
     const pasteAt = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, {
+    const deps = createInteractionDeps(container, store, testView, {
       selectionCommands: createSelectionCommands({
         canPaste: () => true,
         pasteAt,
@@ -124,18 +125,18 @@ describe('SceneInteractionSession', () => {
 
   it('uses primary drag for navigation in overview regardless of the armed tool', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('rectangle')
     session.setOverviewMode(true)
     const scene = structuredClone(store.persisted)
-    const before = camera.viewport
+    const before = testView.viewport()
 
     events.pointerDown({ x: 100, y: 100 }, { button: 0 })
     events.pointerMove({ x: 140, y: 125 }, { button: 0 })
     events.pointerUp({ x: 140, y: 125 }, { button: 0 })
 
-    expect(camera.viewport).toEqual({ x: before.x + 40, y: before.y + 25, scale: before.scale })
+    expect(testView.viewport()).toEqual({ x: before.x + 40, y: before.y + 25, scale: before.scale })
     expect(store.persisted).toEqual(scene)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     session.dispose()
@@ -143,7 +144,7 @@ describe('SceneInteractionSession', () => {
 
   it('aborts an active drawing when overview begins and quarantines its late pointer-up', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('rectangle')
 
@@ -172,7 +173,7 @@ describe('SceneInteractionSession', () => {
       }
       return recorded
     })
-    const baseDeps = createInteractionDeps(container, store, camera)
+    const baseDeps = createInteractionDeps(container, store, testView)
     const coordinator = new SceneRuntimeEditCoordinator({
       sceneStore: store,
       history,
@@ -241,7 +242,7 @@ describe('SceneInteractionSession', () => {
     tool,
     editType,
   }) => {
-    const baseDeps = createInteractionDeps(container, store, camera)
+    const baseDeps = createInteractionDeps(container, store, testView)
     const abortFailure = createAbortFailingSceneEdits(
       baseDeps.sceneEdits,
       editType,
@@ -292,7 +293,7 @@ describe('SceneInteractionSession', () => {
       }
       return recorded
     })
-    const baseDeps = createInteractionDeps(container, store, camera)
+    const baseDeps = createInteractionDeps(container, store, testView)
     const coordinator = new SceneRuntimeEditCoordinator({
       sceneStore: store,
       history,
@@ -339,7 +340,7 @@ describe('SceneInteractionSession', () => {
     { label: 'Measurement Guide', tool: 'measurement-guide' },
   ])('a retained $label cleanup is retried at once, leaving nothing open for the next drag', ({ tool }) => {
     const history = new SceneHistory()
-    const baseDeps = createInteractionDeps(container, store, camera)
+    const baseDeps = createInteractionDeps(container, store, testView)
     const coordinator = new SceneRuntimeEditCoordinator({
       sceneStore: store,
       history,
@@ -415,7 +416,7 @@ describe('SceneInteractionSession', () => {
     })
     const history = new SceneHistory()
     let invalidationCalls = 0
-    const baseDeps = createInteractionDeps(container, store, camera)
+    const baseDeps = createInteractionDeps(container, store, testView)
     const coordinator = new SceneRuntimeEditCoordinator({
       sceneStore: store,
       history,
@@ -493,7 +494,7 @@ describe('SceneInteractionSession', () => {
       ))
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('rectangle')
 
@@ -508,7 +509,7 @@ describe('SceneInteractionSession', () => {
 
   it('creates a linear zone from the Line tool drag', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('line')
 
@@ -549,7 +550,7 @@ describe('SceneInteractionSession', () => {
       ))
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('line')
 
@@ -564,7 +565,7 @@ describe('SceneInteractionSession', () => {
 
   it('shows live linear zone length while drawing without persisting it', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('line')
 
@@ -579,10 +580,10 @@ describe('SceneInteractionSession', () => {
 
   it('previews and commits linear zones from snap-adjusted grid points', () => {
     // At scale=4, gridInterval() returns 5m.
-    camera.setViewport({ x: 0, y: 0, scale: 4 })
+    testView.setViewport({ x: 0, y: 0, scale: 4 })
     snapToGridEnabled.value = true
 
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('line')
 
@@ -607,7 +608,7 @@ describe('SceneInteractionSession', () => {
 
   it('does not commit too-short linear zones', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('line')
 
@@ -622,7 +623,7 @@ describe('SceneInteractionSession', () => {
 
   it('creates an elliptical zone from the ellipse tool drag', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('ellipse')
 
@@ -664,7 +665,7 @@ describe('SceneInteractionSession', () => {
       ))
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('ellipse')
 
@@ -678,7 +679,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('normalizes elliptical zone drags in any direction', () => {
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('ellipse')
 
@@ -699,10 +700,10 @@ describe('SceneInteractionSession', () => {
 
   it('previews and commits elliptical zones from snap-adjusted grid points', () => {
     // At scale=4, gridInterval() returns 5m.
-    camera.setViewport({ x: 0, y: 0, scale: 4 })
+    testView.setViewport({ x: 0, y: 0, scale: 4 })
     snapToGridEnabled.value = true
 
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('ellipse')
 
@@ -727,7 +728,7 @@ describe('SceneInteractionSession', () => {
 
   it('shows live elliptical zone measurements while drawing without persisting them', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('ellipse')
 
@@ -746,7 +747,7 @@ describe('SceneInteractionSession', () => {
 
   it('does not commit too-small elliptical zones', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('ellipse')
 
@@ -766,7 +767,7 @@ describe('SceneInteractionSession', () => {
       ))
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('polygon')
 
@@ -783,10 +784,10 @@ describe('SceneInteractionSession', () => {
 
   it('previews polygonal zone active edges from snap-adjusted grid points', () => {
     // At scale=4, gridInterval() returns 5m.
-    camera.setViewport({ x: 0, y: 0, scale: 4 })
+    testView.setViewport({ x: 0, y: 0, scale: 4 })
     snapToGridEnabled.value = true
 
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('polygon')
 
@@ -799,7 +800,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('shows a live polygonal zone active-edge measurement while drawing', () => {
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('polygon')
 
@@ -828,7 +829,7 @@ describe('SceneInteractionSession', () => {
         quantity: 1,
       }]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     deps.setSelection([plantTarget('plant-1')])
     const session = createTestSession(deps)
     session.setTool('polygon')
@@ -843,7 +844,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('shows polygonal zone draft edge measurements, closing edge, and live area', () => {
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('polygon')
 
@@ -862,7 +863,7 @@ describe('SceneInteractionSession', () => {
 
   it('closes a polygonal zone by clicking the first vertex', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('polygon')
 
@@ -886,7 +887,7 @@ describe('SceneInteractionSession', () => {
 
   it('cancels polygonal zone drafts with Escape without dirtying the scene', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('polygon')
 
@@ -901,7 +902,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('keeps a Backspace the polygon draft consumed from reaching the app shortcuts', () => {
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('polygon')
     events.pointerDown({ x: 10, y: 10 }, { button: 0 })
@@ -925,7 +926,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('keeps a polygon draft at its lon/lat when the session plane re-origins mid-draw', () => {
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('polygon')
     events.pointerDown({ x: 10, y: 10 }, { button: 0 })
@@ -939,7 +940,7 @@ describe('SceneInteractionSession', () => {
     const transform = (deps.sceneEdits as SceneRuntimeEditCoordinator)
       .reoriginSessionPlane(previous.toGeo({ x: 20_000, y: 0 }))!
     expect(transform).not.toBeNull()
-    camera.reprojectViewport(transform)
+    testView.reproject(transform)
     expect(store.sessionPlane).not.toBe(previous)
 
     events.pointerDown({ x: 60, y: 50 }, { button: 0 })
@@ -950,13 +951,13 @@ describe('SceneInteractionSession', () => {
     const near = (geo: { lon: number; lat: number }) => ({ lon: expect.closeTo(geo.lon, 8), lat: expect.closeTo(geo.lat, 8) })
     expect(plane.toGeo(zone.points[0]!)).toEqual(near(firstVertexGeo))
     expect(plane.toGeo(zone.points[1]!)).toEqual(near(secondVertexGeo))
-    expect(plane.toGeo(zone.points[2]!)).toEqual(near(plane.toGeo(camera.screenToWorld({ x: 60, y: 50 }))))
+    expect(plane.toGeo(zone.points[2]!)).toEqual(near(plane.toGeo(testView.view().screenToWorld({ x: 60, y: 50 }))))
     session.dispose()
   })
 
   it('undoes and redoes polygonal zone draft vertices without dirtying the scene', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('polygon')
 
@@ -980,7 +981,7 @@ describe('SceneInteractionSession', () => {
 
   it('undoes the only polygonal zone draft vertex and can redo it', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('polygon')
 
@@ -1001,7 +1002,7 @@ describe('SceneInteractionSession', () => {
 
   it('cancels redo-only polygonal zone draft history with Escape', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('polygon')
 
@@ -1020,7 +1021,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('clears redo-only polygonal zone draft history on window blur', () => {
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('polygon')
 
@@ -1039,7 +1040,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('clears polygonal zone draft redo when a new vertex branches the draft', () => {
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('polygon')
 
@@ -1057,7 +1058,7 @@ describe('SceneInteractionSession', () => {
 
   it('commits only visible polygonal zone draft vertices after undo', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('polygon')
 
@@ -1084,7 +1085,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('clears polygonal zone draft redo on cancellation and tool switch', () => {
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('polygon')
 
@@ -1108,7 +1109,7 @@ describe('SceneInteractionSession', () => {
 
   it('preserves polygonal zone drafts while space-panning the canvas', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('polygon')
 
@@ -1133,7 +1134,7 @@ describe('SceneInteractionSession', () => {
     'preserves a polygon draft while %s cancels Space panning',
     (cancellation) => {
       const onSceneEditCommit = vi.fn()
-      const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+      const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
       const session = createTestSession(deps)
       session.setTool('polygon')
 
@@ -1164,7 +1165,7 @@ describe('SceneInteractionSession', () => {
 
   it('preserves polygonal zone drafts while middle-button panning the canvas', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('polygon')
 
@@ -1181,7 +1182,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('removes polygonal zone draft and measurement overlays on session dispose', () => {
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('polygon')
 
@@ -1198,7 +1199,7 @@ describe('SceneInteractionSession', () => {
 
   it('does not commit degenerate polygonal zones', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('polygon')
 
@@ -1214,11 +1215,11 @@ describe('SceneInteractionSession', () => {
 
   it('previews and commits rectangle zones from snap-adjusted grid points', () => {
     // At scale=4, gridInterval() returns 5m.
-    camera.setViewport({ x: 0, y: 0, scale: 4 })
+    testView.setViewport({ x: 0, y: 0, scale: 4 })
     snapToGridEnabled.value = true
 
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('rectangle')
 
@@ -1249,7 +1250,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('previews and commits rectangle zones from snap-adjusted guide points', () => {
-    camera.setViewport({ x: 0, y: 0, scale: 4 })
+    testView.setViewport({ x: 0, y: 0, scale: 4 })
     snapToGuidesEnabled.value = true
     store.updatePersisted((draft) => {
       draft.guides = [
@@ -1260,7 +1261,7 @@ describe('SceneInteractionSession', () => {
       ]
     })
 
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('rectangle')
 
@@ -1290,7 +1291,7 @@ describe('SceneInteractionSession', () => {
 
   it('shows live rectangle zone measurements while drawing without persisting them', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('rectangle')
 
@@ -1315,7 +1316,7 @@ describe('SceneInteractionSession', () => {
       let plantSession: SceneInteractionSession | null = null
 
       try {
-        rectangleSession = createTestSession(createInteractionDeps(container, store, camera))
+        rectangleSession = createTestSession(createInteractionDeps(container, store, testView))
         rectangleSession.setTool('rectangle')
 
         events.pointerDown({ x: 10, y: 20 }, { button: 0 })
@@ -1332,7 +1333,7 @@ describe('SceneInteractionSession', () => {
           stratum: 'high',
           width_max_m: 4,
         })
-        plantSession = createTestSession(createInteractionDeps(container, store, camera))
+        plantSession = createTestSession(createInteractionDeps(container, store, testView))
         plantSession.setTool('plant-stamp')
 
         events.pointerDown({ x: 50, y: 70 }, { button: 0 })
@@ -1346,7 +1347,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('keeps a polygon edge on 45° angles while Shift is held', () => {
-    const session = createTestSession(createInteractionDeps(container, store, camera))
+    const session = createTestSession(createInteractionDeps(container, store, testView))
     session.setTool('polygon')
 
     events.pointerDown({ x: 10, y: 10 })

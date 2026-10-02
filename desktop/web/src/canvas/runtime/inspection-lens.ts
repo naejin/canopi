@@ -4,11 +4,12 @@ import type { CanvasQueryRevision } from './runtime'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { SceneDesignObjectTarget } from './scene'
 import { createSessionPlane, type SessionPlane } from '../session-plane'
+import { stageScaleToMapZoom } from '../projection'
 import { drawInspectionLensScene } from './inspection-lens-drawing'
 import { getSceneLayerStyle } from './scene-visuals'
 import { inspectionLayout } from './inspection-layout'
 import { runCanvasRuntimeCleanups } from './cleanup'
-import { buildViewTransformFromPlane } from './view/view-transform'
+import { buildViewTransform } from './view/view-transform'
 import type { ViewFrameSource, WorldQuad } from './view/types'
 
 /** 100 % lens zoom: 20 px per metre, the main map's zoom reference. */
@@ -53,14 +54,13 @@ export class SceneCanvasInspectionOwner {
     let released = false
     const options = this.options
 
-    /** The ground under a point of the main screen, through the live frame; null above a horizon. */
-    function groundAt(screenPoint: InspectionPoint): InspectionPoint | null {
+    /** The ground under a point of the main screen, through the live frame. */
+    function groundAt(screenPoint: InspectionPoint): InspectionPoint {
       return options.frames.viewFrame.peek().view.screenToWorld(screenPoint)
     }
     function canvasCenter(): InspectionPoint {
       const { screen } = options.frames.viewFrame.peek().view
-      // The screen centre is the camera's own ground point, never above a horizon.
-      return groundAt({ x: screen.width / 2, y: screen.height / 2 })!
+      return groundAt({ x: screen.width / 2, y: screen.height / 2 })
     }
     function setPoint(next: InspectionPoint | null) {
       point = next
@@ -94,10 +94,11 @@ export class SceneCanvasInspectionOwner {
       if (highlightedId && !layout.plants.some(plant => plant.id === highlightedId)) clearHighlight()
       const dpr = Math.max(window.devicePixelRatio || 1, 1)
       // The lens's own view: the inspected point at its centre, at bearing 0 (spec §4.13).
-      const lensView = buildViewTransformFromPlane({
-        planar: { x: width / 2 - centre.x * scale, y: height / 2 - centre.y * scale, scale, bearingDeg: 0 },
+      const plane = options.readSessionPlane?.() ?? createSessionPlane({ lon: 0, lat: 0 })
+      const lensView = buildViewTransform({
+        camera: { center: plane.toGeo(centre), zoom: stageScaleToMapZoom(scale, plane.origin.lat), bearingDeg: 0, pitchDeg: 0 },
         screen: { width, height, devicePixelRatio: dpr },
-        plane: options.readSessionPlane?.() ?? createSessionPlane({ lon: 0, lat: 0 }),
+        plane,
         planeRevision: options.frames.viewFrame.peek().view.planeRevision,
         revision: ++lensViewRevision,
       })
@@ -181,8 +182,7 @@ export class SceneCanvasInspectionOwner {
       sourceQuad,
       inspectAtScreenPoint: (screenPoint) => {
         if (released || !Number.isFinite(screenPoint.x) || !Number.isFinite(screenPoint.y)) return
-        const next = groundAt(screenPoint)
-        if (next) inspectAtWorldPoint(next)
+        inspectAtWorldPoint(groundAt(screenPoint))
       },
       inspectAtWorldPoint,
       centerOnCanvas: () => { if (!released) { setPoint(canvasCenter()); schedule() } },

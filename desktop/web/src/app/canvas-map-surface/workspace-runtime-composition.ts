@@ -19,7 +19,6 @@ import {
   createSharedMapSceneRendererComposition,
   type SharedMapSceneRendererComposition,
 } from '../../maplibre/shared-scene-renderer'
-import { MapLibreWorkspaceCameraOwner } from '../../maplibre/workspace-camera'
 import type { MapBackgroundPresentation } from '../../maplibre/map-background'
 import {
   WorkspaceActivationCoordinator,
@@ -38,7 +37,8 @@ import { mapAttributionFolded } from '../shell/visible-map-area'
 import type { WorkspaceActivationMapControls, WorkspaceActivationSnapshot } from './workspace-activation'
 import type { WorkspaceMapContributionAdapter, WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import type { MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
-import { DEFAULT_NEW_DESIGN_VIEW, geographicViewOf, type GeographicView } from '../../canvas/session-plane'
+import { DEFAULT_NEW_DESIGN_VIEW, geographicViewOfCamera, type GeographicView } from '../../canvas/session-plane'
+import type { CameraDriverHost } from '../../canvas/runtime/view/camera-driver'
 
 export type WorkspaceRuntimeStartOutcome = WorkspaceActivationOutcome | 'no-design'
 
@@ -62,7 +62,8 @@ export interface WorkspaceRuntimeMountOptions {
 /** The geographic view a settled camera shows, for the app's last-view setting. */
 export type WorkspaceSettledView = GeographicView
 
-export const WORKSPACE_VIEW_SETTLE_MS = 750
+/** The last view is written this long after the view's settled camera last changed (the frame settles 150 ms after the last move). */
+export const WORKSPACE_VIEW_SETTLE_MS = 600
 
 export interface WorkspaceRuntimeCompositionOptions {
   readonly container: HTMLElement
@@ -77,11 +78,13 @@ export interface WorkspaceRuntimeCompositionOptions {
   readonly readBackgroundPresentation?: () => ReturnType<typeof readWorkspaceBackgroundPresentation>
   /** Whether the map credits fold into their (i) button; the visible map area decides by default. */
   readonly readAttributionCompact?: () => boolean
-  /** Called once the camera has been still for `WORKSPACE_VIEW_SETTLE_MS` on a Design. */
+  /** Called with the settled camera, `WORKSPACE_VIEW_SETTLE_MS` after it last changed, on a Design. */
   readonly onViewSettled?: (view: WorkspaceSettledView) => void
 }
 
 interface WorkspaceCompositionRuntime extends WorkspaceActivationRuntime {
+  /** The runtime's one camera: the activation attaches each map to it, and the map container's resizes reach its live driver. */
+  readonly cameraHost: CameraDriverHost
   readonly commandSurface: CanvasCommandSurface
   readonly querySurface: CanvasQuerySurface
   readonly documentSurface: CanvasDocumentSurface
@@ -97,7 +100,6 @@ interface WorkspaceCompositionLifecycle extends WorkspaceGenerationLifecycle {
 /** Constructor-only test seam. Production callers use the default cohesive assembly. */
 interface WorkspaceRuntimeCompositionDependencies {
   readonly createRendererComposition: () => SharedMapSceneRendererComposition
-  readonly createCamera: () => MapLibreWorkspaceCameraOwner
   readonly createRuntime: (options: SceneCanvasRuntimeOptions) => WorkspaceCompositionRuntime
   readonly createControls: (options: ConstructorParameters<typeof WorkspaceMapControls>[0]) => WorkspaceActivationMapControls
   readonly createWorkspace: (options: WorkspaceActivationOptions) => WorkspaceCompositionLifecycle
@@ -106,7 +108,6 @@ interface WorkspaceRuntimeCompositionDependencies {
 
 const DEFAULT_DEPENDENCIES: WorkspaceRuntimeCompositionDependencies = {
   createRendererComposition: createSharedMapSceneRendererComposition,
-  createCamera: () => new MapLibreWorkspaceCameraOwner(),
   createRuntime: (options) => new SceneCanvasRuntime(options),
   createControls: (options) => new WorkspaceMapControls(options),
   createWorkspace: (options) => new WorkspaceActivationCoordinator(options),
@@ -120,19 +121,17 @@ export function createWorkspaceRuntimeComposition(
 ): WorkspaceRuntimeComposition {
   const dependencies = { ...DEFAULT_DEPENDENCIES, ...dependencyOverrides }
   const rendererComposition = dependencies.createRendererComposition()
-  const camera = dependencies.createCamera()
   const runtime = dependencies.createRuntime({
-    camera,
     appAdapter: options.appAdapter,
     targetPresentation: options.targetPresentation,
     renderer: rendererComposition.renderer,
   })
   const controls = dependencies.createControls({
     container: options.container,
-    // The map container's resizes reach the camera driver's setScreen through the shim's resize: the driver is the map's one
-    // resize owner (both maps are built with trackResize: false).
+    // The map container's resizes reach the live camera driver's setScreen: the driver is the map's one resize owner (both maps
+    // are built with trackResize: false).
     setScreen: (screen) => {
-      camera.resize(screen)
+      runtime.cameraHost.current().setScreen(screen)
     },
     contributions: {
       loadTerrainSupport: options.mapContributions.loadTerrainSupport,
@@ -151,7 +150,7 @@ export function createWorkspaceRuntimeComposition(
   const workspace = dependencies.createWorkspace({
     container: options.container,
     runtime,
-    camera,
+    camera: runtime.cameraHost,
     composition: rendererComposition,
     map: controls,
     layer: {},
@@ -163,7 +162,6 @@ export function createWorkspaceRuntimeComposition(
       ? options.readSnapshot(readOrigin)
       : readWorkspaceActivationSnapshot({ readInitialCenter: readOrigin }),
     onFailure: options.onFailure,
-    onOutcome: (outcome) => initializeViewport(outcome),
   })
   const documents = createWorkspaceDocumentSurface({
     documents: runtime.documentSurface,
@@ -180,27 +178,12 @@ export function createWorkspaceRuntimeComposition(
   let cancelledStartResult: Promise<WorkspaceRuntimeStartOutcome> | null = null
   let disposeResult: Promise<void> | null = null
   let disposePresentationEffect: (() => void) | null = null
-  let disposeOriginEffect: (() => void) | null = null
   let disposeSettleEffect: (() => void) | null = null
   let settleTimer: ReturnType<typeof setTimeout> | null = null
   const clearSettleTimer = () => {
     if (settleTimer !== null) clearTimeout(settleTimer)
     settleTimer = null
   }
-  let viewportInitialized = false
-  let viewportReady = false
-
-  const initializeViewport = (outcome: WorkspaceRuntimeStartOutcome): WorkspaceRuntimeStartOutcome => {
-    if (viewportReady || outcome === 'no-design' || outcome === 'cancelled') return outcome
-    if (!viewportInitialized) {
-      documents.initializeViewport()
-      viewportInitialized = true
-    }
-    if (documents.hasLoadedDocument()) documents.zoomToFit()
-    viewportReady = true
-    return outcome
-  }
-
   return {
     surfaces,
     start() {
@@ -214,15 +197,10 @@ export function createWorkspaceRuntimeComposition(
         resolveStart = resolve
       })
       try {
-        // A new session plane (hydration or re-origin) keeps the map where it
-        // is and republishes the plane viewport derived from it.
-        disposeOriginEffect = dependencies.installEffect(() => {
-          if (runtime.querySurface.sessionPlane.value) camera.attachment.refreshOrigin()
-        })
         if (options.onViewSettled) {
           const onViewSettled = options.onViewSettled
           disposeSettleEffect = dependencies.installEffect(() => {
-            const frame = runtime.querySurface.viewport.value
+            const camera = runtime.querySurface.view.settledCamera.value
             const plane = runtime.querySurface.sessionPlane.value
             clearSettleTimer()
             if (!plane) return
@@ -231,7 +209,7 @@ export function createWorkspaceRuntimeComposition(
               // Before a Design is loaded and fitted the camera shows its
               // default viewport, which is not a view the user chose.
               if (!documents.hasLoadedDocument()) return
-              const view = geographicViewOf(frame, plane)
+              const view = geographicViewOfCamera(camera)
               if (view) onViewSettled(view)
             }, WORKSPACE_VIEW_SETTLE_MS)
           })
@@ -265,15 +243,13 @@ export function createWorkspaceRuntimeComposition(
         rejectDispose = reject
       })
       const presentationEffect = disposePresentationEffect
-      const originEffect = disposeOriginEffect
       const settleEffect = disposeSettleEffect
       disposePresentationEffect = null
-      disposeOriginEffect = null
       disposeSettleEffect = null
       clearSettleTimer()
       void (async () => {
         const errors: unknown[] = []
-        for (const disposeEffect of [settleEffect, originEffect, presentationEffect]) {
+        for (const disposeEffect of [settleEffect, presentationEffect]) {
           try {
             disposeEffect?.()
           } catch (error) {

@@ -5,10 +5,9 @@ import {
   createSceneInteractionEventHarness,
   type SceneInteractionEventHarness,
 } from '../../../__tests__/support/canvas-interaction-events'
-import { createTestView } from '../../../__tests__/support/test-view'
+import { createTestView, type TestView } from '../../../__tests__/support/test-view'
 import { setCanvasTool } from '../../session-state'
 import type { CanvasFocusPort } from '../app-adapter'
-import type { CameraController } from '../camera'
 import type { InputPlatform } from '../input/platform'
 import type { ToolHandleId } from '../interaction-types'
 import {
@@ -19,6 +18,7 @@ import {
 import { SceneStore } from '../scene'
 import type { ToolHandle } from '../tools/draft'
 import type { TextEntryRequest } from '../tools/tool'
+import { expectScreenPx } from '../../../__tests__/support/camera-tolerance'
 
 vi.mock('../tools/registry', () => ({ TOOL_REGISTRY: {} }))
 
@@ -33,7 +33,7 @@ const CORNER: ToolHandle = {
 
 let container: HTMLDivElement
 let events: SceneInteractionEventHarness
-let camera: CameraController
+let testView: TestView
 let store: SceneStore
 let sessions: SceneInteractionSession[]
 
@@ -41,7 +41,7 @@ beforeEach(() => {
   container = document.createElement('div')
   document.body.appendChild(container)
   events = createSceneInteractionEventHarness(container)
-  camera = createTestView({ screen: { width: 400, height: 300 }, viewport: { x: 0, y: 0, scale: 1 } }).legacyCamera
+  testView = createTestView({ screen: { width: 400, height: 300 }, viewport: { x: 0, y: 0, scale: 1 } })
   store = new SceneStore()
   sessions = []
 })
@@ -56,7 +56,7 @@ afterEach(() => {
 })
 
 function createSession(overrides: Partial<SceneInteractionSessionDeps> = {}): { session: SceneInteractionSession, deps: SceneInteractionSessionDeps } {
-  const deps: SceneInteractionSessionDeps = { ...createInteractionDeps(container, store, camera), platform: PLATFORM, ...overrides }
+  const deps: SceneInteractionSessionDeps = { ...createInteractionDeps(container, store, testView), platform: PLATFORM, ...overrides }
   const session = createSceneInteractionSession(deps)
   sessions.push(session)
   return { session, deps }
@@ -77,8 +77,8 @@ describe('the session\'s chrome', () => {
     session.setTool('rectangle')
     const handle = drawnHandle()!
     expect(handle.getAttribute('aria-label')).toBe('Zone control point 1')
-    expect(handle.dataset.canvasHandleScreenX).toBe('40')
-    expect(handle.dataset.canvasHandleScreenY).toBe('60')
+    expectScreenPx(handle.dataset.canvasHandleScreenX, 40)
+    expectScreenPx(handle.dataset.canvasHandleScreenY, 60)
 
     events.pointerDown({ x: 40, y: 60 }, { target: handle })
     expect(rectangle.last('handle-drag')?.handle).toBe(CORNER.id)
@@ -136,7 +136,7 @@ describe('the session\'s chrome', () => {
     events.pointerDown({ x: 30, y: 40 })
     events.pointerUp({ x: 30, y: 40 })
     const entry = container.querySelector<HTMLTextAreaElement>('textarea[data-canvas-text-entry]')!
-    expect(entry.style.left).toBe('30px')
+    expectScreenPx(entry.style.left, 30)
     expect(entry.placeholder).toBe('en:canvas.textNote.placeholder')
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     expect(document.activeElement).toBe(entry)

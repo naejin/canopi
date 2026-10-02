@@ -1,7 +1,7 @@
 import { effect } from '@preact/signals'
 import type { CanvasRuntimePlantDisplayAdapter, CanvasRuntimeSettingsAdapter } from '../app-adapter'
 import type { PlantDisplay } from '../plant-display'
-import type { WorkspaceCameraFrameReader } from '../camera'
+import type { ViewFrameSource } from '../view/types'
 import type { CanvasMapBackdrop } from '../scene-visuals'
 import {
   runCanvasRuntimeCleanups,
@@ -16,7 +16,8 @@ interface SceneRuntimeEffectsDeps {
   onPlantDisplay: (display: PlantDisplay) => void
   plantDisplay?: CanvasRuntimePlantDisplayAdapter
   onPanelTargetHover: () => void
-  camera: Pick<WorkspaceCameraFrameReader, 'snapshot'>
+  /** The runtime camera's frames: each frame after the first invalidates (render invalidation coalesces per animation frame). */
+  frames: Pick<ViewFrameSource, 'viewFrame'>
   onCameraFrame: () => void
   settings: Pick<
     CanvasRuntimeSettingsAdapter,
@@ -30,7 +31,7 @@ export function installSceneRuntimeEffects(deps: SceneRuntimeEffectsDeps): Array
   try {
     let initialCameraFrame = true
     disposers.push(effect(() => {
-      void deps.camera.snapshot.value
+      void deps.frames.viewFrame.value
       if (initialCameraFrame) {
         initialCameraFrame = false
         return

@@ -1,34 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import './support/camera-tolerance'
 
 import { SceneChromeOverlay } from '../canvas/runtime/scene-chrome'
 import { pressRuler } from '../canvas/runtime/chrome/rulers'
-import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
+import type { ViewFrame } from '../canvas/runtime/view/types'
+import { testViewFrame } from './support/test-view'
 
-function cameraSnapshot(overrides: {
+function cameraFrame(overrides: {
   x?: number
   y?: number
   scale?: number
   width?: number
   height?: number
-} = {}): CameraViewportSnapshot {
-  return {
-    viewport: {
-      x: overrides.x ?? 0,
-      y: overrides.y ?? 0,
-      scale: overrides.scale ?? 8,
-    },
-    screenSize: {
-      width: overrides.width ?? 320,
-      height: overrides.height ?? 240,
-    },
-    devicePixelRatio: 1,
-    referenceScale: 8,
-    scaleBounds: { minimum: 0.00001, maximum: 2000 },
-    overviewScaleThreshold: 0.1,
-    mode: (overrides.scale ?? 8) < 0.1 ? 'overview' : 'site',
-    groundMetersPerCssPixel: null,
-    revision: 1,
-  }
+} = {}): ViewFrame {
+  return testViewFrame({
+    screen: { width: overrides.width ?? 320, height: overrides.height ?? 240 },
+    viewport: { x: overrides.x ?? 0, y: overrides.y ?? 0, scale: overrides.scale ?? 8 },
+  })
 }
 
 function createContextStub() {
@@ -88,7 +76,7 @@ describe('SceneChromeOverlay', () => {
     vi.spyOn(gridCanvas, 'getContext').mockReturnValue(context as never)
 
     overlay.update({
-      camera: cameraSnapshot(),
+      frame: cameraFrame(),
       chromeVisible: true,
       rulersVisible: false,
       gridVisible: false,
@@ -109,7 +97,7 @@ describe('SceneChromeOverlay', () => {
     vi.spyOn(gridCanvas, 'getContext').mockReturnValue(context as never)
 
     overlay.update({
-      camera: cameraSnapshot(),
+      frame: cameraFrame(),
       chromeVisible: true,
       rulersVisible: true,
       gridVisible: false,
@@ -131,7 +119,7 @@ describe('SceneChromeOverlay', () => {
     vi.spyOn(gridCanvas, 'getContext').mockReturnValue(context as never)
 
     overlay.update({
-      camera: cameraSnapshot({ width: 100, height: 50 }),
+      frame: cameraFrame({ width: 100, height: 50 }),
       chromeVisible: true,
       rulersVisible: false,
       gridVisible: true,
@@ -153,7 +141,7 @@ describe('SceneChromeOverlay', () => {
     vi.spyOn(gridCanvas, 'getContext').mockReturnValue(context as never)
 
     overlay.update({
-      camera: cameraSnapshot({ width: 0, height: 0 }),
+      frame: cameraFrame({ width: 0, height: 0 }),
       chromeVisible: true,
       rulersVisible: false,
       gridVisible: true,
@@ -174,7 +162,7 @@ describe('SceneChromeOverlay', () => {
     vi.spyOn(gridCanvas, 'getContext').mockReturnValue(context as never)
 
     overlay.update({
-      camera: cameraSnapshot({ width: 0, height: 0 }),
+      frame: cameraFrame({ width: 0, height: 0 }),
       chromeVisible: true,
       rulersVisible: false,
       gridVisible: false,
@@ -196,7 +184,7 @@ describe('SceneChromeOverlay', () => {
     const guides = [{ id: 'guide-v', axis: 'v' as const, position: 10 }]
 
     overlay.update({
-      camera: cameraSnapshot({ scale: 0.01 }),
+      frame: cameraFrame({ scale: 0.01 }),
       chromeVisible: true,
       rulersVisible: true,
       gridVisible: true,
@@ -212,7 +200,7 @@ describe('SceneChromeOverlay', () => {
   it('forwards the canonical camera snapshot to ruler guide creation', () => {
     const { container, onGuideCreate, overlay } = createOverlay()
     overlay.update({
-      camera: cameraSnapshot({ y: 20, scale: 4 }),
+      frame: cameraFrame({ y: 20, scale: 4 }),
       chromeVisible: true,
       rulersVisible: true,
       gridVisible: false,
@@ -233,7 +221,7 @@ describe('SceneChromeOverlay', () => {
   it('destroys the grid and complete ruler drag lifetime together', () => {
     const { container, onGuideCreate, overlay } = createOverlay()
     overlay.update({
-      camera: cameraSnapshot(),
+      frame: cameraFrame(),
       chromeVisible: true,
       rulersVisible: true,
       gridVisible: false,

@@ -4,7 +4,7 @@ import {
   currentCanvasSceneEditCommandSurface,
   currentCanvasViewportCommandSurface,
 } from '../../canvas/session'
-import type { SceneBounds } from '../../canvas/runtime/camera'
+import type { SceneBounds } from '../../canvas/runtime/view/types'
 import type { ScenePersistedState } from '../../canvas/runtime/scene'
 import { speciesTarget } from '../../target'
 import { clearSelectedPanelTargetsForOrigin, setMatchedPanelTargets, setSelectedPanelTargets } from '../panel-targets/presentation'
@@ -77,7 +77,8 @@ export function zoomToSpeciesPlants(canonicalNames: readonly string[]): boolean 
   const viewport = currentCanvasViewportCommandSurface.peek()
   if (!queries || !viewport) return false
   const bounds = speciesPlantBounds(queries.getSceneSnapshot(), canonicalNames)
-  return bounds ? viewport.focusTemporaryBounds(bounds, { paddingCssPx: ZOOM_PADDING_CSS_PX }) : false
+  // A framing, not a temporary focus: Return to Design keeps LiDAR's bookmark, and Zoom to them leaves none.
+  return bounds ? viewport.frameBounds(bounds, { paddingCssPx: ZOOM_PADDING_CSS_PX }) : false
 }
 
 /** Species detail rings its species' plants on the map while it is open; never selects or edits. */

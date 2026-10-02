@@ -14,7 +14,6 @@ import {
 } from '../canvas/session-state'
 import { snapToGridEnabled } from '../app/canvas-settings/signals'
 import { plantSpacingIntervalM } from '../app/settings/state'
-import { CameraController } from '../canvas/runtime/camera'
 import type { SceneStore } from '../canvas/runtime/scene'
 import type {
   SceneInteractionSession,
@@ -22,6 +21,7 @@ import type {
 } from '../canvas/runtime/interaction-session'
 import type { DraftShape } from '../canvas/runtime/tools/draft'
 import { createRecordingRenderer, type RecordingRenderer } from './support/recording-renderer'
+import type { TestView } from './support/test-view'
 import {
   createSceneInteractionEventHarness,
   type SceneInteractionEventHarness,
@@ -37,10 +37,11 @@ import {
   plantHoverTooltip,
   installSceneInteractionFixture,
 } from './support/canvas-interaction-setup'
+import './support/camera-tolerance'
 
 describe('SceneInteractionSession', () => {
   let container: HTMLDivElement
-  let camera: CameraController
+  let testView: TestView
   let store: SceneStore
   let events: SceneInteractionEventHarness
   /** The session's draft sink: Plant a row's ring, guide, discs and length draw in Pixi (plan §1, exception 2). */
@@ -54,7 +55,7 @@ describe('SceneInteractionSession', () => {
     openContextMenu,
   } = installSceneInteractionFixture(
     (f) => {
-      ({ container, camera, store, events } = f)
+      ({ container, testView, store, events } = f)
     },
     () => ({ events }),
   )
@@ -92,7 +93,7 @@ describe('SceneInteractionSession', () => {
       draft.plants = [makePlant('source', 'Malus domestica', { x: 20, y: 30 })]
     })
     const published: CanvasToolGuidance[] = []
-    const deps = createInteractionDeps(container, store, camera, {
+    const deps = createInteractionDeps(container, store, testView, {
       translate,
       publishToolGuidance: (guidance) => {
         published.push(guidance)
@@ -138,7 +139,7 @@ describe('SceneInteractionSession', () => {
       width_max_m: 4,
     })
     const onSceneEditCommit = vi.fn()
-    const session = createTestSession(createInteractionDeps(container, store, camera, { onSceneEditCommit }))
+    const session = createTestSession(createInteractionDeps(container, store, testView, { onSceneEditCommit }))
     session.setTool('plant-stamp')
 
     events.pointerDown({ x: 50, y: 70 }, { pointerId: 26 })
@@ -169,7 +170,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
 
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     deps.setSelection([plantTarget('already-selected')])
     vi.mocked(deps.setSelection).mockClear()
     const session = createTestSession(deps)
@@ -201,7 +202,7 @@ describe('SceneInteractionSession', () => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
     let failSceneRead = false
-    const baseDeps = createInteractionDeps(container, store, camera)
+    const baseDeps = createInteractionDeps(container, store, testView)
     baseDeps.setSelection([zoneTarget('missing-selection')])
     const deps: SceneInteractionSessionDeps = {
       ...baseDeps,
@@ -228,7 +229,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('explains Plant a row in the shared tool card, with no runtime card of its own', () => {
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
 
     session.setTool('plant-spacing')
@@ -259,7 +260,7 @@ describe('SceneInteractionSession', () => {
         quantity: 1,
       }]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
 
@@ -300,7 +301,7 @@ describe('SceneInteractionSession', () => {
         quantity: 1,
       }]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
 
@@ -337,7 +338,7 @@ describe('SceneInteractionSession', () => {
         quantity: 1,
       }]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
 
     session.setTool('plant-spacing')
@@ -383,7 +384,7 @@ describe('SceneInteractionSession', () => {
     })
     const nextControl = document.createElement('button')
     document.body.appendChild(nextControl)
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
@@ -422,7 +423,7 @@ describe('SceneInteractionSession', () => {
     })
     const nextControl = document.createElement('button')
     document.body.appendChild(nextControl)
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
@@ -460,7 +461,7 @@ describe('SceneInteractionSession', () => {
         quantity: 1,
       }]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
@@ -493,7 +494,7 @@ describe('SceneInteractionSession', () => {
         quantity: 1,
       }]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
@@ -533,7 +534,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
@@ -573,7 +574,7 @@ describe('SceneInteractionSession', () => {
         quantity: 1,
       }]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
@@ -617,7 +618,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
@@ -655,7 +656,7 @@ describe('SceneInteractionSession', () => {
         quantity: 1,
       }]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
@@ -675,7 +676,7 @@ describe('SceneInteractionSession', () => {
   it('snaps Plant Spacing endpoint before computing preview and commit positions', () => {
     plantSpacingIntervalM.value = 2
     snapToGridEnabled.value = true
-    camera.setViewport({ x: 0, y: 0, scale: 10 })
+    testView.setViewport({ x: 0, y: 0, scale: 10 })
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
@@ -693,7 +694,7 @@ describe('SceneInteractionSession', () => {
         quantity: 1,
       }]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
     events.pointerDown({ x: 20, y: 40 }, { button: 0 })
@@ -712,7 +713,7 @@ describe('SceneInteractionSession', () => {
   it('gives Shift direction constraint priority over Plant Spacing snapping', () => {
     plantSpacingIntervalM.value = 1
     snapToGridEnabled.value = true
-    camera.setViewport({ x: 0, y: 0, scale: 10 })
+    testView.setViewport({ x: 0, y: 0, scale: 10 })
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
@@ -730,7 +731,7 @@ describe('SceneInteractionSession', () => {
         quantity: 1,
       }]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
     events.pointerDown({ x: 40, y: 40 }, { button: 0 })
@@ -763,7 +764,7 @@ describe('SceneInteractionSession', () => {
         quantity: 1,
       }]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
@@ -799,15 +800,15 @@ describe('SceneInteractionSession', () => {
         quantity: 1,
       }]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     events.pointerMove({ x: 26, y: 30 }, { button: 0 })
     const guideOnScreen = (): number => {
       const [start, end] = draftShapes('polyline')[0]!.points
-      const a = camera.worldToScreen(start!)
-      const b = camera.worldToScreen(end!)
+      const a = testView.view().worldToScreen(start!)
+      const b = testView.view().worldToScreen(end!)
       return Math.hypot(b.x - a.x, b.y - a.y)
     }
     const widthBefore = guideOnScreen()
@@ -827,7 +828,7 @@ describe('SceneInteractionSession', () => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 80, y: 30 }, { commonName: 'Apple' })]
     })
     const setHoveredTarget = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { setHoveredTarget })
+    const deps = createInteractionDeps(container, store, testView, { setHoveredTarget })
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
 
@@ -865,7 +866,7 @@ describe('SceneInteractionSession', () => {
           selectPlantStampSource({ canonical_name: 'Pyrus communis', common_name: 'Pear', stratum: 'high', width_max_m: 4 })
         }
         const setHoveredTarget = vi.fn()
-        const deps = createInteractionDeps(container, store, camera, { setHoveredTarget })
+        const deps = createInteractionDeps(container, store, testView, { setHoveredTarget })
         const session = createTestSession(deps)
         session.setTool(c.tool)
 
@@ -904,7 +905,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
 
@@ -924,7 +925,7 @@ describe('SceneInteractionSession', () => {
       draft.plants = [makePlant('source', 'Malus domestica', { x: 20, y: 30 })]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
 
@@ -963,7 +964,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
 
@@ -1003,7 +1004,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
 
@@ -1028,7 +1029,7 @@ describe('SceneInteractionSession', () => {
       width_max_m: 4,
     })
 
-    const session = createTestSession(createInteractionDeps(container, store, camera))
+    const session = createTestSession(createInteractionDeps(container, store, testView))
     session.setTool('plant-stamp')
 
     expect(readPlantStampSource()).not.toBeNull()
@@ -1040,7 +1041,7 @@ describe('SceneInteractionSession', () => {
 
   it('snaps plant-stamp placement to the grid when snap is enabled', () => {
     // At scale=4, gridInterval() returns 5m
-    camera.setViewport({ x: 0, y: 0, scale: 4 })
+    testView.setViewport({ x: 0, y: 0, scale: 4 })
     snapToGridEnabled.value = true
     selectPlantStampSource({
       canonical_name: 'Malus domestica',
@@ -1049,7 +1050,7 @@ describe('SceneInteractionSession', () => {
       width_max_m: 4,
     })
 
-    const session = createTestSession(createInteractionDeps(container, store, camera))
+    const session = createTestSession(createInteractionDeps(container, store, testView))
     session.setTool('plant-stamp')
 
     // Screen (53,67) → world (13.25, 16.75) → snaps to (15, 15) at 5m interval
@@ -1070,7 +1071,7 @@ describe('SceneInteractionSession', () => {
     sourceControl.focus()
     expect(document.activeElement).toBe(sourceControl)
     const setTool = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { setTool })
+    const deps = createInteractionDeps(container, store, testView, { setTool })
     const session = createTestSession(deps)
     const originalFocus = container.focus.bind(container)
     let nativeDropInProgress = false
@@ -1147,7 +1148,7 @@ describe('SceneInteractionSession', () => {
     async (interruption) => {
       const sourceControl = document.createElement('button')
       document.body.appendChild(sourceControl)
-      const deps = createInteractionDeps(container, store, camera)
+      const deps = createInteractionDeps(container, store, testView)
       const session = createTestSession(deps)
       const focusSpy = vi.spyOn(container, 'focus')
       try {
@@ -1194,7 +1195,7 @@ describe('SceneInteractionSession', () => {
   describe('Place plants without a species', () => {
     it('places nothing and asks the tool card to point to the species chooser', async () => {
       const published: CanvasToolGuidance[] = []
-      const deps = createInteractionDeps(container, store, camera, {
+      const deps = createInteractionDeps(container, store, testView, {
         publishToolGuidance: (guidance) => { published.push(guidance) },
       })
       const session = createTestSession(deps)
@@ -1225,7 +1226,7 @@ describe('SceneInteractionSession', () => {
     it('arms Place plants and asks for a species, then places the chosen one at the right-clicked point', async () => {
       const published: CanvasToolGuidance[] = []
       const tools: string[] = []
-      const deps = createInteractionDeps(container, store, camera, {
+      const deps = createInteractionDeps(container, store, testView, {
         publishToolGuidance: (guidance) => { published.push(guidance) },
         setTool: (name: string) => { tools.push(name) },
       })
@@ -1257,7 +1258,7 @@ describe('SceneInteractionSession', () => {
 
     it('places the species already chosen at once', () => {
       selectPlantStampSource(APPLE)
-      const session = createTestSession(createInteractionDeps(container, store, camera))
+      const session = createTestSession(createInteractionDeps(container, store, testView))
       session.setTool('plant-stamp')
 
       openContextMenu({ x: 60, y: 40 })
@@ -1269,7 +1270,7 @@ describe('SceneInteractionSession', () => {
     })
 
     it('forgets the point when the user leaves Place plants before choosing', async () => {
-      const session = createTestSession(createInteractionDeps(container, store, camera))
+      const session = createTestSession(createInteractionDeps(container, store, testView))
       session.setTool('select')
       openContextMenu({ x: 30, y: 30 })
       contextMenuCommand('place-plants-here').run()

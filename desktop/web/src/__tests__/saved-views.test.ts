@@ -117,7 +117,7 @@ function mountCanvas() {
   const queries = createTestCanvasQuerySurface({
     scene,
     // The plane origin sits at the screen centre (400 × 300 test screen).
-    viewport: { x: 200, y: 150, scale },
+    placement: { x: 200, y: 150, scale },
     plants: [plant('Lycium barbarum')],
     selection: [{ kind: 'zone', id: 'Hedge' }, { kind: 'measurement-guide', id: 'g1' }],
     sessionPlane: createSessionPlane(TEST_GEO_ORIGIN),

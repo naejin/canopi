@@ -2285,7 +2285,6 @@ function testCanvasDocumentSurface(
   overrides: Partial<CanvasDocumentSurface> = {},
 ): CanvasDocumentSurface {
   return {
-    initializeViewport: vi.fn(),
     attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(),

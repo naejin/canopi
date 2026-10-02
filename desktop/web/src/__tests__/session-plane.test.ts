@@ -3,13 +3,14 @@ import { mapZoomToStageScale } from '../canvas/projection'
 import {
   createSessionPlane,
   extentOnOneWorld,
-  geographicViewOf,
+  geographicViewOfCamera,
   mapZoomToFitExtent,
   roundGeoDegrees,
   SESSION_PLANE_REORIGIN_DISTANCE_METERS,
   sessionPlaneOriginForPoints,
 } from '../canvas/session-plane'
 import { planeViewportCornerBounds } from './support/plane-viewport-corners'
+import { createTestView } from './support/test-view'
 
 const EARTH_RADIUS_METERS = 6371008.8
 
@@ -97,6 +98,14 @@ describe('geographic extent of a view', () => {
     return { viewport: { x: width / 2, y: height / 2, scale }, screenSize: { width, height } }
   }
 
+  /** The geographic view a camera at this placement shows (ViewReadSurface.captureView's camera). */
+  function geographicViewAt(view: ReturnType<typeof frame>, onPlane: typeof plane) {
+    const camera = createTestView({ plane: onPlane, screen: view.screenSize, viewport: view.viewport })
+    const geographic = geographicViewOfCamera(camera.view().camera)!
+    camera.dispose()
+    return geographic
+  }
+
   /** The saved extent of a view, as the saved views take it: its corner bounds on one world, else none. */
   function savedExtent(view: ReturnType<typeof frame>) {
     return extentOnOneWorld(planeViewportCornerBounds(view, plane))
@@ -109,19 +118,19 @@ describe('geographic extent of a view', () => {
     expect(extent.south).toBeLessThan(origin.lat)
     expect(extent.north).toBeGreaterThan(origin.lat)
     expect((extent.west + extent.east) / 2).toBeCloseTo(origin.lon, 9)
-    expect(geographicViewOf(frame(18, 800, 600), plane)!.zoom).toBeCloseTo(18, 9)
+    expect(geographicViewAt(frame(18, 800, 600), plane).zoom).toBeCloseTo(18, 6)
   })
 
   it('reads the zoom of a view far from the plane origin at the origin latitude', () => {
     const farPlane = createSessionPlane({ lon: 13, lat: 23 })
     const oslo = farPlane.toPlane({ lon: 10.75, lat: 59.91 })
     const scale = mapZoomToStageScale(17, farPlane.origin.lat)
-    const view = geographicViewOf({
+    const view = geographicViewAt({
       viewport: { x: 400 - oslo.x * scale, y: 300 - oslo.y * scale, scale },
       screenSize: { width: 800, height: 600 },
-    }, farPlane)!
+    }, farPlane)
     expect(view.lat).toBeCloseTo(59.91, 6)
-    expect(view.zoom).toBeCloseTo(17, 9)
+    expect(view.zoom).toBeCloseTo(17, 6)
   })
 
   it('fits back into the same screen at the same zoom, and one zoom level closer on a screen twice as big', () => {

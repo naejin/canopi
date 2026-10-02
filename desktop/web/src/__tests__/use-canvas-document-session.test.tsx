@@ -26,7 +26,6 @@ vi.mock("../app/canvas-map-surface/desktop-workspace-runtime", () => ({
   createDesktopWorkspaceRuntimeComposition: vi.fn((options?: { container: HTMLElement }) => {
     let loaded = false;
     const documents = {
-      initializeViewport: vi.fn(),
       attachRulersTo: vi.fn(),
       showCanvasChrome: vi.fn(),
       hideCanvasChrome: vi.fn(),
@@ -64,7 +63,6 @@ vi.mock("../app/canvas-map-surface/desktop-workspace-runtime", () => ({
       surfaces: host.surfaces,
       start: async () => {
         await host.init(options?.container);
-        documents.initializeViewport();
         return 'shared-ready' as const;
       },
       dispose: () => host.destroy(),
@@ -208,11 +206,10 @@ describe("useCanvasDocumentSession", () => {
 
     const documents = mocks.runtimeInstances[0]?.documents as {
       hideCanvasChrome: ReturnType<typeof vi.fn>;
-      initializeViewport: ReturnType<typeof vi.fn>;
     };
 
     expect(documents).toBeDefined();
-    expect(documents.initializeViewport).toHaveBeenCalledTimes(1);
+    expect(mocks.runtimeInstances[0]?.host.init).toHaveBeenCalledTimes(1);
     expect(mocks.startAttachedDesignSession).toHaveBeenCalledWith(currentCanvasDocumentSurface.value);
     expect(documents.hideCanvasChrome).toHaveBeenCalledTimes(1);
     expect(mocks.consumeQueuedDocumentLoad).toHaveBeenCalledWith(currentCanvasDocumentSurface.value);
@@ -254,13 +251,12 @@ describe("useCanvasDocumentSession", () => {
       await mountHarness(container);
 
       const first = mocks.runtimeInstances[0] as unknown as {
-        host: { destroy: ReturnType<typeof vi.fn> };
-        documents: { initializeViewport: ReturnType<typeof vi.fn> };
+        host: { init: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn> };
       };
       const destroyOrder = first.host.destroy.mock.invocationCallOrder[0] ?? 0;
 
       expect(first.host.destroy).toHaveBeenCalledOnce();
-      expect(first.documents.initializeViewport.mock.invocationCallOrder[0])
+      expect(first.host.init.mock.invocationCallOrder[0])
         .toBeLessThan(destroyOrder);
       expect(mocks.startAttachedDesignSession.mock.invocationCallOrder[0])
         .toBeLessThan(destroyOrder);

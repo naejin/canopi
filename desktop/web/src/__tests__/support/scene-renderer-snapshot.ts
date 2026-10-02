@@ -6,7 +6,8 @@ import type {
 } from '../../canvas/runtime/scene'
 import { projectSceneSelectionEntityIds } from '../../canvas/runtime/scene-runtime/selection'
 import type { ViewScreen, ViewTransform } from '../../canvas/runtime/view/types'
-import { buildViewTransformFromPlane } from '../../canvas/runtime/view/view-transform'
+import { planarToViewCamera } from '../../canvas/runtime/view/camera-math'
+import { buildViewTransform } from '../../canvas/runtime/view/view-transform'
 import { createSessionPlane } from '../../canvas/session-plane'
 
 export interface TestSceneRendererSnapshotOptions {
@@ -67,10 +68,12 @@ export function createTestRendererView(
   viewport: { readonly x: number; readonly y: number; readonly scale: number },
   options: { readonly bearingDeg?: number; readonly screen?: Partial<ViewScreen> } = {},
 ): ViewTransform {
-  return buildViewTransformFromPlane({
-    planar: { ...viewport, bearingDeg: options.bearingDeg ?? 0 },
-    screen: { width: 400, height: 300, devicePixelRatio: 1, ...options.screen },
-    plane: createSessionPlane({ lon: 0, lat: 0 }),
+  const screen = { width: 400, height: 300, devicePixelRatio: 1, ...options.screen }
+  const plane = createSessionPlane({ lon: 0, lat: 0 })
+  return buildViewTransform({
+    camera: planarToViewCamera({ ...viewport, bearingDeg: options.bearingDeg ?? 0 }, screen, plane),
+    screen,
+    plane,
     planeRevision: 0,
     revision: ++testViewRevision,
   })

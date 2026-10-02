@@ -5,8 +5,7 @@ import { createDesignSessionReplacement } from '../app/document-session/replacem
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
 import { resetSettingsProjectionForTests } from '../app/settings/projection'
 import { lastView } from '../app/settings/state'
-import { CameraController } from '../canvas/runtime/camera'
-import { geographicViewOf } from '../canvas/session-plane'
+import { geographicViewOfCamera } from '../canvas/session-plane'
 import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
 import type { CanopiFile } from '../types/design'
 import { createLiveTestCanvasRuntimeHost, type CanvasRuntimeHost } from './support/live-canvas-runtime'
@@ -51,10 +50,8 @@ afterEach(async () => {
 
 /** New Design (Ctrl N) over an open Design, through the Design Session replacement. */
 function newDesignOverOpenDesign(): { lon: number; lat: number; zoom: number } {
-  const camera = new CameraController()
-  camera.initialize({ width: 1200, height: 800 })
   const host = createLiveTestCanvasRuntimeHost({
-    camera,
+    screen: { width: 1200, height: 800 },
     appAdapter: createAppCanvasRuntimeAppAdapter({ presentationData: {} }),
   })
   hosts.push(host)
@@ -69,7 +66,7 @@ function newDesignOverOpenDesign(): { lon: number; lat: number; zoom: number } {
 
   replacement.replace({ file: design('Untitled'), kind: 'new', path: null, name: 'Untitled' }, canvas, () => true)
 
-  const view = geographicViewOf(queries.viewport.peek(), queries.sessionPlane.peek()!)
+  const view = geographicViewOfCamera(queries.view.captureView().camera)
   expect(view).not.toBeNull()
   return view!
 }

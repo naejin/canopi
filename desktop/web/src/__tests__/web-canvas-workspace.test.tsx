@@ -9,7 +9,6 @@ import {
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
 import { currentCanvasSession } from '../canvas/session'
 import { CanvasRuntimeCleanupError } from '../canvas/runtime/cleanup'
-import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
 import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
@@ -100,7 +99,6 @@ describe('Web Edition canvas workspace', () => {
         await flushMicrotasks()
 
         expect(runtime.composition.start).toHaveBeenCalledOnce()
-        expect(runtime.documents.initializeViewport).not.toHaveBeenCalled()
         expect(runtime.documents.loadDocument).toHaveBeenCalledWith(expect.objectContaining({ name: 'Untitled' }))
         expect(runtime.documents.showCanvasChrome).toHaveBeenCalled()
         expect(currentCanvasSession.value).toBe(runtime.composition.surfaces)
@@ -378,7 +376,6 @@ describe('Web Edition canvas workspace', () => {
 
     // The mounted owner cannot attach or publish after the component releases
     // its lease while composition start is pending.
-    expect(runtime.documents.initializeViewport).not.toHaveBeenCalled()
     expect(runtime.documents.attachRulersTo).not.toHaveBeenCalled()
     expect(currentCanvasSession.value).toBeNull()
     expect(runtime.composition.dispose).toHaveBeenCalledOnce()
@@ -834,7 +831,6 @@ function fakeRuntimeComposition(
 } {
   let loaded = false
   const documents: CanvasDocumentSurface = {
-    initializeViewport: vi.fn(),
     attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(),
@@ -880,6 +876,7 @@ function fakeCommandSurface(): CanvasCommandSurface {
       zoomToFit: vi.fn(),
       returnToDesign: vi.fn(),
       focusTemporaryBounds: vi.fn(() => false),
+      frameBounds: vi.fn(() => false),
       returnFromTemporaryFocus: vi.fn(() => false),
       showPlace: vi.fn(() => false),
       zoomBy: vi.fn(),
@@ -951,17 +948,6 @@ function fakeQuerySurface(): CanvasQuerySurface {
       scene: signal(0),
       plantNames: signal(0),
     },
-    viewport: signal<CameraViewportSnapshot>({
-      viewport: { x: 0, y: 0, scale: 1 },
-      screenSize: { width: 800, height: 600 },
-      devicePixelRatio: 1,
-      referenceScale: 1,
-      scaleBounds: { minimum: 0.00001, maximum: 2000 },
-      overviewScaleThreshold: 0.1,
-      mode: 'site',
-      groundMetersPerCssPixel: null,
-      revision: 0,
-    }),
     sessionPlane: signal<SessionPlane | null>(createSessionPlane(TEST_GEO_ORIGIN)),
     view: createTestViewReadSurface(),
     getSpeciesFocus: () => ({ canonicalName: null }),

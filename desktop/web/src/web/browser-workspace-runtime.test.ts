@@ -41,10 +41,9 @@ describe('browser workspace runtime composition', () => {
       WorkspaceRuntimeCompositionOptions
     const readInitialCenter = vi.fn(() => ({ lat: 48, lon: 2 }))
     const activation = options.readSnapshot!(readInitialCenter)
-    const contributions = options.mapContributions.read({
-      ...createTestCanvasQuerySurface(),
-      sessionPlane: signal(createSessionPlane({ lat: 48, lon: 2 })),
-    })
+    const contributions = options.mapContributions.read(
+      createTestCanvasQuerySurface({ sessionPlane: createSessionPlane({ lat: 48, lon: 2 }) }),
+    )
 
     expect(activation?.sessionIdentity).toBe(sessionIdentity)
     expect(activation?.map).toMatchObject({ initialCenter: { lat: 48, lon: 2 } })

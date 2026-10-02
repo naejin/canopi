@@ -14,16 +14,14 @@ import type { SessionPlane } from '../session-plane'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import type { SelectedPlantSymbolContext } from '../plant-symbol-context'
 import type { PlantSymbolId, SceneDesignObjectTarget, ScenePoint } from './scene'
-import type {
-  CameraViewportSnapshot,
-  SceneBounds,
-} from './camera'
+import type { SceneBounds } from './view/types'
 import type { ScenePersistedState } from './scene'
 import type { PlantLabelMode } from './plant-display'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
+import type { PointerWorld } from './interaction-ports'
 import type { Modifiers } from './interaction-types'
 import type { ViewCommandSurface, ViewReadSurface } from './view/read-surface'
-import type { ViewTransform, WorldPoint } from './view/types'
+import type { ViewTransform } from './view/types'
 
 export interface CanvasRuntimeDocumentMetadata {
   name: string
@@ -220,8 +218,6 @@ export interface CanvasQuerySurface {
   /** Labels drawn for the plants in view; zero in overview and while nothing is mounted. */
   getPlantLabelCoverage(): CanvasPlantLabelCoverage
   readonly revision: CanvasQueryRevision
-  /** Legacy camera snapshot (0A to the end of 0D2): its last readers move to `view` in 0D2, and the field goes then. */
-  readonly viewport: ReadonlySignal<CameraViewportSnapshot>
   /** What app code observes of the view (spec §1.1a): coarse signals and the capture of what is on screen. */
   readonly view: ViewReadSurface
   // The open Design's metre frame; null only before the first hydration.
@@ -250,10 +246,10 @@ export interface CanvasQuerySurface {
    */
   getEnglishFallbackNames(): ReadonlyMap<string, string>
   /**
-   * Forwards ToolHost.subscribePointerWorld (§1.1a): the pointer's world point over the map, null when it leaves. The
-   * inspection lens reads it instead of its own map-host pointermove. Before the interaction session exists it hears nothing.
+   * Forwards ToolHost.subscribePointerWorld (§1.1a): the pointer's world and screen points over the map, null when it leaves.
+   * The inspection lens reads it instead of its own map-host pointermove. Before the interaction session exists it hears nothing.
    */
-  subscribePointerWorld(listener: (point: WorldPoint | null) => void): () => void
+  subscribePointerWorld(listener: (point: PointerWorld | null) => void): () => void
 }
 
 export interface CanvasDocumentReplacementReceipt {
@@ -303,7 +299,6 @@ export function createCanvasDocumentReplacementToken(): CanvasDocumentReplacemen
 
 export interface CanvasDocumentSurface {
   attachInspectionTo(element: HTMLElement): CanvasInspectionHandle
-  initializeViewport(): void
   attachRulersTo(element: HTMLElement): void
   showCanvasChrome(): void
   hideCanvasChrome(): void

@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { signal } from '@preact/signals'
 import {
   mapZoomToStageScale,
   stageScaleToMapZoom,
 } from '../canvas/projection'
 import { setCurrentCanvasSession } from '../canvas/session'
+import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { planarCameraOf } from '../canvas/runtime/view/view-transform'
 import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
 import {
@@ -23,11 +23,12 @@ const plane = createSessionPlane({ lon: 2.3522, lat: 48.8566 })
 
 function surfacesFor(view: TestView, sessionPlane: SessionPlane | null) {
   return createTestCanvasRuntimeSurfaces({
-    queries: { ...createTestCanvasQuerySurface(), sessionPlane: signal(sessionPlane) },
+    queries: createTestCanvasQuerySurface({ sessionPlane }),
     commands: createTestCanvasCommandSurface({
       viewport: {
         focusTemporaryBounds: (bounds, options) => view.navigation.focusTemporaryBounds(bounds, options),
         returnFromTemporaryFocus: () => view.navigation.returnFromTemporaryFocus(),
+        returnToDesign: () => view.navigation.returnToDesign(),
       },
     }),
   })
@@ -63,22 +64,45 @@ describe('LiDAR workspace camera navigation', () => {
     expect(lidarBoundsToLocalWorld([2.34, 48.85, 2.37, 48.87], null)).toBeNull()
   })
 
-  it('focuses and returns only the live Canvas viewport while retaining the first bookmark', () => {
+  it('focuses and returns only the live Canvas viewport; the latest fit\'s bookmark wins', () => {
     const view = createTestView({ screen: { width: 800, height: 600 }, viewport: { x: 30, y: 40, scale: 2 } })
     const before = planarCameraOf(view.view())
     setCurrentCanvasSession(surfacesFor(view, plane))
 
     expect(viewLidarCoverage([2.34, 48.85, 2.37, 48.87])).toBe(true)
-    expect(planarCameraOf(view.view())).not.toEqual(before)
-    const afterFirstFocus = view.frames.viewFrame.value.revision
+    const afterFirstFocus = planarCameraOf(view.view())
+    expect(afterFirstFocus).not.toEqual(before)
+    const firstFocusRevision = view.frames.viewFrame.value.revision
     expect(viewLidarCoverage([2.345, 48.852, 2.35, 48.858])).toBe(true)
-    expect(view.frames.viewFrame.value.revision).toBeGreaterThan(afterFirstFocus)
+    expect(view.frames.viewFrame.value.revision).toBeGreaterThan(firstFocusRevision)
+    // Return to Design lands on the view the latest fit left: here the first fit's coverage.
     expect(viewDesignLocation()).toBe(true)
-    expect(planarCameraOf(view.view())).toEqual(before)
-    expect(viewDesignLocation()).toBe(false)
+    expect(planarCameraOf(view.view())).toEqual(afterFirstFocus)
+    // The bookmark is spent: a second Return to Design frames the Design.
+    expect(viewDesignLocation()).toBe(true)
     const scaleAtMapZoom18 = mapZoomToStageScale(18, plane.origin.lat)
     expect(scaleAtMapZoom18).toBeGreaterThan(0.1)
     expect(stageScaleToMapZoom(scaleAtMapZoom18, plane.origin.lat)).toBeCloseTo(18, 12)
+  })
+
+  it('Return to Design without a bookmark frames the Design', () => {
+    const design = { extentPoints: () => [{ x: -60, y: -25 }, { x: 60, y: 25 }] }
+    const view = createTestView({ screen: { width: 800, height: 600 }, viewport: { x: 30, y: 40, scale: 0.5 } })
+    view.setScene(createDefaultScenePersistedState(), design)
+    const before = planarCameraOf(view.view())
+    setCurrentCanvasSession(surfacesFor(view, plane))
+
+    // No Fit to data left a bookmark (a place search, a story step or a saved view dropped it): the Design is framed.
+    expect(viewDesignLocation()).toBe(true)
+
+    const framed = planarCameraOf(view.view())
+    expect(framed).not.toEqual(before)
+    const backToMyDesign = createTestView({ screen: { width: 800, height: 600 }, viewport: { x: 30, y: 40, scale: 0.5 } })
+    backToMyDesign.setScene(createDefaultScenePersistedState(), design)
+    backToMyDesign.navigation.returnToDesign()
+    expect(framed).toEqual(planarCameraOf(backToMyDesign.view()))
+    backToMyDesign.dispose()
+    view.dispose()
   })
 
   it('rejects invalid bounds, a missing session plane, and missing canvas commands without moving the camera', () => {

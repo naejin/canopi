@@ -4,7 +4,8 @@ import {
   createRulerOverlay,
   type RulerOverlay,
 } from './chrome/rulers'
-import type { CameraViewportSnapshot } from './camera'
+import type { ViewFrame } from './view/types'
+import { planarCameraOf } from './view/view-transform'
 import { getGuideLineVisual, getMapBackdropInk, OVERLAY_CASING_EXTRA_PX } from './scene-visuals'
 import { CANVAS_RULER_SIZE_PX } from './chrome/rulers'
 
@@ -14,7 +15,7 @@ const MAJOR_STEP = 2
 const GUIDE_LINE_PX = 1
 
 export interface SceneChromeSnapshot {
-  camera: CameraViewportSnapshot
+  frame: ViewFrame
   chromeVisible: boolean
   rulersVisible: boolean
   gridVisible: boolean
@@ -71,12 +72,12 @@ export class SceneChromeOverlay {
     if (!snapshot) return
 
     this._rulers.update({
-      camera: snapshot.camera,
+      frame: snapshot.frame,
       chromeVisible: snapshot.chromeVisible,
       rulersVisible: snapshot.rulersVisible,
     })
 
-    const siteMode = snapshot.camera.mode === 'site'
+    const siteMode = snapshot.frame.mode === 'site'
     this._gridCanvas.style.display = snapshot.chromeVisible && siteMode
       && (snapshot.gridVisible || snapshot.guides.length > 0)
       ? 'block'
@@ -97,8 +98,8 @@ export class SceneChromeOverlay {
 
   private _drawGrid(snapshot: SceneChromeSnapshot): void {
     const dpr = Math.max(window.devicePixelRatio || 1, 1)
-    const width = Math.max(1, snapshot.camera.screenSize.width)
-    const height = Math.max(1, snapshot.camera.screenSize.height)
+    const width = Math.max(1, snapshot.frame.view.screen.width)
+    const height = Math.max(1, snapshot.frame.view.screen.height)
 
     const pixelWidth = Math.round(width * dpr)
     const pixelHeight = Math.round(height * dpr)
@@ -126,7 +127,7 @@ export class SceneChromeOverlay {
     width: number,
     height: number,
   ): void {
-    const viewport = snapshot.camera.viewport
+    const viewport = planarCameraOf(snapshot.frame.view)
     const scale = viewport.scale
     if (scale < 0.05) return
 
@@ -182,7 +183,7 @@ export class SceneChromeOverlay {
     height: number,
   ): void {
     const rulerInset = snapshot.rulersVisible ? RULER_SIZE : 0
-    const viewport = snapshot.camera.viewport
+    const viewport = planarCameraOf(snapshot.frame.view)
 
     const guideLine = getGuideLineVisual()
     ctx.save()

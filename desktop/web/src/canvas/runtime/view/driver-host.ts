@@ -1,57 +1,63 @@
-// canvas/runtime/view/driver-host.ts  (pure; the clock, animation frames and timers are injected)
+// canvas/runtime/view/driver-host.ts
 //
 // Owns the runtime's one camera across attach, detach and failure (ADR 0016): the live CameraDriver (a HeadlessCameraDriver until a
 // map is attached, and again after a detach or a failure), the NavigationPolicy every driver on it reads, and the one frame stream
-// readers subscribe to. The host relays the live driver's frames with its own revisions, so revisions and plane revisions stay
-// monotonic across swaps, and marks them attached while an attached driver is live.
+// readers subscribe to. The host relays the live driver's frames with its own revisions (the drivers keep none), so revisions and
+// plane revisions stay monotonic across swaps, and marks them attached while an attached driver is live.
 
 import { signal, type ReadonlySignal } from '@preact/signals'
 import type { SessionPlane } from '../../session-plane'
 import type { WorkspaceCameraPolicy } from '../../workspace-camera-policy'
 import type { CameraDriver, CameraDriverDeps, CameraDriverFailure, CameraDriverHost } from './camera-driver'
-import { viewCameraToPlanar } from './camera-math'
+import { planarToViewCamera } from './camera-math'
 import { createViewFrameSource } from './frame-source'
 import { createHeadlessCameraDriver } from './headless-driver'
 import { createNavigationPolicy, type NavigationPolicy } from './navigation-policy'
-import type { FrameSourceDeps, PlanarCamera, ScreenInsets, ViewFrame, ViewScreen } from './types'
+import { stageScaleToMapZoom } from '../../projection'
+import type { ScreenInsets, ViewCamera, ViewFrame, ViewScreen } from './types'
 import { planarCameraOf } from './view-transform'
 
 export interface CameraDriverHostOptions {
-  readonly clock: () => number
-  readonly scheduleFrame: CameraDriverDeps['scheduleFrame']
-  /** The settle timer of the host's own frames (its drivers settle nothing: nobody reads a driver's own settled frame). */
-  readonly timers: FrameSourceDeps['timers']
+  /** The zoom range and overview threshold; the reference latitude is options.plane()'s, rebuilt once per plane. */
   readonly policy: WorkspaceCameraPolicy
   readonly reducedMotion: ReadonlySignal<boolean>
   /** The session plane the runtime works in: headless drivers are built on it, and planeChanged is called with it after a re-origin. */
   readonly plane: () => SessionPlane
-  /** Default: an empty screen at density 1, as today's CameraController before initialize. */
+  /** Default: an empty screen at density 1. */
   readonly screen?: ViewScreen
-  /** Default: today's unpublished CameraController placement, { x: 0, y: 0, scale: 1 } at bearing 0. */
-  readonly camera?: PlanarCamera
+  /** Default: the plane origin at 1 px/m, bearing 0. */
+  readonly camera?: ViewCamera
   readonly insets?: ScreenInsets
 }
 
 /**
- * The host as its creator holds it. Its `driverDeps` carry no timers: the host hands its own to its headless drivers, and a MapLibre
- * driver built with them settles on the window's. `followPlane` takes the plane `options.plane` returns from then on: a headless
- * camera keeps its plane placement, bit for bit, and reads its ground on that plane; nothing happens while an attached driver is live
- * (only planeChanged moves the map's plane) or while the headless driver is already on it.
+ * The host as its creator holds it. Only the host's own frames settle (its drivers settle nothing: nobody reads a driver's own
+ * settled frame). `followPlane` takes the plane `options.plane` returns from then on: a headless camera keeps its plane placement
+ * and reads its ground on that plane; nothing happens while an attached driver is live (only planeChanged moves the
+ * map's plane) or while the headless driver is already on it.
  */
 export interface CameraDriverHostController extends CameraDriverHost {
   dispose(): void
 }
 
 const EMPTY_SCREEN: ViewScreen = Object.freeze({ width: 0, height: 0, devicePixelRatio: 1 })
-const TODAY_UNPUBLISHED_CAMERA: PlanarCamera = Object.freeze({ x: 0, y: 0, scale: 1, bearingDeg: 0 })
 
 export function createCameraDriverHost(options: CameraDriverHostOptions): CameraDriverHostController {
-  let navigationPolicy: NavigationPolicy = createNavigationPolicy(options.policy, options.reducedMotion)
-  const driverDeps: CameraDriverDeps = Object.freeze({
-    clock: options.clock,
-    scheduleFrame: options.scheduleFrame,
-    policy: () => navigationPolicy,
-  })
+  let policyPlane: SessionPlane | null = null
+  let navigationPolicy: NavigationPolicy | null = null
+  /** The policy at the runtime plane's latitude, so a re-origin moves the scale bounds (and the zoom buttons' limits) with the plane. */
+  function policyNow(): NavigationPolicy {
+    const plane = options.plane()
+    if (!navigationPolicy || plane !== policyPlane) {
+      policyPlane = plane
+      navigationPolicy = createNavigationPolicy(
+        { ...options.policy, referenceLatitudeDeg: plane.origin.lat },
+        options.reducedMotion,
+      )
+    }
+    return navigationPolicy
+  }
+  const driverDeps: CameraDriverDeps = Object.freeze({ policy: policyNow })
   const failure = signal<CameraDriverFailure | null>(null)
 
   const initialPlane = options.plane()
@@ -59,7 +65,7 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
     deps: driverDeps,
     plane: initialPlane,
     screen: options.screen ?? EMPTY_SCREEN,
-    camera: options.camera ?? TODAY_UNPUBLISHED_CAMERA,
+    camera: options.camera ?? { center: initialPlane.origin, zoom: stageScaleToMapZoom(1, initialPlane.origin.lat), bearingDeg: 0, pitchDeg: 0 },
     insets: options.insets,
   })
   let attached = false
@@ -73,7 +79,7 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
   let disposed = false
   let release = connect(live)
 
-  const frames = createViewFrameSource(stamp(live.frames.viewFrame.peek()), { clock: options.clock, timers: options.timers })
+  const frames = createViewFrameSource(stamp(live.frames.viewFrame.peek()))
 
   function stamp(frame: ViewFrame): ViewFrame {
     const view = Object.freeze({ ...frame.view, revision, planeRevision })
@@ -137,13 +143,10 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
   }
 
   function detachTo(): void {
-    const last = frames.viewFrame.peek()
-    const plane = options.plane()
-    const { screen } = last.view
-    toHeadless(plane, viewCameraToPlanar(last.view.camera, screen, plane))
+    toHeadless(options.plane(), frames.viewFrame.peek().view.camera)
   }
 
-  function toHeadless(plane: SessionPlane, camera: PlanarCamera): void {
+  function toHeadless(plane: SessionPlane, camera: ViewCamera): void {
     const last = frames.viewFrame.peek()
     headlessPlane = plane
     swapTo(createHeadlessCameraDriver({
@@ -193,18 +196,8 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
     },
     followPlane(plane) {
       if (disposed || attached || !headlessPlane || plane === headlessPlane) return
-      toHeadless(plane, planarCameraOf(frames.viewFrame.peek().view))
-    },
-    replacePolicy(policy) {
-      if (disposed) return
-      navigationPolicy = createNavigationPolicy(policy, options.reducedMotion)
-      const last = frames.viewFrame.peek()
-      // A running tween or flight constrains each of its frames under driverDeps.policy and builds them with its bounds, so it takes
-      // the new policy on its next frame; a move now would stop a flight (a re-origin during a place-search flight).
-      if (last.moving) return
-      // Today's applyPolicy: the scale clamps to the new bounds about the screen centre, and the frame takes the new bounds.
-      const { screen } = last.view
-      live.apply({ kind: 'zoom-around', anchorPx: { x: screen.width / 2, y: screen.height / 2 }, factor: 1 })
+      const { view } = frames.viewFrame.peek()
+      toHeadless(plane, planarToViewCamera(planarCameraOf(view), view.screen, plane))
     },
     dispose() {
       if (disposed) return

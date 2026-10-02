@@ -99,7 +99,6 @@ describe('purpose-aware Design persistence operations', () => {
       () => 'applied',
     )
     const session: CanvasDocumentSurface = {
-      initializeViewport: vi.fn(),
       attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
       attachRulersTo: vi.fn(),
       showCanvasChrome: vi.fn(),

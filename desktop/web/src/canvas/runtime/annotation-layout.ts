@@ -1,5 +1,5 @@
 import { getCanvasTextOpacity } from './text-visibility'
-import type { SceneAnnotationEntity, SceneDesignObjectSelection, ScenePoint, SceneViewportState } from './scene'
+import type { SceneAnnotationEntity, SceneDesignObjectSelection, ScenePoint } from './scene'
 
 interface AnnotationTextMetrics {
   widthPx: number
@@ -35,16 +35,17 @@ export function getRevealedAnnotationId(selection: SceneDesignObjectSelection): 
   return selection.length === 1 && selection[0]?.kind === 'annotation' ? selection[0].id : null
 }
 
+/** How a note shows at a scale. Its frames are in CSS px about the note's anchor, its position projected through the view. */
 export function getAnnotationPresentation(
   annotation: SceneAnnotationEntity,
-  viewport: SceneViewportState,
+  pixelsPerMetre: number,
   revealText = false,
   textAllowed = true,
 ) {
-  const textOpacity = revealText ? 1 : textAllowed ? getCanvasTextOpacity(viewport.scale) : 0
-  const textFrame = getAnnotationScreenFrame(annotation, viewport)
+  const textOpacity = revealText ? 1 : textAllowed ? getCanvasTextOpacity(pixelsPerMetre) : 0
+  const textFrame = annotationScreenFrameAt(annotation, { x: 0, y: 0 })
   const markerOwnsGeometry = textOpacity < 0.5
-  const compact = !textAllowed && getCanvasTextOpacity(viewport.scale) > 0
+  const compact = !textAllowed && getCanvasTextOpacity(pixelsPerMetre) > 0
   const markerSize = compact ? 4 : ANNOTATION_MARKER_SIZE_PX
   return {
     textOpacity,
@@ -70,10 +71,10 @@ export function getAnnotationVisualWorldCorners(
   paddingPx: { x: number; y: number } = { x: 0, y: 0 },
   textAllowed = true,
 ): ScenePoint[] {
-  const { frame } = getAnnotationPresentation(annotation, { x: 0, y: 0, scale: viewportScale }, revealText, textAllowed)
+  const { frame } = getAnnotationPresentation(annotation, viewportScale, revealText, textAllowed)
   const safeScale = Math.max(viewportScale, 0.001)
   return rotatedRectCorners({
-    origin: { x: frame.origin.x / safeScale, y: frame.origin.y / safeScale },
+    origin: { x: annotation.position.x + frame.origin.x / safeScale, y: annotation.position.y + frame.origin.y / safeScale },
     width: frame.widthPx / safeScale,
     height: frame.heightPx / safeScale,
     paddingX: paddingPx.x / safeScale,
@@ -102,7 +103,7 @@ export function isPointInAnnotationPresentation(
     return isPointInAnnotationText(annotation, point, viewportScale)
   }
   // Pointer allowance follows the visible marker, including crowded notes.
-  const { frame } = getAnnotationPresentation(annotation, { x: 0, y: 0, scale: viewportScale }, false, textAllowed)
+  const { frame } = getAnnotationPresentation(annotation, viewportScale, false, textAllowed)
   const radius = (frame.widthPx / 2 + 4) / Math.max(viewportScale, 0.001)
   return Math.abs(point.x - annotation.position.x) <= radius + HIT_EPSILON
     && Math.abs(point.y - annotation.position.y) <= radius + HIT_EPSILON
@@ -128,13 +129,6 @@ export function getAnnotationWorldBounds(
   viewportScale: number,
 ): AnnotationWorldBounds {
   return boundsForPoints(getAnnotationWorldCorners(annotation, viewportScale))
-}
-
-export function getAnnotationScreenFrame(
-  annotation: SceneAnnotationEntity,
-  viewport: SceneViewportState,
-): AnnotationScreenFrame {
-  return annotationScreenFrameAt(annotation, worldToScreen(annotation.position, viewport))
 }
 
 /** A note's text frame at an origin already projected (the text-entry host projects through the view frame). */
@@ -183,13 +177,6 @@ function isPointInAnnotationText(
     local.y >= -HIT_EPSILON &&
     local.y <= metrics.heightPx / safeScale + HIT_EPSILON
   )
-}
-
-export function worldToScreen(point: ScenePoint, viewport: SceneViewportState): ScenePoint {
-  return {
-    x: point.x * viewport.scale + viewport.x,
-    y: point.y * viewport.scale + viewport.y,
-  }
 }
 
 function rotatedRectCorners(options: {

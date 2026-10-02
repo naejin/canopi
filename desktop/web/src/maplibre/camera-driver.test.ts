@@ -2,16 +2,18 @@ import { signal } from '@preact/signals'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestView, type TestView } from '../__tests__/support/test-view'
 import { geoToMercator, mapZoomToStageScale, mercatorToGeo, stageScaleToMapZoom, worldToGeo } from '../canvas/projection'
-import type { ScenePersistedState } from '../canvas/runtime/scene'
+import { createDefaultScenePersistedState, type ScenePersistedState } from '../canvas/runtime/scene'
 import { sceneExtentPoints } from '../canvas/runtime/scene-extent'
 import type { CameraDriver, CameraDriverDeps } from '../canvas/runtime/view/camera-driver'
+import { createCameraDriverHost } from '../canvas/runtime/view/driver-host'
+import { createViewNavigation } from '../canvas/runtime/view/navigation'
 import { createNavigationPolicy, zoomFloorForArc, type NavigationPolicy } from '../canvas/runtime/view/navigation-policy'
-import type { GeoPoint, ViewFrame, ViewScreen } from '../canvas/runtime/view/types'
+import { planarToViewCamera } from '../canvas/runtime/view/camera-math'
+import type { GeoPoint, PlanarCamera, ViewFrame, ViewScreen } from '../canvas/runtime/view/types'
 import { planarCameraOf } from '../canvas/runtime/view/view-transform'
 import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
 import { createWorkspaceCameraPolicy } from '../canvas/workspace-camera-policy'
 import { createMapLibreCameraDriver } from './camera-driver'
-import { MapLibreWorkspaceCameraOwner } from './workspace-camera'
 import type { MapLibreLngLat, MapLibreTransformConstrain } from './loader'
 
 const PLANE = createSessionPlane({ lon: 2.35, lat: 48.85 })
@@ -171,39 +173,20 @@ function wrapBearing(bearing: number): number {
   return wrapped === -180 ? 180 : wrapped
 }
 
-function createManualFrames() {
-  let now = 0
-  let nextId = 1
-  let frames = new Map<number, (nowMs: number) => void>()
-  return {
-    clock: () => now,
-    scheduleFrame(callback: (nowMs: number) => void): () => void {
-      const id = nextId++
-      frames.set(id, callback)
-      return () => { frames.delete(id) }
-    },
-    advance(ms: number): void {
-      now += ms
-      const due = frames
-      frames = new Map()
-      for (const callback of due.values()) callback(now)
-    },
-  }
-}
-
 const drivers: CameraDriver[] = []
 
 function attach(map: ConsistentMap, policy: NavigationPolicy = POLICY, plane: SessionPlane = PLANE) {
-  const time = createManualFrames()
-  const driver = createMapLibreCameraDriver(map, plane, {
-    clock: time.clock,
-    scheduleFrame: time.scheduleFrame,
-    policy: () => policy,
-  })
+  const driver = createMapLibreCameraDriver(map, plane, { policy: () => policy })
   drivers.push(driver)
   const published: ViewFrame[] = []
   driver.frames.onViewFrame((frame) => published.push(frame))
-  return { driver, published, time }
+  return { driver, published }
+}
+
+/** A placement as the navigation's fits send it: a 'set' to the camera the plane gives for it on the driver's screen. */
+function placeOn(driver: CameraDriver, plane: SessionPlane, placement: PlanarCamera): void {
+  const target = planarToViewCamera(placement, driver.frames.viewFrame.peek().view.screen, plane)
+  driver.apply({ kind: 'set', target, animation: 'none' })
 }
 
 function screenOf(frame: ViewFrame): ViewScreen {
@@ -212,7 +195,7 @@ function screenOf(frame: ViewFrame): ViewScreen {
 
 const views: TestView[] = []
 
-/** The deps every driver on a test view's host runs with (its manual clock and policy), as the workspace activation builds one. */
+/** The deps every driver on a test view's host runs with (its policy), as the workspace activation builds one. */
 function hostDeps(view: TestView): CameraDriverDeps {
   return view.host.driverDeps
 }
@@ -274,7 +257,7 @@ describe('MapLibre camera driver', () => {
     expect(map.getBearing()).toBe(15)
     expect(published[1]!.view.camera.bearingDeg).toBe(300)
     expect(published[3]!.view.camera).toEqual({ center: { lon: 2.36, lat: 48.86 }, zoom: 17.5, bearingDeg: 15, pitchDeg: 0 })
-    expect(published.map((frame) => frame.revision)).toEqual([1, 2, 3, 4])
+    expect(new Set(published).size).toBe(4)
   })
 
   it('a pan of +10 px moves the ground 10 px right', () => {
@@ -302,14 +285,15 @@ describe('MapLibre camera driver', () => {
     const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
     const { driver } = attach(map)
     const seen: Array<readonly [string, number]> = []
+    const frames: ViewFrame[] = []
     let panned = false
     driver.frames.onViewFrame((frame) => {
-      seen.push(['frame', frame.revision])
+      seen.push(['frame', frames.push(frame)])
       if (panned) return
       panned = true
       driver.apply({ kind: 'pan-by', deltaPx: { x: 10, y: 0 } })
       // Neither sent to the map nor published while the frame is dispatched.
-      seen.push(['after the move', driver.frames.viewFrame.peek().revision])
+      seen.push(['after the move', frames.indexOf(driver.frames.viewFrame.peek()) + 1])
       seen.push(['jumps', map.jumpTo.mock.calls.length])
     })
     const ground = map.unproject([200, 150])
@@ -495,14 +479,15 @@ describe('MapLibre camera driver', () => {
     expect(map.jumpTo).not.toHaveBeenCalled()
   })
 
-  // Moved from __tests__/maplibre-camera.test.ts (createMapFrame > …): a placement reaches the map as one explicit camera.
+  // Moved from __tests__/maplibre-camera.test.ts (createMapFrame > …): a placement, as the navigation's fits send it (a 'set' to the
+  // camera the plane gives for it), reaches the map as one explicit camera.
 
   it('a placement becomes the north-up camera over the plane point at the screen centre', () => {
     const plane = createSessionPlane({ lon: -122.68, lat: 45.52 })
     const map = new ConsistentMap({ center: plane.origin, zoom: 16 }, { width: 1000, height: 800 })
     const { driver, published } = attach(map, createNavigationPolicy(createWorkspaceCameraPolicy(45.52), signal(false)), plane)
 
-    driver.apply({ kind: 'place', planar: { x: -200, y: -100, scale: 2, bearingDeg: 0 } })
+    placeOn(driver, plane, { x: -200, y: -100, scale: 2, bearingDeg: 0 })
 
     const centre = worldToGeo(350, 250, 45.52, -122.68)
     const [options] = map.jumpTo.mock.calls.at(-1)!
@@ -523,7 +508,7 @@ describe('MapLibre camera driver', () => {
       { x: 0, y: 0, scale: -2, bearingDeg: 0 },
       { x: Number.NaN, y: 0, scale: 2, bearingDeg: 0 },
       { x: 0, y: 0, scale: Number.POSITIVE_INFINITY, bearingDeg: 0 },
-    ]) driver.apply({ kind: 'place', planar })
+    ]) placeOn(driver, PLANE, planar)
 
     expect(map.jumpTo).not.toHaveBeenCalled()
     expect(published).toHaveLength(0)
@@ -534,7 +519,7 @@ describe('MapLibre camera driver', () => {
     const map = new ConsistentMap({ center: plane.origin, zoom: 18 }, { width: 1000, height: 800 })
     const { driver, published } = attach(map, createNavigationPolicy(createWorkspaceCameraPolicy(0), signal(false)), plane)
 
-    driver.apply({ kind: 'place', planar: { x: 0, y: 0, scale: 5000, bearingDeg: 0 } })
+    placeOn(driver, plane, { x: 0, y: 0, scale: 5000, bearingDeg: 0 })
 
     expect(map.jumpTo.mock.calls.at(-1)![0]).toMatchObject({ zoom: 27, bearing: 0 })
     expect(published.at(-1)!.view.camera.zoom).toBe(27)
@@ -546,10 +531,10 @@ describe('MapLibre camera driver', () => {
     const map = new ConsistentMap({ center: plane.origin, zoom: 16 }, { width: 1000, height: 800 })
     const { driver } = attach(map, createNavigationPolicy(createWorkspaceCameraPolicy(45.52), signal(false)), plane)
 
-    driver.apply({ kind: 'place', planar: { x: -200, y: -100, scale: 2, bearingDeg: 0 } })
+    placeOn(driver, plane, { x: -200, y: -100, scale: 2, bearingDeg: 0 })
 
     const { view } = driver.frames.viewFrame.peek()
-    const centre = view.screenToWorld({ x: 500, y: 400 })!
+    const centre = view.screenToWorld({ x: 500, y: 400 })
     expect(centre.x).toBeCloseTo(350, 8)
     expect(centre.y).toBeCloseTo(250, 8)
     const corners = view.visibleWorldQuad().map((corner) => plane.toGeo(corner))
@@ -622,7 +607,7 @@ describe('MapLibre camera driver', () => {
     const { driver, published } = attach(map)
     const before = driver.frames.viewFrame.peek()
     const screenPoints = [{ x: 0, y: 0 }, { x: 400, y: 300 }, { x: 200, y: 150 }, { x: 37.5, y: 211 }]
-    const groundBefore = screenPoints.map((point) => PLANE.toGeo(before.view.screenToWorld(point)!))
+    const groundBefore = screenPoints.map((point) => PLANE.toGeo(before.view.screenToWorld(point)))
     // A re-origin about 20 km east, as the runtime makes after panning away.
     const next = createSessionPlane(PLANE.toGeo({ x: 20_000, y: -5_000 }))
 
@@ -635,7 +620,7 @@ describe('MapLibre camera driver', () => {
     expect(after.view.camera).toEqual(before.view.camera)
     // The same ground under every screen point, expressed once in the next plane: its origin is where the map shows it.
     for (const [index, point] of screenPoints.entries()) {
-      const ground = next.toGeo(after.view.screenToWorld(point)!)
+      const ground = next.toGeo(after.view.screenToWorld(point))
       expect(ground.lon).toBeCloseTo(groundBefore[index]!.lon, 9)
       expect(ground.lat).toBeCloseTo(groundBefore[index]!.lat, 9)
     }
@@ -707,7 +692,7 @@ describe('MapLibre camera driver', () => {
     const jumps = map.jumpTo.mock.calls.length
     const x = planarCameraOf(view.view()).x
     view.navigation.panByPx({ x: 10, y: 0 })
-    expect(planarCameraOf(view.view()).x).toBe(x + 10)
+    expect(planarCameraOf(view.view()).x).toBeCloseTo(x + 10, 6)
     expect(map.jumpTo).toHaveBeenCalledTimes(jumps)
   })
 
@@ -782,27 +767,75 @@ describe('MapLibre camera driver', () => {
 
 // Moved from __tests__/maplibre-camera.test.ts: a placement on the attached map keeps every plane point on the canvas pixel the
 // placement gives it (p × scale + { x, y }), through MapLibre's own Mercator camera.
-// The legacy MapLibre shim (maplibre/workspace-camera.ts, deleted with it at the end of 0D2) over this driver.
-describe('MapLibre workspace camera shim', () => {
-  it('a re-origin during a flight keeps the flight running', () => {
-    const scenePlane = signal<SessionPlane | null>(PLANE)
-    const camera = new MapLibreWorkspaceCameraOwner(createWorkspaceCameraPolicy(PLANE.origin.lat))
-    const stopFollowing = camera.followScenePlane(scenePlane)
+/** The runtime's camera as the runtime builds it: a host on the runtime's plane, with the navigation over it and one attached map. */
+function runtimeCameraOn(map: ConsistentMap) {
+  let runtimePlane = PLANE
+  const host = createCameraDriverHost({
+    policy: createWorkspaceCameraPolicy(),
+    reducedMotion: signal(false),
+    plane: () => runtimePlane,
+    screen: { width: 400, height: 300, devicePixelRatio: 1 },
+  })
+  const navigation = createViewNavigation({
+    driver: host,
+    policy: host.driverDeps.policy,
+    readScene: () => ({ persisted: createDefaultScenePersistedState(), selection: [], bounds: {} }),
+  })
+  // Attached on the host, as the workspace activation attaches each map.
+  host.attach(createMapLibreCameraDriver(map, PLANE, host.driverDeps))
+  return {
+    host,
+    navigation,
+    /** The runtime's plane effect on a re-origin: the Scene's plane moves, then the live driver is re-expressed in it. */
+    reorigin(next: SessionPlane) {
+      runtimePlane = next
+      host.current().planeChanged(next)
+    },
+  }
+}
+
+// The attached re-origin, which the runtime's plane effect makes (it was the MapLibre shim's refreshOrigin before 0E).
+describe('the runtime camera on an attached map', () => {
+  it('an attached re-origin keeps the map still and frames in the new plane', () => {
     const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
+    const camera = runtimeCameraOn(map)
     try {
-      // Attached on the host, as the workspace activation attaches each map.
-      camera.host.attach(createMapLibreCameraDriver(map, PLANE, camera.host.driverDeps))
+      const before = camera.host.frames.viewFrame.peek()
+      const groundAtCentre = PLANE.toGeo(before.view.screenToWorld({ x: 200, y: 150 }))
+      const jumps = map.jumpTo.mock.calls.length
+      const next = createSessionPlane(PLANE.toGeo({ x: 20_000, y: -5_000 }))
+
+      camera.reorigin(next)
+
+      expect(map.jumpTo).toHaveBeenCalledTimes(jumps)
+      const after = camera.host.frames.viewFrame.peek()
+      expect(after.attached).toBe(true)
+      expect(after.view.planeRevision).toBeGreaterThan(before.view.planeRevision)
+      expect(after.view.camera).toEqual(before.view.camera)
+      const ground = next.toGeo(after.view.screenToWorld({ x: 200, y: 150 }))
+      expect(ground.lon).toBeCloseTo(groundAtCentre.lon, 9)
+      expect(ground.lat).toBeCloseTo(groundAtCentre.lat, 9)
+      // The new latitude's scale bounds.
+      expect(after.scaleBounds.max).toBeCloseTo(mapZoomToStageScale(27, next.origin.lat), 6)
+    } finally {
+      camera.host.dispose()
+    }
+  })
+
+  it('a re-origin during a flight keeps the flight running', () => {
+    const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
+    const camera = runtimeCameraOn(map)
+    try {
       const far = { x: 30_000, y: -60_000 }
       const target = PLANE.toGeo(far)
-      camera.centerOn(far, mapZoomToStageScale(17, PLANE.origin.lat), { animate: true })
+      camera.navigation.centerOn(far, mapZoomToStageScale(17, PLANE.origin.lat), { animate: true })
       expect(map.flight).not.toBeNull()
       map.flightFrame({ center: target, zoom: 14, bearing: 0 })
 
-      // The re-origin the flight triggered: the Scene's plane moves to a new latitude, then the composition refreshes the origin.
+      // The re-origin the flight triggered: the Scene's plane moves to a new latitude, and the runtime re-expresses the camera.
       const next = createSessionPlane(target)
       const stops = map.stop.mock.calls.length
-      scenePlane.value = next
-      camera.attachment.refreshOrigin()
+      camera.reorigin(next)
 
       expect(map.stop).toHaveBeenCalledTimes(stops)
       expect(map.jumpTo).not.toHaveBeenCalledWith(expect.objectContaining({ zoom: 14 }))
@@ -821,8 +854,7 @@ describe('MapLibre workspace camera shim', () => {
       expect(shown.lng).toBeCloseTo(next.origin.lon, 9)
       expect(shown.lat).toBeCloseTo(next.origin.lat, 9)
     } finally {
-      stopFollowing()
-      camera.dispose()
+      camera.host.dispose()
     }
   })
 })
@@ -840,7 +872,7 @@ describe('screen-lock validation', () => {
   function placedOn(size: { width: number; height: number }, viewport: { x: number; y: number; scale: number }) {
     const map = new ConsistentMap({ center: plane.origin, zoom: 16 }, size)
     const { driver } = attach(map, createNavigationPolicy(createWorkspaceCameraPolicy(location.lat), signal(false)), plane)
-    driver.apply({ kind: 'place', planar: { ...viewport, bearingDeg: 0 } })
+    placeOn(driver, plane, { ...viewport, bearingDeg: 0 })
     return map
   }
 

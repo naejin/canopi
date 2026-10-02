@@ -7,9 +7,7 @@ import { writePlantStampDragData } from '../canvas/plant-stamp-source'
 import { writeSavedObjectStampDragData } from '../canvas/saved-object-stamp-source'
 import { selectedObjectIds } from '../canvas/session-state'
 import { snapToGridEnabled } from '../app/canvas-settings/signals'
-import { CameraController } from '../canvas/runtime/camera'
 import { createMapLibreCameraDriver } from '../maplibre/camera-driver'
-import { MapLibreWorkspaceCameraOwner } from '../maplibre/workspace-camera'
 import { createSessionPlane } from '../canvas/session-plane'
 import { SceneStore, type ScenePoint } from '../canvas/runtime/scene'
 import {
@@ -64,10 +62,12 @@ import {
   pointsCenter,
   installSceneInteractionFixture,
 } from './support/canvas-interaction-setup'
+import { createTestView, type TestView } from './support/test-view'
+import './support/camera-tolerance'
 
 describe('SceneInteractionSession', () => {
   let container: HTMLDivElement
-  let camera: CameraController
+  let testView: TestView
   let store: SceneStore
   let events: SceneInteractionEventHarness
 
@@ -77,7 +77,7 @@ describe('SceneInteractionSession', () => {
     openContextMenuFromKeyboard,
   } = installSceneInteractionFixture(
     (f) => {
-      ({ container, camera, store, events } = f)
+      ({ container, testView, store, events } = f)
     },
     () => ({ events }),
   )
@@ -98,9 +98,9 @@ describe('SceneInteractionSession', () => {
         { locked: true },
       )]
     })
-    const deps = createInteractionDeps(container, store, camera, {
+    const deps = createInteractionDeps(container, store, testView, {
       translate,
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
     })
     const session = createTestSession(deps)
     session.setTool('select')
@@ -135,8 +135,8 @@ describe('SceneInteractionSession', () => {
         { x: 160, y: 150 },
       ])]
     })
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
     })
     const session = createTestSession(deps)
     session.setTool('select')
@@ -158,8 +158,8 @@ describe('SceneInteractionSession', () => {
         { x: 70, y: 90 },
       ])]
     })
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
     })
     const session = createTestSession(deps)
     session.setTool('select')
@@ -167,11 +167,11 @@ describe('SceneInteractionSession', () => {
     session.refreshMeasurements()
     const handle = rotationHandle(container)!
     // Without chrome it sits centred above the selection.
-    expect(Number.parseFloat(handle.style.left)).toBe(26)
-    expect(Number.parseFloat(handle.style.top)).toBe(8)
+    expect(Number.parseFloat(handle.style.left)).toBeCloseTo(26, 6)
+    expect(Number.parseFloat(handle.style.top)).toBeCloseTo(8, 6)
 
     // The labelled tool rail covers 240 px on the left, the title bar 60 px on top.
-    camera.setFrameInsets({ top: 60, right: 0, bottom: 0, left: 240 })
+    testView.navigation.setFramingInsets({ top: 60, right: 0, bottom: 0, left: 240 })
     session.refreshMeasurements()
 
     expect(Number.parseFloat(handle.style.left)).toBe(248)
@@ -200,7 +200,7 @@ describe('SceneInteractionSession', () => {
 
     const render = vi.fn()
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { render, onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { render, onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -221,7 +221,7 @@ describe('SceneInteractionSession', () => {
     })
     const onSceneEditCommit = vi.fn()
     const render = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit, render })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit, render })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -256,7 +256,7 @@ describe('SceneInteractionSession', () => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
     const onSceneEditCommit = vi.fn()
-    const session = createTestSession(createInteractionDeps(container, store, camera, { onSceneEditCommit }))
+    const session = createTestSession(createInteractionDeps(container, store, testView, { onSceneEditCommit }))
     session.setTool('select')
 
     events.pointerDown({ x: 20, y: 30 }, { pointerId: 17 })
@@ -277,7 +277,7 @@ describe('SceneInteractionSession', () => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
     const onSceneEditCommit = vi.fn()
-    const session = createTestSession(createInteractionDeps(container, store, camera, { onSceneEditCommit }))
+    const session = createTestSession(createInteractionDeps(container, store, testView, { onSceneEditCommit }))
     session.setTool('select')
 
     events.pointerDown({ x: 20, y: 30 }, { pointerId: 18 })
@@ -305,7 +305,7 @@ describe('SceneInteractionSession', () => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -333,7 +333,7 @@ describe('SceneInteractionSession', () => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
     const onSceneEditCommit = vi.fn()
-    const session = createTestSession(createInteractionDeps(container, store, camera, { onSceneEditCommit }))
+    const session = createTestSession(createInteractionDeps(container, store, testView, { onSceneEditCommit }))
     session.setTool('select')
 
     events.pointerDown({ x: 20, y: 30 }, { pointerId: 20 })
@@ -360,7 +360,7 @@ describe('SceneInteractionSession', () => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
     const onSceneEditCommit = vi.fn()
-    const session = createTestSession(createInteractionDeps(container, store, camera, { onSceneEditCommit }))
+    const session = createTestSession(createInteractionDeps(container, store, testView, { onSceneEditCommit }))
     session.setTool('select')
 
     events.pointerDown({ x: 20, y: 30 }, { pointerId: 22 })
@@ -383,7 +383,7 @@ describe('SceneInteractionSession', () => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
     const onSceneEditCommit = vi.fn()
-    const session = createTestSession(createInteractionDeps(container, store, camera, { onSceneEditCommit }))
+    const session = createTestSession(createInteractionDeps(container, store, testView, { onSceneEditCommit }))
     session.setTool('select')
 
     events.pointerDown({ x: 20, y: 30 }, { pointerId: 23 })
@@ -410,7 +410,7 @@ describe('SceneInteractionSession', () => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
     const onSceneEditCommit = vi.fn()
-    const session = createTestSession(createInteractionDeps(container, store, camera, { onSceneEditCommit }))
+    const session = createTestSession(createInteractionDeps(container, store, testView, { onSceneEditCommit }))
     session.setTool('select')
 
     events.pointerDown({ x: 20, y: 30 }, { pointerId: 25 })
@@ -423,13 +423,12 @@ describe('SceneInteractionSession', () => {
   })
 
   it('routes navigation through an attached MapLibre camera while tool drags change only the Scene and detach restores fallback navigation', () => {
-    const attachedCamera = new MapLibreWorkspaceCameraOwner()
-    attachedCamera.initialize({ width: 400, height: 300 })
-    const map = new AttachedInteractionMap()
     const plane = createSessionPlane({ lat: 48.8566, lon: 2.3522 })
-    const driver = createMapLibreCameraDriver(map, plane, attachedCamera.host.driverDeps)
+    const attachedView = createTestView({ plane })
+    const map = new AttachedInteractionMap()
+    const driver = createMapLibreCameraDriver(map, plane, attachedView.host.driverDeps)
     expect(driver.failure.peek()).toBeNull()
-    attachedCamera.host.attach(driver)
+    attachedView.host.attach(driver)
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
@@ -437,7 +436,7 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(createInteractionDeps(
       container,
       store,
-      attachedCamera,
+      attachedView,
       { onSceneEditCommit },
     ))
     session.setTool('select')
@@ -454,31 +453,31 @@ describe('SceneInteractionSession', () => {
     expect(onSceneEditCommit).not.toHaveBeenCalled()
 
     const mapCallsBeforeToolDrag = map.jumpTo.mock.calls.length
-    const viewportBeforeToolDrag = attachedCamera.viewport
+    const viewportBeforeToolDrag = attachedView.viewport()
     events.pointerDown({ x: 140, y: 110 }, { pointerId: 27 })
     events.pointerMove({ x: 180, y: 150 }, { pointerId: 27 })
     events.pointerUp({ x: 180, y: 150 }, { pointerId: 27 })
 
     expect(store.persisted.plants[0]?.position).toEqual({ x: expect.closeTo(40, 6), y: expect.closeTo(50, 6) })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
-    expect(attachedCamera.viewport).toEqual(viewportBeforeToolDrag)
+    expect(attachedView.viewport()).toEqual(viewportBeforeToolDrag)
     expect(map.jumpTo).toHaveBeenCalledTimes(mapCallsBeforeToolDrag)
 
-    attachedCamera.host.detach()
+    attachedView.host.detach()
     const mapCallsBeforeDetachPan = map.jumpTo.mock.calls.length
-    const viewportBeforeDetachPan = attachedCamera.viewport
+    const viewportBeforeDetachPan = attachedView.viewport()
     events.pointerDown({ x: 200, y: 150 }, { button: 1, pointerId: 28 })
     events.pointerMove({ x: 220, y: 165 }, { button: 1, pointerId: 28 })
     events.pointerUp({ x: 220, y: 165 }, { button: 1, pointerId: 28 })
 
-    expect(attachedCamera.viewport).toEqual({
+    expect(attachedView.viewport()).toEqual({
       x: viewportBeforeDetachPan.x + 20,
       y: viewportBeforeDetachPan.y + 15,
       scale: viewportBeforeDetachPan.scale,
     })
     expect(map.jumpTo).toHaveBeenCalledTimes(mapCallsBeforeDetachPan)
     session.dispose()
-    attachedCamera.dispose()
+    attachedView.dispose()
   })
 
   it('does not let a second pointer replace the active Scene Edit gesture', () => {
@@ -486,7 +485,7 @@ describe('SceneInteractionSession', () => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -515,7 +514,7 @@ describe('SceneInteractionSession', () => {
     })
     const onSceneEditCommit = vi.fn()
     const setHoveredTarget = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit, setHoveredTarget })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit, setHoveredTarget })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -534,8 +533,8 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 220, y: 150 }, { pointerId: 4 })
     events.pointerUp({ x: 220, y: 150 }, { pointerId: 4 })
 
-    expect(camera.viewport.x).toBe(0)
-    expect(camera.viewport.y).toBe(0)
+    expect(testView.viewport().x).toBeCloseTo(0, 6)
+    expect(testView.viewport().y).toBeCloseTo(0, 6)
     session.dispose()
   })
 
@@ -552,7 +551,7 @@ describe('SceneInteractionSession', () => {
     })
 
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
     deps.setSelection([plantTarget('plant-1'), plantTarget('plant-2')])
@@ -585,8 +584,8 @@ describe('SceneInteractionSession', () => {
         { x: 20, y: 140 },
       ])]
     })
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
     })
     const session = createTestSession(deps)
     session.setTool('select')
@@ -610,7 +609,7 @@ describe('SceneInteractionSession', () => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }, { commonName: 'Apple' })]
     })
     const setHoveredTarget = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { setHoveredTarget })
+    const deps = createInteractionDeps(container, store, testView, { setHoveredTarget })
     const session = createTestSession(deps)
     session.setTool('select')
     deps.setSelection([plantTarget('plant-1')])
@@ -643,8 +642,8 @@ describe('SceneInteractionSession', () => {
       ])]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
       onSceneEditCommit,
     })
     const session = createTestSession(deps)
@@ -671,8 +670,8 @@ describe('SceneInteractionSession', () => {
       ])]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
       onSceneEditCommit,
     })
     const session = createTestSession(deps)
@@ -707,8 +706,8 @@ describe('SceneInteractionSession', () => {
       ])]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
       onSceneEditCommit,
     })
     const session = createTestSession(deps)
@@ -735,7 +734,7 @@ describe('SceneInteractionSession', () => {
     session.refreshMeasurements()
     const handle = rotationHandle(container)!
     const affordanceElement = lockedAffordance(container)!
-    const pivot = selectionBoundsCenter(getDesignObjectSelectionFromStore(store, camera))
+    const pivot = selectionBoundsCenter(getDesignObjectSelectionFromStore(store, testView))
     const start = rotationHandleCenter(container)
     const end = quarterTurnClockwise(pivot, start)
 
@@ -761,8 +760,8 @@ describe('SceneInteractionSession', () => {
         makePlant('locked-plant', 'Malus domestica', { x: 300, y: 250 }, { locked: true }),
       ]
     })
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
     })
     const session = createTestSession(deps)
     session.setTool('select')
@@ -778,16 +777,16 @@ describe('SceneInteractionSession', () => {
       { x: 230, y: 170 },
       { pointerId: 41, button: 1, target: overlay },
     )
-    expect(camera.viewport).toMatchObject({ x: 30, y: 20 })
+    expect(testView.viewport()).toMatchObject({ x: 30, y: 20 })
 
     events.pointerUp(
       { x: 230, y: 170 },
       { pointerId: 41, button: 1, target: overlay },
     )
-    const releasedViewport = { ...camera.viewport }
+    const releasedViewport = { ...testView.viewport() }
     events.pointerMove({ x: 260, y: 190 }, { pointerId: 41, button: 1 })
 
-    expect(camera.viewport).toEqual(releasedViewport)
+    expect(testView.viewport()).toEqual(releasedViewport)
     session.dispose()
   })
 
@@ -809,7 +808,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -838,7 +837,7 @@ describe('SceneInteractionSession', () => {
       ]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     deps.setSelection([plantTarget('apple-1'), plantTarget('apple-2'), plantTarget('pear-1')])
     vi.mocked(deps.setSelection).mockClear()
     const session = createTestSession(deps)
@@ -868,8 +867,8 @@ describe('SceneInteractionSession', () => {
       ])]
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 220, y: 100 }, 'Edit me')]
     })
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
     })
     const session = createTestSession(deps)
     session.setTool('select')
@@ -907,8 +906,8 @@ describe('SceneInteractionSession', () => {
         makeMeasurementGuide('measurement-guide-1', { x: 20, y: 140 }, { x: 120, y: 140 }),
       ]
     })
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
     })
     const session = createTestSession(deps)
 
@@ -948,8 +947,8 @@ describe('SceneInteractionSession', () => {
         rotationDeg: null,
       }]
     })
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
     })
     const session = createTestSession(deps)
 
@@ -971,8 +970,8 @@ describe('SceneInteractionSession', () => {
       ])]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
       onSceneEditCommit,
     })
     const session = createTestSession(deps)
@@ -1010,8 +1009,8 @@ describe('SceneInteractionSession', () => {
         { x: 20, y: 140 },
       ])]
     })
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
     })
     const session = createTestSession(deps)
     deps.setSelection([zoneTarget('zone-1')])
@@ -1042,8 +1041,8 @@ describe('SceneInteractionSession', () => {
       ])]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
       onSceneEditCommit,
     })
     const session = createTestSession(deps)
@@ -1076,8 +1075,8 @@ describe('SceneInteractionSession', () => {
       ])]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
       onSceneEditCommit,
     })
     const session = createTestSession(deps)
@@ -1110,8 +1109,8 @@ describe('SceneInteractionSession', () => {
       ])]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
       onSceneEditCommit,
     })
     const session = createTestSession(deps)
@@ -1134,8 +1133,8 @@ describe('SceneInteractionSession', () => {
   })
 
   it('hides the Rotation Handle for locked Design Objects, hidden Layers, and locked Layers', () => {
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
     })
     const session = createTestSession(deps)
     deps.setSelection([zoneTarget('zone-1')])
@@ -1189,14 +1188,14 @@ describe('SceneInteractionSession', () => {
       ]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
       onSceneEditCommit,
     })
     const session = createTestSession(deps)
     deps.setSelection([plantTarget('plant-1'), plantTarget('plant-2')])
     session.refreshMeasurements()
-    const selection = getDesignObjectSelectionFromStore(store, camera)
+    const selection = getDesignObjectSelectionFromStore(store, testView)
     const pivot = selectionBoundsCenter(selection)
     const start = rotationHandleCenter(container)
     const end = quarterTurnClockwise(pivot, start)
@@ -1243,14 +1242,14 @@ describe('SceneInteractionSession', () => {
       }]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
       onSceneEditCommit,
     })
     const session = createTestSession(deps)
     deps.setSelection([plantTarget('plant-1'), zoneTarget('line-1'), zoneTarget('rect-1'), annotationTarget('annotation-1')])
     session.refreshMeasurements()
-    const selection = getDesignObjectSelectionFromStore(store, camera)
+    const selection = getDesignObjectSelectionFromStore(store, testView)
     const pivot = selectionBoundsCenter(selection)
     const start = rotationHandleCenter(container)
     const end = quarterTurnClockwise(pivot, start)
@@ -1295,14 +1294,14 @@ describe('SceneInteractionSession', () => {
       }]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
       onSceneEditCommit,
     })
     const session = createTestSession(deps)
     deps.setSelection([groupTarget('group-1')])
     session.refreshMeasurements()
-    const selection = getDesignObjectSelectionFromStore(store, camera)
+    const selection = getDesignObjectSelectionFromStore(store, testView)
     const pivot = selectionBoundsCenter(selection)
     const start = rotationHandleCenter(container)
     const end = quarterTurnClockwise(pivot, start)
@@ -1339,8 +1338,8 @@ describe('SceneInteractionSession', () => {
         members: [{ kind: 'plant', id: 'plant-1' }],
       }]
     })
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
     })
     const session = createTestSession(deps)
 
@@ -1370,7 +1369,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -1418,7 +1417,7 @@ describe('SceneInteractionSession', () => {
         quantity: 1,
       }]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -1434,7 +1433,7 @@ describe('SceneInteractionSession', () => {
 
   it('suppresses native context menus only on canvas interaction surfaces', () => {
     const deps = {
-      ...createInteractionDeps(container, store, camera),
+      ...createInteractionDeps(container, store, testView),
       getDesignObjectSelection: () => ({
         editableTargets: [{ kind: 'zone' as const, id: 'zone-1' }],
         lockedTargets: [],
@@ -1492,7 +1491,7 @@ describe('SceneInteractionSession', () => {
       ]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
     deps.setSelection([plantTarget('plant-1')])
@@ -1535,7 +1534,7 @@ describe('SceneInteractionSession', () => {
       ]
     })
     const { admission, recoveryCalls } = createRecoveringCommandAdmission()
-    const baseDeps = createInteractionDeps(container, store, camera)
+    const baseDeps = createInteractionDeps(container, store, testView)
     const deps: SceneInteractionSessionDeps = {
       ...baseDeps,
       commandAdmission: admission,
@@ -1568,7 +1567,7 @@ describe('SceneInteractionSession', () => {
       ]
     })
     const { admission, recoveryCalls } = createRecoveringCommandAdmission()
-    const baseDeps = createInteractionDeps(container, store, camera)
+    const baseDeps = createInteractionDeps(container, store, testView)
     const deps: SceneInteractionSessionDeps = {
       ...baseDeps,
       commandAdmission: admission,
@@ -1601,7 +1600,7 @@ describe('SceneInteractionSession', () => {
     const pasteAt = vi.fn()
     const selectAll = vi.fn()
     let canPaste = false
-    const session = createTestSession(createInteractionDeps(container, store, camera, {
+    const session = createTestSession(createInteractionDeps(container, store, testView, {
       selectionCommands: createSelectionCommands({ canPaste: () => canPaste, pasteAt, selectAll }),
     }))
 
@@ -1628,7 +1627,7 @@ describe('SceneInteractionSession', () => {
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
     deps.setSelection([plantTarget('plant-1')])
@@ -1647,7 +1646,7 @@ describe('SceneInteractionSession', () => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
     const commands = createSelectionCommands({ canPaste: vi.fn(() => true) })
-    const deps = createInteractionDeps(container, store, camera, { selectionCommands: commands })
+    const deps = createInteractionDeps(container, store, testView, { selectionCommands: commands })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -1676,7 +1675,7 @@ describe('SceneInteractionSession', () => {
       bounds: { minX: 20, minY: 20, maxX: 24, maxY: 24 },
       sameSpeciesReferenceCanonicalName: null,
     }
-    const baseDeps = createInteractionDeps(container, store, camera, {
+    const baseDeps = createInteractionDeps(container, store, testView, {
       getDesignObjectSelection: () => selectionModel,
     })
     const withoutStamps = createTestSession(baseDeps)
@@ -1721,7 +1720,7 @@ describe('SceneInteractionSession', () => {
       sameSpeciesReferenceCanonicalName: null,
     }
     const commands = createSelectionCommands({ canPaste: vi.fn(() => true) })
-    const session = createTestSession(createInteractionDeps(container, store, camera, {
+    const session = createTestSession(createInteractionDeps(container, store, testView, {
       getDesignObjectSelection: () => selectionModel,
       selectionCommands: commands,
     }))
@@ -1772,7 +1771,7 @@ describe('SceneInteractionSession', () => {
       )
     })
     const commands = createSelectionCommands({ canPaste: vi.fn(() => true) })
-    const deps = createInteractionDeps(container, store, camera, { selectionCommands: commands })
+    const deps = createInteractionDeps(container, store, testView, { selectionCommands: commands })
     const session = createTestSession(deps)
 
     deps.setSelection([plantTarget('plant-1')])
@@ -1811,7 +1810,7 @@ describe('SceneInteractionSession', () => {
       )
     })
     const commands = createSelectionCommands({ canPaste: vi.fn(() => true) })
-    const deps = createInteractionDeps(container, store, camera, { selectionCommands: commands })
+    const deps = createInteractionDeps(container, store, testView, { selectionCommands: commands })
     const session = createTestSession(deps)
 
     openContextMenu({ x: 120, y: 30 })
@@ -1833,7 +1832,7 @@ describe('SceneInteractionSession', () => {
         makePlant('plant-2', 'Pyrus communis', { x: 80, y: 30 }),
       ]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -1861,7 +1860,7 @@ describe('SceneInteractionSession', () => {
         makePlant('locked-plant', 'Malus domestica', { x: 20, y: 30 }, { locked: true }),
       ]
     })
-    const session = createTestSession(createInteractionDeps(container, store, camera))
+    const session = createTestSession(createInteractionDeps(container, store, testView))
     session.setTool('select')
 
     openContextMenu({ x: 20, y: 30 })
@@ -1882,7 +1881,7 @@ describe('SceneInteractionSession', () => {
         { x: 100, y: 150 },
       ])]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
     deps.setSelection([zoneTarget('zone-1')])
@@ -1940,8 +1939,8 @@ describe('SceneInteractionSession', () => {
     })
 
     const onSceneEditCommit = vi.fn()
-    const baseDeps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const baseDeps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
       onSceneEditCommit,
     })
     const unlockSelected = vi.fn(() => {
@@ -2002,8 +2001,8 @@ describe('SceneInteractionSession', () => {
     })
 
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    const deps = createInteractionDeps(container, store, testView, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
       onSceneEditCommit,
     })
     const session = createTestSession(deps)
@@ -2053,7 +2052,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
 
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2077,13 +2076,13 @@ describe('SceneInteractionSession', () => {
     const before = store.persisted
     const onSceneEditCommit = vi.fn()
     const setHoveredTarget = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit, setHoveredTarget })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit, setHoveredTarget })
     const session = createTestSession(deps)
     session.setTool('select')
     events.pointerDown({ x: 96, y: 100 }, { button: 0 })
     events.pointerUp({ x: 96, y: 100 }, { button: 0 })
     expect(store.session.selectedTargets).toEqual([annotationTarget('note')])
-    expect(getDesignObjectSelectionFromStore(store, camera).bounds!.maxX).toBeGreaterThan(200)
+    expect(getDesignObjectSelectionFromStore(store, testView).bounds!.maxX).toBeGreaterThan(200)
     events.pointerMove({ x: 150, y: 105 })
     expect(setHoveredTarget).toHaveBeenLastCalledWith(annotationTarget('note'))
     for (const deltaY of [-120, 120, -120, 120]) {
@@ -2102,7 +2101,7 @@ describe('SceneInteractionSession', () => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Old note')]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2127,7 +2126,7 @@ describe('SceneInteractionSession', () => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Original note')]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2156,7 +2155,7 @@ describe('SceneInteractionSession', () => {
     store.updatePersisted((draft) => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Before')]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
     container.tabIndex = 0
@@ -2186,7 +2185,7 @@ describe('SceneInteractionSession', () => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Old document')]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
     deps.setSelection([annotationTarget('annotation-1')])
@@ -2209,7 +2208,7 @@ describe('SceneInteractionSession', () => {
     store.updatePersisted((draft) => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Portable note')]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2226,7 +2225,7 @@ describe('SceneInteractionSession', () => {
     store.updatePersisted((draft) => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Portable note')]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2249,7 +2248,7 @@ describe('SceneInteractionSession', () => {
     store.updatePersisted((draft) => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Portable note')]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2268,7 +2267,7 @@ describe('SceneInteractionSession', () => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Line one')]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
     deps.setSelection([annotationTarget('annotation-1')])
@@ -2293,7 +2292,7 @@ describe('SceneInteractionSession', () => {
     store.updatePersisted((draft) => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Keyboard note')]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
     deps.setSelection([annotationTarget('annotation-1')])
@@ -2309,7 +2308,7 @@ describe('SceneInteractionSession', () => {
     store.updatePersisted((draft) => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Keyboard note')]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
     deps.setSelection([annotationTarget('annotation-1')])
@@ -2332,7 +2331,7 @@ describe('SceneInteractionSession', () => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Original note')]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2352,7 +2351,7 @@ describe('SceneInteractionSession', () => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Stable note')]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2372,7 +2371,7 @@ describe('SceneInteractionSession', () => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Before click-away')]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2394,7 +2393,7 @@ describe('SceneInteractionSession', () => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Original note')]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2420,7 +2419,7 @@ describe('SceneInteractionSession', () => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Original note')]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2445,7 +2444,7 @@ describe('SceneInteractionSession', () => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Original note')]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2470,7 +2469,7 @@ describe('SceneInteractionSession', () => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Delete me')]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
     deps.setSelection([annotationTarget('annotation-1')])
@@ -2492,7 +2491,7 @@ describe('SceneInteractionSession', () => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Delete me')]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
     deps.setSelection([annotationTarget('annotation-1')])
@@ -2533,7 +2532,7 @@ describe('SceneInteractionSession', () => {
         ],
       }]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2572,7 +2571,7 @@ describe('SceneInteractionSession', () => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Cleanup note')]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2599,7 +2598,7 @@ describe('SceneInteractionSession', () => {
     store.updatePersisted((draft) => {
       draft.annotations = [makeTextAnnotation('annotation-1', { x: 24, y: 32 }, 'Document note')]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2632,7 +2631,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
 
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2679,7 +2678,7 @@ describe('SceneInteractionSession', () => {
       ]
     })
 
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2711,7 +2710,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
 
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2741,7 +2740,7 @@ describe('SceneInteractionSession', () => {
     })
 
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2776,7 +2775,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
 
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2826,7 +2825,7 @@ describe('SceneInteractionSession', () => {
       ]
     })
 
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2859,7 +2858,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
 
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2888,7 +2887,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
 
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2917,7 +2916,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
 
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2946,7 +2945,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
 
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -2965,7 +2964,7 @@ describe('SceneInteractionSession', () => {
         makePlant('plant-2', 'Pyrus communis', { x: 120, y: 120 }),
       ]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
     deps.setSelection([plantTarget('plant-2')])
@@ -3014,7 +3013,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
 
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -3068,7 +3067,7 @@ describe('SceneInteractionSession', () => {
       ]
     })
 
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -3110,7 +3109,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
 
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -3141,7 +3140,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
 
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -3177,7 +3176,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
 
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     deps.setSelection([zoneTarget('zone-1')])
     const session = createTestSession(deps)
 
@@ -3196,7 +3195,7 @@ describe('SceneInteractionSession', () => {
         { x: 10, y: 90 },
       ])]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -3223,7 +3222,7 @@ describe('SceneInteractionSession', () => {
       ])]
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 10, y: 50 })]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -3251,7 +3250,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -3289,7 +3288,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -3321,7 +3320,7 @@ describe('SceneInteractionSession', () => {
       ]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -3352,7 +3351,7 @@ describe('SceneInteractionSession', () => {
       ]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -3402,7 +3401,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -3433,7 +3432,7 @@ describe('SceneInteractionSession', () => {
       ])]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -3476,7 +3475,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -3502,7 +3501,7 @@ describe('SceneInteractionSession', () => {
 
   it('snaps dragged plant to grid when snap is enabled', () => {
     // At scale=4, gridInterval() returns 5m (first NICE_DISTANCE where d*4 >= 20)
-    camera.setViewport({ x: 0, y: 0, scale: 4 })
+    testView.setViewport({ x: 0, y: 0, scale: 4 })
     snapToGridEnabled.value = true
     store.updatePersisted((draft) => {
       draft.plants = [
@@ -3526,7 +3525,7 @@ describe('SceneInteractionSession', () => {
     })
 
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -3547,9 +3546,9 @@ describe('SceneInteractionSession', () => {
   })
 
   it('places Saved Object Stamps from drag-and-drop payloads with full geometry ghost preview', () => {
-    camera.setViewport({ x: 0, y: 0, scale: 2 })
+    testView.setViewport({ x: 0, y: 0, scale: 2 })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     const dragData = new Map<string, string>()
     let protectedDragData = true
@@ -3646,13 +3645,13 @@ describe('SceneInteractionSession', () => {
       rotationDeg: 45,
       position: { x: 42, y: 40 },
     })])
-    const overviewViewport = camera.viewport
-    camera.setViewport({ ...overviewViewport, scale: 20 })
+    const overviewViewport = testView.viewport()
+    testView.setViewport({ ...overviewViewport, scale: 20 })
     container.dispatchEvent(dragOverEvent)
     // Closer in, the ghosts follow the ground under the pointer.
     expect(ghosts().map((ghost) => ghost.anchor)).toEqual([{ x: 4, y: 4.5 }, { x: 4, y: 4.5 }])
 
-    camera.setViewport(overviewViewport)
+    testView.setViewport(overviewViewport)
     container.dispatchEvent(dragOverEvent)
 
     protectedDragData = false
@@ -3690,7 +3689,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('preserves Saved Object Stamp drag state while another Scene edit owns admission', () => {
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     const dragData = new Map<string, string>()
     let protectedDragData = true
@@ -3769,7 +3768,7 @@ describe('SceneInteractionSession', () => {
       )
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     const dragData = new Map<string, string>()
     const dataTransfer = {
@@ -3833,7 +3832,7 @@ describe('SceneInteractionSession', () => {
 
   it('creates plant placements from drag-and-drop payloads through protected dragover data', () => {
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     const dragData = new Map<string, string>()
     let protectedDragData = true
@@ -3914,7 +3913,7 @@ describe('SceneInteractionSession', () => {
       },
     }
     const deps = {
-      ...createInteractionDeps(container, store, camera, { commandAdmission }),
+      ...createInteractionDeps(container, store, testView, { commandAdmission }),
       settledReader,
     } as SceneInteractionSessionDeps
     const session = createTestSession(deps)
@@ -3957,7 +3956,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('does not show plant drop feedback for protected ordinary text drags', () => {
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     const dataTransfer = {
       dropEffect: 'copy',
@@ -3990,7 +3989,7 @@ describe('SceneInteractionSession', () => {
       ))
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     const dragData = new Map<string, string>()
     const dataTransfer = {
@@ -4065,7 +4064,7 @@ describe('SceneInteractionSession', () => {
       }]
     })
 
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -4079,7 +4078,7 @@ describe('SceneInteractionSession', () => {
 
   it('clears selection through the runtime seam when clicking empty canvas', () => {
     selectedObjectIds.value = new Set(['plant-1'])
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -4095,7 +4094,7 @@ describe('SceneInteractionSession', () => {
 
   it('temporarily pans with the space key while select is active', () => {
     const render = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { render })
+    const deps = createInteractionDeps(container, store, testView, { render })
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -4105,8 +4104,8 @@ describe('SceneInteractionSession', () => {
     events.pointerUp({ x: 130, y: 120 })
     events.releaseSpace()
 
-    expect(camera.viewport.x).toBe(30)
-    expect(camera.viewport.y).toBe(20)
+    expect(testView.viewport().x).toBeCloseTo(30, 6)
+    expect(testView.viewport().y).toBeCloseTo(20, 6)
     expect(render).toHaveBeenCalled()
     session.dispose()
   })
@@ -4116,7 +4115,7 @@ describe('SceneInteractionSession', () => {
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('select')
 
@@ -4138,7 +4137,7 @@ describe('SceneInteractionSession', () => {
       if (failHoveredWrite) throw new Error('hover cleanup failed')
     })
     const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, {
+    const deps = createInteractionDeps(container, store, testView, {
       onSceneEditCommit,
       setHoveredTarget,
     })
@@ -4159,7 +4158,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('rolls back earlier resources when a collaborator fails during Session construction', () => {
-    const deps = createInteractionDeps(container, store, camera)
+    const deps = createInteractionDeps(container, store, testView)
     const originalAppendChild = container.appendChild.bind(container)
     let earlierResources = 0
     const appendChild = vi.spyOn(container, 'appendChild').mockImplementation(
@@ -4194,9 +4193,9 @@ describe('SceneInteractionSession', () => {
       }) as typeof container.appendChild,
     )
     // The handle layer appends its root, then follows the camera's overlay frames.
-    const frames = (camera as unknown as { readonly host: { readonly frames: ViewFrameSource } }).host.frames
+    const frames = testView.frames
     const deps = {
-      ...createInteractionDeps(container, store, camera),
+      ...createInteractionDeps(container, store, testView),
       frames: {
         viewFrame: frames.viewFrame,
         settledViewFrame: frames.settledViewFrame,
@@ -4218,9 +4217,9 @@ describe('SceneInteractionSession', () => {
   })
 
   it('refreshes presentation after pointer-up cancellation reports an error', () => {
-    const getDesignObjectSelection = vi.fn(() => getDesignObjectSelectionFromStore(store, camera))
+    const getDesignObjectSelection = vi.fn(() => getDesignObjectSelectionFromStore(store, testView))
     let failHoveredWrite = false
-    const deps = createInteractionDeps(container, store, camera, {
+    const deps = createInteractionDeps(container, store, testView, {
       getDesignObjectSelection,
       setHoveredTarget: () => {
         if (failHoveredWrite) throw new Error('pointer-up cleanup failed')
@@ -4263,7 +4262,7 @@ describe('SceneInteractionSession', () => {
         })
       }
       let failRender = false
-      const deps = createInteractionDeps(container, store, camera, {
+      const deps = createInteractionDeps(container, store, testView, {
         render: () => {
           if (failRender) throw new Error(`${kind} cancellation render failed`)
         },
@@ -4324,7 +4323,7 @@ describe('SceneInteractionSession', () => {
       const onSceneEditCommit = vi.fn(() => {
         throw new Error(`${kind} commit failed`)
       })
-      const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
+      const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
       deps.setSelection([
         kind === 'Measurement Guide Control Point'
           ? measurementGuideTarget(targetId)
@@ -4395,7 +4394,7 @@ describe('SceneInteractionSession', () => {
           ]
         })
       }
-      const baseDeps = createInteractionDeps(container, store, camera)
+      const baseDeps = createInteractionDeps(container, store, testView)
       const editType = kind === 'Rotation Handle'
         ? 'interaction-rotate'
         : kind === 'Zone Control Point'
@@ -4488,7 +4487,7 @@ describe('SceneInteractionSession', () => {
         : kind === 'Zone Control Point'
           ? 'interaction-zone-control-point'
           : 'interaction-measurement-guide-control-point'
-      const baseDeps = createInteractionDeps(container, store, camera)
+      const baseDeps = createInteractionDeps(container, store, testView)
       const abortFailure = createAbortFailingSceneEdits(
         baseDeps.sceneEdits,
         editType,
@@ -4536,7 +4535,7 @@ describe('SceneInteractionSession', () => {
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
-    const baseDeps = createInteractionDeps(container, store, camera)
+    const baseDeps = createInteractionDeps(container, store, testView)
     const abortFailure = createAbortFailingSceneEdits(
       baseDeps.sceneEdits,
       'interaction-drag',
@@ -4573,7 +4572,7 @@ describe('SceneInteractionSession', () => {
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
-    const baseDeps = createInteractionDeps(container, store, camera)
+    const baseDeps = createInteractionDeps(container, store, testView)
     const abortFailure = createAbortFailingSceneEdits(
       baseDeps.sceneEdits,
       'interaction-drag',
@@ -4612,7 +4611,7 @@ describe('SceneInteractionSession', () => {
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
-    const baseDeps = createInteractionDeps(container, store, camera)
+    const baseDeps = createInteractionDeps(container, store, testView)
     const abortFailure = createAbortFailingSceneEdits(
       baseDeps.sceneEdits,
       'interaction-drag',
@@ -4676,7 +4675,7 @@ describe('SceneInteractionSession', () => {
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
-    const baseDeps = createInteractionDeps(container, store, camera)
+    const baseDeps = createInteractionDeps(container, store, testView)
     const abortFailure = createAbortFailingSceneEdits(
       baseDeps.sceneEdits,
       'interaction-drag',
@@ -4701,7 +4700,7 @@ describe('SceneInteractionSession', () => {
 
   it('clears hover when disposed', () => {
     const setHoveredTarget = vi.fn()
-    const deps = createInteractionDeps(container, store, camera, { setHoveredTarget })
+    const deps = createInteractionDeps(container, store, testView, { setHoveredTarget })
     const session = createTestSession(deps)
 
     session.dispose()

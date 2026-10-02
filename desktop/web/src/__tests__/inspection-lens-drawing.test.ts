@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import './support/camera-tolerance'
 
 import { drawInspectionLensScene } from '../canvas/runtime/inspection-lens-drawing'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'

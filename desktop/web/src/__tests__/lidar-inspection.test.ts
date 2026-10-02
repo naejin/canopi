@@ -42,7 +42,6 @@ const { setCurrentCanvasSession } = await import('../canvas/session')
 const { createTestCanvasRuntimeSurfaces } = await import('./support/canvas-runtime-surfaces')
 const { createTestCanvasQuerySurface } = await import('./support/canvas-query-surface')
 const { createSessionPlane } = await import('../canvas/session-plane')
-const { signal } = await import('@preact/signals')
 
 /** A Design whose only presentation entry is a visible source layer. */
 function designWithPresentedLayer(): Parameters<typeof replaceCurrentDesignState>[0] {
@@ -307,7 +306,7 @@ describe('numeric inspection session state', () => {
     // query surface, so the test provides one rather than a second camera owner.
     const plane = createSessionPlane(POINT)
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
-      queries: { ...createTestCanvasQuerySurface(), sessionPlane: signal(plane) },
+      queries: createTestCanvasQuerySurface({ sessionPlane: plane }),
     }))
     beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
     const submitted = sampleInspectionCentre()

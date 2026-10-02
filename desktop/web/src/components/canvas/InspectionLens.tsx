@@ -94,7 +94,7 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
     // fields); the lens keeps its point when the pointer leaves or presses.
     const stopInspecting = queries.subscribePointerWorld((point) => {
       if (drag || !point) return
-      view.inspectAtWorldPoint(point)
+      view.inspectAtWorldPoint(point.world)
     })
     frame?.addEventListener('pointerdown', start)
     frame?.addEventListener('lostpointercapture', end)

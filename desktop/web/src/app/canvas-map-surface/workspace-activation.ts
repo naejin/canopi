@@ -17,14 +17,9 @@ import {
   type SharedMapSceneMap,
 } from '../../maplibre/shared-scene-layer'
 import type { SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
-import {
-  type MapLibreWorkspaceCameraMap,
-  type MapLibreWorkspaceCameraOwner,
-} from '../../maplibre/workspace-camera'
-import { createMapLibreCameraDriver } from '../../maplibre/camera-driver'
-import type { CameraDriverFailure } from '../../canvas/runtime/view/camera-driver'
+import { createMapLibreCameraDriver, type MapLibreCameraDriverMap } from '../../maplibre/camera-driver'
+import type { CameraDriverFailure, CameraDriverHost } from '../../canvas/runtime/view/camera-driver'
 import { createSessionPlane } from '../../canvas/session-plane'
-import { createWorkspaceCameraPolicy } from '../../canvas/workspace-camera-policy'
 
 /**
  * `map-unavailable`: WebGL2 or MapLibre could not start or failed later. No
@@ -39,7 +34,7 @@ export interface WorkspaceActivationSnapshot {
 }
 
 /** One map that is suitable for both the shared graphics layer and camera owner. */
-export type WorkspaceActivationMap = MapLibreWorkspaceCameraMap & Pick<
+export type WorkspaceActivationMap = MapLibreCameraDriverMap & Required<Pick<MapLibreMapInstance, 'getCanvas'>> & Pick<
   MapLibreMapInstance,
   | 'addLayer'
   | 'addSource'
@@ -83,11 +78,8 @@ export interface WorkspaceActivationRuntime {
 export interface WorkspaceActivationOptions {
   readonly container: HTMLElement
   readonly runtime: WorkspaceActivationRuntime | SceneCanvasRuntime
-  /**
-   * The runtime's camera shim (0A to the end of 0D2): the activation unwraps its CameraDriverHost and attaches each map to it as a
-   * camera driver (spec §1.1 Attachment).
-   */
-  readonly camera: MapLibreWorkspaceCameraOwner
+  /** The runtime's one camera: the activation attaches each map to it as a camera driver (spec §1.1 Attachment). */
+  readonly camera: CameraDriverHost
   readonly composition: SharedMapSceneRendererComposition
   readonly map: WorkspaceActivationMapControls
   readonly layer: Omit<
@@ -177,7 +169,6 @@ export class WorkspaceActivationCoordinator {
       throw error
     }
     if (request !== this.activationRequest || this.disposed) return 'cancelled'
-    this.options.camera.replacePolicy(createWorkspaceCameraPolicy(this.options.readOrigin().lat))
     if (this.mapUnavailable) return 'map-unavailable'
     const current: ActivationGeneration = {
       id: ++this.generation,
@@ -876,9 +867,9 @@ export class WorkspaceActivationCoordinator {
     }
   }
 
-  /** The runtime's one camera, which the shim wraps. */
-  private cameraHost() {
-    return this.options.camera.host
+  /** The runtime's one camera. */
+  private cameraHost(): CameraDriverHost {
+    return this.options.camera
   }
 
   private isCurrent(current: ActivationGeneration): boolean {

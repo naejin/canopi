@@ -2,12 +2,11 @@
 //
 // Owns how the view moves on command: zoom steps, the fits (Fit to Design, Return to Design, zoom to selection, the opening fit),
 // the temporary-focus bookmark, jumps to a place or a camera, key turns, resets, turning to an edge, and rotation sessions. Every
-// fit is oriented at its bearing (fit.ts) and lands as an exact 'place' move, so at bearing 0 a headless camera ends exactly where
-// today's CameraController did.
+// fit is oriented at its bearing (fit.ts) and lands as a 'set' move to the camera that shows its placement.
 
 import type { ScenePersistedState } from '../scene/types'
 import type { CameraDriverHost, CameraMove } from './camera-driver'
-import { planarCentredOn, rotatePlanarAround, screenToGeo } from './camera-math'
+import { placementCentre, screenToGeo } from './camera-math'
 import { fitScene, fitTemporaryBounds, type FitExtent, type FitFrame } from './fit'
 import {
   nextStep,
@@ -36,7 +35,6 @@ import { planarCameraOf } from './view-transform'
 export interface ViewNavigationDeps {
   readonly driver: CameraDriverHost                   // the only CameraDriver user
   readonly policy: () => NavigationPolicy
-  readonly clock: () => number
   /** The scene for zoomToFit, returnToDesign and zoomToSelection without arguments. */
   readonly readScene: () => { readonly persisted: ScenePersistedState; readonly selection: readonly WorldPoint[]; readonly bounds: SceneBoundsOptions }
 }
@@ -69,51 +67,29 @@ const RETURN_VIEW_METRES = 100
 const ROTATION_STEP_DEG = 15
 const NO_INSETS: ScreenInsets = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 })
 
-/** A view to go back to: exact while the plane is unchanged, geographic after a re-origin. */
-interface Placement {
-  readonly camera: ViewCamera
-  readonly planar: PlanarCamera
-  readonly planeRevision: number
-  /** The policy generation it was taken in. */
-  readonly policy: NavigationPolicy
-}
-
 /**
  * view/ cannot measure a scene (P4): a fit's extent is `options.extentPoints`, or the runtime's extent for the current scene from
  * `readScene`, so the `scene` arguments name the scene without being read.
  */
 export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
-  let bookmark: Placement | null = null
+  /** The view to go back to: a camera, so a re-origin cannot invalidate it. */
+  let bookmark: ViewCamera | null = null
   /** The live rotation session; key turns and resets wait until it ends. */
   let rotation: object | null = null
 
   const frame = () => deps.driver.frames.viewFrame.peek()
   const driver = () => deps.driver.current()
   const apply = (move: CameraMove): void => driver().apply(move)
-  const place = (planar: PlanarCamera): void => apply({ kind: 'place', planar })
+  const jump = (target: ViewCamera): void => apply({ kind: 'set', target, animation: 'none' })
+  /** Shows a fit's placement: the camera that puts its centre at the screen centre, at its scale and bearing. */
+  const place = (planar: PlanarCamera): void => {
+    const { view } = frame()
+    jump(cameraCentredOn(view, placementCentre(planar, view.screen), planar.scale, planar.bearingDeg))
+  }
 
   function screenCentre(): ScreenPoint {
     const { screen } = frame().view
     return { x: screen.width / 2, y: screen.height / 2 }
-  }
-
-  function placementNow(): Placement {
-    const { view } = frame()
-    return { camera: view.camera, planar: planarCameraOf(view), planeRevision: view.planeRevision, policy: deps.policy() }
-  }
-
-  /**
-   * The temporary-focus bookmark, unless a new camera policy replaced its generation on the same plane (today's replacePolicy
-   * cleared it). A re-origin changes the plane and then the policy's latitude, and keeps it (today's applyPolicy).
-   */
-  function liveBookmark(): Placement | null {
-    if (bookmark && bookmark.policy !== deps.policy() && bookmark.planeRevision === frame().view.planeRevision) bookmark = null
-    return bookmark
-  }
-
-  function restore(placement: Placement): void {
-    if (placement.planeRevision === frame().view.planeRevision) place(placement.planar)
-    else apply({ kind: 'set', target: placement.camera, animation: 'none' })
   }
 
   function fitFrame(bearingDeg: number): FitFrame {
@@ -129,6 +105,12 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
 
   function extentOf(bounds: SceneBoundsOptions): FitExtent {
     return { extentPoints: bounds.extentPoints ?? (() => []), emptySceneScale: bounds.emptySceneScale }
+  }
+
+  /** A temporary focus's framing of `bounds` at the current bearing, or null when they cannot be framed. */
+  function boundsFraming(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): PlanarCamera | null {
+    const bearing = driver().bearingTarget()
+    return fitTemporaryBounds(fitFrame(bearing), bounds, options, bearing)
   }
 
   function turnTo(bearingDeg: number): void {
@@ -175,18 +157,24 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
       place({ x: width / 2, y: height / 2, scale: Math.max(policy.overviewPixelsPerMetre, scale), bearingDeg: bearing })
     },
     focusTemporaryBounds(bounds, options) {
-      const bearing = driver().bearingTarget()
-      const focused = fitTemporaryBounds(fitFrame(bearing), bounds, options, bearing)
+      const focused = boundsFraming(bounds, options)
       if (!focused) return false
-      if (!liveBookmark()) bookmark = placementNow()
+      // The latest focus wins: a return lands on the view this focus left.
+      bookmark = frame().view.camera
       place(focused)
       return true
     },
+    frameBounds(bounds, options) {
+      const framed = boundsFraming(bounds, options)
+      if (!framed) return false
+      place(framed)
+      return true
+    },
     returnFromTemporaryFocus() {
-      const saved = liveBookmark()
+      const saved = bookmark
       if (!saved) return false
       bookmark = null
-      restore(saved)
+      jump(saved)
       return true
     },
     clearTemporaryFocus() {
@@ -200,19 +188,20 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
       bookmark = null
       const bearing = options?.bearingDeg === undefined || options.bearingDeg === 'keep' ? driver().bearingTarget() : options.bearingDeg
       const { view, attached } = frame()
-      const placement = planarCentredOn(view.screen, point, pixelsPerMetre, bearing)
-      if (options?.animate && attached) {
-        apply({ kind: 'set', target: cameraCentredOn(view, point, pixelsPerMetre, placement.bearingDeg), animation: 'fly' })
-        return
-      }
-      place(placement)
+      apply({
+        kind: 'set',
+        target: cameraCentredOn(view, point, pixelsPerMetre, normaliseBearing(bearing)),
+        animation: options?.animate && attached ? 'fly' : 'none',
+      })
     },
     openAt(_scene, bearingDeg) {
       if (!Number.isFinite(bearingDeg)) return
       bookmark = null
       const bearing = normaliseBearing(bearingDeg)
       const fitted = fitScene(fitFrame(bearing), extentOf(deps.readScene().bounds), bearing)
-      place(fitted.bearingDeg === bearing ? fitted : rotatePlanarAround(fitted, frame().view.screen, 'centre', bearing))
+      // A fit that kept another bearing turns about the screen centre: the same centre and scale at the opening bearing.
+      const { view } = frame()
+      jump(cameraCentredOn(view, placementCentre(fitted, view.screen), fitted.scale, bearing))
     },
     showPlace(target, zoom, options) {
       if (![target.lon, target.lat, zoom].every(Number.isFinite)) return false
@@ -249,14 +238,14 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
     },
     beginRotation(pivot) {
       driver().stopAnimation()
-      const start = placementNow()
+      const start = frame().view.camera
       const session = {}
       rotation = session
       const live = () => rotation === session
       return {
         update(totalDeltaDeg, { step }) {
           if (!live() || !Number.isFinite(totalDeltaDeg)) return
-          const raw = start.camera.bearingDeg + totalDeltaDeg
+          const raw = start.bearingDeg + totalDeltaDeg
           apply({
             kind: 'rotate-around',
             anchorPx: pivot,
@@ -275,7 +264,7 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
         cancel() {
           if (!live()) return
           rotation = null
-          restore(start)
+          jump(start)
         },
       }
     },

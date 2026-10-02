@@ -6,21 +6,27 @@ import { cameraScaleBoundsForPolicy, createWorkspaceCameraPolicy } from '../../w
 import type { CameraDriver, CameraDriverFailure } from './camera-driver'
 import { createCameraDriverHost } from './driver-host'
 import { createHeadlessCameraDriver } from './headless-driver'
+import { planarToViewCamera } from './camera-math'
 import { createNavigationPolicy } from './navigation-policy'
-import type { ViewFrame } from './types'
+import type { PlanarCamera, ViewCamera, ViewFrame } from './types'
 import { planarCameraOf } from './view-transform'
+
+const SCREEN = { width: 400, height: 300, devicePixelRatio: 1 }
+
+/** The camera that shows a placement on a 400 x 300 screen. */
+function cameraAt(plane: SessionPlane, placement: PlanarCamera): ViewCamera {
+  return planarToViewCamera(placement, SCREEN, plane)
+}
 
 /** A driver standing in for an attached one: its own camera, far from the host's until the host hands it over. */
 function standInDriver(plane: SessionPlane): CameraDriver {
   return createHeadlessCameraDriver({
     deps: {
-      clock: () => 0,
-      scheduleFrame: () => () => {},
       policy: () => createNavigationPolicy(createWorkspaceCameraPolicy(), signal(false)),
     },
     plane,
-    screen: { width: 400, height: 300, devicePixelRatio: 1 },
-    camera: { x: -5_000, y: 9_000, scale: 0.5, bearingDeg: 0 },
+    screen: SCREEN,
+    camera: cameraAt(plane, { x: -5_000, y: 9_000, scale: 0.5, bearingDeg: 0 }),
   })
 }
 
@@ -149,54 +155,47 @@ describe('camera driver host', () => {
     view.dispose()
   })
 
-  it('replacePolicy re-constrains the camera to the new bounds about the screen centre', () => {
-    const northern = createWorkspaceCameraPolicy(45)
-    const equatorial = createWorkspaceCameraPolicy(0)
-    const view = createTestView({ policy: northern, viewport: { x: 10, y: -20, scale: cameraScaleBoundsForPolicy(northern).maximum } })
-
-    view.host.replacePolicy(equatorial)
-
-    // Today's CameraController(northern).replacePolicy(equatorial) from the same placement, recorded at 52cbff10.
-    expect(planarCameraOf(view.view())).toEqual({ x: 65.64971157455597, y: 29.79184719828693, scale: 1716.6895781438734, bearingDeg: 0 })
-    const bounds = cameraScaleBoundsForPolicy(equatorial)
-    expect(view.frames.viewFrame.peek().scaleBounds).toEqual({ min: bounds.minimum, max: bounds.maximum })
-    view.dispose()
-  })
-
-  it('replacePolicy during a tween moves nothing, and the tween\'s next frame takes the new bounds', () => {
-    const northern = createWorkspaceCameraPolicy(45)
-    const equatorial = createWorkspaceCameraPolicy(0)
-    const view = createTestView({ policy: northern, viewport: { x: 10, y: -20, scale: cameraScaleBoundsForPolicy(northern).maximum } })
-    view.host.current().apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 90, animation: 'ease' })
-    const turning = view.frames.viewFrame.peek()
-    expect(turning.moving).toBe(true)
-
-    view.host.replacePolicy(equatorial)
-
-    expect(view.frames.viewFrame.peek()).toBe(turning)
-    view.clock.advance(16)
-    const next = view.frames.viewFrame.peek()
-    expect(next.moving).toBe(true)
-    expect(next.scaleBounds.max).toBe(cameraScaleBoundsForPolicy(equatorial).maximum)
-    expect(next.view.pixelsPerMetre).toBeLessThanOrEqual(next.scaleBounds.max * (1 + 1e-12))
-    view.clock.advance(400)
-    expect(view.frames.viewFrame.peek().moving).toBe(false)
-    expect(view.host.current().bearingTarget()).toBe(90)
-    view.dispose()
-  })
-
-  it('a headless camera follows a new runtime plane and keeps its plane placement; an attached one does not', () => {
+  it('the policy\'s latitude is the plane\'s: a re-origin moves the scale bounds with it', () => {
     const first = createSessionPlane({ lon: 2.35, lat: 48.85 })
     let runtimePlane = first
     const host = createCameraDriverHost({
-      clock: () => 0,
-      scheduleFrame: () => () => {},
-      timers: { set: () => 0, clear: () => {} },
+      // The zoom range and overview threshold; the latitude given here is not the one the bounds use.
+      policy: createWorkspaceCameraPolicy(0),
+      reducedMotion: signal(false),
+      plane: () => runtimePlane,
+      screen: SCREEN,
+      camera: cameraAt(first, { x: 40, y: -25, scale: 3, bearingDeg: 0 }),
+    })
+    const expectBoundsAt = (lat: number) => {
+      const expected = cameraScaleBoundsForPolicy(createWorkspaceCameraPolicy(lat))
+      const { scaleBounds } = host.frames.viewFrame.peek()
+      expect(scaleBounds.min / expected.minimum).toBeCloseTo(1, 6)
+      expect(scaleBounds.max / expected.maximum).toBeCloseTo(1, 6)
+    }
+    expectBoundsAt(48.85)
+    expect(host.driverDeps.policy().referenceLatitudeDeg).toBe(48.85)
+
+    // A re-origin far north: the zoom buttons' limits follow the plane the runtime now works in.
+    const next = createSessionPlane({ lon: 2.35, lat: 64.1 })
+    runtimePlane = next
+    host.current().planeChanged(next)
+
+    expectBoundsAt(64.1)
+    expect(host.driverDeps.policy().referenceLatitudeDeg).toBe(64.1)
+    // Rebuilt once per plane, not per read.
+    expect(host.driverDeps.policy()).toBe(host.driverDeps.policy())
+    host.dispose()
+  })
+
+  it('a headless camera follows a new runtime plane and keeps its plane placement; an attached one stays put, re-expressed in the plane', () => {
+    const first = createSessionPlane({ lon: 2.35, lat: 48.85 })
+    let runtimePlane = first
+    const host = createCameraDriverHost({
       policy: createWorkspaceCameraPolicy(),
       reducedMotion: signal(false),
       plane: () => runtimePlane,
-      screen: { width: 400, height: 300, devicePixelRatio: 1 },
-      camera: { x: 40, y: -25, scale: 3, bearingDeg: 0 },
+      screen: SCREEN,
+      camera: cameraAt(first, { x: 40, y: -25, scale: 3, bearingDeg: 0 }),
     })
     const published: ViewFrame[] = []
     host.frames.onViewFrame('overlays', (frame) => published.push(frame))
@@ -206,27 +205,41 @@ describe('camera driver host', () => {
     host.followPlane(runtimePlane)
     expect(published).toHaveLength(0)
 
-    // A hydration replaced the plane: the placement stays, bit for bit, and the ground is read on the new plane.
+    // A hydration replaced the plane: the placement stays, and the ground is read on the new plane.
     const hydrated = createSessionPlane({ lon: 13, lat: 23 })
     runtimePlane = hydrated
     host.followPlane(runtimePlane)
     expect(published).toHaveLength(1)
     const followed = published[0]!
     expect(followed.attached).toBe(false)
-    expect(planarCameraOf(followed.view)).toEqual(planarCameraOf(before.view))
+    const placement = planarCameraOf(followed.view)
+    const placementBefore = planarCameraOf(before.view)
+    expect(placement.x).toBeCloseTo(placementBefore.x, 6)
+    expect(placement.y).toBeCloseTo(placementBefore.y, 6)
+    expect(placement.scale).toBeCloseTo(placementBefore.scale, 9)
     expect(followed.view.planeRevision).toBe(before.view.planeRevision + 1)
-    const centre = hydrated.toGeo(followed.view.screenToWorld({ x: 200, y: 150 })!)
-    expect(followed.view.camera.center.lon).toBe(centre.lon)
-    expect(followed.view.camera.center.lat).toBe(centre.lat)
+    const centre = hydrated.toGeo(followed.view.screenToWorld({ x: 200, y: 150 }))
+    expect(followed.view.camera.center.lon).toBeCloseTo(centre.lon, 9)
+    expect(followed.view.camera.center.lat).toBeCloseTo(centre.lat, 9)
     host.followPlane(runtimePlane)
     expect(published).toHaveLength(1)
 
-    // Attached, the map is the camera: only planeChanged moves its plane.
+    // Attached, the map is the camera: followPlane leaves it alone, and the runtime's planeChanged re-expresses it in the new plane
+    // with its ground kept.
     host.attach(standInDriver(hydrated))
     const attachedFrames = published.length
-    runtimePlane = createSessionPlane({ lon: 14, lat: 24 })
+    const attachedBefore = host.frames.viewFrame.peek()
+    runtimePlane = createSessionPlane({ lon: 13.01, lat: 23.01 })
     host.followPlane(runtimePlane)
     expect(published).toHaveLength(attachedFrames)
+    host.current().planeChanged(runtimePlane)
+    expect(published).toHaveLength(attachedFrames + 1)
+    const reexpressed = published.at(-1)!
+    expect(reexpressed.attached).toBe(true)
+    expect(reexpressed.view.planeRevision).toBe(attachedBefore.view.planeRevision + 1)
+    expect(reexpressed.view.camera.center.lon).toBeCloseTo(attachedBefore.view.camera.center.lon, 9)
+    expect(reexpressed.view.camera.center.lat).toBeCloseTo(attachedBefore.view.camera.center.lat, 9)
+    expect(reexpressed.view.camera.zoom).toBeCloseTo(attachedBefore.view.camera.zoom, 9)
     host.dispose()
   })
 
@@ -286,7 +299,7 @@ describe('camera driver host', () => {
       ['tools', 2],
       ['overlays', 2],
     ])
-    expect(planarCameraOf(view.view()).x).toBe(11)
+    expect(planarCameraOf(view.view()).x).toBeCloseTo(11, 6)
     view.dispose()
   })
 
@@ -328,10 +341,10 @@ describe('camera driver host', () => {
     ])
     expect(published.map((frame) => frame.attached)).toEqual([true, true, false, false])
     const x = published.map((frame) => planarCameraOf(frame.view).x)
-    expect(x[1]! - x[0]!).toBeCloseTo(10, 9)
-    // The detached driver starts from the attached camera through lon/lat.
+    expect(x[1]! - x[0]!).toBeCloseTo(10, 6)
+    // The detached driver starts from the attached camera.
     expect(x[2]!).toBeCloseTo(x[1]!, 6)
-    expect(x[3]! - x[2]!).toBeCloseTo(10, 9)
+    expect(x[3]! - x[2]!).toBeCloseTo(10, 6)
     expect(view.frames.viewFrame.peek()).toBe(published[3])
     view.dispose()
   })

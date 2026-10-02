@@ -1,4 +1,4 @@
-import { effect, type ReadonlySignal } from '@preact/signals'
+import { batch, effect, type ReadonlySignal } from '@preact/signals'
 import { setCanvasSelection, setCanvasToolGuidance } from '../session-state'
 import { refreshCanvasColorCache } from '../theme-refresh'
 import { setCanvasMapBackdrop } from './scene-visuals'
@@ -35,6 +35,7 @@ import type {
 import { bindQuerySurfacePointerWorld } from './query-surface'
 import { targets, speciesTarget } from '../../target'
 import { runCanvasRuntimeCleanups, throwCanvasRuntimeCleanupErrors } from './cleanup'
+import type { CameraDriverHost } from './view/camera-driver'
 
 type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
 
@@ -84,7 +85,7 @@ export class SceneCanvasRuntime {
         cancel: () => this._interaction?.plantRowSpacing.cancel(),
       },
     })
-    this._cameraMode = this._camera.snapshot.peek().mode
+    this._cameraMode = this._construction.frames.viewFrame.peek().mode
     this._installEffects()
   }
 
@@ -94,14 +95,6 @@ export class SceneCanvasRuntime {
 
   private get _sceneSession(): SceneRuntimeConstruction['sceneSession'] {
     return this._construction.sceneSession
-  }
-
-  private get _camera(): SceneRuntimeConstruction['camera'] {
-    return this._construction.camera
-  }
-
-  private get _cameraNavigation(): SceneRuntimeConstruction['cameraNavigation'] {
-    return this._construction.cameraNavigation
   }
 
   private get _sceneRevision(): SceneRuntimeConstruction['sceneRevision'] {
@@ -165,15 +158,21 @@ export class SceneCanvasRuntime {
       refreshCanvasColorCache(container)
       this._disposeEffects.push(markBusyWhileScenePending(container, this._rendering.scenePending))
       await this._rendering.initialize(container)
-      this._cameraNavigation.initialize({
-        width: Math.max(1, container.clientWidth),
-        height: Math.max(1, container.clientHeight),
+      // The first frame is the fit (plan §1, exception 3): the Design's for one loaded before init, else the new-Design overview.
+      // One batch, so the screen size and the fit reach the runtime's effects as one frame. An attached map keeps its own screen.
+      batch(() => {
+        if (!this._construction.frames.viewFrame.peek().attached) {
+          this.cameraHost.current().setScreen({
+            width: Math.max(1, container.clientWidth),
+            height: Math.max(1, container.clientHeight),
+            devicePixelRatio: window.devicePixelRatio,
+          })
+        }
+        this._documentSurface.zoomToFit()
       })
       this._interaction = createSceneInteractionSession({
         container,
         getSceneStore: () => this._sceneState,
-        camera: this._camera,
-        cameraNavigation: this._cameraNavigation,
         getSpeciesCache: () => this._presentation.getSpeciesCache(),
         getPlantPresentationContext: (viewportScale) =>
           this._presentation.createPlantPresentationContext(viewportScale),
@@ -231,7 +230,7 @@ export class SceneCanvasRuntime {
       })
       const interaction = this._interaction
       bindQuerySurfacePointerWorld(this._querySurface, (listener) => interaction.subscribePointerWorld(listener))
-      this._interaction.setOverviewMode(this._camera.snapshot.peek().mode === 'overview')
+      this._interaction.setOverviewMode(this._construction.frames.viewFrame.peek().mode === 'overview')
       await this._rendering.renderScene()
     } catch (error) {
       const errors: unknown[] = [error]
@@ -242,6 +241,11 @@ export class SceneCanvasRuntime {
       }
       throwCanvasRuntimeCleanupErrors(errors, 'Scene Canvas runtime initialization failed')
     }
+  }
+
+  /** The runtime's one camera: the workspace activation attaches each map to it; destroy disposes it. */
+  get cameraHost(): CameraDriverHost {
+    return this._construction.cameraHost
   }
 
   get commandSurface(): CanvasCommandSurface {
@@ -378,9 +382,9 @@ export class SceneCanvasRuntime {
       onPanelTargetHover: () => {
         this._invalidate('scene')
       },
-      camera: this._camera,
+      frames: this._construction.frames,
       onCameraFrame: () => {
-        const mode = this._camera.snapshot.peek().mode
+        const mode = this._construction.frames.viewFrame.peek().mode
         if (mode !== this._cameraMode) {
           this._cameraMode = mode
           this._interaction?.setOverviewMode(mode === 'overview')
@@ -413,7 +417,7 @@ export class SceneCanvasRuntime {
     if (!container) return
     const chromeSettings = this._appAdapter.settings.readChromeOverlay()
     this._chrome.update({
-      camera: this._camera.snapshot.peek(),
+      frame: this._construction.frames.viewFrame.peek(),
       rulersVisible: chromeSettings.rulersVisible,
       gridVisible: chromeSettings.gridVisible,
       guidesVisible: chromeSettings.guidesVisible,

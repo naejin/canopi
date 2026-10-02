@@ -13,6 +13,7 @@ import type { WorldPoint } from '../view/types'
 import type { DraftShape } from './draft'
 import { createPlantStampTool, placePlantFromSpecies } from './plant-stamp'
 import { createToolScene } from './tool-host'
+import '../../../__tests__/support/camera-tolerance'
 
 vi.mock('./registry', () => ({ TOOL_REGISTRY: {} }))
 

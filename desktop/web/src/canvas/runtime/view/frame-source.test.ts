@@ -1,5 +1,5 @@
 import { effect } from '@preact/signals'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { planeViewportCornerBounds } from '../../../__tests__/support/plane-viewport-corners'
 import { createTestView } from '../../../__tests__/support/test-view'
 import { createSessionPlane } from '../../session-plane'
@@ -7,15 +7,15 @@ import { createViewFrameSource, createViewReadSurface, SETTLE_MS } from './frame
 import type { ViewFrame } from './types'
 
 describe('view frame source', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('runs the tools listeners before the overlays listeners, inside publish', () => {
+    vi.useFakeTimers()
     const view = createTestView()
     const initial = view.frames.viewFrame.peek()
-    let now = 0
-    const timers: Array<{ atMs: number; run: () => void }> = []
-    const frames = createViewFrameSource(initial, {
-      clock: () => now,
-      timers: { set: (atMs, run) => timers.push({ atMs, run }), clear: () => {} },
-    })
+    const frames = createViewFrameSource(initial)
     const calls: string[] = []
     frames.onViewFrame('overlays', () => calls.push('overlays'))
     const stopTools = frames.onViewFrame('tools', () => calls.push(`tools, dispatching ${frames.dispatching}`))
@@ -26,18 +26,24 @@ describe('view frame source', () => {
     expect(frames.dispatching).toBe(false)
     expect(frames.viewFrame.peek()).toBe(next)
 
+    vi.advanceTimersByTime(SETTLE_MS - 1)
     stopTools()
-    frames.publish({ ...initial, revision: 2 } as ViewFrame)
+    const last = { ...initial, revision: 2 } as ViewFrame
+    frames.publish(last)
     expect(calls).toEqual(['tools, dispatching true', 'overlays', 'overlays'])
-    // Each publish restarts the settle: the timer asked for last is 150 ms after the last frame.
-    expect(timers.at(-1)!.atMs).toBe(now + SETTLE_MS)
+    // Each publish restarts the settle: the settled frame is the last one, 150 ms after it.
+    vi.advanceTimersByTime(SETTLE_MS - 1)
+    expect(frames.settledViewFrame.peek()).toBe(initial)
+    vi.advanceTimersByTime(1)
+    expect(frames.settledViewFrame.peek()).toBe(last)
+    frames.dispose()
     view.dispose()
   })
 
   it('a frame published while listeners run reaches every listener after the frame being dispatched', () => {
     const view = createTestView()
     const initial = view.frames.viewFrame.peek()
-    const frames = createViewFrameSource(initial, { clock: () => 0, timers: { set: () => 0, clear: () => {} } })
+    const frames = createViewFrameSource(initial)
     const first = { ...initial, revision: 1 } as ViewFrame
     const second = { ...initial, revision: 2 } as ViewFrame
     const seen: Array<readonly [string, number]> = []
@@ -60,6 +66,7 @@ describe('view frame source', () => {
     ])
     expect(frames.viewFrame.peek()).toBe(second)
     expect(frames.dispatching).toBe(false)
+    frames.dispose()
     view.dispose()
   })
 
@@ -104,7 +111,8 @@ describe('view frame source', () => {
     expect(surface.designPin.value).toBeNull()
     view.setViewport({ x: 120.4, y: 80.6, scale: 0.05 })
     expect(surface.designPin.value).toEqual({ x: 120, y: 81 })
-    view.setViewport({ x: 24, y: 276, scale: 0.05 })
+    // Just inside the 24 px margin (the camera reads a placement back within micropixels, not exactly).
+    view.setViewport({ x: 24.001, y: 275.999, scale: 0.05 })
     expect(surface.designPin.value).toEqual({ x: 24, y: 276 })
     view.setViewport({ x: 23.9, y: 150, scale: 0.05 })
     expect(surface.designPin.value).toBeNull()
@@ -112,28 +120,29 @@ describe('view frame source', () => {
   })
 
   it('settledRevision changes once per settle, a resize included', () => {
+    vi.useFakeTimers()
     const view = createTestView()
     const surface = createViewReadSurface(view.frames, () => createSessionPlane({ lon: 0, lat: 0 }))
     const seen: number[] = []
     const stop = effect(() => { seen.push(surface.settledRevision.value) })
 
     view.navigation.panByPx({ x: 25, y: -10 })
-    view.clock.advance(SETTLE_MS - 1)
+    vi.advanceTimersByTime(SETTLE_MS - 1)
     view.navigation.panByPx({ x: -3, y: 4 })
-    view.clock.advance(SETTLE_MS - 1)
+    vi.advanceTimersByTime(SETTLE_MS - 1)
     expect(seen).toHaveLength(1)
-    view.clock.advance(1)
+    vi.advanceTimersByTime(1)
     expect(seen).toHaveLength(2)
     expect(seen[1]).toBe(view.frames.viewFrame.peek().revision)
 
     view.host.current().setScreen({ width: 640, height: 480, devicePixelRatio: 1 })
-    view.clock.advance(SETTLE_MS)
+    vi.advanceTimersByTime(SETTLE_MS)
     expect(seen).toHaveLength(3)
     expect(seen[2]).toBe(view.frames.viewFrame.peek().revision)
     expect(view.frames.settledViewFrame.peek().view.screen.width).toBe(640)
 
     // Nothing new published: no further settle.
-    view.clock.advance(SETTLE_MS * 4)
+    vi.advanceTimersByTime(SETTLE_MS * 4)
     expect(seen).toHaveLength(3)
     stop()
     view.dispose()
@@ -144,14 +153,15 @@ describe('view frame source', () => {
     const view = createTestView({ plane, viewport: { x: -130.5, y: 42.25, scale: 1.75 } })
     const surface = createViewReadSurface(view.frames, () => plane)
 
-    // At bearing 0 the extent is today's north-west and south-east corners, bit for bit.
+    // At bearing 0 the extent is today's north-west and south-east corners.
     const captured = surface.captureView()
     expect(captured.camera).toBe(view.view().camera)
     expect(captured.screen).toEqual({ width: 400, height: 300, devicePixelRatio: 1 })
-    expect(captured.extent).toEqual(planeViewportCornerBounds({
+    const today = planeViewportCornerBounds({
       viewport: { x: -130.5, y: 42.25, scale: 1.75 },
       screenSize: { width: 400, height: 300 },
-    }, plane))
+    }, plane)
+    for (const edge of ['west', 'south', 'east', 'north'] as const) expect(captured.extent[edge]).toBeCloseTo(today[edge], 12)
 
     // Turned, it is the lon/lat box around the ground under all four corners, raw.
     view.host.current().apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 30, animation: 'none' })

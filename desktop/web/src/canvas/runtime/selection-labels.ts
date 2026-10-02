@@ -35,7 +35,7 @@ export function projectScenePlantLabels(
   pixelsPerMetre: number,
 ): { readonly pinnedPlantNameLabels: PlantNameLabel[]; readonly selectionLabels: SelectionLabel[] } {
   const { scene, speciesCache, localizedCommonNames, selectionLabelPlantIds } = snapshot
-  const plantContext = { plants: scene.plants, viewport: scaleOnly(pixelsPerMetre), speciesCache, localizedCommonNames }
+  const plantContext = { plants: scene.plants, pixelsPerMetre, speciesCache, localizedCommonNames }
   return {
     pinnedPlantNameLabels: computePinnedPlantNameLabels(scene.plants, pixelsPerMetre, localizedCommonNames,
       { plantContext, selectionLabelPlantIds }),
@@ -107,11 +107,6 @@ function below(anchor: ScenePoint, offsetYPx: number): AnchoredLabel {
   return { anchor: { x: anchor.x, y: anchor.y }, offsetPx: { x: 0, y: offsetYPx } }
 }
 
-/** Plant presentation reads only a context's scale (`PlantPresentationContext.viewport`, until 0E retypes it). */
-function scaleOnly(pixelsPerMetre: number): PlantPresentationContext['viewport'] {
-  return { x: 0, y: 0, scale: pixelsPerMetre }
-}
-
 /** The gap below a plant's footprint, at `pixelsPerMetre`, clamped to today's 5–8 px. */
 function plantLabelOffsetPx(
   plant: ScenePlantEntity,
@@ -121,7 +116,7 @@ function plantLabelOffsetPx(
 ): number {
   const bounds = getPlantWorldBounds(plant, {
     ...plantContext,
-    viewport: scaleOnly(pixelsPerMetre),
+    pixelsPerMetre,
     speciesCache: plantContext?.speciesCache ?? EMPTY_SPECIES_CACHE,
     plants,
   })

@@ -28,9 +28,15 @@ export function viewLidarCoverage(bounds: [number, number, number, number]): boo
   })
 }
 
-/** Restores the one workspace-camera bookmark captured by coverage focus. */
+/**
+ * Restores the view the latest coverage focus left; with no bookmark left (a place search, a story step or a saved view dropped
+ * it), frames the Design as "Back to my Design" does. False only without a live canvas.
+ */
 export function viewDesignLocation(): boolean {
-  return getCurrentCanvasViewportCommandSurface()?.returnFromTemporaryFocus() ?? false
+  const viewport = getCurrentCanvasViewportCommandSurface()
+  if (!viewport) return false
+  if (!viewport.returnFromTemporaryFocus()) viewport.returnToDesign()
+  return true
 }
 
 export function publishLidarMapViewBounds(

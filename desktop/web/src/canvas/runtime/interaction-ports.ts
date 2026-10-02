@@ -249,10 +249,14 @@ export interface ToolHost {
    *  entry, a handle or the Unlock affordance emits no gesture before phase 2, so the lens keeps its point there, as today's
    *  lens skips buttons, inputs, textareas, contenteditable and [data-preserve-overlays] (spec §1.4 "Hover", §2.2 "Hover").
    *  A hover made with a button held is published too: the interaction session's subscribePointerWorld drops it (its raw
-   *  buttonMask, as today's lens skipped a move with any button held). For the inspection lens and the status line. */
-  subscribePointerWorld(listener: (point: WorldPoint | null) => void): () => void
+   *  buttonMask, as today's lens skipped a move with any button held). For the inspection lens, the status line and, later, hover
+   *  readouts over analysis results: the screen point lets a readout query the map there without projecting (R1, P2). */
+  subscribePointerWorld(listener: (point: PointerWorld | null) => void): () => void
   dispose(): void
 }
+
+/** The pointer over the map: its Scene point and its map-host screen point. */
+export interface PointerWorld { readonly world: WorldPoint; readonly screen: ScreenPoint }
 // Today's SceneInteractionSession members: setTool → ToolHost.setTool; plantRowSpacing (CanvasToolCommandSurface) → ToolHost.command
 // with the spacing kinds; the four transient-history members → transientHistory; refreshMeasurements → ToolHost.sceneChanged();
 // setOverviewMode → through 0B a mode override the session feeds to the recogniser's configure and to the host's frames;

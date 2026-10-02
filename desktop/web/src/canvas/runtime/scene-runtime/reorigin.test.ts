@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import '../../../__tests__/support/camera-tolerance'
 
 vi.mock('../../../ipc/species', () => ({
   getSpeciesBatch: vi.fn(async () => []),
@@ -9,10 +10,14 @@ vi.mock('../../../ipc/species', () => ({
 import { geoAt } from '../../../__tests__/support/geo-design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-format'
 import type { CanopiFile } from '../../../types/design'
-import type { SessionPlane } from '../../session-plane'
+import { createSessionPlane, type SessionPlane } from '../../session-plane'
+import { createTestView, placeOnHost } from '../../../__tests__/support/test-view'
 import { createDetachedCanvasRuntimeAppAdapter } from '../app-adapter'
 import { SceneCanvasRuntime } from '../scene-runtime'
-import type { SceneEditCoordinator } from './transactions'
+import { SceneRuntimeReoriginController } from './reorigin'
+import type { SceneCommandAdmission, SceneEditCoordinator } from './transactions'
+import type { ViewFrame } from '../view/types'
+import { planarCameraOf } from '../view/view-transform'
 
 function makeFile(): CanopiFile {
   return {
@@ -121,13 +126,15 @@ function sessionPlane(runtime: SceneCanvasRuntime): SessionPlane {
   return runtime.querySurface.sessionPlane.value!
 }
 
+/** The runtime camera's live frame. */
+function frameOf(runtime: SceneCanvasRuntime): ViewFrame {
+  return runtime.cameraHost.frames.viewFrame.peek()
+}
+
 /** Centres the view on a session-plane point at the given scale. */
 function centreViewOn(runtime: SceneCanvasRuntime, point: { x: number; y: number }, scale = 1): void {
-  ;(runtime as any)._camera.setViewport({
-    x: SCREEN.width / 2 - point.x * scale,
-    y: SCREEN.height / 2 - point.y * scale,
-    scale,
-  })
+  placeOnHost(runtime.cameraHost, runtime.querySurface.sessionPlane.peek()!,
+    { x: SCREEN.width / 2 - point.x * scale, y: SCREEN.height / 2 - point.y * scale, scale })
 }
 
 function sceneEdits(runtime: SceneCanvasRuntime): SceneEditCoordinator {
@@ -173,7 +180,7 @@ describe('session plane re-origin', () => {
       expect(next.origin.lon).toBeCloseTo(expectedOrigin.lon, 9)
       expect(next.origin.lat).toBeCloseTo(expectedOrigin.lat, 9)
       // The camera is reprojected with the plane, so the view stays put.
-      const viewport = runtime.querySurface.viewport.value.viewport
+      const viewport = planarCameraOf(frameOf(runtime).view)
       const centre = {
         x: (SCREEN.width / 2 - viewport.x) / viewport.scale,
         y: (SCREEN.height / 2 - viewport.y) / viewport.scale,
@@ -303,12 +310,46 @@ describe('session plane re-origin', () => {
     }
   })
 
+  it('a frame that keeps the placement, screen and mode (a hydration, an inset change) is not observed', async () => {
+    const plane = createSessionPlane({ lon: 2.35, lat: 48.85 })
+    const viewport = { x: SCREEN.width / 2 - FAR_EAST_METERS, y: SCREEN.height / 2, scale: 1 }
+    const view = createTestView({ plane, screen: SCREEN, viewport })
+    // Refused, so the plane stays and every observed far frame would ask again.
+    const reoriginSessionPlane = vi.fn(() => null)
+    const controller = new SceneRuntimeReoriginController({
+      sceneState: { sessionPlane: plane },
+      authority: { reoriginSessionPlane },
+      commandAdmission: { runWhenSettled: (run: () => void) => run() } as unknown as SceneCommandAdmission,
+    })
+    try {
+      controller.observe(view.frames.viewFrame.peek())
+      await settleReorigin()
+      expect(reoriginSessionPlane).toHaveBeenCalledOnce()
+
+      view.navigation.setFramingInsets({ top: 40, right: 0, bottom: 0, left: 0 })
+      controller.observe(view.frames.viewFrame.peek())
+      const hydrated = createTestView({ plane: createSessionPlane({ lon: 13, lat: 23 }), screen: SCREEN, viewport })
+      controller.observe(hydrated.frames.viewFrame.peek())
+      hydrated.dispose()
+      await settleReorigin()
+      expect(reoriginSessionPlane).toHaveBeenCalledOnce()
+
+      view.navigation.panByPx({ x: 10, y: 0 })
+      controller.observe(view.frames.viewFrame.peek())
+      await settleReorigin()
+      expect(reoriginSessionPlane).toHaveBeenCalledTimes(2)
+    } finally {
+      controller.dispose()
+      view.dispose()
+    }
+  })
+
   it('does not re-origin in overview mode', async () => {
     const { runtime } = createRuntime()
     try {
       const previous = sessionPlane(runtime)
       centreViewOn(runtime, { x: 500_000, y: 0 }, 0.001)
-      expect(runtime.querySurface.viewport.value.mode).toBe('overview')
+      expect(frameOf(runtime).mode).toBe('overview')
       await settleReorigin()
       expect(sessionPlane(runtime)).toBe(previous)
     } finally {

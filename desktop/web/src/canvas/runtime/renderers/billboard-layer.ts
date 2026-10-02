@@ -437,7 +437,7 @@ function syncPlants(
   const pixelsPerMetre = view.pixelsPerMetre
   const entries = measurePixiSceneWork('plantEntries', () => buildPlantPresentationEntries(visiblePlants, {
     plants: snapshot.scene.plants,
-    viewport: { x: 0, y: 0, scale: pixelsPerMetre },
+    pixelsPerMetre,
     speciesCache: snapshot.speciesCache,
     plantSpeciesSymbols: snapshot.scene.plantSpeciesSymbols,
     localizedCommonNames: snapshot.localizedCommonNames,
@@ -687,7 +687,6 @@ function syncAnnotations(
   }
 
   const pixelsPerMetre = view.pixelsPerMetre
-  const placement = { x: 0, y: 0, scale: pixelsPerMetre }
   const detail = getCanvasDetailLayout(snapshot.scene, pixelsPerMetre)
   const nextIds = new Set<string>()
   for (const annotation of snapshot.scene.annotations) {
@@ -701,7 +700,7 @@ function syncAnnotations(
     const revealText = annotation.id === snapshot.revealedAnnotationId
       || (snapshot.hoverTarget?.kind === 'annotation' && snapshot.hoverTarget.id === annotation.id)
     const textAllowed = detail.annotationIds.has(annotation.id)
-    const presentation = getAnnotationPresentation(annotation, placement, revealText, textAllowed)
+    const presentation = getAnnotationPresentation(annotation, pixelsPerMetre, revealText, textAllowed)
     const origin = view.worldToScreen(annotation.position)
     styleAnnotationText(text, annotation, presentation.textFrame.lineHeightPx, view.camera.bearingDeg)
     text.position.set(origin.x, origin.y)

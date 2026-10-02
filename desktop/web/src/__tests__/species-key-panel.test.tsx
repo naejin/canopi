@@ -32,8 +32,6 @@ import { mapLayers } from '../app/map-layers/state'
 import { setPlantLabels } from '../app/plant-display/actions'
 import { PLANT_LABELS_CHIP_MS, PlantLabelsChip } from '../components/canvas/PlantLabelsChip'
 import { NO_STRATUM_DISPLAY_COLOR, STRATUM_DISPLAY_COLORS } from '../canvas/runtime/plant-display'
-import type { Signal } from '@preact/signals'
-import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
 
 const plants = [
   { id: 'apple-1', canonicalName: 'Malus domestica', commonName: 'Pommier cultivé', x: 0 },
@@ -47,7 +45,7 @@ describe('Plants in this Design', () => {
   let commands: CanvasCommandSurface
   let queries: CanvasQuerySurface
   let baseQueries: TestCanvasQuerySurface
-  let focusTemporaryBounds: ReturnType<typeof vi.fn<CanvasCommandSurface['viewport']['focusTemporaryBounds']>>
+  let frameBounds: ReturnType<typeof vi.fn<CanvasCommandSurface['viewport']['frameBounds']>>
   let selectSpecies: ReturnType<typeof vi.fn<CanvasCommandSurface['sceneEdits']['selectSpecies']>>
   let selectSameSpecies: ReturnType<typeof vi.fn<CanvasCommandSurface['sceneEdits']['selectSameSpecies']>>
   let setPlantColorForSpecies: ReturnType<typeof vi.fn<CanvasCommandSurface['plantPresentation']['setPlantColorForSpecies']>>
@@ -83,7 +81,7 @@ describe('Plants in this Design', () => {
     })
     let focus: SpeciesFocus = { canonicalName: null }
     queries = { ...baseQueries, getSpeciesFocus: () => focus }
-    focusTemporaryBounds = vi.fn<CanvasCommandSurface['viewport']['focusTemporaryBounds']>(() => true)
+    frameBounds = vi.fn<CanvasCommandSurface['viewport']['frameBounds']>(() => true)
     selectSpecies = vi.fn<CanvasCommandSurface['sceneEdits']['selectSpecies']>()
     selectSameSpecies = vi.fn<CanvasCommandSurface['sceneEdits']['selectSameSpecies']>()
     setPlantColorForSpecies = vi.fn<CanvasCommandSurface['plantPresentation']['setPlantColorForSpecies']>(() => 2)
@@ -94,7 +92,7 @@ describe('Plants in this Design', () => {
           baseQueries.bumpSceneRevision()
         },
       },
-      viewport: { focusTemporaryBounds },
+      viewport: { frameBounds },
       sceneEdits: { selectSpecies, selectSameSpecies },
       plantPresentation: { setPlantColorForSpecies },
     })
@@ -157,7 +155,7 @@ describe('Plants in this Design', () => {
     expect(container.textContent).toContain('3 plants match “pomier”')
 
     await act(() => buttonNamed('Zoom to them').click())
-    expect(focusTemporaryBounds).toHaveBeenCalledWith(
+    expect(frameBounds).toHaveBeenCalledWith(
       { minX: -2, minY: -2, maxX: 22, maxY: 2 },
       expect.objectContaining({ paddingCssPx: expect.any(Number) }),
     )
@@ -451,9 +449,7 @@ describe('Plants in this Design', () => {
     await act(() => buttonNamed('Zoom in to see names').click())
     expect(zoomBy).toHaveBeenCalledWith(105)
     // … and one step at a time once there, for plants too close for their names.
-    ;(queries.viewport as Signal<CameraViewportSnapshot>).value = {
-      ...queries.viewport.value, viewport: { x: 0, y: 0, scale: 120 },
-    }
+    baseQueries.setPlacement({ x: 0, y: 0, scale: 120 })
     await act(() => buttonNamed('Zoom in to see names').click())
     expect(zoomIn).toHaveBeenCalledOnce()
 

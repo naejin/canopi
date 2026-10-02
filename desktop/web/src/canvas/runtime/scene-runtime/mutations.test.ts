@@ -130,7 +130,7 @@ function createController(file = makeFile()) {
     presentation: {
       getViewportScale: () => 1,
       createPlantPresentationContext: (viewportScale = 1) => ({
-        viewport: { x: 0, y: 0, scale: viewportScale },
+        pixelsPerMetre: viewportScale,
         speciesCache: new Map(),
         localizedCommonNames: new Map(),
       }),

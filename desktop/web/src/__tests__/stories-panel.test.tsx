@@ -77,7 +77,7 @@ let showPlace: ReturnType<typeof vi.fn<(place: { readonly lon: number; readonly 
 function mountMap(): void {
   const scale = mapZoomToStageScale(18, TEST_GEO_ORIGIN.lat)
   const queries = createTestCanvasQuerySurface({
-    viewport: { x: 200, y: 150, scale },
+    placement: { x: 200, y: 150, scale },
     sessionPlane: createSessionPlane(TEST_GEO_ORIGIN),
   })
   queries.getLocalizedCommonNames = () => new Map([['Lycium barbarum', 'Goji']])

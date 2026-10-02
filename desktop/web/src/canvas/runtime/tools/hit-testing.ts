@@ -516,12 +516,7 @@ function plantPresentationContext(
   const base = getPlantContext(viewportScale)
   return {
     ...base,
-    viewport: {
-      ...base.viewport,
-      x: 0,
-      y: 0,
-      scale: viewportScale,
-    },
+    pixelsPerMetre: viewportScale,
     speciesCache,
   }
 }

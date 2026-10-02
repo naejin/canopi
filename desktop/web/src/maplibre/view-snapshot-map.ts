@@ -334,14 +334,7 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
         'The snapshot map did not load in time.',
       )
       const { view } = created
-      created.driver = createMapLibreCameraDriver(map, view.plane, {
-        clock: now,
-        scheduleFrame: (callback) => {
-          const frame = requestAnimationFrame(callback)
-          return () => cancelAnimationFrame(frame)
-        },
-        policy: () => view.policy,
-      })
+      created.driver = createMapLibreCameraDriver(map, view.plane, { policy: () => view.policy })
       const refused = created.driver.failure.peek()
       if (refused) throw new Error(`The snapshot map cannot place its camera: ${refused.message}`)
       created.background = mountBackground({

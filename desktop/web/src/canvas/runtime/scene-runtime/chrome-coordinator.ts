@@ -1,9 +1,9 @@
 import type { Guide } from '../../guides'
 import { SceneChromeOverlay } from '../scene-chrome'
-import type { CameraViewportSnapshot } from '../camera'
+import type { ViewFrame } from '../view/types'
 
 interface SceneRuntimeChromeSnapshot {
-  camera: CameraViewportSnapshot
+  frame: ViewFrame
   rulersVisible: boolean
   gridVisible: boolean
   guidesVisible: boolean

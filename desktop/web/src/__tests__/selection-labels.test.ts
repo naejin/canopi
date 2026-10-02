@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ScenePlantEntity, ScenePoint } from '../canvas/runtime/scene'
 import { computePinnedPlantNameLabels, computeSelectionLabels } from '../canvas/runtime/selection-labels'
 import { createTestRendererView } from './support/scene-renderer-snapshot'
+import './support/camera-tolerance'
 
 function createViewport(overrides: Partial<{ x: number; y: number; scale: number }> = {}) {
   return { x: 0, y: 0, scale: 8, ...overrides }
@@ -76,7 +77,7 @@ describe('selection labels', () => {
       new Map(),
     )
 
-    expect(landing(result[0]!, createViewport({ scale: 1000 })).x).toBeCloseTo(10000, 6)
+    expect(landing(result[0]!, createViewport({ scale: 1000 })).x).toBeCloseTo(10000, 5)
     expect(landing(result[0]!, createViewport({ scale: 1000 })).y).toBeCloseTo(20008, 2)
   })
 

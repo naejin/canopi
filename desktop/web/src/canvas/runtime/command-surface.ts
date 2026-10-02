@@ -1,4 +1,3 @@
-import { mapZoomToStageScale } from '../projection'
 import type { SpeciesFocusCommands } from './species-key'
 import { computed, type ReadonlySignal } from '@preact/signals'
 import { setCanvasTool } from '../session-state'
@@ -6,12 +5,7 @@ import type {
   CanvasRuntimeSavedObjectStampAdapter,
   CanvasRuntimeSettingsAdapter,
 } from './app-adapter'
-import type {
-  SceneBounds,
-  TemporaryBoundsFocusOptions,
-  WorkspaceCameraFrameReader,
-  WorkspaceCameraNavigation,
-} from './camera'
+import type { SceneBounds, TemporaryBoundsFocusOptions } from './view/types'
 import { sceneExtentPoints } from './scene-extent'
 import type { SceneRuntimePresentationController } from './scene-runtime/presentation'
 import type { ViewNavigation } from './view/navigation'
@@ -68,14 +62,12 @@ interface SceneCanvasCommandSurfaceOptions {
   readonly readEmptySceneScale?: () => number
   readonly speciesFocus: SpeciesFocusCommands
   readonly sceneStore: SceneStateReader
-  readonly camera: Pick<WorkspaceCameraFrameReader, 'screenSize'>
-  /** The legacy shim's navigation: the nine viewport commands app code gave before the view (0A to the end of 0D2). */
-  readonly cameraNavigation: Pick<
-    WorkspaceCameraNavigation,
-    'zoomIn' | 'zoomOut' | 'zoomAroundScreenPoint' | 'zoomToFit' | 'returnToDesign' | 'focusTemporaryBounds' | 'returnFromTemporaryFocus' | 'centerOn' | 'setFrameInsets' | 'clearTemporaryFocus'
+  /** The view's navigation over the runtime's driver host: every viewport command, each with today's viewport render (spec §1.1a). */
+  readonly viewNavigation: Pick<
+    ViewNavigation,
+    | 'zoomIn' | 'zoomOut' | 'zoomBy' | 'zoomToFit' | 'returnToDesign' | 'focusTemporaryBounds' | 'frameBounds' | 'returnFromTemporaryFocus'
+    | 'showPlace' | 'setFramingInsets' | 'zoomToSelection' | 'resetNorth' | 'rotateBy' | 'beginRotation' | 'showCamera'
   >
-  /** The view's navigation over the runtime's driver host: the commands the view adds (spec §1.1a). */
-  readonly viewNavigation: Pick<ViewNavigation, 'zoomToSelection' | 'resetNorth' | 'rotateBy' | 'beginRotation' | 'showCamera'>
   /** The live frame's px/m, which sizes screen-sized notes and plants (INV-XF-27). */
   readonly readViewScale: () => number
   readonly history: SceneHistoryCommands
@@ -193,10 +185,11 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       zoomToFit: () => this.zoomToFit(),
       returnToDesign: () => this.returnToDesign(),
       focusTemporaryBounds: (bounds, options) => this.focusTemporaryBounds(bounds, options),
+      frameBounds: (bounds, options) => this.frameBounds(bounds, options),
       showPlace: (place, zoom, options) => this.showPlace(place, zoom, options),
       returnFromTemporaryFocus: () => this.returnFromTemporaryFocus(),
       setFramingInsets: (insets) => {
-        this.options.cameraNavigation.setFrameInsets(insets)
+        this.options.viewNavigation.setFramingInsets(insets)
         // Chrome placed inside the visible map area (rulers) redraws against the new edges.
         this.options.invalidate('viewport')
       },
@@ -204,11 +197,8 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       resetNorth: () => this.moveView(() => this.options.viewNavigation.resetNorth()),
       rotateBy: (direction) => this.moveView(() => this.options.viewNavigation.rotateBy(direction)),
       beginRotation: (pivot) => this.options.viewNavigation.beginRotation(pivot),
-      showCamera: (camera, options) => this.moveView(() => {
-        // A new camera command drops the temporary focus, as showPlace does.
-        this.options.cameraNavigation.clearTemporaryFocus()
-        this.options.viewNavigation.showCamera(camera, options)
-      }),
+      // A new camera command drops the temporary focus, as showPlace does.
+      showCamera: (camera, options) => this.moveView(() => this.options.viewNavigation.showCamera(camera, options)),
     }
     this.history = {
       canUndo,
@@ -390,20 +380,19 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   }
 
   private zoomIn(): void {
-    this.options.cameraNavigation.zoomIn()
+    this.options.viewNavigation.zoomIn()
     this.options.invalidate('viewport')
   }
 
   private zoomOut(): void {
-    this.options.cameraNavigation.zoomOut()
+    this.options.viewNavigation.zoomOut()
     this.options.invalidate('viewport')
   }
 
   /** Zoom about the screen centre; the scale menu picks the factor for a map scale. */
   private zoomBy(factor: number): void {
     if (!Number.isFinite(factor) || factor <= 0) return
-    const screen = this.options.camera.screenSize
-    this.options.cameraNavigation.zoomAroundScreenPoint({ x: screen.width / 2, y: screen.height / 2 }, factor)
+    this.options.viewNavigation.zoomBy(factor)
     this.options.invalidate('viewport')
   }
 
@@ -412,21 +401,15 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     zoom: number,
     options?: { readonly motion?: 'fly' | 'jump' },
   ): boolean {
-    if (![place.lon, place.lat, zoom].every(Number.isFinite)) return false
-    const plane = this.options.sceneStore.sessionPlane
-    const point = plane.toPlane(place)
-    // Plane metres are Mercator units scaled at the origin latitude, so the
-    // zoom converts there, as the map frame converts it back.
-    this.options.cameraNavigation.centerOn(point, mapZoomToStageScale(zoom, plane.origin.lat), {
-      animate: options?.motion === 'fly',
-    })
+    // The geographic target and MapLibre zoom go to the camera as they are: no plane round trip.
+    if (!this.options.viewNavigation.showPlace(place, zoom, options)) return false
     this.options.invalidate('viewport')
     return true
   }
 
   private zoomToFit(): void {
     const scene = this.options.sceneStore.persisted
-    this.options.cameraNavigation.zoomToFit(scene, {
+    this.options.viewNavigation.zoomToFit(scene, {
       extentPoints: sceneExtentPoints(scene, this.options.presentation.createPlantPresentationContext(this.options.readViewScale())),
       emptySceneScale: this.options.readEmptySceneScale?.(),
     })
@@ -435,7 +418,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
 
   private returnToDesign(): void {
     const scene = this.options.sceneStore.persisted
-    this.options.cameraNavigation.returnToDesign(scene, {
+    this.options.viewNavigation.returnToDesign(scene, {
       extentPoints: sceneExtentPoints(scene, this.options.presentation.createPlantPresentationContext(this.options.readViewScale())),
     })
     this.options.invalidate('viewport')
@@ -456,13 +439,19 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     bounds: SceneBounds,
     options: TemporaryBoundsFocusOptions,
   ): boolean {
-    const changed = this.options.cameraNavigation.focusTemporaryBounds(bounds, options)
+    const changed = this.options.viewNavigation.focusTemporaryBounds(bounds, options)
+    if (changed) this.options.invalidate('viewport')
+    return changed
+  }
+
+  private frameBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean {
+    const changed = this.options.viewNavigation.frameBounds(bounds, options)
     if (changed) this.options.invalidate('viewport')
     return changed
   }
 
   private returnFromTemporaryFocus(): boolean {
-    const changed = this.options.cameraNavigation.returnFromTemporaryFocus()
+    const changed = this.options.viewNavigation.returnFromTemporaryFocus()
     if (changed) this.options.invalidate('viewport')
     return changed
   }

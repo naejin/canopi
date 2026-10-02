@@ -3,6 +3,7 @@ import { createTestRendererView, createTestSceneRendererSnapshot } from '../../.
 import type { ScenePlantEntity } from '../scene'
 import type { PlantNameLabel, SelectionLabel } from '../selection-labels'
 import { LabelAdmission } from './label-admission'
+import '../../../__tests__/support/camera-tolerance'
 
 const plant: ScenePlantEntity = {
   kind: 'plant', id: 'mint', position: { x: 2, y: 3 }, canonicalName: 'Mentha spicata',

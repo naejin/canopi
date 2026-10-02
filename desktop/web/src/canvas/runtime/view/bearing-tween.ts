@@ -1,4 +1,4 @@
-// canvas/runtime/view/bearing-tween.ts  (pure step function; the clock is injected)
+// canvas/runtime/view/bearing-tween.ts  (pure step function; the time is an argument)
 //
 // Owns the driver-run eases (ADR 0016: key turns, resets, snaps to north): ease-out cubic along the shortest arc to an
 // absolute bearing about an anchor. Each step starts from the LIVE camera, so a pan or zoom made during the tween composes

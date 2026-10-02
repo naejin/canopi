@@ -95,7 +95,7 @@ function plant(id: string, canonicalName: string): ScenePlantEntity {
 function mountMap(planted: readonly ScenePlantEntity[] = [plant('p1', 'Lycium barbarum')]): void {
   const queries = createTestCanvasQuerySurface({
     scene: { ...createDefaultScenePersistedState(), plants: [...planted] },
-    viewport: { x: 200, y: 150, scale: mapZoomToStageScale(18, TEST_GEO_ORIGIN.lat) },
+    placement: { x: 200, y: 150, scale: mapZoomToStageScale(18, TEST_GEO_ORIGIN.lat) },
     sessionPlane: createSessionPlane(TEST_GEO_ORIGIN),
   })
   queries.getSpeciesFocus = () => ({ canonicalName: 'Malus domestica' })

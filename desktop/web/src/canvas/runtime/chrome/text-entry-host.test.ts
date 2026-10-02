@@ -4,6 +4,7 @@ import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 import type { CanvasFocusPort } from '../app-adapter'
 import type { TextEntryRequest } from '../tools/tool'
 import { createTextEntryHost, type TextEntryHost } from './text-entry-host'
+import { expectScreenPx } from '../../../__tests__/support/camera-tolerance'
 
 const NOTE: TextEntryRequest = {
   anchor: { x: 10, y: 20 },
@@ -74,8 +75,8 @@ describe('the text-entry host', () => {
     expect(textarea.hasAttribute('data-annotation-inline-editor')).toBe(false)
     expect(textarea.placeholder).toBe('t:canvas.textNote.placeholder')
     expect(textarea.getAttribute('aria-label')).toBe('t:canvas.tools.text')
-    expect(textarea.style.left).toBe('65px')
-    expect(textarea.style.top).toBe('87px')
+    expectScreenPx(textarea.style.left, 65)
+    expectScreenPx(textarea.style.top, 87)
     expect(textarea.style.fontSize).toBe('var(--text-base)')
     expect(textarea.style.lineHeight).toBe('1.4')
     expect(textarea.style.transform).toBe('')
@@ -98,8 +99,8 @@ describe('the text-entry host', () => {
     expect(textarea.dataset.preserveOverlays).toBe('true')
     expect(textarea.hasAttribute('data-canvas-text-entry')).toBe(true)
     expect(textarea.placeholder).toBe('')
-    expect(textarea.style.left).toBe('25px')
-    expect(textarea.style.top).toBe('47px')
+    expectScreenPx(textarea.style.left, 25)
+    expectScreenPx(textarea.style.top, 47)
     expect(textarea.style.fontSize).toBe('20px')
     expect(textarea.style.lineHeight).toBe('1.25')
     // Nine characters at 0.6 em and two lines at 1.25 em, as the note is drawn.
@@ -120,8 +121,8 @@ describe('the text-entry host', () => {
 
     view.setViewport({ x: 100, y: 50, scale: 1 })
 
-    expect(entry()!.style.left).toBe('130px')
-    expect(entry()!.style.top).toBe('90px')
+    expectScreenPx(entry()!.style.left, 130)
+    expectScreenPx(entry()!.style.top, 90)
   })
 
   it('Enter submits the text: a closed entry returns focus to the map, a kept one stays the same field', async () => {
@@ -297,6 +298,6 @@ describe('the text-entry host', () => {
 
     expect(submit).not.toHaveBeenCalled()
     expect(textarea.isConnected).toBe(false)
-    expect(textarea.style.left).toBe('65px')
+    expectScreenPx(textarea.style.left, 65)
   })
 })

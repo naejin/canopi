@@ -13,6 +13,7 @@ import type { ScenePersistedState } from '../scene/types'
 import type { WorldPoint } from '../view/types'
 import type { DraftShape } from './draft'
 import type { CanvasTool } from './tool'
+import '../../../__tests__/support/camera-tolerance'
 
 /** The tools the registry built, newest last: a test calls one as the host does. */
 const builtTools = vi.hoisted(() => [] as CanvasTool[])
@@ -159,8 +160,8 @@ describe('object stamp tool', () => {
     // The plant was picked 4 m east and 3 m south of its centre; at 90° that offset turns too.
     h.hover({ x: 100, y: 120 })
     const ghostPlant = objectsGhost(ghosts(h)[0]).template.plants[0]!.entity
-    expect(ghostPlant.position.x).toBeCloseTo(103, 9)
-    expect(ghostPlant.position.y).toBeCloseTo(116, 9)
+    expect(ghostPlant.position.x).toBeCloseTo(103, 6)
+    expect(ghostPlant.position.y).toBeCloseTo(116, 6)
     h.click({ x: 100, y: 120 })
     expect(h.store.persisted.plants[1]?.position).toEqual({ x: 103, y: 116 })
   })
@@ -259,8 +260,8 @@ describe('object stamp tool', () => {
     h.wheelZoom({ x: 40, y: 40 }, 2)
     h.advance(0)
     // The zoom keeps the ground under the pointer: the ghost stands where the pick was pressed.
-    expect(objectsGhost(ghosts(h)[0]).anchor.x).toBeCloseTo(40, 9)
-    expect(objectsGhost(ghosts(h)[0]).anchor.y).toBeCloseTo(40, 9)
+    expect(objectsGhost(ghosts(h)[0]).anchor.x).toBeCloseTo(40, 6)
+    expect(objectsGhost(ghosts(h)[0]).anchor.y).toBeCloseTo(40, 6)
   })
 
   it('every cancellation reason hides the ghost until the next hover; none drops the pick', () => {

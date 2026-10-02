@@ -7,11 +7,11 @@
 
 import { signal } from '@preact/signals'
 import type { SessionPlane } from '../canvas/session-plane'
+import { isWorkspaceOverviewScale } from '../canvas/workspace-camera-policy'
 import { startBearingTween, type BearingTween } from '../canvas/runtime/view/bearing-tween'
 import type { CameraDriver, CameraDriverDeps, CameraDriverFailure, CameraMove } from '../canvas/runtime/view/camera-driver'
 import {
   panCamera,
-  planarToViewCamera,
   rotateCameraAround,
   zoomCameraAround,
 } from '../canvas/runtime/view/camera-math'
@@ -89,9 +89,8 @@ export function createMapLibreCameraDriver(
   let screen: ViewScreen = EMPTY_SCREEN
   let insets = NO_INSETS
   let tween: BearingTween | null = null
-  let cancelFrame: (() => void) | null = null
+  let frameRequest: number | null = null
   let flight: Flight | null = null
-  let revision = 0
   let disposed = false
   /** Depth of the driver's own map calls: the 'move' and 'moveend' events they fire are not MapLibre's own changes. */
   let ownCalls = 0
@@ -217,16 +216,16 @@ export function createMapLibreCameraDriver(
       screen: state.screen,
       plane: state.plane,
       planeRevision: state.planeRevision,
-      revision,
+      revision: 0,
     })
     return Object.freeze<ViewFrame>({
       view,
-      mode: view.pixelsPerMetre < state.overviewPixelsPerMetre ? 'overview' : 'site',
+      mode: isWorkspaceOverviewScale(view.pixelsPerMetre, { overviewScaleThreshold: state.overviewPixelsPerMetre }) ? 'overview' : 'site',
       scaleBounds: state.scaleBounds,
       insets: state.insets,
       attached: true,
       moving: state.moving,
-      revision,
+      revision: 0,
     })
   }
 
@@ -235,7 +234,6 @@ export function createMapLibreCameraDriver(
     const state = frameState(camera)
     if (sameFrameState(published, state)) return
     published = state
-    revision += 1
     const frame = buildFrame(state)
     frames.publish(frame)
     while (!frames.dispatching && queued.length > 0 && live()) queued.shift()!()
@@ -304,18 +302,18 @@ export function createMapLibreCameraDriver(
   function startTween(next: BearingTween): void {
     stopTween()
     tween = next
-    cancelFrame = deps.scheduleFrame(stepTween)
+    frameRequest = requestAnimationFrame(stepTween)
     refresh()
   }
 
   function stopTween(): void {
-    cancelFrame?.()
-    cancelFrame = null
+    if (frameRequest !== null) cancelAnimationFrame(frameRequest)
+    frameRequest = null
     tween = null
   }
 
   function stepTween(nowMs: number): void {
-    cancelFrame = null
+    frameRequest = null
     const running = tween
     if (!running || !live()) return
     const current = readCamera()
@@ -324,7 +322,7 @@ export function createMapLibreCameraDriver(
     if (done) tween = null
     // Every tween frame goes through constrainCamera at that frame's bearing.
     moveTo(constrainCamera(camera, screen, deps.policy()), { camera: current, shown: true })
-    if (!done && tween === running && live()) cancelFrame = deps.scheduleFrame(stepTween)
+    if (!done && tween === running && live()) frameRequest = requestAnimationFrame(stepTween)
   }
 
   function endFlight(): void {
@@ -387,7 +385,7 @@ export function createMapLibreCameraDriver(
             bearingDeg: move.bearingDeg,
             anchorPx: move.anchorPx,
             durationMs: move.durationMs ?? VIEW_EASE_MS,
-          }, deps.clock()))
+          }, performance.now()))
           return
         }
         stopTween()
@@ -404,15 +402,6 @@ export function createMapLibreCameraDriver(
         stopTween()
         if (move.animation === 'fly') fly(normalised, start.camera)
         else jumpTo(constrainCamera(normalised, screen, deps.policy()))
-        return
-      }
-      case 'place': {
-        const { planar } = move
-        if (![planar.x, planar.y, planar.scale, planar.bearingDeg].every(Number.isFinite) || planar.scale <= 0) return
-        if (!startingCamera(false)) return
-        stopTween()
-        // Converted through the plane once; MapLibre holds a geographic camera.
-        jumpTo(constrainCamera(planarToViewCamera(planar, screen, plane), screen, deps.policy()))
         return
       }
     }

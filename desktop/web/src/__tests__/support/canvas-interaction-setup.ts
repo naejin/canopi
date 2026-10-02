@@ -25,10 +25,9 @@ import { createTestCanvasQuerySurface } from './canvas-query-surface'
 import { snapToGridEnabled, snapToGuidesEnabled } from '../../app/canvas-settings/signals'
 import { plantSpacingIntervalM } from '../../app/settings/state'
 import { t } from '../../i18n'
-import type { CameraController } from '../../canvas/runtime/camera'
 import { planarToViewCamera, screenToGeo } from '../../canvas/runtime/view/camera-math'
 import { createSessionPlane } from '../../canvas/session-plane'
-import type { MapLibreWorkspaceCameraMap } from '../../maplibre/workspace-camera'
+import type { MapLibreCameraDriverMap } from '../../maplibre/camera-driver'
 import { createTestView, type TestView } from './test-view'
 import {
   SceneStore,
@@ -87,7 +86,7 @@ export function storedGeo(store: SceneStore, point: { x: number; y: number }) {
 
 export function createPlantPresentationContext(viewportScale: number) {
   return {
-    viewport: { x: 0, y: 0, scale: viewportScale },
+    pixelsPerMetre: viewportScale,
     speciesCache: new Map(),
   }
 }
@@ -96,7 +95,7 @@ export function createPlantPresentationContext(viewportScale: number) {
  * A consistent MapLibre fake with a fixed camera: the geographic camera that shows today's attached viewport { x: 100, y: 50, scale: 2 }
  * on the plane of the attached test's origin (Paris). jumpTo is recorded and fires 'move', and the read-backs stay put.
  */
-export class AttachedInteractionMap implements MapLibreWorkspaceCameraMap {
+export class AttachedInteractionMap implements MapLibreCameraDriverMap {
   readonly canvas = document.createElement('canvas')
   readonly listeners = new Map<string, Set<() => void>>()
   readonly jumpTo = vi.fn(() => this.fire('move'))
@@ -203,7 +202,7 @@ export function contextMenuItemIds(): readonly string[] {
 export function createInteractionDeps(
   container: HTMLDivElement,
   store: SceneStore,
-  camera: CameraController,
+  view: TestView,
   overrides: Partial<Pick<SceneInteractionSessionDeps,
     | 'render'
     | 'sceneEdits'
@@ -274,8 +273,8 @@ export function createInteractionDeps(
   return {
     container,
     getSceneStore: () => store,
-    camera,
-    cameraNavigation: camera,
+    frames: view.frames,
+    viewNavigation: view.navigation,
     getSpeciesCache: () => new Map(),
     getPlantPresentationContext: overrides.getPlantPresentationContext ?? createPlantPresentationContext,
     getSelection: () => selection.map((target) => ({ ...target })),
@@ -285,7 +284,7 @@ export function createInteractionDeps(
     commandAdmission,
     settledReader,
     getDesignObjectSelection: overrides.getDesignObjectSelection ?? (() =>
-      getDesignObjectSelectionFromStore(store, camera)
+      getDesignObjectSelectionFromStore(store, view)
     ),
     selectionCommands: overrides.selectionCommands ?? {
       copy: vi.fn(),
@@ -576,14 +575,15 @@ export function makeMeasurementGuide(
 
 export function getDesignObjectSelectionFromStore(
   store: SceneStore,
-  camera: CameraController,
+  view: TestView,
 ): CanvasDesignObjectSelectionModel {
+  const scale = view.view().pixelsPerMetre
   return getDesignObjectSelectionModel(
     store.persisted,
     store.session.selectedTargets,
     {
-      annotationViewportScale: camera.viewport.scale,
-      plantContext: createPlantPresentationContext(camera.viewport.scale),
+      annotationViewportScale: scale,
+      plantContext: createPlantPresentationContext(scale),
     },
   )
 }
@@ -704,7 +704,6 @@ export function pointsCenter(points: readonly ScenePoint[]): ScenePoint {
 export interface SceneInteractionFixtureState {
   readonly container: HTMLDivElement
   readonly testView: TestView
-  readonly camera: CameraController
   readonly store: SceneStore
   readonly events: SceneInteractionEventHarness
   readonly sessions: SceneInteractionSession[]
@@ -724,7 +723,6 @@ export function installSceneInteractionFixture(
 ) {
   let container: HTMLDivElement
   let testView: TestView
-  let camera: CameraController
   let store: SceneStore
   let events: SceneInteractionEventHarness
   let sessions: SceneInteractionSession[]
@@ -802,7 +800,6 @@ export function installSceneInteractionFixture(
     contextMenuHost.reset()
 
     testView = createTestView({ screen: { width: 400, height: 300 }, viewport: { x: 0, y: 0, scale: 1 } })
-    camera = testView.legacyCamera
     store = new SceneStore()
     sessions = []
     selectedObjectIds.value = new Set()
@@ -811,7 +808,7 @@ export function installSceneInteractionFixture(
     snapToGridEnabled.value = false
     snapToGuidesEnabled.value = false
     plantSpacingIntervalM.value = 0.5
-    assign({ container, testView, camera, store, events, sessions, toolCardHost, flushToolCard })
+    assign({ container, testView, store, events, sessions, toolCardHost, flushToolCard })
   })
 
   afterEach(() => {

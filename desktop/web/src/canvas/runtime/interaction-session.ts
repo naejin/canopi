@@ -29,7 +29,6 @@ import type {
   CanvasRuntimeTranslator,
   CanvasScrollWheelSetting,
 } from './app-adapter'
-import type { WorkspaceCameraFrameReader, WorkspaceCameraNavigation } from './camera'
 import { createHandleLayer, type HandleLayer } from './chrome/handle-layer'
 import { createHoverTooltip, type HoverTooltipController } from './chrome/hover-tooltip'
 import { createLockedAffordance, type LockedAffordanceController } from './chrome/locked-affordance'
@@ -44,7 +43,7 @@ import { detectPlatform, type InputPlatform } from './input/platform'
 import type { AdapterEffect, RawInput, RecogniserConfig, RecogniserState, TargetClass } from './input/raw-input'
 import { initialRecogniserState, recognise } from './input/recognise'
 import { DEFAULT_THRESHOLDS } from './input/thresholds'
-import type { GestureOutcome, InputRouterDeps, ToolHost, ToolHostDeps } from './interaction-ports'
+import type { GestureOutcome, InputRouterDeps, PointerWorld, ToolHost, ToolHostDeps } from './interaction-ports'
 import type { Modifiers, ToolId } from './interaction-types'
 import { isSceneLayerOpenForCreation, type SceneCreationLayerName } from './interaction/layer-guards'
 import { createCanvasKeyboardPort } from './keyboard-port'
@@ -62,7 +61,7 @@ import type { SceneCommandAdmission, SceneEditCoordinator, SettledSceneReader } 
 import type { SpeciesCacheEntry } from './species-cache'
 import { createContextMenuPort, createToolHost, createToolScene } from './tools/tool-host'
 import type { ViewNavigation } from './view/navigation'
-import type { ScreenPoint, ViewFrame, ViewFrameSource, WorldPoint } from './view/types'
+import type { ScreenPoint, ViewFrame, ViewFrameSource } from './view/types'
 
 /** Attributes the session sets on the map host and restores when it ends. */
 const HOST_ATTRIBUTES = ['tabindex', 'role', 'aria-label', 'aria-describedby'] as const
@@ -91,8 +90,6 @@ let descriptionSequence = 0
 export interface SceneInteractionSessionDeps {
   container: HTMLElement
   getSceneStore: () => SceneStateReader
-  camera: WorkspaceCameraFrameReader
-  cameraNavigation: Pick<WorkspaceCameraNavigation, 'panBy' | 'zoomAroundScreenPoint'>
   getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
   getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
   getSelection: () => SceneDesignObjectSelection
@@ -136,10 +133,10 @@ export interface SceneInteractionSessionDeps {
   publishToolGuidance?: (guidance: CanvasToolGuidance) => void
   /** The arrow keys' nudges, through the runtime's scene-edit commands. */
   nudge?: Pick<CanvasSceneEditCommandSurface, 'nudgeSelected' | 'endNudge'>
-  /** The view's frames (scene-runtime/construction.ts); absent, the camera shim's own driver host's, as the split suites build it. */
-  readonly frames?: ViewFrameSource
-  /** The view's navigation (turn to an edge, key zoom and north); absent, the camera shim's. */
-  readonly viewNavigation?: ViewNavigation
+  /** The view's frames (scene-runtime/construction.ts). */
+  readonly frames: ViewFrameSource
+  /** The view's navigation: pans, zooms, turns and north. */
+  readonly viewNavigation: ViewNavigation
   /** The mounted renderer's draft sink (scene-runtime.ts, over the render scheduler); absent, drafts go nowhere. */
   readonly renderer?: Pick<SceneRenderer, 'setDraft'>
   /** The app's focus port (CanvasRuntimeAppAdapter.focus); absent, the session focuses the map host itself, as today. */
@@ -165,9 +162,9 @@ export interface SceneInteractionSession {
   redoTransientHistory(): boolean
   /** The canvas's key handling (spec §1.2a), fed by the DOM input source's legacy key sink until 0C. */
   readonly keyboard: CanvasKeyboardPort
-  /** ToolHost.subscribePointerWorld: the pointer's world point over the map, null when it leaves (the inspection lens). The
-   *  session drops the point of a move made with any button held (its raw buttonMask), as today's lens skipped it. */
-  subscribePointerWorld(listener: (point: WorldPoint | null) => void): () => void
+  /** ToolHost.subscribePointerWorld: the pointer's world and screen points over the map, null when it leaves (the inspection
+   *  lens). The session drops the point of a move made with any button held (its raw buttonMask), as today's lens skipped it. */
+  subscribePointerWorld(listener: (point: PointerWorld | null) => void): () => void
   dispose(): void
 }
 
@@ -241,8 +238,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     const platform = _deps.platform ?? detectPlatform(navigator, window as unknown as { readonly GestureEvent?: unknown })
     this._config = { platform, bindings: CURRENT_BINDINGS, thresholds: DEFAULT_THRESHOLDS }
     this._pointingDevice = this._readPointingDevice()
-    const view = viewOf(_deps)
-    this._frames = overrideMode(view.frames, this._overview)
+    const navigation = _deps.viewNavigation
+    this._frames = overrideMode(_deps.frames, this._overview)
     this._renderer = _deps.renderer ?? NO_DRAFTS
     this._storyPresented = isStoryPresented()
     const container = _deps.container
@@ -256,13 +253,13 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
     this._focus = focus
     this._navigation = {
-      panByPx: (delta) => this._afterCameraMove(() => _deps.cameraNavigation.panBy(delta)),
-      zoomAroundPx: (anchor, factor) => this._afterCameraMove(() => _deps.cameraNavigation.zoomAroundScreenPoint(anchor, factor)),
-      beginRotation: (pivot) => view.navigation.beginRotation(pivot),
-      zoomIn: () => this._afterCameraMove(() => view.navigation.zoomIn()),
-      zoomOut: () => this._afterCameraMove(() => view.navigation.zoomOut()),
-      resetNorth: () => view.navigation.resetNorth(),
-      rotateBy: (direction) => view.navigation.rotateBy(direction),
+      panByPx: (delta) => this._afterCameraMove(() => navigation.panByPx(delta)),
+      zoomAroundPx: (anchor, factor) => this._afterCameraMove(() => navigation.zoomAroundPx(anchor, factor)),
+      beginRotation: (pivot) => navigation.beginRotation(pivot),
+      zoomIn: () => this._afterCameraMove(() => navigation.zoomIn()),
+      zoomOut: () => this._afterCameraMove(() => navigation.zoomOut()),
+      resetNorth: () => navigation.resetNorth(),
+      rotateBy: (direction) => navigation.rotateBy(direction),
     }
 
     const rollback: Array<() => void> = []
@@ -297,7 +294,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       })
       this._menu = own(createContextMenuPort({
         container,
-        camera: _deps.camera,
+        view: () => _deps.frames.viewFrame.peek().view,
         adapter: _deps.contextMenu,
         commands: _deps.selectionCommands,
         saveSelectionAsObjectStamp: _deps.contextualCommands?.saveSelectionAsObjectStamp,
@@ -506,7 +503,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     return !this._disposed && this._toolHost.transientHistory.redo()
   }
 
-  subscribePointerWorld(listener: (point: WorldPoint | null) => void): () => void {
+  subscribePointerWorld(listener: (point: PointerWorld | null) => void): () => void {
     // The held-button rule is the session's, not the host's: today's lens skipped every move made with a button held (a
     // press off the map, or a right press, dragged across it; a pen's barrel or eraser too).
     return this._toolHost.subscribePointerWorld((point) => {
@@ -862,11 +859,11 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._deps.container.style.cursor = this._navigationCursor ?? this._toolCursor ?? 'default'
   }
 
-  /** A pan or zoom through today's camera navigation: the viewport render and today's refresh when the camera moved. */
+  /** A pan or zoom through the view's navigation: the viewport render and today's refresh when it published a new frame. */
   private _afterCameraMove(move: () => void): void {
-    const before = this._deps.camera.snapshot.peek().revision
+    const before = this._deps.frames.viewFrame.peek()
     move()
-    if (this._deps.camera.snapshot.peek().revision === before) return
+    if (this._deps.frames.viewFrame.peek() === before) return
     this._deps.render('viewport')
   }
 
@@ -1030,15 +1027,6 @@ function prepareInteractionHost(
     throw error
   }
   return host
-}
-
-/** The view the camera shim wraps, when the runtime does not pass its own (the split suites' CameraController). */
-function viewOf(deps: SceneInteractionSessionDeps): { readonly frames: ViewFrameSource; readonly navigation: ViewNavigation } {
-  const shim = deps.camera as Partial<{ readonly host: { readonly frames: ViewFrameSource }; readonly viewNavigation: ViewNavigation }>
-  const frames = deps.frames ?? shim.host?.frames
-  const navigation = deps.viewNavigation ?? shim.viewNavigation
-  if (!frames || !navigation) throw new Error('The interaction session needs the view\'s frames and navigation')
-  return { frames, navigation }
 }
 
 interface ModeOverridingFrames extends ViewFrameSource {

@@ -11,6 +11,7 @@ import { SceneRuntimeRenderScheduler } from '../canvas/runtime/scene-runtime/ren
 import type { DraftPresentation } from '../canvas/runtime/tools/draft'
 import { createTestRendererView, createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
 import { createTestView, type TestView } from './support/test-view'
+import './support/camera-tolerance'
 
 function createCanvas(): HTMLCanvasElement {
   const canvas = document.createElement('canvas')

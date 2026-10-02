@@ -1,18 +1,11 @@
 // canvas/runtime/view/camera-math.ts  (pure; the only place camera targets are computed)
 //
-// Owns camera targets in both of the drivers' terms: geographic ViewCameras (Web Mercator plus bearing, what the MapLibre driver
-// sends) and PlanarCameras (today's CameraController placement plus a bearing, what the headless driver keeps, bit for bit today's
-// arithmetic at bearing 0), and the one conversion each way between them through the session plane. Nothing here constrains:
-// the drivers pass every target through constrainCamera (navigation-policy.ts) or clamp the scale first.
+// Owns camera targets: geographic ViewCameras (Web Mercator plus bearing, what both drivers hold), and the one conversion of a plane
+// placement (a PlanarCamera: a fit's result, a test's viewport) into a ViewCamera through the session plane. Nothing here
+// constrains: the drivers pass every target through constrainCamera (navigation-policy.ts).
 
-import {
-  geoToMercator,
-  MAPLIBRE_WORLD_TILE_SIZE,
-  mapZoomToStageScale,
-  mercatorToGeo,
-  stageScaleToMapZoom,
-} from '../../projection'
-import type { SessionPlane, SessionPlaneTransform } from '../../session-plane'
+import { geoToMercator, MAPLIBRE_WORLD_TILE_SIZE, mercatorToGeo, stageScaleToMapZoom } from '../../projection'
+import type { SessionPlane } from '../../session-plane'
 import { bearingCosSin, normaliseBearing } from './navigation-policy'
 import type { GeoPoint, PlanarCamera, ScreenPoint, ViewCamera, ViewScreen, WorldPoint } from './types'
 
@@ -58,79 +51,22 @@ export function geoToScreen(camera: ViewCamera, screen: ViewScreen, g: GeoPoint)
   return { x: onScreen.x + screen.width / 2, y: onScreen.y + screen.height / 2 }
 }
 
-// The headless driver's PlanarCamera (ADR 0016, amended 2026-09-30): at bearing 0 these are today's CameraController arithmetic,
-// bit for bit (panBy camera.ts:316-323; zoomCameraViewportToScale :502-518, with the scale clamped by the caller first, as :498 does).
-export function panPlanar(camera: PlanarCamera, deltaPx: ScreenPoint): PlanarCamera {
-  if (deltaPx.x === 0 && deltaPx.y === 0) return camera
-  return { x: camera.x + deltaPx.x, y: camera.y + deltaPx.y, scale: camera.scale, bearingDeg: camera.bearingDeg }
-}
-
-/**
- * Today's pointer-anchored zoom. (anchor − { x, y }) / scale is the anchor's plane point turned into screen axes, so the same
- * arithmetic keeps the ground under the anchor at any bearing.
- */
-export function zoomPlanarToScale(camera: PlanarCamera, anchorPx: ScreenPoint, scale: number): PlanarCamera {
-  if (scale === camera.scale) return camera
-  const fromAnchor = {
-    x: (anchorPx.x - camera.x) / camera.scale,
-    y: (anchorPx.y - camera.y) / camera.scale,
-  }
-  return {
-    x: anchorPx.x - fromAnchor.x * scale,
-    y: anchorPx.y - fromAnchor.y * scale,
-    scale,
-    bearingDeg: camera.bearingDeg,
-  }
-}
-
-export function rotatePlanarAround(camera: PlanarCamera, screen: ViewScreen, anchorPx: ScreenPoint | 'centre', bearingDeg: number): PlanarCamera {
-  const bearing = normaliseBearing(bearingDeg)
-  if (bearing === camera.bearingDeg) return camera
-  const anchor = anchorPx === 'centre' ? { x: screen.width / 2, y: screen.height / 2 } : anchorPx
-  const ground = screenToPlaneAxes({ x: (anchor.x - camera.x) / camera.scale, y: (anchor.y - camera.y) / camera.scale }, camera.bearingDeg)
-  const turned = planeToScreenAxes(ground, bearing)
-  return { x: anchor.x - turned.x * camera.scale, y: anchor.y - turned.y * camera.scale, scale: camera.scale, bearingDeg: bearing }
-}
-
-/** The one conversion each way: readers' ViewCamera, geographic inputs, and attach and detach (re-origin stays in plane terms: planeChanged). */
+/** The camera that shows a plane placement: the driver host's follow of a new plane keeps the placement through it. */
 export function planarToViewCamera(camera: PlanarCamera, screen: ViewScreen, plane: SessionPlane): ViewCamera {
-  // At bearing 0 the centre is today's viewportCenterWorld and the zoom today's geographicViewOf.
-  const centreWorld = screenToPlaneAxes({
-    x: (screen.width / 2 - camera.x) / camera.scale,
-    y: (screen.height / 2 - camera.y) / camera.scale,
-  }, camera.bearingDeg)
   return {
-    center: plane.toGeo(centreWorld),
+    center: plane.toGeo(placementCentre(camera, screen)),
     zoom: stageScaleToMapZoom(camera.scale, plane.origin.lat),
     bearingDeg: normaliseBearing(camera.bearingDeg),
     pitchDeg: 0,
   }
 }
 
-export function viewCameraToPlanar(camera: ViewCamera, screen: ViewScreen, plane: SessionPlane): PlanarCamera {
-  return planarCentredOn(screen, plane.toPlane(camera.center), mapZoomToStageScale(camera.zoom, plane.origin.lat), camera.bearingDeg)
-}
-
-/** The placement that puts a plane point at the screen centre: today's centredViewport (x = w/2 − p.x·scale) at bearing 0. */
-export function planarCentredOn(screen: ViewScreen, point: WorldPoint, scale: number, bearingDeg: number): PlanarCamera {
-  const onScreen = planeToScreenAxes({ x: point.x * scale, y: point.y * scale }, bearingDeg)
-  return {
-    x: screen.width / 2 - onScreen.x,
-    y: screen.height / 2 - onScreen.y,
-    scale,
-    bearingDeg: normaliseBearing(bearingDeg),
-  }
-}
-
-/**
- * The same placement in the next session plane (planeChanged: re-origin in plane terms, never through lon/lat). screen =
- * turn(p × scale) + { x, y } must hold for p' = p × s + o, so the scale is divided by s and the offset, scaled and turned as plane
- * points are, comes off the translation: today's reprojectPlaneViewport, bit for bit at bearing 0.
- */
-export function reprojectPlanar(camera: PlanarCamera, transform: SessionPlaneTransform): PlanarCamera {
-  const scale = camera.scale / transform.scale
-  const offset = planeToScreenAxes({ x: transform.offsetX * scale, y: transform.offsetY * scale }, camera.bearingDeg)
-  return { x: camera.x - offset.x, y: camera.y - offset.y, scale, bearingDeg: camera.bearingDeg }
+/** The plane point a placement shows at the screen centre. */
+export function placementCentre(camera: PlanarCamera, screen: ViewScreen): WorldPoint {
+  return screenToPlaneAxes({
+    x: (screen.width / 2 - camera.x) / camera.scale,
+    y: (screen.height / 2 - camera.y) / camera.scale,
+  }, camera.bearingDeg)
 }
 
 /** CSS px per Mercator unit at a zoom: MapLibre's worldSize. */

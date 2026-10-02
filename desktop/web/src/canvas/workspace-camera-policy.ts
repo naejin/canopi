@@ -1,4 +1,4 @@
-import { mapZoomToStageScale } from './projection'
+import { mapZoomToStageScale, scaleReaches } from './projection'
 
 export const WORKSPACE_MAP_MIN_ZOOM = 0
 export const WORKSPACE_MAP_MAX_ZOOM = 27
@@ -66,5 +66,5 @@ export function isWorkspaceOverviewScale(
   scale: number,
   policy: Pick<WorkspaceCameraPolicy, 'overviewScaleThreshold'>,
 ): boolean {
-  return Number.isFinite(scale) && scale < policy.overviewScaleThreshold
+  return Number.isFinite(scale) && !scaleReaches(scale, policy.overviewScaleThreshold)
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createCanvasDocumentReplacementToken, type CanvasDocumentSurface } from '../../canvas/runtime/runtime'
 import { createTestCanvasDocumentSurface } from '../../__tests__/support/canvas-runtime-surfaces'
-import { MapLibreWorkspaceCameraOwner } from '../../maplibre/workspace-camera'
+import { createTestView } from '../../__tests__/support/test-view'
 import type { WorkspaceMapSnapshot } from '../../maplibre/workspace-map'
 import {
   WorkspaceActivationCoordinator,
@@ -65,7 +65,6 @@ describe('createWorkspaceDocumentSurface', () => {
     const element = document.createElement('div')
 
     surface.attachInspectionTo(element)
-    surface.initializeViewport()
     surface.attachRulersTo(element)
     surface.showCanvasChrome()
     surface.hideCanvasChrome()
@@ -78,7 +77,6 @@ describe('createWorkspaceDocumentSurface', () => {
 
     expect(workspace.requestGenerationDisconnect).not.toHaveBeenCalled()
     expect(documents.attachInspectionTo).toHaveBeenCalledWith(element)
-    expect(documents.initializeViewport).toHaveBeenCalledOnce()
     expect(documents.attachRulersTo).toHaveBeenCalledWith(element)
     expect(documents.showCanvasChrome).toHaveBeenCalledOnce()
     expect(documents.hideCanvasChrome).toHaveBeenCalledOnce()
@@ -112,8 +110,7 @@ describe('createWorkspaceDocumentSurface', () => {
     const created = deferred<WorkspaceActivationMap>()
     let signal: AbortSignal | null = null
     const releaseMap = vi.fn()
-    const camera = new MapLibreWorkspaceCameraOwner()
-    camera.initialize({ width: 400, height: 300 })
+    const camera = createTestView().host
     const workspace = new WorkspaceActivationCoordinator({
       container: document.createElement('div'),
       runtime: {
@@ -193,7 +190,6 @@ function createDocumentSurfaceSpy(): CanvasDocumentSurface {
   return {
     ...surface,
     attachInspectionTo: vi.fn(surface.attachInspectionTo),
-    initializeViewport: vi.fn(surface.initializeViewport),
     attachRulersTo: vi.fn(surface.attachRulersTo),
     showCanvasChrome: vi.fn(surface.showCanvasChrome),
     hideCanvasChrome: vi.fn(surface.hideCanvasChrome),

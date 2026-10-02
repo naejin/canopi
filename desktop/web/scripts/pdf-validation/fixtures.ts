@@ -55,6 +55,6 @@ export function fixture(name: FixtureName): Omit<PdfPreparation, 'fontBaseUrl'> 
   // basemap layers exercise filtering without any provider or map capture.
   if (name === 'map-excluded') scene.layers.push({ kind: 'layer', name: 'satellite', visible: true, locked: false, opacity: 1 })
   return { input: { name: name === 'map-excluded' ? 'mixed' : name, locale: 'en', commonNames,
-    canvas: buildCanvasPrintSnapshot(scene, { viewport: { x: 99, y: -99, scale: .001 }, speciesCache: new Map() }) }, setup,
+    canvas: buildCanvasPrintSnapshot(scene, { pixelsPerMetre: .001, speciesCache: new Map() }) }, setup,
     labels: { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants on this page', actualSize: 'Print at actual size' } }
 }

@@ -13,6 +13,7 @@ import type { DraftShape } from './draft'
 import { createMeasurementGuideTool } from './measurement-guide'
 import { createPolygonTool } from './polygon'
 import { createZoneDragTool } from './zone-drag'
+import '../../../__tests__/support/camera-tolerance'
 
 vi.mock('./registry', () => ({ TOOL_REGISTRY: {} }))
 

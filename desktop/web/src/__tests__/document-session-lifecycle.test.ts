@@ -76,10 +76,8 @@ describe('document session lifecycle', () => {
   it.each<WorkspaceRuntimeStartOutcome>(['shared-ready', 'map-unavailable', 'no-design'])(
     'publishes Canvas Runtime Surfaces after the workspace reports %s',
     async (outcome) => {
-      const initializeViewport = vi.fn<() => void>()
       const attachRulersTo = vi.fn<(element: HTMLElement) => void>()
       const documents = createTestCanvasDocumentSurface({
-        initializeViewport,
         attachRulersTo,
       })
       const surfaces = createTestCanvasRuntimeSurfaces({ documents })
@@ -115,7 +113,6 @@ describe('document session lifecycle', () => {
       expect(start).toHaveBeenCalledOnce()
       expect(publishSurfaces).toHaveBeenCalled()
       expect(publishSurfaces.mock.calls[0]![0] === surfaces).toBe(true)
-      expect(initializeViewport).not.toHaveBeenCalled()
       expect(attachRulersTo.mock.calls[0]?.[0] === rulerOverlay).toBe(true)
       expect(logError).not.toHaveBeenCalled()
       const startupOrder = [

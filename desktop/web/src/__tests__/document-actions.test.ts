@@ -159,7 +159,6 @@ function makeSession() {
       acknowledgeSaved,
     })),
     acknowledgeSaved,
-    initializeViewport: vi.fn(),
     attachRulersTo: vi.fn(),
     resize: vi.fn(),
     destroy: vi.fn(),

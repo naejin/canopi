@@ -1,15 +1,9 @@
 import type { SpeciesFocus } from '../species-key'
-import { effect, signal, type Signal } from '@preact/signals'
+import { effect, signal, untracked, type ReadonlySignal, type Signal } from '@preact/signals'
 import {
   createDetachedCanvasRuntimeAppAdapter,
   type CanvasRuntimeAppAdapter,
 } from '../app-adapter'
-import {
-  CameraController,
-  type WorkspaceCameraFrameReader,
-  type WorkspaceCameraNavigation,
-  type WorkspaceCameraOwner,
-} from '../camera'
 import { createSceneCanvasCommandSurface } from '../command-surface'
 import { createSceneCanvasDocumentSurface } from '../document-surface'
 import { createSceneCanvasQuerySurface } from '../query-surface'
@@ -59,13 +53,18 @@ import { runCanvasRuntimeCleanups } from '../cleanup'
 import { getRevealedAnnotationId } from '../annotation-layout'
 import { sceneExtentPoints, selectionExtentPoints } from '../scene-extent'
 import { createViewNavigation, type ViewNavigation } from '../view/navigation'
+import type { CameraDriverHost } from '../view/camera-driver'
+import { createCameraDriverHost } from '../view/driver-host'
 import type { ViewFrameSource } from '../view/types'
+import { createWorkspaceCameraPolicy } from '../../workspace-camera-policy'
 
 type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
 
+/** The view's eases (rotation) wait for phase 1's platform signal; nothing eases at bearing 0. */
+const NO_REDUCED_MOTION: ReadonlySignal<boolean> = signal(false)
+
 export interface SceneRuntimeConstructionOptions {
   appAdapter?: CanvasRuntimeAppAdapter
-  camera?: WorkspaceCameraOwner
   targetPresentation?: SceneRuntimePanelTargetAdapter
   speciesCache?: CanvasSpeciesPresentationCache
   plantLabels?: CanvasPlantLabelSource
@@ -104,8 +103,8 @@ export interface SceneRuntimeConstructionCallbacks {
 export interface SceneRuntimeConstruction {
   readonly sceneState: SceneStateReader
   readonly sceneSession: SceneSessionWriter
-  readonly camera: WorkspaceCameraFrameReader
-  readonly cameraNavigation: WorkspaceCameraNavigation
+  /** The runtime's one camera: headless until the workspace activation attaches a map driver (ADR 0016). */
+  readonly cameraHost: CameraDriverHost
   /** The camera driver host's frames and the navigation over it, which the interaction session hands its ToolHost (0B). */
   readonly frames: ViewFrameSource
   readonly viewNavigation: ViewNavigation
@@ -144,11 +143,12 @@ export function createSceneRuntimeConstruction(
     readEmptyDesignView().zoom,
     sceneStore.sessionPlane.origin.lat,
   )
-  const cameraOwner = options.camera ?? new CameraController()
-  const camera = cameraOwner.frame
-  const cameraNavigation = cameraOwner.navigation
-  // The shim wraps the runtime's one camera: its driver host feeds the view surfaces (0A to the end of 0D2).
-  const cameraHost = cameraOwner.host
+  // The runtime's one camera, on the Scene's plane: the policy takes that plane's latitude.
+  const cameraHost = createCameraDriverHost({
+    policy: createWorkspaceCameraPolicy(),
+    reducedMotion: NO_REDUCED_MOTION,
+    plane: () => sceneStore.sessionPlane,
+  })
   const readViewScale = () => cameraHost.frames.viewFrame.peek().view.pixelsPerMetre
   const sceneRevision = signal(0)
   const plantNamesQueryRevision = signal(0)
@@ -183,9 +183,47 @@ export function createSceneRuntimeConstruction(
     speciesCache: options.speciesCache ?? presentationData?.speciesCache,
     plantLabels: options.plantLabels ?? presentationData?.plantLabels,
   })
+  const viewNavigation = createViewNavigation({
+    driver: cameraHost,
+    policy: cameraHost.driverDeps.policy,
+    readScene: () => {
+      const persisted = sceneStore.persisted
+      const scale = readViewScale()
+      const plantContext = presentation.createPlantPresentationContext(scale)
+      // The objects the selection model frames (editable and locked), by their outlines at the live scale.
+      const { editableTargets, lockedTargets } = querySurface.getDesignObjectSelection()
+      return {
+        persisted,
+        selection: selectionExtentPoints(persisted, [...editableTargets, ...lockedTargets], {
+          plantContext,
+          revealedAnnotationId: getRevealedAnnotationId(sceneStore.session.selectedTargets),
+        })(scale),
+        bounds: {
+          extentPoints: sceneExtentPoints(persisted, plantContext),
+          emptySceneScale: readEmptySceneScale(),
+        },
+      }
+    },
+  })
   const chrome = new SceneRuntimeChromeCoordinator()
   const disposeEffects: Array<() => void> = []
-  disposeEffects.push(cameraOwner.followScenePlane(sceneStore.sessionPlaneSignal))
+  // Every later Scene plane change reaches the camera. A re-origin, and any plane change while a map is attached (a hydration
+  // on a mount-existing start), re-express the live driver in the new plane: headless, the placement keeps its ground; attached,
+  // the map stays put. A detached hydration keeps the plane placement (followPlane). The first run returns before it reads the
+  // re-origin controller, declared below.
+  let planeFollowed = false
+  disposeEffects.push(effect(() => {
+    const plane = sceneStore.sessionPlaneSignal.value
+    if (!planeFollowed) {
+      planeFollowed = true
+      return
+    }
+    if (!plane) return
+    untracked(() => {
+      if (reorigin.reoriginating || cameraHost.frames.viewFrame.peek().attached) cameraHost.current().planeChanged(plane)
+      else cameraHost.followPlane(plane)
+    })
+  }))
   const rendering = new SceneRuntimeRenderScheduler({
     getRenderer: () => renderer,
     getView: () => cameraHost.frames.viewFrame.peek().view,
@@ -227,8 +265,8 @@ export function createSceneRuntimeConstruction(
     readEmptySceneScale,
     inspection,
     documents,
-    camera,
-    cameraNavigation,
+    cameraHost,
+    viewNavigation,
     chrome,
     rendering,
     getSceneSnapshot: () => sceneStore.persisted,
@@ -243,7 +281,7 @@ export function createSceneRuntimeConstruction(
       sceneEdits.disposePersistence()
     },
     disposeInteraction: callbacks.disposeInteraction,
-    disposeCamera: () => cameraOwner.dispose(),
+    disposeCamera: () => cameraHost.dispose(),
     disposeEffects: () => {
       runCanvasRuntimeCleanups(
         disposeEffects.splice(0),
@@ -273,12 +311,11 @@ export function createSceneRuntimeConstruction(
     sceneState: sceneStore,
     authority: sceneEdits,
     commandAdmission: sceneEdits,
-    cameraNavigation,
   })
-  // Each published camera snapshot re-reads the live frame's centre; a plane that only followed a hydration publishes none.
+  // Each frame that moved the placement, screen or mode re-reads the live frame's centre (the controller filters the rest).
   disposeEffects.push(effect(() => {
-    void camera.snapshot.value
-    reorigin.observe(cameraHost.frames.viewFrame.peek())
+    const frame = cameraHost.frames.viewFrame.value
+    untracked(() => reorigin.observe(frame))
   }))
   disposeEffects.push(() => reorigin.dispose())
   const focusSpecies = (canonicalName: string | null) => {
@@ -291,37 +328,12 @@ export function createSceneRuntimeConstruction(
     callbacks.incrementSceneRevision()
     callbacks.invalidate('scene')
   }
-  const viewNavigation = createViewNavigation({
-    driver: cameraHost,
-    policy: cameraHost.driverDeps.policy,
-    clock: cameraHost.driverDeps.clock,
-    readScene: () => {
-      const persisted = sceneStore.persisted
-      const scale = readViewScale()
-      const plantContext = presentation.createPlantPresentationContext(scale)
-      // The objects the selection model frames (editable and locked), by their outlines at the live scale.
-      const { editableTargets, lockedTargets } = querySurface.getDesignObjectSelection()
-      return {
-        persisted,
-        selection: selectionExtentPoints(persisted, [...editableTargets, ...lockedTargets], {
-          plantContext,
-          revealedAnnotationId: getRevealedAnnotationId(sceneStore.session.selectedTargets),
-        })(scale),
-        bounds: {
-          extentPoints: sceneExtentPoints(persisted, plantContext),
-          emptySceneScale: readEmptySceneScale(),
-        },
-      }
-    },
-  })
   const commandSurface = createSceneCanvasCommandSurface({
     readEmptySceneScale,
     speciesFocus: {
       focus: focusSpecies,
     },
     sceneStore,
-    camera,
-    cameraNavigation,
     viewNavigation,
     readViewScale,
     history: sceneEdits,
@@ -345,12 +357,12 @@ export function createSceneRuntimeConstruction(
     plantRowSpacing: callbacks.plantRowSpacing,
     invalidate: callbacks.invalidate,
     isRuntimeActive: () => runtimeActive,
-    isSpatialEditingEnabled: () => camera.snapshot.peek().mode === 'site',
+    isSpatialEditingEnabled: () => cameraHost.frames.viewFrame.peek().mode === 'site',
   })
   const querySurface = createSceneCanvasQuerySurface({
     revision,
     sceneStore,
-    camera: { snapshot: camera.snapshot, host: cameraHost },
+    frames: cameraHost.frames,
     readViewScale,
     settledReader,
     mutations,
@@ -361,8 +373,7 @@ export function createSceneRuntimeConstruction(
     inspection,
     sceneState: sceneStore,
     sceneSession: sceneStore,
-    camera,
-    cameraNavigation,
+    cameraHost,
     frames: cameraHost.frames,
     viewNavigation,
     sceneRevision,
