@@ -191,8 +191,23 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     sessionRects.delete(id)
     deliver(event, null, pointerInput(event, 'lostpointercapture', NO_RECT))
   }
+  /**
+   * The move that takes a hover off the map lands beside it, where the host no longer hears it; the leave carries its
+   * point (classified by where it landed), so a tool's preview follows the pointer there before the hover ends, rather
+   * than staying at the last move the map heard (a coalesced move can lie well inside it). An owned pointer's moves come
+   * from window, and a touch has no hover.
+   */
   const onPointerLeave = (event: PointerEvent): void => {
-    deliver(event, null, pointerInput(event, 'pointerleave', NO_RECT))
+    try {
+      if (!owned.has(event.pointerId) && event.pointerType !== 'touch') {
+        const rect = host.getBoundingClientRect()
+        deliver(event, rect, normalise(domEventLike(event, 'pointermove', rect, classifyTarget(event.relatedTarget, host)), deps.platform, deps.bindings(), {
+          physicalCtrl: deps.keys.physicalCtrl(),
+        }, rect))
+      }
+    } finally {
+      deliver(event, null, pointerInput(event, 'pointerleave', NO_RECT))
+    }
   }
   const onFocusOut = (event: FocusEvent): void => {
     // Focus moving inside the map (to the note editor or a handle) does not leave it.

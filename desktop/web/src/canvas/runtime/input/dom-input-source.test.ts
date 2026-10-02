@@ -212,6 +212,40 @@ describe('createDomInputSource', () => {
     dispose()
   })
 
+  it('a hover leaving the map reaches the point where it left before it ends', () => {
+    let state = initialRecogniserState()
+    const gestures: string[] = []
+    const dispose = attachRecording(createDomInputSource(deps()), (input) => {
+      const result = recognise(state, input, RECOGNISER_CONFIG)
+      state = result.state
+      gestures.push(...result.gestures.map((gesture) => gesture.kind === 'hover' ? `hover:${gesture.at.x},${gesture.at.y}` : gesture.kind))
+    })
+    const panel = document.createElement('div')
+    document.body.appendChild(panel)
+
+    try {
+      // A quick flick: the last move the map heard is well inside it; the move that left lands on the panel, which the map
+      // never hears, so the leave carries its point. A tool's preview (a rubber band, a row, a stamp's ghost) follows the
+      // pointer to it, as the window's moves once carried it, and only then does the hover end.
+      events.pointerMove({ x: 200, y: 150 })
+      events.pointerLeave({ x: 430, y: 150 }, { relatedTarget: panel })
+      expect(received.map((input) => input.kind === 'move' ? `move:${input.at.x},${input.at.y}:${input.target.kind}` : input.kind))
+        .toEqual(['move:200,150:surface', 'move:430,150:foreign', 'leave'])
+      expect(gestures).toEqual(['hover:200,150', 'hover:430,150', 'hover-end'])
+
+      // A pointer the map owns (a press on it) follows on window, so its leave adds no move; a touch has no hover.
+      received.length = 0
+      events.pointerDown({ x: 10, y: 10 }, { pointerId: 4 })
+      events.pointerLeave({ x: 430, y: 10 }, { pointerId: 4, relatedTarget: panel })
+      events.pointerUp({ x: 430, y: 10 }, { pointerId: 4, target: panel })
+      events.pointerLeave({ x: 430, y: 10 }, { pointerId: 5, pointerType: 'touch', relatedTarget: panel })
+      expect(received.map((input) => input.kind)).toEqual(['down', 'leave', 'up', 'leave'])
+    } finally {
+      panel.remove()
+      dispose()
+    }
+  })
+
   it('a ruler press of any mouse button becomes a ruler target', () => {
     const ruler = document.createElement('canvas')
     ruler.dataset.canvasRuler = 'v'
@@ -585,7 +619,7 @@ describe('createDomInputSource', () => {
     expect(downstream).toHaveBeenCalledTimes(1)
   })
 
-  it('pointerleave becomes leave and focusout becomes focus-out', () => {
+  it('pointerleave becomes its last move and a leave, and focusout becomes focus-out', () => {
     const dispose = attachRecording(createDomInputSource(deps()))
     const inside = document.createElement('button')
     host.appendChild(inside)
@@ -597,7 +631,7 @@ describe('createDomInputSource', () => {
     window.dispatchEvent(new Event('blur'))
 
     expect(received.map((input) => input.kind === 'cancel' ? `${input.kind}:${String(input.id)}:${input.reason}` : input.kind))
-      .toEqual(['leave', 'focus-out', 'cancel:all:blur'])
+      .toEqual(['move', 'leave', 'focus-out', 'cancel:all:blur'])
     dispose()
   })
 
