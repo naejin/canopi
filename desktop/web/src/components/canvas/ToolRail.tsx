@@ -115,7 +115,7 @@ export function ToolRail({ projection, showNames: namesWanted }: ToolRailProps) 
         aria-keyshortcuts={command.ariaShortcut}
         aria-disabled={command.disabled ? true : undefined}
         tabIndex={tabIndex}
-        onClick={() => { if (!command.disabled) command.action() }}
+        onClick={() => { if (!command.disabled) command.action('rail') }}
       >
         <ToolIcon name={icon} className={styles.icon} />
         {showNames ? (
@@ -153,7 +153,7 @@ export function ToolRail({ projection, showNames: namesWanted }: ToolRailProps) 
         keyShortcuts: command.ariaShortcut,
         checked: command.active,
         disabled: command.disabled,
-        run: () => command.action(),
+        run: () => command.action('rail'),
       }))}
     />
   )

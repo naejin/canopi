@@ -518,7 +518,7 @@ describe('command registry canvas tool switching', () => {
     expect(settingToggle('grid')).toMatchObject({ disabled: false, pressed: true })
     expect(settingToggle('snap')).toMatchObject({ disabled: false, pressed: true })
 
-    creationTool('ellipse').action()
+    creationTool('ellipse').action('rail')
     historyAction('undo').action()
     settingToggle('grid').action()
     settingToggle('snap').action()

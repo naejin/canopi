@@ -186,8 +186,8 @@ export interface CanvasRuntimeAppAdapter {
   readonly plantDisplay?: CanvasRuntimePlantDisplayAdapter
   readonly settings: CanvasRuntimeSettingsAdapter
   readonly translate: CanvasRuntimeTranslator
-  /** How ToolHostDeps.focus leaves the runtime. 0B: interaction-session.ts falls back to today's host focus when absent;
-   *  0C: app/canvas-runtime/app-adapter.ts passes the FocusOwner (Keyboard). */
+  /** How ToolHostDeps.focus leaves the runtime: app/canvas-runtime/app-adapter.ts passes the FocusOwner; absent (a
+   *  detached runtime), interaction-session.ts focuses its host itself. */
   readonly focus?: CanvasFocusPort
 }
 

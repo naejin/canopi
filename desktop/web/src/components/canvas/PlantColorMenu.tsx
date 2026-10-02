@@ -18,6 +18,7 @@ import {
   type HslColor,
 } from '../../canvas/plant-colors'
 import { t } from '../../i18n'
+import { ESCAPE_PRIORITY, registerEscapeLayer } from '../../app/keyboard/escape-chain'
 import { PlantSymbolGlyph } from './PlantSymbolGlyph'
 import { navigateAppearanceChoices, useAppearancePopover, type AppearanceAnchorRef } from './useAppearancePopover'
 import { createPortal } from 'preact/compat'
@@ -187,19 +188,25 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
       closeMenu()
     }
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        closeMenu(buttonRef)
-      }
-    }
-
     document.addEventListener('pointerup', handlePointerUp)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('pointerup', handlePointerUp)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [menuOpen, buttonRef])
+    return () => document.removeEventListener('pointerup', handlePointerUp)
+  }, [menuOpen])
+
+  // An Esc from outside the menu closes it, and only it (the Esc chain's popover layer, fixture I8); inside, the
+  // menu's own handler takes the Esc first.
+  const shown = menuOpen && hasSelectedPlants
+  useEffect(() => {
+    if (!shown) return
+    return registerEscapeLayer({
+      id: 'plant-color-menu',
+      priority: ESCAPE_PRIORITY.popover,
+      isActive: () => true,
+      escape: () => {
+        closeMenu(buttonRef)
+        return true
+      },
+    })
+  }, [shown, buttonRef])
 
   if (!menuOpen || !hasSelectedPlants) return null
 

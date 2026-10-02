@@ -1741,9 +1741,9 @@
   },
   "shortcuts": {
     "title": "键盘快捷键",
-    "toolsHeading": "{{menu}}（地图获得焦点时）",
+    "toolsHeading": "{{menu}}（文本框以外的任何位置）",
     "escape": "Esc 每次只做一件事：关闭菜单或对话框，取消正在绘制的内容，回到选择工具，清除选择。",
-    "footnote": "工具按键在地图获得焦点时生效。",
+    "footnote": "工具按键在文本框以外的任何位置均可使用。",
     "workspaceHeading": "地图与工作区",
     "nextRegion": "下一个区域：标题栏、工具、地图、面板",
     "previousRegion": "上一个区域",

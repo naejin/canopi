@@ -16,7 +16,7 @@ import {
 import { currentCanvasQuerySurface, currentCanvasSelection } from '../../canvas/session'
 import type { CanvasRuntimeSavedObjectStampCapture } from '../../canvas/runtime/app-adapter'
 import { canSaveSelectionAsObjectStamp } from '../../canvas/runtime/interaction/contextual-selection-actions'
-import { beginSavedObjectStampPlacement } from '../../canvas/saved-object-stamp-source'
+import { armCanvasTool, type ArmFrom } from '../keyboard/arming'
 import { parseSavedObjectStampPayload, SAVED_OBJECT_STAMP_PAYLOAD_VERSION } from '../../canvas/saved-object-stamp-payload'
 import {
   createSavedObjectStamp as createSavedObjectStampIpc,
@@ -68,7 +68,8 @@ export interface SavedObjectStampWorkbench {
   renameStamp(id: string, name: string): Promise<SavedObjectStamp | null>
   deleteStamp(id: string): Promise<boolean>
   reorderStamps(ids: string[]): Promise<void>
-  placeStamp(stamp: SavedObjectStamp): boolean
+  /** Arms Place a stamp with it on the live canvas (Favorites: 'panel'; the tool card's chooser: 'card'). */
+  placeStamp(stamp: SavedObjectStamp, from: Extract<ArmFrom, 'panel' | 'card'>): boolean
   exportStamp(stamp: SavedObjectStamp): Promise<string | null>
   importStampFile(): Promise<SavedObjectStamp | null>
   dispose(): void
@@ -83,7 +84,7 @@ interface SavedObjectStampWorkbenchOptions {
   readonly exportSavedObjectStamp?: (content: CanopiFile, defaultName: string) => Promise<string>
   readonly importSavedObjectStampFile?: () => Promise<CanopiFile>
   readonly getCanvasQuerySurface?: () => CanvasQuerySurface | null
-  readonly beginPlacement?: (stamp: SavedObjectStamp) => boolean
+  readonly arm?: typeof armCanvasTool
 }
 
 interface NormalizedSelection {
@@ -100,7 +101,7 @@ export function createSavedObjectStampWorkbench({
   exportSavedObjectStamp = exportSavedObjectStampFile,
   importSavedObjectStampFile = importSavedObjectStampCanopiFile,
   getCanvasQuerySurface = () => currentCanvasQuerySurface.value,
-  beginPlacement = beginSavedObjectStampPlacement,
+  arm = armCanvasTool,
 }: SavedObjectStampWorkbenchOptions = {}): SavedObjectStampWorkbench {
   const items = signal<SavedObjectStamp[]>([])
   const loading = signal(false)
@@ -218,8 +219,11 @@ export function createSavedObjectStampWorkbench({
     })
   }
 
-  function placeStamp(stamp: SavedObjectStamp): boolean {
-    return !queue.disposed && beginPlacement(stamp)
+  function placeStamp(stamp: SavedObjectStamp, from: Extract<ArmFrom, 'panel' | 'card'>): boolean {
+    if (queue.disposed) return false
+    const payload = parseSavedObjectStampPayload(stamp.payload_json)
+    if (!payload) return false
+    return arm('saved-object-stamp', { from, source: { kind: 'saved-stamp', stamp: payload, name: stamp.name.trim() || null } })
   }
 
   async function exportStamp(stamp: SavedObjectStamp): Promise<string | null> {

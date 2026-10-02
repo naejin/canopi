@@ -14,7 +14,7 @@ import {
 import { installDesignContinuousSave } from "../app/document-session/transition";
 import { installPlaceSearchSession } from "../app/geocoding/place-search-session";
 import { installToolRailLearning } from "../app/tool-rail/learning";
-import { cycleFocusRegion } from "../app/shell/focus-regions";
+import { focusOwner } from "../app/keyboard/focus-owner";
 import { installKeyRouter } from "../app/keyboard/key-router";
 import { singleKeyShortcuts } from "../app/settings/state";
 import { currentCanvasKeyboardPort } from "../canvas/session";
@@ -52,7 +52,7 @@ export function bootstrapPlatform(): void {
     target: window,
     canvas: currentCanvasKeyboardPort,
     singleKeys: singleKeyShortcuts,
-    focus: { cycleRegion: cycleFocusRegion },
+    focus: focusOwner,
     platform: detectPlatform(navigator, window as unknown as { readonly GestureEvent?: unknown }),
     document,
   });

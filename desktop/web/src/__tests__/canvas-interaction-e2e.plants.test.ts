@@ -443,6 +443,35 @@ describe('SceneInteractionSession', () => {
     nextControl.remove()
   })
 
+  it('Plant a row: Esc mid-drag cancels the drag and keeps the source; the next Esc drops it, the third leaves the tool', () => {
+    plantSpacingIntervalM.value = 2
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('source', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const setTool = vi.fn()
+    const onSceneEditCommit = vi.fn()
+    const session = createTestSession(createInteractionDeps(container, store, testView, { setTool, onSceneEditCommit }))
+    session.setTool('plant-spacing')
+    events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerMove({ x: 60, y: 30 }, { button: 0 })
+    // The drag gives the map its focus back.
+    expect(document.activeElement).toBe(container)
+
+    events.keyDown({ key: 'Escape', target: container })
+    expect(rowSource('source')).toBe(true)
+    expect(setTool).not.toHaveBeenCalledWith('select')
+    events.pointerUp({ x: 60, y: 30 }, { button: 0 })
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    expect(store.persisted.plants).toHaveLength(1)
+
+    events.keyDown({ key: 'Escape', target: container })
+    expect(rowSource('source')).toBe(false)
+    expect(setTool).not.toHaveBeenCalledWith('select')
+    events.keyDown({ key: 'Escape', target: container })
+    expect(setTool).toHaveBeenLastCalledWith('select')
+    session.dispose()
+  })
+
   it('handles Escape from the focused Plant Spacing interval input', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{

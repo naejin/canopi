@@ -15,6 +15,7 @@ import {
 import { h, render as renderPreact } from 'preact'
 import { setupRerender, teardown as teardownPreactTestUtils } from 'preact/test-utils'
 import { ToolCard } from '../../components/canvas/ToolCard'
+import { focusOwner } from '../../app/keyboard/focus-owner'
 import { setCanvasRuntimeSurfaces } from '../../canvas/session'
 import {
   createTestCanvasCommandSurface,
@@ -730,6 +731,7 @@ export function installSceneInteractionFixture(
   let toolCardHost: HTMLDivElement
   let flushToolCard: () => void
   let keyRouter: KeyRouterHandle
+  let releaseMapRegion: () => void
 
   function createTestSession(deps: SceneInteractionSessionDeps): SceneInteractionSession {
     const session = createSceneInteractionSession(deps)
@@ -797,7 +799,9 @@ export function installSceneInteractionFixture(
     })
     toolCardHost = document.createElement('div')
     document.body.appendChild(toolCardHost)
-    renderPreact(h(ToolCard, { canvasRef: { current: container } }), toolCardHost)
+    // The map host is the focus owner's map region, as CanvasChrome registers it.
+    releaseMapRegion = focusOwner.registerRegion('map', container)
+    renderPreact(h(ToolCard, { stampChooser: undefined }), toolCardHost)
     contextMenuHost.reset()
 
     testView = createTestView({ screen: { width: 400, height: 300 }, viewport: { x: 0, y: 0, scale: 1 } })
@@ -830,6 +834,7 @@ export function installSceneInteractionFixture(
     live().events.dispose()
     renderPreact(null, toolCardHost)
     toolCardHost.remove()
+    releaseMapRegion()
     teardownPreactTestUtils()
     setCanvasRuntimeSurfaces(null)
     setCanvasTool('select')

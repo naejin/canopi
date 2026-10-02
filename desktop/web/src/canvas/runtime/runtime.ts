@@ -321,9 +321,9 @@ export interface CanvasDocumentSurface {
 export type CanvasEscapeLayer = 'gesture' | 'nudge-series' | 'tool-transient' | 'tool' | 'selection'
 
 export interface CanvasKeyboardPort {
-  escapeLayers(): readonly CanvasEscapeLayer[]            // live canvas layers now, in the order an Esc runs them
-  /** False when the layer consumed nothing, so the next one runs. */
-  escape(layer: CanvasEscapeLayer): boolean
+  escapeLayers(): readonly CanvasEscapeLayer[]            // live canvas layers now, by Esc priority (spec §3.7)
+  /** Runs a live layer; app/keyboard/escape-chain.ts decides which, from the focus. */
+  escape(layer: CanvasEscapeLayer): void
   /** What the next Esc will do, for the tool-card hint (same source as behaviour). */
   describeEscape(): CanvasEscapeLayer | null
   /** False when nothing consumed it. confirm, remove-last, rotate-held, edit-text and context-menu return false in overview;

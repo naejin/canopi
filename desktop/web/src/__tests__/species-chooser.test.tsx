@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '../app/settings/state'
 import { activePanel, sidePanel } from '../app/shell/state'
 import { ToolCard } from '../components/canvas/ToolCard'
+import { focusOwner } from '../app/keyboard/focus-owner'
 import {
   clearPlantStampSource,
   readPlantStampSource,
@@ -77,6 +78,7 @@ function plant(id: string, canonicalName: string, commonName: string, canopySpre
 describe('Place plants species chooser', () => {
   let container: HTMLDivElement
   let map: HTMLDivElement
+  let releaseMap: () => void
   let queries: TestCanvasQuerySurface
 
   beforeEach(async () => {
@@ -85,6 +87,8 @@ describe('Place plants species chooser', () => {
     map = document.createElement('div')
     map.tabIndex = 0
     document.body.append(container, map)
+    // The map host is the focus owner's map region, as CanvasChrome registers it.
+    releaseMap = focusOwner.registerRegion('map', map)
     const store = new SceneStore()
     store.updatePersisted((draft) => {
       draft.plants = [
@@ -108,7 +112,7 @@ describe('Place plants species chooser', () => {
       loading: false,
       revision: 1,
     }
-    await act(() => render(<ToolCard canvasRef={{ current: map }} />, container))
+    await act(() => render(<ToolCard />, container))
     await act(() => {
       setCanvasTool('plant-stamp')
       setCanvasToolGuidance(IDLE_CANVAS_TOOL_GUIDANCE)
@@ -118,6 +122,7 @@ describe('Place plants species chooser', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
+    releaseMap()
     map.remove()
     setCanvasTool('select')
     setCanvasToolGuidance(IDLE_CANVAS_TOOL_GUIDANCE)
@@ -234,7 +239,7 @@ describe('Place plants species chooser', () => {
     render(null, container)
     favorites.view!.value = { items: [], loading: false, revision: 0 }
     favorites.load!.mockClear()
-    await act(() => render(<ToolCard canvasRef={{ current: map }} />, container))
+    await act(() => render(<ToolCard />, container))
 
     expect(favorites.load).toHaveBeenCalledTimes(1)
   })

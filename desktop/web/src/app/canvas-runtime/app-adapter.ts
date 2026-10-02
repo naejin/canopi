@@ -25,6 +25,7 @@ import { setCanvasClean } from '../document-session/store'
 import { closeCanvasContextMenu, openCanvasContextMenu } from '../canvas-context-menu/state'
 import { t } from '../../i18n'
 import { currentPlantDisplay } from '../plant-display/state'
+import { focusOwner } from '../keyboard/focus-owner'
 
 export interface CanvasRuntimeAppCapabilities {
   readonly presentationData: CanvasRuntimePresentationDataAdapter
@@ -44,6 +45,8 @@ export function createAppCanvasRuntimeAppAdapter(
 ): CanvasRuntimeAppAdapter {
   return {
     cleanState: { setCanvasClean },
+    // A tool's focus request and a closed text entry focus the map through the one focus owner.
+    focus: focusOwner,
     document: { composeDocumentForSave },
     contextMenu: { open: openCanvasContextMenu, close: closeCanvasContextMenu },
     // Read per gesture, so an inspection session needs no runtime rebuild, and

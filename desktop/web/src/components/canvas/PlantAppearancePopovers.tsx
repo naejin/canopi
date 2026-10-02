@@ -5,6 +5,7 @@ import {
   plantAppearanceAnchor,
   type PlantAppearanceAnchor,
 } from '../../app/canvas-context-menu/state'
+import { focusOwner } from '../../app/keyboard/focus-owner'
 import { plantColorMenuOpen } from '../../canvas/plant-color-menu-state'
 import { plantSymbolMenuOpen } from '../../canvas/plant-symbol-menu-state'
 import { currentCanvasQuerySurface, currentCanvasSelection } from '../../canvas/session'
@@ -51,6 +52,7 @@ function mapCornerAnchor(canvasRef: RefObject<HTMLDivElement>): PlantAppearanceA
         right: (rect?.left ?? 0) + FALLBACK_OFFSET_PX.right,
       }
     },
-    focus: (options) => canvasRef.current?.focus(options),
+    // Closing gives focus back to the map, through the focus owner.
+    focus: () => focusOwner.focusMap('menu-closed'),
   }
 }

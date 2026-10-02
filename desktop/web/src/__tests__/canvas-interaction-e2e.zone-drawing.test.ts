@@ -892,7 +892,9 @@ describe('SceneInteractionSession', () => {
     session.setTool('polygon')
 
     events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerUp({ x: 10, y: 10 }, { button: 0 })
     events.pointerDown({ x: 60, y: 10 }, { button: 0 })
+    events.pointerUp({ x: 60, y: 10 }, { button: 0 })
     events.keyDown({ key: 'Escape' })
 
     expect(store.persisted.zones).toHaveLength(0)
@@ -1007,6 +1009,7 @@ describe('SceneInteractionSession', () => {
     session.setTool('polygon')
 
     events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerUp({ x: 10, y: 10 }, { button: 0 })
     expect(session.undoTransientHistory()).toBe(true)
     expect(session.canRedoTransientHistory()).toBe(true)
 
@@ -1090,7 +1093,9 @@ describe('SceneInteractionSession', () => {
     session.setTool('polygon')
 
     events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerUp({ x: 10, y: 10 }, { button: 0 })
     events.pointerDown({ x: 60, y: 10 }, { button: 0 })
+    events.pointerUp({ x: 60, y: 10 }, { button: 0 })
     expect(session.undoTransientHistory()).toBe(true)
     expect(session.canRedoTransientHistory()).toBe(true)
     events.keyDown({ key: 'Escape' })

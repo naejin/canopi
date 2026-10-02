@@ -256,17 +256,25 @@ describe('SceneInteractionSession', () => {
       session.dispose()
     })
 
-    it('leaves Esc alone when the map does not have focus', () => {
-      const { session, tools } = sessionWithToolLog()
+    it('leaves the tool from focus outside the map (I2), keeps the selection there and leaves Esc in a text field alone', () => {
+      store.updatePersisted((draft) => {
+        draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 200, y: 200 })]
+      })
+      const { session, deps, tools } = sessionWithToolLog()
       session.setTool('rectangle')
-      const field = document.createElement('div')
-      document.body.appendChild(field)
+      deps.setSelection([plantTarget('plant-1')])
+      const field = document.createElement('input')
+      const panelRow = document.createElement('div')
+      document.body.append(field, panelRow)
 
-      const event = events.keyDown({ key: 'Escape', target: field })
-
-      expect(event.defaultPrevented).toBe(false)
+      expect(events.keyDown({ key: 'Escape', target: field }).defaultPrevented).toBe(false)
       expect(tools).not.toContain('select')
+      expect(events.keyDown({ key: 'Escape', target: panelRow }).defaultPrevented).toBe(true)
+      expect(tools.at(-1)).toBe('select')
+      expect(events.keyDown({ key: 'Escape', target: panelRow }).defaultPrevented).toBe(false)
+      expect(deps.clearSelection).not.toHaveBeenCalled()
       field.remove()
+      panelRow.remove()
       session.dispose()
     })
 
@@ -274,6 +282,7 @@ describe('SceneInteractionSession', () => {
       const { session, tools } = sessionWithToolLog()
       session.setTool('text')
       events.pointerDown({ x: 24, y: 32 }, { button: 0 })
+      events.pointerUp({ x: 24, y: 32 }, { button: 0 })
       const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
       textarea.focus()
 

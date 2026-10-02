@@ -9,7 +9,7 @@ import {
   openKeyboardShortcutsDialog,
   openSettingsDialog,
 } from '../app/shell/dialogs'
-import { cycleFocusRegion } from '../app/shell/focus-regions'
+import { focusOwner } from '../app/keyboard/focus-owner'
 import { modalLayerOpen } from '../app/shell/modal-layer'
 import { registerPlantFinder } from '../app/plant-finder/focus'
 import { sidePanel, activePanel } from '../app/shell/state'
@@ -180,7 +180,7 @@ describe('Modal layer', () => {
     expect(pressKey({ key: '3', ctrlKey: true }).defaultPrevented).toBe(false)
     expect(sidePanel.value).toBeNull()
     // F6 stays inside the palette.
-    expect(cycleFocusRegion(1)).toBe(false)
+    expect(focusOwner.cycleRegion(1)).toBe(false)
 
     // The toggle still closes it, and focus goes back to the control that opened it.
     await act(async () => { expect(toggle()).toBe(true) })

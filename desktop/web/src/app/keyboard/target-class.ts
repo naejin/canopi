@@ -7,7 +7,7 @@ import { isEditableTarget } from '../../canvas/runtime/input/editable-target'
 
 /** modal: a modal dialog holds the keys; text: a text field; map: the map host or a non-control inside it; body: nothing
  *  focused; other: rail buttons, dock lists, menus, controls inside the map. */
-type FocusClass = 'modal' | 'text' | 'map' | 'body' | 'other'
+export type FocusClass = 'modal' | 'text' | 'map' | 'body' | 'other'
 
 /** A control, a field, a menu or a dialog keeps its own keys. */
 const CONTROL_SELECTOR = [

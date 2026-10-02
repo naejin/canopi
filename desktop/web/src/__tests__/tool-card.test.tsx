@@ -5,10 +5,12 @@ import { locale, scrollWheel } from '../app/settings/state'
 import { t } from '../i18n'
 import { activePanel, sidePanel } from '../app/shell/state'
 import { ToolCard } from '../components/canvas/ToolCard'
+import { armCanvasTool } from '../app/keyboard/arming'
+import { focusOwner } from '../app/keyboard/focus-owner'
+import { parseSavedObjectStampPayload } from '../canvas/saved-object-stamp-payload'
 import { StampChooser } from '../components/canvas/StampChooser'
 import { clearPlantStampSource, selectPlantStampSource } from '../canvas/plant-stamp-source'
 import {
-  beginSavedObjectStampPlacement,
   clearSavedObjectStampSource,
 } from '../canvas/saved-object-stamp-source'
 import { setCanvasRuntimeSurfaces } from '../canvas/session'
@@ -78,7 +80,7 @@ describe('Tool card', () => {
       documents: createTestCanvasDocumentSurface(),
       keyboard: createTestCanvasKeyboardPort(),
     })
-    await act(() => render(<ToolCard canvasRef={{ current: null }} />, container))
+    await act(() => render(<ToolCard />, container))
   })
 
   afterEach(() => {
@@ -282,13 +284,14 @@ describe('Tool card', () => {
       const map = document.createElement('div')
       map.tabIndex = 0
       document.body.append(map)
+      const releaseMap = focusOwner.registerRegion('map', map)
       setCanvasRuntimeSurfaces({
         commands: createTestCanvasCommandSurface({ tools: { setTool } }),
         queries: createTestCanvasQuerySurface(),
         documents: createTestCanvasDocumentSurface(),
         keyboard: createTestCanvasKeyboardPort(),
       })
-      await act(() => render(<ToolCard canvasRef={{ current: map }} stampChooser={StampChooser} />, container))
+      await act(() => render(<ToolCard stampChooser={StampChooser} />, container))
       await choose('object-stamp', { stamp: { kind: 'plant', name: 'Apple', plants: 1, species: 1 }, stampRotationDeg: 0 })
 
       const link = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Change stamp')!
@@ -303,6 +306,7 @@ describe('Tool card', () => {
       expect(container.querySelector('[data-stamp-chooser]')).toBeNull()
       expect(document.activeElement).toBe(map)
       expect(lines()[1]).toBe('Guilde pommier')
+      releaseMap()
       map.remove()
     })
 
@@ -319,7 +323,7 @@ describe('Tool card', () => {
         documents: createTestCanvasDocumentSurface(),
         keyboard: createTestCanvasKeyboardPort(),
       })
-      await act(() => render(<ToolCard canvasRef={{ current: null }} stampChooser={StampChooser} />, container))
+      await act(() => render(<ToolCard stampChooser={StampChooser} />, container))
       await choose('object-stamp')
       // Before anything is picked the card offers the saved stamps.
       const link = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Choose a saved stamp')!
@@ -340,27 +344,20 @@ describe('Tool card', () => {
   })
 
   it('names a saved stamp from Favorites with its counts', async () => {
-    const setTool = (tool: string) => setCanvasTool(tool)
     await act(() => {
-      beginSavedObjectStampPlacement({
-        id: 'stamp-1',
-        name: 'Guilde pommier',
-        sort_order: 0,
-        created_at: '',
-        updated_at: '',
-        payload_json: JSON.stringify({
-          version: 2,
-          anchor: { x: 0, y: 0 },
-          plants: [
-            { id: 'a', canonicalName: 'Malus domestica', commonName: 'Apple', color: null, position: { x: 0, y: 0 }, rotationDeg: null, scale: null },
-            { id: 'b', canonicalName: 'Malus domestica', commonName: 'Apple', color: null, position: { x: 1, y: 0 }, rotationDeg: null, scale: null },
-            { id: 'c', canonicalName: 'Rubus idaeus', commonName: 'Raspberry', color: null, position: { x: 2, y: 0 }, rotationDeg: null, scale: null },
-          ],
-          zones: [],
-          annotations: [],
-          groups: [],
-        }),
-      }, { setTool } as never)
+      const stamp = parseSavedObjectStampPayload(JSON.stringify({
+        version: 2,
+        anchor: { x: 0, y: 0 },
+        plants: [
+          { id: 'a', canonicalName: 'Malus domestica', commonName: 'Apple', color: null, position: { x: 0, y: 0 }, rotationDeg: null, scale: null },
+          { id: 'b', canonicalName: 'Malus domestica', commonName: 'Apple', color: null, position: { x: 1, y: 0 }, rotationDeg: null, scale: null },
+          { id: 'c', canonicalName: 'Rubus idaeus', commonName: 'Raspberry', color: null, position: { x: 2, y: 0 }, rotationDeg: null, scale: null },
+        ],
+        zones: [],
+        annotations: [],
+        groups: [],
+      }))!
+      armCanvasTool('saved-object-stamp', { from: 'panel', source: { kind: 'saved-stamp', stamp, name: 'Guilde pommier' } })
     })
 
     expect(lines()).toEqual(['Place a stamp', 'Guilde pommier', '3 plants · 2 species · click to place', '[ and ] rotate by 15° · Esc to stop placing'])

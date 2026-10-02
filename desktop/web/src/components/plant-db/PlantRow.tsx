@@ -2,7 +2,6 @@ import type { ComponentChildren } from 'preact'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import { speciesCatalogWorkbench } from '../../app/plant-browser'
-import { currentCanvasToolCommandSurface } from '../../canvas/session'
 import {
   writePlantStampDragData,
 } from '../../canvas/plant-stamp-source'
@@ -33,7 +32,6 @@ interface Props {
  * body opens details and drags onto the map.
  */
 export function PlantRow({ plant, inDesign, englishName, highlight }: Props) {
-  const session = currentCanvasToolCommandSurface.value
   const show = highlight ?? ((text: string) => text)
   const english = plant.common_name ? undefined : englishName
   const commonName = plant.common_name || english
@@ -90,7 +88,7 @@ export function PlantRow({ plant, inDesign, englishName, highlight }: Props) {
       <button
         type="button"
         className={styles.placeBtn}
-        onClick={() => placeSpeciesOnMap(plant, session)}
+        onClick={() => placeSpeciesOnMap(plant)}
         aria-label={t('plantDb.placeSpecies', { name })}
       >
         {t('plantDb.place')}

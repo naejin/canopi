@@ -45,7 +45,7 @@ export function createDesktopCommandSink(isModalOpen: () => boolean): CommandSin
       const canvas = canvasDefinitionById.get(command as CanvasCommandId)
       if (canvas && canvas.kind !== 'tool' && !getCurrentCanvasCommandSurface()) return false
       // The Desktop keymap names only Desktop commands: its own catalogue's and the canvas rows'.
-      runCatalogCommand(command as AppCommandId)
+      runCatalogCommand(command as AppCommandId, 'shortcut')
       return true
     },
   }

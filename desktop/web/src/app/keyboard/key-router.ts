@@ -3,27 +3,29 @@
 // Owns the only window key listeners (spec §1.6, ADR 0020; policy P8): keydown in capture and bubble, keyup in capture.
 // A key that is part of an IME composition runs nothing (WebKit sends the composition's Enter with keyCode 229).
 // Capture hands every other key to the canvas keyboard port first (keyState: the nudge commit, the physical Ctrl, the Menu
-// key's time, the Space hold), cycles the F6 regions and runs Esc on the canvas. It also keeps the keys held down and
-// lets every one go (a keyup to the port) when Meta comes up, on a window blur and on a visibility change: macOS drops the
-// keyup of any key released while Cmd is down, so Meta's keyup releases every held key. Bubble skips a key an element handler
-// already took, then runs, by focus class, the modal rows, the global rows, the pushed scopes and the keymap's
-// canvas-focus, view-arrows and command rows, each chord's one row per scope, through the canvas port or the edition's
-// CommandSink. Installed once per edition: Desktop's platform/desktop.ts passes installKeyRouter to commands/registry.ts
-// installDesktopKeyRouter; Web's main.web.tsx calls web/browser-shell-commands.ts installWebKeyRouter.
+// key's time, the Space hold), cycles the F6 regions and, while a drag or nudge series is live, runs the Esc chain before
+// any element handler (app/keyboard/escape-chain.ts). It also keeps the keys held down and lets every one go (a keyup to
+// the port) when Meta comes up, on a window blur and on a visibility change: macOS drops the keyup of any key released
+// while Cmd is down, so Meta's keyup releases every held key. Bubble skips a key an element handler already took, then
+// runs, by focus class, the modal rows, the global rows, the pushed scopes, the Esc chain and the keymap's canvas-focus,
+// view-arrows and command rows, each chord's one row per scope, through the canvas port or the edition's CommandSink.
+// The router registers the canvas port's Esc layers for as long as it is installed. Installed once per edition:
+// Desktop's platform/desktop.ts passes installKeyRouter to commands/registry.ts installDesktopKeyRouter; Web's
+// main.web.tsx calls web/browser-shell-commands.ts installWebKeyRouter.
 
 import type { ReadonlySignal } from '@preact/signals'
 import type { CanvasCommandId } from '../canvas-commands'
 import type { ShellCommandId } from '../shell-commands'
 import type { InputPlatform } from '../../canvas/runtime/input/platform'
 import type { CanvasKeyboardPort, CanvasKeyState, CanvasKeyVerdict } from '../../canvas/runtime/runtime'
+import { registerCanvasEscapeLayers, runEscape } from './escape-chain'
+import type { FocusOwner } from './focus-owner'
 import { chordMatches, chordOf, digitChordOf, type KeyboardEventLike, type KeyChord } from './key-chord'
 import { pushedKeyScopes, type CommandSink, type KeymapRow, type KeyScope } from './keymap'
 import { classifyKeyTarget, ownsArrows, type KeyTarget } from './target-class'
 
-/** F6 and Shift+F6 move between the workspace regions (app/shell/focus-regions.ts). */
-interface KeyRouterFocus {
-  cycleRegion(step: 1 | -1): boolean
-}
+/** F6 and Shift+F6 move between the workspace regions through the focus owner. */
+type KeyRouterFocus = Pick<FocusOwner, 'cycleRegion'>
 
 export interface KeyRouterDeps {
   readonly target: Pick<Window, 'addEventListener' | 'removeEventListener'>   // window in production
@@ -31,7 +33,7 @@ export interface KeyRouterDeps {
   readonly commands: CommandSink
   readonly canvas: () => CanvasKeyboardPort | null // canvas/session.ts currentCanvasKeyboardPort
   readonly singleKeys: ReadonlySignal<boolean>     // Settings › Keyboard
-  readonly focus: KeyRouterFocus
+  readonly focus: KeyRouterFocus                  // app/keyboard/focus-owner.ts focusOwner
   readonly isModalOpen: () => boolean              // modalLayerOpen, saveProblem, savedViewDialogOpen
   readonly platform: InputPlatform                 // the Mac chord rule; detectPlatform runs in the platforms
   readonly document: Pick<Document, 'addEventListener' | 'removeEventListener'>   // visibilitychange
@@ -67,6 +69,7 @@ export function installKeyRouter(deps: KeyRouterDeps): KeyRouterHandle {
     if (event.key === 'Meta') letGo(event.timeStamp)
   }
   const onLeave = (event: Event): void => letGo(event.timeStamp)
+  const disposeEscapeLayers = registerCanvasEscapeLayers(deps.canvas)
   deps.target.addEventListener('keydown', onKeyDownCapture as EventListener, true)
   deps.target.addEventListener('keydown', onKeyDownBubble as EventListener)
   deps.target.addEventListener('keyup', onKeyUpCapture as EventListener, true)
@@ -77,6 +80,7 @@ export function installKeyRouter(deps: KeyRouterDeps): KeyRouterHandle {
     dispose() {
       if (disposed) return
       disposed = true
+      disposeEscapeLayers()
       deps.target.removeEventListener('keydown', onKeyDownCapture as EventListener, true)
       deps.target.removeEventListener('keydown', onKeyDownBubble as EventListener)
       deps.target.removeEventListener('keyup', onKeyUpCapture as EventListener, true)
@@ -100,26 +104,15 @@ function keyDownCapture(deps: KeyRouterDeps, event: KeyboardEventLike): void {
     if (deps.focus.cycleRegion(event.shiftKey ? -1 : 1) && event.cancelable) event.preventDefault()
     return
   }
-  if (event.key === 'Escape' && port) escapeOnCanvas(port, event, at, verdict === 'pass-live')
+  // Step 4: a live drag or nudge series takes Esc before any element handler, from any focus but a text field or a
+  // modal (the layers' own rule), so a widget's own Esc (the inspection lens closing) does not also run (fixture I10).
+  const liveOnCanvas = verdict === 'pass-live' || (port?.escapeLayers().includes('nudge-series') ?? false)
+  if (event.key === 'Escape' && liveOnCanvas && at.focus !== 'modal') escape(event, at)
 }
 
-/**
- * Esc on the canvas in today's order and with today's reach, until the Esc chain takes it (plan Phase F, K2): the port's
- * live layers in the order it lists them, until one consumes the key; a nudge series aborts from anywhere, the other
- * layers not from a control unless a pointer session is live, and leaving the tool or clearing the selection needs the
- * map focused and no modifier.
- */
-function escapeOnCanvas(port: CanvasKeyboardPort, event: KeyboardEventLike, at: KeyTarget, live: boolean): void {
-  const modified = event.shiftKey || event.ctrlKey || event.altKey || event.metaKey
-  for (const layer of port.escapeLayers()) {
-    if (layer !== 'nudge-series') {
-      if (at.control && !live) return
-      if ((layer === 'tool' || layer === 'selection') && (at.focus !== 'map' || modified)) return
-    }
-    if (!port.escape(layer)) continue
-    if (event.cancelable) event.preventDefault()
-    return
-  }
+/** Step 8: the Esc chain; a layer that takes the key prevents and stops it. */
+function escape(event: KeyboardEventLike, at: KeyTarget): void {
+  if (runEscape({ event, focus: at.focus })) consume(event)
 }
 
 function keyDownBubble(deps: KeyRouterDeps, event: KeyboardEventLike): void {
@@ -149,6 +142,7 @@ function keyDownBubble(deps: KeyRouterDeps, event: KeyboardEventLike): void {
   if (at.focus === 'text') {
     const row = rows.find((candidate) => candidate.worksInTextFields)
     if (row) dispatch(deps, port, event, row, true)
+    else if (event.key === 'Escape') escape(event, at)
     return
   }
   const global = rows.find((row) => row.scope === 'global')
@@ -160,6 +154,11 @@ function keyDownBubble(deps: KeyRouterDeps, event: KeyboardEventLike): void {
   for (const scope of pushedKeyScopes()) {
     if (!scope.handle(event, chord)) continue
     consume(event)
+    return
+  }
+  // Step 8: no keymap row has Escape.
+  if (event.key === 'Escape') {
+    escape(event, at)
     return
   }
   // Step 9: one row per chord and scope, never tried in turn.

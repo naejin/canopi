@@ -3,11 +3,11 @@ import {
   createCanvasCommandProjection,
   dispatchCanvasCommandIntent,
   isCanvasCommandDisabled,
+  type CanvasCommandFrom,
   type CanvasCommandIntent,
   type CanvasCommandIntentAdapter,
   type CanvasCommandProjectionState,
   type CanvasEditAction,
-  type CanvasToolId,
   type CanvasViewAction,
 } from '../canvas-commands'
 import {
@@ -17,14 +17,12 @@ import {
 } from '../canvas-settings/signals'
 import { requestPlaceSearchFocus } from '../geocoding/place-search-ui'
 import { cyclePlantLabels } from '../plant-display/actions'
-import { activePanel, selectPanel } from '../shell/state'
 import {
   currentCanvasCommandSurface,
   currentCanvasHasSelection,
   currentCanvasQuerySurface,
   currentCanvasSelection,
   currentCanvasTool,
-  setCurrentCanvasTool,
 } from '../../canvas/session'
 import type { CanvasCommandSurface } from '../../canvas/runtime/runtime'
 import { selectionCommandAvailability } from '../../canvas/runtime/interaction/contextual-selection-actions'
@@ -32,6 +30,7 @@ import { openRotateSelectionDialog } from '../rotate-selection/state'
 import { sceneHasLockedDesignObjects } from '../../canvas/runtime/scene'
 import { t } from '../../i18n'
 import { singleKeyShortcuts } from '../settings/state'
+import { armCanvasTool } from '../keyboard/arming'
 
 /**
  * The canvas half of the command graph, shared by both editions: projection
@@ -69,12 +68,6 @@ export function readWorkspaceCanvasProjectionState(): CanvasCommandProjectionSta
 function withCanvas(run: (canvas: CanvasCommandSurface) => void): void {
   const canvas = currentCanvasCommandSurface.peek()
   if (canvas) run(canvas)
-}
-
-/** Place plants arms without a species too: its tool card offers the species chooser. */
-export function selectCanvasTool(tool: CanvasToolId): void {
-  if (activePanel.peek() !== 'canvas') selectPanel('canvas')
-  setCurrentCanvasTool(tool)
 }
 
 function runCanvasEditAction(action: CanvasEditAction): void {
@@ -127,7 +120,8 @@ function runCanvasViewAction(action: CanvasViewAction): void {
 
 /** Runs each intent on the surface current at dispatch time. */
 export const workspaceCanvasIntentAdapter: CanvasCommandIntentAdapter = {
-  selectTool: selectCanvasTool,
+  // Each surface arms with its own caller (the rail, a menu, the palette, a key).
+  selectTool: (tool, from) => { armCanvasTool(tool, { from }) },
   undo: () => withCanvas((canvas) => { if (canvas.history.canUndo.peek()) canvas.history.undo() }),
   redo: () => withCanvas((canvas) => { if (canvas.history.canRedo.peek()) canvas.history.redo() }),
   toggleGrid: () => withCanvas((canvas) => canvas.chrome.toggleGrid()),
@@ -138,9 +132,9 @@ export const workspaceCanvasIntentAdapter: CanvasCommandIntentAdapter = {
 }
 
 /** Dispatch one intent unless the live state disables it; true when it ran. */
-export function dispatchWorkspaceCanvasIntent(intent: CanvasCommandIntent): boolean {
+export function dispatchWorkspaceCanvasIntent(intent: CanvasCommandIntent, from: CanvasCommandFrom): boolean {
   if (isCanvasCommandDisabled(intent, readWorkspaceCanvasProjectionState())) return false
-  dispatchCanvasCommandIntent(intent, workspaceCanvasIntentAdapter)
+  dispatchCanvasCommandIntent(intent, workspaceCanvasIntentAdapter, from)
   return true
 }
 

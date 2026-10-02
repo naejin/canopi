@@ -1741,9 +1741,9 @@
   },
   "shortcuts": {
     "title": "Sneltoetsen",
-    "toolsHeading": "{{menu}} (als de kaart focus heeft)",
+    "toolsHeading": "{{menu}} (overal behalve in tekstvelden)",
     "escape": "Esc doet één ding tegelijk: een menu of dialoog sluiten, tekenen annuleren, terug naar Selecteren, de selectie wissen.",
-    "footnote": "Gereedschapstoetsen werken als de kaart focus heeft.",
+    "footnote": "Gereedschapstoetsen werken overal behalve in tekstvelden.",
     "workspaceHeading": "Kaart en werkruimte",
     "nextRegion": "Volgend gebied: titelbalk, gereedschap, kaart, paneel",
     "previousRegion": "Vorig gebied",

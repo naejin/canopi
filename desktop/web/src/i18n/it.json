@@ -1741,9 +1741,9 @@
   },
   "shortcuts": {
     "title": "Scorciatoie da tastiera",
-    "toolsHeading": "{{menu}} (con la mappa attiva)",
+    "toolsHeading": "{{menu}} (ovunque tranne nei campi di testo)",
     "escape": "Esc fa una cosa alla volta: chiude un menu o una finestra, annulla il disegno in corso, torna a Seleziona, svuota la selezione.",
-    "footnote": "I tasti degli strumenti funzionano con la mappa attiva.",
+    "footnote": "I tasti degli strumenti funzionano ovunque tranne nei campi di testo.",
     "workspaceHeading": "Mappa e area di lavoro",
     "nextRegion": "Area successiva: barra del titolo, strumenti, mappa, pannello",
     "previousRegion": "Area precedente",

@@ -2,7 +2,7 @@ import type { ComponentChildren } from 'preact'
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import { t } from '../../i18n'
 import { clearSpeciesDetailOnMap, selectSpeciesPlants, showSpeciesDetailOnMap, zoomToSpeciesPlants } from '../../app/plant-finder/map-matches'
-import { currentCanvasTool, currentCanvasToolCommandSurface } from '../../canvas/session'
+import { currentCanvasTool } from '../../canvas/session'
 import type { PlantStampSourceInput } from '../../canvas/plant-stamp-source'
 import { PlantSymbolGlyph } from '../canvas/PlantSymbolGlyph'
 import { useCatalogDesignSpecies } from '../plant-db/design-species'
@@ -124,7 +124,7 @@ export function SpeciesDetailLayout({ identity, favorite, onToggleFavorite, onBa
           className={styles.primary}
           disabled={place === null}
           aria-label={t('plantDb.placeSpecies', { name: title })}
-          onClick={() => { if (place) placeSpeciesOnMap(place, currentCanvasToolCommandSurface.value) }}
+          onClick={() => { if (place) placeSpeciesOnMap(place) }}
         >
           {t('plantDb.place')}
         </button>

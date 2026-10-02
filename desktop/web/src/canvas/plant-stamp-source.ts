@@ -1,5 +1,4 @@
 import { signal } from '@preact/signals'
-import type { CanvasToolCommandSurface } from './runtime/runtime'
 
 const PLANT_STAMP_MIME = 'application/x.canopi.plant-stamp+json'
 const LEGACY_TEXT_MIME = 'text/plain'
@@ -60,15 +59,6 @@ export function selectPlantStampSource(source: PlantStampSourceInput): PlantStam
 
 export function clearPlantStampSource(): void {
   selectedPlantStampSource.value = null
-}
-
-export function beginPlantStampFromSpecies(
-  source: PlantStampSourceInput,
-  commandSurface: Pick<CanvasToolCommandSurface, 'setTool'> | null | undefined,
-): PlantStampSource {
-  const next = selectPlantStampSource(source)
-  commandSurface?.setTool('plant-stamp')
-  return next
 }
 
 export function writePlantStampDragData(

@@ -16,7 +16,7 @@ function fakePort(host: HTMLElement) {
     keyState: vi.fn((_k: CanvasKeyState): CanvasKeyVerdict => state.verdict),
     command: vi.fn((c: CanvasKeyCommand) => state.command(c)),
     escapeLayers: vi.fn(() => state.layers),
-    escape: vi.fn((_layer: CanvasEscapeLayer) => true),
+    escape: vi.fn((_layer: CanvasEscapeLayer) => {}),
     describeEscape: () => state.layers[0] ?? null,
   } satisfies CanvasKeyboardPort
   return { port, state }
@@ -305,26 +305,52 @@ describe('key router', () => {
     expect(cycleRegion).toHaveBeenCalledTimes(2)
   })
 
-  it('Esc runs the canvas layers in the port\'s order until one takes it; a control keeps it unless a drag is live', () => {
+  it('Esc runs the Esc chain after element handlers, and before them while a drag or nudge series is live (steps 4 and 8)', () => {
     install()
-    const button = document.createElement('button')
-    document.body.append(button)
-    fake.state.layers = ['tool-transient', 'tool', 'selection']
-    fake.port.escape.mockImplementation((layer) => layer !== 'tool-transient')
+    const panel = document.createElement('div')
+    const row = document.createElement('li')
+    row.tabIndex = 0
+    panel.append(row)
+    document.body.append(panel)
+    // A panel that takes its own Esc.
+    const panelEscape = vi.fn((event: KeyboardEvent) => event.preventDefault())
+    panel.addEventListener('keydown', (event) => { if (event.key === 'Escape') panelEscape(event) })
+    fake.state.layers = ['tool']
 
-    expect(press({ key: 'Escape' }, host).defaultPrevented).toBe(true)
-    expect(fake.port.escape.mock.calls.map(([layer]) => layer)).toEqual(['tool-transient', 'tool'])
-    // Leaving the tool or clearing the selection needs the map focused (until the Esc chain, plan Phase F).
-    fake.port.escape.mockClear()
-    expect(press({ key: 'Escape' }, document.body).defaultPrevented).toBe(false)
-    expect(fake.port.escape.mock.calls.map(([layer]) => layer)).toEqual(['tool-transient'])
-    fake.port.escape.mockClear()
-    press({ key: 'Escape' }, button)
+    expect(press({ key: 'Escape' }, row).defaultPrevented).toBe(true)
+    expect(panelEscape).toHaveBeenCalledOnce()
     expect(fake.port.escape).not.toHaveBeenCalled()
+    expect(press({ key: 'Escape' }, host).defaultPrevented).toBe(true)
+    expect(fake.port.escape).toHaveBeenCalledExactlyOnceWith('tool')
+
+    // A live drag takes the Esc first, wherever focus is, and the panel never hears it.
+    fake.port.escape.mockClear()
     fake.state.verdict = 'pass-live'
-    fake.state.layers = ['gesture']
-    expect(press({ key: 'Escape' }, button).defaultPrevented).toBe(true)
+    fake.state.layers = ['gesture', 'tool']
+    expect(press({ key: 'Escape' }, row).defaultPrevented).toBe(true)
     expect(fake.port.escape).toHaveBeenCalledExactlyOnceWith('gesture')
+    expect(panelEscape).toHaveBeenCalledOnce()
+    // So does a nudge series.
+    fake.port.escape.mockClear()
+    fake.state.verdict = 'pass'
+    fake.state.layers = ['nudge-series', 'selection']
+    press({ key: 'Escape' }, row)
+    expect(fake.port.escape).toHaveBeenCalledExactlyOnceWith('nudge-series')
+    expect(panelEscape).toHaveBeenCalledOnce()
+  })
+
+  it('Esc in a text field or with a modifier leaves the tool and the selection alone', () => {
+    install()
+    const field = document.createElement('input')
+    document.body.append(field)
+    fake.state.layers = ['tool-transient', 'tool', 'selection']
+
+    expect(press({ key: 'Escape' }, field).defaultPrevented).toBe(false)
+    expect(press({ key: 'Escape', shiftKey: true }, host).defaultPrevented).toBe(true)
+    expect(fake.port.escape).toHaveBeenCalledExactlyOnceWith('tool-transient')
+    fake.state.layers = ['tool', 'selection']
+    expect(press({ key: 'Escape', ctrlKey: true }, host).defaultPrevented).toBe(false)
+    expect(fake.port.escape).toHaveBeenCalledOnce()
   })
 
   it('lets go of every held key when Meta comes up, on blur and when the page hides (H10)', () => {

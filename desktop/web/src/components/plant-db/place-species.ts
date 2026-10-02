@@ -1,19 +1,10 @@
-import { focusMapSurface } from '../../app/shell/focus-regions'
-import {
-  beginPlantStampFromSpecies,
-  type PlantStampSourceInput,
-} from '../../canvas/plant-stamp-source'
-import type { CanvasToolCommandSurface } from '../../canvas/runtime/runtime'
+import { armCanvasTool } from '../../app/keyboard/arming'
+import type { PlantStampSourceInput } from '../../canvas/plant-stamp-source'
 
 /**
- * A panel's Place button: arms Place plants with the species, then hands
- * focus to the map so the next click places and Esc cancels. Without a canvas
- * nothing is armed, so focus stays on the button.
+ * A panel's Place button: arms Place plants with the species, and the map takes focus so the next click places and
+ * Esc cancels. Without a canvas the species is kept (Place plants' chooser offers it) and focus stays on the button.
  */
-export function placeSpeciesOnMap(
-  source: PlantStampSourceInput,
-  commandSurface: Pick<CanvasToolCommandSurface, 'setTool'> | null | undefined,
-): void {
-  beginPlantStampFromSpecies(source, commandSurface)
-  if (commandSurface) focusMapSurface()
+export function placeSpeciesOnMap(source: PlantStampSourceInput): void {
+  armCanvasTool('plant-stamp', { from: 'panel', source: { kind: 'species', species: source } })
 }

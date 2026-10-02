@@ -133,3 +133,31 @@ describe('English copy', () => {
     }
   })
 })
+
+describe('keyboard shortcut sheet', () => {
+  // Tool keys run anywhere except text fields and dialogs (canvas v2 plan, phase F): no locale may say they need the map's focus.
+  const MAP_FOCUS_WORDING: Record<string, readonly [string, string]> = {
+    en: ['{{menu}} (while the map has focus)', 'Tool keys work while the map has focus.'],
+    de: ['{{menu}} (wenn die Karte den Fokus hat)', 'Werkzeugtasten wirken, wenn die Karte den Fokus hat.'],
+    es: ['{{menu}} (con el mapa enfocado)', 'Las teclas de herramientas funcionan con el mapa enfocado.'],
+    fr: ['{{menu}} (quand la carte a le focus)', 'Les touches d’outils fonctionnent quand la carte a le focus.'],
+    it: ['{{menu}} (con la mappa attiva)', 'I tasti degli strumenti funzionano con la mappa attiva.'],
+    ja: ['{{menu}}（地図にフォーカスがあるとき）', 'ツールのキーは地図にフォーカスがあるときに使えます。'],
+    ko: ['{{menu}} (지도에 포커스가 있을 때)', '도구 키는 지도에 포커스가 있을 때 작동합니다.'],
+    nl: ['{{menu}} (als de kaart focus heeft)', 'Gereedschapstoetsen werken als de kaart focus heeft.'],
+    pt: ['{{menu}} (com o mapa em foco)', 'As teclas de ferramentas funcionam com o mapa em foco.'],
+    ru: ['{{menu}} (когда карта в фокусе)', 'Клавиши инструментов работают, когда карта в фокусе.'],
+    zh: ['{{menu}}（地图获得焦点时）', '工具按键在地图获得焦点时生效。'],
+  }
+
+  it('says tool keys work anywhere except text fields, in every locale', () => {
+    expect(english.get('shortcuts.toolsHeading')).toBe('{{menu}} (anywhere except text fields)')
+    expect(english.get('shortcuts.footnote')).toBe('Tool keys work anywhere except text fields.')
+    for (const [code, entries] of Object.entries(flat)) {
+      const [heading, footnote] = MAP_FOCUS_WORDING[code]!
+      expect(entries.get('shortcuts.toolsHeading'), code).not.toBe(heading)
+      expect(entries.get('shortcuts.toolsHeading'), code).toContain('{{menu}}')
+      expect(entries.get('shortcuts.footnote'), code).not.toBe(footnote)
+    }
+  })
+})

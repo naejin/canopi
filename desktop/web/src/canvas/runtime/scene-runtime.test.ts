@@ -39,7 +39,7 @@ import {
 } from '../plant-stamp-source'
 import {
   clearSavedObjectStampSource,
-  selectSavedObjectStampSourceForTests,
+  selectSavedObjectStampSource,
 } from '../saved-object-stamp-source'
 import { activeTool, canvasToolGuidanceState as currentCanvasToolGuidance, selectedObjectIds } from '../session-state'
 import {
@@ -2814,7 +2814,7 @@ describe('scene canvas runtime', () => {
     file.groups = []
     runtime.documentSurface.loadDocument(file)
     setInteractionViewport(runtime)
-    selectSavedObjectStampSourceForTests({
+    selectSavedObjectStampSource({
       version: 2,
       anchor: { x: 10, y: 10 },
       plants: [{
