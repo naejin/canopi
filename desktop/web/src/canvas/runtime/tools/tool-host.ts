@@ -602,7 +602,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     // A pen or a finger reaches the map with no hover after a panel drag: its press shows the tool's draft again.
     if (g.target.kind !== 'ruler') showDraftAfterDrop()
     if (!activeTool) return NOTHING
-    if (live) cancelLive('pointercancel')
+    if (live) guardCancellation(() => cancelLive('pointercancel'))
     // The pointer is pressed now: a frame re-emits its drag, not the hover before it.
     lastHover = null
     if (g.target.kind === 'ruler') {
@@ -758,7 +758,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const point = pointAt(gesture.lastScreen, gesture.lastMods, gesture.pointer, gesture.kind === 'handle')
     if (!point) {
       // No ground under the pointer: the drag is cancelled.
-      cancelLive('pointercancel')
+      guardCancellation(() => cancelLive('pointercancel'))
       return
     }
     if (kind === 'drag-end') live = null
@@ -1397,7 +1397,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       runCanvasRuntimeCleanups([
         () => unsubscribeFrames(),
         () => endNudgeSeries(true),
-        () => cancelLive('tool-change'),
+        () => guardCancellation(() => cancelLive('tool-change')),
         () => tool?.cancelTransient('tool-change'),
         () => tool?.deactivate('dispose'),
         // The host is the menu's only opener: an open menu would hold commands for a disposed runtime.

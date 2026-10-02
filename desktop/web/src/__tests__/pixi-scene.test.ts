@@ -1281,7 +1281,6 @@ describe('createPixiScenePresentation', () => {
     renderer.setDraft(null)
     expect(draftWorld.children).toEqual([])
     expect(line!.destroy).toHaveBeenCalled()
-    renderer.setSelectionPreview({ translate: { x: 1, y: 0 }, rotateDeg: 0, pivot: { x: 0, y: 0 } })
     renderer.dispose()
   })
 })

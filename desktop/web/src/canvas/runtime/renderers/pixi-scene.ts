@@ -51,7 +51,7 @@ import {
 } from '../scene-visuals'
 import type { SceneRendererHoverState, SceneRendererSnapshot } from './scene-types'
 import { createDraftLayer, type DraftScenePainters } from './draft-layer'
-import type { DraftPresentation, SelectionPreview } from '../tools/draft'
+import type { DraftPresentation } from '../tools/draft'
 import { getEllipticalZonePolygon, getRectangularZoneCorners } from '../zone-geometry'
 import type { PlantSymbolId, SceneAnnotationEntity, SceneMeasurementGuideEntity, ScenePlantEntity, ScenePoint, SceneZoneEntity } from '../scene'
 import { isSceneObjectGroupMemberTarget } from '../scene'
@@ -180,8 +180,6 @@ export interface PixiScenePresentation {
   renderScene(snapshot: SceneRendererSnapshot): void
   setViewport(viewport: SceneRendererSnapshot['viewport']): void
   setDraft(draft: DraftPresentation | null): void
-  /** A renderer transform of the selection while it is dragged; drawn from phase R, ignored until then. */
-  setSelectionPreview(preview: SelectionPreview | null): void
 }
 
 export interface PixiScenePresentationOptions {
@@ -361,7 +359,6 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
     setDraft(draft) {
       draftLayer.setDraft(draft)
     },
-    setSelectionPreview() {},
   }
 }
 

@@ -35,7 +35,7 @@ import {
 } from './interaction-session'
 import type { CameraController, CameraViewportSnapshot } from './camera'
 import { SceneStore } from './scene'
-import type { SceneEditTransaction } from './scene-runtime/transactions'
+import type { SceneEditCoordinator, SceneEditTransaction } from './scene-runtime/transactions'
 import type { DraftPresentation } from './tools/draft'
 import { createPolygonTool } from './tools/polygon'
 import { createSavedObjectStampTool } from './tools/saved-object-stamp'
@@ -101,7 +101,6 @@ function recordingRenderer() {
     drafts,
     lastDraft: () => drafts.at(-1) ?? null,
     setDraft: (draft: DraftPresentation | null) => { drafts.push(draft) },
-    setSelectionPreview: () => {},
   }
 }
 
@@ -890,6 +889,31 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
 
     dispatchDrag('drop', { x: 60, y: 60 }, species)
     expect(store.persisted.plants).toHaveLength(1)
+  })
+
+  it('a drop whose route throws still prevents the browser\'s own drop', () => {
+    const baseDeps = createInteractionDeps(container, store, camera)
+    const realEdits = baseDeps.sceneEdits
+    const dropFails: SceneEditCoordinator = {
+      begin: (type, options) => realEdits.begin(type, options),
+      run: (type, edit, options) => {
+        if (type === 'interaction-drop') throw new Error('drop route failed')
+        return realEdits.run(type, edit, options)
+      },
+    }
+    useStubTools(stubTool('select'))
+    const { session } = createSession({ sceneEdits: dropFails })
+    session.setTool('select')
+    const species = (transfer: DataTransferLike) => writePlantStampDragData(transfer, PEAR)
+
+    let drop!: DragEvent
+    const errors = captureWindowErrors(() => { drop = dispatchDrag('drop', { x: 60, y: 60 }, species) })
+
+    expect(errors).toHaveLength(1)
+    // Rethrown before the recogniser's prevent-default (recognise.ts) was applied, it would reach the browser's own
+    // drop handler, which for a species drag inserts its payload into whatever focused text field (spec §1.4 "Drops").
+    expect(drop.defaultPrevented).toBe(true)
+    expect(store.persisted.plants).toHaveLength(0)
   })
 
   it('a dragover hides a registered tool\'s draft until the pointer moves over the map again', () => {

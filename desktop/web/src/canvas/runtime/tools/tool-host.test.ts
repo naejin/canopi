@@ -1529,6 +1529,90 @@ describe('ToolHost', () => {
       expect(rectangle.count('press')).toBe(2)
     })
 
+    it('a second press that cancels the live gesture, whose cancel throws, aborts the edit and admits the next press', () => {
+      let edit: SceneEditTransaction | null = null
+      let failing = true
+      const rectangle: StubTool = stubTool('rectangle', {
+        gesture: (g) => {
+          if (g.kind === 'press') {
+            edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
+            edit.mutate((draft) => {
+              draft.zones = [rectZone('z2', [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }, { x: 0, y: 5 }])]
+            })
+          }
+          if (g.kind === 'cancel' && failing) throw new Error('cancel failed')
+          return 'pass'
+        },
+      })
+      useStubTools(rectangle)
+      const h = harness({ tool: 'rectangle' })
+
+      h.press({ x: 10, y: 10 }, { pointerId: 9 })
+      expect(h.store.persisted.zones.map((zone) => zone.id)).toEqual(['z2'])
+      // A press on the same pointer while live cancels it first (today's pointercancel); its cancel throws.
+      expect(() => h.press({ x: 20, y: 20 }, { pointerId: 9 })).toThrow('cancel failed')
+      // The edit is aborted whether or not the cancel succeeded: nothing is left open to retry.
+      expect(h.store.persisted.zones).toEqual([])
+      failing = false
+      expect(h.press({ x: 30, y: 30 }, { pointerId: 9 })).toEqual({})
+      expect(rectangle.count('press')).toBe(2)
+    })
+
+    it('a drag move with no ground under the pointer cancels the live gesture; a cancel that throws aborts the edit', () => {
+      let edit: SceneEditTransaction | null = null
+      let failing = true
+      const rectangle: StubTool = stubTool('rectangle', {
+        gesture: (g) => {
+          if (g.kind === 'press') {
+            edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
+            edit.mutate((draft) => {
+              draft.zones = [rectZone('z2', [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }, { x: 0, y: 5 }])]
+            })
+          }
+          if (g.kind === 'cancel' && failing) throw new Error('cancel failed')
+          return 'pass'
+        },
+      })
+      useStubTools(rectangle)
+      const h = harness({ tool: 'rectangle' })
+
+      h.press({ x: 10, y: 10 })
+      h.move({ x: 40, y: 40 })
+      expect(h.store.persisted.zones.map((zone) => zone.id)).toEqual(['z2'])
+      h.setNoGroundAt((at) => at.x === 70 && at.y === 70)
+      // No ground under the pointer cancels the drag (today's pitched-view case); its cancel throws.
+      expect(() => h.move({ x: 70, y: 70 })).toThrow('cancel failed')
+      expect(h.store.persisted.zones).toEqual([])
+      failing = false
+      h.setNoGroundAt(null)
+      expect(h.press({ x: 20, y: 20 })).toEqual({})
+      expect(rectangle.count('press')).toBe(2)
+    })
+
+    it('a tool cancel that throws during dispose still aborts the open edit', () => {
+      let edit: SceneEditTransaction | null = null
+      const rectangle: StubTool = stubTool('rectangle', {
+        gesture: (g) => {
+          if (g.kind === 'press') {
+            edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
+            edit.mutate((draft) => {
+              draft.zones = [rectZone('z2', [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }, { x: 0, y: 5 }])]
+            })
+          }
+          if (g.kind === 'cancel') throw new Error('cancel failed')
+          return 'pass'
+        },
+      })
+      useStubTools(rectangle)
+      const h = harness({ tool: 'rectangle' })
+
+      h.press({ x: 10, y: 10 })
+      expect(h.store.persisted.zones.map((zone) => zone.id)).toEqual(['z2'])
+      expect(() => h.dispose()).toThrow('cancel failed')
+      // The edit is aborted even though the tool's own cancel failed during dispose.
+      expect(h.store.persisted.zones).toEqual([])
+    })
+
     it('arming another tool cancels the live press and switches the tools', () => {
       const rectangle = stubTool('rectangle')
       const ellipse = stubTool('ellipse')

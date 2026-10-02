@@ -96,6 +96,7 @@ export interface SceneRuntimeConstructionCallbacks {
   readonly undoTransientHistory: () => boolean
   readonly redoTransientHistory: () => boolean
   readonly setInteractionTool: (name: string) => void
+  readonly readInteractionTool: () => string | null
   readonly plantRowSpacing: CanvasPlantRowSpacingField
   readonly disposeInteraction: () => void
 }
@@ -340,6 +341,7 @@ export function createSceneRuntimeConstruction(
     presentation,
     settings: appAdapter.settings,
     setInteractionTool: callbacks.setInteractionTool,
+    readInteractionTool: callbacks.readInteractionTool,
     plantRowSpacing: callbacks.plantRowSpacing,
     invalidate: callbacks.invalidate,
     isRuntimeActive: () => runtimeActive,

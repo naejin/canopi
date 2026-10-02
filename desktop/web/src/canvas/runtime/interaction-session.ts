@@ -69,6 +69,10 @@ const HOST_ATTRIBUTES = ['tabindex', 'role', 'aria-label', 'aria-describedby'] a
 const STORY_PRESENTING_ATTRIBUTE = 'data-story-presenting'
 const NO_MODIFIERS: Modifiers = Object.freeze({ shift: false, ctrl: false, alt: false, meta: false })
 const NO_DROP: readonly AdapterEffect[] = Object.freeze([{ kind: 'drop-effect', dropEffect: 'none' }])
+/** An actual drop (not a dragover or dragleave) prevents the browser's own drop (recognise.ts), unconditionally; a
+ *  throwing route must not skip it, or the browser's default drop runs (today's pre-0B _onDrop prevented it before
+ *  routing). A dragover's prevent-default stays tied to its outcome (REFUSED_DRAGOVER leaves it unprevented). */
+const PREVENT_DEFAULT: readonly AdapterEffect[] = Object.freeze([{ kind: 'prevent-default' }])
 /** The host's types, read through it (P5b: this module imports nothing else from tools/). */
 type DraftPresentation = Parameters<ToolHostDeps['renderer']['setDraft']>[0]
 type ToolSource = Parameters<ToolHost['setTool']>[1]
@@ -145,6 +149,9 @@ export interface SceneInteractionSessionDeps {
 }
 
 export interface SceneInteractionSession {
+  /** The tool the session has armed now (after a failed switch: the one it kept or fell back to). */
+  readonly tool: ToolId
+
   setTool(name: string): void
   /** Plant a row's spacing field in the tool card; does nothing under another tool. */
   readonly plantRowSpacing: CanvasPlantRowSpacingField
@@ -416,6 +423,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
    * already deactivated, and reactivating it risks the same failure) and still ends the live presses, as today's setTool
    * had cleared the pointer gesture before the step that failed.
    */
+  get tool(): ToolId {
+    return this._tool.peek()
+  }
+
   setTool(name: string): void {
     if (this._disposed) return
     const id = name as ToolId
@@ -663,13 +674,17 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   /**
    * A panel drag over the map, routed to the host's drop route. A dragover whose route throws answers 'none' as well as
-   * the source's quarantine, as today's rejected dragover did.
+   * the source's quarantine, as today's rejected dragover did (and, unlike a drop, stays un-prevented: a failed dragover
+   * refuses the drop target, as a never-prevented one does). A drop's own prevent-default (recognise.ts, unconditional
+   * for an actual drop) must reach the event even when the route throws, or the browser's own drop runs, pasting the
+   * payload into whatever has focus (spec §1.4 "Drops"); the single fault rule still rethrows.
    */
   private _routeDrop(input: Extract<RawInput, { kind: 'drop' }>): void {
     try {
       this._routeToHost(input)
     } catch (error) {
       if (input.phase === 'over') this._source.apply(NO_DROP)
+      else if (input.phase === 'drop') this._source.apply(PREVENT_DEFAULT)
       throw error
     }
   }
