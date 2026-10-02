@@ -1,7 +1,6 @@
-import { effect, signal } from '@preact/signals'
+import { computed, effect, signal } from '@preact/signals'
 import type { CanvasInspectionHandle, CanvasInspectionState, InspectionPoint } from '../inspection'
 import type { CanvasQueryRevision } from './runtime'
-import type { WorkspaceCameraFrameReader, WorkspaceCameraOwner } from './camera'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { SceneDesignObjectTarget } from './scene'
 import { createSessionPlane, type SessionPlane } from '../session-plane'
@@ -10,10 +9,14 @@ import { getSceneLayerStyle } from './scene-visuals'
 import { inspectionLayout } from './inspection-layout'
 import { runCanvasRuntimeCleanups } from './cleanup'
 import { buildViewTransformFromPlane } from './view/view-transform'
+import type { ViewFrameSource, WorldQuad } from './view/types'
+
+/** 100 % lens zoom: 20 px per metre, the main map's zoom reference. */
+const LENS_ZOOM_REFERENCE_PIXELS_PER_METRE = 20
 
 interface InspectionOwnerOptions {
-  /** The main camera: its snapshot repaints the lens and gives the zoom reference; its host's live frame places the lens (0A-2). */
-  readonly camera: Pick<WorkspaceCameraFrameReader, 'snapshot'> & Pick<WorkspaceCameraOwner, 'host'>
+  /** The main map's frames: each one repaints the lens, places what it samples and moves its source outline. */
+  readonly frames: Pick<ViewFrameSource, 'viewFrame'>
   readonly revision: CanvasQueryRevision
   /** The live session plane; the inspected point follows it across a re-origin. */
   readSessionPlane?(): SessionPlane | null
@@ -37,6 +40,12 @@ export class SceneCanvasInspectionOwner {
     // The inspected point in session-plane metres, and the plane it belongs to.
     let point: InspectionPoint | null = null
     let pointPlane: SessionPlane | null = null
+    // The ground the lens shows, in plane metres; the main frame projects it, so the outline moves with the map.
+    const footprint = signal<WorldQuad | null>(null)
+    const sourceQuad = computed(() => {
+      const quad = footprint.value
+      return quad && options.frames.viewFrame.value.view.worldQuadToScreen(quad)
+    })
     let magnification = 1
     let highlightedId: string | null = null
     let frame: number | null = null
@@ -46,10 +55,10 @@ export class SceneCanvasInspectionOwner {
 
     /** The ground under a point of the main screen, through the live frame; null above a horizon. */
     function groundAt(screenPoint: InspectionPoint): InspectionPoint | null {
-      return options.camera.host.frames.viewFrame.peek().view.screenToWorld(screenPoint)
+      return options.frames.viewFrame.peek().view.screenToWorld(screenPoint)
     }
     function canvasCenter(): InspectionPoint {
-      const { screen } = options.camera.host.frames.viewFrame.peek().view
+      const { screen } = options.frames.viewFrame.peek().view
       // The screen centre is the camera's own ground point, never above a horizon.
       return groundAt({ x: screen.width / 2, y: screen.height / 2 })!
     }
@@ -73,7 +82,6 @@ export class SceneCanvasInspectionOwner {
       frame = null
       if (released) return
       const snapshot = options.getSnapshot()
-      const camera = options.camera.snapshot.peek()
       const centre = livePoint() ?? canvasCenter()
       setPoint(centre)
       const layer = getSceneLayerStyle(snapshot.scene, 'plants')
@@ -84,8 +92,17 @@ export class SceneCanvasInspectionOwner {
         value => ctx ? ctx.measureText(value).width : Array.from(value).length * 12, magnification)
       const { scale } = layout
       if (highlightedId && !layout.plants.some(plant => plant.id === highlightedId)) clearHighlight()
+      const dpr = Math.max(window.devicePixelRatio || 1, 1)
+      // The lens's own view: the inspected point at its centre, at bearing 0 (spec §4.13).
+      const lensView = buildViewTransformFromPlane({
+        planar: { x: width / 2 - centre.x * scale, y: height / 2 - centre.y * scale, scale, bearingDeg: 0 },
+        screen: { width, height, devicePixelRatio: dpr },
+        plane: options.readSessionPlane?.() ?? createSessionPlane({ lon: 0, lat: 0 }),
+        planeRevision: options.frames.viewFrame.peek().view.planeRevision,
+        revision: ++lensViewRevision,
+      })
+      footprint.value = lensView.visibleWorldQuad()
       if (ctx) {
-        const dpr = Math.max(window.devicePixelRatio || 1, 1)
         canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr)
         const plants = visible.filter((plant) => Math.abs(plant.position.x - centre.x) * scale <= width / 2 + 20
           && Math.abs(plant.position.y - centre.y) * scale <= height / 2 + 20)
@@ -98,14 +115,6 @@ export class SceneCanvasInspectionOwner {
           speciesFocus: { canonicalName: null },
           revealedAnnotationId: null, selectionLabelPlantIds: new Set(),
         }
-        // The lens's own view: the inspected point at its centre, at bearing 0 (spec §4.13).
-        const lensView = buildViewTransformFromPlane({
-          planar: { x: width / 2 - centre.x * scale, y: height / 2 - centre.y * scale, scale, bearingDeg: 0 },
-          screen: { width, height, devicePixelRatio: dpr },
-          plane: options.readSessionPlane?.() ?? createSessionPlane({ lon: 0, lat: 0 }),
-          planeRevision: options.camera.host.frames.viewFrame.peek().view.planeRevision,
-          revision: ++lensViewRevision,
-        })
         try {
           drawInspectionLensScene(ctx, lensSnapshot, lensView, { widthPx: width, heightPx: height, dpr })
         } catch (error) {
@@ -114,7 +123,7 @@ export class SceneCanvasInspectionOwner {
         }
       }
       state.value = {
-        point: centre, scale, zoomPercent: Math.round(scale / camera.referenceScale * 100), previewAvailable: ctx !== null,
+        point: centre, scale, zoomPercent: Math.round(scale / LENS_ZOOM_REFERENCE_PIXELS_PER_METRE * 100), previewAvailable: ctx !== null,
         frame: { width, height }, plants: layout.plants,
       }
     }
@@ -140,7 +149,7 @@ export class SceneCanvasInspectionOwner {
           () => observer?.disconnect(),
           () => document.fonts?.removeEventListener('loadingdone', schedule),
           () => canvas.remove(),
-          () => { state.value = null },
+          () => { state.value = null; footprint.value = null },
           clearHighlight,
         ], 'Unable to release the inspection lens.')
       },
@@ -149,7 +158,7 @@ export class SceneCanvasInspectionOwner {
       unsubscribe = effect(() => {
         void options.revision.scene.value
         void options.revision.plantNames.value
-        void options.camera.snapshot.value
+        void options.frames.viewFrame.value
         schedule()
       })
       document.fonts?.addEventListener('loadingdone', schedule)
@@ -169,8 +178,7 @@ export class SceneCanvasInspectionOwner {
     }
     return {
       state,
-      // 0D2 hand-off stub: the Renderer stream publishes the quad from the main viewFrame and the lens transform.
-      sourceQuad: signal(null),
+      sourceQuad,
       inspectAtScreenPoint: (screenPoint) => {
         if (released || !Number.isFinite(screenPoint.x) || !Number.isFinite(screenPoint.y)) return
         const next = groundAt(screenPoint)

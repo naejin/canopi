@@ -190,7 +190,7 @@ export function createSceneRuntimeConstruction(
     getRenderer: () => renderer,
     getView: () => cameraHost.frames.viewFrame.peek().view,
     prepareSceneRender: async () => {
-      if (camera.snapshot.peek().mode === 'overview') {
+      if (cameraHost.frames.viewFrame.peek().mode === 'overview') {
         return {
           publish: () => presentation.buildRendererSnapshot({ overview: true }),
         }
@@ -217,7 +217,7 @@ export function createSceneRuntimeConstruction(
       syncCanvasSignalsFromDocument(file, appAdapter.settings.layerProjections),
   })
   const inspection = new SceneCanvasInspectionOwner({
-    camera: { snapshot: camera.snapshot, host: cameraHost },
+    frames: cameraHost.frames,
     revision,
     readSessionPlane: () => sceneStore.sessionPlane,
     getSnapshot: () => presentation.buildRendererSnapshot(),
