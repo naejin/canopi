@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { Ticker, type WebGLOptions } from 'pixi.js'
+import { Ticker, WebGLRenderer, type WebGLOptions } from 'pixi.js'
 import {
   createSharedMapSceneLayer,
   sharedPixiRendererInitOptions,
@@ -48,6 +48,18 @@ describe('createSharedMapSceneLayer', () => {
   // ADR 0004: MapLibre owns the canvas's events and the only frame loop. The
   // options are Pixi's real ones (the type check below), so nothing hides
   // behind a cast, and what init installs anyway is detached right after.
+  // skipExtensionImports leaves out Pixi's filter extensions, yet the scene's plant layer
+  // (layer opacity, species focus dim) and the Place plants and stamp ghosts draw through an
+  // AlphaFilter. Without the filter pipe Pixi's render throws, and the map is torn down.
+  it('registers Pixi\'s filter system and pipe, which every AlphaFilter of the scene and its drafts needs', () => {
+    // The extensions a WebGL renderer is built with; `config` is protected, so a subclass reads it.
+    const { renderPipes, systems } = new class extends WebGLRenderer {
+      readonly extensionLists = this.config
+    }().extensionLists
+    expect(renderPipes.map((entry) => entry.name)).toContain('filter')
+    expect(systems.map((entry) => entry.name)).toContain('filter')
+  })
+
   it('initializes Pixi for MapLibre\'s context and loop: no extension imports, events, clears or GC, then detaches Pixi from the canvas and stops its ticker', async () => {
     const canvas = createCanvas()
     const map = createMap(canvas)
