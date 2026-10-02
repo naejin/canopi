@@ -9,7 +9,7 @@ export interface AdmittedLabels {
 }
 
 /** Admits the labels of `snapshot` at `pixelsPerMetre`; a translation never changes admission, so none is taken. */
-export function admitLabels(snapshot: SceneRendererSnapshot, pixelsPerMetre: number): AdmittedLabels {
+function admitLabels(snapshot: SceneRendererSnapshot, pixelsPerMetre: number): AdmittedLabels {
   const projected = projectScenePlantLabels(snapshot, pixelsPerMetre)
   return {
     selectionLabels: projected.selectionLabels,
