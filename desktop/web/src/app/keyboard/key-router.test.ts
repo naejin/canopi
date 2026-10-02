@@ -356,6 +356,22 @@ describe('key router', () => {
     expect(released()).toEqual(['Space'])
   })
 
+  it('keeps a Space held from before Cmd when Meta comes up, so the pan stays armed', () => {
+    install({ platform: { os: 'mac', engine: 'webkit', gestureEvents: false } })
+    host.focus()
+    const up = (key: string, code: string) => host.dispatchEvent(new KeyboardEvent('keyup', { key, code, bubbles: true }))
+    const released = () => fake.port.keyState.mock.calls.filter(([k]) => k.type === 'keyup').map(([k]) => k.code)
+
+    press({ key: ' ', code: 'Space' }, host)
+    press({ key: 'Meta', code: 'MetaLeft', metaKey: true }, host)
+    press({ key: '=', code: 'Equal', metaKey: true }, host)
+    up('Meta', 'MetaLeft')
+    // Only the key pressed under Cmd lost its keyup; Space still waits for its own.
+    expect(released()).toEqual(['MetaLeft', 'Equal'])
+    up(' ', 'Space')
+    expect(released()).toEqual(['MetaLeft', 'Equal', 'Space'])
+  })
+
   it('a composing keydown runs nothing (H11, G12)', () => {
     install()
     host.focus()
