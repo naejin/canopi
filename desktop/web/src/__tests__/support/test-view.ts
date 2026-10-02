@@ -32,7 +32,7 @@ export interface TestViewOptions {
   readonly camera?: Partial<ViewCamera>
   /** Default createSessionPlane({ lon: 0, lat: 0 }). */
   readonly plane?: SessionPlane
-  /** Default: the policy CameraController uses today when constructed without one. */
+  /** Default: the policy CameraController uses today when constructed without one. The host takes its latitude from the plane. */
   readonly policy?: WorkspaceCameraPolicy
   readonly insets?: ScreenInsets
 }

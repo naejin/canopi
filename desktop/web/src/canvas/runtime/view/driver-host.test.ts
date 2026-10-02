@@ -149,40 +149,39 @@ describe('camera driver host', () => {
     view.dispose()
   })
 
-  it('replacePolicy re-constrains the camera to the new bounds about the screen centre', () => {
-    const northern = createWorkspaceCameraPolicy(45)
-    const equatorial = createWorkspaceCameraPolicy(0)
-    const view = createTestView({ policy: northern, viewport: { x: 10, y: -20, scale: cameraScaleBoundsForPolicy(northern).maximum } })
+  it('the policy\'s latitude is the plane\'s: a re-origin moves the scale bounds with it', () => {
+    const first = createSessionPlane({ lon: 2.35, lat: 48.85 })
+    let runtimePlane = first
+    const host = createCameraDriverHost({
+      clock: () => 0,
+      scheduleFrame: () => () => {},
+      timers: { set: () => 0, clear: () => {} },
+      // The zoom range and overview threshold; the latitude given here is not the one the bounds use.
+      policy: createWorkspaceCameraPolicy(0),
+      reducedMotion: signal(false),
+      plane: () => runtimePlane,
+      screen: { width: 400, height: 300, devicePixelRatio: 1 },
+      camera: { x: 40, y: -25, scale: 3, bearingDeg: 0 },
+    })
+    const expectBoundsAt = (lat: number) => {
+      const expected = cameraScaleBoundsForPolicy(createWorkspaceCameraPolicy(lat))
+      const { scaleBounds } = host.frames.viewFrame.peek()
+      expect(scaleBounds.min / expected.minimum).toBeCloseTo(1, 6)
+      expect(scaleBounds.max / expected.maximum).toBeCloseTo(1, 6)
+    }
+    expectBoundsAt(48.85)
+    expect(host.driverDeps.policy().referenceLatitudeDeg).toBe(48.85)
 
-    view.host.replacePolicy(equatorial)
+    // A re-origin far north: the zoom buttons' limits follow the plane the runtime now works in.
+    const next = createSessionPlane({ lon: 2.35, lat: 64.1 })
+    runtimePlane = next
+    host.current().planeChanged(next)
 
-    // Today's CameraController(northern).replacePolicy(equatorial) from the same placement, recorded at 52cbff10.
-    expect(planarCameraOf(view.view())).toEqual({ x: 65.64971157455597, y: 29.79184719828693, scale: 1716.6895781438734, bearingDeg: 0 })
-    const bounds = cameraScaleBoundsForPolicy(equatorial)
-    expect(view.frames.viewFrame.peek().scaleBounds).toEqual({ min: bounds.minimum, max: bounds.maximum })
-    view.dispose()
-  })
-
-  it('replacePolicy during a tween moves nothing, and the tween\'s next frame takes the new bounds', () => {
-    const northern = createWorkspaceCameraPolicy(45)
-    const equatorial = createWorkspaceCameraPolicy(0)
-    const view = createTestView({ policy: northern, viewport: { x: 10, y: -20, scale: cameraScaleBoundsForPolicy(northern).maximum } })
-    view.host.current().apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 90, animation: 'ease' })
-    const turning = view.frames.viewFrame.peek()
-    expect(turning.moving).toBe(true)
-
-    view.host.replacePolicy(equatorial)
-
-    expect(view.frames.viewFrame.peek()).toBe(turning)
-    view.clock.advance(16)
-    const next = view.frames.viewFrame.peek()
-    expect(next.moving).toBe(true)
-    expect(next.scaleBounds.max).toBe(cameraScaleBoundsForPolicy(equatorial).maximum)
-    expect(next.view.pixelsPerMetre).toBeLessThanOrEqual(next.scaleBounds.max * (1 + 1e-12))
-    view.clock.advance(400)
-    expect(view.frames.viewFrame.peek().moving).toBe(false)
-    expect(view.host.current().bearingTarget()).toBe(90)
-    view.dispose()
+    expectBoundsAt(64.1)
+    expect(host.driverDeps.policy().referenceLatitudeDeg).toBe(64.1)
+    // Rebuilt once per plane, not per read.
+    expect(host.driverDeps.policy()).toBe(host.driverDeps.policy())
+    host.dispose()
   })
 
   it('a headless camera follows a new runtime plane and keeps its plane placement; an attached one does not', () => {

@@ -306,21 +306,6 @@ describe('view navigation', () => {
     view.dispose()
   })
 
-  it('clears a temporary bookmark when the generation camera policy changes', () => {
-    const view = createTestView()
-    view.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
-
-    view.host.replacePolicy(createWorkspaceCameraPolicy(45))
-
-    expect(view.navigation.returnFromTemporaryFocus()).toBe(false)
-    // A new focus after the change bookmarks the view it starts from.
-    const before = placement(view)
-    view.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
-    expect(view.navigation.returnFromTemporaryFocus()).toBe(true)
-    expect(placement(view)).toEqual(before)
-    view.dispose()
-  })
-
   it('fits to the scene bounds', () => {
     const view = sceneView(1000, 800, createScene(), { x: 100, y: 0, scale: 8 })
 

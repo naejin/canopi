@@ -2,7 +2,6 @@
 
 import { effect } from '@preact/signals'
 import { describe, expect, it } from 'vitest'
-import { createWorkspaceCameraPolicy } from '../workspace-camera-policy'
 import { CameraController, type CameraViewportSnapshot } from './legacy-camera-facade'
 
 describe('legacy CameraController shim', () => {
@@ -25,22 +24,5 @@ describe('legacy CameraController shim', () => {
     expect(returned).toEqual({ x: 100, y: 0, scale: 8 })
     expect(camera.initialize({ width: 400, height: 300 })).toEqual({ x: 50, y: 0, scale: 3 })
     expect(camera.viewport).toEqual({ x: 50, y: 0, scale: 3 })
-  })
-
-  it('replacePolicy returns the viewport clamped to the new bounds', () => {
-    const camera = new CameraController()
-    camera.initialize({ width: 400, height: 300 })
-    camera.setViewport({ x: 200, y: 150, scale: 1.5e-5 })
-    expect(camera.viewport.scale).toBe(1.5e-5)
-    const revision = camera.snapshot.peek().revision
-
-    // Today's applyPolicy clamped the scale to the new bounds about the screen centre and returned what it published.
-    const returned = camera.replacePolicy(createWorkspaceCameraPolicy(60))
-
-    const minimum = camera.snapshot.peek().scaleBounds.minimum
-    expect(minimum).toBeGreaterThan(1.5e-5)
-    expect(returned).toEqual(camera.viewport)
-    expect(returned).toEqual({ x: 200, y: 150, scale: minimum })
-    expect(camera.snapshot.peek().revision).toBe(revision + 1)
   })
 })

@@ -1664,6 +1664,8 @@ describe('scene canvas runtime', () => {
   it('does not publish a viewport change when document hydration leaves the camera unchanged', async () => {
     const runtime = new SceneCanvasRuntime()
     await initRuntimeWithStubbedRenderer(runtime)
+    // The scale bounds follow the plane's latitude: a first load moves them to the Design's, a second one finds them unchanged.
+    runtime.documentSurface.loadDocument(makeFile())
     const before = runtime.querySurface.viewport.value.revision
 
     runtime.documentSurface.loadDocument(makeFile())

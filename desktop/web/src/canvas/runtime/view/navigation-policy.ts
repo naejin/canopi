@@ -18,7 +18,7 @@ import type { ViewCamera, ViewScreen } from './types'
  * kept: pure, and P4 lets view/ import it). The reference latitude turns zooms into px/m (cameraScaleBoundsForPolicy → ViewFrame.scaleBounds).
  */
 export interface NavigationPolicy {
-  readonly referenceLatitudeDeg: number    // the session plane's latitude; replacePolicy changes it
+  readonly referenceLatitudeDeg: number    // the session plane's latitude (the driver host's, per plane)
   readonly minZoom: number                 // 0
   readonly maxZoom: number                 // 27
   readonly overviewPixelsPerMetre: number  // 0.1

@@ -24,7 +24,6 @@ import {
 import { createMapLibreCameraDriver } from '../../maplibre/camera-driver'
 import type { CameraDriverFailure } from '../../canvas/runtime/view/camera-driver'
 import { createSessionPlane } from '../../canvas/session-plane'
-import { createWorkspaceCameraPolicy } from '../../canvas/workspace-camera-policy'
 
 /**
  * `map-unavailable`: WebGL2 or MapLibre could not start or failed later. No
@@ -177,7 +176,6 @@ export class WorkspaceActivationCoordinator {
       throw error
     }
     if (request !== this.activationRequest || this.disposed) return 'cancelled'
-    this.options.camera.replacePolicy(createWorkspaceCameraPolicy(this.options.readOrigin().lat))
     if (this.mapUnavailable) return 'map-unavailable'
     const current: ActivationGeneration = {
       id: ++this.generation,

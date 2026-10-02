@@ -319,7 +319,6 @@ describe('WorkspaceActivationCoordinator', () => {
     const origin = map.unproject([originPx.x, originPx.y])
     expect(origin.lng).toBeCloseTo(20, 6)
     expect(origin.lat).toBeCloseTo(10, 6)
-    expect(camera.policy.referenceLatitudeDeg).toBe(10)
   })
 
   it('waits for connected shared-layer admission before initializing the runtime', async () => {

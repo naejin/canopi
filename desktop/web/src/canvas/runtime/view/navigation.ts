@@ -74,8 +74,6 @@ interface Placement {
   readonly camera: ViewCamera
   readonly planar: PlanarCamera
   readonly planeRevision: number
-  /** The policy generation it was taken in. */
-  readonly policy: NavigationPolicy
 }
 
 /**
@@ -99,16 +97,7 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
 
   function placementNow(): Placement {
     const { view } = frame()
-    return { camera: view.camera, planar: planarCameraOf(view), planeRevision: view.planeRevision, policy: deps.policy() }
-  }
-
-  /**
-   * The temporary-focus bookmark, unless a new camera policy replaced its generation on the same plane (today's replacePolicy
-   * cleared it). A re-origin changes the plane and then the policy's latitude, and keeps it (today's applyPolicy).
-   */
-  function liveBookmark(): Placement | null {
-    if (bookmark && bookmark.policy !== deps.policy() && bookmark.planeRevision === frame().view.planeRevision) bookmark = null
-    return bookmark
+    return { camera: view.camera, planar: planarCameraOf(view), planeRevision: view.planeRevision }
   }
 
   function restore(placement: Placement): void {
@@ -178,12 +167,12 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
       const bearing = driver().bearingTarget()
       const focused = fitTemporaryBounds(fitFrame(bearing), bounds, options, bearing)
       if (!focused) return false
-      if (!liveBookmark()) bookmark = placementNow()
+      if (!bookmark) bookmark = placementNow()
       place(focused)
       return true
     },
     returnFromTemporaryFocus() {
-      const saved = liveBookmark()
+      const saved = bookmark
       if (!saved) return false
       bookmark = null
       restore(saved)

@@ -156,10 +156,10 @@ export class CameraController implements
    */
   protected ownPlane: SessionPlane
   private readonly _snapshot: Signal<CameraViewportSnapshot>
-  private _policy: WorkspaceCameraPolicy
+  private readonly _policy: WorkspaceCameraPolicy
   /** Today's temporary-focus bookmark, in the plane terms reprojectViewport moves it in. */
   private temporaryFocusBookmark: PlanarCamera | null = null
-  /** Depth of the operations that publish one snapshot for several frames (initialize, a policy change, an attach). */
+  /** Depth of the operations that publish one snapshot for several frames (initialize, a re-origin). */
   private deferredSnapshot = 0
 
   /**
@@ -198,8 +198,6 @@ export class CameraController implements
     })
   }
 
-  get policy(): WorkspaceCameraPolicy { return this._policy }
-
   /** The Scene's plane when a runtime adopted this shim, else null. */
   protected get followedScenePlane(): SessionPlane | null {
     return this.scenePlane?.peek() ?? null
@@ -223,25 +221,6 @@ export class CameraController implements
 
   get frameInsets(): CameraFrameInsets {
     return this.frameNow().insets
-  }
-
-  replacePolicy(policy: WorkspaceCameraPolicy): SceneViewportState {
-    this.clearTemporaryFocus()
-    return this.applyPolicy(policy)
-  }
-
-  /**
-   * Swaps the policy without dropping a temporary focus. A re-origin changes
-   * the reference latitude but not the view the user may return to; the
-   * re-origin reprojects the bookmark instead.
-   */
-  protected applyPolicy(policy: WorkspaceCameraPolicy): SceneViewportState {
-    this.withOneSnapshot(() => {
-      this._policy = policy
-      // The host clamps the scale to the new bounds about the screen centre, as today's applyPolicy did.
-      this.host.replacePolicy(policy)
-    })
-    return this.viewport
   }
 
   initialize(screen: CameraScreenMetrics): SceneViewportState {

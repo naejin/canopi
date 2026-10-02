@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createTestView } from '../../../__tests__/support/test-view'
 import { createSessionPlane, type SessionPlane } from '../../session-plane'
-import { createWorkspaceCameraPolicy } from '../../workspace-camera-policy'
 import type { ViewFrame, ViewTransform } from './types'
 import { planarCameraOf } from './view-transform'
 
@@ -61,10 +60,9 @@ describe('re-origin', () => {
       { paddingCssPx: 24 },
     )).toBe(true)
 
-    // The settled frame re-origins at the new centre, and the policy follows the plane's latitude.
+    // The settled frame re-origins at the new centre.
     const next = createSessionPlane(first.toGeo(view.view().screenToWorld({ x: 200, y: 150 })!))
     view.host.current().planeChanged(next)
-    view.host.replacePolicy(createWorkspaceCameraPolicy(next.origin.lat))
 
     expect(view.navigation.returnFromTemporaryFocus()).toBe(true)
     const returned = view.view().camera

@@ -45,16 +45,8 @@ export class MapLibreWorkspaceCameraOwner extends CameraController {
   refreshOrigin(): void {
     const scenePlane = this.followedScenePlane
     if (!(scenePlane && this.frameNow().attached)) return
-    this.withOneSnapshot(() => {
-      // A re-origin keeps the temporary focus; reprojectViewport moves it into
-      // the new plane. A Document load clears it through its own surface.
-      this.syncPolicyToOrigin(scenePlane.origin)
-      this.driver().planeChanged(scenePlane)
-    })
-  }
-
-  private syncPolicyToOrigin(origin: { readonly lat: number }): void {
-    if (this.policy.referenceLatitudeDeg === origin.lat) return
-    this.applyPolicy(createWorkspaceCameraPolicy(origin.lat))
+    // A re-origin keeps the temporary focus; reprojectViewport moves it into the new plane. A Document load clears it through its
+    // own surface. The scale bounds follow the plane's latitude through the host's policy.
+    this.withOneSnapshot(() => this.driver().planeChanged(scenePlane))
   }
 }

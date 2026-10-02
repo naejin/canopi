@@ -80,8 +80,8 @@
     "name": "view navigation > clears a temporary bookmark during initialization and disposal"
   },
   "src/__tests__/camera-controller.test.ts > CameraController > clears a temporary bookmark when the generation camera policy changes": {
-    "file": "src/canvas/runtime/view/navigation.test.ts",
-    "name": "view navigation > clears a temporary bookmark when the generation camera policy changes"
+    "file": "src/canvas/runtime/document-surface.test.ts",
+    "name": "Scene Canvas document surface lifecycle > clears a temporary focus after successful load or replacement but retains it when replacement is rejected"
   },
   "src/__tests__/camera-controller.test.ts > CameraController > fits to the scene bounds": {
     "file": "src/canvas/runtime/view/navigation.test.ts",

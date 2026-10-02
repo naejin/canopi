@@ -21,6 +21,7 @@ export interface CameraDriverHostOptions {
   readonly scheduleFrame: CameraDriverDeps['scheduleFrame']
   /** The settle timer of the host's own frames (its drivers settle nothing: nobody reads a driver's own settled frame). */
   readonly timers: FrameSourceDeps['timers']
+  /** The zoom range and overview threshold; the reference latitude is options.plane()'s, rebuilt once per plane. */
   readonly policy: WorkspaceCameraPolicy
   readonly reducedMotion: ReadonlySignal<boolean>
   /** The session plane the runtime works in: headless drivers are built on it, and planeChanged is called with it after a re-origin. */
@@ -46,11 +47,24 @@ const EMPTY_SCREEN: ViewScreen = Object.freeze({ width: 0, height: 0, devicePixe
 const TODAY_UNPUBLISHED_CAMERA: PlanarCamera = Object.freeze({ x: 0, y: 0, scale: 1, bearingDeg: 0 })
 
 export function createCameraDriverHost(options: CameraDriverHostOptions): CameraDriverHostController {
-  let navigationPolicy: NavigationPolicy = createNavigationPolicy(options.policy, options.reducedMotion)
+  let policyPlane: SessionPlane | null = null
+  let navigationPolicy: NavigationPolicy | null = null
+  /** The policy at the runtime plane's latitude, so a re-origin moves the scale bounds (and the zoom buttons' limits) with the plane. */
+  function policyNow(): NavigationPolicy {
+    const plane = options.plane()
+    if (!navigationPolicy || plane !== policyPlane) {
+      policyPlane = plane
+      navigationPolicy = createNavigationPolicy(
+        { ...options.policy, referenceLatitudeDeg: plane.origin.lat },
+        options.reducedMotion,
+      )
+    }
+    return navigationPolicy
+  }
   const driverDeps: CameraDriverDeps = Object.freeze({
     clock: options.clock,
     scheduleFrame: options.scheduleFrame,
-    policy: () => navigationPolicy,
+    policy: policyNow,
   })
   const failure = signal<CameraDriverFailure | null>(null)
 
@@ -194,17 +208,6 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
     followPlane(plane) {
       if (disposed || attached || !headlessPlane || plane === headlessPlane) return
       toHeadless(plane, planarCameraOf(frames.viewFrame.peek().view))
-    },
-    replacePolicy(policy) {
-      if (disposed) return
-      navigationPolicy = createNavigationPolicy(policy, options.reducedMotion)
-      const last = frames.viewFrame.peek()
-      // A running tween or flight constrains each of its frames under driverDeps.policy and builds them with its bounds, so it takes
-      // the new policy on its next frame; a move now would stop a flight (a re-origin during a place-search flight).
-      if (last.moving) return
-      // Today's applyPolicy: the scale clamps to the new bounds about the screen centre, and the frame takes the new bounds.
-      const { screen } = last.view
-      live.apply({ kind: 'zoom-around', anchorPx: { x: screen.width / 2, y: screen.height / 2 }, factor: 1 })
     },
     dispose() {
       if (disposed) return

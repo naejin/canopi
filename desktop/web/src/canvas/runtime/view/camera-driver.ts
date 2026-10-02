@@ -2,7 +2,6 @@
 
 import type { ReadonlySignal } from '@preact/signals'
 import type { SessionPlane } from '../../session-plane'
-import type { WorkspaceCameraPolicy } from '../../workspace-camera-policy'
 import type { NavigationPolicy } from './navigation-policy'
 import type { DriverFrameSource, PlanarCamera, ScreenInsets, ScreenPoint, ViewCamera, ViewFrameSource, ViewScreen } from './types'
 
@@ -74,10 +73,6 @@ export interface CameraDriverHost {
   attach(driver: CameraDriver): void
   /** Back to a HeadlessCameraDriver at the last camera; ViewFrame.attached becomes false. */
   detach(): void
-  /** Today's replacePolicy (a new session-plane latitude): the host rebuilds its NavigationPolicy from it and re-constrains the current camera.
-   *  While a tween or flight runs (the frame is moving) it sends no move: the driver constrains its next frame under the new policy,
-   *  so a re-origin during a flight never stops it. */
-  replacePolicy(policy: WorkspaceCameraPolicy): void
   /** The Scene's plane on hydration and on a detached re-origin: a live headless driver keeps its plane placement and takes the new
    *  plane (a headless re-origin is followPlane plus a 'place' move, the same numbers as planeChanged, which only the attached
    *  refreshOrigin calls). The runtime calls it; without it the headless camera would report another plane's ground. */
