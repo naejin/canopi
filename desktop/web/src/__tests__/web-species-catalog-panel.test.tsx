@@ -125,6 +125,7 @@ vi.mock('../canvas/session', () => ({
   currentCanvasToolCommandSurface: mockCanvasSession.currentToolCommandSurface,
   currentCanvasQuerySurface: { value: null },
   currentCanvasTool: { value: 'select' },
+  currentCanvasKeyboardPort: () => null,
 }))
 
 import { WebSpeciesCatalogPanel } from '../web/WebSpeciesCatalogPanel'
