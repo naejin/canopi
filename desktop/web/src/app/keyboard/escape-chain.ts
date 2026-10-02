@@ -75,8 +75,8 @@ const CANVAS_LAYERS: readonly CanvasEscapeLayer[] = ['gesture', 'nudge-series', 
 /**
  * The canvas port's layers (spec §3.7, U10), each live while the port lists it. None runs from a text field, whose own
  * handler cancels its entry (the note editor, Plant a row's spacing field), or under a modal. A live drag, a nudge series,
- * the tool's draft or source and the tool itself run from any other focus; the selection only from the map or with
- * nothing focused, so a side panel keeps the selection it shows. Leaving the tool and clearing the selection take an Esc
+ * the tool's draft or source and the tool itself run from any other focus; the selection only from the map (nothing
+ * focused counts as the map only after a press on it), so a side panel keeps the selection it shows. Leaving the tool and clearing the selection take an Esc
  * with no modifier, as before.
  */
 export function registerCanvasEscapeLayers(canvas: () => CanvasKeyboardPort | null): () => void {
@@ -100,5 +100,5 @@ function admits(layer: CanvasEscapeLayer, { event, focus }: EscapeKey): boolean 
   if (focus === 'modal' || focus === 'text') return false
   if (layer === 'gesture' || layer === 'nudge-series' || layer === 'tool-transient') return true
   if (event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return false
-  return layer === 'tool' || focus === 'map' || focus === 'body'
+  return layer === 'tool' || focus === 'map'
 }

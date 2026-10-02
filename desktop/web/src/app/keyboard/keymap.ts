@@ -18,7 +18,7 @@ export type KeyScope =
   | 'global'          // every focus class except modal; in text only with worksInTextFields (every shell chord, Ctrl+K)
   | 'command'         // anywhere except text fields and dialogs: tool letters, Delete, [ ], N, Ctrl+Z…
   | 'view-arrows'     // like 'command', but not inside an arrow-owning widget
-  | 'canvas-focus'    // focus on the map host (not text or a control inside it) or <body>: arrows, Enter, Backspace, F2, Menu
+  | 'canvas-focus'    // the map host (not text or a control in it), or <body> after a press on the map: arrows, Enter, F2…
 
 /** A shell command, a canvas catalogue command or a canvas key command ('canvas.<CanvasKeyCommand kind>'). */
 type KeyCommandId = ShellCommandId | CanvasCommandId | `canvas.${CanvasKeyCommand['kind']}`

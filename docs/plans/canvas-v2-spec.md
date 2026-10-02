@@ -1443,7 +1443,7 @@ export type KeyScope =
   | 'global'          // every focus class except modal; in text only with worksInTextFields (every shell chord, Ctrl+K)
   | 'command'         // anywhere except text fields and dialogs: tool letters, Delete, [ ], N, Shift+N, Shift+L, Ctrl+Z…
   | 'view-arrows'     // Shift+←/→/↑: like 'command', but not inside an arrow-owning widget
-  | 'canvas-focus'    // focus on the map host (not text inside it) or <body>: plain and mod arrows, Enter, Space, Backspace, F2, + / −, Menu
+  | 'canvas-focus'    // focus on the map host (not text inside it), or <body> after a press on the map: plain and mod arrows, Enter, Space, Backspace, F2, + / −, Menu
 /** A shell command (app/shell-commands), a canvas catalogue command (CanvasCommandId, app/canvas-commands/index.ts: tool letters,
  *  edit.undo, canvas.deleteSelected, view.zoomIn …) or a canvas key command ('canvas.<CanvasKeyCommand kind>'). */
 export type KeyCommandId = ShellCommandId | CanvasCommandId | `canvas.${CanvasKeyCommand['kind']}`
@@ -1541,19 +1541,19 @@ An **arrow-owning widget** is an element with role `listbox`, `menu`, `menubar`,
 
 Resolution order for one keydown. Capture listener:
 1. Composition (`isComposing || keyCode === 229`): return (phase F).
-2. Classify focus: `modal`, `text` (input, textarea, select, contenteditable, the text-entry host), `map` (map host or inside it), `body`, `other` (rail buttons, dock lists, menus, the compass).
-3. Held keys: track modifiers in every class (for `physicalCtrl`); track Space as held only in `map` and `body`, or while a canvas gesture is live; send `keyState` to the canvas port; clear on blur, `visibilitychange` and Meta keyup.
+2. Classify focus: `modal`, `text` (input, textarea, select, contenteditable, the text-entry host), `map` (map host or inside it), `other` (rail buttons, dock lists, menus, the compass). Nothing focused (`<body>`) is `map` when the last pointer press in the document landed in the map host and `other` otherwise, since a click on a dock panel's text also leaves focus on `<body>`; the router records the press at document capture.
+3. Held keys: track modifiers in every class (for `physicalCtrl`); track Space as held only in `map` or with nothing focused (wherever the last press landed), or while a canvas gesture is live; send `keyState` to the canvas port; clear on blur, `visibilitychange` and Meta keyup.
 4. While a pointer gesture or nudge series is live, the canvas port takes the key first whatever the focus (today `keyboard-port.ts:260-277`): Esc runs the `gesture` or `nudge-series` layer. F6 and Shift+F6 cycle regions (today in capture).
 
 Bubble listener, skipped for a key already `defaultPrevented` (an element handler of a focused widget handled it; a widget that calls `stopPropagation` hides the key from these steps, as it hides it from the shell rows today; today's widgets stop propagation on Escape (`InspectionLens.tsx:119`, `PlantColorMenu.tsx:243`, `PlantSymbolMenu.tsx:122`, `PdfPageEditor.tsx:105` and about 15 more), `ToolCard.tsx:240` also on Enter, `SegmentedControl.tsx:52-53` on arrows, Home and End):
 5. Modal: `worksInModal` rows only; nothing else. The modal's element handlers (the story presenter's and the PDF page editor's own `onKeyDown` among them) have already run.
 6. In `text`, the rows with `worksInTextFields`: every shell row but a single key, F2 (rename the Design) included, as before the router, and Ctrl+K; canvas rows stay out. In every other class but `modal`, the `global` rows. Ctrl F is a global row whose command asks the open panel's plant finder first and otherwise opens Edit › Find plants (today `shortcuts/manager.ts:15-20`).
 7. Non-modal pushed scopes: the Stories Undo toast (Ctrl Z while the toast is on screen, today `app/stories/actions.ts` `runStoryUndoShortcut`). Popovers and menus are not scopes: their Esc is an Esc layer (step 8), and their arrows are handled by their own element (arrow-owning widgets).
-8. Esc runs the Esc chain (popovers 100, canvas menu 80, … §3.7). An open text entry never reaches this step: its own element handler cancels it first, and focus class `text` keeps the canvas layers off; the selection layer also needs focus class `map` or `body` (U10).
-9. Keymap match: `command` rows in `map`, `body` and `other`; `view-arrows` the same except in an arrow-owning widget; `canvas-focus` only in `map` and `body`.
+8. Esc runs the Esc chain (popovers 100, canvas menu 80, … §3.7). An open text entry never reaches this step: its own element handler cancels it first, and focus class `text` keeps the canvas layers off; the selection layer also needs focus class `map` (U10).
+9. Keymap match: `command` rows in `map` and `other`; `view-arrows` the same except in an arrow-owning widget; `canvas-focus` only in `map`.
 10. Dispatch: `preventDefault` and `stopPropagation`; canvas commands through the port; a port `command()` that returns false runs the row's `fallback` through the platform's `CommandSink` (Desktop `commands/registry.ts`, Web `web/browser-shell-commands.ts`), and without a fallback the key is not consumed. Each chord has one row per scope; rows are never tried in turn (fixture H27).
 
-Canvas-focus rows run only with focus on the map host or `<body>`, where no widget handler runs, so moving them from today's capture listener to bubble changes no outcome. A focused widget without a role that handles arrows (the scale button, `ZoomControls.tsx:138-143`) runs first and prevents the default, so Shift+↑ on it opens the scale menu and does not reset north. Fixtures I10, I11, I12, I12b and H23–H27 hold the outcomes (§5.8).
+Canvas-focus rows run only with focus on the map host, or on `<body>` after a press on the map, where no widget handler runs, so moving them from today's capture listener to bubble changes no outcome. A focused widget without a role that handles arrows (the scale button, `ZoomControls.tsx:138-143`) runs first and prevents the default, so Shift+↑ on it opens the scale menu and does not reset north. Fixtures I10, I11, I12, I12b and H23–H27 hold the outcomes (§5.8).
 
 Focus after a modal closes stays with `useModalLayer` (it restores the previously focused element, `useModalLayer.ts:25`); it is the one focus mover outside the FocusOwner, for modals.
 
@@ -1899,7 +1899,7 @@ The text entry (note editor, spacing field) is not a layer: its element handler 
 | 30 | selection → clear | something is selected |
 | 25 | raster inspection → end | inspecting |
 
-From F, per layer: the gesture (70), nudge-series (65), tool-transient (60) and tool (50) layers run from every focus class except `text` and `modal`; the selection layer (30) runs only with focus class `map` or `body`, so Esc with focus in a side panel keeps the map selection (U10, user 2026-10-02). No layer closes the dock panel or the phone sheet (U11). Phase 0 keeps today's behaviour. One Esc runs one layer. In overview only layers 100, 70 (a live pan or rotate, or today's interrupted gesture), 30 (from 2, the overview selection) and 25 run; 65, 60 and 50 never run there, so Esc never leaves the tool in overview (today), and the per-tool table below applies in site mode only.
+From F, per layer: the gesture (70), nudge-series (65), tool-transient (60) and tool (50) layers run from every focus class except `text` and `modal`; the selection layer (30) runs only with focus class `map`, so Esc with focus in a side panel keeps the map selection (U10, user 2026-10-02). No layer closes the dock panel or the phone sheet (U11). Phase 0 keeps today's behaviour. One Esc runs one layer. In overview only layers 100, 70 (a live pan or rotate, or today's interrupted gesture), 30 (from 2, the overview selection) and 25 run; 65, 60 and 50 never run there, so Esc never leaves the tool in overview (today), and the per-tool table below applies in site mode only.
 
 The priority table is built in F, the popover layers in the same window as the chain (fixture I8); until then the keyboard port keeps today's Esc order and popovers keep their document listeners. No canvas row matches Esc: `deselect` carries only a key hint (`app/canvas-commands/index.ts:351`) and the canvas rows come from `definition.shortcuts`.
 

@@ -89,12 +89,16 @@ describe('key router', () => {
       // The held keys go on a blur, as on a visibility change.
       ['blur', false],
     ])
-    expect(documentAdd.mock.calls.map(([type]) => type)).toEqual(['visibilitychange'])
+    // The held keys go when the page hides; a press records whether it landed on the map.
+    expect(documentAdd.mock.calls.map(([type, , options]) => [type, capture(options)])).toEqual([
+      ['visibilitychange', false],
+      ['pointerdown', true],
+    ])
     handle.dispose()
     handle.dispose()
     expect(remove.mock.calls.map(([type, listener, options]) => [type, listener, capture(options)])).toEqual(added)
-    expect(documentRemove.mock.calls.map(([type, listener]) => [type, listener]))
-      .toEqual(documentAdd.mock.calls.map(([type, listener]) => [type, listener]))
+    expect(documentRemove.mock.calls.map(([type, listener, options]) => [type, listener, capture(options)]))
+      .toEqual(documentAdd.mock.calls.map(([type, listener, options]) => [type, listener, capture(options)]))
   })
 
   it('keyState runs first for every key, and a held Space stops the key there', () => {
@@ -122,8 +126,43 @@ describe('key router', () => {
     expect(run).not.toHaveBeenCalled()
   })
 
-  it('runs canvas-focus rows on the map and <body>, never from a control', () => {
+  it('with nothing focused, the canvas keys act only when the last press landed on the map', () => {
     install()
+    const dock = document.createElement('section')
+    const text = document.createElement('p')
+    text.textContent = 'Malus domestica'
+    dock.append(text)
+    document.body.append(dock)
+    const pressOn = (target: Element) => target.dispatchEvent(new Event('pointerdown', { bubbles: true, cancelable: true }))
+    const canvasKeys = () => [
+      press({ key: 'ArrowDown' }, document.body),
+      press({ key: 'Enter' }, document.body),
+      press({ key: 'Escape' }, document.body),
+      press({ key: 'ContextMenu' }, document.body),
+    ].map((event) => event.defaultPrevented)
+    fake.state.layers = ['selection']
+
+    // A click on a dock panel's text leaves focus on <body>: the keys are the page's, the selection stays.
+    pressOn(text)
+    expect(canvasKeys()).toEqual([false, false, false, false])
+    expect(fake.port.command).not.toHaveBeenCalled()
+    expect(fake.port.escape).not.toHaveBeenCalled()
+    // Space still pans with nothing focused (spec §1.6, step 3).
+    press({ key: ' ', code: 'Space' }, document.body)
+    expect(fake.port.keyState.mock.lastCall?.[0].onCanvas).toBe(true)
+
+    // After a press on the map, the same keys act on the canvas as before.
+    pressOn(host)
+    expect(canvasKeys()).toEqual([true, true, true, true])
+    expect(fake.port.command.mock.calls.map(([c]) => c.kind)).toEqual(['arrow', 'confirm', 'context-menu'])
+    expect(fake.port.escape).toHaveBeenCalledExactlyOnceWith('selection')
+    press({ key: ' ', code: 'Space' }, document.body)
+    expect(fake.port.keyState.mock.lastCall?.[0].onCanvas).toBe(true)
+  })
+
+  it('runs canvas-focus rows on the map and <body> after a press on the map, never from a control', () => {
+    install()
+    host.dispatchEvent(new Event('pointerdown', { bubbles: true }))
     const button = document.createElement('button')
     document.body.append(button)
 
