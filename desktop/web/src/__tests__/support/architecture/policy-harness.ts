@@ -63,6 +63,7 @@ interface ForbidExportsPolicy {
   readonly kind: 'forbid-exports'
   readonly name: string
   readonly from: readonly string[]
+  readonly exceptFrom?: readonly string[]
   readonly names: readonly string[]
 }
 
@@ -156,6 +157,7 @@ export function collectArchitecturePolicyViolations(
         break
       case 'forbid-exports':
         for (const source of matchingSources(graph, policy.from)) {
+          if (matchesAny(source.path, policy.exceptFrom ?? [])) continue
           for (const name of policy.names) {
             if (source.exportedNames.includes(name)) {
               violations.push(`[${policy.name}] ${source.path} exports forbidden symbol ${name}`)

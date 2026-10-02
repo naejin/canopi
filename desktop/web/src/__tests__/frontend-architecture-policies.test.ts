@@ -1335,6 +1335,13 @@ const SOURCE_TOMBSTONE_POLICIES = [
       // deriving its transform from MapLibre's camera.
       'src/maplibre/view-agreement.ts',
       'src/maplibre/scene-camera-transform.ts',
+      // P11, end of 0E (ADR 0016): the runtime drives its one CameraDriverHost
+      // through ViewNavigation; the legacy facade, the camera module, the
+      // MapLibre shim and the viewport presentation are gone.
+      'src/canvas/runtime/legacy-camera-facade.ts',
+      'src/canvas/runtime/camera.ts',
+      'src/maplibre/workspace-camera.ts',
+      'src/canvas/runtime/renderers/viewport-presentation.ts',
     ],
     symbols: [
       {
@@ -1347,6 +1354,13 @@ const SOURCE_TOMBSTONE_POLICIES = [
         // with scene-interaction.ts and interaction/frame.ts (files above).
         from: ['src/**'],
         names: ['SceneToolAdapter', 'SceneToolPointerEvent', 'SceneInteractionFrame', 'SceneInteractionFrameHandlers'],
+      },
+      {
+        // P11, end of 0E: the shim's origin refresh (the runtime's plane
+        // effect re-origins), the planar hold tolerance and the annotation
+        // screen frame went with the planar camera.
+        from: ['src/**'],
+        names: ['refreshOrigin', 'HOLD_NOISE_DEG', 'getAnnotationScreenFrame'],
       },
     ],
   },
@@ -1868,6 +1882,41 @@ const CANVAS_V2_POLICIES = [
   },
   P2_PROJECTION_POLICY,
   {
+    // Tests included: the legacy camera, its snapshots and the planar camera maths stay deleted (0E).
+    kind: 'forbid-source-symbols',
+    name: 'P3 the legacy camera, its viewport snapshots and the planar camera maths stay deleted',
+    from: ['src/**'],
+    names: [
+      'SceneViewportState', 'deriveSharedMapSceneViewport', 'createMapFrame', 'viewportCenterWorld', 'CameraController',
+      'reprojectPlaneViewport', 'recordResolvedMinimum', 'WorkspaceCameraFrameReader', 'CameraViewportSnapshot',
+      'WorkspaceCameraNavigation', 'WorkspaceCameraOwner', 'MapLibreWorkspaceCameraOwner', 'MapLibreWorkspaceCameraMap',
+      'geographicViewOf', 'legacyCamera', 'fitCameraViewport', 'cameraFramingRect',
+      'buildViewTransformFromPlane', 'viewCameraToPlanar',
+      'reprojectPlanar', 'panPlanar', 'zoomPlanarToScale', 'rotatePlanarAround', 'planarCentredOn',
+    ],
+  },
+  {
+    kind: 'forbid-exports',
+    name: 'P3 only the view transform module exports worldToScreen or screenToWorld',
+    from: ['src/**'],
+    exceptFrom: ['src/canvas/runtime/view/view-transform.ts'],
+    names: ['worldToScreen', 'screenToWorld'],
+  },
+  {
+    // The camera driver builds the frame it publishes; the lens builds its own transform from a camera at its centre;
+    // test support builds one for a test view.
+    kind: 'confine-symbols',
+    name: 'P3 only the view module, the camera driver and the lens build a view transform',
+    from: ['src/**'],
+    names: ['buildViewTransform'],
+    allowedFrom: [
+      'src/canvas/runtime/view/**',
+      'src/maplibre/camera-driver.ts',
+      'src/canvas/runtime/inspection-lens.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+  },
+  {
     // view/ reaches no DOM module, MapLibre, Pixi or scene barrel: outside its own files it imports the pure canvas
     // modules and signals, and scene/types.ts type-only (ScenePersistedState, ScenePlantEntity). Since 0E it calls
     // performance.now, requestAnimationFrame and the window's timers itself (tests use Vitest fake timers), so P4 has
@@ -1913,8 +1962,7 @@ const CANVAS_V2_POLICIES = [
     allowedFrom: ['src/canvas/runtime/tools/tool-host.ts', ...TEST_SOURCE_PATTERNS],
   },
   {
-    // Walks type-only edges too, so tools/tool.ts -> runtime.ts -> camera.ts -> legacy-camera-facade.ts is checked
-    // until 0E removes the facade (spec §1.1b); no exemption.
+    // Walks type-only edges too, so a helper's type import cannot carry MapLibre or Pixi into a tool; no exemption.
     kind: 'forbid-transitive-imports',
     name: 'P5c tools reach no MapLibre or Pixi through other modules',
     from: [TOOLS_SOURCES],
@@ -2491,6 +2539,9 @@ const P1_CAMERA_METHODS = '[P1 only the camera driver calls MapLibre camera meth
 const P1_MAP_RECEIVERS = '[P1 only the camera driver stops, pans, zooms, resizes or resets north a map]'
 const P1_MAP_TYPE = '[P1 the camera driver imports the MapLibre map type]'
 const P2 = '[P2 nobody projects through MapLibre]'
+const P3_SYMBOLS = '[P3 the legacy camera, its viewport snapshots and the planar camera maths stay deleted]'
+const P3_EXPORTS = '[P3 only the view transform module exports worldToScreen or screenToWorld]'
+const P3_BUILDER = '[P3 only the view module, the camera driver and the lens build a view transform]'
 const P4_IMPORTS = '[P4 the view module imports only its pure dependencies]'
 const P5_IMPORTS = '[P5 tools import no MapLibre, DOM or Pixi]'
 const P5_SYMBOLS = '[P5 tools name no DOM event, element or camera]'
@@ -2582,6 +2633,77 @@ describe('canvas v2 policies', () => {
       `${P2} src/maplibre/planted.ts:2 calls this.map?.unproject`,
       `${P2} src/maplibre/planted.ts:3 calls workspaceMap!.project`,
       `${P2} src/maplibre/shared-scene-layer.ts:1 calls map!.project`,
+    ])
+  })
+
+  it('P3 rejects the retired camera symbols anywhere, tests included', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/view/planted.ts', [
+        'export const transform = buildViewTransformFromPlane(plane, viewCameraToPlanar(camera))',
+        'export const moved = panPlanar(zoomPlanarToScale(camera, 4), 1, 2)',
+        '// CameraController and SceneViewportState in a comment are not identifiers',
+      ]),
+      plantedSource('src/app/planted.test.ts', [
+        'const camera = new CameraController()',
+        'export const snapshot: CameraViewportSnapshot = camera.snapshot',
+        "export const name = 'legacyCamera in a string is not an identifier'",
+      ]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P3'))).toEqual([
+      `${P3_SYMBOLS} src/canvas/runtime/view/planted.ts contains forbidden symbol buildViewTransformFromPlane`,
+      `${P3_SYMBOLS} src/canvas/runtime/view/planted.ts contains forbidden symbol viewCameraToPlanar`,
+      `${P3_SYMBOLS} src/canvas/runtime/view/planted.ts contains forbidden symbol panPlanar`,
+      `${P3_SYMBOLS} src/canvas/runtime/view/planted.ts contains forbidden symbol zoomPlanarToScale`,
+      `${P3_SYMBOLS} src/app/planted.test.ts contains forbidden symbol CameraController`,
+      `${P3_SYMBOLS} src/app/planted.test.ts contains forbidden symbol CameraViewportSnapshot`,
+    ])
+  })
+
+  it('P3 rejects a world-to-screen export outside the view transform module', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/view/view-transform.ts', [
+        'export function worldToScreen(p: number) { return p }',
+        'export function screenToWorld(p: number) { return p }',
+      ]),
+      plantedSource('src/canvas/runtime/annotation-layout.ts', [
+        'export function worldToScreen(p: number) { return p }',
+      ]),
+      plantedSource('src/canvas/projection.ts', [
+        'const screenToWorld = (p: number) => p',
+        'export { screenToWorld }',
+      ]),
+      plantedSource('src/canvas/runtime/view/types.ts', [
+        'export interface ViewTransform { worldToScreen(p: number): number }',
+      ]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P3'))).toEqual([
+      `${P3_EXPORTS} src/canvas/runtime/annotation-layout.ts exports forbidden symbol worldToScreen`,
+      `${P3_EXPORTS} src/canvas/projection.ts exports forbidden symbol screenToWorld`,
+    ])
+  })
+
+  it('P3 confines building a view transform to the view module, the camera driver, the lens and tests', () => {
+    const allowed = [
+      'src/canvas/runtime/view/**',
+      'src/maplibre/camera-driver.ts',
+      'src/canvas/runtime/inspection-lens.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ].join(', ')
+    const build = ['export const view = buildViewTransform(camera, screen, plane)']
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/view/headless-driver.ts', build),
+      plantedSource('src/maplibre/camera-driver.ts', build),
+      plantedSource('src/canvas/runtime/inspection-lens.ts', build),
+      plantedSource('src/__tests__/support/test-view.ts', build),
+      plantedSource('src/canvas/runtime/chrome/rulers.ts', build),
+      plantedSource('src/app/canvas-map-surface/planted.ts', build),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P3'))).toEqual([
+      `${P3_BUILDER} src/canvas/runtime/chrome/rulers.ts contains confined symbol buildViewTransform; allowed sources: ${allowed}`,
+      `${P3_BUILDER} src/app/canvas-map-surface/planted.ts contains confined symbol buildViewTransform; allowed sources: ${allowed}`,
     ])
   })
 
@@ -2867,6 +2989,29 @@ describe('canvas v2 policies, end of 0B', () => {
       `${P11} src/canvas/runtime/tools/planted.ts contains retired symbol SceneToolPointerEvent`,
       `${P11} src/canvas/runtime/tools/planted.ts contains retired symbol SceneInteractionFrame`,
       `${P11} src/canvas/runtime/tools/planted.ts contains retired symbol SceneInteractionFrameHandlers`,
+    ])
+  })
+
+  it('P11 rejects the retired camera files and the shim and planar camera symbols', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/legacy-camera-facade.ts', ['export const facade = 1']),
+      plantedSource('src/canvas/runtime/camera.ts', ['export const camera = 1']),
+      plantedSource('src/maplibre/workspace-camera.ts', ['export const shim = 1']),
+      plantedSource('src/canvas/runtime/renderers/viewport-presentation.ts', ['export const presentation = 1']),
+      plantedSource('src/canvas/runtime/view/planted.ts', [
+        'export const HOLD_NOISE_DEG = 1e-9',
+        'export function refreshOrigin() { return getAnnotationScreenFrame() }',
+      ]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, SOURCE_TOMBSTONE_POLICIES)).toEqual([
+      `${P11} retired source still exists: src/canvas/runtime/legacy-camera-facade.ts`,
+      `${P11} retired source still exists: src/canvas/runtime/camera.ts`,
+      `${P11} retired source still exists: src/maplibre/workspace-camera.ts`,
+      `${P11} retired source still exists: src/canvas/runtime/renderers/viewport-presentation.ts`,
+      `${P11} src/canvas/runtime/view/planted.ts contains retired symbol refreshOrigin`,
+      `${P11} src/canvas/runtime/view/planted.ts contains retired symbol HOLD_NOISE_DEG`,
+      `${P11} src/canvas/runtime/view/planted.ts contains retired symbol getAnnotationScreenFrame`,
     ])
   })
 })
