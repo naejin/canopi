@@ -4519,9 +4519,11 @@ describe('SceneInteractionSession', () => {
       // The selected zone's chips, or the dragged guide's length chip, are the host's draft (today's measurement overlay).
       expect(baseDeps.renderer.lastDraft()).not.toBeNull()
 
-      // The ToolHost disposes the tool: both failed aborts (the live drag's cancel, then the tool's transient) are its failure.
+      // The ToolHost disposes the tool: the live drag's cancel fails, the host's own retry inside that same
+      // cancellation (dispose() now guards it like every other cancelLive, per the REFUSED_PRESS fix) fails too,
+      // and so does the tool's own transient cleanup after it.
       expect(() => session.dispose()).toThrow('Tool host disposal failed')
-      expect(abortFailure.abortCalls()).toBe(2)
+      expect(abortFailure.abortCalls()).toBe(3)
       expect(container.querySelector('[data-canvas-handle-layer]')).toBeNull()
       expect(container.querySelector('[data-rotation-handle]')).toBeNull()
       expect(container.querySelector('[data-zone-control-points]')).toBeNull()
