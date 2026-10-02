@@ -86,7 +86,7 @@ export function storedGeo(store: SceneStore, point: { x: number; y: number }) {
 
 export function createPlantPresentationContext(viewportScale: number) {
   return {
-    viewport: { x: 0, y: 0, scale: viewportScale },
+    pixelsPerMetre: viewportScale,
     speciesCache: new Map(),
   }
 }

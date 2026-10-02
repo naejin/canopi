@@ -161,7 +161,7 @@ export interface ToolSceneSourceOptions {
 export function createToolSceneSource(store: SceneStore, options: ToolSceneSourceOptions = {}): ToolSceneSource {
   const speciesCache = options.speciesCache ?? new Map<string, SpeciesCacheEntry>()
   const plantContext = (pixelsPerMetre: number): PlantPresentationContext => ({
-    viewport: { x: 0, y: 0, scale: pixelsPerMetre },
+    pixelsPerMetre,
     speciesCache,
     ...(options.localizedCommonNames ? { localizedCommonNames: options.localizedCommonNames } : {}),
   })

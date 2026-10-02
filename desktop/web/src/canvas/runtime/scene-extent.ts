@@ -39,7 +39,7 @@ export function sceneExtentPoints(
     }
     const plantsAtScale: PlantPresentationContext = {
       ...(plantContext ?? { speciesCache: new Map() }),
-      viewport: { x: 0, y: 0, scale: pixelsPerMetre },
+      pixelsPerMetre,
       plants: scene.plants,
     }
     for (const plant of scene.plants) corners(getPlantWorldBounds(plant, plantsAtScale))
@@ -67,7 +67,7 @@ export function selectionExtentPoints(
     const points: WorldPoint[] = []
     const plantsAtScale: PlantPresentationContext = {
       ...(options.plantContext ?? { speciesCache: new Map() }),
-      viewport: { x: 0, y: 0, scale: pixelsPerMetre },
+      pixelsPerMetre,
       plants: scene.plants,
     }
     let detailAnnotationIds: ReadonlySet<string> | null = null

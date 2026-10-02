@@ -4,13 +4,11 @@ import {
   getStratumColor,
   type PlantLOD,
 } from '../plants'
-import { worldToScreen } from './annotation-layout'
 import {
   resolvePlantSymbolForPlant,
   type PlantSymbolId,
   type ScenePlantEntity,
   type ScenePoint,
-  type SceneViewportState,
 } from './scene'
 import type { SpeciesCacheEntry } from './species-cache'
 import { nearestPlantSpacing } from '../plant-spacing'
@@ -26,7 +24,8 @@ const STACK_BADGE_DIGIT_WIDTH_PX = 7
 const STACK_BADGE_PADDING_PX = 5
 
 export interface PlantPresentationContext {
-  viewport: SceneViewportState
+  /** The view's scale: screen sizes in CSS px turn into metres with it. */
+  pixelsPerMetre: number
   plants?: readonly ScenePlantEntity[]
   speciesCache: ReadonlyMap<string, SpeciesCacheEntry>
   plantSpeciesSymbols?: Readonly<Record<string, string>>
@@ -43,8 +42,6 @@ export interface PlantPresentationEntry {
   usesCanopyRadius: boolean
   stackPriority: number
   lod: PlantLOD
-  /** Screen hit bounds under `PlantPresentationContext.viewport` (annotation-layout's `worldToScreen` until 0E). */
-  hitBoundsScreen: PlantScreenHitBounds
   selected: boolean
 }
 
@@ -99,7 +96,7 @@ export function buildPlantPresentationEntries(
   context: PlantPresentationContext,
   selectedPlantIds: ReadonlySet<string>,
 ): PlantPresentationEntry[] {
-  const lod = getPlantLOD(context.viewport.scale)
+  const lod = getPlantLOD(context.pixelsPerMetre)
   context = { ...context, plants: context.plants ?? plants }
   return plants.map((plant) => {
     const radiusPresentation = resolvePlantRadiusPresentation(plant, context)
@@ -109,7 +106,6 @@ export function buildPlantPresentationEntries(
     const color = resolveDisplayedPlantColor(baseColor, plant.canonicalName, getCanvasPlantDisplay())
     const symbol = resolvePlantSymbolForPlant(plant, context.plantSpeciesSymbols ?? {})
     const selected = selectedPlantIds.has(plant.id)
-    const hitBoundsScreen = plantScreenHitBounds(worldToScreen(plant.position, context.viewport), radiusScreenPx)
     return {
       plant,
       radiusWorld,
@@ -120,7 +116,6 @@ export function buildPlantPresentationEntries(
       usesCanopyRadius: radiusPresentation.usesCanopyRadius,
       stackPriority: getStackPriority(plant, selected),
       lod: radiusScreenPx < 3.6 ? 'dot' : lod,
-      hitBoundsScreen,
       selected,
     }
   })
@@ -150,17 +145,13 @@ export function getPlantWorldBounds(
   }
 }
 
+/** The plant's hit area on screen about `screenPoint`, its position projected through the view. */
 export function getPlantScreenHitBounds(
   plant: ScenePlantEntity,
   context: PlantPresentationContext,
+  screenPoint: ScenePoint,
 ): PlantScreenHitBounds {
-  const screenPoint = worldToScreen(plant.position, context.viewport)
-  const radiusScreenPx = resolvePlantRadiusWorld(plant, context) * context.viewport.scale
-  return plantScreenHitBounds(screenPoint, radiusScreenPx)
-}
-
-function plantScreenHitBounds(screenPoint: ScenePoint, radiusScreenPx: number): PlantScreenHitBounds {
-  const hitRadiusPx = radiusScreenPx + 4
+  const hitRadiusPx = plantHitRadiusPx(plant, context)
   return {
     center: screenPoint,
     radiusPx: hitRadiusPx,
@@ -173,12 +164,17 @@ function plantScreenHitBounds(screenPoint: ScenePoint, radiusScreenPx: number): 
   }
 }
 
+/** The drawn radius plus the interaction padding, in CSS px. */
+function plantHitRadiusPx(plant: ScenePlantEntity, context: PlantPresentationContext): number {
+  return resolvePlantRadiusWorld(plant, context) * context.pixelsPerMetre + 4
+}
+
 export function hitTestPlant(
   plant: ScenePlantEntity,
   point: ScenePoint,
   context: PlantPresentationContext,
 ): boolean {
-  const radiusWorld = getPlantScreenHitBounds(plant, context).radiusPx / Math.max(context.viewport.scale, 0.001)
+  const radiusWorld = plantHitRadiusPx(plant, context) / Math.max(context.pixelsPerMetre, 0.001)
   const dx = point.x - plant.position.x
   const dy = point.y - plant.position.y
   return dx * dx + dy * dy <= radiusWorld * radiusWorld
@@ -269,7 +265,7 @@ function resolvePlantRadiusPresentation(
   plant: ScenePlantEntity,
   context: PlantPresentationContext,
 ): { radiusWorld: number; radiusScreenPx: number; usesCanopyRadius: boolean } {
-  const scale = Math.max(context.viewport.scale, .001)
+  const scale = Math.max(context.pixelsPerMetre, .001)
   const spacing = context.plants ? nearestPlantSpacing(context.plants, plant.position) : Infinity
   // Display › Symbol size scales the footprint, so drawing, hit testing and bounds agree.
   const radiusScreenPx = Math.max(.65, Math.min(getSymbolicPlantRadiusScreenPx(scale), spacing * scale * .42)

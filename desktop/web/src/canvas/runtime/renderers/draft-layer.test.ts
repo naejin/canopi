@@ -342,7 +342,7 @@ describe('draft layer', () => {
     expect(paints(zoneGhost, 'fill')).toEqual([expect.objectContaining({ color: pixiColor(zoneFill), alpha: 0.2 * cssAlpha(zoneFill) })])
     expect(paints(zoneGhost, 'stroke')).toEqual([expect.objectContaining({ color: pixiColor(getCanvasColor('zone-stroke')), width: 2 / 14 })])
 
-    const { textOpacity, markerOpacity } = getAnnotationPresentation(createNote(), { x: 0, y: 0, scale: 14 })
+    const { textOpacity, markerOpacity } = getAnnotationPresentation(createNote(), 14)
     expect(textOpacity).toBeGreaterThan(0)
     expect(markerOpacity).toBeGreaterThan(0)
     expect(noteText!.alpha).toBeCloseTo(0.62 * textOpacity)
@@ -355,7 +355,7 @@ describe('draft layer', () => {
 
     // Far out the scene shows a note as its marker only, as today's drop ghost did.
     layer.setView(at({ x: 0, y: 0 }, 0.5))
-    expect(getAnnotationPresentation(createNote(), { x: 0, y: 0, scale: 0.5 }).textOpacity).toBe(0)
+    expect(getAnnotationPresentation(createNote(), 0.5).textOpacity).toBe(0)
     const [, marker, ...noTextFar] = layer.billboardDraftRoot.children
     expect(marker).toBeInstanceOf(Graphics)
     expect(marker!.alpha).toBeCloseTo(1)
@@ -363,7 +363,7 @@ describe('draft layer', () => {
 
     // Closer in it is the note's text, turned by its rotation, and no marker.
     layer.setView(at({ x: 0, y: 0 }, 40))
-    expect(getAnnotationPresentation(createNote(), { x: 0, y: 0, scale: 40 }).textOpacity).toBe(1)
+    expect(getAnnotationPresentation(createNote(), 40).textOpacity).toBe(1)
     const [, text, ...noMarkerNear] = layer.billboardDraftRoot.children
     expect(text).toBeInstanceOf(Text)
     expect((text as Text).text).toBe('Pond edge')
@@ -386,7 +386,7 @@ describe('draft layer', () => {
     expect(dot!.alpha).toBe(0.35)
     expect(dot!.filters ?? []).toEqual([])
     const entry = buildPlantPresentationEntries([plant], {
-      plants: snapshot.scene.plants, viewport: { x: 0, y: 0, scale: 30 }, speciesCache: snapshot.speciesCache,
+      plants: snapshot.scene.plants, pixelsPerMetre: 30, speciesCache: snapshot.speciesCache,
     }, new Set())[0]!
     const fills = paintInstructions(dot as Graphics, 'fill')
     expect(fills).toHaveLength(1)
@@ -406,7 +406,7 @@ describe('draft layer', () => {
     layer.setView(at({ x: 10, y: 20 }, 30))
 
     const radiusAt = (plant: ScenePlantEntity) => buildPlantPresentationEntries([plant], {
-      plants: snapshot.scene.plants, viewport: { x: 0, y: 0, scale: 30 }, speciesCache: snapshot.speciesCache,
+      plants: snapshot.scene.plants, pixelsPerMetre: 30, speciesCache: snapshot.speciesCache,
     }, new Set())[0]!.radiusScreenPx
     expect(radiusAt(source)).toBeLessThan(radiusAt(ghost))
 
@@ -431,7 +431,7 @@ describe('draft layer', () => {
     layer.setView(at({ x: 10, y: 20 }, 30))
 
     const presented = buildPlantPresentationEntries([source], {
-      plants: snapshot.scene.plants, viewport: { x: 0, y: 0, scale: 30 }, speciesCache: snapshot.speciesCache,
+      plants: snapshot.scene.plants, pixelsPerMetre: 30, speciesCache: snapshot.speciesCache,
     }, new Set())[0]!.radiusScreenPx
     expect(presented).toBeLessThan(2)
 

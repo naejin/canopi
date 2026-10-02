@@ -90,7 +90,7 @@ function readModel(scene: ScenePersistedState, selectedTargets: readonly SceneDe
   return getDesignObjectSelectionModel(scene, selectedTargets, {
     annotationViewportScale: 1,
     plantContext: {
-      viewport: { x: 0, y: 0, scale: 1 },
+      pixelsPerMetre: 1,
       speciesCache: new Map(),
       localizedCommonNames: new Map(),
     },

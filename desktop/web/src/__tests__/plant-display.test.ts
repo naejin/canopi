@@ -144,9 +144,9 @@ describe('plant display rules', () => {
 
   it('draws, hit tests and prints with the display colour and size, never changing stored colours', () => {
     const plants = [plant('a', 'Malus domestica', 0), plant('b', 'Mentha spicata', 40)]
-    const context = { plants, viewport: { x: 0, y: 0, scale: 20 }, speciesCache: new Map() }
+    const context = { plants, pixelsPerMetre: 20, speciesCache: new Map() }
     const before = buildPlantPresentationEntries(plants, context, new Set())
-    const hitBefore = getPlantScreenHitBounds(plants[0]!, context).radiusPx
+    const hitBefore = getPlantScreenHitBounds(plants[0]!, context, plants[0]!.position).radiusPx
 
     const display: PlantDisplay = normalizePlantDisplay({
       colorBy: 'stratum',
@@ -159,7 +159,7 @@ describe('plant display rules', () => {
     expect(after.map((entry) => entry.color)).toEqual([STRATUM_DISPLAY_COLORS.emergent, NO_STRATUM_DISPLAY_COLOR])
     expect(after.map((entry) => entry.baseColor)).toEqual(['#3E8E4E', '#3E8E4E'])
     expect(after[0]!.radiusScreenPx).toBeCloseTo(before[0]!.radiusScreenPx * 1.5)
-    expect(getPlantScreenHitBounds(plants[0]!, context).radiusPx - 4).toBeCloseTo((hitBefore - 4) * 1.5)
+    expect(getPlantScreenHitBounds(plants[0]!, context, plants[0]!.position).radiusPx - 4).toBeCloseTo((hitBefore - 4) * 1.5)
     expect(plants.every((entry) => entry.color === '#3E8E4E')).toBe(true)
     expect(resolvePlantDisplayColor(plants[1]!, new Map())).toBe(NO_STRATUM_DISPLAY_COLOR)
 

@@ -119,7 +119,7 @@ export function createDraftScenePainters(getSnapshot: () => SceneRendererSnapsho
       const presented = mark === 'dot' && sizeFrom ? { ...plant, position: sizeFrom } : plant
       const [entry] = buildPlantPresentationEntries([presented], {
         plants: snapshot.scene.plants,
-        viewport: { x: 0, y: 0, scale },
+        pixelsPerMetre: scale,
         speciesCache: snapshot.speciesCache,
         plantSpeciesSymbols: snapshot.scene.plantSpeciesSymbols,
         localizedCommonNames: snapshot.localizedCommonNames,
@@ -133,7 +133,7 @@ export function createDraftScenePainters(getSnapshot: () => SceneRendererSnapsho
     drawNoteGhost(text, marker, annotation, scale) {
       if (annotation.annotationType !== 'text') return null
       const { textFrame, textOpacity, markerOpacity, markerPaths, markerStrokePx } =
-        getAnnotationPresentation(annotation, { x: 0, y: 0, scale })
+        getAnnotationPresentation(annotation, scale)
       // The note's own angle; the draft layer turns it with the map.
       styleAnnotationText(text, annotation, textFrame.lineHeightPx, 0)
       // Today's ghost marker has no halo.

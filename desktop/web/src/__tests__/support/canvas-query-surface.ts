@@ -90,7 +90,7 @@ export function createTestCanvasQuerySurface({
     getPlantLabelCoverage: () => plantLabelCoverage,
     capturePrintSnapshot: () => {
       void admissionRevision.value
-      return settled ? buildCanvasPrintSnapshot(scene, { viewport: placement, speciesCache: new Map() }) : null
+      return settled ? buildCanvasPrintSnapshot(scene, { pixelsPerMetre: placement.scale, speciesCache: new Map() }) : null
     },
     captureViewScene: (request) => {
       void admissionRevision.value

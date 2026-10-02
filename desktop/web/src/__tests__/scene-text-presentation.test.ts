@@ -9,9 +9,9 @@ describe('scene text presentation', () => {
   it('keeps marker geometry upright and switches to authored rotated text at half opacity', () => {
     const note = { ...createZoomCalibrationScene('garden').annotations[1]!, position: { x: 10, y: 20 }, rotationDeg: 90 }
     expect(getAnnotationVisualWorldBounds(note, 4)).toEqual({ x: 9, y: 19, width: 2, height: 2 })
-    expect(getAnnotationPresentation(note, { x: 0, y: 0, scale: 13.99 }).markerOwnsGeometry).toBe(true)
-    expect(getAnnotationPresentation(note, { x: 0, y: 0, scale: 14 }).markerOwnsGeometry).toBe(false)
-    expect(getAnnotationPresentation(note, { x: 0, y: 0, scale: 4 }, true)).toMatchObject({ textOpacity: 1, markerOpacity: 0, markerOwnsGeometry: false })
+    expect(getAnnotationPresentation(note, 13.99).markerOwnsGeometry).toBe(true)
+    expect(getAnnotationPresentation(note, 14).markerOwnsGeometry).toBe(false)
+    expect(getAnnotationPresentation(note, 4, true)).toMatchObject({ textOpacity: 1, markerOpacity: 0, markerOwnsGeometry: false })
   })
 
   it('projects a direct singleton Annotation reveal without revealing group or mixed selection', () => {

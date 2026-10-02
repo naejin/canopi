@@ -157,7 +157,7 @@ function drawPlants(
   })
   const entries = buildPlantPresentationEntries(visiblePlants, {
     plants: snapshot.scene.plants,
-    viewport: { x: 0, y: 0, scale },
+    pixelsPerMetre: scale,
     speciesCache: snapshot.speciesCache,
     plantSpeciesSymbols: snapshot.scene.plantSpeciesSymbols,
     localizedCommonNames: snapshot.localizedCommonNames,

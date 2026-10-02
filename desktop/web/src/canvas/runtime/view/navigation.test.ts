@@ -79,7 +79,7 @@ function boundsOf(scene: ScenePersistedState, emptySceneScale?: number): SceneBo
         points.push({ x: box.x, y: box.y }, { x: box.x + box.width, y: box.y + box.height })
       }
       for (const plant of scene.plants) {
-        corners(getPlantWorldBounds(plant, { viewport: { x: 0, y: 0, scale: pixelsPerMetre }, speciesCache: new Map(), plants: scene.plants }))
+        corners(getPlantWorldBounds(plant, { pixelsPerMetre, speciesCache: new Map(), plants: scene.plants }))
       }
       for (const zone of scene.zones) {
         const box = getZoneWorldBounds(zone)
