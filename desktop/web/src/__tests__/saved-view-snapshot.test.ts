@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Signal } from '@preact/signals'
-import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
-import { mapZoomToFitExtent, type SessionPlane } from '../canvas/session-plane'
+import { mapZoomToFitExtent } from '../canvas/session-plane'
 import type { ViewSnapshotCapture, ViewSnapshotRequest } from '../maplibre/view-snapshot-map'
 
 const snapshotOwner = vi.hoisted(() => ({
@@ -75,13 +73,13 @@ function withBackground(background: SavedView['visible_layers']['background']): 
   return { ...VIEW, visible_layers: { ...VIEW.visible_layers, background } }
 }
 
-function queries() {
+function queries(screen?: { readonly width: number; readonly height: number }) {
   const scene = createDefaultScenePersistedState()
   scene.layers = [
     { kind: 'layer', name: 'plants', visible: false, locked: false, opacity: 1 },
     { kind: 'layer', name: 'zones', visible: true, locked: false, opacity: 1 },
   ]
-  return createTestCanvasQuerySurface({ scene, viewport: { x: 200, y: 150, scale: 3 } })
+  return createTestCanvasQuerySurface({ scene, placement: { x: 200, y: 150, scale: 3 }, ...(screen ? { screen } : {}) })
 }
 
 function design(): CanopiFile {
@@ -143,14 +141,12 @@ describe('saved view snapshot request', () => {
   })
 
   it('keeps the view zoom when the workspace has no size and clamps to the map range', () => {
-    const surface = queries()
-    const screen = surface.viewport as Signal<CameraViewportSnapshot>
-    screen.value = { ...screen.value, screenSize: { width: 0, height: 0 } }
+    const surface = queries({ width: 0, height: 0 })
     const context = { queries: surface, mapLayers: createDefaultMapLayers(), locale: 'en', plantLabels: 'names' as const }
     expect(describeSavedViewSnapshot(VIEW, { width: 320, height: 200 }, context)!.camera.zoom).toBe(19)
     const deep = { ...VIEW, camera: { ...VIEW.camera, zoom: 27 } }
-    screen.value = { ...screen.value, screenSize: { width: 100, height: 100 } }
-    expect(describeSavedViewSnapshot(deep, { width: 1600, height: 1000 }, context)!.camera.zoom).toBe(27)
+    const small = { ...context, queries: queries({ width: 100, height: 100 }) }
+    expect(describeSavedViewSnapshot(deep, { width: 1600, height: 1000 }, small)!.camera.zoom).toBe(27)
   })
 
   it('refuses a scene while an edit owns it, and a Design without a map frame', () => {
@@ -159,7 +155,7 @@ describe('saved view snapshot request', () => {
     const request = describeSavedViewSnapshot(VIEW, VIEW_SNAPSHOT_THUMBNAIL, context)!
     surface.setSettled(false)
     expect(() => request.scene.build(createTestRendererView({ x: 0, y: 0, scale: 1 }))).toThrow(ViewSnapshotSceneBusyError)
-    ;(surface.sessionPlane as Signal<SessionPlane | null>).value = null
+    surface.sessionPlane.value = null
     expect(describeSavedViewSnapshot(VIEW, VIEW_SNAPSHOT_THUMBNAIL, context)).toBeNull()
   })
 
@@ -201,7 +197,7 @@ describe('capturing a saved view', () => {
     const showPlace = vi.fn(() => true)
     commands.viewport.showPlace = showPlace
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ commands, queries: surface }))
-    const viewport = surface.viewport.value
+    const camera = surface.view.captureView().camera
     const scene = surface.getSceneSnapshot()
     expect(designSessionStore.designDirty.value).toBe(false)
 
@@ -212,7 +208,7 @@ describe('capturing a saved view', () => {
     expect(snapshotOwner.created).toBe(1)
     expect(snapshotOwner.requests[1]).toMatchObject({ width: 1600, height: 1000, pixelRatio: 2 })
     expect(showPlace).not.toHaveBeenCalled()
-    expect(surface.viewport.value).toBe(viewport)
+    expect(surface.view.captureView().camera).toBe(camera)
     expect(surface.getSceneSnapshot()).toBe(scene)
     expect(surface.getSelection()).toEqual([{ kind: 'zone', id: 'Hedge' }])
     expect(designSessionStore.designDirty.value).toBe(false)

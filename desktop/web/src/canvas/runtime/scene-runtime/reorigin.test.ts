@@ -13,6 +13,8 @@ import type { SessionPlane } from '../../session-plane'
 import { createDetachedCanvasRuntimeAppAdapter } from '../app-adapter'
 import { SceneCanvasRuntime } from '../scene-runtime'
 import type { SceneEditCoordinator } from './transactions'
+import type { ViewFrame, ViewFrameSource } from '../view/types'
+import { planarCameraOf } from '../view/view-transform'
 
 function makeFile(): CanopiFile {
   return {
@@ -122,6 +124,11 @@ function sessionPlane(runtime: SceneCanvasRuntime): SessionPlane {
 }
 
 /** Centres the view on a session-plane point at the given scale. */
+/** The runtime camera's live frame. */
+function frameOf(runtime: SceneCanvasRuntime): ViewFrame {
+  return (runtime as unknown as { _construction: { frames: ViewFrameSource } })._construction.frames.viewFrame.peek()
+}
+
 function centreViewOn(runtime: SceneCanvasRuntime, point: { x: number; y: number }, scale = 1): void {
   ;(runtime as any)._camera.setViewport({
     x: SCREEN.width / 2 - point.x * scale,
@@ -173,7 +180,7 @@ describe('session plane re-origin', () => {
       expect(next.origin.lon).toBeCloseTo(expectedOrigin.lon, 9)
       expect(next.origin.lat).toBeCloseTo(expectedOrigin.lat, 9)
       // The camera is reprojected with the plane, so the view stays put.
-      const viewport = runtime.querySurface.viewport.value.viewport
+      const viewport = planarCameraOf(frameOf(runtime).view)
       const centre = {
         x: (SCREEN.width / 2 - viewport.x) / viewport.scale,
         y: (SCREEN.height / 2 - viewport.y) / viewport.scale,
@@ -308,7 +315,7 @@ describe('session plane re-origin', () => {
     try {
       const previous = sessionPlane(runtime)
       centreViewOn(runtime, { x: 500_000, y: 0 }, 0.001)
-      expect(runtime.querySurface.viewport.value.mode).toBe('overview')
+      expect(frameOf(runtime).mode).toBe('overview')
       await settleReorigin()
       expect(sessionPlane(runtime)).toBe(previous)
     } finally {

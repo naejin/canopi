@@ -90,13 +90,3 @@ export function stageScaleToMapZoom(stageScale: number, lat: number): number {
 export function mapZoomToStageScale(mapZoom: number, lat: number): number {
   return MAPLIBRE_WORLD_TILE_SIZE * 2 ** mapZoom * mercatorUnitsPerMeterAtLat(lat)
 }
-
-export function viewportCenterWorld(
-  viewport: { x: number; y: number; scale: number },
-  screenSize: { width: number; height: number },
-): { x: number; y: number } {
-  return {
-    x: (screenSize.width / 2 - viewport.x) / viewport.scale,
-    y: (screenSize.height / 2 - viewport.y) / viewport.scale,
-  }
-}

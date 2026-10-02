@@ -349,7 +349,7 @@ export function createSceneRuntimeConstruction(
   const querySurface = createSceneCanvasQuerySurface({
     revision,
     sceneStore,
-    camera: { snapshot: camera.snapshot, host: cameraHost },
+    frames: cameraHost.frames,
     readViewScale,
     settledReader,
     mutations,

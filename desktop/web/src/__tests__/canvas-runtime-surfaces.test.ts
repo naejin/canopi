@@ -29,17 +29,6 @@ import { createTestViewReadSurface } from './support/canvas-query-surface'
 function createQuerySurface() {
   return {
     revision: { scene: signal(0), plantNames: signal(0) },
-    viewport: signal({
-      viewport: { x: 0, y: 0, scale: 1 },
-      screenSize: { width: 400, height: 300 },
-      devicePixelRatio: 1,
-      referenceScale: 1,
-      scaleBounds: { minimum: 0.00001, maximum: 2000 },
-      overviewScaleThreshold: 0.1,
-      mode: 'site',
-      groundMetersPerCssPixel: null,
-      revision: 0,
-    }),
     sessionPlane: signal(createSessionPlane(DEFAULT_NEW_DESIGN_VIEW)),
     view: createTestViewReadSurface(),
     getSpeciesFocus: () => ({ canonicalName: null }),
@@ -393,7 +382,7 @@ describe('canvas runtime surfaces', () => {
     const querySurface = createQuerySurface()
 
     expect(querySurface.getSceneSnapshot().plants).toEqual([])
-    expect(querySurface.viewport.value.screenSize).toEqual({ width: 400, height: 300 })
+    expect(querySurface.view.captureView().screen).toMatchObject({ width: 400, height: 300 })
     // @ts-expect-error query surfaces cannot issue tool commands.
     querySurface.setTool
     // @ts-expect-error query surfaces cannot replace documents.

@@ -9,7 +9,6 @@ import {
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
 import { currentCanvasSession } from '../canvas/session'
 import { CanvasRuntimeCleanupError } from '../canvas/runtime/cleanup'
-import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
 import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
@@ -951,17 +950,6 @@ function fakeQuerySurface(): CanvasQuerySurface {
       scene: signal(0),
       plantNames: signal(0),
     },
-    viewport: signal<CameraViewportSnapshot>({
-      viewport: { x: 0, y: 0, scale: 1 },
-      screenSize: { width: 800, height: 600 },
-      devicePixelRatio: 1,
-      referenceScale: 1,
-      scaleBounds: { minimum: 0.00001, maximum: 2000 },
-      overviewScaleThreshold: 0.1,
-      mode: 'site',
-      groundMetersPerCssPixel: null,
-      revision: 0,
-    }),
     sessionPlane: signal<SessionPlane | null>(createSessionPlane(TEST_GEO_ORIGIN)),
     view: createTestViewReadSurface(),
     getSpeciesFocus: () => ({ canonicalName: null }),

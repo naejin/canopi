@@ -13,8 +13,6 @@ import {
   geoToMercator,
   mercatorToGeo,
   mercatorUnitsPerMeterAtLat,
-  stageScaleToMapZoom,
-  viewportCenterWorld,
 } from './projection'
 
 export interface GeoPosition {
@@ -62,22 +60,6 @@ export function geographicViewOfCamera(
   const { center, zoom } = camera
   return [center.lon, center.lat, zoom].every(Number.isFinite)
     ? { lon: center.lon, lat: center.lat, zoom }
-    : null
-}
-
-/** The geographic view a plane viewport shows, or null when it is not finite. */
-export function geographicViewOf(
-  frame: {
-    readonly viewport: { readonly x: number; readonly y: number; readonly scale: number }
-    readonly screenSize: { readonly width: number; readonly height: number }
-  },
-  plane: SessionPlane,
-): GeographicView | null {
-  const centre = plane.toGeo(viewportCenterWorld(frame.viewport, frame.screenSize))
-  // Plane metres are scaled at the origin latitude, wherever the view is.
-  const zoom = stageScaleToMapZoom(frame.viewport.scale, plane.origin.lat)
-  return [centre.lon, centre.lat, zoom].every(Number.isFinite)
-    ? { lon: centre.lon, lat: centre.lat, zoom }
     : null
 }
 

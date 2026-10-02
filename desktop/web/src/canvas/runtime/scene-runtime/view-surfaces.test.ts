@@ -10,7 +10,8 @@ import { geoAt } from '../../../__tests__/support/geo-design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-format'
 import type { CanopiFile } from '../../../types/design'
 import { planeViewportCornerBounds } from '../../../__tests__/support/plane-viewport-corners'
-import { geographicViewOf, type GeoPosition } from '../../session-plane'
+import { stageScaleToMapZoom } from '../../projection'
+import type { GeoPosition } from '../../session-plane'
 import type { CameraController } from '../camera'
 import { SceneCanvasRuntime } from '../scene-runtime'
 
@@ -55,11 +56,21 @@ function legacyCamera(runtime: SceneCanvasRuntime): CameraController {
   return (runtime as unknown as { _camera: CameraController })._camera
 }
 
+/** The runtime camera's bearing-0 placement in today's terms. */
+function placementOf(runtime: SceneCanvasRuntime) {
+  return legacyCamera(runtime).viewport
+}
+
 /** Today's reads: the plane viewport interpreted on the Scene's plane (current-view.ts, controller.ts before 0A-2). */
 function todaysCapture(runtime: SceneCanvasRuntime) {
-  const frame = runtime.querySurface.viewport.peek()
+  const viewport = placementOf(runtime)
+  const { width, height } = runtime.querySurface.view.captureView().screen
   const plane = runtime.querySurface.sessionPlane.peek()!
-  return { view: geographicViewOf(frame, plane), extent: planeViewportCornerBounds(frame, plane) }
+  const centre = plane.toGeo({ x: (width / 2 - viewport.x) / viewport.scale, y: (height / 2 - viewport.y) / viewport.scale })
+  return {
+    view: { lon: centre.lon, lat: centre.lat, zoom: stageScaleToMapZoom(viewport.scale, plane.origin.lat) },
+    extent: planeViewportCornerBounds({ viewport, screenSize: { width, height } }, plane),
+  }
 }
 
 describe('the runtime view surfaces', () => {
@@ -76,8 +87,8 @@ describe('the runtime view surfaces', () => {
         const captured = runtime.querySurface.view.captureView()
         // At bearing 0 the headless camera is today's arithmetic, bit for bit.
         expect(captured.camera).toEqual({
-          center: { lon: today.view!.lon, lat: today.view!.lat },
-          zoom: today.view!.zoom,
+          center: { lon: today.view.lon, lat: today.view.lat },
+          zoom: today.view.zoom,
           bearingDeg: 0,
           pitchDeg: 0,
         })
@@ -86,7 +97,7 @@ describe('the runtime view surfaces', () => {
         expect(runtime.querySurface.view.settledCamera.peek()).toBeDefined()
       }
       // The hydration kept the plane placement.
-      expect(runtime.querySurface.viewport.peek().viewport).toEqual({ x: 120.5, y: -40.25, scale: 3.5 })
+      expect(placementOf(runtime)).toEqual({ x: 120.5, y: -40.25, scale: 3.5 })
     } finally {
       runtime.destroy()
     }
@@ -151,7 +162,7 @@ describe('the runtime view surfaces', () => {
       // world-axis box would also reach 29 m down the screen and fit further out.
       const [start, end, , back] = path.points.map((point) => plane.toPlane(point))
       const along = ((end!.x - start!.x) + (end!.y - start!.y)) * Math.SQRT1_2
-      expect(runtime.querySurface.viewport.peek().viewport.scale).toBeCloseTo((SCREEN.width * 0.8) / along, 6)
+      expect(placementOf(runtime).scale).toBeCloseTo((SCREEN.width * 0.8) / along, 6)
       const centre = plane.toPlane(runtime.querySurface.view.captureView().camera.center)
       expect(centre.x).toBeCloseTo((back!.x + end!.x) / 2, 6)
       expect(centre.y).toBeCloseTo((back!.y + end!.y) / 2, 6)
@@ -174,7 +185,7 @@ describe('the runtime view surfaces', () => {
         { center: plane.toGeo(target), zoom: 19, bearingDeg: 30, pitchDeg: 0 },
         { motion: 'jump' },
       )
-      const scale = runtime.querySurface.viewport.peek().viewport.scale
+      const scale = placementOf(runtime).scale
       const lens = runtime.documentSurface.attachInspectionTo(document.createElement('div'))
 
       lens.centerOnCanvas()

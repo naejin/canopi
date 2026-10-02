@@ -90,8 +90,8 @@ describe('canvas icon-only buttons', () => {
       inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panBy: vi.fn(), zoomBy: vi.fn(),
       highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
     }
-    // In overview, so the overview chip shows; its view follows this viewport.
-    const queries = createTestCanvasQuerySurface({ viewport: { x: 200, y: 150, scale: 0.01 } })
+    // In overview, so the overview chip shows; its view follows this placement.
+    const queries = createTestCanvasQuerySurface({ placement: { x: 200, y: 150, scale: 0.01 } })
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       queries: {
         ...queries,

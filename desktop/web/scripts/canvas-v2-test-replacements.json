@@ -700,5 +700,9 @@
   "src/__tests__/v2-shared-camera-transform.test.ts > deriveSharedMapSceneViewport > bounds the discarded affine residual over the qualified local extent": {
     "file": "src/canvas/runtime/view/camera-contract.test.ts",
     "name": "camera contract > the planar and geographic builders agree at bearing 0"
+  },
+  "src/canvas/runtime/scene-runtime.test.ts > scene canvas runtime > publishes zoom and effective resize updates exactly once": {
+    "file": "src/canvas/runtime/scene-runtime.test.ts",
+    "name": "scene canvas runtime > publishes viewport-only camera changes through the canonical snapshot"
   }
 }

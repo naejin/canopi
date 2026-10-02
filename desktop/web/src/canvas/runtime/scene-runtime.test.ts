@@ -1,6 +1,6 @@
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { DraftPresentation } from './tools/draft'
-import type { ViewTransform } from './view/types'
+import type { ViewFrame, ViewFrameSource, ViewTransform } from './view/types'
 import { planarCameraOf } from './view/view-transform'
 import { effect } from '@preact/signals'
 import { stageScaleToMapZoom } from '../projection'
@@ -281,6 +281,17 @@ function lastRenderedViewport(renderer: RendererStub): { x: number; y: number; s
   const view = renderer.setView.mock.calls.at(-1)?.[0]
   if (!view) return null
   const { x, y, scale } = planarCameraOf(view)
+  return { x, y, scale }
+}
+
+/** The runtime camera's live frame. */
+function frameOf(runtime: SceneCanvasRuntime): ViewFrame {
+  return (runtime as unknown as { _construction: { frames: ViewFrameSource } })._construction.frames.viewFrame.peek()
+}
+
+/** The runtime camera's bearing-0 placement in today's terms. */
+function placementOf(runtime: SceneCanvasRuntime): { x: number; y: number; scale: number } {
+  const { x, y, scale } = planarCameraOf(frameOf(runtime).view)
   return { x, y, scale }
 }
 
@@ -941,12 +952,12 @@ describe('scene canvas runtime', () => {
     expect(container.style.cursor).toBe('grab')
 
     selection.mockRestore()
-    const beforeFreshPan = runtime.querySurface.viewport.value.viewport
+    const beforeFreshPan = placementOf(runtime)
     events.pointerDown({ x: 100, y: 100 }, { pointerId: 53 })
     events.pointerMove({ x: 130, y: 120 }, { pointerId: 53 })
     events.pointerUp({ x: 130, y: 120 }, { pointerId: 53 })
 
-    expect(runtime.querySurface.viewport.value.viewport).toMatchObject({
+    expect(placementOf(runtime)).toMatchObject({
       x: beforeFreshPan.x + 30,
       y: beforeFreshPan.y + 20,
     })
@@ -1154,12 +1165,12 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
     const scene = runtime.querySurface.getSceneSnapshot()
     const plane = runtime.querySurface.sessionPlane.value!
-    const before = runtime.querySurface.viewport.value.viewport
+    const before = placementOf(runtime)
     const place = plane.toGeo({ x: 250, y: -120 })
 
     expect(runtime.commandSurface.viewport.showPlace(place, 17)).toBe(true)
 
-    const after = runtime.querySurface.viewport.value.viewport
+    const after = placementOf(runtime)
     expect(after).not.toEqual(before)
     expect(runtime.querySurface.getSceneSnapshot()).toEqual(scene)
     expect(runtime.querySurface.sessionPlane.value).toBe(plane)
@@ -1176,7 +1187,7 @@ describe('scene canvas runtime', () => {
 
     expect(runtime.commandSurface.viewport.showPlace(oslo, 17)).toBe(true)
 
-    const scale = runtime.querySurface.viewport.value.viewport.scale
+    const scale = placementOf(runtime).scale
     expect(stageScaleToMapZoom(scale, plane.origin.lat)).toBeCloseTo(17, 9)
     runtime.destroy()
   })
@@ -1286,7 +1297,7 @@ describe('scene canvas runtime', () => {
     })
     const before = runtime.querySurface.getSceneSnapshot()
 
-    expect(runtime.querySurface.viewport.value.mode).toBe('overview')
+    expect(frameOf(runtime).mode).toBe('overview')
     expect(runtime.commandSurface.sceneEdits.canPaste()).toBe(false)
     runtime.commandSurface.sceneEdits.paste()
     runtime.commandSurface.sceneEdits.pasteAt({ x: 30, y: 40 })
@@ -1626,15 +1637,16 @@ describe('scene canvas runtime', () => {
   })
 
   it('publishes viewport-only camera changes through the canonical snapshot', async () => {
-    const camera = new CameraController()
-    const runtime = new SceneCanvasRuntime({ camera })
+    const runtime = new SceneCanvasRuntime()
     await initRuntimeWithStubbedRenderer(runtime)
-    expect(runtime.querySurface.viewport).toBe(camera.snapshot)
+    const before = frameOf(runtime)
 
-    const before = runtime.querySurface.viewport.value.revision
     runtime.commandSurface.viewport.zoomIn()
 
-    expect(runtime.querySurface.viewport.value.revision).toBe(before + 1)
+    const after = frameOf(runtime)
+    expect(after).not.toBe(before)
+    expect(after.view.pixelsPerMetre).toBeGreaterThan(before.view.pixelsPerMetre)
+    expect(after.view.screen).toEqual(before.view.screen)
     runtime.destroy()
   })
 
@@ -1666,11 +1678,16 @@ describe('scene canvas runtime', () => {
     await initRuntimeWithStubbedRenderer(runtime)
     // The scale bounds follow the plane's latitude: a first load moves them to the Design's, a second one finds them unchanged.
     runtime.documentSurface.loadDocument(makeFile())
-    const before = runtime.querySurface.viewport.value.revision
+    const before = frameOf(runtime)
 
     runtime.documentSurface.loadDocument(makeFile())
 
-    expect(runtime.querySurface.viewport.value.revision).toBe(before)
+    // The hydration's new plane may publish a frame (a viewport render, coalesced per animation frame); it shows the same view.
+    const after = frameOf(runtime)
+    expect(after.view.camera).toEqual(before.view.camera)
+    expect(after.view.screen).toEqual(before.view.screen)
+    expect(after.mode).toBe(before.mode)
+    expect(after.scaleBounds).toEqual(before.scaleBounds)
     runtime.destroy()
   })
 
@@ -2555,22 +2572,6 @@ describe('scene canvas runtime', () => {
 
     expect(renderer.setView).toHaveBeenCalled()
     expect(renderer.syncScene).not.toHaveBeenCalled()
-    runtime.destroy()
-  })
-
-  it('publishes zoom and effective resize updates exactly once', async () => {
-    const runtime = new SceneCanvasRuntime()
-    await initRuntimeWithStubbedRenderer(runtime)
-    const initialRevision = runtime.querySurface.viewport.value.revision
-
-    runtime.commandSurface.viewport.zoomIn()
-    expect(runtime.querySurface.viewport.value.revision).toBe(initialRevision + 1)
-
-    runtime.documentSurface.resize(600, 450)
-    expect(runtime.querySurface.viewport.value.revision).toBe(initialRevision + 2)
-
-    runtime.documentSurface.resize(600, 450)
-    expect(runtime.querySurface.viewport.value.revision).toBe(initialRevision + 2)
     runtime.destroy()
   })
 

@@ -497,7 +497,7 @@ describe('Tool card', () => {
       locating.open!.value = false
       setCanvasRuntimeSurfaces({
         commands: createTestCanvasCommandSurface(),
-        queries: createTestCanvasQuerySurface({ viewport: { x: 0, y: 0, scale: 0.01 } }),
+        queries: createTestCanvasQuerySurface({ placement: { x: 0, y: 0, scale: 0.01 } }),
         documents: createTestCanvasDocumentSurface(),
         keyboard: createTestCanvasKeyboardPort(),
       })

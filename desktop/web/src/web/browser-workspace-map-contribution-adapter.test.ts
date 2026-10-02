@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { effect, signal } from '@preact/signals'
 import { clearPanelOriginTargets, setHoveredPanelTargets } from '../app/panel-targets/presentation'
-import { createTestCanvasQuerySurface } from '../__tests__/support/canvas-query-surface'
-import type { SceneViewportState } from '../canvas/runtime/scene'
+import { createTestCanvasQuerySurface, type TestPlacement } from '../__tests__/support/canvas-query-surface'
 import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
 import { createBrowserWorkspaceMapContributionAdapter } from './browser-workspace-map-contribution-adapter'
 import { setCanvasMapBackdrop } from '../canvas/runtime/scene-visuals'
@@ -11,9 +10,9 @@ afterEach(clearPanelOriginTargets)
 
 function runtimeWithPlane(
   plane: SessionPlane | null,
-  viewport?: SceneViewportState,
+  placement?: TestPlacement,
 ) {
-  return { ...createTestCanvasQuerySurface({ viewport }), sessionPlane: signal(plane) }
+  return createTestCanvasQuerySurface({ placement, sessionPlane: plane })
 }
 
 describe('browser workspace map contribution adapter', () => {

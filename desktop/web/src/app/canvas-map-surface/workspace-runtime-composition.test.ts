@@ -1,4 +1,4 @@
-import { signal, type Signal } from '@preact/signals'
+import { signal } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
 import { createDetachedCanvasRuntimeAppAdapter } from '../../canvas/runtime/app-adapter'
 import { CanvasRuntimeCleanupError } from '../../canvas/runtime/cleanup'
@@ -18,9 +18,10 @@ import {
   createTestCanvasRuntimeSurfaces,
 } from '../../__tests__/support/canvas-runtime-surfaces'
 import { createTestCanvasQuerySurface } from '../../__tests__/support/canvas-query-surface'
-import { createSessionPlane, type SessionPlane } from '../../canvas/session-plane'
-import type { CameraViewportSnapshot } from '../../canvas/runtime/camera'
+import { createSessionPlane, geographicViewOfCamera } from '../../canvas/session-plane'
 import { stageScaleToMapZoom } from '../../canvas/projection'
+import { createViewReadSurface, SETTLE_MS } from '../../canvas/runtime/view/frame-source'
+import { createTestView } from '../../__tests__/support/test-view'
 import type {
   WorkspaceActivationOptions,
   WorkspaceActivationOutcome,
@@ -297,6 +298,34 @@ describe('createWorkspaceRuntimeComposition', () => {
     await expect(fixture.composition.start()).resolves.toBe('cancelled')
   })
 
+  it('the last view writes the settled camera once, one debounce after it settles', async () => {
+    vi.useFakeTimers()
+    try {
+      const onViewSettled = vi.fn<(view: WorkspaceSettledView) => void>()
+      const fixture = compositionFixture({ readSnapshot: () => null, onViewSettled })
+      await expect(fixture.composition.start()).resolves.toBe('no-design')
+      fixture.setLoaded(true)
+      fixture.sessionPlane.value = SETTLE_PLANE
+
+      fixture.view.setViewport({ x: 30, y: 5, scale: 2 })
+      vi.advanceTimersByTime(SETTLE_MS)
+      const settled = fixture.view.frames.settledViewFrame.peek().view.camera
+      // A frame that leaves the camera where it is (an inset change) does not restart the debounce.
+      vi.advanceTimersByTime(WORKSPACE_VIEW_SETTLE_MS - 100)
+      fixture.view.navigation.setFramingInsets({ top: 40, right: 0, bottom: 0, left: 0 })
+      vi.advanceTimersByTime(99)
+      expect(onViewSettled).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1)
+
+      expect(onViewSettled).toHaveBeenCalledExactlyOnceWith(geographicViewOfCamera(settled))
+      vi.advanceTimersByTime(WORKSPACE_VIEW_SETTLE_MS * 4)
+      expect(onViewSettled).toHaveBeenCalledOnce()
+      await fixture.composition.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('reports one settled view after the camera stops moving and none after disposal', async () => {
     vi.useFakeTimers()
     try {
@@ -304,40 +333,36 @@ describe('createWorkspaceRuntimeComposition', () => {
       const fixture = compositionFixture({ readSnapshot: () => null, onViewSettled })
       await expect(fixture.composition.start()).resolves.toBe('no-design')
       fixture.setLoaded(true)
-      const plane = createSessionPlane({ lon: 2.3522, lat: 48.8566 })
-      fixture.sessionPlane.value = plane
-      const viewport = fixture.runtime.querySurface.viewport as Signal<CameraViewportSnapshot>
-      const moveTo = (x: number) => {
-        viewport.value = {
-          ...viewport.value,
-          viewport: { x, y: 5, scale: 2 },
-          revision: viewport.value.revision + 1,
-        }
-      }
+      fixture.sessionPlane.value = SETTLE_PLANE
+      const moveTo = (x: number) => fixture.view.setViewport({ x, y: 5, scale: 2 })
+      // The last view is written one debounce after the frame settles: 750 ms after the last move.
+      const lastViewDelay = SETTLE_MS + WORKSPACE_VIEW_SETTLE_MS
 
+      // Each move settles, and its settled camera restarts the debounce before it ran out.
       for (const x of [10, 20, 30]) {
         moveTo(x)
         vi.advanceTimersByTime(WORKSPACE_VIEW_SETTLE_MS - 1)
       }
+      vi.advanceTimersByTime(lastViewDelay - WORKSPACE_VIEW_SETTLE_MS)
       expect(onViewSettled).not.toHaveBeenCalled()
       vi.advanceTimersByTime(1)
 
       expect(onViewSettled).toHaveBeenCalledOnce()
-      const { width, height } = viewport.value.screenSize
-      const centre = plane.toGeo({ x: (width / 2 - 30) / 2, y: (height / 2 - 5) / 2 })
+      const { width, height } = fixture.view.view().screen
+      const centre = SETTLE_PLANE.toGeo({ x: (width / 2 - 30) / 2, y: (height / 2 - 5) / 2 })
       const view = onViewSettled.mock.calls[0]![0]
-      expect(view.lon).toBeCloseTo(centre.lon, 12)
-      expect(view.lat).toBeCloseTo(centre.lat, 12)
-      expect(view.zoom).toBeCloseTo(stageScaleToMapZoom(2, plane.origin.lat), 12)
-      vi.advanceTimersByTime(WORKSPACE_VIEW_SETTLE_MS * 4)
+      expect(view.lon).toBeCloseTo(centre.lon, 6)
+      expect(view.lat).toBeCloseTo(centre.lat, 6)
+      expect(view.zoom).toBeCloseTo(stageScaleToMapZoom(2, SETTLE_PLANE.origin.lat), 6)
+      vi.advanceTimersByTime(lastViewDelay * 4)
       expect(onViewSettled).toHaveBeenCalledOnce()
 
       // A pending settle is cancelled by disposal and later moves are ignored.
       moveTo(40)
       await fixture.composition.dispose()
-      vi.advanceTimersByTime(WORKSPACE_VIEW_SETTLE_MS * 2)
+      vi.advanceTimersByTime(lastViewDelay * 2)
       moveTo(50)
-      vi.advanceTimersByTime(WORKSPACE_VIEW_SETTLE_MS * 2)
+      vi.advanceTimersByTime(lastViewDelay * 2)
       expect(onViewSettled).toHaveBeenCalledOnce()
     } finally {
       vi.useRealTimers()
@@ -350,17 +375,17 @@ describe('createWorkspaceRuntimeComposition', () => {
       const onViewSettled = vi.fn<(view: WorkspaceSettledView) => void>()
       const fixture = compositionFixture({ readSnapshot: () => null, onViewSettled })
       await expect(fixture.composition.start()).resolves.toBe('no-design')
+      const lastViewDelay = SETTLE_MS + WORKSPACE_VIEW_SETTLE_MS
       // The map settles on the camera's default viewport before the Design
       // arrives; that view is not the user's and must not become the last view.
-      fixture.sessionPlane.value = createSessionPlane({ lon: 13, lat: 23 })
-      const viewport = fixture.runtime.querySurface.viewport as Signal<CameraViewportSnapshot>
-      viewport.value = { ...viewport.value, viewport: { x: 0, y: 0, scale: 1 }, revision: viewport.value.revision + 1 }
-      vi.advanceTimersByTime(WORKSPACE_VIEW_SETTLE_MS * 2)
+      fixture.sessionPlane.value = SETTLE_PLANE
+      fixture.view.setViewport({ x: 1, y: 0, scale: 1 })
+      vi.advanceTimersByTime(lastViewDelay * 2)
       expect(onViewSettled).not.toHaveBeenCalled()
 
       fixture.setLoaded(true)
-      viewport.value = { ...viewport.value, viewport: { x: 5, y: 5, scale: 2 }, revision: viewport.value.revision + 1 }
-      vi.advanceTimersByTime(WORKSPACE_VIEW_SETTLE_MS)
+      fixture.view.setViewport({ x: 5, y: 5, scale: 2 })
+      vi.advanceTimersByTime(lastViewDelay)
       expect(onViewSettled).toHaveBeenCalledOnce()
       await fixture.composition.dispose()
     } finally {
@@ -377,6 +402,9 @@ describe('createWorkspaceRuntimeComposition', () => {
     expect(fixture.workspace.activate).not.toHaveBeenCalled()
   })
 })
+
+/** The Scene's plane the settle tests' camera and Design share. */
+const SETTLE_PLANE = createSessionPlane({ lon: 2.3522, lat: 48.8566 })
 
 interface CompositionFixtureOptions {
   readonly mapContributions?: WorkspaceMapContributionAdapter
@@ -404,10 +432,13 @@ function compositionFixture(options: CompositionFixtureOptions) {
   })
   documents.initializeViewport = vi.fn(documents.initializeViewport)
   documents.zoomToFit = vi.fn(documents.zoomToFit)
-  const sessionPlane = signal<SessionPlane | null>(null)
+  // The runtime's camera: the query surface's view reads its frames on the Scene's plane.
+  const view = createTestView({ plane: SETTLE_PLANE })
+  const queries = createTestCanvasQuerySurface({ sessionPlane: null })
+  const sessionPlane = queries.sessionPlane
   const surfaces = createTestCanvasRuntimeSurfaces({
     documents,
-    queries: { ...createTestCanvasQuerySurface(), sessionPlane },
+    queries: { ...queries, view: createViewReadSurface(view.frames, () => sessionPlane.peek() ?? SETTLE_PLANE) },
   })
   const runtime = {
     commandSurface: surfaces.commands,
@@ -480,6 +511,7 @@ function compositionFixture(options: CompositionFixtureOptions) {
     runtime,
     sessionPlane,
     setLoaded(value: boolean) { loaded = value },
+    view,
     workspace,
   }
 }

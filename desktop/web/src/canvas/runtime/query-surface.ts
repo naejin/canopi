@@ -5,7 +5,6 @@ import { createWorkspaceCameraPolicy, isWorkspaceOverviewScale } from '../worksp
 import type { PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import type { SelectedPlantSymbolContext } from '../plant-symbol-context'
-import type { WorkspaceCameraFrameReader, WorkspaceCameraOwner } from './camera'
 import type {
   CanvasDesignObjects,
   CanvasDesignObjectSelectionModel,
@@ -27,6 +26,7 @@ import { getDesignObjectSelectionModel } from './scene-runtime/selection'
 import type { SettledSceneReader } from './scene-runtime/transactions'
 import { createViewReadSurface } from './view/frame-source'
 import type { ViewReadSurface } from './view/read-surface'
+import type { ViewFrameSource } from './view/types'
 
 /** Overview starts below the policy's threshold, the same at every latitude. */
 const OVERVIEW_POLICY = createWorkspaceCameraPolicy()
@@ -38,8 +38,8 @@ export type PointerWorldSource = (listener: PointerWorldListener) => () => void
 interface SceneCanvasQuerySurfaceOptions {
   readonly revision: CanvasQueryRevision
   readonly sceneStore: SceneStateReader & SceneDocumentReader
-  /** The legacy camera shim; its driver host is unwrapped for `view` and the frame's scale (0A to the end of 0D2). */
-  readonly camera: Pick<WorkspaceCameraFrameReader, 'snapshot'> & Pick<WorkspaceCameraOwner, 'host'>
+  /** The runtime camera's frames: `view`, the label coverage and the frame's scale read them. */
+  readonly frames: ViewFrameSource
   /** The live frame's px/m, which sizes screen-sized notes in the selection model (INV-XF-27). Default: the host's frame. */
   readonly readViewScale?: () => number
   readonly settledReader: SettledSceneReader
@@ -78,7 +78,7 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
   private readonly readViewScale: () => number
 
   constructor(private readonly options: SceneCanvasQuerySurfaceOptions) {
-    const { frames } = options.camera.host
+    const { frames } = options
     // The frames place the Scene's metres; their ground is read on the Scene's plane.
     this.view = createViewReadSurface(frames, () => options.sceneStore.sessionPlane)
     this.readViewScale = options.readViewScale ?? (() => frames.viewFrame.peek().view.pixelsPerMetre)
@@ -99,7 +99,6 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
   }
 
   get revision(): CanvasQueryRevision { return this.options.revision }
-  get viewport(): WorkspaceCameraFrameReader['snapshot'] { return this.options.camera.snapshot }
   get sessionPlane() { return this.options.sceneStore.sessionPlaneSignal }
   capturePrintSnapshot() {
     void this.options.settledReader.revision.value
@@ -124,7 +123,7 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
   getSceneSnapshot(): ScenePersistedState { return this.options.sceneStore.persisted }
   getSpeciesFocus() { return this.options.sceneStore.session.speciesFocus }
   getPlantLabelCoverage(): CanvasPlantLabelCoverage {
-    const { view, mode } = this.options.camera.host.frames.viewFrame.peek()
+    const { view, mode } = this.options.frames.viewFrame.peek()
     const { width, height } = view.screen
     if (mode === 'overview' || width <= 0 || height <= 0) return { labelled: 0, inView: 0 }
     const snapshot = this.options.presentation.buildRendererSnapshot()

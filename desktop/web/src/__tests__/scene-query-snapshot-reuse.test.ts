@@ -1,11 +1,11 @@
 import { signal } from '@preact/signals'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { CameraController } from '../canvas/runtime/camera'
 import { createSceneCanvasQuerySurface } from '../canvas/runtime/query-surface'
 import { SceneStore } from '../canvas/runtime/scene'
 import { SceneHistory } from '../canvas/runtime/scene-history'
 import { SceneRuntimePresentationController } from '../canvas/runtime/scene-runtime/presentation'
 import { SceneRuntimeEditCoordinator } from '../canvas/runtime/scene-runtime/transactions'
+import { createTestView } from './support/test-view'
 
 function setup() {
   const store = new SceneStore()
@@ -18,18 +18,18 @@ function setup() {
     }))
   })
   store.setSelection([{ kind: 'plant', id: '0' }])
-  const camera = new CameraController()
+  const camera = createTestView()
   const authority = new SceneRuntimeEditCoordinator({
     sceneStore: store, history: new SceneHistory(),
     setSelection: (targets) => { store.setSelection(targets) },
     incrementSceneRevision: () => {}, syncCanvasSignalsFromScene: () => {}, invalidate: () => {},
   })
   const presentation = new SceneRuntimePresentationController({
-    sceneStore: store, readPixelsPerMetre: () => camera.viewport.scale, getLocale: () => 'en',
+    sceneStore: store, readPixelsPerMetre: () => camera.view().pixelsPerMetre, getLocale: () => 'en',
     resolveHighlightedTargets: () => ({ plantIds: [], zoneIds: [] }), onPlantNamesChanged: () => {},
   })
   const query = createSceneCanvasQuerySurface({
-    sceneStore: store, camera, settledReader: authority, presentation,
+    sceneStore: store, frames: camera.frames, settledReader: authority, presentation,
     revision: { scene: signal(0), plantNames: signal(0) },
     mutations: {
       getSelectedPlantColorContext: () => { throw new Error('unused') },
@@ -74,7 +74,7 @@ describe('scene query snapshot reuse', () => {
     committed.commit()
     expect(centerX()).toBe(20)
     const before = query.getDesignObjectSelection().bounds!
-    camera.zoomIn()
+    camera.navigation.zoomIn()
     const after = query.getDesignObjectSelection().bounds!
     expect(after.maxX - after.minX).not.toBe(before.maxX - before.minX)
   })

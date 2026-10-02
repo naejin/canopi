@@ -7,7 +7,7 @@ import type {
   CanvasQuerySurface,
   CanvasRuntimeSurfaces,
 } from '../../canvas/runtime/runtime'
-import { bindTestViewToSurface, createTestCanvasQuerySurface } from './canvas-query-surface'
+import { createTestCanvasQuerySurface } from './canvas-query-surface'
 
 type DeepPartial<T> = {
   [K in keyof T]?: T[K] extends object ? Partial<T[K]> : T[K]
@@ -26,8 +26,6 @@ export function createTestCanvasRuntimeSurfaces({
   documents = createTestCanvasDocumentSurface(),
   keyboard = createTestCanvasKeyboardPort(),
 }: TestCanvasRuntimeSurfaceOptions = {}): CanvasRuntimeSurfaces {
-  // A spread fake keeps its original `view`: it follows the fake's replaced `viewport` and `sessionPlane` from here.
-  bindTestViewToSurface(queries)
   return { commands, queries, documents, keyboard }
 }
 

@@ -38,7 +38,7 @@ import { mapAttributionFolded } from '../shell/visible-map-area'
 import type { WorkspaceActivationMapControls, WorkspaceActivationSnapshot } from './workspace-activation'
 import type { WorkspaceMapContributionAdapter, WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import type { MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
-import { DEFAULT_NEW_DESIGN_VIEW, geographicViewOf, type GeographicView } from '../../canvas/session-plane'
+import { DEFAULT_NEW_DESIGN_VIEW, geographicViewOfCamera, type GeographicView } from '../../canvas/session-plane'
 
 export type WorkspaceRuntimeStartOutcome = WorkspaceActivationOutcome | 'no-design'
 
@@ -62,7 +62,8 @@ export interface WorkspaceRuntimeMountOptions {
 /** The geographic view a settled camera shows, for the app's last-view setting. */
 export type WorkspaceSettledView = GeographicView
 
-export const WORKSPACE_VIEW_SETTLE_MS = 750
+/** The last view is written this long after the view's settled camera last changed (the frame settles 150 ms after the last move). */
+export const WORKSPACE_VIEW_SETTLE_MS = 600
 
 export interface WorkspaceRuntimeCompositionOptions {
   readonly container: HTMLElement
@@ -77,7 +78,7 @@ export interface WorkspaceRuntimeCompositionOptions {
   readonly readBackgroundPresentation?: () => ReturnType<typeof readWorkspaceBackgroundPresentation>
   /** Whether the map credits fold into their (i) button; the visible map area decides by default. */
   readonly readAttributionCompact?: () => boolean
-  /** Called once the camera has been still for `WORKSPACE_VIEW_SETTLE_MS` on a Design. */
+  /** Called with the settled camera, `WORKSPACE_VIEW_SETTLE_MS` after it last changed, on a Design. */
   readonly onViewSettled?: (view: WorkspaceSettledView) => void
 }
 
@@ -222,7 +223,7 @@ export function createWorkspaceRuntimeComposition(
         if (options.onViewSettled) {
           const onViewSettled = options.onViewSettled
           disposeSettleEffect = dependencies.installEffect(() => {
-            const frame = runtime.querySurface.viewport.value
+            const camera = runtime.querySurface.view.settledCamera.value
             const plane = runtime.querySurface.sessionPlane.value
             clearSettleTimer()
             if (!plane) return
@@ -231,7 +232,7 @@ export function createWorkspaceRuntimeComposition(
               // Before a Design is loaded and fitted the camera shows its
               // default viewport, which is not a view the user chose.
               if (!documents.hasLoadedDocument()) return
-              const view = geographicViewOf(frame, plane)
+              const view = geographicViewOfCamera(camera)
               if (view) onViewSettled(view)
             }, WORKSPACE_VIEW_SETTLE_MS)
           })

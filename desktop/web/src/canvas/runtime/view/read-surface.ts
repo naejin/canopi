@@ -44,7 +44,7 @@ export interface ViewReadSurface {
   /**
    * Saved-view capture, saved-view snapshot, PDF capture, story restore point: the LIVE frame's camera (viewFrame.peek(),
    * not the settled one), its four-corner ground extent and the screen it was seen on. User-triggered captures record what
-   * is on screen now, as today's `queries.viewport` reads do (current-view.ts:49, :86, snapshot.ts:64, controller.ts:102),
+   * is on screen now, as the camera snapshot's reads did before 0E (current-view.ts:49, :86, snapshot.ts:64, controller.ts:102),
    * so a capture within 150 ms of a pan, zoom or key pan, or during a flight, never records the previous camera. The last
    * view (settings) keeps `settledCamera`, as today.
    */

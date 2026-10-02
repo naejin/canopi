@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { signal } from '@preact/signals'
 import {
   mapZoomToStageScale,
   stageScaleToMapZoom,
@@ -23,7 +22,7 @@ const plane = createSessionPlane({ lon: 2.3522, lat: 48.8566 })
 
 function surfacesFor(view: TestView, sessionPlane: SessionPlane | null) {
   return createTestCanvasRuntimeSurfaces({
-    queries: { ...createTestCanvasQuerySurface(), sessionPlane: signal(sessionPlane) },
+    queries: createTestCanvasQuerySurface({ sessionPlane }),
     commands: createTestCanvasCommandSurface({
       viewport: {
         focusTemporaryBounds: (bounds, options) => view.navigation.focusTemporaryBounds(bounds, options),

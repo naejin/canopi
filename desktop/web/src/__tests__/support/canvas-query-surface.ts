@@ -1,13 +1,11 @@
 import { computeScenePhysicalExtentMeters } from '../../canvas/runtime/scene-physical-extent'
 import { buildCanvasPrintSnapshot } from '../../canvas/runtime/print-snapshot'
 import { createTestSceneRendererSnapshot } from './scene-renderer-snapshot'
-import { computed, signal, type ReadonlySignal } from '@preact/signals'
-import type { CameraViewportSnapshot } from '../../canvas/runtime/camera'
+import { computed, signal, type ReadonlySignal, type Signal } from '@preact/signals'
 import {
   createDefaultScenePersistedState,
   type SceneDesignObjectSelection,
   type ScenePersistedState,
-  type SceneViewportState,
 } from '../../canvas/runtime/scene'
 import type {
   CanvasPlantLabelCoverage,
@@ -17,14 +15,20 @@ import type { PointerWorld } from '../../canvas/runtime/interaction-ports'
 import type { PlacedPlant } from '../../types/design'
 import { createViewReadSurface } from '../../canvas/runtime/view/frame-source'
 import type { ViewReadSurface } from '../../canvas/runtime/view/read-surface'
-import type { ViewFrame, ViewFrameSource } from '../../canvas/runtime/view/types'
+import type { ViewFrame, ViewFrameSource, ViewScreen } from '../../canvas/runtime/view/types'
 import { buildViewTransformFromPlane } from '../../canvas/runtime/view/view-transform'
 import { createSessionPlane, type SessionPlane } from '../../canvas/session-plane'
 import { TEST_GEO_ORIGIN } from './geo-design'
 
+/** A bearing-0 placement in today's terms: screen = world × scale + { x, y }. */
+export interface TestPlacement { readonly x: number; readonly y: number; readonly scale: number }
+
 interface TestCanvasQuerySurfaceOptions {
   readonly scene?: ScenePersistedState
-  readonly viewport?: SceneViewportState
+  /** The view's placement. Default { x: 0, y: 0, scale: 1 }; below 0.1 px/m the view is in overview. */
+  readonly placement?: TestPlacement
+  /** The view's screen in CSS px. Default 400 x 300. */
+  readonly screen?: { readonly width: number; readonly height: number }
   readonly plants?: readonly PlacedPlant[]
   readonly localizedNames?: ReadonlyMap<string, string | null>
   /** English catalog names shown for species with no name in the active locale. */
@@ -36,6 +40,10 @@ interface TestCanvasQuerySurfaceOptions {
 }
 
 export type TestCanvasQuerySurface = CanvasQuerySurface & {
+  /** Writable: the fake's `view` reads its ground on this plane, so a test sets it instead of spreading another signal in. */
+  readonly sessionPlane: Signal<SessionPlane | null>
+  /** Moves the fake's view to this placement, as a camera move would. */
+  setPlacement(placement: TestPlacement): void
   bumpSceneRevision(): void
   bumpPlantNamesRevision(): void
   setSettled(settled: boolean): void
@@ -49,7 +57,8 @@ export type TestCanvasQuerySurface = CanvasQuerySurface & {
 
 export function createTestCanvasQuerySurface({
   scene = createDefaultScenePersistedState(),
-  viewport = { x: 0, y: 0, scale: 1 },
+  placement = { x: 0, y: 0, scale: 1 },
+  screen = DEFAULT_SCREEN,
   plants = [],
   localizedNames = new Map(),
   englishFallbackNames = new Map(),
@@ -60,17 +69,7 @@ export function createTestCanvasQuerySurface({
   const sessionPlaneSignal = signal<SessionPlane | null>(sessionPlane)
   const sceneRevision = signal(0)
   const plantNamesRevision = signal(0)
-  const viewportSnapshot = signal<CameraViewportSnapshot>({
-    viewport,
-    screenSize: { width: 400, height: 300 },
-    devicePixelRatio: 1,
-    referenceScale: 1,
-    scaleBounds: { minimum: 0.00001, maximum: 2000 },
-    overviewScaleThreshold: 0.1,
-    mode: viewport.scale < 0.1 ? 'overview' : 'site',
-    groundMetersPerCssPixel: null,
-    revision: 0,
-  })
+  const placementSignal = signal<TestPlacement>(placement)
   const admissionRevision = signal(0)
   const revision = {
     scene: sceneRevision,
@@ -85,14 +84,13 @@ export function createTestCanvasQuerySurface({
 
   return {
     revision,
-    viewport: viewportSnapshot,
-    view: createBoundTestView(viewportSnapshot, sessionPlaneSignal),
+    view: createFollowingTestView(placementSignal, { ...screen, devicePixelRatio: 1 }, sessionPlaneSignal),
     sessionPlane: sessionPlaneSignal,
     getSpeciesFocus: () => ({ canonicalName: null }),
     getPlantLabelCoverage: () => plantLabelCoverage,
     capturePrintSnapshot: () => {
       void admissionRevision.value
-      return settled ? buildCanvasPrintSnapshot(scene, { viewport, speciesCache: new Map() }) : null
+      return settled ? buildCanvasPrintSnapshot(scene, { viewport: placement, speciesCache: new Map() }) : null
     },
     captureViewScene: (request) => {
       void admissionRevision.value
@@ -151,6 +149,9 @@ export function createTestCanvasQuerySurface({
     },
     getLocalizedCommonNames: () => currentLocalizedNames,
     getEnglishFallbackNames: () => currentEnglishFallbackNames,
+    setPlacement: (next) => {
+      placementSignal.value = next
+    },
     bumpSceneRevision: () => {
       sceneRevision.value += 1
     },
@@ -186,60 +187,44 @@ export function createTestCanvasQuerySurface({
   }
 }
 
-/** A view read surface over the default fake's camera (400 x 300 at the identity viewport), for literal fakes. */
+/** A view read surface over the default fake's camera (400 x 300 at the identity placement), for literal fakes. */
 export function createTestViewReadSurface(): ViewReadSurface {
   return createTestCanvasQuerySurface().view
 }
 
-interface TestViewBinding {
-  readonly snapshot: ReadonlySignal<CameraViewportSnapshot>
-  readonly plane: ReadonlySignal<SessionPlane | null>
-}
-
-const testViewBindings = new WeakMap<ViewReadSurface, ReturnType<typeof signal<TestViewBinding>>>()
+const DEFAULT_SCREEN = Object.freeze({ width: 400, height: 300 })
+const SCALE_BOUNDS = Object.freeze({ min: 0.00001, max: 2000 })
+const OVERVIEW_BELOW_SCALE = 0.1
 const NO_INSETS = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 })
 const FALLBACK_PLANE = createSessionPlane(TEST_GEO_ORIGIN)
 
-/**
- * The fake's `view` follows its own `viewport` and `sessionPlane` signals live, as the runtime's view follows its camera: a
- * bearing-0 frame at the snapshot's placement, settled at once.
- */
-function createBoundTestView(
-  snapshot: ReadonlySignal<CameraViewportSnapshot>,
+/** The fake's `view` follows its placement and `sessionPlane` live, as the runtime's view follows its camera: a bearing-0 frame, settled at once. */
+function createFollowingTestView(
+  placement: ReadonlySignal<TestPlacement>,
+  screen: ViewScreen,
   plane: ReadonlySignal<SessionPlane | null>,
 ): ViewReadSurface {
-  const binding = signal<TestViewBinding>({ snapshot, plane })
-  const viewFrame = computed(() => {
-    const bound = binding.value
-    return testViewFrame(bound.snapshot.value, bound.plane.value ?? FALLBACK_PLANE)
-  })
+  let revision = 0
+  const viewFrame = computed(() => testViewFrame(placement.value, screen, plane.value ?? FALLBACK_PLANE, ++revision))
   const frames: ViewFrameSource = { viewFrame, settledViewFrame: viewFrame, onViewFrame: () => () => {} }
-  const view = createViewReadSurface(frames, () => binding.peek().plane.peek() ?? FALLBACK_PLANE)
-  testViewBindings.set(view, binding)
-  return view
+  return createViewReadSurface(frames, () => plane.peek() ?? FALLBACK_PLANE)
 }
 
-/** A test that spreads a fake and replaces its `viewport` or `sessionPlane` gets a `view` that follows the replacements. */
-export function bindTestViewToSurface(queries: CanvasQuerySurface): void {
-  const binding = testViewBindings.get(queries.view)
-  if (binding) binding.value = { snapshot: queries.viewport, plane: queries.sessionPlane }
-}
-
-function testViewFrame(snapshot: CameraViewportSnapshot, plane: SessionPlane): ViewFrame {
+function testViewFrame(placement: TestPlacement, screen: ViewScreen, plane: SessionPlane, revision: number): ViewFrame {
   const view = buildViewTransformFromPlane({
-    planar: { ...snapshot.viewport, bearingDeg: 0 },
-    screen: { ...snapshot.screenSize, devicePixelRatio: snapshot.devicePixelRatio },
+    planar: { ...placement, bearingDeg: 0 },
+    screen,
     plane,
     planeRevision: 0,
-    revision: snapshot.revision,
+    revision,
   })
   return {
     view,
-    mode: snapshot.mode,
-    scaleBounds: { min: snapshot.scaleBounds.minimum, max: snapshot.scaleBounds.maximum },
+    mode: placement.scale < OVERVIEW_BELOW_SCALE ? 'overview' : 'site',
+    scaleBounds: SCALE_BOUNDS,
     insets: NO_INSETS,
     attached: false,
     moving: false,
-    revision: snapshot.revision,
+    revision,
   }
 }

@@ -94,7 +94,6 @@ export function rotatePlanarAround(camera: PlanarCamera, screen: ViewScreen, anc
 
 /** The one conversion each way: readers' ViewCamera, geographic inputs, and attach and detach (re-origin stays in plane terms: planeChanged). */
 export function planarToViewCamera(camera: PlanarCamera, screen: ViewScreen, plane: SessionPlane): ViewCamera {
-  // At bearing 0 the centre is today's viewportCenterWorld and the zoom today's geographicViewOf.
   const centreWorld = screenToPlaneAxes({
     x: (screen.width / 2 - camera.x) / camera.scale,
     y: (screen.height / 2 - camera.y) / camera.scale,
