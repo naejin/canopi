@@ -1,7 +1,7 @@
 // canvas/runtime/view/navigation.ts  (the camera policy; the only user of CameraDriver; implements RotationSession from read-surface.ts)
 //
 // Owns how the view moves on command: zoom steps, the fits (Fit to Design, Return to Design, zoom to selection, the opening fit),
-// the temporary-focus bookmark, jumps to a place or a camera, key turns, resets, turning to an edge, and rotation sessions. Every
+// the temporary-focus bookmark (LiDAR's Fit to data), jumps to a place or a camera, key turns, resets, turning to an edge, and rotation sessions. Every
 // fit is oriented at its bearing (fit.ts) and lands as a 'set' move to the camera that shows its placement.
 
 import type { ScenePersistedState } from '../scene/types'
@@ -72,14 +72,21 @@ const NO_INSETS: ScreenInsets = Object.freeze({ top: 0, right: 0, bottom: 0, lef
  * `readScene`, so the `scene` arguments name the scene without being read.
  */
 export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
-  /** The view to go back to: a camera, so a re-origin cannot invalidate it. */
+  /**
+   * The view to go back to: the one before the first unreturned temporary focus, a camera so a re-origin cannot invalidate it.
+   * Every move goes through `apply`, which drops it: a pan, zoom, turn, fit or jump is the user going elsewhere, so a later return
+   * frames the Design instead of a stale view. Only a temporary focus and frameBounds keep it across their own move.
+   */
   let bookmark: ViewCamera | null = null
   /** The live rotation session; key turns and resets wait until it ends. */
   let rotation: object | null = null
 
   const frame = () => deps.driver.frames.viewFrame.peek()
   const driver = () => deps.driver.current()
-  const apply = (move: CameraMove): void => driver().apply(move)
+  const apply = (move: CameraMove): void => {
+    bookmark = null
+    driver().apply(move)
+  }
   const jump = (target: ViewCamera): void => apply({ kind: 'set', target, animation: 'none' })
   /** Shows a fit's placement: the camera that puts its centre at the screen centre, at its scale and bearing. */
   const place = (planar: PlanarCamera): void => {
@@ -159,22 +166,24 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
     focusTemporaryBounds(bounds, options) {
       const focused = boundsFraming(bounds, options)
       if (!focused) return false
-      // The latest focus wins: a return lands on the view this focus left.
-      bookmark = frame().view.camera
+      // A chained focus keeps the first one's bookmark: a return lands on the view before the first focus.
+      const saved = bookmark ?? frame().view.camera
       place(focused)
+      bookmark = saved
       return true
     },
     frameBounds(bounds, options) {
       const framed = boundsFraming(bounds, options)
       if (!framed) return false
+      const saved = bookmark   // the plant finder's zoom neither sets nor drops it
       place(framed)
+      bookmark = saved
       return true
     },
     returnFromTemporaryFocus() {
       const saved = bookmark
       if (!saved) return false
-      bookmark = null
-      jump(saved)
+      jump(saved)   // drops the bookmark
       return true
     },
     clearTemporaryFocus() {
@@ -185,7 +194,6 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
       driver().setInsets(valid ? insets : NO_INSETS)
     },
     centerOn(point, pixelsPerMetre, options) {
-      bookmark = null
       const bearing = options?.bearingDeg === undefined || options.bearingDeg === 'keep' ? driver().bearingTarget() : options.bearingDeg
       const { view, attached } = frame()
       apply({
@@ -196,7 +204,6 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
     },
     openAt(_scene, bearingDeg) {
       if (!Number.isFinite(bearingDeg)) return
-      bookmark = null
       const bearing = normaliseBearing(bearingDeg)
       const fitted = fitScene(fitFrame(bearing), extentOf(deps.readScene().bounds), bearing)
       // A fit that kept another bearing turns about the screen centre: the same centre and scale at the opening bearing.
@@ -205,7 +212,6 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
     },
     showPlace(target, zoom, options) {
       if (![target.lon, target.lat, zoom].every(Number.isFinite)) return false
-      bookmark = null
       apply({
         kind: 'set',
         target: { center: { lon: target.lon, lat: target.lat }, zoom, bearingDeg: driver().bearingTarget(), pitchDeg: 0 },
@@ -214,7 +220,6 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
       return true
     },
     showCamera(camera, options) {
-      bookmark = null
       const motion = options?.motion ?? 'jump'
       apply({ kind: 'set', target: camera, animation: motion === 'jump' ? 'none' : motion })
     },

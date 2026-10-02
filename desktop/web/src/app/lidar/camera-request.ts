@@ -29,8 +29,8 @@ export function viewLidarCoverage(bounds: [number, number, number, number]): boo
 }
 
 /**
- * Restores the view the latest coverage focus left; with no bookmark left (a place search, a story step or a saved view dropped
- * it), frames the Design as "Back to my Design" does. False only without a live canvas.
+ * Restores the view before the first coverage focus; with no bookmark left (the user moved the view, or a place search, a story
+ * step or a saved view dropped it), frames the Design as "Back to my Design" does. False only without a live canvas.
  */
 export function viewDesignLocation(): boolean {
   const viewport = getCurrentCanvasViewportCommandSurface()

@@ -209,7 +209,7 @@ export interface ViewCommandSurface {
   zoomToFit(): void                                    // Fit to Design, Home
   zoomToSelection(): void                              // Shift+2
   returnToDesign(): void                               // kept: "Back to my Design"
-  /** Kept: LiDAR's Fit to data. Bookmarks the current view (the latest focus wins), then frames the bounds as frameBounds does. */
+  /** Kept: LiDAR's Fit to data. Bookmarks the current view unless an unreturned focus holds one, then frames the bounds as frameBounds does. */
   focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
   /** Kept: LiDAR's Return to Design. Restores the bookmark; false without one (the caller then calls returnToDesign, 0E). */
   returnFromTemporaryFocus(): boolean
@@ -445,13 +445,14 @@ export interface ViewNavigation extends ViewCommandSurface {
   /** Without arguments (the surface call) the navigation reads the current scene from its construction deps. */
   zoomToFit(scene?: ScenePersistedState, options?: SceneBoundsOptions): void   // keeps the bearing
   returnToDesign(scene?: ScenePersistedState, options?: SceneBoundsOptions): void
-  /** LiDAR's Fit to data. The one bookmark (its ViewCamera; until 0E a Placement with a planar copy and a plane revision) takes the current view, the latest focus
-   *  winning; then the bounds are framed as frameBounds frames them, oriented at the current bearing (the box's four corners are
+  /** LiDAR's Fit to data. The one bookmark (its ViewCamera; until 0E a Placement with a planar copy and a plane revision) takes the current view unless an
+   *  unreturned focus already holds one, so it is the view before the first focus; then the bounds are framed as frameBounds frames them, oriented at the current bearing (the box's four corners are
    *  fitted, not the box on screen axes). The plant finder calls frameBounds, which sets no bookmark (0E). */
   focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
   /** restore(bookmark): its ViewCamera (until 0E its planar copy on its plane revision); false without one. */
   returnFromTemporaryFocus(): boolean
-  /** Design load or replace (document-surface.ts); openAt, centerOn, showPlace and showCamera drop the bookmark too. */
+  /** Design load or replace (document-surface.ts). Every other move drops the bookmark too: manual navigation (pan, zoom, turn, the
+   *  zoom buttons, Fit to Design, Return to Design) and the jumps (openAt, centerOn, showPlace, showCamera); frameBounds keeps it. */
   clearTemporaryFocus(): void
   centerOn(point: WorldPoint, pixelsPerMetre: number, options?: { readonly animate?: boolean; readonly bearingDeg?: number | 'keep' }): void
   /** Opening a Design: oriented fit at the given bearing. */
@@ -561,7 +562,7 @@ Readbacks agree with each other and, attached, with MapLibre's own camera (`view
 |---|---|
 | `CameraController.initialize`: the 100 m start frame; `CanvasDocumentSurface.initializeViewport` and the composition's first-ready pass (`viewportInitialized`, `viewportReady`) that fits again | dropped: no user settles on it, and it likely shows a close-up between two fits; `runtime.init` calls `zoomToFit` (plan §1, exception 3) |
 | the detached reproject (a follow, then a `place`: two frames) | no home of its own: the ordinary re-origin path, the headless driver's `planeChanged` (one frame; on the geographic headless camera it keeps the camera's ground) |
-| the temporary-focus bookmark: the facade's planar copy, moved across a re-origin, the first focus winning | the navigation's one bookmark, its `ViewCamera` (no planar copy), set by `focusTemporaryBounds` (LiDAR's Fit to data) only, the latest focus winning; restored by `restore`, so nothing moves it (plan §1, exception 3) |
+| the temporary-focus bookmark: the facade's planar copy, moved across a re-origin, the first focus winning | the navigation's one bookmark, its `ViewCamera` (no planar copy), set by `focusTemporaryBounds` (LiDAR's Fit to data) only, and only when none is held, so it is the view before the first unreturned focus; restored by `restore`, so nothing moves it; dropped by any manual navigation or jump (plan §1, exception 3) |
 | the plant finder's Zoom to them through `focusTemporaryBounds` | `ViewCommandSurface.frameBounds`: the same `fitTemporaryBounds` maths, no bookmark (plan §1, exception 3) |
 | LiDAR's Return to Design with no bookmark: nothing moves, the button flips back | `app/lidar/camera-request.ts` calls `returnToDesign()` (plan §1, exception 3) |
 | `replacePolicy` (the activation's, the shim's `syncPolicyToOrigin`): the latitude, and dropping the temporary focus | dropped: the host's policy takes the plane's latitude, which keeps the zoom buttons' limits right; a Design load or replace drops the focus |

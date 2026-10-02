@@ -746,7 +746,7 @@
   },
   "src/__tests__/lidar-camera-navigation.test.ts > LiDAR workspace camera navigation > focuses and returns only the live Canvas viewport while retaining the first bookmark": {
     "file": "src/__tests__/lidar-camera-navigation.test.ts",
-    "name": "LiDAR workspace camera navigation > focuses and returns only the live Canvas viewport; the latest fit's bookmark wins"
+    "name": "LiDAR workspace camera navigation > focuses and returns only the live Canvas viewport; Return to Design lands on the view before the first fit"
   },
   "src/__tests__/continuous-save-ui.test.tsx > SaveStatusLabel > says once that a Design from an older format was saved in the current one": {
     "retired": "2.0 breaks stored data (ADR 0021)"

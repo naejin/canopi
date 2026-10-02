@@ -5,6 +5,7 @@ import {
 } from '../canvas/projection'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
+import type { PlanarCamera } from '../canvas/runtime/view/types'
 import { planarCameraOf } from '../canvas/runtime/view/view-transform'
 import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
 import {
@@ -38,6 +39,14 @@ afterEach(() => {
   setCurrentCanvasSession(null)
 })
 
+/** The headless camera is geographic: a placement reads back within 1e-6 px. */
+function expectSamePlacement(actual: PlanarCamera, expected: PlanarCamera): void {
+  expect(actual.x).toBeCloseTo(expected.x, 6)
+  expect(actual.y).toBeCloseTo(expected.y, 6)
+  expect(actual.scale).toBeCloseTo(expected.scale, 9)
+  expect(actual.bearingDeg).toBeCloseTo(expected.bearingDeg, 9)
+}
+
 describe('LiDAR workspace camera navigation', () => {
   it('maps east/west to plane x and north/south to plane y', () => {
     const result = lidarBoundsToLocalWorld([2.34, 48.85, 2.37, 48.87], plane)
@@ -64,7 +73,7 @@ describe('LiDAR workspace camera navigation', () => {
     expect(lidarBoundsToLocalWorld([2.34, 48.85, 2.37, 48.87], null)).toBeNull()
   })
 
-  it('focuses and returns only the live Canvas viewport; the latest fit\'s bookmark wins', () => {
+  it('focuses and returns only the live Canvas viewport; Return to Design lands on the view before the first fit', () => {
     const view = createTestView({ screen: { width: 800, height: 600 }, viewport: { x: 30, y: 40, scale: 2 } })
     const before = planarCameraOf(view.view())
     setCurrentCanvasSession(surfacesFor(view, plane))
@@ -75,9 +84,9 @@ describe('LiDAR workspace camera navigation', () => {
     const firstFocusRevision = view.frames.viewFrame.value.revision
     expect(viewLidarCoverage([2.345, 48.852, 2.35, 48.858])).toBe(true)
     expect(view.frames.viewFrame.value.revision).toBeGreaterThan(firstFocusRevision)
-    // Return to Design lands on the view the latest fit left: here the first fit's coverage.
+    // Fit to data on a second layer keeps the first fit's bookmark: Return to Design lands on the view before both fits.
     expect(viewDesignLocation()).toBe(true)
-    expect(planarCameraOf(view.view())).toEqual(afterFirstFocus)
+    expectSamePlacement(planarCameraOf(view.view()), before)
     // The bookmark is spent: a second Return to Design frames the Design.
     expect(viewDesignLocation()).toBe(true)
     const scaleAtMapZoom18 = mapZoomToStageScale(18, plane.origin.lat)
@@ -102,6 +111,24 @@ describe('LiDAR workspace camera navigation', () => {
     backToMyDesign.navigation.returnToDesign()
     expect(framed).toEqual(planarCameraOf(backToMyDesign.view()))
     backToMyDesign.dispose()
+    view.dispose()
+  })
+
+  it('a pan after Fit to data drops the bookmark: Return to Design frames the Design', () => {
+    const design = { extentPoints: () => [{ x: -60, y: -25 }, { x: 60, y: 25 }] }
+    const view = createTestView({ screen: { width: 800, height: 600 }, viewport: { x: 30, y: 40, scale: 0.5 } })
+    view.setScene(createDefaultScenePersistedState(), design)
+    setCurrentCanvasSession(surfacesFor(view, plane))
+
+    expect(viewLidarCoverage([2.34, 48.85, 2.37, 48.87])).toBe(true)
+    view.navigation.panByPx({ x: 120, y: -40 })
+    expect(viewDesignLocation()).toBe(true)
+
+    const designView = createTestView({ screen: { width: 800, height: 600 }, viewport: { x: 30, y: 40, scale: 0.5 } })
+    designView.setScene(createDefaultScenePersistedState(), design)
+    designView.navigation.returnToDesign()
+    expectSamePlacement(planarCameraOf(view.view()), planarCameraOf(designView.view()))
+    designView.dispose()
     view.dispose()
   })
 

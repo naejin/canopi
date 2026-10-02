@@ -237,13 +237,13 @@ describe('view navigation', () => {
     expectPlacement(afterFirstFocus, { x: 48, y: 74, scale: 3.04, bearingDeg: 0 })
     expect(afterFirstFocus).not.toEqual(before)
 
-    // The latest focus keeps its own bookmark: the view it was taken from, here the first focus's.
+    // A chained focus keeps the bookmark the first one took: a return lands on the view before the first focus.
     expect(view.navigation.focusTemporaryBounds(
       { minX: 300, minY: 100, maxX: 350, maxY: 150 },
       { paddingCssPx: 48, maximumScale: 5 },
     )).toBe(true)
     expect(view.navigation.returnFromTemporaryFocus()).toBe(true)
-    expectPlacement(placement(view), afterFirstFocus)
+    expectPlacement(placement(view), before)
     const returnedRevision = frameOf(view).revision
     expect(view.navigation.returnFromTemporaryFocus()).toBe(false)
     expect(frameOf(view).revision).toBe(returnedRevision)
@@ -266,7 +266,7 @@ describe('view navigation', () => {
     framedView.dispose()
   })
 
-  it('a return lands before the latest focus, whatever frameBounds did in between', () => {
+  it('a return lands before the first focus, whatever frameBounds did in between', () => {
     const view = createTestView({ viewport: { x: 10, y: 20, scale: 2 } })
     const before = placement(view)
     expect(view.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 100, maxY: 50 }, { paddingCssPx: 48 })).toBe(true)
@@ -278,6 +278,29 @@ describe('view navigation', () => {
     expectPlacement(placement(view), before)
     expect(view.navigation.returnFromTemporaryFocus()).toBe(false)
     view.dispose()
+  })
+
+  it('manual navigation and Fit to Design drop the bookmark', () => {
+    const scene = createScene()
+    const moves: ReadonlyArray<readonly [string, (view: TestView) => void]> = [
+      ['pan', (view) => view.navigation.panByPx({ x: 30, y: -12 })],
+      ['wheel or pinch zoom', (view) => view.navigation.zoomAroundPx({ x: 120, y: 80 }, 1.3)],
+      ['zoom in', (view) => view.navigation.zoomIn()],
+      ['zoom out', (view) => view.navigation.zoomOut()],
+      ['zoom by', (view) => view.navigation.zoomBy(2)],
+      ['Fit to Design', (view) => view.navigation.zoomToFit()],
+      ['Return to Design', (view) => view.navigation.returnToDesign()],
+      ['rotate by a key step', (view) => view.navigation.rotateBy(1)],
+      ['turn to an edge', (view) => view.navigation.turnToEdge({ x: 0, y: 0 }, { x: 10, y: 10 })],
+      ['rotate by dragging', (view) => { const session = view.navigation.beginRotation('centre'); session.update(30, { step: false }); session.end() }],
+    ]
+    for (const [name, move] of moves) {
+      const view = sceneView(400, 300, scene, { x: 10, y: 20, scale: 2 })
+      expect(view.navigation.focusTemporaryBounds({ minX: 300, minY: 100, maxX: 350, maxY: 150 }, { paddingCssPx: 48 }), name).toBe(true)
+      move(view)
+      expect(view.navigation.returnFromTemporaryFocus(), name).toBe(false)
+      view.dispose()
+    }
   })
 
   it('rejects invalid temporary bounds without publishing a frame', () => {
