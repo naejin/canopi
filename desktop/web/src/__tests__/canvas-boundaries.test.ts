@@ -140,7 +140,29 @@ const P3B_POLICY = {
   allowlist: { ...P3B_PHASE_1, ...P3B_SIZE_ONLY },
 } as const satisfies RegexPolicy
 
-const REGEX_POLICIES = [...P6_REGEX_POLICIES, P3B_POLICY] as const satisfies readonly RegexPolicy[]
+/** The one owner of window key listeners (spec §1.6): its capture and bubble keydown and capture keyup. */
+const KEY_ROUTER = 'src/app/keyboard/key-router.ts'
+
+/**
+ * P8's regexes (plan §5): a key listener added directly, and a key type passed to a listener helper
+ * (`listen(window, 'keydown', …)`, as the DOM input source did until F). JSX `onKeyDown` is no match.
+ */
+const KEY_LISTENER = new RegExp([
+  /addEventListener\(\s*['"]key(down|up)['"]/,
+  /\b\w+\(\s*[^,()]+,\s*['"]key(down|up)['"]/,
+].map(({ source }) => `(?:${source})`).join('|'), 'g')
+
+const P8_POLICY = {
+  name: 'P8 only the key router adds window key listeners; the chrome files listen on their own elements',
+  pattern: KEY_LISTENER,
+  scope: ['src/**'],
+  // The owner; its keyState(event, 'keydown', …) calls also match the helper form.
+  except: [KEY_ROUTER],
+  // The handles, the note editor and the unlock button take keys on their own elements (inventory INV-KEY-18).
+  allowlist: Object.fromEntries(CHROME_ELEMENT_LISTENERS.map((path) => [path, 1])),
+} as const satisfies RegexPolicy
+
+const REGEX_POLICIES = [...P6_REGEX_POLICIES, P3B_POLICY, P8_POLICY] as const satisfies readonly RegexPolicy[]
 
 let sourcesCache: readonly Source[] | null = null
 
@@ -202,6 +224,7 @@ describe('canvas v2 regex policies', () => {
     expect(paths.some((path) => TEST_SOURCE.test(path))).toBe(false)
     for (const path of Object.keys(P6_COMPONENT_POINTER_LISTENERS)) expect(paths).toContain(path)
     for (const path of Object.keys(P3B_POLICY.allowlist)) expect(paths).toContain(path)
+    expect(paths).toContain(KEY_ROUTER)
   })
 
   for (const policy of REGEX_POLICIES) {
@@ -266,6 +289,24 @@ describe('canvas v2 regex policies', () => {
       { path: 'src/app/canvas-map-surface/planted.ts', text: "container.addEventListener('pointerdown', press, { capture: true })" },
       { path: 'src/app/keyboard/planted.ts', text: "window.addEventListener('keydown', keys)" },
     ])).toEqual({ 'src/app/canvas-map-surface/planted.ts': 1 })
+  })
+
+  it('P8 rejects a planted window, document or helper key listener and a second one in a chrome file', () => {
+    const policy = policyNamed('P8 only the key router adds window key listeners; the chrome files listen on their own elements')
+    expect(regexHits(policy, [
+      { path: 'src/components/canvas/PlantedMenu.tsx', text: "document.addEventListener('keydown', close)" },
+      { path: 'src/app/shell/planted.ts', text: 'window.addEventListener(\n  "keyup", release, true)' },
+      { path: 'src/canvas/runtime/input/planted.ts', text: "listen(window, 'keydown', keys); on(this.host, \"keyup\", up)" },
+      { path: 'src/canvas/runtime/chrome/handle-layer.ts', text: "element.addEventListener('keydown', a)\nelement.addEventListener('keyup', b)" },
+      { path: 'src/components/canvas/Planted.tsx', text: "const x = <div onKeyDown={keys} />\n// window.addEventListener('keydown', keys)" },
+      { path: 'src/web/planted.ts', text: "window.addEventListener('keypress', keys); window.addEventListener('pointerdown', press)" },
+      { path: KEY_ROUTER, text: "deps.target.addEventListener('keydown', capture, true)" },
+    ])).toEqual({
+      'src/components/canvas/PlantedMenu.tsx': 1,
+      'src/app/shell/planted.ts': 1,
+      'src/canvas/runtime/input/planted.ts': 2,
+      'src/canvas/runtime/chrome/handle-layer.ts': 2,
+    })
   })
 
   it('P3b rejects each planted hand-rolled projection, not a comment, the view module or the PDF', () => {

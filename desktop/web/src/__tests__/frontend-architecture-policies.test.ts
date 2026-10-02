@@ -1342,6 +1342,11 @@ const SOURCE_TOMBSTONE_POLICIES = [
       'src/canvas/runtime/camera.ts',
       'src/maplibre/workspace-camera.ts',
       'src/canvas/runtime/renderers/viewport-presentation.ts',
+      // P11, phase F (spec §1.6): one key router owns the window key
+      // listeners and one focus owner holds the F6 regions and the map's focus.
+      'src/app/shell/focus-regions.ts',
+      'src/shortcuts/manager.ts',
+      'src/web/canvas-shortcuts.ts',
     ],
     symbols: [
       {
@@ -1362,7 +1367,28 @@ const SOURCE_TOMBSTONE_POLICIES = [
         from: ['src/**'],
         names: ['refreshOrigin', 'HOLD_NOISE_DEG', 'getAnnotationScreenFrame'],
       },
+      {
+        // P11, phase F: the map takes focus through the focus owner, and the
+        // recogniser has one bindings constant, no frozen legacy copy.
+        from: ['src/**'],
+        names: ['focusMapSurface', 'LEGACY_BINDINGS'],
+      },
     ],
+  },
+  {
+    // P11, phase F: the free focusRegion(id) went with focus-regions.ts. The
+    // focus owner's method keeps the name (spec §1.6), so the tombstone is the
+    // bare call and the export, not the identifier.
+    kind: 'forbid-calls',
+    name: 'Retired frontend seams stay deleted: the free focusRegion is not called',
+    from: ['src/**'],
+    targets: ['focusRegion'],
+  },
+  {
+    kind: 'forbid-exports',
+    name: 'Retired frontend seams stay deleted: no module exports focusRegion',
+    from: ['src/**'],
+    names: ['focusRegion'],
   },
 ] satisfies readonly ArchitecturePolicy[]
 
@@ -2051,6 +2077,51 @@ const CANVAS_V2_POLICIES = [
       ...TEST_SOURCE_PATTERNS,
     ],
   },
+  {
+    // armCanvasTool decides focus and rail learning once (spec §1.6); the session and its signal setter sit below it.
+    kind: 'confine-symbols',
+    name: 'P9 only armCanvasTool and the session arm a tool',
+    from: ['src/**'],
+    names: ['selectCanvasTool', 'setCurrentCanvasTool', 'setCanvasTool'],
+    allowedFrom: [
+      'src/app/keyboard/arming.ts',
+      'src/canvas/session.ts',
+      'src/canvas/session-state.ts',
+      'src/canvas/runtime/command-surface.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+  },
+  {
+    // Any receiver, through `?.`, `!` and brackets: `tools?.setTool`, `commandSurface?.setTool`, `surface['setTool']`.
+    kind: 'forbid-calls',
+    name: 'P9 app code calls no tool surface setTool but through armCanvasTool',
+    from: ['src/app/**', 'src/components/**', 'src/web/**', 'src/canvas/*-source.ts'],
+    exceptFrom: ['src/app/keyboard/arming.ts', ...TEST_SOURCE_PATTERNS],
+    properties: ['setTool'],
+  },
+  {
+    // Fails closed: each caller keeps its import, so a caller that drops arming for a local setter is seen.
+    kind: 'require-imports',
+    name: 'P9 the arming callers import armCanvasTool',
+    from: [
+      'src/components/plant-db/place-species.ts',
+      'src/components/canvas/SiteOnboarding.tsx',
+      'src/components/canvas/StampChooser.tsx',
+      'src/app/saved-object-stamps/workbench.ts',
+      'src/app/workspace-commands/canvas-actions.ts',
+    ],
+    targets: ['src/app/keyboard/arming.ts'],
+  },
+  {
+    // Desktop and Web share one keyboard owner; each edition composes its keymap and command sink outside it
+    // (Desktop: commands/registry.ts installDesktopKeyRouter, called by platform/desktop.ts; Web:
+    // web/browser-shell-commands.ts).
+    kind: 'forbid-imports',
+    name: 'P14 the keyboard module is neutral',
+    from: ['src/app/keyboard/**'],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+    targets: ['src/commands/**', 'src/web/**', 'src/platform/**', 'src/components/**'],
+  },
 ] satisfies readonly ArchitecturePolicy[]
 
 /**
@@ -2580,6 +2651,12 @@ const P10_SIGNALS = '[P10 only the runtime and the map layer read per-frame view
 const P10_IMPORTS = '[P10 the app, components and Web import view types only]'
 const P12 = '[P12 the renderer learns the camera one way]'
 const P11 = '[Retired frontend seams stay deleted]'
+const P11_FOCUS_REGION_CALL = '[Retired frontend seams stay deleted: the free focusRegion is not called]'
+const P11_FOCUS_REGION_EXPORT = '[Retired frontend seams stay deleted: no module exports focusRegion]'
+const P9_SYMBOLS = '[P9 only armCanvasTool and the session arm a tool]'
+const P9_CALLS = '[P9 app code calls no tool surface setTool but through armCanvasTool]'
+const P9_IMPORTS = '[P9 the arming callers import armCanvasTool]'
+const P14 = '[P14 the keyboard module is neutral]'
 const TEST_SOURCES = TEST_SOURCE_PATTERNS.join(', ')
 
 const PLANTED_MAP_LOADER = plantedSource('src/maplibre/loader.ts', ['export interface MapLibreMapInstance { stop(): void }'])
@@ -3083,6 +3160,109 @@ describe('canvas v2 policies, end of 0B', () => {
       `${P11} src/canvas/runtime/view/planted.ts contains retired symbol refreshOrigin`,
       `${P11} src/canvas/runtime/view/planted.ts contains retired symbol HOLD_NOISE_DEG`,
       `${P11} src/canvas/runtime/view/planted.ts contains retired symbol getAnnotationScreenFrame`,
+    ])
+  })
+
+  it('P11 rejects the retired focus regions, shortcut managers, focusMapSurface, the free focusRegion and LEGACY_BINDINGS', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/app/shell/focus-regions.ts', ['export const regions = 1']),
+      plantedSource('src/shortcuts/manager.ts', ['export const manager = 1']),
+      plantedSource('src/web/canvas-shortcuts.ts', ['export const shortcuts = 1']),
+      plantedSource('src/components/plant-db/planted.ts', [
+        'export function focusRegion(id: string) { return id }',
+        "focusRegion('map')",
+        'export function focusMapSurface() {}',
+      ]),
+      plantedSource('src/canvas/runtime/input/planted.test.ts', ['export const bindings = LEGACY_BINDINGS']),
+      // The focus owner's method keeps the name: a declaration, an object method and a call on the owner pass.
+      plantedSource('src/app/keyboard/focus-owner.ts', [
+        "export interface FocusOwner { focusRegion(region: string, reason: string): void }",
+        "export const focusOwner: FocusOwner = { focusRegion(region) { return void region } }",
+        "focusOwner.focusRegion('map', 'region-cycle')",
+      ]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, SOURCE_TOMBSTONE_POLICIES)).toEqual([
+      `${P11} retired source still exists: src/app/shell/focus-regions.ts`,
+      `${P11} retired source still exists: src/shortcuts/manager.ts`,
+      `${P11} retired source still exists: src/web/canvas-shortcuts.ts`,
+      `${P11} src/components/plant-db/planted.ts contains retired symbol focusMapSurface`,
+      `${P11} src/canvas/runtime/input/planted.test.ts contains retired symbol LEGACY_BINDINGS`,
+      `${P11_FOCUS_REGION_CALL} src/components/plant-db/planted.ts:2 calls focusRegion`,
+      `${P11_FOCUS_REGION_EXPORT} src/components/plant-db/planted.ts exports forbidden symbol focusRegion`,
+    ])
+  })
+
+  it('P9 rejects arming a tool outside armCanvasTool: a bare selectCanvasTool and a surface setTool', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/app/keyboard/arming.ts', [
+        "import { setCurrentCanvasTool } from '../../canvas/session'",
+        'export function armCanvasTool(tool: string) { setCurrentCanvasTool(tool); surface.setTool(tool) }',
+      ]),
+      plantedSource('src/canvas/session.ts', ['export function setCurrentCanvasTool(name: string) { setCanvasTool(name) }']),
+      plantedSource('src/canvas/runtime/scene-runtime.ts', ['export const set = (name: string) => tools.setTool(name)']),
+      plantedSource('src/components/canvas/Planted.tsx', [
+        "selectCanvasTool('polygon')",
+        "surface.setTool('line')",
+        "tools?.setTool('select')",
+        "commands!['setTool']('rectangle')",
+      ]),
+      plantedSource('src/canvas/planted-source.ts', ["commandSurface?.setTool('plant-stamp')"]),
+      plantedSource('src/web/planted.test.ts', ["selectCanvasTool('polygon'); surface.setTool('line')"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P9').filter(({ kind }) => kind !== 'require-imports'))).toEqual([
+      `${P9_SYMBOLS} src/components/canvas/Planted.tsx contains confined symbol selectCanvasTool; allowed sources: src/app/keyboard/arming.ts, src/canvas/session.ts, src/canvas/session-state.ts, src/canvas/runtime/command-surface.ts, ${TEST_SOURCES}`,
+      `${P9_CALLS} src/components/canvas/Planted.tsx:2 calls surface.setTool`,
+      `${P9_CALLS} src/components/canvas/Planted.tsx:3 calls tools?.setTool`,
+      `${P9_CALLS} src/components/canvas/Planted.tsx:4 calls commands!['setTool']`,
+      `${P9_CALLS} src/canvas/planted-source.ts:1 calls commandSurface?.setTool`,
+    ])
+  })
+
+  it('P9 fails when an arming caller stops importing armCanvasTool', () => {
+    const callers = [
+      'src/components/plant-db/place-species.ts',
+      'src/components/canvas/SiteOnboarding.tsx',
+      'src/components/canvas/StampChooser.tsx',
+      'src/app/saved-object-stamps/workbench.ts',
+    ]
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/app/keyboard/arming.ts', ['export function armCanvasTool(tool: string) { return tool }']),
+      ...callers.map((path) => plantedSource(path, [
+        `import { armCanvasTool } from '${'../'.repeat(path.split('/').length - 2)}app/keyboard/arming'`,
+        "armCanvasTool('select')",
+      ])),
+      plantedSource('src/app/workspace-commands/canvas-actions.ts', ["export const selectTool = (tool: string) => tool"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P9').filter(({ kind }) => kind === 'require-imports'))).toEqual([
+      `${P9_IMPORTS} src/app/workspace-commands/canvas-actions.ts is missing required import matching src/app/keyboard/arming.ts`,
+    ])
+  })
+
+  it('P14 rejects keyboard imports of commands, Web, the platforms and components, not in tests', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/commands/registry.ts', ['export const registry = 1']),
+      plantedSource('src/web/browser-shell-commands.ts', ['export const web = 1']),
+      plantedSource('src/platform/desktop.ts', ['export const desktop = 1']),
+      plantedSource('src/components/canvas/ToolRail.tsx', ['export const rail = 1']),
+      plantedSource('src/app/shell-commands/index.ts', ['export const shell = 1']),
+      plantedSource('src/app/keyboard/planted.ts', [
+        "import { registry } from '../../commands/registry'",
+        "import type { web } from '../../web/browser-shell-commands'",
+        "import { desktop } from '../../platform/desktop'",
+        "import { rail } from '../../components/canvas/ToolRail'",
+        "import { shell } from '../shell-commands'",
+      ]),
+      plantedSource('src/app/keyboard/planted.test.ts', ["import { rail } from '../../components/canvas/ToolRail'"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P14'))).toEqual([
+      `${P14} src/app/keyboard/planted.ts:1:1 imports src/commands/registry.ts via "../../commands/registry" (static)`,
+      `${P14} src/app/keyboard/planted.ts:2:1 imports src/web/browser-shell-commands.ts via "../../web/browser-shell-commands" (static)`,
+      `${P14} src/app/keyboard/planted.ts:3:1 imports src/platform/desktop.ts via "../../platform/desktop" (static)`,
+      `${P14} src/app/keyboard/planted.ts:4:1 imports src/components/canvas/ToolRail.tsx via "../../components/canvas/ToolRail" (static)`,
     ])
   })
 })
