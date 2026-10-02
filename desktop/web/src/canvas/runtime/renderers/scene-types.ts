@@ -2,7 +2,6 @@ import type { SpeciesFocus } from '../species-key'
 import type { SceneDesignObjectTarget, ScenePersistedState, SceneViewportState } from '../scene'
 import type { DraftPresentation } from '../tools/draft'
 import type { ViewTransform } from '../view/types'
-import type { PlantNameLabel, SelectionLabel } from '../selection-labels'
 import type { SpeciesCacheEntry } from '../species-cache'
 import type { PlantLabelMode } from '../plant-display'
 
@@ -34,8 +33,6 @@ export interface SceneRendererSnapshot {
   readonly localizedCommonNames: ReadonlyMap<string, string | null>
   readonly hoveredCanonicalName: string | null
   readonly hoverTarget: SceneRendererHoverTarget | null
-  readonly pinnedPlantNameLabels: readonly PlantNameLabel[]
-  readonly selectionLabels: readonly SelectionLabel[]
   /** Labels a saved view's snapshot draws; absent, the workspace's plant display decides. */
   readonly plantLabels?: PlantLabelMode
 }

@@ -58,7 +58,7 @@ import {
   createCanvasDocumentReplacementToken,
 } from './runtime'
 import { SceneCanvasRuntime } from './scene-runtime.ts'
-import type { PlantNameLabel } from './selection-labels'
+import { projectScenePlantLabels } from './selection-labels'
 import type { SceneRuntimePanelTargetAdapter } from './scene-runtime/panel-target-adapter'
 import type { ScenePresentationRefreshResult } from './scene-runtime/presentation'
 import {
@@ -3396,6 +3396,8 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
     setInteractionViewport(runtime, { x: 0, y: 0, scale: 20 })
+    const pinnedNames = (snapshot: SceneRendererSnapshot) => projectScenePlantLabels(snapshot, { x: 0, y: 0, scale: 20 })
+      .pinnedPlantNameLabels.map((label) => label.text)
     runtime.commandSurface.sceneEdits.selectAll()
     runtime.commandSurface.sceneEdits.toggleSelectedPlantNamePins()
     expect(runtime.querySurface.getSceneSnapshot().plants.map((plant) => plant.pinnedName)).toEqual([true, true])
@@ -3403,7 +3405,7 @@ describe('scene canvas runtime', () => {
     await vi.waitFor(() => {
       const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
       if (!snapshot) throw new Error('Expected a renderer snapshot')
-      expect(snapshot.pinnedPlantNameLabels.map((label: PlantNameLabel) => label.text)).toEqual(['Apple', 'Apple'])
+      expect(pinnedNames(snapshot)).toEqual(['Apple', 'Apple'])
     })
     const initialRenderCount = renderer.renderScene.mock.calls.length
 
@@ -3414,7 +3416,7 @@ describe('scene canvas runtime', () => {
 
     const localizedSnapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
     if (!localizedSnapshot) throw new Error('Expected a localized renderer snapshot')
-    expect(localizedSnapshot.pinnedPlantNameLabels.map((label: PlantNameLabel) => label.text)).toEqual(['Pommier', 'Pommier'])
+    expect(pinnedNames(localizedSnapshot)).toEqual(['Pommier', 'Pommier'])
     runtime.destroy()
   })
 

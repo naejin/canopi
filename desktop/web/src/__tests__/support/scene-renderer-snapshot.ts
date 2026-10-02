@@ -5,6 +5,9 @@ import type {
   ScenePersistedState,
 } from '../../canvas/runtime/scene'
 import { projectSceneSelectionEntityIds } from '../../canvas/runtime/scene-runtime/selection'
+import type { ViewScreen, ViewTransform } from '../../canvas/runtime/view/types'
+import { buildViewTransformFromPlane } from '../../canvas/runtime/view/view-transform'
+import { createSessionPlane } from '../../canvas/session-plane'
 
 export interface TestSceneRendererSnapshotOptions {
   readonly speciesFocus?: SceneRendererSnapshot['speciesFocus']
@@ -17,8 +20,6 @@ export interface TestSceneRendererSnapshotOptions {
   readonly localizedCommonNames?: SceneRendererSnapshot['localizedCommonNames']
   readonly hoveredCanonicalName?: SceneRendererSnapshot['hoveredCanonicalName']
   readonly hoverTarget?: SceneRendererSnapshot['hoverTarget']
-  readonly pinnedPlantNameLabels?: SceneRendererSnapshot['pinnedPlantNameLabels']
-  readonly selectionLabels?: SceneRendererSnapshot['selectionLabels']
 }
 
 export function createTestSceneRendererSnapshot(
@@ -55,7 +56,24 @@ export function createTestSceneRendererSnapshot(
     localizedCommonNames: new Map(options.localizedCommonNames ?? []),
     hoveredCanonicalName: options.hoveredCanonicalName ?? null,
     hoverTarget: options.hoverTarget ?? null,
-    pinnedPlantNameLabels: options.pinnedPlantNameLabels ?? [],
-    selectionLabels: options.selectionLabels ?? [],
   }
+}
+
+let testViewRevision = 0
+
+/**
+ * A renderer test's view: the plane placed as today's viewport places it (screen = world × scale + { x, y } at bearing 0),
+ * turned by `bearingDeg` about the screen origin, on a 400 × 300 screen unless given.
+ */
+export function createTestRendererView(
+  viewport: { readonly x: number; readonly y: number; readonly scale: number },
+  options: { readonly bearingDeg?: number; readonly screen?: Partial<ViewScreen> } = {},
+): ViewTransform {
+  return buildViewTransformFromPlane({
+    planar: { ...viewport, bearingDeg: options.bearingDeg ?? 0 },
+    screen: { width: 400, height: 300, devicePixelRatio: 1, ...options.screen },
+    plane: createSessionPlane({ lon: 0, lat: 0 }),
+    planeRevision: 0,
+    revision: ++testViewRevision,
+  })
 }

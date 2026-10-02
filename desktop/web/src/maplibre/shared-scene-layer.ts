@@ -9,6 +9,8 @@ import type { CustomLayerInterface, CustomRenderMethodInput } from 'maplibre-gl'
 import { createPixiScenePresentation, type PixiScenePresentation } from '../canvas/runtime/renderers/pixi-scene'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
 import type { DraftPresentation } from '../canvas/runtime/tools/draft'
+import { buildViewTransformFromPlane } from '../canvas/runtime/view/view-transform'
+import { createSessionPlane } from '../canvas/session-plane'
 import { deriveSharedMapSceneViewport, type SharedMapProjector } from './scene-camera-transform'
 
 /** The one production custom layer which all map-owned raster bands sit below. */
@@ -135,6 +137,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
   let pendingSnapshot: SceneRendererSnapshot | null = null
   let renderedSnapshot: SceneRendererSnapshot | null = null
   let presentedViewport: SceneRendererSnapshot['viewport'] | null = null
+  let viewRevision = 0
   let draft: DraftPresentation | null = null
   let initializePromise: Promise<void> | null = null
   let disposePromise: Promise<void> | null = null
@@ -224,15 +227,22 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
       try {
         renderer.resetState()
         presentation.resize(rendererSize.width, rendererSize.height)
+        if (sizeChanged || !sameViewport(presentedViewport, transform.viewport)) {
+          // Until the layer reads the runtime's frames: the derived placement as a bearing-0 view.
+          presentation.setView(buildViewTransformFromPlane({
+            planar: { ...transform.viewport, bearingDeg: 0 },
+            screen: { width: rendererSize.width, height: rendererSize.height, devicePixelRatio: rendererSize.resolution },
+            plane: createSessionPlane(options.readOrigin()),
+            planeRevision: 0,
+            revision: ++viewRevision,
+          }))
+          presentedViewport = transform.viewport
+        }
         if (pendingSnapshot) {
           renderedSnapshot = pendingSnapshot
           pendingSnapshot = null
-          presentation.renderScene({ ...renderedSnapshot, viewport: transform.viewport })
-          presentedViewport = transform.viewport
+          presentation.syncScene(renderedSnapshot)
           sceneSyncCount += 1
-        } else if (sizeChanged || !sameViewport(presentedViewport, transform.viewport)) {
-          presentation.setViewport(transform.viewport)
-          presentedViewport = transform.viewport
         }
         renderer.render({ container: stage, clear: false })
         renderCount += 1

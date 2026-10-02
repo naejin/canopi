@@ -131,7 +131,7 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
       const point = worldToScreen(plant.position, snapshot.viewport)
       if (point.x >= 0 && point.y >= 0 && point.x <= width && point.y <= height) inView.add(plant.id)
     }
-    const labelled = new Set(getCanvasPlantNameLabels(snapshot)
+    const labelled = new Set(getCanvasPlantNameLabels(snapshot, snapshot.viewport)
       .filter((label) => inView.has(label.plantId))
       .map((label) => label.plantId))
     return { labelled: labelled.size, inView: inView.size }

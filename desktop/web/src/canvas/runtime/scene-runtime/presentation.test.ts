@@ -13,6 +13,7 @@ import { SceneStore } from '../scene'
 import { CanvasPlantLabelResolver } from '../plant-labels'
 import { CanvasSpeciesCache } from '../species-cache'
 import { SceneRuntimePresentationController } from './presentation'
+import { projectScenePlantLabels } from '../selection-labels'
 import { getCommonNames, getFlowerColorBatch, getSpeciesBatch } from '../../../ipc/species'
 
 function makeFile(): CanopiFile {
@@ -189,7 +190,7 @@ describe('scene runtime presentation controller', () => {
     expect(snapshot.scene.guides).toEqual([])
     expect(snapshot.selectedPlantIds).toEqual(new Set())
     expect(snapshot.hoverTarget).toBeNull()
-    expect(snapshot.pinnedPlantNameLabels).toEqual([])
+    expect(projectScenePlantLabels(snapshot, { x: 0, y: 0, scale: 2 }).pinnedPlantNameLabels).toEqual([])
   })
 
   it('restores detail from the latest authoritative Scene after overview', () => {
@@ -218,7 +219,7 @@ describe('scene runtime presentation controller', () => {
     const snapshot = controller.buildRendererSnapshot()
 
     expect(snapshot.selectionLabelPlantIds).toEqual(new Set())
-    expect(snapshot.selectionLabels).toEqual([])
+    expect(projectScenePlantLabels(snapshot, { x: 0, y: 0, scale: 2 }).selectionLabels).toEqual([])
   })
 
   it('preserves hover kind when a Plant and Zone share the same raw id', () => {

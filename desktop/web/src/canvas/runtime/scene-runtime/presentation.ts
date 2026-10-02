@@ -1,5 +1,4 @@
 import { getRevealedAnnotationId } from '../annotation-layout'
-import { projectScenePlantLabels } from '../renderers/viewport-presentation'
 import {
   resolvePlantCanopySpreadM,
   resolvePlantStratum,
@@ -153,8 +152,6 @@ export class SceneRuntimePresentationController {
       localizedCommonNames,
       hoveredCanonicalName: hoveredPlant?.canonicalName ?? null,
       hoverTarget: getRendererHoverTarget(scene, session.hoveredTarget),
-      ...projectScenePlantLabels({ scene, viewport, localizedCommonNames, selectionLabelPlantIds,
-        speciesCache: this._speciesCache.getCache() }),
     }
   }
 
@@ -208,7 +205,6 @@ export class SceneRuntimePresentationController {
       localizedCommonNames,
       hoveredCanonicalName: null,
       hoverTarget: null,
-      ...projectScenePlantLabels({ scene, viewport, localizedCommonNames, selectionLabelPlantIds, speciesCache }),
       ...request.plantLabels ? { plantLabels: request.plantLabels } : {},
     }
   }
@@ -347,8 +343,6 @@ function buildOverviewRendererSnapshot(
     localizedCommonNames: new Map(),
     hoveredCanonicalName: null,
     hoverTarget: null,
-    pinnedPlantNameLabels: [],
-    selectionLabels: [],
   }
 }
 

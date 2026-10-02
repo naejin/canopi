@@ -95,7 +95,7 @@ export class SceneCanvasInspectionOwner {
           highlightedPlantIds: new Set(), highlightedZoneIds: new Set(), hoveredCanonicalName: null,
           hoverTarget: highlightedId ? { kind: 'plant', id: highlightedId, state: 'hover' } : null,
           speciesFocus: { canonicalName: null },
-          revealedAnnotationId: null, selectionLabelPlantIds: new Set(), pinnedPlantNameLabels: [], selectionLabels: [],
+          revealedAnnotationId: null, selectionLabelPlantIds: new Set(),
         }
         try {
           drawInspectionLensScene(ctx, lensSnapshot, { widthPx: width, heightPx: height, dpr })

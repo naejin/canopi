@@ -6,20 +6,44 @@ import {
 } from './plant-presentation'
 import type { ScenePlantEntity, ScenePoint, SceneViewportState } from './scene'
 import type { SpeciesCacheEntry } from './species-cache'
+import type { SceneRendererSnapshot } from './renderers/scene-types'
 
-export interface SelectionLabel {
-  canonicalName: string
-  text: string
-  fontStyle: 'normal' | 'italic'
+/**
+ * A plant's name label: drawn upright at `offsetPx` (CSS px) from its plant's projected `anchor` (world metres), so a pan
+ * moves it with its plant. `screenPoint` is where it lands under the viewport it was computed with.
+ */
+interface AnchoredLabel {
+  anchor: ScenePoint
+  offsetPx: ScenePoint
   screenPoint: ScenePoint
 }
 
-export interface PlantNameLabel {
+export interface SelectionLabel extends AnchoredLabel {
+  canonicalName: string
+  text: string
+  fontStyle: 'normal' | 'italic'
+}
+
+export interface PlantNameLabel extends AnchoredLabel {
   plantId: string
   opacity: number
   text: string
   fontStyle: 'normal' | 'italic'
-  screenPoint: ScenePoint
+}
+
+/** A single selection's label and the pinned names, under `viewport`. */
+export function projectScenePlantLabels(
+  snapshot: Pick<SceneRendererSnapshot, 'scene' | 'speciesCache' | 'localizedCommonNames' | 'selectionLabelPlantIds'>,
+  viewport: SceneViewportState,
+): { readonly pinnedPlantNameLabels: PlantNameLabel[]; readonly selectionLabels: SelectionLabel[] } {
+  const { scene, speciesCache, localizedCommonNames, selectionLabelPlantIds } = snapshot
+  const plantContext = { plants: scene.plants, viewport, speciesCache, localizedCommonNames }
+  return {
+    pinnedPlantNameLabels: computePinnedPlantNameLabels(scene.plants, viewport, localizedCommonNames,
+      { plantContext, selectionLabelPlantIds }),
+    selectionLabels: computeSelectionLabels(scene.plants, selectionLabelPlantIds, viewport,
+      localizedCommonNames, { plantContext }),
+  }
 }
 
 export interface SelectionLabelOptions {
@@ -45,14 +69,13 @@ export function computeSelectionLabels(
   const plant = plants.find((candidate) => candidate.id === selectedId)
   if (!plant || plant.pinnedName) return []
 
-  const screenPoint = worldToScreen(plant.position, viewport)
-  screenPoint.y += plantLabelOffsetPx([plant], viewport, { ...options.plantContext, viewport, speciesCache: options.plantContext?.speciesCache ?? EMPTY_SPECIES_CACHE, plants })
+  const offsetYPx = plantLabelOffsetPx([plant], viewport, { ...options.plantContext, viewport, speciesCache: options.plantContext?.speciesCache ?? EMPTY_SPECIES_CACHE, plants })
 
   const localizedName = localizedCommonNames.get(plant.canonicalName) ?? plant.commonName
   const text = localizedName || abbreviateCanonical(plant.canonicalName)
   const fontStyle = localizedName ? 'normal' as const : 'italic' as const
 
-  return [{ canonicalName: plant.canonicalName, text, fontStyle, screenPoint }]
+  return [{ canonicalName: plant.canonicalName, text, fontStyle, ...below(plant.position, offsetYPx, viewport) }]
 }
 
 export function computePinnedPlantNameLabels(
@@ -70,16 +93,22 @@ export function computePinnedPlantNameLabels(
     if (!plant.pinnedName) continue
     const opacity = plant.id === revealedId ? 1 : overviewOpacity
     if (opacity === 0) continue
-    const screenPoint = worldToScreen(plant.position, viewport)
-    screenPoint.y += plantLabelOffsetPx([plant], viewport, { ...options.plantContext, viewport, speciesCache: options.plantContext?.speciesCache ?? EMPTY_SPECIES_CACHE, plants })
+    const offsetYPx = plantLabelOffsetPx([plant], viewport, { ...options.plantContext, viewport, speciesCache: options.plantContext?.speciesCache ?? EMPTY_SPECIES_CACHE, plants })
 
     const localizedName = localizedCommonNames.get(plant.canonicalName) ?? plant.commonName
     const text = localizedName || abbreviateCanonical(plant.canonicalName)
     const fontStyle = localizedName ? 'normal' as const : 'italic' as const
-    labels.push({ plantId: plant.id, text, fontStyle, screenPoint, opacity })
+    labels.push({ plantId: plant.id, text, fontStyle, opacity, ...below(plant.position, offsetYPx, viewport) })
   }
 
   return labels
+}
+
+/** A label `offsetYPx` below `anchor`, and where that lands under `viewport`. */
+function below(anchor: ScenePoint, offsetYPx: number, viewport: SceneViewportState): AnchoredLabel {
+  const screenPoint = worldToScreen(anchor, viewport)
+  screenPoint.y += offsetYPx
+  return { anchor: { x: anchor.x, y: anchor.y }, offsetPx: { x: 0, y: offsetYPx }, screenPoint }
 }
 
 function plantLabelOffsetPx(

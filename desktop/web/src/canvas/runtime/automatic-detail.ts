@@ -3,15 +3,24 @@ import { LabelCollisionIndex, type LabelBounds } from '../label-collision'
 import { getPlantWorldBounds } from './plant-presentation'
 import { nearestPlantSpacing } from '../plant-spacing'
 import { createMeasurementGuidePresentation, MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX } from './measurement-guides'
-import type { ScenePersistedState } from './scene'
+import type { ScenePersistedState, SceneViewportState } from './scene'
 import { getSceneLayerStyle } from './scene-visuals'
 import { getCanvasTextOpacity } from './text-visibility'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
-import type { PlantNameLabel } from './selection-labels'
+import { projectScenePlantLabels, type PlantNameLabel, type SelectionLabel } from './selection-labels'
 import { getCanvasPlantDisplay, PLANT_LABEL_MIN_SCALE } from './plant-display'
 
-export function getCanvasPlantNameLabels(snapshot: SceneRendererSnapshot): readonly PlantNameLabel[] {
-  const { scene, viewport } = snapshot
+/**
+ * The plant names admitted under `viewport`: pinned names first, then automatic ones where they fit, around the single
+ * selection's label (`projected`, computed under the same viewport when not given).
+ */
+export function getCanvasPlantNameLabels(
+  snapshot: SceneRendererSnapshot,
+  viewport: SceneViewportState,
+  projected: { readonly pinnedPlantNameLabels: readonly PlantNameLabel[]; readonly selectionLabels: readonly SelectionLabel[] }
+    = projectScenePlantLabels(snapshot, viewport),
+): readonly PlantNameLabel[] {
+  const { scene } = snapshot
   // Labels › None keeps only names the user pinned or a single selection shows.
   const mode = snapshot.plantLabels ?? getCanvasPlantDisplay().labels
   const automatic = mode !== 'none'
@@ -19,13 +28,13 @@ export function getCanvasPlantNameLabels(snapshot: SceneRendererSnapshot): reado
   const minimumScale = PLANT_LABEL_MIN_SCALE[codes ? 'codes' : 'names']
   const layer = getSceneLayerStyle(scene, 'plants')
   if (!layer.visible || layer.opacity === 0) return []
-  if ((!automatic || viewport.scale < minimumScale) && snapshot.pinnedPlantNameLabels.length === 0) return []
+  if ((!automatic || viewport.scale < minimumScale) && projected.pinnedPlantNameLabels.length === 0) return []
   const occupied = new LabelCollisionIndex()
   for (const rect of getCanvasDetailLayout(scene, viewport.scale).bounds) occupied.add(rect)
-  for (const label of snapshot.selectionLabels) {
+  for (const label of projected.selectionLabels) {
     occupied.add(nameBounds(label.text, label.screenPoint.x - viewport.x, label.screenPoint.y - viewport.y))
   }
-  const pinned = new Map(snapshot.pinnedPlantNameLabels.map((label) => [label.plantId, label]))
+  const pinned = new Map(projected.pinnedPlantNameLabels.map((label) => [label.plantId, label]))
   const hoveredId = snapshot.hoverTarget?.kind === 'plant' ? snapshot.hoverTarget.id : null
   const plants = [...scene.plants].sort((a, b) =>
     Number(b.id === hoveredId) - Number(a.id === hoveredId) || Number(pinned.has(b.id)) - Number(pinned.has(a.id)) || a.id.localeCompare(b.id))
@@ -49,7 +58,8 @@ export function getCanvasPlantNameLabels(snapshot: SceneRendererSnapshot): reado
     const rect = candidates.find((candidate) => !occupied.overlaps(candidate)) ?? (forced ? candidates[0] : null)
     if (!rect) continue
     occupied.add(rect)
-    result.push({ plantId: plant.id, text, fontStyle, opacity, screenPoint: { x: x + viewport.x, y: rect.y + 2 + viewport.y } })
+    result.push({ plantId: plant.id, text, fontStyle, opacity, anchor: { x: plant.position.x, y: plant.position.y },
+      offsetPx: { x: 0, y: rect.y + 2 - y }, screenPoint: { x: x + viewport.x, y: rect.y + 2 + viewport.y } })
   }
   return result
 }
@@ -65,10 +75,10 @@ interface CanvasDetailLayout {
   readonly bounds: readonly LabelBounds[]
 }
 
-export function isMeasurementLabelVisible(snapshot: SceneRendererSnapshot, id: string): boolean {
+export function isMeasurementLabelVisible(snapshot: SceneRendererSnapshot, pixelsPerMetre: number, id: string): boolean {
   return snapshot.selectedMeasurementGuideIds.has(id)
     || (snapshot.hoverTarget?.kind === 'measurement-guide' && snapshot.hoverTarget.id === id)
-    || getCanvasDetailLayout(snapshot.scene, snapshot.viewport.scale).measurementIds.has(id)
+    || getCanvasDetailLayout(snapshot.scene, pixelsPerMetre).measurementIds.has(id)
 }
 
 // Pan does not affect admission. Keep the main view and an inspection view warm.

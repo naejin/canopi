@@ -43,29 +43,40 @@ export function createMeasurementGuidePresentation(
     x: screenDy / screenLength,
     y: -screenDx / screenLength,
   }
-  const labelRotationRad = normalizeUprightLabelRotation(Math.atan2(screenDy, screenDx))
-  const labelNormalScreen = {
-    x: Math.sin(labelRotationRad),
-    y: -Math.cos(labelRotationRad),
-  }
   const midpointWorld = {
     x: (guide.start.x + guide.end.x) / 2,
     y: (guide.start.y + guide.end.y) / 2,
   }
-  const midpointScreen = worldToScreen(midpointWorld, viewport)
+  const label = measurementGuideLabelPose(screenStart, screenEnd, worldToScreen(midpointWorld, viewport))
 
   return {
     text: formatMetricDistance(lengthWorld),
     midpointWorld,
-    labelScreenPoint: {
-      x: midpointScreen.x + labelNormalScreen.x * MEASUREMENT_GUIDE_LABEL_OFFSET_PX,
-      y: midpointScreen.y + labelNormalScreen.y * MEASUREMENT_GUIDE_LABEL_OFFSET_PX,
-    },
-    labelRotationRad,
+    labelScreenPoint: label.point,
+    labelRotationRad: label.rotationRad,
     labelOffsetPx: MEASUREMENT_GUIDE_LABEL_OFFSET_PX,
     normalWorld,
     normalScreen,
     lengthWorld,
+  }
+}
+
+/**
+ * A guide's label from the guide's projected ends and midpoint, in any view: parallel to the guide, turned to read
+ * upright, and offset to the side the upright text faces.
+ */
+export function measurementGuideLabelPose(
+  screenStart: ScenePoint,
+  screenEnd: ScenePoint,
+  screenMidpoint: ScenePoint,
+): { readonly point: ScenePoint; readonly rotationRad: number } {
+  const rotationRad = normalizeUprightLabelRotation(Math.atan2(screenEnd.y - screenStart.y, screenEnd.x - screenStart.x))
+  return {
+    point: {
+      x: screenMidpoint.x + Math.sin(rotationRad) * MEASUREMENT_GUIDE_LABEL_OFFSET_PX,
+      y: screenMidpoint.y - Math.cos(rotationRad) * MEASUREMENT_GUIDE_LABEL_OFFSET_PX,
+    },
+    rotationRad,
   }
 }
 

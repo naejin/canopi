@@ -144,7 +144,6 @@ function createRendererSnapshot(overrides: {
   plantSpeciesSymbols?: Record<string, string>
   viewport?: SceneRendererSnapshot['viewport']
   selectedTargets?: SceneDesignObjectSelection
-  selectionLabels?: SceneRendererSnapshot['selectionLabels']
 } = {}): SceneRendererSnapshot {
   return createTestSceneRendererSnapshot({
     scene: {
@@ -160,7 +159,6 @@ function createRendererSnapshot(overrides: {
     },
     viewport: overrides.viewport ?? { x: 10, y: 20, scale: 2 },
     selectedTargets: overrides.selectedTargets,
-    selectionLabels: overrides.selectionLabels ?? [],
   })
 }
 

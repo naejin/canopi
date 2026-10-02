@@ -668,5 +668,17 @@
   "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps shared selection gesture algorithms behind the Session seam": {
     "file": "src/canvas/runtime/tools/select/move-drag.test.ts",
     "name": "Select move-drag > a drag from a selected object moves the selection with one undo"
+  },
+  "src/__tests__/scene-viewport-presentation.test.ts > retained viewport presentation > translates retained labels on repeated pans without consulting scene geometry again": {
+    "file": "src/canvas/runtime/renderers/label-admission.test.ts",
+    "name": "label admission > a pan keeps the admitted labels without reading scene geometry, and they move with their anchors"
+  },
+  "src/__tests__/scene-viewport-presentation.test.ts > retained viewport presentation > reprojects zoom and replaces selection, pins and localized names with new scene data": {
+    "file": "src/canvas/runtime/renderers/label-admission.test.ts",
+    "name": "label admission > a scale change admits again, and a new scene replaces selection, pins and localized names"
+  },
+  "src/__tests__/scene-viewport-presentation.test.ts > retained viewport presentation > ignores camera updates before a scene and releases retained data on disposal": {
+    "file": "src/canvas/runtime/renderers/label-admission.test.ts",
+    "name": "label admission > admits nothing before a scene or after disposal"
   }
 }
