@@ -1,7 +1,7 @@
 import { effect } from '@preact/signals'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestView, type TestView } from '../../../__tests__/support/test-view'
-import { mapZoomToStageScale } from '../../projection'
+import { mapZoomToStageScale, stageScaleToMapZoom } from '../../projection'
 import { createSessionPlane, type SessionPlane } from '../../session-plane'
 import type { CameraDriver, CameraMove } from './camera-driver'
 import { planarToViewCamera } from './camera-math'
@@ -264,6 +264,18 @@ describe('headless camera driver', () => {
     expect(frame.moving).toBe(false)
     expect(frame.revision).toBe(0)
     expect(frame.view.revision).toBe(0)
+    view.dispose()
+  })
+
+  it('a camera placed at exactly the overview threshold is in site mode, though its scale reads back a hair under', () => {
+    const plane = createSessionPlane({ lon: 13.405, lat: 52.52 })
+    const zoom = stageScaleToMapZoom(0.1, plane.origin.lat)
+    const view = createTestView({ plane, camera: { zoom } })
+    const frame = view.host.current().frames.viewFrame.peek()
+    expect(frame.view.pixelsPerMetre).toBeLessThan(0.1)
+    expect(frame.mode).toBe('site')
+    view.host.current().apply({ kind: 'set', target: { ...frame.view.camera, zoom: stageScaleToMapZoom(0.0999, plane.origin.lat) }, animation: 'none' })
+    expect(view.host.current().frames.viewFrame.peek().mode).toBe('overview')
     view.dispose()
   })
 

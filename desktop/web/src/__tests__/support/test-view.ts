@@ -22,7 +22,7 @@ import type {
   ViewScreen,
   ViewTransform,
 } from '../../canvas/runtime/view/types'
-import { mapZoomToStageScale, stageScaleToMapZoom } from '../../canvas/projection'
+import { stageScaleToMapZoom } from '../../canvas/projection'
 import { createSessionPlane, type SessionPlane, type SessionPlaneTransform } from '../../canvas/session-plane'
 import { createWorkspaceCameraPolicy, type WorkspaceCameraPolicy } from '../../canvas/workspace-camera-policy'
 
@@ -68,7 +68,7 @@ export function createTestView(options: TestViewOptions = {}): TestView {
       bearingDeg: options.camera.bearingDeg ?? 0,
       pitchDeg: 0,
     }
-    : testCameraFor({ ...(options.viewport ?? { x: 0, y: 0, scale: 1 }), bearingDeg: 0 }, screen, plane)
+    : planarToViewCamera({ ...(options.viewport ?? { x: 0, y: 0, scale: 1 }), bearingDeg: 0 }, screen, plane)
   const policy = options.policy ?? createWorkspaceCameraPolicy()
   const host = createCameraDriverHost({
     policy,
@@ -119,22 +119,8 @@ export function placeOnHost(
   placement: { readonly x: number; readonly y: number; readonly scale: number; readonly bearingDeg?: number },
 ): void {
   const { view } = host.frames.viewFrame.peek()
-  const target = testCameraFor({ ...placement, bearingDeg: placement.bearingDeg ?? 0 }, view.screen, plane)
+  const target = planarToViewCamera({ ...placement, bearingDeg: placement.bearingDeg ?? 0 }, view.screen, plane)
   host.current().apply({ kind: 'set', target, animation: 'none' })
-}
-
-/**
- * The camera that shows a placement, its zoom nudged by the last bits so its scale reads back at or just above the placement's:
- * a zoom reads back a hair under a round scale (4 px/m reads 3.9999999999999996), and the grid, the zoom bands and the overview
- * threshold compare scales exactly, so a test placed at 4 px/m sees the 5 m grid it asked for.
- */
-export function testCameraFor(placement: PlanarCamera, screen: ViewScreen, plane: SessionPlane): ViewCamera {
-  const camera = planarToViewCamera(placement, screen, plane)
-  let { zoom } = camera
-  for (let step = 0; step < 8 && mapZoomToStageScale(zoom, plane.origin.lat) < placement.scale; step++) {
-    zoom += Math.max(1, Math.abs(zoom)) * Number.EPSILON
-  }
-  return zoom === camera.zoom ? camera : { ...camera, zoom }
 }
 
 /**

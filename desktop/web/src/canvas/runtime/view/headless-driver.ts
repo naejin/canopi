@@ -8,6 +8,7 @@
 import { signal } from '@preact/signals'
 import { stageScaleToMapZoom } from '../../projection'
 import type { SessionPlane } from '../../session-plane'
+import { isWorkspaceOverviewScale } from '../../workspace-camera-policy'
 import { startBearingTween, type BearingTween } from './bearing-tween'
 import type { CameraDriver, CameraDriverDeps, CameraDriverFailure, CameraMove } from './camera-driver'
 import { panCamera, rotateCameraAround, zoomCameraAround } from './camera-math'
@@ -88,7 +89,7 @@ export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions)
     })
     return Object.freeze<ViewFrame>({
       view,
-      mode: view.pixelsPerMetre < state.overviewPixelsPerMetre ? 'overview' : 'site',
+      mode: isWorkspaceOverviewScale(view.pixelsPerMetre, { overviewScaleThreshold: state.overviewPixelsPerMetre }) ? 'overview' : 'site',
       scaleBounds: state.scaleBounds,
       insets: state.insets,
       attached: false,

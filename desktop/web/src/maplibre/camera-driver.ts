@@ -7,6 +7,7 @@
 
 import { signal } from '@preact/signals'
 import type { SessionPlane } from '../canvas/session-plane'
+import { isWorkspaceOverviewScale } from '../canvas/workspace-camera-policy'
 import { startBearingTween, type BearingTween } from '../canvas/runtime/view/bearing-tween'
 import type { CameraDriver, CameraDriverDeps, CameraDriverFailure, CameraMove } from '../canvas/runtime/view/camera-driver'
 import {
@@ -219,7 +220,7 @@ export function createMapLibreCameraDriver(
     })
     return Object.freeze<ViewFrame>({
       view,
-      mode: view.pixelsPerMetre < state.overviewPixelsPerMetre ? 'overview' : 'site',
+      mode: isWorkspaceOverviewScale(view.pixelsPerMetre, { overviewScaleThreshold: state.overviewPixelsPerMetre }) ? 'overview' : 'site',
       scaleBounds: state.scaleBounds,
       insets: state.insets,
       attached: true,

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRulerOverlay, pressRuler } from '../canvas/runtime/chrome/rulers'
 import type { ViewFrame } from '../canvas/runtime/view/types'
+import { mapZoomToStageScale, stageScaleToMapZoom } from '../canvas/projection'
+import { createSessionPlane } from '../canvas/session-plane'
 import { testViewFrame } from './support/test-view'
 import './support/camera-tolerance'
 
@@ -268,6 +270,27 @@ describe('RulerOverlay', () => {
         expect(horizontal[index]!.start).toBeGreaterThanOrEqual(horizontal[index - 1]!.end)
       }
     }
+    overlay.destroy()
+  })
+
+  it('ticks every metre on a camera placed at exactly 15 px/m, though its scale reads back a hair under', () => {
+    const host = document.createElement('div')
+    const context = createContextStub()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context as never)
+    const overlay = createRulerOverlay(host, { onGuideCreate: vi.fn() })
+    const plane = createSessionPlane({ lon: 2.3522, lat: 48.8566 })
+    const labelsAt = (zoom: number): string[] => {
+      vi.mocked(context.fillText).mockClear()
+      const frame = testViewFrame({ plane, screen: { width: 424, height: 324 }, camera: { zoom } })
+      overlay.update({ frame, chromeVisible: true, rulersVisible: true })
+      return vi.mocked(context.fillText).mock.calls.map(([text]) => text)
+    }
+
+    const placed = stageScaleToMapZoom(15, plane.origin.lat)
+    expect(mapZoomToStageScale(placed, plane.origin.lat)).toBeLessThan(15)
+    // A 1 m tick labels every 5 m; a 2 m tick labels every 10 m.
+    expect(labelsAt(placed)).toContain('5m')
+    expect(labelsAt(stageScaleToMapZoom(14.99, plane.origin.lat))).not.toContain('5m')
     overlay.destroy()
   })
 

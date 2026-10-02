@@ -2,6 +2,8 @@
 // Grid interval computation + snap-to-grid
 // ---------------------------------------------------------------------------
 
+import { scaleReaches } from './projection'
+
 /** Sorted ascending — shared with scene-chrome.ts renderer. */
 export const NICE_DISTANCES = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
 
@@ -15,7 +17,7 @@ const MIN_SCREEN_GAP = 20
  */
 export function gridInterval(viewportScale: number): { interval: number; index: number } {
   for (let i = 0; i < NICE_DISTANCES.length; i++) {
-    if (NICE_DISTANCES[i]! * viewportScale >= MIN_SCREEN_GAP) {
+    if (scaleReaches(NICE_DISTANCES[i]! * viewportScale, MIN_SCREEN_GAP)) {
       return { interval: NICE_DISTANCES[i]!, index: i }
     }
   }

@@ -1,6 +1,7 @@
 import type { ScreenPoint, ViewFrame } from '../view/types'
 import { planarCameraOf } from '../view/view-transform'
 import { NICE_DISTANCES } from '../../grid'
+import { scaleReaches } from '../../projection'
 import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 import { getCanvasColor } from '../../theme-refresh'
 
@@ -433,7 +434,7 @@ const RULER_DISTANCES = NICE_DISTANCES.filter((distance) => distance >= 0.1)
 function calcTickIntervals(scale: number): { tickInterval: number; labelInterval: number } {
   let index = RULER_DISTANCES.length - 1
   for (let candidate = 0; candidate < RULER_DISTANCES.length; candidate += 1) {
-    if (RULER_DISTANCES[candidate]! * scale >= 15) {
+    if (scaleReaches(RULER_DISTANCES[candidate]! * scale, 15)) {
       index = candidate
       break
     }
