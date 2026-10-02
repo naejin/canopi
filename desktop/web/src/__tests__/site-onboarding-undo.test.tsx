@@ -10,7 +10,8 @@ import type { CanopiFile } from '../types/design'
 import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/browser-app-data'
 import { createBrowserCanvasRuntimeAppAdapter } from '../web/browser-canvas-runtime'
 import { createBrowserDesignSessionController } from '../web/browser-design-session'
-import { disposeWebCanvasShortcuts, installWebCanvasShortcuts } from '../web/canvas-shortcuts'
+import type { KeyRouterHandle } from '../app/keyboard/key-router'
+import { installWebKeyRouter } from '../web/browser-shell-commands'
 import { WebCanvasWorkspace } from '../web/WebCanvasWorkspace'
 import { geoAt } from './support/geo-design'
 import { createLiveTestCanvasRuntimeHost } from './support/live-canvas-runtime'
@@ -22,6 +23,7 @@ import { createLiveTestCanvasRuntimeHost } from './support/live-canvas-runtime'
  */
 describe('Where is your site? and Undo on the Web Edition', () => {
   let container: HTMLDivElement
+  let keys: KeyRouterHandle | null = null
 
   afterEach(async () => {
     // Unmounting the workspace releases the runtime through the composition.
@@ -30,7 +32,8 @@ describe('Where is your site? and Undo on the Web Edition', () => {
       await flushMicrotasks()
     })
     container.remove()
-    disposeWebCanvasShortcuts()
+    keys?.dispose()
+    keys = null
     createDesignSessionStoreTestFixture(designSessionStore).reset()
   })
 
@@ -51,7 +54,10 @@ describe('Where is your site? and Undo on the Web Edition', () => {
       },
       now: () => new Date('2026-09-29T12:00:00.000Z'),
     })
-    installWebCanvasShortcuts()
+    keys = installWebKeyRouter({
+      catalog: [],
+      readState: () => ({ hasDesign: true, revertAvailable: false, activePanel: 'canvas', sidePanel: null }),
+    })
 
     await act(async () => {
       render(<WebCanvasWorkspace controller={controller} createRuntimeComposition={() => composition} />, container)

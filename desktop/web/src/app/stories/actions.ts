@@ -21,8 +21,8 @@ import {
 } from '../design-edit'
 import { currentDesign, designSessionStore } from '../document-session/store'
 import { canShowSavedViews, captureCurrentView, goToSavedView } from '../saved-views/current-view'
-import { modalLayerOpen } from '../shell/modal-layer'
-import { isEditableTarget } from '../../canvas/runtime/input/editable-target'
+import type { KeyChord } from '../keyboard/key-chord'
+import { pushKeyScope } from '../keyboard/keymap'
 
 // The Stories panel's action layer. Stories and their steps are Design Edit
 // data (app/design-edit/stories.ts); each step shows a saved view, so adding
@@ -102,28 +102,20 @@ export function dismissStoryUndo(toast?: StoryUndo): void {
   undoState.value = null
 }
 
-let undoToastsShowing = 0
-
-/** The Undo toast is on screen while registered; only then does Ctrl Z reach it. */
+/**
+ * The Undo toast is on screen while registered: it pushes a key scope (app/keyboard), so Ctrl Z (Cmd Z) undoes the
+ * delete it offers before the map's own history. The key router runs scopes outside text fields and dialogs, so a text
+ * field keeps its own undo.
+ */
 export function registerStoryUndoToast(): () => void {
-  undoToastsShowing += 1
-  let released = false
-  return () => {
-    if (released) return
-    released = true
-    undoToastsShowing -= 1
-  }
+  const scope = pushKeyScope({ id: 'stories-undo-toast', handle: (_event, chord) => runStoryUndoShortcut(chord) })
+  return () => scope.dispose()
 }
 
-/**
- * Ctrl Z (Cmd Z) undoes the delete the Undo toast offers while it is on
- * screen, before the map's own history. Shared by both editions' key routing;
- * a text field keeps its own undo. True when the shortcut undid the delete.
- */
-export function runStoryUndoShortcut(event: KeyboardEvent): boolean {
-  if ((event.ctrlKey === event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== 'z') return false
-  if (undoToastsShowing === 0 || !storyUndo.peek()?.undo || modalLayerOpen.peek() || isEditableTarget(event.target)) return false
-  event.preventDefault()
+/** True when Ctrl Z undid the delete the toast offers. */
+function runStoryUndoShortcut(chord: KeyChord): boolean {
+  if (chord.key !== 'z' || !chord.mod || chord.ctrl || chord.shift || chord.alt) return false
+  if (!storyUndo.peek()?.undo) return false
   undoStoryDelete()
   return true
 }

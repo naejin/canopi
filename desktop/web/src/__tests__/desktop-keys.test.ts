@@ -4,7 +4,8 @@ import { activeTool, selectedObjectIds } from '../canvas/session-state'
 import { activePanel, sidePanel } from '../app/shell/state'
 import * as documentActions from '../app/document-session/actions'
 import { commandPaletteOpen } from '../commands/registry'
-import { initShortcuts } from '../shortcuts/manager'
+import type { KeyRouterHandle } from '../app/keyboard/key-router'
+import { installDesktopKeys } from './support/desktop-key-router'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { designSessionFixture } from './support/design-session-state'
 import {
@@ -22,7 +23,9 @@ function mountCanvasCommandSurface(overrides: Parameters<typeof createTestCanvas
   }))
 }
 
-describe('shortcut manager canvas tool switching', () => {
+describe('Desktop keys', () => {
+  let keys: KeyRouterHandle
+
   beforeEach(() => {
     activePanel.value = 'canvas'
     sidePanel.value = null
@@ -33,10 +36,11 @@ describe('shortcut manager canvas tool switching', () => {
     designSessionFixture.nonCanvasRevision = 0
     designSessionFixture.nonCanvasSavedRevision = 0
     commandPaletteOpen.value = false
-    initShortcuts()
+    keys = installDesktopKeys()
   })
 
   afterEach(() => {
+    keys.dispose()
     setCurrentCanvasSession(null)
     activeTool.value = 'select'
     selectedObjectIds.value = new Set()

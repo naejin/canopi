@@ -283,7 +283,7 @@ const FORBIDDEN_IMPORT_POLICIES = [
     kind: 'forbid-imports',
     name: 'Command consumers do not bypass the registry',
     from: [
-      'src/shortcuts/manager.ts',
+      'src/platform/desktop.ts',
       'src/components/shared/MenuBar.tsx',
       'src/components/shared/TitleBar.tsx',
       'src/components/panels/DesktopPanelRail.tsx',
@@ -296,7 +296,7 @@ const FORBIDDEN_IMPORT_POLICIES = [
   {
     kind: 'forbid-imports',
     name: 'Command consumers do not bypass their projections',
-    from: ['src/shortcuts/manager.ts'],
+    from: ['src/app/keyboard/key-router.ts', 'src/app/keyboard/keymap.ts'],
     targets: ['src/app/document-session/actions.ts', 'src/canvas/session.ts'],
   },
   {
@@ -337,7 +337,7 @@ const FORBIDDEN_IMPORT_POLICIES = [
     kind: 'forbid-imports',
     name: 'Command Palette does not own shortcut registration',
     from: ['src/components/shared/CommandPalette.tsx'],
-    targets: ['src/shortcuts/manager.ts'],
+    targets: ['src/app/keyboard/key-router.ts'],
   },
   {
     kind: 'forbid-imports',
@@ -803,7 +803,7 @@ const REQUIRED_IMPORT_POLICIES = [
     kind: 'require-imports',
     name: 'Command consumers depend on the registry',
     from: [
-      'src/shortcuts/manager.ts',
+      'src/platform/desktop.ts',
       'src/components/panels/DesktopPanelRail.tsx',
       'src/components/panels/CanvasPanel.tsx',
       'src/components/shared/TitleBar.tsx',
@@ -1096,9 +1096,9 @@ const NAMED_IMPORT_POLICIES = [
     kind: 'named-imports',
     name: 'Desktop shortcuts match the neutral shell catalog',
     from: ['src/commands/graph/shortcuts.ts'],
-    target: 'src/app/shell-commands/index.ts',
-    requiredNames: ['matchShellCommandShortcut'],
-    allowedNames: ['matchShellCommandShortcut'],
+    target: 'src/app/keyboard/keymap.ts',
+    requiredNames: ['shellKeymapRows', 'CANVAS_KEYMAP_ROWS'],
+    allowedNames: ['shellKeymapRows', 'CANVAS_KEYMAP_ROWS', 'CommandSink', 'KeymapRow'],
   },
   {
     kind: 'named-imports',

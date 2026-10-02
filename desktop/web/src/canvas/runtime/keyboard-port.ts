@@ -1,50 +1,27 @@
 // canvas/runtime/keyboard-port.ts
 //
-// Owns the canvas's key handling behind CanvasKeyboardPort (spec §1.2a, ADR 0020): the arrow nudge and pan, the Menu key,
-// the armed tool's keys, Esc (the nudge series, the tool, a live pointer session, then the chain back to Select and an
-// empty selection), Enter or F2 on a note and Space for panning. In 0B it is today's window key handling in today's order,
-// fed by the DOM input source's `legacyKeys` through `keydown` and `keyup`: the armed tool's keys become ToolCommands.
-// 0C feeds the same port from the key router and removes the legacy half. The arrow nudge series is the ToolHost's; the
-// port only reads its outcome.
+// Owns the canvas's key handling behind CanvasKeyboardPort (spec §1.2a, §1.6, ADR 0020): the key router hands it every
+// key first (keyState: the nudge commit, the physical Ctrl, the Menu key's time, the Space hold), runs its key commands
+// (the arrow nudge and pan, Enter, Backspace, F2, `[` `]`, the Menu key) and its Esc layers. The arrow nudge series is the
+// ToolHost's; the port only reads its outcome. It never touches a DOM event: the router acts on its answers.
 
 import type { ToolHost } from './interaction-ports'
 import type { Modifiers, ToolId } from './interaction-types'
-import { isEditableTarget } from './input/editable-target'
-import type { CanvasEscapeLayer, CanvasKeyboardPort, CanvasKeyCommand } from './runtime'
+import type { CanvasEscapeLayer, CanvasKeyboardPort, CanvasKeyCommand, CanvasKeyState, CanvasKeyVerdict } from './runtime'
 import type { ViewNavigation } from './view/navigation'
 import type { ScreenPoint, ViewFrameSource } from './view/types'
 
 /** Arrow-key pan steps with nothing selected, in screen pixels. */
 const ARROW_PAN_STEP_PX = 64
 const ARROW_PAN_LARGE_STEP_PX = 256
-/** `[` and `]` turn a held stamp by this much; positive is clockwise on the map. */
-const ROTATE_HELD_STEP_DEG = 15 as const
-const ARROW_DIRECTIONS: Readonly<Record<string, ScreenPoint>> = {
-  ArrowLeft: { x: -1, y: 0 },
-  ArrowRight: { x: 1, y: 0 },
-  ArrowUp: { x: 0, y: -1 },
-  ArrowDown: { x: 0, y: 1 },
-}
+const ARROW_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'])
 const DIRECTIONS: Readonly<Record<'left' | 'right' | 'up' | 'down', ScreenPoint>> = {
   left: { x: -1, y: 0 },
   right: { x: 1, y: 0 },
   up: { x: 0, y: -1 },
   down: { x: 0, y: 1 },
 }
-type ToolCommand = Parameters<ToolHost['command']>[0]
 const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'AltGraph', 'CapsLock'])
-const KEYBOARD_INTERACTIVE_SELECTOR = [
-  'button',
-  'a[href]',
-  'input',
-  'textarea',
-  'select',
-  '[contenteditable="true"]',
-  '[role="button"]',
-  '[role="menu"]',
-  '[role="dialog"]',
-  'dialog',
-].join(',')
 
 export interface CanvasKeyboardPortDeps {
   readonly host: HTMLElement
@@ -55,12 +32,12 @@ export interface CanvasKeyboardPortDeps {
   /** Arrow pans (64 or 256 px), + / −, N, Shift+N and Shift+←/→/↑. */
   readonly navigation: Pick<ViewNavigation, 'panByPx' | 'zoomIn' | 'zoomOut' | 'resetNorth' | 'rotateBy'>
   readonly frames: ViewFrameSource
-  /** 0B only: the session's side of today's key handling (0C replaces it with the key router and the FocusOwner). */
-  readonly legacy: LegacyKeySession
+  /** The interaction session's side of the keys. */
+  readonly session: CanvasKeySession
 }
 
-/** 0B only: what today's key handling needs from the interaction session (its recogniser and the ToolHost). */
-export interface LegacyKeySession {
+/** What the keys need from the interaction session (its recogniser and the ToolHost). */
+interface CanvasKeySession {
   /** A pointer press or pan is live: the arrows and the Menu key wait, Esc cancels it. */
   pointerSessionLive(): boolean
   /** The map is in overview (the session's mode). */
@@ -71,18 +48,14 @@ export interface LegacyKeySession {
   keyState(state: { readonly space: boolean; readonly mods: Modifiers }): void
   /** Esc with a pointer session live: the recogniser's 'escape' cancels it and releases Space. */
   escapeGesture(): void
-  /** The Esc chain leaves the armed tool for Select (the runtime's setTool, as a tool's own request). */
+  /** The Esc layer 'tool' leaves the armed tool for Select (the runtime's setTool, as a tool's own request). */
   requestTool(id: ToolId): void
-  /** The Esc chain's last layer: an empty selection, history-free, redrawn. */
+  /** The Esc layer 'selection': an empty selection, history-free, redrawn. */
   clearSelection(): void
-  /** Settings › Keyboard › Single-key shortcuts: with them off, `[` and `]` work only while the map has focus. */
-  readSingleKeyShortcuts(): boolean
 }
 
-/** 0B only: the source's `legacyKeys` sink and the physical keys it reports. */
-export interface LegacyCanvasKeyboardPort extends CanvasKeyboardPort {
-  keydown(event: KeyboardEvent): void
-  keyup(event: KeyboardEvent): void
+/** The session's port: the router's CanvasKeyboardPort, plus the physical keys the DOM input source reads. */
+interface SessionCanvasKeyboardPort extends CanvasKeyboardPort {
   /** Whether Control is physically down (a Ctrl wheel without it is a trackpad pinch). */
   physicalCtrl(): boolean
   /** When the keyboard last opened the canvas menu (event time), for the contextmenu echo; null before. */
@@ -91,14 +64,12 @@ export interface LegacyCanvasKeyboardPort extends CanvasKeyboardPort {
   releaseKeys(): void
 }
 
-export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): LegacyCanvasKeyboardPort {
-  const { host, toolHost, legacy } = deps
+export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionCanvasKeyboardPort {
+  const { host, toolHost, session } = deps
   let physicalCtrl = false
   let lastMenuAt: number | null = null
-
-  function modifiersOf(event: KeyboardEvent): Modifiers {
-    return { shift: event.shiftKey, ctrl: event.ctrlKey, alt: event.altKey, meta: event.metaKey }
-  }
+  /** The last keydown keyState saw: a Menu key or Shift+F10 stamps the keyboard menu's time. */
+  let lastKeyDown: CanvasKeyState | null = null
 
   /** The arrow's rule after the host's nudge (spec §3.6): a handled or refused nudge takes the key, and on 'pass' the map
    *  pans with nothing selected; otherwise the key goes on. */
@@ -111,146 +82,45 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): LegacyCa
     return true
   }
 
-  /** Arrows on the focused map: never with Ctrl, Cmd or Alt, from a field or control, or while a pointer session is live. */
-  function arrowFromKeyboard(event: KeyboardEvent): boolean {
-    const direction = ARROW_DIRECTIONS[event.key]
-    if (!direction || event.ctrlKey || event.metaKey || event.altKey || legacy.pointerSessionLive()) return false
-    const target = event.target
-    if (!(target instanceof Node) || !host.contains(target) || isKeyboardInteractiveEventTarget(target)) return false
-    if (!arrow(direction, event.shiftKey)) return false
-    event.preventDefault()
+  /** Space held for panning: from anything but a text field, and from a control only while a pointer session is live. */
+  function holdsSpace(k: CanvasKeyState): boolean {
+    if (k.code !== 'Space' || session.spaceHeld() || k.text) return false
+    if (k.control && !session.pointerSessionLive()) return false
+    // A new note's field, focused or not, keeps Space from arming a pan, as today's Text adapter kept the shared keys.
+    if (!session.overview() && toolHost.openTextEntryMode() === 'create') return false
+    session.keyState({ space: true, mods: k.mods })
     return true
   }
 
-  function holdSpace(event: KeyboardEvent): void {
-    event.preventDefault()
-    legacy.keyState({ space: true, mods: modifiersOf(event) })
+  function verdict(): CanvasKeyVerdict {
+    return session.pointerSessionLive() ? 'pass-live' : 'pass'
+  }
+
+  function isMenuKey(k: CanvasKeyState): boolean {
+    return k.key === 'ContextMenu'
+      || (k.key === 'F10' && k.mods.shift && !k.mods.ctrl && !k.mods.meta && !k.mods.alt)
   }
 
   /** Esc in overview: today's interrupted-gesture cancel, Space released. */
   function cancelInterrupted(): void {
-    legacy.escapeGesture()
+    session.escapeGesture()
     toolHost.interrupted()
   }
 
-  function openMenu(): boolean {
-    return !toolHost.menuAt('selection', 'keyboard').quarantine
-  }
-
-  /** Menu key or Shift F10 while the map has focus: the menu for the current selection. */
-  function menuFromKeyboard(event: KeyboardEvent): boolean {
-    const menuKey = event.key === 'ContextMenu'
-      || (event.key === 'F10' && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey)
-    if (!menuKey || legacy.pointerSessionLive()) return false
-    if (!isCanvasKeyboardShortcutTarget(event.target, host)) return false
-    event.preventDefault()
-    event.stopPropagation()
-    lastMenuAt = event.timeStamp
-    if (!openMenu()) quarantine(event)
-    return true
-  }
-
-  /** The armed tool's key as a command (spec §3.6): Esc, Enter, Backspace, and `[` `]` under today's gating. */
-  function toolCommandFor(event: KeyboardEvent): ToolCommand | null {
-    switch (event.key) {
-      case 'Escape': return { kind: 'escape' }
-      case 'Enter': return { kind: 'confirm' }
-      case 'Backspace': return { kind: 'remove-last' }
-      case '[':
-      case ']': {
-        // Like other single-key shortcuts they never act in a text field or with Ctrl, Cmd or Alt; with single-key
-        // shortcuts off they still work while the map has focus, as the arrow keys do.
-        if (event.ctrlKey || event.metaKey || event.altKey || isEditableTarget(event.target)) return null
-        const onMap = event.target instanceof Node && host.contains(event.target)
-        if (!onMap && !legacy.readSingleKeyShortcuts()) return null
-        return { kind: 'rotate-held', stepDeg: event.key === ']' ? ROTATE_HELD_STEP_DEG : -ROTATE_HELD_STEP_DEG as -15 }
-      }
-      default: return null
-    }
-  }
-
-  /** The armed tool's own key; a consumed key is not also an app shortcut (Backspace in a draft must not delete). */
-  function toolKey(event: KeyboardEvent): boolean {
-    const command = toolCommandFor(event)
-    if (!command || toolHost.command(command) !== 'handled') return false
-    event.preventDefault()
-    if (command.kind === 'rotate-held') event.stopPropagation()
-    return true
-  }
-
   /**
-   * Esc on the map once the active tool has had its turn (a live pointer session cancels first): leave the tool for
-   * Select, then clear the selection. Tools that keep a pick (a stamp, a row source) drop it first.
+   * The live layers in the order an Esc runs them: today's, until the Esc chain (plan Phase F, K2) — a nudge series, the
+   * armed tool's own Esc (a draft or a row source, and today the stamps and Plant a row leave for Select themselves, even
+   * mid-press), a live pointer session, the tool, the selection; in overview only today's interrupted gesture.
    */
-  function escapeChain(event: KeyboardEvent): boolean {
-    if (event.key !== 'Escape' || event.defaultPrevented) return false
-    if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return false
-    if (!isCanvasKeyboardShortcutTarget(event.target, host)) return false
-    if (!toolHost.activeToolIsSelect()) {
-      event.preventDefault()
-      legacy.requestTool('select')
-      return true
-    }
-    if (!deps.hasSelection()) return false
-    event.preventDefault()
-    legacy.clearSelection()
-    return true
-  }
-
-  /** Enter or F2 under Select, which runs on the ToolHost: its note-edit command. */
-  function editSelectedNote(event: KeyboardEvent): boolean {
-    if (!toolHost.activeToolIsSelect()) return false
-    if (event.key !== 'Enter' && event.key !== 'F2') return false
-    if (!isCanvasKeyboardShortcutTarget(event.target, host)) return false
-    if (isEditableTarget(event.target)) return false
-    if (toolHost.command({ kind: 'edit-text' }) !== 'handled') return false
-    event.preventDefault()
-    event.stopPropagation()
-    return true
-  }
-
-  /** Today's _handleKeyDown, step by step. */
-  function handleKeyDown(event: KeyboardEvent): void {
-    if (toolHost.hasNudgeSeries() && !(event.key in ARROW_DIRECTIONS) && !MODIFIER_KEYS.has(event.key)) {
-      // Esc cancels the series like any gesture in progress; any other key keeps it.
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        toolHost.endNudgeSeries(false)
-        return
-      }
-      toolHost.endNudgeSeries(true)
-    }
-    if (arrowFromKeyboard(event)) return
-    if (!legacy.pointerSessionLive() && isKeyboardInteractiveEventTarget(event.target)) return
-    if (legacy.overview()) {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        cancelInterrupted()
-        return
-      }
-      if (event.code === 'Space' && !legacy.spaceHeld() && !isEditableTarget(event.target)) holdSpace(event)
-      return
-    }
-    if (menuFromKeyboard(event)) return
-    if (toolKey(event)) return
-    if (event.key === 'Escape' && legacy.pointerSessionLive()) {
-      event.preventDefault()
-      legacy.escapeGesture()
-      return
-    }
-    if (escapeChain(event)) return
-    if (editSelectedNote(event)) return
-    if (event.code !== 'Space' || legacy.spaceHeld() || isEditableTarget(event.target)) return
-    // A new note's field, focused or not, keeps Space from arming a pan, as today's Text adapter kept the shared keys.
-    if (toolHost.openTextEntryMode() === 'create') return
-    holdSpace(event)
-  }
-
   function escapeLayers(): readonly CanvasEscapeLayer[] {
     const layers: CanvasEscapeLayer[] = []
-    if (legacy.pointerSessionLive()) layers.push('gesture')
     if (toolHost.hasNudgeSeries()) layers.push('nudge-series')
-    if (toolHost.activeToolHasTransient()) layers.push('tool-transient')
+    if (session.overview()) {
+      layers.push('gesture')
+      return layers
+    }
+    if (toolHost.activeToolHasTransient() || !toolHost.activeToolIsSelect()) layers.push('tool-transient')
+    if (session.pointerSessionLive()) layers.push('gesture')
     if (!toolHost.activeToolIsSelect()) layers.push('tool')
     if (deps.hasSelection()) layers.push('selection')
     return layers
@@ -262,36 +132,45 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): LegacyCa
     escape(layer) {
       switch (layer) {
         case 'gesture':
-          legacy.escapeGesture()
-          return
+          if (session.overview()) cancelInterrupted()
+          else session.escapeGesture()
+          return true
         case 'nudge-series':
           toolHost.endNudgeSeries(false)
-          return
+          return true
         case 'tool-transient':
-          toolHost.command({ kind: 'escape' })
-          return
+          return toolHost.command({ kind: 'escape' }) === 'handled'
         case 'tool':
-          legacy.requestTool('select')
-          return
+          session.requestTool('select')
+          return true
         case 'selection':
-          legacy.clearSelection()
-          return
+          session.clearSelection()
+          return true
       }
     },
     describeEscape() {
       return escapeLayers()[0] ?? null
     },
     command(c: CanvasKeyCommand): boolean {
+      const overview = session.overview()
       switch (c.kind) {
         case 'arrow':
-          if (legacy.pointerSessionLive()) return false
+          if (session.pointerSessionLive()) return false
           return arrow(DIRECTIONS[c.dir], c.large)
         case 'rotate-held':
+          if (overview) return false
           return toolHost.command({ kind: 'rotate-held', stepDeg: c.stepDeg }) === 'handled'
         case 'confirm':
-        case 'remove-last':
+          if (overview) return false
+          if (toolHost.command({ kind: 'confirm' }) === 'handled') return true
+          // Enter under Select edits the one selected note, as F2 does.
+          return toolHost.activeToolIsSelect() && toolHost.command({ kind: 'edit-text' }) === 'handled'
         case 'edit-text':
+          if (overview || !toolHost.activeToolIsSelect()) return false
+          return toolHost.command({ kind: 'edit-text' }) === 'handled'
+        case 'remove-last':
         case 'delete-handle':
+          if (overview) return false
           return toolHost.command({ kind: c.kind }) === 'handled'
         case 'rotate-view':
           deps.navigation.rotateBy(c.direction)
@@ -304,22 +183,26 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): LegacyCa
           else deps.navigation.zoomOut()
           return true
         case 'context-menu':
-          if (legacy.pointerSessionLive()) return false
-          openMenu()
+          if (overview || session.pointerSessionLive()) return false
+          if (lastKeyDown && isMenuKey(lastKeyDown)) lastMenuAt = lastKeyDown.timeStamp
+          toolHost.menuAt('selection', 'keyboard')
           return true
       }
     },
-    keyState(state) {
-      legacy.keyState(state)
-    },
-    keydown(event) {
-      if (event.key === 'Control') physicalCtrl = true
-      handleKeyDown(event)
-    },
-    keyup(event) {
-      if (event.key === 'Control') physicalCtrl = false
-      if (event.code !== 'Space') return
-      legacy.keyState({ space: false, mods: modifiersOf(event) })
+    keyState(k) {
+      if (k.type === 'keyup') {
+        if (k.key === 'Control') physicalCtrl = false
+        if (k.code === 'Space') session.keyState({ space: false, mods: k.mods })
+        return verdict()
+      }
+      lastKeyDown = k
+      if (k.key === 'Control') physicalCtrl = true
+      // Any other key ends a nudge series (one undo step); Esc aborts it through its layer.
+      if (toolHost.hasNudgeSeries() && !ARROW_KEYS.has(k.key) && !MODIFIER_KEYS.has(k.key) && k.key !== 'Escape') {
+        toolHost.endNudgeSeries(true)
+      }
+      if (holdsSpace(k)) return 'held'
+      return verdict()
     },
     physicalCtrl: () => physicalCtrl,
     lastKeyboardMenuAt: () => lastMenuAt,
@@ -343,35 +226,9 @@ export function createForwardingCanvasKeyboardPort(
       return current()?.host ?? host
     },
     escapeLayers: () => current()?.escapeLayers() ?? [],
-    escape: (layer) => current()?.escape(layer),
+    escape: (layer) => current()?.escape(layer) ?? false,
     describeEscape: () => current()?.describeEscape() ?? null,
     command: (c) => current()?.command(c) ?? false,
-    keyState: (state) => current()?.keyState(state),
+    keyState: (state) => current()?.keyState(state) ?? 'pass',
   }
-}
-
-/** Today's app-wide swallow while a failed cancellation is pending. */
-function quarantine(event: KeyboardEvent): void {
-  if (event.cancelable) event.preventDefault()
-  event.stopImmediatePropagation()
-}
-
-/** Keys on the map itself (or the window): not from a control, a field, a menu or a dialog inside it. */
-function isCanvasKeyboardShortcutTarget(target: EventTarget | null, host: HTMLElement): boolean {
-  if (typeof window !== 'undefined' && target === window) return true
-  if (!(target instanceof Node)) return false
-  if (!host.contains(target)) return false
-  const element = target instanceof HTMLElement ? target : target.parentElement
-  if (!element) return false
-  return element.closest(KEYBOARD_INTERACTIVE_SELECTOR) === null
-}
-
-/** A control, a field, a menu or a dialog keeps its own keys. */
-function isKeyboardInteractiveEventTarget(target: EventTarget | null): boolean {
-  const element = target instanceof HTMLElement
-    ? target
-    : target instanceof Node
-      ? target.parentElement
-      : null
-  return element ? element.closest(KEYBOARD_INTERACTIVE_SELECTOR) !== null : false
 }

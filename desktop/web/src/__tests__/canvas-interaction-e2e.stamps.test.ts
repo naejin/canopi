@@ -15,6 +15,7 @@ import type { CanvasToolCommandSurface } from '../canvas/runtime/runtime'
 import type { CanvasToolGuidance } from '../canvas/session-state'
 import type { DraftPresentation } from '../canvas/runtime/tools/draft'
 import { SceneStore } from '../canvas/runtime/scene'
+import { singleKeyShortcuts } from '../app/settings/state'
 import type { SceneInteractionEventHarness } from './support/canvas-interaction-events'
 import type { TestView } from './support/test-view'
 import {
@@ -245,47 +246,40 @@ describe('SceneInteractionSession', () => {
     }
 
     it('keeps ] and [ to the stamp while one is held, and leaves them to the shortcuts otherwise', () => {
-      const bubbled = vi.fn()
-      document.addEventListener('keydown', bubbled)
-      try {
-        const { session, angle } = rotationSession()
-        session.setTool('object-stamp')
-        // Nothing held yet: ] is still Bring to front.
-        expect(events.keyDown({ key: ']', target: container }).defaultPrevented).toBe(false)
-        expect(bubbled).toHaveBeenCalledOnce()
+      const { session, angle } = rotationSession()
+      session.setTool('object-stamp')
+      // Nothing held yet: ] falls back to Bring to front, which this fixture's command sink leaves unconsumed.
+      expect(events.keyDown({ key: ']', target: container }).defaultPrevented).toBe(false)
 
-        store.updatePersisted((draft) => {
-          draft.plants = [{
-            kind: 'plant', locked: false, id: 'plant-1', canonicalName: 'Malus domestica', commonName: 'Apple',
-            color: null, stratum: null, canopySpreadM: 2, position: { x: 50, y: 60 }, rotationDeg: null,
-            notes: null, plantedDate: null, quantity: 1,
-          }]
-        })
-        events.pointerDown({ x: 54, y: 63 }, { button: 0 })
-        const held = events.keyDown({ key: ']', target: container })
-        expect(held.defaultPrevented).toBe(true)
-        expect(bubbled).toHaveBeenCalledOnce()
-        expect(angle()).toBe(15)
-        // Modified brackets and brackets typed in a field are not stamp turns.
-        events.keyDown({ key: ']', ctrlKey: true, target: container })
-        const field = document.createElement('input')
-        container.appendChild(field)
-        events.keyDown({ key: ']', target: field })
-        expect(angle()).toBe(15)
+      store.updatePersisted((draft) => {
+        draft.plants = [{
+          kind: 'plant', locked: false, id: 'plant-1', canonicalName: 'Malus domestica', commonName: 'Apple',
+          color: null, stratum: null, canopySpreadM: 2, position: { x: 50, y: 60 }, rotationDeg: null,
+          notes: null, plantedDate: null, quantity: 1,
+        }]
+      })
+      events.pointerDown({ x: 54, y: 63 }, { button: 0 })
+      const held = events.keyDown({ key: ']', target: container })
+      expect(held.defaultPrevented).toBe(true)
+      expect(angle()).toBe(15)
+      // Modified brackets and brackets typed in a field are not stamp turns.
+      events.keyDown({ key: ']', ctrlKey: true, target: container })
+      const field = document.createElement('input')
+      container.appendChild(field)
+      events.keyDown({ key: ']', target: field })
+      expect(angle()).toBe(15)
 
-        for (let turn = 0; turn < 5; turn += 1) events.keyDown({ key: ']', target: container })
-        // The sampled plant was picked 4 m east and 3 m south of its centre; at 90° that offset turns too.
-        events.pointerDown({ x: 100, y: 120 }, { button: 0 })
-        expect(store.persisted.plants[1]?.position).toEqual({ x: 103, y: 116 })
-        session.dispose()
-      } finally {
-        document.removeEventListener('keydown', bubbled)
-      }
+      for (let turn = 0; turn < 5; turn += 1) events.keyDown({ key: ']', target: container })
+      // The sampled plant was picked 4 m east and 3 m south of its centre; at 90° that offset turns too.
+      events.pointerDown({ x: 100, y: 120 }, { button: 0 })
+      expect(store.persisted.plants[1]?.position).toEqual({ x: 103, y: 116 })
+      session.dispose()
     })
 
     it('with single-key shortcuts off, turns the stamp only while the map has focus', () => {
       holdSavedStamp()
-      const { session, angle } = rotationSession({ readSingleKeyShortcuts: () => false })
+      singleKeyShortcuts.value = false
+      const { session, angle } = rotationSession()
       session.setTool('saved-object-stamp')
       events.pointerMove({ x: 100, y: 100 }, { button: 0 })
 

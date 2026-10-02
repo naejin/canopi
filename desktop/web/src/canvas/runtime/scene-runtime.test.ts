@@ -56,6 +56,7 @@ import { locale, plantSpacingIntervalM } from '../../app/settings/state'
 import type { CanopiFile, PanelTarget } from '../../types/design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../generated/canopi-design-format'
 import { geoAt } from '../../__tests__/support/geo-design'
+import { installCanvasKeyRouter } from '../../__tests__/support/key-router'
 import { placeOnHost } from '../../__tests__/support/test-view'
 import { createTestRendererView } from '../../__tests__/support/scene-renderer-snapshot'
 import { speciesTarget } from '../../target'
@@ -446,7 +447,6 @@ function createTestSettingsAdapter(
     readChromeOverlay: () => ({ gridVisible, rulersVisible, guidesVisible: true }),
     readSnapToGridEnabled: () => snapToGrid,
     readSnapToGuidesEnabled: () => snapToGuides,
-    readSingleKeyShortcuts: () => true,
     readScrollWheel: () => 'zoom',
     readPlantSpacingIntervalMeters: () => plantSpacingIntervalM,
     commitPlantSpacingIntervalMeters: (meters) => {
@@ -1485,7 +1485,7 @@ describe('scene canvas runtime', () => {
     // A load after init takes its own fit, as Design loads do (init showed the empty Design's overview).
     withoutStamps.documentSurface.zoomToFit()
     withoutStamps.commandSurface.sceneEdits.selectAll()
-    openContextMenuFromKeyboard(withoutStampsMount.container)
+    openContextMenuFromKeyboard(withoutStamps, withoutStampsMount.container)
 
     expect(canvasContextMenuRequest.value?.selection?.editableTargets).toHaveLength(1)
     expect(canvasContextMenuRequest.value?.saveSelectionAsObjectStamp).toBeUndefined()
@@ -1503,7 +1503,7 @@ describe('scene canvas runtime', () => {
     // A load after init takes its own fit, as Design loads do (init showed the empty Design's overview).
     withStamps.documentSurface.zoomToFit()
     withStamps.commandSurface.sceneEdits.selectAll()
-    openContextMenuFromKeyboard(withStampsMount.container)
+    openContextMenuFromKeyboard(withStamps, withStampsMount.container)
 
     expect(canvasContextMenuRequest.value?.saveSelectionAsObjectStamp).toBeTypeOf('function')
     withStamps.destroy()
@@ -2968,6 +2968,7 @@ describe('scene canvas runtime', () => {
     // Key routing listens on the window, so the map must be in the document.
     document.body.append(container)
     container.focus()
+    const keys = installCanvasKeyRouter(() => runtime.keyboardPort)
 
     events.keyDown({ key: 'ArrowRight', target: container })
     events.keyDown({ key: 'ArrowRight', shiftKey: true, target: container })
@@ -2978,6 +2979,7 @@ describe('scene canvas runtime', () => {
     runtime.commandSurface.history.undo()
     expect(position().x).toBeCloseTo(start.x, 6)
     expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+    keys.dispose()
     events.dispose()
     runtime.destroy()
     container.remove()
@@ -3576,11 +3578,13 @@ describe('scene canvas runtime', () => {
 })
 
 /** The Menu key while the map has focus opens the right-click menu for the selection. */
-function openContextMenuFromKeyboard(container: HTMLElement): void {
-  // Keyboard shortcuts reach the session through window, so the map must be in the document.
+function openContextMenuFromKeyboard(runtime: SceneCanvasRuntime, container: HTMLElement): void {
+  // The key router listens on the window, so the map must be in the document.
   document.body.appendChild(container)
   container.tabIndex = -1
   container.focus()
+  const keys = installCanvasKeyRouter(() => runtime.keyboardPort)
   container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ContextMenu', bubbles: true, cancelable: true }))
+  keys.dispose()
   container.remove()
 }

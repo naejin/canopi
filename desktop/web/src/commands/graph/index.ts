@@ -9,6 +9,6 @@ export type {
   MenuEntry,
 } from './projections'
 export {
-  isCommandPaletteToggleEvent,
-  runAppCommandShortcutForEvent,
+  createDesktopCommandSink,
+  DESKTOP_KEYMAP,
 } from './shortcuts'

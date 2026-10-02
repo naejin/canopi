@@ -9,6 +9,7 @@ import {
 import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
+  CanvasKeyboardPort,
   CanvasLayerCommandSurface,
   CanvasPlantPresentationCommandSurface,
   CanvasQuerySurface,
@@ -54,6 +55,11 @@ export const currentCanvasHasSelection = canvasHasSelectionState
 
 export function getCurrentCanvasSession(): CanvasRuntimeSurfaces | null {
   return currentCanvasSession.value
+}
+
+/** The live session's keyboard port, which the key router hands every key (spec §1.6); null with no canvas. */
+export function currentCanvasKeyboardPort(): CanvasKeyboardPort | null {
+  return currentCanvasSession.peek()?.keyboard ?? null
 }
 
 export function getCurrentCanvasCommandSurface(): CanvasCommandSurface | null {

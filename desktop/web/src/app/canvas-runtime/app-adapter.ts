@@ -19,7 +19,7 @@ import {
 } from '../canvas-settings/signals'
 import { newDesignViewFrom } from '../canvas-map-surface/last-view'
 import { mutateSettingsProjection } from '../settings/projection'
-import { lastView, locale, plantSpacingIntervalM, scrollWheel, singleKeyShortcuts, theme } from '../settings/state'
+import { lastView, locale, plantSpacingIntervalM, scrollWheel, theme } from '../settings/state'
 import { composeDocumentForSave } from '../contracts/document'
 import { setCanvasClean } from '../document-session/store'
 import { closeCanvasContextMenu, openCanvasContextMenu } from '../canvas-context-menu/state'
@@ -75,7 +75,6 @@ export function createAppCanvasRuntimeAppAdapter(
       },
       readSnapToGridEnabled: () => snapToGridEnabled.value,
       readSnapToGuidesEnabled: () => snapToGuidesEnabled.value,
-      readSingleKeyShortcuts: () => singleKeyShortcuts.peek(),
       readScrollWheel: () => scrollWheel.peek(),
       readPlantSpacingIntervalMeters: () => plantSpacingIntervalM.value,
       readLastView: () => newDesignViewFrom(lastView.peek()),

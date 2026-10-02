@@ -1,8 +1,8 @@
 // canvas/runtime/interaction-session.ts
 //
 // Owns the canvas's interaction session (spec §1.2–1.4, ADRs 0017 and 0018): it composes DomInputSource → normalise →
-// recognise → InputRouter → ToolHost, with the keyboard port on the source's legacy key sink, and prepares the map host
-// as a keyboard stop. Every tool and every drop runs on the host (spec §1.4, "Drops"). The session keeps today's
+// recognise → InputRouter → ToolHost, with the keyboard port the key router reaches (spec §1.6), and prepares the map
+// host as a keyboard stop. Every tool and every drop runs on the host (spec §1.4, "Drops"). The session keeps today's
 // SceneInteractionSession members: setOverviewMode is a mode override fed to the recogniser's configure and the host's
 // frames, refreshMeasurements reaches ToolHost.sceneChanged(). It builds the host's chrome (chrome/: the handle layer,
 // the text entry, the plant tooltip and the Unlock affordance, whose Unlock it runs), bridges the plant and saved-stamp
@@ -119,8 +119,6 @@ export interface SceneInteractionSessionDeps {
   render: (kind: 'scene' | 'viewport') => void
   readSnapToGridEnabled: () => boolean
   readSnapToGuidesEnabled: () => boolean
-  /** Settings › Keyboard › Single-key shortcuts; on when absent. */
-  readSingleKeyShortcuts?: () => boolean
   /** Settings › Canvas › Scroll wheel; `zoom` when absent. Pinch and Ctrl wheel zoom either way. */
   readScrollWheel?: () => CanvasScrollWheelSetting
   readPlantSpacingIntervalMeters: () => number
@@ -160,7 +158,7 @@ export interface SceneInteractionSession {
   canRedoTransientHistory(): boolean
   undoTransientHistory(): boolean
   redoTransientHistory(): boolean
-  /** The canvas's key handling (spec §1.2a), fed by the DOM input source's legacy key sink until 0C. */
+  /** The canvas's key handling (spec §1.2a, §1.6), which the key router reaches through the runtime surfaces. */
   readonly keyboard: CanvasKeyboardPort
   /** ToolHost.subscribePointerWorld: the pointer's world and screen points over the map, null when it leaves (the inspection
    *  lens). The session drops the point of a move made with any button held (its raw buttonMask), as today's lens skipped it. */
@@ -365,7 +363,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         hasSelection: () => _deps.getSelection().length > 0,
         navigation: this._navigation,
         frames: this._frames,
-        legacy: {
+        session: {
           pointerSessionLive: () => this._pointerSessionLive(),
           overview: () => this._overview.peek(),
           spaceHeld: () => this._spaceHeld,
@@ -377,7 +375,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
             _deps.render('scene')
             this._toolHost.sceneChanged()
           },
-          readSingleKeyShortcuts: () => _deps.readSingleKeyShortcuts?.() ?? true,
         },
       })
       this.keyboard = this._port
@@ -391,10 +388,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         },
         clock,
         timers,
-        legacyKeys: {
-          keydown: (event) => this._port.keydown(event),
-          keyup: (event) => this._port.keyup(event),
-        },
         listensToRulers: true,
       })
       this._stopWatchingSources = own(this._watchToolSources(), (stop) => stop())

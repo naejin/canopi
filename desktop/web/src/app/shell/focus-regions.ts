@@ -1,11 +1,9 @@
-import { modalLayerOpen } from './modal-layer'
-
 /**
  * The workspace's keyboard regions, in F6 order: the title bar, the tool
  * rail, the map and the open dock panel. F6 moves focus to the next region
  * that is showing, Shift F6 to the previous one, returning to the control
  * last focused there (else the region's own tab stop). Each region
- * registers while it is mounted; the platform bootstrap installs the keys.
+ * registers while it is mounted; the key router runs F6 (app/keyboard/key-router.ts).
  */
 export type FocusRegionId = 'title-bar' | 'tool-rail' | 'map' | 'dock'
 
@@ -89,29 +87,4 @@ export function cycleFocusRegion(step: 1 | -1): boolean {
     return true
   }
   return false
-}
-
-function handleKeyDown(event: KeyboardEvent): void {
-  if (event.key !== 'F6' || event.ctrlKey || event.altKey || event.metaKey || event.defaultPrevented) return
-  // A modal dialog keeps focus inside it.
-  if (modalLayerOpen.peek()) return
-  if (cycleFocusRegion(event.shiftKey ? -1 : 1)) event.preventDefault()
-}
-
-let disposeInstalled: (() => void) | null = null
-
-/** F6 and Shift F6 on the window; returns the uninstall. */
-export function installFocusRegionKeys(): () => void {
-  disposeInstalled?.()
-  window.addEventListener('keydown', handleKeyDown, true)
-  const dispose = (): void => {
-    window.removeEventListener('keydown', handleKeyDown, true)
-    if (disposeInstalled === dispose) disposeInstalled = null
-  }
-  disposeInstalled = dispose
-  return dispose
-}
-
-if (import.meta.hot) {
-  import.meta.hot.dispose(() => disposeInstalled?.())
 }

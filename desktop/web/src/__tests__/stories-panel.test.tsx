@@ -9,11 +9,13 @@ vi.mock('../app/saved-views/thumbnails', async (importOriginal) => {
 })
 
 import { StoriesPanel } from '../components/panels/StoriesPanel'
-import { dismissStoryUndo, runStoryUndoShortcut, selectStep, selectStory, storyUndo } from '../app/stories'
+import { dismissStoryUndo, selectStep, selectStory, storyUndo } from '../app/stories'
 import { leaveStoryPresentation, presentedStep, storyPresentationActive } from '../app/story-presentation'
 import { StoryPresenter } from '../components/stories/StoryPresenter'
-import { installWebCanvasShortcuts } from '../web/canvas-shortcuts'
-import { disposeShortcuts, initShortcuts } from '../shortcuts/manager'
+import type { KeyRouterHandle } from '../app/keyboard/key-router'
+import { installWebKeyRouter } from '../web/browser-shell-commands'
+import { installDesktopKeys } from './support/desktop-key-router'
+import { pressKey } from './support/key-router'
 import { currentDesign, designSessionStore } from '../app/document-session/store'
 import { mapZoomToStageScale } from '../canvas/projection'
 import { createSessionPlane } from '../canvas/session-plane'
@@ -127,6 +129,8 @@ async function openMenuItem(trigger: HTMLButtonElement, itemId: string): Promise
   await act(async () => { item.click() })
 }
 
+let keys: KeyRouterHandle | null = null
+
 beforeEach(() => {
   locale.value = 'en'
   container = document.createElement('div')
@@ -136,7 +140,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  disposeShortcuts()
+  keys?.dispose()
+  keys = null
   leaveStoryPresentation()
   render(null, container)
   container.remove()
@@ -305,25 +310,23 @@ describe('Stories panel', () => {
     await openMenuItem(button('More actions for step 1'), 'delete')
     expect(stepIds()).toEqual(['s2', 's3'])
 
+    keys = installDesktopKeys()
+
     const field = document.createElement('input')
     document.body.append(field)
-    const inField = new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', ctrlKey: true, bubbles: true, cancelable: true })
-    field.dispatchEvent(inField)
-    expect(runStoryUndoShortcut(inField)).toBe(false)
+    expect(pressKey({ key: 'z', code: 'KeyZ', ctrlKey: true }, field).defaultPrevented).toBe(false)
     expect(stepIds()).toEqual(['s2', 's3'])
 
-    const redo = new KeyboardEvent('keydown', { key: 'Z', code: 'KeyZ', ctrlKey: true, shiftKey: true, cancelable: true })
-    expect(runStoryUndoShortcut(redo)).toBe(false)
+    expect(pressKey({ key: 'Z', code: 'KeyZ', ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(false)
+    expect(stepIds()).toEqual(['s2', 's3'])
 
-    const undo = new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', ctrlKey: true, cancelable: true })
-    let handled = false
-    await act(async () => { handled = runStoryUndoShortcut(undo) })
-    expect(handled).toBe(true)
-    expect(undo.defaultPrevented).toBe(true)
+    let undo: KeyboardEvent | null = null
+    await act(async () => { undo = pressKey({ key: 'z', code: 'KeyZ', ctrlKey: true }) })
+    expect(undo!.defaultPrevented).toBe(true)
     expect(stepIds()).toEqual(['s1', 's2', 's3'])
     expect(storyUndo.value).toBeNull()
-    // Nothing left to undo: Ctrl Z goes on to the map's history.
-    expect(runStoryUndoShortcut(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, cancelable: true }))).toBe(false)
+    // Nothing left to undo: Ctrl Z goes on to the map's history (no canvas here, so nothing takes it).
+    expect(pressKey({ key: 'z', ctrlKey: true }).defaultPrevented).toBe(false)
   })
 
   it('leaves Ctrl Z to the map when the Undo toast is not on screen', async () => {
@@ -331,24 +334,27 @@ describe('Stories panel', () => {
     await openMenuItem(button('More actions for this story'), 'delete-story')
     expect(storyUndo.value).not.toBeNull()
     await act(async () => { render(null, container) })
-    const undo = new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, cancelable: true })
-    expect(runStoryUndoShortcut(undo)).toBe(false)
+    keys = installDesktopKeys()
+    expect(pressKey({ key: 'z', ctrlKey: true }).defaultPrevented).toBe(false)
     expect(currentDesign.value!.stories!.map((story) => story.id)).toEqual(['open-day'])
   })
 
   it('undoes a story delete with Ctrl Z through both editions’ key routing', async () => {
     await renderPanel()
     await openMenuItem(button('More actions for this story'), 'delete-story')
-    const disposeWeb = installWebCanvasShortcuts(window)
+    const web = installWebKeyRouter({
+      catalog: [],
+      readState: () => ({ hasDesign: true, revertAvailable: false, activePanel: 'canvas', sidePanel: 'stories' }),
+    })
     try {
-      await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', ctrlKey: true, cancelable: true })) })
+      await act(async () => { pressKey({ key: 'z', code: 'KeyZ', ctrlKey: true }) })
       expect(currentDesign.value!.stories!.map((story) => story.id)).toEqual(['visit', 'open-day'])
     } finally {
-      disposeWeb()
+      web.dispose()
     }
     await openMenuItem(button('More actions for this story'), 'delete-story')
-    initShortcuts()
-    await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', ctrlKey: true, cancelable: true })) })
+    keys = installDesktopKeys()
+    await act(async () => { pressKey({ key: 'z', code: 'KeyZ', ctrlKey: true }) })
     expect(currentDesign.value!.stories!.map((story) => story.id)).toEqual(['visit', 'open-day'])
   })
 

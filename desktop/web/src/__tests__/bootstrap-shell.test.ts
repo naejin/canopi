@@ -4,8 +4,8 @@ const mocks = vi.hoisted(() => ({
   disposeCloseGuard: vi.fn(),
   disposeSettings: vi.fn(),
   disposeTheme: vi.fn(),
-  initShortcuts: vi.fn(),
-  disposeShortcuts: vi.fn(),
+  installDesktopKeyRouter: vi.fn(),
+  disposeKeyRouter: vi.fn(),
   initTheme: vi.fn(),
   installSettingsProjection: vi.fn(),
   invoke: vi.fn(),
@@ -56,9 +56,8 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: mocks.invoke,
 }));
 
-vi.mock("../shortcuts/manager", () => ({
-  initShortcuts: mocks.initShortcuts,
-  disposeShortcuts: mocks.disposeShortcuts,
+vi.mock("../commands/registry", () => ({
+  installDesktopKeyRouter: mocks.installDesktopKeyRouter,
 }));
 
 vi.mock("../utils/theme", () => ({
@@ -87,8 +86,8 @@ describe("settings platform bootstrap", () => {
     mocks.disposeCloseGuard.mockReset();
     mocks.disposeSettings.mockReset();
     mocks.disposeTheme.mockReset();
-    mocks.initShortcuts.mockReset();
-    mocks.disposeShortcuts.mockReset();
+    mocks.disposeKeyRouter.mockReset();
+    mocks.installDesktopKeyRouter.mockReset().mockReturnValue({ dispose: mocks.disposeKeyRouter });
     mocks.initTheme.mockReset().mockReturnValue(mocks.disposeTheme);
     mocks.installSettingsProjection.mockReset().mockReturnValue({
       ready: Promise.resolve(),
@@ -248,9 +247,15 @@ describe("settings platform bootstrap", () => {
 
   it("replaces the Desktop shell lifecycle while preserving the close guard", async () => {
     const { bootstrapPlatform } = await import("../platform/desktop");
+    const { installKeyRouter } = await import("../app/keyboard/key-router");
 
     bootstrapPlatform();
     bootstrapPlatform();
+
+    // The one Desktop key router: replaced with the rest of the platform lifetime.
+    expect(mocks.installDesktopKeyRouter).toHaveBeenCalledTimes(2);
+    expect(mocks.installDesktopKeyRouter).toHaveBeenLastCalledWith(installKeyRouter, expect.objectContaining({ target: window }));
+    expect(mocks.disposeKeyRouter).toHaveBeenCalledOnce();
 
     expect(mocks.installSettingsProjection).toHaveBeenCalledTimes(2);
     expect(mocks.installSettingsProjection).toHaveBeenNthCalledWith(
@@ -279,7 +284,6 @@ describe("settings platform bootstrap", () => {
     await bootstrap.ready;
 
     expect(mocks.initTheme).toHaveBeenCalledTimes(1);
-    expect(mocks.initShortcuts).toHaveBeenCalledTimes(1);
     expect(mocks.installSettingsProjection).toHaveBeenCalledWith(settingsAdapter);
     expect(mocks.initTheme.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.installSettingsProjection.mock.invocationCallOrder[0]!,
@@ -293,7 +297,6 @@ describe("settings platform bootstrap", () => {
     bootstrap.dispose();
 
     expect(mocks.disposeSettings).toHaveBeenCalledOnce();
-    expect(mocks.disposeShortcuts).toHaveBeenCalledOnce();
     expect(mocks.disposeTheme).toHaveBeenCalledOnce();
   });
 

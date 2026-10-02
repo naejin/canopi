@@ -2,8 +2,6 @@ import type { Panel, SidePanel } from '../shell/state'
 import {
   ariaKeyShortcuts,
   formatShortcut,
-  matchesShortcut,
-  type ShortcutInput,
 } from './shortcut-text'
 
 type ShellCommandIdByCapability = {
@@ -75,8 +73,6 @@ interface ShellCommandCapability {
   /** Current value of a checkable command (theme, tool names, background). */
   isChecked?(): boolean
 }
-
-export type ShellCommandShortcutInput = ShortcutInput
 
 export type ShellCommandCapabilities = Partial<
   Record<ShellCommandCapabilityId, ShellCommandCapability>
@@ -319,15 +315,6 @@ export function projectShellCommandCatalog<Id extends ShellCommandId>(
       planning: panelCommands('planning'),
     },
   }
-}
-
-export function matchShellCommandShortcut<Id extends ShellCommandId>(
-  catalog: readonly ShellCommandCatalogEntry<Id>[],
-  input: ShellCommandShortcutInput,
-): ShellCommandCatalogEntry<Id> | null {
-  return catalog.find((command) =>
-    command.shortcut && matchesShortcut(command.shortcut, input)
-  ) ?? null
 }
 
 function requireProjectedCommand<Id extends ShellCommandId>(

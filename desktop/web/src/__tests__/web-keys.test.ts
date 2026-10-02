@@ -4,36 +4,58 @@ import { setCurrentCanvasSession } from '../canvas/session'
 import { activeTool } from '../canvas/session-state'
 import { placeSearchFocusRequest } from '../app/geocoding/place-search-ui'
 import { keyboardShortcutsDialogOpen } from '../app/shell/dialogs'
+import { activePanel, sidePanel } from '../app/shell/state'
 import { singleKeyShortcuts } from '../app/settings/state'
-import { createBrowserShellCatalog } from '../web/browser-shell-commands'
+import {
+  createBrowserShellCatalog,
+  installWebKeyRouter,
+  type BrowserShellCatalog,
+} from '../web/browser-shell-commands'
+import type { KeyRouterHandle } from '../app/keyboard/key-router'
 import { answerSaveProblem, requestSaveProblemDecision } from '../app/document-session/save-problem'
 import { registerPlantFinder } from '../app/plant-finder/focus'
-import {
-  disposeWebCanvasShortcuts,
-  installWebCanvasShortcuts,
-} from '../web/canvas-shortcuts'
 import {
   createTestCanvasCommandSurface,
   createTestCanvasRuntimeSurfaces,
 } from './support/canvas-runtime-surfaces'
 
-describe('Web Canvas shortcuts', () => {
+let keys: KeyRouterHandle | null = null
+
+/** The Web key router over a catalog (none: the canvas rows alone). */
+function installWebKeys(catalog: BrowserShellCatalog = []): KeyRouterHandle {
+  keys = installWebKeyRouter({
+    catalog,
+    readState: () => ({ hasDesign: true, revertAvailable: false, activePanel: 'canvas', sidePanel: null }),
+  })
+  return keys
+}
+
+function webCatalog(newDesign = vi.fn()): BrowserShellCatalog {
+  return createBrowserShellCatalog({
+    newDesign, openCanopi: vi.fn(), downloadCanopi: vi.fn(), revertDesign: vi.fn(),
+    importGeoJson: vi.fn(), exportGeoJson: vi.fn(), exportBudgetCsv: vi.fn(), closeDesign: vi.fn(), navigate: vi.fn(),
+  }, { templatesEnabled: false, canvasReady: () => true })
+}
+
+describe('Web keys', () => {
   beforeEach(() => {
     activeTool.value = 'select'
     setCurrentCanvasSession(null)
-    disposeWebCanvasShortcuts()
   })
 
   afterEach(() => {
-    disposeWebCanvasShortcuts()
+    keys?.dispose()
+    keys = null
     setCurrentCanvasSession(null)
+    activePanel.value = 'canvas'
+    sidePanel.value = null
     activeTool.value = 'select'
     document.body.innerHTML = ''
     vi.restoreAllMocks()
   })
 
   it('ignores a key an earlier listener already consumed', () => {
-    installWebCanvasShortcuts()
+    installWebKeys()
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces())
     const event = shortcutEvent({ key: 'r' })
     event.preventDefault()
@@ -44,7 +66,7 @@ describe('Web Canvas shortcuts', () => {
   })
 
   it('focuses the place field on Ctrl+K only while a Design canvas is live', () => {
-    installWebCanvasShortcuts()
+    installWebKeys()
     const before = placeSearchFocusRequest.value
     expect(dispatchShortcut({ key: 'k', ctrlKey: true }).defaultPrevented).toBe(false)
     expect(placeSearchFocusRequest.value).toBe(before)
@@ -57,7 +79,7 @@ describe('Web Canvas shortcuts', () => {
   })
 
   it('leaves character keys to the page while single-key shortcuts are off', () => {
-    installWebCanvasShortcuts()
+    installWebKeys()
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces())
     singleKeyShortcuts.value = false
     try {
@@ -73,14 +95,7 @@ describe('Web Canvas shortcuts', () => {
 
   it('routes the shell shortcuts a browser lets a page keep, and leaves the rest to the browser', () => {
     const newDesign = vi.fn()
-    const catalog = createBrowserShellCatalog({
-      newDesign, openCanopi: vi.fn(), downloadCanopi: vi.fn(), revertDesign: vi.fn(),
-      importGeoJson: vi.fn(), exportGeoJson: vi.fn(), exportBudgetCsv: vi.fn(), closeDesign: vi.fn(), navigate: vi.fn(),
-    }, { templatesEnabled: false, canvasReady: () => true })
-    installWebCanvasShortcuts(window, {
-      catalog,
-      readState: () => ({ hasDesign: true, revertAvailable: false, activePanel: 'canvas', sidePanel: null }),
-    })
+    installWebKeys(webCatalog(newDesign))
 
     expect(dispatchShortcut({ key: 'F1' }).defaultPrevented).toBe(true)
     expect(keyboardShortcutsDialogOpen.value).toBe(true)
@@ -89,8 +104,8 @@ describe('Web Canvas shortcuts', () => {
     expect(newDesign).not.toHaveBeenCalled()
   })
 
-  it('focuses the open panel plant finder on Ctrl+F, even from another field', () => {
-    installWebCanvasShortcuts()
+  it('focuses the open panel plant finder on Ctrl+F, even from another field, and opens the catalog without one', () => {
+    installWebKeys(webCatalog())
     const other = document.createElement('input')
     const finder = document.createElement('input')
     document.body.append(other, finder)
@@ -106,7 +121,8 @@ describe('Web Canvas shortcuts', () => {
     expect(finder.selectionStart).toBe(0)
     expect(finder.selectionEnd).toBe(7)
     unregister()
-    expect(dispatchShortcut({ key: 'f', ctrlKey: true }).defaultPrevented).toBe(false)
+    expect(dispatchShortcut({ key: 'f', ctrlKey: true }).defaultPrevented).toBe(true)
+    expect(sidePanel.value).toBe('plant-db')
   })
 
   it('ignores canvas shortcuts while the save dialog is open', async () => {
@@ -114,7 +130,7 @@ describe('Web Canvas shortcuts', () => {
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       commands: createTestCanvasCommandSurface({ history: { canUndo: signal(true), undo } }),
     }))
-    installWebCanvasShortcuts()
+    installWebKeys()
     const decision = requestSaveProblemDecision({ kind: 'revert' })
 
     expect(dispatchShortcut({ key: 'z', ctrlKey: true }).defaultPrevented).toBe(false)
@@ -144,7 +160,7 @@ describe('Web Canvas shortcuts', () => {
         },
       }),
     }))
-    installWebCanvasShortcuts()
+    installWebKeys()
 
     expect(dispatchShortcut({ key: 'e' }).defaultPrevented).toBe(true)
     expect(dispatchShortcut({ key: 'E', shiftKey: true }).defaultPrevented).toBe(false)
@@ -179,7 +195,7 @@ describe('Web Canvas shortcuts', () => {
         history: { canUndo: signal(true), undo },
       }),
     }))
-    installWebCanvasShortcuts()
+    installWebKeys()
 
     input.dispatchEvent(shortcutEvent({ key: 'e', bubbles: true }))
     input.dispatchEvent(shortcutEvent({ key: 'z', ctrlKey: true, bubbles: true }))
@@ -197,7 +213,7 @@ describe('Web Canvas shortcuts', () => {
         history: { canUndo: signal(true), undo: firstUndo },
       }),
     }))
-    installWebCanvasShortcuts()
+    installWebKeys()
 
     dispatchShortcut({ key: 'z', ctrlKey: true })
     setCurrentCanvasSession(null)
@@ -227,7 +243,7 @@ describe('Web Canvas shortcuts', () => {
         },
       }),
     }))
-    installWebCanvasShortcuts()
+    installWebKeys()
 
     const undoShortcut = dispatchShortcut({ key: 'z', ctrlKey: true })
     const redoShortcut = dispatchShortcut({ key: 'Z', metaKey: true, shiftKey: true })
@@ -238,29 +254,23 @@ describe('Web Canvas shortcuts', () => {
     expect(redo).not.toHaveBeenCalled()
   })
 
-  it('replaces and disposes its one owned window listener idempotently', () => {
+  it('replaces its key router on a second install and disposes it once', () => {
     const add = vi.spyOn(window, 'addEventListener')
     const remove = vi.spyOn(window, 'removeEventListener')
+    const keyListeners = (calls: readonly unknown[][]) => calls.filter(([type]) => type === 'keydown' || type === 'keyup')
 
-    const disposeFirst = installWebCanvasShortcuts()
-    const firstHandler = add.mock.calls.find(([type]) => type === 'keydown')?.[1]
-    const disposeReplacement = installWebCanvasShortcuts()
-    const keydownHandlers = add.mock.calls.filter(([type]) => type === 'keydown')
-    const replacementHandler = keydownHandlers.at(-1)?.[1]
+    const first = installWebKeys()
+    const firstListeners = keyListeners(add.mock.calls)
+    expect(firstListeners).toHaveLength(3)
+    const replacement = installWebKeys()
+    expect(keyListeners(remove.mock.calls).map(([, listener]) => listener))
+      .toEqual(firstListeners.map(([, listener]) => listener))
 
-    expect(firstHandler).toBeDefined()
-    expect(replacementHandler).toBeDefined()
-    expect(replacementHandler).not.toBe(firstHandler)
-    expect(remove).toHaveBeenCalledWith('keydown', firstHandler)
-
-    disposeFirst()
-    expect(remove).not.toHaveBeenCalledWith('keydown', replacementHandler)
-
-    disposeReplacement()
-    disposeReplacement()
-    expect(remove.mock.calls.filter(
-      ([type, handler]) => type === 'keydown' && handler === replacementHandler,
-    )).toHaveLength(1)
+    first.dispose()
+    expect(keyListeners(remove.mock.calls)).toHaveLength(3)
+    replacement.dispose()
+    replacement.dispose()
+    expect(keyListeners(remove.mock.calls)).toHaveLength(6)
   })
 })
 

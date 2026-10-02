@@ -14,7 +14,11 @@ import {
 import { installDesignContinuousSave } from "../app/document-session/transition";
 import { installPlaceSearchSession } from "../app/geocoding/place-search-session";
 import { installToolRailLearning } from "../app/tool-rail/learning";
-import { installFocusRegionKeys } from "../app/shell/focus-regions";
+import { cycleFocusRegion } from "../app/shell/focus-regions";
+import { installKeyRouter } from "../app/keyboard/key-router";
+import { singleKeyShortcuts } from "../app/settings/state";
+import { currentCanvasKeyboardPort } from "../canvas/session";
+import { installDesktopKeyRouter } from "../commands/registry";
 import { registerDesignOpenFailurePresenter } from "../app/document-session/open-failure";
 import { presentDesktopDesignOpenFailure } from "./open-failure.desktop";
 import { desktopSettingsPlatformAdapter } from "./settings.desktop";
@@ -24,11 +28,11 @@ let closeGuardLifetime: CloseGuardLifetime | null = null;
 let disposeContinuousSave: (() => void) | null = null;
 let disposePlaceSearchSession: (() => void) | null = null;
 let disposeToolRailLearning: (() => void) | null = null;
-let disposeFocusRegionKeys: (() => void) | null = null;
+let disposeKeyRouter: (() => void) | null = null;
 
 export function bootstrapPlatform(): void {
   closeGuardLifetime?.dispose();
-  disposeFocusRegionKeys?.();
+  disposeKeyRouter?.();
   disposeToolRailLearning?.();
   disposePlaceSearchSession?.();
   disposeContinuousSave?.();
@@ -43,7 +47,13 @@ export function bootstrapPlatform(): void {
   disposeContinuousSave = installDesignContinuousSave();
   disposePlaceSearchSession = installPlaceSearchSession();
   disposeToolRailLearning = installToolRailLearning();
-  disposeFocusRegionKeys = installFocusRegionKeys();
+  const keyRouter = installDesktopKeyRouter(installKeyRouter, {
+    target: window,
+    canvas: currentCanvasKeyboardPort,
+    singleKeys: singleKeyShortcuts,
+    focus: { cycleRegion: cycleFocusRegion },
+  });
+  disposeKeyRouter = () => keyRouter.dispose();
   closeGuardLifetime = registerCloseGuard();
 }
 
@@ -57,8 +67,8 @@ if (import.meta.hot) {
     disposePlaceSearchSession = null;
     disposeToolRailLearning?.();
     disposeToolRailLearning = null;
-    disposeFocusRegionKeys?.();
-    disposeFocusRegionKeys = null;
+    disposeKeyRouter?.();
+    disposeKeyRouter = null;
     disposeContinuousSave?.();
     disposeContinuousSave = null;
     registerDesignOpenFailurePresenter(null);

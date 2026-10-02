@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { installFocusRegionKeys, registerFocusRegion } from '../app/shell/focus-regions'
+import { registerFocusRegion } from '../app/shell/focus-regions'
+import { installDesktopKeys } from './support/desktop-key-router'
 import { holdModalLayer } from '../app/shell/modal-layer'
 
 describe('F6 focus regions', () => {
   let releases: (() => void)[]
-  let uninstall: () => void
+  let keys: ReturnType<typeof installDesktopKeys>
   let titleBar: HTMLElement
   let menu: HTMLButtonElement
   let rail: HTMLElement
@@ -43,11 +44,12 @@ describe('F6 focus regions', () => {
       registerFocusRegion('title-bar', titleBar),
       registerFocusRegion('tool-rail', rail),
     ]
-    uninstall = installFocusRegionKeys()
+    // F6 runs in the key router's capture listener (app/keyboard/key-router.ts).
+    keys = installDesktopKeys()
   })
 
   afterEach(() => {
-    uninstall()
+    keys.dispose()
     for (const release of releases) release()
     document.body.innerHTML = ''
   })

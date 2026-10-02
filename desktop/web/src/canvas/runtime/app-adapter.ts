@@ -128,8 +128,6 @@ export interface CanvasRuntimeSettingsAdapter {
   readChromeOverlay(): CanvasRuntimeChromeSettingsSnapshot
   readSnapToGridEnabled(): boolean
   readSnapToGuidesEnabled(): boolean
-  /** Settings › Keyboard › Single-key shortcuts. */
-  readSingleKeyShortcuts(): boolean
   /** Settings › Canvas › Scroll wheel: what a plain wheel does; pinch and Ctrl wheel always zoom. */
   readScrollWheel(): CanvasScrollWheelSetting
   readPlantSpacingIntervalMeters(): number
@@ -219,7 +217,6 @@ export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter
       readChromeOverlay: () => ({ gridVisible, rulersVisible, guidesVisible: true }),
       readSnapToGridEnabled: () => snapToGrid,
       readSnapToGuidesEnabled: () => snapToGuides,
-      readSingleKeyShortcuts: () => true,
       readScrollWheel: () => 'zoom',
       readPlantSpacingIntervalMeters: () => plantSpacingIntervalM,
       commitPlantSpacingIntervalMeters: (meters) => {

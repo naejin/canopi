@@ -14,7 +14,16 @@ import { createWorkspaceShellCapabilities } from '../app/workspace-commands/capa
 import { savedViewMenuActions } from '../app/saved-views'
 import { plantLabelMenuActions } from '../app/plant-display/menu'
 import { exportCurrentBudgetCsv } from '../app/budget/export'
-import type { CanvasCommandProjection } from '../app/canvas-commands'
+import { canvasCommandDefinitions, type CanvasCommandProjection } from '../app/canvas-commands'
+import { installKeyRouter, type KeyRouterHandle } from '../app/keyboard/key-router'
+import { CANVAS_KEYMAP_ROWS, shellKeymapRows, type CommandSink } from '../app/keyboard/keymap'
+import { saveProblem } from '../app/document-session/save-problem'
+import { savedViewDialogOpen } from '../app/saved-views/dialogs'
+import { singleKeyShortcuts } from '../app/settings/state'
+import { cycleFocusRegion } from '../app/shell/focus-regions'
+import { modalLayerOpen } from '../app/shell/modal-layer'
+import { dispatchWorkspaceCanvasIntent } from '../app/workspace-commands/canvas-actions'
+import { currentCanvasKeyboardPort } from '../canvas/session'
 import { t } from '../i18n'
 import type { DesignSaveStatus } from '../app/document-session/continuous-save'
 import type { GeoJsonWorkflow } from '../app/geojson/workflow'
@@ -105,7 +114,7 @@ export interface BrowserDesignShellCommands {
  * A browser keeps these for itself (new window, tab switching), so the Web
  * Edition neither shows nor listens for them.
  */
-export const BROWSER_RESERVED_SHORTCUTS: ReadonlySet<string> = new Set([
+const BROWSER_RESERVED_SHORTCUTS: ReadonlySet<string> = new Set([
   'Ctrl+N',
   'Ctrl+Q',
   'Ctrl+W',
@@ -230,4 +239,53 @@ function runBrowserDesignCommand(
   } catch (error) {
     onError(error)
   }
+}
+
+/** What the Web keys need to run shell commands against the live state. */
+export interface WebShellShortcutSource {
+  readonly catalog: BrowserShellCatalog
+  readState(): ShellCommandState
+}
+
+let activeKeyRouter: KeyRouterHandle | null = null
+
+/**
+ * The Web Edition key router (spec §1.6): its shell rows, less the shortcuts a browser keeps, then the canvas rows. A
+ * shell shortcut takes its key even when its command is disabled; a canvas command takes it only when it ran.
+ * Installing again replaces the router; main.web.tsx installs it once.
+ */
+export function installWebKeyRouter(shell: WebShellShortcutSource, target: Window = window): KeyRouterHandle {
+  activeKeyRouter?.dispose()
+  const commands: CommandSink = {
+    run(command) {
+      const entry = shell.catalog.find((candidate) => candidate.id === command)
+      if (entry) {
+        if (!entry.isExecutionDisabled(shell.readState())) entry.execute()
+        return true
+      }
+      const definition = canvasCommandDefinitions.find((candidate) => candidate.commandId === command)
+      return definition ? dispatchWorkspaceCanvasIntent(definition.intent) : false
+    },
+  }
+  const router = installKeyRouter({
+    target,
+    keymap: [...shellKeymapRows(shell.catalog, { omit: BROWSER_RESERVED_SHORTCUTS }), ...CANVAS_KEYMAP_ROWS],
+    commands,
+    canvas: currentCanvasKeyboardPort,
+    singleKeys: singleKeyShortcuts,
+    focus: { cycleRegion: cycleFocusRegion },
+    isModalOpen: () => saveProblem.peek() !== null || savedViewDialogOpen.peek() || modalLayerOpen.peek(),
+  })
+  const handle: KeyRouterHandle = {
+    dispose() {
+      router.dispose()
+      if (activeKeyRouter === handle) activeKeyRouter = null
+    },
+  }
+  activeKeyRouter = handle
+  return handle
+}
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => activeKeyRouter?.dispose())
 }

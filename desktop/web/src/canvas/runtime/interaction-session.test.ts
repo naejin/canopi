@@ -11,6 +11,8 @@ import {
   type SceneInteractionEventHarness,
 } from '../../__tests__/support/canvas-interaction-events'
 import { createTestView, testViewFrame, type TestView } from '../../__tests__/support/test-view'
+import { installCanvasKeyRouter } from '../../__tests__/support/key-router'
+import type { KeyRouterHandle } from '../../app/keyboard/key-router'
 import {
   clearPlantStampSource,
   readPlantStampSource,
@@ -70,6 +72,7 @@ let testView: TestView
 let store: SceneStore
 let sessions: SceneInteractionSession[]
 let mountedRulers: MountedRulers[]
+let keys: KeyRouterHandle
 
 beforeEach(() => {
   container = document.createElement('div')
@@ -79,11 +82,14 @@ beforeEach(() => {
   store = new SceneStore()
   sessions = []
   mountedRulers = []
+  // Keys reach the latest session's port through the app's key router, as in the workspace.
+  keys = installCanvasKeyRouter(() => sessions.at(-1)?.keyboard ?? null)
   clearPlantStampSource()
   clearSavedObjectStampSource()
 })
 
 afterEach(() => {
+  keys.dispose()
   for (const session of sessions.splice(0).reverse()) session.dispose()
   builtHosts.length = 0
   for (const rulers of mountedRulers.splice(0)) rulers.unmount()
