@@ -343,7 +343,7 @@ export interface CanvasKeyState {
   readonly mods: Modifiers
   readonly timeStamp: number       // KeyboardEvent.timeStamp: the clock of the contextmenu echo
   readonly text: boolean           // the target is a text field
-  readonly control: boolean        // the target is inside a control, field, menu or dialog (app/keyboard/target-class.ts)
+  readonly onCanvas: boolean       // focus is the map host (not a control in it) or nothing (app/keyboard/target-class.ts)
 }
 /** held: the router prevents and Space is held for panning, nothing else runs; pass-live and pass: the router goes on, with a
  *  pointer session live or not. */

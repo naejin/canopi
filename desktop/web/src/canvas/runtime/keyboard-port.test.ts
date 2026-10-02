@@ -119,7 +119,7 @@ function keyState(
     code: '',
     timeStamp: 0,
     text: false,
-    control: false,
+    onCanvas: true,
     ...init,
     mods: { ...NO_MODS, ...init.mods },
   })
@@ -215,7 +215,7 @@ describe('createCanvasKeyboardPort', () => {
     expect(f.port.describeEscape()).toBeNull()
   })
 
-  it('Space holds for panning once, not from a text field or a control, and keyup releases it', () => {
+  it('Space holds for panning once, from the map or nothing focused, and keyup releases it', () => {
     const f = fixture()
     expect(keyState(f.port, { key: ' ', code: 'Space' })).toBe('held')
     expect(keyState(f.port, { key: ' ', code: 'Space' })).toBe('pass')
@@ -225,11 +225,13 @@ describe('createCanvasKeyboardPort', () => {
     keyState(f.port, { type: 'keyup', key: ' ', code: 'Space' })
     expect(f.space).toBe(false)
     expect(keyState(f.port, { key: ' ', code: 'Space', text: true })).toBe('pass')
-    expect(keyState(f.port, { key: ' ', code: 'Space', control: true })).toBe('pass')
+    // A control or another focused widget keeps its Space.
+    expect(keyState(f.port, { key: ' ', code: 'Space', onCanvas: false })).toBe('pass')
     expect(f.session.keyState).toHaveBeenCalledTimes(2)
-    // A live pointer session holds Space from a control too.
+    // A live pointer session holds Space from outside the map too, never from a text field.
     f.live = true
-    expect(keyState(f.port, { key: ' ', code: 'Space', control: true })).toBe('held')
+    expect(keyState(f.port, { key: ' ', code: 'Space', text: true, onCanvas: false })).toBe('pass-live')
+    expect(keyState(f.port, { key: ' ', code: 'Space', onCanvas: false })).toBe('held')
   })
 
   it('answers pass-live while a pointer session is live', () => {

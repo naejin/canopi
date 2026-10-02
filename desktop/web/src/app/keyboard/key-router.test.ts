@@ -109,10 +109,10 @@ describe('key router', () => {
     press({ key: 'Escape', code: 'Escape' }, host)
     const up = new KeyboardEvent('keyup', { key: 'a', code: 'KeyA', bubbles: true })
     host.dispatchEvent(up)
-    expect(fake.port.keyState.mock.calls.map(([k]) => [k.type, k.key, k.text, k.control])).toEqual([
-      ['keydown', 'a', true, true],
-      ['keydown', 'Escape', false, false],
-      ['keyup', 'a', false, false],
+    expect(fake.port.keyState.mock.calls.map(([k]) => [k.type, k.key, k.text, k.onCanvas])).toEqual([
+      ['keydown', 'a', true, false],
+      ['keydown', 'Escape', false, true],
+      ['keyup', 'a', false, true],
     ])
 
     fake.state.verdict = 'held'
@@ -185,8 +185,8 @@ describe('key router', () => {
     expect(fake.port.command).not.toHaveBeenCalled()
     expect(fake.port.escape).not.toHaveBeenCalled()
     expect(run).not.toHaveBeenCalled()
-    // A modal holds the keys: Space is reported from a control, so the map never holds it.
-    expect(fake.port.keyState.mock.calls.every(([k]) => k.control)).toBe(true)
+    // A modal holds the keys: Space is reported off the map, so the map never holds it.
+    expect(fake.port.keyState.mock.calls.every(([k]) => !k.onCanvas)).toBe(true)
   })
 
   it('runs only the rows that work in a modal while one is open', () => {

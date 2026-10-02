@@ -82,10 +82,11 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionC
     return true
   }
 
-  /** Space held for panning: from anything but a text field, and from a control only while a pointer session is live. */
+  /** Space held for panning: from the map or with nothing focused, and from anywhere but a text field while a pointer
+   *  session is live; any other focused widget keeps its Space (spec §1.6, step 3). */
   function holdsSpace(k: CanvasKeyState): boolean {
     if (k.code !== 'Space' || session.spaceHeld() || k.text) return false
-    if (k.control && !session.pointerSessionLive()) return false
+    if (!k.onCanvas && !session.pointerSessionLive()) return false
     // A new note's field, focused or not, keeps Space from arming a pan, as today's Text adapter kept the shared keys.
     if (!session.overview() && toolHost.openTextEntryMode() === 'create') return false
     session.keyState({ space: true, mods: k.mods })

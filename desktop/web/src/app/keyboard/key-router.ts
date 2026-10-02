@@ -233,7 +233,7 @@ function releasedKey(key: string, code: string, timeStamp: number): CanvasKeySta
     mods: { shift: false, ctrl: false, alt: false, meta: false },
     timeStamp,
     text: false,
-    control: false,
+    onCanvas: false,
   }
 }
 
@@ -245,6 +245,6 @@ function keyState(event: KeyboardEventLike, type: CanvasKeyState['type'], at: Ke
     mods: { shift: event.shiftKey, ctrl: event.ctrlKey, alt: event.altKey, meta: event.metaKey },
     timeStamp: event.timeStamp,
     text: at.text,
-    control: at.control,
+    onCanvas: at.focus === 'map' || at.focus === 'body',
   }
 }
