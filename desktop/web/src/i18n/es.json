@@ -1741,9 +1741,9 @@
   },
   "shortcuts": {
     "title": "Atajos de teclado",
-    "toolsHeading": "{{menu}} (con el mapa enfocado)",
+    "toolsHeading": "{{menu}} (en cualquier sitio salvo en campos de texto)",
     "escape": "Esc hace una cosa cada vez: cerrar un menú o diálogo, cancelar lo que dibujas, volver a Seleccionar, borrar la selección.",
-    "footnote": "Las teclas de herramientas funcionan con el mapa enfocado.",
+    "footnote": "Las teclas de herramientas funcionan en cualquier sitio salvo en los campos de texto.",
     "workspaceHeading": "Mapa y espacio de trabajo",
     "nextRegion": "Zona siguiente: barra de título, herramientas, mapa, panel",
     "previousRegion": "Zona anterior",

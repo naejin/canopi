@@ -1741,9 +1741,9 @@
   },
   "shortcuts": {
     "title": "키보드 단축키",
-    "toolsHeading": "{{menu}} (지도에 포커스가 있을 때)",
+    "toolsHeading": "{{menu}} (텍스트 입력란을 제외한 모든 곳)",
     "escape": "Esc는 한 번에 하나씩 처리합니다: 메뉴나 대화 상자 닫기, 그리던 것 취소, 선택으로 돌아가기, 선택 해제.",
-    "footnote": "도구 키는 지도에 포커스가 있을 때 작동합니다.",
+    "footnote": "도구 키는 텍스트 입력란을 제외한 모든 곳에서 작동합니다.",
     "workspaceHeading": "지도와 작업 공간",
     "nextRegion": "다음 영역: 제목 표시줄, 도구, 지도, 패널",
     "previousRegion": "이전 영역",

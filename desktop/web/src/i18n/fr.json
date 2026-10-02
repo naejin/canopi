@@ -1741,9 +1741,9 @@
   },
   "shortcuts": {
     "title": "Raccourcis clavier",
-    "toolsHeading": "{{menu}} (quand la carte a le focus)",
+    "toolsHeading": "{{menu}} (partout sauf dans les champs de texte)",
     "escape": "Échap fait une chose à la fois : fermer un menu ou une boîte de dialogue, annuler le tracé en cours, revenir à Sélection, vider la sélection.",
-    "footnote": "Les touches d’outils fonctionnent quand la carte a le focus.",
+    "footnote": "Les touches d’outils fonctionnent partout sauf dans les champs de texte.",
     "workspaceHeading": "Carte et espace de travail",
     "nextRegion": "Zone suivante : barre de titre, outils, carte, panneau",
     "previousRegion": "Zone précédente",

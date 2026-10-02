@@ -1741,9 +1741,9 @@
   },
   "shortcuts": {
     "title": "Keyboard shortcuts",
-    "toolsHeading": "{{menu}} (while the map has focus)",
+    "toolsHeading": "{{menu}} (anywhere except text fields)",
     "escape": "Esc does one thing at a time: close a menu or dialog, cancel what you are drawing, return to Select, clear the selection.",
-    "footnote": "Tool keys work while the map has focus.",
+    "footnote": "Tool keys work anywhere except text fields.",
     "workspaceHeading": "Map and workspace",
     "nextRegion": "Next area: title bar, tools, map, panel",
     "previousRegion": "Previous area",

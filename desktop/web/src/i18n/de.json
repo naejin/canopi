@@ -1741,9 +1741,9 @@
   },
   "shortcuts": {
     "title": "Tastenkürzel",
-    "toolsHeading": "{{menu}} (wenn die Karte den Fokus hat)",
+    "toolsHeading": "{{menu}} (überall außer in Textfeldern)",
     "escape": "Esc tut eins nach dem anderen: Menü oder Dialog schließen, Zeichnen abbrechen, zu Auswählen zurück, Auswahl aufheben.",
-    "footnote": "Werkzeugtasten wirken, wenn die Karte den Fokus hat.",
+    "footnote": "Werkzeugtasten wirken überall außer in Textfeldern.",
     "workspaceHeading": "Karte und Arbeitsbereich",
     "nextRegion": "Nächster Teil: Titelleiste, Werkzeuge, Karte, Bereich",
     "previousRegion": "Vorheriger Teil",
