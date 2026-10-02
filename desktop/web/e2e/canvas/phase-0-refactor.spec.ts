@@ -1,6 +1,7 @@
 // Phase 0 of canvas v2 (the refactor that must change nothing): steps 2-6 of the phase-0 live
 // check (docs/plans/canvas-v2-plan.md section 4) on the base fixture, with real input in
-// Chromium and WebKit. The baselines were recorded on the pre-0A commit in the pinned image:
+// Chromium and WebKit, and 0E's viewport resize (its Web check), compared within the run.
+// The baselines were recorded on the pre-0A commit in the pinned image:
 // they are the phase-0 Web reference. Each step opens the fixture afresh, so a failure names
 // the one step that broke; DOM reads say what broke, screenshots say what it looks like.
 // Screenshots are taken on settled states only, never mid-drag (drafts are compared by eye)
@@ -259,4 +260,48 @@ test('step 6: ArrowRight nudges a selected zone 10 cm east, Shift+ArrowRight 1 m
   expectPx(undone.y - nudged.y, 0, 'Ctrl+Z does not move the zone north or south')
   await expect(tool(page, 'Undo'), 'the 10 cm series is still an edit to undo').toBeEnabled()
   await expect(tool(page, 'Redo'), 'the 1 m series can be redone').toBeEnabled()
+})
+
+/** The centre of the map host, in page pixels: a resize keeps the camera's centre there (0E, D8). */
+async function mapCentre(page: Page): Promise<{ x: number, y: number, width: number, height: number }> {
+  const box = await designMap(page).boundingBox()
+  if (!box) throw new Error('the Design map has no box')
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2, width: box.width, height: box.height }
+}
+
+test('canvas v2 0E: a viewport resize keeps the map and the Design on their ground; resizing back restores the pixels', async ({ page }) => {
+  await openBaseFixture(page)
+  // The selected zone's handles are the DOM's measure of where the Design is drawn.
+  await page.mouse.click(RECT_ZONE_EDGE.x, RECT_ZONE_EDGE.y)
+  await expect(selection(page).getByRole('status')).toHaveText(RECT_ZONE_CHIP)
+  await page.mouse.move(NEUTRAL.x, NEUTRAL.y)
+  await expectCanvasDrawn(page)
+  const before = await settledScreenshot(page)
+  const centre = await mapCentre(page)
+  const offsets = (await zoneCorners(page)).map(({ x, y }) => ({ x: x - centre.x, y: y - centre.y }))
+
+  await page.setViewportSize({ width: 1300, height: 840 })
+  await expect.poll(async () => (await mapCentre(page)).width, 'the map host shrinks with the window').toBeLessThan(centre.width)
+  const resized = await mapCentre(page)
+  // The camera keeps its centre and scale (D8), so each handle keeps its offset from the map's centre.
+  await expect.poll(async () => {
+    const corners = await zoneCorners(page)
+    return Math.max(...corners.map(({ x, y }, index) => Math.max(
+      Math.abs(x - resized.x - offsets[index]!.x),
+      Math.abs(y - resized.y - offsets[index]!.y),
+    )))
+  }, 'the zone keeps its place relative to the map centre').toBeLessThanOrEqual(LAYOUT_TOLERANCE_PX)
+  await expect(scaleChip(page), 'a resize keeps the scale').toHaveText('1:240')
+  await expect(tool(page, 'Undo'), 'a resize never edits the Design').toBeDisabled()
+
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await expect.poll(async () => (await mapCentre(page)).width, 'the map host returns to its size').toBe(centre.width)
+  await page.mouse.move(NEUTRAL.x, NEUTRAL.y)
+  await expectCanvasDrawn(page)
+  const back = await settledScreenshot(page)
+  if (!back.equals(before)) {
+    await test.info().attach('before', { body: before, contentType: 'image/png' })
+    await test.info().attach('back', { body: back, contentType: 'image/png' })
+  }
+  expect(back.equals(before), 'resizing back gives the pixels before the resize: the map and the Design kept their ground').toBe(true)
 })
