@@ -17,6 +17,7 @@ This is the current-state inventory behind `docs/plans/canvas-v2-plan.md` and `d
 
 | ID | Where | Assumes or does today | Fate | Phase |
 |---|---|---|---|---|
+| INV-CAM-01 | `canvas/runtime/scene/types.ts:101-105` | `SceneViewportState { x, y, scale }`: translation plus one uniform scale, no rotation or pitch slot; threaded through the camera, renderer snapshot, presentation, tools and chrome | delete; `ViewTransform` (`view/types.ts`, ADR 0016); tombstoned by policy P3 | tools stop reading it in 0B; the renderer in 0D2; deleted 0E |
 | INV-CAM-02 | `canvas/runtime/camera.ts:60-71` | `CameraViewportSnapshot` has no bearing or pitch | delete; `ViewFrame` (runtime) and `ViewReadSurface` (app) | 0A (facade), delete 0E |
 | INV-CAM-03 | `canvas/runtime/camera.ts:85-116` | `WorkspaceCameraFrameReader` / `WorkspaceCameraNavigation`: no rotate or bearing command; every tool and overlay depends on them | change to re-exports of `canvas/runtime/legacy-camera-facade.ts` in 0A-1; delete for `ViewFrameSource` / `ViewNavigation` | 0A, delete 0E |
 | INV-CAM-04 | `canvas/runtime/camera.ts:151-399` | `CameraController` holds the viewport while detached (tests, before attach, after failure); `publishFrame` `:394-398` | delete internals; `view/headless-driver.ts` (a `PlanarCamera` moved with today's arithmetic until 0E, then a geographic `ViewCamera` built through `buildViewTransform`, within 1e-6 px; spec §1.1) and `view/navigation.ts`; a constructible `CameraController` shim over them stays in `canvas/runtime/legacy-camera-facade.ts` (outside `view/`, spec §1.1b) until 0E, which keeps of its last behaviours only those users need (spec §1.1b "0E": the clock and timers move to `scene-runtime/construction.ts`; the start frame, the replay and the density default go) | 0A, file deleted 0E |
@@ -341,3 +342,25 @@ All locale keys exist in 11 files with the same line layout, so an `en.json` lin
 1. **Tauri `dragDropEnabled`** is left at its default (`desktop/tauri.conf.json:40-49`); on Windows this may block the HTML5 drops that `canvas/runtime/input/dom-input-source.ts`'s drop route now feeds to the host's shared drop handler. Open: a phase-F row and its bead check it on Windows; Input owns the fix if confirmed.
 2. **Hillshade light anchor** (INV-TOOL-26): `viewport` keeps the light top-left on screen as the map turns. Kept as is; the phase-1 handoff names it as a convention.
 3. **Suspected grid offset** (INV-REN-14) is unverified live; phase 1 fixes it either way by moving the grid into the world root.
+
+## 13. Retired rows
+
+Done rows are deleted from the tables above; these IDs are still cited by code comments or by other docs, so their fate is recorded here instead of only in git history (full text at `e9245f5e`).
+
+| ID | Fate |
+|---|---|
+| INV-CAM-12 | `cameraFramingRect` moved into `view/fit.ts` as is (screen-space, 0A) |
+| INV-CAM-32 | dev diagnostics publish the live camera bearing instead of always 0 (0A) |
+| INV-ENT-22 | map contributions re-read coarse signals instead of every camera frame (0A-2, both adapters) |
+| INV-ENT-23 | the second capture-phase `pointermove` on the map host is deleted; the inspection lens uses `CanvasQuerySurface.subscribePointerWorld` (0B) |
+| INV-ENT-24 | an active LiDAR inspection claims the plain left press through `ToolHostDeps.inspect`, never while Pan is armed (0B; fixture J10) |
+| INV-FOC-04 | tools focus their textareas through the text-entry host (0B) |
+| INV-LSN-12 | the pending-cancellation fence moved to `ToolHost.retryPendingCancellation()` (0B), then 0B-5: a cancellation that throws with an edit open aborts the edit; no key or click is swallowed |
+| INV-LSN-13 | the rotation handle's `click` stop and `keydown` swallow moved to `chrome/handle-layer.ts:8` as is; handling only its own keys is a later behaviour change, not scheduled |
+| INV-REN-20 | overlays recompute and `setData` only on data or plane change, not every camera frame (0A-2) |
+| INV-TOOL-05 | snap to grid and guides on world x/y moved to `tools/snapping.ts`, reading the two settings through `ToolHostDeps.snapping` (0B) |
+| INV-TOOL-24 | hit tests moved behind `tools/spatial-index.ts`'s `ToolScene.hitAt` / `hitInQuad` (0B) |
+| INV-XF-04 | `viewportCenterGeo` and the corner-point diagnostics deleted with their last importer at the end of 0A |
+| INV-XF-21 | pixel tolerances now divide by `frame.view.pixelsPerMetre` (0B) |
+| INV-XF-27 | selection and scene commands keep reading the viewport scale from the frame through one construction-level reader (0A-2); `mutations.ts` keeps its `getViewportScale` option |
+| INV-KEY-18 | element keydown on runtime-owned controls and fields stays the P8 allowlist: `chrome/handle-layer.ts`, `chrome/text-entry-host.ts`, `chrome/locked-affordance.ts` |
