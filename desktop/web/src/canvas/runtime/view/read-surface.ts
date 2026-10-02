@@ -37,8 +37,10 @@ export interface ViewReadSurface {
    *  The one read that changes during a pan (the overview pin must track the Design); it updates per frame only in overview,
    *  where nothing else re-renders, and is the named exception to the coarse-signal rule (P10). */
   readonly designPin: ReadonlySignal<ScreenPoint | null>
-  /** The camera after 150 ms without change (the settled frame's camera): last view, map contributions, coverage. Never a user-triggered capture (captureView). */
+  /** The camera after 150 ms without change (the settled frame's camera): last view, map contributions. Never a user-triggered capture (captureView). */
   readonly settledCamera: ReadonlySignal<ViewCamera>
+  /** The settled frame's revision: changes once per settle, whatever settled (camera, screen, insets, re-origin). The labels count. */
+  readonly settledRevision: ReadonlySignal<number>
   /**
    * Saved-view capture, saved-view snapshot, PDF capture, story restore point: the LIVE frame's camera (viewFrame.peek(),
    * not the settled one), its four-corner ground extent and the screen it was seen on. User-triggered captures record what

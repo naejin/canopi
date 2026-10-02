@@ -160,6 +160,8 @@ export class SceneCanvasInspectionOwner {
     }
     return {
       state,
+      // 0D2 hand-off stub: the Renderer stream publishes the quad from the main viewFrame and the lens transform.
+      sourceQuad: signal(null),
       inspectAtScreenPoint: (screenPoint) => {
         if (released || !Number.isFinite(screenPoint.x) || !Number.isFinite(screenPoint.y)) return
         const next = groundAt(screenPoint)

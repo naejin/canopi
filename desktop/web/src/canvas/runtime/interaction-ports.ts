@@ -11,7 +11,7 @@ import type { AdapterEffect, RawInput, TargetClass } from './input/raw-input'
 import type { ToolHandleId, ToolId } from './interaction-types'
 import type { PlantPresentationContext } from './plant-presentation'
 import type { SpeciesCacheEntry } from './presentation-data'
-import type { SceneRendererV2 } from './renderers/scene-types'
+import type { SceneRenderer } from './renderers/scene-types'
 import type { CanvasDesignObjectSelectionModel, CanvasSceneEditCommandSurface } from './runtime'
 import type { SceneDesignObjectSelection, SceneDesignObjectTarget } from './scene/design-object-targets'
 import type { SceneStateReader } from './scene/store'
@@ -106,7 +106,7 @@ export interface ToolHostDeps {
   /** History-free, dirty-free selection (today's deps.setSelection/clearSelection); backs ToolEffects.setSelection and the menu retarget. */
   readonly setSelection: (targets: readonly SceneDesignObjectTarget[]) => void
   readonly plane: () => SessionPlane                            // CanvasTool.planeChanged when its identity changes
-  readonly renderer: Pick<SceneRendererV2, 'setDraft'>
+  readonly renderer: Pick<SceneRenderer, 'setDraft'>
   /** Redraw request after a tool call that mutated an open transaction or changed its draft or handles. */
   readonly invalidate: () => void
   readonly chrome: {

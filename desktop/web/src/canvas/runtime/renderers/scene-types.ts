@@ -77,7 +77,7 @@ export interface SceneChangeSet {
   readonly labels: boolean                                  // label admission recomputed (settled or band change)
 }
 
-export interface SceneRendererV2 {   // renamed SceneRenderer at the end of 0D2
+export interface SceneRenderer {
   readonly id: 'maplibre-pixi'
   /** Data, selection, hover, style or label admission changed. Never called for a pan. No camera in the snapshot. */
   syncScene(snapshot: SceneRendererSnapshot, changes: SceneChangeSet): void

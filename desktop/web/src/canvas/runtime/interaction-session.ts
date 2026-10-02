@@ -49,7 +49,7 @@ import type { Modifiers, ToolId } from './interaction-types'
 import { isSceneLayerOpenForCreation, type SceneCreationLayerName } from './interaction/layer-guards'
 import { createCanvasKeyboardPort } from './keyboard-port'
 import type { PlantPresentationContext } from './plant-presentation'
-import type { SceneRendererV2 } from './renderers/scene-types'
+import type { SceneRenderer } from './renderers/scene-types'
 import type {
   CanvasDesignObjectSelectionModel,
   CanvasKeyboardPort,
@@ -80,7 +80,7 @@ type HandleList = Parameters<ToolHostDeps['chrome']['setHandles']>[0]
 type HandleId = Parameters<ToolHostDeps['chrome']['setHandles']>[1]
 type PassiveHoverAt = NonNullable<Parameters<ToolHostDeps['chrome']['setTooltip']>[0]>
 
-const NO_DRAFTS: Pick<SceneRendererV2, 'setDraft'> = Object.freeze({
+const NO_DRAFTS: Pick<SceneRenderer, 'setDraft'> = Object.freeze({
   setDraft() {},
 })
 const NO_HANDLES: HandleList = Object.freeze([])
@@ -141,7 +141,7 @@ export interface SceneInteractionSessionDeps {
   /** The view's navigation (turn to an edge, key zoom and north); absent, the camera shim's. */
   readonly viewNavigation?: ViewNavigation
   /** The mounted renderer's draft sink (scene-runtime.ts, over the render scheduler); absent, drafts go nowhere. */
-  readonly renderer?: Pick<SceneRendererV2, 'setDraft'>
+  readonly renderer?: Pick<SceneRenderer, 'setDraft'>
   /** The app's focus port (CanvasRuntimeAppAdapter.focus); absent, the session focuses the map host itself, as today. */
   readonly focus?: CanvasFocusPort
   /** Injected for tests; detected from the browser otherwise (0C moves the call to the platform modules). */
@@ -210,7 +210,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private readonly _navigation: InputRouterDeps['navigation'] & Pick<ViewNavigation, 'zoomIn' | 'zoomOut' | 'resetNorth' | 'rotateBy'>
   private readonly _router: ReturnType<typeof createInputRouter>
   private readonly _source: ReturnType<typeof createDomInputSource>
-  private readonly _renderer: Pick<SceneRendererV2, 'setDraft'>
+  private readonly _renderer: Pick<SceneRenderer, 'setDraft'>
   private readonly _detachSource: () => void
   private readonly _stopWatchingSources: () => void
   private readonly _storyObserver: MutationObserver | null
