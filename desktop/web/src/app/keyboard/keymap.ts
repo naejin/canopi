@@ -12,13 +12,16 @@ import { canvasCommandDefinitions } from '../canvas-commands'
 import type { ShellCommandCatalogEntry, ShellCommandId } from '../shell-commands'
 import { isCharacterKeyShortcut } from '../shell-commands/shortcut-text'
 import type { CanvasKeyCommand } from '../../canvas/runtime/runtime'
-import { chordsOfShortcut, type KeyboardEventLike, type KeyChord } from './key-chord'
+import { chordMatches, chordsOfShortcut, type KeyboardEventLike, type KeyChord } from './key-chord'
 
 export type KeyScope =
   | 'global'          // every focus class except modal; in text only with worksInTextFields (every shell chord, Ctrl+K)
-  | 'command'         // anywhere except text fields and dialogs: tool letters, Delete, [ ], N, Ctrl+Z…
+  | 'command'         // anywhere except text fields and dialogs: tool letters, [ ], N, Ctrl+V, Ctrl+Z…
   | 'view-arrows'     // like 'command', but not inside an arrow-owning widget
-  | 'canvas-focus'    // focus on the map host (not text or a control inside it) or <body>: arrows, Enter, Backspace, F2, Menu
+  | 'outside-dock'    // like 'command', but not from the dock or phone sheet (focus there, or <body> after a press there):
+                      // the edits of the map's selection (Ctrl+C, Ctrl+A, Delete…)
+  | 'canvas-focus'    // the map host (not text or a control in it), or <body> after a press or focus on the map: arrows,
+                      // Enter, F2…
 
 /** A shell command, a canvas catalogue command or a canvas key command ('canvas.<CanvasKeyCommand kind>'). */
 type KeyCommandId = ShellCommandId | CanvasCommandId | `canvas.${CanvasKeyCommand['kind']}`
@@ -62,15 +65,37 @@ const CANVAS_KEY_ROWS: readonly KeymapRow[] = [
   }),
 ]
 
+/**
+ * The edits of the map's selection run from any focus but a text field, a dialog and the dock or phone sheet: from the
+ * map, its floating chrome, the rail and the title bar as before phase F, while a press on a dock panel's text or a dock
+ * control leaves the browser's copy and select all to the page. `[` `]` stay with their `command` key rows (a held stamp
+ * turns); paste, undo and redo run from the dock too, as before phase F.
+ */
+const MAP_SELECTION_EDITS: ReadonlySet<CanvasCommandId> = new Set<CanvasCommandId>([
+  'canvas.cut',
+  'canvas.copy',
+  'canvas.duplicateSelected',
+  'canvas.deleteSelected',
+  'canvas.selectAll',
+  'canvas.selectSameSpecies',
+  'canvas.groupSelected',
+  'canvas.ungroupSelected',
+  'canvas.rotateSelected',
+  'canvas.lockSelected',
+])
+
 /** Both editions' canvas rows: the key commands, then each catalogue definition's shortcuts through the switch. */
 export const CANVAS_KEYMAP_ROWS: readonly KeymapRow[] = [
   ...CANVAS_KEY_ROWS,
   ...canvasCommandDefinitions.flatMap((definition) => (definition.shortcuts ?? []).flatMap((shortcut): KeymapRow[] => {
-    const scope: KeyScope = definition.worksInTextFields ? 'global' : 'command'
-    const chords = chordsOfShortcut(shortcut)
-    // `[` and `]` belong to their key rows, which fall back to the catalogue command.
-    const claimed = CANVAS_KEY_ROWS.some((row) => row.scope === scope && row.fallback === definition.commandId)
-    if (claimed) return []
+    const scope: KeyScope = definition.worksInTextFields
+      ? 'global'
+      : MAP_SELECTION_EDITS.has(definition.commandId) ? 'outside-dock' : 'command'
+    // A chord a key row of the same scope falls back to the catalogue command with is that row's: `[` `]`, Backspace.
+    const chords = chordsOfShortcut(shortcut).filter((chord) => !CANVAS_KEY_ROWS.some((row) =>
+      row.scope === scope && row.fallback === definition.commandId
+      && row.chords.some((rowChord) => chordMatches(rowChord, chord))))
+    if (chords.length === 0) return []
     return [{
       command: definition.commandId,
       chords,

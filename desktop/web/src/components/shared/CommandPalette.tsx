@@ -57,6 +57,11 @@ function CommandPaletteDialog() {
       e.preventDefault();
       execute(activeIdx);
     } else if (e.key === "Escape") {
+      // The palette takes its Esc: it unmounts and releases the modal layer
+      // before the key router's bubble listener, which would otherwise run the
+      // Esc chain too and close a popover or the inspection under it.
+      e.preventDefault();
+      e.stopPropagation();
       commandPaletteOpen.value = false;
     }
   }

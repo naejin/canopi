@@ -38,6 +38,10 @@ const CHROME_ELEMENT_LISTENERS = [
   'src/canvas/runtime/chrome/locked-affordance.ts',
 ] as const
 
+/** The one owner of window key listeners (spec §1.6): its capture and bubble keydown and capture keyup; it also holds
+ *  the document press record (P6). */
+const KEY_ROUTER = 'src/app/keyboard/key-router.ts'
+
 const RAW_POINTER_LISTENER = /addEventListener\(\s*['"](pointer\w*|mouse\w*|wheel|contextmenu|gesture\w*|touch\w*)['"]/g
 
 /**
@@ -78,10 +82,12 @@ const P6_REGEX_POLICIES = [
     allowlist: P6_COMPONENT_POINTER_LISTENERS,
   },
   {
-    name: 'P6 app modules add no raw pointer, mouse, wheel, contextmenu, gesture or touch listener',
+    name: 'P6 app modules add no raw pointer, mouse, wheel, contextmenu, gesture or touch listener but the key router\'s press record',
     pattern: RAW_POINTER_LISTENER,
     scope: ['src/app/**'],
-    allowlist: {},
+    // The document's pointerdown at capture records whether the last press landed in the map host, so a key with
+    // nothing focused acts on the map only after a press on it; it reads the press and never takes it.
+    allowlist: { [KEY_ROUTER]: 1 },
   },
 ] as const satisfies readonly RegexPolicy[]
 
@@ -140,8 +146,6 @@ const P3B_POLICY = {
   allowlist: { ...P3B_PHASE_1, ...P3B_SIZE_ONLY },
 } as const satisfies RegexPolicy
 
-/** The one owner of window key listeners (spec §1.6): its capture and bubble keydown and capture keyup. */
-const KEY_ROUTER = 'src/app/keyboard/key-router.ts'
 
 /**
  * P8's regexes (plan §5): a key listener added directly, and a key type passed to a listener helper
@@ -271,7 +275,7 @@ describe('canvas v2 regex policies', () => {
   })
 
   it('P6 blanks the right comment range after astral characters', () => {
-    const policy = policyNamed('P6 app modules add no raw pointer, mouse, wheel, contextmenu, gesture or touch listener')
+    const policy = policyNamed('P6 app modules add no raw pointer, mouse, wheel, contextmenu, gesture or touch listener but the key router\'s press record')
     // Comment positions are UTF-16 offsets, so each emoji ahead of a comment takes two places, not one. Read by code
     // point, sixty emoji would shift the blanking past the commented listener and onto the padding line.
     const text = [
@@ -284,7 +288,7 @@ describe('canvas v2 regex policies', () => {
   })
 
   it('P6 rejects a planted raw listener in an app module', () => {
-    const policy = policyNamed('P6 app modules add no raw pointer, mouse, wheel, contextmenu, gesture or touch listener')
+    const policy = policyNamed('P6 app modules add no raw pointer, mouse, wheel, contextmenu, gesture or touch listener but the key router\'s press record')
     expect(regexHits(policy, [
       { path: 'src/app/canvas-map-surface/planted.ts', text: "container.addEventListener('pointerdown', press, { capture: true })" },
       { path: 'src/app/keyboard/planted.ts', text: "window.addEventListener('keydown', keys)" },

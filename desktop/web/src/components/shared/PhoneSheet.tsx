@@ -10,6 +10,7 @@ import {
 } from '../../app/shell/phone-layout'
 import { isSidePanel } from '../../app/shell/state'
 import { visibleMapFrame } from '../../app/shell/visible-map-area'
+import { DOCK_KEY_REGION } from '../../app/keyboard/target-class'
 import { t } from '../../i18n'
 import { ActionMenu } from './ActionMenu'
 import type { PanelRailCommand } from './PanelRail'
@@ -147,6 +148,7 @@ export function PhoneSheet({ layout, tabs, children }: {
       aria-label={t('panelRail.label')}
       data-phone-sheet={height}
       data-orientation={layout}
+      data-key-region={DOCK_KEY_REGION}
     >
       <button
         ref={handle}

@@ -1,5 +1,5 @@
 import { render } from 'preact'
-import { act } from 'preact/test-utils'
+import { act, setupRerender, teardown } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale, theme } from '../app/settings/state'
 import {
@@ -9,6 +9,7 @@ import {
   openKeyboardShortcutsDialog,
   openSettingsDialog,
 } from '../app/shell/dialogs'
+import { ESCAPE_PRIORITY, registerEscapeLayer } from '../app/keyboard/escape-chain'
 import { focusOwner } from '../app/keyboard/focus-owner'
 import { modalLayerOpen } from '../app/shell/modal-layer'
 import { registerPlantFinder } from '../app/plant-finder/focus'
@@ -197,6 +198,40 @@ describe('Modal layer', () => {
     })
     expect(commandPaletteOpen.value).toBe(false)
     expect(document.activeElement).toBe(view)
+  })
+
+  it('one Esc in the palette closes only the palette, not a popover or the inspection under it', async () => {
+    await act(async () => { render(<><Workspace /><CommandPalette /></>, container) })
+    const popover = vi.fn(() => true)
+    const inspection = vi.fn(() => true)
+    const releasePopover = registerEscapeLayer({ id: 'test-popover', priority: ESCAPE_PRIORITY.popover, isActive: () => true, escape: popover })
+    const releaseInspection = registerEscapeLayer({ id: 'test-inspection', priority: ESCAPE_PRIORITY.inspection, isActive: () => true, escape: inspection })
+    try {
+      await act(async () => { commandPaletteOpen.value = true })
+      const input = container.querySelector<HTMLInputElement>('[role="combobox"]')!
+      // A browser renders at the microtask checkpoint after the field's handler, before the window's bubble listener:
+      // the palette has unmounted and released the modal layer by the time the key router sees the Esc.
+      const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+      await act(async () => {
+        const rerender = setupRerender()
+        const checkpoint = () => rerender()
+        document.addEventListener('keydown', checkpoint)
+        try {
+          input.dispatchEvent(escape)
+        } finally {
+          document.removeEventListener('keydown', checkpoint)
+          teardown()
+        }
+      })
+      expect(commandPaletteOpen.value).toBe(false)
+      expect(modalLayerOpen.value).toBe(false)
+      expect(escape.defaultPrevented).toBe(true)
+      expect(popover).not.toHaveBeenCalled()
+      expect(inspection).not.toHaveBeenCalled()
+    } finally {
+      releasePopover()
+      releaseInspection()
+    }
   })
 
   it('runs a palette command after the chrome is live again, so Find plants focuses the finder', async () => {

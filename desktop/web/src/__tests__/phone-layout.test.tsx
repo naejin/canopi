@@ -371,10 +371,13 @@ describe('phone layout', () => {
     expect(container.querySelector('[data-phone-sheet]')).toBeNull()
     expect(container.querySelector('[role="separator"][aria-orientation="vertical"]')).not.toBeNull()
     expect(container.querySelector('[data-layers-panel]')).not.toBeNull()
+    // The dock and the sheet are the key router's dock region: a press there leaves Ctrl+C and Ctrl+A to the page.
+    expect(container.querySelector('[data-layers-panel]')?.closest('[data-key-region="dock"]')).not.toBeNull()
 
     await act(async () => { phoneLayout.value = 'portrait' })
     expect(container.querySelector('[role="separator"][aria-orientation="vertical"]')).toBeNull()
     expect(container.querySelector('[data-phone-sheet="half"] [role="tabpanel"] [data-layers-panel]')).not.toBeNull()
+    expect(container.querySelector('[data-phone-sheet]')?.matches('[data-key-region="dock"]')).toBe(true)
 
     await act(async () => { phoneLayout.value = 'landscape' })
     expect(container.querySelector('[data-phone-sheet]')?.getAttribute('data-orientation')).toBe('landscape')

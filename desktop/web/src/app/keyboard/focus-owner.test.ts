@@ -91,6 +91,26 @@ describe('F6 regions through the focus owner', () => {
     expect(document.activeElement).toBe(dock.querySelector('button'))
   })
 
+  it('F6 skips a control hidden by a display:none parent: the compact Menu button in the title bar', () => {
+    // The compact title bar's Menu button sits in a wrapper the wide layout hides; a browser cannot focus it.
+    const compact = document.createElement('div')
+    compact.style.display = 'none'
+    compact.innerHTML = '<button>Menu</button>'
+    titleBar.prepend(compact)
+    map.focus()
+    press()
+    expect(document.activeElement).toBe(dock.querySelector('button'))
+    press()
+    expect(document.activeElement).toBe(menu)
+    press()
+    expect(document.activeElement).toBe(railTool)
+    press()
+    expect(document.activeElement).toBe(map)
+    press(true)
+    press(true)
+    expect(document.activeElement).toBe(menu)
+  })
+
   it('returns to the control last focused in a region', () => {
     dockField.focus()
     press()

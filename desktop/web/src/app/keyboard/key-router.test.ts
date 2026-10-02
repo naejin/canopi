@@ -89,12 +89,17 @@ describe('key router', () => {
       // The held keys go on a blur, as on a visibility change.
       ['blur', false],
     ])
-    expect(documentAdd.mock.calls.map(([type]) => type)).toEqual(['visibilitychange'])
+    // The held keys go when the page hides; a press or a focus move records whether it landed on the map.
+    expect(documentAdd.mock.calls.map(([type, , options]) => [type, capture(options)])).toEqual([
+      ['visibilitychange', false],
+      ['pointerdown', true],
+      ['focusin', true],
+    ])
     handle.dispose()
     handle.dispose()
     expect(remove.mock.calls.map(([type, listener, options]) => [type, listener, capture(options)])).toEqual(added)
-    expect(documentRemove.mock.calls.map(([type, listener]) => [type, listener]))
-      .toEqual(documentAdd.mock.calls.map(([type, listener]) => [type, listener]))
+    expect(documentRemove.mock.calls.map(([type, listener, options]) => [type, listener, capture(options)]))
+      .toEqual(documentAdd.mock.calls.map(([type, listener, options]) => [type, listener, capture(options)]))
   })
 
   it('keyState runs first for every key, and a held Space stops the key there', () => {
@@ -122,8 +127,157 @@ describe('key router', () => {
     expect(run).not.toHaveBeenCalled()
   })
 
-  it('runs canvas-focus rows on the map and <body>, never from a control', () => {
+  it('with nothing focused, the canvas keys act only when the last press landed on the map', () => {
     install()
+    const dock = document.createElement('section')
+    const text = document.createElement('p')
+    text.textContent = 'Malus domestica'
+    dock.append(text)
+    document.body.append(dock)
+    const pressOn = (target: Element) => target.dispatchEvent(new Event('pointerdown', { bubbles: true, cancelable: true }))
+    const canvasKeys = () => [
+      press({ key: 'ArrowDown' }, document.body),
+      press({ key: 'Enter' }, document.body),
+      press({ key: 'Escape' }, document.body),
+      press({ key: 'ContextMenu' }, document.body),
+    ].map((event) => event.defaultPrevented)
+    fake.state.layers = ['selection']
+
+    // A click on a dock panel's text leaves focus on <body>: the keys are the page's, the selection stays.
+    pressOn(text)
+    expect(canvasKeys()).toEqual([false, false, false, false])
+    expect(fake.port.command).not.toHaveBeenCalled()
+    expect(fake.port.escape).not.toHaveBeenCalled()
+    // Space still pans with nothing focused (spec §1.6, step 3).
+    press({ key: ' ', code: 'Space' }, document.body)
+    expect(fake.port.keyState.mock.lastCall?.[0].onCanvas).toBe(true)
+
+    // After a press on the map, the same keys act on the canvas as before.
+    pressOn(host)
+    expect(canvasKeys()).toEqual([true, true, true, true])
+    expect(fake.port.command.mock.calls.map(([c]) => c.kind)).toEqual(['arrow', 'confirm', 'context-menu'])
+    expect(fake.port.escape).toHaveBeenCalledExactlyOnceWith('selection')
+    press({ key: ' ', code: 'Space' }, document.body)
+    expect(fake.port.keyState.mock.lastCall?.[0].onCanvas).toBe(true)
+  })
+
+  it('focus leaving the map by keyboard takes <body> off the map, and focus entering it puts <body> back', () => {
+    install()
+    const dock = document.createElement('section')
+    const control = document.createElement('button')
+    dock.append(control)
+    document.body.append(dock)
+    fake.state.layers = ['selection']
+    const arrow = () => press({ key: 'ArrowDown' }, document.body).defaultPrevented
+    // A press on the map, then F6 or Tab to a dock control that unmounts: focus falls to <body>.
+    host.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    host.focus()
+    control.focus()
+    control.remove()
+    expect(document.activeElement).toBe(document.body)
+    expect(arrow()).toBe(false)
+    expect(press({ key: 'Escape' }, document.body).defaultPrevented).toBe(false)
+    expect(fake.port.command).not.toHaveBeenCalled()
+    expect(fake.port.escape).not.toHaveBeenCalled()
+
+    // F6 back to the map, then its focused control unmounts: <body> is the map's again, with no press.
+    const unlock = document.createElement('button')
+    host.append(unlock)
+    unlock.focus()
+    unlock.remove()
+    expect(document.activeElement).toBe(document.body)
+    expect(arrow()).toBe(true)
+    expect(fake.port.command).toHaveBeenCalledExactlyOnceWith({ kind: 'arrow', dir: 'down', large: false })
+  })
+
+  describe('the selection edits run anywhere but a text field and the dock', () => {
+    /** The edits of the map's selection, each one's event, and whether the router took it. */
+    const edits = (target: EventTarget) => [
+      press({ key: 'c', ctrlKey: true }, target),
+      press({ key: 'x', ctrlKey: true }, target),
+      press({ key: 'a', ctrlKey: true }, target),
+      press({ key: 'A', ctrlKey: true, shiftKey: true }, target),
+      press({ key: 'd', ctrlKey: true }, target),
+      press({ key: 'g', ctrlKey: true }, target),
+      press({ key: 'Delete' }, target),
+    ].map((event) => event.defaultPrevented)
+    const EDITS = [
+      'canvas.copy', 'canvas.cut', 'canvas.selectAll', 'canvas.selectSameSpecies', 'canvas.duplicateSelected',
+      'canvas.groupSelected', 'canvas.deleteSelected',
+    ]
+
+    /** The side-panel dock's root as SidePanelDock and PhoneSheet mark it, with text and a control. */
+    function dock() {
+      const root = document.createElement('div')
+      root.dataset.keyRegion = 'dock'
+      const text = document.createElement('p')
+      text.textContent = 'Malus domestica'
+      const row = document.createElement('button')
+      root.append(text, row)
+      document.body.append(root)
+      return { root, text, row }
+    }
+
+    it('after a click on Zoom in or other floating chrome, Delete and Ctrl+C act on the map selection', () => {
+      install()
+      host.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+      const zoomIn = document.createElement('button')
+      document.body.append(zoomIn)
+
+      // The click focuses the button (Chromium) or leaves focus on <body> (WebKit): the edits are the map's either way.
+      zoomIn.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+      expect(edits(zoomIn)).toEqual(EDITS.map(() => true))
+      expect(edits(document.body)).toEqual(EDITS.map(() => true))
+      expect(run.mock.calls.map(([command]) => command)).toEqual([...EDITS, ...EDITS])
+    })
+
+    it('after a press on dock text or a dock control, Ctrl+C and Ctrl+A stay the page\'s; undo works anywhere', () => {
+      install()
+      const { root, text, row } = dock()
+
+      text.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+      expect(edits(document.body)).toEqual(EDITS.map(() => false))
+      expect(edits(row)).toEqual(EDITS.map(() => false))
+      expect(edits(root)).toEqual(EDITS.map(() => false))
+      expect(run).not.toHaveBeenCalled()
+      // Undo and redo still run from any focus but a text field, as before phase F.
+      expect(press({ key: 'z', ctrlKey: true }, document.body).defaultPrevented).toBe(true)
+      expect(press({ key: 'Z', ctrlKey: true, shiftKey: true }, row).defaultPrevented).toBe(true)
+      expect(run.mock.calls).toEqual([['edit.undo'], ['edit.redo']])
+
+      // A dock control that Tab reached keeps them too, and a press back on the map hands them back.
+      run.mockClear()
+      row.dispatchEvent(new Event('focusin', { bubbles: true }))
+      expect(press({ key: 'c', ctrlKey: true }, document.body).defaultPrevented).toBe(false)
+      host.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+      expect(edits(document.body)).toEqual(EDITS.map(() => true))
+      expect(run.mock.calls.map(([command]) => command)).toEqual(EDITS)
+    })
+
+    it('at startup, with no press yet, Ctrl+A selects the map\'s objects as before phase F', () => {
+      install()
+      expect(press({ key: 'a', ctrlKey: true }, document.body).defaultPrevented).toBe(true)
+      expect(run).toHaveBeenCalledExactlyOnceWith('canvas.selectAll')
+    })
+
+    it('a text field keeps every edit, in the dock or out of it', () => {
+      install()
+      const { root } = dock()
+      const inDock = document.createElement('input')
+      root.append(inDock)
+      const outside = document.createElement('input')
+      document.body.append(outside)
+      host.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+
+      expect(edits(outside)).toEqual(EDITS.map(() => false))
+      expect(edits(inDock)).toEqual(EDITS.map(() => false))
+      expect(run).not.toHaveBeenCalled()
+    })
+  })
+
+  it('runs canvas-focus rows on the map and <body> after a press on the map, never from a control', () => {
+    install()
+    host.dispatchEvent(new Event('pointerdown', { bubbles: true }))
     const button = document.createElement('button')
     document.body.append(button)
 

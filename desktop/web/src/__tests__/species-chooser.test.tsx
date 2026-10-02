@@ -16,6 +16,7 @@ import { SceneStore } from '../canvas/runtime/scene/store'
 import { setCanvasRuntimeSurfaces } from '../canvas/session'
 import {
   IDLE_CANVAS_TOOL_GUIDANCE,
+  getCanvasTool,
   setCanvasTool,
   setCanvasToolGuidance,
 } from '../canvas/session-state'
@@ -306,6 +307,25 @@ describe('Place plants species chooser', () => {
     expect(document.activeElement).toBe(map)
   })
 
+  it('closes with Esc from a species option, keeping the tool and its species', async () => {
+    await act(() => {
+      selectPlantStampSource({ canonical_name: 'Ficus carica', common_name: 'Fig', stratum: null, width_max_m: 4 })
+    })
+    const change = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Change species')!
+    await act(() => change.click())
+    const option = options()[0]!
+    option.focus()
+
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    await act(() => { option.dispatchEvent(escape) })
+
+    expect(escape.defaultPrevented).toBe(true)
+    expect(options()).toHaveLength(0)
+    expect(getCanvasTool()).toBe('plant-stamp')
+    expect(readPlantStampSource()?.canonical_name).toBe('Ficus carica')
+    expect(document.activeElement).toBe(map)
+  })
+
   it('returns focus to the map on Esc when no species is chosen, leaving the tool armed', async () => {
     const input = container.querySelector<HTMLInputElement>('input[type="search"]')!
     input.focus()
@@ -314,5 +334,20 @@ describe('Place plants species chooser', () => {
 
     expect(document.activeElement).toBe(map)
     expect(options().length).toBeGreaterThan(0)
+  })
+
+  it('leaves an Esc that is part of an IME composition to the IME', async () => {
+    const input = container.querySelector<HTMLInputElement>('input[type="search"]')!
+    input.focus()
+    const composing = new KeyboardEvent('keydown', { key: 'Escape', isComposing: true, bubbles: true, cancelable: true })
+    await act(() => { input.dispatchEvent(composing) })
+    // WebKit sends the key that ends a composition with keyCode 229.
+    const committing = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    Object.defineProperty(committing, 'keyCode', { value: 229 })
+    await act(() => { input.dispatchEvent(committing) })
+
+    expect(composing.defaultPrevented).toBe(false)
+    expect(committing.defaultPrevented).toBe(false)
+    expect(document.activeElement).toBe(input)
   })
 })

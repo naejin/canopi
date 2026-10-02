@@ -1,7 +1,7 @@
 // canvas/runtime/tools/plant-row.ts
 //
-// Owns Plant a row ('plant-spacing', key W; spec §1.4, §3.2, §3.7): a press on a placed plant picks it as the row's source,
-// then every hover and every move of a held press previews the row from it, and a press or a drag's release commits it, one
+// Owns Plant a row ('plant-spacing', key W; spec §1.4, §3.2, §3.7): a press on a placed plant picks it as the row's source
+// (the tool card's spacing field asks for focus on that press's release, unless it became a drag), then every hover and every move of a held press previews the row from it, and a press or a drag's release commits it, one
 // Scene Edit that selects the source and the new plants. The recogniser reports a held press's moves at once (slop 0) and
 // the tool keeps today's 4 px itself: a move 4 px from the press on screen makes it a drag, else its release is a click.
 // The row's plants repeat the source at the spacing interval of the tool card's field (the spacing commands; Settings keeps
@@ -71,6 +71,9 @@ export function createPlantRowTool(): CanvasTool {
   let focusRequest = 0
   /** A move of the held press went PLANT_ROW_DRAG_PX out: its release commits (today's drag), else it is a click. */
   let dragging = false
+  /** The held press picked the source: its field asks for focus on the release, unless the press became a drag (the map
+   *  took focus then; a field focused on the next render would take Esc, Enter and letters from it). */
+  let fieldFocusOnRelease = false
 
   function context(): ToolContext {
     if (!ctx) throw new Error('Plant a row is not active.')
@@ -128,6 +131,14 @@ export function createPlantRowTool(): CanvasTool {
     focusRequest += 1
   }
 
+  /** The release of the press that picked the source: the field asks for focus now. */
+  function focusFieldOnRelease(): boolean {
+    if (!fieldFocusOnRelease) return false
+    fieldFocusOnRelease = false
+    if (source) focusIntervalInput()
+    return true
+  }
+
   // ── Source ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
   function showSourcePicking(reason: 'select-source' | 'source-missed' = 'select-source'): void {
@@ -172,7 +183,7 @@ export function createPlantRowTool(): CanvasTool {
     intervalValid = true
     missed = false
     shownCount = null
-    focusIntervalInput()
+    fieldFocusOnRelease = true
   }
 
   function canUseSource(candidate: PlantRowSource): boolean {
@@ -218,6 +229,7 @@ export function createPlantRowTool(): CanvasTool {
     const tool = context()
     if (!dragging && tool.view.screenDistance(start.world, point.world) >= PLANT_ROW_DRAG_PX) {
       dragging = true
+      fieldFocusOnRelease = false
       tool.effects.requestFocus('map')
     }
     previewAt(point)
@@ -332,6 +344,7 @@ export function createPlantRowTool(): CanvasTool {
       switch (g.kind) {
         case 'press':
           dragging = false
+          fieldFocusOnRelease = false
           if (source) commitPreview(g.point.snapped)
           else pickSource(g.point)
           break
@@ -342,9 +355,18 @@ export function createPlantRowTool(): CanvasTool {
           break
         case 'drag-end':
           if (!source) return 'pass'
-          // A release that never went 4 px out is a click: its press did all a click does, and the preview stays.
+          // A release that never went 4 px out is a click: its press did all a click does but focus the field, and the
+          // preview stays.
           if (dragging) commitPreview(dragCommitEndpoint(g.point))
+          else focusFieldOnRelease()
           break
+        case 'tap':
+          // The tap itself stays the host's, as before; only the field's focus request is published.
+          if (focusFieldOnRelease()) publish()
+          return 'pass'
+        case 'cancel':
+          fieldFocusOnRelease = false
+          return 'pass'
         case 'hover':
           if (!source) return 'pass'
           previewAt(g.point)

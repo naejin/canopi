@@ -82,11 +82,14 @@ export function SpeciesChooser({ autoFocus, focusRequest, onChosen, onEscape }: 
     onChosen()
   }
 
-  function handleKeyDown(event: JSX.TargetedKeyboardEvent<HTMLInputElement>): void {
+  /** Esc anywhere in the chooser closes it, as in the stamp chooser; in the search field it first clears the query. */
+  function handleKeyDown(event: JSX.TargetedKeyboardEvent<HTMLDivElement>): void {
     if (event.key !== 'Escape') return
+    // An Esc inside an IME composition is the IME's (WebKit sends the key that ends one with keyCode 229).
+    if (event.isComposing || event.keyCode === 229) return
     event.preventDefault()
     event.stopPropagation()
-    if (query) setQuery('')
+    if (query && event.target === input.current) setQuery('')
     else onEscape()
   }
 
@@ -101,12 +104,11 @@ export function SpeciesChooser({ autoFocus, focusRequest, onChosen, onEscape }: 
   ).filter(({ entry }) => !allowed || allowed.has(entry.source.canonical_name))
 
   return (
-    <div className={styles.chooser}>
+    <div className={styles.chooser} onKeyDown={handleKeyDown}>
       <PlantFinder
         value={query}
         onChange={setQuery}
         inputRef={input}
-        onKeyDown={handleKeyDown}
         controls={listId}
         correction={finder.correction}
         filters={species.length > 0 && <StratumFormFilters filters={quickFilters} onChange={setQuickFilterValue} />}

@@ -345,7 +345,9 @@ describe('SceneInteractionSession', () => {
     const inputBeforeSource = spacingInput()
     expect(document.activeElement).not.toBe(inputBeforeSource)
 
+    // A tap picks the source; its release focuses the spacing field.
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerUp({ x: 20, y: 30 }, { button: 0 })
 
     const input = spacingInput()!
     expect(input.value).toBe('50 cm')
@@ -387,7 +389,9 @@ describe('SceneInteractionSession', () => {
     const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
+    // A tap picks the source; its release focuses the spacing field.
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerUp({ x: 20, y: 30 }, { button: 0 })
 
     const input = spacingInput()!
     input.value = '0,75m'
@@ -493,7 +497,9 @@ describe('SceneInteractionSession', () => {
     const deps = createInteractionDeps(container, store, testView)
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
+    // A tap picks the source; its release focuses the spacing field.
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
+    events.pointerUp({ x: 20, y: 30 }, { button: 0 })
 
     const input = spacingInput()!
     expect(document.activeElement).toBe(input)
@@ -964,8 +970,11 @@ describe('SceneInteractionSession', () => {
 
     expect(draftShapes('polyline')[0]?.points).toEqual([{ x: 20, y: 30 }, { x: 22, y: 30 }])
     expect(rowLength()).toBe('2 m')
-    expect(document.activeElement).toBe(input)
+    // The field takes focus on the release of the press that picked the source, which a jitter leaves a click.
+    expect(document.activeElement).not.toBe(input)
     events.pointerUp({ x: 22, y: 30 }, { button: 0 })
+    expect(spacingInput()).toBe(input)
+    expect(document.activeElement).toBe(input)
 
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     expect(store.persisted.plants).toHaveLength(1)
