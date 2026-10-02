@@ -4,7 +4,7 @@ import {
   buildPlantPresentationEntries,
   getStackBadgeSizePx,
   STACK_BADGE_FONT_SIZE_PX,
-  getPlantScreenHitBounds,
+  hitTestPlant,
   layoutPlantPresentation,
   resolveStackBadgeDecisions,
   type PlantPresentationContext,
@@ -159,23 +159,18 @@ describe('plant presentation service', () => {
     expect(fallbackPresentation.symbol).toBe('conifer')
   })
 
-  it('computes screen hit bounds from the resolved Visual Footprint plus interaction padding', () => {
+  it('hit tests the resolved Visual Footprint plus interaction padding', () => {
     const plant = createPlant()
     const context = {
       pixelsPerMetre: 8,
       speciesCache: new Map(),
     } as const
     const entry = buildPlantPresentationEntries([plant], context, new Set())[0]!
-    const hitBounds = getPlantScreenHitBounds(plant, context, createTestRendererView({ x: 5, y: 7, scale: 8 }).worldToScreen(plant.position))
-    const expectedHitRadius = entry.radiusScreenPx + 4
+    const hitRadiusMetres = (entry.radiusScreenPx + 4) / context.pixelsPerMetre
+    const at = (distance: number) => ({ x: plant.position.x + distance, y: plant.position.y })
 
-    expect(hitBounds.center.x).toBeCloseTo(85, 6)
-    expect(hitBounds.center.y).toBeCloseTo(167, 6)
-    expect(hitBounds.radiusPx).toBeCloseTo(expectedHitRadius, 5)
-    expect(hitBounds.bounds.x).toBeCloseTo(85 - expectedHitRadius, 5)
-    expect(hitBounds.bounds.y).toBeCloseTo(167 - expectedHitRadius, 5)
-    expect(hitBounds.bounds.width).toBeCloseTo(expectedHitRadius * 2, 5)
-    expect(hitBounds.bounds.height).toBeCloseTo(expectedHitRadius * 2, 5)
+    expect(hitTestPlant(plant, at(hitRadiusMetres * 0.999), context)).toBe(true)
+    expect(hitTestPlant(plant, at(hitRadiusMetres * 1.001), context)).toBe(false)
   })
 
   it('reserves stack badges for coincident centres and anchors them to the highest-priority member', () => {

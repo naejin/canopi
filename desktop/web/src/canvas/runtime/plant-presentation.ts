@@ -50,16 +50,6 @@ export interface PlantLayoutResult {
   stackCounts: ReadonlyMap<string, number>
 }
 
-export interface PlantScreenHitBounds {
-  center: ScenePoint
-  radiusPx: number
-  bounds: {
-    x: number
-    y: number
-    width: number
-    height: number
-  }
-}
 
 export interface PlantStackBadgeDecision {
   anchorPlantId: string
@@ -142,25 +132,6 @@ export function getPlantWorldBounds(
     y: plant.position.y - radiusWorld,
     width: radiusWorld * 2,
     height: radiusWorld * 2,
-  }
-}
-
-/** The plant's hit area on screen about `screenPoint`, its position projected through the view. */
-export function getPlantScreenHitBounds(
-  plant: ScenePlantEntity,
-  context: PlantPresentationContext,
-  screenPoint: ScenePoint,
-): PlantScreenHitBounds {
-  const hitRadiusPx = plantHitRadiusPx(plant, context)
-  return {
-    center: screenPoint,
-    radiusPx: hitRadiusPx,
-    bounds: {
-      x: screenPoint.x - hitRadiusPx,
-      y: screenPoint.y - hitRadiusPx,
-      width: hitRadiusPx * 2,
-      height: hitRadiusPx * 2,
-    },
   }
 }
 
