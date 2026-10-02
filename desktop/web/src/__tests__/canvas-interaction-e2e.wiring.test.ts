@@ -230,7 +230,8 @@ describe('SceneInteractionSession', () => {
 
     expect(() => session.dispose()).toThrow('story observer disconnect failed')
 
-    expect(events.listenerLog?.containerRemoves('pointerdown')).toHaveLength(1)
+    // The source's press listener and the selection-drag guard's.
+    expect(events.listenerLog?.containerRemoves('pointerdown')).toHaveLength(2)
     expect(events.listenerLog?.containerRemoves('pointermove')).toHaveLength(1)
     expect(events.listenerLog?.windowRemoves('blur')).toHaveLength(1)
     expect(container.querySelector('[data-locked-object-affordance]')).toBeNull()

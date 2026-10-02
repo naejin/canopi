@@ -1,8 +1,8 @@
 // canvas/runtime/input/dom-input-source.ts
 //
 // Owns every DOM listener for canvas input: the map host's pointer (hover moves included), wheel, contextmenu, drag and
-// focus events, the window blur, the window pointer listeners while it owns a pointer, and the ruler presses at document
-// capture (keys are the key router's, app/keyboard). A press it delivers, on the map or a ruler, owns that pointer until
+// focus events, the window blur, the window pointer listeners while it owns a pointer, the ruler presses at document
+// capture and the copied GeoLibre selection-drag guard on the host (keys are the key router's, app/keyboard). A press it delivers, on the map or a ruler, owns that pointer until
 // its release, its cancel or a window blur: only then does it listen on window, and only to that pointer, so presses,
 // moves and releases that start elsewhere in the app reach the page untouched. It turns
 // each event into host-relative, classified fields for `normalise`, hands the raw input to the sink, and applies the
@@ -23,6 +23,7 @@ import type { CanvasDropPayload, ToolHandleId } from '../interaction-types'
 import { isEditableTarget } from './editable-target'
 import { normalise, type DomEventLike } from './normalise'
 import type { AdapterEffect, RawInput, TargetClass } from './raw-input'
+import { installSelectionDragGuard } from './selection-drag-guard'
 import { DEFAULT_THRESHOLDS } from './thresholds'
 
 /** The note editor: D1's text-entry host, and today's inline annotation editor until it moves there. */
@@ -310,6 +311,8 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
         listen(host, 'drop', onDrop as EventListener)
         listen(host, 'focusout', onFocusOut as EventListener)
         if (deps.listensToRulers) listen(document, 'pointerdown', onRulerPointerDown as EventListener, { capture: true })
+        // A map drag never selects or drags page text; the note editor and the map's fields keep their own.
+        removals.push(installSelectionDragGuard(host, (target) => keepsTextSelection(target, host)))
         if (deps.bindings().touch.hostTouchActionNone) host.style.touchAction = 'none'
         listenOnWindow = () => {
           const windowRemovals: Array<() => void> = []
@@ -431,6 +434,13 @@ function dropPayloadOf(event: DragEvent, type: 'dragover' | 'dragleave' | 'drop'
   if (stamp) return { kind: 'saved-stamp', stamp }
   const species = readPlantStampDropSource(event)
   return species ? { kind: 'species', species } : { kind: 'unknown' }
+}
+
+/** A text field in the map, the note editor included: its own selection and text drags stay the browser's. */
+function keepsTextSelection(target: EventTarget | null, host: HTMLElement): boolean {
+  const element = elementOf(target)
+  if (!element) return false
+  return isEditableTarget(element) || closestInside(element, `${TEXT_ENTRY_SELECTOR}, input, textarea, [contenteditable="true"]`, host) !== null
 }
 
 /** Classifies an event target from data attributes (spec §1.2 `TargetClass`). */

@@ -394,7 +394,8 @@ describe('SceneInteractionSession', () => {
     expect(onSceneEditCommit).toHaveBeenCalledOnce()
     expect(events.pointerCapture.releaseCalls).toHaveBeenCalledWith(23)
     expect(() => session.dispose()).not.toThrow()
-    expect(events.listenerLog?.containerRemoves('pointerdown')).toHaveLength(1)
+    // The source's press listener and the selection-drag guard's.
+    expect(events.listenerLog?.containerRemoves('pointerdown')).toHaveLength(2)
     expect(events.listenerLog?.windowRemoves('pointermove')).toHaveLength(1)
   })
 

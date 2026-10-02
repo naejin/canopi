@@ -86,6 +86,10 @@ describe('createDomInputSource', () => {
       ['dragleave', false],
       ['drop', false],
       ['focusout', false],
+      // The selection-drag guard (selection-drag-guard.test.ts).
+      ['pointerdown', true],
+      ['dragstart', true],
+      ['selectstart', true],
     ])
     expect(hostAdds.find(([type]) => type === 'wheel')?.[2]).toEqual({ passive: false })
     expect(listenerCalls(spies.windowAdd).map(([type, , options]) => [type, captureFlag(options)])).toEqual([['blur', false]])
