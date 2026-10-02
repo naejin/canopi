@@ -576,7 +576,7 @@ export type TargetClass =
   | { readonly kind: 'surface' }                                   // host or [data-canvas-surface]
   | { readonly kind: 'handle'; readonly id: ToolHandleId }         // [data-canvas-handle] in the handle layer
   | { readonly kind: 'ruler'; readonly axis: 'h' | 'v' }           // [data-canvas-ruler]
-  | { readonly kind: 'owned-chrome'; readonly lockedAffordance?: true }   // compass, zoom group, attribution ([data-canvas-chrome]); any other button, input, select,
+  | { readonly kind: 'owned-chrome'; readonly lockedAffordance?: true }   // MapLibre controls in the host (.maplibregl-ctrl: the attribution, from F); any other button, input, select,
                                                                    // [contenteditable] or [data-preserve-overlays] in the host (the inspection lens's skip set);
                                                                    // lockedAffordance: the Unlock affordance ([data-locked-object-affordance], classified in
                                                                    // dom-input-source.ts), which keeps the hover in every phase (§2.2)
@@ -656,13 +656,13 @@ Stages: `DomInputSource` (the only DOM listener owner for canvas input, includin
 
 The way back: `route` returns the host's `GestureOutcome` (§1.2a); the source applies `quarantine` as `prevent-default` plus `stop-propagation`, `dropEffect` as `drop-effect`, and `rejectSession` by skipping the press's capture and feeding the recogniser `{ kind: 'reject', id }` (its later moves are hovers). A cancellation that throws with an edit open aborts the edit; the next press is still admitted. A sink that throws on a map-host press quarantines that event then rethrows; on any other event it rethrows and the event goes on. Every raw pointerdown also reaches `ToolHost.rawPress(button)` before routing (§1.4 "Raw presses"), so presses the host never sees as gestures still commit the nudge series and, for primary and middle, close the canvas menu and focus the map. See `input/dom-input-source.ts` and its tests for the exact fault matrix.
 
-Window key listeners (keydown capture, keyup bubble) live in the source and go through `legacyKeys` to `keyboard-port.ts` until phase F replaces them with the key router (§1.6). Host `pointerleave` becomes `leave`, `focusout` becomes `focus-out`, window `blur` becomes `cancel('all', 'blur')`. Window `pointermove`/`pointerup`/`pointercancel` capture listeners stay installed from `attach` until phase F, which listens on window only during an owned session (plan §4 F).
+Window key listeners (keydown capture, keyup bubble) live in the source and go through `legacyKeys` to `keyboard-port.ts` until phase F replaces them with the key router (§1.6). Host `pointerleave` becomes `leave`, `focusout` becomes `focus-out`, window `blur` becomes `cancel('all', 'blur')`. Window `pointermove`/`pointerup`/`pointercancel` capture listeners stay installed from `attach` until phase F, which listens on window only during an owned session and adds a host `pointermove` for hover moves (until F the window listener carries them; plan §4 F).
 
 Normalisation rules:
 - Mouse `button` 0/1/2 → primary/auxiliary/secondary; 3 and 4 dropped. Pen tip → primary; barrel (2) → secondary when `penBarrel: 'secondary'`, else dropped; eraser (5) dropped. Touch → primary in every phase. These drop presses only: an `up` is never dropped, and one whose button no press takes (a mouse's 3 or 4, a pen's eraser, its barrel under `ignore`) is a primary `up`, so it ends its pointer's session whatever the button, as today's pointerup did (a pen drag whose tip lifts before its barrel commits).
 - On `os: 'mac'` with `macCtrlClick: 'secondary'`, mouse button 0 with `ctrlKey && !metaKey` becomes secondary with `ctrlConsumed: true`. For that session the recogniser ignores `ctrl` in `move` mods and `key-state`.
 - Wheel `deltaMode` is read before the deltas (16 px per line; a page is the host width for `deltaX` and the host height for `deltaY`). A wheel with `ctrlKey` and no physical Ctrl reported by the KeyRouter becomes `pinch: true`.
-- Targets are classified from data attributes; the attribution control is `data-canvas-chrome` (`owned-chrome`).
+- Targets are classified from data attributes and selectors; from F the MapLibre attribution inside the host is `owned-chrome` through `.maplibregl-ctrl` in `OWNED_CHROME_SELECTOR` (no element carries `data-canvas-chrome`). The zoom group, compass, tool card and rail sit beside the host, so their presses are `foreign`.
 - Rulers sit beside the map host, so the source listens at document capture for `pointerdown` on `[data-canvas-ruler]`. Under LEGACY a mouse or pen press of any button there is a primary `down` with a `ruler` target (today's ruler drag heard `mousedown`, which a pen sends too); a touch press there is dropped (a touch sends its `mousedown` only once it lifts).
 
 ### 1.2a Shared vocabulary and interaction ports (`canvas/runtime/interaction-types.ts`, `interaction-ports.ts`)
@@ -1463,7 +1463,7 @@ export interface KeymapRow {
  *  row has Escape). */
 export const CANVAS_KEYMAP_ROWS: readonly KeymapRow[]
 /** One edition's shell rows from its own catalogue (capability-filtered; Web omits BROWSER_RESERVED_SHORTCUTS, none of which is a
- *  canvas chord). Each edition composes [...shellKeymapRows(…), ...CANVAS_KEYMAP_ROWS] (P14 holds); F1 (F) renders the result. */
+ *  canvas chord). Each edition composes [...shellKeymapRows(…), ...CANVAS_KEYMAP_ROWS] (P14 holds). F1 keeps rendering the menus; phase 2 makes it a static list. */
 export function shellKeymapRows(catalog: readonly ShellCommandCatalogEntry[], options?: { readonly omit?: ReadonlySet<string> }): readonly KeymapRow[]
 
 /** Where a keymap row runs: Desktop's sink, private to commands/registry.ts; Web web/browser-shell-commands.ts. Injected, so
@@ -1472,9 +1472,11 @@ export interface CommandSink {
   /** False when the key is not consumed; the router prevents and stops a consumed key (step 10 below). */
   run(command: ShellCommandId | CanvasCommandId): boolean
 }
-/** Pushed scopes: surfaces that own keys while open. A scope pushed by a surface that holds the modal layer (story-presenter, pdf-page-editor) runs as that modal's own handler (step 4); stories-undo-toast is not modal (step 6). The story presenter's handle returns false unless its root holds the target, as today's root handler (fixture I12b). */
+/** Pushed scopes: non-modal surfaces that own keys while open (step 7). Modal surfaces push none: the story presenter's and the PDF
+ *  page editor's own element onKeyDown run before the router, under the modal step (step 5), so the presenter hears only keys inside
+ *  its root (fixture I12b). */
 export interface KeyScopeHandle { dispose(): void }
-export function pushKeyScope(scope: { readonly id: 'story-presenter' | 'pdf-page-editor' | 'stories-undo-toast'; handle(e: KeyboardEventLike, chord: KeyChord): boolean }): KeyScopeHandle
+export function pushKeyScope(scope: { readonly id: 'stories-undo-toast'; handle(e: KeyboardEventLike, chord: KeyChord): boolean }): KeyScopeHandle
 
 // app/keyboard/escape-chain.ts
 export interface EscapeLayer {
@@ -1495,9 +1497,11 @@ export function describeEscape(): EscapeLayer | null
 export function armCanvasTool(
   tool: ToolId,
   options: {
-    /** Each caller passes its own: the rail, menus, palette and both editions' keys no longer share one 'command' value through
-     *  workspaceCanvasIntentAdapter.selectTool (F threads the caller through app/workspace-commands/canvas-actions.ts). */
-    readonly from: 'rail' | 'menu' | 'palette' | 'panel' | 'card' | 'shortcut' | 'start-card' | 'drop'
+    /** Each caller passes its own: the rail, menus, palette and both editions' keys no longer share one 'command' value. They
+     *  reach arming through shared dispatch, so F threads `from` as an argument through dispatchCanvasCommandIntent,
+     *  CanvasCommandIntentAdapter.selectTool, runCatalogCommand and the projected action(from) to
+     *  app/workspace-commands/canvas-actions.ts. A drop arms in the runtime, with no from (FocusReason 'drop'). */
+    readonly from: 'rail' | 'menu' | 'palette' | 'panel' | 'card' | 'shortcut' | 'start-card'
     readonly source?: ToolSource
   },
 ): boolean   // true when a canvas session took the tool
@@ -1516,7 +1520,7 @@ export interface FocusOwner extends CanvasFocusPort {
 }
 ```
 
-`KeyRouter` (`key-router.ts`) owns the only window key listeners. It and the rest of this section are built once, in F, in their target form (no legacy rebuild, U7); until then the keyboard port keeps today's key handling. `armCanvasTool` writes the source to the module read models (`canvas/plant-stamp-source.ts`, `canvas/saved-object-stamp-source.ts`: they stay, as what the tool card, recents and choosers display; their `begin…` helpers are deleted in F, so the runtime, which value-imports both modules, never reaches `app/keyboard/**`), selects the canvas panel for the command and Start-card callers, calls `CanvasToolCommandSurface.setTool(id)` and focuses the map for every `from` except `shortcut`. F decides whether it records rail learning, which until then stays an effect on every tool change (`app/tool-rail/learning.ts`).
+`KeyRouter` (`key-router.ts`) owns the only window key listeners. It and the rest of this section are built once, in F, in their target form (no legacy rebuild, U7); until then the keyboard port keeps today's key handling. `armCanvasTool` writes the source to the module read models (`canvas/plant-stamp-source.ts`, `canvas/saved-object-stamp-source.ts`: they stay, as what the tool card, recents and choosers display; their `begin…` helpers are deleted in F, so the runtime, which value-imports both modules, never reaches `app/keyboard/**`), selects the canvas panel for the command and Start-card callers, calls `CanvasToolCommandSurface.setTool(id)` and focuses the map for every `from` except `shortcut`. It records no rail learning: that stays an effect on every tool change (`app/tool-rail/learning.ts`, unchanged in F).
 
 | `from` (callers) | Source | Canvas panel | No canvas session | Focus |
 |---|---|---|---|---|
@@ -1525,7 +1529,7 @@ export interface FocusOwner extends CanvasFocusPort {
 | `panel`: `place-species.ts` | species | — | writes the source and recents, arms nothing | the map host |
 | `panel`: `FavoritesPanel.tsx`; `card`: `StampChooser.tsx` (both through `workbench.placeStamp(stamp, from)`) | saved-stamp | — | writes nothing, false | the map host (the card's `closeChooser` focus moves to the owner, INV-FOC-05) |
 | `card`: `StampChooser.tsx`'s `select`, then `object-stamp` (never short-circuits a same-id arm) | — | — | nothing | the map host |
-| `drop` | — | — | — | the map host (no app caller: the runtime arms at a drop, `FocusReason 'drop'`) |
+| a drop (no `from`) | — | — | — | the map host (no app caller: the runtime arms at a drop and focuses with `FocusReason 'drop'`) |
 
 F deletes `app/shell/focus-regions.ts` with today's `focusRegion(id)` and `focusMapSurface()` and moves their callers (`app/story-presentation/controller.ts`, `place-species.ts`, `FavoritesPanel.tsx`) to the owner in the same change; P11 tombstones them.
 
@@ -1542,10 +1546,10 @@ Resolution order for one keydown. Capture listener:
 4. While a pointer gesture or nudge series is live, the canvas port takes the key first whatever the focus (today `keyboard-port.ts:260-277`): Esc runs the `gesture` or `nudge-series` layer. F6 and Shift+F6 cycle regions (today in capture).
 
 Bubble listener, skipped for a key already `defaultPrevented` (an element handler of a focused widget handled it; a widget that calls `stopPropagation` hides the key from these steps, as it hides it from the shell rows today; today's widgets stop propagation on Escape (`InspectionLens.tsx:119`, `PlantColorMenu.tsx:243`, `PlantSymbolMenu.tsx:122`, `PdfPageEditor.tsx:105` and about 15 more), `ToolCard.tsx:240` also on Enter, `SegmentedControl.tsx:52-53` on arrows, Home and End):
-5. Modal: the pushed scope of the surface holding the modal layer (story presenter, PDF page editor inside the PDF workspace), then `worksInModal` rows; nothing else. The modal's element handlers have already run.
+5. Modal: `worksInModal` rows only; nothing else. The modal's element handlers (the story presenter's and the PDF page editor's own `onKeyDown` among them) have already run.
 6. `global` rows (in every class but `modal`; in `text` only with `worksInTextFields`). Ctrl F is a global row whose command asks the open panel's plant finder first and otherwise opens Edit › Find plants (today `shortcuts/manager.ts:15-20`).
 7. Non-modal pushed scopes: the Stories Undo toast (Ctrl Z while the toast is on screen, today `app/stories/actions.ts` `runStoryUndoShortcut`). Popovers and menus are not scopes: their Esc is an Esc layer (step 8), and their arrows are handled by their own element (arrow-owning widgets).
-8. Esc runs the Esc chain (popovers 100, canvas menu 80, … §3.7). An open text entry never reaches this step: its own element handler cancels it first, and focus class `text` keeps the canvas layers off.
+8. Esc runs the Esc chain (popovers 100, canvas menu 80, … §3.7). An open text entry never reaches this step: its own element handler cancels it first, and focus class `text` keeps the canvas layers off; the selection layer also needs focus class `map` or `body` (U10).
 9. Keymap match: `command` rows in `map`, `body` and `other`; `view-arrows` the same except in an arrow-owning widget; `canvas-focus` only in `map` and `body`.
 10. Dispatch: `preventDefault` and `stopPropagation`; canvas commands through the port; a port `command()` that returns false runs the row's `fallback` through the platform's `CommandSink` (Desktop `commands/registry.ts`, Web `web/browser-shell-commands.ts`), and without a fallback the key is not consumed. Each chord has one row per scope; rows are never tried in turn (fixture H27).
 
@@ -1894,9 +1898,8 @@ The text entry (note editor, spacing field) is not a layer: its element handler 
 | 50 | non-Select tool → Select | any tool but Select is armed |
 | 30 | selection → clear | something is selected |
 | 25 | raster inspection → end | inspecting |
-| 10 | dock panel or phone sheet → close | open |
 
-The canvas layers are active from every focus class except `text` and `modal` whenever a tool is armed, a gesture is live or a transient exists (phase F; phase 0 keeps today's behaviour). One Esc runs one layer. In overview only layers 100, 70 (a live pan or rotate, or today's interrupted gesture), 30 (from 2, the overview selection), 25 and 10 run; 65, 60 and 50 never run there, so Esc never leaves the tool in overview (today), and the per-tool table below applies in site mode only.
+From F, per layer: the gesture (70), nudge-series (65), tool-transient (60) and tool (50) layers run from every focus class except `text` and `modal`; the selection layer (30) runs only with focus class `map` or `body`, so Esc with focus in a side panel keeps the map selection (U10, user 2026-10-02). No layer closes the dock panel or the phone sheet (U11). Phase 0 keeps today's behaviour. One Esc runs one layer. In overview only layers 100, 70 (a live pan or rotate, or today's interrupted gesture), 30 (from 2, the overview selection) and 25 run; 65, 60 and 50 never run there, so Esc never leaves the tool in overview (today), and the per-tool table below applies in site mode only.
 
 The priority table is built in F, the popover layers in the same window as the chain (fixture I8); until then the keyboard port keeps today's Esc order and popovers keep their document listeners. No canvas row matches Esc: `deselect` carries only a key hint (`app/canvas-commands/index.ts:351`) and the canvas rows come from `definition.shortcuts`.
 
@@ -1906,6 +1909,7 @@ The priority table is built in F, the popover layers in the same window as the c
 | Pan | Select | clears the selection | — |
 | Plant stamp | Select ("Esc to stop placing") | clears | — |
 | Plant a row, source chosen | drops the source (today, `plant-spacing-tool.ts:205-211`) | Select | clears |
+| Plant a row, during a drag (from F) | cancels the drag; the source stays | drops the source | Select |
 | Object stamp, pick held | drops the pick (from 2; before: Select at once) | Select | clears |
 | Saved object stamp | drops the saved stamp; the card offers "Choose a saved stamp" (from 2; before: Select) | Select | clears |
 | Polygon, draft | drops the draft | Select | clears |
@@ -1914,22 +1918,22 @@ The priority table is built in F, the popover layers in the same window as the c
 | Any tool, rotate drag live | restores the camera | next layer | — |
 | Any tool, pan live (from 2, spec) | ends the pan where it is; the tool stays armed | next layer | — |
 
-The tool card's "Esc …" line is rendered from `describeEscape()`. Phase 0 keeps today's order for Plant a row (INV-KEY-09): its Esc runs before the live-gesture layer, so it drops the source even mid-drag, and with no source it requests Select itself.
+`describeEscape()` names the layer the next Esc runs; no F row wires the tool card's "Esc …" line to it (the card keeps its own hint). Phase 0 keeps today's order for Plant a row (INV-KEY-09): its Esc runs before the live-gesture layer, so it drops the source even mid-drag, and with no source it requests Select itself. From F the gesture layer (70) runs above the transient (60), so an Esc mid-drag cancels only the drag (plan §8).
 
 ### 3.8 Exceptions
 
 | Surface | Rule |
 |---|---|
 | Text entry (note editor, the tool-card spacing field) | Focus class `text`: letters type; single-key shortcuts, Delete, arrows, Shift+arrows, N and Shift+N do not reach the canvas; `global` rows with `worksInTextFields` still work. Enter commits, Shift+Enter adds a line, Esc cancels. From phase F both are IME-safe in the entry itself: `chrome/text-entry-host.ts` ignores Enter and Esc while `isComposing || keyCode === 229`, because its element listener runs before the key router's guard. Any press on the map outside the entry, primary, middle or right, commits it first (today: `_pointerDownWhenSettled` commits on buttons 0 and 1, then focuses the host; the map taking focus commits an entry that holds focus on its blur, and the host submits one whose blur commit was refused; every phase), so a middle- or right-drag pan or a Shift+right- or Shift+middle-drag turn closes it; a primary press that commits a new note's entry places no note and reaches no tool (today, §3.2). Space held in the entry types a space and arms no pan (fixture G11), so a Space-drag never starts from it; while a new note's entry is open without focus (the frame before it takes focus, or after a refused blur commit), Space reaching the map arms no pan either, as today's Text adapter (§1.4 "Releases"). A wheel over the map keeps the entry open and the entry follows its note; a key turn or reset cannot reach the map from the entry (focus class `text`). A still right-click (a `menu-request`) commits the entry first, then opens the menu. Esc in the entry is the entry's own element handler, which runs before the chain; no canvas pan or turn is live while it is open. Wheel over the entry itself is not handled. The textarea is drawn at `rotationDeg − bearing`. |
-| PDF page editor (`components/canvas-pdf/PdfPageEditor.tsx`) | A separate surface with its own pointer handling and a pushed key scope; the canvas input pipeline does not run there. See the table below. |
-| Modal dialogs | Only the modal's element handlers, its pushed scope if it has one, and `worksInModal` rows (§1.6 step 5). |
-| Story presenter | A modal (`StoryPresenter.tsx:36` holds the modal layer) whose pushed presentation scope runs as its own handler: Space, arrows and Esc navigate the story; no canvas keys (fixture I12). Each step restores its bearing. |
+| PDF page editor (`components/canvas-pdf/PdfPageEditor.tsx`) | A separate surface with its own pointer handling and its own element key handler (no pushed scope); the canvas input pipeline does not run there. See the table below. |
+| Modal dialogs | Only the modal's element handlers and `worksInModal` rows (§1.6 step 5). |
+| Story presenter | A modal (`StoryPresenter.tsx:36` holds the modal layer) whose own root `onKeyDown` handles its keys (no pushed scope): Space, arrows and Esc navigate the story; no canvas keys (fixture I12). Each step restores its bearing. |
 | Canvas context menu, popovers | Their own arrows; Esc closes one at a time. |
 | Arrow-owning widgets (lists, sliders, tabs, menus) | Plain and Shift+arrows stay with the widget; N, Shift+N and other `command` keys act on the canvas unless the widget claims them with `data-owns-keys`. |
 | Inspection lens preview | Arrow-owning: arrows move the lens along the screen; mod+arrow moves farther (spec, matching the canvas; was Shift); Shift+arrows move by the plain step (from 1). Drag is screen-relative. |
 | World map (template and place picker) | Its own MapLibre map: north-up, left-drag pans, wheel zooms, no rotation, no compass; `boxZoom: false` from 2 (convention). Its keyboard handler keeps arrow pans and +/− zoom but `disableRotation()` stops Shift+arrows turning and tilting it (from F, INV-CAM-46); its container declares `data-owns-keys="arrows"`, so Shift+←/→/↑ never reach the workspace view from it (from 1, fixture H26). |
 | Inspecting a raster (Desktop LiDAR inspection) | A plain primary press (mouse left, pen tip, and a one-finger tap) anywhere on the map samples the point instead of reaching the tool, after handles and the pan check and before the tool (today, `scene-interaction.ts:609-614`; ToolHost `deps.inspect`, fixture J10). Shift, mod or Alt at the press still samples (today: the probe reads no modifier); the sampled press starts no drag, band or move. Space+drag and a Pan-tool drag pan (the pan check comes first), and a Pan-tool click does not sample (today); from phase 3 (`touch.gestures`) a touch probe runs when the held press resolves to a tap, never on a drag, a long press or a second finger. In overview the probe never runs (today: overview presses pan before 2; from 2 they select, convention). Right, middle and pen-barrel input, the canvas menu, wheel and every rotation input are unchanged; Esc layer 25 ends inspecting. |
-| Compass, zoom group, attribution | `owned-chrome`: a press there never starts a canvas gesture; the attribution no longer starts a band (phase F). |
+| Compass, zoom group, attribution | A press there never starts a canvas gesture: the zoom group and compass sit beside the host (`foreign`); the attribution inside it is `owned-chrome` through `.maplibregl-ctrl` and no longer starts a band (phase F). |
 
 PDF page editor, every phase unless marked (today: `PdfPageEditor.tsx:60` accepts only button 0; `:106-107` arrows):
 
@@ -1941,7 +1945,7 @@ PDF page editor, every phase unless marked (today: `PdfPageEditor.tsx:60` accept
 | Wheel, pinch, trackpad twist | nothing (no wheel handler); the wheel scrolls the dialog as it does elsewhere |
 | Two-finger touch | nothing over the editor: its interactive SVG sets `touch-action: none` (`PdfPageEditor.tsx:102`), so the browser neither scrolls nor zooms; touch users scroll the dialog outside the editor |
 | Space held | nothing |
-| Arrows | move the content 5 pt, the way the canvas does (from F; today the page window moves) |
+| Arrows | move the page window 5 pt, so ArrowLeft moves the content left, as a drag does (today; kept, U12, user 2026-10-02) |
 | Arrows while adding a Print Area or in navigation-only mode | nothing (today, `PdfPageEditor.tsx:106`: the handler returns while `adding` or `navigationOnly`) |
 | Drag in navigation-only mode | moves nothing (today) |
 | Click (under 4 px of travel) on a page window of the overview (`data-pdf-target`), except while adding | opens that page (`onPage`, today); in navigation-only mode only page windows take a press |
