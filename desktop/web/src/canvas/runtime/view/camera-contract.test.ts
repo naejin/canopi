@@ -194,11 +194,7 @@ describe('camera contract', () => {
       const headless = createTestView({ screen: SCREEN, plane, policy, viewport })
       const shown = mapOnTransform(SCREEN, planarToViewCamera({ ...viewport, bearingDeg: 0 }, SCREEN, plane))
       const navigationPolicy = createNavigationPolicy(policy, signal(false))
-      const attached = createMapLibreCameraDriver(shown.map, plane, {
-        clock: () => 0,
-        scheduleFrame: () => () => {},
-        policy: () => navigationPolicy,
-      })
+      const attached = createMapLibreCameraDriver(shown.map, plane, { policy: () => navigationPolicy })
       expect(attached.failure.peek()).toBeNull()
       expectProjectsLikeMapLibre(headless.view(), shown.transform, plane)
       expectProjectsLikeMapLibre(attached.frames.viewFrame.peek().view, shown.transform, plane)

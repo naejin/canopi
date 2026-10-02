@@ -36,7 +36,6 @@ import { planarCameraOf } from './view-transform'
 export interface ViewNavigationDeps {
   readonly driver: CameraDriverHost                   // the only CameraDriver user
   readonly policy: () => NavigationPolicy
-  readonly clock: () => number
   /** The scene for zoomToFit, returnToDesign and zoomToSelection without arguments. */
   readonly readScene: () => { readonly persisted: ScenePersistedState; readonly selection: readonly WorldPoint[]; readonly bounds: SceneBoundsOptions }
 }

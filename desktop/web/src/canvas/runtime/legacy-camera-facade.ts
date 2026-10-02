@@ -5,8 +5,8 @@
 // today's constructor and public members, its CameraViewportSnapshot of each frame, and the two framing functions callers still
 // import. The shim is a CameraDriverHost that starts on a HeadlessCameraDriver, with the view navigation over it; it adds no clamp
 // of its own, and at bearing 0 it reads back what today's CameraController did, bit for bit. It sits outside view/ because it
-// supplies the platform clock, animation frames, timers and device-pixel ratio, and speaks SceneViewportState (P4). It imports
-// nothing that reaches MapLibre or Pixi (P5c): the MapLibre shim (maplibre/workspace-camera.ts) extends it.
+// supplies the device-pixel ratio and speaks SceneViewportState (P4). It imports nothing that reaches MapLibre or Pixi (P5c): the
+// MapLibre shim (maplibre/workspace-camera.ts) extends it.
 
 import { effect, signal, untracked, type ReadonlySignal, type Signal } from '@preact/signals'
 import { createSessionPlane, type SessionPlane, type SessionPlaneTransform } from '../session-plane'
@@ -17,13 +17,12 @@ import {
 } from '../workspace-camera-policy'
 import type { ScenePersistedState, ScenePoint, SceneViewportState } from './scene'
 import { sceneExtentPoints } from './scene-extent'
-import type { CameraDriver, CameraDriverDeps } from './view/camera-driver'
+import type { CameraDriver } from './view/camera-driver'
 import { reprojectPlanar } from './view/camera-math'
 import { createCameraDriverHost, type CameraDriverHostController } from './view/driver-host'
 import { fitScene, framingRect, type FitExtent, type FramingRect } from './view/fit'
 import { createViewNavigation, type ViewNavigation } from './view/navigation'
 import type {
-  FrameSourceDeps,
   PlanarCamera,
   SceneBounds,
   SceneBoundsOptions,
@@ -173,11 +172,7 @@ export class CameraController implements
     this._policy = policy
     // The bare shim's plane shares the policy's latitude, so px/m and the policy's scale bounds use one Mercator factor (§1.1b).
     this.ownPlane = over?.plane ?? createSessionPlane({ lon: 0, lat: policy.referenceLatitudeDeg })
-    const clock = over?.host.driverDeps.clock ?? platformClock()
     this.host = over?.host ?? createCameraDriverHost({
-      clock,
-      scheduleFrame: platformFrames(),
-      timers: platformTimers(clock),
       policy,
       reducedMotion: NO_REDUCED_MOTION,
       plane: () => this.scenePlane?.peek() ?? this.ownPlane,
@@ -187,7 +182,6 @@ export class CameraController implements
     this.viewNavigation = createViewNavigation({
       driver: this.host,
       policy: this.host.driverDeps.policy,
-      clock,
       // Every call of this shim names its scene: the navigation's own scene is never read.
       readScene: () => ({ persisted: EMPTY_SCENE, selection: [], bounds: {} }),
     })
@@ -478,28 +472,4 @@ function normalizeScreenMetrics(screen: CameraScreenMetrics): ViewScreen {
 
 function finiteNonNegative(value: number): number {
   return Number.isFinite(value) ? Math.max(0, value) : 0
-}
-
-function platformClock(): () => number {
-  return typeof performance === 'undefined' ? () => Date.now() : () => performance.now()
-}
-
-function platformFrames(): CameraDriverDeps['scheduleFrame'] {
-  if (typeof requestAnimationFrame !== 'function') {
-    return (callback) => {
-      const id = setTimeout(() => callback(Date.now()), 16)
-      return () => clearTimeout(id)
-    }
-  }
-  return (callback) => {
-    const id = requestAnimationFrame(callback)
-    return () => cancelAnimationFrame(id)
-  }
-}
-
-function platformTimers(clock: () => number): FrameSourceDeps['timers'] {
-  return {
-    set: (atMs, run) => setTimeout(run, Math.max(0, atMs - clock())) as unknown as number,
-    clear: (id) => clearTimeout(id),
-  }
 }

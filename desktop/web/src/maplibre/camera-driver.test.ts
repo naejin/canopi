@@ -171,39 +171,14 @@ function wrapBearing(bearing: number): number {
   return wrapped === -180 ? 180 : wrapped
 }
 
-function createManualFrames() {
-  let now = 0
-  let nextId = 1
-  let frames = new Map<number, (nowMs: number) => void>()
-  return {
-    clock: () => now,
-    scheduleFrame(callback: (nowMs: number) => void): () => void {
-      const id = nextId++
-      frames.set(id, callback)
-      return () => { frames.delete(id) }
-    },
-    advance(ms: number): void {
-      now += ms
-      const due = frames
-      frames = new Map()
-      for (const callback of due.values()) callback(now)
-    },
-  }
-}
-
 const drivers: CameraDriver[] = []
 
 function attach(map: ConsistentMap, policy: NavigationPolicy = POLICY, plane: SessionPlane = PLANE) {
-  const time = createManualFrames()
-  const driver = createMapLibreCameraDriver(map, plane, {
-    clock: time.clock,
-    scheduleFrame: time.scheduleFrame,
-    policy: () => policy,
-  })
+  const driver = createMapLibreCameraDriver(map, plane, { policy: () => policy })
   drivers.push(driver)
   const published: ViewFrame[] = []
   driver.frames.onViewFrame((frame) => published.push(frame))
-  return { driver, published, time }
+  return { driver, published }
 }
 
 function screenOf(frame: ViewFrame): ViewScreen {
@@ -212,7 +187,7 @@ function screenOf(frame: ViewFrame): ViewScreen {
 
 const views: TestView[] = []
 
-/** The deps every driver on a test view's host runs with (its manual clock and policy), as the workspace activation builds one. */
+/** The deps every driver on a test view's host runs with (its policy), as the workspace activation builds one. */
 function hostDeps(view: TestView): CameraDriverDeps {
   return view.host.driverDeps
 }

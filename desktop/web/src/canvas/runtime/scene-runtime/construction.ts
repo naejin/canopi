@@ -294,7 +294,6 @@ export function createSceneRuntimeConstruction(
   const viewNavigation = createViewNavigation({
     driver: cameraHost,
     policy: cameraHost.driverDeps.policy,
-    clock: cameraHost.driverDeps.clock,
     readScene: () => {
       const persisted = sceneStore.persisted
       const scale = readViewScale()

@@ -122,12 +122,6 @@ export interface DriverFrameSource {
   onViewFrame(listener: (frame: ViewFrame) => void): () => void
 }
 
-/** Injected time for the frame source (P4: view/ names no timer or clock itself). */
-export interface FrameSourceDeps {
-  readonly clock: () => number
-  readonly timers: { set(atMs: number, cb: () => void): number; clear(id: number): void }   // the 150 ms settle
-}
-
 /**
  * Dev diagnostics published with the map contributions and the surface state. Replaces `MapFrame`
  * and its `diagnostics` (canvas/maplibre-camera.ts, deleted end of 0A); `viewportCenterWorld` is renamed `centreWorld`.

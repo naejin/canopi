@@ -411,7 +411,7 @@ export interface ToolHarness {
   blur(): void
   /** A re-origin: the session's plane moves to `origin` and the camera follows it. */
   reorigin(origin: GeoPosition): void
-  /** Runs the manual clock: camera frames, then the host's timers. */
+  /** Runs the host's manual clock: its due timers (double-click windows, the nudge series). */
   advance(ms: number): void
   /** Edit › Undo on the scene's history (not the transient history). */
   undo(): boolean
@@ -472,7 +472,8 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
     textEntry: null as ToolHarnessTextEntry | null,
   }
   let menuOpen = false
-  const timers = createHarnessTimers(() => view.clock.now())
+  let now = 0
+  const timers = createHarnessTimers(() => now)
   const toolState = signal<ToolId>(options.tool ?? 'select')
   const scene = createToolScene(createToolSceneSource(store, { pixelsPerMetre: () => view.view().pixelsPerMetre }))
   let snapping: SnapSettings = options.snapping ?? { grid: false, guides: false }
@@ -573,7 +574,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
     snapping: () => snapping,
     translate: options.translate ?? ((key) => key),
     nudge: options.nudge ?? createNudgeSeries(store, edits, record),
-    timers: { ...timers, clock: () => view.clock.now() },
+    timers: { ...timers, clock: () => now },
     hover(target) {
       store.setHoveredTarget(target)
       record.hovers.push(target)
@@ -731,7 +732,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       view.host.current().planeChanged(next)
     },
     advance(ms) {
-      view.clock.advance(ms)
+      now += ms
       timers.runDue()
     },
     undo: () => coordinator.undo(),
@@ -772,7 +773,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
   return harness
 }
 
-/** Timers on the test view's manual clock; the harness runs the due ones after each advance. */
+/** Timers on the harness's manual clock; the harness runs the due ones after each advance. */
 function createHarnessTimers(now: () => number) {
   let nextId = 1
   const pending = new Map<number, { readonly atMs: number; readonly run: () => void }>()

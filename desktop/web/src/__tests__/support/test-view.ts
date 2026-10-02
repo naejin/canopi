@@ -1,8 +1,8 @@
 // __tests__/support/test-view.ts  (test support)
 //
 // createTestView: the one way tests build a camera (spec §1.1b). A driver host starting on a HeadlessCameraDriver, built with the
-// production factories, the navigation over it, one manual clock that the drivers' clock and animation frames and the frame
-// source's settle timers all read, and (0A to the end of 0D2) the legacy CameraController shim over the same host.
+// production factories, the navigation over it, and (0A to 0E) the legacy CameraController shim over the same host. Tweens and the
+// settle run on the window's animation frames and timers: a test that steps time uses Vitest fake timers.
 
 import { signal } from '@preact/signals'
 import { CameraController } from '../../canvas/runtime/camera'
@@ -38,12 +38,10 @@ export interface TestViewOptions {
 }
 
 export interface TestView {
-  /** Starts on a HeadlessCameraDriver, built with the production factories and the manual clock below. */
+  /** Starts on a HeadlessCameraDriver, built with the production factories. */
   readonly host: CameraDriverHost
   readonly frames: ViewFrameSource            // host.frames
   readonly navigation: ViewNavigation         // readScene returns an empty scene unless the test passes one to setScene
-  /** Manual time: the drivers' clock and scheduleFrame and the frame source's timers all read it. */
-  readonly clock: { now(): number; advance(ms: number): void }   // advance runs due frame callbacks, then due timers
   view(): ViewTransform                       // frames.viewFrame.peek().view
   setViewport(v: { readonly x: number; readonly y: number; readonly scale: number }): void   // an exact 'place' move, bearing kept
   setScene(scene: ScenePersistedState, bounds?: SceneBoundsOptions): void
@@ -55,7 +53,6 @@ export interface TestView {
 const DEFAULT_SCREEN: ViewScreen = { width: 400, height: 300, devicePixelRatio: 1 }
 
 export function createTestView(options: TestViewOptions = {}): TestView {
-  const clock = createManualClock()
   const plane = options.plane ?? createSessionPlane({ lon: 0, lat: 0 })
   const screen: ViewScreen = { ...DEFAULT_SCREEN, ...options.screen }
   const camera = options.camera
@@ -68,9 +65,6 @@ export function createTestView(options: TestViewOptions = {}): TestView {
     : { ...(options.viewport ?? { x: 0, y: 0, scale: 1 }), bearingDeg: 0 }
   const policy = options.policy ?? createWorkspaceCameraPolicy()
   const host = createCameraDriverHost({
-    clock: clock.now,
-    scheduleFrame: clock.scheduleFrame,
-    timers: clock.timers,
     policy,
     reducedMotion: signal(false),
     plane: () => plane,
@@ -82,7 +76,6 @@ export function createTestView(options: TestViewOptions = {}): TestView {
   const navigation = createViewNavigation({
     driver: host,
     policy: host.driverDeps.policy,
-    clock: clock.now,
     readScene: () => ({ persisted: scene.persisted, selection: [], bounds: scene.bounds }),
   })
 
@@ -90,7 +83,6 @@ export function createTestView(options: TestViewOptions = {}): TestView {
     host,
     frames: host.frames,
     navigation,
-    clock: { now: clock.now, advance: clock.advance },
     view: () => host.frames.viewFrame.peek().view,
     setViewport(v) {
       const bearingDeg = host.frames.viewFrame.peek().view.camera.bearingDeg
@@ -102,7 +94,6 @@ export function createTestView(options: TestViewOptions = {}): TestView {
     legacyCamera: new CameraController(policy, { host, plane }),
     dispose() {
       host.dispose()
-      clock.clear()
     },
   }
 }
@@ -119,53 +110,5 @@ function emptyScene(): ScenePersistedState {
     measurementGuides: [],
     groups: [],
     guides: [],
-  }
-}
-
-/** Frame callbacks run on the next advance, at its end time; timers run once due, earliest first. */
-function createManualClock() {
-  let now = 0
-  let nextId = 1
-  let frames = new Map<number, (nowMs: number) => void>()
-  const timers = new Map<number, { readonly atMs: number; readonly run: () => void }>()
-
-  return {
-    now: () => now,
-    scheduleFrame(callback: (nowMs: number) => void): () => void {
-      const id = nextId++
-      frames.set(id, callback)
-      return () => {
-        frames.delete(id)
-      }
-    },
-    timers: {
-      set(atMs: number, run: () => void): number {
-        const id = nextId++
-        timers.set(id, { atMs, run })
-        return id
-      },
-      clear(id: number): void {
-        timers.delete(id)
-      },
-    },
-    advance(ms: number): void {
-      now += ms
-      const due = frames
-      frames = new Map()
-      for (const callback of due.values()) callback(now)
-      for (;;) {
-        let next: [number, { readonly atMs: number; readonly run: () => void }] | null = null
-        for (const entry of timers) {
-          if (entry[1].atMs <= now && (!next || entry[1].atMs < next[1].atMs)) next = entry
-        }
-        if (!next) return
-        timers.delete(next[0])
-        next[1].run()
-      }
-    },
-    clear(): void {
-      frames.clear()
-      timers.clear()
-    },
   }
 }

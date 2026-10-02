@@ -89,7 +89,7 @@ export function createMapLibreCameraDriver(
   let screen: ViewScreen = EMPTY_SCREEN
   let insets = NO_INSETS
   let tween: BearingTween | null = null
-  let cancelFrame: (() => void) | null = null
+  let frameRequest: number | null = null
   let flight: Flight | null = null
   let revision = 0
   let disposed = false
@@ -304,18 +304,18 @@ export function createMapLibreCameraDriver(
   function startTween(next: BearingTween): void {
     stopTween()
     tween = next
-    cancelFrame = deps.scheduleFrame(stepTween)
+    frameRequest = requestAnimationFrame(stepTween)
     refresh()
   }
 
   function stopTween(): void {
-    cancelFrame?.()
-    cancelFrame = null
+    if (frameRequest !== null) cancelAnimationFrame(frameRequest)
+    frameRequest = null
     tween = null
   }
 
   function stepTween(nowMs: number): void {
-    cancelFrame = null
+    frameRequest = null
     const running = tween
     if (!running || !live()) return
     const current = readCamera()
@@ -324,7 +324,7 @@ export function createMapLibreCameraDriver(
     if (done) tween = null
     // Every tween frame goes through constrainCamera at that frame's bearing.
     moveTo(constrainCamera(camera, screen, deps.policy()), { camera: current, shown: true })
-    if (!done && tween === running && live()) cancelFrame = deps.scheduleFrame(stepTween)
+    if (!done && tween === running && live()) frameRequest = requestAnimationFrame(stepTween)
   }
 
   function endFlight(): void {
@@ -387,7 +387,7 @@ export function createMapLibreCameraDriver(
             bearingDeg: move.bearingDeg,
             anchorPx: move.anchorPx,
             durationMs: move.durationMs ?? VIEW_EASE_MS,
-          }, deps.clock()))
+          }, performance.now()))
           return
         }
         stopTween()

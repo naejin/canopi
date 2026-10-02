@@ -52,11 +52,8 @@ export interface CameraDriver {
   dispose(): void
 }
 
-/** Injected into both drivers (P4: no clock, timer or requestAnimationFrame in view/). */
+/** Injected into both drivers; they read the clock and animation frames from the window themselves (tests fake them). */
 export interface CameraDriverDeps {
-  readonly clock: () => number
-  /** One animation-frame callback; returns its canceller. Tests step it by hand. */
-  readonly scheduleFrame: (cb: (nowMs: number) => void) => () => void
   readonly policy: () => NavigationPolicy
 }
 

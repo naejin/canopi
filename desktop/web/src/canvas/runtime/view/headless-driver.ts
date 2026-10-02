@@ -1,4 +1,4 @@
-// canvas/runtime/view/headless-driver.ts  (pure; the clock, animation frames and timers are injected)
+// canvas/runtime/view/headless-driver.ts  (tweens run on the window's animation frames)
 //
 // Owns the camera while no map is attached (tests, before attach, after a failure): a PlanarCamera moved with today's
 // CameraController arithmetic, bit for bit at bearing 0 (ADR 0016, amended 2026-09-30). Every move clamps the scale to the frame's
@@ -58,7 +58,7 @@ export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions)
   let screen = normaliseScreen(options.screen)
   let insets = frozenInsets(options.insets ?? NO_INSETS)
   let tween: BearingTween | null = null
-  let cancelFrame: (() => void) | null = null
+  let frameRequest: number | null = null
   let revision = 0
   let disposed = false
   const queued: Array<() => void> = []
@@ -144,18 +144,18 @@ export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions)
   function startTween(next: BearingTween): void {
     stopTween()
     tween = next
-    cancelFrame = deps.scheduleFrame(stepTween)
+    frameRequest = requestAnimationFrame(stepTween)
     commit(planar)
   }
 
   function stopTween(): void {
-    cancelFrame?.()
-    cancelFrame = null
+    if (frameRequest !== null) cancelAnimationFrame(frameRequest)
+    frameRequest = null
     tween = null
   }
 
   function stepTween(nowMs: number): void {
-    cancelFrame = null
+    frameRequest = null
     const running = tween
     if (disposed || !running) return
     const live = liveCamera()
@@ -164,7 +164,7 @@ export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions)
     // Every tween frame goes through constrainCamera at that frame's bearing.
     const constrained = constrainCamera(camera, screen, deps.policy())
     commit(constrained === live ? planar : viewCameraToPlanar(constrained, screen, plane))
-    if (!done && tween === running && !disposed) cancelFrame = deps.scheduleFrame(stepTween)
+    if (!done && tween === running && !disposed) frameRequest = requestAnimationFrame(stepTween)
   }
 
   function zoomAround(anchor: ScreenPoint, factor: number): PlanarCamera | null {
@@ -190,7 +190,7 @@ export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions)
             bearingDeg: move.bearingDeg,
             anchorPx: move.anchorPx,
             durationMs: move.durationMs ?? VIEW_EASE_MS,
-          }, deps.clock()))
+          }, performance.now()))
           return
         }
         stopTween()

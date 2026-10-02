@@ -1,5 +1,5 @@
 import { effect, signal } from '@preact/signals'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestView, type TestView } from '../../../__tests__/support/test-view'
 import { mapZoomToStageScale } from '../../projection'
 import { createWorkspaceCameraPolicy, singleWorldEffectiveMinimumZoom } from '../../workspace-camera-policy'
@@ -13,6 +13,8 @@ import type { PlanarCamera, SceneBoundsOptions, ViewFrame, WorldPoint } from './
 import { planarCameraOf } from './view-transform'
 
 const EQUATOR_MAX_SCALE = mapZoomToStageScale(27, 0)
+/** A 300 ms turn lands on the first animation frame (16 ms apart under fake timers) after its duration. */
+const TURN_MS = 320
 /** The single-world floor of a 1000 × 800 screen at bearing 0 (spec §1.1b): the named rewrite of camera-controller.test.ts:96, :212. */
 const WIDE_FLOOR_SCALE = mapZoomToStageScale(singleWorldEffectiveMinimumZoom(1000, 800), 0)
 
@@ -104,6 +106,10 @@ function placement(view: TestView): PlanarCamera {
 }
 
 describe('view navigation', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   // Moved from __tests__/camera-controller.test.ts (CameraController > …), on the navigation and its driver host.
 
   it('publishes initialization state and revision atomically once', () => {
@@ -443,30 +449,32 @@ describe('view navigation', () => {
   })
 
   it('turns by key steps from the bearing a running turn ends at', () => {
+    vi.useFakeTimers()
     const view = createTestView()
 
     view.navigation.rotateBy(1)
     view.navigation.rotateBy(1)
     view.navigation.rotateBy(1)
     expect(view.host.current().bearingTarget()).toBe(45)
-    view.clock.advance(300)
+    vi.advanceTimersByTime(TURN_MS)
     expect(view.view().camera.bearingDeg).toBe(45)
 
     view.navigation.rotateBy(-1)
-    view.clock.advance(300)
+    vi.advanceTimersByTime(TURN_MS)
     expect(view.view().camera.bearingDeg).toBe(30)
     view.navigation.resetNorth()
-    view.clock.advance(300)
+    vi.advanceTimersByTime(TURN_MS)
     expect(view.view().camera.bearingDeg).toBe(0)
     view.dispose()
   })
 
   it('turns an edge level on screen by the smaller turn', () => {
+    vi.useFakeTimers()
     const view = createTestView()
 
     // An edge running south-east: level at 45° or at 225°; from north, 45° is the smaller turn.
     view.navigation.turnToEdge({ x: 0, y: 0 }, { x: 10, y: 10 })
-    view.clock.advance(300)
+    vi.advanceTimersByTime(TURN_MS)
     const turned = view.view()
     expect(turned.camera.bearingDeg).toBeCloseTo(45, 9)
     const a = turned.worldToScreen({ x: 0, y: 0 })
@@ -476,6 +484,7 @@ describe('view navigation', () => {
   })
 
   it('a rotation session steps, snaps to north on release, and cancel restores the start', () => {
+    vi.useFakeTimers()
     const view = createTestView()
     const session = view.navigation.beginRotation('centre')
 
@@ -488,7 +497,7 @@ describe('view navigation', () => {
     expect(view.host.current().bearingTarget()).toBe(15)
     session.update(-5, { step: false })
     session.end()
-    view.clock.advance(300)
+    vi.advanceTimersByTime(TURN_MS)
     expect(view.view().camera.bearingDeg).toBe(0)
     // Esc after the release does not restore the pre-release bearing.
     session.cancel()
@@ -527,7 +536,6 @@ describe('view navigation', () => {
     const navigation = createViewNavigation({
       driver: view.host,
       policy: () => createNavigationPolicy(createWorkspaceCameraPolicy(), signal(false)),
-      clock: view.clock.now,
       readScene: () => ({ persisted: emptyScene(), selection: [{ x: 10, y: 10 }, { x: 110, y: 60 }], bounds: {} }),
     })
 

@@ -1,4 +1,4 @@
-// canvas/runtime/view/driver-host.ts  (pure; the clock, animation frames and timers are injected)
+// canvas/runtime/view/driver-host.ts
 //
 // Owns the runtime's one camera across attach, detach and failure (ADR 0016): the live CameraDriver (a HeadlessCameraDriver until a
 // map is attached, and again after a detach or a failure), the NavigationPolicy every driver on it reads, and the one frame stream
@@ -13,14 +13,10 @@ import { viewCameraToPlanar } from './camera-math'
 import { createViewFrameSource } from './frame-source'
 import { createHeadlessCameraDriver } from './headless-driver'
 import { createNavigationPolicy, type NavigationPolicy } from './navigation-policy'
-import type { FrameSourceDeps, PlanarCamera, ScreenInsets, ViewFrame, ViewScreen } from './types'
+import type { PlanarCamera, ScreenInsets, ViewFrame, ViewScreen } from './types'
 import { planarCameraOf } from './view-transform'
 
 export interface CameraDriverHostOptions {
-  readonly clock: () => number
-  readonly scheduleFrame: CameraDriverDeps['scheduleFrame']
-  /** The settle timer of the host's own frames (its drivers settle nothing: nobody reads a driver's own settled frame). */
-  readonly timers: FrameSourceDeps['timers']
   /** The zoom range and overview threshold; the reference latitude is options.plane()'s, rebuilt once per plane. */
   readonly policy: WorkspaceCameraPolicy
   readonly reducedMotion: ReadonlySignal<boolean>
@@ -34,10 +30,10 @@ export interface CameraDriverHostOptions {
 }
 
 /**
- * The host as its creator holds it. Its `driverDeps` carry no timers: the host hands its own to its headless drivers, and a MapLibre
- * driver built with them settles on the window's. `followPlane` takes the plane `options.plane` returns from then on: a headless
- * camera keeps its plane placement, bit for bit, and reads its ground on that plane; nothing happens while an attached driver is live
- * (only planeChanged moves the map's plane) or while the headless driver is already on it.
+ * The host as its creator holds it. Only the host's own frames settle (its drivers settle nothing: nobody reads a driver's own
+ * settled frame). `followPlane` takes the plane `options.plane` returns from then on: a headless camera keeps its plane placement,
+ * bit for bit, and reads its ground on that plane; nothing happens while an attached driver is live (only planeChanged moves the
+ * map's plane) or while the headless driver is already on it.
  */
 export interface CameraDriverHostController extends CameraDriverHost {
   dispose(): void
@@ -61,11 +57,7 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
     }
     return navigationPolicy
   }
-  const driverDeps: CameraDriverDeps = Object.freeze({
-    clock: options.clock,
-    scheduleFrame: options.scheduleFrame,
-    policy: policyNow,
-  })
+  const driverDeps: CameraDriverDeps = Object.freeze({ policy: policyNow })
   const failure = signal<CameraDriverFailure | null>(null)
 
   const initialPlane = options.plane()
@@ -87,7 +79,7 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
   let disposed = false
   let release = connect(live)
 
-  const frames = createViewFrameSource(stamp(live.frames.viewFrame.peek()), { clock: options.clock, timers: options.timers })
+  const frames = createViewFrameSource(stamp(live.frames.viewFrame.peek()))
 
   function stamp(frame: ViewFrame): ViewFrame {
     const view = Object.freeze({ ...frame.view, revision, planeRevision })

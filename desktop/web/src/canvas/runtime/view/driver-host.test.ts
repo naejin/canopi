@@ -14,8 +14,6 @@ import { planarCameraOf } from './view-transform'
 function standInDriver(plane: SessionPlane): CameraDriver {
   return createHeadlessCameraDriver({
     deps: {
-      clock: () => 0,
-      scheduleFrame: () => () => {},
       policy: () => createNavigationPolicy(createWorkspaceCameraPolicy(), signal(false)),
     },
     plane,
@@ -153,9 +151,6 @@ describe('camera driver host', () => {
     const first = createSessionPlane({ lon: 2.35, lat: 48.85 })
     let runtimePlane = first
     const host = createCameraDriverHost({
-      clock: () => 0,
-      scheduleFrame: () => () => {},
-      timers: { set: () => 0, clear: () => {} },
       // The zoom range and overview threshold; the latitude given here is not the one the bounds use.
       policy: createWorkspaceCameraPolicy(0),
       reducedMotion: signal(false),
@@ -188,9 +183,6 @@ describe('camera driver host', () => {
     const first = createSessionPlane({ lon: 2.35, lat: 48.85 })
     let runtimePlane = first
     const host = createCameraDriverHost({
-      clock: () => 0,
-      scheduleFrame: () => () => {},
-      timers: { set: () => 0, clear: () => {} },
       policy: createWorkspaceCameraPolicy(),
       reducedMotion: signal(false),
       plane: () => runtimePlane,

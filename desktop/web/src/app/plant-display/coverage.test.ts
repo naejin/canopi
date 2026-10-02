@@ -13,6 +13,7 @@ let view: TestView | null = null
 let stop: (() => void) | null = null
 
 afterEach(() => {
+  vi.useRealTimers()
   stop?.()
   stop = null
   setCanvasRuntimeSurfaces(null)
@@ -22,6 +23,7 @@ afterEach(() => {
 
 describe('plant label coverage', () => {
   it('the labels count re-reads on settle and on a band change, not on a pan frame', () => {
+    vi.useFakeTimers()
     view = createTestView({ viewport: { x: 0, y: 0, scale: 120 } })
     const plane = createSessionPlane(TEST_GEO_ORIGIN)
     const getPlantLabelCoverage = vi.fn(() => ({ labelled: 70, inView: 282 }))
@@ -34,7 +36,7 @@ describe('plant label coverage', () => {
     const lines: Array<string | undefined> = []
     stop = effect(() => { lines.push(plantLabelCoverage()?.text) })
     expect(lines).toEqual(['Names shown for 70 of 282 plants in view'])
-    const settled = () => view!.clock.advance(SETTLE_MS)
+    const settled = () => vi.advanceTimersByTime(SETTLE_MS)
     settled()
     const reads = getPlantLabelCoverage.mock.calls.length
 

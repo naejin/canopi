@@ -1,9 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { planarCameraOf } from '../../canvas/runtime/view/view-transform'
 import type { ViewFrame } from '../../canvas/runtime/view/types'
 import { createTestView } from './test-view'
 
 describe('createTestView', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('setViewport at bearing 0 places world points within 1e-6 of CameraController', () => {
     const view = createTestView()
     const worldPoints = [{ x: 0, y: 0 }, { x: 20, y: 30 }, { x: -12.5, y: 7.25 }, { x: 1e4, y: -3e3 }]
@@ -60,7 +64,8 @@ describe('createTestView', () => {
     view.dispose()
   })
 
-  it('advance runs due frames and the settle timer', () => {
+  it('a turn and the settle run on Vitest fake timers', () => {
+    vi.useFakeTimers()
     const view = createTestView()
     const published: ViewFrame[] = []
     view.frames.onViewFrame('tools', (frame) => published.push(frame))
@@ -68,24 +73,17 @@ describe('createTestView', () => {
 
     view.navigation.rotateBy(1)
     expect(published).toHaveLength(1)
-    expect(view.clock.now()).toBe(0)
 
-    // The tween's first animation frame runs at the end of the next advance, before the timers.
-    view.clock.advance(100)
-    expect(published).toHaveLength(2)
-    expect(view.frames.settledViewFrame.peek()).toBe(settled)
-
-    view.clock.advance(200)
-    expect(published).toHaveLength(3)
-    expect(published[2]!.view.camera.bearingDeg).toBe(15)
+    // The tween lands on an animation frame; the settle has not run while it moved.
+    vi.advanceTimersByTime(320)
+    const landed = published.at(-1)!
+    expect(landed.view.camera.bearingDeg).toBe(15)
+    expect(landed.moving).toBe(false)
     expect(view.frames.settledViewFrame.peek()).toBe(settled)
 
     // 150 ms after the last frame the settle timer publishes it as the settled frame.
-    view.clock.advance(149)
-    expect(view.frames.settledViewFrame.peek()).toBe(settled)
-    view.clock.advance(1)
-    expect(view.frames.settledViewFrame.peek()).toBe(published[2])
-    expect(view.clock.now()).toBe(450)
+    vi.advanceTimersByTime(150)
+    expect(view.frames.settledViewFrame.peek()).toBe(landed)
     view.dispose()
   })
 })
