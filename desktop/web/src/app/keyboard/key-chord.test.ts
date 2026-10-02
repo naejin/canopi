@@ -26,7 +26,7 @@ describe('key chords', () => {
     expect(chordsOfShortcut('Ctrl+Shift+Z')).toEqual([{ key: 'z', mod: true, ctrl: false, shift: true, alt: false }])
     expect(chordsOfShortcut('Shift+F10')).toEqual([{ key: 'F10', mod: false, ctrl: false, shift: true, alt: false }])
     expect(chordsOfShortcut('Ctrl+Plus').map((chord) => chord.key)).toEqual(['+', '='])
-    expect(chordsOfShortcut('Ctrl+Minus').map((chord) => chord.key)).toEqual(['-', '_'])
+    expect(chordsOfShortcut('Ctrl+Minus').map((chord) => chord.key)).toEqual(['-'])
   })
 
   it('matches single keys, Shift toggles and Ctrl edits without confusing them', () => {
@@ -68,6 +68,7 @@ function commandFor(
     closeDesign: { execute },
     navigateLayers: { execute },
     navigateSpeciesKey: { execute },
+    navigateDesignNotebook: { execute },
   })
   const ran: string[] = []
   const host = document.createElement('div')
@@ -106,6 +107,7 @@ describe('layouts (spec §5.8)', () => {
     ['H7 AZERTY Ctrl+Shift+1', { key: '1', code: 'Digit1', ctrlKey: true, shiftKey: true }, {}, 'nav.layers'],
     ['AZERTY Ctrl+é', { key: 'é', code: 'Digit2', ctrlKey: true }, {}, 'nav.speciesKey'],
     ['AZERTY Ctrl+- keeps zoom out', { key: '-', code: 'Digit6', ctrlKey: true }, {}, 'view.zoomOut'],
+    ['AZERTY Ctrl+_ is Ctrl+8, not zoom out', { key: '_', code: 'Digit8', ctrlKey: true }, {}, 'nav.designNotebook'],
     ['Czech Ctrl++ keeps zoom in', { key: '+', code: 'Digit1', ctrlKey: true, shiftKey: true }, {}, 'view.zoomIn'],
     ['H8 AltGr', { key: '@', code: 'Digit0', ctrlKey: true, altKey: true }, {}, null],
     ['AltGr types a character', { key: '¶', code: 'KeyR', ctrlKey: true, altKey: true }, {}, null],

@@ -61,14 +61,14 @@ export function digitChordOf(chord: KeyChord, e: KeyboardEventLike): KeyChord | 
 
 /**
  * The chords a catalogue shortcut string stands for: `Ctrl` is `mod`; `Plus` is `+` or `=` (Shift ignored), `Minus`
- * is `-` or `_` without Shift.
+ * is `-` without Shift (an unshifted `_` is AZERTY's 8).
  */
 export function chordsOfShortcut(shortcut: string): readonly KeyChord[] {
   const parts = shortcut.split('+')
   const name = parts.at(-1) ?? ''
   const base = { mod: parts.includes('Ctrl'), ctrl: false, shift: parts.includes('Shift'), alt: parts.includes('Alt') }
   if (name === 'Plus') return [{ ...base, key: '+' }, { ...base, key: '=' }]
-  if (name === 'Minus') return [{ ...base, key: '-', shift: false }, { ...base, key: '_', shift: false }]
+  if (name === 'Minus') return [{ ...base, key: '-', shift: false }]
   return [{ ...base, key: shortcutKey(name) }]
 }
 
