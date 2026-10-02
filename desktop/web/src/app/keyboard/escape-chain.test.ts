@@ -39,6 +39,8 @@ interface CanvasState {
   transient: boolean
   live: boolean
   selected: boolean
+  /** The map is zoomed out to overview. */
+  overview?: boolean
 }
 
 let host: HTMLDivElement
@@ -72,7 +74,7 @@ function canvasPort(): CanvasKeyboardPort {
     frames: {} as ViewFrameSource,
     session: {
       pointerSessionLive: () => canvas.live,
-      overview: () => false,
+      overview: () => canvas.overview ?? false,
       spaceHeld: () => false,
       keyState: () => {},
       escapeGesture: () => { canvas.live = false },
@@ -267,5 +269,32 @@ describe('the Esc chain', () => {
     expect(describeEscape()?.id).toBe('inspection')
     expect(escape(host).defaultPrevented).toBe(true)
     expect(inspection.endInspection).toHaveBeenCalledOnce()
+  })
+
+  it('Esc in overview with nothing live ends inspecting, from the map or a control', () => {
+    install()
+    mount(h(InspectionStatus, {}))
+    canvas = { tool: 'polygon', transient: false, live: false, selected: false, overview: true }
+    host.focus()
+
+    expect(describeEscape()?.id).toBe('inspection')
+    expect(escape(host).defaultPrevented).toBe(true)
+    expect(inspection.endInspection).toHaveBeenCalledOnce()
+    expect(escape(outside('button')).defaultPrevented).toBe(true)
+    expect(inspection.endInspection).toHaveBeenCalledTimes(2)
+    expect(ran).toEqual([])
+    expect(canvas.tool).toBe('polygon')
+  })
+
+  it('Esc in overview with a pan live ends the pan and keeps inspecting', () => {
+    install()
+    mount(h(InspectionStatus, {}))
+    canvas = { tool: 'select', transient: false, live: true, selected: false, overview: true }
+    host.focus()
+
+    expect(escape(host).defaultPrevented).toBe(true)
+    expect(ran).toEqual(['gesture'])
+    expect(canvas.live).toBe(false)
+    expect(inspection.endInspection).not.toHaveBeenCalled()
   })
 })

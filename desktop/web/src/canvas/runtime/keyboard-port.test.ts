@@ -271,10 +271,18 @@ describe('createCanvasKeyboardPort', () => {
     expect(keyState(f.port, { type: 'keyup', key: 'a' })).toBe('pass-live')
   })
 
-  it('in overview only the interrupted gesture is an Esc layer, and Space still holds', () => {
+  it('in overview only a live or interrupted gesture is an Esc layer, and Space still holds', () => {
     const f = fixture({ tool: 'polygon' })
     f.selected = true
+    f.transient = true
     f.session.overview = vi.fn(() => true)
+    // Nothing to cancel: no canvas layer, so the Esc falls through to the raster inspection's.
+    expect(f.port.escapeLayers()).toEqual([])
+    expect(f.port.describeEscape()).toBeNull()
+    f.nudging = true
+    expect(f.port.escapeLayers()).toEqual(['gesture'])
+    f.nudging = false
+    f.live = true
     expect(f.port.escapeLayers()).toEqual(['gesture'])
     f.port.escape('gesture')
     expect(f.session.escapeGesture).toHaveBeenCalledTimes(1)
