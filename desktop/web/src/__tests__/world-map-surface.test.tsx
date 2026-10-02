@@ -83,6 +83,14 @@ class FakeWorldMap {
   readonly resize = vi.fn()
   readonly fitBounds = vi.fn()
   readonly flyTo = vi.fn()
+  // MapLibre's keyboard handler: Shift+arrows turn and tilt the map unless
+  // its rotation is disabled; arrows pan and +/- zoom either way.
+  readonly keyboard = {
+    rotationDisabled: false,
+    disableRotation: vi.fn(() => {
+      this.keyboard.rotationDisabled = true
+    }),
+  }
   // The background owner installs the Basemap's vector sources and layers and
   // the Satellite raster on the live map, so a faithful fake implements that
   // narrow surface. A map that cannot be reconciled is not a map this surface
@@ -442,6 +450,15 @@ describe('WorldMapSurface', () => {
       FakeResizeObserver.instances[0]?.callback([], {} as ResizeObserver)
     })
     expect(maps[0]!.resize).toHaveBeenCalled()
+  })
+
+  it('Shift+arrow keys do not turn or tilt the World map', async () => {
+    await renderWorldMap(container, { templates: [], selectedId: null, onSelect: vi.fn() })
+    await vi.waitFor(() => expect(maps).toHaveLength(1))
+    // The keyboard handler stays on for arrow pans and +/- zoom; only its
+    // Shift+arrow turn and tilt are off, so the World map stays north-up.
+    expect(maps[0]!.options.keyboard).not.toBe(false)
+    expect(maps[0]!.keyboard.rotationDisabled).toBe(true)
   })
 
   it('switches between Basemap and Satellite on the live map instead of rebuilding it', async () => {
