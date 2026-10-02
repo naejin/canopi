@@ -15,13 +15,15 @@ export interface PlantLabelCoverageLine {
 
 /**
  * How many plants in view carry a label, or null with no plants in view.
- * Reads the camera frame, so a component calling it re-renders as the map
- * moves.
+ * Reads the view's coarse signals, so a component calling it re-renders on
+ * the settled frame (150 ms after the last camera change, a resize included)
+ * and on a zoom-band change, never per frame during a pan or zoom.
  */
 export function plantLabelCoverage(): PlantLabelCoverageLine | null {
   const queries = currentCanvasQuerySurface.value
   if (!queries) return null
-  void queries.viewport.value
+  void queries.view.settledRevision.value
+  void queries.view.zoomBand.value
   void queries.revision.scene.value
   void queries.revision.plantNames.value
   const labels = currentPlantDisplay.value.labels
@@ -46,7 +48,8 @@ export function zoomInForPlantLabels(): void {
   const queries = currentCanvasQuerySurface.peek()
   const labels = currentPlantDisplay.peek().labels
   if (!commands || !queries || labels === 'none') return
-  const scale = queries.viewport.peek().viewport.scale
+  // The scale at the screen centre, from the scale bar's ground resolution (three significant figures).
+  const scale = 1 / queries.view.groundMetresPerPixel.peek()
   // A little past the threshold, so rounding never leaves the map just short of it.
   const factor = PLANT_LABEL_MIN_SCALE[labels] * 1.05 / scale
   if (Number.isFinite(factor) && factor > 1) commands.viewport.zoomBy(factor)
