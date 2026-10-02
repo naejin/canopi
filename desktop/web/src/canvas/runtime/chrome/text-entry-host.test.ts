@@ -246,6 +246,32 @@ describe('the text-entry host', () => {
     expect(submit).toHaveBeenCalledTimes(1)
   })
 
+  it('Enter and Esc while composing stay in the entry: no document listener acts on the IME\'s key', async () => {
+    const entries = mount()
+    entries.open(NEW_NOTE, vi.fn(() => 'close' as const))
+    const textarea = entry()!
+    await nextAnimationFrame()
+    // Document-level Esc listeners (the inspection readout, open menus) check
+    // only key and defaultPrevented, so a composing key that bubbles out would
+    // end inspection or close a menu while the user is still typing.
+    const documentKeys = vi.fn()
+    document.addEventListener('keydown', documentKeys)
+    try {
+      const pressed = [
+        key(textarea, { key: 'Escape', isComposing: true }),
+        key(textarea, { key: 'Escape', keyCode: 229 }),
+        key(textarea, { key: 'Enter', isComposing: true }),
+        key(textarea, { key: 'Enter', keyCode: 229 }),
+      ]
+
+      expect(documentKeys).not.toHaveBeenCalled()
+      expect(pressed.map((event) => event.defaultPrevented)).toEqual([false, false, false, false])
+      expect(entries.isOpen()).toBe(true)
+    } finally {
+      document.removeEventListener('keydown', documentKeys)
+    }
+  })
+
   it('Esc tells the opener through onCancel, once the entry is gone; a submit, close() or dispose does not', async () => {
     const entries = mount()
     const cancelled: boolean[] = []
