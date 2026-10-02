@@ -18,7 +18,7 @@ import { getCanvasDetailLayout, isMeasurementLabelVisible } from '../automatic-d
 import {
   createMeasurementGuidePresentation,
   MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX,
-  measurementGuideLabelPose,
+  measurementGuideLabelPoseIn,
 } from '../measurement-guides'
 import {
   buildPlantPresentationEntries,
@@ -811,7 +811,7 @@ function syncMeasurementLabels(
 
   const nextIds = new Set<string>()
   for (const guide of snapshot.scene.measurementGuides) {
-    const presentation = createMeasurementGuidePresentation(guide, { x: 0, y: 0, scale: view.pixelsPerMetre })
+    const presentation = createMeasurementGuidePresentation(guide)
     if (!presentation) continue
     nextIds.add(guide.id)
     let text = labelById.get(guide.id)
@@ -828,11 +828,7 @@ function syncMeasurementLabels(
       fill: toPixiColor(getAnnotationTextColor(), 0),
       stroke: labelHaloStroke(MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX),
     })
-    const pose = measurementGuideLabelPose(
-      view.worldToScreen(guide.start),
-      view.worldToScreen(guide.end),
-      view.worldToScreen(presentation.midpointWorld),
-    )
+    const pose = measurementGuideLabelPoseIn(guide, view)
     text.position.set(pose.point.x, pose.point.y)
     text.rotation = pose.rotationRad
     text.anchor.set(0.5, 0.5)

@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import type { ScenePlantEntity, SceneViewportState } from '../canvas/runtime/scene'
+import type { ScenePlantEntity, ScenePoint } from '../canvas/runtime/scene'
 import { computePinnedPlantNameLabels, computeSelectionLabels } from '../canvas/runtime/selection-labels'
+import { createTestRendererView } from './support/scene-renderer-snapshot'
 
-function createViewport(overrides: Partial<SceneViewportState> = {}): SceneViewportState {
+function createViewport(overrides: Partial<{ x: number; y: number; scale: number }> = {}) {
   return { x: 0, y: 0, scale: 8, ...overrides }
+}
+
+/** Where a label lands in a bearing-0 frame at `viewport`: its projected anchor plus its offset. */
+function landing(label: { anchor: ScenePoint; offsetPx: ScenePoint }, viewport = createViewport()): ScenePoint {
+  const anchor = createTestRendererView(viewport).worldToScreen(label.anchor)
+  return { x: anchor.x + label.offsetPx.x, y: anchor.y + label.offsetPx.y }
 }
 
 function createPlant(overrides: Partial<ScenePlantEntity> = {}): ScenePlantEntity {
@@ -30,7 +37,7 @@ describe('selection labels', () => {
     const result = computeSelectionLabels(
       [createPlant()],
       new Set(),
-      createViewport(),
+      createViewport().scale,
       new Map(),
     )
     expect(result).toEqual([])
@@ -41,36 +48,36 @@ describe('selection labels', () => {
     const result = computeSelectionLabels(
       plants,
       new Set(['a']),
-      createViewport({ scale: 1 }),
+      createViewport({ scale: 1 }).scale,
       new Map(),
     )
     expect(result).toHaveLength(1)
     expect(result[0]!.canonicalName).toBe('Malus domestica')
-    expect(result[0]!.screenPoint.x).toBe(10)
+    expect(landing(result[0]!, createViewport({ scale: 1 })).x).toBeCloseTo(10, 6)
   })
 
   it('places a selected plant label below the glyph at low zoom', () => {
     const result = computeSelectionLabels(
       [createPlant({ id: 'a', position: { x: 10, y: 20 } })],
       new Set(['a']),
-      createViewport({ scale: 1 }),
+      createViewport({ scale: 1 }).scale,
       new Map(),
     )
 
-    expect(result[0]!.screenPoint.x).toBe(10)
-    expect(result[0]!.screenPoint.y).toBeCloseTo(25, 2)
+    expect(landing(result[0]!, createViewport({ scale: 1 })).x).toBeCloseTo(10, 6)
+    expect(landing(result[0]!, createViewport({ scale: 1 })).y).toBeCloseTo(25, 2)
   })
 
   it('keeps the selected plant label offset balanced at high zoom', () => {
     const result = computeSelectionLabels(
       [createPlant({ id: 'a', position: { x: 10, y: 20 } })],
       new Set(['a']),
-      createViewport({ scale: 1000 }),
+      createViewport({ scale: 1000 }).scale,
       new Map(),
     )
 
-    expect(result[0]!.screenPoint.x).toBe(10000)
-    expect(result[0]!.screenPoint.y).toBeCloseTo(20008, 2)
+    expect(landing(result[0]!, createViewport({ scale: 1000 })).x).toBeCloseTo(10000, 6)
+    expect(landing(result[0]!, createViewport({ scale: 1000 })).y).toBeCloseTo(20008, 2)
   })
 
   it('returns empty array when multiple plants are selected', () => {
@@ -81,7 +88,7 @@ describe('selection labels', () => {
     const result = computeSelectionLabels(
       plants,
       new Set(['a', 'b']),
-      createViewport({ scale: 1 }),
+      createViewport({ scale: 1 }).scale,
       new Map(),
     )
     expect(result).toEqual([])
@@ -91,7 +98,7 @@ describe('selection labels', () => {
     const result = computeSelectionLabels(
       [createPlant({ id: 'a' })],
       new Set(['a', 'zone-1']),
-      createViewport(),
+      createViewport().scale,
       new Map(),
     )
     expect(result).toEqual([])
@@ -101,7 +108,7 @@ describe('selection labels', () => {
     const result = computeSelectionLabels(
       [createPlant({ id: 'a', pinnedName: true })],
       new Set(['a']),
-      createViewport(),
+      createViewport().scale,
       new Map(),
     )
     expect(result).toEqual([])
@@ -111,7 +118,7 @@ describe('selection labels', () => {
     const result = computeSelectionLabels(
       [createPlant({ id: 'a' })],
       new Set(['a']),
-      createViewport(),
+      createViewport().scale,
       new Map([['Malus domestica', 'Pommier']]),
     )
     expect(result[0]!.text).toBe('Pommier')
@@ -123,7 +130,7 @@ describe('selection labels', () => {
     const result = computeSelectionLabels(
       [plant],
       new Set(['a']),
-      createViewport(),
+      createViewport().scale,
       new Map(),
     )
     expect(result[0]!.text).toBe('L. ang.')
@@ -134,7 +141,7 @@ describe('selection labels', () => {
     const plants = [createPlant({ pinnedName: true })]
     const before = structuredClone(plants)
     const visible = [20, 14, 8, 14, 20].map((scale) =>
-      computePinnedPlantNameLabels(plants, createViewport({ scale }), new Map()),
+      computePinnedPlantNameLabels(plants, createViewport({ scale }).scale, new Map()),
     )
     expect(visible.map((labels) => labels[0]?.opacity ?? 0)).toEqual([1, 0.5, 0, 0.5, 1])
     expect(visible[2]).toEqual([])
@@ -143,11 +150,11 @@ describe('selection labels', () => {
 
   it('reveals only a singleton selected pinned name at overview scale', () => {
     const plants = [createPlant({ id: 'a', pinnedName: true }), createPlant({ id: 'b', pinnedName: true })]
-    const labels = computePinnedPlantNameLabels(plants, createViewport(), new Map(), {
+    const labels = computePinnedPlantNameLabels(plants, createViewport().scale, new Map(), {
       selectionLabelPlantIds: new Set(['a']),
     })
     expect(labels.map(({ plantId, opacity }) => ({ plantId, opacity }))).toEqual([{ plantId: 'a', opacity: 1 }])
-    expect(computePinnedPlantNameLabels(plants, createViewport(), new Map(), {
+    expect(computePinnedPlantNameLabels(plants, createViewport().scale, new Map(), {
       selectionLabelPlantIds: new Set(['a', 'b']),
     })).toEqual([])
   })
@@ -159,10 +166,10 @@ describe('selection labels', () => {
     ]
     const result = computePinnedPlantNameLabels(
       plants,
-      createViewport({ scale: 20 }),
+      createViewport({ scale: 20 }).scale,
       new Map(),
     )
     expect(result).toHaveLength(2)
-    expect(result[1]!.screenPoint).toEqual(result[0]!.screenPoint)
+    expect(landing(result[1]!, createViewport({ scale: 20 }))).toEqual(landing(result[0]!, createViewport({ scale: 20 })))
   })
 })

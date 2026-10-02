@@ -1,21 +1,19 @@
 import { getCanvasTextOpacity } from './text-visibility'
-import { worldToScreen } from './annotation-layout'
 import {
   getPlantWorldBounds,
   type PlantPresentationContext,
 } from './plant-presentation'
-import type { ScenePlantEntity, ScenePoint, SceneViewportState } from './scene'
+import type { ScenePlantEntity, ScenePoint } from './scene'
 import type { SpeciesCacheEntry } from './species-cache'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 
 /**
  * A plant's name label: drawn upright at `offsetPx` (CSS px) from its plant's projected `anchor` (world metres), so a pan
- * moves it with its plant. `screenPoint` is where it lands under the viewport it was computed with.
+ * moves it with its plant. Where it lands is the frame's: `view.worldToScreen(anchor)` plus `offsetPx`.
  */
 interface AnchoredLabel {
   anchor: ScenePoint
   offsetPx: ScenePoint
-  screenPoint: ScenePoint
 }
 
 export interface SelectionLabel extends AnchoredLabel {
@@ -31,17 +29,17 @@ export interface PlantNameLabel extends AnchoredLabel {
   fontStyle: 'normal' | 'italic'
 }
 
-/** A single selection's label and the pinned names, under `viewport`. */
+/** A single selection's label and the pinned names, at `pixelsPerMetre`. */
 export function projectScenePlantLabels(
   snapshot: Pick<SceneRendererSnapshot, 'scene' | 'speciesCache' | 'localizedCommonNames' | 'selectionLabelPlantIds'>,
-  viewport: SceneViewportState,
+  pixelsPerMetre: number,
 ): { readonly pinnedPlantNameLabels: PlantNameLabel[]; readonly selectionLabels: SelectionLabel[] } {
   const { scene, speciesCache, localizedCommonNames, selectionLabelPlantIds } = snapshot
-  const plantContext = { plants: scene.plants, viewport, speciesCache, localizedCommonNames }
+  const plantContext = { plants: scene.plants, viewport: scaleOnly(pixelsPerMetre), speciesCache, localizedCommonNames }
   return {
-    pinnedPlantNameLabels: computePinnedPlantNameLabels(scene.plants, viewport, localizedCommonNames,
+    pinnedPlantNameLabels: computePinnedPlantNameLabels(scene.plants, pixelsPerMetre, localizedCommonNames,
       { plantContext, selectionLabelPlantIds }),
-    selectionLabels: computeSelectionLabels(scene.plants, selectionLabelPlantIds, viewport,
+    selectionLabels: computeSelectionLabels(scene.plants, selectionLabelPlantIds, pixelsPerMetre,
       localizedCommonNames, { plantContext }),
   }
 }
@@ -59,7 +57,7 @@ const EMPTY_SPECIES_CACHE = new Map<string, SpeciesCacheEntry>()
 export function computeSelectionLabels(
   plants: readonly ScenePlantEntity[],
   selectedIds: ReadonlySet<string>,
-  viewport: SceneViewportState,
+  pixelsPerMetre: number,
   localizedCommonNames: ReadonlyMap<string, string | null>,
   options: SelectionLabelOptions = {},
 ): SelectionLabel[] {
@@ -69,23 +67,23 @@ export function computeSelectionLabels(
   const plant = plants.find((candidate) => candidate.id === selectedId)
   if (!plant || plant.pinnedName) return []
 
-  const offsetYPx = plantLabelOffsetPx([plant], viewport, { ...options.plantContext, viewport, speciesCache: options.plantContext?.speciesCache ?? EMPTY_SPECIES_CACHE, plants })
+  const offsetYPx = plantLabelOffsetPx(plant, pixelsPerMetre, options.plantContext, plants)
 
   const localizedName = localizedCommonNames.get(plant.canonicalName) ?? plant.commonName
   const text = localizedName || abbreviateCanonical(plant.canonicalName)
   const fontStyle = localizedName ? 'normal' as const : 'italic' as const
 
-  return [{ canonicalName: plant.canonicalName, text, fontStyle, ...below(plant.position, offsetYPx, viewport) }]
+  return [{ canonicalName: plant.canonicalName, text, fontStyle, ...below(plant.position, offsetYPx) }]
 }
 
 export function computePinnedPlantNameLabels(
   plants: readonly ScenePlantEntity[],
-  viewport: SceneViewportState,
+  pixelsPerMetre: number,
   localizedCommonNames: ReadonlyMap<string, string | null>,
   options: SelectionLabelOptions = {},
 ): PlantNameLabel[] {
   const labels: PlantNameLabel[] = []
-  const overviewOpacity = getCanvasTextOpacity(viewport.scale)
+  const overviewOpacity = getCanvasTextOpacity(pixelsPerMetre)
   const revealedId = options.selectionLabelPlantIds?.size === 1
     ? options.selectionLabelPlantIds.values().next().value
     : null
@@ -93,48 +91,42 @@ export function computePinnedPlantNameLabels(
     if (!plant.pinnedName) continue
     const opacity = plant.id === revealedId ? 1 : overviewOpacity
     if (opacity === 0) continue
-    const offsetYPx = plantLabelOffsetPx([plant], viewport, { ...options.plantContext, viewport, speciesCache: options.plantContext?.speciesCache ?? EMPTY_SPECIES_CACHE, plants })
+    const offsetYPx = plantLabelOffsetPx(plant, pixelsPerMetre, options.plantContext, plants)
 
     const localizedName = localizedCommonNames.get(plant.canonicalName) ?? plant.commonName
     const text = localizedName || abbreviateCanonical(plant.canonicalName)
     const fontStyle = localizedName ? 'normal' as const : 'italic' as const
-    labels.push({ plantId: plant.id, text, fontStyle, opacity, ...below(plant.position, offsetYPx, viewport) })
+    labels.push({ plantId: plant.id, text, fontStyle, opacity, ...below(plant.position, offsetYPx) })
   }
 
   return labels
 }
 
-/** A label `offsetYPx` below `anchor`, and where that lands under `viewport`. */
-function below(anchor: ScenePoint, offsetYPx: number, viewport: SceneViewportState): AnchoredLabel {
-  const screenPoint = worldToScreen(anchor, viewport)
-  screenPoint.y += offsetYPx
-  return { anchor: { x: anchor.x, y: anchor.y }, offsetPx: { x: 0, y: offsetYPx }, screenPoint }
+/** A label `offsetYPx` below `anchor`. */
+function below(anchor: ScenePoint, offsetYPx: number): AnchoredLabel {
+  return { anchor: { x: anchor.x, y: anchor.y }, offsetPx: { x: 0, y: offsetYPx } }
 }
 
+/** Plant presentation reads only a context's scale (`PlantPresentationContext.viewport`, until 0E retypes it). */
+function scaleOnly(pixelsPerMetre: number): PlantPresentationContext['viewport'] {
+  return { x: 0, y: 0, scale: pixelsPerMetre }
+}
+
+/** The gap below a plant's footprint, at `pixelsPerMetre`, clamped to today's 5–8 px. */
 function plantLabelOffsetPx(
-  plants: readonly ScenePlantEntity[],
-  viewport: SceneViewportState,
-  plantContext: PlantPresentationContext | undefined,
-): number {
-  let maxRadiusPx = 0
-  for (const plant of plants) {
-    maxRadiusPx = Math.max(maxRadiusPx, plantVisualRadiusPx(plant, viewport, plantContext))
-  }
-  return clamp(maxRadiusPx + PLANT_LABEL_GAP_PX, PLANT_LABEL_MIN_OFFSET_PX, PLANT_LABEL_MAX_OFFSET_PX)
-}
-
-function plantVisualRadiusPx(
   plant: ScenePlantEntity,
-  viewport: SceneViewportState,
+  pixelsPerMetre: number,
   plantContext: PlantPresentationContext | undefined,
+  plants: readonly ScenePlantEntity[],
 ): number {
   const bounds = getPlantWorldBounds(plant, {
-    ...(plantContext ?? {
-      speciesCache: EMPTY_SPECIES_CACHE,
-    }),
-    viewport,
+    ...plantContext,
+    viewport: scaleOnly(pixelsPerMetre),
+    speciesCache: plantContext?.speciesCache ?? EMPTY_SPECIES_CACHE,
+    plants,
   })
-  return (Math.max(bounds.width, bounds.height) * viewport.scale) / 2
+  const radiusPx = (Math.max(bounds.width, bounds.height) * pixelsPerMetre) / 2
+  return clamp(radiusPx + PLANT_LABEL_GAP_PX, PLANT_LABEL_MIN_OFFSET_PX, PLANT_LABEL_MAX_OFFSET_PX)
 }
 
 function clamp(value: number, min: number, max: number): number {

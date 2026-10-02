@@ -131,8 +131,7 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
       const point = view.worldToScreen(plant.position)
       if (point.x >= 0 && point.y >= 0 && point.x <= width && point.y <= height) inView.add(plant.id)
     }
-    // Admission never depends on where the plane sits on screen, only on the scale.
-    const labelled = new Set(getCanvasPlantNameLabels(snapshot, { x: 0, y: 0, scale: view.pixelsPerMetre })
+    const labelled = new Set(getCanvasPlantNameLabels(snapshot, view.pixelsPerMetre)
       .filter((label) => inView.has(label.plantId))
       .map((label) => label.plantId))
     return { labelled: labelled.size, inView: inView.size }

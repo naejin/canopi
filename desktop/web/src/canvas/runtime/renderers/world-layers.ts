@@ -235,7 +235,7 @@ function drawMeasurementGuide(
   snapshot: SceneRendererSnapshot,
   pixelsPerMetre: number,
 ): boolean {
-  const presentation = createMeasurementGuidePresentation(guide, { x: 0, y: 0, scale: pixelsPerMetre })
+  const presentation = createMeasurementGuidePresentation(guide)
   if (!presentation) return false
   let graphics = graphicsById.get(guide.id)
   if (!graphics) {

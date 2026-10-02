@@ -51,7 +51,7 @@ describe('scene text presentation', () => {
       store.setSelection(selection)
       return presentation.buildRendererSnapshot()
     })
-    const labels = snapshots.map((snapshot) => projectScenePlantLabels(snapshot, { x: 0, y: 0, scale: 4 }))
+    const labels = snapshots.map((snapshot) => projectScenePlantLabels(snapshot, 4))
     expect(labels.map(({ pinnedPlantNameLabels }) => pinnedPlantNameLabels.map((label) => label.plantId)))
       .toEqual([['plant-1'], [], [], ['plant-2'], []])
     expect(labels.map(({ selectionLabels }) => selectionLabels.length)).toEqual([0, 0, 0, 0, 1])

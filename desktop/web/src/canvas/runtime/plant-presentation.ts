@@ -43,7 +43,7 @@ export interface PlantPresentationEntry {
   usesCanopyRadius: boolean
   stackPriority: number
   lod: PlantLOD
-  screenPoint: ScenePoint
+  /** Screen hit bounds under `PlantPresentationContext.viewport` (annotation-layout's `worldToScreen` until 0E). */
   hitBoundsScreen: PlantScreenHitBounds
   selected: boolean
 }
@@ -69,8 +69,9 @@ export interface PlantStackBadgeDecision {
   memberPlantIds: ReadonlyArray<string>
   count: number
   text: string
-  anchorScreenPoint: ScenePoint
-  badgeCenterScreenPoint: ScenePoint
+  /** The anchor plant's position (world metres); the badge's centre is its projection plus `badgeOffsetPx`. */
+  anchor: ScenePoint
+  badgeOffsetPx: ScenePoint
 }
 
 /** Screen size of the badge that shows `text` (the stack count). */
@@ -108,8 +109,7 @@ export function buildPlantPresentationEntries(
     const color = resolveDisplayedPlantColor(baseColor, plant.canonicalName, getCanvasPlantDisplay())
     const symbol = resolvePlantSymbolForPlant(plant, context.plantSpeciesSymbols ?? {})
     const selected = selectedPlantIds.has(plant.id)
-    const screenPoint = worldToScreen(plant.position, context.viewport)
-    const hitBoundsScreen = plantScreenHitBounds(screenPoint, radiusScreenPx)
+    const hitBoundsScreen = plantScreenHitBounds(worldToScreen(plant.position, context.viewport), radiusScreenPx)
     return {
       plant,
       radiusWorld,
@@ -120,7 +120,6 @@ export function buildPlantPresentationEntries(
       usesCanopyRadius: radiusPresentation.usesCanopyRadius,
       stackPriority: getStackPriority(plant, selected),
       lod: radiusScreenPx < 3.6 ? 'dot' : lod,
-      screenPoint,
       hitBoundsScreen,
       selected,
     }
@@ -245,17 +244,13 @@ export function resolveStackBadgeDecisions(
     const anchor = members[0]
     if (!anchor) continue
 
-    const badgeOffset = getStackBadgeOffsetPx(anchor.radiusScreenPx)
     decisions.push({
       anchorPlantId: anchor.plant.id,
       memberPlantIds: [...memberIds].sort(),
       count: memberIds.length,
       text: String(memberIds.length),
-      anchorScreenPoint: anchor.screenPoint,
-      badgeCenterScreenPoint: {
-        x: anchor.screenPoint.x + badgeOffset.x,
-        y: anchor.screenPoint.y + badgeOffset.y,
-      },
+      anchor: { x: anchor.plant.position.x, y: anchor.plant.position.y },
+      badgeOffsetPx: getStackBadgeOffsetPx(anchor.radiusScreenPx),
     })
   }
 

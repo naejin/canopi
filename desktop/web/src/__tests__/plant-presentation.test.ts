@@ -9,6 +9,7 @@ import {
   resolveStackBadgeDecisions,
   type PlantPresentationContext,
 } from '../canvas/runtime/plant-presentation'
+import { createTestRendererView } from './support/scene-renderer-snapshot'
 
 /** The renderer's composition: entries, then layout and stack badges from them. */
 function buildPlantPresentationSnapshot(
@@ -218,8 +219,11 @@ describe('plant presentation service', () => {
     }, new Set())
 
     expect(snapshot.stackBadges).toHaveLength(1)
-    expect(snapshot.stackBadges[0]!.badgeCenterScreenPoint.x).toBeCloseTo(4.22, 2)
-    expect(snapshot.stackBadges[0]!.badgeCenterScreenPoint.y).toBeCloseTo(-4.22, 2)
+    // The badge's centre in the frame: its anchor's projection plus its offset.
+    const badge = snapshot.stackBadges[0]!
+    const anchor = createTestRendererView(createViewport({ scale: 1 })).worldToScreen(badge.anchor)
+    expect(anchor.x + badge.badgeOffsetPx.x).toBeCloseTo(4.22, 2)
+    expect(anchor.y + badge.badgeOffsetPx.y).toBeCloseTo(-4.22, 2)
   })
 
   it('does not create stack badges for ordinary Visual Footprint overlap', () => {
@@ -242,7 +246,7 @@ describe('plant presentation service', () => {
 
     expect(entry).toHaveProperty('radiusWorld')
     expect(entry).toHaveProperty('color')
-    expect(entry).toHaveProperty('screenPoint')
+    expect(entry).not.toHaveProperty('screenPoint')
     expect(entry).not.toHaveProperty('labelText')
     expect(entry).not.toHaveProperty('labelScreenPoint')
   })

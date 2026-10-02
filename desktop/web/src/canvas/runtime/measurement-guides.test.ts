@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
+import { createTestView } from '../../__tests__/support/test-view'
 import {
   createMeasurementGuidePresentation,
   MEASUREMENT_GUIDE_LABEL_CLEARANCE_PX,
   MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX,
   MEASUREMENT_GUIDE_LABEL_OFFSET_PX,
+  measurementGuideLabelPoseIn,
 } from './measurement-guides'
 import type { SceneMeasurementGuideEntity, ScenePoint } from './scene'
 
@@ -61,27 +63,27 @@ describe('createMeasurementGuidePresentation', () => {
       },
     ]
 
+    // The label positions come from the frame: a bearing-0 view at 1 px/m with the plane origin at the screen origin.
+    const view = createTestView({ viewport: { x: 0, y: 0, scale: 1 } })
     for (const testCase of cases) {
-      const presentation = createMeasurementGuidePresentation(measurementGuide(testCase.start, testCase.end), {
-        x: 0,
-        y: 0,
-        scale: 1,
-      })
+      const guide = measurementGuide(testCase.start, testCase.end)
+      const presentation = createMeasurementGuidePresentation(guide)
+      const label = measurementGuideLabelPoseIn(guide, view.view())
       expect(presentation, testCase.name).not.toBeNull()
       expect(presentation?.midpointWorld.x, testCase.name).toBeCloseTo(testCase.midpointWorld.x)
       expect(presentation?.midpointWorld.y, testCase.name).toBeCloseTo(testCase.midpointWorld.y)
-      expect(presentation?.labelRotationRad, testCase.name).toBeCloseTo(testCase.rotationRad)
-      expect(Math.abs(presentation?.labelRotationRad ?? Number.POSITIVE_INFINITY), testCase.name)
-        .toBeLessThanOrEqual(Math.PI / 2)
-      expect(presentation?.labelScreenPoint.x, testCase.name).toBeCloseTo(testCase.labelScreenPoint.x)
-      expect(presentation?.labelScreenPoint.y, testCase.name).toBeCloseTo(testCase.labelScreenPoint.y)
+      expect(label.rotationRad, testCase.name).toBeCloseTo(testCase.rotationRad)
+      expect(Math.abs(label.rotationRad), testCase.name).toBeLessThanOrEqual(Math.PI / 2)
+      expect(label.point.x, testCase.name).toBeCloseTo(testCase.labelScreenPoint.x)
+      expect(label.point.y, testCase.name).toBeCloseTo(testCase.labelScreenPoint.y)
 
       const labelDelta = Math.hypot(
-        (presentation?.labelScreenPoint.x ?? 0) - testCase.midpointWorld.x,
-        (presentation?.labelScreenPoint.y ?? 0) - testCase.midpointWorld.y,
+        label.point.x - testCase.midpointWorld.x,
+        label.point.y - testCase.midpointWorld.y,
       )
       expect(labelDelta, testCase.name).toBeCloseTo(MEASUREMENT_GUIDE_LABEL_OFFSET_PX)
     }
+    view.dispose()
   })
 })
 

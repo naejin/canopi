@@ -3410,7 +3410,7 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
     setInteractionViewport(runtime, { x: 0, y: 0, scale: 20 })
-    const pinnedNames = (snapshot: SceneRendererSnapshot) => projectScenePlantLabels(snapshot, { x: 0, y: 0, scale: 20 })
+    const pinnedNames = (snapshot: SceneRendererSnapshot) => projectScenePlantLabels(snapshot, 20)
       .pinnedPlantNameLabels.map((label) => label.text)
     runtime.commandSurface.sceneEdits.selectAll()
     runtime.commandSurface.sceneEdits.toggleSelectedPlantNamePins()
