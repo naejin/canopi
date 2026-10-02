@@ -423,7 +423,7 @@ describe('the interaction session', () => {
     expect(container.style.cursor).toBe('crosshair')
   })
 
-  it('Esc cancels a registered tool\'s live press after the tool passes it', () => {
+  it('Esc cancels a registered tool\'s live press before the tool hears it', () => {
     const rectangle = stubTool('rectangle')
     useStubTools(rectangle)
     const { session } = createSession()
@@ -434,7 +434,7 @@ describe('the interaction session', () => {
     events.pointerMove({ x: 60, y: 60 })
     const escape = events.keyDown({ key: 'Escape', cancelable: true, target: container })
     expect(escape.defaultPrevented).toBe(true)
-    expect(rectangle.commands).toEqual([{ kind: 'escape' }])
+    expect(rectangle.commands).toEqual([])
     expect(rectangle.last('cancel')).toEqual({ kind: 'cancel', reason: 'escape' })
     events.pointerUp({ x: 60, y: 60 })
     expect(rectangle.count('drag-end')).toBe(0)

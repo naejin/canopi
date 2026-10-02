@@ -41,12 +41,13 @@ interface Fixture {
   nudging: boolean
   live: boolean
   space: boolean
+  transient: boolean
   port: ReturnType<typeof createCanvasKeyboardPort>
 }
 
 function fixture(options: { readonly tool?: ToolId; readonly reply?: (c: ToolCommand) => ToolReply } = {}): Fixture {
   const tool = signal<ToolId>(options.tool ?? 'select')
-  const state = { selected: false, nudging: false, live: false, space: false }
+  const state = { selected: false, nudging: false, live: false, space: false, transient: false }
   const toolHost = {
     nudge: vi.fn((): 'handled' | 'refused' | 'pass' => 'pass'),
     command: vi.fn(options.reply ?? ((): ToolReply => 'pass')),
@@ -61,7 +62,7 @@ function fixture(options: { readonly tool?: ToolId; readonly reply?: (c: ToolCom
     activeTool: tool,
     hasNudgeSeries: () => state.nudging,
     activeToolIsSelect: () => tool.peek() === 'select',
-    activeToolHasTransient: () => false,
+    activeToolHasTransient: () => state.transient,
     openTextEntryMode: () => null,
   } as unknown as ToolHost
   const session = {
@@ -93,6 +94,8 @@ function fixture(options: { readonly tool?: ToolId; readonly reply?: (c: ToolCom
     set live(value: boolean) { state.live = value },
     get space() { return state.space },
     set space(value: boolean) { state.space = value },
+    get transient() { return state.transient },
+    set transient(value: boolean) { state.transient = value },
     port: undefined as unknown as ReturnType<typeof createCanvasKeyboardPort>,
   }
   result.port = createCanvasKeyboardPort({
@@ -171,7 +174,7 @@ describe('createCanvasKeyboardPort', () => {
 
     f.nudging = true
     expect(f.port.escapeLayers()[0]).toBe('nudge-series')
-    expect(f.port.escape('nudge-series')).toBe(true)
+    f.port.escape('nudge-series')
     expect(f.toolHost.endNudgeSeries).toHaveBeenLastCalledWith(false)
     expect(f.session.clearSelection).not.toHaveBeenCalled()
   })
@@ -190,29 +193,55 @@ describe('createCanvasKeyboardPort', () => {
     expect(refused.port.command({ kind: 'rotate-held', stepDeg: 15 })).toBe(false)
   })
 
-  it('Esc layers run in today\'s order: the tool\'s own Esc, a live pointer session, the tool, then the selection', () => {
-    let toolTakesEscape = true
-    const f = fixture({ tool: 'polygon', reply: (c) => c.kind === 'escape' && toolTakesEscape ? 'handled' : 'pass' })
+  it('Esc layers run by priority: a live pointer session, a nudge series, the tool\'s draft or source, the tool, the selection', () => {
+    const f = fixture({ tool: 'polygon', reply: (c) => c.kind === 'escape' ? 'handled' : 'pass' })
     f.selected = true
     f.live = true
+    f.nudging = true
+    f.transient = true
 
-    expect(f.port.escapeLayers()).toEqual(['tool-transient', 'gesture', 'tool', 'selection'])
-    expect(f.port.escape('tool-transient')).toBe(true)
-    expect(f.toolHost.command).toHaveBeenLastCalledWith({ kind: 'escape' })
-    toolTakesEscape = false
-    expect(f.port.escape('tool-transient')).toBe(false)
-
-    expect(f.port.escape('gesture')).toBe(true)
+    expect(f.port.escapeLayers()).toEqual(['gesture', 'nudge-series', 'tool-transient', 'tool', 'selection'])
+    expect(f.port.describeEscape()).toBe('gesture')
+    f.port.escape('gesture')
     expect(f.session.escapeGesture).toHaveBeenCalledTimes(1)
-    expect(f.port.escape('tool')).toBe(true)
+    f.port.escape('nudge-series')
+    expect(f.toolHost.endNudgeSeries).toHaveBeenLastCalledWith(false)
+    f.port.escape('tool-transient')
+    expect(f.toolHost.command).toHaveBeenLastCalledWith({ kind: 'escape' })
+    f.port.escape('tool')
     expect(f.session.requestTool).toHaveBeenCalledExactlyOnceWith('select')
     f.live = false
+    f.transient = false
     expect(f.port.escapeLayers()).toEqual(['selection'])
     expect(f.port.describeEscape()).toBe('selection')
-    expect(f.port.escape('selection')).toBe(true)
+    f.port.escape('selection')
     expect(f.session.clearSelection).toHaveBeenCalledTimes(1)
     expect(f.port.escapeLayers()).toEqual([])
     expect(f.port.describeEscape()).toBeNull()
+  })
+
+  it('the tool\'s own Esc is a layer only while it holds a draft or a source; any other tool leaves for Select', () => {
+    const f = fixture({ tool: 'plant-stamp', reply: () => 'handled' })
+    expect(f.port.escapeLayers()).toEqual(['tool'])
+    f.port.escape('tool')
+    expect(f.session.requestTool).toHaveBeenCalledExactlyOnceWith('select')
+    expect(f.toolHost.command).not.toHaveBeenCalled()
+  })
+
+  it('Plant a row: Esc mid-drag cancels the drag and keeps the source', () => {
+    const f = fixture({ tool: 'plant-spacing', reply: (c) => c.kind === 'escape' ? 'handled' : 'pass' })
+    f.transient = true
+    f.live = true
+
+    expect(f.port.describeEscape()).toBe('gesture')
+    f.port.escape('gesture')
+    expect(f.session.escapeGesture).toHaveBeenCalledTimes(1)
+    expect(f.toolHost.command).not.toHaveBeenCalled()
+    // The next Esc drops the source.
+    f.live = false
+    expect(f.port.describeEscape()).toBe('tool-transient')
+    f.port.escape('tool-transient')
+    expect(f.toolHost.command).toHaveBeenCalledExactlyOnceWith({ kind: 'escape' })
   })
 
   it('Space holds for panning once, from the map or nothing focused, and keyup releases it', () => {
@@ -247,7 +276,7 @@ describe('createCanvasKeyboardPort', () => {
     f.selected = true
     f.session.overview = vi.fn(() => true)
     expect(f.port.escapeLayers()).toEqual(['gesture'])
-    expect(f.port.escape('gesture')).toBe(true)
+    f.port.escape('gesture')
     expect(f.session.escapeGesture).toHaveBeenCalledTimes(1)
     expect(f.toolHost.interrupted).toHaveBeenCalledTimes(1)
     expect(f.session.requestTool).not.toHaveBeenCalled()
@@ -337,7 +366,7 @@ describe('createForwardingCanvasKeyboardPort', () => {
     expect(port.host).toBe(host)
     expect(port.command({ kind: 'confirm' })).toBe(false)
     expect(port.escapeLayers()).toEqual([])
-    expect(port.escape('tool')).toBe(false)
+    port.escape('tool')
     expect(port.describeEscape()).toBeNull()
     expect(keyState(port as Fixture['port'], { key: ' ', code: 'Space' })).toBe('pass')
 
@@ -345,8 +374,8 @@ describe('createForwardingCanvasKeyboardPort', () => {
     live = f.port
     expect(port.command({ kind: 'confirm' })).toBe(true)
     expect(f.toolHost.command).toHaveBeenCalledWith({ kind: 'confirm' })
-    expect(port.escapeLayers()).toEqual(['tool-transient', 'tool'])
-    expect(port.escape('tool')).toBe(true)
+    expect(port.escapeLayers()).toEqual(['tool'])
+    port.escape('tool')
     expect(f.session.requestTool).toHaveBeenCalledWith('select')
     expect(keyState(port as Fixture['port'], { key: ' ', code: 'Space' })).toBe('held')
     expect(f.session.keyState).toHaveBeenCalledTimes(1)

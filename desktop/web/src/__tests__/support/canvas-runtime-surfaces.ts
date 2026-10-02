@@ -34,7 +34,7 @@ export function createTestCanvasKeyboardPort(overrides: Partial<CanvasKeyboardPo
   return {
     host: document.createElement('div'),
     escapeLayers: () => [],
-    escape: () => false,
+    escape: () => {},
     describeEscape: () => null,
     command: () => false,
     keyState: () => 'pass',

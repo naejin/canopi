@@ -1,5 +1,6 @@
 import { useEffect } from 'preact/hooks'
 import { t } from '../../i18n'
+import { ESCAPE_PRIORITY, registerEscapeLayer } from '../../app/keyboard/escape-chain'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 import {
   endInspection,
@@ -21,8 +22,8 @@ import styles from './inspection-status.module.css'
  * document state to persist.
  *
  * Escape leaves inspection, which is the keyboard dismissal the contract
- * requires and the reason this surface installs one listener rather than a
- * gesture owner of its own.
+ * requires: the Esc chain's lowest layer, so an Esc first closes a popover,
+ * cancels the map's drag or tool and clears its selection.
  */
 export function InspectionStatus() {
   const target = inspectionTarget.value
@@ -31,15 +32,15 @@ export function InspectionStatus() {
 
   useEffect(() => {
     if (!target) return
-    function onKeyDown(event: KeyboardEvent): void {
-      // The map's Esc chain runs first (window capture); one Esc does one thing.
-      if (event.key === 'Escape' && !event.defaultPrevented) {
-        event.preventDefault()
+    return registerEscapeLayer({
+      id: 'inspection',
+      priority: ESCAPE_PRIORITY.inspection,
+      isActive: () => true,
+      escape: () => {
         endInspection()
-      }
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
+        return true
+      },
+    })
   }, [target])
 
   // Workspace teardown — including navigating away from the canvas to Location —

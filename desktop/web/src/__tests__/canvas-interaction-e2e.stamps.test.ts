@@ -83,6 +83,7 @@ describe('SceneInteractionSession', () => {
     session.setTool('object-stamp')
 
     events.pointerDown({ x: 40, y: 40 }, { button: 0 })
+    events.pointerUp({ x: 40, y: 40 }, { button: 0 })
     events.keyDown({ key: 'Escape' })
     events.pointerDown({ x: 90, y: 90 }, { button: 0 })
 

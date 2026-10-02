@@ -2,8 +2,9 @@
 //
 // Owns the canvas's key handling behind CanvasKeyboardPort (spec §1.2a, §1.6, ADR 0020): the key router hands it every
 // key first (keyState: the nudge commit, the physical Ctrl, the Menu key's time, the Space hold), runs its key commands
-// (the arrow nudge and pan, Enter, Backspace, F2, `[` `]`, the Menu key) and its Esc layers. The arrow nudge series is the
-// ToolHost's; the port only reads its outcome. It never touches a DOM event: the router acts on its answers.
+// (the arrow nudge and pan, Enter, Backspace, F2, `[` `]`, the Menu key) and lists and runs its Esc layers, which
+// app/keyboard/escape-chain.ts places in the Esc chain. The arrow nudge series is the ToolHost's; the port only reads its
+// outcome. It never touches a DOM event: the router acts on its answers.
 
 import type { ToolHost } from './interaction-ports'
 import type { Modifiers, ToolId } from './interaction-types'
@@ -109,19 +110,17 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionC
   }
 
   /**
-   * The live layers in the order an Esc runs them: today's, until the Esc chain (plan Phase F, K2) — a nudge series, the
-   * armed tool's own Esc (a draft or a row source, and today the stamps and Plant a row leave for Select themselves, even
-   * mid-press), a live pointer session, the tool, the selection; in overview only today's interrupted gesture.
+   * The live layers, by the Esc chain's priority (spec §3.7): a live pointer session, a nudge series, the armed tool's draft
+   * or row source, any tool but Select, the selection. The gesture runs above the tool's own Esc, so an Esc mid-drag in
+   * Plant a row cancels only the drag (plan §8). In overview only the gesture runs, today's interrupted-gesture cancel,
+   * so Esc never leaves the tool there.
    */
   function escapeLayers(): readonly CanvasEscapeLayer[] {
+    if (session.overview()) return ['gesture']
     const layers: CanvasEscapeLayer[] = []
-    if (toolHost.hasNudgeSeries()) layers.push('nudge-series')
-    if (session.overview()) {
-      layers.push('gesture')
-      return layers
-    }
-    if (toolHost.activeToolHasTransient() || !toolHost.activeToolIsSelect()) layers.push('tool-transient')
     if (session.pointerSessionLive()) layers.push('gesture')
+    if (toolHost.hasNudgeSeries()) layers.push('nudge-series')
+    if (toolHost.activeToolHasTransient()) layers.push('tool-transient')
     if (!toolHost.activeToolIsSelect()) layers.push('tool')
     if (deps.hasSelection()) layers.push('selection')
     return layers
@@ -135,18 +134,19 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionC
         case 'gesture':
           if (session.overview()) cancelInterrupted()
           else session.escapeGesture()
-          return true
+          return
         case 'nudge-series':
           toolHost.endNudgeSeries(false)
-          return true
+          return
         case 'tool-transient':
-          return toolHost.command({ kind: 'escape' }) === 'handled'
+          toolHost.command({ kind: 'escape' })
+          return
         case 'tool':
           session.requestTool('select')
-          return true
+          return
         case 'selection':
           session.clearSelection()
-          return true
+          return
       }
     },
     describeEscape() {
@@ -227,7 +227,7 @@ export function createForwardingCanvasKeyboardPort(
       return current()?.host ?? host
     },
     escapeLayers: () => current()?.escapeLayers() ?? [],
-    escape: (layer) => current()?.escape(layer) ?? false,
+    escape: (layer) => current()?.escape(layer),
     describeEscape: () => current()?.describeEscape() ?? null,
     command: (c) => current()?.command(c) ?? false,
     keyState: (state) => current()?.keyState(state) ?? 'pass',

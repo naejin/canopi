@@ -1,6 +1,7 @@
 import { useSignal, useSignalEffect } from '@preact/signals'
 import { useRef, useEffect } from 'preact/hooks'
 import { t } from '../../i18n'
+import { ESCAPE_PRIORITY, registerEscapeLayer } from '../../app/keyboard/escape-chain'
 import { formatCount } from '../../utils/format-count'
 import { locale } from '../../app/settings/state'
 import {
@@ -22,14 +23,18 @@ export function MoreFiltersPanel({ open, onClose }: Props) {
   const searchQuery = useSignal('')
   const panelRef = useRef<HTMLDivElement>(null)
 
-  // Close on Escape
+  // Esc closes the panel, and only it (the Esc chain's popover layer).
   useEffect(() => {
     if (!open) return
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
+    return registerEscapeLayer({
+      id: 'more-filters',
+      priority: ESCAPE_PRIORITY.popover,
+      isActive: () => true,
+      escape: () => {
+        onClose()
+        return true
+      },
+    })
   }, [open, onClose])
 
   // Close on click outside — uses pointerup to avoid catching the opening click
