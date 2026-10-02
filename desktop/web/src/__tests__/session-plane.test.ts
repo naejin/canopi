@@ -99,7 +99,7 @@ describe('geographic extent of a view', () => {
   }
 
   /** The geographic view a camera at this placement shows (ViewReadSurface.captureView's camera). */
-  function geographicViewOf(view: ReturnType<typeof frame>, onPlane: typeof plane) {
+  function geographicViewAt(view: ReturnType<typeof frame>, onPlane: typeof plane) {
     const camera = createTestView({ plane: onPlane, screen: view.screenSize, viewport: view.viewport })
     const geographic = geographicViewOfCamera(camera.view().camera)!
     camera.dispose()
@@ -118,14 +118,14 @@ describe('geographic extent of a view', () => {
     expect(extent.south).toBeLessThan(origin.lat)
     expect(extent.north).toBeGreaterThan(origin.lat)
     expect((extent.west + extent.east) / 2).toBeCloseTo(origin.lon, 9)
-    expect(geographicViewOf(frame(18, 800, 600), plane).zoom).toBeCloseTo(18, 6)
+    expect(geographicViewAt(frame(18, 800, 600), plane).zoom).toBeCloseTo(18, 6)
   })
 
   it('reads the zoom of a view far from the plane origin at the origin latitude', () => {
     const farPlane = createSessionPlane({ lon: 13, lat: 23 })
     const oslo = farPlane.toPlane({ lon: 10.75, lat: 59.91 })
     const scale = mapZoomToStageScale(17, farPlane.origin.lat)
-    const view = geographicViewOf({
+    const view = geographicViewAt({
       viewport: { x: 400 - oslo.x * scale, y: 300 - oslo.y * scale, scale },
       screenSize: { width: 800, height: 600 },
     }, farPlane)
