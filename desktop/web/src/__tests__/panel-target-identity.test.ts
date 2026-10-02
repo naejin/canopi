@@ -2,11 +2,12 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { hoveredPanelTargets, selectedPanelTargets } from '../app/panel-targets/state'
 import {
   MANUAL_TARGET,
-  NONE_TARGET,
   targetIdentity,
   type TargetSceneInput,
 } from '../target'
 import type { PanelTarget } from '../types/design'
+
+const NONE_TARGET = { kind: 'none' } as const
 
 function createScene(overrides: Partial<TargetSceneInput> = {}): TargetSceneInput {
   return {

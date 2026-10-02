@@ -45,7 +45,6 @@ export interface TargetResolution {
 }
 
 export const MANUAL_TARGET: Target = { kind: 'manual' }
-export const NONE_TARGET: Target = { kind: 'none' }
 
 export function speciesTarget(canonicalName: string): SpeciesTarget {
   return { kind: 'species', canonical_name: canonicalName }
