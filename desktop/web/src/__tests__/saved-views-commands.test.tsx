@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import { appCommandGraphChromeProjection, handleAppCommandKeyDown } from '../commands/registry'
+import { appCommandGraphChromeProjection } from '../commands/registry'
+import { installDesktopKeys } from './support/desktop-key-router'
+import { pressKey } from './support/key-router'
 import type { MenuAction, MenuDefinition, MenuEntry } from '../commands/registry'
 import {
   closeManageViewsDialog,
@@ -193,14 +195,19 @@ describe('saved views in the App Command Graph', () => {
   it('keeps app shortcuts from acting under an open saved-view dialog', () => {
     open(design([POND]))
     mountCanvas()
-    const redo = () => new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, shiftKey: true })
+    const redo = (): boolean => pressKey({ key: 'z', ctrlKey: true, shiftKey: true }).defaultPrevented
+    const keys = installDesktopKeys()
 
-    openSaveViewDialog()
-    expect(handleAppCommandKeyDown(redo())).toBe(false)
-    closeSaveViewDialog()
+    try {
+      openSaveViewDialog()
+      expect(redo()).toBe(false)
+      closeSaveViewDialog()
 
-    openManageViewsDialog()
-    expect(handleAppCommandKeyDown(redo())).toBe(false)
+      openManageViewsDialog()
+      expect(redo()).toBe(false)
+    } finally {
+      keys.dispose()
+    }
   })
 })
 

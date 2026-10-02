@@ -22,7 +22,6 @@ export {
   stepsShowingView,
   storyUndo,
   registerStoryUndoToast,
-  runStoryUndoShortcut,
   undoStoryDelete,
   useCurrentViewForStep,
   type StoryUndo,

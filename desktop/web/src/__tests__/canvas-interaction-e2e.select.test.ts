@@ -1904,12 +1904,18 @@ describe('SceneInteractionSession', () => {
     openContextMenu({ x: 0, y: 0 })
     expect(contextMenuHost.opened).toHaveLength(1)
 
+    // A control keeps the key; with nothing focused the map takes it (the canvas-focus scope, spec §3.6).
     contextMenuHost.reset()
-    container.blur()
-    document.body.focus()
-    events.keyDown({ key: 'F10', shiftKey: true, cancelable: true, target: document.body })
+    const button = document.createElement('button')
+    document.body.append(button)
+    button.focus()
+    events.keyDown({ key: 'F10', shiftKey: true, cancelable: true, target: button })
     expect(contextMenuHost.current).toBeNull()
+    button.remove()
+    events.keyDown({ key: 'F10', shiftKey: true, cancelable: true, target: document.body })
+    expect(contextMenuHost.current?.selection?.editableTargets).toEqual([zoneTarget('zone-1')])
 
+    contextMenuHost.reset()
     container.focus()
     events.keyDown({ key: 'F10', shiftKey: true, cancelable: true, target: container })
     expect(contextMenuHost.current?.selection?.editableTargets).toEqual([zoneTarget('zone-1')])

@@ -1,16 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  canvasCommandDefinitionForShortcut,
   createCanvasCommandProjection,
   type CanvasCommandIntentAdapter,
   type CanvasCommandProjection,
   type CanvasCommandProjectionState,
-  type CanvasCommandShortcutInput,
 } from '../app/canvas-commands'
 import { ariaKeyShortcuts, formatShortcut } from '../app/shell-commands/shortcut-text'
-
-const canvasCommandIdForShortcut = (input: CanvasCommandShortcutInput) =>
-  canvasCommandDefinitionForShortcut(input)?.commandId ?? null
 
 /** Every tool, in rail order. */
 const projectedCanvasTools = (projection: CanvasCommandProjection) =>
@@ -58,14 +53,6 @@ const KEY_NAMES: Record<string, string> = {
 }
 const tagged = (k: string) => KEY_NAMES[k] ?? `t:${k}`
 
-const key = (value: string, modifiers: Partial<{ ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean; code: string }> = {}) => ({
-  key: value,
-  ctrlKey: false,
-  metaKey: false,
-  shiftKey: false,
-  altKey: false,
-  ...modifiers,
-})
 
 describe('Canvas Command Projection', () => {
   it('owns the tool rail groups and single keys from the Menus board', () => {
@@ -82,34 +69,6 @@ describe('Canvas Command Projection', () => {
       { id: 'annotate', heading: undefined, tools: [['text', 'T'], ['measurement-guide', 'M']] },
     ])
     expect(projectedCanvasTools(projection).every((tool) => tool.ariaShortcut === tool.shortcut)).toBe(true)
-  })
-
-  it('matches single keys, Shift toggles and Ctrl edits without confusing them', () => {
-    expect(canvasCommandIdForShortcut(key('z'))).toBe('canvas.tool.polygon')
-    expect(canvasCommandIdForShortcut(key('z', { ctrlKey: true }))).toBe('edit.undo')
-    expect(canvasCommandIdForShortcut(key('Z', { metaKey: true, shiftKey: true }))).toBe('edit.redo')
-    expect(canvasCommandIdForShortcut(key('y', { ctrlKey: true }))).toBe('edit.redo')
-    expect(canvasCommandIdForShortcut(key('z', { ctrlKey: true, metaKey: true }))).toBeNull()
-    expect(canvasCommandIdForShortcut(key('z', { ctrlKey: true, altKey: true }))).toBeNull()
-    expect(canvasCommandIdForShortcut(key('G', { shiftKey: true }))).toBe('canvas.toggleGrid')
-    expect(canvasCommandIdForShortcut(key('g', { ctrlKey: true }))).toBe('canvas.groupSelected')
-    expect(canvasCommandIdForShortcut(key('G', { ctrlKey: true, shiftKey: true }))).toBe('canvas.ungroupSelected')
-    expect(canvasCommandIdForShortcut(key('F', { shiftKey: true }))).toBe('view.fitToDesign')
-    expect(canvasCommandIdForShortcut(key('0', { ctrlKey: true }))).toBe('view.fitToDesign')
-    expect(canvasCommandIdForShortcut(key('=', { ctrlKey: true }))).toBe('view.zoomIn')
-    expect(canvasCommandIdForShortcut(key('+', { ctrlKey: true, shiftKey: true }))).toBe('view.zoomIn')
-    expect(canvasCommandIdForShortcut(key('-', { ctrlKey: true }))).toBe('view.zoomOut')
-    expect(canvasCommandIdForShortcut(key('k', { ctrlKey: true }))).toBe('view.searchPlace')
-    expect(canvasCommandIdForShortcut(key('f', { ctrlKey: true }))).toBeNull()
-    expect(canvasCommandIdForShortcut(key('A', { ctrlKey: true, shiftKey: true }))).toBe('canvas.selectSameSpecies')
-    expect(canvasCommandIdForShortcut(key('Backspace'))).toBe('canvas.deleteSelected')
-    expect(canvasCommandIdForShortcut(key('E', { shiftKey: true }))).toBeNull()
-    expect(canvasCommandIdForShortcut(key('r', { ctrlKey: true, altKey: true }))).toBe('canvas.rotateSelected')
-    // macOS Option changes the character (⌥R is ®); the physical key still names the shortcut.
-    expect(canvasCommandIdForShortcut(key('®', { metaKey: true, altKey: true, code: 'KeyR' }))).toBe('canvas.rotateSelected')
-    expect(canvasCommandIdForShortcut(key('r', { ctrlKey: true }))).toBeNull()
-    // AltGr (Ctrl Alt) typing a character on Windows or Linux is not the shortcut.
-    expect(canvasCommandIdForShortcut(key('¶', { ctrlKey: true, altKey: true, code: 'KeyR' }))).toBeNull()
   })
 
   it('shows shortcuts with spaces and localized key names, and exposes both modifiers to assistive tech', () => {
@@ -172,10 +131,9 @@ describe('Canvas Command Projection', () => {
     expect(rotate).toMatchObject({ commandId: 'canvas.rotateSelected', label: 'menu.edit.rotate', ariaShortcut: 'Control+Alt+R Meta+Alt+R' })
     rotate.action()
     expect(intents.edit).toHaveBeenCalledWith('rotate')
-    // Deselect shows Esc, which the map's own Esc chain handles: no key routes to it here.
+    // Deselect shows Esc, which the map's own Esc chain handles: no keymap row routes to it (keymap.test.ts).
     const deselect = selected.editActions.find((edit) => edit.id === 'deselect')!
     expect(deselect).toMatchObject({ commandId: 'canvas.clearSelection', label: 'menu.edit.deselect', shortcut: 'shortcutKeys.escape', ariaShortcut: 'Escape' })
-    expect(canvasCommandIdForShortcut(key('Escape'))).toBeNull()
     // Unlock all needs no selection, only a locked object somewhere in the Design.
     const unlockAll = createCanvasCommandProjection({ state: state({ lockedObjectsPresent: true }), intents: intentAdapter(), translate: (k) => k })
       .editActions.find((edit) => edit.id === 'unlock-all')!

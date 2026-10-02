@@ -1,6 +1,5 @@
 import { installPlaceSearchSession } from "../app/geocoding/place-search-session";
 import { installToolRailLearning } from "../app/tool-rail/learning";
-import { installFocusRegionKeys } from "../app/shell/focus-regions";
 import { installSettingsProjection } from "../app/settings/projection";
 import { initTheme } from "../utils/theme";
 import { registerDesignOpenFailurePresenter } from "../app/document-session/open-failure";
@@ -56,13 +55,11 @@ export function bootstrapPlatform(): void {
   registerDesignOpenFailurePresenter(showBrowserShellNotice);
   const disposePlaceSearchSession = installPlaceSearchSession();
   const disposeToolRailLearning = installToolRailLearning();
-  const disposeFocusRegionKeys = installFocusRegionKeys();
 
   disposePlatformBootstrap = () => {
     if (disposed) return;
     disposed = true;
     registerDesignOpenFailurePresenter(null);
-    disposeFocusRegionKeys();
     disposeToolRailLearning();
     disposePlaceSearchSession();
     uninstallContinuousSave();

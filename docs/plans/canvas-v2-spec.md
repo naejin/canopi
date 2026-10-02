@@ -1440,7 +1440,7 @@ export function chordOf(e: KeyboardEventLike, platform: Pick<InputPlatform, 'os'
 
 // app/keyboard/keymap.ts
 export type KeyScope =
-  | 'global'          // every focus class except modal; in text only with worksInTextFields (Ctrl+K, Ctrl+S, F1, F6)
+  | 'global'          // every focus class except modal; in text only with worksInTextFields (every shell chord, Ctrl+K)
   | 'command'         // anywhere except text fields and dialogs: tool letters, Delete, [ ], N, Shift+N, Shift+L, Ctrl+Z…
   | 'view-arrows'     // Shift+←/→/↑: like 'command', but not inside an arrow-owning widget
   | 'canvas-focus'    // focus on the map host (not text inside it) or <body>: plain and mod arrows, Enter, Space, Backspace, F2, + / −, Menu
@@ -1452,7 +1452,7 @@ export interface KeymapRow {
   readonly chords: readonly KeyChord[]
   readonly scope: KeyScope
   readonly singleKey: 'follows-switch' | 'always-on' | 'n/a'  // the single-key shortcut setting
-  readonly worksInTextFields?: boolean        // 'global' rows only: Ctrl+K, Ctrl+S, F1, F6, Ctrl+F (finder)
+  readonly worksInTextFields?: boolean        // also runs in a text field: every shell row but a single key (F2 too), and Ctrl+K
   readonly worksInModal?: boolean             // Desktop's help.commandPalette only: its sink closes the open palette and refuses it
                                               // under any other modal; F1 does not run in a modal
   /** A canvas row whose port command() returns false runs this instead (F2 → file.rename; Backspace's remove-last →
@@ -1547,7 +1547,7 @@ Resolution order for one keydown. Capture listener:
 
 Bubble listener, skipped for a key already `defaultPrevented` (an element handler of a focused widget handled it; a widget that calls `stopPropagation` hides the key from these steps, as it hides it from the shell rows today; today's widgets stop propagation on Escape (`InspectionLens.tsx:119`, `PlantColorMenu.tsx:243`, `PlantSymbolMenu.tsx:122`, `PdfPageEditor.tsx:105` and about 15 more), `ToolCard.tsx:240` also on Enter, `SegmentedControl.tsx:52-53` on arrows, Home and End):
 5. Modal: `worksInModal` rows only; nothing else. The modal's element handlers (the story presenter's and the PDF page editor's own `onKeyDown` among them) have already run.
-6. `global` rows (in every class but `modal`; in `text` only with `worksInTextFields`). Ctrl F is a global row whose command asks the open panel's plant finder first and otherwise opens Edit › Find plants (today `shortcuts/manager.ts:15-20`).
+6. In `text`, the rows with `worksInTextFields`: every shell row but a single key, F2 (rename the Design) included, as before the router, and Ctrl+K; canvas rows stay out. In every other class but `modal`, the `global` rows. Ctrl F is a global row whose command asks the open panel's plant finder first and otherwise opens Edit › Find plants (today `shortcuts/manager.ts:15-20`).
 7. Non-modal pushed scopes: the Stories Undo toast (Ctrl Z while the toast is on screen, today `app/stories/actions.ts` `runStoryUndoShortcut`). Popovers and menus are not scopes: their Esc is an Esc layer (step 8), and their arrows are handled by their own element (arrow-owning widgets).
 8. Esc runs the Esc chain (popovers 100, canvas menu 80, … §3.7). An open text entry never reaches this step: its own element handler cancels it first, and focus class `text` keeps the canvas layers off; the selection layer also needs focus class `map` or `body` (U10).
 9. Keymap match: `command` rows in `map`, `body` and `other`; `view-arrows` the same except in an arrow-owning widget; `canvas-focus` only in `map` and `body`.
@@ -1860,7 +1860,7 @@ The Scope column is built in F (no legacy rebuild, U7); until then the keyboard 
 | Ctrl+Alt+R | rotate the selection | `command` | n/a | unchanged |
 | Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y | undo, redo; during a polygon draft they undo and redo corners | `command` | n/a | unchanged |
 | Ctrl+X, C, V, D, A, Shift+A, G, Shift+G, Shift+L | cut, copy, paste, duplicate, select all, same species, group, ungroup, lock | `command` | n/a | unchanged |
-| Ctrl+K, Ctrl+S, F1, F6 | place search, save, shortcuts, next region; work in text fields | `global` | n/a | unchanged |
+| Ctrl+K, Ctrl+S, F1, F6 | place search, save, shortcuts, next region; work in text fields, as every shell shortcut but a single key does (F2 included) | `global` | n/a | unchanged |
 | Tab, Shift+Tab | focus navigation | browser | n/a | unchanged |
 
 Tool letters and where the tools live:
@@ -1924,7 +1924,7 @@ The priority table is built in F, the popover layers in the same window as the c
 
 | Surface | Rule |
 |---|---|
-| Text entry (note editor, the tool-card spacing field) | Focus class `text`: letters type; single-key shortcuts, Delete, arrows, Shift+arrows, N and Shift+N do not reach the canvas; `global` rows with `worksInTextFields` still work. Enter commits, Shift+Enter adds a line, Esc cancels. From phase F both are IME-safe in the entry itself: `chrome/text-entry-host.ts` ignores Enter and Esc while `isComposing || keyCode === 229`, because its element listener runs before the key router's guard. Any press on the map outside the entry, primary, middle or right, commits it first (today: `_pointerDownWhenSettled` commits on buttons 0 and 1, then focuses the host; the map taking focus commits an entry that holds focus on its blur, and the host submits one whose blur commit was refused; every phase), so a middle- or right-drag pan or a Shift+right- or Shift+middle-drag turn closes it; a primary press that commits a new note's entry places no note and reaches no tool (today, §3.2). Space held in the entry types a space and arms no pan (fixture G11), so a Space-drag never starts from it; while a new note's entry is open without focus (the frame before it takes focus, or after a refused blur commit), Space reaching the map arms no pan either, as today's Text adapter (§1.4 "Releases"). A wheel over the map keeps the entry open and the entry follows its note; a key turn or reset cannot reach the map from the entry (focus class `text`). A still right-click (a `menu-request`) commits the entry first, then opens the menu. Esc in the entry is the entry's own element handler, which runs before the chain; no canvas pan or turn is live while it is open. Wheel over the entry itself is not handled. The textarea is drawn at `rotationDeg − bearing`. |
+| Text entry (note editor, the tool-card spacing field) | Focus class `text`: letters type; single-key shortcuts, Delete, arrows, Shift+arrows, N and Shift+N do not reach the canvas; the rows with `worksInTextFields` (every shell shortcut but a single key, F2 included) still work. Enter commits, Shift+Enter adds a line, Esc cancels. From phase F both are IME-safe in the entry itself: `chrome/text-entry-host.ts` ignores Enter and Esc while `isComposing || keyCode === 229`, because its element listener runs before the key router's guard. Any press on the map outside the entry, primary, middle or right, commits it first (today: `_pointerDownWhenSettled` commits on buttons 0 and 1, then focuses the host; the map taking focus commits an entry that holds focus on its blur, and the host submits one whose blur commit was refused; every phase), so a middle- or right-drag pan or a Shift+right- or Shift+middle-drag turn closes it; a primary press that commits a new note's entry places no note and reaches no tool (today, §3.2). Space held in the entry types a space and arms no pan (fixture G11), so a Space-drag never starts from it; while a new note's entry is open without focus (the frame before it takes focus, or after a refused blur commit), Space reaching the map arms no pan either, as today's Text adapter (§1.4 "Releases"). A wheel over the map keeps the entry open and the entry follows its note; a key turn or reset cannot reach the map from the entry (focus class `text`). A still right-click (a `menu-request`) commits the entry first, then opens the menu. Esc in the entry is the entry's own element handler, which runs before the chain; no canvas pan or turn is live while it is open. Wheel over the entry itself is not handled. The textarea is drawn at `rotationDeg − bearing`. |
 | PDF page editor (`components/canvas-pdf/PdfPageEditor.tsx`) | A separate surface with its own pointer handling and its own element key handler (no pushed scope); the canvas input pipeline does not run there. See the table below. |
 | Modal dialogs | Only the modal's element handlers and `worksInModal` rows (§1.6 step 5). |
 | Story presenter | A modal (`StoryPresenter.tsx:36` holds the modal layer) whose own root `onKeyDown` handles its keys (no pushed scope): Space, arrows and Esc navigate the story; no canvas keys (fixture I12). Each step restores its bearing. |

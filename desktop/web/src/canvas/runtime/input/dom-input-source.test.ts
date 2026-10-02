@@ -71,10 +71,7 @@ describe('createDomInputSource', () => {
       documentAdd: vi.spyOn(document, 'addEventListener'),
       documentRemove: vi.spyOn(document, 'removeEventListener'),
     }
-    const source = createDomInputSource(deps({
-      legacyKeys: { keydown: vi.fn(), keyup: vi.fn() },
-      listensToRulers: true,
-    }))
+    const source = createDomInputSource(deps({ listensToRulers: true }))
     const dispose = attachRecording(source)
 
     const hostAdds = listenerCalls(spies.hostAdd)
@@ -95,8 +92,6 @@ describe('createDomInputSource', () => {
       ['pointermove', true],
       ['pointerup', true],
       ['pointercancel', true],
-      ['keydown', true],
-      ['keyup', false],
       ['blur', false],
     ])
     expect(listenerCalls(spies.documentAdd).map(([type, , options]) => [type, captureFlag(options)])).toEqual([['pointerdown', true]])
@@ -117,7 +112,7 @@ describe('createDomInputSource', () => {
     for (const spy of Object.values(spies)) spy.mockRestore()
   })
 
-  it('installs no key listener without its sink, and no ruler listener unless told to listen', () => {
+  it('installs no key listener (the key router owns them), and no ruler listener unless told to listen', () => {
     const windowAdd = vi.spyOn(window, 'addEventListener')
     const documentAdd = vi.spyOn(document, 'addEventListener')
     const dispose = attachRecording(createDomInputSource(deps()))
@@ -539,23 +534,6 @@ describe('createDomInputSource', () => {
     expect(events.pointerCapture.releaseCalls.mock.calls).toEqual([[6], [5]])
     expect(events.pointerCapture.has(5)).toBe(false)
     expect(received.map((input) => input.kind)).toEqual(['down', 'down'])
-  })
-
-  it('hands the legacy key sink each key event as the current event', () => {
-    const seen: Array<[string, Event | null]> = []
-    const source = createDomInputSource(deps({
-      legacyKeys: {
-        keydown: (event) => seen.push([`down:${event.key}`, source.currentEvent()]),
-        keyup: (event) => seen.push([`up:${event.key}`, source.currentEvent()]),
-      },
-    }))
-    const dispose = attachRecording(source)
-    const down = events.keyDown('a')
-    const up = events.keyUp('a')
-
-    expect(seen).toEqual([['down:a', down], ['up:a', up]])
-    expect(source.currentEvent()).toBeNull()
-    dispose()
   })
 
   it('delivers a tick when a timer effect fires', () => {

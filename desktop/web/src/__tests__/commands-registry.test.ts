@@ -23,8 +23,10 @@ import {
   appCommandGraphPanelProjection,
   appCommandGraphToolbarProjection,
   commandPaletteOpen,
-  handleAppCommandKeyDown,
 } from '../commands/registry'
+import type { KeyRouterHandle } from '../app/keyboard/key-router'
+import { installDesktopKeys } from './support/desktop-key-router'
+import { pressKey } from './support/key-router'
 import type { AppCommandId } from '../commands/graph/catalog'
 import { flattenMenuActions } from '../app/shell-commands/menus'
 import { currentDesign } from '../app/document-session/store'
@@ -70,7 +72,10 @@ describe('command registry canvas tool switching', () => {
     expectTypeOf<'file.downloadCanopi'>().not.toMatchTypeOf<AppCommandId>()
   })
 
+  let keys: KeyRouterHandle
+
   beforeEach(() => {
+    keys = installDesktopKeys()
     activeTool.value = 'select'
     activePanel.value = 'canvas'
     sidePanel.value = null
@@ -87,6 +92,7 @@ describe('command registry canvas tool switching', () => {
   })
 
   afterEach(() => {
+    keys.dispose()
     vi.restoreAllMocks()
     setCurrentCanvasSession(null)
     activeTool.value = 'select'
@@ -565,21 +571,10 @@ describe('command registry canvas tool switching', () => {
       },
     })
     const input = document.createElement('input')
-    let handled = true
-    input.addEventListener('keydown', (event) => {
-      handled = handleAppCommandKeyDown(event)
-    })
     document.body.append(input)
 
-    const event = new KeyboardEvent('keydown', {
-      key: 'z',
-      ctrlKey: true,
-      bubbles: true,
-      cancelable: true,
-    })
-    input.dispatchEvent(event)
+    const event = pressKey({ key: 'z', ctrlKey: true }, input)
 
-    expect(handled).toBe(false)
     expect(event.defaultPrevented).toBe(false)
     expect(undo).not.toHaveBeenCalled()
     input.remove()
@@ -588,13 +583,7 @@ describe('command registry canvas tool switching', () => {
   it('cycles View › Labels with N on the map, never while typing', () => {
     designSessionFixture.file = { ...emptyDesign() }
     mountCanvasCommandSurface({})
-    const keyDown = (target: EventTarget) => {
-      const event = new KeyboardEvent('keydown', { key: 'n', bubbles: true, cancelable: true })
-      let handled = false
-      target.addEventListener('keydown', () => { handled = handleAppCommandKeyDown(event) }, { once: true })
-      target.dispatchEvent(event)
-      return handled
-    }
+    const keyDown = (target: EventTarget) => pressKey({ key: 'n' }, target).defaultPrevented
     const labels = () => (currentDesign.value?.extra?.plant_display as { labels?: string } | undefined)?.labels ?? 'names'
 
     expect(keyDown(document.body)).toBe(true)
@@ -615,8 +604,7 @@ describe('command registry canvas tool switching', () => {
     designSessionFixture.file = { ...emptyDesign() }
     const undo = vi.fn()
     mountCanvasCommandSurface({ history: { undo, canUndo: signal(true) } } as never)
-    const keyDown = (init: KeyboardEventInit) =>
-      handleAppCommandKeyDown(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }))
+    const keyDown = (init: KeyboardEventInit) => pressKey(init).defaultPrevented
     const toolShortcut = () => flattenMenuActions(menus()).find((entry) => entry.id === 'canvas.tool.polygon')!.shortcut
     const fitShortcut = () => flattenMenuActions(menus()).find((entry) => entry.id === 'view.fitToDesign')!.shortcut
     const labels = () => (currentDesign.value?.extra?.plant_display as { labels?: string } | undefined)?.labels ?? 'names'
@@ -649,8 +637,8 @@ describe('command registry canvas tool switching', () => {
   it('ignores app shortcuts and the palette while the save dialog is open', async () => {
     const openSpy = vi.spyOn(documentActions, 'openDesign').mockResolvedValue(undefined)
     const keyDown = (init: KeyboardEventInit) => {
-      const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })
-      return { handled: handleAppCommandKeyDown(event), event }
+      const event = pressKey(init)
+      return { handled: event.defaultPrevented, event }
     }
     const decision = requestSaveProblemDecision({ kind: 'revert' })
 
@@ -788,8 +776,7 @@ describe('command registry canvas tool switching', () => {
   it('routes F2, Ctrl , and F1 to the title bar and dialogs from anywhere', () => {
     designSessionFixture.file = { ...emptyDesign() }
     const before = designRenameRequest.value
-    const keyDown = (init: KeyboardEventInit) =>
-      handleAppCommandKeyDown(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }))
+    const keyDown = (init: KeyboardEventInit) => pressKey(init).defaultPrevented
 
     expect(keyDown({ key: 'F2' })).toBe(true)
     expect(designRenameRequest.value).toBe(before + 1)
@@ -803,8 +790,7 @@ describe('command registry canvas tool switching', () => {
 
   it('opens panels with Ctrl 1–8 and never with a bare digit', () => {
     designSessionFixture.file = { ...emptyDesign() }
-    const keyDown = (init: KeyboardEventInit) =>
-      handleAppCommandKeyDown(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }))
+    const keyDown = (init: KeyboardEventInit) => pressKey(init).defaultPrevented
 
     expect(keyDown({ key: '1' })).toBe(false)
     expect(sidePanel.value).toBe(null)
@@ -819,9 +805,7 @@ describe('command registry canvas tool switching', () => {
     const before = placeSearchFocusRequest.value
     const input = document.createElement('input')
     document.body.append(input)
-    const event = new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true, cancelable: true })
-    input.addEventListener('keydown', (keyEvent) => { handleAppCommandKeyDown(keyEvent) })
-    input.dispatchEvent(event)
+    const event = pressKey({ key: 'k', ctrlKey: true }, input)
 
     expect(event.defaultPrevented).toBe(true)
     expect(placeSearchFocusRequest.value).toBe(before + 1)

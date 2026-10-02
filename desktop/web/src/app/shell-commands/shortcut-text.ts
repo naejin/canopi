@@ -4,16 +4,6 @@
  * key. `Plus` and `Minus` name the zoom keys so the separator stays unambiguous.
  */
 
-export interface ShortcutInput {
-  readonly key: string
-  readonly ctrlKey: boolean
-  readonly metaKey: boolean
-  readonly shiftKey: boolean
-  readonly altKey: boolean
-  /** The physical key (`KeyR`); macOS Option turns `key` into another character. */
-  readonly code?: string
-}
-
 interface ParsedShortcut {
   readonly ctrl: boolean
   readonly shift: boolean
@@ -82,23 +72,6 @@ export function ariaKeyShortcuts(shortcut: string): string {
     .filter(Boolean)
     .join('+')
   return parsed.ctrl ? `Control+${rest} Meta+${rest}` : rest
-}
-
-/** Whether a key event is this shortcut. Ctrl and Cmd are the same modifier. */
-export function matchesShortcut(shortcut: string, input: ShortcutInput): boolean {
-  const parsed = parseShortcut(shortcut)
-  if (!parsed.key) return false
-  const primary = parsed.ctrl
-    ? input.ctrlKey !== input.metaKey
-    : !input.ctrlKey && !input.metaKey
-  if (!primary || input.altKey !== parsed.alt) return false
-  if (parsed.key === 'Plus') return input.key === '+' || input.key === '='
-  if (parsed.key === 'Minus') return (input.key === '-' || input.key === '_') && !input.shiftKey
-  if (input.shiftKey !== parsed.shift) return false
-  if (input.key.toLowerCase() === parsed.key.toLowerCase()) return true
-  // Option on macOS types another character (⌘⌥R types ®): match that letter by its key.
-  // Only with Cmd, so AltGr (Ctrl Alt elsewhere) typing a character never runs a command.
-  return parsed.alt && input.metaKey && /^[A-Z]$/i.test(parsed.key) && input.code === `Key${parsed.key.toUpperCase()}`
 }
 
 /**

@@ -3,10 +3,10 @@ import { bootstrapPlatform } from "#platform";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles/global.css";
 import { createWebAppCatalog, createWebShellShortcutSource, WebApp } from "./web/WebApp";
-import { installWebCanvasShortcuts } from "./web/canvas-shortcuts";
+import { installWebKeyRouter } from "./web/browser-shell-commands";
 
 bootstrapPlatform();
 const catalog = createWebAppCatalog();
-installWebCanvasShortcuts(window, createWebShellShortcutSource(catalog));
+installWebKeyRouter(createWebShellShortcutSource(catalog));
 
 render(<WebApp catalog={catalog} />, document.getElementById("app")!);

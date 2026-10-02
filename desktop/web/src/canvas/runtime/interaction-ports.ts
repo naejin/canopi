@@ -45,11 +45,9 @@ export interface DomInputSourceDeps {
   readonly host: HTMLElement                                    // the map host; listeners attach here and on window (0B: from attach, as today; from F only during an owned session)
   readonly platform: InputPlatform
   readonly bindings: () => Bindings                             // CURRENT_BINDINGS in production
-  readonly keys: { readonly physicalCtrl: () => boolean; readonly lastKeyboardMenuAt: () => number | null }   // from the KeyRouter
+  readonly keys: { readonly physicalCtrl: () => boolean; readonly lastKeyboardMenuAt: () => number | null }   // the keyboard port's, which the key router feeds
   readonly clock: () => number
   readonly timers: { set(atMs: number, cb: () => void): number; clear(id: number): void }
-  /** 0B only: today's window keydown (capture) and keyup (bubble), handed to keyboard-port.ts; 0C removes it. */
-  readonly legacyKeys?: { keydown(e: KeyboardEvent): void; keyup(e: KeyboardEvent): void }
   /** True when the session runs ruler drags: the source listens at document capture for ruler pointerdowns and hands them
    *  on as presses on a 'ruler' target. The session finds the pressed ruler's overlay and lands its guide itself (north-up
    *  only); the source carries no guide port. */

@@ -321,14 +321,33 @@ export interface CanvasDocumentSurface {
 export type CanvasEscapeLayer = 'gesture' | 'nudge-series' | 'tool-transient' | 'tool' | 'selection'
 
 export interface CanvasKeyboardPort {
-  escapeLayers(): readonly CanvasEscapeLayer[]            // live canvas layers now
-  escape(layer: CanvasEscapeLayer): void
+  escapeLayers(): readonly CanvasEscapeLayer[]            // live canvas layers now, in the order an Esc runs them
+  /** False when the layer consumed nothing, so the next one runs. */
+  escape(layer: CanvasEscapeLayer): boolean
   /** What the next Esc will do, for the tool-card hint (same source as behaviour). */
   describeEscape(): CanvasEscapeLayer | null
-  command(c: CanvasKeyCommand): boolean                   // false when nothing consumed it
-  keyState(s: { readonly space: boolean; readonly mods: Modifiers }): void
+  /** False when nothing consumed it. confirm, remove-last, rotate-held, edit-text and context-menu return false in overview;
+   *  edit-text only under Select, and confirm under Select edits the one selected note (Enter). context-menu stamps the
+   *  keyboard-menu echo with the time keyState recorded for a Menu key or Shift+F10, only when that was the last keydown. */
+  command(c: CanvasKeyCommand): boolean
+  /** The key router's first call for every keydown (capture) and keyup: the nudge commit on any key but an arrow, a
+   *  modifier or Esc, the physical Ctrl, the Menu key's time and the Space hold (code Space, not text, and a live pointer
+   *  session or not a control). The verdict tells the router what to do; the port never touches the event. */
+  keyState(k: CanvasKeyState): CanvasKeyVerdict
   readonly host: HTMLElement
 }
+export interface CanvasKeyState {
+  readonly type: 'keydown' | 'keyup'
+  readonly key: string             // 'Control' sets the physical Ctrl; arrows, modifiers and Escape keep a nudge series
+  readonly code: string            // 'Space'
+  readonly mods: Modifiers
+  readonly timeStamp: number       // KeyboardEvent.timeStamp: the clock of the contextmenu echo
+  readonly text: boolean           // the target is a text field
+  readonly onCanvas: boolean       // focus is the map host (not a control in it) or nothing (app/keyboard/target-class.ts)
+}
+/** held: the router prevents and Space is held for panning, nothing else runs; pass-live and pass: the router goes on, with a
+ *  pointer session live or not. */
+export type CanvasKeyVerdict = 'held' | 'pass-live' | 'pass'
 
 /** The router reaches the live session's port here: keyboard-port.ts implements it, and workspace-runtime-composition.ts
  *  exposes a forwarding port that reaches the session's once it exists (spec §1.2a, §1.6). */
@@ -336,7 +355,7 @@ export interface CanvasRuntimeSurfaces {
   readonly commands: CanvasCommandSurface
   readonly queries: CanvasQuerySurface
   readonly documents: CanvasDocumentSurface
-  readonly keyboard: CanvasKeyboardPort          // canvas/session.ts exports currentCanvasKeyboardPort (Keyboard, 0C)
+  readonly keyboard: CanvasKeyboardPort          // canvas/session.ts exports currentCanvasKeyboardPort
 }
 
 export type CanvasKeyCommand =

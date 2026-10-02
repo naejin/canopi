@@ -21,7 +21,10 @@ import { SaveProblemDialog } from '../components/shared/SaveProblemDialog'
 import type { MenuDefinition } from '../app/shell-commands/menus'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { createSessionPlane } from '../canvas/session-plane'
-import { commandPaletteOpen, handleAppCommandKeyDown } from '../commands/registry'
+import { commandPaletteOpen } from '../commands/registry'
+import type { KeyRouterHandle } from '../app/keyboard/key-router'
+import { installDesktopKeys } from './support/desktop-key-router'
+import { pressKey } from './support/key-router'
 import { CommandPalette } from '../components/shared/CommandPalette'
 import { KeyboardShortcutsDialog } from '../components/shared/KeyboardShortcutsDialog'
 import { PanelRail } from '../components/shared/PanelRail'
@@ -88,8 +91,10 @@ const DIALOGS = [
 
 describe('Modal layer', () => {
   let container: HTMLDivElement
+  let keys: KeyRouterHandle
 
   beforeEach(() => {
+    keys = installDesktopKeys()
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
@@ -104,6 +109,7 @@ describe('Modal layer', () => {
   })
 
   afterEach(() => {
+    keys.dispose()
     for (const dialog of DIALOGS) dialog.close()
     commandPaletteOpen.value = false
     render(null, container)
@@ -141,7 +147,7 @@ describe('Modal layer', () => {
       expect(view.getAttribute('aria-expanded')).toBe('false')
 
       // Nor does a workspace shortcut reach the Design under it.
-      expect(handleAppCommandKeyDown(new KeyboardEvent('keydown', { key: '3', ctrlKey: true }))).toBe(false)
+      expect(pressKey({ key: '3', ctrlKey: true }).defaultPrevented).toBe(false)
       expect(sidePanel.value).toBeNull()
 
       await act(async () => { dialog.close() })
@@ -159,10 +165,10 @@ describe('Modal layer', () => {
     await act(async () => { render(<><Workspace /><CommandPalette /></>, container) })
     const titleBar = container.querySelector<HTMLElement>('[data-workspace-title-bar]')!
     const view = titleBar.querySelector<HTMLButtonElement>('button[data-menu-id="view"]')!
-    const toggle = () => new KeyboardEvent('keydown', { key: 'P', ctrlKey: true, shiftKey: true, cancelable: true })
+    const toggle = (): boolean => pressKey({ key: 'P', ctrlKey: true, shiftKey: true }).defaultPrevented
 
     view.focus()
-    await act(async () => { expect(handleAppCommandKeyDown(toggle())).toBe(true) })
+    await act(async () => { expect(toggle()).toBe(true) })
     const input = container.querySelector<HTMLInputElement>('[role="combobox"]')!
     expect(commandPaletteOpen.value).toBe(true)
     expect(modalLayerOpen.value).toBe(true)
@@ -171,20 +177,20 @@ describe('Modal layer', () => {
     expect(document.activeElement).toBe(input)
 
     // A shell shortcut typed into the palette does not reach the Design.
-    expect(handleAppCommandKeyDown(new KeyboardEvent('keydown', { key: '3', ctrlKey: true }))).toBe(false)
+    expect(pressKey({ key: '3', ctrlKey: true }).defaultPrevented).toBe(false)
     expect(sidePanel.value).toBeNull()
     // F6 stays inside the palette.
     expect(cycleFocusRegion(1)).toBe(false)
 
     // The toggle still closes it, and focus goes back to the control that opened it.
-    await act(async () => { expect(handleAppCommandKeyDown(toggle())).toBe(true) })
+    await act(async () => { expect(toggle()).toBe(true) })
     expect(commandPaletteOpen.value).toBe(false)
     expect(modalLayerOpen.value).toBe(false)
     expect(titleBar.hasAttribute('inert')).toBe(false)
     expect(document.activeElement).toBe(view)
 
     // Escape from the palette's field closes it the same way.
-    await act(async () => { handleAppCommandKeyDown(toggle()) })
+    await act(async () => { toggle() })
     await act(async () => {
       container.querySelector<HTMLInputElement>('[role="combobox"]')!
         .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))

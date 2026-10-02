@@ -91,6 +91,37 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('arms the Space pan from the map or with nothing focused, never from a widget outside the map', () => {
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('select')
+    const before = { ...testView.viewport() }
+    // A focusable widget beside the map that is no control (the inspection lens preview, a plain list row).
+    const widget = document.createElement('div')
+    widget.setAttribute('role', 'group')
+    widget.tabIndex = 0
+    document.body.append(widget)
+    widget.focus()
+
+    const fromWidget = events.keyDown({ key: ' ', code: 'Space', cancelable: true, target: widget })
+    expect(fromWidget.defaultPrevented).toBe(false)
+    events.pointerDown({ x: 100, y: 100 })
+    events.pointerMove({ x: 130, y: 120 })
+    events.pointerUp({ x: 130, y: 120 })
+    events.keyUp({ key: ' ', code: 'Space', target: widget })
+    expect(testView.viewport()).toEqual(before)
+
+    widget.remove()
+    container.tabIndex = 0
+    container.focus()
+    expect(events.keyDown({ key: ' ', code: 'Space', cancelable: true, target: container }).defaultPrevented).toBe(true)
+    events.pointerDown({ x: 100, y: 100 })
+    events.pointerMove({ x: 130, y: 120 })
+    events.pointerUp({ x: 130, y: 120 })
+    events.keyUp({ key: ' ', code: 'Space', target: container })
+    expect(testView.viewport().x).toBeCloseTo(before.x + 30, 6)
+    session.dispose()
+  })
+
   describe('keyboard access to the map', () => {
     it('puts the map host in the Tab order with an accessible name and a description of its keys', () => {
       const session = createTestSession(createInteractionDeps(container, store, testView))

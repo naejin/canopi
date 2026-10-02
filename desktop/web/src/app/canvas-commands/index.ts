@@ -2,8 +2,6 @@ import {
   ariaKeyShortcuts,
   formatShortcut,
   isCharacterKeyShortcut,
-  matchesShortcut,
-  type ShortcutInput,
 } from '../shell-commands/shortcut-text'
 
 export type CanvasToolId =
@@ -395,18 +393,6 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     stateKey: 'rulersVisible',
   },
 ]
-
-export type CanvasCommandShortcutInput = ShortcutInput
-
-/** The canvas command a key event names, or null. Callers decide whether the map has focus. */
-export function canvasCommandDefinitionForShortcut(
-  input: CanvasCommandShortcutInput,
-  options: CanvasShortcutOptions = ALL_SHORTCUTS,
-): CanvasCommandDefinition | null {
-  return canvasCommandDefinitions.find((definition) =>
-    liveShortcuts(definition, options)?.some((shortcut) => matchesShortcut(shortcut, input)),
-  ) ?? null
-}
 
 const SELECTION_EDITS: ReadonlySet<CanvasEditAction> = new Set([
   'deselect',

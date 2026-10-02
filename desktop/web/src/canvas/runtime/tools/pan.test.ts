@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { handleAppCommandKeyDown } from '../../../commands/registry'
+import { installDesktopKeys } from '../../../__tests__/support/desktop-key-router'
+import { pressKey } from '../../../__tests__/support/key-router'
 import {
   createTestCanvasCommandSurface,
   createTestCanvasRuntimeSurfaces,
@@ -48,12 +49,14 @@ afterEach(() => {
 describe('Pan tool', () => {
   it('H arms Pan; a primary drag pans', () => {
     const { h, gestures } = panHarness()
-    // Today's key path: the app's command shortcut arms the tool through the canvas command surface.
+    // The key path: the Desktop key router's H row arms the tool through the canvas command surface.
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       commands: createTestCanvasCommandSurface({ tools: { setTool: (id: string) => h.arm(id as ToolId) } }),
     }))
 
-    expect(handleAppCommandKeyDown(new KeyboardEvent('keydown', { key: 'h', bubbles: true, cancelable: true }))).toBe(true)
+    const keys = installDesktopKeys()
+    expect(pressKey({ key: 'h' }).defaultPrevented).toBe(true)
+    keys.dispose()
 
     expect(h.host.activeTool.peek()).toBe('hand')
     expect(h.chrome.cursor).toBe('grab')

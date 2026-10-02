@@ -1,7 +1,7 @@
 // canvas/runtime/input/dom-input-source.ts
 //
 // Owns every DOM listener for canvas input: the map host's pointer, wheel, contextmenu, drag and focus events, today's
-// window pointer, blur and (0B only, `legacyKeys`) key listeners, and the ruler presses at document capture. It turns
+// window pointer and blur listeners, and the ruler presses at document capture (keys are the key router's, app/keyboard). It turns
 // each event into host-relative, classified fields for `normalise`, hands the raw input to the sink, and applies the
 // effects the sink sends back to the event being handled: prevent-default, stop-propagation, pointer capture, the drop
 // effect. Detaching releases every capture it still holds. A sink that throws on a press on the map, a release, a context menu, a dragover or a drop quarantines that event
@@ -184,22 +184,6 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   const onDragOver = dragHandler('dragover')
   const onDragLeave = dragHandler('dragleave')
   const onDrop = dragHandler('drop')
-  const onKeyDown = (event: KeyboardEvent): void => {
-    handling.push({ event, rect: null })
-    try {
-      deps.legacyKeys?.keydown(event)
-    } finally {
-      handling.pop()
-    }
-  }
-  const onKeyUp = (event: KeyboardEvent): void => {
-    handling.push({ event, rect: null })
-    try {
-      deps.legacyKeys?.keyup(event)
-    } finally {
-      handling.pop()
-    }
-  }
 
   function capture(pointerId: number, rect: HostRect | null): void {
     if (rect) sessionRects.set(pointerId, rect)
@@ -270,10 +254,6 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
         listen(window, 'pointermove', onPointerMove as EventListener, { capture: true })
         listen(window, 'pointerup', onPointerUp as EventListener, { capture: true })
         listen(window, 'pointercancel', onPointerCancel as EventListener, { capture: true })
-        if (deps.legacyKeys) {
-          listen(window, 'keydown', onKeyDown as EventListener, { capture: true })
-          listen(window, 'keyup', onKeyUp as EventListener)
-        }
         listen(window, 'blur', onBlur)
         listen(host, 'contextmenu', onContextMenu as EventListener)
         listen(host, 'wheel', onWheel as EventListener, { passive: false })

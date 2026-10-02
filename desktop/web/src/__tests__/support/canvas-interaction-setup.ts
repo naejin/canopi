@@ -23,7 +23,9 @@ import {
 } from './canvas-runtime-surfaces'
 import { createTestCanvasQuerySurface } from './canvas-query-surface'
 import { snapToGridEnabled, snapToGuidesEnabled } from '../../app/canvas-settings/signals'
-import { plantSpacingIntervalM } from '../../app/settings/state'
+import { plantSpacingIntervalM, singleKeyShortcuts } from '../../app/settings/state'
+import type { KeyRouterHandle } from '../../app/keyboard/key-router'
+import { installCanvasKeyRouter } from './key-router'
 import { t } from '../../i18n'
 import { planarToViewCamera, screenToGeo } from '../../canvas/runtime/view/camera-math'
 import { createSessionPlane } from '../../canvas/session-plane'
@@ -219,7 +221,6 @@ export function createInteractionDeps(
     | 'contextMenu'
     | 'publishToolGuidance'
     | 'nudge'
-    | 'readSingleKeyShortcuts'
   >>
     & { onSceneEditCommit?: (type: string) => void } = {},
 ): SceneInteractionTestDeps {
@@ -311,7 +312,6 @@ export function createInteractionDeps(
     render,
     readSnapToGridEnabled: () => snapToGridEnabled.value,
     readSnapToGuidesEnabled: () => snapToGuidesEnabled.value,
-    ...overrides.readSingleKeyShortcuts ? { readSingleKeyShortcuts: overrides.readSingleKeyShortcuts } : {},
     readPlantSpacingIntervalMeters: overrides.readPlantSpacingIntervalMeters ?? (() => plantSpacingIntervalM.value),
     commitPlantSpacingIntervalMeters: overrides.commitPlantSpacingIntervalMeters ?? ((meters) => {
       plantSpacingIntervalM.value = meters
@@ -729,6 +729,7 @@ export function installSceneInteractionFixture(
 
   let toolCardHost: HTMLDivElement
   let flushToolCard: () => void
+  let keyRouter: KeyRouterHandle
 
   function createTestSession(deps: SceneInteractionSessionDeps): SceneInteractionSession {
     const session = createSceneInteractionSession(deps)
@@ -808,11 +809,16 @@ export function installSceneInteractionFixture(
     snapToGridEnabled.value = false
     snapToGuidesEnabled.value = false
     plantSpacingIntervalM.value = 0.5
+    singleKeyShortcuts.value = true
+    // The app's key router, with the canvas rows only: keys reach the latest session's port as they do in the workspace.
+    keyRouter = installCanvasKeyRouter(() => sessions.at(-1)?.keyboard ?? null)
     assign({ container, testView, store, events, sessions, toolCardHost, flushToolCard })
   })
 
   afterEach(() => {
     renderedSession = null
+    keyRouter.dispose()
+    singleKeyShortcuts.value = true
     const disposalErrors: unknown[] = []
     for (const session of sessions.reverse()) {
       try {

@@ -47,7 +47,7 @@ const CANVAS_COMMAND_BOUNDARY_POLICIES = [
       'src/commands/graph/catalog.ts',
       'src/commands/graph/shortcuts.ts',
       'src/app/workspace-commands/canvas-actions.ts',
-      'src/web/canvas-shortcuts.ts',
+      'src/app/keyboard/keymap.ts',
     ],
     targets: ['src/app/canvas-commands/index.ts'],
   },
@@ -55,7 +55,7 @@ const CANVAS_COMMAND_BOUNDARY_POLICIES = [
     kind: 'require-imports',
     name: 'Web entry owns the browser Canvas shortcut lifecycle',
     from: ['src/main.web.tsx'],
-    targets: ['src/web/canvas-shortcuts.ts'],
+    targets: ['src/web/browser-shell-commands.ts'],
   },
   {
     kind: 'source-tombstones',
@@ -186,7 +186,7 @@ describe('Canvas Command Projection boundaries', () => {
 
   it('registers Web shortcut teardown with the Vite HMR lifetime', () => {
     const shortcutLifecycle = sourceGraph()
-      .find((source) => source.path === 'src/web/canvas-shortcuts.ts')
+      .find((source) => source.path === 'src/web/browser-shell-commands.ts')
 
     expect(shortcutLifecycle?.calls.some(
       (call) => call.target === 'import.meta.hot.dispose',

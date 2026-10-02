@@ -24,7 +24,7 @@ import { KeyboardShortcutsDialog } from "../components/shared/KeyboardShortcutsD
 import { AboutCanopiDialog } from "../components/shared/AboutCanopiDialog";
 import { WebWorkspace } from "./WebWorkspace";
 import { createBrowserGeoJsonWorkflow } from "./browser-geojson";
-import type { WebShellShortcutSource } from "./canvas-shortcuts";
+import type { WebShellShortcutSource } from "./browser-shell-commands";
 import { currentCanvasSession } from "../canvas/session";
 import type { GeoJsonWorkflow } from "../app/geojson/workflow";
 

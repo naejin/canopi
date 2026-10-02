@@ -1,6 +1,4 @@
-import { saveProblem } from '../document-session/save-problem'
-import { savedViewDialogOpen } from '../saved-views/dialogs'
-import { modalLayerOpen } from '../shell/modal-layer'
+import type { KeyboardEventLike } from '../keyboard/key-chord'
 
 /**
  * Ctrl F (Cmd F) focuses the plant finder of the open panel. Each mounted finder
@@ -24,21 +22,9 @@ export function focusOpenPlantFinder(): boolean {
   return true
 }
 
-export function isFindPlantsShortcut(event: {
-  readonly key: string
-  readonly ctrlKey: boolean
-  readonly metaKey: boolean
-  readonly shiftKey: boolean
-  readonly altKey: boolean
-}): boolean {
+/** Ctrl F (Cmd F), as an element handler sees it (the PDF dialog's key field). */
+export function isFindPlantsShortcut(
+  event: Pick<KeyboardEventLike, 'key' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey'>,
+): boolean {
   return (event.ctrlKey !== event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'f'
-}
-
-/** Shared by both editions' key routing; true when the shortcut focused a finder. */
-export function runFindPlantsShortcut(event: KeyboardEvent): boolean {
-  // Modal dialogs: the finder under them must not take focus.
-  if (!isFindPlantsShortcut(event) || saveProblem.peek() !== null || savedViewDialogOpen.peek() || modalLayerOpen.peek()) return false
-  if (!focusOpenPlantFinder()) return false
-  event.preventDefault()
-  return true
 }

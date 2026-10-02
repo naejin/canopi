@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   composeShellCommandCatalog,
-  matchShellCommandShortcut,
   projectShellCommandCatalog,
 } from '../app/shell-commands'
 
@@ -60,41 +59,6 @@ describe('App Command Graph shell catalog', () => {
       'nav.designNotebook',
       'view.toggleTheme',
     ])
-  })
-
-  it('matches composed shell shortcuts to their command identities', () => {
-    const execute = () => undefined
-    const catalog = composeShellCommandCatalog({
-      newDesign: { execute },
-      saveDesign: { execute },
-      saveDesignAs: { execute },
-      navigateCanvas: { execute },
-      navigatePlantDatabase: { execute },
-    })
-    const match = (
-      key: string,
-      modifiers: Partial<{
-        ctrlKey: boolean
-        metaKey: boolean
-        shiftKey: boolean
-        altKey: boolean
-      }> = {},
-    ) => matchShellCommandShortcut(catalog, {
-      key,
-      ctrlKey: false,
-      metaKey: false,
-      shiftKey: false,
-      altKey: false,
-      ...modifiers,
-    })?.id ?? null
-
-    expect(match('n', { ctrlKey: true })).toBe('file.new')
-    expect(match('S', { metaKey: true, shiftKey: true })).toBe('file.saveAs')
-    expect(match('3', { ctrlKey: true })).toBe('nav.plantDb')
-    expect(match('2', { ctrlKey: true })).toBeNull()
-    expect(match('2', { ctrlKey: true, altKey: true })).toBeNull()
-    expect(match('n', { ctrlKey: true, metaKey: true })).toBeNull()
-    expect(match('n')).toBeNull()
   })
 
   it('projects caller-ready browser menu and panel commands', () => {

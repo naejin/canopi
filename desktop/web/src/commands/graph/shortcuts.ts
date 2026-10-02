@@ -1,66 +1,52 @@
 import {
-  canvasCommandDefinitionForShortcut,
-  type CanvasCommandShortcutInput,
+  canvasCommandDefinitions,
+  type CanvasCommandDefinition,
+  type CanvasCommandId,
 } from '../../app/canvas-commands'
-import { matchShellCommandShortcut } from '../../app/shell-commands'
-import { singleKeyShortcuts } from '../../app/settings/state'
+import {
+  CANVAS_KEYMAP_ROWS,
+  shellKeymapRows,
+  type CommandSink,
+  type KeymapRow,
+} from '../../app/keyboard/keymap'
+import { closeCommandPalette, commandPaletteOpen } from '../../app/shell/dialogs'
 import { getCurrentCanvasCommandSurface } from '../../canvas/session'
-import { isEditableTarget } from '../../canvas/runtime/input/editable-target'
-import { matchesShortcut } from '../../app/shell-commands/shortcut-text'
 import {
   DESKTOP_SHELL_COMMAND_CATALOG,
   runCatalogCommand,
   type AppCommandId,
 } from './catalog'
 
-interface AppCommandShortcutMatch {
-  readonly commandId: AppCommandId
-  readonly preventDefault: boolean
-}
+/** The Desktop keymap: its shell catalogue's rows, then both editions' canvas rows (spec §1.6). */
+export const DESKTOP_KEYMAP: readonly KeymapRow[] = [
+  ...shellKeymapRows(DESKTOP_SHELL_COMMAND_CATALOG),
+  ...CANVAS_KEYMAP_ROWS,
+]
 
-const COMMAND_PALETTE_SHORTCUT = DESKTOP_SHELL_COMMAND_CATALOG
-  .find((command) => command.id === 'help.commandPalette')?.shortcut
-
-/** The palette's own key: the only shortcut that reaches the open palette, to close it. */
-export function isCommandPaletteToggleEvent(event: KeyboardEvent): boolean {
-  return COMMAND_PALETTE_SHORTCUT !== undefined && matchesShortcut(COMMAND_PALETTE_SHORTCUT, event)
-}
-
-export function runAppCommandShortcutForEvent(event: KeyboardEvent): boolean {
-  // A key an earlier listener consumed (the active tool, a menu) is no shortcut.
-  if (event.defaultPrevented) return false
-  const match = matchAppCommandShortcut(event)
-  if (!match) return false
-  if (match.preventDefault) event.preventDefault()
-  runCatalogCommand(match.commandId)
-  return true
-}
+const canvasDefinitionById = new Map<CanvasCommandId, CanvasCommandDefinition>(
+  canvasCommandDefinitions.map((definition) => [definition.commandId, definition]),
+)
 
 /**
- * Shell shortcuts (File, panels, Settings, Help) work everywhere. Canvas
- * shortcuts need a canvas and never steal keys from a text field, except
- * the few that are meant to (Ctrl K).
+ * Where a Desktop keymap row runs. A shell shortcut takes its key even when its command is disabled; a canvas command
+ * needs a canvas, except a tool key, which before the canvas mounts primes the tool it starts with. The palette's own
+ * key is the one row that runs in a modal: it closes the open palette and opens none over another dialog.
  */
-function matchAppCommandShortcut(event: KeyboardEvent): AppCommandShortcutMatch | null {
-  const input = shortcutInput(event)
-  const shellCommand = matchShellCommandShortcut(DESKTOP_SHELL_COMMAND_CATALOG, input)
-  if (shellCommand) return { commandId: shellCommand.id, preventDefault: true }
-
-  const canvasCommand = canvasCommandDefinitionForShortcut(input, { characterKeys: singleKeyShortcuts.peek() })
-  if (!canvasCommand) return null
-  // A tool key before the canvas mounts primes the tool it starts with.
-  if (canvasCommand.kind !== 'tool' && !getCurrentCanvasCommandSurface()) return null
-  if (isEditableTarget(event.target) && !canvasCommand.worksInTextFields) return null
-  return { commandId: canvasCommand.commandId, preventDefault: true }
-}
-
-function shortcutInput(event: KeyboardEvent): CanvasCommandShortcutInput {
+export function createDesktopCommandSink(isModalOpen: () => boolean): CommandSink {
   return {
-    key: event.key,
-    ctrlKey: event.ctrlKey,
-    metaKey: event.metaKey,
-    shiftKey: event.shiftKey,
-    altKey: event.altKey,
-    code: event.code,
+    run(command) {
+      if (command === 'help.commandPalette') {
+        if (commandPaletteOpen.peek()) {
+          closeCommandPalette()
+          return true
+        }
+        if (isModalOpen()) return false
+      }
+      const canvas = canvasDefinitionById.get(command as CanvasCommandId)
+      if (canvas && canvas.kind !== 'tool' && !getCurrentCanvasCommandSurface()) return false
+      // The Desktop keymap names only Desktop commands: its own catalogue's and the canvas rows'.
+      runCatalogCommand(command as AppCommandId)
+      return true
+    },
   }
 }
