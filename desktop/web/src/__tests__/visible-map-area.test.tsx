@@ -15,7 +15,8 @@ import {
   visibleMapFrame,
 } from '../app/shell/visible-map-area'
 import { setCurrentCanvasSession } from '../canvas/session'
-import { CameraController, cameraFramingRect, fitCameraViewport } from '../canvas/runtime/camera'
+import { framingRect } from '../canvas/runtime/view/fit'
+import { sceneExtentPoints } from '../canvas/runtime/scene-extent'
 import type { ScenePersistedState } from '../canvas/runtime/scene'
 import { plantFinderMapMatches, zoomToPlantFinderMatches } from '../app/plant-finder/map-matches'
 import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
@@ -23,6 +24,7 @@ import type { CanopiFile } from '../types/design'
 import { createLiveTestCanvasRuntimeHost } from './support/live-canvas-runtime'
 import { geoAt } from './support/geo-design'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
+import { createTestView } from './support/test-view'
 
 type Box = { left: number; top: number; width: number; height: number }
 const boxes = new Map<Element, Box>()
@@ -116,13 +118,13 @@ describe('visible map area', () => {
 
   it('frames temporary focus and Fit to Design inside the visible map area', () => {
     const insets = { top: 60, right: 456, bottom: 56, left: 236 }
-    expect(cameraFramingRect({ width: 1280, height: 800 }, insets)).toEqual({ x: 236, y: 60, width: 588, height: 684 })
+    expect(framingRect({ width: 1280, height: 800 }, insets)).toEqual({ x: 236, y: 60, width: 588, height: 684 })
 
-    const camera = new CameraController()
-    camera.initialize({ width: 1280, height: 800 })
-    camera.setFrameInsets(insets)
-    expect(camera.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 72 })).toBe(true)
-    const viewport = camera.viewport
+    // The 100 m start frame the camera used to place on a 1280 x 800 screen.
+    const camera = createTestView({ screen: { width: 1280, height: 800 }, viewport: { x: 240, y: 0, scale: 8 } })
+    camera.navigation.setFramingInsets(insets)
+    expect(camera.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 72 })).toBe(true)
+    const viewport = camera.viewport()
     // The bounds' centre lands on the visible area's centre, not the window's.
     expect(5 * viewport.scale + viewport.x).toBeCloseTo(236 + 588 / 2)
     expect(5 * viewport.scale + viewport.y).toBeCloseTo(60 + 684 / 2)
@@ -130,14 +132,16 @@ describe('visible map area', () => {
     expect(10 * viewport.scale + viewport.x).toBeLessThanOrEqual(1280 - 456 - 72 + 1e-6)
     expect(viewport.x).toBeGreaterThanOrEqual(236 + 72 - 1e-6)
 
-    const fitted = fitCameraViewport(camera.snapshot.peek(), emptyScene({ x: 0, y: 0 }, { x: 40, y: 20 }), {}, insets)
+    const scene = emptyScene({ x: 0, y: 0 }, { x: 40, y: 20 })
+    camera.navigation.zoomToFit(scene, { extentPoints: sceneExtentPoints(scene) })
+    const fitted = camera.viewport()
     const centre = { x: 20 * fitted.scale + fitted.x, y: 10 * fitted.scale + fitted.y }
     expect(centre.x).toBeCloseTo(236 + 588 / 2, 0)
     expect(centre.y).toBeCloseTo(60 + 684 / 2, 0)
   })
 
   it('falls back to the whole screen when chrome leaves too little map', () => {
-    expect(cameraFramingRect({ width: 500, height: 800 }, { top: 0, right: 300, bottom: 0, left: 100 }))
+    expect(framingRect({ width: 500, height: 800 }, { top: 0, right: 300, bottom: 0, left: 100 }))
       .toEqual({ x: 0, y: 0, width: 500, height: 800 })
   })
 

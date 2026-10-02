@@ -1,11 +1,10 @@
 // __tests__/support/test-view.ts  (test support)
 //
 // createTestView: the one way tests build a camera (spec §1.1b). A driver host starting on a HeadlessCameraDriver, built with the
-// production factories, the navigation over it, and (0A to 0E) the legacy CameraController shim over the same host. Tweens and the
-// settle run on the window's animation frames and timers: a test that steps time uses Vitest fake timers.
+// production factories, and the navigation over it. Tweens and the settle run on the window's animation frames and timers: a test
+// that steps time uses Vitest fake timers.
 
 import { signal } from '@preact/signals'
-import { CameraController } from '../../canvas/runtime/camera'
 import type { ScenePersistedState } from '../../canvas/runtime/scene'
 import type { CameraDriverHost } from '../../canvas/runtime/view/camera-driver'
 import { reprojectPlanar, viewCameraToPlanar } from '../../canvas/runtime/view/camera-math'
@@ -34,7 +33,7 @@ export interface TestViewOptions {
   readonly camera?: Partial<ViewCamera>
   /** Default createSessionPlane({ lon: 0, lat: 0 }). */
   readonly plane?: SessionPlane
-  /** Default: the policy CameraController uses today when constructed without one. The host takes its latitude from the plane. */
+  /** Default: createWorkspaceCameraPolicy(). The host takes its latitude from the plane. */
   readonly policy?: WorkspaceCameraPolicy
   readonly insets?: ScreenInsets
 }
@@ -51,8 +50,6 @@ export interface TestView {
   /** CameraController.reprojectViewport's numbers (INV-WR-07): a 'place' by a plane transform in plane terms; the plane stays. */
   reproject(transform: SessionPlaneTransform): void
   setScene(scene: ScenePersistedState, bounds?: SceneBoundsOptions): void
-  /** 0A to the end of 0D2 only: the facade's CameraController shim over this same host. Deleted with the facade. */
-  readonly legacyCamera: CameraController
   dispose(): void
 }
 
@@ -104,7 +101,6 @@ export function createTestView(options: TestViewOptions = {}): TestView {
     setScene(persisted, bounds = {}) {
       scene = { persisted, bounds }
     },
-    legacyCamera: new CameraController(policy, { host, plane }),
     dispose() {
       host.dispose()
     },

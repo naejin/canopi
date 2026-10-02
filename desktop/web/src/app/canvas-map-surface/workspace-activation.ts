@@ -17,8 +17,7 @@ import {
   type SharedMapSceneMap,
 } from '../../maplibre/shared-scene-layer'
 import type { SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
-import type { MapLibreWorkspaceCameraMap } from '../../maplibre/workspace-camera'
-import { createMapLibreCameraDriver } from '../../maplibre/camera-driver'
+import { createMapLibreCameraDriver, type MapLibreCameraDriverMap } from '../../maplibre/camera-driver'
 import type { CameraDriverFailure, CameraDriverHost } from '../../canvas/runtime/view/camera-driver'
 import { createSessionPlane } from '../../canvas/session-plane'
 
@@ -35,7 +34,7 @@ export interface WorkspaceActivationSnapshot {
 }
 
 /** One map that is suitable for both the shared graphics layer and camera owner. */
-export type WorkspaceActivationMap = MapLibreWorkspaceCameraMap & Pick<
+export type WorkspaceActivationMap = MapLibreCameraDriverMap & Required<Pick<MapLibreMapInstance, 'getCanvas'>> & Pick<
   MapLibreMapInstance,
   | 'addLayer'
   | 'addSource'

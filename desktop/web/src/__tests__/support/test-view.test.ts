@@ -69,35 +69,6 @@ describe('createTestView', () => {
     view.dispose()
   })
 
-  it('legacyCamera and view() read the same host', () => {
-    const view = createTestView({ viewport: { x: 12, y: -4, scale: 2 } })
-    const camera = view.legacyCamera
-    const readsAgree = () => {
-      const placement = planarCameraOf(view.view())
-      expect(camera.viewport).toEqual({ x: placement.x, y: placement.y, scale: placement.scale })
-      expect(camera.snapshot.peek().viewport).toEqual(camera.viewport)
-      expect(camera.screenSize).toEqual({ width: view.view().screen.width, height: view.view().screen.height })
-      for (const point of [{ x: 0, y: 0 }, { x: 20, y: 30 }, { x: -7.5, y: 3.25 }]) {
-        expect(camera.worldToScreen(point)).toEqual(view.view().worldToScreen(point))
-        expect(camera.screenToWorld(point)).toEqual(view.view().screenToWorld(point))
-      }
-    }
-    readsAgree()
-
-    // Moves through either side land on the one host.
-    camera.panBy({ x: 30, y: -10 })
-    readsAgree()
-    expect(camera.viewport).toEqual({ x: 42, y: -14, scale: 2 })
-    view.setViewport({ x: -5, y: 8, scale: 4 })
-    readsAgree()
-    view.navigation.zoomIn()
-    readsAgree()
-    camera.zoomAroundScreenPoint({ x: 140, y: 110 }, 0.5)
-    readsAgree()
-    expect(camera.snapshot.peek().mode).toBe(view.frames.viewFrame.peek().mode)
-    view.dispose()
-  })
-
   it('a turn and the settle run on Vitest fake timers', () => {
     vi.useFakeTimers()
     const view = createTestView()

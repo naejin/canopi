@@ -27,7 +27,7 @@ import { plantSpacingIntervalM } from '../../app/settings/state'
 import { t } from '../../i18n'
 import { planarToViewCamera, screenToGeo } from '../../canvas/runtime/view/camera-math'
 import { createSessionPlane } from '../../canvas/session-plane'
-import type { MapLibreWorkspaceCameraMap } from '../../maplibre/workspace-camera'
+import type { MapLibreCameraDriverMap } from '../../maplibre/camera-driver'
 import { createTestView, type TestView } from './test-view'
 import {
   SceneStore,
@@ -95,7 +95,7 @@ export function createPlantPresentationContext(viewportScale: number) {
  * A consistent MapLibre fake with a fixed camera: the geographic camera that shows today's attached viewport { x: 100, y: 50, scale: 2 }
  * on the plane of the attached test's origin (Paris). jumpTo is recorded and fires 'move', and the read-backs stay put.
  */
-export class AttachedInteractionMap implements MapLibreWorkspaceCameraMap {
+export class AttachedInteractionMap implements MapLibreCameraDriverMap {
   readonly canvas = document.createElement('canvas')
   readonly listeners = new Map<string, Set<() => void>>()
   readonly jumpTo = vi.fn(() => this.fire('move'))
