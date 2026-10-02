@@ -5,7 +5,7 @@
 // the map's focus after arming, a drop, a closed chooser or menu, a story's end or a tool's request (the runtime's
 // CanvasFocusPort, passed by app/canvas-runtime/app-adapter.ts), and the first field of a component a user opened.
 // F6 moves to the next showing region, Shift+F6 to the previous one, returning to the control last focused there (else
-// the region's own tab stop). Focus after a modal closes stays with useModalLayer.
+// the region's own tab stop); the map is always entered at its host. Focus after a modal closes stays with useModalLayer.
 
 import type { CanvasFocusPort } from '../../canvas/runtime/app-adapter'
 import { currentCanvasKeyboardPort } from '../../canvas/session'
@@ -62,7 +62,8 @@ function createFocusOwner(deps: FocusOwnerDeps): FocusOwner {
   function enter(region: FocusRegion): boolean {
     const element = regions.get(region)
     if (!element || !showing(element)) return false
-    const target = focusTarget(element)
+    // The map is entered at its host, never a control inside it (the Unlock affordance), so the canvas keys reach it.
+    const target = region === 'map' ? element : focusTarget(element)
     if (!target) return false
     target.focus({ preventScroll: true })
     return document.activeElement === target

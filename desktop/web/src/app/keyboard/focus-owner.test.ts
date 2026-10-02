@@ -112,6 +112,27 @@ describe('F6 regions through the focus owner', () => {
     expect(document.activeElement).toBe(map)
   })
 
+  it('F6 to the map focuses the host', () => {
+    // The Unlock affordance beside a locked object lives inside the map host; F6 never lands on it.
+    map.innerHTML = '<div data-canvas-chrome="locked-affordance"><button type="button">Unlock</button></div>'
+    const unlock = map.querySelector('button')!
+    unlock.focus()
+    press()
+    expect(document.activeElement).toBe(dock.querySelector('button'))
+    press(true)
+    expect(document.activeElement).toBe(map)
+
+    // From outside the map too, and through focusRegion.
+    unlock.focus()
+    menu.focus()
+    press()
+    press()
+    expect(document.activeElement).toBe(map)
+    menu.focus()
+    focusOwner.focusRegion('map', 'region-cycle')
+    expect(document.activeElement).toBe(map)
+  })
+
   it('registerRegion replaces registerFocusRegion for its five users', async () => {
     // The title bar, tool rail, map, dock and phone sheet register through useFocusRegion, which registers with the owner.
     for (const release of releases.splice(0)) release()
