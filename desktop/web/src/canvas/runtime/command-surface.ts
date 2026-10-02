@@ -268,7 +268,15 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   }
 
   private setTool(name: string): void {
-    this.options.setInteractionTool(name)
+    try {
+      this.options.setInteractionTool(name)
+    } catch (error) {
+      // A failed arm's only host-side fallback for a tool other than Select is Select itself (tool-host.ts
+      // setTool's rollback); a failed Select instead leaves the previously armed tool, which the app's own tool
+      // state already shows unchanged, so only the Select-fallback case needs correcting here.
+      if (name !== 'select') setCanvasTool('select')
+      throw error
+    }
     setCanvasTool(name)
   }
 

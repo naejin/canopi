@@ -72,6 +72,23 @@ import type {
   CanvasRuntimeSettingsAdapter,
 } from './app-adapter'
 import { getCommonNames } from '../../ipc/species'
+
+/** Toggled from inside a test to make the real Rectangle tool's activation throw. */
+const rectangleActivation = vi.hoisted(() => ({ fails: false }))
+vi.mock('./tools/registry', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./tools/registry')>()
+  return {
+    ...actual,
+    TOOL_REGISTRY: {
+      ...actual.TOOL_REGISTRY,
+      rectangle: () => {
+        const tool = actual.TOOL_REGISTRY.rectangle!()
+        if (!rectangleActivation.fails) return tool
+        return { ...tool, activate: () => { throw new Error('activation failed') } }
+      },
+    },
+  }
+})
 import { t } from '../../i18n'
 import { createSceneInteractionEventHarness } from '../../__tests__/support/canvas-interaction-events'
 import { CameraController } from './camera'
@@ -666,6 +683,30 @@ describe('scene canvas runtime', () => {
 
     beginSpy.mockRestore()
     events.dispose()
+    runtime.destroy()
+  })
+
+  it('falls back to Select, in the app\'s own tool state too, when a registered tool\'s activation throws', async () => {
+    const runtime = new SceneCanvasRuntime()
+    await initRuntimeWithStubbedRenderer(runtime)
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    setInteractionViewport(runtime)
+    runtime.commandSurface.tools.setTool('line')
+    expect(activeTool.value).toBe('line')
+
+    rectangleActivation.fails = true
+    try {
+      // Rectangle's activation throws: the host falls back to Select, and the app's own tool state (session-state.ts,
+      // read here as `activeTool`) must follow it, not stay on the tool that was armed before the failed attempt.
+      expect(() => runtime.commandSurface.tools.setTool('rectangle')).toThrow('activation failed')
+      expect(activeTool.value).toBe('select')
+    } finally {
+      rectangleActivation.fails = false
+    }
+
+    runtime.commandSurface.tools.setTool('rectangle')
+    expect(activeTool.value).toBe('rectangle')
+
     runtime.destroy()
   })
 
