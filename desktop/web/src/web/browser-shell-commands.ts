@@ -24,6 +24,7 @@ import { cycleFocusRegion } from '../app/shell/focus-regions'
 import { modalLayerOpen } from '../app/shell/modal-layer'
 import { dispatchWorkspaceCanvasIntent } from '../app/workspace-commands/canvas-actions'
 import { currentCanvasKeyboardPort } from '../canvas/session'
+import { detectPlatform, type InputPlatform } from '../canvas/runtime/input/platform'
 import { t } from '../i18n'
 import type { DesignSaveStatus } from '../app/document-session/continuous-save'
 import type { GeoJsonWorkflow } from '../app/geojson/workflow'
@@ -252,9 +253,12 @@ let activeKeyRouter: KeyRouterHandle | null = null
 /**
  * The Web Edition key router (spec §1.6): its shell rows, less the shortcuts a browser keeps, then the canvas rows. A
  * shell shortcut takes its key even when its command is disabled; a canvas command takes it only when it ran.
- * Installing again replaces the router; main.web.tsx installs it once.
+ * Installing again replaces the router; main.web.tsx installs it once, on the browser's own platform.
  */
-export function installWebKeyRouter(shell: WebShellShortcutSource, target: Window = window): KeyRouterHandle {
+export function installWebKeyRouter(
+  shell: WebShellShortcutSource,
+  platform: InputPlatform = detectPlatform(navigator, window as unknown as { readonly GestureEvent?: unknown }),
+): KeyRouterHandle {
   activeKeyRouter?.dispose()
   const commands: CommandSink = {
     run(command) {
@@ -268,13 +272,15 @@ export function installWebKeyRouter(shell: WebShellShortcutSource, target: Windo
     },
   }
   const router = installKeyRouter({
-    target,
+    target: window,
     keymap: [...shellKeymapRows(shell.catalog, { omit: BROWSER_RESERVED_SHORTCUTS }), ...CANVAS_KEYMAP_ROWS],
     commands,
     canvas: currentCanvasKeyboardPort,
     singleKeys: singleKeyShortcuts,
     focus: { cycleRegion: cycleFocusRegion },
     isModalOpen: () => saveProblem.peek() !== null || savedViewDialogOpen.peek() || modalLayerOpen.peek(),
+    platform,
+    document,
   })
   const handle: KeyRouterHandle = {
     dispose() {

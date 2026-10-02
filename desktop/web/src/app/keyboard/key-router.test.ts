@@ -41,6 +41,8 @@ function install(overrides: Partial<KeyRouterDeps> = {}): KeyRouterHandle {
     singleKeys,
     focus: { cycleRegion },
     isModalOpen: () => modal,
+    platform: { os: 'linux', engine: 'chromium', gestureEvents: false },
+    document,
     ...overrides,
   })
   return router
@@ -74,6 +76,8 @@ describe('key router', () => {
   it('installs window capture and bubble keydown listeners and a capture keyup listener, and removes them', () => {
     const add = vi.spyOn(window, 'addEventListener')
     const remove = vi.spyOn(window, 'removeEventListener')
+    const documentAdd = vi.spyOn(document, 'addEventListener')
+    const documentRemove = vi.spyOn(document, 'removeEventListener')
     const capture = (options: unknown) => options === true
     const handle = install()
 
@@ -82,10 +86,15 @@ describe('key router', () => {
       ['keydown', true],
       ['keydown', false],
       ['keyup', true],
+      // The held keys go on a blur, as on a visibility change.
+      ['blur', false],
     ])
+    expect(documentAdd.mock.calls.map(([type]) => type)).toEqual(['visibilitychange'])
     handle.dispose()
     handle.dispose()
     expect(remove.mock.calls.map(([type, listener, options]) => [type, listener, capture(options)])).toEqual(added)
+    expect(documentRemove.mock.calls.map(([type, listener]) => [type, listener]))
+      .toEqual(documentAdd.mock.calls.map(([type, listener]) => [type, listener]))
   })
 
   it('keyState runs first for every key, and a held Space stops the key there', () => {
@@ -316,6 +325,35 @@ describe('key router', () => {
     fake.state.layers = ['gesture']
     expect(press({ key: 'Escape' }, button).defaultPrevented).toBe(true)
     expect(fake.port.escape).toHaveBeenCalledExactlyOnceWith('gesture')
+  })
+
+  it('lets go of the keys held under Cmd when Meta comes up, on blur and when the page hides (H10)', () => {
+    const save: KeymapRow = { command: 'file.save', chords: [{ key: 's', mod: true, ctrl: false, shift: false, alt: false }], scope: 'global', singleKey: 'n/a', worksInTextFields: true }
+    install({ keymap: [save], platform: { os: 'mac', engine: 'webkit', gestureEvents: false } })
+    host.focus()
+    const up = (key: string, code: string) => host.dispatchEvent(new KeyboardEvent('keyup', { key, code, bubbles: true }))
+    const released = () => fake.port.keyState.mock.calls.filter(([k]) => k.type === 'keyup').map(([k]) => k.code)
+
+    press({ key: 'Meta', code: 'MetaLeft', metaKey: true }, host)
+    press({ key: 's', code: 'KeyS', metaKey: true }, host)
+    // macOS sends no keyup for S while Cmd is down.
+    up('Meta', 'MetaLeft')
+    expect(run).toHaveBeenCalledExactlyOnceWith('file.save')
+    expect(released()).toEqual(['MetaLeft', 'KeyS'])
+
+    fake.port.keyState.mockClear()
+    press({ key: ' ', code: 'Space' }, host)
+    press({ key: 'Control', code: 'ControlLeft', ctrlKey: true }, host)
+    window.dispatchEvent(new Event('blur'))
+    expect(released()).toEqual(['Space', 'ControlLeft'])
+
+    fake.port.keyState.mockClear()
+    press({ key: ' ', code: 'Space' }, host)
+    document.dispatchEvent(new Event('visibilitychange'))
+    expect(released()).toEqual(['Space'])
+    // Nothing is held twice.
+    window.dispatchEvent(new Event('blur'))
+    expect(released()).toEqual(['Space'])
   })
 
   it('without a canvas, canvas rows fall back to the shell and the rest run nowhere', () => {

@@ -21,12 +21,12 @@ import {
 
 let keys: KeyRouterHandle | null = null
 
-/** The Web key router over a catalog (none: the canvas rows alone). */
-function installWebKeys(catalog: BrowserShellCatalog = []): KeyRouterHandle {
+/** The Web key router over a catalog (none: the canvas rows alone), on Linux unless a test names a Mac. */
+function installWebKeys(catalog: BrowserShellCatalog = [], os: 'linux' | 'mac' = 'linux'): KeyRouterHandle {
   keys = installWebKeyRouter({
     catalog,
     readState: () => ({ hasDesign: true, revertAvailable: false, activePanel: 'canvas', sidePanel: null }),
-  })
+  }, { os, engine: 'chromium', gestureEvents: false })
   return keys
 }
 
@@ -145,7 +145,7 @@ describe('Web keys', () => {
     expect(undo).toHaveBeenCalledOnce()
   })
 
-  it('dispatches tool and history shortcuts with exact Ctrl, Meta, Shift, and Alt semantics', () => {
+  it('dispatches tool and history shortcuts with exact Ctrl (Cmd on a Mac), Shift and Alt semantics', () => {
     const setTool = vi.fn()
     const undo = vi.fn()
     const redo = vi.fn()
@@ -165,10 +165,17 @@ describe('Web keys', () => {
     expect(dispatchShortcut({ key: 'e' }).defaultPrevented).toBe(true)
     expect(dispatchShortcut({ key: 'E', shiftKey: true }).defaultPrevented).toBe(false)
     expect(dispatchShortcut({ key: 'z', ctrlKey: true }).defaultPrevented).toBe(true)
-    expect(dispatchShortcut({ key: 'z', metaKey: true }).defaultPrevented).toBe(true)
+    // The OS key is no shortcut outside a Mac.
+    expect(dispatchShortcut({ key: 'z', metaKey: true }).defaultPrevented).toBe(false)
     expect(dispatchShortcut({ key: 'z', ctrlKey: true, metaKey: true }).defaultPrevented).toBe(false)
     expect(dispatchShortcut({ key: 'z', ctrlKey: true, altKey: true }).defaultPrevented).toBe(false)
     expect(dispatchShortcut({ key: 'Z', ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(true)
+
+    keys!.dispose()
+    installWebKeys([], 'mac')
+    expect(dispatchShortcut({ key: 'z', metaKey: true }).defaultPrevented).toBe(true)
+    // A physical Ctrl on a Mac is not Cmd.
+    expect(dispatchShortcut({ key: 'z', ctrlKey: true }).defaultPrevented).toBe(false)
     expect(dispatchShortcut({ key: 'Z', metaKey: true, shiftKey: true }).defaultPrevented).toBe(true)
     expect(dispatchShortcut({
       key: 'Z',
@@ -223,7 +230,7 @@ describe('Web keys', () => {
         history: { canUndo: signal(true), undo: replacementUndo },
       }),
     }))
-    dispatchShortcut({ key: 'z', metaKey: true })
+    dispatchShortcut({ key: 'z', ctrlKey: true })
 
     expect(firstUndo).toHaveBeenCalledOnce()
     expect(replacementUndo).toHaveBeenCalledOnce()
@@ -246,7 +253,7 @@ describe('Web keys', () => {
     installWebKeys()
 
     const undoShortcut = dispatchShortcut({ key: 'z', ctrlKey: true })
-    const redoShortcut = dispatchShortcut({ key: 'Z', metaKey: true, shiftKey: true })
+    const redoShortcut = dispatchShortcut({ key: 'Z', ctrlKey: true, shiftKey: true })
 
     expect(undoShortcut.defaultPrevented).toBe(false)
     expect(redoShortcut.defaultPrevented).toBe(false)

@@ -345,6 +345,9 @@ describe('Desktop keys', () => {
 
     rotatable = true
     selectedObjectIds.value = new Set(['zone-1'])
+    // On a Mac, Cmd Option R types ®: the physical key still names the shortcut.
+    keys.dispose()
+    keys = installDesktopKeys({ os: 'mac', engine: 'webkit', gestureEvents: false })
     window.dispatchEvent(new KeyboardEvent('keydown', { key: '®', metaKey: true, altKey: true, code: 'KeyR' }))
     expect(rotateSelectionDialog.value).not.toBeNull()
     applyRotateSelection('-30')

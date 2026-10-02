@@ -4,7 +4,11 @@ import type { KeyboardEventLike } from '../../app/keyboard/key-chord'
 import { installKeyRouter, type KeyRouterHandle } from '../../app/keyboard/key-router'
 import { CANVAS_KEYMAP_ROWS } from '../../app/keyboard/keymap'
 import { singleKeyShortcuts } from '../../app/settings/state'
+import type { InputPlatform } from '../../canvas/runtime/input/platform'
 import type { CanvasKeyboardPort } from '../../canvas/runtime/runtime'
+
+/** The platform the key routers of tests run on unless a test names another: Ctrl is mod. */
+export const TEST_KEY_PLATFORM: InputPlatform = { os: 'linux', engine: 'chromium', gestureEvents: false }
 
 /** The canvas rows over one port, with a command sink that consumes nothing. */
 export function installCanvasKeyRouter(canvas: () => CanvasKeyboardPort | null): KeyRouterHandle {
@@ -16,6 +20,8 @@ export function installCanvasKeyRouter(canvas: () => CanvasKeyboardPort | null):
     singleKeys: singleKeyShortcuts,
     focus: { cycleRegion: () => false },
     isModalOpen: () => false,
+    platform: TEST_KEY_PLATFORM,
+    document,
   })
 }
 

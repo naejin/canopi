@@ -2,7 +2,9 @@
 //
 // Owns the only window key listeners (spec §1.6, ADR 0020; policy P8): keydown in capture and bubble, keyup in capture.
 // Capture hands every key to the canvas keyboard port first (keyState: the nudge commit, the physical Ctrl, the Menu
-// key's time, the Space hold), cycles the F6 regions and runs Esc on the canvas; bubble skips a key an element handler
+// key's time, the Space hold), cycles the F6 regions and runs Esc on the canvas. It also keeps the keys held down and
+// lets them go (a keyup to the port) when Meta comes up, since macOS sends no keyup for a key pressed under Cmd, and on
+// a window blur or a visibility change. Bubble skips a key an element handler
 // already took, then runs, by focus class, the modal rows, the global rows, the pushed scopes and the keymap's
 // canvas-focus, view-arrows and command rows, each chord's one row per scope, through the canvas port or the edition's
 // CommandSink. Installed once per edition: Desktop's platform/desktop.ts passes installKeyRouter to commands/registry.ts
@@ -11,8 +13,9 @@
 import type { ReadonlySignal } from '@preact/signals'
 import type { CanvasCommandId } from '../canvas-commands'
 import type { ShellCommandId } from '../shell-commands'
+import type { InputPlatform } from '../../canvas/runtime/input/platform'
 import type { CanvasKeyboardPort, CanvasKeyState, CanvasKeyVerdict } from '../../canvas/runtime/runtime'
-import { chordMatches, chordOf, type KeyboardEventLike } from './key-chord'
+import { chordMatches, chordOf, digitChordOf, type KeyboardEventLike, type KeyChord } from './key-chord'
 import { pushedKeyScopes, type CommandSink, type KeymapRow, type KeyScope } from './keymap'
 import { classifyKeyTarget, ownsArrows, type KeyTarget } from './target-class'
 
@@ -29,6 +32,8 @@ export interface KeyRouterDeps {
   readonly singleKeys: ReadonlySignal<boolean>     // Settings › Keyboard
   readonly focus: KeyRouterFocus
   readonly isModalOpen: () => boolean              // modalLayerOpen, saveProblem, savedViewDialogOpen
+  readonly platform: InputPlatform                 // the Mac chord rule; detectPlatform runs in the platforms
+  readonly document: Pick<Document, 'addEventListener' | 'removeEventListener'>   // visibilitychange
 }
 
 export interface KeyRouterHandle { dispose(): void }
@@ -37,16 +42,33 @@ export interface KeyRouterHandle { dispose(): void }
 const KEYMAP_SCOPES: readonly Exclude<KeyScope, 'global'>[] = ['canvas-focus', 'view-arrows', 'command']
 
 export function installKeyRouter(deps: KeyRouterDeps): KeyRouterHandle {
+  /** The keys down now, by code: what a lost keyup would leave held in the port. */
+  const held = new Map<string, string>()
+  const letGo = (timeStamp: number): void => {
+    const keys = [...held]
+    held.clear()
+    const port = deps.canvas()
+    if (!port) return
+    for (const [code, key] of keys) port.keyState(releasedKey(key, code, timeStamp))
+  }
   // The listeners are registered for keydown and keyup only, so a KeyboardEvent here is a KeyboardEventLike.
-  const onKeyDownCapture = (event: KeyboardEvent): void => keyDownCapture(deps, event as KeyboardEventLike)
+  const onKeyDownCapture = (event: KeyboardEvent): void => {
+    held.set(event.code || event.key, event.key)
+    keyDownCapture(deps, event as KeyboardEventLike)
+  }
   const onKeyDownBubble = (event: KeyboardEvent): void => keyDownBubble(deps, event as KeyboardEventLike)
   const onKeyUpCapture = (event: KeyboardEvent): void => {
+    held.delete(event.code || event.key)
     const port = deps.canvas()
     if (port) port.keyState(keyState(event as KeyboardEventLike, 'keyup', where(deps, port, event as KeyboardEventLike)))
+    if (event.key === 'Meta') letGo(event.timeStamp)
   }
+  const onLeave = (event: Event): void => letGo(event.timeStamp)
   deps.target.addEventListener('keydown', onKeyDownCapture as EventListener, true)
   deps.target.addEventListener('keydown', onKeyDownBubble as EventListener)
   deps.target.addEventListener('keyup', onKeyUpCapture as EventListener, true)
+  deps.target.addEventListener('blur', onLeave)
+  deps.document.addEventListener('visibilitychange', onLeave)
   let disposed = false
   return {
     dispose() {
@@ -55,6 +77,8 @@ export function installKeyRouter(deps: KeyRouterDeps): KeyRouterHandle {
       deps.target.removeEventListener('keydown', onKeyDownCapture as EventListener, true)
       deps.target.removeEventListener('keydown', onKeyDownBubble as EventListener)
       deps.target.removeEventListener('keyup', onKeyUpCapture as EventListener, true)
+      deps.target.removeEventListener('blur', onLeave)
+      deps.document.removeEventListener('visibilitychange', onLeave)
     },
   }
 }
@@ -98,11 +122,18 @@ function escapeOnCanvas(port: CanvasKeyboardPort, event: KeyboardEventLike, at: 
 function keyDownBubble(deps: KeyRouterDeps, event: KeyboardEventLike): void {
   // An element handler of a focused widget took the key.
   if (event.defaultPrevented) return
-  const chord = chordOf(event)
-  if (!chord) return
+  const named = chordOf(event, deps.platform)
+  if (!named) return
   const port = deps.canvas()
   const at = where(deps, port, event)
-  const rows = deps.keymap.filter((row) => row.chords.some((rowChord) => chordMatches(rowChord, chord)))
+  // A layout's digit row names its digits when no row takes its label (AZERTY Ctrl+& is Ctrl+1).
+  let chord: KeyChord = named
+  let rows = rowsFor(deps.keymap, named)
+  const digit = rows.length === 0 ? digitChordOf(named, event) : null
+  if (digit) {
+    chord = digit
+    rows = rowsFor(deps.keymap, digit)
+  }
   const singleKeys = deps.singleKeys.peek()
 
   // Step 5: a modal dialog's own element handlers have run; only its rows remain.
@@ -136,6 +167,10 @@ function keyDownBubble(deps: KeyRouterDeps, event: KeyboardEventLike): void {
       return
     }
   }
+}
+
+function rowsFor(keymap: readonly KeymapRow[], chord: KeyChord): readonly KeymapRow[] {
+  return keymap.filter((row) => row.chords.some((rowChord) => chordMatches(rowChord, chord)))
 }
 
 function scopeAdmits(scope: Exclude<KeyScope, 'global'>, at: KeyTarget, event: KeyboardEventLike): boolean {
@@ -174,6 +209,19 @@ function consume(event: KeyboardEventLike): void {
 
 function where(deps: KeyRouterDeps, port: CanvasKeyboardPort | null, event: KeyboardEventLike): KeyTarget {
   return classifyKeyTarget(event.target, port?.host ?? null, deps.isModalOpen())
+}
+
+/** A keyup the browser never sent, for a key held when Meta came up or the window lost the keys. */
+function releasedKey(key: string, code: string, timeStamp: number): CanvasKeyState {
+  return {
+    type: 'keyup',
+    key,
+    code,
+    mods: { shift: false, ctrl: false, alt: false, meta: false },
+    timeStamp,
+    text: false,
+    control: false,
+  }
 }
 
 function keyState(event: KeyboardEventLike, type: CanvasKeyState['type'], at: KeyTarget): CanvasKeyState {

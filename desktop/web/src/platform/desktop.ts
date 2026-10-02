@@ -18,6 +18,7 @@ import { cycleFocusRegion } from "../app/shell/focus-regions";
 import { installKeyRouter } from "../app/keyboard/key-router";
 import { singleKeyShortcuts } from "../app/settings/state";
 import { currentCanvasKeyboardPort } from "../canvas/session";
+import { detectPlatform } from "../canvas/runtime/input/platform";
 import { installDesktopKeyRouter } from "../commands/registry";
 import { registerDesignOpenFailurePresenter } from "../app/document-session/open-failure";
 import { presentDesktopDesignOpenFailure } from "./open-failure.desktop";
@@ -52,6 +53,8 @@ export function bootstrapPlatform(): void {
     canvas: currentCanvasKeyboardPort,
     singleKeys: singleKeyShortcuts,
     focus: { cycleRegion: cycleFocusRegion },
+    platform: detectPlatform(navigator, window as unknown as { readonly GestureEvent?: unknown }),
+    document,
   });
   disposeKeyRouter = () => keyRouter.dispose();
   closeGuardLifetime = registerCloseGuard();

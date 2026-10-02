@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { keyLike } from '../../__tests__/support/key-router'
+import { keyLike, TEST_KEY_PLATFORM } from '../../__tests__/support/key-router'
 import { DESKTOP_KEYMAP } from '../../commands/graph/shortcuts'
 import { createBrowserShellCatalog } from '../../web/browser-shell-commands'
 import { canvasCommandDefinitions } from '../canvas-commands'
@@ -11,7 +11,7 @@ import { CANVAS_KEYMAP_ROWS, shellKeymapRows, type KeymapRow } from './keymap'
 
 /** The rows a press names, in keymap order. */
 function rowsFor(rows: readonly KeymapRow[], press: KeyboardEventLike): readonly KeymapRow[] {
-  const chord = chordOf(press)
+  const chord = chordOf(press, TEST_KEY_PLATFORM)
   return chord ? rows.filter((row) => row.chords.some((rowChord) => chordMatches(rowChord, chord))) : []
 }
 
@@ -67,6 +67,8 @@ describe('keymap', () => {
       singleKeys: signal(true),
       focus: { cycleRegion: () => false },
       isModalOpen: () => modal,
+      platform: TEST_KEY_PLATFORM,
+      document,
     })
     const press = (target: EventTarget) => {
       const event = new KeyboardEvent('keydown', { key: 'v', bubbles: true, cancelable: true })
@@ -120,7 +122,7 @@ describe('keymap', () => {
 
     expect(canvasCommandFor(keyLike('z'))).toBe('canvas.tool.polygon')
     expect(canvasCommandFor(keyLike('z', { ctrlKey: true }))).toBe('edit.undo')
-    expect(canvasCommandFor(keyLike('Z', { metaKey: true, shiftKey: true }))).toBe('edit.redo')
+    expect(canvasCommandFor(keyLike('Z', { ctrlKey: true, shiftKey: true }))).toBe('edit.redo')
     expect(canvasCommandFor(keyLike('y', { ctrlKey: true }))).toBe('edit.redo')
     expect(canvasCommandFor(keyLike('z', { ctrlKey: true, metaKey: true }))).toBeNull()
     expect(canvasCommandFor(keyLike('z', { ctrlKey: true, altKey: true }))).toBeNull()
@@ -157,7 +159,7 @@ describe('keymap', () => {
     const rows = shellKeymapRows(catalog)
     const command = (press: KeyboardEventLike) => rowsFor(rows, press).map((row) => row.command)
 
-    expect(command(keyLike('S', { metaKey: true, shiftKey: true }))).toEqual(['file.saveAs'])
+    expect(command(keyLike('S', { ctrlKey: true, shiftKey: true }))).toEqual(['file.saveAs'])
     expect(command(keyLike('3', { ctrlKey: true }))).toEqual(['nav.plantDb'])
     expect(command(keyLike('2', { ctrlKey: true }))).toEqual([])
     expect(command(keyLike('3', { ctrlKey: true, altKey: true }))).toEqual([])
