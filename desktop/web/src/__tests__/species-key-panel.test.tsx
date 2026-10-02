@@ -45,7 +45,7 @@ describe('Plants in this Design', () => {
   let commands: CanvasCommandSurface
   let queries: CanvasQuerySurface
   let baseQueries: TestCanvasQuerySurface
-  let focusTemporaryBounds: ReturnType<typeof vi.fn<CanvasCommandSurface['viewport']['focusTemporaryBounds']>>
+  let frameBounds: ReturnType<typeof vi.fn<CanvasCommandSurface['viewport']['frameBounds']>>
   let selectSpecies: ReturnType<typeof vi.fn<CanvasCommandSurface['sceneEdits']['selectSpecies']>>
   let selectSameSpecies: ReturnType<typeof vi.fn<CanvasCommandSurface['sceneEdits']['selectSameSpecies']>>
   let setPlantColorForSpecies: ReturnType<typeof vi.fn<CanvasCommandSurface['plantPresentation']['setPlantColorForSpecies']>>
@@ -81,7 +81,7 @@ describe('Plants in this Design', () => {
     })
     let focus: SpeciesFocus = { canonicalName: null }
     queries = { ...baseQueries, getSpeciesFocus: () => focus }
-    focusTemporaryBounds = vi.fn<CanvasCommandSurface['viewport']['focusTemporaryBounds']>(() => true)
+    frameBounds = vi.fn<CanvasCommandSurface['viewport']['frameBounds']>(() => true)
     selectSpecies = vi.fn<CanvasCommandSurface['sceneEdits']['selectSpecies']>()
     selectSameSpecies = vi.fn<CanvasCommandSurface['sceneEdits']['selectSameSpecies']>()
     setPlantColorForSpecies = vi.fn<CanvasCommandSurface['plantPresentation']['setPlantColorForSpecies']>(() => 2)
@@ -92,7 +92,7 @@ describe('Plants in this Design', () => {
           baseQueries.bumpSceneRevision()
         },
       },
-      viewport: { focusTemporaryBounds },
+      viewport: { frameBounds },
       sceneEdits: { selectSpecies, selectSameSpecies },
       plantPresentation: { setPlantColorForSpecies },
     })
@@ -155,7 +155,7 @@ describe('Plants in this Design', () => {
     expect(container.textContent).toContain('3 plants match “pomier”')
 
     await act(() => buttonNamed('Zoom to them').click())
-    expect(focusTemporaryBounds).toHaveBeenCalledWith(
+    expect(frameBounds).toHaveBeenCalledWith(
       { minX: -2, minY: -2, maxX: 22, maxY: 2 },
       expect.objectContaining({ paddingCssPx: expect.any(Number) }),
     )

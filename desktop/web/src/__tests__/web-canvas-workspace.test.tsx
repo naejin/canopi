@@ -876,6 +876,7 @@ function fakeCommandSurface(): CanvasCommandSurface {
       zoomToFit: vi.fn(),
       returnToDesign: vi.fn(),
       focusTemporaryBounds: vi.fn(() => false),
+      frameBounds: vi.fn(() => false),
       returnFromTemporaryFocus: vi.fn(() => false),
       showPlace: vi.fn(() => false),
       zoomBy: vi.fn(),

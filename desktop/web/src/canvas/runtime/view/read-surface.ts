@@ -59,7 +59,9 @@ export interface ViewCommandSurface {
   zoomToFit(): void                                    // Fit to Design, Home
   zoomToSelection(): void                              // Shift+2
   returnToDesign(): void                               // kept: "Back to my Design"
-  focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean          // kept: plant finder, LiDAR
+  focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean          // kept: LiDAR's Fit to data
+  /** The plant finder's Zoom to them: a temporary focus's framing that sets no bookmark (false when nothing could be framed). */
+  frameBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
   returnFromTemporaryFocus(): boolean                  // kept
   setFramingInsets(insets: ScreenInsets): void         // kept: the visible-map-area seam
   resetNorth(): void

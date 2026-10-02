@@ -119,6 +119,12 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
     return { extentPoints: bounds.extentPoints ?? (() => []), emptySceneScale: bounds.emptySceneScale }
   }
 
+  /** A temporary focus's framing of `bounds` at the current bearing, or null when they cannot be framed. */
+  function boundsFraming(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): PlanarCamera | null {
+    const bearing = driver().bearingTarget()
+    return fitTemporaryBounds(fitFrame(bearing), bounds, options, bearing)
+  }
+
   function turnTo(bearingDeg: number): void {
     apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg, animation: 'ease', durationMs: VIEW_EASE_MS })
   }
@@ -163,12 +169,17 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
       place({ x: width / 2, y: height / 2, scale: Math.max(policy.overviewPixelsPerMetre, scale), bearingDeg: bearing })
     },
     focusTemporaryBounds(bounds, options) {
-      const bearing = driver().bearingTarget()
-      const focused = fitTemporaryBounds(fitFrame(bearing), bounds, options, bearing)
+      const focused = boundsFraming(bounds, options)
       if (!focused) return false
       // The latest focus wins: a return lands on the view this focus left.
       bookmark = placementNow()
       place(focused)
+      return true
+    },
+    frameBounds(bounds, options) {
+      const framed = boundsFraming(bounds, options)
+      if (!framed) return false
+      place(framed)
       return true
     },
     returnFromTemporaryFocus() {

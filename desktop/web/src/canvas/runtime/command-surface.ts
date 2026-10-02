@@ -65,7 +65,7 @@ interface SceneCanvasCommandSurfaceOptions {
   /** The view's navigation over the runtime's driver host: every viewport command, each with today's viewport render (spec §1.1a). */
   readonly viewNavigation: Pick<
     ViewNavigation,
-    | 'zoomIn' | 'zoomOut' | 'zoomBy' | 'zoomToFit' | 'returnToDesign' | 'focusTemporaryBounds' | 'returnFromTemporaryFocus'
+    | 'zoomIn' | 'zoomOut' | 'zoomBy' | 'zoomToFit' | 'returnToDesign' | 'focusTemporaryBounds' | 'frameBounds' | 'returnFromTemporaryFocus'
     | 'showPlace' | 'setFramingInsets' | 'zoomToSelection' | 'resetNorth' | 'rotateBy' | 'beginRotation' | 'showCamera'
   >
   /** The live frame's px/m, which sizes screen-sized notes and plants (INV-XF-27). */
@@ -185,6 +185,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       zoomToFit: () => this.zoomToFit(),
       returnToDesign: () => this.returnToDesign(),
       focusTemporaryBounds: (bounds, options) => this.focusTemporaryBounds(bounds, options),
+      frameBounds: (bounds, options) => this.frameBounds(bounds, options),
       showPlace: (place, zoom, options) => this.showPlace(place, zoom, options),
       returnFromTemporaryFocus: () => this.returnFromTemporaryFocus(),
       setFramingInsets: (insets) => {
@@ -439,6 +440,12 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     options: TemporaryBoundsFocusOptions,
   ): boolean {
     const changed = this.options.viewNavigation.focusTemporaryBounds(bounds, options)
+    if (changed) this.options.invalidate('viewport')
+    return changed
+  }
+
+  private frameBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean {
+    const changed = this.options.viewNavigation.frameBounds(bounds, options)
     if (changed) this.options.invalidate('viewport')
     return changed
   }

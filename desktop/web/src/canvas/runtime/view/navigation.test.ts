@@ -264,6 +264,36 @@ describe('view navigation', () => {
     view.dispose()
   })
 
+  it('frameBounds frames as a temporary focus does and leaves no bookmark', () => {
+    const bounds = { minX: 0, minY: 0, maxX: 100, maxY: 50 }
+    const options = { paddingCssPx: 48, maximumScale: 5 }
+    const focused = createTestView({ viewport: { x: 10, y: 20, scale: 2 } })
+    expect(focused.navigation.focusTemporaryBounds(bounds, options)).toBe(true)
+    const framedView = createTestView({ viewport: { x: 10, y: 20, scale: 2 } })
+
+    expect(framedView.navigation.frameBounds(bounds, options)).toBe(true)
+
+    expect(placement(framedView)).toEqual(placement(focused))
+    expect(framedView.navigation.returnFromTemporaryFocus()).toBe(false)
+    expect(framedView.navigation.frameBounds({ minX: 1, minY: 0, maxX: 1, maxY: 10 }, options)).toBe(false)
+    focused.dispose()
+    framedView.dispose()
+  })
+
+  it('a return lands before the latest focus, whatever frameBounds did in between', () => {
+    const view = createTestView({ viewport: { x: 10, y: 20, scale: 2 } })
+    const before = placement(view)
+    expect(view.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 100, maxY: 50 }, { paddingCssPx: 48 })).toBe(true)
+
+    expect(view.navigation.frameBounds({ minX: 300, minY: 100, maxX: 350, maxY: 150 }, { paddingCssPx: 48 })).toBe(true)
+    expect(placement(view)).not.toEqual(before)
+
+    expect(view.navigation.returnFromTemporaryFocus()).toBe(true)
+    expect(placement(view)).toEqual(before)
+    expect(view.navigation.returnFromTemporaryFocus()).toBe(false)
+    view.dispose()
+  })
+
   it('rejects invalid temporary bounds without publishing a frame', () => {
     const view = createTestView({ screen: { width: 0, height: 0 } })
     expect(view.navigation.focusTemporaryBounds(

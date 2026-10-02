@@ -85,6 +85,7 @@ function createCommandSurface() {
       zoomToFit: () => {},
       returnToDesign: () => {},
       focusTemporaryBounds: () => false,
+      frameBounds: () => false,
       returnFromTemporaryFocus: () => false,
       showPlace: () => false,
       zoomBy: () => {},

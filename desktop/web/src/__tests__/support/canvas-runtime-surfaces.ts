@@ -58,6 +58,7 @@ export function createTestCanvasCommandSurface(
       zoomToFit: () => {},
       returnToDesign: () => {},
       focusTemporaryBounds: () => false,
+      frameBounds: () => false,
       returnFromTemporaryFocus: () => false,
       showPlace: () => false,
       setFramingInsets: () => {},
