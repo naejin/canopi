@@ -3,6 +3,7 @@ import { useFocusRegion } from './useFocusRegion'
 import { useRef } from 'preact/hooks'
 import { sidePanelWidth } from '../../app/shell/state'
 import { commitSidePanelWidth } from '../../app/shell/controller'
+import { DOCK_KEY_REGION } from '../../app/keyboard/target-class'
 import { t } from '../../i18n'
 import { usePointerResize } from './usePointerResize'
 import { useMapOccluder } from './useMapChrome'
@@ -50,6 +51,7 @@ export function SidePanelDock({
       ref={panelRef}
       className={`${styles.dock} ${responsive ? styles.responsive : ''}`}
       data-dock-width={wide ? 'wide' : 'default'}
+      data-key-region={DOCK_KEY_REGION}
       style={{
         '--side-panel-width': expanded
           ? `max(${baseWidth}, min(${MAX_EXPANDED_SIDEBAR_WIDTH}px, 90%))`

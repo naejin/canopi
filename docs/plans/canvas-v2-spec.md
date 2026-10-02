@@ -1443,7 +1443,8 @@ export type KeyScope =
   | 'global'          // every focus class except modal; in text only with worksInTextFields (every shell chord, Ctrl+K)
   | 'command'         // anywhere except text fields and dialogs: tool letters, [ ], N, Shift+N, Shift+L, Ctrl+V, Ctrl+Z…
   | 'view-arrows'     // Shift+←/→/↑: like 'command', but not inside an arrow-owning widget
-  | 'canvas-focus'    // focus on the map host (not text inside it), or <body> after a press or focus on the map: plain and mod arrows, Enter, Space, Delete, Backspace, F2, + / −, Menu, the selection edits
+  | 'outside-dock'    // like 'command', but not from the side-panel dock or phone sheet (focus there, or <body> after a press or focus there): the selection edits, Delete, Backspace
+  | 'canvas-focus'    // focus on the map host (not text inside it), or <body> after a press or focus on the map: plain and mod arrows, Enter, Space, Backspace in a draft, F2, + / −, Menu
 /** A shell command (app/shell-commands), a canvas catalogue command (CanvasCommandId, app/canvas-commands/index.ts: tool letters,
  *  edit.undo, canvas.deleteSelected, view.zoomIn …) or a canvas key command ('canvas.<CanvasKeyCommand kind>'). */
 export type KeyCommandId = ShellCommandId | CanvasCommandId | `canvas.${CanvasKeyCommand['kind']}`
@@ -1550,7 +1551,7 @@ Bubble listener, skipped for a key already `defaultPrevented` (an element handle
 6. In `text`, the rows with `worksInTextFields`: every shell row but a single key, F2 (rename the Design) included, as before the router, and Ctrl+K; canvas rows stay out. In every other class but `modal`, the `global` rows. Ctrl F is a global row whose command asks the open panel's plant finder first and otherwise opens Edit › Find plants (today `shortcuts/manager.ts:15-20`).
 7. Non-modal pushed scopes: the Stories Undo toast (Ctrl Z while the toast is on screen, today `app/stories/actions.ts` `runStoryUndoShortcut`). Popovers and menus are not scopes: their Esc is an Esc layer (step 8), and their arrows are handled by their own element (arrow-owning widgets).
 8. Esc runs the Esc chain (popovers 100, canvas menu 80, … §3.7). An open text entry never reaches this step: its own element handler cancels it first, and focus class `text` keeps the canvas layers off; the selection layer also needs focus class `map` (U10).
-9. Keymap match: `command` rows in `map` and `other`; `view-arrows` the same except in an arrow-owning widget; `canvas-focus` only in `map`.
+9. Keymap match: `command` rows in `map` and `other`; `view-arrows` the same except in an arrow-owning widget; `outside-dock` the same except from the side-panel dock or phone sheet (focus there, or `<body>` after a press or focus there); `canvas-focus` only in `map`.
 10. Dispatch: `preventDefault` and `stopPropagation`; canvas commands through the port; a port `command()` that returns false runs the row's `fallback` through the platform's `CommandSink` (Desktop `commands/registry.ts`, Web `web/browser-shell-commands.ts`), and without a fallback the key is not consumed. Each chord has one row per scope; rows are never tried in turn (fixture H27).
 
 Canvas-focus rows run only with focus on the map host, or on `<body>` after a press on the map, where no widget handler runs, so moving them from today's capture listener to bubble changes no outcome. A focused widget without a role that handles arrows (the scale button, `ZoomControls.tsx:138-143`) runs first and prevents the default, so Shift+↑ on it opens the scale menu and does not reset north. Fixtures I10, I11, I12, I12b and H23–H27 hold the outcomes (§5.8).
@@ -1846,7 +1847,7 @@ The Scope column is built in F (no legacy rebuild, U7); until then the keyboard 
 | macOS Ctrl+arrows | not bound (Mission Control) | — | — | — |
 | Shift+G, Shift+S, Shift+R | grid, snap to grid, rulers (rulers while rotated: on, hidden, with the hint) | `command` | follows | unchanged |
 | [ / ] | a held stamp: turn it −15° / +15°; otherwise send to back / bring to front | `command` | follows, except that a held stamp's turn also works on map focus with the switch off (today, `keyboard-port.ts:198-206`; fixture H24) | unchanged |
-| Delete, Backspace | delete the selection. Backspace during a polygon draft removes the last corner instead. Delete on a focused or selected corner handle removes that corner (from 2) | `canvas-focus` | n/a | F (was `command`), corner from 2 |
+| Delete, Backspace | delete the selection. Backspace during a polygon draft removes the last corner instead. Delete on a focused or selected corner handle removes that corner (from 2) | `outside-dock` (Backspace in a draft: `canvas-focus`) | n/a | F (was `command`), corner from 2 |
 | Enter | Polygon draft: finish (3+ corners). One selected note: edit its text. Compass focused: reset north | `canvas-focus` | n/a | unchanged; compass 1 |
 | F2 | one selected note with map focus: edit its text; otherwise rename the Design | `canvas-focus`, then shell | n/a | unchanged |
 | Space (held) | a left drag pans in every tool | `canvas-focus` | n/a | unchanged |
@@ -1857,9 +1858,9 @@ The Scope column is built in F (no legacy rebuild, U7); until then the keyboard 
 | Ctrl+Plus / Ctrl+Minus | zoom in / out one step | `command` | n/a | step unified in 2 |
 | Shift+F, Ctrl+0, Home | fit the Design at the current bearing | `command` (Home: `canvas-focus`, spec) | Shift+F follows | Home 2 |
 | Shift+2 | zoom to the selection at the current bearing | `command` | follows (spec: like Shift+G) | 2 |
-| Ctrl+Alt+R | rotate the selection | `canvas-focus` | n/a | F (was `command`) |
+| Ctrl+Alt+R | rotate the selection | `outside-dock` | n/a | F (was `command`) |
 | Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y | undo, redo; during a polygon draft they undo and redo corners | `command` | n/a | unchanged |
-| Ctrl+X, C, D, A, Shift+A, G, Shift+G, Shift+L | cut, copy, duplicate, select all, same species, group, ungroup, lock: they act on the map's selection, so a dock panel keeps the browser's copy and select all | `canvas-focus` | n/a | F (was `command`) |
+| Ctrl+X, C, D, A, Shift+A, G, Shift+G, Shift+L | cut, copy, duplicate, select all, same species, group, ungroup, lock: they act on the map's selection from any focus but a text field and the dock or phone sheet, so a panel keeps the browser's copy and select all | `outside-dock` | n/a | F (was `command`) |
 | Ctrl+V | paste | `command` | n/a | unchanged |
 | Ctrl+K, Ctrl+S, F1, F6 | place search, save, shortcuts, next region; work in text fields, as every shell shortcut but a single key does (F2 included) | `global` | n/a | unchanged |
 | Tab, Shift+Tab | focus navigation | browser | n/a | unchanged |

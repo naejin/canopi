@@ -6,7 +6,7 @@ import * as documentActions from '../app/document-session/actions'
 import { commandPaletteOpen } from '../commands/registry'
 import type { KeyRouterHandle } from '../app/keyboard/key-router'
 import { installDesktopKeys } from './support/desktop-key-router'
-import { currentCanvasKeyboardPort, setCurrentCanvasSession } from '../canvas/session'
+import { setCurrentCanvasSession } from '../canvas/session'
 import { designSessionFixture } from './support/design-session-state'
 import {
   createTestCanvasCommandSurface,
@@ -16,15 +16,6 @@ import { registerPlantFinder } from '../app/plant-finder/focus'
 import { placeSearchFocusRequest } from '../app/geocoding/place-search-ui'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { applyRotateSelection, rotateSelectionDialog } from '../app/rotate-selection/state'
-
-/** A press on the map: the selection edits (Ctrl+C, Ctrl+A, Delete…) act on the map only after one, with nothing focused. */
-function pressOnMap(): void {
-  const host = currentCanvasKeyboardPort()!.host
-  if (!host.isConnected) attachedHosts.push(document.body.appendChild(host))
-  host.dispatchEvent(new Event('pointerdown', { bubbles: true }))
-}
-
-const attachedHosts: HTMLElement[] = []
 
 function mountCanvasCommandSurface(overrides: Parameters<typeof createTestCanvasCommandSurface>[0]): void {
   setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
@@ -50,7 +41,6 @@ describe('Desktop keys', () => {
 
   afterEach(() => {
     keys.dispose()
-    for (const host of attachedHosts.splice(0)) host.remove()
     setCurrentCanvasSession(null)
     activeTool.value = 'select'
     selectedObjectIds.value = new Set()
@@ -296,7 +286,6 @@ describe('Desktop keys', () => {
         ungroupSelected,
       },
     })
-    pressOnMap()
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true }))
     // Nothing is selected: selection edits stay quiet, Paste and Select all still run.
@@ -336,7 +325,6 @@ describe('Desktop keys', () => {
   it('leaves a disabled canvas edit\'s key to the browser, as the Web sink does', () => {
     const copy = vi.fn()
     mountCanvasCommandSurface({ sceneEdits: { copy } })
-    pressOnMap()
     const press = () => {
       const event = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true, cancelable: true })
       window.dispatchEvent(event)
@@ -367,7 +355,6 @@ describe('Desktop keys', () => {
       queries,
     }))
     selectedObjectIds.value = new Set(['plant-1'])
-    pressOnMap()
 
     // A lone plant has nothing to turn.
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', ctrlKey: true, altKey: true, code: 'KeyR' }))
@@ -378,7 +365,6 @@ describe('Desktop keys', () => {
     // On a Mac, Cmd Option R types ®: the physical key still names the shortcut.
     keys.dispose()
     keys = installDesktopKeys({ os: 'mac', engine: 'webkit', gestureEvents: false })
-    pressOnMap()
     window.dispatchEvent(new KeyboardEvent('keydown', { key: '®', metaKey: true, altKey: true, code: 'KeyR' }))
     expect(rotateSelectionDialog.value).not.toBeNull()
     applyRotateSelection('-30')
