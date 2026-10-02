@@ -4,11 +4,12 @@ import type { CanvasQueryRevision } from './runtime'
 import type { WorkspaceCameraFrameReader, WorkspaceCameraOwner } from './camera'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { SceneDesignObjectTarget } from './scene'
-import type { SessionPlane } from '../session-plane'
+import { createSessionPlane, type SessionPlane } from '../session-plane'
 import { drawInspectionLensScene } from './inspection-lens-drawing'
 import { getSceneLayerStyle } from './scene-visuals'
 import { inspectionLayout } from './inspection-layout'
 import { runCanvasRuntimeCleanups } from './cleanup'
+import { buildViewTransformFromPlane } from './view/view-transform'
 
 interface InspectionOwnerOptions {
   /** The main camera: its snapshot repaints the lens and gives the zoom reference; its host's live frame places the lens (0A-2). */
@@ -39,6 +40,7 @@ export class SceneCanvasInspectionOwner {
     let magnification = 1
     let highlightedId: string | null = null
     let frame: number | null = null
+    let lensViewRevision = 0
     let released = false
     const options = this.options
 
@@ -90,15 +92,22 @@ export class SceneCanvasInspectionOwner {
         const lensSnapshot: SceneRendererSnapshot = {
           ...snapshot,
           scene: { ...snapshot.scene, plants, annotations: [], measurementGuides: [], groups: [] },
-          viewport: { x: width / 2 - centre.x * scale, y: height / 2 - centre.y * scale, scale },
           selectedPlantIds: new Set(), selectedZoneIds: new Set(), selectedAnnotationIds: new Set(), selectedMeasurementGuideIds: new Set(),
           highlightedPlantIds: new Set(), highlightedZoneIds: new Set(), hoveredCanonicalName: null,
           hoverTarget: highlightedId ? { kind: 'plant', id: highlightedId, state: 'hover' } : null,
           speciesFocus: { canonicalName: null },
           revealedAnnotationId: null, selectionLabelPlantIds: new Set(),
         }
+        // The lens's own view: the inspected point at its centre, at bearing 0 (spec §4.13).
+        const lensView = buildViewTransformFromPlane({
+          planar: { x: width / 2 - centre.x * scale, y: height / 2 - centre.y * scale, scale, bearingDeg: 0 },
+          screen: { width, height, devicePixelRatio: dpr },
+          plane: options.readSessionPlane?.() ?? createSessionPlane({ lon: 0, lat: 0 }),
+          planeRevision: options.camera.host.frames.viewFrame.peek().view.planeRevision,
+          revision: ++lensViewRevision,
+        })
         try {
-          drawInspectionLensScene(ctx, lensSnapshot, { widthPx: width, heightPx: height, dpr })
+          drawInspectionLensScene(ctx, lensSnapshot, lensView, { widthPx: width, heightPx: height, dpr })
         } catch (error) {
           console.error('Canvas inspection preview unavailable:', error)
           ctx = null

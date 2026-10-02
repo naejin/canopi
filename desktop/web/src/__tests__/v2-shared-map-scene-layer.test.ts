@@ -9,7 +9,7 @@ import {
 import { createSharedMapSceneRendererComposition } from '../maplibre/shared-scene-renderer'
 import { SceneRuntimeRenderScheduler } from '../canvas/runtime/scene-runtime/render-scheduler'
 import type { DraftPresentation } from '../canvas/runtime/tools/draft'
-import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
+import { createTestRendererView, createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
 
 function createCanvas(): HTMLCanvasElement {
   const canvas = document.createElement('canvas')
@@ -345,7 +345,7 @@ describe('createSharedMapSceneLayer', () => {
     })
     const scheduler = new SceneRuntimeRenderScheduler({
       getRenderer: () => composition.renderer,
-      getViewport: () => ({ x: 0, y: 0, scale: 1 }),
+      getView: () => createTestRendererView({ x: 0, y: 0, scale: 1 }),
       prepareSceneRender: async () => ({ publish: () => createTestSceneRendererSnapshot() }),
       renderChrome: vi.fn(),
     })

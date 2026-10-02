@@ -4,10 +4,12 @@ import {
   MapLibreSceneRendererBridge,
   type MapLibreSceneRenderTarget,
 } from '../canvas/runtime/renderers/maplibre-scene'
-import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
+import type { SceneChangeSet, SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
 import { createSharedMapSceneRendererComposition } from '../maplibre/shared-scene-renderer'
 import type { SharedMapSceneMap, SharedPixiRenderer } from '../maplibre/shared-scene-layer'
-import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
+import { createTestRendererView, createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
+
+const WHOLE_SCENE: SceneChangeSet = { scene: true, selection: true, hover: [], style: true, labels: true }
 
 function createTarget() {
   const target = {
@@ -26,11 +28,11 @@ describe('MapLibre scene renderer bridge', () => {
     )
     const first = createTestSceneRendererSnapshot()
     const latest = createTestSceneRendererSnapshot({
-      viewport: { x: 30, y: 40, scale: 5 },
+      speciesFocus: { canonicalName: 'Malus domestica' },
     })
 
-    instance.renderScene(first)
-    instance.renderScene(latest)
+    instance.syncScene(first, WHOLE_SCENE)
+    instance.syncScene(latest, WHOLE_SCENE)
     const target = createTarget()
     bridge.connect(target)
 
@@ -48,8 +50,8 @@ describe('MapLibre scene renderer bridge', () => {
     )
     const snapshot = createTestSceneRendererSnapshot()
 
-    instance.renderScene(snapshot)
-    instance.setViewport({ x: 80, y: 90, scale: 10 })
+    instance.syncScene(snapshot, WHOLE_SCENE)
+    instance.setView(createTestRendererView({ x: 80, y: 90, scale: 10 }))
 
     expect(target.setSnapshot).toHaveBeenCalledExactlyOnceWith(snapshot)
     expect(target.requestRender).toHaveBeenCalledOnce()
@@ -69,7 +71,7 @@ describe('MapLibre scene renderer bridge', () => {
 
     firstConnection.disconnect()
     const snapshot = createTestSceneRendererSnapshot()
-    instance.renderScene(snapshot)
+    instance.syncScene(snapshot, WHOLE_SCENE)
 
     expect(firstTarget.setSnapshot).not.toHaveBeenCalled()
     expect(secondTarget.setSnapshot).toHaveBeenCalledExactlyOnceWith(snapshot)
@@ -119,12 +121,12 @@ describe('MapLibre scene renderer bridge', () => {
     layer.layer.onAdd!(map as never, gl)
     const active = await composition.renderer.initialize({ container: document.createElement('div') })
     const snapshot = createTestSceneRendererSnapshot()
-    active.renderScene(snapshot)
+    active.syncScene(snapshot, WHOLE_SCENE)
     layer.layer.render(gl, {} as never)
 
     expect(onFailure).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ message: 'shared scene failed' }))
     // The renderer keeps publishing; the workspace coordinator owns unmounting it.
-    expect(() => active.renderScene(snapshot)).not.toThrow()
+    expect(() => active.syncScene(snapshot, WHOLE_SCENE)).not.toThrow()
     await layer.dispose({ mapWillBeRemoved: true })
     await active.dispose()
   })
@@ -137,7 +139,7 @@ describe('MapLibre scene renderer bridge', () => {
     const instance = await bridge.createRenderer().initialize(
       { container: document.createElement('div') },
     )
-    instance.renderScene(createTestSceneRendererSnapshot())
+    instance.syncScene(createTestSceneRendererSnapshot(), WHOLE_SCENE)
 
     await instance.dispose()
     const replacement = createTarget()

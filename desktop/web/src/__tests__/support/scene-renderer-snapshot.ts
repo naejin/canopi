@@ -12,7 +12,6 @@ import { createSessionPlane } from '../../canvas/session-plane'
 export interface TestSceneRendererSnapshotOptions {
   readonly speciesFocus?: SceneRendererSnapshot['speciesFocus']
   readonly scene?: Partial<ScenePersistedState>
-  readonly viewport?: SceneRendererSnapshot['viewport']
   readonly selectedTargets?: SceneDesignObjectSelection
   readonly highlightedPlantIds?: SceneRendererSnapshot['highlightedPlantIds']
   readonly highlightedZoneIds?: SceneRendererSnapshot['highlightedZoneIds']
@@ -45,7 +44,6 @@ export function createTestSceneRendererSnapshot(
 
   return {
     scene,
-    viewport: options.viewport ?? { x: 0, y: 0, scale: 1 },
     selectionLabelPlantIds: new Set(singleSelectedPlant ? [singleSelectedPlant.id] : []),
     revealedAnnotationId: getRevealedAnnotationId(selectedTargets),
     ...selectionProjection,

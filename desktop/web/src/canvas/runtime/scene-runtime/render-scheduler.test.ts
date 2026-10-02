@@ -1,22 +1,25 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SceneRendererDefinition, SceneRendererInstance } from '../renderers/scene-types'
-import { createTestSceneRendererSnapshot } from '../../../__tests__/support/scene-renderer-snapshot'
+import type { SceneRenderer, SceneRendererDefinition } from '../renderers/scene-types'
+import { createTestRendererView, createTestSceneRendererSnapshot } from '../../../__tests__/support/scene-renderer-snapshot'
 import {
   SceneRendererMountCancelledError,
   SceneRuntimeRenderScheduler,
 } from './render-scheduler'
 
-function createRenderer(id = 'maplibre-pixi'): SceneRendererInstance {
+const VIEW = createTestRendererView({ x: 0, y: 0, scale: 1 })
+
+function createRenderer(): SceneRenderer {
   return {
-    id,
-    renderScene: vi.fn(),
-    setViewport: vi.fn(),
+    id: 'maplibre-pixi',
+    syncScene: vi.fn(),
+    setView: vi.fn(),
+    setDraft: vi.fn(),
     dispose: vi.fn(),
   }
 }
 
 function definitionFor(
-  renderer: SceneRendererInstance,
+  renderer: SceneRenderer,
   initialize: SceneRendererDefinition['initialize'] = () => renderer,
 ): SceneRendererDefinition {
   return { id: renderer.id, initialize: vi.fn(initialize) }
@@ -28,7 +31,7 @@ function createScheduler(
 ): SceneRuntimeRenderScheduler {
   return new SceneRuntimeRenderScheduler({
     getRenderer: () => definition,
-    getViewport: () => ({ x: 0, y: 0, scale: 1 }),
+    getView: () => VIEW,
     prepareSceneRender: async () => ({
       publish: () => createTestSceneRendererSnapshot(),
     }),
@@ -65,7 +68,7 @@ describe('SceneRuntimeRenderScheduler', () => {
 
     expect(definition.initialize).toHaveBeenCalledExactlyOnceWith({ container })
     expect(scheduler.container).toBe(container)
-    expect(renderer.renderScene).toHaveBeenCalledOnce()
+    expect(renderer.syncScene).toHaveBeenCalledOnce()
     scheduler.dispose()
   })
 
@@ -85,7 +88,7 @@ describe('SceneRuntimeRenderScheduler', () => {
     await expect(scheduler.initialize(document.createElement('div'))).rejects.toBe(failure)
     expect(scheduler.container).toBeNull()
     await scheduler.renderScene()
-    expect(renderer.renderScene).not.toHaveBeenCalled()
+    expect(renderer.syncScene).not.toHaveBeenCalled()
   })
 
   it('coalesces a burst of camera changes into one frame using the latest viewport', async () => {
@@ -94,17 +97,17 @@ describe('SceneRuntimeRenderScheduler', () => {
     vi.stubGlobal('requestAnimationFrame', request)
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
     const renderer = createRenderer()
-    let viewport = { x: 0, y: 0, scale: 20 }
-    const scheduler = createScheduler(definitionFor(renderer), { getViewport: () => viewport })
+    let view = createTestRendererView({ x: 0, y: 0, scale: 20 })
+    const scheduler = createScheduler(definitionFor(renderer), { getView: () => view })
     await scheduler.initialize(document.createElement('div'))
     for (let i = 0; i < 10; i++) {
-      viewport = { x: i, y: i, scale: 20 + i }
+      view = createTestRendererView({ x: i, y: i, scale: 20 + i })
       scheduler.invalidate('viewport')
     }
     expect(request).toHaveBeenCalledOnce()
-    expect(renderer.setViewport).not.toHaveBeenCalled()
+    expect(renderer.setView).not.toHaveBeenCalled()
     frame(0)
-    await vi.waitFor(() => expect(renderer.setViewport).toHaveBeenCalledExactlyOnceWith(viewport))
+    await vi.waitFor(() => expect(renderer.setView).toHaveBeenCalledExactlyOnceWith(view))
     scheduler.dispose()
   })
 
@@ -116,8 +119,8 @@ describe('SceneRuntimeRenderScheduler', () => {
 
     scheduler.resize(400, 300)
 
-    expect(renderer.setViewport).toHaveBeenCalledExactlyOnceWith({ x: 0, y: 0, scale: 1 })
-    expect(renderer.renderScene).not.toHaveBeenCalled()
+    expect(renderer.setView).toHaveBeenCalledExactlyOnceWith(VIEW)
+    expect(renderer.syncScene).not.toHaveBeenCalled()
     expect(renderChrome).toHaveBeenCalledOnce()
     scheduler.dispose()
   })
@@ -136,11 +139,11 @@ describe('SceneRuntimeRenderScheduler', () => {
     scheduler.invalidate('scene')
     scheduler.invalidate('viewport')
     await Promise.resolve()
-    expect(renderer.renderScene).not.toHaveBeenCalled()
+    expect(renderer.syncScene).not.toHaveBeenCalled()
     expect(request).toHaveBeenCalledOnce()
     frame(0)
-    await vi.waitFor(() => expect(renderer.renderScene).toHaveBeenCalledOnce())
-    expect(renderer.setViewport).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(renderer.syncScene).toHaveBeenCalledOnce())
+    expect(renderer.setView).not.toHaveBeenCalled()
     scheduler.invalidate('scene')
     scheduler.dispose()
     expect(cancel).toHaveBeenCalledWith(7)
@@ -162,8 +165,8 @@ describe('SceneRuntimeRenderScheduler', () => {
     expect(renderer.dispose).toHaveBeenCalledOnce()
     expect(scheduler.container).toBeNull()
     expect(request).not.toHaveBeenCalled()
-    expect(renderer.renderScene).not.toHaveBeenCalled()
-    expect(renderer.setViewport).not.toHaveBeenCalled()
+    expect(renderer.syncScene).not.toHaveBeenCalled()
+    expect(renderer.setView).not.toHaveBeenCalled()
   })
 
   it('does not draw a prepared scene after unmount overtakes its preparation', async () => {
@@ -179,11 +182,11 @@ describe('SceneRuntimeRenderScheduler', () => {
     preparation.resolve({ publish: () => createTestSceneRendererSnapshot() })
     await render
 
-    expect(renderer.renderScene).not.toHaveBeenCalled()
+    expect(renderer.syncScene).not.toHaveBeenCalled()
   })
 
   it('rejects a second mount while one is pending or active', async () => {
-    const pendingRenderer = deferred<SceneRendererInstance>()
+    const pendingRenderer = deferred<SceneRenderer>()
     const renderer = createRenderer()
     const scheduler = createScheduler(definitionFor(renderer, () => pendingRenderer.promise))
     const acceptedContainer = document.createElement('div')
@@ -199,7 +202,7 @@ describe('SceneRuntimeRenderScheduler', () => {
   })
 
   it('disposes a renderer whose mount settles after disposal', async () => {
-    const pendingRenderer = deferred<SceneRendererInstance>()
+    const pendingRenderer = deferred<SceneRenderer>()
     const renderer = createRenderer()
     const scheduler = createScheduler(definitionFor(renderer, () => pendingRenderer.promise))
 
@@ -249,7 +252,7 @@ describe('SceneRuntimeRenderScheduler', () => {
       const pendingWhenDrawn: boolean[] = []
       const renderer = {
         ...createRenderer(),
-        renderScene: vi.fn(() => { pendingWhenDrawn.push(scheduler.scenePending.value) }),
+        syncScene: vi.fn(() => { pendingWhenDrawn.push(scheduler.scenePending.value) }),
       }
       const { scheduler, runFrame, prepare } = await createControlledScheduler(renderer)
       expect(scheduler.scenePending.value).toBe(false)
@@ -261,7 +264,7 @@ describe('SceneRuntimeRenderScheduler', () => {
       expect(scheduler.scenePending.value, 'still pending while the render is prepared').toBe(true)
       prepare(0)
 
-      await vi.waitFor(() => expect(renderer.renderScene).toHaveBeenCalledOnce())
+      await vi.waitFor(() => expect(renderer.syncScene).toHaveBeenCalledOnce())
       expect(pendingWhenDrawn).toEqual([true])
       expect(scheduler.scenePending.value, 'MapLibre draws the snapshot in its next frame').toBe(true)
       runFrame()
@@ -281,12 +284,12 @@ describe('SceneRuntimeRenderScheduler', () => {
       prepare(0)
       await Promise.resolve()
       await Promise.resolve()
-      expect(renderer.renderScene).not.toHaveBeenCalled()
+      expect(renderer.syncScene).not.toHaveBeenCalled()
       expect(scheduler.scenePending.value, 'the later edit is not drawn yet').toBe(true)
 
       runFrame()
       prepare(1)
-      await vi.waitFor(() => expect(renderer.renderScene).toHaveBeenCalledOnce())
+      await vi.waitFor(() => expect(renderer.syncScene).toHaveBeenCalledOnce())
       runFrame()
       expect(scheduler.scenePending.value).toBe(false)
       scheduler.dispose()
@@ -298,14 +301,14 @@ describe('SceneRuntimeRenderScheduler', () => {
         ...createRenderer(),
         // The first draw raises a scene invalidation synchronously, before the scheduler asks
         // for the frame that settles it, so the next render's frame runs first.
-        renderScene: vi.fn(() => { if (++draws === 1) scheduler.invalidate('scene') }),
+        syncScene: vi.fn(() => { if (++draws === 1) scheduler.invalidate('scene') }),
       }
       const { scheduler, runFrame, prepare, frames } = await createControlledScheduler(renderer)
 
       scheduler.invalidate('scene')
       runFrame()
       prepare(0)
-      await vi.waitFor(() => expect(renderer.renderScene).toHaveBeenCalledOnce())
+      await vi.waitFor(() => expect(renderer.syncScene).toHaveBeenCalledOnce())
       expect(frames.size, 'the next render frame, then the settle frame of the first render').toBe(2)
 
       runFrame()
@@ -314,7 +317,7 @@ describe('SceneRuntimeRenderScheduler', () => {
       expect(scheduler.scenePending.value, 'the older render settling does not end the newer one').toBe(true)
 
       prepare(1)
-      await vi.waitFor(() => expect(renderer.renderScene).toHaveBeenCalledTimes(2))
+      await vi.waitFor(() => expect(renderer.syncScene).toHaveBeenCalledTimes(2))
       expect(scheduler.scenePending.value, 'MapLibre draws the newer snapshot in its next frame').toBe(true)
       runFrame()
       expect(scheduler.scenePending.value).toBe(false)
@@ -329,7 +332,7 @@ describe('SceneRuntimeRenderScheduler', () => {
       runFrame()
       scheduler.resize(400, 300)
 
-      await vi.waitFor(() => expect(renderer.setViewport).toHaveBeenCalledTimes(2))
+      await vi.waitFor(() => expect(renderer.setView).toHaveBeenCalledTimes(2))
       expect(scheduler.scenePending.value).toBe(false)
       scheduler.dispose()
     })
@@ -337,7 +340,7 @@ describe('SceneRuntimeRenderScheduler', () => {
     it('is idle once a scene render fails', async () => {
       const failure = new Error('renderer draw failed')
       const logError = vi.spyOn(console, 'error').mockImplementation(() => {})
-      const renderer = { ...createRenderer(), renderScene: vi.fn(() => { throw failure }) }
+      const renderer = { ...createRenderer(), syncScene: vi.fn(() => { throw failure }) }
       const { scheduler, runFrame, prepare } = await createControlledScheduler(renderer)
 
       scheduler.invalidate('scene')
@@ -372,7 +375,7 @@ describe('SceneRuntimeRenderScheduler', () => {
       prepare(0)
       await Promise.resolve()
       await Promise.resolve()
-      expect(renderer.renderScene, 'disposal fences the prepared render').not.toHaveBeenCalled()
+      expect(renderer.syncScene, 'disposal fences the prepared render').not.toHaveBeenCalled()
       expect(scheduler.scenePending.value).toBe(false)
     })
   })
@@ -382,7 +385,7 @@ describe('SceneRuntimeRenderScheduler', () => {
     const logError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const renderer = {
       ...createRenderer(),
-      setViewport: () => { throw resizeError },
+      setView: () => { throw resizeError },
     }
     const scheduler = createScheduler(definitionFor(renderer))
     await scheduler.initialize(document.createElement('div'))

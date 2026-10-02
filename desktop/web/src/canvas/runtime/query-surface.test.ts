@@ -27,7 +27,7 @@ async function mountedRuntime(): Promise<{ runtime: SceneCanvasRuntime, containe
   document.body.appendChild(container)
   Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
   Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
-  const renderer = { id: 'test', renderScene: vi.fn(), setViewport: vi.fn(), dispose: vi.fn() }
+  const renderer = { id: 'test', syncScene: vi.fn(), setView: vi.fn(), setDraft: vi.fn(), dispose: vi.fn() }
   ;(runtime as unknown as { _construction: { replaceRenderer(definition: unknown): void } })
     ._construction.replaceRenderer({ id: 'test', initialize: () => renderer })
   await runtime.init(container)

@@ -1,6 +1,5 @@
 import { buildCanvasPrintSnapshot } from './print-snapshot'
 import { getCanvasPlantNameLabels } from './automatic-detail'
-import { worldToScreen } from './annotation-layout'
 import { getSceneLayerStyle } from './scene-visuals'
 import { isWorkspaceOverviewScale } from '../workspace-camera-policy'
 import type { PlacedPlant } from '../../types/design'
@@ -126,12 +125,14 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
     if (frame.mode === 'overview' || width <= 0 || height <= 0) return { labelled: 0, inView: 0 }
     const snapshot = this.options.presentation.buildRendererSnapshot()
     if (!getSceneLayerStyle(snapshot.scene, 'plants').visible) return { labelled: 0, inView: 0 }
+    const { view } = this.options.camera.host.frames.viewFrame.peek()
     const inView = new Set<string>()
     for (const plant of snapshot.scene.plants) {
-      const point = worldToScreen(plant.position, snapshot.viewport)
+      const point = view.worldToScreen(plant.position)
       if (point.x >= 0 && point.y >= 0 && point.x <= width && point.y <= height) inView.add(plant.id)
     }
-    const labelled = new Set(getCanvasPlantNameLabels(snapshot, snapshot.viewport)
+    // Admission never depends on where the plane sits on screen, only on the scale.
+    const labelled = new Set(getCanvasPlantNameLabels(snapshot, { x: 0, y: 0, scale: view.pixelsPerMetre })
       .filter((label) => inView.has(label.plantId))
       .map((label) => label.plantId))
     return { labelled: labelled.size, inView: inView.size }

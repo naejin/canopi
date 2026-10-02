@@ -99,7 +99,6 @@ export function createTestCanvasQuerySurface({
       const visible = new Set(request.visibleLayerNames)
       return createTestSceneRendererSnapshot({
         scene: { ...scene, layers: scene.layers.map((layer) => ({ ...layer, visible: visible.has(layer.name) })) },
-        viewport: request.viewport,
         speciesFocus: { canonicalName: request.focusedSpecies },
       })
     },

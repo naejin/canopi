@@ -3,16 +3,25 @@ import { describe, expect, it, vi } from 'vitest'
 import { drawInspectionLensScene } from '../canvas/runtime/inspection-lens-drawing'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
 import type { SceneDesignObjectSelection } from '../canvas/runtime/scene'
-import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
+import { createTestRendererView, createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
+
+/** A lens snapshot and the placement its view draws it at (screen = world × scale + { x, y }, bearing 0). */
+interface LensScene {
+  readonly snapshot: SceneRendererSnapshot
+  readonly viewport: { readonly x: number; readonly y: number; readonly scale: number }
+}
 
 function draw(
   ctx: ReturnType<typeof createMockCanvasContext>,
-  snapshot: SceneRendererSnapshot,
+  scene: LensScene,
   options: { widthPx?: number; heightPx?: number; dpr?: number } = {},
 ): void {
-  drawInspectionLensScene(ctx as unknown as CanvasRenderingContext2D, snapshot, {
-    widthPx: options.widthPx ?? 400,
-    heightPx: options.heightPx ?? 300,
+  const widthPx = options.widthPx ?? 400
+  const heightPx = options.heightPx ?? 300
+  const view = createTestRendererView(scene.viewport, { screen: { width: widthPx, height: heightPx, devicePixelRatio: options.dpr ?? 1 } })
+  drawInspectionLensScene(ctx as unknown as CanvasRenderingContext2D, scene.snapshot, view, {
+    widthPx,
+    heightPx,
     dpr: options.dpr,
   })
 }
@@ -118,13 +127,11 @@ describe('drawInspectionLensScene', () => {
 
   it('rings the hovered lens plant with the shared hover visual', () => {
     const ctx = createMockCanvasContext()
-    draw(ctx, {
-      ...createRendererSnapshot({
-        plants: [createPlant({ id: 'a', position: { x: 10, y: 10 } }), createPlant({ id: 'b', position: { x: 30, y: 10 } })],
-        viewport: { x: 0, y: 0, scale: 10 },
-      }),
-      hoverTarget: { kind: 'plant', id: 'a', state: 'hover' },
+    const hovered = createRendererSnapshot({
+      plants: [createPlant({ id: 'a', position: { x: 10, y: 10 } }), createPlant({ id: 'b', position: { x: 30, y: 10 } })],
+      viewport: { x: 0, y: 0, scale: 10 },
     })
+    draw(ctx, { ...hovered, snapshot: { ...hovered.snapshot, hoverTarget: { kind: 'plant', id: 'a', state: 'hover' } } })
     const plainStrokes = createMockCanvasContext()
     draw(plainStrokes, createRendererSnapshot({
       plants: [createPlant({ id: 'a', position: { x: 10, y: 10 } }), createPlant({ id: 'b', position: { x: 30, y: 10 } })],
@@ -142,10 +149,10 @@ function createRendererSnapshot(overrides: {
   measurementGuides?: SceneRendererSnapshot['scene']['measurementGuides']
   layers?: SceneRendererSnapshot['scene']['layers']
   plantSpeciesSymbols?: Record<string, string>
-  viewport?: SceneRendererSnapshot['viewport']
+  viewport?: LensScene['viewport']
   selectedTargets?: SceneDesignObjectSelection
-} = {}): SceneRendererSnapshot {
-  return createTestSceneRendererSnapshot({
+} = {}): LensScene {
+  const snapshot = createTestSceneRendererSnapshot({
     scene: {
       plants: overrides.plants ?? [],
       zones: overrides.zones ?? [],
@@ -157,9 +164,9 @@ function createRendererSnapshot(overrides: {
       measurementGuides: overrides.measurementGuides ?? [],
       guides: [],
     },
-    viewport: overrides.viewport ?? { x: 10, y: 20, scale: 2 },
     selectedTargets: overrides.selectedTargets,
   })
+  return { snapshot, viewport: overrides.viewport ?? { x: 10, y: 20, scale: 2 } }
 }
 
 function createPlant(
@@ -186,6 +193,7 @@ function createPlant(
 function createMockCanvasContext() {
   return {
     setTransform: vi.fn(),
+    transform: vi.fn(),
     clearRect: vi.fn(),
     fillRect: vi.fn(),
     translate: vi.fn(),
@@ -235,6 +243,16 @@ function createTransformTrackingCanvasContext(backingStoreScale: number) {
       transform = { a, b, c, d, e, f }
     }),
     getTransform: vi.fn(() => ({ ...transform })),
+    transform: vi.fn((a: number, b: number, c: number, d: number, e: number, f: number) => {
+      transform = {
+        a: transform.a * a + transform.c * b,
+        b: transform.b * a + transform.d * b,
+        c: transform.a * c + transform.c * d,
+        d: transform.b * c + transform.d * d,
+        e: transform.a * e + transform.c * f + transform.e,
+        f: transform.b * e + transform.d * f + transform.f,
+      }
+    }),
     translate: vi.fn((x: number, y: number) => {
       transform = {
         ...transform,

@@ -8,6 +8,7 @@ import { Container, Text, Ticker, WebGLRenderer, type WebGLOptions } from 'pixi.
 import type { CustomLayerInterface, CustomRenderMethodInput } from 'maplibre-gl'
 import { createPixiScenePresentation, type PixiScenePresentation } from '../canvas/runtime/renderers/pixi-scene'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
+import type { SceneViewportState } from '../canvas/runtime/scene'
 import type { DraftPresentation } from '../canvas/runtime/tools/draft'
 import { buildViewTransformFromPlane } from '../canvas/runtime/view/view-transform'
 import { createSessionPlane } from '../canvas/session-plane'
@@ -136,7 +137,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
   let presentation: PixiScenePresentation | null = null
   let pendingSnapshot: SceneRendererSnapshot | null = null
   let renderedSnapshot: SceneRendererSnapshot | null = null
-  let presentedViewport: SceneRendererSnapshot['viewport'] | null = null
+  let presentedViewport: SceneViewportState | null = null
   let viewRevision = 0
   let draft: DraftPresentation | null = null
   let initializePromise: Promise<void> | null = null
@@ -399,8 +400,8 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
 }
 
 function sameViewport(
-  left: SceneRendererSnapshot['viewport'] | null,
-  right: SceneRendererSnapshot['viewport'],
+  left: SceneViewportState | null,
+  right: SceneViewportState,
 ): boolean {
   return left?.x === right.x && left.y === right.y && left.scale === right.scale
 }

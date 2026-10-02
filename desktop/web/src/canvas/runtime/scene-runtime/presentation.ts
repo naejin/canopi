@@ -17,7 +17,6 @@ import type {
   ScenePersistedState,
   ScenePlantEntity,
   SceneStateReader,
-  SceneViewportState,
 } from '../scene'
 import { isSceneDesignObjectLocked } from '../scene'
 import { resolveSceneObjectGroupMembers, sceneObjectGroupMemberLayerName } from '../scene'
@@ -25,7 +24,8 @@ import { projectSceneSelectionEntityIds } from './selection'
 
 interface SceneRuntimePresentationControllerOptions {
   sceneStore: SceneStateReader
-  getViewport(): SceneViewportState
+  /** The live frame's scale, for plant presentation contexts (`view.pixelsPerMetre`). */
+  readPixelsPerMetre(): number
   getLocale(): string
   resolveHighlightedTargets(scene: ScenePersistedState): {
     plantIds: readonly string[]
@@ -52,7 +52,7 @@ export interface PlantPresentationBackfill {
 
 export class SceneRuntimePresentationController {
   private readonly _sceneStore: SceneStateReader
-  private readonly _getViewport: () => SceneViewportState
+  private readonly _readPixelsPerMetre: () => number
   private readonly _getLocale: () => string
   private readonly _resolveHighlightedTargets: SceneRuntimePresentationControllerOptions['resolveHighlightedTargets']
   private readonly _onPlantNamesChanged: () => void
@@ -65,7 +65,7 @@ export class SceneRuntimePresentationController {
 
   constructor(options: SceneRuntimePresentationControllerOptions) {
     this._sceneStore = options.sceneStore
-    this._getViewport = options.getViewport
+    this._readPixelsPerMetre = options.readPixelsPerMetre
     this._getLocale = options.getLocale
     this._resolveHighlightedTargets = options.resolveHighlightedTargets
     this._onPlantNamesChanged = options.onPlantNamesChanged
@@ -90,7 +90,7 @@ export class SceneRuntimePresentationController {
   }
 
   createPlantPresentationContext(
-    viewportScale = this._getViewport().scale,
+    viewportScale = this._readPixelsPerMetre(),
     plants: readonly ScenePlantEntity[] = this._sceneStore.persisted.plants,
   ): PlantPresentationContext {
     return {
@@ -125,8 +125,7 @@ export class SceneRuntimePresentationController {
     if (presented) return this.buildPresentedSnapshot(presented, options.overview === true)
     const scene = this._sceneStore.persisted
     const session = this._sceneStore.session
-    const viewport = this._getViewport()
-    if (options.overview) return buildOverviewRendererSnapshot(scene, session.speciesFocus, viewport)
+    if (options.overview) return buildOverviewRendererSnapshot(scene, session.speciesFocus)
     const hoveredPlant = session.hoveredTarget?.kind === 'plant'
       ? scene.plants.find((plant) => plant.id === session.hoveredTarget?.id)
       : null
@@ -142,7 +141,6 @@ export class SceneRuntimePresentationController {
     return {
       scene,
       speciesFocus: session.speciesFocus,
-      viewport,
       selectionLabelPlantIds,
       revealedAnnotationId: getRevealedAnnotationId(session.selectedTargets),
       ...selectionProjection,
@@ -157,7 +155,6 @@ export class SceneRuntimePresentationController {
 
   private buildPresentedSnapshot(visible: ReadonlySet<string>, overview: boolean): SceneRendererSnapshot {
     const snapshot = this.buildViewCaptureSnapshot({
-      viewport: this._getViewport(),
       overview,
       visibleLayerNames: [...visible],
       focusedSpecies: this._sceneStore.session.speciesFocus.canonicalName,
@@ -171,7 +168,6 @@ export class SceneRuntimePresentationController {
    * the requested layers visible, no selection, hover or panel highlight.
    */
   buildViewCaptureSnapshot(request: {
-    readonly viewport: SceneViewportState
     readonly overview: boolean
     readonly visibleLayerNames: readonly string[]
     readonly focusedSpecies: string | null
@@ -184,15 +180,13 @@ export class SceneRuntimePresentationController {
       layers: persisted.layers.map((layer) => ({ ...layer, visible: visible.has(layer.name) })),
     }
     const speciesFocus = { canonicalName: request.focusedSpecies }
-    const { viewport } = request
-    if (request.overview) return buildOverviewRendererSnapshot(scene, speciesFocus, viewport)
+    if (request.overview) return buildOverviewRendererSnapshot(scene, speciesFocus)
     const localizedCommonNames = this.getLocalizedCommonNames()
     const speciesCache = this._speciesCache.getCache()
     const selectionLabelPlantIds = new Set<string>()
     return {
       scene,
       speciesFocus,
-      viewport,
       selectionLabelPlantIds,
       revealedAnnotationId: null,
       selectedPlantIds: new Set(),
@@ -317,7 +311,6 @@ export class SceneRuntimePresentationController {
 function buildOverviewRendererSnapshot(
   scene: ScenePersistedState,
   speciesFocus: SceneRendererSnapshot['speciesFocus'],
-  viewport: SceneViewportState,
 ): SceneRendererSnapshot {
   return {
     scene: {
@@ -330,7 +323,6 @@ function buildOverviewRendererSnapshot(
       guides: [],
     },
     speciesFocus,
-    viewport,
     selectionLabelPlantIds: new Set(),
     revealedAnnotationId: null,
     selectedPlantIds: new Set(),

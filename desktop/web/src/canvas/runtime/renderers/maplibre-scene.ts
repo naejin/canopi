@@ -1,8 +1,7 @@
-import type { SceneViewportState } from '../scene'
 import type { DraftPresentation } from '../tools/draft'
 import type {
+  SceneRenderer,
   SceneRendererDefinition,
-  SceneRendererInstance,
   SceneRendererSnapshot,
 } from './scene-types'
 
@@ -14,6 +13,7 @@ export const MAPLIBRE_SCENE_RENDERER_ID = 'maplibre-pixi'
  */
 export interface MapLibreSceneRenderTarget {
   setSnapshot(snapshot: SceneRendererSnapshot): void
+  /** A camera frame: the layer reads the view itself when MapLibre draws it. */
   requestRender(): void
   /** The shared scene layer hands these to its Pixi draft layer; optional for targets that draw no drafts (test fakes). */
   setDraft?(draft: DraftPresentation | null): void
@@ -65,7 +65,7 @@ export class MapLibreSceneRendererBridge {
         const generation = ++this.backendGeneration
         this.activeBackendGeneration = generation
 
-        const instance: SceneRendererInstance = {
+        const instance: SceneRenderer = {
           id: MAPLIBRE_SCENE_RENDERER_ID,
           dispose: () => {
             if (this.activeBackendGeneration !== generation) return
@@ -73,12 +73,13 @@ export class MapLibreSceneRendererBridge {
             this.latestSnapshot = null
             this.latestDraft = null
           },
-          renderScene: (snapshot) => {
+          // The Pixi presentation redraws everything it is given until phase R reads the change set.
+          syncScene: (snapshot) => {
             this.assertBackendCurrent(generation)
             this.latestSnapshot = snapshot
             this.target?.setSnapshot(snapshot)
           },
-          setViewport: (_viewport: SceneViewportState) => {
+          setView: () => {
             this.assertBackendCurrent(generation)
             this.target?.requestRender()
           },

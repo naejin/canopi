@@ -1,5 +1,5 @@
 import type { SpeciesFocus } from '../species-key'
-import type { SceneDesignObjectTarget, ScenePersistedState, SceneViewportState } from '../scene'
+import type { SceneDesignObjectTarget, ScenePersistedState } from '../scene'
 import type { DraftPresentation } from '../tools/draft'
 import type { ViewTransform } from '../view/types'
 import type { SpeciesCacheEntry } from '../species-cache'
@@ -20,7 +20,6 @@ export type SceneRendererHoverTarget =
 export interface SceneRendererSnapshot {
   readonly speciesFocus: SpeciesFocus
   readonly scene: ScenePersistedState
-  readonly viewport: SceneViewportState
   readonly revealedAnnotationId: string | null
   readonly selectionLabelPlantIds: ReadonlySet<string>
   readonly selectedPlantIds: ReadonlySet<string>
@@ -41,29 +40,10 @@ interface SceneRendererContext {
   readonly container: HTMLElement
 }
 
-/**
- * The mounted scene renderer. MapLibre owns the drawing surface, its size and
- * its frame loop, so the renderer only receives retained scene state and
- * camera-only updates.
- */
-export interface SceneRendererInstance {
-  readonly id: string
-  // Full scene/content refresh. Retain unchanged graphics across selection/presentation changes.
-  renderScene(snapshot: SceneRendererSnapshot): void
-  // Camera-only update. Must not assume the runtime will provide a fresh scene snapshot.
-  setViewport(viewport: SceneViewportState): void
-  /**
-   * Tool drafts (the ToolHost's renderer sink), for the Pixi draft layer. Optional in 0B because test fakes build
-   * this interface as a literal; SceneRenderer (end of 0D2) requires it.
-   */
-  setDraft?(draft: DraftPresentation | null): void
-  dispose(): void | PromiseLike<void>
-}
-
 /** The one scene renderer the runtime mounts (ADR 0004): there is no selection or fallback. */
 export interface SceneRendererDefinition {
   readonly id: string
-  initialize(context: SceneRendererContext): SceneRendererInstance | PromiseLike<SceneRendererInstance>
+  initialize(context: SceneRendererContext): SceneRenderer | PromiseLike<SceneRenderer>
 }
 
 export interface SceneChangeSet {
@@ -71,9 +51,13 @@ export interface SceneChangeSet {
   readonly selection: boolean
   readonly hover: readonly SceneDesignObjectTarget[]        // old and new hover target only: a two-node restyle
   readonly style: boolean                                   // theme, backdrop, plant display settings
-  readonly labels: boolean                                  // label admission recomputed (settled or band change)
+  readonly labels: boolean                                  // label admission recomputed (each scale change; from phase R, settle or band change)
 }
 
+/**
+ * The mounted scene renderer (spec §1.5). MapLibre owns the drawing surface, its size and its frame loop, so the renderer
+ * receives retained scene data through `syncScene` and the camera through `setView`, and nothing else.
+ */
 export interface SceneRenderer {
   readonly id: 'maplibre-pixi'
   /** Data, selection, hover, style or label admission changed. Never called for a pan. No camera in the snapshot. */

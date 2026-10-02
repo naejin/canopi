@@ -176,7 +176,7 @@ export function createSceneRuntimeConstruction(
   const presentationData = appAdapter.presentationData
   const presentation = new SceneRuntimePresentationController({
     sceneStore,
-    getViewport: () => camera.viewport,
+    readPixelsPerMetre: readViewScale,
     getLocale: () => appAdapter.settings.readLocale(),
     resolveHighlightedTargets: callbacks.resolveHighlightedTargets,
     onPlantNamesChanged: callbacks.incrementPlantNamesRevision,
@@ -188,7 +188,7 @@ export function createSceneRuntimeConstruction(
   disposeEffects.push(cameraOwner.followScenePlane(sceneStore.sessionPlaneSignal))
   const rendering = new SceneRuntimeRenderScheduler({
     getRenderer: () => renderer,
-    getViewport: () => camera.viewport,
+    getView: () => cameraHost.frames.viewFrame.peek().view,
     prepareSceneRender: async () => {
       if (camera.snapshot.peek().mode === 'overview') {
         return {

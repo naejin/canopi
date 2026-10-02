@@ -18,7 +18,7 @@ describe('scene text presentation', () => {
     const store = new SceneStore()
     store.updatePersisted((scene) => Object.assign(scene, createZoomCalibrationScene('garden')))
     const presentation = new SceneRuntimePresentationController({ sceneStore: store,
-      getViewport: () => ({ x: 0, y: 0, scale: 4 }), getLocale: () => 'en',
+      readPixelsPerMetre: () => 4, getLocale: () => 'en',
       resolveHighlightedTargets: () => ({ plantIds: [], zoneIds: [] }), onPlantNamesChanged: () => {},
     })
     for (const selection of [
@@ -36,7 +36,7 @@ describe('scene text presentation', () => {
     store.updatePersisted((scene) => Object.assign(scene, createZoomCalibrationScene('garden')))
     const before = store.persisted
     const presentation = new SceneRuntimePresentationController({
-      sceneStore: store, getViewport: () => ({ x: 0, y: 0, scale: 4 }),
+      sceneStore: store, readPixelsPerMetre: () => 4,
       getLocale: () => 'en', resolveHighlightedTargets: () => ({ plantIds: [], zoneIds: [] }),
       onPlantNamesChanged: () => {},
     })

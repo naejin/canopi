@@ -25,7 +25,7 @@ function setup() {
     incrementSceneRevision: () => {}, syncCanvasSignalsFromScene: () => {}, invalidate: () => {},
   })
   const presentation = new SceneRuntimePresentationController({
-    sceneStore: store, getViewport: () => camera.viewport, getLocale: () => 'en',
+    sceneStore: store, readPixelsPerMetre: () => camera.viewport.scale, getLocale: () => 'en',
     resolveHighlightedTargets: () => ({ plantIds: [], zoneIds: [] }), onPlantNamesChanged: () => {},
   })
   const query = createSceneCanvasQuerySurface({

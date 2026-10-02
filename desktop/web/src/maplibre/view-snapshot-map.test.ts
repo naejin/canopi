@@ -207,7 +207,7 @@ function request(overrides: Partial<ViewSnapshotRequest> = {}): ViewSnapshotRequ
     background: BASEMAP,
     scene: {
       origin: ORIGIN,
-      build: (viewport) => createTestSceneRendererSnapshot({ viewport }),
+      build: () => createTestSceneRendererSnapshot(),
     },
     timeoutMs: 5_000,
     ...overrides,
@@ -231,7 +231,7 @@ afterEach(() => {
 describe('view snapshot map', () => {
   it('captures on the first complete frame without touching another map', async () => {
     const owner = createOwner()
-    const build = vi.fn((viewport: { x: number; y: number; scale: number }) => createTestSceneRendererSnapshot({ viewport }))
+    const build = vi.fn((_viewport: { x: number; y: number; scale: number }) => createTestSceneRendererSnapshot())
 
     const capture = await owner.capture(request({ scene: { origin: ORIGIN, build } }))
 
