@@ -78,6 +78,11 @@ describe('Where is your site? and Undo on the Web Edition', () => {
     expect(opened.annotations).toHaveLength(1)
     expect(undoButton()).not.toBeNull()
 
+    // The selection edits act on the map once the user has pressed it (a press on a panel leaves Ctrl+A to the page).
+    // The map is left out here, so its host is attached only to take the press.
+    const mapHost = host.surfaces.keyboard.host
+    container.append(mapHost)
+    mapHost.dispatchEvent(new Event('pointerdown', { bubbles: true }))
     await press({ key: 'a', ctrlKey: true })
     await press({ key: 'Delete' })
 

@@ -1441,9 +1441,9 @@ export function chordOf(e: KeyboardEventLike, platform: Pick<InputPlatform, 'os'
 // app/keyboard/keymap.ts
 export type KeyScope =
   | 'global'          // every focus class except modal; in text only with worksInTextFields (every shell chord, Ctrl+K)
-  | 'command'         // anywhere except text fields and dialogs: tool letters, Delete, [ ], N, Shift+N, Shift+L, Ctrl+Z…
+  | 'command'         // anywhere except text fields and dialogs: tool letters, [ ], N, Shift+N, Shift+L, Ctrl+V, Ctrl+Z…
   | 'view-arrows'     // Shift+←/→/↑: like 'command', but not inside an arrow-owning widget
-  | 'canvas-focus'    // focus on the map host (not text inside it), or <body> after a press on the map: plain and mod arrows, Enter, Space, Backspace, F2, + / −, Menu
+  | 'canvas-focus'    // focus on the map host (not text inside it), or <body> after a press or focus on the map: plain and mod arrows, Enter, Space, Delete, Backspace, F2, + / −, Menu, the selection edits
 /** A shell command (app/shell-commands), a canvas catalogue command (CanvasCommandId, app/canvas-commands/index.ts: tool letters,
  *  edit.undo, canvas.deleteSelected, view.zoomIn …) or a canvas key command ('canvas.<CanvasKeyCommand kind>'). */
 export type KeyCommandId = ShellCommandId | CanvasCommandId | `canvas.${CanvasKeyCommand['kind']}`
@@ -1846,7 +1846,7 @@ The Scope column is built in F (no legacy rebuild, U7); until then the keyboard 
 | macOS Ctrl+arrows | not bound (Mission Control) | — | — | — |
 | Shift+G, Shift+S, Shift+R | grid, snap to grid, rulers (rulers while rotated: on, hidden, with the hint) | `command` | follows | unchanged |
 | [ / ] | a held stamp: turn it −15° / +15°; otherwise send to back / bring to front | `command` | follows, except that a held stamp's turn also works on map focus with the switch off (today, `keyboard-port.ts:198-206`; fixture H24) | unchanged |
-| Delete, Backspace | delete the selection. Backspace during a polygon draft removes the last corner instead. Delete on a focused or selected corner handle removes that corner (from 2) | `command` (Backspace in a draft: `canvas-focus`) | n/a | unchanged, corner from 2 |
+| Delete, Backspace | delete the selection. Backspace during a polygon draft removes the last corner instead. Delete on a focused or selected corner handle removes that corner (from 2) | `canvas-focus` | n/a | F (was `command`), corner from 2 |
 | Enter | Polygon draft: finish (3+ corners). One selected note: edit its text. Compass focused: reset north | `canvas-focus` | n/a | unchanged; compass 1 |
 | F2 | one selected note with map focus: edit its text; otherwise rename the Design | `canvas-focus`, then shell | n/a | unchanged |
 | Space (held) | a left drag pans in every tool | `canvas-focus` | n/a | unchanged |
@@ -1857,9 +1857,10 @@ The Scope column is built in F (no legacy rebuild, U7); until then the keyboard 
 | Ctrl+Plus / Ctrl+Minus | zoom in / out one step | `command` | n/a | step unified in 2 |
 | Shift+F, Ctrl+0, Home | fit the Design at the current bearing | `command` (Home: `canvas-focus`, spec) | Shift+F follows | Home 2 |
 | Shift+2 | zoom to the selection at the current bearing | `command` | follows (spec: like Shift+G) | 2 |
-| Ctrl+Alt+R | rotate the selection | `command` | n/a | unchanged |
+| Ctrl+Alt+R | rotate the selection | `canvas-focus` | n/a | F (was `command`) |
 | Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y | undo, redo; during a polygon draft they undo and redo corners | `command` | n/a | unchanged |
-| Ctrl+X, C, V, D, A, Shift+A, G, Shift+G, Shift+L | cut, copy, paste, duplicate, select all, same species, group, ungroup, lock | `command` | n/a | unchanged |
+| Ctrl+X, C, D, A, Shift+A, G, Shift+G, Shift+L | cut, copy, duplicate, select all, same species, group, ungroup, lock: they act on the map's selection, so a dock panel keeps the browser's copy and select all | `canvas-focus` | n/a | F (was `command`) |
+| Ctrl+V | paste | `command` | n/a | unchanged |
 | Ctrl+K, Ctrl+S, F1, F6 | place search, save, shortcuts, next region; work in text fields, as every shell shortcut but a single key does (F2 included) | `global` | n/a | unchanged |
 | Tab, Shift+Tab | focus navigation | browser | n/a | unchanged |
 

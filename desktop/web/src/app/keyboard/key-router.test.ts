@@ -190,6 +190,45 @@ describe('key router', () => {
     expect(fake.port.command).toHaveBeenCalledExactlyOnceWith({ kind: 'arrow', dir: 'down', large: false })
   })
 
+  it('the selection edits need the map, so a press on dock text leaves Ctrl+C and Ctrl+A to the page; undo works anywhere', () => {
+    install()
+    const dock = document.createElement('section')
+    const text = document.createElement('p')
+    text.textContent = 'Malus domestica'
+    const row = document.createElement('button')
+    dock.append(text, row)
+    document.body.append(dock)
+    const edits = () => [
+      press({ key: 'c', ctrlKey: true }, document.body),
+      press({ key: 'x', ctrlKey: true }, document.body),
+      press({ key: 'a', ctrlKey: true }, document.body),
+      press({ key: 'A', ctrlKey: true, shiftKey: true }, document.body),
+      press({ key: 'd', ctrlKey: true }, document.body),
+      press({ key: 'g', ctrlKey: true }, document.body),
+      press({ key: 'Delete' }, document.body),
+    ].map((event) => event.defaultPrevented)
+
+    text.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    expect(edits()).toEqual([false, false, false, false, false, false, false])
+    expect(run).not.toHaveBeenCalled()
+    // Nor from a dock control.
+    expect(press({ key: 'c', ctrlKey: true }, row).defaultPrevented).toBe(false)
+    expect(run).not.toHaveBeenCalled()
+    // Undo and redo still run from any focus but a text field, as before phase F.
+    expect(press({ key: 'z', ctrlKey: true }, document.body).defaultPrevented).toBe(true)
+    expect(press({ key: 'Z', ctrlKey: true, shiftKey: true }, row).defaultPrevented).toBe(true)
+    expect(run.mock.calls).toEqual([['edit.undo'], ['edit.redo']])
+
+    // After a press on the map, the edits are the map's.
+    run.mockClear()
+    host.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    expect(edits()).toEqual([true, true, true, true, true, true, true])
+    expect(run.mock.calls.map(([command]) => command)).toEqual([
+      'canvas.copy', 'canvas.cut', 'canvas.selectAll', 'canvas.selectSameSpecies', 'canvas.duplicateSelected',
+      'canvas.groupSelected', 'canvas.deleteSelected',
+    ])
+  })
+
   it('runs canvas-focus rows on the map and <body> after a press on the map, never from a control', () => {
     install()
     host.dispatchEvent(new Event('pointerdown', { bubbles: true }))

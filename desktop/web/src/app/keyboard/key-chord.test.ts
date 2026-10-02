@@ -78,7 +78,9 @@ function commandFor(
     target: window,
     keymap: [...shellKeymapRows(catalog, options.web ? { omit: new Set(['Ctrl+W', 'Ctrl+1', 'Ctrl+2']) } : {}), ...CANVAS_KEYMAP_ROWS],
     commands: { run: (command) => { ran.push(command); return true } },
-    canvas: () => null,
+    // A port that takes no key command, so the map's focus counts (the selection edits need it) and each canvas key row
+    // reaches its fallback.
+    canvas: () => ({ host, keyState: () => 'pass', command: () => false, escapeLayers: () => [], escape: () => {}, describeEscape: () => null }),
     singleKeys: signal(options.singleKeys ?? true),
     focus: { cycleRegion: () => false },
     isModalOpen: () => false,
