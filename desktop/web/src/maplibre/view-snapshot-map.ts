@@ -1,11 +1,9 @@
 import { signal } from '@preact/signals'
 import { logMapError } from './redact-credentials'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
-import type { SceneViewportState } from '../canvas/runtime/scene'
 import type { CameraDriver } from '../canvas/runtime/view/camera-driver'
 import { createNavigationPolicy, type NavigationPolicy } from '../canvas/runtime/view/navigation-policy'
 import type { ViewTransform } from '../canvas/runtime/view/types'
-import { planarCameraOf } from '../canvas/runtime/view/view-transform'
 import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
 import {
   createWorkspaceCameraPolicy,
@@ -57,8 +55,8 @@ interface ViewSnapshotCamera {
 interface ViewSnapshotScene {
   /** Session plane origin that the scene's metres are measured from. */
   readonly origin: { readonly lat: number; readonly lon: number }
-  /** Scene state at the snapshot's viewport. Throwing fails the capture. */
-  build(viewport: SceneViewportState): SceneRendererSnapshot
+  /** Scene state at the snapshot's view (its own driver's frame). Throwing fails the capture. */
+  build(view: ViewTransform): SceneRendererSnapshot
 }
 
 export type ViewSnapshotImageType = 'image/png' | 'image/jpeg' | 'image/webp'
@@ -426,7 +424,7 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
     }
     background.update(request.background)
     const scenePresentedBefore = sceneLayer.diagnostics.sceneSyncCount
-    sceneLayer.setSnapshot(request.scene.build(sceneViewportOf(driver.frames.viewFrame.peek().view)))
+    sceneLayer.setSnapshot(request.scene.build(driver.frames.viewFrame.peek().view))
 
     const complete = () => background.isApplied()
       && map.loaded()
@@ -615,12 +613,6 @@ function snapshotView(origin: { readonly lat: number; readonly lon: number }): S
     plane: createSessionPlane(origin),
     policy: createNavigationPolicy(createWorkspaceCameraPolicy(origin.lat), VIEW_SNAPSHOT_REDUCED_MOTION),
   }
-}
-
-/** The scene's bearing-0 placement in today's terms, until the scene takes the ViewTransform itself (0D2). */
-function sceneViewportOf(view: ViewTransform): SceneViewportState {
-  const { x, y, scale } = planarCameraOf(view)
-  return { x, y, scale }
 }
 
 function clampZoom(zoom: number): number {

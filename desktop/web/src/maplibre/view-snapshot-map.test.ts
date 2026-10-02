@@ -4,6 +4,7 @@ import type { MapLibreMapConstructorOptions } from './loader'
 import type { MapBackgroundHandle, MapBackgroundOptions, MapBackgroundPresentation } from './map-background'
 import type { SharedMapSceneLayer, SharedMapSceneLayerOptions } from './shared-scene-layer'
 import { createTestSceneRendererSnapshot } from '../__tests__/support/scene-renderer-snapshot'
+import type { ViewTransform } from '../canvas/runtime/view/types'
 import {
   createViewSnapshotMap,
   VIEW_SNAPSHOT_SCENE_LAYER_ID,
@@ -231,7 +232,7 @@ afterEach(() => {
 describe('view snapshot map', () => {
   it('captures on the first complete frame without touching another map', async () => {
     const owner = createOwner()
-    const build = vi.fn((_viewport: { x: number; y: number; scale: number }) => createTestSceneRendererSnapshot())
+    const build = vi.fn((_view: ViewTransform) => createTestSceneRendererSnapshot())
 
     const capture = await owner.capture(request({ scene: { origin: ORIGIN, build } }))
 
@@ -248,10 +249,10 @@ describe('view snapshot map', () => {
       canvasContextAttributes: { antialias: true, preserveDrawingBuffer: false },
     })
     expect(map!.jumps.at(-1)).toEqual({ center: [ORIGIN.lon, ORIGIN.lat], zoom: 18 })
-    // The plane origin is the map centre, so the scene viewport puts it there.
-    const viewport = build.mock.calls[0]![0]
-    expect(viewport.x).toBeCloseTo(160, 6)
-    expect(viewport.y).toBeCloseTo(100, 6)
+    // The plane origin is the map centre, so the snapshot's view puts it there.
+    const origin = build.mock.calls[0]![0].worldToScreen({ x: 0, y: 0 })
+    expect(origin.x).toBeCloseTo(160, 6)
+    expect(origin.y).toBeCloseTo(100, 6)
     expect(map!.layers.has(VIEW_SNAPSHOT_SCENE_LAYER_ID)).toBe(true)
     expect(backgrounds[0]!.presentations).toEqual([BASEMAP])
     expect(layers[0]!.options.readOrigin()).toEqual(ORIGIN)

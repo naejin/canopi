@@ -18,12 +18,12 @@ import type {
   CameraViewportSnapshot,
   SceneBounds,
 } from './camera'
-import type { ScenePersistedState, SceneViewportState } from './scene'
+import type { ScenePersistedState } from './scene'
 import type { PlantLabelMode } from './plant-display'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { Modifiers } from './interaction-types'
 import type { ViewCommandSurface, ViewReadSurface } from './view/read-surface'
-import type { WorldPoint } from './view/types'
+import type { ViewTransform, WorldPoint } from './view/types'
 
 export interface CanvasRuntimeDocumentMetadata {
   name: string
@@ -199,7 +199,8 @@ export interface CanvasCommandSurface {
 }
 
 export interface CanvasViewSceneRequest {
-  readonly viewport: SceneViewportState
+  /** The view the scene is captured for: its scale decides overview. */
+  readonly view: ViewTransform
   /** Design layers drawn; every other layer is hidden. */
   readonly visibleLayerNames: readonly string[]
   /** Species the view focuses; others are dimmed as Species Focus does. */
@@ -227,7 +228,7 @@ export interface CanvasQuerySurface {
   readonly sessionPlane: ReadonlySignal<SessionPlane | null>
   capturePrintSnapshot(): CanvasPrintSnapshot | null
   /**
-   * The settled scene as a saved view shows it at `viewport`, for an off-screen
+   * The settled scene as a saved view shows it in `view`, for an off-screen
    * snapshot: no selection, hover or panel highlight. Null while an edit owns
    * the Scene. Never changes session state.
    */

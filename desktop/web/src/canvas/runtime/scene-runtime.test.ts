@@ -54,6 +54,7 @@ import { locale, plantSpacingIntervalM } from '../../app/settings/state'
 import type { CanopiFile, PanelTarget } from '../../types/design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../generated/canopi-design-format'
 import { geoAt } from '../../__tests__/support/geo-design'
+import { createTestRendererView } from '../../__tests__/support/scene-renderer-snapshot'
 import { speciesTarget } from '../../target'
 import {
   CanvasDocumentReplacementNotAdmittedError,
@@ -1083,10 +1084,10 @@ describe('scene canvas runtime', () => {
     const scene = runtime.querySurface.getSceneSnapshot()
     const layerNames = scene.layers.map((layer) => layer.name)
     expect(selection.length).toBeGreaterThan(0)
-    const viewport = { x: 100, y: 80, scale: 4 }
+    const view = createTestRendererView({ x: 100, y: 80, scale: 4 })
 
     const capture = runtime.querySurface.captureViewScene({
-      viewport,
+      view,
       visibleLayerNames: [layerNames[0]!],
       focusedSpecies: 'Malus domestica',
     })
@@ -1095,7 +1096,7 @@ describe('scene canvas runtime', () => {
     expect(capture?.speciesFocus).toEqual({ canonicalName: 'Malus domestica' })
     expect(capture?.selectedPlantIds.size).toBe(0)
     expect(capture?.hoverTarget).toBeNull()
-    expect(runtime.querySurface.captureViewScene({ viewport: { x: 0, y: 0, scale: 0.001 }, visibleLayerNames: [], focusedSpecies: null })
+    expect(runtime.querySurface.captureViewScene({ view: createTestRendererView({ x: 0, y: 0, scale: 0.001 }), visibleLayerNames: [], focusedSpecies: null })
       ?.scene.layers.every((layer) => !layer.visible)).toBe(true)
     expect(runtime.querySurface.getSelection()).toEqual(selection)
     expect(runtime.querySurface.getSceneSnapshot()).toEqual(scene)
@@ -1105,7 +1106,7 @@ describe('scene canvas runtime', () => {
     const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
     const active = sceneEdits.begin('interaction-drag')
     active.mutate((draft) => { draft.plants[0]!.position.x = 30 })
-    expect(runtime.querySurface.captureViewScene({ viewport, visibleLayerNames: layerNames, focusedSpecies: null })).toBeNull()
+    expect(runtime.querySurface.captureViewScene({ view, visibleLayerNames: layerNames, focusedSpecies: null })).toBeNull()
     active.abort()
     runtime.destroy()
   })
