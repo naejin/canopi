@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from 'preact/hooks'
 import { placeSearch } from '../../app/geocoding/place-search-session'
 import { PLACE_SEARCH_ZOOM } from '../../app/geocoding/place-search-ui'
+import { focusOwner } from '../../app/keyboard/focus-owner'
 import { selectPanel } from '../../app/shell/state'
 import {
   closeStartDesignCard,
@@ -16,6 +17,17 @@ import { t } from '../../i18n'
 import { ControlIcon } from '../shared/ControlIcon'
 import { PlaceCombobox } from './PlaceSearch'
 import styles from './SiteOnboarding.module.css'
+
+/**
+ * Set when the user answers "Where is your site?" (a place or Skip), so the Start card that answer opens takes focus;
+ * a card that mounts again over a session where it was already open (the chrome back from another panel) does not.
+ */
+let startCardOpenedByUser = false
+
+function answerSiteLocate(placeLabel: string | null): void {
+  startCardOpenedByUser = true
+  finishSiteLocate(placeLabel)
+}
 
 /** New-Design guidance over the map: where the site is, then how to start. */
 export function SiteOnboarding() {
@@ -42,7 +54,7 @@ function SiteLocateDialog() {
       onKeyDown={(event) => {
         if (event.key !== 'Escape' || event.defaultPrevented) return
         event.preventDefault()
-        finishSiteLocate(null)
+        answerSiteLocate(null)
       }}
     >
       <h2 className={styles.locateTitle} id={titleId}>{t('siteOnboarding.locateTitle')}</h2>
@@ -53,12 +65,12 @@ function SiteLocateDialog() {
         label={t('canvas.placeSearch.placeholder')}
         onPick={(result, label) => {
           currentCanvasViewportCommandSurface.peek()?.showPlace(result, PLACE_SEARCH_ZOOM, { motion: 'fly' })
-          finishSiteLocate(label)
+          answerSiteLocate(label)
         }}
       />
       <div className={styles.locateFooter}>
         <span className={styles.attribution}>{attribution ?? t('siteOnboarding.placeNamesCredit')}</span>
-        <button type="button" className={styles.link} onClick={() => finishSiteLocate(null)}>
+        <button type="button" className={styles.link} onClick={() => answerSiteLocate(null)}>
           {t('siteOnboarding.skip')}
         </button>
       </div>
@@ -71,7 +83,10 @@ function StartDesignCard() {
   const card = useRef<HTMLElement>(null)
 
   useEffect(() => {
-    card.current?.querySelector<HTMLButtonElement>('[data-start-primary]')?.focus()
+    const openedByUser = startCardOpenedByUser
+    startCardOpenedByUser = false
+    const primary = card.current?.querySelector<HTMLButtonElement>('[data-start-primary]')
+    if (openedByUser && primary) focusOwner.focusOnOpen(primary, 'user-opened')
   }, [])
 
   return (
