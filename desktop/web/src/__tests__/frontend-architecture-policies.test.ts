@@ -1869,8 +1869,9 @@ const CANVAS_V2_POLICIES = [
   P2_PROJECTION_POLICY,
   {
     // view/ reaches no DOM module, MapLibre, Pixi or scene barrel: outside its own files it imports the pure canvas
-    // modules and signals, and scene/types.ts type-only (ScenePersistedState, ScenePlantEntity). The legacy camera
-    // shims, which need the window, the clock and MapLibre, sit outside view/ (spec §1.1b).
+    // modules and signals, and scene/types.ts type-only (ScenePersistedState, ScenePlantEntity). Since 0E it calls
+    // performance.now, requestAnimationFrame and the window's timers itself (tests use Vitest fake timers), so P4 has
+    // no symbol rule.
     kind: 'forbid-imports',
     name: 'P4 the view module imports only its pure dependencies',
     from: ['src/canvas/runtime/view/**'],
@@ -1884,19 +1885,6 @@ const CANVAS_V2_POLICIES = [
       '@preact/signals',
     ],
     allowTypeOnlyTargets: ['src/canvas/runtime/scene/types.ts'],
-  },
-  {
-    // Clocks, timers, animation frames and reduced motion reach view/ injected (CameraDriverDeps, FrameSourceDeps,
-    // ViewNavigationDeps). The rule matches every identifier, member names included, so an injected shape names its
-    // members set and clear, never setTimeout and clearTimeout; comments are not identifiers.
-    kind: 'confine-symbols',
-    name: 'P4 the view module reaches no DOM, timer, clock or media query',
-    from: ['src/canvas/runtime/view/**'],
-    names: [
-      'window', 'document', 'requestAnimationFrame', 'performance', 'matchMedia', 'setTimeout', 'clearTimeout',
-      'setInterval', 'Date', 'queueMicrotask', 'navigator',
-    ],
-    allowedFrom: [...TEST_SOURCE_PATTERNS],
   },
   {
     // A tool reads the shared vocabulary from interaction-types.ts (type-only imports), never interaction-ports.ts;
@@ -2504,7 +2492,6 @@ const P1_MAP_RECEIVERS = '[P1 only the camera driver stops, pans, zooms, resizes
 const P1_MAP_TYPE = '[P1 the camera driver imports the MapLibre map type]'
 const P2 = '[P2 nobody projects through MapLibre]'
 const P4_IMPORTS = '[P4 the view module imports only its pure dependencies]'
-const P4_GLOBALS = '[P4 the view module reaches no DOM, timer, clock or media query]'
 const P5_IMPORTS = '[P5 tools import no MapLibre, DOM or Pixi]'
 const P5_SYMBOLS = '[P5 tools name no DOM event, element or camera]'
 const P5B_IMPORTERS = '[P5b tool modules are value-imported only inside tools/ and by the interaction session]'
@@ -2634,67 +2621,6 @@ describe('canvas v2 policies', () => {
       `${P4_IMPORTS} src/canvas/runtime/view/planted.ts:4:1 imports src/canvas/runtime/scene/index.ts via "../scene" (static)`,
       `${P4_IMPORTS} src/canvas/runtime/view/planted.ts:5:1 imports pixi.js via "pixi.js" (static)`,
     ])
-  })
-
-  it('P4 rejects DOM, timer and clock globals in view modules and allows them in tests and outside view/', () => {
-    const graph = createTypeScriptSourceGraph([
-      plantedSource('src/canvas/runtime/view/frame-source.ts', [
-        '// The settle timer is injected: no setTimeout, requestAnimationFrame or Date here.',
-        'export function settle(deps: { timers: { set(atMs: number, cb: () => void): number } }, clock: () => number) {',
-        '  return deps.timers.set(clock() + 150, () => {})',
-        '}',
-      ]),
-      plantedSource('src/canvas/runtime/view/planted-frame.ts', [
-        'export const cancel = requestAnimationFrame(() => {})',
-      ]),
-      plantedSource('src/canvas/runtime/view/planted-timer.ts', [
-        'export const handle = setTimeout(() => {}, Date.now() % 150)',
-      ]),
-      plantedSource('src/canvas/runtime/view/planted-deps.ts', [
-        'export interface Deps { readonly timers: { setTimeout(cb: () => void, ms: number): unknown } }',
-      ]),
-      plantedSource('src/canvas/runtime/view/planted.test.ts', [
-        'requestAnimationFrame(() => {}); setTimeout(() => {}, 0); window.matchMedia(navigator.userAgent)',
-      ]),
-      plantedSource('src/maplibre/camera-driver.ts', [
-        'export const timers = { set: (atMs: number, run: () => void) => window.setTimeout(run, atMs - performance.now()) }',
-      ]),
-    ])
-
-    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P4'))).toEqual([
-      `${P4_GLOBALS} src/canvas/runtime/view/planted-frame.ts contains confined symbol requestAnimationFrame; allowed sources: ${TEST_SOURCES}`,
-      `${P4_GLOBALS} src/canvas/runtime/view/planted-timer.ts contains confined symbol setTimeout; allowed sources: ${TEST_SOURCES}`,
-      `${P4_GLOBALS} src/canvas/runtime/view/planted-timer.ts contains confined symbol Date; allowed sources: ${TEST_SOURCES}`,
-      `${P4_GLOBALS} src/canvas/runtime/view/planted-deps.ts contains confined symbol setTimeout; allowed sources: ${TEST_SOURCES}`,
-    ])
-  })
-
-  it('P4 confines each of the eleven globals the plan names', () => {
-    // One view/ module reaching every global of plan §5 P4: dropping any name from the rule drops its line here.
-    const graph = createTypeScriptSourceGraph([
-      plantedSource('src/canvas/runtime/view/planted-globals.ts', [
-        'export function planted(run: () => void) {',
-        "  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches",
-        '  const started = performance.now() + Date.now()',
-        '  const frame = requestAnimationFrame(run)',
-        '  clearTimeout(setTimeout(run, 0))',
-        '  setInterval(run, 16)',
-        '  queueMicrotask(run)',
-        "  document.title = `${reduce} ${started} ${frame} ${navigator.language}`",
-        '}',
-      ]),
-    ])
-
-    const confined = [
-      'window', 'document', 'requestAnimationFrame', 'performance', 'matchMedia', 'setTimeout', 'clearTimeout',
-      'setInterval', 'Date', 'queueMicrotask', 'navigator',
-    ]
-    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P4'))).toEqual(
-      confined.map(
-        (name) =>
-          `${P4_GLOBALS} src/canvas/runtime/view/planted-globals.ts contains confined symbol ${name}; allowed sources: ${TEST_SOURCES}`,
-      ),
-    )
   })
 })
 
