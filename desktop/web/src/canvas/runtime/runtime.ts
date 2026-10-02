@@ -299,7 +299,6 @@ export function createCanvasDocumentReplacementToken(): CanvasDocumentReplacemen
 
 export interface CanvasDocumentSurface {
   attachInspectionTo(element: HTMLElement): CanvasInspectionHandle
-  initializeViewport(): void
   attachRulersTo(element: HTMLElement): void
   showCanvasChrome(): void
   hideCanvasChrome(): void

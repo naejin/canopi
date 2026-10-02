@@ -5,10 +5,7 @@ import { CanvasRuntimeCleanupError } from '../../canvas/runtime/cleanup'
 import { MAPLIBRE_SCENE_RENDERER_ID } from '../../canvas/runtime/renderers/maplibre-scene'
 import { createDetachedSceneRuntimePanelTargetAdapter } from '../../canvas/runtime/scene-runtime/panel-target-adapter'
 import type { SceneCanvasRuntimeOptions } from '../../canvas/runtime/scene-runtime'
-import {
-  createCanvasDocumentReplacementToken,
-  type CanvasDocumentSurface,
-} from '../../canvas/runtime/runtime'
+import type { CanvasDocumentSurface } from '../../canvas/runtime/runtime'
 import { MapLibreWorkspaceCameraOwner } from '../../maplibre/workspace-camera'
 import type { WorkspaceMapContributionSnapshot, WorkspaceMapContributionAdapter } from './workspace-map-contribution-adapter'
 import type { MapBackgroundPresentation } from '../../maplibre/map-background'
@@ -65,7 +62,7 @@ describe('createWorkspaceRuntimeComposition', () => {
 
     activation.resolve('shared-ready')
     await expect(start).resolves.toBe('shared-ready')
-    expect(fixture.documents.initializeViewport).toHaveBeenCalledOnce()
+    // runtime.init frames the Design: the composition runs no viewport pass of its own.
     expect(fixture.documents.zoomToFit).not.toHaveBeenCalled()
   })
 
@@ -77,115 +74,6 @@ describe('createWorkspaceRuntimeComposition', () => {
     expect(fixture.workspace.requestGenerationDisconnect).not.toHaveBeenCalled()
     expect(fixture.workspace.activate).not.toHaveBeenCalled()
     expect(fixture.runtime.init).not.toHaveBeenCalled()
-  })
-
-  it.each<WorkspaceActivationOutcome>(['shared-ready', 'map-unavailable'])(
-    'initializes and fits hydrated content once for %s',
-    async (outcome) => {
-      const fixture = compositionFixture({
-        readSnapshot: () => workspaceSnapshot(),
-        activate: async () => outcome,
-        initiallyLoaded: true,
-      })
-
-      await expect(fixture.composition.start()).resolves.toBe(outcome)
-
-      expect(fixture.documents.initializeViewport).toHaveBeenCalledOnce()
-      expect(fixture.documents.zoomToFit).toHaveBeenCalledOnce()
-      expect(fixture.documents.initializeViewport.mock.invocationCallOrder[0])
-        .toBeLessThan(fixture.documents.zoomToFit.mock.invocationCallOrder[0]!)
-    },
-  )
-
-  it('initializes and fits the first replacement after an empty start', async () => {
-    let snapshot: WorkspaceActivationSnapshot | null = null
-    const next = workspaceSnapshot()
-    const fixture = compositionFixture({
-      readSnapshot: () => snapshot,
-      replaceDocument: (_file, _token, finalizeReplacement) => {
-        snapshot = next
-        fixture.setLoaded(true)
-        finalizeReplacement()
-        return { callerFinalizerInvoked: true }
-      },
-    })
-    await expect(fixture.composition.start()).resolves.toBe('no-design')
-
-    replaceDocument(fixture.composition.surfaces.documents)
-
-    await vi.waitFor(() => expect(fixture.workspace.activate).toHaveBeenCalledExactlyOnceWith(next))
-    await vi.waitFor(() => expect(fixture.documents.zoomToFit).toHaveBeenCalledOnce())
-    expect(fixture.documents.initializeViewport).toHaveBeenCalledOnce()
-  })
-
-  it('retries only the incomplete viewport phase after a first-ready callback fails', async () => {
-    let snapshot: WorkspaceActivationSnapshot | null = null
-    const onFailure = vi.fn()
-    const zoomError = new Error('fit failed')
-    const fixture = compositionFixture({
-      readSnapshot: () => snapshot,
-      onFailure,
-      zoomToFit: vi.fn()
-        .mockImplementationOnce(() => { throw zoomError })
-        .mockImplementation(() => {}),
-      replaceDocument: (_file, _token, finalizeReplacement) => {
-        fixture.setLoaded(true)
-        finalizeReplacement()
-        return { callerFinalizerInvoked: true }
-      },
-    })
-    await fixture.composition.start()
-
-    snapshot = workspaceSnapshot({ latitude: 10 })
-    replaceDocument(fixture.composition.surfaces.documents)
-    await vi.waitFor(() => expect(onFailure).toHaveBeenCalledExactlyOnceWith(zoomError))
-
-    snapshot = workspaceSnapshot({ latitude: 20 })
-    replaceDocument(fixture.composition.surfaces.documents)
-    await vi.waitFor(() => expect(fixture.documents.zoomToFit).toHaveBeenCalledTimes(2))
-    expect(fixture.documents.initializeViewport).toHaveBeenCalledOnce()
-  })
-
-  it('cancels initial readiness and retries viewport initialization on a later generation', async () => {
-    let snapshot = workspaceSnapshot({ latitude: 10 })
-    const error = new Error('viewport initialization failed')
-    const onFailure = vi.fn()
-    const fixture = compositionFixture({
-      readSnapshot: () => snapshot,
-      onFailure,
-      initializeViewport: vi.fn()
-        .mockImplementationOnce(() => { throw error })
-        .mockImplementation(() => {}),
-    })
-
-    await expect(fixture.composition.start()).resolves.toBe('cancelled')
-    expect(onFailure).toHaveBeenCalledExactlyOnceWith(error)
-
-    snapshot = workspaceSnapshot({ latitude: 20 })
-    replaceDocument(fixture.composition.surfaces.documents)
-    await vi.waitFor(() => expect(fixture.documents.initializeViewport).toHaveBeenCalledTimes(2))
-  })
-
-  it('cancels initial readiness and retries only hydrated fit on a later generation', async () => {
-    let snapshot = workspaceSnapshot({ latitude: 10 })
-    const error = new Error('initial fit failed')
-    const onFailure = vi.fn()
-    const fixture = compositionFixture({
-      readSnapshot: () => snapshot,
-      onFailure,
-      initiallyLoaded: true,
-      zoomToFit: vi.fn()
-        .mockImplementationOnce(() => { throw error })
-        .mockImplementation(() => {}),
-    })
-
-    await expect(fixture.composition.start()).resolves.toBe('cancelled')
-    expect(onFailure).toHaveBeenCalledExactlyOnceWith(error)
-
-    snapshot = workspaceSnapshot({ latitude: 20 })
-    replaceDocument(fixture.composition.surfaces.documents)
-    await vi.waitFor(() => expect(fixture.documents.zoomToFit).toHaveBeenCalledTimes(2))
-    expect(fixture.documents.initializeViewport).toHaveBeenCalledOnce()
   })
 
   it('projects live background settings without recreating resources and stops after disposal', async () => {
@@ -416,8 +304,6 @@ interface CompositionFixtureOptions {
   readonly teardown?: () => Promise<void>
   readonly installEffect?: (callback: () => void) => () => void
   readonly initiallyLoaded?: boolean
-  readonly replaceDocument?: CanvasDocumentSurface['replaceDocument']
-  readonly initializeViewport?: () => void
   readonly zoomToFit?: () => void
   readonly onViewSettled?: (view: WorkspaceSettledView) => void
 }
@@ -425,12 +311,9 @@ interface CompositionFixtureOptions {
 function compositionFixture(options: CompositionFixtureOptions) {
   let loaded = options.initiallyLoaded ?? false
   const documents = createTestCanvasDocumentSurface({
-    initializeViewport: options.initializeViewport ?? vi.fn(),
     zoomToFit: options.zoomToFit ?? vi.fn(),
     hasLoadedDocument: () => loaded,
-    ...(options.replaceDocument ? { replaceDocument: options.replaceDocument } : {}),
   })
-  documents.initializeViewport = vi.fn(documents.initializeViewport)
   documents.zoomToFit = vi.fn(documents.zoomToFit)
   // The runtime's camera: the query surface's view reads its frames on the Scene's plane.
   const view = createTestView({ plane: SETTLE_PLANE })
@@ -504,7 +387,6 @@ function compositionFixture(options: CompositionFixtureOptions) {
     createWorkspace,
     camera,
     documents: documents as CanvasDocumentSurface & {
-      initializeViewport: ReturnType<typeof vi.fn>
       zoomToFit: ReturnType<typeof vi.fn>
     },
     rendererComposition,
@@ -514,14 +396,6 @@ function compositionFixture(options: CompositionFixtureOptions) {
     view,
     workspace,
   }
-}
-
-function replaceDocument(documents: CanvasDocumentSurface): void {
-  documents.replaceDocument(
-    {} as never,
-    createCanvasDocumentReplacementToken(),
-    () => {},
-  )
 }
 
 function workspaceSnapshot({ latitude = 48.86 } = {}): WorkspaceActivationSnapshot {

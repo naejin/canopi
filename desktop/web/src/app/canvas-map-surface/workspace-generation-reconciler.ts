@@ -19,7 +19,6 @@ export interface WorkspaceGenerationReconcilerOptions {
   readonly readSnapshot: () => WorkspaceActivationSnapshot | null
   readonly workspace: WorkspaceGenerationLifecycle
   readonly onFailure?: (error: unknown) => void
-  readonly onOutcome?: (outcome: WorkspaceActivationOutcome) => void
 }
 
 const replacementTicketBrand = Symbol('workspace-generation-replacement-ticket')
@@ -70,7 +69,7 @@ export class WorkspaceGenerationReconciler {
       if (!this.isCurrentActivation(activation)) return 'cancelled'
       this.activation = null
       if (outcome !== 'cancelled') this.reconciledSnapshot = snapshot
-      return this.publishOutcome(outcome) ? outcome : 'cancelled'
+      return outcome
     } catch (error) {
       if (!this.isCurrentActivation(activation)) return 'cancelled'
       this.activation = null
@@ -170,7 +169,6 @@ export class WorkspaceGenerationReconciler {
         if (!this.isCurrentActivation(activation)) return
         this.activation = null
         if (outcome !== 'cancelled') this.reconciledSnapshot = activation.snapshot
-        this.publishOutcome(outcome)
       },
       (error: unknown) => this.handleActivationFailure(activation, error),
     )
@@ -190,16 +188,6 @@ export class WorkspaceGenerationReconciler {
           : activation.ticket === this.currentReplacement
       )
       && this.activation === activation
-  }
-
-  private publishOutcome(outcome: WorkspaceActivationOutcome): boolean {
-    try {
-      this.options.onOutcome?.(outcome)
-      return true
-    } catch (error) {
-      this.reportFailure(error)
-      return false
-    }
   }
 
   private reportFailure(error: unknown): void {

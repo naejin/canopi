@@ -4,6 +4,7 @@ import type { ViewFrame, ViewFrameSource, ViewTransform } from './view/types'
 import { planarCameraOf } from './view/view-transform'
 import { effect } from '@preact/signals'
 import { stageScaleToMapZoom } from '../projection'
+import { DEFAULT_NEW_DESIGN_VIEW } from '../session-plane'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../ipc/species', async (importOriginal) => ({
@@ -547,6 +548,97 @@ describe('scene canvas runtime', () => {
     plantSpacingIntervalM.value = 0.5
     vi.mocked(getCommonNames).mockReset()
     vi.mocked(getCommonNames).mockResolvedValue({})
+  })
+
+  describe('the start frame (plan §1, exception 3)', () => {
+    function framesOf(runtime: SceneCanvasRuntime): ViewFrameSource {
+      return (runtime as unknown as { _construction: { frames: ViewFrameSource } })._construction.frames
+    }
+
+    /**
+     * Fits the runtime's camera again; a frame that already shows the fit stays where it is. Plants and notes are sized at the
+     * scale a fit starts from, so a second fit can land a few micro-pixels from the first: 1e-3 px tells a fit from any other frame.
+     */
+    function expectShowsTheFit(runtime: SceneCanvasRuntime): void {
+      const shown = placementOf(runtime)
+      runtime.documentSurface.zoomToFit()
+      const fitted = placementOf(runtime)
+      expect(shown.x).toBeCloseTo(fitted.x, 3)
+      expect(shown.y).toBeCloseTo(fitted.y, 3)
+      expect(shown.scale).toBeCloseTo(fitted.scale, 3)
+    }
+
+    it('init frames a Design opened before it: the first frame is the fit, with no 100 m frame between two fits', async () => {
+      const runtime = new SceneCanvasRuntime()
+      runtime.documentSurface.resize(400, 300)
+      runtime.documentSurface.loadDocument(makeFile())
+      const seen: ViewFrame[] = []
+      const stop = effect(() => { seen.push(framesOf(runtime).viewFrame.value) })
+      try {
+        await initRuntimeWithStubbedRenderer(runtime)
+        stop()
+
+        // One frame during init, and it is the Design's fit: 100 m across the shorter side (3 px/m here) is never shown.
+        expect(seen).toHaveLength(2)
+        expect(seen[1]).toBe(frameOf(runtime))
+        expect(placementOf(runtime).scale).not.toBeCloseTo(3, 3)
+        expectShowsTheFit(runtime)
+      } finally {
+        stop()
+        runtime.destroy()
+      }
+    })
+
+    it('init frames a Design loaded before the screen had a size', async () => {
+      const runtime = new SceneCanvasRuntime()
+      runtime.documentSurface.loadDocument(makeFile())
+      try {
+        await initRuntimeWithStubbedRenderer(runtime)
+
+        expect(frameOf(runtime).view.screen).toMatchObject({ width: 400, height: 300 })
+        expectShowsTheFit(runtime)
+      } finally {
+        runtime.destroy()
+      }
+    })
+
+    it('init shows the new-Design overview for an empty Design', async () => {
+      const runtime = new SceneCanvasRuntime()
+      try {
+        await initRuntimeWithStubbedRenderer(runtime)
+
+        // The empty Design's fit: the plane origin at the screen centre, at the new-Design overview's scale.
+        const { view } = frameOf(runtime)
+        const origin = view.worldToScreen({ x: 0, y: 0 })
+        expect(origin.x).toBeCloseTo(200, 6)
+        expect(origin.y).toBeCloseTo(150, 6)
+        const plane = runtime.querySurface.sessionPlane.value!
+        expect(stageScaleToMapZoom(view.pixelsPerMetre, plane.origin.lat)).toBeCloseTo(DEFAULT_NEW_DESIGN_VIEW.zoom, 6)
+        expect(frameOf(runtime).mode).toBe('overview')
+      } finally {
+        runtime.destroy()
+      }
+    })
+
+    it('a Design loaded after init: the last frame before its first scene render is the load\'s fit', async () => {
+      const runtime = new SceneCanvasRuntime()
+      try {
+        const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
+        const atSceneRender: Array<{ x: number; y: number; scale: number }> = []
+        renderer.syncScene.mockImplementation(() => { atSceneRender.push(placementOf(runtime)) })
+
+        runtime.documentSurface.loadDocument(makeFile())
+        runtime.documentSurface.zoomToFit()
+        const fitted = placementOf(runtime)
+        await vi.waitFor(() => expect(atSceneRender).not.toHaveLength(0))
+
+        expect(atSceneRender[0]!.x).toBeCloseTo(fitted.x, 6)
+        expect(atSceneRender[0]!.y).toBeCloseTo(fitted.y, 6)
+        expect(atSceneRender[0]!.scale).toBeCloseTo(fitted.scale, 6)
+      } finally {
+        runtime.destroy()
+      }
+    })
   })
 
   it('routes locale subscriptions through the mounted interaction translation refresh', async () => {
@@ -1368,6 +1460,8 @@ describe('scene canvas runtime', () => {
     })
     const withoutStampsMount = await initRuntimeWithStubbedRenderer(withoutStamps)
     withoutStamps.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    // A load after init takes its own fit, as Design loads do (init showed the empty Design's overview).
+    withoutStamps.documentSurface.zoomToFit()
     withoutStamps.commandSurface.sceneEdits.selectAll()
     openContextMenuFromKeyboard(withoutStampsMount.container)
 
@@ -1384,6 +1478,8 @@ describe('scene canvas runtime', () => {
     })
     const withStampsMount = await initRuntimeWithStubbedRenderer(withStamps)
     withStamps.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    // A load after init takes its own fit, as Design loads do (init showed the empty Design's overview).
+    withStamps.documentSurface.zoomToFit()
     withStamps.commandSurface.sceneEdits.selectAll()
     openContextMenuFromKeyboard(withStampsMount.container)
 

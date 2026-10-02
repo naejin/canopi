@@ -1,4 +1,4 @@
-import { effect, type ReadonlySignal } from '@preact/signals'
+import { batch, effect, type ReadonlySignal } from '@preact/signals'
 import { setCanvasSelection, setCanvasToolGuidance } from '../session-state'
 import { refreshCanvasColorCache } from '../theme-refresh'
 import { setCanvasMapBackdrop } from './scene-visuals'
@@ -165,9 +165,16 @@ export class SceneCanvasRuntime {
       refreshCanvasColorCache(container)
       this._disposeEffects.push(markBusyWhileScenePending(container, this._rendering.scenePending))
       await this._rendering.initialize(container)
-      this._cameraNavigation.initialize({
-        width: Math.max(1, container.clientWidth),
-        height: Math.max(1, container.clientHeight),
+      // The first frame is the fit (plan §1, exception 3): the Design's for one loaded before init, else the new-Design overview.
+      // One batch, so the screen size and the fit reach the runtime's effects as one frame. An attached map keeps its own screen.
+      batch(() => {
+        if (!this._construction.frames.viewFrame.peek().attached) {
+          this._cameraNavigation.resize({
+            width: Math.max(1, container.clientWidth),
+            height: Math.max(1, container.clientHeight),
+          })
+        }
+        this._documentSurface.zoomToFit()
       })
       this._interaction = createSceneInteractionSession({
         container,

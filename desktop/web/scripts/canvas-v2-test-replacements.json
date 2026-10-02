@@ -704,5 +704,41 @@
   "src/canvas/runtime/scene-runtime.test.ts > scene canvas runtime > publishes zoom and effective resize updates exactly once": {
     "file": "src/canvas/runtime/scene-runtime.test.ts",
     "name": "scene canvas runtime > publishes viewport-only camera changes through the canonical snapshot"
+  },
+  "src/app/canvas-map-surface/workspace-runtime-composition.test.ts > createWorkspaceRuntimeComposition > initializes and fits hydrated content once for shared-ready": {
+    "file": "src/canvas/runtime/scene-runtime.test.ts",
+    "name": "scene canvas runtime > the start frame (plan §1, exception 3) > init frames a Design opened before it: the first frame is the fit, with no 100 m frame between two fits"
+  },
+  "src/app/canvas-map-surface/workspace-runtime-composition.test.ts > createWorkspaceRuntimeComposition > initializes and fits hydrated content once for map-unavailable": {
+    "file": "src/app/canvas-map-surface/workspace-activation.test.ts",
+    "name": "WorkspaceActivationCoordinator > unmounts the renderer on map failure and retains the spatial camera frame"
+  },
+  "src/app/canvas-map-surface/workspace-runtime-composition.test.ts > createWorkspaceRuntimeComposition > initializes and fits the first replacement after an empty start": {
+    "file": "src/canvas/runtime/scene-runtime.test.ts",
+    "name": "scene canvas runtime > the start frame (plan §1, exception 3) > init frames a Design opened before it: the first frame is the fit, with no 100 m frame between two fits"
+  },
+  "src/app/canvas-map-surface/workspace-runtime-composition.test.ts > createWorkspaceRuntimeComposition > retries only the incomplete viewport phase after a first-ready callback fails": {
+    "file": "src/canvas/runtime/scene-runtime.test.ts",
+    "name": "scene canvas runtime > the start frame (plan §1, exception 3) > init frames a Design opened before it: the first frame is the fit, with no 100 m frame between two fits"
+  },
+  "src/app/canvas-map-surface/workspace-runtime-composition.test.ts > createWorkspaceRuntimeComposition > cancels initial readiness and retries viewport initialization on a later generation": {
+    "file": "src/canvas/runtime/scene-runtime.test.ts",
+    "name": "scene canvas runtime > the start frame (plan §1, exception 3) > init frames a Design opened before it: the first frame is the fit, with no 100 m frame between two fits"
+  },
+  "src/app/canvas-map-surface/workspace-runtime-composition.test.ts > createWorkspaceRuntimeComposition > cancels initial readiness and retries only hydrated fit on a later generation": {
+    "file": "src/canvas/runtime/scene-runtime.test.ts",
+    "name": "scene canvas runtime > the start frame (plan §1, exception 3) > init frames a Design opened before it: the first frame is the fit, with no 100 m frame between two fits"
+  },
+  "src/canvas/runtime/document-surface.test.ts > Scene Canvas document surface lifecycle > routes viewport initialization rendering through contained invalidation": {
+    "file": "src/canvas/runtime/scene-runtime.test.ts",
+    "name": "scene canvas runtime > the start frame (plan §1, exception 3) > init frames a Design opened before it: the first frame is the fit, with no 100 m frame between two fits"
+  },
+  "src/app/canvas-map-surface/workspace-generation-reconciler.test.ts > WorkspaceGenerationReconciler > routes a queued outcome callback failure once without leaking its microtask": {
+    "file": "src/canvas/runtime/scene-runtime.test.ts",
+    "name": "scene canvas runtime > the start frame (plan §1, exception 3) > init frames a Design opened before it: the first frame is the fit, with no 100 m frame between two fits"
+  },
+  "src/app/canvas-map-surface/workspace-generation-reconciler.test.ts > WorkspaceGenerationReconciler > downgrades initial readiness when its outcome callback fails": {
+    "file": "src/canvas/runtime/scene-runtime.test.ts",
+    "name": "scene canvas runtime > the start frame (plan §1, exception 3) > init frames a Design opened before it: the first frame is the fit, with no 100 m frame between two fits"
   }
 }

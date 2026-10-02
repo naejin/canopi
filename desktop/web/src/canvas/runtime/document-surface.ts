@@ -29,7 +29,7 @@ interface SceneCanvasDocumentSurfaceOptions {
   readonly camera: Pick<WorkspaceCameraFrameReader, 'viewport'>
   readonly cameraNavigation: Pick<
     WorkspaceCameraNavigation,
-    'initialize' | 'resize' | 'zoomToFit' | 'clearTemporaryFocus'
+    'resize' | 'zoomToFit' | 'clearTemporaryFocus'
   >
   readonly chrome: Pick<SceneRuntimeChromeCoordinator, 'attach' | 'show' | 'hide' | 'destroy'>
   readonly rendering: Pick<SceneRuntimeRenderScheduler, 'container' | 'invalidate' | 'resize' | 'dispose'>
@@ -58,16 +58,6 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
 
   attachInspectionTo(element: HTMLElement): CanvasInspectionHandle {
     return this.options.inspection.mount(element)
-  }
-
-  initializeViewport(): void {
-    const container = this.options.rendering.container
-    if (!container) return
-    this.options.cameraNavigation.initialize({
-      width: Math.max(1, container.clientWidth),
-      height: Math.max(1, container.clientHeight),
-    })
-    this.options.rendering.invalidate('scene')
   }
 
   attachRulersTo(element: HTMLElement): void {

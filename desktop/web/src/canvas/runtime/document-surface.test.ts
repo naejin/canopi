@@ -90,29 +90,6 @@ describe('Scene Canvas document surface lifecycle', () => {
     expect(camera.returnFromTemporaryFocus()).toBe(true)
   })
 
-  it('routes viewport initialization rendering through contained invalidation', () => {
-    const invalidate = vi.fn()
-    const surface = createTestDocumentSurface({
-      loadDocument: vi.fn(),
-      replaceDocument: vi.fn((_file, _token, finalizeReplacement) => {
-        finalizeReplacement()
-        return { callerFinalizerInvoked: true }
-      }),
-      captureForPersistence: vi.fn((_metadata, document) => ({
-        content: document,
-        isCurrent: () => true,
-        acknowledgeSaved: () => 'applied',
-      })),
-    }, {
-      container: document.createElement('div'),
-      invalidate,
-    })
-
-    surface.initializeViewport()
-
-    expect(invalidate).toHaveBeenCalledWith('scene')
-  })
-
   it('continues destroying every owner after interaction disposal fails', () => {
     const calls: string[] = []
     const camera = new CameraController()

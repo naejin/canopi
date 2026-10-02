@@ -65,7 +65,6 @@ describe('createWorkspaceDocumentSurface', () => {
     const element = document.createElement('div')
 
     surface.attachInspectionTo(element)
-    surface.initializeViewport()
     surface.attachRulersTo(element)
     surface.showCanvasChrome()
     surface.hideCanvasChrome()
@@ -78,7 +77,6 @@ describe('createWorkspaceDocumentSurface', () => {
 
     expect(workspace.requestGenerationDisconnect).not.toHaveBeenCalled()
     expect(documents.attachInspectionTo).toHaveBeenCalledWith(element)
-    expect(documents.initializeViewport).toHaveBeenCalledOnce()
     expect(documents.attachRulersTo).toHaveBeenCalledWith(element)
     expect(documents.showCanvasChrome).toHaveBeenCalledOnce()
     expect(documents.hideCanvasChrome).toHaveBeenCalledOnce()
@@ -193,7 +191,6 @@ function createDocumentSurfaceSpy(): CanvasDocumentSurface {
   return {
     ...surface,
     attachInspectionTo: vi.fn(surface.attachInspectionTo),
-    initializeViewport: vi.fn(surface.initializeViewport),
     attachRulersTo: vi.fn(surface.attachRulersTo),
     showCanvasChrome: vi.fn(surface.showCanvasChrome),
     hideCanvasChrome: vi.fn(surface.hideCanvasChrome),

@@ -24,15 +24,14 @@ describe('WorkspaceGenerationReconciler', () => {
 
   it('activates one initial Design and publishes its non-cancelled outcome', async () => {
     const A = snapshot()
-    const onOutcome = vi.fn()
     const workspace = lifecycle()
     const reconciler = new WorkspaceGenerationReconciler({
-      workspace, readSnapshot: () => A, onOutcome,
+      workspace, readSnapshot: () => A,
     })
 
     await expect(reconciler.reconcileInitialGeneration()).resolves.toBe('shared-ready')
     expect(workspace.activate).toHaveBeenCalledExactlyOnceWith(A)
-    expect(onOutcome).toHaveBeenCalledExactlyOnceWith('shared-ready')
+    await expect(workspace.activate.mock.results[0]!.value).resolves.toBe('shared-ready')
   })
 
   it('observes one initial snapshot read failure without rejecting startup', async () => {
@@ -51,14 +50,13 @@ describe('WorkspaceGenerationReconciler', () => {
     const A = snapshot({ sessionIdentity: {}, latitude: 10 })
     const B = snapshot({ sessionIdentity: {}, latitude: 20 })
     let current = A
-    const onOutcome = vi.fn()
     const workspace = lifecycle({
       activate: vi.fn()
         .mockImplementationOnce(() => initial.promise)
         .mockResolvedValue('shared-ready'),
     })
     const reconciler = new WorkspaceGenerationReconciler({
-      workspace, readSnapshot: () => current, onOutcome,
+      workspace, readSnapshot: () => current,
     })
 
     const startup = reconciler.reconcileInitialGeneration()
@@ -69,15 +67,15 @@ describe('WorkspaceGenerationReconciler', () => {
     initial.resolve('shared-ready')
 
     await expect(startup).resolves.toBe('cancelled')
-    await vi.waitFor(() => expect(onOutcome).toHaveBeenCalledExactlyOnceWith('shared-ready'))
+    expect(workspace.activate).toHaveBeenLastCalledWith(B)
+    await expect(workspace.activate.mock.results[1]!.value).resolves.toBe('shared-ready')
   })
 
   it('invalidates a late initial activation when disposed', async () => {
     const activation = deferred<'shared-ready'>()
-    const onOutcome = vi.fn()
     const workspace = lifecycle({ activate: () => activation.promise })
     const reconciler = new WorkspaceGenerationReconciler({
-      workspace, readSnapshot: () => snapshot(), onOutcome,
+      workspace, readSnapshot: () => snapshot(),
     })
 
     const startup = reconciler.reconcileInitialGeneration()
@@ -86,36 +84,6 @@ describe('WorkspaceGenerationReconciler', () => {
     activation.resolve('shared-ready')
 
     await expect(startup).resolves.toBe('cancelled')
-    expect(onOutcome).not.toHaveBeenCalled()
-  })
-
-  it('routes a queued outcome callback failure once without leaking its microtask', async () => {
-    const error = new Error('viewport failed')
-    const onFailure = vi.fn()
-    const reconciler = new WorkspaceGenerationReconciler({
-      workspace: lifecycle(),
-      readSnapshot: () => snapshot(),
-      onOutcome: () => { throw error },
-      onFailure,
-    })
-
-    reconciler.reconcileAfterDocumentReplacement(reconciler.suspendForDocumentReplacement())
-
-    await vi.waitFor(() => expect(onFailure).toHaveBeenCalledExactlyOnceWith(error))
-  })
-
-  it('downgrades initial readiness when its outcome callback fails', async () => {
-    const error = new Error('initial viewport failed')
-    const onFailure = vi.fn()
-    const reconciler = new WorkspaceGenerationReconciler({
-      workspace: lifecycle(),
-      readSnapshot: () => snapshot(),
-      onOutcome: () => { throw error },
-      onFailure,
-    })
-
-    await expect(reconciler.reconcileInitialGeneration()).resolves.toBe('cancelled')
-    expect(onFailure).toHaveBeenCalledExactlyOnceWith(error)
   })
 
   it('contains a throwing failure observer during queued snapshot reconciliation', async () => {

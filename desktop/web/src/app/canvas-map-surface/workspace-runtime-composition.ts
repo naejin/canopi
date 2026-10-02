@@ -164,7 +164,6 @@ export function createWorkspaceRuntimeComposition(
       ? options.readSnapshot(readOrigin)
       : readWorkspaceActivationSnapshot({ readInitialCenter: readOrigin }),
     onFailure: options.onFailure,
-    onOutcome: (outcome) => initializeViewport(outcome),
   })
   const documents = createWorkspaceDocumentSurface({
     documents: runtime.documentSurface,
@@ -188,20 +187,6 @@ export function createWorkspaceRuntimeComposition(
     if (settleTimer !== null) clearTimeout(settleTimer)
     settleTimer = null
   }
-  let viewportInitialized = false
-  let viewportReady = false
-
-  const initializeViewport = (outcome: WorkspaceRuntimeStartOutcome): WorkspaceRuntimeStartOutcome => {
-    if (viewportReady || outcome === 'no-design' || outcome === 'cancelled') return outcome
-    if (!viewportInitialized) {
-      documents.initializeViewport()
-      viewportInitialized = true
-    }
-    if (documents.hasLoadedDocument()) documents.zoomToFit()
-    viewportReady = true
-    return outcome
-  }
-
   return {
     surfaces,
     start() {

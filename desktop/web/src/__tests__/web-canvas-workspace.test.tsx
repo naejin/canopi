@@ -99,7 +99,6 @@ describe('Web Edition canvas workspace', () => {
         await flushMicrotasks()
 
         expect(runtime.composition.start).toHaveBeenCalledOnce()
-        expect(runtime.documents.initializeViewport).not.toHaveBeenCalled()
         expect(runtime.documents.loadDocument).toHaveBeenCalledWith(expect.objectContaining({ name: 'Untitled' }))
         expect(runtime.documents.showCanvasChrome).toHaveBeenCalled()
         expect(currentCanvasSession.value).toBe(runtime.composition.surfaces)
@@ -377,7 +376,6 @@ describe('Web Edition canvas workspace', () => {
 
     // The mounted owner cannot attach or publish after the component releases
     // its lease while composition start is pending.
-    expect(runtime.documents.initializeViewport).not.toHaveBeenCalled()
     expect(runtime.documents.attachRulersTo).not.toHaveBeenCalled()
     expect(currentCanvasSession.value).toBeNull()
     expect(runtime.composition.dispose).toHaveBeenCalledOnce()
@@ -833,7 +831,6 @@ function fakeRuntimeComposition(
 } {
   let loaded = false
   const documents: CanvasDocumentSurface = {
-    initializeViewport: vi.fn(),
     attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(),
