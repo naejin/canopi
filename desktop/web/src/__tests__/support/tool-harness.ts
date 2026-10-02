@@ -189,8 +189,8 @@ export function createToolSceneSource(store: SceneStore, options: ToolSceneSourc
 // ── The host harness ────────────────────────────────────────────────────────────────────────────────────────────────
 //
 // createToolHarness runs gesture scripts through a real createToolHost, with the input router in front of it and a
-// recording ToolHostDeps behind it. The scripts send what the LEGACY recogniser emits (slop 0: any movement after a press
-// is a drag) and do what interaction-session.ts does around it: they report each raw press (a primary press, and the
+// recording ToolHostDeps behind it. The scripts send gestures as the recogniser emits them (a scripted drag has passed
+// the slop) and do what interaction-session.ts does around it: they report each raw press (a primary press, and the
 // right press before a mouse menu) through rawPress before routing, take a press's capture when the host asks
 // (capturePress, recorded), end a session the host rejected, end the nudge series on focus-out and call interrupted
 // after a blur. Tools come from

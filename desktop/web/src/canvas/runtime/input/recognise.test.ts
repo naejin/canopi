@@ -550,6 +550,37 @@ describe('recognise: sessions', () => {
     ])
   })
 
+  it('a 2 px mouse or pen jitter is a tap; 3 px starts a drag', () => {
+    for (const pointer of ['mouse', 'pen'] as const) {
+      const jitter = run(seq(`${pointer} jitter`, WINDOWS, [
+        down(100, 100, { pointer }),
+        move(102, 100, { pointer, buttons: 1 }),
+        move(100, 102, { pointer, buttons: 1 }),
+        up(101, 101, { pointer }),
+      ]))
+      expect(kinds(jitter.gestures)).toEqual(['press', 'tap'])
+      const dragged = run(seq(`${pointer} drag`, WINDOWS, [
+        down(100, 100, { pointer }),
+        move(102, 100, { pointer, buttons: 1 }),
+        move(103, 100, { pointer, buttons: 1 }),
+        up(103, 100, { pointer }),
+      ]))
+      expect(kinds(dragged.gestures)).toEqual(['press', 'drag-start', 'drag-end'])
+      // The drag starts where the press was, at the move that passed the threshold.
+      expect(dragged.gestures[1]).toMatchObject({ from: { x: 100, y: 100 }, at: { x: 103, y: 100 } })
+    }
+  })
+
+  it('Plant a row keeps slop 0 through configure', () => {
+    const result = run(seq('plant a row', WINDOWS, [
+      { raw: { kind: 'configure', context: { tool: 'plant-spacing', mode: 'site', pointingDevice: 'mouse', dragSlopPx: 0 } } },
+      down(100, 100),
+      move(101, 100, { buttons: 1 }),
+      up(101, 100),
+    ]))
+    expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'drag-end'])
+  })
+
   it('a pointer-source pan carries the pointer\'s point and a wheel pan does not', () => {
     const space = run(SEQUENCES.G3)
     const points = pansOf(space.gestures).map((pan) => pan.at)

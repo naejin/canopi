@@ -26,9 +26,10 @@ export interface Bindings {
 
 /**
  * The right button is inert and the native contextmenu opens the canvas menu at once; a middle drag pans (Shift too);
- * the Pan tool and overview pan on a primary drag; no touch gestures, pen barrel or trackpad gesture events. Slop 0 on
- * every pointer: with `d >= slop && d > 0`, any movement is a drag (the tools keep their own thresholds, measured at
- * release).
+ * the Pan tool and overview pan on a primary drag; no touch gestures, pen barrel or trackpad gesture events. A mouse or
+ * pen press starts a drag once it moves 3 px (U6), so a click with a little jitter stays a click; touch keeps slop 0
+ * until phase 3 (with `d >= slop && d > 0`, any movement is a drag). A tool may override the slop through `configure`
+ * (Plant a row: 0), and the tools keep their own thresholds, measured at release.
  */
 export const CURRENT_BINDINGS: Bindings = Object.freeze({
   secondary: Object.freeze({ click: 'menu-on-native', drag: 'none', shiftDrag: 'none' }),
@@ -38,5 +39,5 @@ export const CURRENT_BINDINGS: Bindings = Object.freeze({
   touch: Object.freeze({ gestures: false, longPressMenu: false, hostTouchActionNone: false }),
   penBarrel: 'ignore',
   trackpadGestures: false,
-  dragSlopPx: Object.freeze({ mouse: 0, pen: 0, touch: 0 }),
+  dragSlopPx: Object.freeze({ mouse: 3, pen: 3, touch: 0 }),
 })
