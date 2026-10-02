@@ -149,6 +149,9 @@ export interface SceneInteractionSessionDeps {
 }
 
 export interface SceneInteractionSession {
+  /** The tool the session has armed now (after a failed switch: the one it kept or fell back to). */
+  readonly tool: ToolId
+
   setTool(name: string): void
   /** Plant a row's spacing field in the tool card; does nothing under another tool. */
   readonly plantRowSpacing: CanvasPlantRowSpacingField
@@ -420,6 +423,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
    * already deactivated, and reactivating it risks the same failure) and still ends the live presses, as today's setTool
    * had cleared the pointer gesture before the step that failed.
    */
+  get tool(): ToolId {
+    return this._tool.peek()
+  }
+
   setTool(name: string): void {
     if (this._disposed) return
     const id = name as ToolId

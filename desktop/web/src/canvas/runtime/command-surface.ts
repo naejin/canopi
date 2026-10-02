@@ -133,6 +133,8 @@ interface SceneCanvasCommandSurfaceOptions {
     'toggleGridVisible' | 'toggleSnapToGrid' | 'toggleRulersVisible' | 'layerProjections'
   >
   readonly setInteractionTool: (name: string) => void
+  /** The tool the interaction session has armed now, or null without a session. */
+  readonly readInteractionTool: () => string | null
   /** The active interaction session's Plant a row spacing field. */
   readonly plantRowSpacing: CanvasPlantRowSpacingField
   readonly invalidate: (kind: CommandInvalidationKind) => void
@@ -271,10 +273,10 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     try {
       this.options.setInteractionTool(name)
     } catch (error) {
-      // A failed arm's only host-side fallback for a tool other than Select is Select itself (tool-host.ts
-      // setTool's rollback); a failed Select instead leaves the previously armed tool, which the app's own tool
-      // state already shows unchanged, so only the Select-fallback case needs correcting here.
-      if (name !== 'select') setCanvasTool('select')
+      // A failed switch leaves the session on the tool it kept or fell back to (Select after a failed activation,
+      // the tool being left when leaving it failed): the app's own tool state follows the session, not the request.
+      const kept = this.options.readInteractionTool()
+      if (kept) setCanvasTool(kept)
       throw error
     }
     setCanvasTool(name)
