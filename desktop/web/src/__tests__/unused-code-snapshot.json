@@ -224,8 +224,6 @@
   "testOnlyExports": [
     "src/app/analyses/model.ts#parseLocaleNumber",
     "src/app/budget/workbench.ts#validateBudgetPriceDraft",
-    "src/app/canvas-commands/index.ts#canvasCommandIdForShortcut",
-    "src/app/canvas-commands/index.ts#projectedCanvasTools",
     "src/app/canvas-map-surface/workspace-runtime-composition.ts#WORKSPACE_VIEW_SETTLE_MS",
     "src/app/canvas-pdf/print-colors.ts#printPlantColors",
     "src/app/canvas-settings/signals.ts#createDefaultLayerLockState",
