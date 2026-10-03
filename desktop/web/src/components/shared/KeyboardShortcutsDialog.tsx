@@ -23,7 +23,7 @@ export function KeyboardShortcutsDialog({ menus }: { readonly menus: readonly Me
       label: menu.id === 'tools' ? t('shortcuts.toolsHeading', { menu: menu.label }) : menu.label,
       rows: [
         ...flattenMenuActions([menu]).filter((action) => action.shortcut),
-        // A submenu whose key acts on it as a whole (View › Labels, N).
+        // A submenu whose key acts on it as a whole (View › Labels, Shift L).
         ...menu.items.flatMap((entry) => entry.type === 'submenu' && entry.shortcut
           ? [{ id: entry.id, label: entry.label, shortcut: entry.shortcut }]
           : []),

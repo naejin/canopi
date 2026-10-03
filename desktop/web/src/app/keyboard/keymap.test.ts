@@ -201,6 +201,13 @@ describe('keymap', () => {
     expect(canvasCommandFor(keyLike('Escape'))).toBeNull()
   })
 
+  it('N follows the switch', () => {
+    expect(rowsFor(CANVAS_KEYMAP_ROWS, keyLike('n')).map((row) => [row.command, row.scope, row.singleKey]))
+      .toEqual([['view.resetNorth', 'command', 'follows-switch']])
+    expect(rowsFor(CANVAS_KEYMAP_ROWS, keyLike('L', { shiftKey: true })).map((row) => [row.command, row.singleKey]))
+      .toEqual([['view.cycleLabels', 'follows-switch']])
+  })
+
   it('the Shift+N row is always on', () => {
     const rows = rowsFor(CANVAS_KEYMAP_ROWS, keyLike('N', { shiftKey: true }))
     expect(rows.map((row) => [row.command, row.scope, row.singleKey])).toEqual([['canvas.reset-north', 'command', 'always-on']])

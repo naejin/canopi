@@ -406,6 +406,28 @@ describe('key router', () => {
     expect(run).not.toHaveBeenCalled()
   })
 
+  it('N resets north with the switch on, and only Shift+N with it off (H14)', () => {
+    install()
+    host.focus()
+    expect(press({ key: 'n' }, host).defaultPrevented).toBe(true)
+    expect(run).toHaveBeenCalledExactlyOnceWith('view.resetNorth')
+    singleKeys.value = false
+    expect(press({ key: 'n' }, host).defaultPrevented).toBe(false)
+    expect(run).toHaveBeenCalledOnce()
+    expect(fake.port.command).not.toHaveBeenCalled()
+    expect(press({ key: 'N', shiftKey: true }, host).defaultPrevented).toBe(true)
+    expect(fake.port.command).toHaveBeenCalledExactlyOnceWith({ kind: 'reset-north' })
+    expect(run).toHaveBeenCalledOnce()
+  })
+
+  it('Shift+L cycles labels and N resets north, never cycling labels (H16)', () => {
+    install()
+    host.focus()
+    press({ key: 'L', shiftKey: true }, host)
+    press({ key: 'n' }, host)
+    expect(run.mock.calls).toEqual([['view.cycleLabels'], ['view.resetNorth']])
+  })
+
   it('Ctrl+→ is the large step, Shift+→ turns, a Mac Ctrl+→ does nothing (H17)', () => {
     install()
     host.focus()

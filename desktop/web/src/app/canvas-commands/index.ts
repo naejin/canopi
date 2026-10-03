@@ -380,12 +380,13 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
   view('fit-to-design', 'view.fitToDesign', 'menu.view.fitToDesign', { shortcuts: ['Shift+F', 'Ctrl+0'] }),
   // The rotation rows sit after Fit to Design, in the View menu's first section. Their routed chords (Shift+N, Shift+←,
   // Shift+→, Shift+↑) are canvas key rows, shown here only (spec §3.6).
-  view('reset-north', 'view.resetNorth', 'menu.view.resetNorth', { keyHints: ['Shift+N', 'Shift+ArrowUp'] }),
+  // N follows the single-key switch; Shift+N always resets (with the switch off menus show it).
+  view('reset-north', 'view.resetNorth', 'menu.view.resetNorth', { shortcuts: ['N'], keyHints: ['Shift+N', 'Shift+ArrowUp'] }),
   view('turn-view-left', 'view.turnViewLeft', 'menu.view.turnViewLeft', { keyHints: ['Shift+ArrowLeft'] }),
   view('turn-view-right', 'view.turnViewRight', 'menu.view.turnViewRight', { keyHints: ['Shift+ArrowRight'] }),
   view('search-place', 'view.searchPlace', 'menu.view.searchPlace', { shortcuts: ['Ctrl+K'], worksInTextFields: true }),
-  // N cycles View › Labels (None, Codes, Names); menus show it on the Labels submenu.
-  view('cycle-labels', 'view.cycleLabels', 'menu.view.cycleLabels', { shortcuts: ['N'] }),
+  // Shift+L cycles View › Labels (None, Codes, Names; it was N before rotation); menus show it on the Labels submenu.
+  view('cycle-labels', 'view.cycleLabels', 'menu.view.cycleLabels', { shortcuts: ['Shift+L'] }),
   {
     kind: 'settings',
     id: 'grid',
