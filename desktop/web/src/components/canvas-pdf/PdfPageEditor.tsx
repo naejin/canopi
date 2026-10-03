@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import type { PrintBounds, PrintPoint } from '../../canvas/print'
 import type { PdfPage, PdfPlan } from '../../app/canvas-pdf/types'
+import { areaFromFrame, pageFrame } from '../../app/canvas-pdf/page-frame'
 import { t } from '../../i18n'
 import { PdfPageArtwork } from './PdfPagePreview'
 
@@ -16,9 +17,10 @@ interface EditorProps {
   readonly keyMatches?: readonly PrintBounds[]
   /** The entry Find in key showed last, ringed more strongly and scrolled into view. */
   readonly keyCurrent?: PrintBounds | null
+  /** The drawn area in plan metres: an unturned box about its centre (`PdfPrintArea`). */
   readonly onPrintArea?: (bounds: PrintBounds) => void
   readonly onPage?: (id: string) => void
-  /** Delta of the view centre in metres, committed once per completed gesture. */
+  /** Delta of the view centre in plan metres, committed once per completed gesture or arrow press. */
   readonly onMove?: (delta: PrintPoint) => void
 }
 interface Gesture {
@@ -37,6 +39,9 @@ export function PdfPageEditor({ page, plan, adding = false, disabled = false, in
   const drag = useRef<Gesture | null>(null)
   const [selection, setSelection] = useState<PrintBounds | null>(null)
   const clipId = useId()
+  // Page grounds are in the layout's turned frame; what the editor reports goes back to plan metres.
+  const frame = pageFrame(plan.angleDeg)
+  const move = (x: number, y: number) => onMove?.(frame.fromFrame({ x: x / page.pointsPerMeter, y: y / page.pointsPerMeter }))
   const interactive = !disabled && !inspecting && page.kind !== 'legend'
   function cancel() {
     const previous = drag.current; drag.current = null; setSelection(null)
@@ -90,10 +95,10 @@ export function PdfPageEditor({ page, plan, adding = false, disabled = false, in
     if (navigationOnly) return
     if (adding) {
       if (bounds.width < 2 || bounds.height < 2) return
-      onPrintArea?.({ x: page.ground.x + (bounds.x - page.frame.x) / page.pointsPerMeter,
+      onPrintArea?.(areaFromFrame(frame, { x: page.ground.x + (bounds.x - page.frame.x) / page.pointsPerMeter,
         y: page.ground.y + (bounds.y - page.frame.y) / page.pointsPerMeter,
-        width: bounds.width / page.pointsPerMeter, height: bounds.height / page.pointsPerMeter })
-    } else onMove?.({ x: (gesture.start.x - end.x) / page.pointsPerMeter, y: (gesture.start.y - end.y) / page.pointsPerMeter })
+        width: bounds.width / page.pointsPerMeter, height: bounds.height / page.pointsPerMeter }))
+    } else move(gesture.start.x - end.x, gesture.start.y - end.y)
   }
   return <svg ref={root} xmlns="http://www.w3.org/2000/svg" viewBox={`0 0 ${page.width} ${page.height}`}
     role="group" tabindex={0} aria-label={t('pdf.pageCount', { page: page.number, count: plan.pages.length })}
@@ -106,7 +111,7 @@ export function PdfPageEditor({ page, plan, adding = false, disabled = false, in
       if (!interactive || navigationOnly || adding || event.altKey || event.ctrlKey || event.metaKey) return
       const delta = event.shiftKey ? 30 : 5
       const direction = { ArrowLeft: [delta, 0], ArrowRight: [-delta, 0], ArrowUp: [0, delta], ArrowDown: [0, -delta] }[event.key]
-      if (direction) { event.preventDefault(); onMove?.({ x: direction[0]! / page.pointsPerMeter, y: direction[1]! / page.pointsPerMeter }) }
+      if (direction) { event.preventDefault(); move(direction[0]!, direction[1]!) }
     }}>
     <desc>{page.legend.map((entry) => entry.name).join('; ')}</desc>
     <PdfPageArtwork page={page} plan={plan} />
