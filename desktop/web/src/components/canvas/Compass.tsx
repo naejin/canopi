@@ -23,9 +23,8 @@ interface Press {
   /** pending: under 3 px of travel, a click; turning: the view follows the pointer; ended: Esc, a lost capture or a window blur
    *  ended it while the pointer is still down, so its release is no click. */
   phase: 'pending' | 'turning' | 'ended'
-  /** The pointer's angle about the centre at the last move outside the dead zone, in screen degrees (clockwise); null
-   *  while the pointer is inside it, so the next angle starts afresh. */
-  angle: number | null
+  /** Where the pointer last was, if outside the dead zone; null while it is inside, so the next angle starts afresh. */
+  last: ScreenPoint | null
   /** Clockwise degrees swept since the press, unwrapped. */
   swept: number
   session: RotationSession | null
@@ -39,9 +38,10 @@ interface Press {
  * shows. A primary drag on the face past 3 px turns the view about the screen centre by the pointer's angle around the
  * compass, so the needle follows the pointer (a clockwise drag lowers the bearing); Shift steps to 15° multiples, read
  * on each move. Within 6 px of the centre the angle is ignored, so a drag there turns nothing and a drag that crosses
- * it takes the angle up again on the far side; past 3 px of travel a press is a drag wherever the pointer is. The drag runs outside the input pipeline, so while a press is
- * live it holds an Esc layer at the gesture priority (fixture I9): Esc restores the starting camera, or before the drag
- * starts ends the press with no reset. A pointer cancel, a lost capture and a window blur cancel it too.
+ * it, even in one step between two moves, takes the angle up again on the far side; past 3 px of travel a press is a
+ * drag wherever the pointer is. The drag runs outside the input pipeline, so while a press is live it holds an Esc
+ * layer at the gesture priority (fixture I9): Esc restores the starting camera, or before the drag starts ends the press
+ * with no reset. A pointer cancel, a lost capture and a window blur cancel it too.
  */
 export function Compass({ command, className }: {
   readonly command: CanvasToolbarActionCommand
@@ -103,7 +103,7 @@ export function Compass({ command, className }: {
       start,
       centre,
       phase: 'pending',
-      angle: angleOutsideDeadZone(centre, start),
+      last: outsideDeadZone(centre, start) ? start : null,
       swept: 0,
       session: null,
       release: () => {
@@ -117,9 +117,12 @@ export function Compass({ command, className }: {
     const current = press.current
     if (!current || current.pointerId !== event.pointerId || current.phase === 'ended') return
     const point = { x: event.clientX, y: event.clientY }
-    const angle = angleOutsideDeadZone(current.centre, point)
-    if (angle !== null && current.angle !== null) current.swept += wrapDegrees(angle - current.angle)
-    current.angle = angle
+    const outside = outsideDeadZone(current.centre, point)
+    // A step whose path passes through the dead zone crossed the centre, however fast: it turns nothing either.
+    if (outside && current.last && !passesThroughDeadZone(current.centre, current.last, point)) {
+      current.swept += wrapDegrees(angleAbout(current.centre, point) - angleAbout(current.centre, current.last))
+    }
+    current.last = outside ? point : null
     if (current.phase === 'pending') {
       if (Math.hypot(point.x - current.start.x, point.y - current.start.y) < DRAG_START_PX) return
       const viewport = currentCanvasViewportCommandSurface.peek()
@@ -205,12 +208,22 @@ function isLive(press: Press | null): boolean {
   return press !== null && press.phase !== 'ended'
 }
 
-/** The angle of a point about a centre on screen, in degrees (0 to the right, 90 down), or null inside the dead zone. */
-function angleOutsideDeadZone(centre: ScreenPoint, point: ScreenPoint): number | null {
-  const dx = point.x - centre.x
-  const dy = point.y - centre.y
-  if (Math.hypot(dx, dy) < CENTRE_DEAD_ZONE_PX) return null
-  return Math.atan2(dy, dx) * 180 / Math.PI
+function outsideDeadZone(centre: ScreenPoint, point: ScreenPoint): boolean {
+  return Math.hypot(point.x - centre.x, point.y - centre.y) >= CENTRE_DEAD_ZONE_PX
+}
+
+/** Whether the straight step from one point to the next comes within the dead zone. */
+function passesThroughDeadZone(centre: ScreenPoint, from: ScreenPoint, to: ScreenPoint): boolean {
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const lengthSq = dx * dx + dy * dy
+  const along = lengthSq === 0 ? 0 : Math.min(1, Math.max(0, ((centre.x - from.x) * dx + (centre.y - from.y) * dy) / lengthSq))
+  return !outsideDeadZone(centre, { x: from.x + along * dx, y: from.y + along * dy })
+}
+
+/** The angle of a point about a centre on screen, in degrees (0 to the right, 90 down). */
+function angleAbout(centre: ScreenPoint, point: ScreenPoint): number {
+  return Math.atan2(point.y - centre.y, point.x - centre.x) * 180 / Math.PI
 }
 
 /** A difference of angles in (−180, 180]. */

@@ -239,6 +239,20 @@ describe('Compass', () => {
     expect(bearing()).toBe(0)
   })
 
+  it.each([0.5, -0.5])('a fast swipe that jumps over the centre between two moves never flips the view (%s px off centre)', (offset) => {
+    mount(30)
+    const y = CENTRE.y + offset
+    // One sample each side of the centre, both just outside its dead zone: the pointer's angle jumps by about 172°, one
+    // way or the other by half a pixel, but the step between them crosses the centre, so it turns nothing.
+    pointer(compass(), 'pointerdown', { x: CENTRE.x - 10, y })
+    pointer(compass(), 'pointermove', { x: CENTRE.x + 6.1, y })
+    expect(compass().dataset.dragging).toBe('true')
+    expect(bearing()).toBeCloseTo(30, 6)
+    // The angle is taken up again on the far side.
+    pointer(compass(), 'pointermove', { x: CENTRE.x + 6.1, y: y + 3 })
+    expect(Math.abs(bearing() - 30)).toBeGreaterThan(10)
+  })
+
   it('Enter and Space reset', () => {
     vi.useFakeTimers()
     mount(30)
