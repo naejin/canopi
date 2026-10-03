@@ -157,7 +157,6 @@
     "src/canvas/runtime/tools/hit-testing.ts#TopLevelTarget",
     "src/canvas/runtime/tools/select/click.ts#SelectPress",
     "src/canvas/runtime/tools/select/reshape.ts#ZoneControlPointKind",
-    "src/canvas/runtime/tools/tool-actions.ts#SceneRect",
     "src/canvas/runtime/tools/tool.ts#SelectionReadModel",
     "src/canvas/runtime/tools/zone-drag.ts#DragShapeSpec",
     "src/canvas/runtime/tools/zone-drag.ts#ZoneDragKind",

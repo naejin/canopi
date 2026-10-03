@@ -10,7 +10,7 @@ import { newZoneId } from '../zone-identity'
 
 /** An unturned box in the session plane: a zone's `rotationDeg` turns it about its centre (zone-geometry.ts), as
  *  ToolView.screenAlignedRect's centre, width and height describe it. */
-export interface SceneRect {
+interface SceneRect {
   x: number
   y: number
   width: number
