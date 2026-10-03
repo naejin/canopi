@@ -1414,6 +1414,9 @@
       "grayscale": "Grijstinten",
       "black": "Zwart"
     },
+    "mapOrientation": "Kaartoriëntatie",
+    "mapOrientationNorthUp": "Noorden boven",
+    "mapOrientationAsOnScreen": "Zoals op het scherm",
     "northArrow": "Noordpijl en schaal",
     "pageOptions": "Geselecteerde pagina",
     "findInKey": "Zoeken in de legenda"

@@ -1414,6 +1414,9 @@
       "grayscale": "회색조",
       "black": "검정"
     },
+    "mapOrientation": "지도 방향",
+    "mapOrientationNorthUp": "북쪽 위",
+    "mapOrientationAsOnScreen": "화면과 같이",
     "northArrow": "방위표와 축척",
     "pageOptions": "선택한 페이지",
     "findInKey": "범례에서 찾기"

@@ -115,7 +115,7 @@ it('sets print-only plant colours and the north arrow from the side sheet', asyn
     delivery: { save: vi.fn(), dispose: vi.fn() }, labels: () => ({ notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => '' })
   try {
     await act(async () => { workflow.show(); render(<CanvasPdfDialog workflow={workflow} />, container) })
-    const radios = container.querySelectorAll<HTMLInputElement>('[role="radiogroup"] input[type="radio"]')
+    const radios = container.querySelectorAll<HTMLInputElement>('[role="radiogroup"][aria-label="Plant colors"] input[type="radio"]')
     expect(Array.from(radios, radio => radio.value)).toEqual(['design', 'grayscale', 'black'])
     expect(radios[0]!.checked).toBe(true)
     await act(async () => { radios[1]!.click() })
@@ -125,6 +125,32 @@ it('sets print-only plant colours and the north arrow from the side sheet', asyn
     await act(async () => { north.click() })
     expect(workflow.setup.value.northArrow).toBe(false)
     expect(prepare.mock.lastCall![0].setup).toMatchObject({ plantColors: 'grayscale', northArrow: false })
+  } finally { render(null, container); workflow.dispose(); container.remove() }
+})
+
+it('offers Map orientation under Plant colours, North up by default, and As on screen draws at the view bearing', async () => {
+  const container = document.createElement('div'); document.body.append(container)
+  const prepare = vi.fn(async ({ input, setup }: PdfPreparation) => ({ bytes: null, plan: { ...buildPdfPlan(input, setup, createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en'),
+    { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }) } }))
+  const canvas = { layers: [{ name: 'plants', visible: true, opacity: 1 }], zones: [], annotations: [], measurements: [],
+    plants: [{ id: 'p', canonicalName: 'Malus domestica', position: { x: 3, y: 4 }, color: '#123456', symbol: 'round', mark: [], pinnedName: false }] }
+  const workflow = createPdfWorkflow({ capture: () => ({ identity: canvas, isCurrent: () => true,
+    input: { name: 'Garden', locale: 'en', commonNames: {}, canvas, viewBearingDeg: 30 } }), prepare, resolveDisplayNames: async () => ({ names: {}, englishFallbacks: [] }),
+    delivery: { save: vi.fn(), dispose: vi.fn() }, labels: () => ({ notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => '' })
+  try {
+    await act(async () => { workflow.show(); render(<CanvasPdfDialog workflow={workflow} />, container) })
+    await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+    const groups = Array.from(container.querySelectorAll('aside [role="radiogroup"]'), group => group.getAttribute('aria-label'))
+    expect(groups).toEqual(['Plant colors', 'Map orientation'])
+    const radios = container.querySelectorAll<HTMLInputElement>('[role="radiogroup"][aria-label="Map orientation"] input[type="radio"]')
+    expect(Array.from(radios, radio => radio.closest('label')!.textContent)).toEqual(['North up', 'As on screen'])
+    expect(radios[0]!.checked).toBe(true)
+    expect(workflow.state.value.result!.plan.angleDeg).toBe(0)
+    await act(async () => { radios[1]!.click(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready')) })
+    expect(workflow.setup.value.mapOrientation).toBe('as-on-screen')
+    expect(workflow.state.value.result!.plan.angleDeg).toBe(30)
+    await act(async () => { radios[0]!.click(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready')) })
+    expect(workflow.state.value.result!.plan.angleDeg).toBe(0)
   } finally { render(null, container); workflow.dispose(); container.remove() }
 })
 

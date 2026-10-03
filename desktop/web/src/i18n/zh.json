@@ -1414,6 +1414,9 @@
       "grayscale": "灰度",
       "black": "黑色"
     },
+    "mapOrientation": "地图方向",
+    "mapOrientationNorthUp": "北向上",
+    "mapOrientationAsOnScreen": "与屏幕一致",
     "northArrow": "指北针和比例尺",
     "pageOptions": "所选页面",
     "findInKey": "在图例中查找"

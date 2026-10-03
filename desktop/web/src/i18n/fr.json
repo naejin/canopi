@@ -1414,6 +1414,9 @@
       "grayscale": "Niveaux de gris",
       "black": "Noir"
     },
+    "mapOrientation": "Orientation de la carte",
+    "mapOrientationNorthUp": "Nord en haut",
+    "mapOrientationAsOnScreen": "Comme à l'écran",
     "northArrow": "Flèche du nord et échelle",
     "pageOptions": "Page sélectionnée",
     "findInKey": "Chercher dans la légende"

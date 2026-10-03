@@ -1414,6 +1414,9 @@
       "grayscale": "Scala di grigi",
       "black": "Nero"
     },
+    "mapOrientation": "Orientamento della mappa",
+    "mapOrientationNorthUp": "Nord in alto",
+    "mapOrientationAsOnScreen": "Come sullo schermo",
     "northArrow": "Freccia del nord e scala",
     "pageOptions": "Pagina selezionata",
     "findInKey": "Cerca nella legenda"

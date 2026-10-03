@@ -1414,6 +1414,9 @@
       "grayscale": "Оттенки серого",
       "black": "Чёрный"
     },
+    "mapOrientation": "Ориентация карты",
+    "mapOrientationNorthUp": "Север вверху",
+    "mapOrientationAsOnScreen": "Как на экране",
     "northArrow": "Стрелка севера и масштаб",
     "pageOptions": "Выбранная страница",
     "findInKey": "Найти в легенде"

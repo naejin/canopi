@@ -1414,6 +1414,9 @@
       "grayscale": "Graustufen",
       "black": "Schwarz"
     },
+    "mapOrientation": "Kartenausrichtung",
+    "mapOrientationNorthUp": "Norden oben",
+    "mapOrientationAsOnScreen": "Wie auf dem Bildschirm",
     "northArrow": "Nordpfeil und Maßstab",
     "pageOptions": "Ausgewählte Seite",
     "findInKey": "In der Legende suchen"

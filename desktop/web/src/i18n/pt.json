@@ -1414,6 +1414,9 @@
       "grayscale": "Escala de cinza",
       "black": "Preto"
     },
+    "mapOrientation": "Orientação do mapa",
+    "mapOrientationNorthUp": "Norte para cima",
+    "mapOrientationAsOnScreen": "Como na tela",
     "northArrow": "Seta do norte e escala",
     "pageOptions": "Página selecionada",
     "findInKey": "Buscar na legenda"
