@@ -134,7 +134,6 @@
     "src/canvas/runtime/renderers/pixi-scene.ts#PixiScenePresentationOptions",
     "src/canvas/runtime/renderers/scene-paint.ts#CasedStroke",
     "src/canvas/runtime/renderers/world-layers.ts#WorldLayers",
-    "src/canvas/runtime/scene-chrome.ts#SceneChromeSnapshot",
     "src/canvas/runtime/scene-history.ts#SceneHistoryAcknowledgement",
     "src/canvas/runtime/scene-history.ts#SceneHistoryCheckpoint",
     "src/canvas/runtime/scene-runtime/arrangement-placement.ts#SceneArrangementPlacementDeps",
