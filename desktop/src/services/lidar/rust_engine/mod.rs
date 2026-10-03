@@ -278,10 +278,10 @@ impl RasterEngine for RustRasterEngine {
 
     #[cfg(test)]
     fn statistics(&self, raster: &Path, cancel: &AtomicBool) -> Result<RasterStatistics, String> {
-        let loaded = source::load(raster, "raster statistics", cancel)?;
+        let opened = source::open(raster, "raster statistics", cancel)?;
         check_cancel(cancel)?;
-        let nodata = loaded.nodata;
-        let samples = loaded.into_samples(cancel)?;
+        let nodata = opened.nodata;
+        let samples = opened.into_samples("raster statistics", cancel)?;
         let valid = |value: &f32| value.is_finite() && nodata.is_none_or(|marker| *value != marker);
         let mut minimum = f64::INFINITY;
         let mut maximum = f64::NEG_INFINITY;
@@ -339,15 +339,15 @@ impl RasterEngine for RustRasterEngine {
         height: u32,
         cancel: &AtomicBool,
     ) -> Result<Vec<f32>, String> {
-        let loaded = source::load(raster, "raw raster extraction", cancel)?;
-        if loaded.grid.width != width || loaded.grid.height != height {
+        let opened = source::open(raster, "raw raster extraction", cancel)?;
+        if opened.grid.width != width || opened.grid.height != height {
             return Err(format!(
                 "raw raster buffer has {} bytes, expected {}",
-                u64::from(loaded.grid.width) * u64::from(loaded.grid.height) * 4,
+                u64::from(opened.grid.width) * u64::from(opened.grid.height) * 4,
                 u64::from(width) * u64::from(height) * 4
             ));
         }
-        loaded.into_samples(cancel)
+        opened.into_samples("raw raster extraction", cancel)
     }
 
     fn write_geotiff(

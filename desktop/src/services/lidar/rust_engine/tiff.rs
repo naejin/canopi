@@ -537,41 +537,37 @@ impl BandReader {
     /// The decoded bytes of chunk `index`, decoding it unless it was the
     /// last one decoded.
     fn decode(&mut self, index: usize, chunk: &Chunk) -> Result<&[u8], String> {
-        if self.decoded.as_ref().is_none_or(|(held, _)| *held != index) {
-            self.decoded = None;
-            let expected = chunk.stored_width
-                * chunk.stored_rows
-                * self.band.chunk_bands
-                * self.bytes_per_sample;
-            let raw = self.read_bytes(
-                chunk.offset,
-                usize::try_from(chunk.count).map_err(|_| "chunk size overflows".to_string())?,
-            )?;
-            let mut data = wbgeotiff::compression::decompress(self.codec, &raw, expected)
-                .map_err(|e| format!("Failed to decode raster chunk: {e}"))?;
-            if data.len() < expected {
-                return Err(format!(
-                    "raster chunk decoded to {} bytes, expected {expected}",
-                    data.len()
-                ));
-            }
-            data.truncate(expected);
-            wbgeotiff::compression::undo_predictor(
-                &mut data,
-                self.band.predictor,
-                chunk.stored_width,
-                chunk.stored_rows,
-                self.band.chunk_bands,
-                self.bytes_per_sample,
-                self.band.byte_order,
-            )
-            .map_err(|e| format!("Failed to undo the raster predictor: {e}"))?;
-            self.decoded = Some((index, data));
+        if let Some((held, data)) = self.decoded.take_if(|(held, _)| *held == index) {
+            return Ok(&self.decoded.insert((held, data)).1);
         }
-        Ok(self
-            .decoded
-            .as_ref()
-            .map_or(&[][..], |(_, data)| data.as_slice()))
+        // Free the previous chunk before decoding the next one.
+        self.decoded = None;
+        let expected =
+            chunk.stored_width * chunk.stored_rows * self.band.chunk_bands * self.bytes_per_sample;
+        let raw = self.read_bytes(
+            chunk.offset,
+            usize::try_from(chunk.count).map_err(|_| "chunk size overflows".to_string())?,
+        )?;
+        let mut data = wbgeotiff::compression::decompress(self.codec, &raw, expected)
+            .map_err(|e| format!("Failed to decode raster chunk: {e}"))?;
+        if data.len() < expected {
+            return Err(format!(
+                "raster chunk decoded to {} bytes, expected {expected}",
+                data.len()
+            ));
+        }
+        data.truncate(expected);
+        wbgeotiff::compression::undo_predictor(
+            &mut data,
+            self.band.predictor,
+            chunk.stored_width,
+            chunk.stored_rows,
+            self.band.chunk_bands,
+            self.bytes_per_sample,
+            self.band.byte_order,
+        )
+        .map_err(|e| format!("Failed to undo the raster predictor: {e}"))?;
+        Ok(&self.decoded.insert((index, data)).1)
     }
 
     /// Fill `out` with `window` of band 1, row-major.

@@ -30,11 +30,13 @@ pub(super) enum Band {
 }
 
 impl Opened {
-    /// The whole band, row-major (the caller checked the capacity limit).
-    pub fn into_samples(self, cancel: &AtomicBool) -> Result<Vec<f32>, String> {
+    /// The whole band, row-major; a streamed band is read whole only after
+    /// the capacity check named `operation`.
+    pub fn into_samples(self, operation: &str, cancel: &AtomicBool) -> Result<Vec<f32>, String> {
         match self.band {
             Band::Whole(samples) => Ok(samples.into_vec()),
             Band::Streamed(mut reader) => {
+                validate_working_grid(&self.grid, operation)?;
                 Ok(read_whole(&mut reader, &self.grid, cancel)?.into_vec())
             }
         }
@@ -51,25 +53,10 @@ pub(super) fn probe(path: &Path) -> Result<RasterProbe, String> {
     Ok(probe_other(path, &raster)?.0)
 }
 
-/// Band 1 of any raster the engine reads, ready to convert: a GeoTIFF is
-/// streamed when its chunks allow, anything else is loaded whole after the
-/// capacity check named `operation`.
-pub(super) fn open(path: &Path, operation: &str, cancel: &AtomicBool) -> Result<Opened, String> {
-    open_band(path, operation, false, cancel)
-}
-
-/// Band 1 of any raster the engine reads, whole, after the capacity check
+/// Band 1 of any raster the engine reads: a GeoTIFF is streamed when its
+/// chunks allow, anything else is loaded whole after the capacity check
 /// named `operation`.
-pub(super) fn load(path: &Path, operation: &str, cancel: &AtomicBool) -> Result<Opened, String> {
-    open_band(path, operation, true, cancel)
-}
-
-fn open_band(
-    path: &Path,
-    operation: &str,
-    whole: bool,
-    cancel: &AtomicBool,
-) -> Result<Opened, String> {
+pub(super) fn open(path: &Path, operation: &str, cancel: &AtomicBool) -> Result<Opened, String> {
     if tiff::is_tiff(path)? {
         let header = tiff::read_header(path)?;
         let probe = probe_tiff(&header)?;
@@ -80,7 +67,7 @@ fn open_band(
         };
         let nodata = probe.nodata;
         let mut reader = tiff::BandReader::open(path, header.band_format(), nodata.unwrap_or(0.0))?;
-        let band = if !whole && reader.streams() {
+        let band = if reader.streams() {
             Band::Streamed(reader)
         } else {
             validate_working_grid(&grid, operation)?;
