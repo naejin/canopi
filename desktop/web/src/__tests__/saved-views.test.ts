@@ -13,13 +13,13 @@ import {
   openSaveViewDialog,
   renameView,
   requestDeleteView,
-  saveCurrentView,
   savedViewDeleteConfirmation,
   savedViewDialogOpen,
   savedViewUndo,
   saveViewDialog,
   undoDeleteView,
 } from '../app/saved-views'
+import { saveCurrentView } from '../app/saved-views/actions'
 import { composeSavedView } from '../app/saved-views/model'
 import { describeSavedViewSnapshot, VIEW_SNAPSHOT_THUMBNAIL } from '../app/saved-views/snapshot'
 import type { ViewCamera } from '../canvas/runtime/view/types'

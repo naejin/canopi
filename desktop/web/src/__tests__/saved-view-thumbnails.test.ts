@@ -3,7 +3,7 @@ import {
   createSavedViewThumbnailCache,
   type SavedViewThumbnailCacheOptions,
 } from '../app/saved-views/thumbnails'
-import { ViewSnapshotSceneBusyError } from '../app/saved-views'
+import { ViewSnapshotSceneBusyError } from '../app/saved-views/snapshot'
 import type { SavedView } from '../types/design'
 
 const VIEW: SavedView = {

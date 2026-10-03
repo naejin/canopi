@@ -11,8 +11,3 @@ export {
   togglePresentationFullScreen,
   type PresentedStep,
 } from './controller'
-export {
-  presentedMapLayers,
-  storyPresentationHidesEditingAids,
-  storyPresentationOverrides,
-} from './overrides'

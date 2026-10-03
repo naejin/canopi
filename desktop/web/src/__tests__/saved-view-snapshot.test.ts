@@ -41,7 +41,7 @@ import {
   VIEW_SNAPSHOT_DEFAULT_TIMEOUT_MS,
   VIEW_SNAPSHOT_THUMBNAIL,
   ViewSnapshotSceneBusyError,
-} from '../app/saved-views'
+} from '../app/saved-views/snapshot'
 import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
 import { designSessionStore } from '../app/document-session/store'
 import { setCurrentCanvasSession } from '../canvas/session'

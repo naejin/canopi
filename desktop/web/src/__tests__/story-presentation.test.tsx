@@ -6,14 +6,16 @@ import {
   goToPresentedStep,
   leaveStoryPresentation,
   nextPresentedStep,
-  presentedMapLayers,
   presentedStep,
   presentStory,
   previousPresentedStep,
   storyPresentationActive,
+} from '../app/story-presentation'
+import {
+  presentedMapLayers,
   storyPresentationHidesEditingAids,
   storyPresentationOverrides,
-} from '../app/story-presentation'
+} from '../app/story-presentation/overrides'
 import { StoryPresenter } from '../components/stories/StoryPresenter'
 import { PanelRail } from '../components/shared/PanelRail'
 import { currentDesign, designSessionStore } from '../app/document-session/store'

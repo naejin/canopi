@@ -29,10 +29,10 @@ vi.mock('../maplibre/view-snapshot-map', async (importOriginal) => {
 
 import {
   closeManageViewsDialog,
-  disposeViewSnapshots,
   openManageViewsDialog,
   savedViewMenuActions,
 } from '../app/saved-views'
+import { disposeViewSnapshots } from '../app/saved-views/snapshot'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { SavedViewDialogs } from '../components/shared/SavedViewDialogs'
 import { MenuBar } from '../components/shared/MenuBar'
