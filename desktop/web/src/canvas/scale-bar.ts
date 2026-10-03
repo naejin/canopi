@@ -10,15 +10,13 @@ export interface ScaleBarDisplay {
   readonly meters: number
 }
 
-/** `scale` is CSS pixels per ground metre. */
+/** `scale` is CSS pixels per ground metre, positive and finite on a validated camera. */
 export function getScaleBarDisplay(scale: number): ScaleBarDisplay {
-  const safeScale = scale > 0 ? scale : 1
-  const meters = niceDistanceAtMost(MAX_BAR_PX / safeScale)
-  return { barScreenPx: meters * safeScale, meters }
+  const meters = niceDistanceAtMost(MAX_BAR_PX / scale)
+  return { barScreenPx: meters * scale, meters }
 }
 
 function niceDistanceAtMost(maximum: number): number {
-  if (!Number.isFinite(maximum) || maximum <= 0) return 0.5
   const exponent = Math.floor(Math.log10(maximum))
   const power = 10 ** exponent
   const normalized = maximum / power
