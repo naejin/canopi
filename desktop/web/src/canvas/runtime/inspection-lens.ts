@@ -38,10 +38,17 @@ export class SceneCanvasInspectionOwner {
     let ctx: CanvasRenderingContext2D | null = null
     try { ctx = canvas.getContext('2d') } catch (error) { console.error('Canvas inspection preview unavailable:', error) }
     container.appendChild(canvas)
-    // Offscreen, made on the first translucent Plants layer and reused: the plants are composited from it once.
+    // Offscreen, made on the first translucent Plants layer and reused: the plants are composited from it once. Asked for
+    // once; without one the plants are drawn per shape.
     let scratch: CanvasRenderingContext2D | null = null
+    let scratchAsked = false
     function scratchSized(widthPx: number, heightPx: number): CanvasRenderingContext2D | null {
-      scratch ??= document.createElement('canvas').getContext('2d')
+      if (!scratchAsked) {
+        scratchAsked = true
+        try { scratch = document.createElement('canvas').getContext('2d') } catch (error) {
+          console.error('Canvas inspection plant compositing unavailable:', error)
+        }
+      }
       if (scratch && (scratch.canvas.width !== widthPx || scratch.canvas.height !== heightPx)) {
         scratch.canvas.width = widthPx; scratch.canvas.height = heightPx
       }

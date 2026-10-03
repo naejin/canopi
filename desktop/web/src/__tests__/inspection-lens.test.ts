@@ -558,4 +558,27 @@ describe('Inspection Lens Plants opacity (canopi-h90p.67)', () => {
     expect([scratch!.width, scratch!.height]).toEqual([Math.round(431 * 1.25), Math.round(390 * 1.25)])
     owner.dispose()
   })
+
+  it('draws translucent plants per shape when the scratch context throws, keeping the preview', () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { owner, view, main, resize } = mountTranslucentLens(() => { throw new Error('no second context') })
+    expect(view.state.value!.previewAvailable).toBe(true)
+    expect(main.draws).toEqual([])
+    expect(main.fills.length).toBeGreaterThanOrEqual(2)
+    expect(main.fills.every((alpha) => alpha === .5)).toBe(true)
+    expect(logged).toHaveBeenCalled()
+    resize(431, 1.25)
+    expect(view.state.value!.previewAvailable).toBe(true)
+    owner.dispose()
+  })
+
+  it('asks for a scratch context once when none can be made, not on every paint', () => {
+    const { owner, view, main, scratchCanvases, resize } = mountTranslucentLens(() => null)
+    resize(431, 1.25)
+    resize(432, 2)
+    expect(scratchCanvases).toHaveLength(1)
+    expect(view.state.value!.previewAvailable).toBe(true)
+    expect(main.fills.every((alpha) => alpha === .5)).toBe(true)
+    owner.dispose()
+  })
 })
