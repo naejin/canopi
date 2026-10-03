@@ -67,9 +67,14 @@ pub fn load_design(user_db: &UserDb, path: String) -> Result<LoadedDesign, Desig
     Ok(LoadedDesign { file, fingerprint })
 }
 
-pub fn load_design_file(path: String) -> Result<CanopiFile, String> {
+/// Read a Design file for a stamp import, without listing it as recent.
+/// Failures are typed like `load_design`'s, so an older file says why.
+pub fn load_design_file(path: String) -> Result<CanopiFile, DesignLoadFailure> {
     let dest = std::path::PathBuf::from(&path);
-    let design = format::load_from_file(&dest).map_err(|error| error.failure().message)?;
+    let design = format::load_from_file(&dest).map_err(|error| {
+        tracing::info!(kind = ?error.failure().kind, "Design could not be read for import");
+        error.failure()
+    })?;
     tracing::info!("Design file loaded for import");
     Ok(design)
 }
@@ -292,7 +297,8 @@ mod tests {
     use crate::db::UserDb;
     use crate::test_scratch::TestScratch;
     use common_types::design::{
-        CanopiFile, DesignLoadFailure, DesignSaveOutcome, DesignSummary, LoadedDesign,
+        CanopiFile, DesignLoadFailure, DesignLoadFailureKind, DesignSaveOutcome, DesignSummary,
+        LoadedDesign,
     };
     use rusqlite::Connection;
     use std::path::PathBuf;
@@ -424,6 +430,24 @@ mod tests {
         assert!(recent.is_empty());
 
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn load_design_file_refuses_a_file_saved_before_2_0_as_older_version() {
+        let scratch = TestScratch::new("design-files-load-design-file-refuses-older-version");
+        let path = temp_design_path(&scratch, "old_stamp");
+        std::fs::write(&path, r#"{"version": 4, "name": "Canopi 1.1 stamp"}"#).unwrap();
+
+        // Stamp import maps `kind` to its message, so the IPC must reject
+        // with the typed failure, not a plain string.
+        let failure = load_design_file(path.to_string_lossy().into_owned()).unwrap_err();
+
+        assert_eq!(failure.kind, DesignLoadFailureKind::OlderVersion);
+        assert!(
+            !failure.message.contains("old_stamp"),
+            "{}",
+            failure.message
+        );
     }
 
     #[test]

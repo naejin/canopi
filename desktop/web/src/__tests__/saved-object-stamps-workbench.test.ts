@@ -928,7 +928,9 @@ describe('Saved Object Stamp Workbench', () => {
     const workbench = createSavedObjectStampWorkbench({
       getSavedObjectStamps: async () => [],
       createSavedObjectStamp: createStamp,
-      // The native loader rejects with the typed DesignLoadFailure.
+      // The shape `load_saved_object_stamp_canopi_file` rejects with: a
+      // serialized DesignLoadFailure (pinned by the Rust test
+      // load_design_file_refuses_a_file_saved_before_2_0_as_older_version).
       importSavedObjectStampFile: async () => {
         throw { kind: 'older_version', message: 'unsupported_version: 7' }
       },
