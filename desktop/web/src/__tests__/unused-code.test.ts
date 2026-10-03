@@ -65,8 +65,6 @@ const OPTIONS: UnusedCodeOptions = {
  * (`canopi-…`) or the plan section (`canvas-v2-plan.md section N`) that needs it.
  */
 const KEPT: Readonly<Record<string, string>> = {
-  'src/canvas/runtime/view/navigation-policy.ts#ROTATE_DEG_PER_PX':
-    'canopi-f47t.7 (phase 1 rotation): the pointer rotate rate (canvas-v2-spec.md §2.2 "Rotation sign")',
   'src/canvas/runtime/view/navigation-policy.ts#SNAP_TO_NORTH_DEG':
     'canopi-f47t.7 (phase 1 rotation): free gestures and the compass snap to north within 7° (canvas-v2-spec.md §4)',
   'src/canvas/runtime/view/camera-math.ts#cameraKeepingPoint':
