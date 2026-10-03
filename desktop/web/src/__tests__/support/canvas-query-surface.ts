@@ -208,7 +208,7 @@ function createFollowingTestView(
   let revision = 0
   const viewFrame = computed(() => testViewFrame(placement.value, screen, plane.value ?? FALLBACK_PLANE, ++revision))
   const frames: ViewFrameSource = { viewFrame, settledViewFrame: viewFrame, onViewFrame: () => () => {} }
-  return createViewReadSurface(frames, () => plane.peek() ?? FALLBACK_PLANE)
+  return createViewReadSurface(frames)
 }
 
 function testViewFrame(placement: TestPlacement, screen: ViewScreen, plane: SessionPlane, revision: number): ViewFrame {

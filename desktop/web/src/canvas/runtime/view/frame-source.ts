@@ -4,13 +4,11 @@
 // frame 150 ms after the last one, and ViewReadSurface, the coarse signals app code observes instead of frames (P10).
 
 import { computed, signal, type ReadonlySignal } from '@preact/signals'
-import type { SessionPlane } from '../../session-plane'
 import { normaliseBearing } from './navigation-policy'
 import type { ViewReadSurface } from './read-surface'
 import type {
   DriverFrameSource,
   FramePhase,
-  GeoBounds,
   ScreenPoint,
   ViewCamera,
   ViewFrame,
@@ -156,10 +154,9 @@ export function createDriverFrameSource(initial: ViewFrame): DriverFramePublishe
 }
 
 /**
- * The app-facing view of a frame source. Each signal changes only when its own value does. `plane` is the session plane the frames
- * are built on: captureView turns the four screen corners into lon/lat through it, as today's plane viewport did.
+ * The app-facing view of a frame source. Each signal changes only when its own value does.
  */
-export function createViewReadSurface(frames: ViewFrameSource, plane: () => SessionPlane): ViewReadSurface {
+export function createViewReadSurface(frames: ViewFrameSource): ViewReadSurface {
   const view = () => frames.viewFrame.value.view
   return {
     mode: computed(() => frames.viewFrame.value.mode),
@@ -178,17 +175,7 @@ export function createViewReadSurface(frames: ViewFrameSource, plane: () => Sess
     settledRevision: computed(() => frames.settledViewFrame.value.revision),
     captureView() {
       const current = frames.viewFrame.peek().view
-      const onPlane = plane()
-      const corners = current.visibleWorldQuad().map((corner) => onPlane.toGeo(corner))
-      const lons = corners.map((corner) => corner.lon)
-      const lats = corners.map((corner) => corner.lat)
-      const extent: GeoBounds = {
-        west: Math.min(...lons),
-        south: Math.min(...lats),
-        east: Math.max(...lons),
-        north: Math.max(...lats),
-      }
-      return { camera: current.camera, extent, screen: current.screen }
+      return { camera: current.camera, screen: current.screen }
     },
   }
 }

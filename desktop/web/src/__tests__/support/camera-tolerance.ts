@@ -5,7 +5,7 @@
 // A test file that compares such points with toEqual, toMatchObject or toHaveBeenCalledWith imports this module: in that file, two
 // finite numbers are equal when they differ by at most 1e-6, far below a pixel or a millimetre in plane metres and CSS px. Geographic
 // values are not: 1e-6 degrees is about 11 cm of ground, hundreds of pixels at the closest zoom. An object with a lon, lat, zoom or
-// ground-extent key (a point, a camera, a last view, a GeoBounds) compares exactly, all the way down. Other values compare as usual.
+// ground-extent key (a point, a camera, a last view, a lon/lat box) compares exactly, all the way down. Other values compare as usual.
 
 import { expect } from 'vitest'
 

@@ -339,7 +339,7 @@ function compositionFixture(options: CompositionFixtureOptions) {
   const sessionPlane = queries.sessionPlane
   const surfaces = createTestCanvasRuntimeSurfaces({
     documents,
-    queries: { ...queries, view: createViewReadSurface(view.frames, () => sessionPlane.peek() ?? SETTLE_PLANE) },
+    queries: { ...queries, view: createViewReadSurface(view.frames) },
   })
   const runtime = {
     cameraHost: view.host,
