@@ -179,7 +179,8 @@
       "grid": "Raster",
       "snapToGrid": "Uitlijnen op raster",
       "rulers": "Linialen",
-      "zoom": "Zoom"
+      "zoom": "Zoom",
+      "rulersNorthUpOnly": "Linialen verschijnen als het noorden boven is"
     },
     "overview": {
       "zoomInToEdit": "Zoom in om te bewerken. Op deze schaal zijn planten verborgen.",

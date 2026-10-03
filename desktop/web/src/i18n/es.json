@@ -179,7 +179,8 @@
       "grid": "Cuadrícula",
       "snapToGrid": "Ajustar a la cuadrícula",
       "rulers": "Reglas",
-      "zoom": "Zoom"
+      "zoom": "Zoom",
+      "rulersNorthUpOnly": "Las reglas se muestran cuando el norte está arriba"
     },
     "overview": {
       "zoomInToEdit": "Acerca la vista para editar. Las plantas se ocultan a esta escala.",

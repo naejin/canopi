@@ -179,7 +179,8 @@
       "grid": "Grille",
       "snapToGrid": "Aimanter à la grille",
       "rulers": "Règles",
-      "zoom": "Zoom"
+      "zoom": "Zoom",
+      "rulersNorthUpOnly": "Les règles s’affichent quand le nord est en haut"
     },
     "overview": {
       "zoomInToEdit": "Zoomez pour modifier. Les plantes sont masquées à cette échelle.",

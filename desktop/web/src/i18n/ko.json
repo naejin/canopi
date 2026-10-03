@@ -179,7 +179,8 @@
       "grid": "격자",
       "snapToGrid": "격자에 맞추기",
       "rulers": "눈금자",
-      "zoom": "확대/축소"
+      "zoom": "확대/축소",
+      "rulersNorthUpOnly": "북쪽이 위일 때 눈금자가 표시됩니다"
     },
     "overview": {
       "zoomInToEdit": "편집하려면 확대하세요. 이 축척에서는 식물이 숨겨집니다.",

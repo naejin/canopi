@@ -179,7 +179,8 @@
       "grid": "Grade",
       "snapToGrid": "Alinhar à grade",
       "rulers": "Réguas",
-      "zoom": "Zoom"
+      "zoom": "Zoom",
+      "rulersNorthUpOnly": "As réguas aparecem quando o norte está para cima"
     },
     "overview": {
       "zoomInToEdit": "Aproxime para editar. As plantas ficam ocultas nesta escala.",

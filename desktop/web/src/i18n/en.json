@@ -179,7 +179,8 @@
       "grid": "Grid",
       "snapToGrid": "Snap to grid",
       "rulers": "Rulers",
-      "zoom": "Zoom"
+      "zoom": "Zoom",
+      "rulersNorthUpOnly": "Rulers show when north is up"
     },
     "overview": {
       "zoomInToEdit": "Zoom in to edit. Plants are hidden at this scale.",

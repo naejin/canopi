@@ -179,7 +179,8 @@
       "grid": "Raster",
       "snapToGrid": "Am Raster ausrichten",
       "rulers": "Lineale",
-      "zoom": "Zoom"
+      "zoom": "Zoom",
+      "rulersNorthUpOnly": "Lineale erscheinen, wenn Norden oben ist"
     },
     "overview": {
       "zoomInToEdit": "Zum Bearbeiten hineinzoomen. In diesem Maßstab sind Pflanzen ausgeblendet.",
