@@ -2315,7 +2315,7 @@ Every new or changed key exists in all 11 locales (`desktop/web/src/i18n/*.json`
 
 ### 9.1 Phase 1 (rotation)
 
-F1's gesture rows (`shortcuts.gestures.*`) are written once, in phase 2, with the static gesture list (§9.3; U1): phase 1 adds only the keyboard rows below. Owners (plan section 4, phase 1): Keyboard the `menu`, `shortcuts`, `shortcutKeys`, `settings` and `canvas.map` keys; Components `canvas.compass`, `canvas.grid` and `canvas.inspection`; D1 `canvas.contextMenu`; PDF `pdf`.
+F1's gesture rows (`shortcuts.gestures.*`) are written once, in phase 2, with the static gesture list (§9.3; U1): phase 1 adds only the keyboard rows below. Owners (plan section 4, phase 1): Keyboard the `menu`, `shortcuts`, `shortcutKeys`, `settings` and `canvas.map` keys and the removal of `plantFinder.shortcut`; Components `canvas.compass`, `canvas.grid` and `canvas.inspection`; D1 `canvas.contextMenu`; PDF `pdf`.
 
 | Key | English | Where |
 |---|---|---|
@@ -2333,7 +2333,7 @@ F1's gesture rows (`shortcuts.gestures.*`) are written once, in phase 2, with th
 | `shortcuts.turnView` | Turn the view 15° | F1 static row (Shift ← · Shift →) |
 | `shortcuts.resetNorth` | Reset north | F1 static row (N, only when the switch is on · Shift N · Shift ↑) |
 | `shortcuts.resetNorthAlways` | Shift+N works even when single-key shortcuts are off. | F1 note |
-| `shortcutKeys.cmd` | Cmd | the mod key's name on macOS in menus, tooltips, F1 and `{{mod}}` (U13; `formatShortcut`) |
+| `shortcutKeys.cmd` | Cmd | the mod key's name on macOS in menus, tooltips, F1, the plant finder's hint and `{{mod}}` (U13; `formatShortcut`) |
 
 F1's View section omits the menu-derived rotation rows and shows only the two static rows above.
 
@@ -2350,6 +2350,8 @@ Changed copy in phase 1:
 | `canvas.inspection.panHint` | Inspection preview. Drag or use arrow keys to explore; {{mod}} moves farther. (spec) |
 | `menu` → `view.cycleLabels` | Labels: none, codes, names (unchanged text; its key moves from N to Shift+L) |
 
+Removed in phase 1: `plantFinder.shortcut` ("Ctrl F" in every locale). The plant finder's hint is `formatShortcut('Ctrl+F')` with the interface language, so it reads Cmd F on macOS (U13).
+
 `common-types/src/settings.rs` single-key doc comment (View owns the file): "character-key shortcuts (tool keys such as V or P, N, Shift G, Shift L, brackets). Off leaves only shortcuts with Ctrl or Cmd, Alt or a named key (Delete, Esc, arrows, F keys), plus Shift N, which always resets north."
 
 ### 9.2 Phase F (shipped)
@@ -2364,7 +2366,7 @@ Changed copy in phase 1:
 
 | Key | English | Where |
 |---|---|---|
-| `settings.singleKeyShortcutsHint` | Tool keys such as V, P and Z, N to reset north, brackets and Shift G, S, R, L. Shift N always resets north. Off keeps Ctrl shortcuts, Delete, Esc, arrows, F keys, and + and − on the map. | Settings › Keyboard (changed from §9.1); the `settings.rs` doc comment adds "and + and − while the map has focus" in the same commit |
+| `settings.singleKeyShortcutsHint` | Tool keys such as V, P and Z, N to reset north, brackets and Shift G, S, R, L. Shift N always resets north. Off keeps {{mod}} shortcuts, Delete, Esc, arrows, F keys, and + and − on the map. | Settings › Keyboard (changed from §9.1); the `settings.rs` doc comment adds "and + and − while the map has focus" in the same commit |
 | `settings.pointingDevice` | Pointing device | Settings › Canvas (replaces `settings.scrollWheel`) |
 | `settings.pointingDeviceMouse` | Mouse: the wheel zooms | option, stored `zoom` (replaces `settings.scrollWheelZoom`) |
 | `settings.pointingDeviceTrackpad` | Trackpad: two fingers pan | option, stored `pan` (replaces `settings.scrollWheelPan`) |
