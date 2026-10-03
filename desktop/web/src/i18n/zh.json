@@ -283,7 +283,6 @@
       "lockLayer": "锁定图层",
       "unlockLayer": "解锁图层",
       "opacity": "不透明度",
-      "mapSection": "地图图层",
       "basemapLoading": "正在加载底图…",
       "mapUnavailable": "地图不可用",
       "mapStopped": "地图已停止绘制。您的设计不受影响。",

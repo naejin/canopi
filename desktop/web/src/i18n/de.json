@@ -283,7 +283,6 @@
       "lockLayer": "Ebene sperren",
       "unlockLayer": "Ebene entsperren",
       "opacity": "Deckkraft",
-      "mapSection": "Kartenebenen",
       "basemapLoading": "Basiskarte wird geladen…",
       "mapUnavailable": "Karte nicht verfügbar",
       "mapStopped": "Die Karte wird nicht mehr gezeichnet. Ihr Design ist sicher.",

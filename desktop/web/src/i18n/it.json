@@ -283,7 +283,6 @@
       "lockLayer": "Blocca livello",
       "unlockLayer": "Sblocca livello",
       "opacity": "Opacità",
-      "mapSection": "Livelli della mappa",
       "basemapLoading": "Caricamento mappa base…",
       "mapUnavailable": "Mappa non disponibile",
       "mapStopped": "La mappa non viene più disegnata. Il tuo progetto è al sicuro.",

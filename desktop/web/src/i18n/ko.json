@@ -283,7 +283,6 @@
       "lockLayer": "레이어 잠금",
       "unlockLayer": "레이어 잠금 해제",
       "opacity": "불투명도",
-      "mapSection": "지도 레이어",
       "basemapLoading": "기본 지도를 불러오는 중…",
       "mapUnavailable": "지도를 사용할 수 없음",
       "mapStopped": "지도 그리기가 멈췄습니다. 디자인은 안전합니다.",

@@ -283,7 +283,6 @@
       "lockLayer": "Laag vergrendelen",
       "unlockLayer": "Laag ontgrendelen",
       "opacity": "Dekking",
-      "mapSection": "Kaartlagen",
       "basemapLoading": "Basiskaart laden…",
       "mapUnavailable": "Kaart niet beschikbaar",
       "mapStopped": "De kaart wordt niet meer getekend. Je ontwerp is veilig.",
