@@ -18,7 +18,7 @@ Canvas v2 ([plan](../plans/canvas-v2-plan.md), [spec](../plans/canvas-v2-spec.md
 
 ## Rules
 
-- Exact camera sync: one view transform (metres to CSS px, bearing included) serves map, scene, overlays, hit testing and tools; one point, one pixel; no deadbands. (`v2-shared-camera-transform.test.ts` through 0D2)
+- Exact camera sync: one view transform (metres to CSS px, bearing included) serves map, scene, overlays, hit testing and tools; one point, one pixel; no deadbands. (`canvas/runtime/view/view-transform.test.ts`)
 - When WebGL2 or MapLibre fails, the workspace resolves `map-unavailable`: no renderer or editing, Design still saveable, until a user Retry rebuilds it; nothing restarts on its own. Notices show no engine text. A failing optional contribution only skips itself. (`app/canvas-map-surface/workspace-{activation,map-unavailable,map-contributions}.test.ts`)
 - `app/**` and `components/**` never import `maplibre-gl`; Web composition never imports raster display, the LiDAR library or display stores or the Desktop contribution adapter; production never imports the UI gallery. (`__tests__/frontend-architecture-policies.test.ts`)
 - Every map-layer log goes through `maplibre/redact-credentials.ts`, because MapLibre copies request URLs, key included, into errors; no bare `console` in `maplibre/` or `app/canvas-map-surface/`. (policy test)
