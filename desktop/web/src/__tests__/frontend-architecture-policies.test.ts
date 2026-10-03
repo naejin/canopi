@@ -42,6 +42,12 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
+    name: 'Web sources do not import the Settings Projection',
+    from: ['src/web/**'],
+    targets: ['src/app/settings/projection.ts'],
+  },
+  {
+    kind: 'forbid-imports',
     name: 'Web Edition sources stay free of Desktop-only capabilities',
     from: ['src/web/**'],
     targets: [
@@ -586,16 +592,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
 ] satisfies readonly ArchitecturePolicy[]
 
 const CONFINED_IMPORTER_POLICIES = [
-  {
-    kind: 'confine-importers',
-    name: 'Web settings mutations use the shared Settings Projection',
-    from: ['src/web/**'],
-    targets: ['src/app/settings/projection.ts'],
-    allowedFrom: [
-      'src/web/BrowserAppShell.tsx',
-      'src/web/browser-shell-commands.ts',
-    ],
-  },
   {
     kind: 'confine-importers',
     name: 'Species Catalog state stays private to its Workbench',
@@ -1166,7 +1162,7 @@ const NAMED_IMPORT_POLICIES = [
     target: 'src/canvas/session.ts',
     // Place arms through armCanvasTool (placeSpeciesOnMap), so the row needs no session import.
     requiredNames: [],
-    allowedNames: ['currentCanvasToolCommandSurface'],
+    allowedNames: [],
   },
   {
     kind: 'named-imports',
@@ -1588,17 +1584,10 @@ const SYMBOL_OWNERSHIP_POLICIES = [
     ],
   },
   {
-    kind: 'confine-symbols',
-    name: 'Committed Design state stays private to the document store',
-    from: ['src/**'],
-    names: ['committedDesign'],
-    allowedFrom: ['src/app/document-session/store.ts', ...TEST_SOURCE_PATTERNS],
-  },
-  {
     kind: 'forbid-source-symbols',
     name: 'Retired Design mutation escape hatches stay absent',
     from: ['src/app/**', 'src/canvas/**', 'src/components/**', 'src/ipc/**', 'src/web/**'],
-    names: ['DocumentMutationOptions', 'markDesignEdited'],
+    names: ['DocumentMutationOptions', 'markDesignEdited', 'committedDesign'],
   },
   {
     kind: 'forbid-source-symbols',
@@ -1824,17 +1813,6 @@ const SYMBOL_OWNERSHIP_POLICIES = [
     name: 'App-facing tests do not call an unbound Scene Store escape hatch',
     from: ['src/__tests__/**/*.test.ts', 'src/__tests__/**/*.test.tsx'],
     targets: ['getSceneStore'],
-  },
-  {
-    kind: 'forbid-calls',
-    name: 'Design mutation capability calls stay in store and Design Edit core',
-    from: ['src/app/**', 'src/canvas/**', 'src/components/**', 'src/ipc/**', 'src/web/**'],
-    exceptFrom: [
-      'src/app/document-session/store.ts',
-      'src/app/design-edit/core.ts',
-      ...TEST_SOURCE_PATTERNS,
-    ],
-    properties: ['mutateCurrentDesign', 'reconcileCurrentDesign', 'updateDesignArray'],
   },
   {
     kind: 'confine-symbols',
@@ -2540,12 +2518,6 @@ describe('declarative frontend architecture policies', () => {
   it('names only source exemptions that excuse a real file', () => {
     // Each kept entry names why it stays although nothing needs it today.
     const kept = [
-      // Non-canvas rules that match nothing; the next commit drops them.
-      '[Web settings mutations use the shared Settings Projection] allowedFrom entry excuses nothing: src/web/BrowserAppShell.tsx',
-      '[Web settings mutations use the shared Settings Projection] allowedFrom entry excuses nothing: src/web/browser-shell-commands.ts',
-      '[Committed Design state stays private to the document store] allowedFrom entry excuses nothing: src/app/document-session/store.ts',
-      '[Design mutation capability calls stay in store and Design Edit core] exceptFrom entry excuses nothing: src/app/document-session/store.ts',
-      '[Design mutation capability calls stay in store and Design Edit core] exceptFrom entry excuses nothing: src/app/design-edit/core.ts',
       // Label admission projects anchors once phase R lands; drop it at the R close if R does not project.
       '[P12 the renderer learns the camera one way] allowedFrom entry excuses nothing: src/canvas/runtime/renderers/label-admission.ts',
     ]
