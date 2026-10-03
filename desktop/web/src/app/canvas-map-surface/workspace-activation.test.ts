@@ -23,6 +23,7 @@ import type { MapBackgroundPresentation } from '../../maplibre/map-background'
 import { geoToScreen, screenToGeo } from '../../canvas/runtime/view/camera-math'
 import type { ViewCamera } from '../../canvas/runtime/view/types'
 import { createDetachedCanvasRuntimeAppAdapter } from '../../canvas/runtime/app-adapter'
+import { createCanvasDocumentReplacementToken } from '../../canvas/runtime/runtime'
 import { createDetachedSceneRuntimePanelTargetAdapter } from '../../canvas/runtime/scene-runtime/panel-target-adapter'
 import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
@@ -1858,6 +1859,25 @@ describe('WorkspaceActivationCoordinator', () => {
     await vi.waitFor(() => expect(f.maps).toHaveLength(2))
     expect(pressed).toBe(1)
     await vi.waitFor(() => expect(f.runtime().keyboardPort).not.toBeNull())
+    await f.composition.dispose()
+  })
+
+  it('offers Retry when a Design is opened while the lost map\'s failure is still being handled', async () => {
+    const f = realComposition()
+    await expect(f.composition.start()).resolves.toBe('shared-ready')
+
+    f.loseContext()
+    // The failure is now being handled (the map is marked unavailable, Retry withheld)...
+    for (let i = 0; i < 3; i += 1) await Promise.resolve()
+    expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: false })
+    // ...when the user opens another Design, which retires the failed generation.
+    f.composition.surfaces.documents.replaceDocument(designWithPlant(), createCanvasDocumentReplacementToken(), () => {})
+    await failureHandled(f.maps[0]!)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: true })
+    f.composition.retryMap()
+    await vi.waitFor(() => expect(f.maps).toHaveLength(2))
     await f.composition.dispose()
   })
 

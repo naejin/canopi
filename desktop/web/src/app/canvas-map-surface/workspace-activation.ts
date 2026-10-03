@@ -624,8 +624,9 @@ export class WorkspaceActivationCoordinator {
     })
     const settle = () => {
       current.failureSettled = true
-      // A Retry withheld while the failure was handled can now be offered.
-      if (this.isCurrent(current)) this.notifyRetryAvailability()
+      // A Retry withheld while the failure was handled can now be offered, also when a Design
+      // replacement retired this generation meanwhile (the observer only recomputes canRetry()).
+      this.notifyRetryAvailability()
     }
     void current.failure.then(settle, settle)
     return current.failure
