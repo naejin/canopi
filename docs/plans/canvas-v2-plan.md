@@ -325,7 +325,7 @@ Code done 2026-10-03 (hand-off `4701f802`, stream merges `0c7e3c3d` to `dd3a6d48
 | bf-labels | f47t.20 | a locale switch relabels zone and guide points; a source scan fails on the two literals | Opus medium | — | live: the French `aria-label`; no Web check | as a slot frees |
 | U-ui | S8, S41 (+A20), S69, T7 | A20's legend test | Opus medium | — | none | any time |
 | bf-quit | pj62 | prototype first (A9); then the order release → `destroy()`, never on Cancel | Opus high | — | live: the kernel-log count on this machine | prototype at any free live slot; code after bf-map and bf-views merge |
-| U-runtime | 57 items (report §4) + A24; may be two sequential agents | per item: its guard test, written first where report §4 says so | Opus medium | Rust and contracts (A24 commit only); Docs | live smoke; Web check | after bf-lens, bf-map, bf-views and bf-labels merge |
+| U-runtime | 57 items (report §4) + A24; may be two sequential agents | per item: its guard test, written first where report §4 says so | Opus medium | Rust and contracts (A24 commit only); Docs | live smoke; Web check | after bf-lens, bf-map, bf-views, bf-labels and bf-pdf merge (S46 runs a bf-pdf test) |
 | U-map | 21 items, then a tail of 7 | per item; written first: S56 | Opus high (secrets and seams) | Rust (comment), shared contracts | live; Web check | after bf-map, bf-views and bf-quit merge; the tail after U-runtime merges |
 | main | the hand-off commit (T1's policy "role modules do not import `./scene-runtime`"), T5, T6, T9 (last, after every locale merge), locale integration, e2e, A18, the A14 scenario, policies, docs, beads | — | Opus high (merges) / medium (mechanical) | Docs | — | throughout |
 
