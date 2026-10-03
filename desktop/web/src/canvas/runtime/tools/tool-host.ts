@@ -184,8 +184,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   const view: ToolView = {
+    /** Normalised to [0, 360), so a tool can store it as a rotation (a note, a saved stamp's pick). */
     get bearingDeg() {
-      return frame().view.camera.bearingDeg
+      return normaliseBearing(frame().view.camera.bearingDeg)
     },
     get mode() {
       return frame().mode

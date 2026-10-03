@@ -1,7 +1,8 @@
 // canvas/runtime/tools/text-note.ts
 //
 // Owns the Text tool (spec §1.4, §3.2): a press on the map opens a new note's text entry where it lands (the host's
-// text entry in 'create' mode: today's interaction/text-annotation-tool.ts without its textarea). Enter or a blur hands
+// text entry in 'create' mode: today's interaction/text-annotation-tool.ts without its textarea), level with the screen:
+// the note stores the bearing at the press as its rotation (spec §4.7; 0 when north is up). Enter or a blur hands
 // the text to the submit, which writes the note as one 'interaction-text' Scene Edit, selects it and closes the entry
 // once the edit has committed (a commit that settles later closes it then); blank text, or an Annotations layer hidden
 // or locked by then, writes nothing and closes it; while the scene refuses the edit the entry stays open with its text.
@@ -30,10 +31,11 @@ export function createTextNoteTool(): CanvasTool {
   function open(at: WorldPoint): void {
     const c = ctx()
     anchor = at
+    // A new note is level with the screen: it stores the bearing (spec §4.7), 0 when north is up.
+    const rotationDeg = c.view.bearingDeg
     c.effects.requestTextEntry(
-      // New notes store north (null) until phase 1.
-      { anchor: at, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.textNote.placeholder', mode: 'create' },
-      (text) => submit(at, text),
+      { anchor: at, rotationDeg, initialText: '', placeholderKey: 'canvas.textNote.placeholder', mode: 'create' },
+      (text) => submit(at, text, rotationDeg),
       () => {
         if (anchor === at) entryClosed()
       },
@@ -41,7 +43,7 @@ export function createTextNoteTool(): CanvasTool {
     c.effects.setGuidance({ gesture: true })
   }
 
-  function submit(at: WorldPoint, text: string): 'close' | 'keep' {
+  function submit(at: WorldPoint, text: string, rotationDeg: number): 'close' | 'keep' {
     if (!context || anchor !== at) return 'close'
     const c = context
     const note = text.trim()
@@ -53,7 +55,7 @@ export function createTextNoteTool(): CanvasTool {
     c.effects.edits.run(EDIT_TYPE, (tx) => {
       let id = ''
       tx.mutate((draft) => {
-        id = appendTextAnnotationToDraft(draft, at, note)
+        id = appendTextAnnotationToDraft(draft, at, note, rotationDeg)
       })
       tx.setSelection([{ kind: 'annotation', id }])
     }, {

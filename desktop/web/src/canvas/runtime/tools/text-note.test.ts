@@ -52,7 +52,8 @@ describe('the Text tool', () => {
       position: { x: 24, y: 32 },
       text: 'Guild note',
       fontSize: 16,
-      rotationDeg: null,
+      // Level with the screen at bearing 0: 0, which draws as the null of older notes.
+      rotationDeg: 0,
     })])
     const note = h.store.persisted.annotations[0]!
     expect(h.store.session.selectedTargets).toEqual([{ kind: 'annotation', id: note.id }])
@@ -63,6 +64,18 @@ describe('the Text tool', () => {
     // The next click places a new note.
     h.click({ x: 60, y: 70 })
     expect(h.chrome.textEntry?.request.anchor).toEqual({ x: 60, y: 70 })
+  })
+
+  it('a note created at 30 stores 30', () => {
+    const h = harness({ camera: { bearingDeg: 30 } })
+
+    h.click({ x: 120, y: 80 })
+    // The entry is drawn at rotationDeg − bearing: level with the screen.
+    expect(h.chrome.textEntry?.request.rotationDeg).toBe(30)
+    h.typeText('Mulch in November')
+    expect(h.enterText()).toBe('close')
+
+    expect(h.store.persisted.annotations).toEqual([expect.objectContaining({ text: 'Mulch in November', rotationDeg: 30 })])
   })
 
   it('a blur commits the note; the click that blurred it places nothing, and the next one does', () => {
