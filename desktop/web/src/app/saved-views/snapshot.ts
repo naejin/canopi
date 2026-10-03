@@ -23,7 +23,6 @@ import { savedViewZoom } from './framing'
 export const VIEW_SNAPSHOT_DEFAULT_TIMEOUT_MS = 8_000
 
 export const VIEW_SNAPSHOT_THUMBNAIL = Object.freeze({ width: 320, height: 200 })
-export const VIEW_SNAPSHOT_EXPORT = Object.freeze({ width: 1600, height: 1000 })
 
 interface SavedViewSnapshotOptions {
   /** CSS pixels of the image. */

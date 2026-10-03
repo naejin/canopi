@@ -29,7 +29,6 @@ export {
   captureSavedViewSnapshot,
   describeSavedViewSnapshot,
   savedViewPresentedLabels,
-  VIEW_SNAPSHOT_EXPORT,
   VIEW_SNAPSHOT_THUMBNAIL,
   type SavedViewSnapshot,
 } from './snapshot'
