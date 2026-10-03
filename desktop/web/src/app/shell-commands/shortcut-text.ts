@@ -28,6 +28,10 @@ const ENGLISH_KEY_NAMES: Readonly<Record<string, string>> = {
   Escape: 'Esc',
   Plus: '+',
   Minus: '\u2212',
+  ArrowLeft: '\u2190',
+  ArrowUp: '\u2191',
+  ArrowRight: '\u2192',
+  ArrowDown: '\u2193',
 }
 
 const ARIA_KEYS: Readonly<Record<string, string>> = {
@@ -48,7 +52,8 @@ function parseShortcut(shortcut: string): ParsedShortcut {
 
 /**
  * `Ctrl+Shift+Z` → `Ctrl Shift Z`, as menus and tooltips show it. With a
- * translator, key names follow the interface language (`Ctrl Maj Z`).
+ * translator, key names follow the interface language (`Ctrl Maj Z`). Arrow
+ * keys read as glyphs (`Shift+ArrowLeft` → `Shift ←`).
  */
 export function formatShortcut(shortcut: string, translate?: (key: string) => string): string {
   const parsed = parseShortcut(shortcut)
