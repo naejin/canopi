@@ -1301,6 +1301,7 @@
     "resizeFrame": "Frame Opgeslagen stempels aanpassen",
     "reorderNamed": "{{name}} verplaatsen (Alt ↑ of ↓)",
     "placeNamed": "Stempel {{name}} plaatsen",
+    "deleteNamed": "Stempel {{name}} verwijderen",
     "actionsFor": "Meer acties voor {{name}}"
   },
   "error": {

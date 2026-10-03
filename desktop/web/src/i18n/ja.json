@@ -1301,6 +1301,7 @@
     "resizeFrame": "保存済みスタンプ枠のサイズ変更",
     "reorderNamed": "{{name}}を並べ替え（Alt ↑ または ↓）",
     "placeNamed": "スタンプ「{{name}}」を配置",
+    "deleteNamed": "スタンプ「{{name}}」を削除",
     "actionsFor": "{{name}}のその他の操作"
   },
   "error": {

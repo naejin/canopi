@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
+import { useEffect, useId, useMemo, useRef, useState } from 'preact/hooks'
 import { t } from '../../i18n'
 import { formatCount } from '../../utils/format-count'
 import {
@@ -771,6 +771,7 @@ function SavedObjectStampRow({
   const renameInputRef = useRef<HTMLInputElement>(null)
   // Canopi 2.0 cannot place, drag, export or convert a stamp saved before 2.0 (ADR 0021): it offers only Delete.
   const before2_0 = useMemo(() => isSavedObjectStampPayloadFromBefore2_0(stamp.payload_json), [stamp.payload_json])
+  const summaryId = useId()
 
   useEffect(() => {
     setDraftName(stamp.name)
@@ -896,7 +897,7 @@ function SavedObjectStampRow({
           <span className={styles.savedStampName}>{stamp.name}</span>
         )}
         {!confirmingDelete && (before2_0
-          ? <span className={`${styles.savedStampSummary} ${styles.savedStampSummaryBefore2_0}`}>{t('savedObjectStamps.summaryBefore2_0')}</span>
+          ? <span id={summaryId} className={`${styles.savedStampSummary} ${styles.savedStampSummaryBefore2_0}`}>{t('savedObjectStamps.summaryBefore2_0')}</span>
           : <span className={styles.savedStampSummary}>{savedStampSummary(stamp)}</span>)}
       </div>
       <div className={styles.savedStampActions}>
@@ -923,7 +924,8 @@ function SavedObjectStampRow({
           <button
             type="button"
             className={styles.savedStampSecondaryButton}
-            aria-label={t('savedObjectStamps.delete')}
+            aria-label={t('savedObjectStamps.deleteNamed', { name: stamp.name })}
+            aria-describedby={summaryId}
             onClick={() => setConfirmingDelete(true)}
           >
             {t('savedObjectStamps.delete')}

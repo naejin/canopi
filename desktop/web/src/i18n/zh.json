@@ -1301,6 +1301,7 @@
     "resizeFrame": "调整已保存图章框架大小",
     "reorderNamed": "调整 {{name}} 的顺序（Alt ↑ 或 ↓）",
     "placeNamed": "放置图章 {{name}}",
+    "deleteNamed": "删除图章 {{name}}",
     "actionsFor": "{{name}} 的更多操作"
   },
   "error": {

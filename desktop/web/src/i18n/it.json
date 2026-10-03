@@ -1301,6 +1301,7 @@
     "resizeFrame": "Ridimensiona il riquadro Timbri salvati",
     "reorderNamed": "Sposta {{name}} (Alt ↑ o ↓)",
     "placeNamed": "Posiziona il timbro {{name}}",
+    "deleteNamed": "Elimina il timbro {{name}}",
     "actionsFor": "Altre azioni per {{name}}"
   },
   "error": {

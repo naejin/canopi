@@ -1301,6 +1301,7 @@
     "resizeFrame": "Größe des Bereichs Gespeicherte Stempel ändern",
     "reorderNamed": "{{name}} verschieben (Alt ↑ oder ↓)",
     "placeNamed": "Stempel {{name}} setzen",
+    "deleteNamed": "Stempel {{name}} löschen",
     "actionsFor": "Weitere Aktionen für {{name}}"
   },
   "error": {

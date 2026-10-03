@@ -1301,6 +1301,7 @@
     "resizeFrame": "Redimensionar o quadro Carimbos salvos",
     "reorderNamed": "Reordenar {{name}} (Alt ↑ ou ↓)",
     "placeNamed": "Colocar o carimbo {{name}}",
+    "deleteNamed": "Excluir o carimbo {{name}}",
     "actionsFor": "Mais ações para {{name}}"
   },
   "error": {

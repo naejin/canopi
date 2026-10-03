@@ -1301,6 +1301,7 @@
     "resizeFrame": "Redimensionner le cadre Tampons enregistrés",
     "reorderNamed": "Déplacer {{name}} (Alt ↑ ou ↓)",
     "placeNamed": "Placer le tampon {{name}}",
+    "deleteNamed": "Supprimer le tampon {{name}}",
     "actionsFor": "Autres actions pour {{name}}"
   },
   "error": {

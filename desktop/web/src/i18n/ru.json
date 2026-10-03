@@ -1301,6 +1301,7 @@
     "resizeFrame": "Изменить размер области «Сохранённые штампы»",
     "reorderNamed": "Переместить {{name}} (Alt ↑ или ↓)",
     "placeNamed": "Разместить штамп {{name}}",
+    "deleteNamed": "Удалить штамп {{name}}",
     "actionsFor": "Другие действия: {{name}}"
   },
   "error": {

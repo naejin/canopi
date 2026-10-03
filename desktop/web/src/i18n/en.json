@@ -1301,6 +1301,7 @@
     "resizeFrame": "Resize the Saved stamps frame",
     "reorderNamed": "Reorder {{name}} (Alt ↑ or ↓)",
     "placeNamed": "Place stamp {{name}}",
+    "deleteNamed": "Delete stamp {{name}}",
     "actionsFor": "More actions for {{name}}"
   },
   "error": {

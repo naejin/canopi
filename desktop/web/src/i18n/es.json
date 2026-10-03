@@ -1301,6 +1301,7 @@
     "resizeFrame": "Redimensionar el marco de Sellos guardados",
     "reorderNamed": "Reordenar {{name}} (Alt ↑ o ↓)",
     "placeNamed": "Colocar el sello {{name}}",
+    "deleteNamed": "Eliminar el sello {{name}}",
     "actionsFor": "Más acciones para {{name}}"
   },
   "error": {

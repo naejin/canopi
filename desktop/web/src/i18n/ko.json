@@ -1301,6 +1301,7 @@
     "resizeFrame": "저장된 스탬프 프레임 크기 조정",
     "reorderNamed": "{{name}} 순서 변경(Alt ↑ 또는 ↓)",
     "placeNamed": "스탬프 {{name}} 배치",
+    "deleteNamed": "스탬프 {{name}} 삭제",
     "actionsFor": "{{name}} 추가 작업"
   },
   "error": {

@@ -588,7 +588,12 @@ describe('FavoritesPanel', () => {
     row.querySelector<HTMLElement>('[data-saved-stamp-body="stamp-old"]')!.dispatchEvent(dragStart)
     expect(readSavedObjectStampDragData(dragData)).toBeNull()
     const actions = [...row.querySelectorAll<HTMLButtonElement>('button:not([data-saved-stamp-grip])')]
-    expect(actions.map((button) => button.getAttribute('aria-label'))).toEqual(['Delete'])
+    // The only action names its stamp, and its description says why it is the only one,
+    // so a keyboard or screen-reader user hears both while tabbing.
+    expect(actions.map((button) => button.getAttribute('aria-label'))).toEqual(['Delete stamp Old guild'])
+    const describedBy = actions[0]!.getAttribute('aria-describedby')
+    expect(describedBy).toBeTruthy()
+    expect(document.getElementById(describedBy!)?.textContent).toBe('Saved with Canopi before 2.0; Canopi 2.0 can’t place it.')
 
     await act(async () => {
       actions[0]!.click()
