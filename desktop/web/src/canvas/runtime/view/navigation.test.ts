@@ -573,6 +573,18 @@ describe('view navigation', () => {
     view.dispose()
   })
 
+  it('openAt opens an empty scene at 0', () => {
+    const scene = emptyScene()
+    const view = createTestView({ screen: { width: 1000, height: 800 }, camera: { bearingDeg: 30 } })
+    view.setScene(scene, boundsOf(scene, 4))
+
+    view.navigation.openAt(scene, 30)
+
+    // The new-Design overview: the plane origin at the screen centre, at the empty scene's scale, north up.
+    expectPlacement(placement(view), { x: 500, y: 400, scale: 4, bearingDeg: 0 })
+    view.dispose()
+  })
+
   it('zooms to the selection at the current bearing', () => {
     const view = createTestView({ screen: { width: 1000, height: 800 } })
     const navigation = createViewNavigation({

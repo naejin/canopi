@@ -155,6 +155,11 @@ export function fitTemporaryBounds(
   }
 }
 
+/** Whether a scene has nothing to frame at a scale: the empty-scene branch of fitScene. */
+export function isEmptyExtent(extent: FitExtent, pixelsPerMetre: number): boolean {
+  return orientedExtent(extent.extentPoints(pixelsPerMetre), 0) === null
+}
+
 /** Null for an empty or non-finite point set (today's computeSceneBounds returning null). */
 function orientedExtent(points: readonly WorldPoint[], bearingDeg: number): OrientedExtent | null {
   const [cos, sin] = bearingCosSin(bearingDeg)
