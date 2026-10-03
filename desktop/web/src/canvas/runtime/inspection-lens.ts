@@ -38,6 +38,15 @@ export class SceneCanvasInspectionOwner {
     let ctx: CanvasRenderingContext2D | null = null
     try { ctx = canvas.getContext('2d') } catch (error) { console.error('Canvas inspection preview unavailable:', error) }
     container.appendChild(canvas)
+    // Offscreen, made on the first translucent Plants layer and reused: the plants are composited from it once.
+    let scratch: CanvasRenderingContext2D | null = null
+    function scratchSized(widthPx: number, heightPx: number): CanvasRenderingContext2D | null {
+      scratch ??= document.createElement('canvas').getContext('2d')
+      if (scratch && (scratch.canvas.width !== widthPx || scratch.canvas.height !== heightPx)) {
+        scratch.canvas.width = widthPx; scratch.canvas.height = heightPx
+      }
+      return scratch
+    }
     // The inspected point in session-plane metres, and the plane it belongs to.
     let point: InspectionPoint | null = null
     let pointPlane: SessionPlane | null = null
@@ -129,7 +138,7 @@ export class SceneCanvasInspectionOwner {
           revealedAnnotationId: null, selectionLabelPlantIds: new Set(),
         }
         try {
-          drawInspectionLensScene(ctx, lensSnapshot, view, { widthPx: width, heightPx: height, dpr })
+          drawInspectionLensScene(ctx, lensSnapshot, view, { widthPx: width, heightPx: height, dpr, scratch: scratchSized })
         } catch (error) {
           console.error('Canvas inspection preview unavailable:', error)
           ctx = null

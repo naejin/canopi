@@ -39,6 +39,11 @@ export interface InspectionLensDrawOptions {
   readonly widthPx: number
   readonly heightPx: number
   readonly dpr?: number
+  /**
+   * An offscreen context of the given backing size, for a translucent Plants layer: its symbols and hover ring are
+   * drawn opaque there and composited once, so overlaps are no darker than one plant. Null draws them per shape.
+   */
+  scratch(widthPx: number, heightPx: number): CanvasRenderingContext2D | null
 }
 
 /**
@@ -61,7 +66,7 @@ export function drawInspectionLensScene(
   ctx.clearRect(0, 0, widthPx, heightPx)
   applyView(ctx, view)
   drawZones(ctx, snapshot, view.pixelsPerMetre)
-  drawPlants(ctx, snapshot, view, dpr, widthPx, heightPx)
+  drawPlants(ctx, snapshot, view, dpr, widthPx, heightPx, options.scratch)
 }
 
 function drawZones(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnapshot, pixelsPerMetre: number): void {
@@ -144,9 +149,20 @@ function drawPlants(
   dpr: number,
   widthPx: number,
   heightPx: number,
+  createScratch: InspectionLensDrawOptions['scratch'],
 ): void {
   const layer = getSceneLayerStyle(snapshot.scene, 'plants')
   if (!layer.visible) return
+  // The Plants opacity applies once to the layer, as on the map: opaque symbols on a scratch, one drawImage at it.
+  const backingWidth = Math.round(widthPx * dpr), backingHeight = Math.round(heightPx * dpr)
+  const scratch = layer.opacity < 1 ? createScratch(backingWidth, backingHeight) : null
+  const target = scratch ?? ctx
+  const symbolOpacity = scratch ? 1 : layer.opacity
+  if (scratch) {
+    applyScreenSpaceTransform(scratch, dpr)
+    scratch.clearRect(0, 0, widthPx, heightPx)
+    applyView(scratch, view)
+  }
 
   // Symbolic footprints are bounded in CSS pixels; include rings and stack badges.
   const margin = 32
@@ -173,31 +189,42 @@ function drawPlants(
     if (turned) {
       // Undo the view's turn about the plant: the glyph is drawn level at worldToScreen(position), still in metres.
       const { x, y } = entry.plant.position
-      ctx.save()
-      ctx.translate(x, y)
-      ctx.rotate(uprightRad)
-      ctx.translate(-x, -y)
+      target.save()
+      target.translate(x, y)
+      target.rotate(uprightRad)
+      target.translate(-x, -y)
     }
-    drawPlantSymbolGlyph(ctx, entry, layer.opacity, scale)
+    drawPlantSymbolGlyph(target, entry, symbolOpacity, scale)
 
     if (hoverTarget && entry.plant.id === hoveredPlantId) {
       const ring = getCanvasInteractionStrokeVisual(hoverTarget.state)
-      ctx.beginPath()
-      ctx.arc(entry.plant.position.x, entry.plant.position.y, entry.radiusWorld * 1.4, 0, Math.PI * 2)
-      ctx.globalAlpha = ring.alpha * layer.opacity
-      ctx.strokeStyle = ring.casingColor
-      ctx.lineWidth = ring.casingWidthPx / scale
-      ctx.stroke()
-      ctx.strokeStyle = ring.color
-      ctx.lineWidth = ring.widthPx / scale
-      ctx.stroke()
+      target.beginPath()
+      target.arc(entry.plant.position.x, entry.plant.position.y, entry.radiusWorld * 1.4, 0, Math.PI * 2)
+      target.globalAlpha = ring.alpha * symbolOpacity
+      target.strokeStyle = ring.casingColor
+      target.lineWidth = ring.casingWidthPx / scale
+      target.stroke()
+      target.strokeStyle = ring.color
+      target.lineWidth = ring.widthPx / scale
+      target.stroke()
     }
-    if (turned) ctx.restore()
+    if (turned) target.restore()
+  }
 
+  if (scratch) {
+    ctx.save()
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.globalAlpha = layer.opacity
+    ctx.drawImage(scratch.canvas, 0, 0)
+    ctx.restore()
+  }
+  // Stack badges stay per shape, above every symbol.
+  for (const entry of entries) {
     const stackCount = layout.stackCounts.get(entry.plant.id)
     if (stackCount) drawStackBadge(ctx, entry, view.worldToScreen(entry.plant.position), stackCount, layer.opacity, dpr)
   }
 
+  target.globalAlpha = 1
   ctx.globalAlpha = 1
 }
 
