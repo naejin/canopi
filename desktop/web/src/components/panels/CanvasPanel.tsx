@@ -6,7 +6,7 @@ import {
   type MapLibreCanvasSurfaceState,
 } from '../../maplibre/canvas-surface-state'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
-import { readCanvasLayerPresentation } from '../../app/canvas-layer-presentation/presentation'
+import { hasVisibleMapLayer, mapLayers } from '../../app/map-layers/state'
 import { getMapNoticeReadModel } from '../../app/canvas-map-surface/map-notice'
 import { currentDesign } from '../../app/document-session/store'
 import { appCommandGraphToolbarProjection } from '../../commands/registry'
@@ -37,7 +37,7 @@ export function CanvasPanel() {
   const hasDesign = currentDesign.value !== null
   const mapNotice = getMapNoticeReadModel({
     hasDesign,
-    mapVisible: readCanvasLayerPresentation().hasVisibleMapLayer,
+    mapVisible: hasVisibleMapLayer(mapLayers.value),
     mapSurface: basemapState,
     t,
   })
