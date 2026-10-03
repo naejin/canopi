@@ -2,7 +2,7 @@
 //
 // Owns CURRENT_BINDINGS, the one constant saying which physical input means what (spec §1.2 table). Each phase that
 // changes a field rewrites its value here and the fixture expectations it changes; no earlier constant is kept beside
-// it. describeBindings is written in phase 2 with F1, its first reader.
+// it.
 
 import type { PointerKind } from '../interaction-types'
 
@@ -25,15 +25,15 @@ export interface Bindings {
 }
 
 /**
- * The right button is inert and the native contextmenu opens the canvas menu at once; a middle drag pans (Shift too);
- * the Pan tool and overview pan on a primary drag; no touch gestures, pen barrel or trackpad gesture events. A mouse or
+ * The right button is inert and the native contextmenu opens the canvas menu at once; a middle drag pans and a
+ * Shift+middle drag rotates; the Pan tool and overview pan on a primary drag; no touch gestures or pen barrel. A mouse or
  * pen press starts a drag once it moves 3 px (U6), so a click with a little jitter stays a click; touch keeps slop 0
  * until phase 3 (with `d >= slop && d > 0`, any movement is a drag). A tool may override the slop through `configure`
  * (Plant a row: 0), and the tools keep their own thresholds, measured at release.
  */
 export const CURRENT_BINDINGS: Bindings = Object.freeze({
   secondary: Object.freeze({ click: 'menu-on-native', drag: 'none', shiftDrag: 'none' }),
-  auxiliaryShiftDrag: 'pan',
+  auxiliaryShiftDrag: 'rotate',
   primaryDragPansIn: Object.freeze(['hand-tool', 'overview'] as const),
   macCtrlClick: 'primary',
   touch: Object.freeze({ gestures: false, longPressMenu: false, hostTouchActionNone: false }),

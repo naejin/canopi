@@ -4,6 +4,7 @@ import type { Gesture } from './gestures'
 import {
   FOREIGN,
   HORIZONTAL_RULER,
+  MAC_WEBKIT,
   OWNED_CHROME,
   OWNED_TEXT,
   ROTATE_HANDLE,
@@ -393,10 +394,14 @@ describe('recognise: 5.6 wheel and trackpad', () => {
     expect(run(SEQUENCES.F17).gestures).toEqual(run(SEQUENCES.F1).gestures.map((gesture) => ({ ...gesture })))
   })
 
-  it('F18 Wheel during a Shift+middle-drag: the drag pans and the wheel zooms as today', () => {
+  it('F18 a wheel during a pointer rotate is ignored', () => {
     const result = run(SEQUENCES.F18)
-    expect(kinds(result.gestures)).toEqual(['pan:start', 'pan:move', 'pan:move', 'zoom', 'pan:move', 'pan:move', 'pan:end'])
-    expect(pansOf(result.gestures).every((pan) => pan.source === 'auxiliary-drag')).toBe(true)
+    expect(kinds(result.gestures)).toEqual([
+      'rotate:start', 'rotate:move', 'rotate:move', 'rotate:move', 'rotate:move', 'rotate:end',
+    ])
+    expect(zoomsOf(result.gestures)).toEqual([])
+    // The wheel stays the map's: the page neither scrolls nor zooms.
+    expect(result.steps[3]!.effects).toEqual([{ kind: 'prevent-default' }])
   })
 })
 
@@ -442,13 +447,67 @@ describe('recognise: 5.7 middle button and Space', () => {
     expect(kinds(run(SEQUENCES.G6).gestures)).toEqual(['pan:start', 'pan:move', 'pan:move', 'pan:end'])
   })
 
-  it('G9 Shift+middle-drag: a pan under LEGACY', () => {
+  it('G9 Shift+middle-drag rotates: nothing until 3 px, then +16° at 20 px, measured from the press', () => {
     const result = run(SEQUENCES.G9)
-    expect(pansOf(result.gestures)).toEqual([
-      { kind: 'pan', phase: 'start', deltaPx: { x: 0, y: 0 }, source: 'auxiliary-drag', at: { x: 100, y: 100 } },
-      { kind: 'pan', phase: 'move', deltaPx: { x: 20, y: 0 }, source: 'auxiliary-drag', at: { x: 120, y: 100 } },
-      { kind: 'pan', phase: 'end', deltaPx: { x: 0, y: 0 }, source: 'auxiliary-drag', at: { x: 120, y: 100 } },
+    expect(result.steps[0]!.gestures).toEqual([])
+    expect(result.steps[0]!.effects).toEqual([{ kind: 'prevent-default' }, { kind: 'capture', pointerId: 1 }])
+    expect(result.steps[1]!.gestures).toEqual([])
+    expect(result.gestures).toEqual([
+      { kind: 'rotate', phase: 'start', anchorPx: { x: 100, y: 100 }, totalDeltaDeg: 0, step: false, source: 'auxiliary-drag' },
+      { kind: 'rotate', phase: 'move', anchorPx: { x: 100, y: 100 }, totalDeltaDeg: 16, step: false, source: 'auxiliary-drag' },
+      { kind: 'rotate', phase: 'end', anchorPx: { x: 100, y: 100 }, totalDeltaDeg: 16, step: false, source: 'auxiliary-drag' },
     ])
+    expect(result.steps.at(-1)!.effects).toEqual([{ kind: 'release-capture', pointerId: 1 }])
+  })
+
+  it('G9b a still Shift+middle click turns nothing', () => {
+    const result = run(SEQUENCES.G9B)
+    expect(result.gestures).toEqual([])
+    expect(result.effects).toEqual([
+      { kind: 'prevent-default' },
+      { kind: 'capture', pointerId: 1 },
+      { kind: 'release-capture', pointerId: 1 },
+    ])
+  })
+
+  it('G9c Shift+middle-drag in overview rotates', () => {
+    const result = run(SEQUENCES.G9C)
+    expect(kinds(result.gestures)).toEqual(['rotate:start', 'rotate:move', 'rotate:end'])
+    expect(result.gestures).toEqual(run(SEQUENCES.G9).gestures)
+  })
+
+  it('a modifier change during a rotate re-emits the move with the new step', () => {
+    const steps = (platform: typeof WINDOWS) => run(seq('rotate step', platform, [
+      down(100, 100, { button: 1, shift: true }),
+      move(120, 100, { buttons: 4, shift: true }),
+      keyState(false, { shift: true, ctrl: true }),
+      keyState(false, { shift: true, meta: true }),
+      keyState(false, { shift: true }),
+      move(125, 100, { buttons: 4, shift: true, ctrl: true }),
+    ])).steps
+    const rotate = (totalDeltaDeg: number, step: boolean) =>
+      ({ kind: 'rotate', phase: 'move', anchorPx: { x: 100, y: 100 }, totalDeltaDeg, step, source: 'auxiliary-drag' })
+    // mod is Ctrl off a Mac: each key change re-emits the last total with the step it now reads.
+    const windows = steps(WINDOWS)
+    expect(windows.slice(2).map((step) => step.gestures)).toEqual([
+      [rotate(16, true)], [rotate(16, false)], [rotate(16, false)], [rotate(20, true)],
+    ])
+    // On a Mac mod is Cmd: Ctrl never steps.
+    const mac = steps(MAC_WEBKIT)
+    expect(mac.slice(2).map((step) => step.gestures)).toEqual([
+      [rotate(16, false)], [rotate(16, true)], [rotate(16, false)], [rotate(20, false)],
+    ])
+  })
+
+  it('Esc during a Shift+middle rotate cancels the rotate, then the session', () => {
+    const result = run(seq('escape rotate', WINDOWS, [
+      down(100, 100, { button: 1, shift: true }),
+      move(120, 100, { buttons: 4, shift: true }),
+      escape(),
+    ]))
+    expect(kinds(result.gestures)).toEqual(['rotate:start', 'rotate:move', 'rotate:cancel', 'cancel'])
+    expect(result.gestures.at(-1)).toEqual({ kind: 'cancel', reason: 'escape' })
+    expect(result.state.sessions.size).toBe(0)
   })
 
   it('G10 Space while a rail button has focus: no pan arming, a primary drag', () => {

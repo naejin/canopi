@@ -4,7 +4,7 @@
 // `recognise` with an injected platform, clock (each step's timeStamp) and bindings constant. A sequence holds DOM-shaped
 // literals (`DomEventLike`, with host-relative points and classified targets, as the DOM source hands them over) and the
 // raw inputs that come from elsewhere (key state from the keyboard, escape from the Esc chain, the session's configure
-// and reject). The expectations live in recognise.test.ts, per binding constant.
+// and reject). The expectations live in recognise.test.ts, under CURRENT_BINDINGS.
 
 import type { CanvasDropPayload, ToolHandleId, ToolId } from '../../interaction-types'
 import type { Gesture } from '../gestures'
@@ -596,7 +596,7 @@ export const SEQUENCES = {
     wheel(120, 80, { dx: 0.25, mode: 2 }),
   ], { pointingDevice: 'trackpad' }),
   F17: seq('F17 Alt + wheel', WINDOWS, [wheel(120, 80, { dy: 100, alt: true })]),
-  F18: seq('F18 Wheel during a rotate', WINDOWS, [
+  F18: seq('F18 Wheel during a pointer rotate', WINDOWS, [
     down(100, 100, { button: 1, shift: true }),
     ...moves([100, 100], [120, 100], 2, { buttons: 4, shift: true }),
     wheel(120, 100, { dy: 100 }),
@@ -654,11 +654,23 @@ export const SEQUENCES = {
     up(120, 100),
     keyState(false),
   ]),
-  G9: seq('G9 Shift+middle-drag', WINDOWS, [
+  G9: seq('G9 Shift+middle-drag rotates', WINDOWS, [
     down(100, 100, { button: 1, shift: true }),
+    move(102, 100, { buttons: 4, shift: true }),
     move(120, 100, { buttons: 4, shift: true }),
     up(120, 100, { button: 1, shift: true }),
   ]),
+  G9B: seq('G9b Still Shift+middle click', WINDOWS, [
+    down(100, 100, { button: 1, shift: true }),
+    move(101, 101, { buttons: 4, shift: true }),
+    up(102, 100, { button: 1, shift: true }),
+  ]),
+  G9C: seq('G9c Shift+middle-drag in overview', WINDOWS, [
+    down(100, 100, { button: 1, shift: true }),
+    move(102, 100, { buttons: 4, shift: true }),
+    move(120, 100, { buttons: 4, shift: true }),
+    up(120, 100, { button: 1, shift: true }),
+  ], { mode: 'overview' }),
   // Space pressed while a rail button has focus stays with the button: no key state reaches the recogniser.
   G10: seq('G10 Space while a rail button has focus', WINDOWS, [
     down(100, 100),

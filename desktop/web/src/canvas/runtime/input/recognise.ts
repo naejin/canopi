@@ -9,21 +9,26 @@
 // the right button inert and the native contextmenu opening the menu at once (except in overview and for a keyboard
 // menu's echo); a middle drag, a Space press, overview and the Pan tool pan (a primary press on a handle drags the handle
 // first), a pointer pan carrying the pointer's point and a Pan-tool press ending with cancel('navigate') after its drag;
-// a button-less move over owned chrome, the text entry or a handle ends the hover; wheels zoom or pan by the
-// pointing-device setting; no touch gestures, pen barrel or trackpad gesture events.
-// The other binding values arrive in later phases: the trackpad gestures and Shift+middle rotation in phase 1,
-// the secondary drag and the menu on release in phase 2, touch gestures and the long press in phase 3.
+// a Shift+middle drag rotating about its press once it passes 3 px (silent before, so a still click turns nothing), stepped
+// while mod is held, with the wheel ignored while it lives; a button-less move over owned chrome, the text entry or a
+// handle ends the hover; wheels zoom or pan by the pointing-device setting; no touch gestures, pen barrel or trackpad
+// gesture events.
+// The other binding values arrive in later phases: the trackpad gestures in phase 1, the secondary drag and the menu on
+// release in phase 2, touch gestures and the long press in phase 3.
 
 import type { CancelReason, Modifiers, PointerKind } from '../interaction-types'
+import { ROTATE_DEG_PER_PX } from '../view/navigation-policy'
 import type { ScreenPoint } from '../view/types'
 import type { Gesture, NavigationSource, PressTarget } from './gestures'
+import type { InputPlatform } from './platform'
 import type { AdapterEffect, ButtonRole, RawInput, RecogniserConfig, RecogniserState, TargetClass } from './raw-input'
 
 export interface PointerSession {
   readonly pointerId: number
   readonly pointer: PointerKind
   readonly role: ButtonRole
-  /** 'pending' is a primary press within slop; 'primary' a primary drag past it; 'pan' a navigation pan. */
+  /** 'pending' is a primary press within slop; 'primary' a primary drag past it; 'pan' a navigation pan; 'rotate' a
+   *  rotate, which turns the view only once `slopPassed` (until then it is pending and silent). */
   readonly mode: 'pending' | 'primary' | 'pan' | 'rotate' | 'ignored'
   readonly start: ScreenPoint
   readonly last: ScreenPoint
@@ -32,7 +37,7 @@ export interface PointerSession {
   readonly captured: boolean
   /** The press target its editing gestures carry. */
   readonly pressTarget: PressTarget
-  /** The pan's source while `mode` is 'pan'. */
+  /** The pan's or the rotate's source while `mode` is 'pan' or 'rotate'. */
   readonly navigation: NavigationSource | null
   /** True when a `press` reached the host, which owes it one end: a `tap` within slop, else `cancel('navigate')` for a pan
    *  (the Pan tool's press). */
@@ -53,6 +58,8 @@ const NO_MODIFIERS: Modifiers = Object.freeze({ shift: false, ctrl: false, alt: 
 const ZERO: ScreenPoint = Object.freeze({ x: 0, y: 0 })
 /** Wheel zoom: today's exp(clamp(−dy × 0.002, ±1)) per event. */
 const WHEEL_ZOOM_PER_PX = 0.002
+/** A pointer rotate starts past this travel from its press (MapLibre's clickTolerance); a tool's own slop never applies. */
+const ROTATE_SLOP_PX = 3
 
 export function initialRecogniserState(): RecogniserState {
   return {
@@ -80,7 +87,7 @@ export function recognise(
   switch (input.kind) {
     case 'down': down(step, input, config); break
     case 'move': move(step, input, config); break
-    case 'up': up(step, input); break
+    case 'up': up(step, input, config); break
     case 'cancel': cancel(step, input); break
     case 'reject': reject(step, input.id); break
     case 'leave': step.gestures.push({ kind: 'hover-end' }); break
@@ -90,6 +97,7 @@ export function recognise(
       break
     case 'key-state':
       step.state = { ...step.state, held: { space: input.space, mods: input.mods } }
+      restepRotate(step, input.mods, config.platform)
       break
     case 'configure': configure(step, input.context); break
     case 'wheel': wheel(step, input); break
@@ -151,6 +159,14 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
   const pressTarget: PressTarget = input.target.kind === 'handle' ? { kind: 'handle', id: input.target.id } : { kind: 'surface' }
   const panIn = (panContext: 'hand-tool' | 'overview'): boolean => bindings.primaryDragPansIn.includes(panContext)
 
+  if (input.role === 'auxiliary' && input.mods.shift && bindings.auxiliaryShiftDrag === 'rotate') {
+    // Shift+middle (checked before overview, fixture G9c): a pending rotate, silent until it passes its slop, so a still
+    // click turns nothing (G9b). Shift at the press decides the mode for the whole session.
+    step.effects.push({ kind: 'prevent-default' }, { kind: 'capture', pointerId: input.id })
+    putSession(step, { ...base, mode: 'rotate', captured: true, pressTarget, navigation: 'auxiliary-drag', pressed: false })
+    return
+  }
+
   let navigation: NavigationSource | null = null
   let pressed = true
   if (context.mode === 'overview' && (input.role === 'auxiliary' || panIn('overview'))) {
@@ -160,7 +176,7 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
   } else if (input.role === 'primary' && pressTarget.kind === 'handle') {
     // Handles first: before Space and the Pan tool (today's order; fixture G3b).
   } else if (input.role === 'auxiliary') {
-    // Plain and (LEGACY) Shift middle drags pan; a middle tap does nothing.
+    // A plain middle drag pans; a middle tap does nothing.
     navigation = 'auxiliary-drag'
     pressed = false
   } else if (held.space) {
@@ -193,7 +209,11 @@ function move(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void 
     return
   }
 
-  // LEGACY: a button added or dropped mid-session changes nothing (the session keeps its mode until its up).
+  // A button added or dropped mid-session changes nothing (the session keeps its mode until its up).
+  if (session.mode === 'rotate') {
+    rotateMove(step, session, input, config.platform)
+    return
+  }
   const slopPassed = session.slopPassed || passesSlop(session, input.at, step.state, config)
   if (session.mode === 'pan') {
     const deltaPx = { x: input.at.x - session.last.x, y: input.at.y - session.last.y }
@@ -223,10 +243,15 @@ function move(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void 
   }
 }
 
-function up(step: Step, input: RawOf<'up'>): void {
+function up(step: Step, input: RawOf<'up'>, config: RecogniserConfig): void {
   const session = step.state.sessions.get(input.id)
   if (!session) return
   dropSession(step, session)
+  if (session.mode === 'rotate') {
+    // A rotate that never passed its slop ends as it began: silently.
+    if (session.slopPassed) step.gestures.push(rotateOf(session, 'end', session.last, stepsRotate(input.mods, config.platform)))
+    return
+  }
   if (session.mode === 'pan') {
     if (session.navigation) step.gestures.push(panEndOf(session))
     // A Pan-tool press the host saw ends once: a tap after a still click, or cancel('navigate') after its drag panned.
@@ -258,10 +283,11 @@ function cancel(step: Step, input: RawOf<'cancel'>): void {
   releaseSpace(step)
 }
 
-/** The host refused the press: the session ends with no gesture (its later moves are hovers). */
+/** The host refused the press: the session ends with no gesture (its later moves are hovers). A session whose press the
+ *  host never heard (a pan or rotate of its own) has nothing to refuse, so a live rotate always ends with its camera. */
 function reject(step: Step, id: number): void {
   const session = step.state.sessions.get(id)
-  if (!session) return
+  if (!session?.pressed) return
   dropSession(step, session)
 }
 
@@ -294,6 +320,8 @@ function wheel(step: Step, input: RawOf<'wheel'>): void {
   // The note editor, handles and the canvas's own chrome keep their wheels (not prevented).
   if (input.target.kind !== 'surface') return
   step.effects.push({ kind: 'prevent-default' })
+  // A pointer rotate owns the camera from its press, so Esc restores exactly the camera it pressed on (fixture F18).
+  if (pointerRotateLive(step.state)) return
   const { dxPx, dyPx, mods } = input
   if (!Number.isFinite(dxPx) || !Number.isFinite(dyPx)) return
   const scrollPans = step.state.context.pointingDevice === 'trackpad'
@@ -359,6 +387,51 @@ function panEndOf(session: PointerSession): Gesture {
   return { kind: 'pan', phase: 'end', deltaPx: ZERO, source: session.navigation!, at: session.last }
 }
 
+/**
+ * A pointer rotate's move: nothing within its slop; past it, `rotate{start}` about the press point, then the turn since
+ * the press (rightward raises the bearing), stepped while mod is held.
+ */
+function rotateMove(step: Step, session: PointerSession, input: RawOf<'move'>, platform: InputPlatform): void {
+  const starting = !session.slopPassed
+  if (starting && Math.hypot(input.at.x - session.start.x, input.at.y - session.start.y) < ROTATE_SLOP_PX) return
+  const live = { ...session, last: input.at, slopPassed: true }
+  putSession(step, live)
+  const stepped = stepsRotate(input.mods, platform)
+  if (starting) step.gestures.push(rotateOf(live, 'start', live.start, stepped))
+  step.gestures.push(rotateOf(live, 'move', input.at, stepped))
+}
+
+/** A key change during a live pointer rotate: the turn so far again, with the step the keys now give. */
+function restepRotate(step: Step, mods: Modifiers, platform: InputPlatform): void {
+  for (const session of step.state.sessions.values()) {
+    if (session.mode !== 'rotate' || !session.slopPassed || session.navigation === 'trackpad-twist') continue
+    step.gestures.push(rotateOf(session, 'move', session.last, stepsRotate(mods, platform)))
+  }
+}
+
+function rotateOf(session: PointerSession, phase: 'start' | 'move' | 'end' | 'cancel', at: ScreenPoint, stepped: boolean): Gesture {
+  return {
+    kind: 'rotate',
+    phase,
+    anchorPx: session.start,
+    totalDeltaDeg: phase === 'start' ? 0 : ROTATE_DEG_PER_PX * (at.x - session.start.x),
+    step: stepped,
+    source: session.navigation!,
+  }
+}
+
+/** mod steps a rotate: Cmd on Apple platforms, where Ctrl never steps; Ctrl elsewhere. */
+function stepsRotate(mods: Modifiers, platform: InputPlatform): boolean {
+  return platform.os === 'mac' || platform.os === 'ios' ? mods.meta : mods.ctrl
+}
+
+function pointerRotateLive(state: RecogniserState): boolean {
+  for (const session of state.sessions.values()) {
+    if (session.mode === 'rotate' && session.navigation !== 'trackpad-twist') return true
+  }
+  return false
+}
+
 function tapOf(session: PointerSession, input: RawOf<'up'>): Gesture {
   return {
     kind: 'tap',
@@ -375,6 +448,8 @@ function tapOf(session: PointerSession, input: RawOf<'up'>): Gesture {
 function endSession(step: Step, session: PointerSession, reason: CancelReason): void {
   dropSession(step, session)
   if (session.mode === 'pan' && session.navigation) step.gestures.push(panEndOf(session))
+  // The router restores the camera the rotate started from; the input router does not cancel it on a plain cancel.
+  if (session.mode === 'rotate' && session.slopPassed) step.gestures.push(rotateOf(session, 'cancel', session.last, false))
   step.gestures.push({ kind: 'cancel', reason })
 }
 

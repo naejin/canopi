@@ -71,17 +71,30 @@ function sessionPans(gestures: readonly Gesture[], phase: 'start' | 'end'): numb
   return gestures.filter((gesture) => gesture.kind === 'pan' && gesture.phase === phase && gesture.source !== 'wheel').length
 }
 
+function rotates(gestures: readonly Gesture[], phases: readonly string[]): number {
+  return gestures.filter((gesture) => gesture.kind === 'rotate' && phases.includes(gesture.phase)).length
+}
+
+/** A rotate session's own end: its release. Anything else that ends one is a fence. */
+function endsNaturally(input: RawInput): boolean {
+  return input.kind === 'up'
+}
+
 /**
  * Replays random interleavings and checks each step against the sessions before and after it. A session starts with a
- * press or a pan start, and ends exactly once: an editing session with one tap, drag-end or cancel; a pan with one pan
- * end, then a cancel when a fence ended it; a reject ends it with no gesture. Every press the host sees ends once: a
- * Pan-tool press with a tap after a still click, or with cancel('navigate') after its drag panned (fixture J1).
+ * press or a pan start, or silently as a pending rotate; it ends exactly once: an editing session with one tap, drag-end
+ * or cancel; a pan with one pan end, then a cancel when a fence ended it; a rotate with one rotate end (its release) or
+ * rotate cancel (a fence, then a cancel) once it passed its slop, and silently, or with a fence's cancel alone, before;
+ * a reject ends it with no gesture. Every press the host sees ends once: a Pan-tool press with a tap after a still click,
+ * or with cancel('navigate') after its drag panned (fixture J1). A rotate starts once, when its session passes its slop.
  */
 function checkSessionLifecycle(seed: number): void {
   const random = generator(seed)
   let state: RecogniserState = initialRecogniserState()
   let started = 0
   let ended = 0
+  let rotateStarts = 0
+  let rotateEnds = 0
   const at = (index: number) => `seed ${seed}, step ${index}`
 
   const feed = (input: RawInput, index: number): void => {
@@ -100,16 +113,27 @@ function checkSessionLifecycle(seed: number): void {
     const gestures = result.gestures
     const editingEnds = gestures.filter((gesture) => TERMINAL_EDITING.has(gesture.kind)).length
     const panEnds = sessionPans(gestures, 'end')
+    const rotateEndsNow = rotates(gestures, ['end', 'cancel'])
+    const rotateStartsNow = rotates(gestures, ['start'])
     const starts = gestures.filter((gesture) => gesture.kind === 'press').length + sessionPans(gestures, 'start')
 
     expect(endedSessions.length, at(index)).toBeLessThanOrEqual(1)
     const [endedSession] = endedSessions
     if (!endedSession) {
-      expect({ editingEnds, panEnds }, `${at(index)}: a terminal gesture without an ending session`).toEqual({ editingEnds: 0, panEnds: 0 })
+      expect({ editingEnds, panEnds, rotateEndsNow }, `${at(index)}: a terminal gesture without an ending session`)
+        .toEqual({ editingEnds: 0, panEnds: 0, rotateEndsNow: 0 })
     } else if (input.kind === 'reject') {
       expect(gestures, `${at(index)}: a reject emits nothing`).toEqual([])
+    } else if (endedSession.mode === 'rotate') {
+      const fenced = !endsNaturally(input)
+      expect({ editingEnds, panEnds, rotateEndsNow }, `${at(index)}: a rotate session ends once`).toEqual({
+        editingEnds: fenced ? 1 : 0,
+        panEnds: 0,
+        rotateEndsNow: endedSession.slopPassed ? 1 : 0,
+      })
     } else if (endedSession.mode === 'pan') {
       expect(panEnds, at(index)).toBe(1)
+      expect(rotateEndsNow, at(index)).toBe(0)
       // A press the host saw ends once, whatever ended its pan; a pan with no press ends silently on its release.
       expect(editingEnds, at(index)).toBe(endedSession.pressed || input.kind !== 'up' ? 1 : 0)
       if (endedSession.pressed && input.kind === 'up') {
@@ -117,21 +141,33 @@ function checkSessionLifecycle(seed: number): void {
         expect(navigated, `${at(index)}: a Pan-tool press ends with a tap only when its drag did not pan`).toBe(endedSession.slopPassed)
       }
     } else {
-      expect({ editingEnds, panEnds }, at(index)).toEqual({ editingEnds: 1, panEnds: 0 })
+      expect({ editingEnds, panEnds, rotateEndsNow }, at(index)).toEqual({ editingEnds: 1, panEnds: 0, rotateEndsNow: 0 })
     }
     const startedNow = [...after.keys()].filter((id) => !before.has(id) || endedSessions.some((session) => session.pointerId === id))
-    if (startedNow.length > 0) expect(starts, `${at(index)}: a session started silently`).toBeGreaterThan(0)
+    const silentStart = startedNow.length > 0 && startedNow.every((id) => after.get(id)!.mode === 'rotate')
+    if (silentStart) expect(starts, `${at(index)}: a pending rotate starts silently`).toBe(0)
+    else if (startedNow.length > 0) expect(starts, `${at(index)}: a session started silently`).toBeGreaterThan(0)
     else expect(starts, `${at(index)}: a start gesture without a new session`).toBe(0)
     started += startedNow.length
     ended += endedSessions.length
 
     const live = [...after.values()][0]
+    const passedSlopNow = live?.mode === 'rotate' && live.slopPassed && !(before.get(live.pointerId)?.slopPassed ?? false)
+    expect(rotateStartsNow, `${at(index)}: a rotate starts when its session passes its slop`).toBe(passedSlopNow ? 1 : 0)
+    rotateStarts += rotateStartsNow
+    rotateEnds += rotateEndsNow
     for (const gesture of gestures) {
       if (gesture.kind === 'drag-start' || gesture.kind === 'drag-move') {
         expect(live?.mode, `${at(index)}: ${gesture.kind} outside a primary drag`).toBe('primary')
       }
       if (gesture.kind === 'pan' && gesture.phase === 'move' && gesture.source !== 'wheel') {
         expect(live?.mode, `${at(index)}: a pan move outside a pan`).toBe('pan')
+      }
+      if (gesture.kind === 'rotate' && gesture.phase === 'move') {
+        expect(live?.mode === 'rotate' && live.slopPassed, `${at(index)}: a rotate move outside a live rotate`).toBe(true)
+      }
+      if (gesture.kind === 'zoom') {
+        expect(live?.mode === 'rotate' && live.navigation !== 'trackpad-twist', `${at(index)}: a zoom during a pointer rotate`).toBe(false)
       }
     }
   }
@@ -140,6 +176,7 @@ function checkSessionLifecycle(seed: number): void {
   feed({ kind: 'cancel', t: STEPS * 16, id: 'all', reason: 'blur' }, STEPS)
   expect(state.sessions.size, `seed ${seed}: sessions outlived the final blur`).toBe(0)
   expect(ended, `seed ${seed}`).toBe(started)
+  expect(rotateEnds, `seed ${seed}: every rotate that started ends once`).toBe(rotateStarts)
 }
 
 /** Every capture effect is released by a release-capture, or by the browser (a lost capture the recogniser acted on). */
