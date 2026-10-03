@@ -254,7 +254,7 @@ test('step 6: ArrowRight nudges a selected zone 10 cm east, Control+ArrowRight 1
   await expect(page).toHaveScreenshot('phase0-06c-nudge-1m.png')
 
   await pressMod(page, 'z')
-  await expect.poll(async () => (await firstCorner(page)).x - shifted.x, 'Ctrl+Z moves the zone back').toBeLessThan(-LAYOUT_TOLERANCE_PX)
+  await expect.poll(async () => (await firstCorner(page)).x - large.x, 'Ctrl+Z moves the zone back').toBeLessThan(-LAYOUT_TOLERANCE_PX)
   const undone = await firstCorner(page)
   expectPx(undone.x - nudged.x, 0, 'Ctrl+Z undoes the 1 m series alone: the zone is back 10 cm east of its start')
   expectPx(undone.y - nudged.y, 0, 'Ctrl+Z does not move the zone north or south')
