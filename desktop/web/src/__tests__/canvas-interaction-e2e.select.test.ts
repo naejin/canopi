@@ -1433,6 +1433,10 @@ describe('SceneInteractionSession', () => {
   })
 
   it('suppresses native context menus only on canvas interaction surfaces', () => {
+    // The rotation handle sits above the drawn shapes (select/selection-hull.ts), so the selected zone must exist.
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [{ x: 160, y: 100 }, { x: 220, y: 150 }])]
+    })
     const deps = {
       ...createInteractionDeps(container, store, testView),
       getDesignObjectSelection: () => ({
