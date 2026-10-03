@@ -128,8 +128,8 @@ jobs:
           src/canvas/runtime/scene-runtime/reorigin.test.ts
           src/__tests__/new-design-view.test.ts
 
-      - name: Frontend tests
-        run: npm test --prefix desktop/web
+      - name: Frontend source-policy tests (the coverage run leaves them out)
+        run: npm run test:policies --prefix desktop/web
 
       - name: Frontend coverage ratchet
         run: npm run test:coverage --prefix desktop/web

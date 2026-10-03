@@ -83,7 +83,7 @@ Run the gates for the changed area, from `AGENTS.md`, on the integration branch 
 | Rust | `cargo fmt --all -- --check`; `CANOPI_SKIP_BUNDLED_DB=1 cargo clippy --workspace --all-targets -- -D warnings`; `CANOPI_SKIP_BUNDLED_DB=1 cargo test --workspace`; `cargo cov` above its floor; `python3 scripts/check_unused_crates.py` |
 | A `#[tauri::command]` | `CANOPI_SKIP_BUNDLED_DB=1 cargo test -p canopi-desktop native_command_policy::tests` |
 | Shared contracts (`common-types/`) | `cd desktop/web && npm run gen:types && npm run check:types` |
-| Frontend | `cd desktop/web && npx tsc --noEmit && npx vitest run --maxWorkers=4 && npm run test:coverage -- --maxWorkers=4 && npm run check:ui && npm run build && npm run build:web` |
+| Frontend | `cd desktop/web && npx tsc --noEmit && npm run test:coverage -- --maxWorkers=4 && npm run test:policies && npm run check:ui && npm run build && npm run build:web` |
 | Docs | `python3 scripts/check_docs.py` (validator changes: `python3 -m unittest scripts.test_check_docs`) |
 
 Every canvas step runs the Frontend row. Phases 1 and 2 add the Rust and Shared contracts rows (phase 1: `LastView.bearing`; phase 2: the `settings.rs` doc comments, which `bindings-gen` copies into `generated/contracts.ts`), and the regenerated `generated/contracts.ts` is committed with the change. Docs commits run the Docs row. Coverage floors are raised at milestones, never lowered. A gate you cannot run is recorded in the bead and the handoff with the command, the reason and the residual risk. No performance gates.

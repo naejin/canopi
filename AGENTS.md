@@ -11,7 +11,7 @@ Rules for agents working in Canopi. Optimise for user work preserved, reviewable
 ## Rules
 
 - **Preserve user work.** Run `git status --short --branch` before editing; pre-existing dirty or untracked files are the user's. Never stage, revert or stash them, and never run `reset --hard` or `checkout -- <file>` unless asked. The git stash stack is shared with the user; if you must set work aside, make a WIP commit.
-- **Behavioural test first, then the fix.** Bug fixes carry a regression test. Frontend tests live in `desktop/web/src/__tests__/` or beside their module as `*.test.ts(x)`; Rust tests beside their module.
+- **Behavioural test first, then the fix.** Bug fixes carry a regression test. A change to a seam (renderer, camera, map, input) carries at least one test through the real implementation or the real browser, not only fakes: fakes hid the phase-0 Pixi crash and the phase-1 thumbnail bug (advice; user, 2026-10-03). Frontend tests live in `desktop/web/src/__tests__/` or beside their module as `*.test.ts(x)`; Rust tests beside their module.
 - **Gates run on the changed area** (table below). A gate you cannot run is recorded in the bead and handoff with the command, the reason and the residual risk. Coverage floors (`desktop/web/vite.config.ts`, `.cargo/config.toml`) are raised at milestones, never lowered; on a merge conflict keep the higher number.
 - **Authorities are exclusive.** The scene runtime owns design objects and mutates through runtime transactions; Design Edit (`app/design-edit/`) owns budget, timeline, consortiums, views, stories and `extra`; the map layer store owns map layers; settings own device state. Panels read canvas state through read-only runtime queries. Enforced by `frontend-architecture-policies.test.ts`.
 - **Coordinates.** Files store WGS84 lon/lat; runtime geometry is metres in the session plane; camera moves never move objects (ADR 0001).
@@ -31,7 +31,7 @@ Rules for agents working in Canopi. Optimise for user work preserved, reviewable
 | Rust | `cargo fmt --all -- --check`; `CANOPI_SKIP_BUNDLED_DB=1 cargo clippy --workspace --all-targets -- -D warnings`; `CANOPI_SKIP_BUNDLED_DB=1 cargo test --workspace`; `cargo cov` above its floor; `python3 scripts/check_unused_crates.py` (validator changes: `python3 -m unittest scripts.test_check_unused_crates`) |
 | A `#[tauri::command]` | `CANOPI_SKIP_BUNDLED_DB=1 cargo test -p canopi-desktop native_command_policy::tests` |
 | Shared contracts (`common-types/`) | `cd desktop/web && npm run gen:types && npm run check:types` |
-| Frontend | `cd desktop/web && npx tsc --noEmit && npx vitest run --maxWorkers=4 && npm run test:coverage -- --maxWorkers=4 && npm run check:ui && npm run build && npm run build:web` |
+| Frontend | `cd desktop/web && npx tsc --noEmit && npm run test:coverage -- --maxWorkers=4 && npm run test:policies && npm run check:ui && npm run build && npm run build:web` |
 | Species catalog queries | `python3 scripts/species_catalog_contract.py check` and its Python tests |
 | LiDAR services | the GeoLibre ignored lane and the engine comparison lane ([data library](docs/guides/data-library.md)) |
 | Docs | `python3 scripts/check_docs.py` (validator changes: `python3 -m unittest scripts.test_check_docs`) |
