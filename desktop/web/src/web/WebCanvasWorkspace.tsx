@@ -237,7 +237,7 @@ export function WebCanvasWorkspace({
         />
         <div ref={rulerOverlayRef} className={panelStyles.rulerOverlay} />
         {hasDesign && <CanvasChrome projection={workspaceCanvasCommandProjection.value} canvasRef={containerRef} />}
-        <MapNotice notice={mapNotice} onRetry={() => runtimeRef.current?.composition.retryMap?.()} />
+        <MapNotice notice={mapNotice} onRetry={() => runtimeRef.current?.composition.retryMap()} />
         {!hasDesign && <WebWelcomeScreen controller={controller} />}
       </div>
     </div>

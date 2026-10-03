@@ -155,7 +155,7 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
 
   retryMap(): void {
     if (this.cancelled) return;
-    this.runtime.retryMap?.();
+    this.runtime.retryMap();
   }
 
   dispose(): Promise<void> {

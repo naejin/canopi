@@ -24,6 +24,7 @@ describe('createWorkspaceDocumentSurface', () => {
       }),
       activate: vi.fn(async () => 'cancelled' as const),
       teardown: vi.fn(async () => {}),
+      retry: vi.fn(() => false),
     }
     const documents = createTestCanvasDocumentSurface({
       replaceDocument: (_file, _token, finalizeReplacement) => {
@@ -116,6 +117,7 @@ describe('createWorkspaceDocumentSurface', () => {
       runtime: {
         init: async () => {},
         unmountRenderer: async () => {},
+        remountRenderer: async () => {},
         destroy: () => {},
       },
       camera,
@@ -132,6 +134,7 @@ describe('createWorkspaceDocumentSurface', () => {
         getWebGL2Context: () => null,
         updateMapContributions: () => {},
         updateBackgroundPresentation: () => {},
+        retryBasemap: vi.fn(),
         installStyleRestorer: () => () => {},
       },
       layer: {},
@@ -207,6 +210,7 @@ function createWorkspaceLifecycle() {
     requestGenerationDisconnect: vi.fn(async () => {}),
     activate: vi.fn(async () => 'cancelled' as const),
     teardown: vi.fn(async () => {}),
+    retry: vi.fn(() => false),
   }
 }
 

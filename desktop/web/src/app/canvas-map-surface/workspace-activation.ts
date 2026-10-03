@@ -70,7 +70,7 @@ export interface WorkspaceActivationMapControls {
   /** Folds the map credits into their (i) button, now and on every later map. */
   setAttributionCompact?(compact: boolean): void
   /** The user's Retry for a Basemap that couldn't load: downloads it again on the live map. */
-  retryBasemap?(): void
+  retryBasemap(): void
   /** Restores same-map style contributions after initial style admission. */
   installStyleRestorer(map: WorkspaceActivationMap, restore: () => void): () => void
   /** Map/context failures that happen outside the custom layer. */
@@ -84,8 +84,8 @@ export interface WorkspaceActivationRuntime {
   init(container: HTMLElement): Promise<void>
   /** Releases the renderer and editing after a map failure; the Scene stays loaded. */
   unmountRenderer(): Promise<void>
-  /** Mounts them again on a rebuilt map after a user Retry; without it, Retry is refused once a renderer was unmounted. */
-  remountRenderer?(container: HTMLElement): Promise<void>
+  /** Mounts them again on a rebuilt map after a user Retry. */
+  remountRenderer(container: HTMLElement): Promise<void>
   destroy(): void
 }
 
@@ -376,7 +376,7 @@ export class WorkspaceActivationCoordinator {
         // remount leaves nothing mounted, and a failure that unmounts during it marks the renderer unmounted again.
         this.rendererUnmounted = false
         try {
-          await this.runOwnedCallback('renderer remount', () => this.options.runtime.remountRenderer!(this.options.container))
+          await this.runOwnedCallback('renderer remount', () => this.options.runtime.remountRenderer(this.options.container))
         } catch (error) {
           this.rendererUnmounted = true
           throw error
@@ -423,14 +423,13 @@ export class WorkspaceActivationCoordinator {
 
   /**
    * Whether a user Retry could rebuild an unavailable map: the runtime is alive (a failed renderer
-   * initialization destroys it), it can mount a renderer again, and the map did not fail for lack of WebGL2.
+   * initialization destroys it) and the map did not fail for lack of WebGL2.
    */
   canRetry(): boolean {
     return !this.disposed
       && !this.runtimeDestroyed
       && !this.terminalTeardownResult
       && !(this.unavailableCause instanceof WorkspaceWebGL2UnavailableError)
-      && (!this.rendererUnmounted || typeof this.options.runtime.remountRenderer === 'function')
   }
 
   /**

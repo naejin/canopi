@@ -348,6 +348,7 @@ function compositionFixture(options: CompositionFixtureOptions) {
     documentSurface: surfaces.documents,
     init: vi.fn(async () => {}),
     unmountRenderer: vi.fn(async () => {}),
+    remountRenderer: vi.fn(async () => {}),
     destroy: vi.fn(),
   }
   const rendererComposition = {
@@ -364,15 +365,19 @@ function compositionFixture(options: CompositionFixtureOptions) {
     updateMapContributions: vi.fn(),
     updateBackgroundPresentation: vi.fn(),
     setAttributionCompact: vi.fn(),
+    retryBasemap: vi.fn(),
     installStyleRestorer: vi.fn(() => () => {}),
   }
   const workspace = {
     requestGenerationDisconnect: vi.fn(async () => {}),
     activate: vi.fn(options.activate ?? (async () => 'shared-ready' as const)),
     teardown: vi.fn(options.teardown ?? (async () => {})),
+    retry: vi.fn(() => false),
+    canRetry: vi.fn(() => false),
     updateMapContributions: vi.fn(),
     updateBackgroundPresentation: vi.fn(),
   } satisfies WorkspaceGenerationLifecycle & {
+    canRetry(): boolean
     updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void
     updateBackgroundPresentation(presentation: MapBackgroundPresentation): void
   }

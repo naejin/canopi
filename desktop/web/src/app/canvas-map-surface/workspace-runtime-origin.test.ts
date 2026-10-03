@@ -25,15 +25,19 @@ describe('workspace runtime composition origin effect', () => {
       documentSurface: surfaces.documents,
       init: vi.fn(async () => {}),
       unmountRenderer: vi.fn(async () => {}),
+      remountRenderer: vi.fn(async () => {}),
       destroy: vi.fn(),
     }
     const workspace = {
       requestGenerationDisconnect: vi.fn(async () => {}),
       activate: vi.fn(async () => 'shared-ready' as const),
       teardown: vi.fn(async () => {}),
+      retry: vi.fn(() => false),
+      canRetry: vi.fn(() => false),
       updateMapContributions: vi.fn(),
       updateBackgroundPresentation: vi.fn(),
     } satisfies WorkspaceGenerationLifecycle & {
+      canRetry(): boolean
       updateMapContributions(snapshot: unknown): void
       updateBackgroundPresentation(presentation: unknown): void
     }
@@ -64,6 +68,7 @@ describe('workspace runtime composition origin effect', () => {
         getWebGL2Context: vi.fn(() => null),
         updateMapContributions: vi.fn(),
         updateBackgroundPresentation: vi.fn(),
+        retryBasemap: vi.fn(),
         installStyleRestorer: vi.fn(() => () => {}),
       }),
       createWorkspace,

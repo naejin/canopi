@@ -217,6 +217,7 @@ function createCoordinator(input: {
       ?? (() => input.context === undefined ? map.context : input.context),
     updateMapContributions: vi.fn(),
     updateBackgroundPresentation: vi.fn(),
+    retryBasemap: vi.fn(),
     installStyleRestorer: input.installStyleRestorer ?? vi.fn(() => () => {}),
     watchFailure: input.watchFailure
       ?? (input.unwatchFailure ? () => input.unwatchFailure! : undefined),
@@ -1839,6 +1840,7 @@ describe('WorkspaceActivationCoordinator', () => {
         getWebGL2Context: () => map.context,
         updateMapContributions: () => {},
         updateBackgroundPresentation: () => {},
+        retryBasemap: vi.fn(),
         installStyleRestorer: () => () => {},
       },
       layer: {
@@ -1935,6 +1937,7 @@ function realComposition(options: { failRuntimeInit?: boolean; runtimeInit?: Pro
       getWebGL2Context: (map) => (map as unknown as FakeMap).context,
       updateMapContributions: () => {},
       updateBackgroundPresentation: () => {},
+      retryBasemap: vi.fn(),
       installStyleRestorer: () => () => {},
       // Like WorkspaceMapControls.reportRestorationFailure: the error is published before the coordinator hears of it.
       watchFailure: (map, report) => {

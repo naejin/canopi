@@ -861,6 +861,7 @@ function fakeRuntimeComposition(
       keyboard: createTestCanvasKeyboardPort(),
     } satisfies CanvasRuntimeSurfaces,
     start: vi.fn(async () => outcome),
+    retryMap: vi.fn(),
     dispose: vi.fn(),
   }
   return { composition, documents }

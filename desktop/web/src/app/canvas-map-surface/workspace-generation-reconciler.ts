@@ -12,8 +12,8 @@ export interface WorkspaceGenerationLifecycle {
   teardown(): Promise<void>
   /** True when this lifecycle already observes rejection of this exact result. */
   ownsLifecycleFailureObservation?(result: Promise<unknown>): boolean
-  /** Accepts a user Retry of an unavailable map (WorkspaceActivationCoordinator.retry); absent, Retry is refused. */
-  retry?(): boolean
+  /** Accepts a user Retry of an unavailable map (WorkspaceActivationCoordinator.retry). */
+  retry(): boolean
 }
 
 export interface WorkspaceGenerationReconcilerOptions {
@@ -86,7 +86,7 @@ export class WorkspaceGenerationReconciler {
    * way, or when the workspace refuses.
    */
   retry(): boolean {
-    if (this.disposed || this.activation || this.replacementSuspended || !this.options.workspace.retry) return false
+    if (this.disposed || this.activation || this.replacementSuspended) return false
     let snapshot: WorkspaceActivationSnapshot | null
     try {
       snapshot = this.options.readSnapshot()

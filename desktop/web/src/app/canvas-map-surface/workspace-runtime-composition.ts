@@ -50,7 +50,7 @@ export interface WorkspaceRuntimeComposition {
    * undo, or downloads a basemap that couldn't load again. It can be pressed any number of times; nothing
    * retries on its own (ADR 0004).
    */
-  retryMap?(): void
+  retryMap(): void
   dispose(): Promise<void>
 }
 
@@ -101,8 +101,8 @@ interface WorkspaceCompositionRuntime extends WorkspaceActivationRuntime {
 interface WorkspaceCompositionLifecycle extends WorkspaceGenerationLifecycle {
   updateBackgroundPresentation(presentation: MapBackgroundPresentation): void
   updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void
-  /** Whether a Retry could rebuild an unavailable map (WorkspaceActivationCoordinator.canRetry); absent, never. */
-  canRetry?(): boolean
+  /** Whether a Retry could rebuild an unavailable map (WorkspaceActivationCoordinator.canRetry). */
+  canRetry(): boolean
 }
 
 /** Constructor-only test seam. Production callers use the default cohesive assembly. */
@@ -137,7 +137,7 @@ export function createWorkspaceRuntimeComposition(
   // The edition sees a map error as retryable only while the workspace could rebuild the map.
   let mapState: MapLibreCanvasSurfaceState | null = null
   const publishMapState = (state: MapLibreCanvasSurfaceState) => {
-    mapState = state.retryable && !(workspace.canRetry?.() ?? false) ? { ...state, retryable: false } : state
+    mapState = state.retryable && !workspace.canRetry() ? { ...state, retryable: false } : state
     options.onMapStateChange?.(mapState)
   }
   const controls = dependencies.createControls({
@@ -255,7 +255,7 @@ export function createWorkspaceRuntimeComposition(
     retryMap() {
       if (disposeResult) return
       if (mapState?.status !== 'error') {
-        controls.retryBasemap?.()
+        controls.retryBasemap()
         return
       }
       // A refused Retry that can never succeed withdraws the button.
