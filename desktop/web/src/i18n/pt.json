@@ -286,6 +286,7 @@
       "mapSection": "Camadas do mapa",
       "basemapLoading": "Carregando mapa base…",
       "mapUnavailable": "Mapa indisponível",
+      "mapStopped": "O mapa parou de ser desenhado. Seu design está seguro.",
       "layerSkipped": "Não foi possível mostrar uma camada do mapa",
       "basemapFailed": "Não foi possível carregar o mapa base. Verifique a conexão.",
       "retryMap": "Tentar novamente",

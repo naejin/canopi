@@ -9,6 +9,7 @@ const READY_MAP_STATE: MapLibreCanvasSurfaceState = {
   terrainErrorMessage: null,
   layerSkipped: false,
   basemapStatus: 'idle',
+  retryable: false,
 }
 
 function translate(key: string): string {
@@ -17,6 +18,7 @@ function translate(key: string): string {
     'canvas.layers.basemapLoading': 'Loading',
     'canvas.layers.layerSkipped': 'A map layer couldn’t be shown',
     'canvas.layers.basemapFailed': 'Basemap couldn’t load. Check your connection.',
+    'canvas.layers.mapStopped': 'The map stopped drawing. Your Design is safe.',
   }[key] ?? key
 }
 
@@ -48,6 +50,21 @@ describe('Map Notice read model', () => {
       tone: 'error',
       statusText: 'Map unavailable',
       retry: false,
+    })
+  })
+
+  it('offers Retry on a map that stopped drawing and can be rebuilt', () => {
+    expect(getMapNoticeReadModel({
+      hasDesign: true,
+      mapVisible: true,
+      mapSurface: { ...READY_MAP_STATE, status: 'error', errorMessage: 'context lost', retryable: true, basemapStatus: 'failed' },
+      t: translate,
+    })).toEqual({
+      visible: true,
+      mapSurfaceVisible: true,
+      tone: 'error',
+      statusText: 'The map stopped drawing. Your Design is safe.',
+      retry: true,
     })
   })
 

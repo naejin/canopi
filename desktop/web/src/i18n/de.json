@@ -286,6 +286,7 @@
       "mapSection": "Kartenebenen",
       "basemapLoading": "Basiskarte wird geladen…",
       "mapUnavailable": "Karte nicht verfügbar",
+      "mapStopped": "Die Karte wird nicht mehr gezeichnet. Ihr Design ist sicher.",
       "layerSkipped": "Eine Kartenebene konnte nicht angezeigt werden",
       "basemapFailed": "Die Basiskarte konnte nicht geladen werden. Prüfen Sie Ihre Verbindung.",
       "retryMap": "Erneut versuchen",

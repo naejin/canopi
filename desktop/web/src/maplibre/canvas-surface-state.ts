@@ -13,6 +13,8 @@ export interface MapLibreCanvasSurfaceState {
   /** An optional map contribution (overlay, raster band) was skipped; the map stays editable. */
   readonly layerSkipped: boolean
   readonly basemapStatus: MapLibreBasemapStatus
+  /** With status `error`: a user Retry can rebuild the map (WebGL2 present, the runtime alive). */
+  readonly retryable: boolean
 }
 
 export const IDLE_MAPLIBRE_CANVAS_SURFACE_STATE: MapLibreCanvasSurfaceState = {
@@ -22,6 +24,7 @@ export const IDLE_MAPLIBRE_CANVAS_SURFACE_STATE: MapLibreCanvasSurfaceState = {
   terrainErrorMessage: null,
   layerSkipped: false,
   basemapStatus: 'idle',
+  retryable: false,
 }
 
 export function mapLibreCanvasSurfaceStateEquals(
@@ -35,6 +38,7 @@ export function mapLibreCanvasSurfaceStateEquals(
     && left.terrainErrorMessage === right.terrainErrorMessage
     && left.layerSkipped === right.layerSkipped
     && left.basemapStatus === right.basemapStatus
+    && left.retryable === right.retryable
   )
 }
 

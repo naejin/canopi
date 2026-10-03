@@ -202,6 +202,25 @@ describe('CanvasPanel basemap feedback', () => {
     expect(container.querySelector('button')).toBeNull()
   })
 
+  it('offers Retry when the map stopped drawing and hands it to the Design session', async () => {
+    designSessionFixture.file = demoDesign()
+    mockBasemapState = {
+      ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
+      status: 'error',
+      errorMessage: 'MapLibre WebGL context was lost.',
+      retryable: true,
+    }
+
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+
+    const status = container.querySelector<HTMLElement>('[role="status"]')!
+    expect(status.textContent).toBe('The map stopped drawing. Your Design is safe.Retry')
+    await act(async () => { status.querySelector('button')!.click() })
+    expect(retryMap).toHaveBeenCalledOnce()
+  })
+
   it('surfaces terrain degradation as a skipped layer while keeping the basemap ready', async () => {
     designSessionFixture.file = demoDesign()
     mockBasemapState = {

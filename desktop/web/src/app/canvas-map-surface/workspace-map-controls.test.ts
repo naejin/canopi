@@ -1381,7 +1381,22 @@ describe('WorkspaceMapControls', () => {
     expect(states).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
       status: 'error',
       errorMessage: expect.stringContaining('WebGL2 is unavailable'),
+      retryable: false,
     }))
+  })
+
+  it('publishes a lost context as an error a Retry can rebuild', async () => {
+    const states: MapLibreCanvasSurfaceState[] = []
+    const { controls, maps } = createControls({ contributions: { onStateChange: (state) => states.push(state) } })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    const admitted = await acquisition
+    controls.watchFailure(admitted, (error) => controls.releaseMap(admitted, error))
+
+    map.emit('webglcontextlost')
+
+    expect(states.at(-1)).toMatchObject({ status: 'error', retryable: true })
   })
 
   it('does not ask a browser without the WebGL2 interface to create a context', async () => {

@@ -286,6 +286,7 @@
       "mapSection": "Map layers",
       "basemapLoading": "Loading basemap…",
       "mapUnavailable": "Map unavailable",
+      "mapStopped": "The map stopped drawing. Your Design is safe.",
       "layerSkipped": "A map layer couldn’t be shown",
       "basemapFailed": "Basemap couldn’t load. Check your connection.",
       "retryMap": "Retry",

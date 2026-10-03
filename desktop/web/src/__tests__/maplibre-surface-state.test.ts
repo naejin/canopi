@@ -19,6 +19,7 @@ describe('maplibre surface state adapter', () => {
       terrainErrorMessage: null,
       layerSkipped: false,
       basemapStatus: 'idle',
+      retryable: false,
     })
   })
 
@@ -30,6 +31,7 @@ describe('maplibre surface state adapter', () => {
       terrainErrorMessage: 'dem failed',
       layerSkipped: false,
       basemapStatus: 'idle' as const,
+      retryable: false,
     }
     const right = { ...left }
     const different = { ...left, terrainErrorMessage: null }
@@ -38,6 +40,7 @@ describe('maplibre surface state adapter', () => {
     expect(mapLibreCanvasSurfaceStateEquals(left, different)).toBe(false)
     expect(mapLibreCanvasSurfaceStateEquals(left, { ...left, layerSkipped: true })).toBe(false)
     expect(mapLibreCanvasSurfaceStateEquals(left, { ...left, basemapStatus: 'failed' })).toBe(false)
+    expect(mapLibreCanvasSurfaceStateEquals(left, { ...left, retryable: true })).toBe(false)
   })
 
   it('publishes the stable canonical projection diagnostics without backend selection', () => {

@@ -152,6 +152,8 @@ export class WorkspaceMapContributions {
       ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
       status: error ? 'error' : 'idle',
       errorMessage: error ? toMapLibreSurfaceErrorMessage(error) : null,
+      // A map that failed once it existed can be built again; whether the runtime allows it is the composition's call.
+      retryable: Boolean(error),
     })
     for (const remove of this.removeListeners.splice(0)) this.attempt('Failed to remove map contribution listener:', remove)
     this.clear()

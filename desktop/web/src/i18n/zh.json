@@ -286,6 +286,7 @@
       "mapSection": "地图图层",
       "basemapLoading": "正在加载底图…",
       "mapUnavailable": "地图不可用",
+      "mapStopped": "地图已停止绘制。您的设计不受影响。",
       "layerSkipped": "无法显示某个地图图层",
       "basemapFailed": "无法加载底图。请检查网络连接。",
       "retryMap": "重试",

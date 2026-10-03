@@ -286,6 +286,7 @@
       "mapSection": "Capas de mapa",
       "basemapLoading": "Cargando mapa base…",
       "mapUnavailable": "Mapa no disponible",
+      "mapStopped": "El mapa dejó de dibujarse. Tu diseño está a salvo.",
       "layerSkipped": "No se pudo mostrar una capa del mapa",
       "basemapFailed": "No se pudo cargar el mapa base. Comprueba la conexión.",
       "retryMap": "Reintentar",

@@ -31,9 +31,10 @@ import {
   createMapLayerStackDescriptors,
   reconcileMapLayerStack,
 } from '../map-layers/bands'
-import type {
-  WorkspaceActivationMap,
-  WorkspaceActivationMapControls,
+import {
+  WorkspaceWebGL2UnavailableError,
+  type WorkspaceActivationMap,
+  type WorkspaceActivationMapControls,
 } from './workspace-activation'
 
 interface WorkspaceMapAttempt {
@@ -106,7 +107,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
       this.releaseAttempt(previous)
     }
     if (!(this.options.canCreateWebGL2Context ?? canCreateWebGL2Context)()) {
-      const error = new Error('WebGL2 is unavailable for the shared workspace map.')
+      const error = new WorkspaceWebGL2UnavailableError()
       // No map attempt exists to publish its failure, so publish it here.
       this.publishUnavailable(error)
       return Promise.reject(error)
@@ -350,6 +351,8 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
         ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
         status: 'error',
         errorMessage: toMapLibreSurfaceErrorMessage(error),
+        // No Retry: a new map would find no WebGL2 either.
+        retryable: false,
       })
     } catch (observerError) {
       this.logError('Map state observer failed:', observerError)

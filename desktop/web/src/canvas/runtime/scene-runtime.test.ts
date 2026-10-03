@@ -2958,6 +2958,69 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('mounts the renderer and editing again after a map failure, keeping the Scene, view, selection and undo', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const renderers: RendererStub[] = []
+    ;(runtime as any)._construction.replaceRenderer({
+      id: 'test',
+      initialize: () => {
+        const renderer = createRendererStub()
+        renderers.push(renderer)
+        return renderer
+      },
+    })
+    const container = createRuntimeContainer()
+    await runtime.init(container)
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    setInteractionViewport(runtime)
+    runtime.commandSurface.sceneEdits.selectAll()
+    runtime.commandSurface.sceneEdits.nudgeSelected({ x: 1, y: 0 })
+    runtime.commandSurface.sceneEdits.endNudge()
+    expect(runtime.commandSurface.history.canUndo.value).toBe(true)
+    panOn(runtime, { x: 40, y: 10 })
+    const placement = placementOf(runtime)
+    const scene = runtime.querySurface.getSceneSnapshot()
+
+    await runtime.unmountRenderer()
+    expect(runtime.keyboardPort).toBeNull()
+    await runtime.remountRenderer(container)
+
+    expect(renderers).toHaveLength(2)
+    expect(renderers[0]!.dispose).toHaveBeenCalledOnce()
+    expect(renderers[1]!.syncScene).toHaveBeenCalled()
+    expect(runtime.keyboardPort).not.toBeNull()
+    expect(runtime.querySurface.getSceneSnapshot()).toEqual(scene)
+    expect(runtime.querySurface.getSelection()).toEqual([{ kind: 'plant', id: 'plant-1' }])
+    const kept = placementOf(runtime)
+    expect(kept.x).toBeCloseTo(placement.x, 6)
+    expect(kept.y).toBeCloseTo(placement.y, 6)
+    expect(kept.scale).toBeCloseTo(placement.scale, 6)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(true)
+    runtime.destroy()
+  })
+
+  it('leaves nothing mounted when a remount fails', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const renderer = createRendererStub()
+    let initializations = 0
+    ;(runtime as any)._construction.replaceRenderer({
+      id: 'test',
+      initialize: () => {
+        initializations += 1
+        if (initializations > 1) throw new Error('renderer remount failed')
+        return renderer
+      },
+    })
+    const container = createRuntimeContainer()
+    await runtime.init(container)
+    await runtime.unmountRenderer()
+
+    await expect(runtime.remountRenderer(container)).rejects.toThrow('renderer remount failed')
+
+    expect(runtime.keyboardPort).toBeNull()
+    runtime.destroy()
+  })
+
   it('nudges from the arrow keys on the focused map through the runtime command', async () => {
     const runtime = new SceneCanvasRuntime({ appAdapter: createCleanStateAdapterProbe().adapter })
     const { container } = await initRuntimeWithStubbedRenderer(runtime)

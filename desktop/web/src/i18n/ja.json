@@ -286,6 +286,7 @@
       "mapSection": "地図レイヤー",
       "basemapLoading": "ベースマップを読み込み中…",
       "mapUnavailable": "地図を利用できません",
+      "mapStopped": "地図の描画が停止しました。デザインは安全です。",
       "layerSkipped": "地図レイヤーを表示できませんでした",
       "basemapFailed": "ベースマップを読み込めませんでした。接続を確認してください。",
       "retryMap": "再試行",

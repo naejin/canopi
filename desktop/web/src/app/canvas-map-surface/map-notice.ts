@@ -45,12 +45,19 @@ function getMapStatusTone(mapSurface: MapLibreCanvasSurfaceState): MapNoticeTone
   return 'loading'
 }
 
-/** By rank: a map failure, a basemap that couldn't load, loading, then a skipped layer or terrain. */
+/**
+ * By rank: a map failure (with Retry when the map can be rebuilt), a basemap that couldn't load, loading,
+ * then a skipped layer or terrain.
+ */
 function readMapNotice(
   mapSurface: MapLibreCanvasSurfaceState,
   t: (key: string) => string,
 ): { readonly text: string; readonly tone: MapNoticeTone; readonly retry: boolean } | null {
-  if (mapSurface.status === 'error') return { text: t('canvas.layers.mapUnavailable'), tone: 'error', retry: false }
+  if (mapSurface.status === 'error') {
+    return mapSurface.retryable
+      ? { text: t('canvas.layers.mapStopped'), tone: 'error', retry: true }
+      : { text: t('canvas.layers.mapUnavailable'), tone: 'error', retry: false }
+  }
   if (mapSurface.basemapStatus === 'failed') return { text: t('canvas.layers.basemapFailed'), tone: 'error', retry: true }
   const tone = getMapStatusTone(mapSurface)
   if (mapSurface.status !== 'ready') return { text: t('canvas.layers.basemapLoading'), tone, retry: false }
