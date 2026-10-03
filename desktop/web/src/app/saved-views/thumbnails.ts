@@ -1,4 +1,4 @@
-import { effect, signal, untracked, type ReadonlySignal, type Signal } from '@preact/signals'
+import { computed, effect, signal, untracked, type ReadonlySignal, type Signal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { currentCanvasQuerySurface } from '../../canvas/session'
 import type { SavedView } from '../../types/design'
@@ -14,8 +14,9 @@ import {
 
 // Saved view thumbnails: small off-screen snapshots of each view, a session
 // cache that is never written to the Design. An entry is drawn again only when
-// what it depends on changes (the view, the Scene revision, the background
-// settings, the locale or the theme), never on render. Captures run one at a
+// what it depends on changes (the view, the Scene revision, the settled
+// workspace size the image is fitted to, the background settings, the locale
+// or the theme), never on render. Captures run one at a
 // time, a short while after the last change, and retry while an edit owns the
 // Scene. Every object URL is revoked when it is replaced, when its view goes
 // away, when another Design replaces this one and on HMR.
@@ -191,14 +192,28 @@ export function createSavedViewThumbnailCache(options: SavedViewThumbnailCacheOp
 }
 
 /**
+ * The workspace size a thumbnail is fitted to (spec §4.10), read once per
+ * settled frame: a drag-resize draws again once, after it settles, and a pan
+ * that settles at the same size notifies nobody.
+ */
+const settledWorkspaceSize = computed(() => {
+  const view = currentCanvasQuerySurface.value?.view
+  if (!view) return null
+  void view.settledRevision.value
+  const { width, height } = view.captureView().screen
+  return `${Math.round(width)}x${Math.round(height)}`
+})
+
+/**
  * What a view's thumbnail depends on besides the view itself. Reading it in a
  * component subscribes the component to those signals.
  */
-function savedViewThumbnailKey(view: SavedView): string {
+export function savedViewThumbnailKey(view: SavedView): string {
   const sceneRevision = currentCanvasQuerySurface.value?.revision.scene.value ?? -1
   const layers = mapLayers.value
   return JSON.stringify([
     sceneRevision,
+    settledWorkspaceSize.value,
     view.camera,
     view.visible_layers,
     view.highlighted.species,
