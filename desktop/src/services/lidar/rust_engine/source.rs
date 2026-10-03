@@ -1,29 +1,46 @@
-//! Reading source rasters: header probes and whole-band loads.
+//! Reading source rasters: header probes, windowed GeoTIFF bands and
+//! whole-band loads.
 //!
-//! A TIFF is probed from its directory and decoded strip by strip; every
-//! other format `wbraster` knows is read whole, as that library works. Both
-//! routes end in the same [`Loaded`] band the engine converts, and every
-//! whole load first passes the library's capacity limit.
+//! A TIFF is probed from its directory and read window by window
+//! ([`tiff::BandReader`]), so a conversion streams it whatever its size
+//! unless one compressed chunk alone would decode above the streamed working
+//! set. Such a file, and every other format `wbraster` knows (read whole, as
+//! that library works), is loaded whole after the capacity limit.
 
 use super::super::engine::RasterProbe;
 use super::super::grid::RasterGrid;
-use super::super::import::validate_working_grid;
+use super::super::import::{raw_extraction_cells, validate_working_grid};
+use super::super::prepared_raster::RasterWindow;
 use super::crs::{self, ResolvedCrs};
-use super::tiff;
+use super::{Cells, tiff};
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 
-/// Largest non-TIFF file read whole: the capacity limit in Float32 bytes,
-/// checked before the file is parsed because its grid is not known until
-/// then.
-const MAX_OTHER_FORMAT_BYTES: u64 = super::super::import::MAX_RAW_EXTRACTION_CELLS * 4;
-
-/// One band in memory with its placement.
-pub(super) struct Loaded {
+/// One band with its placement: streamed from its file, or held whole.
+pub(super) struct Opened {
     pub grid: RasterGrid,
     pub crs: Option<ResolvedCrs>,
     pub nodata: Option<f32>,
-    pub samples: Vec<f32>,
+    pub band: Band,
+}
+
+pub(super) enum Band {
+    Streamed(tiff::BandReader),
+    Whole(Cells),
+}
+
+impl Opened {
+    /// The whole band, row-major; a streamed band is read whole only after
+    /// the capacity check named `operation`.
+    pub fn into_samples(self, operation: &str, cancel: &AtomicBool) -> Result<Vec<f32>, String> {
+        match self.band {
+            Band::Whole(samples) => Ok(samples.into_vec()),
+            Band::Streamed(mut reader) => {
+                validate_working_grid(&self.grid, operation)?;
+                Ok(read_whole(&mut reader, &self.grid, cancel)?.into_vec())
+            }
+        }
+    }
 }
 
 /// Header facts of any raster the engine reads.
@@ -36,26 +53,31 @@ pub(super) fn probe(path: &Path) -> Result<RasterProbe, String> {
     Ok(probe_other(path, &raster)?.0)
 }
 
-/// Band 1 of any raster the engine reads, after the capacity check named
-/// `operation`.
-pub(super) fn load(path: &Path, operation: &str, cancel: &AtomicBool) -> Result<Loaded, String> {
+/// Band 1 of any raster the engine reads: a GeoTIFF is streamed when its
+/// chunks allow, anything else is loaded whole after the capacity check
+/// named `operation`.
+pub(super) fn open(path: &Path, operation: &str, cancel: &AtomicBool) -> Result<Opened, String> {
     if tiff::is_tiff(path)? {
         let header = tiff::read_header(path)?;
         let probe = probe_tiff(&header)?;
         let grid = grid_of(&probe);
-        validate_working_grid(&grid, operation)?;
         let crs = match &header.geo_keys {
             Some(keys) => crs::from_geokeys(keys)?,
             None => None,
         };
         let nodata = probe.nodata;
-        let fill = nodata.unwrap_or(0.0);
-        let samples = tiff::read_band_f32(path, &header, fill, cancel)?;
-        return Ok(Loaded {
+        let mut reader = tiff::BandReader::open(path, header.band_format(), nodata.unwrap_or(0.0))?;
+        let band = if reader.streams() {
+            Band::Streamed(reader)
+        } else {
+            validate_working_grid(&grid, operation)?;
+            Band::Whole(read_whole(&mut reader, &grid, cancel)?)
+        };
+        return Ok(Opened {
             grid,
             crs,
             nodata,
-            samples,
+            band,
         });
     }
     let raster = read_other(path)?;
@@ -78,12 +100,33 @@ pub(super) fn load(path: &Path, operation: &str, cancel: &AtomicBool) -> Result<
             grid.height
         ));
     }
-    Ok(Loaded {
+    Ok(Opened {
         grid,
         crs,
         nodata: probe.nodata,
-        samples,
+        band: Band::Whole(Cells::new(samples)),
     })
+}
+
+fn read_whole(
+    reader: &mut tiff::BandReader,
+    grid: &RasterGrid,
+    cancel: &AtomicBool,
+) -> Result<Cells, String> {
+    let cells = usize::try_from(u64::from(grid.width) * u64::from(grid.height))
+        .map_err(|_| "raster cell count overflows".to_string())?;
+    let mut samples = Cells::zeroed(cells);
+    reader.read(
+        RasterWindow {
+            x: 0,
+            y: 0,
+            width: grid.width,
+            height: grid.height,
+        },
+        &mut samples,
+        cancel,
+    )?;
+    Ok(samples)
 }
 
 pub(super) fn grid_of(probe: &RasterProbe) -> RasterGrid {
@@ -137,13 +180,16 @@ fn probe_tiff(header: &tiff::TiffHeader) -> Result<RasterProbe, String> {
     })
 }
 
+/// Read a non-TIFF file whole. Its grid is not known until it is parsed, so
+/// the file is first held to the capacity limit in Float32 bytes.
 fn read_other(path: &Path) -> Result<wbraster::Raster, String> {
     let bytes = std::fs::metadata(path)
         .map_err(|e| format!("Failed to inspect {}: {e}", path.display()))?
         .len();
-    if bytes > MAX_OTHER_FORMAT_BYTES {
+    let limit = raw_extraction_cells().saturating_mul(4);
+    if bytes > limit {
         return Err(format!(
-            "{} has {bytes} bytes; a whole-raster read of this format is limited to {MAX_OTHER_FORMAT_BYTES}",
+            "{} has {bytes} bytes; a whole-raster read of this format is limited to {limit}",
             path.display()
         ));
     }

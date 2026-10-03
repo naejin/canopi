@@ -27,9 +27,50 @@ use std::sync::atomic::AtomicBool;
 
 /// Canonical NoData used for a layer whose first source declares none.
 pub const FALLBACK_NODATA: f32 = -99999.0;
-/// Most cells one whole-raster read into memory may hold (analysis blocks and
-/// test oracles). Item reads never materialize a whole raster.
+/// Most cells one whole-raster read into memory may hold (analysis blocks,
+/// test oracles, and the conversions that cannot stream: formats other than
+/// GeoTIFF and GeoTIFFs with one huge compressed chunk). It is also the row
+/// window budget of a streamed conversion. Item reads never materialize a
+/// whole raster.
 pub(crate) const MAX_RAW_EXTRACTION_CELLS: u64 = 25_000_000;
+
+/// The whole-raster limit in force on this thread: the production constant,
+/// or the lower bound a test installed through [`extraction_limit_probe`].
+pub(crate) fn raw_extraction_cells() -> u64 {
+    #[cfg(test)]
+    if let Some(cells) = extraction_limit_probe::overridden() {
+        return cells;
+    }
+    MAX_RAW_EXTRACTION_CELLS
+}
+
+#[cfg(test)]
+thread_local! {
+    static EXTRACTION_LIMIT: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+}
+
+/// Test-only seam for the whole-raster limit, thread-local like
+/// `admission::limits_probe`, so a lowered limit reaches only its own test.
+#[cfg(test)]
+pub(crate) mod extraction_limit_probe {
+    pub(crate) fn overridden() -> Option<u64> {
+        super::EXTRACTION_LIMIT.with(std::cell::Cell::get)
+    }
+
+    /// Hold the limit at `cells` until the guard is dropped.
+    pub(crate) fn set(cells: u64) -> Guard {
+        super::EXTRACTION_LIMIT.with(|slot| slot.set(Some(cells)));
+        Guard
+    }
+
+    pub(crate) struct Guard;
+
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            super::EXTRACTION_LIMIT.with(|slot| slot.set(None));
+        }
+    }
+}
 
 /// What reading an item's sources costs: each source across its full native
 /// grid. NoData is charged too, because a mostly-NoData source still costs
@@ -96,7 +137,40 @@ impl RetainedSourceCog {
     }
 }
 
-/// Move a prepared job to publishing.
+/// The share of a job's one progress bar that preparation fills; publication
+/// carries on from it, so the percentage only rises across the whole job.
+/// Publication's own steps (rendering the map, then [`apply_import`]) sit
+/// above it.
+const PREPARATION_SHARE: usize = 40;
+
+/// Advance a preparing job once `converted` of its `total` sources are
+/// converted, under the existing "Preparing raster" phase, within
+/// [`PREPARATION_SHARE`].
+fn record_staging_progress(library: &LidarLibrary, job_id: &str, converted: usize, total: usize) {
+    let percent = (converted.min(total) * PREPARATION_SHARE / total.max(1)) as i64;
+    let result = library.catalogue().and_then(|connection| {
+        connection
+            .execute(
+                "UPDATE lidar_import_jobs
+                 SET progress_phase = ?2, progress_percent = ?3, updated_at = ?4
+                 WHERE id = ?1 AND state = 'staging'
+                   AND COALESCE(progress_percent, -1) < ?3",
+                rusqlite::params![
+                    job_id,
+                    super::import_progress_phase_key(LidarImportProgressPhase::PreparingRaster),
+                    percent,
+                    catalogue::now_iso()
+                ],
+            )
+            .map_err(|e| e.to_string())
+    });
+    if let Err(error) = result {
+        tracing::warn!(job_id, error, "LiDAR import progress update failed");
+    }
+}
+
+/// Move a prepared job to publishing, at the end of preparation's share and
+/// under "Rendering map", publication's first step (the display derivative).
 ///
 /// Guarded on the staging state so a job that was cancelled while it prepared
 /// stays cancelled and its publication is refused.
@@ -106,10 +180,15 @@ fn mark_publishing(library: &LidarLibrary, job_id: &str) -> Result<(), String> {
         .execute(
             "UPDATE lidar_import_jobs
              SET state = 'applying', message = NULL,
-                 progress_phase = 'composing_layer', progress_percent = 0,
-                 updated_at = ?2
+                 progress_phase = ?2, progress_percent = ?3,
+                 updated_at = ?4
              WHERE id = ?1 AND state = 'staging'",
-            rusqlite::params![job_id, catalogue::now_iso()],
+            rusqlite::params![
+                job_id,
+                super::import_progress_phase_key(LidarImportProgressPhase::RenderingMap),
+                PREPARATION_SHARE as i64,
+                catalogue::now_iso()
+            ],
         )
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -176,6 +255,7 @@ pub fn stage_import(
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| source_path.display().to_string());
+        let earlier = ordered_processing_cost(&staged.iter().collect::<Vec<_>>())?;
         let staged_source = stage_source(
             engine,
             paths,
@@ -183,12 +263,14 @@ pub fn stage_import(
             &layer.quantity,
             &layer.units,
             source_path,
+            &earlier,
             job_id,
             &job_dir,
             cancel,
         )
         .map_err(|error| format!("{filename}: {error}"))?;
         staged.push(staged_source);
+        record_staging_progress(library, job_id, staged.len(), source_paths.len());
     }
 
     // One common interpretation for the whole batch: the first compatible
@@ -374,9 +456,10 @@ pub(crate) fn validate_working_grid(grid: &RasterGrid, operation: &str) -> Resul
     let cells = u64::from(grid.width)
         .checked_mul(u64::from(grid.height))
         .ok_or_else(|| format!("{operation} dimensions overflow"))?;
-    if cells > MAX_RAW_EXTRACTION_CELLS {
+    let limit = raw_extraction_cells();
+    if cells > limit {
         return Err(format!(
-            "{operation} requires {cells} cells; a whole-raster read is limited to {MAX_RAW_EXTRACTION_CELLS}"
+            "{operation} requires {cells} cells; a whole-raster read is limited to {limit}"
         ));
     }
     Ok(())
@@ -507,6 +590,7 @@ fn stage_source(
     quantity: &str,
     units: &str,
     source_path: &Path,
+    earlier: &[admission::ProcessingCost],
     job_id: &str,
     job_dir: &Path,
     cancel: &AtomicBool,
@@ -584,11 +668,21 @@ fn stage_source(
         height: probe.height,
         geotransform: probe.geotransform,
     };
-    // No working-area check here: the engine converts the source into the
-    // retained COG under its own capacity rule and its facts are read from
-    // that COG in bounded windows. The item's bound is the admission
-    // processing budget.
+    // No working-area check here: the engine streams a GeoTIFF into the
+    // retained COG in row windows (anything it must load whole passes its
+    // capacity rule) and the facts are read from that COG in bounded
+    // windows. The bound is the admission processing budget, charged from
+    // the probe with every source converted before this one, so an import
+    // that will be refused never converts. Every selected source counts
+    // here: a source later found incompatible refuses the batch anyway.
     validate_lattice(&source_grid, "source raster")?;
+    admission::check_processing_budget(
+        earlier.iter().copied().chain([admission::ProcessingCost {
+            width: probe.width,
+            height: probe.height,
+        }]),
+        "import",
+    )?;
     let (source_cog, valid_cells) = stage_source_samples(
         engine,
         cancel,
@@ -1038,7 +1132,12 @@ pub fn apply_import(
 ) -> Result<ApplyOutcome, String> {
     let paths = &library.inner.paths;
     let layer_id = staging.layer_id.clone();
-    library.record_import_progress(&staging.job_id, LidarImportProgressPhase::ComposingLayer, 2);
+    // Publication's steps sit above preparation's share of the bar.
+    library.record_import_progress(
+        &staging.job_id,
+        LidarImportProgressPhase::ComposingLayer,
+        41,
+    );
     {
         let connection = library.catalogue()?;
         if catalogue::head_generation(&connection, &layer_id)?.is_some() {
@@ -1063,7 +1162,7 @@ pub fn apply_import(
     library.record_import_progress(
         &staging.job_id,
         LidarImportProgressPhase::PreparingRaster,
-        42,
+        65,
     );
 
     // Move the job's own source COGs into the store first: the generation
@@ -1073,7 +1172,7 @@ pub fn apply_import(
     library.record_import_progress(
         &staging.job_id,
         LidarImportProgressPhase::PreparingRaster,
-        50,
+        70,
     );
     let crs_wkt = compatible[0].crs_wkt.clone();
     let lattice = {
@@ -1109,7 +1208,7 @@ pub fn apply_import(
     library.record_import_progress(
         &staging.job_id,
         LidarImportProgressPhase::ComposingLayer,
-        60,
+        76,
     );
     let measurement = collection::measure(library, &plan, cancel)?;
     // Member facts prove an empty composition exactly.
@@ -2264,6 +2363,117 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// canopi-dfc0: one bar covers the whole job, so the percentage never
+    /// falls. Preparation fills its share once per converted source, the job
+    /// moves to publishing at that share under "Rendering map" (the worker's
+    /// next step, the display derivative), the worker's own rendering step
+    /// does not pull it back, and publication carries on to "Finalizing".
+    #[test]
+    fn an_import_job_progress_only_rises_from_preparation_to_publication() {
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
+        let cancel = AtomicBool::new(false);
+        let root = crate::test_scratch::TestScratch::new("canopi-job-progress");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let west = write_placed_fixture(&engine, &root, "west", 0.0, 4.0, 4, 4, -9999.0, 5.0);
+        let east = write_placed_fixture(&engine, &root, "east", 4.0, 4.0, 4, 4, -9999.0, 7.0);
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "job progress",
+                common_types::library::RasterQuantity::GroundElevation,
+                None,
+                false,
+            )
+            .unwrap();
+        let job_id = library.record_import_job(&layer_id).expect("job recorded");
+        let progress = || {
+            library
+                .get_import_job(&job_id)
+                .unwrap()
+                .unwrap()
+                .progress
+                .expect("the job shows progress")
+        };
+        let mut seen = Vec::new();
+        // What preparation shows as each of the two sources converts.
+        record_staging_progress(&library, &job_id, 1, 2);
+        seen.push(progress());
+        record_staging_progress(&library, &job_id, 2, 2);
+        seen.push(progress());
+        // The real preparation, which ends by moving the job to publishing.
+        stage_import(&library, &job_id, &layer_id, &[west, east], &cancel)
+            .expect("the pair prepares");
+        let publishing = progress();
+        assert_eq!(publishing.phase, LidarImportProgressPhase::RenderingMap);
+        seen.push(publishing);
+        // The worker's rendering step, then publication.
+        library.record_import_progress(&job_id, LidarImportProgressPhase::RenderingMap, 1);
+        seen.push(progress());
+        let staging = read_staged_import(&library, &job_id).expect("staged payload");
+        apply_import(&library, &staging, &cancel).expect("the pair publishes");
+        let finished = progress();
+        assert_eq!(finished.phase, LidarImportProgressPhase::Finalizing);
+        seen.push(finished);
+        let percents: Vec<u8> = seen.iter().map(|step| step.percent).collect();
+        assert!(
+            percents.windows(2).all(|pair| pair[0] <= pair[1]),
+            "the percentage never falls: {seen:?}"
+        );
+        assert!(
+            percents[1] < 50,
+            "preparation leaves most of the bar to publication: {seen:?}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// canopi-dfc0: preparation advances the job's progress once per
+    /// converted source, under the existing "Preparing raster" phase, within
+    /// its share of the job's bar.
+    #[test]
+    fn preparation_advances_progress_once_per_converted_source() {
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
+        let cancel = AtomicBool::new(false);
+        let root = crate::test_scratch::TestScratch::new("canopi-staging-progress");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let west = write_placed_fixture(&engine, &root, "west", 0.0, 4.0, 4, 4, -9999.0, 5.0);
+        let east = write_placed_fixture(&engine, &root, "east", 4.0, 4.0, 4, 4, -9999.0, 7.0);
+        let broken = root.join("broken.tif");
+        std::fs::write(&broken, b"not a raster").unwrap();
+
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "staging progress",
+                common_types::library::RasterQuantity::GroundElevation,
+                None,
+                false,
+            )
+            .unwrap();
+        let job_id = library.record_import_job(&layer_id).expect("job recorded");
+        let progress = || library.get_import_job(&job_id).unwrap().unwrap().progress;
+        assert_eq!(progress(), None, "nothing is converted yet");
+        // The third source fails after two were converted: the job still
+        // shows how far preparation got.
+        stage_import(
+            &library,
+            &job_id,
+            &layer_id,
+            &[west.clone(), east.clone(), broken],
+            &cancel,
+        )
+        .expect_err("the broken source refuses the batch");
+        assert_eq!(
+            progress(),
+            Some(common_types::lidar::LidarImportProgress {
+                phase: LidarImportProgressPhase::PreparingRaster,
+                percent: 26,
+            })
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     /// P1-4: an all-NoData source is refused by name before review.
     #[test]
     fn an_all_nodata_source_is_refused_by_name() {
@@ -2867,6 +3077,121 @@ mod tests {
             );
         }
         drop(connection);
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// canopi-dfc0: a GeoTIFF streams at any size, so the processing budget
+    /// is the bound on what preparation converts, and it is checked from the
+    /// probe before a source converts: a source at exactly the budget
+    /// prepares, one cell over is refused with no retained COG written, and
+    /// a batch is charged as it goes, refusing the source that crosses it by
+    /// name before that source converts.
+    #[test]
+    fn the_processing_budget_refuses_a_source_before_it_converts() {
+        let root = crate::test_scratch::TestScratch::new("canopi-budget-before-conversion");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
+        let cancel = AtomicBool::new(false);
+        let library = LidarLibrary::open(&root).expect("library opens");
+        // Two 4x4 sources: 16 processing cells each.
+        let west = write_placed_fixture(&engine, &root, "west", 0.0, 4.0, 4, 4, -9999.0, 5.0);
+        let east = write_placed_fixture(&engine, &root, "east", 4.0, 4.0, 4, 4, -9999.0, 7.0);
+        let budget = |processing_cells| {
+            admission::limits_probe::set(admission::AdmissionLimits {
+                files: 24,
+                source_bytes: 2 * 1024 * 1024 * 1024,
+                import_bytes: 2 * 1024 * 1024 * 1024,
+                processing_cells,
+            })
+        };
+        let new_item = |name: &str| {
+            library
+                .create_layer(
+                    name,
+                    common_types::library::RasterQuantity::GroundElevation,
+                    None,
+                    false,
+                )
+                .unwrap()
+        };
+        let source_cogs = |job_id: &str| {
+            std::fs::read_dir(library.inner.paths.job_dir(job_id))
+                .map(|entries| {
+                    entries
+                        .filter_map(Result::ok)
+                        .filter(|entry| {
+                            entry
+                                .file_name()
+                                .to_string_lossy()
+                                .starts_with("source-cog-")
+                        })
+                        .count()
+                })
+                .unwrap_or(0)
+        };
+
+        // Exactly the budget: the source prepares.
+        {
+            let _budget = budget(16);
+            let layer_id = new_item("at the budget");
+            let job_id = library.record_import_job(&layer_id).expect("job recorded");
+            stage_import(
+                &library,
+                &job_id,
+                &layer_id,
+                std::slice::from_ref(&west),
+                &cancel,
+            )
+            .expect("a source at exactly the budget prepares");
+        }
+
+        // One cell over: refused from the probe, before any conversion.
+        {
+            let _budget = budget(15);
+            let layer_id = new_item("one cell over");
+            let job_id = library.record_import_job(&layer_id).expect("job recorded");
+            let error = stage_import(
+                &library,
+                &job_id,
+                &layer_id,
+                std::slice::from_ref(&west),
+                &cancel,
+            )
+            .expect_err("a source one cell over the budget is refused");
+            assert!(
+                error.contains("west.tif") && error.contains("16 processing cells"),
+                "the refusal names the file and its cost: {error}"
+            );
+            assert_eq!(source_cogs(&job_id), 0, "nothing was converted");
+            assert_eq!(
+                library.get_import_job(&job_id).unwrap().unwrap().progress,
+                None,
+                "no source is reported as converted"
+            );
+        }
+
+        // A batch is charged source by source: the second crosses the budget
+        // and is refused by name before it converts.
+        {
+            let _budget = budget(31);
+            let layer_id = new_item("batch over");
+            let job_id = library.record_import_job(&layer_id).expect("job recorded");
+            let error = stage_import(
+                &library,
+                &job_id,
+                &layer_id,
+                &[west.clone(), east.clone()],
+                &cancel,
+            )
+            .expect_err("a batch over the budget is refused");
+            assert!(
+                error.contains("east.tif") && error.contains("32 processing cells"),
+                "the refusal names the source that crosses the budget: {error}"
+            );
+            assert_eq!(source_cogs(&job_id), 1, "only the first source converted");
+        }
         drop(library);
         let _ = std::fs::remove_dir_all(&root);
     }

@@ -8,20 +8,30 @@
 //! and tile data after them. Overviews halve while a side exceeds one tile,
 //! sized by floor division, and average only valid samples, the layout GDAL's
 //! COG driver produced for the same profile.
+//!
+//! The writer reads its band through [`BandSource`] in row windows of whole
+//! tiles, at most the caller's cell budget each, so a band in memory and a
+//! band streamed from its file take the same path and give the same bytes.
+//! Each overview level is averaged from the level before it, read back from
+//! the tiles already written.
 
 use super::super::engine::check_cancel;
 use super::super::grid::RasterGrid;
+use super::super::prepared_raster::RasterWindow;
+use super::tiff;
 use std::fs::File;
 use std::io::{BufWriter, Seek as _, SeekFrom, Write as _};
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use wbgeotiff::geo_keys::GeoKeyDirectory;
-use wbgeotiff::tags::{Compression, tag};
+use wbgeotiff::ifd::ByteOrder;
+use wbgeotiff::tags::{Compression, SampleFormat, tag};
 
 /// Tile side of every profile.
 pub(super) const TILE: u32 = 256;
-/// Classic TIFF addresses 32-bit offsets; the capacity limit keeps every
-/// profile far below it, so the writer refuses rather than switch layouts.
+/// Classic TIFF addresses 32-bit offsets; the import budget (400 M cells,
+/// 1.6 GB of Float32, charged before a source converts) keeps every profile
+/// below it, so the writer refuses rather than switch layouts.
 const MAX_CLASSIC_BYTES: u64 = u32::MAX as u64;
 
 /// What kind of file to write.
@@ -38,75 +48,95 @@ pub(super) struct CogGeoref<'a> {
     pub geo_keys: Option<&'a GeoKeyDirectory>,
 }
 
-/// Write `samples` (row-major, `grid.width * grid.height`) to `path`,
-/// removing a partial file on any failure.
+/// A band the writer reads window by window.
+pub(super) trait BandSource {
+    /// Fill `out` (row-major, `window.width * window.height`) with `window`,
+    /// which lies inside the band.
+    fn read(
+        &mut self,
+        window: RasterWindow,
+        out: &mut [f32],
+        cancel: &AtomicBool,
+    ) -> Result<(), String>;
+}
+
+/// A band already in memory, row-major.
+pub(super) struct SliceSource<'a> {
+    pub samples: &'a [f32],
+    pub width: u32,
+}
+
+impl BandSource for SliceSource<'_> {
+    fn read(
+        &mut self,
+        window: RasterWindow,
+        out: &mut [f32],
+        _cancel: &AtomicBool,
+    ) -> Result<(), String> {
+        let (columns, width) = (window.width as usize, self.width as usize);
+        for (row, target) in out.chunks_mut(columns).enumerate() {
+            let start = (window.y as usize + row) * width + window.x as usize;
+            target.copy_from_slice(&self.samples[start..start + columns]);
+        }
+        Ok(())
+    }
+}
+
+impl BandSource for tiff::BandReader {
+    fn read(
+        &mut self,
+        window: RasterWindow,
+        out: &mut [f32],
+        cancel: &AtomicBool,
+    ) -> Result<(), String> {
+        tiff::BandReader::read(self, window, out, cancel)
+    }
+}
+
+/// Write the band `source` yields (`georef.grid` sized) to `path`, reading
+/// at most `budget` cells of row windows at a time, and removing a partial
+/// file on any failure.
 pub(super) fn write(
     path: &Path,
     georef: CogGeoref<'_>,
     nodata: Option<f32>,
-    samples: &[f32],
+    source: &mut dyn BandSource,
     profile: CogProfile,
+    budget: u64,
     cancel: &AtomicBool,
 ) -> Result<(), String> {
-    let written = write_inner(path, georef, nodata, samples, profile, cancel);
+    let written = write_inner(path, georef, nodata, source, profile, budget, cancel);
     if written.is_err() {
         let _ = std::fs::remove_file(path);
     }
     written
 }
 
-struct Level {
-    width: u32,
-    height: u32,
-    samples: Vec<f32>,
-}
-
 fn write_inner(
     path: &Path,
     georef: CogGeoref<'_>,
     nodata: Option<f32>,
-    samples: &[f32],
+    source: &mut dyn BandSource,
     profile: CogProfile,
+    budget: u64,
     cancel: &AtomicBool,
 ) -> Result<(), String> {
     let grid = georef.grid;
-    let cells = usize::try_from(u64::from(grid.width) * u64::from(grid.height))
-        .map_err(|_| "raster is too large for this platform".to_string())?;
-    if samples.len() != cells {
-        return Err(format!(
-            "{} samples do not fill a {}x{} grid",
-            samples.len(),
-            grid.width,
-            grid.height
-        ));
-    }
     if grid.width == 0 || grid.height == 0 {
         return Err("cannot write an empty raster".to_string());
     }
     check_cancel(cancel)?;
 
     // Reduced-resolution levels, each halved from the previous one.
-    let mut overviews: Vec<Level> = Vec::new();
+    let mut level_dims = vec![(grid.width, grid.height)];
     if profile.overviews {
         let (mut width, mut height) = (grid.width, grid.height);
         while width.max(height) > TILE {
-            check_cancel(cancel)?;
-            let level = halve(
-                overviews
-                    .last()
-                    .map_or(samples, |level| level.samples.as_slice()),
-                width,
-                height,
-                nodata,
-            );
-            width = level.width;
-            height = level.height;
-            overviews.push(level);
+            width = (width / 2).max(1);
+            height = (height / 2).max(1);
+            level_dims.push((width, height));
         }
     }
-    let level_dims: Vec<(u32, u32)> = std::iter::once((grid.width, grid.height))
-        .chain(overviews.iter().map(|level| (level.width, level.height)))
-        .collect();
 
     // Directory sizes depend on tile counts only, so the directories can be
     // reserved at the front and filled in once every tile's placement is known.
@@ -135,62 +165,71 @@ fn write_inner(
 
     let file =
         File::create(path).map_err(|e| format!("Failed to create {}: {e}", path.display()))?;
-    let mut output = BufWriter::new(file);
+    let mut output = TileOutput {
+        file: BufWriter::new(file),
+        position: data_start,
+        compression: profile.compression,
+        pad: nodata.unwrap_or(0.0),
+        tile: vec![0.0; (TILE * TILE) as usize],
+    };
     output
+        .file
         .write_all(&vec![0u8; data_start as usize])
         .map_err(|e| format!("Failed to reserve the raster directory: {e}"))?;
 
-    // Tile data: full resolution first, then each overview.
+    // Tile data: full resolution first, then each overview, whose rows are
+    // halved from the level before it as read back from this file.
     let mut placements: Vec<(Vec<u32>, Vec<u32>)> = Vec::with_capacity(level_dims.len());
-    let mut position = data_start;
-    let pad = nodata.unwrap_or(0.0);
-    for (index, (width, height)) in level_dims.iter().enumerate() {
-        let level_samples = if index == 0 {
-            samples
-        } else {
-            &overviews[index - 1].samples
+    placements.push(output.level(source, level_dims[0], budget, cancel)?);
+    for index in 1..level_dims.len() {
+        output
+            .file
+            .flush()
+            .map_err(|e| format!("Failed to flush the raster: {e}"))?;
+        let (offsets, counts) = &placements[index - 1];
+        let (source_width, source_height) = level_dims[index - 1];
+        let mut written = tiff::BandReader::open(
+            path,
+            tiff::BandFormat {
+                width: source_width,
+                height: source_height,
+                format: SampleFormat::IeeeFloat,
+                bits: 32,
+                compression_tag: profile.compression.tag_value(),
+                predictor: 1,
+                chunk_bands: 1,
+                byte_order: ByteOrder::LittleEndian,
+                layout: tiff::Layout::Tiles {
+                    width: TILE,
+                    height: TILE,
+                    offsets: offsets.iter().map(|offset| u64::from(*offset)).collect(),
+                    counts: counts.iter().map(|count| u64::from(*count)).collect(),
+                },
+            },
+            output.pad,
+        )?;
+        // Half the budget for the level's own windows, the rest for the rows
+        // they are averaged from.
+        let window_budget = budget / 2;
+        let mut halved = Halved {
+            source: &mut written,
+            width: source_width,
+            height: source_height,
+            target_width: level_dims[index].0,
+            target_height: level_dims[index].1,
+            nodata,
+            budget: budget.saturating_sub(window_cells(level_dims[index], window_budget)),
         };
-        let tiles_x = width.div_ceil(TILE);
-        let tiles_y = height.div_ceil(TILE);
-        let mut offsets = Vec::with_capacity((tiles_x * tiles_y) as usize);
-        let mut counts = Vec::with_capacity((tiles_x * tiles_y) as usize);
-        let mut tile = vec![pad; (TILE * TILE) as usize];
-        for tile_y in 0..tiles_y {
-            check_cancel(cancel)?;
-            for tile_x in 0..tiles_x {
-                tile.fill(pad);
-                let x0 = (tile_x * TILE) as usize;
-                let y0 = (tile_y * TILE) as usize;
-                let columns = (TILE as usize).min(*width as usize - x0);
-                let rows = (TILE as usize).min(*height as usize - y0);
-                for row in 0..rows {
-                    let source = (y0 + row) * *width as usize + x0;
-                    let target = row * TILE as usize;
-                    tile[target..target + columns]
-                        .copy_from_slice(&level_samples[source..source + columns]);
-                }
-                let bytes: Vec<u8> = tile.iter().flat_map(|value| value.to_le_bytes()).collect();
-                let encoded = wbgeotiff::compression::compress(profile.compression, &bytes)
-                    .map_err(|e| format!("Failed to compress a raster tile: {e}"))?;
-                if position + encoded.len() as u64 > MAX_CLASSIC_BYTES {
-                    return Err("the raster exceeds the 4 GiB classic TIFF limit".to_string());
-                }
-                output
-                    .write_all(&encoded)
-                    .map_err(|e| format!("Failed to write a raster tile: {e}"))?;
-                offsets.push(position as u32);
-                counts.push(encoded.len() as u32);
-                position += encoded.len() as u64;
-            }
-        }
-        placements.push((offsets, counts));
+        placements.push(output.level(&mut halved, level_dims[index], window_budget, cancel)?);
     }
     output
+        .file
         .flush()
         .map_err(|e| format!("Failed to flush the raster: {e}"))?;
 
     // Now the directories, with every tile placed.
     let mut file = output
+        .file
         .into_inner()
         .map_err(|e| format!("Failed to finish the raster: {e}"))?;
     for (index, (width, height)) in level_dims.iter().enumerate() {
@@ -227,6 +266,100 @@ fn write_inner(
         .map_err(|e| format!("Failed to flush the raster: {e}"))
 }
 
+/// Tiles per row window: as many as `budget` cells hold, at least one.
+fn window_tiles(width: u32, budget: u64) -> u32 {
+    let fit = (budget / u64::from(TILE * TILE)).clamp(1, u64::from(u32::MAX)) as u32;
+    fit.min(width.div_ceil(TILE))
+}
+
+/// Cells of the largest row window a level of `dims` reads under `budget`.
+fn window_cells(dims: (u32, u32), budget: u64) -> u64 {
+    let columns = (window_tiles(dims.0, budget) * TILE).min(dims.0);
+    u64::from(columns) * u64::from(TILE.min(dims.1))
+}
+
+/// The tile stream after the reserved directories.
+struct TileOutput {
+    file: BufWriter<File>,
+    position: u64,
+    compression: Compression,
+    pad: f32,
+    tile: Vec<f32>,
+}
+
+impl TileOutput {
+    /// Write one level's tiles in row-major order from row windows of
+    /// whole tiles, returning their offsets and byte counts.
+    fn level(
+        &mut self,
+        source: &mut dyn BandSource,
+        (width, height): (u32, u32),
+        budget: u64,
+        cancel: &AtomicBool,
+    ) -> Result<(Vec<u32>, Vec<u32>), String> {
+        let tiles_x = width.div_ceil(TILE);
+        let tiles_y = height.div_ceil(TILE);
+        let run = window_tiles(width, budget);
+        let capacity = window_cells((width, height), budget) as usize;
+        let mut window = super::Cells::zeroed(capacity);
+        let mut offsets = Vec::with_capacity((tiles_x * tiles_y) as usize);
+        let mut counts = Vec::with_capacity((tiles_x * tiles_y) as usize);
+        for tile_y in 0..tiles_y {
+            check_cancel(cancel)?;
+            let y = tile_y * TILE;
+            let rows = TILE.min(height - y);
+            for first in (0..tiles_x).step_by(run as usize) {
+                let x = first * TILE;
+                let columns = (run * TILE).min(width - x);
+                let cells = (columns * rows) as usize;
+                source.read(
+                    RasterWindow {
+                        x,
+                        y,
+                        width: columns,
+                        height: rows,
+                    },
+                    &mut window[..cells],
+                    cancel,
+                )?;
+                for tile_x in first..(first + run).min(tiles_x) {
+                    let x0 = (tile_x - first) * TILE;
+                    let tile_columns = TILE.min(columns - x0) as usize;
+                    self.tile.fill(self.pad);
+                    for row in 0..rows as usize {
+                        let start = row * columns as usize + x0 as usize;
+                        self.tile[row * TILE as usize..row * TILE as usize + tile_columns]
+                            .copy_from_slice(&window[start..start + tile_columns]);
+                    }
+                    let (offset, count) = self.write_tile()?;
+                    offsets.push(offset);
+                    counts.push(count);
+                }
+            }
+        }
+        Ok((offsets, counts))
+    }
+
+    fn write_tile(&mut self) -> Result<(u32, u32), String> {
+        let bytes: Vec<u8> = self
+            .tile
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        let encoded = wbgeotiff::compression::compress(self.compression, &bytes)
+            .map_err(|e| format!("Failed to compress a raster tile: {e}"))?;
+        if self.position + encoded.len() as u64 > MAX_CLASSIC_BYTES {
+            return Err("the raster exceeds the 4 GiB classic TIFF limit".to_string());
+        }
+        self.file
+            .write_all(&encoded)
+            .map_err(|e| format!("Failed to write a raster tile: {e}"))?;
+        let placed = (self.position as u32, encoded.len() as u32);
+        self.position += encoded.len() as u64;
+        Ok(placed)
+    }
+}
+
 fn tile_count(width: u32, height: u32) -> usize {
     (width.div_ceil(TILE) * height.div_ceil(TILE)) as usize
 }
@@ -239,41 +372,106 @@ fn header(first_directory: u64) -> [u8; 8] {
     bytes
 }
 
-/// Halve a level: each cell averages the valid samples of its source block
-/// (floor-sized levels give some blocks a third row or column), and a block
-/// with no valid sample stays NoData.
-fn halve(source: &[f32], width: u32, height: u32, nodata: Option<f32>) -> Level {
-    let (sw, sh) = (width as usize, height as usize);
-    let dw = (sw / 2).max(1);
-    let dh = (sh / 2).max(1);
-    let invalid = nodata.unwrap_or(f32::NAN);
-    let mut samples = vec![invalid; dw * dh];
-    for dy in 0..dh {
-        let y0 = dy * sh / dh;
-        let y1 = ((dy + 1) * sh / dh).min(sh).max(y0 + 1);
-        for dx in 0..dw {
-            let x0 = dx * sw / dw;
-            let x1 = ((dx + 1) * sw / dw).min(sw).max(x0 + 1);
-            let mut sum = 0f64;
-            let mut count = 0u32;
-            for y in y0..y1 {
-                for x in x0..x1 {
-                    let value = source[y * sw + x];
-                    if value.is_finite() && nodata.is_none_or(|marker| value != marker) {
-                        sum += f64::from(value);
-                        count += 1;
+/// The next level of a band: each cell averages the valid samples of its
+/// source block (floor-sized levels give some blocks a third row or column),
+/// and a block with no valid sample stays NoData. Source rows are read in
+/// windows of at most `budget` cells.
+struct Halved<'a> {
+    source: &'a mut dyn BandSource,
+    width: u32,
+    height: u32,
+    target_width: u32,
+    target_height: u32,
+    nodata: Option<f32>,
+    budget: u64,
+}
+
+impl Halved<'_> {
+    /// Source rows (or columns) `start..end` averaged into target cell `at`.
+    fn block(at: u32, source: u32, target: u32) -> (u32, u32) {
+        let (at, source, target) = (u64::from(at), u64::from(source), u64::from(target));
+        let start = at * source / target;
+        let end = ((at + 1) * source / target).min(source).max(start + 1);
+        (start as u32, end as u32)
+    }
+}
+
+impl BandSource for Halved<'_> {
+    fn read(
+        &mut self,
+        window: RasterWindow,
+        out: &mut [f32],
+        cancel: &AtomicBool,
+    ) -> Result<(), String> {
+        let invalid = self.nodata.unwrap_or(f32::NAN);
+        let (x0, _) = Self::block(window.x, self.width, self.target_width);
+        let (_, x1) = Self::block(window.x + window.width - 1, self.width, self.target_width);
+        let columns = (x1 - x0) as usize;
+        // Runs of target rows whose source rows fit the budget, at least one
+        // target row each, as (first, last, source y0, source y1).
+        let end = window.y + window.height;
+        let mut runs = Vec::new();
+        let mut first = window.y;
+        while first < end {
+            let (y0, mut y1) = Self::block(first, self.height, self.target_height);
+            let mut last = first + 1;
+            while last < end {
+                let (_, next) = Self::block(last, self.height, self.target_height);
+                if u64::from(next - y0) * columns as u64 > self.budget {
+                    break;
+                }
+                y1 = next;
+                last += 1;
+            }
+            runs.push((first, last, y0, y1));
+            first = last;
+        }
+        let largest = runs
+            .iter()
+            .map(|(_, _, y0, y1)| (y1 - y0) as usize * columns)
+            .max()
+            .unwrap_or(0);
+        let mut rows = super::Cells::zeroed(largest);
+        for (first, last, y0, y1) in runs {
+            check_cancel(cancel)?;
+            let cells = (y1 - y0) as usize * columns;
+            self.source.read(
+                RasterWindow {
+                    x: x0,
+                    y: y0,
+                    width: x1 - x0,
+                    height: y1 - y0,
+                },
+                &mut rows[..cells],
+                cancel,
+            )?;
+            for target_y in first..last {
+                let (sy0, sy1) = Self::block(target_y, self.height, self.target_height);
+                let line = (target_y - window.y) as usize * window.width as usize;
+                for column in 0..window.width {
+                    let (sx0, sx1) = Self::block(window.x + column, self.width, self.target_width);
+                    let mut sum = 0f64;
+                    let mut count = 0u32;
+                    for y in sy0..sy1 {
+                        let row = (y - y0) as usize * columns;
+                        for x in sx0..sx1 {
+                            let value = rows[row + (x - x0) as usize];
+                            if value.is_finite() && self.nodata.is_none_or(|marker| value != marker)
+                            {
+                                sum += f64::from(value);
+                                count += 1;
+                            }
+                        }
                     }
+                    out[line + column as usize] = if count > 0 {
+                        (sum / f64::from(count)) as f32
+                    } else {
+                        invalid
+                    };
                 }
             }
-            if count > 0 {
-                samples[dy * dw + dx] = (sum / f64::from(count)) as f32;
-            }
         }
-    }
-    Level {
-        width: dw as u32,
-        height: dh as u32,
-        samples,
+        Ok(())
     }
 }
 
@@ -412,17 +610,45 @@ fn directory(
 mod tests {
     use super::*;
 
+    /// The whole next level of a `width`×`height` band.
+    fn halve(source: &[f32], width: u32, height: u32, nodata: Option<f32>) -> Vec<f32> {
+        let (target_width, target_height) = ((width / 2).max(1), (height / 2).max(1));
+        let mut slice = SliceSource {
+            samples: source,
+            width,
+        };
+        let mut halved = Halved {
+            source: &mut slice,
+            width,
+            height,
+            target_width,
+            target_height,
+            nodata,
+            budget: u64::MAX,
+        };
+        let mut out = vec![0.0; (target_width * target_height) as usize];
+        halved
+            .read(
+                RasterWindow {
+                    x: 0,
+                    y: 0,
+                    width: target_width,
+                    height: target_height,
+                },
+                &mut out,
+                &AtomicBool::new(false),
+            )
+            .unwrap();
+        out
+    }
+
     #[test]
     fn halving_averages_valid_samples_only_and_keeps_holes() {
         let source = [1.0, 3.0, -9999.0, -9999.0, 5.0, 7.0, -9999.0, f32::NAN, 9.0];
-        let level = halve(&source, 3, 3, Some(-9999.0));
-        assert_eq!((level.width, level.height), (1, 1));
         // Every valid sample of the 3×3 block, the sentinel and NaN excluded.
-        assert_eq!(level.samples, vec![5.0]);
-        let hole = halve(&[-9999.0; 4], 2, 2, Some(-9999.0));
-        assert_eq!(hole.samples, vec![-9999.0]);
-        let untagged = halve(&[f32::NAN; 4], 2, 2, None);
-        assert!(untagged.samples[0].is_nan());
+        assert_eq!(halve(&source, 3, 3, Some(-9999.0)), vec![5.0]);
+        assert_eq!(halve(&[-9999.0; 4], 2, 2, Some(-9999.0)), vec![-9999.0]);
+        assert!(halve(&[f32::NAN; 4], 2, 2, None)[0].is_nan());
     }
 
     #[test]
