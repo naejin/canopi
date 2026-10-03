@@ -2,7 +2,8 @@
 //
 // Owns the canvas's key handling behind CanvasKeyboardPort (spec §1.2a, §1.6, ADR 0020): the key router hands it every
 // key first (keyState: the nudge commit, the physical Ctrl, the Menu key's time, the Space hold), runs its key commands
-// (the arrow nudge and pan, Enter, Backspace, F2, `[` `]`, the Menu key) and lists and runs its Esc layers, which
+// (the arrow nudge and pan, mod for the large step; Shift+←/→ turning the view and Shift+↑ or Shift+N resetting north;
+// Enter, Backspace, F2, `[` `]`, the Menu key) and lists and runs its Esc layers, which
 // app/keyboard/escape-chain.ts places in the Esc chain. The arrow nudge series is the ToolHost's; the port only reads its
 // outcome. It never touches a DOM event: the router acts on its answers.
 
@@ -30,7 +31,7 @@ export interface CanvasKeyboardPortDeps {
   /** Today's getSelection().length > 0, read per key: on a 'pass' nudge the arrow pans with nothing selected and is let through
    *  otherwise; the Esc 'selection' layer is live while it holds. */
   hasSelection(): boolean
-  /** Arrow pans (64 or 256 px), + / −, N, Shift+N and Shift+←/→/↑. */
+  /** Arrow pans (64 or 256 px), + / −, Shift+N and Shift+←/→/↑ (N runs View › Reset north through the edition's sink). */
   readonly navigation: Pick<ViewNavigation, 'panByPx' | 'zoomIn' | 'zoomOut' | 'resetNorth' | 'rotateBy'>
   readonly frames: ViewFrameSource
   /** The interaction session's side of the keys. */

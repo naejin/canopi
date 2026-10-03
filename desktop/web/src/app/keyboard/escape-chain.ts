@@ -3,8 +3,9 @@
 // Owns Esc (spec §3.7, ADR 0020): every surface an Esc can close or cancel is a layer with a priority, and one Esc runs
 // the highest active layer that takes it. The key router runs the chain (§1.6: in bubble after element handlers, step 8;
 // in capture while a drag or nudge series is live, step 4) and prevents and stops a key a layer took. Popovers register at
-// 100 while open, the raster inspection at 25 while inspecting; the canvas port's layers register here, since the runtime
-// never imports app code, from the key router's install.
+// 100 while open, the compass at 70 while its drag turns the view (it runs outside the input pipeline, so the canvas
+// gesture layer cannot see it; fixture I9), the raster inspection at 25 while inspecting; the canvas port's layers
+// register here, since the runtime never imports app code, from the key router's install.
 
 import type { CanvasEscapeLayer, CanvasKeyboardPort } from '../../canvas/runtime/runtime'
 import type { KeyboardEventLike } from './key-chord'
