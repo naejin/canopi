@@ -1,9 +1,9 @@
 // canvas/runtime/keyboard-port.ts
 //
 // Owns the canvas's key handling behind CanvasKeyboardPort (spec §1.2a, §1.6, ADR 0020): the key router hands it every
-// key first (keyState: the nudge commit, the physical Ctrl, the Menu key's time, the Space hold), runs its key commands
-// (the arrow nudge and pan, mod for the large step; Shift+←/→ turning the view and Shift+↑ or Shift+N resetting north;
-// Enter, Backspace, F2, `[` `]`, the Menu key) and lists and runs its Esc layers, which
+// key first (keyState: the nudge commit, the physical Ctrl, the Menu key's time, the Space hold, the modifiers a live rotate
+// steps by), runs its key commands (the arrow nudge and pan, mod for the large step; Shift+←/→ turning the view and
+// Shift+↑ or Shift+N resetting north; Enter, Backspace, F2, `[` `]`, the Menu key) and lists and runs its Esc layers, which
 // app/keyboard/escape-chain.ts places in the Esc chain. The arrow nudge series is the ToolHost's; the port only reads its
 // outcome. It never touches a DOM event: the router acts on its answers.
 
@@ -198,6 +198,7 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionC
       if (k.type === 'keyup') {
         if (k.key === 'Control') physicalCtrl = false
         if (k.code === 'Space') session.keyState({ space: false, mods: k.mods })
+        else if (MODIFIER_KEYS.has(k.key)) session.keyState({ space: session.spaceHeld(), mods: k.mods })
         return verdict()
       }
       lastKeyDown = k
@@ -207,6 +208,8 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionC
         toolHost.endNudgeSeries(true)
       }
       if (holdsSpace(k)) return 'held'
+      // A modifier reaches the recogniser's key state, so a live rotate re-steps with the mouse still (spec §2.2, A8).
+      if (MODIFIER_KEYS.has(k.key)) session.keyState({ space: session.spaceHeld(), mods: k.mods })
       return verdict()
     },
     physicalCtrl: () => physicalCtrl,

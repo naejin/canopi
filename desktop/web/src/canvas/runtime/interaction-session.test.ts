@@ -474,6 +474,43 @@ describe('the interaction session', () => {
     expect(session.keyboard.command({ kind: 'rotate-view', direction: 1 })).toBe(true)
   })
 
+  it('mod pressed and released through the key router during a still Shift+middle rotate steps the view, then frees it (A8)', () => {
+    createSession()
+    const bearing = () => testView.view().camera.bearingDeg
+
+    events.pointerDown({ x: 100, y: 100 }, { pointerId: 4, button: 1, buttons: 4, shiftKey: true })
+    events.pointerMove({ x: 140, y: 100 }, { pointerId: 4, buttons: 4, shiftKey: true })
+    expect(bearing()).toBeCloseTo(32, 6)
+
+    // The mouse stays still: only the key reaches the canvas, through the router and the session's keyboard port.
+    events.keyDown({ key: 'Control', code: 'ControlLeft', ctrlKey: true, shiftKey: true })
+    expect(bearing()).toBeCloseTo(30, 6)
+    events.keyUp({ key: 'Control', code: 'ControlLeft', shiftKey: true })
+    expect(bearing()).toBeCloseTo(32, 6)
+
+    events.pointerUp({ x: 140, y: 100 }, { pointerId: 4, button: 1, buttons: 0 })
+    // Released without moving, the turn ends where the freed view shows it, not at the stepped bearing.
+    expect(bearing()).toBeCloseTo(32, 6)
+  })
+
+  it('on a Mac, Cmd pressed and released during a still Shift+middle rotate steps the view, then frees it (A8)', () => {
+    createSession({ platform: { os: 'mac', engine: 'webkit', gestureEvents: true } })
+    const bearing = () => testView.view().camera.bearingDeg
+
+    events.pointerDown({ x: 100, y: 100 }, { pointerId: 4, button: 1, buttons: 4, shiftKey: true })
+    events.pointerMove({ x: 140, y: 100 }, { pointerId: 4, buttons: 4, shiftKey: true })
+    expect(bearing()).toBeCloseTo(32, 6)
+
+    events.keyDown({ key: 'Meta', code: 'MetaLeft', metaKey: true, shiftKey: true })
+    expect(bearing()).toBeCloseTo(30, 6)
+    events.keyUp({ key: 'Meta', code: 'MetaLeft', shiftKey: true })
+    expect(bearing()).toBeCloseTo(32, 6)
+
+    events.pointerUp({ x: 140, y: 100 }, { pointerId: 4, button: 1, buttons: 0 })
+    // Released without moving, the turn ends where the freed view shows it, not at the stepped bearing.
+    expect(bearing()).toBeCloseTo(32, 6)
+  })
+
   it('a move with a button held and no press on the map publishes no pointer world point', () => {
     const { session } = createSession()
     session.setTool('line')
