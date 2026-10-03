@@ -741,7 +741,12 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   private _pointerSessionLive(): boolean {
-    return this._recogniser.sessions.size > 0 || this._toolHost.hasLiveGesture()
+    for (const session of this._recogniser.sessions.values()) {
+      // WebKit holds a twist session from every pinch's gesturestart: it is live only once it turns the view (past 10°),
+      // so a plain pinch-zoom keeps Esc, the arrows and the Menu key.
+      if (session.navigation !== 'trackpad-twist' || session.slopPassed) return true
+    }
+    return this._toolHost.hasLiveGesture()
   }
 
   /** Esc with a pointer session live: the recogniser cancels it; a pointer pan or turn it ends runs today's cancellation

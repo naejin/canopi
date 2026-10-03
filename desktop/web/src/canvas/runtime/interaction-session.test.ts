@@ -528,6 +528,30 @@ describe('the interaction session', () => {
     events.pointerUp({ x: 140, y: 100 }, { pointerId: 5, button: 1, buttons: 0 })
   })
 
+  it('a WebKit pinch is no live pointer session until its twist passes 10°: Esc and the arrows keep working', () => {
+    const { session } = createSession({ platform: { os: 'mac', engine: 'webkit', gestureEvents: true } })
+    const gesture = (type: string, rotation: number) => {
+      const event = Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
+        clientX: 200, clientY: 150, scale: 1.2, rotation, shiftKey: false, ctrlKey: false, altKey: false, metaKey: false,
+      })
+      container.dispatchEvent(event)
+    }
+
+    gesture('gesturestart', 0)
+    gesture('gesturechange', 4)
+    // A plain pinch: nothing is turning, so the keys act as without it.
+    expect(session.keyboard.escapeLayers()).not.toContain('gesture')
+    expect(session.keyboard.keyState({
+      type: 'keydown', key: 'Shift', code: 'ShiftLeft', mods: { shift: true, ctrl: false, alt: false, meta: false },
+      timeStamp: 0, text: false, onCanvas: true,
+    })).toBe('pass')
+    // Past 10° the twist turns the view and is live: Esc cancels it first.
+    gesture('gesturechange', 14)
+    expect(session.keyboard.escapeLayers()[0]).toBe('gesture')
+    gesture('gestureend', 14)
+    expect(session.keyboard.escapeLayers()).not.toContain('gesture')
+  })
+
   it('a move with a button held and no press on the map publishes no pointer world point', () => {
     const { session } = createSession()
     session.setTool('line')
