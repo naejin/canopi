@@ -248,8 +248,22 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     const like: DomEventLike = { ...domEventLike(event, type, rect, classifyTarget(event.target, host)), dropPayload: dropPayloadOf(event, type) }
     deliver(event, rect, normalise(like, deps.platform, deps.bindings(), { physicalCtrl: deps.keys.physicalCtrl() }, rect))
   }
+  /**
+   * True from a gesturestart the canvas does not take to its gestureend. A twist starts only over the map, as a wheel is
+   * handled (MapLibre's controls count as map), and never while the text entry is open (spec §3.8: no canvas turn is live
+   * then, and its Esc is the entry's); the source prevents that twist's events and delivers none of them.
+   */
+  let ignoringTwist = false
   /** WebKit's trackpad gesture events (WKWebView and Safari); the recogniser prevents each one and uses its rotation. */
   const gestureHandler = (type: 'gesturestart' | 'gesturechange' | 'gestureend') => (event: Event): void => {
+    if (type === 'gesturestart') {
+      ignoringTwist = classifyTarget(event.target, host, 'surface').kind !== 'surface' || host.querySelector(TEXT_ENTRY_SELECTOR) !== null
+    }
+    if (ignoringTwist) {
+      event.preventDefault()
+      if (type === 'gestureend') ignoringTwist = false
+      return
+    }
     const rect = host.getBoundingClientRect()
     deliver(event, rect, normalise(gestureEventLike(event, type, rect), deps.platform, deps.bindings(), {
       physicalCtrl: deps.keys.physicalCtrl(),

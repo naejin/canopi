@@ -787,6 +787,50 @@ describe('createDomInputSource', () => {
     remove.mockRestore()
   })
 
+  it('a twist that starts over the text entry or owned chrome, or while the text entry is open, is prevented and never delivered', () => {
+    const MAC_WEBKIT = { os: 'mac', engine: 'webkit', gestureEvents: true } as const
+    const config: RecogniserConfig = { ...RECOGNISER_CONFIG, platform: MAC_WEBKIT }
+    let state = initialRecogniserState()
+    const turns: number[] = []
+    const source = createDomInputSource(deps({ platform: MAC_WEBKIT }))
+    const dispose = attachRecording(source, (input) => {
+      const result = recognise(state, input, config)
+      state = result.state
+      source.apply(result.effects)
+      for (const gesture of result.gestures) if (gesture.kind === 'rotate') turns.push(gesture.totalDeltaDeg)
+    })
+    const dispatch = (target: Element, type: string, rotation: number): Event => {
+      const event = new Event(type, { bubbles: true, cancelable: true })
+      Object.defineProperties(event, {
+        clientX: { value: 210 }, clientY: { value: 170 }, scale: { value: 1 }, rotation: { value: rotation },
+        shiftKey: { value: false }, ctrlKey: { value: false }, altKey: { value: false }, metaKey: { value: false },
+      })
+      target.dispatchEvent(event)
+      return event
+    }
+    const twist = (target: Element): Event[] =>
+      [dispatch(target, 'gesturestart', 0), dispatch(target, 'gesturechange', 30), dispatch(target, 'gestureend', 30)]
+    const surface = document.createElement('canvas')
+    const chrome = document.createElement('div')
+    chrome.setAttribute('data-canvas-chrome', '')
+    const entry = document.createElement('textarea')
+    entry.setAttribute('data-canvas-text-entry', 'create')
+    host.append(surface, chrome, entry)
+
+    // Over the entry, over owned chrome, and over the map while the entry is open (spec §3.8: no canvas turn is live).
+    const ignored = [...twist(entry), ...twist(chrome), ...twist(surface)]
+    expect(received).toEqual([])
+    expect(turns).toEqual([])
+    expect(ignored.every((event) => event.defaultPrevented)).toBe(true)
+
+    // Once the entry closes, a twist over the map turns the view again.
+    entry.remove()
+    twist(surface)
+    expect(received.map((input) => input.kind)).toEqual(['platform-gesture', 'platform-gesture', 'platform-gesture'])
+    expect(turns).toEqual([0, -20, -20])
+    dispose()
+  })
+
   it('host CSS is unchanged while touch gestures are off', () => {
     const before = host.getAttribute('style')
     const source = createDomInputSource(deps())
