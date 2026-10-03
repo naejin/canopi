@@ -130,7 +130,7 @@
       "widen": "Élargir la vue",
       "magnify": "Zoomer dans la loupe",
       "namesCount": "Noms {{shown}} / {{total}}",
-      "panHint": "Aperçu. Glissez ou utilisez les flèches ; Maj accélère le déplacement.",
+      "panHint": "Aperçu. Glissez ou utilisez les flèches ; {{mod}} accélère le déplacement.",
       "recenter": "Centrer sur le canevas"
     },
     "toolbar": "Outils",
@@ -179,7 +179,8 @@
       "grid": "Grille",
       "snapToGrid": "Aimanter à la grille",
       "rulers": "Règles",
-      "zoom": "Zoom"
+      "zoom": "Zoom",
+      "rulersNorthUpOnly": "Les règles s’affichent quand le nord est en haut"
     },
     "overview": {
       "zoomInToEdit": "Zoomez pour modifier. Les plantes sont masquées à cette échelle.",
@@ -706,6 +707,11 @@
       "scaleBar": "Barre d’échelle : {{distance}}",
       "chooseScale": "Échelle {{scale}}. Choisir une échelle",
       "mapScale": "Échelle de la carte"
+    },
+    "compass": {
+      "bearing": "Vue tournée de {{degrees, number}}° par rapport au nord",
+      "northUp": "Le nord est en haut",
+      "hint": "Cliquez pour rétablir le nord. Faites glisser l’anneau pour tourner la vue ; maintenez Maj pour des pas de 15°."
     },
     "selectionChip": {
       "label": "Sélection",

@@ -130,3 +130,39 @@ it("draws the source outline from the lens handle's sourceQuad", async () => {
   expect(outline()).toBeNull()
   host.remove()
 })
+
+it('arrows move the lens along the screen; mod is the large step', async () => {
+  document.body.appendChild(root)
+  const view: CanvasInspectionHandle = {
+    state: signal({ point: { x: 0, y: 0 }, scale: 10, zoomPercent: 700, previewAvailable: true, frame: { width: 430, height: 390 }, plants: [] }),
+    sourceQuad: signal<InspectionSourceQuad | null>(null),
+    inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panByScreen: vi.fn(), zoomBy: vi.fn(), highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
+  }
+  setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+    queries: createTestCanvasQuerySurface(),
+    documents: createTestCanvasDocumentSurface({ attachInspectionTo: vi.fn(() => view) }),
+  }))
+  await act(async () => render(<InspectionLens canvasRef={{ current: document.createElement('div') }} />, root))
+  await act(async () => root.querySelector<HTMLButtonElement>('button[aria-expanded]')!.click())
+  const frame = root.querySelector<HTMLElement>('[data-inspection-frame]')!
+  // The preview owns its arrows, Shift+arrows included: the key router leaves them to it (spec §1.6, fixture H19).
+  expect(frame.getAttribute('data-owns-keys')).toBe('arrows')
+  expect(frame.getAttribute('aria-label')).toBe('Inspection preview. Drag or use arrow keys to explore; Ctrl moves farther.')
+  const press = (key: string, init: KeyboardEventInit = {}) => {
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init })
+    act(() => { frame.dispatchEvent(event) })
+    return event
+  }
+
+  // Screen directions in lens pixels: the lens turns with the map, so up on screen is up in the lens.
+  expect(press('ArrowUp').defaultPrevented).toBe(true)
+  expect(view.panByScreen).toHaveBeenLastCalledWith({ x: 0, y: -20 })
+  press('ArrowLeft')
+  expect(view.panByScreen).toHaveBeenLastCalledWith({ x: -20, y: 0 })
+  press('ArrowRight', { ctrlKey: true })
+  expect(view.panByScreen).toHaveBeenLastCalledWith({ x: 60, y: 0 })
+  // Shift is no longer the large step: Shift+arrow moves by the plain step.
+  press('ArrowDown', { shiftKey: true })
+  expect(view.panByScreen).toHaveBeenLastCalledWith({ x: 0, y: 20 })
+  expect(view.panByScreen).toHaveBeenCalledTimes(4)
+})

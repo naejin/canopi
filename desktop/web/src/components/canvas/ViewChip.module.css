@@ -1,7 +1,13 @@
-.chip {
+/* Places the chip and the rulers hint above it; no stacking context of its own, so both sit on the scale's chrome
+   layer. */
+.wrapper {
   position: absolute;
   bottom: var(--chrome-inset);
   left: var(--chrome-inset);
+}
+
+.chip {
+  position: relative;
   z-index: 30;
   display: flex;
   align-items: center;
@@ -52,9 +58,9 @@
   outline-offset: 2px;
 }
 
-/* Narrow canvases leave Grid, Snap and Rulers to the View menu. */
+/* Narrow canvases leave Grid, Snap and Rulers to the View menu, and hide the rulers hint with them. */
 @container (max-width: 600px) {
-  .chip {
+  .wrapper {
     display: none;
   }
 }

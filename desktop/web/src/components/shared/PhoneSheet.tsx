@@ -42,7 +42,8 @@ interface SheetDrag {
  * is open, and opens a panel at half height or all the way up to the top bar.
  * The handle is a 44 px button: a press steps peek → half → full → peek,
  * ArrowUp and ArrowDown (PageUp, PageDown, Home, End) move between the
- * heights, and in portrait a drag lets go at the nearest one. Resting at peek
+ * heights (the handle owns its arrows, so Shift+arrows there never turn the
+ * map), and in portrait a drag lets go at the nearest one. Resting at peek
  * closes the open panel; raising the sheet with none open opens the first
  * tab. The sheet covers the map's bottom (or right) edge in the visible map
  * area, so fitting, chips and cards keep above it.
@@ -158,6 +159,7 @@ export function PhoneSheet({ layout, tabs, children }: {
         aria-expanded={height !== 'peek'}
         aria-controls={open ? panelId : undefined}
         aria-keyshortcuts="ArrowUp ArrowDown"
+        data-owns-keys="arrows"
         data-sheet-handle
         onPointerDown={onPointerDown}
         onClick={() => {

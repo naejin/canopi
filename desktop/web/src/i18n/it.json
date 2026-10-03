@@ -130,7 +130,7 @@
       "widen": "Allarga lente",
       "magnify": "Ingrandisci nella lente",
       "namesCount": "Nomi {{shown}} / {{total}}",
-      "panHint": "Anteprima. Trascina o usa le frecce; Maiusc aumenta lo spostamento.",
+      "panHint": "Anteprima. Trascina o usa le frecce; {{mod}} aumenta lo spostamento.",
       "recenter": "Centra sulla tela"
     },
     "toolbar": "Strumenti",
@@ -179,7 +179,8 @@
       "grid": "Griglia",
       "snapToGrid": "Aggancia alla griglia",
       "rulers": "Righelli",
-      "zoom": "Zoom"
+      "zoom": "Zoom",
+      "rulersNorthUpOnly": "I righelli compaiono quando il nord è in alto"
     },
     "overview": {
       "zoomInToEdit": "Ingrandisci per modificare. A questa scala le piante sono nascoste.",
@@ -706,6 +707,11 @@
       "scaleBar": "Barra di scala: {{distance}}",
       "chooseScale": "Scala {{scale}}. Scegli una scala",
       "mapScale": "Scala della mappa"
+    },
+    "compass": {
+      "bearing": "Vista ruotata di {{degrees, number}}° rispetto al nord",
+      "northUp": "Il nord è in alto",
+      "hint": "Fai clic per ripristinare il nord. Trascina l’anello per ruotare la vista; tieni premuto Maiusc per passi di 15°."
     },
     "selectionChip": {
       "label": "Selezione",

@@ -130,7 +130,7 @@
       "widen": "Widen lens",
       "magnify": "Magnify lens",
       "namesCount": "Names {{shown}} / {{total}}",
-      "panHint": "Inspection preview. Drag or use arrow keys to explore; Shift moves farther.",
+      "panHint": "Inspection preview. Drag or use arrow keys to explore; {{mod}} moves farther.",
       "recenter": "Centre on canvas view"
     },
     "toolbar": "Tools",
@@ -179,7 +179,8 @@
       "grid": "Grid",
       "snapToGrid": "Snap to grid",
       "rulers": "Rulers",
-      "zoom": "Zoom"
+      "zoom": "Zoom",
+      "rulersNorthUpOnly": "Rulers show when north is up"
     },
     "overview": {
       "zoomInToEdit": "Zoom in to edit. Plants are hidden at this scale.",
@@ -706,6 +707,11 @@
       "scaleBar": "Scale bar: {{distance}}",
       "chooseScale": "Map scale {{scale}}. Choose a scale",
       "mapScale": "Map scale"
+    },
+    "compass": {
+      "bearing": "View turned {{degrees, number}}° from north",
+      "northUp": "North is up",
+      "hint": "Click to reset north. Drag the ring to turn the view; hold Shift for 15° steps."
     },
     "selectionChip": {
       "label": "Selection",

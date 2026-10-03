@@ -179,5 +179,7 @@ export function WorldMapSurface({
     markersRef.current = []
   }
 
-  return <div ref={containerRef} className={styles.map} />
+  // MapLibre's keyboard handler pans this map with the arrows: the container owns them, so Shift+arrows on it never
+  // turn or reset the workspace view (spec §1.6, fixture H26).
+  return <div ref={containerRef} className={styles.map} data-owns-keys="arrows" />
 }

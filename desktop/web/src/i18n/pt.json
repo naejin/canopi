@@ -130,7 +130,7 @@
       "widen": "Ampliar área",
       "magnify": "Aproximar lupa",
       "namesCount": "Nomes {{shown}} / {{total}}",
-      "panHint": "Pré-visualização. Arraste ou use as setas; Shift desloca mais.",
+      "panHint": "Pré-visualização. Arraste ou use as setas; {{mod}} desloca mais.",
       "recenter": "Centralizar na tela"
     },
     "toolbar": "Ferramentas",
@@ -179,7 +179,8 @@
       "grid": "Grade",
       "snapToGrid": "Alinhar à grade",
       "rulers": "Réguas",
-      "zoom": "Zoom"
+      "zoom": "Zoom",
+      "rulersNorthUpOnly": "As réguas aparecem quando o norte está para cima"
     },
     "overview": {
       "zoomInToEdit": "Aproxime para editar. As plantas ficam ocultas nesta escala.",
@@ -706,6 +707,11 @@
       "scaleBar": "Barra de escala: {{distance}}",
       "chooseScale": "Escala do mapa {{scale}}. Escolha uma escala",
       "mapScale": "Escala do mapa"
+    },
+    "compass": {
+      "bearing": "Vista girada {{degrees, number}}° em relação ao norte",
+      "northUp": "O norte está para cima",
+      "hint": "Clique para redefinir o norte. Arraste o anel para girar a vista; mantenha Shift para passos de 15°."
     },
     "selectionChip": {
       "label": "Seleção",

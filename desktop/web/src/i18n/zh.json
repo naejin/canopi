@@ -130,7 +130,7 @@
       "widen": "扩大查看范围",
       "magnify": "放大查看",
       "namesCount": "名称 {{shown}} / {{total}}",
-      "panHint": "预览。拖动或使用方向键浏览；按住 Shift 可移动更远。",
+      "panHint": "预览。拖动或使用方向键浏览；按住 {{mod}} 可移动更远。",
       "recenter": "居中到画布视图"
     },
     "toolbar": "工具",
@@ -179,7 +179,8 @@
       "grid": "网格",
       "snapToGrid": "吸附网格",
       "rulers": "标尺",
-      "zoom": "缩放"
+      "zoom": "缩放",
+      "rulersNorthUpOnly": "北向上时显示标尺"
     },
     "overview": {
       "zoomInToEdit": "放大以编辑。此比例下植物已隐藏。",
@@ -706,6 +707,11 @@
       "scaleBar": "比例尺：{{distance}}",
       "chooseScale": "地图比例 {{scale}}。选择比例",
       "mapScale": "地图比例"
+    },
+    "compass": {
+      "bearing": "视图已从正北旋转 {{degrees, number}}°",
+      "northUp": "北向上",
+      "hint": "点击重置为正北。拖动圆环旋转视图；按住 Shift 以 15° 为步进。"
     },
     "selectionChip": {
       "label": "选择",

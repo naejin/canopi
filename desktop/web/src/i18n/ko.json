@@ -130,7 +130,7 @@
       "widen": "보기 범위 넓히기",
       "magnify": "돋보기 안에서 확대",
       "namesCount": "이름 {{shown}} / {{total}}",
-      "panHint": "미리보기. 드래그하거나 방향키로 탐색하세요. Shift를 누르면 더 멀리 이동합니다.",
+      "panHint": "미리보기. 드래그하거나 방향키로 탐색하세요. {{mod}} 키를 누르면 더 멀리 이동합니다.",
       "recenter": "캔버스 보기에 맞춰 중앙 정렬"
     },
     "toolbar": "도구",
@@ -179,7 +179,8 @@
       "grid": "격자",
       "snapToGrid": "격자에 맞추기",
       "rulers": "눈금자",
-      "zoom": "확대/축소"
+      "zoom": "확대/축소",
+      "rulersNorthUpOnly": "북쪽이 위일 때 눈금자가 표시됩니다"
     },
     "overview": {
       "zoomInToEdit": "편집하려면 확대하세요. 이 축척에서는 식물이 숨겨집니다.",
@@ -706,6 +707,11 @@
       "scaleBar": "축척 막대: {{distance}}",
       "chooseScale": "축척 {{scale}}. 축척 선택",
       "mapScale": "지도 축척"
+    },
+    "compass": {
+      "bearing": "보기가 북쪽에서 {{degrees, number}}° 회전됨",
+      "northUp": "북쪽이 위",
+      "hint": "클릭하면 북쪽을 위로 맞춥니다. 링을 드래그하여 보기를 회전하고, Shift를 누르면 15°씩 회전합니다."
     },
     "selectionChip": {
       "label": "선택",

@@ -15,6 +15,7 @@ import { t } from '../../i18n'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 import { ControlIcon, type ControlIconName } from '../shared/ControlIcon'
 import { useMapOccluder, usePublishedWidth, useUnderRail } from '../shared/useMapChrome'
+import { Compass } from './Compass'
 import styles from './ZoomControls.module.css'
 
 const VIEW_ACTION_ICONS: Readonly<Record<string, ControlIconName>> = {
@@ -25,10 +26,12 @@ const VIEW_ACTION_ICONS: Readonly<Record<string, ControlIconName>> = {
 
 /**
  * The zoom group at the bottom right: scale bar, zoom out, the map scale as
- * a ratio (a menu of common scales), zoom in and Fit to Design. The map
- * attribution pill sits just left of it. On a phone it is a column on the
- * right above the panel sheet: zoom in, zoom out and the ratio, with 44 px
- * targets; it is placed from the visible map frame, so it covers no edge.
+ * a ratio (a menu of common scales), zoom in, Fit to Design and, after a
+ * divider, the compass (always shown). The map attribution pill sits just
+ * left of it. On a phone it is a column on the right above the panel sheet:
+ * zoom in, zoom out, the ratio and the compass, with 44 px targets; it is
+ * placed from the visible map frame, so it covers no edge. The compass is a
+ * button of the group: the group's layer and map registration cover it.
  */
 export function ZoomControls({ viewActions }: { readonly viewActions: readonly CanvasToolbarActionCommand[] }) {
   const group = useRef<HTMLDivElement>(null)
@@ -40,6 +43,7 @@ export function ZoomControls({ viewActions }: { readonly viewActions: readonly C
   const zoomIn = command('zoom-in')
   const zoomOut = command('zoom-out')
   const fit = command('fit-to-design')
+  const resetNorth = command('reset-north')
   const zoomLimit = view?.zoomLimit.value ?? null
   const atMinimum = zoomLimit === 'min'
   const atMaximum = zoomLimit === 'max'
@@ -56,6 +60,7 @@ export function ZoomControls({ viewActions }: { readonly viewActions: readonly C
         {zoomIn && <ZoomButton command={zoomIn} disabled={zoomIn.disabled || atMaximum} />}
         {zoomOut && <ZoomButton command={zoomOut} disabled={zoomOut.disabled || atMinimum} />}
         {denominator !== null && <ScaleMenu denominator={denominator} />}
+        {resetNorth && <Compass command={resetNorth} className={styles.button} />}
       </div>
     )
   }
@@ -73,6 +78,10 @@ export function ZoomControls({ viewActions }: { readonly viewActions: readonly C
       {denominator !== null && <ScaleMenu denominator={denominator} />}
       {zoomIn && <ZoomButton command={zoomIn} disabled={zoomIn.disabled || atMaximum} />}
       {fit && <ZoomButton command={fit} disabled={fit.disabled} />}
+      {resetNorth && <>
+        <span className={styles.rule} aria-hidden="true" />
+        <Compass command={resetNorth} className={styles.button} />
+      </>}
     </div>
   )
 }

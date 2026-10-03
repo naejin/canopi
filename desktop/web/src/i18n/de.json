@@ -130,7 +130,7 @@
       "widen": "Ausschnitt erweitern",
       "magnify": "Lupe heranzoomen",
       "namesCount": "Namen {{shown}} / {{total}}",
-      "panHint": "Vorschau. Ziehen oder Pfeiltasten verwenden; Umschalt bewegt weiter.",
+      "panHint": "Vorschau. Ziehen oder Pfeiltasten verwenden; {{mod}} bewegt weiter.",
       "recenter": "Auf Zeichenfläche zentrieren"
     },
     "toolbar": "Werkzeuge",
@@ -179,7 +179,8 @@
       "grid": "Raster",
       "snapToGrid": "Am Raster ausrichten",
       "rulers": "Lineale",
-      "zoom": "Zoom"
+      "zoom": "Zoom",
+      "rulersNorthUpOnly": "Lineale erscheinen, wenn Norden oben ist"
     },
     "overview": {
       "zoomInToEdit": "Zum Bearbeiten hineinzoomen. In diesem Maßstab sind Pflanzen ausgeblendet.",
@@ -706,6 +707,11 @@
       "scaleBar": "Maßstabsleiste: {{distance}}",
       "chooseScale": "Maßstab {{scale}}. Maßstab wählen",
       "mapScale": "Kartenmaßstab"
+    },
+    "compass": {
+      "bearing": "Ansicht um {{degrees, number}}° gegenüber Norden gedreht",
+      "northUp": "Norden ist oben",
+      "hint": "Klicken, um nach Norden auszurichten. Ring ziehen, um die Ansicht zu drehen; Umschalt gedrückt halten für 15°-Schritte."
     },
     "selectionChip": {
       "label": "Auswahl",

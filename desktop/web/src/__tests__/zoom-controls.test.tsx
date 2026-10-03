@@ -40,7 +40,7 @@ describe('ZoomControls', () => {
     phoneLayout.value = null
   })
 
-  it('stands as a column of zoom in, zoom out and the ratio on a phone, covering no edge of the map', async () => {
+  it('stands as a column of zoom in, zoom out, the ratio and the compass on a phone, covering no edge of the map', async () => {
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries: { ...createTestCanvasQuerySurface(), view: view() } }))
     const area = document.createElement('div')
     document.body.appendChild(area)
@@ -54,7 +54,7 @@ describe('ZoomControls', () => {
     const group = container.querySelector<HTMLElement>('[data-zoom-group]')!
     expect(group.dataset.zoomGroup).toBe('phone')
     expect([...group.querySelectorAll('button')].map((element) => element.getAttribute('aria-label'))).toEqual([
-      'Zoom in', 'Zoom out', 'Map scale 1:190. Choose a scale',
+      'Zoom in', 'Zoom out', 'Map scale 1:190. Choose a scale', 'Reset north',
     ])
     expect(container.querySelector('[role="img"]')).toBeNull()
     expect(visibleMapFrame.value).toMatchObject({ right: 0, bottom: 0 })
@@ -74,6 +74,30 @@ describe('ZoomControls', () => {
   }
   const ratio = () => container.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!
   const button = (label: string) => container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!
+
+  it('the compass is the last button of the registered zoom group', async () => {
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries: { ...createTestCanvasQuerySurface(), view: view() } }))
+    const area = document.createElement('div')
+    document.body.appendChild(area)
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const box = this === area ? { left: 0, top: 0, width: 1200, height: 800 } : this.dataset.zoomGroup !== undefined ? { left: 700, top: 748, width: 488, height: 40 } : { left: 0, top: 0, width: 0, height: 0 }
+      return { ...box, x: box.left, y: box.top, right: box.left + box.width, bottom: box.top + box.height, toJSON: () => ({}) } as DOMRect
+    })
+    const release = registerMapArea(area)
+    await mount()
+    const group = container.querySelector<HTMLElement>('[data-zoom-group]')!
+    const buttons = [...group.querySelectorAll('button')]
+    expect(buttons.map((element) => element.getAttribute('aria-label'))).toEqual([
+      'Zoom out', 'Map scale 1:190. Choose a scale', 'Zoom in', 'Fit to Design', 'Reset north',
+    ])
+    expect(buttons.at(-1)!.hasAttribute('data-compass')).toBe(true)
+    // It is a button of the group, which keeps the map's bottom edge clear; it registers nothing of its own.
+    expect(visibleMapFrame.value.bottom).toBe(800 - 748)
+    expect(buttons.at(-1)!.getAttribute('aria-keyshortcuts')).toBe('N Shift+N Shift+ArrowUp')
+    release()
+    area.remove()
+    vi.restoreAllMocks()
+  })
 
   it('shows the map scale as a ratio and a scale bar, the same whatever the window size', async () => {
     const plane = createSessionPlane({ lon: 0, lat: 0 })

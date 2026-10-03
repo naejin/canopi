@@ -130,7 +130,7 @@
       "widen": "Zichtgebied vergroten",
       "magnify": "Loep inzoomen",
       "namesCount": "Namen {{shown}} / {{total}}",
-      "panHint": "Voorbeeld. Sleep of gebruik pijltjestoetsen; Shift verplaatst verder.",
+      "panHint": "Voorbeeld. Sleep of gebruik pijltjestoetsen; {{mod}} verplaatst verder.",
       "recenter": "Centreren op canvas"
     },
     "toolbar": "Gereedschap",
@@ -179,7 +179,8 @@
       "grid": "Raster",
       "snapToGrid": "Uitlijnen op raster",
       "rulers": "Linialen",
-      "zoom": "Zoom"
+      "zoom": "Zoom",
+      "rulersNorthUpOnly": "Linialen verschijnen als het noorden boven is"
     },
     "overview": {
       "zoomInToEdit": "Zoom in om te bewerken. Op deze schaal zijn planten verborgen.",
@@ -706,6 +707,11 @@
       "scaleBar": "Schaalbalk: {{distance}}",
       "chooseScale": "Schaal {{scale}}. Kies een schaal",
       "mapScale": "Kaartschaal"
+    },
+    "compass": {
+      "bearing": "Weergave {{degrees, number}}° gedraaid ten opzichte van het noorden",
+      "northUp": "Het noorden is boven",
+      "hint": "Klik om het noorden te herstellen. Sleep de ring om de weergave te draaien; houd Shift ingedrukt voor stappen van 15°."
     },
     "selectionChip": {
       "label": "Selectie",
