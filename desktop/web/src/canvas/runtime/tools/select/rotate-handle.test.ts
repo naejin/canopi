@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createToolHarness,
   rectZone,
@@ -18,6 +18,7 @@ function harness(options: ToolHarnessOptions = {}): ToolHarness {
 
 afterEach(() => {
   for (const created of harnesses.splice(0)) created.dispose()
+  vi.useRealTimers()
 })
 
 /** A bed whose bounds centre, the rotation pivot, is (70, 110); its rotation handle sits 28 px above its top edge. */
@@ -49,6 +50,40 @@ describe('Select rotation handle', () => {
       glyph: 'rotate',
       label: 'canvas.rotationHandle.label',
     })
+  })
+
+  it('the handle sits 28 px above the projected hull', () => {
+    vi.useFakeTimers()
+    const h = harness({
+      camera: { bearingDeg: 45 },
+      scene: { zones: [rectZone('bed', [{ x: 20, y: 80 }, { x: 120, y: 80 }, { x: 120, y: 140 }, { x: 20, y: 140 }])] },
+    })
+    h.select({ kind: 'zone', id: 'bed' })
+    /** The handle's centre on screen, and where it belongs: centred 28 px above the screen box of the bounds' four corners. */
+    const placement = () => {
+      const view = h.view.view()
+      const handle = h.chrome.handles.find((entry) => entry.id === ROTATE_HANDLE_ID)!
+      const anchor = view.worldToScreen(handle.anchor)
+      const hull = view.worldQuadToScreen([{ x: 20, y: 80 }, { x: 120, y: 80 }, { x: 120, y: 140 }, { x: 20, y: 140 }])
+      const xs = hull.map((corner) => corner.x)
+      return {
+        at: { x: anchor.x + handle.offsetPx!.x, y: anchor.y + handle.offsetPx!.y },
+        expected: { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: Math.min(...hull.map((corner) => corner.y)) - 28 },
+      }
+    }
+
+    let { at, expected } = placement()
+    expect(at.x).toBeCloseTo(expected.x, 6)
+    expect(at.y).toBeCloseTo(expected.y, 6)
+
+    // It follows a turn of the view with the pointer resting on the map.
+    h.hover({ x: 10, y: 10 })
+    h.view.navigation.rotateBy(1)
+    vi.advanceTimersByTime(400)
+    expect(h.view.view().camera.bearingDeg).toBe(60);
+    ({ at, expected } = placement())
+    expect(at.x).toBeCloseTo(expected.x, 6)
+    expect(at.y).toBeCloseTo(expected.y, 6)
   })
 
   it('Shift steps 15 degrees from the press angle', () => {
