@@ -81,13 +81,9 @@ export const presentedStep: ReadonlySignal<PresentedStep | null> = computed(() =
 export const storyPresentationActive: ReadonlySignal<boolean> = computed(() => active.value !== null)
 
 interface StoryPresentationOptions {
-  /** Jump between steps instead of flying; defaults to the platform reduced-motion preference. */
-  readonly reducedMotion?: boolean
   /** Where focus goes after leaving; the map by default. */
   readonly returnFocus?: PresentationReturnFocus
 }
-
-let reducedMotionOverride: boolean | undefined
 
 /** Presents a story from `index` (the first step by default); false when it has no step or no map. */
 export function presentStory(storyId: string, index = 0, options: StoryPresentationOptions = {}): boolean {
@@ -97,7 +93,6 @@ export function presentStory(storyId: string, index = 0, options: StoryPresentat
   if (!story || story.steps.length === 0 || !queries || !plane) return false
   if (active.peek()) leaveStoryPresentation()
   cancelReturnFocus()
-  reducedMotionOverride = options.reducedMotion
   returnFocus = { target: options.returnFocus ?? 'map', storyId }
   restore = {
     camera: queries.view.captureView().camera,
@@ -256,7 +251,7 @@ function applyStep({ view }: PresentedStep): void {
   setStoryPresentationOverrides(stepOverrides(view, mapLayers.peek(), labels))
   commands.layers.presentLayers(view.visible_layers.scene_layers)
   commands.speciesFocus.focus(plantedSpeciesToFocus(view))
-  goToSavedView(view.id, reducedMotionOverride === undefined ? {} : { reducedMotion: reducedMotionOverride })
+  goToSavedView(view.id)
 }
 
 /** What a view shows, over the user's own map layer settings (opacities, style choices). */

@@ -12,7 +12,6 @@ import { currentDesign } from '../document-session/store'
 import { mapLayers } from '../map-layers/state'
 import { currentPlantDisplay } from '../plant-display/state'
 import type { PlantLabelMode } from '../../canvas/runtime/plant-display'
-import { reducedMotionPreference } from '../canvas-runtime/app-adapter'
 import { composeSavedView } from './model'
 
 /** The views of the open Design, in saved order. */
@@ -68,25 +67,19 @@ export function captureCurrentView({ id, name, title = '' }: {
   }
 }
 
-interface GoToSavedViewOptions {
-  /** Jump instead of flying; defaults to the platform reduced-motion preference. */
-  readonly reducedMotion?: boolean
-}
-
 /**
  * Goes to a saved view: session state only, never a Design edit. The camera
- * flies there (or jumps under reduced motion) to the view's centre, zoom and
+ * flies there (the camera driver jumps under reduced motion) to the view's centre, zoom and
  * bearing, never snapped; a view saved in a larger window reopens closer in a
  * smaller one (spec §4.10, one framing rule with its thumbnails); objects
  * never move. Background, layer and highlight overrides belong to presenting
  * a story, which applies them on top of this and restores the user's state
  * when it ends.
  */
-export function goToSavedView(id: string, options: GoToSavedViewOptions = {}): boolean {
+export function goToSavedView(id: string): boolean {
   const view = currentSavedViews().find((entry) => entry.id === id)
   const commands = getCurrentCanvasCommandSurface()
   if (!view || !commands || !canShowSavedViews()) return false
-  const reducedMotion = options.reducedMotion ?? reducedMotionPreference().peek()
   const { lon, lat, zoom, bearing } = view.camera
   if (![lon, lat, zoom, bearing].every(Number.isFinite)) return false
   commands.viewport.showCamera(
@@ -96,7 +89,7 @@ export function goToSavedView(id: string, options: GoToSavedViewOptions = {}): b
       bearingDeg: bearing,
       pitchDeg: 0,
     },
-    { motion: reducedMotion ? 'jump' : 'fly' },
+    { motion: 'fly' },
   )
   return true
 }

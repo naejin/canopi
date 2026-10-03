@@ -9,7 +9,7 @@ import { createCameraDriverHost } from '../canvas/runtime/view/driver-host'
 import { createViewNavigation } from '../canvas/runtime/view/navigation'
 import { createNavigationPolicy, zoomFloorForArc, type NavigationPolicy } from '../canvas/runtime/view/navigation-policy'
 import { planarToViewCamera } from '../canvas/runtime/view/camera-math'
-import type { GeoPoint, PlanarCamera, ViewFrame, ViewScreen } from '../canvas/runtime/view/types'
+import type { GeoPoint, PlanarCamera, ViewCamera, ViewFrame, ViewScreen } from '../canvas/runtime/view/types'
 import { planarCameraOf } from '../canvas/runtime/view/view-transform'
 import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
 import { createWorkspaceCameraPolicy } from '../canvas/workspace-camera-policy'
@@ -347,6 +347,30 @@ describe('MapLibre camera driver', () => {
     expect(driver.bearingTarget()).toBe(90)
     // Landed, the arc is the live bearing's alone.
     expect(guard(0).zoom).toBeCloseTo(floorAt(90, 90), 12)
+  })
+
+  it('fly jumps under reducedMotion', () => {
+    // The platform preference reaches the driver through its policy; going to a saved view or a story step asks for a
+    // flight and the driver alone chooses the jump, read when the move starts.
+    const reducedMotion = signal(true)
+    const policy = createNavigationPolicy(createWorkspaceCameraPolicy(PLANE.origin.lat), reducedMotion)
+    const map = new ConsistentMap({ center: PLANE.origin, zoom: 3, bearing: 0 }, { width: 1000, height: 800 })
+    const { driver, published } = attach(map, policy)
+    const target: ViewCamera = { center: { lon: 2.4, lat: 48.9 }, zoom: 5, bearingDeg: 90, pitchDeg: 0 }
+
+    driver.apply({ kind: 'set', target, animation: 'fly' })
+
+    expect(map.flyTo).not.toHaveBeenCalled()
+    expect(map.jumpTo).toHaveBeenCalledTimes(1)
+    expect(map.jumpTo).toHaveBeenCalledWith({ center: [2.4, 48.9], zoom: 5, bearing: 90, pitch: 0 })
+    expect(published.at(-1)!.moving).toBe(false)
+    expect(published.at(-1)!.view.camera).toEqual(target)
+
+    reducedMotion.value = false
+    driver.apply({ kind: 'set', target: { ...target, zoom: 6 }, animation: 'fly' })
+
+    expect(map.flyTo).toHaveBeenCalledTimes(1)
+    expect(map.jumpTo).toHaveBeenCalledTimes(1)
   })
 
   it('a resize publishes one frame with the new screen size and keeps the camera', () => {

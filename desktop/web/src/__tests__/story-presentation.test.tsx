@@ -148,7 +148,7 @@ describe('presenting a story', () => {
     const revision = designSessionStore.committedDesignRevision.value
     const userLayers = mapLayers.value
 
-    expect(presentStory('tour', 1, { reducedMotion: true })).toBe(true)
+    expect(presentStory('tour', 1)).toBe(true)
 
     expect(storyPresentationActive.value).toBe(true)
     expect(presentedStep.value?.step.id).toBe('s2')
@@ -165,7 +165,7 @@ describe('presenting a story', () => {
     ])
     expect(presentLayers).toHaveBeenLastCalledWith(['zones'])
     expect(focus).toHaveBeenLastCalledWith('Lycium barbarum')
-    expect(showCamera).toHaveBeenLastCalledWith(stepCamera(45), { motion: 'jump' })
+    expect(showCamera).toHaveBeenLastCalledWith(stepCamera(45), { motion: 'fly' })
     expect(showPlace).not.toHaveBeenCalled()
     expect(document.documentElement.hasAttribute('data-story-presenting')).toBe(true)
 
@@ -178,17 +178,17 @@ describe('presenting a story', () => {
   it('clears the highlight for a step whose species has no plants instead of keeping the previous one', () => {
     setCurrentCanvasSession(null)
     mountMap([])
-    presentStory('tour', 1, { reducedMotion: true })
+    presentStory('tour', 1)
     expect(focus).toHaveBeenLastCalledWith(null)
   })
 
-  it('flies between steps unless reduced motion asks for a jump', () => {
-    presentStory('tour', 0, { reducedMotion: false })
+  it('flies between steps; the camera driver alone jumps under reduced motion', () => {
+    presentStory('tour', 0)
     expect(showCamera).toHaveBeenLastCalledWith(stepCamera(0), { motion: 'fly' })
   })
 
   it('moves between steps within the story', () => {
-    presentStory('tour', 0, { reducedMotion: true })
+    presentStory('tour', 0)
     previousPresentedStep()
     expect(presentedStep.value?.index).toBe(0)
     nextPresentedStep()
@@ -204,7 +204,7 @@ describe('presenting a story', () => {
 
   it('restores the user’s state exactly on leaving: layers, site data, labels, focus, camera', () => {
     const camera = mapQueries.view.captureView().camera
-    presentStory('tour', 1, { reducedMotion: true })
+    presentStory('tour', 1)
     showCamera.mockClear()
 
     leaveStoryPresentation()
@@ -226,8 +226,8 @@ describe('presenting a story', () => {
     const live = mapQueries.view.captureView()
     const turned = { ...live, camera: { ...live.camera, bearingDeg: 30 } }
     vi.spyOn(mapQueries.view, 'captureView').mockReturnValue(turned)
-    presentStory('tour', 1, { reducedMotion: true })
-    expect(showCamera).toHaveBeenLastCalledWith(stepCamera(45), { motion: 'jump' })
+    presentStory('tour', 1)
+    expect(showCamera).toHaveBeenLastCalledWith(stepCamera(45), { motion: 'fly' })
 
     leaveStoryPresentation()
 
@@ -236,7 +236,7 @@ describe('presenting a story', () => {
   })
 
   it('ends without moving the camera when another Design replaces this one', async () => {
-    presentStory('tour', 0, { reducedMotion: true })
+    presentStory('tour', 0)
     showPlace.mockClear()
     showCamera.mockClear()
 
@@ -251,7 +251,7 @@ describe('presenting a story', () => {
   })
 
   it('ends when its story goes away, and cannot present a story without steps or a map', async () => {
-    presentStory('tour', 0, { reducedMotion: true })
+    presentStory('tour', 0)
     replaceCurrentDesignState({ ...design(), stories: [] }, null, 'Stories')
     await Promise.resolve()
     expect(storyPresentationActive.value).toBe(false)
@@ -271,7 +271,7 @@ describe('presenting a story', () => {
     const before = overlay()
     expect(before.guidesVisible).toBe(true)
 
-    presentStory('tour', 1, { reducedMotion: true })
+    presentStory('tour', 1)
     expect(displays.at(-1)?.labels).toBe('codes')
     expect(overlay()).toEqual({ gridVisible: false, rulersVisible: false, guidesVisible: false })
 
@@ -288,7 +288,7 @@ describe('presenting a story', () => {
     // No command surface: no step applies its overrides, yet the aids stay hidden.
     setCurrentCanvasSession({ ...createTestCanvasRuntimeSurfaces({ queries: currentCanvasQuerySurface.peek()! }), commands: null as never })
     try {
-      presentStory('tour', 0, { reducedMotion: true })
+      presentStory('tour', 0)
       expect(storyPresentationOverrides.value).toBeNull()
       expect(storyPresentationHidesEditingAids.value).toBe(true)
       expect(adapter.settings.readChromeOverlay()).toEqual({ gridVisible: false, rulersVisible: false, guidesVisible: false })
@@ -309,7 +309,7 @@ describe('presenting a story', () => {
     document.body.append(map)
     const release = focusOwner.registerRegion('map', map)
     try {
-      presentStory('tour', 0, { reducedMotion: true })
+      presentStory('tour', 0)
       leaveStoryPresentation()
       await vi.waitFor(() => expect(document.activeElement).toBe(map))
     } finally {
@@ -321,7 +321,7 @@ describe('presenting a story', () => {
 describe('the presenter', () => {
   async function present(index = 0): Promise<HTMLElement> {
     await act(async () => {
-      presentStory('tour', index, { reducedMotion: true })
+      presentStory('tour', index)
       render(<StoryPresenter />, container)
     })
     return container.querySelector<HTMLElement>('[data-story-presenter]')!
@@ -524,7 +524,7 @@ describe('the presenter', () => {
       render(<PanelRail label="Panels" groups={[[{ id: 'nav.layers', label: 'Layers', disabled: false, panel: 'layers', action: () => undefined }]]} />, container)
     })
     expect(container.querySelector('nav')).not.toBeNull()
-    await act(async () => { presentStory('tour', 0, { reducedMotion: true }) })
+    await act(async () => { presentStory('tour', 0) })
     expect(container.querySelector('nav')).toBeNull()
     await act(async () => { leaveStoryPresentation() })
     expect(container.querySelector('nav')).not.toBeNull()

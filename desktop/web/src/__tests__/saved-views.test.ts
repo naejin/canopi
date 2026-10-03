@@ -149,7 +149,6 @@ afterEach(() => {
   closeManageViewsDialog()
   dismissDeleteViewUndo()
   mapLayers.value = createDefaultMapLayers()
-  vi.unstubAllGlobals()
 })
 
 describe('saving the current view', () => {
@@ -276,7 +275,7 @@ describe('going to a saved view', () => {
     const revision = designSessionStore.committedDesignRevision.value
     const layersBefore = mapLayers.value
 
-    expect(goToSavedView('berries', { reducedMotion: false })).toBe(true)
+    expect(goToSavedView('berries')).toBe(true)
 
     expect(showCamera).toHaveBeenCalledWith(berriesCamera(), { motion: 'fly' })
     expect(showPlace).not.toHaveBeenCalled()
@@ -288,15 +287,15 @@ describe('going to a saved view', () => {
     expect(selectSpecies).not.toHaveBeenCalled()
   })
 
-  it('jumps under reduced motion and ignores unknown views', () => {
+  it('ignores unknown views', () => {
     replaceCurrentDesignState(design([BERRIES]), null, 'Orchard')
     const { showCamera } = mountCanvas()
 
     expect(goToSavedView('missing')).toBe(false)
-    expect(goToSavedView('berries', { reducedMotion: true })).toBe(true)
+    expect(goToSavedView('berries')).toBe(true)
 
     expect(showCamera).toHaveBeenCalledTimes(1)
-    expect(showCamera).toHaveBeenCalledWith(berriesCamera(), { motion: 'jump' })
+    expect(showCamera).toHaveBeenCalledWith(berriesCamera(), { motion: 'fly' })
   })
 
   it('going to a view restores its camera zoom in any window size', () => {
@@ -306,21 +305,9 @@ describe('going to a saved view', () => {
     replaceCurrentDesignState(design([{ ...BERRIES, camera: { ...BERRIES.camera, bearing: 30 }, extent }]), null, 'Orchard')
     const { showCamera } = mountCanvas()
 
-    goToSavedView('berries', { reducedMotion: true })
-
-    expect(showCamera).toHaveBeenCalledWith(berriesCamera(30), { motion: 'jump' })
-  })
-
-  it('follows the platform reduced-motion preference by default', () => {
-    replaceCurrentDesignState(design([BERRIES]), null, 'Orchard')
-    const { showCamera } = mountCanvas()
-    vi.stubGlobal('matchMedia', (query: string) => ({
-      matches: query === '(prefers-reduced-motion: reduce)',
-    }))
-
     goToSavedView('berries')
 
-    expect(showCamera).toHaveBeenCalledWith(berriesCamera(), { motion: 'jump' })
+    expect(showCamera).toHaveBeenCalledWith(berriesCamera(30), { motion: 'fly' })
   })
 
   it('does nothing without a map', () => {
