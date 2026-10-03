@@ -57,3 +57,24 @@ describe('PDF reference numbers', () => {
     }
   })
 })
+
+/** Guides outside every zone, listed B first: the overview labels them itself, and list order is not plan order. */
+function looseGuides(bearing: number): PdfInput {
+  const input = design(bearing)
+  return { ...input, canvas: { ...input.canvas, zones: [], measurements: [...guides('mb', B), ...guides('ma', A)] } }
+}
+describe('PDF guide references across pages', () => {
+  it('a guide prints the same M code on the overview as on its detail page, North up and As on screen at 30° and 60°', () => {
+    const plans = [['North up', buildPdfPlan(looseGuides(60), { ...setup, mapOrientation: 'north-up' }, text(), labels)] as const,
+      ...[30, 60].map(bearing => [`As on screen ${bearing}°`, buildPdfPlan(looseGuides(bearing), setup, text(), labels)] as const)]
+    for (const [name, plan] of plans) {
+      const guideCodes = (pages: PdfPlan['pages']) => Object.fromEntries(pages
+        .flatMap(page => (page as { notes?: readonly { id: string; reference: string; kind: string }[] }).notes ?? [])
+        .filter(note => note.reference.startsWith('M')).map(note => [note.id, note.reference]))
+      const overview = guideCodes(plan.pages.filter(page => page.kind === 'overview'))
+      const detail = guideCodes(plan.pages.filter(page => page.kind !== 'overview'))
+      expect(Object.keys(overview).length, name).toBeGreaterThan(0)
+      expect(overview, name).toEqual(Object.fromEntries(Object.keys(overview).map(id => [id, detail[id]])))
+    }
+  })
+})

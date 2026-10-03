@@ -2,7 +2,7 @@ import type { CanvasPrintSnapshot, PrintBounds } from '../../canvas/print'
 import type { PdfTextEngine } from './text'
 import { MM, PRINT, fitOverview, textOp, pathOp, rectPath } from './page-drawing'
 import { moveCoverage, zoomCoverage, fitArea } from './coverage'
-import { drawField, fieldReferences, visibleFieldCanvas, type FieldDrawing } from './field-layout'
+import { drawField, fieldReferences, measurementReferences, visibleFieldCanvas, type FieldDrawing } from './field-layout'
 import { drawOverview } from './overview'
 import { fieldKey } from './field-key'
 import { integratedKey } from './integrated-key'
@@ -165,7 +165,7 @@ function buildPages(original: PdfInput, setup: PdfSetup, text: PdfTextEngine, la
   const visible = visibleFieldCanvas(overviewInput.canvas, overviewFit.ground)
   const readableChain = readableOverviewChain(chain, fitted.geometry.frame, overviewFit.ground, overviewFit.pointsPerMeter, text, input.locale)
   const drawing = drawOverview({ ...selected, canvas: visible }, fitted.geometry.frame, overviewFit.ground, overviewFit.pointsPerMeter, text,
-    new Map([...guideHomes, ...readableChain.map(g => [g.id, 'chain'] as const)]), true, dimensions)
+    new Map([...guideHomes, ...readableChain.map(g => [g.id, 'chain'] as const)]), true, dimensions, measurementReferences(plan))
   drawing.operations.push(...drawOverviewGuideChain(readableChain, fitted.geometry.frame, overviewFit.ground, overviewFit.pointsPerMeter, text, input.locale, labels.guides, selected.canvas.layers.find(l => l.name === 'measurement-guides')?.opacity ?? 1))
   const summaryFrame = { x: fitted.geometry.frame.x + fitted.geometry.frame.width + 6 * MM, y: fitted.geometry.frame.y,
     width: 108 * MM, height: fitted.geometry.height - fitted.geometry.frame.y - 20 * MM }
