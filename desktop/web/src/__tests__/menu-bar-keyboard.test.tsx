@@ -90,7 +90,7 @@ describe('MenuBar keyboard and semantics', () => {
     expect(grid.getAttribute('aria-checked')).toBe('true')
     expect(grid.querySelector('svg')).not.toBeNull()
     expect(view.querySelector('[data-command-id="rulers"]')!.getAttribute('aria-checked')).toBe('false')
-    // A submenu whose key acts on it as a whole shows that key (View › Labels, N).
+    // A submenu whose key acts on it as a whole shows that key (View › Labels, Shift+L; View › Background, B).
     const background = view.querySelector('[data-submenu-id="background"]')!
     expect(background.textContent).toBe('BackgroundB')
     expect(background.getAttribute('aria-keyshortcuts')).toBe('B')
