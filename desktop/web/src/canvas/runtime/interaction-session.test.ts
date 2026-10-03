@@ -880,6 +880,31 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
     expect(readPlantStampSource()).toBeNull()
   })
 
+  it('a failed tool switch during a Shift+middle rotate cancels the turn, so the view keys work again', () => {
+    let failActivation = true
+    const rectangle = stubTool('rectangle', {
+      activate: () => {
+        if (failActivation) throw new Error('activation failed')
+      },
+    })
+    useStubTools(rectangle)
+    const { session } = createSession()
+    const bearing = () => testView.view().camera.bearingDeg
+
+    events.pointerDown({ x: 100, y: 100 }, { pointerId: 4, button: 1, buttons: 4, shiftKey: true })
+    events.pointerMove({ x: 120, y: 100 }, { pointerId: 4, buttons: 4, shiftKey: true })
+    expect(bearing()).toBeCloseTo(16, 6)
+
+    expect(() => session.setTool('rectangle')).toThrow('activation failed')
+    failActivation = false
+    // The rotate's session is cancelled: the camera is back at the press bearing.
+    expect(bearing()).toBeCloseTo(0, 6)
+    // No stale rotation holds the view keys back.
+    expect(session.keyboard.command({ kind: 'rotate-view', direction: 1 })).toBe(true)
+    expect(testView.host.current().bearingTarget()).toBeCloseTo(15, 6)
+    events.pointerUp({ x: 120, y: 100 }, { pointerId: 4, button: 1, buttons: 0 })
+  })
+
   it('disposal releases the capture of a registered tool\'s live press and rolls its edit back', () => {
     const { tool: rectangle, open } = editingTool('rectangle')
     useStubTools(rectangle)

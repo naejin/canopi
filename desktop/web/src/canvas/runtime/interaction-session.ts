@@ -790,12 +790,16 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   /**
    * After a failed switch the recogniser still ends its live sessions, with their captures and pans (today's cancellation
    * had cleared the pointer gesture before the step that failed). The tool's own cancel was the host's setTool, whose
-   * failure it left pending: it is not retried here.
+   * failure it left pending: it is not retried here. A live rotate's cancel still reaches the router, which closes its
+   * RotationSession and restores the press bearing, so the view keys work again.
    */
   private _endPressesAfterFailedSwitch(): void {
     const result = recognise(this._recogniser, this._configureInput(), this._config)
     this._recogniser = result.state
-    for (const gesture of result.gestures) this._followNavigation(gesture)
+    for (const gesture of result.gestures) {
+      this._followNavigation(gesture)
+      if (gesture.kind === 'rotate') this._router.route(gesture)
+    }
     this._source.apply(result.effects.filter((effect) => effect.kind === 'release-capture'))
     this._applyCursor()
   }
