@@ -31,7 +31,7 @@ import type { ScenePersistedState } from '../scene/types'
 import type { SceneEditCoordinator, SceneEditRunOptions, SceneEditTransaction } from '../scene-runtime/transactions'
 import { normaliseBearing } from '../view/navigation-policy'
 import type { ScreenPoint, ViewFrame, ViewScreen, ViewTransform, WorldPoint } from '../view/types'
-import { applyToolConstraint, type ScreenAxes } from './constraints'
+import { applyToolConstraint } from './constraints'
 import type { DraftPresentation, DraftShape, ToolHandle } from './draft'
 import { measureLabelShapes, selectedZoneMeasurementLabels } from './measure-labels'
 import { placePlantFromSpecies } from './plant-stamp'
@@ -70,11 +70,6 @@ const REFUSED_DRAGOVER: GestureOutcome = Object.freeze({ quarantine: true, dropE
 const DROP_CUE_PX = 12
 const NO_HANDLES: readonly ToolHandle[] = Object.freeze([])
 const NO_SNAP: SnapSettings = Object.freeze({ grid: false, guides: false })
-/** Constraints turn against the world axes before phase 1 (spec §2.3); the screen axes from phase 1 are the same at bearing 0. */
-const WORLD_AXES: ScreenAxes = Object.freeze({
-  right: Object.freeze({ x: 1, y: 0 }),
-  down: Object.freeze({ x: 0, y: 1 }),
-})
 /** Arrow-key nudge steps, in session-plane metres. */
 const NUDGE_STEP_M = 0.1
 const NUDGE_LARGE_STEP_M = 1
@@ -400,14 +395,16 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const free = snap(world, modifiers.noSnap)
     const constraint = modifiers.constrain ? activeTool?.constraint?.() ?? null : null
     if (!constraint) return { world, free, constrained: world, snapped: free, modifiers, pointer }
-    const constrained = applyToolConstraint(constraint, world, WORLD_AXES)
+    // Shift's steps turn against the screen axes (spec §4.7), which are the world's at bearing 0, bit for bit.
+    const axes = frame().view.screenAxesInWorld()
+    const constrained = applyToolConstraint(constraint, world, axes)
     if (constraint.kind === 'rotation-delta') {
       return { world, free, constrained, snapped: constrained, modifiers, pointer }
     }
     // Today's order, keyed by tool id: Polygon snaps, then constrains, so a Shift corner may be off the grid
     // (today's (a4c86d39) zone-drawing-tool.ts:226); Plant a row constrains the raw point, and its Shift is also no-snap.
     const snapped = currentId === 'polygon'
-      ? applyToolConstraint(constraint, free, WORLD_AXES)
+      ? applyToolConstraint(constraint, free, axes)
       : snap(constrained, modifiers.noSnap)
     return { world, free, constrained, snapped, modifiers, pointer }
   }
