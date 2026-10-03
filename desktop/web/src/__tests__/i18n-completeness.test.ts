@@ -1,3 +1,6 @@
+// @vitest-environment node
+
+import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import en from '../i18n/en.json'
@@ -61,7 +64,27 @@ function collectMissingKeys(
   return missing
 }
 
+// A canvas tool's handle names reach screen readers as aria-labels, so they come from `ctx.translate`, never a literal.
+const TOOLS_DIR = new URL('../canvas/runtime/tools/', import.meta.url)
+const LITERAL_HANDLE_LABEL = /\blabel:\s*['"`]|setAttribute\(\s*'aria-label',\s*['"`]/
+
+function literalToolHandleLabels(): string[] {
+  const found: string[] = []
+  for (const name of readdirSync(TOOLS_DIR, { recursive: true }) as string[]) {
+    if (!name.endsWith('.ts') || name.endsWith('.test.ts')) continue
+    readFileSync(new URL(name, TOOLS_DIR), 'utf8').split('\n').forEach((line, index) => {
+      if (LITERAL_HANDLE_LABEL.test(line)) found.push(`${name.replace(/\\/g, '/')}:${index + 1}`)
+    })
+  }
+  return found.sort()
+}
+
 describe('i18n completeness', () => {
+  it('names canvas tool handles through translate, never a literal aria-label', () => {
+    expect(literalToolHandleLabels()).toEqual([])
+  })
+
+
   for (const [locale, translations] of Object.entries(locales)) {
     it(`${locale} has exactly the english translation key tree`, () => {
       expect(collectMissingKeys(en as TranslationTree, translations)).toEqual([])

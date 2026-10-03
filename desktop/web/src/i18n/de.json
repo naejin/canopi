@@ -175,6 +175,12 @@
     "rotationHandle": {
       "label": "Drehen"
     },
+    "zoneControlPoint": {
+      "label": "Zonen-Kontrollpunkt {{index}}"
+    },
+    "guideEnd": {
+      "label": "Endpunkt der Messhilfe {{index}}"
+    },
     "grid": {
       "grid": "Raster",
       "snapToGrid": "Am Raster ausrichten",

@@ -175,6 +175,12 @@
     "rotationHandle": {
       "label": "Draaien"
     },
+    "zoneControlPoint": {
+      "label": "Zonecontrolepunt {{index}}"
+    },
+    "guideEnd": {
+      "label": "Eindpunt van meethulp {{index}}"
+    },
     "grid": {
       "grid": "Raster",
       "snapToGrid": "Uitlijnen op raster",

@@ -175,6 +175,12 @@
     "rotationHandle": {
       "label": "旋转"
     },
+    "zoneControlPoint": {
+      "label": "区域控制点 {{index}}"
+    },
+    "guideEnd": {
+      "label": "测量参考线端点 {{index}}"
+    },
     "grid": {
       "grid": "网格",
       "snapToGrid": "吸附网格",

@@ -175,6 +175,12 @@
     "rotationHandle": {
       "label": "Girar"
     },
+    "zoneControlPoint": {
+      "label": "Ponto de controle da zona {{index}}"
+    },
+    "guideEnd": {
+      "label": "Extremidade da guia de medição {{index}}"
+    },
     "grid": {
       "grid": "Grade",
       "snapToGrid": "Alinhar à grade",

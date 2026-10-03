@@ -27,6 +27,6 @@ export interface ToolHandle {
   readonly offsetPx?: ScreenPoint        // rotate handle: 42 px above the selection's projected hull
   readonly hitRadiusPx: number           // 10 today; 22 on touch (44 px target, ADR 0010)
   readonly glyph: 'vertex' | 'corner' | 'rotate' | 'midpoint'
-  readonly label: string                 // aria-label: the rotate handle's is translated; zone and guide points keep today's literal English (phase 0)
+  readonly label: string                 // aria-label, translated through ctx.translate (i18n-completeness scans for literals)
   readonly readout?: string              // live chip beside the handle (the rotate handle's '+15°'); the host marks the dragged handle active
 }
