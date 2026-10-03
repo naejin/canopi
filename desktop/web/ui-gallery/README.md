@@ -16,7 +16,7 @@ The canvas is the production shared workspace (MapLibre + `maplibre-pixi`, `gall
 - `color`, `symbol`, `symbols` (the plant symbol sheet), `key`, `menu-plant`, `menu-mixed`, `menu-empty`
 - `layers` (Desktop, with the ground elevation row active), `site-details`, `library`, `import`, `analyze` (the data workflow dialogs over Layers)
 - `calendar`, `calendar-expanded`, `budget`, `consortium`, `favorites`, `notebook` (Desktop only)
-- `stories` (the Stories panel on its third step; `state=empty` has no story, `state=long` a long step title; `present=1` presents the story from that step)
+- `stories` (the Stories panel on its third step; `state=empty` has no story, `state=long` a long step title; `present=1` presents the story from that step, flying there unless the browser prefers reduced motion, so captures emulate `prefers-reduced-motion: reduce`)
 - `lens`, `snapshots` (off-screen saved-view snapshots with their timings, flags and attribution; offline unless `tiles=1`)
 
 ## Parameters

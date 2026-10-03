@@ -200,8 +200,9 @@ function GalleryCanvasWorkspace() {
 function setGalleryCanvasReady(ready: boolean): void {
   galleryCanvasReady.value = ready
   // `surface=stories&present=1` presents the story from its third step once the map is ready.
+  // The map flies there; it jumps only when the browser prefers reduced motion (emulate it for captures).
   if (ready && initial === 'stories' && params.get('present') === '1') {
-    presentStory('story-visit', 2, { reducedMotion: true })
+    presentStory('story-visit', 2)
   }
 }
 
