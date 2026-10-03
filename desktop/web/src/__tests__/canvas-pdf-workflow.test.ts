@@ -23,7 +23,7 @@ function fixture(plants: PrintPlant[] = [], view: Pick<PdfInput, 'viewBearingDeg
     const canvas = currentCanvas, turningNow = turning, settled = settles
     return { ...capture, input: { ...capture.input, canvas, viewBearingDeg: bearing },
       ...(turningNow ? { turning: true } : {}), isCurrent: () => current && canvas === currentCanvas && (!turningNow || settled === settles) }
-  }, prepare, resolveDisplayNames,
+  }, prepare, resolveDisplayNames, resolveHabits: async () => ({}),
     delivery: { save, dispose: vi.fn() }, labels: () => ({ ...englishPdfLabels, notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => 'https://test/fonts/' })
   return { workflow, prepare, save, resolveDisplayNames, capture, setCanvas: (canvas: CanvasPrintSnapshot) => { currentCanvas = canvas },
     turnView: (deg: number) => { bearing = deg },

@@ -20,8 +20,8 @@ export interface PdfWorkflowDependencies {
   capture(): PdfCapture | null
   /** The catalog's display-name projection: the chosen language's names, English marked for the rest. */
   resolveDisplayNames(names: readonly string[], locale: string): Promise<SpeciesDisplayNames>
-  /** Catalog habit (`Tree`, `Shrub`, ...) by canonical name; absent where the edition has none. */
-  resolveHabits?(names: readonly string[]): Promise<Record<string, string>>
+  /** Catalog habit (`Tree`, `Shrub`, ...) by canonical name. */
+  resolveHabits(names: readonly string[]): Promise<Record<string, string>>
   prepare(input: PdfPreparation, signal: AbortSignal, progress?: (plan: PdfPlan) => void): Promise<PreparedPdf>
   readonly delivery: PdfDelivery
   labels(): PdfLabels
@@ -240,7 +240,7 @@ async function resolvePrintIdentities(deps: PdfWorkflowDependencies, names: read
   try {
     const [display, catalogHabits] = await Promise.all([
       bounded(() => deps.resolveDisplayNames(names, locale), NO_DISPLAY_NAMES),
-      deps.resolveHabits ? bounded(() => deps.resolveHabits!(names), {} as Record<string, string>) : Promise.resolve<Record<string, string>>({}),
+      bounded(() => deps.resolveHabits(names), {} as Record<string, string>),
     ])
     const habits: Record<string, PdfHabit> = {}
     for (const [name, habit] of Object.entries(catalogHabits)) {
