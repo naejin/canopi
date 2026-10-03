@@ -79,7 +79,8 @@ export function createSelectTool(): CanvasTool {
     c.effects.setHandles(handles)
   }
 
-  /** A camera frame that turned the view moves the rotation handle; a pan or a zoom leaves it where it is. */
+  /** A camera frame that turned the view moves the rotation handle; a pan or a zoom leaves it where it is. The host
+   *  re-emits a hover or a live drag on each camera frame, so both follow it. */
   function followBearing(): void {
     if (context && context.view.bearingDeg !== handlesBearingDeg) refreshHandles()
   }
@@ -248,6 +249,8 @@ export function createSelectTool(): CanvasTool {
         case 'drag-start':
         case 'drag-move':
           dragTo(g.point)
+          // The host re-emits a live drag on a camera frame, not a hover: a key turn mid-band moves the handle too.
+          followBearing()
           // The press stays Select's to its release: no passive hover over its moves, as today.
           return 'handled'
         case 'drag-end':
