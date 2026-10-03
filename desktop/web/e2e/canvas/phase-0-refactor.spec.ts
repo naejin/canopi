@@ -216,7 +216,7 @@ test('step 5: P places a plant, Ctrl+Z removes it; R draws a rectangle; Esc, Esc
   await expect(page).toHaveScreenshot('phase0-05e-esc-cleared.png')
 })
 
-test('step 6: ArrowRight nudges a selected zone 10 cm east, Control+ArrowRight 1 m; each pause commits one Design edit', async ({ page }) => {
+test('step 6: ArrowRight nudges a selected zone 10 cm east, Ctrl+ArrowRight (Cmd on a Mac) 1 m; each pause commits one Design edit', async ({ page }) => {
   await openBaseFixture(page)
   await page.mouse.click(RECT_ZONE_EDGE.x, RECT_ZONE_EDGE.y)
   await expect(selection(page).getByRole('status')).toHaveText(RECT_ZONE_CHIP)
@@ -243,12 +243,12 @@ test('step 6: ArrowRight nudges a selected zone 10 cm east, Control+ArrowRight 1
   await expectCanvasDrawn(page)
   await expect(page).toHaveScreenshot('phase0-06b-nudge-10cm.png')
 
-  await page.keyboard.press('Control+ArrowRight')
-  await expect.poll(async () => (await firstCorner(page)).x - nudged.x, 'Control+ArrowRight moves the zone').toBeGreaterThan(LAYOUT_TOLERANCE_PX)
-  await expect(tool(page, 'Undo'), 'the Control+ArrowRight series commits as one Design edit after its pause').toBeEnabled()
+  await pressMod(page, 'ArrowRight')
+  await expect.poll(async () => (await firstCorner(page)).x - nudged.x, 'Ctrl+ArrowRight (Cmd on a Mac) moves the zone').toBeGreaterThan(LAYOUT_TOLERANCE_PX)
+  await expect(tool(page, 'Undo'), 'the Ctrl+ArrowRight (Cmd on a Mac) series commits as one Design edit after its pause').toBeEnabled()
   const large = await firstCorner(page)
-  expectPx(large.x - nudged.x, pxPerMetre, 'Control+ArrowRight moves the zone 1 m east')
-  expectPx(large.y - nudged.y, 0, 'Control+ArrowRight does not move the zone north or south')
+  expectPx(large.x - nudged.x, pxPerMetre, 'Ctrl+ArrowRight (Cmd on a Mac) moves the zone 1 m east')
+  expectPx(large.y - nudged.y, 0, 'Ctrl+ArrowRight (Cmd on a Mac) does not move the zone north or south')
   await expect(selection(page).getByRole('status'), 'nudging keeps the zone selected').toHaveText(RECT_ZONE_CHIP)
   await expectCanvasDrawn(page)
   await expect(page).toHaveScreenshot('phase0-06c-nudge-1m.png')
