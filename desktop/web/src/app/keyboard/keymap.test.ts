@@ -152,7 +152,18 @@ describe('keymap', () => {
     expect(rowsFor(DESKTOP_KEYMAP, keyLike('1', { ctrlKey: true })).map((row) => row.command)).toEqual(['nav.layers'])
   })
 
-  it('canvas rows come from definition.shortcuts through the switch, never from keyHint; no row has Escape', () => {
+  it('no catalogue row has an arrow chord', () => {
+    // The routed rotation chords are canvas key rows; a catalogue definition only shows them (keyHints).
+    const arrowChords = canvasCommandDefinitions.flatMap((definition) => (definition.shortcuts ?? [])
+      .filter((shortcut) => /Arrow/.test(shortcut)).map((shortcut) => `${definition.commandId} ${shortcut}`))
+    expect(arrowChords).toEqual([])
+    const catalogueRows = CANVAS_KEYMAP_ROWS.filter((row) => !row.canvas)
+    expect(catalogueRows.flatMap((row) => row.chords).filter((chord) => chord.key.startsWith('Arrow'))).toEqual([])
+    expect(canvasCommandDefinitions.find((definition) => definition.commandId === 'view.turnViewLeft')?.keyHints)
+      .toEqual(['Shift+ArrowLeft'])
+  })
+
+  it('canvas rows come from definition.shortcuts through the switch, never from keyHints; no row has Escape', () => {
     for (const definition of canvasCommandDefinitions) {
       for (const shortcut of definition.shortcuts ?? []) {
         const named = CANVAS_KEYMAP_ROWS.some((row) =>

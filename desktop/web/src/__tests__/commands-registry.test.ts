@@ -710,7 +710,8 @@ describe('command registry canvas tool switching', () => {
       'canvas.lockSelected', 'canvas.unlockSelected', 'canvas.unlockAll', 'canvas.saveSelectionAsStamp',
     ])
     expect(byMenu.view).toEqual([
-      'view.zoomIn', 'view.zoomOut', 'view.fitToDesign', 'view.searchPlace',
+      'view.zoomIn', 'view.zoomOut', 'view.fitToDesign',
+      'view.resetNorth', 'view.turnViewLeft', 'view.turnViewRight', 'view.searchPlace',
       'view.saveCurrentView', 'view.manageViews',
       'canvas.toggleGrid', 'canvas.toggleSnapToGrid', 'canvas.toggleRulers',
       'view.labels:none', 'view.labels:codes', 'view.labels:names', 'view.toggleToolNames',
@@ -753,6 +754,31 @@ describe('command registry canvas tool switching', () => {
     expect(menuShortcut.get('canvas.lockSelected')).toBe('Ctrl Shift L')
     // Esc belongs to the map's own chain; the menu names it without routing it.
     expect(menuShortcut.get('canvas.clearSelection')).toBe('Esc')
+  })
+
+  it('lists Reset north, Turn view left 15° and Turn view right 15° in the View menu and the palette, after Fit to Design', () => {
+    const resetNorth = vi.fn()
+    const rotateBy = vi.fn()
+    mountCanvasCommandSurface({ viewport: { resetNorth, rotateBy } })
+    const view = menus().find((menu) => menu.id === 'view')!
+    const rows = flattenMenuActions([view]).filter((item) => item.id === 'view.resetNorth' || item.id.startsWith('view.turnView'))
+
+    expect(rows.map((item) => [item.label, item.shortcut, item.ariaShortcut, item.disabled])).toEqual([
+      ['Reset north', 'Shift N', 'Shift+N Shift+ArrowUp', false],
+      ['Turn view left 15°', 'Shift ←', 'Shift+ArrowLeft', false],
+      ['Turn view right 15°', 'Shift →', 'Shift+ArrowRight', false],
+    ])
+    const ids = flattenMenuActions([view]).map((item) => item.id)
+    expect(ids.indexOf('view.resetNorth')).toBe(ids.indexOf('view.fitToDesign') + 1)
+    for (const id of ['view.resetNorth', 'view.turnViewLeft', 'view.turnViewRight']) {
+      expect(getCommand(id).shortcut, id).toBe(rows.find((item) => item.id === id)!.shortcut)
+    }
+
+    rows[0]!.action()
+    rows[1]!.action()
+    getCommand('view.turnViewRight').action()
+    expect(resetNorth).toHaveBeenCalledOnce()
+    expect(rotateBy.mock.calls).toEqual([[-1], [1]])
   })
 
   it('marks checkable View items with their state and groups Export, Arrange, Saved views and Background as submenus', () => {

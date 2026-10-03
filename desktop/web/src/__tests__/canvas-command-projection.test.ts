@@ -171,6 +171,9 @@ describe('Canvas Command Projection', () => {
       ['zoom-in', 'Ctrl +'],
       ['zoom-out', 'Ctrl −'],
       ['fit-to-design', 'Shift F'],
+      ['reset-north', 'Shift N'],
+      ['turn-view-left', 'Shift ←'],
+      ['turn-view-right', 'Shift →'],
       ['search-place', 'Ctrl K'],
       ['cycle-labels', 'N'],
     ])
