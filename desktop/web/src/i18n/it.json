@@ -1368,8 +1368,7 @@
       "text-too-wide": "Parte del testo non entra a una dimensione leggibile. Modifica il testo nel progetto e riprova.",
       "delivery-failed": "Impossibile salvare il PDF. Prova a salvarlo di nuovo.",
       "selection-missing": "Alcuni livelli selezionati non esistono più. Controlla i livelli di stampa prima di esportare.",
-      "coverage-too-large": "Questa configurazione supera il limite di 200 pagine. Stampa meno aree o livelli.",
-      "invalid-page-view": "Scegli uno zoom e un orientamento validi per questa pagina."
+      "coverage-too-large": "Questa configurazione supera il limite di 200 pagine. Stampa meno aree o livelli."
     },
     "canvasZoom": "Zoom della tela (%)",
     "resetFit": "Adatta",

@@ -1368,8 +1368,7 @@
       "text-too-wide": "某些文本无法以可读字号放入页面。请在设计中修改文本后重试。",
       "delivery-failed": "无法保存 PDF，请重试保存。",
       "selection-missing": "部分所选图层已不存在。请检查打印图层后再导出。",
-      "coverage-too-large": "此设置超过200页上限。请减少打印区域或图层。",
-      "invalid-page-view": "请为此页面选择有效的缩放值和方向。"
+      "coverage-too-large": "此设置超过200页上限。请减少打印区域或图层。"
     },
     "canvasZoom": "画布缩放 (%)",
     "resetFit": "适合页面",

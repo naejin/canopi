@@ -1368,8 +1368,7 @@
       "text-too-wide": "Parte del texto no cabe a un tamaño legible. Edita el texto del diseño e inténtalo de nuevo.",
       "delivery-failed": "No se pudo guardar el PDF. Intenta guardarlo de nuevo.",
       "selection-missing": "Algunas capas seleccionadas ya no existen. Revisa las capas de impresión antes de exportar.",
-      "coverage-too-large": "Esta configuración supera el límite de 200 páginas. Imprime menos áreas o capas.",
-      "invalid-page-view": "Elige un zoom y una orientación válidos para esta página."
+      "coverage-too-large": "Esta configuración supera el límite de 200 páginas. Imprime menos áreas o capas."
     },
     "canvasZoom": "Zoom del lienzo (%)",
     "resetFit": "Ajustar",

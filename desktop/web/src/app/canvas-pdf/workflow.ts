@@ -129,7 +129,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     } catch (error) {
       if (!current()) return
       const message = error instanceof Error ? error.message : ''
-      state.value = { status: 'error', error: ['unsupported-text', 'text-too-wide', 'prepare-timeout', 'selection-missing', 'coverage-too-large', 'invalid-page-view'].includes(message) ? message : 'prepare-failed', result: null }
+      state.value = { status: 'error', error: ['unsupported-text', 'text-too-wide', 'prepare-timeout', 'coverage-too-large'].includes(message) ? message : 'prepare-failed', result: null }
     } finally {
       if (controller === abort) controller = null
     }
