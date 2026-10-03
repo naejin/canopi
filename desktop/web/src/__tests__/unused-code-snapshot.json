@@ -170,7 +170,6 @@
     "src/canvas/runtime/view/types.ts#PlanarProjection",
     "src/canvas/runtime/zone-geometry.ts#ZoneMeasure",
     "src/canvas/runtime/zone-geometry.ts#ZoneWorldBounds",
-    "src/canvas/runtime/zone-measurements.ts#ZoneMeasurementRect",
     "src/canvas/scale-bar.ts#ScaleBarDisplay",
     "src/canvas/workspace-camera-policy.ts#WorkspaceCameraScaleBounds",
     "src/commands/graph/catalog.ts#AppCommandState",
