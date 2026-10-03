@@ -85,15 +85,19 @@ export function measureVisibleMapFrame(map: DOMRect, occluders: Iterable<MapOccl
 /**
  * Pure: the free width of the bottom band, between the bottom chrome on the
  * left (the view chip) and on the right (the zoom group), where the map
- * credits sit. The whole map width when no bottom chrome is registered.
+ * credits sit. Chrome standing wholly above the band (the rulers hint above
+ * the view chip) takes none of its room. The whole map width when no bottom
+ * chrome is registered.
  */
 export function measureBottomBandRoom(map: DOMRect, occluders: Iterable<MapOccluderBox>): number {
+  const bottom = [...occluders].filter(({ rect, side }) =>
+    rect.width > 0 && rect.height > 0 && (side ?? inferSide(map, rect)) === 'bottom')
+  const bandTop = Math.max(-Infinity, ...bottom.map(({ rect }) => rect.top))
   let left = map.left
   let right = map.right
   const middle = map.left + map.width / 2
-  for (const { rect, side } of occluders) {
-    if (rect.width <= 0 || rect.height <= 0) continue
-    if ((side ?? inferSide(map, rect)) !== 'bottom') continue
+  for (const { rect } of bottom) {
+    if (rect.bottom <= bandTop) continue
     if (rect.left + rect.width / 2 < middle) left = Math.max(left, rect.right)
     else right = Math.min(right, rect.left)
   }
