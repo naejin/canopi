@@ -747,7 +747,7 @@
     "viewChip": "Ansicht",
     "map": {
       "label": "Designkarte",
-      "description": "Drücken Sie die Taste eines Werkzeugs, um es zu wählen, wie die Werkzeugleiste zeigt. Umschalt F10 öffnet das Menü der Auswahl. Esc bricht ab, kehrt dann zu Auswählen zurück und hebt dann die Auswahl auf. Die Pfeiltasten verschieben die Auswahl um 10 cm, mit Umschalt um 1 m; ohne Auswahl verschieben sie die Karte, mit Umschalt weiter. F6 wechselt zum nächsten Teil: Titelleiste, Werkzeuge, Karte, Bereich."
+      "description": "Drücken Sie die Taste eines Werkzeugs, um es zu wählen, wie die Werkzeugleiste zeigt. Umschalt F10 öffnet das Menü der Auswahl. Esc bricht ab, kehrt dann zu Auswählen zurück und hebt dann die Auswahl auf. Die Pfeiltasten verschieben die Auswahl auf dem Bildschirm um 10 cm, mit {{mod}} um 1 m; ohne Auswahl verschieben sie die Karte. Umschalt mit Pfeil links oder rechts dreht die Ansicht; N oder Umschalt mit Pfeil nach oben richtet nach Norden aus. F6 wechselt zum nächsten Teil: Titelleiste, Werkzeuge, Karte, Bereich."
     },
     "textNote": {
       "placeholder": "Notiz eingeben"
@@ -1074,6 +1074,9 @@
     "view.darkTheme": "Dunkles Farbschema",
     "edit.saveAsStamp": "Als Stempel speichern",
     "view.fitToDesign": "Auf Design einpassen",
+    "view.resetNorth": "Nach Norden ausrichten",
+    "view.turnViewLeft": "Ansicht um 15° nach links drehen",
+    "view.turnViewRight": "Ansicht um 15° nach rechts drehen",
     "file.new": "Neues Design",
     "view.backgroundMap": "Karte",
     "edit.findPlants": "Pflanzen finden…",
@@ -1561,7 +1564,6 @@
   "plantFinder": {
     "label": "Pflanzen finden",
     "placeholder": "Name, botanischer Name oder Code",
-    "shortcut": "Strg F",
     "quickFilters": "Schnellfilter",
     "selectedOnMap": "Auf der Karte ausgewählt",
     "selectedOnMapCount": "Auf der Karte ausgewählt · {{count, number}}",
@@ -1722,6 +1724,7 @@
   },
   "shortcutKeys": {
     "ctrl": "Strg",
+    "cmd": "Cmd",
     "shift": "Umschalt",
     "alt": "Alt",
     "delete": "Entf",
@@ -1751,11 +1754,14 @@
     "workspaceHeading": "Karte und Arbeitsbereich",
     "nextRegion": "Nächster Teil: Titelleiste, Werkzeuge, Karte, Bereich",
     "previousRegion": "Vorheriger Teil",
-    "nudge": "Auswahl um 10 cm verschieben",
+    "nudge": "Auswahl um 10 cm in Pfeilrichtung auf dem Bildschirm verschieben",
     "nudgeLarge": "Auswahl um 1 m verschieben",
     "pan": "Karte verschieben, wenn nichts ausgewählt ist",
     "panLarge": "Karte weiter verschieben, wenn nichts ausgewählt ist",
     "rotateStamp": "Den zu setzenden Stempel um 15° drehen",
+    "turnView": "Ansicht um 15° drehen",
+    "resetNorth": "Nach Norden ausrichten",
+    "resetNorthAlways": "{{shortcut}} funktioniert auch, wenn Kurzbefehle mit einer Taste aus sind.",
     "arrowKeys": "Pfeiltasten",
     "singleKeysOn": "Kurzbefehle mit einer Taste lassen sich unter Einstellungen › Tastatur ausschalten.",
     "singleKeysOff": "Kurzbefehle mit einer Taste sind aus. Schalten Sie sie unter Einstellungen › Tastatur ein."
@@ -1795,7 +1801,7 @@
     "openOnSatellite": "Auf Satellitenbild öffnen",
     "openOnSatelliteHint": "Aus behält den zuletzt verwendeten Hintergrund.",
     "singleKeyShortcuts": "Kurzbefehle mit einer Taste",
-    "singleKeyShortcutsHint": "Werkzeugtasten wie V, P und Z, N für Beschriftungen, eckige Klammern und Umschalt G, S, R. Aus lässt Strg-Kurzbefehle, Entf, Esc, Pfeile und F-Tasten.",
+    "singleKeyShortcutsHint": "Werkzeugtasten wie V, P und Z, N zum Ausrichten nach Norden, eckige Klammern und Umschalt G, S, R, L. Umschalt N richtet immer nach Norden aus. Aus lässt {{mod}}-Kurzbefehle, Entf, Esc, Pfeile und F-Tasten.",
     "remapLater": "Kurzbefehle lassen sich noch nicht ändern.",
     "allShortcuts": "Alle Kurzbefehle anzeigen",
     "filesIntro": "Canopi hält diese Ordner auf diesem Computer. Gespeicherte Designs sind Dateien dort, wo Sie sie abgelegt haben.",

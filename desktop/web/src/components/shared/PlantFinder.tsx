@@ -13,6 +13,7 @@ import type {
   SpeciesStratumChoice,
 } from '../../app/plant-finder/quick-filters'
 import { locale } from '../../app/settings/state'
+import { formatShortcut } from '../../app/shell-commands/shortcut-text'
 import { t } from '../../i18n'
 import { formatCount } from '../../utils/format-count'
 import { ControlIcon } from './ControlIcon'
@@ -28,7 +29,7 @@ export interface SelectedOnMapFilter {
 }
 
 /**
- * The one way to find plants in a list: a search field (Ctrl F), quick filters starting
+ * The one way to find plants in a list: a search field (Ctrl F, Cmd F on macOS), quick filters starting
  * with "Selected on map", and a live count that says what was searched. Callers own the
  * query, the filters and the list; the matcher is `app/plant-finder/matcher.ts`.
  */
@@ -87,7 +88,7 @@ export function PlantFinder({
         onChange={onChange}
         label={label ?? t('plantFinder.label')}
         placeholder={placeholder ?? t('plantFinder.placeholder')}
-        shortcutHint={t('plantFinder.shortcut')}
+        shortcutHint={formatShortcut('Ctrl+F', t)}
         keyShortcuts="Control+F"
         inputRef={input}
         onKeyDown={onKeyDown}

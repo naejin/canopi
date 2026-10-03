@@ -2,7 +2,8 @@
 //
 // Owns the canvas's key handling behind CanvasKeyboardPort (spec §1.2a, §1.6, ADR 0020): the key router hands it every
 // key first (keyState: the nudge commit, the physical Ctrl, the Menu key's time, the Space hold), runs its key commands
-// (the arrow nudge and pan, Enter, Backspace, F2, `[` `]`, the Menu key) and lists and runs its Esc layers, which
+// (the arrow nudge and pan, mod for the large step; Shift+←/→ turning the view and Shift+↑ or Shift+N resetting north;
+// Enter, Backspace, F2, `[` `]`, the Menu key) and lists and runs its Esc layers, which
 // app/keyboard/escape-chain.ts places in the Esc chain. The arrow nudge series is the ToolHost's; the port only reads its
 // outcome. It never touches a DOM event: the router acts on its answers.
 
@@ -30,7 +31,7 @@ export interface CanvasKeyboardPortDeps {
   /** Today's getSelection().length > 0, read per key: on a 'pass' nudge the arrow pans with nothing selected and is let through
    *  otherwise; the Esc 'selection' layer is live while it holds. */
   hasSelection(): boolean
-  /** Arrow pans (64 or 256 px), + / −, N, Shift+N and Shift+←/→/↑. */
+  /** Arrow pans (64 or 256 px), + / −, Shift+N and Shift+←/→/↑ (N runs View › Reset north through the edition's sink). */
   readonly navigation: Pick<ViewNavigation, 'panByPx' | 'zoomIn' | 'zoomOut' | 'resetNorth' | 'rotateBy'>
   readonly frames: ViewFrameSource
   /** The interaction session's side of the keys. */
@@ -73,11 +74,12 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionC
   let lastKeyDown: CanvasKeyState | null = null
 
   /** The arrow's rule after the host's nudge (spec §3.6): a handled or refused nudge takes the key, and on 'pass' the map
-   *  pans with nothing selected; otherwise the key goes on. */
+   *  pans with nothing selected; otherwise a plain arrow goes on, and mod+arrow is taken anyway (Web Mac Cmd+← would go
+   *  Back). */
   function arrow(direction: ScreenPoint, large: boolean): boolean {
     const outcome = toolHost.nudge(direction, large)
     if (outcome !== 'pass') return true
-    if (deps.hasSelection()) return false
+    if (deps.hasSelection()) return large
     const step = large ? ARROW_PAN_LARGE_STEP_PX : ARROW_PAN_STEP_PX
     deps.navigation.panByPx({ x: -direction.x * step + 0, y: -direction.y * step + 0 })
     return true
@@ -157,7 +159,8 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionC
       const overview = session.overview()
       switch (c.kind) {
         case 'arrow':
-          if (session.pointerSessionLive()) return false
+          // A live pointer session leaves the arrows still (fixture H25); mod+arrow is consumed even so.
+          if (session.pointerSessionLive()) return c.large
           return arrow(DIRECTIONS[c.dir], c.large)
         case 'rotate-held':
           if (overview) return false

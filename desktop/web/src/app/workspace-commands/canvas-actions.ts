@@ -112,9 +112,14 @@ function runCanvasViewAction(action: CanvasViewAction): void {
     return
   }
   withCanvas(({ viewport }) => {
-    if (action === 'zoom-in') viewport.zoomIn()
-    else if (action === 'zoom-out') viewport.zoomOut()
-    else viewport.zoomToFit()
+    switch (action) {
+      case 'zoom-in': viewport.zoomIn(); return
+      case 'zoom-out': viewport.zoomOut(); return
+      case 'fit-to-design': viewport.zoomToFit(); return
+      case 'reset-north': viewport.resetNorth(); return
+      case 'turn-view-left': viewport.rotateBy(-1); return
+      case 'turn-view-right': viewport.rotateBy(1)
+    }
   })
 }
 

@@ -4,6 +4,7 @@ import { keyLike, TEST_KEY_PLATFORM } from '../../__tests__/support/key-router'
 import { DESKTOP_KEYMAP } from '../../commands/graph/shortcuts'
 import { createBrowserShellCatalog } from '../../web/browser-shell-commands'
 import { canvasCommandDefinitions } from '../canvas-commands'
+import type { CanvasKeyCommand } from '../../canvas/runtime/runtime'
 import { composeShellCommandCatalog } from '../shell-commands'
 import { chordMatches, chordOf, chordsOfShortcut, type KeyboardEventLike } from './key-chord'
 import { installKeyRouter, type KeyRouterHandle } from './key-router'
@@ -151,7 +152,18 @@ describe('keymap', () => {
     expect(rowsFor(DESKTOP_KEYMAP, keyLike('1', { ctrlKey: true })).map((row) => row.command)).toEqual(['nav.layers'])
   })
 
-  it('canvas rows come from definition.shortcuts through the switch, never from keyHint; no row has Escape', () => {
+  it('no catalogue row has an arrow chord', () => {
+    // The routed rotation chords are canvas key rows; a catalogue definition only shows them (keyHints).
+    const arrowChords = canvasCommandDefinitions.flatMap((definition) => (definition.shortcuts ?? [])
+      .filter((shortcut) => /Arrow/.test(shortcut)).map((shortcut) => `${definition.commandId} ${shortcut}`))
+    expect(arrowChords).toEqual([])
+    const catalogueRows = CANVAS_KEYMAP_ROWS.filter((row) => !row.canvas)
+    expect(catalogueRows.flatMap((row) => row.chords).filter((chord) => chord.key.startsWith('Arrow'))).toEqual([])
+    expect(canvasCommandDefinitions.find((definition) => definition.commandId === 'view.turnViewLeft')?.keyHints)
+      .toEqual(['Shift+ArrowLeft'])
+  })
+
+  it('canvas rows come from definition.shortcuts through the switch, never from keyHints; no row has Escape', () => {
     for (const definition of canvasCommandDefinitions) {
       for (const shortcut of definition.shortcuts ?? []) {
         const named = CANVAS_KEYMAP_ROWS.some((row) =>
@@ -187,6 +199,63 @@ describe('keymap', () => {
     expect(canvasCommandFor(keyLike(']'))).toBe('canvas.bringToFront')
     expect(canvasCommandFor(keyLike('['))).toBe('canvas.sendToBack')
     expect(canvasCommandFor(keyLike('Escape'))).toBeNull()
+  })
+
+  it('N follows the switch', () => {
+    expect(rowsFor(CANVAS_KEYMAP_ROWS, keyLike('n')).map((row) => [row.command, row.scope, row.singleKey]))
+      .toEqual([['view.resetNorth', 'command', 'follows-switch']])
+    expect(rowsFor(CANVAS_KEYMAP_ROWS, keyLike('L', { shiftKey: true })).map((row) => [row.command, row.singleKey]))
+      .toEqual([['view.cycleLabels', 'follows-switch']])
+  })
+
+  it('the Shift+N row is always on', () => {
+    const rows = rowsFor(CANVAS_KEYMAP_ROWS, keyLike('N', { shiftKey: true }))
+    expect(rows.map((row) => [row.command, row.scope, row.singleKey])).toEqual([['canvas.reset-north', 'command', 'always-on']])
+    expect(rows[0]!.canvas).toEqual({ kind: 'reset-north' })
+  })
+
+  it('Shift+arrows do nothing inside a listbox or slider', () => {
+    const command = vi.fn((_c: CanvasKeyCommand) => true)
+    const host = document.createElement('div')
+    host.tabIndex = 0
+    router = installKeyRouter({
+      target: window,
+      keymap: CANVAS_KEYMAP_ROWS,
+      commands: { run: vi.fn(() => true) },
+      canvas: () => ({ host, keyState: () => 'pass', command, escapeLayers: () => [], escape: () => {}, describeEscape: () => null }),
+      singleKeys: signal(true),
+      focus: { cycleRegion: () => false },
+      isModalOpen: () => false,
+      platform: TEST_KEY_PLATFORM,
+      document,
+    })
+    const listbox = document.createElement('div')
+    listbox.setAttribute('role', 'listbox')
+    listbox.tabIndex = 0
+    const option = document.createElement('div')
+    option.setAttribute('role', 'option')
+    option.tabIndex = -1
+    listbox.append(option)
+    const slider = document.createElement('div')
+    slider.setAttribute('role', 'slider')
+    slider.tabIndex = 0
+    document.body.append(host, listbox, slider)
+    const shiftArrows = (target: HTMLElement) => ['ArrowLeft', 'ArrowRight', 'ArrowUp'].map((key) => {
+      target.focus()
+      const event = new KeyboardEvent('keydown', { key, shiftKey: true, bubbles: true, cancelable: true })
+      target.dispatchEvent(event)
+      return event.defaultPrevented
+    })
+
+    expect([...shiftArrows(listbox), ...shiftArrows(option), ...shiftArrows(slider)].every((taken) => !taken)).toBe(true)
+    expect(command).not.toHaveBeenCalled()
+    // Outside them the routed rows turn the view and reset north.
+    expect(shiftArrows(host)).toEqual([true, true, true])
+    expect(command.mock.calls.map(([c]) => c)).toEqual([
+      { kind: 'rotate-view', direction: -1 },
+      { kind: 'rotate-view', direction: 1 },
+      { kind: 'reset-north' },
+    ])
   })
 
   it('composes an edition\'s shell rows from its catalogue, F2 after the map, every row working in text fields', () => {

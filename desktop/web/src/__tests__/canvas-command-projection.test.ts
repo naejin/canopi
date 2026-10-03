@@ -171,8 +171,11 @@ describe('Canvas Command Projection', () => {
       ['zoom-in', 'Ctrl +'],
       ['zoom-out', 'Ctrl −'],
       ['fit-to-design', 'Shift F'],
+      ['reset-north', 'N'],
+      ['turn-view-left', 'Shift ←'],
+      ['turn-view-right', 'Shift →'],
       ['search-place', 'Ctrl K'],
-      ['cycle-labels', 'N'],
+      ['cycle-labels', 'Shift L'],
     ])
     projection.viewActions[2]!.action()
     expect(intents.view).toHaveBeenCalledWith('fit-to-design')

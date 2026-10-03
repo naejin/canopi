@@ -747,7 +747,7 @@
     "viewChip": "Vista",
     "map": {
       "label": "Mapa del diseño",
-      "description": "Pulsa la tecla de una herramienta para elegirla, como muestra la barra de herramientas. Mayús F10 abre el menú de la selección. Esc cancela, luego vuelve a Seleccionar y luego borra la selección. Las flechas mueven la selección 10 cm, o 1 m con Mayús; sin nada seleccionado desplazan el mapa, más lejos con Mayús. F6 pasa a la zona siguiente: barra de título, herramientas, mapa, panel."
+      "description": "Pulsa la tecla de una herramienta para elegirla, como muestra la barra de herramientas. Mayús F10 abre el menú de la selección. Esc cancela, luego vuelve a Seleccionar y luego borra la selección. Las flechas mueven la selección 10 cm en pantalla, o 1 m con {{mod}}; sin nada seleccionado desplazan el mapa. Mayús con la flecha izquierda o derecha gira la vista; N o Mayús con la flecha arriba restablece el norte. F6 pasa a la zona siguiente: barra de título, herramientas, mapa, panel."
     },
     "textNote": {
       "placeholder": "Escribe la nota"
@@ -1074,6 +1074,9 @@
     "view.darkTheme": "Tema oscuro",
     "edit.saveAsStamp": "Guardar como sello",
     "view.fitToDesign": "Ajustar al diseño",
+    "view.resetNorth": "Restablecer el norte",
+    "view.turnViewLeft": "Girar la vista 15° a la izquierda",
+    "view.turnViewRight": "Girar la vista 15° a la derecha",
     "file.new": "Nuevo diseño",
     "view.backgroundMap": "Mapa",
     "edit.findPlants": "Buscar plantas…",
@@ -1561,7 +1564,6 @@
   "plantFinder": {
     "label": "Buscar plantas",
     "placeholder": "Nombre, nombre científico o código",
-    "shortcut": "Ctrl F",
     "quickFilters": "Filtros rápidos",
     "selectedOnMap": "Seleccionadas en el mapa",
     "selectedOnMapCount": "Seleccionadas en el mapa · {{count, number}}",
@@ -1722,6 +1724,7 @@
   },
   "shortcutKeys": {
     "ctrl": "Ctrl",
+    "cmd": "Cmd",
     "shift": "Mayús",
     "alt": "Alt",
     "delete": "Supr",
@@ -1751,11 +1754,14 @@
     "workspaceHeading": "Mapa y espacio de trabajo",
     "nextRegion": "Zona siguiente: barra de título, herramientas, mapa, panel",
     "previousRegion": "Zona anterior",
-    "nudge": "Mover la selección 10 cm",
+    "nudge": "Mover la selección 10 cm en la dirección de la flecha en pantalla",
     "nudgeLarge": "Mover la selección 1 m",
     "pan": "Desplazar el mapa cuando no hay nada seleccionado",
     "panLarge": "Desplazar el mapa más lejos cuando no hay nada seleccionado",
     "rotateStamp": "Girar 15° el sello que colocas",
+    "turnView": "Girar la vista 15°",
+    "resetNorth": "Restablecer el norte",
+    "resetNorthAlways": "{{shortcut}} funciona aunque los atajos de una tecla estén desactivados.",
     "arrowKeys": "Flechas",
     "singleKeysOn": "Los atajos de una tecla se pueden desactivar en Ajustes › Teclado.",
     "singleKeysOff": "Los atajos de una tecla están desactivados. Actívalos en Ajustes › Teclado."
@@ -1795,7 +1801,7 @@
     "openOnSatellite": "Abrir en satélite",
     "openOnSatelliteHint": "Desactivado, se mantiene el último fondo usado.",
     "singleKeyShortcuts": "Atajos de una tecla",
-    "singleKeyShortcutsHint": "Teclas de herramientas como V, P y Z, N para etiquetas, los corchetes y Mayús G, S, R. Desactivados, quedan los atajos con Ctrl, Supr, Esc, las flechas y las teclas F.",
+    "singleKeyShortcutsHint": "Teclas de herramientas como V, P y Z, N para restablecer el norte, los corchetes y Mayús G, S, R, L. Mayús N siempre restablece el norte. Desactivados, quedan los atajos con {{mod}}, Supr, Esc, las flechas y las teclas F.",
     "remapLater": "Los atajos aún no se pueden cambiar.",
     "allShortcuts": "Ver todos los atajos",
     "filesIntro": "Canopi guarda estas carpetas en este ordenador. Los diseños que guardas son archivos donde los elegiste.",

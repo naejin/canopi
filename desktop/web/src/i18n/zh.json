@@ -747,7 +747,7 @@
     "viewChip": "视图",
     "map": {
       "label": "设计地图",
-      "description": "按工具栏上显示的按键即可选择工具。Shift F10 打开所选对象的菜单。Esc 取消操作，然后返回选择工具，再清除选择。方向键将所选对象移动 10 厘米，按住 Shift 移动 1 米；未选中任何对象时平移地图，按住 Shift 平移更远。F6 切换到下一个区域：标题栏、工具、地图、面板。"
+      "description": "按工具栏上显示的按键即可选择工具。Shift F10 打开所选对象的菜单。Esc 取消操作，然后返回选择工具，再清除选择。方向键将所选对象沿屏幕方向移动 10 厘米，按住 {{mod}} 移动 1 米；未选中任何对象时平移地图。Shift 加左或右方向键旋转视图；N 或 Shift 加上方向键重置为正北。F6 切换到下一个区域：标题栏、工具、地图、面板。"
     },
     "textNote": {
       "placeholder": "输入注释"
@@ -1074,6 +1074,9 @@
     "view.darkTheme": "深色主题",
     "edit.saveAsStamp": "保存为图章",
     "view.fitToDesign": "适应设计",
+    "view.resetNorth": "重置为正北",
+    "view.turnViewLeft": "向左旋转视图 15°",
+    "view.turnViewRight": "向右旋转视图 15°",
     "file.new": "新建设计",
     "view.backgroundMap": "地图",
     "edit.findPlants": "查找植物…",
@@ -1561,7 +1564,6 @@
   "plantFinder": {
     "label": "查找植物",
     "placeholder": "名称、学名或代码",
-    "shortcut": "Ctrl F",
     "quickFilters": "快速筛选",
     "selectedOnMap": "地图上已选",
     "selectedOnMapCount": "地图上已选 · {{count, number}}",
@@ -1722,6 +1724,7 @@
   },
   "shortcutKeys": {
     "ctrl": "Ctrl",
+    "cmd": "Cmd",
     "shift": "Shift",
     "alt": "Alt",
     "delete": "Del",
@@ -1751,11 +1754,14 @@
     "workspaceHeading": "地图与工作区",
     "nextRegion": "下一个区域：标题栏、工具、地图、面板",
     "previousRegion": "上一个区域",
-    "nudge": "将所选对象移动 10 厘米",
+    "nudge": "将所选对象沿屏幕上箭头的方向移动 10 厘米",
     "nudgeLarge": "将所选对象移动 1 米",
     "pan": "未选中任何对象时平移地图",
     "panLarge": "未选中任何对象时平移地图更远",
     "rotateStamp": "将正在放置的图章旋转 15°",
+    "turnView": "将视图旋转 15°",
+    "resetNorth": "重置为正北",
+    "resetNorthAlways": "即使单键快捷键已关闭，{{shortcut}} 仍然有效。",
     "arrowKeys": "方向键",
     "singleKeysOn": "单键快捷键可在“设置 › 键盘”中关闭。",
     "singleKeysOff": "单键快捷键已关闭。可在“设置 › 键盘”中开启。"
@@ -1795,7 +1801,7 @@
     "openOnSatellite": "以卫星影像打开",
     "openOnSatelliteHint": "关闭时保留上次使用的背景。",
     "singleKeyShortcuts": "单键快捷键",
-    "singleKeyShortcutsHint": "工具键如 V、P 和 Z，标签键 N，方括号以及 Shift G、S、R。关闭后仍保留 Ctrl 快捷键、Delete、Esc、方向键和 F 键。",
+    "singleKeyShortcutsHint": "工具键如 V、P 和 Z，重置为正北的 N，方括号以及 Shift G、S、R、L。Shift N 始终重置为正北。关闭后仍保留 {{mod}} 快捷键、Delete、Esc、方向键和 F 键。",
     "remapLater": "快捷键暂时无法更改。",
     "allShortcuts": "显示全部快捷键",
     "filesIntro": "Canopi 在这台电脑上保留这些文件夹。你保存的设计是你所选位置中的文件。",

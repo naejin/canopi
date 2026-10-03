@@ -747,7 +747,7 @@
     "viewChip": "Affichage",
     "map": {
       "label": "Carte du Design",
-      "description": "Appuyez sur la touche d’un outil pour le choisir, comme l’indique la barre d’outils. Maj F10 ouvre le menu de la sélection. Échap annule, puis revient à Sélection, puis vide la sélection. Les flèches déplacent la sélection de 10 cm, ou de 1 m avec Maj ; sans sélection, elles déplacent la carte, plus loin avec Maj. F6 passe à la zone suivante : barre de titre, outils, carte, panneau."
+      "description": "Appuyez sur la touche d’un outil pour le choisir, comme l’indique la barre d’outils. Maj F10 ouvre le menu de la sélection. Échap annule, puis revient à Sélection, puis vide la sélection. Les flèches déplacent la sélection de 10 cm à l’écran, ou de 1 m avec {{mod}} ; sans sélection, elles déplacent la carte. Maj avec la flèche gauche ou droite tourne la vue ; N ou Maj avec la flèche haut rétablit le nord. F6 passe à la zone suivante : barre de titre, outils, carte, panneau."
     },
     "textNote": {
       "placeholder": "Saisissez la note"
@@ -1074,6 +1074,9 @@
     "view.darkTheme": "Thème sombre",
     "edit.saveAsStamp": "Enregistrer comme tampon",
     "view.fitToDesign": "Ajuster au Design",
+    "view.resetNorth": "Rétablir le nord",
+    "view.turnViewLeft": "Tourner la vue de 15° à gauche",
+    "view.turnViewRight": "Tourner la vue de 15° à droite",
     "file.new": "Nouveau Design",
     "view.backgroundMap": "Carte",
     "edit.findPlants": "Trouver des plantes…",
@@ -1561,7 +1564,6 @@
   "plantFinder": {
     "label": "Trouver des plantes",
     "placeholder": "Nom, nom scientifique ou code",
-    "shortcut": "Ctrl F",
     "quickFilters": "Filtres rapides",
     "selectedOnMap": "Sélection sur la carte",
     "selectedOnMapCount": "Sélection sur la carte · {{count, number}}",
@@ -1722,6 +1724,7 @@
   },
   "shortcutKeys": {
     "ctrl": "Ctrl",
+    "cmd": "Cmd",
     "shift": "Maj",
     "alt": "Alt",
     "delete": "Suppr",
@@ -1751,11 +1754,14 @@
     "workspaceHeading": "Carte et espace de travail",
     "nextRegion": "Zone suivante : barre de titre, outils, carte, panneau",
     "previousRegion": "Zone précédente",
-    "nudge": "Déplacer la sélection de 10 cm",
+    "nudge": "Déplacer la sélection de 10 cm dans le sens de la flèche à l’écran",
     "nudgeLarge": "Déplacer la sélection de 1 m",
     "pan": "Déplacer la carte quand rien n'est sélectionné",
     "panLarge": "Déplacer la carte plus loin quand rien n'est sélectionné",
     "rotateStamp": "Faire pivoter de 15° le tampon en cours de placement",
+    "turnView": "Tourner la vue de 15°",
+    "resetNorth": "Rétablir le nord",
+    "resetNorthAlways": "{{shortcut}} fonctionne même quand les raccourcis à une touche sont désactivés.",
     "arrowKeys": "Flèches",
     "singleKeysOn": "Les raccourcis à une touche peuvent être désactivés dans Réglages › Clavier.",
     "singleKeysOff": "Les raccourcis à une touche sont désactivés. Activez-les dans Réglages › Clavier."
@@ -1795,7 +1801,7 @@
     "openOnSatellite": "Ouvrir sur le satellite",
     "openOnSatelliteHint": "Désactivé, le dernier fond utilisé est conservé.",
     "singleKeyShortcuts": "Raccourcis à une touche",
-    "singleKeyShortcutsHint": "Touches d’outils comme V, P et Z, N pour les étiquettes, les crochets et Maj G, S, R. Désactivés, les raccourcis Ctrl, Suppr, Échap, les flèches et les touches F restent.",
+    "singleKeyShortcutsHint": "Touches d’outils comme V, P et Z, N pour rétablir le nord, les crochets et Maj G, S, R, L. Maj N rétablit toujours le nord. Désactivés, les raccourcis {{mod}}, Suppr, Échap, les flèches et les touches F restent.",
     "remapLater": "Les raccourcis ne peuvent pas encore être modifiés.",
     "allShortcuts": "Voir tous les raccourcis",
     "filesIntro": "Canopi garde ces dossiers sur cet ordinateur. Les Designs que vous enregistrez sont des fichiers là où vous les avez placés.",

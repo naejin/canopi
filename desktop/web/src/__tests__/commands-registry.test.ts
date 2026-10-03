@@ -580,10 +580,11 @@ describe('command registry canvas tool switching', () => {
     input.remove()
   })
 
-  it('cycles View › Labels with N on the map, never while typing', () => {
+  it('cycles View › Labels with Shift+L on the map, never while typing, and N resets north', () => {
     designSessionFixture.file = { ...emptyDesign() }
-    mountCanvasCommandSurface({})
-    const keyDown = (target: EventTarget) => pressKey({ key: 'n' }, target).defaultPrevented
+    const resetNorth = vi.fn()
+    mountCanvasCommandSurface({ viewport: { resetNorth } })
+    const keyDown = (target: EventTarget) => pressKey({ key: 'L', shiftKey: true }, target).defaultPrevented
     const labels = () => (currentDesign.value?.extra?.plant_display as { labels?: string } | undefined)?.labels ?? 'names'
 
     expect(keyDown(document.body)).toBe(true)
@@ -598,6 +599,11 @@ describe('command registry canvas tool switching', () => {
     expect(keyDown(input)).toBe(false)
     expect(labels()).toBe('names')
     input.remove()
+
+    // N moved from Labels to Reset north (spec §3.6).
+    expect(pressKey({ key: 'n' }, document.body).defaultPrevented).toBe(true)
+    expect(labels()).toBe('names')
+    expect(resetNorth).toHaveBeenCalledOnce()
   })
 
   it('turns character-key shortcuts off everywhere with Settings › Keyboard, and keeps Ctrl and named keys', () => {
@@ -616,13 +622,15 @@ describe('command registry canvas tool switching', () => {
 
       expect(keyDown({ key: 'z' })).toBe(false)
       expect(activeTool.value).toBe('select')
-      expect(keyDown({ key: 'n' })).toBe(false)
+      expect(keyDown({ key: 'L', shiftKey: true })).toBe(false)
       expect(labels()).toBe('names')
       expect(keyDown({ key: 'F', shiftKey: true })).toBe(false)
       // Menus, the palette and the F1 list drop the keys that no longer work.
       expect(toolShortcut()).toBeUndefined()
       expect(getCommand('canvas.tool.polygon').shortcut).toBeUndefined()
       expect(fitShortcut()).toBe('Ctrl 0')
+      // Reset north shows the chord that still works: Shift N.
+      expect(flattenMenuActions(menus()).find((entry) => entry.id === 'view.resetNorth')!.shortcut).toBe('Shift N')
 
       expect(keyDown({ key: ',', ctrlKey: true })).toBe(true)
       expect(settingsDialogOpen.value).toBe(true)
@@ -630,7 +638,7 @@ describe('command registry canvas tool switching', () => {
       singleKeyShortcuts.value = true
       settingsDialogOpen.value = false
     }
-    expect(keyDown({ key: 'n' })).toBe(true)
+    expect(keyDown({ key: 'L', shiftKey: true })).toBe(true)
     expect(labels()).toBe('none')
   })
 
@@ -710,7 +718,8 @@ describe('command registry canvas tool switching', () => {
       'canvas.lockSelected', 'canvas.unlockSelected', 'canvas.unlockAll', 'canvas.saveSelectionAsStamp',
     ])
     expect(byMenu.view).toEqual([
-      'view.zoomIn', 'view.zoomOut', 'view.fitToDesign', 'view.searchPlace',
+      'view.zoomIn', 'view.zoomOut', 'view.fitToDesign',
+      'view.resetNorth', 'view.turnViewLeft', 'view.turnViewRight', 'view.searchPlace',
       'view.saveCurrentView', 'view.manageViews',
       'canvas.toggleGrid', 'canvas.toggleSnapToGrid', 'canvas.toggleRulers',
       'view.labels:none', 'view.labels:codes', 'view.labels:names', 'view.toggleToolNames',
@@ -727,7 +736,7 @@ describe('command registry canvas tool switching', () => {
     expect(byMenu.help).toEqual(['help.commandPalette', 'help.shortcuts', 'help.gettingStarted', 'help.reportProblem', 'help.aboutCanopi'])
 
     // Every palette command with a shortcut shows the same shortcut in its menu
-    // item, or on the submenu it acts on (N on View › Labels).
+    // item, or on the submenu it acts on (Shift L on View › Labels).
     const menuShortcut = new Map([
       ...flattenMenuActions(menus()).map((item) => [item.id, item.shortcut] as const),
       ...menus().flatMap((menu) => menu.items).flatMap((entry) => entry.type === 'submenu' && entry.shortcut
@@ -747,12 +756,38 @@ describe('command registry canvas tool switching', () => {
     expect(paletteCommands().some((command) => command.id === 'help.commandPalette')).toBe(false)
     expect(menuShortcut.get('file.exportCanvasPdf')).toBe('Ctrl P')
     expect(menuShortcut.get('edit.findPlants')).toBe('Ctrl F')
-    expect(menuShortcut.get('view.cycleLabels')).toBe('N')
+    expect(menuShortcut.get('view.cycleLabels')).toBe('Shift L')
+    expect(menuShortcut.get('view.resetNorth')).toBe('N')
     expect(menuShortcut.get('file.close')).toBe('Ctrl W')
     expect(menuShortcut.get('canvas.rotateSelected')).toBe('Ctrl Alt R')
     expect(menuShortcut.get('canvas.lockSelected')).toBe('Ctrl Shift L')
     // Esc belongs to the map's own chain; the menu names it without routing it.
     expect(menuShortcut.get('canvas.clearSelection')).toBe('Esc')
+  })
+
+  it('lists Reset north, Turn view left 15° and Turn view right 15° in the View menu and the palette, after Fit to Design', () => {
+    const resetNorth = vi.fn()
+    const rotateBy = vi.fn()
+    mountCanvasCommandSurface({ viewport: { resetNorth, rotateBy } })
+    const view = menus().find((menu) => menu.id === 'view')!
+    const rows = flattenMenuActions([view]).filter((item) => item.id === 'view.resetNorth' || item.id.startsWith('view.turnView'))
+
+    expect(rows.map((item) => [item.label, item.shortcut, item.ariaShortcut, item.disabled])).toEqual([
+      ['Reset north', 'N', 'N Shift+N Shift+ArrowUp', false],
+      ['Turn view left 15°', 'Shift ←', 'Shift+ArrowLeft', false],
+      ['Turn view right 15°', 'Shift →', 'Shift+ArrowRight', false],
+    ])
+    const ids = flattenMenuActions([view]).map((item) => item.id)
+    expect(ids.indexOf('view.resetNorth')).toBe(ids.indexOf('view.fitToDesign') + 1)
+    for (const id of ['view.resetNorth', 'view.turnViewLeft', 'view.turnViewRight']) {
+      expect(getCommand(id).shortcut, id).toBe(rows.find((item) => item.id === id)!.shortcut)
+    }
+
+    rows[0]!.action()
+    rows[1]!.action()
+    getCommand('view.turnViewRight').action()
+    expect(resetNorth).toHaveBeenCalledOnce()
+    expect(rotateBy.mock.calls).toEqual([[-1], [1]])
   })
 
   it('marks checkable View items with their state and groups Export, Arrange, Saved views and Background as submenus', () => {

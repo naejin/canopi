@@ -16,12 +16,12 @@ import { chordMatches, chordsOfShortcut, type KeyboardEventLike, type KeyChord }
 
 export type KeyScope =
   | 'global'          // every focus class except modal; in text only with worksInTextFields (every shell chord, Ctrl+K)
-  | 'command'         // anywhere except text fields and dialogs: tool letters, [ ], N, Ctrl+V, Ctrl+Z…
-  | 'view-arrows'     // like 'command', but not inside an arrow-owning widget
+  | 'command'         // anywhere except text fields and dialogs: tool letters, [ ], N, Shift+N, Shift+L, Ctrl+V, Ctrl+Z…
+  | 'view-arrows'     // like 'command', but not inside an arrow-owning widget: Shift+←/→ turn the view, Shift+↑ resets north
   | 'outside-dock'    // like 'command', but not from the dock or phone sheet (focus there, or <body> after a press there):
                       // the edits of the map's selection (Ctrl+C, Ctrl+A, Delete…)
-  | 'canvas-focus'    // the map host (not text or a control in it), or <body> after a press or focus on the map: arrows,
-                      // Enter, F2…
+  | 'canvas-focus'    // the map host (not text or a control in it), or <body> after a press or focus on the map: plain
+                      // and mod arrows, Enter, F2…
 
 /** A shell command, a canvas catalogue command or a canvas key command ('canvas.<CanvasKeyCommand kind>'). */
 type KeyCommandId = ShellCommandId | CanvasCommandId | `canvas.${CanvasKeyCommand['kind']}`
@@ -48,7 +48,11 @@ export interface CommandSink {
   run(command: ShellCommandId | CanvasCommandId): boolean
 }
 
-/** The canvas key commands, ahead of the catalogue rows they share a chord with (Backspace, F2, `[` `]`). */
+/**
+ * The canvas key commands, ahead of the catalogue rows they share a chord with (Backspace, F2, `[` `]`). The rotation
+ * chords live only here, never on a catalogue definition, whose rows are not in the `view-arrows` scope and would turn
+ * the map from an arrow-owning widget (spec §3.6): the menus show them through the definitions' display-only keyHints.
+ */
 const CANVAS_KEY_ROWS: readonly KeymapRow[] = [
   keyRow({ kind: 'confirm' }, ['Enter']),
   keyRow({ kind: 'remove-last' }, ['Backspace'], { fallback: 'canvas.deleteSelected' }),
@@ -60,9 +64,15 @@ const CANVAS_KEY_ROWS: readonly KeymapRow[] = [
     const key = `Arrow${dir[0]!.toUpperCase()}${dir.slice(1)}`
     return [
       keyRow({ kind: 'arrow', dir, large: false }, [key]),
-      keyRow({ kind: 'arrow', dir, large: true }, [`Shift+${key}`]),
+      // mod is the large step (Cmd on a Mac, where Ctrl+arrow is Mission Control's).
+      keyRow({ kind: 'arrow', dir, large: true }, [`Ctrl+${key}`]),
     ]
   }),
+  keyRow({ kind: 'rotate-view', direction: -1 }, ['Shift+ArrowLeft'], { scope: 'view-arrows' }),
+  keyRow({ kind: 'rotate-view', direction: 1 }, ['Shift+ArrowRight'], { scope: 'view-arrows' }),
+  keyRow({ kind: 'reset-north' }, ['Shift+ArrowUp'], { scope: 'view-arrows' }),
+  // N follows the switch through its catalogue row (View › Reset north); Shift+N always resets.
+  keyRow({ kind: 'reset-north' }, ['Shift+N'], { scope: 'command', singleKey: 'always-on' }),
 ]
 
 /**

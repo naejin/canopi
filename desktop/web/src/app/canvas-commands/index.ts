@@ -39,7 +39,15 @@ export type CanvasEditAction =
   | 'unlock-all'
   | 'save-as-stamp'
 
-export type CanvasViewAction = 'zoom-in' | 'zoom-out' | 'fit-to-design' | 'search-place' | 'cycle-labels'
+export type CanvasViewAction =
+  | 'zoom-in'
+  | 'zoom-out'
+  | 'fit-to-design'
+  | 'reset-north'
+  | 'turn-view-left'
+  | 'turn-view-right'
+  | 'search-place'
+  | 'cycle-labels'
 
 export type CanvasCommandId =
   | 'edit.undo'
@@ -78,6 +86,9 @@ export type CanvasCommandId =
   | 'view.zoomIn'
   | 'view.zoomOut'
   | 'view.fitToDesign'
+  | 'view.resetNorth'
+  | 'view.turnViewLeft'
+  | 'view.turnViewRight'
   | 'view.searchPlace'
   | 'view.cycleLabels'
 
@@ -174,10 +185,12 @@ interface CanvasCommandDefinitionBase {
   /** Canonical shortcuts; the first is shown, the rest are accepted aliases. */
   readonly shortcuts?: readonly string[]
   /**
-   * A key shown beside the command but never routed to it, because another
-   * owner handles it (Deselect's Esc is the map's own Esc chain).
+   * Keys shown beside the command but never routed to it, because another
+   * owner handles them (Deselect's Esc is the map's own Esc chain; the rotation
+   * chords are canvas key rows in app/keyboard/keymap.ts). Menus show the first
+   * when no live shortcut is left; `aria-keyshortcuts` lists every one.
    */
-  readonly keyHint?: string
+  readonly keyHints?: readonly string[]
   readonly palette: boolean
   readonly intent: CanvasCommandIntent
   /** The shortcut also works while a text field has focus. */
@@ -248,7 +261,7 @@ function edit(
   commandId: CanvasCommandId,
   labelKey: string,
   shortcuts?: readonly string[],
-  keyHint?: string,
+  keyHints?: readonly string[],
 ): CanvasEditCommandDefinition {
   return {
     kind: 'edit',
@@ -256,7 +269,7 @@ function edit(
     commandId,
     labelKey,
     shortcuts,
-    ...(keyHint ? { keyHint } : {}),
+    ...(keyHints ? { keyHints } : {}),
     palette: true,
     intent: { type: 'edit', action: id },
   }
@@ -279,39 +292,39 @@ function liveShortcuts(
   return live.length > 0 ? live : undefined
 }
 
-/** The key a command shows: its first live shortcut, else its key hint. */
+/** The key a command shows: its first live shortcut, else its first key hint. */
 export function canvasCommandDisplayKey(
   definition: CanvasCommandDefinition,
   options: CanvasShortcutOptions = ALL_SHORTCUTS,
 ): string | undefined {
-  return liveShortcuts(definition, options)?.[0] ?? definition.keyHint
+  return liveShortcuts(definition, options)?.[0] ?? definition.keyHints?.[0]
 }
 
-/** `aria-keyshortcuts` for a command: every live shortcut, else its key hint. */
+/** `aria-keyshortcuts` for a command: every live shortcut, then every key hint. */
 export function canvasCommandAriaKeys(
   definition: CanvasCommandDefinition,
   options: CanvasShortcutOptions = ALL_SHORTCUTS,
 ): string | undefined {
-  const keys = liveShortcuts(definition, options) ?? (definition.keyHint ? [definition.keyHint] : undefined)
-  return keys?.map(ariaKeyShortcuts).join(' ')
+  const keys = [...liveShortcuts(definition, options) ?? [], ...definition.keyHints ?? []]
+  return keys.length > 0 ? keys.map(ariaKeyShortcuts).join(' ') : undefined
 }
 
 function view(
   id: CanvasViewAction,
   commandId: CanvasCommandId,
   labelKey: string,
-  shortcuts: readonly string[],
-  worksInTextFields = false,
+  keys: { readonly shortcuts?: readonly string[], readonly keyHints?: readonly string[], readonly worksInTextFields?: boolean },
 ): CanvasViewCommandDefinition {
   return {
     kind: 'view',
     id,
     commandId,
     labelKey,
-    shortcuts,
+    ...(keys.shortcuts ? { shortcuts: keys.shortcuts } : {}),
+    ...(keys.keyHints ? { keyHints: keys.keyHints } : {}),
     palette: true,
     intent: { type: 'view', action: id },
-    worksInTextFields,
+    worksInTextFields: keys.worksInTextFields ?? false,
   }
 }
 
@@ -352,7 +365,7 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
   edit('delete', 'canvas.deleteSelected', 'menu.edit.delete', ['Delete', 'Backspace']),
   edit('select-all', 'canvas.selectAll', 'menu.edit.selectAll', ['Ctrl+A']),
   edit('select-same-species', 'canvas.selectSameSpecies', 'menu.edit.selectSameSpecies', ['Ctrl+Shift+A']),
-  edit('deselect', 'canvas.clearSelection', 'menu.edit.deselect', undefined, 'Escape'),
+  edit('deselect', 'canvas.clearSelection', 'menu.edit.deselect', undefined, ['Escape']),
   edit('group', 'canvas.groupSelected', 'menu.edit.group', ['Ctrl+G']),
   edit('ungroup', 'canvas.ungroupSelected', 'menu.edit.ungroup', ['Ctrl+Shift+G']),
   edit('bring-to-front', 'canvas.bringToFront', 'menu.edit.bringToFront', [']']),
@@ -362,12 +375,18 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
   edit('unlock', 'canvas.unlockSelected', 'menu.edit.unlock'),
   edit('unlock-all', 'canvas.unlockAll', 'menu.edit.unlockAll'),
   edit('save-as-stamp', 'canvas.saveSelectionAsStamp', 'menu.edit.saveAsStamp'),
-  view('zoom-in', 'view.zoomIn', 'menu.view.zoomIn', ['Ctrl+Plus']),
-  view('zoom-out', 'view.zoomOut', 'menu.view.zoomOut', ['Ctrl+Minus']),
-  view('fit-to-design', 'view.fitToDesign', 'menu.view.fitToDesign', ['Shift+F', 'Ctrl+0']),
-  view('search-place', 'view.searchPlace', 'menu.view.searchPlace', ['Ctrl+K'], true),
-  // N cycles View › Labels (None, Codes, Names); menus show it on the Labels submenu.
-  view('cycle-labels', 'view.cycleLabels', 'menu.view.cycleLabels', ['N']),
+  view('zoom-in', 'view.zoomIn', 'menu.view.zoomIn', { shortcuts: ['Ctrl+Plus'] }),
+  view('zoom-out', 'view.zoomOut', 'menu.view.zoomOut', { shortcuts: ['Ctrl+Minus'] }),
+  view('fit-to-design', 'view.fitToDesign', 'menu.view.fitToDesign', { shortcuts: ['Shift+F', 'Ctrl+0'] }),
+  // The rotation rows sit after Fit to Design, in the View menu's first section. Their routed chords (Shift+N, Shift+←,
+  // Shift+→, Shift+↑) are canvas key rows, shown here only (spec §3.6).
+  // N follows the single-key switch; Shift+N always resets (with the switch off menus show it).
+  view('reset-north', 'view.resetNorth', 'menu.view.resetNorth', { shortcuts: ['N'], keyHints: ['Shift+N', 'Shift+ArrowUp'] }),
+  view('turn-view-left', 'view.turnViewLeft', 'menu.view.turnViewLeft', { keyHints: ['Shift+ArrowLeft'] }),
+  view('turn-view-right', 'view.turnViewRight', 'menu.view.turnViewRight', { keyHints: ['Shift+ArrowRight'] }),
+  view('search-place', 'view.searchPlace', 'menu.view.searchPlace', { shortcuts: ['Ctrl+K'], worksInTextFields: true }),
+  // Shift+L cycles View › Labels (None, Codes, Names; it was N before rotation); menus show it on the Labels submenu.
+  view('cycle-labels', 'view.cycleLabels', 'menu.view.cycleLabels', { shortcuts: ['Shift+L'] }),
   {
     kind: 'settings',
     id: 'grid',

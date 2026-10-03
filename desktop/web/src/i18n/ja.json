@@ -747,7 +747,7 @@
     "viewChip": "表示",
     "map": {
       "label": "デザインの地図",
-      "description": "ツールレールに表示されたキーを押すとツールを選べます。Shift F10 で選択範囲のメニューを開きます。Esc で取り消し、次に選択ツールに戻り、次に選択を解除します。矢印キーで選択範囲を 10 cm、Shift を押しながらで 1 m 動かします。何も選択していないときは地図を移動し、Shift で大きく移動します。F6 で次の領域（タイトルバー、ツール、地図、パネル）に移ります。"
+      "description": "ツールレールに表示されたキーを押すとツールを選べます。Shift F10 で選択範囲のメニューを開きます。Esc で取り消し、次に選択ツールに戻り、次に選択を解除します。矢印キーで選択範囲を画面上で 10 cm、{{mod}} を押しながらで 1 m 動かします。何も選択していないときは地図を移動します。Shift と左右の矢印キーでビューを回転し、N または Shift と上矢印キーで北を上にします。F6 で次の領域（タイトルバー、ツール、地図、パネル）に移ります。"
     },
     "textNote": {
       "placeholder": "メモを入力"
@@ -1074,6 +1074,9 @@
     "view.darkTheme": "ダークテーマ",
     "edit.saveAsStamp": "スタンプとして保存",
     "view.fitToDesign": "デザインに合わせる",
+    "view.resetNorth": "北を上にする",
+    "view.turnViewLeft": "ビューを左に 15° 回転",
+    "view.turnViewRight": "ビューを右に 15° 回転",
     "file.new": "新しいデザイン",
     "view.backgroundMap": "地図",
     "edit.findPlants": "植物を探す…",
@@ -1561,7 +1564,6 @@
   "plantFinder": {
     "label": "植物を検索",
     "placeholder": "名前、学名、コード",
-    "shortcut": "Ctrl F",
     "quickFilters": "クイックフィルター",
     "selectedOnMap": "地図で選択中",
     "selectedOnMapCount": "地図で選択中 · {{count, number}}",
@@ -1722,6 +1724,7 @@
   },
   "shortcutKeys": {
     "ctrl": "Ctrl",
+    "cmd": "Cmd",
     "shift": "Shift",
     "alt": "Alt",
     "delete": "Del",
@@ -1751,11 +1754,14 @@
     "workspaceHeading": "地図とワークスペース",
     "nextRegion": "次の領域：タイトルバー、ツール、地図、パネル",
     "previousRegion": "前の領域",
-    "nudge": "選択範囲を 10 cm 動かす",
+    "nudge": "選択範囲を画面上の矢印の方向に 10 cm 動かす",
     "nudgeLarge": "選択範囲を 1 m 動かす",
     "pan": "何も選択していないときに地図を移動する",
     "panLarge": "何も選択していないときに地図を大きく移動する",
     "rotateStamp": "配置中のスタンプを 15° 回転",
+    "turnView": "ビューを 15° 回転",
+    "resetNorth": "北を上にする",
+    "resetNorthAlways": "1 キーのショートカットがオフでも {{shortcut}} は使えます。",
     "arrowKeys": "矢印キー",
     "singleKeysOn": "1 キーのショートカットは「設定 › キーボード」でオフにできます。",
     "singleKeysOff": "1 キーのショートカットはオフです。「設定 › キーボード」でオンにできます。"
@@ -1795,7 +1801,7 @@
     "openOnSatellite": "衛星画像で開く",
     "openOnSatelliteHint": "オフにすると、最後に使った背景のままになります。",
     "singleKeyShortcuts": "1 キーのショートカット",
-    "singleKeyShortcutsHint": "V、P、Z などのツールキー、ラベルの N、角かっこ、Shift G・S・R。オフでも Ctrl のショートカット、Delete、Esc、矢印キー、F キーは使えます。",
+    "singleKeyShortcutsHint": "V、P、Z などのツールキー、北を上にする N、角かっこ、Shift G・S・R・L。Shift N はいつでも北を上にします。オフでも {{mod}} のショートカット、Delete、Esc、矢印キー、F キーは使えます。",
     "remapLater": "ショートカットはまだ変更できません。",
     "allShortcuts": "すべてのショートカットを表示",
     "filesIntro": "Canopi はこれらのフォルダーをこのコンピューターに保存します。保存したデザインは、選んだ場所にあるファイルです。",

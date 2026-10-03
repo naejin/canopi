@@ -133,7 +133,8 @@ describe('SceneInteractionSession', () => {
       expect(descriptionId).toBeTruthy()
       expect(document.getElementById(descriptionId!)?.textContent).toBe(t('canvas.map.description'))
       // It names every key the map takes: tools, the menu, arrows, F6 and Esc.
-      expect(t('canvas.map.description')).toContain('Arrow keys move the selection 10 cm, or 1 m with Shift')
+      expect(t('canvas.map.description', { mod: 'Ctrl' })).toContain('Arrow keys move the selection 10 cm on screen, or 1 m with Ctrl')
+      expect(t('canvas.map.description', { mod: 'Cmd' })).toContain('Shift with left or right arrow turns the view; N or Shift with up arrow resets north.')
       expect(t('canvas.map.description')).toContain('F6')
       session.dispose()
     })
@@ -419,7 +420,7 @@ describe('SceneInteractionSession', () => {
       return { nudge, session, deps, render }
     }
 
-    it('pans the map 64 px per arrow, 256 px with Shift, when nothing is selected', () => {
+    it('pans the map 64 px per arrow, 256 px with mod, when nothing is selected', () => {
       const { nudge, render } = nudgeSession(false)
       const before = testView.viewport()
       render.mockClear()
@@ -429,15 +430,18 @@ describe('SceneInteractionSession', () => {
       expect(testView.viewport()).toEqual({ x: before.x - 64, y: before.y, scale: before.scale })
       expect(render).toHaveBeenCalledWith('viewport')
 
-      events.keyDown({ key: 'ArrowDown', shiftKey: true, target: container })
+      events.keyDown({ key: 'ArrowDown', ctrlKey: true, target: container })
       events.keyDown({ key: 'ArrowLeft', target: container })
       events.keyDown({ key: 'ArrowUp', target: container })
+      expect(testView.viewport()).toEqual({ x: before.x, y: before.y - 256 + 64, scale: before.scale })
+      // Shift+↓ is unbound (reserved for tilt): it no longer pans farther.
+      events.keyDown({ key: 'ArrowDown', shiftKey: true, target: container })
       expect(testView.viewport()).toEqual({ x: before.x, y: before.y - 256 + 64, scale: before.scale })
       expect(nudge.nudgeSelected).not.toHaveBeenCalled()
       expect(nudge.endNudge).not.toHaveBeenCalled()
     })
 
-    it('pans with an empty selection under any tool and in overview, but not from a field or with Ctrl', () => {
+    it('pans with an empty selection under any tool and in overview, but not from a field or with Alt', () => {
       const { session, deps } = nudgeSession(false)
       const before = testView.viewport()
       session.setTool('polygon')
@@ -455,22 +459,24 @@ describe('SceneInteractionSession', () => {
       expect(inField.defaultPrevented).toBe(false)
       field.remove()
       container.focus()
-      events.keyDown({ key: 'ArrowRight', ctrlKey: true, target: container })
       events.keyDown({ key: 'ArrowRight', altKey: true, target: container })
       expect(testView.viewport().x).toBeCloseTo(before.x - 128, 6)
+      // mod is the large step (it was Shift before phase 1).
+      events.keyDown({ key: 'ArrowRight', ctrlKey: true, target: container })
+      expect(testView.viewport().x).toBeCloseTo(before.x - 128 - 256, 6)
 
       // With a selection the same key nudges instead.
       deps.setSelection([plantTarget('plant-1')])
       events.keyDown({ key: 'ArrowRight', target: container })
-      expect(testView.viewport().x).toBeCloseTo(before.x - 128, 6)
+      expect(testView.viewport().x).toBeCloseTo(before.x - 128 - 256, 6)
       expect(deps.nudge!.nudgeSelected).toHaveBeenCalledExactlyOnceWith({ x: 0.1, y: 0 })
     })
 
-    it('nudges the selection 0.1 m per arrow, 1 m with Shift, north-up', () => {
+    it('nudges the selection 0.1 m per arrow, 1 m with mod, north-up', () => {
       const { nudge } = nudgeSession()
       const right = events.keyDown({ key: 'ArrowRight', cancelable: true, target: container })
       events.keyDown({ key: 'ArrowLeft', target: container })
-      events.keyDown({ key: 'ArrowUp', shiftKey: true, target: container })
+      events.keyDown({ key: 'ArrowUp', ctrlKey: true, target: container })
       events.keyDown({ key: 'ArrowDown', target: container })
       expect(right.defaultPrevented).toBe(true)
       expect(nudge.nudgeSelected.mock.calls.map(([delta]) => delta)).toEqual([
@@ -523,13 +529,12 @@ describe('SceneInteractionSession', () => {
       expect(deps.clearSelection).toHaveBeenCalled()
     })
 
-    it('leaves the arrows alone off the map, under other tools and with Ctrl or Alt', () => {
+    it('leaves the arrows alone off the map, under other tools and with Alt', () => {
       const { nudge, session } = nudgeSession()
       const field = document.createElement('input')
       document.body.append(field)
       try {
         events.keyDown({ key: 'ArrowRight', target: field })
-        events.keyDown({ key: 'ArrowRight', ctrlKey: true, target: container })
         events.keyDown({ key: 'ArrowRight', altKey: true, target: container })
         session.setTool('polygon')
         events.keyDown({ key: 'ArrowRight', target: container })
