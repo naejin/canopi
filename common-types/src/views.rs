@@ -463,7 +463,7 @@ mod tests {
         value["extent"] = json!({ "west": 1.99, "south": 47.995, "east": 2.01, "north": 48.005 });
         let view: SavedView = serde_json::from_value(value).expect("view should parse");
         assert_eq!(view.camera.ground_size_m, None);
-        validate_views_and_stories(&[view.clone()], &[])
+        validate_views_and_stories(std::slice::from_ref(&view), &[])
             .expect("a view without a ground size is valid");
         let written = serde_json::to_value(&view).expect("serialize");
         assert!(written.get("extent").is_none(), "{written}");
