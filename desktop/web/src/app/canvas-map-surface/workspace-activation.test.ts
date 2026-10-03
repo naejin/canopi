@@ -856,6 +856,49 @@ describe('WorkspaceActivationCoordinator', () => {
     expect(runtime.init).not.toHaveBeenCalled()
   })
 
+  it('logs a lost map\'s cause once, with the tile key redacted', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const { coordinator } = createCoordinator()
+      await expect(coordinator.activate()).resolves.toBe('shared-ready')
+      const failure = new Error('AJAXError: Forbidden (403): https://example.test/style.json?key=AIzaLeakedCoreKey')
+
+      const outcome = coordinator.reportFailure(failure)
+      void coordinator.reportFailure(new Error('a second report of the same loss'))
+      await expect(outcome).resolves.toBe('map-unavailable')
+
+      expect(consoleError).toHaveBeenCalledExactlyOnceWith('Shared workspace map failed:', expect.any(Error))
+      const logged = String((consoleError.mock.calls[0]?.[1] as Error).message)
+      expect(logged).toContain('key=<redacted>')
+      expect(logged).not.toContain('AIzaLeakedCoreKey')
+      await coordinator.teardown()
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
+  it.each([
+    ['map acquisition rejects before admission', () => ({ createMap: async () => { throw new Error('context lost before the style loaded') } }), 'context lost before the style loaded'],
+    ['WebGL2 is missing', () => ({ createMap: async () => { throw new WorkspaceWebGL2UnavailableError() } }), 'WebGL2 is unavailable'],
+    ['the shared layer fails to initialize', () => ({
+      composition: createComposition({ initialize: async () => { throw new Error('Pixi init failed') } }).composition,
+    }), 'Pixi init failed'],
+  ])('logs the cause when %s', async (_reason, setup, message) => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const { coordinator } = createCoordinator(setup())
+
+      await expect(coordinator.activate()).resolves.toBe('map-unavailable')
+
+      expect(consoleError).toHaveBeenCalledExactlyOnceWith(
+        'Shared workspace map failed:',
+        expect.objectContaining({ message: expect.stringContaining(message) }),
+      )
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
   it('unmounts once when replacement admission fails and never restarts on its own', async () => {
     const map = new FakeMap()
     const replacementFailure = new Error('replacement map failed')

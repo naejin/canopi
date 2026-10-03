@@ -606,6 +606,9 @@ export class WorkspaceActivationCoordinator {
   ): Promise<WorkspaceActivationOutcome> {
     if (!this.isCurrent(current)) return Promise.resolve('cancelled')
     if (current.failure) return current.failure
+    // Every core map failure passes here once per generation. The notice and the
+    // published state carry no engine text, so the log keeps the redacted cause.
+    logMapError('Shared workspace map failed:', error)
 
     // Install the failure fence before invoking composition, runtime, or
     // cleanup code. Those boundaries may synchronously report another failure.
