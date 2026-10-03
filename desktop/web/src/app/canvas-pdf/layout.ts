@@ -46,7 +46,9 @@ function buildPages(original: PdfInput, setup: PdfSetup, text: PdfTextEngine, la
   const input = { ...original, canvas: turnSnapshot(original.canvas, frame) }
   const offsetOf = (view?: PdfPageView) => view?.offset && frame.toFrame(view.offset)
   const selected = { ...input, canvas: printableCanvas(input.canvas, setup.layers, setup.plantColors) }
-  const dimensions = zoneMeasurements(selected.canvas.zones)
+  // E, N, P and M are allocated once, from the unturned plan, so a code names the same object at every angle.
+  const plan = printableCanvas(original.canvas, setup.layers)
+  const dimensions = zoneMeasurements(selected.canvas.zones, plan.zones)
   const details: PdfPage[] = []
   const empty = !(setup.areas?.length || selected.canvas.plants.length || selected.canvas.zones.length || selected.canvas.annotations.length || selected.canvas.measurements.length)
   const asPages = (id: string, geometry: Geometry, ground: PrintBounds, scale: number, drawing: FieldDrawing, areaName?: string): PdfPage[] => {
@@ -92,7 +94,7 @@ function buildPages(original: PdfInput, setup: PdfSetup, text: PdfTextEngine, la
   })
   if (fittedDetails.length) {
     // Identity collisions follow the printed colours, so grayscale and black get enclosures where needed.
-    const references = fieldReferences({ ...input, canvas: { ...input.canvas, plants: recolorPlants(input.canvas.plants, setup.plantColors) } }, fittedDetails.map(p => p.ground))
+    const references = fieldReferences({ ...input, canvas: { ...input.canvas, plants: recolorPlants(input.canvas.plants, setup.plantColors) } }, plan, dimensions, fittedDetails.map(p => p.ground))
     references.measurementHomes = new Map(selected.canvas.measurements.flatMap(guide => {
       const home = fittedDetails.filter(p => contains(p.ground, guide.start) && contains(p.ground, guide.end))
         .sort((a, b) => b.pointsPerMeter - a.pointsPerMeter)[0]
@@ -164,7 +166,7 @@ function buildPages(original: PdfInput, setup: PdfSetup, text: PdfTextEngine, la
   const visible = visibleFieldCanvas(overviewInput.canvas, overviewFit.ground)
   const readableChain = readableOverviewChain(chain, fitted.geometry.frame, overviewFit.ground, overviewFit.pointsPerMeter, text, input.locale)
   const drawing = drawOverview({ ...selected, canvas: visible }, fitted.geometry.frame, overviewFit.ground, overviewFit.pointsPerMeter, text,
-    new Map([...guideHomes, ...readableChain.map(g => [g.id, 'chain'] as const)]), true)
+    new Map([...guideHomes, ...readableChain.map(g => [g.id, 'chain'] as const)]), true, dimensions)
   drawing.operations.push(...drawOverviewGuideChain(readableChain, fitted.geometry.frame, overviewFit.ground, overviewFit.pointsPerMeter, text, input.locale, fieldLabels(labels).guides, selected.canvas.layers.find(l => l.name === 'measurement-guides')?.opacity ?? 1))
   const summaryFrame = { x: fitted.geometry.frame.x + fitted.geometry.frame.width + 6 * MM, y: fitted.geometry.frame.y,
     width: 108 * MM, height: fitted.geometry.height - fitted.geometry.frame.y - 20 * MM }

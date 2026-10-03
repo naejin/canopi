@@ -18,7 +18,9 @@ const input: PdfInput = { name: 'Garden', locale: 'en', commonNames: {}, canvas:
     mark: [{ d: 'M1 0 A1 1 0 1 0 -1 0 A1 1 0 1 0 1 0 Z', paint: 'symbol' }] }],
 } }
 const draw = (value: PdfInput) => drawField(value, { x: 60, y: 60, width: 400, height: 400 },
-  { x: 0, y: 0, width: 10, height: 10 }, 40, { id: 'detail', width: 595, height: 842 }, text(), fieldReferences(value))
+  { x: 0, y: 0, width: 10, height: 10 }, 40, { id: 'detail', width: 595, height: 842 }, text(), references(value))
+/** North up: the drawn canvas is the plan. */
+const references = (value: PdfInput) => fieldReferences(value, value.canvas, zoneMeasurements(value.canvas.zones))
 
 it('prints overlapping zones transparently beneath artwork on the overview, detail and picker without changing authored fills', () => {
   const source: PdfInput = { ...input, canvas: { ...input.canvas,
@@ -373,10 +375,10 @@ it('uses direct Species Codes for locally occasional ambiguous plants, regardles
   const plants = Array.from({ length: 12 }, (_, i) => ({ ...input.canvas.plants[0]!, id: `apple-${i}`, position: { x: 3, y: 1 + i * .6 } }))
   const pear = { ...input.canvas.plants[0]!, id: 'pear', canonicalName: 'Pyrus communis', speciesCode: 'PCO', position: { x: 7, y: 5 } }
   const source = { ...input, canvas: { ...input.canvas, plants: [...plants, pear] } }
-  const references = fieldReferences({ ...source, canvas: { ...source.canvas, plants: [...source.canvas.plants,
+  const allPlants = references({ ...source, canvas: { ...source.canvas, plants: [...source.canvas.plants,
     ...Array.from({ length: 100 }, (_, i) => ({ ...pear, id: `outside-${i}`, position: { x: 30, y: i } }))] } })
   const drawing = drawField(source, { x: 60, y: 60, width: 400, height: 400 }, { x: 0, y: 0, width: 10, height: 10 }, 40,
-    { id: 'detail', width: 595, height: 842 }, text(), references)
+    { id: 'detail', width: 595, height: 842 }, text(), allPlants)
   expect(drawing.legend.find(e => e.canonicalName === 'Pyrus communis')!.enclosures).toEqual(['code'])
   expect(drawing.legend.find(e => e.canonicalName === 'Malus domestica')!.enclosures).toEqual(['plain'])
   expect(drawing.operations.some(op => op.kind === 'text' && op.line.runs.map(r => r.text).join('') === 'PCO')).toBe(true)

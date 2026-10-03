@@ -6,14 +6,14 @@ import { drawMark, MM, pathOp, textOp } from './page-drawing'
 import { paperPlantRadius } from './plant-marks'
 import { FieldSpace } from './field-placement'
 import { contains } from './field-geometry'
-import { zoneMeasurements } from './zone-measurements'
+import type { ZoneMeasurements } from './zone-measurements'
 import { zoneLabels } from './zone-labels'
 import { fieldDimensions } from './field-dimensions'
 import { directAnnotation } from './field-annotations'
 import { protectZoneInk } from './zone-ink'
 
 /** Overview and picker share authored artwork; only the overview adds physical guide and zone labels. */
-export function drawOverview(input: PdfInput, frame: PrintBounds, ground: PrintBounds, scale: number, text: PdfTextEngine, grouped: ReadonlyMap<string, string> = new Map(), labels = false): FieldDrawing {
+export function drawOverview(input: PdfInput, frame: PrintBounds, ground: PrintBounds, scale: number, text: PdfTextEngine, grouped: ReadonlyMap<string, string> = new Map(), labels = false, zones: readonly ZoneMeasurements[] = []): FieldDrawing {
   const canvas = input.canvas
   const drawing: FieldDrawing = { operations: [], links: [], destinations: [], legend: [], notes: [], identifiedPlants: [],
     annotationIds: labels ? [] : canvas.annotations.map(n => n.id), measurementIds: canvas.measurements.map(g => g.id), pageReferences: [] }
@@ -72,7 +72,7 @@ export function drawOverview(input: PdfInput, frame: PrintBounds, ground: PrintB
   }
   if (labels) {
     for (const guide of canvas.measurements) space.addSegments([{ a: project(guide.start), b: project(guide.end) }])
-    operations.push(...zoneLabels(zoneMeasurements(canvas.zones), ground, project, space, false))
+    operations.push(...zoneLabels(zones, ground, project, space, false))
   }
   for (const note of [...canvas.annotations].sort((a, b) => a.text.length - b.text.length || a.id.localeCompare(b.id))) {
     if (labels) {
