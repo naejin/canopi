@@ -2,9 +2,10 @@
 //
 // Owns Select's band (today's (a4c86d39) shared-gestures.ts 'band' mode): a press on empty ground clears the selection unless the
 // press is additive, and the drag draws a screen-aligned box from the press to the pointer (the band's `quad` draft:
-// the selection stroke at 2 px over the selection fill). The release selects every object the box's bounds touch, the
-// locked ones left out, added to the selection when the press was additive; a release within 2 px of the press selects
-// nothing. The release runs when the scene is settled (CanvasTool.settledRelease).
+// the selection stroke at 2 px over the selection fill). The release selects every object the box touches, tested
+// against its world quad (turned with the view, never widened to its world box; spec §4.9), the locked ones left out,
+// added to the selection when the press was additive; a release within 2 px of the press selects nothing. The release
+// runs when the scene is settled (CanvasTool.settledRelease).
 
 import { isSceneDesignObjectLocked } from '../../scene/locks'
 import { sceneTargetKey, type SceneDesignObjectTarget } from '../../scene/design-object-targets'

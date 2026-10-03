@@ -7,11 +7,10 @@ import {
   sceneStoreWith,
   textNote,
 } from '../../../__tests__/support/tool-harness'
-import { computeSelectionRect } from '../../operations'
 import { buildPlantPresentationEntries } from '../plant-presentation'
 import type { SceneStore } from '../scene'
 import type { WorldPoint, WorldQuad } from '../view/types'
-import { hitTestTopLevel, hitTestVisibleTopLevel, queryRectTopLevel } from './hit-testing'
+import { hitTestTopLevel, hitTestVisibleTopLevel } from './hit-testing'
 import { createToolScene } from './spatial-index'
 
 function orchardStore(): SceneStore {
@@ -44,10 +43,6 @@ function samplePoints(): WorldPoint[] {
     for (let y = -5; y <= 45; y += 1.25) points.push({ x, y })
   }
   return points
-}
-
-function quad(a: WorldPoint, b: WorldPoint): WorldQuad {
-  return [{ x: a.x, y: a.y }, { x: b.x, y: a.y }, { x: b.x, y: b.y }, { x: a.x, y: b.y }]
 }
 
 describe('ToolScene over today\'s hit tests', () => {
@@ -123,28 +118,46 @@ describe('ToolScene over today\'s hit tests', () => {
     expect(() => scene.hitAt({ x: 0, y: 0 }, { toleranceScreenPx: 12 })).toThrow(/toleranceScreenPx/)
   })
 
-  it('hitInQuad queries the quad\'s world bounds as today\'s band select does', () => {
-    const store = orchardStore()
-    const source = createToolSceneSource(store, { pixelsPerMetre: () => 4 })
-    const scene = createToolScene(source)
+  it('a quad at 45 hits plants by their circles and shapes by their polygons, never a hidden layer', () => {
+    const pixelsPerMetre = 20
+    // A diamond: the band of a square screen box seen at 45°. Its world box is [-10, 10]², which today's query read.
+    const diamond: WorldQuad = [{ x: 10, y: 0 }, { x: 0, y: 10 }, { x: -10, y: 0 }, { x: 0, y: -10 }]
+    const probe = createToolScene(createToolSceneSource(sceneStoreWith({}), { pixelsPerMetre: () => pixelsPerMetre }))
+    const radius = probe.plantPresentation(plantEntity('probe', 'Malus domestica', { x: 0, y: 0 }))!.radiusPx / pixelsPerMetre
+    // Off the diamond's south-east edge (x + y = 10) by 0.85 radius along the diagonal: the plant's square reaches the
+    // diamond, its circle does not. Off the north-west edge by half a radius, the circle reaches it. (The plants stay far
+    // enough apart that their spacing leaves the probe's radius alone.)
+    const offEdge = 5 + radius * 0.85
+    const store = sceneStoreWith({
+      plants: [
+        plantEntity('centre', 'Malus domestica', { x: 0, y: 0 }),
+        plantEntity('box-corner', 'Malus domestica', { x: 8, y: 8 }),
+        plantEntity('square-only', 'Malus domestica', { x: offEdge, y: offEdge }),
+        plantEntity('circle-crosses', 'Malus domestica', { x: -5 - radius * 0.5, y: -5 - radius * 0.5 }),
+      ],
+      zones: [
+        rectZone('in-box-corner', [{ x: -9, y: -9 }, { x: -7, y: -9 }, { x: -7, y: -7 }, { x: -9, y: -7 }]),
+        rectZone('across-edge', [{ x: -8, y: 6 }, { x: -2, y: 6 }, { x: -2, y: 9 }, { x: -8, y: 9 }]),
+      ],
+      measurementGuides: [
+        measurementGuide('in-box', { x: 9, y: -9 }, { x: 9, y: -6 }),
+        measurementGuide('crossing', { x: 3, y: -12 }, { x: 3, y: -4 }),
+      ],
+    })
+    const scene = createToolScene(createToolSceneSource(store, { pixelsPerMetre: () => pixelsPerMetre }))
 
-    for (const [a, b] of [
-      [{ x: -1, y: -1 }, { x: 6, y: 6 }],
-      [{ x: 25, y: 25 }, { x: 16, y: -2 }],
-      [{ x: -10, y: 28 }, { x: 50, y: 50 }],
-    ] as const) {
-      const expected = queryRectTopLevel(
-        store.persisted,
-        computeSelectionRect(a, b),
-        4,
-        source.speciesCache(),
-        source.plantContext,
-        store.session.selectedTargets,
-      )
-      expect(scene.hitInQuad(quad(a, b))).toEqual(expected.map((target) => ({ kind: 'object', target })))
-    }
-    expect(scene.hitInQuad(quad({ x: -1, y: -1 }, { x: 16, y: 16 }), { kinds: ['zone'] }))
-      .toEqual([{ kind: 'object', target: { kind: 'zone', id: 'z1' } }])
+    expect(scene.hitInQuad(diamond)).toEqual([
+      { kind: 'object', target: { kind: 'plant', id: 'centre' } },
+      { kind: 'object', target: { kind: 'plant', id: 'circle-crosses' } },
+      { kind: 'object', target: { kind: 'measurement-guide', id: 'crossing' } },
+      { kind: 'object', target: { kind: 'zone', id: 'across-edge' } },
+    ])
+
+    store.updatePersisted((draft) => {
+      draft.layers = draft.layers.map((layer) => layer.name === 'zones' ? { ...layer, visible: false } : layer)
+    })
+    expect(scene.hitInQuad(diamond, { kinds: ['zone'] })).toEqual([])
+    expect(scene.hitInQuad(diamond, { kinds: ['plant'] })).toHaveLength(2)
   })
 
   it('nearestPlant keeps the first plant in scene order on a tie, as Place plants does today, and skips excluded plants', () => {

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import type { PlantPresentationContext } from '../plant-presentation'
-import type { ScenePersistedState } from '../scene'
-import { hitTestTopLevel, hitTestVisibleTopLevel, queryRectTopLevel } from './hit-testing'
+import type { ScenePersistedState, ScenePoint } from '../scene'
+import { hitTestTopLevel, hitTestVisibleTopLevel, queryQuadTopLevel } from './hit-testing'
 
 function createScene(): ScenePersistedState {
   return {
@@ -36,6 +36,16 @@ function createScene(): ScenePersistedState {
   }
 }
 
+/** A band level with the world axes, as its four corners. */
+function box(rect: { x: number; y: number; width: number; height: number }): ScenePoint[] {
+  return [
+    { x: rect.x, y: rect.y },
+    { x: rect.x + rect.width, y: rect.y },
+    { x: rect.x + rect.width, y: rect.y + rect.height },
+    { x: rect.x, y: rect.y + rect.height },
+  ]
+}
+
 function getPlantContext(viewportScale: number): PlantPresentationContext {
   return {
     pixelsPerMetre: viewportScale,
@@ -52,7 +62,7 @@ describe('scene hit testing', () => {
       .toEqual({ kind: 'plant', id: 'plant-1' })
     expect(hitTestTopLevel(scene, { x: 0, y: 20 }, 20, new Map(), getPlantContext))
       .toEqual({ kind: 'annotation', id: 'note' })
-    expect(queryRectTopLevel(scene, { x: 5, y: 20, width: .1, height: .1 }, 20, new Map(), getPlantContext))
+    expect(queryQuadTopLevel(scene, box({ x: 5, y: 20, width: .1, height: .1 }), 20, new Map(), getPlantContext))
       .toEqual([])
     expect(hitTestTopLevel(scene, { x: 5, y: 20 }, 20, new Map(), getPlantContext, [], { kind: 'annotation', id: 'note' }))
       .toEqual({ kind: 'annotation', id: 'note' })
@@ -68,7 +78,7 @@ describe('scene hit testing', () => {
     ]
     expect(hitTestTopLevel(scene, { x: 0, y: 0 }, 10, new Map(), getPlantContext))
       .toEqual({ kind: 'plant', id: 'a' })
-    expect(queryRectTopLevel(scene, { x: -.3, y: 0, width: .01, height: .01 }, 10, new Map(), getPlantContext))
+    expect(queryQuadTopLevel(scene, box({ x: -.3, y: 0, width: .01, height: .01 }), 10, new Map(), getPlantContext))
       .toEqual([])
   })
 
@@ -80,15 +90,15 @@ describe('scene hit testing', () => {
       .toEqual({ kind: 'annotation', id: 'note' })
     expect(hitTestTopLevel(scene, { x: 10, y: 20 }, 1, new Map(), getPlantContext))
       .toEqual({ kind: 'plant', id: 'plant-1' })
-    expect(queryRectTopLevel(scene, { x: 30, y: 22, width: 2, height: 2 }, 1, new Map(), getPlantContext))
+    expect(queryQuadTopLevel(scene, box({ x: 30, y: 22, width: 2, height: 2 }), 1, new Map(), getPlantContext))
       .toEqual([])
   })
 
   it('uses the symbolic Placed Plant Visual Footprint for band selection bounds', () => {
     const scene = createScene()
-    const targets = queryRectTopLevel(
+    const targets = queryQuadTopLevel(
       scene,
-      { x: 10.34, y: 20, width: 0.01, height: 0.01 },
+      box({ x: 10.34, y: 20, width: 0.01, height: 0.01 }),
       10,
       new Map(),
       getPlantContext,
@@ -163,9 +173,9 @@ describe('scene hit testing', () => {
       notes: null,
     }]
 
-    expect(queryRectTopLevel(scene, { x: 5, y: 2, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext))
+    expect(queryQuadTopLevel(scene, box({ x: 5, y: 2, width: 0.01, height: 0.01 }), 1, new Map(), getPlantContext))
       .toEqual([{ kind: 'zone', id: 'zone-1' }])
-    expect(queryRectTopLevel(scene, { x: 1, y: 1, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext))
+    expect(queryQuadTopLevel(scene, box({ x: 1, y: 1, width: 0.01, height: 0.01 }), 1, new Map(), getPlantContext))
       .toEqual([])
   })
 
@@ -241,9 +251,9 @@ describe('scene hit testing', () => {
       notes: null,
     }]
 
-    expect(queryRectTopLevel(scene, { x: 0, y: 3, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext))
+    expect(queryQuadTopLevel(scene, box({ x: 0, y: 3, width: 0.01, height: 0.01 }), 1, new Map(), getPlantContext))
       .toEqual([{ kind: 'zone', id: 'zone-1' }])
-    expect(queryRectTopLevel(scene, { x: 3, y: 0, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext))
+    expect(queryQuadTopLevel(scene, box({ x: 3, y: 0, width: 0.01, height: 0.01 }), 1, new Map(), getPlantContext))
       .toEqual([])
   })
 
@@ -265,9 +275,9 @@ describe('scene hit testing', () => {
       .toEqual({ kind: 'annotation', id: 'annotation-1' })
     expect(hitTestTopLevel(scene, { x: 20, y: 25 }, 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
       .toBeNull()
-    expect(queryRectTopLevel(scene, { x: 0, y: 30, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
+    expect(queryQuadTopLevel(scene, box({ x: 0, y: 30, width: 0.01, height: 0.01 }), 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
       .toEqual([{ kind: 'annotation', id: 'annotation-1' }])
-    expect(queryRectTopLevel(scene, { x: 20, y: 25, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
+    expect(queryQuadTopLevel(scene, box({ x: 20, y: 25, width: 0.01, height: 0.01 }), 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
       .toEqual([])
   })
 
@@ -287,9 +297,9 @@ describe('scene hit testing', () => {
 
     expect(hitTestTopLevel(scene, { x: 16, y: 2 }, 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
       .toBeNull()
-    expect(queryRectTopLevel(scene, { x: 16, y: 2, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
+    expect(queryQuadTopLevel(scene, box({ x: 16, y: 2, width: 0.01, height: 0.01 }), 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
       .toEqual([])
-    expect(queryRectTopLevel(scene, { x: 8, y: 8, width: 0.01, height: 0.01 }, 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
+    expect(queryQuadTopLevel(scene, box({ x: 8, y: 8, width: 0.01, height: 0.01 }), 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
       .toEqual([{ kind: 'annotation', id: 'annotation-1' }])
   })
 })
