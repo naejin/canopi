@@ -22,6 +22,7 @@ export const canvasPdf = createPdfWorkflow({
     const canvas = query.capturePrintSnapshot()
     if (!canvas) return null
     // Exact, not the rounded bearing signal: As on screen levels guides drawn level on the turned map.
+    // Read on every capture; the workflow keeps the one read on open until the workspace closes.
     const viewBearingDeg = query.view.captureView().camera.bearingDeg
     return { identity, input: { name, locale: language, canvas, commonNames: {}, viewBearingDeg },
       isCurrent: () => designSessionStore.sessionIdentity.value === identity && currentCanvasQuerySurface.value === query

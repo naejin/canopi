@@ -17,12 +17,15 @@ function fixture(plants: PrintPlant[] = [], view: Pick<PdfInput, 'viewBearingDeg
   const save = vi.fn(async () => 'saved' as const)
   const resolveDisplayNames = vi.fn(async (_names: readonly string[], _locale: string): Promise<SpeciesDisplayNames> => ({ names: {}, englishFallbacks: [] }))
   let currentCanvas = capture.input.canvas
+  let bearing = view.viewBearingDeg
   const workflow = createPdfWorkflow({ capture: () => {
     const canvas = currentCanvas
-    return { ...capture, input: { ...capture.input, canvas }, isCurrent: () => current && canvas === currentCanvas }
+    return { ...capture, input: { ...capture.input, canvas, ...(bearing === undefined ? {} : { viewBearingDeg: bearing }) },
+      isCurrent: () => current && canvas === currentCanvas }
   }, prepare, resolveDisplayNames,
     delivery: { save, dispose: vi.fn() }, labels: () => ({ notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => 'https://test/fonts/' })
-  return { workflow, prepare, save, resolveDisplayNames, capture, setCanvas: (canvas: CanvasPrintSnapshot) => { currentCanvas = canvas }, replace: () => { current = false; workflow.synchronize({}) } }
+  return { workflow, prepare, save, resolveDisplayNames, capture, setCanvas: (canvas: CanvasPrintSnapshot) => { currentCanvas = canvas },
+    turnView: (deg: number) => { bearing = deg }, replace: () => { current = false; workflow.synchronize({}) } }
 }
 describe('PDF workflow lifetime', () => {
   it('As on screen stores Whole Design and split sheets in plan metres and looks names up in the turned area', async () => {
@@ -56,6 +59,26 @@ describe('PDF workflow lifetime', () => {
       expect(parts).toEqual(splitPrintArea(picker, plants, frame))
       expect(parts.length).toBeGreaterThan(1)
       for (const p of plants.filter(p => areaContains(frame, stored, p.position))) expect(parts.some(part => areaContains(frame, part, p.position))).toBe(true)
+    } finally { workflow.dispose() }
+  })
+  it('holds the bearing captured on open until the workspace closes, however the view turns behind it', async () => {
+    // A turn still easing when Ctrl+P opens the workspace must not move the pages on the next setting change.
+    const { workflow, prepare, turnView, setCanvas, capture } = fixture([], { viewBearingDeg: 9 })
+    const angle = () => layoutAngle(prepare.mock.lastCall![0].setup, prepare.mock.lastCall![0].input)
+    try {
+      workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      workflow.configure({ mapOrientation: 'as-on-screen' }); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      expect(angle()).toBe(9)
+      turnView(15)
+      workflow.configure({ paper: 'Letter' }); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      expect(angle()).toBe(9)
+      setCanvas({ ...capture.input.canvas, zones: [] }); workflow.synchronize(capture.identity)
+      await vi.waitFor(() => expect(prepare.mock.lastCall![0].input.canvas.zones).not.toBe(capture.input.canvas.zones))
+      await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      expect(angle()).toBe(9)
+      workflow.close(); workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      expect(workflow.setup.value.mapOrientation).toBe('as-on-screen')
+      expect(angle()).toBe(15)
     } finally { workflow.dispose() }
   })
   it('exports automatically prepared pages and clears temporary choices on Design replacement', async () => {
