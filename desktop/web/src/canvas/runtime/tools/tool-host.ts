@@ -31,7 +31,7 @@ import type { ScenePersistedState } from '../scene/types'
 import type { SceneEditCoordinator, SceneEditRunOptions, SceneEditTransaction } from '../scene-runtime/transactions'
 import { normaliseBearing } from '../view/navigation-policy'
 import type { ScreenPoint, ViewFrame, ViewScreen, ViewTransform, WorldPoint } from '../view/types'
-import { applyToolConstraint } from './constraints'
+import { applyToolConstraint, type ScreenAxes } from './constraints'
 import type { DraftPresentation, DraftShape, ToolHandle } from './draft'
 import { measureLabelShapes, selectedZoneMeasurementLabels } from './measure-labels'
 import { zoneEdgeSegment } from './hit-testing'
@@ -411,7 +411,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const constraint = modifiers.constrain ? activeTool?.constraint?.() ?? null : null
     if (!constraint) return { world, free, constrained: world, snapped: free, modifiers, pointer }
     // Shift's steps turn against the screen axes (spec §4.7), which are the world's at bearing 0, bit for bit.
-    const axes = frame().view.screenAxesInWorld()
+    const axes: ScreenAxes = frame().view.screenAxesInWorld()
     const constrained = applyToolConstraint(constraint, world, axes)
     if (constraint.kind === 'rotation-delta') {
       return { world, free, constrained, snapped: constrained, modifiers, pointer }

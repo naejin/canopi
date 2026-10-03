@@ -234,7 +234,7 @@ interface QueryPolygon {
 }
 
 /** The zone edge nearest a point, within a screen tolerance ("Turn view to this edge", spec §4.16). */
-export interface ZoneEdgeHit {
+interface ZoneEdgeHit {
   readonly zoneId: string
   readonly edgeIndex: number
   readonly distancePx: number
