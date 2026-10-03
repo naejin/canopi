@@ -10,8 +10,8 @@ export interface SavedViewCaptureInput {
   readonly name: string
   readonly title: string | null
   readonly view: GeographicView
-  /** The whole map's size in CSS pixels: the ground it shows is the view's frame. Without it the view keeps its camera zoom. */
-  readonly screen?: { readonly width: number; readonly height: number }
+  /** The whole map's size in CSS pixels: the ground it shows is the view's frame. A map with no size frames none, and the view keeps its camera zoom. */
+  readonly screen: { readonly width: number; readonly height: number }
   readonly mapLayers: MapLayersState
   readonly sceneLayers: readonly { readonly name: string; readonly visible: boolean }[]
   readonly siteData: readonly { readonly id: string; readonly visible: boolean }[]
@@ -26,7 +26,7 @@ export interface SavedViewCaptureInput {
 export function composeSavedView(input: SavedViewCaptureInput): SavedView {
   const lat = roundGeoDegrees(input.view.lat)
   const zoom = Math.min(SAVED_VIEW_MAX_ZOOM, Math.max(0, Math.round(input.view.zoom * 1e6) / 1e6))
-  const ground = input.screen ? savedViewGroundSize({ lat, zoom }, input.screen) : null
+  const ground = savedViewGroundSize({ lat, zoom }, input.screen)
   return {
     id: input.id,
     name: input.name,

@@ -134,8 +134,9 @@ function describe(view: SavedView, size: { width: number; height: number }, sign
 function galleryViews(tiles: boolean): SavedView[] {
   const queries = currentCanvasQuerySurface.peek()
   const plane = queries?.sessionPlane.peek()
-  const current = queries && plane ? geographicViewOfCamera(queries.view.captureView().camera) : null
-  if (!queries || !current) return []
+  const capture = queries && plane ? queries.view.captureView() : null
+  const current = capture ? geographicViewOfCamera(capture.camera) : null
+  if (!queries || !capture || !current) return []
   const sceneLayers = queries.getSceneSnapshot().layers
   const species = queries.getSceneSnapshot().plants[0]?.canonicalName ?? null
   const view = (name: string, zoomDelta: number, background: 'none' | 'basemap' | 'satellite', options: { layers?: typeof sceneLayers; species?: string | null } = {}) => {
@@ -149,6 +150,7 @@ function galleryViews(tiles: boolean): SavedView[] {
       name,
       title: null,
       view: { ...current, zoom: current.zoom + zoomDelta },
+      screen: capture.screen,
       mapLayers: layers,
       sceneLayers: options.layers ?? sceneLayers,
       siteData: [],
