@@ -6,7 +6,7 @@ import type { PdfInput, PdfLabels, PdfSetup } from '../app/canvas-pdf/types'
 const labels: PdfLabels = { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Print at actual size' }
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
 function garden(): PdfInput {
-  return { name: 'Garden', locale: 'en', commonNames: {}, canvas: {
+  return { name: 'Garden', locale: 'en', viewBearingDeg: 0, commonNames: {}, canvas: {
     layers: ['plants', 'zones'].map((name) => ({ name, visible: true, opacity: 1 })),
     zones: [{ name: 'Orchard', bounds: { x: 0, y: 0, width: 30, height: 20 }, path: 'M0 0 H30 V20 H0 Z', fill: null }],
     plants: [[8.5, 'Overlap'], [31, 'Nearby'], [200, 'Distant']].map(([x, name]) => ({ id: String(name), canonicalName: String(name), position: { x: Number(x), y: 12 },

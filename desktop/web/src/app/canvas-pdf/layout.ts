@@ -192,7 +192,7 @@ function buildPages(original: PdfInput, setup: PdfSetup, text: PdfTextEngine, la
   const byId = new Map(pages.map(page => [page.id, page]))
   const showScale = setup.northArrow !== false
   // The north arrow points to true north on the turned page.
-  const northAngleDeg = frame.angleDeg ? -frame.angleDeg : 0
+  const northAngleDeg = -frame.angleDeg
   const finalized = pages.map((page): PdfPage => {
     const operations = [...page.operations], links = [...page.links ?? []]
     let legendSymbols: readonly string[] | undefined

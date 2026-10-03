@@ -22,9 +22,9 @@ export interface PageFrame {
 const same = (point: PrintPoint) => point
 const NORTH_UP: PageFrame = { angleDeg: 0, toFrame: same, fromFrame: same }
 
-export function pageFrame(angleDeg = 0): PageFrame {
+export function pageFrame(angleDeg: number): PageFrame {
   const angle = ((angleDeg % 360) + 360) % 360
-  if (!Number.isFinite(angle) || angle === 0) return NORTH_UP
+  if (angle === 0) return NORTH_UP
   const radians = angle * Math.PI / 180, c = Math.cos(radians), s = Math.sin(radians)
   return {
     angleDeg: angle,
@@ -35,7 +35,7 @@ export function pageFrame(angleDeg = 0): PageFrame {
 
 /** The layout angle: the view's bearing under As on screen, else 0. */
 export function layoutAngle(setup: Pick<PdfSetup, 'mapOrientation'>, input: Pick<PdfInput, 'viewBearingDeg'>): number {
-  return setup.mapOrientation === 'as-on-screen' ? input.viewBearingDeg ?? 0 : 0
+  return setup.mapOrientation === 'as-on-screen' ? input.viewBearingDeg : 0
 }
 
 /**

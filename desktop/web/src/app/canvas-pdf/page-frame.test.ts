@@ -70,7 +70,6 @@ describe('PDF page frame', () => {
     expect(layoutAngle({}, { viewBearingDeg: 30 })).toBe(0)
     expect(layoutAngle({ mapOrientation: 'north-up' }, { viewBearingDeg: 30 })).toBe(0)
     expect(layoutAngle({ mapOrientation: 'as-on-screen' }, { viewBearingDeg: 30 })).toBe(30)
-    expect(layoutAngle({ mapOrientation: 'as-on-screen' }, {})).toBe(0)
     for (const angle of [0, 360, -360]) {
       const frame = pageFrame(angle)
       expect(frame.angleDeg).toBe(0)

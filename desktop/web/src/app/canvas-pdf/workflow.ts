@@ -88,7 +88,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     if (heldBearing === null && next.turning) {
       capture = next; state.value = { status: 'preparing', error: null, result: null }; return
     }
-    heldBearing ??= next.input.viewBearingDeg ?? 0
+    heldBearing ??= next.input.viewBearingDeg
     next = { ...next, input: { ...next.input, viewBearingDeg: heldBearing } }
     capture = next
     if (setup.peek().layers.some((name) => !availableLayers.peek().includes(name))) {

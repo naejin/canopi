@@ -6,8 +6,8 @@ import { createPdfWorkflow, type PdfCapture } from '../app/canvas-pdf/workflow'
 import { pdfAreaKey, type PdfInput, type PdfPage, type PreparedPdf } from '../app/canvas-pdf/types'
 import { areaContains, areaFromFrame, areaToFrame, layoutAngle, pageFrame } from '../app/canvas-pdf/page-frame'
 import { splitPrintArea } from '../app/canvas-pdf/split-sheets'
-const result: PreparedPdf = { bytes: new Uint8Array([37, 80, 68, 70]), plan: { pages: [], outlines: {}, blocked: null } }
-function fixture(plants: PrintPlant[] = [], view: Pick<PdfInput, 'viewBearingDeg'> = {}) {
+const result: PreparedPdf = { bytes: new Uint8Array([37, 80, 68, 70]), plan: { pages: [], angleDeg: 0, outlines: {}, blocked: null } }
+function fixture(plants: PrintPlant[] = [], view: Pick<PdfInput, 'viewBearingDeg'> = { viewBearingDeg: 0 }) {
   const identity = {}
   let current = true
   const capture: PdfCapture = { identity, isCurrent: () => current, input: { name: 'Garden', locale: 'fr', commonNames: {}, ...view,
@@ -20,7 +20,7 @@ function fixture(plants: PrintPlant[] = [], view: Pick<PdfInput, 'viewBearingDeg
   let bearing = view.viewBearingDeg, turning = false, settles = 0
   const workflow = createPdfWorkflow({ capture: () => {
     const canvas = currentCanvas, turningNow = turning, settled = settles
-    return { ...capture, input: { ...capture.input, canvas, ...(bearing === undefined ? {} : { viewBearingDeg: bearing }) },
+    return { ...capture, input: { ...capture.input, canvas, viewBearingDeg: bearing },
       ...(turningNow ? { turning: true } : {}), isCurrent: () => current && canvas === currentCanvas && (!turningNow || settled === settles) }
   }, prepare, resolveDisplayNames,
     delivery: { save, dispose: vi.fn() }, labels: () => ({ notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => 'https://test/fonts/' })

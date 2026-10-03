@@ -4,7 +4,7 @@ import type { PdfTextEngine } from './text'
 import { MM, PRINT, drawMark, pathOp, textOp } from './page-drawing'
 import { fieldLabels } from './labels'
 
-export function detailFurniture(page: PdfPage, input: PdfInput, labels: PdfLabels, paper: PdfPaper, text: PdfTextEngine, showScale = true, northAngleDeg = 0): PdfOperation[] {
+export function detailFurniture(page: PdfPage, input: PdfInput, labels: PdfLabels, paper: PdfPaper, text: PdfTextEngine, showScale: boolean, northAngleDeg: number): PdfOperation[] {
   const operations: PdfOperation[] = [], wording = fieldLabels(labels), margin = 10 * MM
   const emit = (value: string, x: number, y: number, size: number, right = false) => {
     const line = text.line(value, size)

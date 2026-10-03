@@ -53,8 +53,8 @@ export interface PdfInput {
   readonly englishFallbacks?: readonly string[]
   /** Catalog habit by canonical name. */
   readonly habits?: Readonly<Record<string, PdfHabit>>
-  /** The view's exact bearing at capture (`captureView().camera.bearingDeg`), the As on screen angle; absent reads 0. */
-  readonly viewBearingDeg?: number
+  /** The view's exact bearing at capture (`captureView().camera.bearingDeg`), the As on screen angle. */
+  readonly viewBearingDeg: number
 }
 export interface PdfLabels extends Partial<typeof import('./labels').fieldLabelDefaults> {
   readonly notes: string; readonly observations: string; readonly keyAndNotes: string; readonly overview: string; readonly plants: string; readonly actualSize: string
@@ -108,8 +108,8 @@ export interface PdfPlan {
   /** Fitted navigation surface for adding areas; never encoded as a PDF page. */
   readonly pickerPage?: PdfPage
   readonly pages: readonly PdfPage[]
-  /** The one layout angle every map page is drawn at (`page-frame.ts`); absent reads 0. Page grounds are in its frame. */
-  readonly angleDeg?: number
+  /** The one layout angle every map page is drawn at (`page-frame.ts`). Page grounds are in its frame. */
+  readonly angleDeg: number
   readonly outlines: Record<string, GlyphOutline>
   readonly blocked: 'empty' | null
 }

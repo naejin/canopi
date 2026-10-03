@@ -26,6 +26,7 @@ function page(overrides: Partial<PdfPage> & Pick<PdfPage, 'id' | 'number' | 'kin
 
 // The overview, one field sheet whose key runs onto a key page, and a second sheet.
 const PLAN: PdfPlan = {
+  angleDeg: 0,
   outlines: {},
   blocked: null,
   pages: [
@@ -84,7 +85,7 @@ describe('Find in key in the export sheet', () => {
     Object.defineProperty(SVGElement.prototype, 'scrollIntoView', { configurable: true, value: scrolled })
     const canvas = { layers: [], plants: [], zones: [], annotations: [], measurements: [] }
     const workflow = createPdfWorkflow({
-      capture: () => ({ identity: canvas, isCurrent: () => true, input: { name: 'Garden', locale: 'en', commonNames: {}, canvas } }),
+      capture: () => ({ identity: canvas, isCurrent: () => true, input: { name: 'Garden', locale: 'en', viewBearingDeg: 0, commonNames: {}, canvas } }),
       prepare: async () => ({ plan: PLAN, bytes: new Uint8Array([1]) }),
       resolveDisplayNames: async () => ({ names: {}, englishFallbacks: [] }),
       delivery: { save: vi.fn(), dispose: vi.fn() },

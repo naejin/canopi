@@ -11,7 +11,7 @@ import type { PdfOperation } from '../app/canvas-pdf/types'
 import { hits, outlineSegments, rotatedBounds } from '../app/canvas-pdf/field-geometry'
 
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
-const input: PdfInput = { name: 'Garden', locale: 'en', commonNames: {}, canvas: {
+const input: PdfInput = { name: 'Garden', locale: 'en', viewBearingDeg: 0, commonNames: {}, canvas: {
   layers: [{ name: 'plants', visible: true, opacity: 1 }], zones: [], annotations: [], measurements: [],
   plants: [{ id: 'apple', canonicalName: 'Malus domestica', speciesCode: 'MDO', position: { x: 5, y: 5 },
     color: '#218455', symbol: 'round', pinnedName: false,
