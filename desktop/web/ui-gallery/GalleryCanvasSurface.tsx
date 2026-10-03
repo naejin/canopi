@@ -31,6 +31,8 @@ interface GalleryCanvasSurfaceProps {
   readonly cameraState?: 'site' | 'overview' | 'maximum'
   /** Select everything instead of the first species (a fixture without plants). */
   readonly selectAll?: boolean
+  /** The view's bearing after the fit, clockwise from north (`bearing=`); 0 keeps north up. */
+  readonly bearingDeg?: number
   readonly onReadyChange: (ready: boolean) => void
   /** Place a stamp's saved-stamp chooser, as the Desktop canvas hands it over; none on Web. */
   readonly stampChooser?: FunctionComponent<StampChooserProps>
@@ -43,6 +45,7 @@ export function GalleryCanvasSurface({
   dense,
   cameraState = 'site',
   selectAll = false,
+  bearingDeg = 0,
   onReadyChange,
   stampChooser,
   createRuntimeComposition = createGalleryWorkspaceRuntimeComposition,
@@ -163,6 +166,11 @@ export function GalleryCanvasSurface({
       activeRuntime.surfaces.documents.resize(container.clientWidth, container.clientHeight)
       if (!runtimeIsActive()) return
       activeRuntime.surfaces.documents.zoomToFit()
+      if (bearingDeg !== 0) {
+        // Turned about the fitted centre at the same zoom, as a restored view is: no animation, never snapped.
+        const { camera } = activeRuntime.surfaces.queries.view.captureView()
+        activeRuntime.surfaces.commands.viewport.showCamera({ ...camera, bearingDeg }, { motion: 'jump' })
+      }
       if (dense) {
         for (let i = 0; i < 6; i++) {
           if (!runtimeIsActive()) return
@@ -198,7 +206,7 @@ export function GalleryCanvasSurface({
       cancelled = true
       release()
     }
-  }, [cameraState, createRuntimeComposition, dense, design, onReadyChange, selectAll])
+  }, [bearingDeg, cameraState, createRuntimeComposition, dense, design, onReadyChange, selectAll])
 
   useEffect(() => {
     const surface = activeSurface.value
