@@ -184,7 +184,9 @@ export function FavoritesPanel() {
       const outcome = await savedObjectStampWorkbench.importStampFile()
       if (outcome.status === 'refused') setImportRefusalKey(outcome.messageKey)
     } catch (error) {
+      // The workbench rejects only when saving the read stamp fails.
       console.error('Saved stamp import failed:', error)
+      setImportRefusalKey('savedObjectStamps.importSaveFailed')
     }
   }
 

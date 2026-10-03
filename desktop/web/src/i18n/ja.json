@@ -1279,6 +1279,7 @@
     "title": "保存済みスタンプ",
     "saveSelection": "選択を保存",
     "import": "スタンプをインポート…",
+    "importSaveFailed": "インポートしたスタンプを保存できませんでした。",
     "place": "配置",
     "export": "スタンプをエクスポート…",
     "rename": "名前を変更",

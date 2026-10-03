@@ -1279,6 +1279,7 @@
     "title": "Tampons enregistrés",
     "saveSelection": "Enregistrer la sélection",
     "import": "Importer des tampons…",
+    "importSaveFailed": "Impossible d’enregistrer le tampon importé.",
     "place": "Placer",
     "export": "Exporter le tampon…",
     "rename": "Renommer",

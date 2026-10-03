@@ -1279,6 +1279,7 @@
     "title": "Opgeslagen stempels",
     "saveSelection": "Selectie opslaan",
     "import": "Stempels importeren…",
+    "importSaveFailed": "De geïmporteerde stempel kon niet worden opgeslagen.",
     "place": "Plaatsen",
     "export": "Stempel exporteren…",
     "rename": "Hernoemen",

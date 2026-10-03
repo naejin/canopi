@@ -1279,6 +1279,7 @@
     "title": "Sellos guardados",
     "saveSelection": "Guardar selección",
     "import": "Importar sellos…",
+    "importSaveFailed": "No se pudo guardar el sello importado.",
     "place": "Colocar",
     "export": "Exportar sello…",
     "rename": "Renombrar",

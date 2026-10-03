@@ -1279,6 +1279,7 @@
     "title": "Carimbos salvos",
     "saveSelection": "Salvar seleção",
     "import": "Importar carimbos…",
+    "importSaveFailed": "Não foi possível salvar o carimbo importado.",
     "place": "Colocar",
     "export": "Exportar carimbo…",
     "rename": "Renomear",

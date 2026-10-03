@@ -1279,6 +1279,7 @@
     "title": "Saved stamps",
     "saveSelection": "Save selection",
     "import": "Import stamps…",
+    "importSaveFailed": "Couldn’t save the imported stamp.",
     "place": "Place",
     "export": "Export stamp…",
     "rename": "Rename",

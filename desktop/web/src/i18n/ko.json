@@ -1279,6 +1279,7 @@
     "title": "저장된 스탬프",
     "saveSelection": "선택 저장",
     "import": "스탬프 가져오기…",
+    "importSaveFailed": "가져온 스탬프를 저장할 수 없습니다.",
     "place": "배치",
     "export": "스탬프 내보내기…",
     "rename": "이름 바꾸기",
