@@ -68,8 +68,8 @@ export interface HitFilter {
   /** hitAt: also locked layers that are visible (today's hitTestVisibleTopLevel, the host's hover). hitInQuad: a phase-1
    *  feature; the 0B façade throws a clear error (today's band select skips locked layers). */
   readonly includeLocked?: boolean
-  /** A phase-1 feature (the zone-edge hits of "Turn view to this edge", spec §4.16), converted at the frame's pixelsPerMetre;
-   *  the 0B façade throws a clear error (today's hit tests carry their own tolerances). */
+  /** hitAt: answers only the nearest zone edge within this many CSS px ("Turn view to this edge", spec §4.16), converted at
+   *  the frame's pixelsPerMetre. hitInQuad throws a clear error (a band has no tolerance). */
   readonly toleranceScreenPx?: number
 }
 /** The selection read model: today's CanvasDesignObjectSelectionModel (canvas/runtime/runtime.ts:48), unchanged. */
@@ -138,6 +138,7 @@ export type ToolReply = 'handled' | 'pass'
 
 /** Read-only view queries: everything a tool may know about the camera. */
 export interface ToolView {
+  /** Normalised to [0, 360), so a tool can store it as a rotation without importing view/ (policy P5). */
   readonly bearingDeg: number
   readonly mode: 'site' | 'overview'
   metresPerPixelAt(p: WorldPoint): number
