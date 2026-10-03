@@ -47,6 +47,8 @@ export function createSelectTool(): CanvasTool {
   let editingNoteId: string | null = null
   /** The turn so far while the rotation handle is dragged: its readout, shown while the host shows the handles. */
   let rotationDeltaDeg: number | null = null
+  /** The bearing the handles were placed at: the rotation handle sits above the projected hull, so a turn moves it. */
+  let handlesBearingDeg = 0
   let reshapePoints = new Map<ToolHandleId, ZoneControlPoint>()
   let guideEndPoints = new Map<ToolHandleId, GuideEnd>()
 
@@ -63,7 +65,8 @@ export function createSelectTool(): CanvasTool {
     const handles: ToolHandle[] = []
     // A point handle's drag hides the rotation handle from its press to its release, as today's drag presentation did.
     const pointDrag = gesture?.kind === 'reshape' || gesture?.kind === 'guide-end'
-    const rotate = pointDrag ? null : rotateHandle(selection, c.translate, rotationDeltaDeg)
+    const rotate = pointDrag ? null : rotateHandle(c.scene, selection, c.view, c.translate, rotationDeltaDeg)
+    handlesBearingDeg = c.view.bearingDeg
     if (rotate) handles.push(rotate)
     const zone = reshapableZone(scene, selection)
     const points = zone ? zoneControlPoints(zone) : []
@@ -74,6 +77,11 @@ export function createSelectTool(): CanvasTool {
     guideEndPoints = new Map(ends.map((entry) => [entry.id, entry]))
     handles.push(...guideEndHandles(ends))
     c.effects.setHandles(handles)
+  }
+
+  /** A camera frame that turned the view moves the rotation handle; a pan or a zoom leaves it where it is. */
+  function followBearing(): void {
+    if (context && context.view.bearingDeg !== handlesBearingDeg) refreshHandles()
   }
 
   function press(point: ToolPoint, hit: HitTarget | null, clickCount: number): void {
@@ -254,10 +262,17 @@ export function createSelectTool(): CanvasTool {
         case 'cancel':
           cancelGesture()
           break
+        case 'hover':
+          // The host re-emits the resting pointer on a camera frame instead of calling viewChanged.
+          followBearing()
+          break
         default:
           break
       }
       return 'pass'
+    },
+    viewChanged() {
+      followBearing()
     },
     command(c): ToolReply {
       if (c.kind !== 'edit-text') return 'pass'

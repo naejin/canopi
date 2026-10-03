@@ -1,11 +1,15 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createToolHarness,
+  createToolSceneSource,
+  plantEntity,
   rectZone,
   type ToolHarness,
   type ToolHarnessOptions,
 } from '../../../../__tests__/support/tool-harness'
 import type { ScreenPoint } from '../../view/types'
+import { getEllipticalZonePolygon, getRectangularZoneCorners } from '../../zone-geometry'
+import { createToolScene } from '../spatial-index'
 import { ROTATE_HANDLE_ID, rotationReadout } from './rotate-handle'
 
 const harnesses: ToolHarness[] = []
@@ -18,6 +22,7 @@ function harness(options: ToolHarnessOptions = {}): ToolHarness {
 
 afterEach(() => {
   for (const created of harnesses.splice(0)) created.dispose()
+  vi.useRealTimers()
 })
 
 /** A bed whose bounds centre, the rotation pivot, is (70, 110); its rotation handle sits 28 px above its top edge. */
@@ -48,6 +53,97 @@ describe('Select rotation handle', () => {
       hitRadiusPx: 14,
       glyph: 'rotate',
       label: 'canvas.rotationHandle.label',
+    })
+  })
+
+  it('the handle sits 28 px above the projected hull', () => {
+    vi.useFakeTimers()
+    const h = harness({
+      camera: { bearingDeg: 45 },
+      scene: { zones: [rectZone('bed', [{ x: 20, y: 80 }, { x: 120, y: 80 }, { x: 120, y: 140 }, { x: 20, y: 140 }])] },
+    })
+    h.select({ kind: 'zone', id: 'bed' })
+    /** The handle's centre on screen, and where it belongs: centred 28 px above the screen box of the bed's four corners. */
+    const placement = () => {
+      const view = h.view.view()
+      const handle = h.chrome.handles.find((entry) => entry.id === ROTATE_HANDLE_ID)!
+      const anchor = view.worldToScreen(handle.anchor)
+      const hull = view.worldQuadToScreen([{ x: 20, y: 80 }, { x: 120, y: 80 }, { x: 120, y: 140 }, { x: 20, y: 140 }])
+      const xs = hull.map((corner) => corner.x)
+      return {
+        at: { x: anchor.x + handle.offsetPx!.x, y: anchor.y + handle.offsetPx!.y },
+        expected: { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: Math.min(...hull.map((corner) => corner.y)) - 28 },
+      }
+    }
+
+    let { at, expected } = placement()
+    expect(at.x).toBeCloseTo(expected.x, 6)
+    expect(at.y).toBeCloseTo(expected.y, 6)
+
+    // It follows a turn of the view with the pointer resting on the map.
+    h.hover({ x: 10, y: 10 })
+    h.view.navigation.rotateBy(1)
+    vi.advanceTimersByTime(400)
+    expect(h.view.view().camera.bearingDeg).toBe(60);
+    ({ at, expected } = placement())
+    expect(at.x).toBeCloseTo(expected.x, 6)
+    expect(at.y).toBeCloseTo(expected.y, 6)
+  })
+
+  describe('on a turned map it sits 28 px above the drawn shapes, not above their world box', () => {
+    /** The handle's centre on screen. */
+    function handleCentre(h: ToolHarness): ScreenPoint {
+      const handle = h.chrome.handles.find((entry) => entry.id === ROTATE_HANDLE_ID)!
+      const anchor = h.view.view().worldToScreen(handle.anchor)
+      return { x: anchor.x + handle.offsetPx!.x, y: anchor.y + handle.offsetPx!.y }
+    }
+
+    /** Centred 28 px above the screen box of `outline` (screen points). */
+    function above(outline: readonly ScreenPoint[]): ScreenPoint {
+      const xs = outline.map((point) => point.x)
+      return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: Math.min(...outline.map((point) => point.y)) - 28 }
+    }
+
+    it('a rectangle drawn level at 45', () => {
+      const bed = rectZone('bed', [{ x: -50, y: -10 }, { x: 50, y: -10 }, { x: 50, y: 10 }, { x: -50, y: 10 }], { rotationDeg: 45 })
+      const h = harness({ camera: { bearingDeg: 45 }, scene: { zones: [bed] } })
+      h.select({ kind: 'zone', id: 'bed' })
+      const corners = getRectangularZoneCorners(bed)!.map((corner) => h.view.view().worldToScreen(corner))
+      // Level on screen: its top edge is one height.
+      expect(corners.map((corner) => corner.y).sort((a, b) => a - b)[1]).toBeCloseTo(Math.min(...corners.map((c) => c.y)), 6)
+
+      const at = handleCentre(h)
+      const expected = above(corners)
+      expect(at.x).toBeCloseTo(expected.x, 6)
+      expect(at.y).toBeCloseTo(expected.y, 6)
+    })
+
+    it('an ellipse drawn level at 30', () => {
+      const pond = rectZone('pond', [{ x: 0, y: 0 }, { x: 80, y: 20 }], { zoneType: 'ellipse', rotationDeg: 30 })
+      const h = harness({ camera: { bearingDeg: 30 }, scene: { zones: [pond] } })
+      h.select({ kind: 'zone', id: 'pond' })
+      const outline = getEllipticalZonePolygon(pond, 3600)!.map((point) => h.view.view().worldToScreen(point))
+
+      const at = handleCentre(h)
+      const expected = above(outline)
+      expect(at.x).toBeCloseTo(expected.x, 2)
+      expect(at.y).toBeCloseTo(expected.y, 2)
+    })
+
+    it('a plant above a bed: the plant drawn as its circle', () => {
+      const bed = rectZone('bed', [{ x: -50, y: -10 }, { x: 50, y: -10 }, { x: 50, y: 10 }, { x: -50, y: 10 }], { rotationDeg: 45 })
+      const h = harness({ camera: { bearingDeg: 45 }, scene: { zones: [bed], plants: [plantEntity('apple', 'Malus domestica', { x: 30, y: -60 })] } })
+      h.select({ kind: 'zone', id: 'bed' }, { kind: 'plant', id: 'apple' })
+      const plant = h.store.persisted.plants[0]!
+      const radiusPx = createToolScene(createToolSceneSource(h.store)).plantPresentation(plant)!.radiusPx
+      const centre = h.view.view().worldToScreen(plant.position)
+      const corners = getRectangularZoneCorners(bed)!.map((corner) => h.view.view().worldToScreen(corner))
+      expect(centre.y - radiusPx).toBeLessThan(Math.min(...corners.map((corner) => corner.y)))
+
+      const at = handleCentre(h)
+      const expected = above([...corners, { x: centre.x - radiusPx, y: centre.y - radiusPx }, { x: centre.x + radiusPx, y: centre.y + radiusPx }])
+      expect(at.x).toBeCloseTo(expected.x, 6)
+      expect(at.y).toBeCloseTo(expected.y, 6)
     })
   })
 

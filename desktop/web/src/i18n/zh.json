@@ -169,6 +169,7 @@
       "addToCalendar": "添加到日历…",
       "setUnitCost": "设置单价…",
       "placePlantsHere": "在此放置植物",
+      "turnViewToEdge": "将视图旋转至此边",
       "renameZone": "重命名区域…"
     },
     "rotationHandle": {

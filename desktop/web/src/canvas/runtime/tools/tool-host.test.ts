@@ -25,6 +25,7 @@ import type { CanvasDropPayload, ToolHandleId } from '../interaction-types'
 import type { SceneDesignObjectTarget } from '../scene/design-object-targets'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
 import type { WorldPoint } from '../view/types'
+import { getRectangularZoneCorners } from '../zone-geometry'
 import { constrainPointTo45Degrees } from './constraints'
 import type { DraftPresentation, DraftShape, ToolHandle } from './draft'
 import { measureLabelShapes, selectedZoneMeasurementLabels } from './measure-labels'
@@ -195,6 +196,32 @@ describe('ToolHost', () => {
       expect(rectangle.last('drag-move')!.start.world).toEqual(ground)
       h.release({ x: 170, y: 150 })
       expect(rectangle.last('drag-end')!.start.world).toEqual(ground)
+    })
+
+    it('Shift+→ during a left drag keeps the draft\'s start on the ground', () => {
+      vi.useFakeTimers()
+      try {
+        const rectangle = stubTool('rectangle')
+        useStubTools(rectangle)
+        const h = harness({ tool: 'rectangle' })
+        const press = { x: 100, y: 100 }
+        const ground = h.world(press)
+
+        h.press(press)
+        h.move({ x: 160, y: 140 })
+        // Shift+→ is the keyboard's rotate-view, a 15° turn about the centre (ViewNavigation.rotateBy).
+        h.view.navigation.rotateBy(1)
+        vi.advanceTimersByTime(400)
+        expect(h.view.view().camera.bearingDeg).toBe(15)
+        expect(h.world(press)).not.toEqual(ground)
+        // Each camera frame of the turn re-emitted the drag from the press's ground.
+        expect(rectangle.last('drag-move')!.start.world).toEqual(ground)
+        expect(rectangle.last('drag-move')!.point.world).toEqual(h.world({ x: 160, y: 140 }))
+        h.release({ x: 170, y: 150 })
+        expect(rectangle.last('drag-end')!.start.world).toEqual(ground)
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
     it('re-emits the drag on a camera frame', () => {
@@ -1383,6 +1410,26 @@ describe('ToolHost', () => {
       expect(h.history.canUndo.value).toBe(false)
     })
 
+    it('nudge follows the screen at 30', () => {
+      useStubTools(stubTool('select'))
+      const h = harness({ camera: { bearingDeg: 30 }, scene: { plants: [appleAt({ x: 0, y: 0 })] } })
+      h.select(P1)
+      const screenOfApple = () => h.view.view().worldToScreen(h.store.persisted.plants[0]!.position)
+      const before = screenOfApple()
+      const pixelsPerMetre = h.view.view().pixelsPerMetre
+
+      expect(h.arrow('ArrowUp')).toBe('handled')
+      const after = screenOfApple()
+      expect(after.x - before.x).toBeCloseTo(0, 6)
+      expect(after.y - before.y).toBeCloseTo(-0.1 * pixelsPerMetre, 6)
+
+      // The large step (mod+arrow, chosen by the keymap) is 1 m along the screen.
+      expect(h.arrow('ArrowRight', true)).toBe('handled')
+      const moved = screenOfApple()
+      expect(moved.x - after.x).toBeCloseTo(pixelsPerMetre, 6)
+      expect(moved.y - after.y).toBeCloseTo(0, 6)
+    })
+
     it('a refused nudge answers refused, and without Select or a selection nudge answers pass', () => {
       useStubTools(stubTool('select'), stubTool('plant-stamp'))
       const nudgeSelected = vi.fn(() => false)
@@ -1965,6 +2012,33 @@ describe('ToolHost', () => {
       expect(h.record.drops).toEqual(['saved-stamp'])
     })
 
+    it('a saved stamp dropped from Favorites at 30 is level to the screen', () => {
+      useStubTools(stubTool('rectangle'), stubTool('select'))
+      const h = harness({ tool: 'rectangle', camera: { bearingDeg: 30 } })
+      const at = { x: 150, y: 120 }
+      const screenOf = (world: WorldPoint) => h.view.view().worldToScreen(world)
+
+      // Its dragover ghost is the pick a click would make: turned by the bearing.
+      h.drop('over', at, GUILD_DRAG)
+      const ghost = (h.renderer.lastDraft()?.shapes ?? []).find((shape) => shape.kind === 'ghost' && shape.entity.kind === 'objects')
+      expect(ghost?.kind === 'ghost' && ghost.entity.kind === 'objects' ? ghost.entity.rotationDeg : null).toBe(30)
+
+      h.drop('drop', at, GUILD_DRAG)
+
+      // The bed and the apple sit on screen as they were saved, north up: the bed's top edge level, the apple 4 px
+      // right of and 3 px below its corner (scale 1).
+      const bed = h.store.persisted.zones[0]!
+      expect(bed.rotationDeg).toBeCloseTo(30, 6)
+      const [nw, ne] = getRectangularZoneCorners(bed)!.map(screenOf)
+      expect(nw!.x).toBeCloseTo(at.x, 6)
+      expect(nw!.y).toBeCloseTo(at.y, 6)
+      expect(ne!.y).toBeCloseTo(at.y, 6)
+      expect(ne!.x - nw!.x).toBeCloseTo(10, 6)
+      const apple = screenOf(h.store.persisted.plants[0]!.position)
+      expect(apple.x).toBeCloseTo(at.x + 4, 6)
+      expect(apple.y).toBeCloseTo(at.y + 3, 6)
+    })
+
     it('dragover answers copy or none from the payload kind', () => {
       useStubTools(stubTool('rectangle'))
       const h = harness({ tool: 'rectangle' })
@@ -2104,6 +2178,58 @@ describe('ToolHost', () => {
       expect(h.record.menus.at(-1)).toEqual({ at: 'selection', source: 'keyboard', screen: null, hit: null })
     })
 
+    it('Turn view to this edge is offered within 8 px of a polygon, rectangle or line edge for a native menu, on a locked zone too, never from the keyboard and never for an ellipse', () => {
+      vi.useFakeTimers()
+      try {
+        useStubTools(stubTool('select'))
+        const zone = (id: string, zoneType: 'polygon' | 'rect' | 'line' | 'ellipse', points: WorldPoint[], locked = false) =>
+          ({ ...rectZone(id, points), zoneType, locked })
+        // Scale 1: a screen pixel is a metre and the screen is the world.
+        const h = harness({
+          scene: {
+            zones: [
+              // A field whose south-east edge runs from (100, 20) down to (60, 100).
+              zone('field', 'polygon', [{ x: 20, y: 20 }, { x: 100, y: 20 }, { x: 60, y: 100 }]),
+              zone('bed', 'rect', [{ x: 150, y: 20 }, { x: 250, y: 20 }, { x: 250, y: 60 }, { x: 150, y: 60 }], true),
+              zone('hedge', 'line', [{ x: 300, y: 20 }, { x: 340, y: 120 }]),
+              zone('pond', 'ellipse', [{ x: 200, y: 200 }, { x: 40, y: 20 }]),
+            ],
+          },
+        })
+        const offered = () => h.record.menus.at(-1)!.turnViewToEdge
+
+        // 7 px off the field's slanted edge, beyond its 6 px hit: the empty map's menu, with the entry.
+        const normal = { x: 2 / Math.sqrt(5), y: 1 / Math.sqrt(5) }
+        h.menu({ x: 80 + normal.x * 7, y: 60 + normal.y * 7 }, 'native')
+        expect(h.record.menus.at(-1)!.hit).toBeNull()
+        expect(offered()).toBeTypeOf('function')
+        offered()!()
+        vi.advanceTimersByTime(400)
+        const view = h.view.view()
+        const [a, b] = [view.worldToScreen({ x: 100, y: 20 }), view.worldToScreen({ x: 60, y: 100 })]
+        expect(b.y - a.y).toBeCloseTo(0, 6)
+        h.view.navigation.resetNorth()
+        vi.advanceTimersByTime(400)
+
+        h.menu({ x: 80 + normal.x * 9, y: 60 + normal.y * 9 }, 'native')
+        expect(offered()).toBeUndefined()
+        // The locked bed: its own menu, with the entry; the view turns, no object moves.
+        h.menu({ x: 200, y: 63 }, 'native')
+        expect(h.record.menus.at(-1)!.hit).toEqual({ kind: 'object', target: { kind: 'zone', id: 'bed' } })
+        expect(offered()).toBeTypeOf('function')
+        h.menu({ x: 324, y: 78 }, 'native')
+        expect(offered()).toBeTypeOf('function')
+        h.menu({ x: 240, y: 200 }, 'native')
+        expect(offered()).toBeUndefined()
+
+        h.select({ kind: 'zone', id: 'field' })
+        h.menu('selection', 'keyboard')
+        expect(offered()).toBeUndefined()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it('a right-click during a nudge series commits the series and opens the menu', () => {
       useStubTools(stubTool('select'))
       const h = harness({ scene: { plants: [appleAt({ x: 10, y: 10 })] } })
@@ -2181,6 +2307,13 @@ describe('ToolHost', () => {
 
       port.open({ at: { x: 300, y: 250 }, source: 'mouse', screen: null, hit: null })
       expect(opened.at(-1)!.selection).toBeNull()
+      expect(opened.at(-1)!.turnViewToEdge).toBeUndefined()
+      // The host's edge turn rides on the request, for the empty map's menu as for an object's.
+      const turnViewToEdge = vi.fn()
+      port.open({ at: { x: 300, y: 250 }, source: 'native', screen: null, hit: null, turnViewToEdge })
+      expect(opened.at(-1)!.turnViewToEdge).toBe(turnViewToEdge)
+      port.open({ at: { x: 50, y: 50 }, source: 'native', screen: { x: 50, y: 50 }, hit: null, turnViewToEdge })
+      expect(opened.at(-1)!.turnViewToEdge).toBe(turnViewToEdge)
 
       store.updatePersisted((draft) => {
         draft.layers = draft.layers.map((layer) => (layer.name === 'plants' ? { ...layer, locked: true } : layer))
@@ -2190,6 +2323,43 @@ describe('ToolHost', () => {
 
       port.close()
       expect(port.isOpen()).toBe(false)
+      view.dispose()
+    })
+
+    it('the keyboard menu opens beside a shape drawn level at 45, not beside its world box', () => {
+      const bed = rectZone('bed', [{ x: -50, y: -10 }, { x: 50, y: -10 }, { x: 50, y: 10 }, { x: -50, y: 10 }], { rotationDeg: 45 })
+      const store = sceneStoreWith({ zones: [bed] })
+      store.updateSession((session) => {
+        session.selectedTargets = [{ kind: 'zone', id: 'bed' }]
+      })
+      const source = createToolSceneSource(store)
+      const opened: CanvasContextMenuRequest[] = []
+      const view = createTestView({ screen: { width: 800, height: 600 }, camera: { bearingDeg: 45 } })
+      const port = createContextMenuPort({
+        container: document.createElement('div'),
+        view: view.view,
+        adapter: { open: (request) => opened.push(request), close: () => {} },
+        commands: {} as never,
+        returnFocus: () => {},
+        scene: createToolScene(source),
+        selectionModel: source.selectionModel,
+      })
+
+      port.open({ at: 'selection', source: 'keyboard', screen: null, hit: null })
+
+      // The bed on screen: a level 100 × 20 px box (1 px/m).
+      const corners = getRectangularZoneCorners(bed)!.map((corner) => view.view().worldToScreen(corner))
+      const xs = corners.map((corner) => corner.x)
+      const ys = corners.map((corner) => corner.y)
+      expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(100, 6)
+      expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(20, 6)
+      const anchor = opened.at(-1)!.anchor
+      expect(anchor.left).toBeCloseTo(Math.min(...xs), 6)
+      expect(anchor.right).toBeCloseTo(Math.max(...xs), 6)
+      expect(anchor.top).toBeCloseTo(Math.min(...ys), 6)
+      expect(anchor.bottom).toBeCloseTo(Math.max(...ys), 6)
+      expect(opened.at(-1)!.world).toEqual({ x: 0, y: 0 })
+      port.close()
       view.dispose()
     })
 

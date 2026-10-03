@@ -336,6 +336,19 @@ describe('Plant a row tool', () => {
     expect(added(h).map((point) => point.x)).toEqual([5, 6, 7])
   })
 
+  it('Shift keeps 45 degrees on screen at 30', () => {
+    const { h } = rowHarness({ camera: { bearingDeg: 30 }, intervalM: 1 })
+    const source = h.view.view().worldToScreen({ x: 20, y: 30 })
+
+    h.press(source)
+    // 31 px right and 12 px down on screen: Shift lays the row level on screen, not level with the world.
+    h.move({ x: source.x + 31, y: source.y + 12 }, { shift: true })
+
+    const end = h.view.view().worldToScreen(shapesOf(h, 'polyline')[0]!.points[1]!)
+    expect(end.y).toBeCloseTo(source.y, 6)
+    expect(end.x - source.x).toBeCloseTo(Math.hypot(31, 12), 6)
+  })
+
   it('a row of 100 plants commits without confirmation', () => {
     const { h } = rowHarness({ intervalM: 1, plants: [sourcePlant({ x: 10, y: 10 })] })
     h.click({ x: 10, y: 10 })

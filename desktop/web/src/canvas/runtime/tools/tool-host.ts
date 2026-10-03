@@ -34,10 +34,12 @@ import type { ScreenPoint, ViewFrame, ViewScreen, ViewTransform, WorldPoint } fr
 import { applyToolConstraint, type ScreenAxes } from './constraints'
 import type { DraftPresentation, DraftShape, ToolHandle } from './draft'
 import { measureLabelShapes, selectedZoneMeasurementLabels } from './measure-labels'
+import { zoneEdgeSegment } from './hit-testing'
 import { placePlantFromSpecies } from './plant-stamp'
 import { TOOL_REGISTRY } from './registry'
 import { placeSavedObjectStamp, savedObjectStampGhostShapes } from './saved-object-stamp'
 import { bandDraft } from './select/band'
+import { selectionScreenHull } from './select/selection-hull'
 import { snapWorldPoint, type SnapSettings } from './snapping'
 import type {
   CanvasTool,
@@ -70,10 +72,13 @@ const REFUSED_DRAGOVER: GestureOutcome = Object.freeze({ quarantine: true, dropE
 const DROP_CUE_PX = 12
 const NO_HANDLES: readonly ToolHandle[] = Object.freeze([])
 const NO_SNAP: SnapSettings = Object.freeze({ grid: false, guides: false })
-/** Constraints turn against the world axes before phase 1 (spec §2.3); the screen axes from phase 1 are the same at bearing 0. */
-const WORLD_AXES: ScreenAxes = Object.freeze({
-  right: Object.freeze({ x: 1, y: 0 }),
-  down: Object.freeze({ x: 0, y: 1 }),
+/** How near a zone's edge a pointer menu offers "Turn view to this edge" (spec §4.16). The keyboard menu has no point;
+ *  phase 3 adds the long press's 22 px. */
+const MENU_EDGE_TOLERANCE_PX: Partial<Record<MenuSource, number>> = Object.freeze({
+  native: 8,
+  mouse: 8,
+  'ctrl-click': 8,
+  'pen-barrel': 8,
 })
 /** Arrow-key nudge steps, in session-plane metres. */
 const NUDGE_STEP_M = 0.1
@@ -123,7 +128,8 @@ export type ContextMenuPortOptions = Parameters<typeof createCanvasContextMenu>[
 /**
  * ToolHostDeps.menu over today's controller. The host hits and retargets the selection first; open() then rebuilds
  * today's three menu states: the selection's menu from the keyboard, the empty-map menu, and a right-clicked object's menu,
- * disabled when the object is on a locked layer or locked through its group (today's _retargetContextMenuSelection).
+ * disabled when the object is on a locked layer or locked through its group (today's _retargetContextMenuSelection). A
+ * pointer menu carries the host's "Turn view to this edge" onto the app's request.
  */
 export function createContextMenuPort(options: ContextMenuPortOptions): ContextMenuPort {
   const { scene, selectionModel, ...controllerOptions } = options
@@ -133,12 +139,17 @@ export function createContextMenuPort(options: ContextMenuPortOptions): ContextM
   return {
     open(request) {
       if (request.at === 'selection') {
-        controller.openFromKeyboard(selectionModel())
+        const selection = selectionModel()
+        controller.openFromKeyboard(selection, selectionScreenHull(scene, selection, controllerOptions.view()))
         return
       }
       const screen = request.screen ?? controllerOptions.view().worldToScreen(request.at)
       const { visible, target } = contextMenuTargetAt(scene, request.at)
-      controller.openAtPointer(screen, target ? selectionModel() : visible ? disabledContextMenuSelection() : null)
+      controller.openAtPointer(
+        screen,
+        target ? selectionModel() : visible ? disabledContextMenuSelection() : null,
+        request.turnViewToEdge,
+      )
     },
     close: () => controller.close(),
     isOpen: () => controller.isOpen(),
@@ -189,8 +200,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   const view: ToolView = {
+    /** Normalised to [0, 360), so a tool can store it as a rotation (a note, a saved stamp's pick). */
     get bearingDeg() {
-      return frame().view.camera.bearingDeg
+      return normaliseBearing(frame().view.camera.bearingDeg)
     },
     get mode() {
       return frame().mode
@@ -400,14 +412,16 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const free = snap(world, modifiers.noSnap)
     const constraint = modifiers.constrain ? activeTool?.constraint?.() ?? null : null
     if (!constraint) return { world, free, constrained: world, snapped: free, modifiers, pointer }
-    const constrained = applyToolConstraint(constraint, world, WORLD_AXES)
+    // Shift's steps turn against the screen axes (spec §4.7), which are the world's at bearing 0, bit for bit.
+    const axes: ScreenAxes = frame().view.screenAxesInWorld()
+    const constrained = applyToolConstraint(constraint, world, axes)
     if (constraint.kind === 'rotation-delta') {
       return { world, free, constrained, snapped: constrained, modifiers, pointer }
     }
     // Today's order, keyed by tool id: Polygon snaps, then constrains, so a Shift corner may be off the grid
     // (today's (a4c86d39) zone-drawing-tool.ts:226); Plant a row constrains the raw point, and its Shift is also no-snap.
     const snapped = currentId === 'polygon'
-      ? applyToolConstraint(constraint, free, WORLD_AXES)
+      ? applyToolConstraint(constraint, free, axes)
       : snap(constrained, modifiers.noSnap)
     return { world, free, constrained, snapped, modifiers, pointer }
   }
@@ -851,12 +865,15 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   /**
    * What a drop at `at` would place, drawn as the drop preview; null when it would place nothing. A species shows today's
    * cue, a box from the pointer drawn as the band select's draft (its data is unreadable until the drop); a saved stamp
-   * shows its ghosts with the anchor at the snapped point (today's previewSavedObjectStampAt).
+   * shows its ghosts with the anchor at the snapped point (today's previewSavedObjectStampAt), turned by the bearing as
+   * its drop is.
    */
   function dropPreviewAt(at: ScreenPoint, payload: CanvasDropPayload): readonly DraftShape[] | null {
     const transform = frame().view
     const world = transform.screenToWorld(at)
-    if (payload.kind === 'saved-stamp') return savedObjectStampGhostShapes(deps.scene, payload.stamp, snap(world, false))
+    if (payload.kind === 'saved-stamp') {
+      return savedObjectStampGhostShapes(deps.scene, payload.stamp, snap(world, false), view.bearingDeg)
+    }
     if (payload.kind !== 'species' || !deps.scene.isLayerOpenForCreation('plants')) return null
     const corner = transform.screenToWorld({ x: at.x + DROP_CUE_PX, y: at.y + DROP_CUE_PX })
     return bandDraft(view, { start: world, additive: false }, corner).shapes
@@ -875,11 +892,15 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     return admitted ? NOTHING : QUARANTINE
   }
 
-  /** Today's _dropWhenSettled: the payload at the snapped point, as one Scene Edit that selects what it placed. */
+  /** Today's _dropWhenSettled: the payload at the snapped point, as one Scene Edit that selects what it placed. A saved
+   *  stamp is turned by the bearing, so it lands level with the screen as a click of the stamp tool places it (spec §4.7). */
   function placeDrop(at: ScreenPoint, payload: CanvasDropPayload): void {
     const point = snap(frame().view.screenToWorld(at), false)
     if (payload.kind === 'saved-stamp') {
-      placeSavedObjectStamp(deps.edits, deps.scene, payload.stamp, point, { onCommitted: () => dropped('saved-stamp') })
+      placeSavedObjectStamp(deps.edits, deps.scene, payload.stamp, point, {
+        rotationDeg: view.bearingDeg,
+        onCommitted: () => dropped('saved-stamp'),
+      })
     } else if (payload.kind === 'species' && payload.species) {
       const target = { edits: deps.edits, scene: deps.scene }
       placePlantFromSpecies(target, payload.species, point, 'interaction-drop', () => dropped('species'))
@@ -1103,7 +1124,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   // ── Menus ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-  /** Hit, retarget the selection to the object under the pointer (history-free), then open the menu. */
+  /** Hit, retarget the selection to the object under the pointer (history-free), then open the menu, with "Turn view to
+   *  this edge" when the pointer is on a zone's edge. */
   function openMenuAt(at: ScreenPoint, source: MenuSource): void {
     const world = frame().view.screenToWorld(at)
     const { visible, target } = contextMenuTargetAt(deps.scene, world)
@@ -1111,7 +1133,33 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       deps.setSelection([target])
       notifySceneChanged()
     }
-    deps.menu.open({ at: world, source, screen: at, hit: visible ? { kind: 'object', target: visible } : null })
+    const turnViewToEdge = edgeTurnAt(world, source)
+    deps.menu.open({
+      at: world,
+      source,
+      screen: at,
+      hit: visible ? { kind: 'object', target: visible } : null,
+      ...(turnViewToEdge ? { turnViewToEdge } : {}),
+    })
+  }
+
+  /**
+   * "Turn view to this edge" (spec §4.16): the nearest polygon, rectangle or line zone edge within the source's
+   * tolerance, locked zones included, turned level on screen by the smaller angle. Pointer menus only: the keyboard
+   * menu has no point (the keyboard turns the view with Shift ← and Shift →).
+   */
+  function edgeTurnAt(world: WorldPoint, source: MenuSource): (() => void) | null {
+    const tolerancePx = MENU_EDGE_TOLERANCE_PX[source]
+    if (tolerancePx === undefined) return null
+    const hit = deps.scene.hitAt(world, { toleranceScreenPx: tolerancePx })
+    if (hit?.kind !== 'zone-edge') return null
+    const zone = deps.scene.persisted.zones.find((entry) => entry.id === hit.zoneId)
+    const edge = zone ? zoneEdgeSegment(zone, hit.edgeIndex) : null
+    if (!edge) return null
+    const [a, b] = [{ x: edge[0].x, y: edge[0].y }, { x: edge[1].x, y: edge[1].y }]
+    return () => {
+      if (!disposed) deps.navigation.turnToEdge(a, b)
+    }
   }
 
   function notifySceneChanged(): void {

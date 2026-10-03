@@ -1,8 +1,10 @@
 // canvas/runtime/tools/select/rotate-handle.ts
 //
 // Owns Select's rotation handle (the successor of interaction/selection-rotation-handle.ts): the 'rotate' ToolHandle
-// centred 28 px above the selection's bounds (today's 28 px button 14 px above them; the handle layer keeps it inside the
-// visible map area), shown for a rotatable selection (scene-runtime/selection-rotation.ts), and its drag: one
+// centred 28 px above the selection's projected hull (today's 28 px button 14 px above it; spec §4.9): the screen box of
+// the shapes it draws (select/selection-hull.ts), so on a turned map it sits above what the user sees, centred on it. The
+// handle layer keeps it inside the visible map area. It is shown for a rotatable selection
+// (scene-runtime/selection-rotation.ts), and its drag: one
 // 'interaction-rotate' Scene Edit turning the selection about the centre of its bounds by the signed angle the pointer
 // has turned since the press. With Shift (ToolModifiers.constrain) the angle steps by 15° from the press angle, relative
 // as today; the host turns the point (a 'rotation-delta' constraint) and the drag rounds the angle it reads back. A turn
@@ -21,7 +23,8 @@ import type { SceneEditTransaction } from '../../scene-runtime/transactions'
 import type { ScenePersistedState } from '../../scene/types'
 import type { WorldPoint } from '../../view/types'
 import type { ToolHandle } from '../draft'
-import type { ToolConstraint, ToolContext, ToolPoint } from '../tool'
+import type { ToolConstraint, ToolContext, ToolPoint, ToolScene, ToolView } from '../tool'
+import { selectionScreenHull } from './selection-hull'
 
 export const ROTATE_HANDLE_ID = 'rotate' as ToolHandleId
 
@@ -45,15 +48,19 @@ export interface RotationDrag {
 
 /** The rotation handle for `selection`, or null when it does not rotate. */
 export function rotateHandle(
+  scene: ToolScene,
   selection: CanvasDesignObjectSelectionModel,
+  view: ToolView,
   translate: ToolContext['translate'],
   deltaDeg: number | null = null,
 ): ToolHandle | null {
   if (!isRotatableSelection(selection)) return null
-  const { minX, minY, maxX } = selection.bounds
+  const hull = selectionScreenHull(scene, selection, view)
+  if (!hull) return null
+  const [topLeft, topRight] = hull
   return {
     id: ROTATE_HANDLE_ID,
-    anchor: { x: (minX + maxX) / 2, y: minY },
+    anchor: { x: (topLeft.x + topRight.x) / 2, y: (topLeft.y + topRight.y) / 2 },
     offsetPx: { x: 0, y: -(HANDLE_GAP_PX + HANDLE_RADIUS_PX) },
     hitRadiusPx: HANDLE_RADIUS_PX,
     glyph: 'rotate',

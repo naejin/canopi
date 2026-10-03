@@ -159,9 +159,14 @@ function isGroupLayerHitEligible(
   )
 }
 
-export function queryRectTopLevel(
+/**
+ * Band select: every top-level target the world polygon `quad` touches (spec §4.9), on interactive layers only. Shapes
+ * are tested as polygons and segments, plants as circles of their drawn radius, notes as their turned text box; a turned
+ * band is never widened to its world box.
+ */
+export function queryQuadTopLevel(
   scene: ScenePersistedState,
-  rect: SimpleRect,
+  quad: readonly ScenePoint[],
   viewportScale: number,
   speciesCache: ReadonlyMap<string, SpeciesCacheEntry>,
   getPlantContext: (viewportScale: number) => PlantPresentationContext,
@@ -172,19 +177,20 @@ export function queryRectTopLevel(
   getPlantContext = (scale) => ({ ...baseContext(scale), plants: scene.plants })
   const groupedMemberKeys = getSceneGroupedMemberKeys(scene)
   const detail = getCanvasDetailLayout(scene, viewportScale)
+  const area: QueryPolygon = { points: quad, bounds: pointsBounds(quad) }
 
   for (const group of scene.groups) {
     const members = resolveSceneObjectGroupMembers(scene, group)
     if (!isGroupLayerHitEligible(scene, group, isLayerInteractive, members)) continue
     const hit = members.some((member) => {
       const plant = member.kind === 'plant' ? scene.plants.find((entry) => entry.id === member.id) : null
-      if (plant && rectsIntersect(rect, plantBounds(plant, viewportScale, speciesCache, getPlantContext))) return true
+      if (plant && plantIntersectsPolygon(plant, area, viewportScale, speciesCache, getPlantContext)) return true
       const zone = member.kind === 'zone' ? scene.zones.find((entry) => entry.id === member.id) : null
-      if (zone && zoneIntersectsRect(zone, rect)) return true
+      if (zone && zoneIntersectsPolygon(zone, area)) return true
       const annotation = member.kind === 'annotation'
         ? scene.annotations.find((entry) => entry.id === member.id)
         : null
-      return annotation ? annotationIntersectsRect(annotation, rect, viewportScale, false, detail.annotationIds.has(annotation.id)) : false
+      return annotation ? annotationIntersectsPolygon(annotation, area, viewportScale, false, detail.annotationIds.has(annotation.id)) : false
     })
     if (hit) targets.push({ kind: 'group', id: group.id })
   }
@@ -192,14 +198,14 @@ export function queryRectTopLevel(
   for (const plant of scene.plants) {
     if (groupedMemberKeys.has(sceneTargetKey({ kind: 'plant', id: plant.id }))) continue
     if (!isLayerInteractive(scene, 'plants')) continue
-    if (rectsIntersect(rect, plantBounds(plant, viewportScale, speciesCache, getPlantContext))) {
+    if (plantIntersectsPolygon(plant, area, viewportScale, speciesCache, getPlantContext)) {
       targets.push({ kind: 'plant', id: plant.id })
     }
   }
 
   for (const guide of scene.measurementGuides) {
     if (!isLayerInteractive(scene, 'measurement-guides')) continue
-    if (measurementGuideIntersectsRect(guide, rect)) {
+    if (segmentIntersectsPolygon(guide.start, guide.end, area)) {
       targets.push({ kind: 'measurement-guide', id: guide.id })
     }
   }
@@ -207,18 +213,74 @@ export function queryRectTopLevel(
   for (const zone of scene.zones) {
     if (groupedMemberKeys.has(sceneTargetKey({ kind: 'zone', id: zone.id }))) continue
     if (!isLayerInteractive(scene, 'zones')) continue
-    if (zoneIntersectsRect(zone, rect)) targets.push({ kind: 'zone', id: zone.id })
+    if (zoneIntersectsPolygon(zone, area)) targets.push({ kind: 'zone', id: zone.id })
   }
 
   for (const annotation of scene.annotations) {
     if (groupedMemberKeys.has(sceneTargetKey({ kind: 'annotation', id: annotation.id }))) continue
     if (!isLayerInteractive(scene, 'annotations')) continue
-    if (annotationIntersectsRect(annotation, rect, viewportScale, annotation.id === getRevealedAnnotationId(selection), detail.annotationIds.has(annotation.id))) {
+    if (annotationIntersectsPolygon(annotation, area, viewportScale, annotation.id === getRevealedAnnotationId(selection), detail.annotationIds.has(annotation.id))) {
       targets.push({ kind: 'annotation', id: annotation.id })
     }
   }
 
   return targets
+}
+
+/** A band's polygon with its world bounds, the quick reject before the exact test. */
+interface QueryPolygon {
+  readonly points: readonly ScenePoint[]
+  readonly bounds: SimpleRect
+}
+
+/** The zone edge nearest a point, within a screen tolerance ("Turn view to this edge", spec §4.16). */
+interface ZoneEdgeHit {
+  readonly zoneId: string
+  readonly edgeIndex: number
+  readonly distancePx: number
+}
+
+/**
+ * The polygon, rectangle (its turned corners) or line zone edge nearest `point` within `tolerancePx` at `viewportScale`
+ * px/m, or null. Zones on hidden layers are left out; locked zones, locked layers and grouped zones count, since the
+ * entry only turns the view. Ellipses have no edges.
+ */
+export function hitZoneEdge(
+  scene: ScenePersistedState,
+  point: ScenePoint,
+  tolerancePx: number,
+  viewportScale: number,
+): ZoneEdgeHit | null {
+  if (!isLayerVisible(scene, 'zones')) return null
+  const scale = Math.max(viewportScale, 1e-6)
+  let best: ZoneEdgeHit | null = null
+  for (let i = scene.zones.length - 1; i >= 0; i -= 1) {
+    const zone = scene.zones[i]!
+    const edges = zoneEdges(zone)
+    for (let edgeIndex = 0; edgeIndex < edges.length; edgeIndex += 1) {
+      const [start, end] = edges[edgeIndex]!
+      const distancePx = distanceToSegment(point, start, end) * scale
+      if (distancePx <= tolerancePx + GEOMETRY_EPSILON && (!best || distancePx < best.distancePx)) {
+        best = { zoneId: zone.id, edgeIndex, distancePx }
+      }
+    }
+  }
+  return best
+}
+
+/** Edge `edgeIndex` of a polygon, rectangle or line zone, from its first corner to its next; null for an ellipse. */
+export function zoneEdgeSegment(zone: SceneZoneEntity, edgeIndex: number): readonly [ScenePoint, ScenePoint] | null {
+  return zoneEdges(zone)[edgeIndex] ?? null
+}
+
+function zoneEdges(zone: SceneZoneEntity): ReadonlyArray<readonly [ScenePoint, ScenePoint]> {
+  if (zone.zoneType === 'line' && zone.points.length >= 2) return [[zone.points[0]!, zone.points[1]!]]
+  if (zone.zoneType === 'polygon' && zone.points.length >= 3) return edgesOf(zone.points)
+  if (zone.zoneType === 'rect' && zone.points.length >= 4) {
+    const corners = getRectangularZoneCorners(zone)
+    return corners ? edgesOf(corners) : []
+  }
+  return []
 }
 
 const LINE_HIT_TOLERANCE_PX = 6
@@ -250,26 +312,27 @@ function hitZone(zone: SceneZoneEntity, point: ScenePoint, viewportScale: number
   return point.x >= bounds.x && point.x <= bounds.x + bounds.width && point.y >= bounds.y && point.y <= bounds.y + bounds.height
 }
 
-function zoneIntersectsRect(zone: SceneZoneEntity, rect: SimpleRect): boolean {
+function zoneIntersectsPolygon(zone: SceneZoneEntity, area: QueryPolygon): boolean {
   if (zone.zoneType === 'rect' && zone.points.length >= 4) {
     const corners = getRectangularZoneCorners(zone)
-    return corners ? polygonIntersectsRect(corners, rect) : false
+    return corners ? polygonsIntersect(corners, area) : false
   }
 
   if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
     const polygon = getEllipticalZonePolygon(zone)
-    return polygon ? polygonIntersectsRect(polygon, rect) : false
+    return polygon ? polygonsIntersect(polygon, area) : false
   }
 
   if (zone.zoneType === 'line' && zone.points.length >= 2) {
-    return segmentIntersectsRect(zone.points[0]!, zone.points[1]!, rect)
+    return segmentIntersectsPolygon(zone.points[0]!, zone.points[1]!, area)
   }
 
   if (zone.zoneType === 'polygon' && zone.points.length >= 3) {
-    return polygonIntersectsRect(zone.points, rect)
+    return polygonsIntersect(zone.points, area)
   }
 
-  return rectsIntersect(rect, zoneBounds(zone))
+  const bounds = zoneBounds(zone)
+  return polygonsIntersect(rectCorners(bounds), area)
 }
 
 function hitMeasurementGuide(
@@ -281,13 +344,6 @@ function hitMeasurementGuide(
   return pointNearSegment(point, guide.start, guide.end, toleranceWorld)
 }
 
-function measurementGuideIntersectsRect(
-  guide: SceneMeasurementGuideEntity,
-  rect: SimpleRect,
-): boolean {
-  return segmentIntersectsRect(guide.start, guide.end, rect)
-}
-
 function ellipseBoundarySegmentCount(zone: SceneZoneEntity, viewportScale: number): number {
   const radii = zone.points[1]!
   const maxRadiusPx = Math.max(Math.abs(radii.x), Math.abs(radii.y)) * Math.max(viewportScale, 1e-6)
@@ -297,37 +353,31 @@ function ellipseBoundarySegmentCount(zone: SceneZoneEntity, viewportScale: numbe
   return Math.max(MIN_ELLIPSE_BOUNDARY_SEGMENTS, Math.ceil(Math.PI / halfAngle))
 }
 
-function polygonIntersectsRect(polygon: readonly ScenePoint[], rect: SimpleRect): boolean {
-  if (!rectsIntersect(rect, pointsBounds(polygon))) return false
-
-  const rectPoint = rect.width <= GEOMETRY_EPSILON && rect.height <= GEOMETRY_EPSILON
-  if (rectPoint) return pointInOrOnPolygon({ x: rect.x, y: rect.y }, polygon)
-
-  if (polygon.some((point) => pointInRect(point, rect))) return true
-
-  const corners = rectCorners(rect)
-  if (corners.some((corner) => pointInOrOnPolygon(corner, polygon))) return true
-
-  const rectEdges = rectEdgeSegments(corners)
-  for (let index = 0; index < polygon.length; index += 1) {
-    const start = polygon[index]!
-    const end = polygon[(index + 1) % polygon.length]!
-    if (rectEdges.some(([rectStart, rectEnd]) => segmentsIntersect(start, end, rectStart, rectEnd))) return true
-  }
-
-  return false
+/** True when `polygon` and the band's polygon overlap or touch: a corner of either inside the other, or crossing edges. */
+function polygonsIntersect(polygon: readonly ScenePoint[], area: QueryPolygon): boolean {
+  if (polygon.length === 0 || !rectsIntersect(area.bounds, pointsBounds(polygon))) return false
+  if (polygon.some((point) => pointInOrOnPolygon(point, area.points))) return true
+  if (area.points.some((corner) => pointInOrOnPolygon(corner, polygon))) return true
+  return edgesOf(polygon).some(([start, end]) => edgesOf(area.points)
+    .some(([areaStart, areaEnd]) => segmentsIntersect(start, end, areaStart, areaEnd)))
 }
 
-function segmentIntersectsRect(start: ScenePoint, end: ScenePoint, rect: SimpleRect): boolean {
-  if (!rectsIntersect(pointsBounds([start, end]), rect)) return false
+function segmentIntersectsPolygon(start: ScenePoint, end: ScenePoint, area: QueryPolygon): boolean {
+  if (!rectsIntersect(pointsBounds([start, end]), area.bounds)) return false
+  if (pointInOrOnPolygon(start, area.points) || pointInOrOnPolygon(end, area.points)) return true
+  return edgesOf(area.points).some(([areaStart, areaEnd]) => segmentsIntersect(start, end, areaStart, areaEnd))
+}
 
-  const rectPoint = rect.width <= GEOMETRY_EPSILON && rect.height <= GEOMETRY_EPSILON
-  if (rectPoint) return pointOnSegment({ x: rect.x, y: rect.y }, start, end)
+/** A circle and the band's polygon: the centre inside it, or an edge within the radius. */
+function circleIntersectsPolygon(center: ScenePoint, radius: number, area: QueryPolygon): boolean {
+  const reach = { x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2 }
+  if (!rectsIntersect(reach, area.bounds)) return false
+  if (pointInOrOnPolygon(center, area.points)) return true
+  return edgesOf(area.points).some(([start, end]) => pointNearSegment(center, start, end, radius))
+}
 
-  if (pointInRect(start, rect) || pointInRect(end, rect)) return true
-
-  return rectEdgeSegments(rectCorners(rect))
-    .some(([rectStart, rectEnd]) => segmentsIntersect(start, end, rectStart, rectEnd))
+function edgesOf(polygon: readonly ScenePoint[]): Array<[ScenePoint, ScenePoint]> {
+  return polygon.map((point, index) => [point, polygon[(index + 1) % polygon.length]!])
 }
 
 const GEOMETRY_EPSILON = 0.000001
@@ -378,30 +428,12 @@ function pointNearPolygonBoundary(
   return false
 }
 
-function pointInRect(point: ScenePoint, rect: SimpleRect): boolean {
-  return (
-    point.x >= rect.x - GEOMETRY_EPSILON &&
-    point.x <= rect.x + rect.width + GEOMETRY_EPSILON &&
-    point.y >= rect.y - GEOMETRY_EPSILON &&
-    point.y <= rect.y + rect.height + GEOMETRY_EPSILON
-  )
-}
-
 function rectCorners(rect: SimpleRect): ScenePoint[] {
   return [
     { x: rect.x, y: rect.y },
     { x: rect.x + rect.width, y: rect.y },
     { x: rect.x + rect.width, y: rect.y + rect.height },
     { x: rect.x, y: rect.y + rect.height },
-  ]
-}
-
-function rectEdgeSegments(corners: readonly ScenePoint[]): Array<[ScenePoint, ScenePoint]> {
-  return [
-    [corners[0]!, corners[1]!],
-    [corners[1]!, corners[2]!],
-    [corners[2]!, corners[3]!],
-    [corners[3]!, corners[0]!],
   ]
 }
 
@@ -442,30 +474,35 @@ function pointOnSegment(point: ScenePoint, start: ScenePoint, end: ScenePoint): 
 function pointNearSegment(point: ScenePoint, start: ScenePoint, end: ScenePoint, tolerance: number): boolean {
   const dx = end.x - start.x
   const dy = end.y - start.y
-  const lengthSquared = dx * dx + dy * dy
-  if (lengthSquared <= GEOMETRY_EPSILON) {
+  if (dx * dx + dy * dy <= GEOMETRY_EPSILON) {
     return Math.hypot(point.x - start.x, point.y - start.y) <= tolerance
   }
+  return distanceToSegment(point, start, end) <= tolerance + GEOMETRY_EPSILON
+}
 
+function distanceToSegment(point: ScenePoint, start: ScenePoint, end: ScenePoint): number {
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const lengthSquared = dx * dx + dy * dy
+  if (lengthSquared <= 0) return Math.hypot(point.x - start.x, point.y - start.y)
   const t = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared))
-  const projected = {
-    x: start.x + t * dx,
-    y: start.y + t * dy,
-  }
-  return Math.hypot(point.x - projected.x, point.y - projected.y) <= tolerance + GEOMETRY_EPSILON
+  return Math.hypot(point.x - (start.x + t * dx), point.y - (start.y + t * dy))
 }
 
 function orientation(a: ScenePoint, b: ScenePoint, c: ScenePoint): number {
   return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
 }
 
-function plantBounds(
+/** A plant is the circle of its drawn footprint (the symbolic Placed Plant Visual Footprint). */
+function plantIntersectsPolygon(
   plant: ScenePlantEntity,
+  area: QueryPolygon,
   viewportScale: number,
   speciesCache: ReadonlyMap<string, SpeciesCacheEntry>,
   getPlantContext: (viewportScale: number) => PlantPresentationContext,
-): SimpleRect {
-  return getPlantWorldBounds(plant, plantPresentationContext(getPlantContext, viewportScale, speciesCache))
+): boolean {
+  const footprint = getPlantWorldBounds(plant, plantPresentationContext(getPlantContext, viewportScale, speciesCache))
+  return circleIntersectsPolygon(plant.position, footprint.width / 2, area)
 }
 
 function zoneBounds(zone: SceneZoneEntity): SimpleRect {
@@ -488,14 +525,14 @@ function hitAnnotation(annotation: SceneAnnotationEntity, point: ScenePoint, vie
   return isPointInAnnotationPresentation(annotation, point, viewportScale, revealText, textAllowed)
 }
 
-function annotationIntersectsRect(
+function annotationIntersectsPolygon(
   annotation: SceneAnnotationEntity,
-  rect: SimpleRect,
+  area: QueryPolygon,
   viewportScale: number,
   revealText = false,
   textAllowed = true,
 ): boolean {
-  return polygonIntersectsRect(getAnnotationVisualWorldCorners(annotation, viewportScale, revealText, undefined, textAllowed), rect)
+  return polygonsIntersect(getAnnotationVisualWorldCorners(annotation, viewportScale, revealText, undefined, textAllowed), area)
 }
 
 function isLayerInteractive(scene: ScenePersistedState, layerName: string): boolean {

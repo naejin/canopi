@@ -157,6 +157,18 @@ describe('Polygon tool', () => {
     expect(second.x).toBeCloseTo(Math.hypot(50, 4) + 10)
   })
 
+  it('Shift keeps 45 degrees on screen at 30', () => {
+    const h = harness({ camera: { bearingDeg: 30 } })
+
+    h.click({ x: 100, y: 100 })
+    // 50 px right and 4 px down on screen: Shift turns the edge level on screen, not level with the world.
+    h.click({ x: 150, y: 104 }, { mods: { shift: true } })
+
+    const [first, second] = cornerMarkers(h).map((corner) => h.view.view().worldToScreen(corner))
+    expect(second!.y).toBeCloseTo(first!.y, 6)
+    expect(second!.x - first!.x).toBeCloseTo(Math.hypot(50, 4), 6)
+  })
+
   it('a key zoom with the pointer off the map re-culls the edge chips', () => {
     const h = harness()
 

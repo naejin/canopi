@@ -6,7 +6,7 @@ import type {
 } from '../app-adapter'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
 import type { ScenePoint } from '../scene'
-import type { ViewTransform } from '../view/types'
+import type { ViewTransform, WorldQuad } from '../view/types'
 
 interface CanvasContextMenuOptions {
   readonly container: HTMLElement
@@ -24,10 +24,12 @@ interface CanvasContextMenuOptions {
  * render. The session owns this controller; the app owns the menu's DOM.
  */
 export interface CanvasContextMenuController {
-  /** `screen` is container-relative; `selection` is null on the empty map. */
-  openAtPointer(screen: ScenePoint, selection: CanvasDesignObjectSelectionModel | null): void
-  /** Menu key or Shift F10: beside the selection's bounds, else mid-map (the empty-map menu without a selection). */
-  openFromKeyboard(selection: CanvasDesignObjectSelectionModel): void
+  /** `screen` is container-relative; `selection` is null on the empty map. `turnViewToEdge`: the pointer is on a zone's
+   *  edge (the request's entry, spec §4.16). */
+  openAtPointer(screen: ScenePoint, selection: CanvasDesignObjectSelectionModel | null, turnViewToEdge?: () => void): void
+  /** Menu key or Shift F10: beside the selection's projected hull (`hull`, the world quad of the screen box of the shapes it
+   *  draws, tools/select/selection-hull.ts; INV-XF-22), else mid-map (the empty-map menu without a selection). */
+  openFromKeyboard(selection: CanvasDesignObjectSelectionModel, hull: WorldQuad | null): void
   /** True from an open until the app closes the menu (the request's `closed`) or close() closes it. */
   isOpen(): boolean
   close(): void
@@ -41,6 +43,7 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
     anchor: CanvasContextMenuAnchor,
     world: ScenePoint,
     selection: CanvasDesignObjectSelectionModel | null,
+    turnViewToEdge?: () => void,
   ): void {
     const adapter = options.adapter
     if (!adapter) return
@@ -53,6 +56,7 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
         ? { saveSelectionAsObjectStamp: options.saveSelectionAsObjectStamp }
         : {}),
       ...(options.placePlantsAt ? { placePlantsAt: options.placePlantsAt } : {}),
+      ...(turnViewToEdge ? { turnViewToEdge } : {}),
       returnFocus: options.returnFocus,
       closed: () => {
         if (openRequest === request) openRequest = null
@@ -68,19 +72,19 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
   }
 
   return {
-    openAtPointer(screen, selection) {
+    openAtPointer(screen, selection, turnViewToEdge) {
       const world = options.view().screenToWorld(screen)
       const origin = containerOrigin()
       const x = origin.left + screen.x
       const y = origin.top + screen.y
-      open({ left: x, top: y, right: x, bottom: y }, world, selection)
+      open({ left: x, top: y, right: x, bottom: y }, world, selection, turnViewToEdge)
     },
-    openFromKeyboard(selection) {
+    openFromKeyboard(selection, hull) {
       const origin = containerOrigin()
       const target = hasSelectedObjects(selection) ? selection : null
       const bounds = target?.bounds ?? null
       const view = options.view()
-      if (!bounds) {
+      if (!bounds || !hull) {
         const centre = { x: view.screen.width / 2, y: view.screen.height / 2 }
         const world = view.screenToWorld(centre)
         const x = origin.left + centre.x
@@ -88,14 +92,16 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
         open({ left: x, top: y, right: x, bottom: y }, world, target)
         return
       }
-      const a = view.worldToScreen({ x: bounds.minX, y: bounds.minY })
-      const b = view.worldToScreen({ x: bounds.maxX, y: bounds.maxY })
+      // The hull's four projected corners: two would miss its box on a turned map.
+      const corners = view.worldQuadToScreen(hull)
+      const xs = corners.map((corner) => corner.x)
+      const ys = corners.map((corner) => corner.y)
       open(
         {
-          left: origin.left + Math.min(a.x, b.x),
-          top: origin.top + Math.min(a.y, b.y),
-          right: origin.left + Math.max(a.x, b.x),
-          bottom: origin.top + Math.max(a.y, b.y),
+          left: origin.left + Math.min(...xs),
+          top: origin.top + Math.min(...ys),
+          right: origin.left + Math.max(...xs),
+          bottom: origin.top + Math.max(...ys),
         },
         { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 },
         selection,
