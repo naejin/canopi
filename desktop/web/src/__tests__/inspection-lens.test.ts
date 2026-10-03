@@ -53,14 +53,17 @@ const MINT = {
   plantedDate: null, quantity: null, locked: false,
 }
 
-/** A 430 x 390 lens at device pixel ratio 2 inspecting (0.5, 1.5), half a metre up-left of the mint, with the mint highlighted. */
-function mountLensBesideMint() {
+/**
+ * A 430 x 390 lens at device pixel ratio 2 inspecting (0.5, 1.5), half a metre up-left of the mint, with the mint highlighted,
+ * under a main map turned `bearingDeg`.
+ */
+function mountLensBesideMint(bearingDeg = 0) {
   vi.useFakeTimers()
   vi.stubGlobal('devicePixelRatio', 2)
   const recording = recordingContext()
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(recording.ctx as never)
   let snapshot = createTestSceneRendererSnapshot({ scene: { plants: [MINT] } })
-  const camera = createTestView(START)
+  const camera = bearingDeg === 0 ? createTestView(START) : createTestView({ screen: START.screen, camera: { bearingDeg } })
   const owner = new SceneCanvasInspectionOwner({ frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
     getSnapshot: () => snapshot, setHoveredTarget: (target) => { snapshot = { ...snapshot, hoverTarget: target && { ...target, state: 'hover' } } } })
   const container = document.createElement('div')
@@ -381,6 +384,47 @@ describe('Inspection Lens ownership', () => {
     const ring = arcs.at(-1)!
     expect((ring.m.a * ring.x + ring.m.c * ring.y + ring.m.e) / 2).toBeCloseTo(today.x, 6)
     expect((ring.m.b * ring.x + ring.m.d * ring.y + ring.m.f) / 2).toBeCloseTo(today.y, 6)
+    owner.dispose()
+  })
+
+  it('name buttons and rings sit over their plants at bearing 45', () => {
+    const { owner, view, arcs } = mountLensBesideMint(45)
+    const { scale, plants } = view.state.value!
+    // The lens turns with the view: the mint, half a metre east and half a metre south of the inspected point, is
+    // 0.71 m to the right of the lens centre on screen and level with it.
+    const onLens = { x: 215 + Math.SQRT1_2 * scale, y: 195 }
+    expect(plants.map((plant) => plant.id)).toEqual(['mint'])
+    expect(plants[0]!.screenPosition.x).toBeCloseTo(onLens.x, 6)
+    expect(plants[0]!.screenPosition.y).toBeCloseTo(onLens.y, 6)
+    expect(plants[0]!.label!.y).toBeCloseTo(onLens.y + 13, 6)
+    const ring = arcs.at(-1)!
+    expect((ring.m.a * ring.x + ring.m.c * ring.y + ring.m.e) / 2).toBeCloseTo(onLens.x, 6)
+    expect((ring.m.b * ring.x + ring.m.d * ring.y + ring.m.f) / 2).toBeCloseTo(onLens.y, 6)
+    owner.dispose()
+  })
+
+  it('lens plant glyphs stay upright at bearing 45', () => {
+    const { owner, view, arcs } = mountLensBesideMint(45)
+    const { scale } = view.state.value!
+    expect(arcs.length).toBeGreaterThan(0)
+    for (const arc of arcs) {
+      // Drawn unturned: the transform at the glyph is a pure scale (device pixels per metre) and a translation.
+      expect(arc.m.a).toBeCloseTo(2 * scale, 6)
+      expect(arc.m.b).toBeCloseTo(0, 6)
+      expect(arc.m.c).toBeCloseTo(0, 6)
+      expect(arc.m.d).toBeCloseTo(2 * scale, 6)
+    }
+    owner.dispose()
+  })
+
+  it('arrows and drags move the lens along its turned screen at bearing 90', () => {
+    const { owner, view } = mountLensBesideMint(90)
+    const { scale } = view.state.value!
+    // At 90° east is up on the lens: its screen right is the plane's south (+y) and its screen down is west (−x).
+    view.panByScreen({ x: 2 * scale, y: 1 * scale })
+    vi.advanceTimersByTime(20)
+    expect(view.state.value!.point.x).toBeCloseTo(0.5 - 1, 6)
+    expect(view.state.value!.point.y).toBeCloseTo(1.5 + 2, 6)
     owner.dispose()
   })
 

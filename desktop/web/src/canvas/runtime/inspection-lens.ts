@@ -7,10 +7,10 @@ import { createSessionPlane, type SessionPlane } from '../session-plane'
 import { stageScaleToMapZoom } from '../projection'
 import { drawInspectionLensScene } from './inspection-lens-drawing'
 import { getSceneLayerStyle } from './scene-visuals'
-import { inspectionLayout } from './inspection-layout'
+import { inspectionLayout, inspectionScale } from './inspection-layout'
 import { runCanvasRuntimeCleanups } from './cleanup'
 import { buildViewTransform } from './view/view-transform'
-import type { ViewFrameSource, WorldQuad } from './view/types'
+import type { ViewFrameSource, ViewTransform, WorldQuad } from './view/types'
 
 /** 100 % lens zoom: 20 px per metre, the main map's zoom reference. */
 const LENS_ZOOM_REFERENCE_PIXELS_PER_METRE = 20
@@ -51,6 +51,8 @@ export class SceneCanvasInspectionOwner {
     let highlightedId: string | null = null
     let frame: number | null = null
     let lensViewRevision = 0
+    /** The lens's view as last painted: its screen axes turn a lens drag or arrow into ground. */
+    let lensView: ViewTransform | null = null
     let released = false
     const options = this.options
 
@@ -88,25 +90,33 @@ export class SceneCanvasInspectionOwner {
       const visible = layer.visible && layer.opacity > 0 ? snapshot.scene.plants : []
       const width = Math.max(1, container.clientWidth || 430), height = Math.max(1, container.clientHeight || 390)
       if (ctx) ctx.font = `600 12px ${getComputedStyle(container).fontFamily || 'sans-serif'}`
-      const layout = inspectionLayout(visible, centre, { width, height }, snapshot.localizedCommonNames,
-        value => ctx ? ctx.measureText(value).width : Array.from(value).length * 12, magnification)
-      const scale = layout.scale
-      if (highlightedId && !layout.plants.some(plant => plant.id === highlightedId)) clearHighlight()
+      const scale = inspectionScale(visible, centre, magnification)
       const dpr = Math.max(window.devicePixelRatio || 1, 1)
-      // The lens's own view: the inspected point at its centre, at bearing 0 (spec §4.13).
+      // The lens's own view: the inspected point at its centre, at the main map's live bearing, so the loupe matches what is
+      // under the pointer (spec §4.13). Names, rings and the cull go through it.
       const plane = options.readSessionPlane?.() ?? createSessionPlane({ lon: 0, lat: 0 })
-      const lensView = buildViewTransform({
-        camera: { center: plane.toGeo(centre), zoom: stageScaleToMapZoom(scale, plane.origin.lat), bearingDeg: 0, pitchDeg: 0 },
+      const mainView = options.frames.viewFrame.peek().view
+      const view = buildViewTransform({
+        camera: {
+          center: plane.toGeo(centre),
+          zoom: stageScaleToMapZoom(scale, plane.origin.lat),
+          bearingDeg: mainView.camera.bearingDeg,
+          pitchDeg: 0,
+        },
         screen: { width, height, devicePixelRatio: dpr },
         plane,
-        planeRevision: options.frames.viewFrame.peek().view.planeRevision,
+        planeRevision: mainView.planeRevision,
         revision: ++lensViewRevision,
       })
-      footprint.value = lensView.visibleWorldQuad()
+      lensView = view
+      const laidOut = inspectionLayout(visible, view, snapshot.localizedCommonNames,
+        value => ctx ? ctx.measureText(value).width : Array.from(value).length * 12)
+      if (highlightedId && !laidOut.some(plant => plant.id === highlightedId)) clearHighlight()
+      footprint.value = view.visibleWorldQuad()
       if (ctx) {
         canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr)
         const plants = visible.filter((plant) => {
-          const onLens = lensView.worldToScreen(plant.position)
+          const onLens = view.worldToScreen(plant.position)
           return Math.abs(onLens.x - width / 2) <= width / 2 + 20 && Math.abs(onLens.y - height / 2) <= height / 2 + 20
         })
         const lensSnapshot: SceneRendererSnapshot = {
@@ -119,7 +129,7 @@ export class SceneCanvasInspectionOwner {
           revealedAnnotationId: null, selectionLabelPlantIds: new Set(),
         }
         try {
-          drawInspectionLensScene(ctx, lensSnapshot, lensView, { widthPx: width, heightPx: height, dpr })
+          drawInspectionLensScene(ctx, lensSnapshot, view, { widthPx: width, heightPx: height, dpr })
         } catch (error) {
           console.error('Canvas inspection preview unavailable:', error)
           ctx = null
@@ -127,7 +137,7 @@ export class SceneCanvasInspectionOwner {
       }
       state.value = {
         point: centre, scale, zoomPercent: Math.round(scale / LENS_ZOOM_REFERENCE_PIXELS_PER_METRE * 100), previewAvailable: ctx !== null,
-        frame: { width, height }, plants: layout.plants,
+        frame: { width, height }, plants: laidOut,
       }
     }
     function clearHighlight() {
@@ -190,10 +200,14 @@ export class SceneCanvasInspectionOwner {
       centerOnCanvas: () => { if (!released) { setPoint(canvasCenter()); schedule() } },
       panByScreen: (deltaPx) => {
         const scale = state.peek()?.scale
-        if (released || !scale || !Number.isFinite(deltaPx.x) || !Number.isFinite(deltaPx.y)) return
-        // The lens's own view is at bearing 0, so its screen axes are the plane's (x east, y south).
+        if (released || !scale || !lensView || !Number.isFinite(deltaPx.x) || !Number.isFinite(deltaPx.y)) return
+        // Along the lens's own screen, which turns with the main map: its screen axes in the plane, at the painted scale.
+        const { right, down } = lensView.screenAxesInWorld()
         const centre = livePoint() ?? canvasCenter()
-        setPoint({ x: centre.x + deltaPx.x / scale, y: centre.y + deltaPx.y / scale })
+        setPoint({
+          x: centre.x + (right.x * deltaPx.x + down.x * deltaPx.y) / scale,
+          y: centre.y + (right.y * deltaPx.x + down.y * deltaPx.y) / scale,
+        })
         schedule()
       },
       zoomBy: (factor) => {
