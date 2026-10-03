@@ -66,15 +66,23 @@ function collectMissingKeys(
 
 // A canvas tool's handle names reach screen readers as aria-labels, so they come from `ctx.translate`, never a literal.
 const TOOLS_DIR = new URL('../canvas/runtime/tools/', import.meta.url)
-const LITERAL_HANDLE_LABEL = /\blabel:\s*['"`]|setAttribute\(\s*'aria-label',\s*['"`]/
+// Matched against the whole file so a literal wrapped onto the next line is caught; either quote names aria-label.
+const LITERAL_HANDLE_LABEL = /\blabel:\s*['"`]|setAttribute\(\s*['"`]aria-label['"`]\s*,\s*['"`]/g
+
+// Reports the 1-based line of each literal handle label in a tool's source text.
+function literalHandleLabelLines(source: string): number[] {
+  return [...source.matchAll(LITERAL_HANDLE_LABEL)].map(
+    (match) => source.slice(0, match.index).split('\n').length,
+  )
+}
 
 function literalToolHandleLabels(): string[] {
   const found: string[] = []
   for (const name of readdirSync(TOOLS_DIR, { recursive: true }) as string[]) {
     if (!name.endsWith('.ts') || name.endsWith('.test.ts')) continue
-    readFileSync(new URL(name, TOOLS_DIR), 'utf8').split('\n').forEach((line, index) => {
-      if (LITERAL_HANDLE_LABEL.test(line)) found.push(`${name.replace(/\\/g, '/')}:${index + 1}`)
-    })
+    for (const line of literalHandleLabelLines(readFileSync(new URL(name, TOOLS_DIR), 'utf8'))) {
+      found.push(`${name.replace(/\\/g, '/')}:${line}`)
+    }
   }
   return found.sort()
 }
@@ -82,6 +90,15 @@ function literalToolHandleLabels(): string[] {
 describe('i18n completeness', () => {
   it('names canvas tool handles through translate, never a literal aria-label', () => {
     expect(literalToolHandleLabels()).toEqual([])
+  })
+
+  it('finds a literal handle label in either quote style and when wrapped onto the next line', () => {
+    expect(literalHandleLabelLines("el.setAttribute('aria-label', 'Endpoint')")).toEqual([1])
+    expect(literalHandleLabelLines('el.setAttribute("aria-label", "Endpoint")')).toEqual([1])
+    expect(literalHandleLabelLines('el.setAttribute(\n  "aria-label",\n  `Endpoint`,\n)')).toEqual([1])
+    expect(literalHandleLabelLines("const a = 1\nconst handle = {\n  label:\n    'Zone control point 1',\n}")).toEqual([3])
+    expect(literalHandleLabelLines("label: translate('canvas.handles.endpoint')")).toEqual([])
+    expect(literalHandleLabelLines("el.setAttribute('aria-label', translate('canvas.handles.endpoint'))")).toEqual([])
   })
 
 
