@@ -406,6 +406,29 @@ describe('key router', () => {
     expect(run).not.toHaveBeenCalled()
   })
 
+  it('mod+arrow is the large step on the map, and a Mac Ctrl+arrow does nothing (H17)', () => {
+    install()
+    host.focus()
+    expect(press({ key: 'ArrowRight', ctrlKey: true }, host).defaultPrevented).toBe(true)
+    expect(fake.port.command).toHaveBeenLastCalledWith({ kind: 'arrow', dir: 'right', large: true })
+    expect(press({ key: 'ArrowRight' }, host).defaultPrevented).toBe(true)
+    expect(fake.port.command).toHaveBeenLastCalledWith({ kind: 'arrow', dir: 'right', large: false })
+    // Shift is no longer the large step.
+    fake.port.command.mockClear()
+    press({ key: 'ArrowRight', shiftKey: true }, host)
+    expect(fake.port.command).not.toHaveBeenCalledWith({ kind: 'arrow', dir: 'right', large: true })
+
+    router?.dispose()
+    install({ platform: { os: 'mac', engine: 'webkit', gestureEvents: false } })
+    fake.port.command.mockClear()
+    expect(press({ key: 'ArrowRight', metaKey: true }, host).defaultPrevented).toBe(true)
+    expect(fake.port.command).toHaveBeenCalledExactlyOnceWith({ kind: 'arrow', dir: 'right', large: true })
+    // Mission Control's chord on a Mac.
+    expect(press({ key: 'ArrowRight', ctrlKey: true }, host).defaultPrevented).toBe(false)
+    expect(fake.port.command).toHaveBeenCalledOnce()
+    expect(run).not.toHaveBeenCalled()
+  })
+
   it('an arrow-owning widget outside the map keeps Shift+arrows (H26)', () => {
     install()
     const world = document.createElement('div')

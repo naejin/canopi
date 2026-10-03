@@ -169,7 +169,7 @@ describe('Keyboard shortcuts dialog', () => {
       'Turn the stamp you are placing by 15°',
     ])
     expect([...sections[2]!.querySelectorAll('dd')].map((row) => row.textContent)).toEqual([
-      'F6', 'Shift F6', 'Arrow keys', 'Shift Arrow keys', 'Arrow keys', 'Shift Arrow keys', '[ ]',
+      'F6', 'Shift F6', 'Arrow keys', 'Ctrl Arrow keys', 'Arrow keys', 'Ctrl Arrow keys', '[ ]',
     ])
     expect(container.textContent).toContain('Esc does one thing at a time')
     expect(document.activeElement?.textContent).toBe('Close')

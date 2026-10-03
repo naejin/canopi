@@ -3,7 +3,7 @@ import { flattenMenuActions } from '../../app/shell-commands/menus'
 import { closeKeyboardShortcutsDialog, keyboardShortcutsDialogOpen } from '../../app/shell/dialogs'
 import { singleKeyShortcuts } from '../../app/settings/state'
 import { t } from '../../i18n'
-import { formatShortcut } from '../../app/shell-commands/shortcut-text'
+import { formatShortcut, modKeyName } from '../../app/shell-commands/shortcut-text'
 import { WorkspaceDialog } from './WorkspaceDialog'
 import styles from './KeyboardShortcutsDialog.module.css'
 
@@ -32,13 +32,15 @@ export function KeyboardShortcutsDialog({ menus }: { readonly menus: readonly Me
     .filter((section) => section.rows.length > 0)
   // Keys that are not menu commands: moving between areas (F6), nudging or panning on the map and turning a stamp.
   const arrows = t('shortcuts.arrowKeys')
+  // The large step is mod: Ctrl, or Cmd on macOS.
+  const modArrows = `${modKeyName(t)} ${arrows}`
   const workspaceRows = [
     { id: 'next-region', label: t('shortcuts.nextRegion'), shortcut: formatShortcut('F6', t) },
     { id: 'previous-region', label: t('shortcuts.previousRegion'), shortcut: formatShortcut('Shift+F6', t) },
     { id: 'nudge', label: t('shortcuts.nudge'), shortcut: arrows },
-    { id: 'nudge-large', label: t('shortcuts.nudgeLarge'), shortcut: `${t('shortcutKeys.shift')} ${arrows}` },
+    { id: 'nudge-large', label: t('shortcuts.nudgeLarge'), shortcut: modArrows },
     { id: 'pan', label: t('shortcuts.pan'), shortcut: arrows },
-    { id: 'pan-large', label: t('shortcuts.panLarge'), shortcut: `${t('shortcutKeys.shift')} ${arrows}` },
+    { id: 'pan-large', label: t('shortcuts.panLarge'), shortcut: modArrows },
     // Place a stamp's [ and ]: while the map has focus even with single-key shortcuts off, like the arrows.
     { id: 'rotate-stamp', label: t('shortcuts.rotateStamp'), shortcut: '[ ]' },
   ]

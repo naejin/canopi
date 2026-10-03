@@ -2973,10 +2973,10 @@ describe('scene canvas runtime', () => {
     const keys = installCanvasKeyRouter(() => runtime.keyboardPort)
 
     events.keyDown({ key: 'ArrowRight', target: container })
-    events.keyDown({ key: 'ArrowRight', shiftKey: true, target: container })
+    events.keyDown({ key: 'ArrowRight', ctrlKey: true, target: container })
     expect(position().x).toBeCloseTo(start.x + 1.1, 6)
     // Another key ends the series: one edit to undo.
-    events.keyDown({ key: 'Shift', target: container })
+    events.keyDown({ key: 'Control', target: container })
     events.keyDown({ key: 'a', target: container })
     runtime.commandSurface.history.undo()
     expect(position().x).toBeCloseTo(start.x, 6)

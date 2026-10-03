@@ -60,7 +60,8 @@ const CANVAS_KEY_ROWS: readonly KeymapRow[] = [
     const key = `Arrow${dir[0]!.toUpperCase()}${dir.slice(1)}`
     return [
       keyRow({ kind: 'arrow', dir, large: false }, [key]),
-      keyRow({ kind: 'arrow', dir, large: true }, [`Shift+${key}`]),
+      // mod is the large step (Cmd on a Mac, where Ctrl+arrow is Mission Control's).
+      keyRow({ kind: 'arrow', dir, large: true }, [`Ctrl+${key}`]),
     ]
   }),
 ]
