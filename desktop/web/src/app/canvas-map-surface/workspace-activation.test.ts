@@ -894,6 +894,22 @@ describe('WorkspaceActivationCoordinator', () => {
     await coordinator.teardown()
   })
 
+  it('rebuilds the map on Retry after the failure handling itself failed', async () => {
+    const maps = [new FakeMap(), new FakeMap()]
+    const createMap = vi.fn(async () => maps[createMap.mock.calls.length - 1] as unknown as WorkspaceActivationMap)
+    const runtime = createRuntime()
+    runtime.unmountRenderer.mockRejectedValueOnce(new Error('unmount boom'))
+    const { coordinator } = createCoordinator({ createMap, runtime })
+    await expect(coordinator.activate()).resolves.toBe('shared-ready')
+    await expect(coordinator.reportFailure(new Error('context lost'))).rejects.toThrow('unmount boom')
+
+    expect(coordinator.retry()).toBe(true)
+    await expect(coordinator.activate()).resolves.toBe('shared-ready')
+    expect(createMap).toHaveBeenCalledTimes(2)
+    expect(runtime.remountRenderer).toHaveBeenCalledOnce()
+    await coordinator.teardown()
+  })
+
   it('initializes the runtime on Retry when the first map failed before admission', async () => {
     const map = new FakeMap()
     const createMap = vi.fn()

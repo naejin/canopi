@@ -440,9 +440,21 @@ export class WorkspaceActivationCoordinator {
     if (!this.mapUnavailable || !this.canRetry()) return false
     const current = this.active
     if (current && !current.failureSettled) return false
+    if (current) this.retireFailedGeneration()
     this.mapUnavailable = false
     this.unavailableCause = null
     return true
+  }
+
+  /**
+   * Ends the failed generation before a Retry. Its failure transaction already reported every error,
+   * so the rebuilt map waits for this cleanup but never fails on those errors a second time.
+   */
+  private retireFailedGeneration(): void {
+    const cleanup = this.cleanupActiveGeneration()
+    this.retainedCleanup = cleanup.catch((error) => {
+      logMapError('Shared workspace cleanup before a map Retry failed:', error)
+    })
   }
 
   updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void {
