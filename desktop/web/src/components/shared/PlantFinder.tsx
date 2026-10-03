@@ -13,7 +13,7 @@ import type {
   SpeciesStratumChoice,
 } from '../../app/plant-finder/quick-filters'
 import { locale } from '../../app/settings/state'
-import { formatShortcut } from '../../app/shell-commands/shortcut-text'
+import { ariaKeyShortcuts, formatShortcut } from '../../app/shell-commands/shortcut-text'
 import { t } from '../../i18n'
 import { formatCount } from '../../utils/format-count'
 import { ControlIcon } from './ControlIcon'
@@ -89,7 +89,7 @@ export function PlantFinder({
         label={label ?? t('plantFinder.label')}
         placeholder={placeholder ?? t('plantFinder.placeholder')}
         shortcutHint={formatShortcut('Ctrl+F', t)}
-        keyShortcuts="Control+F"
+        keyShortcuts={ariaKeyShortcuts('Ctrl+F')}
         inputRef={input}
         onKeyDown={onKeyDown}
         controls={controls}
