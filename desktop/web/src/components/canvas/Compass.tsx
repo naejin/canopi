@@ -8,7 +8,8 @@ import { ButtonTooltip } from '../shared/ButtonTooltip'
 import styles from './Compass.module.css'
 
 /** Travel under this is a click; past it the press turns the view (spec §4.2): 3 px for a mouse or pen, 8 px for a
- *  finger, whose tap rolls further (the canvas's touch slop, spec §2.2), so a jittery tap still resets north. */
+ *  finger, whose tap rolls further, so a jittery tap still resets north. The 8 px is the touch slop phase 3 gives the
+ *  canvas (spec §2.2); the canvas's own touch slop stays 0 until then (`bindings.ts`), so the compass does not read it. */
 const DRAG_START_PX = 3
 const TOUCH_DRAG_START_PX = 8
 /** Within this radius of the centre, on the needle, the pointer's angle is noise: it turns nothing, and the angle is
