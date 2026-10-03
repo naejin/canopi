@@ -35,7 +35,6 @@
   --color-surface: #FBF8F2;          /* panels, menus, dialogs */
   --color-surface-alt: #F3EEE3;      /* wells, segmented tracks, info notices */
   --color-surface-muted: rgba(251, 248, 242, 0.82);
-  --color-surface-ring: rgba(251, 248, 242, 0.76);
   --color-glass: rgba(251, 248, 242, 0.95); /* floating chrome over the map */
   --color-border: rgba(58, 46, 28, 0.14);
   --color-border-strong: rgba(58, 46, 28, 0.55); /* control boundaries, >= 3:1 on surface */
@@ -56,7 +55,6 @@
 
   /* Semantic */
   --color-success: #5A7D3A;          /* plant data only, never chrome */
-  --color-success-bg: rgba(90, 125, 58, 0.08);
   --color-warning: #7A5A00;          /* amber ink */
   --color-warning-bg: rgba(214, 170, 40, 0.18);
   --color-warning-line: #A88410;
@@ -74,21 +72,11 @@
 
   /* Plant attributes — earthy tones, not neon */
   --color-edible: #5A7D3A;           /* moss — food plants */
-  --color-edible-bg: rgba(90, 125, 58, 0.08);
   --color-medicinal: #7B5090;        /* dried lavender */
-  --color-medicinal-bg: rgba(123, 80, 144, 0.08);
   --color-nitrogen: #3A7D7D;         /* pond teal — nutrient cycling */
-  --color-nitrogen-bg: rgba(58, 125, 125, 0.08);
   --color-sun: #C27830;              /* amber — full sun */
-  --color-sun-bg: rgba(194, 120, 48, 0.08);
-  --color-shade: #5C6B6B;            /* stone — shade tolerance */
-  --color-shade-bg: rgba(92, 107, 107, 0.08);
-  --color-hardiness: #3A6B8C;        /* winter sky — cold hardiness */
-  --color-hardiness-bg: rgba(58, 107, 140, 0.08);
   --color-family: #6B4F3A;           /* bark — taxonomy */
-  --color-family-bg: rgba(107, 79, 58, 0.08);
   --color-height: #5C6B6B;           /* stone — dimensions */
-  --color-height-bg: rgba(92, 107, 107, 0.08);
 
   /* Shadows — soft and warm; floating chrome, menus and dialogs use --shadow-float */
   --shadow-sm: 0 2px 8px rgba(30, 22, 10, 0.12);
@@ -148,8 +136,6 @@
   --chrome-bottom: 64px;       /* the dock stops above the view chip and zoom group */
   --chrome-rail-width: 52px;   /* icon-only tool and panel rails */
   --chrome-rail-named-width: 224px; /* tool rail while it shows names and keys */
-  --dock-width: 380px;
-  --dock-width-wide: 440px;    /* Budget and Consortium */
   --panel-width: 280px;
   --control-size-xs: 20px;
   --control-size-sm: 24px;
@@ -170,13 +156,6 @@
   --transition-normal: 150ms ease;
   --transition-enter: 200ms ease-out;
   --transition-delay-tooltip: 400ms;
-
-  /* State indicators */
-  --color-dirty-indicator: #9C5A16;
-
-  /* Window close */
-  --color-close-hover: #A8332A;
-  --color-close-active: #8C2A22;
 
   /* Canvas — the garden (separate from the tool chrome) */
   --canvas-bg: #EFE9DD;                                /* paper behind lens previews */
@@ -216,7 +195,6 @@
   --color-surface: #201E19;
   --color-surface-alt: #2A2721;
   --color-surface-muted: rgba(32, 30, 25, 0.85);
-  --color-surface-ring: rgba(32, 30, 25, 0.80);
   --color-glass: rgba(30, 28, 23, 0.93);
   --color-border: rgba(255, 248, 235, 0.12);
   --color-border-strong: rgba(255, 248, 235, 0.40);
@@ -235,7 +213,6 @@
   --panel-gradient: linear-gradient(180deg, #201E19 0%, #201E19 100%);
 
   --color-success: #8BAA5E;
-  --color-success-bg: rgba(90, 125, 58, 0.12);
   --color-warning: #E8C766;
   --color-warning-bg: rgba(232, 199, 102, 0.14);
   --color-warning-line: #C9A640;
@@ -256,10 +233,6 @@
   --shadow-float: 0 12px 34px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.4);
   --color-scrim: rgba(0, 0, 0, 0.55);
 
-  --color-dirty-indicator: #E3A04C;
-  --color-close-hover: #F08A7C;
-  --color-close-active: #E07466;
-
   --canvas-bg: #161510;
   --canvas-ruler-bg: #2A2721;
   --canvas-ruler-text: #B5AC9D;
@@ -276,21 +249,11 @@
 
   /* Plant attributes — desaturated for dark */
   --color-edible: #8BAA5E;
-  --color-edible-bg: rgba(139, 170, 94, 0.10);
   --color-medicinal: #B88BC4;
-  --color-medicinal-bg: rgba(184, 139, 196, 0.10);
   --color-nitrogen: #6BA3A3;
-  --color-nitrogen-bg: rgba(107, 163, 163, 0.10);
   --color-sun: #D4A060;
-  --color-sun-bg: rgba(212, 160, 96, 0.10);
-  --color-shade: #8A9A9A;
-  --color-shade-bg: rgba(138, 154, 154, 0.10);
-  --color-hardiness: #6A9AC0;
-  --color-hardiness-bg: rgba(106, 154, 192, 0.10);
   --color-family: #A08870;
-  --color-family-bg: rgba(160, 136, 112, 0.10);
   --color-height: #8A9A9A;
-  --color-height-bg: rgba(138, 154, 154, 0.10);
 }
 
 /* CJK text never goes below 13px. */
@@ -392,11 +355,6 @@ mark {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
-}
-
-/* Botanical names always italic */
-.botanical-name {
-  font-style: italic;
 }
 
 /* A presented story shows the map without the hover chrome the runtime places

@@ -149,6 +149,7 @@ describe('canvas icon-only buttons', () => {
   it('labels layer row visibility and lock buttons', async () => {
     const actions: LayerPanelActions = {
       active: vi.fn(), visibility: vi.fn(), locked: vi.fn(), opacity: vi.fn(),
+      contourInterval: vi.fn(), basemapStyle: vi.fn(), saveGoogleKey: vi.fn(), background: vi.fn(), softenBackground: vi.fn(),
     }
     const rows = [
       row('plants', { active: true, count: 3 }),

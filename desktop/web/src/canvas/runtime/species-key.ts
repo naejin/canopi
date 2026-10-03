@@ -6,7 +6,8 @@ import {
 import { resolvePlantBaseColor } from './plant-presentation'
 import type { SpeciesCacheEntry } from './species-cache'
 
-const EMPTY_SPECIES_CACHE = new Map<string, SpeciesCacheEntry>()
+/** No catalog entries: colours come from the plant and the Design alone. */
+export const EMPTY_SPECIES_CACHE: ReadonlyMap<string, SpeciesCacheEntry> = new Map()
 
 /** A species' symbol and colour on the map. */
 export interface SpeciesAppearance {

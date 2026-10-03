@@ -26,10 +26,6 @@ describe('map scale ratio', () => {
 
   it('uses the map ground resolution when a map is attached', () => {
     expect(formatMapScale(mapScaleDenominator(13.2), 'en')).toBe('1:50,000')
-    // A ground resolution that is not a positive number reads as one metre per pixel, never 1:0 or 1:NaN.
-    for (const unusable of [0, -5, Number.NaN]) {
-      expect(mapScaleDenominator(unusable)).toBeCloseTo(mapScaleDenominator(1), 6)
-    }
   })
 
   it('rounds to two significant figures and formats digits through Intl', () => {

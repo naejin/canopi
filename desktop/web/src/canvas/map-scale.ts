@@ -5,17 +5,15 @@ const CSS_PIXEL_METERS = 0.0254 / 96
 export const COMMON_MAP_SCALES: readonly number[] = [100, 200, 500, 1000, 2000, 5000, 10000, 25000]
 
 /**
- * The N of "1:N", unrounded, from the ground metres one CSS pixel covers (`ViewReadSurface.groundMetresPerPixel`).
- * A ground resolution that is not a positive number reads as one metre per pixel.
+ * The N of "1:N", unrounded, from the ground metres one CSS pixel covers (`ViewReadSurface.groundMetresPerPixel`,
+ * positive and finite on a validated camera).
  */
 export function mapScaleDenominator(groundMetresPerPixel: number): number {
-  const metres = groundMetresPerPixel > 0 ? groundMetresPerPixel : 1
-  return metres / CSS_PIXEL_METERS
+  return groundMetresPerPixel / CSS_PIXEL_METERS
 }
 
 /** Two significant figures: a readable ratio (1:190, 1:1,500, 1:50,000,000). */
 export function roundScaleDenominator(denominator: number): number {
-  if (!Number.isFinite(denominator) || denominator <= 0) return 1
   const power = 10 ** Math.max(0, Math.floor(Math.log10(denominator)) - 1)
   return Math.max(1, Math.round(denominator / power) * power)
 }
