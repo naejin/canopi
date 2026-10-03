@@ -178,6 +178,10 @@ impl NativeOperationExecutor {
             .map_err(|_| format!("{label} native operation executor is unavailable"))?;
         let queued_ms = duration_millis(queued_at.elapsed());
 
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "the executor owns the blocking pool; every native operation reaches it here"
+        )]
         let task = tauri::async_runtime::spawn_blocking(move || {
             tracing::debug!(
                 native_operation_class = class.as_str(),

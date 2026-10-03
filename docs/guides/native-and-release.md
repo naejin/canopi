@@ -6,7 +6,7 @@ Rules for the Rust/Tauri backend (execution policy, files, network, redaction, t
 
 ## Authorities and boundaries
 
-- `desktop/src/native_command_policy.rs` decides how a `#[tauri::command]` may run; `desktop/src/native_operation.rs` owns the `NativeOperationExecutor` and is the only module that calls the global blocking pool.
+- `desktop/src/native_command_policy.rs` decides how a `#[tauri::command]` may run; `desktop/src/native_operation.rs` owns the `NativeOperationExecutor` and is the only module that calls the global blocking pool. `clippy.toml` disallows every thread and blocking-pool entry point, resolved by type; a reviewed escape (the executor, the folder opener's reaper, Tauri's generated context) is one statement's `#[expect(clippy::disallowed_methods, reason = "...")]`, and tests may use threads (`native_command_policy::tests`).
 - `desktop/tauri.conf.json` is the version authority (read by the About dialog) and holds the CSP and asset-protocol scope; `capabilities/main-window.json` grants exactly the permissions the frontend calls.
 - `desktop/src/design/mod.rs` owns file writes; `services/export.rs` admits export payloads; `image_cache.rs` owns outbound image fetches; `services/problem_report/` and `services/folder_reveal.rs` own reports and folder opening.
 - `bindings-gen` (`npm run gen:types`) is the only writer of the generated adapter set; it embeds its checkout path at compile time, so run it from the worktree whose bindings you regenerate.

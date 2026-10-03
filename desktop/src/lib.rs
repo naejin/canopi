@@ -1,3 +1,7 @@
+// Tests may start threads freely; production threads and blocking pools are
+// disallowed in clippy.toml (native_command_policy::tests).
+#![cfg_attr(test, allow(clippy::disallowed_methods))]
+
 mod commands;
 mod db;
 mod design;
@@ -65,6 +69,11 @@ pub fn run() {
         tauri_plugin_mcp_bridge::Config::localhost_only(),
     ));
 
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "Tauri's generated context builds itself on a startup thread it joins at once"
+    )]
+    let context = tauri::generate_context!();
     let result = builder
         .invoke_handler(tauri::generate_handler![
             commands::settings::get_settings,
@@ -242,7 +251,7 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!());
+        .run(context);
     if let Err(error) = result {
         tracing::error!("Canopi failed to run: {error}");
         eprintln!("Canopi failed to run: {error}");

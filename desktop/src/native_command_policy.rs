@@ -3,9 +3,9 @@
 //! The Rust test suite parses command modules and the Tauri registry with `syn`, then checks the
 //! complete command set against one small synchronous allowlist. Async command bodies may touch
 //! managed state outside executor work only through a reviewed allowlist of bounded in-memory
-//! operations. It also scans production source (out-of-line `#[cfg(test)]` module files excluded)
-//! for blocking-pool and raw-thread escapes outside the managed executor owner and the reviewed
-//! escape allowlist, and checks every registered command against the frontend's `invoke(...)`
+//! operations. Threads and blocking pools are disallowed by clippy (`clippy.toml`); this module
+//! checks that list and that every production exemption from it is one statement's reasoned
+//! `#[expect]`. It also checks every registered command against the frontend's `invoke(...)`
 //! call sites.
 
 use std::{
@@ -15,8 +15,9 @@ use std::{
 };
 
 use syn::{
-    Attribute, Expr, ExprCall, ExprForLoop, ExprLet, ExprLoop, ExprMethodCall, ExprPath, ExprWhile,
-    FnArg, Item, ItemFn, ItemMod, ItemUse, Local, Macro, Pat, Path as SynPath, TypePath, UseTree,
+    AttrStyle, Attribute, Expr, ExprCall, ExprForLoop, ExprLet, ExprLit, ExprLoop, ExprMethodCall,
+    ExprPath, ExprWhile, FnArg, Item, ItemFn, ItemMod, Lit, Local, Macro, Meta, Pat,
+    Path as SynPath, Stmt, TypePath,
     parse::Parser,
     punctuated::Punctuated,
     visit::{self, Visit},
@@ -737,63 +738,54 @@ fn method_chain(call: &ExprMethodCall) -> (Option<String>, Vec<String>) {
     }
 }
 
-/// One reviewed production escape from the managed executor: a raw thread or blocking-pool
-/// call a file needs for work the executor cannot own, at a reviewed number of sites. A site
-/// beyond the count is a new escape, and an entry with fewer sites than its count (or none)
-/// is reported, so the list only shrinks with the code.
-#[derive(Clone, Copy)]
-struct BlockingEscapeAllowance {
-    path: &'static str,
-    escape: &'static str,
-    /// How many sites of `escape` the file has; one more is a new, unreviewed escape.
-    count: usize,
-    reason: &'static str,
+/// Every way to start a thread or reach a blocking pool. `clippy.toml` disallows each one
+/// (`disallowed-methods`), and clippy resolves calls by type, so an alias, a re-export, a
+/// macro body or a function value is caught as well as a plain call; the Rust gate runs
+/// clippy with `-D warnings`. A reviewed escape (the executor's own pool call, the folder
+/// opener's reaper, Tauri's generated context) carries a statement-level
+/// `#[expect(clippy::disallowed_methods, reason = "...")]`, which fails when the escape goes.
+const ESCAPE_ENTRY_POINTS: &[&str] = &[
+    "std::thread::spawn",
+    "std::thread::scope",
+    "std::thread::Builder::spawn",
+    "std::thread::Builder::spawn_scoped",
+    "tokio::task::spawn_blocking",
+    "tokio::task::block_in_place",
+    "tokio::runtime::Handle::spawn_blocking",
+    "tokio::runtime::Runtime::spawn_blocking",
+    "tauri::async_runtime::spawn_blocking",
+    "rayon::spawn",
+    "rayon::spawn_fifo",
+    "rayon::scope",
+];
+
+/// The `(path, reason)` pairs of `clippy.toml`'s `disallowed-methods`, one entry per line.
+fn disallowed_method_paths(config: &str) -> Vec<(String, String)> {
+    let quoted = |line: &str, key: &str| {
+        let rest = line.split_once(&format!("{key} = \""))?.1;
+        Some(rest.split_once('"')?.0.to_owned())
+    };
+    let Some((_, list)) = config.split_once("disallowed-methods = [") else {
+        return Vec::new();
+    };
+    let list = list.split_once("\n]").map_or(list, |(list, _)| list);
+    list.lines()
+        .filter_map(|line| Some((quoted(line, "path")?, quoted(line, "reason")?)))
+        .collect()
 }
 
-const BLOCKING_ESCAPE_ALLOWLIST: &[BlockingEscapeAllowance] = &[BlockingEscapeAllowance {
-    path: "src/services/folder_reveal.rs",
-    escape: "std::thread::Builder::new",
-    count: 1,
-    reason: "reaps the file-manager opener, which may live as long as the file manager; \
-             holding an executor slot for that would starve bounded work",
-}];
-
-/// Thread escapes are recognised by path (called or passed as a value), never by method
-/// name, so `Command::spawn` and `Scope::spawn` on a value are not escapes while the call
-/// that made the thread or scope is. `spawn_blocking` and `block_in_place` are escapes as a
-/// path's last segment, a method or an import under any name.
-const THREAD_ESCAPE_CALLS: &[&str] = &[
-    "std::thread::spawn",
-    "thread::spawn",
-    "std::thread::scope",
-    "thread::scope",
-    "std::thread::Builder::new",
-    "thread::Builder::new",
-    "rayon::spawn",
-];
-
-/// Importing one of these makes a bare `spawn(...)` or `Builder::new()` an escape the call
-/// check cannot see, so the import itself is the escape.
-const THREAD_ESCAPE_IMPORTS: &[&str] = &[
-    "std::thread::spawn",
-    "std::thread::scope",
-    "std::thread::Builder",
-    "rayon::spawn",
-];
-
-fn audit_blocking_pool_sources(
-    sources: &[(&str, &str)],
-    executor_owners: &[&str],
-    allowances: &[BlockingEscapeAllowance],
-) -> Vec<String> {
-    let owners = executor_owners.iter().copied().collect::<BTreeSet<_>>();
+/// Production attributes that switch `clippy::disallowed_methods` off. Each must be one
+/// statement's `#[expect(clippy::disallowed_methods, reason = "...")]`, so a new escape beside
+/// a reviewed one still fails clippy. The only wider switch is the crate root's
+/// `#![cfg_attr(test, allow(clippy::disallowed_methods))]`, which frees tests to use threads.
+fn audit_escape_exemptions(sources: &[(&str, &str)]) -> Vec<String> {
     let mut violations = Vec::new();
     let mut parsed = Vec::new();
     for (path, source) in sources {
         match syn::parse_file(source) {
             Ok(file) => parsed.push((*path, file)),
             Err(error) => violations.push(format!(
-                "failed to parse {path} for blocking escapes: {error}"
+                "failed to parse {path} for escape exemptions: {error}"
             )),
         }
     }
@@ -801,51 +793,28 @@ fn audit_blocking_pool_sources(
     for (path, file) in &parsed {
         test_modules.collect(path, &file.items);
     }
-
-    let mut used_allowances = BTreeSet::new();
     for (path, file) in &parsed {
-        if owners.contains(path) || test_modules.contains(path) {
+        if test_modules.contains(path) {
             continue;
         }
-        let mut visitor = BlockingEscapeVisitor::default();
+        let mut visitor = EscapeExemptionVisitor::default();
+        if *path == "src/lib.rs" {
+            visitor.accepted.extend(
+                file.attrs
+                    .iter()
+                    .filter(|attribute| {
+                        render_attribute(attribute)
+                            == "#![cfg_attr(test, allow(clippy::disallowed_methods))]"
+                    })
+                    .map(|attribute| attribute as *const Attribute),
+            );
+        }
         visitor.visit_file(file);
-        for (escape, sites) in visitor.escapes {
-            let Some(index) = allowances
-                .iter()
-                .position(|allowance| allowance.path == *path && allowance.escape == escape)
-            else {
-                violations.push(format!(
-                    "direct native blocking execution outside NativeOperationExecutor: {path} ({escape})"
-                ));
-                continue;
-            };
-            used_allowances.insert(index);
-            let reviewed = allowances[index].count;
-            if sites > reviewed {
-                violations.push(format!(
-                    "direct native blocking execution outside NativeOperationExecutor: {path} ({escape}, {sites} sites, {reviewed} reviewed)"
-                ));
-            } else if sites < reviewed {
-                let noun = if sites == 1 { "site" } else { "sites" };
-                violations.push(format!(
-                    "blocking escape allowance counts more sites than exist: {path} ({escape}, {sites} {noun}, {reviewed} reviewed)"
-                ));
-            }
-        }
-    }
-    for (index, allowance) in allowances.iter().enumerate() {
-        if allowance.reason.trim().is_empty() {
-            violations.push(format!(
-                "blocking escape allowance has no reason: {} ({})",
-                allowance.path, allowance.escape
-            ));
-        }
-        if !used_allowances.contains(&index) {
-            violations.push(format!(
-                "unused blocking escape allowance has no escape: {} ({})",
-                allowance.path, allowance.escape
-            ));
-        }
+        violations.extend(visitor.refused.into_iter().map(|attribute| {
+            format!(
+                "an exemption from clippy::disallowed_methods must be one statement's #[expect] with a reason: {path} ({attribute})"
+            )
+        }));
     }
     violations.sort();
     violations.dedup();
@@ -898,91 +867,15 @@ impl TestModuleFiles {
 }
 
 #[derive(Default)]
-struct BlockingEscapeVisitor {
-    /// Each escape and how many times it appears.
-    escapes: BTreeMap<String, usize>,
+struct EscapeExemptionVisitor {
+    /// The crate root's test-only switch.
+    accepted: BTreeSet<*const Attribute>,
+    /// Attributes on a single statement, where an `#[expect]` may sit.
+    statements: BTreeSet<*const Attribute>,
+    refused: Vec<String>,
 }
 
-impl BlockingEscapeVisitor {
-    fn record(&mut self, escape: String) {
-        *self.escapes.entry(escape).or_default() += 1;
-    }
-}
-
-impl BlockingEscapeVisitor {
-    /// A path is an escape wherever it appears as a value, so `.map(std::thread::spawn)` is
-    /// caught as well as a call.
-    fn inspect_path(&mut self, path: &ExprPath) {
-        let segments = path_segments(&path.path);
-        let joined = segments.join("::");
-        if segments
-            .last()
-            .is_some_and(|name| is_blocking_pool_name(name))
-            || THREAD_ESCAPE_CALLS.contains(&joined.as_str())
-        {
-            self.record(joined);
-        }
-    }
-
-    /// The blocking-pool names are never anything else, so unlike `spawn` they are matched
-    /// as methods too (`Handle::current().spawn_blocking(...)`).
-    fn inspect_method_call(&mut self, call: &ExprMethodCall) {
-        let method = call.method.to_string();
-        if is_blocking_pool_name(&method) {
-            self.record(format!(".{method}()"));
-        }
-    }
-
-    fn inspect_use(&mut self, prefix: &mut Vec<String>, tree: &UseTree) {
-        match tree {
-            UseTree::Path(path) => {
-                prefix.push(path.ident.to_string());
-                self.inspect_use(prefix, &path.tree);
-                prefix.pop();
-            }
-            UseTree::Name(name) => self.inspect_import(prefix, &name.ident, None),
-            UseTree::Rename(rename) => {
-                self.inspect_import(prefix, &rename.ident, Some(&rename.rename));
-            }
-            UseTree::Glob(_) => {
-                if prefix.join("::") == "std::thread" {
-                    self.record("use std::thread::*".into());
-                }
-            }
-            UseTree::Group(group) => {
-                for tree in &group.items {
-                    self.inspect_use(prefix, tree);
-                }
-            }
-        }
-    }
-
-    fn inspect_import(
-        &mut self,
-        prefix: &[String],
-        name: &syn::Ident,
-        rename: Option<&syn::Ident>,
-    ) {
-        let mut full = prefix.to_vec();
-        if name != "self" {
-            full.push(name.to_string());
-        }
-        let full = full.join("::");
-        if THREAD_ESCAPE_IMPORTS.contains(&full.as_str())
-            || (name != "self" && is_blocking_pool_name(&name.to_string()))
-        {
-            // Any import of a blocking-pool function is an escape, whatever it is renamed to.
-            self.record(format!("use {full}"));
-        } else if full == "std::thread"
-            && let Some(rename) = rename.filter(|rename| *rename != "thread")
-        {
-            // `use std::thread as t;` hides `t::spawn(...)` from the call check.
-            self.record(format!("use std::thread as {rename}"));
-        }
-    }
-}
-
-impl<'ast> Visit<'ast> for BlockingEscapeVisitor {
+impl<'ast> Visit<'ast> for EscapeExemptionVisitor {
     fn visit_item_mod(&mut self, node: &'ast ItemMod) {
         if has_cfg_test_attribute(&node.attrs) {
             return;
@@ -997,26 +890,100 @@ impl<'ast> Visit<'ast> for BlockingEscapeVisitor {
         visit::visit_item_fn(self, node);
     }
 
-    fn visit_item_use(&mut self, node: &'ast ItemUse) {
-        if has_cfg_test_attribute(&node.attrs) {
+    fn visit_stmt(&mut self, node: &'ast Stmt) {
+        let attributes: &[Attribute] = match node {
+            Stmt::Local(local) => &local.attrs,
+            Stmt::Macro(statement) => &statement.attrs,
+            Stmt::Expr(expression, _) => statement_expression_attributes(expression),
+            Stmt::Item(_) => &[],
+        };
+        self.statements.extend(
+            attributes
+                .iter()
+                .map(|attribute| attribute as *const Attribute),
+        );
+        visit::visit_stmt(self, node);
+    }
+
+    fn visit_attribute(&mut self, node: &'ast Attribute) {
+        let pointer = node as *const Attribute;
+        if !switches_off_escape_lint(node) || self.accepted.contains(&pointer) {
             return;
         }
-        self.inspect_use(&mut Vec::new(), &node.tree);
-    }
-
-    fn visit_expr_path(&mut self, node: &'ast ExprPath) {
-        self.inspect_path(node);
-        visit::visit_expr_path(self, node);
-    }
-
-    fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
-        self.inspect_method_call(node);
-        visit::visit_expr_method_call(self, node);
+        if !(self.statements.contains(&pointer) && is_reasoned_escape_expect(node)) {
+            self.refused.push(render_attribute(node));
+        }
     }
 }
 
-fn is_blocking_pool_name(name: &str) -> bool {
-    matches!(name, "spawn_blocking" | "block_in_place")
+fn statement_expression_attributes(expression: &Expr) -> &[Attribute] {
+    match expression {
+        Expr::Call(inner) => &inner.attrs,
+        Expr::MethodCall(inner) => &inner.attrs,
+        Expr::Try(inner) => &inner.attrs,
+        Expr::Await(inner) => &inner.attrs,
+        Expr::Assign(inner) => &inner.attrs,
+        Expr::Macro(inner) => &inner.attrs,
+        _ => &[],
+    }
+}
+
+/// `clippy::disallowed_methods` and the lint groups that contain it.
+fn switches_off_escape_lint(attribute: &Attribute) -> bool {
+    let rendered = render_attribute(attribute);
+    ["clippy::disallowed_methods", "clippy::style", "clippy::all"]
+        .iter()
+        .any(|lint| rendered.contains(lint))
+}
+
+fn is_reasoned_escape_expect(attribute: &Attribute) -> bool {
+    if !attribute.path().is_ident("expect") {
+        return false;
+    }
+    let Ok(arguments) =
+        attribute.parse_args_with(Punctuated::<Meta, syn::Token![,]>::parse_terminated)
+    else {
+        return false;
+    };
+    let mut lints = Vec::new();
+    let mut reason = None;
+    for argument in arguments {
+        match argument {
+            Meta::Path(path) => lints.push(path_to_string(&path)),
+            Meta::NameValue(pair) if pair.path.is_ident("reason") => {
+                if let Expr::Lit(ExprLit {
+                    lit: Lit::Str(text),
+                    ..
+                }) = pair.value
+                {
+                    reason = Some(text.value());
+                }
+            }
+            Meta::NameValue(_) | Meta::List(_) => return false,
+        }
+    }
+    lints == ["clippy::disallowed_methods"] && reason.is_some_and(|text| !text.trim().is_empty())
+}
+
+/// `#[name(arguments)]` with the token spacing tidied, for messages and exact matches.
+fn render_attribute(attribute: &Attribute) -> String {
+    let bang = match attribute.style {
+        AttrStyle::Inner(_) => "!",
+        AttrStyle::Outer => "",
+    };
+    let name = path_to_string(attribute.path());
+    let body = match &attribute.meta {
+        Meta::List(list) => format!(
+            "({})",
+            list.tokens
+                .to_string()
+                .replace(" :: ", "::")
+                .replace(" , ", ", ")
+                .replace(" (", "(")
+        ),
+        Meta::Path(_) | Meta::NameValue(_) => String::new(),
+    };
+    format!("#{bang}[{name}{body}]")
 }
 
 /// Every registered command must have an `invoke('<name>'...)` call site in
@@ -1192,11 +1159,7 @@ fn audit_repository() -> Vec<String> {
         .iter()
         .map(|(path, source)| (path.as_str(), source.as_str()))
         .collect::<Vec<_>>();
-    violations.extend(audit_blocking_pool_sources(
-        &rust_sources,
-        &["src/native_operation.rs"],
-        BLOCKING_ESCAPE_ALLOWLIST,
-    ));
+    violations.extend(audit_escape_exemptions(&rust_sources));
     let frontend_root = manifest.join("web").join("src");
     let mut owned_frontend_sources = Vec::new();
     frontend_sources_under(&frontend_root, &frontend_root, &mut owned_frontend_sources);
@@ -1275,9 +1238,9 @@ fn duplicates(values: &[String]) -> BTreeSet<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        BlockingEscapeAllowance, StateAccessAllowance, SyncCommandAllowance,
-        audit_blocking_pool_sources, audit_command_policy, audit_frontend_invocations,
-        audit_repository, invoked_command_names, is_production_frontend_source,
+        ESCAPE_ENTRY_POINTS, StateAccessAllowance, SyncCommandAllowance, audit_command_policy,
+        audit_escape_exemptions, audit_frontend_invocations, audit_repository,
+        disallowed_method_paths, invoked_command_names, is_production_frontend_source,
     };
     use std::path::Path;
 
@@ -1485,297 +1448,111 @@ mod tests {
     }
 
     #[test]
-    fn direct_global_blocking_pool_fixture_is_rejected() {
-        let violations = audit_blocking_pool_sources(
-            &[(
-                "src/commands/fixture.rs",
-                "fn fixture() { tauri::async_runtime::spawn_blocking(|| work()); }",
-            )],
-            &["src/native_operation.rs"],
-            &[],
+    fn clippy_disallows_every_thread_and_blocking_pool_entry_point() {
+        let config = std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("..")
+                .join("clippy.toml"),
+        )
+        .unwrap();
+        let disallowed = disallowed_method_paths(&config);
+        let missing = ESCAPE_ENTRY_POINTS
+            .iter()
+            .filter(|entry| !disallowed.iter().any(|(path, _)| path == *entry))
+            .collect::<Vec<_>>();
+        assert!(
+            missing.is_empty(),
+            "clippy.toml does not disallow {missing:?}"
         );
-
-        assert_eq!(
-            violations,
-            [
-                "direct native blocking execution outside NativeOperationExecutor: src/commands/fixture.rs (tauri::async_runtime::spawn_blocking)"
-            ]
-        );
+        let unexplained = disallowed
+            .iter()
+            .filter(|(_, reason)| reason.trim().is_empty())
+            .collect::<Vec<_>>();
+        assert!(unexplained.is_empty(), "{unexplained:?}");
     }
 
     #[test]
-    fn raw_production_thread_fixture_is_rejected_but_test_module_is_ignored() {
-        let violations = audit_blocking_pool_sources(
-            &[(
-                "src/commands/fixture.rs",
+    fn escape_exemptions_cover_one_reviewed_statement() {
+        let exemption = |name: &str| {
+            format!(
+                "an exemption from clippy::disallowed_methods must be one statement's #[expect] with a reason: src/services/fixture.rs ({name})"
+            )
+        };
+        let violations = audit_escape_exemptions(&[
+            (
+                "src/services/fixture.rs",
                 r#"
-                    fn production() { std::thread::spawn(work); }
+                    fn reviewed() {
+                        #[expect(clippy::disallowed_methods, reason = "reaps the opener")]
+                        let reaper = std::thread::Builder::new().spawn(work);
+                        #[expect(clippy::disallowed_methods, reason = "joined at once")]
+                        std::thread::Builder::new().spawn(work)?;
+                    }
+                    #[expect(clippy::disallowed_methods, reason = "covers every thread below")]
+                    fn whole_function() { std::thread::spawn(work); std::thread::spawn(heavy); }
+                    impl Opener {
+                        #[allow(clippy::disallowed_methods)]
+                        fn method(&self) { std::thread::spawn(work); }
+                    }
+                    fn unexplained() {
+                        #[expect(clippy::disallowed_methods)]
+                        let thread = std::thread::spawn(work);
+                        #[expect(clippy::disallowed_methods, reason = " ")]
+                        let blank = std::thread::spawn(work);
+                        #[allow(clippy::style)]
+                        let grouped = std::thread::spawn(work);
+                    }
                     #[cfg(test)]
                     mod tests {
-                        fn helper() { std::thread::spawn(test_work); }
+                        #![allow(clippy::disallowed_methods)]
                     }
                 "#,
-            )],
-            &["src/native_operation.rs"],
-            &[],
-        );
+            ),
+            (
+                "src/lib.rs",
+                "#![cfg_attr(test, allow(clippy::disallowed_methods))]\nmod services;",
+            ),
+            (
+                "src/services/mod.rs",
+                "#![cfg_attr(test, allow(clippy::disallowed_methods))]\nmod fixture;",
+            ),
+        ]);
 
         assert_eq!(
             violations,
             [
-                "direct native blocking execution outside NativeOperationExecutor: src/commands/fixture.rs (std::thread::spawn)"
-            ]
-        );
-
-        let test_only = audit_blocking_pool_sources(
-            &[(
-                "src/commands/fixture.rs",
-                "#[cfg(test)] mod tests { fn helper() { std::thread::spawn(test_work); } }",
-            )],
-            &["src/native_operation.rs"],
-            &[],
-        );
-        assert!(test_only.is_empty(), "{test_only:?}");
-    }
-
-    #[test]
-    fn thread_escapes_are_detected_by_path_and_command_spawn_is_not() {
-        let violations = audit_blocking_pool_sources(
-            &[(
-                "src/services/fixture.rs",
-                r#"
-                    use std::thread::{spawn, Builder as ThreadBuilder, scope};
-                    use std::thread::*;
-                    use std::thread as threads;
-                    use std::thread;
-                    use std::process::Command;
-                    fn builder() { std::thread::Builder::new().name("x".into()).spawn(work); }
-                    fn short_builder() { let b = thread::Builder::new(); b.spawn(work); }
-                    fn scoped() { std::thread::scope(|s| { s.spawn(work); }); }
-                    fn short_scoped() { thread::scope(|s| { s.spawn(work); }); }
-                    fn process() { Command::new("opener").spawn(); }
-                    fn qualified_process() { std::process::Command::new("opener").spawn(); }
-                "#,
-            )],
-            &["src/native_operation.rs"],
-            &[],
-        );
-
-        let escape = |name: &str| {
-            format!(
-                "direct native blocking execution outside NativeOperationExecutor: src/services/fixture.rs ({name})"
-            )
-        };
-        assert_eq!(
-            violations,
-            [
-                escape("std::thread::Builder::new"),
-                escape("std::thread::scope"),
-                escape("thread::Builder::new"),
-                escape("thread::scope"),
-                escape("use std::thread as threads"),
-                escape("use std::thread::*"),
-                escape("use std::thread::Builder"),
-                escape("use std::thread::scope"),
-                escape("use std::thread::spawn"),
-            ]
-        );
-    }
-
-    #[test]
-    fn renamed_blocking_pool_imports_are_escapes() {
-        let violations = audit_blocking_pool_sources(
-            &[(
-                "src/commands/fixture.rs",
-                r#"
-                    use tauri::async_runtime::spawn_blocking as offload;
-                    use tokio::task::{block_in_place as inline, spawn_blocking};
-                    fn f(path: String) { offload(move || std::fs::read(path)); inline(work); }
-                "#,
-            )],
-            &["src/native_operation.rs"],
-            &[],
-        );
-
-        let escape = |name: &str| {
-            format!(
-                "direct native blocking execution outside NativeOperationExecutor: src/commands/fixture.rs ({name})"
-            )
-        };
-        assert_eq!(
-            violations,
-            [
-                escape("use tauri::async_runtime::spawn_blocking"),
-                escape("use tokio::task::block_in_place"),
-                escape("use tokio::task::spawn_blocking"),
-            ]
-        );
-    }
-
-    #[test]
-    fn blocking_pool_method_calls_are_escapes() {
-        let violations = audit_blocking_pool_sources(
-            &[(
-                "src/services/fixture.rs",
-                r#"
-                    fn current() { tokio::runtime::Handle::current().spawn_blocking(move || heavy_cpu()); }
-                    fn stored(rt: &tokio::runtime::Handle) { rt.spawn_blocking(work); }
-                    fn inline(rt: &Runtime) { rt.block_in_place(work); }
-                "#,
-            )],
-            &["src/native_operation.rs"],
-            &[],
-        );
-
-        let escape = |name: &str| {
-            format!(
-                "direct native blocking execution outside NativeOperationExecutor: src/services/fixture.rs ({name})"
-            )
-        };
-        assert_eq!(
-            violations,
-            [escape(".block_in_place()"), escape(".spawn_blocking()")]
-        );
-    }
-
-    #[test]
-    fn escape_paths_passed_as_function_values_are_escapes() {
-        let violations = audit_blocking_pool_sources(
-            &[(
-                "src/services/fixture.rs",
-                r#"
-                    fn threads(jobs: Vec<fn()>) { let h: Vec<_> = jobs.into_iter().map(std::thread::spawn).collect(); }
-                    fn pool(jobs: Vec<fn()>) { jobs.into_iter().map(tokio::task::spawn_blocking); }
-                    fn stored() { let start = rayon::spawn; start(work); }
-                "#,
-            )],
-            &["src/native_operation.rs"],
-            &[],
-        );
-
-        let escape = |name: &str| {
-            format!(
-                "direct native blocking execution outside NativeOperationExecutor: src/services/fixture.rs ({name})"
-            )
-        };
-        assert_eq!(
-            violations,
-            [
-                escape("rayon::spawn"),
-                escape("std::thread::spawn"),
-                escape("tokio::task::spawn_blocking"),
-            ]
-        );
-    }
-
-    #[test]
-    fn out_of_line_test_module_files_are_skipped() {
-        let spawn = "fn helper() { std::thread::spawn(work); }";
-        let violations = audit_blocking_pool_sources(
-            &[
-                (
-                    "src/services/fixture.rs",
-                    "#[cfg(test)] mod tests; mod live;",
+                exemption("#[allow(clippy::disallowed_methods)]"),
+                exemption("#[allow(clippy::style)]"),
+                exemption("#[expect(clippy::disallowed_methods)]"),
+                exemption(r#"#[expect(clippy::disallowed_methods, reason = " ")]"#),
+                exemption(
+                    r#"#[expect(clippy::disallowed_methods, reason = "covers every thread below")]"#
                 ),
-                ("src/services/fixture/tests.rs", spawn),
-                ("src/services/fixture/tests/deep.rs", spawn),
-                ("src/services/fixture/live.rs", spawn),
-                ("src/services/other/mod.rs", "#[cfg(test)] mod checks;"),
-                ("src/services/other/checks/mod.rs", spawn),
-                ("src/lib.rs", "#[cfg(test)] mod scratch;"),
-                ("src/scratch.rs", spawn),
-            ],
-            &["src/native_operation.rs"],
-            &[],
-        );
-
-        assert_eq!(
-            violations,
-            [
-                "direct native blocking execution outside NativeOperationExecutor: src/services/fixture/live.rs (std::thread::spawn)"
+                "an exemption from clippy::disallowed_methods must be one statement's #[expect] with a reason: src/services/mod.rs (#![cfg_attr(test, allow(clippy::disallowed_methods))])".to_owned(),
             ]
         );
     }
 
     #[test]
-    fn reviewed_blocking_escapes_pass_and_stale_allowances_are_reported() {
-        let allowances = [
-            BlockingEscapeAllowance {
-                path: "src/services/fixture.rs",
-                escape: "std::thread::Builder::new",
-                count: 1,
-                reason: "reviewed fixture",
-            },
-            BlockingEscapeAllowance {
-                path: "src/services/removed.rs",
-                escape: "std::thread::Builder::new",
-                count: 1,
-                reason: " ",
-            },
-        ];
-        let violations = audit_blocking_pool_sources(
-            &[(
+    fn out_of_line_test_module_files_are_not_audited_for_exemptions() {
+        let exempt =
+            "#[allow(clippy::disallowed_methods)] fn helper() { std::thread::spawn(work); }";
+        let violations = audit_escape_exemptions(&[
+            (
                 "src/services/fixture.rs",
-                r#"
-                    fn reviewed() { std::thread::Builder::new().spawn(work); }
-                    fn unreviewed() { std::thread::spawn(work); }
-                "#,
-            )],
-            &["src/native_operation.rs"],
-            &allowances,
-        );
+                "#[cfg(test)] mod tests; mod live;",
+            ),
+            ("src/services/fixture/tests.rs", exempt),
+            ("src/services/fixture/tests/deep.rs", exempt),
+            ("src/services/fixture/live.rs", exempt),
+            ("src/services/other/mod.rs", "#[cfg(test)] mod checks;"),
+            ("src/services/other/checks/mod.rs", exempt),
+        ]);
 
         assert_eq!(
             violations,
             [
-                "blocking escape allowance has no reason: src/services/removed.rs (std::thread::Builder::new)",
-                "direct native blocking execution outside NativeOperationExecutor: src/services/fixture.rs (std::thread::spawn)",
-                "unused blocking escape allowance has no escape: src/services/removed.rs (std::thread::Builder::new)",
-            ]
-        );
-    }
-
-    #[test]
-    fn allowance_covers_only_the_reviewed_number_of_escapes() {
-        let allowances = [BlockingEscapeAllowance {
-            path: "src/services/fixture.rs",
-            escape: "std::thread::Builder::new",
-            count: 1,
-            reason: "reviewed fixture",
-        }];
-        let violations = audit_blocking_pool_sources(
-            &[(
-                "src/services/fixture.rs",
-                r#"
-                    fn reviewed() { std::thread::Builder::new().spawn(work); }
-                    fn added() { std::thread::Builder::new().spawn(heavy); }
-                "#,
-            )],
-            &["src/native_operation.rs"],
-            &allowances,
-        );
-        assert_eq!(
-            violations,
-            [
-                "direct native blocking execution outside NativeOperationExecutor: src/services/fixture.rs (std::thread::Builder::new, 2 sites, 1 reviewed)"
-            ]
-        );
-
-        let over_counted = audit_blocking_pool_sources(
-            &[(
-                "src/services/fixture.rs",
-                "fn reviewed() { std::thread::Builder::new().spawn(work); }",
-            )],
-            &["src/native_operation.rs"],
-            &[BlockingEscapeAllowance {
-                count: 2,
-                ..allowances[0]
-            }],
-        );
-        assert_eq!(
-            over_counted,
-            [
-                "blocking escape allowance counts more sites than exist: src/services/fixture.rs (std::thread::Builder::new, 1 site, 2 reviewed)"
+                "an exemption from clippy::disallowed_methods must be one statement's #[expect] with a reason: src/services/fixture/live.rs (#[allow(clippy::disallowed_methods)])"
             ]
         );
     }

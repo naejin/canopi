@@ -21,6 +21,11 @@ impl FolderRevealer for SystemFolderRevealer {
             .map_err(|error| format!("Failed to open the file manager: {error}"))?;
         // The opener may run as long as the file manager it hands off to, so
         // reap it off the calling thread instead of leaving a zombie.
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "the opener may live as long as the file manager; holding an executor \
+                      slot for it would starve bounded work"
+        )]
         std::thread::Builder::new()
             .name("folder-reveal-reaper".to_owned())
             .spawn(move || {
