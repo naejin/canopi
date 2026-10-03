@@ -287,6 +287,8 @@
       "basemapLoading": "Basiskaart laden…",
       "mapUnavailable": "Kaart niet beschikbaar",
       "layerSkipped": "Een kaartlaag kon niet worden weergegeven",
+      "basemapFailed": "De basiskaart kon niet worden geladen. Controleer je verbinding.",
+      "retryMap": "Opnieuw proberen",
       "visible": "Zichtbaar",
       "hidden": "Verborgen",
       "locked": "Vergrendeld",

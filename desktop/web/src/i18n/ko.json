@@ -287,6 +287,8 @@
       "basemapLoading": "기본 지도를 불러오는 중…",
       "mapUnavailable": "지도를 사용할 수 없음",
       "layerSkipped": "지도 레이어를 표시할 수 없습니다",
+      "basemapFailed": "기본 지도를 불러오지 못했습니다. 연결을 확인하세요.",
+      "retryMap": "재시도",
       "visible": "표시",
       "hidden": "숨김",
       "locked": "잠김",

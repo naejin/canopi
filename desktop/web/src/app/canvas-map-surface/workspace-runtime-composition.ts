@@ -45,6 +45,8 @@ export type WorkspaceRuntimeStartOutcome = WorkspaceActivationOutcome | 'no-desi
 export interface WorkspaceRuntimeComposition {
   readonly surfaces: CanvasRuntimeSurfaces
   start(): Promise<WorkspaceRuntimeStartOutcome>
+  /** The map notice's Retry: downloads a basemap that couldn't load again. Nothing retries on its own. */
+  retryMap?(): void
   dispose(): Promise<void>
 }
 
@@ -233,6 +235,10 @@ export function createWorkspaceRuntimeComposition(
         resolveStart('cancelled')
       }
       return startResult
+    },
+    retryMap() {
+      if (disposeResult) return
+      controls.retryBasemap?.()
     },
     dispose() {
       if (disposeResult) return disposeResult

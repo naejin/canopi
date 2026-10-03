@@ -287,6 +287,8 @@
       "basemapLoading": "ベースマップを読み込み中…",
       "mapUnavailable": "地図を利用できません",
       "layerSkipped": "地図レイヤーを表示できませんでした",
+      "basemapFailed": "ベースマップを読み込めませんでした。接続を確認してください。",
+      "retryMap": "再試行",
       "visible": "表示",
       "hidden": "非表示",
       "locked": "ロック中",

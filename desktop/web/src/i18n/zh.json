@@ -287,6 +287,8 @@
       "basemapLoading": "正在加载底图…",
       "mapUnavailable": "地图不可用",
       "layerSkipped": "无法显示某个地图图层",
+      "basemapFailed": "无法加载底图。请检查网络连接。",
+      "retryMap": "重试",
       "visible": "可见",
       "hidden": "隐藏",
       "locked": "已锁定",

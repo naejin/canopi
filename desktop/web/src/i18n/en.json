@@ -287,6 +287,8 @@
       "basemapLoading": "Loading basemap…",
       "mapUnavailable": "Map unavailable",
       "layerSkipped": "A map layer couldn’t be shown",
+      "basemapFailed": "Basemap couldn’t load. Check your connection.",
+      "retryMap": "Retry",
       "visible": "Visible",
       "hidden": "Hidden",
       "locked": "Locked",

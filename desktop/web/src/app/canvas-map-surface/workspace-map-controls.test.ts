@@ -18,6 +18,9 @@ import { OPENFREEMAP_BASEMAPS } from '../../maplibre/openfreemap-basemap'
 import { GOOGLE_KEYLESS_TILES, GOOGLE_SESSION_TILES } from '../../maplibre/satellite-provider'
 import { MAPLIBRE_SHARED_SCENE_LAYER_ID } from '../../maplibre/shared-scene-layer'
 import { WorkspaceMapControls } from './workspace-map-controls'
+import { getMapNoticeReadModel } from './map-notice'
+import type { MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
+import { t } from '../../i18n'
 
 type MapListener = (event?: unknown) => void
 
@@ -1709,23 +1712,47 @@ describe('WorkspaceMapControls OpenFreeMap basemap', () => {
     expect(map.setStyle).not.toHaveBeenCalled()
   })
 
-  it('logs a basemap style failure without failing the workspace map', async () => {
+  it('notices a 503 basemap style with a fixed message and Retry, keeps the map, and Retry loads it', async () => {
+    // A loaded style stays cached for the session, so this uses the one style no earlier test loads.
     styleFetch.mockImplementationOnce(async () => new Response('unavailable', { status: 503 }))
     const logError = vi.fn()
-    const { controls, maps } = createControls({ background: basemapOn({ style: 'dark' }), logError })
+    const states: MapLibreCanvasSurfaceState[] = []
+    const { controls, maps } = createControls({
+      background: basemapOn({ style: 'dark' }),
+      contributions: { onStateChange: (state) => states.push(state) },
+      logError,
+    })
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
     map.emit('style.load')
     const admitted = await acquisition
+    controls.updateMapContributions(targetContribution(controls.sessionIdentity))
     const reportFailure = vi.fn()
     controls.watchFailure(admitted, reportFailure)
 
-    await vi.waitFor(() => expect(logError).toHaveBeenCalledWith(
+    await vi.waitFor(() => expect(states.at(-1)?.basemapStatus).toBe('failed'))
+    expect(states.at(-1)?.status).toBe('ready')
+    expect(logError).toHaveBeenCalledWith(
       'Map basemap style failed to load:',
       expect.objectContaining({ message: expect.stringContaining('503') }),
-    ))
+    )
+    const notice = getMapNoticeReadModel({ hasDesign: true, mapVisible: true, mapSurface: states.at(-1)!, t })
+    expect(notice).toMatchObject({
+      visible: true,
+      tone: 'error',
+      statusText: 'Basemap couldn’t load. Check your connection.',
+      retry: true,
+    })
+    expect(JSON.stringify(notice)).not.toContain('503')
     expect(hasAnyOpenFreeMapLayer(map)).toBe(false)
     expect(reportFailure).not.toHaveBeenCalled()
+    expect(map.remove).not.toHaveBeenCalled()
+
+    controls.retryBasemap()
+
+    await vi.waitFor(() => expect(states.at(-1)?.basemapStatus).toBe('ok'))
+    expect(hasOpenFreeMapBasemap(map)).toBe(true)
+    expect(getMapNoticeReadModel({ hasDesign: true, mapVisible: true, mapSurface: states.at(-1)!, t }).visible).toBe(false)
     expect(map.remove).not.toHaveBeenCalled()
   })
 

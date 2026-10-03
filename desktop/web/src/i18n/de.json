@@ -287,6 +287,8 @@
       "basemapLoading": "Basiskarte wird geladen…",
       "mapUnavailable": "Karte nicht verfügbar",
       "layerSkipped": "Eine Kartenebene konnte nicht angezeigt werden",
+      "basemapFailed": "Die Basiskarte konnte nicht geladen werden. Prüfen Sie Ihre Verbindung.",
+      "retryMap": "Erneut versuchen",
       "visible": "Sichtbar",
       "hidden": "Ausgeblendet",
       "locked": "Gesperrt",

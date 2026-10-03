@@ -59,6 +59,8 @@ export interface WorkspaceActivationMapControls {
   updateBackgroundPresentation(presentation: MapBackgroundPresentation): void
   /** Folds the map credits into their (i) button, now and on every later map. */
   setAttributionCompact?(compact: boolean): void
+  /** The user's Retry for a Basemap that couldn't load: downloads it again on the live map. */
+  retryBasemap?(): void
   /** Restores same-map style contributions after initial style admission. */
   installStyleRestorer(map: WorkspaceActivationMap, restore: () => void): () => void
   /** Map/context failures that happen outside the custom layer. */

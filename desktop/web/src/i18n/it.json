@@ -287,6 +287,8 @@
       "basemapLoading": "Caricamento mappa base…",
       "mapUnavailable": "Mappa non disponibile",
       "layerSkipped": "Impossibile mostrare un livello della mappa",
+      "basemapFailed": "Impossibile caricare la mappa base. Controlla la connessione.",
+      "retryMap": "Riprova",
       "visible": "Visibile",
       "hidden": "Nascosto",
       "locked": "Bloccato",

@@ -243,6 +243,26 @@ describe('map background band', () => {
     background.dispose()
   })
 
+  it('reports a Basemap that failed to load until Satellite hides it', async () => {
+    const statuses: string[] = []
+    const background = mountMapBackground({
+      map: createMap() as never,
+      maplibre: { AttributionControl: FakeControl },
+      tileAuth: null,
+      lifetime: { on: () => {}, off: () => {} },
+      loadStyle: async () => { throw new Error('Basemap style request failed (503).') },
+      onBasemapStatus: (status) => statuses.push(status),
+    })
+    background.update(presentation())
+    await settle()
+    expect(statuses).toEqual(['failed'])
+
+    background.update(presentation({ satelliteVisible: true }))
+    await settle()
+    expect(statuses).toEqual(['failed', 'idle'])
+    background.dispose()
+  })
+
   it('adds no remote source when every background row is hidden', async () => {
     const { map, background } = mount()
     background.update(presentation({ basemapVisible: false }))

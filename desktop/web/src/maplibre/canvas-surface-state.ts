@@ -2,6 +2,9 @@ import type { ViewDiagnostics } from '../canvas/runtime/view/types'
 
 type MapLibreCanvasSurfaceStatus = 'idle' | 'loading' | 'ready' | 'error'
 
+/** The OpenFreeMap Basemap: `failed` from a failed style download until it loads, is hidden or Satellite is chosen. */
+export type MapLibreBasemapStatus = 'idle' | 'ok' | 'failed'
+
 export interface MapLibreCanvasSurfaceState {
   readonly status: MapLibreCanvasSurfaceStatus
   readonly errorMessage: string | null
@@ -9,6 +12,7 @@ export interface MapLibreCanvasSurfaceState {
   readonly terrainErrorMessage: string | null
   /** An optional map contribution (overlay, raster band) was skipped; the map stays editable. */
   readonly layerSkipped: boolean
+  readonly basemapStatus: MapLibreBasemapStatus
 }
 
 export const IDLE_MAPLIBRE_CANVAS_SURFACE_STATE: MapLibreCanvasSurfaceState = {
@@ -17,6 +21,7 @@ export const IDLE_MAPLIBRE_CANVAS_SURFACE_STATE: MapLibreCanvasSurfaceState = {
   terrainStatus: 'idle',
   terrainErrorMessage: null,
   layerSkipped: false,
+  basemapStatus: 'idle',
 }
 
 export function mapLibreCanvasSurfaceStateEquals(
@@ -29,6 +34,7 @@ export function mapLibreCanvasSurfaceStateEquals(
     && left.terrainStatus === right.terrainStatus
     && left.terrainErrorMessage === right.terrainErrorMessage
     && left.layerSkipped === right.layerSkipped
+    && left.basemapStatus === right.basemapStatus
   )
 }
 

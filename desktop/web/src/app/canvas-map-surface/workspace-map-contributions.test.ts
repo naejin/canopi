@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createDefaultScenePersistedState } from '../../canvas/runtime/scene'
 import type { MapLibreApi, MapLibreMapInstance } from '../../maplibre/loader'
-import type { MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
+import { IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, type MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
 import type { TerrainProtocolSupport } from '../../maplibre/terrain'
 import { WorkspaceMapContributions } from './workspace-map-contributions'
 import type { WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
@@ -369,7 +369,7 @@ describe('WorkspaceMapContributions', () => {
     expect([...f.map.listeners.values()].every((listeners) => listeners.size === 0)).toBe(true)
     expect(f.bounds).toHaveBeenLastCalledWith(null)
     expect(f.diagnostics).toHaveBeenLastCalledWith(null)
-    expect(f.states.at(-1)).toEqual({ status: 'idle', errorMessage: null, terrainStatus: 'idle', terrainErrorMessage: null, layerSkipped: false })
+    expect(f.states.at(-1)).toEqual(IDLE_MAPLIBRE_CANVAS_SURFACE_STATE)
   })
 
   describe('optional overlay failures', () => {

@@ -265,6 +265,13 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     this.drainReconciliation(attempt)
   }
 
+  retryBasemap(): void {
+    const attempt = this.attempt
+    if (!attempt || attempt.released || attempt.failureReported || !attempt.admitted) return
+    // The latest presentation again: a Basemap that is not installed is downloaded again.
+    attempt.background?.update(attempt.presentation)
+  }
+
   setAttributionCompact(compact: boolean): void {
     this.attributionCompact = compact
     const attempt = this.attempt
@@ -359,6 +366,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
       tileAuth: attempt.tileAuth,
       lifetime,
       onError: (error) => this.logError('Map basemap style failed to load:', error),
+      onBasemapStatus: (status) => attempt.contributions.setBasemapStatus(status),
     })
     if (this.attributionCompact !== null) attempt.background.setAttributionCompact(this.attributionCompact)
     attempt.background.update(attempt.presentation)

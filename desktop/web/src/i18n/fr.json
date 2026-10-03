@@ -287,6 +287,8 @@
       "basemapLoading": "Chargement du fond de carte…",
       "mapUnavailable": "Carte indisponible",
       "layerSkipped": "Un calque de la carte n’a pas pu être affiché",
+      "basemapFailed": "Le fond de carte n’a pas pu être chargé. Vérifiez votre connexion.",
+      "retryMap": "Réessayer",
       "visible": "Visible",
       "hidden": "Masqué",
       "locked": "Verrouillé",

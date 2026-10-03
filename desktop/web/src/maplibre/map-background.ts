@@ -4,6 +4,7 @@ import {
   MAPLIBRE_SATELLITE_LAYER_ID,
 } from './config'
 import type { BasemapTileAuth } from './basemap-tile-auth'
+import type { MapLibreBasemapStatus } from './canvas-surface-state'
 import {
   OPENFREEMAP_LAYER_PREFIX,
   VectorBasemap,
@@ -83,6 +84,8 @@ export interface MapBackgroundOptions {
   }
   readonly loadStyle?: (url: string) => Promise<VectorStyleDocument>
   readonly onError?: (error: unknown) => void
+  /** The Basemap's download status; hidden, also under Satellite, is `idle`. */
+  readonly onBasemapStatus?: (status: MapLibreBasemapStatus) => void
 }
 
 export interface MapBackgroundHandle {
@@ -118,6 +121,7 @@ export function mountMapBackground(options: MapBackgroundOptions): MapBackground
     ...(options.loadStyle ? { loadStyle: options.loadStyle } : {}),
     beforeLayerId,
     ...(options.onError ? { onError: options.onError } : {}),
+    ...(options.onBasemapStatus ? { onStatus: options.onBasemapStatus } : {}),
   })
   let presentation: MapBackgroundPresentation | null = null
   let satellite: SatelliteMountHandle | null = null

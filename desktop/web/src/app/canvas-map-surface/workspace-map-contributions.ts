@@ -6,6 +6,7 @@ import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   mapLibreCanvasSurfaceStateEquals,
   publishMapDiagnostics,
+  type MapLibreBasemapStatus,
   type MapLibreCanvasSurfaceState,
 } from '../../maplibre/canvas-surface-state'
 import { toMapLibreSurfaceErrorMessage } from '../../maplibre/canvas-surface-errors'
@@ -133,6 +134,12 @@ export class WorkspaceMapContributions {
       return true
     }
     return false
+  }
+
+  /** The Basemap's download status, kept until the map goes. */
+  setBasemapStatus(basemapStatus: MapLibreBasemapStatus): void {
+    if (this.disposed) return
+    this.publishState({ ...this.state, basemapStatus })
   }
 
   dispose(error?: unknown): void {

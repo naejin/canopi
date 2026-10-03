@@ -162,6 +162,32 @@ describe('OpenFreeMap vector basemap', () => {
     expect(map.sprite).toContain('positron')
   })
 
+  it('reports a rejected style as failed until a later load installs it, and idle once hidden', async () => {
+    const map = new FakeMap()
+    const statuses: string[] = []
+    let reject = true
+    const basemap = new VectorBasemap(map, {
+      loadStyle: async (url) => {
+        if (reject) throw new Error('Basemap style request failed (503).')
+        return styleDocument(url.split('/').pop()!)
+      },
+      onStatus: (status) => statuses.push(status),
+    })
+    const shown = { style: 'liberty', visible: true, opacity: 1, locale: 'en' } as const
+    basemap.update(shown)
+    await settle()
+    expect(statuses).toEqual(['failed'])
+
+    reject = false
+    basemap.update(shown)
+    await settle()
+    expect(statuses).toEqual(['failed', 'ok'])
+    expect(map.sprite).toContain('liberty')
+
+    basemap.update({ ...shown, visible: false })
+    expect(statuses).toEqual(['failed', 'ok', 'idle'])
+  })
+
   it('scales legacy stop functions and wraps other expressions', () => {
     expect(scaleOpacity({ stops: [[4, 0.4], [10, 1]] }, 0.5)).toEqual({ stops: [[4, 0.2], [10, 0.5]] })
     expect(scaleOpacity(['get', 'o'], 0.5)).toEqual(['*', ['get', 'o'], 0.5])
