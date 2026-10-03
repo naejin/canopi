@@ -1852,7 +1852,7 @@ Where the rotation rows live (phase 1): Shift+←/→ and Shift+↑ (`view-arrow
 | Shift+↑ | reset north | `view-arrows` | n/a | 1 (was large nudge or large pan) |
 | Shift+↓ | unbound, reserved for tilt | — | — | 1 (convention) |
 | ← → ↑ ↓ | with a selection, the Select tool armed and site mode: nudge 10 cm along the screen direction (from 1; before: world axes); with a selection in another tool or in overview: nothing (today, every phase); with none: pan 64 px along the screen, in any tool and in overview. Never while a pointer session (drag, band, move, handle drag, pan or rotate) is live: the arrow does nothing (today, `keyboard-port.ts:146`; every phase; fixture H25) | `canvas-focus` | n/a | 1 |
-| mod+arrows | as the arrows, 1 m or 256 px, along the screen; on the focused map the chord is always consumed, even when nothing moves (Web Mac Cmd+← would go Back) | `canvas-focus` | n/a | 1 (was Shift+arrows) |
+| mod+arrows | as the arrows, 1 m or 256 px, along the screen; on the focused map the chord is always consumed, even when nothing moves (Web Mac Cmd+← would go Back); away from the map outside text fields mod+←/→ runs nothing and is only kept from the browser (a `command` row, `keepsFromBrowser`) | `canvas-focus` | n/a | 1 (was Shift+arrows) |
 | Alt+arrows | unbound | — | — | — |
 | macOS Ctrl+arrows | not bound (Mission Control) | — | — | — |
 | Shift+G, Shift+S, Shift+R | grid, snap to grid, rulers (rulers while rotated: on, hidden, with the hint) | `command` | follows | unchanged |

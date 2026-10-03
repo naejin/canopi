@@ -219,7 +219,8 @@ function scopeAdmits(scope: Exclude<KeyScope, 'global'>, at: KeyTarget, event: K
   }
 }
 
-/** Step 10: canvas commands through the port, a refused one through its fallback, the rest through the sink. */
+/** Step 10: canvas commands through the port, a refused one through its fallback, the rest through the sink; a row kept
+ *  from the browser runs nothing. */
 function dispatch(
   deps: KeyRouterDeps,
   port: CanvasKeyboardPort | null,
@@ -228,7 +229,9 @@ function dispatch(
   fallbackAllowed: boolean,
 ): void {
   let consumed: boolean
-  if (row.canvas) {
+  if (row.keepsFromBrowser) {
+    consumed = true
+  } else if (row.canvas) {
     consumed = port?.command(row.canvas) ?? false
     if (!consumed && row.fallback && fallbackAllowed) consumed = deps.commands.run(row.fallback)
   } else {

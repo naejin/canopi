@@ -451,6 +451,36 @@ describe('key router', () => {
     expect(run).not.toHaveBeenCalled()
   })
 
+  it('a Mac Cmd+←/→ away from the map runs nothing and never reaches the browser, which would go Back (H17)', () => {
+    install({ platform: { os: 'mac', engine: 'chromium', gestureEvents: false } })
+    const zoomIn = document.createElement('button')
+    host.append(zoomIn)
+    const dock = document.createElement('div')
+    dock.setAttribute('data-key-region', 'dock')
+    const field = document.createElement('input')
+    document.body.append(dock, field)
+
+    // A map control that a click focused (Chrome focuses buttons) is not the map.
+    zoomIn.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    zoomIn.focus()
+    expect(press({ key: 'ArrowLeft', metaKey: true }, zoomIn).defaultPrevented).toBe(true)
+    expect(press({ key: 'ArrowRight', metaKey: true }, zoomIn).defaultPrevented).toBe(true)
+    // Nor is <body> after a press on a dock panel.
+    zoomIn.blur()
+    dock.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    expect(press({ key: 'ArrowLeft', metaKey: true }, document.body).defaultPrevented).toBe(true)
+    expect(fake.port.command).not.toHaveBeenCalled()
+    expect(run).not.toHaveBeenCalled()
+
+    // Cmd+↑ and Cmd+↓ only scroll; a text field moves its caret; a modal keeps its keys.
+    expect(press({ key: 'ArrowUp', metaKey: true }, document.body).defaultPrevented).toBe(false)
+    field.focus()
+    expect(press({ key: 'ArrowLeft', metaKey: true }, field).defaultPrevented).toBe(false)
+    field.blur()
+    modal = true
+    expect(press({ key: 'ArrowLeft', metaKey: true }, document.body).defaultPrevented).toBe(false)
+  })
+
   it('an arrow-owning widget outside the map keeps Shift+arrows, and a plain focusable div does not (H26)', () => {
     install()
     const world = document.createElement('div')

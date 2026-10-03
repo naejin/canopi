@@ -157,7 +157,7 @@ describe('keymap', () => {
     const arrowChords = canvasCommandDefinitions.flatMap((definition) => (definition.shortcuts ?? [])
       .filter((shortcut) => /Arrow/.test(shortcut)).map((shortcut) => `${definition.commandId} ${shortcut}`))
     expect(arrowChords).toEqual([])
-    const catalogueRows = CANVAS_KEYMAP_ROWS.filter((row) => !row.canvas)
+    const catalogueRows = CANVAS_KEYMAP_ROWS.filter((row) => !row.canvas && !row.keepsFromBrowser)
     expect(catalogueRows.flatMap((row) => row.chords).filter((chord) => chord.key.startsWith('Arrow'))).toEqual([])
     expect(canvasCommandDefinitions.find((definition) => definition.commandId === 'view.turnViewLeft')?.keyHints)
       .toEqual(['Shift+ArrowLeft'])
@@ -199,6 +199,16 @@ describe('keymap', () => {
     expect(canvasCommandFor(keyLike(']'))).toBe('canvas.bringToFront')
     expect(canvasCommandFor(keyLike('['))).toBe('canvas.sendToBack')
     expect(canvasCommandFor(keyLike('Escape'))).toBeNull()
+  })
+
+  it('mod+←/→ away from the map runs nothing and is only kept from the browser', () => {
+    const kept = CANVAS_KEYMAP_ROWS.filter((row) => row.keepsFromBrowser)
+    expect(kept.map((row) => [row.scope, row.canvas, row.chords])).toEqual([[
+      'command',
+      undefined,
+      [{ key: 'ArrowLeft', mod: true, ctrl: false, shift: false, alt: false },
+        { key: 'ArrowRight', mod: true, ctrl: false, shift: false, alt: false }],
+    ]])
   })
 
   it('N follows the switch', () => {
