@@ -5,7 +5,8 @@ import {
   type ToolHarness,
   type ToolHarnessOptions,
 } from '../../../__tests__/support/tool-harness'
-import type { WorldPoint } from '../view/types'
+import type { ScreenPoint, WorldPoint } from '../view/types'
+import { getEllipticalZonePolygon, getRectangularZoneCorners } from '../zone-geometry'
 import type { DraftShape } from './draft'
 import { createMeasurementGuideTool } from './measurement-guide'
 import { createPolygonTool } from './polygon'
@@ -57,6 +58,16 @@ function expectPoints(actual: readonly WorldPoint[], expected: readonly WorldPoi
   for (const [index, point] of expected.entries()) {
     expect(actual[index]!.x).toBeCloseTo(point.x, 9)
     expect(actual[index]!.y).toBeCloseTo(point.y, 9)
+  }
+}
+
+function expectScreen(h: ToolHarness, actual: readonly WorldPoint[], expected: readonly ScreenPoint[]): void {
+  const view = h.view.view()
+  expect(actual).toHaveLength(expected.length)
+  for (const [index, point] of expected.entries()) {
+    const screen = view.worldToScreen(actual[index]!)
+    expect(screen.x).toBeCloseTo(point.x, 6)
+    expect(screen.y).toBeCloseTo(point.y, 6)
   }
 }
 
@@ -263,5 +274,41 @@ describe('Zone drag tools', () => {
     expect(h.renderer.lastDraft()).toBeNull()
     expect(h.store.persisted.zones).toEqual([])
     expect(h.host.hasLiveGesture()).toBe(false)
+  })
+
+  it('a rectangle drawn at 30 stores 30', () => {
+    const h = harness({ tool: 'rectangle', camera: { bearingDeg: 30 } })
+    const box = [{ x: 100, y: 100 }, { x: 220, y: 100 }, { x: 220, y: 180 }, { x: 100, y: 180 }]
+
+    h.press({ x: 100, y: 100 })
+    h.move({ x: 220, y: 180 })
+    // The draft is level with the screen, and so are its edge chips.
+    const draft = shapes(h)[0]
+    expectScreen(h, draft?.kind === 'polygon' ? draft.points : [], box)
+    expect(chips(h)).toHaveLength(5)
+    h.release({ x: 220, y: 180 })
+
+    const zone = h.store.persisted.zones[0]!
+    expect(zone).toMatchObject({ zoneType: 'rect', rotationDeg: 30 })
+    expectScreen(h, getRectangularZoneCorners(zone) ?? [], box)
+  })
+
+  it('an ellipse drawn at 30 stores 30', () => {
+    const h = harness({ tool: 'ellipse', camera: { bearingDeg: 30 } })
+
+    h.press({ x: 100, y: 100 })
+    h.move({ x: 220, y: 180 })
+    const draft = shapes(h)[0]
+    expect(draft).toMatchObject({ kind: 'ellipse', rotationDeg: 30 })
+    if (draft?.kind !== 'ellipse') return
+    expectScreen(h, [draft.center], [{ x: 160, y: 140 }])
+    expect(chips(h).map(([text]) => text.slice(0, 2))).toEqual(['W ', 'H ', expect.any(String)])
+    h.release({ x: 220, y: 180 })
+
+    const zone = h.store.persisted.zones[0]!
+    expect(zone).toMatchObject({ zoneType: 'ellipse', rotationDeg: 30 })
+    // The ellipse's right, bottom, left and top extremes land on the dragged box's edge midpoints.
+    const outline = getEllipticalZonePolygon(zone, 4) ?? []
+    expectScreen(h, outline, [{ x: 220, y: 140 }, { x: 160, y: 180 }, { x: 100, y: 140 }, { x: 160, y: 100 }])
   })
 })
