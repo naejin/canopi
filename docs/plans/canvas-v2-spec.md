@@ -1289,8 +1289,8 @@ The grid and the ruler guides are editing aids, not scene data: the same Pixi pr
 ```ts
 export interface SceneRendererSnapshot {
   // … existing fields …
-  /** The grid (null when off; its interval and ink) and the ruler guides; the Renderer names the shapes. Absent: nothing is
-   *  drawn (thumbnails, overview, lens). */
+  /** The grid (null when off; its ink and major ink, the interval coming from `gridInterval` at the view's scale) and
+   *  the ruler guides; the Renderer names the shapes. Absent: nothing is drawn (thumbnails, overview, lens). */
   readonly editingAids?: { readonly grid: unknown; readonly rulerGuides: readonly unknown[] }
 }
 ```
@@ -1327,7 +1327,7 @@ The contract split: data goes through `syncScene`, the camera through `setView`,
 | `worldDraftRoot` (`draft-layer.ts`) | the same `view.planar.affine`, written in the same `setView` | world drafts (polylines, polygons, quads, ellipses) and the zone shapes of an `objects` ghost |
 | `billboardDraftRoot` (`draft-layer.ts`) | identity (CSS px) | pixel-sized drafts (`circle-px`, `label`) and the plants and note text of a ghost (a plant is a billboard); positions from `view.projectAnchors` |
 | DOM overlay host (`canvas/runtime/chrome/`) | placed in `onViewFrame('overlays')`, no element created per frame (`left`/`top` until phase R, then `translate` only) | handle layer, text-entry host, hover tooltip, locked affordance |
-| Canvas2D rulers (`chrome/rulers.ts`) | redrawn after each `setView` through the chrome coordinator, which builds and disposes them and passes `northUp` | shown only while `northUp` |
+| Canvas2D rulers (`chrome/rulers.ts`) | redrawn after each `setView` through the chrome coordinator, which builds and disposes them; they read `frame.view.northUp`, and the runtime's `_renderChrome` runs `setEditingAids` | shown only while `northUp` |
 
 `SelectionPreview` spans both roots: `world-layers.ts` applies it to the selected world shapes (zones, guides) as a transform of their retained geometry, and `billboard-layer.ts` applies it to the anchors of selected plants and notes before `projectAnchors` (and adds `rotateDeg` to a selected note's text angle), so a move-drag moves everything selected without `syncScene` (test `renderers/billboard-layer.test.ts`: "a selection preview moves selected plants and notes without syncScene", phase R).
 
