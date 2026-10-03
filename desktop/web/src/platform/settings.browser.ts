@@ -109,9 +109,15 @@ function readU32(value: unknown, fallback: number): number {
 
 function readLastView(value: unknown): Settings['last_view'] {
   if (!value || typeof value !== 'object') return null
-  const { lon, lat, zoom } = value as Record<string, unknown>
+  const { lon, lat, zoom, bearing } = value as Record<string, unknown>
   return [lon, lat, zoom].every((part) => typeof part === 'number' && Number.isFinite(part))
-    ? { lon: lon as number, lat: lat as number, zoom: zoom as number }
+    ? {
+        lon: lon as number,
+        lat: lat as number,
+        zoom: zoom as number,
+        // A view stored before the bearing existed reads as north up (common-types settings.rs: #[serde(default)]).
+        bearing: typeof bearing === 'number' && Number.isFinite(bearing) ? bearing : 0,
+      }
     : null
 }
 

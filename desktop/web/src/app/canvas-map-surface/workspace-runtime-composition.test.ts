@@ -212,6 +212,26 @@ describe('createWorkspaceRuntimeComposition', () => {
     }
   })
 
+  it('the last view carries the settled bearing', async () => {
+    vi.useFakeTimers()
+    try {
+      const onViewSettled = vi.fn<(view: WorkspaceSettledView) => void>()
+      const fixture = compositionFixture({ readSnapshot: () => null, onViewSettled })
+      await expect(fixture.composition.start()).resolves.toBe('no-design')
+      fixture.setLoaded(true)
+      fixture.sessionPlane.value = SETTLE_PLANE
+
+      fixture.view.navigation.showCamera({ ...fixture.view.view().camera, bearingDeg: 30 }, { motion: 'jump' })
+      vi.advanceTimersByTime(SETTLE_MS + WORKSPACE_VIEW_SETTLE_MS)
+
+      expect(onViewSettled).toHaveBeenCalledOnce()
+      expect(onViewSettled.mock.calls[0]![0].bearing).toBeCloseTo(30, 6)
+      await fixture.composition.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('reports one settled view after the camera stops moving and none after disposal', async () => {
     vi.useFakeTimers()
     try {

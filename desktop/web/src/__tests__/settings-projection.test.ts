@@ -123,9 +123,17 @@ afterEach(() => {
 
 describe('settings projection', () => {
   it('hydrates, snapshots and normalizes the last view', () => {
-    hydrateSettingsProjectionForTests(baseSettings({ last_view: { lon: 2.3522, lat: 48.8566, zoom: 17.5 } }))
-    expect(lastView.value).toEqual({ lon: 2.3522, lat: 48.8566, zoom: 17.5 })
-    expect(snapshotSettingsProjection().last_view).toEqual({ lon: 2.3522, lat: 48.8566, zoom: 17.5 })
+    hydrateSettingsProjectionForTests(baseSettings({ last_view: { lon: 2.3522, lat: 48.8566, zoom: 17.5, bearing: 30 } }))
+    expect(lastView.value).toEqual({ lon: 2.3522, lat: 48.8566, zoom: 17.5, bearing: 30 })
+    expect(snapshotSettingsProjection().last_view).toEqual({ lon: 2.3522, lat: 48.8566, zoom: 17.5, bearing: 30 })
+
+    // The bearing is folded into [0, 360); a missing or non-finite one reads as north up.
+    for (const [bearing, normalized] of [[390, 30], [-30, 330], [360, 0], [Number.NaN, 0], [undefined, 0]] as const) {
+      mutateSettingsProjection((draft) => {
+        draft.lastView = { lon: 2.3522, lat: 48.8566, zoom: 17.5, bearing }
+      }, { persist: 'none' })
+      expect(lastView.value?.bearing).toBeCloseTo(normalized, 9)
+    }
 
     mutateSettingsProjection((draft) => {
       draft.lastView = { lon: 13, lat: 89, zoom: 4 }
@@ -380,6 +388,21 @@ describe('settings projection', () => {
     expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
       locale: 'es',
       side_panel_width: 480,
+    }))
+  })
+
+  it('a bearing-only change to the last view is persisted', async () => {
+    hydrateSettingsProjectionForTests(baseSettings({ last_view: { lon: 2.3522, lat: 48.8566, zoom: 17.5, bearing: 0 } }))
+
+    mutateSettingsProjection((settings) => {
+      settings.lastView = { lon: 2.3522, lat: 48.8566, zoom: 17.5, bearing: 30 }
+    }, { persist: 'immediate' })
+    await Promise.resolve()
+
+    expect(lastView.value).toEqual({ lon: 2.3522, lat: 48.8566, zoom: 17.5, bearing: 30 })
+    expect(saveSettings).toHaveBeenCalledTimes(1)
+    expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
+      last_view: { lon: 2.3522, lat: 48.8566, zoom: 17.5, bearing: 30 },
     }))
   })
 

@@ -80,8 +80,8 @@ describe('new Design view', () => {
     expect(camera.viewport()).toEqual(START.viewport)
   })
 
-  it('remembers the settled view as the last view', () => {
-    persistLastView({ lon: 2.3522, lat: 48.8566, zoom: 18.25 })
-    expect(lastView.value).toEqual({ lon: 2.3522, lat: 48.8566, zoom: 18.25 })
+  it('remembers the settled view, its bearing included, as the last view', () => {
+    persistLastView({ lon: 2.3522, lat: 48.8566, zoom: 18.25, bearing: 30 })
+    expect(lastView.value).toEqual({ lon: 2.3522, lat: 48.8566, zoom: 18.25, bearing: 30 })
   })
 })

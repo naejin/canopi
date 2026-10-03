@@ -11,14 +11,13 @@ export type CameraMove =
   | { readonly kind: 'zoom-around'; readonly anchorPx: ScreenPoint; readonly factor: number }
   /**
    * Keep the ground under anchorPx fixed while the bearing changes; the centre is an output.
-   * 'ease' runs a driver tween (durationMs, default 300) about the same anchor.
+   * 'ease' runs a driver tween (VIEW_EASE_MS) about the same anchor.
    */
   | {
       readonly kind: 'rotate-around'
       readonly anchorPx: ScreenPoint | 'centre'
       readonly bearingDeg: number
       readonly animation: 'none' | 'ease'
-      readonly durationMs?: number
     }
   /** Go to a full camera. The centre is an input; no anchor. 'fly' is MapLibre flyTo; without a map it jumps. */
   | {

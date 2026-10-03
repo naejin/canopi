@@ -37,7 +37,7 @@ describe('worldToGeo', () => {
     expect(result.lat).toBeLessThan(45.52)
   })
 
-  it('keeps the canvas north-up: x displacement changes only longitude', () => {
+  it('keeps the plane axes on east and north: x displacement changes only longitude', () => {
     const result = worldToGeo(100, 0, 45.52, -122.68)
     expect(result.lng).toBeGreaterThan(-122.68)
     expect(result.lat).toBeCloseTo(45.52, 10)

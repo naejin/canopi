@@ -1,7 +1,7 @@
 // The current-view seam shared by saved views and stories: whether views can
 // be shown, what the map shows now as a view, and going to a view (camera only).
 
-import { extentOnOneWorld, geographicViewOfCamera, mapZoomToFitExtent } from '../../canvas/session-plane'
+import { extentOnOneWorld, geographicViewOfCamera } from '../../canvas/session-plane'
 import { WORKSPACE_MAP_MAX_ZOOM, WORKSPACE_MAP_MIN_ZOOM } from '../../canvas/workspace-camera-policy'
 import {
   currentCanvasQuerySurface,
@@ -12,6 +12,7 @@ import { currentDesign } from '../document-session/store'
 import { mapLayers } from '../map-layers/state'
 import { currentPlantDisplay } from '../plant-display/state'
 import type { PlantLabelMode } from '../../canvas/runtime/plant-display'
+import { reducedMotionPreference } from '../canvas-runtime/app-adapter'
 import { composeSavedView } from './model'
 
 /** The views of the open Design, in saved order. */
@@ -74,38 +75,28 @@ interface GoToSavedViewOptions {
 
 /**
  * Goes to a saved view: session state only, never a Design edit. The camera
- * flies there (or jumps under reduced motion) and frames the ground recorded
- * with the view in the current window; objects never move. Background,
- * layer and highlight overrides belong to presenting a story, which applies
- * them on top of this and restores the user's state when it ends.
+ * flies there (or jumps under reduced motion) to the view's centre, zoom and
+ * bearing, never snapped; a view saved in a larger window reopens closer in a
+ * smaller one (spec §4.10, one framing rule with its thumbnails); objects
+ * never move. Background, layer and highlight overrides belong to presenting
+ * a story, which applies them on top of this and restores the user's state
+ * when it ends.
  */
 export function goToSavedView(id: string, options: GoToSavedViewOptions = {}): boolean {
   const view = currentSavedViews().find((entry) => entry.id === id)
   const commands = getCurrentCanvasCommandSurface()
   if (!view || !commands || !canShowSavedViews()) return false
-  const reducedMotion = options.reducedMotion ?? prefersReducedMotion()
-  const screen = currentCanvasQuerySurface.peek()?.view.captureView().screen
-  return commands.viewport.showPlace(
-    { lon: view.camera.lon, lat: view.camera.lat },
-    savedViewZoomFor(view, screen),
+  const reducedMotion = options.reducedMotion ?? reducedMotionPreference().peek()
+  const { lon, lat, zoom, bearing } = view.camera
+  if (![lon, lat, zoom, bearing].every(Number.isFinite)) return false
+  commands.viewport.showCamera(
+    {
+      center: { lon, lat },
+      zoom: Math.min(WORKSPACE_MAP_MAX_ZOOM, Math.max(WORKSPACE_MAP_MIN_ZOOM, zoom)),
+      bearingDeg: bearing,
+      pitchDeg: 0,
+    },
     { motion: reducedMotion ? 'jump' : 'fly' },
   )
-}
-
-/**
- * The zoom that shows a view in a frame: its recorded ground fitted to the
- * frame, or its saved zoom for a view without one, within the map's range.
- */
-export function savedViewZoomFor(
-  view: Pick<SavedView, 'camera' | 'extent'>,
-  size: { readonly width: number; readonly height: number } | undefined,
-): number {
-  const fitted = view.extent && size ? mapZoomToFitExtent(view.extent, size) : null
-  return Math.min(WORKSPACE_MAP_MAX_ZOOM, Math.max(WORKSPACE_MAP_MIN_ZOOM, fitted ?? view.camera.zoom))
-}
-
-function prefersReducedMotion(): boolean {
-  return typeof window !== 'undefined'
-    && typeof window.matchMedia === 'function'
-    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  return true
 }

@@ -1,5 +1,5 @@
 import type { SceneDesignObjectTarget } from '../../canvas/runtime/scene'
-import { roundGeoDegrees, type GeographicExtent, type GeographicView } from '../../canvas/session-plane'
+import { roundGeoDegrees, storedBearing, type GeographicExtent, type GeographicView } from '../../canvas/session-plane'
 import { SAVED_VIEW_MAX_ZOOM } from '../../generated/canopi-design-format'
 import type { CanopiFile, SavedView, SavedViewBackground, SavedViewObject } from '../../types/design'
 import { mapBackgroundOf, type MapLayersState } from '../map-layers/state'
@@ -9,7 +9,7 @@ export interface SavedViewCaptureInput {
   readonly name: string
   readonly title: string | null
   readonly view: GeographicView
-  /** The ground the map shows; null when it leaves one world. */
+  /** The ground the map shows (written with the view; going to it and its thumbnails use the camera); null when it leaves one world. */
   readonly extent?: GeographicExtent | null
   readonly mapLayers: MapLayersState
   readonly sceneLayers: readonly { readonly name: string; readonly visible: boolean }[]
@@ -18,7 +18,7 @@ export interface SavedViewCaptureInput {
   readonly selection: readonly SceneDesignObjectTarget[]
 }
 
-/** What the current view shows, as a saved view. The map is north-up: bearing 0. */
+/** What the current view shows, as a saved view: its camera with the bearing rounded to 1e-6 and folded into [0, 360) (spec §4.10). */
 export function composeSavedView(input: SavedViewCaptureInput): SavedView {
   return {
     id: input.id,
@@ -27,7 +27,7 @@ export function composeSavedView(input: SavedViewCaptureInput): SavedView {
       lon: roundGeoDegrees(input.view.lon),
       lat: roundGeoDegrees(input.view.lat),
       zoom: Math.min(SAVED_VIEW_MAX_ZOOM, Math.max(0, Math.round(input.view.zoom * 1e6) / 1e6)),
-      bearing: 0,
+      bearing: storedBearing(input.view.bearing),
     },
     visible_layers: {
       background: backgroundOf(input.mapLayers),

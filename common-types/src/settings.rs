@@ -63,7 +63,9 @@ pub struct Settings {
     pub soften_background: bool,
     #[serde(default = "default_plant_spacing_interval_m")]
     pub plant_spacing_interval_m: f64,
-    /// The camera view last shown on a Design; a new Design opens here.
+    /// The camera view last shown on a Design, on this device. The first
+    /// Design opened turns to its bearing; a new or empty Design opens at its
+    /// centre, zoomed out and north up.
     pub last_view: Option<LastView>,
     /// Canvas tools used at least once on this device. The tool rail shows
     /// names and keys until every tool is in this list.
@@ -71,8 +73,9 @@ pub struct Settings {
     /// View › Tool names: `None` follows first use, `Some` is the user's choice.
     pub tool_names_visible: Option<bool>,
     /// Settings › Keyboard: character-key shortcuts (tool keys such as V or
-    /// P, N, Shift G, brackets). Off leaves only shortcuts with Ctrl, Alt or
-    /// a named key (Delete, Esc, arrows, F keys).
+    /// P, N, Shift G, Shift L, brackets). Off leaves only shortcuts with Ctrl
+    /// or Cmd, Alt or a named key (Delete, Esc, arrows, F keys), plus Shift N,
+    /// which always resets north.
     pub single_key_shortcuts: bool,
     /// Settings › Canvas: what a plain wheel or two-finger scroll does on the
     /// map. Pinch and Ctrl wheel always zoom; Shift wheel always pans.
@@ -102,12 +105,15 @@ pub struct AppFolderLocations {
     pub data_library: String,
 }
 
-/// A geographic camera view: WGS84 centre and MapLibre zoom.
+/// A geographic camera view: WGS84 centre, MapLibre zoom and bearing.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
 pub struct LastView {
     pub lon: f64,
     pub lat: f64,
     pub zoom: f64,
+    /// Degrees clockwise from north; 0 when missing, normalised on read.
+    #[serde(default)]
+    pub bearing: f64,
 }
 
 impl Default for Settings {
@@ -234,7 +240,7 @@ mod tests {
     fn last_view_defaults_to_none_and_round_trips() {
         assert_eq!(Settings::default().last_view, None);
         let settings: Settings = serde_json::from_value(serde_json::json!({
-            "last_view": { "lon": 2.3522, "lat": 48.8566, "zoom": 17.5 }
+            "last_view": { "lon": 2.3522, "lat": 48.8566, "zoom": 17.5, "bearing": 0.0 }
         }))
         .expect("last view should load");
         assert_eq!(
@@ -242,14 +248,35 @@ mod tests {
             Some(LastView {
                 lon: 2.3522,
                 lat: 48.8566,
-                zoom: 17.5
+                zoom: 17.5,
+                bearing: 0.0
             })
         );
         let value = serde_json::to_value(&settings).expect("settings should serialize");
         assert_eq!(
             value["last_view"],
-            serde_json::json!({ "lon": 2.3522, "lat": 48.8566, "zoom": 17.5 })
+            serde_json::json!({ "lon": 2.3522, "lat": 48.8566, "zoom": 17.5, "bearing": 0.0 })
         );
+    }
+
+    #[test]
+    fn last_view_defaults_bearing_zero() {
+        let settings: Settings = serde_json::from_value(serde_json::json!({
+            "last_view": { "lon": 2.3522, "lat": 48.8566, "zoom": 17.5 }
+        }))
+        .expect("a last view saved without a bearing should load");
+        assert_eq!(settings.last_view.map(|view| view.bearing), Some(0.0));
+    }
+
+    #[test]
+    fn last_view_round_trips_bearing() {
+        let settings: Settings = serde_json::from_value(serde_json::json!({
+            "last_view": { "lon": 2.3522, "lat": 48.8566, "zoom": 17.5, "bearing": 30.0 }
+        }))
+        .expect("last view should load");
+        assert_eq!(settings.last_view.map(|view| view.bearing), Some(30.0));
+        let value = serde_json::to_value(&settings).expect("settings should serialize");
+        assert_eq!(value["last_view"]["bearing"], serde_json::json!(30.0));
     }
 
     #[test]

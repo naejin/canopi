@@ -169,7 +169,7 @@ export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions)
           startTween(startBearingTween(camera, {
             bearingDeg: move.bearingDeg,
             anchorPx: move.anchorPx,
-            durationMs: move.durationMs ?? VIEW_EASE_MS,
+            durationMs: VIEW_EASE_MS,
           }, performance.now()))
           return
         }

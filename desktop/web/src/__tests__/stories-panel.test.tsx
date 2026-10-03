@@ -22,6 +22,7 @@ import { createSessionPlane } from '../canvas/session-plane'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { locale } from '../app/settings/state'
 import type { CanopiFile, SavedView, Story, StoryStep } from '../types/design'
+import type { ViewCamera } from '../canvas/runtime/view/types'
 import { createTestCanvasCommandSurface, createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { replaceCurrentDesignState } from './support/design-session-state'
@@ -74,7 +75,7 @@ function design(stories: Story[] = [VISIT, OPEN_DAY]): CanopiFile {
 }
 
 let container: HTMLDivElement
-let showPlace: ReturnType<typeof vi.fn<(place: { readonly lon: number; readonly lat: number }, zoom: number) => boolean>>
+let showCamera: ReturnType<typeof vi.fn<(camera: ViewCamera, options?: { readonly motion?: 'fly' | 'jump' }) => void>>
 
 function mountMap(): void {
   const scale = mapZoomToStageScale(18, TEST_GEO_ORIGIN.lat)
@@ -84,8 +85,8 @@ function mountMap(): void {
   })
   queries.getLocalizedCommonNames = () => new Map([['Lycium barbarum', 'Goji']])
   const commands = createTestCanvasCommandSurface()
-  showPlace = vi.fn(() => true)
-  commands.viewport.showPlace = showPlace
+  showCamera = vi.fn()
+  commands.viewport.showCamera = showCamera
   setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ commands, queries }))
 }
 
@@ -415,7 +416,7 @@ describe('step editor', () => {
     expect(site.visible_layers.background).toEqual({ kind: 'basemap', style: 'liberty' })
 
     await act(async () => { button('Go to this view', editor).click() })
-    expect(showPlace).toHaveBeenCalledTimes(1)
+    expect(showCamera).toHaveBeenCalledTimes(1)
   })
 
   it('keeps pasted text to the block model: no raw HTML is stored', async () => {

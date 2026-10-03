@@ -31,6 +31,7 @@ import { gridVisible, rulersVisible } from '../app/canvas-settings/signals'
 import { focusOwner } from '../app/keyboard/focus-owner'
 import { currentCanvasQuerySurface } from '../canvas/session'
 import type { CanopiFile, SavedView, Story } from '../types/design'
+import type { ViewCamera } from '../canvas/runtime/view/types'
 import { createTestCanvasCommandSurface, createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { replaceCurrentDesignState } from './support/design-session-state'
@@ -71,7 +72,11 @@ function design(): CanopiFile {
     timeline: [], budget: [], budget_currency: 'EUR',
     views: [
       view('site'),
-      view('hedges', { background: { kind: 'basemap', style: 'dark' }, terrain: { contours: false, hillshade: true }, scene_layers: ['zones'], site_data: [] }, ['Lycium barbarum']),
+      // Saved turned 45°: the step restores its bearing.
+      {
+        ...view('hedges', { background: { kind: 'basemap', style: 'dark' }, terrain: { contours: false, hillshade: true }, scene_layers: ['zones'], site_data: [] }, ['Lycium barbarum']),
+        camera: { lon: TEST_GEO_ORIGIN.lon + 0.001, lat: TEST_GEO_ORIGIN.lat, zoom: 20, bearing: 45 },
+      },
     ],
     stories: [TOUR],
     created_at: '', updated_at: '',
@@ -83,6 +88,13 @@ let commands: ReturnType<typeof createTestCanvasCommandSurface>
 let presentLayers: ReturnType<typeof vi.fn<(names: readonly string[] | null) => void>>
 let focus: ReturnType<typeof vi.fn<(name: string | null) => void>>
 let showPlace: ReturnType<typeof vi.fn<(place: { readonly lon: number; readonly lat: number }, zoom: number, options?: { readonly motion?: 'fly' | 'jump' }) => boolean>>
+let showCamera: ReturnType<typeof vi.fn<(camera: ViewCamera, options?: { readonly motion?: 'fly' | 'jump' }) => void>>
+let mapQueries: ReturnType<typeof createTestCanvasQuerySurface>
+
+/** The camera a step of the tour shows: its view's centre, zoom 20 and bearing. */
+function stepCamera(bearingDeg: number): ViewCamera {
+  return { center: { lon: TEST_GEO_ORIGIN.lon + 0.001, lat: TEST_GEO_ORIGIN.lat }, zoom: 20, bearingDeg, pitchDeg: 0 }
+}
 let container: HTMLDivElement
 
 function plant(id: string, canonicalName: string): ScenePlantEntity {
@@ -104,9 +116,12 @@ function mountMap(planted: readonly ScenePlantEntity[] = [plant('p1', 'Lycium ba
   presentLayers = vi.fn()
   focus = vi.fn()
   showPlace = vi.fn(() => true)
+  showCamera = vi.fn()
   commands.layers.presentLayers = presentLayers
   commands.speciesFocus.focus = focus
   commands.viewport.showPlace = showPlace
+  commands.viewport.showCamera = showCamera
+  mapQueries = queries
   setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ commands, queries }))
 }
 
@@ -150,7 +165,8 @@ describe('presenting a story', () => {
     ])
     expect(presentLayers).toHaveBeenLastCalledWith(['zones'])
     expect(focus).toHaveBeenLastCalledWith('Lycium barbarum')
-    expect(showPlace).toHaveBeenLastCalledWith({ lon: TEST_GEO_ORIGIN.lon + 0.001, lat: TEST_GEO_ORIGIN.lat }, 20, { motion: 'jump' })
+    expect(showCamera).toHaveBeenLastCalledWith(stepCamera(45), { motion: 'jump' })
+    expect(showPlace).not.toHaveBeenCalled()
     expect(document.documentElement.hasAttribute('data-story-presenting')).toBe(true)
 
     expect(mapLayers.value).toBe(userLayers)
@@ -168,7 +184,7 @@ describe('presenting a story', () => {
 
   it('flies between steps unless reduced motion asks for a jump', () => {
     presentStory('tour', 0, { reducedMotion: false })
-    expect(showPlace).toHaveBeenLastCalledWith(expect.anything(), 20, { motion: 'fly' })
+    expect(showCamera).toHaveBeenLastCalledWith(stepCamera(0), { motion: 'fly' })
   })
 
   it('moves between steps within the story', () => {
@@ -187,8 +203,9 @@ describe('presenting a story', () => {
   })
 
   it('restores the user’s state exactly on leaving: layers, site data, labels, focus, camera', () => {
+    const camera = mapQueries.view.captureView().camera
     presentStory('tour', 1, { reducedMotion: true })
-    showPlace.mockClear()
+    showCamera.mockClear()
 
     leaveStoryPresentation()
 
@@ -197,16 +214,31 @@ describe('presenting a story', () => {
     expect(presentedMapLayers()).toBe(mapLayers.value)
     expect(presentLayers).toHaveBeenLastCalledWith(null)
     expect(focus).toHaveBeenLastCalledWith('Malus domestica')
-    expect(showPlace).toHaveBeenCalledTimes(1)
-    expect(showPlace.mock.calls[0]![1]).toBeCloseTo(18, 6)
-    expect(showPlace.mock.calls[0]![2]).toEqual({ motion: 'jump' })
+    expect(showCamera).toHaveBeenCalledTimes(1)
+    expect(showCamera).toHaveBeenCalledWith(camera, { motion: 'jump' })
+    expect(showCamera.mock.calls[0]![0].zoom).toBeCloseTo(18, 6)
     expect(document.documentElement.hasAttribute('data-story-presenting')).toBe(false)
     expect(designSessionStore.designDirty.value).toBe(false)
+  })
+
+  it('restore after presenting returns the camera with its bearing', () => {
+    // The user had turned the view 30° before presenting.
+    const live = mapQueries.view.captureView()
+    const turned = { ...live, camera: { ...live.camera, bearingDeg: 30 } }
+    vi.spyOn(mapQueries.view, 'captureView').mockReturnValue(turned)
+    presentStory('tour', 1, { reducedMotion: true })
+    expect(showCamera).toHaveBeenLastCalledWith(stepCamera(45), { motion: 'jump' })
+
+    leaveStoryPresentation()
+
+    expect(showCamera).toHaveBeenLastCalledWith(turned.camera, { motion: 'jump' })
+    expect(showPlace).not.toHaveBeenCalled()
   })
 
   it('ends without moving the camera when another Design replaces this one', async () => {
     presentStory('tour', 0, { reducedMotion: true })
     showPlace.mockClear()
+    showCamera.mockClear()
 
     replaceCurrentDesignState(design(), null, 'Other')
     await Promise.resolve()
@@ -214,6 +246,7 @@ describe('presenting a story', () => {
     expect(storyPresentationActive.value).toBe(false)
     expect(presentLayers).toHaveBeenLastCalledWith(null)
     expect(showPlace).not.toHaveBeenCalled()
+    expect(showCamera).not.toHaveBeenCalled()
     expect(storyPresentationOverrides.value).toBeNull()
   })
 

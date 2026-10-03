@@ -7,7 +7,7 @@
 import type { ScenePersistedState } from '../scene/types'
 import type { CameraDriverHost, CameraMove } from './camera-driver'
 import { placementCentre, screenToGeo } from './camera-math'
-import { fitScene, fitTemporaryBounds, type FitExtent, type FitFrame } from './fit'
+import { fitScene, fitTemporaryBounds, isEmptyExtent, type FitExtent, type FitFrame } from './fit'
 import {
   nextStep,
   normaliseBearing,
@@ -15,7 +15,6 @@ import {
   scaleBoundsAt,
   shortestArc,
   snapBearing,
-  VIEW_EASE_MS,
   type NavigationPolicy,
 } from './navigation-policy'
 import type { RotationSession, ViewCommandSurface } from './read-surface'
@@ -48,7 +47,8 @@ export interface ViewNavigation extends ViewCommandSurface {
   returnFromTemporaryFocus(): boolean        // bookmark is a ViewCamera: re-origin cannot invalidate it
   clearTemporaryFocus(): void
   centerOn(point: WorldPoint, pixelsPerMetre: number, options?: { readonly animate?: boolean; readonly bearingDeg?: number | 'keep' }): void
-  /** Opening a Design: oriented fit at the given bearing. */
+  /** Opening a Design: oriented fit at the given bearing; an empty scene opens at 0 (spec §4.15). Every open path calls it
+   *  through document-surface.ts's open fit; Fit to Design stays zoomToFit. */
   openAt(scene: ScenePersistedState, bearingDeg: number): void
 
   // rotation
@@ -121,7 +121,7 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
   }
 
   function turnTo(bearingDeg: number): void {
-    apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg, animation: 'ease', durationMs: VIEW_EASE_MS })
+    apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg, animation: 'ease' })
   }
 
   function zoomAroundPx(anchor: ScreenPoint, factor: number): void {
@@ -204,8 +204,10 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
     },
     openAt(_scene, bearingDeg) {
       if (!Number.isFinite(bearingDeg)) return
-      const bearing = normaliseBearing(bearingDeg)
-      const fitted = fitScene(fitFrame(bearing), extentOf(deps.readScene().bounds), bearing)
+      const extent = extentOf(deps.readScene().bounds)
+      // A new or empty Design opens north up: "Where is your site?" appears over a north-up overview.
+      const bearing = isEmptyExtent(extent, frame().view.pixelsPerMetre) ? 0 : normaliseBearing(bearingDeg)
+      const fitted = fitScene(fitFrame(bearing), extent, bearing)
       // A fit that kept another bearing turns about the screen centre: the same centre and scale at the opening bearing.
       const { view } = frame()
       jump(cameraCentredOn(view, placementCentre(fitted, view.screen), fitted.scale, bearing))
@@ -263,7 +265,7 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
           rotation = null
           const bearing = frame().view.camera.bearingDeg
           if (bearing !== 0 && snapBearing(bearing) === 0) {
-            apply({ kind: 'rotate-around', anchorPx: pivot, bearingDeg: 0, animation: 'ease', durationMs: VIEW_EASE_MS })
+            apply({ kind: 'rotate-around', anchorPx: pivot, bearingDeg: 0, animation: 'ease' })
           }
         },
         cancel() {

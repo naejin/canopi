@@ -2,6 +2,7 @@ import { batch } from '@preact/signals'
 import type { LastView, SatelliteSource, ScrollWheel } from '../../generated/contracts'
 import { WEB_MERCATOR_MAX_LATITUDE_DEG } from '../../generated/canopi-design-format'
 import type { Locale, Settings, Theme } from '../../types/settings'
+import { storedBearing } from '../../canvas/session-plane'
 import { FALLBACK_PLANT_SPACING_INTERVAL_M } from '../../canvas/plant-spacing-interval'
 import { clampPlantSymbolScale } from '../../canvas/runtime/plant-display'
 import {
@@ -264,12 +265,14 @@ function normalizeLastView(view: LastView | null): LastView | null {
   const { lon, lat, zoom } = view
   if (![lon, lat, zoom].every(Number.isFinite)) return null
   if (lon < -180 || lon > 180 || Math.abs(lat) > WEB_MERCATOR_MAX_LATITUDE_DEG) return null
-  return { lon, lat, zoom }
+  // A view written before the bearing existed reads as north up.
+  return { lon, lat, zoom, bearing: storedBearing(view.bearing) }
 }
 
 function sameLastView(left: LastView | null | undefined, right: LastView | null | undefined): boolean {
   if (!left || !right) return !left && !right
   return left.lon === right.lon && left.lat === right.lat && left.zoom === right.zoom
+    && storedBearing(left.bearing) === storedBearing(right.bearing)
 }
 
 function sameStrings(left: readonly string[], right: readonly string[]): boolean {

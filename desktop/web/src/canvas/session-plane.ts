@@ -9,7 +9,6 @@
 // ---------------------------------------------------------------------------
 
 import {
-  MAPLIBRE_WORLD_TILE_SIZE,
   geoToMercator,
   mercatorToGeo,
   mercatorUnitsPerMeterAtLat,
@@ -46,21 +45,32 @@ export interface SessionPlane {
   readonly mercatorOrigin: PlanePoint
 }
 
-/** A geographic camera: the view centre and its MapLibre zoom. */
+/** A geographic camera: the view centre, its MapLibre zoom and its bearing (degrees clockwise from north). */
 export interface GeographicView {
   readonly lon: number
   readonly lat: number
   readonly zoom: number
+  readonly bearing: number
 }
 
-/** A camera's centre and zoom as a geographic view (ViewReadSurface.captureView), or null when they are not finite. */
+/** A camera's centre, zoom and bearing as a geographic view (ViewReadSurface.captureView), or null when they are not finite. */
 export function geographicViewOfCamera(
-  camera: { readonly center: GeoPosition; readonly zoom: number },
+  camera: { readonly center: GeoPosition; readonly zoom: number; readonly bearingDeg: number },
 ): GeographicView | null {
-  const { center, zoom } = camera
-  return [center.lon, center.lat, zoom].every(Number.isFinite)
-    ? { lon: center.lon, lat: center.lat, zoom }
+  const { center, zoom, bearingDeg } = camera
+  return [center.lon, center.lat, zoom, bearingDeg].every(Number.isFinite)
+    ? { lon: center.lon, lat: center.lat, zoom, bearing: storedBearing(bearingDeg) }
     : null
+}
+
+/**
+ * A bearing as stored data writes it (the last view, saved views): rounded to 1e-6 degrees and folded into [0, 360), so 360
+ * is 0; a missing or non-finite bearing is north up. App code cannot import the view's normaliseBearing (P10).
+ */
+export function storedBearing(deg: number | null | undefined): number {
+  if (typeof deg !== 'number' || !Number.isFinite(deg)) return 0
+  const folded = Math.round((((deg % 360) + 360) % 360) * 1e6) / 1e6
+  return folded >= 360 ? 0 : folded
 }
 
 /** A north-up WGS84 box on one world: `west < east`, `south < north`. */
@@ -84,21 +94,6 @@ export function extentOnOneWorld(extent: GeographicExtent): GeographicExtent | n
     && extent.south >= -MERCATOR_MAX_LATITUDE_DEG && extent.north <= MERCATOR_MAX_LATITUDE_DEG
     && extent.west < extent.east && extent.south < extent.north
   return onOneWorld ? extent : null
-}
-
-/** The MapLibre zoom at which an extent just fits a frame of CSS pixels, or null for an empty frame. */
-export function mapZoomToFitExtent(
-  extent: GeographicExtent,
-  size: { readonly width: number; readonly height: number },
-): number | null {
-  if (!(size.width > 0 && size.height > 0)) return null
-  const northWest = geoToMercator(extent.west, extent.north)
-  const southEast = geoToMercator(extent.east, extent.south)
-  const width = (southEast.x - northWest.x) * MAPLIBRE_WORLD_TILE_SIZE
-  const height = (southEast.y - northWest.y) * MAPLIBRE_WORLD_TILE_SIZE
-  if (!(width > 0 && height > 0)) return null
-  const zoom = Math.log2(Math.min(size.width / width, size.height / height))
-  return Number.isFinite(zoom) ? zoom : null
 }
 
 export function createSessionPlane(origin: GeoPosition): SessionPlane {

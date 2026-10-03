@@ -202,7 +202,7 @@ const BASEMAP: MapBackgroundPresentation = {
 
 function request(overrides: Partial<ViewSnapshotRequest> = {}): ViewSnapshotRequest {
   return {
-    camera: { lon: ORIGIN.lon, lat: ORIGIN.lat, zoom: 18 },
+    camera: { lon: ORIGIN.lon, lat: ORIGIN.lat, zoom: 18, bearing: 0 },
     width: 320,
     height: 200,
     background: BASEMAP,
@@ -262,6 +262,29 @@ describe('view snapshot map', () => {
     expect(container.style.visibility).toBe('hidden')
     expect(container.style.position).toBe('fixed')
     expect(owner.diagnostics).toMatchObject({ live: true, mapsCreated: 1, captures: 1 })
+    await owner.dispose()
+  })
+
+  it('draws a view at its saved bearing', async () => {
+    const owner = createOwner()
+    const build = vi.fn((_view: ViewTransform) => createTestSceneRendererSnapshot())
+
+    await owner.capture(request({ camera: { lon: ORIGIN.lon, lat: ORIGIN.lat, zoom: 18, bearing: 30 }, scene: { origin: ORIGIN, build } }))
+
+    const [map] = FakeMap.instances
+    expect(map!.getBearing()).toBeCloseTo(30, 9)
+    // The scene is built at the turned view: the plane's east axis points 30° up-right of the screen's.
+    const view = build.mock.calls[0]![0]
+    expect(view.camera.bearingDeg).toBeCloseTo(30, 9)
+    const origin = view.worldToScreen({ x: 0, y: 0 })
+    const east = view.worldToScreen({ x: 1, y: 0 })
+    expect(origin.x).toBeCloseTo(160, 6)
+    expect(origin.y).toBeCloseTo(100, 6)
+    expect(Math.atan2(origin.y - east.y, east.x - origin.x) * 180 / Math.PI).toBeCloseTo(30, 6)
+
+    // A second capture at north turns the shared map back.
+    await owner.capture(request())
+    expect(map!.getBearing()).toBeCloseTo(0, 9)
     await owner.dispose()
   })
 
@@ -498,7 +521,8 @@ describe('view snapshot map', () => {
     await expect(owner.capture(request({ width: 2049, pixelRatio: 2 }))).rejects.toThrow('4096')
     await expect(owner.capture(request({ width: 10.5 }))).rejects.toThrow('whole positive')
     await expect(owner.capture(request({ pixelRatio: 0 }))).rejects.toThrow('pixel ratio')
-    await expect(owner.capture(request({ camera: { lon: Number.NaN, lat: 0, zoom: 1 } }))).rejects.toThrow('finite')
+    await expect(owner.capture(request({ camera: { lon: Number.NaN, lat: 0, zoom: 1, bearing: 0 } }))).rejects.toThrow('finite')
+    await expect(owner.capture(request({ camera: { lon: 0, lat: 0, zoom: 1, bearing: Number.POSITIVE_INFINITY } }))).rejects.toThrow('finite')
     await expect(owner.capture(request({ timeoutMs: -1 }))).rejects.toThrow('timeout')
     expect(FakeMap.instances).toHaveLength(0)
   })

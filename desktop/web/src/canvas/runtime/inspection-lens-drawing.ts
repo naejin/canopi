@@ -165,8 +165,19 @@ function drawPlants(
   const layout = layoutPlantPresentation(entries, scale)
   const hoverTarget = snapshot.hoverTarget
   const hoveredPlantId = hoverTarget?.kind === 'plant' ? hoverTarget.id : null
+  // Plant glyphs are side-view pictograms: on a lens turned with the map they stay upright on screen (spec §4.8, §4.13).
+  const uprightRad = (view.camera.bearingDeg * Math.PI) / 180
 
   for (const entry of entries) {
+    const turned = uprightRad !== 0
+    if (turned) {
+      // Undo the view's turn about the plant: the glyph is drawn level at worldToScreen(position), still in metres.
+      const { x, y } = entry.plant.position
+      ctx.save()
+      ctx.translate(x, y)
+      ctx.rotate(uprightRad)
+      ctx.translate(-x, -y)
+    }
     drawPlantSymbolGlyph(ctx, entry, layer.opacity, scale)
 
     if (hoverTarget && entry.plant.id === hoveredPlantId) {
@@ -181,6 +192,7 @@ function drawPlants(
       ctx.lineWidth = ring.widthPx / scale
       ctx.stroke()
     }
+    if (turned) ctx.restore()
 
     const stackCount = layout.stackCounts.get(entry.plant.id)
     if (stackCount) drawStackBadge(ctx, entry, view.worldToScreen(entry.plant.position), stackCount, layer.opacity, dpr)

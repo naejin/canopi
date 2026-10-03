@@ -465,6 +465,38 @@ describe('MapLibre camera driver', () => {
     expect(driver.bearingTarget()).toBe(60)
   })
 
+  it('a pan at 100 ms during the ease to north keeps both', () => {
+    vi.useFakeTimers()
+    try {
+      const map = new ConsistentMap({ center: PLANE.origin, zoom: 18, bearing: 40 })
+      const { driver } = attach(map)
+      const start = map.getCenter()
+      driver.apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 0, animation: 'ease' })
+      vi.advanceTimersByTime(100)
+      const midway = map.getBearing()
+      expect(midway).toBeGreaterThan(0)
+      expect(midway).toBeLessThan(40)
+
+      const ground = map.unproject([120, 90])
+      driver.apply({ kind: 'pan-by', deltaPx: { x: 10, y: 0 } })
+      // The pan lands at once, at the tween's bearing: the ground under (120, 90) is now under (130, 90).
+      const moved = map.unproject([130, 90])
+      expect(moved.lng).toBeCloseTo(ground.lng, 9)
+      expect(moved.lat).toBeCloseTo(ground.lat, 9)
+      const panned = map.getCenter()
+      expect(panned.lng).not.toBeCloseTo(start.lng, 9)
+      expect(driver.bearingTarget()).toBe(0)
+
+      vi.advanceTimersByTime(300)
+      // The ease still ends at north, about the screen centre, so the panned centre stays.
+      expect(map.getBearing()).toBeCloseTo(0, 6)
+      expect(map.getCenter().lng).toBeCloseTo(panned.lng, 9)
+      expect(map.getCenter().lat).toBeCloseTo(panned.lat, 9)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('dispose releases its map listeners and the guard', () => {
     const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
     const { driver } = attach(map)
