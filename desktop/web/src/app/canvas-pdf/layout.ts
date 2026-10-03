@@ -17,6 +17,7 @@ import { paperPlantRadius } from './plant-marks'
 import { FieldSpace } from './field-placement'
 import { recolorPlants } from './print-colors'
 import { pdfAreaKey } from './types'
+import { areaToFrame, layoutAngle, pageFrame, turnSnapshot } from './page-frame'
 import type { PdfPlantColors, PdfInput, PdfLabels, PdfOperation, PdfPage, PdfPlan, PdfSetup, PdfPageView, PdfLayoutCache, PdfLayoutCacheEntry } from './types'
 
 type Geometry = Pick<PdfPage, 'width' | 'height' | 'frame'> & { bodyTop?: number; keyFrame?: PrintBounds }
@@ -39,7 +40,11 @@ export function buildPdfPlan(input: PdfInput, setup: PdfSetup, text: PdfTextEngi
   return { ...plan, outlines: Object.fromEntries([...used].sort().map(key => [key, text.outlines[key]!])) }
 }
 
-function buildPages(input: PdfInput, setup: PdfSetup, text: PdfTextEngine, labels: PdfLabels, options: PdfLayoutOptions): PdfPlan {
+function buildPages(original: PdfInput, setup: PdfSetup, text: PdfTextEngine, labels: PdfLabels, options: PdfLayoutOptions): PdfPlan {
+  // One frame per plan: everything below runs in it, and page grounds are in its metres.
+  const frame = pageFrame(layoutAngle(setup, original))
+  const input = { ...original, canvas: turnSnapshot(original.canvas, frame) }
+  const offsetOf = (view?: PdfPageView) => view?.offset && frame.toFrame(view.offset)
   const selected = { ...input, canvas: printableCanvas(input.canvas, setup.layers, setup.plantColors) }
   const dimensions = zoneMeasurements(selected.canvas.zones)
   const details: PdfPage[] = []
@@ -62,18 +67,18 @@ function buildPages(input: PdfInput, setup: PdfSetup, text: PdfTextEngine, label
     return [page, ...continuations]
   }
   const fittedDetails = (setup.areas ?? []).map(area => {
-    const id = pdfAreaKey(area), view = setup.views?.[id], requested = area.bounds
+    const id = pdfAreaKey(area), view = setup.views?.[id], requested = areaToFrame(frame, area.bounds)
     if (![requested.x, requested.y, requested.width, requested.height].every(Number.isFinite) || requested.width <= 0 || requested.height <= 0) throw new Error('invalid-page-view')
     const choices = requested.width === requested.height && (!view?.orientation || view.orientation === 'auto') ? ['portrait'] as const : orientations(view)
     const candidates = choices.map(orientation => {
       const geometry = pageGeometry(setup.paper, orientation, 'detail')
       const available = { ...geometry.frame }
-      const summary = fieldSummary(dimensions, moveCoverage(zoomCoverage({ ground: requested, pointsPerMeter: 1 }, view?.zoom), view?.offset).ground, geometry.width - 20 * MM, input.locale, text)
+      const summary = fieldSummary(dimensions, moveCoverage(zoomCoverage({ ground: requested, pointsPerMeter: 1 }, view?.zoom), offsetOf(view)).ground, geometry.width - 20 * MM, input.locale, text)
       const summaryHeight = summary.length ? summary.length * 11 + 5 : 0
       available.y += summaryHeight; available.height -= summaryHeight
       if (available.height < 30 * MM) throw new Error('coverage-too-large')
       const fit = fitArea(requested, available, view?.zoom)
-      return { geometry: { ...geometry, frame: fit.frame, bodyTop: available.y }, summary, ...moveCoverage(fit, view?.offset) }
+      return { geometry: { ...geometry, frame: fit.frame, bodyTop: available.y }, summary, ...moveCoverage(fit, offsetOf(view)) }
     }).sort((a, b) => b.pointsPerMeter - a.pointsPerMeter)
     const { geometry, ground, pointsPerMeter, summary } = candidates[0]!
     return { id, area, geometry, ground, pointsPerMeter, summary }
@@ -148,7 +153,7 @@ function buildPages(input: PdfInput, setup: PdfSetup, text: PdfTextEngine, label
     const fitting = spatial ? { ...overviewInput, canvas: { ...overviewInput.canvas, annotations: [] } } : selected
     return { geometry, ...fitOverview(fitting, geometry.frame, empty ? [{ x: -5, y: -5, width: 10, height: 10 }] : extents) }
   }).sort((a, b) => b.pointsPerMeter - a.pointsPerMeter)
-  const fitted = fits[0]!, overviewFit = moveCoverage(zoomCoverage(fitted, setup.views?.overview?.zoom), setup.views?.overview?.offset)
+  const fitted = fits[0]!, overviewFit = moveCoverage(zoomCoverage(fitted, setup.views?.overview?.zoom), offsetOf(setup.views?.overview))
   const visible = visibleFieldCanvas(overviewInput.canvas, overviewFit.ground)
   const readableChain = readableOverviewChain(chain, fitted.geometry.frame, overviewFit.ground, overviewFit.pointsPerMeter, text, input.locale)
   const drawing = drawOverview({ ...selected, canvas: visible }, fitted.geometry.frame, overviewFit.ground, overviewFit.pointsPerMeter, text,
@@ -229,7 +234,7 @@ function buildPages(input: PdfInput, setup: PdfSetup, text: PdfTextEngine, label
   const picker = pickerFits[0]!
   const pickerDrawing = drawOverview(selected, picker.geometry.frame, picker.ground, picker.pointsPerMeter, text)
   const pickerPage: PdfPage = { id: 'overview', kind: 'overview', number: 1, ...picker.geometry, ...pickerDrawing, ground: picker.ground, pointsPerMeter: picker.pointsPerMeter }
-  return { pages: finalized, pickerPage, outlines: text.outlines, blocked: empty ? 'empty' : null }
+  return { pages: finalized, pickerPage, angleDeg: frame.angleDeg, outlines: text.outlines, blocked: empty ? 'empty' : null }
 }
 
 function pageGeometry(paper: 'A4' | 'Letter', orientation: 'portrait' | 'landscape', kind: PdfPage['kind']): Geometry {

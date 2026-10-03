@@ -12,10 +12,19 @@ export const PDF_ZOOM = { min: 1, max: 1000 } as const
 export interface PdfPageView {
   readonly zoom?: number
   readonly orientation?: PdfOrientation
-  /** Ground-space displacement from the fitted centre, in metres. */
+  /** Displacement from the fitted centre, in plan metres (independent of the layout angle). */
   readonly offset?: { readonly x: number; readonly y: number }
 }
-export interface PdfPrintArea { readonly id: string; readonly name: string; readonly bounds: PrintBounds }
+/** Print-only map angle (spec §4.12): North up draws every page at 0, As on screen at the view's bearing. */
+export type PdfMapOrientation = 'north-up' | 'as-on-screen'
+export const PDF_MAP_ORIENTATIONS: readonly PdfMapOrientation[] = ['north-up', 'as-on-screen']
+export interface PdfPrintArea {
+  readonly id: string
+  readonly name: string
+  /** An unturned box about the area's centre, in plan metres: the centre is the area's, the sides lie along the page axes
+   *  whatever the layout angle (`page-frame.ts`). */
+  readonly bounds: PrintBounds
+}
 export function pdfAreaKey(area: PdfPrintArea): string { return `area:${area.id}` }
 export interface PdfSetup {
   readonly paper: PdfPaper
@@ -26,6 +35,8 @@ export interface PdfSetup {
   readonly plantColors?: PdfPlantColors
   /** North arrow and ground scale bar on map pages; defaults to on. */
   readonly northArrow?: boolean
+  /** Defaults to `north-up`. In memory only, like the rest of the setup. */
+  readonly mapOrientation?: PdfMapOrientation
 }
 export interface PdfInput {
   readonly name: string
@@ -37,6 +48,8 @@ export interface PdfInput {
   readonly englishFallbacks?: readonly string[]
   /** Catalog habit by canonical name. */
   readonly habits?: Readonly<Record<string, PdfHabit>>
+  /** The view's exact bearing at capture (`captureView().camera.bearingDeg`), the As on screen angle; absent reads 0. */
+  readonly viewBearingDeg?: number
 }
 export interface PdfLabels extends Partial<typeof import('./labels').fieldLabelDefaults> {
   readonly notes: string; readonly observations: string; readonly keyAndNotes: string; readonly overview: string; readonly plants: string; readonly actualSize: string
@@ -90,6 +103,8 @@ export interface PdfPlan {
   /** Fitted navigation surface for adding areas; never encoded as a PDF page. */
   readonly pickerPage?: PdfPage
   readonly pages: readonly PdfPage[]
+  /** The one layout angle every map page is drawn at (`page-frame.ts`); absent reads 0. Page grounds are in its frame. */
+  readonly angleDeg?: number
   readonly outlines: Record<string, GlyphOutline>
   readonly blocked: 'empty' | null
 }

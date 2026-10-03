@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
-import { splitFieldBounds } from '../app/canvas-pdf/split-sheets'
+import { splitFieldBounds, splitPrintArea } from '../app/canvas-pdf/split-sheets'
+import { areaContains, pageFrame } from '../app/canvas-pdf/page-frame'
 import type { PdfInput, PdfLabels, PdfLayoutCacheEntry, PdfSetup } from '../app/canvas-pdf/types'
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([
   ['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')], ['strong', readFileSync('public/pdf-fonts/NotoSans-SemiBold.ttf')],
@@ -79,4 +80,29 @@ it('partitions all ground with bounded frames and handles coincident locations',
   expect(frames.reduce((sum, f) => sum + f.width * f.height, 0)).toBe(25)
   for (const p of input.canvas.plants) expect(frames.some(f => p.position.x >= f.x && p.position.x <= f.x + f.width && p.position.y >= f.y && p.position.y <= f.y + f.height)).toBe(true)
   expect(splitFieldBounds(bounds, input.canvas.plants.map(p => ({ ...p, position: { x: 1, y: 1 } })))).toHaveLength(2)
+})
+it('split and detail lookup use the turned plants', () => {
+  const frame = pageFrame(30), plant = (id: string, canonicalName: string, x: number, y: number) =>
+    ({ id, canonicalName, position: { x, y }, color: '#123456', symbol: 'round', mark: [], pinnedName: false })
+  // A strip level on the turned page: A lies on it only once turned, B only north-up.
+  const along = frame.fromFrame({ x: 9, y: 0 })
+  const plants = [plant('a', 'Malus domestica', along.x, along.y), plant('b', 'Prunus avium', 9, 0),
+    ...Array.from({ length: 300 }, (_, i) => frame.fromFrame({ x: -9 + i * .06, y: .5 })).map((p, i) => plant(`r${i}`, 'Ribes rubrum', p.x, p.y))]
+  const input: PdfInput = { ...source(0), viewBearingDeg: 30, canvas: { ...source(0).canvas, annotations: [], plants } }
+  const area = { id: 'strip', name: 'Strip', bounds: { x: -10, y: -1, width: 20, height: 2 } }
+  const species = (orientation: 'north-up' | 'as-on-screen') => buildPdfPlan(input, { ...setup, layers: ['plants'], mapOrientation: orientation, areas: [area] }, text(), labels)
+    .pages.find(p => p.kind === 'detail')!.legend.map(entry => entry.canonicalName).sort()
+  expect(species('as-on-screen')).toEqual(['Malus domestica', 'Ribes rubrum'])
+  expect(species('north-up')).toContain('Prunus avium')
+  expect(species('north-up')).not.toContain('Malus domestica')
+  expect(areaContains(frame, area.bounds, along)).toBe(true)
+  expect(areaContains(frame, area.bounds, { x: 9, y: 0 })).toBe(false)
+  // The split partitions the turned page and stores plan boxes that turn back onto it.
+  const page = { x: -10, y: -1, width: 20, height: 2 }
+  const parts = splitPrintArea(page, plants, frame)
+  expect(parts.length).toBeGreaterThan(1)
+  expect(parts.reduce((sum, part) => sum + part.width * part.height, 0)).toBeCloseTo(40, 6)
+  for (const p of plants.filter(p => areaContains(frame, area.bounds, p.position))) expect(parts.some(part => areaContains(frame, part, p.position))).toBe(true)
+  expect(parts.some(part => areaContains(frame, part, { x: 9, y: 0 }))).toBe(false)
+  expect(splitPrintArea(page, plants, pageFrame(0))).toEqual(splitFieldBounds(page, plants))
 })

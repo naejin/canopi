@@ -1,5 +1,6 @@
 import type { PrintBounds, PrintPlant } from '../../canvas/print'
 import { contains } from './field-geometry'
+import { areaFromFrame, type PageFrame } from './page-frame'
 
 /** Previewable coverage partition. Coincident plants cannot be separated by cropping. */
 export function splitFieldBounds(bounds: PrintBounds, plants: readonly PrintPlant[]): PrintBounds[] {
@@ -19,4 +20,10 @@ export function splitFieldBounds(bounds: PrintBounds, plants: readonly PrintPlan
   }
   partition(bounds, 0)
   return result
+}
+
+/** Splits a page's ground (in the layout frame) by the turned plants, as Print Areas in plan metres. */
+export function splitPrintArea(ground: PrintBounds, plants: readonly PrintPlant[], frame: PageFrame): PrintBounds[] {
+  const turned = frame.angleDeg ? plants.map(plant => ({ ...plant, position: frame.toFrame(plant.position) })) : plants
+  return splitFieldBounds(ground, turned).map(bounds => areaFromFrame(frame, bounds))
 }
