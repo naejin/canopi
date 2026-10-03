@@ -396,6 +396,23 @@ describe('key router', () => {
     expect(run).toHaveBeenCalledExactlyOnceWith('canvas.bringToFront')
   })
 
+  it('] turns a held stamp while the Change stamp button has focus, and never runs Bring to front (canopi-h90p.67)', () => {
+    install()
+    fake.state.command = (c) => c.kind === 'rotate-held'
+    const change = document.createElement('button')
+    change.textContent = 'Change stamp'
+    document.body.append(change)
+    change.focus()
+
+    expect(press({ key: ']' }, change).defaultPrevented).toBe(true)
+    expect(press({ key: '[' }, change).defaultPrevented).toBe(true)
+    expect(fake.port.command.mock.calls).toEqual([
+      [{ kind: 'rotate-held', stepDeg: 15 }],
+      [{ kind: 'rotate-held', stepDeg: -15 }],
+    ])
+    expect(run).not.toHaveBeenCalled()
+  })
+
   it('arrows during a live drag do nothing (H25)', () => {
     install()
     fake.state.verdict = 'pass-live'
