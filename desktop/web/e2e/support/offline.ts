@@ -24,8 +24,9 @@ function isAllowedConsoleError(message: ConsoleMessage, aborted: ReadonlySet<str
   const text = message.text()
   const source = message.location().url
   // The Web Edition's default basemap is remote (OpenFreeMap). Its style request is aborted
-  // below, so the basemap never installs and the map keeps its backdrop colour; the app only
-  // logs this (app/canvas-map-surface/workspace-map-controls.ts:351) and shows no notice.
+  // below, so the basemap never installs and the map keeps its backdrop colour; the app logs
+  // this (app/canvas-map-surface/workspace-map-controls.ts) and shows "Basemap couldn't load"
+  // with Retry in the map's status chip, which every offline baseline records (U22).
   if (text.startsWith('Map basemap style failed to load:')) return true
   // The browser's own log line for a request this file aborted (Chromium:
   // "Failed to load resource: net::ERR_INTERNET_DISCONNECTED"); its location is the aborted
