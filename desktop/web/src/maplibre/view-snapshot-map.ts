@@ -50,6 +50,8 @@ interface ViewSnapshotCamera {
   readonly lon: number
   readonly lat: number
   readonly zoom: number
+  /** Degrees clockwise from north: a saved view's bearing (spec §4.11). */
+  readonly bearing: number
 }
 
 interface ViewSnapshotScene {
@@ -274,7 +276,7 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
         style: createMapLibreEmptyStyle(),
         center: [request.camera.lon, request.camera.lat],
         zoom: clampZoom(request.camera.zoom),
-        bearing: 0,
+        bearing: request.camera.bearing,
         minZoom: WORKSPACE_MAP_MIN_ZOOM,
         maxZoom: WORKSPACE_MAP_MAX_ZOOM,
         renderWorldCopies: false,
@@ -400,11 +402,16 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
       driver.planeChanged(current.view.plane)
     }
     current.tileErrors = 0
-    // The driver resizes the map (an unchanged size does nothing) and jumps it: the snapshot's camera is north-up.
+    // The driver resizes the map (an unchanged size does nothing) and jumps it to the view's camera, its bearing included.
     driver.setScreen({ width: request.width, height: request.height, devicePixelRatio: current.pixelRatio })
     driver.apply({
       kind: 'set',
-      target: { center: { lon: request.camera.lon, lat: request.camera.lat }, zoom: request.camera.zoom, bearingDeg: 0, pitchDeg: 0 },
+      target: {
+        center: { lon: request.camera.lon, lat: request.camera.lat },
+        zoom: request.camera.zoom,
+        bearingDeg: request.camera.bearing,
+        pitchDeg: 0,
+      },
       animation: 'none',
     })
     const failure = driver.failure.peek()
@@ -592,8 +599,8 @@ function validateRequest(request: ViewSnapshotRequest): string | null {
       return `Snapshot sides are limited to ${VIEW_SNAPSHOT_MAX_DEVICE_PIXELS} device pixels.`
     }
   }
-  const { lon, lat, zoom } = request.camera
-  if (![lon, lat, zoom].every(Number.isFinite)) return 'Snapshot camera must be finite.'
+  const { lon, lat, zoom, bearing } = request.camera
+  if (![lon, lat, zoom, bearing].every(Number.isFinite)) return 'Snapshot camera must be finite.'
   if (!Number.isFinite(request.timeoutMs) || request.timeoutMs < 0) return 'Snapshot timeout must be a finite, non-negative time.'
   return null
 }

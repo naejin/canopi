@@ -25,8 +25,9 @@ pub struct SavedView {
     pub title: Option<String>,
     #[serde(default)]
     pub text: Vec<RichTextBlock>,
-    // The ground the map showed when the view was saved, so going to the view
-    // and its snapshots frame the same area at any window size. Absent for a
+    // The ground the map showed when the view was saved: the lon/lat box of the
+    // ground under the four screen corners. Going to the view and its snapshots
+    // use the camera; the extent is a record of what was on screen. Absent for a
     // view whose map crossed the antimeridian or showed more than one world.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "design-schema", schemars(default))]
@@ -77,8 +78,9 @@ impl SavedViewExtent {
     }
 }
 
-// Camera of a saved view. Canopi's map is north-up, so it writes `bearing` 0;
-// the field keeps the view portable to rotating viewers.
+// Camera of a saved view: centre, zoom and bearing (degrees clockwise from
+// north, written normalised to [0, 360)). Going to the view restores all
+// three, the bearing never snapped.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
 pub struct SavedViewCamera {

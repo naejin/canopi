@@ -80,14 +80,14 @@ function open(file: CanopiFile): void {
 }
 
 function mountCanvas() {
-  const showPlace = vi.fn(() => true)
+  const showCamera = vi.fn()
   const commands = createTestCanvasCommandSurface()
-  commands.viewport.showPlace = showPlace
+  commands.viewport.showCamera = showCamera
   setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
     commands,
     queries: createTestCanvasQuerySurface({ sessionPlane: createSessionPlane(TEST_GEO_ORIGIN) }),
   }))
-  return { showPlace }
+  return { showCamera }
 }
 
 function viewMenuOf(menus: readonly MenuDefinition[]): readonly MenuEntry[] {
@@ -156,7 +156,7 @@ describe.each([
 
   it('lists each view, which goes there, and enables the commands once a map shows the Design', () => {
     open(design([POND, HEDGE]))
-    const { showPlace } = mountCanvas()
+    const { showCamera } = mountCanvas()
 
     const submenu = savedViewsSubmenu(viewMenu())
     expect(submenu.disabled).toBe(false)
@@ -168,9 +168,10 @@ describe.each([
     expect(action(viewMenu(), 'view.manageViews').disabled).toBe(false)
 
     submenu.items[1]!.action()
-    expect(showPlace).toHaveBeenCalledWith({ lon: 13.001, lat: 23.002 }, 17, expect.objectContaining({
-      motion: expect.stringMatching(/^(fly|jump)$/),
-    }))
+    expect(showCamera).toHaveBeenCalledWith(
+      { center: { lon: 13.001, lat: 23.002 }, zoom: 17, bearingDeg: 0, pitchDeg: 0 },
+      expect.objectContaining({ motion: expect.stringMatching(/^(fly|jump)$/) }),
+    )
   })
 
   it('opens the Save and Manage dialogs', () => {
@@ -354,12 +355,12 @@ describe('saved view dialogs', () => {
 
   it('goes to a view from the dialog and closes it', async () => {
     open(design([POND]))
-    const { showPlace } = mountCanvas()
+    const { showCamera } = mountCanvas()
     await act(async () => { openManageViewsDialog() })
 
     await act(async () => { button('Go to Pond')!.click() })
 
     expect(dialog()).toBeNull()
-    expect(showPlace).toHaveBeenCalledTimes(1)
+    expect(showCamera).toHaveBeenCalledTimes(1)
   })
 })

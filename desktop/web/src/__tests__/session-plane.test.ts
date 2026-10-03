@@ -4,7 +4,6 @@ import {
   createSessionPlane,
   extentOnOneWorld,
   geographicViewOfCamera,
-  mapZoomToFitExtent,
   roundGeoDegrees,
   SESSION_PLANE_REORIGIN_DISTANCE_METERS,
   sessionPlaneOriginForPoints,
@@ -131,15 +130,6 @@ describe('geographic extent of a view', () => {
     }, farPlane)
     expect(view.lat).toBeCloseTo(59.91, 6)
     expect(view.zoom).toBeCloseTo(17, 6)
-  })
-
-  it('fits back into the same screen at the same zoom, and one zoom level closer on a screen twice as big', () => {
-    const extent = savedExtent(frame(18, 800, 600))!
-    expect(mapZoomToFitExtent(extent, { width: 800, height: 600 })).toBeCloseTo(18, 6)
-    expect(mapZoomToFitExtent(extent, { width: 1600, height: 1200 })).toBeCloseTo(19, 6)
-    // A wide screen is limited by its height.
-    expect(mapZoomToFitExtent(extent, { width: 1600, height: 600 })).toBeCloseTo(18, 6)
-    expect(mapZoomToFitExtent(extent, { width: 0, height: 600 })).toBeNull()
   })
 
   it('is none when the screen shows more than one world or none at all', () => {

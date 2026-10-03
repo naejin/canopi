@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mapZoomToFitExtent } from '../canvas/session-plane'
 import type { ViewSnapshotCapture, ViewSnapshotRequest } from '../maplibre/view-snapshot-map'
 
 const snapshotOwner = vi.hoisted(() => ({
@@ -102,16 +101,19 @@ afterEach(async () => {
 })
 
 describe('saved view snapshot request', () => {
-  it('frames the ground recorded with the view, whatever the workspace size', () => {
+  it('draws a turned view at its bearing and camera zoom, whatever ground it recorded', () => {
     const extent = { west: 12.9995, south: 22.999, east: 13.0005, north: 23.001 }
-    const request = describeSavedViewSnapshot({ ...VIEW, extent }, VIEW_SNAPSHOT_THUMBNAIL, {
+    const turned: SavedView = { ...VIEW, camera: { ...VIEW.camera, bearing: 30 }, extent }
+    const request = describeSavedViewSnapshot(turned, VIEW_SNAPSHOT_THUMBNAIL, {
       queries: queries(),
       mapLayers: createDefaultMapLayers(),
       locale: 'en',
       plantLabels: 'names',
     })!
 
-    expect(request.camera.zoom).toBeCloseTo(mapZoomToFitExtent(extent, VIEW_SNAPSHOT_THUMBNAIL)!, 9)
+    // What going to the view shows in the 400 × 300 workspace, scaled to the 320 × 200 image, never the recorded extent.
+    expect(request.camera).toMatchObject({ lon: VIEW.camera.lon, lat: VIEW.camera.lat, bearing: 30 })
+    expect(request.camera.zoom).toBeCloseTo(19 + Math.log2(200 / 300), 9)
   })
 
   it('draws the view off-screen with its layers, focused species and a fitted zoom', () => {
@@ -195,19 +197,24 @@ describe('capturing a saved view', () => {
     surface.setSelection([{ kind: 'zone', id: 'Hedge' }])
     const commands = createTestCanvasCommandSurface()
     const showPlace = vi.fn(() => true)
+    const showCamera = vi.fn()
     commands.viewport.showPlace = showPlace
+    // Going to a view moves the camera through showCamera; a snapshot of a turned view never does.
+    commands.viewport.showCamera = showCamera
+    const turned: SavedView = { ...VIEW, camera: { ...VIEW.camera, bearing: 30 } }
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ commands, queries: surface }))
     const camera = surface.view.captureView().camera
     const scene = surface.getSceneSnapshot()
     expect(designSessionStore.designDirty.value).toBe(false)
 
-    const first = await captureSavedViewSnapshot(VIEW, VIEW_SNAPSHOT_THUMBNAIL)
-    await captureSavedViewSnapshot(VIEW, { width: 1600, height: 1000, pixelRatio: 2 })
+    const first = await captureSavedViewSnapshot(turned, VIEW_SNAPSHOT_THUMBNAIL)
+    await captureSavedViewSnapshot(turned, { width: 1600, height: 1000, pixelRatio: 2 })
 
     expect(first).toMatchObject({ width: 320, height: 200, missingTiles: false, attribution: ['OpenFreeMap'] })
     expect(snapshotOwner.created).toBe(1)
-    expect(snapshotOwner.requests[1]).toMatchObject({ width: 1600, height: 1000, pixelRatio: 2 })
+    expect(snapshotOwner.requests[1]).toMatchObject({ width: 1600, height: 1000, pixelRatio: 2, camera: { bearing: 30 } })
     expect(showPlace).not.toHaveBeenCalled()
+    expect(showCamera).not.toHaveBeenCalled()
     expect(surface.view.captureView().camera).toBe(camera)
     expect(surface.getSceneSnapshot()).toBe(scene)
     expect(surface.getSelection()).toEqual([{ kind: 'zone', id: 'Hedge' }])

@@ -1,7 +1,7 @@
 import { computed, effect, signal, type ReadonlySignal } from '@preact/signals'
 import { currentCanvasQuerySurface, getCurrentCanvasCommandSurface } from '../../canvas/session'
-import { geographicViewOfCamera, type GeographicView } from '../../canvas/session-plane'
 import type { PlantLabelMode } from '../../canvas/runtime/plant-display'
+import type { ViewCamera } from '../../canvas/runtime/view/types'
 import type { PanelTarget, SavedView, Story, StoryStep } from '../../types/design'
 import { savedViewPlantLabels } from '../design-edit/views'
 import { currentDesign, designSessionStore } from '../document-session/store'
@@ -33,7 +33,8 @@ interface ActivePresentation {
 
 /** What was on screen before presenting, put back on leaving. */
 interface Restore {
-  readonly camera: GeographicView | null
+  /** The live camera, its bearing included (spec §4.10). */
+  readonly camera: ViewCamera
   readonly speciesFocus: string | null
 }
 
@@ -99,7 +100,7 @@ export function presentStory(storyId: string, index = 0, options: StoryPresentat
   reducedMotionOverride = options.reducedMotion
   returnFocus = { target: options.returnFocus ?? 'map', storyId }
   restore = {
-    camera: geographicViewOfCamera(queries.view.captureView().camera),
+    camera: queries.view.captureView().camera,
     speciesFocus: queries.getSpeciesFocus().canonicalName,
   }
   active.value = {
@@ -154,7 +155,7 @@ export function leaveStoryPresentation(): void {
   restore = null
   if (commands && saved && sameDesign) {
     commands.speciesFocus.focus(saved.speciesFocus)
-    if (saved.camera) commands.viewport.showPlace(saved.camera, saved.camera.zoom, { motion: 'jump' })
+    commands.viewport.showCamera(saved.camera, { motion: 'jump' })
   }
   exitFullScreen()
   scheduleReturnFocus(sameDesign)

@@ -21,13 +21,15 @@ import {
   undoDeleteView,
 } from '../app/saved-views'
 import { composeSavedView } from '../app/saved-views/model'
+import { describeSavedViewSnapshot, VIEW_SNAPSHOT_THUMBNAIL } from '../app/saved-views/snapshot'
+import type { ViewCamera } from '../canvas/runtime/view/types'
 import { savedViewPlantLabels } from '../app/design-edit/views'
 import { setPlantLabels } from '../app/plant-display/actions'
 import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
 import { currentDesign, designSessionStore } from '../app/document-session/store'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { mapZoomToStageScale } from '../canvas/projection'
-import { createSessionPlane, mapZoomToFitExtent } from '../canvas/session-plane'
+import { createSessionPlane } from '../canvas/session-plane'
 import { setCurrentCanvasSession } from '../canvas/session'
 import type { CanopiFile, PlacedPlant, SavedView, Story } from '../types/design'
 import {
@@ -124,14 +126,21 @@ function mountCanvas() {
   })
   queries.getSpeciesFocus = () => ({ canonicalName: 'Lycium barbarum', showCodes: false })
   const showPlace = vi.fn(() => true)
+  const showCamera = vi.fn<(camera: ViewCamera, options?: { readonly motion?: 'fly' | 'jump' }) => void>()
   const focus = vi.fn()
   const selectSpecies = vi.fn()
   const commands = createTestCanvasCommandSurface()
   commands.viewport.showPlace = showPlace
+  commands.viewport.showCamera = showCamera
   commands.speciesFocus.focus = focus
   commands.sceneEdits.selectSpecies = selectSpecies
   setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ commands, queries }))
-  return { showPlace, focus, selectSpecies }
+  return { showPlace, showCamera, focus, selectSpecies, queries }
+}
+
+/** The camera going to BERRIES shows: its centre, zoom and bearing. */
+function berriesCamera(bearingDeg = 0): ViewCamera {
+  return { center: { lon: 13.0012, lat: 22.9991 }, zoom: 19.5, bearingDeg, pitchDeg: 0 }
 }
 
 afterEach(() => {
@@ -174,17 +183,24 @@ describe('saving the current view', () => {
     expect(designSessionStore.designDirty.value).toBe(true)
   })
 
-  it('records the ground the map shows, so the view frames the same area at any window size', () => {
+  it('a thumbnail scales the camera zoom by the screen ratio', () => {
     replaceCurrentDesignState(design(), null, 'Orchard')
-    mountCanvas()
-
+    const { queries } = mountCanvas()
+    // The view still records the ground the map shows (the test screen is 400 × 300 at zoom 18) ...
     const saved = saveCurrentView({ name: 'Hedges' })!
-
-    // The test screen is 400 × 300 at zoom 18.
     expect(saved.extent).toBeDefined()
     expect(saved.extent!.west).toBeLessThan(TEST_GEO_ORIGIN.lon)
     expect(saved.extent!.north).toBeGreaterThan(TEST_GEO_ORIGIN.lat)
-    expect(mapZoomToFitExtent(saved.extent!, { width: 400, height: 300 })).toBeCloseTo(18, 5)
+    // ... but its thumbnail frames what going to it shows: the camera zoom, scaled from the 400 × 300 workspace to the
+    // 320 × 200 image (limited by the height), at the view's bearing, whatever extent was recorded.
+    const turned: SavedView = { ...BERRIES, camera: { ...BERRIES.camera, bearing: 30 }, extent: { west: 13, south: 22.99, east: 13.01, north: 23 } }
+    const request = describeSavedViewSnapshot(turned, VIEW_SNAPSHOT_THUMBNAIL, {
+      queries, mapLayers: createDefaultMapLayers(), locale: 'en', plantLabels: 'names',
+    })!
+    expect(request.camera.lon).toBe(13.0012)
+    expect(request.camera.lat).toBe(22.9991)
+    expect(request.camera.zoom).toBeCloseTo(19.5 + Math.log2(200 / 300), 9)
+    expect(request.camera.bearing).toBe(30)
   })
 
   it('records the label choice with the view, and presents the view with it', () => {
@@ -253,7 +269,7 @@ describe('saving the current view', () => {
 describe('going to a saved view', () => {
   it('flies the camera there and touches nothing else: no Design edit, dirt, layers, focus or selection', () => {
     replaceCurrentDesignState(design([BERRIES]), null, 'Orchard')
-    const { showPlace, focus, selectSpecies } = mountCanvas()
+    const { showPlace, showCamera, focus, selectSpecies } = mountCanvas()
     designSessionStore.resetDirtyBaselines()
     expect(designSessionStore.designDirty.value).toBe(false)
     const before = currentDesign.value
@@ -262,7 +278,8 @@ describe('going to a saved view', () => {
 
     expect(goToSavedView('berries', { reducedMotion: false })).toBe(true)
 
-    expect(showPlace).toHaveBeenCalledWith({ lon: 13.0012, lat: 22.9991 }, 19.5, { motion: 'fly' })
+    expect(showCamera).toHaveBeenCalledWith(berriesCamera(), { motion: 'fly' })
+    expect(showPlace).not.toHaveBeenCalled()
     expect(currentDesign.value).toBe(before)
     expect(designSessionStore.designDirty.value).toBe(false)
     expect(designSessionStore.committedDesignRevision.value).toBe(revision)
@@ -273,38 +290,37 @@ describe('going to a saved view', () => {
 
   it('jumps under reduced motion and ignores unknown views', () => {
     replaceCurrentDesignState(design([BERRIES]), null, 'Orchard')
-    const { showPlace } = mountCanvas()
+    const { showCamera } = mountCanvas()
 
     expect(goToSavedView('missing')).toBe(false)
     expect(goToSavedView('berries', { reducedMotion: true })).toBe(true)
 
-    expect(showPlace).toHaveBeenCalledTimes(1)
-    expect(showPlace).toHaveBeenCalledWith({ lon: 13.0012, lat: 22.9991 }, 19.5, { motion: 'jump' })
+    expect(showCamera).toHaveBeenCalledTimes(1)
+    expect(showCamera).toHaveBeenCalledWith(berriesCamera(), { motion: 'jump' })
   })
 
-  it('fits the recorded ground into the current window', () => {
-    // Saved on a screen twice the size of the 400 × 300 test screen.
+  it('going to a view restores its camera zoom in any window size', () => {
+    // Saved on a screen twice the size of the 400 × 300 test screen, turned 30°: the recorded ground is not fitted to this
+    // window; the camera's centre, zoom and bearing are restored as saved.
     const extent = { west: 13.0002, south: 22.9985, east: 13.0022, north: 22.9997 }
-    replaceCurrentDesignState(design([{ ...BERRIES, extent }]), null, 'Orchard')
-    const { showPlace } = mountCanvas()
+    replaceCurrentDesignState(design([{ ...BERRIES, camera: { ...BERRIES.camera, bearing: 30 }, extent }]), null, 'Orchard')
+    const { showCamera } = mountCanvas()
 
     goToSavedView('berries', { reducedMotion: true })
 
-    const zoom = mapZoomToFitExtent(extent, { width: 400, height: 300 })!
-    expect(showPlace).toHaveBeenCalledWith({ lon: 13.0012, lat: 22.9991 }, zoom, { motion: 'jump' })
-    expect(zoom).not.toBeCloseTo(19.5, 1)
+    expect(showCamera).toHaveBeenCalledWith(berriesCamera(30), { motion: 'jump' })
   })
 
   it('follows the platform reduced-motion preference by default', () => {
     replaceCurrentDesignState(design([BERRIES]), null, 'Orchard')
-    const { showPlace } = mountCanvas()
+    const { showCamera } = mountCanvas()
     vi.stubGlobal('matchMedia', (query: string) => ({
       matches: query === '(prefers-reduced-motion: reduce)',
     }))
 
     goToSavedView('berries')
 
-    expect(showPlace).toHaveBeenCalledWith(expect.anything(), 19.5, { motion: 'jump' })
+    expect(showCamera).toHaveBeenCalledWith(berriesCamera(), { motion: 'jump' })
   })
 
   it('does nothing without a map', () => {
@@ -407,5 +423,19 @@ describe('saved view model', () => {
     })
     expect(view.camera).toEqual({ lon: 2.294481235, lat: 48.858370123, zoom: 27, bearing: 0 })
     expect(view.highlighted).toEqual({ species: [], objects: [] })
+  })
+
+  it('capture writes the bearing, rounded, 360 as 0', () => {
+    const bearingOf = (bearing: number) => composeSavedView({
+      id: 'v', name: 'V', title: null,
+      view: { lon: 2.2944, lat: 48.8583, zoom: 18, bearing },
+      mapLayers: createDefaultMapLayers(),
+      sceneLayers: [], siteData: [], focusedSpecies: null, selection: [],
+    }).camera.bearing
+    expect(bearingOf(30)).toBe(30)
+    expect(bearingOf(30.12345678912)).toBe(30.123457)
+    expect(bearingOf(359.99999999)).toBe(0)
+    expect(bearingOf(360)).toBe(0)
+    expect(bearingOf(-15)).toBe(345)
   })
 })

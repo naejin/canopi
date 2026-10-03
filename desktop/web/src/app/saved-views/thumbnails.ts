@@ -200,7 +200,6 @@ function savedViewThumbnailKey(view: SavedView): string {
   return JSON.stringify([
     sceneRevision,
     view.camera,
-    view.extent ?? null,
     view.visible_layers,
     view.highlighted.species,
     readLabels(view),

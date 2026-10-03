@@ -9,7 +9,6 @@
 // ---------------------------------------------------------------------------
 
 import {
-  MAPLIBRE_WORLD_TILE_SIZE,
   geoToMercator,
   mercatorToGeo,
   mercatorUnitsPerMeterAtLat,
@@ -95,21 +94,6 @@ export function extentOnOneWorld(extent: GeographicExtent): GeographicExtent | n
     && extent.south >= -MERCATOR_MAX_LATITUDE_DEG && extent.north <= MERCATOR_MAX_LATITUDE_DEG
     && extent.west < extent.east && extent.south < extent.north
   return onOneWorld ? extent : null
-}
-
-/** The MapLibre zoom at which an extent just fits a frame of CSS pixels, or null for an empty frame. */
-export function mapZoomToFitExtent(
-  extent: GeographicExtent,
-  size: { readonly width: number; readonly height: number },
-): number | null {
-  if (!(size.width > 0 && size.height > 0)) return null
-  const northWest = geoToMercator(extent.west, extent.north)
-  const southEast = geoToMercator(extent.east, extent.south)
-  const width = (southEast.x - northWest.x) * MAPLIBRE_WORLD_TILE_SIZE
-  const height = (southEast.y - northWest.y) * MAPLIBRE_WORLD_TILE_SIZE
-  if (!(width > 0 && height > 0)) return null
-  const zoom = Math.log2(Math.min(size.width / width, size.height / height))
-  return Number.isFinite(zoom) ? zoom : null
 }
 
 export function createSessionPlane(origin: GeoPosition): SessionPlane {
