@@ -384,7 +384,7 @@ export function createMapLibreCameraDriver(
           startTween(startBearingTween(start.camera, {
             bearingDeg: move.bearingDeg,
             anchorPx: move.anchorPx,
-            durationMs: move.durationMs ?? VIEW_EASE_MS,
+            durationMs: VIEW_EASE_MS,
           }, performance.now()))
           return
         }

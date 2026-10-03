@@ -15,7 +15,6 @@ import {
   scaleBoundsAt,
   shortestArc,
   snapBearing,
-  VIEW_EASE_MS,
   type NavigationPolicy,
 } from './navigation-policy'
 import type { RotationSession, ViewCommandSurface } from './read-surface'
@@ -122,7 +121,7 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
   }
 
   function turnTo(bearingDeg: number): void {
-    apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg, animation: 'ease', durationMs: VIEW_EASE_MS })
+    apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg, animation: 'ease' })
   }
 
   function zoomAroundPx(anchor: ScreenPoint, factor: number): void {
@@ -266,7 +265,7 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
           rotation = null
           const bearing = frame().view.camera.bearingDeg
           if (bearing !== 0 && snapBearing(bearing) === 0) {
-            apply({ kind: 'rotate-around', anchorPx: pivot, bearingDeg: 0, animation: 'ease', durationMs: VIEW_EASE_MS })
+            apply({ kind: 'rotate-around', anchorPx: pivot, bearingDeg: 0, animation: 'ease' })
           }
         },
         cancel() {
