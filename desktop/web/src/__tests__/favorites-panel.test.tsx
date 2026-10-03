@@ -407,6 +407,41 @@ describe('FavoritesPanel', () => {
     expect(container.querySelector('[data-saved-stamps-frame] [role="alert"]')).toBeNull()
   })
 
+  it('clears a stamp import refusal once Save selection is pressed or the library changes', async () => {
+    await act(async () => {
+      render(<FavoritesPanel />, container)
+      await flushEffects()
+    })
+    const importButton = container.querySelector<HTMLButtonElement>('button[aria-label="Import stamps…"]')!
+    const alert = () => container.querySelector<HTMLElement>('[data-saved-stamps-frame] [role="alert"]')
+
+    importStampFileMock.mockResolvedValueOnce({ status: 'refused', messageKey: 'savedObjectStamps.summaryEmpty' })
+    await act(async () => {
+      importButton.click()
+      await flushEffects()
+    })
+    expect(alert()?.textContent).toBe('No visible objects')
+    const saveButton = [...container.querySelectorAll('button')]
+      .find((button) => button.textContent?.includes('Save selection'))!
+    await act(async () => {
+      saveButton.click()
+      await flushEffects()
+    })
+    expect(alert()).toBeNull()
+
+    importStampFileMock.mockResolvedValueOnce({ status: 'refused', messageKey: 'savedObjectStamps.summaryEmpty' })
+    await act(async () => {
+      importButton.click()
+      await flushEffects()
+    })
+    expect(alert()?.textContent).toBe('No visible objects')
+    await act(async () => {
+      stampLibrary.value = { ...stampLibrary.value, revision: stampLibrary.value.revision + 1 }
+      await flushEffects()
+    })
+    expect(alert()).toBeNull()
+  })
+
   it('handles a failed stamp import instead of dropping the promise', async () => {
     const failure = new Error('database is locked')
     importStampFileMock.mockRejectedValueOnce(failure)

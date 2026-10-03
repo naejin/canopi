@@ -168,6 +168,16 @@ export function FavoritesPanel() {
     clearSavedStampReorderPreviewIfLibraryMatches()
   }, [savedStampsView.revision, savedStampReorderPreviewIds])
 
+  // A refusal notice is about the last import only: a save or any library change clears it.
+  useEffect(() => {
+    setImportRefusalKey(null)
+  }, [savedStampsView.revision])
+
+  function saveSelection(): void {
+    setImportRefusalKey(null)
+    saveCanvasSelectionAsObjectStamp()
+  }
+
   async function importStampFile(): Promise<void> {
     setImportRefusalKey(null)
     try {
@@ -417,7 +427,7 @@ export function FavoritesPanel() {
               className={styles.saveStampButton}
               disabled={!savedStampSelection.canSave}
               title={!savedStampSelection.canSave ? t('savedObjectStamps.selectHint') : undefined}
-              onClick={saveCanvasSelectionAsObjectStamp}
+              onClick={saveSelection}
             >
               <PlusIcon />{t('savedObjectStamps.saveSelection')}
             </button>
