@@ -47,7 +47,7 @@ Every row re-implements `p·scale + t` or its inverse from a bearing-blind `{x, 
 | INV-TOOL-19 | `canvas/runtime/interaction/selection-rotation-handle.ts:283-292`; `canvas/runtime/scene-runtime/selection-rotation.ts:43-52`, `:125-130` | Handle angle is a world delta; Shift snaps the delta to 15°; pivot = world AABB centre | keep | — |
 | INV-TOOL-22 | `canvas/runtime/interaction/plant-placement-preview.ts:70`, `:86`; `plant-spacing-overlay.ts:151-157` | Labels offset screen-up or screen-down | keep (upright on purpose) | — |
 | INV-TOOL-23 | `canvas/runtime/interaction/hit-testing.ts:228-251`, `:300-319` | Zones hit on the outline only; a band counts the interior | change; zone fill rules (canopi-f47t.2) | 2 |
-| INV-TOOL-26 | `canvas/contours.ts:158` | Hillshade `illumination-anchor: 'viewport'`: the light stays top-left as the map turns | keep (not decided by the design; see section 12) | — |
+| INV-TOOL-26 | `canvas/contours.ts:158` | Hillshade `illumination-anchor: 'viewport'`: the light stays top-left as the map turns | keep (not decided by the design; a phase-1 convention, named at the phase-1 handoff (plan §8)) | — |
 | INV-TOOL-27 | `canvas/plants.ts:19-27` | Plant LOD bands at 0.5 and 5 px/m | keep; natural zoom bands for retained glyphs | R |
 | INV-TOOL-28 | `canvas/runtime/interaction/pointer-utils.ts:17-18` (used by `shared-gestures.ts:179`) | `hasAdditiveModifier`: Shift, Ctrl or Meta toggle the selection | change; additive is Shift or mod (on Mac a physical Ctrl is a right-click, never additive); Alt is subtractive (spec §2.3); the rule lives in `tools/tool-host.ts` modifier resolution (D1) | 2 |
 
@@ -168,7 +168,7 @@ All locale keys exist in 11 files with the same line layout, so an `en.json` lin
 
 ## 12. Open items for the plan
 
-1. **Tauri `dragDropEnabled`** stays at its default (`desktop/tauri.conf.json`), so native file-path drops keep working (R4). Whether Windows lets HTML5 panel drops reach the map is canopi-f47t.6.2's hand check (U9); if blocked, a separate bead rebuilds panel drags on pointer events.
+1. **Tauri `dragDropEnabled`** stays at its default (`desktop/tauri.conf.json`), so native file-path drops keep working (R4). Whether Windows lets HTML5 panel drops reach the map is not checked by hand (U9, U20): canopi-f47t.6.2 stays open as a known unverified item; if a Windows user reports them blocked, a separate bead rebuilds panel drags on pointer events.
 
 ## 13. Retired rows
 
