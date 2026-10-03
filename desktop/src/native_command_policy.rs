@@ -738,18 +738,22 @@ fn method_chain(call: &ExprMethodCall) -> (Option<String>, Vec<String>) {
 }
 
 /// One reviewed production escape from the managed executor: a raw thread or blocking-pool
-/// call a file needs for work the executor cannot own. An entry that matches no escape is
-/// reported, so the list only shrinks with the code.
+/// call a file needs for work the executor cannot own, at a reviewed number of sites. A site
+/// beyond the count is a new escape, and an entry with fewer sites than its count (or none)
+/// is reported, so the list only shrinks with the code.
 #[derive(Clone, Copy)]
 struct BlockingEscapeAllowance {
     path: &'static str,
     escape: &'static str,
+    /// How many sites of `escape` the file has; one more is a new, unreviewed escape.
+    count: usize,
     reason: &'static str,
 }
 
 const BLOCKING_ESCAPE_ALLOWLIST: &[BlockingEscapeAllowance] = &[BlockingEscapeAllowance {
     path: "src/services/folder_reveal.rs",
     escape: "std::thread::Builder::new",
+    count: 1,
     reason: "reaps the file-manager opener, which may live as long as the file manager; \
              holding an executor slot for that would starve bounded work",
 }];
@@ -805,17 +809,28 @@ fn audit_blocking_pool_sources(
         }
         let mut visitor = BlockingEscapeVisitor::default();
         visitor.visit_file(file);
-        for escape in visitor.escapes {
-            if let Some(index) = allowances
+        for (escape, sites) in visitor.escapes {
+            let Some(index) = allowances
                 .iter()
                 .position(|allowance| allowance.path == *path && allowance.escape == escape)
-            {
-                used_allowances.insert(index);
+            else {
+                violations.push(format!(
+                    "direct native blocking execution outside NativeOperationExecutor: {path} ({escape})"
+                ));
                 continue;
+            };
+            used_allowances.insert(index);
+            let reviewed = allowances[index].count;
+            if sites > reviewed {
+                violations.push(format!(
+                    "direct native blocking execution outside NativeOperationExecutor: {path} ({escape}, {sites} sites, {reviewed} reviewed)"
+                ));
+            } else if sites < reviewed {
+                let noun = if sites == 1 { "site" } else { "sites" };
+                violations.push(format!(
+                    "blocking escape allowance counts more sites than exist: {path} ({escape}, {sites} {noun}, {reviewed} reviewed)"
+                ));
             }
-            violations.push(format!(
-                "direct native blocking execution outside NativeOperationExecutor: {path} ({escape})"
-            ));
         }
     }
     for (index, allowance) in allowances.iter().enumerate() {
@@ -884,7 +899,14 @@ impl TestModuleFiles {
 
 #[derive(Default)]
 struct BlockingEscapeVisitor {
-    escapes: BTreeSet<String>,
+    /// Each escape and how many times it appears.
+    escapes: BTreeMap<String, usize>,
+}
+
+impl BlockingEscapeVisitor {
+    fn record(&mut self, escape: String) {
+        *self.escapes.entry(escape).or_default() += 1;
+    }
 }
 
 impl BlockingEscapeVisitor {
@@ -898,7 +920,7 @@ impl BlockingEscapeVisitor {
             .is_some_and(|name| is_blocking_pool_name(name))
             || THREAD_ESCAPE_CALLS.contains(&joined.as_str())
         {
-            self.escapes.insert(joined);
+            self.record(joined);
         }
     }
 
@@ -907,7 +929,7 @@ impl BlockingEscapeVisitor {
     fn inspect_method_call(&mut self, call: &ExprMethodCall) {
         let method = call.method.to_string();
         if is_blocking_pool_name(&method) {
-            self.escapes.insert(format!(".{method}()"));
+            self.record(format!(".{method}()"));
         }
     }
 
@@ -924,7 +946,7 @@ impl BlockingEscapeVisitor {
             }
             UseTree::Glob(_) => {
                 if prefix.join("::") == "std::thread" {
-                    self.escapes.insert("use std::thread::*".into());
+                    self.record("use std::thread::*".into());
                 }
             }
             UseTree::Group(group) => {
@@ -950,12 +972,12 @@ impl BlockingEscapeVisitor {
             || (name != "self" && is_blocking_pool_name(&name.to_string()))
         {
             // Any import of a blocking-pool function is an escape, whatever it is renamed to.
-            self.escapes.insert(format!("use {full}"));
+            self.record(format!("use {full}"));
         } else if full == "std::thread"
             && let Some(rename) = rename.filter(|rename| *rename != "thread")
         {
             // `use std::thread as t;` hides `t::spawn(...)` from the call check.
-            self.escapes.insert(format!("use std::thread as {rename}"));
+            self.record(format!("use std::thread as {rename}"));
         }
     }
 }
@@ -1681,11 +1703,13 @@ mod tests {
             BlockingEscapeAllowance {
                 path: "src/services/fixture.rs",
                 escape: "std::thread::Builder::new",
+                count: 1,
                 reason: "reviewed fixture",
             },
             BlockingEscapeAllowance {
                 path: "src/services/removed.rs",
                 escape: "std::thread::Builder::new",
+                count: 1,
                 reason: " ",
             },
         ];
@@ -1707,6 +1731,51 @@ mod tests {
                 "blocking escape allowance has no reason: src/services/removed.rs (std::thread::Builder::new)",
                 "direct native blocking execution outside NativeOperationExecutor: src/services/fixture.rs (std::thread::spawn)",
                 "unused blocking escape allowance has no escape: src/services/removed.rs (std::thread::Builder::new)",
+            ]
+        );
+    }
+
+    #[test]
+    fn allowance_covers_only_the_reviewed_number_of_escapes() {
+        let allowances = [BlockingEscapeAllowance {
+            path: "src/services/fixture.rs",
+            escape: "std::thread::Builder::new",
+            count: 1,
+            reason: "reviewed fixture",
+        }];
+        let violations = audit_blocking_pool_sources(
+            &[(
+                "src/services/fixture.rs",
+                r#"
+                    fn reviewed() { std::thread::Builder::new().spawn(work); }
+                    fn added() { std::thread::Builder::new().spawn(heavy); }
+                "#,
+            )],
+            &["src/native_operation.rs"],
+            &allowances,
+        );
+        assert_eq!(
+            violations,
+            [
+                "direct native blocking execution outside NativeOperationExecutor: src/services/fixture.rs (std::thread::Builder::new, 2 sites, 1 reviewed)"
+            ]
+        );
+
+        let over_counted = audit_blocking_pool_sources(
+            &[(
+                "src/services/fixture.rs",
+                "fn reviewed() { std::thread::Builder::new().spawn(work); }",
+            )],
+            &["src/native_operation.rs"],
+            &[BlockingEscapeAllowance {
+                count: 2,
+                ..allowances[0]
+            }],
+        );
+        assert_eq!(
+            over_counted,
+            [
+                "blocking escape allowance counts more sites than exist: src/services/fixture.rs (std::thread::Builder::new, 1 site, 2 reviewed)"
             ]
         );
     }
