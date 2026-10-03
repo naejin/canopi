@@ -298,7 +298,43 @@ describe('saved object stamp tool', () => {
       expect(h.store.persisted.annotations[0]).toMatchObject({ position: { x: 90, y: 100 }, rotationDeg: 90 })
     })
 
-    it('a stamp chosen while armed starts upright, and none leaves nothing to turn', () => {
+    it('a saved stamp pick starts at the bearing and the tool card reads 0°', () => {
+      // The screen centre shows the plane's origin; the map is turned 30° (spec §4.7, phase-1 amendment A13).
+      const h = createToolHarness({ camera: { bearingDeg: 30 } })
+      harnesses.push(h)
+      holding(h, mulchStamp())
+      expect(h.record.guidance.at(-1)?.stampRotationDeg).toBe(0)
+
+      h.hover({ x: 200, y: 150 })
+      const anchor = h.world({ x: 200, y: 150 })
+      expect(ghosts(h)[0]!.entity).toMatchObject({ rotationDeg: 30 })
+      // Level to the screen: the plant saved 10 m east of the anchor shows 10 px right of the pointer.
+      const right = h.world({ x: 210, y: 150 })
+      const ghostPlant = templateOf(ghosts(h)[0]).plants[0]!.entity
+      expect(ghostPlant.position.x).toBeCloseTo(right.x, 6)
+      expect(ghostPlant.position.y).toBeCloseTo(right.y, 6)
+
+      // ] turns it 15° from the pick's start: the card reads 15°, the copies are stored at 45°.
+      h.host.command({ kind: 'rotate-held', stepDeg: 15 })
+      expect(h.record.guidance.at(-1)?.stampRotationDeg).toBe(15)
+      expect(ghosts(h)[0]!.entity).toMatchObject({ rotationDeg: 45 })
+      h.host.command({ kind: 'rotate-held', stepDeg: -15 })
+      h.host.command({ kind: 'rotate-held', stepDeg: -15 })
+      expect(h.record.guidance.at(-1)?.stampRotationDeg).toBe(345)
+      expect(ghosts(h)[0]!.entity).toMatchObject({ rotationDeg: 15 })
+
+      // Another stamp starts at the bearing again.
+      h.host.sourceChanged({ kind: 'saved-stamp', stamp: mulchStamp() })
+      expect(h.record.guidance.at(-1)?.stampRotationDeg).toBe(0)
+      h.host.command({ kind: 'rotate-held', stepDeg: 15 })
+      h.click({ x: 200, y: 150 })
+      expect(h.store.persisted.zones[0]?.rotationDeg).toBe(45)
+      expect(h.store.persisted.annotations[0]?.rotationDeg).toBe(45)
+      expect(h.store.persisted.plants[0]!.position.x).toBeCloseTo(anchor.x + 10 * Math.cos(Math.PI / 4), 6)
+      expect(h.store.persisted.plants[0]!.position.y).toBeCloseTo(anchor.y + 10 * Math.sin(Math.PI / 4), 6)
+    })
+
+    it('a stamp chosen while armed starts level to the screen, and none leaves nothing to turn', () => {
       const h = harness()
       holding(h, mulchStamp())
       h.hover({ x: 100, y: 100 })
