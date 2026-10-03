@@ -68,6 +68,11 @@ function pointer(target: EventTarget, type: string, point: { x: number; y: numbe
   act(() => { target.dispatchEvent(event) })
 }
 
+/** The click a browser sends for a pointer press: its detail counts the presses, unlike a screen reader's or a script's. */
+function pointerClick(): void {
+  act(() => { compass().dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, detail: 1 })) })
+}
+
 function key(target: EventTarget, init: KeyboardEventInit): KeyboardEvent {
   const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })
   act(() => { target.dispatchEvent(event) })
@@ -132,7 +137,7 @@ describe('Compass', () => {
     pointer(compass(), 'pointermove', around(-112))
     expect(bearing()).toBeCloseTo(52, 6)
     pointer(compass(), 'pointerup', around(-112))
-    act(() => { compass().click() })
+    pointerClick()
     // A drag is not a click: the release keeps the turned view.
     expect(bearing()).toBeCloseTo(52, 6)
     expect(compass().dataset.dragging).toBeUndefined()
@@ -157,7 +162,7 @@ describe('Compass', () => {
     pointer(compass(), 'pointermove', { x: CENTRE.x - 2, y: CENTRE.y + 2 })
     expect(bearing()).toBe(30)
     pointer(compass(), 'pointerup', { x: CENTRE.x - 2, y: CENTRE.y + 2 })
-    act(() => { compass().click() })
+    pointerClick()
     act(() => { vi.advanceTimersByTime(TURN_MS) })
     expect(bearing()).toBe(30)
   })
@@ -170,7 +175,7 @@ describe('Compass', () => {
     pointer(compass(), 'pointermove', { x: CENTRE.x + 5, y: CENTRE.y })
     pointer(compass(), 'pointermove', CENTRE)
     pointer(compass(), 'pointerup', CENTRE)
-    act(() => { compass().click() })
+    pointerClick()
     act(() => { vi.advanceTimersByTime(TURN_MS) })
     expect(bearing()).toBe(30)
   })
@@ -183,7 +188,7 @@ describe('Compass', () => {
     pointer(compass(), 'pointermove', CENTRE)
     pointer(compass(), 'pointermove', { x: CENTRE.x + 5, y: CENTRE.y })
     pointer(compass(), 'pointerup', { x: CENTRE.x + 5, y: CENTRE.y })
-    act(() => { compass().click() })
+    pointerClick()
     act(() => { vi.advanceTimersByTime(TURN_MS) })
     expect(bearing()).toBe(30)
   })
@@ -197,6 +202,41 @@ describe('Compass', () => {
     expect(compass().dataset.dragging).toBe('true')
     // Only the small sweeps outside the centre count: about 3°, never the 180° the crossing passes through.
     expect(Math.abs(bearing() - 30)).toBeLessThan(5)
+  })
+
+  it('a short touch drag keeps its turn when the click of the tap comes in a later task', () => {
+    vi.useFakeTimers()
+    mount(0)
+    // 6 px around the face: past 3 px, so a drag, but inside a touch screen's tap slop, so the browser still sends a click,
+    // from its tap gesture, after the release's task.
+    pointer(compass(), 'pointerdown', around(-90, 15))
+    pointer(compass(), 'pointermove', around(-67, 15))
+    pointer(compass(), 'pointerup', around(-67, 15))
+    expect(bearing()).toBeCloseTo(337, 6)
+    act(() => { vi.advanceTimersByTime(50) })
+    pointerClick()
+    act(() => { vi.advanceTimersByTime(TURN_MS) })
+    expect(bearing()).toBeCloseTo(337, 6)
+    // The next press is a click again.
+    pointer(compass(), 'pointerdown', around(-90, 15))
+    pointer(compass(), 'pointerup', around(-90, 15))
+    pointerClick()
+    act(() => { vi.advanceTimersByTime(TURN_MS) })
+    expect(bearing()).toBe(0)
+  })
+
+  it('a screen reader activation after a drag that sent no click resets north', () => {
+    vi.useFakeTimers()
+    mount(30)
+    // A touch drag past the tap slop: the browser sends no click after its release.
+    pointer(compass(), 'pointerdown', around(-90))
+    pointer(compass(), 'pointermove', around(-120))
+    pointer(compass(), 'pointerup', around(-120))
+    expect(bearing()).toBeCloseTo(60, 6)
+    // A screen reader activates the button with a click of detail 0.
+    act(() => { compass().click() })
+    act(() => { vi.advanceTimersByTime(TURN_MS) })
+    expect(bearing()).toBe(0)
   })
 
   it('Enter and Space reset', () => {
@@ -221,13 +261,13 @@ describe('Compass', () => {
     pointer(compass(), 'pointermove', { x: around(-90).x + 2, y: around(-90).y })
     expect(key(compass(), { key: 'Escape', code: 'Escape' }).defaultPrevented).toBe(true)
     pointer(compass(), 'pointerup', around(-90))
-    act(() => { compass().click() })
+    pointerClick()
     act(() => { vi.advanceTimersByTime(TURN_MS) })
     expect(bearing()).toBe(30)
     // The next press is a click again.
     pointer(compass(), 'pointerdown', around(-90))
     pointer(compass(), 'pointerup', around(-90))
-    act(() => { compass().click() })
+    pointerClick()
     act(() => { vi.advanceTimersByTime(TURN_MS) })
     expect(bearing()).toBe(0)
   })

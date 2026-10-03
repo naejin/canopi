@@ -53,7 +53,9 @@ export function Compass({ command, className }: {
   const northUp = view?.northUp.value ?? true
   const descriptionId = useId()
   const press = useRef<Press | null>(null)
-  /** The release of a press that was not a click: the click the browser sends after it does nothing. */
+  /** Set by the release of a press that was not a click, until the next press: the pointer click the browser sends
+   *  after it does nothing. A touch tap sends that click from its own gesture, a task or more after the release, so no
+   *  timer can bound it. A click of detail 0 (a screen reader, a script) is never a pointer's, so it always runs. */
   const swallowClick = useRef(false)
   const [turning, setTurning] = useState(false)
 
@@ -140,9 +142,8 @@ export function Compass({ command, className }: {
       current.session?.end()
       setTurning(false)
     }
-    // The click that follows this release belongs to the drag (or the Esc that ended it).
+    // The click that follows this release, however late, belongs to the drag (or the Esc that ended it).
     swallowClick.current = true
-    setTimeout(() => { swallowClick.current = false }, 0)
   }
 
   function onPointerCancel(event: PointerEvent): void {
@@ -169,8 +170,8 @@ export function Compass({ command, className }: {
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
         onLostPointerCapture={(event) => { if (press.current?.pointerId === event.pointerId) cancel() }}
-        onClick={() => {
-          if (swallowClick.current) {
+        onClick={(event) => {
+          if (swallowClick.current && event.detail !== 0) {
             swallowClick.current = false
             return
           }
