@@ -148,6 +148,32 @@ describe('Compass', () => {
     expect(bearing()).toBeCloseTo(100, 6)
   })
 
+  it('a press on the needle that drifts past 3 px stays a click', () => {
+    vi.useFakeTimers()
+    mount(30)
+    // A tap lands on the needle beside the centre and rolls 3.6 px across it: near the centre the pointer's angle
+    // means nothing, so the press neither turns the view nor stops being the reset the user meant.
+    pointer(compass(), 'pointerdown', { x: CENTRE.x + 1, y: CENTRE.y })
+    pointer(compass(), 'pointermove', { x: CENTRE.x - 2, y: CENTRE.y + 2 })
+    expect(bearing()).toBe(30)
+    expect(compass().dataset.dragging).toBeUndefined()
+    pointer(compass(), 'pointerup', { x: CENTRE.x - 2, y: CENTRE.y + 2 })
+    act(() => { compass().click() })
+    act(() => { vi.advanceTimersByTime(TURN_MS) })
+    expect(bearing()).toBe(0)
+  })
+
+  it('a drag across the centre takes up the angle again on the far side and never flips the view', () => {
+    mount(30)
+    // A straight drag from the left of the face to its right, half a pixel below the centre.
+    for (const [index, x] of [88, 93, 100, 107, 112].entries()) {
+      pointer(compass(), index === 0 ? 'pointerdown' : 'pointermove', { x, y: CENTRE.y + 0.5 })
+    }
+    expect(compass().dataset.dragging).toBe('true')
+    // Only the small sweeps outside the centre count: about 3°, never the 180° the crossing passes through.
+    expect(Math.abs(bearing() - 30)).toBeLessThan(5)
+  })
+
   it('Enter and Space reset', () => {
     vi.useFakeTimers()
     mount(30)

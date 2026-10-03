@@ -9,6 +9,9 @@ import styles from './Compass.module.css'
 
 /** Travel under this is a click; past it the press turns the view (spec §4.2). */
 const DRAG_START_PX = 3
+/** Within this radius of the centre, on the needle, the pointer's angle is noise: it neither turns the view nor starts
+ *  a drag, and the angle is taken up again where the pointer leaves it (spec §4.2). */
+const CENTRE_DEAD_ZONE_PX = 6
 
 interface ScreenPoint { readonly x: number; readonly y: number }
 
@@ -17,11 +20,12 @@ interface Press {
   readonly pointerId: number
   readonly start: ScreenPoint
   readonly centre: ScreenPoint
-  /** pending: under 3 px, a click; turning: the view follows the pointer; ended: Esc, a lost capture or a window blur
+  /** pending: under 3 px or still on the needle, a click; turning: the view follows the pointer; ended: Esc, a lost capture or a window blur
    *  ended it while the pointer is still down, so its release is no click. */
   phase: 'pending' | 'turning' | 'ended'
-  /** The pointer's angle about the centre at the last move, in screen degrees (clockwise). */
-  angle: number
+  /** The pointer's angle about the centre at the last move outside the dead zone, in screen degrees (clockwise); null
+   *  while the pointer is inside it, so the next angle starts afresh. */
+  angle: number | null
   /** Clockwise degrees swept since the press, unwrapped. */
   swept: number
   session: RotationSession | null
@@ -34,9 +38,10 @@ interface Press {
  * north, turned by −bearing. A click, Enter or Space runs Keyboard's `reset-north` command, whose label and keys it
  * shows. A primary drag on the face past 3 px turns the view about the screen centre by the pointer's angle around the
  * compass, so the needle follows the pointer (a clockwise drag lowers the bearing); Shift steps to 15° multiples, read
- * on each move. The drag runs outside the input pipeline, so while a press is live it holds an Esc layer at the gesture
- * priority (fixture I9): Esc restores the starting camera, or before 3 px ends the press with no reset. A pointer
- * cancel, a lost capture and a window blur cancel it too.
+ * on each move. Within 6 px of the centre the angle is ignored: a press that stays there is a click, and a drag that
+ * crosses it takes the angle up again on the far side. The drag runs outside the input pipeline, so while a press is
+ * live it holds an Esc layer at the gesture priority (fixture I9): Esc restores the starting camera, or before the drag
+ * starts ends the press with no reset. A pointer cancel, a lost capture and a window blur cancel it too.
  */
 export function Compass({ command, className }: {
   readonly command: CanvasToolbarActionCommand
@@ -96,7 +101,7 @@ export function Compass({ command, className }: {
       start,
       centre,
       phase: 'pending',
-      angle: angleAbout(centre, start),
+      angle: angleOutsideDeadZone(centre, start),
       swept: 0,
       session: null,
       release: () => {
@@ -110,17 +115,17 @@ export function Compass({ command, className }: {
     const current = press.current
     if (!current || current.pointerId !== event.pointerId || current.phase === 'ended') return
     const point = { x: event.clientX, y: event.clientY }
+    const angle = angleOutsideDeadZone(current.centre, point)
+    if (angle !== null && current.angle !== null) current.swept += wrapDegrees(angle - current.angle)
+    current.angle = angle
     if (current.phase === 'pending') {
-      if (Math.hypot(point.x - current.start.x, point.y - current.start.y) < DRAG_START_PX) return
+      if (angle === null || Math.hypot(point.x - current.start.x, point.y - current.start.y) < DRAG_START_PX) return
       const viewport = currentCanvasViewportCommandSurface.peek()
       if (!viewport) return
       current.session = viewport.beginRotation('centre')
       current.phase = 'turning'
       setTurning(true)
     }
-    const angle = angleAbout(current.centre, point)
-    current.swept += wrapDegrees(angle - current.angle)
-    current.angle = angle
     // The needle follows the pointer: a clockwise sweep turns the map clockwise on screen, which lowers the bearing.
     current.session?.update(-current.swept, { step: event.shiftKey })
   }
@@ -199,9 +204,12 @@ function isLive(press: Press | null): boolean {
   return press !== null && press.phase !== 'ended'
 }
 
-/** The angle of a point about a centre on screen, in degrees: 0 to the right, 90 down. */
-function angleAbout(centre: ScreenPoint, point: ScreenPoint): number {
-  return Math.atan2(point.y - centre.y, point.x - centre.x) * 180 / Math.PI
+/** The angle of a point about a centre on screen, in degrees (0 to the right, 90 down), or null inside the dead zone. */
+function angleOutsideDeadZone(centre: ScreenPoint, point: ScreenPoint): number | null {
+  const dx = point.x - centre.x
+  const dy = point.y - centre.y
+  if (Math.hypot(dx, dy) < CENTRE_DEAD_ZONE_PX) return null
+  return Math.atan2(dy, dx) * 180 / Math.PI
 }
 
 /** A difference of angles in (−180, 180]. */
