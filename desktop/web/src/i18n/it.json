@@ -707,6 +707,11 @@
       "chooseScale": "Scala {{scale}}. Scegli una scala",
       "mapScale": "Scala della mappa"
     },
+    "compass": {
+      "bearing": "Vista ruotata di {{degrees, number}}° rispetto al nord",
+      "northUp": "Il nord è in alto",
+      "hint": "Fai clic per ripristinare il nord. Trascina l’anello per ruotare la vista; tieni premuto Maiusc per passi di 15°."
+    },
     "selectionChip": {
       "label": "Selezione",
       "selected_one": "{{count, number}} selezionato",

@@ -707,6 +707,11 @@
       "chooseScale": "Échelle {{scale}}. Choisir une échelle",
       "mapScale": "Échelle de la carte"
     },
+    "compass": {
+      "bearing": "Vue tournée de {{degrees, number}}° par rapport au nord",
+      "northUp": "Le nord est en haut",
+      "hint": "Cliquez pour rétablir le nord. Faites glisser l’anneau pour tourner la vue ; maintenez Maj pour des pas de 15°."
+    },
     "selectionChip": {
       "label": "Sélection",
       "selected_one": "{{count, number}} sélectionné",

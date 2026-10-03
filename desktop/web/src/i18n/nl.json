@@ -707,6 +707,11 @@
       "chooseScale": "Schaal {{scale}}. Kies een schaal",
       "mapScale": "Kaartschaal"
     },
+    "compass": {
+      "bearing": "Weergave {{degrees, number}}° gedraaid ten opzichte van het noorden",
+      "northUp": "Het noorden is boven",
+      "hint": "Klik om het noorden te herstellen. Sleep de ring om de weergave te draaien; houd Shift ingedrukt voor stappen van 15°."
+    },
     "selectionChip": {
       "label": "Selectie",
       "selected_one": "{{count, number}} geselecteerd",

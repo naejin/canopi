@@ -707,6 +707,11 @@
       "chooseScale": "Maßstab {{scale}}. Maßstab wählen",
       "mapScale": "Kartenmaßstab"
     },
+    "compass": {
+      "bearing": "Ansicht um {{degrees, number}}° gegenüber Norden gedreht",
+      "northUp": "Norden ist oben",
+      "hint": "Klicken, um nach Norden auszurichten. Ring ziehen, um die Ansicht zu drehen; Umschalt gedrückt halten für 15°-Schritte."
+    },
     "selectionChip": {
       "label": "Auswahl",
       "selected_one": "{{count, number}} ausgewählt",

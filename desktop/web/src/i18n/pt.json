@@ -707,6 +707,11 @@
       "chooseScale": "Escala do mapa {{scale}}. Escolha uma escala",
       "mapScale": "Escala do mapa"
     },
+    "compass": {
+      "bearing": "Vista girada {{degrees, number}}° em relação ao norte",
+      "northUp": "O norte está para cima",
+      "hint": "Clique para redefinir o norte. Arraste o anel para girar a vista; mantenha Shift para passos de 15°."
+    },
     "selectionChip": {
       "label": "Seleção",
       "selected_one": "{{count, number}} selecionado",

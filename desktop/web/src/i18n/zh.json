@@ -707,6 +707,11 @@
       "chooseScale": "地图比例 {{scale}}。选择比例",
       "mapScale": "地图比例"
     },
+    "compass": {
+      "bearing": "视图已从正北旋转 {{degrees, number}}°",
+      "northUp": "北向上",
+      "hint": "点击重置为正北。拖动圆环旋转视图；按住 Shift 以 15° 为步进。"
+    },
     "selectionChip": {
       "label": "选择",
       "selected_one": "已选 {{count, number}} 项",

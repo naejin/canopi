@@ -707,6 +707,11 @@
       "chooseScale": "縮尺 {{scale}}。縮尺を選択",
       "mapScale": "地図の縮尺"
     },
+    "compass": {
+      "bearing": "ビューは北から {{degrees, number}}° 回転しています",
+      "northUp": "北が上",
+      "hint": "クリックで北を上にします。リングをドラッグしてビューを回転します。Shift を押しながらで 15° ずつ回転します。"
+    },
     "selectionChip": {
       "label": "選択",
       "selected_one": "{{count, number}} 件を選択",
