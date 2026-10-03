@@ -2132,6 +2132,58 @@ describe('ToolHost', () => {
       expect(h.record.menus.at(-1)).toEqual({ at: 'selection', source: 'keyboard', screen: null, hit: null })
     })
 
+    it('Turn view to this edge is offered within 8 px of a polygon, rectangle or line edge for a native menu, on a locked zone too, never from the keyboard and never for an ellipse', () => {
+      vi.useFakeTimers()
+      try {
+        useStubTools(stubTool('select'))
+        const zone = (id: string, zoneType: 'polygon' | 'rect' | 'line' | 'ellipse', points: WorldPoint[], locked = false) =>
+          ({ ...rectZone(id, points), zoneType, locked })
+        // Scale 1: a screen pixel is a metre and the screen is the world.
+        const h = harness({
+          scene: {
+            zones: [
+              // A field whose south-east edge runs from (100, 20) down to (60, 100).
+              zone('field', 'polygon', [{ x: 20, y: 20 }, { x: 100, y: 20 }, { x: 60, y: 100 }]),
+              zone('bed', 'rect', [{ x: 150, y: 20 }, { x: 250, y: 20 }, { x: 250, y: 60 }, { x: 150, y: 60 }], true),
+              zone('hedge', 'line', [{ x: 300, y: 20 }, { x: 340, y: 120 }]),
+              zone('pond', 'ellipse', [{ x: 200, y: 200 }, { x: 40, y: 20 }]),
+            ],
+          },
+        })
+        const offered = () => h.record.menus.at(-1)!.turnViewToEdge
+
+        // 7 px off the field's slanted edge, beyond its 6 px hit: the empty map's menu, with the entry.
+        const normal = { x: 2 / Math.sqrt(5), y: 1 / Math.sqrt(5) }
+        h.menu({ x: 80 + normal.x * 7, y: 60 + normal.y * 7 }, 'native')
+        expect(h.record.menus.at(-1)!.hit).toBeNull()
+        expect(offered()).toBeTypeOf('function')
+        offered()!()
+        vi.advanceTimersByTime(400)
+        const view = h.view.view()
+        const [a, b] = [view.worldToScreen({ x: 100, y: 20 }), view.worldToScreen({ x: 60, y: 100 })]
+        expect(b.y - a.y).toBeCloseTo(0, 6)
+        h.view.navigation.resetNorth()
+        vi.advanceTimersByTime(400)
+
+        h.menu({ x: 80 + normal.x * 9, y: 60 + normal.y * 9 }, 'native')
+        expect(offered()).toBeUndefined()
+        // The locked bed: its own menu, with the entry; the view turns, no object moves.
+        h.menu({ x: 200, y: 63 }, 'native')
+        expect(h.record.menus.at(-1)!.hit).toEqual({ kind: 'object', target: { kind: 'zone', id: 'bed' } })
+        expect(offered()).toBeTypeOf('function')
+        h.menu({ x: 324, y: 78 }, 'native')
+        expect(offered()).toBeTypeOf('function')
+        h.menu({ x: 240, y: 200 }, 'native')
+        expect(offered()).toBeUndefined()
+
+        h.select({ kind: 'zone', id: 'field' })
+        h.menu('selection', 'keyboard')
+        expect(offered()).toBeUndefined()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it('a right-click during a nudge series commits the series and opens the menu', () => {
       useStubTools(stubTool('select'))
       const h = harness({ scene: { plants: [appleAt({ x: 10, y: 10 })] } })
@@ -2209,6 +2261,13 @@ describe('ToolHost', () => {
 
       port.open({ at: { x: 300, y: 250 }, source: 'mouse', screen: null, hit: null })
       expect(opened.at(-1)!.selection).toBeNull()
+      expect(opened.at(-1)!.turnViewToEdge).toBeUndefined()
+      // The host's edge turn rides on the request, for the empty map's menu as for an object's.
+      const turnViewToEdge = vi.fn()
+      port.open({ at: { x: 300, y: 250 }, source: 'native', screen: null, hit: null, turnViewToEdge })
+      expect(opened.at(-1)!.turnViewToEdge).toBe(turnViewToEdge)
+      port.open({ at: { x: 50, y: 50 }, source: 'native', screen: { x: 50, y: 50 }, hit: null, turnViewToEdge })
+      expect(opened.at(-1)!.turnViewToEdge).toBe(turnViewToEdge)
 
       store.updatePersisted((draft) => {
         draft.layers = draft.layers.map((layer) => (layer.name === 'plants' ? { ...layer, locked: true } : layer))

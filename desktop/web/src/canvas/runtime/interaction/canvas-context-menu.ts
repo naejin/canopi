@@ -24,8 +24,9 @@ interface CanvasContextMenuOptions {
  * render. The session owns this controller; the app owns the menu's DOM.
  */
 export interface CanvasContextMenuController {
-  /** `screen` is container-relative; `selection` is null on the empty map. */
-  openAtPointer(screen: ScenePoint, selection: CanvasDesignObjectSelectionModel | null): void
+  /** `screen` is container-relative; `selection` is null on the empty map. `turnViewToEdge`: the pointer is on a zone's
+   *  edge (the request's entry, spec §4.16). */
+  openAtPointer(screen: ScenePoint, selection: CanvasDesignObjectSelectionModel | null, turnViewToEdge?: () => void): void
   /** Menu key or Shift F10: beside the selection's projected bounds (four corners, INV-XF-22), else mid-map (the empty-map
    *  menu without a selection). */
   openFromKeyboard(selection: CanvasDesignObjectSelectionModel): void
@@ -42,6 +43,7 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
     anchor: CanvasContextMenuAnchor,
     world: ScenePoint,
     selection: CanvasDesignObjectSelectionModel | null,
+    turnViewToEdge?: () => void,
   ): void {
     const adapter = options.adapter
     if (!adapter) return
@@ -54,6 +56,7 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
         ? { saveSelectionAsObjectStamp: options.saveSelectionAsObjectStamp }
         : {}),
       ...(options.placePlantsAt ? { placePlantsAt: options.placePlantsAt } : {}),
+      ...(turnViewToEdge ? { turnViewToEdge } : {}),
       returnFocus: options.returnFocus,
       closed: () => {
         if (openRequest === request) openRequest = null
@@ -69,12 +72,12 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
   }
 
   return {
-    openAtPointer(screen, selection) {
+    openAtPointer(screen, selection, turnViewToEdge) {
       const world = options.view().screenToWorld(screen)
       const origin = containerOrigin()
       const x = origin.left + screen.x
       const y = origin.top + screen.y
-      open({ left: x, top: y, right: x, bottom: y }, world, selection)
+      open({ left: x, top: y, right: x, bottom: y }, world, selection, turnViewToEdge)
     },
     openFromKeyboard(selection) {
       const origin = containerOrigin()

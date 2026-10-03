@@ -169,6 +169,7 @@
       "addToCalendar": "Добавить в календарь…",
       "setUnitCost": "Задать цену за единицу…",
       "placePlantsHere": "Разместить растения здесь",
+      "turnViewToEdge": "Повернуть вид по этому краю",
       "renameZone": "Переименовать зону…"
     },
     "rotationHandle": {

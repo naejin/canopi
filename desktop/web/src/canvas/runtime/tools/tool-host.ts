@@ -34,6 +34,7 @@ import type { ScreenPoint, ViewFrame, ViewScreen, ViewTransform, WorldPoint } fr
 import { applyToolConstraint } from './constraints'
 import type { DraftPresentation, DraftShape, ToolHandle } from './draft'
 import { measureLabelShapes, selectedZoneMeasurementLabels } from './measure-labels'
+import { zoneEdgeSegment } from './hit-testing'
 import { placePlantFromSpecies } from './plant-stamp'
 import { TOOL_REGISTRY } from './registry'
 import { placeSavedObjectStamp, savedObjectStampGhostShapes } from './saved-object-stamp'
@@ -70,6 +71,14 @@ const REFUSED_DRAGOVER: GestureOutcome = Object.freeze({ quarantine: true, dropE
 const DROP_CUE_PX = 12
 const NO_HANDLES: readonly ToolHandle[] = Object.freeze([])
 const NO_SNAP: SnapSettings = Object.freeze({ grid: false, guides: false })
+/** How near a zone's edge a pointer menu offers "Turn view to this edge" (spec §4.16). The keyboard menu has no point;
+ *  phase 3 adds the long press's 22 px. */
+const MENU_EDGE_TOLERANCE_PX: Partial<Record<MenuSource, number>> = Object.freeze({
+  native: 8,
+  mouse: 8,
+  'ctrl-click': 8,
+  'pen-barrel': 8,
+})
 /** Arrow-key nudge steps, in session-plane metres. */
 const NUDGE_STEP_M = 0.1
 const NUDGE_LARGE_STEP_M = 1
@@ -118,7 +127,8 @@ export type ContextMenuPortOptions = Parameters<typeof createCanvasContextMenu>[
 /**
  * ToolHostDeps.menu over today's controller. The host hits and retargets the selection first; open() then rebuilds
  * today's three menu states: the selection's menu from the keyboard, the empty-map menu, and a right-clicked object's menu,
- * disabled when the object is on a locked layer or locked through its group (today's _retargetContextMenuSelection).
+ * disabled when the object is on a locked layer or locked through its group (today's _retargetContextMenuSelection). A
+ * pointer menu carries the host's "Turn view to this edge" onto the app's request.
  */
 export function createContextMenuPort(options: ContextMenuPortOptions): ContextMenuPort {
   const { scene, selectionModel, ...controllerOptions } = options
@@ -133,7 +143,11 @@ export function createContextMenuPort(options: ContextMenuPortOptions): ContextM
       }
       const screen = request.screen ?? controllerOptions.view().worldToScreen(request.at)
       const { visible, target } = contextMenuTargetAt(scene, request.at)
-      controller.openAtPointer(screen, target ? selectionModel() : visible ? disabledContextMenuSelection() : null)
+      controller.openAtPointer(
+        screen,
+        target ? selectionModel() : visible ? disabledContextMenuSelection() : null,
+        request.turnViewToEdge,
+      )
     },
     close: () => controller.close(),
     isOpen: () => controller.isOpen(),
@@ -1108,7 +1122,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   // ── Menus ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-  /** Hit, retarget the selection to the object under the pointer (history-free), then open the menu. */
+  /** Hit, retarget the selection to the object under the pointer (history-free), then open the menu, with "Turn view to
+   *  this edge" when the pointer is on a zone's edge. */
   function openMenuAt(at: ScreenPoint, source: MenuSource): void {
     const world = frame().view.screenToWorld(at)
     const { visible, target } = contextMenuTargetAt(deps.scene, world)
@@ -1116,7 +1131,33 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       deps.setSelection([target])
       notifySceneChanged()
     }
-    deps.menu.open({ at: world, source, screen: at, hit: visible ? { kind: 'object', target: visible } : null })
+    const turnViewToEdge = edgeTurnAt(world, source)
+    deps.menu.open({
+      at: world,
+      source,
+      screen: at,
+      hit: visible ? { kind: 'object', target: visible } : null,
+      ...(turnViewToEdge ? { turnViewToEdge } : {}),
+    })
+  }
+
+  /**
+   * "Turn view to this edge" (spec §4.16): the nearest polygon, rectangle or line zone edge within the source's
+   * tolerance, locked zones included, turned level on screen by the smaller angle. Pointer menus only: the keyboard
+   * menu has no point (the keyboard turns the view with Shift ← and Shift →).
+   */
+  function edgeTurnAt(world: WorldPoint, source: MenuSource): (() => void) | null {
+    const tolerancePx = MENU_EDGE_TOLERANCE_PX[source]
+    if (tolerancePx === undefined) return null
+    const hit = deps.scene.hitAt(world, { toleranceScreenPx: tolerancePx })
+    if (hit?.kind !== 'zone-edge') return null
+    const zone = deps.scene.persisted.zones.find((entry) => entry.id === hit.zoneId)
+    const edge = zone ? zoneEdgeSegment(zone, hit.edgeIndex) : null
+    if (!edge) return null
+    const [a, b] = [{ x: edge[0].x, y: edge[0].y }, { x: edge[1].x, y: edge[1].y }]
+    return () => {
+      if (!disposed) deps.navigation.turnToEdge(a, b)
+    }
   }
 
   function notifySceneChanged(): void {

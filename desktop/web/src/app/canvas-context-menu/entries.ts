@@ -28,6 +28,7 @@ export type CanvasContextMenuItemId =
   | 'add-to-calendar'
   | 'set-unit-cost'
   | 'place-plants-here'
+  | 'turn-view-to-edge'
 
 export interface CanvasContextMenuCommand {
   readonly id: CanvasContextMenuItemId
@@ -75,7 +76,9 @@ const SEPARATOR = { separator: true } as const
 /**
  * The right-click menu for a request: the selection's commands in plain words
  * with their menu-bar shortcuts, or Paste and Select all on the empty map.
- * Every command runs on the request's scene-edit surface.
+ * Every command runs on the request's scene-edit surface. On a zone's edge,
+ * Turn view to this edge leads the empty map's menu and comes before Lock in
+ * the selection's.
  */
 export function buildCanvasContextMenuEntries(
   request: CanvasContextMenuRequest,
@@ -85,10 +88,22 @@ export function buildCanvasContextMenuEntries(
   const edit = (id: CanvasEditAction, disabled: boolean, run: () => void, extra: Partial<CanvasContextMenuCommand> = {}) =>
     editCommand(id, disabled, run, options.translate, options.characterKeyShortcuts ?? true, extra)
   const paste = edit('paste', !commands.canPaste(), () => commands.pasteAt(world))
+  // Turn view to this edge (spec §4.16): only when the menu opened on a zone's edge; it moves the view, never an object,
+  // so a locked zone keeps it enabled.
+  const turnViewToEdge = request.turnViewToEdge
+  const edgeEntries: readonly CanvasContextMenuEntry[] = turnViewToEdge
+    ? [{
+        id: 'turn-view-to-edge',
+        label: options.translate('canvas.contextMenu.turnViewToEdge'),
+        disabled: false,
+        run: () => turnViewToEdge(),
+      }, SEPARATOR]
+    : []
 
   if (!selection) {
     const placePlantsAt = request.placePlantsAt
     return [
+      ...edgeEntries,
       ...placePlantsAt
         ? [{
             id: 'place-plants-here' as const,
@@ -211,6 +226,7 @@ export function buildCanvasContextMenuEntries(
       ? [edit('save-as-stamp', !can.saveAsStamp, request.saveSelectionAsObjectStamp)]
       : [],
     SEPARATOR,
+    ...edgeEntries,
     edit('lock', !can.edit, () => commands.lockSelected()),
     edit('unlock', !can.unlock, () => commands.unlockSelected()),
     SEPARATOR,

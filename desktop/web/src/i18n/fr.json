@@ -169,6 +169,7 @@
       "addToCalendar": "Ajouter au calendrier…",
       "setUnitCost": "Définir le coût unitaire…",
       "placePlantsHere": "Placer des plantes ici",
+      "turnViewToEdge": "Tourner la vue sur ce bord",
       "renameZone": "Renommer la zone…"
     },
     "rotationHandle": {

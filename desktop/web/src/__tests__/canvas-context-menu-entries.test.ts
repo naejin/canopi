@@ -83,6 +83,7 @@ function build(
     readonly returnFocus?: () => void
     readonly summary?: MapSelectionSummary | null
     readonly characterKeyShortcuts?: boolean
+    readonly turnViewToEdge?: () => void
   } = {},
 ) {
   const commands = options.commands ?? createCommands()
@@ -97,6 +98,7 @@ function build(
     commands,
     ...(options.saveSelectionAsObjectStamp ? { saveSelectionAsObjectStamp: options.saveSelectionAsObjectStamp } : {}),
     placePlantsAt: vi.fn(),
+    ...(options.turnViewToEdge ? { turnViewToEdge: options.turnViewToEdge } : {}),
     returnFocus: options.returnFocus ?? vi.fn(),
   }
   const entries = buildCanvasContextMenuEntries(request, {
@@ -231,6 +233,27 @@ describe('canvas context menu entries', () => {
     expect(commands.selectAll).toHaveBeenCalledOnce()
     expect(item(build(null, { commands: createCommands({ canPaste: () => false }) }).entries, 'paste').disabled)
       .toBe(true)
+  })
+
+  it('the entry is the empty-map menu\'s first group and sits before Lock in the selection menu', () => {
+    const turnViewToEdge = vi.fn()
+
+    const empty = build(null, { turnViewToEdge }).entries
+    expect(ids(empty)).toEqual(['turn-view-to-edge', '—', 'place-plants-here', '—', 'paste', 'select-all'])
+    expect(item(empty, 'turn-view-to-edge')).toMatchObject({ label: 'Turn view to this edge', disabled: false })
+    expect(item(empty, 'turn-view-to-edge').shortcut).toBeUndefined()
+    item(empty, 'turn-view-to-edge').run()
+    expect(turnViewToEdge).toHaveBeenCalledOnce()
+
+    // Its own group before Lock and Unlock, enabled for a locked zone too: it moves only the view.
+    const locked = build(selection({ lockedTargets: [{ kind: 'zone', id: 'zone-1' }] }), { turnViewToEdge }).entries
+    expect(ids(locked).slice(-7)).toEqual(['—', 'turn-view-to-edge', '—', 'lock', 'unlock', '—', 'delete'])
+    expect(item(locked, 'turn-view-to-edge').disabled).toBe(false)
+    expect(item(locked, 'lock').disabled).toBe(true)
+
+    // Without an edge under the pointer, neither menu offers it.
+    expect(ids(build(null).entries)).not.toContain('turn-view-to-edge')
+    expect(ids(build(ONE_ZONE).entries)).not.toContain('turn-view-to-edge')
   })
 
   it('keeps inapplicable commands visible but disabled, and running them does nothing', () => {
