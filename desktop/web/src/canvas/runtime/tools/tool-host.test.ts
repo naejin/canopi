@@ -198,6 +198,32 @@ describe('ToolHost', () => {
       expect(rectangle.last('drag-end')!.start.world).toEqual(ground)
     })
 
+    it('Shift+→ during a left drag keeps the draft\'s start on the ground', () => {
+      vi.useFakeTimers()
+      try {
+        const rectangle = stubTool('rectangle')
+        useStubTools(rectangle)
+        const h = harness({ tool: 'rectangle' })
+        const press = { x: 100, y: 100 }
+        const ground = h.world(press)
+
+        h.press(press)
+        h.move({ x: 160, y: 140 })
+        // Shift+→ is the keyboard's rotate-view, a 15° turn about the centre (ViewNavigation.rotateBy).
+        h.view.navigation.rotateBy(1)
+        vi.advanceTimersByTime(400)
+        expect(h.view.view().camera.bearingDeg).toBe(15)
+        expect(h.world(press)).not.toEqual(ground)
+        // Each camera frame of the turn re-emitted the drag from the press's ground.
+        expect(rectangle.last('drag-move')!.start.world).toEqual(ground)
+        expect(rectangle.last('drag-move')!.point.world).toEqual(h.world({ x: 160, y: 140 }))
+        h.release({ x: 170, y: 150 })
+        expect(rectangle.last('drag-end')!.start.world).toEqual(ground)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it('re-emits the drag on a camera frame', () => {
       const rectangle = stubTool('rectangle')
       useStubTools(rectangle)
@@ -1382,6 +1408,26 @@ describe('ToolHost', () => {
       expect(h.undo()).toBe(true)
       expect(h.store.persisted.plants[0]!.position).toEqual({ x: 10, y: 10 })
       expect(h.history.canUndo.value).toBe(false)
+    })
+
+    it('nudge follows the screen at 30', () => {
+      useStubTools(stubTool('select'))
+      const h = harness({ camera: { bearingDeg: 30 }, scene: { plants: [appleAt({ x: 0, y: 0 })] } })
+      h.select(P1)
+      const screenOfApple = () => h.view.view().worldToScreen(h.store.persisted.plants[0]!.position)
+      const before = screenOfApple()
+      const pixelsPerMetre = h.view.view().pixelsPerMetre
+
+      expect(h.arrow('ArrowUp')).toBe('handled')
+      const after = screenOfApple()
+      expect(after.x - before.x).toBeCloseTo(0, 6)
+      expect(after.y - before.y).toBeCloseTo(-0.1 * pixelsPerMetre, 6)
+
+      // The large step (mod+arrow, chosen by the keymap) is 1 m along the screen.
+      expect(h.arrow('ArrowRight', true)).toBe('handled')
+      const moved = screenOfApple()
+      expect(moved.x - after.x).toBeCloseTo(pixelsPerMetre, 6)
+      expect(moved.y - after.y).toBeCloseTo(0, 6)
     })
 
     it('a refused nudge answers refused, and without Select or a selection nudge answers pass', () => {
