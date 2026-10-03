@@ -63,7 +63,7 @@ function buildPages(original: PdfInput, setup: PdfSetup, text: PdfTextEngine, la
     const continuations: PdfPage[] = bodies.map((body, index) => ({ ...body, id: `${id}:legend:${index}`, sourceId: id, kind: 'legend', number: 0,
       ground: { x: 0, y: 0, width: 0, height: 0 }, pointsPerMeter: 0, legend: body.entries }))
     const page: PdfPage = { ...geometry, ...drawing, id, kind: 'detail', number: 0, ground, pointsPerMeter: scale,
-      ...(areaName === undefined ? {} : { areaName, areaKey: id }), continuationIds: continuations.map(p => p.id),
+      ...(areaName === undefined ? {} : { areaName }), continuationIds: continuations.map(p => p.id),
       operations: [...drawing.operations, ...integrated?.operations ?? []], links: [...drawing.links, ...integrated?.links ?? []],
       destinations: [...drawing.destinations, ...integrated?.destinations ?? []] }
     return [page, ...continuations]

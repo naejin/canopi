@@ -94,7 +94,6 @@ export interface PdfPage {
   readonly id: string
   readonly sourceId?: string
   readonly continuationIds?: readonly string[]
-  readonly areaKey?: string
   readonly areaName?: string
   readonly frame: PrintBounds
   readonly ground: PrintBounds
