@@ -8,6 +8,7 @@ import {
   richTextFromPlainText,
   sameRichText,
 } from '../../app/stories'
+import { ariaKeyShortcuts, formatShortcut } from '../../app/shell-commands/shortcut-text'
 import { t } from '../../i18n'
 import type { RichTextBlock, RichTextSpan } from '../../types/design'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
@@ -146,8 +147,8 @@ export function RichTextEditor({ value, onChange, label, placeholder, trailingTo
     <div className={styles.editor}>
       <span className={styles.label} id={labelId}>{label}</span>
       <div className={styles.toolbar} role="toolbar" aria-label={t('stories.formatting')}>
-        <ToolButton icon="bold" label={t('stories.bold')} shortcut="Ctrl B" keyShortcuts="Control+B Meta+B" onRun={() => format('bold')} />
-        <ToolButton icon="italic" label={t('stories.italic')} shortcut="Ctrl I" keyShortcuts="Control+I Meta+I" onRun={() => format('italic')} />
+        <ToolButton icon="bold" label={t('stories.bold')} shortcut={formatShortcut('Ctrl+B', t)} keyShortcuts={ariaKeyShortcuts('Ctrl+B')} onRun={() => format('bold')} />
+        <ToolButton icon="italic" label={t('stories.italic')} shortcut={formatShortcut('Ctrl+I', t)} keyShortcuts={ariaKeyShortcuts('Ctrl+I')} onRun={() => format('italic')} />
         <ToolButton icon="list" label={t('stories.bullets')} onRun={() => format('insertUnorderedList')} />
         <ToolButton icon="link" label={t('stories.link')} pressed={linkOpen} onRun={openLink} />
         {trailingTools}

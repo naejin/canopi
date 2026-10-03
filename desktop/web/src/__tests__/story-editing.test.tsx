@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { RichTextEditor, insertAtCaret } from '../components/stories/RichTextEditor'
+import { setShortcutPlatform } from '../app/shell-commands/shortcut-text'
 import { RichTextView } from '../components/stories/RichTextView'
 import {
   addCurrentViewAsStep,
@@ -163,6 +164,19 @@ describe('the rich text editor', () => {
       { kind: 'paragraph', spans: [span('Hello', { bold: true }), span(' '), span('world', { italic: true })] },
     ])
     expect(onChange).toHaveBeenCalledTimes(2)
+  })
+
+  it('names the platform’s mod key in the Bold and Italic tooltips: Cmd on macOS (U13)', async () => {
+    setShortcutPlatform({ os: 'mac' })
+    try {
+      await mount()
+      expect(tool('Bold').querySelector('[role="tooltip"]')!.textContent).toBe('BoldCmd B')
+      expect(tool('Italic').querySelector('[role="tooltip"]')!.textContent).toBe('ItalicCmd I')
+      expect(tool('Bold').getAttribute('aria-keyshortcuts')).toBe('Control+B Meta+B')
+      expect(tool('Italic').getAttribute('aria-keyshortcuts')).toBe('Control+I Meta+I')
+    } finally {
+      setShortcutPlatform({ os: 'linux' })
+    }
   })
 
   it('links the typed address at the caret, removes links, and cancels with Esc', async () => {
