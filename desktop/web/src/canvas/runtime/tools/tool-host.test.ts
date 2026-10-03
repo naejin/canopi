@@ -25,6 +25,7 @@ import type { CanvasDropPayload, ToolHandleId } from '../interaction-types'
 import type { SceneDesignObjectTarget } from '../scene/design-object-targets'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
 import type { WorldPoint } from '../view/types'
+import { getRectangularZoneCorners } from '../zone-geometry'
 import { constrainPointTo45Degrees } from './constraints'
 import type { DraftPresentation, DraftShape, ToolHandle } from './draft'
 import { measureLabelShapes, selectedZoneMeasurementLabels } from './measure-labels'
@@ -1963,6 +1964,33 @@ describe('ToolHost', () => {
       h.drop('drop', { x: 120, y: 120 }, GUILD_DRAG)
       expect(h.store.persisted.zones).toHaveLength(1)
       expect(h.record.drops).toEqual(['saved-stamp'])
+    })
+
+    it('a saved stamp dropped from Favorites at 30 is level to the screen', () => {
+      useStubTools(stubTool('rectangle'), stubTool('select'))
+      const h = harness({ tool: 'rectangle', camera: { bearingDeg: 30 } })
+      const at = { x: 150, y: 120 }
+      const screenOf = (world: WorldPoint) => h.view.view().worldToScreen(world)
+
+      // Its dragover ghost is the pick a click would make: turned by the bearing.
+      h.drop('over', at, GUILD_DRAG)
+      const ghost = (h.renderer.lastDraft()?.shapes ?? []).find((shape) => shape.kind === 'ghost' && shape.entity.kind === 'objects')
+      expect(ghost?.kind === 'ghost' && ghost.entity.kind === 'objects' ? ghost.entity.rotationDeg : null).toBe(30)
+
+      h.drop('drop', at, GUILD_DRAG)
+
+      // The bed and the apple sit on screen as they were saved, north up: the bed's top edge level, the apple 4 px
+      // right of and 3 px below its corner (scale 1).
+      const bed = h.store.persisted.zones[0]!
+      expect(bed.rotationDeg).toBeCloseTo(30, 6)
+      const [nw, ne] = getRectangularZoneCorners(bed)!.map(screenOf)
+      expect(nw!.x).toBeCloseTo(at.x, 6)
+      expect(nw!.y).toBeCloseTo(at.y, 6)
+      expect(ne!.y).toBeCloseTo(at.y, 6)
+      expect(ne!.x - nw!.x).toBeCloseTo(10, 6)
+      const apple = screenOf(h.store.persisted.plants[0]!.position)
+      expect(apple.x).toBeCloseTo(at.x + 4, 6)
+      expect(apple.y).toBeCloseTo(at.y + 3, 6)
     })
 
     it('dragover answers copy or none from the payload kind', () => {

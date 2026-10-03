@@ -849,12 +849,15 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   /**
    * What a drop at `at` would place, drawn as the drop preview; null when it would place nothing. A species shows today's
    * cue, a box from the pointer drawn as the band select's draft (its data is unreadable until the drop); a saved stamp
-   * shows its ghosts with the anchor at the snapped point (today's previewSavedObjectStampAt).
+   * shows its ghosts with the anchor at the snapped point (today's previewSavedObjectStampAt), turned by the bearing as
+   * its drop is.
    */
   function dropPreviewAt(at: ScreenPoint, payload: CanvasDropPayload): readonly DraftShape[] | null {
     const transform = frame().view
     const world = transform.screenToWorld(at)
-    if (payload.kind === 'saved-stamp') return savedObjectStampGhostShapes(deps.scene, payload.stamp, snap(world, false))
+    if (payload.kind === 'saved-stamp') {
+      return savedObjectStampGhostShapes(deps.scene, payload.stamp, snap(world, false), view.bearingDeg)
+    }
     if (payload.kind !== 'species' || !deps.scene.isLayerOpenForCreation('plants')) return null
     const corner = transform.screenToWorld({ x: at.x + DROP_CUE_PX, y: at.y + DROP_CUE_PX })
     return bandDraft(view, { start: world, additive: false }, corner).shapes
@@ -873,11 +876,15 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     return admitted ? NOTHING : QUARANTINE
   }
 
-  /** Today's _dropWhenSettled: the payload at the snapped point, as one Scene Edit that selects what it placed. */
+  /** Today's _dropWhenSettled: the payload at the snapped point, as one Scene Edit that selects what it placed. A saved
+   *  stamp is turned by the bearing, so it lands level with the screen as a click of the stamp tool places it (spec §4.7). */
   function placeDrop(at: ScreenPoint, payload: CanvasDropPayload): void {
     const point = snap(frame().view.screenToWorld(at), false)
     if (payload.kind === 'saved-stamp') {
-      placeSavedObjectStamp(deps.edits, deps.scene, payload.stamp, point, { onCommitted: () => dropped('saved-stamp') })
+      placeSavedObjectStamp(deps.edits, deps.scene, payload.stamp, point, {
+        rotationDeg: view.bearingDeg,
+        onCommitted: () => dropped('saved-stamp'),
+      })
     } else if (payload.kind === 'species' && payload.species) {
       const target = { edits: deps.edits, scene: deps.scene }
       placePlantFromSpecies(target, payload.species, point, 'interaction-drop', () => dropped('species'))
