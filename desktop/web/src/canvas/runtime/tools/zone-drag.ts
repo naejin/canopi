@@ -4,27 +4,27 @@
 // (tools/measurement-guide.ts). A press opens one Scene Edit at the snapped point and draws the zero-size shape; each drag
 // point redraws the draft between the drag's start, which the host keeps on the ground (plan §1, exception 1), and the
 // snapped pointer, with its measure chips (tools/measure-labels.ts); the release adds the object and selects it in that
-// edit, and a cancel, a tool change or a closed layer aborts it. Rectangles and ellipses are world boxes until phase 1
-// (INV-TOOL-03), and Shift does nothing here until phase 2. A release that adds nothing aborts its edit, as today's
-// cancellation after every pointerup did; a release whose commit throws leaves the edit to the host's cancellation after
-// the failed release, whose abort retries the commit; an abort that fails keeps the drag for the host's retry before the
-// next event.
+// edit, and a cancel, a tool change or a closed layer aborts it. Rectangles and ellipses are level with the screen
+// (ToolView.screenAlignedRect, INV-TOOL-03): the zone stores the unturned box about its centre and the bearing as its
+// rotationDeg, so at bearing 0 they are today's world boxes. Shift does nothing here until phase 2. A release that adds
+// nothing aborts its edit, as today's cancellation after every pointerup did; a release whose commit throws leaves the edit
+// to the host's cancellation after the failed release, whose abort retries the commit; an abort that fails keeps the drag
+// for the host's retry before the next event.
 
-import { computeSelectionRect } from '../../operations'
 import type { ToolId } from '../interaction-types'
 import type { SceneDesignObjectTarget } from '../scene/design-object-targets'
 import type { ScenePersistedState } from '../scene/types'
 import type { SceneEditTransaction } from '../scene-runtime/transactions'
 import type { WorldPoint } from '../view/types'
 import {
-  createEllipticalZoneMeasurementsFromRect,
+  createEllipticalZoneMeasurements,
   createLinearZoneMeasurements,
-  createRectangularZoneMeasurementsFromRect,
+  createRectangularZoneMeasurements,
   type ZoneMeasurementLabel,
 } from '../zone-measurements'
 import type { DraftFill, DraftShape, DraftStroke } from './draft'
 import { measureLabelShapes } from './measure-labels'
-import type { CanvasTool, SceneLayerKind, ToolContext, ToolGesture, ToolReply } from './tool'
+import type { CanvasTool, SceneLayerKind, ToolContext, ToolGesture, ToolReply, ToolView } from './tool'
 import { appendEllipseZoneToDraft, appendLineZoneToDraft, appendRectangleZoneToDraft } from './tool-actions'
 
 /** Today's draft line: 2 px in the guide-line colour, on the overlay casing. */
@@ -41,12 +41,16 @@ export interface DragShapeSpec {
   readonly layer: SceneLayerKind
   /** The Scene Edit of one drag. */
   readonly editType: string
-  /** The shape between the snapped start and end. */
-  shape(start: WorldPoint, end: WorldPoint): DraftShape
+  /** The shape between the snapped start and end; `view` is the current frame's (screen-aligned boxes read it). */
+  shape(start: WorldPoint, end: WorldPoint, view: ToolView): DraftShape
   /** Its measurements; none for a shape too small to measure (the press's zero-size shape). */
-  measure(start: WorldPoint, end: WorldPoint): readonly ZoneMeasurementLabel[]
+  measure(start: WorldPoint, end: WorldPoint, view: ToolView): readonly ZoneMeasurementLabel[]
   /** The edit a release at `end` makes, returning the object to select; null when the shape is too small to keep. */
-  place(start: WorldPoint, end: WorldPoint): ((draft: ScenePersistedState) => SceneDesignObjectTarget | null) | null
+  place(
+    start: WorldPoint,
+    end: WorldPoint,
+    view: ToolView,
+  ): ((draft: ScenePersistedState) => SceneDesignObjectTarget | null) | null
 }
 
 interface ActiveDrag {
@@ -72,50 +76,69 @@ const ZONE_DRAGS: Readonly<Record<ZoneDragKind, DragShapeSpec>> = {
     id: 'rectangle',
     layer: 'zones',
     editType: 'interaction-rectangle',
-    shape(start, end) {
-      const rect = computeSelectionRect(start, end)
-      return {
-        kind: 'polygon',
-        points: [
-          { x: rect.x, y: rect.y },
-          { x: rect.x + rect.width, y: rect.y },
-          { x: rect.x + rect.width, y: rect.y + rect.height },
-          { x: rect.x, y: rect.y + rect.height },
-        ],
-        style: DRAFT_STROKE,
-        fill: ZONE_DRAFT_FILL,
-      }
+    shape: (start, end, view) => ({
+      kind: 'polygon',
+      points: boxCorners(view.screenAlignedRect(start, end)),
+      style: DRAFT_STROKE,
+      fill: ZONE_DRAFT_FILL,
+    }),
+    measure(start, end, view) {
+      const box = view.screenAlignedRect(start, end)
+      return isTooSmall(box) ? [] : createRectangularZoneMeasurements(boxCorners(box))
     },
-    measure: (start, end) => createRectangularZoneMeasurementsFromRect(computeSelectionRect(start, end)),
-    place(start, end) {
-      const rect = computeSelectionRect(start, end)
-      if (isTooSmall(rect)) return null
-      return (draft) => zoneTarget(appendRectangleZoneToDraft(draft, rect))
+    place(start, end, view) {
+      const box = view.screenAlignedRect(start, end)
+      if (isTooSmall(box)) return null
+      return (draft) => zoneTarget(appendRectangleZoneToDraft(draft, unturnedRect(box), box.rotationDeg))
     },
   },
   ellipse: {
     id: 'ellipse',
     layer: 'zones',
     editType: 'interaction-ellipse',
-    shape(start, end) {
-      const rect = computeSelectionRect(start, end)
+    shape(start, end, view) {
+      const box = view.screenAlignedRect(start, end)
       return {
         kind: 'ellipse',
-        center: { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 },
-        radiusX: rect.width / 2,
-        radiusY: rect.height / 2,
-        rotationDeg: 0,
+        center: box.center,
+        radiusX: box.width / 2,
+        radiusY: box.height / 2,
+        rotationDeg: box.rotationDeg,
         style: DRAFT_STROKE,
         fill: ZONE_DRAFT_FILL,
       }
     },
-    measure: (start, end) => createEllipticalZoneMeasurementsFromRect(computeSelectionRect(start, end)),
-    place(start, end) {
-      const rect = computeSelectionRect(start, end)
-      if (isTooSmall(rect)) return null
-      return (draft) => zoneTarget(appendEllipseZoneToDraft(draft, rect))
+    measure(start, end, view) {
+      const box = view.screenAlignedRect(start, end)
+      return createEllipticalZoneMeasurements(box.center, { x: box.width / 2, y: box.height / 2 }, box.rotationDeg)
+    },
+    place(start, end, view) {
+      const box = view.screenAlignedRect(start, end)
+      if (isTooSmall(box)) return null
+      return (draft) => zoneTarget(appendEllipseZoneToDraft(draft, unturnedRect(box), box.rotationDeg))
     },
   },
+}
+
+/** ToolView.screenAlignedRect's box. */
+type ScreenAlignedBox = ReturnType<ToolView['screenAlignedRect']>
+
+/** The box before its turn: what the zone stores, its rotationDeg turning it about the centre. */
+function unturnedRect(box: ScreenAlignedBox): { x: number; y: number; width: number; height: number } {
+  return { x: box.center.x - box.width / 2, y: box.center.y - box.height / 2, width: box.width, height: box.height }
+}
+
+/** The box's corners in a rectangle zone's order, turned about the centre as zone-geometry.ts turns a stored rectangle. */
+function boxCorners(box: ScreenAlignedBox): WorldPoint[] {
+  const { center, width, height } = box
+  const radians = (box.rotationDeg * Math.PI) / 180
+  const cos = Math.cos(radians)
+  const sin = Math.sin(radians)
+  return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => {
+    const dx = (sx! * width) / 2
+    const dy = (sy! * height) / 2
+    return { x: center.x + dx * cos - dy * sin, y: center.y + dx * sin + dy * cos }
+  })
 }
 
 /** A drag-to-draw tool: one Scene Edit from the press to the release. */
@@ -131,8 +154,8 @@ export function createDragShapeTool(spec: DragShapeSpec): CanvasTool {
 
   function draw(current: ActiveDrag): void {
     const { view, effects } = context()
-    const chips = measureLabelShapes(spec.measure(current.start, current.end), (a, b) => view.screenDistance(a, b))
-    effects.setDraft({ shapes: [spec.shape(current.start, current.end), ...chips] })
+    const chips = measureLabelShapes(spec.measure(current.start, current.end, view), (a, b) => view.screenDistance(a, b))
+    effects.setDraft({ shapes: [spec.shape(current.start, current.end, view), ...chips] })
     drawn = true
   }
 
@@ -175,8 +198,9 @@ export function createDragShapeTool(spec: DragShapeSpec): CanvasTool {
 
   /** Adds the shape and selects it in the drag's edit; a closed layer or a shape too small leaves it to the abort. */
   function commit(current: ActiveDrag, end: WorldPoint): void {
-    if (!context().scene.isLayerOpenForCreation(spec.layer)) return
-    const place = spec.place(current.start, end)
+    const { scene, view } = context()
+    if (!scene.isLayerOpenForCreation(spec.layer)) return
+    const place = spec.place(current.start, end, view)
     if (!place) return
     let target = null as SceneDesignObjectTarget | null
     current.edit.mutate((draft) => {
