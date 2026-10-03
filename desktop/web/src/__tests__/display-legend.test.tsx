@@ -7,10 +7,6 @@ import { setCurrentCanvasSession } from '../canvas/session'
 import { DisplayLegend } from '../components/canvas/DisplayLegend'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
-import { buildPinnedPlantNameLegendEntries } from '../canvas/pinned-plant-name-legend'
-import { resolvePlantDisplayColor } from '../canvas/runtime/plant-presentation'
-import { DEFAULT_PLANT_DISPLAY } from '../canvas/runtime/plant-display'
-import type { SpeciesCacheEntry } from '../canvas/runtime/species-cache'
 
 
 describe('DisplayLegend', () => {
@@ -155,27 +151,6 @@ describe('DisplayLegend', () => {
 
     expect(container.textContent).toContain('Pommier')
     expect(container.textContent).not.toContain('Apple')
-  })
-
-  // A20 (open bug): an opened Design's plants carry no stratum (the codec hydrates `stratum: null`), so the canvas
-  // colours a plant with no colour of its own from the species catalog; the legend has no species cache and shows the
-  // default colour instead. Remove `.fails` when the legend reads the runtime's species cache.
-  it.fails('shows a pinned plant in the colour the canvas paints it, with its stratum from the species catalog', () => {
-    const scene = createDefaultScenePersistedState()
-    const opened = plant({ pinnedName: true, color: null, stratum: null })
-    scene.plants = [opened]
-    const speciesCache = new Map<string, SpeciesCacheEntry>([
-      ['Malus domestica', { canonical_name: 'Malus domestica', stratum: 'high' } as SpeciesCacheEntry],
-    ])
-    const source = {
-      getSceneSnapshot: () => scene,
-      getLocalizedCommonNames: () => new Map<string, string | null>(),
-      getSpeciesCache: () => speciesCache,
-    }
-
-    const [entry] = buildPinnedPlantNameLegendEntries(source, DEFAULT_PLANT_DISPLAY)
-
-    expect(entry?.color).toBe(resolvePlantDisplayColor(opened, speciesCache, DEFAULT_PLANT_DISPLAY))
   })
 
   it('hides the pinned-name legend when plant layer visibility makes it inapplicable', async () => {

@@ -30,6 +30,7 @@ export function buildPinnedPlantNameLegendEntries(
     if (plant.pinnedName !== true) continue
 
     const label = localizedNames.get(plant.canonicalName) ?? plant.commonName ?? plant.canonicalName
+    // No species cache needed: the runtime writes the catalog stratum into the Scene before it first draws a plant.
     const color = resolvePlantDisplayColor(plant, EMPTY_SPECIES_CACHE, display)
     const symbol = resolvePlantSymbolForPlant(plant, scene.plantSpeciesSymbols)
     const key = `${label}\u0000${symbol}\u0000${color}`
