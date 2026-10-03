@@ -686,6 +686,66 @@ describe('FavoritesPanel', () => {
     expect(document.activeElement).not.toBe(document.body)
   })
 
+  it('moves keyboard focus to the next row, the previous row, then the heading as confirmed deletes empty the list', async () => {
+    const current = stampLibrary.value.items[0]!
+    stampLibrary.value = {
+      ...stampLibrary.value,
+      items: [
+        current,
+        { ...current, id: 'stamp-old', name: 'Old guild', sort_order: 1, payload_json: JSON.stringify({ ...JSON.parse(current.payload_json), version: 1 }) },
+        { ...current, id: 'stamp-3', name: 'Hedge', sort_order: 2 },
+      ],
+    }
+    deleteStampMock.mockImplementation(async (id: string) => {
+      stampLibrary.value = { ...stampLibrary.value, items: stampLibrary.value.items.filter((stamp) => stamp.id !== id), revision: stampLibrary.value.revision + 1 }
+      return true
+    })
+    await act(async () => {
+      render(<FavoritesPanel />, container)
+      await flushEffects()
+    })
+    const row = (id: string) => container.querySelector<HTMLElement>(`[data-saved-stamp-row="${id}"]`)
+    const confirmWithKeyboard = async (id: string) => {
+      const confirm = row(id)!.querySelector<HTMLButtonElement>('button[aria-label="Confirm delete"]')!
+      await act(async () => {
+        confirm.focus()
+        confirm.click()
+        await flushEffects()
+      })
+    }
+
+    // A stamp from before 2.0, in the middle: focus goes to the next row.
+    await act(async () => {
+      row('stamp-old')!.querySelector<HTMLButtonElement>('button[aria-label="Delete stamp Old guild"]')!.click()
+      await flushEffects()
+    })
+    await confirmWithKeyboard('stamp-old')
+    expect(row('stamp-old')).toBeNull()
+    expect(document.activeElement).toBe(row('stamp-3')!.querySelector('[data-saved-stamp-grip]'))
+
+    // The last row: focus goes to the previous one.
+    await act(async () => {
+      row('stamp-3')!.querySelector<HTMLButtonElement>('button[aria-label^="More actions for "]')!.click()
+    })
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('button[aria-label="Delete"]')!.click()
+      await flushEffects()
+    })
+    await confirmWithKeyboard('stamp-3')
+    expect(row('stamp-3')).toBeNull()
+    expect(document.activeElement).toBe(row('stamp-1')!.querySelector('[data-saved-stamp-grip]'))
+
+    // The only row: focus goes to the Saved stamps heading above the empty list.
+    await openStampActions()
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('button[aria-label="Delete"]')!.click()
+      await flushEffects()
+    })
+    await confirmWithKeyboard('stamp-1')
+    expect(row('stamp-1')).toBeNull()
+    expect(document.activeElement).toBe(document.getElementById('saved-object-stamps-title'))
+  })
+
   it('keeps keyboard focus in the row through Delete and Cancel from the row actions menu', async () => {
     await act(async () => {
       render(<FavoritesPanel />, container)

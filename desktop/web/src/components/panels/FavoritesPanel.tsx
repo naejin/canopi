@@ -405,7 +405,7 @@ export function FavoritesPanel() {
         >
           <div className={styles.frameHeader}>
             <div className={styles.savedStampsTitleGroup}>
-              <span id="saved-object-stamps-title" className={styles.title}>
+              <span id="saved-object-stamps-title" className={styles.title} tabIndex={-1}>
                 {t('savedObjectStamps.title')}
               </span>
             </div>
@@ -781,6 +781,7 @@ function SavedObjectStampRow({
   const renameInputRef = useRef<HTMLInputElement>(null)
   const actionsRef = useRef<HTMLDivElement>(null)
   const cancelDeleteRef = useRef<HTMLButtonElement>(null)
+  const rowRef = useRef<HTMLDivElement>(null)
   // Set when the user opens or cancels the Delete confirmation, whose buttons replace the one that had focus.
   const deleteConfirmToggledRef = useRef(false)
   // Canopi 2.0 cannot place, drag, export or convert a stamp saved before 2.0 (ADR 0021): it offers only Delete.
@@ -819,6 +820,30 @@ function SavedObjectStampRow({
     setConfirmingDelete(next)
   }
 
+  // The deleted row takes the focused Confirm with it: once it is gone, focus the next row, else the previous
+  // one, else the list's heading, unless focus has already gone somewhere else.
+  const focusAfterDeleteRef = useRef<HTMLElement | null>(null)
+  useEffect(() => () => {
+    const target = focusAfterDeleteRef.current
+    if (!target) return
+    queueMicrotask(() => {
+      const active = document.activeElement
+      if (active && active !== document.body && active.isConnected) return
+      if (target.isConnected) target.focus()
+    })
+  }, [])
+
+  function confirmDelete(): void {
+    const row = rowRef.current
+    const neighbour = (row?.nextElementSibling ?? row?.previousElementSibling)?.querySelector<HTMLElement>('[data-saved-stamp-grip]')
+    focusAfterDeleteRef.current = neighbour
+      ?? row?.closest('[data-saved-stamps-frame]')?.querySelector<HTMLElement>('#saved-object-stamps-title')
+      ?? null
+    void savedObjectStampWorkbench.deleteStamp(stamp.id).then((deleted) => {
+      if (!deleted) focusAfterDeleteRef.current = null
+    })
+  }
+
   function commitRename(): void {
     const next = (renameInputRef.current?.value ?? draftName).trim()
     if (next.length === 0) {
@@ -854,6 +879,7 @@ function SavedObjectStampRow({
 
   return (
     <div
+      ref={rowRef}
       className={styles.savedStampRow}
       role="listitem"
       data-saved-stamp-row={stamp.id}
@@ -942,7 +968,7 @@ function SavedObjectStampRow({
               className={styles.savedStampDangerButton}
               aria-label={t('savedObjectStamps.confirmDelete')}
               aria-describedby={deleteCopyId}
-              onClick={() => void savedObjectStampWorkbench.deleteStamp(stamp.id)}
+              onClick={confirmDelete}
             >
               {t('savedObjectStamps.confirmDelete')}
             </button>
