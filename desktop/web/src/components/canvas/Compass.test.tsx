@@ -148,19 +148,44 @@ describe('Compass', () => {
     expect(bearing()).toBeCloseTo(100, 6)
   })
 
-  it('a press on the needle that drifts past 3 px stays a click', () => {
+  it('a press on the needle that drifts past 3 px turns nothing and is no click', () => {
     vi.useFakeTimers()
     mount(30)
-    // A tap lands on the needle beside the centre and rolls 3.6 px across it: near the centre the pointer's angle
-    // means nothing, so the press neither turns the view nor stops being the reset the user meant.
+    // A press lands on the needle beside the centre and rolls 3.6 px across it: past 3 px it is a drag (spec §4.2), and
+    // near the centre the pointer's angle means nothing, so the view does not turn.
     pointer(compass(), 'pointerdown', { x: CENTRE.x + 1, y: CENTRE.y })
     pointer(compass(), 'pointermove', { x: CENTRE.x - 2, y: CENTRE.y + 2 })
     expect(bearing()).toBe(30)
-    expect(compass().dataset.dragging).toBeUndefined()
     pointer(compass(), 'pointerup', { x: CENTRE.x - 2, y: CENTRE.y + 2 })
     act(() => { compass().click() })
     act(() => { vi.advanceTimersByTime(TURN_MS) })
-    expect(bearing()).toBe(0)
+    expect(bearing()).toBe(30)
+  })
+
+  it('a drag from the face into the needle is no click', () => {
+    vi.useFakeTimers()
+    mount(30)
+    // 10 px of travel straight in to the centre: a drag, so its release does not reset north.
+    pointer(compass(), 'pointerdown', { x: CENTRE.x + 10, y: CENTRE.y })
+    pointer(compass(), 'pointermove', { x: CENTRE.x + 5, y: CENTRE.y })
+    pointer(compass(), 'pointermove', CENTRE)
+    pointer(compass(), 'pointerup', CENTRE)
+    act(() => { compass().click() })
+    act(() => { vi.advanceTimersByTime(TURN_MS) })
+    expect(bearing()).toBe(30)
+  })
+
+  it('a drag that stays on the needle across the centre is no click', () => {
+    vi.useFakeTimers()
+    mount(30)
+    // From 5 px on one side of the centre to 5 px on the other: 10 px of travel, all of it inside the needle.
+    pointer(compass(), 'pointerdown', { x: CENTRE.x - 5, y: CENTRE.y })
+    pointer(compass(), 'pointermove', CENTRE)
+    pointer(compass(), 'pointermove', { x: CENTRE.x + 5, y: CENTRE.y })
+    pointer(compass(), 'pointerup', { x: CENTRE.x + 5, y: CENTRE.y })
+    act(() => { compass().click() })
+    act(() => { vi.advanceTimersByTime(TURN_MS) })
+    expect(bearing()).toBe(30)
   })
 
   it('a drag across the centre takes up the angle again on the far side and never flips the view', () => {
