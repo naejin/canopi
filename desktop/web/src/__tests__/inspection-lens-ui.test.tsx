@@ -19,7 +19,7 @@ it('opens the optional lens, identifies plants and releases the view on Escape',
   document.body.appendChild(root)
   const view: CanvasInspectionHandle = {
     state: signal({ point: { x: 0, y: 0 }, scale: 10, zoomPercent: 700, previewAvailable: true, frame: { width: 430, height: 390 },
-      plants: [{ id: 'mint', name: 'Menthe verte', position: { x: 0, y: 0 }, distanceM: 0,
+      plants: [{ id: 'mint', name: 'Menthe verte',
         screenPosition: { x: 215, y: 195 }, label: { x: 160, y: 208, width: 110, height: 24, lines: ['Menthe verte'] } }] }),
     // Today's rect at the identity main view: the 430 x 390 px preview at 10 px/m is 43 x 39 m about the origin.
     sourceQuad: signal<InspectionSourceQuad | null>([{ x: -21.5, y: -19.5 }, { x: 21.5, y: -19.5 }, { x: 21.5, y: 19.5 }, { x: -21.5, y: 19.5 }]),

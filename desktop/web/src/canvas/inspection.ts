@@ -10,8 +10,6 @@ export interface InspectionLabel extends InspectionPoint {
 export interface InspectedPlant {
   readonly id: string
   readonly name: string
-  readonly position: InspectionPoint
-  readonly distanceM: number
   readonly screenPosition: InspectionPoint
   readonly label: InspectionLabel | null
 }

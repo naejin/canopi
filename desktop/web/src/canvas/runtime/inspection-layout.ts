@@ -19,7 +19,7 @@ function byDistance(plants: readonly ScenePlantEntity[], centre: InspectionPoint
  * The lens scale in preview pixels per metre: 100 px between the median of the nearest seven plants and their neighbours,
  * within 140–600, times the lens magnification. The lens builds its view from it (inspection-lens.ts), then lays out.
  */
-export function inspectionScale(plants: readonly ScenePlantEntity[], centre: InspectionPoint, magnification = 1): number {
+export function inspectionScale(plants: readonly ScenePlantEntity[], centre: InspectionPoint, magnification: number): number {
   const spacing = byDistance(plants, centre).slice(0, 7).map((plant) => nearestPlantSpacing(plants, plant.position)).sort((a, b) => a - b)
   return Math.max(140, Math.min(600, 100 / (spacing[Math.floor(spacing.length / 2)] ?? Infinity))) * magnification
 }
@@ -39,7 +39,7 @@ export function inspectionLayout(plants: readonly ScenePlantEntity[], lensView: 
     .filter(({ screenPosition: p }) => p.x >= 0 && p.y >= 0 && p.x <= frame.width && p.y <= frame.height)
   const occupied = new LabelCollisionIndex()
   for (const { screenPosition: p } of visible) occupied.add({ x: p.x - 10, y: p.y - 10, width: 20, height: 20 })
-  return visible.map(({ plant, distanceM, screenPosition: p }) => {
+  return visible.map(({ plant, screenPosition: p }) => {
     const name = names.get(plant.canonicalName)?.trim() || plant.commonName?.trim() || plant.canonicalName
     const lines = wrapName(name, Math.max(1, Math.min(220, frame.width - 24) - 8), measure)
     const width = Math.max(...lines.map(measure)) + 8, height = lines.length * INSPECTION_TYPE.line + 8
@@ -52,7 +52,7 @@ export function inspectionLayout(plants: readonly ScenePlantEntity[], lensView: 
       .find(box => box.x >= 4 && box.y >= 4 && box.x + width <= frame.width - 4 && box.y + height <= frame.height - 4 && !occupied.overlaps(box))
     let label: InspectionLabel | null = null
     if (bounds) { occupied.add(bounds); label = { ...bounds, lines } }
-    return { id: plant.id, name, position: { ...plant.position }, distanceM, screenPosition: p, label }
+    return { id: plant.id, name, screenPosition: p, label }
   })
 }
 
