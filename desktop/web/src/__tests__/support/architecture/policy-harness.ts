@@ -195,7 +195,8 @@ export function collectArchitecturePolicyViolations(
  * name only the files they plant, so only this check's own tests plant one). Package specifiers, `#` aliases and
  * other non-`src/` entries, `forbid-calls` callee text, `forbid-writes` target
  * text, `exceptFrom`, `exceptTargets`, `allowTypeOnlyTargets` and
- * `source-tombstones` (whose paths are meant to be absent) are not checked.
+ * `source-tombstones` (whose paths are meant to be absent) are not checked;
+ * `collectUnusedExemptionViolations` reports an `exceptFrom` that excuses nothing.
  */
 export function collectPolicyPathDriftViolations(
   graph: readonly TypeScriptSourceFact[],
@@ -237,6 +238,41 @@ export function collectPolicyPathDriftViolations(
       case 'confine-symbols':
         check(policy, 'allowedFrom', policy.allowedFrom, isSourcePath)
         break
+    }
+  }
+
+  return violations
+}
+
+/**
+ * Reports source exemptions that excuse nothing: an `exceptFrom` or `allowedFrom` entry is unused when, with every
+ * entry of that list removed, no new violation comes from a source it matches. An exemption that permits what no file
+ * does can only hide a regression, so drop it. Entries in `ignored` (the test-source patterns most rules carry) are
+ * not reported. Run it on the graph each policy list is checked against.
+ */
+export function collectUnusedExemptionViolations(
+  graph: readonly TypeScriptSourceFact[],
+  policies: readonly ArchitecturePolicy[],
+  ignored: readonly string[] = [],
+): string[] {
+  const violations: string[] = []
+
+  for (const policy of policies) {
+    const field = 'exceptFrom' in policy && policy.exceptFrom
+      ? 'exceptFrom'
+      : 'allowedFrom' in policy ? 'allowedFrom' : null
+    if (!field) continue
+    const entries = (policy as unknown as Record<string, readonly string[]>)[field]!
+    const baseline = new Set(collectArchitecturePolicyViolations(graph, [policy]))
+    const unexempted = { ...policy, [field]: [] } as ArchitecturePolicy
+    const excusedSources = collectArchitecturePolicyViolations(graph, [unexempted])
+      .filter((violation) => !baseline.has(violation))
+      .map((violation) => /^\[[^\]]*\] ([^\s:]+)/.exec(violation)?.[1] ?? '')
+
+    for (const entry of entries) {
+      if (ignored.includes(entry)) continue
+      if (excusedSources.some((path) => matchesPathPattern(path, entry))) continue
+      violations.push(`[${policy.name}] ${field} entry excuses nothing: ${entry}`)
     }
   }
 

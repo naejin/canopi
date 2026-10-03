@@ -10,6 +10,7 @@ import {
 import {
   collectArchitecturePolicyViolations,
   collectPolicyPathDriftViolations,
+  collectUnusedExemptionViolations,
   type ArchitecturePolicy,
 } from './support/architecture/policy-harness'
 
@@ -251,10 +252,7 @@ const FORBIDDEN_IMPORT_POLICIES = [
     kind: 'forbid-imports',
     name: 'App-facing tests use explicit Canvas Runtime surfaces',
     from: ['src/__tests__/**/*.test.ts', 'src/__tests__/**/*.test.tsx'],
-    exceptFrom: [
-      'src/__tests__/canvas-runtime-surfaces.test.ts',
-      'src/__tests__/frontend-architecture-policies.test.ts',
-    ],
+    exceptFrom: ['src/__tests__/canvas-runtime-surfaces.test.ts'],
     targets: ['src/canvas/runtime/scene-runtime.ts'],
   },
   {
@@ -487,14 +485,14 @@ const FORBIDDEN_IMPORT_POLICIES = [
     kind: 'forbid-imports',
     name: 'Canvas Runtime core stays free of app imports',
     from: ['src/canvas/runtime/**'],
-    exceptFrom: ['src/canvas/runtime/**/*.test.ts', 'src/canvas/runtime/**/*.test.tsx'],
+    exceptFrom: ['src/canvas/runtime/**/*.test.ts'],
     targets: ['src/app.tsx', 'src/app/**'],
   },
   {
     kind: 'forbid-transitive-imports',
     name: 'Canvas Runtime translations and settings stay behind the App Adapter',
     from: ['src/canvas/runtime/**'],
-    exceptFrom: ['src/canvas/runtime/**/*.test.ts', 'src/canvas/runtime/**/*.test.tsx'],
+    exceptFrom: ['src/canvas/runtime/**/*.test.ts'],
     targets: ['src/i18n/**', 'src/app/settings/**', 'src/app/canvas-settings/**'],
   },
   {
@@ -1868,17 +1866,15 @@ const SYMBOL_OWNERSHIP_POLICIES = [
  */
 const MAP_RECEIVER_TARGETS = ['*map.*', '*map!.*', '*map?.*', '*Map.*', '*Map!.*', '*Map?.*'] as const
 
-/** The World map drives its own north-up map without a camera driver, so P1 and P2 exempt it. */
-const WORLD_MAP_SOURCES = ['src/maplibre/world-map.ts', 'src/components/world-map/**'] as const
+/** The World map's components drive their own north-up map without a camera driver, so P1 exempts them. */
+const WORLD_MAP_SOURCES = ['src/components/world-map/**'] as const
 
 /** P5's and P5c's scope: every tool module. */
 const TOOLS_SOURCES = 'src/canvas/runtime/tools/**'
 
-/** The tools' own seams, which P5 and P5c exempt: the host, the registry and the two scene indexes. */
+/** The tools' own seams, which P5 exempts: the host and the scene index. */
 const TOOL_SEAM_SOURCES = [
   'src/canvas/runtime/tools/tool-host.ts',
-  'src/canvas/runtime/tools/registry.ts',
-  'src/canvas/runtime/tools/snapping.ts',
   'src/canvas/runtime/tools/spatial-index.ts',
 ] as const
 
@@ -1887,10 +1883,7 @@ const P2_PROJECTION_POLICY = {
   kind: 'forbid-calls',
   name: 'P2 nobody projects through MapLibre',
   from: ['src/**'],
-  exceptFrom: [
-    ...WORLD_MAP_SOURCES,
-    ...TEST_SOURCE_PATTERNS,
-  ],
+  exceptFrom: [...TEST_SOURCE_PATTERNS],
   targets: [...MAP_RECEIVER_TARGETS],
   properties: ['project', 'unproject'],
 } satisfies ArchitecturePolicy
@@ -1942,10 +1935,10 @@ const CANVAS_V2_POLICIES = [
     ],
   },
   {
+    // World-to-screen is a ViewTransform method (view/view-transform.ts builds it); no module exports a free one.
     kind: 'forbid-exports',
-    name: 'P3 only the view transform module exports worldToScreen or screenToWorld',
+    name: 'P3 no module exports a free worldToScreen or screenToWorld',
     from: ['src/**'],
-    exceptFrom: ['src/canvas/runtime/view/view-transform.ts'],
     names: ['worldToScreen', 'screenToWorld'],
   },
   {
@@ -1983,7 +1976,7 @@ const CANVAS_V2_POLICIES = [
   },
   {
     // A tool reads the shared vocabulary from interaction-types.ts (type-only imports), never interaction-ports.ts;
-    // the host, the registry and the two scene indexes are the tools' own seams (ADR 0018).
+    // the host and the scene index are the tools' own seams (ADR 0018).
     kind: 'forbid-imports',
     name: 'P5 tools import no MapLibre, DOM or Pixi',
     from: [TOOLS_SOURCES],
@@ -2012,7 +2005,7 @@ const CANVAS_V2_POLICIES = [
     kind: 'forbid-transitive-imports',
     name: 'P5c tools reach no MapLibre or Pixi through other modules',
     from: [TOOLS_SOURCES],
-    exceptFrom: [...TOOL_SEAM_SOURCES, ...TEST_SOURCE_PATTERNS],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
     targets: ['maplibre-gl', 'pixi.js', 'src/maplibre/**'],
   },
   {
@@ -2058,7 +2051,7 @@ const CANVAS_V2_POLICIES = [
     name: 'P7 the input core reaches no browser global or DOM event',
     from: ['src/canvas/runtime/input/**'],
     names: ['window', 'document', 'Date', 'performance', 'setTimeout', 'navigator', 'PointerEvent', 'WheelEvent'],
-    allowedFrom: ['src/canvas/runtime/input/dom-input-source.ts', 'src/canvas/runtime/input/selection-drag-guard.ts', ...TEST_SOURCE_PATTERNS],
+    allowedFrom: ['src/canvas/runtime/input/dom-input-source.ts', ...TEST_SOURCE_PATTERNS],
   },
   {
     // Per-frame view data stays in the runtime and the map layer; the overview pin's ViewReadSurface.designPin is the
@@ -2117,7 +2110,7 @@ const CANVAS_V2_POLICIES = [
     kind: 'forbid-calls',
     name: 'P9 app code calls no tool surface setTool but through armCanvasTool',
     from: ['src/app/**', 'src/components/**', 'src/web/**', 'src/canvas/*-source.ts'],
-    exceptFrom: ['src/app/keyboard/arming.ts', ...TEST_SOURCE_PATTERNS],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
     properties: ['setTool'],
   },
   {
@@ -2544,6 +2537,60 @@ describe('declarative frontend architecture policies', () => {
     ])).toEqual([])
   }, 20_000)
 
+  it('names only source exemptions that excuse a real file', () => {
+    // Each kept entry names why it stays although nothing needs it today.
+    const kept = [
+      // Non-canvas rules that match nothing; the next commit drops them.
+      '[Web settings mutations use the shared Settings Projection] allowedFrom entry excuses nothing: src/web/BrowserAppShell.tsx',
+      '[Web settings mutations use the shared Settings Projection] allowedFrom entry excuses nothing: src/web/browser-shell-commands.ts',
+      '[Committed Design state stays private to the document store] allowedFrom entry excuses nothing: src/app/document-session/store.ts',
+      '[Design mutation capability calls stay in store and Design Edit core] exceptFrom entry excuses nothing: src/app/document-session/store.ts',
+      '[Design mutation capability calls stay in store and Design Edit core] exceptFrom entry excuses nothing: src/app/design-edit/core.ts',
+      // Label admission projects anchors once phase R lands; drop it at the R close if R does not project.
+      '[P12 the renderer learns the camera one way] allowedFrom entry excuses nothing: src/canvas/runtime/renderers/label-admission.ts',
+    ]
+    const graph = discoveredSourceGraph()
+    const runtime = runtimeGraph(graph)
+    expect([
+      ...collectUnusedExemptionViolations(graph, FRONTEND_ARCHITECTURE_POLICIES, TEST_SOURCE_PATTERNS),
+      ...collectUnusedExemptionViolations(runtime, SHARED_RUNTIME_GRAPH_POLICIES, TEST_SOURCE_PATTERNS),
+      ...collectUnusedExemptionViolations(
+        resolveWebEditionAliases(runtime),
+        WEB_EDITION_RUNTIME_GRAPH_POLICIES,
+        TEST_SOURCE_PATTERNS,
+      ),
+      ...collectUnusedExemptionViolations(runtime, BROWSER_WORKSPACE_GRAPH_POLICIES, TEST_SOURCE_PATTERNS),
+      ...collectUnusedExemptionViolations(runtime, TOOL_HOST_RUNTIME_GRAPH_POLICIES, TEST_SOURCE_PATTERNS),
+    ]).toEqual(kept)
+  }, 60_000)
+
+  it('reports an exceptFrom or allowedFrom entry that excuses nothing, but not an ignored one', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/app/uses.ts', ["import { invoke } from '@tauri-apps/api/core'", 'export const live = invoke']),
+      plantedSource('src/app/clean.ts', ['export const clean = 1']),
+    ])
+
+    expect(collectUnusedExemptionViolations(graph, [
+      {
+        kind: 'forbid-imports',
+        name: 'Planted exceptFrom',
+        from: ['src/app/**'],
+        exceptFrom: ['src/app/uses.ts', 'src/app/clean.ts', 'src/app/gone/**', 'src/**/*.test.ts'],
+        targets: ['@tauri-apps/**'],
+      },
+      {
+        kind: 'confine-symbols',
+        name: 'Planted allowedFrom',
+        names: ['live'],
+        allowedFrom: ['src/app/uses.ts', 'src/app/clean.ts'],
+      },
+    ], ['src/**/*.test.ts'])).toEqual([
+      '[Planted exceptFrom] exceptFrom entry excuses nothing: src/app/clean.ts',
+      '[Planted exceptFrom] exceptFrom entry excuses nothing: src/app/gone/**',
+      '[Planted allowedFrom] allowedFrom entry excuses nothing: src/app/clean.ts',
+    ])
+  })
+
   it('rejects a policy glob from that matches no source', () => {
     const graph = createTypeScriptSourceGraph([PATH_DRIFT_LIVE_SOURCE])
 
@@ -2675,7 +2722,7 @@ const P1_MAP_RECEIVERS = '[P1 only the camera driver stops, pans, zooms, resizes
 const P1_MAP_TYPE = '[P1 the camera driver imports the MapLibre map type]'
 const P2 = '[P2 nobody projects through MapLibre]'
 const P3_SYMBOLS = '[P3 the legacy camera, its viewport snapshots and the planar camera maths stay deleted]'
-const P3_EXPORTS = '[P3 only the view transform module exports worldToScreen or screenToWorld]'
+const P3_EXPORTS = '[P3 no module exports a free worldToScreen or screenToWorld]'
 const P3_BUILDER = '[P3 only the view module, the camera driver and the lens build a view transform]'
 const P4_IMPORTS = '[P4 the view module imports only its pure dependencies]'
 const P5_IMPORTS = '[P5 tools import no MapLibre, DOM or Pixi]'
@@ -2706,7 +2753,7 @@ const PLANTED_CAMERA_DRIVER = plantedSource('src/maplibre/camera-driver.ts', [
 ])
 
 describe('canvas v2 policies', () => {
-  it('P1 rejects camera moves and resizes on a map outside the camera driver and the World map', () => {
+  it('P1 rejects camera moves and resizes on a map outside the camera driver and the World map components', () => {
     const graph = createTypeScriptSourceGraph([
       PLANTED_MAP_LOADER,
       PLANTED_CAMERA_DRIVER,
@@ -2732,6 +2779,7 @@ describe('canvas v2 policies', () => {
       `${P1_CAMERA_METHODS} src/maplibre/planted.ts:1 calls instance.easeTo`,
       `${P1_CAMERA_METHODS} src/maplibre/planted.ts:2 calls this.mapInstance.jumpTo`,
       `${P1_CAMERA_METHODS} src/maplibre/planted.ts:3 calls map.flyTo!`,
+      `${P1_CAMERA_METHODS} src/maplibre/world-map.ts:1 calls map.jumpTo`,
       `${P1_MAP_RECEIVERS} src/maplibre/planted.ts:4 calls map.resetNorth`,
       `${P1_MAP_RECEIVERS} src/maplibre/planted.ts:5 calls this.map!.zoomIn`,
       `${P1_MAP_RECEIVERS} src/maplibre/planted.ts:6 calls workspaceMap?.resize`,
@@ -2757,7 +2805,7 @@ describe('canvas v2 policies', () => {
     ])
   })
 
-  it('P2 rejects map projections outside the World map', () => {
+  it('P2 rejects map projections everywhere but tests, the World map included', () => {
     const graph = createTypeScriptSourceGraph([
       plantedSource('src/maplibre/planted.ts', [
         'map.project([1, 2]);',
@@ -2776,6 +2824,7 @@ describe('canvas v2 policies', () => {
       `${P2} src/maplibre/planted.ts:2 calls this.map?.unproject`,
       `${P2} src/maplibre/planted.ts:3 calls workspaceMap!.project`,
       `${P2} src/maplibre/shared-scene-layer.ts:1 calls map!.project`,
+      `${P2} src/components/world-map/WorldMapSurface.tsx:1 calls map.project`,
     ])
   })
 
@@ -2803,7 +2852,7 @@ describe('canvas v2 policies', () => {
     ])
   })
 
-  it('P3 rejects a world-to-screen export outside the view transform module', () => {
+  it('P3 rejects a free world-to-screen export, the view transform module included', () => {
     const graph = createTypeScriptSourceGraph([
       plantedSource('src/canvas/runtime/view/view-transform.ts', [
         'export function worldToScreen(p: number) { return p }',
@@ -2822,6 +2871,8 @@ describe('canvas v2 policies', () => {
     ])
 
     expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P3'))).toEqual([
+      `${P3_EXPORTS} src/canvas/runtime/view/view-transform.ts exports forbidden symbol worldToScreen`,
+      `${P3_EXPORTS} src/canvas/runtime/view/view-transform.ts exports forbidden symbol screenToWorld`,
       `${P3_EXPORTS} src/canvas/runtime/annotation-layout.ts exports forbidden symbol worldToScreen`,
       `${P3_EXPORTS} src/canvas/projection.ts exports forbidden symbol screenToWorld`,
     ])
@@ -3012,6 +3063,7 @@ describe('canvas v2 policies, end of 0B', () => {
     expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P5c'))).toEqual([
       `${P5C} src/canvas/runtime/tools/tool.ts transitively imports src/maplibre/loader.ts via src/canvas/runtime/tools/tool.ts -> src/canvas/runtime/runtime.ts -> src/canvas/runtime/legacy-shim.ts -> src/maplibre/loader.ts`,
       `${P5C} src/canvas/runtime/tools/polygon.ts transitively imports pixi.js via src/canvas/runtime/tools/polygon.ts -> src/canvas/runtime/helper.ts -> pixi.js`,
+      `${P5C} src/canvas/runtime/tools/tool-host.ts transitively imports src/maplibre/loader.ts via src/canvas/runtime/tools/tool-host.ts -> src/maplibre/loader.ts`,
     ])
   })
 
@@ -3081,7 +3133,7 @@ describe('canvas v2 policies, end of 0B', () => {
     expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P7'))).toEqual(
       confined.map(
         (name) =>
-          `${P7} src/canvas/runtime/input/recognise.ts contains confined symbol ${name}; allowed sources: src/canvas/runtime/input/dom-input-source.ts, src/canvas/runtime/input/selection-drag-guard.ts, ${TEST_SOURCES}`,
+          `${P7} src/canvas/runtime/input/recognise.ts contains confined symbol ${name}; allowed sources: src/canvas/runtime/input/dom-input-source.ts, ${TEST_SOURCES}`,
       ),
     )
   })
@@ -3265,6 +3317,7 @@ describe('canvas v2 policies, end of 0B', () => {
 
     expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P9').filter(({ kind }) => kind !== 'require-imports'))).toEqual([
       `${P9_SYMBOLS} src/components/canvas/Planted.tsx contains confined symbol selectCanvasTool; allowed sources: src/app/keyboard/arming.ts, src/canvas/session.ts, src/canvas/session-state.ts, src/canvas/runtime/command-surface.ts, ${TEST_SOURCES}`,
+      `${P9_CALLS} src/app/keyboard/arming.ts:2 calls surface.setTool`,
       `${P9_CALLS} src/components/canvas/Planted.tsx:2 calls surface.setTool`,
       `${P9_CALLS} src/components/canvas/Planted.tsx:3 calls tools?.setTool`,
       `${P9_CALLS} src/components/canvas/Planted.tsx:4 calls commands!['setTool']`,
