@@ -27,9 +27,50 @@ use std::sync::atomic::AtomicBool;
 
 /// Canonical NoData used for a layer whose first source declares none.
 pub const FALLBACK_NODATA: f32 = -99999.0;
-/// Most cells one whole-raster read into memory may hold (analysis blocks and
-/// test oracles). Item reads never materialize a whole raster.
+/// Most cells one whole-raster read into memory may hold (analysis blocks,
+/// test oracles, and the conversions that cannot stream: formats other than
+/// GeoTIFF and GeoTIFFs with one huge compressed chunk). It is also the row
+/// window budget of a streamed conversion. Item reads never materialize a
+/// whole raster.
 pub(crate) const MAX_RAW_EXTRACTION_CELLS: u64 = 25_000_000;
+
+/// The whole-raster limit in force on this thread: the production constant,
+/// or the lower bound a test installed through [`extraction_limit_probe`].
+pub(crate) fn raw_extraction_cells() -> u64 {
+    #[cfg(test)]
+    if let Some(cells) = extraction_limit_probe::overridden() {
+        return cells;
+    }
+    MAX_RAW_EXTRACTION_CELLS
+}
+
+#[cfg(test)]
+thread_local! {
+    static EXTRACTION_LIMIT: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+}
+
+/// Test-only seam for the whole-raster limit, thread-local like
+/// `admission::limits_probe`, so a lowered limit reaches only its own test.
+#[cfg(test)]
+pub(crate) mod extraction_limit_probe {
+    pub(crate) fn overridden() -> Option<u64> {
+        super::EXTRACTION_LIMIT.with(std::cell::Cell::get)
+    }
+
+    /// Hold the limit at `cells` until the guard is dropped.
+    pub(crate) fn set(cells: u64) -> Guard {
+        super::EXTRACTION_LIMIT.with(|slot| slot.set(Some(cells)));
+        Guard
+    }
+
+    pub(crate) struct Guard;
+
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            super::EXTRACTION_LIMIT.with(|slot| slot.set(None));
+        }
+    }
+}
 
 /// What reading an item's sources costs: each source across its full native
 /// grid. NoData is charged too, because a mostly-NoData source still costs
@@ -374,9 +415,10 @@ pub(crate) fn validate_working_grid(grid: &RasterGrid, operation: &str) -> Resul
     let cells = u64::from(grid.width)
         .checked_mul(u64::from(grid.height))
         .ok_or_else(|| format!("{operation} dimensions overflow"))?;
-    if cells > MAX_RAW_EXTRACTION_CELLS {
+    let limit = raw_extraction_cells();
+    if cells > limit {
         return Err(format!(
-            "{operation} requires {cells} cells; a whole-raster read is limited to {MAX_RAW_EXTRACTION_CELLS}"
+            "{operation} requires {cells} cells; a whole-raster read is limited to {limit}"
         ));
     }
     Ok(())
@@ -584,10 +626,10 @@ fn stage_source(
         height: probe.height,
         geotransform: probe.geotransform,
     };
-    // No working-area check here: the engine converts the source into the
-    // retained COG under its own capacity rule and its facts are read from
-    // that COG in bounded windows. The item's bound is the admission
-    // processing budget.
+    // No working-area check here: the engine streams a GeoTIFF into the
+    // retained COG in row windows (anything it must load whole passes its
+    // capacity rule) and the facts are read from that COG in bounded
+    // windows. The item's bound is the admission processing budget.
     validate_lattice(&source_grid, "source raster")?;
     let (source_cog, valid_cells) = stage_source_samples(
         engine,

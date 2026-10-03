@@ -6,11 +6,15 @@
 //! coordinate reference systems. Nothing is bundled or discovered at run
 //! time; the engine is always available and its version names the crates.
 //!
-//! Memory: every conversion holds one Float32 band and, for the display
-//! profile, its overview cascade. The library's capacity limit
-//! (`import::MAX_RAW_EXTRACTION_CELLS`) is checked before any band is loaded,
-//! with the same named reason every whole-raster read gives. Cancellation is
-//! honoured between strips, tiles and levels.
+//! Memory: a GeoTIFF converts through the one writer in row windows of at
+//! most the library's capacity limit (`import::MAX_RAW_EXTRACTION_CELLS`),
+//! whatever its size; each overview level is averaged from the level before
+//! it, read back from the file being written. Beside the windows the writer
+//! holds one output tile and the reader one decoded chunk of at most
+//! `tiff::MAX_STREAMED_CHUNK_BYTES`. Other formats, and a GeoTIFF with a
+//! larger compressed chunk, are loaded whole after the capacity check, with
+//! the same named reason every whole-raster read gives. Cancellation is
+//! honoured between windows, chunks and levels.
 
 mod cog;
 #[cfg(test)]
@@ -27,7 +31,7 @@ use super::engine::{
     RasterEngine, RasterGeoref, RasterInput, RasterProbe, bounds_of, check_cancel, grid_corners,
 };
 use super::grid::RasterGrid;
-use super::import::validate_working_grid;
+use super::import::{raw_extraction_cells, validate_working_grid};
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use wbgeotiff::tags::Compression;
@@ -46,25 +50,116 @@ pub(super) fn engine_version() -> String {
     )
 }
 
+/// Band samples a conversion holds outside its fixed working set (one output
+/// tile and one decoded source chunk): row windows, halving windows and whole
+/// loads. Tests read their high-water mark through [`high_water`];
+/// production builds keep no count.
+pub(super) struct Cells {
+    samples: Vec<f32>,
+}
+
+impl Cells {
+    pub(super) fn new(samples: Vec<f32>) -> Self {
+        #[cfg(test)]
+        high_water::add(samples.len() as u64);
+        Self { samples }
+    }
+
+    pub(super) fn zeroed(len: usize) -> Self {
+        Self::new(vec![0.0; len])
+    }
+
+    /// The samples, no longer counted as held by the conversion.
+    pub(super) fn into_vec(mut self) -> Vec<f32> {
+        // Drop counts what is left, which is nothing once taken.
+        #[cfg(test)]
+        high_water::remove(self.samples.len() as u64);
+        std::mem::take(&mut self.samples)
+    }
+}
+
+impl std::ops::Deref for Cells {
+    type Target = [f32];
+
+    fn deref(&self) -> &[f32] {
+        &self.samples
+    }
+}
+
+impl std::ops::DerefMut for Cells {
+    fn deref_mut(&mut self) -> &mut [f32] {
+        &mut self.samples
+    }
+}
+
+#[cfg(test)]
+impl Drop for Cells {
+    fn drop(&mut self) {
+        high_water::remove(self.samples.len() as u64);
+    }
+}
+
+/// Test-only high-water mark of [`Cells`] on this thread.
+#[cfg(test)]
+pub(super) mod high_water {
+    use std::cell::Cell;
+
+    thread_local! {
+        /// `(held now, most held since the last reset)`.
+        static CELLS: Cell<(u64, u64)> = const { Cell::new((0, 0)) };
+    }
+
+    pub(super) fn add(cells: u64) {
+        CELLS.with(|slot| {
+            let (now, peak) = slot.get();
+            slot.set((now + cells, peak.max(now + cells)));
+        });
+    }
+
+    pub(super) fn remove(cells: u64) {
+        CELLS.with(|slot| {
+            let (now, peak) = slot.get();
+            slot.set((now.saturating_sub(cells), peak));
+        });
+    }
+
+    /// Start a new measurement from what is held now.
+    pub(super) fn reset() {
+        CELLS.with(|slot| {
+            let (now, _) = slot.get();
+            slot.set((now, now));
+        });
+    }
+
+    pub(super) fn peak() -> u64 {
+        CELLS.with(|slot| slot.get().1)
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RustRasterEngine;
 
 /// A band ready to be written: its placement, CRS and validity rule.
-struct Prepared {
+struct Prepared<'a> {
     grid: RasterGrid,
     crs: crs::ResolvedCrs,
     nodata: Option<f32>,
-    samples: Vec<f32>,
+    band: PreparedBand<'a>,
+}
+
+enum PreparedBand<'a> {
+    Samples(&'a [f32]),
+    Source(source::Band),
 }
 
 impl RustRasterEngine {
-    fn prepare(
-        input: RasterInput<'_>,
+    fn prepare<'a>(
+        input: RasterInput<'a>,
         georef: Option<RasterGeoref<'_>>,
         nodata: Option<f32>,
         operation: &str,
         cancel: &AtomicBool,
-    ) -> Result<Prepared, String> {
+    ) -> Result<Prepared<'a>, String> {
         check_cancel(cancel)?;
         match input {
             RasterInput::Samples { grid, values } => {
@@ -88,55 +183,74 @@ impl RustRasterEngine {
                     grid: grid.clone(),
                     crs: crs::from_reference(georef.crs)?,
                     nodata,
-                    samples: values.to_vec(),
+                    band: PreparedBand::Samples(values),
                 })
             }
             RasterInput::File(path) => {
-                let loaded = source::load(path, operation, cancel)?;
+                let opened = source::open(path, operation, cancel)?;
                 check_cancel(cancel)?;
                 let (grid, crs) = match georef {
                     Some(georef) => {
-                        if georef.grid.width != loaded.grid.width
-                            || georef.grid.height != loaded.grid.height
+                        if georef.grid.width != opened.grid.width
+                            || georef.grid.height != opened.grid.height
                         {
                             return Err(format!(
                                 "the georeference is {}x{} but {} is {}x{}",
                                 georef.grid.width,
                                 georef.grid.height,
                                 path.display(),
-                                loaded.grid.width,
-                                loaded.grid.height
+                                opened.grid.width,
+                                opened.grid.height
                             ));
                         }
                         (georef.grid.clone(), crs::from_reference(georef.crs)?)
                     }
                     None => {
-                        let crs = loaded.crs.ok_or_else(|| {
+                        let crs = opened.crs.ok_or_else(|| {
                             format!(
                                 "{} has no coordinate system; Canopi requires a horizontal CRS",
                                 path.display()
                             )
                         })?;
-                        (loaded.grid, crs)
+                        (opened.grid, crs)
                     }
                 };
                 Ok(Prepared {
                     grid,
                     crs,
-                    nodata: nodata.or(loaded.nodata),
-                    samples: loaded.samples,
+                    nodata: nodata.or(opened.nodata),
+                    band: PreparedBand::Source(opened.band),
                 })
             }
         }
     }
 
+    /// Write a prepared band through the one writer, in row windows of at
+    /// most the capacity limit.
     fn write(
-        prepared: &Prepared,
+        prepared: Prepared<'_>,
         output: &Path,
         profile: cog::CogProfile,
         cancel: &AtomicBool,
     ) -> Result<(), String> {
         let geo_keys = crs::geokeys_for(&prepared.crs)?;
+        let width = prepared.grid.width;
+        let mut slice;
+        let mut reader;
+        let band: &mut dyn cog::BandSource = match prepared.band {
+            PreparedBand::Samples(samples) => {
+                slice = cog::SliceSource { samples, width };
+                &mut slice
+            }
+            PreparedBand::Source(source::Band::Whole(ref samples)) => {
+                slice = cog::SliceSource { samples, width };
+                &mut slice
+            }
+            PreparedBand::Source(source::Band::Streamed(streamed)) => {
+                reader = streamed;
+                &mut reader
+            }
+        };
         cog::write(
             output,
             cog::CogGeoref {
@@ -144,8 +258,9 @@ impl RustRasterEngine {
                 geo_keys: Some(&geo_keys),
             },
             prepared.nodata,
-            &prepared.samples,
+            band,
             profile,
+            raw_extraction_cells(),
             cancel,
         )
     }
@@ -165,13 +280,14 @@ impl RasterEngine for RustRasterEngine {
     fn statistics(&self, raster: &Path, cancel: &AtomicBool) -> Result<RasterStatistics, String> {
         let loaded = source::load(raster, "raster statistics", cancel)?;
         check_cancel(cancel)?;
-        let valid =
-            |value: &f32| value.is_finite() && loaded.nodata.is_none_or(|marker| *value != marker);
+        let nodata = loaded.nodata;
+        let samples = loaded.into_samples(cancel)?;
+        let valid = |value: &f32| value.is_finite() && nodata.is_none_or(|marker| *value != marker);
         let mut minimum = f64::INFINITY;
         let mut maximum = f64::NEG_INFINITY;
         let mut sum = 0f64;
         let mut count = 0u64;
-        for value in loaded.samples.iter().filter(|value| valid(value)) {
+        for value in samples.iter().filter(|value| valid(value)) {
             let value = f64::from(*value);
             minimum = minimum.min(value);
             maximum = maximum.max(value);
@@ -188,8 +304,7 @@ impl RasterEngine for RustRasterEngine {
             });
         }
         let mean = sum / count as f64;
-        let squares: f64 = loaded
-            .samples
+        let squares: f64 = samples
             .iter()
             .filter(|value| valid(value))
             .map(|value| (f64::from(*value) - mean).powi(2))
@@ -199,7 +314,7 @@ impl RasterEngine for RustRasterEngine {
             maximum,
             mean,
             std_dev: (squares / count as f64).sqrt(),
-            valid_percent: count as f64 * 100.0 / loaded.samples.len() as f64,
+            valid_percent: count as f64 * 100.0 / samples.len() as f64,
         })
     }
 
@@ -232,7 +347,7 @@ impl RasterEngine for RustRasterEngine {
                 u64::from(width) * u64::from(height) * 4
             ));
         }
-        Ok(loaded.samples)
+        loaded.into_samples(cancel)
     }
 
     fn write_geotiff(
@@ -254,7 +369,7 @@ impl RasterEngine for RustRasterEngine {
             cancel,
         )?;
         Self::write(
-            &prepared,
+            prepared,
             output,
             cog::CogProfile {
                 compression: Compression::Deflate,
@@ -274,7 +389,7 @@ impl RasterEngine for RustRasterEngine {
     ) -> Result<(), String> {
         let prepared = Self::prepare(input, georef, nodata, "the raster conversion", cancel)?;
         Self::write(
-            &prepared,
+            prepared,
             output,
             cog::CogProfile {
                 compression: Compression::None,
@@ -294,7 +409,7 @@ impl RasterEngine for RustRasterEngine {
     ) -> Result<(), String> {
         let prepared = Self::prepare(input, georef, nodata, "the display derivative", cancel)?;
         Self::write(
-            &prepared,
+            prepared,
             output,
             cog::CogProfile {
                 compression: Compression::Deflate,
@@ -373,6 +488,258 @@ mod tests {
                 assert!(got.is_nan(), "sample {index} must stay NaN, got {got}");
             } else {
                 assert_eq!(got.to_bits(), expected.to_bits(), "sample {index}");
+            }
+        }
+    }
+
+    /// How an authored source TIFF chunks its samples.
+    #[derive(Clone, Copy)]
+    enum Chunking {
+        Strips(u32),
+        Tiles(u32, u32),
+    }
+
+    /// Author a little-endian Float32 GeoTIFF the way GDAL writes elevation
+    /// tiles: EPSG:2154 keys, a -9999 NoData tag and the test grid, chunked
+    /// as asked, with `compression` (1 none, 8 Deflate) and `predictor`
+    /// (1 none, 3 floating point). Edge tiles are padded with NoData.
+    fn write_source_tiff(
+        path: &Path,
+        width: u32,
+        height: u32,
+        chunking: Chunking,
+        compression: u16,
+        predictor: u16,
+        samples: &[f32],
+    ) {
+        let codec = Compression::from_tag(compression);
+        let encode = |chunk: &[f32], columns: usize| -> Vec<u8> {
+            let mut bytes: Vec<u8> = chunk.iter().flat_map(|v| v.to_le_bytes()).collect();
+            if predictor == 3 {
+                // TIFF Technical Note 3: per row, byte planes most significant
+                // first, then byte-wise horizontal differencing.
+                for row in bytes.chunks_mut(columns * 4) {
+                    let planes: Vec<u8> = (0..4)
+                        .flat_map(|plane| row.chunks(4).map(move |sample| sample[3 - plane]))
+                        .collect();
+                    row.copy_from_slice(&planes);
+                    for index in (1..row.len()).rev() {
+                        row[index] = row[index].wrapping_sub(row[index - 1]);
+                    }
+                }
+            }
+            wbgeotiff::compression::compress(codec, &bytes).unwrap()
+        };
+        let (w, h) = (width as usize, height as usize);
+        let mut chunks = Vec::new();
+        match chunking {
+            Chunking::Strips(rows_per_strip) => {
+                for first in (0..h).step_by(rows_per_strip as usize) {
+                    let last = (first + rows_per_strip as usize).min(h);
+                    chunks.push(encode(&samples[first * w..last * w], w));
+                }
+            }
+            Chunking::Tiles(tile_width, tile_height) => {
+                let (tw, th) = (tile_width as usize, tile_height as usize);
+                for y0 in (0..h).step_by(th) {
+                    for x0 in (0..w).step_by(tw) {
+                        let mut tile = vec![-9999.0f32; tw * th];
+                        for row in 0..th.min(h - y0) {
+                            for column in 0..tw.min(w - x0) {
+                                tile[row * tw + column] = samples[(y0 + row) * w + x0 + column];
+                            }
+                        }
+                        chunks.push(encode(&tile, tw));
+                    }
+                }
+            }
+        }
+        let mut file = vec![0u8; 8];
+        file[..4].copy_from_slice(b"II\x2a\x00");
+        let mut offsets = Vec::new();
+        let mut counts = Vec::new();
+        for chunk in &chunks {
+            offsets.push(file.len() as u32);
+            counts.push(chunk.len() as u32);
+            file.extend_from_slice(chunk);
+        }
+        if file.len() % 2 == 1 {
+            file.push(0);
+        }
+        let (key_words, key_doubles, key_text) =
+            crs::geokeys_for(&crs::from_reference("EPSG:2154").unwrap())
+                .unwrap()
+                .encode();
+        let geotransform = grid(width, height).geotransform;
+        let shorts = |values: &[u16]| {
+            (
+                3u16,
+                values.len(),
+                values
+                    .iter()
+                    .flat_map(|v| v.to_le_bytes())
+                    .collect::<Vec<u8>>(),
+            )
+        };
+        let longs = |values: &[u32]| {
+            (
+                4u16,
+                values.len(),
+                values
+                    .iter()
+                    .flat_map(|v| v.to_le_bytes())
+                    .collect::<Vec<u8>>(),
+            )
+        };
+        let doubles = |values: &[f64]| {
+            (
+                12u16,
+                values.len(),
+                values
+                    .iter()
+                    .flat_map(|v| v.to_le_bytes())
+                    .collect::<Vec<u8>>(),
+            )
+        };
+        let ascii = |text: &str| {
+            let mut bytes = text.as_bytes().to_vec();
+            bytes.push(0);
+            (2u16, bytes.len(), bytes)
+        };
+        let mut fields = vec![
+            (256u16, longs(&[width])),
+            (257, longs(&[height])),
+            (258, shorts(&[32])),
+            (259, shorts(&[compression])),
+            (262, shorts(&[1])),
+            (277, shorts(&[1])),
+            (284, shorts(&[1])),
+            (317, shorts(&[predictor])),
+            (339, shorts(&[3])),
+            (33550, doubles(&[geotransform[1], -geotransform[5], 0.0])),
+            (
+                33922,
+                doubles(&[0.0, 0.0, 0.0, geotransform[0], geotransform[3], 0.0]),
+            ),
+            (34735, shorts(&key_words)),
+            (42113, ascii("-9999")),
+        ];
+        if !key_doubles.is_empty() {
+            fields.push((34736, doubles(&key_doubles)));
+        }
+        if !key_text.is_empty() {
+            fields.push((34737, ascii(&key_text)));
+        }
+        match chunking {
+            Chunking::Strips(rows_per_strip) => {
+                fields.push((273, longs(&offsets)));
+                fields.push((278, longs(&[rows_per_strip])));
+                fields.push((279, longs(&counts)));
+            }
+            Chunking::Tiles(tile_width, tile_height) => {
+                fields.push((322, longs(&[tile_width])));
+                fields.push((323, longs(&[tile_height])));
+                fields.push((324, longs(&offsets)));
+                fields.push((325, longs(&counts)));
+            }
+        }
+        fields.sort_by_key(|(tag, _)| *tag);
+        let directory = file.len();
+        file[4..8].copy_from_slice(&(directory as u32).to_le_bytes());
+        let mut extra_at = directory + 2 + fields.len() * 12 + 4;
+        let mut entries = (fields.len() as u16).to_le_bytes().to_vec();
+        let mut extra = Vec::new();
+        for (tag, (kind, count, payload)) in &fields {
+            entries.extend_from_slice(&tag.to_le_bytes());
+            entries.extend_from_slice(&kind.to_le_bytes());
+            entries.extend_from_slice(&(*count as u32).to_le_bytes());
+            if payload.len() <= 4 {
+                let mut inline = [0u8; 4];
+                inline[..payload.len()].copy_from_slice(payload);
+                entries.extend_from_slice(&inline);
+            } else {
+                entries.extend_from_slice(&(extra_at as u32).to_le_bytes());
+                extra.extend_from_slice(payload);
+                if payload.len() % 2 == 1 {
+                    extra.push(0);
+                }
+                extra_at = directory + 2 + fields.len() * 12 + 4 + extra.len();
+            }
+        }
+        entries.extend_from_slice(&0u32.to_le_bytes());
+        file.extend_from_slice(&entries);
+        file.extend_from_slice(&extra);
+        std::fs::write(path, file).unwrap();
+    }
+
+    /// canopi-dfc0: a GeoTIFF above the whole-raster limit converts in row
+    /// windows that never hold more than the limit, into exactly the bytes
+    /// the whole raster gives, for both profiles and every chunk layout.
+    #[test]
+    fn geotiff_sources_stream_under_the_limit_into_the_whole_raster_bytes() {
+        const LIMIT: u64 = 100_000;
+        let dir = scratch("streamed");
+        let engine = RustRasterEngine;
+        let (width, height) = (701u32, 599u32);
+        assert!(u64::from(width * height) > 4 * LIMIT);
+        let authored = values(width, height);
+        let grid = grid(width, height);
+        let georef = RasterGeoref {
+            grid: &grid,
+            crs: "EPSG:2154",
+        };
+        let sources = [
+            ("striped", Chunking::Strips(7), 8, 3),
+            ("tiled", Chunking::Tiles(160, 144), 8, 3),
+            ("one-strip", Chunking::Strips(height), 1, 1),
+        ];
+        for (label, chunking, compression, predictor) in sources {
+            let source = dir.join(format!("{label}.tif"));
+            write_source_tiff(
+                &source,
+                width,
+                height,
+                chunking,
+                compression,
+                predictor,
+                &authored,
+            );
+            let read = engine.read_f32(&source, width, height, &cancel()).unwrap();
+            assert_same_samples(&read, &authored);
+            for display in [false, true] {
+                let convert = |input: RasterInput<'_>, output: &Path, nodata: Option<f32>| {
+                    if display {
+                        engine.write_display_cog(input, output, Some(georef), nodata, &cancel())
+                    } else {
+                        engine.write_controlled_cog(input, output, Some(georef), nodata, &cancel())
+                    }
+                };
+                let whole = dir.join(format!("{label}-{display}-whole.tif"));
+                convert(
+                    RasterInput::Samples {
+                        grid: &grid,
+                        values: &authored,
+                    },
+                    &whole,
+                    Some(-9999.0),
+                )
+                .unwrap();
+                let streamed = dir.join(format!("{label}-{display}-streamed.tif"));
+                let peak = {
+                    let _limit = super::super::import::extraction_limit_probe::set(LIMIT);
+                    high_water::reset();
+                    convert(RasterInput::File(&source), &streamed, None)
+                        .unwrap_or_else(|error| panic!("{label} display={display}: {error}"));
+                    high_water::peak()
+                };
+                assert!(
+                    peak > 0 && peak <= LIMIT,
+                    "{label} display={display} held {peak} cells"
+                );
+                assert!(
+                    std::fs::read(&whole).unwrap() == std::fs::read(&streamed).unwrap(),
+                    "{label} display={display}: the streamed output differs from the whole one"
+                );
             }
         }
     }
@@ -792,6 +1159,40 @@ mod tests {
             )
             .unwrap();
         assert_eq!(engine.probe(&out, &cancel()).unwrap().nodata, Some(-1.0));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn other_formats_keep_the_whole_raster_limit() {
+        let dir = scratch("ascii-limit");
+        let engine = RustRasterEngine;
+        let path = dir.join("grid.asc");
+        std::fs::write(
+            &path,
+            "ncols 3\nnrows 2\nxllcorner 100\nyllcorner 200\ncellsize 10\nNODATA_value -1\n1 2 -1\n4.5 5 6\n",
+        )
+        .unwrap();
+        let grid = RasterGrid {
+            width: 3,
+            height: 2,
+            geotransform: [100.0, 10.0, 0.0, 220.0, 0.0, -10.0],
+        };
+        let out = dir.join("grid.tif");
+        let _limit = super::super::import::extraction_limit_probe::set(5);
+        let error = engine
+            .write_controlled_cog(
+                RasterInput::File(&path),
+                &out,
+                Some(RasterGeoref {
+                    grid: &grid,
+                    crs: "EPSG:3857",
+                }),
+                None,
+                &cancel(),
+            )
+            .unwrap_err();
+        assert!(error.contains("whole-raster read"), "{error}");
+        assert!(!out.exists());
         let _ = std::fs::remove_dir_all(dir);
     }
 

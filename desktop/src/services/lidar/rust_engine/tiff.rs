@@ -1,13 +1,14 @@
 //! TIFF header probing and band-1 decoding on the `wbgeotiff` primitives.
 //!
 //! The header is read from the file's directory alone, so probing a
-//! multi-gigabyte GeoTIFF costs O(directory). Decoding streams one strip or
-//! tile at a time through `wbgeotiff`'s codecs and predictor into a whole
-//! Float32 band; the caller checks the capacity limit before asking for it.
+//! multi-gigabyte GeoTIFF costs O(directory). Band 1 is read in windows, one
+//! strip or tile at a time through `wbgeotiff`'s codecs and predictor; the
+//! caller decides whether a window is a row band or the whole raster.
 
 use super::super::engine::check_cancel;
+use super::super::prepared_raster::RasterWindow;
 use std::fs::File;
-use std::io::{BufReader, Read as _};
+use std::io::{BufReader, Read as _, Seek as _, SeekFrom};
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use wbgeotiff::geo_keys::GeoKeyDirectory;
@@ -15,6 +16,7 @@ use wbgeotiff::ifd::{ByteOrder, Ifd, TiffReader};
 use wbgeotiff::tags::{Compression, SampleFormat, tag};
 
 /// How band samples are chunked in the file.
+#[derive(Clone)]
 pub(super) enum Layout {
     Strips {
         rows_per_strip: u32,
@@ -314,158 +316,351 @@ fn codec(compression_tag: u16) -> Result<Compression, String> {
     }
 }
 
-/// Decode band 1 as row-major Float32, `width * height` samples, streaming
-/// one strip or tile at a time. Integer and Float64 samples convert as a
-/// Float32 cast does; a chunk the file left empty reads as `fill`.
-pub(super) fn read_band_f32(
-    path: &Path,
-    header: &TiffHeader,
-    fill: f32,
-    cancel: &AtomicBool,
-) -> Result<Vec<f32>, String> {
-    let width = header.width as usize;
-    let height = header.height as usize;
-    let cells = width
-        .checked_mul(height)
-        .ok_or_else(|| "raster cell count overflows".to_string())?;
-    if !matches!(header.bits, 8 | 16 | 32 | 64) {
-        return Err(format!(
-            "band type {} is not supported by the raster engine",
-            band_type_name(header.format, header.bits)
-        ));
+/// Largest chunk decoded whole on a streamed read. A compressed chunk above
+/// it (typically a whole image in one strip) would hold more than a row
+/// window, so such a file is loaded whole under the capacity limit instead.
+pub(super) const MAX_STREAMED_CHUNK_BYTES: u64 = 64 * 1024 * 1024;
+
+/// How band 1's samples are laid out and encoded, chunk by chunk.
+#[derive(Clone)]
+pub(super) struct BandFormat {
+    pub width: u32,
+    pub height: u32,
+    pub format: SampleFormat,
+    pub bits: u16,
+    pub compression_tag: u16,
+    pub predictor: u16,
+    /// Samples per pixel inside a chunk: every band for chunky files, one
+    /// for planar files, whose first run of chunks is band 1.
+    pub chunk_bands: usize,
+    pub byte_order: ByteOrder,
+    pub layout: Layout,
+}
+
+impl BandFormat {
+    /// Whether samples are read by byte range instead of decoding chunks:
+    /// uncompressed strips without a predictor.
+    fn by_byte_range(&self) -> bool {
+        matches!(self.layout, Layout::Strips { .. })
+            && self.compression_tag == 1
+            && self.predictor == 1
     }
-    let bytes_per_sample = usize::from(header.bits / 8);
-    let codec = codec(header.compression_tag)?;
-    // Planar files keep every band in its own run of chunks; band 1 is the
-    // first run. Chunky files interleave the bands within each pixel.
-    let chunk_bands = if header.planar == 2 {
-        1
-    } else {
-        usize::from(header.bands.max(1))
-    };
-    let mut reader = open(path)?;
-    let mut out = vec![fill; cells];
-    let mut decode_chunk = |offset: u64,
-                            count: u64,
-                            chunk_width: usize,
-                            chunk_rows: usize|
-     -> Result<Option<Vec<u8>>, String> {
-        if count == 0 {
-            return Ok(None);
+
+    /// Whether no chunk decoded whole exceeds [`MAX_STREAMED_CHUNK_BYTES`].
+    fn streams(&self) -> bool {
+        if self.by_byte_range() {
+            return true;
         }
-        let expected = chunk_width * chunk_rows * chunk_bands * bytes_per_sample;
-        let raw = reader
-            .read_bytes_at(
-                offset,
-                usize::try_from(count).map_err(|_| "chunk size overflows".to_string())?,
-            )
-            .map_err(|e| format!("Failed to read raster chunk: {e}"))?;
-        let mut data = wbgeotiff::compression::decompress(codec, &raw, expected)
-            .map_err(|e| format!("Failed to decode raster chunk: {e}"))?;
-        if data.len() < expected {
+        let (columns, rows) = match &self.layout {
+            Layout::Strips { rows_per_strip, .. } => (self.width, *rows_per_strip),
+            Layout::Tiles { width, height, .. } => (*width, *height),
+        };
+        u64::from(columns) * u64::from(rows) * (self.chunk_bands as u64) * u64::from(self.bits / 8)
+            <= MAX_STREAMED_CHUNK_BYTES
+    }
+}
+
+impl TiffHeader {
+    pub(super) fn band_format(&self) -> BandFormat {
+        BandFormat {
+            width: self.width,
+            height: self.height,
+            format: self.format,
+            bits: self.bits,
+            compression_tag: self.compression_tag,
+            predictor: self.predictor,
+            chunk_bands: if self.planar == 2 {
+                1
+            } else {
+                usize::from(self.bands.max(1))
+            },
+            byte_order: self.byte_order,
+            layout: self.layout.clone(),
+        }
+    }
+}
+
+/// One chunk's place in the band: its file range and the cells it covers.
+struct Chunk {
+    offset: u64,
+    count: u64,
+    x: usize,
+    y: usize,
+    /// The chunk's own row length and row count as stored (a tile keeps its
+    /// full size at the band's edge; the last strip is short).
+    stored_width: usize,
+    stored_rows: usize,
+}
+
+/// Windowed band-1 reads of a TIFF as row-major Float32, one strip or tile
+/// at a time through `wbgeotiff`'s codecs and predictor. Integer and Float64
+/// samples convert as a Float32 cast does; a chunk the file left empty reads
+/// as `fill`. Uncompressed strips without a predictor are read by byte range,
+/// so a whole image stored in one strip is never held; every other chunk is
+/// decoded whole and the last one is kept for the next window.
+pub(super) struct BandReader {
+    file: File,
+    band: BandFormat,
+    codec: Compression,
+    bytes_per_sample: usize,
+    fill: f32,
+    decoded: Option<(usize, Vec<u8>)>,
+}
+
+impl BandReader {
+    pub(super) fn open(path: &Path, band: BandFormat, fill: f32) -> Result<Self, String> {
+        if !matches!(band.bits, 8 | 16 | 32 | 64) {
             return Err(format!(
-                "raster chunk decoded to {} bytes, expected {expected}",
-                data.len()
+                "band type {} is not supported by the raster engine",
+                band_type_name(band.format, band.bits)
             ));
         }
-        data.truncate(expected);
-        wbgeotiff::compression::undo_predictor(
-            &mut data,
-            header.predictor,
-            chunk_width,
-            chunk_rows,
-            chunk_bands,
-            bytes_per_sample,
-            header.byte_order,
-        )
-        .map_err(|e| format!("Failed to undo the raster predictor: {e}"))?;
-        Ok(Some(data))
-    };
-    let stride = chunk_bands * bytes_per_sample;
-    match &header.layout {
-        Layout::Strips {
-            rows_per_strip,
-            offsets,
-            counts,
-        } => {
-            let rows_per_strip = *rows_per_strip as usize;
-            let strips = height.div_ceil(rows_per_strip);
-            if offsets.len() < strips || counts.len() < strips {
-                return Err(format!(
-                    "TIFF declares {} strips for {strips} needed",
-                    offsets.len()
-                ));
-            }
-            for strip in 0..strips {
-                if strip % 16 == 0 {
-                    check_cancel(cancel)?;
+        let codec = codec(band.compression_tag)?;
+        let (width, height) = (band.width as usize, band.height as usize);
+        match &band.layout {
+            Layout::Strips {
+                rows_per_strip,
+                offsets,
+                counts,
+            } => {
+                let strips = height.div_ceil(*rows_per_strip as usize);
+                if offsets.len() < strips || counts.len() < strips {
+                    return Err(format!(
+                        "TIFF declares {} strips for {strips} needed",
+                        offsets.len()
+                    ));
                 }
-                let first_row = strip * rows_per_strip;
-                let rows = rows_per_strip.min(height - first_row);
-                let Some(data) = decode_chunk(offsets[strip], counts[strip], width, rows)? else {
-                    continue;
-                };
-                for row in 0..rows {
-                    let target = (first_row + row) * width;
-                    for column in 0..width {
-                        let at = (row * width + column) * stride;
-                        out[target + column] = sample_f32(
-                            &data[at..at + bytes_per_sample],
-                            header.format,
-                            header.byte_order,
-                        );
-                    }
+            }
+            Layout::Tiles {
+                width: tile_width,
+                height: tile_height,
+                offsets,
+                counts,
+            } => {
+                if *tile_width == 0 || *tile_height == 0 {
+                    return Err("TIFF declares an empty tile size".to_string());
+                }
+                let tiles =
+                    width.div_ceil(*tile_width as usize) * height.div_ceil(*tile_height as usize);
+                if offsets.len() < tiles || counts.len() < tiles {
+                    return Err(format!(
+                        "TIFF declares {} tiles for {tiles} needed",
+                        offsets.len()
+                    ));
                 }
             }
         }
-        Layout::Tiles {
-            width: tile_width,
-            height: tile_height,
-            offsets,
-            counts,
-        } => {
-            let (tile_width, tile_height) = (*tile_width as usize, *tile_height as usize);
-            if tile_width == 0 || tile_height == 0 {
-                return Err("TIFF declares an empty tile size".to_string());
+        let file =
+            File::open(path).map_err(|e| format!("Failed to open {}: {e}", path.display()))?;
+        Ok(Self {
+            file,
+            bytes_per_sample: usize::from(band.bits / 8),
+            band,
+            codec,
+            fill,
+            decoded: None,
+        })
+    }
+
+    /// Whether every window reads within the streamed working set.
+    pub(super) fn streams(&self) -> bool {
+        self.band.streams()
+    }
+
+    /// The chunks overlapping rows `y0..y1` and columns `x0..x1`, in file
+    /// order.
+    fn chunks(&self, x0: usize, y0: usize, x1: usize, y1: usize) -> Vec<(usize, Chunk)> {
+        let (width, height) = (self.band.width as usize, self.band.height as usize);
+        match &self.band.layout {
+            Layout::Strips {
+                rows_per_strip,
+                offsets,
+                counts,
+            } => {
+                let rows_per_strip = *rows_per_strip as usize;
+                (y0 / rows_per_strip..y1.div_ceil(rows_per_strip))
+                    .map(|strip| {
+                        let y = strip * rows_per_strip;
+                        (
+                            strip,
+                            Chunk {
+                                offset: offsets[strip],
+                                count: counts[strip],
+                                x: 0,
+                                y,
+                                stored_width: width,
+                                stored_rows: rows_per_strip.min(height - y),
+                            },
+                        )
+                    })
+                    .collect()
             }
-            let tiles_x = width.div_ceil(tile_width);
-            let tiles_y = height.div_ceil(tile_height);
-            let tiles = tiles_x * tiles_y;
-            if offsets.len() < tiles || counts.len() < tiles {
-                return Err(format!(
-                    "TIFF declares {} tiles for {tiles} needed",
-                    offsets.len()
-                ));
-            }
-            for tile_y in 0..tiles_y {
-                check_cancel(cancel)?;
-                for tile_x in 0..tiles_x {
-                    let index = tile_y * tiles_x + tile_x;
-                    let Some(data) =
-                        decode_chunk(offsets[index], counts[index], tile_width, tile_height)?
-                    else {
-                        continue;
-                    };
-                    let x0 = tile_x * tile_width;
-                    let y0 = tile_y * tile_height;
-                    let columns = tile_width.min(width - x0);
-                    let rows = tile_height.min(height - y0);
-                    for row in 0..rows {
-                        let target = (y0 + row) * width + x0;
-                        for column in 0..columns {
-                            let at = (row * tile_width + column) * stride;
-                            out[target + column] = sample_f32(
-                                &data[at..at + bytes_per_sample],
-                                header.format,
-                                header.byte_order,
-                            );
-                        }
+            Layout::Tiles {
+                width: tile_width,
+                height: tile_height,
+                offsets,
+                counts,
+            } => {
+                let (tile_width, tile_height) = (*tile_width as usize, *tile_height as usize);
+                let tiles_x = width.div_ceil(tile_width);
+                let mut chunks = Vec::new();
+                for tile_y in y0 / tile_height..y1.div_ceil(tile_height) {
+                    for tile_x in x0 / tile_width..x1.div_ceil(tile_width) {
+                        let index = tile_y * tiles_x + tile_x;
+                        chunks.push((
+                            index,
+                            Chunk {
+                                offset: offsets[index],
+                                count: counts[index],
+                                x: tile_x * tile_width,
+                                y: tile_y * tile_height,
+                                stored_width: tile_width,
+                                stored_rows: tile_height,
+                            },
+                        ));
                     }
                 }
+                chunks
             }
         }
     }
-    Ok(out)
+
+    fn read_bytes(&mut self, offset: u64, count: usize) -> Result<Vec<u8>, String> {
+        let mut bytes = vec![0u8; count];
+        self.file
+            .seek(SeekFrom::Start(offset))
+            .and_then(|_| self.file.read_exact(&mut bytes))
+            .map_err(|e| format!("Failed to read raster chunk: {e}"))?;
+        Ok(bytes)
+    }
+
+    /// The decoded bytes of chunk `index`, decoding it unless it was the
+    /// last one decoded.
+    fn decode(&mut self, index: usize, chunk: &Chunk) -> Result<&[u8], String> {
+        if self.decoded.as_ref().is_none_or(|(held, _)| *held != index) {
+            self.decoded = None;
+            let expected = chunk.stored_width
+                * chunk.stored_rows
+                * self.band.chunk_bands
+                * self.bytes_per_sample;
+            let raw = self.read_bytes(
+                chunk.offset,
+                usize::try_from(chunk.count).map_err(|_| "chunk size overflows".to_string())?,
+            )?;
+            let mut data = wbgeotiff::compression::decompress(self.codec, &raw, expected)
+                .map_err(|e| format!("Failed to decode raster chunk: {e}"))?;
+            if data.len() < expected {
+                return Err(format!(
+                    "raster chunk decoded to {} bytes, expected {expected}",
+                    data.len()
+                ));
+            }
+            data.truncate(expected);
+            wbgeotiff::compression::undo_predictor(
+                &mut data,
+                self.band.predictor,
+                chunk.stored_width,
+                chunk.stored_rows,
+                self.band.chunk_bands,
+                self.bytes_per_sample,
+                self.band.byte_order,
+            )
+            .map_err(|e| format!("Failed to undo the raster predictor: {e}"))?;
+            self.decoded = Some((index, data));
+        }
+        Ok(self
+            .decoded
+            .as_ref()
+            .map_or(&[][..], |(_, data)| data.as_slice()))
+    }
+
+    /// Fill `out` with `window` of band 1, row-major.
+    pub(super) fn read(
+        &mut self,
+        window: RasterWindow,
+        out: &mut [f32],
+        cancel: &AtomicBool,
+    ) -> Result<(), String> {
+        let (x0, y0) = (window.x as usize, window.y as usize);
+        let (x1, y1) = (x0 + window.width as usize, y0 + window.height as usize);
+        let columns = window.width as usize;
+        debug_assert_eq!(out.len(), columns * window.height as usize);
+        debug_assert!(x1 <= self.band.width as usize && y1 <= self.band.height as usize);
+        out.fill(self.fill);
+        let (format, order) = (self.band.format, self.band.byte_order);
+        let bytes_per_sample = self.bytes_per_sample;
+        let stride = self.band.chunk_bands * bytes_per_sample;
+        let by_byte_range = self.band.by_byte_range();
+        for (position, (index, chunk)) in self.chunks(x0, y0, x1, y1).into_iter().enumerate() {
+            if position % 16 == 0 {
+                check_cancel(cancel)?;
+            }
+            if chunk.count == 0 {
+                continue;
+            }
+            let (cx0, cy0) = (x0.max(chunk.x), y0.max(chunk.y));
+            let cx1 = x1.min(chunk.x + chunk.stored_width);
+            let cy1 = y1.min(chunk.y + chunk.stored_rows);
+            if cx0 >= cx1 || cy0 >= cy1 {
+                continue;
+            }
+            let span = cx1 - cx0;
+            let row_bytes = chunk.stored_width * stride;
+            if by_byte_range {
+                let expected = row_bytes * chunk.stored_rows;
+                if chunk.count < expected as u64 {
+                    return Err(format!(
+                        "raster chunk decoded to {} bytes, expected {expected}",
+                        chunk.count
+                    ));
+                }
+                for row in cy0..cy1 {
+                    let at = (row - chunk.y) * row_bytes + (cx0 - chunk.x) * stride;
+                    let bytes = self.read_bytes(chunk.offset + at as u64, span * stride)?;
+                    let target = (row - y0) * columns + (cx0 - x0);
+                    convert_row(
+                        &bytes,
+                        stride,
+                        bytes_per_sample,
+                        format,
+                        order,
+                        &mut out[target..target + span],
+                    );
+                }
+            } else {
+                let data = self.decode(index, &chunk)?;
+                for row in cy0..cy1 {
+                    let at = (row - chunk.y) * row_bytes + (cx0 - chunk.x) * stride;
+                    let target = (row - y0) * columns + (cx0 - x0);
+                    convert_row(
+                        &data[at..],
+                        stride,
+                        bytes_per_sample,
+                        format,
+                        order,
+                        &mut out[target..target + span],
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Convert consecutive pixels starting at `bytes` into `out`: the first
+/// `bytes_per_sample` bytes (band 1) of every `stride`-byte pixel.
+fn convert_row(
+    bytes: &[u8],
+    stride: usize,
+    bytes_per_sample: usize,
+    format: SampleFormat,
+    order: ByteOrder,
+    out: &mut [f32],
+) {
+    for (column, value) in out.iter_mut().enumerate() {
+        let at = column * stride;
+        *value = sample_f32(&bytes[at..at + bytes_per_sample], format, order);
+    }
 }
 
 /// One sample as Float32, exactly as a Float32 cast of its native value.
@@ -559,6 +754,42 @@ mod tests {
         assert!(parse_nodata("nan").is_some_and(f64::is_nan));
         assert_eq!(parse_nodata("-inf"), Some(f64::NEG_INFINITY));
         assert_eq!(parse_nodata("x"), None);
+    }
+
+    #[test]
+    fn only_a_chunk_decoding_above_64_mib_keeps_a_tiff_from_streaming() {
+        let band = |layout: Layout, compression_tag: u16, predictor: u16| BandFormat {
+            width: 8193,
+            height: 4096,
+            format: SampleFormat::IeeeFloat,
+            bits: 32,
+            compression_tag,
+            predictor,
+            chunk_bands: 1,
+            byte_order: ByteOrder::LittleEndian,
+            layout,
+        };
+        let strips = |rows_per_strip: u32| Layout::Strips {
+            rows_per_strip,
+            offsets: Vec::new(),
+            counts: Vec::new(),
+        };
+        // One Deflate strip of the whole image decodes to 128 MiB.
+        assert!(!band(strips(4096), 8, 1).streams());
+        // Uncompressed, it is read by byte range whatever its size...
+        assert!(band(strips(4096), 1, 1).streams());
+        // ...unless a predictor needs whole rows decoded.
+        assert!(!band(strips(4096), 1, 2).streams());
+        // 2048 rows of 8193 Float32 samples are exactly 64 MiB plus 2048 samples.
+        assert!(!band(strips(2048), 8, 1).streams());
+        assert!(band(strips(2047), 8, 3).streams());
+        let tiles = Layout::Tiles {
+            width: 512,
+            height: 512,
+            offsets: Vec::new(),
+            counts: Vec::new(),
+        };
+        assert!(band(tiles, 8, 3).streams());
     }
 
     #[test]
