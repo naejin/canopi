@@ -2043,7 +2043,7 @@ Hits are world-space and unaffected by bearing; pixel tolerances convert through
 
 ### 4.11 Snapshot map and thumbnails
 
-The snapshot map (`maplibre/view-snapshot-map.ts`) has its own `MapLibreCameraDriver` and applies the saved view's bearing. Saved-view and story thumbnails are drawn at the saved bearing and camera zoom (§4.10; the cache key already includes the camera). Recent-file sketches (`DesignSketch`) and saved-stamp thumbnails stay north-up. PDF page-rail thumbnails follow the layout angle.
+The snapshot map (`maplibre/view-snapshot-map.ts`) has its own `MapLibreCameraDriver` and applies the saved view's bearing. Saved-view thumbnails are drawn at the saved bearing, with the camera zoom scaled by the thumbnail-to-workspace screen ratio (§4.10; the cache key holds the camera and the settled workspace size, so a resize draws them again once it settles). Stories have no thumbnails. Recent-file sketches (`DesignSketch`) and saved-stamp thumbnails stay north-up. PDF page-rail thumbnails follow the layout angle.
 
 ### 4.12 PDF
 
