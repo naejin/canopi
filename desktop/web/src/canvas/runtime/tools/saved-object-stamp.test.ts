@@ -368,7 +368,7 @@ describe('saved object stamp tool', () => {
       h.view.host.current().apply({ kind: 'set', target: { ...camera, bearingDeg: 30 }, animation: 'none' })
       h.advance(0)
 
-      // The parked ghost turns with the map, at the angle a click places.
+      // After any frame runs, the parked ghost keeps the ground angle a click places.
       expect(ghosts(h)[0]!.entity).toMatchObject({ anchor: { x: 200, y: 150 }, rotationDeg: 15 })
       expect(h.record.guidance.at(-1)?.stampRotationDeg).toBe(15)
     })
