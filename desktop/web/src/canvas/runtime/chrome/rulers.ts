@@ -1,5 +1,4 @@
 import type { ScreenPoint, ViewFrame } from '../view/types'
-import { planarCameraOf } from '../view/view-transform'
 import { NICE_DISTANCES } from '../../grid'
 import { scaleReaches } from '../../projection'
 import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
@@ -156,15 +155,11 @@ class HtmlRulerOverlay implements RulerOverlay {
     const snapshot = this._snapshot
     if (!snapshot || !snapshot.chromeVisible || !snapshot.rulersVisible || snapshot.frame.mode !== 'site') return
     const origin = this._overlayOrigin()
-    const screenX = at.x
-    const screenY = at.y
-    if (axis === 'h' && screenY <= origin.y + RULER_SIZE) return
-    if (axis === 'v' && screenX <= origin.x + RULER_SIZE) return
+    if (axis === 'h' && at.y <= origin.y + RULER_SIZE) return
+    if (axis === 'v' && at.x <= origin.x + RULER_SIZE) return
 
-    const viewport = planarCameraOf(snapshot.frame.view)
-    const screenPosition = axis === 'h' ? screenY : screenX
-    const viewportOffset = axis === 'h' ? viewport.y : viewport.x
-    this._options.onGuideCreate(axis, (screenPosition - viewportOffset) / viewport.scale)
+    const ground = snapshot.frame.view.screenToWorld(at)
+    this._options.onGuideCreate(axis, axis === 'h' ? ground.y : ground.x)
   }
 
   /** Today's drag start: the previous drag ends, and this one remembers the cursor to give back. */
@@ -302,8 +297,7 @@ function drawHorizontalRuler(
   if (!context) return
   context.setTransform(dpr, 0, 0, dpr, 0, 0)
 
-  const viewport = planarCameraOf(frame.view)
-  const scale = viewport.scale
+  const view = frame.view
   context.fillStyle = palette.background
   context.fillRect(0, 0, cssWidth, cssHeight)
   context.strokeStyle = palette.border
@@ -313,10 +307,10 @@ function drawHorizontalRuler(
   context.lineTo(cssWidth, cssHeight - 0.5)
   context.stroke()
 
-  const { tickInterval, labelInterval } = calcTickIntervals(scale)
+  const { tickInterval, labelInterval } = calcTickIntervals(view.pixelsPerMetre)
   const screenOffsetX = origin.x + RULER_SIZE
-  const worldLeft = (screenOffsetX - viewport.x) / scale
-  const worldRight = (screenOffsetX + cssWidth - viewport.x) / scale
+  const worldLeft = view.screenToWorld({ x: screenOffsetX, y: 0 }).x
+  const worldRight = view.screenToWorld({ x: screenOffsetX + cssWidth, y: 0 }).x
   const startWorld = Math.floor(worldLeft / tickInterval) * tickInterval
   const labels = new RulerLabelSpacing()
 
@@ -328,7 +322,7 @@ function drawHorizontalRuler(
   context.lineWidth = 1
 
   for (let world = startWorld; world <= worldRight; world += tickInterval) {
-    const canvasX = viewport.x + world * scale - screenOffsetX
+    const canvasX = view.worldToScreen({ x: world, y: 0 }).x - screenOffsetX
     if (canvasX < 0 || canvasX > cssWidth) continue
 
     const isMajor = Math.abs(Math.round(world / labelInterval) * labelInterval - world) < 1e-9
@@ -364,8 +358,7 @@ function drawVerticalRuler(
   if (!context) return
   context.setTransform(dpr, 0, 0, dpr, 0, 0)
 
-  const viewport = planarCameraOf(frame.view)
-  const scale = viewport.scale
+  const view = frame.view
   context.fillStyle = palette.background
   context.fillRect(0, 0, cssWidth, cssHeight)
   context.strokeStyle = palette.border
@@ -375,10 +368,10 @@ function drawVerticalRuler(
   context.lineTo(cssWidth - 0.5, cssHeight)
   context.stroke()
 
-  const { tickInterval, labelInterval } = calcTickIntervals(scale)
+  const { tickInterval, labelInterval } = calcTickIntervals(view.pixelsPerMetre)
   const screenOffsetY = origin.y + RULER_SIZE
-  const worldTop = (screenOffsetY - viewport.y) / scale
-  const worldBottom = (screenOffsetY + cssHeight - viewport.y) / scale
+  const worldTop = view.screenToWorld({ x: 0, y: screenOffsetY }).y
+  const worldBottom = view.screenToWorld({ x: 0, y: screenOffsetY + cssHeight }).y
   const startWorld = Math.floor(worldTop / tickInterval) * tickInterval
   const labels = new RulerLabelSpacing()
 
@@ -388,7 +381,7 @@ function drawVerticalRuler(
   context.lineWidth = 1
 
   for (let world = startWorld; world <= worldBottom; world += tickInterval) {
-    const canvasY = viewport.y + world * scale - screenOffsetY
+    const canvasY = view.worldToScreen({ x: 0, y: world }).y - screenOffsetY
     if (canvasY < 0 || canvasY > cssHeight) continue
 
     const isMajor = Math.abs(Math.round(world / labelInterval) * labelInterval - world) < 1e-9
