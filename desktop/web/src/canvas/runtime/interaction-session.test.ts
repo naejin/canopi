@@ -511,6 +511,23 @@ describe('the interaction session', () => {
     expect(bearing()).toBeCloseTo(32, 6)
   })
 
+  it('a Shift+middle rotate\'s release and its Esc run the tool\'s cleanup, as the pan it replaced did', () => {
+    createSession()
+    const released = vi.spyOn(builtHosts.at(-1)!, 'released')
+
+    events.pointerDown({ x: 100, y: 100 }, { pointerId: 4, button: 1, buttons: 4, shiftKey: true })
+    events.pointerMove({ x: 140, y: 100 }, { pointerId: 4, buttons: 4, shiftKey: true })
+    expect(released).not.toHaveBeenCalled()
+    events.pointerUp({ x: 140, y: 100 }, { pointerId: 4, button: 1, buttons: 0 })
+    expect(released).toHaveBeenCalledTimes(1)
+
+    events.pointerDown({ x: 100, y: 100 }, { pointerId: 5, button: 1, buttons: 4, shiftKey: true })
+    events.pointerMove({ x: 140, y: 100 }, { pointerId: 5, buttons: 4, shiftKey: true })
+    events.keyDown({ key: 'Escape', code: 'Escape' })
+    expect(released).toHaveBeenCalledTimes(2)
+    events.pointerUp({ x: 140, y: 100 }, { pointerId: 5, button: 1, buttons: 0 })
+  })
+
   it('a move with a button held and no press on the map publishes no pointer world point', () => {
     const { session } = createSession()
     session.setTool('line')

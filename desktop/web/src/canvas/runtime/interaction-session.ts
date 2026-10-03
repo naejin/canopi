@@ -639,13 +639,13 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   /**
    * Whether this input ended no press of the tool's, so today's window pointerup (or a pan's pointercancel or lost
-   * capture) would have run the cancellation (ToolHost.released): the up, cancel or Esc that ends a pointer pan, or an up
-   * with no press of the map's at all. Today's exceptions hold for the latter: nothing while another pointer's press is
+   * capture) would have run the cancellation (ToolHost.released): the up, cancel or Esc that ends a pointer pan or turn,
+   * or an up with no press of the map's at all. Today's exceptions hold for the latter: nothing while another pointer's press is
    * live, in overview (the recogniser swallows the up), or over the note editor, a handle or the Unlock affordance. The
    * host handles the tap or drag-end of a ruler drag or of a press the tool never heard itself.
    */
   private _releasesOutsideTool(input: RawInput, gestures: readonly Gesture[]): boolean {
-    if (gestures.some(endsPointerPan)) return input.kind === 'up' || (input.kind === 'cancel' && input.id !== 'all')
+    if (gestures.some(endsPointerNavigation)) return input.kind === 'up' || (input.kind === 'cancel' && input.id !== 'all')
     if (input.kind !== 'up' || gestures.length > 0) return false
     if (this._recogniser.sessions.size > 0 || this._overview.peek()) return false
     return !isOwnedOverlay(input.target)
@@ -744,12 +744,13 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     return this._recogniser.sessions.size > 0 || this._toolHost.hasLiveGesture()
   }
 
-  /** Esc with a pointer session live: the recogniser cancels it; a pan it ends runs today's cancellation (released). */
+  /** Esc with a pointer session live: the recogniser cancels it; a pointer pan or turn it ends runs today's cancellation
+   *  (released). */
   private _escapeGesture(): void {
     const gestures = this._feed({ kind: 'escape', t: Date.now() })
     this._spaceHeld = false
     this._setNavigationCursor(this._panning ? 'grabbing' : null)
-    if (gestures.some(endsPointerPan)) this._toolHost.released()
+    if (gestures.some(endsPointerNavigation)) this._toolHost.released()
   }
 
   private _configure(): void {
@@ -1093,9 +1094,12 @@ function clearToolSource(tool: ToolId): void {
   else if (tool === 'saved-object-stamp') clearSavedObjectStampSource()
 }
 
-/** The end of a pan that a pointer drove (middle, Space, overview, the Pan tool), not a wheel's. */
-function endsPointerPan(gesture: Gesture): boolean {
-  return gesture.kind === 'pan' && gesture.phase === 'end' && gesture.source !== 'wheel'
+/** The end of a pan or turn that a pointer drove (middle, Space, overview, the Pan tool, Shift+middle or Shift+right), not
+ *  a wheel's pan nor a macOS trackpad twist, which no pointer press holds. A rotate ends on release or cancel. */
+function endsPointerNavigation(gesture: Gesture): boolean {
+  if (gesture.kind === 'pan') return gesture.phase === 'end' && gesture.source !== 'wheel'
+  if (gesture.kind === 'rotate') return (gesture.phase === 'end' || gesture.phase === 'cancel') && gesture.source !== 'trackpad-twist'
+  return false
 }
 
 /** The note editor, a handle or the Unlock affordance: today's owned overlays, over which a release ran no cleanup. */
