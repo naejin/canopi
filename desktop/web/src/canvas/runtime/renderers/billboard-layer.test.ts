@@ -21,7 +21,7 @@ function nodes(root: Container): Container[] {
 }
 
 describe('billboard layer', () => {
-  it('billboards stay upright at bearings 0, 45 and 200', () => {
+  it('billboards stay upright at bearings 0, 30, 45, 60 and 200', () => {
     const layer = createBillboardLayer({ createText: () => new Text(), viewSize: { width: 400, height: 300 } })
     const plants = [
       createPlant({ id: 'apple', position: { x: 4, y: 3 }, pinnedName: true }),
@@ -36,7 +36,7 @@ describe('billboard layer', () => {
       selectedTargets: [{ kind: 'plant', id: 'pear' }],
     }))
 
-    for (const bearingDeg of [0, 45, 200]) {
+    for (const bearingDeg of [0, 30, 45, 60, 200]) {
       const view = createTestRendererView({ x: 200, y: 150, scale: 20 }, { bearingDeg })
       layer.setView(view)
       // The root carries no transform: billboards are CSS px, placed one by one.
