@@ -29,7 +29,7 @@ export interface RotationSession {
 export interface ViewReadSurface {
   readonly mode: ReadonlySignal<'site' | 'overview'>
   readonly zoomBand: ReadonlySignal<number>              // floor(log(pixelsPerMetre) / log(1.25)): LOD key
-  readonly bearingDeg: ReadonlySignal<number>            // rounded to 0.1° (compass needle, PDF "As on screen")
+  readonly bearingDeg: ReadonlySignal<number>            // rounded to 0.1° (compass needle); the PDF reads captureView's exact bearing
   readonly northUp: ReadonlySignal<boolean>              // rulers and their hint; never hides the compass
   readonly groundMetresPerPixel: ReadonlySignal<number>  // at the screen centre, 3 significant figures (scale bar, ratio)
   readonly zoomLimit: ReadonlySignal<'min' | 'max' | null>
