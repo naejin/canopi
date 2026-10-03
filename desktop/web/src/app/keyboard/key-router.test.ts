@@ -671,6 +671,22 @@ describe('key router', () => {
     expect(run.mock.calls.map(([command]) => command)).toEqual(['canvas.deleteSelected', 'canvas.deleteSelected'])
   })
 
+  it('Ctrl+X cuts nothing while a pointer session is live, and cuts once it settles', () => {
+    install()
+    host.focus()
+    fake.state.verdict = 'pass-live'
+    fake.state.layers = ['gesture', 'selection']
+    fake.state.command = () => false
+    // Cut deletes the selection too: the deletion would wait for the session to settle and land after the release.
+    expect(press({ key: 'x', code: 'KeyX', ctrlKey: true }, host).defaultPrevented).toBe(true)
+    expect(run).not.toHaveBeenCalled()
+
+    fake.state.verdict = 'pass'
+    fake.state.layers = ['selection']
+    press({ key: 'x', code: 'KeyX', ctrlKey: true }, host)
+    expect(run.mock.calls.map(([command]) => command)).toEqual(['canvas.cut'])
+  })
+
   it('Esc in a text field or with a modifier leaves the tool and the selection alone', () => {
     install()
     const field = document.createElement('input')

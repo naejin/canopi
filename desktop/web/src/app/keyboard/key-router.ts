@@ -240,10 +240,17 @@ function dispatch(
   if (consumed) consume(event)
 }
 
-/** A sink command from a key. Delete and Backspace's deletion is consumed and runs nothing while a pointer session is
- *  live (a still drag, twist or rotate included): it would wait for the session to settle and land after the release. */
+/** The sink commands that delete the selection: Delete and Backspace's deletion, and Ctrl+X's cut. */
+const DELETES_SELECTION: ReadonlySet<ShellCommandId | CanvasCommandId> = new Set<ShellCommandId | CanvasCommandId>([
+  'canvas.deleteSelected',
+  'canvas.cut',
+])
+
+/** A sink command from a key. A command that deletes the selection is consumed and runs nothing while a pointer
+ *  session is live (a still drag, twist or rotate included): it would wait for the session to settle and land after
+ *  the release. */
 function runSink(deps: KeyRouterDeps, port: CanvasKeyboardPort | null, command: ShellCommandId | CanvasCommandId): boolean {
-  if (command === 'canvas.deleteSelected' && (port?.escapeLayers().includes('gesture') ?? false)) return true
+  if (DELETES_SELECTION.has(command) && (port?.escapeLayers().includes('gesture') ?? false)) return true
   return deps.commands.run(command)
 }
 
