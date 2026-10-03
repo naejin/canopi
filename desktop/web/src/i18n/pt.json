@@ -746,7 +746,7 @@
     "viewChip": "Visualização",
     "map": {
       "label": "Mapa do design",
-      "description": "Pressione a tecla de uma ferramenta para escolhê-la, como mostra a barra de ferramentas. Shift F10 abre o menu da seleção. Esc cancela, depois volta a Selecionar e depois limpa a seleção. As setas movem a seleção 10 cm, ou 1 m com Shift; sem nada selecionado deslocam o mapa, mais longe com Shift. F6 passa para a área seguinte: barra de título, ferramentas, mapa, painel."
+      "description": "Pressione a tecla de uma ferramenta para escolhê-la, como mostra a barra de ferramentas. Shift F10 abre o menu da seleção. Esc cancela, depois volta a Selecionar e depois limpa a seleção. As setas movem a seleção 10 cm na tela, ou 1 m com {{mod}}; sem nada selecionado deslocam o mapa. Shift com a seta para a esquerda ou para a direita gira a vista; N ou Shift com a seta para cima redefine o norte. F6 passa para a área seguinte: barra de título, ferramentas, mapa, painel."
     },
     "textNote": {
       "placeholder": "Escreva a nota"
@@ -1750,7 +1750,7 @@
     "workspaceHeading": "Mapa e área de trabalho",
     "nextRegion": "Área seguinte: barra de título, ferramentas, mapa, painel",
     "previousRegion": "Área anterior",
-    "nudge": "Mover a seleção 10 cm",
+    "nudge": "Mover a seleção 10 cm na direção da seta na tela",
     "nudgeLarge": "Mover a seleção 1 m",
     "pan": "Deslocar o mapa quando nada está selecionado",
     "panLarge": "Deslocar o mapa mais longe quando nada está selecionado",
@@ -1797,7 +1797,7 @@
     "openOnSatellite": "Abrir no satélite",
     "openOnSatelliteHint": "Desativado, mantém o último fundo usado.",
     "singleKeyShortcuts": "Atalhos de uma tecla",
-    "singleKeyShortcutsHint": "Teclas de ferramentas como V, P e Z, N para rótulos, colchetes e Shift G, S, R. Desativados, ficam os atalhos com Ctrl, Delete, Esc, as setas e as teclas F.",
+    "singleKeyShortcutsHint": "Teclas de ferramentas como V, P e Z, N para redefinir o norte, colchetes e Shift G, S, R, L. Shift N sempre redefine o norte. Desativados, ficam os atalhos com {{mod}}, Delete, Esc, as setas e as teclas F.",
     "remapLater": "Os atalhos ainda não podem ser alterados.",
     "allShortcuts": "Ver todos os atalhos",
     "filesIntro": "O Canopi mantém estas pastas neste computador. Os designs que você salva são arquivos onde você escolheu.",

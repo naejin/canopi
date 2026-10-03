@@ -746,7 +746,7 @@
     "viewChip": "Ansicht",
     "map": {
       "label": "Designkarte",
-      "description": "Drücken Sie die Taste eines Werkzeugs, um es zu wählen, wie die Werkzeugleiste zeigt. Umschalt F10 öffnet das Menü der Auswahl. Esc bricht ab, kehrt dann zu Auswählen zurück und hebt dann die Auswahl auf. Die Pfeiltasten verschieben die Auswahl um 10 cm, mit Umschalt um 1 m; ohne Auswahl verschieben sie die Karte, mit Umschalt weiter. F6 wechselt zum nächsten Teil: Titelleiste, Werkzeuge, Karte, Bereich."
+      "description": "Drücken Sie die Taste eines Werkzeugs, um es zu wählen, wie die Werkzeugleiste zeigt. Umschalt F10 öffnet das Menü der Auswahl. Esc bricht ab, kehrt dann zu Auswählen zurück und hebt dann die Auswahl auf. Die Pfeiltasten verschieben die Auswahl auf dem Bildschirm um 10 cm, mit {{mod}} um 1 m; ohne Auswahl verschieben sie die Karte. Umschalt mit Pfeil links oder rechts dreht die Ansicht; N oder Umschalt mit Pfeil nach oben richtet nach Norden aus. F6 wechselt zum nächsten Teil: Titelleiste, Werkzeuge, Karte, Bereich."
     },
     "textNote": {
       "placeholder": "Notiz eingeben"
@@ -1750,7 +1750,7 @@
     "workspaceHeading": "Karte und Arbeitsbereich",
     "nextRegion": "Nächster Teil: Titelleiste, Werkzeuge, Karte, Bereich",
     "previousRegion": "Vorheriger Teil",
-    "nudge": "Auswahl um 10 cm verschieben",
+    "nudge": "Auswahl um 10 cm in Pfeilrichtung auf dem Bildschirm verschieben",
     "nudgeLarge": "Auswahl um 1 m verschieben",
     "pan": "Karte verschieben, wenn nichts ausgewählt ist",
     "panLarge": "Karte weiter verschieben, wenn nichts ausgewählt ist",
@@ -1797,7 +1797,7 @@
     "openOnSatellite": "Auf Satellitenbild öffnen",
     "openOnSatelliteHint": "Aus behält den zuletzt verwendeten Hintergrund.",
     "singleKeyShortcuts": "Kurzbefehle mit einer Taste",
-    "singleKeyShortcutsHint": "Werkzeugtasten wie V, P und Z, N für Beschriftungen, eckige Klammern und Umschalt G, S, R. Aus lässt Strg-Kurzbefehle, Entf, Esc, Pfeile und F-Tasten.",
+    "singleKeyShortcutsHint": "Werkzeugtasten wie V, P und Z, N zum Ausrichten nach Norden, eckige Klammern und Umschalt G, S, R, L. Umschalt N richtet immer nach Norden aus. Aus lässt {{mod}}-Kurzbefehle, Entf, Esc, Pfeile und F-Tasten.",
     "remapLater": "Kurzbefehle lassen sich noch nicht ändern.",
     "allShortcuts": "Alle Kurzbefehle anzeigen",
     "filesIntro": "Canopi hält diese Ordner auf diesem Computer. Gespeicherte Designs sind Dateien dort, wo Sie sie abgelegt haben.",

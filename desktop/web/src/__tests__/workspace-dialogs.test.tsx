@@ -18,6 +18,7 @@ import { sidePanel } from '../app/shell/state'
 import type { MenuDefinition } from '../app/shell-commands/menus'
 import { SettingsDialog } from '../components/shared/SettingsDialog'
 import { KeyboardShortcutsDialog } from '../components/shared/KeyboardShortcutsDialog'
+import { t } from '../i18n'
 
 describe('Settings dialog', () => {
   let container: HTMLDivElement
@@ -77,6 +78,13 @@ describe('Settings dialog', () => {
     expect(container.querySelector('[role="dialog"]')).toBeNull()
     expect(document.activeElement).toBe(opener)
     opener.remove()
+  })
+
+  it('the single-key hint names N and Shift L, says Shift N always resets north and names the mod key', () => {
+    expect(t('settings.singleKeyShortcutsHint', { mod: 'Cmd' })).toBe(
+      'Tool keys such as V, P and Z, N to reset north, brackets and Shift G, S, R, L. Shift N always resets north. '
+      + 'Off keeps Cmd shortcuts, Delete, Esc, arrows and F keys.',
+    )
   })
 
   it('keeps Tab inside the dialog and closes on a backdrop press', async () => {
@@ -174,7 +182,7 @@ describe('Keyboard shortcuts dialog', () => {
     expect([...sections[2]!.querySelectorAll('dt')].map((row) => row.textContent)).toEqual([
       'Next area: title bar, tools, map, panel',
       'Previous area',
-      'Nudge the selection 10 cm',
+      'Nudge the selection 10 cm in the arrow\'s direction on screen',
       'Nudge the selection 1 m',
       'Pan the map when nothing is selected',
       'Pan the map farther when nothing is selected',

@@ -133,7 +133,8 @@ describe('SceneInteractionSession', () => {
       expect(descriptionId).toBeTruthy()
       expect(document.getElementById(descriptionId!)?.textContent).toBe(t('canvas.map.description'))
       // It names every key the map takes: tools, the menu, arrows, F6 and Esc.
-      expect(t('canvas.map.description')).toContain('Arrow keys move the selection 10 cm, or 1 m with Shift')
+      expect(t('canvas.map.description', { mod: 'Ctrl' })).toContain('Arrow keys move the selection 10 cm on screen, or 1 m with Ctrl')
+      expect(t('canvas.map.description', { mod: 'Cmd' })).toContain('Shift with left or right arrow turns the view; N or Shift with up arrow resets north.')
       expect(t('canvas.map.description')).toContain('F6')
       session.dispose()
     })

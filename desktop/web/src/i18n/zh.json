@@ -746,7 +746,7 @@
     "viewChip": "视图",
     "map": {
       "label": "设计地图",
-      "description": "按工具栏上显示的按键即可选择工具。Shift F10 打开所选对象的菜单。Esc 取消操作，然后返回选择工具，再清除选择。方向键将所选对象移动 10 厘米，按住 Shift 移动 1 米；未选中任何对象时平移地图，按住 Shift 平移更远。F6 切换到下一个区域：标题栏、工具、地图、面板。"
+      "description": "按工具栏上显示的按键即可选择工具。Shift F10 打开所选对象的菜单。Esc 取消操作，然后返回选择工具，再清除选择。方向键将所选对象沿屏幕方向移动 10 厘米，按住 {{mod}} 移动 1 米；未选中任何对象时平移地图。Shift 加左或右方向键旋转视图；N 或 Shift 加上方向键重置为正北。F6 切换到下一个区域：标题栏、工具、地图、面板。"
     },
     "textNote": {
       "placeholder": "输入注释"
@@ -1750,7 +1750,7 @@
     "workspaceHeading": "地图与工作区",
     "nextRegion": "下一个区域：标题栏、工具、地图、面板",
     "previousRegion": "上一个区域",
-    "nudge": "将所选对象移动 10 厘米",
+    "nudge": "将所选对象沿屏幕上箭头的方向移动 10 厘米",
     "nudgeLarge": "将所选对象移动 1 米",
     "pan": "未选中任何对象时平移地图",
     "panLarge": "未选中任何对象时平移地图更远",
@@ -1797,7 +1797,7 @@
     "openOnSatellite": "以卫星影像打开",
     "openOnSatelliteHint": "关闭时保留上次使用的背景。",
     "singleKeyShortcuts": "单键快捷键",
-    "singleKeyShortcutsHint": "工具键如 V、P 和 Z，标签键 N，方括号以及 Shift G、S、R。关闭后仍保留 Ctrl 快捷键、Delete、Esc、方向键和 F 键。",
+    "singleKeyShortcutsHint": "工具键如 V、P 和 Z，重置为正北的 N，方括号以及 Shift G、S、R、L。Shift N 始终重置为正北。关闭后仍保留 {{mod}} 快捷键、Delete、Esc、方向键和 F 键。",
     "remapLater": "快捷键暂时无法更改。",
     "allShortcuts": "显示全部快捷键",
     "filesIntro": "Canopi 在这台电脑上保留这些文件夹。你保存的设计是你所选位置中的文件。",

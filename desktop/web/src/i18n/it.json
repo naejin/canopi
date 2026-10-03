@@ -746,7 +746,7 @@
     "viewChip": "Vista",
     "map": {
       "label": "Mappa del progetto",
-      "description": "Premi il tasto di uno strumento per sceglierlo, come mostra la barra degli strumenti. Maiusc F10 apre il menu della selezione. Esc annulla, poi torna a Seleziona, poi svuota la selezione. Le frecce spostano la selezione di 10 cm, o di 1 m con Maiusc; senza selezione spostano la mappa, più lontano con Maiusc. F6 passa all’area successiva: barra del titolo, strumenti, mappa, pannello."
+      "description": "Premi il tasto di uno strumento per sceglierlo, come mostra la barra degli strumenti. Maiusc F10 apre il menu della selezione. Esc annulla, poi torna a Seleziona, poi svuota la selezione. Le frecce spostano la selezione di 10 cm sullo schermo, o di 1 m con {{mod}}; senza selezione spostano la mappa. Maiusc con la freccia sinistra o destra ruota la vista; N o Maiusc con la freccia su ripristina il nord. F6 passa all’area successiva: barra del titolo, strumenti, mappa, pannello."
     },
     "textNote": {
       "placeholder": "Scrivi la nota"
@@ -1750,7 +1750,7 @@
     "workspaceHeading": "Mappa e area di lavoro",
     "nextRegion": "Area successiva: barra del titolo, strumenti, mappa, pannello",
     "previousRegion": "Area precedente",
-    "nudge": "Sposta la selezione di 10 cm",
+    "nudge": "Sposta la selezione di 10 cm nella direzione della freccia sullo schermo",
     "nudgeLarge": "Sposta la selezione di 1 m",
     "pan": "Spostare la mappa quando non è selezionato nulla",
     "panLarge": "Spostare la mappa più lontano quando non è selezionato nulla",
@@ -1797,7 +1797,7 @@
     "openOnSatellite": "Apri sul satellite",
     "openOnSatelliteHint": "Disattivato, resta l’ultimo sfondo usato.",
     "singleKeyShortcuts": "Scorciatoie a un tasto",
-    "singleKeyShortcutsHint": "Tasti degli strumenti come V, P e Z, N per le etichette, le parentesi quadre e Maiusc G, S, R. Disattivate, restano le scorciatoie con Ctrl, Canc, Esc, le frecce e i tasti F.",
+    "singleKeyShortcutsHint": "Tasti degli strumenti come V, P e Z, N per ripristinare il nord, le parentesi quadre e Maiusc G, S, R, L. Maiusc N ripristina sempre il nord. Disattivate, restano le scorciatoie con {{mod}}, Canc, Esc, le frecce e i tasti F.",
     "remapLater": "Le scorciatoie non si possono ancora modificare.",
     "allShortcuts": "Mostra tutte le scorciatoie",
     "filesIntro": "Canopi tiene queste cartelle su questo computer. I progetti che salvi sono file dove li hai scelti.",

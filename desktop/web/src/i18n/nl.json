@@ -746,7 +746,7 @@
     "viewChip": "Weergave",
     "map": {
       "label": "Ontwerpkaart",
-      "description": "Druk op de toets van een gereedschap om het te kiezen, zoals de gereedschapsbalk laat zien. Shift F10 opent het menu van de selectie. Esc annuleert, gaat dan terug naar Selecteren en wist daarna de selectie. Pijltjestoetsen verplaatsen de selectie 10 cm, of 1 m met Shift; zonder selectie verschuiven ze de kaart, verder met Shift. F6 gaat naar het volgende gebied: titelbalk, gereedschap, kaart, paneel."
+      "description": "Druk op de toets van een gereedschap om het te kiezen, zoals de gereedschapsbalk laat zien. Shift F10 opent het menu van de selectie. Esc annuleert, gaat dan terug naar Selecteren en wist daarna de selectie. Pijltjestoetsen verplaatsen de selectie 10 cm op het scherm, of 1 m met {{mod}}; zonder selectie verschuiven ze de kaart. Shift met pijl links of rechts draait de weergave; N of Shift met pijl omhoog herstelt het noorden. F6 gaat naar het volgende gebied: titelbalk, gereedschap, kaart, paneel."
     },
     "textNote": {
       "placeholder": "Typ de notitie"
@@ -1750,7 +1750,7 @@
     "workspaceHeading": "Kaart en werkruimte",
     "nextRegion": "Volgend gebied: titelbalk, gereedschap, kaart, paneel",
     "previousRegion": "Vorig gebied",
-    "nudge": "Selectie 10 cm verschuiven",
+    "nudge": "Selectie 10 cm in de richting van de pijl op het scherm verschuiven",
     "nudgeLarge": "Selectie 1 m verschuiven",
     "pan": "Kaart verschuiven als niets is geselecteerd",
     "panLarge": "Kaart verder verschuiven als niets is geselecteerd",
@@ -1797,7 +1797,7 @@
     "openOnSatellite": "Openen op satelliet",
     "openOnSatelliteHint": "Uit houdt de laatst gebruikte achtergrond.",
     "singleKeyShortcuts": "Sneltoetsen met één toets",
-    "singleKeyShortcutsHint": "Gereedschapstoetsen zoals V, P en Z, N voor labels, vierkante haken en Shift G, S, R. Uit houdt Ctrl-sneltoetsen, Delete, Esc, pijltjes en F-toetsen.",
+    "singleKeyShortcutsHint": "Gereedschapstoetsen zoals V, P en Z, N om het noorden te herstellen, vierkante haken en Shift G, S, R, L. Shift N herstelt altijd het noorden. Uit houdt {{mod}}-sneltoetsen, Delete, Esc, pijltjes en F-toetsen.",
     "remapLater": "Sneltoetsen kunnen nog niet worden gewijzigd.",
     "allShortcuts": "Alle sneltoetsen tonen",
     "filesIntro": "Canopi bewaart deze mappen op deze computer. Ontwerpen die je opslaat zijn bestanden waar je ze koos.",

@@ -746,7 +746,7 @@
     "viewChip": "View",
     "map": {
       "label": "Design map",
-      "description": "Press a tool's key to choose it, as the tool rail shows. Shift F10 opens the menu for the selection. Esc cancels, then returns to Select, then clears the selection. Arrow keys move the selection 10 cm, or 1 m with Shift; with nothing selected they pan the map, farther with Shift. F6 moves to the next area: title bar, tools, map, panel."
+      "description": "Press a tool's key to choose it, as the tool rail shows. Shift F10 opens the menu for the selection. Esc cancels, then returns to Select, then clears the selection. Arrow keys move the selection 10 cm on screen, or 1 m with {{mod}}; with nothing selected they pan the map. Shift with left or right arrow turns the view; N or Shift with up arrow resets north. F6 moves to the next area: title bar, tools, map, panel."
     },
     "textNote": {
       "placeholder": "Type the note"
@@ -1750,7 +1750,7 @@
     "workspaceHeading": "Map and workspace",
     "nextRegion": "Next area: title bar, tools, map, panel",
     "previousRegion": "Previous area",
-    "nudge": "Nudge the selection 10 cm",
+    "nudge": "Nudge the selection 10 cm in the arrow's direction on screen",
     "nudgeLarge": "Nudge the selection 1 m",
     "pan": "Pan the map when nothing is selected",
     "panLarge": "Pan the map farther when nothing is selected",
@@ -1797,7 +1797,7 @@
     "openOnSatellite": "Open on satellite",
     "openOnSatelliteHint": "Off keeps the background you used last.",
     "singleKeyShortcuts": "Single-key shortcuts",
-    "singleKeyShortcutsHint": "Tool keys such as V, P and Z, N for labels, brackets and Shift G, S, R. Off keeps Ctrl shortcuts, Delete, Esc, arrows and F keys.",
+    "singleKeyShortcutsHint": "Tool keys such as V, P and Z, N to reset north, brackets and Shift G, S, R, L. Shift N always resets north. Off keeps {{mod}} shortcuts, Delete, Esc, arrows and F keys.",
     "remapLater": "Shortcuts can’t be changed yet.",
     "allShortcuts": "Show all shortcuts",
     "filesIntro": "Canopi keeps these folders on this computer. Designs you save are files wherever you chose.",
