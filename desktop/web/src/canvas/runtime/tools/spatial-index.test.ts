@@ -7,7 +7,6 @@ import {
   sceneStoreWith,
   textNote,
 } from '../../../__tests__/support/tool-harness'
-import { computeSelectionRect } from '../../operations'
 import { buildPlantPresentationEntries } from '../plant-presentation'
 import type { SceneStore } from '../scene'
 import type { WorldPoint, WorldQuad } from '../view/types'
@@ -135,7 +134,12 @@ describe('ToolScene over today\'s hit tests', () => {
     ] as const) {
       const expected = queryRectTopLevel(
         store.persisted,
-        computeSelectionRect(a, b),
+        {
+          x: Math.min(a.x, b.x),
+          y: Math.min(a.y, b.y),
+          width: Math.abs(b.x - a.x),
+          height: Math.abs(b.y - a.y),
+        },
         4,
         source.speciesCache(),
         source.plantContext,

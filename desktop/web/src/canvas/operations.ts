@@ -5,21 +5,9 @@ export interface SimpleRect {
   height: number
 }
 
-export function computeSelectionRect(
-  start: { x: number; y: number },
-  end: { x: number; y: number },
-): SimpleRect {
-  return {
-    x: Math.min(start.x, end.x),
-    y: Math.min(start.y, end.y),
-    width: Math.abs(end.x - start.x),
-    height: Math.abs(end.y - start.y),
-  }
-}
-
 /**
  * The band select query: the world bounds of a band's four corners. At bearing 0 the band is level with the world axes, so
- * the bounds are the band itself (today's computeSelectionRect of its two corners); a turned band is queried as a polygon
+ * the bounds are the band itself (the box spanned by its two corners); a turned band is queried as a polygon
  * from phase 1 (INV-TOOL-01).
  */
 export function computeQuadBoundsRect(corners: readonly { x: number; y: number }[]): SimpleRect {
