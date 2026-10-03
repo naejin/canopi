@@ -744,6 +744,92 @@ mod tests {
         }
     }
 
+    /// canopi-dfc0 (C9): a GeoTIFF whose compressed chunk decodes above the
+    /// streamed chunk ceiling is loaded whole, so it keeps the capacity
+    /// limit: at the limit it converts into the whole raster's bytes, one
+    /// cell over it is refused by name, and the same file under the real
+    /// ceiling streams past that lowered limit.
+    #[test]
+    fn a_tiff_chunk_above_the_streamed_ceiling_loads_whole_under_the_limit() {
+        let dir = scratch("one-big-chunk");
+        let engine = RustRasterEngine;
+        let (width, height) = (701u32, 599u32);
+        let cells = u64::from(width * height);
+        let authored = values(width, height);
+        let grid = grid(width, height);
+        let georef = RasterGeoref {
+            grid: &grid,
+            crs: "EPSG:2154",
+        };
+        // One Deflate strip with the floating-point predictor: about 1.6 MiB
+        // decoded, above a lowered ceiling of 1 MiB.
+        let source = dir.join("one-deflate-strip.tif");
+        write_source_tiff(
+            &source,
+            width,
+            height,
+            Chunking::Strips(height),
+            8,
+            3,
+            &authored,
+        );
+        let whole = dir.join("whole.tif");
+        engine
+            .write_controlled_cog(
+                RasterInput::Samples {
+                    grid: &grid,
+                    values: &authored,
+                },
+                &whole,
+                Some(georef),
+                Some(-9999.0),
+                &cancel(),
+            )
+            .unwrap();
+        let convert = |output: &Path| {
+            engine.write_controlled_cog(
+                RasterInput::File(&source),
+                output,
+                Some(georef),
+                None,
+                &cancel(),
+            )
+        };
+
+        let _ceiling = tiff::chunk_ceiling_probe::set(1024 * 1024);
+        let at_limit = dir.join("at-limit.tif");
+        {
+            let _limit = super::super::import::extraction_limit_probe::set(cells);
+            convert(&at_limit).expect("a whole load at the limit converts");
+        }
+        assert!(
+            std::fs::read(&whole).unwrap() == std::fs::read(&at_limit).unwrap(),
+            "the whole load gives the whole raster's bytes"
+        );
+
+        let over = dir.join("over.tif");
+        {
+            let _limit = super::super::import::extraction_limit_probe::set(cells - 1);
+            let error = convert(&over).expect_err("one cell over the limit is refused");
+            assert!(
+                error.contains(&format!("requires {cells} cells"))
+                    && error.contains(&format!("limited to {}", cells - 1)),
+                "the refusal names the limit: {error}"
+            );
+        }
+        assert!(!over.exists());
+
+        // The ceiling alone decides: under the real one the chunk streams.
+        drop(_ceiling);
+        let streamed = dir.join("streamed.tif");
+        {
+            let _limit = super::super::import::extraction_limit_probe::set(cells - 1);
+            convert(&streamed).expect("under the real ceiling the strip streams");
+        }
+        assert!(std::fs::read(&whole).unwrap() == std::fs::read(&streamed).unwrap());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     #[test]
     fn a_written_geotiff_probes_and_reads_back_exactly() {
         let dir = scratch("geotiff");

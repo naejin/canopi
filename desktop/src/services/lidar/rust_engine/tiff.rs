@@ -321,6 +321,41 @@ fn codec(compression_tag: u16) -> Result<Compression, String> {
 /// window, so such a file is loaded whole under the capacity limit instead.
 pub(super) const MAX_STREAMED_CHUNK_BYTES: u64 = 64 * 1024 * 1024;
 
+/// The chunk ceiling in force on this thread: the constant, or the lower one
+/// a test installed through [`chunk_ceiling_probe`].
+fn max_streamed_chunk_bytes() -> u64 {
+    #[cfg(test)]
+    if let Some(bytes) = CHUNK_CEILING.with(std::cell::Cell::get) {
+        return bytes;
+    }
+    MAX_STREAMED_CHUNK_BYTES
+}
+
+#[cfg(test)]
+thread_local! {
+    static CHUNK_CEILING: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+}
+
+/// Test-only seam for the chunk ceiling, thread-local like
+/// `import::extraction_limit_probe`, so a small authored file can take the
+/// whole-load path of a huge compressed chunk.
+#[cfg(test)]
+pub(super) mod chunk_ceiling_probe {
+    /// Hold the ceiling at `bytes` until the guard is dropped.
+    pub(in super::super) fn set(bytes: u64) -> Guard {
+        super::CHUNK_CEILING.with(|slot| slot.set(Some(bytes)));
+        Guard
+    }
+
+    pub(in super::super) struct Guard;
+
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            super::CHUNK_CEILING.with(|slot| slot.set(None));
+        }
+    }
+}
+
 /// How band 1's samples are laid out and encoded, chunk by chunk.
 #[derive(Clone)]
 pub(super) struct BandFormat {
@@ -346,7 +381,8 @@ impl BandFormat {
             && self.predictor == 1
     }
 
-    /// Whether no chunk decoded whole exceeds [`MAX_STREAMED_CHUNK_BYTES`].
+    /// Whether no chunk decoded whole exceeds [`MAX_STREAMED_CHUNK_BYTES`]
+    /// (or a test's lower ceiling).
     fn streams(&self) -> bool {
         if self.by_byte_range() {
             return true;
@@ -356,7 +392,7 @@ impl BandFormat {
             Layout::Tiles { width, height, .. } => (*width, *height),
         };
         u64::from(columns) * u64::from(rows) * (self.chunk_bands as u64) * u64::from(self.bits / 8)
-            <= MAX_STREAMED_CHUNK_BYTES
+            <= max_streamed_chunk_bytes()
     }
 }
 
