@@ -1,7 +1,7 @@
 import { batch, signal } from '@preact/signals'
 import type { PrintBounds } from '../../canvas/print'
-import { splitFieldBounds } from './split-sheets'
-import { contains } from './field-geometry'
+import { splitPrintArea } from './split-sheets'
+import { areaContains, areaFromFrame, layoutAngle, pageFrame } from './page-frame'
 import { PDF_HABITS, PDF_ZOOM, pdfAreaKey, type PdfHabit, type PdfPageView } from './types'
 import type { PdfPreparation } from './prepare'
 import type { SpeciesDisplayNames } from '../plant-browser/workbench'
@@ -96,10 +96,11 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
         if (!current()) return
         progress(overview.plan)
       }
+      const frame = pageFrame(layoutAngle(choices, next.input))
       const names = choices.areas?.length && choices.layers.includes('plants')
         ? Array.from(new Set(next.input.canvas.plants.filter(plant => choices.areas!.some(area => {
           // A manually displaced/zoomed view can include plants outside its original rectangle.
-          return choices.views?.[pdfAreaKey(area)] ? true : contains(area.bounds, plant.position)
+          return choices.views?.[pdfAreaKey(area)] ? true : areaContains(frame, area.bounds, plant.position)
         })).map(plant => plant.canonicalName))) : []
       // Catalog failure retains full canonical identities on chosen detail sheets.
       const identities = names.length ? await resolvePrintIdentities(deps, names, next.input.locale, abort.signal) : { commonNames: {} }
@@ -132,6 +133,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     const layers = setup.peek().layers.filter((layer) => layer !== name)
     configure({ layers: selected ? [...layers, name] : layers })
   }
+  /** `bounds` is the area in plan metres: an unturned box about its centre (`PdfPrintArea`). */
   function addPrintArea(bounds: PrintBounds): string | undefined {
     if (!open.peek() || disposed || state.peek().status === 'delivering') return
     if (![bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) || bounds.width <= 0 || bounds.height <= 0) return
@@ -141,13 +143,13 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     return `area:${number}`
   }
   function addWholeDesign(): string | undefined {
-    const page = state.peek().result?.plan.pickerPage
-    return page ? addPrintArea(page.ground) : undefined
+    const plan = state.peek().result?.plan
+    return plan?.pickerPage ? addPrintArea(areaFromFrame(pageFrame(plan.angleDeg), plan.pickerPage.ground)) : undefined
   }
   function previewSplit(id: string): void {
-    const page = state.peek().result?.plan.pages.find(p => p.id === id && p.kind === 'detail')
+    const plan = state.peek().result?.plan, page = plan?.pages.find(p => p.id === id && p.kind === 'detail')
     if (!page || !capture?.isCurrent() || !['ready', 'saved', 'downloaded', 'error'].includes(state.peek().status)) return
-    const bounds = splitFieldBounds(page.ground, setup.peek().layers.includes('plants') ? capture.input.canvas.plants : [])
+    const bounds = splitPrintArea(page.ground, setup.peek().layers.includes('plants') ? capture.input.canvas.plants : [], pageFrame(plan!.angleDeg))
     const areas = bounds.map((bounds, index) => ({ id: String(nextAreaId + index + 1), name: deps.namePrintArea(nextAreaId + index + 1), bounds }))
     const views = Object.fromEntries(Object.entries(setup.peek().views ?? {}).filter(([key]) => key !== id && !key.startsWith(`${id}:legend:`)))
     splitPreview.value = { ...setup.peek(), areas: setup.peek().areas?.flatMap(a => pdfAreaKey(a) === id ? areas : [a]), views }

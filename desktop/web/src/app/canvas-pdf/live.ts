@@ -21,7 +21,9 @@ export const canvasPdf = createPdfWorkflow({
     const name = designSessionStore.designName.value
     const canvas = query.capturePrintSnapshot()
     if (!canvas) return null
-    return { identity, input: { name, locale: language, canvas, commonNames: {} },
+    // Exact, not the rounded bearing signal: As on screen levels guides drawn level on the turned map.
+    const viewBearingDeg = query.view.captureView().camera.bearingDeg
+    return { identity, input: { name, locale: language, canvas, commonNames: {}, viewBearingDeg },
       isCurrent: () => designSessionStore.sessionIdentity.value === identity && currentCanvasQuerySurface.value === query
         && query.revision.scene.value === revision && locale.value === language && designSessionStore.designName.value === name
         && query.getSettledPlacedPlants() !== null }
