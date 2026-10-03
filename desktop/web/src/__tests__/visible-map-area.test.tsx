@@ -160,6 +160,13 @@ describe('visible map area', () => {
       { rect: rect(ZOOM_GROUP), side: 'bottom' },
     ])).toBe(608)
     expect(measureBottomBandRoom(rect(WINDOW), [])).toBe(1280)
+    // The rulers hint stands above the view chip, wider than it: wholly above the band, it takes none of its room, so
+    // turning the view never folds the credits.
+    expect(measureBottomBandRoom(rect(WINDOW), [
+      { rect: rect(viewChip), side: 'bottom' },
+      { rect: rect({ left: 12, top: 700, width: 380, height: 36 }), side: 'bottom' },
+      { rect: rect(ZOOM_GROUP), side: 'bottom' },
+    ])).toBe(608)
 
     const area = element(narrow)
     const releaseArea = registerMapArea(area)

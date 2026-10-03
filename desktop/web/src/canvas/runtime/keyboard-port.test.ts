@@ -338,6 +338,23 @@ describe('createCanvasKeyboardPort', () => {
     expect(polygon.toolHost.command.mock.calls.map(([c]) => c.kind)).toEqual(['confirm'])
   })
 
+  it('Enter and F2 never open the note editor while a pointer session is live; F2 is kept from renaming the Design', () => {
+    // A still twist or rotate is live with no events: the editor would take Esc, which then never cancels it.
+    const f = fixture({ reply: (c) => c.kind === 'edit-text' ? 'handled' : 'pass' })
+    f.live = true
+    expect(f.port.command({ kind: 'confirm' })).toBe(false)
+    expect(f.port.command({ kind: 'edit-text' })).toBe(true)
+    // The tool's own Enter still runs (a Polygon finished with a corner's press held).
+    expect(f.toolHost.command.mock.calls.map(([c]) => c.kind)).toEqual(['confirm'])
+    f.live = false
+    expect(f.port.command({ kind: 'edit-text' })).toBe(true)
+    expect(f.toolHost.command).toHaveBeenLastCalledWith({ kind: 'edit-text' })
+
+    const polygon = fixture({ tool: 'polygon', reply: (c) => c.kind === 'confirm' ? 'handled' : 'pass' })
+    polygon.live = true
+    expect(polygon.port.command({ kind: 'confirm' })).toBe(true)
+  })
+
   it('in overview Enter, Backspace, F2 and the Menu key do nothing', () => {
     const f = fixture({ reply: () => 'handled' })
     f.session.overview = vi.fn(() => true)

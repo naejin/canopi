@@ -2,7 +2,7 @@
 
 Status: Accepted (2026-09-26, Canopi v2)
 
-Amended by [ADR 0015](0015-rotating-map-and-canvas-controls.md) (2026-09-29): saved views and stories restore their bearing.
+Amended by [ADR 0015](0015-rotating-map-and-canvas-controls.md) (2026-09-29): saved views and stories restore their bearing; 2026-10-03 (A12): a view's extent is a record only, framing comes from its camera.
 
 ## Context
 
@@ -18,7 +18,7 @@ v2.0 ships one analysis (slope) wired directly into the LiDAR workflow. Planned 
   - Unavailable entries say why (already in Layers, needs Desktop, needs a point cloud).
 - **Typed library items.** Library and site-data items carry a kind: raster (elevation, height, slope, flow…), point cloud, or vector result (streams, watersheds, detected trees, crowns). Layers, legends and value readouts dispatch on kind; nothing assumes an elevation raster.
 - **Provenance.** Every derived item records its input items and generations, analysis id and recipe version, parameters and tool version. Refresh re-runs a result in place (every Design that uses it sees the new result; the run stays in the processing history); stale results are flagged with their reason (input, recipe or tool changed); refresh is always explicit, never automatic.
-- **Saved views.** A Design can hold named views: camera (lon, lat, zoom, bearing), the lon/lat bounding box of the ground it frames (four corners when rotated; used by thumbnails and older builds), visible layers, highlighted species or objects, and optional title and text. Views are Design data (Design Edit authority), stored in lon/lat like everything else. Showing a view or story step restores centre, zoom and bearing exactly; it never snaps to north.
+- **Saved views.** A Design can hold named views: camera (lon, lat, zoom, bearing), the lon/lat bounding box of the ground it frames (four corners when rotated; a record only: going to a view, story steps and thumbnails use the camera zoom), visible layers, highlighted species or objects, and optional title and text. Views are Design data (Design Edit authority), stored in lon/lat like everything else. Showing a view or story step restores centre, zoom and bearing exactly; it never snaps to north.
 - **Stories.** A story is an ordered list of saved views with rich text and optional images, authored in a Story panel beside the live map and presented full-window inside Canopi (keyboard and click navigation, reduced-motion jumps). Export to a self-contained web page and PDF comes from the same model. Canopi does not depend on ArcGIS StoryMaps.
 
 ## Consequences

@@ -121,6 +121,14 @@ describe('Compass', () => {
     expect(compass().querySelector('[data-needle]')?.getAttribute('transform')).toBe('rotate(-30 10 10)')
   })
 
+  it('reads the bearing in whole degrees, and a turn within half a degree of north to its tenth', () => {
+    mount(0)
+    act(() => { view.navigation.showCamera({ ...view.view().camera, bearingDeg: 37.5 }) })
+    expect(description()).toBe('View turned 38° from north')
+    act(() => { view.navigation.showCamera({ ...view.view().camera, bearingDeg: 359.7 }) })
+    expect(description()).toBe('View turned 359.7° from north')
+  })
+
   it('click resets north', () => {
     vi.useFakeTimers()
     mount(30)

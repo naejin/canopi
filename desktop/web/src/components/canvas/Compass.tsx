@@ -204,10 +204,17 @@ export function Compass({ command, className }: {
         <ButtonTooltip label={command.label} shortcut={command.shortcut} description={t('canvas.compass.hint')} side="top" />
       </button>
       <span id={descriptionId} className={styles.description}>
-        {northUp ? t('canvas.compass.northUp') : t('canvas.compass.bearing', { degrees: bearingDeg })}
+        {northUp ? t('canvas.compass.northUp') : t('canvas.compass.bearing', { degrees: spokenBearing(bearingDeg) })}
       </span>
     </>
   )
+}
+
+/** The bearing in whole degrees for the screen reader; within half a degree of north, its tenth, so it never reads 0°
+ *  or 360° while the view is turned. */
+function spokenBearing(bearingDeg: number): number {
+  const whole = Math.round(bearingDeg) % 360
+  return whole === 0 ? bearingDeg : whole
 }
 
 function isLive(press: Press | null): boolean {

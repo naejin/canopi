@@ -252,7 +252,7 @@ describe('Budget Item workbench', () => {
     expect(rowNames()).toEqual(['Apple', 'Cherry'])
 
     const finder = container.querySelector<HTMLInputElement>('input[type="search"]')!
-    expect(finder.getAttribute('aria-keyshortcuts')).toBe('Control+F')
+    expect(finder.getAttribute('aria-keyshortcuts')).toBe('Control+F Meta+F')
     await type(finder, 'chery')
     expect(rowNames()).toEqual(['Cherry'])
     expect(container.querySelector('[role="status"]')?.textContent).toBe('Showing results for cherry · 1 species · 1 plant')

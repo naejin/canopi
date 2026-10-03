@@ -43,7 +43,7 @@ interface MenuSubmenu {
   readonly type: 'submenu'
   readonly id: string
   readonly label: string
-  /** A key that acts on the whole submenu (View › Labels: N cycles its items). */
+  /** A key that acts on the whole submenu (View › Labels: Shift+L cycles its items). */
   readonly shortcut?: string
   readonly ariaShortcut?: string
   readonly disabled: boolean

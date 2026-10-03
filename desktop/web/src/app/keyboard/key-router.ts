@@ -219,7 +219,8 @@ function scopeAdmits(scope: Exclude<KeyScope, 'global'>, at: KeyTarget, event: K
   }
 }
 
-/** Step 10: canvas commands through the port, a refused one through its fallback, the rest through the sink. */
+/** Step 10: canvas commands through the port, a refused one through its fallback, the rest through the sink; a row kept
+ *  from the browser runs nothing. */
 function dispatch(
   deps: KeyRouterDeps,
   port: CanvasKeyboardPort | null,
@@ -228,13 +229,29 @@ function dispatch(
   fallbackAllowed: boolean,
 ): void {
   let consumed: boolean
-  if (row.canvas) {
+  if (row.keepsFromBrowser) {
+    consumed = true
+  } else if (row.canvas) {
     consumed = port?.command(row.canvas) ?? false
-    if (!consumed && row.fallback && fallbackAllowed) consumed = deps.commands.run(row.fallback)
+    if (!consumed && row.fallback && fallbackAllowed) consumed = runSink(deps, port, row.fallback)
   } else {
-    consumed = deps.commands.run(row.command as ShellCommandId | CanvasCommandId)
+    consumed = runSink(deps, port, row.command as ShellCommandId | CanvasCommandId)
   }
   if (consumed) consume(event)
+}
+
+/** The sink commands that delete the selection: Delete and Backspace's deletion, and Ctrl+X's cut. */
+const DELETES_SELECTION: ReadonlySet<ShellCommandId | CanvasCommandId> = new Set<ShellCommandId | CanvasCommandId>([
+  'canvas.deleteSelected',
+  'canvas.cut',
+])
+
+/** A sink command from a key. A command that deletes the selection is consumed and runs nothing while a pointer
+ *  session is live (a still drag, twist or rotate included): it would wait for the session to settle and land after
+ *  the release. */
+function runSink(deps: KeyRouterDeps, port: CanvasKeyboardPort | null, command: ShellCommandId | CanvasCommandId): boolean {
+  if (DELETES_SELECTION.has(command) && (port?.escapeLayers().includes('gesture') ?? false)) return true
+  return deps.commands.run(command)
 }
 
 function consume(event: KeyboardEventLike): void {

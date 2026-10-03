@@ -1,6 +1,7 @@
 // canvas/runtime/tools/stamp-rotation.ts  (pure)
 //
-// Owns the held angle of the Object and saved stamps, how a stamp's objects turn about its anchor, and the ghosts that
+// Owns how a held stamp's angle steps (each stamp tool keeps its own pick's start: the saved stamp's in
+// saved-object-stamp.ts), how a stamp's objects turn about its anchor, and the ghosts that
 // show what a press would place: drafts of 'objects' ghosts, zones and plants in one at 0.62 and notes in a second at
 // 0.68 (today's opacities), for both stamp tools and the saved stamp's dragover preview for the drop route. `[` and `]`
 // reach the stamp tools as rotate-held commands of ±15° from the keyboard port, which keeps today's key gating (spec
@@ -20,7 +21,7 @@ const STAMP_GHOST_OPACITY = 0.62
 /** Notes draw a little less faint than zones and plants (the draft layer multiplies each note's own opacities). */
 const STAMP_GHOST_NOTE_OPACITY = 0.68
 
-/** The stamp's angle after a step, kept in 0–345°. */
+/** The stamp's angle after a step, normalised to [0, 360): a saved stamp starts at any live bearing (37.5° → 52.5°). */
 export function turnStampRotation(current: number, step: number): number {
   return (((current + step) % 360) + 360) % 360
 }

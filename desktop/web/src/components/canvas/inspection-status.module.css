@@ -17,6 +17,15 @@
   font-size: var(--text-xs);
 }
 
+/* The rulers hint stands above the view chip on a turned map (spec §4.6): the status rises above both. Narrow
+   canvases hide the chip's wrapper with the hint still in the DOM (ViewChip.module.css), so the rise needs the
+   complementary width. */
+@container (width > 600px) {
+  :global(*:has(> [data-rulers-north-hint])) ~ .status {
+    bottom: calc(var(--chrome-inset) + var(--control-size-3xl) + var(--space-2) + var(--control-size-2xl) + var(--space-2));
+  }
+}
+
 .heading {
   display: flex;
   align-items: center;

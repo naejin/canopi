@@ -169,7 +169,7 @@ describe('Web Edition Species Catalog panel', () => {
     expect(mockWorkbench.mount).toHaveBeenCalledWith('catalog')
 
     const search = requiredElement<HTMLInputElement>('input[aria-label="Search the plant catalog"]')
-    expect(search.getAttribute('aria-keyshortcuts')).toBe('Control+F')
+    expect(search.getAttribute('aria-keyshortcuts')).toBe('Control+F Meta+F')
     await act(async () => {
       search.value = 'apple'
       search.dispatchEvent(new Event('input', { bubbles: true }))

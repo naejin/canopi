@@ -474,6 +474,84 @@ describe('the interaction session', () => {
     expect(session.keyboard.command({ kind: 'rotate-view', direction: 1 })).toBe(true)
   })
 
+  it('mod pressed and released through the key router during a still Shift+middle rotate steps the view, then frees it (A8)', () => {
+    createSession()
+    const bearing = () => testView.view().camera.bearingDeg
+
+    events.pointerDown({ x: 100, y: 100 }, { pointerId: 4, button: 1, buttons: 4, shiftKey: true })
+    events.pointerMove({ x: 140, y: 100 }, { pointerId: 4, buttons: 4, shiftKey: true })
+    expect(bearing()).toBeCloseTo(32, 6)
+
+    // The mouse stays still: only the key reaches the canvas, through the router and the session's keyboard port.
+    events.keyDown({ key: 'Control', code: 'ControlLeft', ctrlKey: true, shiftKey: true })
+    expect(bearing()).toBeCloseTo(30, 6)
+    events.keyUp({ key: 'Control', code: 'ControlLeft', shiftKey: true })
+    expect(bearing()).toBeCloseTo(32, 6)
+
+    events.pointerUp({ x: 140, y: 100 }, { pointerId: 4, button: 1, buttons: 0 })
+    // Released without moving, the turn ends where the freed view shows it, not at the stepped bearing.
+    expect(bearing()).toBeCloseTo(32, 6)
+  })
+
+  it('on a Mac, Cmd pressed and released during a still Shift+middle rotate steps the view, then frees it (A8)', () => {
+    createSession({ platform: { os: 'mac', engine: 'webkit', gestureEvents: true } })
+    const bearing = () => testView.view().camera.bearingDeg
+
+    events.pointerDown({ x: 100, y: 100 }, { pointerId: 4, button: 1, buttons: 4, shiftKey: true })
+    events.pointerMove({ x: 140, y: 100 }, { pointerId: 4, buttons: 4, shiftKey: true })
+    expect(bearing()).toBeCloseTo(32, 6)
+
+    events.keyDown({ key: 'Meta', code: 'MetaLeft', metaKey: true, shiftKey: true })
+    expect(bearing()).toBeCloseTo(30, 6)
+    events.keyUp({ key: 'Meta', code: 'MetaLeft', shiftKey: true })
+    expect(bearing()).toBeCloseTo(32, 6)
+
+    events.pointerUp({ x: 140, y: 100 }, { pointerId: 4, button: 1, buttons: 0 })
+    // Released without moving, the turn ends where the freed view shows it, not at the stepped bearing.
+    expect(bearing()).toBeCloseTo(32, 6)
+  })
+
+  it('a Shift+middle rotate\'s release and its Esc run the tool\'s cleanup, as the pan it replaced did', () => {
+    createSession()
+    const released = vi.spyOn(builtHosts.at(-1)!, 'released')
+
+    events.pointerDown({ x: 100, y: 100 }, { pointerId: 4, button: 1, buttons: 4, shiftKey: true })
+    events.pointerMove({ x: 140, y: 100 }, { pointerId: 4, buttons: 4, shiftKey: true })
+    expect(released).not.toHaveBeenCalled()
+    events.pointerUp({ x: 140, y: 100 }, { pointerId: 4, button: 1, buttons: 0 })
+    expect(released).toHaveBeenCalledTimes(1)
+
+    events.pointerDown({ x: 100, y: 100 }, { pointerId: 5, button: 1, buttons: 4, shiftKey: true })
+    events.pointerMove({ x: 140, y: 100 }, { pointerId: 5, buttons: 4, shiftKey: true })
+    events.keyDown({ key: 'Escape', code: 'Escape' })
+    expect(released).toHaveBeenCalledTimes(2)
+    events.pointerUp({ x: 140, y: 100 }, { pointerId: 5, button: 1, buttons: 0 })
+  })
+
+  it('a WebKit pinch is no live pointer session until its twist passes 10°: Esc and the arrows keep working', () => {
+    const { session } = createSession({ platform: { os: 'mac', engine: 'webkit', gestureEvents: true } })
+    const gesture = (type: string, rotation: number) => {
+      const event = Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
+        clientX: 200, clientY: 150, scale: 1.2, rotation, shiftKey: false, ctrlKey: false, altKey: false, metaKey: false,
+      })
+      container.dispatchEvent(event)
+    }
+
+    gesture('gesturestart', 0)
+    gesture('gesturechange', 4)
+    // A plain pinch: nothing is turning, so the keys act as without it.
+    expect(session.keyboard.escapeLayers()).not.toContain('gesture')
+    expect(session.keyboard.keyState({
+      type: 'keydown', key: 'Shift', code: 'ShiftLeft', mods: { shift: true, ctrl: false, alt: false, meta: false },
+      timeStamp: 0, text: false, onCanvas: true,
+    })).toBe('pass')
+    // Past 10° the twist turns the view and is live: Esc cancels it first.
+    gesture('gesturechange', 14)
+    expect(session.keyboard.escapeLayers()[0]).toBe('gesture')
+    gesture('gestureend', 14)
+    expect(session.keyboard.escapeLayers()).not.toContain('gesture')
+  })
+
   it('a move with a button held and no press on the map publishes no pointer world point', () => {
     const { session } = createSession()
     session.setTool('line')
@@ -841,6 +919,31 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
     failActivation = false
     expect(builtHosts.at(-1)?.activeTool.value).toBe('select')
     expect(readPlantStampSource()).toBeNull()
+  })
+
+  it('a failed tool switch during a Shift+middle rotate cancels the turn, so the view keys work again', () => {
+    let failActivation = true
+    const rectangle = stubTool('rectangle', {
+      activate: () => {
+        if (failActivation) throw new Error('activation failed')
+      },
+    })
+    useStubTools(rectangle)
+    const { session } = createSession()
+    const bearing = () => testView.view().camera.bearingDeg
+
+    events.pointerDown({ x: 100, y: 100 }, { pointerId: 4, button: 1, buttons: 4, shiftKey: true })
+    events.pointerMove({ x: 120, y: 100 }, { pointerId: 4, buttons: 4, shiftKey: true })
+    expect(bearing()).toBeCloseTo(16, 6)
+
+    expect(() => session.setTool('rectangle')).toThrow('activation failed')
+    failActivation = false
+    // The rotate's session is cancelled: the camera is back at the press bearing.
+    expect(bearing()).toBeCloseTo(0, 6)
+    // No stale rotation holds the view keys back.
+    expect(session.keyboard.command({ kind: 'rotate-view', direction: 1 })).toBe(true)
+    expect(testView.host.current().bearingTarget()).toBeCloseTo(15, 6)
+    events.pointerUp({ x: 120, y: 100 }, { pointerId: 4, button: 1, buttons: 0 })
   })
 
   it('disposal releases the capture of a registered tool\'s live press and rolls its edit back', () => {

@@ -40,6 +40,8 @@ export interface KeymapRow {
   readonly worksInModal?: boolean             // Desktop's help.commandPalette only: its sink closes the open palette
   /** A canvas row whose port command() returns false runs this instead (F2 → file.rename; Backspace → delete). */
   readonly fallback?: ShellCommandId | CanvasCommandId
+  /** Runs nothing: the router only keeps the chord from the browser (Web Mac Cmd+← and Cmd+→ go Back). */
+  readonly keepsFromBrowser?: true
 }
 
 /** Where a keymap row runs. Injected, so this module stays neutral (P14). */
@@ -68,6 +70,15 @@ const CANVAS_KEY_ROWS: readonly KeymapRow[] = [
       keyRow({ kind: 'arrow', dir, large: true }, [`Ctrl+${key}`]),
     ]
   }),
+  // Away from the map mod+←/→ runs nothing but stays in the app: Chrome and Firefox on a Mac go Back on Cmd+←/→, and the
+  // map teaches it as the large step. Cmd+↑/↓ only scroll, so they keep it.
+  {
+    command: 'canvas.arrow',
+    chords: ['Ctrl+ArrowLeft', 'Ctrl+ArrowRight'].flatMap(chordsOfShortcut),
+    scope: 'command',
+    singleKey: 'n/a',
+    keepsFromBrowser: true,
+  },
   keyRow({ kind: 'rotate-view', direction: -1 }, ['Shift+ArrowLeft'], { scope: 'view-arrows' }),
   keyRow({ kind: 'rotate-view', direction: 1 }, ['Shift+ArrowRight'], { scope: 'view-arrows' }),
   keyRow({ kind: 'reset-north' }, ['Shift+ArrowUp'], { scope: 'view-arrows' }),
