@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { geoToMercator, mercatorToGeo } from '../canvas/projection'
 import type { MapLibreMapConstructorOptions } from './loader'
 import type { MapBackgroundHandle, MapBackgroundOptions, MapBackgroundPresentation } from './map-background'
-import type { SharedMapSceneLayer, SharedMapSceneLayerOptions } from './shared-scene-layer'
+import { createSharedMapSceneLayer, type SharedMapSceneLayer, type SharedMapSceneLayerOptions } from './shared-scene-layer'
 import { createTestSceneRendererSnapshot } from '../__tests__/support/scene-renderer-snapshot'
 import type { ViewTransform } from '../canvas/runtime/view/types'
 import {
@@ -285,6 +285,59 @@ describe('view snapshot map', () => {
     // A second capture at north turns the shared map back.
     await owner.capture(request())
     expect(map!.getBearing()).toBeCloseTo(0, 9)
+    await owner.dispose()
+  })
+
+  // Live check 7b: a reused snapshot map drew every later thumbnail's scene at the first capture's centre, zoom and bearing.
+  it('moves the real scene layer to each capture\'s view when the snapshot map is reused', async () => {
+    const gl = {} as WebGL2RenderingContext
+    /** MapLibre as the real scene layer meets it: one context, onAdd on addLayer, and a render on every repaint request. */
+    class RenderingMap extends FakeMap {
+      constructor(options: MapLibreMapConstructorOptions) {
+        super(options)
+        ;(this.canvas as unknown as { getContext: (type: string) => unknown }).getContext = (type: string) => type === 'webgl2' ? gl : null
+      }
+      override addLayer(layer: Record<string, unknown>): void {
+        super.addLayer(layer)
+        ;(layer as { onAdd?: (map: unknown, context: WebGL2RenderingContext) => void }).onAdd?.(this, gl)
+      }
+      override triggerRepaint(): void {
+        for (const layer of this.layers.values()) {
+          (layer as { render?: (context: WebGL2RenderingContext, input: unknown) => void }).render?.(gl, {})
+        }
+        super.triggerRepaint()
+      }
+    }
+    const setView = vi.fn((_view: ViewTransform) => undefined)
+    const owner = createOwner({
+      loadMapLibre: async () => ({ Map: RenderingMap as unknown as new (options: MapLibreMapConstructorOptions) => unknown }),
+      createSceneLayer: (options) => createSharedMapSceneLayer({
+        ...options,
+        createRenderer: () => ({
+          init: async () => undefined,
+          render: () => undefined,
+          resize: () => undefined,
+          resetState: () => undefined,
+          destroy: () => undefined,
+          context: { extensions: {} },
+        }),
+        createStage: () => ({ destroy: () => undefined }) as never,
+        createPresentation: () => ({ dispose: () => undefined, resize: () => undefined, syncScene: () => undefined, setView, setDraft: () => undefined }),
+      }),
+    })
+
+    await owner.capture(request())
+    expect(setView).toHaveBeenCalled()
+    expect(setView.mock.lastCall![0].camera.bearingDeg).toBeCloseTo(0, 9)
+
+    const elsewhere = { lon: ORIGIN.lon + 0.001, lat: ORIGIN.lat + 0.001 }
+    await owner.capture(request({ camera: { ...elsewhere, zoom: 19, bearing: 30 } }))
+    expect(FakeMap.instances).toHaveLength(1)
+    const presented = setView.mock.lastCall![0]
+    expect(presented.camera.bearingDeg).toBeCloseTo(30, 9)
+    expect(presented.camera.zoom).toBeCloseTo(19, 9)
+    expect(presented.camera.center.lon).toBeCloseTo(elsewhere.lon, 9)
+    expect(presented.camera.center.lat).toBeCloseTo(elsewhere.lat, 9)
     await owner.dispose()
   })
 

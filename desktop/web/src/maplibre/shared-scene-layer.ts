@@ -9,7 +9,7 @@ import type { CustomLayerInterface, CustomRenderMethodInput } from 'maplibre-gl'
 import { createPixiScenePresentation, type PixiScenePresentation } from '../canvas/runtime/renderers/pixi-scene'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
 import type { DraftPresentation } from '../canvas/runtime/tools/draft'
-import type { ViewFrameSource } from '../canvas/runtime/view/types'
+import type { ViewFrameSource, ViewTransform } from '../canvas/runtime/view/types'
 
 /** The one production custom layer which all map-owned raster bands sit below. */
 export const MAPLIBRE_SHARED_SCENE_LAYER_ID = 'canopi-shared-scene'
@@ -88,7 +88,8 @@ export interface SharedMapSceneLayerOptions {
   readonly id: string
   /**
    * The camera's frames: the runtime's host for the workspace map, the snapshot map's own driver. The layer reads the latest
-   * frame in `render` and never derives a transform from the map (spec §1.5).
+   * frame in `render` and never derives a transform from the map (spec §1.5). It presents a view whenever the frame's view is a new
+   * object, never by revision: the snapshot map's driver keeps none, so all its frames carry revision 0.
    */
   readonly frames: Pick<ViewFrameSource, 'viewFrame'>
   readonly onFailure?: (error: Error) => void
@@ -135,7 +136,8 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
   let presentation: PixiScenePresentation | null = null
   let pendingSnapshot: SceneRendererSnapshot | null = null
   let renderedSnapshot: SceneRendererSnapshot | null = null
-  let presentedViewRevision: number | null = null
+  /** The view last given to the presentation, compared by identity (see `frames`). */
+  let presentedView: ViewTransform | null = null
   let draft: DraftPresentation | null = null
   let initializePromise: Promise<void> | null = null
   let disposePromise: Promise<void> | null = null
@@ -216,9 +218,9 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
       try {
         renderer.resetState()
         presentation.resize(rendererSize.width, rendererSize.height)
-        if (view.revision !== presentedViewRevision) {
+        if (view !== presentedView) {
           presentation.setView(view)
-          presentedViewRevision = view.revision
+          presentedView = view
         }
         if (pendingSnapshot) {
           renderedSnapshot = pendingSnapshot
@@ -368,7 +370,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
     renderer = null
     pendingSnapshot = null
     renderedSnapshot = null
-    presentedViewRevision = null
+    presentedView = null
     draft = null
     map = null
     context = null
