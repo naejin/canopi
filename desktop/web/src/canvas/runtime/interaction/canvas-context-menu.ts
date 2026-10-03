@@ -26,7 +26,8 @@ interface CanvasContextMenuOptions {
 export interface CanvasContextMenuController {
   /** `screen` is container-relative; `selection` is null on the empty map. */
   openAtPointer(screen: ScenePoint, selection: CanvasDesignObjectSelectionModel | null): void
-  /** Menu key or Shift F10: beside the selection's bounds, else mid-map (the empty-map menu without a selection). */
+  /** Menu key or Shift F10: beside the selection's projected bounds (four corners, INV-XF-22), else mid-map (the empty-map
+   *  menu without a selection). */
   openFromKeyboard(selection: CanvasDesignObjectSelectionModel): void
   /** True from an open until the app closes the menu (the request's `closed`) or close() closes it. */
   isOpen(): boolean
@@ -88,14 +89,21 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
         open({ left: x, top: y, right: x, bottom: y }, world, target)
         return
       }
-      const a = view.worldToScreen({ x: bounds.minX, y: bounds.minY })
-      const b = view.worldToScreen({ x: bounds.maxX, y: bounds.maxY })
+      // The selection's box on screen from all four projected corners: two would miss the box on a turned map.
+      const corners = view.worldQuadToScreen([
+        { x: bounds.minX, y: bounds.minY },
+        { x: bounds.maxX, y: bounds.minY },
+        { x: bounds.maxX, y: bounds.maxY },
+        { x: bounds.minX, y: bounds.maxY },
+      ])
+      const xs = corners.map((corner) => corner.x)
+      const ys = corners.map((corner) => corner.y)
       open(
         {
-          left: origin.left + Math.min(a.x, b.x),
-          top: origin.top + Math.min(a.y, b.y),
-          right: origin.left + Math.max(a.x, b.x),
-          bottom: origin.top + Math.max(a.y, b.y),
+          left: origin.left + Math.min(...xs),
+          top: origin.top + Math.min(...ys),
+          right: origin.left + Math.max(...xs),
+          bottom: origin.top + Math.max(...ys),
         },
         { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 },
         selection,

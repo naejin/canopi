@@ -19,6 +19,8 @@ import type {
 } from '../canvas/runtime/app-adapter'
 import type { CanvasDesignObjectSelectionModel } from '../canvas/runtime/runtime'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import { createTestView } from './support/test-view'
+import { createCanvasContextMenu } from '../canvas/runtime/interaction/canvas-context-menu'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import {
   createTestCanvasCommandSurface,
@@ -281,6 +283,44 @@ describe('CanvasContextMenu', () => {
     } finally {
       Object.defineProperty(window, 'innerHeight', { configurable: true, value: innerHeight })
     }
+  })
+
+  it('the keyboard menu sits beside the projected selection at 45', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const size = this.getAttribute('role') === 'menu' ? { width: 200, height: 300 } : { width: 0, height: 0 }
+      return { x: 0, y: 0, left: 0, top: 0, right: size.width, bottom: size.height, ...size, toJSON: () => ({}) }
+    })
+    const view = createTestView({ screen: { width: 800, height: 600 }, camera: { bearingDeg: 45 } })
+    const controller = createCanvasContextMenu({
+      container: map,
+      view: () => view.view(),
+      adapter: { open: openCanvasContextMenu, close: closeCanvasContextMenu },
+      commands,
+      returnFocus,
+    })
+    const bounds = { minX: -40, minY: -10, maxX: 40, maxY: 10 }
+    // The selection's box on screen: the four corners of its world bounds, turned 45°.
+    const corners = view.view().worldQuadToScreen([
+      { x: bounds.minX, y: bounds.minY },
+      { x: bounds.maxX, y: bounds.minY },
+      { x: bounds.maxX, y: bounds.maxY },
+      { x: bounds.minX, y: bounds.maxY },
+    ])
+    const xs = corners.map((corner) => corner.x)
+    const ys = corners.map((corner) => corner.y)
+
+    await act(async () => { controller.openFromKeyboard({ ...APPLES, bounds }) })
+
+    const anchor = canvasContextMenuRequest.value!.anchor
+    expect(anchor.left).toBeCloseTo(Math.min(...xs), 6)
+    expect(anchor.right).toBeCloseTo(Math.max(...xs), 6)
+    expect(anchor.top).toBeCloseTo(Math.min(...ys), 6)
+    expect(anchor.bottom).toBeCloseTo(Math.max(...ys), 6)
+    // Below the selection, never over it.
+    const menu = document.querySelector<HTMLElement>('[role="menu"]')!
+    expect(parseFloat(menu.style.top)).toBeCloseTo(Math.max(...ys), 6)
+    controller.dispose()
+    view.dispose()
   })
 
   it('keeps its heading in view while the items scroll', async () => {
