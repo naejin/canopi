@@ -11,10 +11,10 @@
 // first), a pointer pan carrying the pointer's point and a Pan-tool press ending with cancel('navigate') after its drag;
 // a Shift+middle drag rotating about its press once it passes 3 px (silent before, so a still click turns nothing), stepped
 // while mod is held, with the wheel ignored while it lives; a button-less move over owned chrome, the text entry or a
-// handle ends the hover; wheels zoom or pan by the pointing-device setting; no touch gestures, pen barrel or trackpad
-// gesture events.
-// The other binding values arrive in later phases: the trackpad gestures in phase 1, the secondary drag and the menu on
-// release in phase 2, touch gestures and the long press in phase 3.
+// handle ends the hover; wheels zoom or pan by the pointing-device setting; a WebKit trackpad twist rotating past 10° as
+// a session of its own; no touch gestures or pen barrel.
+// The other binding values arrive in later phases: the secondary drag and the menu on release in phase 2, touch gestures
+// and the long press in phase 3.
 
 import type { CancelReason, Modifiers, PointerKind } from '../interaction-types'
 import { ROTATE_DEG_PER_PX } from '../view/navigation-policy'
@@ -60,6 +60,8 @@ const ZERO: ScreenPoint = Object.freeze({ x: 0, y: 0 })
 const WHEEL_ZOOM_PER_PX = 0.002
 /** A pointer rotate starts past this travel from its press (MapLibre's clickTolerance); a tool's own slop never applies. */
 const ROTATE_SLOP_PX = 3
+/** The session id of a WebKit trackpad twist, which has no pointer: browsers number pointers from 0. */
+const TRACKPAD_TWIST_ID = -1
 
 export function initialRecogniserState(): RecogniserState {
   return {
@@ -107,9 +109,7 @@ export function recognise(
       if (input.phase !== 'leave') step.effects.push({ kind: 'prevent-default' })
       step.gestures.push({ kind: 'drop', phase: input.phase, at: input.at, payload: input.payload })
       break
-    case 'platform-gesture':
-      // LEGACY: no gesture* listener today (trackpadGestures false); WebKit's Ctrl wheels zoom instead. Phase 1 adds them.
-      break
+    case 'platform-gesture': platformGesture(step, input, config); break
     case 'focus-out':
       // The session ends the nudge series (ToolHost.endNudgeSeries); no pointer state changes.
       break
@@ -385,6 +385,64 @@ function pressOf(input: RawOf<'down'>, target: PressTarget): Gesture {
 /** A pointer pan's end, where the pointer last was: the router moves the host's resting pointer there. */
 function panEndOf(session: PointerSession): Gesture {
   return { kind: 'pan', phase: 'end', deltaPx: ZERO, source: session.navigation!, at: session.last }
+}
+
+/**
+ * A WebKit trackpad twist (gesturestart, gesturechange, gestureend; spec §2.2): only its rotation is used, since WKWebView
+ * delivers the pinch as Ctrl wheels, which zoom as everywhere. It is a session under TRACKPAD_TWIST_ID, so Esc, blur and
+ * configure end it like a pointer rotate: silent until the twist exceeds the threshold, then a rotate about the gesture's
+ * point with the threshold subtracted, the ground following the fingers (WebKit's rotation is clockwise-positive; a
+ * clockwise twist lowers the bearing). `trackpadTwistDeg` holds the rotation up to the change that crossed the threshold,
+ * whose sign says which way the threshold is subtracted. One session at a time: a twist that starts during a pointer
+ * session is ignored to its end, and a press during a twist is ignored (`down`). On iOS the pointers are the one source:
+ * every gesture event is prevented and ignored. Every gesture event is prevented, so the page never zooms itself.
+ */
+function platformGesture(step: Step, input: RawOf<'platform-gesture'>, config: RecogniserConfig): void {
+  step.effects.push({ kind: 'prevent-default' })
+  if (config.platform.os === 'ios') return
+  const live = step.state.sessions.get(TRACKPAD_TWIST_ID)
+  if (input.phase === 'start') {
+    // A start with a twist still live: its end was lost.
+    if (live) endSession(step, live, 'pointercancel')
+    if (step.state.sessions.size > 0) return
+    putSession(step, {
+      pointerId: TRACKPAD_TWIST_ID,
+      // No button or pointer kind: the twist reads neither.
+      pointer: 'mouse',
+      role: 'auxiliary',
+      mode: 'rotate',
+      start: input.at,
+      last: input.at,
+      target: { kind: 'surface' },
+      slopPassed: false,
+      captured: false,
+      pressTarget: { kind: 'surface' },
+      navigation: 'trackpad-twist',
+      pressed: false,
+      clickCount: 0,
+    })
+    step.state = { ...step.state, trackpadTwistDeg: 0 }
+    return
+  }
+  if (!live) return
+  if (!live.slopPassed && input.phase === 'change') {
+    step.state = { ...step.state, trackpadTwistDeg: input.rotationDeg }
+    if (!(Math.abs(input.rotationDeg) > config.thresholds.trackpadTwistStartDeg)) return
+    putSession(step, { ...live, slopPassed: true })
+    step.gestures.push(twistOf(live, 'start', 0))
+  }
+  const subtractedDeg = Math.sign(step.state.trackpadTwistDeg) * config.thresholds.trackpadTwistStartDeg
+  const totalDeltaDeg = subtractedDeg - input.rotationDeg
+  if (input.phase === 'change') {
+    step.gestures.push(twistOf(live, 'move', totalDeltaDeg))
+    return
+  }
+  dropSession(step, live)
+  if (live.slopPassed) step.gestures.push(twistOf(live, 'end', totalDeltaDeg))
+}
+
+function twistOf(session: PointerSession, phase: 'start' | 'move' | 'end', totalDeltaDeg: number): Gesture {
+  return { kind: 'rotate', phase, anchorPx: session.start, totalDeltaDeg, step: false, source: 'trackpad-twist' }
 }
 
 /**

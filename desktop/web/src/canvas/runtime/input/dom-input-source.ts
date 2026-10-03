@@ -1,8 +1,9 @@
 // canvas/runtime/input/dom-input-source.ts
 //
 // Owns every DOM listener for canvas input: the map host's pointer (hover moves included), wheel, contextmenu, drag and
-// focus events, the window blur, the window pointer listeners while it owns a pointer, the ruler presses at document
-// capture and the copied GeoLibre selection-drag guard on the host (keys are the key router's, app/keyboard). A press it delivers, on the map or a ruler, owns that pointer until
+// focus events, WebKit's gesture events (only with trackpad gestures on a platform that has them), the window blur, the
+// window pointer listeners while it owns a pointer, the ruler presses at document capture and the copied GeoLibre
+// selection-drag guard on the host (keys are the key router's, app/keyboard). A press it delivers, on the map or a ruler, owns that pointer until
 // its release, its cancel or a window blur: only then does it listen on window, and only to that pointer, so presses,
 // moves and releases that start elsewhere in the app reach the page untouched. It turns
 // each event into host-relative, classified fields for `normalise`, hands the raw input to the sink, and applies the
@@ -247,6 +248,13 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     const like: DomEventLike = { ...domEventLike(event, type, rect, classifyTarget(event.target, host)), dropPayload: dropPayloadOf(event, type) }
     deliver(event, rect, normalise(like, deps.platform, deps.bindings(), { physicalCtrl: deps.keys.physicalCtrl() }, rect))
   }
+  /** WebKit's trackpad gesture events (WKWebView and Safari); the recogniser prevents each one and uses its rotation. */
+  const gestureHandler = (type: 'gesturestart' | 'gesturechange' | 'gestureend') => (event: Event): void => {
+    const rect = host.getBoundingClientRect()
+    deliver(event, rect, normalise(gestureEventLike(event, type, rect), deps.platform, deps.bindings(), {
+      physicalCtrl: deps.keys.physicalCtrl(),
+    }, rect))
+  }
   const onDragOver = dragHandler('dragover')
   const onDragLeave = dragHandler('dragleave')
   const onDrop = dragHandler('drop')
@@ -327,6 +335,9 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
         listen(host, 'drop', onDrop as EventListener)
         listen(host, 'focusout', onFocusOut as EventListener)
         if (deps.listensToRulers) listen(document, 'pointerdown', onRulerPointerDown as EventListener, { capture: true })
+        if (deps.bindings().trackpadGestures && deps.platform.gestureEvents) {
+          for (const type of ['gesturestart', 'gesturechange', 'gestureend'] as const) listen(host, type, gestureHandler(type))
+        }
         // A map drag never selects or drags page text; the note editor and the map's fields keep their own.
         removals.push(installSelectionDragGuard(host, (target) => keepsTextSelection(target, host)))
         if (deps.bindings().touch.hostTouchActionNone) host.style.touchAction = 'none'
@@ -433,6 +444,35 @@ function domEventLike(event: MouseEvent, type: DomEventLike['type'], rect: HostR
     deltaY: wheel.deltaY,
     deltaMode: wheel.deltaMode,
     target,
+  }
+}
+
+/** WebKit's GestureEvent: a UIEvent with the pointer's client point, the pinch scale and the rotation in degrees. */
+interface GestureEventFields {
+  readonly clientX: number
+  readonly clientY: number
+  readonly scale: number
+  readonly rotation: number
+  readonly shiftKey: boolean
+  readonly ctrlKey: boolean
+  readonly altKey: boolean
+  readonly metaKey: boolean
+}
+
+function gestureEventLike(event: Event, type: 'gesturestart' | 'gesturechange' | 'gestureend', rect: HostRect): DomEventLike {
+  const gesture = event as Event & GestureEventFields
+  return {
+    type,
+    timeStamp: event.timeStamp,
+    clientX: gesture.clientX - rect.left,
+    clientY: gesture.clientY - rect.top,
+    shiftKey: gesture.shiftKey,
+    ctrlKey: gesture.ctrlKey,
+    altKey: gesture.altKey,
+    metaKey: gesture.metaKey,
+    scale: gesture.scale,
+    rotation: gesture.rotation,
+    target: SURFACE,
   }
 }
 

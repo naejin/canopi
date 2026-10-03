@@ -61,11 +61,16 @@ function randomInput(random: () => number, t: number): RawInput {
     return { kind: 'configure', t, context: { tool: pick(TOOLS), mode: random() < 0.25 ? 'overview' : 'site', pointingDevice: pick(['mouse', 'trackpad'] as const) } }
   }
   if (roll < 0.92) return { kind: 'key-state', t, space: random() < 0.4, mods }
-  if (roll < 0.96) return { kind: 'wheel', t, at, dxPx: random() * 20 - 10, dyPx: random() * 200 - 100, mods, pinch: false, target: pick(TARGETS) }
+  if (roll < 0.93) return { kind: 'wheel', t, at, dxPx: random() * 20 - 10, dyPx: random() * 200 - 100, mods, pinch: false, target: pick(TARGETS) }
+  if (roll < 0.97) {
+    return { kind: 'platform-gesture', t, phase: pick(['start', 'change', 'change', 'end'] as const), at, scale: 1 + random(), rotationDeg: random() * 60 - 30 }
+  }
   return { kind: 'native-contextmenu', t, at, fromKeyboard: random() < 0.3, target: pick(TARGETS) }
 }
 
 const TERMINAL_EDITING = new Set(['tap', 'drag-end', 'cancel'])
+/** The recogniser's session id for a trackpad twist (recognise.ts). */
+const TRACKPAD_TWIST_ID = -1
 
 function sessionPans(gestures: readonly Gesture[], phase: 'start' | 'end'): number {
   return gestures.filter((gesture) => gesture.kind === 'pan' && gesture.phase === phase && gesture.source !== 'wheel').length
@@ -75,9 +80,9 @@ function rotates(gestures: readonly Gesture[], phases: readonly string[]): numbe
   return gestures.filter((gesture) => gesture.kind === 'rotate' && phases.includes(gesture.phase)).length
 }
 
-/** A rotate session's own end: its release. Anything else that ends one is a fence. */
+/** A rotate session's own end: its release, or a twist's gesture end. Anything else that ends one is a fence. */
 function endsNaturally(input: RawInput): boolean {
-  return input.kind === 'up'
+  return input.kind === 'up' || (input.kind === 'platform-gesture' && input.phase === 'end')
 }
 
 /**
@@ -107,8 +112,11 @@ function checkSessionLifecycle(seed: number): void {
     expect(after.size, at(index)).toBeLessThanOrEqual(1)
 
     const endedSessions: PointerSession[] = []
+    // A down on a live pointer id, or a gesture start with a twist live, ends that session and may start the next.
+    const restarts = (id: number) => (input.kind === 'down' && input.id === id)
+      || (input.kind === 'platform-gesture' && input.phase === 'start' && id === TRACKPAD_TWIST_ID)
     for (const [id, session] of before) {
-      if (!after.has(id) || (input.kind === 'down' && input.id === id && after.get(id) !== session)) endedSessions.push(session)
+      if (!after.has(id) || (restarts(id) && after.get(id) !== session)) endedSessions.push(session)
     }
     const gestures = result.gestures
     const editingEnds = gestures.filter((gesture) => TERMINAL_EDITING.has(gesture.kind)).length
@@ -163,11 +171,11 @@ function checkSessionLifecycle(seed: number): void {
       if (gesture.kind === 'pan' && gesture.phase === 'move' && gesture.source !== 'wheel') {
         expect(live?.mode, `${at(index)}: a pan move outside a pan`).toBe('pan')
       }
-      if (gesture.kind === 'rotate' && gesture.phase === 'move') {
-        expect(live?.mode === 'rotate' && live.slopPassed, `${at(index)}: a rotate move outside a live rotate`).toBe(true)
+      if (gesture.kind === 'rotate' && gesture.phase === 'move' && !(live?.mode === 'rotate' && live.slopPassed)) {
+        expect.fail(`${at(index)}: a rotate move outside a live rotate`)
       }
-      if (gesture.kind === 'zoom') {
-        expect(live?.mode === 'rotate' && live.navigation !== 'trackpad-twist', `${at(index)}: a zoom during a pointer rotate`).toBe(false)
+      if (gesture.kind === 'zoom' && live?.mode === 'rotate' && live.navigation !== 'trackpad-twist') {
+        expect.fail(`${at(index)}: a zoom during a pointer rotate`)
       }
     }
   }
@@ -209,8 +217,11 @@ function checkCaptureLedger(seed: number): void {
   expect([...held], `seed ${seed}: captures never released`).toEqual([])
 }
 
+/** 400 seeds take about 2 s alone and over 5 s on a loaded machine, past vitest's default timeout. */
+const PROPERTY_TIMEOUT_MS = 30_000
+
 describe('recognise properties', () => {
-  it('every started session ends exactly once', () => {
+  it('every started session ends exactly once', { timeout: PROPERTY_TIMEOUT_MS }, () => {
     for (let seed = 1; seed <= RUNS; seed += 1) checkSessionLifecycle(seed)
   })
 

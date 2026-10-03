@@ -737,6 +737,56 @@ describe('createDomInputSource', () => {
     dispose()
   })
 
+  it('gesture listeners attach only with trackpad gestures on WebKit, copy the rotation, prevent the default and detach', () => {
+    const MAC_WEBKIT = { os: 'mac', engine: 'webkit', gestureEvents: true } as const
+    const GESTURE_TYPES = ['gesturestart', 'gesturechange', 'gestureend']
+    const gestureListeners = (spy: { mock: { calls: unknown[][] } }) =>
+      listenerCalls(spy).map(([type]) => type).filter((type) => GESTURE_TYPES.includes(type))
+    const without: Bindings = { ...CURRENT_BINDINGS, trackpadGestures: false }
+    for (const [platform, bindings] of [[PLATFORM, CURRENT_BINDINGS], [MAC_WEBKIT, without]] as const) {
+      const add = vi.spyOn(host, 'addEventListener')
+      createDomInputSource(deps({ platform, bindings: () => bindings })).attach(() => {})()
+      expect(gestureListeners(add)).toEqual([])
+      add.mockRestore()
+    }
+
+    const add = vi.spyOn(host, 'addEventListener')
+    const remove = vi.spyOn(host, 'removeEventListener')
+    let state = initialRecogniserState()
+    const config: RecogniserConfig = { ...RECOGNISER_CONFIG, platform: MAC_WEBKIT }
+    const source = createDomInputSource(deps({ platform: MAC_WEBKIT }))
+    const dispose = attachRecording(source, (input) => {
+      const result = recognise(state, input, config)
+      state = result.state
+      source.apply(result.effects)
+    })
+    expect(gestureListeners(add)).toEqual(GESTURE_TYPES)
+    const dispatch = (type: string, rotation: number): Event => {
+      // jsdom has no GestureEvent: WebKit's carries the pointer's client point, scale and rotation (degrees, clockwise).
+      const event = new Event(type, { bubbles: true, cancelable: true })
+      Object.defineProperties(event, {
+        clientX: { value: 210 }, clientY: { value: 170 }, scale: { value: 1.3 }, rotation: { value: rotation },
+        shiftKey: { value: false }, ctrlKey: { value: false }, altKey: { value: false }, metaKey: { value: false },
+      })
+      host.dispatchEvent(event)
+      return event
+    }
+    const events = [dispatch('gesturestart', 0), dispatch('gesturechange', 12.5), dispatch('gestureend', 12.5)]
+
+    expect(received).toEqual([
+      expect.objectContaining({ kind: 'platform-gesture', phase: 'start', at: { x: 200, y: 150 }, scale: 1.3, rotationDeg: 0 }),
+      expect.objectContaining({ kind: 'platform-gesture', phase: 'change', at: { x: 200, y: 150 }, scale: 1.3, rotationDeg: 12.5 }),
+      expect.objectContaining({ kind: 'platform-gesture', phase: 'end', rotationDeg: 12.5 }),
+    ])
+    expect(events.map((event) => event.defaultPrevented)).toEqual([true, true, true])
+    dispose()
+    expect(gestureListeners(remove)).toEqual(GESTURE_TYPES)
+    dispatch('gesturechange', 20)
+    expect(received).toHaveLength(3)
+    add.mockRestore()
+    remove.mockRestore()
+  })
+
   it('host CSS is unchanged while touch gestures are off', () => {
     const before = host.getAttribute('style')
     const source = createDomInputSource(deps())
