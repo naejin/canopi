@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { JSX } from 'preact'
 import { savedObjectStampWorkbench } from '../../app/saved-object-stamps'
-import { parseSavedObjectStampPayload } from '../../canvas/saved-object-stamp-payload'
+import {
+  isSavedObjectStampPayloadFromBefore2_0,
+  parseSavedObjectStampPayload,
+} from '../../canvas/saved-object-stamp-payload'
 import { armCanvasTool } from '../../app/keyboard/arming'
 import { t } from '../../i18n'
 import type { SavedObjectStamp } from '../../types/saved-object-stamps'
@@ -14,10 +17,12 @@ import styles from './ToolCard.module.css'
  * saved stamps are (the Desktop canvas hands it to `CanvasChrome`): the saved stamps,
  * each with its plant and species counts, and a way back to copying an object
  * from the map. Choosing arms the stamp and gives the map focus back; Esc
- * closes the chooser.
+ * closes the chooser. Stamps saved before 2.0 are left out: Canopi 2.0 cannot
+ * place them, and Favorites offers to delete them.
  */
 export function StampChooser({ onChosen, onEscape }: StampChooserProps) {
   const library = savedObjectStampWorkbench.library.value
+  const stamps = library.items.filter((stamp) => !isSavedObjectStampPayloadFromBefore2_0(stamp.payload_json))
   const root = useRef<HTMLDivElement | null>(null)
   const listId = 'tool-card-stamp-options'
 
@@ -56,13 +61,13 @@ export function StampChooser({ onChosen, onEscape }: StampChooserProps) {
     <div ref={root} className={styles.chooser} data-stamp-chooser onKeyDown={handleKeyDown}>
       <section id={listId} className={styles.options} aria-label={t('savedObjectStamps.title')}>
         <h3 className={styles.section}>{t('savedObjectStamps.title')}</h3>
-        {library.loading && library.items.length === 0
+        {library.loading && stamps.length === 0
           ? <p className={styles.empty}>{t('savedObjectStamps.loading')}</p>
-          : library.items.length === 0
+          : stamps.length === 0
             ? <p className={styles.empty}>{t('canvas.toolCard.noSavedStamps')}</p>
             : (
               <ul className={styles.optionList}>
-                {library.items.map((stamp) => (
+                {stamps.map((stamp) => (
                   <li key={stamp.id}>
                     <button type="button" className={`${styles.option} ${styles.stampOption}`} data-stamp-option={stamp.id} onClick={() => choose(stamp)}>
                       <span className={styles.stampGlyph} aria-hidden="true"><ToolIcon name="object-stamp" /></span>

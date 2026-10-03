@@ -1290,6 +1290,7 @@
     "summaryAnnotationOther": "{{count}} аннотаций",
     "summaryEmpty": "Нет видимых объектов",
     "summaryUnavailable": "Предпросмотр недоступен",
+    "summaryBefore2_0": "Сохранён в Canopi до версии 2.0; Canopi 2.0 не может его разместить.",
     "nameInput": "Название штампа",
     "confirmRename": "Подтвердить переименование",
     "cancelRename": "Отменить переименование",

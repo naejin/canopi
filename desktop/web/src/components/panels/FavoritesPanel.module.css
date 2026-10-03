@@ -335,6 +335,11 @@
   white-space: nowrap;
 }
 
+/* The before-2.0 sentence is the row's only explanation, so it wraps instead of truncating. */
+.savedStampSummaryBefore2_0 {
+  white-space: normal;
+}
+
 .savedStampActions {
   grid-area: actions;
   display: flex;

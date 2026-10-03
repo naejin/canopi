@@ -1290,6 +1290,7 @@
     "summaryAnnotationOther": "주석 {{count}}개",
     "summaryEmpty": "보이는 객체 없음",
     "summaryUnavailable": "미리보기 사용할 수 없음",
+    "summaryBefore2_0": "Canopi 2.0 이전 버전에서 저장되어 Canopi 2.0에서는 배치할 수 없습니다.",
     "nameInput": "스탬프 이름",
     "confirmRename": "이름 바꾸기 확인",
     "cancelRename": "이름 바꾸기 취소",

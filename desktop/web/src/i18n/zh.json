@@ -1290,6 +1290,7 @@
     "summaryAnnotationOther": "{{count}} 条注释",
     "summaryEmpty": "没有可见对象",
     "summaryUnavailable": "预览不可用",
+    "summaryBefore2_0": "由 Canopi 2.0 之前的版本保存，Canopi 2.0 无法放置。",
     "nameInput": "图章名称",
     "confirmRename": "确认重命名",
     "cancelRename": "取消重命名",

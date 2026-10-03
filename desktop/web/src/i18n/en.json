@@ -1290,6 +1290,7 @@
     "summaryAnnotationOther": "{{count}} annotations",
     "summaryEmpty": "No visible objects",
     "summaryUnavailable": "Preview unavailable",
+    "summaryBefore2_0": "Saved with Canopi before 2.0; Canopi 2.0 can’t place it.",
     "nameInput": "Stamp name",
     "confirmRename": "Confirm rename",
     "cancelRename": "Cancel rename",

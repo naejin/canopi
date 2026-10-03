@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { parseSavedObjectStampPayload, type SavedObjectStampPayload } from '../canvas/saved-object-stamp-payload'
+import {
+  isSavedObjectStampPayloadFromBefore2_0,
+  parseSavedObjectStampPayload,
+  type SavedObjectStampPayload,
+} from '../canvas/saved-object-stamp-payload'
 import type { SavedObjectStamp } from '../types/saved-object-stamps'
 import {
   hasSavedObjectStampDragData,
@@ -102,6 +106,17 @@ describe('Saved Object Stamp source', () => {
     expect(parseSavedObjectStampPayload(JSON.stringify({ ...payload(), version: 1, zones: [{ ...zone, name: 'Kitchen bed' }] }))).toBeNull()
     expect(parseSavedObjectStampPayload(JSON.stringify({ ...payload(), version: 0 }))).toBeNull()
     expect(parseSavedObjectStampPayload(JSON.stringify({ ...payload(), version: 3 }))).toBeNull()
+  })
+
+  it('tells a payload saved before 2.0 (version 1) apart from a current or damaged one', () => {
+    const before2_0 = JSON.stringify({ ...payload(), version: 1 })
+    expect(isSavedObjectStampPayloadFromBefore2_0(before2_0)).toBe(true)
+    expect(parseSavedObjectStampPayload(before2_0)).toBeNull()
+    expect(isSavedObjectStampPayloadFromBefore2_0(JSON.stringify(payload()))).toBe(false)
+    expect(isSavedObjectStampPayloadFromBefore2_0(JSON.stringify({ ...payload(), version: 3 }))).toBe(false)
+    expect(isSavedObjectStampPayloadFromBefore2_0('{not json')).toBe(false)
+    expect(isSavedObjectStampPayloadFromBefore2_0('')).toBe(false)
+    expect(isSavedObjectStampPayloadFromBefore2_0('1')).toBe(false)
   })
 
   it('rejects invalid Saved Object Stamp drag payloads', () => {

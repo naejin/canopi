@@ -22,6 +22,10 @@ import {
   clearSavedObjectStampDragSource,
   writeSavedObjectStampDragData,
 } from '../../canvas/saved-object-stamp-source'
+import {
+  isSavedObjectStampPayloadFromBefore2_0,
+  parseSavedObjectStampPayload,
+} from '../../canvas/saved-object-stamp-payload'
 import type { SavedObjectStamp } from '../../types/saved-object-stamps'
 import type { SpeciesListItem } from '../../types/species'
 import { useFavoriteSpeciesDetailNavigation } from '../plant-db/favorite-species-presentation'
@@ -752,6 +756,8 @@ function SavedObjectStampRow({
   const [isRenaming, setIsRenaming] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const renameInputRef = useRef<HTMLInputElement>(null)
+  // Canopi 2.0 cannot place, drag, export or convert a stamp saved before 2.0 (ADR 0021): it offers only Delete.
+  const before2_0 = useMemo(() => isSavedObjectStampPayloadFromBefore2_0(stamp.payload_json), [stamp.payload_json])
 
   useEffect(() => {
     setDraftName(stamp.name)
@@ -785,7 +791,7 @@ function SavedObjectStampRow({
 
   function handleStampDragStart(event: DragEvent): void {
     const target = event.target
-    if (target instanceof HTMLElement && target.closest('button, input')) {
+    if (before2_0 || (target instanceof HTMLElement && target.closest('button, input'))) {
       event.preventDefault()
       return
     }
@@ -827,17 +833,17 @@ function SavedObjectStampRow({
       <div
         className={styles.savedStampContent}
         data-saved-stamp-body={stamp.id}
-        draggable={!isRenaming && !confirmingDelete}
+        draggable={!before2_0 && !isRenaming && !confirmingDelete}
         onDragStart={handleStampDragStart}
         onDragEnd={handleStampDragEnd}
-        tabIndex={confirmingDelete ? -1 : 0}
+        tabIndex={before2_0 ? undefined : confirmingDelete ? -1 : 0}
         onPointerEnter={(event) => {
-          if (isRenaming || confirmingDelete) return
+          if (before2_0 || isRenaming || confirmingDelete) return
           onPreviewSchedule(stamp, event.currentTarget as HTMLElement)
         }}
         onPointerLeave={onPreviewClear}
         onFocus={(event) => {
-          if (isRenaming || confirmingDelete) return
+          if (before2_0 || isRenaming || confirmingDelete) return
           onPreviewRequest(stamp, event.currentTarget as HTMLElement)
         }}
         onBlur={onPreviewClear}
@@ -876,7 +882,9 @@ function SavedObjectStampRow({
         ) : (
           <span className={styles.savedStampName}>{stamp.name}</span>
         )}
-        {!confirmingDelete && <span className={styles.savedStampSummary}>{savedStampSummary(stamp)}</span>}
+        {!confirmingDelete && (before2_0
+          ? <span className={`${styles.savedStampSummary} ${styles.savedStampSummaryBefore2_0}`}>{t('savedObjectStamps.summaryBefore2_0')}</span>
+          : <span className={styles.savedStampSummary}>{savedStampSummary(stamp)}</span>)}
       </div>
       <div className={styles.savedStampActions}>
         {confirmingDelete ? (
@@ -898,6 +906,15 @@ function SavedObjectStampRow({
               {t('savedObjectStamps.cancelDelete')}
             </button>
           </>
+        ) : before2_0 ? (
+          <button
+            type="button"
+            className={styles.savedStampSecondaryButton}
+            aria-label={t('savedObjectStamps.delete')}
+            onClick={() => setConfirmingDelete(true)}
+          >
+            {t('savedObjectStamps.delete')}
+          </button>
         ) : isRenaming ? (
           <>
             <SavedStampIconButton
@@ -1020,21 +1037,14 @@ function sameIdOrder(left: readonly string[] | null, right: readonly string[]): 
 }
 
 function savedStampSummary(stamp: SavedObjectStamp): string {
-  try {
-    const payload = JSON.parse(stamp.payload_json) as {
-      plants?: unknown[]
-      zones?: unknown[]
-      annotations?: unknown[]
-    }
-    const parts = [
-      countPart(payload.plants?.length ?? 0, 'summaryPlantOne', 'summaryPlantOther'),
-      countPart(payload.zones?.length ?? 0, 'summaryZoneOne', 'summaryZoneOther'),
-      countPart(payload.annotations?.length ?? 0, 'summaryAnnotationOne', 'summaryAnnotationOther'),
-    ].filter((part): part is string => part !== null)
-    return parts.length > 0 ? parts.join(' · ') : t('savedObjectStamps.summaryEmpty')
-  } catch {
-    return t('savedObjectStamps.summaryUnavailable')
-  }
+  const payload = parseSavedObjectStampPayload(stamp.payload_json)
+  if (!payload) return t('savedObjectStamps.summaryUnavailable')
+  const parts = [
+    countPart(payload.plants.length, 'summaryPlantOne', 'summaryPlantOther'),
+    countPart(payload.zones.length, 'summaryZoneOne', 'summaryZoneOther'),
+    countPart(payload.annotations.length, 'summaryAnnotationOne', 'summaryAnnotationOther'),
+  ].filter((part): part is string => part !== null)
+  return parts.length > 0 ? parts.join(' · ') : t('savedObjectStamps.summaryEmpty')
 }
 
 function countPart(

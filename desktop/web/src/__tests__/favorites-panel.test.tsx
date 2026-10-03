@@ -513,6 +513,57 @@ describe('FavoritesPanel', () => {
     expect(deleteStampMock).toHaveBeenCalledWith('stamp-1')
   })
 
+  it('says a stamp saved before 2.0 cannot be placed and offers only Delete, which removes it', async () => {
+    const current = stampLibrary.value.items[0]!
+    stampLibrary.value = {
+      ...stampLibrary.value,
+      items: [{
+        ...current,
+        id: 'stamp-old',
+        name: 'Old guild',
+        payload_json: JSON.stringify({ ...JSON.parse(current.payload_json), version: 1 }),
+      }],
+    }
+    deleteStampMock.mockImplementation(async (id: string) => {
+      stampLibrary.value = { ...stampLibrary.value, items: stampLibrary.value.items.filter((stamp) => stamp.id !== id), revision: stampLibrary.value.revision + 1 }
+      return true
+    })
+    await act(async () => {
+      render(<FavoritesPanel />, container)
+      await flushEffects()
+    })
+
+    const row = container.querySelector<HTMLElement>('[data-saved-stamp-row="stamp-old"]')!
+    expect(row.textContent).toContain('Old guild')
+    expect(row.textContent).toContain('Saved with Canopi before 2.0; Canopi 2.0 can’t place it.')
+    expect(row.textContent).not.toContain('2 plants')
+    // No Place, drag, Export or Rename: only Delete.
+    expect(row.querySelector('button[aria-label^="Place stamp "]')).toBeNull()
+    expect(row.querySelector('button[aria-label^="More actions for "]')).toBeNull()
+    expect(row.querySelector('[data-saved-stamp-body="stamp-old"]')?.getAttribute('draggable')).not.toBe('true')
+    const dragData = dragDataStore()
+    const dragStart = dragStartEvent(dragData)
+    row.querySelector<HTMLElement>('[data-saved-stamp-body="stamp-old"]')!.dispatchEvent(dragStart)
+    expect(readSavedObjectStampDragData(dragData)).toBeNull()
+    const actions = [...row.querySelectorAll<HTMLButtonElement>('button:not([data-saved-stamp-grip])')]
+    expect(actions.map((button) => button.getAttribute('aria-label'))).toEqual(['Delete'])
+
+    await act(async () => {
+      actions[0]!.click()
+      await flushEffects()
+    })
+    expect(row.textContent).toContain('Delete this saved stamp?')
+    expect(deleteStampMock).not.toHaveBeenCalled()
+    await act(async () => {
+      row.querySelector<HTMLButtonElement>('button[aria-label="Confirm delete"]')!.click()
+      await flushEffects()
+    })
+    expect(deleteStampMock).toHaveBeenCalledWith('stamp-old')
+    expect(container.querySelector('[data-saved-stamp-row="stamp-old"]')).toBeNull()
+    expect(placeStampMock).not.toHaveBeenCalled()
+    expect(exportStampMock).not.toHaveBeenCalled()
+  })
+
   it('cancels Saved Stamp rename drafts on Escape without saving', async () => {
     await act(async () => {
       render(<FavoritesPanel />, container)

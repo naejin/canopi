@@ -1290,6 +1290,7 @@
     "summaryAnnotationOther": "{{count}} Anmerkungen",
     "summaryEmpty": "Keine sichtbaren Objekte",
     "summaryUnavailable": "Vorschau nicht verfügbar",
+    "summaryBefore2_0": "Mit Canopi vor Version 2.0 gespeichert; Canopi 2.0 kann ihn nicht setzen.",
     "nameInput": "Stempelname",
     "confirmRename": "Umbenennen bestätigen",
     "cancelRename": "Umbenennen abbrechen",
