@@ -1347,6 +1347,9 @@ const SOURCE_TOMBSTONE_POLICIES = [
       'src/app/shell/focus-regions.ts',
       'src/shortcuts/manager.ts',
       'src/web/canvas-shortcuts.ts',
+      // P11, phase 1 (spec §1.5): the grid and guides draw in the world layers;
+      // the Canvas2D scene chrome is gone.
+      'src/canvas/runtime/scene-chrome.ts',
     ],
     symbols: [
       {
@@ -1372,6 +1375,11 @@ const SOURCE_TOMBSTONE_POLICIES = [
         // recogniser has one bindings constant, no frozen legacy copy.
         from: ['src/**'],
         names: ['focusMapSurface', 'LEGACY_BINDINGS'],
+      },
+      {
+        // P11, phase 1: the overlay went with scene-chrome.ts (file above).
+        from: ['src/**'],
+        names: ['SceneChromeOverlay'],
       },
     ],
   },
@@ -3190,6 +3198,18 @@ describe('canvas v2 policies, end of 0B', () => {
       `${P11} src/canvas/runtime/input/planted.test.ts contains retired symbol LEGACY_BINDINGS`,
       `${P11_FOCUS_REGION_CALL} src/components/plant-db/planted.ts:2 calls focusRegion`,
       `${P11_FOCUS_REGION_EXPORT} src/components/plant-db/planted.ts exports forbidden symbol focusRegion`,
+    ])
+  })
+
+  it('P11 rejects the retired scene chrome file and SceneChromeOverlay', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/scene-chrome.ts', ['export const chrome = 1']),
+      plantedSource('src/canvas/runtime/scene-runtime/planted.ts', ['export class SceneChromeOverlay {}']),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, SOURCE_TOMBSTONE_POLICIES)).toEqual([
+      `${P11} retired source still exists: src/canvas/runtime/scene-chrome.ts`,
+      `${P11} src/canvas/runtime/scene-runtime/planted.ts contains retired symbol SceneChromeOverlay`,
     ])
   })
 
