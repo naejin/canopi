@@ -60,10 +60,15 @@ function around(deg: number, radius = 12): { x: number; y: number } {
   return { x: CENTRE.x + radius * Math.cos(rad), y: CENTRE.y + radius * Math.sin(rad) }
 }
 
-function pointer(target: EventTarget, type: string, point: { x: number; y: number }, init: MouseEventInit = {}): void {
+function pointer(
+  target: EventTarget,
+  type: string,
+  point: { x: number; y: number },
+  { pointerType = 'mouse', ...init }: MouseEventInit & { pointerType?: 'mouse' | 'pen' | 'touch' } = {},
+): void {
   const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: point.x, clientY: point.y, ...init })
   Object.defineProperty(event, 'pointerId', { value: 1 })
-  Object.defineProperty(event, 'pointerType', { value: 'mouse' })
+  Object.defineProperty(event, 'pointerType', { value: pointerType })
   Object.defineProperty(event, 'isPrimary', { value: true })
   act(() => { target.dispatchEvent(event) })
 }
@@ -204,22 +209,52 @@ describe('Compass', () => {
     expect(Math.abs(bearing() - 30)).toBeLessThan(5)
   })
 
-  it('a short touch drag keeps its turn when the click of the tap comes in a later task', () => {
+  it('a touch tap that rolls 5 px is still a tap and resets north', () => {
     vi.useFakeTimers()
-    mount(0)
-    // 6 px around the face: past 3 px, so a drag, but inside a touch screen's tap slop, so the browser still sends a click,
-    // from its tap gesture, after the release's task.
-    pointer(compass(), 'pointerdown', around(-90, 15))
-    pointer(compass(), 'pointermove', around(-67, 15))
-    pointer(compass(), 'pointerup', around(-67, 15))
-    expect(bearing()).toBeCloseTo(337, 6)
+    mount(30)
+    const touch = { pointerType: 'touch' } as const
+    // A finger lands 12 px above the centre and rolls 5 px sideways: past the mouse's 3 px, inside a finger's 8 px.
+    const start = around(-90)
+    const rolled = { x: start.x + 5, y: start.y }
+    pointer(compass(), 'pointerdown', start, touch)
+    pointer(compass(), 'pointermove', rolled, touch)
+    expect(compass().dataset.dragging).toBeUndefined()
+    expect(bearing()).toBe(30)
+    pointer(compass(), 'pointerup', rolled, touch)
+    // The tap's click comes from its own gesture, a task after the release.
     act(() => { vi.advanceTimersByTime(50) })
     pointerClick()
     act(() => { vi.advanceTimersByTime(TURN_MS) })
-    expect(bearing()).toBeCloseTo(337, 6)
+    expect(bearing()).toBe(0)
+  })
+
+  it('a pen press past 3 px turns, like a mouse', () => {
+    mount(30)
+    const pen = { pointerType: 'pen' } as const
+    const start = around(-90)
+    pointer(compass(), 'pointerdown', start, pen)
+    pointer(compass(), 'pointermove', { x: start.x + 5, y: start.y }, pen)
+    expect(compass().dataset.dragging).toBe('true')
+    expect(bearing()).not.toBe(30)
+  })
+
+  it('a short touch drag keeps its turn when the click of the tap comes in a later task', () => {
+    vi.useFakeTimers()
+    mount(0)
+    const touch = { pointerType: 'touch' } as const
+    // 10 px around the face: past a finger's 8 px, so a drag, but inside a touch screen's tap slop, so the browser still
+    // sends a click, from its tap gesture, after the release's task.
+    pointer(compass(), 'pointerdown', around(-90, 15), touch)
+    pointer(compass(), 'pointermove', around(-50, 15), touch)
+    pointer(compass(), 'pointerup', around(-50, 15), touch)
+    expect(bearing()).toBeCloseTo(320, 6)
+    act(() => { vi.advanceTimersByTime(50) })
+    pointerClick()
+    act(() => { vi.advanceTimersByTime(TURN_MS) })
+    expect(bearing()).toBeCloseTo(320, 6)
     // The next press is a click again.
-    pointer(compass(), 'pointerdown', around(-90, 15))
-    pointer(compass(), 'pointerup', around(-90, 15))
+    pointer(compass(), 'pointerdown', around(-90, 15), touch)
+    pointer(compass(), 'pointerup', around(-90, 15), touch)
     pointerClick()
     act(() => { vi.advanceTimersByTime(TURN_MS) })
     expect(bearing()).toBe(0)

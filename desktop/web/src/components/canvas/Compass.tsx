@@ -7,8 +7,10 @@ import { t } from '../../i18n'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 import styles from './Compass.module.css'
 
-/** Travel under this is a click; past it the press turns the view (spec §4.2). */
+/** Travel under this is a click; past it the press turns the view (spec §4.2): 3 px for a mouse or pen, 8 px for a
+ *  finger, whose tap rolls further (the canvas's touch slop, spec §2.2), so a jittery tap still resets north. */
 const DRAG_START_PX = 3
+const TOUCH_DRAG_START_PX = 8
 /** Within this radius of the centre, on the needle, the pointer's angle is noise: it turns nothing, and the angle is
  *  taken up again where the pointer leaves it. It never decides click or drag; travel alone does. */
 const CENTRE_DEAD_ZONE_PX = 6
@@ -20,7 +22,9 @@ interface Press {
   readonly pointerId: number
   readonly start: ScreenPoint
   readonly centre: ScreenPoint
-  /** pending: under 3 px of travel, a click; turning: the view follows the pointer; ended: Esc, a lost capture or a window blur
+  /** Travel that makes the press a drag: DRAG_START_PX, or TOUCH_DRAG_START_PX for a finger. */
+  readonly dragStartPx: number
+  /** pending: under the drag start's travel, a click; turning: the view follows the pointer; ended: Esc, a lost capture or a window blur
    *  ended it while the pointer is still down, so its release is no click. */
   phase: 'pending' | 'turning' | 'ended'
   /** Where the pointer last was, if outside the dead zone; null while it is inside, so the next angle starts afresh. */
@@ -37,9 +41,9 @@ interface Press {
  * north, turned by −bearing. A click, Enter or Space runs Keyboard's `reset-north` command, whose label and keys it
  * shows. A primary drag on the face past 3 px turns the view about the screen centre by the pointer's angle around the
  * compass, so the needle follows the pointer (a clockwise drag lowers the bearing); Shift steps to 15° multiples, read
- * on each move. Within 6 px of the centre the angle is ignored, so a drag there turns nothing and a drag that crosses
- * it, even in one step between two moves, takes the angle up again on the far side; past 3 px of travel a press is a
- * drag wherever the pointer is. The drag runs outside the input pipeline, so while a press is live it holds an Esc
+ * on each move. A finger needs 8 px of travel, so a tap that rolls stays a tap. Within 6 px of the centre the angle is
+ * ignored, so a drag there turns nothing and a drag that crosses it, even in one step between two moves, takes the
+ * angle up again on the far side; past the travel a press is a drag wherever the pointer is. The drag runs outside the input pipeline, so while a press is live it holds an Esc
  * layer at the gesture priority (fixture I9): Esc restores the starting camera, or before the drag starts ends the press
  * with no reset. A pointer cancel, a lost capture and a window blur cancel it too.
  */
@@ -102,6 +106,7 @@ export function Compass({ command, className }: {
       pointerId: event.pointerId,
       start,
       centre,
+      dragStartPx: event.pointerType === 'touch' ? TOUCH_DRAG_START_PX : DRAG_START_PX,
       phase: 'pending',
       last: outsideDeadZone(centre, start) ? start : null,
       swept: 0,
@@ -124,7 +129,7 @@ export function Compass({ command, className }: {
     }
     current.last = outside ? point : null
     if (current.phase === 'pending') {
-      if (Math.hypot(point.x - current.start.x, point.y - current.start.y) < DRAG_START_PX) return
+      if (Math.hypot(point.x - current.start.x, point.y - current.start.y) < current.dragStartPx) return
       const viewport = currentCanvasViewportCommandSurface.peek()
       if (!viewport) return
       current.session = viewport.beginRotation('centre')
