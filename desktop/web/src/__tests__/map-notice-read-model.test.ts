@@ -148,6 +148,27 @@ describe('Map Notice read model', () => {
     })).toMatchObject({ visible: false, mapSurfaceVisible: false, statusText: '' })
   })
 
+  it('reports a map that stopped drawing with Retry even when every background row is hidden', () => {
+    expect(getMapNoticeReadModel({
+      hasDesign: true,
+      mapVisible: false,
+      mapSurface: { ...READY_MAP_STATE, status: 'error', errorMessage: 'context lost', retryable: true },
+      t: translate,
+    })).toEqual({
+      visible: true,
+      mapSurfaceVisible: false,
+      tone: 'error',
+      statusText: 'The map stopped drawing. Your Design is safe.',
+      retry: true,
+    })
+    expect(getMapNoticeReadModel({
+      hasDesign: true,
+      mapVisible: false,
+      mapSurface: { ...READY_MAP_STATE, status: 'error', errorMessage: 'context lost' },
+      t: translate,
+    })).toMatchObject({ visible: true, statusText: 'Map unavailable', retry: false })
+  })
+
   it('hides without a visible map layer', () => {
     expect(getMapNoticeReadModel({
       hasDesign: true,
