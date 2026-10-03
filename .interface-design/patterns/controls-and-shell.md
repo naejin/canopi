@@ -20,7 +20,7 @@ Read the [design system](../system.md) first. Boards: DesignSystem, DesignSystem
 ## Dialogs, notices and states
 
 - Dialogs: Literata 20 title, body 14.5, footer actions right-aligned and wrapping, a leading ghost action aligned with the text. Modal, focus-trapped, Esc closes and returns focus. Everything under the scrim is inert: no press, focus, key or shortcut reaches it.
-- Saved views: Save current view… has Name (selected, default "View n") and an optional Title. Manage views… lists each view with its thumbnail (64 × 44), Go to, Rename in place (Enter keeps, Esc cancels only the rename) and Delete.
+- Saved views: Save current view… has Name (selected, default "View n") and an optional Title. Manage views… lists each view with its thumbnail (64 × 40), Go to, Rename in place (Enter keeps, Esc cancels only the rename) and Delete.
 - Notices: info (surface-alt), warning (amber), error (red, alert). Toasts are dark, carry Undo when it applies, and do not time out while hovered or focused.
 - Notices never cover controls. An app-wide notice (catalog database missing or damaged; Data library refused; earlier data set aside, dismissible; a Web shell notice) takes its own row under the title bar and lowers `--chrome-rail-top` while it shows.
 - Empty states say what goes here and give the one action to start. Loading keeps the frame: inline "Searching…", row skeletons, a progress bar for long opens. Errors say what happened, what is safe and the next step.

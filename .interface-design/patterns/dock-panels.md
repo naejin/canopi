@@ -43,7 +43,7 @@ Search; Plants (star first, row opens details, Place and More); Saved stamps (re
 
 ## Stories
 
-Title "Stories"; a row with the story `Dropdown`, its More menu (Rename story…, Delete story with Undo) and New story. Body: step rows (60 px: reorder handle with Alt ↑/↓, number, a 64 × 44 thumbnail, the title over the first line of its text, More: Duplicate, Move up/down, Move to ▸ another story, Delete with Undo); the selected row is the ochre-edged selected row. Then "Add the current view as a step" (disabled until the Design is on a map).
+Title "Stories"; a row with the story `Dropdown`, its More menu (Rename story…, Delete story with Undo) and New story. Body: step rows (60 px: reorder handle with Alt ↑/↓, number, a 64 × 40 thumbnail, the title over the first line of its text, More: Duplicate, Move up/down, Move to ▸ another story, Delete with Undo); the selected row is the ochre-edged selected row. Then "Add the current view as a step" (disabled until the Design is on a map).
 
 The selected step's editor card: "Step n", Title, Text (a small toolbar; links only to web and e-mail addresses), Images (thumbnail, a required Description and Remove), "This step shows" tags, then Use the current map view and Go to this view. Footer: "N steps · saved with the Design" and Present (primary; disabled without a step or a map), from the selected step ([Canvas workspace](canvas-workspace.md#presenting-a-story)). No stories yet is an `EmptyState` with New story.
 
