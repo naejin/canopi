@@ -1,7 +1,7 @@
-import { DEFAULT_PLANT_COLOR, normalizeHexColor } from './plant-colors'
 import { resolvePlantSymbolForPlant, type PlantSymbolId, type ScenePersistedState } from './runtime/scene'
-import { resolveDisplayedPlantColor, type PlantDisplay } from './runtime/plant-display'
-import { getStratumColor } from './plants'
+import type { PlantDisplay } from './runtime/plant-display'
+import { resolvePlantDisplayColor } from './runtime/plant-presentation'
+import { EMPTY_SPECIES_CACHE } from './runtime/species-key'
 
 export interface PinnedPlantNameLegendEntry {
   readonly label: string
@@ -17,7 +17,7 @@ export interface PinnedPlantNameLegendSource {
 
 export function buildPinnedPlantNameLegendEntries(
   source: PinnedPlantNameLegendSource,
-  display?: PlantDisplay,
+  display: PlantDisplay,
 ): PinnedPlantNameLegendEntry[] {
   const scene = source.getSceneSnapshot()
   const plantLayer = scene.layers.find((layer) => layer.name === 'plants')
@@ -30,8 +30,7 @@ export function buildPinnedPlantNameLegendEntries(
     if (plant.pinnedName !== true) continue
 
     const label = localizedNames.get(plant.canonicalName) ?? plant.commonName ?? plant.canonicalName
-    const stored = normalizeHexColor(plant.color) ?? getStratumColor(plant.stratum) ?? DEFAULT_PLANT_COLOR
-    const color = display ? resolveDisplayedPlantColor(stored, plant.canonicalName, display) : stored
+    const color = resolvePlantDisplayColor(plant, EMPTY_SPECIES_CACHE, display)
     const symbol = resolvePlantSymbolForPlant(plant, scene.plantSpeciesSymbols)
     const key = `${label}\u0000${symbol}\u0000${color}`
     const existing = groups.get(key)
