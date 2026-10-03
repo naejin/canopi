@@ -217,6 +217,7 @@ pub fn stage_import(
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| source_path.display().to_string());
+        let earlier = ordered_processing_cost(&staged.iter().collect::<Vec<_>>())?;
         let staged_source = stage_source(
             engine,
             paths,
@@ -224,6 +225,7 @@ pub fn stage_import(
             &layer.quantity,
             &layer.units,
             source_path,
+            &earlier,
             job_id,
             &job_dir,
             cancel,
@@ -549,6 +551,7 @@ fn stage_source(
     quantity: &str,
     units: &str,
     source_path: &Path,
+    earlier: &[admission::ProcessingCost],
     job_id: &str,
     job_dir: &Path,
     cancel: &AtomicBool,
@@ -629,8 +632,18 @@ fn stage_source(
     // No working-area check here: the engine streams a GeoTIFF into the
     // retained COG in row windows (anything it must load whole passes its
     // capacity rule) and the facts are read from that COG in bounded
-    // windows. The item's bound is the admission processing budget.
+    // windows. The bound is the admission processing budget, charged from
+    // the probe with every source converted before this one, so an import
+    // that will be refused never converts. Every selected source counts
+    // here: a source later found incompatible refuses the batch anyway.
     validate_lattice(&source_grid, "source raster")?;
+    admission::check_processing_budget(
+        earlier.iter().copied().chain([admission::ProcessingCost {
+            width: probe.width,
+            height: probe.height,
+        }]),
+        "import",
+    )?;
     let (source_cog, valid_cells) = stage_source_samples(
         engine,
         cancel,
@@ -2909,6 +2922,121 @@ mod tests {
             );
         }
         drop(connection);
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// canopi-dfc0: a GeoTIFF streams at any size, so the processing budget
+    /// is the bound on what preparation converts, and it is checked from the
+    /// probe before a source converts: a source at exactly the budget
+    /// prepares, one cell over is refused with no retained COG written, and
+    /// a batch is charged as it goes, refusing the source that crosses it by
+    /// name before that source converts.
+    #[test]
+    fn the_processing_budget_refuses_a_source_before_it_converts() {
+        let root = crate::test_scratch::TestScratch::new("canopi-budget-before-conversion");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
+        let cancel = AtomicBool::new(false);
+        let library = LidarLibrary::open(&root).expect("library opens");
+        // Two 4x4 sources: 16 processing cells each.
+        let west = write_placed_fixture(&engine, &root, "west", 0.0, 4.0, 4, 4, -9999.0, 5.0);
+        let east = write_placed_fixture(&engine, &root, "east", 4.0, 4.0, 4, 4, -9999.0, 7.0);
+        let budget = |processing_cells| {
+            admission::limits_probe::set(admission::AdmissionLimits {
+                files: 24,
+                source_bytes: 2 * 1024 * 1024 * 1024,
+                import_bytes: 2 * 1024 * 1024 * 1024,
+                processing_cells,
+            })
+        };
+        let new_item = |name: &str| {
+            library
+                .create_layer(
+                    name,
+                    common_types::library::RasterQuantity::GroundElevation,
+                    None,
+                    false,
+                )
+                .unwrap()
+        };
+        let source_cogs = |job_id: &str| {
+            std::fs::read_dir(library.inner.paths.job_dir(job_id))
+                .map(|entries| {
+                    entries
+                        .filter_map(Result::ok)
+                        .filter(|entry| {
+                            entry
+                                .file_name()
+                                .to_string_lossy()
+                                .starts_with("source-cog-")
+                        })
+                        .count()
+                })
+                .unwrap_or(0)
+        };
+
+        // Exactly the budget: the source prepares.
+        {
+            let _budget = budget(16);
+            let layer_id = new_item("at the budget");
+            let job_id = library.record_import_job(&layer_id).expect("job recorded");
+            stage_import(
+                &library,
+                &job_id,
+                &layer_id,
+                std::slice::from_ref(&west),
+                &cancel,
+            )
+            .expect("a source at exactly the budget prepares");
+        }
+
+        // One cell over: refused from the probe, before any conversion.
+        {
+            let _budget = budget(15);
+            let layer_id = new_item("one cell over");
+            let job_id = library.record_import_job(&layer_id).expect("job recorded");
+            let error = stage_import(
+                &library,
+                &job_id,
+                &layer_id,
+                std::slice::from_ref(&west),
+                &cancel,
+            )
+            .expect_err("a source one cell over the budget is refused");
+            assert!(
+                error.contains("west.tif") && error.contains("16 processing cells"),
+                "the refusal names the file and its cost: {error}"
+            );
+            assert_eq!(source_cogs(&job_id), 0, "nothing was converted");
+            assert_eq!(
+                library.get_import_job(&job_id).unwrap().unwrap().progress,
+                None,
+                "no source is reported as converted"
+            );
+        }
+
+        // A batch is charged source by source: the second crosses the budget
+        // and is refused by name before it converts.
+        {
+            let _budget = budget(31);
+            let layer_id = new_item("batch over");
+            let job_id = library.record_import_job(&layer_id).expect("job recorded");
+            let error = stage_import(
+                &library,
+                &job_id,
+                &layer_id,
+                &[west.clone(), east.clone()],
+                &cancel,
+            )
+            .expect_err("a batch over the budget is refused");
+            assert!(
+                error.contains("east.tif") && error.contains("32 processing cells"),
+                "the refusal names the source that crosses the budget: {error}"
+            );
+            assert_eq!(source_cogs(&job_id), 1, "only the first source converted");
+        }
         drop(library);
         let _ = std::fs::remove_dir_all(&root);
     }

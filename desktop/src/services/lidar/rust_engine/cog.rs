@@ -29,9 +29,9 @@ use wbgeotiff::tags::{Compression, SampleFormat, tag};
 
 /// Tile side of every profile.
 pub(super) const TILE: u32 = 256;
-/// Classic TIFF addresses 32-bit offsets; the admission limits (400 M cells,
-/// 1.6 GB of Float32) keep every profile below it, so the writer refuses
-/// rather than switch layouts.
+/// Classic TIFF addresses 32-bit offsets; the import budget (400 M cells,
+/// 1.6 GB of Float32, charged before a source converts) keeps every profile
+/// below it, so the writer refuses rather than switch layouts.
 const MAX_CLASSIC_BYTES: u64 = u32::MAX as u64;
 
 /// What kind of file to write.
