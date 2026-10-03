@@ -161,6 +161,21 @@ describe('createCanvasKeyboardPort', () => {
     expect(f.navigation.panByPx).not.toHaveBeenCalled()
   })
 
+  it('mod+arrow on the focused map is always consumed', () => {
+    // Even when nothing moves: Web Mac Cmd+← would go Back (A18).
+    const f = fixture({ tool: 'polygon' })
+    f.selected = true
+    expect(f.port.command({ kind: 'arrow', dir: 'left', large: true })).toBe(true)
+    f.live = true
+    expect(f.port.command({ kind: 'arrow', dir: 'left', large: true })).toBe(true)
+    expect(f.toolHost.nudge).toHaveBeenCalledOnce()
+    expect(f.navigation.panByPx).not.toHaveBeenCalled()
+    // The plain arrow still leaves the key to the page.
+    expect(f.port.command({ kind: 'arrow', dir: 'left', large: false })).toBe(false)
+    f.live = false
+    expect(f.port.command({ kind: 'arrow', dir: 'left', large: false })).toBe(false)
+  })
+
   it('another key commits the nudge series; arrows, modifiers and Esc keep it, and its Esc layer aborts it', () => {
     const f = fixture()
     f.selected = true
