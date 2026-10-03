@@ -401,7 +401,7 @@ describe('saved view model', () => {
   it('rounds the camera like stored positions and clamps zoom to the map range', () => {
     const view = composeSavedView({
       id: 'v', name: 'V', title: null,
-      view: { lon: 2.29448123456789, lat: 48.85837012345678, zoom: 31 },
+      view: { lon: 2.29448123456789, lat: 48.85837012345678, zoom: 31, bearing: 0 },
       mapLayers: createDefaultMapLayers(),
       sceneLayers: [], siteData: [], focusedSpecies: null, selection: [],
     })

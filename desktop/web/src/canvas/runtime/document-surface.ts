@@ -1,5 +1,4 @@
 import type { CanopiFile } from '../../types/design'
-import type { PlantPresentationContext } from './plant-presentation'
 import {
   CanvasAuthorityBusyError,
   CanvasDocumentReplacementNotAdmittedError,
@@ -10,7 +9,6 @@ import {
   type CanvasRuntimeDocumentMetadata,
 } from './runtime'
 import type { ScenePersistedState } from './scene'
-import { sceneExtentPoints } from './scene-extent'
 import type { SceneRuntimeChromeCoordinator } from './scene-runtime/chrome-coordinator'
 import type { SceneRuntimeDocumentBridge } from './scene-runtime/document'
 import type { SceneRuntimeRenderScheduler } from './scene-runtime/render-scheduler'
@@ -21,19 +19,19 @@ import type { CameraDriverHost } from './view/camera-driver'
 import type { ViewNavigation } from './view/navigation'
 
 interface SceneCanvasDocumentSurfaceOptions {
-  readonly readEmptySceneScale?: () => number
+  /** The bearing a loaded Design opens at; read once per open of a loaded Design (scene-runtime/construction.ts). */
+  readonly readOpeningBearing: () => number
   readonly inspection: Pick<SceneCanvasInspectionOwner, 'mount' | 'reset' | 'dispose'>
   readonly documents: Pick<
     SceneRuntimeDocumentBridge,
     'loadDocument' | 'replaceDocument' | 'captureForPersistence'
   >
   /** The runtime's camera: a resize reaches its live driver. */
-  readonly cameraHost: Pick<CameraDriverHost, 'frames' | 'current'>
-  readonly viewNavigation: Pick<ViewNavigation, 'zoomToFit' | 'clearTemporaryFocus'>
+  readonly cameraHost: Pick<CameraDriverHost, 'current'>
+  readonly viewNavigation: Pick<ViewNavigation, 'openAt' | 'clearTemporaryFocus'>
   readonly chrome: Pick<SceneRuntimeChromeCoordinator, 'attach' | 'show' | 'hide' | 'destroy'>
   readonly rendering: Pick<SceneRuntimeRenderScheduler, 'container' | 'invalidate' | 'resize' | 'dispose'>
   readonly getSceneSnapshot: () => ScenePersistedState
-  readonly createPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
   readonly invalidateViewport: () => void
   readonly renderChrome: () => void
   readonly addGuide: (axis: 'h' | 'v', worldPosition: number) => void
@@ -76,13 +74,13 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
     this.options.renderChrome()
   }
 
+  /**
+   * The open fit: every open path (the first load, a replace, the first generation) ends here, never Fit to Design. It opens
+   * at the opening bearing (spec §4.15); an empty scene, and the first frame before any Design, open north up (openAt).
+   */
   zoomToFit(): void {
-    const scene = this.options.getSceneSnapshot()
-    const pixelsPerMetre = this.options.cameraHost.frames.viewFrame.peek().view.pixelsPerMetre
-    this.options.viewNavigation.zoomToFit(scene, {
-      extentPoints: sceneExtentPoints(scene, this.options.createPlantPresentationContext(pixelsPerMetre)),
-      emptySceneScale: this.options.readEmptySceneScale?.(),
-    })
+    const bearing = this._documentState === 'absent' ? 0 : this.options.readOpeningBearing()
+    this.options.viewNavigation.openAt(this.options.getSceneSnapshot(), bearing)
     this.options.invalidateViewport()
   }
 

@@ -24,6 +24,7 @@ function createTestDocumentSurface(
     ...renderingOverrides,
   } as Parameters<typeof createSceneCanvasDocumentSurface>[0]['rendering']
   return createSceneCanvasDocumentSurface({
+    readOpeningBearing: () => 0,
     inspection: { mount: () => { throw new Error('Inspection is not used by this fixture.') }, reset: () => {}, dispose: () => {} },
     documents,
     cameraHost: camera.host,
@@ -36,7 +37,6 @@ function createTestDocumentSurface(
     },
     rendering,
     getSceneSnapshot: createDefaultScenePersistedState,
-    createPlantPresentationContext: vi.fn(),
     invalidateViewport: vi.fn(),
     renderChrome: vi.fn(),
     addGuide: vi.fn(),
@@ -93,6 +93,7 @@ describe('Scene Canvas document surface lifecycle', () => {
     const calls: string[] = []
     const camera = createTestView()
     const surface = createSceneCanvasDocumentSurface({
+      readOpeningBearing: () => 0,
     inspection: { mount: () => { throw new Error('Inspection is not used by this fixture.') }, reset: () => {}, dispose: () => {} },
       documents: {
         loadDocument: vi.fn(),
@@ -125,9 +126,6 @@ describe('Scene Canvas document surface lifecycle', () => {
         },
       },
       getSceneSnapshot: createDefaultScenePersistedState,
-      createPlantPresentationContext: () => {
-        throw new Error('not used by destroy')
-      },
       invalidateViewport: vi.fn(),
       renderChrome: vi.fn(),
       addGuide: vi.fn(),

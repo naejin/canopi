@@ -62,6 +62,8 @@ type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
 
 /** The view's eases (rotation) wait for phase 1's platform signal; nothing eases at bearing 0. */
 const NO_REDUCED_MOTION: ReadonlySignal<boolean> = signal(false)
+/** The closest a new or empty Design opens: about one country wide. */
+const NEW_DESIGN_OVERVIEW_MAX_ZOOM = 5
 
 export interface SceneRuntimeConstructionOptions {
   appAdapter?: CanvasRuntimeAppAdapter
@@ -133,7 +135,12 @@ export function createSceneRuntimeConstruction(
   callbacks: SceneRuntimeConstructionCallbacks,
 ): SceneRuntimeConstruction {
   const appAdapter = options.appAdapter ?? createDetachedCanvasRuntimeAppAdapter()
-  const readEmptyDesignView = () => appAdapter.settings.readLastView?.() ?? DEFAULT_NEW_DESIGN_VIEW
+  // A new or empty Design opens at the last view's centre, zoomed out to at most country level, so "Where is your site?"
+  // appears over an overview, never at the previous Design's site scale; the world default without a last view.
+  const readEmptyDesignView = () => {
+    const last = appAdapter.settings.readLastView?.()
+    return last ? { lon: last.lon, lat: last.lat, zoom: Math.min(last.zoom, NEW_DESIGN_OVERVIEW_MAX_ZOOM) } : DEFAULT_NEW_DESIGN_VIEW
+  }
   const sceneStore = new SceneStore(undefined, {}, () => {
     const view = readEmptyDesignView()
     return { lon: view.lon, lat: view.lat }
@@ -261,8 +268,16 @@ export function createSceneRuntimeConstruction(
     getSnapshot: () => presentation.buildRendererSnapshot(),
     setHoveredTarget: callbacks.setHoveredTarget,
   })
+  // The opening bearing (spec §4.15): the stored last view's on the first Design opened, then the live target for later opens
+  // in the session, so the per-device last view carries over without waiting for it to settle and be written.
+  let lastViewBearingRead = false
+  const readOpeningBearing = () => {
+    if (lastViewBearingRead) return cameraHost.current().bearingTarget()
+    lastViewBearingRead = true
+    return appAdapter.settings.readLastView?.()?.bearing ?? 0
+  }
   const documentSurface = createSceneCanvasDocumentSurface({
-    readEmptySceneScale,
+    readOpeningBearing,
     inspection,
     documents,
     cameraHost,
@@ -270,8 +285,6 @@ export function createSceneRuntimeConstruction(
     chrome,
     rendering,
     getSceneSnapshot: () => sceneStore.persisted,
-    createPlantPresentationContext: (viewportScale) =>
-      presentation.createPlantPresentationContext(viewportScale),
     invalidateViewport: () => callbacks.invalidate('viewport'),
     renderChrome: callbacks.renderChrome,
     addGuide: callbacks.addGuide,

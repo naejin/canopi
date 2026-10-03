@@ -74,7 +74,7 @@ function newDesignOverOpenDesign(): { lon: number; lat: number; zoom: number } {
 describe('New Design opens at an overview', () => {
   it('opens a regional overview around the previous site, not its site-scale camera', () => {
     // The previous Design settled at site scale (about 1:190).
-    persistLastView({ ...SITE, zoom: 18.25 })
+    persistLastView({ ...SITE, zoom: 18.25, bearing: 0 })
 
     const view = newDesignOverOpenDesign()
 
@@ -84,7 +84,7 @@ describe('New Design opens at an overview', () => {
   })
 
   it('keeps a last view that is already wider than the regional overview', () => {
-    persistLastView({ ...SITE, zoom: 3 })
+    persistLastView({ ...SITE, zoom: 3, bearing: 0 })
     expect(newDesignOverOpenDesign().zoom).toBeCloseTo(3, 6)
   })
 
