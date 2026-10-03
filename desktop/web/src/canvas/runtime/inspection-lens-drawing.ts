@@ -181,31 +181,34 @@ function drawPlants(
   const layout = layoutPlantPresentation(entries, scale)
   // Plant glyphs are side-view pictograms: on a lens turned with the map they stay upright on screen (spec §4.8, §4.13).
   const uprightRad = (view.camera.bearingDeg * Math.PI) / 180
-
+  const turned = uprightRad !== 0
+  /** Undoes the view's turn about a plant: what follows is drawn level at worldToScreen(position), still in metres. */
+  const upright = ({ x, y }: { readonly x: number; readonly y: number }) => {
+    target.save()
+    target.translate(x, y)
+    target.rotate(uprightRad)
+    target.translate(-x, -y)
+  }
   for (const entry of entries) {
-    const turned = uprightRad !== 0
-    if (turned) {
-      // Undo the view's turn about the plant: the glyph is drawn level at worldToScreen(position), still in metres.
-      const { x, y } = entry.plant.position
-      target.save()
-      target.translate(x, y)
-      target.rotate(uprightRad)
-      target.translate(-x, -y)
-    }
+    if (turned) upright(entry.plant.position)
     drawPlantSymbolGlyph(target, entry, symbolOpacity, scale)
+    if (turned) target.restore()
+  }
 
-    if (entry.plant.id === hoveredPlantId) {
-      const ring = getCanvasInteractionStrokeVisual('hover')
-      target.beginPath()
-      target.arc(entry.plant.position.x, entry.plant.position.y, entry.radiusWorld * 1.4, 0, Math.PI * 2)
-      target.globalAlpha = ring.alpha * symbolOpacity
-      target.strokeStyle = ring.casingColor
-      target.lineWidth = ring.casingWidthPx / scale
-      target.stroke()
-      target.strokeStyle = ring.color
-      target.lineWidth = ring.widthPx / scale
-      target.stroke()
-    }
+  // The hover ring sits above every symbol, as on the map.
+  const hovered = hoveredPlantId === null ? undefined : entries.find((entry) => entry.plant.id === hoveredPlantId)
+  if (hovered) {
+    if (turned) upright(hovered.plant.position)
+    const ring = getCanvasInteractionStrokeVisual('hover')
+    target.beginPath()
+    target.arc(hovered.plant.position.x, hovered.plant.position.y, hovered.radiusWorld * 1.4, 0, Math.PI * 2)
+    target.globalAlpha = ring.alpha * symbolOpacity
+    target.strokeStyle = ring.casingColor
+    target.lineWidth = ring.casingWidthPx / scale
+    target.stroke()
+    target.strokeStyle = ring.color
+    target.lineWidth = ring.widthPx / scale
+    target.stroke()
     if (turned) target.restore()
   }
 

@@ -4,6 +4,7 @@ import './support/camera-tolerance'
 import { drawInspectionLensScene } from '../canvas/runtime/inspection-lens-drawing'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
 import type { SceneDesignObjectSelection } from '../canvas/runtime/scene'
+import { getCanvasInteractionStrokeVisual } from '../canvas/runtime/scene-visuals'
 import { createTestRendererView, createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
 
 /** A lens snapshot and the placement its view draws it at (screen = world × scale + { x, y }, bearing 0). */
@@ -207,6 +208,31 @@ describe('drawInspectionLensScene', () => {
     expect(ctx.fills).toEqual([.5])
     expect(ctx.fillText).toHaveBeenCalledOnce()
     expect(ctx.order.indexOf('drawImage')).toBeLessThan(ctx.order.indexOf('fillText'))
+  })
+
+  it('draws the hover ring above every plant symbol, as the map does', () => {
+    const ring = getCanvasInteractionStrokeVisual('hover')
+    for (const opacity of [.5, 1]) {
+      const ctx = createAlphaRecordingContext()
+      const scratch = createAlphaRecordingContext()
+      const strokeStyles: string[] = []
+      for (const target of [ctx, scratch]) {
+        target.stroke = vi.fn(() => { target.order.push('stroke'); target.strokes.push(target.globalAlpha); strokeStyles.push(target.strokeStyle) })
+      }
+      // The hovered plant comes first, so its neighbour, drawn later and overlapping it, would cover a ring drawn with it.
+      const overlapping = createRendererSnapshot({
+        plants: [createPlant({ id: 'a', position: { x: 10, y: 10 } }), createPlant({ id: 'b', position: { x: 10.4, y: 10 } })],
+        layers: [{ kind: 'layer', name: 'plants', visible: true, locked: false, opacity }],
+        viewport: { x: 0, y: 0, scale: 20 },
+      })
+      draw(ctx, { ...overlapping, snapshot: { ...overlapping.snapshot, hoverTarget: { kind: 'plant', id: 'a', state: 'hover' } } },
+        { scratch: () => scratch as unknown as CanvasRenderingContext2D })
+      const target = opacity < 1 ? scratch : ctx
+      expect(target.fills.length).toBeGreaterThanOrEqual(2)
+      expect(strokeStyles.slice(-2)).toEqual([ring.casingColor, ring.color])
+      expect(target.order.lastIndexOf('fill')).toBeLessThan(target.order.length - 2)
+      expect(target.order.slice(-2)).toEqual(['stroke', 'stroke'])
+    }
   })
 
   it('rings the hovered lens plant with the shared hover visual', () => {
