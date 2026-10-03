@@ -251,13 +251,26 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   /**
    * True from a gesturestart the canvas does not take to its gestureend. A twist starts only over the map, as a wheel is
    * handled (MapLibre's controls count as map), and never while the text entry is open (spec §3.8: no canvas turn is live
-   * then, and its Esc is the entry's); the source prevents that twist's events and delivers none of them.
+   * then, and its Esc is the entry's); the source prevents that twist's events and delivers none of them. An entry that
+   * opens during a twist (F2 or Enter under Select) ends it on its next event, at the last rotation delivered, so the
+   * turn made before the entry stays and the rest of the twist is ignored the same way.
    */
   let ignoringTwist = false
+  /** The last gesture event delivered of the live twist: the end the source gives it when the entry opens. */
+  let lastTwist: DomEventLike | null = null
   /** WebKit's trackpad gesture events (WKWebView and Safari); the recogniser prevents each one and uses its rotation. */
   const gestureHandler = (type: 'gesturestart' | 'gesturechange' | 'gestureend') => (event: Event): void => {
+    const entryOpen = host.querySelector(TEXT_ENTRY_SELECTOR) !== null
     if (type === 'gesturestart') {
-      ignoringTwist = classifyTarget(event.target, host, 'surface').kind !== 'surface' || host.querySelector(TEXT_ENTRY_SELECTOR) !== null
+      lastTwist = null
+      ignoringTwist = classifyTarget(event.target, host, 'surface').kind !== 'surface' || entryOpen
+    }
+    if (!ignoringTwist && entryOpen && lastTwist) {
+      const end: DomEventLike = { ...lastTwist, type: 'gestureend', timeStamp: event.timeStamp }
+      lastTwist = null
+      ignoringTwist = true
+      const rect = host.getBoundingClientRect()
+      deliver(event, rect, normalise(end, deps.platform, deps.bindings(), { physicalCtrl: deps.keys.physicalCtrl() }, rect))
     }
     if (ignoringTwist) {
       event.preventDefault()
@@ -265,7 +278,9 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
       return
     }
     const rect = host.getBoundingClientRect()
-    deliver(event, rect, normalise(gestureEventLike(event, type, rect), deps.platform, deps.bindings(), {
+    const like = gestureEventLike(event, type, rect)
+    lastTwist = type === 'gestureend' ? null : like
+    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), {
       physicalCtrl: deps.keys.physicalCtrl(),
     }, rect))
   }
