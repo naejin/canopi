@@ -1,9 +1,10 @@
 // canvas/runtime/tools/snapping.ts  (pure)
 //
-// Owns the ToolHost's grid and guide snapping: the grid first, then the ruler guides, both on world axes (user),
-// at the frame's pixelsPerMetre, which is exact at bearing 0 where metresPerPixelAt is not. The host feeds
-// ToolPoint.free, ToolPoint.snapped and ToolContext.snap from here. canvas/grid.ts and canvas/guides.ts keep the arithmetic,
-// which the scene chrome and the rulers read too.
+// Owns the ToolHost's grid and guide snapping: the grid first, then the ruler guides, both on true east and north (world
+// axes, user), whatever the bearing: on a turned map the lattice turns with the map (spec §4.6). The interval comes from
+// the frame's pixelsPerMetre (the plane origin's scale, which the bearing does not change). The host feeds
+// ToolPoint.free, ToolPoint.snapped and ToolContext.snap from here. canvas/grid.ts and canvas/guides.ts keep the
+// arithmetic, which the drawn grid and the rulers read too, so the grid lines are the snap lattice.
 
 import { gridInterval, snapToGrid } from '../../grid'
 import { snapToGuides, type Guide } from '../../guides'
