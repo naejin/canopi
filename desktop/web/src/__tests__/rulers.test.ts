@@ -135,6 +135,53 @@ describe('RulerOverlay', () => {
     overlay.destroy()
   })
 
+  it('a ruler tick meets the grid line it labels at a bearing inside the north-up tolerance', () => {
+    // An exact "Turn view to this edge" on a hand-drawn 120 m fence with 5 cm of drift, about 400 m south and east of the plane origin.
+    const plane = createSessionPlane({ lon: 2.3522, lat: 48.8566 })
+    const frame = testViewFrame({
+      plane,
+      screen: { width: 1400, height: 324 },
+      camera: {
+        center: plane.toGeo({ x: 400, y: 400 }),
+        zoom: stageScaleToMapZoom(25, plane.origin.lat),
+        bearingDeg: Math.atan2(0.05, 120) * 180 / Math.PI,
+      },
+    })
+    expect(frame.view.northUp).toBe(true)
+    expect(frame.view.camera.bearingDeg).not.toBe(0)
+
+    const host = document.createElement('div')
+    const contexts = new Map<HTMLCanvasElement, CanvasRenderingContext2D>()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function (this: HTMLCanvasElement) {
+      if (!contexts.has(this)) contexts.set(this, createContextStub())
+      return contexts.get(this) as never
+    })
+    const overlay = createRulerOverlay(host, { onGuideCreate: vi.fn() })
+    overlay.update({ frame, chromeVisible: true, rulersVisible: true })
+    const metres = (label: string): number => Number.parseFloat(label)
+    const view = frame.view
+
+    // The top ruler's labelled ticks: where each meets the canvas (screen row 24), the world x is the tick's own value.
+    const horizontal = contexts.get(findPart<HTMLCanvasElement>(host, 'horizontal'))!
+    const topLabels = vi.mocked(horizontal.fillText).mock.calls
+    expect(topLabels.length).toBeGreaterThan(2)
+    for (const [label, canvasX] of topLabels) {
+      const ground = view.screenToWorld({ x: canvasX + 24, y: 24 })
+      expect(Math.abs(ground.x - metres(label)) * view.pixelsPerMetre).toBeLessThan(0.05)
+    }
+
+    // The left ruler's labelled ticks: where each meets the canvas (screen column 24), the world y is the tick's own value.
+    const vertical = contexts.get(findPart<HTMLCanvasElement>(host, 'vertical'))!
+    const leftLabels = vi.mocked(vertical.fillText).mock.calls.map(([label]) => label)
+    const leftRows = vi.mocked(vertical.translate).mock.calls.map(([, canvasY]) => canvasY)
+    expect(leftLabels.length).toBeGreaterThan(2)
+    leftLabels.forEach((label, index) => {
+      const ground = view.screenToWorld({ x: 24, y: leftRows[index]! + 24 })
+      expect(Math.abs(ground.y - metres(label)) * view.pixelsPerMetre).toBeLessThan(0.05)
+    })
+    overlay.destroy()
+  })
+
   it('refuses a guide in overview', () => {
     const host = document.createElement('div')
     const onGuideCreate = vi.fn()

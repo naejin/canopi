@@ -1,4 +1,4 @@
-import type { ScreenPoint, ViewFrame } from '../view/types'
+import type { ScreenPoint, ViewFrame, ViewTransform } from '../view/types'
 import { NICE_DISTANCES } from '../../grid'
 import { scaleReaches } from '../../projection'
 import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
@@ -311,8 +311,10 @@ function drawHorizontalRuler(
 
   const { tickInterval, labelInterval } = calcTickIntervals(view.pixelsPerMetre)
   const screenOffsetX = origin.x + RULER_SIZE
-  const worldLeft = view.screenToWorld({ x: screenOffsetX, y: 0 }).x
-  const worldRight = view.screenToWorld({ x: screenOffsetX + cssWidth, y: 0 }).x
+  // The ticks meet the canvas on the ruler's inner edge: values and places are read on that row, where the grid lines cross it.
+  const edgeRow = origin.y + RULER_SIZE
+  const worldLeft = view.screenToWorld({ x: screenOffsetX, y: edgeRow }).x
+  const worldRight = view.screenToWorld({ x: screenOffsetX + cssWidth, y: edgeRow }).x
   const startWorld = Math.floor(worldLeft / tickInterval) * tickInterval
   const labels = new RulerLabelSpacing()
 
@@ -324,7 +326,7 @@ function drawHorizontalRuler(
   context.lineWidth = 1
 
   for (let world = startWorld; world <= worldRight; world += tickInterval) {
-    const canvasX = view.worldToScreen({ x: world, y: 0 }).x - screenOffsetX
+    const canvasX = rulerCrossing(view, 'h', world, edgeRow) - screenOffsetX
     if (canvasX < 0 || canvasX > cssWidth) continue
 
     const isMajor = Math.abs(Math.round(world / labelInterval) * labelInterval - world) < 1e-9
@@ -372,8 +374,9 @@ function drawVerticalRuler(
 
   const { tickInterval, labelInterval } = calcTickIntervals(view.pixelsPerMetre)
   const screenOffsetY = origin.y + RULER_SIZE
-  const worldTop = view.screenToWorld({ x: 0, y: screenOffsetY }).y
-  const worldBottom = view.screenToWorld({ x: 0, y: screenOffsetY + cssHeight }).y
+  const edgeColumn = origin.x + RULER_SIZE
+  const worldTop = view.screenToWorld({ x: edgeColumn, y: screenOffsetY }).y
+  const worldBottom = view.screenToWorld({ x: edgeColumn, y: screenOffsetY + cssHeight }).y
   const startWorld = Math.floor(worldTop / tickInterval) * tickInterval
   const labels = new RulerLabelSpacing()
 
@@ -383,7 +386,7 @@ function drawVerticalRuler(
   context.lineWidth = 1
 
   for (let world = startWorld; world <= worldBottom; world += tickInterval) {
-    const canvasY = view.worldToScreen({ x: 0, y: world }).y - screenOffsetY
+    const canvasY = rulerCrossing(view, 'v', world, edgeColumn) - screenOffsetY
     if (canvasY < 0 || canvasY > cssHeight) continue
 
     const isMajor = Math.abs(Math.round(world / labelInterval) * labelInterval - world) < 1e-9
@@ -403,6 +406,19 @@ function drawVerticalRuler(
       context.restore()
     }
   }
+}
+
+/**
+ * Where the grid line a tick labels crosses the ruler's inner edge, along the ruler: for the top ruler ('h') the world
+ * column x = `world` on screen row `edge`, for the left ruler ('v') the world row y = `world` on screen column `edge`.
+ * North-up allows a bearing of up to NORTH_UP_TOLERANCE_DEG, and the grid turns with it; a tick projected on world row
+ * y = 0 (or column x = 0) would slide off its line by pixelsPerMetre × sin(bearing) × the edge's distance from the origin.
+ */
+function rulerCrossing(view: ViewTransform, axis: RulerAxis, world: number, edge: number): number {
+  const from = view.worldToScreen(axis === 'h' ? { x: world, y: 0 } : { x: 0, y: world })
+  const to = view.worldToScreen(axis === 'h' ? { x: world, y: 1 } : { x: 1, y: world })
+  if (axis === 'h') return from.x + (to.x - from.x) * (edge - from.y) / (to.y - from.y)
+  return from.y + (to.y - from.y) * (edge - from.x) / (to.x - from.x)
 }
 
 /** Admits centred labels along one axis only when they keep clear of the previous one. */
