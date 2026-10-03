@@ -5,6 +5,9 @@ import type { ViewFrame } from '../canvas/runtime/view/types'
 import { testViewFrame } from './support/test-view'
 import { pressRuler } from '../canvas/runtime/chrome/rulers'
 import { SceneRuntimeChromeCoordinator } from '../canvas/runtime/scene-runtime/chrome-coordinator'
+import { SceneRuntimePresentationController } from '../canvas/runtime/scene-runtime/presentation'
+import { SceneStore } from '../canvas/runtime/scene'
+import { getMapBackdropInk } from '../canvas/runtime/scene-visuals'
 
 function cameraFrame(): ViewFrame {
   return testViewFrame({ screen: { width: 320, height: 240 }, viewport: { x: 10, y: 20, scale: 2 } })
@@ -114,6 +117,53 @@ describe('SceneRuntimeChromeCoordinator', () => {
 
     coordinator.update({ frame: cameraFrame(), rulersVisible: false, gridVisible: false, guidesVisible: true, guides })
     expect(grid().style.display).toBe('block')
+    coordinator.destroy()
+  })
+
+  it('the grid and guides reach the workspace renderer and never a thumbnail', () => {
+    const coordinator = new SceneRuntimeChromeCoordinator()
+    coordinator.attach(document.createElement('div'), vi.fn())
+    const presentation = new SceneRuntimePresentationController({
+      sceneStore: new SceneStore(),
+      readPixelsPerMetre: () => 2,
+      getLocale: () => 'en',
+      resolveHighlightedTargets: () => ({ plantIds: [], zoneIds: [] }),
+      onPlantNamesChanged: vi.fn(),
+    })
+    const snapshot = {
+      frame: cameraFrame(),
+      rulersVisible: true,
+      gridVisible: true,
+      guidesVisible: true,
+      guides: [{ id: 'guide-v', axis: 'v' as const, position: 10 }],
+    }
+
+    // Hidden chrome (a Design opening, a document replacement) draws no aids.
+    expect(presentation.setEditingAids(coordinator.update(snapshot))).toBe(false)
+    expect(presentation.buildRendererSnapshot().editingAids).toBeUndefined()
+
+    coordinator.show()
+    expect(presentation.setEditingAids(coordinator.update(snapshot))).toBe(true)
+    // The same aids again change nothing, so a camera frame never re-syncs the scene.
+    expect(presentation.setEditingAids(coordinator.update(snapshot))).toBe(false)
+    const ink = getMapBackdropInk()
+    expect(presentation.buildRendererSnapshot().editingAids).toEqual({
+      grid: { ink: ink.grid, majorInk: ink.gridMajor },
+      rulerGuides: [{ axis: 'v', position: 10 }],
+    })
+
+    // The overview, a saved view's or story's thumbnail and a presented story draw none.
+    expect(presentation.buildRendererSnapshot({ overview: true }).editingAids).toBeUndefined()
+    expect(presentation.buildViewCaptureSnapshot({
+      overview: false, visibleLayerNames: ['plants'], focusedSpecies: null,
+    }).editingAids).toBeUndefined()
+    presentation.presentLayers(['plants'])
+    expect(presentation.buildRendererSnapshot().editingAids).toBeUndefined()
+    presentation.presentLayers(null)
+
+    // Grid off and guides hidden: nothing to draw.
+    expect(presentation.setEditingAids(coordinator.update({ ...snapshot, gridVisible: false, guidesVisible: false }))).toBe(true)
+    expect(presentation.buildRendererSnapshot().editingAids).toBeUndefined()
     coordinator.destroy()
   })
 })

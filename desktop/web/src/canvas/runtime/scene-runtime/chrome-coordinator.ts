@@ -1,5 +1,7 @@
 import type { Guide } from '../../guides'
+import type { SceneEditingAids } from '../renderers/scene-types'
 import { SceneChromeOverlay } from '../scene-chrome'
+import { getMapBackdropInk } from '../scene-visuals'
 import type { ViewFrame } from '../view/types'
 
 interface SceneRuntimeChromeSnapshot {
@@ -34,12 +36,21 @@ export class SceneRuntimeChromeCoordinator {
     this._overlay?.refreshTheme()
   }
 
-  update({ guidesVisible, ...snapshot }: SceneRuntimeChromeSnapshot): void {
+  /**
+   * Draws the rulers for this frame and returns the editing aids the workspace map draws (the grid and the ruler
+   * guides), null while the chrome is hidden or there is nothing to draw.
+   */
+  update({ guidesVisible, ...snapshot }: SceneRuntimeChromeSnapshot): SceneEditingAids | null {
     this._overlay?.update({
       ...snapshot,
       guides: guidesVisible ? snapshot.guides : [],
       chromeVisible: this._visible,
     })
+    if (!this._visible) return null
+    const ink = snapshot.gridVisible ? getMapBackdropInk() : null
+    const rulerGuides = guidesVisible ? snapshot.guides.map(({ axis, position }) => ({ axis, position })) : []
+    if (!ink && rulerGuides.length === 0) return null
+    return { grid: ink ? { ink: ink.grid, majorInk: ink.gridMajor } : null, rulerGuides }
   }
 
   destroy(): void {
