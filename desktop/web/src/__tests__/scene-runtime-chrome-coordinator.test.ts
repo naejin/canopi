@@ -180,6 +180,22 @@ describe('SceneRuntimeChromeCoordinator', () => {
     expect(host.childElementCount).toBe(0)
   })
 
+  it('hides the rulers on a turned view', () => {
+    const host = document.createElement('div')
+    setHostRect(host)
+    const coordinator = new SceneRuntimeChromeCoordinator()
+    coordinator.attach(host, vi.fn())
+    coordinator.show()
+    const horizontal = () => host.querySelector<HTMLCanvasElement>('[data-ruler-overlay-part="horizontal"]')!.style.display
+    const chrome = { rulersVisible: true, gridVisible: true, guidesVisible: true, guides: [] }
+
+    coordinator.update({ ...chrome, frame: testViewFrame({ screen: { width: 320, height: 240 }, camera: { bearingDeg: 30 } }) })
+    expect(horizontal()).toBe('none')
+    coordinator.update({ ...chrome, frame: cameraFrame() })
+    expect(horizontal()).toBe('block')
+    coordinator.destroy()
+  })
+
   it('the grid and guides reach the workspace renderer and never a thumbnail', () => {
     const coordinator = new SceneRuntimeChromeCoordinator()
     coordinator.attach(document.createElement('div'), vi.fn())

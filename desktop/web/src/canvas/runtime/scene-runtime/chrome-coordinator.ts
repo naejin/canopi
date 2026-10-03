@@ -14,7 +14,7 @@ interface SceneRuntimeChromeSnapshot {
 
 /**
  * The workspace's editing chrome (spec §1.5): it builds the Canvas2D rulers on the ruler host, redraws them after each
- * frame and disposes them, and turns the chrome settings into the editing aids (the grid and the ruler guides) the
+ * frame (shown only while north is up) and disposes them, and turns the chrome settings into the editing aids (the grid and the ruler guides) the
  * workspace map draws in its world root.
  */
 export class SceneRuntimeChromeCoordinator {

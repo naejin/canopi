@@ -120,8 +120,9 @@ class HtmlRulerOverlay implements RulerOverlay {
     if (this._destroyed) return
     this._snapshot = snapshot
 
-    const siteMode = snapshot.frame.mode === 'site'
-    const shown = snapshot.chromeVisible && snapshot.rulersVisible && siteMode
+    // The rulers measure world axes along the screen's edges, so they show only while north is up (spec §4.6).
+    const { mode, view } = snapshot.frame
+    const shown = snapshot.chromeVisible && snapshot.rulersVisible && mode === 'site' && view.northUp
     const rulerDisplay = shown ? 'block' : 'none'
     this._horizontalCanvas.style.display = rulerDisplay
     this._verticalCanvas.style.display = rulerDisplay
@@ -134,7 +135,7 @@ class HtmlRulerOverlay implements RulerOverlay {
     this._shown = shown
     if (!snapshot.chromeVisible) return
 
-    if (siteMode) {
+    if (mode === 'site' && view.northUp) {
       const origin = this._overlayOrigin()
       drawHorizontalRuler(this._horizontalCanvas, snapshot.frame, this._palette, origin)
       drawVerticalRuler(this._verticalCanvas, snapshot.frame, this._palette, origin)
@@ -147,13 +148,14 @@ class HtmlRulerOverlay implements RulerOverlay {
   }
 
   /**
-   * A guide released at `at`, in CSS px of the camera's screen (the map host): nothing while the rulers are hidden or in
-   * overview, or inside the ruler's own gutter; otherwise a guide at that world coordinate of the latest camera.
+   * A guide released at `at`, in CSS px of the camera's screen (the map host): nothing while the rulers are hidden (off,
+   * in overview or turned from north), or inside the ruler's own gutter; otherwise a guide at that world coordinate of
+   * the latest camera.
    */
   createGuideAt(axis: RulerAxis, at: ScreenPoint): void {
     if (this._destroyed) return
     const snapshot = this._snapshot
-    if (!snapshot || !snapshot.chromeVisible || !snapshot.rulersVisible || snapshot.frame.mode !== 'site') return
+    if (!snapshot || !this._shown) return
     const origin = this._overlayOrigin()
     if (axis === 'h' && at.y <= origin.y + RULER_SIZE) return
     if (axis === 'v' && at.x <= origin.x + RULER_SIZE) return
