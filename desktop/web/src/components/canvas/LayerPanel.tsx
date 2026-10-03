@@ -67,13 +67,13 @@ export interface LayerPanelActions {
   visibility(id: string, visible: boolean): void
   locked(id: string, locked: boolean): void
   opacity(id: string, opacity: number): void
-  contourInterval?(meters: number): void
-  basemapStyle?(style: BasemapStyle): void
-  saveGoogleKey?(key: string | null): void
+  contourInterval(meters: number): void
+  basemapStyle(style: BasemapStyle): void
+  saveGoogleKey(key: string | null): void
   /** Background › Satellite, Map or None. */
-  background?(choice: MapBackground): void
+  background(choice: MapBackground): void
   /** Soften background: dims the chosen background under the Design. */
-  softenBackground?(soften: boolean): void
+  softenBackground(soften: boolean): void
 }
 
 /** Background sources are proper names, the same in every language. */
@@ -181,7 +181,7 @@ function BackgroundChoice({ rows, choice, actions }: {
             value={option.value}
             checked={option.value === choice}
             onChange={() => {
-              actions.background?.(option.value)
+              actions.background(option.value)
               if (option.row) actions.active(option.row.id)
             }}
             onClick={() => {
@@ -301,7 +301,7 @@ function BasemapLayerDetail({ row, detail, actions }: {
           trigger={t(`canvas.basemap.styles.${detail.style}`)}
           items={detail.styles.map((style) => ({ value: style, label: t(`canvas.basemap.styles.${style}`) }))}
           value={detail.style}
-          onChange={(style) => actions.basemapStyle?.(style)}
+          onChange={(style) => actions.basemapStyle(style)}
           ariaLabel={t('canvas.basemap.style')}
           floating
         />
@@ -319,7 +319,7 @@ function SatelliteLayerDetail({ row, detail, actions }: {
 }) {
   return (
     <div className={styles.layerDetail}>
-      <GoogleKeyForm hasKey={detail.hasGoogleKey} onSave={(key) => actions.saveGoogleKey?.(key)} />
+      <GoogleKeyForm hasKey={detail.hasGoogleKey} onSave={(key) => actions.saveGoogleKey(key)} />
       <OpacitySlider actions={actions} row={row} />
       <SoftenBackgroundSwitch soften={detail.softenBackground} actions={actions} />
     </div>
@@ -332,7 +332,7 @@ function SoftenBackgroundSwitch({ soften, actions }: { soften: boolean; actions:
       label={t('speciesKey.softenBackground')}
       hint={t('speciesKey.softenBackgroundHint')}
       checked={soften}
-      onChange={(next) => actions.softenBackground?.(next)}
+      onChange={(next) => actions.softenBackground(next)}
     />
   )
 }
@@ -413,7 +413,7 @@ function ContourLayerDetail({ row, detail, actions }: {
           onInput={(event) => {
             const raw = event.currentTarget.value
             const value = Number(raw)
-            if (raw.trim() && Number.isFinite(value) && value >= 0) actions.contourInterval?.(value)
+            if (raw.trim() && Number.isFinite(value) && value >= 0) actions.contourInterval(value)
           }}
         />
       </div>
@@ -440,7 +440,7 @@ function SceneLayerDetail({ row, actions }: { row: CanvasLayerPresentationRow; a
   )
 }
 
-function OpacitySlider({ row, disabled, actions, label }: { row: CanvasLayerPresentationRow; disabled?: boolean; actions: LayerPanelActions; label?: string }) {
+function OpacitySlider({ row, actions, label }: { row: CanvasLayerPresentationRow; actions: LayerPanelActions; label?: string }) {
   const opacity = Math.round(row.opacity * 100)
   return (
     <div className={styles.controlRow}>
@@ -455,7 +455,6 @@ function OpacitySlider({ row, disabled, actions, label }: { row: CanvasLayerPres
         max="100"
         value={opacity}
         aria-label={label ?? `${t('canvas.layers.opacity')}: ${row.label}`}
-        disabled={disabled}
         onInput={(event) => {
           actions.opacity(row.id, Number((event.target as HTMLInputElement).value) / 100)
         }}
