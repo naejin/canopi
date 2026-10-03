@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { fixture } from '../../scripts/pdf-validation/fixtures'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
+import { pageFrame } from '../app/canvas-pdf/page-frame'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 import type { PdfInput, PdfLabels, PdfOperation } from '../app/canvas-pdf/types'
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
@@ -52,6 +53,37 @@ describe('Canvas PDF page plan', () => {
     expect(page.ground.x).toBeLessThan(0)
     expect(page.ground.x + page.ground.width).toBeGreaterThan(30)
     expect(plan.pages.flatMap(page => page.operations.flatMap(op => op.kind === 'text' ? op.line.runs.map(run => run.text) : [])).join(' ')).toContain('Apple')
+  })
+  it('Map orientation is North up by default; As on screen re-lays every page', () => {
+    const turned = { ...input(), viewBearingDeg: 30 }
+    const area = { id: 'all', name: 'Garden', bounds: { x: -1, y: -1, width: 32, height: 14 } }
+    const setup = { paper: 'A4' as const, layers: ['plants'], areas: [area] }
+    const northUp = buildPdfPlan(input(), setup, text(), labels)
+    const byDefault = buildPdfPlan(turned, setup, text(), labels)
+    expect(byDefault.angleDeg).toBe(0)
+    expect(byDefault).toEqual(northUp)
+    expect(buildPdfPlan(turned, { ...setup, mapOrientation: 'north-up' }, text(), labels)).toEqual(northUp)
+    const onScreen = buildPdfPlan(turned, { ...setup, mapOrientation: 'as-on-screen' }, text(), labels)
+    expect(onScreen.angleDeg).toBe(30)
+    const frame = pageFrame(30)
+    for (const kind of ['overview', 'detail'] as const) {
+      const before = northUp.pages.find(p => p.kind === kind)!, after = onScreen.pages.find(p => p.kind === kind)!
+      expect(after.ground).not.toEqual(before.ground)
+      expect(after.operations).not.toEqual(before.operations)
+    }
+    expect(onScreen.pickerPage!.ground).not.toEqual(northUp.pickerPage!.ground)
+    // The area keeps its size along the page axes and turns about its own centre.
+    const detail = onScreen.pages.find(p => p.kind === 'detail')!
+    const centre = frame.toFrame({ x: 15, y: 6 })
+    expect(detail.ground.x + detail.ground.width / 2).toBeCloseTo(centre.x, 6)
+    expect(detail.ground.y + detail.ground.height / 2).toBeCloseTo(centre.y, 6)
+    expect(detail.ground.width).toBeCloseTo(32, 6)
+    expect(detail.ground.height).toBeCloseTo(14, 6)
+    // Page offsets are plan metres: the page moves by the same ground whatever the angle.
+    const moved = buildPdfPlan(turned, { ...setup, mapOrientation: 'as-on-screen', views: { 'area:all': { offset: { x: 2, y: 0 } } } }, text(), labels)
+    const shift = moved.pages.find(p => p.kind === 'detail')!.ground, step = frame.toFrame({ x: 2, y: 0 })
+    expect(shift.x - detail.ground.x).toBeCloseTo(step.x, 6)
+    expect(shift.y - detail.ground.y).toBeCloseTo(step.y, 6)
   })
 })
 

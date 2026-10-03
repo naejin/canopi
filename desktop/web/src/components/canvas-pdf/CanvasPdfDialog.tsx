@@ -3,7 +3,7 @@ import { findInPdfKey, pdfKeyLocations, type PdfKeyLocation } from '../../app/ca
 import { canvasPdf } from '../../app/canvas-pdf/live'
 import { isFindPlantsShortcut } from '../../app/plant-finder/focus'
 import type { PdfWorkflow } from '../../app/canvas-pdf/workflow'
-import { PDF_PLANT_COLORS, type PdfPlan, type PdfPaper } from '../../app/canvas-pdf/types'
+import { PDF_MAP_ORIENTATIONS, PDF_PLANT_COLORS, type PdfMapOrientation, type PdfPlan, type PdfPaper } from '../../app/canvas-pdf/types'
 import { t } from '../../i18n'
 import { Dropdown } from '../shared/Dropdown'
 import { useModalLayer } from '../shared/useModalLayer'
@@ -114,6 +114,16 @@ function PrintWorkspace({ workflow }: { readonly workflow: PdfWorkflow }) {
                   </label>)}
                 </div>
               </fieldset>
+              <fieldset className={styles.segmented} disabled={delivering || !!splitPreview}>
+                <legend className={styles.optionLabel}>{t('pdf.mapOrientation')}</legend>
+                <div role="radiogroup" aria-label={t('pdf.mapOrientation')}>
+                  {PDF_MAP_ORIENTATIONS.map((orientation) => <label key={orientation}>
+                    <input type="radio" name="pdf-map-orientation" value={orientation} checked={(setup.mapOrientation ?? 'north-up') === orientation}
+                      onChange={() => workflow.configure({ mapOrientation: orientation })} />
+                    <span>{t(MAP_ORIENTATION_LABELS[orientation])}</span>
+                  </label>)}
+                </div>
+              </fieldset>
               <fieldset className={styles.include} disabled={delivering || !!splitPreview}>
                 <legend className={styles.optionLabel}>{t('pdf.include')}</legend>
                 {Array.from(new Set([...workflow.availableLayers.value, ...setup.layers])).map((name) => <label key={name} className={styles.check}>
@@ -180,4 +190,9 @@ function PrintWorkspace({ workflow }: { readonly workflow: PdfWorkflow }) {
       </footer>
     </section>
   </div>
+}
+
+const MAP_ORIENTATION_LABELS: Readonly<Record<PdfMapOrientation, string>> = {
+  'north-up': 'pdf.mapOrientationNorthUp',
+  'as-on-screen': 'pdf.mapOrientationAsOnScreen',
 }

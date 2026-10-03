@@ -1415,6 +1415,9 @@
       "grayscale": "Grayscale",
       "black": "Black"
     },
+    "mapOrientation": "Map orientation",
+    "mapOrientationNorthUp": "North up",
+    "mapOrientationAsOnScreen": "As on screen",
     "northArrow": "North arrow and scale",
     "pageOptions": "Selected page",
     "findInKey": "Find in key"
