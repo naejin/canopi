@@ -3,7 +3,8 @@ import { expect, it } from 'vitest'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 import type { PdfInput, PdfLabels } from '../app/canvas-pdf/types'
-const labels: PdfLabels = { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }
+import { englishPdfLabels } from '../../scripts/pdf-validation/fixtures'
+const labels: PdfLabels = { ...englishPdfLabels, notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
 it('keeps key identities consistent across frames, locale and layers without changing reserved Design codes', () => {
   const input: PdfInput = { name: 'Garden', locale: 'en', viewBearingDeg: 0, commonNames: {}, canvas: { layers: [{ name: 'plants', visible: true, opacity: 1 }], annotations: [], measurements: [], zones: [],

@@ -11,7 +11,6 @@ import { groupedGuides, overviewMeasurements } from './overview-measurements'
 import { detailFurniture, groundScale, symbolLegend } from './page-furniture'
 import { fieldSummary } from './field-summary'
 import { drawOverviewGuideChain, overviewGuideChain, readableOverviewChain } from './overview-guides'
-import { fieldLabels } from './labels'
 import { contains, rotatedBounds } from './field-geometry'
 import { paperPlantRadius } from './plant-marks'
 import { FieldSpace } from './field-placement'
@@ -167,7 +166,7 @@ function buildPages(original: PdfInput, setup: PdfSetup, text: PdfTextEngine, la
   const readableChain = readableOverviewChain(chain, fitted.geometry.frame, overviewFit.ground, overviewFit.pointsPerMeter, text, input.locale)
   const drawing = drawOverview({ ...selected, canvas: visible }, fitted.geometry.frame, overviewFit.ground, overviewFit.pointsPerMeter, text,
     new Map([...guideHomes, ...readableChain.map(g => [g.id, 'chain'] as const)]), true, dimensions)
-  drawing.operations.push(...drawOverviewGuideChain(readableChain, fitted.geometry.frame, overviewFit.ground, overviewFit.pointsPerMeter, text, input.locale, fieldLabels(labels).guides, selected.canvas.layers.find(l => l.name === 'measurement-guides')?.opacity ?? 1))
+  drawing.operations.push(...drawOverviewGuideChain(readableChain, fitted.geometry.frame, overviewFit.ground, overviewFit.pointsPerMeter, text, input.locale, labels.guides, selected.canvas.layers.find(l => l.name === 'measurement-guides')?.opacity ?? 1))
   const summaryFrame = { x: fitted.geometry.frame.x + fitted.geometry.frame.width + 6 * MM, y: fitted.geometry.frame.y,
     width: 108 * MM, height: fitted.geometry.height - fitted.geometry.frame.y - 20 * MM }
   const summaryGeometry = (index: number) => {
@@ -217,7 +216,7 @@ function buildPages(original: PdfInput, setup: PdfSetup, text: PdfTextEngine, la
       const y = page.height - 12 * MM
       operations.push(pathOp(`M${10 * MM} ${y} h${50 * MM} M${10 * MM} ${y - 2} v4 M${60 * MM} ${y - 2} v4`, PRINT.ink, null, .25 * MM))
       operations.push(textOp(text.line('50 mm', 7), 10 * MM, page.height - 6 * MM, 7))
-      if (showScale) operations.push(...groundScale(page, input.locale, text, fieldLabels(labels).north, northAngleDeg))
+      if (showScale) operations.push(...groundScale(page, input.locale, text, labels.north, northAngleDeg))
       const reminder = text.line(`${labels.actualSize} · ${setup.paper}`, 7.5)
       operations.push(textOp(reminder, page.width - 10 * MM - reminder.width, page.height - 8.5 * MM, 7.5))
     } else if (page.kind === 'detail') {
@@ -225,12 +224,12 @@ function buildPages(original: PdfInput, setup: PdfSetup, text: PdfTextEngine, la
       if (page.continuationIds?.[0]) links.push({ bounds: { x: 8 * MM, y: 8 * MM, width: 13 * MM, height: 11 * MM }, target: `page:${page.continuationIds[0]}` })
     } else {
       const source = byId.get(page.sourceId!)!
-      operations.push(textOp(text.line(`${source.detailNumber ?? labels.overview} · ${source.kind === 'overview' ? fieldLabels(labels).measurementSummary : labels.keyAndNotes}`, 16), 10 * MM, 13 * MM, 16))
+      operations.push(textOp(text.line(`${source.detailNumber ?? labels.overview} · ${source.kind === 'overview' ? labels.measurementSummary : labels.keyAndNotes}`, 16), 10 * MM, 13 * MM, 16))
       if (source.legend.length) {
         const count = text.line(`${source.legend.reduce((sum, entry) => sum + (entry.count ?? 0), 0)} ${labels.plants}`, 8.5)
         operations.push(textOp(count, 10 * MM, 18 * MM, 8.5))
         if (source.legend.some(entry => entry.englishFallback)) {
-          const lines = text.wrap(fieldLabels(labels).englishFallback, 8, page.width - 26 * MM - count.width)
+          const lines = text.wrap(labels.englishFallback, 8, page.width - 26 * MM - count.width)
           lines.forEach((line, i) => operations.push({ ...textOp(line, page.width - 10 * MM - line.width, 18 * MM - (lines.length - 1 - i) * 3.2 * MM, 8), color: '#655f55' }))
         }
       }

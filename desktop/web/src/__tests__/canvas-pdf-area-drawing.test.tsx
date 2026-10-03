@@ -8,6 +8,7 @@ import { areaFromFrame, pageFrame } from '../app/canvas-pdf/page-frame'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 import type { PdfInput, PdfPage, PdfPlan, PdfSetup } from '../app/canvas-pdf/types'
 import type { PrintBounds, PrintPoint } from '../canvas/print'
+import { englishPdfLabels } from '../../scripts/pdf-validation/fixtures'
 
 const page: PdfPage = { id: 'overview', kind: 'overview', number: 1, width: 200, height: 100,
   frame: { x: 20, y: 10, width: 160, height: 80 }, ground: { x: 100, y: 200, width: 16, height: 8 },
@@ -31,7 +32,7 @@ async function editor(props: Partial<Parameters<typeof PdfPageEditor>[0]> & { pl
   return { pointer, key, dispose: () => { render(null, container); container.remove() } }
 }
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
-const labels = { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }
+const labels = { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }
 const garden = (viewBearingDeg: number): PdfInput => ({ name: 'Garden', locale: 'en', commonNames: {}, viewBearingDeg, canvas: {
   layers: [{ name: 'plants', visible: true, opacity: 1 }], zones: [], annotations: [], measurements: [],
   plants: [0, 1, 2].map(i => ({ id: String(i), canonicalName: 'Malus domestica', position: { x: 100 + i * 6, y: 200 + i * 3 }, color: '#123456', symbol: 'round', mark: [], pinnedName: false })),

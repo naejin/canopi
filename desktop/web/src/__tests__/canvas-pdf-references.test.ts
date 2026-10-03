@@ -2,11 +2,12 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
-import type { PdfInput, PdfLabels, PdfPlan } from '../app/canvas-pdf/types'
+import type { PdfInput, PdfPlan } from '../app/canvas-pdf/types'
 import type { PrintZone } from '../canvas/print'
+import { englishPdfLabels } from '../../scripts/pdf-validation/fixtures'
 
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
-const labels: PdfLabels = { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants on this page', actualSize: 'Print at actual size' }
+const labels = englishPdfLabels
 const mark = [{ d: 'M-1 -1 h2 v2 h-2 Z', paint: 'symbol' as const }]
 // A is the top item North up and at 30°; B, 10 m east and 8 m south, becomes the top item at 60°.
 const A = { x: 0, y: 0 }, B = { x: 10, y: 8 }

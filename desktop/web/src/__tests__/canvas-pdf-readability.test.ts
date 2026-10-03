@@ -6,11 +6,12 @@ import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 import { FieldSpace } from '../app/canvas-pdf/field-placement'
 import { hits, outlineSegments, overlaps } from '../app/canvas-pdf/field-geometry'
 import type { PdfInput, PdfLabels, PdfPage, PdfOperation, PdfSetup } from '../app/canvas-pdf/types'
+import { englishPdfLabels } from '../../scripts/pdf-validation/fixtures'
 
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([
   ['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')], ['strong', readFileSync('public/pdf-fonts/NotoSans-SemiBold.ttf')],
 ]), 'en')
-const labels: PdfLabels = { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }
+const labels: PdfLabels = { ...englishPdfLabels, notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }
 const mark = [{ d: 'M-1 -1 h2 v2 h-2 Z', paint: 'symbol' as const }]
 const words = (page: PdfPage) => page.operations.flatMap(op => op.kind === 'text' ? op.line.runs.map(run => run.text) : []).join(' ')
 const setup: PdfSetup = { paper: 'A4', layers: ['plants', 'annotations', 'measurement-guides', 'zones'], areas: [{ id: 'bed', name: 'Bed', bounds: { x: -1, y: -1, width: 10, height: 15 } }] }

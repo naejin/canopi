@@ -56,8 +56,13 @@ export interface PdfInput {
   /** The view's exact bearing at capture (`captureView().camera.bearingDeg`), the As on screen angle. */
   readonly viewBearingDeg: number
 }
-export interface PdfLabels extends Partial<typeof import('./labels').fieldLabelDefaults> {
+/** Every printed word, localized by the caller (`live.ts`). */
+export interface PdfLabels {
   readonly notes: string; readonly observations: string; readonly keyAndNotes: string; readonly overview: string; readonly plants: string; readonly actualSize: string
+  readonly detail: string; readonly measurementSummary: string; readonly zone: string; readonly longSide: string; readonly width: string; readonly guides: string
+  readonly metres: string; readonly diameters: string; readonly outerSides: string; readonly quantity: string; readonly species: string; readonly plantKey: string
+  readonly habitTree: string; readonly habitShrub: string; readonly habitHerbaceous: string; readonly habitClimber: string; readonly habitOther: string
+  readonly continued: string; readonly englishFallback: string; readonly englishMark: string; readonly symbols: string; readonly north: string
   /** Localized plant symbol names by symbol id, for the page 1 symbol legend. */
   readonly symbolNames?: Readonly<Record<string, string>>
 }

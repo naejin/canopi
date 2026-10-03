@@ -6,6 +6,7 @@ import { createPdfWorkflow, type PdfCapture } from '../app/canvas-pdf/workflow'
 import { pdfAreaKey, type PdfInput, type PdfPage, type PreparedPdf } from '../app/canvas-pdf/types'
 import { areaContains, areaFromFrame, areaToFrame, layoutAngle, pageFrame } from '../app/canvas-pdf/page-frame'
 import { splitPrintArea } from '../app/canvas-pdf/split-sheets'
+import { englishPdfLabels } from '../../scripts/pdf-validation/fixtures'
 const result: PreparedPdf = { bytes: new Uint8Array([37, 80, 68, 70]), plan: { pages: [], angleDeg: 0, outlines: {}, blocked: null } }
 function fixture(plants: PrintPlant[] = [], view: Pick<PdfInput, 'viewBearingDeg'> = { viewBearingDeg: 0 }) {
   const identity = {}
@@ -23,7 +24,7 @@ function fixture(plants: PrintPlant[] = [], view: Pick<PdfInput, 'viewBearingDeg
     return { ...capture, input: { ...capture.input, canvas, viewBearingDeg: bearing },
       ...(turningNow ? { turning: true } : {}), isCurrent: () => current && canvas === currentCanvas && (!turningNow || settled === settles) }
   }, prepare, resolveDisplayNames,
-    delivery: { save, dispose: vi.fn() }, labels: () => ({ notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => 'https://test/fonts/' })
+    delivery: { save, dispose: vi.fn() }, labels: () => ({ ...englishPdfLabels, notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => 'https://test/fonts/' })
   return { workflow, prepare, save, resolveDisplayNames, capture, setCanvas: (canvas: CanvasPrintSnapshot) => { currentCanvas = canvas },
     turnView: (deg: number) => { bearing = deg },
     startTurn: (deg: number) => { bearing = deg; turning = true },

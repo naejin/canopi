@@ -13,9 +13,10 @@ vi.mock('../app/canvas-pdf/worker?worker&inline', () => ({ default: class extend
 } }))
 import { preparePdfJob } from '../app/canvas-pdf/job'
 import type { PdfPreparation } from '../app/canvas-pdf/prepare'
+import { englishPdfLabels } from '../../scripts/pdf-validation/fixtures'
 const input: PdfPreparation = { input: { name: 'Garden', locale: 'en', viewBearingDeg: 0, commonNames: {}, canvas: { plants: [], zones: [], annotations: [], measurements: [], layers: [] } },
   setup: { paper: 'A4', layers: [] }, fontBaseUrl: 'https://app.test/fonts/',
-  labels: { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' } }
+  labels: { ...englishPdfLabels, notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' } }
 afterEach(() => { workers.instances.length = 0; vi.useRealTimers() })
 it.each(['success', 'font failure', 'worker failure', 'cancel', 'timeout'] as const)('releases its worker, deadline and abort listener after %s', async (outcome) => {
   vi.useFakeTimers()

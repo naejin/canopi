@@ -5,10 +5,11 @@ import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 import { MM } from '../app/canvas-pdf/print-style'
 import { overlaps } from '../app/canvas-pdf/field-geometry'
 import type { PdfInput, PdfLabels } from '../app/canvas-pdf/types'
+import { englishPdfLabels } from '../../scripts/pdf-validation/fixtures'
 const fonts = new Map<PdfFontId, Uint8Array>([
   ['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')], ['strong', readFileSync('public/pdf-fonts/NotoSans-SemiBold.ttf')],
 ])
-const labels: PdfLabels = { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }
+const labels: PdfLabels = { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }
 
 it.each([
   { vertical: false, tilt: 0, rows: 3 },

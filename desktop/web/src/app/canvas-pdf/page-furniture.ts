@@ -2,25 +2,24 @@ import type { PrintPlant } from '../../canvas/print'
 import type { PdfInput, PdfLabels, PdfOperation, PdfPage, PdfPaper } from './types'
 import type { PdfTextEngine } from './text'
 import { MM, PRINT, drawMark, pathOp, textOp } from './page-drawing'
-import { fieldLabels } from './labels'
 
 export function detailFurniture(page: PdfPage, input: PdfInput, labels: PdfLabels, paper: PdfPaper, text: PdfTextEngine, showScale: boolean, northAngleDeg: number): PdfOperation[] {
-  const operations: PdfOperation[] = [], wording = fieldLabels(labels), margin = 10 * MM
+  const operations: PdfOperation[] = [], margin = 10 * MM
   const emit = (value: string, x: number, y: number, size: number, right = false) => {
     const line = text.line(value, size)
     operations.push(textOp(line, right ? x - line.width : x, y, size))
   }
   const name = text.wrap(input.name, 8, page.width - 2 * margin)[0]!
   operations.push(textOp(name, margin, 10 * MM, 8))
-  const identity = `${wording.detail} ${page.detailNumber}`
+  const identity = `${labels.detail} ${page.detailNumber}`
   emit(identity, margin, 18 * MM, 18)
-  if (page.legend.length) emit(`${page.legend.reduce((n, e) => n + (e.count ?? 0), 0)} ${labels.plants} · ${page.legend.length} ${wording.species}`, page.width - margin, 18 * MM, 8, true)
+  if (page.legend.length) emit(`${page.legend.reduce((n, e) => n + (e.count ?? 0), 0)} ${labels.plants} · ${page.legend.length} ${labels.species}`, page.width - margin, 18 * MM, 8, true)
   operations.push(pathOp(`M${margin} ${22 * MM} h${page.width - 2 * margin}`, '#d8d2c8', null, .2 * MM))
   const y = page.height - 10 * MM
   operations.push(pathOp(`M${margin} ${page.height - 16 * MM} h${page.width - 2 * margin}`, '#d8d2c8', null, .2 * MM))
   emit(identity, margin, y + 1.5 * MM, 8)
   emit(`${labels.actualSize} · ${paper}`, page.width - margin, y + 1.5 * MM, 7.5, true)
-  if (showScale) operations.push(...groundScale(page, input.locale, text, wording.north, northAngleDeg))
+  if (showScale) operations.push(...groundScale(page, input.locale, text, labels.north, northAngleDeg))
   return operations
 }
 
@@ -68,7 +67,7 @@ export function symbolLegend(plants: readonly PrintPlant[], pageWidth: number, l
   const samples = new Map<string, PrintPlant>()
   for (const plant of plants) if (!samples.has(plant.symbol)) samples.set(plant.symbol, plant)
   if (!samples.size) return null
-  const wording = fieldLabels(labels), collator = new Intl.Collator(locale)
+  const collator = new Intl.Collator(locale)
   const nameOf = (symbol: string) => labels.symbolNames?.[symbol]?.trim() || symbol
   const ordered = [...samples.keys()].sort((a, b) => collator.compare(nameOf(a), nameOf(b)) || a.localeCompare(b))
   const size = 7, rows = 4, row = 3.4 * MM, first = 12 * MM, radius = 1.1 * MM, gap = 1.2 * MM, columnGap = 4 * MM
@@ -84,7 +83,7 @@ export function symbolLegend(plants: readonly PrintPlant[], pageWidth: number, l
   }
   const operations: PdfOperation[] = []
   const hidden = ordered.length - printed.length
-  const titleLine = text.line(hidden ? `${wording.symbols} (+${hidden})` : wording.symbols, size, true)
+  const titleLine = text.line(hidden ? `${labels.symbols} (+${hidden})` : labels.symbols, size, true)
   const width = Math.max(used, titleLine.width), left = right - width
   operations.push({ ...textOp(titleLine, left, 8 * MM, size), color: '#655f55' })
   let x = left

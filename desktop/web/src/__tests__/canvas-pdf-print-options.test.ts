@@ -8,8 +8,9 @@ import { createPdfWorkflow } from '../app/canvas-pdf/workflow'
 import type { PdfPreparation } from '../app/canvas-pdf/prepare'
 import type { PrintPlant } from '../canvas/print'
 import type { PdfInput, PdfLabels, PdfPage, PdfSetup, PreparedPdf } from '../app/canvas-pdf/types'
+import { englishPdfLabels } from '../../scripts/pdf-validation/fixtures'
 
-const labels: PdfLabels = { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Print at actual size',
+const labels: PdfLabels = { ...englishPdfLabels, notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Print at actual size',
   symbolNames: { square: 'Canopy tree', round: 'Round mark' } }
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
 const mark = [{ d: 'M-1 -1 H1 V1 H-1 Z', paint: 'symbol' as const }]
