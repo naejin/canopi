@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { useEffect } from 'preact/hooks'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -296,6 +297,15 @@ describe('WebCanvasWorkspace map notice', () => {
     const button = [...status.querySelectorAll('button')].find((candidate) => candidate.textContent === 'Retry')!
     await act(async () => { button.click() })
     expect(retry).toHaveBeenCalledOnce()
+  })
+
+  it('wraps a long localized notice beside Retry instead of cutting off its advice', () => {
+    // jsdom has no layout: the chip's text rule must let the sentence wrap (German basemapFailed plus Retry is ~550 px).
+    const css = readFileSync('src/components/panels/Panels.module.css', 'utf8')
+    const text = /\.basemapFeedbackText\s*\{(?<body>[^}]*)\}/.exec(css)?.groups?.body
+    expect(text).toBeDefined()
+    expect(text).not.toMatch(/white-space:\s*nowrap/)
+    expect(text).not.toMatch(/text-overflow:\s*ellipsis/)
   })
 })
 
