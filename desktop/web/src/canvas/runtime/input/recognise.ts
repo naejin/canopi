@@ -170,7 +170,7 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
   let navigation: NavigationSource | null = null
   let pressed = true
   if (context.mode === 'overview' && (input.role === 'auxiliary' || panIn('overview'))) {
-    // Legacy overview: a left or middle press pans the map, whatever is under it; a pan never reaches the host.
+    // Legacy overview: a left or plain middle press pans the map, whatever is under it; a pan never reaches the host.
     navigation = input.role === 'auxiliary' ? 'auxiliary-drag' : 'primary-drag'
     pressed = false
   } else if (input.role === 'primary' && pressTarget.kind === 'handle') {
