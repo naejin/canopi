@@ -5,6 +5,12 @@ import type { MapBackgroundHandle, MapBackgroundOptions, MapBackgroundPresentati
 import { createSharedMapSceneLayer, type SharedMapSceneLayer, type SharedMapSceneLayerOptions } from './shared-scene-layer'
 import { createTestSceneRendererSnapshot } from '../__tests__/support/scene-renderer-snapshot'
 import type { ViewTransform } from '../canvas/runtime/view/types'
+import { createSessionPlane } from '../canvas/session-plane'
+import { describeSavedViewSnapshot, VIEW_SNAPSHOT_THUMBNAIL } from '../app/saved-views/snapshot'
+import { createDefaultMapLayers } from '../app/map-layers/state'
+import type { SavedView } from '../types/design'
+import { createTestCanvasQuerySurface } from '../__tests__/support/canvas-query-surface'
+import { groundSizeShown } from '../__tests__/support/saved-view-frame'
 import {
   createViewSnapshotMap,
   VIEW_SNAPSHOT_SCENE_LAYER_ID,
@@ -285,6 +291,50 @@ describe('view snapshot map', () => {
     // A second capture at north turns the shared map back.
     await owner.capture(request())
     expect(map!.getBearing()).toBeCloseTo(0, 9)
+    await owner.dispose()
+  })
+
+  it('a saved view\'s thumbnail shows its whole framed area at its bearing, through the real snapshot map', async () => {
+    // Framed in a 1000 × 500 window at zoom 18, turned 30°; the 400 × 300 workspace it is drawn from plays no part.
+    const camera = { lon: ORIGIN.lon, lat: ORIGIN.lat, zoom: 18, bearing: 30 }
+    const ground = groundSizeShown(camera, { width: 1000, height: 500 })
+    const view: SavedView = {
+      id: 'hedges', name: 'Hedges', title: null, text: [],
+      camera: { ...camera, ground_size_m: ground },
+      visible_layers: { background: { kind: 'none' }, terrain: { contours: false, hillshade: false }, scene_layers: [], site_data: [] },
+      highlighted: { species: [], objects: [] },
+    }
+    const plane = createSessionPlane(ORIGIN)
+    const queries = createTestCanvasQuerySurface({ sessionPlane: plane })
+    const thumbnail = describeSavedViewSnapshot(view, VIEW_SNAPSHOT_THUMBNAIL, {
+      queries, mapLayers: createDefaultMapLayers(), locale: 'en', plantLabels: 'names',
+    })!
+    const owner = createOwner()
+
+    await owner.capture(thumbnail)
+
+    // The ground the view framed, its corners turned with the view: right along the bearing, down across it (x east, y south).
+    const map = FakeMap.instances[0]!
+    expect(map.getBearing()).toBeCloseTo(30, 9)
+    const radians = 30 * Math.PI / 180
+    const right = { x: Math.cos(radians), y: Math.sin(radians) }
+    const down = { x: -Math.sin(radians), y: Math.cos(radians) }
+    const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([across, along]) => {
+      const point = plane.toGeo({
+        x: across! * ground.width / 2 * right.x + along! * ground.height / 2 * down.x,
+        y: across! * ground.width / 2 * right.y + along! * ground.height / 2 * down.y,
+      })
+      return map.project({ lng: point.lon, lat: point.lat })
+    })
+    for (const corner of corners) {
+      expect(corner.x).toBeGreaterThanOrEqual(-1e-6)
+      expect(corner.x).toBeLessThanOrEqual(320 + 1e-6)
+      expect(corner.y).toBeGreaterThanOrEqual(-1e-6)
+      expect(corner.y).toBeLessThanOrEqual(200 + 1e-6)
+    }
+    // Fitted, not shrunk: the width (1000 / 320 > 500 / 200) spans the image.
+    expect(Math.min(...corners.map((corner) => corner.x))).toBeCloseTo(0, 3)
+    expect(Math.max(...corners.map((corner) => corner.x))).toBeCloseTo(320, 3)
     await owner.dispose()
   })
 

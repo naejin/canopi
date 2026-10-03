@@ -1,6 +1,5 @@
 import { currentCanvasQuerySurface } from '../../canvas/session'
 import type { CanvasQuerySurface } from '../../canvas/runtime/runtime'
-import { WORKSPACE_MAP_MAX_ZOOM, WORKSPACE_MAP_MIN_ZOOM } from '../../canvas/workspace-camera-policy'
 import { SETTINGS_BASEMAP_STYLES } from '../../generated/settings'
 import { captureMapBackgroundPresentation, type MapBackgroundPresentation } from '../../maplibre/map-background'
 import {
@@ -18,6 +17,7 @@ import { savedViewPlantLabels } from '../design-edit/views'
 import { currentDesign } from '../document-session/store'
 import { currentPlantDisplay } from '../plant-display/state'
 import type { PlantLabelMode } from '../../canvas/runtime/plant-display'
+import { savedViewZoom } from './framing'
 
 /** Default wait for tiles before a snapshot is read with a "some tiles missing" flag. */
 export const VIEW_SNAPSHOT_DEFAULT_TIMEOUT_MS = 8_000
@@ -48,11 +48,12 @@ export interface SavedViewSnapshotContext {
 
 /**
  * The off-screen capture request for a saved view of the open Design, or null
- * when no Design is open on a map. The camera is the view's centre and bearing,
- * with its zoom scaled by the image-to-workspace screen ratio, so the image
- * shows what going to the view shows in the workspace now (spec §4.10).
- * Background, Design layers, the focused species and the labels come from the
- * view; opacities and locale from the user's current settings.
+ * when no Design is open on a map. The camera is the view's centre and bearing
+ * at the zoom that fits its framed ground into the image, the rule going to the
+ * view follows (spec §4.10); a view saved without its ground frames what the
+ * workspace shows now at its camera zoom. Background, Design layers, the
+ * focused species and the labels come from the view; opacities and locale from
+ * the user's current settings.
  */
 export function describeSavedViewSnapshot(
   view: SavedView,
@@ -68,7 +69,7 @@ export function describeSavedViewSnapshot(
     camera: {
       lon: view.camera.lon,
       lat: view.camera.lat,
-      zoom: fitZoom(view.camera.zoom, options, screenSize),
+      zoom: savedViewZoom(view.camera, options, screenSize),
       bearing: view.camera.bearing,
     },
     width: options.width,
@@ -151,18 +152,6 @@ export async function disposeViewSnapshots(): Promise<void> {
   const current = owner
   owner = null
   await current?.dispose()
-}
-
-function fitZoom(
-  zoom: number,
-  size: { readonly width: number; readonly height: number },
-  reference: { readonly width: number; readonly height: number },
-): number {
-  const fit = reference.width > 0 && reference.height > 0
-    ? Math.log2(Math.min(size.width / reference.width, size.height / reference.height))
-    : 0
-  const fitted = Number.isFinite(fit) ? zoom + fit : zoom
-  return Math.min(WORKSPACE_MAP_MAX_ZOOM, Math.max(WORKSPACE_MAP_MIN_ZOOM, fitted))
 }
 
 /** Whether a saved view's basemap style name is one the settings know. */

@@ -14,11 +14,11 @@ import {
 
 // Saved view thumbnails: small off-screen snapshots of each view, a session
 // cache that is never written to the Design. An entry is drawn again only when
-// what it depends on changes (the view, the Scene revision, the settled
-// workspace size the image is fitted to, the background settings, the locale
-// or the theme), never on render. Captures run one at a
-// time, a short while after the last change, and retry while an edit owns the
-// Scene. Every object URL is revoked when it is replaced, when its view goes
+// what it depends on changes (the view, the Scene revision, the background
+// settings, the locale or the theme, and, for a view saved without its framed
+// ground, the settled workspace size the image is fitted to), never on render.
+// Captures run one at a time, a short while after the last change, and retry
+// while an edit owns the Scene. Every object URL is revoked when it is replaced, when its view goes
 // away, when another Design replaces this one and on HMR.
 
 interface SavedViewThumbnail {
@@ -192,9 +192,10 @@ export function createSavedViewThumbnailCache(options: SavedViewThumbnailCacheOp
 }
 
 /**
- * The workspace size a thumbnail is fitted to (spec §4.10), read once per
- * settled frame: a drag-resize draws again once, after it settles, and a pan
- * that settles at the same size notifies nobody.
+ * The workspace size the thumbnail of a view saved without its framed ground is
+ * fitted to (spec §4.10), read once per settled frame: a drag-resize draws
+ * again once, after it settles, and a pan that settles at the same size
+ * notifies nobody.
  */
 const settledWorkspaceSize = computed(() => {
   const view = currentCanvasQuerySurface.value?.view
@@ -213,7 +214,7 @@ function savedViewThumbnailKey(view: SavedView): string {
   const layers = mapLayers.value
   return JSON.stringify([
     sceneRevision,
-    settledWorkspaceSize.value,
+    view.camera.ground_size_m ? null : settledWorkspaceSize.value,
     view.camera,
     view.visible_layers,
     view.highlighted.species,

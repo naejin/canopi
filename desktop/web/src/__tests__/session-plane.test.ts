@@ -2,13 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { mapZoomToStageScale } from '../canvas/projection'
 import {
   createSessionPlane,
-  extentOnOneWorld,
   geographicViewOfCamera,
   roundGeoDegrees,
   SESSION_PLANE_REORIGIN_DISTANCE_METERS,
   sessionPlaneOriginForPoints,
 } from '../canvas/session-plane'
-import { planeViewportCornerBounds } from './support/plane-viewport-corners'
 import { createTestView } from './support/test-view'
 
 const EARTH_RADIUS_METERS = 6371008.8
@@ -89,35 +87,22 @@ describe('session plane', () => {
   })
 })
 
-describe('geographic extent of a view', () => {
-  const origin = { lon: 2.2945, lat: 48.8584 }
-  const plane = createSessionPlane(origin)
-  function frame(zoom: number, width: number, height: number) {
-    const scale = mapZoomToStageScale(zoom, origin.lat)
-    return { viewport: { x: width / 2, y: height / 2, scale }, screenSize: { width, height } }
-  }
-
+describe('the geographic view of a camera', () => {
   /** The geographic view a camera at this placement shows (ViewReadSurface.captureView's camera). */
-  function geographicViewAt(view: ReturnType<typeof frame>, onPlane: typeof plane) {
+  function geographicViewAt(view: { viewport: { x: number; y: number; scale: number }; screenSize: { width: number; height: number } }, onPlane: ReturnType<typeof createSessionPlane>) {
     const camera = createTestView({ plane: onPlane, screen: view.screenSize, viewport: view.viewport })
     const geographic = geographicViewOfCamera(camera.view().camera)!
     camera.dispose()
     return geographic
   }
 
-  /** The saved extent of a view, as the saved views take it: its corner bounds on one world, else none. */
-  function savedExtent(view: ReturnType<typeof frame>) {
-    return extentOnOneWorld(planeViewportCornerBounds(view, plane))
-  }
-
-  it('is the ground the screen shows around the view centre', () => {
-    const extent = savedExtent(frame(18, 800, 600))!
-    expect(extent.west).toBeLessThan(origin.lon)
-    expect(extent.east).toBeGreaterThan(origin.lon)
-    expect(extent.south).toBeLessThan(origin.lat)
-    expect(extent.north).toBeGreaterThan(origin.lat)
-    expect((extent.west + extent.east) / 2).toBeCloseTo(origin.lon, 9)
-    expect(geographicViewAt(frame(18, 800, 600), plane).zoom).toBeCloseTo(18, 6)
+  it('reads the zoom of a view at the plane origin', () => {
+    const origin = { lon: 2.2945, lat: 48.8584 }
+    const scale = mapZoomToStageScale(18, origin.lat)
+    const view = geographicViewAt({ viewport: { x: 400, y: 300, scale }, screenSize: { width: 800, height: 600 } }, createSessionPlane(origin))
+    expect(view.lon).toBeCloseTo(origin.lon, 9)
+    expect(view.lat).toBeCloseTo(origin.lat, 9)
+    expect(view.zoom).toBeCloseTo(18, 6)
   })
 
   it('reads the zoom of a view far from the plane origin at the origin latitude', () => {
@@ -130,10 +115,5 @@ describe('geographic extent of a view', () => {
     }, farPlane)
     expect(view.lat).toBeCloseTo(59.91, 6)
     expect(view.zoom).toBeCloseTo(17, 6)
-  })
-
-  it('is none when the screen shows more than one world or none at all', () => {
-    expect(savedExtent(frame(0.5, 1600, 900))).toBeNull()
-    expect(savedExtent(frame(18, 0, 0))).toBeNull()
   })
 })

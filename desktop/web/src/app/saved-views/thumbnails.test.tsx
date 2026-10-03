@@ -75,7 +75,7 @@ afterEach(() => {
 })
 
 describe('saved view thumbnails in the workspace', () => {
-  it('are drawn again once the workspace size settles, since each is fitted to it (spec §4.10)', async () => {
+  it('without their framed area, are drawn again once the workspace size settles, since each is fitted to it (spec §4.10)', async () => {
     const host = workspace(1600, 900)
     await act(() => { render(<Thumbnail view={VIEW} />, container) })
     await vi.advanceTimersByTimeAsync(1_000)
@@ -95,5 +95,19 @@ describe('saved view thumbnails in the workspace', () => {
     await host.settle()
     await vi.advanceTimersByTimeAsync(1_000)
     expect(capture).toHaveBeenCalledTimes(2)
+  })
+
+  it('with their framed area, are never drawn again for a workspace size change', async () => {
+    // The image shows the ground the view framed, which no window changes (spec §4.10).
+    const framed: SavedView = { ...VIEW, camera: { ...VIEW.camera, ground_size_m: { width: 400, height: 250 } } }
+    const host = workspace(1600, 900)
+    await act(() => { render(<Thumbnail view={framed} />, container) })
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(capture).toHaveBeenCalledTimes(1)
+
+    host.resize(800, 450)
+    await host.settle()
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(capture).toHaveBeenCalledTimes(1)
   })
 })

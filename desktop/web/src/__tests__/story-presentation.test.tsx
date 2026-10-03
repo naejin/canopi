@@ -1,3 +1,4 @@
+import { signal } from '@preact/signals'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -36,6 +37,7 @@ import { createTestCanvasCommandSurface, createTestCanvasRuntimeSurfaces } from 
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { replaceCurrentDesignState } from './support/design-session-state'
 import { TEST_GEO_ORIGIN } from './support/geo-design'
+import { framedCornersOnScreen, groundSizeShown } from './support/saved-view-frame'
 
 function view(id: string, overrides: Partial<SavedView['visible_layers']> = {}, species: string[] = []): SavedView {
   return {
@@ -125,6 +127,28 @@ function mountMap(planted: readonly ScenePlantEntity[] = [plant('p1', 'Lycium ba
   setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ commands, queries }))
 }
 
+/** The map's live screen, which a test resizes, and its settled frame, which it settles: full screen ending, say. */
+function resizableMap(width: number, height: number) {
+  const base = mapQueries.view
+  let screen = { width, height, devicePixelRatio: 1 }
+  const settledRevision = signal(0)
+  const view = { ...base, settledRevision, captureView: () => ({ ...base.captureView(), screen }) }
+  setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ commands, queries: { ...mapQueries, view } }))
+  return {
+    resize(nextWidth: number, nextHeight: number) { screen = { width: nextWidth, height: nextHeight, devicePixelRatio: 1 } },
+    settle() { settledRevision.value += 1 },
+  }
+}
+
+/** The tour with its hedges step framed in a `width` × `height` window at `bearing`. */
+function framedTour(width: number, height: number, bearing: number): CanopiFile {
+  const tour = design()
+  const hedges = tour.views![1]!
+  const camera = { ...hedges.camera, bearing }
+  tour.views![1] = { ...hedges, camera: { ...camera, ground_size_m: groundSizeShown(camera, { width, height }) } }
+  return tour
+}
+
 beforeEach(() => {
   locale.value = 'en'
   replaceCurrentDesignState(design(), null, 'Stories')
@@ -185,6 +209,49 @@ describe('presenting a story', () => {
   it('flies between steps; the camera driver alone jumps under reduced motion', () => {
     presentStory('tour', 0)
     expect(showCamera).toHaveBeenLastCalledWith(stepCamera(0), { motion: 'fly' })
+  })
+
+  it('a story step saved at 30 keeps its frame on a smaller screen', () => {
+    // Framed in a 1400 × 900 window, presented on the 400 × 300 map: zoomed out until the width (400 / 1400 < 300 / 900) fits.
+    replaceCurrentDesignState(framedTour(1400, 900, 30), null, 'Stories')
+    presentStory('tour', 1)
+
+    const [shown] = showCamera.mock.calls.at(-1)!
+    expect(shown.bearingDeg).toBe(30)
+    expect(shown.zoom).toBeCloseTo(20 + Math.log2(400 / 1400), 6)
+    const saved = presentedStep.value!.view!.camera
+    for (const corner of framedCornersOnScreen(saved, { width: 1400, height: 900 }, shown, { width: 400, height: 300 })) {
+      expect(corner.x).toBeGreaterThanOrEqual(-1e-6)
+      expect(corner.x).toBeLessThanOrEqual(400 + 1e-6)
+      expect(corner.y).toBeGreaterThanOrEqual(-1e-6)
+      expect(corner.y).toBeLessThanOrEqual(300 + 1e-6)
+    }
+  })
+
+  it('a story step keeps its frame when full screen ends', () => {
+    // Framed in the full-screen 400 × 300 map; full screen ends and the map settles at 200 × 150.
+    replaceCurrentDesignState(framedTour(400, 300, 45), null, 'Stories')
+    const map = resizableMap(400, 300)
+    presentStory('tour', 1)
+    expect(showCamera).toHaveBeenLastCalledWith(stepCamera(45), { motion: 'fly' })
+    showCamera.mockClear()
+
+    // A settle at the same size, or a resize still in progress, refits nothing.
+    map.settle()
+    map.resize(300, 200)
+    expect(showCamera).not.toHaveBeenCalled()
+    map.resize(200, 150)
+    map.settle()
+
+    expect(showCamera).toHaveBeenCalledTimes(1)
+    expect(showCamera).toHaveBeenCalledWith({ ...stepCamera(45), zoom: 19 }, { motion: 'jump' })
+    // Another step's view without the size keeps its camera when the screen changes again.
+    showCamera.mockClear()
+    goToPresentedStep(0)
+    showCamera.mockClear()
+    map.resize(400, 300)
+    map.settle()
+    expect(showCamera).not.toHaveBeenCalled()
   })
 
   it('moves between steps within the story', () => {
