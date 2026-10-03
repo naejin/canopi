@@ -169,6 +169,10 @@ export function createWorkspaceRuntimeComposition(
     map: controls,
     layer: {},
     readOrigin,
+    // A Retry already on screen is withdrawn once the workspace can no longer rebuild the map.
+    onRetryAvailabilityChange: () => {
+      if (mapState?.retryable) publishMapState(mapState)
+    },
   })
   const reconciler = new WorkspaceGenerationReconciler({
     workspace,

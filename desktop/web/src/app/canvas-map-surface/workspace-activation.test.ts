@@ -1764,8 +1764,9 @@ describe('WorkspaceActivationCoordinator', () => {
     expect(selection).toHaveLength(1)
 
     f.loseContext()
-    await vi.waitFor(() => expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: true }))
+    expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: true })
     await vi.waitFor(() => expect(runtime.keyboardPort).toBeNull())
+    await failureHandled(f.maps[0]!)
 
     f.composition.retryMap!()
 
@@ -1785,6 +1786,7 @@ describe('WorkspaceActivationCoordinator', () => {
     // Retry can be pressed again after a later loss.
     f.loseContext()
     await vi.waitFor(() => expect(runtime.keyboardPort).toBeNull())
+    await failureHandled(f.maps[1]!)
     f.composition.retryMap!()
     await vi.waitFor(() => expect(runtime.keyboardPort).not.toBeNull())
     expect(f.maps).toHaveLength(3)
@@ -1800,6 +1802,21 @@ describe('WorkspaceActivationCoordinator', () => {
     await Promise.resolve()
     expect(f.maps).toHaveLength(1)
     await expect(f.composition.dispose()).rejects.toThrow('renderer init failed')
+  })
+
+  it('withdraws Retry when a context lost during renderer initialization ends with the runtime destroyed', async () => {
+    const init = deferred<void>()
+    const f = realComposition({ runtimeInit: init.promise })
+    void f.composition.start()
+    await vi.waitFor(() => expect(f.runtime().init).toHaveBeenCalledOnce())
+
+    f.loseContext()
+    expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: true })
+    init.reject(new Error('renderer init failed'))
+
+    await vi.waitFor(() => expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: false }))
+    expect(f.maps).toHaveLength(1)
+    await expect(f.composition.dispose()).rejects.toThrow('Shared workspace teardown failed')
   })
 
   it('uses a real SceneCanvasRuntime and shared composition without adding a runtime canvas', async () => {
@@ -1840,6 +1857,12 @@ describe('WorkspaceActivationCoordinator', () => {
   })
 })
 
+/** Waits until the coordinator released the lost map and settled its failure, when Retry is accepted. */
+async function failureHandled(map: FakeMap): Promise<void> {
+  await vi.waitFor(() => expect(map.remove).toHaveBeenCalledOnce())
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
 /** A FakeMap whose camera follows jumpTo, so a rebuilt map shows the camera the runtime gave it. */
 class MovableFakeMap extends FakeMap {
   override readonly jumpTo = vi.fn((options?: { center: [number, number]; zoom: number; bearing: number }) => {
@@ -1858,8 +1881,9 @@ class MovableFakeMap extends FakeMap {
  * The production composition with a real SceneCanvasRuntime, coordinator and renderer composition; only MapLibre
  * (the map controls) and Pixi (the layer's renderer) are fakes. Each map reports failures like the real controls.
  */
-function realComposition(options: { failRuntimeInit?: boolean } = {}) {
+function realComposition(options: { failRuntimeInit?: boolean; runtimeInit?: Promise<void> } = {}) {
   const maps: MovableFakeMap[] = []
+  const ended = new Set<WorkspaceActivationMap>()
   const reports: Array<(error: unknown) => void> = []
   const states: MapLibreCanvasSurfaceState[] = []
   let runtime: SceneCanvasRuntime | null = null
@@ -1881,6 +1905,7 @@ function realComposition(options: { failRuntimeInit?: boolean } = {}) {
     createRuntime: (runtimeOptions) => {
       runtime = new SceneCanvasRuntime(runtimeOptions)
       if (options.failRuntimeInit) vi.spyOn(runtime, 'init').mockRejectedValue(new Error('renderer init failed'))
+      if (options.runtimeInit) vi.spyOn(runtime, 'init').mockReturnValue(options.runtimeInit)
       return runtime
     },
     createWorkspace: (workspaceOptions) => new WorkspaceActivationCoordinator({
@@ -1898,8 +1923,11 @@ function realComposition(options: { failRuntimeInit?: boolean } = {}) {
         controlOptions.contributions?.onStateChange?.({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'ready' })
         return map as unknown as WorkspaceActivationMap
       },
+      // Like WorkspaceMapContributions.dispose: a map publishes its end once, at the reported failure or at release.
       releaseMap: (map, failure) => {
         ;(map as unknown as FakeMap).remove()
+        if (ended.has(map)) return
+        ended.add(map)
         controlOptions.contributions?.onStateChange?.(failure === undefined
           ? IDLE_MAPLIBRE_CANVAS_SURFACE_STATE
           : { ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'error', retryable: true })
@@ -1908,8 +1936,15 @@ function realComposition(options: { failRuntimeInit?: boolean } = {}) {
       updateMapContributions: () => {},
       updateBackgroundPresentation: () => {},
       installStyleRestorer: () => () => {},
-      watchFailure: (_map, report) => {
-        reports.push(report)
+      // Like WorkspaceMapControls.reportRestorationFailure: the error is published before the coordinator hears of it.
+      watchFailure: (map, report) => {
+        reports.push((error) => {
+          if (!ended.has(map)) {
+            ended.add(map)
+            controlOptions.contributions?.onStateChange?.({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'error', retryable: true })
+          }
+          report(error)
+        })
         return () => {}
       },
     }),

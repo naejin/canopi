@@ -102,6 +102,8 @@ export interface WorkspaceActivationOptions {
   >
   /** Live session plane origin of the runtime's open Design. */
   readonly readOrigin: () => { readonly lat: number; readonly lon: number }
+  /** Called when `canRetry()` may have changed, so a Retry already on screen can be withdrawn. */
+  readonly onRetryAvailabilityChange?: () => void
 }
 
 interface ActivationGeneration {
@@ -672,6 +674,15 @@ export class WorkspaceActivationCoordinator {
   private markMapUnavailable(cause: unknown): void {
     this.mapUnavailable = true
     this.unavailableCause = cause
+    this.notifyRetryAvailability()
+  }
+
+  private notifyRetryAvailability(): void {
+    try {
+      this.options.onRetryAvailabilityChange?.()
+    } catch (error) {
+      logMapError('Shared workspace Retry availability observer failed:', error)
+    }
   }
 
   private async unmountRuntimeRenderer(current: ActivationGeneration, errors: unknown[]): Promise<void> {
@@ -940,6 +951,7 @@ export class WorkspaceActivationCoordinator {
     } catch (error) {
       errors.push(error)
     }
+    this.notifyRetryAvailability()
   }
 
   private releaseStaleMap(map: WorkspaceActivationMap): void {
