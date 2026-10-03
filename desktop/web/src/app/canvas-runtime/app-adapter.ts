@@ -1,4 +1,4 @@
-import { batch, effect } from '@preact/signals'
+import { batch, effect, signal, type ReadonlySignal } from '@preact/signals'
 import type {
   CanvasRuntimeAppAdapter,
   CanvasRuntimeLayerProjectionSource,
@@ -64,6 +64,7 @@ export function createAppCanvasRuntimeAppAdapter(
       }),
     },
     translate: t,
+    reducedMotion: reducedMotionPreference(),
     settings: {
       readLocale: () => locale.value,
       // Presenting a story shows the map without the grid, rulers and ruler guides.
@@ -119,6 +120,25 @@ export function createAppCanvasRuntimeAppAdapter(
       },
     },
   }
+}
+
+let reducedMotion: { readonly source: unknown; readonly preference: ReadonlySignal<boolean> } | null = null
+
+/**
+ * The platform's prefers-reduced-motion: reduce, live: the runtime's view jumps instead of easing while it is true (spec §4.3),
+ * and going to a saved view or a story step reads the same source. One query listener per matchMedia (the app's lifetime; a
+ * test that stubs matchMedia gets its own).
+ */
+export function reducedMotionPreference(): ReadonlySignal<boolean> {
+  const matchMedia = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia : null
+  if (reducedMotion?.source === matchMedia) return reducedMotion.preference
+  const query = matchMedia?.call(window, '(prefers-reduced-motion: reduce)') ?? null
+  const preference = signal(query?.matches ?? false)
+  query?.addEventListener?.('change', (event) => {
+    preference.value = event.matches
+  })
+  reducedMotion = { source: matchMedia, preference }
+  return preference
 }
 
 /** Below half opacity a background mostly lets the map's light paper through. */

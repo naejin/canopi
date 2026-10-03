@@ -60,7 +60,7 @@ import { createWorkspaceCameraPolicy } from '../../workspace-camera-policy'
 
 type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
 
-/** The view's eases (rotation) wait for phase 1's platform signal; nothing eases at bearing 0. */
+/** A detached runtime has no platform preference: it eases. */
 const NO_REDUCED_MOTION: ReadonlySignal<boolean> = signal(false)
 /** The closest a new or empty Design opens: about one country wide. */
 const NEW_DESIGN_OVERVIEW_MAX_ZOOM = 5
@@ -153,7 +153,7 @@ export function createSceneRuntimeConstruction(
   // The runtime's one camera, on the Scene's plane: the policy takes that plane's latitude.
   const cameraHost = createCameraDriverHost({
     policy: createWorkspaceCameraPolicy(),
-    reducedMotion: NO_REDUCED_MOTION,
+    reducedMotion: appAdapter.reducedMotion ?? NO_REDUCED_MOTION,
     plane: () => sceneStore.sessionPlane,
   })
   const readViewScale = () => cameraHost.frames.viewFrame.peek().view.pixelsPerMetre

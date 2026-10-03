@@ -23,7 +23,8 @@ export interface NavigationPolicy {
   readonly maxZoom: number                 // 27
   readonly overviewPixelsPerMetre: number  // 0.1
   readonly referencePixelsPerMetre: number // 20 px/m = 100 %
-  /** prefers-reduced-motion: reduce. Read by the platform (platform/desktop.ts, platform/browser.ts) and injected; view/ never calls matchMedia (P4). Eases and tweens become 'none' moves while true. */
+  /** prefers-reduced-motion: reduce, a live matchMedia signal made in app/canvas-runtime/app-adapter.ts, declared on canvas/runtime/app-adapter.ts and
+   *  passed to createCameraDriverHost; view/ never calls matchMedia (P4). Eases and tweens become 'none' moves while true. */
   readonly reducedMotion: ReadonlySignal<boolean>
 }
 

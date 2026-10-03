@@ -12,6 +12,7 @@ import { currentDesign } from '../document-session/store'
 import { mapLayers } from '../map-layers/state'
 import { currentPlantDisplay } from '../plant-display/state'
 import type { PlantLabelMode } from '../../canvas/runtime/plant-display'
+import { reducedMotionPreference } from '../canvas-runtime/app-adapter'
 import { composeSavedView } from './model'
 
 /** The views of the open Design, in saved order. */
@@ -83,7 +84,7 @@ export function goToSavedView(id: string, options: GoToSavedViewOptions = {}): b
   const view = currentSavedViews().find((entry) => entry.id === id)
   const commands = getCurrentCanvasCommandSurface()
   if (!view || !commands || !canShowSavedViews()) return false
-  const reducedMotion = options.reducedMotion ?? prefersReducedMotion()
+  const reducedMotion = options.reducedMotion ?? reducedMotionPreference().peek()
   const screen = currentCanvasQuerySurface.peek()?.view.captureView().screen
   return commands.viewport.showPlace(
     { lon: view.camera.lon, lat: view.camera.lat },
@@ -102,10 +103,4 @@ export function savedViewZoomFor(
 ): number {
   const fitted = view.extent && size ? mapZoomToFitExtent(view.extent, size) : null
   return Math.min(WORKSPACE_MAP_MAX_ZOOM, Math.max(WORKSPACE_MAP_MIN_ZOOM, fitted ?? view.camera.zoom))
-}
-
-function prefersReducedMotion(): boolean {
-  return typeof window !== 'undefined'
-    && typeof window.matchMedia === 'function'
-    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }

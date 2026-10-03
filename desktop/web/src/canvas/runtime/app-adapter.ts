@@ -1,3 +1,4 @@
+import type { ReadonlySignal } from '@preact/signals'
 import type { CanopiFile } from '../../types/design'
 import { FALLBACK_PLANT_SPACING_INTERVAL_M } from '../plant-spacing-interval'
 import type {
@@ -192,6 +193,9 @@ export interface CanvasRuntimeAppAdapter {
   readonly plantDisplay?: CanvasRuntimePlantDisplayAdapter
   readonly settings: CanvasRuntimeSettingsAdapter
   readonly translate: CanvasRuntimeTranslator
+  /** prefers-reduced-motion: reduce, live (app/canvas-runtime/app-adapter.ts): the view's eases and tweens jump while it is
+   *  true (spec §4.3). Absent in a detached runtime, which always eases. */
+  readonly reducedMotion?: ReadonlySignal<boolean>
   /** How ToolHostDeps.focus leaves the runtime: app/canvas-runtime/app-adapter.ts passes the FocusOwner; absent (a
    *  detached runtime), interaction-session.ts focuses its host itself. */
   readonly focus?: CanvasFocusPort

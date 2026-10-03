@@ -204,6 +204,46 @@ describe('Canvas Runtime app adapter composition', () => {
   })
 })
 
+describe('reduced motion', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    vi.resetModules()
+  })
+
+  it('under reduced motion a key turn jumps', async () => {
+    // A live prefers-reduced-motion query: on, then turned off while the app runs.
+    let onChange: ((event: { readonly matches: boolean }) => void) | null = null
+    const query = {
+      matches: true,
+      addEventListener: (_type: string, listener: (event: { readonly matches: boolean }) => void) => { onChange = listener },
+      removeEventListener: vi.fn(),
+    }
+    vi.stubGlobal('matchMedia', vi.fn(() => query))
+    vi.resetModules()
+    const { createAppCanvasRuntimeAppAdapter: createLiveAdapter } = await import('./app-adapter')
+    const { createLiveTestCanvasRuntimeHost } = await import('../../__tests__/support/live-canvas-runtime')
+    vi.useFakeTimers()
+    const host = createLiveTestCanvasRuntimeHost({
+      screen: { width: 800, height: 600 },
+      appAdapter: createLiveAdapter({ presentationData: {} }),
+    })
+    const bearing = () => host.surfaces.queries.view.captureView().camera.bearingDeg
+
+    host.surfaces.commands.viewport.rotateBy(1)
+    expect(bearing()).toBeCloseTo(15, 6)
+
+    // The preference is live: once it is off, the next turn eases over 300 ms.
+    query.matches = false
+    onChange!({ matches: false })
+    host.surfaces.commands.viewport.rotateBy(1)
+    expect(bearing()).toBeCloseTo(15, 6)
+    vi.advanceTimersByTime(320)
+    expect(bearing()).toBeCloseTo(30, 6)
+    await host.destroy()
+  })
+})
+
 function createAdapter() {
   return createAppCanvasRuntimeAppAdapter({ presentationData: {} })
 }
