@@ -14,6 +14,7 @@ import {
   createTestCanvasCommandSurface,
   createTestCanvasRuntimeSurfaces,
 } from '../../__tests__/support/canvas-runtime-surfaces'
+import { CanvasChrome } from './CanvasChrome'
 import { ViewChip } from './ViewChip'
 
 const northUp = signal(false)
@@ -105,6 +106,15 @@ describe('RulersNorthHint', () => {
     expect(wrapperClass).toMatch(/wrapper/)
     expect(narrow).toMatch(/\.wrapper\s*\{\s*display:\s*none;\s*\}/)
     expect(narrow).not.toMatch(/\.chip\s*\{/)
+  })
+
+  it('the canvas chrome hands the view chip the Reset north command', () => {
+    const canvasRef = { current: document.createElement('div') }
+    act(() => { render(<CanvasChrome projection={workspaceCanvasCommandProjection.value} canvasRef={canvasRef} />, container) })
+    const link = hint()?.querySelector<HTMLButtonElement>('button')
+    expect(link?.dataset.command).toBe('view.resetNorth')
+    act(() => { link!.click() })
+    expect(resetNorth).toHaveBeenCalledOnce()
   })
 
   it('its link resets north', () => {

@@ -52,7 +52,7 @@ function CanvasChromeContent({ projection, canvasRef, stampChooser, children }: 
       {!locating && <ToolRail projection={projection} showNames={toolRailShowsNamesOnMap.value} />}
       <ToolCard stampChooser={stampChooser} />
       {/* Phones leave Grid, Snap and Rulers to the View menu. */}
-      {!phoneLayout.value && <ViewChip toggles={projection.settingsToggles} />}
+      {!phoneLayout.value && <ViewChip toggles={projection.settingsToggles} resetNorth={projection.viewActions.find((a) => a.id === 'reset-north')} />}
       <ZoomControls viewActions={projection.viewActions} />
       <InspectionLens canvasRef={canvasRef} />
       {children}
