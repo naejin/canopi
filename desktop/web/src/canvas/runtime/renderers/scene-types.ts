@@ -17,12 +17,6 @@ export type SceneRendererHoverTarget =
   | { kind: 'measurement-guide'; id: string; state: SceneRendererHoverState }
   | { kind: 'group'; id: string; state: SceneRendererHoverState }
 
-/** A ruler guide: a world east-west line at y = `position` (`h`) or a north-south one at x = `position` (`v`). */
-export interface SceneRulerGuide {
-  readonly axis: 'h' | 'v'
-  readonly position: number
-}
-
 /**
  * The workspace map's editing aids (spec §1.5): the grid, null when off, and the ruler guides, drawn in the world root
  * under every billboard. The grid's interval follows the scale through `canvas/grid.ts`'s `gridInterval`, the lattice
@@ -30,7 +24,8 @@ export interface SceneRulerGuide {
  */
 export interface SceneEditingAids {
   readonly grid: { readonly ink: string; readonly majorInk: string } | null
-  readonly rulerGuides: readonly SceneRulerGuide[]
+  /** World east-west lines at y = `position` (`h`) and north-south ones at x = `position` (`v`). */
+  readonly rulerGuides: readonly { readonly axis: 'h' | 'v'; readonly position: number }[]
 }
 
 export interface SceneRendererSnapshot {

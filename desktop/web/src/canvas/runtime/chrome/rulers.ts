@@ -6,8 +6,7 @@ import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 import { getCanvasColor } from '../../theme-refresh'
 
 /** Ruler band thickness in CSS px. */
-export const CANVAS_RULER_SIZE_PX = 24
-const RULER_SIZE = CANVAS_RULER_SIZE_PX
+const RULER_SIZE = 24
 /** Tick labels keep the 12 px type floor; they are digits and units, never CJK text. */
 const CANVAS_RULER_LABEL_FONT_SIZE_PX = 12
 /** Clear space between neighbouring tick labels; a label that would come closer is left out. */

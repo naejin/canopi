@@ -104,20 +104,80 @@ describe('SceneRuntimeChromeCoordinator', () => {
   })
 
   it('draws no ruler guides while the app hides them, and draws them again after', () => {
-    const host = document.createElement('div')
-    setHostRect(host)
     const coordinator = new SceneRuntimeChromeCoordinator()
-    coordinator.attach(host, vi.fn())
+    coordinator.attach(document.createElement('div'), vi.fn())
     coordinator.show()
-    const grid = () => host.querySelector<HTMLCanvasElement>('[data-scene-chrome-part="grid"]')!
     const guides = [{ id: 'guide-v', axis: 'v' as const, position: 10 }]
 
-    coordinator.update({ frame: cameraFrame(), rulersVisible: false, gridVisible: false, guidesVisible: false, guides })
-    expect(grid().style.display).toBe('none')
-
-    coordinator.update({ frame: cameraFrame(), rulersVisible: false, gridVisible: false, guidesVisible: true, guides })
-    expect(grid().style.display).toBe('block')
+    expect(coordinator.update({ frame: cameraFrame(), rulersVisible: false, gridVisible: false, guidesVisible: false, guides }))
+      .toBeNull()
+    expect(coordinator.update({ frame: cameraFrame(), rulersVisible: false, gridVisible: false, guidesVisible: true, guides }))
+      .toEqual({ grid: null, rulerGuides: [{ axis: 'v', position: 10 }] })
     coordinator.destroy()
+  })
+
+  it('forwards the canonical camera snapshot to ruler guide creation', () => {
+    const host = document.createElement('div')
+    setHostRect(host)
+    const onGuideCreate = vi.fn()
+    const coordinator = new SceneRuntimeChromeCoordinator()
+    coordinator.attach(host, onGuideCreate)
+    coordinator.show()
+    coordinator.update({
+      frame: testViewFrame({ screen: { width: 320, height: 240 }, viewport: { x: 0, y: 20, scale: 4 } }),
+      rulersVisible: true,
+      gridVisible: false,
+      guidesVisible: true,
+      guides: [],
+    })
+
+    // What the session does with a ruler press: the pressed ruler's guide port, handed the release in camera screen px
+    // (client 180, 150 on the map host at 100, 50).
+    pressRuler(host.querySelector<HTMLCanvasElement>('[data-ruler-overlay-part="horizontal"]'))?.createGuideAt('h', { x: 80, y: 100 })
+
+    expect(onGuideCreate).toHaveBeenCalledWith('h', 20)
+    coordinator.destroy()
+  })
+
+  it('destroy ends a ruler drag with the rulers', () => {
+    const host = document.createElement('div')
+    setHostRect(host)
+    const onGuideCreate = vi.fn()
+    const coordinator = new SceneRuntimeChromeCoordinator()
+    coordinator.attach(host, onGuideCreate)
+    coordinator.show()
+    coordinator.update({ frame: cameraFrame(), rulersVisible: true, gridVisible: false, guidesVisible: true, guides: [] })
+    const horizontal = host.querySelector<HTMLCanvasElement>('[data-ruler-overlay-part="horizontal"]')
+    // A ruler drag under way, as the session runs it: the pressed ruler's guide port, dragged.
+    const press = pressRuler(horizontal)
+    expect(press).not.toBeNull()
+    press!.drag()
+    expect(host.style.cursor).toBe('s-resize')
+
+    coordinator.destroy()
+    // The drag ends with the rulers: its cursor comes back, and its release lands no guide.
+    expect(host.style.cursor).toBe('')
+    press!.drag()
+    press!.createGuideAt('h', { x: 80, y: 100 })
+
+    expect(host.childElementCount).toBe(0)
+    expect(host.style.cursor).toBe('')
+    expect(onGuideCreate).not.toHaveBeenCalled()
+    expect(pressRuler(horizontal)).toBeNull()
+  })
+
+  it('an attach whose rulers fail leaves the host empty', () => {
+    const host = document.createElement('div')
+    const appendChild = host.appendChild.bind(host)
+    let appendCount = 0
+    vi.spyOn(host, 'appendChild').mockImplementation((node) => {
+      appendCount += 1
+      if (appendCount === 3) throw new Error('chrome host unavailable')
+      return appendChild(node)
+    })
+
+    expect(() => new SceneRuntimeChromeCoordinator().attach(host, vi.fn())).toThrow('chrome host unavailable')
+    expect(host.childElementCount).toBe(0)
   })
 
   it('the grid and guides reach the workspace renderer and never a thumbnail', () => {
