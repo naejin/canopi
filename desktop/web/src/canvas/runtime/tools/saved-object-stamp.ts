@@ -4,10 +4,12 @@
 // §1.4 "Drops", 0B-4). The stamp arrives as the tool's source (the session bridges the saved-stamp read model); a press
 // places it once with its anchor at the snapped point, turned by the held angle, as one 'interaction-saved-object-stamp'
 // edit that selects the copies, then returns to Select, whose leaving drops the stamp from the read model. Its ghost
-// follows the pointer and stays when the pointer leaves the map. `[` and `]` turn it (rotate-held commands); another stamp
-// starts upright; Esc leaves for Select at once under LEGACY (spec §3.7). A release, another stamp and every cancellation
-// (a blur, the tool armed again, overview) hide the ghost until the next hover and keep the stamp, as today's pointerup and
-// cancellation hid the preview; a re-origin keeps a shown ghost on its ground. The ghosts come from tools/stamp-rotation.ts.
+// follows the pointer and stays when the pointer leaves the map. A stamp reads level to the screen: its angle starts at the
+// live bearing, as a Favorites drop's does, also when the view turns while it is held (spec §4.7); `[` and `]` turn it from
+// there (rotate-held commands), and the tool card shows that turn; Esc leaves for Select at once under LEGACY (spec §3.7).
+// A release, another stamp and every cancellation (a blur, the tool armed again, overview) hide the ghost until the next
+// hover and keep the stamp, as today's pointerup and cancellation hid the preview; a re-origin keeps a shown ghost on its
+// ground. The ghosts come from tools/stamp-rotation.ts.
 
 import type { SavedObjectStampPayload } from '../../saved-object-stamp-payload'
 import type { SceneAnnotationEntity, ScenePlantEntity, SceneZoneEntity } from '../scene/types'
@@ -36,7 +38,8 @@ type StampScene = Pick<ToolScene, 'isLayerOpenForCreation'>
 export function createSavedObjectStampTool(): CanvasTool {
   let ctx: ToolContext | null = null
   let stamp: SavedObjectStampPayload | null = null
-  let rotationDeg = 0
+  /** The turn `[` and `]` added since the pick, which the tool card shows. */
+  let turnDeg = 0
   /** Where the ghost's anchor was last drawn: `[` and `]` redraw it there. */
   let lastAnchor: WorldPoint | null = null
   /** Whether the ghost is drawn now (a release or a cancellation hides it until the next hover). */
@@ -47,23 +50,28 @@ export function createSavedObjectStampTool(): CanvasTool {
     return ctx
   }
 
-  /** The stamp held now; choosing another stamp starts it upright. True when the stamp changed. */
+  /** The stamp held now; choosing another stamp starts it level to the screen. True when the stamp changed. */
   function hold(source: ToolSource | null): boolean {
     const next = source?.kind === 'saved-stamp' ? source.stamp : null
     if (next === stamp) return false
-    rotationDeg = 0
+    turnDeg = 0
     stamp = next
     return true
   }
 
+  /** The angle the stamp is placed at: the live bearing, so it reads level to the screen like a drop, plus the held turn. */
+  function rotationDeg(): number {
+    return turnStampRotation(context().view.bearingDeg, turnDeg)
+  }
+
   function publishGuidance(): void {
-    context().effects.setGuidance({ stampRotationDeg: stamp ? rotationDeg : null })
+    context().effects.setGuidance({ stampRotationDeg: stamp ? turnDeg : null })
   }
 
   function showGhostAt(at: WorldPoint): void {
     lastAnchor = at
     const { effects, scene } = context()
-    const shapes = stamp ? savedObjectStampGhostShapes(scene, stamp, at, rotationDeg) : null
+    const shapes = stamp ? savedObjectStampGhostShapes(scene, stamp, at, rotationDeg()) : null
     ghostShown = shapes !== null
     effects.setDraft(shapes ? { shapes } : null)
   }
@@ -78,7 +86,7 @@ export function createSavedObjectStampTool(): CanvasTool {
     if (!held) return
     const { effects, scene } = context()
     placeSavedObjectStamp(effects.edits, scene, held, at, {
-      rotationDeg,
+      rotationDeg: rotationDeg(),
       onCommitted: () => {
         // One placement, then Select: leaving the tool drops the stamp from the read model (the session's).
         stamp = null
@@ -91,7 +99,7 @@ export function createSavedObjectStampTool(): CanvasTool {
 
   function reset(): void {
     stamp = null
-    rotationDeg = 0
+    turnDeg = 0
     lastAnchor = null
     ghostShown = false
   }
@@ -137,7 +145,7 @@ export function createSavedObjectStampTool(): CanvasTool {
     command(c) {
       if (c.kind === 'rotate-held') {
         if (!stamp) return 'pass'
-        rotationDeg = turnStampRotation(rotationDeg, c.stepDeg)
+        turnDeg = turnStampRotation(turnDeg, c.stepDeg)
         if (lastAnchor) showGhostAt(lastAnchor)
         publishGuidance()
         return 'handled'
@@ -148,6 +156,11 @@ export function createSavedObjectStampTool(): CanvasTool {
         return 'handled'
       }
       return 'pass'
+    },
+    viewChanged() {
+      // The host re-emits no hover with the pointer off the map: the ghost left there redraws at the live bearing, where
+      // the next click places.
+      if (ghostShown && lastAnchor) showGhostAt(lastAnchor)
     },
     planeChanged(reproject) {
       // A re-origin moves the ground under the last anchor: the ghost stays where it stood, also with the pointer off the
@@ -195,7 +208,7 @@ function savedObjectStampEntities(
 
 /**
  * The saved stamp's ghosts with its anchor at `at` (a snapped point), turned by `rotationDeg`; null when it cannot be
- * placed there. The tool's preview, and the drop route's dragover preview (a drop is level in phase 0).
+ * placed there. The tool's preview, and the drop route's dragover preview.
  */
 export function savedObjectStampGhostShapes(
   scene: StampScene,
@@ -210,7 +223,7 @@ export function savedObjectStampGhostShapes(
 /**
  * Places the saved stamp with its anchor at `at` (snapped by the caller), turned by `rotationDeg`, as one
  * 'interaction-saved-object-stamp' edit that selects the copies; false when it cannot be placed or the edit did not
- * commit. The tool's press, and the drop route's drop (level in phase 0).
+ * commit. The tool's press, and the drop route's drop.
  */
 export function placeSavedObjectStamp(
   edits: SceneEditCoordinator,

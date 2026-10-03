@@ -5,10 +5,10 @@
 // later press places the pick with that anchor at the snapped point, turned by the held angle, as one
 // 'interaction-object-stamp' edit that selects the copies, while the source is still unlocked on open layers. The ghost of
 // what a press would place follows the pointer from the pick on and stays when the pointer leaves the map; the tool card
-// names the pick. A pick starts level (today's rule; phase 1 starts it at the bearing); `[` and `]` turn it (rotate-held
-// commands); Esc leaves for Select at once under LEGACY (spec §3.7). A release and every cancellation (a blur, K again,
-// overview) hide the ghost until the next hover and keep the pick, as today's pointerup and cancellation hid the preview;
-// a re-origin keeps a shown ghost on its ground.
+// names the pick. A pick starts at 0, so copies keep their source's orientation like Paste and Duplicate (spec §4.7); `[`
+// and `]` turn it (rotate-held commands), and the tool card shows that turn; Esc leaves for Select at once under LEGACY
+// (spec §3.7). A release and every cancellation (a blur, K again, overview) hide the ghost until the next hover and keep
+// the pick, as today's pointerup and cancellation hid the preview; a re-origin keeps a shown ghost on its ground.
 
 import type { CanvasStampGuidance } from '../../session-state'
 import type { SceneDesignObjectTarget } from '../scene/design-object-targets'
