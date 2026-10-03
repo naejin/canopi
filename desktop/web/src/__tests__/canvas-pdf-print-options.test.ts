@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
-import { printPlantColors } from '../app/canvas-pdf/print-colors'
+import { recolorPlants } from '../app/canvas-pdf/print-colors'
 import { createPdfWorkflow } from '../app/canvas-pdf/workflow'
 import type { PdfPreparation } from '../app/canvas-pdf/prepare'
 import type { PrintPlant } from '../canvas/print'
@@ -57,7 +57,8 @@ describe('Canvas PDF print options', () => {
     expect(input).toEqual(before)
   })
   it('gives each distinct colour its own grey, darkest for the darkest colour', () => {
-    const greys = printPlantColors([plant('a', 'A', 0, '#000000'), plant('b', 'B', 0, '#ffffff'), plant('c', 'C', 0, '#808080')], 'grayscale')
+    const plants = [plant('a', 'A', 0, '#000000'), plant('b', 'B', 0, '#ffffff'), plant('c', 'C', 0, '#808080')]
+    const greys = new Map(recolorPlants(plants, 'grayscale').map((printed, i) => [plants[i]!.color, printed.color]))
     const level = (color: string) => parseInt(greys.get(color)!.slice(1, 3), 16)
     expect(new Set(greys.values()).size).toBe(3)
     expect(level('#000000')).toBeLessThan(level('#808080'))
