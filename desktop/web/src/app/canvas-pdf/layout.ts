@@ -67,7 +67,7 @@ function buildPages(original: PdfInput, setup: PdfSetup, text: PdfTextEngine, la
     return [page, ...continuations]
   }
   const fittedDetails = (setup.areas ?? []).map(area => {
-    const id = pdfAreaKey(area), view = setup.views?.[id], requested = areaToFrame(frame, area.bounds)
+    const id = pdfAreaKey(area), view = setup.views?.[id], requested = areaToFrame(frame, area.bounds, area.pivot)
     if (![requested.x, requested.y, requested.width, requested.height].every(Number.isFinite) || requested.width <= 0 || requested.height <= 0) throw new Error('invalid-page-view')
     const choices = requested.width === requested.height && (!view?.orientation || view.orientation === 'auto') ? ['portrait'] as const : orientations(view)
     const candidates = choices.map(orientation => {

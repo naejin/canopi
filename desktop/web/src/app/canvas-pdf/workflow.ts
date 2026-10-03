@@ -116,7 +116,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
       const names = choices.areas?.length && choices.layers.includes('plants')
         ? Array.from(new Set(next.input.canvas.plants.filter(plant => choices.areas!.some(area => {
           // A manually displaced/zoomed view can include plants outside its original rectangle.
-          return choices.views?.[pdfAreaKey(area)] ? true : areaContains(frame, area.bounds, plant.position)
+          return choices.views?.[pdfAreaKey(area)] ? true : areaContains(frame, area.bounds, plant.position, area.pivot)
         })).map(plant => plant.canonicalName))) : []
       // Catalog failure retains full canonical identities on chosen detail sheets.
       const identities = names.length ? await resolvePrintIdentities(deps, names, next.input.locale, abort.signal) : { commonNames: {} }
@@ -165,8 +165,9 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   function previewSplit(id: string): void {
     const plan = state.peek().result?.plan, page = plan?.pages.find(p => p.id === id && p.kind === 'detail')
     if (!page || !capture?.isCurrent() || !['ready', 'saved', 'downloaded', 'error'].includes(state.peek().status)) return
-    const bounds = splitPrintArea(page.ground, setup.peek().layers.includes('plants') ? capture.input.canvas.plants : [], pageFrame(plan!.angleDeg))
-    const areas = bounds.map((bounds, index) => ({ id: String(nextAreaId + index + 1), name: deps.namePrintArea(nextAreaId + index + 1), bounds }))
+    const parent = setup.peek().areas?.find(area => pdfAreaKey(area) === id)
+    const parts = splitPrintArea(page.ground, setup.peek().layers.includes('plants') ? capture.input.canvas.plants : [], pageFrame(plan!.angleDeg), parent?.pivot)
+    const areas = parts.map((part, index) => ({ id: String(nextAreaId + index + 1), name: deps.namePrintArea(nextAreaId + index + 1), ...part }))
     const views = Object.fromEntries(Object.entries(setup.peek().views ?? {}).filter(([key]) => key !== id && !key.startsWith(`${id}:legend:`)))
     splitPreview.value = { ...setup.peek(), areas: setup.peek().areas?.flatMap(a => pdfAreaKey(a) === id ? areas : [a]), views }
     priority = pdfAreaKey(areas[0]!)

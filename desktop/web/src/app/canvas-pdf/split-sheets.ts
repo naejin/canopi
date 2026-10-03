@@ -1,4 +1,5 @@
-import type { PrintBounds, PrintPlant } from '../../canvas/print'
+import type { PrintBounds, PrintPlant, PrintPoint } from '../../canvas/print'
+import type { PdfPrintArea } from './types'
 import { contains } from './field-geometry'
 import { areaFromFrame, type PageFrame } from './page-frame'
 
@@ -22,8 +23,13 @@ function splitFieldBounds(bounds: PrintBounds, plants: readonly PrintPlant[]): P
   return result
 }
 
-/** Splits a page's ground (in the layout frame) by the turned plants, as Print Areas in plan metres. */
-export function splitPrintArea(ground: PrintBounds, plants: readonly PrintPlant[], frame: PageFrame): PrintBounds[] {
+/**
+ * Splits a page's ground (in the layout frame) by the turned plants, as Print Areas in plan metres that turn together
+ * about one pivot: the split's centre, or `pivot` when the page is itself a split sheet. At any later angle they then
+ * tile the ground turned about that pivot, as the area they replace would be.
+ */
+export function splitPrintArea(ground: PrintBounds, plants: readonly PrintPlant[], frame: PageFrame, pivot?: PrintPoint): Pick<PdfPrintArea, 'bounds' | 'pivot'>[] {
   const turned = frame.angleDeg ? plants.map(plant => ({ ...plant, position: frame.toFrame(plant.position) })) : plants
-  return splitFieldBounds(ground, turned).map(bounds => areaFromFrame(frame, bounds))
+  const about = pivot ?? frame.fromFrame({ x: ground.x + ground.width / 2, y: ground.y + ground.height / 2 })
+  return splitFieldBounds(ground, turned).map(bounds => ({ bounds: areaFromFrame(frame, bounds, about), pivot: about }))
 }

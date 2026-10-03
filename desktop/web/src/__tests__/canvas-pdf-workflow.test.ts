@@ -43,7 +43,7 @@ describe('PDF workflow lifetime', () => {
       const page = (id: string, ground: PdfPage['ground'], kind: PdfPage['kind']): PdfPage =>
         ({ id, kind, number: 1, width: 600, height: 800, frame: ground, ground, pointsPerMeter: 1, operations: [], legend: [] })
       return { bytes: new Uint8Array([1]), plan: { angleDeg: angle.angleDeg, outlines: {}, blocked: null, pickerPage: page('overview', picker, 'overview'),
-        pages: (setup.areas ?? []).map(area => page(pdfAreaKey(area), areaToFrame(angle, area.bounds), 'detail')) } }
+        pages: (setup.areas ?? []).map(area => page(pdfAreaKey(area), areaToFrame(angle, area.bounds, area.pivot), 'detail')) } }
     })
     try {
       workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
@@ -57,10 +57,16 @@ describe('PDF workflow lifetime', () => {
       expect(stored.x).not.toBeCloseTo(picker.x, 3)
       expect(resolveDisplayNames.mock.lastCall![0]).toEqual(['Malus domestica'])
       workflow.previewSplit(id); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
-      const parts = workflow.splitPreview.value!.areas!.map(area => area.bounds)
+      const parts = workflow.splitPreview.value!.areas!.map(({ bounds, pivot }) => ({ bounds, pivot }))
       expect(parts).toEqual(splitPrintArea(picker, plants, frame))
       expect(parts.length).toBeGreaterThan(1)
-      for (const p of plants.filter(p => areaContains(frame, stored, p.position))) expect(parts.some(part => areaContains(frame, part, p.position))).toBe(true)
+      for (const p of plants.filter(p => areaContains(frame, stored, p.position))) expect(parts.some(part => areaContains(frame, part.bounds, p.position, part.pivot))).toBe(true)
+      // A split sheet split again keeps the first split's pivot, so every sheet still tiles after a switch.
+      workflow.applySplit(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      workflow.previewSplit(pdfAreaKey(workflow.setup.value.areas![0]!)); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
+      const family = workflow.splitPreview.value!.areas!
+      expect(family.length).toBeGreaterThan(parts.length)
+      for (const area of family) expect(area.pivot).toEqual(parts[0]!.pivot)
     } finally { workflow.dispose() }
   })
   it('waits for a turn still easing on open and holds the bearing it ends at', async () => {

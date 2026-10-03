@@ -4,7 +4,7 @@
 // capture. The layout runs once per build on a turned copy of the print snapshot, so no layout module takes an angle and
 // text stays level on paper. The frame turns about the plan origin; Print Areas and page offsets stay in plan metres,
 // independent of the frame, and each build converts them, so switching Map orientation or reopening at a new bearing
-// turns every area about its own centre.
+// turns every area about its own centre, and the sheets of one split together about their split's centre (its pivot).
 
 import type { CanvasPrintSnapshot, PrintBounds, PrintPoint, PrintZone } from '../../canvas/print'
 import { outlineSegments } from './field-geometry'
@@ -38,25 +38,36 @@ export function layoutAngle(setup: Pick<PdfSetup, 'mapOrientation'>, input: Pick
   return setup.mapOrientation === 'as-on-screen' ? input.viewBearingDeg ?? 0 : 0
 }
 
-/** A Print Area's rectangle on the page: the area is an unturned box about its centre, in plan metres. */
-export function areaToFrame(frame: PageFrame, area: PrintBounds): PrintBounds {
+/**
+ * A Print Area's rectangle on the page. The area is a box in plan metres, its sides along the page axes; it turns about
+ * `pivot` (a plan point; absent, its own centre), its centre keeping its offset from the pivot along the page axes.
+ */
+export function areaToFrame(frame: PageFrame, area: PrintBounds, pivot?: PrintPoint): PrintBounds {
   if (!frame.angleDeg) return area
-  const centre = frame.toFrame({ x: area.x + area.width / 2, y: area.y + area.height / 2 })
-  return { x: centre.x - area.width / 2, y: centre.y - area.height / 2, width: area.width, height: area.height }
+  const centre = centreOf(area)
+  if (!pivot) return boxAbout(frame.toFrame(centre), area)
+  const turned = frame.toFrame(pivot)
+  return boxAbout({ x: turned.x + centre.x - pivot.x, y: turned.y + centre.y - pivot.y }, area)
 }
 
-/** A rectangle drawn on the page as a Print Area: its centre back in plan metres, its size along the page axes. */
-export function areaFromFrame(frame: PageFrame, rectangle: PrintBounds): PrintBounds {
+/** A rectangle on the page as a Print Area turning about `pivot` (a plan point; absent, the rectangle's own centre). */
+export function areaFromFrame(frame: PageFrame, rectangle: PrintBounds, pivot?: PrintPoint): PrintBounds {
   if (!frame.angleDeg) return rectangle
-  const centre = frame.fromFrame({ x: rectangle.x + rectangle.width / 2, y: rectangle.y + rectangle.height / 2 })
-  return { x: centre.x - rectangle.width / 2, y: centre.y - rectangle.height / 2, width: rectangle.width, height: rectangle.height }
+  const centre = centreOf(rectangle)
+  if (!pivot) return boxAbout(frame.fromFrame(centre), rectangle)
+  const turned = frame.toFrame(pivot)
+  return boxAbout({ x: pivot.x + centre.x - turned.x, y: pivot.y + centre.y - turned.y }, rectangle)
 }
 
 /** Whether a plan point lies inside a Print Area as the page frames it. */
-export function areaContains(frame: PageFrame, area: PrintBounds, point: PrintPoint): boolean {
-  const r = areaToFrame(frame, area), p = frame.toFrame(point)
+export function areaContains(frame: PageFrame, area: PrintBounds, point: PrintPoint, pivot?: PrintPoint): boolean {
+  const r = areaToFrame(frame, area, pivot), p = frame.toFrame(point)
   return p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height
 }
+
+const centreOf = (box: PrintBounds): PrintPoint => ({ x: box.x + box.width / 2, y: box.y + box.height / 2 })
+const boxAbout = (centre: PrintPoint, { width, height }: PrintBounds): PrintBounds =>
+  ({ x: centre.x - width / 2, y: centre.y - height / 2, width, height })
 
 /** The snapshot in the page frame; North up returns the same snapshot. */
 export function turnSnapshot(snapshot: CanvasPrintSnapshot, frame: PageFrame): CanvasPrintSnapshot {
