@@ -334,6 +334,24 @@ describe('saved object stamp tool', () => {
       expect(h.store.persisted.plants[0]!.position.y).toBeCloseTo(anchor.y + 10 * Math.sin(Math.PI / 4), 6)
     })
 
+    it('Shift+→ while a saved stamp is held keeps the click level to the screen and equal to a drop', () => {
+      const h = harness()
+      holding(h, mulchStamp())
+      h.host.command({ kind: 'rotate-held', stepDeg: 15 })
+      // The view turns to 30° with the stamp held (Shift+→ twice, the compass or Shift+middle-drag).
+      const { camera } = h.view.host.frames.viewFrame.peek().view
+      h.view.host.current().apply({ kind: 'set', target: { ...camera, bearingDeg: 30 }, animation: 'none' })
+
+      h.hover({ x: 200, y: 150 })
+      // The card still shows the held turn; the ghost starts at the live bearing, as a Favorites drop's does.
+      expect(h.record.guidance.at(-1)?.stampRotationDeg).toBe(15)
+      expect(ghosts(h)[0]!.entity).toMatchObject({ rotationDeg: 45 })
+
+      h.click({ x: 200, y: 150 })
+      expect(h.store.persisted.zones[0]?.rotationDeg).toBe(45)
+      expect(h.store.persisted.annotations[0]?.rotationDeg).toBe(45)
+    })
+
     it('a stamp chosen while armed starts level to the screen, and none leaves nothing to turn', () => {
       const h = harness()
       holding(h, mulchStamp())
