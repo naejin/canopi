@@ -1,8 +1,8 @@
 # Canvas v2 specification: interfaces, bindings, rotation, strings
 
-Trimmed 2026-10-02 at the phase-0 close; the full earlier text is at commit 76bd08a659d916069a340fc06e670e54e32f54c7.
+Trimmed 2026-10-02 at the phase-0 close (the full earlier text is at commit 76bd08a659d916069a340fc06e670e54e32f54c7) and 2026-10-03 at the phase-1 close (the text before it is at `da12600b`): §4.5, §4.11, §9.1 and §9.2, built and read by no later step, were deleted; section numbers are not reused, so code comments citing them resolve at that commit.
 
-Status: agreed (2026-09-29); phase 0 and phase F built (2026-10-02); phase 1 amended by its design check (2026-10-03: plan section 4, phase 1); 1, 2, 3 and R build on it per docs/plans/canvas-v2-plan.md
+Status: agreed (2026-09-29); phase 0 and phase F built (2026-10-02); phase 1 built (2026-10-03); 2, 3 and R build on it per docs/plans/canvas-v2-plan.md
 
 This is the contract the canvas v2 work is built to. The phases, owners, gates and bead mapping are in `docs/plans/canvas-v2-plan.md`; what exists today and what happens to each piece is in `docs/plans/canvas-v2-inventory.md`. The reasons live in the ADRs: 0015 (rotating map and canvas controls; amends ADR 0010's control and shortcut rules), 0016 (one view transform), 0017 (input pipeline and gestures), 0018 (narrow tool interface), 0019 (rendering and the view transform), 0020 (focus and keyboard ownership). Delete this file with the plan at the 2.0 release close.
 
@@ -1625,26 +1625,22 @@ Stored data: `.canopi` does not change (`SavedViewCamera.bearing` exists; writer
 
 ### 1.8 Module layout: what later phases add
 
-Phase 0 built the modules of `canvas/runtime/{view,input,tools,renderers,chrome}/`; F built `app/keyboard/**` and `input/selection-drag-guard.ts`; `interaction-types.ts`, `interaction-ports.ts`, `keyboard-port.ts`, `scene-extent.ts`, `scene-runtime/drag-state.ts`, `maplibre/camera-driver.ts` and the test supports (`test-view.ts`, `tool-harness.ts`, `recording-renderer.ts`, `canvas-interaction-setup.ts`); the tree under `desktop/web/src/` is their reference. `view/` imports only what policy P4 (plan §5) allows. Later phases add:
+Phase 0 built the modules of `canvas/runtime/{view,input,tools,renderers,chrome}/`, `interaction-types.ts`, `interaction-ports.ts`, `keyboard-port.ts`, `scene-extent.ts`, `scene-runtime/drag-state.ts`, `maplibre/camera-driver.ts` and the test supports (`test-view.ts`, `tool-harness.ts`, `recording-renderer.ts`, `canvas-interaction-setup.ts`); F built `app/keyboard/**` and `input/selection-drag-guard.ts`; phase 1 built `app/canvas-pdf/page-frame.ts` (§1.7), `components/canvas/Compass.tsx` and `RulersNorthHint.tsx` (§4.2, §4.6) and moved the grid and ruler guides into `renderers/world-layers.ts`; the tree under `desktop/web/src/` is their reference. `view/` imports only what policy P4 (plan §5) allows. Later phases add:
 
 ```
 desktop/web/src/
 ├─ canvas/runtime/input/
 │  └─ context-menu-gesture.ts           copy of GeoLibre @ b3d91de, MIT header, THIRD_PARTY_NOTICES row (phase 2)
-├─ app/canvas-pdf/page-frame.ts         §1.7 the turned page frame (phase 1)
-├─ components/canvas/Compass.tsx        button (the whole face is the drag target); reads ViewReadSurface.bearingDeg; commands via ViewCommandSurface (phase 1)
-└─ components/canvas/RulersNorthHint.tsx  the "Rulers show when north is up" pill above the view chip (§4.6); useMapOccluder (phase 1)
 ```
 
-Phase 1 also mounts the grid and ruler guides in `renderers/world-layers.ts` (which holds zones and measurement guides since phase 0); phase R retains billboard geometry per zoom band in `renderers/billboard-layer.ts` and admits labels on settle in `renderers/label-admission.ts`.
+Phase R retains billboard geometry per zoom band in `renderers/billboard-layer.ts` and admits labels on settle in `renderers/label-admission.ts`.
 
 ### 1.9 Module layout: deleted, in the phase that replaces them
 
-Phase 0's and F's deletions are done; P11 tombstones them. Left:
+Phase 0's, F's and phase 1's deletions are done; P11 tombstones them. Left:
 
 | File or symbol | Replaced by | Phase |
 |---|---|---|
-| `canvas/runtime/scene-chrome.ts` (grid and guides Canvas2D) | `renderers/world-layers.ts`; P11 tombstones the file and `SceneChromeOverlay` | 1 |
 | `'overview'` in `primaryDragPansIn` | nothing | 2 |
 | `settings.scrollWheel*` UI strings | `settings.pointingDevice*` | 2 |
 | `Bindings`, `CURRENT_BINDINGS`, `PanContext`, `DomInputSourceDeps.bindings`: after phase 3 every field has one value (table in §1.2) | the end values, hard-coded in the recogniser and the source (no `ROTATION_BINDINGS`, `V2_BINDINGS` or `TOUCH_BINDINGS` is ever written); P11 tombstones the names | release close |
@@ -2003,10 +1999,6 @@ Fixtures: "Shift+→ during a left drag keeps the draft's start on the ground" i
 | Never snapped | explicit targets: "Turn view to this edge", saved views, stories, `showPlace`, `centerOn` with a bearing, the last view; a saved view at 3° restores at 3° |
 | No stepping | touch and trackpad twist |
 
-### 4.5 Nudges and key pans
-
-Arrows move the selection along screen directions (↑ = up on screen) by 10 cm, or 1 m with mod, converted through `screenAxesInWorld()`, only with the Select tool in site mode (today's condition, kept); with a selection in another tool or in overview they do nothing. With nothing selected they pan 64 px, or 256 px with mod, along the screen, in any tool. The PDF page editor turns its screen deltas into ground deltas by the page angle. The inspection lens moves along the screen.
-
 ### 4.6 Grid, snapping, rulers and guides
 
 - The grid, grid snapping and guides stay on true east and north (world axes) and turn with the map (user). From phase 1 the grid and ruler guides are drawn in `worldRoot` under plants, notes, labels and drafts (convention), on the snap lattice (§1.5).
@@ -2041,10 +2033,6 @@ Hits are world-space and unaffected by bearing; pixel tolerances convert through
 - One framing rule: going to a view, a story step and every thumbnail use the camera's centre, zoom and bearing; a thumbnail scales the camera zoom by the thumbnail-to-workspace screen ratio, so it always shows what going to the view shows. Going to a view no longer fits the stored extent to the window, so a view saved in a large window reopens closer in a small one (the user confirms this rule at the phase-1 handoff, plan section 8; if overturned, saved views gain an optional saved-window size, which ADR 0021 permits).
 - Story restore after presenting stores `captureView().camera` and returns through `showCamera`. Stories restore each step's bearing; restores are explicit targets and never snap.
 - `ViewSnapshotCamera` carries the bearing with its validation; `normalizeLastView` and the Web settings reader default a missing bearing to 0.
-
-### 4.11 Snapshot map and thumbnails
-
-The snapshot map (`maplibre/view-snapshot-map.ts`) has its own `MapLibreCameraDriver` and applies the saved view's bearing. Saved-view thumbnails are drawn at the saved bearing, with the camera zoom scaled by the thumbnail-to-workspace screen ratio (§4.10; the cache key holds the camera and the settled workspace size, so a resize draws them again once it settles). Stories have no thumbnails. Recent-file sketches (`DesignSketch`) and saved-stamp thumbnails stay north-up. PDF page-rail thumbnails follow the layout angle.
 
 ### 4.12 PDF
 
@@ -2314,60 +2302,11 @@ When pitch ships (this paragraph is the recipe; the main agent notes it on canop
 
 Every new or changed key exists in all 11 locales (`desktop/web/src/i18n/*.json`), English in sentence case (`i18n-copy.test.ts`); removed keys are deleted from every locale in the change that replaces them. Keys follow the existing layout: nested camelCase, menu items as dotted keys under `menu`. `{{mod}}` is filled with the platform's localised Ctrl label, or `shortcutKeys.cmd` on macOS, where every shortcut label reads Cmd for mod (U13, from phase 1); numbers and degrees use `Intl` through `{{value, number}}`. Rows marked (spec) were not in the design and are settled here.
 
-### 9.1 Phase 1 (rotation)
-
-F1's gesture rows (`shortcuts.gestures.*`) are written once, in phase 2, with the static gesture list (§9.3; U1): phase 1 adds only the keyboard rows below. Owners (plan section 4, phase 1): Keyboard the `menu`, `shortcuts`, `shortcutKeys`, `settings` and `canvas.map` keys and the removal of `plantFinder.shortcut`; Components `canvas.compass`, `canvas.grid` and `canvas.inspection`; D1 `canvas.contextMenu`; PDF `pdf`.
-
-| Key | English | Where |
-|---|---|---|
-| `menu` → `view.resetNorth` | Reset north | View menu (phones share it), palette; also the compass's `aria-label` and the rulers hint's link, through the `reset-north` command |
-| `menu` → `view.turnViewLeft` | Turn view left 15° | View menu, palette (Shift+←) |
-| `menu` → `view.turnViewRight` | Turn view right 15° | View menu, palette (Shift+→) |
-| `canvas.contextMenu.turnViewToEdge` | Turn view to this edge | canvas menu on a zone edge |
-| `canvas.compass.bearing` | View turned {{degrees, number}}° from north | compass description when rotated (the `aria-describedby` span) |
-| `canvas.compass.northUp` | North is up | compass description at 0° |
-| `canvas.compass.hint` | Click to reset north. Drag the ring to turn the view; hold Shift for 15° steps. | compass tooltip, second line |
-| `canvas.grid.rulersNorthUpOnly` | Rulers show when north is up | pill above the view chip when rotated with Rulers on, in site mode; no live role |
-| `pdf.mapOrientation` | Map orientation | PDF setup |
-| `pdf.mapOrientationNorthUp` | North up | PDF setup option (default) |
-| `pdf.mapOrientationAsOnScreen` | As on screen | PDF setup option |
-| `shortcuts.turnView` | Turn the view 15° | F1 static row (Shift ← · Shift →) |
-| `shortcuts.resetNorth` | Reset north | F1 static row (N, only when the switch is on · Shift N · Shift ↑) |
-| `shortcuts.resetNorthAlways` | Shift+N works even when single-key shortcuts are off. | F1 note |
-| `shortcutKeys.cmd` | Cmd | the mod key's name on macOS in menus, tooltips, F1, the plant finder's hint and `{{mod}}` (U13; `formatShortcut`) |
-
-F1's View section omits the menu-derived rotation rows and shows only the two static rows above.
-
-Changed copy in phase 1:
-
-| Key | New English |
-|---|---|
-| `shortcuts.nudge` | Nudge the selection 10 cm in the arrow's direction on screen |
-| `shortcuts.nudgeLarge` | Nudge the selection 1 m (the chord column shows Ctrl or Cmd + arrow) |
-| `shortcuts.pan` | Pan the map when nothing is selected (unchanged text; now along the screen) |
-| `shortcuts.panLarge` | Pan the map farther when nothing is selected (chord Ctrl or Cmd + arrow) |
-| `settings.singleKeyShortcutsHint` | Tool keys such as V, P and Z, N to reset north, brackets and Shift G, S, R, L. Shift N always resets north. Off keeps {{mod}} shortcuts, Delete, Esc, arrows and F keys. |
-| `canvas.map.description` | Press a tool's key to choose it, as the tool rail shows. Shift F10 opens the menu for the selection. Esc cancels, then returns to Select, then clears the selection. Arrow keys move the selection 10 cm on screen, or 1 m with {{mod}}; with nothing selected they pan the map. Shift with left or right arrow turns the view; N or Shift with up arrow resets north. F6 moves to the next area: title bar, tools, map, panel. |
-| `canvas.inspection.panHint` | Inspection preview. Drag or use arrow keys to explore; {{mod}} moves farther. (spec) |
-| `menu` → `view.cycleLabels` | Labels: none, codes, names (unchanged text; its key moves from N to Shift+L) |
-
-Removed in phase 1: `plantFinder.shortcut` ("Ctrl F" in every locale). The plant finder's hint is `formatShortcut('Ctrl+F')` with the interface language, so it reads Cmd F on macOS (U13).
-
-`common-types/src/settings.rs` single-key doc comment (View owns the file): "character-key shortcuts (tool keys such as V or P, N, Shift G, Shift L, brackets). Off leaves only shortcuts with Ctrl or Cmd, Alt or a named key (Delete, Esc, arrows, F keys), plus Shift N, which always resets north."
-
-### 9.2 Phase F (shipped)
-
-| Key | New English |
-|---|---|
-| `shortcuts.toolsHeading` | {{menu}} (anywhere except text fields) |
-| `shortcuts.footnote` | Tool keys work anywhere except text fields. |
-| `shortcuts.escape` | unchanged text; now true for popovers too |
-
 ### 9.3 Phase 2 (controls)
 
 | Key | English | Where |
 |---|---|---|
-| `settings.singleKeyShortcutsHint` | Tool keys such as V, P and Z, N to reset north, brackets and Shift G, S, R, L. Shift N always resets north. Off keeps {{mod}} shortcuts, Delete, Esc, arrows, F keys, and + and − on the map. | Settings › Keyboard (changed from §9.1); the `settings.rs` doc comment adds "and + and − while the map has focus" in the same commit |
+| `settings.singleKeyShortcutsHint` | Tool keys such as V, P and Z, N to reset north, brackets and Shift G, S, R, L. Shift N always resets north. Off keeps {{mod}} shortcuts, Delete, Esc, arrows, F keys, and + and − on the map. | Settings › Keyboard (changed from its phase-1 text); the `settings.rs` doc comment adds "and + and − while the map has focus" in the same commit |
 | `settings.pointingDevice` | Pointing device | Settings › Canvas (replaces `settings.scrollWheel`) |
 | `settings.pointingDeviceMouse` | Mouse: the wheel zooms | option, stored `zoom` (replaces `settings.scrollWheelZoom`) |
 | `settings.pointingDeviceTrackpad` | Trackpad: two fingers pan | option, stored `pan` (replaces `settings.scrollWheelPan`) |
