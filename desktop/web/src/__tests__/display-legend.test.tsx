@@ -110,6 +110,18 @@ describe('DisplayLegend', () => {
     )
   })
 
+  it('stays at the bottom chrome on a narrow canvas, where the view chip and the rulers hint are hidden', () => {
+    // The chip's narrow-canvas rule hides its wrapper but the hint stays in the DOM, so the raised rule must carry the
+    // complementary container condition or the legend floats over an empty gap with a shortened max-height.
+    const chip = readFileSync('src/components/canvas/ViewChip.module.css', 'utf8')
+    const breakpoint = /@container \(max-width: (?<px>\d+)px\) \{\s*\.wrapper \{\s*display: none;/.exec(chip)?.groups?.px
+    expect(breakpoint).toBe('600')
+    const css = readFileSync('src/components/canvas/DisplayLegend.module.css', 'utf8')
+    const wide = new RegExp(`@container \\(width > ${breakpoint}px\\) \\{(?<body>[\\s\\S]*?)\\n\\}`).exec(css)
+    expect(wide?.groups?.body ?? '').toMatch(/:global\(\*:has\(> \[data-rulers-north-hint\]\)\) ~ \.legend \{/)
+    expect(css.replace(wide?.[0] ?? '', '')).not.toContain('data-rulers-north-hint')
+  })
+
   it('updates pinned plant names when pins or localized names change', async () => {
     const scene = createDefaultScenePersistedState()
     scene.plants = [plant({ pinnedName: false })]
