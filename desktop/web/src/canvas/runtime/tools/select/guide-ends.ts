@@ -13,6 +13,7 @@ import type { SceneMeasurementGuideEntity, ScenePersistedState } from '../../sce
 import type { WorldPoint } from '../../view/types'
 import type { DraftShape, ToolHandle } from '../draft'
 import { measureLabelShapes } from '../measure-labels'
+import type { ToolContext } from '../tool'
 import type { PointHandleSubject } from './point-handle'
 
 /** One end handle: which end of which guide it moves ('a' the start, 'b' the end). */
@@ -49,13 +50,13 @@ export function guideEnds(guide: SceneMeasurementGuideEntity): GuideEnd[] {
   ]
 }
 
-export function guideEndHandles(ends: readonly GuideEnd[]): ToolHandle[] {
+export function guideEndHandles(ends: readonly GuideEnd[], translate: ToolContext['translate']): ToolHandle[] {
   return ends.map((end) => ({
     id: end.id,
     anchor: end.world,
     hitRadiusPx: POINT_HIT_RADIUS_PX,
     glyph: 'vertex',
-    label: `Measurement Guide endpoint ${end.index + 1}`,
+    label: translate('canvas.guideEnd.label', { index: end.index + 1 }),
   }))
 }
 

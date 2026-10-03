@@ -175,6 +175,12 @@
     "rotationHandle": {
       "label": "Pivoter"
     },
+    "zoneControlPoint": {
+      "label": "Point de contrôle de zone {{index}}"
+    },
+    "guideEnd": {
+      "label": "Extrémité du guide de mesure {{index}}"
+    },
     "grid": {
       "grid": "Grille",
       "snapToGrid": "Aimanter à la grille",

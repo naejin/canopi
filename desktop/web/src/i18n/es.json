@@ -175,6 +175,12 @@
     "rotationHandle": {
       "label": "Girar"
     },
+    "zoneControlPoint": {
+      "label": "Punto de control de zona {{index}}"
+    },
+    "guideEnd": {
+      "label": "Extremo de la guía de medida {{index}}"
+    },
     "grid": {
       "grid": "Cuadrícula",
       "snapToGrid": "Ajustar a la cuadrícula",

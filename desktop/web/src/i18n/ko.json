@@ -175,6 +175,12 @@
     "rotationHandle": {
       "label": "회전"
     },
+    "zoneControlPoint": {
+      "label": "구역 제어점 {{index}}"
+    },
+    "guideEnd": {
+      "label": "측정 가이드 끝점 {{index}}"
+    },
     "grid": {
       "grid": "격자",
       "snapToGrid": "격자에 맞추기",

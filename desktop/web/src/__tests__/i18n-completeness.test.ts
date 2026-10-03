@@ -1,3 +1,6 @@
+// @vitest-environment node
+
+import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import en from '../i18n/en.json'
@@ -61,7 +64,44 @@ function collectMissingKeys(
   return missing
 }
 
+// A canvas tool's handle names reach screen readers as aria-labels, so they come from `ctx.translate`, never a literal.
+const TOOLS_DIR = new URL('../canvas/runtime/tools/', import.meta.url)
+// Matched against the whole file so a literal wrapped onto the next line is caught; either quote names aria-label.
+const LITERAL_HANDLE_LABEL = /\blabel:\s*['"`]|setAttribute\(\s*['"`]aria-label['"`]\s*,\s*['"`]/g
+
+// Reports the 1-based line of each literal handle label in a tool's source text.
+function literalHandleLabelLines(source: string): number[] {
+  return [...source.matchAll(LITERAL_HANDLE_LABEL)].map(
+    (match) => source.slice(0, match.index).split('\n').length,
+  )
+}
+
+function literalToolHandleLabels(): string[] {
+  const found: string[] = []
+  for (const name of readdirSync(TOOLS_DIR, { recursive: true }) as string[]) {
+    if (!name.endsWith('.ts') || name.endsWith('.test.ts')) continue
+    for (const line of literalHandleLabelLines(readFileSync(new URL(name, TOOLS_DIR), 'utf8'))) {
+      found.push(`${name.replace(/\\/g, '/')}:${line}`)
+    }
+  }
+  return found.sort()
+}
+
 describe('i18n completeness', () => {
+  it('names canvas tool handles through translate, never a literal aria-label', () => {
+    expect(literalToolHandleLabels()).toEqual([])
+  })
+
+  it('finds a literal handle label in either quote style and when wrapped onto the next line', () => {
+    expect(literalHandleLabelLines("el.setAttribute('aria-label', 'Endpoint')")).toEqual([1])
+    expect(literalHandleLabelLines('el.setAttribute("aria-label", "Endpoint")')).toEqual([1])
+    expect(literalHandleLabelLines('el.setAttribute(\n  "aria-label",\n  `Endpoint`,\n)')).toEqual([1])
+    expect(literalHandleLabelLines("const a = 1\nconst handle = {\n  label:\n    'Zone control point 1',\n}")).toEqual([3])
+    expect(literalHandleLabelLines("label: translate('canvas.handles.endpoint')")).toEqual([])
+    expect(literalHandleLabelLines("el.setAttribute('aria-label', translate('canvas.handles.endpoint'))")).toEqual([])
+  })
+
+
   for (const [locale, translations] of Object.entries(locales)) {
     it(`${locale} has exactly the english translation key tree`, () => {
       expect(collectMissingKeys(en as TranslationTree, translations)).toEqual([])

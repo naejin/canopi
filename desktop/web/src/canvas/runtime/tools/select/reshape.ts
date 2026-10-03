@@ -12,6 +12,7 @@ import type { ScenePersistedState, SceneZoneEntity } from '../../scene/types'
 import type { WorldPoint } from '../../view/types'
 import { getRectangularZoneCorners } from '../../zone-geometry'
 import type { ToolHandle } from '../draft'
+import type { ToolContext } from '../tool'
 import type { PointHandleSubject } from './point-handle'
 
 export type ZoneControlPointKind =
@@ -83,13 +84,13 @@ export function zoneControlPoints(zone: SceneZoneEntity): ZoneControlPoint[] {
 }
 
 /** The handles the host draws for `points`. */
-export function zoneControlPointHandles(points: readonly ZoneControlPoint[]): ToolHandle[] {
+export function zoneControlPointHandles(points: readonly ZoneControlPoint[], translate: ToolContext['translate']): ToolHandle[] {
   return points.map((entry) => ({
     id: entry.id,
     anchor: entry.world,
     hitRadiusPx: POINT_HIT_RADIUS_PX,
     glyph: entry.kind === 'rect-corner' ? 'corner' : 'vertex',
-    label: `Zone control point ${entry.index + 1}`,
+    label: translate('canvas.zoneControlPoint.label', { index: entry.index + 1 }),
   }))
 }
 

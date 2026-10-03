@@ -71,11 +71,11 @@ export function createSelectTool(): CanvasTool {
     const zone = reshapableZone(scene, selection)
     const points = zone ? zoneControlPoints(zone) : []
     reshapePoints = new Map(points.map((entry) => [entry.id, entry]))
-    handles.push(...zoneControlPointHandles(points))
+    handles.push(...zoneControlPointHandles(points, c.translate))
     const guide = draggableGuide(scene, selection)
     const ends = guide ? guideEnds(guide) : []
     guideEndPoints = new Map(ends.map((entry) => [entry.id, entry]))
-    handles.push(...guideEndHandles(ends))
+    handles.push(...guideEndHandles(ends, c.translate))
     c.effects.setHandles(handles)
   }
 

@@ -128,6 +128,47 @@ describe('SceneInteractionSession', () => {
     expect(unlock.getAttribute('aria-label')).toBe('fr:canvas.lockedObject.unlock')
   })
 
+  it('names zone control points and guide ends through translate, and relabels them on a locale switch', () => {
+    let language = 'en'
+    const translate = (key: string, options?: Readonly<Record<string, unknown>>): string =>
+      `${language}:${key}${options?.index === undefined ? '' : `:${String(options.index)}`}`
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 100, y: 100 },
+        { x: 160, y: 100 },
+        { x: 160, y: 150 },
+        { x: 100, y: 150 },
+      ])]
+      draft.measurementGuides = [
+        makeMeasurementGuide('measurement-guide-1', { x: 10, y: 10 }, { x: 60, y: 10 }),
+      ]
+    })
+    const deps = createInteractionDeps(container, store, testView, {
+      translate,
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
+    })
+    const session = createTestSession(deps)
+    session.setTool('select')
+
+    deps.setSelection([zoneTarget('zone-1')])
+    session.refreshMeasurements()
+    const corner = zoneControlPoint(container, 'rect-corner', 1)!
+    expect(corner.getAttribute('aria-label')).toBe('en:canvas.zoneControlPoint.label:2')
+    language = 'fr'
+    session.refreshTranslations()
+    expect(zoneControlPoint(container, 'rect-corner', 1)?.getAttribute('aria-label'))
+      .toBe('fr:canvas.zoneControlPoint.label:2')
+
+    deps.setSelection([measurementGuideTarget('measurement-guide-1')])
+    session.refreshMeasurements()
+    expect(measurementGuideControlPoint(container, 1)?.getAttribute('aria-label'))
+      .toBe('fr:canvas.guideEnd.label:2')
+    language = 'en'
+    session.refreshTranslations()
+    expect(measurementGuideControlPoint(container, 0)?.getAttribute('aria-label'))
+      .toBe('en:canvas.guideEnd.label:1')
+  })
+
   it('shows no floating action bar: rotation is the only control on a selection', () => {
     store.updatePersisted((draft) => {
       draft.zones = [makeRectZone('zone-1', [

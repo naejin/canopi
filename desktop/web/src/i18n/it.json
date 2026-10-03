@@ -175,6 +175,12 @@
     "rotationHandle": {
       "label": "Ruota"
     },
+    "zoneControlPoint": {
+      "label": "Punto di controllo della zona {{index}}"
+    },
+    "guideEnd": {
+      "label": "Estremità della guida di misura {{index}}"
+    },
     "grid": {
       "grid": "Griglia",
       "snapToGrid": "Aggancia alla griglia",

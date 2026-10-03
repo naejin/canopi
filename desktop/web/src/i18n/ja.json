@@ -175,6 +175,12 @@
     "rotationHandle": {
       "label": "回転"
     },
+    "zoneControlPoint": {
+      "label": "ゾーンの制御点 {{index}}"
+    },
+    "guideEnd": {
+      "label": "計測ガイドの端点 {{index}}"
+    },
     "grid": {
       "grid": "グリッド",
       "snapToGrid": "グリッドにスナップ",

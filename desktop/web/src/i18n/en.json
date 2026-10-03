@@ -175,6 +175,12 @@
     "rotationHandle": {
       "label": "Rotate"
     },
+    "zoneControlPoint": {
+      "label": "Zone control point {{index}}"
+    },
+    "guideEnd": {
+      "label": "Measurement guide endpoint {{index}}"
+    },
     "grid": {
       "grid": "Grid",
       "snapToGrid": "Snap to grid",

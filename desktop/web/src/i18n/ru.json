@@ -175,6 +175,12 @@
     "rotationHandle": {
       "label": "Повернуть"
     },
+    "zoneControlPoint": {
+      "label": "Контрольная точка зоны {{index}}"
+    },
+    "guideEnd": {
+      "label": "Конец измерительной направляющей {{index}}"
+    },
     "grid": {
       "grid": "Сетка",
       "snapToGrid": "Привязка к сетке",
