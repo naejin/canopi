@@ -174,6 +174,27 @@ describe('drawInspectionLensScene', () => {
     expect(opaque.fills).toEqual([1])
   })
 
+  it('clears the whole reused scratch backing at a fractional device pixel ratio', () => {
+    // A 431 x 300 lens at dpr 1.25 has a 539 x 375 backing: a clear in CSS pixels reaches only 538.75 x 375 device pixels.
+    const scratch = createAlphaRecordingContext()
+    scratch.canvas = { width: 539, height: 375 }
+    let m = { a: 1, d: 1, e: 0, f: 0 }
+    scratch.setTransform = vi.fn((a: number, _b: number, _c: number, d: number, e: number, f: number) => { m = { a, d, e, f } })
+    const cleared: Array<{ readonly left: number; readonly top: number; readonly right: number; readonly bottom: number }> = []
+    scratch.clearRect = vi.fn((x: number, y: number, w: number, h: number) => {
+      scratch.order.push('clearRect')
+      cleared.push({ left: m.a * x + m.e, top: m.d * y + m.f, right: m.a * (x + w) + m.e, bottom: m.d * (y + h) + m.f })
+    })
+    draw(createAlphaRecordingContext(), createRendererSnapshot({
+      plants: [createPlant({ id: 'edge', position: { x: 430.5 / 20, y: 5 } })],
+      layers: [{ kind: 'layer', name: 'plants', visible: true, locked: false, opacity: .5 }],
+      viewport: { x: 0, y: 0, scale: 20 },
+    }), { widthPx: 431, heightPx: 300, dpr: 1.25, scratch: () => scratch as unknown as CanvasRenderingContext2D })
+
+    expect(cleared.some((rect) => rect.left <= 0 && rect.top <= 0 && rect.right >= 539 && rect.bottom >= 375)).toBe(true)
+    expect(scratch.order.indexOf('clearRect')).toBeLessThan(scratch.order.indexOf('fill'))
+  })
+
   it('keeps stack badges per shape at the Plants opacity, on the page above the composited plants', () => {
     const ctx = createAlphaRecordingContext()
     const scratch = createAlphaRecordingContext()

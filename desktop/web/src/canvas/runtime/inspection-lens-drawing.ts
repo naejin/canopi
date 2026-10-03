@@ -157,8 +157,10 @@ function drawPlants(
   const target = scratch ?? ctx
   const symbolOpacity = scratch ? 1 : layer.opacity
   if (scratch) {
+    // The scratch is reused: clear its whole backing in device pixels, which a CSS-pixel clear misses at a fractional dpr.
+    scratch.setTransform(1, 0, 0, 1, 0, 0)
+    scratch.clearRect(0, 0, scratch.canvas.width, scratch.canvas.height)
     applyScreenSpaceTransform(scratch, dpr)
-    scratch.clearRect(0, 0, widthPx, heightPx)
     applyView(scratch, view)
   }
 
