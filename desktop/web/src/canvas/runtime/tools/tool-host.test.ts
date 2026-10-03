@@ -2326,6 +2326,43 @@ describe('ToolHost', () => {
       view.dispose()
     })
 
+    it('the keyboard menu opens beside a shape drawn level at 45, not beside its world box', () => {
+      const bed = rectZone('bed', [{ x: -50, y: -10 }, { x: 50, y: -10 }, { x: 50, y: 10 }, { x: -50, y: 10 }], { rotationDeg: 45 })
+      const store = sceneStoreWith({ zones: [bed] })
+      store.updateSession((session) => {
+        session.selectedTargets = [{ kind: 'zone', id: 'bed' }]
+      })
+      const source = createToolSceneSource(store)
+      const opened: CanvasContextMenuRequest[] = []
+      const view = createTestView({ screen: { width: 800, height: 600 }, camera: { bearingDeg: 45 } })
+      const port = createContextMenuPort({
+        container: document.createElement('div'),
+        view: view.view,
+        adapter: { open: (request) => opened.push(request), close: () => {} },
+        commands: {} as never,
+        returnFocus: () => {},
+        scene: createToolScene(source),
+        selectionModel: source.selectionModel,
+      })
+
+      port.open({ at: 'selection', source: 'keyboard', screen: null, hit: null })
+
+      // The bed on screen: a level 100 × 20 px box (1 px/m).
+      const corners = getRectangularZoneCorners(bed)!.map((corner) => view.view().worldToScreen(corner))
+      const xs = corners.map((corner) => corner.x)
+      const ys = corners.map((corner) => corner.y)
+      expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(100, 6)
+      expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(20, 6)
+      const anchor = opened.at(-1)!.anchor
+      expect(anchor.left).toBeCloseTo(Math.min(...xs), 6)
+      expect(anchor.right).toBeCloseTo(Math.max(...xs), 6)
+      expect(anchor.top).toBeCloseTo(Math.min(...ys), 6)
+      expect(anchor.bottom).toBeCloseTo(Math.max(...ys), 6)
+      expect(opened.at(-1)!.world).toEqual({ x: 0, y: 0 })
+      port.close()
+      view.dispose()
+    })
+
     it("the menu port follows every close of the app's menu, with or without a focus return", async () => {
       const source = createToolSceneSource(sceneStoreWith({}))
       const returnFocus = vi.fn()

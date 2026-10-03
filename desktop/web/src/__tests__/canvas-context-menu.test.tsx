@@ -299,17 +299,13 @@ describe('CanvasContextMenu', () => {
       returnFocus,
     })
     const bounds = { minX: -40, minY: -10, maxX: 40, maxY: 10 }
-    // The selection's box on screen: the four corners of its world bounds, turned 45°.
-    const corners = view.view().worldQuadToScreen([
-      { x: bounds.minX, y: bounds.minY },
-      { x: bounds.maxX, y: bounds.minY },
-      { x: bounds.maxX, y: bounds.maxY },
-      { x: bounds.minX, y: bounds.maxY },
-    ])
+    // The selection's hull (tools/select/selection-hull.ts): a world quad turned 45°, its four corners projected.
+    const hull = [{ x: -40, y: -10 }, { x: 40, y: -10 }, { x: 40, y: 10 }, { x: -40, y: 10 }] as const
+    const corners = view.view().worldQuadToScreen(hull)
     const xs = corners.map((corner) => corner.x)
     const ys = corners.map((corner) => corner.y)
 
-    await act(async () => { controller.openFromKeyboard({ ...APPLES, bounds }) })
+    await act(async () => { controller.openFromKeyboard({ ...APPLES, bounds }, hull) })
 
     const anchor = canvasContextMenuRequest.value!.anchor
     expect(anchor.left).toBeCloseTo(Math.min(...xs), 6)

@@ -39,6 +39,7 @@ import { placePlantFromSpecies } from './plant-stamp'
 import { TOOL_REGISTRY } from './registry'
 import { placeSavedObjectStamp, savedObjectStampGhostShapes } from './saved-object-stamp'
 import { bandDraft } from './select/band'
+import { selectionScreenHull } from './select/selection-hull'
 import { snapWorldPoint, type SnapSettings } from './snapping'
 import type {
   CanvasTool,
@@ -138,7 +139,8 @@ export function createContextMenuPort(options: ContextMenuPortOptions): ContextM
   return {
     open(request) {
       if (request.at === 'selection') {
-        controller.openFromKeyboard(selectionModel())
+        const selection = selectionModel()
+        controller.openFromKeyboard(selection, selectionScreenHull(scene, selection, controllerOptions.view()))
         return
       }
       const screen = request.screen ?? controllerOptions.view().worldToScreen(request.at)

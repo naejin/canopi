@@ -6,7 +6,7 @@ import type {
 } from '../app-adapter'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
 import type { ScenePoint } from '../scene'
-import type { ViewTransform } from '../view/types'
+import type { ViewTransform, WorldQuad } from '../view/types'
 
 interface CanvasContextMenuOptions {
   readonly container: HTMLElement
@@ -27,9 +27,9 @@ export interface CanvasContextMenuController {
   /** `screen` is container-relative; `selection` is null on the empty map. `turnViewToEdge`: the pointer is on a zone's
    *  edge (the request's entry, spec §4.16). */
   openAtPointer(screen: ScenePoint, selection: CanvasDesignObjectSelectionModel | null, turnViewToEdge?: () => void): void
-  /** Menu key or Shift F10: beside the selection's projected bounds (four corners, INV-XF-22), else mid-map (the empty-map
-   *  menu without a selection). */
-  openFromKeyboard(selection: CanvasDesignObjectSelectionModel): void
+  /** Menu key or Shift F10: beside the selection's projected hull (`hull`, the world quad of the screen box of the shapes it
+   *  draws, tools/select/selection-hull.ts; INV-XF-22), else mid-map (the empty-map menu without a selection). */
+  openFromKeyboard(selection: CanvasDesignObjectSelectionModel, hull: WorldQuad | null): void
   /** True from an open until the app closes the menu (the request's `closed`) or close() closes it. */
   isOpen(): boolean
   close(): void
@@ -79,12 +79,12 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
       const y = origin.top + screen.y
       open({ left: x, top: y, right: x, bottom: y }, world, selection, turnViewToEdge)
     },
-    openFromKeyboard(selection) {
+    openFromKeyboard(selection, hull) {
       const origin = containerOrigin()
       const target = hasSelectedObjects(selection) ? selection : null
       const bounds = target?.bounds ?? null
       const view = options.view()
-      if (!bounds) {
+      if (!bounds || !hull) {
         const centre = { x: view.screen.width / 2, y: view.screen.height / 2 }
         const world = view.screenToWorld(centre)
         const x = origin.left + centre.x
@@ -92,13 +92,8 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
         open({ left: x, top: y, right: x, bottom: y }, world, target)
         return
       }
-      // The selection's box on screen from all four projected corners: two would miss the box on a turned map.
-      const corners = view.worldQuadToScreen([
-        { x: bounds.minX, y: bounds.minY },
-        { x: bounds.maxX, y: bounds.minY },
-        { x: bounds.maxX, y: bounds.maxY },
-        { x: bounds.minX, y: bounds.maxY },
-      ])
+      // The hull's four projected corners: two would miss its box on a turned map.
+      const corners = view.worldQuadToScreen(hull)
       const xs = corners.map((corner) => corner.x)
       const ys = corners.map((corner) => corner.y)
       open(
