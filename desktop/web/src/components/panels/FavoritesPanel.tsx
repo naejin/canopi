@@ -103,6 +103,7 @@ export function FavoritesPanel() {
   const [, setLayoutRevision] = useState(0)
   const [preview, setPreview] = useState<SavedStampPreview | null>(null)
   const [savedStampReorderPreviewIds, setSavedStampReorderPreviewIds] = useState<readonly string[] | null>(null)
+  const [importRefusalKey, setImportRefusalKey] = useState<string | null>(null)
 
   useEffect(() => speciesCatalogWorkbench.mount('favorites'), [])
 
@@ -166,6 +167,16 @@ export function FavoritesPanel() {
   useEffect(() => {
     clearSavedStampReorderPreviewIfLibraryMatches()
   }, [savedStampsView.revision, savedStampReorderPreviewIds])
+
+  async function importStampFile(): Promise<void> {
+    setImportRefusalKey(null)
+    try {
+      const outcome = await savedObjectStampWorkbench.importStampFile()
+      if (outcome.status === 'refused') setImportRefusalKey(outcome.messageKey)
+    } catch (error) {
+      console.error('Saved stamp import failed:', error)
+    }
+  }
 
   function showStampPreview(stamp: SavedObjectStamp, anchor: HTMLElement): void {
     clearPreviewTimer(previewTimerRef)
@@ -395,7 +406,7 @@ export function FavoritesPanel() {
               type="button"
               className={styles.importStampButton}
               aria-label={t('savedObjectStamps.import')}
-              onClick={() => void savedObjectStampWorkbench.importStampFile()}
+              onClick={importStampFile}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true"><path d="M8 2v8M5 7l3 3 3-3M3 11v3h10v-3" /></svg><ButtonTooltip label={t('savedObjectStamps.import')} side="left" />
             </button>
@@ -410,7 +421,9 @@ export function FavoritesPanel() {
             >
               <PlusIcon />{t('savedObjectStamps.saveSelection')}
             </button>
-
+            {importRefusalKey && (
+              <p className={styles.savedStampsImportRefusal} role="alert">{t(importRefusalKey)}</p>
+            )}
           </div>
           {savedStampsView.loading ? (
             <div className={styles.savedStampsLoading} aria-live="polite" aria-busy="true">

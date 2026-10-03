@@ -146,7 +146,7 @@ describe('FavoritesPanel', () => {
     reorderStampMock = vi.fn(async () => {})
     placeStampMock = vi.fn(() => true)
     exportStampMock = vi.fn(async () => '/tmp/Pommier, Lavande.canopi')
-    importStampFileMock = vi.fn(async () => null)
+    importStampFileMock = vi.fn(async () => ({ status: 'cancelled' }))
     stampLibrary = signal({
       items: [{
         id: 'stamp-1',
@@ -382,6 +382,48 @@ describe('FavoritesPanel', () => {
     })
 
     expect(exportStampMock).toHaveBeenCalledWith(stampLibrary.value.items[0])
+  })
+
+  it('says why a stamp file was refused, and clears the message on the next import', async () => {
+    importStampFileMock.mockResolvedValueOnce({ status: 'refused', messageKey: 'start.cantReadOlderVersion' })
+    await act(async () => {
+      render(<FavoritesPanel />, container)
+      await flushEffects()
+    })
+    const importButton = container.querySelector<HTMLButtonElement>('button[aria-label="Import stamps…"]')!
+    await act(async () => {
+      importButton.click()
+      await flushEffects()
+    })
+
+    const notice = container.querySelector<HTMLElement>('[data-saved-stamps-frame] [role="alert"]')
+    expect(notice?.textContent).toBe('Made with Canopi before 2.0; Canopi 2.0 and later can’t open it')
+
+    importStampFileMock.mockResolvedValueOnce({ status: 'cancelled' })
+    await act(async () => {
+      importButton.click()
+      await flushEffects()
+    })
+    expect(container.querySelector('[data-saved-stamps-frame] [role="alert"]')).toBeNull()
+  })
+
+  it('handles a failed stamp import instead of dropping the promise', async () => {
+    const failure = new Error('database is locked')
+    importStampFileMock.mockRejectedValueOnce(failure)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await act(async () => {
+        render(<FavoritesPanel />, container)
+        await flushEffects()
+      })
+      await act(async () => {
+        container.querySelector<HTMLButtonElement>('button[aria-label="Import stamps…"]')!.click()
+        await flushEffects()
+      })
+      expect(consoleError).toHaveBeenCalledWith('Saved stamp import failed:', failure)
+    } finally {
+      consoleError.mockRestore()
+    }
   })
 
   it('renders plant favorites and Saved Stamps as sibling frames', async () => {

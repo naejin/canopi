@@ -28,6 +28,7 @@ import {
   reorderSavedObjectStamps as reorderSavedObjectStampsIpc,
 } from '../../ipc/saved-object-stamps'
 import { encodeCanopiDesign } from '../contracts/canopi-design-wire'
+import { designLoadFailureMessageKey, designLoadFailureOf } from '../contracts/canopi-design-errors'
 import type { CanopiFile } from '../../types/design'
 import type { SavedObjectStamp } from '../../types/saved-object-stamps'
 import type {
@@ -54,6 +55,19 @@ export interface SavedObjectStampLibraryView {
   readonly revision: number
 }
 
+/**
+ * What became of an import. `refused` carries the string that says why: the
+ * typed load failure's wording (older version, damaged, …; the Start screen's
+ * keys) or "No visible objects" for a file with nothing to stamp.
+ */
+type SavedObjectStampImportOutcome =
+  | { readonly status: 'imported'; readonly stamp: SavedObjectStamp }
+  /** The dialog was closed, or the Workbench went away meanwhile. */
+  | { readonly status: 'cancelled' }
+  | { readonly status: 'refused'; readonly messageKey: string }
+
+const IMPORT_CANCELLED: SavedObjectStampImportOutcome = { status: 'cancelled' }
+
 export interface SavedObjectStampSelectionView {
   readonly canSave: boolean
   readonly reason: 'no-canvas' | 'empty-selection' | 'structural-blocker' | null
@@ -71,7 +85,8 @@ export interface SavedObjectStampWorkbench {
   /** Arms Place a stamp with it on the live canvas (Favorites: 'panel'; the tool card's chooser: 'card'). */
   placeStamp(stamp: SavedObjectStamp, from: Extract<ArmFrom, 'panel' | 'card'>): boolean
   exportStamp(stamp: SavedObjectStamp): Promise<string | null>
-  importStampFile(): Promise<SavedObjectStamp | null>
+  /** Rejects only when saving the imported stamp fails. */
+  importStampFile(): Promise<SavedObjectStampImportOutcome>
   dispose(): void
 }
 
@@ -244,31 +259,34 @@ export function createSavedObjectStampWorkbench({
     }
   }
 
-  function importStampFile(): Promise<SavedObjectStamp | null> {
-    return queue.enqueue(null, async (admittedLifetime) => {
+  function importStampFile(): Promise<SavedObjectStampImportOutcome> {
+    return queue.enqueue(IMPORT_CANCELLED, async (admittedLifetime) => {
       let file: CanopiFile
       try {
         file = await importSavedObjectStampFile()
       } catch (error) {
-        if (!queue.isCurrent(admittedLifetime)) return null
-        if (isDialogCancelled(error)) return null
-        throw error
+        if (!queue.isCurrent(admittedLifetime) || isDialogCancelled(error)) return IMPORT_CANCELLED
+        const failure = designLoadFailureOf(error)
+        return {
+          status: 'refused',
+          messageKey: failure ? designLoadFailureMessageKey(failure.kind) : 'start.cantRead',
+        }
       }
-      if (!queue.isCurrent(admittedLifetime)) return null
+      if (!queue.isCurrent(admittedLifetime)) return IMPORT_CANCELLED
 
       const payload = savedObjectStampPayloadFromCanopiFile(file)
-      if (!payload) return null
+      if (!payload) return { status: 'refused', messageKey: 'savedObjectStamps.summaryEmpty' }
 
       const saved = await createSavedObjectStamp(
         importedSavedObjectStampName(file, payload),
         JSON.stringify(payload),
       )
-      if (!queue.isCurrent(admittedLifetime)) return null
+      if (!queue.isCurrent(admittedLifetime)) return IMPORT_CANCELLED
       batch(() => {
         items.value = [...items.value, saved].sort(compareSavedObjectStamps)
         revision.value += 1
       })
-      return saved
+      return { status: 'imported', stamp: saved }
     })
   }
 

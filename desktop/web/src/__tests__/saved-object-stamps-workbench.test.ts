@@ -842,7 +842,8 @@ describe('Saved Object Stamp Workbench', () => {
       getCanvasQuerySurface,
     })
 
-    const saved = await workbench.importStampFile()
+    const outcome = await workbench.importStampFile()
+    const saved = outcome.status === 'imported' ? outcome.stamp : null
 
     expect(saved?.name).toBe('Imported design')
     expect(getCanvasQuerySurface).not.toHaveBeenCalled()
@@ -883,12 +884,12 @@ describe('Saved Object Stamp Workbench', () => {
     workbench.dispose()
     pendingImport.resolve(importableFile())
 
-    await expect(importing).resolves.toBeNull()
+    await expect(importing).resolves.toEqual({ status: 'cancelled' })
     expect(createStamp).not.toHaveBeenCalled()
     expect(workbench.library.value.items).toEqual([])
   })
 
-  it('does not create a saved stamp from an empty Canopi import', async () => {
+  it('does not create a saved stamp from an empty Canopi import, and says it has no visible objects', async () => {
     const importSavedObjectStampFile = vi.fn(async (): Promise<CanopiFile> => ({
       version: CURRENT_CANOPI_FILE_VERSION,
       name: 'Empty design',
@@ -916,9 +917,42 @@ describe('Saved Object Stamp Workbench', () => {
       getCanvasQuerySurface: () => null,
     })
 
-    const saved = await workbench.importStampFile()
+    const outcome = await workbench.importStampFile()
 
-    expect(saved).toBeNull()
+    expect(outcome).toEqual({ status: 'refused', messageKey: 'savedObjectStamps.summaryEmpty' })
     expect(createStamp).not.toHaveBeenCalled()
+  })
+
+  it('refuses a stamp file saved before 2.0 with the typed older-version message', async () => {
+    const createStamp = vi.fn()
+    const workbench = createSavedObjectStampWorkbench({
+      getSavedObjectStamps: async () => [],
+      createSavedObjectStamp: createStamp,
+      // The native loader rejects with the typed DesignLoadFailure.
+      importSavedObjectStampFile: async () => {
+        throw { kind: 'older_version', message: 'unsupported_version: 7' }
+      },
+      getCanvasQuerySurface: () => null,
+    })
+
+    await expect(workbench.importStampFile()).resolves.toEqual({
+      status: 'refused',
+      messageKey: 'start.cantReadOlderVersion',
+    })
+    expect(createStamp).not.toHaveBeenCalled()
+    expect(workbench.library.value.items).toEqual([])
+  })
+
+  it('refuses an unreadable stamp file with the generic message, and treats a closed dialog as cancelled', async () => {
+    let failure: unknown = new Error('Failed to read file')
+    const workbench = createSavedObjectStampWorkbench({
+      getSavedObjectStamps: async () => [],
+      importSavedObjectStampFile: async () => { throw failure },
+      getCanvasQuerySurface: () => null,
+    })
+
+    await expect(workbench.importStampFile()).resolves.toEqual({ status: 'refused', messageKey: 'start.cantRead' })
+    failure = new Error('Dialog cancelled')
+    await expect(workbench.importStampFile()).resolves.toEqual({ status: 'cancelled' })
   })
 })
