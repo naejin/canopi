@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { fixture } from '../../scripts/pdf-validation/fixtures'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
-import { pageFrame } from '../app/canvas-pdf/page-frame'
+import { areaFromFrame, pageFrame } from '../app/canvas-pdf/page-frame'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 import type { PdfInput, PdfLabels, PdfOperation } from '../app/canvas-pdf/types'
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
@@ -84,6 +84,23 @@ describe('Canvas PDF page plan', () => {
     const shift = moved.pages.find(p => p.kind === 'detail')!.ground, step = frame.toFrame({ x: 2, y: 0 })
     expect(shift.x - detail.ground.x).toBeCloseTo(step.x, 6)
     expect(shift.y - detail.ground.y).toBeCloseTo(step.y, 6)
+  })
+  it('Add whole design refits to the design at every Map orientation', () => {
+    // A 20 m square bed level on a screen turned to 45: north-up it is a diamond about 28.3 m across.
+    const at45 = pageFrame(45), corners = [[-10, -10], [10, -10], [10, 10], [-10, 10]].map(([x, y]) => at45.fromFrame({ x: x!, y: y! }))
+    const design: PdfInput = { ...input(), viewBearingDeg: 45, canvas: { ...input().canvas, plants: corners.map((position, i) =>
+      ({ id: `c${i}`, canonicalName: 'Malus domestica', position, color: '#123456', symbol: 'square' as const, mark, pinnedName: false })) } }
+    const setup = { paper: 'A4' as const, layers: ['plants'], mapOrientation: 'as-on-screen' as const }
+    const picker = buildPdfPlan(design, setup, text(), labels).pickerPage!.ground
+    const area = { id: 'whole', name: 'Whole design', bounds: areaFromFrame(at45, picker), wholeDesign: true as const }
+    for (const mapOrientation of ['as-on-screen', 'north-up'] as const) {
+      const plan = buildPdfPlan(design, { ...setup, mapOrientation, areas: [area] }, text(), labels)
+      const frame = pageFrame(plan.angleDeg), ground = plan.pages.find(p => p.kind === 'detail')!.ground
+      for (const corner of corners.map(frame.toFrame)) {
+        expect(corner.x).toBeGreaterThan(ground.x); expect(corner.x).toBeLessThan(ground.x + ground.width)
+        expect(corner.y).toBeGreaterThan(ground.y); expect(corner.y).toBeLessThan(ground.y + ground.height)
+      }
+    }
   })
 })
 

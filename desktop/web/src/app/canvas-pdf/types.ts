@@ -26,6 +26,9 @@ export interface PdfPrintArea {
   /** Split sheets: the plan point every sheet of the split turns about, so they keep tiling at any angle.
    *  Absent, the area turns about its own centre. */
   readonly pivot?: PrintPoint
+  /** Add whole design: each build refits the area to the printed design at the layout angle; `bounds` is the fit it was
+   *  added with, kept for when nothing is printed. */
+  readonly wholeDesign?: true
 }
 export function pdfAreaKey(area: PdfPrintArea): string { return `area:${area.id}` }
 export interface PdfSetup {

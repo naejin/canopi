@@ -116,7 +116,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
       const names = choices.areas?.length && choices.layers.includes('plants')
         ? Array.from(new Set(next.input.canvas.plants.filter(plant => choices.areas!.some(area => {
           // A manually displaced/zoomed view can include plants outside its original rectangle.
-          return choices.views?.[pdfAreaKey(area)] ? true : areaContains(frame, area.bounds, plant.position, area.pivot)
+          return choices.views?.[pdfAreaKey(area)] || area.wholeDesign ? true : areaContains(frame, area.bounds, plant.position, area.pivot)
         })).map(plant => plant.canonicalName))) : []
       // Catalog failure retains full canonical identities on chosen detail sheets.
       const identities = names.length ? await resolvePrintIdentities(deps, names, next.input.locale, abort.signal) : { commonNames: {} }
@@ -150,17 +150,19 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     configure({ layers: selected ? [...layers, name] : layers })
   }
   /** `bounds` is the area in plan metres: an unturned box about its centre (`PdfPrintArea`). */
-  function addPrintArea(bounds: PrintBounds): string | undefined {
+  function addPrintArea(bounds: PrintBounds): string | undefined { return addArea(bounds, false) }
+  function addArea(bounds: PrintBounds, wholeDesign: boolean): string | undefined {
     if (!open.peek() || disposed || state.peek().status === 'delivering') return
     if (![bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) || bounds.width <= 0 || bounds.height <= 0) return
     const number = ++nextAreaId
     priority = `area:${number}`
-    configure({ areas: [...setup.peek().areas ?? [], { id: String(number), name: deps.namePrintArea(number), bounds: { ...bounds } }] })
+    configure({ areas: [...setup.peek().areas ?? [], { id: String(number), name: deps.namePrintArea(number), bounds: { ...bounds },
+      ...wholeDesign ? { wholeDesign } : {} }] })
     return `area:${number}`
   }
   function addWholeDesign(): string | undefined {
     const plan = state.peek().result?.plan
-    return plan?.pickerPage ? addPrintArea(areaFromFrame(pageFrame(plan.angleDeg), plan.pickerPage.ground)) : undefined
+    return plan?.pickerPage ? addArea(areaFromFrame(pageFrame(plan.angleDeg), plan.pickerPage.ground), true) : undefined
   }
   function previewSplit(id: string): void {
     const plan = state.peek().result?.plan, page = plan?.pages.find(p => p.id === id && p.kind === 'detail')

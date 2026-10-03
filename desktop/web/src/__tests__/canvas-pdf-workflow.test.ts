@@ -30,7 +30,7 @@ function fixture(plants: PrintPlant[] = [], view: Pick<PdfInput, 'viewBearingDeg
     settleView: (deg: number) => { bearing = deg; turning = false; settles++; workflow.synchronize(identity) }, replace: () => { current = false; workflow.synchronize({}) } }
 }
 describe('PDF workflow lifetime', () => {
-  it('As on screen stores Whole Design and split sheets in plan metres and looks names up in the turned area', async () => {
+  it('As on screen stores Whole Design and split sheets in plan metres and looks split names up in the turned sheets', async () => {
     const frame = pageFrame(30), plant = (id: string, canonicalName: string, x: number, y: number): PrintPlant =>
       ({ id, canonicalName, position: { x, y }, color: '#123456', symbol: 'round', mark: [], pinnedName: false })
     const along = frame.fromFrame({ x: 9, y: 0 })
@@ -55,10 +55,14 @@ describe('PDF workflow lifetime', () => {
       const stored = workflow.setup.value.areas![0]!.bounds
       expect(stored).toEqual(areaFromFrame(frame, picker))
       expect(stored.x).not.toBeCloseTo(picker.x, 3)
-      expect(resolveDisplayNames.mock.lastCall![0]).toEqual(['Malus domestica'])
+      // Whole design refits to the design at every build, so it looks up every plant.
+      expect(workflow.setup.value.areas![0]!.wholeDesign).toBe(true)
+      expect(resolveDisplayNames.mock.lastCall![0]).toEqual(['Malus domestica', 'Prunus avium'])
       workflow.previewSplit(id); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
       const parts = workflow.splitPreview.value!.areas!.map(({ bounds, pivot }) => ({ bounds, pivot }))
       expect(parts).toEqual(splitPrintArea(picker, plants, frame))
+      expect(workflow.splitPreview.value!.areas!.some(area => area.wholeDesign)).toBe(false)
+      expect(resolveDisplayNames.mock.lastCall![0]).toEqual(['Malus domestica'])
       expect(parts.length).toBeGreaterThan(1)
       for (const p of plants.filter(p => areaContains(frame, stored, p.position))) expect(parts.some(part => areaContains(frame, part.bounds, p.position, part.pivot))).toBe(true)
       // A split sheet split again keeps the first split's pivot, so every sheet still tiles after a switch.
