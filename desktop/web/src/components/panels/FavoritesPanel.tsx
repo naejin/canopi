@@ -779,9 +779,14 @@ function SavedObjectStampRow({
   const [isRenaming, setIsRenaming] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const renameInputRef = useRef<HTMLInputElement>(null)
+  const actionsRef = useRef<HTMLDivElement>(null)
+  const cancelDeleteRef = useRef<HTMLButtonElement>(null)
+  // Set when the user opens or cancels the Delete confirmation, whose buttons replace the one that had focus.
+  const deleteConfirmToggledRef = useRef(false)
   // Canopi 2.0 cannot place, drag, export or convert a stamp saved before 2.0 (ADR 0021): it offers only Delete.
   const before2_0 = useMemo(() => isSavedObjectStampPayloadFromBefore2_0(stamp.payload_json), [stamp.payload_json])
   const summaryId = useId()
+  const deleteCopyId = useId()
 
   useEffect(() => {
     setDraftName(stamp.name)
@@ -794,6 +799,25 @@ function SavedObjectStampRow({
     input.focus()
     input.setSelectionRange(0, input.value.length)
   }, [isRenaming])
+
+  // The confirmation's buttons replace the control that opened it, and back on Cancel: move focus with
+  // them so a keyboard user stays on the row. Cancel is the safe choice and reads the question.
+  useEffect(() => {
+    if (!deleteConfirmToggledRef.current) return
+    deleteConfirmToggledRef.current = false
+    if (confirmingDelete) {
+      cancelDeleteRef.current?.focus()
+      return
+    }
+    // The row's last action opened it: Delete on a stamp saved before 2.0, otherwise the actions menu.
+    const actions = actionsRef.current?.querySelectorAll<HTMLButtonElement>('button')
+    actions?.[actions.length - 1]?.focus()
+  }, [confirmingDelete])
+
+  function setDeleteConfirmation(next: boolean): void {
+    deleteConfirmToggledRef.current = true
+    setConfirmingDelete(next)
+  }
 
   function commitRename(): void {
     const next = (renameInputRef.current?.value ?? draftName).trim()
@@ -873,7 +897,7 @@ function SavedObjectStampRow({
         onBlur={onPreviewClear}
       >
         {confirmingDelete ? (
-          <span className={styles.savedStampDeleteCopy}>{t('savedObjectStamps.deleteConfirmCopy')}</span>
+          <span id={deleteCopyId} className={styles.savedStampDeleteCopy}>{t('savedObjectStamps.deleteConfirmCopy')}</span>
         ) : isRenaming ? (
           <input
             ref={renameInputRef}
@@ -910,22 +934,25 @@ function SavedObjectStampRow({
           ? <span id={summaryId} className={`${styles.savedStampSummary} ${styles.savedStampSummaryBefore2_0}`}>{t('savedObjectStamps.summaryBefore2_0')}</span>
           : <span className={styles.savedStampSummary}>{savedStampSummary(stamp)}</span>)}
       </div>
-      <div className={styles.savedStampActions}>
+      <div ref={actionsRef} className={styles.savedStampActions}>
         {confirmingDelete ? (
           <>
             <button
               type="button"
               className={styles.savedStampDangerButton}
               aria-label={t('savedObjectStamps.confirmDelete')}
+              aria-describedby={deleteCopyId}
               onClick={() => void savedObjectStampWorkbench.deleteStamp(stamp.id)}
             >
               {t('savedObjectStamps.confirmDelete')}
             </button>
             <button
+              ref={cancelDeleteRef}
               type="button"
               className={styles.savedStampSecondaryButton}
               aria-label={t('savedObjectStamps.cancelDelete')}
-              onClick={() => setConfirmingDelete(false)}
+              aria-describedby={deleteCopyId}
+              onClick={() => setDeleteConfirmation(false)}
             >
               {t('savedObjectStamps.cancelDelete')}
             </button>
@@ -936,7 +963,7 @@ function SavedObjectStampRow({
             className={styles.savedStampSecondaryButton}
             aria-label={t('savedObjectStamps.deleteNamed', { name: stamp.name })}
             aria-describedby={summaryId}
-            onClick={() => setConfirmingDelete(true)}
+            onClick={() => setDeleteConfirmation(true)}
           >
             {t('savedObjectStamps.delete')}
           </button>
@@ -971,7 +998,7 @@ function SavedObjectStampRow({
             <ActionMenu label={t('savedObjectStamps.actionsFor', { name: stamp.name })} items={[
               { label: t('savedObjectStamps.export'), run: () => { void savedObjectStampWorkbench.exportStamp(stamp) } },
               { label: t('savedObjectStamps.rename'), run: () => { setConfirmingDelete(false); setDraftName(stamp.name); setIsRenaming(true) } },
-              { label: t('savedObjectStamps.delete'), danger: true, run: () => { setIsRenaming(false); setConfirmingDelete(true) } },
+              { label: t('savedObjectStamps.delete'), danger: true, run: () => { setIsRenaming(false); setDeleteConfirmation(true) } },
             ]} />
           </>
         )}

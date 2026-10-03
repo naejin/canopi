@@ -646,6 +646,67 @@ describe('FavoritesPanel', () => {
     expect(exportStampMock).not.toHaveBeenCalled()
   })
 
+  it('keeps keyboard focus in the row through Delete and Cancel on a stamp saved before 2.0', async () => {
+    const current = stampLibrary.value.items[0]!
+    stampLibrary.value = {
+      ...stampLibrary.value,
+      items: [{
+        ...current,
+        id: 'stamp-old',
+        name: 'Old guild',
+        payload_json: JSON.stringify({ ...JSON.parse(current.payload_json), version: 1 }),
+      }],
+    }
+    await act(async () => {
+      render(<FavoritesPanel />, container)
+      await flushEffects()
+    })
+
+    const row = container.querySelector<HTMLElement>('[data-saved-stamp-row="stamp-old"]')!
+    const deleteButton = row.querySelector<HTMLButtonElement>('button[aria-label="Delete stamp Old guild"]')!
+    await act(async () => {
+      deleteButton.focus()
+      deleteButton.click()
+      await flushEffects()
+    })
+    // Focus moves to the safe choice, which reads the question as its description.
+    const cancelButton = row.querySelector<HTMLButtonElement>('button[aria-label="Cancel delete"]')!
+    expect(document.activeElement).toBe(cancelButton)
+    const describedBy = cancelButton.getAttribute('aria-describedby')
+    expect(describedBy).toBeTruthy()
+    expect(document.getElementById(describedBy!)?.textContent).toBe('Delete this saved stamp?')
+    expect(row.querySelector('button[aria-label="Confirm delete"]')?.getAttribute('aria-describedby')).toBe(describedBy)
+
+    await act(async () => {
+      cancelButton.click()
+      await flushEffects()
+    })
+    // Focus returns to the row's Delete button.
+    expect(document.activeElement).toBe(row.querySelector('button[aria-label="Delete stamp Old guild"]'))
+    expect(document.activeElement).not.toBe(document.body)
+  })
+
+  it('keeps keyboard focus in the row through Delete and Cancel from the row actions menu', async () => {
+    await act(async () => {
+      render(<FavoritesPanel />, container)
+      await flushEffects()
+    })
+
+    await openStampActions()
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('button[aria-label="Delete"]')!.click()
+      await flushEffects()
+    })
+    const cancelButton = container.querySelector<HTMLButtonElement>('button[aria-label="Cancel delete"]')!
+    expect(document.activeElement).toBe(cancelButton)
+
+    await act(async () => {
+      cancelButton.click()
+      await flushEffects()
+    })
+    expect(document.activeElement?.getAttribute('aria-label')).toMatch(/^More actions for /)
+  })
+
   it('cancels Saved Stamp rename drafts on Escape without saving', async () => {
     await act(async () => {
       render(<FavoritesPanel />, container)
