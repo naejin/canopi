@@ -136,8 +136,12 @@ export class VectorBasemap {
     }
     const installed = this.installed
     if (installed && installed.style === presentation.style && this.layersPresent(installed)) {
+      // The style on screen is the one asked for: a load still running for
+      // another style is stale, and an earlier failure no longer applies.
+      this.generation += 1
       if (installed.opacity !== presentation.opacity) this.applyOpacity(installed, presentation.opacity)
       if (installed.locale !== presentation.locale) this.applyLocale(installed, presentation.locale)
+      this.setStatus('ok')
       return
     }
     const generation = ++this.generation

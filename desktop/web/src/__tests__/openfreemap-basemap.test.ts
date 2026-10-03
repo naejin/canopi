@@ -188,6 +188,52 @@ describe('OpenFreeMap vector basemap', () => {
     expect(statuses).toEqual(['failed', 'ok', 'idle'])
   })
 
+  it('clears a failed style once the user returns to the style still on screen', async () => {
+    const map = new FakeMap()
+    const statuses: string[] = []
+    let reject = false
+    const basemap = new VectorBasemap(map, {
+      loadStyle: async (url) => {
+        if (reject) throw new Error('Basemap style request failed (503).')
+        return styleDocument(url.split('/').pop()!)
+      },
+      onStatus: (status) => statuses.push(status),
+    })
+    const liberty = { style: 'liberty', visible: true, opacity: 1, locale: 'en' } as const
+    basemap.update(liberty)
+    await settle()
+    reject = true
+    basemap.update({ ...liberty, style: 'dark' })
+    await settle()
+    expect(statuses).toEqual(['ok', 'failed'])
+
+    basemap.update(liberty)
+    await settle()
+    expect(basemap.installedStyle).toBe('liberty')
+    expect(statuses).toEqual(['ok', 'failed', 'ok'])
+  })
+
+  it('ignores a style that fails after the user returned to the style on screen', async () => {
+    const map = new FakeMap()
+    const statuses: string[] = []
+    let rejectDark!: () => void
+    const basemap = new VectorBasemap(map, {
+      loadStyle: (url) => url.endsWith('dark')
+        ? new Promise((_, reject) => { rejectDark = () => reject(new Error('Basemap style request failed (503).')) })
+        : Promise.resolve(styleDocument('liberty')),
+      onStatus: (status) => statuses.push(status),
+    })
+    const liberty = { style: 'liberty', visible: true, opacity: 1, locale: 'en' } as const
+    basemap.update(liberty)
+    await settle()
+    basemap.update({ ...liberty, style: 'dark' })
+    basemap.update(liberty)
+    rejectDark()
+    await settle()
+    expect(basemap.installedStyle).toBe('liberty')
+    expect(statuses).toEqual(['ok'])
+  })
+
   it('scales legacy stop functions and wraps other expressions', () => {
     expect(scaleOpacity({ stops: [[4, 0.4], [10, 1]] }, 0.5)).toEqual({ stops: [[4, 0.2], [10, 0.5]] })
     expect(scaleOpacity(['get', 'o'], 0.5)).toEqual(['*', ['get', 'o'], 0.5])
