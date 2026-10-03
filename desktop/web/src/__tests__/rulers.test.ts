@@ -109,6 +109,32 @@ describe('RulerOverlay', () => {
     expect(onGuideCreate).toHaveBeenCalledTimes(2)
   })
 
+  it('rulers hide when rotated and return at north', () => {
+    const host = document.createElement('div')
+    const onGuideCreate = vi.fn()
+    const overlay = createRulerOverlay(host, { onGuideCreate })
+    const display = () => (['horizontal', 'vertical', 'corner'] as const).map((part) => findPart(host, part).style.display)
+    const north = cameraFrame({ y: 20, scale: 4 })
+    const turned = testViewFrame({ screen: { width: 424, height: 324 }, camera: { bearingDeg: 30 } })
+
+    overlay.update({ frame: north, chromeVisible: true, rulersVisible: true })
+    expect(display()).toEqual(['block', 'block', 'block'])
+    const press = pressRuler(findPart(host, 'horizontal'))
+
+    // Turned, the rulers hide and no guide can be pulled, not even by a press made at north.
+    overlay.update({ frame: turned, chromeVisible: true, rulersVisible: true })
+    expect(display()).toEqual(['none', 'none', 'none'])
+    overlay.createGuideAt('h', { x: 80, y: 100 })
+    press?.createGuideAt('h', { x: 80, y: 100 })
+    expect(onGuideCreate).not.toHaveBeenCalled()
+
+    overlay.update({ frame: north, chromeVisible: true, rulersVisible: true })
+    expect(display()).toEqual(['block', 'block', 'block'])
+    overlay.createGuideAt('h', { x: 80, y: 100 })
+    expect(onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 20)
+    overlay.destroy()
+  })
+
   it('refuses a guide in overview', () => {
     const host = document.createElement('div')
     const onGuideCreate = vi.fn()

@@ -415,13 +415,16 @@ export class SceneCanvasRuntime {
     const container = this._rendering.container
     if (!container) return
     const chromeSettings = this._appAdapter.settings.readChromeOverlay()
-    this._chrome.update({
+    const editingAids = this._chrome.update({
       frame: this._construction.frames.viewFrame.peek(),
       rulersVisible: chromeSettings.rulersVisible,
       gridVisible: chromeSettings.gridVisible,
       guidesVisible: chromeSettings.guidesVisible,
       guides: this._sceneState.guides,
     })
+    // The grid and ruler guides are scene content (spec §1.5): a change syncs the scene, since 'chrome' never does.
+    // Every chrome render passes here (settings, a new guide, an undo, showing or hiding the chrome); a frame changes nothing.
+    if (this._presentation.setEditingAids(editingAids)) this._invalidate('scene')
   }
 
   private _addGuide(axis: 'h' | 'v', position: number): void {

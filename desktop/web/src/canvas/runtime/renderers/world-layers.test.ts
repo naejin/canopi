@@ -1,9 +1,14 @@
 // Production CSP rejects Pixi's generated functions; its shim avoids eval.
 import 'pixi.js/unsafe-eval'
-import { Graphics } from 'pixi.js'
+import { Graphics, type Container, type GraphicsContext } from 'pixi.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createTestRendererView, createTestSceneRendererSnapshot } from '../../../__tests__/support/scene-renderer-snapshot'
+import { gridInterval } from '../../grid'
+import { getMapBackdropInk } from '../scene-visuals'
+import { snapWorldPoint } from '../tools/snapping'
+import type { ViewTransform, WorldPoint } from '../view/types'
+import type { SceneEditingAids } from './scene-types'
 import { createWorldLayers } from './world-layers'
 
 afterEach(() => {
@@ -16,6 +21,54 @@ function bedAndGuide() {
       points: [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 2 }, { x: 0, y: 2 }] }],
     measurementGuides: [{ kind: 'measurement-guide', id: 'guide', locked: false, start: { x: 0, y: 0 }, end: { x: 2, y: 0 } }],
   } })
+}
+
+function withAids(aids: SceneEditingAids, snapshot = createTestSceneRendererSnapshot()) {
+  return { ...snapshot, editingAids: aids }
+}
+
+function gridAid(): SceneEditingAids['grid'] {
+  const ink = getMapBackdropInk()
+  return { ink: ink.grid, majorInk: ink.gridMajor }
+}
+
+function aid(layers: ReturnType<typeof createWorldLayers>, label: 'grid' | 'ruler-guides'): Graphics {
+  const graphics = layers.root.getChildByLabel(label, true)
+  if (!(graphics instanceof Graphics)) throw new Error(`no ${label} graphics`)
+  return graphics
+}
+
+type PathStep = { readonly action: string; readonly data: readonly number[] }
+
+/** Each stroke's straight segments in world metres, in drawing order. */
+function strokedSegments(graphics: Graphics): Array<Array<readonly [WorldPoint, WorldPoint]>> {
+  return graphics.context.instructions
+    .filter((instruction: GraphicsContext['instructions'][number]) => instruction.action === 'stroke')
+    .map((instruction) => {
+      const steps = (instruction.data as unknown as { path: { instructions: PathStep[] } }).path.instructions
+      const segments: Array<readonly [WorldPoint, WorldPoint]> = []
+      let from: WorldPoint | null = null
+      for (const step of steps) {
+        const to = { x: step.data[0]!, y: step.data[1]! }
+        if (step.action === 'lineTo' && from) segments.push([from, to])
+        from = to
+      }
+      return segments
+    })
+}
+
+/** A world point on screen through the root's transform, as the GPU draws it. */
+function onScreen(root: Container, point: WorldPoint): WorldPoint {
+  root.updateLocalTransform()
+  const { a, b, c, d, tx, ty } = root.localTransform
+  return { x: a * point.x + c * point.y + tx, y: b * point.x + d * point.y + ty }
+}
+
+function visibleBox(view: ViewTransform) {
+  const quad = view.visibleWorldQuad()
+  const xs = quad.map((point) => point.x)
+  const ys = quad.map((point) => point.y)
+  return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) }
 }
 
 describe('world layers', () => {
@@ -48,5 +101,122 @@ describe('world layers', () => {
     expect(layers.root.children.flatMap((layer) => layer.children)).toEqual([])
     layers.setView(createTestRendererView({ x: 0, y: 0, scale: 30 }))
     expect(layers.root.children.flatMap((layer) => layer.children)).toHaveLength(2)
+  })
+
+  it('a guide lands at worldToScreen', () => {
+    // INV-REN-14: the old Canvas2D drew guides in map coordinates inside the inset ruler overlay, off the ruler ticks.
+    const layers = createWorldLayers()
+    const view = createTestRendererView({ x: 12, y: 34, scale: 8 })
+    layers.syncScene(withAids({ grid: null, rulerGuides: [{ axis: 'v', position: 10 }, { axis: 'h', position: 5 }] }))
+    layers.setView(view)
+
+    const [casing, line] = strokedSegments(aid(layers, 'ruler-guides'))
+    expect(line).toEqual(casing)
+    const vertical = line!.filter(([start, end]) => start.x === end.x)
+    const horizontal = line!.filter(([start, end]) => start.y === end.y)
+    expect(vertical.length).toBeGreaterThan(0)
+    expect(horizontal.length).toBeGreaterThan(0)
+    for (const [start, end] of vertical) {
+      expect(onScreen(layers.root, start).x).toBeCloseTo(view.worldToScreen({ x: 10, y: 0 }).x, 6)
+      expect(onScreen(layers.root, end).x).toBeCloseTo(view.worldToScreen({ x: 10, y: 0 }).x, 6)
+    }
+    for (const [start] of horizontal) {
+      expect(onScreen(layers.root, start).y).toBeCloseTo(view.worldToScreen({ x: 0, y: 5 }).y, 6)
+    }
+    // The dashes run the whole height and width of the screen, flush to its edges.
+    const ys = vertical.flatMap(([start, end]) => [onScreen(layers.root, start).y, onScreen(layers.root, end).y])
+    expect(Math.min(...ys)).toBeLessThanOrEqual(0)
+    expect(Math.max(...ys)).toBeGreaterThanOrEqual(view.screen.height)
+    const xs = horizontal.flatMap(([start, end]) => [onScreen(layers.root, start).x, onScreen(layers.root, end).x])
+    expect(Math.min(...xs)).toBeLessThanOrEqual(0)
+    expect(Math.max(...xs)).toBeGreaterThanOrEqual(view.screen.width)
+  })
+
+  it('the grid lines are the snap lattice', () => {
+    const layers = createWorldLayers()
+    const view = createTestRendererView({ x: 12, y: 34, scale: 8 })
+    layers.syncScene(withAids({ grid: gridAid(), rulerGuides: [] }))
+    layers.setView(view)
+
+    const interval = gridInterval(view.pixelsPerMetre).interval
+    const [minor] = strokedSegments(aid(layers, 'grid'))
+    const columns = minor!.filter(([start, end]) => start.x === end.x).map(([start]) => start.x)
+    const rows = minor!.filter(([start, end]) => start.y === end.y).map(([start]) => start.y)
+    for (const x of columns) expect(x / interval).toBeCloseTo(Math.round(x / interval), 9)
+    for (const y of rows) expect(y / interval).toBeCloseTo(Math.round(y / interval), 9)
+
+    // A point snapped to the grid lands on a drawn line, where the screen shows it.
+    for (const pointer of [{ x: 37, y: 61 }, { x: 250.4, y: 190.2 }, { x: 399, y: 1 }]) {
+      const snapped = snapWorldPoint(view.screenToWorld(pointer), { grid: true, guides: false }, view.pixelsPerMetre, [])
+      const column = columns.find((x) => Math.abs(x - snapped.x) < 1e-9)
+      const row = rows.find((y) => Math.abs(y - snapped.y) < 1e-9)
+      expect(column, `column for ${pointer.x}`).toBeDefined()
+      expect(row, `row for ${pointer.y}`).toBeDefined()
+      expect(onScreen(layers.root, snapped).x).toBeCloseTo(view.worldToScreen(snapped).x, 6)
+      expect(onScreen(layers.root, snapped).y).toBeCloseTo(view.worldToScreen(snapped).y, 6)
+    }
+  })
+
+  it('the grid turns with the world root', () => {
+    const layers = createWorldLayers()
+    const view = createTestRendererView({ x: 120, y: 80, scale: 8 }, { bearingDeg: 30 })
+    layers.syncScene(withAids({ grid: gridAid(), rulerGuides: [{ axis: 'v', position: 10 }] }))
+    layers.setView(view)
+
+    // One affine for the zones and the grid: lines on world axes, turned on screen by the view.
+    layers.root.updateLocalTransform()
+    const { a, b, c, d, tx, ty } = layers.root.localTransform
+    ;[a, b, c, d, tx, ty].forEach((value, index) => expect(value).toBeCloseTo(view.planar.affine[index]!, 6))
+    const [minor] = strokedSegments(aid(layers, 'grid'))
+    expect(minor!.every(([start, end]) => start.x === end.x || start.y === end.y)).toBe(true)
+    // The traced lattice covers the turned screen's corners.
+    const box = visibleBox(view)
+    const xs = minor!.flatMap(([start, end]) => [start.x, end.x])
+    const ys = minor!.flatMap(([start, end]) => [start.y, end.y])
+    expect(Math.min(...xs)).toBeLessThanOrEqual(box.minX)
+    expect(Math.max(...xs)).toBeGreaterThanOrEqual(box.maxX)
+    expect(Math.min(...ys)).toBeLessThanOrEqual(box.minY)
+    expect(Math.max(...ys)).toBeGreaterThanOrEqual(box.maxY)
+  })
+
+  it('a pan inside the margin traces nothing; leaving it retraces only the grid and guides', () => {
+    const layers = createWorldLayers()
+    layers.syncScene(withAids({ grid: gridAid(), rulerGuides: [{ axis: 'v', position: 10 }] }, bedAndGuide()))
+    layers.setView(createTestRendererView({ x: 0, y: 0, scale: 30 }))
+    const clear = vi.spyOn(Graphics.prototype, 'clear')
+
+    // A 40 px pan stays inside the traced margin.
+    layers.setView(createTestRendererView({ x: 40, y: -40, scale: 30 }))
+    expect(clear).not.toHaveBeenCalled()
+
+    // A screen-wide pan leaves it: the grid and the guides retrace, the zones keep their geometry.
+    layers.setView(createTestRendererView({ x: -1200, y: 900, scale: 30 }))
+    expect(clear.mock.contexts).toHaveLength(2)
+    expect(new Set(clear.mock.contexts)).toEqual(new Set([aid(layers, 'grid'), aid(layers, 'ruler-guides')]))
+
+    // A scene sync with the same aids traces nothing either.
+    clear.mockClear()
+    layers.syncScene(withAids({ grid: gridAid(), rulerGuides: [{ axis: 'v', position: 10 }] }, bedAndGuide()))
+    expect(clear).not.toHaveBeenCalled()
+  })
+
+  it('draws no grid or guides without editing aids, as in a thumbnail', () => {
+    const layers = createWorldLayers()
+    layers.syncScene(withAids({ grid: gridAid(), rulerGuides: [{ axis: 'v', position: 10 }] }))
+    layers.setView(createTestRendererView({ x: 0, y: 0, scale: 30 }))
+    expect(strokedSegments(aid(layers, 'grid'))).not.toEqual([])
+
+    layers.syncScene(createTestSceneRendererSnapshot())
+    expect(layers.root.getChildByLabel('grid', true)).toBeNull()
+    expect(layers.root.getChildByLabel('ruler-guides', true)).toBeNull()
+  })
+
+  it('draws the grid and guides under the zones', () => {
+    const layers = createWorldLayers()
+    layers.syncScene(withAids({ grid: gridAid(), rulerGuides: [{ axis: 'v', position: 10 }] }, bedAndGuide()))
+    layers.setView(createTestRendererView({ x: 0, y: 0, scale: 30 }))
+    const aidsLayer = aid(layers, 'grid').parent!
+    expect(layers.root.children[0]).toBe(aidsLayer)
+    expect(aidsLayer.children).toEqual([aid(layers, 'grid'), aid(layers, 'ruler-guides')])
   })
 })

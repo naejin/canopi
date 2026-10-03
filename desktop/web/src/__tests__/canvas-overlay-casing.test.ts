@@ -1,14 +1,13 @@
+// Production CSP rejects Pixi's generated functions; its shim avoids eval.
+import 'pixi.js/unsafe-eval'
+import type { Graphics } from 'pixi.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { getCanvasColor } from '../canvas/theme-refresh'
-import type { ViewFrame } from '../canvas/runtime/view/types'
-import { testViewFrame } from './support/test-view'
-import { SceneChromeOverlay } from '../canvas/runtime/scene-chrome'
+import { createWorldLayers } from '../canvas/runtime/renderers/world-layers'
+import { toPixiColor } from '../canvas/runtime/renderers/scene-paint'
 import { getCanvasInteractionStrokeVisual, resolveZoneVisual } from '../canvas/runtime/scene-visuals'
-
-function cameraFrame(): ViewFrame {
-  return testViewFrame({ screen: { width: 320, height: 240 }, viewport: { x: 0, y: 0, scale: 8 } })
-}
+import { createTestRendererView, createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
 
 describe('overlay stroke casing', () => {
   afterEach(() => {
@@ -33,34 +32,18 @@ describe('overlay stroke casing', () => {
   })
 
   it('strokes ruler guides over a wider dark casing', () => {
-    vi.stubGlobal('devicePixelRatio', 1)
-    const strokes: Array<{ strokeStyle: string; lineWidth: number }> = []
-    const context = {
-      setTransform: vi.fn(), clearRect: vi.fn(), fillRect: vi.fn(), beginPath: vi.fn(), moveTo: vi.fn(),
-      lineTo: vi.fn(), fillText: vi.fn(), translate: vi.fn(), rotate: vi.fn(), save: vi.fn(), restore: vi.fn(),
-      setLineDash: vi.fn(), fillStyle: '', strokeStyle: '', lineWidth: 0, font: '',
-      stroke: vi.fn(() => { strokes.push({ strokeStyle: context.strokeStyle, lineWidth: context.lineWidth }) }),
-    }
-    const rulerContext = { ...context, stroke: vi.fn() }
-    let gridCanvas: HTMLCanvasElement | null = null
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function (this: HTMLCanvasElement) {
-      return (this === gridCanvas ? context : rulerContext) as never
-    })
-    const container = document.createElement('div')
-    const overlay = new SceneChromeOverlay(container, vi.fn())
-    gridCanvas = container.querySelector<HTMLCanvasElement>('[data-scene-chrome-part="grid"]')
-    overlay.update({
-      frame: cameraFrame(),
-      chromeVisible: true,
-      rulersVisible: false,
-      gridVisible: false,
-      guides: [{ id: 'guide-v', axis: 'v', position: 10 }],
-    })
+    const layers = createWorldLayers()
+    layers.syncScene({ ...createTestSceneRendererSnapshot(), editingAids: { grid: null, rulerGuides: [{ axis: 'v', position: 10 }] } })
+    layers.setView(createTestRendererView({ x: 0, y: 0, scale: 8 }))
+    const guides = layers.root.getChildByLabel('ruler-guides', true) as Graphics
+    const strokes = guides.context.instructions
+      .filter((instruction) => instruction.action === 'stroke')
+      .map((instruction) => instruction.data.style as unknown as { color: number; width: number })
 
+    // CSS px widths in world metres at 8 px/m.
     expect(strokes).toEqual([
-      { strokeStyle: getCanvasColor('overlay-casing'), lineWidth: 3 },
-      { strokeStyle: getCanvasColor('guide-line'), lineWidth: 1 },
+      expect.objectContaining({ color: toPixiColor(getCanvasColor('overlay-casing'), 0), width: expect.closeTo(3 / 8, 6) }),
+      expect.objectContaining({ color: toPixiColor(getCanvasColor('guide-line'), 0), width: expect.closeTo(1 / 8, 6) }),
     ])
-    overlay.destroy()
   })
 })

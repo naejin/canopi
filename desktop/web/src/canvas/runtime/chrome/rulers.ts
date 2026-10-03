@@ -1,13 +1,11 @@
 import type { ScreenPoint, ViewFrame } from '../view/types'
-import { planarCameraOf } from '../view/view-transform'
 import { NICE_DISTANCES } from '../../grid'
 import { scaleReaches } from '../../projection'
 import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 import { getCanvasColor } from '../../theme-refresh'
 
 /** Ruler band thickness in CSS px. */
-export const CANVAS_RULER_SIZE_PX = 24
-const RULER_SIZE = CANVAS_RULER_SIZE_PX
+const RULER_SIZE = 24
 /** Tick labels keep the 12 px type floor; they are digits and units, never CJK text. */
 const CANVAS_RULER_LABEL_FONT_SIZE_PX = 12
 /** Clear space between neighbouring tick labels; a label that would come closer is left out. */
@@ -122,8 +120,9 @@ class HtmlRulerOverlay implements RulerOverlay {
     if (this._destroyed) return
     this._snapshot = snapshot
 
-    const siteMode = snapshot.frame.mode === 'site'
-    const shown = snapshot.chromeVisible && snapshot.rulersVisible && siteMode
+    // The rulers measure world axes along the screen's edges, so they show only while north is up (spec §4.6).
+    const { mode, view } = snapshot.frame
+    const shown = snapshot.chromeVisible && snapshot.rulersVisible && mode === 'site' && view.northUp
     const rulerDisplay = shown ? 'block' : 'none'
     this._horizontalCanvas.style.display = rulerDisplay
     this._verticalCanvas.style.display = rulerDisplay
@@ -136,7 +135,7 @@ class HtmlRulerOverlay implements RulerOverlay {
     this._shown = shown
     if (!snapshot.chromeVisible) return
 
-    if (siteMode) {
+    if (mode === 'site' && view.northUp) {
       const origin = this._overlayOrigin()
       drawHorizontalRuler(this._horizontalCanvas, snapshot.frame, this._palette, origin)
       drawVerticalRuler(this._verticalCanvas, snapshot.frame, this._palette, origin)
@@ -149,23 +148,20 @@ class HtmlRulerOverlay implements RulerOverlay {
   }
 
   /**
-   * A guide released at `at`, in CSS px of the camera's screen (the map host): nothing while the rulers are hidden or in
-   * overview, or inside the ruler's own gutter; otherwise a guide at that world coordinate of the latest camera.
+   * A guide released at `at`, in CSS px of the camera's screen (the map host): nothing while the rulers are hidden (off,
+   * in overview or turned from north), or inside the ruler's own gutter; otherwise a guide at that world coordinate of
+   * the latest camera.
    */
   createGuideAt(axis: RulerAxis, at: ScreenPoint): void {
     if (this._destroyed) return
     const snapshot = this._snapshot
-    if (!snapshot || !snapshot.chromeVisible || !snapshot.rulersVisible || snapshot.frame.mode !== 'site') return
+    if (!snapshot || !this._shown) return
     const origin = this._overlayOrigin()
-    const screenX = at.x
-    const screenY = at.y
-    if (axis === 'h' && screenY <= origin.y + RULER_SIZE) return
-    if (axis === 'v' && screenX <= origin.x + RULER_SIZE) return
+    if (axis === 'h' && at.y <= origin.y + RULER_SIZE) return
+    if (axis === 'v' && at.x <= origin.x + RULER_SIZE) return
 
-    const viewport = planarCameraOf(snapshot.frame.view)
-    const screenPosition = axis === 'h' ? screenY : screenX
-    const viewportOffset = axis === 'h' ? viewport.y : viewport.x
-    this._options.onGuideCreate(axis, (screenPosition - viewportOffset) / viewport.scale)
+    const ground = snapshot.frame.view.screenToWorld(at)
+    this._options.onGuideCreate(axis, axis === 'h' ? ground.y : ground.x)
   }
 
   /** Today's drag start: the previous drag ends, and this one remembers the cursor to give back. */
@@ -303,8 +299,7 @@ function drawHorizontalRuler(
   if (!context) return
   context.setTransform(dpr, 0, 0, dpr, 0, 0)
 
-  const viewport = planarCameraOf(frame.view)
-  const scale = viewport.scale
+  const view = frame.view
   context.fillStyle = palette.background
   context.fillRect(0, 0, cssWidth, cssHeight)
   context.strokeStyle = palette.border
@@ -314,10 +309,10 @@ function drawHorizontalRuler(
   context.lineTo(cssWidth, cssHeight - 0.5)
   context.stroke()
 
-  const { tickInterval, labelInterval } = calcTickIntervals(scale)
+  const { tickInterval, labelInterval } = calcTickIntervals(view.pixelsPerMetre)
   const screenOffsetX = origin.x + RULER_SIZE
-  const worldLeft = (screenOffsetX - viewport.x) / scale
-  const worldRight = (screenOffsetX + cssWidth - viewport.x) / scale
+  const worldLeft = view.screenToWorld({ x: screenOffsetX, y: 0 }).x
+  const worldRight = view.screenToWorld({ x: screenOffsetX + cssWidth, y: 0 }).x
   const startWorld = Math.floor(worldLeft / tickInterval) * tickInterval
   const labels = new RulerLabelSpacing()
 
@@ -329,7 +324,7 @@ function drawHorizontalRuler(
   context.lineWidth = 1
 
   for (let world = startWorld; world <= worldRight; world += tickInterval) {
-    const canvasX = viewport.x + world * scale - screenOffsetX
+    const canvasX = view.worldToScreen({ x: world, y: 0 }).x - screenOffsetX
     if (canvasX < 0 || canvasX > cssWidth) continue
 
     const isMajor = Math.abs(Math.round(world / labelInterval) * labelInterval - world) < 1e-9
@@ -365,8 +360,7 @@ function drawVerticalRuler(
   if (!context) return
   context.setTransform(dpr, 0, 0, dpr, 0, 0)
 
-  const viewport = planarCameraOf(frame.view)
-  const scale = viewport.scale
+  const view = frame.view
   context.fillStyle = palette.background
   context.fillRect(0, 0, cssWidth, cssHeight)
   context.strokeStyle = palette.border
@@ -376,10 +370,10 @@ function drawVerticalRuler(
   context.lineTo(cssWidth - 0.5, cssHeight)
   context.stroke()
 
-  const { tickInterval, labelInterval } = calcTickIntervals(scale)
+  const { tickInterval, labelInterval } = calcTickIntervals(view.pixelsPerMetre)
   const screenOffsetY = origin.y + RULER_SIZE
-  const worldTop = (screenOffsetY - viewport.y) / scale
-  const worldBottom = (screenOffsetY + cssHeight - viewport.y) / scale
+  const worldTop = view.screenToWorld({ x: 0, y: screenOffsetY }).y
+  const worldBottom = view.screenToWorld({ x: 0, y: screenOffsetY + cssHeight }).y
   const startWorld = Math.floor(worldTop / tickInterval) * tickInterval
   const labels = new RulerLabelSpacing()
 
@@ -389,7 +383,7 @@ function drawVerticalRuler(
   context.lineWidth = 1
 
   for (let world = startWorld; world <= worldBottom; world += tickInterval) {
-    const canvasY = viewport.y + world * scale - screenOffsetY
+    const canvasY = view.worldToScreen({ x: 0, y: world }).y - screenOffsetY
     if (canvasY < 0 || canvasY > cssHeight) continue
 
     const isMajor = Math.abs(Math.round(world / labelInterval) * labelInterval - world) < 1e-9

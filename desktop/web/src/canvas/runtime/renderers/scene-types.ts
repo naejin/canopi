@@ -17,6 +17,17 @@ export type SceneRendererHoverTarget =
   | { kind: 'measurement-guide'; id: string; state: SceneRendererHoverState }
   | { kind: 'group'; id: string; state: SceneRendererHoverState }
 
+/**
+ * The workspace map's editing aids (spec §1.5): the grid, null when off, and the ruler guides, drawn in the world root
+ * under every billboard. The grid's interval follows the scale through `canvas/grid.ts`'s `gridInterval`, the lattice
+ * snapping uses; its ink follows the map backdrop.
+ */
+export interface SceneEditingAids {
+  readonly grid: { readonly ink: string; readonly majorInk: string } | null
+  /** World east-west lines at y = `position` (`h`) and north-south ones at x = `position` (`v`). */
+  readonly rulerGuides: readonly { readonly axis: 'h' | 'v'; readonly position: number }[]
+}
+
 export interface SceneRendererSnapshot {
   readonly speciesFocus: SpeciesFocus
   readonly scene: ScenePersistedState
@@ -34,6 +45,8 @@ export interface SceneRendererSnapshot {
   readonly hoverTarget: SceneRendererHoverTarget | null
   /** Labels a saved view's snapshot draws; absent, the workspace's plant display decides. */
   readonly plantLabels?: PlantLabelMode
+  /** Set only for the workspace map; absent, nothing is drawn (thumbnails, the overview, a presented story, the lens). */
+  readonly editingAids?: SceneEditingAids
 }
 
 interface SceneRendererContext {
