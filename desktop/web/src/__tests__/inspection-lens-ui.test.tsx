@@ -7,6 +7,10 @@ import { setCurrentCanvasSession } from '../canvas/session'
 import { InspectionLens } from '../components/canvas/InspectionLens'
 import { createTestCanvasDocumentSurface, createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import { SceneCanvasInspectionOwner } from '../canvas/runtime/inspection-lens'
+import { createSessionPlane } from '../canvas/session-plane'
+import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
+import { createTestView } from './support/test-view'
 
 const root = document.createElement('div')
 afterEach(() => { render(null, root); setCurrentCanvasSession(null); root.remove() })
@@ -165,4 +169,40 @@ it('arrows move the lens along the screen; mod is the large step', async () => {
   press('ArrowDown', { shiftKey: true })
   expect(view.panByScreen).toHaveBeenLastCalledWith({ x: 0, y: 20 })
   expect(view.panByScreen).toHaveBeenCalledTimes(4)
+})
+
+it('a drag on the preview pans the lens, through the real lens owner', async () => {
+  vi.useFakeTimers()
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+  document.body.appendChild(root)
+  const camera = createTestView({ screen: { width: 800, height: 600 }, viewport: { x: 100, y: 0, scale: 6 } })
+  const owner = new SceneCanvasInspectionOwner({ frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
+    readSessionPlane: () => createSessionPlane({ lon: 0, lat: 0 }),
+    getSnapshot: () => createTestSceneRendererSnapshot(), setHoveredTarget() {} })
+  let view: CanvasInspectionHandle | null = null
+  setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+    queries: createTestCanvasQuerySurface(),
+    documents: createTestCanvasDocumentSurface({ attachInspectionTo: (container: HTMLElement) => (view = owner.mount(container)) }),
+  }))
+  await act(async () => render(<InspectionLens canvasRef={{ current: document.createElement('div') }} />, root))
+  await act(async () => root.querySelector<HTMLButtonElement>('button[aria-expanded]')!.click())
+  const frame = root.querySelector<HTMLElement>('[data-inspection-frame]')!
+  // Before the first paint an arrow moves nothing and throws nothing.
+  act(() => { frame.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true })) })
+  await act(async () => { vi.advanceTimersByTime(20) })
+  const before = view!.state.value!.point
+  const scale = view!.state.value!.scale
+  const pointer = (target: EventTarget, type: string, x: number) => {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: 0 })
+    Object.defineProperty(event, 'pointerId', { value: 1 })
+    target.dispatchEvent(event)
+  }
+  await act(async () => { pointer(frame, 'pointerdown', 100); pointer(document, 'pointermove', 70); vi.advanceTimersByTime(20) })
+  // Dragging 30 px right moves the inspected ground 30 px left of the lens's screen at bearing 0.
+  expect(view!.state.value!.point.x).toBeCloseTo(before.x + 30 / scale, 9)
+  expect(view!.state.value!.point.y).toBeCloseTo(before.y, 9)
+  await act(async () => { pointer(document, 'pointerup', 70) })
+  owner.dispose()
+  vi.restoreAllMocks()
+  vi.useRealTimers()
 })
