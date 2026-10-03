@@ -166,11 +166,11 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionC
           if (overview) return false
           return toolHost.command({ kind: 'rotate-held', stepDeg: c.stepDeg }) === 'handled'
         case 'confirm':
-          // A live pointer session (a still twist or rotate included) keeps the note editor shut: it would take the Esc
-          // that cancels the session.
-          if (overview || session.pointerSessionLive()) return false
+          if (overview) return false
           if (toolHost.command({ kind: 'confirm' }) === 'handled') return true
-          // Enter under Select edits the one selected note, as F2 does.
+          // Enter under Select edits the one selected note, as F2 does; never while a pointer session (a still twist or
+          // rotate included) is live, as the editor would take the Esc that cancels the session.
+          if (session.pointerSessionLive()) return false
           return toolHost.activeToolIsSelect() && toolHost.command({ kind: 'edit-text' }) === 'handled'
         case 'edit-text':
           // Consumed while a pointer session is live, so its fallback never renames the Design mid-gesture.
