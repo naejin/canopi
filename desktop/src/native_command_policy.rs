@@ -754,8 +754,10 @@ const BLOCKING_ESCAPE_ALLOWLIST: &[BlockingEscapeAllowance] = &[BlockingEscapeAl
              holding an executor slot for that would starve bounded work",
 }];
 
-/// Thread escapes are recognised by path, never by method name, so `Command::spawn` and
-/// `Scope::spawn` on a value are not escapes while the call that made the thread or scope is.
+/// Thread escapes are recognised by path (called or passed as a value), never by method
+/// name, so `Command::spawn` and `Scope::spawn` on a value are not escapes while the call
+/// that made the thread or scope is. `spawn_blocking` and `block_in_place` are escapes as a
+/// path's last segment, a method or an import under any name.
 const THREAD_ESCAPE_CALLS: &[&str] = &[
     "std::thread::spawn",
     "thread::spawn",
@@ -886,18 +888,26 @@ struct BlockingEscapeVisitor {
 }
 
 impl BlockingEscapeVisitor {
-    fn inspect_call(&mut self, call: &ExprCall) {
-        let Expr::Path(function) = call.func.as_ref() else {
-            return;
-        };
-        let segments = path_segments(&function.path);
+    /// A path is an escape wherever it appears as a value, so `.map(std::thread::spawn)` is
+    /// caught as well as a call.
+    fn inspect_path(&mut self, path: &ExprPath) {
+        let segments = path_segments(&path.path);
         let joined = segments.join("::");
         if segments
             .last()
-            .is_some_and(|name| matches!(name.as_str(), "spawn_blocking" | "block_in_place"))
+            .is_some_and(|name| is_blocking_pool_name(name))
             || THREAD_ESCAPE_CALLS.contains(&joined.as_str())
         {
             self.escapes.insert(joined);
+        }
+    }
+
+    /// The blocking-pool names are never anything else, so unlike `spawn` they are matched
+    /// as methods too (`Handle::current().spawn_blocking(...)`).
+    fn inspect_method_call(&mut self, call: &ExprMethodCall) {
+        let method = call.method.to_string();
+        if is_blocking_pool_name(&method) {
+            self.escapes.insert(format!(".{method}()"));
         }
     }
 
@@ -936,7 +946,10 @@ impl BlockingEscapeVisitor {
             full.push(name.to_string());
         }
         let full = full.join("::");
-        if THREAD_ESCAPE_IMPORTS.contains(&full.as_str()) {
+        if THREAD_ESCAPE_IMPORTS.contains(&full.as_str())
+            || (name != "self" && is_blocking_pool_name(&name.to_string()))
+        {
+            // Any import of a blocking-pool function is an escape, whatever it is renamed to.
             self.escapes.insert(format!("use {full}"));
         } else if full == "std::thread"
             && let Some(rename) = rename.filter(|rename| *rename != "thread")
@@ -969,10 +982,19 @@ impl<'ast> Visit<'ast> for BlockingEscapeVisitor {
         self.inspect_use(&mut Vec::new(), &node.tree);
     }
 
-    fn visit_expr_call(&mut self, node: &'ast ExprCall) {
-        self.inspect_call(node);
-        visit::visit_expr_call(self, node);
+    fn visit_expr_path(&mut self, node: &'ast ExprPath) {
+        self.inspect_path(node);
+        visit::visit_expr_path(self, node);
     }
+
+    fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
+        self.inspect_method_call(node);
+        visit::visit_expr_method_call(self, node);
+    }
+}
+
+fn is_blocking_pool_name(name: &str) -> bool {
+    matches!(name, "spawn_blocking" | "block_in_place")
 }
 
 /// Every registered command must have an `invoke('<name>'...)` call site in
@@ -1534,6 +1556,92 @@ mod tests {
                 escape("use std::thread::Builder"),
                 escape("use std::thread::scope"),
                 escape("use std::thread::spawn"),
+            ]
+        );
+    }
+
+    #[test]
+    fn renamed_blocking_pool_imports_are_escapes() {
+        let violations = audit_blocking_pool_sources(
+            &[(
+                "src/commands/fixture.rs",
+                r#"
+                    use tauri::async_runtime::spawn_blocking as offload;
+                    use tokio::task::{block_in_place as inline, spawn_blocking};
+                    fn f(path: String) { offload(move || std::fs::read(path)); inline(work); }
+                "#,
+            )],
+            &["src/native_operation.rs"],
+            &[],
+        );
+
+        let escape = |name: &str| {
+            format!(
+                "direct native blocking execution outside NativeOperationExecutor: src/commands/fixture.rs ({name})"
+            )
+        };
+        assert_eq!(
+            violations,
+            [
+                escape("use tauri::async_runtime::spawn_blocking"),
+                escape("use tokio::task::block_in_place"),
+                escape("use tokio::task::spawn_blocking"),
+            ]
+        );
+    }
+
+    #[test]
+    fn blocking_pool_method_calls_are_escapes() {
+        let violations = audit_blocking_pool_sources(
+            &[(
+                "src/services/fixture.rs",
+                r#"
+                    fn current() { tokio::runtime::Handle::current().spawn_blocking(move || heavy_cpu()); }
+                    fn stored(rt: &tokio::runtime::Handle) { rt.spawn_blocking(work); }
+                    fn inline(rt: &Runtime) { rt.block_in_place(work); }
+                "#,
+            )],
+            &["src/native_operation.rs"],
+            &[],
+        );
+
+        let escape = |name: &str| {
+            format!(
+                "direct native blocking execution outside NativeOperationExecutor: src/services/fixture.rs ({name})"
+            )
+        };
+        assert_eq!(
+            violations,
+            [escape(".block_in_place()"), escape(".spawn_blocking()")]
+        );
+    }
+
+    #[test]
+    fn escape_paths_passed_as_function_values_are_escapes() {
+        let violations = audit_blocking_pool_sources(
+            &[(
+                "src/services/fixture.rs",
+                r#"
+                    fn threads(jobs: Vec<fn()>) { let h: Vec<_> = jobs.into_iter().map(std::thread::spawn).collect(); }
+                    fn pool(jobs: Vec<fn()>) { jobs.into_iter().map(tokio::task::spawn_blocking); }
+                    fn stored() { let start = rayon::spawn; start(work); }
+                "#,
+            )],
+            &["src/native_operation.rs"],
+            &[],
+        );
+
+        let escape = |name: &str| {
+            format!(
+                "direct native blocking execution outside NativeOperationExecutor: src/services/fixture.rs ({name})"
+            )
+        };
+        assert_eq!(
+            violations,
+            [
+                escape("rayon::spawn"),
+                escape("std::thread::spawn"),
+                escape("tokio::task::spawn_blocking"),
             ]
         );
     }
