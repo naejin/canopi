@@ -19,6 +19,7 @@ import { installKeyRouter } from "../app/keyboard/key-router";
 import { singleKeyShortcuts } from "../app/settings/state";
 import { currentCanvasKeyboardPort } from "../canvas/session";
 import { detectPlatform } from "../canvas/runtime/input/platform";
+import { setShortcutPlatform } from "../app/shell-commands/shortcut-text";
 import { installDesktopKeyRouter } from "../commands/registry";
 import { registerDesignOpenFailurePresenter } from "../app/document-session/open-failure";
 import { presentDesktopDesignOpenFailure } from "./open-failure.desktop";
@@ -48,12 +49,15 @@ export function bootstrapPlatform(): void {
   disposeContinuousSave = installDesignContinuousSave();
   disposePlaceSearchSession = installPlaceSearchSession();
   disposeToolRailLearning = installToolRailLearning();
+  // One platform for the key router's chords and the labels that name them (Cmd on macOS).
+  const platform = detectPlatform(navigator, window as unknown as { readonly GestureEvent?: unknown });
+  setShortcutPlatform(platform);
   const keyRouter = installDesktopKeyRouter(installKeyRouter, {
     target: window,
     canvas: currentCanvasKeyboardPort,
     singleKeys: singleKeyShortcuts,
     focus: focusOwner,
-    platform: detectPlatform(navigator, window as unknown as { readonly GestureEvent?: unknown }),
+    platform,
     document,
   });
   disposeKeyRouter = () => keyRouter.dispose();

@@ -14,6 +14,7 @@ import {
 import type { KeyRouterHandle } from '../app/keyboard/key-router'
 import { answerSaveProblem, requestSaveProblemDecision } from '../app/document-session/save-problem'
 import { registerPlantFinder } from '../app/plant-finder/focus'
+import { formatShortcut, setShortcutPlatform } from '../app/shell-commands/shortcut-text'
 import {
   createTestCanvasCommandSurface,
   createTestCanvasRuntimeSurfaces,
@@ -51,7 +52,16 @@ describe('Web keys', () => {
     sidePanel.value = null
     activeTool.value = 'select'
     document.body.innerHTML = ''
+    setShortcutPlatform({ os: 'linux' })
     vi.restoreAllMocks()
+  })
+
+  it('labels the mod key for the platform it routes keys on: Cmd on a Mac, Ctrl elsewhere', () => {
+    installWebKeys([], 'mac')
+    expect(formatShortcut('Ctrl+Shift+Z')).toBe('Cmd Shift Z')
+
+    installWebKeys([], 'linux')
+    expect(formatShortcut('Ctrl+Shift+Z')).toBe('Ctrl Shift Z')
   })
 
   it('ignores a key an earlier listener already consumed', () => {

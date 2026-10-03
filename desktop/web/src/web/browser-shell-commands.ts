@@ -10,6 +10,7 @@ import {
   type ShellCommandState,
 } from '../app/shell-commands'
 import { composeWorkspaceMenus, type MenuDefinition } from '../app/shell-commands/menus'
+import { setShortcutPlatform } from '../app/shell-commands/shortcut-text'
 import { createWorkspaceShellCapabilities } from '../app/workspace-commands/capabilities'
 import { savedViewMenuActions } from '../app/saved-views'
 import { plantLabelMenuActions } from '../app/plant-display/menu'
@@ -253,13 +254,15 @@ let activeKeyRouter: KeyRouterHandle | null = null
 /**
  * The Web Edition key router (spec §1.6): its shell rows, less the shortcuts a browser keeps, then the canvas rows. A
  * shell shortcut takes its key even when its command is disabled; a canvas command takes it only when it ran.
- * Installing again replaces the router; main.web.tsx installs it once, on the browser's own platform.
+ * Installing again replaces the router; main.web.tsx installs it once, on the browser's own platform, which also
+ * names the mod key in every shortcut label (Cmd on a Mac).
  */
 export function installWebKeyRouter(
   shell: WebShellShortcutSource,
   platform: InputPlatform = detectPlatform(navigator, window as unknown as { readonly GestureEvent?: unknown }),
 ): KeyRouterHandle {
   activeKeyRouter?.dispose()
+  setShortcutPlatform(platform)
   const commands: CommandSink = {
     run(command) {
       const entry = shell.catalog.find((candidate) => candidate.id === command)
