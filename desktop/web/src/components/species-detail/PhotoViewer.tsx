@@ -76,7 +76,8 @@ export function PhotoViewer({ model, name, linkSources }: {
   }
 
   return (
-    <section className={styles.photos} aria-roledescription={t('plantDetail.carousel')} aria-label={t('plantDetail.photos')} onKeyDown={onKeyDown}>
+    // The carousel owns its arrows, Shift+arrows included, so they never turn the map (spec §1.6).
+    <section className={styles.photos} aria-roledescription={t('plantDetail.carousel')} aria-label={t('plantDetail.photos')} data-owns-keys="arrows" onKeyDown={onKeyDown}>
       <div className={styles.photoFrame}>
         {model.src !== null && !model.failed && (
           <img
