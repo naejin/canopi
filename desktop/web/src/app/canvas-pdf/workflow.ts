@@ -6,7 +6,14 @@ import { PDF_HABITS, PDF_ZOOM, pdfAreaKey, type PdfHabit, type PdfPageView } fro
 import type { PdfPreparation } from './prepare'
 import type { SpeciesDisplayNames } from '../plant-browser/workbench'
 import type { PdfInput, PdfLabels, PdfSetup, PreparedPdf, PdfPlan, PdfLayoutCache } from './types'
-export interface PdfCapture { readonly identity: object; readonly input: PdfInput; isCurrent(): boolean }
+export interface PdfCapture {
+  readonly identity: object
+  readonly input: PdfInput
+  /** The view is still turning: its live bearing is not the settled one, so `viewBearingDeg` may be an angle the turn only
+   *  passes through. `isCurrent` turns false once the view settles. */
+  readonly turning?: boolean
+  isCurrent(): boolean
+}
 type PdfDeliveryResult = 'saved' | 'downloaded' | 'cancelled'
 export interface PdfDelivery { save(bytes: Uint8Array, name: string, signal: AbortSignal): Promise<PdfDeliveryResult>; dispose(): void }
 export interface PdfWorkflowDependencies {
@@ -40,8 +47,8 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   let nextAreaId = 0
   let identity: object | null = null
   let capture: PdfCapture | null = null
-  // As on screen lays pages out at the bearing captured when the workspace opens, held until it closes:
-  // a turn still easing behind the modal, or any later turn, never moves the pages (ADR 0015).
+  // As on screen lays pages out at the bearing the view rests at when the workspace opens, held until it closes:
+  // a turn still easing then is waited for (ADR 0015), and any later turn never moves the pages.
   let heldBearing: number | null = null
   let controller: AbortController | null = null
   let generation = 0
@@ -77,9 +84,12 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
       nextAreaId = 0
       setup.value = { paper: 'A4', layers: next.input.canvas.layers.filter((l) => EXPORTABLE.has(l.name) && l.visible).map((l) => l.name) }
     }
+    availableLayers.value = next.input.canvas.layers.filter((layer) => EXPORTABLE.has(layer.name)).map((layer) => layer.name)
+    if (heldBearing === null && next.turning) {
+      capture = next; state.value = { status: 'preparing', error: null, result: null }; return
+    }
     heldBearing ??= next.input.viewBearingDeg ?? 0
     next = { ...next, input: { ...next.input, viewBearingDeg: heldBearing } }
-    availableLayers.value = next.input.canvas.layers.filter((layer) => EXPORTABLE.has(layer.name)).map((layer) => layer.name)
     capture = next
     if (setup.peek().layers.some((name) => !availableLayers.peek().includes(name))) {
       state.value = { status: 'error', error: 'selection-missing', result: null }; return

@@ -21,13 +21,15 @@ export const canvasPdf = createPdfWorkflow({
     const name = designSessionStore.designName.value
     const canvas = query.capturePrintSnapshot()
     if (!canvas) return null
-    // Exact, not the rounded bearing signal: As on screen levels guides drawn level on the turned map.
-    // Read on every capture; the workflow keeps the one read on open until the workspace closes.
+    // Exact, not the rounded bearing signal: As on screen levels guides drawn level on the turned map. Read on every
+    // capture; the workflow holds the first one read while the view is not turning, until the workspace closes.
     const viewBearingDeg = query.view.captureView().camera.bearingDeg
-    return { identity, input: { name, locale: language, canvas, commonNames: {}, viewBearingDeg },
+    const settled = query.view.settledCamera.value
+    const turning = normalise(viewBearingDeg) !== normalise(settled.bearingDeg)
+    return { identity, input: { name, locale: language, canvas, commonNames: {}, viewBearingDeg }, ...(turning ? { turning } : {}),
       isCurrent: () => designSessionStore.sessionIdentity.value === identity && currentCanvasQuerySurface.value === query
         && query.revision.scene.value === revision && locale.value === language && designSessionStore.designName.value === name
-        && query.getSettledPlacedPlants() !== null }
+        && query.getSettledPlacedPlants() !== null && (!turning || query.view.settledCamera.value === settled) }
   },
   // The catalog's batch projections: the same names and habits every plant list shows, in both editions.
   resolveDisplayNames: (names, language) => speciesCatalogWorkbench.resolveDisplayNames(names, language),
@@ -49,11 +51,13 @@ const disposeObservation = effect(() => {
     const query = currentCanvasQuerySurface.value
     void query?.revision.scene.value
     void query?.getSettledPlacedPlants()
+    void query?.view.settledCamera.value
     void locale.value
     void designSessionStore.designName.value
   }
   canvasPdf.synchronize(identity)
 })
+const normalise = (deg: number) => ((deg % 360) + 360) % 360
 function symbolNames(): Record<string, string> {
   return Object.fromEntries(PLANT_SYMBOL_IDS.map(symbol => [symbol, t(`canvas.plantSymbol.names.${symbol}`, symbol)]))
 }
