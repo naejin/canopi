@@ -3,7 +3,7 @@ import { expect, it } from 'vitest'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 import { splitPrintArea } from '../app/canvas-pdf/split-sheets'
-import { areaContains, pageFrame } from '../app/canvas-pdf/page-frame'
+import { areaContains, areaToFrame, pageFrame } from '../app/canvas-pdf/page-frame'
 import type { PdfInput, PdfLabels, PdfLayoutCacheEntry, PdfSetup } from '../app/canvas-pdf/types'
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([
   ['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')], ['strong', readFileSync('public/pdf-fonts/NotoSans-SemiBold.ttf')],
@@ -75,7 +75,7 @@ it('retains complete local species identity and explicit locations for unresolve
 })
 it('partitions all ground with bounded frames and handles coincident locations', () => {
   const bounds = { x: 0, y: 0, width: 5, height: 5 }, input = source(2201)
-  const frames = splitPrintArea(bounds, input.canvas.plants, pageFrame(0))
+  const frames = splitPrintArea(bounds, input.canvas.plants, pageFrame(0)).map(part => part.bounds)
   expect(frames.length).toBeGreaterThan(2); expect(frames.length).toBeLessThanOrEqual(32)
   expect(frames.reduce((sum, f) => sum + f.width * f.height, 0)).toBe(25)
   for (const p of input.canvas.plants) expect(frames.some(f => p.position.x >= f.x && p.position.x <= f.x + f.width && p.position.y >= f.y && p.position.y <= f.y + f.height)).toBe(true)
@@ -101,8 +101,33 @@ it('split and detail lookup use the turned plants', () => {
   const page = { x: -10, y: -1, width: 20, height: 2 }
   const parts = splitPrintArea(page, plants, frame)
   expect(parts.length).toBeGreaterThan(1)
-  expect(parts.reduce((sum, part) => sum + part.width * part.height, 0)).toBeCloseTo(40, 6)
-  for (const p of plants.filter(p => areaContains(frame, area.bounds, p.position))) expect(parts.some(part => areaContains(frame, part, p.position))).toBe(true)
-  expect(parts.some(part => areaContains(frame, part, { x: 9, y: 0 }))).toBe(false)
-  expect(splitPrintArea(page, plants, pageFrame(0)).some(part => areaContains(pageFrame(0), part, { x: 9, y: 0 }))).toBe(true)
+  expect(parts.reduce((sum, { bounds }) => sum + bounds.width * bounds.height, 0)).toBeCloseTo(40, 6)
+  for (const p of plants.filter(p => areaContains(frame, area.bounds, p.position))) expect(parts.some(part => areaContains(frame, part.bounds, p.position, part.pivot))).toBe(true)
+  expect(parts.some(part => areaContains(frame, part.bounds, { x: 9, y: 0 }, part.pivot))).toBe(false)
+  expect(splitPrintArea(page, plants, pageFrame(0)).some(part => areaContains(pageFrame(0), part.bounds, { x: 9, y: 0 }, part.pivot))).toBe(true)
+})
+it('split sheets turn together about their split, so they keep tiling at any Map orientation', () => {
+  // Split at 30, then switch to North up or reopen at 60: neighbouring sheets neither overlap nor leave gaps.
+  const at30 = pageFrame(30), page = { x: 3, y: -4, width: 20, height: 12 }
+  const plants = Array.from({ length: 900 }, (_, i) => at30.fromFrame({ x: 3.1 + (i % 30) * .66, y: -3.9 + Math.floor(i / 30) * .4 }))
+    .map((position, i) => ({ id: `p${i}`, canonicalName: 'Ribes rubrum', position, color: '#123456', symbol: 'round', mark: [], pinnedName: false }))
+  const parts = splitPrintArea(page, plants, at30)
+  expect(parts.length).toBeGreaterThan(3)
+  // Splitting a sheet again keeps the first split's pivot, so the whole family tiles.
+  const [first, ...others] = parts, firstOnPage = areaToFrame(at30, first!.bounds, first!.pivot)
+  const family = [...others, ...splitPrintArea(firstOnPage, plants, at30, first!.pivot)]
+  expect(family.length).toBeGreaterThan(parts.length)
+  const pivot = at30.fromFrame({ x: 13, y: 2 })
+  for (const angle of [0, 30, 60]) {
+    const frame = pageFrame(angle), boxes = family.map(part => areaToFrame(frame, part.bounds, part.pivot)), centre = frame.toFrame(pivot)
+    expect(Math.min(...boxes.map(b => b.x))).toBeCloseTo(centre.x - 10, 6)
+    expect(Math.max(...boxes.map(b => b.x + b.width))).toBeCloseTo(centre.x + 10, 6)
+    expect(Math.min(...boxes.map(b => b.y))).toBeCloseTo(centre.y - 6, 6)
+    expect(Math.max(...boxes.map(b => b.y + b.height))).toBeCloseTo(centre.y + 6, 6)
+    expect(boxes.reduce((sum, b) => sum + b.width * b.height, 0)).toBeCloseTo(240, 6)
+    for (let i = 0; i < 400; i++) {
+      const point = frame.fromFrame({ x: centre.x - 9.95 + (i % 20) * 1.047, y: centre.y - 5.95 + Math.floor(i / 20) * .626 })
+      expect(family.some(part => areaContains(frame, part.bounds, point, part.pivot))).toBe(true)
+    }
+  }
 })

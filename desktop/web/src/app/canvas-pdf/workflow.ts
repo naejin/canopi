@@ -6,7 +6,14 @@ import { PDF_HABITS, PDF_ZOOM, pdfAreaKey, type PdfHabit, type PdfPageView } fro
 import type { PdfPreparation } from './prepare'
 import type { SpeciesDisplayNames } from '../plant-browser/workbench'
 import type { PdfInput, PdfLabels, PdfSetup, PreparedPdf, PdfPlan, PdfLayoutCache } from './types'
-export interface PdfCapture { readonly identity: object; readonly input: PdfInput; isCurrent(): boolean }
+export interface PdfCapture {
+  readonly identity: object
+  readonly input: PdfInput
+  /** The view is still turning: its live bearing is not the settled one, so `viewBearingDeg` may be an angle the turn only
+   *  passes through. `isCurrent` turns false once the view settles. */
+  readonly turning?: boolean
+  isCurrent(): boolean
+}
 type PdfDeliveryResult = 'saved' | 'downloaded' | 'cancelled'
 export interface PdfDelivery { save(bytes: Uint8Array, name: string, signal: AbortSignal): Promise<PdfDeliveryResult>; dispose(): void }
 export interface PdfWorkflowDependencies {
@@ -40,8 +47,8 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   let nextAreaId = 0
   let identity: object | null = null
   let capture: PdfCapture | null = null
-  // As on screen lays pages out at the bearing captured when the workspace opens, held until it closes:
-  // a turn still easing behind the modal, or any later turn, never moves the pages (ADR 0015).
+  // As on screen lays pages out at the bearing the view rests at when the workspace opens, held until it closes:
+  // a turn still easing then is waited for (ADR 0015), and any later turn never moves the pages.
   let heldBearing: number | null = null
   let controller: AbortController | null = null
   let generation = 0
@@ -77,9 +84,12 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
       nextAreaId = 0
       setup.value = { paper: 'A4', layers: next.input.canvas.layers.filter((l) => EXPORTABLE.has(l.name) && l.visible).map((l) => l.name) }
     }
+    availableLayers.value = next.input.canvas.layers.filter((layer) => EXPORTABLE.has(layer.name)).map((layer) => layer.name)
+    if (heldBearing === null && next.turning) {
+      capture = next; state.value = { status: 'preparing', error: null, result: null }; return
+    }
     heldBearing ??= next.input.viewBearingDeg ?? 0
     next = { ...next, input: { ...next.input, viewBearingDeg: heldBearing } }
-    availableLayers.value = next.input.canvas.layers.filter((layer) => EXPORTABLE.has(layer.name)).map((layer) => layer.name)
     capture = next
     if (setup.peek().layers.some((name) => !availableLayers.peek().includes(name))) {
       state.value = { status: 'error', error: 'selection-missing', result: null }; return
@@ -106,7 +116,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
       const names = choices.areas?.length && choices.layers.includes('plants')
         ? Array.from(new Set(next.input.canvas.plants.filter(plant => choices.areas!.some(area => {
           // A manually displaced/zoomed view can include plants outside its original rectangle.
-          return choices.views?.[pdfAreaKey(area)] ? true : areaContains(frame, area.bounds, plant.position)
+          return choices.views?.[pdfAreaKey(area)] || area.wholeDesign ? true : areaContains(frame, area.bounds, plant.position, area.pivot)
         })).map(plant => plant.canonicalName))) : []
       // Catalog failure retains full canonical identities on chosen detail sheets.
       const identities = names.length ? await resolvePrintIdentities(deps, names, next.input.locale, abort.signal) : { commonNames: {} }
@@ -140,23 +150,26 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     configure({ layers: selected ? [...layers, name] : layers })
   }
   /** `bounds` is the area in plan metres: an unturned box about its centre (`PdfPrintArea`). */
-  function addPrintArea(bounds: PrintBounds): string | undefined {
+  function addPrintArea(bounds: PrintBounds): string | undefined { return addArea(bounds, false) }
+  function addArea(bounds: PrintBounds, wholeDesign: boolean): string | undefined {
     if (!open.peek() || disposed || state.peek().status === 'delivering') return
     if (![bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) || bounds.width <= 0 || bounds.height <= 0) return
     const number = ++nextAreaId
     priority = `area:${number}`
-    configure({ areas: [...setup.peek().areas ?? [], { id: String(number), name: deps.namePrintArea(number), bounds: { ...bounds } }] })
+    configure({ areas: [...setup.peek().areas ?? [], { id: String(number), name: deps.namePrintArea(number), bounds: { ...bounds },
+      ...wholeDesign ? { wholeDesign } : {} }] })
     return `area:${number}`
   }
   function addWholeDesign(): string | undefined {
     const plan = state.peek().result?.plan
-    return plan?.pickerPage ? addPrintArea(areaFromFrame(pageFrame(plan.angleDeg), plan.pickerPage.ground)) : undefined
+    return plan?.pickerPage ? addArea(areaFromFrame(pageFrame(plan.angleDeg), plan.pickerPage.ground), true) : undefined
   }
   function previewSplit(id: string): void {
     const plan = state.peek().result?.plan, page = plan?.pages.find(p => p.id === id && p.kind === 'detail')
     if (!page || !capture?.isCurrent() || !['ready', 'saved', 'downloaded', 'error'].includes(state.peek().status)) return
-    const bounds = splitPrintArea(page.ground, setup.peek().layers.includes('plants') ? capture.input.canvas.plants : [], pageFrame(plan!.angleDeg))
-    const areas = bounds.map((bounds, index) => ({ id: String(nextAreaId + index + 1), name: deps.namePrintArea(nextAreaId + index + 1), bounds }))
+    const parent = setup.peek().areas?.find(area => pdfAreaKey(area) === id)
+    const parts = splitPrintArea(page.ground, setup.peek().layers.includes('plants') ? capture.input.canvas.plants : [], pageFrame(plan!.angleDeg), parent?.pivot)
+    const areas = parts.map((part, index) => ({ id: String(nextAreaId + index + 1), name: deps.namePrintArea(nextAreaId + index + 1), ...part }))
     const views = Object.fromEntries(Object.entries(setup.peek().views ?? {}).filter(([key]) => key !== id && !key.startsWith(`${id}:legend:`)))
     splitPreview.value = { ...setup.peek(), areas: setup.peek().areas?.flatMap(a => pdfAreaKey(a) === id ? areas : [a]), views }
     priority = pdfAreaKey(areas[0]!)

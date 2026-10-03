@@ -66,8 +66,15 @@ function buildPages(original: PdfInput, setup: PdfSetup, text: PdfTextEngine, la
       destinations: [...drawing.destinations, ...integrated?.destinations ?? []] }
     return [page, ...continuations]
   }
+  // Add whole design refits at every build, as the picker frames the printed design with no Print Areas, so a new angle
+  // never leaves part of the design off its sheet. With nothing printed it keeps the box it was added with.
+  const printed = selected.canvas.plants.length || selected.canvas.zones.length || selected.canvas.annotations.length || selected.canvas.measurements.length
+  let wholeDesign: PrintBounds | undefined
+  const wholeDesignGround = () => wholeDesign ??= orientations().map(orientation =>
+    fitOverview(selected, pageGeometry(setup.paper, orientation, 'detail').frame)).sort((a, b) => b.pointsPerMeter - a.pointsPerMeter)[0]!.ground
   const fittedDetails = (setup.areas ?? []).map(area => {
-    const id = pdfAreaKey(area), view = setup.views?.[id], requested = areaToFrame(frame, area.bounds)
+    const id = pdfAreaKey(area), view = setup.views?.[id]
+    const requested = area.wholeDesign && printed ? wholeDesignGround() : areaToFrame(frame, area.bounds, area.pivot)
     if (![requested.x, requested.y, requested.width, requested.height].every(Number.isFinite) || requested.width <= 0 || requested.height <= 0) throw new Error('invalid-page-view')
     const choices = requested.width === requested.height && (!view?.orientation || view.orientation === 'auto') ? ['portrait'] as const : orientations(view)
     const candidates = choices.map(orientation => {

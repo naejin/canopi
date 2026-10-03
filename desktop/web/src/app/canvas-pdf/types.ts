@@ -1,4 +1,4 @@
-import type { CanvasPrintSnapshot, PrintBounds, PrintPlant } from '../../canvas/print'
+import type { CanvasPrintSnapshot, PrintBounds, PrintPlant, PrintPoint } from '../../canvas/print'
 import type { GlyphOutline, TextLine } from './text'
 export type PdfPaper = 'A4' | 'Letter'
 type PdfOrientation = 'auto' | 'portrait' | 'landscape'
@@ -21,9 +21,14 @@ export const PDF_MAP_ORIENTATIONS: readonly PdfMapOrientation[] = ['north-up', '
 export interface PdfPrintArea {
   readonly id: string
   readonly name: string
-  /** An unturned box about the area's centre, in plan metres: the centre is the area's, the sides lie along the page axes
-   *  whatever the layout angle (`page-frame.ts`). */
+  /** A box in plan metres whose sides lie along the page axes whatever the layout angle (`page-frame.ts`). */
   readonly bounds: PrintBounds
+  /** Split sheets: the plan point every sheet of the split turns about, so they keep tiling at any angle.
+   *  Absent, the area turns about its own centre. */
+  readonly pivot?: PrintPoint
+  /** Add whole design: each build refits the area to the printed design at the layout angle; `bounds` is the fit it was
+   *  added with, kept for when nothing is printed. */
+  readonly wholeDesign?: true
 }
 export function pdfAreaKey(area: PdfPrintArea): string { return `area:${area.id}` }
 export interface PdfSetup {
