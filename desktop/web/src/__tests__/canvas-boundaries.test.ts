@@ -109,17 +109,10 @@ const HAND_ROLLED_PROJECTION = new RegExp([
 ].map(({ source }) => `(?:${source})`).join('|'), 'g')
 
 /**
- * P3b's phase-1 allowlist (counted at the end of 0E, comments blanked, recorded in canopi-f47t.5): the chrome that
- * still projects from a planar camera read off the frame. Each entry goes in phase 1.
+ * P3b's permanent allowlist: sizes, never positions (counted at the end of 0E, recorded in canopi-f47t.5; re-counted
+ * at the Renderer merge of phase 1, when the phase-1 allowlist emptied: the scene chrome went and the rulers place
+ * through the view transform).
  */
-const P3B_PHASE_1: Readonly<Record<string, number>> = {
-  // Deleted in phase 1.
-  'src/canvas/runtime/scene-chrome.ts': 8,
-  // Phase 1 takes the origin from worldToScreen and keeps pixelsPerMetre for tick spacing only (8 matches, 7 lines).
-  'src/canvas/runtime/chrome/rulers.ts': 8,
-}
-
-/** P3b's permanent allowlist: sizes, never positions (counted at the end of 0E, recorded in canopi-f47t.5). */
 const P3B_SIZE_ONLY: Readonly<Record<string, number>> = {
   // The lens's stroke widths and its plants' presentation scale.
   'src/canvas/runtime/inspection-lens-drawing.ts': 3,
@@ -143,7 +136,7 @@ const P3B_POLICY = {
   scope: ['src/**'],
   // The PDF's paper projection maps a page to the ground, not the view (ADR 0008).
   except: ['src/canvas/runtime/view/**', 'src/app/canvas-pdf/**'],
-  allowlist: { ...P3B_PHASE_1, ...P3B_SIZE_ONLY },
+  allowlist: P3B_SIZE_ONLY,
 } as const satisfies RegexPolicy
 
 
@@ -332,10 +325,11 @@ describe('canvas v2 regex policies', () => {
       { path: 'src/canvas/runtime/chrome/planted-comment.ts', text: '// p.x * view.pixelsPerMetre\n/* viewport.x */' },
       { path: 'src/canvas/runtime/view/planted.ts', text: 'const sx = (p.x - c.x) * view.pixelsPerMetre + w / 2' },
       { path: 'src/app/canvas-pdf/planted.ts', text: 'const sx = frame.x + (p.x - ground.x) * scale.pixelsPerMetre' },
-      { path: 'src/canvas/runtime/scene-chrome.ts', text: 'const sx = viewport.x + x * scale' },
+      // The rulers left the phase-1 allowlist: a projection there counts again.
+      { path: 'src/canvas/runtime/chrome/rulers.ts', text: 'const sx = viewport.x + x * scale' },
     ])).toEqual({
       ...Object.fromEntries(sources.map(({ path }) => [path, 1])),
-      'src/canvas/runtime/scene-chrome.ts': 1,
+      'src/canvas/runtime/chrome/rulers.ts': 1,
     })
   })
 })
