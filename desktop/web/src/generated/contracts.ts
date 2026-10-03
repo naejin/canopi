@@ -300,11 +300,13 @@ export type GeoResult = {
 	lon: number,
 };
 
-// A geographic camera view: WGS84 centre and MapLibre zoom.
+// A geographic camera view: WGS84 centre, MapLibre zoom and bearing.
 export type LastView = {
 	lon: number,
 	lat: number,
 	zoom: number,
+	// Degrees clockwise from north; 0 when missing, normalised on read.
+	bearing?: number,
 };
 
 export type Layer = {
@@ -948,7 +950,11 @@ export type Settings = {
 	 */
 	soften_background: boolean,
 	plant_spacing_interval_m: number,
-	// The camera view last shown on a Design; a new Design opens here.
+	/**
+	 *  The camera view last shown on a Design, on this device. The first
+	 *  Design opened turns to its bearing; a new or empty Design opens at its
+	 *  centre, zoomed out and north up.
+	 */
 	last_view: LastView | null,
 	/**
 	 *  Canvas tools used at least once on this device. The tool rail shows
@@ -959,8 +965,9 @@ export type Settings = {
 	tool_names_visible: boolean | null,
 	/**
 	 *  Settings › Keyboard: character-key shortcuts (tool keys such as V or
-	 *  P, N, Shift G, brackets). Off leaves only shortcuts with Ctrl, Alt or
-	 *  a named key (Delete, Esc, arrows, F keys).
+	 *  P, N, Shift G, Shift L, brackets). Off leaves only shortcuts with Ctrl
+	 *  or Cmd, Alt or a named key (Delete, Esc, arrows, F keys), plus Shift N,
+	 *  which always resets north.
 	 */
 	single_key_shortcuts: boolean,
 	/**
