@@ -124,21 +124,9 @@ export class SceneCanvasInspectionOwner {
       footprint.value = view.visibleWorldQuad()
       if (ctx) {
         canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr)
-        const plants = visible.filter((plant) => {
-          const onLens = view.worldToScreen(plant.position)
-          return Math.abs(onLens.x - width / 2) <= width / 2 + 20 && Math.abs(onLens.y - height / 2) <= height / 2 + 20
-        })
-        const lensSnapshot: SceneRendererSnapshot = {
-          ...snapshot,
-          scene: { ...snapshot.scene, plants, annotations: [], measurementGuides: [], groups: [] },
-          selectedPlantIds: new Set(), selectedZoneIds: new Set(), selectedAnnotationIds: new Set(), selectedMeasurementGuideIds: new Set(),
-          highlightedPlantIds: new Set(), highlightedZoneIds: new Set(), hoveredCanonicalName: null,
-          hoverTarget: highlightedId ? { kind: 'plant', id: highlightedId, state: 'hover' } : null,
-          speciesFocus: { canonicalName: null },
-          revealedAnnotationId: null, selectionLabelPlantIds: new Set(),
-        }
         try {
-          drawInspectionLensScene(ctx, lensSnapshot, view, { widthPx: width, heightPx: height, dpr, scratch: scratchSized })
+          drawInspectionLensScene(ctx, { scene: snapshot.scene, speciesCache: snapshot.speciesCache, hoveredPlantId: highlightedId },
+            view, { widthPx: width, heightPx: height, dpr, scratch: scratchSized })
         } catch (error) {
           console.error('Canvas inspection preview unavailable:', error)
           ctx = null

@@ -12,8 +12,8 @@ import {
   ROUND_PLANT_SYMBOL_RADIUS,
   tracePlantSymbolContours,
 } from './plant-symbol-recipes'
-import type { SceneRendererSnapshot } from './renderers/scene-types'
-import type { SceneZoneEntity } from './scene'
+import type { SpeciesCacheEntry } from './species-cache'
+import type { ScenePersistedState, SceneZoneEntity } from './scene'
 import {
   getCanvasInteractionStrokeVisual,
   getPlantSymbolEdgeColor,
@@ -35,10 +35,17 @@ function lensPaper(): string {
   return getCanvasColor('background')
 }
 
+/** What the lens paints: the scene's zones and plants with their layers, and the plant the lens has highlighted. */
+interface InspectionLensScene {
+  readonly scene: ScenePersistedState
+  readonly speciesCache: ReadonlyMap<string, SpeciesCacheEntry>
+  readonly hoveredPlantId: string | null
+}
+
 export interface InspectionLensDrawOptions {
   readonly widthPx: number
   readonly heightPx: number
-  readonly dpr?: number
+  readonly dpr: number
   /**
    * An offscreen context of the given backing size, for a translucent Plants layer: its symbols and hover ring are
    * drawn opaque there and composited once, so overlaps are no darker than one plant. Null draws them per shape.
@@ -47,33 +54,33 @@ export interface InspectionLensDrawOptions {
 }
 
 /**
- * Paints the inspection lens preview: Zones and Plant Symbols of a lens
- * snapshot on a Canvas2D context, through the lens's own view. This is
+ * Paints the inspection lens preview: Zones and Plant Symbols on a Canvas2D
+ * context, through the lens's own view. This is
  * renderer-neutral preview output (ADR 0004), not a scene renderer; it never
  * mounts on the workspace.
  */
 export function drawInspectionLensScene(
   ctx: CanvasRenderingContext2D,
-  snapshot: SceneRendererSnapshot,
+  lens: InspectionLensScene,
   view: ViewTransform,
   options: InspectionLensDrawOptions,
 ): void {
-  const dpr = Math.max(options.dpr ?? 1, 1)
+  const dpr = Math.max(options.dpr, 1)
   const widthPx = Math.max(1, options.widthPx)
   const heightPx = Math.max(1, options.heightPx)
 
   applyScreenSpaceTransform(ctx, dpr)
   ctx.clearRect(0, 0, widthPx, heightPx)
   applyView(ctx, view)
-  drawZones(ctx, snapshot, view.pixelsPerMetre)
-  drawPlants(ctx, snapshot, view, dpr, widthPx, heightPx, options.scratch)
+  drawZones(ctx, lens.scene, view.pixelsPerMetre)
+  drawPlants(ctx, lens, view, dpr, widthPx, heightPx, options.scratch)
 }
 
-function drawZones(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnapshot, pixelsPerMetre: number): void {
-  const layer = getSceneLayerStyle(snapshot.scene, 'zones')
+function drawZones(ctx: CanvasRenderingContext2D, scene: ScenePersistedState, pixelsPerMetre: number): void {
+  const layer = getSceneLayerStyle(scene, 'zones')
   if (!layer.visible) return
 
-  for (const zone of snapshot.scene.zones) {
+  for (const zone of scene.zones) {
     const visual = resolveZoneVisual(zone)
     ctx.beginPath()
     traceZonePath(ctx, zone)
@@ -94,15 +101,7 @@ function drawZones(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnapsho
 
 function traceZonePath(ctx: CanvasRenderingContext2D, zone: SceneZoneEntity): void {
   if (zone.zoneType === 'rect' && zone.points.length >= 4) {
-    if (Math.abs(zone.rotationDeg) > 0.000001) {
-      const corners = getRectangularZoneCorners(zone)
-      if (corners) traceClosedPath(ctx, corners)
-      return
-    }
-
-    const start = zone.points[0]!
-    const end = zone.points[2]!
-    ctx.rect(start.x, start.y, end.x - start.x, end.y - start.y)
+    traceClosedPath(ctx, getRectangularZoneCorners(zone)!)
     return
   }
 
@@ -132,8 +131,7 @@ function traceZonePath(ctx: CanvasRenderingContext2D, zone: SceneZoneEntity): vo
 }
 
 function traceClosedPath(ctx: CanvasRenderingContext2D, points: readonly { x: number; y: number }[]): void {
-  const first = points[0]
-  if (!first) return
+  const first = points[0]!
   ctx.moveTo(first.x, first.y)
   for (let index = 1; index < points.length; index += 1) {
     const point = points[index]!
@@ -144,15 +142,15 @@ function traceClosedPath(ctx: CanvasRenderingContext2D, points: readonly { x: nu
 
 function drawPlants(
   ctx: CanvasRenderingContext2D,
-  snapshot: SceneRendererSnapshot,
+  { scene, speciesCache, hoveredPlantId }: InspectionLensScene,
   view: ViewTransform,
   dpr: number,
   widthPx: number,
   heightPx: number,
   createScratch: InspectionLensDrawOptions['scratch'],
 ): void {
-  const layer = getSceneLayerStyle(snapshot.scene, 'plants')
-  if (!layer.visible) return
+  const layer = getSceneLayerStyle(scene, 'plants')
+  if (!layer.visible || layer.opacity <= 0) return
   // The Plants opacity applies once to the layer, as on the map: opaque symbols on a scratch, one drawImage at it.
   const backingWidth = Math.round(widthPx * dpr), backingHeight = Math.round(heightPx * dpr)
   const scratch = layer.opacity < 1 ? createScratch(backingWidth, backingHeight) : null
@@ -164,23 +162,21 @@ function drawPlants(
     applyView(scratch, view)
   }
 
-  // Symbolic footprints are bounded in CSS pixels; include rings and stack badges.
+  // The one cull: symbolic footprints are bounded in CSS pixels, rings and stack badges included. Spacing reads every
+  // plant, so a neighbour just outside the lens still sizes an edge plant.
   const margin = 32
   const scale = view.pixelsPerMetre
-  const visiblePlants = snapshot.scene.plants.filter((plant) => {
+  const visiblePlants = scene.plants.filter((plant) => {
     const { x, y } = view.worldToScreen(plant.position)
     return x >= -margin && y >= -margin && x <= widthPx + margin && y <= heightPx + margin
   })
   const entries = buildPlantPresentationEntries(visiblePlants, {
-    plants: snapshot.scene.plants,
+    plants: scene.plants,
     pixelsPerMetre: scale,
-    speciesCache: snapshot.speciesCache,
-    plantSpeciesSymbols: snapshot.scene.plantSpeciesSymbols,
-    localizedCommonNames: snapshot.localizedCommonNames,
+    speciesCache,
+    plantSpeciesSymbols: scene.plantSpeciesSymbols,
   }, new Set())
   const layout = layoutPlantPresentation(entries, scale)
-  const hoverTarget = snapshot.hoverTarget
-  const hoveredPlantId = hoverTarget?.kind === 'plant' ? hoverTarget.id : null
   // Plant glyphs are side-view pictograms: on a lens turned with the map they stay upright on screen (spec §4.8, §4.13).
   const uprightRad = (view.camera.bearingDeg * Math.PI) / 180
 
@@ -196,8 +192,8 @@ function drawPlants(
     }
     drawPlantSymbolGlyph(target, entry, symbolOpacity, scale)
 
-    if (hoverTarget && entry.plant.id === hoveredPlantId) {
-      const ring = getCanvasInteractionStrokeVisual(hoverTarget.state)
+    if (entry.plant.id === hoveredPlantId) {
+      const ring = getCanvasInteractionStrokeVisual('hover')
       target.beginPath()
       target.arc(entry.plant.position.x, entry.plant.position.y, entry.radiusWorld * 1.4, 0, Math.PI * 2)
       target.globalAlpha = ring.alpha * symbolOpacity

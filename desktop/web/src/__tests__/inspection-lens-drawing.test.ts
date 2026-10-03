@@ -20,10 +20,12 @@ function draw(
   const widthPx = options.widthPx ?? 400
   const heightPx = options.heightPx ?? 300
   const view = createTestRendererView(scene.viewport, { screen: { width: widthPx, height: heightPx, devicePixelRatio: options.dpr ?? 1 } })
-  drawInspectionLensScene(ctx as unknown as CanvasRenderingContext2D, scene.snapshot, view, {
+  const { snapshot } = scene
+  const hoveredPlantId = snapshot.hoverTarget?.kind === 'plant' ? snapshot.hoverTarget.id : null
+  drawInspectionLensScene(ctx as unknown as CanvasRenderingContext2D, { scene: snapshot.scene, speciesCache: snapshot.speciesCache, hoveredPlantId }, view, {
     widthPx,
     heightPx,
-    dpr: options.dpr,
+    dpr: options.dpr ?? 1,
     scratch: options.scratch ?? (() => null),
   })
 }

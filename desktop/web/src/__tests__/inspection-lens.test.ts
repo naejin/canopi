@@ -29,7 +29,7 @@ function multiply(m: Matrix, n: Matrix): Matrix {
 function recordingContext() {
   let m: Matrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
   const stack: Matrix[] = []
-  const arcs: Array<{ readonly x: number; readonly y: number; readonly m: Matrix }> = []
+  const arcs: Array<{ readonly x: number; readonly y: number; readonly r: number; readonly m: Matrix }> = []
   const target: Record<string | symbol, unknown> = {
     setTransform: (a: number, b: number, c: number, d: number, e: number, f: number) => { m = { a, b, c, d, e, f } },
     transform: (a: number, b: number, c: number, d: number, e: number, f: number) => { m = multiply(m, { a, b, c, d, e, f }) },
@@ -39,7 +39,7 @@ function recordingContext() {
     translate: (x: number, y: number) => { m = multiply(m, { a: 1, b: 0, c: 0, d: 1, e: x, f: y }) },
     scale: (x: number, y: number) => { m = multiply(m, { a: x, b: 0, c: 0, d: y, e: 0, f: 0 }) },
     rotate: (r: number) => { m = multiply(m, { a: Math.cos(r), b: Math.sin(r), c: -Math.sin(r), d: Math.cos(r), e: 0, f: 0 }) },
-    arc: (x: number, y: number) => { arcs.push({ x, y, m }) },
+    arc: (x: number, y: number, r: number) => { arcs.push({ x, y, r, m }) },
     measureText: (text: string) => ({ width: text.length * 7 }),
   }
   const ctx = new Proxy(target, {
@@ -356,6 +356,31 @@ describe('Inspection Lens ownership', () => {
     expect(view.state.value).toBeNull()
     view.dispose()
   })
+  it('a plant just outside the lens still sets an edge plant\'s spacing', () => {
+    vi.useFakeTimers()
+    const recording = recordingContext()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(recording.ctx as never)
+    const plant = (id: string, x: number, y: number) => ({ ...MINT, id, position: { x, y } })
+    // Five plants a metre apart hold the lens at its 140 px/m floor; the edge plant is 19 px left of the 430 px lens,
+    // its neighbour 21 px left, two pixels away.
+    const plants = [plant('c0', 0, 0), plant('c1', 0, 1), plant('c2', 0, -1), plant('c3', 1, 0), plant('c4', 1, 1),
+      plant('edge', -(215 + 19) / 140, 0), plant('neighbour', -(215 + 21) / 140, 0)]
+    const snapshot = createTestSceneRendererSnapshot({ scene: { plants } })
+    const camera = createTestView(START)
+    const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames,
+      revision: { scene: signal(0), plantNames: signal(0) }, getSnapshot: () => snapshot, setHoveredTarget() {} })
+    const container = document.createElement('div')
+    Object.defineProperties(container, { clientWidth: { value: 430 }, clientHeight: { value: 390 } })
+    const view = owner.mount(container)
+    view.inspectAtWorldPoint({ x: 0, y: 0 })
+    vi.advanceTimersByTime(20)
+    expect(view.state.value!.scale).toBe(140)
+    const edge = recording.arcs.find((arc) => arc.x === plants[5]!.position.x)!
+    // Two CSS pixels between centres leaves a .84 CSS-pixel position mark, as on the map.
+    expect(edge.r * 140).toBeCloseTo(.84)
+    owner.dispose()
+  })
+
   it('the lens draws the same pixels through its view transform at bearing 0', () => {
     const { owner, view, arcs } = mountLensBesideMint()
     const { scale } = view.state.value!
