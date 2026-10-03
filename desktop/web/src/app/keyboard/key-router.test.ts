@@ -406,17 +406,17 @@ describe('key router', () => {
     expect(run).not.toHaveBeenCalled()
   })
 
-  it('mod+arrow is the large step on the map, and a Mac Ctrl+arrow does nothing (H17)', () => {
+  it('Ctrl+→ is the large step, Shift+→ turns, a Mac Ctrl+→ does nothing (H17)', () => {
     install()
     host.focus()
     expect(press({ key: 'ArrowRight', ctrlKey: true }, host).defaultPrevented).toBe(true)
     expect(fake.port.command).toHaveBeenLastCalledWith({ kind: 'arrow', dir: 'right', large: true })
     expect(press({ key: 'ArrowRight' }, host).defaultPrevented).toBe(true)
     expect(fake.port.command).toHaveBeenLastCalledWith({ kind: 'arrow', dir: 'right', large: false })
-    // Shift is no longer the large step.
+    // Shift turns the view instead of taking the large step.
     fake.port.command.mockClear()
-    press({ key: 'ArrowRight', shiftKey: true }, host)
-    expect(fake.port.command).not.toHaveBeenCalledWith({ kind: 'arrow', dir: 'right', large: true })
+    expect(press({ key: 'ArrowRight', shiftKey: true }, host).defaultPrevented).toBe(true)
+    expect(fake.port.command).toHaveBeenCalledExactlyOnceWith({ kind: 'rotate-view', direction: 1 })
 
     router?.dispose()
     install({ platform: { os: 'mac', engine: 'webkit', gestureEvents: false } })
@@ -429,18 +429,96 @@ describe('key router', () => {
     expect(run).not.toHaveBeenCalled()
   })
 
-  it('an arrow-owning widget outside the map keeps Shift+arrows (H26)', () => {
+  it('an arrow-owning widget outside the map keeps Shift+arrows, and a plain focusable div does not (H26)', () => {
     install()
     const world = document.createElement('div')
     world.tabIndex = 0
     world.setAttribute('data-owns-keys', 'arrows')
-    document.body.append(world)
+    const plain = document.createElement('div')
+    plain.tabIndex = 0
+    document.body.append(world, plain)
     world.focus()
 
     press({ key: 'ArrowRight', shiftKey: true }, world)
     press({ key: 'ArrowUp', shiftKey: true }, world)
 
     expect(fake.port.command).not.toHaveBeenCalled()
+    // The positive control: the same presses on a plain focusable div turn the view and reset north.
+    plain.focus()
+    expect(press({ key: 'ArrowRight', shiftKey: true }, plain).defaultPrevented).toBe(true)
+    expect(press({ key: 'ArrowUp', shiftKey: true }, plain).defaultPrevented).toBe(true)
+    expect(fake.port.command.mock.calls.map(([c]) => c)).toEqual([{ kind: 'rotate-view', direction: 1 }, { kind: 'reset-north' }])
+  })
+
+  it('Shift+arrows in a listbox stay the listbox\'s; on a button outside any widget the view turns (H15)', () => {
+    install()
+    const list = document.createElement('ul')
+    list.setAttribute('role', 'listbox')
+    list.tabIndex = 0
+    const compass = document.createElement('button')
+    document.body.append(list, compass)
+
+    list.focus()
+    expect(press({ key: 'ArrowRight', shiftKey: true }, list).defaultPrevented).toBe(false)
+    expect(fake.port.command).not.toHaveBeenCalled()
+    compass.focus()
+    expect(press({ key: 'ArrowRight', shiftKey: true }, compass).defaultPrevented).toBe(true)
+    expect(press({ key: 'ArrowLeft', shiftKey: true }, compass).defaultPrevented).toBe(true)
+    expect(fake.port.command.mock.calls.map(([c]) => c)).toEqual([
+      { kind: 'rotate-view', direction: 1 },
+      { kind: 'rotate-view', direction: -1 },
+    ])
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('the dock splitter and the tool rail keep Shift+arrows (H18)', () => {
+    install()
+    // SidePanelDock's splitter: a focusable separator that resizes the dock.
+    const splitter = document.createElement('div')
+    splitter.setAttribute('role', 'separator')
+    splitter.tabIndex = 0
+    let resized = 0
+    splitter.addEventListener('keydown', (event) => { if (event.key === 'ArrowLeft') resized += 1 })
+    // ToolRail: a toolbar whose buttons move focus with the arrows.
+    const rail = document.createElement('div')
+    rail.setAttribute('role', 'toolbar')
+    const tool = document.createElement('button')
+    rail.append(tool)
+    document.body.append(splitter, rail)
+
+    splitter.focus()
+    press({ key: 'ArrowLeft', shiftKey: true }, splitter)
+    tool.focus()
+    press({ key: 'ArrowUp', shiftKey: true }, tool)
+
+    expect(resized).toBe(1)
+    expect(fake.port.command).not.toHaveBeenCalled()
+  })
+
+  it('declared arrow owners keep Shift+arrows: the lens, the phone sheet, the calendar and the carousel (H19)', () => {
+    install()
+    const owner = (attribute: boolean) => {
+      const root = document.createElement('div')
+      if (attribute) root.setAttribute('data-owns-keys', 'arrows')
+      const inner = document.createElement('button')
+      root.append(inner)
+      document.body.append(root)
+      return inner
+    }
+    const lens = owner(true)
+    const sheet = owner(true)
+    const carousel = owner(true)
+    // A calendar date button: its grid prevents every arrow itself, so it declares nothing.
+    const date = owner(false)
+    date.parentElement!.addEventListener('keydown', (event) => { if (event.key.startsWith('Arrow')) event.preventDefault() })
+
+    for (const [target, key] of [[lens, 'ArrowRight'], [sheet, 'ArrowUp'], [date, 'ArrowRight'], [carousel, 'ArrowLeft']] as const) {
+      target.focus()
+      press({ key, shiftKey: true }, target)
+    }
+
+    expect(fake.port.command).not.toHaveBeenCalled()
+    expect(run).not.toHaveBeenCalled()
   })
 
   it('F2 falls through to the shell when the map has no note to edit (H27)', () => {
