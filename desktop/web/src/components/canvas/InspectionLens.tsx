@@ -80,7 +80,7 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
       }
     }
     const move = (event: PointerEvent) => {
-      if (!drag || event.pointerId !== drag.id || !view.state.peek()) return
+      if (!drag || event.pointerId !== drag.id) return
       event.preventDefault()
       view.panByScreen({ x: drag.x - event.clientX, y: drag.y - event.clientY })
       drag.x = event.clientX; drag.y = event.clientY
@@ -132,7 +132,7 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
     <div className={styles.preview} data-inspection-frame data-owns-keys="arrows" role="group" tabIndex={0}
       aria-label={t('canvas.inspection.panHint', { mod: modKeyName(t) })}
       onKeyDown={event => {
-        if (event.target !== event.currentTarget || !state) return
+        if (event.target !== event.currentTarget) return
         const step = (MOD_IS_CMD ? event.metaKey : event.ctrlKey) ? LARGE_ARROW_STEP_PX : ARROW_STEP_PX
         const delta = { ArrowLeft: { x: -step, y: 0 }, ArrowRight: { x: step, y: 0 },
           ArrowUp: { x: 0, y: -step }, ArrowDown: { x: 0, y: step } }[event.key]

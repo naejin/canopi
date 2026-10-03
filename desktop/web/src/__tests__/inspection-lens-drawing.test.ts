@@ -4,6 +4,7 @@ import './support/camera-tolerance'
 import { drawInspectionLensScene } from '../canvas/runtime/inspection-lens-drawing'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
 import type { SceneDesignObjectSelection } from '../canvas/runtime/scene'
+import { getCanvasInteractionStrokeVisual } from '../canvas/runtime/scene-visuals'
 import { createTestRendererView, createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
 
 /** A lens snapshot and the placement its view draws it at (screen = world × scale + { x, y }, bearing 0). */
@@ -15,15 +16,18 @@ interface LensScene {
 function draw(
   ctx: ReturnType<typeof createMockCanvasContext>,
   scene: LensScene,
-  options: { widthPx?: number; heightPx?: number; dpr?: number } = {},
+  options: { widthPx?: number; heightPx?: number; dpr?: number; scratch?: (widthPx: number, heightPx: number) => CanvasRenderingContext2D | null } = {},
 ): void {
   const widthPx = options.widthPx ?? 400
   const heightPx = options.heightPx ?? 300
   const view = createTestRendererView(scene.viewport, { screen: { width: widthPx, height: heightPx, devicePixelRatio: options.dpr ?? 1 } })
-  drawInspectionLensScene(ctx as unknown as CanvasRenderingContext2D, scene.snapshot, view, {
+  const { snapshot } = scene
+  const hoveredPlantId = snapshot.hoverTarget?.kind === 'plant' ? snapshot.hoverTarget.id : null
+  drawInspectionLensScene(ctx as unknown as CanvasRenderingContext2D, { scene: snapshot.scene, speciesCache: snapshot.speciesCache, hoveredPlantId }, view, {
     widthPx,
     heightPx,
-    dpr: options.dpr,
+    dpr: options.dpr ?? 1,
+    scratch: options.scratch ?? (() => null),
   })
 }
 
@@ -126,6 +130,111 @@ describe('drawInspectionLensScene', () => {
     expect(canvas.roundRects).toEqual([expect.objectContaining({ widthCss: 18, heightCss: 18 })])
   })
 
+  it('composites translucent plants once: opaque on a scratch, then one drawImage at the Plants opacity (canopi-h90p.67)', () => {
+    const ctx = createAlphaRecordingContext()
+    const scratch = createAlphaRecordingContext()
+    const scratches: Array<[number, number]> = []
+    const half = createRendererSnapshot({
+      plants: [createPlant({ id: 'a', position: { x: 10, y: 10 } }), createPlant({ id: 'b', position: { x: 10.4, y: 10 } })],
+      zones: [{ kind: 'zone', id: 'bed', name: 'bed', zoneType: 'rect', locked: false, rotationDeg: 0,
+        points: [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 20 }, { x: 0, y: 20 }], fillColor: null, notes: null }],
+      layers: [
+        { kind: 'layer', name: 'plants', visible: true, locked: false, opacity: .5 },
+        { kind: 'layer', name: 'zones', visible: true, locked: false, opacity: .5 },
+      ],
+      viewport: { x: 0, y: 0, scale: 20 },
+    })
+    draw(ctx, { ...half, snapshot: { ...half.snapshot, hoverTarget: { kind: 'plant', id: 'a', state: 'hover' } } }, {
+      dpr: 2,
+      scratch: (width, height) => { scratches.push([width, height]); return scratch as unknown as CanvasRenderingContext2D },
+    })
+
+    // Both symbols and the hover ring are opaque on the scratch, so the overlap is no darker than either plant.
+    expect(scratches).toEqual([[800, 600]])
+    expect(scratch.fills.length).toBeGreaterThanOrEqual(2)
+    expect(scratch.fills.every((alpha) => alpha === 1)).toBe(true)
+    expect(scratch.strokes.length).toBeGreaterThan(0)
+    expect(Math.max(...scratch.strokes)).toBeLessThanOrEqual(1)
+    expect(Math.min(...scratch.strokes)).toBeGreaterThan(.5)
+    // The page gets the zone per shape, then the plants in one drawImage at 0.5 on the device-pixel grid.
+    expect(ctx.drawImage).toHaveBeenCalledExactlyOnceWith(scratch.canvas, 0, 0)
+    expect(ctx.drawImageAlpha).toEqual([.5])
+    expect(ctx.fills).toEqual([.1])
+    expect(ctx.order.indexOf('fill')).toBeLessThan(ctx.order.indexOf('drawImage'))
+    expect(ctx.setTransform).toHaveBeenLastCalledWith(1, 0, 0, 1, 0, 0)
+
+    // An opaque layer draws straight on the page.
+    const opaque = createAlphaRecordingContext()
+    const unused = vi.fn()
+    draw(opaque, createRendererSnapshot({
+      plants: [createPlant({ id: 'a', position: { x: 10, y: 10 } })],
+      viewport: { x: 0, y: 0, scale: 20 },
+    }), { scratch: unused })
+    expect(unused).not.toHaveBeenCalled()
+    expect(opaque.drawImage).not.toHaveBeenCalled()
+    expect(opaque.fills).toEqual([1])
+  })
+
+  it('clears the whole reused scratch backing at a fractional device pixel ratio', () => {
+    // A 431 x 300 lens at dpr 1.25 has a 539 x 375 backing: a clear in CSS pixels reaches only 538.75 x 375 device pixels.
+    const scratch = createAlphaRecordingContext()
+    scratch.canvas = { width: 539, height: 375 }
+    let m = { a: 1, d: 1, e: 0, f: 0 }
+    scratch.setTransform = vi.fn((a: number, _b: number, _c: number, d: number, e: number, f: number) => { m = { a, d, e, f } })
+    const cleared: Array<{ readonly left: number; readonly top: number; readonly right: number; readonly bottom: number }> = []
+    scratch.clearRect = vi.fn((x: number, y: number, w: number, h: number) => {
+      scratch.order.push('clearRect')
+      cleared.push({ left: m.a * x + m.e, top: m.d * y + m.f, right: m.a * (x + w) + m.e, bottom: m.d * (y + h) + m.f })
+    })
+    draw(createAlphaRecordingContext(), createRendererSnapshot({
+      plants: [createPlant({ id: 'edge', position: { x: 430.5 / 20, y: 5 } })],
+      layers: [{ kind: 'layer', name: 'plants', visible: true, locked: false, opacity: .5 }],
+      viewport: { x: 0, y: 0, scale: 20 },
+    }), { widthPx: 431, heightPx: 300, dpr: 1.25, scratch: () => scratch as unknown as CanvasRenderingContext2D })
+
+    expect(cleared.some((rect) => rect.left <= 0 && rect.top <= 0 && rect.right >= 539 && rect.bottom >= 375)).toBe(true)
+    expect(scratch.order.indexOf('clearRect')).toBeLessThan(scratch.order.indexOf('fill'))
+  })
+
+  it('keeps stack badges per shape at the Plants opacity, on the page above the composited plants', () => {
+    const ctx = createAlphaRecordingContext()
+    const scratch = createAlphaRecordingContext()
+    draw(ctx, createRendererSnapshot({
+      plants: [createPlant({ id: 'plant-1', position: { x: 10, y: 20 } }), createPlant({ id: 'plant-2', position: { x: 10, y: 20 } })],
+      layers: [{ kind: 'layer', name: 'plants', visible: true, locked: false, opacity: .5 }],
+      viewport: { x: 40, y: -15, scale: 3 },
+    }), { scratch: () => scratch as unknown as CanvasRenderingContext2D })
+    expect(scratch.fillText).not.toHaveBeenCalled()
+    expect(ctx.fills).toEqual([.5])
+    expect(ctx.fillText).toHaveBeenCalledOnce()
+    expect(ctx.order.indexOf('drawImage')).toBeLessThan(ctx.order.indexOf('fillText'))
+  })
+
+  it('draws the hover ring above every plant symbol, as the map does', () => {
+    const ring = getCanvasInteractionStrokeVisual('hover')
+    for (const opacity of [.5, 1]) {
+      const ctx = createAlphaRecordingContext()
+      const scratch = createAlphaRecordingContext()
+      const strokeStyles: string[] = []
+      for (const target of [ctx, scratch]) {
+        target.stroke = vi.fn(() => { target.order.push('stroke'); target.strokes.push(target.globalAlpha); strokeStyles.push(target.strokeStyle) })
+      }
+      // The hovered plant comes first, so its neighbour, drawn later and overlapping it, would cover a ring drawn with it.
+      const overlapping = createRendererSnapshot({
+        plants: [createPlant({ id: 'a', position: { x: 10, y: 10 } }), createPlant({ id: 'b', position: { x: 10.4, y: 10 } })],
+        layers: [{ kind: 'layer', name: 'plants', visible: true, locked: false, opacity }],
+        viewport: { x: 0, y: 0, scale: 20 },
+      })
+      draw(ctx, { ...overlapping, snapshot: { ...overlapping.snapshot, hoverTarget: { kind: 'plant', id: 'a', state: 'hover' } } },
+        { scratch: () => scratch as unknown as CanvasRenderingContext2D })
+      const target = opacity < 1 ? scratch : ctx
+      expect(target.fills.length).toBeGreaterThanOrEqual(2)
+      expect(strokeStyles.slice(-2)).toEqual([ring.casingColor, ring.color])
+      expect(target.order.lastIndexOf('fill')).toBeLessThan(target.order.length - 2)
+      expect(target.order.slice(-2)).toEqual(['stroke', 'stroke'])
+    }
+  })
+
   it('rings the hovered lens plant with the shared hover visual', () => {
     const ctx = createMockCanvasContext()
     const hovered = createRendererSnapshot({
@@ -225,6 +334,27 @@ function createMockCanvasContext() {
     globalAlpha: 1,
     lineWidth: 1,
   }
+}
+
+/** A mock context that records the alpha of every fill, stroke and drawImage, and the order of those calls. */
+function createAlphaRecordingContext() {
+  const order: string[] = []
+  const fills: number[] = []
+  const strokes: number[] = []
+  const drawImageAlpha: number[] = []
+  const context = {
+    ...createMockCanvasContext(),
+    canvas: { width: 0, height: 0 },
+    order,
+    fills,
+    strokes,
+    drawImageAlpha,
+    fill: vi.fn(() => { order.push('fill'); fills.push(context.globalAlpha) }),
+    stroke: vi.fn(() => { order.push('stroke'); strokes.push(context.globalAlpha) }),
+    fillText: vi.fn(() => { order.push('fillText') }),
+    drawImage: vi.fn((..._args: unknown[]) => { order.push('drawImage'); drawImageAlpha.push(context.globalAlpha) }),
+  }
+  return context
 }
 
 function createTransformTrackingCanvasContext(backingStoreScale: number) {

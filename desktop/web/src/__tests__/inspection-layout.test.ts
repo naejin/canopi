@@ -4,7 +4,7 @@ import { createTestRendererView, createTestSceneRendererSnapshot } from './suppo
 
 /** The lens's view at bearing 0: the plane origin at the centre of a frame, at the layout's scale. */
 function lensViewAt(plants: Parameters<typeof inspectionScale>[0], frame: { width: number; height: number }) {
-  const scale = inspectionScale(plants, { x: 0, y: 0 })
+  const scale = inspectionScale(plants, { x: 0, y: 0 }, 1)
   expect(Number.isFinite(scale)).toBe(true)
   return createTestRendererView({ x: frame.width / 2, y: frame.height / 2, scale }, { screen: { ...frame, devicePixelRatio: 1 } })
 }

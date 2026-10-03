@@ -10,6 +10,8 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(
 
 /** The 100 m start frame the camera used to place on an 800 x 600 screen: the lens tests read it. */
 const START = { screen: { width: 800, height: 600 }, viewport: { x: 100, y: 0, scale: 6 } }
+/** The plane the test views use by default. */
+const TEST_PLANE = createSessionPlane({ lon: 0, lat: 0 })
 /** A camera with no screen yet. */
 const UNSIZED = { screen: { width: 0, height: 0 } }
 
@@ -23,11 +25,13 @@ function multiply(m: Matrix, n: Matrix): Matrix {
   }
 }
 
-/** A 2D context that keeps the current transform and records each arc's centre with it; other calls do nothing. */
+/** A 2D context that keeps the current transform and records each arc's centre with it, each fill's and drawImage's alpha; other calls do nothing. */
 function recordingContext() {
   let m: Matrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
   const stack: Matrix[] = []
-  const arcs: Array<{ readonly x: number; readonly y: number; readonly m: Matrix }> = []
+  const arcs: Array<{ readonly x: number; readonly y: number; readonly r: number; readonly m: Matrix }> = []
+  const fills: number[] = []
+  const draws: Array<{ readonly image: unknown; readonly alpha: number }> = []
   const target: Record<string | symbol, unknown> = {
     setTransform: (a: number, b: number, c: number, d: number, e: number, f: number) => { m = { a, b, c, d, e, f } },
     transform: (a: number, b: number, c: number, d: number, e: number, f: number) => { m = multiply(m, { a, b, c, d, e, f }) },
@@ -37,14 +41,17 @@ function recordingContext() {
     translate: (x: number, y: number) => { m = multiply(m, { a: 1, b: 0, c: 0, d: 1, e: x, f: y }) },
     scale: (x: number, y: number) => { m = multiply(m, { a: x, b: 0, c: 0, d: y, e: 0, f: 0 }) },
     rotate: (r: number) => { m = multiply(m, { a: Math.cos(r), b: Math.sin(r), c: -Math.sin(r), d: Math.cos(r), e: 0, f: 0 }) },
-    arc: (x: number, y: number) => { arcs.push({ x, y, m }) },
+    arc: (x: number, y: number, r: number) => { arcs.push({ x, y, r, m }) },
+    fill: () => { fills.push(target.globalAlpha as number) },
+    drawImage: (image: unknown) => { draws.push({ image, alpha: target.globalAlpha as number }) },
     measureText: (text: string) => ({ width: text.length * 7 }),
+    globalAlpha: 1,
   }
   const ctx = new Proxy(target, {
     get: (t, key) => (key in t ? t[key] : (t[key] = () => {})),
     set: (t, key, value) => { t[key] = value; return true },
   })
-  return { ctx: ctx as unknown as CanvasRenderingContext2D, arcs }
+  return { ctx: ctx as unknown as CanvasRenderingContext2D, arcs, fills, draws }
 }
 
 const MINT = {
@@ -64,7 +71,7 @@ function mountLensBesideMint(bearingDeg = 0) {
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(recording.ctx as never)
   let snapshot = createTestSceneRendererSnapshot({ scene: { plants: [MINT] } })
   const camera = bearingDeg === 0 ? createTestView(START) : createTestView({ screen: START.screen, camera: { bearingDeg } })
-  const owner = new SceneCanvasInspectionOwner({ frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
+  const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
     getSnapshot: () => snapshot, setHoveredTarget: (target) => { snapshot = { ...snapshot, hoverTarget: target && { ...target, state: 'hover' } } } })
   const container = document.createElement('div')
   Object.defineProperties(container, { clientWidth: { value: 430 }, clientHeight: { value: 390 } })
@@ -85,7 +92,7 @@ describe('Inspection Lens ownership', () => {
     camera.setViewport({ x: 100, y: 50, scale: 10 })
     const snapshot = createTestSceneRendererSnapshot()
     const before = JSON.stringify(snapshot.scene)
-    const owner = new SceneCanvasInspectionOwner({ frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
+    const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
       getSnapshot: () => snapshot, setHoveredTarget() {} })
     const view = owner.mount(document.createElement('div'))
     view.inspectAtScreenPoint({ x: 250, y: 180 })
@@ -107,7 +114,7 @@ describe('Inspection Lens ownership', () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
     const camera = createTestView(START)
     camera.setViewport({ x: 100, y: 50, scale: 10 })
-    const owner = new SceneCanvasInspectionOwner({ frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
+    const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
       getSnapshot: () => createTestSceneRendererSnapshot(), setHoveredTarget() {} })
     const view = owner.mount(document.createElement('div'))
 
@@ -132,7 +139,7 @@ describe('Inspection Lens ownership', () => {
     vi.useFakeTimers()
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
     const camera = createTestView(START)
-    const owner = new SceneCanvasInspectionOwner({ frames: camera.frames,
+    const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames,
       revision: { scene: signal(0), plantNames: signal(0) },
       getSnapshot: () => createTestSceneRendererSnapshot(), setHoveredTarget() {} })
     const view = owner.mount(document.createElement('div'))
@@ -181,7 +188,7 @@ describe('Inspection Lens ownership', () => {
     vi.useFakeTimers()
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
     const camera = createTestView(START)
-    const owner = new SceneCanvasInspectionOwner({ frames: camera.frames,
+    const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames,
       revision: { scene: signal(0), plantNames: signal(0) },
       getSnapshot: () => createTestSceneRendererSnapshot(), setHoveredTarget() {} })
     const view = owner.mount(document.createElement('div'))
@@ -212,7 +219,7 @@ describe('Inspection Lens ownership', () => {
       plantedDate: null, quantity: null, locked: false,
     }] } })
     const revision = { scene: signal(0), plantNames: signal(0) }, setHoveredTarget = vi.fn(target => { snapshot = { ...snapshot, hoverTarget: target } })
-    const owner = new SceneCanvasInspectionOwner({ frames: createTestView(UNSIZED).frames, revision, getSnapshot: () => snapshot, setHoveredTarget })
+    const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: createTestView(UNSIZED).frames, revision, getSnapshot: () => snapshot, setHoveredTarget })
     const view = owner.mount(document.createElement('div'))
     vi.advanceTimersByTime(20)
     view.highlightPlant('mint'); vi.advanceTimersByTime(20)
@@ -231,7 +238,7 @@ describe('Inspection Lens ownership', () => {
       canopySpreadM: null, rotationDeg: null, scale: null, notes: null, plantedDate: null, quantity: null, locked: false,
     })) } })
     const camera = createTestView(START)
-    const owner = new SceneCanvasInspectionOwner({ frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
+    const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
       getSnapshot: () => snapshot, setHoveredTarget() {} })
     const container = document.createElement('div')
     Object.defineProperties(container, { clientWidth: { value: 430 }, clientHeight: { value: 390 } })
@@ -260,7 +267,7 @@ describe('Inspection Lens ownership', () => {
     const snapshot = createTestSceneRendererSnapshot()
     const camera = createTestView(START)
     const viewport = { ...camera.viewport() }
-    const owner = new SceneCanvasInspectionOwner({ frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
+    const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
       getSnapshot: () => snapshot, setHoveredTarget() {} })
     const view = owner.mount(document.createElement('div'))
     // A screen pan before the lens has painted has no scale to read: it does nothing.
@@ -296,7 +303,7 @@ describe('Inspection Lens ownership', () => {
     })
     const camera = createTestView(UNSIZED)
     const getSnapshot = vi.fn(() => createTestSceneRendererSnapshot())
-    const owner = new SceneCanvasInspectionOwner({ frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
+    const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
       getSnapshot, setHoveredTarget() {} })
     const container = document.createElement('div')
     try {
@@ -318,7 +325,7 @@ describe('Inspection Lens ownership', () => {
     }] } })
     const before = JSON.stringify(snapshot.scene)
     const camera = createTestView(START)
-    const owner = new SceneCanvasInspectionOwner({ frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
+    const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
       getSnapshot: () => snapshot, setHoveredTarget() {} })
     const container = document.createElement('div')
     const view = owner.mount(container)
@@ -354,6 +361,31 @@ describe('Inspection Lens ownership', () => {
     expect(view.state.value).toBeNull()
     view.dispose()
   })
+  it('a plant just outside the lens still sets an edge plant\'s spacing', () => {
+    vi.useFakeTimers()
+    const recording = recordingContext()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(recording.ctx as never)
+    const plant = (id: string, x: number, y: number) => ({ ...MINT, id, position: { x, y } })
+    // Five plants a metre apart hold the lens at its 140 px/m floor; the edge plant is 19 px left of the 430 px lens,
+    // its neighbour 21 px left, two pixels away.
+    const plants = [plant('c0', 0, 0), plant('c1', 0, 1), plant('c2', 0, -1), plant('c3', 1, 0), plant('c4', 1, 1),
+      plant('edge', -(215 + 19) / 140, 0), plant('neighbour', -(215 + 21) / 140, 0)]
+    const snapshot = createTestSceneRendererSnapshot({ scene: { plants } })
+    const camera = createTestView(START)
+    const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames,
+      revision: { scene: signal(0), plantNames: signal(0) }, getSnapshot: () => snapshot, setHoveredTarget() {} })
+    const container = document.createElement('div')
+    Object.defineProperties(container, { clientWidth: { value: 430 }, clientHeight: { value: 390 } })
+    const view = owner.mount(container)
+    view.inspectAtWorldPoint({ x: 0, y: 0 })
+    vi.advanceTimersByTime(20)
+    expect(view.state.value!.scale).toBe(140)
+    const edge = recording.arcs.find((arc) => arc.x === plants[5]!.position.x)!
+    // Two CSS pixels between centres leaves a .84 CSS-pixel position mark, as on the map.
+    expect(edge.r * 140).toBeCloseTo(.84)
+    owner.dispose()
+  })
+
   it('the lens draws the same pixels through its view transform at bearing 0', () => {
     const { owner, view, arcs } = mountLensBesideMint()
     const { scale } = view.state.value!
@@ -457,5 +489,96 @@ describe('Inspection Lens ownership', () => {
     expectQuad(todayQuad())
     owner.dispose()
     expect(view.sourceQuad.value).toBeNull()
+  })
+})
+
+/**
+ * A lens over two overlapping mints with the Plants layer at 50 %. The lens canvas gets a recording context; every other
+ * canvas, the offscreen scratch, gets what `scratchContext` returns for it.
+ */
+function mountTranslucentLens(scratchContext: (canvas: HTMLCanvasElement) => CanvasRenderingContext2D | null) {
+  vi.useFakeTimers()
+  let dpr = 2
+  vi.stubGlobal('devicePixelRatio', dpr)
+  const main = recordingContext()
+  let lensCanvas: HTMLCanvasElement | null = null
+  const scratchCanvases: HTMLCanvasElement[] = []
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function (this: HTMLCanvasElement) {
+    lensCanvas ??= this
+    if (this === lensCanvas) return main.ctx as never
+    scratchCanvases.push(this)
+    return scratchContext(this) as never
+  })
+  const snapshot = createTestSceneRendererSnapshot({ scene: {
+    layers: [{ kind: 'layer', name: 'plants', visible: true, opacity: .5, locked: false }],
+    plants: [MINT, { ...MINT, id: 'mint-2', position: { x: 1.2, y: 2 } }],
+  } })
+  const camera = createTestView(START)
+  const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames,
+    revision: { scene: signal(0), plantNames: signal(0) }, getSnapshot: () => snapshot, setHoveredTarget() {} })
+  let width = 430
+  const container = document.createElement('div')
+  Object.defineProperties(container, { clientWidth: { get: () => width }, clientHeight: { value: 390 } })
+  const view = owner.mount(container)
+  view.inspectAtWorldPoint({ x: 1, y: 2 })
+  vi.advanceTimersByTime(20)
+  return {
+    owner, view, main, scratchCanvases,
+    /** Resizes the lens and changes the device pixel ratio, then lets the next paint run. */
+    resize(nextWidth: number, nextDpr: number) {
+      width = nextWidth; dpr = nextDpr
+      vi.stubGlobal('devicePixelRatio', dpr)
+      owner.refresh()
+      vi.advanceTimersByTime(20)
+    },
+  }
+}
+
+/** A recording scratch context bound to its canvas, as a real one is. */
+function scratchFor(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+  const scratch = recordingContext().ctx
+  ;(scratch as unknown as { canvas: HTMLCanvasElement }).canvas = canvas
+  return scratch
+}
+
+describe('Inspection Lens Plants opacity (canopi-h90p.67)', () => {
+  it('composites a translucent Plants layer from its scratch once, at the layer opacity, sized to the backing', () => {
+    const { owner, main, scratchCanvases, resize } = mountTranslucentLens(scratchFor)
+    expect(scratchCanvases).toHaveLength(1)
+    const [scratch] = scratchCanvases
+    expect(main.draws).toEqual([{ image: scratch, alpha: .5 }])
+    expect(main.fills).toEqual([])
+    expect([scratch!.width, scratch!.height]).toEqual([860, 780])
+
+    // A resize at a fractional device pixel ratio reuses the scratch at the new backing size.
+    main.draws.length = 0
+    resize(431, 1.25)
+    expect(scratchCanvases).toHaveLength(1)
+    expect(main.draws).toEqual([{ image: scratch, alpha: .5 }])
+    expect([scratch!.width, scratch!.height]).toEqual([Math.round(431 * 1.25), Math.round(390 * 1.25)])
+    owner.dispose()
+  })
+
+  it('draws translucent plants per shape when the scratch context throws, keeping the preview', () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { owner, view, main, resize } = mountTranslucentLens(() => { throw new Error('no second context') })
+    expect(view.state.value!.previewAvailable).toBe(true)
+    expect(main.draws).toEqual([])
+    expect(main.fills.length).toBeGreaterThanOrEqual(2)
+    expect(main.fills.every((alpha) => alpha === .5)).toBe(true)
+    expect(logged).toHaveBeenCalled()
+    resize(431, 1.25)
+    expect(view.state.value!.previewAvailable).toBe(true)
+    owner.dispose()
+  })
+
+  it('asks for a scratch context once when none can be made, not on every paint', () => {
+    const { owner, view, main, scratchCanvases, resize } = mountTranslucentLens(() => null)
+    resize(431, 1.25)
+    resize(432, 2)
+    expect(scratchCanvases).toHaveLength(1)
+    expect(view.state.value!.previewAvailable).toBe(true)
+    expect(main.fills.every((alpha) => alpha === .5)).toBe(true)
+    owner.dispose()
   })
 })

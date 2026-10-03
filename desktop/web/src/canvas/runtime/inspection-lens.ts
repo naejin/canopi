@@ -3,7 +3,7 @@ import type { CanvasInspectionHandle, CanvasInspectionState, InspectionPoint } f
 import type { CanvasQueryRevision } from './runtime'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { SceneDesignObjectTarget } from './scene'
-import { createSessionPlane, type SessionPlane } from '../session-plane'
+import type { SessionPlane } from '../session-plane'
 import { stageScaleToMapZoom } from '../projection'
 import { drawInspectionLensScene } from './inspection-lens-drawing'
 import { getSceneLayerStyle } from './scene-visuals'
@@ -20,7 +20,7 @@ interface InspectionOwnerOptions {
   readonly frames: Pick<ViewFrameSource, 'viewFrame'>
   readonly revision: CanvasQueryRevision
   /** The live session plane; the inspected point follows it across a re-origin. */
-  readSessionPlane?(): SessionPlane | null
+  readSessionPlane(): SessionPlane
   getSnapshot(): SceneRendererSnapshot
   setHoveredTarget(target: SceneDesignObjectTarget | null): void
 }
@@ -38,6 +38,22 @@ export class SceneCanvasInspectionOwner {
     let ctx: CanvasRenderingContext2D | null = null
     try { ctx = canvas.getContext('2d') } catch (error) { console.error('Canvas inspection preview unavailable:', error) }
     container.appendChild(canvas)
+    // Offscreen, made on the first translucent Plants layer and reused: the plants are composited from it once. Asked for
+    // once; without one the plants are drawn per shape.
+    let scratch: CanvasRenderingContext2D | null = null
+    let scratchAsked = false
+    function scratchSized(widthPx: number, heightPx: number): CanvasRenderingContext2D | null {
+      if (!scratchAsked) {
+        scratchAsked = true
+        try { scratch = document.createElement('canvas').getContext('2d') } catch (error) {
+          console.error('Canvas inspection plant compositing unavailable:', error)
+        }
+      }
+      if (scratch && (scratch.canvas.width !== widthPx || scratch.canvas.height !== heightPx)) {
+        scratch.canvas.width = widthPx; scratch.canvas.height = heightPx
+      }
+      return scratch
+    }
     // The inspected point in session-plane metres, and the plane it belongs to.
     let point: InspectionPoint | null = null
     let pointPlane: SessionPlane | null = null
@@ -66,12 +82,12 @@ export class SceneCanvasInspectionOwner {
     }
     function setPoint(next: InspectionPoint | null) {
       point = next
-      pointPlane = options.readSessionPlane?.() ?? null
+      pointPlane = options.readSessionPlane()
     }
     /** The inspected point in the current plane: a re-origin keeps the same ground. */
     function livePoint(): InspectionPoint | null {
-      const plane = options.readSessionPlane?.() ?? null
-      if (point && pointPlane && plane && plane !== pointPlane) {
+      const plane = options.readSessionPlane()
+      if (point && pointPlane && plane !== pointPlane) {
         point = plane.toPlane(pointPlane.toGeo(point))
       }
       pointPlane = plane
@@ -94,7 +110,7 @@ export class SceneCanvasInspectionOwner {
       const dpr = Math.max(window.devicePixelRatio || 1, 1)
       // The lens's own view: the inspected point at its centre, at the main map's live bearing, so the loupe matches what is
       // under the pointer (spec §4.13). Names, rings and the cull go through it.
-      const plane = options.readSessionPlane?.() ?? createSessionPlane({ lon: 0, lat: 0 })
+      const plane = options.readSessionPlane()
       const mainView = options.frames.viewFrame.peek().view
       const view = buildViewTransform({
         camera: {
@@ -115,21 +131,9 @@ export class SceneCanvasInspectionOwner {
       footprint.value = view.visibleWorldQuad()
       if (ctx) {
         canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr)
-        const plants = visible.filter((plant) => {
-          const onLens = view.worldToScreen(plant.position)
-          return Math.abs(onLens.x - width / 2) <= width / 2 + 20 && Math.abs(onLens.y - height / 2) <= height / 2 + 20
-        })
-        const lensSnapshot: SceneRendererSnapshot = {
-          ...snapshot,
-          scene: { ...snapshot.scene, plants, annotations: [], measurementGuides: [], groups: [] },
-          selectedPlantIds: new Set(), selectedZoneIds: new Set(), selectedAnnotationIds: new Set(), selectedMeasurementGuideIds: new Set(),
-          highlightedPlantIds: new Set(), highlightedZoneIds: new Set(), hoveredCanonicalName: null,
-          hoverTarget: highlightedId ? { kind: 'plant', id: highlightedId, state: 'hover' } : null,
-          speciesFocus: { canonicalName: null },
-          revealedAnnotationId: null, selectionLabelPlantIds: new Set(),
-        }
         try {
-          drawInspectionLensScene(ctx, lensSnapshot, view, { widthPx: width, heightPx: height, dpr })
+          drawInspectionLensScene(ctx, { scene: snapshot.scene, speciesCache: snapshot.speciesCache, hoveredPlantId: highlightedId },
+            view, { widthPx: width, heightPx: height, dpr, scratch: scratchSized })
         } catch (error) {
           console.error('Canvas inspection preview unavailable:', error)
           ctx = null
