@@ -14,9 +14,7 @@ describe('maplibre surface state adapter', () => {
   it('returns idle defaults from the shared state constant', () => {
     expect(IDLE_MAPLIBRE_CANVAS_SURFACE_STATE).toEqual({
       status: 'idle',
-      errorMessage: null,
       terrainStatus: 'idle',
-      terrainErrorMessage: null,
       layerSkipped: false,
       basemapStatus: 'idle',
       retryable: false,
@@ -26,15 +24,13 @@ describe('maplibre surface state adapter', () => {
   it('detects state equality including terrain fields', () => {
     const left = {
       status: 'ready' as const,
-      errorMessage: null,
       terrainStatus: 'error' as const,
-      terrainErrorMessage: 'dem failed',
       layerSkipped: false,
       basemapStatus: 'idle' as const,
       retryable: false,
     }
     const right = { ...left }
-    const different = { ...left, terrainErrorMessage: null }
+    const different = { ...left, terrainStatus: 'ready' as const }
 
     expect(mapLibreCanvasSurfaceStateEquals(left, right)).toBe(true)
     expect(mapLibreCanvasSurfaceStateEquals(left, different)).toBe(false)

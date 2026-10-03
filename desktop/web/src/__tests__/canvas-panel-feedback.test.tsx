@@ -85,9 +85,7 @@ describe('CanvasPanel basemap feedback', () => {
     mockBasemapState = {
       ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
       status: 'loading',
-      errorMessage: null,
       terrainStatus: 'idle',
-      terrainErrorMessage: null,
     }
 
     await act(async () => {
@@ -106,9 +104,7 @@ describe('CanvasPanel basemap feedback', () => {
     mockBasemapState = {
       ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
       status: 'loading',
-      errorMessage: null,
       terrainStatus: 'idle',
-      terrainErrorMessage: null,
     }
 
     await act(async () => {
@@ -125,9 +121,7 @@ describe('CanvasPanel basemap feedback', () => {
     mockBasemapState = {
       ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
       status: 'ready',
-      errorMessage: null,
       terrainStatus: 'idle',
-      terrainErrorMessage: null,
     }
 
     await act(async () => {
@@ -150,9 +144,7 @@ describe('CanvasPanel basemap feedback', () => {
     mockBasemapState = {
       ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
       status: 'ready',
-      errorMessage: null,
       terrainStatus: 'ready',
-      terrainErrorMessage: null,
     }
 
     await act(async () => {
@@ -174,9 +166,7 @@ describe('CanvasPanel basemap feedback', () => {
     mockBasemapState = {
       ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
       status: 'ready',
-      errorMessage: null,
       terrainStatus: 'idle',
-      terrainErrorMessage: null,
     }
 
     await act(async () => {
@@ -191,7 +181,6 @@ describe('CanvasPanel basemap feedback', () => {
     mockBasemapState = {
       ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
       status: 'error',
-      errorMessage: 'style fetch failed',
     }
 
     await act(async () => {
@@ -208,7 +197,6 @@ describe('CanvasPanel basemap feedback', () => {
     mockBasemapState = {
       ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
       status: 'error',
-      errorMessage: 'MapLibre WebGL context was lost.',
       retryable: true,
     }
 
@@ -228,7 +216,6 @@ describe('CanvasPanel basemap feedback', () => {
       ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
       status: 'ready',
       terrainStatus: 'error',
-      terrainErrorMessage: 'dem fetch failed',
     }
 
     await act(async () => {

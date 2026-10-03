@@ -420,7 +420,7 @@ describe('WorkspaceMapControls', () => {
     controls.updateMapContributions(input)
     await vi.waitFor(() => expect(failure).toHaveBeenCalledExactlyOnceWith(cleanup))
     expect(map.remove).toHaveBeenCalledOnce()
-    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'error', errorMessage: cleanup.message })
+    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'error' })
     const mutations = map.addSource.mock.calls.length
     controls.updateMapContributions(input)
     expect(map.addSource).toHaveBeenCalledTimes(mutations)
@@ -442,7 +442,7 @@ describe('WorkspaceMapControls', () => {
     map.emit('style.load')
     await expect(acquisition).resolves.toBe(map)
     expect(map.remove).not.toHaveBeenCalled()
-    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'ready', errorMessage: null, layerSkipped: true })
+    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'ready', layerSkipped: true })
     expect([...map.layers.keys()].some((id) => id.startsWith('panel-target-'))).toBe(false)
     expect(logError).toHaveBeenCalledWith('Skipped a map overlay that failed to sync:', error)
   })
@@ -568,7 +568,7 @@ describe('WorkspaceMapControls', () => {
     const rejection = expect(acquisition).rejects.toThrow(stage === 'webgl' ? 'WebGL2' : error.message)
     if (stage === 'pre-admission') (await waitForMap(maps)).emit('error', { error })
     await rejection
-    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'error', errorMessage: stage === 'webgl' ? expect.stringContaining('WebGL2') : error.message })
+    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'error' })
   })
 
   it('keeps an ordinary acquisition abort idle', async () => {
@@ -580,7 +580,7 @@ describe('WorkspaceMapControls', () => {
     const rejected = expect(acquisition).rejects.toMatchObject({ name: 'AbortError' })
     abort.abort()
     await rejected
-    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'idle', errorMessage: null })
+    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'idle' })
   })
 
   it.each(['loader rejected', new DOMException('access denied', 'SecurityError'), new DOMException('loader cancelled internally', 'AbortError')])(
@@ -594,7 +594,7 @@ describe('WorkspaceMapControls', () => {
       await expect(controls.createMap(abort.signal)).rejects.toBe(error)
       expect(abort.signal.aborted).toBe(false)
       expect(states.mock.lastCall?.[0]).toMatchObject({
-        status: 'error', errorMessage: typeof error === 'string' ? error : error.message,
+        status: 'error',
       })
     },
   )
@@ -608,7 +608,7 @@ describe('WorkspaceMapControls', () => {
     const admitted = await acquisition
     controls.releaseMap(admitted, error)
     controls.releaseMap(admitted)
-    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'error', errorMessage: error.message })
+    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'error' })
     expect(map.remove).toHaveBeenCalledOnce()
   })
 
@@ -1380,7 +1380,6 @@ describe('WorkspaceMapControls', () => {
     expect(maps).toEqual([])
     expect(states).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
       status: 'error',
-      errorMessage: expect.stringContaining('WebGL2 is unavailable'),
       retryable: false,
     }))
   })

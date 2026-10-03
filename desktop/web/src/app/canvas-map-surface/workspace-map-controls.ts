@@ -20,7 +20,6 @@ import { mapErrorResourceId } from '../../maplibre/map-error-owner'
 import { describeMapErrorEvent, logMapError, redactCredentials, redactError } from '../../maplibre/redact-credentials'
 import type { MapLibreSurfaceLifetime } from '../../maplibre/surface-adapter'
 import { IDLE_MAPLIBRE_CANVAS_SURFACE_STATE } from '../../maplibre/canvas-surface-state'
-import { toMapLibreSurfaceErrorMessage } from '../../maplibre/canvas-surface-errors'
 import {
   createWorkspaceMapLibreMap,
   type WorkspaceMapSnapshot,
@@ -107,10 +106,9 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
       this.releaseAttempt(previous)
     }
     if (!(this.options.canCreateWebGL2Context ?? canCreateWebGL2Context)()) {
-      const error = new WorkspaceWebGL2UnavailableError()
       // No map attempt exists to publish its failure, so publish it here.
-      this.publishUnavailable(error)
-      return Promise.reject(error)
+      this.publishUnavailable()
+      return Promise.reject(new WorkspaceWebGL2UnavailableError())
     }
     this.surface.attach(this.options.container)
 
@@ -345,12 +343,11 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     }
   }
 
-  private publishUnavailable(error: Error): void {
+  private publishUnavailable(): void {
     try {
       this.options.contributions?.onStateChange?.({
         ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
         status: 'error',
-        errorMessage: toMapLibreSurfaceErrorMessage(error),
         // No Retry: a new map would find no WebGL2 either.
         retryable: false,
       })

@@ -4,9 +4,7 @@ import type { MapLibreCanvasSurfaceState } from '../maplibre/canvas-surface-stat
 
 const READY_MAP_STATE: MapLibreCanvasSurfaceState = {
   status: 'ready',
-  errorMessage: null,
   terrainStatus: 'idle',
-  terrainErrorMessage: null,
   layerSkipped: false,
   basemapStatus: 'idle',
   retryable: false,
@@ -42,7 +40,7 @@ describe('Map Notice read model', () => {
     expect(getMapNoticeReadModel({
       hasDesign: true,
       mapVisible: true,
-      mapSurface: { ...READY_MAP_STATE, status: 'error', errorMessage: 'style fetch failed' },
+      mapSurface: { ...READY_MAP_STATE, status: 'error' },
       t: translate,
     })).toEqual({
       visible: true,
@@ -57,7 +55,7 @@ describe('Map Notice read model', () => {
     expect(getMapNoticeReadModel({
       hasDesign: true,
       mapVisible: true,
-      mapSurface: { ...READY_MAP_STATE, status: 'error', errorMessage: 'context lost', retryable: true, basemapStatus: 'failed' },
+      mapSurface: { ...READY_MAP_STATE, status: 'error', retryable: true, basemapStatus: 'failed' },
       t: translate,
     })).toEqual({
       visible: true,
@@ -73,7 +71,7 @@ describe('Map Notice read model', () => {
     expect(getMapNoticeReadModel({
       hasDesign: true,
       mapVisible: true,
-      mapSurface: { ...failed, layerSkipped: true, terrainStatus: 'error', terrainErrorMessage: 'dem fetch failed' },
+      mapSurface: { ...failed, layerSkipped: true, terrainStatus: 'error' },
       t: translate,
     })).toEqual({
       visible: true,
@@ -85,7 +83,7 @@ describe('Map Notice read model', () => {
     expect(getMapNoticeReadModel({
       hasDesign: true,
       mapVisible: true,
-      mapSurface: { ...failed, status: 'error', errorMessage: 'context lost' },
+      mapSurface: { ...failed, status: 'error' },
       t: translate,
     })).toMatchObject({ statusText: 'Map unavailable', retry: false })
   })
@@ -97,7 +95,6 @@ describe('Map Notice read model', () => {
       mapSurface: {
         ...READY_MAP_STATE,
         terrainStatus: 'error',
-        terrainErrorMessage: 'dem fetch failed',
       },
       t: translate,
     })).toEqual({
@@ -143,7 +140,7 @@ describe('Map Notice read model', () => {
     expect(getMapNoticeReadModel({
       hasDesign: false,
       mapVisible: true,
-      mapSurface: { ...READY_MAP_STATE, status: 'error', errorMessage: 'boom' },
+      mapSurface: { ...READY_MAP_STATE, status: 'error' },
       t: translate,
     })).toMatchObject({ visible: false, mapSurfaceVisible: false, statusText: '' })
   })
@@ -152,7 +149,7 @@ describe('Map Notice read model', () => {
     expect(getMapNoticeReadModel({
       hasDesign: true,
       mapVisible: false,
-      mapSurface: { ...READY_MAP_STATE, status: 'error', errorMessage: 'context lost', retryable: true },
+      mapSurface: { ...READY_MAP_STATE, status: 'error', retryable: true },
       t: translate,
     })).toEqual({
       visible: true,
@@ -164,7 +161,7 @@ describe('Map Notice read model', () => {
     expect(getMapNoticeReadModel({
       hasDesign: true,
       mapVisible: false,
-      mapSurface: { ...READY_MAP_STATE, status: 'error', errorMessage: 'context lost' },
+      mapSurface: { ...READY_MAP_STATE, status: 'error' },
       t: translate,
     })).toMatchObject({ visible: true, statusText: 'Map unavailable', retry: false })
   })

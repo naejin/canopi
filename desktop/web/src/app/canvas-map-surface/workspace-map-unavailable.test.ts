@@ -49,7 +49,6 @@ describe('shared workspace without WebGL2', () => {
 
     expect(states.at(-1)).toMatchObject({
       status: 'error',
-      errorMessage: expect.stringContaining('WebGL2 is unavailable'),
       retryable: false,
     })
     // "Map unavailable" stays: Retry is refused and builds no map.
