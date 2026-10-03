@@ -1755,6 +1755,9 @@
     "pan": "Déplacer la carte quand rien n'est sélectionné",
     "panLarge": "Déplacer la carte plus loin quand rien n'est sélectionné",
     "rotateStamp": "Faire pivoter de 15° le tampon en cours de placement",
+    "turnView": "Tourner la vue de 15°",
+    "resetNorth": "Rétablir le nord",
+    "resetNorthAlways": "{{shortcut}} fonctionne même quand les raccourcis à une touche sont désactivés.",
     "arrowKeys": "Flèches",
     "singleKeysOn": "Les raccourcis à une touche peuvent être désactivés dans Réglages › Clavier.",
     "singleKeysOff": "Les raccourcis à une touche sont désactivés. Activez-les dans Réglages › Clavier."

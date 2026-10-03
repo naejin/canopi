@@ -133,6 +133,18 @@ describe('Keyboard shortcuts dialog', () => {
     },
     { id: 'help', label: 'Help', items: [{ type: 'action', id: 'about', label: 'About', disabled: false, action: vi.fn() }] },
   ]
+  /** The View menu as composeWorkspaceMenus builds it: its rotation rows come from the canvas commands. */
+  const viewMenu: MenuDefinition = {
+    id: 'view',
+    label: 'View',
+    items: [
+      { type: 'action', id: 'view.fitToDesign', label: 'Fit to Design', shortcut: 'Shift F', disabled: false, action: vi.fn() },
+      { type: 'action', id: 'view.resetNorth', label: 'Reset north', shortcut: 'N', disabled: false, action: vi.fn() },
+      { type: 'action', id: 'view.turnViewLeft', label: 'Turn view left 15°', shortcut: 'Shift ←', disabled: false, action: vi.fn() },
+      { type: 'action', id: 'view.turnViewRight', label: 'Turn view right 15°', shortcut: 'Shift →', disabled: false, action: vi.fn() },
+      { type: 'action', id: 'canvas.toggleGrid', label: 'Grid', shortcut: 'Shift G', disabled: false, action: vi.fn() },
+    ],
+  }
 
   beforeEach(() => {
     locale.value = 'en'
@@ -178,15 +190,41 @@ describe('Keyboard shortcuts dialog', () => {
     expect(keyboardShortcutsDialogOpen.value).toBe(false)
   })
 
+  it('shows static rotation rows in View instead of the menu\'s, and that Shift N always resets north', async () => {
+    await act(async () => { render(<KeyboardShortcutsDialog menus={[...menus, viewMenu]} />, container) })
+    await act(async () => { openKeyboardShortcutsDialog() })
+    const viewRows = () => {
+      const section = [...container.querySelectorAll('section section')].find((candidate) => candidate.querySelector('h3')?.textContent === 'View')!
+      return [...section.querySelectorAll('dl > div')].map((row) => [row.querySelector('dt')!.textContent, row.querySelector('dd')!.textContent])
+    }
+
+    expect(viewRows()).toEqual([
+      ['Fit to Design', 'Shift F'],
+      ['Turn the view 15°', 'Shift ← · Shift →'],
+      ['Reset north', 'N · Shift N · Shift ↑'],
+      ['Grid', 'Shift G'],
+    ])
+    const footnote = () => container.querySelector('[data-single-key-shortcuts]')!.textContent
+    expect(footnote()).toContain('Shift N works even when single-key shortcuts are off.')
+    // With the switch off, N is gone from the menus and from the static row; the note stays.
+    await act(async () => { singleKeyShortcuts.value = false })
+    try {
+      expect(viewRows()).toContainEqual(['Reset north', 'Shift N · Shift ↑'])
+      expect(footnote()).toContain('Shift N works even when single-key shortcuts are off.')
+    } finally {
+      singleKeyShortcuts.value = true
+    }
+  })
+
   it('says where single-key shortcuts are turned off, and that they are off', async () => {
     await act(async () => { render(<KeyboardShortcutsDialog menus={menus} />, container) })
     await act(async () => { openKeyboardShortcutsDialog() })
     const footnote = () => container.querySelector('[data-single-key-shortcuts]')!
-    expect(footnote().textContent).toBe('Tool keys work anywhere except text fields. Single-key shortcuts can be turned off in Settings › Keyboard.')
+    expect(footnote().textContent).toBe('Tool keys work anywhere except text fields. Single-key shortcuts can be turned off in Settings › Keyboard. Shift N works even when single-key shortcuts are off.')
     await act(async () => { singleKeyShortcuts.value = false })
     try {
       expect(footnote().getAttribute('data-single-key-shortcuts')).toBe('off')
-      expect(footnote().textContent).toBe('Single-key shortcuts are off. Turn them on in Settings › Keyboard.')
+      expect(footnote().textContent).toBe('Single-key shortcuts are off. Turn them on in Settings › Keyboard. Shift N works even when single-key shortcuts are off.')
     } finally {
       singleKeyShortcuts.value = true
     }

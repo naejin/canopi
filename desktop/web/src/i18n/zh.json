@@ -1755,6 +1755,9 @@
     "pan": "未选中任何对象时平移地图",
     "panLarge": "未选中任何对象时平移地图更远",
     "rotateStamp": "将正在放置的图章旋转 15°",
+    "turnView": "将视图旋转 15°",
+    "resetNorth": "重置为正北",
+    "resetNorthAlways": "即使单键快捷键已关闭，{{shortcut}} 仍然有效。",
     "arrowKeys": "方向键",
     "singleKeysOn": "单键快捷键可在“设置 › 键盘”中关闭。",
     "singleKeysOff": "单键快捷键已关闭。可在“设置 › 键盘”中开启。"

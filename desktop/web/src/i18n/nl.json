@@ -1755,6 +1755,9 @@
     "pan": "Kaart verschuiven als niets is geselecteerd",
     "panLarge": "Kaart verder verschuiven als niets is geselecteerd",
     "rotateStamp": "De stempel die je plaatst 15° draaien",
+    "turnView": "Weergave 15° draaien",
+    "resetNorth": "Noorden herstellen",
+    "resetNorthAlways": "{{shortcut}} werkt ook als sneltoetsen met één toets uit staan.",
     "arrowKeys": "Pijltjestoetsen",
     "singleKeysOn": "Sneltoetsen met één toets kun je uitzetten in Instellingen › Toetsenbord.",
     "singleKeysOff": "Sneltoetsen met één toets staan uit. Zet ze aan in Instellingen › Toetsenbord."

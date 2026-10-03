@@ -1755,6 +1755,9 @@
     "pan": "Deslocar o mapa quando nada está selecionado",
     "panLarge": "Deslocar o mapa mais longe quando nada está selecionado",
     "rotateStamp": "Girar 15° o carimbo que está posicionando",
+    "turnView": "Girar a vista 15°",
+    "resetNorth": "Redefinir o norte",
+    "resetNorthAlways": "{{shortcut}} funciona mesmo com os atalhos de uma tecla desativados.",
     "arrowKeys": "Setas",
     "singleKeysOn": "Os atalhos de uma tecla podem ser desativados em Configurações › Teclado.",
     "singleKeysOff": "Os atalhos de uma tecla estão desativados. Ative-os em Configurações › Teclado."

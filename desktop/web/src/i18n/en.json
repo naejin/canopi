@@ -1755,6 +1755,9 @@
     "pan": "Pan the map when nothing is selected",
     "panLarge": "Pan the map farther when nothing is selected",
     "rotateStamp": "Turn the stamp you are placing by 15°",
+    "turnView": "Turn the view 15°",
+    "resetNorth": "Reset north",
+    "resetNorthAlways": "{{shortcut}} works even when single-key shortcuts are off.",
     "arrowKeys": "Arrow keys",
     "singleKeysOn": "Single-key shortcuts can be turned off in Settings › Keyboard.",
     "singleKeysOff": "Single-key shortcuts are off. Turn them on in Settings › Keyboard."

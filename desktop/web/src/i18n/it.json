@@ -1755,6 +1755,9 @@
     "pan": "Spostare la mappa quando non è selezionato nulla",
     "panLarge": "Spostare la mappa più lontano quando non è selezionato nulla",
     "rotateStamp": "Ruota di 15° il timbro che stai posizionando",
+    "turnView": "Ruota la vista di 15°",
+    "resetNorth": "Ripristina il nord",
+    "resetNorthAlways": "{{shortcut}} funziona anche quando le scorciatoie a un tasto sono disattivate.",
     "arrowKeys": "Frecce",
     "singleKeysOn": "Le scorciatoie a un tasto si possono disattivare in Impostazioni › Tastiera.",
     "singleKeysOff": "Le scorciatoie a un tasto sono disattivate. Attivale in Impostazioni › Tastiera."

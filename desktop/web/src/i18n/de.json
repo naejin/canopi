@@ -1755,6 +1755,9 @@
     "pan": "Karte verschieben, wenn nichts ausgewählt ist",
     "panLarge": "Karte weiter verschieben, wenn nichts ausgewählt ist",
     "rotateStamp": "Den zu setzenden Stempel um 15° drehen",
+    "turnView": "Ansicht um 15° drehen",
+    "resetNorth": "Nach Norden ausrichten",
+    "resetNorthAlways": "{{shortcut}} funktioniert auch, wenn Kurzbefehle mit einer Taste aus sind.",
     "arrowKeys": "Pfeiltasten",
     "singleKeysOn": "Kurzbefehle mit einer Taste lassen sich unter Einstellungen › Tastatur ausschalten.",
     "singleKeysOff": "Kurzbefehle mit einer Taste sind aus. Schalten Sie sie unter Einstellungen › Tastatur ein."
