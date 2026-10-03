@@ -1,6 +1,6 @@
 # Rotating map and canvas controls
 
-Status: Accepted (2026-09-29, Canopi v2); amended 2026-10-01
+Status: Accepted (2026-09-29, Canopi v2); amended 2026-10-01 and 2026-10-03 (phase-1 design check: stamp starts, line zones)
 
 Amends [ADR 0010](0010-map-first-interface.md) (single-key shortcut scope, compass in the zoom group) and [ADR 0001](0001-geolocated-map-canvas.md), [0004](0004-one-renderer.md), [0008](0008-canvas-pdf-export.md) and [0011](0011-analyses-provenance-and-stories.md) where they assumed north-up or a tool that switches navigation off. The architecture that carries these rules is in ADRs [0016](0016-one-view-transform.md) to [0020](0020-focus-and-keyboard-ownership.md).
 
@@ -17,7 +17,7 @@ The canvas was north-up and left-drag panned in some modes but selected in other
 - Free gestures snap to north on release within 7°. While dragging, 15° absolute steps come from Ctrl (Cmd on Mac) added during a Shift+drag, and from Shift on the compass ring (recorded resolution: Shift is already held for the drag). Explicit targets (saved views, stories, "Turn view to this edge", last view) are never snapped.
 - Grid, snapping and guides stay on true east/north and turn with the map. Rulers show only when north is up, else the hint "Rulers show when north is up".
 - Zones, notes and Print Areas are map objects and turn with the map. Rectangles, ellipses and notes drawn on a rotated map are level with the screen and store the bearing as their rotation; polygons, lines and rows store their corners. Plant names, readouts, badges, handles and other labels stay upright.
-- "Turn view to this edge" on a zone edge (canvas menu), with no edge highlight (user, 2026-10-01). Saved views store bearing; reopening a Design with content restores the device's last bearing (`LastView.bearing`, default 0); a new or empty Design opens north-up (convention).
+- "Turn view to this edge" on a zone edge, line zones included (canvas menu; 2026-10-03), with no edge highlight (user, 2026-10-01). Saved views store bearing; reopening a Design with content restores the device's last bearing (`LastView.bearing`, default 0); a new or empty Design opens north-up (convention).
 - PDF: "Map orientation: North up / As on screen", default North up, with one angle for the whole layout (the bearing captured when the PDF workspace opens, or 0); Print Areas carry no angle of their own (user, 2026-10-01). The north arrow always points to true north.
 - One release (user, 2026-10-01): rotation, the controls and the architecture ship together as 2.0.
 
@@ -29,7 +29,7 @@ The canvas was north-up and left-drag panned in some modes but selected in other
 - Single-key shortcuts work anywhere except text fields and modals, and stay switchable off. Esc belongs to the active tool first.
 - Arrows nudge the selection 10 cm along screen directions, or pan with nothing selected; Ctrl/Cmd+arrow is the large step.
 
-**Conventions** (planner-decided; the user may overturn them): macOS Ctrl+click is a right-click and Ctrl+drag pans; Cycle labels moves from N to Shift+L; Shift+↓ is reserved for tilt; Shift constrains every drawing tool against screen axes; Plant a row's no-snap moves to Ctrl/Cmd; Esc drops a held stamp pick before leaving the tool; the inspection lens turns with the view; the World map stays north-up.
+**Conventions** (planner-decided; the user may overturn them): macOS Ctrl+click is a right-click and Ctrl+drag pans; Cycle labels moves from N to Shift+L; Shift+↓ is reserved for tilt; Shift constrains every drawing tool against screen axes; Plant a row's no-snap moves to Ctrl/Cmd; Esc drops a held stamp pick before leaving the tool; an Object stamp pick starts at 0, so copies keep their source's orientation like Paste, while a saved stamp's pick starts level with the screen (2026-10-03); the inspection lens turns with the view; the World map stays north-up.
 
 ## Options considered
 

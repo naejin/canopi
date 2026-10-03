@@ -17,9 +17,9 @@ Read the [design system](../system.md) first. Decisions: [ADR 0015](../../docs/a
 - Keys: Shift ← and Shift → turn to the next 15° step; N, Shift N (always, even with single keys off), Shift ↑ and a compass click reset north. Key turns take 300 ms, and jump when reduced motion is requested. Esc during a turn drag restores the starting view.
 - A free turn (drag, twist, compass ring) that ends within 7° of north settles on north. Explicit targets never snap: saved views, stories, Turn view to this edge, the last view.
 - Turns with the map: imagery, zones, text notes, the grid, snapping and ruler guides (true east and north). Stays upright: plant symbols and names, measurements, stack badges, handles, chips and all chrome. The hillshade light stays top-left on screen, so relief reads the same at any bearing.
-- Arrows nudge and pan along the screen. Rectangles, ellipses, notes and stamp picks start level to the screen (a Print Area takes its page's angle); Shift keeps squares, circles and 45° against the screen axes.
+- Arrows nudge and pan along the screen. Rectangles, ellipses, notes and saved-stamp picks start level to the screen, and an Object stamp pick keeps its source's orientation (a Print Area takes the layout's angle); Shift keeps squares, circles and 45° against the screen axes.
 - Rulers show only when north is up. Turned with Rulers on, they hide and a quiet glass pill above the view chip reads "Rulers show when north is up" with a Reset north link; guides already placed stay and turn; new guides are pulled only while north is up. Rulers stay pressed in the view chip.
-- Turn view to this edge: a polygon or rectangle zone right-clicked within 8 px of an edge (22 px for a long press) adds this item to the canvas menu, in its own group before Lock; while the item is highlighted the edge is traced in ochre. Choosing it turns the view by the smaller angle until that edge is level. It is pointer-only, the one exception to the keyboard-path rule: from the keyboard, Shift ← and Shift → turn the view.
+- Turn view to this edge: a polygon, rectangle or line zone right-clicked within 8 px of an edge (22 px for a long press) adds this item to the canvas menu, as the first group of the empty-map menu and before Lock in the selection menu; the edge is not highlighted. Choosing it turns the view by the smaller angle until that edge is level. It is pointer-only, the one exception to the keyboard-path rule: from the keyboard, Shift ← and Shift → turn the view.
 - Saved views, stories and snapshots keep their bearing; the inspection lens turns with the view; the World map for finding a site stays north up.
 
 ## Compass
@@ -44,7 +44,7 @@ One setting: Pointing device as a segmented Mouse: the wheel zooms / Trackpad: t
 
 ## Export planting plan
 
-Map orientation, a segmented North up (default) / As on screen, sits under Plant colours; it is not the paper Orientation of a page. The north arrow always points to true north: upright on north-up pages, turned on As on screen pages. A Print Area drawn on a turned page keeps its angle and prints level with As on screen; North up prints the north-aligned box around it.
+Map orientation, a segmented North up (default) / As on screen, sits under Plant colours; it is not the paper Orientation of a page. The north arrow always points to true north: upright on north-up pages, turned on As on screen pages. The whole layout shares one angle, so a Print Area has none of its own; switching Map orientation turns each area about its centre.
 
 ## Phones
 

@@ -2,7 +2,7 @@
 
 Trimmed 2026-10-02 at the phase-0 close; the full earlier text is at commit 76bd08a659d916069a340fc06e670e54e32f54c7.
 
-Status: agreed (2026-09-29); phase 0 and phase F built (2026-10-02); 1, 2, 3 and R build on it per docs/plans/canvas-v2-plan.md
+Status: agreed (2026-09-29); phase 0 and phase F built (2026-10-02); phase 1 amended by its design check (2026-10-03: plan section 4, phase 1); 1, 2, 3 and R build on it per docs/plans/canvas-v2-plan.md
 
 This is the contract the canvas v2 work is built to. The phases, owners, gates and bead mapping are in `docs/plans/canvas-v2-plan.md`; what exists today and what happens to each piece is in `docs/plans/canvas-v2-inventory.md`. The reasons live in the ADRs: 0015 (rotating map and canvas controls; amends ADR 0010's control and shortcut rules), 0016 (one view transform), 0017 (input pipeline and gestures), 0018 (narrow tool interface), 0019 (rendering and the view transform), 0020 (focus and keyboard ownership). Delete this file with the plan at the 2.0 release close.
 
@@ -199,7 +199,7 @@ export interface ViewCommandSurface {
   /** Kept: LiDAR's Return to Design. Restores the bookmark; false without one (the caller then calls returnToDesign). */
   returnFromTemporaryFocus(): boolean
   /** The plant finder's Zoom to them: the temporary-focus fit with no bookmark. Not named fitBounds: P1 forbids that MapLibre
-   *  name as a call. Phase 1 adds the rotation-safe circle fit for zoom to matches (INV-CAM-40). */
+   *  name as a call. It fits the box's four corners at the bearing, so every match stays framed (no circle fit: phase-1 drop). */
   frameBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
   setFramingInsets(insets: ScreenInsets): void         // kept: the visible-map-area seam
   resetNorth(): void
@@ -211,7 +211,7 @@ export interface ViewCommandSurface {
 }
 ```
 
-**How the view surfaces meet the session surfaces (§1.1a).** `ViewCommandSurface` is `CanvasCommandSurface.viewport` (`canvas/runtime/runtime.ts`); `ViewReadSurface` is `CanvasQuerySurface.view`. `CanvasQuerySurface.subscribePointerWorld` forwards `ToolHost.subscribePointerWorld` (the world and screen point, R1, so a hover readout over analysis results can call `queryRenderedFeatures` while P2 stays strict); the inspection lens component uses it instead of a map-host `pointermove`. The lens handle (`canvas/inspection.ts`) publishes `sourceQuad`, the lens footprint's four screen corners on the main map; phase 1 replaces its `panBy(delta)` (world metres) with `panByScreen(deltaPx: InspectionPoint)`, turned into ground at the lens's bearing (INV-WR-17, INV-KEY-21). `CanvasOverview.tsx` places the overview pin from `ViewReadSurface.designPin`. App code (`app/**`, `components/**`, `web/**`) uses only these two surfaces, except `workspace-runtime-composition.ts` and `workspace-activation.ts`, which wire the driver host directly (Attachment, below); `ViewFrameSource` stays inside `canvas/runtime/**` and `maplibre/**` (P10).
+**How the view surfaces meet the session surfaces (§1.1a).** `ViewCommandSurface` is `CanvasCommandSurface.viewport` (`canvas/runtime/runtime.ts`); `ViewReadSurface` is `CanvasQuerySurface.view`. `CanvasQuerySurface.subscribePointerWorld` forwards `ToolHost.subscribePointerWorld` (the world and screen point, R1, so a hover readout over analysis results can call `queryRenderedFeatures` while P2 stays strict); the inspection lens component uses it instead of a map-host `pointermove`. The lens handle (`canvas/inspection.ts`) publishes `sourceQuad`, the lens footprint's four screen corners on the main map; phase 1's hand-off commit renames its `panBy(delta)` to `panByScreen(deltaPx: InspectionPoint)`, which View turns into ground at the lens's bearing (INV-WR-17, INV-KEY-21): the lens window moves by `deltaPx` in preview pixels, and a drag passes its start minus the current point. `CanvasOverview.tsx` places the overview pin from `ViewReadSurface.designPin`. App code (`app/**`, `components/**`, `web/**`) uses only these two surfaces, except `workspace-runtime-composition.ts` and `workspace-activation.ts`, which wire the driver host directly (Attachment, below); `ViewFrameSource` stays inside `canvas/runtime/**` and `maplibre/**` (P10).
 
 **Resize.** One owner changes the screen size: the MapLibre driver calls `map.resize()`, re-runs `constrainCamera` at the live bearing (the zoom floor depends on screen size and bearing, §4.14) and publishes one frame; the World map (no driver, exempt from P1) resizes itself. `setScreen` is a no-op when the size is unchanged. The runtime's two resize entries call the live driver's `setScreen` (`cameraHost.current().setScreen`) with `window.devicePixelRatio`. P1 forbids `resize` on a map outside the driver.
 
@@ -297,7 +297,7 @@ export interface CameraDriverHost {
 export interface CameraDriverHostOptions {
   /** The zoom range and overview threshold; the reference latitude is options.plane()'s, rebuilt once per plane. */
   readonly policy: WorkspaceCameraPolicy
-  readonly reducedMotion: ReadonlySignal<boolean>   // a false signal until phase 1 injects the platform's
+  readonly reducedMotion: ReadonlySignal<boolean>   // from phase 1 a live matchMedia signal from app/canvas-runtime/app-adapter.ts
   readonly plane: () => SessionPlane
   readonly screen?: ViewScreen
   readonly camera?: ViewCamera
@@ -335,7 +335,8 @@ export interface NavigationPolicy {
   readonly maxZoom: number                 // 27
   readonly overviewPixelsPerMetre: number  // 0.1
   readonly referencePixelsPerMetre: number // 20 px/m = 100 %
-  /** prefers-reduced-motion: reduce. Read by the platform (platform/desktop.ts, platform/browser.ts) and injected; view/ never calls matchMedia (P4). Eases and tweens become 'none' moves while true. */
+  /** prefers-reduced-motion: reduce, a live matchMedia signal made in app/canvas-runtime/app-adapter.ts, declared on canvas/runtime/app-adapter.ts and
+   *  passed to createCameraDriverHost; app/saved-views/current-view.ts reads the same source. view/ never calls matchMedia (P4). Eases and tweens become 'none' moves while true. */
   readonly reducedMotion: ReadonlySignal<boolean>
 }
 
@@ -420,7 +421,8 @@ export interface ViewNavigation extends ViewCommandSurface {
    *  zoom buttons, Fit to Design, Return to Design) and the jumps (openAt, centerOn, showPlace, showCamera); frameBounds keeps it. */
   clearTemporaryFocus(): void
   centerOn(point: WorldPoint, pixelsPerMetre: number, options?: { readonly animate?: boolean; readonly bearingDeg?: number | 'keep' }): void
-  /** Opening a Design: oriented fit at the given bearing. */
+  /** Opening a Design: oriented fit at the given bearing; an empty scene opens at 0 (§4.15). Every open path calls it through
+   *  document-surface.ts's open fit; Fit to Design stays zoomToFit. */
   openAt(scene: ScenePersistedState, bearingDeg: number): void
 
   // rotation
@@ -524,7 +526,7 @@ export interface Bindings {
   // No navigateDuringPrimaryDrag: a second button during a primary drag is ignored in every phase (U2, 2026-10-01).
   readonly touch: { readonly gestures: boolean; readonly longPressMenu: boolean; readonly hostTouchActionNone: boolean }
   readonly penBarrel: 'ignore' | 'secondary'
-  readonly trackpadGestures: boolean                       // WebKit gesture* rotate and scale
+  readonly trackpadGestures: boolean                       // WebKit gesture* rotation (the scale is ignored: the pinch arrives as Ctrl+wheel)
   readonly dragSlopPx: Readonly<Record<PointerKind, number>>
 }
 export const CURRENT_BINDINGS: Bindings     // the one constant; no ROTATION_BINDINGS, V2_BINDINGS or TOUCH_BINDINGS (audit 1.2)
@@ -790,8 +792,9 @@ export interface ToolHostDeps {
    *  adapter's readSnapToGridEnabled and readSnapToGuidesEnabled); the shape tools/snapping.ts takes. */
   readonly snapping: () => { readonly grid: boolean; readonly guides: boolean }
   readonly translate: ToolContext['translate']
-  // bindings and platform (modifier resolution, phase 2) and navigation.turnToEdge (the menu entry, phase 1) come with their
-  // first callers.
+  /** "Turn view to this edge" (§4.16); added by phase 1's hand-off commit. */
+  readonly navigation: Pick<ViewNavigation, 'turnToEdge'>
+  // bindings and platform (modifier resolution) come in phase 2 with their first callers.
   /** Today's deps.nudge (the runtime's scene-edit commands); the host owns the series (nudge below). */
   readonly nudge: Pick<CanvasSceneEditCommandSurface, 'nudgeSelected' | 'endNudge'>
   readonly timers: { set(atMs: number, cb: () => void): number; clear(id: number): void; readonly clock: () => number }
@@ -1231,7 +1234,7 @@ export interface SelectionPreview { readonly translate: WorldVector; readonly ro
 export interface ToolHandle {
   readonly id: ToolHandleId              // unique across objects: 'rotate', 'vertex:<zone id>:<index>', 'rect-corner:<id>:ne', 'guide-end:<id>:a', 'edge-mid:<zone id>:<index>'
   readonly anchor: WorldPoint
-  readonly offsetPx?: ScreenPoint        // rotate handle: 42 px above the selection's projected hull
+  readonly offsetPx?: ScreenPoint        // rotate handle: centred 28 px above the selection's projected hull
   readonly hitRadiusPx: number           // 10 today; 22 on touch (44 px target, ADR 0010)
   readonly glyph: 'vertex' | 'corner' | 'rotate' | 'midpoint'
   readonly label: string                 // aria-label: the rotate handle's is translated; zone and guide points keep today's literal English (phase 0)
@@ -1281,6 +1284,19 @@ Every tool, drop and piece of chrome runs on the host and `chrome/*.ts`; tools d
 
 `SceneRendererDefinition.initialize` returns a `SceneRenderer`; `SceneRendererSnapshot` carries no camera.
 
+The grid and the ruler guides are editing aids, not scene data: the same Pixi presentation draws saved-view and story thumbnails from snapshots that hold `scene.guides`, so reading guides from the scene would print them into thumbnails, the overview and the lens. They travel in their own optional field, set only on the workspace renderer (phase 1):
+
+```ts
+export interface SceneRendererSnapshot {
+  // … existing fields …
+  /** The grid (null when off; its interval and ink) and the ruler guides; the Renderer names the shapes. Absent: nothing is
+   *  drawn (thumbnails, overview, lens). */
+  readonly editingAids?: { readonly grid: unknown; readonly rulerGuides: readonly unknown[] }
+}
+```
+
+The presentation controller gains `setEditingAids(aids)`, the pattern of `presentLayers`; `scene-runtime.ts` calls it from `onChromeOverlay` and from `_addGuide`'s commit, then `invalidate('scene')` (the `'chrome'` invalidation never syncs the scene). `world-layers.ts` traces the grid and guides over a padded box around `visibleWorldQuad()` and retraces only them when the view leaves that box or the scale changes (zones keep the scale-only rule); the grid uses `snapping.ts`'s `gridInterval`, and its ink is part of the reuse key.
+
 ```ts
 export interface SceneChangeSet {
   readonly scene: boolean                                   // document revision
@@ -1306,12 +1322,12 @@ The contract split: data goes through `syncScene`, the camera through `setView`,
 
 | Root | Transform | Content |
 |---|---|---|
-| `worldRoot` | `view.planar.affine`, one write per frame | grid (from phase 1), zones, ruler and measurement guides, selection preview |
+| `worldRoot` | `view.planar.affine`, one write per frame | grid and ruler guides (from phase 1, `editingAids`, under every billboard), zones, measurement guides, selection preview |
 | `billboardRoot` | identity (CSS px) | plants, rings, badges, notes (text at `rotationDeg − bearing`), labels; positions from `view.projectAnchors` |
 | `worldDraftRoot` (`draft-layer.ts`) | the same `view.planar.affine`, written in the same `setView` | world drafts (polylines, polygons, quads, ellipses) and the zone shapes of an `objects` ghost |
 | `billboardDraftRoot` (`draft-layer.ts`) | identity (CSS px) | pixel-sized drafts (`circle-px`, `label`) and the plants and note text of a ghost (a plant is a billboard); positions from `view.projectAnchors` |
 | DOM overlay host (`canvas/runtime/chrome/`) | placed in `onViewFrame('overlays')`, no element created per frame (`left`/`top` until phase R, then `translate` only) | handle layer, text-entry host, hover tooltip, locked affordance |
-| Canvas2D rulers (`chrome/rulers.ts`) | redrawn in `onViewFrame('overlays')` | shown only while `northUp` |
+| Canvas2D rulers (`chrome/rulers.ts`) | redrawn after each `setView` through the chrome coordinator, which builds and disposes them and passes `northUp` | shown only while `northUp` |
 
 `SelectionPreview` spans both roots: `world-layers.ts` applies it to the selected world shapes (zones, guides) as a transform of their retained geometry, and `billboard-layer.ts` applies it to the anchors of selected plants and notes before `projectAnchors` (and adds `rotateDeg` to a selected note's text angle), so a move-drag moves everything selected without `syncScene` (test `renderers/billboard-layer.test.ts`: "a selection preview moves selected plants and notes without syncScene", phase R).
 
@@ -1565,33 +1581,36 @@ export interface PdfSetup {
 export interface PdfPrintArea {           // unchanged: no rotationDeg (one layout angle, user 2026-10-01, §4.12)
   readonly id: string
   readonly name: string
-  /** The area in the layout's frame: centre ± width/2, height/2 along the page's axes at the layout angle. */
+  /** Frame-independent: the area's centre in plan metres, and its width and height along the page axes. Each build converts
+   *  it into the layout frame, so a switch of Map orientation or a reopen at a new bearing needs no code. */
   readonly bounds: PrintBounds
 }
-// CanvasPrintSnapshot (canvas/print) gains the view bearing captured at PDF open:
-//   readonly viewBearingDeg: number   // from ViewReadSurface.captureView().camera.bearingDeg
+// Page-editor offsets are stored in plan metres too. The layout, contains, split and whole-design steps convert at each build.
+// PdfInput gains: readonly viewBearingDeg?: number   // live.ts: captureView().camera.bearingDeg at each capture (exact, not the
+//                                                    // rounded ViewReadSurface.bearingDeg); canvas/print.ts and print-snapshot.ts unchanged
+// PdfPlan gains: readonly angleDeg: number           // the one layout angle: 0 under North up, viewBearingDeg under As on screen
 // page-furniture groundScale gains northAngleDeg: the north arrow and its letter are drawn rotated by it.
-// PdfPage gains: readonly angleDeg: number   // 0 on North up pages; PdfPage.ground is a PrintBounds in the page's turned frame
 
 // app/canvas-pdf/page-frame.ts  (phase 1; the only place the PDF turns geometry)
 export interface PdfPageFrame {
   readonly angleDeg: number                 // clockwise from true north; 0 = north up
-  readonly pivot: PrintPoint                // the page's ground centre, in plan metres
+  readonly pivot: PrintPoint                // one pivot per plan, {0, 0} in plan metres (a per-page pivot breaks the page windows)
   /** Plan metres → the turned frame (rotate by −angle about the pivot). */
   toFrame(p: PrintPoint): PrintPoint
   /** The turned frame → plan metres (+angle): page-editor deltas. */
   fromFrame(p: PrintPoint): PrintPoint
 }
-export function pageFrame(angleDeg: number, pivot: PrintPoint): PdfPageFrame
+export function pageFrame(angleDeg: number, pivot?: PrintPoint): PdfPageFrame   // pivot defaults to {0, 0}
 /**
- * The print snapshot as seen in the frame: zone paths, bounds, plant positions, note positions,
- * measurement ends and guide ends turned by −angle; note rotationDeg becomes rotationDeg − angle.
- * Identity (same object) when angleDeg is 0, so North up pages are byte-identical to today.
+ * The print snapshot as seen in the frame, applied once per build: every coordinate pair of zone paths, plant positions, note
+ * positions, measurement ends and guide ends turned by −angle, geometry turned when present, bounds recomputed, and an
+ * annotation's `rotation` becomes `rotation − angle`. Identity (same object) when angleDeg is 0, so North up plans are
+ * byte-identical to today.
  */
 export function turnSnapshot(snapshot: CanvasPrintSnapshot, frame: PdfPageFrame): CanvasPrintSnapshot
 ```
 
-The layout modules (`overview.ts`, `field-layout.ts`, `layout.ts`, `overview-guides.ts`, `zone-labels.ts`, `coverage.ts`, `field-summary.ts`, `page-drawing.ts`, `split-sheets.ts`, `field-dimensions.ts`) keep their axis-aligned `frame + (p − ground) × scale` maths and world-box tests: they run on the turned snapshot, where "axis-aligned" means "aligned with the page". Text they place (plant marks and codes, names, zone labels, dimension readouts) is laid out level on paper, so it stays upright whatever the angle. Every page shares the layout angle, so no page window is drawn as a turned outline (§4.12).
+The layout modules (`overview.ts`, `field-layout.ts`, `layout.ts`, `overview-guides.ts`, `zone-labels.ts`, `coverage.ts`, `field-summary.ts`, `page-drawing.ts`, `split-sheets.ts`, `field-dimensions.ts`) keep their axis-aligned `frame + (p − ground) × scale` maths and world-box tests: they run on the turned snapshot, where "axis-aligned" means "aligned with the page". Text they place (plant marks and codes, names, zone labels, dimension readouts) is laid out level on paper, so it stays upright whatever the angle. Every page shares the layout angle, so no page window is drawn as a turned outline, and split and detail lookup read the turned plants (§4.12).
 
 ```rust
 // common-types/src/settings.rs  (phase 1)
@@ -1602,7 +1621,7 @@ pub struct LastView {
 }
 ```
 
-Stored data: `.canopi` does not change (`SavedViewCamera.bearing` exists; writers normalise to [0, 360)). Settings gain `LastView.bearing` with a one-line default. PDF setups are not persisted, so Map orientation and the layout angle live in memory only; `PdfPrintArea` gains no angle (U3; decided with the user, 2026-10-01). `scroll_wheel` keeps its field and values; only its UI is relabelled.
+Stored data: `.canopi` does not change (`SavedViewCamera.bearing` exists; writers normalise to [0, 360), locally, P10). Settings gain `LastView.bearing` with a one-line default. PDF setups are not persisted, so Map orientation and the layout angle live in memory only; `PdfPrintArea` gains no angle (U3; decided with the user, 2026-10-01). `scroll_wheel` keeps its field and values; only its UI is relabelled.
 
 ### 1.8 Module layout: what later phases add
 
@@ -1655,7 +1674,7 @@ Pinch and twist are sources, not kinds. Keys are not gestures: key-driven naviga
 - **Rotation sign (spec).** A pointer rotate turns the view by `ROTATE_DEG_PER_PX` × the horizontal travel since the start, and a rightward drag increases the bearing (MapLibre's convention: the map turns counter-clockwise on screen, as if the pointer pushed the top of the map to the left). Twists (touch two-finger, WebKit trackpad) make the ground follow the fingers: a clockwise twist of the fingers turns the map clockwise on screen, which lowers the bearing by the twist angle. The compass drag makes the needle follow the pointer around the compass centre: moving the pointer clockwise around the face turns the needle clockwise, which lowers the bearing by the same angle (§4.2).
 - **Primary.** `press` on down; `tap` on an up within slop, or `drag-start` past slop, then `drag-move`, `drag-end` (under LEGACY slop 0: any movement is a drag; §1.2). Space held at press turns it into `pan` (`space-drag`). Space pressed after a primary session started does not change it (a session's mode is fixed; spec): the drag, band or move continues, and Space is only recorded for the next press. In a `primaryDragPansIn` context a primary drag is `pan` (`primary-drag`). With the Pan tool its press still reaches the tool and ends with a `tap`, or after a drag with `cancel('navigate')` right after the `pan{end}`, so every press the host sees ends (the Pan tool ignores them); a legacy overview press never reaches the host.
 - **Hover.** A move with no live session, buttons or not, is a `hover` wherever the pointer is, carrying the target class it saw (only a `surface` target reaches `subscribePointerWorld`, §1.4 "Hover"), except over owned chrome, the text entry or a handle, where it emits `hover-end` (F, U6; hard-coded in `recognise.ts`, no bindings field), and over the Unlock affordance, which keeps the hover and emits nothing, or the affordance would clear before it could be clicked.
-- **Auxiliary.** Drag → `pan`; with Shift at press and `auxiliaryShiftDrag: 'rotate'` → `rotate` about the press point, `step` = mod held live. A middle tap does nothing; `pointerdown` is always default-prevented (no autoscroll, no Linux paste).
+- **Auxiliary.** Drag → `pan`. With Shift at press and `auxiliaryShiftDrag: 'rotate'` the press opens a pending rotate: capture taken, default prevented, nothing emitted; `rotate{start}` comes only past the 3 px drag slop, with the total measured from the press (fixture G9), so a still Shift+middle click turns nothing (G9b). Shift is checked before the overview branch, so a Shift+middle-drag rotates in overview too (G9c). `step` = mod held live: a modifier change during a live rotate re-emits `rotate{move}` with the new step. A middle tap does nothing; `pointerdown` is always default-prevented (no autoscroll, no Linux paste).
 - **Secondary (legacy, `menu-on-native`).** The button is inert; a native `contextmenu` on the surface opens the menu at once, except in overview.
 - **Secondary (V2).** `down` → pending, capture taken, nothing emitted. Past 3 px with no Shift at the press → `pan`; with Shift at the press → `rotate` about the press point, `step` = mod held live (a consumed Mac Ctrl never counts). An `up` within 3 px → `menu-request` at the release point on every OS (convention). The document-capture `contextmenu` guard acts only on events whose target class is `surface`, `handle`, `ruler` or `owned-chrome`, or that arrive while a canvas secondary session is live or within 250 ms of its end (the WebView2 trail, which may be retargeted to `<html>` or the open menu, A8). There, every mouse and pen native `contextmenu` is prevented; one is honoured only when `fromKeyboard`, or when no secondary session exists and none ended in the last 250 ms and it is not a keyboard-menu echo within 500 ms; it then becomes `menu-request('selection', 'keyboard')`, except on `owned-chrome`, where it emits nothing. On `owned-text` and `foreign` targets the guard does nothing: the native menu (copy and paste in the note editor and panel fields) stays and no `menu-request` is emitted (spec, as today's `allowsNativeContextMenuTarget`, `pointer-utils.ts:27`).
 - **Drag end.** A drag ends when `buttons` loses its role on a `move`, on `up`, on lost capture, blur or `visibilitychange` (not under LEGACY, below).
@@ -1664,7 +1683,7 @@ Pinch and twist are sources, not kinds. Keys are not gestures: key-driven naviga
 - **Touch before phase 3.** One touch is a primary pointer exactly as today; a second concurrent touch is ignored; no long press, no twist; host CSS unchanged.
 - **Touch (phase 3).** One finger is primary with 8 px slop. Still for 500 ms → `menu-request('long-press')` and the session ends (no `tap` on release). A second finger before slop withdraws the press (`cancel('multitouch')`); after a drag started, the drag is cancelled and its Scene Edit aborted (a polygon draft survives, as it does a pan). Two fingers: centroid → `pan`, distance ratio → `zoom` about the centroid, angle → `rotate` after 25 px of arc with the threshold subtracted. Lifting to one finger does not resume editing until every finger lifted. Android's native long-press `contextmenu` and the timer produce one menu.
 - **Pen.** Tip = primary with pen slop; barrel = secondary rules when `penBarrel: 'secondary'`; eraser ignored; hover works.
-- **WebKit gesture events** (`trackpadGestures`). Scale → `zoom` (`trackpad-pinch`) at once, as a ratio to the previous event. Rotation is accumulated and emits nothing until |accumulated| exceeds 10°; then `rotate` (`trackpad-twist`) starts with the threshold subtracted. A Ctrl+wheel inside an open gesture is ignored; `gesture*` defaults are prevented. On iOS the pointer-based two-finger recogniser is the only source; `gesture*` is prevented and not counted.
+- **WebKit gesture events** (`trackpadGestures`; the DOM source adds `gesturestart`, `gesturechange` and `gestureend` listeners only when `platform.gestureEvents` is also true, copies `rotation`, prevents the default and removes them on detach). Only the rotation is used: WKWebView already delivers the pinch as Ctrl+wheel, so the gesture's scale is ignored and Ctrl-wheels zoom as everywhere (phase-1 drop). Rotation is accumulated and emits nothing until |accumulated| exceeds 10°; then `rotate` (`trackpad-twist`) starts with the threshold subtracted. A live twist is a session in `sessions` under a reserved non-pointer id (mode `rotate`, navigation `trackpad-twist`, slop passed at 10°), so Esc, blur, `configure` and the gesture Esc layer cancel it like a pointer rotate. One session at a time: a twist is ignored while a pointer pan or rotate is live, and a pointer down during a twist is ignored. On iOS the pointer-based two-finger recogniser is the only source; `gesture*` is prevented and ignored.
 - **Cancel fences.** `pointercancel`, lost capture, blur, `visibilitychange`, the Esc chain's `escape`, and a tool change (`configure`) emit `cancel`; a live rotate emits `rotate{cancel}`, which restores the starting camera. Under LEGACY the source listens to no `visibilitychange` and no `gesture*` event (today), so only blur releases Space and WebKit's Ctrl wheels zoom. After a window blur the session also calls `ToolHost.interrupted()` (§1.4).
 
 ### 2.3 Modifier resolution (ToolHost)
@@ -1767,12 +1786,13 @@ Overview (below 0.1 px/m) replaces the rows above:
 | Pinch (Chromium and WebView2 synthetic Ctrl wheel; Firefox line-mode pinch) | zoom; no Ctrl is recorded as held | zoom |
 | Alt + wheel | as without Alt (no rotation, convention) | as without Alt |
 | Space held + wheel | as without Space | as without Space |
-| macOS WebKit gesture: scale | zoom about the gesture centre (from 1) | same |
-| macOS WebKit gesture: rotation | nothing until 10° accumulated, then turns the view with the 10° subtracted; release within 7° of north snaps (from 1) | same |
+| macOS WebKit gesture: scale | ignored: WKWebView also delivers the pinch as Ctrl+wheel, which zooms (row above) | same |
+| macOS WebKit gesture: rotation | nothing until 10° accumulated, then turns the view with the 10° subtracted; release within 7° of north snaps; Esc cancels it (from 1) | same |
 | Linux WebKitGTK trackpad pinch | not delivered to the page (user): zoom with Ctrl + scroll or the buttons; the F1 gesture list shows the note on Linux | same |
 | Trackpad twist on Windows (WebView2), and in Chromium or Firefox on any OS (Web edition) | not delivered: no rotation event reaches the page (the user's "where available"); turn with Shift+right-drag, the compass or Shift+←/→. `trackpadGestures` is true only on WebKit (WKWebView and Safari), so F1 lists the twist only there | same |
 | Wheel during a drawing, move or band drag | as above; the draft stays under the cursor (from 2, convention) | same |
-| Wheel, pinch or WebKit gesture during a rotate session (Shift+middle-drag, Shift+right-drag, compass drag) | ignored while the rotate owns the camera, so Esc restores exactly the camera at its press (from 1, convention; fixture F18) | same |
+| Wheel or pinch during a pointer rotate session (Shift+middle-drag, Shift+right-drag) | ignored while the rotate owns the camera, so Esc restores exactly the camera at its press (from 1, convention; fixture F18) | same |
+| Wheel or pinch during a trackpad twist or a compass drag | as without them: the twist never zooms and Ctrl-wheels keep zooming; a compass drag composes with the wheel, and its cancel restores the whole starting camera | same |
 | Wheel over the text-entry host, the compass, the zoom group or any foreign target | not handled by the canvas | same |
 | Momentum tail | handled as ordinary wheel events | same |
 
@@ -1820,6 +1840,8 @@ Scope and switch are defined in §1.6. "Switch" is Settings › Keyboard › sin
 
 The Scope column is built in F (no legacy rebuild, U7); until then the keyboard port keeps today's gates.
 
+Where the rotation rows live (phase 1): Shift+←/→ and Shift+↑ (`view-arrows`) and Shift+N (`command`, always on) are canvas key rows of `CANVAS_KEYMAP_ROWS` sending `rotate-view` and `reset-north`, never chords of a catalogue definition: catalogue rows are not in the `view-arrows` scope, so they would turn the map from an arrow-owning widget. The catalogue keeps N (`view.resetNorth`, follows the switch) and Shift+L (`view.cycleLabels`). Its rotation definitions sit after Fit to Design and show the routed chords through display-only `keyHints: readonly string[]`, also appended to `aria-keyshortcuts`. On macOS every label shows Cmd for mod (U13).
+
 | Key | Action | Scope | Switch | Phase |
 |---|---|---|---|---|
 | V, H, P, W, K, Z, R, E, L, T, M | arm Select, Pan, Plant stamp, Plant a row, Object stamp, Polygon, Rectangle, Ellipse, Line, Text, Measure | `command` | follows | unchanged |
@@ -1830,7 +1852,7 @@ The Scope column is built in F (no legacy rebuild, U7); until then the keyboard 
 | Shift+↑ | reset north | `view-arrows` | n/a | 1 (was large nudge or large pan) |
 | Shift+↓ | unbound, reserved for tilt | — | — | 1 (convention) |
 | ← → ↑ ↓ | with a selection, the Select tool armed and site mode: nudge 10 cm along the screen direction (from 1; before: world axes); with a selection in another tool or in overview: nothing (today, every phase); with none: pan 64 px along the screen, in any tool and in overview. Never while a pointer session (drag, band, move, handle drag, pan or rotate) is live: the arrow does nothing (today, `keyboard-port.ts:146`; every phase; fixture H25) | `canvas-focus` | n/a | 1 |
-| mod+arrows | as the arrows, 1 m or 256 px, along the screen | `canvas-focus` | n/a | 1 (was Shift+arrows) |
+| mod+arrows | as the arrows, 1 m or 256 px, along the screen; on the focused map the chord is always consumed, even when nothing moves (Web Mac Cmd+← would go Back) | `canvas-focus` | n/a | 1 (was Shift+arrows) |
 | Alt+arrows | unbound | — | — | — |
 | macOS Ctrl+arrows | not bound (Mission Control) | — | — | — |
 | Shift+G, Shift+S, Shift+R | grid, snap to grid, rulers (rulers while rotated: on, hidden, with the hint) | `command` | follows | unchanged |
@@ -1953,22 +1975,22 @@ Rotation starts only from deliberate inputs (user): Shift+right-drag (from 2), S
 
 ### 4.2 Compass
 
-- **Place.** Always visible (at north too): in the zoom group on desktop and in the phone zoom column on the Web edition (from 1). As a button inside that group it inherits the group's layer on the stacking scale and its visible-map-area registration (`useMapOccluder` in `ZoomControls.tsx`); it adds no entry to `global.css` or the seam. Its look is set in `.interface-design/patterns/canvas-navigation.md` (a round button whose needle points to true north, turned by `−bearingDeg`).
+- **Place.** Always visible (at north too): in the zoom group on desktop and in the phone zoom column on the Web edition (from 1). As a button inside that group it inherits the group's layer on the stacking scale and its visible-map-area registration (`useMapOccluder` in `ZoomControls.tsx`); it adds no entry to `global.css` or the seam, and its size comes from the `.button` class `ZoomControls` passes in. Its look is set in `.interface-design/patterns/canvas-navigation.md`: a round button whose needle, an inline SVG coloured from the compass's CSS module (not a `ControlIcon` glyph), points to true north, turned by `−bearingDeg`. Its styling and description follow `northUp`.
 - **Click.** Tweens to north in 300 ms about the centre; at north it does nothing.
-- **Drag.** A primary drag anywhere on the compass face (the hit area is the whole button, though the copy says "ring"; past 3 px of travel, under that it is a click) turns the view about the screen centre by the pointer's angle around the compass centre (`beginRotation('centre')`); the needle follows the pointer, so moving clockwise around the face lowers the bearing by the angle swept (§2.2, rotation sign). Shift steps to absolute 15° multiples while held; release returns to the raw angle. Release within 7° of north snaps to north in 300 ms. Works with mouse, pen and touch from phase 1 (the compass sets `touch-action: none`). While dragging, the face takes `--color-accent-soft` and a grabbing cursor (pattern).
-- **Keyboard.** A focusable button: Enter or Space resets north; Shift+←/→ turn as anywhere; Esc during a compass drag restores the starting camera: while dragging, `Compass.tsx` registers an Esc layer at priority 70 (`registerEscapeLayer`, active while its `RotationSession` is live) that calls `cancel()`, because the compass drag runs outside the input pipeline and `ToolHost.hasLiveGesture()` cannot see it (fixture I9).
-- **Words.** `aria-label` "Reset north" and `aria-keyshortcuts="N Shift+N"`; description (`aria-description`) "View turned {{degrees}}° from north" (Intl number) or "North is up"; no `title`: a `ButtonTooltip` shows "Reset north" with N and the hint as its second line (pattern `canvas-navigation.md`).
+- **Drag.** A primary drag anywhere on the compass face (the hit area is the whole button, though the copy says "ring"; past 3 px of travel, under that it is a click) turns the view about the screen centre by the pointer's angle around the compass centre (`beginRotation('centre')`); the needle follows the pointer, so moving clockwise around the face lowers the bearing by the angle swept (§2.2, rotation sign). Shift steps to absolute 15° multiples while held, re-read on each move; release returns to the raw angle. Release within 7° of north snaps to north in 300 ms. The button takes focus at `pointerdown` (`focus({ preventScroll: true })`); `pointercancel`, `lostpointercapture` and blur cancel the drag. A wheel during the drag composes with it (§3.3). Works with mouse, pen and touch from phase 1 (the compass sets `touch-action: none`). While dragging, the face takes `--color-accent-soft` and a grabbing cursor (pattern).
+- **Keyboard.** A focusable button: Enter or Space resets north; Shift+←/→ turn as anywhere; Esc during a compass drag restores the starting camera: while dragging, `Compass.tsx` registers an Esc layer at priority 70 (`registerEscapeLayer`, active while its `RotationSession` is live) that calls `cancel()`, because the compass drag runs outside the input pipeline and `ToolHost.hasLiveGesture()` cannot see it (fixture I9). An Esc before the 3 px threshold ends the press, so the release does not reset north.
+- **Words.** Action, label and shortcut come from Keyboard's `reset-north` command: `aria-label` is its label ("Reset north") and `aria-keyshortcuts` its `ariaShortcut` plus `Shift+N`. The bearing text, "View turned {{degrees}}° from north" (Intl number) or "North is up", is a visually hidden span named by `aria-describedby` (not `aria-description`). No `title`: a `ButtonTooltip` shows "Reset north" with N and the hint as its second line (pattern `canvas-navigation.md`).
 
 ### 4.3 Reset and the animation
 
-Reset north comes from N (follows the switch), Shift+N (always), Shift+↑, a compass click, View › Reset north (also the phone View menu) and the palette. Every reset and key step is a 300 ms ease-out cubic tween about the screen centre along the shortest arc; with `prefers-reduced-motion: reduce` it jumps to the target instead. A pan or zoom during it composes with it. Repeated key presses compute from `bearingTarget()`, so three Shift+→ presses within 300 ms end at 45°. A running flight is interrupted by any move, which lands at the flight's target bearing.
+Reset north comes from N (follows the switch), Shift+N (always), Shift+↑, a compass click, View › Reset north (phones share the View menu) and the palette. Every reset and key step is a 300 ms ease-out cubic tween about the screen centre along the shortest arc; with `prefers-reduced-motion: reduce` it jumps to the target instead (the live `reducedMotion` signal of §1.1, injected from phase 1). A pan or zoom during it composes with it. Repeated key presses compute from `bearingTarget()`, so three Shift+→ presses within 300 ms end at 45°. A running flight is interrupted by any move, which lands at the flight's target bearing.
 
 Turning while something else is live (convention):
 - **During a primary drag in phase 1** (a band, move, draw or handle drag): key turns, resets and a compass click apply, and the draft stays in world space, like a wheel zoom during a drag today; the ToolHost re-emits the drag on the camera frame. The trackpad twist starts no rotation while a primary session is live (one session at a time, §2.2). From phase 2 the same holds for every navigation input (§3.2).
 - **During a live rotate session** (Shift+right- or Shift+middle-drag, a trackpad twist, a compass drag), every phase: key turns, resets and compass clicks are ignored; the session owns the bearing until it ends.
 - **The snap to north after a rotate release** (300 ms) is a tween like a reset: a key turn or reset during it computes from `bearingTarget()`, a pan or zoom composes with it, and it is not an Esc layer (Esc does not restore the pre-release bearing).
 
-Fixtures in `view/navigation.test.ts`: "Shift+→ during a left drag turns the view and keeps the draft's start on the ground" (phase 1), "Shift+→ during a rotate drag does nothing", "Esc during the snap to north does not restore the bearing".
+Fixtures: "Shift+→ during a left drag keeps the draft's start on the ground" in `tools/tool-host.test.ts`, through the tool harness (phase 1); "Shift+→ during a rotate drag does nothing" and "Esc during the snap to north does not restore the bearing" in `view/navigation.test.ts`.
 
 ### 4.4 Snapping and steps
 
@@ -1987,55 +2009,57 @@ Arrows move the selection along screen directions (↑ = up on screen) by 10 cm,
 
 ### 4.6 Grid, snapping, rulers and guides
 
-- The grid, grid snapping and guides stay on true east and north (world axes) and turn with the map (user). The grid is drawn in `worldRoot` from phase 1.
-- Rulers show only while north is up. When the view is rotated `chrome/rulers.ts` hides them, and a glass pill above the view chip (`components/canvas/RulersNorthHint.tsx`, rendered by `ViewChip.tsx`, registered with the visible-map-area seam through `useMapOccluder`, reading `ViewReadSurface` and the rulers toggle) shows "Rulers show when north is up" with a Reset north link (pattern: the ruler corner sits under the title bar); resetting north brings them back if the Rulers option is on. Turning rulers on while rotated shows only the hint.
+- The grid, grid snapping and guides stay on true east and north (world axes) and turn with the map (user). From phase 1 the grid and ruler guides are drawn in `worldRoot` under plants, notes, labels and drafts (convention), on the snap lattice (§1.5).
+- Rulers show only while north is up. When the view is rotated `chrome/rulers.ts` hides them, and a glass pill above the view chip (`components/canvas/RulersNorthHint.tsx`) shows "Rulers show when north is up" with a Reset north link (pattern: the ruler corner sits under the title bar); resetting north brings them back if the Rulers option is on. Turning rulers on while rotated shows only the hint. The hint shows when `!northUp && rulersVisible && mode === 'site'`; it is wrapped with the view chip, so the chip's 600 px rule hides both (convention); it registers `useUnderRail(hint, 'tool', shown)` and the map occluder; it has no live role.
 - Ruler guides already on the map stay: they are world east-west and north-south lines and turn with the map. New ruler guides can be pulled only while north is up. Measurement guides are world lines and turn with the map; their labels stay upright.
 
 ### 4.7 Objects created on a rotated map
 
 | Object | Rule |
 |---|---|
-| Rectangle, ellipse | drawn aligned to the screen (`screenAlignedRect`), stored with `rotationDeg = normaliseBearing(bearing)` (user; identical at 0) |
+| Rectangle, ellipse | drawn aligned to the screen (`screenAlignedRect`: the unturned box about its centre), stored with `rotationDeg = normaliseBearing(bearing)` (user; identical at 0) |
 | Note | created level to the screen, stored with `rotationDeg = normaliseBearing(bearing)`; at bearing 0 it writes 0 instead of null, which renders identically |
-| Object and saved stamps | the held pick starts at `rotationDeg = bearing`, so it reads as saved relative to the screen; [ and ] step 15° from there (convention). A saved stamp dropped from Favorites, and its dragover ghost, use the same `rotationDeg = bearing` as a click (convention; today both pass 0, `saved-object-stamp-tool.ts:170-180`, `:219-223`) |
+| Object stamp | the held pick starts at 0, so copies keep their source's orientation, like Paste and Duplicate; [ and ] step 15° from there (convention) |
+| Saved stamp | the held pick starts at `rotationDeg = normaliseBearing(bearing)`, so it reads as saved relative to the screen; a saved stamp dropped from Favorites, and its dragover ghost, use the same angle as a click (convention) |
+| Stamp angle on the tool card | `rotationDeg` minus the pick's start, so a fresh pick reads 0°, never "turned 30°" |
 | Paste, duplicate | keep north-relative geometry |
-| Polygon, line, measure, plant row | vertices are where the pointer is; Shift constrains to 45° against the screen axes |
+| Polygon, line, measure, plant row | vertices are where the pointer is; Shift constrains to 45° against the screen axes (the host passes `screenAxesInWorld()`, bit-identical at 0) |
 | Print Area drawn on an "As on screen" page | level with the page; the area has no angle of its own (one layout angle, §4.12) |
 
 ### 4.8 Labels and text orientation
 
-Notes are map objects: stored `rotationDeg` is clockwise from true north (null reads as 0), and the text is drawn at `rotationDeg − bearing`, so notes turn with the map. Everything else stays upright on screen: plant glyphs (side-view pictograms), plant names, zone names and measurement readouts, stack badges, guide labels, draft labels, handles, the hover tooltip and the locked affordance. Billboards are never under a rotating container.
+Notes are map objects: stored `rotationDeg` is clockwise from true north (null reads as 0), and the text is drawn at `rotationDeg − bearing`, so notes turn with the map. Everything else stays upright on screen: plant glyphs (side-view pictograms), plant names and measurement readouts, stack badges, guide labels, draft labels, handles, the hover tooltip and the locked affordance. Billboards are never under a rotating container.
 
 ### 4.9 Hit testing and band select
 
-Hits are world-space and unaffected by bearing; pixel tolerances convert through `metresPerPixelAt`. The band is drawn as a screen rectangle and hits everything in its world quad (the band's corners through `screenAxesInWorld`, `tools/select/band.ts`, → `hitInQuad`); the draft is a `quad` shape. Selection handles anchor on the selection hull projected from four corners; the rotate handle sits 42 px above the hull's top edge on screen. The note hit box is the rotated text box, north-relative, the same model as print and GeoJSON.
+Hits are world-space and unaffected by bearing; pixel tolerances convert through `metresPerPixelAt`. The band is drawn as a screen rectangle and hits everything in its world quad (the band's corners through `screenAxesInWorld`, `tools/select/band.ts`, → `hitInQuad`); the draft is a `quad` shape. `hitInQuad` is a polygon test against shapes and a circle test for plants, never the quad's world box; `hitAt` with `toleranceScreenPx` returns the nearest polygon, rectangle (from its turned corners) or line edge; both skip hidden layers. Selection handles, and the keyboard menu's anchor, use the selection hull projected from four corners (INV-XF-22); the rotate handle is centred 28 px above the projected hull on screen. The note hit box is the rotated text box, north-relative, the same model as print and GeoJSON.
 
 ### 4.10 Saved views and stories
 
-- Capture writes `SavedViewCamera.bearing = normaliseBearing(bearing)` and the extent as the lon/lat bounding box of the ground under the four screen corners (convention; no new field).
-- Restore uses centre, zoom and bearing from the camera at every bearing (from 1): going to a view or a story step no longer fits the stored extent to the window (`savedViewZoomFor`, `current-view.ts:98-104`, today), so a view saved in a large window reopens closer in a small one (plan section 8, phase 1). The extent is used only by thumbnails of north-up views (`snapshot.ts:71`; a rotated view's thumbnail scales its camera zoom to the thumbnail, as a view without an extent does today) and by older builds, which show a rotated view north-up and slightly zoomed out.
-- Stories restore each step's bearing; restores are explicit targets and never snap.
+- Capture writes `SavedViewCamera.bearing`, normalised locally (P10: rounded to 1e-6, 360 folded to 0), and the extent as the lon/lat bounding box of the ground under the four screen corners (convention; no new field). Writing the extent costs nothing and continues.
+- One framing rule: going to a view, a story step and every thumbnail use the camera's centre, zoom and bearing; a thumbnail scales the camera zoom by the thumbnail-to-workspace screen ratio, so it always shows what going to the view shows. Going to a view no longer fits the stored extent to the window, so a view saved in a large window reopens closer in a small one (the user confirms this rule at the phase-1 handoff, plan section 8; if overturned, saved views gain an optional saved-window size, which ADR 0021 permits).
+- Story restore after presenting stores `captureView().camera` and returns through `showCamera`. Stories restore each step's bearing; restores are explicit targets and never snap.
+- `ViewSnapshotCamera` carries the bearing with its validation; `normalizeLastView` and the Web settings reader default a missing bearing to 0.
 
 ### 4.11 Snapshot map and thumbnails
 
-The snapshot map (`maplibre/view-snapshot-map.ts`) has its own `MapLibreCameraDriver` and applies the saved view's bearing. Saved-view and story thumbnails are drawn at the saved bearing (the cache key already includes the camera). Recent-file sketches (`DesignSketch`) and saved-stamp thumbnails stay north-up. PDF page-rail thumbnails follow their page's orientation.
+The snapshot map (`maplibre/view-snapshot-map.ts`) has its own `MapLibreCameraDriver` and applies the saved view's bearing. Saved-view and story thumbnails are drawn at the saved bearing and camera zoom (§4.10; the cache key already includes the camera). Recent-file sketches (`DesignSketch`) and saved-stamp thumbnails stay north-up. PDF page-rail thumbnails follow the layout angle.
 
 ### 4.12 PDF
 
-- A two-option control labelled "Map orientation" under Plant colours (placement and look: `.interface-design/patterns/canvas-navigation.md`, Export planting plan); it is not the paper "Orientation" of a page. North up (default) and As on screen. The bearing is captured once when the PDF workspace opens.
-- **One angle for the whole layout** (user, 2026-10-01): 0 under North up, the captured bearing under As on screen. Every page, the overview and each Print Area's, is drawn at it, so Print Areas carry no angle of their own (no `PdfPrintArea.rotationDeg`).
-- North up: every map page is north-up (`angleDeg` 0, `turnSnapshot` is the identity).
-- As on screen: every map page is drawn at the captured bearing. Each page's layout runs on `turnSnapshot(snapshot, pageFrame(angle, ground centre))`; `PdfPage.angleDeg` records the angle.
+- A two-option control labelled "Map orientation" under Plant colours (placement and look: `.interface-design/patterns/canvas-navigation.md`, Export planting plan); it is not the paper "Orientation" of a page. North up (default) and As on screen.
+- **One angle for the whole layout** (user, 2026-10-01): 0 under North up; under As on screen the view's bearing, read at each capture (`captureView().camera.bearingDeg`, exact) and constant while the workspace is open. Every page, the overview and each Print Area's, is drawn at it, so Print Areas carry no angle of their own (no `PdfPrintArea.rotationDeg`). `PdfPlan.angleDeg` records it.
+- One layout frame per plan, `pageFrame(angle)` about the plan origin, applied once per build: the layout runs on `turnSnapshot(snapshot, frame)`. North up is the identity.
 - Page windows on the overview are today's rectangles, since every area shares the overview's angle; the overview's coverage fit (`fitOverview`) is today's.
-- A Print Area is a rectangle in the layout's frame. Switching Map orientation turns every area about its own centre with the layout, so each area stays level on its page (convention; plan §8).
+- Print setup is stored independently of the frame: a Print Area is its centre in plan metres plus its size along the page axes, and page-editor offsets are plan metres. Each build converts them, so switching Map orientation, or reopening the workspace at a new bearing, turns every area about its own centre with the layout and keeps each level on its page (convention; plan section 8, named with U3).
 - Overview guide bands (`overview-guides.ts`): "horizontal" means horizontal on the page, in the turned frame; on an As on screen overview the band follows the screen's horizontal.
-- Split sheets split along the page's axes in the layout's frame; every sheet keeps the layout angle.
-- The page editor turns its screen deltas back by `fromFrame` (+angle) before applying them to the ground.
+- Split sheets split along the page's axes in the layout's frame; split and detail lookup use the turned plants; every sheet keeps the layout angle.
+- The page editor turns its screen deltas back by `fromFrame` (+angle) before applying them to the ground. Its arrows keep their direction (U12); mod is the large step (`metaKey` on a Mac, else `ctrlKey`), and Shift, like Alt, is ignored.
 - The north arrow ("North arrow and scale") always points to true north: it is drawn at `−angle` with its letter. The scale bar is unchanged.
 
 ### 4.13 Inspection lens
 
-The lens turns with the view (convention): its local transform is built at the live bearing, so the loupe matches what is under the pointer. Its drags and arrows are screen-relative.
+The lens turns with the view (convention): its local transform is built at the live bearing, so the loupe matches what is under the pointer. Its plant glyphs are drawn in screen space at `lensView.worldToScreen(position)`, unrotated, so they stay upright; names, rings and the cull go through the same transform. The layout splits into `inspectionScale(…)` and `inspectionLayout(plants, lensView, …)`, and `inspection-lens.ts` builds the transform between the two calls. Its drags and arrows are screen-relative (`panByScreen`, §1.1a); mod is the large step.
 
 ### 4.14 Scale bar and zoom limits
 
@@ -2043,11 +2067,11 @@ The scale bar and 1:N ratio read the ground resolution at the screen centre, whi
 
 ### 4.15 Opening a Design and the last view
 
-Reopening a Design with content restores the last bearing (user) and fits at it (`openAt`). A new or empty Design opens north-up at the zoomed-out last-view centre, so "Where is your site?" appears over a north-up overview (convention). `LastView` is per device: the bearing carries over to whichever Design opens next. Fit, Fit to Design, zoom to selection, temporary focus and place search keep the current bearing.
+Every open (the first load, a replace, the first generation) goes through `document-surface.ts`'s open fit, which calls `openAt(scene, openingBearing)`. The opening bearing is the stored `LastView.bearing` on the runtime's first open, then the live `bearingTarget()` for later opens in the session, which keeps the per-device convention without the 750 ms settle lag. `readLastView` returns the raw view with its bearing; the new-Design clamp lives in `construction.ts`. Reopening a Design with content therefore restores the last bearing (user). `openAt` opens an empty scene at 0, so a new or empty Design opens north-up at the zoomed-out last-view centre and "Where is your site?" appears over a north-up overview (convention). `LastView` is per device: the bearing carries over to whichever Design opens next. Fit, Fit to Design, zoom to selection, temporary focus and place search keep the current bearing.
 
 ### 4.16 Turn view to this edge
 
-A canvas-menu entry when the menu request's point lies within the edge tolerance of a polygon or rectangle zone's edge (pattern), in its own group before Lock. The edge is not highlighted while the entry is (user, 2026-10-01: no `highlightEdge` hook). Sources: a mouse right-click, a Mac Ctrl+click (from 2) and a pen-barrel tap use 8 px; a long press (from 3) uses the 22 px touch radius. The Menu key and Shift+F10 have no point, so they never offer it: the entry is pointer-only, a named exception to the keyboard-path rule of `system.md` (the keyboard turns the view with Shift+←/→). Ellipse zones have no edges and never offer it. It turns the view by the smaller angle that makes the edge horizontal on screen, as a 300 ms tween about the centre, never snapped. The bearing is saved with any saved view captured afterwards.
+A canvas-menu entry when the menu request's point lies within the edge tolerance of a polygon, rectangle or line zone's edge (convention; ADR 0015's "a zone edge"), locked zones included, since it only moves the view. In the empty-map menu it is its own first group; in the selection menu it sits before Lock. The edge is not highlighted while the entry is (user, 2026-10-01: no `highlightEdge` hook). Native sources (a mouse right-click, from 2 a Mac Ctrl+click, a pen-barrel tap) use 8 px; phase 3 adds the 22 px touch radius with its long press. The keyboard menu (the Menu key and Shift+F10) has no point, so it never offers it: the entry is pointer-only, a named exception to the keyboard-path rule of `system.md` (the keyboard turns the view with Shift+←/→). Ellipse zones have no edges and never offer it. It turns the view by the smaller angle that makes the edge horizontal on screen, as a 300 ms tween about the centre, never snapped. The bearing is saved with any saved view captured afterwards.
 
 ### 4.17 World map
 
@@ -2055,7 +2079,7 @@ North-up, no rotation, no compass; left-drag pans (a navigation-only picker); Sh
 
 ### 4.18 Web Edition phone layout and touch
 
-- Phase 1: the compass joins the phone zoom column, and the phone View menu gains "Reset north", so a phone user who opens a rotated Design (last view, saved view, story) can always return north. The compass ring turns the view by touch from phase 1.
+- Phase 1: the compass joins the phone zoom column after the ratio, and the View menu, which phones share, gains its three rotation rows (convention), so a phone user who opens a rotated Design (last view, saved view, story) can always return north. The compass ring turns the view by touch from phase 1.
 - The Pan tool stays in the phone strip in every phase.
 - Phase 3: two-finger pan, pinch and twist; long press opens the menu; one finger edits; 44 px handle targets; Fit joins the phone zoom column.
 - Rulers are not shown on phones today; the hint follows the rulers.
@@ -2139,7 +2163,7 @@ B5 is not used.
 | E6 Long press on Android | touch down, hold 600 ms, contextmenu, up | from phase 3: exactly one `menu-request(long-press)` whichever arrives first; contextmenu prevented |
 | E7 Long press on iOS | touch down, hold 600 ms, up | from phase 3: `menu-request(long-press)` from the timer; no tap |
 | E8 Long press with movement | move past slop at 200 ms, hold, up | drag; no menu |
-| E9 Trackpad pinch with rotation drift | mac/webkit, ROTATION on: gesturestart → changes with scale 1.2, 1.5 and rotation ±4° → gestureend | `zoom` only; no `rotate` |
+| E9 Trackpad pinch with rotation drift | mac/webkit: gesturestart → changes with scale 1.2, 1.5 and rotation ±4° → gestureend | no `rotate`; no `zoom` from the gesture (the pinch zooms through WebKit's Ctrl wheels, F12) |
 | E10 Deliberate trackpad twist | mac/webkit: rotation 5°, 12°, 20° (WebKit `rotation` is clockwise-positive) | nothing at 5°; `rotate` starts at 12° with `totalDeltaDeg` −2°, then −10° (the ground follows the fingers: a clockwise twist lowers the bearing); snap on end if within 7° of north; defaults prevented |
 | E11 Touch under V2 behaves like today, except overview (a one-finger drag bands from 2, G7) | V2: one touch down → moves → up; a second touch meanwhile | primary drag as today; the second touch is ignored; no long press |
 | E13 Press-acting tools under a pinch | from phase 3, Plant stamp armed: id1 down, id2 down 40 ms later, both move; Polygon armed: same | no plant placed; no corner added; `pan`/`zoom` only |
@@ -2161,14 +2185,14 @@ B5 is not used.
 | F9 Shift + wheel, macOS swapped | Trackpad, mac: wheel shift, dx 100, dy 0 | `pan(−100, 0)`; never a double swap |
 | F10 Shift + wheel, Mouse | Mouse: wheel shift, dx 0, dy 100 | `pan(0, −100)` (LEGACY pins it: today's Mouse Shift+wheel pans as delivered, no swap) |
 | F10b Shift + wheel delivered as dx | Mouse: wheel shift, dx 100, dy 0 (Chromium, and WebKitGTK if the live check shows dx) | `pan(−100, 0)` |
-| F11 WKWebView pinch and rotate | gesturestart → change(1.2, 5°) → change(1.5, 12°) → end | ROTATION on: `zoom(1.2)`, `zoom(1.25)`; `rotate` starts only past 10° (total 2° at 12°); LEGACY: `gesture*` ignored (no listener today), WebKit's Ctrl wheels zoom |
-| F12 WKWebView pinch with Ctrl wheels | gesturestart → wheel ctrl → change(1.1) → wheel ctrl → end | zoom only from the gesture; Ctrl wheels inside the gesture ignored; LEGACY: the gesture is ignored and each Ctrl wheel zooms |
+| F11 WKWebView pinch and rotate | gesturestart → change(1.2, 5°) → change(1.5, 12°) → end | no `zoom` from the scale; `rotate` starts only past 10° (total 2° at 12°) |
+| F12 WKWebView pinch with Ctrl wheels | gesturestart → wheel ctrl → change(1.1) → wheel ctrl → end | each Ctrl wheel zooms; the gesture's scale is ignored (phase-1 drop of gesture-scale zoom) |
 | F13 WebKitGTK pinch | no DOM events | none possible; a manual release check records the documented absence |
 | F14 Momentum tail | 20 small wheels at 16 ms, a pointerdown during the tail | wheels stay standalone; the press starts a fresh session |
 | F15 Wheel over owned text | wheel on the text-entry host | not prevented; no output |
 | F16 Page mode | wheel deltaMode 2, dy 1; then dx 0.25 at host width 400 | dy = host height; dx = 100 (a page of dx is the host width) |
 | F17 Alt + wheel (spec) | wheel alt, dy 100, Mouse | zoom as without Alt; never `rotate` |
-| F18 Wheel during a rotate (convention) | ROTATION: down(1, Shift) → moves → wheel dy 100 → moves → up | `rotate` continues; the wheel emits no `zoom`; LEGACY: the Shift+middle-drag is a `pan`, and the wheel zooms as today |
+| F18 Wheel during a pointer rotate (convention) | down(1, Shift) → moves → wheel dy 100 → moves → up | `rotate` continues; the wheel emits no `zoom` (pointer rotate sessions only; a twist does not stop Ctrl wheels) |
 
 ### 5.7 Middle button and Space
 
@@ -2183,7 +2207,9 @@ B5 is not used.
 | G6 X11 autorepeat pairs | Space down, up, down in the same ms during a drag | pan continues (a keyup followed by keydown within 30 ms counts as repeat) |
 | G7 V2 overview left drag | V2, mode overview: down(0) → moves → up | `drag-start` (band), not `pan` |
 | G8 Pan tool under V2 | V2 (touch from phase 3), tool hand: pen tip drag; touch drag | `pan` (`primary-drag`) |
-| G9 Shift+middle-drag rotates (spec) | ROTATION: down(1, Shift) → moves 20 px right → up | `rotate` about the press point with `totalDeltaDeg` +16 (rightward raises the bearing); LEGACY: `pan` |
+| G9 Shift+middle-drag rotates (spec) | down(1, Shift) → moves 20 px right → up | nothing until 3 px, then `rotate` about the press point with `totalDeltaDeg` +16 measured from the press (rightward raises the bearing) |
+| G9b Still Shift+middle click | down(1, Shift) → up within 3 px | nothing emitted; default prevented; the bearing is unchanged |
+| G9c Shift+middle-drag in overview | mode overview: down(1, Shift) → moves 20 px right → up | `rotate`, as in site mode (Shift is checked before the overview branch) |
 | G10 Space while a rail button has focus | focus rail button; Space down → down(0) on the map → drag → Space up | the press moves focus to the host; primary drag; no button click |
 | G11 Space in the text entry | focus text; Space down | no pan arming |
 | G12 Space during IME | compositionstart → keydown Space, key Process, isComposing | no pan arming |
@@ -2210,9 +2236,9 @@ These run in `app/keyboard/*.test.ts` with `KeyboardEventLike` literals.
 | H14 N and Shift+N with the switch (spec) | switch on: N; switch off: N, Shift+N | reset, nothing, reset |
 | H15 Shift+arrows in a listbox (spec) | focus listbox: Shift+→; focus the compass (a button outside any arrow-owning widget): Shift+→ | listbox keeps it; the view turns |
 | H16 Shift+L and N moved (spec) | Shift+L; N | cycle labels; reset north (never cycle labels) |
-| H17 mod+arrow on Mac (spec) | mac: Cmd+→ with a selection; Ctrl+→ | 1 m nudge; nothing |
+| H17 mod+arrow (spec) | Ctrl+→ with a selection; Shift+→; mac: Cmd+→ with a selection; Ctrl+→ | 1 m nudge; the view turns; 1 m nudge; nothing |
 | H18 Arrow-owning splitter and rail (spec) | focus the dock splitter: Shift+ArrowLeft; focus a tool-rail button: Shift+ArrowUp | the splitter resizes and the view does not turn; the rail keeps the key and north is not reset |
-| H19 Declared arrow owners (spec) | focus the lens preview (`data-owns-keys="arrows"`): Shift+→; the phone sheet handle: Shift+↑; a calendar date button: Shift+→; the photo carousel: Shift+← | the lens moves by the plain step (as an unmodified arrow); the sheet, the calendar and the carousel handle it; the view does not turn |
+| H19 Declared arrow owners (spec) | focus the lens preview (`data-owns-keys="arrows"`): Shift+→; the phone sheet handle: Shift+↑; a calendar date button (its grid prevents every arrow itself, so it declares nothing): Shift+→; the photo carousel: Shift+← | the lens moves by the plain step (as an unmodified arrow); the sheet, the calendar and the carousel handle it; the view does not turn |
 | H20 QWERTY `+` (spec) | en-US, map focus: key `+`, code Equal, shift | zoom in one step |
 | H21 QWERTY Shift+2 (spec) | en-US: key `@`, code Digit2, shift | zoom to the selection |
 | H22 AZERTY Shift+2 (spec) | fr: key `2`, code Digit2, shift | zoom to the selection |
@@ -2224,7 +2250,7 @@ These run in `app/keyboard/*.test.ts` with `KeyboardEventLike` literals.
 | I6 Press on the host | pointerdown on the host | focus with `preventScroll`; no `:focus-visible` |
 | I7 Blur mid-gesture | down(0) → move → blur | `cancel('blur')`; Space released |
 | I8 One Esc, one thing (spec) | popover open over an armed polygon draft: Esc, Esc, Esc | popover closes; draft drops; Select |
-| I9 Esc during a compass drag (spec) | Select with a selection; compass drag in progress; Esc | the starting camera returns; the selection stays |
+| I9 Esc during a compass drag (spec) | in `Compass.test.tsx` through the real router: Select with a selection; compass drag in progress; Esc with map focus, then with `<body>` focus | the starting camera returns; the selection stays |
 | I10 Esc during a drag, focus in the lens (F) | left drag live; focus in the inspection lens panel; Esc | the drag aborts and the lens stays open (today the lens also closes; no rebuild pins that bug) |
 | I11 F6 past a widget that stops propagation (F) | focus inside the inspection lens; F6 | the next region takes focus (capture listener) |
 | I12 Presenter scope inside its modal (F) | story presenter open (modal layer held): ArrowRight; N | the next step; nothing |
@@ -2232,7 +2258,7 @@ These run in `app/keyboard/*.test.ts` with `KeyboardEventLike` literals.
 | H23 Scale button owns its arrows (F, again in phase 1) | focus the scale button (`ZoomControls.tsx:138-143`): Shift+↑ | the scale menu opens; no nudge or pan (the button handles its arrows first); from 1 the bearing is unchanged |
 | H24 Held stamp turns with the switch off (F) | single-key shortcuts off, map focused, Object stamp holding a pick: `]`; then focus the body: `]` | the pick turns +15° on the map; nothing on the body |
 | H25 Arrows during a live drag | Select with a selection; a move-drag in progress: → | nothing: no nudge and no pan (today) |
-| H26 The World map owns its arrows (1) | focus the World map canvas (`data-owns-keys="arrows"`): Shift+→, Shift+↑ | the workspace view neither turns nor resets; MapLibre's rotation is off (INV-CAM-46) |
+| H26 The World map owns its arrows (1) | focus the World map canvas (`data-owns-keys="arrows"`): Shift+→, Shift+↑; then the same press on a plain focusable div | the workspace view neither turns nor resets, and MapLibre's rotation is off (INV-CAM-46); the plain div's press turns the view (the positive control) |
 | H27 F2 falls through to the shell (F) | map focus with nothing selected: F2; map focus with one note selected: F2 | rename the Design (the row's `fallback`, after the port's `edit-text` returns false); edit the note |
 
 ### 5.9 Precedence
@@ -2280,34 +2306,36 @@ When pitch ships (this paragraph is the recipe; the main agent notes it on canop
 |---|---|
 | `.canopi` | none. `SavedViewCamera.bearing` is now written (normalised); `extent` keeps its meaning, computed from four corners. Notes, rectangles and ellipses created rotated store the bearing in their existing `rotationDeg`. |
 | Settings | `LastView.bearing`, `#[serde(default)]` 0: a one-line default, no migration; older builds ignore it. `scroll_wheel` values unchanged. |
-| PDF | `PdfSetup.mapOrientation?` (default North up), in memory only; one layout angle, the bearing captured at PDF open (`CanvasPrintSnapshot.viewBearingDeg`), also in memory. `PdfPrintArea.rotationDeg` is dropped (user, 2026-10-01): no stored format replaces it, since PDF setups are not saved (plan §8). |
+| PDF | `PdfSetup.mapOrientation?` (default North up), in memory only; one layout angle, the view's bearing read at each capture (`PdfInput.viewBearingDeg`), also in memory; Print Areas and offsets in plan metres, independent of the frame. `PdfPrintArea.rotationDeg` is dropped (user, 2026-10-01): no stored format replaces it, since PDF setups are not saved (plan §8). |
 | User DB, LiDAR catalogue, plant catalog | none |
 
 ## 9. User-facing strings
 
-Every new or changed key exists in all 11 locales (`desktop/web/src/i18n/*.json`), English in sentence case (`i18n-copy.test.ts`); removed keys are deleted from every locale in the change that replaces them. Keys follow the existing layout: nested camelCase, menu items as dotted keys under `menu`. `{{mod}}` is filled with the platform's localised Ctrl or Cmd label; numbers and degrees use `Intl` through `{{value, number}}`. Rows marked (spec) were not in the design and are settled here.
+Every new or changed key exists in all 11 locales (`desktop/web/src/i18n/*.json`), English in sentence case (`i18n-copy.test.ts`); removed keys are deleted from every locale in the change that replaces them. Keys follow the existing layout: nested camelCase, menu items as dotted keys under `menu`. `{{mod}}` is filled with the platform's localised Ctrl label, or `shortcutKeys.cmd` on macOS, where every shortcut label reads Cmd for mod (U13, from phase 1); numbers and degrees use `Intl` through `{{value, number}}`. Rows marked (spec) were not in the design and are settled here.
 
 ### 9.1 Phase 1 (rotation)
 
-F1's gesture rows (`shortcuts.gestures.*`) are written once, in phase 2, with the static gesture list (§9.3; U1): phase 1 adds only the keyboard rows below.
+F1's gesture rows (`shortcuts.gestures.*`) are written once, in phase 2, with the static gesture list (§9.3; U1): phase 1 adds only the keyboard rows below. Owners (plan section 4, phase 1): Keyboard the `menu`, `shortcuts`, `shortcutKeys`, `settings` and `canvas.map` keys; Components `canvas.compass`, `canvas.grid` and `canvas.inspection`; D1 `canvas.contextMenu`; PDF `pdf`.
 
 | Key | English | Where |
 |---|---|---|
-| `menu` → `view.resetNorth` | Reset north | View menu, phone View menu, palette |
+| `menu` → `view.resetNorth` | Reset north | View menu (phones share it), palette; also the compass's `aria-label` and the rulers hint's link, through the `reset-north` command |
 | `menu` → `view.turnViewLeft` | Turn view left 15° | View menu, palette (Shift+←) |
 | `menu` → `view.turnViewRight` | Turn view right 15° | View menu, palette (Shift+→) |
 | `canvas.contextMenu.turnViewToEdge` | Turn view to this edge | canvas menu on a zone edge |
-| `canvas.compass.resetNorth` | Reset north | compass `aria-label` |
-| `canvas.compass.bearing` | View turned {{degrees, number}}° from north | compass description when rotated |
+| `canvas.compass.bearing` | View turned {{degrees, number}}° from north | compass description when rotated (the `aria-describedby` span) |
 | `canvas.compass.northUp` | North is up | compass description at 0° |
 | `canvas.compass.hint` | Click to reset north. Drag the ring to turn the view; hold Shift for 15° steps. | compass tooltip, second line |
-| `canvas.grid.rulersNorthUpOnly` | Rulers show when north is up | pill above the view chip when rotated with Rulers on; its link reuses `canvas.compass.resetNorth` |
+| `canvas.grid.rulersNorthUpOnly` | Rulers show when north is up | pill above the view chip when rotated with Rulers on, in site mode; no live role |
 | `pdf.mapOrientation` | Map orientation | PDF setup |
 | `pdf.mapOrientationNorthUp` | North up | PDF setup option (default) |
 | `pdf.mapOrientationAsOnScreen` | As on screen | PDF setup option |
-| `shortcuts.turnView` | Turn the view 15° | F1 row (Shift+←, Shift+→) |
-| `shortcuts.resetNorth` | Reset north | F1 row (N, Shift+N, Shift+↑) |
+| `shortcuts.turnView` | Turn the view 15° | F1 static row (Shift ← · Shift →) |
+| `shortcuts.resetNorth` | Reset north | F1 static row (N, only when the switch is on · Shift N · Shift ↑) |
 | `shortcuts.resetNorthAlways` | Shift+N works even when single-key shortcuts are off. | F1 note |
+| `shortcutKeys.cmd` | Cmd | the mod key's name on macOS in menus, tooltips, F1 and `{{mod}}` (U13; `formatShortcut`) |
+
+F1's View section omits the menu-derived rotation rows and shows only the two static rows above.
 
 Changed copy in phase 1:
 
@@ -2317,12 +2345,12 @@ Changed copy in phase 1:
 | `shortcuts.nudgeLarge` | Nudge the selection 1 m (the chord column shows Ctrl or Cmd + arrow) |
 | `shortcuts.pan` | Pan the map when nothing is selected (unchanged text; now along the screen) |
 | `shortcuts.panLarge` | Pan the map farther when nothing is selected (chord Ctrl or Cmd + arrow) |
-| `settings.singleKeyShortcutsHint` | Tool keys such as V, P and Z, N to reset north, brackets and Shift G, S, R, L. Shift N always resets north. Off keeps Ctrl shortcuts, Delete, Esc, arrows and F keys. |
-| `canvas.map.description` | Press a tool's key to choose it, as the tool rail shows. Shift F10 opens the menu for the selection. Esc cancels, then returns to Select, then clears the selection. Arrow keys move the selection 10 cm on screen, or 1 m with Ctrl; with nothing selected they pan the map. Shift with left or right arrow turns the view; N or Shift with up arrow resets north. F6 moves to the next area: title bar, tools, map, panel. |
+| `settings.singleKeyShortcutsHint` | Tool keys such as V, P and Z, N to reset north, brackets and Shift G, S, R, L. Shift N always resets north. Off keeps {{mod}} shortcuts, Delete, Esc, arrows and F keys. |
+| `canvas.map.description` | Press a tool's key to choose it, as the tool rail shows. Shift F10 opens the menu for the selection. Esc cancels, then returns to Select, then clears the selection. Arrow keys move the selection 10 cm on screen, or 1 m with {{mod}}; with nothing selected they pan the map. Shift with left or right arrow turns the view; N or Shift with up arrow resets north. F6 moves to the next area: title bar, tools, map, panel. |
 | `canvas.inspection.panHint` | Inspection preview. Drag or use arrow keys to explore; {{mod}} moves farther. (spec) |
 | `menu` → `view.cycleLabels` | Labels: none, codes, names (unchanged text; its key moves from N to Shift+L) |
 
-`common-types/src/settings.rs` single-key doc comment: "character-key shortcuts (tool keys such as V or P, N, Shift G, Shift L, brackets). Off leaves only shortcuts with Ctrl, Alt or a named key (Delete, Esc, arrows, F keys), plus Shift N, which always resets north." The Web copy of `canvas.map.description` names Ctrl; macOS builds that show Cmd use the `{{mod}}` form if `i18n-copy.test.ts` requires it (the Keyboard agent decides with the string owner).
+`common-types/src/settings.rs` single-key doc comment (View owns the file): "character-key shortcuts (tool keys such as V or P, N, Shift G, Shift L, brackets). Off leaves only shortcuts with Ctrl or Cmd, Alt or a named key (Delete, Esc, arrows, F keys), plus Shift N, which always resets north."
 
 ### 9.2 Phase F (shipped)
 

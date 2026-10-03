@@ -46,11 +46,10 @@ def navigation():
     corners = [turn(x, y) for x, y in [(620, 300), (760, 300), (760, 360), (620, 360)]]
     pts = ' '.join(f'{x:.1f},{y:.1f}' for x, y in corners)
     (ax, ay), (bx, by) = corners[3], corners[2]
+    # No edge highlight while "Turn view to this edge" is in the menu (user, 2026-10-01).
     zone = (f'<svg width="1440" height="900" style="position: absolute; inset: 0;" aria-hidden="true">'
             f'<polygon points="{pts}" fill="#FFF8EC" fill-opacity="0.08" stroke="#FFF8EC" stroke-width="5"></polygon>'
-            f'<polygon points="{pts}" fill="none" stroke="#9C5A16" stroke-width="2"></polygon>'
-            f'<line x1="{ax:.1f}" y1="{ay:.1f}" x2="{bx:.1f}" y2="{by:.1f}" stroke="#FFF8EC" stroke-width="8" stroke-linecap="round"></line>'
-            f'<line x1="{ax:.1f}" y1="{ay:.1f}" x2="{bx:.1f}" y2="{by:.1f}" stroke="#9C5A16" stroke-width="4" stroke-linecap="round"></line></svg>')
+            f'<polygon points="{pts}" fill="none" stroke="#9C5A16" stroke-width="2"></polygon></svg>')
     cx = sum(x for x, _ in corners) / 4
     cy = sum(y for _, y in corners) / 4
     label = mname(cx, cy, 'Verger nord')  # zone names stay upright

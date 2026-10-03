@@ -101,6 +101,8 @@ These arrive with Canvas v2 phases 1 and 2 ([ADR 0015](../adr/0015-rotating-map-
 | Reset north | Rétablir le nord | Restablecer el norte | Redefinir o norte | Ripristina il nord | Nach Norden ausrichten |
 | turn the view | tourner la vue | girar la vista | girar a vista | ruotare la vista | Ansicht drehen |
 | Map orientation | Orientation de la carte | Orientación del mapa | Orientação do mapa | Orientamento della mappa | Kartenausrichtung |
+| North up | Nord en haut | Norte arriba | Norte para cima | Nord in alto | Norden oben |
+| As on screen | Comme à l'écran | Como en pantalla | Como na tela | Come sullo schermo | Wie auf dem Bildschirm |
 | Pointing device | Périphérique de pointage | Dispositivo señalador | Dispositivo apontador | Dispositivo di puntamento | Zeigegerät |
 
 | English | nl | ru | zh | ja | ko |
@@ -109,4 +111,6 @@ These arrive with Canvas v2 phases 1 and 2 ([ADR 0015](../adr/0015-rotating-map-
 | Reset north | Noorden herstellen | Север вверх | 重置为正北 | 北を上にする | 북쪽을 위로 |
 | turn the view | weergave draaien | повернуть вид | 旋转视图 | ビューを回転 | 보기 회전 |
 | Map orientation | Kaartoriëntatie | Ориентация карты | 地图方向 | 地図の向き | 지도 방향 |
+| North up | Noorden boven | Север вверху | 北向上 | 北を上 | 북쪽 위 |
+| As on screen | Zoals op het scherm | Как на экране | 与屏幕一致 | 画面どおり | 화면과 같이 |
 | Pointing device | Aanwijsapparaat | Указывающее устройство | 指点设备 | ポインティングデバイス | 포인팅 장치 |
