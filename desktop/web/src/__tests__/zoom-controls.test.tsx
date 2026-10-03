@@ -104,7 +104,7 @@ describe('ZoomControls', () => {
     for (const screen of [{ width: 1000, height: 800 }, { width: 600, height: 400 }]) {
       const camera = createTestView({ plane, screen, viewport: { x: 0, y: 0, scale: 20 } })
       setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
-        queries: { ...createTestCanvasQuerySurface(), view: createViewReadSurface(camera.frames, () => plane) },
+        queries: { ...createTestCanvasQuerySurface(), view: createViewReadSurface(camera.frames) },
       }))
       await mount()
       expect(ratio().textContent).toBe('1:190')

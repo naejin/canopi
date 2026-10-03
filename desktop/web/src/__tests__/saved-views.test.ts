@@ -13,13 +13,13 @@ import {
   openSaveViewDialog,
   renameView,
   requestDeleteView,
-  saveCurrentView,
   savedViewDeleteConfirmation,
   savedViewDialogOpen,
   savedViewUndo,
   saveViewDialog,
   undoDeleteView,
 } from '../app/saved-views'
+import { saveCurrentView } from '../app/saved-views/actions'
 import { composeSavedView } from '../app/saved-views/model'
 import { describeSavedViewSnapshot, VIEW_SNAPSHOT_THUMBNAIL } from '../app/saved-views/snapshot'
 import type { ViewCamera } from '../canvas/runtime/view/types'
@@ -39,6 +39,7 @@ import {
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { replaceCurrentDesignState } from './support/design-session-state'
 import { TEST_GEO_ORIGIN } from './support/geo-design'
+import { framedCornersOnScreen, groundSizeShown, type WindowSize } from './support/saved-view-frame'
 
 function design(views: SavedView[] = [], stories: Story[] = []): CanopiFile {
   return {
@@ -109,7 +110,8 @@ function visit(viewIds: string[]): Story {
   }
 }
 
-function mountCanvas() {
+/** A map on a `screen` CSS px window (400 × 300 by default) whose centre shows the plane origin at zoom 18. */
+function mountCanvas(screen: WindowSize = { width: 400, height: 300 }) {
   const scale = mapZoomToStageScale(18, TEST_GEO_ORIGIN.lat)
   const scene = createDefaultScenePersistedState()
   scene.layers = [
@@ -118,8 +120,9 @@ function mountCanvas() {
   ]
   const queries = createTestCanvasQuerySurface({
     scene,
-    // The plane origin sits at the screen centre (400 × 300 test screen).
-    placement: { x: 200, y: 150, scale },
+    // The plane origin sits at the screen centre.
+    placement: { x: screen.width / 2, y: screen.height / 2, scale },
+    screen,
     plants: [plant('Lycium barbarum')],
     selection: [{ kind: 'zone', id: 'Hedge' }, { kind: 'measurement-guide', id: 'g1' }],
     sessionPlane: createSessionPlane(TEST_GEO_ORIGIN),
@@ -149,7 +152,6 @@ afterEach(() => {
   closeManageViewsDialog()
   dismissDeleteViewUndo()
   mapLayers.value = createDefaultMapLayers()
-  vi.unstubAllGlobals()
 })
 
 describe('saving the current view', () => {
@@ -180,27 +182,28 @@ describe('saving the current view', () => {
       text: [],
     })
     expect(saved!.camera.zoom).toBeCloseTo(18, 6)
+    // The ground the 400 × 300 map shows, in metres at the stored camera: what going to the view fits into any window.
+    const ground = groundSizeShown(saved!.camera, { width: 400, height: 300 })
+    expect(saved!.camera.ground_size_m!.width).toBeCloseTo(ground.width, 6)
+    expect(saved!.camera.ground_size_m!.height).toBeCloseTo(ground.height, 6)
+    expect(Object.keys(saved!)).not.toContain('extent')
     expect(designSessionStore.designDirty.value).toBe(true)
   })
 
-  it('a thumbnail scales the camera zoom by the screen ratio', () => {
+  it('a thumbnail shows the framed area fitted into the image, whatever the workspace size', () => {
     replaceCurrentDesignState(design(), null, 'Orchard')
     const { queries } = mountCanvas()
-    // The view still records the ground the map shows (the test screen is 400 × 300 at zoom 18) ...
+    const context = { queries, mapLayers: createDefaultMapLayers(), locale: 'en', plantLabels: 'names' as const }
+    // Saved in this 400 × 300 workspace: the 320 × 200 image shows its frame, limited by the height.
     const saved = saveCurrentView({ name: 'Hedges' })!
-    expect(saved.extent).toBeDefined()
-    expect(saved.extent!.west).toBeLessThan(TEST_GEO_ORIGIN.lon)
-    expect(saved.extent!.north).toBeGreaterThan(TEST_GEO_ORIGIN.lat)
-    // ... but its thumbnail frames what going to it shows: the camera zoom, scaled from the 400 × 300 workspace to the
-    // 320 × 200 image (limited by the height), at the view's bearing, whatever extent was recorded.
-    const turned: SavedView = { ...BERRIES, camera: { ...BERRIES.camera, bearing: 30 }, extent: { west: 13, south: 22.99, east: 13.01, north: 23 } }
-    const request = describeSavedViewSnapshot(turned, VIEW_SNAPSHOT_THUMBNAIL, {
-      queries, mapLayers: createDefaultMapLayers(), locale: 'en', plantLabels: 'names',
-    })!
-    expect(request.camera.lon).toBe(13.0012)
-    expect(request.camera.lat).toBe(22.9991)
-    expect(request.camera.zoom).toBeCloseTo(19.5 + Math.log2(200 / 300), 9)
-    expect(request.camera.bearing).toBe(30)
+    const request = describeSavedViewSnapshot(saved, VIEW_SNAPSHOT_THUMBNAIL, context)!
+    expect(request.camera.zoom).toBeCloseTo(saved.camera.zoom + Math.log2(200 / 300), 6)
+    // A view framed in a 1400 × 900 window, turned 30°: its frame fitted into the image at its bearing, not this workspace's.
+    const camera = { ...BERRIES.camera, bearing: 30 }
+    const turned: SavedView = { ...BERRIES, camera: { ...camera, ground_size_m: groundSizeShown(camera, { width: 1400, height: 900 }) } }
+    const thumbnail = describeSavedViewSnapshot(turned, VIEW_SNAPSHOT_THUMBNAIL, context)!
+    expect(thumbnail.camera).toMatchObject({ lon: 13.0012, lat: 22.9991, bearing: 30 })
+    expect(thumbnail.camera.zoom).toBeCloseTo(19.5 + Math.log2(200 / 900), 6)
   })
 
   it('records the label choice with the view, and presents the view with it', () => {
@@ -276,7 +279,7 @@ describe('going to a saved view', () => {
     const revision = designSessionStore.committedDesignRevision.value
     const layersBefore = mapLayers.value
 
-    expect(goToSavedView('berries', { reducedMotion: false })).toBe(true)
+    expect(goToSavedView('berries')).toBe(true)
 
     expect(showCamera).toHaveBeenCalledWith(berriesCamera(), { motion: 'fly' })
     expect(showPlace).not.toHaveBeenCalled()
@@ -288,39 +291,83 @@ describe('going to a saved view', () => {
     expect(selectSpecies).not.toHaveBeenCalled()
   })
 
-  it('jumps under reduced motion and ignores unknown views', () => {
+  it('ignores unknown views', () => {
     replaceCurrentDesignState(design([BERRIES]), null, 'Orchard')
     const { showCamera } = mountCanvas()
 
     expect(goToSavedView('missing')).toBe(false)
-    expect(goToSavedView('berries', { reducedMotion: true })).toBe(true)
+    expect(goToSavedView('berries')).toBe(true)
 
     expect(showCamera).toHaveBeenCalledTimes(1)
-    expect(showCamera).toHaveBeenCalledWith(berriesCamera(), { motion: 'jump' })
+    expect(showCamera).toHaveBeenCalledWith(berriesCamera(), { motion: 'fly' })
   })
 
-  it('going to a view restores its camera zoom in any window size', () => {
-    // Saved on a screen twice the size of the 400 × 300 test screen, turned 30°: the recorded ground is not fitted to this
-    // window; the camera's centre, zoom and bearing are restored as saved.
-    const extent = { west: 13.0002, south: 22.9985, east: 13.0022, north: 22.9997 }
-    replaceCurrentDesignState(design([{ ...BERRIES, camera: { ...BERRIES.camera, bearing: 30 }, extent }]), null, 'Orchard')
-    const { showCamera } = mountCanvas()
+  it('a view saved in a 1400x900 window and opened in a 1000x700 one keeps every corner inside', () => {
+    replaceCurrentDesignState(design(), null, 'Orchard')
+    mountCanvas({ width: 1400, height: 900 })
+    const saved = saveCurrentView({ name: 'Hedges' })!
+    const { showCamera } = mountCanvas({ width: 1000, height: 700 })
 
-    goToSavedView('berries', { reducedMotion: true })
+    expect(goToSavedView(saved.id)).toBe(true)
 
-    expect(showCamera).toHaveBeenCalledWith(berriesCamera(30), { motion: 'jump' })
+    const [shown] = showCamera.mock.calls[0]!
+    expect(shown.zoom).toBeLessThan(saved.camera.zoom)
+    expect(shown).toMatchObject({ center: { lon: saved.camera.lon, lat: saved.camera.lat }, bearingDeg: 0 })
+    const corners = framedCornersOnScreen(saved.camera, { width: 1400, height: 900 }, shown, { width: 1000, height: 700 })
+    for (const corner of corners) {
+      expect(corner.x).toBeGreaterThanOrEqual(-1e-6)
+      expect(corner.x).toBeLessThanOrEqual(1000 + 1e-6)
+      expect(corner.y).toBeGreaterThanOrEqual(-1e-6)
+      expect(corner.y).toBeLessThanOrEqual(700 + 1e-6)
+    }
+    // Zoomed out just enough: the width (1000 / 1400 < 700 / 900) fills the window edge to edge.
+    expect(Math.min(...corners.map((corner) => corner.x))).toBeCloseTo(0, 4)
+    expect(Math.max(...corners.map((corner) => corner.x))).toBeCloseTo(1000, 4)
   })
 
-  it('follows the platform reduced-motion preference by default', () => {
-    replaceCurrentDesignState(design([BERRIES]), null, 'Orchard')
-    const { showCamera } = mountCanvas()
-    vi.stubGlobal('matchMedia', (query: string) => ({
-      matches: query === '(prefers-reduced-motion: reduce)',
-    }))
+  it('the same window restores the exact camera', () => {
+    replaceCurrentDesignState(design(), null, 'Orchard')
+    const { showCamera } = mountCanvas({ width: 1400, height: 900 })
+    const saved = saveCurrentView({ name: 'Hedges' })!
+    // A turned view framed in this window, as saving it records.
+    const camera = { ...BERRIES.camera, bearing: 30 }
+    const turned: SavedView = {
+      ...BERRIES,
+      camera: { ...camera, ground_size_m: groundSizeShown(camera, { width: 1400, height: 900 }) },
+    }
+    replaceCurrentDesignState(design([saved, turned]), null, 'Orchard')
+
+    goToSavedView(saved.id)
+    goToSavedView('berries')
+
+    expect(showCamera.mock.calls).toEqual([
+      [{ center: { lon: saved.camera.lon, lat: saved.camera.lat }, zoom: saved.camera.zoom, bearingDeg: 0, pitchDeg: 0 }, { motion: 'fly' }],
+      [berriesCamera(30), { motion: 'fly' }],
+    ])
+  })
+
+  it('a larger window never zooms in past the saved zoom', () => {
+    replaceCurrentDesignState(design(), null, 'Orchard')
+    mountCanvas()
+    const saved = saveCurrentView({ name: 'Hedges' })!
+    const { showCamera } = mountCanvas({ width: 1600, height: 1000 })
+
+    goToSavedView(saved.id)
+
+    expect(showCamera).toHaveBeenCalledWith(
+      { center: { lon: saved.camera.lon, lat: saved.camera.lat }, zoom: saved.camera.zoom, bearingDeg: 0, pitchDeg: 0 },
+      { motion: 'fly' },
+    )
+  })
+
+  it('a saved view without the size falls back to the camera zoom', () => {
+    // Saved by a 2.0 preview build: centre, zoom and bearing only, restored as saved in any window.
+    replaceCurrentDesignState(design([{ ...BERRIES, camera: { ...BERRIES.camera, bearing: 30 } }]), null, 'Orchard')
+    const { showCamera } = mountCanvas({ width: 1000, height: 700 })
 
     goToSavedView('berries')
 
-    expect(showCamera).toHaveBeenCalledWith(berriesCamera(), { motion: 'jump' })
+    expect(showCamera).toHaveBeenCalledWith(berriesCamera(30), { motion: 'fly' })
   })
 
   it('does nothing without a map', () => {
@@ -418,9 +465,11 @@ describe('saved view model', () => {
     const view = composeSavedView({
       id: 'v', name: 'V', title: null,
       view: { lon: 2.29448123456789, lat: 48.85837012345678, zoom: 31, bearing: 0 },
+      screen: { width: 0, height: 0 },
       mapLayers: createDefaultMapLayers(),
       sceneLayers: [], siteData: [], focusedSpecies: null, selection: [],
     })
+    // A map with no size frames no ground: the view keeps its camera zoom.
     expect(view.camera).toEqual({ lon: 2.294481235, lat: 48.858370123, zoom: 27, bearing: 0 })
     expect(view.highlighted).toEqual({ species: [], objects: [] })
   })
@@ -429,6 +478,7 @@ describe('saved view model', () => {
     const bearingOf = (bearing: number) => composeSavedView({
       id: 'v', name: 'V', title: null,
       view: { lon: 2.2944, lat: 48.8583, zoom: 18, bearing },
+      screen: { width: 400, height: 300 },
       mapLayers: createDefaultMapLayers(),
       sceneLayers: [], siteData: [], focusedSpecies: null, selection: [],
     }).camera.bearing

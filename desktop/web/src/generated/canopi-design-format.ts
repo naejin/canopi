@@ -591,16 +591,6 @@ export const CANOPI_FILE_SCHEMA = {
         "camera": {
           "$ref": "#/$defs/SavedViewCamera"
         },
-        "extent": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SavedViewExtent"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "highlighted": {
           "$ref": "#/$defs/SavedViewHighlight"
         },
@@ -689,6 +679,17 @@ export const CANOPI_FILE_SCHEMA = {
           "minimum": 0.0,
           "type": "number"
         },
+        "ground_size_m": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SavedViewGroundSize"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "lat": {
           "format": "double",
           "maximum": 85.0511287798066,
@@ -716,38 +717,24 @@ export const CANOPI_FILE_SCHEMA = {
       ],
       "type": "object"
     },
-    "SavedViewExtent": {
+    "SavedViewGroundSize": {
       "properties": {
-        "east": {
+        "height": {
           "format": "double",
-          "maximum": 180.0,
-          "minimum": -180.0,
+          "maximum": 100000000.0,
+          "minimum": 0.0,
           "type": "number"
         },
-        "north": {
+        "width": {
           "format": "double",
-          "maximum": 85.0511287798066,
-          "minimum": -85.0511287798066,
-          "type": "number"
-        },
-        "south": {
-          "format": "double",
-          "maximum": 85.0511287798066,
-          "minimum": -85.0511287798066,
-          "type": "number"
-        },
-        "west": {
-          "format": "double",
-          "maximum": 180.0,
-          "minimum": -180.0,
+          "maximum": 100000000.0,
+          "minimum": 0.0,
           "type": "number"
         }
       },
       "required": [
-        "west",
-        "south",
-        "east",
-        "north"
+        "width",
+        "height"
       ],
       "type": "object"
     },

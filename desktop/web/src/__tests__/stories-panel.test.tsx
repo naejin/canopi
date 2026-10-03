@@ -193,7 +193,8 @@ describe('Stories panel', () => {
     expect(added.title).toBe('Step 4')
     const saved = currentDesign.value!.views!.find((entry) => entry.id === added.view_id)!
     expect(saved.name).toBe('Client visit · step 4')
-    expect(saved.extent).toBeDefined()
+    // A step's view records the ground it frames, so the step keeps its frame on any screen.
+    expect(saved.camera.ground_size_m).toEqual({ width: expect.any(Number), height: expect.any(Number) })
     expect(container.querySelector(`[data-step-editor="${added.id}"]`)).not.toBeNull()
   })
 

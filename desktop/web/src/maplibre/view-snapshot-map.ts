@@ -50,7 +50,7 @@ interface ViewSnapshotCamera {
   readonly lon: number
   readonly lat: number
   readonly zoom: number
-  /** Degrees clockwise from north: a saved view's bearing (spec §4.11). */
+  /** Degrees clockwise from north: a saved view's bearing, so the image is turned as going to the view turns the map. */
   readonly bearing: number
 }
 

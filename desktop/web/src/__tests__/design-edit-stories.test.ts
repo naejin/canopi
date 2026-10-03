@@ -214,10 +214,9 @@ describe('recapturing a saved view', () => {
     const capture: SavedView = {
       ...view('fresh'),
       name: 'ignored',
-      camera: { lon: 3, lat: 45, zoom: 17, bearing: 0 },
+      camera: { lon: 3, lat: 45, zoom: 17, bearing: 0, ground_size_m: { width: 340, height: 210 } },
       visible_layers: { ...view('a').visible_layers, background: { kind: 'satellite' } },
       highlighted: { species: ['Lycium barbarum'], objects: [] },
-      extent: { west: 2.9, south: 44.9, east: 3.1, north: 45.1 },
     }
     recaptureSavedView('a', capture, { labels: 'codes' })
     expect(currentDesign.value?.views?.[0]).toEqual({
@@ -225,7 +224,6 @@ describe('recapturing a saved view', () => {
       camera: capture.camera,
       visible_layers: capture.visible_layers,
       highlighted: capture.highlighted,
-      extent: capture.extent,
     })
     expect(savedViewPlantLabels(currentDesign.value, 'a')).toBe('codes')
 
@@ -233,8 +231,14 @@ describe('recapturing a saved view', () => {
     recaptureSavedView('a', capture, { labels: 'codes' })
     recaptureSavedView('missing', capture)
     expect(currentDesign.value).toBe(before)
+  })
 
-    recaptureSavedView('a', { ...capture, extent: undefined })
+  it('writes back only the fields a saved view has, never a field the view carried from elsewhere', () => {
+    // A view object holding a stray field (the deleted `extent`, say): recapturing builds the view from its named fields.
+    const stray = { ...view('a'), extent: { west: 2.9, south: 44.9, east: 3.1, north: 45.1 } } as SavedView
+    open([], [stray])
+    recaptureSavedView('a', { ...view('fresh'), camera: { lon: 3, lat: 45, zoom: 17, bearing: 0 } })
     expect(currentDesign.value?.views?.[0]).not.toHaveProperty('extent')
+    expect(currentDesign.value?.views?.[0]).toEqual({ ...view('a'), camera: { lon: 3, lat: 45, zoom: 17, bearing: 0 } })
   })
 })

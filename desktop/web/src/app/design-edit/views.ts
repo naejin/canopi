@@ -72,9 +72,10 @@ export function addSavedView(view: SavedView, display: SavedViewDisplay | null =
 }
 
 /**
- * Points an existing view at what the map shows now: camera, extent, layers,
- * highlights and labels. Its name, title and text stay. Every step that shows
- * the view shows the new capture.
+ * Points an existing view at what the map shows now: camera (with the ground
+ * it frames), layers, highlights and labels. Its name, title and text stay.
+ * Every step that shows the view shows the new capture. The view is built from
+ * its named fields, so nothing it carried from elsewhere is written back.
  */
 export function recaptureSavedView(id: string, capture: SavedView, display: SavedViewDisplay | null = null): void {
   editCurrentDesign((design) => {
@@ -83,13 +84,14 @@ export function recaptureSavedView(id: string, capture: SavedView, display: Save
     if (index === -1) return design
     const current = views[index]!
     const next: SavedView = {
-      ...current,
+      id: current.id,
+      name: current.name,
       camera: capture.camera,
       visible_layers: capture.visible_layers,
       highlighted: capture.highlighted,
+      title: current.title,
+      ...(current.text === undefined ? {} : { text: current.text }),
     }
-    if (capture.extent) next.extent = capture.extent
-    else delete next.extent
     const sameCapture = JSON.stringify(next) === JSON.stringify(current)
     const sameDisplay = display === null || readSavedViewDisplay(design, id)?.labels === display.labels
     if (sameCapture && sameDisplay) return design

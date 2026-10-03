@@ -191,7 +191,11 @@
             "lon": 2.2944812345,
             "lat": 48.8583701234,
             "zoom": 19.25,
-            "bearing": 0.0
+            "bearing": 0.0,
+            "ground_size_m": {
+              "width": 312.5,
+              "height": 187.5
+            }
           },
           "visible_layers": {
             "background": {
@@ -259,13 +263,41 @@
                 }
               ]
             }
-          ],
-          "extent": {
-            "west": 2.2934,
-            "south": 48.8577,
-            "east": 2.2956,
-            "north": 48.859
-          }
+          ]
+        },
+        {
+          "id": "view-pond",
+          "name": "Pond",
+          "camera": {
+            "lon": 2.2951,
+            "lat": 48.8579,
+            "zoom": 18.0,
+            "bearing": 45.0,
+            "ground_size_m": null
+          },
+          "visible_layers": {
+            "background": {
+              "kind": "basemap",
+              "style": "liberty"
+            },
+            "terrain": {
+              "contours": false,
+              "hillshade": true
+            },
+            "scene_layers": [
+              "plants",
+              "zones"
+            ],
+            "site_data": [
+              "lidar-dtm-1"
+            ]
+          },
+          "highlighted": {
+            "species": [],
+            "objects": []
+          },
+          "title": null,
+          "text": []
         }
       ],
       "stories": [
@@ -627,7 +659,11 @@
               "lon": 2.2944812345,
               "lat": 48.8583701234,
               "zoom": 19.25,
-              "bearing": 0.0
+              "bearing": 0.0,
+              "ground_size_m": {
+                "width": 312.5,
+                "height": 187.5
+              }
             },
             "visible_layers": {
               "background": {
@@ -695,12 +731,45 @@
                   }
                 ]
               }
-            ],
+            ]
+          },
+          {
+            "id": "view-pond",
+            "name": "Pond",
+            "camera": {
+              "lon": 2.2951,
+              "lat": 48.8579,
+              "zoom": 18.0,
+              "bearing": 45.0
+            },
+            "visible_layers": {
+              "background": {
+                "kind": "basemap",
+                "style": "liberty"
+              },
+              "terrain": {
+                "contours": false,
+                "hillshade": true
+              },
+              "scene_layers": [
+                "plants",
+                "zones"
+              ],
+              "site_data": [
+                "lidar-dtm-1"
+              ]
+            },
+            "highlighted": {
+              "species": [],
+              "objects": []
+            },
+            "title": null,
+            "text": [],
             "extent": {
-              "west": 2.2934,
-              "south": 48.8577,
-              "east": 2.2956,
-              "north": 48.859
+              "west": 2.2941,
+              "south": 48.8573,
+              "east": 2.2961,
+              "north": 48.8585
             }
           }
         ],
@@ -1839,7 +1908,7 @@
       "error_kind": "invalid_document"
     },
     {
-      "id": "reject-view-extent-west-of-its-east",
+      "id": "reject-view-ground-size-zero-width",
       "input": {
         "version": 9,
         "name": "Story Garden",
@@ -1865,7 +1934,11 @@
               "lon": 2.2944812345,
               "lat": 48.8583701234,
               "zoom": 19.25,
-              "bearing": 0.0
+              "bearing": 0.0,
+              "ground_size_m": {
+                "width": 0.0,
+                "height": 187.5
+              }
             },
             "visible_layers": {
               "background": {
@@ -1933,13 +2006,7 @@
                   }
                 ]
               }
-            ],
-            "extent": {
-              "west": 2.2956,
-              "south": 48.8577,
-              "east": 2.2934,
-              "north": 48.859
-            }
+            ]
           }
         ],
         "stories": [
@@ -2002,7 +2069,7 @@
       "error_kind": "invalid_document"
     },
     {
-      "id": "reject-view-extent-outside-web-mercator",
+      "id": "reject-view-ground-size-negative-height",
       "input": {
         "version": 9,
         "name": "Story Garden",
@@ -2028,7 +2095,11 @@
               "lon": 2.2944812345,
               "lat": 48.8583701234,
               "zoom": 19.25,
-              "bearing": 0.0
+              "bearing": 0.0,
+              "ground_size_m": {
+                "width": 312.5,
+                "height": -1.0
+              }
             },
             "visible_layers": {
               "background": {
@@ -2096,13 +2167,7 @@
                   }
                 ]
               }
-            ],
-            "extent": {
-              "west": 2.2934,
-              "south": 48.8577,
-              "east": 2.2956,
-              "north": 86.0
-            }
+            ]
           }
         ],
         "stories": [
@@ -3546,64 +3611,170 @@
               "objects": []
             },
             "title": null,
-            "text": [],
-            "extent": {
-              "west": 12.999,
-              "south": 22.999,
-              "east": 13.001,
-              "north": 23.001
-            }
+            "text": []
           }
         ]
       },
       "error_kind": "invalid_document"
     },
     {
-      "id": "reject-view-extent-south-above-north",
+      "id": "reject-view-ground-size-above-1e8-metres",
       "input": {
         "version": 9,
-        "name": "Conformance Garden",
+        "name": "Story Garden",
+        "description": null,
         "plant_species_colors": {},
+        "plant_species_symbols": {},
+        "plant_species_codes": {},
         "layers": [],
         "plants": [],
         "zones": [],
-        "created_at": "2026-09-25T00:00:00.000Z",
-        "updated_at": "2026-09-25T00:00:00.000Z",
+        "annotations": [],
+        "measurement_guides": [],
+        "consortiums": [],
+        "groups": [],
+        "timeline": [],
+        "budget": [],
+        "budget_currency": "EUR",
         "views": [
           {
-            "id": "view-1",
-            "name": "View",
+            "id": "view-berries",
+            "name": "Berry hedges",
             "camera": {
-              "lon": 13.0,
-              "lat": 23.0,
-              "zoom": 18.0,
-              "bearing": 0.0
+              "lon": 2.2944812345,
+              "lat": 48.8583701234,
+              "zoom": 19.25,
+              "bearing": 0.0,
+              "ground_size_m": {
+                "width": 100000001.0,
+                "height": 187.5
+              }
             },
             "visible_layers": {
               "background": {
-                "kind": "satellite"
+                "kind": "basemap",
+                "style": "liberty"
               },
               "terrain": {
                 "contours": false,
-                "hillshade": false
+                "hillshade": true
               },
-              "scene_layers": [],
-              "site_data": []
+              "scene_layers": [
+                "plants",
+                "zones"
+              ],
+              "site_data": [
+                "lidar-dtm-1"
+              ]
             },
             "highlighted": {
-              "species": [],
-              "objects": []
+              "species": [
+                "Lycium barbarum"
+              ],
+              "objects": [
+                {
+                  "kind": "plant",
+                  "id": "plant-1"
+                },
+                {
+                  "kind": "measurement_guide",
+                  "id": "guide-1"
+                }
+              ]
             },
-            "title": null,
-            "text": [],
-            "extent": {
-              "west": 12.999,
-              "south": 23.001,
-              "east": 13.001,
-              "north": 22.999
-            }
+            "title": "Berry hedges",
+            "text": [
+              {
+                "kind": "paragraph",
+                "spans": [
+                  {
+                    "text": "Two hedges ",
+                    "bold": true,
+                    "italic": false,
+                    "link": null
+                  },
+                  {
+                    "text": "shelter",
+                    "bold": false,
+                    "italic": true,
+                    "link": "https://example.org"
+                  }
+                ]
+              },
+              {
+                "kind": "bullets",
+                "items": [
+                  {
+                    "spans": [
+                      {
+                        "text": "Year one",
+                        "bold": false,
+                        "italic": false,
+                        "link": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
           }
-        ]
+        ],
+        "stories": [
+          {
+            "id": "story-visit",
+            "name": "Client visit",
+            "steps": [
+              {
+                "id": "step-1",
+                "view_id": "view-berries",
+                "title": "Berry hedges",
+                "text": [
+                  {
+                    "kind": "paragraph",
+                    "spans": [
+                      {
+                        "text": "They crop from year two."
+                      }
+                    ]
+                  }
+                ],
+                "images": [
+                  {
+                    "src": "https://example.org/hedge.jpg",
+                    "alt": "The hedge in June"
+                  },
+                  {
+                    "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+                    "alt": "A pixel"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "lidar": {
+          "schema_version": 1,
+          "entries": [
+            {
+              "kind": "Source",
+              "id": "lidar-dtm-1",
+              "visible": true,
+              "opacity": 1.0,
+              "order": 0,
+              "style": null
+            },
+            {
+              "kind": "Derived",
+              "id": "slope-1",
+              "visible": true,
+              "opacity": 0.5,
+              "order": 1,
+              "style": "slope"
+            }
+          ]
+        }
       },
       "error_kind": "invalid_document"
     },
@@ -3644,13 +3815,7 @@
               "objects": []
             },
             "title": null,
-            "text": [],
-            "extent": {
-              "west": 12.999,
-              "south": 22.999,
-              "east": 13.001,
-              "north": 23.001
-            }
+            "text": []
           }
         ],
         "stories": [
@@ -3721,13 +3886,7 @@
               "objects": []
             },
             "title": null,
-            "text": [],
-            "extent": {
-              "west": 12.999,
-              "south": 22.999,
-              "east": 13.001,
-              "north": 23.001
-            }
+            "text": []
           }
         ],
         "stories": [

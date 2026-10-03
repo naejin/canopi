@@ -1,4 +1,5 @@
 import {
+  CANOPI_FILE_SCHEMA,
   RICH_TEXT_LINK_SCHEMES,
   STORY_IMAGE_DATA_TYPES,
   STORY_IMAGE_MAX_BYTES,
@@ -6,9 +7,13 @@ import {
 } from '../../generated/canopi-design-format'
 import type { CanopiFile, RichTextBlock, RichTextSpan, SavedView, Story } from '../../types/design'
 
+/** The largest ground side a saved view may frame, in metres: the schema's bound (common_types::views::SAVED_VIEW_MAX_GROUND_SIZE_M). */
+const SAVED_VIEW_MAX_GROUND_SIZE_M = CANOPI_FILE_SCHEMA.$defs.SavedViewGroundSize.properties.width.maximum
+
 // Mirrors common_types::views::validate_views_and_stories. The generated schema
-// already bounds each camera and extent; this checks extent order, ids, cross-references, link schemes
-// and embedded images. Returns the first problem as "$.path: reason".
+// already bounds each camera when a file is read; this checks recorded ground
+// sizes (Design edits never pass the schema), ids, cross-references, link
+// schemes and embedded images. Returns the first problem as "$.path: reason".
 export function viewsAndStoriesProblem(
   views: readonly SavedView[],
   stories: readonly Story[],
@@ -17,9 +22,9 @@ export function viewsAndStoriesProblem(
   for (const [index, view] of views.entries()) {
     if (viewIds.has(view.id)) return `$.views[${index}].id: duplicate saved view id ${JSON.stringify(view.id)}`
     viewIds.add(view.id)
-    const extent = view.extent
-    if (extent && !(extent.west < extent.east && extent.south < extent.north)) {
-      return `$.views[${index}].extent: expected WGS84 bounds on the Web Mercator map with west < east and south < north`
+    const ground = view.camera.ground_size_m
+    if (ground && !isAdmittedGroundSize(ground)) {
+      return `$.views[${index}].camera.ground_size_m: expected a finite width and height above 0 and at most ${SAVED_VIEW_MAX_GROUND_SIZE_M} m`
     }
     const problem = richTextProblem(view.text ?? [], `$.views[${index}].text`)
     if (problem) return problem
@@ -53,6 +58,11 @@ export function viewsAndStoriesProblem(
     }
   }
   return null
+}
+
+/** Whether a saved view's recorded ground is one the format admits: finite, above 0 and at most 1e8 m on each side. */
+export function isAdmittedGroundSize(ground: { readonly width: number; readonly height: number }): boolean {
+  return [ground.width, ground.height].every((side) => Number.isFinite(side) && side > 0 && side <= SAVED_VIEW_MAX_GROUND_SIZE_M)
 }
 
 /** Whether a viewer may open this rich-text link (https:, http: or mailto:), in any case. */

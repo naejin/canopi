@@ -1,3 +1,4 @@
+import { signal } from '@preact/signals'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -5,14 +6,16 @@ import {
   goToPresentedStep,
   leaveStoryPresentation,
   nextPresentedStep,
-  presentedMapLayers,
   presentedStep,
   presentStory,
   previousPresentedStep,
   storyPresentationActive,
+} from '../app/story-presentation'
+import {
+  presentedMapLayers,
   storyPresentationHidesEditingAids,
   storyPresentationOverrides,
-} from '../app/story-presentation'
+} from '../app/story-presentation/overrides'
 import { StoryPresenter } from '../components/stories/StoryPresenter'
 import { PanelRail } from '../components/shared/PanelRail'
 import { currentDesign, designSessionStore } from '../app/document-session/store'
@@ -36,6 +39,7 @@ import { createTestCanvasCommandSurface, createTestCanvasRuntimeSurfaces } from 
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { replaceCurrentDesignState } from './support/design-session-state'
 import { TEST_GEO_ORIGIN } from './support/geo-design'
+import { framedCornersOnScreen, groundSizeShown } from './support/saved-view-frame'
 
 function view(id: string, overrides: Partial<SavedView['visible_layers']> = {}, species: string[] = []): SavedView {
   return {
@@ -125,6 +129,28 @@ function mountMap(planted: readonly ScenePlantEntity[] = [plant('p1', 'Lycium ba
   setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ commands, queries }))
 }
 
+/** The map's live screen, which a test resizes, and its settled frame, which it settles: full screen ending, say. */
+function resizableMap(width: number, height: number) {
+  const base = mapQueries.view
+  let screen = { width, height, devicePixelRatio: 1 }
+  const settledRevision = signal(0)
+  const view = { ...base, settledRevision, captureView: () => ({ ...base.captureView(), screen }) }
+  setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ commands, queries: { ...mapQueries, view } }))
+  return {
+    resize(nextWidth: number, nextHeight: number) { screen = { width: nextWidth, height: nextHeight, devicePixelRatio: 1 } },
+    settle() { settledRevision.value += 1 },
+  }
+}
+
+/** The tour with its hedges step framed in a `width` × `height` window at `bearing`. */
+function framedTour(width: number, height: number, bearing: number): CanopiFile {
+  const tour = design()
+  const hedges = tour.views![1]!
+  const camera = { ...hedges.camera, bearing }
+  tour.views![1] = { ...hedges, camera: { ...camera, ground_size_m: groundSizeShown(camera, { width, height }) } }
+  return tour
+}
+
 beforeEach(() => {
   locale.value = 'en'
   replaceCurrentDesignState(design(), null, 'Stories')
@@ -148,7 +174,7 @@ describe('presenting a story', () => {
     const revision = designSessionStore.committedDesignRevision.value
     const userLayers = mapLayers.value
 
-    expect(presentStory('tour', 1, { reducedMotion: true })).toBe(true)
+    expect(presentStory('tour', 1)).toBe(true)
 
     expect(storyPresentationActive.value).toBe(true)
     expect(presentedStep.value?.step.id).toBe('s2')
@@ -165,7 +191,7 @@ describe('presenting a story', () => {
     ])
     expect(presentLayers).toHaveBeenLastCalledWith(['zones'])
     expect(focus).toHaveBeenLastCalledWith('Lycium barbarum')
-    expect(showCamera).toHaveBeenLastCalledWith(stepCamera(45), { motion: 'jump' })
+    expect(showCamera).toHaveBeenLastCalledWith(stepCamera(45), { motion: 'fly' })
     expect(showPlace).not.toHaveBeenCalled()
     expect(document.documentElement.hasAttribute('data-story-presenting')).toBe(true)
 
@@ -178,17 +204,60 @@ describe('presenting a story', () => {
   it('clears the highlight for a step whose species has no plants instead of keeping the previous one', () => {
     setCurrentCanvasSession(null)
     mountMap([])
-    presentStory('tour', 1, { reducedMotion: true })
+    presentStory('tour', 1)
     expect(focus).toHaveBeenLastCalledWith(null)
   })
 
-  it('flies between steps unless reduced motion asks for a jump', () => {
-    presentStory('tour', 0, { reducedMotion: false })
+  it('flies between steps; the camera driver alone jumps under reduced motion', () => {
+    presentStory('tour', 0)
     expect(showCamera).toHaveBeenLastCalledWith(stepCamera(0), { motion: 'fly' })
   })
 
+  it('a story step saved at 30 keeps its frame on a smaller screen', () => {
+    // Framed in a 1400 × 900 window, presented on the 400 × 300 map: zoomed out until the width (400 / 1400 < 300 / 900) fits.
+    replaceCurrentDesignState(framedTour(1400, 900, 30), null, 'Stories')
+    presentStory('tour', 1)
+
+    const [shown] = showCamera.mock.calls.at(-1)!
+    expect(shown.bearingDeg).toBe(30)
+    expect(shown.zoom).toBeCloseTo(20 + Math.log2(400 / 1400), 6)
+    const saved = presentedStep.value!.view!.camera
+    for (const corner of framedCornersOnScreen(saved, { width: 1400, height: 900 }, shown, { width: 400, height: 300 })) {
+      expect(corner.x).toBeGreaterThanOrEqual(-1e-6)
+      expect(corner.x).toBeLessThanOrEqual(400 + 1e-6)
+      expect(corner.y).toBeGreaterThanOrEqual(-1e-6)
+      expect(corner.y).toBeLessThanOrEqual(300 + 1e-6)
+    }
+  })
+
+  it('a story step keeps its frame when full screen ends', () => {
+    // Framed in the full-screen 400 × 300 map; full screen ends and the map settles at 200 × 150.
+    replaceCurrentDesignState(framedTour(400, 300, 45), null, 'Stories')
+    const map = resizableMap(400, 300)
+    presentStory('tour', 1)
+    expect(showCamera).toHaveBeenLastCalledWith(stepCamera(45), { motion: 'fly' })
+    showCamera.mockClear()
+
+    // A settle at the same size, or a resize still in progress, refits nothing.
+    map.settle()
+    map.resize(300, 200)
+    expect(showCamera).not.toHaveBeenCalled()
+    map.resize(200, 150)
+    map.settle()
+
+    expect(showCamera).toHaveBeenCalledTimes(1)
+    expect(showCamera).toHaveBeenCalledWith({ ...stepCamera(45), zoom: 19 }, { motion: 'jump' })
+    // Another step's view without the size keeps its camera when the screen changes again.
+    showCamera.mockClear()
+    goToPresentedStep(0)
+    showCamera.mockClear()
+    map.resize(400, 300)
+    map.settle()
+    expect(showCamera).not.toHaveBeenCalled()
+  })
+
   it('moves between steps within the story', () => {
-    presentStory('tour', 0, { reducedMotion: true })
+    presentStory('tour', 0)
     previousPresentedStep()
     expect(presentedStep.value?.index).toBe(0)
     nextPresentedStep()
@@ -204,7 +273,7 @@ describe('presenting a story', () => {
 
   it('restores the user’s state exactly on leaving: layers, site data, labels, focus, camera', () => {
     const camera = mapQueries.view.captureView().camera
-    presentStory('tour', 1, { reducedMotion: true })
+    presentStory('tour', 1)
     showCamera.mockClear()
 
     leaveStoryPresentation()
@@ -226,8 +295,8 @@ describe('presenting a story', () => {
     const live = mapQueries.view.captureView()
     const turned = { ...live, camera: { ...live.camera, bearingDeg: 30 } }
     vi.spyOn(mapQueries.view, 'captureView').mockReturnValue(turned)
-    presentStory('tour', 1, { reducedMotion: true })
-    expect(showCamera).toHaveBeenLastCalledWith(stepCamera(45), { motion: 'jump' })
+    presentStory('tour', 1)
+    expect(showCamera).toHaveBeenLastCalledWith(stepCamera(45), { motion: 'fly' })
 
     leaveStoryPresentation()
 
@@ -236,7 +305,7 @@ describe('presenting a story', () => {
   })
 
   it('ends without moving the camera when another Design replaces this one', async () => {
-    presentStory('tour', 0, { reducedMotion: true })
+    presentStory('tour', 0)
     showPlace.mockClear()
     showCamera.mockClear()
 
@@ -251,7 +320,7 @@ describe('presenting a story', () => {
   })
 
   it('ends when its story goes away, and cannot present a story without steps or a map', async () => {
-    presentStory('tour', 0, { reducedMotion: true })
+    presentStory('tour', 0)
     replaceCurrentDesignState({ ...design(), stories: [] }, null, 'Stories')
     await Promise.resolve()
     expect(storyPresentationActive.value).toBe(false)
@@ -271,7 +340,7 @@ describe('presenting a story', () => {
     const before = overlay()
     expect(before.guidesVisible).toBe(true)
 
-    presentStory('tour', 1, { reducedMotion: true })
+    presentStory('tour', 1)
     expect(displays.at(-1)?.labels).toBe('codes')
     expect(overlay()).toEqual({ gridVisible: false, rulersVisible: false, guidesVisible: false })
 
@@ -288,7 +357,7 @@ describe('presenting a story', () => {
     // No command surface: no step applies its overrides, yet the aids stay hidden.
     setCurrentCanvasSession({ ...createTestCanvasRuntimeSurfaces({ queries: currentCanvasQuerySurface.peek()! }), commands: null as never })
     try {
-      presentStory('tour', 0, { reducedMotion: true })
+      presentStory('tour', 0)
       expect(storyPresentationOverrides.value).toBeNull()
       expect(storyPresentationHidesEditingAids.value).toBe(true)
       expect(adapter.settings.readChromeOverlay()).toEqual({ gridVisible: false, rulersVisible: false, guidesVisible: false })
@@ -309,7 +378,7 @@ describe('presenting a story', () => {
     document.body.append(map)
     const release = focusOwner.registerRegion('map', map)
     try {
-      presentStory('tour', 0, { reducedMotion: true })
+      presentStory('tour', 0)
       leaveStoryPresentation()
       await vi.waitFor(() => expect(document.activeElement).toBe(map))
     } finally {
@@ -321,7 +390,7 @@ describe('presenting a story', () => {
 describe('the presenter', () => {
   async function present(index = 0): Promise<HTMLElement> {
     await act(async () => {
-      presentStory('tour', index, { reducedMotion: true })
+      presentStory('tour', index)
       render(<StoryPresenter />, container)
     })
     return container.querySelector<HTMLElement>('[data-story-presenter]')!
@@ -524,7 +593,7 @@ describe('the presenter', () => {
       render(<PanelRail label="Panels" groups={[[{ id: 'nav.layers', label: 'Layers', disabled: false, panel: 'layers', action: () => undefined }]]} />, container)
     })
     expect(container.querySelector('nav')).not.toBeNull()
-    await act(async () => { presentStory('tour', 0, { reducedMotion: true }) })
+    await act(async () => { presentStory('tour', 0) })
     expect(container.querySelector('nav')).toBeNull()
     await act(async () => { leaveStoryPresentation() })
     expect(container.querySelector('nav')).not.toBeNull()

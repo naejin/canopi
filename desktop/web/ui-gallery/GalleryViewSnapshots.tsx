@@ -4,7 +4,6 @@ import {
   captureSavedViewSnapshot,
   describeSavedViewSnapshot,
   savedViewPresentedLabels,
-  VIEW_SNAPSHOT_EXPORT,
   VIEW_SNAPSHOT_THUMBNAIL,
   type SavedViewSnapshot,
 } from '../src/app/saved-views'
@@ -59,9 +58,7 @@ export function GalleryViewSnapshots({ ready, tiles }: { readonly ready: boolean
           ...(view.id === SHORT_TIMEOUT_VIEW ? { timeoutMs: 50 } : {}),
         })))
       }
-      const [first] = views
-      if (first) {
-        push(await capture(`${first.name} · export`, 'render-callback', () => captureSavedViewSnapshot(first, { ...VIEW_SNAPSHOT_EXPORT, signal: controller.signal })))
+      if (views.length > 0) {
         // The same captures on a map whose drawing buffer is preserved, to
         // compare their cost with reading inside the frame's task.
         const preserving = createViewSnapshotMap({ preserveDrawingBuffer: true })

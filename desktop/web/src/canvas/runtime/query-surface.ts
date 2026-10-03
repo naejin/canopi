@@ -80,7 +80,7 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
   constructor(private readonly options: SceneCanvasQuerySurfaceOptions) {
     const { frames } = options
     // The frames place the Scene's metres; their ground is read on the Scene's plane.
-    this.view = createViewReadSurface(frames, () => options.sceneStore.sessionPlane)
+    this.view = createViewReadSurface(frames)
     this.readViewScale = options.readViewScale ?? (() => frames.viewFrame.peek().view.pixelsPerMetre)
   }
 

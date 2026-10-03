@@ -11,7 +11,6 @@ export interface ScreenPoint { readonly x: number; readonly y: number }
 export type WorldQuad = readonly [WorldPoint, WorldPoint, WorldPoint, WorldPoint]
 export interface ScreenInsets { readonly top: number; readonly right: number; readonly bottom: number; readonly left: number }
 export interface GeoPoint { readonly lon: number; readonly lat: number }
-export interface GeoBounds { readonly west: number; readonly south: number; readonly east: number; readonly north: number }
 
 /** World-axis box in plane metres. */
 export interface SceneBounds { readonly minX: number; readonly minY: number; readonly maxX: number; readonly maxY: number }

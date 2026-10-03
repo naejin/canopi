@@ -3,12 +3,10 @@ import { currentCanvasQuerySurface, getCurrentCanvasCommandSurface } from '../..
 import type { PlantLabelMode } from '../../canvas/runtime/plant-display'
 import type { ViewCamera } from '../../canvas/runtime/view/types'
 import type { PanelTarget, SavedView, Story, StoryStep } from '../../types/design'
-import { savedViewPlantLabels } from '../design-edit/views'
 import { currentDesign, designSessionStore } from '../document-session/store'
 import { mapLayers, type MapLayersState } from '../map-layers/state'
-import { currentPlantDisplay } from '../plant-display/state'
 import { goToSavedView } from '../saved-views/current-view'
-import { isBasemapStyle } from '../saved-views/snapshot'
+import { isBasemapStyle, savedViewPresentedLabels } from '../saved-views/snapshot'
 import { focusOwner } from '../keyboard/focus-owner'
 import {
   setStoryPresentationHidesEditingAids,
@@ -19,7 +17,8 @@ import {
 // Presenting a story full-window inside Canopi. This controller is the one
 // owner of the presentation: its state, the session overrides (overrides.ts:
 // the editing aids it hides and what a step shows; the runtime's presented
-// layers and the Species Focus), the camera it moves, the full-screen request,
+// layers and the Species Focus), the camera it moves (and refits when the map
+// settles at another size), the full-screen request,
 // the listeners it adds and where focus goes afterwards. Every one of them is
 // undone by `leaveStoryPresentation()`, which also runs when another Design
 // replaces this one, when the story goes away and on HMR. Applying a step
@@ -81,13 +80,9 @@ export const presentedStep: ReadonlySignal<PresentedStep | null> = computed(() =
 export const storyPresentationActive: ReadonlySignal<boolean> = computed(() => active.value !== null)
 
 interface StoryPresentationOptions {
-  /** Jump between steps instead of flying; defaults to the platform reduced-motion preference. */
-  readonly reducedMotion?: boolean
   /** Where focus goes after leaving; the map by default. */
   readonly returnFocus?: PresentationReturnFocus
 }
-
-let reducedMotionOverride: boolean | undefined
 
 /** Presents a story from `index` (the first step by default); false when it has no step or no map. */
 export function presentStory(storyId: string, index = 0, options: StoryPresentationOptions = {}): boolean {
@@ -97,7 +92,6 @@ export function presentStory(storyId: string, index = 0, options: StoryPresentat
   if (!story || story.steps.length === 0 || !queries || !plane) return false
   if (active.peek()) leaveStoryPresentation()
   cancelReturnFocus()
-  reducedMotionOverride = options.reducedMotion
   returnFocus = { target: options.returnFocus ?? 'map', storyId }
   restore = {
     camera: queries.view.captureView().camera,
@@ -109,7 +103,13 @@ export function presentStory(storyId: string, index = 0, options: StoryPresentat
     index: clampIndex(index, story.steps.length),
   }
   setStoryPresentationHidesEditingAids(true)
-  disposeWatch = effect(watchPresentation)
+  presentedScreen = null
+  const disposeStep = effect(watchPresentation)
+  const disposeScreen = effect(watchSettledScreen)
+  disposeWatch = () => {
+    disposeStep()
+    disposeScreen()
+  }
   setPresentingAttribute(true)
   return true
 }
@@ -231,6 +231,8 @@ function onFullScreenChange(): void {
 if (typeof document !== 'undefined') document.addEventListener('fullscreenchange', onFullScreenChange)
 
 let appliedStepKey: string | null = null
+/** The map's size when the presentation last settled, as `width×height` CSS px. */
+let presentedScreen: string | null = null
 
 /** Applies the presented step, and ends the presentation when its Design or story goes away. */
 function watchPresentation(): void {
@@ -249,14 +251,32 @@ function watchPresentation(): void {
   applyStep(presented)
 }
 
+/**
+ * The step on screen keeps its frame: when the map settles at another size
+ * (full screen ends, the window is resized), a step whose view records its
+ * framed ground is fitted again, with a jump. A view saved without it keeps
+ * its camera zoom in any window, so nothing moves.
+ */
+function watchSettledScreen(): void {
+  const view = currentCanvasQuerySurface.value?.view
+  if (!view) return
+  void view.settledRevision.value
+  const { width, height } = view.captureView().screen
+  const size = `${width}×${height}`
+  const previous = presentedScreen
+  presentedScreen = size
+  if (previous === null || previous === size) return
+  const shown = presentedStep.peek()?.view
+  if (shown?.camera.ground_size_m) goToSavedView(shown.id, 'jump')
+}
+
 function applyStep({ view }: PresentedStep): void {
   const commands = getCurrentCanvasCommandSurface()
   if (!view || !commands) return
-  const labels = savedViewPlantLabels(currentDesign.peek(), view.id) ?? currentPlantDisplay.peek().labels
-  setStoryPresentationOverrides(stepOverrides(view, mapLayers.peek(), labels))
+  setStoryPresentationOverrides(stepOverrides(view, mapLayers.peek(), savedViewPresentedLabels(view)))
   commands.layers.presentLayers(view.visible_layers.scene_layers)
   commands.speciesFocus.focus(plantedSpeciesToFocus(view))
-  goToSavedView(view.id, reducedMotionOverride === undefined ? {} : { reducedMotion: reducedMotionOverride })
+  goToSavedView(view.id)
 }
 
 /** What a view shows, over the user's own map layer settings (opacities, style choices). */
