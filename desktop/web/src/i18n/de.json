@@ -130,7 +130,7 @@
       "widen": "Ausschnitt erweitern",
       "magnify": "Lupe heranzoomen",
       "namesCount": "Namen {{shown}} / {{total}}",
-      "panHint": "Vorschau. Ziehen oder Pfeiltasten verwenden; Umschalt bewegt weiter.",
+      "panHint": "Vorschau. Ziehen oder Pfeiltasten verwenden; {{mod}} bewegt weiter.",
       "recenter": "Auf Zeichenfläche zentrieren"
     },
     "toolbar": "Werkzeuge",

@@ -130,7 +130,7 @@
       "widen": "扩大查看范围",
       "magnify": "放大查看",
       "namesCount": "名称 {{shown}} / {{total}}",
-      "panHint": "预览。拖动或使用方向键浏览；按住 Shift 可移动更远。",
+      "panHint": "预览。拖动或使用方向键浏览；按住 {{mod}} 可移动更远。",
       "recenter": "居中到画布视图"
     },
     "toolbar": "工具",

@@ -130,7 +130,7 @@
       "widen": "Ampliar área",
       "magnify": "Acercar lupa",
       "namesCount": "Nombres {{shown}} / {{total}}",
-      "panHint": "Vista previa. Arrastra o usa las flechas; Mayús desplaza más.",
+      "panHint": "Vista previa. Arrastra o usa las flechas; {{mod}} desplaza más.",
       "recenter": "Centrar en el lienzo"
     },
     "toolbar": "Herramientas",

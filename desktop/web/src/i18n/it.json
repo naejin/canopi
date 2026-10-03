@@ -130,7 +130,7 @@
       "widen": "Allarga lente",
       "magnify": "Ingrandisci nella lente",
       "namesCount": "Nomi {{shown}} / {{total}}",
-      "panHint": "Anteprima. Trascina o usa le frecce; Maiusc aumenta lo spostamento.",
+      "panHint": "Anteprima. Trascina o usa le frecce; {{mod}} aumenta lo spostamento.",
       "recenter": "Centra sulla tela"
     },
     "toolbar": "Strumenti",

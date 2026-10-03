@@ -130,7 +130,7 @@
       "widen": "Zichtgebied vergroten",
       "magnify": "Loep inzoomen",
       "namesCount": "Namen {{shown}} / {{total}}",
-      "panHint": "Voorbeeld. Sleep of gebruik pijltjestoetsen; Shift verplaatst verder.",
+      "panHint": "Voorbeeld. Sleep of gebruik pijltjestoetsen; {{mod}} verplaatst verder.",
       "recenter": "Centreren op canvas"
     },
     "toolbar": "Gereedschap",

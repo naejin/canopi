@@ -130,7 +130,7 @@
       "widen": "Ampliar área",
       "magnify": "Aproximar lupa",
       "namesCount": "Nomes {{shown}} / {{total}}",
-      "panHint": "Pré-visualização. Arraste ou use as setas; Shift desloca mais.",
+      "panHint": "Pré-visualização. Arraste ou use as setas; {{mod}} desloca mais.",
       "recenter": "Centralizar na tela"
     },
     "toolbar": "Ferramentas",

@@ -5,13 +5,21 @@ import type { RefObject } from 'preact'
 import { useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import type { CanvasInspectionHandle, InspectionSourceQuad } from '../../canvas/inspection'
+import { detectPlatform, modKeyIsCmd } from '../../canvas/runtime/input/platform'
 import type { CanvasDocumentSurface, CanvasQuerySurface } from '../../canvas/runtime/runtime'
 import { currentCanvasDocumentSurface, currentCanvasQuerySurface } from '../../canvas/session'
+import { modKeyName } from '../../app/shell-commands/shortcut-text'
 import { t } from '../../i18n'
 import { ControlIcon } from '../shared/ControlIcon'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 import { useUnderRail } from '../shared/useMapChrome'
 import styles from './InspectionLens.module.css'
+
+/** The lens's arrow steps in preview pixels: plain, and with mod (Cmd on macOS, else Ctrl; spec §4.13). */
+const ARROW_STEP_PX = 20
+const LARGE_ARROW_STEP_PX = 60
+const MOD_IS_CMD = typeof navigator !== 'undefined'
+  && modKeyIsCmd(detectPlatform(navigator, window as unknown as { readonly GestureEvent?: unknown }))
 
 export function InspectionLens({ canvasRef }: { canvasRef: RefObject<HTMLDivElement> }) {
   const documents = currentCanvasDocumentSurface.value
@@ -119,10 +127,13 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
         </svg>
         <ButtonTooltip label={expandLabel} side="left" />
       </button>} />
-    <div className={styles.preview} data-inspection-frame role="group" tabIndex={0} aria-label={t('canvas.inspection.panHint')}
+    {/* The preview owns its arrows, Shift+arrows included, so they never turn the map (spec §1.6). Its arrows and drags
+        move the lens along its own screen, which turns with the map; mod is the large step, Shift adds nothing. */}
+    <div className={styles.preview} data-inspection-frame data-owns-keys="arrows" role="group" tabIndex={0}
+      aria-label={t('canvas.inspection.panHint', { mod: modKeyName(t) })}
       onKeyDown={event => {
         if (event.target !== event.currentTarget || !state) return
-        const step = event.shiftKey ? 60 : 20
+        const step = (MOD_IS_CMD ? event.metaKey : event.ctrlKey) ? LARGE_ARROW_STEP_PX : ARROW_STEP_PX
         const delta = { ArrowLeft: { x: -step, y: 0 }, ArrowRight: { x: step, y: 0 },
           ArrowUp: { x: 0, y: -step }, ArrowDown: { x: 0, y: step } }[event.key]
         if (!delta) return

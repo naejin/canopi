@@ -130,7 +130,7 @@
       "widen": "Widen lens",
       "magnify": "Magnify lens",
       "namesCount": "Names {{shown}} / {{total}}",
-      "panHint": "Inspection preview. Drag or use arrow keys to explore; Shift moves farther.",
+      "panHint": "Inspection preview. Drag or use arrow keys to explore; {{mod}} moves farther.",
       "recenter": "Centre on canvas view"
     },
     "toolbar": "Tools",

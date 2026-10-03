@@ -130,7 +130,7 @@
       "widen": "Élargir la vue",
       "magnify": "Zoomer dans la loupe",
       "namesCount": "Noms {{shown}} / {{total}}",
-      "panHint": "Aperçu. Glissez ou utilisez les flèches ; Maj accélère le déplacement.",
+      "panHint": "Aperçu. Glissez ou utilisez les flèches ; {{mod}} accélère le déplacement.",
       "recenter": "Centrer sur le canevas"
     },
     "toolbar": "Outils",
