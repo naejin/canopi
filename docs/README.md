@@ -24,6 +24,7 @@ Also: [`workflow.md`](workflow.md) for beads, branches, ownership and delivery; 
 | Plant catalog and search | [species-catalog.md](guides/species-catalog.md) |
 | Planting-plan PDF | [pdf-export.md](guides/pdf-export.md) |
 | Native rules, build, release, problem reports | [native-and-release.md](guides/native-and-release.md) |
+| How agents run multi-agent steps: places, commands, live check, tracker | [agentic-delivery.md](guides/agentic-delivery.md) |
 
 ## Rules for these documents
 
