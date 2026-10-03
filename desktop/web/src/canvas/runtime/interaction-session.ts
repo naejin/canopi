@@ -39,7 +39,7 @@ import { CURRENT_BINDINGS } from './input/bindings'
 import { createDomInputSource, outcomeEffects } from './input/dom-input-source'
 import type { Gesture } from './input/gestures'
 import { createInputRouter } from './input/input-router'
-import { detectPlatform, type InputPlatform } from './input/platform'
+import { detectPlatform, modKeyIsCmd, type InputPlatform } from './input/platform'
 import type { AdapterEffect, RawInput, RecogniserConfig, RecogniserState, TargetClass } from './input/raw-input'
 import { initialRecogniserState, recognise } from './input/recognise'
 import { DEFAULT_THRESHOLDS } from './input/thresholds'
@@ -266,7 +266,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       return resource
     }
     try {
-      this._hostKeys = own(prepareInteractionHost(container, _deps.translate), (host) => host.dispose())
+      this._hostKeys = own(prepareInteractionHost(container, _deps.translate, platform), (host) => host.dispose())
       this._handleLayer = own(createHandleLayer({ container, frames: this._frames }), (layer) => layer.dispose())
       this._textEntry = own(createTextEntryHost({
         container,
@@ -987,6 +987,7 @@ interface InteractionHostController {
 function prepareInteractionHost(
   container: HTMLElement,
   translate: CanvasRuntimeTranslator,
+  platform: Pick<InputPlatform, 'os'>,
 ): InteractionHostController {
   const previous = HOST_ATTRIBUTES.map((name) => [name, container.getAttribute(name)] as const)
   const description = document.createElement('div')
@@ -996,7 +997,9 @@ function prepareInteractionHost(
 
   function refreshTranslations(): void {
     container.setAttribute('aria-label', translate('canvas.map.label'))
-    description.textContent = translate('canvas.map.description')
+    // The mod key named as the shell's shortcut labels name it (app/shell-commands/shortcut-text.ts): Cmd on a Mac.
+    const mod = translate(modKeyIsCmd(platform) ? 'shortcutKeys.cmd' : 'shortcutKeys.ctrl')
+    description.textContent = translate('canvas.map.description', { mod })
   }
 
   const host: InteractionHostController = {

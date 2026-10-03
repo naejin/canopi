@@ -4,6 +4,7 @@
 // Shared fakes, helpers and fixture: support/canvas-interaction-setup.ts.
 import { describe, expect, it, vi } from 'vitest'
 import { t } from '../i18n'
+import { modKeyName } from '../app/shell-commands/shortcut-text'
 import { SceneStore } from '../canvas/runtime/scene'
 import type {
   SceneInteractionSession,
@@ -131,7 +132,9 @@ describe('SceneInteractionSession', () => {
       expect(container.getAttribute('aria-label')).toBe(t('canvas.map.label'))
       const descriptionId = container.getAttribute('aria-describedby')
       expect(descriptionId).toBeTruthy()
-      expect(document.getElementById(descriptionId!)?.textContent).toBe(t('canvas.map.description'))
+      const description = document.getElementById(descriptionId!)?.textContent
+      expect(description).toBe(t('canvas.map.description', { mod: modKeyName(t) }))
+      expect(description).not.toContain('{{mod}}')
       // It names every key the map takes: tools, the menu, arrows, F6 and Esc.
       expect(t('canvas.map.description', { mod: 'Ctrl' })).toContain('Arrow keys move the selection 10 cm on screen, or 1 m with Ctrl')
       expect(t('canvas.map.description', { mod: 'Cmd' })).toContain('Shift with left or right arrow turns the view; N or Shift with up arrow resets north.')

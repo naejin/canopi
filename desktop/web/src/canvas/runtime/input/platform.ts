@@ -23,6 +23,11 @@ export function detectPlatform(
   }
 }
 
+/** Whether the mod key is Cmd: macOS, and iPadOS keyboards, as the key router's chord rule reads them. */
+export function modKeyIsCmd(platform: Pick<InputPlatform, 'os'>): boolean {
+  return platform.os === 'mac' || platform.os === 'ios'
+}
+
 function detectOs(agent: string, platform: string): InputPlatform['os'] {
   if (/iPhone|iPad|iPod/.test(agent)) return 'ios'
   if (/Android/.test(agent)) return 'android'

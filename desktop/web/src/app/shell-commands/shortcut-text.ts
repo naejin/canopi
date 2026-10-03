@@ -7,7 +7,7 @@
  */
 
 import { signal } from '@preact/signals'
-import type { InputPlatform } from '../../canvas/runtime/input/platform'
+import { modKeyIsCmd, type InputPlatform } from '../../canvas/runtime/input/platform'
 
 interface ParsedShortcut {
   readonly ctrl: boolean
@@ -52,7 +52,7 @@ const modIsCmd = signal(false)
 
 /** The platform whose mod key the labels name; Ctrl until an edition calls it. */
 export function setShortcutPlatform(platform: Pick<InputPlatform, 'os'>): void {
-  modIsCmd.value = platform.os === 'mac' || platform.os === 'ios'
+  modIsCmd.value = modKeyIsCmd(platform)
 }
 
 /** The mod key's name: Cmd on macOS, else Ctrl, in the interface language with a translator. It fills `{{mod}}`. */

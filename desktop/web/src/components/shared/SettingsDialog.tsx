@@ -18,6 +18,7 @@ import {
   settingsDialogOpen,
 } from '../../app/shell/dialogs'
 import { toggleToolNames, toolRailShowsNames } from '../../app/tool-rail/learning'
+import { modKeyName } from '../../app/shell-commands/shortcut-text'
 import { PLANT_SYMBOL_SCALE_MAX, PLANT_SYMBOL_SCALE_MIN } from '../../canvas/runtime/plant-display'
 import type { AppFolder, AppFolderLocations, BasemapStyle, PlantLabels, ScrollWheel } from '../../generated/contracts'
 import { SETTINGS_BASEMAP_STYLES } from '../../generated/settings'
@@ -248,7 +249,7 @@ function KeyboardSection() {
   return <>
     <Switch
       label={t('settings.singleKeyShortcuts')}
-      hint={t('settings.singleKeyShortcutsHint')}
+      hint={t('settings.singleKeyShortcutsHint', { mod: modKeyName(t) })}
       checked={singleKeyShortcuts.value}
       onChange={(checked) => mutateSettingsProjection((settings) => { settings.singleKeyShortcuts = checked }, { persist: 'immediate' })}
     />

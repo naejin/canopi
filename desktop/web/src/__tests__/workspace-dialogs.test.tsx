@@ -87,6 +87,15 @@ describe('Settings dialog', () => {
     )
   })
 
+  it('fills the single-key hint with the platform mod key', async () => {
+    await act(async () => { render(<SettingsDialog />, container) })
+    await act(async () => { openSettingsDialog() })
+    await act(async () => { container.querySelector<HTMLElement>('[data-settings-section="keyboard"]')!.click() })
+    const text = container.querySelector('[role="dialog"]')!.textContent!
+    expect(text).toContain('Off keeps Ctrl shortcuts')
+    expect(text).not.toContain('{{mod}}')
+  })
+
   it('keeps Tab inside the dialog and closes on a backdrop press', async () => {
     await act(async () => { render(<SettingsDialog />, container) })
     await act(async () => { openSettingsDialog() })
