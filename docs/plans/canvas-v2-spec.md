@@ -1857,7 +1857,7 @@ Where the rotation rows live (phase 1): Shift+←/→ and Shift+↑ (`view-arrow
 | macOS Ctrl+arrows | not bound (Mission Control) | — | — | — |
 | Shift+G, Shift+S, Shift+R | grid, snap to grid, rulers (rulers while rotated: on, hidden, with the hint) | `command` | follows | unchanged |
 | [ / ] | a held stamp: turn it −15° / +15°; otherwise send to back / bring to front | `command` | follows, except that a held stamp's turn also works on map focus with the switch off (today, `keyboard-port.ts:198-206`; fixture H24) | unchanged |
-| Delete, Backspace | delete the selection. Backspace during a polygon draft removes the last corner instead. Delete on a focused or selected corner handle removes that corner (from 2) | `outside-dock` (Backspace in a draft: `canvas-focus`) | n/a | F (was `command`), corner from 2 |
+| Delete, Backspace | delete the selection, never while a pointer session (a still drag, twist or rotate included) is live: the key is consumed (from 1). Backspace during a polygon draft removes the last corner instead. Delete on a focused or selected corner handle removes that corner (from 2) | `outside-dock` (Backspace in a draft: `canvas-focus`) | n/a | F (was `command`), corner from 2 |
 | Enter | Polygon draft: finish (3+ corners). One selected note: edit its text, never while a pointer session (a still twist or rotate included) is live (from 1). Compass focused: reset north | `canvas-focus` | n/a | unchanged; compass 1 |
 | F2 | one selected note with map focus: edit its text; otherwise rename the Design. While a pointer session is live on the map: nothing, and the key is consumed (from 1) | `canvas-focus`, then shell | n/a | unchanged |
 | Space (held) | a left drag pans in every tool | `canvas-focus` | n/a | unchanged |

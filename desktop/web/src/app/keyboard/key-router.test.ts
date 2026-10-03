@@ -646,6 +646,31 @@ describe('key router', () => {
     expect(panelEscape).toHaveBeenCalledOnce()
   })
 
+  it('Backspace and Delete delete nothing while a pointer session is live; a tool\'s own Backspace still runs', () => {
+    install()
+    host.focus()
+    fake.state.verdict = 'pass-live'
+    fake.state.layers = ['gesture', 'selection']
+    fake.state.command = () => false
+    // A still drag or twist is live: the deletion would wait for it to settle and land after the release.
+    expect(press({ key: 'Backspace' }, host).defaultPrevented).toBe(true)
+    expect(press({ key: 'Delete' }, host).defaultPrevented).toBe(true)
+    expect(run).not.toHaveBeenCalled()
+
+    // A Polygon draft's Backspace removes its last corner with a corner's press held.
+    fake.state.command = (c) => c.kind === 'remove-last'
+    expect(press({ key: 'Backspace' }, host).defaultPrevented).toBe(true)
+    expect(fake.port.command).toHaveBeenLastCalledWith({ kind: 'remove-last' })
+    expect(run).not.toHaveBeenCalled()
+
+    fake.state.verdict = 'pass'
+    fake.state.layers = ['selection']
+    fake.state.command = () => false
+    press({ key: 'Backspace' }, host)
+    press({ key: 'Delete' }, host)
+    expect(run.mock.calls.map(([command]) => command)).toEqual(['canvas.deleteSelected', 'canvas.deleteSelected'])
+  })
+
   it('Esc in a text field or with a modifier leaves the tool and the selection alone', () => {
     install()
     const field = document.createElement('input')
