@@ -1557,7 +1557,6 @@
   "plantFinder": {
     "label": "Planten zoeken",
     "placeholder": "Naam, Latijnse naam of code",
-    "shortcut": "Ctrl F",
     "quickFilters": "Snelfilters",
     "selectedOnMap": "Geselecteerd op kaart",
     "selectedOnMapCount": "Geselecteerd op kaart · {{count, number}}",
@@ -1718,6 +1717,7 @@
   },
   "shortcutKeys": {
     "ctrl": "Ctrl",
+    "cmd": "Cmd",
     "shift": "Shift",
     "alt": "Alt",
     "delete": "Del",

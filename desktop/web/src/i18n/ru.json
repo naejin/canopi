@@ -1557,7 +1557,6 @@
   "plantFinder": {
     "label": "Найти растения",
     "placeholder": "Название, научное название или код",
-    "shortcut": "Ctrl F",
     "quickFilters": "Быстрые фильтры",
     "selectedOnMap": "Выделенные на карте",
     "selectedOnMapCount": "Выделенные на карте · {{count, number}}",
@@ -1718,6 +1717,7 @@
   },
   "shortcutKeys": {
     "ctrl": "Ctrl",
+    "cmd": "Cmd",
     "shift": "Shift",
     "alt": "Alt",
     "delete": "Del",

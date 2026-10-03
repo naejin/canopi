@@ -1557,7 +1557,6 @@
   "plantFinder": {
     "label": "查找植物",
     "placeholder": "名称、学名或代码",
-    "shortcut": "Ctrl F",
     "quickFilters": "快速筛选",
     "selectedOnMap": "地图上已选",
     "selectedOnMapCount": "地图上已选 · {{count, number}}",
@@ -1718,6 +1717,7 @@
   },
   "shortcutKeys": {
     "ctrl": "Ctrl",
+    "cmd": "Cmd",
     "shift": "Shift",
     "alt": "Alt",
     "delete": "Del",

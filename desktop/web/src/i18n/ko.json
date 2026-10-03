@@ -1557,7 +1557,6 @@
   "plantFinder": {
     "label": "식물 찾기",
     "placeholder": "이름, 학명 또는 코드",
-    "shortcut": "Ctrl F",
     "quickFilters": "빠른 필터",
     "selectedOnMap": "지도에서 선택됨",
     "selectedOnMapCount": "지도에서 선택됨 · {{count, number}}",
@@ -1718,6 +1717,7 @@
   },
   "shortcutKeys": {
     "ctrl": "Ctrl",
+    "cmd": "Cmd",
     "shift": "Shift",
     "alt": "Alt",
     "delete": "Del",

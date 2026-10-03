@@ -2,7 +2,12 @@
  * Shortcut strings shared by every command catalog. A shortcut is written
  * `Ctrl+Shift+Z`: modifiers (`Ctrl` means Ctrl or Cmd, `Shift`, `Alt`) then one
  * key. `Plus` and `Minus` name the zoom keys so the separator stays unambiguous.
+ * Labels read Cmd for `Ctrl` on macOS (U13): each edition tells this module its
+ * platform once, at the point where it detects it (setShortcutPlatform).
  */
+
+import { signal } from '@preact/signals'
+import type { InputPlatform } from '../../canvas/runtime/input/platform'
 
 interface ParsedShortcut {
   readonly ctrl: boolean
@@ -14,6 +19,7 @@ interface ParsedShortcut {
 /** Keys whose shown name is a word the interface language may change ("Maj", "Suppr", "Strg"). */
 const KEY_NAME_KEYS: Readonly<Record<string, string>> = {
   Ctrl: 'shortcutKeys.ctrl',
+  Cmd: 'shortcutKeys.cmd',
   Shift: 'shortcutKeys.shift',
   Alt: 'shortcutKeys.alt',
   Delete: 'shortcutKeys.delete',
@@ -22,6 +28,7 @@ const KEY_NAME_KEYS: Readonly<Record<string, string>> = {
 
 const ENGLISH_KEY_NAMES: Readonly<Record<string, string>> = {
   Ctrl: 'Ctrl',
+  Cmd: 'Cmd',
   Shift: 'Shift',
   Alt: 'Alt',
   Delete: 'Del',
@@ -39,6 +46,25 @@ const ARIA_KEYS: Readonly<Record<string, string>> = {
   Minus: '-',
 }
 
+/** Whether the mod key is Cmd (macOS, and iPadOS keyboards, as the key router's chord rule reads them). A signal, so
+ *  menus and tooltips computed from it follow a late call. */
+const modIsCmd = signal(false)
+
+/** The platform whose mod key the labels name; Ctrl until an edition calls it. */
+export function setShortcutPlatform(platform: Pick<InputPlatform, 'os'>): void {
+  modIsCmd.value = platform.os === 'mac' || platform.os === 'ios'
+}
+
+/** The mod key's name: Cmd on macOS, else Ctrl, in the interface language with a translator. It fills `{{mod}}`. */
+export function modKeyName(translate?: (key: string) => string): string {
+  return keyName(modIsCmd.value ? 'Cmd' : 'Ctrl', translate)
+}
+
+function keyName(key: string, translate?: (key: string) => string): string {
+  const translationKey = KEY_NAME_KEYS[key]
+  return translate && translationKey ? translate(translationKey) : ENGLISH_KEY_NAMES[key] ?? key
+}
+
 function parseShortcut(shortcut: string): ParsedShortcut {
   const parts = shortcut.split('+')
   const key = parts.at(-1) ?? ''
@@ -51,18 +77,15 @@ function parseShortcut(shortcut: string): ParsedShortcut {
 }
 
 /**
- * `Ctrl+Shift+Z` → `Ctrl Shift Z`, as menus and tooltips show it. With a
- * translator, key names follow the interface language (`Ctrl Maj Z`). Arrow
- * keys read as glyphs (`Shift+ArrowLeft` → `Shift ←`).
+ * `Ctrl+Shift+Z` → `Ctrl Shift Z`, as menus and tooltips show it, or `Cmd Shift Z`
+ * on macOS. With a translator, key names follow the interface language
+ * (`Ctrl Maj Z`). Arrow keys read as glyphs (`Shift+ArrowLeft` → `Shift ←`).
  */
 export function formatShortcut(shortcut: string, translate?: (key: string) => string): string {
   const parsed = parseShortcut(shortcut)
-  const name = (key: string) => {
-    const translationKey = KEY_NAME_KEYS[key]
-    return translate && translationKey ? translate(translationKey) : ENGLISH_KEY_NAMES[key] ?? key
-  }
+  const name = (key: string) => keyName(key, translate)
   return [
-    parsed.ctrl ? name('Ctrl') : null,
+    parsed.ctrl ? modKeyName(translate) : null,
     parsed.alt ? name('Alt') : null,
     parsed.shift ? name('Shift') : null,
     name(parsed.key),

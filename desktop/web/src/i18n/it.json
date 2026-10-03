@@ -1557,7 +1557,6 @@
   "plantFinder": {
     "label": "Trova piante",
     "placeholder": "Nome, nome scientifico o codice",
-    "shortcut": "Ctrl F",
     "quickFilters": "Filtri rapidi",
     "selectedOnMap": "Selezionate sulla mappa",
     "selectedOnMapCount": "Selezionate sulla mappa · {{count, number}}",
@@ -1718,6 +1717,7 @@
   },
   "shortcutKeys": {
     "ctrl": "Ctrl",
+    "cmd": "Cmd",
     "shift": "Maiusc",
     "alt": "Alt",
     "delete": "Canc",

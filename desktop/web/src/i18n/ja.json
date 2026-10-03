@@ -1557,7 +1557,6 @@
   "plantFinder": {
     "label": "植物を検索",
     "placeholder": "名前、学名、コード",
-    "shortcut": "Ctrl F",
     "quickFilters": "クイックフィルター",
     "selectedOnMap": "地図で選択中",
     "selectedOnMapCount": "地図で選択中 · {{count, number}}",
@@ -1718,6 +1717,7 @@
   },
   "shortcutKeys": {
     "ctrl": "Ctrl",
+    "cmd": "Cmd",
     "shift": "Shift",
     "alt": "Alt",
     "delete": "Del",
