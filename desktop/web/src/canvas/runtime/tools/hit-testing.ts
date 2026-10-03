@@ -233,6 +233,56 @@ interface QueryPolygon {
   readonly bounds: SimpleRect
 }
 
+/** The zone edge nearest a point, within a screen tolerance ("Turn view to this edge", spec §4.16). */
+export interface ZoneEdgeHit {
+  readonly zoneId: string
+  readonly edgeIndex: number
+  readonly distancePx: number
+}
+
+/**
+ * The polygon, rectangle (its turned corners) or line zone edge nearest `point` within `tolerancePx` at `viewportScale`
+ * px/m, or null. Zones on hidden layers are left out; locked zones, locked layers and grouped zones count, since the
+ * entry only turns the view. Ellipses have no edges.
+ */
+export function hitZoneEdge(
+  scene: ScenePersistedState,
+  point: ScenePoint,
+  tolerancePx: number,
+  viewportScale: number,
+): ZoneEdgeHit | null {
+  if (!isLayerVisible(scene, 'zones')) return null
+  const scale = Math.max(viewportScale, 1e-6)
+  let best: ZoneEdgeHit | null = null
+  for (let i = scene.zones.length - 1; i >= 0; i -= 1) {
+    const zone = scene.zones[i]!
+    const edges = zoneEdges(zone)
+    for (let edgeIndex = 0; edgeIndex < edges.length; edgeIndex += 1) {
+      const [start, end] = edges[edgeIndex]!
+      const distancePx = distanceToSegment(point, start, end) * scale
+      if (distancePx <= tolerancePx + GEOMETRY_EPSILON && (!best || distancePx < best.distancePx)) {
+        best = { zoneId: zone.id, edgeIndex, distancePx }
+      }
+    }
+  }
+  return best
+}
+
+/** Edge `edgeIndex` of a polygon, rectangle or line zone, from its first corner to its next; null for an ellipse. */
+export function zoneEdgeSegment(zone: SceneZoneEntity, edgeIndex: number): readonly [ScenePoint, ScenePoint] | null {
+  return zoneEdges(zone)[edgeIndex] ?? null
+}
+
+function zoneEdges(zone: SceneZoneEntity): ReadonlyArray<readonly [ScenePoint, ScenePoint]> {
+  if (zone.zoneType === 'line' && zone.points.length >= 2) return [[zone.points[0]!, zone.points[1]!]]
+  if (zone.zoneType === 'polygon' && zone.points.length >= 3) return edgesOf(zone.points)
+  if (zone.zoneType === 'rect' && zone.points.length >= 4) {
+    const corners = getRectangularZoneCorners(zone)
+    return corners ? edgesOf(corners) : []
+  }
+  return []
+}
+
 const LINE_HIT_TOLERANCE_PX = 6
 const ELLIPSE_BOUNDARY_MAX_SAGITTA_PX = LINE_HIT_TOLERANCE_PX / 2
 const MIN_ELLIPSE_BOUNDARY_SEGMENTS = 48
@@ -424,17 +474,19 @@ function pointOnSegment(point: ScenePoint, start: ScenePoint, end: ScenePoint): 
 function pointNearSegment(point: ScenePoint, start: ScenePoint, end: ScenePoint, tolerance: number): boolean {
   const dx = end.x - start.x
   const dy = end.y - start.y
-  const lengthSquared = dx * dx + dy * dy
-  if (lengthSquared <= GEOMETRY_EPSILON) {
+  if (dx * dx + dy * dy <= GEOMETRY_EPSILON) {
     return Math.hypot(point.x - start.x, point.y - start.y) <= tolerance
   }
+  return distanceToSegment(point, start, end) <= tolerance + GEOMETRY_EPSILON
+}
 
+function distanceToSegment(point: ScenePoint, start: ScenePoint, end: ScenePoint): number {
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const lengthSquared = dx * dx + dy * dy
+  if (lengthSquared <= 0) return Math.hypot(point.x - start.x, point.y - start.y)
   const t = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared))
-  const projected = {
-    x: start.x + t * dx,
-    y: start.y + t * dy,
-  }
-  return Math.hypot(point.x - projected.x, point.y - projected.y) <= tolerance + GEOMETRY_EPSILON
+  return Math.hypot(point.x - (start.x + t * dx), point.y - (start.y + t * dy))
 }
 
 function orientation(a: ScenePoint, b: ScenePoint, c: ScenePoint): number {

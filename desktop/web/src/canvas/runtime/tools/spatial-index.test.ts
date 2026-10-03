@@ -112,10 +112,17 @@ describe('ToolScene over today\'s hit tests', () => {
     expect(scene.hitAt(between)).not.toBeNull()
   })
 
-  it('refuses a screen tolerance until the zone-edge hits of phase 1 exist', () => {
-    const scene = createToolScene(createToolSceneSource(orchardStore()))
+  it('with a pixel tolerance hitAt answers the nearest zone edge at the frame\'s scale, and hitInQuad refuses one', () => {
+    let pixelsPerMetre = 4
+    const scene = createToolScene(createToolSceneSource(orchardStore(), { pixelsPerMetre: () => pixelsPerMetre }))
 
-    expect(() => scene.hitAt({ x: 0, y: 0 }, { toleranceScreenPx: 12 })).toThrow(/toleranceScreenPx/)
+    // z1's north edge runs along y = 5 from x = 5 to 15: 1.5 m is 6 px at 4 px/m, 12 px at 8 px/m.
+    expect(scene.hitAt({ x: 10, y: 3.5 }, { toleranceScreenPx: 8 }))
+      .toEqual({ kind: 'zone-edge', zoneId: 'z1', edgeIndex: 0, distancePx: expect.closeTo(6, 6) })
+    pixelsPerMetre = 8
+    expect(scene.hitAt({ x: 10, y: 3.5 }, { toleranceScreenPx: 8 })).toBeNull()
+    expect(() => scene.hitInQuad([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }], { toleranceScreenPx: 8 }))
+      .toThrow(/toleranceScreenPx/)
   })
 
   it('a quad at 45 hits plants by their circles and shapes by their polygons, never a hidden layer', () => {

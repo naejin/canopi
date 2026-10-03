@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import type { PlantPresentationContext } from '../plant-presentation'
-import type { ScenePersistedState, ScenePoint } from '../scene'
-import { hitTestTopLevel, hitTestVisibleTopLevel, queryQuadTopLevel } from './hit-testing'
+import type { ScenePersistedState, ScenePoint, SceneZoneEntity } from '../scene'
+import { hitTestTopLevel, hitTestVisibleTopLevel, hitZoneEdge, queryQuadTopLevel, zoneEdgeSegment } from './hit-testing'
 
 function createScene(): ScenePersistedState {
   return {
@@ -301,5 +301,46 @@ describe('scene hit testing', () => {
       .toEqual([])
     expect(queryQuadTopLevel(scene, box({ x: 8, y: 8, width: 0.01, height: 0.01 }), 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
       .toEqual([{ kind: 'annotation', id: 'annotation-1' }])
+  })
+  it('with a pixel tolerance, the nearest polygon, rectangle or line edge', () => {
+    const zone = (id: string, zoneType: SceneZoneEntity['zoneType'], points: ScenePoint[], rotationDeg = 0): SceneZoneEntity =>
+      ({ kind: 'zone', id, name: null, locked: false, zoneType, points, rotationDeg, fillColor: null, notes: null })
+    const scene = createScene()
+    scene.plants = []
+    scene.layers = [
+      { kind: 'layer', name: 'plants', visible: true, locked: false, opacity: 1 },
+      // A locked layer still offers its edges: turning the view moves no object.
+      { kind: 'layer', name: 'zones', visible: true, locked: true, opacity: 1 },
+    ]
+    scene.zones = [
+      zone('triangle', 'polygon', [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 0, y: 20 }]),
+      // A 10 × 4 bed turned 90° about its centre (5, 32): its long edges run north-south at x = 3 and x = 7.
+      zone('bed', 'rect', [{ x: 0, y: 30 }, { x: 10, y: 30 }, { x: 10, y: 34 }, { x: 0, y: 34 }], 90),
+      zone('hedge', 'line', [{ x: 40, y: 0 }, { x: 40, y: 20 }]),
+      zone('pond', 'ellipse', [{ x: 70, y: 10 }, { x: 5, y: 3 }]),
+    ]
+    const at = (x: number, y: number, tolerancePx = 8, scale = 2) => hitZoneEdge(scene, { x, y }, tolerancePx, scale)
+
+    // The hypotenuse (edge 1) is nearer than the bottom edge (edge 0); 2 px/m: distances read in pixels.
+    expect(at(10, 9)).toEqual({ zoneId: 'triangle', edgeIndex: 1, distancePx: expect.closeTo(Math.SQRT2, 6) })
+    expect(at(10, -3)).toEqual({ zoneId: 'triangle', edgeIndex: 0, distancePx: expect.closeTo(6, 6) })
+    // Beyond the tolerance, or deep inside a zone: no edge.
+    expect(at(10, -5)).toBeNull()
+    expect(at(6, 6, 4, 1)).toBeNull()
+    // The rectangle by its turned corners.
+    const bedEdge = at(7.5, 32)!
+    expect(bedEdge).toMatchObject({ zoneId: 'bed', distancePx: expect.closeTo(1, 6) })
+    const [a, b] = zoneEdgeSegment(scene.zones[1]!, bedEdge.edgeIndex)!
+    expect(a.x).toBeCloseTo(7, 6)
+    expect(b.x).toBeCloseTo(7, 6)
+    expect(Math.abs(b.y - a.y)).toBeCloseTo(10, 6)
+    expect(at(41, 10)).toEqual({ zoneId: 'hedge', edgeIndex: 0, distancePx: expect.closeTo(2, 6) })
+    expect(zoneEdgeSegment(scene.zones[2]!, 0)).toEqual([{ x: 40, y: 0 }, { x: 40, y: 20 }])
+    // An ellipse has no edge.
+    expect(at(75, 10)).toBeNull()
+    expect(zoneEdgeSegment(scene.zones[3]!, 0)).toBeNull()
+
+    scene.layers = scene.layers.map((layer) => layer.name === 'zones' ? { ...layer, visible: false } : layer)
+    expect(at(10, 9)).toBeNull()
   })
 })
