@@ -3,7 +3,7 @@ import { contains } from './field-geometry'
 import { areaFromFrame, type PageFrame } from './page-frame'
 
 /** Previewable coverage partition. Coincident plants cannot be separated by cropping. */
-export function splitFieldBounds(bounds: PrintBounds, plants: readonly PrintPlant[]): PrintBounds[] {
+function splitFieldBounds(bounds: PrintBounds, plants: readonly PrintPlant[]): PrintBounds[] {
   const result: PrintBounds[] = []
   const partition = (ground: PrintBounds, depth: number) => {
     const positions = new Set(plants.filter(p => contains(ground, p.position)).map(p => `${p.position.x},${p.position.y}`))

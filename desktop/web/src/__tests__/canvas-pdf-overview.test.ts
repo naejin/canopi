@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
-import { splitFieldBounds, splitPrintArea } from '../app/canvas-pdf/split-sheets'
+import { splitPrintArea } from '../app/canvas-pdf/split-sheets'
 import { areaContains, pageFrame } from '../app/canvas-pdf/page-frame'
 import type { PdfInput, PdfLabels, PdfLayoutCacheEntry, PdfSetup } from '../app/canvas-pdf/types'
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([
@@ -75,11 +75,11 @@ it('retains complete local species identity and explicit locations for unresolve
 })
 it('partitions all ground with bounded frames and handles coincident locations', () => {
   const bounds = { x: 0, y: 0, width: 5, height: 5 }, input = source(2201)
-  const frames = splitFieldBounds(bounds, input.canvas.plants)
+  const frames = splitPrintArea(bounds, input.canvas.plants, pageFrame(0))
   expect(frames.length).toBeGreaterThan(2); expect(frames.length).toBeLessThanOrEqual(32)
   expect(frames.reduce((sum, f) => sum + f.width * f.height, 0)).toBe(25)
   for (const p of input.canvas.plants) expect(frames.some(f => p.position.x >= f.x && p.position.x <= f.x + f.width && p.position.y >= f.y && p.position.y <= f.y + f.height)).toBe(true)
-  expect(splitFieldBounds(bounds, input.canvas.plants.map(p => ({ ...p, position: { x: 1, y: 1 } })))).toHaveLength(2)
+  expect(splitPrintArea(bounds, input.canvas.plants.map(p => ({ ...p, position: { x: 1, y: 1 } })), pageFrame(0))).toHaveLength(2)
 })
 it('split and detail lookup use the turned plants', () => {
   const frame = pageFrame(30), plant = (id: string, canonicalName: string, x: number, y: number) =>
@@ -104,5 +104,5 @@ it('split and detail lookup use the turned plants', () => {
   expect(parts.reduce((sum, part) => sum + part.width * part.height, 0)).toBeCloseTo(40, 6)
   for (const p of plants.filter(p => areaContains(frame, area.bounds, p.position))) expect(parts.some(part => areaContains(frame, part, p.position))).toBe(true)
   expect(parts.some(part => areaContains(frame, part, { x: 9, y: 0 }))).toBe(false)
-  expect(splitPrintArea(page, plants, pageFrame(0))).toEqual(splitFieldBounds(page, plants))
+  expect(splitPrintArea(page, plants, pageFrame(0)).some(part => areaContains(pageFrame(0), part, { x: 9, y: 0 }))).toBe(true)
 })
