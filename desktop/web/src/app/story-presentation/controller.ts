@@ -3,12 +3,10 @@ import { currentCanvasQuerySurface, getCurrentCanvasCommandSurface } from '../..
 import type { PlantLabelMode } from '../../canvas/runtime/plant-display'
 import type { ViewCamera } from '../../canvas/runtime/view/types'
 import type { PanelTarget, SavedView, Story, StoryStep } from '../../types/design'
-import { savedViewPlantLabels } from '../design-edit/views'
 import { currentDesign, designSessionStore } from '../document-session/store'
 import { mapLayers, type MapLayersState } from '../map-layers/state'
-import { currentPlantDisplay } from '../plant-display/state'
 import { goToSavedView } from '../saved-views/current-view'
-import { isBasemapStyle } from '../saved-views/snapshot'
+import { isBasemapStyle, savedViewPresentedLabels } from '../saved-views/snapshot'
 import { focusOwner } from '../keyboard/focus-owner'
 import {
   setStoryPresentationHidesEditingAids,
@@ -275,8 +273,7 @@ function watchSettledScreen(): void {
 function applyStep({ view }: PresentedStep): void {
   const commands = getCurrentCanvasCommandSurface()
   if (!view || !commands) return
-  const labels = savedViewPlantLabels(currentDesign.peek(), view.id) ?? currentPlantDisplay.peek().labels
-  setStoryPresentationOverrides(stepOverrides(view, mapLayers.peek(), labels))
+  setStoryPresentationOverrides(stepOverrides(view, mapLayers.peek(), savedViewPresentedLabels(view)))
   commands.layers.presentLayers(view.visible_layers.scene_layers)
   commands.speciesFocus.focus(plantedSpeciesToFocus(view))
   goToSavedView(view.id)
