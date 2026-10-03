@@ -3,9 +3,10 @@
 //! The Rust test suite parses command modules and the Tauri registry with `syn`, then checks the
 //! complete command set against one small synchronous allowlist. Async command bodies may touch
 //! managed state outside executor work only through a reviewed allowlist of bounded in-memory
-//! operations. It also scans production source for blocking-pool and raw-thread escapes outside
-//! the managed executor owner, and checks every registered command against the frontend's
-//! `invoke(...)` call sites.
+//! operations. It also scans production source (out-of-line `#[cfg(test)]` module files excluded)
+//! for blocking-pool and raw-thread escapes outside the managed executor owner and the reviewed
+//! escape allowlist, and checks every registered command against the frontend's `invoke(...)`
+//! call sites.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -15,7 +16,7 @@ use std::{
 
 use syn::{
     Attribute, Expr, ExprCall, ExprForLoop, ExprLet, ExprLoop, ExprMethodCall, ExprPath, ExprWhile,
-    FnArg, Item, ItemFn, ItemMod, Local, Macro, Pat, Path as SynPath, TypePath,
+    FnArg, Item, ItemFn, ItemMod, ItemUse, Local, Macro, Pat, Path as SynPath, TypePath, UseTree,
     parse::Parser,
     punctuated::Punctuated,
     visit::{self, Visit},
@@ -736,27 +737,98 @@ fn method_chain(call: &ExprMethodCall) -> (Option<String>, Vec<String>) {
     }
 }
 
-fn audit_blocking_pool_sources(sources: &[(&str, &str)], allowed_sources: &[&str]) -> Vec<String> {
-    let allowed = allowed_sources.iter().copied().collect::<BTreeSet<_>>();
+/// One reviewed production escape from the managed executor: a raw thread or blocking-pool
+/// call a file needs for work the executor cannot own. An entry that matches no escape is
+/// reported, so the list only shrinks with the code.
+#[derive(Clone, Copy)]
+struct BlockingEscapeAllowance {
+    path: &'static str,
+    escape: &'static str,
+    reason: &'static str,
+}
+
+const BLOCKING_ESCAPE_ALLOWLIST: &[BlockingEscapeAllowance] = &[BlockingEscapeAllowance {
+    path: "src/services/folder_reveal.rs",
+    escape: "std::thread::Builder::new",
+    reason: "reaps the file-manager opener, which may live as long as the file manager; \
+             holding an executor slot for that would starve bounded work",
+}];
+
+/// Thread escapes are recognised by path (called or passed as a value), never by method
+/// name, so `Command::spawn` and `Scope::spawn` on a value are not escapes while the call
+/// that made the thread or scope is. `spawn_blocking` and `block_in_place` are escapes as a
+/// path's last segment, a method or an import under any name.
+const THREAD_ESCAPE_CALLS: &[&str] = &[
+    "std::thread::spawn",
+    "thread::spawn",
+    "std::thread::scope",
+    "thread::scope",
+    "std::thread::Builder::new",
+    "thread::Builder::new",
+    "rayon::spawn",
+];
+
+/// Importing one of these makes a bare `spawn(...)` or `Builder::new()` an escape the call
+/// check cannot see, so the import itself is the escape.
+const THREAD_ESCAPE_IMPORTS: &[&str] = &[
+    "std::thread::spawn",
+    "std::thread::scope",
+    "std::thread::Builder",
+    "rayon::spawn",
+];
+
+fn audit_blocking_pool_sources(
+    sources: &[(&str, &str)],
+    executor_owners: &[&str],
+    allowances: &[BlockingEscapeAllowance],
+) -> Vec<String> {
+    let owners = executor_owners.iter().copied().collect::<BTreeSet<_>>();
     let mut violations = Vec::new();
+    let mut parsed = Vec::new();
     for (path, source) in sources {
-        if allowed.contains(path) {
+        match syn::parse_file(source) {
+            Ok(file) => parsed.push((*path, file)),
+            Err(error) => violations.push(format!(
+                "failed to parse {path} for blocking escapes: {error}"
+            )),
+        }
+    }
+    let mut test_modules = TestModuleFiles::default();
+    for (path, file) in &parsed {
+        test_modules.collect(path, &file.items);
+    }
+
+    let mut used_allowances = BTreeSet::new();
+    for (path, file) in &parsed {
+        if owners.contains(path) || test_modules.contains(path) {
             continue;
         }
-        let file = match syn::parse_file(source) {
-            Ok(file) => file,
-            Err(error) => {
-                violations.push(format!(
-                    "failed to parse {path} for blocking escapes: {error}"
-                ));
+        let mut visitor = BlockingEscapeVisitor::default();
+        visitor.visit_file(file);
+        for escape in visitor.escapes {
+            if let Some(index) = allowances
+                .iter()
+                .position(|allowance| allowance.path == *path && allowance.escape == escape)
+            {
+                used_allowances.insert(index);
                 continue;
             }
-        };
-        let mut visitor = BlockingEscapeVisitor::default();
-        visitor.visit_file(&file);
-        for escape in visitor.escapes {
             violations.push(format!(
                 "direct native blocking execution outside NativeOperationExecutor: {path} ({escape})"
+            ));
+        }
+    }
+    for (index, allowance) in allowances.iter().enumerate() {
+        if allowance.reason.trim().is_empty() {
+            violations.push(format!(
+                "blocking escape allowance has no reason: {} ({})",
+                allowance.path, allowance.escape
+            ));
+        }
+        if !used_allowances.contains(&index) {
+            violations.push(format!(
+                "unused blocking escape allowance has no escape: {} ({})",
+                allowance.path, allowance.escape
             ));
         }
     }
@@ -765,27 +837,125 @@ fn audit_blocking_pool_sources(sources: &[(&str, &str)], allowed_sources: &[&str
     violations
 }
 
+/// Files that belong to an out-of-line `#[cfg(test)] mod name;`, and everything below them.
+/// `#[path]` modules are not resolved, so they are scanned as production.
+#[derive(Default)]
+struct TestModuleFiles {
+    files: BTreeSet<String>,
+    directories: Vec<String>,
+}
+
+impl TestModuleFiles {
+    fn collect(&mut self, path: &str, items: &[Item]) {
+        let directory = match path.rsplit_once('/') {
+            Some((parent, "mod.rs" | "lib.rs" | "main.rs")) => parent.to_owned(),
+            Some(_) | None => path.trim_end_matches(".rs").to_owned(),
+        };
+        self.collect_in(&directory, items, false);
+    }
+
+    fn collect_in(&mut self, directory: &str, items: &[Item], inside_test: bool) {
+        for item in items {
+            let Item::Mod(module) = item else {
+                continue;
+            };
+            let is_test = inside_test || has_cfg_test_attribute(&module.attrs);
+            let child = format!("{directory}/{}", module.ident);
+            match &module.content {
+                Some((_, inner)) => self.collect_in(&child, inner, is_test),
+                None if is_test => {
+                    self.files.insert(format!("{child}.rs"));
+                    self.files.insert(format!("{child}/mod.rs"));
+                    self.directories.push(format!("{child}/"));
+                }
+                None => {}
+            }
+        }
+    }
+
+    fn contains(&self, path: &str) -> bool {
+        self.files.contains(path)
+            || self
+                .directories
+                .iter()
+                .any(|directory| path.starts_with(directory.as_str()))
+    }
+}
+
 #[derive(Default)]
 struct BlockingEscapeVisitor {
     escapes: BTreeSet<String>,
 }
 
 impl BlockingEscapeVisitor {
-    fn inspect_call(&mut self, call: &ExprCall) {
-        let Expr::Path(function) = call.func.as_ref() else {
-            return;
-        };
-        let segments = path_segments(&function.path);
+    /// A path is an escape wherever it appears as a value, so `.map(std::thread::spawn)` is
+    /// caught as well as a call.
+    fn inspect_path(&mut self, path: &ExprPath) {
+        let segments = path_segments(&path.path);
         let joined = segments.join("::");
         if segments
             .last()
-            .is_some_and(|name| matches!(name.as_str(), "spawn_blocking" | "block_in_place"))
-            || matches!(
-                joined.as_str(),
-                "std::thread::spawn" | "thread::spawn" | "rayon::spawn"
-            )
+            .is_some_and(|name| is_blocking_pool_name(name))
+            || THREAD_ESCAPE_CALLS.contains(&joined.as_str())
         {
             self.escapes.insert(joined);
+        }
+    }
+
+    /// The blocking-pool names are never anything else, so unlike `spawn` they are matched
+    /// as methods too (`Handle::current().spawn_blocking(...)`).
+    fn inspect_method_call(&mut self, call: &ExprMethodCall) {
+        let method = call.method.to_string();
+        if is_blocking_pool_name(&method) {
+            self.escapes.insert(format!(".{method}()"));
+        }
+    }
+
+    fn inspect_use(&mut self, prefix: &mut Vec<String>, tree: &UseTree) {
+        match tree {
+            UseTree::Path(path) => {
+                prefix.push(path.ident.to_string());
+                self.inspect_use(prefix, &path.tree);
+                prefix.pop();
+            }
+            UseTree::Name(name) => self.inspect_import(prefix, &name.ident, None),
+            UseTree::Rename(rename) => {
+                self.inspect_import(prefix, &rename.ident, Some(&rename.rename));
+            }
+            UseTree::Glob(_) => {
+                if prefix.join("::") == "std::thread" {
+                    self.escapes.insert("use std::thread::*".into());
+                }
+            }
+            UseTree::Group(group) => {
+                for tree in &group.items {
+                    self.inspect_use(prefix, tree);
+                }
+            }
+        }
+    }
+
+    fn inspect_import(
+        &mut self,
+        prefix: &[String],
+        name: &syn::Ident,
+        rename: Option<&syn::Ident>,
+    ) {
+        let mut full = prefix.to_vec();
+        if name != "self" {
+            full.push(name.to_string());
+        }
+        let full = full.join("::");
+        if THREAD_ESCAPE_IMPORTS.contains(&full.as_str())
+            || (name != "self" && is_blocking_pool_name(&name.to_string()))
+        {
+            // Any import of a blocking-pool function is an escape, whatever it is renamed to.
+            self.escapes.insert(format!("use {full}"));
+        } else if full == "std::thread"
+            && let Some(rename) = rename.filter(|rename| *rename != "thread")
+        {
+            // `use std::thread as t;` hides `t::spawn(...)` from the call check.
+            self.escapes.insert(format!("use std::thread as {rename}"));
         }
     }
 }
@@ -805,10 +975,26 @@ impl<'ast> Visit<'ast> for BlockingEscapeVisitor {
         visit::visit_item_fn(self, node);
     }
 
-    fn visit_expr_call(&mut self, node: &'ast ExprCall) {
-        self.inspect_call(node);
-        visit::visit_expr_call(self, node);
+    fn visit_item_use(&mut self, node: &'ast ItemUse) {
+        if has_cfg_test_attribute(&node.attrs) {
+            return;
+        }
+        self.inspect_use(&mut Vec::new(), &node.tree);
     }
+
+    fn visit_expr_path(&mut self, node: &'ast ExprPath) {
+        self.inspect_path(node);
+        visit::visit_expr_path(self, node);
+    }
+
+    fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
+        self.inspect_method_call(node);
+        visit::visit_expr_method_call(self, node);
+    }
+}
+
+fn is_blocking_pool_name(name: &str) -> bool {
+    matches!(name, "spawn_blocking" | "block_in_place")
 }
 
 /// Every registered command must have an `invoke('<name>'...)` call site in
@@ -987,6 +1173,7 @@ fn audit_repository() -> Vec<String> {
     violations.extend(audit_blocking_pool_sources(
         &rust_sources,
         &["src/native_operation.rs"],
+        BLOCKING_ESCAPE_ALLOWLIST,
     ));
     let frontend_root = manifest.join("web").join("src");
     let mut owned_frontend_sources = Vec::new();
@@ -1066,9 +1253,9 @@ fn duplicates(values: &[String]) -> BTreeSet<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        StateAccessAllowance, SyncCommandAllowance, audit_blocking_pool_sources,
-        audit_command_policy, audit_frontend_invocations, audit_repository, invoked_command_names,
-        is_production_frontend_source,
+        BlockingEscapeAllowance, StateAccessAllowance, SyncCommandAllowance,
+        audit_blocking_pool_sources, audit_command_policy, audit_frontend_invocations,
+        audit_repository, invoked_command_names, is_production_frontend_source,
     };
     use std::path::Path;
 
@@ -1283,6 +1470,7 @@ mod tests {
                 "fn fixture() { tauri::async_runtime::spawn_blocking(|| work()); }",
             )],
             &["src/native_operation.rs"],
+            &[],
         );
 
         assert_eq!(
@@ -1307,6 +1495,7 @@ mod tests {
                 "#,
             )],
             &["src/native_operation.rs"],
+            &[],
         );
 
         assert_eq!(
@@ -1322,8 +1511,204 @@ mod tests {
                 "#[cfg(test)] mod tests { fn helper() { std::thread::spawn(test_work); } }",
             )],
             &["src/native_operation.rs"],
+            &[],
         );
         assert!(test_only.is_empty(), "{test_only:?}");
+    }
+
+    #[test]
+    fn thread_escapes_are_detected_by_path_and_command_spawn_is_not() {
+        let violations = audit_blocking_pool_sources(
+            &[(
+                "src/services/fixture.rs",
+                r#"
+                    use std::thread::{spawn, Builder as ThreadBuilder, scope};
+                    use std::thread::*;
+                    use std::thread as threads;
+                    use std::thread;
+                    use std::process::Command;
+                    fn builder() { std::thread::Builder::new().name("x".into()).spawn(work); }
+                    fn short_builder() { let b = thread::Builder::new(); b.spawn(work); }
+                    fn scoped() { std::thread::scope(|s| { s.spawn(work); }); }
+                    fn short_scoped() { thread::scope(|s| { s.spawn(work); }); }
+                    fn process() { Command::new("opener").spawn(); }
+                    fn qualified_process() { std::process::Command::new("opener").spawn(); }
+                "#,
+            )],
+            &["src/native_operation.rs"],
+            &[],
+        );
+
+        let escape = |name: &str| {
+            format!(
+                "direct native blocking execution outside NativeOperationExecutor: src/services/fixture.rs ({name})"
+            )
+        };
+        assert_eq!(
+            violations,
+            [
+                escape("std::thread::Builder::new"),
+                escape("std::thread::scope"),
+                escape("thread::Builder::new"),
+                escape("thread::scope"),
+                escape("use std::thread as threads"),
+                escape("use std::thread::*"),
+                escape("use std::thread::Builder"),
+                escape("use std::thread::scope"),
+                escape("use std::thread::spawn"),
+            ]
+        );
+    }
+
+    #[test]
+    fn renamed_blocking_pool_imports_are_escapes() {
+        let violations = audit_blocking_pool_sources(
+            &[(
+                "src/commands/fixture.rs",
+                r#"
+                    use tauri::async_runtime::spawn_blocking as offload;
+                    use tokio::task::{block_in_place as inline, spawn_blocking};
+                    fn f(path: String) { offload(move || std::fs::read(path)); inline(work); }
+                "#,
+            )],
+            &["src/native_operation.rs"],
+            &[],
+        );
+
+        let escape = |name: &str| {
+            format!(
+                "direct native blocking execution outside NativeOperationExecutor: src/commands/fixture.rs ({name})"
+            )
+        };
+        assert_eq!(
+            violations,
+            [
+                escape("use tauri::async_runtime::spawn_blocking"),
+                escape("use tokio::task::block_in_place"),
+                escape("use tokio::task::spawn_blocking"),
+            ]
+        );
+    }
+
+    #[test]
+    fn blocking_pool_method_calls_are_escapes() {
+        let violations = audit_blocking_pool_sources(
+            &[(
+                "src/services/fixture.rs",
+                r#"
+                    fn current() { tokio::runtime::Handle::current().spawn_blocking(move || heavy_cpu()); }
+                    fn stored(rt: &tokio::runtime::Handle) { rt.spawn_blocking(work); }
+                    fn inline(rt: &Runtime) { rt.block_in_place(work); }
+                "#,
+            )],
+            &["src/native_operation.rs"],
+            &[],
+        );
+
+        let escape = |name: &str| {
+            format!(
+                "direct native blocking execution outside NativeOperationExecutor: src/services/fixture.rs ({name})"
+            )
+        };
+        assert_eq!(
+            violations,
+            [escape(".block_in_place()"), escape(".spawn_blocking()")]
+        );
+    }
+
+    #[test]
+    fn escape_paths_passed_as_function_values_are_escapes() {
+        let violations = audit_blocking_pool_sources(
+            &[(
+                "src/services/fixture.rs",
+                r#"
+                    fn threads(jobs: Vec<fn()>) { let h: Vec<_> = jobs.into_iter().map(std::thread::spawn).collect(); }
+                    fn pool(jobs: Vec<fn()>) { jobs.into_iter().map(tokio::task::spawn_blocking); }
+                    fn stored() { let start = rayon::spawn; start(work); }
+                "#,
+            )],
+            &["src/native_operation.rs"],
+            &[],
+        );
+
+        let escape = |name: &str| {
+            format!(
+                "direct native blocking execution outside NativeOperationExecutor: src/services/fixture.rs ({name})"
+            )
+        };
+        assert_eq!(
+            violations,
+            [
+                escape("rayon::spawn"),
+                escape("std::thread::spawn"),
+                escape("tokio::task::spawn_blocking"),
+            ]
+        );
+    }
+
+    #[test]
+    fn out_of_line_test_module_files_are_skipped() {
+        let spawn = "fn helper() { std::thread::spawn(work); }";
+        let violations = audit_blocking_pool_sources(
+            &[
+                (
+                    "src/services/fixture.rs",
+                    "#[cfg(test)] mod tests; mod live;",
+                ),
+                ("src/services/fixture/tests.rs", spawn),
+                ("src/services/fixture/tests/deep.rs", spawn),
+                ("src/services/fixture/live.rs", spawn),
+                ("src/services/other/mod.rs", "#[cfg(test)] mod checks;"),
+                ("src/services/other/checks/mod.rs", spawn),
+                ("src/lib.rs", "#[cfg(test)] mod scratch;"),
+                ("src/scratch.rs", spawn),
+            ],
+            &["src/native_operation.rs"],
+            &[],
+        );
+
+        assert_eq!(
+            violations,
+            [
+                "direct native blocking execution outside NativeOperationExecutor: src/services/fixture/live.rs (std::thread::spawn)"
+            ]
+        );
+    }
+
+    #[test]
+    fn reviewed_blocking_escapes_pass_and_stale_allowances_are_reported() {
+        let allowances = [
+            BlockingEscapeAllowance {
+                path: "src/services/fixture.rs",
+                escape: "std::thread::Builder::new",
+                reason: "reviewed fixture",
+            },
+            BlockingEscapeAllowance {
+                path: "src/services/removed.rs",
+                escape: "std::thread::Builder::new",
+                reason: " ",
+            },
+        ];
+        let violations = audit_blocking_pool_sources(
+            &[(
+                "src/services/fixture.rs",
+                r#"
+                    fn reviewed() { std::thread::Builder::new().spawn(work); }
+                    fn unreviewed() { std::thread::spawn(work); }
+                "#,
+            )],
+            &["src/native_operation.rs"],
+            &allowances,
+        );
+
+        assert_eq!(
+            violations,
+            [
+                "blocking escape allowance has no reason: src/services/removed.rs (std::thread::Builder::new)",
+                "direct native blocking execution outside NativeOperationExecutor: src/services/fixture.rs (std::thread::spawn)",
+                "unused blocking escape allowance has no escape: src/services/removed.rs (std::thread::Builder::new)",
+            ]
+        );
     }
 
     #[test]
