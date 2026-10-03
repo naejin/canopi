@@ -215,7 +215,7 @@ describe('focus moves go through the focus owner', () => {
     }))
     const focusMap = vi.spyOn(focusOwner, 'focusMap')
     try {
-      expect(presentStory('tour', 0, { reducedMotion: true })).toBe(true)
+      expect(presentStory('tour', 0)).toBe(true)
       elsewhere.focus()
       leaveStoryPresentation()
       await vi.waitFor(() => expect(focusMap).toHaveBeenCalledWith('story-exit'))

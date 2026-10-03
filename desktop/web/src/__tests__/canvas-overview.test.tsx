@@ -21,7 +21,7 @@ describe('CanvasOverview', () => {
   function overviewView(viewport: { x?: number; y?: number } = {}): ViewReadSurface {
     const plane = createSessionPlane({ lon: 0, lat: 0 })
     testView = createTestView({ plane, viewport: { x: 200, y: 150, scale: 0.01, ...viewport } })
-    return createViewReadSurface(testView.frames, () => plane)
+    return createViewReadSurface(testView.frames)
   }
 
   beforeEach(() => {

@@ -41,7 +41,7 @@ import {
   VIEW_SNAPSHOT_DEFAULT_TIMEOUT_MS,
   VIEW_SNAPSHOT_THUMBNAIL,
   ViewSnapshotSceneBusyError,
-} from '../app/saved-views'
+} from '../app/saved-views/snapshot'
 import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
 import { designSessionStore } from '../app/document-session/store'
 import { setCurrentCanvasSession } from '../canvas/session'
@@ -52,6 +52,7 @@ import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { createTestRendererView } from './support/scene-renderer-snapshot'
 import { replaceCurrentDesignState } from './support/design-session-state'
 import { TEST_GEO_ORIGIN } from './support/geo-design'
+import { groundSizeShown } from './support/saved-view-frame'
 
 const VIEW: SavedView = {
   id: 'hedges',
@@ -101,19 +102,18 @@ afterEach(async () => {
 })
 
 describe('saved view snapshot request', () => {
-  it('draws a turned view at its bearing and camera zoom, whatever ground it recorded', () => {
-    const extent = { west: 12.9995, south: 22.999, east: 13.0005, north: 23.001 }
-    const turned: SavedView = { ...VIEW, camera: { ...VIEW.camera, bearing: 30 }, extent }
-    const request = describeSavedViewSnapshot(turned, VIEW_SNAPSHOT_THUMBNAIL, {
-      queries: queries(),
-      mapLayers: createDefaultMapLayers(),
-      locale: 'en',
-      plantLabels: 'names',
-    })!
+  it('draws a turned view at its bearing with its framed area fitted into the image, whatever the workspace size', () => {
+    // Framed in a 1000 × 500 window at zoom 19: 1000 / 320 limits the 320 × 200 image more than 500 / 200.
+    const ground = groundSizeShown(VIEW.camera, { width: 1000, height: 500 })
+    const turned: SavedView = { ...VIEW, camera: { ...VIEW.camera, bearing: 30, ground_size_m: ground } }
+    const context = { mapLayers: createDefaultMapLayers(), locale: 'en', plantLabels: 'names' as const }
+    const request = describeSavedViewSnapshot(turned, VIEW_SNAPSHOT_THUMBNAIL, { ...context, queries: queries() })!
 
-    // What going to the view shows in the 400 × 300 workspace, scaled to the 320 × 200 image, never the recorded extent.
     expect(request.camera).toMatchObject({ lon: VIEW.camera.lon, lat: VIEW.camera.lat, bearing: 30 })
-    expect(request.camera.zoom).toBeCloseTo(19 + Math.log2(200 / 300), 9)
+    expect(request.camera.zoom).toBeCloseTo(19 + Math.log2(320 / 1000), 6)
+    // The workspace size plays no part: the same image in a 1600 × 900 workspace.
+    const wide = describeSavedViewSnapshot(turned, VIEW_SNAPSHOT_THUMBNAIL, { ...context, queries: queries({ width: 1600, height: 900 }) })!
+    expect(wide.camera.zoom).toBe(request.camera.zoom)
   })
 
   it('draws the view off-screen with its layers, focused species and a fitted zoom', () => {
@@ -126,8 +126,8 @@ describe('saved view snapshot request', () => {
       plantLabels: 'codes',
     })!
 
-    // The workspace is 400 × 300; a 320 × 200 image shows the same ground at
-    // two thirds of the size, limited by its height.
+    // A view saved without its framed area shows what the 400 × 300 workspace shows at its camera zoom: a 320 × 200
+    // image shows the same ground at two thirds of the size, limited by its height.
     expect(request.camera.zoom).toBeCloseTo(19 + Math.log2(200 / 300), 9)
     expect(request.camera).toMatchObject({ lon: VIEW.camera.lon, lat: VIEW.camera.lat })
     expect(request).toMatchObject({ width: 320, height: 200, timeoutMs: VIEW_SNAPSHOT_DEFAULT_TIMEOUT_MS })

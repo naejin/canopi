@@ -321,6 +321,7 @@ function fakeRuntimeComposition(
         await initialize()
         return 'shared-ready' as const
       }),
+      retryMap: vi.fn(),
       dispose: vi.fn(destroy),
     },
   }

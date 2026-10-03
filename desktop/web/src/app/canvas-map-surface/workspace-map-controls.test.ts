@@ -18,6 +18,9 @@ import { OPENFREEMAP_BASEMAPS } from '../../maplibre/openfreemap-basemap'
 import { GOOGLE_KEYLESS_TILES, GOOGLE_SESSION_TILES } from '../../maplibre/satellite-provider'
 import { MAPLIBRE_SHARED_SCENE_LAYER_ID } from '../../maplibre/shared-scene-layer'
 import { WorkspaceMapControls } from './workspace-map-controls'
+import { getMapNoticeReadModel } from './map-notice'
+import type { MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
+import { t } from '../../i18n'
 
 type MapListener = (event?: unknown) => void
 
@@ -130,10 +133,14 @@ const OPENFREEMAP_STYLE = {
 }
 const OPENFREEMAP_LAYER_IDS = ['ofm:background', 'ofm:water', 'ofm:place-label']
 
-const styleFetch = vi.fn(async (_url: string | URL | Request) => new Response(
-  JSON.stringify(OPENFREEMAP_STYLE),
-  { status: 200, headers: { 'content-type': 'application/json' } },
-))
+function serveOpenFreeMapStyle(): Response {
+  return new Response(
+    JSON.stringify(OPENFREEMAP_STYLE),
+    { status: 200, headers: { 'content-type': 'application/json' } },
+  )
+}
+
+const styleFetch = vi.fn(async (_url: string | URL | Request) => serveOpenFreeMapStyle())
 
 function background(
   basemap: Partial<MapBackgroundPresentation['basemap']> = {},
@@ -209,7 +216,20 @@ function createControls(options: {
     canCreateWebGL2Context: options.canCreateWebGL2Context ?? (() => true),
     ...(options.setScreen ? { setScreen: options.setScreen } : {}),
   }, snapshot)
+  createdControls.push({ controls, maps })
   return { controls, maps, observers, container }
+}
+
+/**
+ * Every controls instance a test made, so `afterEach` can release its maps: a
+ * map left alive keeps its settings observers and would answer later tests.
+ */
+const createdControls: Array<{ controls: WorkspaceMapControls; maps: readonly FakeMap[] }> = []
+
+function releaseCreatedMaps(): void {
+  for (const { controls, maps } of createdControls.splice(0)) {
+    for (const map of maps) controls.releaseMap(map as never)
+  }
 }
 
 class TestWorkspaceMapControls extends WorkspaceMapControls {
@@ -243,11 +263,13 @@ function targetContribution(sessionIdentity: object): WorkspaceMapContributionSn
 }
 
 beforeEach(() => {
-  styleFetch.mockClear()
+  styleFetch.mockReset()
+  styleFetch.mockImplementation(async () => serveOpenFreeMapStyle())
   vi.stubGlobal('fetch', styleFetch)
 })
 
 afterEach(() => {
+  releaseCreatedMaps()
   vi.unstubAllGlobals()
 })
 
@@ -398,7 +420,7 @@ describe('WorkspaceMapControls', () => {
     controls.updateMapContributions(input)
     await vi.waitFor(() => expect(failure).toHaveBeenCalledExactlyOnceWith(cleanup))
     expect(map.remove).toHaveBeenCalledOnce()
-    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'error', errorMessage: cleanup.message })
+    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'error' })
     const mutations = map.addSource.mock.calls.length
     controls.updateMapContributions(input)
     expect(map.addSource).toHaveBeenCalledTimes(mutations)
@@ -420,7 +442,7 @@ describe('WorkspaceMapControls', () => {
     map.emit('style.load')
     await expect(acquisition).resolves.toBe(map)
     expect(map.remove).not.toHaveBeenCalled()
-    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'ready', errorMessage: null, layerSkipped: true })
+    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'ready', layerSkipped: true })
     expect([...map.layers.keys()].some((id) => id.startsWith('panel-target-'))).toBe(false)
     expect(logError).toHaveBeenCalledWith('Skipped a map overlay that failed to sync:', error)
   })
@@ -546,7 +568,7 @@ describe('WorkspaceMapControls', () => {
     const rejection = expect(acquisition).rejects.toThrow(stage === 'webgl' ? 'WebGL2' : error.message)
     if (stage === 'pre-admission') (await waitForMap(maps)).emit('error', { error })
     await rejection
-    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'error', errorMessage: stage === 'webgl' ? expect.stringContaining('WebGL2') : error.message })
+    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'error' })
   })
 
   it('keeps an ordinary acquisition abort idle', async () => {
@@ -558,7 +580,7 @@ describe('WorkspaceMapControls', () => {
     const rejected = expect(acquisition).rejects.toMatchObject({ name: 'AbortError' })
     abort.abort()
     await rejected
-    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'idle', errorMessage: null })
+    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'idle' })
   })
 
   it.each(['loader rejected', new DOMException('access denied', 'SecurityError'), new DOMException('loader cancelled internally', 'AbortError')])(
@@ -572,7 +594,7 @@ describe('WorkspaceMapControls', () => {
       await expect(controls.createMap(abort.signal)).rejects.toBe(error)
       expect(abort.signal.aborted).toBe(false)
       expect(states.mock.lastCall?.[0]).toMatchObject({
-        status: 'error', errorMessage: typeof error === 'string' ? error : error.message,
+        status: 'error',
       })
     },
   )
@@ -586,7 +608,7 @@ describe('WorkspaceMapControls', () => {
     const admitted = await acquisition
     controls.releaseMap(admitted, error)
     controls.releaseMap(admitted)
-    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'error', errorMessage: error.message })
+    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'error' })
     expect(map.remove).toHaveBeenCalledOnce()
   })
 
@@ -1358,8 +1380,22 @@ describe('WorkspaceMapControls', () => {
     expect(maps).toEqual([])
     expect(states).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
       status: 'error',
-      errorMessage: expect.stringContaining('WebGL2 is unavailable'),
+      retryable: false,
     }))
+  })
+
+  it('publishes a lost context as an error a Retry can rebuild', async () => {
+    const states: MapLibreCanvasSurfaceState[] = []
+    const { controls, maps } = createControls({ contributions: { onStateChange: (state) => states.push(state) } })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    const admitted = await acquisition
+    controls.watchFailure(admitted, (error) => controls.releaseMap(admitted, error))
+
+    map.emit('webglcontextlost')
+
+    expect(states.at(-1)).toMatchObject({ status: 'error', retryable: true })
   })
 
   it('does not ask a browser without the WebGL2 interface to create a context', async () => {
@@ -1690,23 +1726,47 @@ describe('WorkspaceMapControls OpenFreeMap basemap', () => {
     expect(map.setStyle).not.toHaveBeenCalled()
   })
 
-  it('logs a basemap style failure without failing the workspace map', async () => {
+  it('notices a 503 basemap style with a fixed message and Retry, keeps the map, and Retry loads it', async () => {
+    // A loaded style stays cached for the session, so this uses the one style no earlier test loads.
     styleFetch.mockImplementationOnce(async () => new Response('unavailable', { status: 503 }))
     const logError = vi.fn()
-    const { controls, maps } = createControls({ background: basemapOn({ style: 'dark' }), logError })
+    const states: MapLibreCanvasSurfaceState[] = []
+    const { controls, maps } = createControls({
+      background: basemapOn({ style: 'dark' }),
+      contributions: { onStateChange: (state) => states.push(state) },
+      logError,
+    })
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
     map.emit('style.load')
     const admitted = await acquisition
+    controls.updateMapContributions(targetContribution(controls.sessionIdentity))
     const reportFailure = vi.fn()
     controls.watchFailure(admitted, reportFailure)
 
-    await vi.waitFor(() => expect(logError).toHaveBeenCalledWith(
+    await vi.waitFor(() => expect(states.at(-1)?.basemapStatus).toBe('failed'))
+    expect(states.at(-1)?.status).toBe('ready')
+    expect(logError).toHaveBeenCalledWith(
       'Map basemap style failed to load:',
       expect.objectContaining({ message: expect.stringContaining('503') }),
-    ))
+    )
+    const notice = getMapNoticeReadModel({ hasDesign: true, mapVisible: true, mapSurface: states.at(-1)!, t })
+    expect(notice).toMatchObject({
+      visible: true,
+      tone: 'error',
+      statusText: 'Basemap couldn’t load. Check your connection.',
+      retry: true,
+    })
+    expect(JSON.stringify(notice)).not.toContain('503')
     expect(hasAnyOpenFreeMapLayer(map)).toBe(false)
     expect(reportFailure).not.toHaveBeenCalled()
+    expect(map.remove).not.toHaveBeenCalled()
+
+    controls.retryBasemap()
+
+    await vi.waitFor(() => expect(states.at(-1)?.basemapStatus).toBe('ok'))
+    expect(hasOpenFreeMapBasemap(map)).toBe(true)
+    expect(getMapNoticeReadModel({ hasDesign: true, mapVisible: true, mapSurface: states.at(-1)!, t }).visible).toBe(false)
     expect(map.remove).not.toHaveBeenCalled()
   })
 
@@ -1829,7 +1889,9 @@ describe('WorkspaceMapControls Google satellite', () => {
   })
 
   it('replaces keyless tiles with official session tiles when a key is saved on a live map', async () => {
-    vi.stubGlobal('fetch', (async (url: string) => {
+    // The shared fetch stub answers Google too, so a map another test left
+    // alive would show up here as a second session request.
+    styleFetch.mockImplementation(async (url) => {
       if (String(url).includes('createSession')) {
         return new Response(JSON.stringify({
           session: 'fake-session-token',
@@ -1838,11 +1900,15 @@ describe('WorkspaceMapControls Google satellite', () => {
           tileHeight: 256,
         }), { status: 200, headers: { 'content-type': 'application/json' } })
       }
-      return new Response(JSON.stringify({
-        copyright: 'Imagery ©2026 Google',
-        maxZoomRects: [{ north: 90, south: -90, east: 180, west: -180, maxZoom: 20 }],
-      }), { status: 200, headers: { 'content-type': 'application/json' } })
-    }) as unknown as typeof fetch)
+      if (String(url).includes('googleapis')) {
+        return new Response(JSON.stringify({
+          copyright: 'Imagery ©2026 Google',
+          maxZoomRects: [{ north: 90, south: -90, east: 180, west: -180, maxZoom: 20 }],
+        }), { status: 200, headers: { 'content-type': 'application/json' } })
+      }
+      return serveOpenFreeMapStyle()
+    })
+    const requested = () => styleFetch.mock.calls.map(([url]) => String(url))
     const { googleMapsApiKey, satelliteSource } = await import('../../app/settings/state')
     googleMapsApiKey.value = null
     satelliteSource.value = 'free'
@@ -1860,7 +1926,10 @@ describe('WorkspaceMapControls Google satellite', () => {
       await vi.waitFor(() => expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID))
         .toMatchObject({ tiles: [GOOGLE_SESSION_TILES] }))
       expect(JSON.stringify([...map.sources.entries()])).not.toContain('fake-canvas-google-key')
-      expect(map.setStyle).not.toHaveBeenCalled()
+      // Only this live map reacts to the saved key: one session, and no map
+      // left over from another test requests a style of its own.
+      expect(requested().filter((url) => url.includes('createSession'))).toHaveLength(1)
+      expect(requested().some((url) => url.includes('openfreemap'))).toBe(false)
       expect(map.remove).not.toHaveBeenCalled()
     } finally {
       googleMapsApiKey.value = null

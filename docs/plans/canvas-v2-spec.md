@@ -1603,9 +1603,10 @@ export interface PdfPageFrame {
 export function pageFrame(angleDeg: number, pivot?: PrintPoint): PdfPageFrame   // pivot defaults to {0, 0}
 /**
  * The print snapshot as seen in the frame, applied once per build: every coordinate pair of zone paths, plant positions, note
- * positions, measurement ends and guide ends turned by −angle, geometry turned when present, bounds recomputed, and an
- * annotation's `rotation` becomes `rotation − angle`. Identity (same object) when angleDeg is 0, so North up plans are
- * byte-identical to today.
+ * positions, measurement ends and guide ends turned by −angle, each zone's geometry turned (`PrintZone.geometry` is
+ * required), bounds recomputed, and an annotation's `rotation` becomes `rotation − angle`. Print paths hold only absolute
+ * M, L, C and Z; any other command throws `unsupported-print-path`. Identity (same object) when angleDeg is 0, so North up
+ * plans are byte-identical to today.
  */
 export function turnSnapshot(snapshot: CanvasPrintSnapshot, frame: PdfPageFrame): CanvasPrintSnapshot
 ```

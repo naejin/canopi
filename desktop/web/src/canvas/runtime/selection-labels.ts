@@ -4,7 +4,7 @@ import {
   type PlantPresentationContext,
 } from './plant-presentation'
 import type { ScenePlantEntity, ScenePoint } from './scene'
-import type { SpeciesCacheEntry } from './species-cache'
+import { EMPTY_SPECIES_CACHE } from './species-key'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 
 /**
@@ -52,7 +52,6 @@ export interface SelectionLabelOptions {
 const PLANT_LABEL_GAP_PX = 2
 const PLANT_LABEL_MIN_OFFSET_PX = 5
 const PLANT_LABEL_MAX_OFFSET_PX = 8
-const EMPTY_SPECIES_CACHE = new Map<string, SpeciesCacheEntry>()
 
 export function computeSelectionLabels(
   plants: readonly ScenePlantEntity[],

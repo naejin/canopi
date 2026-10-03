@@ -44,6 +44,7 @@ describe('Where is your site? and Undo on the Web Edition', () => {
     const composition: WorkspaceRuntimeComposition = {
       surfaces: host.surfaces,
       start: async () => 'shared-ready',
+      retryMap: () => undefined,
       dispose: () => host.destroy(),
     }
     const controller = createBrowserDesignSessionController({

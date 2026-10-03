@@ -239,7 +239,6 @@ describe('Canvas Layer Presentation', () => {
         detail: { type: 'hillshade' },
       },
     ])
-    expect(presentation.hasVisibleMapLayer).toBe(true)
   })
 
   it('reports the background choices, Soften background and a saved Google key without exposing it', () => {

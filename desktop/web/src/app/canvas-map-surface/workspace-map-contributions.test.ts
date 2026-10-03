@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createDefaultScenePersistedState } from '../../canvas/runtime/scene'
 import type { MapLibreApi, MapLibreMapInstance } from '../../maplibre/loader'
-import type { MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
+import { IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, type MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
 import type { TerrainProtocolSupport } from '../../maplibre/terrain'
 import { WorkspaceMapContributions } from './workspace-map-contributions'
 import type { WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
@@ -133,7 +133,7 @@ describe('WorkspaceMapContributions', () => {
     else f.manager.handleMapError({ sourceId: 'terrain-dem', error: new Error('terrain tile failed') })
     await flush()
     expect(f.failure).toHaveBeenCalledExactlyOnceWith(cleanup)
-    expect(f.states.at(-1)).toMatchObject({ status: 'error', errorMessage: cleanup.message, terrainStatus: 'idle' })
+    expect(f.states.at(-1)).toMatchObject({ status: 'error', terrainStatus: 'idle' })
     const mutations = f.map.addSource.mock.calls.length
     f.manager.update(input)
     f.manager.restoreStyle()
@@ -162,7 +162,7 @@ describe('WorkspaceMapContributions', () => {
     if (phase === 'live') f.manager.update(input)
     else f.manager.restoreStyle()
     expect(f.failure).toHaveBeenCalledExactlyOnceWith(error)
-    expect(f.states.at(-1)).toMatchObject({ status: 'error', errorMessage: error.message, terrainStatus: 'idle' })
+    expect(f.states.at(-1)).toMatchObject({ status: 'error', terrainStatus: 'idle' })
     expect(f.map.sources.size).toBe(0)
     const mutations = f.map.addSource.mock.calls.length
     f.manager.update(input)
@@ -183,7 +183,7 @@ describe('WorkspaceMapContributions', () => {
     pending.resolve(terrainSupport)
     await flush()
     expect(f.failure).toHaveBeenCalledExactlyOnceWith(error)
-    expect(f.states.at(-1)).toMatchObject({ status: 'error', errorMessage: error.message, terrainStatus: 'idle' })
+    expect(f.states.at(-1)).toMatchObject({ status: 'error', terrainStatus: 'idle' })
   })
 
   it('keeps terrain source construction failures passive', async () => {
@@ -336,9 +336,30 @@ describe('WorkspaceMapContributions', () => {
     f.manager.update(snapshot(f.identity, { terrain: { ...snapshot(f.identity).terrain, hillshadeVisible: true } }))
     f.manager.restoreStyle()
     await flush()
-    expect(f.states.at(-1)).toMatchObject({ status: 'ready', terrainStatus: 'error', terrainErrorMessage: 'terrain offline' })
+    expect(f.states.at(-1)).toMatchObject({ status: 'ready', terrainStatus: 'error' })
+    // The notice is a fixed sentence; engine text stays in the log, not in the state.
+    expect(f.states.at(-1)).not.toHaveProperty('terrainErrorMessage')
     expect(f.raster.syncs.at(-1)?.ids).toEqual(['lidar-a'])
     expect(f.map.getLayer('panel-target-hover-zones-fill')).toBeTruthy()
+  })
+
+  it('publishes no engine text, so a terrain tile error with new text publishes no new state', async () => {
+    const f = fixture(vi.fn(async () => { throw new Error('terrain offline') }))
+    f.manager.update(snapshot(f.identity, { terrain: { ...snapshot(f.identity).terrain, hillshadeVisible: true } }))
+    f.manager.restoreStyle()
+    await flush()
+    expect(f.states.at(-1)?.terrainStatus).toBe('error')
+    const published = f.states.length
+    // Each tile error carries its own engine text; the notice is the same fixed sentence.
+    f.manager.handleMapError({ sourceId: 'terrain-dem', error: new Error('tile 12/3/4 failed') })
+    f.manager.handleMapError({ sourceId: 'terrain-dem', error: new Error('tile 12/3/5 failed') })
+    expect(f.states).toHaveLength(published)
+    f.map.moveLayer.mockImplementation(() => { throw new Error('order failed at https://tiles.example/?key=secret') })
+    f.raster.added.push('lidar-a')
+    f.map.order.push('lidar-a')
+    f.manager.update(snapshot(f.identity))
+    expect(f.states.at(-1)?.status).toBe('error')
+    expect(JSON.stringify(f.states)).not.toMatch(/terrain offline|tile 12|order failed|secret/)
   })
 
   it('ignores delayed source errors after contributions are disconnected', () => {
@@ -369,7 +390,7 @@ describe('WorkspaceMapContributions', () => {
     expect([...f.map.listeners.values()].every((listeners) => listeners.size === 0)).toBe(true)
     expect(f.bounds).toHaveBeenLastCalledWith(null)
     expect(f.diagnostics).toHaveBeenLastCalledWith(null)
-    expect(f.states.at(-1)).toEqual({ status: 'idle', errorMessage: null, terrainStatus: 'idle', terrainErrorMessage: null, layerSkipped: false })
+    expect(f.states.at(-1)).toEqual(IDLE_MAPLIBRE_CANVAS_SURFACE_STATE)
   })
 
   describe('optional overlay failures', () => {
@@ -393,7 +414,7 @@ describe('WorkspaceMapContributions', () => {
         f.manager.update({ ...input, overlays: { ...input.overlays, selectedTargets: [{ kind: 'zone', zone_id: 'plot' }] } })
       } else f.manager.restoreStyle()
       expect(f.failure).not.toHaveBeenCalled()
-      expect(f.states.at(-1)).toMatchObject({ status: 'ready', errorMessage: null, layerSkipped: true })
+      expect(f.states.at(-1)).toMatchObject({ status: 'ready', layerSkipped: true })
       expect(f.map.sources.has('panel-target-hover-source')).toBe(false)
       expect(f.raster.disposed).toBe(false)
     })
@@ -410,7 +431,7 @@ describe('WorkspaceMapContributions', () => {
       f.manager.update(snapshot(f.identity))
       f.manager.restoreStyle()
       expect(f.failure).not.toHaveBeenCalled()
-      expect(f.states.at(-1)).toMatchObject({ status: 'ready', errorMessage: null, layerSkipped: true })
+      expect(f.states.at(-1)).toMatchObject({ status: 'ready', layerSkipped: true })
       expect(f.map.getSource('panel-target-hover-source')).toBeUndefined()
       expect(f.map.order.some((id) => id.startsWith('panel-target-'))).toBe(false)
       expect(f.logError).toHaveBeenCalledWith(expect.stringContaining('overlay'), error)

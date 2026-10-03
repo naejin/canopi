@@ -12,6 +12,8 @@ export interface WorkspaceGenerationLifecycle {
   teardown(): Promise<void>
   /** True when this lifecycle already observes rejection of this exact result. */
   ownsLifecycleFailureObservation?(result: Promise<unknown>): boolean
+  /** Accepts a user Retry of an unavailable map (WorkspaceActivationCoordinator.retry). */
+  retry(): boolean
 }
 
 export interface WorkspaceGenerationReconcilerOptions {
@@ -76,6 +78,27 @@ export class WorkspaceGenerationReconciler {
       this.reportFailure(error)
       return 'cancelled'
     }
+  }
+
+  /**
+   * The user's Retry after the map became unavailable: when the workspace accepts it, the current Design
+   * is activated again. Refused, and false, with no Design, while an activation or a replacement is under
+   * way, or when the workspace refuses.
+   */
+  retry(): boolean {
+    if (this.disposed || this.activation || this.replacementSuspended) return false
+    let snapshot: WorkspaceActivationSnapshot | null
+    try {
+      snapshot = this.options.readSnapshot()
+    } catch (error) {
+      this.reportFailure(error)
+      return false
+    }
+    if (!snapshot || !this.options.workspace.retry()) return false
+    const activation: ReconciliationActivation = { ticket: this.currentReplacement, snapshot }
+    this.activation = activation
+    this.observeActivation(activation)
+    return true
   }
 
   /** Synchronously fences the old generation before Canvas replacement begins. */

@@ -16,7 +16,14 @@ import {
   type BrowserWorkspaceRuntimeMountOptions,
 } from './browser-workspace-runtime'
 import type { WorkspaceRuntimeComposition } from '../app/canvas-map-surface/workspace-runtime-composition'
-import type { MapLibreCanvasSurfaceState } from '../maplibre/canvas-surface-state'
+import {
+  IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
+  type MapLibreCanvasSurfaceState,
+} from '../maplibre/canvas-surface-state'
+import { getMapNoticeReadModel } from '../app/canvas-map-surface/map-notice'
+import { hasVisibleMapLayer, mapLayers } from '../app/map-layers/state'
+import { MapNotice } from '../components/canvas/MapNotice'
+import { t } from '../i18n'
 import { WebWelcomeScreen } from './WebWelcomeScreen'
 import { useMapArea } from '../components/shared/useMapChrome'
 
@@ -212,6 +219,13 @@ export function WebCanvasWorkspace({
     }
   }, [controller, createRuntimeComposition, store])
 
+  const mapNotice = getMapNoticeReadModel({
+    hasDesign,
+    mapVisible: hasVisibleMapLayer(mapLayers.value),
+    mapSurface: mapState ?? IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
+    t,
+  })
+
   return (
     <div className={panelStyles.canvasPanel} data-testid="web-canvas-workspace">
       <div ref={canvasAreaRef} className={panelStyles.canvasArea}>
@@ -223,6 +237,7 @@ export function WebCanvasWorkspace({
         />
         <div ref={rulerOverlayRef} className={panelStyles.rulerOverlay} />
         {hasDesign && <CanvasChrome projection={workspaceCanvasCommandProjection.value} canvasRef={containerRef} />}
+        <MapNotice notice={mapNotice} onRetry={() => runtimeRef.current?.composition.retryMap()} />
         {!hasDesign && <WebWelcomeScreen controller={controller} />}
       </div>
     </div>

@@ -1385,11 +1385,6 @@ impl LidarLibrary {
                         import::ensure_whole_batch_compatible(&staging)?;
                         // Display derivatives are staged under the same job, so
                         // the item can be drawn as soon as it is published.
-                        library_for_work.record_import_progress(
-                            &job_id_for_stage,
-                            LidarImportProgressPhase::RenderingMap,
-                            1,
-                        );
                         library_for_work.prepare_staged_display(&staging, &flag)?;
                         // Publication refuses an item that already has a head:
                         // items are fixed once published.

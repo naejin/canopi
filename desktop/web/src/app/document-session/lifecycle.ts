@@ -59,6 +59,8 @@ const DEFAULT_LIFECYCLE_DEPS: DesignSessionLifecycleDeps = {
 
 export interface DesignSessionLifecycle {
   start(): void;
+  /** The map notice's Retry (WorkspaceRuntimeComposition.retryMap). */
+  retryMap(): void;
   dispose(): Promise<void>;
 }
 
@@ -149,6 +151,11 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
         );
       }
     });
+  }
+
+  retryMap(): void {
+    if (this.cancelled) return;
+    this.runtime.retryMap();
   }
 
   dispose(): Promise<void> {

@@ -134,7 +134,7 @@ export function GalleryCanvasSurface({
           container,
           design,
           onMapStateChange: (state) => {
-            if (state.status === 'error') activity.value = `Map unavailable: ${state.errorMessage ?? 'unknown error'}`
+            if (state.status === 'error') activity.value = 'Map unavailable'
           },
           onFailure: (error) => console.error('Gallery workspace failed:', error),
         })

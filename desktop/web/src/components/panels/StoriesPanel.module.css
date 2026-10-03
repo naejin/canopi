@@ -167,7 +167,7 @@
 .missingThumb {
   flex-shrink: 0;
   width: 64px;
-  height: 44px;
+  height: 40px;
   border: 1px dashed var(--color-border-strong);
   border-radius: var(--radius-md);
 }

@@ -2,6 +2,7 @@ import type { WorkspaceMapContributionSnapshot } from './workspace-map-contribut
 import { describe, expect, it, vi } from 'vitest'
 import {
   WorkspaceActivationCoordinator,
+  WorkspaceWebGL2UnavailableError,
   type WorkspaceActivationOutcome,
   type WorkspaceActivationMap,
   type WorkspaceActivationMapControls,
@@ -21,6 +22,16 @@ import { WorkspaceGenerationReconciler } from './workspace-generation-reconciler
 import type { MapBackgroundPresentation } from '../../maplibre/map-background'
 import { geoToScreen, screenToGeo } from '../../canvas/runtime/view/camera-math'
 import type { ViewCamera } from '../../canvas/runtime/view/types'
+import { createDetachedCanvasRuntimeAppAdapter } from '../../canvas/runtime/app-adapter'
+import { createCanvasDocumentReplacementToken } from '../../canvas/runtime/runtime'
+import { createDetachedSceneRuntimePanelTargetAdapter } from '../../canvas/runtime/scene-runtime/panel-target-adapter'
+import {
+  IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
+  type MapLibreCanvasSurfaceState,
+} from '../../maplibre/canvas-surface-state'
+import { CURRENT_CANOPI_FILE_VERSION } from '../../generated/canopi-design-format'
+import type { CanopiFile } from '../../types/design'
+import { createWorkspaceRuntimeComposition, type WorkspaceRuntimeComposition } from './workspace-runtime-composition'
 
 function background(
   basemap: Partial<MapBackgroundPresentation['basemap']> = {},
@@ -133,12 +144,13 @@ class FakeMap {
   }
 }
 
-function createRuntime(): WorkspaceActivationRuntime {
+function createRuntime() {
   return {
     init: vi.fn(async () => {}),
     unmountRenderer: vi.fn(async () => {}),
+    remountRenderer: vi.fn(async () => {}),
     destroy: vi.fn(),
-  }
+  } satisfies WorkspaceActivationRuntime
 }
 
 function createComposition(options: {
@@ -186,7 +198,7 @@ function createCoordinator(input: {
   map?: FakeMap
   createMap?: WorkspaceActivationMapControls['createMap']
   composition?: SharedMapSceneRendererComposition
-  runtime?: WorkspaceActivationRuntime
+  runtime?: ReturnType<typeof createRuntime>
   context?: WebGL2RenderingContext | null
   getWebGL2Context?: WorkspaceActivationMapControls['getWebGL2Context']
   unwatchFailure?: () => void
@@ -206,6 +218,7 @@ function createCoordinator(input: {
       ?? (() => input.context === undefined ? map.context : input.context),
     updateMapContributions: vi.fn(),
     updateBackgroundPresentation: vi.fn(),
+    retryBasemap: vi.fn(),
     installStyleRestorer: input.installStyleRestorer ?? vi.fn(() => () => {}),
     watchFailure: input.watchFailure
       ?? (input.unwatchFailure ? () => input.unwatchFailure! : undefined),
@@ -414,7 +427,7 @@ describe('WorkspaceActivationCoordinator', () => {
     expect(updateBackgroundPresentation).not.toHaveBeenCalled()
   })
 
-  it('fences presentation updates after the map becomes terminally unavailable', async () => {
+  it('fences presentation updates after the map becomes unavailable', async () => {
     const { coordinator, mapControls } = createCoordinator()
     const updateBackgroundPresentation = vi.fn()
     mapControls.updateBackgroundPresentation = updateBackgroundPresentation
@@ -844,7 +857,50 @@ describe('WorkspaceActivationCoordinator', () => {
     expect(runtime.init).not.toHaveBeenCalled()
   })
 
-  it('unmounts once when replacement admission fails and never restarts the map', async () => {
+  it('logs a lost map\'s cause once, with the tile key redacted', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const { coordinator } = createCoordinator()
+      await expect(coordinator.activate()).resolves.toBe('shared-ready')
+      const failure = new Error('AJAXError: Forbidden (403): https://example.test/style.json?key=AIzaLeakedCoreKey')
+
+      const outcome = coordinator.reportFailure(failure)
+      void coordinator.reportFailure(new Error('a second report of the same loss'))
+      await expect(outcome).resolves.toBe('map-unavailable')
+
+      expect(consoleError).toHaveBeenCalledExactlyOnceWith('Shared workspace map failed:', expect.any(Error))
+      const logged = String((consoleError.mock.calls[0]?.[1] as Error).message)
+      expect(logged).toContain('key=<redacted>')
+      expect(logged).not.toContain('AIzaLeakedCoreKey')
+      await coordinator.teardown()
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
+  it.each([
+    ['map acquisition rejects before admission', () => ({ createMap: async () => { throw new Error('context lost before the style loaded') } }), 'context lost before the style loaded'],
+    ['WebGL2 is missing', () => ({ createMap: async () => { throw new WorkspaceWebGL2UnavailableError() } }), 'WebGL2 is unavailable'],
+    ['the shared layer fails to initialize', () => ({
+      composition: createComposition({ initialize: async () => { throw new Error('Pixi init failed') } }).composition,
+    }), 'Pixi init failed'],
+  ])('logs the cause when %s', async (_reason, setup, message) => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const { coordinator } = createCoordinator(setup())
+
+      await expect(coordinator.activate()).resolves.toBe('map-unavailable')
+
+      expect(consoleError).toHaveBeenCalledExactlyOnceWith(
+        'Shared workspace map failed:',
+        expect.objectContaining({ message: expect.stringContaining(message) }),
+      )
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
+  it('unmounts once when replacement admission fails and never restarts on its own', async () => {
     const map = new FakeMap()
     const replacementFailure = new Error('replacement map failed')
     const createMap = vi.fn()
@@ -860,6 +916,119 @@ describe('WorkspaceActivationCoordinator', () => {
     expect(runtime.init).toHaveBeenCalledOnce()
     expect(runtime.unmountRenderer).toHaveBeenCalledOnce()
     expect(runtime.destroy).not.toHaveBeenCalled()
+  })
+
+  it('rebuilds the map on Retry after a failure and remounts the renderer, any number of times', async () => {
+    const maps = [new FakeMap(), new FakeMap(), new FakeMap()]
+    const createMap = vi.fn(async () => maps[createMap.mock.calls.length - 1] as unknown as WorkspaceActivationMap)
+    const { coordinator, runtime, camera } = createCoordinator({ createMap })
+    await expect(coordinator.activate()).resolves.toBe('shared-ready')
+
+    for (const round of [1, 2]) {
+      await expect(coordinator.reportFailure(new Error('context lost'))).resolves.toBe('map-unavailable')
+      expect(maps[round - 1]!.remove).toHaveBeenCalledOnce()
+      expect(coordinator.retry()).toBe(true)
+      await expect(coordinator.activate()).resolves.toBe('shared-ready')
+      expect(runtime.remountRenderer).toHaveBeenCalledTimes(round)
+      expect(camera.frames.viewFrame.peek().attached).toBe(true)
+    }
+    expect(createMap).toHaveBeenCalledTimes(3)
+    expect(runtime.init).toHaveBeenCalledOnce()
+    expect(runtime.unmountRenderer).toHaveBeenCalledTimes(2)
+    expect(runtime.destroy).not.toHaveBeenCalled()
+    await coordinator.teardown()
+  })
+
+  it('rebuilds the map on Retry after the failure handling itself failed', async () => {
+    const maps = [new FakeMap(), new FakeMap()]
+    const createMap = vi.fn(async () => maps[createMap.mock.calls.length - 1] as unknown as WorkspaceActivationMap)
+    const runtime = createRuntime()
+    runtime.unmountRenderer.mockRejectedValueOnce(new Error('unmount boom'))
+    const { coordinator } = createCoordinator({ createMap, runtime })
+    await expect(coordinator.activate()).resolves.toBe('shared-ready')
+    await expect(coordinator.reportFailure(new Error('context lost'))).rejects.toThrow('unmount boom')
+
+    expect(coordinator.retry()).toBe(true)
+    await expect(coordinator.activate()).resolves.toBe('shared-ready')
+    expect(createMap).toHaveBeenCalledTimes(2)
+    expect(runtime.remountRenderer).toHaveBeenCalledOnce()
+    await coordinator.teardown()
+  })
+
+  it('initializes the runtime on Retry when the first map failed before admission', async () => {
+    const map = new FakeMap()
+    const createMap = vi.fn()
+      .mockRejectedValueOnce(new Error('MapLibre loader failed'))
+      .mockResolvedValueOnce(map as unknown as WorkspaceActivationMap)
+    const { coordinator, runtime } = createCoordinator({ createMap })
+    await expect(coordinator.activate()).resolves.toBe('map-unavailable')
+
+    expect(coordinator.retry()).toBe(true)
+    await expect(coordinator.activate()).resolves.toBe('shared-ready')
+
+    expect(runtime.init).toHaveBeenCalledOnce()
+    expect(runtime.remountRenderer).not.toHaveBeenCalled()
+    await coordinator.teardown()
+  })
+
+  it('refuses Retry while the map is up and while its failure is still being handled', async () => {
+    const { coordinator } = createCoordinator()
+    expect(coordinator.retry()).toBe(false)
+    await expect(coordinator.activate()).resolves.toBe('shared-ready')
+    expect(coordinator.retry()).toBe(false)
+
+    const failure = coordinator.reportFailure(new Error('context lost'))
+    expect(coordinator.retry()).toBe(false)
+    await expect(failure).resolves.toBe('map-unavailable')
+
+    expect(coordinator.canRetry()).toBe(true)
+    expect(coordinator.retry()).toBe(true)
+    await coordinator.teardown()
+    expect(coordinator.canRetry()).toBe(false)
+  })
+
+  it('refuses Retry when WebGL2 is missing', async () => {
+    const createMap = vi.fn(async () => { throw new WorkspaceWebGL2UnavailableError() })
+    const { coordinator } = createCoordinator({ createMap })
+    await expect(coordinator.activate()).resolves.toBe('map-unavailable')
+
+    expect(coordinator.canRetry()).toBe(false)
+    expect(coordinator.retry()).toBe(false)
+    await expect(coordinator.activate()).resolves.toBe('map-unavailable')
+    expect(createMap).toHaveBeenCalledOnce()
+  })
+
+  it('refuses Retry once a failed renderer initialization destroyed the runtime', async () => {
+    const runtime = createRuntime()
+    runtime.init = vi.fn(async () => { throw new Error('runtime init failed') })
+    const createMap = vi.fn(async () => new FakeMap() as unknown as WorkspaceActivationMap)
+    const { coordinator } = createCoordinator({ runtime, createMap })
+    await expect(coordinator.activate()).rejects.toThrow('runtime init failed')
+
+    expect(coordinator.canRetry()).toBe(false)
+    expect(coordinator.retry()).toBe(false)
+    expect(createMap).toHaveBeenCalledOnce()
+  })
+
+  it('hands the rebuilt map the contributions published while the map was unavailable', async () => {
+    const f = createCoordinator({ createMap: async () => new FakeMap() as unknown as WorkspaceActivationMap })
+    const activation = createActivationSnapshot()
+    await expect(f.coordinator.activate(activation)).resolves.toBe('shared-ready')
+    await expect(f.coordinator.reportFailure(new Error('context lost'))).resolves.toBe('map-unavailable')
+    const contribution: WorkspaceMapContributionSnapshot = {
+      sessionIdentity: activation.sessionIdentity, lidar: [],
+      terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
+      overlays: { runtime: null, location: null, hoveredTargets: [], selectedTargets: [], paintRevision: 7 },
+      frame: null,
+    }
+    f.coordinator.updateMapContributions(contribution)
+    expect(f.mapControls.updateMapContributions).not.toHaveBeenLastCalledWith(contribution)
+
+    expect(f.coordinator.retry()).toBe(true)
+    await expect(f.coordinator.activate(activation)).resolves.toBe('shared-ready')
+
+    expect(f.mapControls.updateMapContributions).toHaveBeenLastCalledWith(contribution)
+    await f.coordinator.teardown()
   })
 
   it('unmounts the renderer on map failure and retains the spatial camera frame', async () => {
@@ -1619,6 +1788,129 @@ describe('WorkspaceActivationCoordinator', () => {
     consoleError.mockRestore()
   })
 
+  it('rebuilds a map that lost its context through the real composition, keeping the Scene, view, selection and undo', async () => {
+    const f = realComposition()
+    await expect(f.composition.start()).resolves.toBe('shared-ready')
+    const runtime = f.runtime()
+    f.composition.surfaces.documents.loadDocument(designWithPlant())
+    // A site-scale view of the plant (editing needs one), away from the map's start camera.
+    runtime.cameraHost.current().apply({
+      kind: 'set',
+      target: { center: { lon: 0.0001, lat: 0.00005 }, zoom: 19, bearingDeg: 0, pitchDeg: 0 },
+      animation: 'none',
+    })
+    f.composition.surfaces.commands.sceneEdits.selectAll()
+    f.composition.surfaces.commands.sceneEdits.nudgeSelected({ x: 1, y: 0 })
+    f.composition.surfaces.commands.sceneEdits.endNudge()
+    await vi.waitFor(() => expect(f.composition.surfaces.commands.history.canUndo.value).toBe(true))
+    const camera = runtime.cameraHost.frames.viewFrame.peek().view.camera
+    const scene = runtime.querySurface.getSceneSnapshot()
+    const selection = runtime.querySurface.getSelection()
+    expect(selection).toHaveLength(1)
+
+    f.loseContext()
+    expect(f.states.at(-1)).toMatchObject({ status: 'error' })
+    await vi.waitFor(() => expect(runtime.keyboardPort).toBeNull())
+    await failureHandled(f.maps[0]!)
+    expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: true })
+
+    f.composition.retryMap!()
+
+    await vi.waitFor(() => expect(runtime.keyboardPort).not.toBeNull())
+    expect(f.maps).toHaveLength(2)
+    expect(f.maps[0]!.remove).toHaveBeenCalledOnce()
+    expect(f.maps[1]!.addLayer).toHaveBeenCalledOnce()
+    expect(runtime.querySurface.getSceneSnapshot()).toEqual(scene)
+    expect(runtime.querySurface.getSelection()).toEqual(selection)
+    expect(f.composition.surfaces.commands.history.canUndo.value).toBe(true)
+    const kept = runtime.cameraHost.frames.viewFrame.peek()
+    expect(kept.attached).toBe(true)
+    expect(kept.view.camera.center.lon).toBeCloseTo(camera.center.lon, 6)
+    expect(kept.view.camera.center.lat).toBeCloseTo(camera.center.lat, 6)
+    expect(kept.view.camera.zoom).toBeCloseTo(camera.zoom, 6)
+
+    // Retry can be pressed again after a later loss.
+    f.loseContext()
+    await vi.waitFor(() => expect(runtime.keyboardPort).toBeNull())
+    await failureHandled(f.maps[1]!)
+    f.composition.retryMap!()
+    await vi.waitFor(() => expect(runtime.keyboardPort).not.toBeNull())
+    expect(f.maps).toHaveLength(3)
+    await f.composition.dispose()
+  })
+
+  it('offers Retry only once the lost map\'s failure is handled, so a press the moment it shows rebuilds the map', async () => {
+    let composition: WorkspaceRuntimeComposition | null = null
+    let pressed = 0
+    const f = realComposition({
+      // The user presses Retry as soon as it is on screen.
+      onMapStateChange: (state) => {
+        if (state.status !== 'error' || !state.retryable || pressed > 0) return
+        pressed += 1
+        queueMicrotask(() => composition!.retryMap())
+      },
+    })
+    composition = f.composition
+    await expect(f.composition.start()).resolves.toBe('shared-ready')
+
+    f.loseContext()
+    expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: false })
+
+    await vi.waitFor(() => expect(f.maps).toHaveLength(2))
+    expect(pressed).toBe(1)
+    await vi.waitFor(() => expect(f.runtime().keyboardPort).not.toBeNull())
+    await f.composition.dispose()
+  })
+
+  it('offers Retry when a Design is opened while the lost map\'s failure is still being handled', async () => {
+    const f = realComposition()
+    await expect(f.composition.start()).resolves.toBe('shared-ready')
+
+    f.loseContext()
+    // The failure is now being handled (the map is marked unavailable, Retry withheld)...
+    for (let i = 0; i < 3; i += 1) await Promise.resolve()
+    expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: false })
+    // ...when the user opens another Design, which retires the failed generation.
+    f.composition.surfaces.documents.replaceDocument(designWithPlant(), createCanvasDocumentReplacementToken(), () => {})
+    await failureHandled(f.maps[0]!)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: true })
+    f.composition.retryMap()
+    await vi.waitFor(() => expect(f.maps).toHaveLength(2))
+    await f.composition.dispose()
+  })
+
+  it('offers no Retry once a failed renderer initialization destroyed the runtime', async () => {
+    const f = realComposition({ failRuntimeInit: true })
+    await f.composition.start()
+
+    await vi.waitFor(() => expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: false }))
+    f.composition.retryMap!()
+    await Promise.resolve()
+    expect(f.maps).toHaveLength(1)
+    await expect(f.composition.dispose()).rejects.toThrow('renderer init failed')
+  })
+
+  it('offers no Retry when a context lost during renderer initialization ends with the runtime destroyed', async () => {
+    const init = deferred<void>()
+    const f = realComposition({ runtimeInit: init.promise })
+    void f.composition.start()
+    await vi.waitFor(() => expect(f.runtime().init).toHaveBeenCalledOnce())
+
+    f.loseContext()
+    // Its failure is handled only once initialization ends, so Retry is not offered meanwhile.
+    expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: false })
+    const destroy = vi.spyOn(f.runtime(), 'destroy')
+    init.reject(new Error('renderer init failed'))
+
+    await vi.waitFor(() => expect(destroy).toHaveBeenCalled())
+    expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: false })
+    expect(f.states.some((state) => state.retryable)).toBe(false)
+    expect(f.maps).toHaveLength(1)
+    await expect(f.composition.dispose()).rejects.toThrow('Shared workspace teardown failed')
+  })
+
   it('uses a real SceneCanvasRuntime and shared composition without adding a runtime canvas', async () => {
     const map = new FakeMap()
     const composition = createSharedMapSceneRendererComposition()
@@ -1639,6 +1931,7 @@ describe('WorkspaceActivationCoordinator', () => {
         getWebGL2Context: () => map.context,
         updateMapContributions: () => {},
         updateBackgroundPresentation: () => {},
+        retryBasemap: vi.fn(),
         installStyleRestorer: () => () => {},
       },
       layer: {
@@ -1656,3 +1949,135 @@ describe('WorkspaceActivationCoordinator', () => {
     await coordinator.teardown()
   })
 })
+
+/** Waits until the coordinator released the lost map and settled its failure, when Retry is accepted. */
+async function failureHandled(map: FakeMap): Promise<void> {
+  await vi.waitFor(() => expect(map.remove).toHaveBeenCalledOnce())
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+/** A FakeMap whose camera follows jumpTo, so a rebuilt map shows the camera the runtime gave it. */
+class MovableFakeMap extends FakeMap {
+  override readonly jumpTo = vi.fn((options?: { center: [number, number]; zoom: number; bearing: number }) => {
+    if (options) {
+      Object.assign(this.camera, {
+        center: { lon: options.center[0], lat: options.center[1] },
+        zoom: options.zoom,
+        bearingDeg: options.bearing,
+      })
+    }
+    this.emit('move')
+  })
+}
+
+/**
+ * The production composition with a real SceneCanvasRuntime, coordinator and renderer composition; only MapLibre
+ * (the map controls) and Pixi (the layer's renderer) are fakes. Each map reports failures like the real controls.
+ */
+function realComposition(options: {
+  failRuntimeInit?: boolean
+  runtimeInit?: Promise<void>
+  onMapStateChange?: (state: MapLibreCanvasSurfaceState) => void
+} = {}) {
+  const maps: MovableFakeMap[] = []
+  const ended = new Set<WorkspaceActivationMap>()
+  const reports: Array<(error: unknown) => void> = []
+  const states: MapLibreCanvasSurfaceState[] = []
+  let runtime: SceneCanvasRuntime | null = null
+  const container = document.createElement('div')
+  Object.defineProperties(container, { clientWidth: { value: 400 }, clientHeight: { value: 300 } })
+  const pixi: SharedPixiRenderer = {
+    init: vi.fn(async () => {}), render: vi.fn(), resize: vi.fn(), resetState: vi.fn(),
+    destroy: vi.fn(), context: { extensions: {} },
+  }
+  const composition = createWorkspaceRuntimeComposition({
+    container,
+    appAdapter: createDetachedCanvasRuntimeAppAdapter(),
+    targetPresentation: createDetachedSceneRuntimePanelTargetAdapter(),
+    mapContributions: { read: () => null },
+    onMapStateChange: (state) => {
+      states.push(state)
+      options.onMapStateChange?.(state)
+    },
+    readSnapshot: () => createActivationSnapshot(),
+    readAttributionCompact: () => false,
+  }, {
+    createRuntime: (runtimeOptions) => {
+      runtime = new SceneCanvasRuntime(runtimeOptions)
+      if (options.failRuntimeInit) vi.spyOn(runtime, 'init').mockRejectedValue(new Error('renderer init failed'))
+      if (options.runtimeInit) vi.spyOn(runtime, 'init').mockReturnValue(options.runtimeInit)
+      return runtime
+    },
+    createWorkspace: (workspaceOptions) => new WorkspaceActivationCoordinator({
+      ...workspaceOptions,
+      layer: {
+        createRenderer: () => pixi,
+        createStage: () => ({ destroy: vi.fn() }) as never,
+        createPresentation: () => ({ dispose() {}, resize() {}, setView() {}, setDraft() {}, syncScene() {} }),
+      },
+    }),
+    createControls: (controlOptions) => ({
+      createMap: async () => {
+        const map = new MovableFakeMap()
+        maps.push(map)
+        controlOptions.contributions?.onStateChange?.({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'ready' })
+        return map as unknown as WorkspaceActivationMap
+      },
+      // Like WorkspaceMapContributions.dispose: a map publishes its end once, at the reported failure or at release.
+      releaseMap: (map, failure) => {
+        ;(map as unknown as FakeMap).remove()
+        if (ended.has(map)) return
+        ended.add(map)
+        controlOptions.contributions?.onStateChange?.(failure === undefined
+          ? IDLE_MAPLIBRE_CANVAS_SURFACE_STATE
+          : { ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'error', retryable: true })
+      },
+      getWebGL2Context: (map) => (map as unknown as FakeMap).context,
+      updateMapContributions: () => {},
+      updateBackgroundPresentation: () => {},
+      retryBasemap: vi.fn(),
+      installStyleRestorer: () => () => {},
+      // Like WorkspaceMapControls.reportRestorationFailure: the error is published before the coordinator hears of it.
+      watchFailure: (map, report) => {
+        reports.push((error) => {
+          if (!ended.has(map)) {
+            ended.add(map)
+            controlOptions.contributions?.onStateChange?.({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'error', retryable: true })
+          }
+          report(error)
+        })
+        return () => {}
+      },
+    }),
+  })
+  return {
+    composition,
+    maps,
+    states,
+    runtime: () => runtime!,
+    loseContext: () => reports.at(-1)!(new Error('MapLibre WebGL context was lost.')),
+  }
+}
+
+function designWithPlant(): CanopiFile {
+  return {
+    version: CURRENT_CANOPI_FILE_VERSION,
+    name: 'Orchard',
+    description: null,
+    plant_species_colors: {},
+    layers: [],
+    plants: [{
+      id: 'apple', locked: false, canonical_name: 'Malus domestica', common_name: 'Apple', color: null,
+      position: { lon: 0, lat: 0 }, rotation: null, scale: null, notes: null, planted_date: null, quantity: 1,
+    }],
+    zones: [],
+    annotations: [],
+    consortiums: [],
+    groups: [],
+    timeline: [],
+    budget: [],
+    budget_currency: 'EUR',
+    created_at: '2026-10-03T00:00:00.000Z',
+    updated_at: '2026-10-03T00:00:00.000Z',
+  }
+}

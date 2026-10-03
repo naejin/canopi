@@ -4,18 +4,19 @@ import type { MapLibreCanvasSurfaceState } from '../maplibre/canvas-surface-stat
 
 const READY_MAP_STATE: MapLibreCanvasSurfaceState = {
   status: 'ready',
-  errorMessage: null,
   terrainStatus: 'idle',
-  terrainErrorMessage: null,
   layerSkipped: false,
+  basemapStatus: 'idle',
+  retryable: false,
 }
 
 function translate(key: string): string {
   return {
     'canvas.layers.mapUnavailable': 'Map unavailable',
     'canvas.layers.basemapLoading': 'Loading',
-    'canvas.layers.mapSection': 'Map Layers',
     'canvas.layers.layerSkipped': 'A map layer couldn’t be shown',
+    'canvas.layers.basemapFailed': 'Basemap couldn’t load. Check your connection.',
+    'canvas.layers.mapStopped': 'The map stopped drawing. Your Design is safe.',
   }[key] ?? key
 }
 
@@ -31,38 +32,77 @@ describe('Map Notice read model', () => {
       mapSurfaceVisible: true,
       tone: 'loading',
       statusText: 'Loading',
+      retry: false,
     })
   })
 
-  it('reports basemap errors with the error message', () => {
+  it('reports a map failure with a fixed message, never the engine text', () => {
     expect(getMapNoticeReadModel({
       hasDesign: true,
       mapVisible: true,
-      mapSurface: { ...READY_MAP_STATE, status: 'error', errorMessage: 'style fetch failed' },
+      mapSurface: { ...READY_MAP_STATE, status: 'error' },
       t: translate,
     })).toEqual({
       visible: true,
       mapSurfaceVisible: true,
       tone: 'error',
-      statusText: 'Map unavailable: style fetch failed',
+      statusText: 'Map unavailable',
+      retry: false,
     })
   })
 
-  it('builds ready notice text from terrain errors', () => {
+  it('offers Retry on a map that stopped drawing and can be rebuilt', () => {
+    expect(getMapNoticeReadModel({
+      hasDesign: true,
+      mapVisible: true,
+      mapSurface: { ...READY_MAP_STATE, status: 'error', retryable: true, basemapStatus: 'failed' },
+      t: translate,
+    })).toEqual({
+      visible: true,
+      mapSurfaceVisible: true,
+      tone: 'error',
+      statusText: 'The map stopped drawing. Your Design is safe.',
+      retry: true,
+    })
+  })
+
+  it('reports a failed basemap with Retry, below a map failure and above a skipped layer', () => {
+    const failed = { ...READY_MAP_STATE, basemapStatus: 'failed' as const }
+    expect(getMapNoticeReadModel({
+      hasDesign: true,
+      mapVisible: true,
+      mapSurface: { ...failed, layerSkipped: true, terrainStatus: 'error' },
+      t: translate,
+    })).toEqual({
+      visible: true,
+      mapSurfaceVisible: true,
+      tone: 'error',
+      statusText: 'Basemap couldn’t load. Check your connection.',
+      retry: true,
+    })
+    expect(getMapNoticeReadModel({
+      hasDesign: true,
+      mapVisible: true,
+      mapSurface: { ...failed, status: 'error' },
+      t: translate,
+    })).toMatchObject({ statusText: 'Map unavailable', retry: false })
+  })
+
+  it('reports a terrain failure as a skipped layer, never the engine text', () => {
     expect(getMapNoticeReadModel({
       hasDesign: true,
       mapVisible: true,
       mapSurface: {
         ...READY_MAP_STATE,
         terrainStatus: 'error',
-        terrainErrorMessage: 'dem fetch failed',
       },
       t: translate,
     })).toEqual({
       visible: true,
       mapSurfaceVisible: true,
       tone: 'ready',
-      statusText: 'Map Layers: dem fetch failed',
+      statusText: 'A map layer couldn’t be shown',
+      retry: false,
     })
   })
 
@@ -77,6 +117,7 @@ describe('Map Notice read model', () => {
       mapSurfaceVisible: true,
       tone: 'ready',
       statusText: 'A map layer couldn’t be shown',
+      retry: false,
     })
   })
 
@@ -91,6 +132,7 @@ describe('Map Notice read model', () => {
       mapSurfaceVisible: true,
       tone: 'ready',
       statusText: '',
+      retry: false,
     })
   })
 
@@ -98,9 +140,30 @@ describe('Map Notice read model', () => {
     expect(getMapNoticeReadModel({
       hasDesign: false,
       mapVisible: true,
-      mapSurface: { ...READY_MAP_STATE, status: 'error', errorMessage: 'boom' },
+      mapSurface: { ...READY_MAP_STATE, status: 'error' },
       t: translate,
     })).toMatchObject({ visible: false, mapSurfaceVisible: false, statusText: '' })
+  })
+
+  it('reports a map that stopped drawing with Retry even when every background row is hidden', () => {
+    expect(getMapNoticeReadModel({
+      hasDesign: true,
+      mapVisible: false,
+      mapSurface: { ...READY_MAP_STATE, status: 'error', retryable: true },
+      t: translate,
+    })).toEqual({
+      visible: true,
+      mapSurfaceVisible: false,
+      tone: 'error',
+      statusText: 'The map stopped drawing. Your Design is safe.',
+      retry: true,
+    })
+    expect(getMapNoticeReadModel({
+      hasDesign: true,
+      mapVisible: false,
+      mapSurface: { ...READY_MAP_STATE, status: 'error' },
+      t: translate,
+    })).toMatchObject({ visible: true, statusText: 'Map unavailable', retry: false })
   })
 
   it('hides without a visible map layer', () => {

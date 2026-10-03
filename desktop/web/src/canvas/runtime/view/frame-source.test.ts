@@ -1,6 +1,5 @@
 import { effect } from '@preact/signals'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { planeViewportCornerBounds } from '../../../__tests__/support/plane-viewport-corners'
 import { createTestView } from '../../../__tests__/support/test-view'
 import { createSessionPlane } from '../../session-plane'
 import { createViewFrameSource, createViewReadSurface, SETTLE_MS } from './frame-source'
@@ -72,7 +71,7 @@ describe('view frame source', () => {
 
   it('the read surface signals change only with their own values', () => {
     const view = createTestView({ screen: { width: 400, height: 300 }, viewport: { x: 0, y: 0, scale: 2 } })
-    const surface = createViewReadSurface(view.frames, () => createSessionPlane({ lon: 0, lat: 0 }))
+    const surface = createViewReadSurface(view.frames)
     const runs = { mode: 0, zoomBand: 0, bearingDeg: 0, northUp: 0, groundMetresPerPixel: 0, zoomLimit: 0, designPin: 0 }
     const disposers = (Object.keys(runs) as Array<keyof typeof runs>).map((name) => effect(() => {
       void surface[name].value
@@ -105,7 +104,7 @@ describe('view frame source', () => {
 
   it('the Design pin shows in overview only, rounded, 24 px or more inside every edge', () => {
     const view = createTestView({ screen: { width: 400, height: 300 } })
-    const surface = createViewReadSurface(view.frames, () => createSessionPlane({ lon: 0, lat: 0 }))
+    const surface = createViewReadSurface(view.frames)
 
     view.setViewport({ x: 120.4, y: 80.6, scale: 2 })
     expect(surface.designPin.value).toBeNull()
@@ -122,7 +121,7 @@ describe('view frame source', () => {
   it('settledRevision changes once per settle, a resize included', () => {
     vi.useFakeTimers()
     const view = createTestView()
-    const surface = createViewReadSurface(view.frames, () => createSessionPlane({ lon: 0, lat: 0 }))
+    const surface = createViewReadSurface(view.frames)
     const seen: number[] = []
     const stop = effect(() => { seen.push(surface.settledRevision.value) })
 
@@ -148,31 +147,18 @@ describe('view frame source', () => {
     view.dispose()
   })
 
-  it('captureView returns the live camera and the four-corner extent', () => {
+  it('captureView returns the live camera and its screen', () => {
     const plane = createSessionPlane({ lon: 2.3522, lat: 48.8566 })
     const view = createTestView({ plane, viewport: { x: -130.5, y: 42.25, scale: 1.75 } })
-    const surface = createViewReadSurface(view.frames, () => plane)
+    const surface = createViewReadSurface(view.frames)
 
-    // At bearing 0 the extent is today's north-west and south-east corners.
     const captured = surface.captureView()
     expect(captured.camera).toBe(view.view().camera)
     expect(captured.screen).toEqual({ width: 400, height: 300, devicePixelRatio: 1 })
-    const today = planeViewportCornerBounds({
-      viewport: { x: -130.5, y: 42.25, scale: 1.75 },
-      screenSize: { width: 400, height: 300 },
-    }, plane)
-    for (const edge of ['west', 'south', 'east', 'north'] as const) expect(captured.extent[edge]).toBeCloseTo(today[edge], 12)
 
-    // Turned, it is the lon/lat box around the ground under all four corners, raw.
     view.host.current().apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 30, animation: 'none' })
     const turned = surface.captureView()
-    const corners = view.view().visibleWorldQuad().map((corner) => plane.toGeo(corner))
-    expect(turned.extent).toEqual({
-      west: Math.min(...corners.map((corner) => corner.lon)),
-      south: Math.min(...corners.map((corner) => corner.lat)),
-      east: Math.max(...corners.map((corner) => corner.lon)),
-      north: Math.max(...corners.map((corner) => corner.lat)),
-    })
+    expect(turned.camera).toBe(view.view().camera)
     expect(turned.camera.bearingDeg).toBe(30)
     view.dispose()
   })

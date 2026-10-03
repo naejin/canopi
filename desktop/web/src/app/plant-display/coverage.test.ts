@@ -2,11 +2,9 @@ import { effect } from '@preact/signals'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestCanvasQuerySurface } from '../../__tests__/support/canvas-query-surface'
 import { createTestCanvasRuntimeSurfaces } from '../../__tests__/support/canvas-runtime-surfaces'
-import { TEST_GEO_ORIGIN } from '../../__tests__/support/geo-design'
 import { createTestView, type TestView } from '../../__tests__/support/test-view'
 import { setCanvasRuntimeSurfaces } from '../../canvas/session'
 import { createViewReadSurface, SETTLE_MS } from '../../canvas/runtime/view/frame-source'
-import { createSessionPlane } from '../../canvas/session-plane'
 import { plantLabelCoverage } from './coverage'
 
 let view: TestView | null = null
@@ -25,11 +23,10 @@ describe('plant label coverage', () => {
   it('the labels count re-reads on settle and on a band change, not on a pan frame', () => {
     vi.useFakeTimers()
     view = createTestView({ viewport: { x: 0, y: 0, scale: 120 } })
-    const plane = createSessionPlane(TEST_GEO_ORIGIN)
     const getPlantLabelCoverage = vi.fn(() => ({ labelled: 70, inView: 282 }))
     const queries = {
       ...createTestCanvasQuerySurface(),
-      view: createViewReadSurface(view.frames, () => plane),
+      view: createViewReadSurface(view.frames),
       getPlantLabelCoverage,
     }
     setCanvasRuntimeSurfaces(createTestCanvasRuntimeSurfaces({ queries }))

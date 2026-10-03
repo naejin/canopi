@@ -12,8 +12,12 @@ import { fieldDimensions } from './field-dimensions'
 import { directAnnotation } from './field-annotations'
 import { protectZoneInk } from './zone-ink'
 
-/** Overview and picker share authored artwork; only the overview adds physical guide and zone labels. */
-export function drawOverview(input: PdfInput, frame: PrintBounds, ground: PrintBounds, scale: number, text: PdfTextEngine, grouped: ReadonlyMap<string, string> = new Map(), labels = false, zones: readonly ZoneMeasurements[] = []): FieldDrawing {
+/**
+ * Overview and picker share authored artwork; only the overview adds physical guide and zone labels. A guide it cannot label
+ * in place prints its code from `measurementCodes` (measurementReferences), the one its detail page prints.
+ */
+export function drawOverview(input: PdfInput, frame: PrintBounds, ground: PrintBounds, scale: number, text: PdfTextEngine, grouped: ReadonlyMap<string, string> = new Map(), labels = false, zones: readonly ZoneMeasurements[] = [],
+  measurementCodes: ReadonlyMap<string, string> = new Map()): FieldDrawing {
   const canvas = input.canvas
   const drawing: FieldDrawing = { operations: [], links: [], destinations: [], legend: [], notes: [], identifiedPlants: [],
     annotationIds: labels ? [] : canvas.annotations.map(n => n.id), measurementIds: canvas.measurements.map(g => g.id), pageReferences: [] }
@@ -53,10 +57,11 @@ export function drawOverview(input: PdfInput, frame: PrintBounds, ground: PrintB
     const l = d.label
     operations.push(textOp(l.lines[0]!, (l.origin?.x ?? l.bounds.x + l.inset) * MM, (l.origin?.y ?? l.bounds.y + l.baseline) * MM, l.size, l.rotation ?? 0, opacity('measurement-guides')))
   }
-  if (labels) for (const [i, guide] of canvas.measurements.entries()) {
-    if (grouped.has(guide.id) || dimensionIds.has(guide.id)) continue
+  if (labels) for (const guide of canvas.measurements) {
+    const reference = measurementCodes.get(guide.id)
+    if (!reference || grouped.has(guide.id) || dimensionIds.has(guide.id)) continue
     const position = { x: (guide.start.x + guide.end.x) / 2, y: (guide.start.y + guide.end.y) / 2 }
-    const n = new Intl.NumberFormat(input.locale, { maximumFractionDigits: 2 }), reference = `M${i + 1}`
+    const n = new Intl.NumberFormat(input.locale, { maximumFractionDigits: 2 })
     const label = space.place(space.measure(reference, 7.5), [project(position)], [], '', { near: true })
     if (label) {
       label.route = []; space.admit(label)

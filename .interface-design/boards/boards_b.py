@@ -702,7 +702,7 @@ def french_dialogs():
 
 # ============================================================ stories
 def _step_thumb(pos, zoom=1.0, sel=False):
-    return (f'<span aria-hidden="true" style="width: 64px; height: 44px; border-radius: 6px; flex-shrink: 0; border: 1px solid var(--line); '
+    return (f'<span aria-hidden="true" style="width: 64px; height: 40px; border-radius: 6px; flex-shrink: 0; border: 1px solid var(--line); '
             f'background: url({blob("orchard-sat")}) {pos} / {int(1440 * 0.1 * zoom)}px {int(900 * 0.1 * zoom)}px;"></span>')
 
 

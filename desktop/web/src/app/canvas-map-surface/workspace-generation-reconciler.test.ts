@@ -375,6 +375,45 @@ describe('WorkspaceGenerationReconciler', () => {
     expect(workspace.activate).not.toHaveBeenCalled()
   })
 
+  it('activates the current Design again on a Retry the workspace accepts', async () => {
+    const A = snapshot()
+    const B = snapshot()
+    let current = A
+    const workspace = lifecycle({ activate: vi.fn().mockResolvedValueOnce('map-unavailable').mockResolvedValue('shared-ready') })
+    const reconciler = new WorkspaceGenerationReconciler({ workspace, readSnapshot: () => current })
+    await expect(reconciler.reconcileInitialGeneration()).resolves.toBe('map-unavailable')
+    current = B
+
+    expect(reconciler.retry()).toBe(true)
+
+    expect(workspace.retry).toHaveBeenCalledOnce()
+    expect(workspace.activate).toHaveBeenLastCalledWith(B)
+    // A second press while that activation runs is refused rather than queued.
+    expect(reconciler.retry()).toBe(false)
+    await vi.waitFor(() => expect(reconciler.retry()).toBe(true))
+    expect(workspace.activate).toHaveBeenCalledTimes(3)
+  })
+
+  it('refuses Retry without a Design, when the workspace refuses, during a replacement and after disposal', async () => {
+    let current: WorkspaceActivationSnapshot | null = null
+    const workspace = lifecycle({ retry: () => false })
+    const reconciler = new WorkspaceGenerationReconciler({ workspace, readSnapshot: () => current })
+    expect(reconciler.retry()).toBe(false)
+    expect(workspace.retry).not.toHaveBeenCalled()
+
+    current = snapshot()
+    expect(reconciler.retry()).toBe(false)
+    expect(workspace.retry).toHaveBeenCalledOnce()
+
+    workspace.retry.mockImplementation(() => true)
+    reconciler.suspendForDocumentReplacement()
+    expect(reconciler.retry()).toBe(false)
+
+    await reconciler.dispose()
+    expect(reconciler.retry()).toBe(false)
+    expect(workspace.activate).not.toHaveBeenCalled()
+  })
+
   it('ignores a late activation settlement after disposal', async () => {
     const activation = deferred<'shared-ready'>()
     const A = snapshot({ sessionIdentity: {}, latitude: 10 })
@@ -398,10 +437,12 @@ function lifecycle(overrides: Partial<WorkspaceGenerationLifecycle> = {}) {
   const requestGenerationDisconnect = overrides.requestGenerationDisconnect ?? (async () => {})
   const activate = overrides.activate ?? (async () => 'shared-ready' as const)
   const teardown = overrides.teardown ?? (async () => {})
+  const retry = overrides.retry ?? (() => true)
   return {
     requestGenerationDisconnect: vi.fn(requestGenerationDisconnect),
     activate: vi.fn(activate),
     teardown: vi.fn(teardown),
+    retry: vi.fn(retry),
   }
 }
 

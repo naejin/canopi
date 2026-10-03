@@ -36,7 +36,7 @@ function mount(bearingDeg: number): void {
   view = createTestView({ plane, screen: { width: 800, height: 600 }, camera: { bearingDeg } })
   const { navigation } = view
   setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
-    queries: { ...createTestCanvasQuerySurface(), view: createViewReadSurface(view.frames, () => plane) },
+    queries: { ...createTestCanvasQuerySurface(), view: createViewReadSurface(view.frames) },
     commands: createTestCanvasCommandSurface({
       viewport: {
         resetNorth: () => navigation.resetNorth(),

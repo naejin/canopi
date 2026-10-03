@@ -73,29 +73,6 @@ export function storedBearing(deg: number | null | undefined): number {
   return folded >= 360 ? 0 : folded
 }
 
-/** A north-up WGS84 box on one world: `west < east`, `south < north`. */
-export interface GeographicExtent {
-  readonly west: number
-  readonly south: number
-  readonly east: number
-  readonly north: number
-}
-
-// Web Mercator's latitude limit, as the file format bounds it.
-const MERCATOR_MAX_LATITUDE_DEG = 85.0511287798066
-
-/**
- * A lon/lat box as a saved extent, or null when it is not a box on one world (across the antimeridian or the poles, or empty):
- * the check ViewReadSurface.captureView's raw corner bounds pass before they are saved.
- */
-export function extentOnOneWorld(extent: GeographicExtent): GeographicExtent | null {
-  const onOneWorld = Object.values(extent).every(Number.isFinite)
-    && extent.west >= -180 && extent.east <= 180
-    && extent.south >= -MERCATOR_MAX_LATITUDE_DEG && extent.north <= MERCATOR_MAX_LATITUDE_DEG
-    && extent.west < extent.east && extent.south < extent.north
-  return onOneWorld ? extent : null
-}
-
 export function createSessionPlane(origin: GeoPosition): SessionPlane {
   const frozenOrigin = Object.freeze({ lon: origin.lon, lat: origin.lat })
   const mercatorOrigin = Object.freeze(geoToMercator(origin.lon, origin.lat))

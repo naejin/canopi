@@ -22,12 +22,13 @@ function workspaceSnapshot(): WorkspaceActivationSnapshot {
 }
 
 describe('shared workspace without WebGL2', () => {
-  it('shows the map-unavailable state and mounts no renderer', async () => {
+  it('shows the map-unavailable state, mounts no renderer and offers no Retry', async () => {
     const container = document.createElement('div')
     const states: MapLibreCanvasSurfaceState[] = []
     const rendererComposition = createSharedMapSceneRendererComposition()
     const initializeRenderer = vi.spyOn(rendererComposition.renderer, 'initialize')
     const onFailure = vi.fn()
+    const canCreateWebGL2Context = vi.fn(() => false)
     const composition = createWorkspaceRuntimeComposition({
       container,
       appAdapter: createDetachedCanvasRuntimeAppAdapter(),
@@ -40,7 +41,7 @@ describe('shared workspace without WebGL2', () => {
       createRendererComposition: () => rendererComposition,
       createControls: (options) => new WorkspaceMapControls({
         ...options,
-        canCreateWebGL2Context: () => false,
+        canCreateWebGL2Context,
       }),
     })
 
@@ -48,8 +49,13 @@ describe('shared workspace without WebGL2', () => {
 
     expect(states.at(-1)).toMatchObject({
       status: 'error',
-      errorMessage: expect.stringContaining('WebGL2 is unavailable'),
+      retryable: false,
     })
+    // "Map unavailable" stays: Retry is refused and builds no map.
+    composition.retryMap!()
+    await Promise.resolve()
+    expect(canCreateWebGL2Context).toHaveBeenCalledOnce()
+    expect(states.at(-1)).toMatchObject({ status: 'error', retryable: false })
     expect(initializeRenderer).not.toHaveBeenCalled()
     expect(container.querySelector('canvas')).toBeNull()
     expect(container.childElementCount).toBe(0)

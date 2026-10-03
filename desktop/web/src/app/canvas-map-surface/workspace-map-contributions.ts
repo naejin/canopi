@@ -6,9 +6,9 @@ import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   mapLibreCanvasSurfaceStateEquals,
   publishMapDiagnostics,
+  type MapLibreBasemapStatus,
   type MapLibreCanvasSurfaceState,
 } from '../../maplibre/canvas-surface-state'
-import { toMapLibreSurfaceErrorMessage } from '../../maplibre/canvas-surface-errors'
 import { applyTerrainPaintUpdates, classifyTerrainSync, clearTerrain, rebuildTerrain } from '../../maplibre/terrain-sync'
 import {
   TERRAIN_CONTOUR_LAYER_IDS,
@@ -135,6 +135,12 @@ export class WorkspaceMapContributions {
     return false
   }
 
+  /** The Basemap's download status, kept until the map goes. */
+  setBasemapStatus(basemapStatus: MapLibreBasemapStatus): void {
+    if (this.disposed) return
+    this.publishState({ ...this.state, basemapStatus })
+  }
+
   dispose(error?: unknown): void {
     if (this.disposed) return
     this.disposed = true
@@ -144,7 +150,8 @@ export class WorkspaceMapContributions {
     this.publishState({
       ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
       status: error ? 'error' : 'idle',
-      errorMessage: error ? toMapLibreSurfaceErrorMessage(error) : null,
+      // A map that failed once it existed can be built again; whether the runtime allows it is the composition's call.
+      retryable: Boolean(error),
     })
     for (const remove of this.removeListeners.splice(0)) this.attempt('Failed to remove map contribution listener:', remove)
     this.clear()
@@ -179,7 +186,7 @@ export class WorkspaceMapContributions {
           this.syncRaster(map, snapshot.lidar)
           this.syncOverlays(map, snapshot.overlays)
           this.reconcileOrder(map, snapshot)
-          this.publishState({ ...this.state, status: 'ready', errorMessage: null, layerSkipped: this.layerSkipped() })
+          this.publishState({ ...this.state, status: 'ready', layerSkipped: this.layerSkipped() })
           if (!this.current(revision)) continue
           this.publishBounds()
           if (!this.current(revision)) continue
@@ -273,7 +280,7 @@ export class WorkspaceMapContributions {
         applyTerrainPaintUpdates(map, next)
         this.terrain = next
       } else if (mode === 'rebuild') {
-        this.publishState({ ...this.state, terrainStatus: 'loading', terrainErrorMessage: null })
+        this.publishState({ ...this.state, terrainStatus: 'loading' })
         if (!current()) return
         if (!this.options.loadTerrainSupport) throw new Error('Terrain support is unavailable in this workspace.')
         const support = await this.options.loadTerrainSupport(this.context!.maplibre)
@@ -299,7 +306,7 @@ export class WorkspaceMapContributions {
         return
       }
     }
-    if (current()) this.publishState({ ...this.state, terrainStatus: this.terrain ? 'ready' : 'idle', terrainErrorMessage: null })
+    if (current()) this.publishState({ ...this.state, terrainStatus: this.terrain ? 'ready' : 'idle' })
   }
 
   private fail(error: unknown): void {
@@ -325,7 +332,7 @@ export class WorkspaceMapContributions {
     }
     if (!this.current(revision)) return
     this.terrain = null
-    this.publishState({ ...this.state, terrainStatus: 'error', terrainErrorMessage: toMapLibreSurfaceErrorMessage(error) })
+    this.publishState({ ...this.state, terrainStatus: 'error' })
     this.log('Failed to sync terrain layers:', error)
   }
 

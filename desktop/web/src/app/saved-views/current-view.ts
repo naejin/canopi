@@ -1,8 +1,7 @@
 // The current-view seam shared by saved views and stories: whether views can
 // be shown, what the map shows now as a view, and going to a view (camera only).
 
-import { extentOnOneWorld, geographicViewOfCamera } from '../../canvas/session-plane'
-import { WORKSPACE_MAP_MAX_ZOOM, WORKSPACE_MAP_MIN_ZOOM } from '../../canvas/workspace-camera-policy'
+import { geographicViewOfCamera } from '../../canvas/session-plane'
 import {
   currentCanvasQuerySurface,
   getCurrentCanvasCommandSurface,
@@ -12,7 +11,7 @@ import { currentDesign } from '../document-session/store'
 import { mapLayers } from '../map-layers/state'
 import { currentPlantDisplay } from '../plant-display/state'
 import type { PlantLabelMode } from '../../canvas/runtime/plant-display'
-import { reducedMotionPreference } from '../canvas-runtime/app-adapter'
+import { savedViewZoom } from './framing'
 import { composeSavedView } from './model'
 
 /** The views of the open Design, in saved order. */
@@ -34,8 +33,9 @@ interface CurrentViewCapture {
 
 /**
  * Captures what the map shows now as a view (not yet saved): camera and the
- * ground on screen, map background and terrain, visible Design layers and site
- * data, the focused species, the selection and the plant label choice.
+ * ground the whole map shows, map background and terrain, visible Design
+ * layers and site data, the focused species, the selection and the plant label
+ * choice.
  */
 export function captureCurrentView({ id, name, title = '' }: {
   readonly id: string
@@ -57,7 +57,7 @@ export function captureCurrentView({ id, name, title = '' }: {
       name: trimmed,
       title: title.trim() || null,
       view,
-      extent: extentOnOneWorld(capture.extent),
+      screen: capture.screen,
       mapLayers: mapLayers.value,
       sceneLayers: queries.getSceneSnapshot().layers,
       siteData: design.lidar?.entries ?? [],
@@ -68,35 +68,32 @@ export function captureCurrentView({ id, name, title = '' }: {
   }
 }
 
-interface GoToSavedViewOptions {
-  /** Jump instead of flying; defaults to the platform reduced-motion preference. */
-  readonly reducedMotion?: boolean
-}
-
 /**
  * Goes to a saved view: session state only, never a Design edit. The camera
- * flies there (or jumps under reduced motion) to the view's centre, zoom and
- * bearing, never snapped; a view saved in a larger window reopens closer in a
- * smaller one (spec §4.10, one framing rule with its thumbnails); objects
- * never move. Background, layer and highlight overrides belong to presenting
- * a story, which applies them on top of this and restores the user's state
- * when it ends.
+ * flies there (the camera driver jumps under reduced motion; a refit asks for a
+ * jump) to the view's centre and bearing, never snapped, at the zoom that fits
+ * its framed ground into the whole map: the same window gives the exact saved
+ * camera, a smaller one zooms out until nothing framed is cut off, a larger
+ * one never zooms in past the saved zoom (spec §4.10, one framing rule with
+ * its thumbnails); objects never move. Background, layer and highlight
+ * overrides belong to presenting a story, which applies them on top of this
+ * and restores the user's state when it ends.
  */
-export function goToSavedView(id: string, options: GoToSavedViewOptions = {}): boolean {
+export function goToSavedView(id: string, motion: 'fly' | 'jump' = 'fly'): boolean {
   const view = currentSavedViews().find((entry) => entry.id === id)
   const commands = getCurrentCanvasCommandSurface()
-  if (!view || !commands || !canShowSavedViews()) return false
-  const reducedMotion = options.reducedMotion ?? reducedMotionPreference().peek()
+  const queries = currentCanvasQuerySurface.peek()
+  if (!view || !commands || !queries || !canShowSavedViews()) return false
   const { lon, lat, zoom, bearing } = view.camera
   if (![lon, lat, zoom, bearing].every(Number.isFinite)) return false
   commands.viewport.showCamera(
     {
       center: { lon, lat },
-      zoom: Math.min(WORKSPACE_MAP_MAX_ZOOM, Math.max(WORKSPACE_MAP_MIN_ZOOM, zoom)),
+      zoom: savedViewZoom(view.camera, queries.view.captureView().screen),
       bearingDeg: bearing,
       pitchDeg: 0,
     },
-    { motion: reducedMotion ? 'jump' : 'fly' },
+    { motion },
   )
   return true
 }

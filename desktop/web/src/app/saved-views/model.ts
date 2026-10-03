@@ -1,16 +1,17 @@
 import type { SceneDesignObjectTarget } from '../../canvas/runtime/scene'
-import { roundGeoDegrees, storedBearing, type GeographicExtent, type GeographicView } from '../../canvas/session-plane'
+import { roundGeoDegrees, storedBearing, type GeographicView } from '../../canvas/session-plane'
 import { SAVED_VIEW_MAX_ZOOM } from '../../generated/canopi-design-format'
 import type { CanopiFile, SavedView, SavedViewBackground, SavedViewObject } from '../../types/design'
 import { mapBackgroundOf, type MapLayersState } from '../map-layers/state'
+import { savedViewGroundSize } from './framing'
 
 export interface SavedViewCaptureInput {
   readonly id: string
   readonly name: string
   readonly title: string | null
   readonly view: GeographicView
-  /** The ground the map shows (written with the view; going to it and its thumbnails use the camera); null when it leaves one world. */
-  readonly extent?: GeographicExtent | null
+  /** The whole map's size in CSS pixels: the ground it shows is the view's frame. A map with no size frames none, and the view keeps its camera zoom. */
+  readonly screen: { readonly width: number; readonly height: number }
   readonly mapLayers: MapLayersState
   readonly sceneLayers: readonly { readonly name: string; readonly visible: boolean }[]
   readonly siteData: readonly { readonly id: string; readonly visible: boolean }[]
@@ -18,16 +19,23 @@ export interface SavedViewCaptureInput {
   readonly selection: readonly SceneDesignObjectTarget[]
 }
 
-/** What the current view shows, as a saved view: its camera with the bearing rounded to 1e-6 and folded into [0, 360) (spec §4.10). */
+/**
+ * What the current view shows, as a saved view: its camera with the bearing rounded to 1e-6 and folded into [0, 360) (spec
+ * §4.10), and the ground the map shows measured at the stored camera, so the same window gives back the exact camera.
+ */
 export function composeSavedView(input: SavedViewCaptureInput): SavedView {
+  const lat = roundGeoDegrees(input.view.lat)
+  const zoom = Math.min(SAVED_VIEW_MAX_ZOOM, Math.max(0, Math.round(input.view.zoom * 1e6) / 1e6))
+  const ground = savedViewGroundSize({ lat, zoom }, input.screen)
   return {
     id: input.id,
     name: input.name,
     camera: {
       lon: roundGeoDegrees(input.view.lon),
-      lat: roundGeoDegrees(input.view.lat),
-      zoom: Math.min(SAVED_VIEW_MAX_ZOOM, Math.max(0, Math.round(input.view.zoom * 1e6) / 1e6)),
+      lat,
+      zoom,
       bearing: storedBearing(input.view.bearing),
+      ...(ground ? { ground_size_m: ground } : {}),
     },
     visible_layers: {
       background: backgroundOf(input.mapLayers),
@@ -44,14 +52,6 @@ export function composeSavedView(input: SavedViewCaptureInput): SavedView {
     },
     title: input.title,
     text: [],
-    ...(input.extent ? {
-      extent: {
-        west: roundGeoDegrees(input.extent.west),
-        south: roundGeoDegrees(input.extent.south),
-        east: roundGeoDegrees(input.extent.east),
-        north: roundGeoDegrees(input.extent.north),
-      },
-    } : {}),
   }
 }
 

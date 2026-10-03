@@ -55,12 +55,18 @@ const paper = (r: PrintBounds): PrintBounds => ({ x: r.x * MM, y: r.y * MM, widt
 export function fieldReferences(input: PdfInput, plan: CanvasPrintSnapshot, zones: readonly ZoneMeasurements[], fields?: readonly PrintBounds[]): FieldReferences {
   const codes = new Map(input.canvas.plants.map(p => [p.canonicalName, p.speciesCode ?? p.canonicalName]))
   const names = [...codes.keys()].sort((a, b) => codes.get(a)!.localeCompare(codes.get(b)!, 'en') || a.localeCompare(b, 'en'))
-  const ordered = <T extends { id: string; position: PrintPoint }>(items: readonly T[], prefix: string) => new Map([...items]
-    .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x || a.id.localeCompare(b.id))
-    .map((p, i) => [p.id, `${prefix}${i + 1}`]))
   return { zones, allPlants: input.canvas.plants, identities: assignFieldIdentity(input.canvas.plants, fields), species: new Map(names.map((name, i) => [name, String(i + 1).padStart(2, '0')])),
     notes: ordered(plan.annotations, 'N'), plants: ordered(plan.plants, 'P'),
-    measurements: ordered(plan.measurements.map(g => ({ ...g, position: g.start })), 'M') }
+    measurements: measurementReferences(plan) }
+}
+
+const ordered = <T extends { id: string; position: PrintPoint }>(items: readonly T[], prefix: string) => new Map([...items]
+  .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x || a.id.localeCompare(b.id))
+  .map((p, i) => [p.id, `${prefix}${i + 1}`]))
+
+/** Every guide's M code, from the unturned `plan`: the overview and the detail pages print the same one. */
+export function measurementReferences(plan: CanvasPrintSnapshot): ReadonlyMap<string, string> {
+  return ordered(plan.measurements.map(g => ({ ...g, position: g.start })), 'M')
 }
 
 export function visibleFieldCanvas(canvas: CanvasPrintSnapshot, ground: PrintBounds): CanvasPrintSnapshot {

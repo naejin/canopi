@@ -11,7 +11,6 @@ vi.mock('../../../ipc/species', async (importOriginal) => ({
 import { geoAt } from '../../../__tests__/support/geo-design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-format'
 import type { CanopiFile } from '../../../types/design'
-import { planeViewportCornerBounds } from '../../../__tests__/support/plane-viewport-corners'
 import { stageScaleToMapZoom } from '../../projection'
 import type { GeoPosition } from '../../session-plane'
 import { AttachedInteractionMap } from '../../../__tests__/support/canvas-interaction-setup'
@@ -76,7 +75,6 @@ function todaysCapture(runtime: SceneCanvasRuntime) {
   const centre = plane.toGeo({ x: (width / 2 - viewport.x) / viewport.scale, y: (height / 2 - viewport.y) / viewport.scale })
   return {
     view: { lon: centre.lon, lat: centre.lat, zoom: stageScaleToMapZoom(viewport.scale, plane.origin.lat) },
-    extent: planeViewportCornerBounds({ viewport, screenSize: { width, height } }, plane),
   }
 }
 
@@ -99,7 +97,6 @@ describe('the runtime view surfaces', () => {
           bearingDeg: 0,
           pitchDeg: 0,
         })
-        expect(captured.extent).toEqual(today.extent)
         expect(captured.screen).toEqual({ ...SCREEN, devicePixelRatio: 1 })
         expect(runtime.querySurface.view.settledCamera.peek()).toBeDefined()
       }

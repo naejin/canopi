@@ -23,9 +23,19 @@ import { createSessionPlane } from '../../canvas/session-plane'
 
 /**
  * `map-unavailable`: WebGL2 or MapLibre could not start or failed later. No
- * renderer is mounted and the map surface publishes its error state (ADR 0004).
+ * renderer is mounted and the map surface publishes its error state until a
+ * user Retry rebuilds the map; nothing restarts on its own (ADR 0004).
  */
 export type WorkspaceActivationOutcome = 'shared-ready' | 'map-unavailable' | 'cancelled'
+
+/** The browser cannot create a WebGL2 context, so no map can be built and Retry is never offered. */
+export class WorkspaceWebGL2UnavailableError extends Error {
+  override readonly name = 'WorkspaceWebGL2UnavailableError'
+
+  constructor() {
+    super('WebGL2 is unavailable for the shared workspace map.')
+  }
+}
 
 /** One immutable Design/map generation input. Session identity is compared only by ownership. */
 export interface WorkspaceActivationSnapshot {
@@ -59,6 +69,8 @@ export interface WorkspaceActivationMapControls {
   updateBackgroundPresentation(presentation: MapBackgroundPresentation): void
   /** Folds the map credits into their (i) button, now and on every later map. */
   setAttributionCompact?(compact: boolean): void
+  /** The user's Retry for a Basemap that couldn't load: downloads it again on the live map. */
+  retryBasemap(): void
   /** Restores same-map style contributions after initial style admission. */
   installStyleRestorer(map: WorkspaceActivationMap, restore: () => void): () => void
   /** Map/context failures that happen outside the custom layer. */
@@ -72,6 +84,8 @@ export interface WorkspaceActivationRuntime {
   init(container: HTMLElement): Promise<void>
   /** Releases the renderer and editing after a map failure; the Scene stays loaded. */
   unmountRenderer(): Promise<void>
+  /** Mounts them again on a rebuilt map after a user Retry. */
+  remountRenderer(container: HTMLElement): Promise<void>
   destroy(): void
 }
 
@@ -88,6 +102,8 @@ export interface WorkspaceActivationOptions {
   >
   /** Live session plane origin of the runtime's open Design. */
   readonly readOrigin: () => { readonly lat: number; readonly lon: number }
+  /** Called when `canRetry()` may have changed, so a Retry already on screen can be withdrawn. */
+  readonly onRetryAvailabilityChange?: () => void
 }
 
 interface ActivationGeneration {
@@ -106,6 +122,8 @@ interface ActivationGeneration {
   finishCleanup: ((errors: unknown[]) => void) | null
   setupResult: Promise<void> | null
   failure: Promise<WorkspaceActivationOutcome> | null
+  /** The failure transaction settled: its cleanup ran and Retry may start a new generation. */
+  failureSettled: boolean
   terminalMapFailure?: unknown
   readonly abortController: AbortController
 }
@@ -138,7 +156,11 @@ export class WorkspaceActivationCoordinator {
   private runtimeInit: Promise<void> | null = null
   private runtimeInitialized = false
   private runtimeDestroyed = false
+  /** unmountRenderer ran after the runtime initialized: a rebuilt map remounts instead of initializing. */
+  private rendererUnmounted = false
   private mapUnavailable = false
+  /** Why the map became unavailable, kept until a Retry clears it. */
+  private unavailableCause: unknown = null
   private disposed = false
 
   constructor(private readonly options: WorkspaceActivationOptions) {}
@@ -186,6 +208,7 @@ export class WorkspaceActivationCoordinator {
       finishCleanup: null,
       setupResult: null,
       failure: null,
+      failureSettled: false,
       abortController: new AbortController(),
     }
     this.active = current
@@ -348,6 +371,20 @@ export class WorkspaceActivationCoordinator {
       if (!attached) throw new Error('MapLibre workspace camera rejected the shared map attachment.')
       if (current.failure) return current.failure
 
+      if (this.rendererUnmounted) {
+        // A Retry rebuilt the map: the initialized runtime mounts its renderer and editing on it again. A failed
+        // remount leaves nothing mounted, and a failure that unmounts during it marks the renderer unmounted again.
+        this.rendererUnmounted = false
+        try {
+          await this.runOwnedCallback('renderer remount', () => this.options.runtime.remountRenderer(this.options.container))
+        } catch (error) {
+          this.rendererUnmounted = true
+          throw error
+        }
+        if (!this.isCurrent(current)) return 'cancelled'
+        return current.failure ?? 'shared-ready'
+      }
+
       const runtimeInit = this.initializeRuntime()
       try {
         await runtimeInit
@@ -357,7 +394,7 @@ export class WorkspaceActivationCoordinator {
         sharedRuntimeInitializationFailed = true
         current.terminalMapFailure = error
         const errors: unknown[] = [error]
-        this.mapUnavailable = true
+        this.markMapUnavailable(error)
         this.destroyRuntime(errors)
         try {
           await this.cleanup(current)
@@ -384,9 +421,51 @@ export class WorkspaceActivationCoordinator {
     return current ? this.reportFailureFor(current, error) : Promise.resolve('cancelled')
   }
 
+  /**
+   * Whether a user Retry could rebuild an unavailable map: the runtime is alive (a failed renderer
+   * initialization destroys it), the map did not fail for lack of WebGL2, and no generation's failure
+   * is still being handled (`retry()` refuses until it settles, so Retry is not offered before).
+   */
+  canRetry(): boolean {
+    const current = this.active
+    return !this.disposed
+      && !(current && !current.failureSettled)
+      && !this.runtimeDestroyed
+      && !this.terminalTeardownResult
+      && !(this.unavailableCause instanceof WorkspaceWebGL2UnavailableError)
+  }
+
+  /**
+   * The user's Retry after the map became unavailable. It clears the unavailable state only when
+   * `canRetry()` holds and no generation is still being set up or torn down; the caller then activates
+   * the current Design again. Returns whether it was accepted. Nothing calls this on its own (ADR 0004).
+   */
+  retry(): boolean {
+    if (!this.mapUnavailable || !this.canRetry()) return false
+    const current = this.active
+    if (current && !current.failureSettled) return false
+    if (current) this.retireFailedGeneration()
+    this.mapUnavailable = false
+    this.unavailableCause = null
+    return true
+  }
+
+  /**
+   * Ends the failed generation before a Retry. Its failure transaction already reported every error,
+   * so the rebuilt map waits for this cleanup but never fails on those errors a second time.
+   */
+  private retireFailedGeneration(): void {
+    const cleanup = this.cleanupActiveGeneration()
+    this.retainedCleanup = cleanup.catch((error) => {
+      logMapError('Shared workspace cleanup before a map Retry failed:', error)
+    })
+  }
+
   updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void {
-    if (this.disposed || this.mapUnavailable || this.terminalTeardownResult) return
+    if (this.disposed || this.terminalTeardownResult) return
+    // Kept while the map is unavailable, so a rebuilt map starts from the latest contributions.
     this.contributions = snapshot && captureWorkspaceMapContributions(snapshot)
+    if (this.mapUnavailable) return
     const current = this.active
     if (!current || !this.isCurrent(current)) return
     if (snapshot && snapshot.sessionIdentity !== current.snapshot.sessionIdentity) return
@@ -527,19 +606,29 @@ export class WorkspaceActivationCoordinator {
   ): Promise<WorkspaceActivationOutcome> {
     if (!this.isCurrent(current)) return Promise.resolve('cancelled')
     if (current.failure) return current.failure
+    // Every core map failure passes here once per generation. The notice and the
+    // published state carry no engine text, so the log keeps the redacted cause.
+    logMapError('Shared workspace map failed:', error)
 
     // Install the failure fence before invoking composition, runtime, or
     // cleanup code. Those boundaries may synchronously report another failure.
     current.failure = Promise.resolve().then(() => {
       if (!this.isCurrent(current)) return 'cancelled'
       current.terminalMapFailure = error
-      this.mapUnavailable = true
+      this.markMapUnavailable(error)
       return this.runtimeInitialized
         ? this.failActiveRenderer(current)
         : this.runtimeInit
           ? this.failWhileRuntimeInitializes(current)
           : this.failAdmission(current)
     })
+    const settle = () => {
+      current.failureSettled = true
+      // A Retry withheld while the failure was handled can now be offered, also when a Design
+      // replacement retired this generation meanwhile (the observer only recomputes canRetry()).
+      this.notifyRetryAvailability()
+    }
+    void current.failure.then(settle, settle)
     return current.failure
   }
 
@@ -592,7 +681,22 @@ export class WorkspaceActivationCoordinator {
     return 'map-unavailable'
   }
 
+  private markMapUnavailable(cause: unknown): void {
+    this.mapUnavailable = true
+    this.unavailableCause = cause
+    this.notifyRetryAvailability()
+  }
+
+  private notifyRetryAvailability(): void {
+    try {
+      this.options.onRetryAvailabilityChange?.()
+    } catch (error) {
+      logMapError('Shared workspace Retry availability observer failed:', error)
+    }
+  }
+
   private async unmountRuntimeRenderer(current: ActivationGeneration, errors: unknown[]): Promise<void> {
+    this.rendererUnmounted = true
     try {
       await this.runOwnedCallback('renderer unmount', () => this.options.runtime.unmountRenderer())
     } catch (unmountError) {
@@ -857,6 +961,7 @@ export class WorkspaceActivationCoordinator {
     } catch (error) {
       errors.push(error)
     }
+    this.notifyRetryAvailability()
   }
 
   private releaseStaleMap(map: WorkspaceActivationMap): void {

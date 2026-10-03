@@ -12,6 +12,9 @@ use crate::design::{GeoPoint, WEB_MERCATOR_MAX_LATITUDE_DEG};
 /// Highest MapLibre zoom a saved view may hold (the workspace map's maximum).
 pub const SAVED_VIEW_MAX_ZOOM: f64 = 27.0;
 
+/// Largest ground side a saved view may frame, in metres (far beyond one world).
+pub const SAVED_VIEW_MAX_GROUND_SIZE_M: f64 = 1e8;
+
 // A named map view of a Design.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
@@ -25,62 +28,13 @@ pub struct SavedView {
     pub title: Option<String>,
     #[serde(default)]
     pub text: Vec<RichTextBlock>,
-    // The ground the map showed when the view was saved: the lon/lat box of the
-    // ground under the four screen corners. Going to the view and its snapshots
-    // use the camera; the extent is a record of what was on screen. Absent for a
-    // view whose map crossed the antimeridian or showed more than one world.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(feature = "design-schema", schemars(default))]
-    pub extent: Option<SavedViewExtent>,
-}
-
-// A north-up WGS84 box: `west < east` (it never crosses the antimeridian) and
-// `south < north`.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
-pub struct SavedViewExtent {
-    #[cfg_attr(
-        feature = "design-schema",
-        schemars(range(min = -180.0, max = 180.0))
-    )]
-    pub west: f64,
-    #[cfg_attr(
-        feature = "design-schema",
-        schemars(range(min = -85.0511287798066, max = 85.0511287798066))
-    )]
-    pub south: f64,
-    #[cfg_attr(
-        feature = "design-schema",
-        schemars(range(min = -180.0, max = 180.0))
-    )]
-    pub east: f64,
-    #[cfg_attr(
-        feature = "design-schema",
-        schemars(range(min = -85.0511287798066, max = 85.0511287798066))
-    )]
-    pub north: f64,
-}
-
-impl SavedViewExtent {
-    pub fn is_valid(&self) -> bool {
-        let south_west = GeoPoint {
-            lon: self.west,
-            lat: self.south,
-        };
-        let north_east = GeoPoint {
-            lon: self.east,
-            lat: self.north,
-        };
-        south_west.is_valid()
-            && north_east.is_valid()
-            && self.west < self.east
-            && self.south < self.north
-    }
 }
 
 // Camera of a saved view: centre, zoom and bearing (degrees clockwise from
-// north, written normalised to [0, 360)). Going to the view restores all
-// three, the bearing never snapped.
+// north, written normalised to [0, 360)), and the ground the view framed.
+// Going to the view restores the centre and bearing, never snapped, and fits
+// the framed ground into the window, never zooming in past the saved zoom; a
+// view without the ground size keeps its zoom (ADR 0011).
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
 pub struct SavedViewCamera {
@@ -100,6 +54,36 @@ pub struct SavedViewCamera {
     // Degrees clockwise from true north.
     #[cfg_attr(feature = "design-schema", schemars(range(min = 0.0, max = 360.0)))]
     pub bearing: f64,
+    // The ground the map showed when the view was saved, in metres in the
+    // view's own turned frame. Absent for a view saved before 2.0 recorded it.
+    #[serde(default)]
+    #[cfg_attr(feature = "design-schema", schemars(default))]
+    pub ground_size_m: Option<SavedViewGroundSize>,
+}
+
+// Width (along the view's screen x axis) and height of the ground a saved view
+// framed, in metres: positive, finite and at most `SAVED_VIEW_MAX_GROUND_SIZE_M`.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
+pub struct SavedViewGroundSize {
+    #[cfg_attr(
+        feature = "design-schema",
+        schemars(range(min = 0.0, max = 100_000_000.0))
+    )]
+    pub width: f64,
+    #[cfg_attr(
+        feature = "design-schema",
+        schemars(range(min = 0.0, max = 100_000_000.0))
+    )]
+    pub height: f64,
+}
+
+impl SavedViewGroundSize {
+    pub fn is_valid(&self) -> bool {
+        [self.width, self.height]
+            .iter()
+            .all(|side| side.is_finite() && *side > 0.0 && *side <= SAVED_VIEW_MAX_GROUND_SIZE_M)
+    }
 }
 
 impl SavedViewCamera {
@@ -245,7 +229,7 @@ pub const STORY_IMAGES_MAX_TOTAL_BYTES: usize = 10 * STORY_IMAGE_MAX_BYTES;
 
 /// Check the saved views and stories of an admitted Design: ids are unique,
 /// every camera is a valid WGS84 position with an in-range zoom and bearing,
-/// every extent is an ordered box on the map,
+/// every recorded ground size is positive and at most 1e8 m,
 /// every story step names a saved view of the same Design, rich-text links use
 /// an allowed scheme, and images are `https:` links or embedded raster images
 /// within the per-image and per-Design caps.
@@ -263,9 +247,13 @@ pub fn validate_views_and_stories(views: &[SavedView], stories: &[Story]) -> Res
                 "$.views[{index}].camera: expected lon in [-180, 180], a Web Mercator latitude (±{WEB_MERCATOR_MAX_LATITUDE_DEG}), zoom in [0, {SAVED_VIEW_MAX_ZOOM}] and bearing in [0, 360]"
             ));
         }
-        if view.extent.is_some_and(|extent| !extent.is_valid()) {
+        if view
+            .camera
+            .ground_size_m
+            .is_some_and(|ground| !ground.is_valid())
+        {
             return Err(format!(
-                "$.views[{index}].extent: expected WGS84 bounds on the Web Mercator map with west < east and south < north"
+                "$.views[{index}].camera.ground_size_m: expected a finite width and height above 0 and at most {SAVED_VIEW_MAX_GROUND_SIZE_M} m"
             ));
         }
         validate_rich_text(&view.text, &format!("$.views[{index}].text"))?;
@@ -423,6 +411,7 @@ mod tests {
     #[test]
     fn saved_views_round_trip_with_typed_objects_and_rich_text() {
         let mut value = view_value(camera(2.2945, 48.8584, 18.5, 0.0));
+        value["camera"]["ground_size_m"] = serde_json::Value::Null;
         value["text"] = json!([
             { "kind": "paragraph", "spans": [
                 { "text": "Goji ", "bold": true, "italic": false, "link": null },
@@ -467,39 +456,58 @@ mod tests {
     }
 
     #[test]
-    fn a_view_saved_without_an_extent_loads_and_saves_without_one() {
-        let view: SavedView = serde_json::from_value(view_value(camera(2.0, 48.0, 17.0, 0.0)))
-            .expect("view should parse");
-        assert_eq!(view.extent, None);
+    fn a_view_saved_without_a_ground_size_loads_and_falls_back_to_its_camera_zoom() {
+        // A view saved by a 2.0 preview build has no ground size, and one saved before the
+        // extent was deleted still carries it: both load, the extent is dropped.
+        let mut value = view_value(camera(2.0, 48.0, 17.0, 0.0));
+        value["extent"] = json!({ "west": 1.99, "south": 47.995, "east": 2.01, "north": 48.005 });
+        let view: SavedView = serde_json::from_value(value).expect("view should parse");
+        assert_eq!(view.camera.ground_size_m, None);
+        validate_views_and_stories(&[view.clone()], &[])
+            .expect("a view without a ground size is valid");
         let written = serde_json::to_value(&view).expect("serialize");
         assert!(written.get("extent").is_none(), "{written}");
+        assert_eq!(written["camera"]["ground_size_m"], serde_json::Value::Null);
     }
 
     #[test]
-    fn view_extents_round_trip_and_must_be_ordered_boxes_on_the_map() {
-        let mut value = view_value(camera(2.0, 48.0, 17.0, 0.0));
-        value["extent"] = json!({ "west": 1.99, "south": 47.995, "east": 2.01, "north": 48.005 });
+    fn view_ground_sizes_round_trip_and_must_be_positive_finite_and_at_most_1e8_m() {
+        let mut ground = camera(2.0, 48.0, 17.0, 30.0);
+        ground["ground_size_m"] = json!({ "width": 312.5, "height": 200.25 });
+        let value = view_value(ground);
         let view: SavedView = serde_json::from_value(value.clone()).expect("view should parse");
+        assert_eq!(
+            view.camera.ground_size_m,
+            Some(SavedViewGroundSize {
+                width: 312.5,
+                height: 200.25
+            })
+        );
         assert_eq!(serde_json::to_value(&view).expect("serialize"), value);
-        validate_views_and_stories(&[view], &[]).expect("an ordered extent is valid");
+        validate_views_and_stories(&[view], &[]).expect("a positive ground size is valid");
 
-        for (west, south, east, north) in [
-            (2.01, 47.995, 1.99, 48.005),
-            (1.99, 48.005, 2.01, 47.995),
-            (1.99, 47.995, 1.99, 48.005),
-            (-181.0, 47.995, 2.01, 48.005),
-            (1.99, 47.995, 2.01, 86.0),
-            (f64::NAN, 47.995, 2.01, 48.005),
+        let mut largest = valid_view();
+        largest.camera.ground_size_m = Some(SavedViewGroundSize {
+            width: SAVED_VIEW_MAX_GROUND_SIZE_M,
+            height: SAVED_VIEW_MAX_GROUND_SIZE_M,
+        });
+        validate_views_and_stories(&[largest], &[]).expect("1e8 m is the largest ground size");
+
+        for (width, height) in [
+            (0.0, 200.0),
+            (312.0, -1.0),
+            (f64::NAN, 200.0),
+            (312.0, f64::INFINITY),
+            (1.000_000_1e8, 200.0),
         ] {
             let mut view = valid_view();
-            view.extent = Some(SavedViewExtent {
-                west,
-                south,
-                east,
-                north,
-            });
-            let error = validate_views_and_stories(&[view], &[]).expect_err("extent is invalid");
-            assert!(error.starts_with("$.views[0].extent: "), "{error}");
+            view.camera.ground_size_m = Some(SavedViewGroundSize { width, height });
+            let error =
+                validate_views_and_stories(&[view], &[]).expect_err("ground size is invalid");
+            assert!(
+                error.starts_with("$.views[0].camera.ground_size_m: "),
+                "{error}"
+            );
         }
     }
 

@@ -49,6 +49,7 @@ function composition(
   return {
     surfaces,
     start,
+    retryMap: () => undefined,
     dispose,
   }
 }
@@ -220,6 +221,7 @@ describe('document session lifecycle', () => {
         createRuntimeComposition: () => ({
           surfaces,
           start: vi.fn(async () => 'shared-ready' as const),
+          retryMap: vi.fn(),
           dispose: destroy,
         }),
         publishSurfaces,
@@ -251,6 +253,7 @@ describe('document session lifecycle', () => {
       {
         createRuntimeComposition: () => ({
           surfaces: createTestCanvasRuntimeSurfaces(),
+          retryMap: vi.fn(),
           start: vi.fn(async () => {
             throw initializationError
           }),
@@ -295,6 +298,7 @@ describe('document session lifecycle', () => {
       {
         createRuntimeComposition: () => ({
           surfaces: createTestCanvasRuntimeSurfaces({ documents }),
+          retryMap: vi.fn(),
           start: vi.fn(async () => 'shared-ready' as const),
           dispose: vi.fn(async () => undefined),
         }),
@@ -337,6 +341,7 @@ describe('document session lifecycle', () => {
       {
         createRuntimeComposition: () => ({
           surfaces: createTestCanvasRuntimeSurfaces(),
+          retryMap: vi.fn(),
           start: vi.fn(async () => {
             throw new Error('renderer initialization failed')
           }),

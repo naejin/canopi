@@ -83,7 +83,7 @@ pub(crate) fn render_typescript_contracts() -> Result<String, Box<dyn std::error
         .register::<common_types::views::SavedView>()
         .register::<common_types::views::SavedViewBackground>()
         .register::<common_types::views::SavedViewCamera>()
-        .register::<common_types::views::SavedViewExtent>()
+        .register::<common_types::views::SavedViewGroundSize>()
         .register::<common_types::views::SavedViewHighlight>()
         .register::<common_types::views::SavedViewLayers>()
         .register::<common_types::views::SavedViewObject>()
