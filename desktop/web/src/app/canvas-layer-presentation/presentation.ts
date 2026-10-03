@@ -1,6 +1,6 @@
 import { activeLayerName, layerLockState, layerOpacity, layerVisibility } from '../canvas-settings/signals'
 import { googleMapsApiKey } from '../settings/state'
-import { hasVisibleMapLayer, mapLayers } from '../map-layers/state'
+import { mapLayers } from '../map-layers/state'
 import {
   setMapLayerOpacity,
   setMapLayerVisible,
@@ -59,7 +59,6 @@ export interface CanvasLayerPresentationRow {
 
 export interface CanvasLayerPresentation {
   readonly rows: readonly CanvasLayerPresentationRow[]
-  readonly hasVisibleMapLayer: boolean
 }
 
 export function readCanvasLayerPresentation(): CanvasLayerPresentation {
@@ -125,7 +124,7 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
     mapRow('hillshade', t('canvas.terrain.hillshade'), layers.hillshade, { type: 'hillshade' }),
   ]
 
-  return { rows, hasVisibleMapLayer: hasVisibleMapLayer(layers) }
+  return { rows }
 }
 
 export function setCanvasLayerPresentationActiveLayer(id: string): void {
