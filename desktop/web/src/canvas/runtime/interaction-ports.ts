@@ -70,7 +70,8 @@ export interface DomInputSource {
  * An adapter over today's controller (`createCanvasContextMenu`, interaction/canvas-context-menu.ts), which builds the
  * app's CanvasContextMenuRequest (canvas/runtime/app-adapter.ts: anchor, world, retargeted selection, commands,
  * placePlantsAt, saveSelectionAsObjectStamp, returnFocus) and hands it to CanvasRuntimeAppAdapter.contextMenu.
- * The host fills the optional entries from its hit and tool state; the request type gains them in phase 1 (D1).
+ * The host fills the optional entries from its hit and tool state, and the controller carries them onto the request
+ * (CanvasContextMenuRequest.turnViewToEdge). finishShape joins in phase 2 with its first caller; there is no highlightEdge (U4).
  */
 export interface ContextMenuPort {
   open(request: {
@@ -130,6 +131,8 @@ export interface ToolHostDeps {
    *  adapter's readSnapToGridEnabled and readSnapToGuidesEnabled); the shape tools/snapping.ts takes. */
   readonly snapping: () => { readonly grid: boolean; readonly guides: boolean }
   readonly translate: ToolContext['translate']
+  /** "Turn view to this edge" (§4.16): the menu entry's action on a zone-edge hit. */
+  readonly navigation: Pick<ViewNavigation, 'turnToEdge'>
   /** Today's deps.nudge (the runtime's scene-edit commands); the host owns the series (nudge below). */
   readonly nudge: Pick<CanvasSceneEditCommandSurface, 'nudgeSelected' | 'endNudge'>
   readonly timers: { set(atMs: number, cb: () => void): number; clear(id: number): void; readonly clock: () => number }

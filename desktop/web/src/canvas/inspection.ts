@@ -37,7 +37,9 @@ export interface CanvasInspectionHandle {
   /** Samples at the plane point ToolHost.subscribePointerWorld publishes (its `world`), with no screen conversion of its own. */
   inspectAtWorldPoint(point: WorldPoint): void
   centerOnCanvas(): void
-  panBy(delta: InspectionPoint): void
+  /** Moves the inspected point by a drag or arrow step on the lens, in lens CSS pixels (x right, y down), at the lens's
+   *  painted scale; nothing before the lens has painted. */
+  panByScreen(deltaPx: InspectionPoint): void
   zoomBy(factor: number): void
   highlightPlant(id: string | null): void
   focusPlant(id: string): void

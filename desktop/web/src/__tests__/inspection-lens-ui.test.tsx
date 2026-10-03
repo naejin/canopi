@@ -19,7 +19,7 @@ it('opens the optional lens, identifies plants and releases the view on Escape',
         screenPosition: { x: 215, y: 195 }, label: { x: 160, y: 208, width: 110, height: 24, lines: ['Menthe verte'] } }] }),
     // Today's rect at the identity main view: the 430 x 390 px preview at 10 px/m is 43 x 39 m about the origin.
     sourceQuad: signal<InspectionSourceQuad | null>([{ x: -21.5, y: -19.5 }, { x: 21.5, y: -19.5 }, { x: 21.5, y: 19.5 }, { x: -21.5, y: 19.5 }]),
-    inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panBy: vi.fn(), zoomBy: vi.fn(), highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
+    inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panByScreen: vi.fn(), zoomBy: vi.fn(), highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
   }
   const host = document.createElement('div')
   document.body.appendChild(host)
@@ -41,25 +41,25 @@ it('opens the optional lens, identifies plants and releases the view on Escape',
   queries.emitPointerWorld(null)
   expect(view.inspectAtWorldPoint).toHaveBeenCalledTimes(1)
   expect(view.inspectAtScreenPoint).not.toHaveBeenCalled()
-  expect(view.panBy).not.toHaveBeenCalled()
+  expect(view.panByScreen).not.toHaveBeenCalled()
   expect(view.centerOnCanvas).not.toHaveBeenCalled()
   expect(host.querySelector('[data-inspection-source] polygon')?.getAttribute('points')).toBe('-21.5,-19.5 21.5,-19.5 21.5,19.5 -21.5,19.5')
   const frame = root.querySelector<HTMLElement>('[data-inspection-frame]')!
   await act(async () => { frame.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })) })
-  expect(view.panBy).toHaveBeenCalledWith({ x: 2, y: 0 })
+  expect(view.panByScreen).toHaveBeenCalledWith({ x: 20, y: 0 })
   const pointer = (target: EventTarget, type: string, x: number) => {
     const event = new MouseEvent(type, { bubbles: true, button: 0, clientX: x, clientY: 0 })
     Object.defineProperty(event, 'pointerId', { value: 1 })
     target.dispatchEvent(event)
   }
   await act(async () => { pointer(frame, 'pointerdown', 100); pointer(document, 'pointermove', 80) })
-  expect(view.panBy).toHaveBeenLastCalledWith({ x: 2, y: 0 })
+  expect(view.panByScreen).toHaveBeenLastCalledWith({ x: 20, y: 0 })
   // While the lens's own view is dragged, the map pointer does not move it.
   queries.emitPointerWorld({ world: { x: 7, y: 7 }, screen: { x: 207, y: 157 } })
   expect(view.inspectAtWorldPoint).toHaveBeenCalledTimes(1)
-  const calls = vi.mocked(view.panBy).mock.calls.length
+  const calls = vi.mocked(view.panByScreen).mock.calls.length
   await act(async () => { window.dispatchEvent(new Event('blur')); pointer(document, 'pointermove', 60) })
-  expect(view.panBy).toHaveBeenCalledTimes(calls)
+  expect(view.panByScreen).toHaveBeenCalledTimes(calls)
   expect(calls).toBe(2)
   for (const terminal of ['pointerup', 'pointercancel', 'lostpointercapture']) {
     await act(async () => {
@@ -67,7 +67,7 @@ it('opens the optional lens, identifies plants and releases the view on Escape',
       pointer(terminal === 'lostpointercapture' ? frame : document, terminal, 100)
       pointer(document, 'pointermove', 60)
     })
-    expect(view.panBy).toHaveBeenCalledTimes(calls)
+    expect(view.panByScreen).toHaveBeenCalledTimes(calls)
   }
   await act(async () => root.querySelector<HTMLButtonElement>('[aria-label="Centre on canvas view"]')!.click())
   expect(view.centerOnCanvas).toHaveBeenCalledTimes(1)
@@ -87,7 +87,7 @@ it('opens the optional lens, identifies plants and releases the view on Escape',
   await act(async () => { pointer(frame, 'pointerdown', 100) })
   await act(async () => { name.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
   pointer(document, 'pointermove', 50)
-  expect(view.panBy).toHaveBeenCalledTimes(calls)
+  expect(view.panByScreen).toHaveBeenCalledTimes(calls)
   expect(view.dispose).toHaveBeenCalledTimes(1)
   expect(host.querySelector('[data-inspection-source]')).toBeNull()
   queries.emitPointerWorld({ world: { x: 200, y: 0 }, screen: { x: 400, y: 150 } })
@@ -103,7 +103,7 @@ it("draws the source outline from the lens handle's sourceQuad", async () => {
   const view: CanvasInspectionHandle = {
     state: signal({ point: { x: 0, y: 0 }, scale: 10, zoomPercent: 700, previewAvailable: true, frame: { width: 430, height: 390 }, plants: [] }),
     sourceQuad,
-    inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panBy: vi.fn(), zoomBy: vi.fn(), highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
+    inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panByScreen: vi.fn(), zoomBy: vi.fn(), highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
   }
   const host = document.createElement('div')
   document.body.appendChild(host)

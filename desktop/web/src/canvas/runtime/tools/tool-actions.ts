@@ -8,6 +8,8 @@ import {
 import { createUuid } from '../../../utils/ids'
 import { newZoneId } from '../zone-identity'
 
+/** An unturned box in the session plane: a zone's `rotationDeg` turns it about its centre (zone-geometry.ts), as
+ *  ToolView.screenAlignedRect's centre, width and height describe it. */
 export interface SceneRect {
   x: number
   y: number
@@ -15,9 +17,11 @@ export interface SceneRect {
   height: number
 }
 
+/** `rect` is the unturned box; `rotationDeg` turns it about its centre (screenAlignedRect's rotationDeg). */
 export function appendRectangleZoneToDraft(
   draft: ScenePersistedState,
   rect: SceneRect,
+  rotationDeg = 0,
 ): string | null {
   if (rect.width < 0.5 || rect.height < 0.5) return null
 
@@ -29,7 +33,7 @@ export function appendRectangleZoneToDraft(
       id: zoneId,
       name: null,
       zoneType: 'rect',
-      rotationDeg: 0,
+      rotationDeg,
       points: [
         { x: rect.x, y: rect.y },
         { x: rect.x + rect.width, y: rect.y },
@@ -44,9 +48,11 @@ export function appendRectangleZoneToDraft(
   return zoneId
 }
 
+/** `rect` is the unturned box the ellipse fills; `rotationDeg` turns it about its centre (screenAlignedRect's rotationDeg). */
 export function appendEllipseZoneToDraft(
   draft: ScenePersistedState,
   rect: SceneRect,
+  rotationDeg = 0,
 ): string | null {
   if (rect.width < 0.5 || rect.height < 0.5) return null
 
@@ -58,7 +64,7 @@ export function appendEllipseZoneToDraft(
       id: zoneId,
       name: null,
       zoneType: 'ellipse',
-      rotationDeg: 0,
+      rotationDeg,
       points: [
         { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 },
         { x: rect.width / 2, y: rect.height / 2 },
@@ -186,10 +192,12 @@ export function plantEntityFromStampSource(
   }
 }
 
+/** `rotationDeg` null keeps the note level with north; a note is drawn at `rotationDeg − bearing` on screen. */
 export function appendTextAnnotationToDraft(
   draft: ScenePersistedState,
   position: ScenePoint,
   text: string,
+  rotationDeg: number | null = null,
 ): string {
   const id = createUuid()
   draft.annotations = [
@@ -201,7 +209,7 @@ export function appendTextAnnotationToDraft(
       position,
       text,
       fontSize: 16,
-      rotationDeg: null,
+      rotationDeg,
       locked: false,
     },
   ]

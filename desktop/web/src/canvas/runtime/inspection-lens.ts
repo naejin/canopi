@@ -188,10 +188,12 @@ export class SceneCanvasInspectionOwner {
       },
       inspectAtWorldPoint,
       centerOnCanvas: () => { if (!released) { setPoint(canvasCenter()); schedule() } },
-      panBy: (delta) => {
-        if (released || !Number.isFinite(delta.x) || !Number.isFinite(delta.y)) return
+      panByScreen: (deltaPx) => {
+        const scale = state.peek()?.scale
+        if (released || !scale || !Number.isFinite(deltaPx.x) || !Number.isFinite(deltaPx.y)) return
+        // The lens's own view is at bearing 0, so its screen axes are the plane's (x east, y south).
         const centre = livePoint() ?? canvasCenter()
-        setPoint({ x: centre.x + delta.x, y: centre.y + delta.y })
+        setPoint({ x: centre.x + deltaPx.x / scale, y: centre.y + deltaPx.y / scale })
         schedule()
       },
       zoomBy: (factor) => {

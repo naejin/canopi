@@ -341,6 +341,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         },
         snapping: () => ({ grid: _deps.readSnapToGridEnabled(), guides: _deps.readSnapToGuidesEnabled() }),
         translate: _deps.translate as ToolHostDeps['translate'],
+        navigation: { turnToEdge: (a, b) => navigation.turnToEdge(a, b) },
         nudge: {
           nudgeSelected: (delta) => nudge?.nudgeSelected(delta) ?? false,
           endNudge: (options) => {

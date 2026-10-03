@@ -87,7 +87,7 @@ describe('canvas icon-only buttons', () => {
       state: signal({ point: { x: 0, y: 0 }, scale: 10, zoomPercent: 700, previewAvailable: true,
         frame: { width: 430, height: 390 }, plants: [] }),
       sourceQuad: signal(null),
-      inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panBy: vi.fn(), zoomBy: vi.fn(),
+      inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panByScreen: vi.fn(), zoomBy: vi.fn(),
       highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
     }
     // In overview, so the overview chip shows; its view follows this placement.

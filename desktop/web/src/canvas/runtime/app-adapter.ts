@@ -99,6 +99,11 @@ export interface CanvasContextMenuRequest {
    * chosen species at `world`, or, with none chosen yet, the next one picked.
    */
   readonly placePlantsAt?: (world: ScenePoint) => void
+  /**
+   * Turn view to this edge: present only when the menu opened on a zone's edge (spec §4.16). Turns the view the smaller
+   * way until that edge is level on screen.
+   */
+  readonly turnViewToEdge?: () => void
   /** Gives keyboard focus back to the map. */
   returnFocus(): void
   /**

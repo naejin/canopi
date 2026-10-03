@@ -72,10 +72,9 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
       }
     }
     const move = (event: PointerEvent) => {
-      const state = view.state.peek()
-      if (!drag || event.pointerId !== drag.id || !state) return
+      if (!drag || event.pointerId !== drag.id || !view.state.peek()) return
       event.preventDefault()
-      view.panBy({ x: (drag.x - event.clientX) / state.scale, y: (drag.y - event.clientY) / state.scale })
+      view.panByScreen({ x: drag.x - event.clientX, y: drag.y - event.clientY })
       drag.x = event.clientX; drag.y = event.clientY
     }
     const end = (event: PointerEvent) => { if (event.pointerId === drag?.id) stop() }
@@ -123,11 +122,11 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
     <div className={styles.preview} data-inspection-frame role="group" tabIndex={0} aria-label={t('canvas.inspection.panHint')}
       onKeyDown={event => {
         if (event.target !== event.currentTarget || !state) return
-        const step = (event.shiftKey ? 60 : 20) / state.scale
+        const step = event.shiftKey ? 60 : 20
         const delta = { ArrowLeft: { x: -step, y: 0 }, ArrowRight: { x: step, y: 0 },
           ArrowUp: { x: 0, y: -step }, ArrowDown: { x: 0, y: step } }[event.key]
         if (!delta) return
-        event.preventDefault(); event.stopPropagation(); handle.value?.panBy(delta)
+        event.preventDefault(); event.stopPropagation(); handle.value?.panByScreen(delta)
       }}>
       <div ref={preview} className={styles.artwork} />
       {state && <svg className={styles.connectors} viewBox={`0 0 ${state.frame.width} ${state.frame.height}`} aria-hidden="true">
