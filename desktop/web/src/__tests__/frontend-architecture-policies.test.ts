@@ -471,6 +471,19 @@ const FORBIDDEN_IMPORT_POLICIES = [
     targets: ['src/canvas/runtime/plant-labels.ts', 'src/canvas/runtime/species-cache.ts'],
   },
   {
+    // The role surfaces and the construction module stand alone: the runtime composes them, never the reverse.
+    // Type-only edges count, so no role module types itself against the runtime.
+    kind: 'forbid-imports',
+    name: 'Canvas runtime role modules do not import ./scene-runtime',
+    from: [
+      'src/canvas/runtime/command-surface.ts',
+      'src/canvas/runtime/query-surface.ts',
+      'src/canvas/runtime/document-surface.ts',
+      'src/canvas/runtime/scene-runtime/construction.ts',
+    ],
+    targets: ['src/canvas/runtime/scene-runtime.ts'],
+  },
+  {
     kind: 'forbid-imports',
     name: 'Canvas Runtime core stays free of app imports',
     from: ['src/canvas/runtime/**'],
@@ -2487,6 +2500,25 @@ describe('declarative frontend architecture policies', () => {
       expect.stringContaining('[GeoJSON, continuous save and map layers stay free of Desktop capabilities] src/app/map-layers/state.ts transitively imports @tauri-apps/api/core'),
       expect.stringContaining('[Place Search reaches native geocoding only through the edition transport] src/components/canvas/PlaceSearch.tsx transitively imports src/ipc/lidar.ts'),
       expect.stringContaining('[Web entry graph stays free of Desktop capabilities] src/main.web.tsx transitively imports @tauri-apps/api/core via src/main.web.tsx -> src/app/geocoding/transport.browser.ts'),
+    ])
+  })
+
+  it('rejects a canvas runtime role module importing the scene runtime, type-only edges included', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/scene-runtime.ts', ['export class SceneCanvasRuntime {}']),
+      plantedSource('src/canvas/runtime/command-surface.ts', ["import { SceneCanvasRuntime } from './scene-runtime'"]),
+      plantedSource('src/canvas/runtime/query-surface.ts', ["import type { SceneCanvasRuntime } from './scene-runtime'"]),
+      plantedSource('src/canvas/runtime/document-surface.ts', ['export const documents = 1']),
+      plantedSource('src/canvas/runtime/scene-runtime/construction.ts', ["import { SceneCanvasRuntime } from '../scene-runtime'"]),
+    ])
+    const policies = FRONTEND_ARCHITECTURE_POLICIES.filter(
+      ({ name }) => name === 'Canvas runtime role modules do not import ./scene-runtime',
+    )
+
+    expect(collectArchitecturePolicyViolations(graph, policies)).toEqual([
+      expect.stringContaining('src/canvas/runtime/command-surface.ts:1:1 imports src/canvas/runtime/scene-runtime.ts'),
+      expect.stringContaining('src/canvas/runtime/query-surface.ts:1:1 imports src/canvas/runtime/scene-runtime.ts'),
+      expect.stringContaining('src/canvas/runtime/scene-runtime/construction.ts:1:1 imports src/canvas/runtime/scene-runtime.ts'),
     ])
   })
 
