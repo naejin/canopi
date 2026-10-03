@@ -2,7 +2,7 @@
 //
 // Owns Select's rotation handle (the successor of interaction/selection-rotation-handle.ts): the 'rotate' ToolHandle
 // centred 28 px above the selection's projected hull (today's 28 px button 14 px above it; spec §4.9): the screen box of
-// the four corners of the selection's bounds, so on a turned map it sits above what the user sees, centred on it. The
+// the shapes it draws (select/selection-hull.ts), so on a turned map it sits above what the user sees, centred on it. The
 // handle layer keeps it inside the visible map area. It is shown for a rotatable selection
 // (scene-runtime/selection-rotation.ts), and its drag: one
 // 'interaction-rotate' Scene Edit turning the selection about the centre of its bounds by the signed angle the pointer
@@ -23,7 +23,8 @@ import type { SceneEditTransaction } from '../../scene-runtime/transactions'
 import type { ScenePersistedState } from '../../scene/types'
 import type { WorldPoint } from '../../view/types'
 import type { ToolHandle } from '../draft'
-import type { ToolConstraint, ToolContext, ToolPoint, ToolView } from '../tool'
+import type { ToolConstraint, ToolContext, ToolPoint, ToolScene, ToolView } from '../tool'
+import { selectionScreenHull } from './selection-hull'
 
 export const ROTATE_HANDLE_ID = 'rotate' as ToolHandleId
 
@@ -47,45 +48,24 @@ export interface RotationDrag {
 
 /** The rotation handle for `selection`, or null when it does not rotate. */
 export function rotateHandle(
+  scene: ToolScene,
   selection: CanvasDesignObjectSelectionModel,
   view: ToolView,
   translate: ToolContext['translate'],
   deltaDeg: number | null = null,
 ): ToolHandle | null {
   if (!isRotatableSelection(selection)) return null
+  const hull = selectionScreenHull(scene, selection, view)
+  if (!hull) return null
+  const [topLeft, topRight] = hull
   return {
     id: ROTATE_HANDLE_ID,
-    anchor: hullTopCentre(selection.bounds, view),
+    anchor: { x: (topLeft.x + topRight.x) / 2, y: (topLeft.y + topRight.y) / 2 },
     offsetPx: { x: 0, y: -(HANDLE_GAP_PX + HANDLE_RADIUS_PX) },
     hitRadiusPx: HANDLE_RADIUS_PX,
     glyph: 'rotate',
     label: translate('canvas.rotationHandle.label'),
     ...(deltaDeg === null ? {} : { readout: rotationReadout(deltaDeg) }),
-  }
-}
-
-/**
- * The world point under the middle of the top edge of the bounds' screen box: the four corners measured along the
- * screen's axes (unit world vectors, so the zoom does not matter). At bearing 0 it is the bounds' top-edge midpoint.
- */
-function hullTopCentre(bounds: { minX: number; minY: number; maxX: number; maxY: number }, view: ToolView): WorldPoint {
-  const { right, down } = view.screenAxesInWorld()
-  const origin = { x: bounds.minX, y: bounds.minY }
-  let minAcross = 0
-  let maxAcross = 0
-  let minDown = 0
-  for (const corner of [{ x: bounds.maxX, y: bounds.minY }, { x: bounds.maxX, y: bounds.maxY }, { x: bounds.minX, y: bounds.maxY }]) {
-    const dx = corner.x - origin.x
-    const dy = corner.y - origin.y
-    const across = dx * right.x + dy * right.y
-    minAcross = Math.min(minAcross, across)
-    maxAcross = Math.max(maxAcross, across)
-    minDown = Math.min(minDown, dx * down.x + dy * down.y)
-  }
-  const across = (minAcross + maxAcross) / 2
-  return {
-    x: origin.x + right.x * across + down.x * minDown,
-    y: origin.y + right.y * across + down.y * minDown,
   }
 }
 

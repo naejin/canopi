@@ -65,7 +65,7 @@ export function createSelectTool(): CanvasTool {
     const handles: ToolHandle[] = []
     // A point handle's drag hides the rotation handle from its press to its release, as today's drag presentation did.
     const pointDrag = gesture?.kind === 'reshape' || gesture?.kind === 'guide-end'
-    const rotate = pointDrag ? null : rotateHandle(selection, c.view, c.translate, rotationDeltaDeg)
+    const rotate = pointDrag ? null : rotateHandle(c.scene, selection, c.view, c.translate, rotationDeltaDeg)
     handlesBearingDeg = c.view.bearingDeg
     if (rotate) handles.push(rotate)
     const zone = reshapableZone(scene, selection)
