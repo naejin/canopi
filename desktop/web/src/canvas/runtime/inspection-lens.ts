@@ -3,7 +3,7 @@ import type { CanvasInspectionHandle, CanvasInspectionState, InspectionPoint } f
 import type { CanvasQueryRevision } from './runtime'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { SceneDesignObjectTarget } from './scene'
-import { createSessionPlane, type SessionPlane } from '../session-plane'
+import type { SessionPlane } from '../session-plane'
 import { stageScaleToMapZoom } from '../projection'
 import { drawInspectionLensScene } from './inspection-lens-drawing'
 import { getSceneLayerStyle } from './scene-visuals'
@@ -20,7 +20,7 @@ interface InspectionOwnerOptions {
   readonly frames: Pick<ViewFrameSource, 'viewFrame'>
   readonly revision: CanvasQueryRevision
   /** The live session plane; the inspected point follows it across a re-origin. */
-  readSessionPlane?(): SessionPlane | null
+  readSessionPlane(): SessionPlane
   getSnapshot(): SceneRendererSnapshot
   setHoveredTarget(target: SceneDesignObjectTarget | null): void
 }
@@ -75,12 +75,12 @@ export class SceneCanvasInspectionOwner {
     }
     function setPoint(next: InspectionPoint | null) {
       point = next
-      pointPlane = options.readSessionPlane?.() ?? null
+      pointPlane = options.readSessionPlane()
     }
     /** The inspected point in the current plane: a re-origin keeps the same ground. */
     function livePoint(): InspectionPoint | null {
-      const plane = options.readSessionPlane?.() ?? null
-      if (point && pointPlane && plane && plane !== pointPlane) {
+      const plane = options.readSessionPlane()
+      if (point && pointPlane && plane !== pointPlane) {
         point = plane.toPlane(pointPlane.toGeo(point))
       }
       pointPlane = plane
@@ -103,7 +103,7 @@ export class SceneCanvasInspectionOwner {
       const dpr = Math.max(window.devicePixelRatio || 1, 1)
       // The lens's own view: the inspected point at its centre, at the main map's live bearing, so the loupe matches what is
       // under the pointer (spec §4.13). Names, rings and the cull go through it.
-      const plane = options.readSessionPlane?.() ?? createSessionPlane({ lon: 0, lat: 0 })
+      const plane = options.readSessionPlane()
       const mainView = options.frames.viewFrame.peek().view
       const view = buildViewTransform({
         camera: {

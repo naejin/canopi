@@ -10,6 +10,8 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(
 
 /** The 100 m start frame the camera used to place on an 800 x 600 screen: the lens tests read it. */
 const START = { screen: { width: 800, height: 600 }, viewport: { x: 100, y: 0, scale: 6 } }
+/** The plane the test views use by default. */
+const TEST_PLANE = createSessionPlane({ lon: 0, lat: 0 })
 /** A camera with no screen yet. */
 const UNSIZED = { screen: { width: 0, height: 0 } }
 
@@ -64,7 +66,7 @@ function mountLensBesideMint(bearingDeg = 0) {
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(recording.ctx as never)
   let snapshot = createTestSceneRendererSnapshot({ scene: { plants: [MINT] } })
   const camera = bearingDeg === 0 ? createTestView(START) : createTestView({ screen: START.screen, camera: { bearingDeg } })
-  const owner = new SceneCanvasInspectionOwner({ frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
+  const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
     getSnapshot: () => snapshot, setHoveredTarget: (target) => { snapshot = { ...snapshot, hoverTarget: target && { ...target, state: 'hover' } } } })
   const container = document.createElement('div')
   Object.defineProperties(container, { clientWidth: { value: 430 }, clientHeight: { value: 390 } })
@@ -85,7 +87,7 @@ describe('Inspection Lens ownership', () => {
     camera.setViewport({ x: 100, y: 50, scale: 10 })
     const snapshot = createTestSceneRendererSnapshot()
     const before = JSON.stringify(snapshot.scene)
-    const owner = new SceneCanvasInspectionOwner({ frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
+    const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
       getSnapshot: () => snapshot, setHoveredTarget() {} })
     const view = owner.mount(document.createElement('div'))
     view.inspectAtScreenPoint({ x: 250, y: 180 })
@@ -107,7 +109,7 @@ describe('Inspection Lens ownership', () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
     const camera = createTestView(START)
     camera.setViewport({ x: 100, y: 50, scale: 10 })
-    const owner = new SceneCanvasInspectionOwner({ frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
+    const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
       getSnapshot: () => createTestSceneRendererSnapshot(), setHoveredTarget() {} })
     const view = owner.mount(document.createElement('div'))
 
@@ -132,7 +134,7 @@ describe('Inspection Lens ownership', () => {
     vi.useFakeTimers()
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
     const camera = createTestView(START)
-    const owner = new SceneCanvasInspectionOwner({ frames: camera.frames,
+    const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames,
       revision: { scene: signal(0), plantNames: signal(0) },
       getSnapshot: () => createTestSceneRendererSnapshot(), setHoveredTarget() {} })
     const view = owner.mount(document.createElement('div'))
@@ -181,7 +183,7 @@ describe('Inspection Lens ownership', () => {
     vi.useFakeTimers()
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
     const camera = createTestView(START)
-    const owner = new SceneCanvasInspectionOwner({ frames: camera.frames,
+    const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames,
       revision: { scene: signal(0), plantNames: signal(0) },
       getSnapshot: () => createTestSceneRendererSnapshot(), setHoveredTarget() {} })
     const view = owner.mount(document.createElement('div'))
@@ -212,7 +214,7 @@ describe('Inspection Lens ownership', () => {
       plantedDate: null, quantity: null, locked: false,
     }] } })
     const revision = { scene: signal(0), plantNames: signal(0) }, setHoveredTarget = vi.fn(target => { snapshot = { ...snapshot, hoverTarget: target } })
-    const owner = new SceneCanvasInspectionOwner({ frames: createTestView(UNSIZED).frames, revision, getSnapshot: () => snapshot, setHoveredTarget })
+    const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: createTestView(UNSIZED).frames, revision, getSnapshot: () => snapshot, setHoveredTarget })
     const view = owner.mount(document.createElement('div'))
     vi.advanceTimersByTime(20)
     view.highlightPlant('mint'); vi.advanceTimersByTime(20)
@@ -231,7 +233,7 @@ describe('Inspection Lens ownership', () => {
       canopySpreadM: null, rotationDeg: null, scale: null, notes: null, plantedDate: null, quantity: null, locked: false,
     })) } })
     const camera = createTestView(START)
-    const owner = new SceneCanvasInspectionOwner({ frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
+    const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
       getSnapshot: () => snapshot, setHoveredTarget() {} })
     const container = document.createElement('div')
     Object.defineProperties(container, { clientWidth: { value: 430 }, clientHeight: { value: 390 } })
@@ -260,7 +262,7 @@ describe('Inspection Lens ownership', () => {
     const snapshot = createTestSceneRendererSnapshot()
     const camera = createTestView(START)
     const viewport = { ...camera.viewport() }
-    const owner = new SceneCanvasInspectionOwner({ frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
+    const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
       getSnapshot: () => snapshot, setHoveredTarget() {} })
     const view = owner.mount(document.createElement('div'))
     // A screen pan before the lens has painted has no scale to read: it does nothing.
@@ -296,7 +298,7 @@ describe('Inspection Lens ownership', () => {
     })
     const camera = createTestView(UNSIZED)
     const getSnapshot = vi.fn(() => createTestSceneRendererSnapshot())
-    const owner = new SceneCanvasInspectionOwner({ frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
+    const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
       getSnapshot, setHoveredTarget() {} })
     const container = document.createElement('div')
     try {
@@ -318,7 +320,7 @@ describe('Inspection Lens ownership', () => {
     }] } })
     const before = JSON.stringify(snapshot.scene)
     const camera = createTestView(START)
-    const owner = new SceneCanvasInspectionOwner({ frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
+    const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames, revision: { scene: signal(0), plantNames: signal(0) },
       getSnapshot: () => snapshot, setHoveredTarget() {} })
     const container = document.createElement('div')
     const view = owner.mount(container)
