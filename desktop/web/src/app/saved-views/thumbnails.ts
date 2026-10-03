@@ -208,7 +208,7 @@ const settledWorkspaceSize = computed(() => {
  * What a view's thumbnail depends on besides the view itself. Reading it in a
  * component subscribes the component to those signals.
  */
-export function savedViewThumbnailKey(view: SavedView): string {
+function savedViewThumbnailKey(view: SavedView): string {
   const sceneRevision = currentCanvasQuerySurface.value?.revision.scene.value ?? -1
   const layers = mapLayers.value
   return JSON.stringify([
