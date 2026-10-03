@@ -105,7 +105,7 @@ export interface ViewTransform {
   /** Unit world vectors of screen-right and screen-down at a point (view centre if omitted). */
   screenAxesInWorld(at?: WorldPoint): { readonly right: WorldVector; readonly down: WorldVector }
 
-  visibleWorldQuad(insets?: ScreenInsets): WorldQuad   // captureView().extent
+  visibleWorldQuad(insets?: ScreenInsets): WorldQuad
   /** Four projected corners, never two (rotation-handle anchor, menu anchor). */
   worldQuadToScreen(q: WorldQuad): readonly [ScreenPoint, ScreenPoint, ScreenPoint, ScreenPoint]
 
@@ -179,11 +179,11 @@ export interface ViewReadSurface {
   readonly settledRevision: ReadonlySignal<number>
   /**
    * Saved-view capture, saved-view snapshot, PDF capture, story restore point: the LIVE frame's camera (viewFrame.peek(),
-   * not the settled one), its four-corner ground extent and the screen it was seen on. User-triggered captures record what
+   * not the settled one), and the screen it was seen on. User-triggered captures record what
    * is on screen now, so a capture within 150 ms of a pan, zoom or key pan, or during a flight, never records the previous
    * camera. The last view (settings) keeps `settledCamera`.
    */
-  captureView(): { readonly camera: ViewCamera; readonly extent: GeoBounds; readonly screen: ViewScreen }
+  captureView(): { readonly camera: ViewCamera; readonly screen: ViewScreen }
 }
 
 /** What app code and components may command. Implemented by ViewNavigation; nothing else is exposed. */
@@ -307,7 +307,7 @@ export interface CameraDriverHostController extends CameraDriverHost { dispose()
 export function createCameraDriverHost(options: CameraDriverHostOptions): CameraDriverHostController
 ```
 
-**Attachment** (`app/canvas-map-surface/workspace-activation.ts`). The activation builds each map's `MapLibreCameraDriver` and calls `attach`/`detach`, and subscribes to `CameraDriverHost.failure` to report the map as unavailable. A rotated camera is never a failure; a read-back pitch other than 0 is (`'map-error'`). The composition and the activation are the only two app modules that touch the driver host directly (P10 allows their type-only import of `camera-driver.ts`); everything else goes through the two surfaces above. The runtime builds its one host in `scene-runtime/construction.ts` (`SceneCanvasRuntime.cameraHost`) and follows the Scene's plane itself, through one plane effect there.
+**Attachment** (`app/canvas-map-surface/workspace-activation.ts`). The activation builds each map's `MapLibreCameraDriver` and calls `attach`/`detach`, and subscribes to `CameraDriverHost.failure` to report the map as unavailable. Map notices (U22, C4, C5; 2.0 bug fixes, canopi-0p2n) use fixed localized strings, never engine text, from one shared component in both editions. A lost WebGL context reads "The map stopped drawing. Your Design is safe." with Retry; Retry rebuilds the map and keeps the view, selection and undo, can be pressed any number of times, and nothing restarts on its own. Without WebGL2, or when the renderer init destroyed the runtime, "Map unavailable" stays with no Retry. A failed basemap download reads "Basemap couldn't load. Check your connection." with Retry in the map's status chip, until the basemap loads, is hidden or Satellite is chosen; it ranks below a map error and above a skipped layer. A rotated camera is never a failure; a read-back pitch other than 0 is (`'map-error'`). The composition and the activation are the only two app modules that touch the driver host directly (P10 allows their type-only import of `camera-driver.ts`); everything else goes through the two surfaces above. The runtime builds its one host in `scene-runtime/construction.ts` (`SceneCanvasRuntime.cameraHost`) and follows the Scene's plane itself, through one plane effect there.
 
 **Driver rules** (ADR 0016, amended 2026-09-30). `MapLibreCameraDriver` and `HeadlessCameraDriver` both implement `CameraDriver` with the same `camera-math`, `constrainCamera` and `BearingTween`, and both build their frames with `buildViewTransform` from a geographic `ViewCamera`: the MapLibre driver's is MapLibre's own camera, the headless driver's its own; `view/camera-contract.test.ts` holds the transform to MapLibre's (1e-6 px), and tests compare with `toBeCloseTo`. The MapLibre driver is the only code that calls camera methods on the workspace and snapshot maps, always with explicit `jumpTo`/`flyTo` values; each publishes one frame from the read-back camera (bearing normalised to [0, 360)). A `CameraDriver.apply` made mid-dispatch is queued and applied once, after every listener ran. The map stays `interactive: false`, `dragRotate: false`, `touchZoomRotate: false`.
 
@@ -1237,7 +1237,7 @@ export interface ToolHandle {
   readonly offsetPx?: ScreenPoint        // rotate handle: centred 28 px above the selection's projected hull
   readonly hitRadiusPx: number           // 10 today; 22 on touch (44 px target, ADR 0010)
   readonly glyph: 'vertex' | 'corner' | 'rotate' | 'midpoint'
-  readonly label: string                 // aria-label: the rotate handle's is translated; zone and guide points keep today's literal English (phase 0)
+  readonly label: string                 // aria-label, always translated: the rotate handle, "Zone control point N", "Measurement guide endpoint N" (C8)
   readonly readout?: string              // live chip beside the handle (the rotate handle's '+15°'); the host marks the dragged handle active
 }
 ```
@@ -1653,7 +1653,7 @@ Phase 0's, F's and phase 1's deletions are done; P11 tombstones them. Left:
 |---|---|---|
 | `hover`, `hover-end` | pointer over the map with no button, with the target class under it; `hover-end` on leaving the map, and from F on moving over owned chrome, the text entry or a handle, never the Unlock affordance (§2.2 "Hover") | ToolHost → `subscribePointerWorld` (a `surface` target only), then the tool (world point, hit) and the passive hover |
 | `press` | primary button or finger down | ToolHost → tool |
-| `tap` | primary up within slop | ToolHost → tool (`clickCount`: under LEGACY the platform's `detail`; later bindings may count with the multi-click thresholds) |
+| `tap` | primary up within slop | ToolHost → tool (`clickCount`: the platform's `detail`) |
 | `drag-start`, `drag-move`, `drag-end` | primary past slop | ToolHost → tool, or `handle-drag` when the press was on a handle |
 | `drop` | drag-and-drop from a panel | the ToolHost's shared drop handler, whatever tool is armed; dragover answers a drop effect |
 | `pan` | move the ground with the pointer; `deltaPx` is content movement | `ViewNavigation.panByPx` |
@@ -2028,9 +2028,9 @@ Hits are world-space and unaffected by bearing; pixel tolerances convert through
 
 ### 4.10 Saved views and stories
 
-- Capture writes `SavedViewCamera.bearing`, normalised locally (P10: rounded to 1e-6, 360 folded to 0), and the extent as the lon/lat bounding box of the ground under the four screen corners (convention), and the visible ground size of the framing rule below (U21).
+- Capture writes `SavedViewCamera.bearing`, normalised locally (P10: rounded to 1e-6, 360 folded to 0), and the ground size of the framing rule below. `SavedView.extent` is deleted (no reader; C6), and recapture does not write it back.
 - User captures (Save view, story restore) record the live frame's camera (`captureView().camera`), including during a key-turn ease, never its `bearingTarget()` (convention, 2026-10-03). PDF open is the exception: it waits for a turn still easing and holds the bearing the turn ends at, so pages are never laid out at an angle the turn only passed through (`app/canvas-pdf/live.ts`, `canvas-pdf-workflow.test.ts`).
-- One framing rule (U21, user 2026-10-03; built in the 2.0 bug fixes, canopi-f47t.17): a saved view and a story step store their centre, bearing and visible ground size (width × height in metres in the view's turned frame), an optional saved-view field in `.canopi`. Going to one fits that turned rectangle inside the current window at the saved bearing (contain): the same window gives the exact saved camera, a smaller window zooms out just enough that nothing framed is cut off, a larger window shows more around it and never zooms in past the saved zoom. Every thumbnail uses the same rule, so it shows what going to the view shows. A view without the field falls back to its camera zoom; no migration (ADR 0021).
+- One framing rule (U21 and U23, user 2026-10-03; built in the 2.0 bug fixes, canopi-f47t.17). `SavedViewCamera` gains an optional ground size, `ground_size_m {width, height}`: the visible ground in metres along the view's turned frame, positive, finite, at most 1e8 m, checked on both trust boundaries. It is optional and additive, so the `.canopi` version stays 9 (ADR 0021, "Later format changes"). Going to a saved view or story step fits that turned rectangle into the whole map at the saved bearing, including what floating panels and the story card cover (U23): `zoom = saved + min(0, log2(min(W·mpp/w, H·mpp/h)))`, with mpp from the stored zoom, and the saved zoom itself within 1e-6. The same window gives back the exact saved camera, a smaller one zooms out just enough that nothing framed is cut off, a larger one shows more and never zooms in past the saved zoom. Thumbnails use the same rule and show the framed area, with no redraw on resize. While presenting, the current step refits with a jump when the settled screen changes (full screen ends, the window resizes). A view without the field keeps its camera zoom; no migration (ADR 0021).
 - Story restore after presenting stores `captureView().camera` and returns through `showCamera`. Stories restore each step's bearing; restores are explicit targets and never snap.
 - `ViewSnapshotCamera` carries the bearing with its validation; `normalizeLastView` and the Web settings reader default a missing bearing to 0.
 
@@ -2285,7 +2285,7 @@ When pitch ships (this paragraph is the recipe; the main agent notes it on canop
 - Box zoom (Shift+drag) anywhere.
 - Navigating with a second button during a drag (user, 2026-10-01): wheel zoom and keys stay live during a drag; a right or middle press during it is ignored.
 - An angle per Print Area (user, 2026-10-01: one angle for the whole PDF layout) and an edge highlight for "Turn view to this edge" (user, 2026-10-01).
-- A new stored enum for Pointing device, a stored PDF setup, a four-corner saved-view extent, or any `.canopi`, user-DB, LiDAR catalogue or plant-catalog change.
+- A new stored enum for Pointing device, a stored PDF setup, or any `.canopi` change beyond the saved-view ground size (§4.10), or any user-DB, LiDAR catalogue or plant-catalog change.
 - Performance gates and optimisation beyond making canopi-p32r and canopi-wx8w fixable (phase R), and the select-all and delete-all slowness (its own bead).
 - Instanced billboard or screen-constant line shaders (they fit behind `setView` later).
 
@@ -2293,7 +2293,7 @@ When pitch ships (this paragraph is the recipe; the main agent notes it on canop
 
 | Store | Change |
 |---|---|
-| `.canopi` | none. `SavedViewCamera.bearing` is now written (normalised); `extent` keeps its meaning, computed from four corners. Notes, rectangles and ellipses created rotated store the bearing in their existing `rotationDeg`. |
+| `.canopi` | version stays 9. `SavedViewCamera.bearing` is now written (normalised); optional `SavedViewCamera.ground_size_m` added and `SavedView.extent` deleted (§4.10; ADR 0021, "Later format changes"). Notes, rectangles and ellipses created rotated store the bearing in their existing `rotationDeg`. |
 | Settings | `LastView.bearing`, `#[serde(default)]` 0: a one-line default, no migration; older builds ignore it. `scroll_wheel` values unchanged. |
 | PDF | `PdfSetup.mapOrientation?` (default North up), in memory only; one layout angle, the view's bearing read at each capture (`PdfInput.viewBearingDeg`), also in memory; Print Areas and offsets in plan metres, independent of the frame. `PdfPrintArea.rotationDeg` is dropped (user, 2026-10-01): no stored format replaces it, since PDF setups are not saved (plan §8). |
 | User DB, LiDAR catalogue, plant catalog | none |

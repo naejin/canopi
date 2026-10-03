@@ -20,7 +20,8 @@ Canopi has two users, and the maintainer converts their `.canopi` files by hand.
   - No backup ever overwrites another; a taken name gets `-1`, `-2`…
 - **Saved stamps.** Only payload version 2 is read.
 - **Settings.** New fields have defaults; an unreadable record is set aside under `settings.set-aside`. That is not a migration and stays.
-- **Later format changes.** The `.canopi` format and local data (user database, Drafts, Web storage, LiDAR catalogue, settings) may change when that improves the project, without asking the user first; each change is named in the handoff. Before 2.0 ships, a change moves the current version and older files are refused as above. After 2.0, each format change decides, case by case, between refusing older files (local data moved aside, as above) and a migration; there is no ladder by default. The plant catalog database (`canopi-core.db`) never changes.
+- **Additive `.canopi` changes** (amended 2026-10-03, following the user's decision U21: a saved view without the new ground size falls back to its camera zoom, with no migration). An optional additive field, or the removal of a field nothing reads, does not move the version: admission has no `deny_unknown_fields` and the schema allows extra properties, so files on either side of the change still open.
+- **Later format changes.** The `.canopi` format and local data (user database, Drafts, Web storage, LiDAR catalogue, settings) may change when that improves the project, without asking the user first; each change is named in the handoff. Before 2.0 ships, any other change moves the current version and older files are refused as above. After 2.0, each format change decides, case by case, between refusing older files (local data moved aside, as above) and a migration; there is no ladder by default. The plant catalog database (`canopi-core.db`) never changes.
 
 ## Consequences
 
