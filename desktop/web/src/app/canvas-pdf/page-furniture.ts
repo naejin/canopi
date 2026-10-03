@@ -4,7 +4,7 @@ import type { PdfTextEngine } from './text'
 import { MM, PRINT, drawMark, pathOp, textOp } from './page-drawing'
 import { fieldLabels } from './labels'
 
-export function detailFurniture(page: PdfPage, input: PdfInput, labels: PdfLabels, paper: PdfPaper, text: PdfTextEngine, showScale = true): PdfOperation[] {
+export function detailFurniture(page: PdfPage, input: PdfInput, labels: PdfLabels, paper: PdfPaper, text: PdfTextEngine, showScale = true, northAngleDeg = 0): PdfOperation[] {
   const operations: PdfOperation[] = [], wording = fieldLabels(labels), margin = 10 * MM
   const emit = (value: string, x: number, y: number, size: number, right = false) => {
     const line = text.line(value, size)
@@ -20,12 +20,15 @@ export function detailFurniture(page: PdfPage, input: PdfInput, labels: PdfLabel
   operations.push(pathOp(`M${margin} ${page.height - 16 * MM} h${page.width - 2 * margin}`, '#d8d2c8', null, .2 * MM))
   emit(identity, margin, y + 1.5 * MM, 8)
   emit(`${labels.actualSize} · ${paper}`, page.width - margin, y + 1.5 * MM, 7.5, true)
-  if (showScale) operations.push(...groundScale(page, input.locale, text, wording.north))
+  if (showScale) operations.push(...groundScale(page, input.locale, text, wording.north, northAngleDeg))
   return operations
 }
 
-/** Ground scale bar centred in the footer, with a north arrow to its right. Designs are drawn north-up. */
-export function groundScale(page: Pick<PdfPage, 'width' | 'height' | 'pointsPerMeter'>, locale: string, text: PdfTextEngine, north = 'N'): PdfOperation[] {
+/**
+ * Ground scale bar centred in the footer, with a north arrow to its right pointing to true north: `northAngleDeg` is the
+ * arrow's clockwise turn on paper, minus the layout angle (0 on North up pages). Its letter sits beyond the tip, level.
+ */
+export function groundScale(page: Pick<PdfPage, 'width' | 'height' | 'pointsPerMeter'>, locale: string, text: PdfTextEngine, north = 'N', northAngleDeg = 0): PdfOperation[] {
   const operations: PdfOperation[] = [], y = page.height - 10 * MM
   const emit = (value: string, x: number, y: number, size: number, right = false, strong = false) => {
     const line = text.line(value, size, strong)
@@ -39,11 +42,19 @@ export function groundScale(page: Pick<PdfPage, 'width' | 'height' | 'pointsPerM
   emit('0', x, y - MM, 7)
   emit(`${new Intl.NumberFormat(locale, { maximumSignificantDigits: 4 }).format(metres)} m`, x + length, y - MM, 7, true)
   // Arrow: a filled half and an open half, tip up, with the letter above it.
-  const ax = x + length + 8 * MM, tip = y - 1.5 * MM, base = y + 2.5 * MM, half = 1.3 * MM
-  operations.push(pathOp(`M${ax} ${tip} L${ax + half} ${base} L${ax} ${base - MM} Z`, null, PRINT.ink, 0),
-    pathOp(`M${ax} ${tip} L${ax - half} ${base} L${ax} ${base - MM} Z`, PRINT.ink, null, .15 * MM))
+  const ax = x + length + 8 * MM, tip = y - 1.5 * MM, base = y + 2.5 * MM, half = 1.3 * MM, middle = (tip + base) / 2
+  const angle = northAngleDeg % 360 ? northAngleDeg * Math.PI / 180 : 0, c = Math.cos(angle), s = Math.sin(angle)
+  // Turned about the arrow's centre; at 0 the points are the upright arrow's own.
+  const at = (px: number, py: number) => angle ? `${ax + (px - ax) * c - (py - middle) * s} ${middle + (px - ax) * s + (py - middle) * c}` : `${px} ${py}`
+  operations.push(pathOp(`M${at(ax, tip)} L${at(ax + half, base)} L${at(ax, base - MM)} Z`, null, PRINT.ink, 0),
+    pathOp(`M${at(ax, tip)} L${at(ax - half, base)} L${at(ax, base - MM)} Z`, PRINT.ink, null, .15 * MM))
   const letter = text.line(north, 6.5, true)
-  operations.push(textOp(letter, ax - letter.width / 2, tip - .8 * MM, 6.5))
+  if (!angle) operations.push(textOp(letter, ax - letter.width / 2, tip - .8 * MM, 6.5))
+  else {
+    // The letter's centre beyond the tip along true north, with the upright arrow's gap.
+    const reach = middle - tip + .8 * MM + 6.5 * .35, cx = ax + s * reach, cy = middle - c * reach
+    operations.push(textOp(letter, cx - letter.width / 2, cy + 6.5 * .35, 6.5))
+  }
   return operations
 }
 

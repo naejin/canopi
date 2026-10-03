@@ -182,6 +182,8 @@ function buildPages(original: PdfInput, setup: PdfSetup, text: PdfTextEngine, la
   if (pages.length > 200) throw new Error('coverage-too-large')
   const byId = new Map(pages.map(page => [page.id, page]))
   const showScale = setup.northArrow !== false
+  // The north arrow points to true north on the turned page.
+  const northAngleDeg = frame.angleDeg ? -frame.angleDeg : 0
   const finalized = pages.map((page): PdfPage => {
     const operations = [...page.operations], links = [...page.links ?? []]
     let legendSymbols: readonly string[] | undefined
@@ -206,11 +208,11 @@ function buildPages(original: PdfInput, setup: PdfSetup, text: PdfTextEngine, la
       const y = page.height - 12 * MM
       operations.push(pathOp(`M${10 * MM} ${y} h${50 * MM} M${10 * MM} ${y - 2} v4 M${60 * MM} ${y - 2} v4`, PRINT.ink, null, .25 * MM))
       operations.push(textOp(text.line('50 mm', 7), 10 * MM, page.height - 6 * MM, 7))
-      if (showScale) operations.push(...groundScale(page, input.locale, text, fieldLabels(labels).north))
+      if (showScale) operations.push(...groundScale(page, input.locale, text, fieldLabels(labels).north, northAngleDeg))
       const reminder = text.line(`${labels.actualSize} · ${setup.paper}`, 7.5)
       operations.push(textOp(reminder, page.width - 10 * MM - reminder.width, page.height - 8.5 * MM, 7.5))
     } else if (page.kind === 'detail') {
-      operations.push(...detailFurniture(page, input, labels, setup.paper, text, showScale))
+      operations.push(...detailFurniture(page, input, labels, setup.paper, text, showScale, northAngleDeg))
       if (page.continuationIds?.[0]) links.push({ bounds: { x: 8 * MM, y: 8 * MM, width: 13 * MM, height: 11 * MM }, target: `page:${page.continuationIds[0]}` })
     } else {
       const source = byId.get(page.sourceId!)!
