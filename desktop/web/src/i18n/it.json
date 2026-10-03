@@ -1290,6 +1290,7 @@
     "summaryAnnotationOther": "{{count}} annotazioni",
     "summaryEmpty": "Nessun oggetto visibile",
     "summaryUnavailable": "Anteprima non disponibile",
+    "summaryBefore2_0": "Salvato con una versione di Canopi precedente alla 2.0; Canopi 2.0 non può posizionarlo.",
     "nameInput": "Nome del timbro",
     "confirmRename": "Conferma rinomina",
     "cancelRename": "Annulla rinomina",
@@ -1300,6 +1301,7 @@
     "resizeFrame": "Ridimensiona il riquadro Timbri salvati",
     "reorderNamed": "Sposta {{name}} (Alt ↑ o ↓)",
     "placeNamed": "Posiziona il timbro {{name}}",
+    "deleteNamed": "Elimina il timbro {{name}}",
     "actionsFor": "Altre azioni per {{name}}"
   },
   "error": {

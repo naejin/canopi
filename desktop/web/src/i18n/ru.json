@@ -1290,6 +1290,7 @@
     "summaryAnnotationOther": "{{count}} аннотаций",
     "summaryEmpty": "Нет видимых объектов",
     "summaryUnavailable": "Предпросмотр недоступен",
+    "summaryBefore2_0": "Сохранён в Canopi до версии 2.0; Canopi 2.0 не может его разместить.",
     "nameInput": "Название штампа",
     "confirmRename": "Подтвердить переименование",
     "cancelRename": "Отменить переименование",
@@ -1300,6 +1301,7 @@
     "resizeFrame": "Изменить размер области «Сохранённые штампы»",
     "reorderNamed": "Переместить {{name}} (Alt ↑ или ↓)",
     "placeNamed": "Разместить штамп {{name}}",
+    "deleteNamed": "Удалить штамп {{name}}",
     "actionsFor": "Другие действия: {{name}}"
   },
   "error": {

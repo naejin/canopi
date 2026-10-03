@@ -137,7 +137,8 @@
 
 .savedStampSummary,
 .savedStampsEmpty,
-.savedStampsLoading {
+.savedStampsLoading,
+.savedStampsImportRefusal {
   font-size: var(--text-xs);
   color: var(--color-text-muted);
   line-height: var(--line-height);
@@ -333,6 +334,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.savedStampsImportRefusal {
+  margin: 0;
+  color: var(--color-danger);
+}
+
+/* The before-2.0 sentence is the row's only explanation, so it wraps instead of truncating. */
+.savedStampSummaryBefore2_0 {
+  white-space: normal;
 }
 
 .savedStampActions {

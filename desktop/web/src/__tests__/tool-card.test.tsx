@@ -310,6 +310,31 @@ describe('Tool card', () => {
       map.remove()
     })
 
+    it('leaves out a stamp saved before 2.0, which Canopi 2.0 cannot place', async () => {
+      const before2_0 = savedStamp('stamp-old', 'Old guild', ['Malus domestica'])
+      savedStamps.items = [
+        { ...before2_0, payload_json: JSON.stringify({ ...JSON.parse(before2_0.payload_json), version: 1 }) },
+        savedStamp('stamp-1', 'Guilde pommier', ['Malus domestica']),
+      ]
+      await act(() => render(<ToolCard stampChooser={StampChooser} />, container))
+      await choose('object-stamp', { stamp: { kind: 'plant', name: 'Apple', plants: 1, species: 1 }, stampRotationDeg: 0 })
+      const link = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Change stamp')!
+      await act(() => link.click())
+      await vi.waitFor(() => expect(container.querySelector('[data-stamp-option="stamp-1"]')).not.toBeNull())
+      expect([...container.querySelectorAll<HTMLElement>('[data-stamp-option]')].map((option) => option.dataset.stampOption)).toEqual(['stamp-1'])
+
+      // With only stamps from before 2.0, the chooser says there is nothing to place.
+      savedStamps.items = [savedStamps.items[0]!]
+      await act(() => { render(null, container) })
+      await act(() => render(<ToolCard stampChooser={StampChooser} />, container))
+      await choose('select')
+      await choose('object-stamp', { stamp: { kind: 'plant', name: 'Apple', plants: 1, species: 1 }, stampRotationDeg: 0 })
+      const again = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Change stamp')!
+      await act(() => again.click())
+      await vi.waitFor(() => expect(container.querySelector('[data-stamp-chooser]')?.textContent).toContain('No saved stamps'))
+      expect(container.querySelector('[data-stamp-option]')).toBeNull()
+    })
+
     it('is not offered where the edition keeps no saved stamps (Web)', async () => {
       await choose('object-stamp', { stamp: { kind: 'plant', name: 'Apple', plants: 1, species: 1 }, stampRotationDeg: 0 })
       expect([...container.querySelectorAll('button')].map((button) => button.textContent)).not.toContain('Change stamp')

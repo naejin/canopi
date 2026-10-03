@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
+import { useEffect, useId, useMemo, useRef, useState } from 'preact/hooks'
 import { t } from '../../i18n'
 import { formatCount } from '../../utils/format-count'
 import {
@@ -22,6 +22,10 @@ import {
   clearSavedObjectStampDragSource,
   writeSavedObjectStampDragData,
 } from '../../canvas/saved-object-stamp-source'
+import {
+  isSavedObjectStampPayloadFromBefore2_0,
+  parseSavedObjectStampPayload,
+} from '../../canvas/saved-object-stamp-payload'
 import type { SavedObjectStamp } from '../../types/saved-object-stamps'
 import type { SpeciesListItem } from '../../types/species'
 import { useFavoriteSpeciesDetailNavigation } from '../plant-db/favorite-species-presentation'
@@ -99,6 +103,7 @@ export function FavoritesPanel() {
   const [, setLayoutRevision] = useState(0)
   const [preview, setPreview] = useState<SavedStampPreview | null>(null)
   const [savedStampReorderPreviewIds, setSavedStampReorderPreviewIds] = useState<readonly string[] | null>(null)
+  const [importRefusalKey, setImportRefusalKey] = useState<string | null>(null)
 
   useEffect(() => speciesCatalogWorkbench.mount('favorites'), [])
 
@@ -162,6 +167,26 @@ export function FavoritesPanel() {
   useEffect(() => {
     clearSavedStampReorderPreviewIfLibraryMatches()
   }, [savedStampsView.revision, savedStampReorderPreviewIds])
+
+  // A refusal notice is about the last import only: a save or any library change clears it.
+  useEffect(() => {
+    setImportRefusalKey(null)
+  }, [savedStampsView.revision])
+
+  function saveSelection(): void {
+    setImportRefusalKey(null)
+    saveCanvasSelectionAsObjectStamp()
+  }
+
+  async function importStampFile(): Promise<void> {
+    setImportRefusalKey(null)
+    try {
+      const outcome = await savedObjectStampWorkbench.importStampFile()
+      if (outcome.status === 'refused') setImportRefusalKey(outcome.messageKey)
+    } catch (error) {
+      console.error('Saved stamp import failed:', error)
+    }
+  }
 
   function showStampPreview(stamp: SavedObjectStamp, anchor: HTMLElement): void {
     clearPreviewTimer(previewTimerRef)
@@ -391,7 +416,7 @@ export function FavoritesPanel() {
               type="button"
               className={styles.importStampButton}
               aria-label={t('savedObjectStamps.import')}
-              onClick={() => void savedObjectStampWorkbench.importStampFile()}
+              onClick={importStampFile}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true"><path d="M8 2v8M5 7l3 3 3-3M3 11v3h10v-3" /></svg><ButtonTooltip label={t('savedObjectStamps.import')} side="left" />
             </button>
@@ -402,11 +427,13 @@ export function FavoritesPanel() {
               className={styles.saveStampButton}
               disabled={!savedStampSelection.canSave}
               title={!savedStampSelection.canSave ? t('savedObjectStamps.selectHint') : undefined}
-              onClick={saveCanvasSelectionAsObjectStamp}
+              onClick={saveSelection}
             >
               <PlusIcon />{t('savedObjectStamps.saveSelection')}
             </button>
-
+            {importRefusalKey && (
+              <p className={styles.savedStampsImportRefusal} role="alert">{t(importRefusalKey)}</p>
+            )}
           </div>
           {savedStampsView.loading ? (
             <div className={styles.savedStampsLoading} aria-live="polite" aria-busy="true">
@@ -752,6 +779,14 @@ function SavedObjectStampRow({
   const [isRenaming, setIsRenaming] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const renameInputRef = useRef<HTMLInputElement>(null)
+  const actionsRef = useRef<HTMLDivElement>(null)
+  const cancelDeleteRef = useRef<HTMLButtonElement>(null)
+  // Set when the user opens or cancels the Delete confirmation, whose buttons replace the one that had focus.
+  const deleteConfirmToggledRef = useRef(false)
+  // Canopi 2.0 cannot place, drag, export or convert a stamp saved before 2.0 (ADR 0021): it offers only Delete.
+  const before2_0 = useMemo(() => isSavedObjectStampPayloadFromBefore2_0(stamp.payload_json), [stamp.payload_json])
+  const summaryId = useId()
+  const deleteCopyId = useId()
 
   useEffect(() => {
     setDraftName(stamp.name)
@@ -764,6 +799,25 @@ function SavedObjectStampRow({
     input.focus()
     input.setSelectionRange(0, input.value.length)
   }, [isRenaming])
+
+  // The confirmation's buttons replace the control that opened it, and back on Cancel: move focus with
+  // them so a keyboard user stays on the row. Cancel is the safe choice and reads the question.
+  useEffect(() => {
+    if (!deleteConfirmToggledRef.current) return
+    deleteConfirmToggledRef.current = false
+    if (confirmingDelete) {
+      cancelDeleteRef.current?.focus()
+      return
+    }
+    // The row's last action opened it: Delete on a stamp saved before 2.0, otherwise the actions menu.
+    const actions = actionsRef.current?.querySelectorAll<HTMLButtonElement>('button')
+    actions?.[actions.length - 1]?.focus()
+  }, [confirmingDelete])
+
+  function setDeleteConfirmation(next: boolean): void {
+    deleteConfirmToggledRef.current = true
+    setConfirmingDelete(next)
+  }
 
   function commitRename(): void {
     const next = (renameInputRef.current?.value ?? draftName).trim()
@@ -785,7 +839,7 @@ function SavedObjectStampRow({
 
   function handleStampDragStart(event: DragEvent): void {
     const target = event.target
-    if (target instanceof HTMLElement && target.closest('button, input')) {
+    if (before2_0 || (target instanceof HTMLElement && target.closest('button, input'))) {
       event.preventDefault()
       return
     }
@@ -827,23 +881,23 @@ function SavedObjectStampRow({
       <div
         className={styles.savedStampContent}
         data-saved-stamp-body={stamp.id}
-        draggable={!isRenaming && !confirmingDelete}
+        draggable={!before2_0 && !isRenaming && !confirmingDelete}
         onDragStart={handleStampDragStart}
         onDragEnd={handleStampDragEnd}
-        tabIndex={confirmingDelete ? -1 : 0}
+        tabIndex={before2_0 ? undefined : confirmingDelete ? -1 : 0}
         onPointerEnter={(event) => {
-          if (isRenaming || confirmingDelete) return
+          if (before2_0 || isRenaming || confirmingDelete) return
           onPreviewSchedule(stamp, event.currentTarget as HTMLElement)
         }}
         onPointerLeave={onPreviewClear}
         onFocus={(event) => {
-          if (isRenaming || confirmingDelete) return
+          if (before2_0 || isRenaming || confirmingDelete) return
           onPreviewRequest(stamp, event.currentTarget as HTMLElement)
         }}
         onBlur={onPreviewClear}
       >
         {confirmingDelete ? (
-          <span className={styles.savedStampDeleteCopy}>{t('savedObjectStamps.deleteConfirmCopy')}</span>
+          <span id={deleteCopyId} className={styles.savedStampDeleteCopy}>{t('savedObjectStamps.deleteConfirmCopy')}</span>
         ) : isRenaming ? (
           <input
             ref={renameInputRef}
@@ -876,28 +930,43 @@ function SavedObjectStampRow({
         ) : (
           <span className={styles.savedStampName}>{stamp.name}</span>
         )}
-        {!confirmingDelete && <span className={styles.savedStampSummary}>{savedStampSummary(stamp)}</span>}
+        {!confirmingDelete && (before2_0
+          ? <span id={summaryId} className={`${styles.savedStampSummary} ${styles.savedStampSummaryBefore2_0}`}>{t('savedObjectStamps.summaryBefore2_0')}</span>
+          : <span className={styles.savedStampSummary}>{savedStampSummary(stamp)}</span>)}
       </div>
-      <div className={styles.savedStampActions}>
+      <div ref={actionsRef} className={styles.savedStampActions}>
         {confirmingDelete ? (
           <>
             <button
               type="button"
               className={styles.savedStampDangerButton}
               aria-label={t('savedObjectStamps.confirmDelete')}
+              aria-describedby={deleteCopyId}
               onClick={() => void savedObjectStampWorkbench.deleteStamp(stamp.id)}
             >
               {t('savedObjectStamps.confirmDelete')}
             </button>
             <button
+              ref={cancelDeleteRef}
               type="button"
               className={styles.savedStampSecondaryButton}
               aria-label={t('savedObjectStamps.cancelDelete')}
-              onClick={() => setConfirmingDelete(false)}
+              aria-describedby={deleteCopyId}
+              onClick={() => setDeleteConfirmation(false)}
             >
               {t('savedObjectStamps.cancelDelete')}
             </button>
           </>
+        ) : before2_0 ? (
+          <button
+            type="button"
+            className={styles.savedStampSecondaryButton}
+            aria-label={t('savedObjectStamps.deleteNamed', { name: stamp.name })}
+            aria-describedby={summaryId}
+            onClick={() => setDeleteConfirmation(true)}
+          >
+            {t('savedObjectStamps.delete')}
+          </button>
         ) : isRenaming ? (
           <>
             <SavedStampIconButton
@@ -929,7 +998,7 @@ function SavedObjectStampRow({
             <ActionMenu label={t('savedObjectStamps.actionsFor', { name: stamp.name })} items={[
               { label: t('savedObjectStamps.export'), run: () => { void savedObjectStampWorkbench.exportStamp(stamp) } },
               { label: t('savedObjectStamps.rename'), run: () => { setConfirmingDelete(false); setDraftName(stamp.name); setIsRenaming(true) } },
-              { label: t('savedObjectStamps.delete'), danger: true, run: () => { setIsRenaming(false); setConfirmingDelete(true) } },
+              { label: t('savedObjectStamps.delete'), danger: true, run: () => { setIsRenaming(false); setDeleteConfirmation(true) } },
             ]} />
           </>
         )}
@@ -1020,21 +1089,14 @@ function sameIdOrder(left: readonly string[] | null, right: readonly string[]): 
 }
 
 function savedStampSummary(stamp: SavedObjectStamp): string {
-  try {
-    const payload = JSON.parse(stamp.payload_json) as {
-      plants?: unknown[]
-      zones?: unknown[]
-      annotations?: unknown[]
-    }
-    const parts = [
-      countPart(payload.plants?.length ?? 0, 'summaryPlantOne', 'summaryPlantOther'),
-      countPart(payload.zones?.length ?? 0, 'summaryZoneOne', 'summaryZoneOther'),
-      countPart(payload.annotations?.length ?? 0, 'summaryAnnotationOne', 'summaryAnnotationOther'),
-    ].filter((part): part is string => part !== null)
-    return parts.length > 0 ? parts.join(' · ') : t('savedObjectStamps.summaryEmpty')
-  } catch {
-    return t('savedObjectStamps.summaryUnavailable')
-  }
+  const payload = parseSavedObjectStampPayload(stamp.payload_json)
+  if (!payload) return t('savedObjectStamps.summaryUnavailable')
+  const parts = [
+    countPart(payload.plants.length, 'summaryPlantOne', 'summaryPlantOther'),
+    countPart(payload.zones.length, 'summaryZoneOne', 'summaryZoneOther'),
+    countPart(payload.annotations.length, 'summaryAnnotationOne', 'summaryAnnotationOther'),
+  ].filter((part): part is string => part !== null)
+  return parts.length > 0 ? parts.join(' · ') : t('savedObjectStamps.summaryEmpty')
 }
 
 function countPart(

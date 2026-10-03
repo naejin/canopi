@@ -1290,6 +1290,7 @@
     "summaryAnnotationOther": "注釈 {{count}} 件",
     "summaryEmpty": "表示オブジェクトなし",
     "summaryUnavailable": "プレビュー不可",
+    "summaryBefore2_0": "Canopi 2.0 より前のバージョンで保存されたため、Canopi 2.0 では配置できません。",
     "nameInput": "スタンプ名",
     "confirmRename": "名前変更を確定",
     "cancelRename": "名前変更をキャンセル",
@@ -1300,6 +1301,7 @@
     "resizeFrame": "保存済みスタンプ枠のサイズ変更",
     "reorderNamed": "{{name}}を並べ替え（Alt ↑ または ↓）",
     "placeNamed": "スタンプ「{{name}}」を配置",
+    "deleteNamed": "スタンプ「{{name}}」を削除",
     "actionsFor": "{{name}}のその他の操作"
   },
   "error": {

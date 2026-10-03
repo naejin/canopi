@@ -1290,6 +1290,7 @@
     "summaryAnnotationOther": "{{count}} annotaties",
     "summaryEmpty": "Geen zichtbare objecten",
     "summaryUnavailable": "Voorbeeld niet beschikbaar",
+    "summaryBefore2_0": "Opgeslagen met Canopi vóór 2.0; Canopi 2.0 kan hem niet plaatsen.",
     "nameInput": "Stempelnaam",
     "confirmRename": "Hernoemen bevestigen",
     "cancelRename": "Hernoemen annuleren",
@@ -1300,6 +1301,7 @@
     "resizeFrame": "Frame Opgeslagen stempels aanpassen",
     "reorderNamed": "{{name}} verplaatsen (Alt ↑ of ↓)",
     "placeNamed": "Stempel {{name}} plaatsen",
+    "deleteNamed": "Stempel {{name}} verwijderen",
     "actionsFor": "Meer acties voor {{name}}"
   },
   "error": {

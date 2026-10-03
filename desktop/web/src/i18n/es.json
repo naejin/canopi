@@ -1290,6 +1290,7 @@
     "summaryAnnotationOther": "{{count}} anotaciones",
     "summaryEmpty": "Sin objetos visibles",
     "summaryUnavailable": "Vista previa no disponible",
+    "summaryBefore2_0": "Guardado con una versión de Canopi anterior a la 2.0; Canopi 2.0 no puede colocarlo.",
     "nameInput": "Nombre del sello",
     "confirmRename": "Confirmar cambio de nombre",
     "cancelRename": "Cancelar cambio de nombre",
@@ -1300,6 +1301,7 @@
     "resizeFrame": "Redimensionar el marco de Sellos guardados",
     "reorderNamed": "Reordenar {{name}} (Alt ↑ o ↓)",
     "placeNamed": "Colocar el sello {{name}}",
+    "deleteNamed": "Eliminar el sello {{name}}",
     "actionsFor": "Más acciones para {{name}}"
   },
   "error": {
