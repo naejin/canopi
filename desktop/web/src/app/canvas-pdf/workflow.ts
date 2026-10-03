@@ -20,8 +20,8 @@ export interface PdfWorkflowDependencies {
   capture(): PdfCapture | null
   /** The catalog's display-name projection: the chosen language's names, English marked for the rest. */
   resolveDisplayNames(names: readonly string[], locale: string): Promise<SpeciesDisplayNames>
-  /** Catalog habit (`Tree`, `Shrub`, ...) by canonical name; absent where the edition has none. */
-  resolveHabits?(names: readonly string[]): Promise<Record<string, string>>
+  /** Catalog habit (`Tree`, `Shrub`, ...) by canonical name. */
+  resolveHabits(names: readonly string[]): Promise<Record<string, string>>
   prepare(input: PdfPreparation, signal: AbortSignal, progress?: (plan: PdfPlan) => void): Promise<PreparedPdf>
   readonly delivery: PdfDelivery
   labels(): PdfLabels
@@ -88,7 +88,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     if (heldBearing === null && next.turning) {
       capture = next; state.value = { status: 'preparing', error: null, result: null }; return
     }
-    heldBearing ??= next.input.viewBearingDeg ?? 0
+    heldBearing ??= next.input.viewBearingDeg
     next = { ...next, input: { ...next.input, viewBearingDeg: heldBearing } }
     capture = next
     if (setup.peek().layers.some((name) => !availableLayers.peek().includes(name))) {
@@ -129,7 +129,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     } catch (error) {
       if (!current()) return
       const message = error instanceof Error ? error.message : ''
-      state.value = { status: 'error', error: ['unsupported-text', 'text-too-wide', 'prepare-timeout', 'selection-missing', 'coverage-too-large', 'invalid-page-view'].includes(message) ? message : 'prepare-failed', result: null }
+      state.value = { status: 'error', error: ['unsupported-text', 'text-too-wide', 'prepare-timeout', 'coverage-too-large'].includes(message) ? message : 'prepare-failed', result: null }
     } finally {
       if (controller === abort) controller = null
     }
@@ -240,7 +240,7 @@ async function resolvePrintIdentities(deps: PdfWorkflowDependencies, names: read
   try {
     const [display, catalogHabits] = await Promise.all([
       bounded(() => deps.resolveDisplayNames(names, locale), NO_DISPLAY_NAMES),
-      deps.resolveHabits ? bounded(() => deps.resolveHabits!(names), {} as Record<string, string>) : Promise.resolve<Record<string, string>>({}),
+      bounded(() => deps.resolveHabits(names), {} as Record<string, string>),
     ])
     const habits: Record<string, PdfHabit> = {}
     for (const [name, habit] of Object.entries(catalogHabits)) {

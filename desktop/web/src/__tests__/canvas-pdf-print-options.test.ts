@@ -3,20 +3,21 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
-import { printPlantColors } from '../app/canvas-pdf/print-colors'
+import { recolorPlants } from '../app/canvas-pdf/print-colors'
 import { createPdfWorkflow } from '../app/canvas-pdf/workflow'
 import type { PdfPreparation } from '../app/canvas-pdf/prepare'
 import type { PrintPlant } from '../canvas/print'
 import type { PdfInput, PdfLabels, PdfPage, PdfSetup, PreparedPdf } from '../app/canvas-pdf/types'
+import { englishPdfLabels } from '../../scripts/pdf-validation/fixtures'
 
-const labels: PdfLabels = { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Print at actual size',
+const labels: PdfLabels = { ...englishPdfLabels, notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Print at actual size',
   symbolNames: { square: 'Canopy tree', round: 'Round mark' } }
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
 const mark = [{ d: 'M-1 -1 H1 V1 H-1 Z', paint: 'symbol' as const }]
 const plant = (id: string, canonicalName: string, x: number, color = '#2f7d32', symbol = 'square'): PrintPlant =>
   ({ id, canonicalName, position: { x, y: 10 }, color, symbol, mark, pinnedName: false })
 function garden(extra: Partial<PdfInput> = {}): PdfInput {
-  return { name: 'Garden', locale: 'fr', commonNames: { 'Malus domestica': 'Pommier', 'Ribes nigrum': 'Blackcurrant', 'Mentha spicata': 'Menthe' }, canvas: {
+  return { name: 'Garden', locale: 'fr', viewBearingDeg: 0, commonNames: { 'Malus domestica': 'Pommier', 'Ribes nigrum': 'Blackcurrant', 'Mentha spicata': 'Menthe' }, canvas: {
     layers: [{ name: 'plants', visible: true, opacity: 1 }], zones: [], annotations: [], measurements: [],
     plants: [plant('a', 'Malus domestica', 4, '#c0392b'), plant('b', 'Ribes nigrum', 10, '#2f7d32', 'round'), plant('c', 'Mentha spicata', 16, '#8e44ad', 'round'),
       plant('d', 'Unknown species', 22, '#f1c40f')],
@@ -56,7 +57,8 @@ describe('Canvas PDF print options', () => {
     expect(input).toEqual(before)
   })
   it('gives each distinct colour its own grey, darkest for the darkest colour', () => {
-    const greys = printPlantColors([plant('a', 'A', 0, '#000000'), plant('b', 'B', 0, '#ffffff'), plant('c', 'C', 0, '#808080')], 'grayscale')
+    const plants = [plant('a', 'A', 0, '#000000'), plant('b', 'B', 0, '#ffffff'), plant('c', 'C', 0, '#808080')]
+    const greys = new Map(recolorPlants(plants, 'grayscale').map((printed, i) => [plants[i]!.color, printed.color]))
     const level = (color: string) => parseInt(greys.get(color)!.slice(1, 3), 16)
     expect(new Set(greys.values()).size).toBe(3)
     expect(level('#000000')).toBeLessThan(level('#808080'))
@@ -78,7 +80,7 @@ describe('Canvas PDF print options', () => {
 describe('Canvas PDF name and habit resolution', () => {
   it('fills missing chosen-language names with English, marks them, and maps catalog habits', async () => {
     const input = garden({ commonNames: {} })
-    const prepare = vi.fn(async (_preparation: PdfPreparation): Promise<PreparedPdf> => ({ bytes: new Uint8Array([1]), plan: { pages: [], outlines: {}, blocked: null } }))
+    const prepare = vi.fn(async (_preparation: PdfPreparation): Promise<PreparedPdf> => ({ bytes: new Uint8Array([1]), plan: { pages: [], angleDeg: 0, outlines: {}, blocked: null } }))
     // The catalog's projection: the chosen language's names, English marked for the rest.
     const resolveDisplayNames = vi.fn(composeSpeciesDisplayNames(async (names, locale) =>
       locale === 'fr' ? { 'Malus domestica': 'Pommier' } : Object.fromEntries(names.filter(name => name !== 'Unknown species').map(name => [name, `${name} (English)`]))))

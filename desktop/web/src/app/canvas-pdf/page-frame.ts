@@ -7,7 +7,6 @@
 // turns every area about its own centre, and the sheets of one split together about their split's centre (its pivot).
 
 import type { CanvasPrintSnapshot, PrintBounds, PrintPoint, PrintZone } from '../../canvas/print'
-import { outlineSegments } from './field-geometry'
 import type { PdfInput, PdfSetup } from './types'
 
 export interface PageFrame {
@@ -22,9 +21,9 @@ export interface PageFrame {
 const same = (point: PrintPoint) => point
 const NORTH_UP: PageFrame = { angleDeg: 0, toFrame: same, fromFrame: same }
 
-export function pageFrame(angleDeg = 0): PageFrame {
+export function pageFrame(angleDeg: number): PageFrame {
   const angle = ((angleDeg % 360) + 360) % 360
-  if (!Number.isFinite(angle) || angle === 0) return NORTH_UP
+  if (angle === 0) return NORTH_UP
   const radians = angle * Math.PI / 180, c = Math.cos(radians), s = Math.sin(radians)
   return {
     angleDeg: angle,
@@ -35,7 +34,7 @@ export function pageFrame(angleDeg = 0): PageFrame {
 
 /** The layout angle: the view's bearing under As on screen, else 0. */
 export function layoutAngle(setup: Pick<PdfSetup, 'mapOrientation'>, input: Pick<PdfInput, 'viewBearingDeg'>): number {
-  return setup.mapOrientation === 'as-on-screen' ? input.viewBearingDeg ?? 0 : 0
+  return setup.mapOrientation === 'as-on-screen' ? input.viewBearingDeg : 0
 }
 
 /**
@@ -83,23 +82,20 @@ export function turnSnapshot(snapshot: CanvasPrintSnapshot, frame: PageFrame): C
 }
 
 function turnZone(zone: PrintZone, frame: PageFrame): PrintZone {
-  const path = turnPath(zone.path, frame.toFrame)
-  const geometry: PrintZone['geometry'] = !zone.geometry ? undefined : zone.geometry.kind === 'ellipse'
+  const geometry: PrintZone['geometry'] = zone.geometry.kind === 'ellipse'
     ? { ...zone.geometry, center: frame.toFrame(zone.geometry.center), rotation: zone.geometry.rotation - frame.angleDeg }
     : { ...zone.geometry, points: zone.geometry.points.map(frame.toFrame) }
-  return { ...zone, path, bounds: turnedBounds(zone, geometry, path, frame), ...(geometry ? { geometry } : {}) }
+  return { ...zone, path: turnPath(zone.path, frame.toFrame), bounds: turnedBounds(geometry), geometry }
 }
 
-function turnedBounds(zone: PrintZone, geometry: PrintZone['geometry'], path: string, frame: PageFrame): PrintBounds {
-  if (geometry?.kind === 'ellipse') {
+/** The print snapshot gives every zone its geometry, and a polygon or line at least one point. */
+function turnedBounds(geometry: PrintZone['geometry']): PrintBounds {
+  if (geometry.kind === 'ellipse') {
     const a = geometry.rotation * Math.PI / 180, { x: rx, y: ry } = geometry.radii
     const hx = Math.hypot(rx * Math.cos(a), ry * Math.sin(a)), hy = Math.hypot(rx * Math.sin(a), ry * Math.cos(a))
     return { x: geometry.center.x - hx, y: geometry.center.y - hy, width: 2 * hx, height: 2 * hy }
   }
-  const points = geometry?.points.length ? geometry.points
-    : outlineSegments(path, same).flatMap(segment => [segment.a, segment.b])
-  const { x, y, width, height } = zone.bounds
-  return boxOf(points.length ? points : [{ x, y }, { x: x + width, y }, { x: x + width, y: y + height }, { x, y: y + height }].map(frame.toFrame))
+  return boxOf(geometry.points)
 }
 
 function boxOf(points: readonly PrintPoint[]): PrintBounds {
@@ -108,26 +104,22 @@ function boxOf(points: readonly PrintPoint[]): PrintBounds {
   return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y }
 }
 
-/** Every coordinate pair of an M/L/H/V/C/Z print path, turned; the result is absolute M, L, C and Z. */
+/** Every coordinate pair of a print path, turned. The print snapshot writes only absolute M, L, C and Z. */
 function turnPath(path: string, turn: (point: PrintPoint) => PrintPoint): string {
   const tokens = path.match(/[a-zA-Z]|[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:e[-+]?\d+)?/gi) ?? []
   const out: string[] = []
-  let i = 0, command = '', point: PrintPoint = { x: 0, y: 0 }, start = point
-  const number = () => Number(tokens[i++])
-  const read = (relative: boolean): PrintPoint => ({ x: number() + (relative ? point.x : 0), y: number() + (relative ? point.y : 0) })
+  let i = 0, command = ''
+  const read = (): PrintPoint => ({ x: Number(tokens[i++]), y: Number(tokens[i++]) })
   const emit = (letter: string, ...points: PrintPoint[]) => {
     out.push(`${letter}${points.map(p => { const t = turn(p); return `${t.x} ${t.y}` }).join(' ')}`)
   }
   while (i < tokens.length) {
     if (/^[a-z]$/i.test(tokens[i]!)) command = tokens[i++]!
-    const relative = command === command.toLowerCase()
-    switch (command.toUpperCase()) {
-      case 'M': point = read(relative); start = point; emit('M', point); command = relative ? 'l' : 'L'; break
-      case 'L': point = read(relative); emit('L', point); break
-      case 'H': point = { ...point, x: number() + (relative ? point.x : 0) }; emit('L', point); break
-      case 'V': point = { ...point, y: number() + (relative ? point.y : 0) }; emit('L', point); break
-      case 'C': { const b = read(relative), c = read(relative), next = read(relative); emit('C', b, c, next); point = next; break }
-      case 'Z': out.push('Z'); point = start; command = ''; break
+    switch (command) {
+      case 'M': emit('M', read()); command = 'L'; break
+      case 'L': emit('L', read()); break
+      case 'C': emit('C', read(), read(), read()); break
+      case 'Z': out.push('Z'); command = ''; break
       default: throw new Error('unsupported-print-path')
     }
   }

@@ -1376,8 +1376,7 @@
       "text-too-wide": "Some text cannot fit at a readable size. Edit the text in the Design and try again.",
       "delivery-failed": "Could not save the PDF. Try saving again.",
       "selection-missing": "Some selected layers no longer exist. Review Print layers before exporting.",
-      "coverage-too-large": "This setup exceeds the 200-page limit. Print fewer areas or layers.",
-      "invalid-page-view": "Choose a valid zoom and orientation for this page."
+      "coverage-too-large": "This setup exceeds the 200-page limit. Print fewer areas or layers."
     },
     "canvasZoom": "Canvas zoom (%)",
     "resetFit": "Fit",

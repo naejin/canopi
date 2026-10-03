@@ -1,17 +1,17 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { fixture } from '../../scripts/pdf-validation/fixtures'
+import { fixture, englishPdfLabels } from '../../scripts/pdf-validation/fixtures'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { areaFromFrame, pageFrame } from '../app/canvas-pdf/page-frame'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
-import type { PdfInput, PdfLabels, PdfOperation } from '../app/canvas-pdf/types'
+import type { PdfInput, PdfOperation } from '../app/canvas-pdf/types'
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
-const labels: PdfLabels = { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants on this page', actualSize: 'Print at actual size' }
+const labels = englishPdfLabels
 // Symbol legend and north arrow fill in ink; plant marks keep their authored colours.
 const plantFill = (op: PdfOperation) => op.kind === 'path' && !!op.fill && op.fill !== '#24211c'
 const mark = [{ d: 'M-1 -1 h2 v2 h-2 Z', paint: 'symbol' as const }]
 function input(): PdfInput {
-  return { name: 'Field garden', locale: 'en', commonNames: { 'Malus domestica': 'Apple' }, canvas: {
+  return { name: 'Field garden', locale: 'en', viewBearingDeg: 0, commonNames: { 'Malus domestica': 'Apple' }, canvas: {
     layers: [{ name: 'plants', visible: true, opacity: 1 }], zones: [], annotations: [], measurements: [],
     plants: [
       { id: 'a', canonicalName: 'Malus domestica', position: { x: 0, y: 0 }, color: '#123456', symbol: 'square', mark, pinnedName: true },

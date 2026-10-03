@@ -1376,8 +1376,7 @@
       "text-too-wide": "Sommige tekst past niet op leesbare grootte. Bewerk de tekst in het ontwerp en probeer opnieuw.",
       "delivery-failed": "De PDF kon niet worden opgeslagen. Probeer opnieuw op te slaan.",
       "selection-missing": "Sommige geselecteerde lagen bestaan niet meer. Controleer de afdruklagen voordat je exporteert.",
-      "coverage-too-large": "Deze indeling overschrijdt de limiet van 200 pagina’s. Druk minder afdrukgebieden of lagen af.",
-      "invalid-page-view": "Kies een geldige zoom en afdrukstand voor deze pagina."
+      "coverage-too-large": "Deze indeling overschrijdt de limiet van 200 pagina’s. Druk minder afdrukgebieden of lagen af."
     },
     "canvasZoom": "Canvaszoom (%)",
     "resetFit": "Passend",

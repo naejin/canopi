@@ -4,6 +4,7 @@ import { expect, it } from 'vitest'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { encodePdf } from '../app/canvas-pdf/encode'
+import { englishPdfLabels } from '../../scripts/pdf-validation/fixtures'
 
 it('encodes the shared mixed-script overview as vector PDF bytes with embedded fonts', async () => {
   const fonts = new Map<PdfFontId, Uint8Array>([
@@ -11,12 +12,12 @@ it('encodes the shared mixed-script overview as vector PDF bytes with embedded f
     ['jp', readFileSync('public/pdf-fonts/NotoSansCJKjp-Regular.otf')],
     ['kr', readFileSync('public/pdf-fonts/NotoSansCJKkr-Regular.otf')],
   ])
-  const input = { name: 'Érable Яблоня 庭園 정원', locale: 'ja', commonNames: {}, canvas: {
+  const input = { name: 'Érable Яблоня 庭園 정원', locale: 'ja', viewBearingDeg: 0, commonNames: {}, canvas: {
     layers: [{ name: 'annotations', visible: true, opacity: 1 }], plants: [], zones: [], measurements: [],
     annotations: [{ id: 'name', position: { x: 0, y: 0 }, text: 'ローズマリー AVATAR office', fontSize: 16, rotation: 0 }],
   } }
   const plan = buildPdfPlan(input, { paper: 'Letter', views: { overview: { orientation: 'landscape' } }, layers: ['annotations'] }, createPdfTextEngine(fonts, 'ja'),
-    { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Print at actual size' })
+    { ...englishPdfLabels, notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Print at actual size' })
   const bytes = await encodePdf(plan, fonts, input.name)
   const pdf = new TextDecoder().decode(bytes)
   expect(pdf.startsWith('%PDF-')).toBe(true)
@@ -34,11 +35,11 @@ it('loads every regional font needed when mixed-script names wrap onto different
   vi.stubGlobal('fetch', async (url: URL) => new Response(new Uint8Array(readFileSync(`public/pdf-fonts/${url.pathname.split('/').at(-1)}`))))
   try {
     const result = await preparePdf({
-      input: { name: 'Field garden · 庭園 정원', locale: 'en', commonNames: {}, canvas: {
+      input: { name: 'Field garden · 庭園 정원', locale: 'en', viewBearingDeg: 0, commonNames: {}, canvas: {
         layers: [{ name: 'annotations', visible: true, opacity: 1 }], plants: [], zones: [], measurements: [],
         annotations: [{ id: 'note', position: { x: 0, y: 0 }, text: 'Érable Яблоня ローズマリー 정원', fontSize: 16, rotation: 0 }],
       } }, setup: { paper: 'A4', layers: ['annotations'] },
-      labels: { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Print at actual size' }, fontBaseUrl: 'https://app.test/fonts/',
+      labels: { ...englishPdfLabels, notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Print at actual size' }, fontBaseUrl: 'https://app.test/fonts/',
     })
     expect(result.plan.blocked).toBeNull()
     expect(result.bytes?.byteLength).toBeGreaterThan(1000)

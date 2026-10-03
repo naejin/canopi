@@ -8,6 +8,7 @@ import { areaFromFrame, pageFrame } from '../app/canvas-pdf/page-frame'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 import type { PdfInput, PdfPage, PdfPlan, PdfSetup } from '../app/canvas-pdf/types'
 import type { PrintBounds, PrintPoint } from '../canvas/print'
+import { englishPdfLabels } from '../../scripts/pdf-validation/fixtures'
 
 const page: PdfPage = { id: 'overview', kind: 'overview', number: 1, width: 200, height: 100,
   frame: { x: 20, y: 10, width: 160, height: 80 }, ground: { x: 100, y: 200, width: 16, height: 8 },
@@ -31,7 +32,7 @@ async function editor(props: Partial<Parameters<typeof PdfPageEditor>[0]> & { pl
   return { pointer, key, dispose: () => { render(null, container); container.remove() } }
 }
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
-const labels = { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }
+const labels = { ...englishPdfLabels, notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }
 const garden = (viewBearingDeg: number): PdfInput => ({ name: 'Garden', locale: 'en', commonNames: {}, viewBearingDeg, canvas: {
   layers: [{ name: 'plants', visible: true, opacity: 1 }], zones: [], annotations: [], measurements: [],
   plants: [0, 1, 2].map(i => ({ id: String(i), canonicalName: 'Malus domestica', position: { x: 100 + i * 6, y: 200 + i * 3 }, color: '#123456', symbol: 'round', mark: [], pinnedName: false })),
@@ -86,7 +87,7 @@ it('maps a drag through fitted-page whitespace into ground coordinates and cance
     pointsPerMeter: 10, operations: [], legend: [] }
   const onPrintArea = vi.fn()
   try {
-    await act(async () => { render(<PdfPageEditor page={page} plan={{ pages: [page], outlines: {}, blocked: null }} adding onPrintArea={onPrintArea} />, container) })
+    await act(async () => { render(<PdfPageEditor page={page} plan={{ pages: [page], angleDeg: 0, outlines: {}, blocked: null }} adding onPrintArea={onPrintArea} />, container) })
     const svg = container.querySelector('svg')!
     vi.spyOn(svg, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1000, 1000))
     const captured = new Set<number>()
@@ -120,7 +121,7 @@ it('commits framing once, cancels lost capture and Escape, and ignores clicks wh
     frame: { x: 20, y: 10, width: 160, height: 80 }, ground: { x: 100, y: 200, width: 16, height: 8 },
     pointsPerMeter: 10, operations: [], legend: [] }
   const onMove = vi.fn(), onPrintArea = vi.fn()
-  const plan = { pages: [page], outlines: {}, blocked: null }
+  const plan = { pages: [page], angleDeg: 0, outlines: {}, blocked: null }
   try {
     await act(async () => { render(<PdfPageEditor page={page} plan={plan} onMove={onMove} />, container) })
     const svg = container.querySelector('svg')!
@@ -170,7 +171,7 @@ it('commits framing once, cancels lost capture and Escape, and ignores clicks wh
 it('mod+arrow is the large step; Shift+arrow does nothing; the direction is unchanged', async () => {
   for (const mac of [false, true]) {
     const onMove = vi.fn()
-    const view = await editor({ plan: { pages: [page], outlines: {}, blocked: null }, onMove, mac })
+    const view = await editor({ plan: { pages: [page], angleDeg: 0, outlines: {}, blocked: null }, onMove, mac })
     try {
       const mod = mac ? { metaKey: true } : { ctrlKey: true }, other = mac ? { ctrlKey: true } : { metaKey: true }
       // ArrowLeft moves the content left, as a drag does (U12): the view centre goes right.

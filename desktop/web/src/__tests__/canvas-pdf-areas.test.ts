@@ -3,13 +3,14 @@ import { describe, expect, it } from 'vitest'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
 import type { PdfInput, PdfSetup } from '../app/canvas-pdf/types'
-const labels = { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Print at actual size' }
+import { englishPdfLabels } from '../../scripts/pdf-validation/fixtures'
+const labels = { ...englishPdfLabels, notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Print at actual size' }
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
-const empty: PdfInput = { name: 'Empty design', locale: 'en', commonNames: {}, canvas: { layers: [], plants: [], zones: [], annotations: [], measurements: [] } }
+const empty: PdfInput = { name: 'Empty design', locale: 'en', viewBearingDeg: 0, commonNames: {}, canvas: { layers: [], plants: [], zones: [], annotations: [], measurements: [] } }
 const setup: PdfSetup = { paper: 'A4', layers: [] }
 describe('Temporary Print Areas', () => {
   it('fits the drawing overview to printable content without hidden Zones or manual overview framing', () => {
-    const input: PdfInput = { ...empty, canvas: { ...empty.canvas, zones: [{ name: 'Far bed', bounds: { x: 100, y: 200, width: 30, height: 10 }, path: 'M100 200 H130 V210 H100 Z', fill: null }] } }
+    const input: PdfInput = { ...empty, canvas: { ...empty.canvas, zones: [{ name: 'Far bed', bounds: { x: 100, y: 200, width: 30, height: 10 }, path: 'M100 200 L130 200 L130 210 L100 210 Z', geometry: { kind: 'rect' as const, points: [{ x: 100, y: 200 }, { x: 130, y: 200 }, { x: 130, y: 210 }, { x: 100, y: 210 }] }, fill: null }] } }
     const plan = buildPdfPlan(input, { ...setup, views: { overview: { zoom: 200, offset: { x: -100, y: 0 } } } }, text(), labels)
     const blank = buildPdfPlan(empty, setup, text(), labels)
     expect(plan.pickerPage!.ground).toEqual(blank.pickerPage!.ground)
@@ -56,7 +57,7 @@ describe('Temporary Print Areas', () => {
     expect(empty).toEqual(before)
   })
   it('keeps custom zoom and orientation independent across Print Areas', () => {
-    const input = { ...empty, canvas: { ...empty.canvas, zones: [{ name: 'Bed', bounds: { x: 0, y: 0, width: 2, height: 2 }, path: 'M0 0 H2 V2 H0 Z', fill: null }] } }
+    const input = { ...empty, canvas: { ...empty.canvas, zones: [{ name: 'Bed', bounds: { x: 0, y: 0, width: 2, height: 2 }, path: 'M0 0 L2 0 L2 2 L0 2 Z', geometry: { kind: 'rect' as const, points: [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 2 }, { x: 0, y: 2 }] }, fill: null }] } }
     const options: PdfSetup = { ...setup, views: { 'area:bed': { zoom: 80, orientation: 'landscape' } }, areas: [
       { id: 'bed', name: 'Bed', bounds: { x: 0, y: 0, width: 2, height: 2 } },
       { id: 'field', name: 'Field', bounds: { x: 5, y: 5, width: 10, height: 10 } },

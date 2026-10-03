@@ -1376,8 +1376,7 @@
       "text-too-wide": "Alguns textos não cabem em tamanho legível. Edite o texto no design e tente novamente.",
       "delivery-failed": "Não foi possível salvar o PDF. Tente salvar novamente.",
       "selection-missing": "Algumas camadas selecionadas não existem mais. Revise as camadas de impressão antes de exportar.",
-      "coverage-too-large": "Esta configuração excede o limite de 200 páginas. Imprima menos áreas ou camadas.",
-      "invalid-page-view": "Escolha um zoom e uma orientação válidos para esta página."
+      "coverage-too-large": "Esta configuração excede o limite de 200 páginas. Imprima menos áreas ou camadas."
     },
     "canvasZoom": "Zoom da tela (%)",
     "resetFit": "Ajustar",

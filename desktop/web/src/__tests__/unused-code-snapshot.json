@@ -219,7 +219,6 @@
     "src/app/analyses/model.ts#parseLocaleNumber",
     "src/app/budget/workbench.ts#validateBudgetPriceDraft",
     "src/app/canvas-map-surface/workspace-runtime-composition.ts#WORKSPACE_VIEW_SETTLE_MS",
-    "src/app/canvas-pdf/print-colors.ts#printPlantColors",
     "src/app/canvas-settings/signals.ts#createDefaultLayerLockState",
     "src/app/canvas-settings/signals.ts#createDefaultLayerOpacity",
     "src/app/canvas-settings/signals.ts#createDefaultLayerVisibility",

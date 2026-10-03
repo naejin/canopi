@@ -6,8 +6,9 @@ import { createPdfWorkflow, type PdfCapture } from '../app/canvas-pdf/workflow'
 import { pdfAreaKey, type PdfInput, type PdfPage, type PreparedPdf } from '../app/canvas-pdf/types'
 import { areaContains, areaFromFrame, areaToFrame, layoutAngle, pageFrame } from '../app/canvas-pdf/page-frame'
 import { splitPrintArea } from '../app/canvas-pdf/split-sheets'
-const result: PreparedPdf = { bytes: new Uint8Array([37, 80, 68, 70]), plan: { pages: [], outlines: {}, blocked: null } }
-function fixture(plants: PrintPlant[] = [], view: Pick<PdfInput, 'viewBearingDeg'> = {}) {
+import { englishPdfLabels } from '../../scripts/pdf-validation/fixtures'
+const result: PreparedPdf = { bytes: new Uint8Array([37, 80, 68, 70]), plan: { pages: [], angleDeg: 0, outlines: {}, blocked: null } }
+function fixture(plants: PrintPlant[] = [], view: Pick<PdfInput, 'viewBearingDeg'> = { viewBearingDeg: 0 }) {
   const identity = {}
   let current = true
   const capture: PdfCapture = { identity, isCurrent: () => current, input: { name: 'Garden', locale: 'fr', commonNames: {}, ...view,
@@ -20,10 +21,10 @@ function fixture(plants: PrintPlant[] = [], view: Pick<PdfInput, 'viewBearingDeg
   let bearing = view.viewBearingDeg, turning = false, settles = 0
   const workflow = createPdfWorkflow({ capture: () => {
     const canvas = currentCanvas, turningNow = turning, settled = settles
-    return { ...capture, input: { ...capture.input, canvas, ...(bearing === undefined ? {} : { viewBearingDeg: bearing }) },
+    return { ...capture, input: { ...capture.input, canvas, viewBearingDeg: bearing },
       ...(turningNow ? { turning: true } : {}), isCurrent: () => current && canvas === currentCanvas && (!turningNow || settled === settles) }
-  }, prepare, resolveDisplayNames,
-    delivery: { save, dispose: vi.fn() }, labels: () => ({ notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => 'https://test/fonts/' })
+  }, prepare, resolveDisplayNames, resolveHabits: async () => ({}),
+    delivery: { save, dispose: vi.fn() }, labels: () => ({ ...englishPdfLabels, notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => 'https://test/fonts/' })
   return { workflow, prepare, save, resolveDisplayNames, capture, setCanvas: (canvas: CanvasPrintSnapshot) => { currentCanvas = canvas },
     turnView: (deg: number) => { bearing = deg },
     startTurn: (deg: number) => { bearing = deg; turning = true },
@@ -201,7 +202,7 @@ describe('PDF workflow lifetime', () => {
   })
   it('retains independent Print Areas when Zones are resized, renamed or removed', async () => {
     const { workflow, prepare, capture, setCanvas } = fixture()
-    const zone = { name: 'Orchard', bounds: { x: 0, y: 0, width: 10, height: 10 }, path: 'M0 0 H10 V10 H0 Z', fill: null }
+    const zone = { name: 'Orchard', bounds: { x: 0, y: 0, width: 10, height: 10 }, path: 'M0 0 L10 0 L10 10 L0 10 Z', geometry: { kind: 'rect' as const, points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }] }, fill: null }
     setCanvas({ ...capture.input.canvas, zones: [zone] })
     workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
     expect(workflow.setup.value.areas ?? []).toEqual([])

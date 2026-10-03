@@ -1376,8 +1376,7 @@
       "text-too-wide": "Certains textes ne tiennent pas à une taille lisible. Modifiez le texte dans le Design et réessayez.",
       "delivery-failed": "Impossible d’enregistrer le PDF. Réessayez l’enregistrement.",
       "selection-missing": "Certains calques sélectionnés n’existent plus. Vérifiez les calques à imprimer avant d’exporter.",
-      "coverage-too-large": "Cette configuration dépasse la limite de 200 pages. Imprimez moins d’aires ou de calques.",
-      "invalid-page-view": "Choisissez un zoom et une orientation valides pour cette page."
+      "coverage-too-large": "Cette configuration dépasse la limite de 200 pages. Imprimez moins d’aires ou de calques."
     },
     "canvasZoom": "Zoom du canevas (%)",
     "resetFit": "Ajuster",

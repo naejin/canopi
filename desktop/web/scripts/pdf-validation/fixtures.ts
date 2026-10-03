@@ -1,8 +1,16 @@
 import { createDefaultScenePersistedState } from '../../src/canvas/runtime/scene'
 import { buildCanvasPrintSnapshot } from '../../src/canvas/runtime/print-snapshot'
 import type { PdfPreparation } from '../../src/app/canvas-pdf/prepare'
-import type { PdfSetup } from '../../src/app/canvas-pdf/types'
+import type { PdfLabels, PdfSetup } from '../../src/app/canvas-pdf/types'
 
+/** English print wording for fixtures and tests; the app reads every label from its locale (`live.ts`). */
+export const englishPdfLabels: PdfLabels = {
+  notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants on this page', actualSize: 'Print at actual size',
+  detail: 'Detail', measurementSummary: 'Dimensions and spacing', zone: 'Zone', longSide: 'Length', width: 'Width', guides: 'Guides',
+  metres: 'Measurements in metres', diameters: 'Diameters', outerSides: 'Exterior sides', quantity: 'Qty', species: 'species', plantKey: 'Plant key',
+  habitTree: 'Tree', habitShrub: 'Shrub', habitHerbaceous: 'Herbaceous', habitClimber: 'Climber', habitOther: 'Other', continued: '(continued)',
+  englishFallback: '(en) = no name in this language yet', englishMark: '(en)', symbols: 'Symbols', north: 'N',
+}
 export const fixtureNames = ['dense', 'mixed', 'framing', 'legends', 'multilingual', 'map-excluded', 'stress-1', 'stress-10', 'stress-50'] as const
 export type FixtureName = typeof fixtureNames[number]
 const species = [
@@ -54,7 +62,7 @@ export function fixture(name: FixtureName): Omit<PdfPreparation, 'fontBaseUrl'> 
   // Map state is deliberately absent from the public print projection. Extra
   // basemap layers exercise filtering without any provider or map capture.
   if (name === 'map-excluded') scene.layers.push({ kind: 'layer', name: 'satellite', visible: true, locked: false, opacity: 1 })
-  return { input: { name: name === 'map-excluded' ? 'mixed' : name, locale: 'en', commonNames,
+  return { input: { name: name === 'map-excluded' ? 'mixed' : name, locale: 'en', viewBearingDeg: 0, commonNames,
     canvas: buildCanvasPrintSnapshot(scene, { pixelsPerMetre: .001, speciesCache: new Map() }) }, setup,
-    labels: { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants on this page', actualSize: 'Print at actual size' } }
+    labels: englishPdfLabels }
 }

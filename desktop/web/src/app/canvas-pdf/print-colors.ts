@@ -10,9 +10,8 @@ const DARKEST = 0x2a, LIGHTEST = 0x94
  * Print colour for each authored plant colour. Grayscale gives every distinct colour its own
  * grey, ordered by the original luminance, so the same species keeps one grey on every page.
  */
-export function printPlantColors(plants: readonly PrintPlant[], mode: PdfPlantColors = 'design'): ReadonlyMap<string, string> {
+function printPlantColors(plants: readonly PrintPlant[], mode: 'grayscale' | 'black'): ReadonlyMap<string, string> {
   const colors = [...new Set(plants.map(p => p.color))]
-  if (mode === 'design') return new Map(colors.map(color => [color, color]))
   if (mode === 'black') return new Map(colors.map(color => [color, PRINT.ink]))
   const keyed = [...new Set(colors.map(key))].sort((a, b) => luminance(a) - luminance(b) || a.localeCompare(b))
   const levels = new Map(keyed.map((color, rank) => [color, keyed.length === 1 ? Math.round((DARKEST + LIGHTEST) / 2)

@@ -1376,8 +1376,7 @@
       "text-too-wide": "Einige Texte passen nicht in lesbarer Größe. Bearbeiten Sie den Text im Design und versuchen Sie es erneut.",
       "delivery-failed": "Das PDF konnte nicht gespeichert werden. Versuchen Sie es erneut.",
       "selection-missing": "Einige ausgewählte Ebenen sind nicht mehr vorhanden. Prüfen Sie die Druckebenen vor dem Export.",
-      "coverage-too-large": "Diese Konfiguration überschreitet 200 Seiten. Drucken Sie weniger Druckbereiche oder Ebenen.",
-      "invalid-page-view": "Wählen Sie einen gültigen Zoom und eine gültige Ausrichtung für diese Seite."
+      "coverage-too-large": "Diese Konfiguration überschreitet 200 Seiten. Drucken Sie weniger Druckbereiche oder Ebenen."
     },
     "canvasZoom": "Zeichenflächenzoom (%)",
     "resetFit": "Einpassen",
