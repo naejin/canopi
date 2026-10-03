@@ -233,6 +233,16 @@ describe('recapturing a saved view', () => {
     expect(currentDesign.value).toBe(before)
   })
 
+  it('leaves an unchanged view loaded with a null ground size alone', () => {
+    // Desktop's loader writes an absent ground size as `null`; a capture leaves the key out.
+    const loaded = { ...view('a'), camera: { ...view('a').camera, ground_size_m: null } }
+    open([], [loaded])
+    const before = currentDesign.value
+    recaptureSavedView('a', { ...view('fresh'), camera: view('a').camera })
+    expect(currentDesign.value).toBe(before)
+    expect(designSessionStore.designDirty.value).toBe(false)
+  })
+
   it('writes back only the fields a saved view has, never a field the view carried from elsewhere', () => {
     // A view object holding a stray field (the deleted `extent`, say): recapturing builds the view from its named fields.
     const stray = { ...view('a'), extent: { west: 2.9, south: 44.9, east: 3.1, north: 45.1 } } as SavedView
