@@ -23,10 +23,10 @@ const SAME_ZOOM_TOLERANCE = 1e-6
  * or null when the window has no size or the ground is out of range.
  */
 export function savedViewGroundSize(camera: Pick<SavedViewCamera, 'lat' | 'zoom'>, window: WindowSize): GroundSize | null {
-  const pixelsPerMetre = mapZoomToStageScale(camera.zoom, camera.lat)
+  const metresPerPixel = groundMetresPerPixel(camera)
   const ground = {
-    width: Number((window.width / pixelsPerMetre).toPrecision(10)),
-    height: Number((window.height / pixelsPerMetre).toPrecision(10)),
+    width: Number((window.width * metresPerPixel).toPrecision(10)),
+    height: Number((window.height * metresPerPixel).toPrecision(10)),
   }
   return isAdmittedGroundSize(ground) ? ground : null
 }
@@ -39,10 +39,15 @@ export function savedViewGroundSize(camera: Pick<SavedViewCamera, 'lat' | 'zoom'
  */
 export function savedViewZoom(camera: SavedViewCamera, window: WindowSize, workspace: WindowSize = window): number {
   const ground = camera.ground_size_m ?? savedViewGroundSize(camera, workspace)
-  const metresPerPixel = 1 / mapZoomToStageScale(camera.zoom, camera.lat)
+  const metresPerPixel = groundMetresPerPixel(camera)
   const step = ground
     ? Math.min(0, Math.log2(Math.min(window.width * metresPerPixel / ground.width, window.height * metresPerPixel / ground.height)))
     : 0
   const zoom = Number.isFinite(step) && Math.abs(step) > SAME_ZOOM_TOLERANCE ? camera.zoom + step : camera.zoom
   return Math.min(WORKSPACE_MAP_MAX_ZOOM, Math.max(WORKSPACE_MAP_MIN_ZOOM, zoom))
+}
+
+/** Ground metres per CSS pixel at a stored camera's centre latitude and zoom: a size, never a position. */
+function groundMetresPerPixel(camera: Pick<SavedViewCamera, 'lat' | 'zoom'>): number {
+  return 1 / mapZoomToStageScale(camera.zoom, camera.lat)
 }
