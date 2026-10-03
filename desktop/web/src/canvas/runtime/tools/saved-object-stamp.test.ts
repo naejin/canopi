@@ -352,6 +352,25 @@ describe('saved object stamp tool', () => {
       expect(h.store.persisted.annotations[0]?.rotationDeg).toBe(45)
     })
 
+    it('the ghost left with the pointer off the map follows the view as it turns', () => {
+      const h = harness()
+      holding(h, mulchStamp())
+      h.hover({ x: 200, y: 150 })
+      h.host.command({ kind: 'rotate-held', stepDeg: 15 })
+      // The pointer moves onto the compass: the ghost stays where it was drawn.
+      h.leave()
+      expect(ghosts(h)[0]!.entity).toMatchObject({ rotationDeg: 15 })
+
+      // The compass or "Turn view to this edge" turns the view to 30° with no pointer on the map.
+      const { camera } = h.view.host.frames.viewFrame.peek().view
+      h.view.host.current().apply({ kind: 'set', target: { ...camera, bearingDeg: 30 }, animation: 'none' })
+      h.advance(0)
+
+      // The parked ghost shows where a click would place: level to the screen at the new bearing.
+      expect(ghosts(h)[0]!.entity).toMatchObject({ anchor: { x: 200, y: 150 }, rotationDeg: 45 })
+      expect(h.record.guidance.at(-1)?.stampRotationDeg).toBe(15)
+    })
+
     it('a stamp chosen while armed starts level to the screen, and none leaves nothing to turn', () => {
       const h = harness()
       holding(h, mulchStamp())

@@ -157,6 +157,11 @@ export function createSavedObjectStampTool(): CanvasTool {
       }
       return 'pass'
     },
+    viewChanged() {
+      // The host re-emits no hover with the pointer off the map: the ghost left there redraws at the live bearing, where
+      // the next click places.
+      if (ghostShown && lastAnchor) showGhostAt(lastAnchor)
+    },
     planeChanged(reproject) {
       // A re-origin moves the ground under the last anchor: the ghost stays where it stood, also with the pointer off the
       // map, where the host re-emits nothing. The stamp's objects are placed by their offsets from its anchor.
