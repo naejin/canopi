@@ -525,6 +525,28 @@ describe('view navigation', () => {
     view.dispose()
   })
 
+  it('turnToEdge 3 degrees off horizontal ends at 3', () => {
+    vi.useFakeTimers()
+    const view = createTestView()
+    const rad = 3 * Math.PI / 180
+
+    // An explicit target is never snapped to north, however close it is (spec §4.4).
+    view.navigation.turnToEdge({ x: 0, y: 0 }, { x: 10 * Math.cos(rad), y: 10 * Math.sin(rad) })
+    vi.advanceTimersByTime(TURN_MS)
+
+    expect(view.view().camera.bearingDeg).toBeCloseTo(3, 9)
+    view.dispose()
+  })
+
+  it('a saved view at 3 restores at 3', () => {
+    const view = createTestView()
+
+    view.navigation.showCamera({ ...view.view().camera, bearingDeg: 3 }, { motion: 'fly' })
+
+    expect(view.view().camera.bearingDeg).toBeCloseTo(3, 9)
+    view.dispose()
+  })
+
   it('a rotation session steps, snaps to north on release, and cancel restores the start', () => {
     vi.useFakeTimers()
     const view = createTestView()
