@@ -1735,7 +1735,7 @@ Rotation from the pointer is never available without Shift (user: deliberate ges
 | Pan (H) | nothing | pans (mouse, pen, touch); no handles show while Pan is armed (as today; only Select shows them), so a press never lands on one | nothing | ignored (a session's mode is fixed) | ignored | ignored |
 | Plant stamp (P) | places one plant of the chosen species at the snapped point; with no species the card asks to choose one | the press already placed; the drag does nothing more (today) | places a second plant (each press places one, today) | none | none | none |
 | Plant a row (W) | on a placed plant: chooses it as the row source | draws the row from the source along the drag (4 px, measured by the tool); plants at the spacing interval | nothing | 45° steps against the screen axes (from 1; before: world axes). Before 2 Shift also turns snapping off | no snapping while held (from 2) | none |
-| Object stamp (K) | first click on a plant, zone, note or group copies it (the pick); later clicks place the pick, level to the screen at the current bearing (from 1) | nothing more than the click | places twice | none | none | none |
+| Object stamp (K) | first click on a plant, zone, note or group copies it (the pick); later clicks place the pick at its source's orientation, turned by [ and ] (§4.7, A13) | nothing more than the click | places twice | none | none | none |
 | Saved object stamp (no key) | places the saved stamp, level to the screen (from 1), then returns to Select (today); a drop from Favorites places it the same way (from 1) | nothing more | places once; the second press reaches Select (today) | none | none | none |
 | Text (T) | places a note and opens text entry; a note created on a rotated map is level to the screen (from 1) | nothing more | nothing more | none | none | none |
 | Line (L) | nothing | draws a line | nothing | 45° steps against the screen axes (from 2) | none | none |
@@ -2020,7 +2020,7 @@ Arrows move the selection along screen directions (↑ = up on screen) by 10 cm,
 | Rectangle, ellipse | drawn aligned to the screen (`screenAlignedRect`: the unturned box about its centre), stored with `rotationDeg = normaliseBearing(bearing)` (user; identical at 0) |
 | Note | created level to the screen, stored with `rotationDeg = normaliseBearing(bearing)`; at bearing 0 it writes 0 instead of null, which renders identically |
 | Object stamp | the held pick starts at 0, so copies keep their source's orientation, like Paste and Duplicate; [ and ] step 15° from there (convention) |
-| Saved stamp | the held pick starts at `rotationDeg = normaliseBearing(bearing)`, so it reads as saved relative to the screen; a saved stamp dropped from Favorites, and its dragover ghost, use the same angle as a click (convention) |
+| Saved stamp | the held pick starts at `rotationDeg = normaliseBearing(bearing)` when the stamp is chosen, so it reads as saved relative to the screen, and keeps that ground angle when the view turns, as an Object stamp pick does; a saved stamp dropped from Favorites, and its dragover ghost, take the bearing at drop time (convention) |
 | Stamp angle on the tool card | `rotationDeg` minus the pick's start, so a fresh pick reads 0°, never "turned 30°" |
 | Paste, duplicate | keep north-relative geometry |
 | Polygon, line, measure, plant row | vertices are where the pointer is; Shift constrains to 45° against the screen axes (the host passes `screenAxesInWorld()`, bit-identical at 0) |
