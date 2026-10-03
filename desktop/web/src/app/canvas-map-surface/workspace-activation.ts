@@ -423,10 +423,13 @@ export class WorkspaceActivationCoordinator {
 
   /**
    * Whether a user Retry could rebuild an unavailable map: the runtime is alive (a failed renderer
-   * initialization destroys it) and the map did not fail for lack of WebGL2.
+   * initialization destroys it), the map did not fail for lack of WebGL2, and no generation's failure
+   * is still being handled (`retry()` refuses until it settles, so Retry is not offered before).
    */
   canRetry(): boolean {
+    const current = this.active
     return !this.disposed
+      && !(current && !current.failureSettled)
       && !this.runtimeDestroyed
       && !this.terminalTeardownResult
       && !(this.unavailableCause instanceof WorkspaceWebGL2UnavailableError)
@@ -616,7 +619,11 @@ export class WorkspaceActivationCoordinator {
           ? this.failWhileRuntimeInitializes(current)
           : this.failAdmission(current)
     })
-    const settle = () => { current.failureSettled = true }
+    const settle = () => {
+      current.failureSettled = true
+      // A Retry withheld while the failure was handled can now be offered.
+      if (this.isCurrent(current)) this.notifyRetryAvailability()
+    }
     void current.failure.then(settle, settle)
     return current.failure
   }

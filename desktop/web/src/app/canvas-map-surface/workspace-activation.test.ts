@@ -30,7 +30,7 @@ import {
 } from '../../maplibre/canvas-surface-state'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../generated/canopi-design-format'
 import type { CanopiFile } from '../../types/design'
-import { createWorkspaceRuntimeComposition } from './workspace-runtime-composition'
+import { createWorkspaceRuntimeComposition, type WorkspaceRuntimeComposition } from './workspace-runtime-composition'
 
 function background(
   basemap: Partial<MapBackgroundPresentation['basemap']> = {},
@@ -1765,9 +1765,10 @@ describe('WorkspaceActivationCoordinator', () => {
     expect(selection).toHaveLength(1)
 
     f.loseContext()
-    expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: true })
+    expect(f.states.at(-1)).toMatchObject({ status: 'error' })
     await vi.waitFor(() => expect(runtime.keyboardPort).toBeNull())
     await failureHandled(f.maps[0]!)
+    expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: true })
 
     f.composition.retryMap!()
 
@@ -1794,6 +1795,29 @@ describe('WorkspaceActivationCoordinator', () => {
     await f.composition.dispose()
   })
 
+  it('offers Retry only once the lost map\'s failure is handled, so a press the moment it shows rebuilds the map', async () => {
+    let composition: WorkspaceRuntimeComposition | null = null
+    let pressed = 0
+    const f = realComposition({
+      // The user presses Retry as soon as it is on screen.
+      onMapStateChange: (state) => {
+        if (state.status !== 'error' || !state.retryable || pressed > 0) return
+        pressed += 1
+        queueMicrotask(() => composition!.retryMap())
+      },
+    })
+    composition = f.composition
+    await expect(f.composition.start()).resolves.toBe('shared-ready')
+
+    f.loseContext()
+    expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: false })
+
+    await vi.waitFor(() => expect(f.maps).toHaveLength(2))
+    expect(pressed).toBe(1)
+    await vi.waitFor(() => expect(f.runtime().keyboardPort).not.toBeNull())
+    await f.composition.dispose()
+  })
+
   it('offers no Retry once a failed renderer initialization destroyed the runtime', async () => {
     const f = realComposition({ failRuntimeInit: true })
     await f.composition.start()
@@ -1805,17 +1829,21 @@ describe('WorkspaceActivationCoordinator', () => {
     await expect(f.composition.dispose()).rejects.toThrow('renderer init failed')
   })
 
-  it('withdraws Retry when a context lost during renderer initialization ends with the runtime destroyed', async () => {
+  it('offers no Retry when a context lost during renderer initialization ends with the runtime destroyed', async () => {
     const init = deferred<void>()
     const f = realComposition({ runtimeInit: init.promise })
     void f.composition.start()
     await vi.waitFor(() => expect(f.runtime().init).toHaveBeenCalledOnce())
 
     f.loseContext()
-    expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: true })
+    // Its failure is handled only once initialization ends, so Retry is not offered meanwhile.
+    expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: false })
+    const destroy = vi.spyOn(f.runtime(), 'destroy')
     init.reject(new Error('renderer init failed'))
 
-    await vi.waitFor(() => expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: false }))
+    await vi.waitFor(() => expect(destroy).toHaveBeenCalled())
+    expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: false })
+    expect(f.states.some((state) => state.retryable)).toBe(false)
     expect(f.maps).toHaveLength(1)
     await expect(f.composition.dispose()).rejects.toThrow('Shared workspace teardown failed')
   })
@@ -1883,7 +1911,11 @@ class MovableFakeMap extends FakeMap {
  * The production composition with a real SceneCanvasRuntime, coordinator and renderer composition; only MapLibre
  * (the map controls) and Pixi (the layer's renderer) are fakes. Each map reports failures like the real controls.
  */
-function realComposition(options: { failRuntimeInit?: boolean; runtimeInit?: Promise<void> } = {}) {
+function realComposition(options: {
+  failRuntimeInit?: boolean
+  runtimeInit?: Promise<void>
+  onMapStateChange?: (state: MapLibreCanvasSurfaceState) => void
+} = {}) {
   const maps: MovableFakeMap[] = []
   const ended = new Set<WorkspaceActivationMap>()
   const reports: Array<(error: unknown) => void> = []
@@ -1900,7 +1932,10 @@ function realComposition(options: { failRuntimeInit?: boolean; runtimeInit?: Pro
     appAdapter: createDetachedCanvasRuntimeAppAdapter(),
     targetPresentation: createDetachedSceneRuntimePanelTargetAdapter(),
     mapContributions: { read: () => null },
-    onMapStateChange: (state) => states.push(state),
+    onMapStateChange: (state) => {
+      states.push(state)
+      options.onMapStateChange?.(state)
+    },
     readSnapshot: () => createActivationSnapshot(),
     readAttributionCompact: () => false,
   }, {
