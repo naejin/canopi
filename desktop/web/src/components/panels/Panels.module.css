@@ -103,10 +103,6 @@
   background: var(--color-accent);
 }
 
-.basemapFeedback[data-tone="warning"] .basemapFeedbackDot {
-  background: var(--color-warning);
-}
-
 .basemapFeedback[data-tone="error"] .basemapFeedbackDot {
   background: var(--color-danger);
 }
