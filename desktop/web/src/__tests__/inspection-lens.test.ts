@@ -25,11 +25,13 @@ function multiply(m: Matrix, n: Matrix): Matrix {
   }
 }
 
-/** A 2D context that keeps the current transform and records each arc's centre with it; other calls do nothing. */
+/** A 2D context that keeps the current transform and records each arc's centre with it, each fill's and drawImage's alpha; other calls do nothing. */
 function recordingContext() {
   let m: Matrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
   const stack: Matrix[] = []
   const arcs: Array<{ readonly x: number; readonly y: number; readonly r: number; readonly m: Matrix }> = []
+  const fills: number[] = []
+  const draws: Array<{ readonly image: unknown; readonly alpha: number }> = []
   const target: Record<string | symbol, unknown> = {
     setTransform: (a: number, b: number, c: number, d: number, e: number, f: number) => { m = { a, b, c, d, e, f } },
     transform: (a: number, b: number, c: number, d: number, e: number, f: number) => { m = multiply(m, { a, b, c, d, e, f }) },
@@ -40,13 +42,16 @@ function recordingContext() {
     scale: (x: number, y: number) => { m = multiply(m, { a: x, b: 0, c: 0, d: y, e: 0, f: 0 }) },
     rotate: (r: number) => { m = multiply(m, { a: Math.cos(r), b: Math.sin(r), c: -Math.sin(r), d: Math.cos(r), e: 0, f: 0 }) },
     arc: (x: number, y: number, r: number) => { arcs.push({ x, y, r, m }) },
+    fill: () => { fills.push(target.globalAlpha as number) },
+    drawImage: (image: unknown) => { draws.push({ image, alpha: target.globalAlpha as number }) },
     measureText: (text: string) => ({ width: text.length * 7 }),
+    globalAlpha: 1,
   }
   const ctx = new Proxy(target, {
     get: (t, key) => (key in t ? t[key] : (t[key] = () => {})),
     set: (t, key, value) => { t[key] = value; return true },
   })
-  return { ctx: ctx as unknown as CanvasRenderingContext2D, arcs }
+  return { ctx: ctx as unknown as CanvasRenderingContext2D, arcs, fills, draws }
 }
 
 const MINT = {
@@ -484,5 +489,73 @@ describe('Inspection Lens ownership', () => {
     expectQuad(todayQuad())
     owner.dispose()
     expect(view.sourceQuad.value).toBeNull()
+  })
+})
+
+/**
+ * A lens over two overlapping mints with the Plants layer at 50 %. The lens canvas gets a recording context; every other
+ * canvas, the offscreen scratch, gets what `scratchContext` returns for it.
+ */
+function mountTranslucentLens(scratchContext: (canvas: HTMLCanvasElement) => CanvasRenderingContext2D | null) {
+  vi.useFakeTimers()
+  let dpr = 2
+  vi.stubGlobal('devicePixelRatio', dpr)
+  const main = recordingContext()
+  let lensCanvas: HTMLCanvasElement | null = null
+  const scratchCanvases: HTMLCanvasElement[] = []
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function (this: HTMLCanvasElement) {
+    lensCanvas ??= this
+    if (this === lensCanvas) return main.ctx as never
+    scratchCanvases.push(this)
+    return scratchContext(this) as never
+  })
+  const snapshot = createTestSceneRendererSnapshot({ scene: {
+    layers: [{ kind: 'layer', name: 'plants', visible: true, opacity: .5, locked: false }],
+    plants: [MINT, { ...MINT, id: 'mint-2', position: { x: 1.2, y: 2 } }],
+  } })
+  const camera = createTestView(START)
+  const owner = new SceneCanvasInspectionOwner({ readSessionPlane: () => TEST_PLANE, frames: camera.frames,
+    revision: { scene: signal(0), plantNames: signal(0) }, getSnapshot: () => snapshot, setHoveredTarget() {} })
+  let width = 430
+  const container = document.createElement('div')
+  Object.defineProperties(container, { clientWidth: { get: () => width }, clientHeight: { value: 390 } })
+  const view = owner.mount(container)
+  view.inspectAtWorldPoint({ x: 1, y: 2 })
+  vi.advanceTimersByTime(20)
+  return {
+    owner, view, main, scratchCanvases,
+    /** Resizes the lens and changes the device pixel ratio, then lets the next paint run. */
+    resize(nextWidth: number, nextDpr: number) {
+      width = nextWidth; dpr = nextDpr
+      vi.stubGlobal('devicePixelRatio', dpr)
+      owner.refresh()
+      vi.advanceTimersByTime(20)
+    },
+  }
+}
+
+/** A recording scratch context bound to its canvas, as a real one is. */
+function scratchFor(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+  const scratch = recordingContext().ctx
+  ;(scratch as unknown as { canvas: HTMLCanvasElement }).canvas = canvas
+  return scratch
+}
+
+describe('Inspection Lens Plants opacity (canopi-h90p.67)', () => {
+  it('composites a translucent Plants layer from its scratch once, at the layer opacity, sized to the backing', () => {
+    const { owner, main, scratchCanvases, resize } = mountTranslucentLens(scratchFor)
+    expect(scratchCanvases).toHaveLength(1)
+    const [scratch] = scratchCanvases
+    expect(main.draws).toEqual([{ image: scratch, alpha: .5 }])
+    expect(main.fills).toEqual([])
+    expect([scratch!.width, scratch!.height]).toEqual([860, 780])
+
+    // A resize at a fractional device pixel ratio reuses the scratch at the new backing size.
+    main.draws.length = 0
+    resize(431, 1.25)
+    expect(scratchCanvases).toHaveLength(1)
+    expect(main.draws).toEqual([{ image: scratch, alpha: .5 }])
+    expect([scratch!.width, scratch!.height]).toEqual([Math.round(431 * 1.25), Math.round(390 * 1.25)])
+    owner.dispose()
   })
 })
