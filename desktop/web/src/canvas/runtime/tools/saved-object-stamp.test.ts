@@ -334,16 +334,18 @@ describe('saved object stamp tool', () => {
       expect(h.store.persisted.plants[0]!.position.y).toBeCloseTo(anchor.y + 10 * Math.sin(Math.PI / 4), 6)
     })
 
-    it('Shift+→ while a saved stamp is held keeps the click level to the screen and equal to a drop', () => {
-      const h = harness()
+    it('a held saved stamp keeps its ground angle when the view turns, as an Object stamp pick does', () => {
+      // At bearing 30 the stamp is chosen and ] lines it up with a bed edge (spec §4.7: the pick starts at the bearing).
+      const h = createToolHarness({ camera: { bearingDeg: 30 } })
+      harnesses.push(h)
       holding(h, mulchStamp())
       h.host.command({ kind: 'rotate-held', stepDeg: 15 })
-      // The view turns to 30° with the stamp held (Shift+→ twice, the compass or Shift+middle-drag).
+      // Shift+→ turns the view to 45° with the stamp held.
       const { camera } = h.view.host.frames.viewFrame.peek().view
-      h.view.host.current().apply({ kind: 'set', target: { ...camera, bearingDeg: 30 }, animation: 'none' })
+      h.view.host.current().apply({ kind: 'set', target: { ...camera, bearingDeg: 45 }, animation: 'none' })
 
       h.hover({ x: 200, y: 150 })
-      // The card still shows the held turn; the ghost starts at the live bearing, as a Favorites drop's does.
+      // The card shows rotationDeg minus the pick's start; the ghost keeps the angle it was lined up at.
       expect(h.record.guidance.at(-1)?.stampRotationDeg).toBe(15)
       expect(ghosts(h)[0]!.entity).toMatchObject({ rotationDeg: 45 })
 
@@ -352,7 +354,7 @@ describe('saved object stamp tool', () => {
       expect(h.store.persisted.annotations[0]?.rotationDeg).toBe(45)
     })
 
-    it('the ghost left with the pointer off the map follows the view as it turns', () => {
+    it('the ghost left with the pointer off the map keeps its ground angle as the view turns', () => {
       const h = harness()
       holding(h, mulchStamp())
       h.hover({ x: 200, y: 150 })
@@ -366,8 +368,8 @@ describe('saved object stamp tool', () => {
       h.view.host.current().apply({ kind: 'set', target: { ...camera, bearingDeg: 30 }, animation: 'none' })
       h.advance(0)
 
-      // The parked ghost shows where a click would place: level to the screen at the new bearing.
-      expect(ghosts(h)[0]!.entity).toMatchObject({ anchor: { x: 200, y: 150 }, rotationDeg: 45 })
+      // The parked ghost turns with the map, at the angle a click places.
+      expect(ghosts(h)[0]!.entity).toMatchObject({ anchor: { x: 200, y: 150 }, rotationDeg: 15 })
       expect(h.record.guidance.at(-1)?.stampRotationDeg).toBe(15)
     })
 

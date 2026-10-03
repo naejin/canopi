@@ -4,12 +4,12 @@
 // §1.4 "Drops", 0B-4). The stamp arrives as the tool's source (the session bridges the saved-stamp read model); a press
 // places it once with its anchor at the snapped point, turned by the held angle, as one 'interaction-saved-object-stamp'
 // edit that selects the copies, then returns to Select, whose leaving drops the stamp from the read model. Its ghost
-// follows the pointer and stays when the pointer leaves the map. A stamp reads level to the screen: its angle starts at the
-// live bearing, as a Favorites drop's does, also when the view turns while it is held (spec §4.7); `[` and `]` turn it from
-// there (rotate-held commands), and the tool card shows that turn; Esc leaves for Select at once under LEGACY (spec §3.7).
-// A release, another stamp and every cancellation (a blur, the tool armed again, overview) hide the ghost until the next
-// hover and keep the stamp, as today's pointerup and cancellation hid the preview; a re-origin keeps a shown ghost on its
-// ground. The ghosts come from tools/stamp-rotation.ts.
+// follows the pointer and stays when the pointer leaves the map. A stamp starts level to the screen (its pick starts at the
+// bearing when it is chosen, spec §4.7) and keeps that ground angle when the view turns, as an Object stamp pick does; `[`
+// and `]` turn it from there (rotate-held commands), and the tool card shows that turn; Esc leaves for Select at once under
+// LEGACY (spec §3.7). A release, another stamp and every cancellation (a blur, the tool armed again, overview) hide the
+// ghost until the next hover and keep the stamp, as today's pointerup and cancellation hid the preview; a re-origin keeps a
+// shown ghost on its ground. The ghosts come from tools/stamp-rotation.ts.
 
 import type { SavedObjectStampPayload } from '../../saved-object-stamp-payload'
 import type { SceneAnnotationEntity, ScenePlantEntity, SceneZoneEntity } from '../scene/types'
@@ -38,6 +38,8 @@ type StampScene = Pick<ToolScene, 'isLayerOpenForCreation'>
 export function createSavedObjectStampTool(): CanvasTool {
   let ctx: ToolContext | null = null
   let stamp: SavedObjectStampPayload | null = null
+  /** The pick's start: the bearing when the stamp was chosen, so it reads as saved relative to the screen (spec §4.7). */
+  let startDeg = 0
   /** The turn `[` and `]` added since the pick, which the tool card shows. */
   let turnDeg = 0
   /** Where the ghost's anchor was last drawn: `[` and `]` redraw it there. */
@@ -54,14 +56,15 @@ export function createSavedObjectStampTool(): CanvasTool {
   function hold(source: ToolSource | null): boolean {
     const next = source?.kind === 'saved-stamp' ? source.stamp : null
     if (next === stamp) return false
+    startDeg = turnStampRotation(context().view.bearingDeg, 0)
     turnDeg = 0
     stamp = next
     return true
   }
 
-  /** The angle the stamp is placed at: the live bearing, so it reads level to the screen like a drop, plus the held turn. */
+  /** The angle the stamp is placed at: the pick's start plus the held turn. */
   function rotationDeg(): number {
-    return turnStampRotation(context().view.bearingDeg, turnDeg)
+    return turnStampRotation(startDeg, turnDeg)
   }
 
   function publishGuidance(): void {
@@ -99,6 +102,7 @@ export function createSavedObjectStampTool(): CanvasTool {
 
   function reset(): void {
     stamp = null
+    startDeg = 0
     turnDeg = 0
     lastAnchor = null
     ghostShown = false
@@ -156,11 +160,6 @@ export function createSavedObjectStampTool(): CanvasTool {
         return 'handled'
       }
       return 'pass'
-    },
-    viewChanged() {
-      // The host re-emits no hover with the pointer off the map: the ghost left there redraws at the live bearing, where
-      // the next click places.
-      if (ghostShown && lastAnchor) showGhostAt(lastAnchor)
     },
     planeChanged(reproject) {
       // A re-origin moves the ground under the last anchor: the ghost stays where it stood, also with the pointer off the
