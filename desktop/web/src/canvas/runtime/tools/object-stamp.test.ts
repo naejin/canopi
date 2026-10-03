@@ -166,6 +166,32 @@ describe('object stamp tool', () => {
     expect(h.store.persisted.plants[1]?.position).toEqual({ x: 103, y: 116 })
   })
 
+  it('at bearing 30 an Object stamp pick starts at 0', () => {
+    // The screen centre shows the plane's origin; the map is turned 30° (spec §4.7, phase-1 amendment A13). The plant's
+    // centre is 3 m east of the press, inside its 10 m canopy.
+    const h = stampHarness(
+      { plants: [smallApple({ x: 3, y: 0 }, { canopySpreadM: 20 })] },
+      { camera: { bearingDeg: 30 } },
+    )
+
+    h.press({ x: 200, y: 150 })
+    // Copies keep their source's orientation, like Paste and Duplicate: the pick is not turned to the screen.
+    expect(objectsGhost(ghosts(h)[0])).toMatchObject({ rotationDeg: 0 })
+    expect(h.record.guidance.at(-1)?.stampRotationDeg).toBe(0)
+    h.release()
+
+    // The copy keeps the pick's offset in the plane: still 3 m east of where it is placed.
+    h.click({ x: 260, y: 150 })
+    const placedAt = h.world({ x: 260, y: 150 })
+    expect(h.store.persisted.plants[1]!.position.x).toBeCloseTo(placedAt.x + 3, 6)
+    expect(h.store.persisted.plants[1]!.position.y).toBeCloseTo(placedAt.y, 6)
+
+    // ] turns it from there, and the tool card reads the turn.
+    h.host.command({ kind: 'rotate-held', stepDeg: 15 })
+    expect(h.record.guidance.at(-1)?.stampRotationDeg).toBe(15)
+    expect(objectsGhost(ghosts(h)[0])).toMatchObject({ rotationDeg: 15 })
+  })
+
   it('keeps the passive hover off while a pick is held, and runs it before', () => {
     const h = stampHarness({ plants: [smallApple({ x: 40, y: 40 })] })
 
