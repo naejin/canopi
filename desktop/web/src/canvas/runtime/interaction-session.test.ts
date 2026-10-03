@@ -469,7 +469,7 @@ describe('the interaction session', () => {
     expect(render).toHaveBeenCalledWith('viewport')
     session.keyboard.command({ kind: 'zoom-step', direction: -1 })
     expect(testView.viewport().scale).toBeCloseTo(scale, 9)
-    // North stays up under LEGACY: the view commands answer and leave the camera's bearing alone.
+    // The view keys answer here; navigation.test.ts holds the 15° turn and the turn back to north they start.
     expect(session.keyboard.command({ kind: 'reset-north' })).toBe(true)
     expect(session.keyboard.command({ kind: 'rotate-view', direction: 1 })).toBe(true)
   })
