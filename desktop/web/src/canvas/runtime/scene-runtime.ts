@@ -170,67 +170,7 @@ export class SceneCanvasRuntime {
         }
         this._documentSurface.zoomToFit()
       })
-      this._interaction = createSceneInteractionSession({
-        container,
-        getSceneStore: () => this._sceneState,
-        getSpeciesCache: () => this._presentation.getSpeciesCache(),
-        getPlantPresentationContext: (viewportScale) =>
-          this._presentation.createPlantPresentationContext(viewportScale),
-        getSelection: () => this._sceneState.session.selectedTargets,
-        setSelection: (targets) => {
-          this._sceneCommands.runWhenSettled(
-            () => this._setSelection(targets),
-            undefined,
-            { resumePending: true },
-          )
-        },
-        clearSelection: () => {
-          this._sceneCommands.runWhenSettled(
-            () => this._setSelection([]),
-            undefined,
-            { resumePending: true },
-          )
-        },
-        sceneEdits: this._sceneCommands,
-        commandAdmission: this._sceneCommands,
-        settledReader: this._settledReader,
-        tryInspectAt: this._appAdapter.tryInspectAt,
-        getDesignObjectSelection: () => this._querySurface.getDesignObjectSelection(),
-        selectionCommands: this._commandSurface.sceneEdits,
-        contextualCommands: this._appAdapter.savedObjectStamps
-          ? {
-              saveSelectionAsObjectStamp: () =>
-                this._commandSurface.sceneEdits.saveSelectionAsObjectStamp(),
-            }
-          : undefined,
-        contextMenu: this._appAdapter.contextMenu,
-        setTool: (name) => this._commandSurface.tools.setTool(name),
-        render: (kind) => this._invalidate(kind),
-        readSnapToGridEnabled: () => this._appAdapter.settings.readSnapToGridEnabled(),
-        readSnapToGuidesEnabled: () => this._appAdapter.settings.readSnapToGuidesEnabled(),
-        readScrollWheel: () => this._appAdapter.settings.readScrollWheel(),
-        readPlantSpacingIntervalMeters: () => this._appAdapter.settings.readPlantSpacingIntervalMeters(),
-        commitPlantSpacingIntervalMeters: (meters) =>
-          this._appAdapter.settings.commitPlantSpacingIntervalMeters(meters),
-        translate: this._appAdapter.translate,
-        getLocalizedCommonNames: () => this._presentation.getLocalizedCommonNames(),
-        notifyTransientHistoryChange: () => this._notifyTransientHistoryChanged(),
-        publishToolGuidance: setCanvasToolGuidance,
-        nudge: this._commandSurface.sceneEdits,
-        setHoveredTarget: (target) => {
-          this._setHoveredTarget(target)
-        },
-        frames: this._construction.frames,
-        viewNavigation: this._construction.viewNavigation,
-        renderer: {
-          setDraft: (draft) => this._rendering.setDraft(draft),
-        },
-        ...(this._appAdapter.focus ? { focus: this._appAdapter.focus } : {}),
-      })
-      const interaction = this._interaction
-      bindQuerySurfacePointerWorld(this._querySurface, (listener) => interaction.subscribePointerWorld(listener))
-      this._interaction.setOverviewMode(this._construction.frames.viewFrame.peek().mode === 'overview')
-      await this._rendering.renderScene()
+      await this._mountInteraction(container)
     } catch (error) {
       const errors: unknown[] = [error]
       try {
@@ -240,6 +180,71 @@ export class SceneCanvasRuntime {
       }
       throwCanvasRuntimeCleanupErrors(errors, 'Scene Canvas runtime initialization failed')
     }
+  }
+
+  /** Creates the interaction session over the mounted renderer and draws the Scene. */
+  private async _mountInteraction(container: HTMLElement): Promise<void> {
+    this._interaction = createSceneInteractionSession({
+      container,
+      getSceneStore: () => this._sceneState,
+      getSpeciesCache: () => this._presentation.getSpeciesCache(),
+      getPlantPresentationContext: (viewportScale) =>
+        this._presentation.createPlantPresentationContext(viewportScale),
+      getSelection: () => this._sceneState.session.selectedTargets,
+      setSelection: (targets) => {
+        this._sceneCommands.runWhenSettled(
+          () => this._setSelection(targets),
+          undefined,
+          { resumePending: true },
+        )
+      },
+      clearSelection: () => {
+        this._sceneCommands.runWhenSettled(
+          () => this._setSelection([]),
+          undefined,
+          { resumePending: true },
+        )
+      },
+      sceneEdits: this._sceneCommands,
+      commandAdmission: this._sceneCommands,
+      settledReader: this._settledReader,
+      tryInspectAt: this._appAdapter.tryInspectAt,
+      getDesignObjectSelection: () => this._querySurface.getDesignObjectSelection(),
+      selectionCommands: this._commandSurface.sceneEdits,
+      contextualCommands: this._appAdapter.savedObjectStamps
+        ? {
+            saveSelectionAsObjectStamp: () =>
+              this._commandSurface.sceneEdits.saveSelectionAsObjectStamp(),
+          }
+        : undefined,
+      contextMenu: this._appAdapter.contextMenu,
+      setTool: (name) => this._commandSurface.tools.setTool(name),
+      render: (kind) => this._invalidate(kind),
+      readSnapToGridEnabled: () => this._appAdapter.settings.readSnapToGridEnabled(),
+      readSnapToGuidesEnabled: () => this._appAdapter.settings.readSnapToGuidesEnabled(),
+      readScrollWheel: () => this._appAdapter.settings.readScrollWheel(),
+      readPlantSpacingIntervalMeters: () => this._appAdapter.settings.readPlantSpacingIntervalMeters(),
+      commitPlantSpacingIntervalMeters: (meters) =>
+        this._appAdapter.settings.commitPlantSpacingIntervalMeters(meters),
+      translate: this._appAdapter.translate,
+      getLocalizedCommonNames: () => this._presentation.getLocalizedCommonNames(),
+      notifyTransientHistoryChange: () => this._notifyTransientHistoryChanged(),
+      publishToolGuidance: setCanvasToolGuidance,
+      nudge: this._commandSurface.sceneEdits,
+      setHoveredTarget: (target) => {
+        this._setHoveredTarget(target)
+      },
+      frames: this._construction.frames,
+      viewNavigation: this._construction.viewNavigation,
+      renderer: {
+        setDraft: (draft) => this._rendering.setDraft(draft),
+      },
+      ...(this._appAdapter.focus ? { focus: this._appAdapter.focus } : {}),
+    })
+    const interaction = this._interaction
+    bindQuerySurfacePointerWorld(this._querySurface, (listener) => interaction.subscribePointerWorld(listener))
+    this._interaction.setOverviewMode(this._construction.frames.viewFrame.peek().mode === 'overview')
+    await this._rendering.renderScene()
   }
 
   /** The runtime's one camera: the workspace activation attaches each map to it; destroy disposes it. */
@@ -279,6 +284,27 @@ export class SceneCanvasRuntime {
     } finally {
       this._notifyTransientHistoryChanged()
       await this._rendering.unmount()
+    }
+  }
+
+  /**
+   * Internal workspace-lifecycle control: a user Retry built a new map after unmountRenderer. The
+   * renderer and the interaction session mount again over the loaded Scene, which keeps its camera,
+   * selection and undo history. A failed remount leaves nothing mounted.
+   */
+  async remountRenderer(container: HTMLElement): Promise<void> {
+    try {
+      refreshCanvasColorCache(container)
+      await this._rendering.initialize(container)
+      await this._mountInteraction(container)
+    } catch (error) {
+      const errors: unknown[] = [error]
+      try {
+        await this.unmountRenderer()
+      } catch (cleanupError) {
+        errors.push(cleanupError)
+      }
+      throwCanvasRuntimeCleanupErrors(errors, 'Scene Canvas renderer remount failed')
     }
   }
 

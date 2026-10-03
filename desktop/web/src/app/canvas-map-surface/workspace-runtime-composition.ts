@@ -45,6 +45,12 @@ export type WorkspaceRuntimeStartOutcome = WorkspaceActivationOutcome | 'no-desi
 export interface WorkspaceRuntimeComposition {
   readonly surfaces: CanvasRuntimeSurfaces
   start(): Promise<WorkspaceRuntimeStartOutcome>
+  /**
+   * The map notice's Retry: rebuilds a map that stopped drawing, keeping the Scene, view, selection and
+   * undo, or downloads a basemap that couldn't load again. It can be pressed any number of times; nothing
+   * retries on its own (ADR 0004).
+   */
+  retryMap?(): void
   dispose(): Promise<void>
 }
 
@@ -95,6 +101,8 @@ interface WorkspaceCompositionRuntime extends WorkspaceActivationRuntime {
 interface WorkspaceCompositionLifecycle extends WorkspaceGenerationLifecycle {
   updateBackgroundPresentation(presentation: MapBackgroundPresentation): void
   updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void
+  /** Whether a Retry could rebuild an unavailable map (WorkspaceActivationCoordinator.canRetry); absent, never. */
+  canRetry?(): boolean
 }
 
 /** Constructor-only test seam. Production callers use the default cohesive assembly. */
@@ -126,6 +134,12 @@ export function createWorkspaceRuntimeComposition(
     targetPresentation: options.targetPresentation,
     renderer: rendererComposition.renderer,
   })
+  // The edition sees a map error as retryable only while the workspace could rebuild the map.
+  let mapState: MapLibreCanvasSurfaceState | null = null
+  const publishMapState = (state: MapLibreCanvasSurfaceState) => {
+    mapState = state.retryable && !(workspace.canRetry?.() ?? false) ? { ...state, retryable: false } : state
+    options.onMapStateChange?.(mapState)
+  }
   const controls = dependencies.createControls({
     container: options.container,
     // The map container's resizes reach the live camera driver's setScreen: the driver is the map's one resize owner (both maps
@@ -137,7 +151,7 @@ export function createWorkspaceRuntimeComposition(
       loadTerrainSupport: options.mapContributions.loadTerrainSupport,
       createRasterDisplay: options.mapContributions.createRasterDisplay,
       publishViewBounds: options.mapContributions.publishViewBounds,
-      onStateChange: options.onMapStateChange,
+      onStateChange: publishMapState,
     },
   })
   // Read without subscribing: the camera and scene layer call this per frame.
@@ -155,6 +169,10 @@ export function createWorkspaceRuntimeComposition(
     map: controls,
     layer: {},
     readOrigin,
+    // A Retry already on screen is withdrawn once the workspace can no longer rebuild the map.
+    onRetryAvailabilityChange: () => {
+      if (mapState?.retryable) publishMapState(mapState)
+    },
   })
   const reconciler = new WorkspaceGenerationReconciler({
     workspace,
@@ -233,6 +251,15 @@ export function createWorkspaceRuntimeComposition(
         resolveStart('cancelled')
       }
       return startResult
+    },
+    retryMap() {
+      if (disposeResult) return
+      if (mapState?.status !== 'error') {
+        controls.retryBasemap?.()
+        return
+      }
+      // A refused Retry that can never succeed withdraws the button.
+      if (!reconciler.retry()) publishMapState(mapState)
     },
     dispose() {
       if (disposeResult) return disposeResult

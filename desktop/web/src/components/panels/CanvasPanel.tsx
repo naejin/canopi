@@ -6,12 +6,13 @@ import {
   type MapLibreCanvasSurfaceState,
 } from '../../maplibre/canvas-surface-state'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
-import { readCanvasLayerPresentation } from '../../app/canvas-layer-presentation/presentation'
+import { hasVisibleMapLayer, mapLayers } from '../../app/map-layers/state'
 import { getMapNoticeReadModel } from '../../app/canvas-map-surface/map-notice'
 import { currentDesign } from '../../app/document-session/store'
 import { appCommandGraphToolbarProjection } from '../../commands/registry'
 import { CanvasChrome } from '../canvas/CanvasChrome'
 import { InspectionStatus } from '../canvas/InspectionStatus'
+import { MapNotice } from '../canvas/MapNotice'
 import { StampChooser } from '../canvas/StampChooser'
 import { useMapArea } from '../shared/useMapChrome'
 import styles from './Panels.module.css'
@@ -26,7 +27,7 @@ export function CanvasPanel() {
   )
 
   useMapArea(canvasAreaRef)
-  useCanvasDocumentSession({
+  const { retryMap } = useCanvasDocumentSession({
     canvasAreaRef,
     containerRef,
     rulerOverlayRef,
@@ -34,9 +35,9 @@ export function CanvasPanel() {
   })
 
   const hasDesign = currentDesign.value !== null
-  const locationNotice = getMapNoticeReadModel({
+  const mapNotice = getMapNoticeReadModel({
     hasDesign,
-    mapVisible: readCanvasLayerPresentation().hasVisibleMapLayer,
+    mapVisible: hasVisibleMapLayer(mapLayers.value),
     mapSurface: basemapState,
     t,
   })
@@ -47,7 +48,7 @@ export function CanvasPanel() {
         <div
           ref={containerRef}
           className={styles.canvasContainer}
-          data-map-active={locationNotice.mapSurfaceVisible ? 'true' : 'false'}
+          data-map-active={mapNotice.mapSurfaceVisible ? 'true' : 'false'}
         />
         <div ref={rulerOverlayRef} className={styles.rulerOverlay} />
         {hasDesign && (
@@ -56,17 +57,7 @@ export function CanvasPanel() {
             <InspectionStatus />
           </CanvasChrome>
         )}
-        {locationNotice.visible && (
-          <div
-            className={styles.basemapFeedback}
-            data-tone={locationNotice.tone}
-            role="status"
-            aria-live="polite"
-          >
-            <span className={styles.basemapFeedbackDot} aria-hidden="true" />
-            <span className={styles.basemapFeedbackText}>{locationNotice.statusText}</span>
-          </div>
-        )}
+        <MapNotice notice={mapNotice} onRetry={retryMap} />
         {!hasDesign && <WelcomeScreen />}
       </div>
     </div>

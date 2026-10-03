@@ -7,6 +7,8 @@ export interface MapNoticeReadModel {
   readonly mapSurfaceVisible: boolean
   readonly tone: MapNoticeTone
   readonly statusText: string
+  /** The notice offers Retry. */
+  readonly retry: boolean
 }
 
 export interface MapNoticeReadModelInput {
@@ -16,7 +18,11 @@ export interface MapNoticeReadModelInput {
   readonly t: (key: string) => string
 }
 
-/** Reports basemap and terrain readiness for the open Design's map canvas. */
+/**
+ * Reports the map, basemap and terrain status for the open Design's map canvas. Every notice is a fixed
+ * localized sentence, never the engine's error text, so no URL or key can reach it. A map failure shows
+ * whatever background rows are visible, because a lost map takes the drawing and editing with it.
+ */
 export function getMapNoticeReadModel({
   hasDesign,
   mapVisible,
@@ -24,28 +30,48 @@ export function getMapNoticeReadModel({
   t,
 }: MapNoticeReadModelInput): MapNoticeReadModel {
   const mapSurfaceVisible = hasDesign && mapVisible
-  const statusText = mapSurfaceVisible ? getMapNoticeStatusText(mapSurface, t) : ''
+  const notice = !hasDesign
+    ? null
+    : mapSurface.status === 'error'
+      ? readMapFailure(mapSurface, t)
+      : mapVisible
+        ? readMapNotice(mapSurface, t)
+        : null
   return {
-    visible: mapSurfaceVisible && statusText !== '',
+    visible: notice !== null,
     mapSurfaceVisible,
-    tone: getMapNoticeTone(mapSurface),
-    statusText,
+    tone: notice?.tone ?? getMapStatusTone(mapSurface),
+    statusText: notice?.text ?? '',
+    retry: notice?.retry ?? false,
   }
 }
 
-function getMapNoticeTone(mapSurface: MapLibreCanvasSurfaceState): MapNoticeTone {
+function getMapStatusTone(mapSurface: MapLibreCanvasSurfaceState): MapNoticeTone {
   if (mapSurface.status === 'error') return 'error'
   if (mapSurface.status === 'ready') return 'ready'
   return 'loading'
 }
 
-function getMapNoticeStatusText(mapSurface: MapLibreCanvasSurfaceState, t: (key: string) => string): string {
-  if (mapSurface.status === 'error') {
-    return `${t('canvas.layers.mapUnavailable')}: ${mapSurface.errorMessage ?? ''}`.trim()
+interface MapNotice {
+  readonly text: string
+  readonly tone: MapNoticeTone
+  readonly retry: boolean
+}
+
+/** A map failure, with Retry when the map can be rebuilt. */
+function readMapFailure(mapSurface: MapLibreCanvasSurfaceState, t: (key: string) => string): MapNotice {
+  return mapSurface.retryable
+    ? { text: t('canvas.layers.mapStopped'), tone: 'error', retry: true }
+    : { text: t('canvas.layers.mapUnavailable'), tone: 'error', retry: false }
+}
+
+/** Below a map failure, by rank: a basemap that couldn't load, loading, then a skipped layer or terrain. */
+function readMapNotice(mapSurface: MapLibreCanvasSurfaceState, t: (key: string) => string): MapNotice | null {
+  if (mapSurface.basemapStatus === 'failed') return { text: t('canvas.layers.basemapFailed'), tone: 'error', retry: true }
+  const tone = getMapStatusTone(mapSurface)
+  if (mapSurface.status !== 'ready') return { text: t('canvas.layers.basemapLoading'), tone, retry: false }
+  if (mapSurface.terrainStatus === 'error' || mapSurface.layerSkipped) {
+    return { text: t('canvas.layers.layerSkipped'), tone, retry: false }
   }
-  if (mapSurface.status !== 'ready') return t('canvas.layers.basemapLoading')
-  if (mapSurface.terrainStatus === 'error') {
-    return `${t('canvas.layers.mapSection')}: ${mapSurface.terrainErrorMessage ?? ''}`.trim()
-  }
-  return mapSurface.layerSkipped ? t('canvas.layers.layerSkipped') : ''
+  return null
 }

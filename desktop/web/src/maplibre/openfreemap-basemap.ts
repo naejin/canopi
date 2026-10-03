@@ -1,4 +1,5 @@
 import type { BasemapStyle } from '../generated/contracts'
+import type { MapLibreBasemapStatus } from './canvas-surface-state'
 
 /*
  * OpenFreeMap style presets adapted from GeoLibre
@@ -59,6 +60,8 @@ export interface VectorBasemapOptions {
   /** The first Canopi layer the basemap must stay beneath. */
   readonly beforeLayerId?: () => string | null
   readonly onError?: (error: unknown) => void
+  /** `failed` when the shown style could not be downloaded, `ok` once a style is installed, `idle` when hidden. */
+  readonly onStatus?: (status: MapLibreBasemapStatus) => void
 }
 
 const OPACITY_PAINT_PROPERTIES: Readonly<Record<string, readonly string[]>> = {
@@ -110,6 +113,7 @@ export class VectorBasemap {
   private installed: Installed | null = null
   private desired: VectorBasemapPresentation | null = null
   private generation = 0
+  private status: MapLibreBasemapStatus = 'idle'
   private disposed = false
 
   constructor(
@@ -127,6 +131,7 @@ export class VectorBasemap {
     if (!presentation.visible) {
       this.generation += 1
       this.uninstall()
+      this.setStatus('idle')
       return
     }
     const installed = this.installed
@@ -143,8 +148,10 @@ export class VectorBasemap {
       if (!desired?.visible || desired.style !== presentation.style) return
       this.uninstall()
       this.install(desired, document)
+      this.setStatus('ok')
     }).catch((error: unknown) => {
       if (this.disposed || generation !== this.generation) return
+      this.setStatus('failed')
       this.options.onError?.(error)
     })
   }
@@ -162,6 +169,12 @@ export class VectorBasemap {
     this.disposed = true
     this.generation += 1
     this.uninstall()
+  }
+
+  private setStatus(status: MapLibreBasemapStatus): void {
+    if (status === this.status) return
+    this.status = status
+    this.options.onStatus?.(status)
   }
 
   private layersPresent(installed: Installed): boolean {

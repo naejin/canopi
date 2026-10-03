@@ -6,6 +6,7 @@ import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   mapLibreCanvasSurfaceStateEquals,
   publishMapDiagnostics,
+  type MapLibreBasemapStatus,
   type MapLibreCanvasSurfaceState,
 } from '../../maplibre/canvas-surface-state'
 import { toMapLibreSurfaceErrorMessage } from '../../maplibre/canvas-surface-errors'
@@ -135,6 +136,12 @@ export class WorkspaceMapContributions {
     return false
   }
 
+  /** The Basemap's download status, kept until the map goes. */
+  setBasemapStatus(basemapStatus: MapLibreBasemapStatus): void {
+    if (this.disposed) return
+    this.publishState({ ...this.state, basemapStatus })
+  }
+
   dispose(error?: unknown): void {
     if (this.disposed) return
     this.disposed = true
@@ -145,6 +152,8 @@ export class WorkspaceMapContributions {
       ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
       status: error ? 'error' : 'idle',
       errorMessage: error ? toMapLibreSurfaceErrorMessage(error) : null,
+      // A map that failed once it existed can be built again; whether the runtime allows it is the composition's call.
+      retryable: Boolean(error),
     })
     for (const remove of this.removeListeners.splice(0)) this.attempt('Failed to remove map contribution listener:', remove)
     this.clear()
