@@ -5,7 +5,6 @@ export interface ZoneMeasurements { zone: PrintZone; reference: string; lengths:
 
 export function insideZone(zone: PrintZone, point: PrintPoint): boolean {
   const geometry = zone.geometry
-  if (!geometry) return false
   if (geometry.kind === 'ellipse') {
     const a = -geometry.rotation * Math.PI / 180, dx = point.x - geometry.center.x, dy = point.y - geometry.center.y
     return ((dx * Math.cos(a) - dy * Math.sin(a)) / geometry.radii.x) ** 2 + ((dx * Math.sin(a) + dy * Math.cos(a)) / geometry.radii.y) ** 2 <= 1 + 1e-8
@@ -28,7 +27,7 @@ export function insideZone(zone: PrintZone, point: PrintPoint): boolean {
  * zone at every Map orientation.
  */
 export function zoneMeasurements(zones: readonly PrintZone[], planZones: readonly PrintZone[] = zones): ZoneMeasurements[] {
-  const ellipses = zones.map((_, i) => i).filter(i => zones[i]!.geometry?.kind === 'ellipse').sort((a, b) => {
+  const ellipses = zones.map((_, i) => i).filter(i => zones[i]!.geometry.kind === 'ellipse').sort((a, b) => {
     const p = planZones[a]!.bounds, q = planZones[b]!.bounds
     return p.y - q.y || p.x - q.x || (zones[a]!.name ?? '').localeCompare(zones[b]!.name ?? '')
   })
@@ -36,7 +35,6 @@ export function zoneMeasurements(zones: readonly PrintZone[], planZones: readonl
   let polygons = 0
   return zones.flatMap((zone, index): ZoneMeasurements[] => {
     const geometry = zone.geometry
-    if (!geometry) return []
     while (reserved.has(`Z${String(polygons + 1).padStart(2, '0')}`)) polygons++
     const generated = geometry.kind === 'ellipse' ? `E${String(ellipses.indexOf(index) + 1).padStart(2, '0')}` : `Z${String(++polygons).padStart(2, '0')}`
     let reference = zone.name !== null && /^[ZE]\d+$/.test(zone.name) && !assigned.has(zone.name) ? zone.name : generated

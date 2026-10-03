@@ -53,7 +53,7 @@ it('places transparent readable text clear of other text and stroked geometry on
   const base = input(), a = Math.PI / 6
   const source: PdfInput = { ...base, canvas: { ...base.canvas,
     plants: base.canvas.plants.map(p => ({ ...p, position: { x: p.position.y * Math.cos(a), y: p.position.y * Math.sin(a) } })),
-    zones: [{ name: 'Boundary', path: 'M-0.3 0.8 L8.1 5.65', fill: null, bounds: { x: -.3, y: .8, width: 8.4, height: 4.85 } }],
+    zones: [{ name: 'Boundary', path: 'M-0.3 0.8 L8.1 5.65', geometry: { kind: 'line' as const, points: [{ x: -0.3, y: 0.8 }, { x: 8.1, y: 5.65 }] }, fill: null, bounds: { x: -.3, y: .8, width: 8.4, height: 4.85 } }],
     measurements: [{ id: 'distance', start: { x: 0, y: 0 }, end: { x: Math.cos(a) * .4, y: Math.sin(a) * .4 } }],
   } }
   const page = buildPdfPlan(source, setup, text(), labels).pages.find(p => p.kind === 'detail')!

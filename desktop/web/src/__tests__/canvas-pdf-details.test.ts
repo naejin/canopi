@@ -8,7 +8,7 @@ const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin',
 function garden(): PdfInput {
   return { name: 'Garden', locale: 'en', viewBearingDeg: 0, commonNames: {}, canvas: {
     layers: ['plants', 'zones'].map((name) => ({ name, visible: true, opacity: 1 })),
-    zones: [{ name: 'Orchard', bounds: { x: 0, y: 0, width: 30, height: 20 }, path: 'M0 0 H30 V20 H0 Z', fill: null }],
+    zones: [{ name: 'Orchard', bounds: { x: 0, y: 0, width: 30, height: 20 }, path: 'M0 0 L30 0 L30 20 L0 20 Z', geometry: { kind: 'rect' as const, points: [{ x: 0, y: 0 }, { x: 30, y: 0 }, { x: 30, y: 20 }, { x: 0, y: 20 }] }, fill: null }],
     plants: [[8.5, 'Overlap'], [31, 'Nearby'], [200, 'Distant']].map(([x, name]) => ({ id: String(name), canonicalName: String(name), position: { x: Number(x), y: 12 },
       color: '#000000', symbol: 'square', mark: [{ d: 'M-1 -1 H1 V1 H-1 Z', paint: 'symbol' }], pinnedName: false })),
     annotations: [], measurements: [],

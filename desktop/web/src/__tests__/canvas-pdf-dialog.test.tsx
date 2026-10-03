@@ -157,8 +157,8 @@ it('offers Map orientation under Plant colours, North up by default, and As on s
 it('creates explicitly drawn detail pages and edits their zoom and orientation independently', async () => {
   const container = document.createElement('div'); document.body.append(container)
   const canvas = { layers: [{ name: 'zones', visible: true, opacity: 1 }], plants: [], annotations: [], measurements: [], zones: [
-    { name: 'Wide bed', bounds: { x: 0, y: 0, width: 30, height: 5 }, path: 'M0 0 H30 V5 H0 Z', fill: null },
-    { name: 'Tall bed', bounds: { x: 40, y: 0, width: 5, height: 30 }, path: 'M40 0 H45 V30 H40 Z', fill: null },
+    { name: 'Wide bed', bounds: { x: 0, y: 0, width: 30, height: 5 }, path: 'M0 0 L30 0 L30 5 L0 5 Z', geometry: { kind: 'rect' as const, points: [{ x: 0, y: 0 }, { x: 30, y: 0 }, { x: 30, y: 5 }, { x: 0, y: 5 }] }, fill: null },
+    { name: 'Tall bed', bounds: { x: 40, y: 0, width: 5, height: 30 }, path: 'M40 0 L45 0 L45 30 L40 30 Z', geometry: { kind: 'rect' as const, points: [{ x: 40, y: 0 }, { x: 45, y: 0 }, { x: 45, y: 30 }, { x: 40, y: 30 }] }, fill: null },
   ] }
   const text = createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
   const workflow = createPdfWorkflow({ capture: () => ({ identity: canvas, isCurrent: () => true, input: { name: 'Garden', locale: 'en', viewBearingDeg: 0, commonNames: {}, canvas } }),
@@ -184,7 +184,7 @@ it('creates explicitly drawn detail pages and edits their zoom and orientation i
         await act(async () => { target.dispatchEvent(event) })
       }
       // Authored Zone artwork remains printable, but clicking it creates no page.
-      const artwork = svg.querySelector('path[d="M0 0 H30 V5 H0 Z"]')!
+      const artwork = svg.querySelector('path[d="M0 0 L30 0 L30 5 L0 5 Z"]')!
       expect(artwork).not.toBeNull()
       const count = workflow.setup.value.areas?.length ?? 0
       await pointer('pointerdown', overview.frame.x + 20, overview.frame.y + 20, artwork)

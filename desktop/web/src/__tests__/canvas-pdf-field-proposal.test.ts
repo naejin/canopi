@@ -284,7 +284,7 @@ it('labels overview zones on the drawing so their dimension table can be used on
 })
 
 it('keeps a note near its authored position by interrupting only a crossing zone outline', () => {
-  const drawing = draw({ ...input, canvas: { ...input.canvas, plants: [], zones: [{ name: 'Bed', path: 'M2 1 H3.5 V8 H2 Z', fill: null,
+  const drawing = draw({ ...input, canvas: { ...input.canvas, plants: [], zones: [{ name: 'Bed', path: 'M2 1 L3.5 1 L3.5 8 L2 8 Z', geometry: { kind: 'rect' as const, points: [{ x: 2, y: 1 }, { x: 3.5, y: 1 }, { x: 3.5, y: 8 }, { x: 2, y: 8 }] }, fill: null,
     bounds: { x: 2, y: 1, width: 1.5, height: 7 } }], annotations: [{ id: 'note', text: 'Keep access clear', fontSize: 16, rotation: 0, position: { x: 2, y: 4 } }] } })
   const note = drawing.operations.find(op => op.kind === 'text' && op.line.runs.map(r => r.text).join('') === 'Keep access clear')!
   expect(note.kind === 'text' && note.x >= 140 && note.x < 142).toBe(true)
@@ -333,7 +333,7 @@ it('paginates only zone dimensions and guide values when an overview with annota
 })
 
 it('keeps local overview notes legible at a large ground extent', () => {
-  const source: PdfInput = { ...input, canvas: { ...input.canvas, plants: [], zones: [{ name: 'Park', path: 'M0 0 H400 V400 H0 Z', fill: null,
+  const source: PdfInput = { ...input, canvas: { ...input.canvas, plants: [], zones: [{ name: 'Park', path: 'M0 0 L400 0 L400 400 L0 400 Z', geometry: { kind: 'rect' as const, points: [{ x: 0, y: 0 }, { x: 400, y: 0 }, { x: 400, y: 400 }, { x: 0, y: 400 }] }, fill: null,
     bounds: { x: 0, y: 0, width: 400, height: 400 } }], annotations: [{ id: 'tree', text: 'Keep this tree', fontSize: 16, rotation: 0, position: { x: 200, y: 200 } }] } }
   const plan = buildPdfPlan(source, { paper: 'A4', layers: ['zones', 'annotations'] }, text(),
     { notes: 'Notes', observations: 'Observations', keyAndNotes: 'Key', overview: 'Overview', plants: 'plants', actualSize: '100%' })

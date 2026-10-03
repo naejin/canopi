@@ -201,7 +201,7 @@ describe('PDF workflow lifetime', () => {
   })
   it('retains independent Print Areas when Zones are resized, renamed or removed', async () => {
     const { workflow, prepare, capture, setCanvas } = fixture()
-    const zone = { name: 'Orchard', bounds: { x: 0, y: 0, width: 10, height: 10 }, path: 'M0 0 H10 V10 H0 Z', fill: null }
+    const zone = { name: 'Orchard', bounds: { x: 0, y: 0, width: 10, height: 10 }, path: 'M0 0 L10 0 L10 10 L0 10 Z', geometry: { kind: 'rect' as const, points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }] }, fill: null }
     setCanvas({ ...capture.input.canvas, zones: [zone] })
     workflow.show(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
     expect(workflow.setup.value.areas ?? []).toEqual([])

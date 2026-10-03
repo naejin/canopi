@@ -6,7 +6,7 @@ const snapshot: CanvasPrintSnapshot = {
   layers: [{ name: 'plants', visible: true, opacity: 1 }],
   plants: [{ id: 'p', canonicalName: 'Malus domestica', position: { x: 10, y: 0 }, color: '#123456', symbol: 'round', mark: [], pinnedName: false }],
   zones: [
-    { name: 'Bed', path: 'M0 0 H10 V4 H0 Z', fill: null, bounds: { x: 0, y: 0, width: 10, height: 4 },
+    { name: 'Bed', path: 'M0 0 L10 0 L10 4 L0 4 Z', fill: null, bounds: { x: 0, y: 0, width: 10, height: 4 },
       geometry: { kind: 'rect', points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 4 }, { x: 0, y: 4 }] } },
     { name: 'Pond', path: 'M2 0 C2 1 1 2 0 2 Z', fill: '#aabbcc', bounds: { x: -2, y: -1, width: 4, height: 2 },
       geometry: { kind: 'ellipse', center: { x: 0, y: 0 }, radii: { x: 2, y: 1 }, rotation: 30 } },
@@ -35,20 +35,19 @@ describe('PDF page frame', () => {
     close(result.annotations[0]!.position, turned(0, -10, -30))
     const [bed, pond] = result.zones
     const corners = [[0, 0], [10, 0], [10, 4], [0, 4]].map(([x, y]) => turned(x!, y!, -30))
-    if (bed!.geometry?.kind !== 'rect') throw new Error('rect expected')
+    if (bed!.geometry.kind !== 'rect') throw new Error('rect expected')
     bed!.geometry.points.forEach((point, i) => close(point, corners[i]!))
-    // Every coordinate pair of the path turns, H and V included.
+    // Every coordinate pair of the path turns.
     const numbers = bed!.path.match(/-?[\d.]+(?:e-?\d+)?/g)!.map(Number)
     const pairs = Array.from({ length: numbers.length / 2 }, (_, i) => ({ x: numbers[2 * i]!, y: numbers[2 * i + 1]! }))
     expect(pairs).toHaveLength(4)
     pairs.forEach((pair, i) => close(pair, corners[i]!))
-    expect(bed!.path).toMatch(/^M[^HV]*Z$/)
     const xs = corners.map(p => p.x), ys = corners.map(p => p.y)
     expect(bed!.bounds.x).toBeCloseTo(Math.min(...xs), 6)
     expect(bed!.bounds.y).toBeCloseTo(Math.min(...ys), 6)
     expect(bed!.bounds.width).toBeCloseTo(Math.max(...xs) - Math.min(...xs), 6)
     expect(bed!.bounds.height).toBeCloseTo(Math.max(...ys) - Math.min(...ys), 6)
-    if (pond!.geometry?.kind !== 'ellipse') throw new Error('ellipse expected')
+    if (pond!.geometry.kind !== 'ellipse') throw new Error('ellipse expected')
     expect(pond!.geometry.rotation).toBeCloseTo(0, 6)
     expect(pond!.bounds.width).toBeCloseTo(4, 6)
     expect(pond!.bounds.height).toBeCloseTo(2, 6)
@@ -64,6 +63,11 @@ describe('PDF page frame', () => {
     const back = areaFromFrame(frame, onPage)
     close(back, area)
     expect(back.width).toBe(6); expect(back.height).toBe(2)
+  })
+
+  it('refuses a zone path the print snapshot never writes', () => {
+    const relative = { ...snapshot, zones: [{ ...snapshot.zones[0]!, path: 'M0 0 h10 v4 h-10 Z' }] }
+    expect(() => turnSnapshot(relative, pageFrame(30))).toThrow('unsupported-print-path')
   })
 
   it('a North up layout has angle 0 and an unchanged snapshot', () => {
