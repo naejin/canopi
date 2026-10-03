@@ -166,3 +166,29 @@ it('commits framing once, cancels lost capture and Escape, and ignores clicks wh
     expect(captured.size).toBe(0)
   } finally { render(null, container); container.remove() }
 })
+
+it('mod+arrow is the large step; Shift+arrow does nothing; the direction is unchanged', async () => {
+  for (const mac of [false, true]) {
+    const onMove = vi.fn()
+    const view = await editor({ plan: { pages: [page], outlines: {}, blocked: null }, onMove, mac })
+    try {
+      const mod = mac ? { metaKey: true } : { ctrlKey: true }, other = mac ? { ctrlKey: true } : { metaKey: true }
+      // ArrowLeft moves the content left, as a drag does (U12): the view centre goes right.
+      await view.key({ key: 'ArrowLeft' })
+      expect(onMove).toHaveBeenLastCalledWith({ x: .5, y: 0 })
+      await view.key({ key: 'ArrowDown', ...mod })
+      expect(onMove).toHaveBeenLastCalledWith({ x: 0, y: -3 })
+      expect(onMove).toHaveBeenCalledTimes(2)
+      for (const modifiers of [{ shiftKey: true }, { altKey: true }, other, { ...mod, shiftKey: true }]) await view.key({ key: 'ArrowRight', ...modifiers })
+      expect(onMove).toHaveBeenCalledTimes(2)
+    } finally { view.dispose() }
+  }
+  // On a turned page the press keeps its direction on paper.
+  const onMove = vi.fn()
+  const view = await editor({ plan: { pages: [page], outlines: {}, blocked: null, angleDeg: 90 }, onMove, mac: false })
+  try {
+    await view.key({ key: 'ArrowLeft', ctrlKey: true })
+    const onPaper = pageFrame(90).toFrame(onMove.mock.lastCall![0])
+    expect(onPaper.x).toBeCloseTo(3, 6); expect(onPaper.y).toBeCloseTo(0, 6)
+  } finally { view.dispose() }
+})

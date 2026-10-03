@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import type { PrintBounds, PrintPoint } from '../../canvas/print'
 import type { PdfPage, PdfPlan } from '../../app/canvas-pdf/types'
 import { areaFromFrame, pageFrame } from '../../app/canvas-pdf/page-frame'
+import { detectPlatform } from '../../canvas/runtime/input/platform'
 import { t } from '../../i18n'
 import { PdfPageArtwork } from './PdfPagePreview'
 
@@ -22,6 +23,8 @@ interface EditorProps {
   readonly onPage?: (id: string) => void
   /** Delta of the view centre in plan metres, committed once per completed gesture or arrow press. */
   readonly onMove?: (delta: PrintPoint) => void
+  /** Cmd is mod on a Mac, else Ctrl; defaults to the browser's platform. */
+  readonly mac?: boolean
 }
 interface Gesture {
   readonly start: PrintPoint
@@ -30,7 +33,7 @@ interface Gesture {
   readonly pageId?: string
 }
 export function PdfPageEditor({ page, plan, adding = false, disabled = false, inspecting = false, navigationOnly = false, highlightedPage,
-  keyMatches = NO_KEY_MATCHES, keyCurrent = null, onPrintArea, onPage, onMove }: EditorProps) {
+  keyMatches = NO_KEY_MATCHES, keyCurrent = null, onPrintArea, onPage, onMove, mac = MAC }: EditorProps) {
   const root = useRef<SVGSVGElement>(null)
   const currentKeyMatch = useRef<SVGRectElement>(null)
   useEffect(() => {
@@ -108,8 +111,11 @@ export function PdfPageEditor({ page, plan, adding = false, disabled = false, in
     onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={cancel} onLostPointerCapture={cancel}
     onKeyDown={(event) => {
       if (event.key === 'Escape' && drag.current) { event.preventDefault(); event.stopPropagation(); cancel(); return }
-      if (!interactive || navigationOnly || adding || event.altKey || event.ctrlKey || event.metaKey) return
-      const delta = event.shiftKey ? 30 : 5
+      // Arrows move the content their way, as a drag does (U12); mod is the large step, and Shift, Alt and the other
+      // of Ctrl and Cmd do nothing (spec §4.12).
+      const mod = mac ? event.metaKey : event.ctrlKey, other = mac ? event.ctrlKey : event.metaKey
+      if (!interactive || navigationOnly || adding || event.altKey || event.shiftKey || other) return
+      const delta = mod ? 30 : 5
       const direction = { ArrowLeft: [delta, 0], ArrowRight: [-delta, 0], ArrowUp: [0, delta], ArrowDown: [0, -delta] }[event.key]
       if (direction) { event.preventDefault(); move(direction[0]!, direction[1]!) }
     }}>
@@ -136,3 +142,5 @@ export function PdfPageEditor({ page, plan, adding = false, disabled = false, in
 }
 
 const NO_KEY_MATCHES: readonly PrintBounds[] = []
+const MAC = typeof navigator !== 'undefined'
+  && ['mac', 'ios'].includes(detectPlatform(navigator, window as unknown as { readonly GestureEvent?: unknown }).os)
