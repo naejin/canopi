@@ -35,6 +35,14 @@ MIT and/or Apache-2.0; `zlib-rs` under Zlib, `zopfli` under Apache-2.0). The tes
 `third-party-notices.test.ts` checks every `opengeos` crate in `Cargo.lock`
 has a row above.
 
+The coordinate reference system definitions compiled into the binary
+(`crs-definitions`' PROJ strings and WKT, and `wbprojection`'s registry) are
+derived from the EPSG Geodetic Parameter Dataset, owned by the International
+Association of Oil & Gas Producers (IOGP) and used under its terms of use
+(https://epsg.org/terms-of-use.html). Canopi reads them as published, apart
+from normalising the scale factor and prime meridian terms of a PROJ string
+to equivalent values before parsing.
+
 `wbspatialstats` is not linked into the Canopi binary. The GeoLibre CLI
 sidecar statically links the Whitebox tool registry it is built with
 (`wbtools_oss` from `opengeos/whitebox-wasm` at
