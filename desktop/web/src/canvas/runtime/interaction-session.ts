@@ -1034,7 +1034,7 @@ function liveStoreReader(deps: SceneInteractionSessionDeps): SceneStateReader {
     get persisted() { return deps.getSceneStore().persisted },
     get session() { return deps.getSceneStore().session },
     get guides() { return deps.getSceneStore().guides },
-    get physicalExtentMeters() { return deps.getSceneStore().physicalExtentMeters },
+    get hasObjects() { return deps.getSceneStore().hasObjects },
     get sessionPlane() { return deps.getSceneStore().sessionPlane },
     get sessionPlaneSignal() { return deps.getSceneStore().sessionPlaneSignal },
   }

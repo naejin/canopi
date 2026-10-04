@@ -116,7 +116,7 @@ class SceneCanvasQueryRole implements SceneCanvasQuerySurface {
       null,
     )
   }
-  getScenePhysicalExtentMeters(): number | null { return this.options.sceneStore.physicalExtentMeters }
+  sceneHasObjects(): boolean { return this.options.sceneStore.hasObjects }
   getSceneSnapshot(): ScenePersistedState { return this.options.sceneStore.persisted }
   getSpeciesFocus() { return this.options.sceneStore.session.speciesFocus }
   getPlantLabelCoverage(): CanvasPlantLabelCoverage {

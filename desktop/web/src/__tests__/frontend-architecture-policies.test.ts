@@ -574,15 +574,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'Scene physical extent depends only on canonical Zone geometry',
-    from: ['src/canvas/runtime/scene-physical-extent.ts'],
-    targets: ['**'],
-    exceptTargets: ['src/canvas/runtime/zone-geometry.ts'],
-    allowTypeOnlyTargets: ['src/canvas/runtime/scene/index.ts'],
-    edgeKinds: ['static', 'dynamic', 'import-type', 'reexport'],
-  },
-  {
-    kind: 'forbid-imports',
     name: 'Plant finder matcher stays pure over the search normalization authority',
     from: ['src/app/plant-finder/matcher.ts'],
     targets: ['**'],
@@ -1122,14 +1113,6 @@ const NAMED_IMPORT_POLICIES = [
       'ShellCommandIdForCapability',
       'ShellCommandState',
     ],
-  },
-  {
-    kind: 'named-imports',
-    name: 'Scene physical extent delegates every Zone shape to canonical geometry',
-    from: ['src/canvas/runtime/scene-physical-extent.ts'],
-    target: 'src/canvas/runtime/zone-geometry.ts',
-    requiredNames: ['getZoneRadialExtentMeters'],
-    allowedNames: ['getZoneRadialExtentMeters'],
   },
   {
     kind: 'named-imports',

@@ -1,5 +1,4 @@
 import { signal, type ReadonlySignal } from '@preact/signals'
-import { computeScenePhysicalExtentMeters } from '../scene-physical-extent'
 import type {
   CanopiFile,
 } from '../../../types/design'
@@ -25,6 +24,14 @@ import {
   normalizeSceneDesignObjectTargets,
   type SceneDesignObjectTarget,
 } from './design-object-targets'
+
+/** Whether a Scene holds any plant, note, measurement guide, or zone with a point. */
+function sceneHasObjects(scene: ScenePersistedState): boolean {
+  return scene.plants.length > 0
+    || scene.annotations.length > 0
+    || scene.measurementGuides.length > 0
+    || scene.zones.some((zone) => zone.points.length > 0)
+}
 
 export class SceneStore {
   private _persisted: ScenePersistedState
@@ -79,8 +86,9 @@ export class SceneStore {
     return this._geo
   }
 
-  get physicalExtentMeters(): number | null {
-    return computeScenePhysicalExtentMeters(this._persisted)
+  /** sceneHasObjects of the Scene, read without copying it. */
+  get hasObjects(): boolean {
+    return sceneHasObjects(this._persisted)
   }
 
   get session(): SceneSessionState {
@@ -159,7 +167,7 @@ export class SceneStore {
 
 export type SceneStateReader = Pick<
   SceneStore,
-  'persisted' | 'session' | 'guides' | 'physicalExtentMeters' | 'sessionPlane' | 'sessionPlaneSignal'
+  'persisted' | 'session' | 'guides' | 'hasObjects' | 'sessionPlane' | 'sessionPlaneSignal'
 >
 export type SceneDocumentReader = Pick<SceneStore, 'toCanopiFile'>
 export type SceneSessionWriter = Pick<

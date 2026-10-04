@@ -229,7 +229,8 @@ export interface CanvasQuerySurface {
    * the Scene. Never changes session state.
    */
   captureViewScene(request: CanvasViewSceneRequest): SceneRendererSnapshot | null
-  getScenePhysicalExtentMeters(): number | null
+  /** Whether the Scene holds any plant, note, measurement guide, or zone with a point ("Where is your site?"). */
+  sceneHasObjects(): boolean
   getSceneSnapshot(): ScenePersistedState
   getSelection(): SceneDesignObjectTarget[]
   getDesignObjectSelection(): CanvasDesignObjectSelectionModel

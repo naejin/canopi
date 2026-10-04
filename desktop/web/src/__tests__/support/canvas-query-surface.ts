@@ -1,4 +1,3 @@
-import { computeScenePhysicalExtentMeters } from '../../canvas/runtime/scene-physical-extent'
 import { buildCanvasPrintSnapshot } from '../../canvas/runtime/print-snapshot'
 import { createTestSceneRendererSnapshot } from './scene-renderer-snapshot'
 import { computed, signal, type ReadonlySignal, type Signal } from '@preact/signals'
@@ -102,7 +101,8 @@ export function createTestCanvasQuerySurface({
         speciesFocus: { canonicalName: request.focusedSpecies },
       })
     },
-    getScenePhysicalExtentMeters: () => computeScenePhysicalExtentMeters(scene),
+    sceneHasObjects: () => scene.plants.length > 0 || scene.annotations.length > 0 || scene.measurementGuides.length > 0
+      || scene.zones.some((zone) => zone.points.length > 0),
     getSceneSnapshot: () => scene,
     getSelection: () => currentSelection.map((target) => ({ ...target })),
     getDesignObjectSelection: () => ({

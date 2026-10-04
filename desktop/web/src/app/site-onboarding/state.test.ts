@@ -30,14 +30,14 @@ function open(file: CanopiFile, kind: 'new' | 'loaded'): void {
 function deleteEverything(): void {
   host.surfaces.commands.sceneEdits.selectAll()
   host.surfaces.commands.sceneEdits.deleteSelected()
-  expect(host.surfaces.queries.getScenePhysicalExtentMeters()).toBeNull()
+  expect(host.surfaces.queries.sceneHasObjects()).toBe(false)
 }
 
 function placePlant(): void {
   host.surfaces.commands.sceneEdits.importDesignObjects({
     plants: [plant('first', 0, 0)], zones: [], annotations: [], measurementGuides: [], groups: [],
   })
-  expect(host.surfaces.queries.getScenePhysicalExtentMeters()).not.toBeNull()
+  expect(host.surfaces.queries.sceneHasObjects()).toBe(true)
 }
 
 describe('Where is your site?', () => {
@@ -62,7 +62,7 @@ describe('Where is your site?', () => {
 
     host.surfaces.commands.history.undo()
 
-    expect(host.surfaces.queries.getScenePhysicalExtentMeters()).toBeNull()
+    expect(host.surfaces.queries.sceneHasObjects()).toBe(false)
     expect(siteLocateOpen.value).toBe(false)
   })
 

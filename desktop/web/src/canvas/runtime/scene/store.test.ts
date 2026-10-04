@@ -14,7 +14,7 @@ import { createSceneGeoFrame } from './geo-frame'
 const TEST_FRAME_ORIGIN = { lon: 13, lat: 23 }
 
 describe('scene store', () => {
-  it('projects guides and current physical extent without cloning the full scene', () => {
+  it('reads guides and whether it holds objects without cloning the full scene', () => {
     const store = new SceneStore()
     store.updatePersisted((draft) => {
       draft.guides.push({ id: 'guide', axis: 'h', position: 7 })
@@ -23,12 +23,12 @@ describe('scene store', () => {
     })
     const read = vi.spyOn(store, 'persisted', 'get')
     try {
-      expect(store.physicalExtentMeters).toBe(5)
+      expect(store.hasObjects).toBe(true)
       const guides = store.guides
       guides[0]!.position = 99
       expect(store.guides[0]!.position).toBe(7)
-      store.updatePersisted((draft) => { draft.annotations[0]!.position = { x: 6, y: 8 } })
-      expect(store.physicalExtentMeters).toBe(10)
+      store.updatePersisted((draft) => { draft.annotations = [] })
+      expect(store.hasObjects).toBe(false)
       expect(read).not.toHaveBeenCalled()
     } finally { read.mockRestore() }
   })

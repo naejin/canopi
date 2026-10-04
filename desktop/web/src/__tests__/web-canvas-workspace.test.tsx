@@ -955,7 +955,7 @@ function fakeQuerySurface(): CanvasQuerySurface {
     getPlantLabelCoverage: () => ({ labelled: 0, inView: 0 }),
     capturePrintSnapshot: () => null,
     captureViewScene: () => null,
-    getScenePhysicalExtentMeters: () => null,
+    sceneHasObjects: () => false,
     getSceneSnapshot: vi.fn(() => createDefaultScenePersistedState()),
     getSelection: vi.fn(() => []),
     getDesignObjectSelection: vi.fn(() => ({

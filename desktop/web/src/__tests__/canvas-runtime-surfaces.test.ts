@@ -35,7 +35,7 @@ function createQuerySurface() {
     getPlantLabelCoverage: () => ({ labelled: 0, inView: 0 }),
     capturePrintSnapshot: () => null,
     captureViewScene: () => null,
-    getScenePhysicalExtentMeters: () => null,
+    sceneHasObjects: () => false,
     getSceneSnapshot: () => createDefaultScenePersistedState(),
     getSelection: () => [],
     getDesignObjectSelection: () => ({
