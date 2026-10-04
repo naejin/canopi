@@ -296,7 +296,6 @@
     "src/canvas/runtime/scene-visuals.ts#CANVAS_MAP_BACKDROP_COLORS",
     "src/canvas/runtime/scene-visuals.ts#resolveBackdropInk",
     "src/canvas/runtime/scene/geo-frame.ts#roundGeoPosition",
-    "src/canvas/runtime/scene/store.ts#createDefaultSceneSessionState",
     "src/canvas/runtime/selection-labels.ts#computePinnedPlantNameLabels",
     "src/canvas/runtime/selection-labels.ts#computeSelectionLabels",
     "src/canvas/runtime/tools/saved-object-stamp.ts#canPlaceSavedObjectStamp",
