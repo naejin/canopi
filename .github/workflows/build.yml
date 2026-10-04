@@ -8,15 +8,38 @@ on:
   pull_request:
     branches: [main, feature/geolibre-adoption]
 
+# A newer push or PR update cancels the older run of the same ref; main always finishes.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   CARGO_TERM_COLOR: always
   CANOPI_CORE_DB_RELEASE_TAG: canopi-core-db
 
 jobs:
+  # Docs, bead and design-board changes run only lint (which checks the docs);
+  # the tests, LiDAR lanes and installer builds run when anything else changed.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$BASE" "$GITHUB_SHA" | grep -qvE '^(docs/|\.beads/|\.interface-design/)|\.md$'; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
   lint:
     runs-on: ubuntu-latest
     env:
@@ -84,6 +107,8 @@ jobs:
         run: npm run check:ui --prefix desktop/web
 
   test:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     env:
       CANOPI_SKIP_BUNDLED_DB: "1"
@@ -144,6 +169,8 @@ jobs:
     # GeoLibre-backed LiDAR lanes (ignored in the default suite); the engine
     # comparison lane skips itself here, as CI installs no GDAL. Fixture e2e
     # lanes stay local: they need IGN tiles.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     env:
       CANOPI_SKIP_BUNDLED_DB: "1"

@@ -5,8 +5,10 @@ name: Web Edition browsers
 on:
   push:
     branches: [main, feature/geolibre-adoption]
+    paths-ignore: ['docs/**', '.beads/**', '.interface-design/**', '**/*.md']
   pull_request:
     branches: [main, feature/geolibre-adoption]
+    paths-ignore: ['docs/**', '.beads/**', '.interface-design/**', '**/*.md']
   workflow_dispatch:
     inputs:
       update_snapshots:
@@ -14,9 +16,10 @@ on:
         type: boolean
         default: false
 
+# A newer push or PR update cancels the older run of the same ref; main always finishes.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   browsers:
