@@ -375,11 +375,12 @@ Code done and pushed 2026-10-04 (step merge `f064f611`, receipts `a7cfa062`). Fu
   - C15. LiDAR in the Dutch, UK, Belgian, Austrian, Greek, Luxembourg and Czech grids moves 30 m to 1,260 km to its true place, within about 1–5 m (Helmert shifts, no grid files); French NTF Lambert data moves about 17 km; Lambert-93, Swiss and LAEA data do not move.
   - C16. Display tiles regenerate once (v2), and the drawn pixel matches the hover readout in every datum.
   - C17. Items in those grids imported before the fix keep their old extent until re-imported.
-  - C18. EPSG:5698 and about 1,329 more codes import; feet systems are labelled in feet and no longer offer slope; about 290 codes are refused with "EPSG:n is not supported".
+  - C18. EPSG:5698 and about 1,329 more codes import; feet systems are labelled in feet and no longer offer slope, whatever unit a compound CRS's height part uses (`38dae37d`); about 290 codes are refused with "EPSG:n is not supported".
   - C19. `maplibre-contour` is pinned at exactly 0.1.1 (checked live).
   - C20. Developer-only: `globalThis.__CANOPI_MAP_DEBUG__` is gone (D4).
+- **Fixes named at the handoff.** Zooming past about 1:15 (z25) no longer blanks the basemap, satellite and other MapLibre layers: they draw over-scaled (`e535f3c4`, test `09b07fae` in `maplibre/workspace-map.test.ts`).
 - **Gates, review, checks.** Section 1 (reviews as changed on 2026-10-04); the Web check after each merge and once after the last; a live check after each merge that changes a faked seam and again before the pre-push review; the main agent adds a container-empty assertion to the Web e2e (A15); all worktrees share the build folder and the Rust steps take turns on the build slot (A10).
-- **Exit.** canopi-f47t.19's U-runtime and U-map items and canopi-f47t.18's remaining items landed or dropped with the reason; canopi-ji73 closed with its live import; the shim-removal bead filed; the unused-code check run; C13–C20 named at the handoff. canopi-f47t.19 stays open for the items phases 2, 3 and R own.
+- **Exit.** canopi-f47t.19's U-runtime and U-map items and canopi-f47t.18's remaining items landed or dropped with the reason; canopi-ji73 closed with its live import; the shim-removal bead filed; the unused-code check run; C13–C20 and the fixes named at the handoff. canopi-f47t.19 stays open for the items phases 2, 3 and R own.
 
 ### 2.0 release close (main agent, after phases 3 and R, the 2.0 bug fixes and the 2.0 cleanup)
 
@@ -535,7 +536,7 @@ The conventions, per phase:
 - **Phase 0:** the three by-eye conventions of section 1.
 - **Phase F:** window listeners now attach only during a gesture, a deliberate behaviour change with its own test; a canvas drag no longer selects page text (the GeoLibre guard); the hover ends over owned chrome from F, not phase 2 (U6).
 - **2.0 bug fixes:** C1–C12, accepted by the user on 2026-10-03 and named at the step's handoff (section 4, "2.0 bug fixes").
-- **2.0 cleanup:** C13 (accepted with the bug-fix conventions on 2026-10-03) and C14–C20 from its design check, named at the step's handoff (section 4, "2.0 cleanup").
+- **2.0 cleanup:** C13 (accepted with the bug-fix conventions on 2026-10-03) and C14–C20 from its design check, and the fixes beside them, named at the step's handoff (section 4, "2.0 cleanup").
 - **Phase 2:** the menu opens on right-button release on every OS; Mac Ctrl+click is a right-click; overview left click and band select with no menu; on phones and tablets a one-finger drag in overview now band-selects too, so until phase 3 adds two-finger pan, panning there needs the Pan tool in the phone strip; the World map loses Shift+drag box zoom; a still right-click during a polygon opens the menu with "Finish shape" first; Plant a row's no-snap moved to Ctrl/Cmd; Esc drops a held pick first; the canopi-f47t.2 and .4 items shipped as scoped (all conventions the user may overturn).
 - **Phase 3:** `touch-action: none` on the map host; Linux trackpad pinch stays unsupported until the Rust bead lands.
 - **Phase R:** stroke widths may drift about 12 % within a zoom band (convention); names and codes are admitted on the settled frame (150 ms after the last camera change) and on a zoom-band change (×1.25), not at each zoom frame, with no admission cache: mid-zoom, the labels admitted for the previous band move with their plants until the band changes or the view settles, and a settled view admits as before (convention); a plant under the pointer wins the hover tooltip over a layer readout.
