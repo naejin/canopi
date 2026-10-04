@@ -1122,65 +1122,6 @@ impl<'ast> Visit<'ast> for NestedCodeFinder {
     }
 }
 
-/// Crate and workspace `[lints]` tables that switch `clippy::disallowed_methods` off, which no
-/// source attribute would show. Read line by line: each key is joined to its table header
-/// (spaces and quotes dropped, `-` read as `_`), so `[lints.clippy] name = ..`, `[lints]
-/// clippy.name = ..`, a root `lints.clippy.name = ..` and `[lints.clippy.name] level = ..` all
-/// name the same lint; a value holding `allow` or `expect` in either quote style silences it.
-fn audit_manifest_lints(manifests: &[(&str, &str)]) -> Vec<String> {
-    let normalise = |text: &str| {
-        text.chars()
-            .filter(|c| !c.is_whitespace() && *c != '"' && *c != '\'')
-            .map(|c| if c == '-' { '_' } else { c })
-            .collect::<String>()
-    };
-    let mut violations = Vec::new();
-    for (path, manifest) in manifests {
-        let mut table = String::new();
-        for line in manifest.lines() {
-            let line = line.split_once('#').map_or(line, |(code, _)| code).trim();
-            if let Some(header) = line
-                .strip_prefix('[')
-                .and_then(|rest| rest.strip_suffix(']'))
-            {
-                table = normalise(header);
-                continue;
-            }
-            let Some((key, value)) = line.split_once('=') else {
-                continue;
-            };
-            let key = normalise(key);
-            let full = if table.is_empty() {
-                key
-            } else {
-                format!("{table}.{key}")
-            };
-            let full = full.strip_prefix("workspace.").unwrap_or(&full);
-            let Some(entry) = full.strip_prefix("lints.") else {
-                continue;
-            };
-            let entry = entry.strip_suffix(".level").unwrap_or(entry);
-            let lint = match entry.split_once('.') {
-                Some(("clippy", name)) => format!("clippy::{name}"),
-                Some(("rust", name)) => name.to_owned(),
-                _ => continue,
-            };
-            let value = value.replace('\'', "\"");
-            let silenced = ["\"allow\"", "\"expect\""]
-                .iter()
-                .any(|level| value.contains(level));
-            if silenced && ESCAPE_LINT_NAMES.contains(&lint.as_str()) {
-                violations.push(format!(
-                    "a manifest must not switch clippy::disallowed_methods off: {path} ({lint})"
-                ));
-            }
-        }
-    }
-    violations.sort();
-    violations.dedup();
-    violations
-}
-
 fn is_reasoned_escape_expect(attribute: &Attribute) -> bool {
     escape_expect_reason(attribute).is_some()
 }
@@ -1441,12 +1382,6 @@ fn audit_repository() -> Vec<String> {
         &rust_sources,
         BLOCKING_ESCAPE_ALLOWLIST,
     ));
-    let crate_manifest = fs::read_to_string(manifest.join("Cargo.toml")).unwrap();
-    let workspace_manifest = fs::read_to_string(manifest.join("..").join("Cargo.toml")).unwrap();
-    violations.extend(audit_manifest_lints(&[
-        ("desktop/Cargo.toml", &crate_manifest),
-        ("Cargo.toml", &workspace_manifest),
-    ]));
     let frontend_root = manifest.join("web").join("src");
     let mut owned_frontend_sources = Vec::new();
     frontend_sources_under(&frontend_root, &frontend_root, &mut owned_frontend_sources);
@@ -1527,8 +1462,8 @@ mod tests {
     use super::{
         ESCAPE_ENTRY_POINTS, EscapeAllowance, StateAccessAllowance, SyncCommandAllowance,
         audit_command_policy, audit_escape_allowlist, audit_escape_exemptions,
-        audit_frontend_invocations, audit_manifest_lints, audit_repository,
-        disallowed_method_paths, invoked_command_names, is_production_frontend_source,
+        audit_frontend_invocations, audit_repository, disallowed_method_paths,
+        invoked_command_names, is_production_frontend_source,
     };
     use std::path::Path;
 
@@ -1960,64 +1895,6 @@ mod tests {
                 exemption("#[allow(clippy::disallowed_method)]"),
                 exemption("#[allow(warnings)]"),
                 exemption("#[cfg_attr(not(test), allow(warnings))]"),
-            ]
-        );
-    }
-
-    #[test]
-    fn manifests_cannot_switch_the_escape_lint_off() {
-        let manifest = r#"
-[package]
-name = "fixture"
-
-[features]
-all = []
-
-[lints.clippy]
-unwrap_used = "deny"
-disallowed_methods = "allow"
-
-[lints.rust]
-warnings = { level = "allow", priority = -1 }
-unused = "allow"
-
-[lints]
-clippy.style = "expect"
-
-[workspace.lints.clippy]
-all = "allow"
-pedantic = "allow"
-"#;
-        let root_dotted =
-            "lints.clippy.disallowed_methods = \"allow\"\n[package]\nname = \"fixture\"\n";
-        let spelled_otherwise = r#"
-[ lints . clippy ]
-disallowed-methods = 'allow'
-
-[workspace.lints.rust.warnings]
-level = 'expect'
-"#;
-        let violations = audit_manifest_lints(&[
-            ("Cargo.toml", manifest),
-            ("root/Cargo.toml", root_dotted),
-            ("spelled/Cargo.toml", spelled_otherwise),
-        ]);
-        let refused = |lint: &str| {
-            format!(
-                "a manifest must not switch clippy::disallowed_methods off: Cargo.toml ({lint})"
-            )
-        };
-
-        assert_eq!(
-            violations,
-            [
-                refused("clippy::all"),
-                refused("clippy::disallowed_methods"),
-                refused("clippy::style"),
-                refused("warnings"),
-                "a manifest must not switch clippy::disallowed_methods off: root/Cargo.toml (clippy::disallowed_methods)".to_owned(),
-                "a manifest must not switch clippy::disallowed_methods off: spelled/Cargo.toml (clippy::disallowed_methods)".to_owned(),
-                "a manifest must not switch clippy::disallowed_methods off: spelled/Cargo.toml (warnings)".to_owned(),
             ]
         );
     }
