@@ -8,7 +8,7 @@ import {
   MAPLIBRE_SATELLITE_LAYER_ID,
   MAPLIBRE_SATELLITE_SOURCE_ID,
 } from '../maplibre/config'
-import { bindSatelliteImagery } from '../maplibre/satellite-bind'
+import { mountSatelliteLifecycle, type SatelliteMountOptions } from '../maplibre/satellite-bind'
 import { BasemapTileAuth } from '../maplibre/basemap-tile-auth'
 import type { SatelliteReconcileTarget } from '../maplibre/satellite-contribution'
 
@@ -18,7 +18,7 @@ const COPYRIGHT = 'Imagery ©2026 Google'
 const OFFICIAL_TILE = 'https://tile.googleapis.com/v1/2dtiles/{z}/{x}/{y}?session={session}'
 const VIEWPORT = { west: -1, south: 48, east: 1, north: 49, zoom: 14 }
 
-/** A recording map, narrowed to what the binding is allowed to touch. */
+/** A recording map, narrowed to what the mount is allowed to touch. */
 function recordingMap() {
   const sources = new Map<string, Record<string, unknown>>()
   const layers = new Map<string, Record<string, unknown>>()
@@ -35,6 +35,29 @@ function recordingMap() {
     },
   }
   return { target, sources, layers, layout }
+}
+
+const STYLE_READY: SatelliteMountOptions['styleReady'] = { isReady: () => true, whenReady: () => () => {} }
+
+/** Mounts `provider` at VIEWPORT; the style is ready unless `overrides` says otherwise. */
+function mountOn(
+  provider: SatelliteImageryProvider,
+  map: SatelliteReconcileTarget,
+  tileAuth: BasemapTileAuth | null,
+  overrides: Partial<SatelliteMountOptions> = {},
+) {
+  return mountSatelliteLifecycle({
+    provider,
+    map,
+    tileAuth,
+    readViewport: () => VIEWPORT,
+    styleReady: STYLE_READY,
+    beforeLayerId: () => null,
+    afterApply: () => {},
+    events: { on: () => {}, off: () => {} },
+    replaceSatelliteAttribution: () => {},
+    ...overrides,
+  })
 }
 
 /** A scripted Google tier: one session answer, then one viewport answer. */
@@ -97,9 +120,8 @@ describe('Google official provider drives the live map', () => {
     const tileAuth = new BasemapTileAuth()
     const provider = officialProvider(http, tileAuth)
     const map = recordingMap()
-    const dispose = bindSatelliteImagery({ provider, map: map.target, tileAuth })
+    const mount = mountOn(provider, map.target, tileAuth)
 
-    provider.update(VIEWPORT)
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
 
     // The session request is authenticated with the key.
@@ -107,7 +129,7 @@ describe('Google official provider drives the live map', () => {
     expect(calls[0]?.url).toContain(API_KEY)
 
     const source = map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID)
-    expect(source, 'the binding must reconcile a source for a ready provider').toBeDefined()
+    expect(source, 'the mount must reconcile a source for a ready provider').toBeDefined()
     expect(source?.type).toBe('raster')
     const tiles = source?.tiles as string[]
     // The published descriptor is credential-free: the template names the
@@ -131,7 +153,7 @@ describe('Google official provider drives the live map', () => {
       descriptor: { official: true, tileSize: 512 },
     })
     expect(map.layers.has(MAPLIBRE_SATELLITE_LAYER_ID)).toBe(true)
-    dispose()
+    mount.dispose()
   })
 
   it('never puts the session token in the published state or the map source', async () => {
@@ -139,9 +161,8 @@ describe('Google official provider drives the live map', () => {
     const tileAuth = new BasemapTileAuth()
     const provider = officialProvider(http, tileAuth)
     const map = recordingMap()
-    const dispose = bindSatelliteImagery({ provider, map: map.target, tileAuth })
+    const mount = mountOn(provider, map.target, tileAuth)
 
-    provider.update(VIEWPORT)
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
 
     expect(JSON.stringify(provider.snapshot())).not.toContain(SESSION_TOKEN)
@@ -151,7 +172,7 @@ describe('Google official provider drives the live map', () => {
 
     // Disposal stops the transport authenticating: the credential belongs to
     // the map that installed it.
-    dispose()
+    mount.dispose()
     expect(tileAuth.installed).toBe(false)
     expect(tileAuth.authorize(OFFICIAL_TILE)).toContain('{session}')
   })
@@ -161,14 +182,13 @@ describe('Google official provider drives the live map', () => {
     const provider = new SatelliteImageryProvider(http, () => ({ googleMapsApiKey: API_KEY }))
     const map = recordingMap()
     // No tileAuth: a map created without the request seam cannot resolve the
-    // session template, so the binding must not install a source that would
+    // session template, so the mount must not install a source that would
     // request a literal `{session}`.
-    const dispose = bindSatelliteImagery({ provider, map: map.target })
+    const mount = mountOn(provider, map.target, null)
 
-    provider.update(VIEWPORT)
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
     expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(false)
-    dispose()
+    mount.dispose()
   })
 
   it('authenticates viewport requests and installs their attribution and zoom', async () => {
@@ -177,17 +197,11 @@ describe('Google official provider drives the live map', () => {
     const provider = officialProvider(http, tileAuth)
     const map = recordingMap()
     let installedCredit: string | null = null
-    const unbind = bindSatelliteImagery({
-      provider,
-      map: {
-        ...map.target,
-        replaceSatelliteAttribution: (credit: string) => {
-          installedCredit = credit
-        },
+    const mount = mountOn(provider, map.target, tileAuth, {
+      replaceSatelliteAttribution: (credit: string) => {
+        installedCredit = credit
       },
-      tileAuth,
     })
-    provider.update(VIEWPORT)
 
     await vi.waitFor(() => expect(installedCredit).toBe(COPYRIGHT))
     const viewportCall = calls.find((call) => call.url.includes('/viewport'))
@@ -202,8 +216,7 @@ describe('Google official provider drives the live map', () => {
     // Availability comes from the provider's own viewport metadata, not from a
     // universal zoom ceiling.
     expect(source?.maxzoom).toBe(21)
-    unbind()
-    provider.dispose()
+    mount.dispose()
   })
 
   it('reports viewport metadata failure as an actionable unavailable state', async () => {
@@ -211,8 +224,7 @@ describe('Google official provider drives the live map', () => {
     const tileAuth = new BasemapTileAuth()
     const provider = officialProvider(http, tileAuth)
     const map = recordingMap()
-    const unbind = bindSatelliteImagery({ provider, map: map.target, tileAuth })
-    provider.update(VIEWPORT)
+    const mount = mountOn(provider, map.target, tileAuth)
 
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('unavailable'))
     // Imagery is not shown with attribution that cannot be established.
@@ -220,8 +232,7 @@ describe('Google official provider drives the live map', () => {
     const snapshot = provider.snapshot()
     if (snapshot.state !== 'unavailable') throw new Error('expected unavailable')
     expect(snapshot.reason).not.toContain(API_KEY)
-    unbind()
-    provider.dispose()
+    mount.dispose()
   })
 
   it('withdraws the contribution and sanitizes the reason when the key is rejected', async () => {
@@ -230,10 +241,8 @@ describe('Google official provider drives the live map', () => {
     const key: { value: string | null } = { value: null }
     const provider = officialProvider(http, tileAuth, key)
     const map = recordingMap()
-    const dispose = bindSatelliteImagery({ provider, map: map.target, tileAuth })
-
     // Keyless imagery first, so withdrawal is observable rather than vacuous.
-    provider.update(VIEWPORT)
+    const mount = mountOn(provider, map.target, tileAuth)
     expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(true)
 
     key.value = API_KEY
@@ -245,7 +254,7 @@ describe('Google official provider drives the live map', () => {
     // A rejected key must not silently downgrade to keyless imagery.
     expect(snapshot.reason).not.toContain(API_KEY)
     expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(false)
-    dispose()
+    mount.dispose()
   })
 
   it('keeps the map contribution stable across a key change without recreating it', async () => {
@@ -260,9 +269,8 @@ describe('Google official provider drives the live map', () => {
       tileAuth,
     )
     const map = recordingMap()
-    const dispose = bindSatelliteImagery({ provider, map: map.target, tileAuth })
+    const mount = mountOn(provider, map.target, tileAuth)
 
-    provider.update(VIEWPORT)
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
     const firstSource = map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID)
     expect(firstSource).toBeDefined()
@@ -277,7 +285,7 @@ describe('Google official provider drives the live map', () => {
     expect(map.sources.size).toBe(1)
     expect(map.layers.size).toBe(1)
     expect(tileAuth.authorize(OFFICIAL_TILE)).toContain('key=fake-google-key-9876543210')
-    dispose()
+    mount.dispose()
   })
 
   it('waits for a mounted map style before mutating it, then applies the latest state', async () => {
@@ -296,10 +304,7 @@ describe('Google official provider drives the live map', () => {
         map.sources.set(id, source)
       },
     }
-    const dispose = bindSatelliteImagery({
-      provider,
-      map: target,
-      tileAuth,
+    const mount = mountOn(provider, target, tileAuth, {
       styleReady: {
         isReady: () => ready,
         whenReady: (listener) => {
@@ -309,10 +314,9 @@ describe('Google official provider drives the live map', () => {
       },
     })
 
-    provider.update(VIEWPORT)
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
     // MapLibre loads even an inline style asynchronously, so `addSource` before
-    // readiness throws; the binding must not have touched the map yet.
+    // readiness throws; the mount must not have touched the map yet.
     expect(added).toEqual([])
 
     // A key added while the style is still loading: the state applied at
@@ -326,7 +330,7 @@ describe('Google official provider drives the live map', () => {
     for (const listener of readyListeners) listener()
     expect(added).toEqual([MAPLIBRE_SATELLITE_SOURCE_ID])
     expect(map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID)?.tiles).toEqual([OFFICIAL_TILE])
-    dispose()
+    mount.dispose()
   })
 
   it('applies a state published while tiles load once the style is ready again, without a style load event', async () => {
@@ -335,7 +339,7 @@ describe('Google official provider drives the live map', () => {
     const key: { value: string | null } = { value: API_KEY }
     const provider = officialProvider(http, tileAuth, key)
     const map = recordingMap()
-    // Ready at bind time, so the binding registers no wait up front.
+    // Ready at mount time, so the mount registers no wait up front.
     let ready = true
     const readyListeners: Array<() => void> = []
     const added: string[] = []
@@ -346,10 +350,7 @@ describe('Google official provider drives the live map', () => {
         map.sources.set(id, source)
       },
     }
-    const dispose = bindSatelliteImagery({
-      provider,
-      map: target,
-      tileAuth,
+    const mount = mountOn(provider, target, tileAuth, {
       styleReady: {
         isReady: () => ready,
         whenReady: (listener) => {
@@ -372,7 +373,7 @@ describe('Google official provider drives the live map', () => {
     for (const listener of [...readyListeners]) listener()
     expect(added).toEqual([MAPLIBRE_SATELLITE_SOURCE_ID])
     expect(map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID)?.tiles).toEqual([OFFICIAL_TILE])
-    dispose()
+    mount.dispose()
   })
 
   it('clears the transport credential when the provider is disposed', async () => {
@@ -380,13 +381,12 @@ describe('Google official provider drives the live map', () => {
     const tileAuth = new BasemapTileAuth()
     const provider = officialProvider(http, tileAuth)
     const map = recordingMap()
-    const dispose = bindSatelliteImagery({ provider, map: map.target, tileAuth })
-    provider.update(VIEWPORT)
+    const mount = mountOn(provider, map.target, tileAuth)
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
     expect(tileAuth.installed).toBe(true)
 
     provider.dispose()
     expect(tileAuth.installed).toBe(false)
-    dispose()
+    mount.dispose()
   })
 })

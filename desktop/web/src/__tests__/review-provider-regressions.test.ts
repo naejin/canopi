@@ -12,6 +12,7 @@ import {
   type SatelliteReconcileTarget,
 } from '../maplibre/satellite-contribution'
 import { MAPLIBRE_SATELLITE_LAYER_ID, MAPLIBRE_SATELLITE_SOURCE_ID } from '../maplibre/config'
+import { createSatelliteImagery, mountSatelliteLifecycle } from '../maplibre/satellite-bind'
 import { GOOGLE_SESSION_TILES, type SatelliteDescriptor } from '../maplibre/satellite-provider'
 
 const VIEWPORT_A: SatelliteViewport = { west: -1, south: 48, east: 1, north: 49, zoom: 14 }
@@ -58,6 +59,16 @@ function scriptedHttp(
     },
   }
 }
+
+/** A ready style, no layer anchor, no events: what a mount needs beyond its provider, map and viewport. */
+const MOUNT_DEFAULTS = {
+  tileAuth: null,
+  styleReady: { isReady: () => true, whenReady: () => () => {} },
+  beforeLayerId: () => null,
+  afterApply: () => {},
+  events: { on: () => {}, off: () => {} },
+  replaceSatelliteAttribution: () => {},
+} as const
 
 function recorder(provider: SatelliteImageryProvider): SatelliteState[] {
   const seen: SatelliteState[] = []
@@ -530,7 +541,6 @@ describe('provider lifecycle regressions after 26eca68a', () => {
   })
 
   it('M1: mountSatelliteLifecycle applies current configuration without waiting for events', async () => {
-    const { mountSatelliteLifecycle } = await import('../maplibre/satellite-bind')
     const sources = new Map<string, Record<string, unknown>>()
     const layers = new Map<string, Record<string, unknown>>()
     const map = {
@@ -546,10 +556,10 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       },
     }
     const teardown = mountSatelliteLifecycle({
+      ...MOUNT_DEFAULTS,
+      provider: createSatelliteImagery(null),
       map,
-      tileAuth: null,
       readViewport: () => ({ west: -10, south: -10, east: 10, north: 10, zoom: 2 }),
-      readVisible: () => true,
     })
     // No movement, settings or style-ready event: keyless Google imagery
     // must already be applied from current configuration.
@@ -561,7 +571,6 @@ describe('provider lifecycle regressions after 26eca68a', () => {
   })
 
   it('M2: mountSatelliteLifecycle keeps a class-based map\'s prototype methods with an attribution seam', async () => {
-    const { mountSatelliteLifecycle } = await import('../maplibre/satellite-bind')
     // A real MapLibre map exposes its methods on the prototype, so a mount that
     // copies the map into a plain object loses every one of them.
     class PrototypeMap {
@@ -578,8 +587,9 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     const map = new PrototypeMap()
     const credits: string[] = []
     const mount = mountSatelliteLifecycle({
+      ...MOUNT_DEFAULTS,
+      provider: createSatelliteImagery(null),
       map,
-      tileAuth: null,
       readViewport: () => ({ west: -10, south: -10, east: 10, north: 10, zoom: 2 }),
       replaceSatelliteAttribution: (credit: string) => credits.push(credit),
     })
@@ -610,7 +620,6 @@ describe('provider lifecycle regressions after 26eca68a', () => {
   })
 
   it('E1: mountSatelliteLifecycle registers moveend and updates viewport metadata', async () => {
-    const { mountSatelliteLifecycle } = await import('../maplibre/satellite-bind')
     const sources = new Map<string, Record<string, unknown>>()
     const layers = new Map<string, Record<string, unknown>>()
     const listeners = new Map<string, Set<() => void>>()
@@ -640,13 +649,13 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     }
     const credits: string[] = []
     const mount = mountSatelliteLifecycle({
+      ...MOUNT_DEFAULTS,
+      provider: createSatelliteImagery(null),
       map,
-      tileAuth: null,
       readViewport: () => {
         readCount += 1
         return viewport
       },
-      readVisible: () => true,
       events,
       replaceSatelliteAttribution: (credit: string) => credits.push(credit),
     })

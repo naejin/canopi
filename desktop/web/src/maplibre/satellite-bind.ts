@@ -1,8 +1,11 @@
 import { effect } from '@preact/signals'
-import type { SatelliteImageryProvider, SatelliteState, SatelliteViewport } from './satellite-provider-session'
-import { SatelliteImageryProvider as Provider } from './satellite-provider-session'
+import {
+  SatelliteImageryProvider,
+  type SatelliteState,
+  type SatelliteViewport,
+} from './satellite-provider-session'
 import { createBrowserSatelliteHttp } from './satellite-http.browser'
-import { BasemapTileAuth } from './basemap-tile-auth'
+import type { BasemapTileAuth } from './basemap-tile-auth'
 import { activeGoogleMapsApiKey, locale } from '../app/settings/state'
 import {
   reconcileSatelliteContribution,
@@ -11,31 +14,14 @@ import {
 } from './satellite-contribution'
 
 /**
- * Wire a live provider to a live map.
- *
- * The provider owns the session, the viewport requests and the retry policy; the
- * map owns its camera, its scene and every other layer. This binding is the only
- * place they meet, and it deliberately does exactly two things: apply the
- * provider's published state to the basemap source and layer once the style can
- * accept it, and apply visibility. It never calls `setStyle()` and never
- * recreates the map, which is what lets a key change or a
- * re-issued session happen mid-edit without disturbing the camera, the scene
- * runtime, or placement.
- *
- * Callers pass a map that already carries a basemap — from the style the map was
- * created with — so the binding adopts that contribution rather than duplicating
- * it.
- */
-
-/**
  * Whether a mounted map can accept a source and layer yet.
  *
  * MapLibre loads even an inline JSON style asynchronously, and `addSource`
  * throws `Style is not done loading.` before that finishes. A ready keyless
  * provider would therefore break map initialization if the contribution were
- * applied straight from `onCreate`, so the binding waits for this.
+ * applied straight from `onCreate`, so the mount waits for this.
  */
-export interface MapStyleReadiness {
+interface MapStyleReadiness {
   isReady(): boolean
   /**
    * Wait for the style once. The callback runs at most once, and firing or
@@ -43,127 +29,6 @@ export interface MapStyleReadiness {
    * the caller owns it and keeps at most one pending wait.
    */
   whenReady(listener: () => void): () => void
-}
-
-export interface SatelliteBindingDeps {
-  readonly provider: SatelliteImageryProvider
-  readonly map: SatelliteReconcileTarget
-  /** Relative cost of one zoom level at this map's projection; a raster
-   * contribution is a single source, so this is constant. */
-  readonly maxzoomFallback?: number
-  /** User visibility of the satellite layer, independent of provider readiness. */
-  readonly visible?: () => boolean
-  /**
-   * The map's credential owner, when the map was created with a request
-   * transform. Without it an official provider has nothing to authenticate its
-   * tiles and the binding withholds the contribution rather than requesting an
-   * unresolved `{session}` template.
-   */
-  readonly tileAuth?: BasemapTileAuth
-  /** When absent the contribution is applied immediately, which is correct for
-   * a map stub with no asynchronous style load. */
-  readonly styleReady?: MapStyleReadiness
-  /** Where the raster layer belongs in the target's own stack. */
-  readonly beforeLayerId?: () => string | null
-  /**
-   * Run after the contribution and visibility are applied.
-   *
-   * A map that keeps its own paint state on the basemap layer — opacity, for
-   * one — needs it re-applied whenever the contribution is replaced, and only
-   * then, so it is not applied twice for one published state.
-   */
-  readonly afterApply?: () => void
-}
-
-/** Effective basemap visibility: user visibility AND provider renderability. */
-function effectiveBasemapVisibility(
-  state: SatelliteState,
-  userVisible: boolean,
-): boolean {
-  return userVisible && state.state === 'ready'
-}
-
-/** Install the binding and return its disposer. */
-export function bindSatelliteImagery(deps: SatelliteBindingDeps): () => void {
-  const { provider, map, tileAuth } = deps
-  const visible = deps.visible ?? (() => true)
-  let disposed = false
-  let pending: SatelliteState | null = null
-  let cancelReadyWait: (() => void) | null = null
-
-  const target: SatelliteReconcileTarget = {
-    getSource: (id) => map.getSource(id),
-    getLayer: (id) => map.getLayer(id),
-    removeLayer: (id) => map.removeLayer(id),
-    removeSource: (id) => map.removeSource(id),
-    addSource: (id, source) => map.addSource(id, source),
-    addLayer: (layer, beforeId) => {
-      if (beforeId) map.addLayer(layer, beforeId)
-      else map.addLayer(layer)
-    },
-    setLayoutProperty: (id, name, value) => map.setLayoutProperty?.(id, name, value),
-  }
-  // Only expose the attribution adapter when a real control seam exists, so
-  // the contribution can fall back to source-carried credit.
-  if (map.replaceSatelliteAttribution) {
-    target.replaceSatelliteAttribution = (attribution: string) =>
-      map.replaceSatelliteAttribution?.(attribution)
-  }
-
-  const reconcile = (state: SatelliteState): void => {
-    reconcileSatelliteContribution(target, state, {
-      officialTilesResolvable: tileAuth?.installed === true,
-      ...(deps.beforeLayerId ? { beforeLayerId: deps.beforeLayerId } : {}),
-    })
-    // Effective visibility is user visibility AND provider renderability:
-    // Loading official metadata must not expose cached imagery.
-    setSatelliteContributionVisibility(
-      target,
-      effectiveBasemapVisibility(state, visible()),
-    )
-    deps.afterApply?.()
-  }
-
-  const apply = (state: SatelliteState): void => {
-    // The latest state always wins: a state that arrives while the style is
-    // not ready is what gets applied when it is, not the one that happened to
-    // arrive first. Every deferral keeps one wait pending, not only the one at
-    // bind time, so a state published while tiles load is never dropped.
-    pending = state
-    if (deps.styleReady && !deps.styleReady.isReady()) {
-      if (!cancelReadyWait) {
-        cancelReadyWait = deps.styleReady.whenReady(() => {
-          cancelReadyWait = null
-          if (disposed) return
-          const latest = pending ?? provider.snapshot()
-          pending = null
-          reconcile(latest)
-        })
-      }
-      return
-    }
-    pending = null
-    cancelReadyWait?.()
-    cancelReadyWait = null
-    reconcile(state)
-  }
-
-  // Adopt whatever the provider already published. Without this a map created
-  // after the provider resolved would show no basemap until the next change.
-  apply(provider.snapshot())
-
-  const unsubscribe = provider.subscribe(apply)
-
-  return () => {
-    disposed = true
-    pending = null
-    cancelReadyWait?.()
-    cancelReadyWait = null
-    unsubscribe()
-    // The credential belongs to the surface that installed it: a removed map
-    // must not leave a live session token in a shared transport.
-    tileAuth?.clear()
-  }
 }
 
 /**
@@ -179,10 +44,8 @@ export function bindSatelliteImagery(deps: SatelliteBindingDeps): () => void {
  * serving a live map: `update()` re-reads it, and no caller has to capture the
  * key at map-creation time and go stale.
  */
-function createSatelliteImagery(
-  tileAuth: BasemapTileAuth | null = null,
-): SatelliteImageryProvider {
-  return new Provider(
+export function createSatelliteImagery(tileAuth: BasemapTileAuth | null): SatelliteImageryProvider {
+  return new SatelliteImageryProvider(
     createBrowserSatelliteHttp(),
     () => ({
       // The saved key only while Settings › Map and imagery chooses it.
@@ -296,89 +159,133 @@ const READY_EVENTS = ['load', 'style.load'] as const
 const RECHECK_EVENTS = ['idle', 'data', 'sourcedata', 'styledata'] as const
 
 /**
- * One per-map basemap mount operation.
+ * One per-map Satellite mount: the only place a live provider meets a live map.
  *
- * Creates the provider and its observers/binding, initializes from current
- * configuration immediately, applies later configuration and viewport changes,
- * and cleans up subscriptions, pending callbacks, requests and credentials.
- * Where request transformation must exist before map
- * construction, the map host creates that credential capability and supplies
- * it; this mount never installs a second transform or recreates the map.
+ * The provider owns the session, the viewport requests and the retry policy; the
+ * map owns its camera, its scene and every other layer. The mount applies the
+ * provider's published state to the Satellite source and layer once the style
+ * can accept it, starts the provider from the current configuration at once,
+ * follows later configuration and settled viewports, and on disposal releases
+ * subscriptions, pending waits, requests and credentials and withdraws the
+ * contribution. It never calls `setStyle()` and never recreates the map, which
+ * is what lets a key change or a re-issued session happen mid-edit without
+ * disturbing the camera, the scene runtime or placement. Where request
+ * transformation must exist before map construction, the map host creates that
+ * credential capability and supplies it; this mount never installs a second
+ * transform.
  */
 export interface SatelliteMountOptions {
+  /** The provider this mount drives and disposes (`createSatelliteImagery`). */
+  readonly provider: SatelliteImageryProvider
   readonly map: SatelliteReconcileTarget
-  readonly tileAuth?: BasemapTileAuth | null
-  readonly readViewport: () => SatelliteViewport
-  readonly readVisible?: () => boolean
-  readonly styleReady?: MapStyleReadiness
-  readonly beforeLayerId?: () => string | null
-  readonly afterApply?: () => void
   /**
-   * Lifetime-owned event registration from the map host. The mount registers
-   * `moveend` once and unregisters on disposal. Host camera/UI listeners stay
-   * with their existing owners.
+   * The map's credential owner, created with its request transform. Without it
+   * an official provider has nothing to authenticate its tiles and the mount
+   * withholds the contribution rather than requesting an unresolved
+   * `{session}` template.
    */
-  readonly events?: {
+  readonly tileAuth: BasemapTileAuth | null
+  readonly readViewport: () => SatelliteViewport
+  readonly styleReady: MapStyleReadiness
+  /** Where the raster layer belongs in the map's own stack. */
+  readonly beforeLayerId: () => string | null
+  /**
+   * Runs after the contribution and visibility are applied: paint state the
+   * map keeps on the Satellite layer (its opacity) is re-applied whenever the
+   * contribution is replaced, and only then.
+   */
+  readonly afterApply: () => void
+  /** Lifetime-owned event registration from the map host: `moveend`, registered once and removed on disposal. */
+  readonly events: {
     on(type: string, listener: () => void): void
-    off?(type: string, listener: () => void): void
+    off(type: string, listener: () => void): void
   }
-  readonly replaceSatelliteAttribution?: (attribution: string) => void
+  readonly replaceSatelliteAttribution: (attribution: string) => void
 }
 
 export interface SatelliteMountHandle {
   update(viewport: SatelliteViewport): void
-  updateViewport(viewport: SatelliteViewport): void
   dispose(): void
 }
 
 export function mountSatelliteLifecycle(options: SatelliteMountOptions): SatelliteMountHandle {
-  const tileAuth = options.tileAuth ?? null
-  const provider = createSatelliteImagery(tileAuth)
+  const { provider, map, tileAuth, styleReady } = options
   // Delegate explicitly: a live MapLibre map keeps its methods on the class
   // prototype, so spreading it would drop them.
-  const map = options.map
-  const replaceSatelliteAttribution = options.replaceSatelliteAttribution
-  const mapTarget: SatelliteReconcileTarget = replaceSatelliteAttribution
-    ? {
-        getSource: (id) => map.getSource(id),
-        getLayer: (id) => map.getLayer(id),
-        removeLayer: (id) => map.removeLayer(id),
-        removeSource: (id) => map.removeSource(id),
-        addSource: (id, source) => map.addSource(id, source),
-        addLayer: (layer, beforeId) => map.addLayer(layer, beforeId),
-        setLayoutProperty: (id, name, value) => map.setLayoutProperty?.(id, name, value),
-        replaceSatelliteAttribution,
+  const target: SatelliteReconcileTarget = {
+    getSource: (id) => map.getSource(id),
+    getLayer: (id) => map.getLayer(id),
+    removeLayer: (id) => map.removeLayer(id),
+    removeSource: (id) => map.removeSource(id),
+    addSource: (id, source) => map.addSource(id, source),
+    addLayer: (layer, beforeId) => map.addLayer(layer, beforeId),
+    setLayoutProperty: (id, name, value) => map.setLayoutProperty?.(id, name, value),
+    replaceSatelliteAttribution: options.replaceSatelliteAttribution,
+  }
+  let disposed = false
+  let pending: SatelliteState | null = null
+  let cancelReadyWait: (() => void) | null = null
+
+  const reconcile = (state: SatelliteState): void => {
+    reconcileSatelliteContribution(target, state, {
+      officialTilesResolvable: tileAuth?.installed === true,
+      beforeLayerId: options.beforeLayerId,
+    })
+    // Loading official metadata must not expose cached imagery.
+    setSatelliteContributionVisibility(target, state.state === 'ready')
+    options.afterApply()
+  }
+
+  const apply = (state: SatelliteState): void => {
+    // The latest state always wins: a state that arrives while the style is
+    // not ready is what gets applied when it is, not the one that happened to
+    // arrive first. Every deferral keeps one wait pending, not only the one at
+    // mount time, so a state published while tiles load is never dropped.
+    pending = state
+    if (!styleReady.isReady()) {
+      if (!cancelReadyWait) {
+        cancelReadyWait = styleReady.whenReady(() => {
+          cancelReadyWait = null
+          if (disposed) return
+          const latest = pending ?? provider.snapshot()
+          pending = null
+          reconcile(latest)
+        })
       }
-    : map
-  const unbind = bindSatelliteImagery({
-    provider,
-    map: mapTarget,
-    ...(tileAuth ? { tileAuth } : {}),
-    ...(options.styleReady ? { styleReady: options.styleReady } : {}),
-    ...(options.beforeLayerId ? { beforeLayerId: options.beforeLayerId } : {}),
-    ...(options.afterApply ? { afterApply: options.afterApply } : {}),
-    ...(options.readVisible ? { visible: options.readVisible } : {}),
-  })
-  // Initialize from current configuration immediately: no movement, settings
-  // or style-ready event is required before the first provider generation.
+      return
+    }
+    pending = null
+    cancelReadyWait?.()
+    cancelReadyWait = null
+    reconcile(state)
+  }
+
+  // Adopt whatever the provider already published, then start it from the
+  // current configuration: no movement, settings or style-ready event is
+  // required before the first provider generation.
+  apply(provider.snapshot())
+  const unsubscribe = provider.subscribe(apply)
   provider.update(options.readViewport())
   const disposeObserver = installSatelliteConfigObserver(provider, options.readViewport)
-  // The mount owns viewport-event subscription as well as configuration
-  // observation. Read the current map viewport when the event fires.
   const onMoveEnd = () => provider.updateViewport(options.readViewport())
-  options.events?.on('moveend', onMoveEnd)
+  options.events.on('moveend', onMoveEnd)
   return {
     update: (viewport: SatelliteViewport) => provider.update(viewport),
-    updateViewport: (viewport: SatelliteViewport) => provider.updateViewport(viewport),
     dispose: () => {
-      options.events?.off?.('moveend', onMoveEnd)
+      disposed = true
+      pending = null
+      cancelReadyWait?.()
+      cancelReadyWait = null
+      options.events.off('moveend', onMoveEnd)
       disposeObserver()
-      unbind()
+      unsubscribe()
+      // The provider clears the credential it published: a removed map must
+      // not leave a live session token in a shared transport.
       provider.dispose()
       // Withdraw the contribution so teardown leaves no source, layer or
       // basemap-owned credit on a map that outlives the mount.
       try {
-        reconcileSatelliteContribution(mapTarget, { state: 'idle' })
+        reconcileSatelliteContribution(target, { state: 'idle' })
       } catch {
         // A map that rejects withdrawal still tears down its own resources.
       }

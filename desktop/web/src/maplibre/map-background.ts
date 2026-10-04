@@ -12,6 +12,7 @@ import {
   type VectorStyleDocument,
 } from './openfreemap-basemap'
 import {
+  createSatelliteImagery,
   mapStyleReadiness,
   mountSatelliteLifecycle,
   type SatelliteMountHandle,
@@ -164,6 +165,7 @@ export function mountMapBackground(options: MapBackgroundOptions): MapBackground
     }
     if (!satellite) {
       satellite = mountSatelliteLifecycle({
+        provider: createSatelliteImagery(options.tileAuth),
         map,
         tileAuth: options.tileAuth,
         readViewport: () => readViewport(map),

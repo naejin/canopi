@@ -4,7 +4,7 @@ import {
   MAPLIBRE_SATELLITE_LAYER_ID,
   MAPLIBRE_SATELLITE_SOURCE_ID,
 } from '../maplibre/config'
-import { bindSatelliteImagery } from '../maplibre/satellite-bind'
+import { mountSatelliteLifecycle, type SatelliteMountOptions } from '../maplibre/satellite-bind'
 import type { SatelliteReconcileTarget } from '../maplibre/satellite-contribution'
 import { BasemapTileAuth } from '../maplibre/basemap-tile-auth'
 import { GOOGLE_KEYLESS_TILES, GOOGLE_SESSION_TILES } from '../maplibre/satellite-provider'
@@ -51,6 +51,22 @@ function recordingMap() {
   return { target, sources, layers, layout, calls }
 }
 
+/** Mounts `provider` on a map whose style is ready, at VIEWPORT. */
+function mountOn(provider: SatelliteImageryProvider, map: SatelliteReconcileTarget, tileAuth: BasemapTileAuth | null = null) {
+  const options: SatelliteMountOptions = {
+    provider,
+    map,
+    tileAuth,
+    readViewport: () => VIEWPORT,
+    styleReady: { isReady: () => true, whenReady: () => () => {} },
+    beforeLayerId: () => null,
+    afterApply: () => {},
+    events: { on: () => {}, off: () => {} },
+    replaceSatelliteAttribution: () => {},
+  }
+  return mountSatelliteLifecycle(options)
+}
+
 const inertHttp: SatelliteHttp = {
   async request() {
     return { ok: false, status: 500, json: null, retryAfterSeconds: null }
@@ -78,23 +94,21 @@ const googleHttp: SatelliteHttp = {
   },
 }
 
-describe('satellite provider binding', () => {
-  it('adopts the provider it is bound to without touching the map style', () => {
+describe('satellite mount', () => {
+  it('shows the provider\'s imagery from the current configuration without touching the map style', () => {
     const provider = new SatelliteImageryProvider(inertHttp, () => ({}))
-    provider.update(VIEWPORT)
     const map = recordingMap()
 
-    const dispose = bindSatelliteImagery({ provider, map: map.target })
+    const mount = mountOn(provider, map.target)
 
-    // A map created after the provider resolved must still show imagery, which
-    // is why the binding adopts the snapshot rather than waiting for a change.
+    // No movement, settings or style-ready event is needed for the first imagery.
     expect(map.layers.has(MAPLIBRE_SATELLITE_LAYER_ID)).toBe(true)
     expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(true)
 
-    // The whole point of the binding: nothing here recreates the map or resets
+    // The whole point of the mount: nothing here recreates the map or resets
     // its style, so a key change cannot disturb the camera or the scene.
     expect(map.calls.some((call) => call.includes('setStyle'))).toBe(false)
-    dispose()
+    mount.dispose()
   })
 
   it('reconciles on every published change and never accumulates sources', async () => {
@@ -107,9 +121,8 @@ describe('satellite provider binding', () => {
       (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
       tileAuth,
     )
-    provider.update(VIEWPORT)
     const map = recordingMap()
-    const dispose = bindSatelliteImagery({ provider, map: map.target, tileAuth })
+    const mount = mountOn(provider, map.target, tileAuth)
     expect((map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID) as { tiles: string[] }).tiles)
       .toEqual([GOOGLE_KEYLESS_TILES])
 
@@ -126,7 +139,7 @@ describe('satellite provider binding', () => {
     const added = map.calls.filter((call) => call.startsWith('addSource:'))
     expect(added.length).toBe(2)
     expect(map.calls.filter((call) => call.startsWith('removeSource:')).length).toBe(1)
-    dispose()
+    mount.dispose()
   })
 
   it('replaces official session tiles with keyless tiles when the key is cleared', async () => {
@@ -140,8 +153,7 @@ describe('satellite provider binding', () => {
       tileAuth,
     )
     const map = recordingMap()
-    const dispose = bindSatelliteImagery({ provider, map: map.target, tileAuth })
-    provider.update(VIEWPORT)
+    const mount = mountOn(provider, map.target, tileAuth)
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
     expect(tileAuth.installed).toBe(true)
 
@@ -153,25 +165,21 @@ describe('satellite provider binding', () => {
     expect(provider.snapshot().state).toBe('ready')
     expect((map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID) as { tiles: string[] }).tiles).toEqual([GOOGLE_KEYLESS_TILES])
     expect(map.layers.has(MAPLIBRE_SATELLITE_LAYER_ID)).toBe(true)
-    dispose()
+    mount.dispose()
   })
 
-  it('applies visibility to the live contribution and stops when disposed', () => {
+  it('withdraws its contribution when disposed and then stops mutating the map', () => {
     const provider = new SatelliteImageryProvider(inertHttp, () => ({}))
-    provider.update(VIEWPORT)
     const map = recordingMap()
-    const dispose = bindSatelliteImagery({
-      provider,
-      map: map.target,
-      visible: () => false,
-    })
+    const mount = mountOn(provider, map.target)
+    expect(map.layout.get(`${MAPLIBRE_SATELLITE_LAYER_ID}:visibility`)).toBe('visible')
 
-    expect(map.layout.get(`${MAPLIBRE_SATELLITE_LAYER_ID}:visibility`)).toBe('none')
-
+    mount.dispose()
+    expect(map.sources.size).toBe(0)
+    expect(map.layers.size).toBe(0)
     const afterDispose = map.calls.length
-    dispose()
     provider.update(VIEWPORT)
-    // A disposed binding must stop mutating the map, which is what keeps a
+    // A disposed mount must stop mutating the map, which is what keeps a
     // torn-down surface from being written to after its map is gone.
     expect(map.calls.length).toBe(afterDispose)
   })
@@ -182,13 +190,15 @@ describe('satellite provider binding', () => {
     const listener = vi.fn()
     provider.subscribe(listener)
 
-    const dispose = bindSatelliteImagery({ provider, map: map.target })
+    const mount = mountOn(provider, map.target)
+    map.layers.clear()
+    map.sources.clear()
     provider.update(VIEWPORT)
 
-    // The binding is a provider subscriber, so a caller that only updates the
+    // The mount is a provider subscriber, so a caller that only updates the
     // provider still gets a reconciled map without any extra plumbing.
     expect(listener).toHaveBeenCalled()
     expect(map.layers.has(MAPLIBRE_SATELLITE_LAYER_ID)).toBe(true)
-    dispose()
+    mount.dispose()
   })
 })
