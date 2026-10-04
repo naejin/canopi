@@ -1,4 +1,4 @@
-import { effect } from '@preact/signals'
+import { effect, signal } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
 import type {
   CanvasDocumentSurface,
@@ -99,7 +99,8 @@ describe('purpose-aware Design persistence operations', () => {
       () => 'applied',
     )
     const session: CanvasDocumentSurface = {
-      attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
+      presented: signal(true),
+    attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
       attachRulersTo: vi.fn(),
       showCanvasChrome: vi.fn(),
       hideCanvasChrome: vi.fn(),
@@ -110,6 +111,7 @@ describe('purpose-aware Design persistence operations', () => {
         return { callerFinalizerInvoked: true }
       }),
       hasLoadedDocument: vi.fn(() => true),
+      viewMovedSinceSave: () => false,
       captureForPersistence: vi.fn((metadata, doc) => ({
         content: capture(metadata, doc),
         isCurrent: () => true,

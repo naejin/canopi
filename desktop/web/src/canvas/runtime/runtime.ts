@@ -297,6 +297,11 @@ export function createCanvasDocumentReplacementToken(): CanvasDocumentReplacemen
 }
 
 export interface CanvasDocumentSurface {
+  /**
+   * False from a load or replace until that Design's first scene is drawn (or nothing will draw it): the Design's chrome and
+   * the start screen wait for it, so the chrome never shows over an empty map. Camera moves and edits never turn it false.
+   */
+  readonly presented: ReadonlySignal<boolean>
   attachInspectionTo(element: HTMLElement): CanvasInspectionHandle
   attachRulersTo(element: HTMLElement): void
   showCanvasChrome(): void
@@ -309,6 +314,9 @@ export interface CanvasDocumentSurface {
     finalizeReplacement: () => void,
   ): CanvasDocumentReplacementReceipt
   hasLoadedDocument(): boolean
+  /** The live view moved from the one the Design's home holds (the view it opened at, or the last acknowledged save's): a flush
+   *  writes it, though a camera move alone marks nothing unsaved and schedules no write (U28). */
+  viewMovedSinceSave(): boolean
   captureForPersistence(
     metadata: CanvasRuntimeDocumentMetadata,
     doc: CanopiFile,

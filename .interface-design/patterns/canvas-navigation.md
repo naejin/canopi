@@ -12,7 +12,7 @@ Read the [design system](../system.md) first. Decisions: [ADR 0015](../../docs/a
 
 ## Turning the map
 
-- The map turns like a map app; editing stays top-down. North up is the default: a new Design opens north up, a Design with content reopens at the last bearing.
+- The map turns like a map app; editing stays top-down. North up is the default: a new or empty Design opens north up; a Design reopens at the view it was saved with, and one saved without it reopens at the last bearing.
 - Only deliberate gestures turn it: Shift + right-drag or Shift + middle-drag about the press point (horizontal travel), the compass, a two-finger twist past 25 px of arc, a macOS trackpad twist past 10°. Adding Ctrl (Cmd on Mac) during a turn drag steps by 15°; on the compass Shift steps. No setting turns rotation off.
 - Keys: Shift ← and Shift → turn to the next 15° step; N, Shift N (always, even with single keys off), Shift ↑ and a compass click reset north. Key turns take 300 ms, and jump when reduced motion is requested. Esc during a turn drag restores the starting view.
 - A free turn (drag, twist, compass ring) that ends within 7° of north settles on north. Explicit targets never snap: saved views, stories, Turn view to this edge, the last view.

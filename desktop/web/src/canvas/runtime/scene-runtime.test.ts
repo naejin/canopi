@@ -570,12 +570,13 @@ describe('scene canvas runtime', () => {
 
   describe('the start frame (plan §1, exception 3)', () => {
     /**
-     * Fits the runtime's camera again; a frame that already shows the fit stays where it is. Plants and notes are sized at the
-     * scale a fit starts from, so a second fit can land a few micro-pixels from the first: 1e-3 px tells a fit from any other frame.
+     * Fits the runtime's camera again (Fit to Design, at the opening bearing 0 here); a frame that already shows the fit stays where
+     * it is. Plants and notes are sized at the scale a fit starts from, so a second fit can land a few micro-pixels from the first:
+     * 1e-3 px tells a fit from any other frame.
      */
     function expectShowsTheFit(runtime: SceneCanvasRuntime): void {
       const shown = placementOf(runtime)
-      runtime.documentSurface.zoomToFit()
+      runtime.commandSurface.viewport.zoomToFit()
       const fitted = placementOf(runtime)
       expect(shown.x).toBeCloseTo(fitted.x, 3)
       expect(shown.y).toBeCloseTo(fitted.y, 3)
@@ -643,12 +644,11 @@ describe('scene canvas runtime', () => {
 
         runtime.documentSurface.loadDocument(makeFile())
         runtime.documentSurface.zoomToFit()
-        const fitted = placementOf(runtime)
         await vi.waitFor(() => expect(atSceneRender).not.toHaveLength(0))
 
-        expect(atSceneRender[0]!.x).toBeCloseTo(fitted.x, 6)
-        expect(atSceneRender[0]!.y).toBeCloseTo(fitted.y, 6)
-        expect(atSceneRender[0]!.scale).toBeCloseTo(fitted.scale, 6)
+        // The first scene render places the camera, then draws: the camera and the scene land in one frame.
+        expect(atSceneRender[0]).toEqual(placementOf(runtime))
+        expectShowsTheFit(runtime)
       } finally {
         runtime.destroy()
       }
@@ -736,6 +736,51 @@ describe('scene canvas runtime', () => {
     expect(container.getAttribute('aria-busy')).toBe('true')
     runtime.destroy()
     expect(container.hasAttribute('aria-busy'), 'a destroyed runtime leaves the host as it found it').toBe(false)
+  })
+
+  describe('presenting an opened Design (its chrome waits for its first drawn scene)', () => {
+    it('a replaced Design is presented only after the frame that draws its scene, and an edit never hides it again', async () => {
+      const runtime = stubbedRuntime()
+      const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
+      const { presented } = runtime.documentSurface
+      await vi.waitFor(() => expect(presented.value).toBe(true))
+      const presentedWhenDrawn: boolean[] = []
+      renderer.syncScene.mockImplementation(() => { presentedWhenDrawn.push(presented.value) })
+
+      runtime.documentSurface.replaceDocument(makeFile(), createCanvasDocumentReplacementToken(), () => {})
+      expect(presented.value).toBe(false)
+      await vi.waitFor(() => expect(presented.value).toBe(true))
+      expect(presentedWhenDrawn, 'not presented while its scene is synced, only once MapLibre drew it').toEqual([false])
+
+      runtime.commandSurface.history.undo()
+      runtime.cameraHost.current().apply({ kind: 'pan-by', deltaPx: { x: 5, y: 0 } })
+      expect(presented.value).toBe(true)
+      runtime.destroy()
+    })
+
+    it('a Design opened before the renderer mounts is presented by init\'s first drawn scene', async () => {
+      const runtime = stubbedRuntime()
+      runtime.documentSurface.loadDocument(makeFile())
+      expect(runtime.documentSurface.presented.value).toBe(false)
+      const init = initRuntimeWithStubbedRenderer(runtime)
+      expect(runtime.documentSurface.presented.value).toBe(false)
+
+      await init
+      await vi.waitFor(() => expect(runtime.documentSurface.presented.value).toBe(true))
+      runtime.destroy()
+    })
+
+    it('a Design is presented once its renderer unmounts (the map failed): nothing will draw it', async () => {
+      const runtime = stubbedRuntime()
+      runtime.documentSurface.loadDocument(makeFile())
+      await initRuntimeWithStubbedRenderer(runtime)
+      expect(runtime.documentSurface.presented.value, 'the first drawn frame has not run yet').toBe(false)
+
+      await runtime.unmountRenderer()
+
+      expect(runtime.documentSurface.presented.value).toBe(true)
+      runtime.destroy()
+    })
   })
 
   it('rolls back effects acquired before a later subscription fails', () => {
@@ -1497,8 +1542,9 @@ describe('scene canvas runtime', () => {
     })
     const withoutStampsMount = await initRuntimeWithStubbedRenderer(withoutStamps)
     withoutStamps.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
-    // A load after init takes its own fit, as Design loads do (init showed the empty Design's overview).
+    // A load after init takes its own fit in its first scene render, as Design loads do (init showed the empty Design's overview).
     withoutStamps.documentSurface.zoomToFit()
+    await vi.waitFor(() => expect(withoutStamps.documentSurface.presented.value).toBe(true))
     withoutStamps.commandSurface.sceneEdits.selectAll()
     openContextMenuFromKeyboard(withoutStamps, withoutStampsMount.container)
 
@@ -1515,8 +1561,9 @@ describe('scene canvas runtime', () => {
     })
     const withStampsMount = await initRuntimeWithStubbedRenderer(withStamps)
     withStamps.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
-    // A load after init takes its own fit, as Design loads do (init showed the empty Design's overview).
+    // A load after init takes its own fit in its first scene render, as Design loads do (init showed the empty Design's overview).
     withStamps.documentSurface.zoomToFit()
+    await vi.waitFor(() => expect(withStamps.documentSurface.presented.value).toBe(true))
     withStamps.commandSurface.sceneEdits.selectAll()
     openContextMenuFromKeyboard(withStamps, withStampsMount.container)
 
@@ -2795,22 +2842,47 @@ describe('scene canvas runtime', () => {
     }
   })
 
-  it('the open fit draws the fitted view in the next frame', async () => {
+  it('a reopen frames the Design inside the chrome insets reported before its first frame, as Fit to Design does', async () => {
+    const runtime = stubbedRuntime()
+    const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
+    await vi.waitFor(() => expect(runtime.documentSurface.presented.value).toBe(true))
+    // The start screen's insets while no Design is open (the title bar).
+    runtime.commandSurface.viewport.setFramingInsets({ top: 60, right: 0, bottom: 0, left: 0 })
+    const atSceneSync: Array<{ x: number; y: number; scale: number }> = []
+    renderer.syncScene.mockImplementation(() => { atSceneSync.push(placementOf(runtime)) })
+
+    runtime.documentSurface.replaceDocument(makeFile(), createCanvasDocumentReplacementToken(), () => {})
+    runtime.documentSurface.zoomToFit()
+    // The Design chrome mounts and reports where it sits before the next frame.
+    runtime.commandSurface.viewport.setFramingInsets({ top: 60, right: 64, bottom: 52, left: 236 })
+    await vi.waitFor(() => expect(runtime.documentSurface.presented.value).toBe(true))
+    const opened = placementOf(runtime)
+
+    expect(atSceneSync.at(-1), 'the camera and the scene land in one frame').toEqual(opened)
+    runtime.commandSurface.viewport.zoomToFit()
+    const fitted = placementOf(runtime)
+    expect(opened.x).toBeCloseTo(fitted.x, 3)
+    expect(opened.y).toBeCloseTo(fitted.y, 3)
+    expect(opened.scale).toBeCloseTo(fitted.scale, 3)
+    runtime.destroy()
+  })
+
+  it('the open fit places the camera in the scene render that draws it, never before', async () => {
     const runtime = stubbedRuntime()
     runtime.documentSurface.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
     setInteractionViewport(runtime, { x: 50, y: 0, scale: 3 })
-    const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-    await nextFrame()
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     const before = placementOf(runtime)
+    const atSceneSync: Array<{ x: number; y: number; scale: number }> = []
+    renderer.syncScene.mockImplementation(() => { atSceneSync.push(placementOf(runtime)) })
 
-    renderer.setView.mockClear()
     runtime.documentSurface.zoomToFit()
-    await nextFrame()
+    expect(placementOf(runtime), 'the camera waits for the scene render').toEqual(before)
+    await vi.waitFor(() => expect(atSceneSync).toHaveLength(1))
 
-    expect(placementOf(runtime)).not.toEqual(before)
-    expect(renderer.setView).toHaveBeenCalledOnce()
-    expect(lastRenderedViewport(renderer)).toEqual(placementOf(runtime))
+    expect(atSceneSync[0]).not.toEqual(before)
+    expect(atSceneSync[0]).toEqual(placementOf(runtime))
     runtime.destroy()
   })
 

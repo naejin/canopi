@@ -1163,6 +1163,16 @@ export const CANOPI_FILE_SCHEMA = {
         }
       ]
     },
+    "map_view": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SavedViewCamera"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "measurement_guides": {
       "default": [],
       "items": {

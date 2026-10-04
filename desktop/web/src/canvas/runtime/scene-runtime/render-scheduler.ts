@@ -22,6 +22,11 @@ interface SceneRuntimeRenderSchedulerOptions {
   /** The live frame's view, handed to the renderer on every camera frame. */
   getView(): ViewTransform
   prepareSceneRender(): Promise<SceneRuntimePreparedRender>
+  /**
+   * Runs first in every scene render: a waiting open fit places the camera (document-surface.ts), so the render draws the
+   * opened Design where it opens, inside the chrome mounted since the open. A view-mode change it causes is this render's.
+   */
+  placeOpenedDesign(): void
   renderChrome(): void
 }
 
@@ -51,8 +56,17 @@ export class SceneRuntimeRenderScheduler {
   /** The epoch of the latest scene render, until it has drawn or failed; a newer epoch fences it. */
   private _sceneRenderEpoch: number | null = null
   private readonly _scenePending = signal(false)
+  /** Scene renders up to this epoch were started before the latest awaitPresentation; only a later one presents. */
+  private _presentAfterEpoch = 0
+  private readonly _presented = signal(true)
+  /** The runtime has no renderer, or unmount released it and no mount has begun since, so nothing here will draw an opened
+   *  Design. A renderer that is never mounted (no WebGL2, the map failed first) is not covered: presented stays false, and
+   *  the map error shows the Design (app/canvas-map-surface/design-reveal.ts). */
+  private _unmounted: boolean
 
-  constructor(private readonly _options: SceneRuntimeRenderSchedulerOptions) {}
+  constructor(private readonly _options: SceneRuntimeRenderSchedulerOptions) {
+    this._unmounted = _options.getRenderer() === null
+  }
 
   get container(): HTMLElement | null {
     return this._container
@@ -66,6 +80,24 @@ export class SceneRuntimeRenderScheduler {
     return this._scenePending
   }
 
+  /**
+   * False from awaitPresentation until a scene render started after it has drawn (or failed), or the renderer unmounts and
+   * nothing will draw it. Camera frames and later scene changes never turn it false.
+   */
+  get presented(): ReadonlySignal<boolean> {
+    return this._presented
+  }
+
+  /**
+   * A Design was opened: it is presented by the first scene render started from now on (the mount's, if none is mounted yet),
+   * or at once when nothing will draw it.
+   */
+  awaitPresentation(): void {
+    if (this._unmounted) return
+    this._presentAfterEpoch = this._renderEpoch
+    this._presented.value = false
+  }
+
   async initialize(container: HTMLElement): Promise<void> {
     const definition = this._options.getRenderer()
     if (!definition) throw new Error('The Scene Canvas runtime has no renderer to mount.')
@@ -73,6 +105,7 @@ export class SceneRuntimeRenderScheduler {
       throw new Error('The Scene Canvas renderer is already mounted. Unmount it before mounting again.')
     }
     this._mounting = true
+    this._unmounted = false
     const mountEpoch = ++this._mountEpoch
     let renderer: SceneRenderer
     try {
@@ -112,6 +145,8 @@ export class SceneRuntimeRenderScheduler {
     const renderer = this._renderer
     if (!renderer) return
 
+    // Before the frame is cancelled and the epoch taken: a scene invalidation the placement raises folds into this render.
+    this._options.placeOpenedDesign()
     this._cancelFrame()
     const renderEpoch = ++this._renderEpoch
     this._sceneRenderEpoch = renderEpoch
@@ -165,6 +200,8 @@ export class SceneRuntimeRenderScheduler {
     const renderer = this._renderer
     this._renderer = null
     this._publishScenePending()
+    this._unmounted = true
+    this._presented.value = true
     if (renderer) await disposeRenderer(renderer)
   }
 
@@ -182,6 +219,7 @@ export class SceneRuntimeRenderScheduler {
     if (this._sceneRenderEpoch !== renderEpoch) return
     this._sceneRenderEpoch = null
     this._publishScenePending()
+    if (renderEpoch > this._presentAfterEpoch) this._presented.value = true
   }
 
   /** A scene invalidation waits for its frame, or the latest scene render has not drawn yet. */

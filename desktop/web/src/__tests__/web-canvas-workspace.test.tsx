@@ -600,6 +600,9 @@ describe('Web Edition canvas workspace', () => {
       })
       expect(runtime.composition.dispose).toHaveBeenCalledOnce()
       expect(currentCanvasSession.value).toBeNull()
+      // The open Design shows over the map notice; it never waits behind the start screen for a session that will not come.
+      expect(container.querySelector('[data-design-hidden]')).toBeNull()
+      expect(container.querySelector('[data-map-notice] [role="status"]')?.textContent).toBe('Map unavailable')
     } finally {
       logError.mockRestore()
     }
@@ -833,6 +836,7 @@ function fakeRuntimeComposition(
 } {
   let loaded = false
   const documents: CanvasDocumentSurface = {
+    presented: signal(true),
     attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(),
@@ -847,6 +851,7 @@ function fakeRuntimeComposition(
       return { callerFinalizerInvoked: true }
     }),
     hasLoadedDocument: vi.fn(() => loaded),
+    viewMovedSinceSave: () => false,
     captureForPersistence: vi.fn((metadata, doc) => ({
       content: { ...doc, name: metadata.name },
       isCurrent: () => true,

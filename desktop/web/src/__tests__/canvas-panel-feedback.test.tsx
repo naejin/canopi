@@ -15,6 +15,9 @@ import type { WorkspaceRuntimeComposition } from '../app/canvas-map-surface/work
 import { designSessionFixture } from './support/design-session-state'
 import type { CanopiFile } from '../types/design'
 import { locale } from '../app/settings/state'
+import { signal } from '@preact/signals'
+import { setCurrentCanvasSession } from '../canvas/session'
+import { createTestCanvasDocumentSurface, createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 
 let mockBasemapState: MapLibreCanvasSurfaceState = IDLE_MAPLIBRE_CANVAS_SURFACE_STATE
 let publishMapState: ((state: MapLibreCanvasSurfaceState) => void) | null = null
@@ -264,6 +267,107 @@ describe('CanvasPanel basemap feedback', () => {
     const retry = [...notice.querySelectorAll('button')].find((button) => button.textContent === 'Retry')!
     await act(async () => { retry.click() })
     expect(retryMap).toHaveBeenCalledOnce()
+  })
+})
+
+describe('CanvasPanel opening a Design', () => {
+  let container: HTMLDivElement
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.innerHTML = ''
+    document.body.appendChild(container)
+    locale.value = 'en'
+    mapLayers.value = createDefaultMapLayers()
+    designSessionFixture.file = null
+    mockBasemapState = { ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'ready' }
+  })
+
+  afterEach(() => {
+    render(null, container)
+    container.remove()
+    setCurrentCanvasSession(null)
+    designSessionFixture.file = null
+  })
+
+  it('keeps the start screen up and the chrome laid out but hidden until the Design\'s first scene is drawn', async () => {
+    const presented = signal(false)
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ presented }) }))
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+    expect(container.querySelector('[data-testid="welcome-screen"]')).not.toBeNull()
+
+    await act(async () => { designSessionFixture.file = demoDesign() })
+
+    const area = container.querySelector<HTMLElement>('[data-design-hidden]')
+    expect(area, 'the canvas area hides everything but the start screen').not.toBeNull()
+    expect(container.querySelector('[data-testid="welcome-screen"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="canvas-chrome"]'), 'mounted, so it registers what it covers').not.toBeNull()
+    // Transparent, not visibility: hidden, which would refuse the focus a field gives itself on mount; the real browser checks
+    // focus and that no part of it takes pointer input (e2e/canvas/design-reveal.spec.ts).
+    const css = readFileSync('src/components/panels/Panels.module.css', 'utf8')
+    expect(css).toMatch(/\.canvasArea\[data-design-hidden\] > :not\(\[data-start-screen\], :has\(\[data-start-screen\]\)\) \{\s*opacity: 0;\s*\}/)
+    expect(css).not.toMatch(/visibility: hidden/)
+
+    await act(async () => { presented.value = true })
+
+    expect(container.querySelector('[data-design-hidden]')).toBeNull()
+    expect(container.querySelector('[data-testid="welcome-screen"]')).toBeNull()
+    expect(container.querySelector('[data-testid="canvas-chrome"]')).not.toBeNull()
+  })
+
+  it('keeps an open Design shown while another opens over it: the start screen comes back only after Close Design', async () => {
+    const presented = signal(true)
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ presented }) }))
+    designSessionFixture.file = demoDesign()
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+    expect(container.querySelector('[data-testid="welcome-screen"]')).toBeNull()
+
+    await act(async () => {
+      designSessionFixture.file = { ...demoDesign(), name: 'Other' }
+      presented.value = false
+    })
+
+    expect(container.querySelector('[data-design-hidden]')).toBeNull()
+    expect(container.querySelector('[data-testid="welcome-screen"]')).toBeNull()
+
+    await act(async () => { designSessionFixture.file = null })
+    expect(container.querySelector('[data-testid="welcome-screen"]')).not.toBeNull()
+    await act(async () => { designSessionFixture.file = demoDesign() })
+    expect(container.querySelector('[data-design-hidden]'), 'opened from the start screen: hidden until drawn').not.toBeNull()
+  })
+
+  it('never shows the start screen for a Design already open when the canvas mounts, as a reload restoring a Draft', async () => {
+    const presented = signal(false)
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ presented }) }))
+    designSessionFixture.file = demoDesign()
+
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+
+    expect(container.querySelector('[data-testid="welcome-screen"]'), 'its buttons would replace the open Design').toBeNull()
+    expect(container.querySelector('[data-design-hidden]'), 'no chrome over an empty map either').not.toBeNull()
+
+    await act(async () => { presented.value = true })
+    expect(container.querySelector('[data-design-hidden]')).toBeNull()
+    expect(container.querySelector('[data-testid="welcome-screen"]')).toBeNull()
+  })
+
+  it('shows the Design at once on a map that failed: nothing will draw its scene', async () => {
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ presented: signal(false) }) }))
+    designSessionFixture.file = demoDesign()
+    mockBasemapState = { ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'error', retryable: true }
+
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+
+    expect(container.querySelector('[data-design-hidden]')).toBeNull()
+    expect(container.querySelector('[data-testid="welcome-screen"]')).toBeNull()
   })
 })
 

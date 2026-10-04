@@ -18,7 +18,7 @@ import { OPENFREEMAP_LAYER_PREFIX, OPENFREEMAP_SOURCE_PREFIX } from '../../mapli
 import { mapErrorResourceId } from '../../maplibre/map-error-owner'
 import { describeMapErrorEvent, logMapError, redactCredentials, redactError } from '../../maplibre/redact-credentials'
 import type { MapLibreSurfaceLifetime } from '../../maplibre/surface-adapter'
-import { IDLE_MAPLIBRE_CANVAS_SURFACE_STATE } from '../../maplibre/canvas-surface-state'
+import { UNAVAILABLE_MAPLIBRE_CANVAS_SURFACE_STATE } from '../../maplibre/canvas-surface-state'
 import {
   createWorkspaceMapLibreMap,
   type WorkspaceMapSnapshot,
@@ -342,10 +342,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
 
   private publishUnavailable(): void {
     try {
-      this.options.contributions.onStateChange?.({
-        ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
-        status: 'error',
-      })
+      this.options.contributions.onStateChange?.(UNAVAILABLE_MAPLIBRE_CANVAS_SURFACE_STATE)
     } catch (observerError) {
       this.logError('Map state observer failed:', observerError)
     }

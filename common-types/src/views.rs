@@ -242,20 +242,7 @@ pub fn validate_views_and_stories(views: &[SavedView], stories: &[Story]) -> Res
                 view.id
             ));
         }
-        if !view.camera.is_valid() {
-            return Err(format!(
-                "$.views[{index}].camera: expected lon in [-180, 180], a Web Mercator latitude (±{WEB_MERCATOR_MAX_LATITUDE_DEG}), zoom in [0, {SAVED_VIEW_MAX_ZOOM}] and bearing in [0, 360]"
-            ));
-        }
-        if view
-            .camera
-            .ground_size_m
-            .is_some_and(|ground| !ground.is_valid())
-        {
-            return Err(format!(
-                "$.views[{index}].camera.ground_size_m: expected a finite width and height above 0 and at most {SAVED_VIEW_MAX_GROUND_SIZE_M} m"
-            ));
-        }
+        validate_camera(&view.camera, &format!("$.views[{index}].camera"))?;
         validate_rich_text(&view.text, &format!("$.views[{index}].text"))?;
     }
 
@@ -295,6 +282,29 @@ pub fn validate_views_and_stories(views: &[SavedView], stories: &[Story]) -> Res
                 }
             }
         }
+    }
+    Ok(())
+}
+
+/// Check the view a Design was saved with (`$.map_view`) by the saved-view
+/// camera rules.
+pub fn validate_map_view(map_view: Option<&SavedViewCamera>) -> Result<(), String> {
+    map_view.map_or(Ok(()), |camera| validate_camera(camera, "$.map_view"))
+}
+
+fn validate_camera(camera: &SavedViewCamera, path: &str) -> Result<(), String> {
+    if !camera.is_valid() {
+        return Err(format!(
+            "{path}: expected lon in [-180, 180], a Web Mercator latitude (±{WEB_MERCATOR_MAX_LATITUDE_DEG}), zoom in [0, {SAVED_VIEW_MAX_ZOOM}] and bearing in [0, 360]"
+        ));
+    }
+    if camera
+        .ground_size_m
+        .is_some_and(|ground| !ground.is_valid())
+    {
+        return Err(format!(
+            "{path}.ground_size_m: expected a finite width and height above 0 and at most {SAVED_VIEW_MAX_GROUND_SIZE_M} m"
+        ));
     }
     Ok(())
 }

@@ -4,7 +4,7 @@ use common_types::design::{
     MISSING_CANOPI_FILE_VERSION, OBSOLETE_CANOPI_ROOT_KEYS, admit_design_identities_and_ranges,
     validate_design_geometry,
 };
-use common_types::views::validate_views_and_stories;
+use common_types::views::{validate_map_view, validate_views_and_stories};
 use std::fmt;
 use std::path::Path;
 
@@ -281,6 +281,7 @@ fn admit_current_design_value(
     validate_design_geometry(&file)
         .and_then(|()| admit_design_identities_and_ranges(&mut file))
         .and_then(|()| validate_views_and_stories(&file.views, &file.stories))
+        .and_then(|()| validate_map_view(file.map_view.as_ref()))
         .map_err(|error| {
             CanopiDesignIngestionError::new(CanopiDesignIngestionErrorKind::InvalidDocument, error)
         })?;
@@ -354,6 +355,7 @@ pub(crate) fn create_new_design(
         budget_currency: DEFAULT_BUDGET_CURRENCY.to_owned(),
         views: Vec::new(),
         stories: Vec::new(),
+        map_view: None,
         created_at: timestamp.clone(),
         updated_at: timestamp,
         extra: std::collections::HashMap::new(),
@@ -365,6 +367,7 @@ mod tests {
     use super::*;
     use crate::test_scratch::TestScratch;
     use common_types::design::PanelTarget;
+    use common_types::views::{SavedViewCamera, SavedViewGroundSize};
     use std::path::PathBuf;
 
     fn create_default() -> CanopiFile {
@@ -1064,6 +1067,84 @@ mod tests {
         assert_eq!(std::fs::read(&path).unwrap(), bytes);
         assert_eq!(loaded.views[0].camera.lon, 2.294_481_234_5);
         assert_eq!(loaded.stories[0].steps[0].view_id, "view-1");
+    }
+
+    fn map_view_value() -> serde_json::Value {
+        serde_json::json!({
+            "lon": 2.294_481_234_5,
+            "lat": 48.858_370_123_4,
+            "zoom": 19.25,
+            "bearing": 30.5,
+            "ground_size_m": { "width": 312.5, "height": 187.5 }
+        })
+    }
+
+    fn resaved_bytes(dir: &Path, name: &str, bytes: &[u8]) -> (CanopiFile, Vec<u8>) {
+        let path = dir.join(name);
+        std::fs::write(&path, bytes).unwrap();
+        let loaded = load_from_file(&path).expect("load");
+        save_to_file(&path, &loaded, None).expect("save");
+        (loaded, std::fs::read(&path).unwrap())
+    }
+
+    #[test]
+    fn a_design_saves_its_map_view_and_one_without_it_saves_byte_identically() {
+        let dir = unique_dir("map_view_round_trip");
+
+        let plain = encode_design(&create_default()).expect("encode");
+        assert!(!String::from_utf8_lossy(&plain).contains("map_view"));
+        let (loaded, resaved) = resaved_bytes(&dir, "plain.canopi", &plain);
+        assert_eq!(loaded.map_view, None);
+        assert_eq!(resaved, plain, "a Design without the field stays as it was");
+
+        let mut value = serde_json::to_value(create_default()).expect("serialize");
+        value["map_view"] = map_view_value();
+        let design = decode_design_value(value).expect("a saved map view is admitted");
+        assert_eq!(
+            design.map_view,
+            Some(SavedViewCamera {
+                lon: 2.294_481_234_5,
+                lat: 48.858_370_123_4,
+                zoom: 19.25,
+                bearing: 30.5,
+                ground_size_m: Some(SavedViewGroundSize {
+                    width: 312.5,
+                    height: 187.5,
+                }),
+            })
+        );
+        assert!(
+            design.extra.is_empty(),
+            "map_view is a known field, not extra"
+        );
+        let bytes = encode_design(&design).expect("encode");
+        let (loaded, resaved) = resaved_bytes(&dir, "viewed.canopi", &bytes);
+        assert_eq!(loaded.map_view, design.map_view);
+        assert_eq!(resaved, bytes);
+        assert_eq!(loaded.version, CURRENT_CANOPI_FILE_VERSION);
+    }
+
+    #[test]
+    fn an_invalid_map_view_is_refused_at_its_path() {
+        for (field, invalid, path) in [
+            ("zoom", serde_json::json!(27.5), "$.map_view: "),
+            ("bearing", serde_json::json!(361.0), "$.map_view: "),
+            ("lat", serde_json::json!(86.0), "$.map_view: "),
+            (
+                "ground_size_m",
+                serde_json::json!({ "width": 0.0, "height": 187.5 }),
+                "$.map_view.ground_size_m: ",
+            ),
+        ] {
+            let mut value = serde_json::to_value(create_default()).expect("serialize");
+            value["map_view"] = map_view_value();
+            value["map_view"][field] = invalid;
+
+            let error = decode_design_value(value).expect_err("an invalid map view is refused");
+
+            assert_eq!(error.kind, CanopiDesignIngestionErrorKind::InvalidDocument);
+            assert!(error.message.starts_with(path), "{field}: {error}");
+        }
     }
 
     #[test]

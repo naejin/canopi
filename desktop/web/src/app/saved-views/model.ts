@@ -1,9 +1,8 @@
 import type { SceneDesignObjectTarget } from '../../canvas/runtime/scene'
-import { roundGeoDegrees, storedBearing, type GeographicView } from '../../canvas/session-plane'
-import { SAVED_VIEW_MAX_ZOOM } from '../../generated/canopi-design-format'
+import type { GeographicView } from '../../canvas/session-plane'
+import { savedViewCameraOf } from '../../canvas/saved-view-framing'
 import type { CanopiFile, SavedView, SavedViewBackground, SavedViewObject } from '../../types/design'
 import { mapBackgroundOf, type MapLayersState } from '../map-layers/state'
-import { savedViewGroundSize } from './framing'
 
 export interface SavedViewCaptureInput {
   readonly id: string
@@ -19,24 +18,12 @@ export interface SavedViewCaptureInput {
   readonly selection: readonly SceneDesignObjectTarget[]
 }
 
-/**
- * What the current view shows, as a saved view: its camera with the bearing rounded to 1e-6 and folded into [0, 360) (spec
- * §4.10), and the ground the map shows measured at the stored camera, so the same window gives back the exact camera.
- */
+/** What the current view shows, as a saved view: its camera as stored, with the ground the whole map shows (savedViewCameraOf). */
 export function composeSavedView(input: SavedViewCaptureInput): SavedView {
-  const lat = roundGeoDegrees(input.view.lat)
-  const zoom = Math.min(SAVED_VIEW_MAX_ZOOM, Math.max(0, Math.round(input.view.zoom * 1e6) / 1e6))
-  const ground = savedViewGroundSize({ lat, zoom }, input.screen)
   return {
     id: input.id,
     name: input.name,
-    camera: {
-      lon: roundGeoDegrees(input.view.lon),
-      lat,
-      zoom,
-      bearing: storedBearing(input.view.bearing),
-      ...(ground ? { ground_size_m: ground } : {}),
-    },
+    camera: savedViewCameraOf(input.view, input.screen),
     visible_layers: {
       background: backgroundOf(input.mapLayers),
       terrain: {

@@ -15,6 +15,7 @@ import type {
   WorkspaceRuntimeComposition,
   WorkspaceRuntimeMountOptions,
 } from "../canvas-map-surface/workspace-runtime-composition";
+import { UNAVAILABLE_MAPLIBRE_CANVAS_SURFACE_STATE } from "../../maplibre/canvas-surface-state";
 import {
   abortFailedAttachedDesignSessionStart,
   consumeQueuedDocumentLoad,
@@ -142,6 +143,8 @@ class RuntimeDesignSessionLifecycle implements DesignSessionLifecycle {
     }).catch((error: unknown) => {
       if (this.cancelled) return;
       this.deps.logError("Failed to initialize scene canvas runtime:", error);
+      // Nothing will draw: an open Design shows at once, over the map notice (design-reveal.ts).
+      this.host.onMapStateChange?.(UNAVAILABLE_MAPLIBRE_CANVAS_SURFACE_STATE);
       try {
         this.deps.onInitializationFailure();
       } catch (cleanupError) {

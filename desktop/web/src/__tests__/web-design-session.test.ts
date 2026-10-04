@@ -1,6 +1,6 @@
 import { newDesignDefaults } from '../app/settings/state'
 import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
-import { effect } from '@preact/signals'
+import { effect, signal } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
 import { composeDocumentForSave } from '../app/contracts/document'
 import { decodeCanopiDesign } from '../app/contracts/design-ingestion'
@@ -977,6 +977,65 @@ describe('browser Design Session lifecycle', () => {
     await expect(tabA.controller.continuousSave.flush()).resolves.toBe(true)
   })
 
+  it('writes a view that moved without starting or showing a conflict with another tab (U28)', async () => {
+    const storage = memoryStorage()
+    let tick = 0
+    const clock = () => new Date(Date.UTC(2026, 6, 4, 12, 0, tick++))
+    createBrowserAppDataStore({ storage }).saveDraft({
+      id: 'draft-shared',
+      file: makeCanopiFile({ name: 'Shared Garden', description: 'as opened' }),
+      now: clock().toISOString(),
+    })
+    function openTab() {
+      const store = createMemoryDesignSessionStore()
+      const appDataStore = createBrowserAppDataStore({ storage })
+      const requestSaveDecision = vi.fn(async () => 'cancel')
+      const controller = createBrowserDesignSessionController({
+        store,
+        appDataStore,
+        fileAdapter: testFileAdapter(),
+        now: clock,
+        requestSaveDecision: requestSaveDecision as never,
+      })
+      expect(controller.restoreLatestDraft()).toBe(true)
+      return { store, appDataStore, controller, requestSaveDecision }
+    }
+    const tabA = openTab()
+    let view = { lon: 13, lat: 23, zoom: 18, bearing: 0 }
+    let held = view
+    tabA.controller.attachCanvasSession(testCanvasDocumentSurface({
+      viewMovedSinceSave: () => view !== held,
+      captureForPersistence: (_metadata, doc) => {
+        const captured = view
+        return {
+          content: { ...doc, map_view: captured },
+          isCurrent: () => true,
+          acknowledgeSaved: () => {
+            held = captured
+            return 'applied' as const
+          },
+        }
+      },
+    }))
+    const tabB = openTab()
+
+    // Tab A only pans and is hidden: the Draft gets its view, but tab B's edit still writes.
+    view = { ...view, bearing: 30 }
+    await expect(tabA.controller.continuousSave.flush()).resolves.toBe(true)
+    expect(tabA.appDataStore.loadDraft('draft-shared')?.map_view).toMatchObject({ bearing: 30 })
+    editDesignSessionForTest(tabB.store, (design) => ({ ...design, description: 'nudged zone' }))
+    await expect(tabB.controller.continuousSave.flush()).resolves.toBe(true)
+    expect(tabB.controller.continuousSave.status.value).toBe('draft')
+
+    // Tab A pans again after tab B wrote: its view is dropped, tab B's edit stays, and tab A shows nothing.
+    view = { ...view, zoom: 19 }
+    await expect(tabA.controller.continuousSave.flush()).resolves.toBe(true)
+    expect(tabA.appDataStore.loadDraft('draft-shared')?.description).toBe('nudged zone')
+    expect(tabA.controller.continuousSave.status.value, 'no conflict shows').toBe('draft')
+    await tabA.controller.newDesign()
+    expect(tabA.requestSaveDecision).not.toHaveBeenCalled()
+  })
+
   it('asks about a Draft another tab changed before a replacement discards this tab\'s edits', async () => {
     const storage = memoryStorage()
     let tick = 0
@@ -1260,6 +1319,52 @@ describe('browser Design Session lifecycle', () => {
       },
     ])
     expect(acknowledgeSaved).toHaveBeenCalledOnce()
+  })
+
+  it('writes a view that moved to the Draft on page hide and before a replacement, with nothing else to write (U28)', async () => {
+    const store = createMemoryDesignSessionStore()
+    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+    appDataStore.saveDraft({ id: 'draft-viewed', file: makeCanopiFile({ name: 'Viewed' }), now: NOW.toISOString() })
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore,
+      fileAdapter: testFileAdapter(),
+      now: () => NOW,
+      createDraftId: () => 'draft-next',
+    })
+    let view = { lon: 13, lat: 23, zoom: 18, bearing: 0 }
+    let held = view
+    const canvas = testCanvasDocumentSurface({
+      viewMovedSinceSave: () => view !== held,
+      captureForPersistence: (_metadata, doc) => {
+        const captured = view
+        return {
+          content: { ...doc, map_view: captured },
+          isCurrent: () => true,
+          acknowledgeSaved: () => {
+            held = captured
+            return 'applied' as const
+          },
+        }
+      },
+    })
+    controller.attachCanvasSession(canvas)
+    expect(controller.restoreLatestDraft()).toBe(true)
+    const page = testPage()
+    const uninstall = controller.installContinuousSave(page)
+
+    try {
+      view = { ...view, bearing: 30 }
+      expect(controller.continuousSave.status.value, 'nothing reads as unsaved').toBe('draft')
+      page.window.dispatchEvent(new Event('pagehide'))
+      expect(appDataStore.loadDraft('draft-viewed')?.map_view).toMatchObject({ lon: 13, lat: 23, zoom: 18, bearing: 30 })
+
+      view = { ...view, zoom: 19 }
+      await controller.newDesign()
+      expect(appDataStore.loadDraft('draft-viewed')?.map_view).toMatchObject({ lon: 13, lat: 23, zoom: 19, bearing: 30 })
+    } finally {
+      uninstall()
+    }
   })
 
   it('applies every browser replacement through the attached canvas lifecycle', async () => {
@@ -2283,6 +2388,7 @@ function testCanvasDocumentSurface(
   overrides: Partial<CanvasDocumentSurface> = {},
 ): CanvasDocumentSurface {
   return {
+    presented: signal(true),
     attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(),
@@ -2294,6 +2400,7 @@ function testCanvasDocumentSurface(
       return { callerFinalizerInvoked: true }
     }),
     hasLoadedDocument: vi.fn(() => true),
+    viewMovedSinceSave: () => false,
     captureForPersistence: vi.fn((_metadata, doc) => persistenceCapture(doc)),
     resize: vi.fn(),
     destroy: vi.fn(),

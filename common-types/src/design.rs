@@ -233,6 +233,10 @@ pub const DESIGN_FILE_FIELDS: &[DesignFileField] = &[
         owner: DesignFileFieldOwner::Document,
     },
     DesignFileField {
+        key: "map_view",
+        owner: DesignFileFieldOwner::Scene,
+    },
+    DesignFileField {
         key: "created_at",
         owner: DesignFileFieldOwner::Document,
     },
@@ -286,6 +290,10 @@ pub struct CanopiFile {
     // Ordered presentations of saved views (ADR 0011).
     #[serde(default)]
     pub stories: Vec<crate::views::Story>,
+    // The view the Design was last saved with: opening it restores this view
+    // by the saved-view rule. Absent in a Design saved before 2.0 wrote it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub map_view: Option<crate::views::SavedViewCamera>,
     pub created_at: String,
     pub updated_at: String,
     /// Preserves unknown fields for forward compatibility — round-trips fields

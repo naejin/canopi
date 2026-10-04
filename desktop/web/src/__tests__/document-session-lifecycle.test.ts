@@ -17,6 +17,10 @@ import type {
   WorkspaceRuntimeComposition,
   WorkspaceRuntimeStartOutcome,
 } from '../app/canvas-map-surface/workspace-runtime-composition'
+import {
+  UNAVAILABLE_MAPLIBRE_CANVAS_SURFACE_STATE,
+  type MapLibreCanvasSurfaceState,
+} from '../maplibre/canvas-surface-state'
 
 vi.mock('../app/document-session/transition', () => ({
   abortFailedAttachedDesignSessionStart: vi.fn(),
@@ -164,6 +168,26 @@ describe('document session lifecycle', () => {
       expect.objectContaining({ message: 'Shared workspace initialization was cancelled.' }),
     )
 
+    await lifecycle.dispose()
+  })
+
+  it('reports the map unavailable when the runtime fails to start, so an open Design shows over the notice', async () => {
+    const onMapStateChange = vi.fn<(state: MapLibreCanvasSurfaceState) => void>()
+    const lifecycle = createDesignSessionLifecycle(
+      { canvasArea, container, rulerOverlay, onMapStateChange },
+      {
+        createRuntimeComposition: () => composition(createTestCanvasRuntimeSurfaces(), async () => 'cancelled'),
+        publishSurfaces: vi.fn(),
+        createResizeObserver: () => null,
+        logError: vi.fn(),
+      },
+    )
+
+    lifecycle.start()
+    await flushLifecycle()
+
+    expect(onMapStateChange).toHaveBeenLastCalledWith(UNAVAILABLE_MAPLIBRE_CANVAS_SURFACE_STATE)
+    expect(UNAVAILABLE_MAPLIBRE_CANVAS_SURFACE_STATE).toMatchObject({ status: 'error', retryable: false })
     await lifecycle.dispose()
   })
 
@@ -318,10 +342,11 @@ describe('document session lifecycle', () => {
       await Promise.resolve()
       await flushLifecycle()
 
-      expect(abortFailedAttachedDesignSessionStart).toHaveBeenCalledWith(
-        documents,
-        logError,
-      )
+      // By identity: the surface holds a signal, which Vitest's deep equality cannot compare.
+      expect(abortFailedAttachedDesignSessionStart).toHaveBeenCalledOnce()
+      const [abortedDocuments, abortLog] = vi.mocked(abortFailedAttachedDesignSessionStart).mock.calls[0]!
+      expect(abortedDocuments).toBe(documents)
+      expect(abortLog).toBe(logError)
       expect(publishSurfaces).not.toHaveBeenCalled()
       expect(onInitializationFailure).toHaveBeenCalledOnce()
       expect(logError).toHaveBeenCalledWith(

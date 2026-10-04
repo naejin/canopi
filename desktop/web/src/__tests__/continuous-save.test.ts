@@ -5,6 +5,7 @@ import {
   type ContinuousSave,
   type DesignHome,
   type HomeWriteOutcome,
+  type HomeWriteOptions,
 } from '../app/document-session/continuous-save'
 import {
   createDesignSessionStoreTestFixture,
@@ -18,7 +19,7 @@ import type { CanopiFile } from '../types/design'
 let store: PersistenceCapableDesignSessionStore
 let fixture: DesignSessionStoreTestFixture
 let writes: DesignHome[]
-let writeHome: ReturnType<typeof vi.fn<(home: DesignHome) => Promise<HomeWriteOutcome>>>
+let writeHome: ReturnType<typeof vi.fn<(home: DesignHome, options: HomeWriteOptions) => Promise<HomeWriteOutcome>>>
 let save: ContinuousSave
 let uninstall: () => void
 
@@ -82,7 +83,7 @@ beforeEach(() => {
   store = createMemoryDesignSessionStore()
   fixture = createDesignSessionStoreTestFixture(store)
   writes = []
-  writeHome = vi.fn((home: DesignHome) => {
+  writeHome = vi.fn((home: DesignHome, _options: HomeWriteOptions) => {
     writes.push(home)
     return acknowledgingWrite()
   })
@@ -354,5 +355,102 @@ describe('continuous save', () => {
     finish()
     await settle()
     expect(idle).toBe(true)
+  })
+})
+
+describe('continuous save of a view that moved (U28)', () => {
+  let moved: boolean
+  let logError: ReturnType<typeof vi.fn<(message?: unknown, ...rest: unknown[]) => void>>
+
+  beforeEach(() => {
+    uninstall()
+    save.dispose()
+    moved = false
+    logError = vi.fn()
+    save = createContinuousSave({ store, writeHome, viewMoved: () => moved, logError })
+    uninstall = save.install()
+  })
+
+  it('writes a moved view on flush, marked view only, and never on a timer', async () => {
+    openSession(FILE_HOME)
+    moved = true
+    expect(save.hasSomethingToWrite()).toBe(true)
+    expect(save.status.value, 'a camera move marks nothing unsaved').toBe('saved')
+    await vi.advanceTimersByTimeAsync(CONTINUOUS_SAVE_DELAY_MS * 2)
+    expect(writeHome).not.toHaveBeenCalled()
+
+    await expect(save.flush()).resolves.toBe(true)
+    expect(writeHome).toHaveBeenCalledTimes(1)
+    expect(writeHome.mock.calls[0]?.[1]).toEqual({ viewOnly: true })
+
+    edit('a')
+    await expect(save.flush()).resolves.toBe(true)
+    expect(writeHome.mock.calls[1]?.[1]).toEqual({ viewOnly: false })
+  })
+
+  it('leaves a moved view alone on a flush that asks for edits only', async () => {
+    openSession(FILE_HOME)
+    moved = true
+    await expect(save.flush({ view: false })).resolves.toBe(true)
+    expect(writeHome).not.toHaveBeenCalled()
+
+    edit('a')
+    await expect(save.flush({ view: false })).resolves.toBe(true)
+    expect(writeHome).toHaveBeenCalledTimes(1)
+    expect(writeHome.mock.calls[0]?.[1]).toEqual({ viewOnly: false })
+  })
+
+  it('has nothing to write while neither an edit nor the view is waiting', () => {
+    openSession(FILE_HOME)
+    expect(save.hasSomethingToWrite()).toBe(false)
+    edit('a')
+    expect(save.hasSomethingToWrite()).toBe(true)
+  })
+
+  it('treats a refused view-only write as best effort: no error, no conflict, the flush succeeds', async () => {
+    openSession({ path: '/designs/garden.canopi', draftId: null, fingerprint: 'fp-1' })
+    moved = true
+
+    writeHome.mockRejectedValueOnce(new Error('read-only file'))
+    await expect(save.flush()).resolves.toBe(true)
+    expect(save.status.value).toBe('saved')
+    expect(save.failureReason.value).toBeNull()
+    expect(logError).toHaveBeenCalledTimes(1)
+
+    writeHome.mockResolvedValueOnce({ kind: 'conflict', fileGone: false })
+    await expect(save.flush()).resolves.toBe(true)
+    expect(save.conflict.value).toBeNull()
+    expect(save.status.value).toBe('saved')
+    expect(writeHome.mock.calls.at(-1)?.[0], 'the writer still checks the file it opened').toEqual({
+      kind: 'file',
+      path: '/designs/garden.canopi',
+      fingerprint: 'fp-1',
+    })
+
+    // An edit's write reaches the same conflict and shows it.
+    writeHome.mockResolvedValueOnce({ kind: 'conflict', fileGone: false })
+    edit('a')
+    await expect(save.flush()).resolves.toBe(false)
+    expect(save.conflict.value).toEqual({ fileGone: false })
+  })
+
+  it('writes an edit made during a refused view-only write', async () => {
+    openSession(FILE_HOME)
+    moved = true
+    let refuse!: () => void
+    writeHome.mockImplementationOnce(() => new Promise((_resolve, reject) => {
+      refuse = () => reject(new Error('busy'))
+    }))
+    const flushed = save.flush()
+    await settle()
+    edit('a')
+    refuse()
+    await expect(flushed).resolves.toBe(false)
+    expect(save.status.value).toBe('saving')
+
+    await vi.advanceTimersByTimeAsync(CONTINUOUS_SAVE_DELAY_MS)
+    expect(writeHome).toHaveBeenCalledTimes(2)
+    expect(writeHome.mock.calls[1]?.[1]).toEqual({ viewOnly: false })
+    expect(save.status.value).toBe('saved')
   })
 })

@@ -1,4 +1,7 @@
-import type { CanopiFile } from '../../types/design'
+import type { ReadonlySignal } from '@preact/signals'
+import type { CanopiFile, SavedViewCamera } from '../../types/design'
+import { savedViewCameraOf, savedViewZoom } from '../saved-view-framing'
+import { geographicViewOfCamera } from '../session-plane'
 import {
   CanvasAuthorityBusyError,
   CanvasDocumentReplacementNotAdmittedError,
@@ -16,6 +19,7 @@ import type { CanvasInspectionHandle } from '../inspection'
 import type { SceneCanvasInspectionOwner } from './inspection-lens'
 import type { CameraDriverHost } from './view/camera-driver'
 import type { ViewNavigation } from './view/navigation'
+import type { ViewCamera } from './view/types'
 
 interface SceneCanvasDocumentSurfaceOptions {
   /** The bearing a loaded Design opens at; read once per open of a loaded Design (scene-runtime/construction.ts). */
@@ -25,11 +29,14 @@ interface SceneCanvasDocumentSurfaceOptions {
     SceneRuntimeDocumentBridge,
     'loadDocument' | 'replaceDocument' | 'captureForPersistence'
   >
-  /** The runtime's camera: a resize reaches its live driver. */
-  readonly cameraHost: Pick<CameraDriverHost, 'current'>
+  /** The runtime's camera: a resize reaches its live driver; a save reads its live frame. */
+  readonly cameraHost: Pick<CameraDriverHost, 'current' | 'frames'>
   readonly viewNavigation: Pick<ViewNavigation, 'openAt' | 'clearTemporaryFocus'>
   readonly chrome: Pick<SceneRuntimeChromeCoordinator, 'attach' | 'show' | 'hide' | 'destroy'>
-  readonly rendering: Pick<SceneRuntimeRenderScheduler, 'container' | 'invalidate' | 'resize' | 'dispose'>
+  readonly rendering: Pick<
+    SceneRuntimeRenderScheduler,
+    'container' | 'invalidate' | 'resize' | 'dispose' | 'presented' | 'awaitPresentation'
+  >
   readonly renderChrome: () => void
   readonly addGuide: (axis: 'h' | 'v', worldPosition: number) => void
   readonly clearHoveredEntity: () => void
@@ -39,16 +46,34 @@ interface SceneCanvasDocumentSurfaceOptions {
   readonly disposeEffects: () => void
 }
 
+/** The runtime's document role: the app's surface, and the open fit's step in the scene render (construction.ts). */
+export interface SceneCanvasDocumentSurface extends CanvasDocumentSurface {
+  /** The scene render's first step (render-scheduler.ts): places the camera for a waiting open fit. */
+  applyPendingOpen(): void
+}
+
 export function createSceneCanvasDocumentSurface(
   options: SceneCanvasDocumentSurfaceOptions,
-): CanvasDocumentSurface {
+): SceneCanvasDocumentSurface {
   return new SceneCanvasDocumentRole(options)
 }
 
-class SceneCanvasDocumentRole implements CanvasDocumentSurface {
+class SceneCanvasDocumentRole implements SceneCanvasDocumentSurface {
   private _documentState: 'absent' | 'settling' | 'loaded' = 'absent'
+  /** The view the open Design's file was saved with (`map_view`), or null. */
+  private _savedMapView: SavedViewCamera | null = null
+  /** The view the home holds as this map stands at it: the open fit's placement, then each acknowledged save's capture. */
+  private _heldView: SavedViewCamera | null = null
+  /** The open fit has placed the camera for the open Design: from then on the live view is the Design's view. */
+  private _placed = false
+  /** An open fit waits for the next scene render's publish step. */
+  private _openPending = false
 
   constructor(private readonly options: SceneCanvasDocumentSurfaceOptions) {}
+
+  get presented(): ReadonlySignal<boolean> {
+    return this.options.rendering.presented
+  }
 
   attachInspectionTo(element: HTMLElement): CanvasInspectionHandle {
     return this.options.inspection.mount(element)
@@ -72,12 +97,71 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
   }
 
   /**
-   * The open fit: every open path (the first load, a replace, the first generation) ends here, never Fit to Design. It opens
-   * at the opening bearing (spec §4.15); an empty scene, and the first frame before any Design, open north up (openAt).
+   * The open fit: every open path (the first load, a replace, the first generation) ends here, never Fit to Design. A Design
+   * saved with its view (`map_view`, U28) opens at that view's centre and bearing, its framed ground fitted into the whole map
+   * by the saved-view rule; any other opens on the fit at the opening bearing (spec §4.15). An empty scene, and the first
+   * frame before any Design, open north up (openAt). With a renderer mounted the placement waits for the next scene render,
+   * which applies it first (applyPendingOpen), so it frames inside the chrome the opened Design mounts meanwhile and the
+   * camera and the scene land in one frame; with none, nothing draws and it places now.
    */
   zoomToFit(): void {
-    const bearing = this._documentState === 'absent' ? 0 : this.options.readOpeningBearing()
-    this.options.viewNavigation.openAt(bearing)
+    if (this.options.rendering.container === null) {
+      this._open()
+      return
+    }
+    this._openPending = true
+    this.options.rendering.invalidate('scene')
+  }
+
+  applyPendingOpen(): void {
+    if (!this._openPending) return
+    this._openPending = false
+    this._open()
+  }
+
+  private _open(): void {
+    if (this._documentState === 'absent') {
+      this.options.viewNavigation.openAt(0)
+      return
+    }
+    this.options.viewNavigation.openAt(this.options.readOpeningBearing(), this._savedCamera())
+    this._placed = true
+    this._heldView = this._mapViewForSave()
+  }
+
+  /** The camera the open Design was saved with, framed for the whole map now; null without one. */
+  private _savedCamera(): ViewCamera | null {
+    const saved = this._savedMapView
+    if (!saved) return null
+    const { screen } = this.options.cameraHost.frames.viewFrame.peek().view
+    return {
+      center: { lon: saved.lon, lat: saved.lat },
+      zoom: savedViewZoom(saved, screen),
+      bearingDeg: saved.bearing,
+      pitchDeg: 0,
+    }
+  }
+
+  /**
+   * The view a save writes (`map_view`): the live view once the open fit has placed the camera on a map with a size, else the
+   * view the file was saved with. A camera move never edits the Design: it reaches the file with the next flush
+   * (viewMovedSinceSave).
+   */
+  private _mapViewForSave(): SavedViewCamera | null {
+    const { view } = this.options.cameraHost.frames.viewFrame.peek()
+    if (!this._placed || view.screen.width <= 0 || view.screen.height <= 0) return this._savedMapView
+    return savedViewCameraOf(geographicViewOfCamera(view.camera), view.screen)
+  }
+
+  private _opened(file: CanopiFile): void {
+    this._documentState = 'loaded'
+    this._savedMapView = file.map_view ?? null
+    this._heldView = null
+    this._placed = false
+    this._openPending = false
+    this.options.rendering.awaitPresentation()
+    this.options.viewNavigation.clearTemporaryFocus()
+    this.options.inspection.reset()
   }
 
   loadDocument(file: CanopiFile): void {
@@ -91,9 +175,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
       if (error instanceof CanvasAuthorityBusyError) this._documentState = previousDocumentState
       throw error
     }
-    this._documentState = 'loaded'
-    this.options.viewNavigation.clearTemporaryFocus()
-    this.options.inspection.reset()
+    this._opened(file)
   }
 
   replaceDocument(
@@ -105,9 +187,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
     this._documentState = 'settling'
     try {
       const receipt = this.options.documents.replaceDocument(file, token, finalizeReplacement)
-      this._documentState = 'loaded'
-      this.options.viewNavigation.clearTemporaryFocus()
-      this.options.inspection.reset()
+      this._opened(file)
       return receipt
     } catch (error) {
       if (error instanceof CanvasDocumentReplacementNotAdmittedError) {
@@ -121,6 +201,12 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
     return this._documentState !== 'absent'
   }
 
+  viewMovedSinceSave(): boolean {
+    if (this._documentState !== 'loaded' || !this._placed) return false
+    const live = this._mapViewForSave()
+    return live !== null && !sameStandpoint(live, this._heldView)
+  }
+
   captureForPersistence(
     metadata: CanvasRuntimeDocumentMetadata,
     doc: CanopiFile,
@@ -128,7 +214,17 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
     if (this._documentState === 'settling') {
       throw new CanvasAuthorityBusyError('document-settlement')
     }
-    return this.options.documents.captureForPersistence(metadata, doc)
+    const mapView = this._mapViewForSave()
+    const capture = this.options.documents.captureForPersistence(metadata, doc, mapView)
+    return Object.freeze({
+      content: capture.content,
+      isCurrent: () => capture.isCurrent(),
+      acknowledgeSaved: () => {
+        const acknowledged = capture.acknowledgeSaved()
+        if (acknowledged !== 'stale') this._heldView = mapView
+        return acknowledged
+      },
+    })
   }
 
   resize(width: number, height: number): void {
@@ -148,4 +244,9 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
       () => this.options.rendering.dispose(),
     ], 'Scene Canvas document surface disposal failed')
   }
+}
+
+/** Two stored views stand at the same centre, zoom and bearing; the ground each frames follows its window, so it is not compared. */
+function sameStandpoint(a: SavedViewCamera, b: SavedViewCamera | null): boolean {
+  return b !== null && a.lon === b.lon && a.lat === b.lat && a.zoom === b.zoom && a.bearing === b.bearing
 }

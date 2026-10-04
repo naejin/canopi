@@ -81,6 +81,8 @@ export interface DesignSessionPersistence {
   isCanvasAttached(session: CanvasDocumentSurface): boolean;
   /** The Canvas whose persistence lease is current, if any. */
   attachedCanvas(): CanvasDocumentSurface | null;
+  /** The attached Canvas's view moved from the one the home holds: continuous save's next flush writes it (U28). */
+  viewMovedSinceSave(): boolean;
   attachCanvas(session: CanvasDocumentSurface): DesignPersistenceCanvasLease;
   acquireDetachedCanvasLease(): DesignPersistenceCanvasLease;
   beginReplacementGuard(): DesignReplacementGuardCapture;
@@ -630,6 +632,7 @@ export function createDesignSessionPersistence({
   return {
     isCanvasAttached,
     attachedCanvas: () => attachedCanvas,
+    viewMovedSinceSave: () => attachedCanvas?.viewMovedSinceSave() ?? false,
     attachCanvas,
     acquireDetachedCanvasLease,
     beginReplacementGuard,
@@ -764,8 +767,10 @@ function cloneDocument(file: CanopiFile): CanopiFile {
   return JSON.parse(JSON.stringify(file)) as CanopiFile;
 }
 
+/** What a replacement guards: the content, without the save timestamp or the view (a pan is not a change to guard). */
 function replacementContentFingerprint(file: CanopiFile): string {
-  const { updated_at: _generatedTimestamp, ...stableContent } = file;
+  const { updated_at: _generatedTimestamp, map_view: _view, ...stableContent } = file;
   void _generatedTimestamp;
+  void _view;
   return JSON.stringify(stableContent);
 }

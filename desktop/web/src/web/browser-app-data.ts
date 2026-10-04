@@ -135,6 +135,12 @@ interface SaveDraftOptions {
    * Omitted: overwrite unconditionally.
    */
   readonly expectedUpdatedAt?: string | null;
+  /**
+   * The write is not an edit (it carries only a view that moved): the Draft
+   * keeps its `updatedAt` and its place in the list, so the stamp another tab
+   * holds stays valid. A Draft deleted meanwhile is written as new.
+   */
+  readonly keepUpdatedAt?: boolean;
 }
 
 /** Another browser tab wrote the Draft after this writer last read or wrote it. */
@@ -207,27 +213,25 @@ export function createBrowserAppDataStore({
   }
 
   return {
-    saveDraft({ id: requestedId, file, now, expectedUpdatedAt }) {
+    saveDraft({ id: requestedId, file, now, expectedUpdatedAt, keepUpdatedAt = false }) {
       return writePartition(
         PARTITIONS.drafts,
         (current) => {
           const id = normalizeDraftId(requestedId, file.name);
-          if (expectedUpdatedAt !== undefined) {
-            // A Draft deleted meanwhile is written again rather than lost.
-            const stored = current.drafts.find((draft) => draft.id === id);
-            if (stored && stored.updatedAt !== expectedUpdatedAt) {
-              throw new BrowserDraftChangedError(id);
-            }
+          // A Draft deleted meanwhile is written again rather than lost.
+          const stored = current.drafts.find((draft) => draft.id === id);
+          if (expectedUpdatedAt !== undefined && stored && stored.updatedAt !== expectedUpdatedAt) {
+            throw new BrowserDraftChangedError(id);
           }
+          const kept = keepUpdatedAt ? stored : undefined;
           const summary = {
             id,
             name: file.name || "Untitled",
-            updatedAt: now,
+            updatedAt: kept?.updatedAt ?? now,
           };
-          const drafts = [
-            summary,
-            ...current.drafts.filter((draft) => draft.id !== summary.id),
-          ];
+          const drafts = kept
+            ? current.drafts.map((draft) => draft.id === id ? summary : draft)
+            : [summary, ...current.drafts.filter((draft) => draft.id !== summary.id)];
           return {
             next: {
               version: RECORD_VERSION,

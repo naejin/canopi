@@ -145,6 +145,7 @@ export function createTestCanvasDocumentSurface(
   overrides: Partial<CanvasDocumentSurface> = {},
 ): CanvasDocumentSurface {
   const surface: CanvasDocumentSurface = {
+    presented: signal(true),
     attachInspectionTo: () => { throw new Error('Inspection view is not configured in this test.') },
     attachRulersTo: () => {},
     showCanvasChrome: () => {},
@@ -156,6 +157,7 @@ export function createTestCanvasDocumentSurface(
       return { callerFinalizerInvoked: true }
     },
     hasLoadedDocument: () => false,
+    viewMovedSinceSave: () => false,
     captureForPersistence: (metadata, doc) => ({
       content: { ...doc, name: metadata.name },
       isCurrent: () => true,

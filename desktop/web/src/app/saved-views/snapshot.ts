@@ -17,7 +17,7 @@ import { savedViewPlantLabels } from '../design-edit/views'
 import { currentDesign } from '../document-session/store'
 import { currentPlantDisplay } from '../plant-display/state'
 import type { PlantLabelMode } from '../../canvas/runtime/plant-display'
-import { savedViewZoom } from './framing'
+import { savedViewZoom } from '../../canvas/saved-view-framing'
 
 /** Default wait for tiles before a snapshot is read with a "some tiles missing" flag. */
 export const VIEW_SNAPSHOT_DEFAULT_TIMEOUT_MS = 8_000

@@ -1,3 +1,4 @@
+import { signal } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
 import type { CanvasDocumentSurface, CanvasPersistenceCapture } from '../canvas/runtime/runtime'
@@ -78,6 +79,7 @@ function makeSceneSession(): SceneSession {
   })
   return {
     history,
+    presented: signal(true),
     attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(),
@@ -92,6 +94,7 @@ function makeSceneSession(): SceneSession {
       }),
     })),
     hasLoadedDocument: vi.fn(() => true),
+    viewMovedSinceSave: () => false,
     captureForPersistence: vi.fn((metadata, document): CanvasPersistenceCapture => {
       const capture = authority.capturePersistence()
       return {

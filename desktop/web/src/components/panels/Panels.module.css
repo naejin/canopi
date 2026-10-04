@@ -29,6 +29,20 @@
   --tool-card-reserve: calc(var(--canvas-tool-card-left) + 320px + var(--space-2));
 }
 
+/* An open Design is hidden until its first scene is drawn (app/canvas-map-surface/design-reveal.ts):
+   its chrome is laid out, so it registers what it covers, and transparent rather than hidden, so a field that focuses
+   itself on mount (the New Design place field) keeps that focus when it shows. */
+.canvasArea[data-design-hidden] > :not([data-start-screen], :has([data-start-screen])) {
+  opacity: 0;
+}
+
+/* Transparent chrome stacked over the start screen must not take its clicks, including parts that ask for pointer input
+   (the rulers set it inline, so only !important wins; e2e/canvas/design-reveal.spec.ts). */
+.canvasArea[data-design-hidden] > :not([data-start-screen], :has([data-start-screen])),
+.canvasArea[data-design-hidden] > :not([data-start-screen], :has([data-start-screen])) * {
+  pointer-events: none !important;
+}
+
 /* Rulers start below the floating title bar (and any notice) and right of the tool rail
    (`--map-inset-left`, published by app/shell/visible-map-area.ts). */
 .rulerOverlay {
