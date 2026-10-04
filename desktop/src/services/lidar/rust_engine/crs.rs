@@ -134,7 +134,7 @@ fn parse(definition: &str) -> Result<(String, Proj), String> {
         return Err("a geocentric CRS".to_string());
     }
     if proj.is_latlong() && prime_meridian != 0.0 {
-        return Err("a geographic CRS on a meridian other than Greenwich".to_string());
+        return Err(OTHER_MERIDIAN.to_string());
     }
     let polar = term(&normalised, "+lat_0=")
         .and_then(|lat0| lat0.parse::<f64>().ok())
@@ -173,14 +173,22 @@ pub(super) fn from_reference(reference: &str) -> Result<ResolvedCrs, String> {
     }
     let crs = Crs::from_wkt(trimmed).map_err(|e| format!("unsupported CRS WKT: {e}"))?;
     let params = crs.projection.params();
-    // wbprojection reads the projection in metres, as its keys are written
-    // back, while the raster's coordinates are in the WKT's own unit.
-    let unit = nodes
-        .iter()
-        .rev()
-        .find(|node| node.keyword == "UNIT" || node.keyword == "LENGTHUNIT")
-        .and_then(|node| node.numbers().first().copied());
-    if !matches!(params.kind, ProjectionKind::Geographic) && unit.is_some_and(|unit| unit != 1.0) {
+    // wbprojection reads the projection in metres from Greenwich, as its keys
+    // are written back (a projected CRS's meridian goes into its central
+    // meridian), while the raster's coordinates keep the WKT's own unit and a
+    // geographic CRS's longitudes their own meridian.
+    // The last unit node is the CRS's own (the geographic base's comes first).
+    let number = |keywords: [&str; 2]| {
+        let node = nodes
+            .iter()
+            .rfind(|node| keywords.contains(&node.keyword))?;
+        node.numbers().first().copied()
+    };
+    let geographic = matches!(params.kind, ProjectionKind::Geographic);
+    if geographic && number(["PRIMEM", "PRIMEMERIDIAN"]).is_some_and(|pm| pm != 0.0) {
+        return Err(not_supported(OTHER_MERIDIAN));
+    }
+    if !geographic && number(["UNIT", "LENGTHUNIT"]).is_some_and(|unit| unit != 1.0) {
         return Err(not_supported(OTHER_UNIT));
     }
     user_defined(
@@ -241,6 +249,10 @@ pub(super) fn from_proj4(definition: &str) -> Result<ResolvedCrs, String> {
 /// Why a CRS with no registry code in another linear unit is refused: its
 /// keys are written back in metres.
 const OTHER_UNIT: &str = "a linear unit other than the metre";
+
+/// Why a geographic CRS on another meridian is refused: proj4rs ignores its
+/// `+pm`, and keys spell a CRS with no code from Greenwich.
+const OTHER_MERIDIAN: &str = "a prime meridian other than Greenwich";
 
 fn not_supported(reason: &str) -> String {
     format!("the raster's coordinate system is not supported: {reason}")
@@ -683,6 +695,9 @@ fn user_defined_projected(keys: &GeoKeyDirectory) -> Result<ResolvedCrs, String>
 /// geographic code's own, or the keys' ellipsoid, shifted only by a
 /// `GeogTOWGS84GeoKey`. An unknown datum shifts nothing, as GDAL treats it.
 fn datum_of(keys: &GeoKeyDirectory) -> Result<(Datum, Option<Vec<f64>>), String> {
+    if short(keys, key::GeogPrimeMeridianGeoKey).is_some_and(|meridian| meridian != 8901) {
+        return Err(not_supported(OTHER_MERIDIAN));
+    }
     let written = match keys.get(GEOG_TOWGS84) {
         Some(GeoKeyValue::Doubles(values)) if values.iter().any(|value| *value != 0.0) => {
             Some(values.clone())
@@ -1334,6 +1349,38 @@ mod tests {
                     "EPSG:{code} at {lon} {lat}: {px} {py}, PROJ {x} {y}"
                 );
             }
+        }
+    }
+
+    /// The engine refuses a registry geographic CRS on another meridian
+    /// (EPSG:4807, NTF Paris), and so a code-less one, from WKT or keys,
+    /// rather than reading its Paris longitudes as Greenwich's (170 km west).
+    #[test]
+    fn a_crs_naming_no_code_on_another_meridian_is_refused() {
+        let wkt = r#"GEOGCS["NTF (Paris)",DATUM["Nouvelle_Triangulation_Francaise_Paris",SPHEROID["Clarke 1880 (IGN)",6378249.2,293.4660212936269]],PRIMEM["Paris",2.33722917],UNIT["degree",0.0174532925199433]]"#;
+        let keys = GeoKeyDirectory {
+            version: 1,
+            key_revision: 1,
+            minor_revision: 0,
+            entries: vec![
+                short_entry(key::GTModelTypeGeoKey, 2),
+                short_entry(key::GeographicTypeGeoKey, USER_DEFINED),
+                short_entry(key::GeogGeodeticDatumGeoKey, USER_DEFINED),
+                short_entry(key::GeogPrimeMeridianGeoKey, 8903),
+                short_entry(key::GeogAngularUnitsGeoKey, 9102),
+                double_entry(key::GeogSemiMajorAxisGeoKey, 6_378_249.2),
+                double_entry(key::GeogInvFlatteningGeoKey, 293.466_021_293_626_9),
+            ],
+        };
+        let from_wkt = from_reference(wkt).map(|crs| crs.definition);
+        let from_keys = from_geokeys(&keys).map(|crs| crs.map(|crs| crs.definition));
+        for refused in [from_wkt, from_keys.map(Option::unwrap_or_default)] {
+            assert!(
+                refused
+                    .as_ref()
+                    .is_err_and(|e| e.contains("a prime meridian other than Greenwich")),
+                "{refused:?}"
+            );
         }
     }
 
