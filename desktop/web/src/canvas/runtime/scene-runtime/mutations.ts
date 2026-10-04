@@ -36,6 +36,7 @@ import {
   createClipboardArrangementTemplate,
   createClipboardPayload,
   reprojectClipboardPayload,
+  resolveSelectedEntitySets,
   type SceneClipboardPayload,
 } from './clipboard'
 import {
@@ -1000,53 +1001,6 @@ function getEffectivelyLockedGroupMemberKeys(persisted: ScenePersistedState): Se
     for (const member of group.members) memberKeys.add(sceneObjectGroupMemberKey(member))
   }
   return memberKeys
-}
-
-function resolveSelectedEntitySets(
-  persisted: ScenePersistedState,
-  selected: readonly SceneSelectionTarget[],
-): {
-  plantIds: Set<string>
-  zoneIds: Set<string>
-  annotationIds: Set<string>
-  measurementGuideIds: Set<string>
-  groupIds: Set<string>
-} {
-  const plantIds = new Set<string>()
-  const zoneIds = new Set<string>()
-  const annotationIds = new Set<string>()
-  const measurementGuideIds = new Set<string>()
-  const groupIds = new Set<string>()
-
-  for (const target of selected) {
-    if (target.kind === 'plant') {
-      plantIds.add(target.id)
-      continue
-    }
-    if (target.kind === 'zone') {
-      zoneIds.add(target.id)
-      continue
-    }
-    if (target.kind === 'annotation') {
-      annotationIds.add(target.id)
-      continue
-    }
-    if (target.kind === 'measurement-guide') {
-      measurementGuideIds.add(target.id)
-      continue
-    }
-
-    groupIds.add(target.id)
-    const group = persisted.groups.find((entry) => entry.id === target.id)
-    if (!group) continue
-    for (const member of resolveSceneObjectGroupMembers(persisted, group)) {
-      if (member.kind === 'plant') plantIds.add(member.id)
-      else if (member.kind === 'zone') zoneIds.add(member.id)
-      else annotationIds.add(member.id)
-    }
-  }
-
-  return { plantIds, zoneIds, annotationIds, measurementGuideIds, groupIds }
 }
 
 function reorderSceneEntities<T>(
