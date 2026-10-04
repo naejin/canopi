@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { signal } from '@preact/signals'
 import { googleMapsApiKey, satelliteSource } from '../app/settings/state'
 import { MAPLIBRE_SATELLITE_LAYER_ID, MAPLIBRE_SATELLITE_SOURCE_ID } from '../maplibre/config'
+import { BasemapTileAuth } from '../maplibre/basemap-tile-auth'
 import { mountMapBackground, type MapBackgroundPresentation } from '../maplibre/map-background'
 import type { VectorStyleDocument } from '../maplibre/openfreemap-basemap'
 import { GOOGLE_KEYLESS_TILES } from '../maplibre/satellite-provider'
@@ -88,7 +89,7 @@ function mount(map = createMap()) {
   const background = mountMapBackground({
     map: map as never,
     maplibre: { AttributionControl: FakeControl },
-    tileAuth: null,
+    tileAuth: new BasemapTileAuth(),
     lifetime: { on: () => {}, off: () => {} },
     loadStyle: async () => STYLE,
   })
@@ -249,7 +250,7 @@ describe('map background band', () => {
     const background = mountMapBackground({
       map: createMap() as never,
       maplibre: { AttributionControl: FakeControl },
-      tileAuth: null,
+      tileAuth: new BasemapTileAuth(),
       lifetime: { on: () => {}, off: () => {} },
       loadStyle: async () => { throw new Error('Basemap style request failed (503).') },
       onBasemapStatus: (status) => statuses.push(status),

@@ -44,7 +44,7 @@ interface MapStyleReadiness {
  * serving a live map: `update()` re-reads it, and no caller has to capture the
  * key at map-creation time and go stale.
  */
-export function createSatelliteImagery(tileAuth: BasemapTileAuth | null): SatelliteImageryProvider {
+export function createSatelliteImagery(tileAuth: BasemapTileAuth): SatelliteImageryProvider {
   return new SatelliteImageryProvider(
     createBrowserSatelliteHttp(),
     () => ({
