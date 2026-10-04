@@ -10,31 +10,31 @@ function command(type: string): SceneCommand {
 describe('Scene history persistence checkpoints', () => {
   it('acknowledges the exact captured state and becomes clean again only on undo to it', () => {
     const history = new SceneHistory()
-    history.record(command('first'))
+    history.record(command('first'), {})
     const checkpoint = history.captureCheckpoint()
-    history.record(command('second'))
+    history.record(command('second'), {})
 
     expect(history.acknowledgeSaved(checkpoint)).toBe('applied')
     expect(history.isClean).toBe(false)
 
-    history.undo(() => {})
+    history.undo(() => {}, {})
     expect(history.isClean).toBe(true)
 
-    history.redo(() => {})
+    history.redo(() => {}, {})
     expect(history.isClean).toBe(false)
 
-    history.undo(() => {})
+    history.undo(() => {}, {})
     expect(history.isClean).toBe(true)
   })
 
   it('does not alias an equal-depth branch to the saved state', () => {
     const history = new SceneHistory()
-    history.record(command('saved-branch'))
+    history.record(command('saved-branch'), {})
     const checkpoint = history.captureCheckpoint()
     expect(history.acknowledgeSaved(checkpoint)).toBe('applied')
 
-    history.undo(() => {})
-    history.record(command('divergent-branch'))
+    history.undo(() => {}, {})
+    history.record(command('divergent-branch'), {})
 
     expect(history.isClean).toBe(false)
   })
@@ -68,7 +68,7 @@ describe('Scene history persistence checkpoints', () => {
       },
     })
     const older = history.captureCheckpoint()
-    history.record(command('newer'))
+    history.record(command('newer'), {})
     const newer = history.captureCheckpoint()
 
     throwNextPublication = true
@@ -81,16 +81,16 @@ describe('Scene history persistence checkpoints', () => {
 
   it('preserves a reachable saved identity across history truncation', () => {
     const history = new SceneHistory()
-    history.record(command('saved'))
+    history.record(command('saved'), {})
     expect(history.acknowledgeSaved(history.captureCheckpoint())).toBe('applied')
 
     for (let index = 0; index < 500; index += 1) {
-      history.record(command(`later-${index}`))
+      history.record(command(`later-${index}`), {})
     }
     expect(history.isClean).toBe(false)
 
     for (let index = 0; index < 500; index += 1) {
-      expect(history.undo(() => {})).toBe(true)
+      expect(history.undo(() => {}, {})).toBe(true)
     }
     expect(history.isClean).toBe(true)
   })

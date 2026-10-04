@@ -66,28 +66,30 @@ describe('dirty state after open/new', () => {
 
 describe('canvas edits', () => {
   it('single edit makes dirty', () => {
-    history.record(noop())
+    history.record(noop(), {})
     expect(designDirty.value).toBe(true)
   })
 
   it('history record/undo/redo reconcile canvas cleanliness', () => {
-    history.record(noop())
-    history.undo(applyHistoryCommand)
-    history.redo(applyHistoryCommand)
+    history.record(noop(), {})
+    history.undo(applyHistoryCommand, {})
+    history.redo(applyHistoryCommand, {})
 
     expect(canvasClean.value).toBe(false)
   })
 
   it('does not move history stacks when command replay fails', () => {
-    history.record(noop())
+    history.record(noop(), {})
+    // The retry finishes the same replay operation.
+    const replay = {}
 
     expect(() => history.undo(() => {
       throw new Error('replay failed')
-    })).toThrow('replay failed')
+    }, replay)).toThrow('replay failed')
     expect(history.canUndo.value).toBe(true)
     expect(history.canRedo.value).toBe(false)
 
-    expect(history.undo(applyHistoryCommand)).toBe(true)
+    expect(history.undo(applyHistoryCommand, replay)).toBe(true)
     expect(history.canUndo.value).toBe(false)
     expect(history.canRedo.value).toBe(true)
   })
@@ -99,13 +101,13 @@ describe('canvas edits', () => {
       after: {},
     }
 
-    history.record(cmd)
+    history.record(cmd, {})
 
     expect(designDirty.value).toBe(true)
   })
 
   it('save clears dirty', () => {
-    history.record(noop())
+    history.record(noop(), {})
     expect(designDirty.value).toBe(true)
     acknowledgeCurrentScene()
     markSaved()
@@ -115,9 +117,9 @@ describe('canvas edits', () => {
   it('undo back to saved state clears dirty', () => {
     acknowledgeCurrentScene()
     markSaved()
-    history.record(noop())
+    history.record(noop(), {})
     expect(designDirty.value).toBe(true)
-    history.undo(applyHistoryCommand)
+    history.undo(applyHistoryCommand, {})
     // Stack is back to saved position — canvas is clean
     expect(designDirty.value).toBe(false)
   })
@@ -125,10 +127,10 @@ describe('canvas edits', () => {
   it('redo after undo makes dirty again', () => {
     acknowledgeCurrentScene()
     markSaved()
-    history.record(noop())
-    history.undo(applyHistoryCommand)
+    history.record(noop(), {})
+    history.undo(applyHistoryCommand, {})
     expect(designDirty.value).toBe(false)
-    history.redo(applyHistoryCommand)
+    history.redo(applyHistoryCommand, {})
     expect(designDirty.value).toBe(true)
   })
 
@@ -138,7 +140,7 @@ describe('canvas edits', () => {
 
     // Execute 501 commands — stack caps at 500, saved position shifts
     for (let i = 0; i < 501; i++) {
-      history.record(noop())
+      history.record(noop(), {})
     }
 
     expect(designDirty.value).toBe(true)
@@ -147,23 +149,23 @@ describe('canvas edits', () => {
     acknowledgeCurrentScene()
     markSaved()
     expect(designDirty.value).toBe(false)
-    history.record(noop())
+    history.record(noop(), {})
     expect(designDirty.value).toBe(true)
   })
 
   it('save at cap boundary then undo-to-saved works', () => {
     // Fill stack to cap
     for (let i = 0; i < 500; i++) {
-      history.record(noop())
+      history.record(noop(), {})
     }
     acknowledgeCurrentScene()
     markSaved()
     expect(designDirty.value).toBe(false)
 
     // One more edit, then undo — back to saved
-    history.record(noop())
+    history.record(noop(), {})
     expect(designDirty.value).toBe(true)
-    history.undo(applyHistoryCommand)
+    history.undo(applyHistoryCommand, {})
     expect(designDirty.value).toBe(false)
   })
 
@@ -197,8 +199,8 @@ describe('non-canvas edits (timeline/budget/consortium)', () => {
     designSessionFixture.nonCanvasRevision = nonCanvasRevision.value + 1
 
     // Canvas edit + undo (returns to saved canvas state)
-    history.record(noop())
-    history.undo(applyHistoryCommand)
+    history.record(noop(), {})
+    history.undo(applyHistoryCommand, {})
 
     // Still dirty because non-canvas edit remains unsaved
     expect(designDirty.value).toBe(true)
@@ -207,7 +209,7 @@ describe('non-canvas edits (timeline/budget/consortium)', () => {
 
 describe('mixed edit sources', () => {
   it('save clears both canvas and non-canvas dirty', () => {
-    history.record(noop())
+    history.record(noop(), {})
     designSessionFixture.nonCanvasRevision = nonCanvasRevision.value + 1
     expect(designDirty.value).toBe(true)
     acknowledgeCurrentScene()
@@ -216,7 +218,7 @@ describe('mixed edit sources', () => {
   })
 
   it('resetDirtyBaselines clears everything', () => {
-    history.record(noop())
+    history.record(noop(), {})
     designSessionFixture.nonCanvasRevision = nonCanvasRevision.value + 1
     expect(designDirty.value).toBe(true)
     resetDirtyBaselines()
