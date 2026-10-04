@@ -159,7 +159,8 @@ pub(super) fn from_reference(reference: &str) -> Result<ResolvedCrs, String> {
     // A WKT names its own code at the top. A nested node's code is a
     // datum's, a unit's or a parameter's, and identification by parameters
     // misreads hundreds of codes, so a WKT naming no code the registry has is
-    // read as it is spelled.
+    // read as it is spelled, or as the code it is identified as only when
+    // that code places as it does (`identified`).
     let stored = |resolved: ResolvedCrs| ResolvedCrs {
         wkt: trimmed.to_string(),
         ..resolved
@@ -171,8 +172,8 @@ pub(super) fn from_reference(reference: &str) -> Result<ResolvedCrs, String> {
     if let Some(definition) = proj4_extension(&nodes) {
         return from_proj4(definition).map(stored);
     }
-    let crs = Crs::from_wkt(&without_codes(trimmed, &nodes))
-        .map_err(|e| format!("unsupported CRS WKT: {e}"))?;
+    let codeless = without_codes(trimmed, &nodes);
+    let crs = Crs::from_wkt(&codeless).map_err(|e| format!("unsupported CRS WKT: {e}"))?;
     let params = crs.projection.params();
     // wbprojection reads the projection in metres from Greenwich, as its keys
     // are written back (a projected CRS's meridian goes into its central
@@ -193,7 +194,44 @@ pub(super) fn from_reference(reference: &str) -> Result<ResolvedCrs, String> {
         Some(shift) => Some(shift),
         None => geographic_shift(&nodes)?,
     };
+    if shift.is_none()
+        && let Some(registry) = identified(&codeless, params)
+    {
+        return Ok(registry);
+    }
     user_defined(params.clone(), shift, crs.name.clone(), trimmed.to_string())
+}
+
+/// The registry code a WKT naming no code and no shift is identified as,
+/// when that code's projection and ellipsoid are the WKT's: an ESRI .prj
+/// names its datum only by name (D_OSGB_1936), so the code gives the shift.
+/// Identification alone misreads codes (an ESRI Lambert-93 comes back as
+/// EPSG:2918), so the WKT with the code's shift must place as the code does
+/// at points 50 km around its false origin.
+fn identified(codeless: &str, params: &ProjectionParams) -> Option<ResolvedCrs> {
+    let registry = from_epsg(wbprojection::identify_epsg_from_wkt(codeless)?).ok()?;
+    let spelled = user_defined(
+        params.clone(),
+        datum_shift(&registry.definition),
+        String::new(),
+        String::new(),
+    )
+    .ok()?;
+    let (step, x0, y0) = if spelled.is_projected() {
+        (50_000.0, params.false_easting, params.false_northing)
+    } else {
+        (0.5, params.lon0, params.lat0)
+    };
+    let tolerance = step * 2e-7;
+    [(-step, -step), (-step, step), (step, -step), (step, step)]
+        .into_iter()
+        .all(|(dx, dy)| {
+            let (x, y) = (x0 + dx, y0 + dy);
+            spelled
+                .transform_to(x, y, &registry)
+                .is_ok_and(|(rx, ry)| (rx - x).abs() < tolerance && (ry - y).abs() < tolerance)
+        })
+        .then_some(registry)
 }
 
 fn definition_of(code: u32) -> Option<crs_definitions::Def> {
@@ -1482,10 +1520,10 @@ mod tests {
         assert_eq!(refused, Err("EPSG:4267 is not supported".to_string()));
     }
 
-    /// A projected WKT naming no code of its own is read as it is spelled,
-    /// never as the geographic CRS nested in it: with UTM 31N's root and
-    /// unit codes removed, its last code is its GEOGCS's (4326), which
-    /// wbprojection would take as the whole CRS.
+    /// A projected WKT naming no code of its own is read as it is spelled
+    /// (here as the code it places as), never as the geographic CRS nested
+    /// in it: with UTM 31N's root and unit codes removed, its last code is
+    /// its GEOGCS's (4326), which wbprojection would take as the whole CRS.
     #[test]
     fn a_wkt_naming_no_code_is_not_read_as_its_geographic_crs() {
         let wkt = crs_definitions::from_code(32631)
@@ -1495,7 +1533,7 @@ mod tests {
             .replace(r#",AUTHORITY["EPSG","9001"]"#, "");
         assert_eq!(own_code(&wkt_nodes(&wkt)), None);
         let custom = from_reference(&wkt).unwrap();
-        assert_eq!(custom.epsg, None);
+        assert_eq!(custom.epsg, Some(32631));
         assert!(custom.is_projected(), "{}", custom.definition);
         let wgs84 = from_epsg(4326).unwrap();
         let utm = from_epsg(32631).unwrap();

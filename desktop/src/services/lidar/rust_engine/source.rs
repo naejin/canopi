@@ -338,6 +338,54 @@ mod tests {
         }
     }
 
+    /// ESRI .prj files name their datum only by name and carry no TOWGS84.
+    /// A grid whose .prj spells a registry code's projection and ellipsoid
+    /// is placed where PROJ places that code, with its datum shift (British
+    /// National Grid, Belgian Lambert 72); wbraster's identification alone is
+    /// not trusted, so Lambert-93, which it reads as EPSG:2918, still lands
+    /// where Lambert-93 does.
+    #[test]
+    fn an_esri_prj_naming_a_datum_only_by_name_is_placed_with_its_shift() {
+        let prjs = [
+            (
+                27700,
+                r#"PROJCS["British_National_Grid",GEOGCS["GCS_OSGB_1936",DATUM["D_OSGB_1936",SPHEROID["Airy_1830",6377563.396,299.3249646]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],PARAMETER["False_Easting",400000.0],PARAMETER["False_Northing",-100000.0],PARAMETER["Central_Meridian",-2.0],PARAMETER["Scale_Factor",0.9996012717],PARAMETER["Latitude_Of_Origin",49.0],UNIT["Meter",1.0]]"#,
+            ),
+            (
+                31370,
+                r#"PROJCS["Belge_Lambert_1972",GEOGCS["GCS_Belge_1972",DATUM["D_Belge_1972",SPHEROID["International_1924",6378388.0,297.0]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Lambert_Conformal_Conic"],PARAMETER["False_Easting",150000.013],PARAMETER["False_Northing",5400088.438],PARAMETER["Central_Meridian",4.367486666666666],PARAMETER["Standard_Parallel_1",49.8333339],PARAMETER["Standard_Parallel_2",51.16666723333333],PARAMETER["Latitude_Of_Origin",90.0],UNIT["Meter",1.0]]"#,
+            ),
+            (
+                2154,
+                r#"PROJCS["RGF_1993_Lambert_93",GEOGCS["GCS_RGF_1993",DATUM["D_RGF_1993",SPHEROID["GRS_1980",6378137.0,298.257222101]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Lambert_Conformal_Conic"],PARAMETER["False_Easting",700000.0],PARAMETER["False_Northing",6600000.0],PARAMETER["Central_Meridian",3.0],PARAMETER["Standard_Parallel_1",44.0],PARAMETER["Standard_Parallel_2",49.0],PARAMETER["Latitude_Of_Origin",46.5],UNIT["Meter",1.0]]"#,
+            ),
+        ];
+        let dir = crate::test_scratch::TestScratch::new("rust-engine-source-esri-datum");
+        let wgs84 = crs::from_epsg(4326).unwrap();
+        for (code, prj) in prjs {
+            let asc = dir.join(format!("grid-{code}.asc"));
+            std::fs::write(
+                &asc,
+                "ncols 2\nnrows 2\nxllcorner 150000\nyllcorner 170000\ncellsize 10\nNODATA_value -1\n1 2\n3 4\n",
+            )
+            .unwrap();
+            std::fs::write(dir.join(format!("grid-{code}.prj")), prj).unwrap();
+            let read = read_other(&asc).unwrap();
+            let (_, resolved) = probe_other(&asc, &read).unwrap();
+            let resolved = resolved.unwrap();
+            for &(_, lon, lat, x, y) in super::super::crs_reference_points::REFERENCE_POINTS
+                .iter()
+                .filter(|row| row.0 == code)
+            {
+                let (px, py) = wgs84.transform_to(lon, lat, &resolved).unwrap();
+                assert!(
+                    (px - x).abs() < 0.01 && (py - y).abs() < 0.01,
+                    "EPSG:{code} at {lon} {lat}: {px} {py}, PROJ {x} {y}"
+                );
+            }
+        }
+    }
+
     /// An Esri ASCII grid whose .prj names no code of its own: wbraster
     /// identifies it by its last nested code (its unit's, 9003), so the
     /// probe reads the WKT itself and refuses the feet grid by name.
