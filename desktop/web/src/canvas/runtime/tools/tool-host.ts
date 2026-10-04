@@ -1044,8 +1044,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     return deps.chrome.isTextEntryOpen() ? textEntryMode : null
   }
 
-  /** Entering overview drops what today's setOverviewMode(true) dropped: an in-place editor ('edit'), the menu and every
-   *  transient. A new note's entry ('create') stays, as today's new-note field did: the next press commits it. */
+  /** Entering overview drops an in-place editor ('edit'), the menu and every transient. A new note's entry ('create') stays:
+   *  the next press commits it. */
   function enterOverview(): void {
     lastHover = null
     setDropPreview(null)

@@ -260,6 +260,6 @@ export interface ToolHost {
 export interface PointerWorld { readonly world: WorldPoint; readonly screen: ScreenPoint }
 // Today's SceneInteractionSession members: setTool → ToolHost.setTool; plantRowSpacing (CanvasToolCommandSurface) → ToolHost.command
 // with the spacing kinds; the four transient-history members → transientHistory; refreshMeasurements → ToolHost.sceneChanged();
-// setOverviewMode → through 0B a mode override the session feeds to the recogniser's configure and to the host's frames;
+// the view's mode reaches the host on its own 'tools' frames and the recogniser through the session's configure;
 // prepareForDocumentReplacement, refreshTranslations and dispose → the same names. interaction-session.ts keeps the old session
 // interface over these, and bridges the plant and saved-stamp read models to setTool and sourceChanged.

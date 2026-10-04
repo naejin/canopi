@@ -245,7 +245,6 @@ export class SceneCanvasRuntime {
     })
     const interaction = this._interaction
     bindQuerySurfacePointerWorld(this._querySurface, (listener) => interaction.subscribePointerWorld(listener))
-    this._interaction.setOverviewMode(this._construction.frames.viewFrame.peek().mode === 'overview')
     await this._rendering.renderScene()
   }
 
@@ -418,7 +417,6 @@ export class SceneCanvasRuntime {
         const mode = this._construction.frames.viewFrame.peek().mode
         if (mode !== this._cameraMode) {
           this._cameraMode = mode
-          this._interaction?.setOverviewMode(mode === 'overview')
           this._invalidate('scene')
           return
         }

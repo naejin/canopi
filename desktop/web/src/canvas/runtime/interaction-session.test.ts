@@ -5,6 +5,7 @@ import {
   createInteractionDeps,
   makePlant,
   plantTarget,
+  enterOverview,
 } from '../../__tests__/support/canvas-interaction-setup'
 import {
   createSceneInteractionEventHarness,
@@ -1165,12 +1166,12 @@ describe('releases the tool did not hear (today\'s pointerup cleanup)', () => {
     expect(navigates()).toBe(0)
 
     // Overview swallows a release with no session instead.
-    session.setOverviewMode(true)
+    const leaveOverview = enterOverview(testView)
     const before = rectangle.calls.length
     events.pointerDown({ x: 50, y: 50 }, { button: 2 })
     events.pointerUp({ x: 50, y: 50 }, { button: 2 })
     expect(rectangle.calls.slice(before)).toEqual([])
-    session.setOverviewMode(false)
+    leaveOverview()
 
     // A press and release beside the map are the page's (phase F: no window listener without a press on the map).
     const panel = document.createElement('div')

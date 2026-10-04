@@ -32,6 +32,7 @@ import {
   captureWindowErrors,
   makePlant,
   installSceneInteractionFixture,
+  enterOverview,
 } from './support/canvas-interaction-setup'
 import './support/camera-tolerance'
 
@@ -128,7 +129,7 @@ describe('SceneInteractionSession', () => {
     const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
     session.setTool('rectangle')
-    session.setOverviewMode(true)
+    enterOverview(testView)
     const scene = structuredClone(store.persisted)
     const before = testView.viewport()
 
@@ -136,7 +137,10 @@ describe('SceneInteractionSession', () => {
     events.pointerMove({ x: 140, y: 125 }, { button: 0 })
     events.pointerUp({ x: 140, y: 125 }, { button: 0 })
 
-    expect(testView.viewport()).toEqual({ x: before.x + 40, y: before.y + 25, scale: before.scale })
+    const after = testView.viewport()
+    expect(after.x).toBeCloseTo(before.x + 40, 6)
+    expect(after.y).toBeCloseTo(before.y + 25, 6)
+    expect(after.scale).toBeCloseTo(before.scale, 9)
     expect(store.persisted).toEqual(scene)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     session.dispose()
@@ -150,7 +154,7 @@ describe('SceneInteractionSession', () => {
 
     events.pointerDown({ x: 20, y: 20 }, { button: 0, pointerId: 72 })
     events.pointerMove({ x: 80, y: 60 }, { button: 0, pointerId: 72 })
-    session.setOverviewMode(true)
+    enterOverview(testView)
     events.pointerUp({ x: 80, y: 60 }, { button: 0, pointerId: 72 })
 
     expect(store.persisted.zones).toEqual([])

@@ -2,9 +2,10 @@
 //
 // Owns the canvas's interaction session (spec §1.2–1.4, ADRs 0017 and 0018): it composes DomInputSource → normalise →
 // recognise → InputRouter → ToolHost, with the keyboard port the key router reaches (spec §1.6), and prepares the map
-// host as a keyboard stop. Every tool and every drop runs on the host (spec §1.4, "Drops"). The session keeps today's
-// SceneInteractionSession members: setOverviewMode is a mode override fed to the recogniser's configure and the host's
-// frames, refreshMeasurements reaches ToolHost.sceneChanged(). It builds the host's chrome (chrome/: the handle layer,
+// host as a keyboard stop. Every tool and every drop runs on the host (spec §1.4, "Drops"). The session hears the view's mode on
+// its own 'tools' frame listener, registered after the host's so the host meets overview first: entering or leaving overview
+// reconfigures the recogniser, and entering it releases Space and closes the menu. refreshMeasurements reaches
+// ToolHost.sceneChanged(). It builds the host's chrome (chrome/: the handle layer,
 // the text entry, the plant tooltip and the Unlock affordance, whose Unlock it runs), bridges the plant and saved-stamp
 // read models to the armed tool, reads the snapping settings per point, calls ToolHost.rawPress for every raw press on
 // the map host, ToolHost.released() after a release that ended no press of the tool's and ToolHost.interrupted() after a
@@ -13,7 +14,7 @@
 // beside the map: the session finds the pressed ruler's overlay (chrome/rulers.ts) and runs today's ruler drag under
 // any tool (its cursor, its end on a blur, its guide at the release), whatever the host does with the input.
 
-import { computed, effect, signal, type ReadonlySignal } from '@preact/signals'
+import { effect, signal } from '@preact/signals'
 import { readPlantStampSource, clearPlantStampSource } from '../plant-stamp-source'
 import {
   clearSavedObjectStampDragSource,
@@ -147,7 +148,6 @@ export interface SceneInteractionSession {
   setTool(name: string): void
   /** Plant a row's spacing field in the tool card; does nothing under another tool. */
   readonly plantRowSpacing: CanvasPlantRowSpacingField
-  setOverviewMode(enabled: boolean): void
   prepareForDocumentReplacement(): void
   refreshMeasurements(): void
   refreshTranslations(): void
@@ -188,8 +188,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   private readonly _config: RecogniserConfig
   private readonly _tool = signal<ToolId>(getCanvasTool() as ToolId)
-  private readonly _overview = signal(false)
-  private readonly _frames: ModeOverridingFrames
+  private readonly _frames: ViewFrameSource
+  /** The view's mode as the session last heard it on a 'tools' frame: what the recogniser is configured with. */
+  private _mode: ViewFrame['mode']
+  private readonly _stopHearingMode: () => void
   private readonly _hostKeys: InteractionHostController
   private readonly _focus: CanvasFocusPort
   private readonly _handleLayer: HandleLayer
@@ -234,7 +236,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._config = { platform, bindings: CURRENT_BINDINGS, thresholds: DEFAULT_THRESHOLDS }
     this._pointingDevice = this._readPointingDevice()
     const navigation = _deps.viewNavigation
-    this._frames = overrideMode(_deps.frames, this._overview)
+    this._frames = _deps.frames
+    this._mode = _deps.frames.viewFrame.peek().mode
     this._renderer = _deps.renderer
     this._storyPresented = isStoryPresented()
     const container = _deps.container
@@ -356,7 +359,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         frames: this._frames,
         session: {
           pointerSessionLive: () => this._pointerSessionLive(),
-          overview: () => this._overview.peek(),
+          overview: () => this._mode === 'overview',
           spaceHeld: () => this._spaceHeld,
           keyState: (state) => this._setKeyState(state.space, state.mods),
           escapeGesture: () => this._escapeGesture(),
@@ -381,6 +384,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         timers,
         listensToRulers: true,
       })
+      // After the host's own listener, so the host hears each mode change first.
+      this._stopHearingMode = own(this._frames.onViewFrame('tools', (frame) => this._modeHeard(frame.mode)), (stop) => stop())
       this._stopWatchingSources = own(this._watchToolSources(), (stop) => stop())
       this._storyObserver = own(this._observeStoryPresentation(), (observer) => observer?.disconnect())
       this.setTool(this._tool.peek())
@@ -430,17 +435,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (previous !== id) clearToolSource(previous)
     // The live presses belong to the tool left: they end on the host's path, which releases their capture.
     this._configure()
-  }
-
-  setOverviewMode(enabled: boolean): void {
-    if (this._disposed || this._overview.peek() === enabled) return
-    this._overview.value = enabled
-    // The host hears the mode on a 'tools' frame (today's overview transition for a registered tool).
-    this._frames.modeChanged()
-    this._configure()
-    if (!enabled) return
-    this._releaseSpace()
-    this._menu.close()
   }
 
   prepareForDocumentReplacement(): void {
@@ -511,6 +505,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     attempt(() => this._detachSource())
     attempt(() => this._endRulerPress())
     attempt(() => this._storyObserver?.disconnect())
+    attempt(() => this._stopHearingMode())
     attempt(() => this._stopWatchingSources())
     attempt(() => clearToolSource(tool))
     attempt(() => this._cancelDropFocus())
@@ -637,7 +632,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _releasesOutsideTool(input: RawInput, gestures: readonly Gesture[]): boolean {
     if (gestures.some(endsPointerNavigation)) return input.kind === 'up' || (input.kind === 'cancel' && input.id !== 'all')
     if (input.kind !== 'up' || gestures.length > 0) return false
-    if (this._recogniser.sessions.size > 0 || this._overview.peek()) return false
+    if (this._recogniser.sessions.size > 0 || this._mode === 'overview') return false
     return !isOwnedOverlay(input.target)
   }
 
@@ -752,13 +747,22 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._feed(this._configureInput())
   }
 
+  private _modeHeard(mode: ViewFrame['mode']): void {
+    if (this._disposed || mode === this._mode) return
+    this._mode = mode
+    this._configure()
+    if (mode !== 'overview') return
+    this._releaseSpace()
+    this._menu.close()
+  }
+
   private _configureInput(): RawInput {
     return {
       kind: 'configure',
       t: Date.now(),
       context: {
         tool: this._tool.peek(),
-        mode: this._overview.peek() ? 'overview' : 'site',
+        mode: this._mode,
         pointingDevice: this._pointingDevice,
         dragSlopPx: this._toolHost.activeToolDragSlopPx() ?? undefined,
       },
@@ -816,7 +820,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._feed({ kind: 'key-state', t: Date.now(), space, mods })
     if (space) {
       // Today's grab: always in overview; otherwise not during a press, nor with the Pan tool's own grab.
-      if (this._overview.peek() || (!this._toolHost.hasLiveGesture() && this._tool.peek() !== 'hand')) {
+      if (this._mode === 'overview' || (!this._toolHost.hasLiveGesture() && this._tool.peek() !== 'hand')) {
         this._setNavigationCursor(this._panning ? 'grabbing' : 'grab')
       }
     } else if (!this._panning) {
@@ -1024,39 +1028,6 @@ function prepareInteractionHost(
     throw error
   }
   return host
-}
-
-interface ModeOverridingFrames extends ViewFrameSource {
-  /** The override changed: the 'tools' listeners hear the current frame at once. */
-  modeChanged(): void
-}
-
-/** The view's frames with the session's mode (today's setOverviewMode), which the host reads through 0B. */
-function overrideMode(frames: ViewFrameSource, overview: ReadonlySignal<boolean>): ModeOverridingFrames {
-  const withMode = (frame: ViewFrame, inOverview: boolean): ViewFrame => {
-    const mode = inOverview ? 'overview' : 'site'
-    return frame.mode === mode ? frame : { ...frame, mode }
-  }
-  const viewFrame = computed(() => withMode(frames.viewFrame.value, overview.value))
-  const settledViewFrame = computed(() => withMode(frames.settledViewFrame.value, overview.value))
-  const toolListeners = new Set<(frame: ViewFrame) => void>()
-  return {
-    viewFrame,
-    settledViewFrame,
-    onViewFrame(phase, listener) {
-      const stop = frames.onViewFrame(phase, (frame) => listener(withMode(frame, overview.peek())))
-      if (phase !== 'tools') return stop
-      toolListeners.add(listener)
-      return () => {
-        stop()
-        toolListeners.delete(listener)
-      }
-    },
-    modeChanged() {
-      const frame = viewFrame.peek()
-      for (const listener of [...toolListeners]) listener(frame)
-    },
-  }
 }
 
 /** The scene store the deps name, read live (a hydration replaces nothing here, but the fixture may swap stores). */
