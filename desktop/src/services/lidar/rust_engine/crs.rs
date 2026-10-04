@@ -203,12 +203,18 @@ pub(super) fn from_reference(reference: &str) -> Result<ResolvedCrs, String> {
 }
 
 /// The registry code a WKT naming no code and no shift is identified as,
-/// when that code's projection and ellipsoid are the WKT's: an ESRI .prj
-/// names its datum only by name (D_OSGB_1936), so the code gives the shift.
-/// Identification alone misreads codes (an ESRI Lambert-93 comes back as
-/// EPSG:2918), so the WKT with the code's shift must place as the code does.
+/// when that code's datum, projection and ellipsoid are the WKT's: an ESRI
+/// .prj names its datum only by name (D_OSGB_1936), so the code gives the
+/// shift. Identification alone misreads codes (an ESRI Lambert-93 comes back
+/// as EPSG:2918, Martinique 1938 / UTM 20N as PSAD56's), so the code's datum
+/// name must contain the WKT's (ESRI's D_Belge_1972 is EPSG's
+/// Reseau_National_Belge_1972) and the WKT with the code's shift must place
+/// as the code does.
 fn identified(codeless: &str, params: &ProjectionParams) -> Option<ResolvedCrs> {
     let registry = from_epsg(wbprojection::identify_epsg_from_wkt(codeless)?).ok()?;
+    if !datum_name(&registry.wkt)?.contains(&datum_name(codeless)?) {
+        return None;
+    }
     let spelled = user_defined(
         params.clone(),
         datum_shift(&registry.definition),
@@ -217,6 +223,22 @@ fn identified(codeless: &str, params: &ProjectionParams) -> Option<ResolvedCrs> 
     )
     .ok()?;
     places_as(&spelled, &registry, params).then_some(registry)
+}
+
+/// A WKT's datum name, lower case without its ESRI `D_` prefix and anything
+/// but letters and digits.
+fn datum_name(wkt: &str) -> Option<String> {
+    let node = wkt_nodes(wkt)
+        .into_iter()
+        .find(|node| matches!(node.keyword, "DATUM" | "GEODETICDATUM"))?;
+    let name = node.body.split(',').next()?.trim().trim_matches('"');
+    let name = name.strip_prefix("D_").unwrap_or(name);
+    Some(
+        name.chars()
+            .filter(char::is_ascii_alphanumeric)
+            .map(|c| c.to_ascii_lowercase())
+            .collect(),
+    )
 }
 
 /// Whether `a`, spelled by `params`, places points as `b` does: four points
@@ -1518,6 +1540,30 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A WKT naming no code and no shift, as an ESRI .prj is, is never taken
+    /// for a code on another datum that shares its ellipsoid and projection:
+    /// Martinique 1938 / UTM 20N (2973) is not PSAD56 / UTM 20N (24820),
+    /// whose shift lands it 766 m off, and RGR92 / UTM 40S (2975) is not
+    /// WGS 84 / UTM 40S. Each reference code with its codes and TOWGS84
+    /// removed comes back as that code or as no code.
+    #[test]
+    fn a_wkt_naming_no_code_is_never_taken_for_another_datum() {
+        let mut misread = Vec::new();
+        for &(code, ..) in REFERENCE_POINTS {
+            let mut wkt = without_authorities(crs_definitions::from_code(code as u16).unwrap().wkt);
+            if let Some(start) = wkt.find(",TOWGS84[") {
+                let end = start + wkt[start..].find(']').unwrap() + 1;
+                wkt.replace_range(start..end, "");
+            }
+            if let Ok(resolved) = from_reference(&wkt)
+                && resolved.epsg.is_some_and(|read| read != code)
+            {
+                misread.push(format!("EPSG:{code} read as {:?}", resolved.epsg));
+            }
+        }
+        assert!(misread.is_empty(), "{misread:?}");
     }
 
     /// A WKT naming no code on a registry geographic CRS the engine refuses
