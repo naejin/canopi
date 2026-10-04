@@ -59,8 +59,12 @@ export class SceneRuntimeRenderScheduler {
   /** Scene renders up to this epoch were started before the latest awaitPresentation; only a later one presents. */
   private _presentAfterEpoch = 0
   private readonly _presented = signal(true)
+  /** Nothing will draw an opened Design: the runtime has no renderer, or unmount released it and no mount has begun since. */
+  private _unmounted: boolean
 
-  constructor(private readonly _options: SceneRuntimeRenderSchedulerOptions) {}
+  constructor(private readonly _options: SceneRuntimeRenderSchedulerOptions) {
+    this._unmounted = _options.getRenderer() === null
+  }
 
   get container(): HTMLElement | null {
     return this._container
@@ -82,10 +86,12 @@ export class SceneRuntimeRenderScheduler {
     return this._presented
   }
 
-  /** A Design was opened: it is presented by the first scene render started from now on (the mount's, if none is mounted yet). */
+  /**
+   * A Design was opened: it is presented by the first scene render started from now on (the mount's, if none is mounted yet),
+   * or at once when nothing will draw it.
+   */
   awaitPresentation(): void {
-    // A runtime without a renderer never draws.
-    if (!this._options.getRenderer()) return
+    if (this._unmounted) return
     this._presentAfterEpoch = this._renderEpoch
     this._presented.value = false
   }
@@ -97,6 +103,7 @@ export class SceneRuntimeRenderScheduler {
       throw new Error('The Scene Canvas renderer is already mounted. Unmount it before mounting again.')
     }
     this._mounting = true
+    this._unmounted = false
     const mountEpoch = ++this._mountEpoch
     let renderer: SceneRenderer
     try {
@@ -191,6 +198,7 @@ export class SceneRuntimeRenderScheduler {
     const renderer = this._renderer
     this._renderer = null
     this._publishScenePending()
+    this._unmounted = true
     this._presented.value = true
     if (renderer) await disposeRenderer(renderer)
   }

@@ -170,6 +170,18 @@ describe('SceneRuntimeRenderScheduler', () => {
     expect(renderer.setView).not.toHaveBeenCalled()
   })
 
+  it('presents a Design opened while its renderer is unmounted at once: nothing will draw it until a remount', async () => {
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    const scheduler = createScheduler(definitionFor(createRenderer()))
+    await scheduler.initialize(document.createElement('div'))
+    await scheduler.unmount()
+
+    scheduler.awaitPresentation()
+
+    expect(scheduler.presented.value).toBe(true)
+  })
+
   it('does not draw a prepared scene after unmount overtakes its preparation', async () => {
     const preparation = deferred<{ publish(): ReturnType<typeof createTestSceneRendererSnapshot> }>()
     const renderer = createRenderer()
