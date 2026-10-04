@@ -255,11 +255,11 @@ describe('map background band', () => {
     })
     background.update(presentation())
     await settle()
-    expect(statuses).toEqual(['failed'])
+    expect(statuses).toEqual(['loading', 'failed'])
 
     background.update(presentation({ satelliteVisible: true }))
     await settle()
-    expect(statuses).toEqual(['failed', 'idle'])
+    expect(statuses).toEqual(['loading', 'failed', 'idle'])
     background.dispose()
   })
 
