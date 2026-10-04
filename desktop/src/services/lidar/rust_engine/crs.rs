@@ -279,10 +279,15 @@ fn definition_of(code: u32) -> Option<crs_definitions::Def> {
 /// tile lands 2,400 km away with its axes negated and swapped.
 const SOUTH_WEST_AXIS: [u32; 2] = [2065, 5513];
 
-/// Resolve a registry code.
+/// Resolve a registry code. One whose definition points its axes west or
+/// south is refused: the display renderer (proj4js in cog-tiler-wasm) draws
+/// every CRS east-north, so its tile would land in the opposite hemisphere.
 pub(super) fn from_epsg(code: u32) -> Result<ResolvedCrs, String> {
     let unsupported = || format!("EPSG:{code} is not supported");
     let def = definition_of(code).ok_or_else(unsupported)?;
+    if term(def.proj4, "+axis=").is_some_and(|axis| axis != "enu") {
+        return Err(unsupported());
+    }
     let axis = if SOUTH_WEST_AXIS.contains(&code) {
         " +axis=swu"
     } else {
@@ -1808,6 +1813,28 @@ mod tests {
             from_reference("EPSG:3068").unwrap_err(),
             "EPSG:3068 is not supported"
         );
+    }
+
+    /// The display renderer (cog-tiler-wasm through proj4js) draws every
+    /// CRS east-north, so a registry code whose axes point west and south
+    /// (the South African Lo grids 2046-2055 and 22275-22293, Schwarzeck
+    /// 29371-29385, S-JTSK/05 8352) would draw in the opposite hemisphere
+    /// from where import places it; such codes are refused by name. 5513 and
+    /// 2065 stay accepted until the user decides on them (U25 names them).
+    #[test]
+    fn registry_codes_whose_axes_point_west_or_south_are_refused() {
+        for code in [2046u32, 2055, 22275, 22293, 29371, 8352] {
+            assert_eq!(
+                from_epsg(code).unwrap_err(),
+                format!("EPSG:{code} is not supported")
+            );
+        }
+        let accepted: Vec<u32> = (0..=u16::MAX)
+            .filter_map(|code| from_epsg(u32::from(code)).ok())
+            .filter(|crs| term(&crs.definition, "+axis=").is_some_and(|axis| axis != "enu"))
+            .filter_map(|crs| crs.epsg)
+            .collect();
+        assert_eq!(accepted, [2065, 5513]);
     }
 
     /// proj4rs 0.2.0 drops part of the northing of an oblique LAEA on a
