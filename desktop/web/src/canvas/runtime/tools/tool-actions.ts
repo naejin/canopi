@@ -22,9 +22,7 @@ export function appendRectangleZoneToDraft(
   draft: ScenePersistedState,
   rect: SceneRect,
   rotationDeg = 0,
-): string | null {
-  if (rect.width < 0.5 || rect.height < 0.5) return null
-
+): string {
   const zoneId = newZoneId()
   draft.zones = [
     ...draft.zones,
@@ -53,9 +51,7 @@ export function appendEllipseZoneToDraft(
   draft: ScenePersistedState,
   rect: SceneRect,
   rotationDeg = 0,
-): string | null {
-  if (rect.width < 0.5 || rect.height < 0.5) return null
-
+): string {
   const zoneId = newZoneId()
   draft.zones = [
     ...draft.zones,
