@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  BASEMAP_STYLE_TIMEOUT_MS,
   OPENFREEMAP_BASEMAPS,
   scaleOpacity,
   VectorBasemap,
@@ -336,6 +337,49 @@ describe('OpenFreeMap vector basemap', () => {
       const { basemap } = await installedLiberty()
       basemap.update({ style: 'liberty', visible: false, opacity: 1, locale: 'en' })
       expect(basemap.claimResourceError(urlLess[1][1])).toBe(false)
+    })
+  })
+
+  describe('a style download that hangs (a captive portal or weak hotspot holding the request open)', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+      vi.unstubAllGlobals()
+    })
+
+    it('fails after the timeout, so the notice offers Retry, and the next request downloads again', async () => {
+      vi.useFakeTimers()
+      const requests: string[] = []
+      vi.stubGlobal('fetch', vi.fn((url: string, init?: { signal?: AbortSignal }) => {
+        requests.push(url)
+        return new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new DOMException('The operation was aborted.', 'AbortError')))
+        })
+      }))
+      const statuses: string[] = []
+      const errors: unknown[] = []
+      const first = new VectorBasemap(new FakeMap(), {
+        onStatus: (status) => statuses.push(`first:${status}`),
+        onError: (error) => errors.push(error),
+      })
+      const positron = { style: 'positron', visible: true, opacity: 1, locale: 'en' } as const
+      first.update(positron)
+      await vi.advanceTimersByTimeAsync(BASEMAP_STYLE_TIMEOUT_MS - 1)
+      expect(statuses).toEqual(['first:loading'])
+
+      await vi.advanceTimersByTimeAsync(1)
+      expect(statuses).toEqual(['first:loading', 'first:failed'])
+      expect(errors).toHaveLength(1)
+
+      // Retry (the same instance) and a rebuilt map (a new instance) both start a fresh download.
+      first.update(positron)
+      const second = new VectorBasemap(new FakeMap(), { onStatus: (status) => statuses.push(`second:${status}`) })
+      second.update(positron)
+      expect(requests).toEqual([
+        OPENFREEMAP_BASEMAPS.positron.styleUrl,
+        OPENFREEMAP_BASEMAPS.positron.styleUrl,
+      ])
+      first.dispose()
+      second.dispose()
     })
   })
 

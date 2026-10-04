@@ -81,13 +81,24 @@ const OPACITY_PAINT_PROPERTIES: Readonly<Record<string, readonly string[]>> = {
 
 const styleCache = new Map<string, Promise<VectorStyleDocument>>()
 
+/**
+ * How long a style download may take, body included. A captive portal or weak hotspot can hold the request open for
+ * minutes; past this it fails, so the notice offers Retry (ADR 0004) and the next request starts over.
+ */
+export const BASEMAP_STYLE_TIMEOUT_MS = 20_000
+
 async function fetchStyle(url: string): Promise<VectorStyleDocument> {
   const cached = styleCache.get(url)
   if (cached) return cached
-  const request = fetch(url).then(async (response) => {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), BASEMAP_STYLE_TIMEOUT_MS)
+  const request = fetch(url, { signal: controller.signal }).then(async (response) => {
     if (!response.ok) throw new Error(`Basemap style request failed (${response.status}).`)
     return await response.json() as VectorStyleDocument
-  })
+  }).catch((error: unknown) => {
+    if (controller.signal.aborted) throw new Error('Basemap style request timed out.')
+    throw error
+  }).finally(() => clearTimeout(timeout))
   styleCache.set(url, request)
   request.catch(() => styleCache.delete(url))
   return request
