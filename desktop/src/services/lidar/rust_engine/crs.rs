@@ -125,8 +125,10 @@ fn term<'a>(definition: &'a str, name: &str) -> Option<&'a str> {
 }
 
 /// Read a PROJ definition: a geocentric CRS, a geographic one on another
-/// meridian than Greenwich (proj4rs ignores its `+pm`) and a polar LAEA
-/// (proj4rs fails every ellipsoidal south-polar point) are refused (U24).
+/// meridian than Greenwich (proj4rs ignores its `+pm`), a polar LAEA
+/// (proj4rs fails every ellipsoidal south-polar point) and an oblique LAEA
+/// on a sphere (proj4rs drops part of its northing: EPSG:2163 lands 10 km
+/// off) are refused (U24).
 fn parse(definition: &str) -> Result<(String, Proj), String> {
     let (normalised, prime_meridian) = normalise(definition)?;
     let proj = Proj::from_proj_string(&normalised).map_err(|e| e.to_string())?;
@@ -136,11 +138,17 @@ fn parse(definition: &str) -> Result<(String, Proj), String> {
     if proj.is_latlong() && prime_meridian != 0.0 {
         return Err(OTHER_MERIDIAN.to_string());
     }
-    let polar = term(&normalised, "+lat_0=")
-        .and_then(|lat0| lat0.parse::<f64>().ok())
-        .is_some_and(|lat0| lat0.abs() == 90.0);
-    if term(&normalised, "+proj=") == Some("laea") && polar {
-        return Err("a polar Lambert azimuthal equal-area CRS".to_string());
+    if term(&normalised, "+proj=") == Some("laea") {
+        let lat0 = term(&normalised, "+lat_0=")
+            .and_then(|lat0| lat0.parse::<f64>().ok())
+            .unwrap_or(0.0);
+        let (a, b) = proj.ellipse_parameters();
+        if lat0.abs() == 90.0 {
+            return Err("a polar Lambert azimuthal equal-area CRS".to_string());
+        }
+        if a == b && lat0 != 0.0 {
+            return Err("an oblique Lambert azimuthal equal-area CRS on a sphere".to_string());
+        }
     }
     Ok((normalised, proj))
 }
@@ -1800,5 +1808,24 @@ mod tests {
             from_reference("EPSG:3068").unwrap_err(),
             "EPSG:3068 is not supported"
         );
+    }
+
+    /// proj4rs 0.2.0 drops part of the northing of an oblique LAEA on a
+    /// sphere (US National Atlas Equal Area, EPSG:2163: 10 km off at -90 40,
+    /// where PROJ gives 850045.52 -504360.09), so the code, its PROJ string
+    /// and its WKT naming no code are refused by name, not placed.
+    #[test]
+    fn an_oblique_lambert_azimuthal_on_a_sphere_is_refused() {
+        assert_eq!(from_epsg(2163).unwrap_err(), "EPSG:2163 is not supported");
+        let def = crs_definitions::from_code(2163).unwrap();
+        let sphere = "an oblique Lambert azimuthal equal-area CRS on a sphere";
+        let from_string = from_proj4(def.proj4).map(|crs| crs.definition);
+        let from_wkt = from_reference(&without_authorities(def.wkt)).map(|crs| crs.definition);
+        for refused in [from_string, from_wkt] {
+            assert!(
+                refused.as_ref().is_err_and(|e| e.contains(sphere)),
+                "{refused:?}"
+            );
+        }
     }
 }
