@@ -197,7 +197,6 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
       })
     },
     openAt(bearingDeg) {
-      if (!Number.isFinite(bearingDeg)) return
       const extent = deps.readSceneExtent()
       // A new or empty Design opens north up: "Where is your site?" appears over a north-up overview.
       const bearing = isEmptyExtent(extent, frame().view.pixelsPerMetre) ? 0 : normaliseBearing(bearingDeg)
