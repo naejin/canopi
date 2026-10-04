@@ -10,7 +10,6 @@ import { createCanvasKeyboardPort } from '../../canvas/runtime/keyboard-port'
 import type { ToolHost } from '../../canvas/runtime/interaction-ports'
 import type { CanvasKeyboardPort } from '../../canvas/runtime/runtime'
 import { createViewReadSurface } from '../../canvas/runtime/view/frame-source'
-import type { ViewFrameSource } from '../../canvas/runtime/view/types'
 import { setCurrentCanvasSession } from '../../canvas/session'
 import { createSessionPlane } from '../../canvas/session-plane'
 import { createTestCanvasQuerySurface } from '../../__tests__/support/canvas-query-surface'
@@ -387,7 +386,6 @@ function selectPort(host: HTMLElement, canvas: { selected: boolean, tool: string
     toolHost,
     hasSelection: () => canvas.selected,
     navigation: { panByPx: vi.fn(), zoomIn: vi.fn(), zoomOut: vi.fn(), resetNorth: vi.fn(), rotateBy: vi.fn() },
-    frames: {} as ViewFrameSource,
     session: {
       pointerSessionLive: () => false,
       overview: () => false,

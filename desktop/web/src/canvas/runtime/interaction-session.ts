@@ -355,7 +355,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         toolHost: this._toolHost,
         hasSelection: () => _deps.getSelection().length > 0,
         navigation: this._navigation,
-        frames: this._frames,
         session: {
           pointerSessionLive: () => this._pointerSessionLive(),
           overview: () => this._mode === 'overview',

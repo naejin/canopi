@@ -16,7 +16,6 @@ import type { ToolHost } from '../../canvas/runtime/interaction-ports'
 import type { ToolId } from '../../canvas/runtime/interaction-types'
 import { createCanvasKeyboardPort } from '../../canvas/runtime/keyboard-port'
 import type { CanvasEscapeLayer, CanvasKeyboardPort } from '../../canvas/runtime/runtime'
-import type { ViewFrameSource } from '../../canvas/runtime/view/types'
 import { describeEscape } from './escape-chain'
 import { installKeyRouter, type KeyRouterHandle } from './key-router'
 import { CANVAS_KEYMAP_ROWS } from './keymap'
@@ -71,7 +70,6 @@ function canvasPort(): CanvasKeyboardPort {
     toolHost,
     hasSelection: () => canvas.selected,
     navigation: { panByPx: vi.fn(), zoomIn: vi.fn(), zoomOut: vi.fn(), resetNorth: vi.fn(), rotateBy: vi.fn() },
-    frames: {} as ViewFrameSource,
     session: {
       pointerSessionLive: () => canvas.live,
       overview: () => canvas.overview ?? false,
