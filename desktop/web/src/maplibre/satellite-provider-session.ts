@@ -166,6 +166,11 @@ export class SatelliteImageryProvider {
     return this.state
   }
 
+  /** Whether the map's transport holds this provider's session, so an official `{session}` tile template resolves. */
+  officialTilesResolvable(): boolean {
+    return this.credentials?.installed === true
+  }
+
   /** Subscribe to state changes; the returned function removes the listener. */
   subscribe(listener: (state: SatelliteState) => void): () => void {
     this.listeners.add(listener)

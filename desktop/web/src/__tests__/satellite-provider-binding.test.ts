@@ -42,13 +42,11 @@ const STYLE_READY: SatelliteMountOptions['styleReady'] = { isReady: () => true, 
 function mountOn(
   provider: SatelliteImageryProvider,
   map: SatelliteMountOptions['map'],
-  tileAuth: BasemapTileAuth | null,
   overrides: Partial<SatelliteMountOptions> = {},
 ) {
   return mountSatelliteLifecycle({
     provider,
     map,
-    tileAuth,
     readViewport: () => VIEWPORT,
     styleReady: STYLE_READY,
     beforeLayerId: () => null,
@@ -119,7 +117,7 @@ describe('Google official provider drives the live map', () => {
     const tileAuth = new BasemapTileAuth()
     const provider = officialProvider(http, tileAuth)
     const map = recordingMap()
-    const mount = mountOn(provider, map.target, tileAuth)
+    const mount = mountOn(provider, map.target)
 
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
 
@@ -160,7 +158,7 @@ describe('Google official provider drives the live map', () => {
     const tileAuth = new BasemapTileAuth()
     const provider = officialProvider(http, tileAuth)
     const map = recordingMap()
-    const mount = mountOn(provider, map.target, tileAuth)
+    const mount = mountOn(provider, map.target)
 
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
 
@@ -180,10 +178,10 @@ describe('Google official provider drives the live map', () => {
     const { http } = googleHttp()
     const provider = new SatelliteImageryProvider(http, () => ({ googleMapsApiKey: API_KEY }))
     const map = recordingMap()
-    // No tileAuth: a map created without the request seam cannot resolve the
-    // session template, so the mount must not install a source that would
-    // request a literal `{session}`.
-    const mount = mountOn(provider, map.target, null)
+    // A provider with no transport: a map created without the request seam
+    // cannot resolve the session template, so the mount must not install a
+    // source that would request a literal `{session}`.
+    const mount = mountOn(provider, map.target)
 
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
     expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(false)
@@ -196,7 +194,7 @@ describe('Google official provider drives the live map', () => {
     const provider = officialProvider(http, tileAuth)
     const map = recordingMap()
     let installedCredit: string | null = null
-    const mount = mountOn(provider, map.target, tileAuth, {
+    const mount = mountOn(provider, map.target, {
       replaceSatelliteAttribution: (credit: string) => {
         installedCredit = credit
       },
@@ -223,7 +221,7 @@ describe('Google official provider drives the live map', () => {
     const tileAuth = new BasemapTileAuth()
     const provider = officialProvider(http, tileAuth)
     const map = recordingMap()
-    const mount = mountOn(provider, map.target, tileAuth)
+    const mount = mountOn(provider, map.target)
 
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('unavailable'))
     // Imagery is not shown with attribution that cannot be established.
@@ -241,7 +239,7 @@ describe('Google official provider drives the live map', () => {
     const provider = officialProvider(http, tileAuth, key)
     const map = recordingMap()
     // Keyless imagery first, so withdrawal is observable rather than vacuous.
-    const mount = mountOn(provider, map.target, tileAuth)
+    const mount = mountOn(provider, map.target)
     expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(true)
 
     key.value = API_KEY
@@ -268,7 +266,7 @@ describe('Google official provider drives the live map', () => {
       tileAuth,
     )
     const map = recordingMap()
-    const mount = mountOn(provider, map.target, tileAuth)
+    const mount = mountOn(provider, map.target)
 
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
     const firstSource = map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID)
@@ -303,7 +301,7 @@ describe('Google official provider drives the live map', () => {
         map.sources.set(id, source)
       },
     }
-    const mount = mountOn(provider, target, tileAuth, {
+    const mount = mountOn(provider, target, {
       styleReady: {
         isReady: () => ready,
         whenReady: (listener) => {
@@ -349,7 +347,7 @@ describe('Google official provider drives the live map', () => {
         map.sources.set(id, source)
       },
     }
-    const mount = mountOn(provider, target, tileAuth, {
+    const mount = mountOn(provider, target, {
       styleReady: {
         isReady: () => ready,
         whenReady: (listener) => {
@@ -380,7 +378,7 @@ describe('Google official provider drives the live map', () => {
     const tileAuth = new BasemapTileAuth()
     const provider = officialProvider(http, tileAuth)
     const map = recordingMap()
-    const mount = mountOn(provider, map.target, tileAuth)
+    const mount = mountOn(provider, map.target)
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
     expect(tileAuth.installed).toBe(true)
 

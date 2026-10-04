@@ -66,7 +66,6 @@ const NO_TRANSPORT = { officialTilesResolvable: false, beforeLayerId: () => null
 
 /** A ready style, no layer anchor, no events: what a mount needs beyond its provider, map and viewport. */
 const MOUNT_DEFAULTS = {
-  tileAuth: null,
   styleReady: { isReady: () => true, whenReady: () => () => {} },
   beforeLayerId: () => null,
   afterApply: () => {},

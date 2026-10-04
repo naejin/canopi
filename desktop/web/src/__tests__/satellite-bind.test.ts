@@ -51,11 +51,10 @@ function recordingMap() {
 }
 
 /** Mounts `provider` on a map whose style is ready, at VIEWPORT. */
-function mountOn(provider: SatelliteImageryProvider, map: SatelliteMountOptions['map'], tileAuth: BasemapTileAuth | null = null) {
+function mountOn(provider: SatelliteImageryProvider, map: SatelliteMountOptions['map']) {
   const options: SatelliteMountOptions = {
     provider,
     map,
-    tileAuth,
     readViewport: () => VIEWPORT,
     styleReady: { isReady: () => true, whenReady: () => () => {} },
     beforeLayerId: () => null,
@@ -121,7 +120,7 @@ describe('satellite mount', () => {
       tileAuth,
     )
     const map = recordingMap()
-    const mount = mountOn(provider, map.target, tileAuth)
+    const mount = mountOn(provider, map.target)
     expect((map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID) as { tiles: string[] }).tiles)
       .toEqual([GOOGLE_KEYLESS_TILES])
 
@@ -152,7 +151,7 @@ describe('satellite mount', () => {
       tileAuth,
     )
     const map = recordingMap()
-    const mount = mountOn(provider, map.target, tileAuth)
+    const mount = mountOn(provider, map.target)
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
     expect(tileAuth.installed).toBe(true)
 

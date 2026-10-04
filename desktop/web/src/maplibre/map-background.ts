@@ -167,7 +167,6 @@ export function mountMapBackground(options: MapBackgroundOptions): MapBackground
       satellite = mountSatelliteLifecycle({
         provider: createSatelliteImagery(options.tileAuth),
         map,
-        tileAuth: options.tileAuth,
         readViewport: () => readViewport(map),
         styleReady: readiness,
         beforeLayerId,

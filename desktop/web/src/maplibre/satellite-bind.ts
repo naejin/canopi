@@ -175,17 +175,14 @@ const RECHECK_EVENTS = ['idle', 'data', 'sourcedata', 'styledata'] as const
  * transform.
  */
 export interface SatelliteMountOptions {
-  /** The provider this mount drives and disposes (`createSatelliteImagery`). */
+  /**
+   * The provider this mount drives and disposes (`createSatelliteImagery`), built on the map's credential owner. Without
+   * one an official provider has nothing to authenticate its tiles, and the mount withholds the contribution rather
+   * than requesting an unresolved `{session}` template.
+   */
   readonly provider: SatelliteImageryProvider
   /** The map's own methods; the mount adds the credit callback. */
   readonly map: Omit<SatelliteReconcileTarget, 'replaceSatelliteAttribution'>
-  /**
-   * The map's credential owner, created with its request transform. Without it
-   * an official provider has nothing to authenticate its tiles and the mount
-   * withholds the contribution rather than requesting an unresolved
-   * `{session}` template.
-   */
-  readonly tileAuth: BasemapTileAuth | null
   readonly readViewport: () => SatelliteViewport
   readonly styleReady: MapStyleReadiness
   /** Where the raster layer belongs in the map's own stack. */
@@ -210,7 +207,7 @@ export interface SatelliteMountHandle {
 }
 
 export function mountSatelliteLifecycle(options: SatelliteMountOptions): SatelliteMountHandle {
-  const { provider, map, tileAuth, styleReady } = options
+  const { provider, map, styleReady } = options
   // Delegate explicitly: a live MapLibre map keeps its methods on the class
   // prototype, so spreading it would drop them.
   const target: SatelliteReconcileTarget = {
@@ -228,7 +225,7 @@ export function mountSatelliteLifecycle(options: SatelliteMountOptions): Satelli
   let cancelReadyWait: (() => void) | null = null
 
   const contribute = (state: SatelliteState): void => reconcileSatelliteContribution(target, state, {
-    officialTilesResolvable: tileAuth?.installed === true,
+    officialTilesResolvable: provider.officialTilesResolvable(),
     beforeLayerId: options.beforeLayerId,
   })
 

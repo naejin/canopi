@@ -248,7 +248,6 @@ describe('satellite mount style-ready wait', () => {
     const mount = () => mountSatelliteLifecycle({
       provider: new SatelliteImageryProvider(inertHttp, () => ({ googleMapsApiKey: null, locale: 'en' })),
       map: map as unknown as SatelliteMountOptions['map'],
-      tileAuth: null,
       readViewport: () => ({ west: -1, south: 48, east: 1, north: 49, zoom: 14 }),
       styleReady: readiness,
       beforeLayerId: () => null,
