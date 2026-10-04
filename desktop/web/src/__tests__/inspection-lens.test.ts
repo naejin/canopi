@@ -154,9 +154,9 @@ describe('Inspection Lens ownership', () => {
   it('keeps inspecting the same ground after the session plane re-origins', () => {
     vi.useFakeTimers()
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
-    const camera = createTestView(START)
-    camera.setViewport({ x: 100, y: 50, scale: 10 })
     const firstPlane = createSessionPlane({ lon: 2.3522, lat: 48.8566 })
+    const camera = createTestView({ ...START, plane: firstPlane })
+    camera.setViewport({ x: 100, y: 50, scale: 10 })
     let plane = firstPlane
     const scene = signal(0)
     const owner = new SceneCanvasInspectionOwner({ frames: camera.frames,
@@ -170,7 +170,7 @@ describe('Inspection Lens ownership', () => {
 
     const nextPlane = createSessionPlane(firstPlane.toGeo({ x: 15_000, y: -4_000 }))
     plane = nextPlane
-    camera.reproject(firstPlane.transformTo(nextPlane))
+    camera.setPlane(nextPlane)
     scene.value += 1
     vi.advanceTimersByTime(20)
 

@@ -20,7 +20,7 @@ import {
 import type { DraftShape } from '../canvas/runtime/tools/draft'
 import { createRecordingRenderer, type RecordingRenderer } from './support/recording-renderer'
 import type { SceneInteractionEventHarness } from './support/canvas-interaction-events'
-import type { TestView } from './support/test-view'
+import { createTestView, type TestView } from './support/test-view'
 import {
   storedGeo,
   contextMenuCommand,
@@ -932,7 +932,8 @@ describe('SceneInteractionSession', () => {
   })
 
   it('keeps a polygon draft at its lon/lat when the session plane re-origins mid-draw', () => {
-    const deps = createInteractionDeps(container, store, testView)
+    const view = createTestView({ screen: { width: 400, height: 300 }, viewport: { x: 0, y: 0, scale: 1 }, plane: store.sessionPlane })
+    const deps = createInteractionDeps(container, store, view)
     const session = createTestSession(deps)
     session.setTool('polygon')
     events.pointerDown({ x: 10, y: 10 }, { button: 0 })
@@ -945,7 +946,7 @@ describe('SceneInteractionSession', () => {
     // Panning 20 km east re-origins the plane; the camera follows it.
     ;(deps.sceneEdits as SceneRuntimeEditCoordinator).reoriginSessionPlane(previous.toGeo({ x: 20_000, y: 0 }))
     expect(store.sessionPlane).not.toBe(previous)
-    testView.reproject(previous.transformTo(store.sessionPlane))
+    view.setPlane(store.sessionPlane)
 
     events.pointerDown({ x: 60, y: 50 }, { button: 0 })
     events.keyDown({ key: 'Enter' })
@@ -955,8 +956,9 @@ describe('SceneInteractionSession', () => {
     const near = (geo: { lon: number; lat: number }) => ({ lon: expect.closeTo(geo.lon, 8), lat: expect.closeTo(geo.lat, 8) })
     expect(plane.toGeo(zone.points[0]!)).toEqual(near(firstVertexGeo))
     expect(plane.toGeo(zone.points[1]!)).toEqual(near(secondVertexGeo))
-    expect(plane.toGeo(zone.points[2]!)).toEqual(near(plane.toGeo(testView.view().screenToWorld({ x: 60, y: 50 }))))
+    expect(plane.toGeo(zone.points[2]!)).toEqual(near(previous.toGeo({ x: 60, y: 50 })))
     session.dispose()
+    view.dispose()
   })
 
   it('undoes and redoes polygonal zone draft vertices without dirtying the scene', () => {
