@@ -95,7 +95,7 @@ Beads:
   - `ResultManifest`.
 - `slope_eligibility`, run at job time, checks:
   - the values are in metres;
-  - the raster's CRS (`wbprojection` from its GeoKeys/WKT) is projected with metre units.
+  - the raster's CRS (the engine's resolver in `rust_engine/crs.rs`, from its GeoKeys/WKT) is projected with metre units.
 - `compute_slope_block`, per window:
   1. Read core plus halo, write raw, then `raw_to_tif`.
   2. Run `geolibre slope`.
@@ -136,7 +136,7 @@ Beads:
 - Native pixel read. For analyses it uses `result_units(manifest.parameters.slope_unit)` (`°` or `%`).
 
 **`services/lidar/display_cog.rs`** (1264 lines)
-- Display derivatives, profile `display-cog-deflate256-v1`.
+- Display derivatives, profile `display-cog-deflate256-v2`.
 - Results are read in chunk parts of at most 8×8 chunks, with the -2^127 sentinel.
 - Kind-agnostic except for test fixtures.
 
