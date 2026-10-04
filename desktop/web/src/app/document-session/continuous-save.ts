@@ -35,7 +35,7 @@ export interface HomeWriteOptions {
   readonly viewOnly: boolean
 }
 
-export interface FlushOptions {
+interface FlushOptions {
   /** Also write a view that moved when nothing else is waiting (default true); focus loss writes edits only. */
   readonly view?: boolean
 }
