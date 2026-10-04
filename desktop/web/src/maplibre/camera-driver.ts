@@ -62,7 +62,6 @@ interface FrameState {
   readonly insets: ScreenInsets
   readonly scaleBounds: { readonly min: number; readonly max: number }
   readonly overviewPixelsPerMetre: number
-  readonly moving: boolean
   readonly plane: SessionPlane
   readonly planeRevision: number
 }
@@ -204,7 +203,6 @@ export function createMapLibreCameraDriver(
       insets,
       scaleBounds: scaleBoundsAt(screen, policy, camera.bearingDeg),
       overviewPixelsPerMetre: policy.overviewPixelsPerMetre,
-      moving: tween !== null || flight !== null,
       plane,
       planeRevision,
     }
@@ -224,7 +222,6 @@ export function createMapLibreCameraDriver(
       scaleBounds: state.scaleBounds,
       insets: state.insets,
       attached: true,
-      moving: state.moving,
       revision: 0,
     })
   }
@@ -557,7 +554,6 @@ function sameFrameState(previous: FrameState, next: FrameState): boolean {
     && previous.scaleBounds.min === next.scaleBounds.min
     && previous.scaleBounds.max === next.scaleBounds.max
     && previous.overviewPixelsPerMetre === next.overviewPixelsPerMetre
-    && previous.moving === next.moving
     && previous.plane === next.plane
     && previous.planeRevision === next.planeRevision
 }

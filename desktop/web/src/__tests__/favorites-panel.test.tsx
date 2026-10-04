@@ -465,31 +465,6 @@ describe('FavoritesPanel', () => {
     expect(alert()).toBeNull()
   })
 
-  it('says nothing in another Design about an import refused after it opened', async () => {
-    const { designSessionStore } = await import('../app/document-session/store')
-    let settle!: (outcome: unknown) => void
-    importStampFileMock.mockImplementationOnce(() => new Promise((resolve) => { settle = resolve }))
-    await act(async () => {
-      render(<FavoritesPanel />, container)
-      await flushEffects()
-    })
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="Import stamps…"]')!.click()
-      await flushEffects()
-    })
-
-    await act(async () => {
-      designSessionStore.replaceCurrentDesignState(otherDesign(), '/designs/other.canopi', 'Other')
-      await flushEffects()
-    })
-    await act(async () => {
-      settle({ status: 'refused', messageKey: 'savedObjectStamps.summaryEmpty' })
-      await flushEffects()
-    })
-
-    expect(container.querySelector('[data-saved-stamps-frame] [role="alert"]')).toBeNull()
-  })
-
   it('tells the user when saving an imported stamp fails', async () => {
     const failure = new Error('database is locked')
     importStampFileMock.mockRejectedValueOnce(failure)

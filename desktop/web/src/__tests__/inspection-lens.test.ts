@@ -493,10 +493,10 @@ describe('Inspection Lens ownership', () => {
 })
 
 /**
- * A lens over two overlapping mints with the Plants layer at 50 %. The lens canvas gets a recording context; every other
- * canvas, the offscreen scratch, gets what `scratchContext` returns for it.
+ * A lens over two overlapping mints with the Plants layer at `opacity` (50 % by default). The lens canvas gets a recording
+ * context; every other canvas, the offscreen scratch, gets what `scratchContext` returns for it.
  */
-function mountTranslucentLens(scratchContext: (canvas: HTMLCanvasElement) => CanvasRenderingContext2D | null) {
+function mountTranslucentLens(scratchContext: (canvas: HTMLCanvasElement) => CanvasRenderingContext2D | null, opacity = .5) {
   vi.useFakeTimers()
   let dpr = 2
   vi.stubGlobal('devicePixelRatio', dpr)
@@ -510,7 +510,7 @@ function mountTranslucentLens(scratchContext: (canvas: HTMLCanvasElement) => Can
     return scratchContext(this) as never
   })
   const snapshot = createTestSceneRendererSnapshot({ scene: {
-    layers: [{ kind: 'layer', name: 'plants', visible: true, opacity: .5, locked: false }],
+    layers: [{ kind: 'layer', name: 'plants', visible: true, opacity, locked: false }],
     plants: [MINT, { ...MINT, id: 'mint-2', position: { x: 1.2, y: 2 } }],
   } })
   const camera = createTestView(START)
@@ -559,26 +559,37 @@ describe('Inspection Lens Plants opacity (canopi-h90p.67)', () => {
     owner.dispose()
   })
 
-  it('draws translucent plants per shape when the scratch context throws, keeping the preview', () => {
-    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const { owner, view, main, resize } = mountTranslucentLens(() => { throw new Error('no second context') })
+  it('keeps the preview of an opaque Plants layer when no offscreen context can be made, and never asks for one', () => {
+    const { owner, view, main, scratchCanvases, resize } = mountTranslucentLens(() => null, 1)
     expect(view.state.value!.previewAvailable).toBe(true)
-    expect(main.draws).toEqual([])
+    expect(scratchCanvases).toEqual([])
     expect(main.fills.length).toBeGreaterThanOrEqual(2)
-    expect(main.fills.every((alpha) => alpha === .5)).toBe(true)
-    expect(logged).toHaveBeenCalled()
     resize(431, 1.25)
     expect(view.state.value!.previewAvailable).toBe(true)
+    expect(scratchCanvases).toEqual([])
     owner.dispose()
   })
 
-  it('asks for a scratch context once when none can be made, not on every paint', () => {
+  it('draws a translucent Plants layer opaque when no offscreen context can be made, asking once and keeping the preview', () => {
     const { owner, view, main, scratchCanvases, resize } = mountTranslucentLens(() => null)
+    expect(view.state.value!.previewAvailable).toBe(true)
+    expect(main.draws).toEqual([])
+    expect(main.fills.length).toBeGreaterThanOrEqual(2)
     resize(431, 1.25)
     resize(432, 2)
     expect(scratchCanvases).toHaveLength(1)
     expect(view.state.value!.previewAvailable).toBe(true)
-    expect(main.fills.every((alpha) => alpha === .5)).toBe(true)
+    owner.dispose()
+  })
+
+  it('keeps the preview, logging once, when making the offscreen context throws', () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { owner, view, main, resize } = mountTranslucentLens(() => { throw new Error('no second context') })
+    expect(view.state.value!.previewAvailable).toBe(true)
+    expect(main.fills.length).toBeGreaterThanOrEqual(2)
+    resize(431, 1.25)
+    expect(view.state.value!.previewAvailable).toBe(true)
+    expect(logged).toHaveBeenCalledTimes(1)
     owner.dispose()
   })
 })

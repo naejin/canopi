@@ -1814,7 +1814,7 @@ describe('WorkspaceActivationCoordinator', () => {
     await failureHandled(f.maps[0]!)
     expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: true })
 
-    f.composition.retryMap!()
+    f.composition.retryMap()
 
     await vi.waitFor(() => expect(runtime.keyboardPort).not.toBeNull())
     expect(f.maps).toHaveLength(2)
@@ -1833,7 +1833,7 @@ describe('WorkspaceActivationCoordinator', () => {
     f.loseContext()
     await vi.waitFor(() => expect(runtime.keyboardPort).toBeNull())
     await failureHandled(f.maps[1]!)
-    f.composition.retryMap!()
+    f.composition.retryMap()
     await vi.waitFor(() => expect(runtime.keyboardPort).not.toBeNull())
     expect(f.maps).toHaveLength(3)
     await f.composition.dispose()
@@ -1886,7 +1886,7 @@ describe('WorkspaceActivationCoordinator', () => {
     await f.composition.start()
 
     await vi.waitFor(() => expect(f.states.at(-1)).toMatchObject({ status: 'error', retryable: false }))
-    f.composition.retryMap!()
+    f.composition.retryMap()
     await Promise.resolve()
     expect(f.maps).toHaveLength(1)
     await expect(f.composition.dispose()).rejects.toThrow('renderer init failed')

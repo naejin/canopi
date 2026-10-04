@@ -130,8 +130,6 @@ export class VectorBasemap {
   private installed: Installed | null = null
   private desired: VectorBasemapPresentation | null = null
   private generation = 0
-  /** The style whose download is running, so a repeated request (Retry) joins it instead of starting over. */
-  private loading: BasemapStyle | null = null
   private status: MapLibreBasemapStatus = 'idle'
   /** The installed style's sprite, glyphs or TileJSON failed to download: only Retry installs it again. */
   private resourceFailed = false
@@ -159,7 +157,6 @@ export class VectorBasemap {
     this.desired = presentation
     if (!presentation.visible) {
       this.generation += 1
-      this.loading = null
       this.uninstall()
       this.setStatus('idle')
       return
@@ -169,22 +166,19 @@ export class VectorBasemap {
       // The style on screen is the one asked for: a load still running for
       // another style is stale, and an earlier failure no longer applies.
       this.generation += 1
-      this.loading = null
       if (installed.opacity !== presentation.opacity) this.applyOpacity(installed, presentation.opacity)
       if (installed.locale !== presentation.locale) this.applyLocale(installed, presentation.locale)
       // Nothing downloads on its own (ADR 0004): a style whose resources failed stays failed until Retry.
       if (!this.resourceFailed) this.setStatus('ok')
       return
     }
-    // The settling load reads `desired`, so opacity or locale asked for meanwhile still applies.
-    if (this.loading === presentation.style) return
+    // The settling load reads `desired`, so opacity or locale asked for meanwhile still applies. A repeated request
+    // joins the download already running: fetchStyle shares it per URL.
     const generation = ++this.generation
-    this.loading = presentation.style
     this.setStatus('loading')
     const load = this.options.loadStyle ?? fetchStyle
     load(OPENFREEMAP_BASEMAPS[presentation.style].styleUrl).then((document) => {
       if (this.disposed || generation !== this.generation) return
-      this.loading = null
       const desired = this.desired
       if (!desired?.visible || desired.style !== presentation.style) return
       this.uninstall()
@@ -192,7 +186,6 @@ export class VectorBasemap {
       this.setStatus('ok')
     }).catch((error: unknown) => {
       if (this.disposed || generation !== this.generation) return
-      this.loading = null
       this.setStatus('failed')
       this.options.onError?.(error)
     })
@@ -255,7 +248,6 @@ export class VectorBasemap {
     if (this.disposed) return
     this.disposed = true
     this.generation += 1
-    this.loading = null
     this.uninstall()
   }
 
@@ -373,12 +365,10 @@ function prepareOpenFreeMapStyle(
  */
 function styleResourceRequests(document: VectorStyleDocument): RegExp[] {
   const resources: RegExp[] = []
-  const sprites = typeof document.sprite === 'string'
-    ? [document.sprite]
-    : Array.isArray(document.sprite)
-      ? document.sprite.flatMap((entry) => typeof entry?.url === 'string' ? [entry.url as string] : [])
-      : []
-  for (const sprite of sprites) resources.push(new RegExp(`^${escapeRegExp(sprite)}(?:@\\d+(?:\\.\\d+)?x)?\\.(?:json|png)(?:[?#].*)?$`))
+  // install() sets only a string sprite, so only its requests can fail.
+  if (typeof document.sprite === 'string') {
+    resources.push(new RegExp(`^${escapeRegExp(document.sprite)}(?:@\\d+(?:\\.\\d+)?x)?\\.(?:json|png)(?:[?#].*)?$`))
+  }
   if (document.glyphs) {
     const glyphs = escapeRegExp(document.glyphs)
       .replace(/\\\{fontstack\\\}/g, '[^/]+')

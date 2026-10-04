@@ -2056,8 +2056,8 @@ const CANVAS_V2_POLICIES = [
   },
   {
     // World content moves by the world-root matrix, never per-point projection (world-layers.test.ts "a pan
-    // re-tessellates no zone" is the behavioural half). Upright billboards, the billboard drafts and label admission
-    // project anchors; overlays live in chrome/, outside the rule.
+    // re-tessellates no zone" is the behavioural half). Upright billboards and the billboard drafts project anchors;
+    // overlays live in chrome/, outside the rule.
     kind: 'confine-symbols',
     name: 'P12 the renderer learns the camera one way',
     from: ['src/canvas/runtime/renderers/**'],
@@ -2065,7 +2065,6 @@ const CANVAS_V2_POLICIES = [
     allowedFrom: [
       'src/canvas/runtime/renderers/billboard-layer.ts',
       'src/canvas/runtime/renderers/draft-layer.ts',
-      'src/canvas/runtime/renderers/label-admission.ts',
       ...TEST_SOURCE_PATTERNS,
     ],
   },
@@ -2516,11 +2515,6 @@ describe('declarative frontend architecture policies', () => {
   }, 20_000)
 
   it('names only source exemptions that excuse a real file', () => {
-    // Each kept entry names why it stays although nothing needs it today.
-    const kept = [
-      // Label admission projects anchors once phase R lands; drop it at the R close if R does not project.
-      '[P12 the renderer learns the camera one way] allowedFrom entry excuses nothing: src/canvas/runtime/renderers/label-admission.ts',
-    ]
     const graph = discoveredSourceGraph()
     const runtime = runtimeGraph(graph)
     expect([
@@ -2533,7 +2527,7 @@ describe('declarative frontend architecture policies', () => {
       ),
       ...collectUnusedExemptionViolations(runtime, BROWSER_WORKSPACE_GRAPH_POLICIES, TEST_SOURCE_PATTERNS),
       ...collectUnusedExemptionViolations(runtime, TOOL_HOST_RUNTIME_GRAPH_POLICIES, TEST_SOURCE_PATTERNS),
-    ]).toEqual(kept)
+    ]).toEqual([])
   }, 60_000)
 
   it('reports an exceptFrom or allowedFrom entry that excuses nothing, but not an ignored one', () => {
@@ -3110,7 +3104,7 @@ describe('canvas v2 policies, end of 0B', () => {
     )
   })
 
-  it('P12 confines per-point projection in the renderers to the billboards, the billboard drafts and label admission', () => {
+  it('P12 confines per-point projection in the renderers to the billboards and the billboard drafts', () => {
     // One world-layer module reaching every name of plan §5 P12: dropping any name from the rule drops its line here.
     const graph = createTypeScriptSourceGraph([
       plantedSource('src/canvas/runtime/renderers/world-layers.ts', [
@@ -3123,14 +3117,12 @@ describe('canvas v2 policies, end of 0B', () => {
         'export function place(view: RendererView, out: Float64Array) { view.projectAnchors(out, out, 1); view.worldToScreen({ x: 0, y: 0 }) }',
       ]),
       plantedSource('src/canvas/runtime/renderers/draft-layer.ts', ['export function draft(at: RendererView, out: Float64Array) { at.projectAnchors(out, out, 1) }']),
-      plantedSource('src/canvas/runtime/renderers/label-admission.ts', ['export function admit(view: RendererView) { return view.worldToScreen({ x: 0, y: 0 }) }']),
       plantedSource('src/canvas/runtime/renderers/world-layers.test.ts', ['view.worldToScreen({ x: 0, y: 0 })']),
       plantedSource('src/canvas/runtime/chrome/handle-layer.ts', ['export function place(view: RendererView) { return view.worldToScreen({ x: 0, y: 0 }) }']),
     ])
     const allowed = [
       'src/canvas/runtime/renderers/billboard-layer.ts',
       'src/canvas/runtime/renderers/draft-layer.ts',
-      'src/canvas/runtime/renderers/label-admission.ts',
       ...TEST_SOURCE_PATTERNS,
     ].join(', ')
 

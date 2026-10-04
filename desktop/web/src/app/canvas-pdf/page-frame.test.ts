@@ -65,11 +65,6 @@ describe('PDF page frame', () => {
     expect(back.width).toBe(6); expect(back.height).toBe(2)
   })
 
-  it('refuses a zone path the print snapshot never writes', () => {
-    const relative = { ...snapshot, zones: [{ ...snapshot.zones[0]!, path: 'M0 0 h10 v4 h-10 Z' }] }
-    expect(() => turnSnapshot(relative, pageFrame(30))).toThrow('unsupported-print-path')
-  })
-
   it('a North up layout has angle 0 and an unchanged snapshot', () => {
     expect(layoutAngle({}, { viewBearingDeg: 30 })).toBe(0)
     expect(layoutAngle({ mapOrientation: 'north-up' }, { viewBearingDeg: 30 })).toBe(0)

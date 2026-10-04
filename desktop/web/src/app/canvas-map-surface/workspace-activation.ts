@@ -437,14 +437,12 @@ export class WorkspaceActivationCoordinator {
 
   /**
    * The user's Retry after the map became unavailable. It clears the unavailable state only when
-   * `canRetry()` holds and no generation is still being set up or torn down; the caller then activates
+   * `canRetry()` holds; the caller then activates
    * the current Design again. Returns whether it was accepted. Nothing calls this on its own (ADR 0004).
    */
   retry(): boolean {
     if (!this.mapUnavailable || !this.canRetry()) return false
-    const current = this.active
-    if (current && !current.failureSettled) return false
-    if (current) this.retireFailedGeneration()
+    if (this.active) this.retireFailedGeneration()
     this.mapUnavailable = false
     this.unavailableCause = null
     return true

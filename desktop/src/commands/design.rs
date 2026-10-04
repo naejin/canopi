@@ -68,7 +68,8 @@ pub async fn load_design(
         .unwrap_or_else(|message| Err(internal_load_failure(message)))
 }
 
-fn internal_load_failure(message: String) -> DesignLoadFailure {
+/// The executor could not run the load: a typed `Internal` failure.
+pub(crate) fn internal_load_failure(message: String) -> DesignLoadFailure {
     DesignLoadFailure {
         kind: DesignLoadFailureKind::Internal,
         message,

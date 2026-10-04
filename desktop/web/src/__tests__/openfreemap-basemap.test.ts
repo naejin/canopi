@@ -235,30 +235,35 @@ describe('OpenFreeMap vector basemap', () => {
     expect(statuses).toEqual(['loading', 'ok', 'loading', 'ok'])
   })
 
-  it('reports loading while a style downloads, and a repeated request keeps the download already running', async () => {
-    const map = new FakeMap()
-    const statuses: string[] = []
-    const loads: string[] = []
-    let release!: () => void
-    const basemap = new VectorBasemap(map, {
-      loadStyle: (url) => {
-        loads.push(url)
-        return new Promise((resolve) => { release = () => resolve(styleDocument('liberty')) })
-      },
-      onStatus: (status) => statuses.push(status),
-    })
-    const liberty = { style: 'liberty', visible: true, opacity: 1, locale: 'en' } as const
-    basemap.update(liberty)
-    basemap.update(liberty)
-    basemap.update({ ...liberty, opacity: 0.5 })
-    expect(statuses).toEqual(['loading'])
-    expect(loads).toEqual([OPENFREEMAP_BASEMAPS.liberty.styleUrl])
+  it('reports loading while a style downloads, and a repeated request joins the download already running', async () => {
+    // Through the real style download: Bright, which no other test downloads, so the shared cache starts empty for it.
+    const requests: string[] = []
+    let respond!: () => void
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      requests.push(url)
+      return new Promise((resolve) => { respond = () => resolve({ ok: true, json: async () => styleDocument('bright') }) })
+    }))
+    try {
+      const map = new FakeMap()
+      const statuses: string[] = []
+      const basemap = new VectorBasemap(map, { onStatus: (status) => statuses.push(status) })
+      const bright = { style: 'bright', visible: true, opacity: 1, locale: 'en' } as const
+      basemap.update(bright)
+      basemap.update(bright)
+      basemap.update({ ...bright, opacity: 0.5 })
+      expect(statuses).toEqual(['loading'])
+      expect(requests).toEqual([OPENFREEMAP_BASEMAPS.bright.styleUrl])
 
-    release()
-    await settle()
-    expect(basemap.installedStyle).toBe('liberty')
-    expect(statuses).toEqual(['loading', 'ok'])
-    expect((map.getLayer('ofm:water') as { paint: Record<string, unknown> }).paint['fill-opacity']).toBe(0.4)
+      respond()
+      await settle()
+      expect(basemap.installedStyle).toBe('bright')
+      expect(statuses).toEqual(['loading', 'ok'])
+      expect(requests).toHaveLength(1)
+      expect((map.getLayer('ofm:water') as { paint: Record<string, unknown> }).paint['fill-opacity']).toBe(0.4)
+      basemap.dispose()
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   describe('a sprite that fails after its response arrived (no URL on the error)', () => {

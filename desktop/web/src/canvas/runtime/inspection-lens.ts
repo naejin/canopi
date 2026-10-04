@@ -39,10 +39,10 @@ export class SceneCanvasInspectionOwner {
     try { ctx = canvas.getContext('2d') } catch (error) { console.error('Canvas inspection preview unavailable:', error) }
     container.appendChild(canvas)
     // Offscreen, made on the first translucent Plants layer and reused: the plants are composited from it once. Asked for
-    // once; without one the plants are drawn per shape.
+    // once; without one they are drawn opaque, and an opaque layer never needs it.
     let scratch: CanvasRenderingContext2D | null = null
     let scratchAsked = false
-    function scratchSized(widthPx: number, heightPx: number): CanvasRenderingContext2D | null {
+    function sizedScratch(widthPx: number, heightPx: number): CanvasRenderingContext2D | null {
       if (!scratchAsked) {
         scratchAsked = true
         try { scratch = document.createElement('canvas').getContext('2d') } catch (error) {
@@ -133,7 +133,7 @@ export class SceneCanvasInspectionOwner {
         canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr)
         try {
           drawInspectionLensScene(ctx, { scene: snapshot.scene, speciesCache: snapshot.speciesCache, hoveredPlantId: highlightedId },
-            view, { widthPx: width, heightPx: height, dpr, scratch: scratchSized })
+            view, { widthPx: width, heightPx: height, dpr, scratch: sizedScratch })
         } catch (error) {
           console.error('Canvas inspection preview unavailable:', error)
           ctx = null
