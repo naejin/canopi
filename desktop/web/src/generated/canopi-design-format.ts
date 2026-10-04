@@ -7,6 +7,7 @@ export const WEB_MERCATOR_MAX_LATITUDE_DEG = 85.0511287798066
 export const FUTURE_CANOPI_FILE_VERSION_POLICY = "reject" as const
 
 export const SAVED_VIEW_MAX_ZOOM = 27.0
+export const SAVED_VIEW_MAX_GROUND_SIZE_M = 100000000.0
 export const RICH_TEXT_LINK_SCHEMES = ["https:","http:","mailto:"] as const
 export const STORY_IMAGE_DATA_TYPES = ["image/png","image/jpeg","image/webp","image/gif"] as const
 export const STORY_IMAGE_MAX_BYTES = 1048576

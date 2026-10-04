@@ -1,14 +1,11 @@
 import {
-  CANOPI_FILE_SCHEMA,
   RICH_TEXT_LINK_SCHEMES,
+  SAVED_VIEW_MAX_GROUND_SIZE_M,
   STORY_IMAGE_DATA_TYPES,
   STORY_IMAGE_MAX_BYTES,
   STORY_IMAGES_MAX_TOTAL_BYTES,
 } from '../../generated/canopi-design-format'
 import type { CanopiFile, RichTextBlock, RichTextSpan, SavedView, Story } from '../../types/design'
-
-/** The largest ground side a saved view may frame, in metres: the schema's bound (common_types::views::SAVED_VIEW_MAX_GROUND_SIZE_M). */
-const SAVED_VIEW_MAX_GROUND_SIZE_M = CANOPI_FILE_SCHEMA.$defs.SavedViewGroundSize.properties.width.maximum
 
 // Mirrors common_types::views::validate_views_and_stories. The generated schema
 // already bounds each camera when a file is read; this checks recorded ground

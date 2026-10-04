@@ -184,6 +184,11 @@ pub(crate) fn render_canopi_design_format() -> Result<String, Box<dyn std::error
     )?;
     writeln!(
         file,
+        "export const SAVED_VIEW_MAX_GROUND_SIZE_M = {:?}",
+        common_types::views::SAVED_VIEW_MAX_GROUND_SIZE_M,
+    )?;
+    writeln!(
+        file,
         "export const RICH_TEXT_LINK_SCHEMES = {} as const",
         serde_json::to_string(common_types::views::RICH_TEXT_LINK_SCHEMES)?,
     )?;
