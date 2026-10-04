@@ -337,7 +337,7 @@ export class WorkspaceActivationCoordinator {
       try {
         attached = this.runOwnedCallback('camera attachment', () => {
           // The map becomes the runtime's camera, in the plane of the Design's live origin. A map the driver cannot drive (a
-          // pitched camera, missing read-backs) never takes the camera: the host reports it as its failure.
+          // pitched camera, or one whose camera cannot be read) never takes the camera: the host reports it as its failure.
           const host = this.cameraHost()
           const driver = createMapLibreCameraDriver(map, createSessionPlane(this.options.readOrigin()), host.driverDeps)
           host.attach(driver)

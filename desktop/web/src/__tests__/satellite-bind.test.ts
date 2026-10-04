@@ -10,7 +10,7 @@ import { GOOGLE_KEYLESS_TILES, GOOGLE_SESSION_TILES } from '../maplibre/satellit
 
 const VIEWPORT = { west: -1, south: 48, east: 1, north: 49, zoom: 14 }
 
-/** A recording stand-in for a live map, narrowed to what the binding may touch. */
+/** A recording stand-in for a live map, narrowed to what the Satellite mount may touch. */
 function recordingMap() {
   const sources = new Map<string, unknown>()
   const layers = new Map<string, unknown>()
