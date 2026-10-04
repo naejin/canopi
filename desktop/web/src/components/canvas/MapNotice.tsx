@@ -25,7 +25,7 @@ export function MapNotice({ notice, onRetry, canvasRef }: MapNoticeProps) {
   useLayoutEffect(() => {
     if (!handOff.current) return
     handOff.current = false
-    canvasRef.current?.focus()
+    canvasRef.current?.focus({ preventScroll: true })
   })
   if (!notice.visible) return null
   const retry = (event: MouseEvent) => {

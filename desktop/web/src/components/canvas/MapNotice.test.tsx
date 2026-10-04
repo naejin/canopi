@@ -57,11 +57,14 @@ describe('MapNotice', () => {
     retry.focus()
     await act(async () => { retry.click() })
     await act(async () => { render(<MapNotice notice={loading} onRetry={onRetry} canvasRef={canvasRef} />, container) })
+    const focus = vi.spyOn(canvas, 'focus')
 
     await act(async () => { render(<MapNotice notice={hidden} onRetry={onRetry} canvasRef={canvasRef} />, container) })
 
     expect(container.querySelector('[data-map-notice]')).toBeNull()
     expect(document.activeElement).toBe(canvas)
+    // The map takes focus the way its own session does, without scrolling the page.
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true })
   })
 
   it('leaves focus alone when the chip goes away without holding it', async () => {
