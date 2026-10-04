@@ -18,9 +18,9 @@ function fakeMap() {
 }
 
 function selectionAt(lon: number, lat: number) {
-  return createPanelTargetMapOverlayContract('selection', {
-    features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [lon, lat] }, properties: { kind: 'plant' } }],
-  } as never)
+  return createPanelTargetMapOverlayContract('selection', [
+    { type: 'Feature', geometry: { type: 'Point', coordinates: [lon, lat] }, properties: { kind: 'plant' } },
+  ] as never)
 }
 
 describe('panel target overlay data', () => {

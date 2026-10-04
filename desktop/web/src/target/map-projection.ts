@@ -74,21 +74,17 @@ interface TargetMapLineZoneFeature {
 type TargetMapZoneFeature = TargetMapPolygonZoneFeature | TargetMapLineZoneFeature
 export type TargetMapFeature = TargetMapPlantFeature | TargetMapZoneFeature
 
-/** The resolved Targets' map features; a plant without a position, or a zone with too few points, has none. */
-export interface TargetMapProjectionResult {
-  readonly features: readonly TargetMapFeature[]
-}
-
 function isTargetSceneIndex(
   scene: TargetSceneInput | TargetSceneIndex,
 ): scene is TargetSceneIndex {
   return 'plantsById' in scene
 }
 
+/** The resolved Targets' map features; a plant without a position, or a zone with too few points, has none. */
 export function projectTargetResolutionToMapFeatures(
   resolution: TargetResolution,
   location: GeoPosition,
-): TargetMapProjectionResult {
+): readonly TargetMapFeature[] {
   const features: TargetMapFeature[] = []
   const plane = createSessionPlane(location)
 
@@ -153,14 +149,14 @@ export function projectTargetResolutionToMapFeatures(
     })
   }
 
-  return { features }
+  return features
 }
 
 export function projectTargetsToMapFeatures(
   values: readonly PanelTarget[],
   scene: TargetMapProjectionScene | TargetSceneIndex,
   location: GeoPosition,
-): TargetMapProjectionResult {
+): readonly TargetMapFeature[] {
   const index = isTargetSceneIndex(scene) ? scene : indexTargetScene(scene)
   return projectTargetResolutionToMapFeatures(resolveTargetsInScene(values, index), location)
 }
