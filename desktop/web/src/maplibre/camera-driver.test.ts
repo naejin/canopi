@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestView, type TestView } from '../__tests__/support/test-view'
-import { geoToMercator, mapZoomToStageScale, mercatorToGeo, stageScaleToMapZoom, worldToGeo } from '../canvas/projection'
+import { geoToMercator, mapZoomToStageScale, mercatorToGeo, stageScaleToMapZoom } from '../canvas/projection'
 import type { ScenePersistedState } from '../canvas/runtime/scene'
 import type { CameraDriver, CameraDriverDeps } from '../canvas/runtime/view/camera-driver'
 import { createCameraDriverHost } from '../canvas/runtime/view/driver-host'
@@ -217,8 +217,8 @@ function viewOn(map: ConsistentMap, viewport?: { x: number; y: number; scale: nu
 
 /** The pixel MapLibre shows a plane point at, from the map's own camera (512-px Mercator tiles, north up). */
 function mapPixelOf(map: ConsistentMap, plane: SessionPlane, point: { x: number; y: number }) {
-  const geo = worldToGeo(point.x, point.y, plane.origin.lat, plane.origin.lon)
-  const ground = geoToMercator(geo.lng, geo.lat)
+  const geo = plane.toGeo(point)
+  const ground = geoToMercator(geo.lon, geo.lat)
   const centre = geoToMercator(map.getCenter().lng, map.getCenter().lat)
   const worldSize = 512 * 2 ** map.getZoom()
   return { x: map.size.width / 2 + (ground.x - centre.x) * worldSize, y: map.size.height / 2 + (ground.y - centre.y) * worldSize }
@@ -523,9 +523,9 @@ describe('MapLibre camera driver', () => {
 
     placeOn(driver, plane, { x: -200, y: -100, scale: 2, bearingDeg: 0 })
 
-    const centre = worldToGeo(350, 250, 45.52, -122.68)
+    const centre = plane.toGeo({ x: 350, y: 250 })
     const [options] = map.jumpTo.mock.calls.at(-1)!
-    expect(options.center[0]).toBeCloseTo(centre.lng, 8)
+    expect(options.center[0]).toBeCloseTo(centre.lon, 8)
     expect(options.center[1]).toBeCloseTo(centre.lat, 8)
     expect(options.zoom).toBeCloseTo(stageScaleToMapZoom(2, 45.52), 8)
     expect(options.bearing).toBe(0)

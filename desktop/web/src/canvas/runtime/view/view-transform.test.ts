@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapZoomToStageScale, worldToGeo } from '../../projection'
+import { mapZoomToStageScale } from '../../projection'
 import { createSessionPlane, type SessionPlane } from '../../session-plane'
 import { planarToViewCamera } from './camera-math'
 import type { PlanarCamera, ViewCamera, ViewScreen, WorldPoint } from './types'
@@ -109,8 +109,8 @@ describe('view transform', () => {
     const plane = createSessionPlane({ lon: -122.68, lat: 45.52 })
     const view = fromPlane({ x: -200, y: -100, scale: 2, bearingDeg: 0 }, plane)
 
-    const centre = worldToGeo(350, 250, 45.52, -122.68)
-    expect(view.camera.center.lon).toBeCloseTo(centre.lng, 10)
+    const centre = plane.toGeo({ x: 350, y: 250 })
+    expect(view.camera.center.lon).toBeCloseTo(centre.lon, 10)
     expect(view.camera.center.lat).toBeCloseTo(centre.lat, 10)
     expect(view.camera.zoom).toBeCloseTo(Math.log2(mapZoomToStageScale(0, 45.52) ** -1 * 2), 12)
     view.visibleWorldQuad().forEach((corner, index) => expectClose(corner, [
@@ -176,8 +176,8 @@ describe('ViewTransform.camera center', () => {
     const plane = createSessionPlane({ lon: -122.68, lat: 45.52 })
     const view = fromPlane({ x: -200, y: -100, scale: 2, bearingDeg: 0 }, plane)
 
-    const expected = worldToGeo(350, 250, 45.52, -122.68)
-    expect(view.camera.center.lon).toBeCloseTo(expected.lng, 8)
+    const expected = plane.toGeo({ x: 350, y: 250 })
+    expect(view.camera.center.lon).toBeCloseTo(expected.lon, 8)
     expect(view.camera.center.lat).toBeCloseTo(expected.lat, 8)
   })
 })

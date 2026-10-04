@@ -294,7 +294,7 @@ function disposeInspectionObserver(): void {
 /**
  * Sample one WGS84 point of the inspected layer.
  *
- * The point is produced by the canvas's own `worldToGeo`, so it is the
+ * The point is produced by the session plane's `toGeo`, so it is the
  * geographic position the canvas actually drew rather than an approximation
  * reconstructed here. The displayed coordinate is that same point.
  */

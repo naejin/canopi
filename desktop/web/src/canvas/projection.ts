@@ -52,30 +52,6 @@ export function mercatorToGeo(x: number, y: number): { lng: number; lat: number 
   }
 }
 
-function worldToMercator(
-  x: number,
-  y: number,
-  originLat: number,
-  originLon: number,
-): MapMercatorCoordinate {
-  const origin = geoToMercator(originLon, originLat)
-  const mercatorUnitsPerMeter = mercatorUnitsPerMeterAtLat(originLat)
-  return {
-    x: origin.x + x * mercatorUnitsPerMeter,
-    y: origin.y + y * mercatorUnitsPerMeter,
-  }
-}
-
-export function worldToGeo(
-  x: number,
-  y: number,
-  originLat: number,
-  originLon: number,
-): { lng: number; lat: number } {
-  const mercator = worldToMercator(x, y, originLat, originLon)
-  return mercatorToGeo(mercator.x, mercator.y)
-}
-
 /**
  * Convert canvas viewport scale to a MapLibre zoom level using the same
  * Mercator world-size convention as MapLibre's transform (512px world at z=0).

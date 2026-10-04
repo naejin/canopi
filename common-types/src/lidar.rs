@@ -165,8 +165,8 @@ pub struct LidarSampleRequest {
     pub request_id: String,
     /// WGS84 longitude in degrees of the point to sample.
     ///
-    /// The caller derives this from the scene point with the canvas's own
-    /// `worldToGeo`, which is the projection the canvas actually drew with, so
+    /// The caller derives this from the scene point with the session plane's
+    /// `toGeo`, which is the projection the canvas actually drew with, so
     /// the sampled point is the displayed point. Nothing here re-derives or
     /// approximates the placement: the native side only transforms this WGS84
     /// point into the generation's own CRS.

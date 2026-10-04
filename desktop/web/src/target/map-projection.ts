@@ -1,4 +1,4 @@
-import { worldToGeo } from '../canvas/projection'
+import { createSessionPlane, type GeoPosition } from '../canvas/session-plane'
 import type { SceneZoneEntity } from '../canvas/runtime/scene'
 import {
   getEllipticalZonePolygon,
@@ -16,11 +16,6 @@ import {
 import type { PanelTarget } from '../types/design'
 
 type TargetMapProjectionPoint = TargetScenePoint
-
-interface TargetMapProjectionLocation {
-  readonly lat: number
-  readonly lon: number
-}
 
 interface TargetMapPlantRef {
   readonly id: string
@@ -92,34 +87,24 @@ function isTargetSceneIndex(
 
 export function projectTargetResolutionToMapFeatures(
   resolution: TargetResolution,
-  location: TargetMapProjectionLocation,
+  location: GeoPosition,
 ): TargetMapProjectionResult {
   const features: TargetMapFeature[] = []
+  const plane = createSessionPlane(location)
 
   const projectPoint = (point: TargetMapProjectionPoint): readonly [number, number] => {
-    const geo = worldToGeo(
-      point.x,
-      point.y,
-      location.lat,
-      location.lon,
-    )
-    return [geo.lng, geo.lat]
+    const geo = plane.toGeo(point)
+    return [geo.lon, geo.lat]
   }
 
   for (const ref of resolution.resolvedRefs) {
     if (ref.kind === 'plant') {
       if (!ref.plant.position) continue
-      const geo = worldToGeo(
-        ref.plant.position.x,
-        ref.plant.position.y,
-        location.lat,
-        location.lon,
-      )
       features.push({
         type: 'Feature',
         geometry: {
           type: 'Point',
-          coordinates: [geo.lng, geo.lat],
+          coordinates: projectPoint(ref.plant.position),
         },
         properties: {
           kind: 'plant',
@@ -174,7 +159,7 @@ export function projectTargetResolutionToMapFeatures(
 export function projectTargetsToMapFeatures(
   values: readonly PanelTarget[],
   scene: TargetMapProjectionScene | TargetSceneIndex,
-  location: TargetMapProjectionLocation,
+  location: GeoPosition,
 ): TargetMapProjectionResult {
   const index = isTargetSceneIndex(scene) ? scene : indexTargetScene(scene)
   return projectTargetResolutionToMapFeatures(resolveTargetsInScene(values, index), location)
