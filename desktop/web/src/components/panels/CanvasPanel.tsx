@@ -8,7 +8,7 @@ import {
 import { WelcomeScreen } from '../shared/WelcomeScreen'
 import { hasVisibleMapLayer, mapLayers } from '../../app/map-layers/state'
 import { getMapNoticeReadModel } from '../../app/canvas-map-surface/map-notice'
-import { isOpenDesignShown } from '../../app/canvas-map-surface/design-reveal'
+import { useOpenDesignShown } from '../../app/canvas-map-surface/design-reveal'
 import { currentDesign } from '../../app/document-session/store'
 import { appCommandGraphToolbarProjection } from '../../commands/registry'
 import { CanvasChrome } from '../canvas/CanvasChrome'
@@ -36,7 +36,7 @@ export function CanvasPanel() {
   })
 
   const hasDesign = currentDesign.value !== null
-  const designShown = isOpenDesignShown(hasDesign, basemapState)
+  const designShown = useOpenDesignShown(hasDesign, basemapState)
   const mapNotice = getMapNoticeReadModel({
     hasDesign,
     mapVisible: hasVisibleMapLayer(mapLayers.value),

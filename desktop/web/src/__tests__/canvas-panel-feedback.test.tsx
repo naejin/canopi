@@ -302,14 +302,38 @@ describe('CanvasPanel opening a Design', () => {
     expect(area, 'the canvas area hides everything but the start screen').not.toBeNull()
     expect(container.querySelector('[data-testid="welcome-screen"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="canvas-chrome"]'), 'mounted, so it registers what it covers').not.toBeNull()
+    // Transparent, not visibility: hidden, which would refuse the focus a field gives itself on mount (e2e/canvas/design-reveal.spec.ts).
     const css = readFileSync('src/components/panels/Panels.module.css', 'utf8')
-    expect(css).toMatch(/\.canvasArea\[data-design-hidden\] > :not\(\[data-start-screen\], :has\(\[data-start-screen\]\)\) \{\s*visibility: hidden;/)
+    expect(css).toMatch(/\.canvasArea\[data-design-hidden\] > :not\(\[data-start-screen\], :has\(\[data-start-screen\]\)\) \{\s*opacity: 0;\s*pointer-events: none;\s*\}/)
 
     await act(async () => { presented.value = true })
 
     expect(container.querySelector('[data-design-hidden]')).toBeNull()
     expect(container.querySelector('[data-testid="welcome-screen"]')).toBeNull()
     expect(container.querySelector('[data-testid="canvas-chrome"]')).not.toBeNull()
+  })
+
+  it('keeps an open Design shown while another opens over it: the start screen comes back only after Close Design', async () => {
+    const presented = signal(true)
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ presented }) }))
+    designSessionFixture.file = demoDesign()
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+    expect(container.querySelector('[data-testid="welcome-screen"]')).toBeNull()
+
+    await act(async () => {
+      designSessionFixture.file = { ...demoDesign(), name: 'Other' }
+      presented.value = false
+    })
+
+    expect(container.querySelector('[data-design-hidden]')).toBeNull()
+    expect(container.querySelector('[data-testid="welcome-screen"]')).toBeNull()
+
+    await act(async () => { designSessionFixture.file = null })
+    expect(container.querySelector('[data-testid="welcome-screen"]')).not.toBeNull()
+    await act(async () => { designSessionFixture.file = demoDesign() })
+    expect(container.querySelector('[data-design-hidden]'), 'opened from the start screen: hidden until drawn').not.toBeNull()
   })
 
   it('shows the Design at once on a map that failed: nothing will draw its scene', async () => {

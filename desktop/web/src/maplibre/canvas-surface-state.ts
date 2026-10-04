@@ -25,6 +25,12 @@ export const IDLE_MAPLIBRE_CANVAS_SURFACE_STATE: MapLibreCanvasSurfaceState = {
   retryable: false,
 }
 
+/** The map cannot be built (no WebGL2), or the canvas runtime that would draw it could not start; no Retry is offered. */
+export const UNAVAILABLE_MAPLIBRE_CANVAS_SURFACE_STATE: MapLibreCanvasSurfaceState = {
+  ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
+  status: 'error',
+}
+
 export function mapLibreCanvasSurfaceStateEquals(
   left: MapLibreCanvasSurfaceState,
   right: MapLibreCanvasSurfaceState,

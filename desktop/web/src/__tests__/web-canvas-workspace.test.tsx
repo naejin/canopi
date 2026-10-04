@@ -600,6 +600,9 @@ describe('Web Edition canvas workspace', () => {
       })
       expect(runtime.composition.dispose).toHaveBeenCalledOnce()
       expect(currentCanvasSession.value).toBeNull()
+      // The open Design shows over the map notice; it never waits behind the start screen for a session that will not come.
+      expect(container.querySelector('[data-design-hidden]')).toBeNull()
+      expect(container.querySelector('[data-map-notice] [role="status"]')?.textContent).toBe('Map unavailable')
     } finally {
       logError.mockRestore()
     }

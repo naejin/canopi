@@ -18,10 +18,11 @@ import {
 import type { WorkspaceRuntimeComposition } from '../app/canvas-map-surface/workspace-runtime-composition'
 import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
+  UNAVAILABLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   type MapLibreCanvasSurfaceState,
 } from '../maplibre/canvas-surface-state'
 import { getMapNoticeReadModel } from '../app/canvas-map-surface/map-notice'
-import { isOpenDesignShown } from '../app/canvas-map-surface/design-reveal'
+import { useOpenDesignShown } from '../app/canvas-map-surface/design-reveal'
 import { hasVisibleMapLayer, mapLayers } from '../app/map-layers/state'
 import { MapNotice } from '../components/canvas/MapNotice'
 import { t } from '../i18n'
@@ -211,6 +212,8 @@ export function WebCanvasWorkspace({
       release()
       if (!cancelled) {
         console.error('Failed to initialize browser canvas runtime:', error)
+        // Nothing will draw: an open Design shows at once, over the map notice (design-reveal.ts).
+        setMapState(UNAVAILABLE_MAPLIBRE_CANVAS_SURFACE_STATE)
       }
     })
 
@@ -227,7 +230,7 @@ export function WebCanvasWorkspace({
     mapSurface,
     t,
   })
-  const designShown = isOpenDesignShown(hasDesign, mapSurface)
+  const designShown = useOpenDesignShown(hasDesign, mapSurface)
 
   return (
     <div className={panelStyles.canvasPanel} data-testid="web-canvas-workspace">

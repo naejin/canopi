@@ -29,10 +29,12 @@
   --tool-card-reserve: calc(var(--canvas-tool-card-left) + 320px + var(--space-2));
 }
 
-/* An opening Design keeps the start screen up until its first scene is drawn (app/canvas-map-surface/design-reveal.ts):
-   its chrome is laid out, so it registers what it covers, but not shown. */
+/* A Design opened from the start screen keeps it up until its first scene is drawn (app/canvas-map-surface/design-reveal.ts):
+   its chrome is laid out, so it registers what it covers, and transparent rather than hidden, so a field that focuses
+   itself on mount (the New Design place field) keeps that focus when it shows. */
 .canvasArea[data-design-hidden] > :not([data-start-screen], :has([data-start-screen])) {
-  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* Rulers start below the floating title bar (and any notice) and right of the tool rail
