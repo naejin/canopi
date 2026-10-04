@@ -17,7 +17,7 @@ The better source is the ONF plugin for Computree (`ct_pluginonf`, https://gitla
 - **Port, don't embed.** Canopi translates a chosen set of ONF methods to Rust in a workspace crate, `vegetation/` (package `canopi-vegetation`).
   - The crate is licensed LGPL-3.0-or-later, keeps ONF's notices and records the permission in `vegetation/NOTICE`.
   - Ported code lives in `src/onf/` and names its upstream file at the pinned commit `229ae44d`. That commit is final; Canopi owns the port.
-  - The crate depends on nothing Canopi-specific. It reuses `wblidar` and `wbtopology` from the already pinned `opengeos/whitebox-wasm` revision, and no `wbprojection`: transforms to WGS84 go through ADR 0014's one resolver in the desktop. It uses no OpenCV or Qt.
+  - The crate depends on nothing Canopi-specific. It reuses `wblidar`, `wbtopology` and `wbprojection` from the already pinned `opengeos/whitebox-wasm` revision. It uses no OpenCV or Qt.
 - **Canopi-authored methods.** Where neither ONF nor GeoLibre offers a public method, Canopi implements a published one in `src/methods/`. Crown segmentation (a seeded watershed) is the first case. Each such method:
   - cites its reference in the module, the recipe and the result details;
   - is specified by its module documentation;

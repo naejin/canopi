@@ -35,11 +35,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// Versioned display profile; every derivative key starts with it, and the
-/// startup prune drops derivatives of any other. v2: the keys carry the
-/// source's datum shift (`GeogTOWGS84GeoKey`), so derivatives written before
-/// it regenerate once.
-pub(super) const DISPLAY_PROFILE: &str = "display-cog-deflate256-v2";
+/// Versioned display profile; part of every derivative key.
+pub(super) const DISPLAY_PROFILE: &str = "display-cog-deflate256-v1";
 /// Largest side of a composed part, in 1024-cell chunks: a part is composed
 /// in memory and converted whole, so 4×4 chunks keep it inside the engine's
 /// capacity limit (`import::MAX_RAW_EXTRACTION_CELLS`).
@@ -140,7 +137,11 @@ fn build_plan(
                 .map(|member| {
                     let cog = &member.resolved.cog;
                     PartSpec {
-                        key: asset_key(&cog.sha256, member.resolved.nodata),
+                        key: format!(
+                            "asset-{}-{}",
+                            cog.sha256,
+                            nodata_tag(member.resolved.nodata)
+                        ),
                         source: PartSource::Asset {
                             path: cog.path.clone(),
                             nodata: member.resolved.nodata,
@@ -183,11 +184,7 @@ fn build_plan(
                 lattice: manifest.grid.clone(),
                 crs_wkt: manifest.crs_wkt.clone(),
             });
-            let parts = grouped_parts(
-                &format!("{DISPLAY_PROFILE}-gen-{}", result.id),
-                &reader,
-                coordinates,
-            );
+            let parts = grouped_parts(&format!("gen-{}", result.id), &reader, coordinates);
             Ok(Planned::Plan(Arc::new(DisplayPlan {
                 kind,
                 entity_id: entity_id.to_string(),
@@ -197,11 +194,6 @@ fn build_plan(
             })))
         }
     }
-}
-
-/// The derivative key of one numeric COG under its NoData rule.
-fn asset_key(sha256: &str, nodata: Option<f32>) -> String {
-    format!("{DISPLAY_PROFILE}-asset-{sha256}-{}", nodata_tag(nodata))
 }
 
 /// Group occupied chunks into parts of at most `PART_CHUNKS`² chunks.
@@ -671,7 +663,7 @@ impl LidarLibrary {
         for source in &staging.sources {
             let cog = &source.source_cog;
             let part = PartSpec {
-                key: asset_key(&cog.sha256, cog.nodata),
+                key: format!("asset-{}-{}", cog.sha256, nodata_tag(cog.nodata)),
                 source: PartSource::Asset {
                     path: cog.resolve(&self.inner.paths, &source.job_id)?,
                     nodata: cog.nodata,
@@ -688,8 +680,7 @@ impl LidarLibrary {
     }
 }
 
-/// Remove staging leftovers, derivatives of an earlier profile and published
-/// files the registry does not own.
+/// Remove staging leftovers and published files the registry does not own.
 ///
 /// Runs at startup, when no WebView reader can hold a derivative open, so an
 /// unreferenced file can go without racing an admitted read.
@@ -700,12 +691,6 @@ pub(super) fn prune_display_derivatives(library: &LidarLibrary) -> Result<(), St
     }
     let owned: HashSet<String> = {
         let display = library.display()?;
-        display
-            .execute(
-                "DELETE FROM display_cogs WHERE instr(key, ?1) != 1",
-                [format!("{DISPLAY_PROFILE}-")],
-            )
-            .map_err(|e| e.to_string())?;
         let mut statement = display
             .prepare("SELECT file FROM display_cogs WHERE file != ''")
             .map_err(|e| e.to_string())?;
@@ -960,76 +945,6 @@ mod library_tests {
             .map(|asset| std::fs::metadata(&asset.path).unwrap().modified().unwrap())
             .collect();
         assert_eq!(before, after);
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// A derivative an earlier display profile wrote is never served: the
-    /// startup prune drops its row and file, and the item regenerates.
-    #[test]
-    fn derivatives_of_an_earlier_profile_are_pruned_and_regenerated() {
-        let root = crate::test_scratch::TestScratch::new("canopi-display-profile");
-        std::fs::create_dir_all(&root).unwrap();
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let cancel = AtomicBool::new(false);
-        let source = plane_source(&library, &root, "tile", 445_000.0);
-        let layer_id = library
-            .create_layer("tile", RasterQuantity::GroundElevation, None, false)
-            .unwrap();
-        let job_id = library.record_import_job(&layer_id).unwrap();
-        super::super::import::stage_and_publish(&library, &job_id, &layer_id, &[source], &cancel)
-            .unwrap();
-        library
-            .prepare_display_now(LibraryItemRole::Source, &layer_id)
-            .unwrap();
-        // Rewrite each row as an earlier profile keyed it: without the profile.
-        {
-            let display = library.display().unwrap();
-            let keys: Vec<String> = display
-                .prepare("SELECT key FROM display_cogs")
-                .unwrap()
-                .query_map([], |row| row.get(0))
-                .unwrap()
-                .collect::<Result<_, _>>()
-                .unwrap();
-            assert!(!keys.is_empty());
-            for key in keys {
-                let earlier = key
-                    .strip_prefix(&format!("{DISPLAY_PROFILE}-"))
-                    .unwrap_or(&key);
-                display
-                    .execute(
-                        "UPDATE display_cogs SET key = ?1 WHERE key = ?2",
-                        [earlier, key.as_str()],
-                    )
-                    .unwrap();
-            }
-        }
-
-        prune_display_derivatives(&library).unwrap();
-        let display_dir = library.inner.paths.display_cog_dir();
-        assert_eq!(std::fs::read_dir(&display_dir).unwrap().count(), 0);
-        let Planned::Plan(plan) =
-            build_plan(&library, LibraryItemRole::Source, &layer_id, &cancel).unwrap()
-        else {
-            panic!("a published item has a plan")
-        };
-        for part in &plan.parts {
-            assert!(
-                ready_part(&library, &part.key).unwrap().is_none(),
-                "{}",
-                part.key
-            );
-        }
-        library
-            .prepare_display_now(LibraryItemRole::Source, &layer_id)
-            .unwrap();
-        for part in &plan.parts {
-            assert!(
-                ready_part(&library, &part.key).unwrap().is_some(),
-                "{}",
-                part.key
-            );
-        }
         let _ = std::fs::remove_dir_all(&root);
     }
 }

@@ -10,7 +10,7 @@ GeoLibre (MIT, https://github.com/opengeos/GeoLibre) is an open GIS app with lay
 
 - Keep Canopi's Preact app, Rust/Tauri backend and design engine. Do not fork GeoLibre and do not import its React components or stores.
 - Reuse GeoLibre before writing generic map code:
-  - **Depend** on light packages: `maplibre-gl-raster` and `cog-tiler-wasm` for COG display; `wbgeotiff` (from `opengeos/whitebox-wasm`) as the native GeoTIFF/COG reader; the GeoLibre CLI (`opengeos/geolibre-rust`) as the slope sidecar. Each is pinned. Outside GeoLibre, `proj4rs` with `crs-definitions` carries the engine's coordinate transforms, because the whitebox projection crate misplaced national grids ([ADR 0014](0014-pure-rust-raster-engine.md)).
+  - **Depend** on light packages: `maplibre-gl-raster` and `cog-tiler-wasm` for COG display; `wbgeotiff` (from `opengeos/whitebox-wasm`) as the native GeoTIFF/COG reader; the GeoLibre CLI (`opengeos/geolibre-rust`) as the slope sidecar. Each is pinned.
   - **Copy** framework-free modules from GeoLibre at reference commit `e9df9e2`: the geocoding provider registry (`packages/core/src/geocoding.ts`) and OpenFreeMap basemap presets (`packages/core/src/types.ts`). The map layer store follows the store-driven sync pattern of `packages/map/src/layer-sync.ts` without copying its code.
   - Evaluated in V7 and not adopted, because none made Canopi smaller or clearly better: terrain control and COG DEM source, COG imagery helpers, fill patterns, map capture, print layout export, collapsed attribution, map resize and map bounds helpers.
 - A copy is justified only when Canopi code gets smaller or clearly better.

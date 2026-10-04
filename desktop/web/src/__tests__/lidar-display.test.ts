@@ -39,7 +39,7 @@ function descriptor(overrides: Partial<LidarDisplayDescriptor> = {}): LidarDispl
     kind: 'Source',
     entity_id: 'lyr-1',
     generation_id: 'gen-2',
-    profile: 'display-cog-deflate256-v2',
+    profile: 'display-cog-deflate256-v1',
     state: 'Ready',
     message: null,
     assets: [

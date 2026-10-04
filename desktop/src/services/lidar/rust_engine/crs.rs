@@ -1,156 +1,166 @@
-//! Coordinate reference systems for the raster engine.
+//! Coordinate reference systems for the raster engine, on `wbprojection`.
 //!
 //! A CRS reaches the engine as `EPSG:n`, as WKT (the catalogue's stored
-//! form), as GeoTIFF keys or as the PROJ string of another raster format.
-//! Every route resolves to one [`ResolvedCrs`]: a PROJ definition `proj4rs`
-//! transforms through, the WKT the catalogue stores and the name written as
-//! the GeoTIFF citation. A registry code takes its definition and WKT from
-//! `crs-definitions` and is preferred whenever the source names one; a code
-//! whose definition `proj4rs` cannot read is refused by name, never
-//! approximated. `wbprojection` only reads WKT that names no code, identifies
-//! codes and gives areas of use (ADR 0014).
+//! form) or as GeoTIFF keys. Every route resolves to one [`ResolvedCrs`]
+//! that can transform points and be written back as GeoTIFF keys. An EPSG
+//! code is preferred whenever the definition names one, so stored WKT and
+//! written keys stay registry-backed; only a source with user-defined keys
+//! and no recognisable code keeps a user-defined definition.
 
-use proj4rs::Proj;
+use super::laea::Laea;
+use super::swiss::SwissGrid;
 use wbgeotiff::geo_keys::{GeoKeyDirectory, GeoKeyEntry, GeoKeyValue, key};
 use wbprojection::{Crs, Datum, DatumTransform, Ellipsoid, ProjectionKind, ProjectionParams};
+
+/// Projections the engine computes itself because the crate's are not
+/// accurate enough (see `swiss.rs` and `laea.rs`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum OwnProjection {
+    Swiss(SwissGrid),
+    Laea(Laea),
+}
+
+impl OwnProjection {
+    fn forward(&self, lon: f64, lat: f64) -> (f64, f64) {
+        match self {
+            OwnProjection::Swiss(grid) => grid.forward(lon, lat),
+            OwnProjection::Laea(laea) => laea.forward(lon, lat),
+        }
+    }
+
+    fn inverse(&self, x: f64, y: f64) -> (f64, f64) {
+        match self {
+            OwnProjection::Swiss(grid) => grid.inverse(x, y),
+            OwnProjection::Laea(laea) => laea.inverse(x, y),
+        }
+    }
+}
 
 /// One horizontal CRS the engine can transform through and write.
 #[derive(Debug, Clone)]
 pub(super) struct ResolvedCrs {
+    /// The crate's definition: datum and, unless `own` is set, projection.
+    pub crs: Crs,
     pub epsg: Option<u32>,
-    /// WKT the catalogue stores; resolving it again yields the same CRS.
+    /// WKT the catalogue stores; re-parsing it yields the same CRS.
     pub wkt: String,
-    /// The name written as the GeoTIFF citation.
-    name: String,
-    /// The normalised PROJ definition `proj` was read from.
-    definition: String,
-    proj: Proj,
-    /// A CRS with no registry code, as GeoTIFF keys spell it out.
-    user: Option<ProjectionParams>,
+    /// A projection the engine computes itself; `crs` is then the geographic
+    /// definition on the same datum, used for the datum step only.
+    own: Option<OwnProjection>,
 }
 
 impl ResolvedCrs {
-    pub(super) fn is_projected(&self) -> bool {
-        !self.proj.is_latlong()
+    /// A crate definition, with LAEA taken over by the engine's formulas.
+    pub(super) fn registry(crs: Crs, epsg: Option<u32>, wkt: String) -> Self {
+        let params = crs.projection.params();
+        if matches!(params.kind, ProjectionKind::LambertAzimuthalEqualArea)
+            && params.lat0.abs() < 89.999
+        {
+            let laea = Laea {
+                lon0: params.lon0,
+                lat0: params.lat0,
+                false_easting: params.false_easting,
+                false_northing: params.false_northing,
+                a: params.ellipsoid.a,
+                e2: params.ellipsoid.e2,
+            };
+            if let Some(geographic) = geographic_on(&crs.datum, &crs.name) {
+                return Self {
+                    crs: geographic,
+                    epsg,
+                    wkt,
+                    own: Some(OwnProjection::Laea(laea)),
+                };
+            }
+        }
+        Self {
+            crs,
+            epsg,
+            wkt,
+            own: None,
+        }
     }
 
-    /// Transform one point into `target`: degrees in a geographic CRS, the
-    /// CRS's own linear unit in a projected one.
+    pub(super) fn is_projected(&self) -> bool {
+        self.own.is_some() || self.crs.is_projected()
+    }
+
+    /// Geodetic WGS84 (lon, lat) of a point in this CRS.
+    fn to_wgs84(&self, x: f64, y: f64, wgs84: &Crs) -> Result<(f64, f64), String> {
+        match self.own {
+            Some(own) => {
+                let (lon, lat) = own.inverse(x, y);
+                self.crs.transform_to(lon, lat, wgs84)
+            }
+            None => self.crs.transform_to(x, y, wgs84),
+        }
+        .map_err(|e| e.to_string())
+    }
+
+    /// A point of this CRS from geodetic WGS84 (lon, lat).
+    fn place_wgs84(&self, lon: f64, lat: f64, wgs84: &Crs) -> Result<(f64, f64), String> {
+        match self.own {
+            Some(own) => {
+                let (lon, lat) = wgs84
+                    .transform_to(lon, lat, &self.crs)
+                    .map_err(|e| e.to_string())?;
+                Ok(own.forward(lon, lat))
+            }
+            None => wgs84
+                .transform_to(lon, lat, &self.crs)
+                .map_err(|e| e.to_string()),
+        }
+    }
+
+    /// Transform one point into `target`, through geodetic WGS84.
     pub(super) fn transform_to(
         &self,
         x: f64,
         y: f64,
         target: &ResolvedCrs,
     ) -> Result<(f64, f64), String> {
-        let mut point = if self.proj.is_latlong() {
-            (x.to_radians(), y.to_radians(), 0.0)
-        } else {
-            (x, y, 0.0)
-        };
-        proj4rs::transform::transform(&self.proj, &target.proj, &mut point)
-            .map_err(|e| e.to_string())?;
-        Ok(if target.proj.is_latlong() {
-            (point.0.to_degrees(), point.1.to_degrees())
-        } else {
-            (point.0, point.1)
-        })
+        let wgs84 = Crs::wgs84_geographic();
+        let (lon, lat) = self.to_wgs84(x, y, &wgs84)?;
+        target.place_wgs84(lon, lat, &wgs84)
     }
 }
 
-/// The prime meridians the registry's definitions name, in degrees east of
-/// Greenwich as EPSG defines them: PROJ and proj4rs 0.2.0 keep an older
-/// Madrid (3°41'16.58" W, 48 m west of EPSG's) and proj4rs an older
-/// Copenhagen, while PROJ places EPSG:2062 at EPSG's Madrid.
-const PRIME_MERIDIANS: [(&str, f64); 14] = [
-    ("greenwich", 0.0),
-    ("lisbon", -9.131_906_111_111),
-    ("paris", 2.337_229_166_667),
-    ("bogota", -74.080_916_666_667),
-    ("madrid", -3.687_375),
-    ("rome", 12.452_333_333_333),
-    ("bern", 7.439_583_333_333),
-    ("jakarta", 106.807_719_444_444),
-    ("ferro", -17.666_666_666_667),
-    ("brussels", 4.367_975),
-    ("stockholm", 18.058_277_777_778),
-    ("athens", 23.716_337_5),
-    ("oslo", 10.722_916_666_667),
-    ("copenhagen", 12.577_875),
-];
+/// GDAL's WKT1 of the Swiss grids, which the crate's registry text does not
+/// describe truthfully (see `swiss.rs`).
+const LV95_WKT: &str = r#"PROJCS["CH1903+ / LV95",GEOGCS["CH1903+",DATUM["CH1903+",SPHEROID["Bessel 1841",6377397.155,299.1528128,AUTHORITY["EPSG","7004"]],AUTHORITY["EPSG","6150"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4150"]],PROJECTION["Hotine_Oblique_Mercator_Azimuth_Center"],PARAMETER["latitude_of_center",46.9524055555556],PARAMETER["longitude_of_center",7.43958333333333],PARAMETER["azimuth",90],PARAMETER["rectified_grid_angle",90],PARAMETER["scale_factor",1],PARAMETER["false_easting",2600000],PARAMETER["false_northing",1200000],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["Easting",EAST],AXIS["Northing",NORTH],AUTHORITY["EPSG","2056"]]"#;
+const LV03_WKT: &str = r#"PROJCS["CH1903 / LV03",GEOGCS["CH1903",DATUM["CH1903",SPHEROID["Bessel 1841",6377397.155,299.1528128,AUTHORITY["EPSG","7004"]],AUTHORITY["EPSG","6149"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4149"]],PROJECTION["Hotine_Oblique_Mercator_Azimuth_Center"],PARAMETER["latitude_of_center",46.9524055555556],PARAMETER["longitude_of_center",7.43958333333333],PARAMETER["azimuth",90],PARAMETER["rectified_grid_angle",90],PARAMETER["scale_factor",1],PARAMETER["false_easting",600000],PARAMETER["false_northing",200000],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["Easting",EAST],AXIS["Northing",NORTH],AUTHORITY["EPSG","21781"]]"#;
 
-/// A PROJ string as proj4rs 0.2.0 reads it right, with its prime meridian.
-///
-/// That release reads the scale factor only as `+k` or `+k0` (`proj.rs`), so
-/// `+k_0` would silently fall back to 1, and it adds `+pm`, held in degrees,
-/// to longitudes in radians (`transform.rs`, `prime_meridian`). `+k_0`
-/// becomes `+k` and the meridian folds into `+lon_0`; without both, 323 EPSG
-/// definitions (the NTF Lambert zones, EOV, the Paris, Madrid and Ferro
-/// grids) are placed wrong. Goes when proj4rs fixes both upstream.
-fn normalise(definition: &str) -> Result<(String, f64), String> {
-    let mut prime_meridian = 0.0;
-    let mut terms = Vec::new();
-    for term in definition.split_whitespace() {
-        if let Some(value) = term.strip_prefix("+k_0=") {
-            terms.push(format!("+k={value}"));
-        } else if let Some(value) = term.strip_prefix("+pm=") {
-            prime_meridian = PRIME_MERIDIANS
-                .iter()
-                .find(|(name, _)| name.eq_ignore_ascii_case(value))
-                .map(|(_, degrees)| *degrees)
-                .or_else(|| value.parse().ok())
-                .ok_or_else(|| format!("unknown prime meridian {value}"))?;
-        } else {
-            terms.push(term.to_string());
-        }
-    }
-    if prime_meridian != 0.0 {
-        match terms.iter_mut().find(|term| term.starts_with("+lon_0=")) {
-            Some(term) => {
-                let lon0: f64 = term["+lon_0=".len()..]
-                    .parse()
-                    .map_err(|_| format!("unreadable {term}"))?;
-                *term = format!("+lon_0={}", lon0 + prime_meridian);
-            }
-            None => terms.push(format!("+lon_0={prime_meridian}")),
-        }
-    }
-    Ok((terms.join(" "), prime_meridian))
+/// The Swiss grids: the crate's datum, the engine's projection.
+fn swiss(code: u32) -> Option<ResolvedCrs> {
+    let (grid, wkt, datum) = match code {
+        2056 => (SwissGrid::LV95, LV95_WKT, Datum::CH1903_PLUS),
+        21781 => (SwissGrid::LV03, LV03_WKT, Datum::CH1903),
+        _ => return None,
+    };
+    let params = ProjectionParams {
+        kind: ProjectionKind::Geographic,
+        ellipsoid: datum.ellipsoid.clone(),
+        datum: datum.clone(),
+        ..ProjectionParams::default()
+    };
+    let geographic = Crs::new(format!("EPSG:{code} geodetic"), datum, params).ok()?;
+    Some(ResolvedCrs {
+        crs: geographic,
+        epsg: Some(code),
+        wkt: wkt.to_string(),
+        own: Some(OwnProjection::Swiss(grid)),
+    })
 }
 
-/// The value of one `+name=` term of a PROJ definition.
-fn term<'a>(definition: &'a str, name: &str) -> Option<&'a str> {
-    definition
-        .split_whitespace()
-        .find_map(|term| term.strip_prefix(name))
-}
-
-/// Read a PROJ definition: a geocentric CRS, a geographic one on another
-/// meridian than Greenwich (proj4rs ignores its `+pm`), a polar LAEA
-/// (proj4rs fails every ellipsoidal south-polar point) and an oblique LAEA
-/// on a sphere (proj4rs drops part of its northing: EPSG:2163 lands 10 km
-/// off) are refused (U24).
-fn parse(definition: &str) -> Result<(String, Proj), String> {
-    let (normalised, prime_meridian) = normalise(definition)?;
-    let proj = Proj::from_proj_string(&normalised).map_err(|e| e.to_string())?;
-    if proj.is_geocent() {
-        return Err("a geocentric CRS".to_string());
-    }
-    if proj.is_latlong() && prime_meridian != 0.0 {
-        return Err(OTHER_MERIDIAN.to_string());
-    }
-    if term(&normalised, "+proj=") == Some("laea") {
-        let lat0 = term(&normalised, "+lat_0=")
-            .and_then(|lat0| lat0.parse::<f64>().ok())
-            .unwrap_or(0.0);
-        let (a, b) = proj.ellipse_parameters();
-        if lat0.abs() == 90.0 {
-            return Err("a polar Lambert azimuthal equal-area CRS".to_string());
-        }
-        if a == b && lat0 != 0.0 {
-            return Err("an oblique Lambert azimuthal equal-area CRS on a sphere".to_string());
-        }
-    }
-    Ok((normalised, proj))
+/// The geographic CRS on `datum`, for the datum step of an own projection.
+fn geographic_on(datum: &Datum, name: &str) -> Option<Crs> {
+    let params = ProjectionParams {
+        kind: ProjectionKind::Geographic,
+        ellipsoid: datum.ellipsoid.clone(),
+        datum: datum.clone(),
+        ..ProjectionParams::default()
+    };
+    Crs::new(format!("{name} geodetic"), datum.clone(), params).ok()
 }
 
 /// Resolve `EPSG:n` (any common spelling) or WKT.
@@ -164,513 +174,32 @@ pub(super) fn from_reference(reference: &str) -> Result<ResolvedCrs, String> {
             .ok_or_else(|| format!("unrecognised coordinate reference system {trimmed}"))?;
         return from_epsg(code);
     }
-    // A WKT names its own code at the top. A nested node's code is a
-    // datum's, a unit's or a parameter's, and identification by parameters
-    // misreads hundreds of codes, so a WKT naming no code the registry has is
-    // read as it is spelled, or as the code it is identified as only when
-    // that code places as it does (`identified`).
-    let stored = |resolved: ResolvedCrs| ResolvedCrs {
-        wkt: trimmed.to_string(),
-        ..resolved
-    };
-    let nodes = wkt_nodes(trimmed);
-    if let Some(code) = own_code(&nodes) {
-        return from_epsg(code).map(stored);
-    }
-    if let Some(definition) = proj4_extension(&nodes) {
-        return from_proj4(definition).map(stored);
-    }
-    let codeless = without_codes(trimmed, &nodes);
-    let crs = Crs::from_wkt(&codeless).map_err(|e| format!("unsupported CRS WKT: {e}"))?;
-    let params = crs.projection.params();
-    // wbprojection reads the projection in metres from Greenwich, as its keys
-    // are written back (a projected CRS's meridian goes into its central
-    // meridian), while the raster's coordinates keep the WKT's own unit and a
-    // geographic CRS's longitudes their own meridian.
-    let geographic = matches!(params.kind, ProjectionKind::Geographic);
-    let meridian = nodes
-        .iter()
-        .rfind(|node| matches!(node.keyword, "PRIMEM" | "PRIMEMERIDIAN"))
-        .and_then(|node| node.numbers().first().copied());
-    if geographic && meridian.is_some_and(|pm| pm != 0.0) {
-        return Err(not_supported(OTHER_MERIDIAN));
-    }
-    if !geographic && projected_unit(trimmed).is_some_and(|metres| metres != 1.0) {
-        return Err(not_supported(OTHER_UNIT));
-    }
-    let shift = match wkt_shift(&nodes) {
-        Some(shift) => Some(shift),
-        None => geographic_shift(&nodes)?,
-    };
-    if shift.is_none()
-        && let Some(registry) = identified(&codeless, params)
+    if let Some(code) = wbprojection::epsg_from_wkt(trimmed)
+        && let Ok(mut resolved) = from_epsg(code)
     {
-        return Ok(registry);
+        resolved.wkt = trimmed.to_string();
+        return Ok(resolved);
     }
-    user_defined(params.clone(), shift, crs.name.clone(), trimmed.to_string())
+    let crs = Crs::from_wkt(trimmed).map_err(|e| format!("unsupported CRS WKT: {e}"))?;
+    Ok(ResolvedCrs::registry(crs, None, trimmed.to_string()))
 }
 
-/// The registry code a WKT naming no code and no shift is identified as,
-/// when that code's datum, projection and ellipsoid are the WKT's: an ESRI
-/// .prj names its datum only by name (D_OSGB_1936), so the code gives the
-/// shift. Identification alone misreads codes (an ESRI Lambert-93 comes back
-/// as EPSG:2918, Martinique 1938 / UTM 20N as PSAD56's), so the code's datum
-/// name must contain the WKT's (ESRI's D_Belge_1972 is EPSG's
-/// Reseau_National_Belge_1972) and the WKT with the code's shift must place
-/// as the code does.
-fn identified(codeless: &str, params: &ProjectionParams) -> Option<ResolvedCrs> {
-    let registry = from_epsg(wbprojection::identify_epsg_from_wkt(codeless)?).ok()?;
-    if !datum_name(&registry.wkt)?.contains(&datum_name(codeless)?) {
-        return None;
-    }
-    let spelled = user_defined(
-        params.clone(),
-        datum_shift(&registry.definition),
-        String::new(),
-        String::new(),
-    )
-    .ok()?;
-    places_as(&spelled, &registry, params).then_some(registry)
-}
-
-/// A WKT's datum name, lower case without its ESRI `D_` prefix and anything
-/// but letters and digits.
-fn datum_name(wkt: &str) -> Option<String> {
-    let node = wkt_nodes(wkt)
-        .into_iter()
-        .find(|node| matches!(node.keyword, "DATUM" | "GEODETICDATUM"))?;
-    let name = node.body.split(',').next()?.trim().trim_matches('"');
-    let name = name.strip_prefix("D_").unwrap_or(name);
-    Some(
-        name.chars()
-            .filter(char::is_ascii_alphanumeric)
-            .map(|c| c.to_ascii_lowercase())
-            .collect(),
-    )
-}
-
-/// Whether `a`, spelled by `params`, places points as `b` does: four points
-/// 50 km (half a degree in a geographic CRS) around its false origin agree
-/// to a centimetre.
-fn places_as(a: &ResolvedCrs, b: &ResolvedCrs, params: &ProjectionParams) -> bool {
-    let (step, x0, y0) = if a.is_projected() {
-        (50_000.0, params.false_easting, params.false_northing)
-    } else {
-        (0.5, params.lon0, params.lat0)
-    };
-    let tolerance = step * 2e-7;
-    [(-step, -step), (-step, step), (step, -step), (step, step)]
-        .into_iter()
-        .all(|(dx, dy)| {
-            let (x, y) = (x0 + dx, y0 + dy);
-            a.transform_to(x, y, b)
-                .is_ok_and(|(bx, by)| (bx - x).abs() < tolerance && (by - y).abs() < tolerance)
-        })
-}
-
-fn definition_of(code: u32) -> Option<crs_definitions::Def> {
-    u16::try_from(code)
-        .ok()
-        .and_then(crs_definitions::from_code)
-}
-
-/// The codes whose `crs-definitions` definition drops the south-west axis
-/// PROJ gives them (every code checked against `projinfo`); without it a
-/// tile lands 2,400 km away with its axes negated and swapped.
-const SOUTH_WEST_AXIS: [u32; 2] = [2065, 5513];
-
-/// Resolve a registry code. One whose definition points its axes west or
-/// south is refused: the display renderer (proj4js in cog-tiler-wasm) draws
-/// every CRS east-north, so its tile would land in the opposite hemisphere.
+/// Resolve a registry code.
 pub(super) fn from_epsg(code: u32) -> Result<ResolvedCrs, String> {
-    let unsupported = || format!("EPSG:{code} is not supported");
-    let def = definition_of(code).ok_or_else(unsupported)?;
-    if term(def.proj4, "+axis=").is_some_and(|axis| axis != "enu") {
-        return Err(unsupported());
+    if let Some(resolved) = swiss(code) {
+        return Ok(resolved);
     }
-    let axis = if SOUTH_WEST_AXIS.contains(&code) {
-        " +axis=swu"
-    } else {
-        ""
-    };
-    let (definition, proj) = parse(&format!("{}{axis}", def.proj4)).map_err(|_| unsupported())?;
-    Ok(ResolvedCrs {
-        epsg: Some(code),
-        wkt: with_authority(def.wkt, code),
-        name: def
-            .wkt
-            .split('"')
-            .nth(1)
-            .map_or_else(|| format!("EPSG:{code}"), str::to_string),
-        definition,
-        proj,
-        user: None,
-    })
+    let crs = Crs::from_epsg(code)
+        .map_err(|e| format!("EPSG:{code} is not in the projection registry: {e}"))?;
+    let wkt = wbprojection::to_ogc_wkt(code).unwrap_or_else(|_| crs.to_wkt());
+    Ok(ResolvedCrs::registry(
+        crs,
+        Some(code),
+        with_authority(&wkt, code),
+    ))
 }
 
-/// Resolve the PROJ string another raster format carries; `wbprojection`
-/// reads the normalised string for the projection the keys written back
-/// spell out. Keys spell a user-defined CRS in metres, and only the
-/// projections `projection_terms` names, so a string in another linear unit
-/// or projection, or one whose keys would place elsewhere (wbprojection
-/// drops a Mercator's `+lat_ts` and every `+axis`), is refused here rather
-/// than drawn from keys that disagree with the import.
-pub(super) fn from_proj4(definition: &str) -> Result<ResolvedCrs, String> {
-    let unsupported = |e: String| format!("unsupported PROJ definition: {e}");
-    let (definition, proj) = parse(definition).map_err(unsupported)?;
-    if !proj.is_latlong() && proj.to_meter() != 1.0 {
-        return Err(unsupported(OTHER_UNIT.to_string()));
-    }
-    let crs =
-        wbprojection::from_proj_string(&definition).map_err(|e| unsupported(e.to_string()))?;
-    let params = crs.projection.params();
-    projection_terms(params).map_err(unsupported)?;
-    let resolved = ResolvedCrs {
-        epsg: None,
-        wkt: with_definition(&crs.to_wkt(), &definition),
-        name: crs.name.clone(),
-        definition,
-        proj,
-        user: Some(params.clone()),
-    };
-    let keyed = from_geokeys(&geokeys_for(&resolved)?)?
-        .ok_or_else(|| unsupported("its keys name no CRS".to_string()))?;
-    if !places_as(&resolved, &keyed, params) {
-        return Err(unsupported(
-            "a definition GeoTIFF keys cannot spell is not supported".to_string(),
-        ));
-    }
-    Ok(resolved)
-}
-
-/// Why a CRS with no registry code in another linear unit is refused: its
-/// keys are written back in metres.
-const OTHER_UNIT: &str = "a linear unit other than the metre";
-
-/// Why a geographic CRS on another meridian is refused: proj4rs ignores its
-/// `+pm`, and keys spell a CRS with no code from Greenwich. Keys on another
-/// meridian are refused projected too: readers disagree on whether their
-/// projection longitudes count from it.
-const OTHER_MERIDIAN: &str = "a prime meridian other than Greenwich";
-
-fn not_supported(reason: &str) -> String {
-    format!("the raster's coordinate system is not supported: {reason}")
-}
-
-/// A CRS with no registry code: its projection, ellipsoid and datum shift.
-fn user_defined(
-    params: ProjectionParams,
-    shift: Option<Vec<f64>>,
-    name: String,
-    wkt: String,
-) -> Result<ResolvedCrs, String> {
-    let ellipsoid = &params.ellipsoid;
-    let mut definition = format!(
-        "{} +a={} +b={}",
-        projection_terms(&params)?,
-        ellipsoid.a,
-        ellipsoid.b
-    );
-    if let Some(shift) = &shift {
-        definition.push_str(&format!(" +towgs84={}", list(shift)));
-    }
-    let (definition, proj) = parse(&definition).map_err(|e| not_supported(&e))?;
-    Ok(ResolvedCrs {
-        epsg: None,
-        wkt: with_definition(&wkt, &definition),
-        name,
-        definition,
-        proj,
-        user: Some(params),
-    })
-}
-
-/// The PROJ terms of a user-defined projection, for the kinds GeoTIFF keys
-/// and WKT without a code spell out.
-fn projection_terms(params: &ProjectionParams) -> Result<String, String> {
-    let origin = format!(
-        "+lat_0={} +lon_0={} +x_0={} +y_0={}",
-        params.lat0, params.lon0, params.false_easting, params.false_northing
-    );
-    let k = params.scale;
-    Ok(match &params.kind {
-        ProjectionKind::Geographic => "+proj=longlat".to_string(),
-        ProjectionKind::TransverseMercator => format!("+proj=tmerc +k={k} {origin}"),
-        ProjectionKind::Utm { zone, south } => {
-            format!(
-                "+proj=utm +zone={zone}{}",
-                if *south { " +south" } else { "" }
-            )
-        }
-        ProjectionKind::Mercator => format!("+proj=merc +k={k} {origin}"),
-        ProjectionKind::LambertConformalConic {
-            lat1,
-            lat2: Some(lat2),
-        } => format!("+proj=lcc +lat_1={lat1} +lat_2={lat2} {origin}"),
-        ProjectionKind::LambertConformalConic { lat1, lat2: None } => {
-            format!("+proj=lcc +lat_1={lat1} +k={k} {origin}")
-        }
-        ProjectionKind::LambertAzimuthalEqualArea => format!("+proj=laea {origin}"),
-        ProjectionKind::AlbersEqualAreaConic { lat1, lat2 } => {
-            format!("+proj=aea +lat_1={lat1} +lat_2={lat2} {origin}")
-        }
-        ProjectionKind::Stereographic => format!("+proj=stere +k={k} {origin}"),
-        ProjectionKind::ObliqueStereographic => format!("+proj=sterea +k={k} {origin}"),
-        ProjectionKind::Equirectangular { lat_ts } => {
-            format!("+proj=eqc +lat_ts={lat_ts} {origin}")
-        }
-        other => return Err(format!("the projection {other:?} is not supported")),
-    })
-}
-
-fn list(values: &[f64]) -> String {
-    values
-        .iter()
-        .map(f64::to_string)
-        .collect::<Vec<_>>()
-        .join(",")
-}
-
-/// The Helmert shifts of proj4rs 0.2.0's named datums (`datums.rs`); WGS84
-/// and NAD83 shift nothing and NAD27 needs grids proj4rs refuses.
-const NAMED_SHIFTS: [(&str, &[f64]); 14] = [
-    ("GGRS87", &[-199.87, 74.79, 246.62]),
-    ("potsdam", &[598.1, 73.7, 418.2, 0.202, 0.045, -2.455, 6.7]),
-    ("carthage", &[-263.0, 6.0, 431.0]),
-    (
-        "hermannskogel",
-        &[577.326, 90.129, 463.919, 5.137, 1.474, 5.297, 2.4232],
-    ),
-    (
-        "ire65",
-        &[482.530, -130.596, 564.557, -1.042, -0.214, -0.631, 8.15],
-    ),
-    (
-        "nzgd49",
-        &[59.47, -5.04, 187.44, 0.47, -0.1, 1.024, -4.5993],
-    ),
-    (
-        "OSGB36",
-        &[446.448, -125.157, 542.060, 0.1502, 0.2470, 0.8421, -20.4894],
-    ),
-    ("ch1903", &[674.374, 15.056, 405.346]),
-    (
-        "osni52",
-        &[482.530, -130.596, 564.557, -1.042, -0.214, -0.631, 8.15],
-    ),
-    ("rassadiran", &[-133.63, -157.5, -158.62]),
-    ("s_jtsk", &[589.0, 76.0, 480.0]),
-    ("beduaram", &[-106.0, -87.0, 188.0]),
-    ("gunung_segara", &[-403.0, 684.0, 41.0]),
-    (
-        "rnb72",
-        &[
-            106.869, -52.2978, 103.724, -0.33657, 0.456955, -1.84218, 1.0,
-        ],
-    ),
-];
-
-/// The Helmert shift to WGS84 of a PROJ definition, `None` when it shifts
-/// nothing: its `+towgs84`, or its named datum's.
-fn datum_shift(definition: &str) -> Option<Vec<f64>> {
-    let shift: Vec<f64> = match term(definition, "+towgs84=") {
-        Some(values) => values
-            .split(',')
-            .map(|value| value.trim().parse().ok())
-            .collect::<Option<_>>()?,
-        None => {
-            let datum = term(definition, "+datum=")?;
-            NAMED_SHIFTS
-                .iter()
-                .find(|(name, _)| name.eq_ignore_ascii_case(datum))?
-                .1
-                .to_vec()
-        }
-    };
-    shift.iter().any(|value| *value != 0.0).then_some(shift)
-}
-
-/// One node of a WKT: its keyword, the keywords of the nodes it sits in
-/// (outermost first), its text between the brackets and where it lies in
-/// the WKT, keyword to closing bracket.
-struct WktNode<'a> {
-    parents: Vec<&'a str>,
-    keyword: &'a str,
-    body: &'a str,
-    span: std::ops::Range<usize>,
-}
-
-impl WktNode<'_> {
-    /// The values that read as numbers: not its name nor a nested node's code.
-    fn numbers(&self) -> Vec<f64> {
-        self.body
-            .split(',')
-            .filter_map(|value| value.trim().parse().ok())
-            .collect()
-    }
-
-    /// The code an `AUTHORITY["EPSG","n"]` (WKT1) or `ID["EPSG",n]` (WKT2)
-    /// node names.
-    fn epsg(&self) -> Option<u32> {
-        if self.keyword != "AUTHORITY" && self.keyword != "ID" {
-            return None;
-        }
-        let mut values = self
-            .body
-            .split(',')
-            .map(|value| value.trim().trim_matches('"'));
-        (values.next() == Some("EPSG"))
-            .then(|| values.next()?.parse().ok())
-            .flatten()
-    }
-}
-
-/// Every node of a WKT, in the order they open.
-fn wkt_nodes(wkt: &str) -> Vec<WktNode<'_>> {
-    let mut nodes: Vec<WktNode> = Vec::new();
-    let mut open: Vec<(usize, usize)> = Vec::new();
-    let mut quoted = false;
-    for (index, ch) in wkt.char_indices() {
-        match ch {
-            '"' => quoted = !quoted,
-            '[' if !quoted => {
-                let piece = wkt[..index].rsplit([',', '[']).next().unwrap_or("");
-                let parents = open.iter().map(|(node, _)| nodes[*node].keyword).collect();
-                open.push((nodes.len(), index + 1));
-                nodes.push(WktNode {
-                    parents,
-                    keyword: piece.trim(),
-                    body: "",
-                    span: index - piece.len()..wkt.len(),
-                });
-            }
-            ']' if !quoted => {
-                if let Some((node, start)) = open.pop() {
-                    nodes[node].body = &wkt[start..index];
-                    nodes[node].span.end = index + 1;
-                }
-            }
-            _ => {}
-        }
-    }
-    nodes
-}
-
-/// A projected WKT's horizontal unit in metres: the last unit node inside its
-/// PROJCS or PROJCRS. The base geographic CRS's unit comes before it, and a
-/// compound's vertical part (or an ESRI .prj's trailing VERTCS) lies outside
-/// it.
-pub(crate) fn projected_unit(wkt: &str) -> Option<f64> {
-    wkt_nodes(wkt)
-        .into_iter()
-        .rfind(|node| {
-            matches!(node.keyword, "UNIT" | "LENGTHUNIT")
-                && node
-                    .parents
-                    .iter()
-                    .any(|parent| matches!(*parent, "PROJCS" | "PROJCRS"))
-        })?
-        .numbers()
-        .first()
-        .copied()
-}
-
-/// The shift a WKT's `TOWGS84` node gives, `None` when it shifts nothing.
-fn wkt_shift(nodes: &[WktNode]) -> Option<Vec<f64>> {
-    let shift = nodes
-        .iter()
-        .find(|node| node.keyword == "TOWGS84")?
-        .numbers();
-    shift.iter().any(|value| *value != 0.0).then_some(shift)
-}
-
-/// `wkt` carrying the PROJ definition it was resolved through, as GDAL's
-/// `EXTENSION["PROJ4",..]` node: wbprojection's WKT writer drops the scale
-/// of a one-parallel Lambert, a named datum's ellipsoid and the datum shift,
-/// so a CRS with no registry code resolves again through the definition.
-fn with_definition(wkt: &str, definition: &str) -> String {
-    match wkt.trim_end().strip_suffix(']') {
-        Some(body) => format!("{body},EXTENSION[\"PROJ4\",\"{definition}\"]]"),
-        None => wkt.to_string(),
-    }
-}
-
-/// The shift of the registry geographic CRS a WKT names inside it, as
-/// `datum_of` takes it for keys: GDAL 3 writes WKT1 without TOWGS84. A code
-/// the engine refuses is refused here too.
-fn geographic_shift(nodes: &[WktNode]) -> Result<Option<Vec<f64>>, String> {
-    let Some(code) = nodes
-        .iter()
-        .filter(|node| {
-            node.parents.last().is_some_and(|parent| {
-                matches!(
-                    *parent,
-                    "GEOGCS" | "GEOGCRS" | "BASEGEOGCRS" | "GEODCRS" | "BASEGEODCRS"
-                )
-            })
-        })
-        .find_map(WktNode::epsg)
-    else {
-        return Ok(None);
-    };
-    Ok(datum_shift(&from_epsg(code)?.definition))
-}
-
-/// The PROJ definition a WKT's `EXTENSION["PROJ4",..]` node carries.
-fn proj4_extension<'a>(nodes: &[WktNode<'a>]) -> Option<&'a str> {
-    let extension = nodes.iter().find(|node| node.keyword == "EXTENSION")?;
-    Some(
-        extension
-            .body
-            .strip_prefix("\"PROJ4\",")?
-            .trim()
-            .trim_matches('"'),
-    )
-}
-
-/// The registry code a WKT names for itself, not a nested node's: its
-/// root's, or else a compound CRS's horizontal part's.
-fn own_code(nodes: &[WktNode]) -> Option<u32> {
-    nodes
-        .iter()
-        .filter(|node| match node.parents.as_slice() {
-            [_] => true,
-            [root, part] => {
-                matches!(*root, "COMPD_CS" | "COMPOUNDCRS")
-                    && matches!(
-                        *part,
-                        "PROJCS" | "GEOGCS" | "PROJCRS" | "GEOGCRS" | "GEODCRS"
-                    )
-            }
-            _ => false,
-        })
-        .filter_map(|node| {
-            let code = node.epsg().filter(|code| definition_of(*code).is_some())?;
-            Some((node.parents.len(), code))
-        })
-        .min()
-        .map(|(_, code)| code)
-}
-
-/// `wkt` without its `AUTHORITY` and `ID` nodes. `Crs::from_wkt` first takes
-/// the registry definition of the last code a WKT names, which in one naming
-/// no code of its own is a nested node's: a projected CRS whose last code is
-/// its geographic CRS's would be read as longitudes and latitudes.
-fn without_codes(wkt: &str, nodes: &[WktNode]) -> String {
-    let mut kept = String::with_capacity(wkt.len());
-    let mut from = 0;
-    for node in nodes {
-        if matches!(node.keyword, "AUTHORITY" | "ID") && node.span.start >= from {
-            let cut = node.span.start - usize::from(wkt[..node.span.start].ends_with(','));
-            kept.push_str(&wkt[from..cut]);
-            from = node.span.end;
-        }
-    }
-    kept.push_str(&wkt[from..]);
-    kept
-}
-
-/// WKT with the authority node GDAL and the parser both key on, so a
+/// WKT1 with the authority node GDAL and the parser both key on, so a
 /// stored definition resolves back to its code rather than by name.
 fn with_authority(wkt: &str, code: u32) -> String {
     let authority = format!("AUTHORITY[\"EPSG\",\"{code}\"]");
@@ -706,11 +235,10 @@ fn ascii(keys: &GeoKeyDirectory, id: u16) -> Option<String> {
 }
 
 const USER_DEFINED: u16 = 32767;
-/// Keys `wbgeotiff::geo_keys::key` does not name: the false origin of conic
-/// projections and the datum shift to WGS84.
+/// False-origin keys of conic projections, which `wbgeotiff::geo_keys::key`
+/// does not name.
 const PROJ_FALSE_ORIGIN_EASTING: u16 = 3086;
 const PROJ_FALSE_ORIGIN_NORTHING: u16 = 3087;
-const GEOG_TOWGS84: u16 = 2062;
 
 fn registry_code(value: Option<u16>) -> Option<u32> {
     value
@@ -731,19 +259,19 @@ pub(super) fn from_geokeys(keys: &GeoKeyDirectory) -> Result<Option<ResolvedCrs>
             if let Some(code) = registry_code(short(keys, key::GeographicTypeGeoKey)) {
                 return from_epsg(code).map(Some);
             }
-            let (datum, shift) = datum_of(keys)?;
+            let (ellipsoid, datum) = ellipsoid_of(keys)?;
             let params = ProjectionParams {
                 kind: ProjectionKind::Geographic,
-                ellipsoid: datum.ellipsoid.clone(),
+                ellipsoid,
                 datum: datum.clone(),
                 ..ProjectionParams::default()
             };
             let name = ascii(keys, key::GTCitationGeoKey)
                 .or_else(|| ascii(keys, key::GeogCitationGeoKey))
                 .unwrap_or_else(|| "user-defined geographic CRS".to_string());
-            let crs = Crs::new(name.clone(), datum, params.clone())
+            let crs = Crs::new(name, datum, params)
                 .map_err(|e| format!("unsupported geographic CRS: {e}"))?;
-            user_defined(params, shift, name, crs.to_wkt()).map(Some)
+            Ok(Some(ResolvedCrs::registry(crs.clone(), None, crs.to_wkt())))
         }
         Some(3) => Err("geocentric rasters are not supported".to_string()),
         None => Ok(None),
@@ -751,11 +279,8 @@ pub(super) fn from_geokeys(keys: &GeoKeyDirectory) -> Result<Option<ResolvedCrs>
     }
 }
 
-/// A projected CRS spelled out key by key (no registry code), in metres.
+/// A projected CRS spelled out key by key (no registry code).
 fn user_defined_projected(keys: &GeoKeyDirectory) -> Result<ResolvedCrs, String> {
-    if short(keys, key::ProjLinearUnitsGeoKey).is_some_and(|unit| unit != 9001) {
-        return Err(not_supported(OTHER_UNIT));
-    }
     let transformation = short(keys, key::ProjCoordTransGeoKey).ok_or_else(|| {
         "the raster declares a user-defined projection without a coordinate transformation"
             .to_string()
@@ -808,7 +333,7 @@ fn user_defined_projected(keys: &GeoKeyDirectory) -> Result<ResolvedCrs, String>
             ));
         }
     };
-    let (datum, shift) = datum_of(keys)?;
+    let (ellipsoid, datum) = ellipsoid_of(keys)?;
     let params = ProjectionParams {
         kind,
         lon0,
@@ -816,7 +341,7 @@ fn user_defined_projected(keys: &GeoKeyDirectory) -> Result<ResolvedCrs, String>
         false_easting,
         false_northing,
         scale,
-        ellipsoid: datum.ellipsoid.clone(),
+        ellipsoid,
         datum: datum.clone(),
     };
     let citation =
@@ -824,8 +349,7 @@ fn user_defined_projected(keys: &GeoKeyDirectory) -> Result<ResolvedCrs, String>
     let name = citation
         .clone()
         .unwrap_or_else(|| "user-defined projected CRS".to_string());
-    let crs = Crs::new(name.clone(), datum, params.clone())
-        .map_err(|e| format!("unsupported projection: {e}"))?;
+    let crs = Crs::new(name, datum, params).map_err(|e| format!("unsupported projection: {e}"))?;
     // A citation naming a registry code the keys agree with is that code.
     if let Some(code) = citation
         .as_deref()
@@ -835,61 +359,40 @@ fn user_defined_projected(keys: &GeoKeyDirectory) -> Result<ResolvedCrs, String>
     {
         return Ok(resolved);
     }
-    user_defined(params, shift, name, crs.to_wkt())
+    Ok(ResolvedCrs::registry(crs.clone(), None, crs.to_wkt()))
 }
 
-/// The datum of a user-defined CRS and its shift to WGS84: a registry
-/// geographic code's own, or the keys' ellipsoid, shifted only by a
-/// `GeogTOWGS84GeoKey`. An unknown datum shifts nothing, as GDAL treats it.
-fn datum_of(keys: &GeoKeyDirectory) -> Result<(Datum, Option<Vec<f64>>), String> {
-    // Geographic or projected keys on another meridian are refused
-    // (`OTHER_MERIDIAN`). IGN's tiles write a user-defined meridian with no
-    // longitude: Greenwich.
-    let greenwich = match short(keys, key::GeogPrimeMeridianGeoKey) {
-        None | Some(8901) => true,
-        Some(USER_DEFINED) => {
-            double(keys, key::GeogPrimeMeridianLongGeoKey).is_none_or(|meridian| meridian == 0.0)
-        }
-        Some(_) => false,
-    };
-    if !greenwich {
-        return Err(not_supported(OTHER_MERIDIAN));
-    }
-    let written = match keys.get(GEOG_TOWGS84) {
-        Some(GeoKeyValue::Doubles(values)) if values.iter().any(|value| *value != 0.0) => {
-            Some(values.clone())
-        }
-        _ => None,
-    };
-    let datum = |ellipsoid: Ellipsoid| Datum {
-        name: "unknown",
-        ellipsoid,
-        transform: DatumTransform::None,
-    };
-    let ellipsoid = |a: f64, inverse_flattening: f64| {
-        Ellipsoid::from_a_inv_f("user-defined", a, inverse_flattening)
-    };
+/// The ellipsoid and datum of a user-defined CRS. An unknown datum is
+/// treated as WGS84-equivalent with no shift, as GDAL treats it.
+fn ellipsoid_of(keys: &GeoKeyDirectory) -> Result<(Ellipsoid, Datum), String> {
     if let Some(code) = registry_code(short(keys, key::GeographicTypeGeoKey)) {
-        let geographic = from_epsg(code)?;
-        let (a, b) = geographic.proj.ellipse_parameters();
-        let inverse_flattening = if a > b { a / (a - b) } else { f64::INFINITY };
-        let shift = written.or_else(|| datum_shift(&geographic.definition));
-        return Ok((datum(ellipsoid(a, inverse_flattening)), shift));
+        let geographic = Crs::from_epsg(code)
+            .map_err(|e| format!("EPSG:{code} is not in the projection registry: {e}"))?;
+        return Ok((geographic.datum.ellipsoid.clone(), geographic.datum));
     }
-    let keyed = match (
+    let ellipsoid = match (
         double(keys, key::GeogSemiMajorAxisGeoKey),
         double(keys, key::GeogInvFlatteningGeoKey),
         double(keys, key::GeogSemiMinorAxisGeoKey),
     ) {
-        (Some(a), Some(inv_f), _) if inv_f > 0.0 => ellipsoid(a, inv_f),
-        (Some(a), _, Some(b)) if b > 0.0 && a > b => ellipsoid(a, a / (a - b)),
-        (Some(a), _, _) => ellipsoid(a, f64::INFINITY),
+        (Some(a), Some(inv_f), _) if inv_f > 0.0 => {
+            Ellipsoid::from_a_inv_f("user-defined", a, inv_f)
+        }
+        (Some(a), _, Some(b)) if b > 0.0 && a > b => {
+            Ellipsoid::from_a_inv_f("user-defined", a, a / (a - b))
+        }
+        (Some(a), _, _) => Ellipsoid::from_a_inv_f("user-defined sphere", a, f64::INFINITY),
         _ => match short(keys, key::GeogEllipsoidGeoKey) {
             Some(7019) => Ellipsoid::GRS80,
             _ => Ellipsoid::WGS84,
         },
     };
-    Ok((datum(keyed), written))
+    let datum = Datum {
+        name: "unknown",
+        ellipsoid: ellipsoid.clone(),
+        transform: DatumTransform::None,
+    };
+    Ok((ellipsoid, datum))
 }
 
 fn entry(key_id: u16, value: GeoKeyValue) -> GeoKeyEntry {
@@ -904,20 +407,7 @@ fn double_entry(key_id: u16, value: f64) -> GeoKeyEntry {
     entry(key_id, GeoKeyValue::Doubles(vec![value]))
 }
 
-/// The GeoTIFF unit code of a projected CRS's linear unit: metre, foot or
-/// US survey foot.
-fn linear_unit(proj: &Proj) -> Option<u16> {
-    let metres = proj.to_meter();
-    [(1.0, 9001), (0.3048, 9002), (1200.0 / 3937.0, 9003)]
-        .into_iter()
-        .find(|(unit, _)| (metres - unit).abs() < 1e-12)
-        .map(|(_, code)| code)
-}
-
-/// The GeoTIFF keys that describe `resolved` in a written file. A datum
-/// shift travels as `GeogTOWGS84GeoKey`, which the display renderer reads
-/// beside the code, so the drawn pixel agrees with the engine; a CRS that
-/// shifts nothing writes no such key.
+/// The GeoTIFF keys that describe `resolved` in a written file.
 pub(super) fn geokeys_for(resolved: &ResolvedCrs) -> Result<GeoKeyDirectory, String> {
     let projected = resolved.is_projected();
     let mut entries = vec![
@@ -925,30 +415,21 @@ pub(super) fn geokeys_for(resolved: &ResolvedCrs) -> Result<GeoKeyDirectory, Str
         short_entry(key::GTRasterTypeGeoKey, 1),
         entry(
             key::GTCitationGeoKey,
-            GeoKeyValue::Ascii(resolved.name.replace('|', " ")),
+            GeoKeyValue::Ascii(resolved.crs.name.replace('|', " ")),
         ),
     ];
-    match (resolved.epsg, &resolved.user) {
-        (_, Some(params)) => entries.extend(user_defined_entries(params, &resolved.proj)?),
-        (Some(code), None) => {
-            let code = u16::try_from(code)
-                .map_err(|_| format!("EPSG:{code} cannot be written as GeoTIFF keys"))?;
-            if projected {
-                entries.push(short_entry(key::ProjectedCSTypeGeoKey, code));
-                if let Some(unit) = linear_unit(&resolved.proj) {
-                    entries.push(short_entry(key::ProjLinearUnitsGeoKey, unit));
-                }
-            } else {
-                entries.push(short_entry(key::GeographicTypeGeoKey, code));
-                entries.push(short_entry(key::GeogAngularUnitsGeoKey, 9102));
-            }
+    if let Some(code) = resolved.epsg {
+        let code = u16::try_from(code)
+            .map_err(|_| format!("EPSG:{code} cannot be written as GeoTIFF keys"))?;
+        if projected {
+            entries.push(short_entry(key::ProjectedCSTypeGeoKey, code));
+            entries.push(short_entry(key::ProjLinearUnitsGeoKey, 9001));
+        } else {
+            entries.push(short_entry(key::GeographicTypeGeoKey, code));
+            entries.push(short_entry(key::GeogAngularUnitsGeoKey, 9102));
         }
-        (None, None) => {
-            return Err("a coordinate system with neither a code nor a definition".to_string());
-        }
-    }
-    if let Some(shift) = datum_shift(&resolved.definition) {
-        entries.push(entry(GEOG_TOWGS84, GeoKeyValue::Doubles(shift)));
+    } else {
+        entries.extend(user_defined_entries(resolved, projected)?);
     }
     entries.sort_by_key(|entry| entry.key_id);
     Ok(GeoKeyDirectory {
@@ -959,26 +440,34 @@ pub(super) fn geokeys_for(resolved: &ResolvedCrs) -> Result<GeoKeyDirectory, Str
     })
 }
 
-/// The keys of a CRS with no registry code: the projection as `params`
-/// spell it, the ellipsoid as `proj` transforms through.
 fn user_defined_entries(
-    params: &ProjectionParams,
-    proj: &Proj,
+    resolved: &ResolvedCrs,
+    projected: bool,
 ) -> Result<Vec<GeoKeyEntry>, String> {
-    let (a, b) = proj.ellipse_parameters();
-    let mut entries = vec![
-        short_entry(key::GeographicTypeGeoKey, USER_DEFINED),
-        short_entry(key::GeogGeodeticDatumGeoKey, USER_DEFINED),
-        short_entry(key::GeogEllipsoidGeoKey, USER_DEFINED),
-        double_entry(key::GeogSemiMajorAxisGeoKey, a),
-    ];
-    if a > b {
-        entries.push(double_entry(key::GeogInvFlatteningGeoKey, a / (a - b)));
+    let crs = &resolved.crs;
+    let params = crs.projection.params();
+    let ellipsoid = &params.ellipsoid;
+    let mut entries = Vec::new();
+    let wgs84 = (ellipsoid.a - Ellipsoid::WGS84.a).abs() < 1e-6
+        && (ellipsoid.f - Ellipsoid::WGS84.f).abs() < 1e-12;
+    if wgs84 {
+        entries.push(short_entry(key::GeographicTypeGeoKey, 4326));
     } else {
-        entries.push(double_entry(key::GeogSemiMinorAxisGeoKey, b));
+        entries.push(short_entry(key::GeographicTypeGeoKey, USER_DEFINED));
+        entries.push(short_entry(key::GeogGeodeticDatumGeoKey, USER_DEFINED));
+        entries.push(short_entry(key::GeogEllipsoidGeoKey, USER_DEFINED));
+        entries.push(double_entry(key::GeogSemiMajorAxisGeoKey, ellipsoid.a));
+        if ellipsoid.f.abs() > 0.0 {
+            entries.push(double_entry(
+                key::GeogInvFlatteningGeoKey,
+                1.0 / ellipsoid.f,
+            ));
+        } else {
+            entries.push(double_entry(key::GeogSemiMinorAxisGeoKey, ellipsoid.b));
+        }
     }
     entries.push(short_entry(key::GeogAngularUnitsGeoKey, 9102));
-    if proj.is_latlong() {
+    if !projected {
         return Ok(entries);
     }
     entries.push(short_entry(key::ProjectedCSTypeGeoKey, USER_DEFINED));
@@ -996,6 +485,20 @@ fn user_defined_entries(
             params.false_northing,
         ));
     };
+    if let Some(OwnProjection::Laea(laea)) = resolved.own {
+        entries.push(short_entry(key::ProjCoordTransGeoKey, 10));
+        entries.push(double_entry(key::ProjCenterLatGeoKey, laea.lat0));
+        entries.push(double_entry(key::ProjCenterLongGeoKey, laea.lon0));
+        entries.push(double_entry(
+            key::ProjFalseEastingGeoKey,
+            laea.false_easting,
+        ));
+        entries.push(double_entry(
+            key::ProjFalseNorthingGeoKey,
+            laea.false_northing,
+        ));
+        return Ok(entries);
+    }
     match &params.kind {
         ProjectionKind::TransverseMercator | ProjectionKind::Utm { .. } => {
             entries.push(short_entry(key::ProjCoordTransGeoKey, 1));
@@ -1096,8 +599,6 @@ mod tests {
                 ),
                 short_entry(key::GeographicTypeGeoKey, USER_DEFINED),
                 short_entry(key::GeogGeodeticDatumGeoKey, USER_DEFINED),
-                // A user-defined meridian with no longitude: Greenwich.
-                short_entry(key::GeogPrimeMeridianGeoKey, USER_DEFINED),
                 short_entry(key::GeogAngularUnitsGeoKey, 9102),
                 short_entry(key::GeogEllipsoidGeoKey, USER_DEFINED),
                 short_entry(key::ProjectedCSTypeGeoKey, USER_DEFINED),
@@ -1144,9 +645,10 @@ mod tests {
         let resolved = from_geokeys(&lambert93_keys()).unwrap().unwrap();
         assert_eq!(resolved.epsg, Some(2154));
         let (lon, lat) = resolved
-            .transform_to(700_000.0, 6_600_000.0, &from_epsg(4326).unwrap())
+            .crs
+            .transform_to(700_000.0, 6_600_000.0, &Crs::from_epsg(4326).unwrap())
             .unwrap();
-        assert!((lon - 3.0).abs() < 1e-8 && (lat - 46.5).abs() < 1e-8);
+        assert!((lon - 3.0).abs() < 1e-9 && (lat - 46.5).abs() < 1e-9);
     }
 
     #[test]
@@ -1156,15 +658,16 @@ mod tests {
             .retain(|entry| entry.key_id != key::GTCitationGeoKey);
         let resolved = from_geokeys(&keys).unwrap().unwrap();
         assert_eq!(resolved.epsg, None);
-        let wgs84 = from_epsg(4326).unwrap();
+        let (x, y) = resolved.crs.forward(3.0, 46.5).unwrap();
+        assert!((x - 700_000.0).abs() < 1e-3 && (y - 6_600_000.0).abs() < 1e-3);
         // Its WKT re-parses to the same placement and keys re-read to it.
         let again = from_reference(&resolved.wkt).unwrap();
+        let (x, y) = again.crs.forward(3.0, 46.5).unwrap();
+        assert!((x - 700_000.0).abs() < 1e-3 && (y - 6_600_000.0).abs() < 1e-3);
         let written = geokeys_for(&resolved).unwrap();
         let reread = from_geokeys(&written).unwrap().unwrap();
-        for crs in [&resolved, &again, &reread] {
-            let (x, y) = wgs84.transform_to(3.0, 46.5, crs).unwrap();
-            assert!((x - 700_000.0).abs() < 1e-3 && (y - 6_600_000.0).abs() < 1e-3);
-        }
+        let (x, y) = reread.crs.forward(3.0, 46.5).unwrap();
+        assert!((x - 700_000.0).abs() < 1e-3 && (y - 6_600_000.0).abs() < 1e-3);
     }
 
     /// GDAL's LV95 and LV03 coordinates of six points across Switzerland.
@@ -1195,17 +698,10 @@ mod tests {
                 (x - (e - 2_000_000.0)).abs() < 1e-3 && (y - (n - 1_000_000.0)).abs() < 1e-3,
                 "LV03 {lon} {lat}: {x} {y}"
             );
-            // GDAL's own coordinates read back within 1e-7 deg (a centimetre).
+            // The crate's datum step closes to about 1e-8 deg (a millimetre).
             let (back_lon, back_lat) = lv95.transform_to(e, n, &wgs84).unwrap();
             assert!(
                 (back_lon - lon).abs() < 1e-7 && (back_lat - lat).abs() < 1e-7,
-                "inverse of GDAL's {e} {n}: {back_lon} {back_lat}"
-            );
-            // The datum shift's dropped height closes within 3e-8 deg (3 mm).
-            let (x, y) = wgs84.transform_to(lon, lat, &lv95).unwrap();
-            let (back_lon, back_lat) = lv95.transform_to(x, y, &wgs84).unwrap();
-            assert!(
-                (back_lon - lon).abs() < 3e-8 && (back_lat - lat).abs() < 3e-8,
                 "round trip {lon} {lat}: {back_lon} {back_lat} ({:e}, {:e})",
                 back_lon - lon,
                 back_lat - lat
@@ -1230,38 +726,18 @@ mod tests {
             "{x} {y}"
         );
         let (lon, lat) = laea.transform_to(x, y, &wgs84).unwrap();
-        assert!((lon - 2.35).abs() < 1e-8 && (lat - 48.85).abs() < 1e-8);
+        assert!((lon - 2.35).abs() < 1e-9 && (lat - 48.85).abs() < 1e-9);
         assert!(laea.is_projected());
         // A user-defined LAEA from keys takes the same route.
-        let keys = GeoKeyDirectory {
-            version: 1,
-            key_revision: 1,
-            minor_revision: 0,
-            entries: vec![
-                short_entry(key::GTModelTypeGeoKey, 1),
-                short_entry(key::GeographicTypeGeoKey, 4258),
-                short_entry(key::ProjectedCSTypeGeoKey, USER_DEFINED),
-                short_entry(key::ProjCoordTransGeoKey, 10),
-                double_entry(key::ProjCenterLatGeoKey, 52.0),
-                double_entry(key::ProjCenterLongGeoKey, 10.0),
-                double_entry(key::ProjFalseEastingGeoKey, 4_321_000.0),
-                double_entry(key::ProjFalseNorthingGeoKey, 3_210_000.0),
-            ],
-        };
+        let keys = geokeys_for(&ResolvedCrs::registry(
+            Crs::from_epsg(3035).unwrap(),
+            None,
+            String::new(),
+        ))
+        .unwrap();
         let reread = from_geokeys(&keys).unwrap().unwrap();
-        assert_eq!(reread.epsg, None);
         let (x2, y2) = wgs84.transform_to(2.35, 48.85, &reread).unwrap();
-        // They place where PROJ does within 1e-6 m; the registry definition's
-        // seven zero shift parameters move proj4rs 0.1 mm off it.
-        let (_, _, _, px, py) = REFERENCE_POINTS
-            .iter()
-            .find(|row| row.0 == 3035)
-            .copied()
-            .unwrap();
-        assert!(
-            (x2 - px).abs() < 1e-6 && (y2 - py).abs() < 1e-6,
-            "{x2} {y2}, PROJ {px} {py}"
-        );
+        assert!((x2 - x).abs() < 1e-6 && (y2 - y).abs() < 1e-6, "{x2} {y2}");
     }
 
     #[test]
@@ -1283,576 +759,5 @@ mod tests {
             ..GeoKeyDirectory::default()
         };
         assert!(from_geokeys(&geocentric).is_err());
-    }
-
-    use super::super::super::analyses::{CRS_PROJECTED_METRE, CRS_PROJECTED_OTHER, crs_class};
-    use super::super::crs_reference_points::REFERENCE_POINTS;
-
-    /// Metres in one linear unit of a code in the reference table.
-    fn unit_metres(code: u32) -> f64 {
-        if code == 2263 { 1200.0 / 3937.0 } else { 1.0 }
-    }
-
-    /// Every code of the reference table against PROJ: forward within 1 cm
-    /// (8 m for Krovak, whose PROJ method proj4rs approximates; 0.5 m
-    /// for Martinique 2973, where PROJ takes the 0.1 m Helmert shift and the
-    /// definition carries the 10 m one), and the engine's own inverse returns
-    /// the input within 1e-8 deg. A datum shift moves the ellipsoidal height
-    /// some 50 m, which a 2-D transform drops as PROJ's does, so those codes
-    /// close within 3e-8 deg (3 mm).
-    #[test]
-    fn registry_codes_match_proj_at_their_reference_points() {
-        let wgs84 = from_epsg(4326).unwrap();
-        let mut failures = Vec::new();
-        for &(code, lon, lat, x, y) in REFERENCE_POINTS {
-            let crs = match from_epsg(code) {
-                Ok(crs) => crs,
-                Err(error) => {
-                    failures.push(format!("EPSG:{code}: {error}"));
-                    continue;
-                }
-            };
-            let (px, py) = wgs84.transform_to(lon, lat, &crs).unwrap();
-            let tolerance = match code {
-                5514 | 5513 | 2065 => 8.0,
-                2973 => 0.5,
-                _ if !crs.is_projected() => 1e-7,
-                _ => 0.01 / unit_metres(code),
-            };
-            let closure = if datum_shift(&crs.definition).is_some() {
-                3e-8
-            } else {
-                1e-8
-            };
-            if (px - x).abs() > tolerance || (py - y).abs() > tolerance {
-                failures.push(format!(
-                    "EPSG:{code} at {lon} {lat}: {px} {py}, PROJ {x} {y}"
-                ));
-            }
-            let (back_lon, back_lat) = crs.transform_to(px, py, &wgs84).unwrap();
-            if (back_lon - lon).abs() > closure || (back_lat - lat).abs() > closure {
-                failures.push(format!("EPSG:{code} inverse: {back_lon} {back_lat}"));
-            }
-        }
-        assert!(failures.is_empty(), "{}", failures.join("\n"));
-    }
-
-    /// IGN's LiDAR HD point clouds are in RGF93 v2b / Lambert-93 (EPSG:5698):
-    /// the code resolves, and its stored WKT and written keys name it again.
-    #[test]
-    fn epsg_5698_resolves_and_round_trips() {
-        let resolved = from_reference("EPSG:5698").unwrap();
-        assert_eq!(resolved.epsg, Some(5698));
-        assert!(resolved.is_projected());
-        assert_eq!(crs_class(&resolved.wkt), CRS_PROJECTED_METRE);
-        assert_eq!(from_reference(&resolved.wkt).unwrap().epsg, Some(5698));
-        let keys = geokeys_for(&resolved).unwrap();
-        assert_eq!(from_geokeys(&keys).unwrap().unwrap().epsg, Some(5698));
-    }
-
-    /// An AHN-style tile whose keys spell RD New out instead of naming 28992
-    /// places where PROJ places 28992, datum shift included, and keeps doing
-    /// so through the WKT the catalogue stores and the keys written back.
-    #[test]
-    fn a_user_defined_rd_tile_places_within_a_centimetre_of_28992() {
-        let keys = GeoKeyDirectory {
-            version: 1,
-            key_revision: 1,
-            minor_revision: 0,
-            entries: vec![
-                short_entry(key::GTModelTypeGeoKey, 1),
-                short_entry(key::GTRasterTypeGeoKey, 1),
-                short_entry(key::GeographicTypeGeoKey, 4289),
-                short_entry(key::GeogAngularUnitsGeoKey, 9102),
-                short_entry(key::ProjectedCSTypeGeoKey, USER_DEFINED),
-                short_entry(key::ProjectionGeoKey, USER_DEFINED),
-                short_entry(key::ProjCoordTransGeoKey, 16),
-                short_entry(key::ProjLinearUnitsGeoKey, 9001),
-                double_entry(key::ProjNatOriginLatGeoKey, 52.156_160_555_555_55),
-                double_entry(key::ProjNatOriginLongGeoKey, 5.387_638_888_888_89),
-                double_entry(key::ProjScaleAtNatOriginGeoKey, 0.999_907_9),
-                double_entry(key::ProjFalseEastingGeoKey, 155_000.0),
-                double_entry(key::ProjFalseNorthingGeoKey, 463_000.0),
-            ],
-        };
-        let wgs84 = from_epsg(4326).unwrap();
-        let user = from_geokeys(&keys).unwrap().unwrap();
-        assert_eq!(user.epsg, None);
-        let stored = from_reference(&user.wkt).unwrap();
-        let rewritten = from_geokeys(&geokeys_for(&user).unwrap()).unwrap().unwrap();
-        for &(_, lon, lat, x, y) in REFERENCE_POINTS.iter().filter(|row| row.0 == 28992) {
-            for (label, crs) in [
-                ("keys", &user),
-                ("stored WKT", &stored),
-                ("written keys", &rewritten),
-            ] {
-                let (ux, uy) = wgs84.transform_to(lon, lat, crs).unwrap();
-                assert!(
-                    (ux - x).abs() < 0.01 && (uy - y).abs() < 0.01,
-                    "{label} at {lon} {lat}: {ux} {uy}, PROJ {x} {y}"
-                );
-            }
-        }
-    }
-
-    /// Another format's PROJ string places where PROJ places its code, and
-    /// keeps doing so through the WKT the catalogue stores, the keys written
-    /// back and those keys' own stored WKT: its `+towgs84`, `+k_0`, named
-    /// datum and ellipsoid survive every route. A string in feet is refused,
-    /// and so is a WKT naming no code whose GDAL `EXTENSION["PROJ4",..]`
-    /// node is in feet, rather than identified by its parameters.
-    #[test]
-    fn a_proj_string_places_the_same_through_its_stored_wkt_and_written_keys() {
-        let wgs84 = from_epsg(4326).unwrap();
-        let definition = |code: u32| crs_definitions::from_code(code as u16).unwrap().proj4;
-        for code in [28992u32, 27572, 27571, 31287] {
-            let resolved = from_proj4(definition(code)).unwrap();
-            let stored = from_reference(&resolved.wkt).unwrap();
-            let rewritten = from_geokeys(&geokeys_for(&resolved).unwrap())
-                .unwrap()
-                .unwrap();
-            let rewritten_stored = from_reference(&rewritten.wkt).unwrap();
-            for &(_, lon, lat, x, y) in REFERENCE_POINTS.iter().filter(|row| row.0 == code) {
-                for (label, crs) in [
-                    ("PROJ string", &resolved),
-                    ("stored WKT", &stored),
-                    ("written keys", &rewritten),
-                    ("their stored WKT", &rewritten_stored),
-                ] {
-                    let (px, py) = wgs84.transform_to(lon, lat, crs).unwrap();
-                    assert!(
-                        (px - x).abs() < 0.01 && (py - y).abs() < 0.01,
-                        "EPSG:{code} through its {label} at {lon} {lat}: {px} {py}, PROJ {x} {y}"
-                    );
-                }
-            }
-        }
-        assert!(from_proj4(definition(2263)).is_err());
-        let new_york = crs_definitions::from_code(2263).unwrap().wkt;
-        let codeless = new_york.replace(r#",AUTHORITY["EPSG","2263"]]"#, "]");
-        let gdal = with_definition(&codeless, definition(2263));
-        assert_eq!(own_code(&wkt_nodes(&gdal)), None);
-        assert!(
-            from_reference(&gdal)
-                .unwrap_err()
-                .contains("a linear unit other than the metre")
-        );
-    }
-
-    /// `wkt` without any `AUTHORITY` node, as a hand-made or ESRI-style WKT.
-    fn without_authorities(wkt: &str) -> String {
-        let mut wkt = wkt.to_string();
-        while let Some(start) = wkt.find(",AUTHORITY[") {
-            let end = start + wkt[start..].find(']').unwrap() + 1;
-            wkt.replace_range(start..end, "");
-        }
-        wkt
-    }
-
-    const ESRI_LONG_ISLAND_FEET: &str = r#"PROJCS["NAD_1983_StatePlane_New_York_Long_Island_FIPS_3104_Feet",GEOGCS["GCS_North_American_1983",DATUM["D_North_American_1983",SPHEROID["GRS_1980",6378137.0,298.257222101]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Lambert_Conformal_Conic"],PARAMETER["False_Easting",984250.0],PARAMETER["False_Northing",0.0],PARAMETER["Central_Meridian",-74.0],PARAMETER["Standard_Parallel_1",40.66666666666666],PARAMETER["Standard_Parallel_2",41.03333333333333],PARAMETER["Latitude_Of_Origin",40.16666666666666],UNIT["Foot_US",0.3048006096012192]]"#;
-
-    /// wbprojection reads a WKT naming no code in metres, as its keys are
-    /// written back, so one in feet is refused rather than placed 3.28 times
-    /// too far from its false origin: GDAL's Long Island with every authority
-    /// stripped, and an ESRI .prj in Foot_US.
-    #[test]
-    fn a_wkt_naming_no_code_in_feet_is_refused() {
-        let gdal = without_authorities(crs_definitions::from_code(2263).unwrap().wkt);
-        for wkt in [gdal.as_str(), ESRI_LONG_ISLAND_FEET] {
-            let refused = from_reference(wkt).map(|crs| crs.definition);
-            assert!(
-                refused
-                    .as_ref()
-                    .is_err_and(|e| e.contains("a linear unit other than the metre")),
-                "{refused:?}"
-            );
-        }
-    }
-
-    /// An ESRI .prj naming no code may end with a VERTCS in another unit:
-    /// the grid's own unit decides, so a metre grid with a feet height is
-    /// read and classed in metres, and a feet grid with a metre height is
-    /// refused.
-    #[test]
-    fn an_esri_prj_is_read_by_its_horizontal_unit_not_its_height() {
-        let vertical = |unit: &str| {
-            format!(
-                r#",VERTCS["NAVD_1988",VDATUM["North_American_Vertical_Datum_1988"],PARAMETER["Vertical_Shift",0.0],PARAMETER["Direction",1.0],{unit}]"#
-            )
-        };
-        let utm_metres = r#"PROJCS["NAD_1983_UTM_Zone_18N",GEOGCS["GCS_North_American_1983",DATUM["D_North_American_1983",SPHEROID["GRS_1980",6378137.0,298.257222101]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],PARAMETER["False_Easting",500000.0],PARAMETER["False_Northing",0.0],PARAMETER["Central_Meridian",-75.0],PARAMETER["Scale_Factor",0.9996],PARAMETER["Latitude_Of_Origin",0.0],UNIT["Meter",1.0]]"#;
-        let metres_with_feet_height = format!(
-            "{utm_metres}{}",
-            vertical(r#"UNIT["Foot_US",0.3048006096012192]"#)
-        );
-        let read = from_reference(&metres_with_feet_height).unwrap();
-        assert_eq!(crs_class(&read.wkt), CRS_PROJECTED_METRE);
-
-        let feet_with_metre_height = format!(
-            "{ESRI_LONG_ISLAND_FEET}{}",
-            vertical(r#"UNIT["Meter",1.0]"#)
-        );
-        let refused = from_reference(&feet_with_metre_height).map(|crs| crs.definition);
-        assert!(
-            refused
-                .as_ref()
-                .is_err_and(|e| e.contains("a linear unit other than the metre")),
-            "{refused:?}"
-        );
-        assert_eq!(crs_class(&feet_with_metre_height), CRS_PROJECTED_OTHER);
-    }
-
-    /// A WKT names its own code at its root, or for a compound CRS naming
-    /// none in its horizontal part. A nested node's code is never the CRS's: with the
-    /// root's removed, Long Island's last nested code is its unit's (9003,
-    /// IGS97 geographic in the registry), so it is read as the feet WKT it
-    /// is, not as longitudes and latitudes.
-    #[test]
-    fn a_wkt_is_identified_by_its_own_code_only() {
-        let long_island = crs_definitions::from_code(2263).unwrap().wkt;
-        let rootless = long_island.replace(r#",AUTHORITY["EPSG","2263"]]"#, "]");
-        let refused = from_reference(&rootless).map(|crs| crs.definition);
-        assert!(
-            refused
-                .as_ref()
-                .is_err_and(|e| e.contains("a linear unit other than the metre")),
-            "{refused:?}"
-        );
-        let rd = crs_definitions::from_code(28992).unwrap().wkt;
-        let compound = format!(
-            r#"COMPD_CS["Amersfoort / RD New + NAP height",{rd},VERT_CS["NAP height",VERT_DATUM["Normaal Amsterdams Peil",2005,AUTHORITY["EPSG","5109"]],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["Gravity-related height",UP],AUTHORITY["EPSG","5709"]]]"#
-        );
-        let resolved = from_reference(&compound).unwrap();
-        assert_eq!(resolved.epsg, Some(28992));
-        let keys = geokeys_for(&resolved).unwrap();
-        assert_eq!(short(&keys, key::ProjectedCSTypeGeoKey), Some(28992));
-    }
-
-    /// GDAL 3 writes WKT1 without TOWGS84. A custom grid on a registry datum
-    /// (here RD New and Belgian Lambert 72 with their own codes removed)
-    /// takes the shift of the geographic CRS it names, as keys do, and places
-    /// where PROJ places the code.
-    #[test]
-    fn a_wkt_naming_no_code_takes_its_geographic_codes_shift() {
-        let wgs84 = from_epsg(4326).unwrap();
-        for code in [28992u32, 31370] {
-            let mut wkt = crs_definitions::from_code(code as u16)
-                .unwrap()
-                .wkt
-                .replace(&format!(r#",AUTHORITY["EPSG","{code}"]]"#), "]");
-            let start = wkt.find(",TOWGS84[").unwrap();
-            let end = start + wkt[start..].find(']').unwrap() + 1;
-            wkt.replace_range(start..end, "");
-            let custom = from_reference(&wkt).unwrap();
-            assert_eq!(custom.epsg, None);
-            for &(_, lon, lat, x, y) in REFERENCE_POINTS.iter().filter(|row| row.0 == code) {
-                let (px, py) = wgs84.transform_to(lon, lat, &custom).unwrap();
-                assert!(
-                    (px - x).abs() < 0.01 && (py - y).abs() < 0.01,
-                    "EPSG:{code} at {lon} {lat}: {px} {py}, PROJ {x} {y}"
-                );
-            }
-        }
-    }
-
-    /// A WKT naming no code and no shift, as an ESRI .prj is, is never taken
-    /// for a code on another datum that shares its ellipsoid and projection:
-    /// Martinique 1938 / UTM 20N (2973) is not PSAD56 / UTM 20N (24820),
-    /// whose shift lands it 766 m off, and RGR92 / UTM 40S (2975) is not
-    /// WGS 84 / UTM 40S. Each reference code with its codes and TOWGS84
-    /// removed comes back as that code or as no code.
-    #[test]
-    fn a_wkt_naming_no_code_is_never_taken_for_another_datum() {
-        let mut misread = Vec::new();
-        for &(code, ..) in REFERENCE_POINTS {
-            let mut wkt = without_authorities(crs_definitions::from_code(code as u16).unwrap().wkt);
-            if let Some(start) = wkt.find(",TOWGS84[") {
-                let end = start + wkt[start..].find(']').unwrap() + 1;
-                wkt.replace_range(start..end, "");
-            }
-            if let Ok(resolved) = from_reference(&wkt)
-                && resolved.epsg.is_some_and(|read| read != code)
-            {
-                misread.push(format!("EPSG:{code} read as {:?}", resolved.epsg));
-            }
-        }
-        assert!(misread.is_empty(), "{misread:?}");
-    }
-
-    /// A WKT naming no code on a registry geographic CRS the engine refuses
-    /// (NAD27, which needs grids) is refused as keys naming it are, rather
-    /// than placed with its datum shift dropped.
-    #[test]
-    fn a_wkt_naming_no_code_on_a_refused_geographic_crs_is_refused() {
-        let wkt = crs_definitions::from_code(26717)
-            .unwrap()
-            .wkt
-            .replace(r#",AUTHORITY["EPSG","26717"]]"#, "]")
-            .replace(r#",AUTHORITY["EPSG","9001"]"#, "");
-        assert_eq!(own_code(&wkt_nodes(&wkt)), None);
-        let refused = from_reference(&wkt).map(|crs| crs.definition);
-        assert_eq!(refused, Err("EPSG:4267 is not supported".to_string()));
-    }
-
-    /// A projected WKT naming no code of its own is read as it is spelled
-    /// (here as the code it places as), never as the geographic CRS nested
-    /// in it: with UTM 31N's root and unit codes removed, its last code is
-    /// its GEOGCS's (4326), which wbprojection would take as the whole CRS.
-    #[test]
-    fn a_wkt_naming_no_code_is_not_read_as_its_geographic_crs() {
-        let wkt = crs_definitions::from_code(32631)
-            .unwrap()
-            .wkt
-            .replace(r#",AUTHORITY["EPSG","32631"]]"#, "]")
-            .replace(r#",AUTHORITY["EPSG","9001"]"#, "");
-        assert_eq!(own_code(&wkt_nodes(&wkt)), None);
-        let custom = from_reference(&wkt).unwrap();
-        assert_eq!(custom.epsg, Some(32631));
-        assert!(custom.is_projected(), "{}", custom.definition);
-        let wgs84 = from_epsg(4326).unwrap();
-        let utm = from_epsg(32631).unwrap();
-        for (lon, lat) in [(3.0, 45.0), (2.35, 48.85)] {
-            let (x, y) = wgs84.transform_to(lon, lat, &utm).unwrap();
-            let (px, py) = wgs84.transform_to(lon, lat, &custom).unwrap();
-            assert!(
-                (px - x).abs() < 0.01 && (py - y).abs() < 0.01,
-                "{lon} {lat}: {px} {py}, EPSG:32631 {x} {y}"
-            );
-        }
-    }
-
-    /// The engine refuses a registry geographic CRS on another meridian
-    /// (EPSG:4807, NTF Paris), and so a code-less one, from WKT or keys,
-    /// rather than reading its Paris longitudes as Greenwich's (170 km west).
-    #[test]
-    fn a_crs_naming_no_code_on_another_meridian_is_refused() {
-        let wkt = r#"GEOGCS["NTF (Paris)",DATUM["Nouvelle_Triangulation_Francaise_Paris",SPHEROID["Clarke 1880 (IGN)",6378249.2,293.4660212936269]],PRIMEM["Paris",2.33722917],UNIT["degree",0.0174532925199433]]"#;
-        let keys = GeoKeyDirectory {
-            version: 1,
-            key_revision: 1,
-            minor_revision: 0,
-            entries: vec![
-                short_entry(key::GTModelTypeGeoKey, 2),
-                short_entry(key::GeographicTypeGeoKey, USER_DEFINED),
-                short_entry(key::GeogGeodeticDatumGeoKey, USER_DEFINED),
-                short_entry(key::GeogPrimeMeridianGeoKey, 8903),
-                short_entry(key::GeogAngularUnitsGeoKey, 9102),
-                double_entry(key::GeogSemiMajorAxisGeoKey, 6_378_249.2),
-                double_entry(key::GeogInvFlatteningGeoKey, 293.466_021_293_626_9),
-            ],
-        };
-        let from_wkt = from_reference(wkt).map(|crs| crs.definition);
-        let from_keys = from_geokeys(&keys).map(|crs| crs.map(|crs| crs.definition));
-        for refused in [from_wkt, from_keys.map(Option::unwrap_or_default)] {
-            assert!(
-                refused
-                    .as_ref()
-                    .is_err_and(|e| e.contains("a prime meridian other than Greenwich")),
-                "{refused:?}"
-            );
-        }
-    }
-
-    /// Keys spelling a projection with no code in US feet give their false
-    /// origin and coordinates in feet; the engine reads and writes such keys
-    /// in metres, so they are refused as a PROJ string in feet is.
-    #[test]
-    fn user_defined_keys_in_feet_are_refused() {
-        let mut keys = lambert93_keys();
-        keys.entries
-            .retain(|entry| entry.key_id != key::GTCitationGeoKey);
-        for entry in &mut keys.entries {
-            if entry.key_id == key::ProjLinearUnitsGeoKey {
-                entry.value = GeoKeyValue::Short(9003);
-            }
-        }
-        let refused = from_geokeys(&keys).map(|crs| crs.map(|crs| crs.definition));
-        assert!(
-            refused
-                .as_ref()
-                .is_err_and(|e| e.contains("a linear unit other than the metre")),
-            "{refused:?}"
-        );
-    }
-
-    /// A PROJ string names no code, so it is written back as user-defined
-    /// keys: a projection keys cannot spell (spherical Web Mercator, Swiss
-    /// oblique Mercator, Krovak) is refused when probed, not when written,
-    /// and so is one whose keys would place elsewhere than the string does
-    /// (a Mercator's true-scale latitude, a south-west axis).
-    #[test]
-    fn a_proj_string_keys_cannot_spell_is_refused_when_probed() {
-        let definition = |code: u16| crs_definitions::from_code(code).unwrap().proj4;
-        for proj4 in [
-            "+proj=merc +a=6378137 +b=6378137 +lat_ts=0 +lon_0=0 +x_0=0 +y_0=0 +k=1 +units=m +no_defs",
-            "+proj=merc +lat_ts=20 +ellps=WGS84 +units=m",
-            "+proj=tmerc +lat_0=0 +lon_0=25 +k=1 +x_0=0 +y_0=0 +axis=wsu +ellps=WGS84 +units=m",
-            definition(3857),
-            definition(2056),
-            definition(5514),
-        ] {
-            let refused = from_proj4(proj4).map(|crs| crs.definition);
-            assert!(
-                refused
-                    .as_ref()
-                    .is_err_and(|e| e.contains("is not supported")),
-                "{proj4}: {refused:?}"
-            );
-        }
-    }
-
-    /// A user-defined CRS on the WGS84 ellipsoid with a datum shift keeps
-    /// the shift through the keys written back, so hover reads the written
-    /// file where import placed it (and where the display tile draws it).
-    #[test]
-    fn a_shifted_crs_on_the_wgs84_ellipsoid_keeps_its_shift_in_written_keys() {
-        let wgs84 = from_epsg(4326).unwrap();
-        let source = from_proj4("+proj=longlat +ellps=WGS84 +towgs84=-84,-22,209").unwrap();
-        let reread = from_geokeys(&geokeys_for(&source).unwrap())
-            .unwrap()
-            .unwrap();
-        let (lon, lat) = source.transform_to(2.35, 48.85, &wgs84).unwrap();
-        let (again_lon, again_lat) = reread.transform_to(2.35, 48.85, &wgs84).unwrap();
-        assert!(
-            (again_lon - lon).abs() < 1e-9 && (again_lat - lat).abs() < 1e-9,
-            "{again_lon} {again_lat}, import placed {lon} {lat}"
-        );
-    }
-
-    /// NAD83 / New York Long Island (EPSG:2263) is in US survey feet: points
-    /// come out in feet (the reference table), its WKT names the unit and
-    /// its written keys say US feet. A compound CRS is classed by its
-    /// horizontal unit, whatever its vertical part's.
-    #[test]
-    fn feet_systems_are_placed_and_labelled_in_feet() {
-        let new_york = from_epsg(2263).unwrap();
-        assert!(
-            new_york
-                .wkt
-                .contains(r#"UNIT["US survey foot",0.3048006096012192"#),
-            "{}",
-            new_york.wkt
-        );
-        assert_eq!(crs_class(&new_york.wkt), CRS_PROJECTED_OTHER);
-        let compound = |code: u32, unit: &str| {
-            let horizontal = from_epsg(code).unwrap().wkt;
-            let wkt = format!(
-                r#"COMPD_CS["{code} + NAVD88 height",{horizontal},VERT_CS["NAVD88 height",VERT_DATUM["North American Vertical Datum 1988",2005],{unit},AXIS["Gravity-related height",UP]]]"#
-            );
-            crs_class(&from_reference(&wkt).unwrap().wkt)
-        };
-        assert_eq!(compound(2263, r#"UNIT["metre",1]"#), CRS_PROJECTED_OTHER);
-        assert_eq!(
-            compound(26918, r#"UNIT["US survey foot",0.3048006096012192]"#),
-            CRS_PROJECTED_METRE
-        );
-        let keys = geokeys_for(&new_york).unwrap();
-        assert_eq!(short(&keys, key::ProjLinearUnitsGeoKey), Some(9003));
-    }
-
-    /// The display renderer rebuilds the CRS from the written keys, so a datum
-    /// shift travels as GeogTOWGS84GeoKey (2062): Amersfoort's seven
-    /// parameters and OSGB36's named datum. A CRS that shifts nothing writes
-    /// no such key, so Lambert-93's keys stay the code and its unit; only the
-    /// citation changed with the registry, from wbprojection's "RGF93 v1 /
-    /// Lambert-93 (EPSG:2154)" to crs-definitions' name.
-    #[test]
-    fn written_keys_carry_the_datum_shift_and_nothing_for_a_zero_shift() {
-        let shift = |code: u32| match geokeys_for(&from_epsg(code).unwrap()).unwrap().get(2062) {
-            Some(GeoKeyValue::Doubles(values)) => Some(values.clone()),
-            _ => None,
-        };
-        assert_eq!(
-            shift(28992),
-            Some(vec![
-                565.2369, 50.0087, 465.658, -0.406857, 0.350733, -1.87035, 4.0812
-            ])
-        );
-        assert_eq!(
-            shift(27700),
-            Some(vec![
-                446.448, -125.157, 542.060, 0.1502, 0.2470, 0.8421, -20.4894
-            ])
-        );
-        for code in [2154, 3035, 25832] {
-            assert_eq!(shift(code), None, "EPSG:{code}");
-        }
-        let lambert93 = geokeys_for(&from_epsg(2154).unwrap()).unwrap();
-        let keys: Vec<(u16, GeoKeyValue)> = lambert93
-            .entries
-            .into_iter()
-            .map(|entry| (entry.key_id, entry.value))
-            .collect();
-        assert_eq!(
-            keys,
-            vec![
-                (key::GTModelTypeGeoKey, GeoKeyValue::Short(1)),
-                (key::GTRasterTypeGeoKey, GeoKeyValue::Short(1)),
-                (
-                    key::GTCitationGeoKey,
-                    GeoKeyValue::Ascii("RGF93 / Lambert-93".to_string())
-                ),
-                (key::ProjectedCSTypeGeoKey, GeoKeyValue::Short(2154)),
-                (key::ProjLinearUnitsGeoKey, GeoKeyValue::Short(9001)),
-            ]
-        );
-    }
-
-    /// Codes the library cannot read (Cassini, oblique Mercator, a geographic
-    /// CRS on the Paris meridian in grads, polar LAEA north and south, an
-    /// unknown code) are refused by name, never approximated (U24).
-    #[test]
-    fn codes_the_library_cannot_read_are_refused_by_name() {
-        for code in [3068u32, 2057, 4807, 3571, 6932, 999_999] {
-            assert_eq!(
-                from_epsg(code).unwrap_err(),
-                format!("EPSG:{code} is not supported")
-            );
-        }
-        assert_eq!(
-            from_reference("EPSG:3068").unwrap_err(),
-            "EPSG:3068 is not supported"
-        );
-    }
-
-    /// The display renderer (cog-tiler-wasm through proj4js) draws every
-    /// CRS east-north, so a registry code whose axes point west and south
-    /// (the South African Lo grids 2046-2055 and 22275-22293, Schwarzeck
-    /// 29371-29385, S-JTSK [JTSK03] 8352) would draw in the opposite hemisphere
-    /// from where import places it; such codes are refused by name. 5513 and
-    /// 2065 stay accepted until the user decides on them (U25 names them).
-    #[test]
-    fn registry_codes_whose_axes_point_west_or_south_are_refused() {
-        for code in [2046u32, 2055, 22275, 22293, 29371, 8352] {
-            assert_eq!(
-                from_epsg(code).unwrap_err(),
-                format!("EPSG:{code} is not supported")
-            );
-        }
-        let accepted: Vec<u32> = (0..=u16::MAX)
-            .filter_map(|code| from_epsg(u32::from(code)).ok())
-            .filter(|crs| term(&crs.definition, "+axis=").is_some_and(|axis| axis != "enu"))
-            .filter_map(|crs| crs.epsg)
-            .collect();
-        assert_eq!(accepted, [2065, 5513]);
-    }
-
-    /// proj4rs 0.2.0 drops part of the northing of an oblique LAEA on a
-    /// sphere (US National Atlas Equal Area, EPSG:2163: 10 km off at -90 40,
-    /// where PROJ gives 850045.52 -504360.09), so the code, its PROJ string
-    /// and its WKT naming no code are refused by name, not placed.
-    #[test]
-    fn an_oblique_lambert_azimuthal_on_a_sphere_is_refused() {
-        assert_eq!(from_epsg(2163).unwrap_err(), "EPSG:2163 is not supported");
-        let def = crs_definitions::from_code(2163).unwrap();
-        let sphere = "an oblique Lambert azimuthal equal-area CRS on a sphere";
-        let from_string = from_proj4(def.proj4).map(|crs| crs.definition);
-        let from_wkt = from_reference(&without_authorities(def.wkt)).map(|crs| crs.definition);
-        for refused in [from_string, from_wkt] {
-            assert!(
-                refused.as_ref().is_err_and(|e| e.contains(sphere)),
-                "{refused:?}"
-            );
-        }
     }
 }

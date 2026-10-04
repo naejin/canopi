@@ -255,24 +255,19 @@ fn probe_other(
     if raster.cell_size_x == 0.0 || raster.cell_size_y == 0.0 {
         return Err("raster has degenerate pixel size (zero geotransform scale)".to_string());
     }
-    // The WKT first: wbraster's code is the WKT's last nested one when its
-    // root names none. A WKT wbraster generated from a bare code (a
-    // GeoPackage's srs_id) names no code, so that code resolves instead.
-    let generated = raster
-        .crs
-        .epsg
-        .and_then(|code| wbprojection::to_ogc_wkt(code).ok());
-    let crs = if let Some(wkt) = raster
+    let crs = if let Some(code) = raster.crs.epsg {
+        Some(crs::from_epsg(code)?)
+    } else if let Some(wkt) = raster
         .crs
         .wkt
         .as_deref()
-        .filter(|wkt| !wkt.trim().is_empty() && Some(*wkt) != generated.as_deref())
+        .filter(|wkt| !wkt.trim().is_empty())
     {
         Some(crs::from_reference(wkt)?)
-    } else if let Some(code) = raster.crs.epsg {
-        Some(crs::from_epsg(code)?)
     } else if let Some(proj4) = raster.crs.proj4.as_deref().filter(|p| !p.trim().is_empty()) {
-        Some(crs::from_proj4(proj4)?)
+        let crs = wbprojection::from_proj_string(proj4)
+            .map_err(|e| format!("unsupported PROJ definition: {e}"))?;
+        Some(crs::from_reference(&crs.to_wkt())?)
     } else {
         None
     };
@@ -301,115 +296,4 @@ fn probe_other(
         overview_count: 0,
     };
     Ok((probe, crs))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A GeoPackage names only its srs_id; wbraster fills a WKT from it
-    /// that carries no code, so the probe resolves the code, not that WKT.
-    #[test]
-    fn a_geopackage_is_placed_by_its_srs_id() {
-        let dir = crate::test_scratch::TestScratch::new("rust-engine-source-gpkg");
-        for code in [28992, 3857] {
-            let gpkg = dir.join(format!("grid-{code}.gpkg"));
-            let mut raster = wbraster::Raster::new(wbraster::RasterConfig {
-                cols: 2,
-                rows: 2,
-                bands: 1,
-                x_min: 155_000.0,
-                y_min: 463_000.0,
-                cell_size: 10.0,
-                nodata: 0.0,
-                data_type: wbraster::raster::DataType::U8,
-                crs: wbraster::CrsInfo::from_epsg(code),
-                ..Default::default()
-            });
-            raster.set(0, 0, 0, 1.0).unwrap();
-            raster
-                .write(&gpkg, wbraster::RasterFormat::GeoPackage)
-                .unwrap();
-            let read = read_other(&gpkg).unwrap();
-            let (_, resolved) = probe_other(&gpkg, &read).unwrap();
-            let resolved = resolved.unwrap();
-            assert_eq!(resolved.epsg, Some(code));
-            assert_eq!(resolved.wkt, crs::from_epsg(code).unwrap().wkt);
-        }
-    }
-
-    /// ESRI .prj files name their datum only by name and carry no TOWGS84.
-    /// A grid whose .prj spells a registry code's projection and ellipsoid
-    /// is placed where PROJ places that code, with its datum shift (British
-    /// National Grid, Belgian Lambert 72); wbraster's identification alone is
-    /// not trusted, so Lambert-93, which it reads as EPSG:2918, still lands
-    /// where Lambert-93 does.
-    #[test]
-    fn an_esri_prj_naming_a_datum_only_by_name_is_placed_with_its_shift() {
-        let prjs = [
-            (
-                27700,
-                r#"PROJCS["British_National_Grid",GEOGCS["GCS_OSGB_1936",DATUM["D_OSGB_1936",SPHEROID["Airy_1830",6377563.396,299.3249646]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],PARAMETER["False_Easting",400000.0],PARAMETER["False_Northing",-100000.0],PARAMETER["Central_Meridian",-2.0],PARAMETER["Scale_Factor",0.9996012717],PARAMETER["Latitude_Of_Origin",49.0],UNIT["Meter",1.0]]"#,
-            ),
-            (
-                31370,
-                r#"PROJCS["Belge_Lambert_1972",GEOGCS["GCS_Belge_1972",DATUM["D_Belge_1972",SPHEROID["International_1924",6378388.0,297.0]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Lambert_Conformal_Conic"],PARAMETER["False_Easting",150000.013],PARAMETER["False_Northing",5400088.438],PARAMETER["Central_Meridian",4.367486666666666],PARAMETER["Standard_Parallel_1",49.8333339],PARAMETER["Standard_Parallel_2",51.16666723333333],PARAMETER["Latitude_Of_Origin",90.0],UNIT["Meter",1.0]]"#,
-            ),
-            (
-                2154,
-                r#"PROJCS["RGF_1993_Lambert_93",GEOGCS["GCS_RGF_1993",DATUM["D_RGF_1993",SPHEROID["GRS_1980",6378137.0,298.257222101]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Lambert_Conformal_Conic"],PARAMETER["False_Easting",700000.0],PARAMETER["False_Northing",6600000.0],PARAMETER["Central_Meridian",3.0],PARAMETER["Standard_Parallel_1",44.0],PARAMETER["Standard_Parallel_2",49.0],PARAMETER["Latitude_Of_Origin",46.5],UNIT["Meter",1.0]]"#,
-            ),
-        ];
-        let dir = crate::test_scratch::TestScratch::new("rust-engine-source-esri-datum");
-        let wgs84 = crs::from_epsg(4326).unwrap();
-        for (code, prj) in prjs {
-            let asc = dir.join(format!("grid-{code}.asc"));
-            std::fs::write(
-                &asc,
-                "ncols 2\nnrows 2\nxllcorner 150000\nyllcorner 170000\ncellsize 10\nNODATA_value -1\n1 2\n3 4\n",
-            )
-            .unwrap();
-            std::fs::write(dir.join(format!("grid-{code}.prj")), prj).unwrap();
-            let read = read_other(&asc).unwrap();
-            let (_, resolved) = probe_other(&asc, &read).unwrap();
-            let resolved = resolved.unwrap();
-            for &(_, lon, lat, x, y) in super::super::crs_reference_points::REFERENCE_POINTS
-                .iter()
-                .filter(|row| row.0 == code)
-            {
-                let (px, py) = wgs84.transform_to(lon, lat, &resolved).unwrap();
-                assert!(
-                    (px - x).abs() < 0.01 && (py - y).abs() < 0.01,
-                    "EPSG:{code} at {lon} {lat}: {px} {py}, PROJ {x} {y}"
-                );
-            }
-        }
-    }
-
-    /// An Esri ASCII grid whose .prj names no code of its own: wbraster
-    /// identifies it by its last nested code (its unit's, 9003), so the
-    /// probe reads the WKT itself and refuses the feet grid by name.
-    #[test]
-    fn another_format_is_placed_by_its_wkt_not_a_nested_code() {
-        let dir = crate::test_scratch::TestScratch::new("rust-engine-source-prj");
-        let asc = dir.join("grid.asc");
-        std::fs::write(
-            &asc,
-            "ncols 2\nnrows 2\nxllcorner 1000000\nyllcorner 200000\ncellsize 10\nNODATA_value -1\n1 2\n3 4\n",
-        )
-        .unwrap();
-        let long_island = crs_definitions::from_code(2263).unwrap().wkt;
-        std::fs::write(
-            dir.join("grid.prj"),
-            long_island.replace(r#",AUTHORITY["EPSG","2263"]]"#, "]"),
-        )
-        .unwrap();
-        let refused = probe(&asc).map(|probe| probe.crs_wkt);
-        assert!(
-            refused
-                .as_ref()
-                .is_err_and(|e| e.contains("a linear unit other than the metre")),
-            "{refused:?}"
-        );
-    }
 }
