@@ -295,7 +295,6 @@
     "src/canvas/runtime/plant-symbol-recipes.ts#tracePlantSymbolContour",
     "src/canvas/runtime/renderers/maplibre-scene.ts#MAPLIBRE_SCENE_RENDERER_ID",
     "src/canvas/runtime/renderers/pixi-scene.ts#createDraftScenePainters",
-    "src/canvas/runtime/scene-runtime/render-scheduler.ts#SceneRendererMountCancelledError",
     "src/canvas/runtime/scene-visuals.ts#CANVAS_MAP_BACKDROP_COLORS",
     "src/canvas/runtime/scene-visuals.ts#resolveBackdropInk",
     "src/canvas/runtime/scene/geo-frame.ts#roundGeoPosition",
