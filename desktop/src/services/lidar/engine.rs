@@ -140,7 +140,7 @@ pub trait RasterEngine: Send + Sync + std::fmt::Debug {
         cancel: &AtomicBool,
     ) -> Result<(), String>;
 
-    /// Write the display profile (`display-cog-deflate256-v1`): band 1 as
+    /// Write the display profile (`display-cog-deflate256-v2`): band 1 as
     /// Float32, 256×256 tiles, Deflate, averaged valid-data overviews, the
     /// NoData tag readers compare samples against. Same override rules as
     /// [`RasterEngine::write_controlled_cog`].
