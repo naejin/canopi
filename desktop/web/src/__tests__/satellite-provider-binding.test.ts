@@ -158,7 +158,7 @@ describe('Google official provider drives the live map', () => {
 
   it('withdraws an official contribution when the map has no tile transport', async () => {
     const { http } = googleHttp()
-    const provider = new SatelliteImageryProvider(http, { googleMapsApiKey: API_KEY })
+    const provider = new SatelliteImageryProvider(http, () => ({ googleMapsApiKey: API_KEY }))
     const map = recordingMap()
     // No tileAuth: a map created without the request seam cannot resolve the
     // session template, so the binding must not install a source that would

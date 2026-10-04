@@ -60,9 +60,8 @@ export type SatelliteState =
   | { readonly state: 'loading' }
   | {
       readonly state: 'ready'
+      /** An official descriptor's attribution is the viewport copyright. */
       readonly descriptor: SatelliteDescriptor
-      /** Viewport copyright, when the provider supplies and requires one. */
-      readonly copyright: string | null
       /**
        * Nothing. The live session token and key are published separately, into
        * the map's tile transport, so they can never be persisted, exported or
@@ -88,7 +87,6 @@ interface GoogleSession {
    */
   readonly sessionToken: string
   readonly tileWidth: number
-  readonly tileHeight: number
   readonly expiresAtMs: number
 }
 
@@ -148,13 +146,11 @@ export class SatelliteImageryProvider {
   constructor(
     private readonly http: SatelliteHttp,
     /**
-     * The configuration, or a getter for it.
-     *
-     * A getter is how a device-local key or a locale change reaches a provider
-     * that is already serving a live map: `update()` re-reads it, so no caller
-     * has to capture the key at map-creation time and go stale.
+     * Reads the configuration: a device-local key or a locale change reaches a
+     * provider that is already serving a live map, because `update()` re-reads
+     * it, so no caller has to capture the key at map-creation time and go stale.
      */
-    private readonly config: SatelliteConfig | (() => SatelliteConfig),
+    private readonly config: () => SatelliteConfig,
     private readonly now: () => number = () => Date.now(),
     private readonly sleep: (ms: number) => Promise<void> = (ms) =>
       new Promise((resolve) => setTimeout(resolve, ms)),
@@ -164,11 +160,6 @@ export class SatelliteImageryProvider {
      */
     private readonly credentials: BasemapTileAuth | null = null,
   ) {}
-
-  /** The configuration in force for this call. */
-  private currentConfig(): SatelliteConfig {
-    return typeof this.config === 'function' ? this.config() : this.config
-  }
 
   /** The current published state. */
   snapshot(): SatelliteState {
@@ -203,7 +194,7 @@ export class SatelliteImageryProvider {
     this.viewportInFlight = null
     this.clearRenewal()
 
-    const config = this.currentConfig()
+    const config = this.config()
     const nextIdentity = this.configIdentityOf(config)
     const configChanged = this.configIdentity !== nextIdentity
     if (configChanged) {
@@ -224,11 +215,7 @@ export class SatelliteImageryProvider {
       this.session = null
       this.credentials?.clear()
       this.viewportMetadata = null
-      this.publish({
-        state: 'ready',
-        descriptor,
-        copyright: null,
-      })
+      this.publish({ state: 'ready', descriptor })
       return
     }
 
@@ -317,7 +304,7 @@ export class SatelliteImageryProvider {
     generation: number,
     descriptor: SatelliteDescriptor,
   ): Promise<void> {
-    const key = this.currentConfig().googleMapsApiKey?.trim() ?? ''
+    const key = this.config().googleMapsApiKey?.trim() ?? ''
     let session: GoogleSession | null = null
     try {
       session = await this.runSessionRequest(generation, key)
@@ -353,7 +340,7 @@ export class SatelliteImageryProvider {
   /** Hand the live session to the map's transport, when the surface has one. */
   private installCredentials(session: GoogleSession): void {
     if (!this.credentials) return
-    const key = this.currentConfig().googleMapsApiKey?.trim() ?? ''
+    const key = this.config().googleMapsApiKey?.trim() ?? ''
     if (!key) return
     this.credentials.set({ sessionToken: session.sessionToken, apiKey: key })
   }
@@ -394,7 +381,6 @@ export class SatelliteImageryProvider {
     this.publish({
       state: 'ready',
       descriptor: this.descriptorForSession(descriptor, session),
-      copyright: metadata.copyright,
     })
     this.scheduleRenewal(generation, session, descriptor)
   }
@@ -453,11 +439,9 @@ export class SatelliteImageryProvider {
     const sessionToken = body.session
     if (typeof sessionToken !== 'string' || sessionToken.length === 0) return null
     const tileWidth = Number(body.tileWidth)
-    const tileHeight = Number(body.tileHeight)
     return {
       sessionToken,
       tileWidth: Number.isFinite(tileWidth) && tileWidth > 0 ? tileWidth : 256,
-      tileHeight: Number.isFinite(tileHeight) && tileHeight > 0 ? tileHeight : 256,
       expiresAtMs: readSessionExpiryMs(body.expiry, this.now()),
     }
   }
@@ -483,7 +467,7 @@ export class SatelliteImageryProvider {
       return
     }
     const session = this.session
-    const key = this.currentConfig().googleMapsApiKey?.trim() ?? ''
+    const key = this.config().googleMapsApiKey?.trim() ?? ''
     if (!session || !key) return
     this.latestDesiredViewport = viewport
     this.viewportInFlight = { generation, viewport }
@@ -608,13 +592,13 @@ export class SatelliteImageryProvider {
 
   /** The app's supported locale as an IETF tag, falling back to `en`. */
   private sessionLocale(): string {
-    const locale = this.currentConfig().locale?.trim()
+    const locale = this.config().locale?.trim()
     return locale && /^[A-Za-z]{2}(-[A-Za-z0-9]{2,8})?$/.test(locale) ? locale : 'en'
   }
 
   /** A validated region, defaulting to `US` as the contract specifies. */
   private sessionRegion(): string {
-    const locale = this.currentConfig().locale ?? ''
+    const locale = this.config().locale ?? ''
     const region = locale.split('-')[1]
     return region && /^[A-Za-z]{2}$/.test(region) ? region.toUpperCase() : 'US'
   }
@@ -675,7 +659,6 @@ export interface BasemapViewportMetadata {
 export function readViewportMetadata(
   json: unknown,
   viewport: SatelliteViewport,
-  fallbackMaxZoom = 22,
 ): BasemapViewportMetadata | null {
   if (!isRecord(json)) return null
   const copyright =
@@ -717,10 +700,7 @@ export function readViewportMetadata(
   if (viewPieces.length === 0) return null
   const ceiling = exactCoverageCeiling(viewPieces, viewport, parsed)
   if (ceiling === null) return null
-  return {
-    copyright,
-    maxZoom: Math.min(ceiling, fallbackMaxZoom),
-  }
+  return { copyright, maxZoom: ceiling }
 }
 
 type LonInterval = { start: number; end: number }

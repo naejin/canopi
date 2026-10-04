@@ -8,7 +8,6 @@ import {
 describe('shared satellite descriptor resolution', () => {
   it('serves Google keylessly from its public tile endpoint until a key is configured', () => {
     for (const config of [
-      undefined,
       {},
       { googleMapsApiKey: undefined },
       { googleMapsApiKey: null },
@@ -43,7 +42,7 @@ describe('shared satellite descriptor resolution', () => {
   })
 
   it('names no imagery provider on the descriptor', () => {
-    expect(resolveSatelliteDescriptor()).not.toHaveProperty('provider')
+    expect(resolveSatelliteDescriptor({})).not.toHaveProperty('provider')
     expect(resolveSatelliteDescriptor({ googleMapsApiKey: 'key' })).not.toHaveProperty('provider')
   })
 })

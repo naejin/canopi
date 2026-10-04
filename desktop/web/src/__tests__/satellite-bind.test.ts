@@ -80,7 +80,7 @@ const googleHttp: SatelliteHttp = {
 
 describe('satellite provider binding', () => {
   it('adopts the provider it is bound to without touching the map style', () => {
-    const provider = new SatelliteImageryProvider(inertHttp, {})
+    const provider = new SatelliteImageryProvider(inertHttp, () => ({}))
     provider.update(VIEWPORT)
     const map = recordingMap()
 
@@ -157,7 +157,7 @@ describe('satellite provider binding', () => {
   })
 
   it('applies visibility to the live contribution and stops when disposed', () => {
-    const provider = new SatelliteImageryProvider(inertHttp, {})
+    const provider = new SatelliteImageryProvider(inertHttp, () => ({}))
     provider.update(VIEWPORT)
     const map = recordingMap()
     const dispose = bindSatelliteImagery({
@@ -177,7 +177,7 @@ describe('satellite provider binding', () => {
   })
 
   it('drives the map from the provider rather than from the caller', () => {
-    const provider = new SatelliteImageryProvider(inertHttp, {})
+    const provider = new SatelliteImageryProvider(inertHttp, () => ({}))
     const map = recordingMap()
     const listener = vi.fn()
     provider.subscribe(listener)

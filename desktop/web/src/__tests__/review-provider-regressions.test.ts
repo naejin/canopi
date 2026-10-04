@@ -157,7 +157,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
         }),
       ok(viewportBody(20, 'new')),
     ])
-    const provider = new SatelliteImageryProvider(http, { googleMapsApiKey: 'key' })
+    const provider = new SatelliteImageryProvider(http, () => ({ googleMapsApiKey: 'key' }))
     provider.update(VIEWPORT_A)
     await vi.waitFor(() => {
       if (calls.length < 2) throw new Error('session not settled')
@@ -169,7 +169,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     await vi.waitFor(() => {
       const last = provider.snapshot()
       if (last.state !== 'ready') throw new Error('not ready')
-      if (last.copyright !== 'new') throw new Error('stale viewport published')
+      if (last.descriptor.attribution !== 'new') throw new Error('stale viewport published')
     })
     const viewportCalls = calls.filter((call) => call.url.includes('viewport'))
     expect(viewportCalls.length).toBeGreaterThanOrEqual(2)
@@ -185,7 +185,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
           gate.release = () => resolve(ok(viewportBody()))
         }),
     ])
-    const provider = new SatelliteImageryProvider(http, { googleMapsApiKey: 'key' })
+    const provider = new SatelliteImageryProvider(http, () => ({ googleMapsApiKey: 'key' }))
     const seen = recorder(provider)
     provider.update(VIEWPORT_A)
     await vi.waitFor(() => {
@@ -220,7 +220,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     ])
     const provider = new SatelliteImageryProvider(
       http,
-      { googleMapsApiKey: 'key' },
+      () => ({ googleMapsApiKey: 'key' }),
       () => 0,
       async () => {},
     )
@@ -234,7 +234,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     await vi.waitFor(() => {
       const last = provider.snapshot()
       if (last.state !== 'ready') throw new Error('not recovered')
-      if (last.copyright !== 'recovered') throw new Error('wrong copyright')
+      if (last.descriptor.attribution !== 'recovered') throw new Error('wrong copyright')
     })
     expect(calls.filter((c) => c.url.includes('viewport')).length).toBeGreaterThanOrEqual(2)
     provider.dispose()
@@ -247,7 +247,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       ok(viewportBody(20)),
       ok(viewportBody(12)),
     ])
-    const provider = new SatelliteImageryProvider(http, { googleMapsApiKey: 'key' })
+    const provider = new SatelliteImageryProvider(http, () => ({ googleMapsApiKey: 'key' }))
     provider.update(VIEWPORT_A)
     await vi.waitFor(() => {
       const last = provider.snapshot()
@@ -317,7 +317,6 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       {
         state: 'ready',
         descriptor: descriptor({ attribution: 'second' }),
-        copyright: 'second',
       },
       { officialTilesResolvable: true },
     )
@@ -330,12 +329,12 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     const { target, sources, order } = recordingTarget()
     reconcileSatelliteContribution(
       target,
-      { state: 'ready', descriptor: descriptor({ maxzoom: 18 }), copyright: 'a' },
+      { state: 'ready', descriptor: descriptor({ maxzoom: 18 }) },
       { officialTilesResolvable: true },
     )
     reconcileSatelliteContribution(
       target,
-      { state: 'ready', descriptor: descriptor({ maxzoom: 20 }), copyright: 'a' },
+      { state: 'ready', descriptor: descriptor({ maxzoom: 20 }) },
       { officialTilesResolvable: true },
     )
     expect(order.filter((entry) => entry.startsWith('removeSource')).length).toBe(1)
@@ -354,7 +353,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     const addCount = order.filter((entry) => entry.startsWith('addSource')).length
     reconcileSatelliteContribution(
       target,
-      { state: 'ready', descriptor: descriptor({ attribution: 'B' }), copyright: 'B' },
+      { state: 'ready', descriptor: descriptor({ attribution: 'B' }) },
       { officialTilesResolvable: true },
     )
     expect(sources.size).toBe(1)
@@ -367,7 +366,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     const { target, layers } = recordingTarget()
     reconcileSatelliteContribution(
       target,
-      { state: 'ready', descriptor: descriptor(), copyright: 'A' },
+      { state: 'ready', descriptor: descriptor() },
       { officialTilesResolvable: true },
     )
     const layer = layers.get(MAPLIBRE_SATELLITE_LAYER_ID) as { layout?: { visibility?: string } } | undefined
@@ -522,7 +521,6 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     reconcileSatelliteContribution(target, {
       state: 'ready',
       descriptor: descriptor({ attribution: 'A' }),
-      copyright: 'A',
     }, { officialTilesResolvable: true })
     expect(credits.at(-1)).toBe('A')
     expect(sources.size).toBe(1)
