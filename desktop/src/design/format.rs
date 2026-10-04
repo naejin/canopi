@@ -480,11 +480,11 @@ mod tests {
     }
 
     #[test]
-    fn test_create_default_has_six_layers() {
+    fn test_create_default_has_four_layers() {
         let design = create_default();
         assert_eq!(design.version, CURRENT_CANOPI_FILE_VERSION);
         assert_eq!(design.name, "Untitled");
-        assert_eq!(design.layers.len(), 6);
+        assert_eq!(design.layers.len(), 4);
         assert!(design.measurement_guides.is_empty());
     }
 
@@ -499,7 +499,7 @@ mod tests {
         assert_eq!(second.name, "Second Design");
         assert_eq!(second.created_at, "2026-07-03T00:00:00Z");
         first.layers[0].name = "changed".to_owned();
-        assert_eq!(second.layers[0].name, "climate");
+        assert_eq!(second.layers[0].name, "zones");
     }
 
     #[test]
@@ -513,9 +513,7 @@ mod tests {
         assert_eq!(
             by_name,
             std::collections::HashMap::from([
-                ("climate", false),
                 ("zones", true),
-                ("water", false),
                 ("plants", true),
                 ("measurement-guides", true),
                 ("annotations", true),
@@ -535,9 +533,45 @@ mod tests {
         let loaded = load_from_file(&path).expect("load should succeed");
         assert_eq!(loaded.name, original.name);
         assert_eq!(loaded.version, original.version);
-        assert_eq!(loaded.layers.len(), 6);
+        assert_eq!(loaded.layers.len(), 4);
 
         // Clean up
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn a_design_saved_with_the_hidden_climate_and_water_rows_still_loads_them() {
+        let dir = unique_dir("climate_water_rows");
+        let path: PathBuf = dir.join("older_layers.canopi");
+        let mut older = create_default();
+        for name in ["climate", "water"] {
+            older.layers.push(Layer {
+                name: name.to_owned(),
+                visible: false,
+                locked: false,
+                opacity: 1.0,
+            });
+        }
+        save_to_file(&path, &older, None).expect("save should succeed");
+
+        let loaded = load_from_file(&path).expect("load should succeed");
+        let names: Vec<_> = loaded
+            .layers
+            .iter()
+            .map(|layer| layer.name.as_str())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "zones",
+                "plants",
+                "measurement-guides",
+                "annotations",
+                "climate",
+                "water"
+            ]
+        );
+
         let _ = std::fs::remove_file(&path);
     }
 

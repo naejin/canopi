@@ -1,14 +1,14 @@
 import { signal } from '@preact/signals'
+import { NEW_DESIGN_LAYER_DEFAULTS } from '../../generated/new-design-defaults'
 import { DEFAULT_SETTINGS } from '../../generated/settings'
 
+/** One value per New Design layer, from the generated defaults (common-types/canopi-new-design-defaults.json). */
+function perNewDesignLayer<T>(read: (layer: (typeof NEW_DESIGN_LAYER_DEFAULTS)[number]) => T): Record<string, T> {
+  return Object.fromEntries(NEW_DESIGN_LAYER_DEFAULTS.map((layer) => [layer.name, read(layer)]))
+}
+
 export function createDefaultLayerVisibility(): Record<string, boolean> {
-  return {
-    climate: false,
-    zones: true,
-    water: false,
-    plants: true,
-    annotations: true,
-  }
+  return perNewDesignLayer((layer) => layer.visible)
 }
 
 export const layerVisibility = signal<Record<string, boolean>>(createDefaultLayerVisibility())
@@ -20,25 +20,13 @@ export const rulersVisible = signal<boolean>(true)
 export const snapToGuidesEnabled = signal<boolean>(DEFAULT_SETTINGS.snap_to_guides)
 
 export function createDefaultLayerLockState(): Record<string, boolean> {
-  return {
-    climate: false,
-    zones: false,
-    water: false,
-    plants: false,
-    annotations: false,
-  }
+  return perNewDesignLayer((layer) => layer.locked)
 }
 
 export const layerLockState = signal<Record<string, boolean>>(createDefaultLayerLockState())
 
 export function createDefaultLayerOpacity(): Record<string, number> {
-  return {
-    climate: 1,
-    zones: 1,
-    water: 1,
-    plants: 1,
-    annotations: 1,
-  }
+  return perNewDesignLayer((layer) => layer.opacity)
 }
 
 export const layerOpacity = signal<Record<string, number>>(createDefaultLayerOpacity())

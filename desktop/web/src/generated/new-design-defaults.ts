@@ -4,20 +4,8 @@ import type { Layer } from './contracts'
 
 export const NEW_DESIGN_LAYER_DEFAULTS = [
   {
-    "name": "climate",
-    "visible": false,
-    "locked": false,
-    "opacity": 1.0
-  },
-  {
     "name": "zones",
     "visible": true,
-    "locked": false,
-    "opacity": 1.0
-  },
-  {
-    "name": "water",
-    "visible": false,
     "locked": false,
     "opacity": 1.0
   },
