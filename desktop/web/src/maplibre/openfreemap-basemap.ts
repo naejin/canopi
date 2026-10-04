@@ -191,7 +191,8 @@ export class VectorBasemap {
    * Claims a map error about this basemap's sprite, glyphs or TileJSON, which MapLibre reports with no layer id (a
    * glyph range only through the tile that needed it). Such a failure leaves the basemap blank or unlabelled, so the
    * installed style is `failed` until Retry; a single tile's failure is not claimed. An error with no URL is claimed
-   * only while the installed style's sprite downloads (`spriteInFlight`). Returns whether it was claimed.
+   * only in a sprite's failure shapes while the installed style's sprite downloads (`spriteInFlight`). Returns whether
+   * it was claimed.
    */
   claimResourceError(event: unknown): boolean {
     if (this.disposed) return false
@@ -211,9 +212,13 @@ export class VectorBasemap {
     this.spriteInFlight = false
   }
 
-  /** A URL-less error naming no source or layer, while the installed style's sprite downloads, is that sprite's. */
+  /**
+   * A URL-less, sprite-shaped error (`isSpriteShapedError`) naming no source or layer, while the installed style's
+   * sprite downloads, is that sprite's. Any other URL-less error stays a map failure.
+   */
   private claimSpriteError(event: unknown): boolean {
     if (!this.spriteInFlight || !this.installed || mapErrorResourceId(event) !== null) return false
+    if (!isSpriteShapedError(event)) return false
     this.spriteInFlight = false
     this.resourceFailed = true
     this.setStatus('failed')
@@ -382,6 +387,25 @@ function failedRequestUrl(event: unknown): string | null {
   const { url, message } = error as { url?: unknown; message?: unknown }
   if (typeof url === 'string' && url.length > 0) return url
   return typeof message === 'string' ? /(https?:\/\/\S+)\s*$/.exec(message)?.[1] ?? null : null
+}
+
+/** The body-read failures browsers raise as a `TypeError` when a download is cut off (WebKit, Chromium, Firefox). */
+const CUT_OFF_BODY = /^(?:Load failed|network error|Failed to fetch|NetworkError\b|Error in body stream|terminated)/i
+
+/**
+ * The shapes a sprite takes when it fails after its response arrived (MapLibre `load_sprite.ts`): its JSON is not JSON
+ * (`SyntaxError`, a captive portal's HTML), its body was cut off (a network `TypeError`), its image is empty or not an
+ * image (MapLibre's "Could not load (sprite) image"), or the browser could not decode it (a `DOMException`).
+ */
+function isSpriteShapedError(event: unknown): boolean {
+  const error = typeof event === 'object' && event !== null && 'error' in event ? (event as { error: unknown }).error : event
+  if (typeof error !== 'object' || error === null) return false
+  const { name, message } = error as { name?: unknown; message?: unknown }
+  const text = typeof message === 'string' ? message : ''
+  if (name === 'SyntaxError') return true
+  if (name === 'InvalidStateError' || name === 'EncodingError') return true
+  if (name === 'TypeError') return CUT_OFF_BODY.test(text)
+  return /^Could not load (?:sprite )?image\b/.test(text)
 }
 
 function escapeRegExp(text: string): string {

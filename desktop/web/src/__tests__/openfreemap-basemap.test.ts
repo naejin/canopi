@@ -295,6 +295,24 @@ describe('OpenFreeMap vector basemap', () => {
       expect(statuses.at(-1)).toBe('ok')
     })
 
+    it.each([
+      ['a shader that fails to compile', new Error('Could not compile fragment shader')],
+      ['a programming error', new TypeError("Cannot read properties of undefined (reading 'x')")],
+      ['a lost context', new Error('WebGL context lost')],
+    ])('leaves %s unclaimed while the sprite is downloading, so it stays a map failure', async (_case, error) => {
+      const { basemap, statuses } = await installedLiberty()
+      expect(basemap.claimResourceError({ type: 'error', error })).toBe(false)
+      expect(statuses.at(-1)).toBe('ok')
+      // The sprite's own failure is still claimed afterwards.
+      expect(basemap.claimResourceError(urlLess[0][1])).toBe(true)
+    })
+
+    it('claims an undecodable sprite image, which the browser rejects as a DOMException', async () => {
+      const { basemap } = await installedLiberty()
+      const decode = new DOMException('The source image could not be decoded.', 'InvalidStateError')
+      expect(basemap.claimResourceError({ type: 'error', error: decode })).toBe(true)
+    })
+
     it('leaves a URL-less error that names a source or layer unclaimed', async () => {
       const { basemap } = await installedLiberty()
       expect(basemap.claimResourceError({ type: 'error', sourceId: 'canopi-scene', error: new TypeError('Load failed') })).toBe(false)
