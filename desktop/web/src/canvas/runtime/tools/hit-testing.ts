@@ -473,11 +473,6 @@ function pointOnSegment(point: ScenePoint, start: ScenePoint, end: ScenePoint): 
 }
 
 function pointNearSegment(point: ScenePoint, start: ScenePoint, end: ScenePoint, tolerance: number): boolean {
-  const dx = end.x - start.x
-  const dy = end.y - start.y
-  if (dx * dx + dy * dy <= GEOMETRY_EPSILON) {
-    return Math.hypot(point.x - start.x, point.y - start.y) <= tolerance
-  }
   return distanceToSegment(point, start, end) <= tolerance + GEOMETRY_EPSILON
 }
 
