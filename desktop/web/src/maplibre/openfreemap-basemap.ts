@@ -196,20 +196,21 @@ export class VectorBasemap {
   /**
    * Claims a map error about this basemap's sprite or TileJSON. Such a failure leaves the basemap blank or without
    * icons, so the installed style is `failed` until Retry; a failure from an earlier style is claimed silently. A
-   * TileJSON failure is a failed request naming a basemap source and no tile; a single tile's failure is not claimed
-   * (nor a glyph range: MapLibre draws its glyphs locally and only warns). A sprite failure names its URL and no
+   * TileJSON failure names a basemap source and no tile, with or without a URL (a captive portal's HTML fails to parse
+   * after its response arrived); a single tile's failure is not claimed (nor a glyph range: MapLibre draws its glyphs
+   * locally and only warns). A sprite failure names its URL and no
    * source, or, after its response arrived, neither: then it is claimed only in a sprite's failure shapes while the
    * installed style's sprite downloads (`spriteInFlight`). Returns whether it was claimed.
    */
   claimResourceError(event: unknown): boolean {
     if (this.disposed) return false
-    const url = failedRequestUrl(event)
     const sourceId = mapErrorResourceId(event)
-    if (url !== null && sourceId?.startsWith(OPENFREEMAP_SOURCE_PREFIX)) {
+    if (sourceId?.startsWith(OPENFREEMAP_SOURCE_PREFIX)) {
       if (typeof event === 'object' && event !== null && 'tile' in event) return false
       if (this.installed?.sourceIds.includes(sourceId)) this.markFailed()
       return true
     }
+    const url = failedRequestUrl(event)
     if (url === null) return this.claimSpriteError(event)
     const sprite = spriteOf(url)
     if (!this.knownSprites.has(sprite)) return false

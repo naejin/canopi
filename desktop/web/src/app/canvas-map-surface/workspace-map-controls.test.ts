@@ -1558,7 +1558,8 @@ describe('WorkspaceMapControls', () => {
     const reportFailure = vi.fn()
     controls.watchFailure(map as never, reportFailure)
 
-    const event = { sourceId: 'ofm-openmaptiles', error: new Error('vector tile unavailable') }
+    // A tile's failure carries the tile; a source failure without one is the TileJSON's.
+    const event = { sourceId: 'ofm-openmaptiles', error: new Error('vector tile unavailable'), tile: {} }
     map.emit('error', event)
 
     expect(map.remove).not.toHaveBeenCalled()
@@ -1783,6 +1784,8 @@ describe('WorkspaceMapControls OpenFreeMap basemap', () => {
     ['sprite', { type: 'error', error: offlineRequest('https://tiles.openfreemap.org/sprites/ofm_f384/ofm.json') }],
     // The basemap source's TileJSON fails, which leaves the source empty.
     ['TileJSON', { type: 'error', sourceId: 'ofm-openmaptiles', error: offlineRequest('https://tiles.openfreemap.org/planet') }],
+    // A captive portal answers the TileJSON with 200 and HTML: the JSON parse fails naming the source and no URL.
+    ['TileJSON behind a captive portal', { type: 'error', sourceId: 'ofm-openmaptiles', error: new SyntaxError('JSON Parse error: Unrecognized token \'<\'') }],
     // A captive portal answers the sprite with 200 and HTML: the JSON parse fails with no URL and no source.
     ['sprite behind a captive portal', { type: 'error', error: new SyntaxError('JSON Parse error: Unrecognized token \'<\'') }],
     // The connection drops while the sprite body downloads: the body read fails with no URL and no source.
