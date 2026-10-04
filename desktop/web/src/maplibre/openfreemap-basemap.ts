@@ -335,7 +335,7 @@ function prepareOpenFreeMapStyle(document: VectorStyleDocument): PreparedVectorS
     const id = `${OPENFREEMAP_LAYER_PREFIX}${layer.id}`
     const paint: Record<string, unknown> = { ...(layer.paint ?? {}) }
     for (const property of OPACITY_PAINT_PROPERTIES[layer.type] ?? []) {
-      paint[property] = scaleOpacity(layer.paint?.[property], OPACITY)
+      paint[property] = scaleOpacity(layer.paint?.[property])
     }
     const layout: Record<string, unknown> = { ...(layer.layout ?? {}) }
     if (isNameLabel(layout['text-field'])) layout['text-field'] = LOCALIZED_LABEL
@@ -388,22 +388,22 @@ function isNameLabel(textField: unknown): boolean {
 }
 
 /**
- * Multiplies an opacity paint value by `factor`, an expression. Zoom curves keep their top-level interpolate/step shape
+ * Multiplies an opacity paint value by the row opacity's global state. Zoom curves keep their top-level interpolate/step shape
  * (MapLibre requires it), so only their outputs are scaled. A legacy function, which none of the OpenFreeMap styles
  * uses, cannot hold an expression and keeps its own opacity.
  */
-export function scaleOpacity(value: unknown, factor: unknown): unknown {
-  if (value === undefined || value === null) return factor
+function scaleOpacity(value: unknown): unknown {
+  if (value === undefined || value === null) return OPACITY
   if (Array.isArray(value)) {
     const operator = value[0]
     if (operator === 'interpolate' || operator === 'interpolate-hcl' || operator === 'interpolate-lab') {
-      return value.map((entry, index) => index >= 4 && (index - 4) % 2 === 0 ? scaleOpacity(entry, factor) : entry)
+      return value.map((entry, index) => index >= 4 && (index - 4) % 2 === 0 ? scaleOpacity(entry) : entry)
     }
     if (operator === 'step') {
-      return value.map((entry, index) => index >= 2 && index % 2 === 0 ? scaleOpacity(entry, factor) : entry)
+      return value.map((entry, index) => index >= 2 && index % 2 === 0 ? scaleOpacity(entry) : entry)
     }
   } else if (typeof value === 'object') {
     return value
   }
-  return ['*', value, factor]
+  return ['*', value, OPACITY]
 }

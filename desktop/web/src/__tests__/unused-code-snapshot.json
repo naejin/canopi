@@ -309,7 +309,6 @@
     "src/components/stories/RichTextEditor.tsx#insertAtCaret",
     "src/components/workspace/WorkspaceComposition.tsx#validateWorkspaceSurfaces",
     "src/maplibre/openfreemap-basemap.ts#OPENFREEMAP_BASEMAPS",
-    "src/maplibre/openfreemap-basemap.ts#scaleOpacity",
     "src/maplibre/raster-display/adapter.ts#tileIsRelevant",
     "src/maplibre/satellite-http.browser.ts#BASEMAP_HTTP_MAX_BODY_BYTES",
     "src/maplibre/satellite-provider-session.ts#PROVIDER_MAX_RETRIES",

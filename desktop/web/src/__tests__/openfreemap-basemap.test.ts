@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   OPENFREEMAP_BASEMAPS,
-  scaleOpacity,
   VectorBasemap,
   type VectorBasemapMap,
   type VectorStyleDocument,
@@ -542,10 +541,31 @@ describe('OpenFreeMap vector basemap', () => {
     expect(label()).toBe('Paris (de)')
   })
 
-  it('wraps other expressions and leaves legacy stop functions, which cannot hold an expression', () => {
-    const factor = ['global-state', 'opacity']
-    expect(scaleOpacity(['get', 'o'], factor)).toEqual(['*', ['get', 'o'], factor])
-    expect(scaleOpacity(undefined, factor)).toBe(factor)
-    expect(scaleOpacity({ stops: [[4, 0.4], [10, 1]] }, factor)).toEqual({ stops: [[4, 0.4], [10, 1]] })
+  it('scales data-driven opacities and leaves legacy stop functions, which cannot hold an expression', async () => {
+    // A downloaded style is untrusted input: a legacy function must reach the map unchanged, never wrapped.
+    const map = new FakeMap()
+    const document = styleDocument('liberty')
+    const basemap = new VectorBasemap(map, {
+      loadStyle: async () => ({
+        ...document,
+        layers: [
+          ...document.layers,
+          { id: 'park', type: 'fill', source: 'openmaptiles', 'source-layer': 'park', paint: { 'fill-opacity': ['get', 'o'] } },
+          {
+            id: 'landuse',
+            type: 'fill',
+            source: 'openmaptiles',
+            'source-layer': 'landuse',
+            paint: { 'fill-opacity': { stops: [[4, 0.4], [10, 1]] } },
+          },
+        ],
+      }),
+      beforeLayerId: () => 'canopi-scene',
+    })
+    basemap.update({ style: 'liberty', visible: true, opacity: 0.5, locale: 'en' })
+    await settle()
+
+    expect(map.resolved('ofm:park', 'paint', 'fill-opacity')).toEqual(['*', ['get', 'o'], 0.5])
+    expect(map.resolved('ofm:landuse', 'paint', 'fill-opacity')).toEqual({ stops: [[4, 0.4], [10, 1]] })
   })
 })
