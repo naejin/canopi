@@ -1593,7 +1593,7 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
     session.setTool('select')
     baseDeps.setSelection([plantTarget('plant-1')])
-    const before = store.snapshot().persisted
+    const before = store.persisted
 
     events.pointerDown({ x: 120, y: 30 }, { pointerId: 43 })
     events.pointerMove({ x: 150, y: 60 }, { pointerId: 43 })
@@ -4389,7 +4389,7 @@ describe('SceneInteractionSession', () => {
       const session = createTestSession(deps)
       session.setTool('select')
       session.refreshMeasurements()
-      const persistedBefore = store.snapshot().persisted
+      const persistedBefore = store.persisted
       // A zone turns, so its rotation handle shows once the selection is settled; a guide does not.
       const settledRotationHandle = kind !== 'Measurement Guide Control Point'
       expect(rotationHandle(container) !== null).toBe(settledRotationHandle)
@@ -4471,7 +4471,7 @@ describe('SceneInteractionSession', () => {
       const session = createTestSession(deps)
       session.setTool('select')
       session.refreshMeasurements()
-      const persistedBefore = store.snapshot().persisted
+      const persistedBefore = store.persisted
       const handle = kind === 'Rotation Handle'
         ? rotationHandle(container)!
         : kind === 'Zone Control Point'
@@ -4601,7 +4601,7 @@ describe('SceneInteractionSession', () => {
     const deps: SceneInteractionSessionDeps = { ...baseDeps, sceneEdits: abortFailure.sceneEdits }
     const session = createTestSession(deps)
     session.setTool('select')
-    const persistedBefore = store.snapshot().persisted
+    const persistedBefore = store.persisted
 
     events.pointerDown({ x: 20, y: 30 }, { pointerId: 26 })
     events.pointerMove({ x: 40, y: 50 }, { pointerId: 26 })
@@ -4638,7 +4638,7 @@ describe('SceneInteractionSession', () => {
     const deps: SceneInteractionSessionDeps = { ...baseDeps, sceneEdits: abortFailure.sceneEdits }
     const session = createTestSession(deps)
     session.setTool('select')
-    const persistedBefore = store.snapshot().persisted
+    const persistedBefore = store.persisted
 
     events.pointerDown({ x: 20, y: 30 }, { pointerId: 28 })
     events.pointerMove({ x: 40, y: 50 }, { pointerId: 28 })
@@ -4678,7 +4678,7 @@ describe('SceneInteractionSession', () => {
     const deps: SceneInteractionSessionDeps = { ...baseDeps, sceneEdits: abortFailure.sceneEdits }
     const session = createTestSession(deps)
     session.setTool('select')
-    const persistedBefore = store.snapshot().persisted
+    const persistedBefore = store.persisted
 
     events.pointerDown({ x: 20, y: 30 }, { pointerId: 29 })
     events.pointerMove({ x: 40, y: 50 }, { pointerId: 29 })
@@ -4742,7 +4742,7 @@ describe('SceneInteractionSession', () => {
     const deps: SceneInteractionSessionDeps = { ...baseDeps, sceneEdits: abortFailure.sceneEdits }
     const session = createTestSession(deps)
     session.setTool('select')
-    const persistedBefore = store.snapshot().persisted
+    const persistedBefore = store.persisted
 
     events.pointerDown({ x: 20, y: 30 }, { pointerId: 30 })
     events.pointerMove({ x: 40, y: 50 }, { pointerId: 30 })

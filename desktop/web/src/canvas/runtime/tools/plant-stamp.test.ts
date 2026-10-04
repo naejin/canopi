@@ -155,7 +155,7 @@ describe('Place plants tool', () => {
           ],
         },
       })
-      const before = h.store.snapshot().persisted
+      const before = h.store.persisted
 
       expect(h.hover({ x: 130, y: 140 })).toEqual({})
 

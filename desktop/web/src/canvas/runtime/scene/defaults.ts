@@ -15,7 +15,7 @@ export function createDefaultSceneSessionState(overrides: Partial<SceneSessionSt
   }
 }
 
-export function createDefaultScenePersistedState(_now: Date = new Date()): ScenePersistedState {
+export function createDefaultScenePersistedState(): ScenePersistedState {
   return {
     plantSpeciesColors: {},
     plantSpeciesSymbols: {},

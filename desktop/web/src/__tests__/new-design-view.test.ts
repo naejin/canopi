@@ -46,7 +46,7 @@ describe('new Design view', () => {
 
   it('centres an empty Design on the last view', () => {
     const last = { lon: -1.5536, lat: 47.2184 }
-    const store = new SceneStore(emptyDesign(), {}, () => last)
+    const store = new SceneStore(emptyDesign(), () => last)
     expect(store.sessionPlane.origin).toEqual(last)
     store.hydrate(emptyDesign())
     expect(store.sessionPlane.origin).toEqual(last)
@@ -59,7 +59,7 @@ describe('new Design view', () => {
       pinned_name: false, position: { lon: 5, lat: 45 }, rotation: null, scale: null, notes: null,
       planted_date: null, quantity: null,
     }]
-    const store = new SceneStore(file, {}, () => ({ lon: -1.5536, lat: 47.2184 }))
+    const store = new SceneStore(file, () => ({ lon: -1.5536, lat: 47.2184 }))
     expect(store.sessionPlane.origin).toEqual({ lon: 5, lat: 45 })
   })
 

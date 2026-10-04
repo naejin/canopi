@@ -147,7 +147,7 @@ describe('geolocated design codec', () => {
   })
 
   it('writes new objects with rounded lon/lat', () => {
-    const store = new SceneStore(undefined, {}, ORIGIN)
+    const store = new SceneStore(undefined, ORIGIN)
     store.updatePersisted((draft) => {
       draft.annotations.push({
         kind: 'annotation', id: 'fresh', locked: false, annotationType: 'text',

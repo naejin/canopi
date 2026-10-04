@@ -43,7 +43,6 @@ export class SceneStore {
   /** `emptyOrigin` places the session plane of a Design without objects. */
   constructor(
     file?: CanopiFile,
-    sessionOverrides: Partial<SceneSessionState> = {},
     emptyOrigin: GeoPosition | (() => GeoPosition) = DEFAULT_NEW_DESIGN_VIEW,
   ) {
     this._resolveEmptyOrigin = typeof emptyOrigin === 'function' ? emptyOrigin : () => emptyOrigin
@@ -55,12 +54,8 @@ export class SceneStore {
       this._persisted = createDefaultScenePersistedState()
       this._geo = createSceneGeoFrame(this._resolveEmptyOrigin())
     }
-    this._session = createDefaultSceneSessionState(sessionOverrides)
+    this._session = createDefaultSceneSessionState()
     this._plane.value = this._geo.plane
-  }
-
-  static fromCanopi(file: CanopiFile, sessionOverrides: Partial<SceneSessionState> = {}): SceneStore {
-    return new SceneStore(file, sessionOverrides)
   }
 
   get persisted(): ScenePersistedState {
@@ -95,8 +90,8 @@ export class SceneStore {
     return cloneSceneSessionState(this._session)
   }
 
-  hydrate(file: CanopiFile, emptyOrigin: GeoPosition = this._resolveEmptyOrigin()): this {
-    const hydrated = hydrateSceneFromDesign(file, emptyOrigin)
+  hydrate(file: CanopiFile): this {
+    const hydrated = hydrateSceneFromDesign(file, this._resolveEmptyOrigin())
     this._persisted = hydrated.persisted
     this._geo = hydrated.geo
     this._session = createDefaultSceneSessionState()
@@ -115,11 +110,6 @@ export class SceneStore {
     this._persisted = reprojector.persisted(this._persisted)
     this._geo = reprojector.next
     this._plane.value = this._geo.plane
-    return this
-  }
-
-  resetSession(overrides: Partial<SceneSessionState> = {}): this {
-    this._session = createDefaultSceneSessionState(overrides)
     return this
   }
 
@@ -153,13 +143,6 @@ export class SceneStore {
     return this
   }
 
-  snapshot(): { persisted: ScenePersistedState; session: SceneSessionState } {
-    return {
-      persisted: this.persisted,
-      session: this.session,
-    }
-  }
-
   toCanopiFile(options: SceneSerializeOptions = {}): CanopiFile {
     return serializeScenePersistedState(this._persisted, this._geo, options)
   }
@@ -174,9 +157,3 @@ export type SceneSessionWriter = Pick<
   SceneStore,
   'setSelection' | 'setHoveredTarget'
 >
-
-export {
-  createDefaultScenePersistedState,
-  createDefaultSceneSessionState,
-  serializeScenePersistedState,
-}
