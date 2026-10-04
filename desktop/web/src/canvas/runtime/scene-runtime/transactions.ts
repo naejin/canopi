@@ -709,7 +709,8 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
   }
 
   private _noteCommitted(command: SceneCommand): void {
-    if (command.diffs.some((diff) => diff !== 'selection')) {
+    // A command that changed persisted state (a re-origin keeps the patch present).
+    if (command.after.persisted !== undefined) {
       this._contentRevision += 1
       this._dropStaleDeferredBackfills()
       return

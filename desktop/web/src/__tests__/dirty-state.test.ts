@@ -26,7 +26,6 @@ const applyHistoryCommand = () => {}
 function noop(): SceneCommand {
   return {
     type: 'test',
-    diffs: ['plants'],
     before: {},
     after: {},
   }
@@ -96,7 +95,6 @@ describe('canvas edits', () => {
   it('history record marks dirty', () => {
     const cmd: SceneCommand = {
       type: 'recorded-test',
-      diffs: ['annotations'],
       before: {},
       after: {},
     }
