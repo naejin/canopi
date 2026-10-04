@@ -7,6 +7,11 @@ import {
 } from '../../generated/canopi-design-format'
 import type { CanopiFile, RichTextBlock, RichTextSpan, SavedView, Story } from '../../types/design'
 
+/** Mirrors common_types::views::validate_map_view: the view a Design was saved with, by the saved-view camera rules. */
+export function mapViewProblem(mapView: SavedView['camera'] | null | undefined): string | null {
+  return mapView ? groundSizeProblem(mapView, '$.map_view') : null
+}
+
 // Mirrors common_types::views::validate_views_and_stories. The generated schema
 // already bounds each camera when a file is read; this checks recorded ground
 // sizes (Design edits never pass the schema), ids, cross-references, link
@@ -19,11 +24,8 @@ export function viewsAndStoriesProblem(
   for (const [index, view] of views.entries()) {
     if (viewIds.has(view.id)) return `$.views[${index}].id: duplicate saved view id ${JSON.stringify(view.id)}`
     viewIds.add(view.id)
-    const ground = view.camera.ground_size_m
-    if (ground && !isAdmittedGroundSize(ground)) {
-      return `$.views[${index}].camera.ground_size_m: expected a finite width and height above 0 and at most ${SAVED_VIEW_MAX_GROUND_SIZE_M} m`
-    }
-    const problem = richTextProblem(view.text ?? [], `$.views[${index}].text`)
+    const problem = groundSizeProblem(view.camera, `$.views[${index}].camera`)
+      ?? richTextProblem(view.text ?? [], `$.views[${index}].text`)
     if (problem) return problem
   }
 
@@ -55,6 +57,14 @@ export function viewsAndStoriesProblem(
     }
   }
   return null
+}
+
+/** The schema already bounds the camera itself when a file is read; this checks its recorded ground. */
+function groundSizeProblem(camera: SavedView['camera'], path: string): string | null {
+  const ground = camera.ground_size_m
+  return ground && !isAdmittedGroundSize(ground)
+    ? `${path}.ground_size_m: expected a finite width and height above 0 and at most ${SAVED_VIEW_MAX_GROUND_SIZE_M} m`
+    : null
 }
 
 /** Whether a saved view's recorded ground is one the format admits: finite, above 0 and at most 1e8 m on each side. */

@@ -5,7 +5,7 @@ import {
   OBSOLETE_CANOPI_ROOT_KEYS,
 } from '../../generated/canopi-design-format'
 import type { CanopiFile } from '../../types/design'
-import { viewsAndStoriesProblem } from './views-admission'
+import { mapViewProblem, viewsAndStoriesProblem } from './views-admission'
 import { normalizeLoadedDocument } from './document'
 import { decodeCanopiFileSchema } from './canopi-design-schema-decoder'
 import { asCanopiDesignIngestionError, CanopiDesignIngestionError } from './canopi-design-errors'
@@ -69,6 +69,7 @@ function admitCurrentDesignValue(value: Record<string, unknown>): CanopiFile {
   const decoded = normalizeLoadedDocument(decodeCanopiFileSchema(value, CANOPI_FILE_SCHEMA) as CanopiFile)
   const problem = designIdentitiesAndRangesProblem(decoded)
     ?? viewsAndStoriesProblem(decoded.views ?? [], decoded.stories ?? [])
+    ?? mapViewProblem(decoded.map_view)
   if (problem) throw new CanopiDesignIngestionError('invalid_document', problem)
   return decoded
 }

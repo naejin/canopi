@@ -140,6 +140,19 @@ describe('Canopi Design decoder', () => {
     expect(() => decodeCanopiDesign(input)).toThrow(`$.stories[0].steps[0].images[0].src: ${reason}`)
   })
 
+  it('admits the view a Design was saved with and refuses one outside the saved-view rules at $.map_view', () => {
+    const mapView = { lon: 2.2944812345, lat: 48.8583701234, zoom: 19.25, bearing: 30.5, ground_size_m: { width: 312.5, height: 187.5 } }
+    expect(decodeCanopiDesign(currentDesign({ map_view: mapView })).map_view).toEqual(mapView)
+    expect('map_view' in decodeCanopiDesign(currentDesign()), 'a Design without it has none').toBe(false)
+
+    const zeroWidth = currentDesign({ map_view: { ...mapView, ground_size_m: { width: 0, height: 187.5 } } })
+    expect(() => decodeCanopiDesign(zeroWidth)).toThrow(
+      '$.map_view.ground_size_m: expected a finite width and height above 0 and at most 100000000 m',
+    )
+    expectKind(() => decodeCanopiDesign(zeroWidth), 'invalid_document')
+    expectKind(() => decodeCanopiDesign(currentDesign({ map_view: { ...mapView, zoom: 27.5 } })), 'invalid_document')
+  })
+
   it.each(['location', 'north_bearing_deg', 'spatial_frame'])('rejects obsolete root authority %s', (key) => {
     const input = currentDesign({ [key]: null })
     expect(() => decodeCanopiDesign(input)).toThrow(
