@@ -35,8 +35,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// Versioned display profile; part of every derivative key.
-pub(super) const DISPLAY_PROFILE: &str = "display-cog-deflate256-v1";
+/// Versioned display profile; part of every derivative key. v2: the keys
+/// carry the source's datum shift (`GeogTOWGS84GeoKey`), so derivatives
+/// written before it regenerate once.
+pub(super) const DISPLAY_PROFILE: &str = "display-cog-deflate256-v2";
 /// Largest side of a composed part, in 1024-cell chunks: a part is composed
 /// in memory and converted whole, so 4×4 chunks keep it inside the engine's
 /// capacity limit (`import::MAX_RAW_EXTRACTION_CELLS`).

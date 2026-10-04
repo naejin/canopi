@@ -343,7 +343,7 @@ fn compare_source(
 /// double precision and store Float32, so cells agree bit for bit except
 /// where the source block holds a NaN or ±inf. GDAL propagates a non-finite
 /// sample into the average; Canopi averages the finite samples, which is the
-/// display rule (`display-cog-deflate256-v1`). Those "poisoned" cells are
+/// display rule (`display-cog-deflate256-v2`). Those "poisoned" cells are
 /// counted and reported; every other cell must agree within 1e-3.
 fn compare_overviews(
     report: &mut Report,

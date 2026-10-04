@@ -456,10 +456,11 @@ fn ascii(keys: &GeoKeyDirectory, id: u16) -> Option<String> {
 }
 
 const USER_DEFINED: u16 = 32767;
-/// False-origin keys of conic projections, which `wbgeotiff::geo_keys::key`
-/// does not name.
+/// Keys `wbgeotiff::geo_keys::key` does not name: the false origin of conic
+/// projections and the datum shift to WGS84.
 const PROJ_FALSE_ORIGIN_EASTING: u16 = 3086;
 const PROJ_FALSE_ORIGIN_NORTHING: u16 = 3087;
+const GEOG_TOWGS84: u16 = 2062;
 
 fn registry_code(value: Option<u16>) -> Option<u32> {
     value
@@ -587,9 +588,15 @@ fn user_defined_projected(keys: &GeoKeyDirectory) -> Result<ResolvedCrs, String>
 }
 
 /// The datum of a user-defined CRS and its shift to WGS84: a registry
-/// geographic code's own, or the keys' ellipsoid with no shift. An unknown
-/// datum shifts nothing, as GDAL treats it.
+/// geographic code's own, or the keys' ellipsoid, shifted only by a
+/// `GeogTOWGS84GeoKey`. An unknown datum shifts nothing, as GDAL treats it.
 fn datum_of(keys: &GeoKeyDirectory) -> Result<(Datum, Option<Vec<f64>>), String> {
+    let written = match keys.get(GEOG_TOWGS84) {
+        Some(GeoKeyValue::Doubles(values)) if values.iter().any(|value| *value != 0.0) => {
+            Some(values.clone())
+        }
+        _ => None,
+    };
     let datum = |ellipsoid: Ellipsoid| Datum {
         name: "unknown",
         ellipsoid,
@@ -602,7 +609,7 @@ fn datum_of(keys: &GeoKeyDirectory) -> Result<(Datum, Option<Vec<f64>>), String>
         let geographic = from_epsg(code)?;
         let (a, b) = geographic.proj.ellipse_parameters();
         let inverse_flattening = if a > b { a / (a - b) } else { f64::INFINITY };
-        let shift = datum_shift(&geographic.definition);
+        let shift = written.or_else(|| datum_shift(&geographic.definition));
         return Ok((datum(ellipsoid(a, inverse_flattening)), shift));
     }
     let keyed = match (
@@ -618,7 +625,7 @@ fn datum_of(keys: &GeoKeyDirectory) -> Result<(Datum, Option<Vec<f64>>), String>
             _ => Ellipsoid::WGS84,
         },
     };
-    Ok((datum(keyed), None))
+    Ok((datum(keyed), written))
 }
 
 fn entry(key_id: u16, value: GeoKeyValue) -> GeoKeyEntry {
@@ -643,7 +650,10 @@ fn linear_unit(proj: &Proj) -> Option<u16> {
         .map(|(_, code)| code)
 }
 
-/// The GeoTIFF keys that describe `resolved` in a written file.
+/// The GeoTIFF keys that describe `resolved` in a written file. A datum
+/// shift travels as `GeogTOWGS84GeoKey`, which the display renderer reads
+/// beside the code, so the drawn pixel agrees with the engine; a CRS that
+/// shifts nothing writes no such key.
 pub(super) fn geokeys_for(resolved: &ResolvedCrs) -> Result<GeoKeyDirectory, String> {
     let projected = resolved.is_projected();
     let mut entries = vec![
@@ -672,6 +682,9 @@ pub(super) fn geokeys_for(resolved: &ResolvedCrs) -> Result<GeoKeyDirectory, Str
         (None, None) => {
             return Err("a coordinate system with neither a code nor a definition".to_string());
         }
+    }
+    if let Some(shift) = datum_shift(&resolved.definition) {
+        entries.push(entry(GEOG_TOWGS84, GeoKeyValue::Doubles(shift)));
     }
     entries.sort_by_key(|entry| entry.key_id);
     Ok(GeoKeyDirectory {
@@ -1064,7 +1077,7 @@ mod tests {
 
     /// An AHN-style tile whose keys spell RD New out instead of naming 28992
     /// places where PROJ places 28992, datum shift included, and keeps doing
-    /// so through the WKT the catalogue stores.
+    /// so through the WKT the catalogue stores and the keys written back.
     #[test]
     fn a_user_defined_rd_tile_places_within_a_centimetre_of_28992() {
         let keys = GeoKeyDirectory {
@@ -1091,8 +1104,13 @@ mod tests {
         let user = from_geokeys(&keys).unwrap().unwrap();
         assert_eq!(user.epsg, None);
         let stored = from_reference(&user.wkt).unwrap();
+        let rewritten = from_geokeys(&geokeys_for(&user).unwrap()).unwrap().unwrap();
         for &(_, lon, lat, x, y) in REFERENCE_POINTS.iter().filter(|row| row.0 == 28992) {
-            for (label, crs) in [("keys", &user), ("stored WKT", &stored)] {
+            for (label, crs) in [
+                ("keys", &user),
+                ("stored WKT", &stored),
+                ("written keys", &rewritten),
+            ] {
                 let (ux, uy) = wgs84.transform_to(lon, lat, crs).unwrap();
                 assert!(
                     (ux - x).abs() < 0.01 && (uy - y).abs() < 0.01,
@@ -1135,6 +1153,49 @@ mod tests {
         );
         let keys = geokeys_for(&new_york).unwrap();
         assert_eq!(short(&keys, key::ProjLinearUnitsGeoKey), Some(9003));
+    }
+
+    /// The display renderer rebuilds the CRS from the written keys, so a datum
+    /// shift travels as GeogTOWGS84GeoKey (2062): Amersfoort's seven
+    /// parameters and OSGB36's named datum. A CRS that shifts nothing writes
+    /// no such key, so Lambert-93's keys stay the code and its unit.
+    #[test]
+    fn written_keys_carry_the_datum_shift_and_nothing_for_a_zero_shift() {
+        let shift = |code: u32| match geokeys_for(&from_epsg(code).unwrap()).unwrap().get(2062) {
+            Some(GeoKeyValue::Doubles(values)) => Some(values.clone()),
+            _ => None,
+        };
+        assert_eq!(
+            shift(28992),
+            Some(vec![
+                565.2369, 50.0087, 465.658, -0.406857, 0.350733, -1.87035, 4.0812
+            ])
+        );
+        assert_eq!(
+            shift(27700),
+            Some(vec![
+                446.448, -125.157, 542.060, 0.1502, 0.2470, 0.8421, -20.4894
+            ])
+        );
+        for code in [2154, 3035, 25832] {
+            assert_eq!(shift(code), None, "EPSG:{code}");
+        }
+        let lambert93 = geokeys_for(&from_epsg(2154).unwrap()).unwrap();
+        let keys: Vec<(u16, GeoKeyValue)> = lambert93
+            .entries
+            .into_iter()
+            .filter(|entry| entry.key_id != key::GTCitationGeoKey)
+            .map(|entry| (entry.key_id, entry.value))
+            .collect();
+        assert_eq!(
+            keys,
+            vec![
+                (key::GTModelTypeGeoKey, GeoKeyValue::Short(1)),
+                (key::GTRasterTypeGeoKey, GeoKeyValue::Short(1)),
+                (key::ProjectedCSTypeGeoKey, GeoKeyValue::Short(2154)),
+                (key::ProjLinearUnitsGeoKey, GeoKeyValue::Short(9001)),
+            ]
+        );
     }
 
     /// Codes the library cannot read (Cassini, oblique Mercator, a geographic
