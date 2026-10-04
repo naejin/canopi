@@ -1,10 +1,11 @@
 // canvas/runtime/view/driver-frame.ts  (pure)
 //
 // The frame helpers both camera drivers share (the headless driver and maplibre/camera-driver.ts): what a frame is built from, when
-// a change publishes, the frame itself, the screen and point checks, and the zoom factor held inside the zoom range.
+// a change publishes, the frame itself, the screen and move checks, and the zoom factor held inside the zoom range.
 
 import type { SessionPlane } from '../../session-plane'
 import { isWorkspaceOverviewScale } from '../../workspace-camera-policy'
+import type { CameraMove } from './camera-driver'
 import { scaleBoundsAt, zoomFloorForArc, type NavigationPolicy } from './navigation-policy'
 import type { ScreenInsets, ScreenPoint, ViewCamera, ViewFrame, ViewScreen } from './types'
 import { buildViewTransform } from './view-transform'
@@ -86,7 +87,24 @@ export function normaliseScreen(screen: {
   })
 }
 
-export function finitePoint(point: ScreenPoint): boolean {
+/** A move with a non-finite number, or a zoom factor that is not positive, is refused: both drivers ignore it, and navigation
+ *  keeps its bookmark because the view did not move. */
+export function acceptsMove(move: CameraMove): boolean {
+  switch (move.kind) {
+    case 'pan-by':
+      return finitePoint(move.deltaPx)
+    case 'zoom-around':
+      return Number.isFinite(move.factor) && move.factor > 0 && finitePoint(move.anchorPx)
+    case 'rotate-around':
+      return Number.isFinite(move.bearingDeg) && (move.anchorPx === 'centre' || finitePoint(move.anchorPx))
+    case 'set': {
+      const { center, zoom, bearingDeg } = move.target
+      return [center.lon, center.lat, zoom, bearingDeg].every(Number.isFinite)
+    }
+  }
+}
+
+function finitePoint(point: ScreenPoint): boolean {
   return Number.isFinite(point.x) && Number.isFinite(point.y)
 }
 

@@ -15,9 +15,9 @@ import {
   zoomCameraAround,
 } from '../canvas/runtime/view/camera-math'
 import {
+  acceptsMove,
   driverFrame,
   driverFrameState,
-  finitePoint,
   normaliseScreen,
   sameDriverFrameState,
   zoomFactorWithinRange,
@@ -309,17 +309,15 @@ export function createMapLibreCameraDriver(
   }
 
   function apply(move: CameraMove): void {
-    if (!live() || queuedWhileDispatching(() => apply(move))) return
+    if (!live() || !acceptsMove(move) || queuedWhileDispatching(() => apply(move))) return
     switch (move.kind) {
       case 'pan-by': {
-        if (!finitePoint(move.deltaPx)) return
         // A pan during a tween composes with it: the tween's next step starts from the panned camera.
         const start = startingCamera(true)
         if (start) moveTo(constrainCamera(panCamera(start.camera, screen, move.deltaPx), screen, deps.policy()), start)
         return
       }
       case 'zoom-around': {
-        if (!Number.isFinite(move.factor) || move.factor <= 0 || !finitePoint(move.anchorPx)) return
         const start = startingCamera(true)
         if (!start) return
         // The factor is held inside the zoom range at the live bearing first, as the headless driver holds it, so the anchor holds.
@@ -328,7 +326,6 @@ export function createMapLibreCameraDriver(
         return
       }
       case 'rotate-around': {
-        if (!Number.isFinite(move.bearingDeg) || (move.anchorPx !== 'centre' && !finitePoint(move.anchorPx))) return
         const start = startingCamera(false)
         if (!start) return
         if (move.animation === 'ease' && !deps.policy().reducedMotion.peek()) {
@@ -346,7 +343,6 @@ export function createMapLibreCameraDriver(
       }
       case 'set': {
         const { target } = move
-        if (![target.center.lon, target.center.lat, target.zoom, target.bearingDeg].every(Number.isFinite)) return
         const start = startingCamera(false)
         if (!start) return
         const normalised: ViewCamera = { ...target, bearingDeg: normaliseBearing(target.bearingDeg), pitchDeg: 0 }

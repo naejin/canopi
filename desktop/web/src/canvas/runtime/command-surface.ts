@@ -5,9 +5,7 @@ import type {
   CanvasRuntimeSavedObjectStampAdapter,
   CanvasRuntimeSettingsAdapter,
 } from './app-adapter'
-import type { SceneBounds, TemporaryBoundsFocusOptions } from './view/types'
 import type { SceneRuntimePresentationController } from './scene-runtime/presentation'
-import type { ViewNavigation } from './view/navigation'
 import { getDesignObjectSelectionModel } from './scene-runtime/selection'
 import type {
   CanvasChromeCommandSurface,
@@ -60,12 +58,8 @@ type SceneLayerEdit = Partial<Pick<SceneLayerEntity, 'visible' | 'locked' | 'opa
 interface SceneCanvasCommandSurfaceOptions {
   readonly speciesFocus: SpeciesFocusCommands
   readonly sceneStore: SceneStateReader
-  /** The view's navigation over the runtime's driver host: every viewport command, each with today's viewport render (spec §1.1a). */
-  readonly viewNavigation: Pick<
-    ViewNavigation,
-    | 'zoomIn' | 'zoomOut' | 'zoomBy' | 'zoomToFit' | 'returnToDesign' | 'focusTemporaryBounds' | 'frameBounds' | 'returnFromTemporaryFocus'
-    | 'showPlace' | 'setFramingInsets' | 'zoomToSelection' | 'resetNorth' | 'rotateBy' | 'beginRotation' | 'showCamera'
-  >
+  /** The view's navigation over the runtime's driver host: the viewport commands, as they are. */
+  readonly viewNavigation: CanvasViewportCommandSurface
   /** The live frame's px/m, which sizes screen-sized notes and plants. */
   readonly readViewScale: () => number
   readonly history: SceneHistoryCommands
@@ -176,29 +170,9 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       setTool: (name) => this.setTool(name),
       plantRowSpacing: options.plantRowSpacing,
     }
-    this.viewport = {
-      zoomIn: () => this.moveView(() => this.options.viewNavigation.zoomIn()),
-      zoomOut: () => this.moveView(() => this.options.viewNavigation.zoomOut()),
-      // The scale menu picks the factor for a map scale; the camera driver refuses a factor that is not finite and positive.
-      zoomBy: (factor) => this.moveView(() => this.options.viewNavigation.zoomBy(factor)),
-      zoomToFit: () => this.moveView(() => this.options.viewNavigation.zoomToFit()),
-      returnToDesign: () => this.moveView(() => this.options.viewNavigation.returnToDesign()),
-      focusTemporaryBounds: (bounds, options) => this.focusTemporaryBounds(bounds, options),
-      frameBounds: (bounds, options) => this.frameBounds(bounds, options),
-      showPlace: (place, zoom, options) => this.showPlace(place, zoom, options),
-      returnFromTemporaryFocus: () => this.returnFromTemporaryFocus(),
-      setFramingInsets: (insets) => {
-        this.options.viewNavigation.setFramingInsets(insets)
-        // Chrome placed inside the visible map area (rulers) redraws against the new edges.
-        this.options.invalidate('viewport')
-      },
-      zoomToSelection: () => this.moveView(() => this.options.viewNavigation.zoomToSelection()),
-      resetNorth: () => this.moveView(() => this.options.viewNavigation.resetNorth()),
-      rotateBy: (direction) => this.moveView(() => this.options.viewNavigation.rotateBy(direction)),
-      beginRotation: (pivot) => this.options.viewNavigation.beginRotation(pivot),
-      // A new camera command drops the temporary focus, as showPlace does.
-      showCamera: (camera, options) => this.moveView(() => this.options.viewNavigation.showCamera(camera, options)),
-    }
+    // View commands go to navigation as they are: every frame the camera publishes redraws the view and the chrome placed
+    // against it (rulers inside the visible map area, after new framing insets), so a refused move redraws nothing.
+    this.viewport = options.viewNavigation
     this.history = {
       canUndo,
       canRedo,
@@ -378,47 +352,9 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     }, DESIGN_OBJECTS_NOT_IMPORTED, { resumePending: true })
   }
 
-  private showPlace(
-    place: { readonly lon: number; readonly lat: number },
-    zoom: number,
-    options?: { readonly motion?: 'fly' | 'jump' },
-  ): boolean {
-    // The geographic target and MapLibre zoom go to the camera as they are: no plane round trip.
-    if (!this.options.viewNavigation.showPlace(place, zoom, options)) return false
-    this.options.invalidate('viewport')
-    return true
-  }
-
-  /** A view command: the chrome placed against the view redraws with it. */
-  private moveView(move: () => void): void {
-    move()
-    this.options.invalidate('viewport')
-  }
-
   private runSpatialEdit(operation: () => void): void {
     if (!this.options.isSpatialEditingEnabled()) return
     operation()
-  }
-
-  private focusTemporaryBounds(
-    bounds: SceneBounds,
-    options: TemporaryBoundsFocusOptions,
-  ): boolean {
-    const changed = this.options.viewNavigation.focusTemporaryBounds(bounds, options)
-    if (changed) this.options.invalidate('viewport')
-    return changed
-  }
-
-  private frameBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean {
-    const changed = this.options.viewNavigation.frameBounds(bounds, options)
-    if (changed) this.options.invalidate('viewport')
-    return changed
-  }
-
-  private returnFromTemporaryFocus(): boolean {
-    const changed = this.options.viewNavigation.returnFromTemporaryFocus()
-    if (changed) this.options.invalidate('viewport')
-    return changed
   }
 
   private undo(): void {

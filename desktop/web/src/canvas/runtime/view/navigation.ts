@@ -6,6 +6,7 @@
 
 import type { CameraDriverHost, CameraMove } from './camera-driver'
 import { placementCentre, screenToGeo } from './camera-math'
+import { acceptsMove } from './driver-frame'
 import { fitScene, fitTemporaryBounds, isEmptyExtent, type FitFrame } from './fit'
 import {
   nextStep,
@@ -70,7 +71,7 @@ const NO_INSETS: ScreenInsets = Object.freeze({ top: 0, right: 0, bottom: 0, lef
 export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
   /**
    * The view to go back to: the one before the first unreturned temporary focus, a camera so a re-origin cannot invalidate it.
-   * Every move goes through `apply`, which drops it: a pan, zoom, turn, fit or jump is the user going elsewhere, so a later return
+   * Every move the camera accepts goes through `apply`, which drops it: a pan, zoom, turn, fit or jump is the user going elsewhere, so a later return
    * frames the Design instead of a stale view. Only a temporary focus and frameBounds keep it across their own move.
    */
   let bookmark: ViewCamera | null = null
@@ -80,6 +81,7 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
   const frame = () => deps.driver.frames.viewFrame.peek()
   const driver = () => deps.driver.current()
   const apply = (move: CameraMove): void => {
+    if (!acceptsMove(move)) return   // the view stays, and so does the bookmark
     bookmark = null
     driver().apply(move)
   }

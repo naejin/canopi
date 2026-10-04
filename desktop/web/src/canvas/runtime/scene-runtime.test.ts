@@ -2727,6 +2727,21 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('a view command the camera refuses does not redraw', async () => {
+    const runtime = stubbedRuntime()
+    const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
+    setInteractionViewport(runtime, { x: 50, y: 0, scale: 3 })
+    const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    await nextFrame()
+
+    renderer.setView.mockClear()
+    runtime.commandSurface.viewport.zoomBy(Number.NaN)
+    await nextFrame()
+
+    expect(renderer.setView).not.toHaveBeenCalled()
+    runtime.destroy()
+  })
+
   it('resets transient runtime state before replacing the document', async () => {
     const runtime = createRuntimeWithAppPanelTargets()
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)

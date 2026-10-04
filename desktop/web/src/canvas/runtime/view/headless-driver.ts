@@ -12,9 +12,9 @@ import { startBearingTween, type BearingTween } from './bearing-tween'
 import type { CameraDriver, CameraDriverDeps, CameraDriverFailure, CameraMove } from './camera-driver'
 import { panCamera, rotateCameraAround, zoomCameraAround } from './camera-math'
 import {
+  acceptsMove,
   driverFrame,
   driverFrameState,
-  finitePoint,
   normaliseScreen,
   sameDriverFrameState,
   zoomFactorWithinRange,
@@ -22,7 +22,7 @@ import {
 } from './driver-frame'
 import { createDriverFrameSource } from './frame-source'
 import { constrainCamera, normaliseBearing, VIEW_EASE_MS } from './navigation-policy'
-import type { ScreenInsets, ScreenPoint, ViewCamera, ViewScreen } from './types'
+import type { ScreenInsets, ViewCamera, ViewScreen } from './types'
 
 export interface HeadlessCameraDriverOptions {
   readonly deps: CameraDriverDeps
@@ -108,24 +108,20 @@ export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions)
     if (!step.done && tween === running && !disposed) frameRequest = requestAnimationFrame(stepTween)
   }
 
-  /** The zoom factor clamped to the zoom range at the live bearing first, as the MapLibre driver does, so the anchor holds. */
-  function zoomAround(anchor: ScreenPoint, factor: number): ViewCamera | null {
-    if (!Number.isFinite(factor) || factor <= 0 || !finitePoint(anchor)) return null
-    return zoomCameraAround(camera, screen, anchor, zoomFactorWithinRange(camera, screen, deps.policy(), factor))
-  }
-
   function apply(move: CameraMove): void {
-    if (disposed || queuedWhileDispatching(() => apply(move))) return
+    if (disposed || !acceptsMove(move) || queuedWhileDispatching(() => apply(move))) return
     switch (move.kind) {
       case 'pan-by':
         // A pan during a tween composes with it: the tween's next step starts from the panned camera.
-        if (finitePoint(move.deltaPx)) commit(panCamera(camera, screen, move.deltaPx))
+        commit(panCamera(camera, screen, move.deltaPx))
         return
-      case 'zoom-around':
-        commit(zoomAround(move.anchorPx, move.factor))
+      case 'zoom-around': {
+        // The factor is held inside the zoom range at the live bearing first, as the MapLibre driver holds it, so the anchor holds.
+        const factor = zoomFactorWithinRange(camera, screen, deps.policy(), move.factor)
+        commit(zoomCameraAround(camera, screen, move.anchorPx, factor))
         return
+      }
       case 'rotate-around':
-        if (!Number.isFinite(move.bearingDeg) || (move.anchorPx !== 'centre' && !finitePoint(move.anchorPx))) return
         if (move.animation === 'ease' && !reducedMotion()) {
           startTween(startBearingTween(camera, {
             bearingDeg: move.bearingDeg,
@@ -137,14 +133,11 @@ export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions)
         stopTween()
         commit(rotateCameraAround(camera, screen, move.anchorPx, move.bearingDeg))
         return
-      case 'set': {
-        const target = validCamera(move.target)
-        if (!target) return
+      case 'set':
         // Without a map there is no flight: 'fly' jumps.
         stopTween()
-        commit(target)
+        commit(validCamera(move.target))
         return
-      }
     }
   }
 

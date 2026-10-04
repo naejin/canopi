@@ -303,6 +303,25 @@ describe('view navigation', () => {
     }
   })
 
+  it('a move the camera refuses keeps the bookmark', () => {
+    const refused: ReadonlyArray<readonly [string, (view: TestView) => void]> = [
+      ...[Number.NaN, 0, Number.POSITIVE_INFINITY, -2].map((factor) =>
+        [`zoom by ${factor}`, (view: TestView) => view.navigation.zoomBy(factor)] as const),
+      ['zoom about a non-finite point', (view) => view.navigation.zoomAroundPx({ x: Number.NaN, y: 0 }, 2)],
+      ['pan by a non-finite delta', (view) => view.navigation.panByPx({ x: Number.POSITIVE_INFINITY, y: 0 })],
+      ['jump to an invalid camera', (view) => view.navigation.showCamera({ center: { lon: Number.NaN, lat: 0 }, zoom: 10, bearingDeg: 0, pitchDeg: 0 })],
+    ]
+    for (const [name, move] of refused) {
+      const view = createTestView({ viewport: { x: 10, y: 20, scale: 2 } })
+      expect(view.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 100, maxY: 50 }, { paddingCssPx: 48 }), name).toBe(true)
+      const focused = frameOf(view)
+      move(view)
+      expect(frameOf(view), name).toBe(focused)
+      expect(view.navigation.returnFromTemporaryFocus(), name).toBe(true)
+      view.dispose()
+    }
+  })
+
   it('rejects invalid temporary bounds without publishing a frame', () => {
     const view = createTestView({ screen: { width: 0, height: 0 } })
     expect(view.navigation.focusTemporaryBounds(
