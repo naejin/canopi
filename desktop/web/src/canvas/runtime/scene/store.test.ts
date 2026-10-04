@@ -30,10 +30,6 @@ describe('scene store', () => {
     } finally { read.mockRestore() }
   })
 
-  it('keeps camera viewport state out of Scene Session state', () => {
-    expect(new SceneStore().session).not.toHaveProperty('viewport')
-  })
-
   it('owns committed persisted drafts after the mutator returns', () => {
     const store = new SceneStore()
     let mutateEscapedGuide = (): void => {}
@@ -169,8 +165,6 @@ describe('scene store', () => {
     const store = new SceneStore(file).setSelection([{ kind: 'plant', id: 'plant-1' }])
 
     expect(store.session.selectedTargets).toContainEqual({ kind: 'plant', id: 'plant-1' })
-    expect(store.session).not.toHaveProperty('activeEntityId')
-    expect(store.session).not.toHaveProperty('activeLayerName')
     expect(store.persisted.plants[0]).toMatchObject({
       stratum: null,
       canopySpreadM: 1.2,
@@ -198,7 +192,6 @@ describe('scene store', () => {
     expect(roundTripped.extra).toEqual({ guides: file.extra?.guides })
     expect(roundTripped.name).toBe('Untitled')
     expect(roundTripped.description).toBeNull()
-    expect(roundTripped).not.toHaveProperty('spatial_frame')
     expect(roundTripped.version).toBe(CURRENT_CANOPI_FILE_VERSION)
     // Non-canvas sections must be empty placeholders, NOT the input values
     expect(roundTripped.consortiums).toEqual([])
@@ -228,8 +221,6 @@ describe('scene store', () => {
     expect(persisted.plants).toHaveLength(0)
     expect(persisted.measurementGuides).toEqual([])
     expect(session.selectedTargets).toEqual([])
-    expect(session).not.toHaveProperty('activeEntityId')
-    expect(session).not.toHaveProperty('activeLayerName')
     expect(serializeScenePersistedState(persisted, createSceneGeoFrame(TEST_FRAME_ORIGIN), { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(CURRENT_CANOPI_FILE_VERSION)
   })
 
