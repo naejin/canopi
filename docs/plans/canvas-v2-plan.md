@@ -2,7 +2,7 @@
 
 Trimmed 2026-10-02 at the phase-0 close (the full earlier text is at commit 76bd08a659d916069a340fc06e670e54e32f54c7) and at the phase-F close (the text before it is at `99bbe615`).
 
-Status: agreed (2026-09-29); scope amended 2026-10-01 (one release; section 1, "Decisions of 2026-10-01"); phase 0 done (2026-10-02); phase F done (2026-10-02; its decisions in section 1, "Decisions of 2026-10-02"); phase 1 done (2026-10-03; its decisions and retrospective rules in section 1, "Decisions of 2026-10-03"); 2.0 bug fixes done (2026-10-04; section 4); the 2.0 cleanup next, its design check and amendment done (2026-10-04; section 1, "Decisions of 2026-10-04"; section 4); completed for a new session 2026-10-02 (every remaining phase, the 2.0 bug fixes and the release close)
+Status: agreed (2026-09-29); scope amended 2026-10-01 (one release; section 1, "Decisions of 2026-10-01"); phase 0 done (2026-10-02); phase F done (2026-10-02; its decisions in section 1, "Decisions of 2026-10-02"); phase 1 done (2026-10-03; its decisions and retrospective rules in section 1, "Decisions of 2026-10-03"); 2.0 bug fixes done (2026-10-04; section 4); the 2.0 cleanup done (2026-10-05; section 4), the U-crs redesign next (U27); completed for a new session 2026-10-02 (every remaining phase, the 2.0 bug fixes and the release close)
 
 Start here: [`canvas-v2-implementation-prompt.md`](canvas-v2-implementation-prompt.md) (definition of done, operational notes, first steps).
 
@@ -106,7 +106,7 @@ The standing product decisions of 2026-09-29 (rotation like GeoLibre, the contro
 ## 2. Order
 
 ```
-phase 0 (done) ─▶ F (done) ─▶ 1 (done) ─▶ 2.0 bug fixes (done) ─▶ 2.0 cleanup ─▶ U-crs redesign ─▶ 2 ─▶ 3 ─▶ R ─▶ 2.0 release close ─▶ (after 2.0) canopi-224j
+phase 0 (done) ─▶ F (done) ─▶ 1 (done) ─▶ 2.0 bug fixes (done) ─▶ 2.0 cleanup (done) ─▶ U-crs redesign ─▶ 2 ─▶ 3 ─▶ R ─▶ 2.0 release close ─▶ (after 2.0) canopi-224j
 ```
 
 - The U-crs redesign (canopi-ji73, U27) is in 2.0 and runs after the 2.0 cleanup's close by default; it shares no file with phases 2, 3 and R, so it may also run beside one of them. It starts with its own design check of GeoLibre's approach, then one batch of the user's questions.
@@ -340,54 +340,22 @@ Code done and pushed 2026-10-04 (step merge `f064f611`, receipts `a7cfa062`). Fu
   10. Known issue: on Linux with an NVIDIA graphics driver, the system may report that a WebKit process crashed when you quit Canopi. Your Design is saved before Canopi closes, so nothing is lost.
 - **Follow-ups filed:** canopi-f47t.24 (lens open: arrows and Esc on the focused map), canopi-f47t.25 (PDF on a turned layout: labels over the next row), canopi-he4e (flaky bindings-gen admission test).
 
-### 2.0 cleanup (after the 2.0 bug fixes, before phase 2)
+### 2.0 cleanup (done 2026-10-05)
 
-- **Goal.** The runtime and map items of canopi-f47t.19's "now" list and the remaining canopi-f47t.18 items, split from the bug-fix step so it stays short (user, 2026-10-03), and the national-grid fix canopi-ji73 (U24), held for its own redesign step (U27). Deletion protocol: each item's guard test named, or written first, one commit per item, only the removed code's tests deleted; an item whose guard test cannot be made to hold is dropped and named in the receipt.
-- **Entry.** Design check done 2026-10-04 at `66e541b6`: `/home/daylon/projects/canopi/.rq-scratch/tools/cleanup-design-check.md` (§1 item status, owners and guard tests; §2 drift DR1–DR29; §3 amendments A1–A16 with each stream's exclusive files and the collisions, which "Ownership beyond A9" below corrects; §4 drops; §5 user-visible changes). The report is the briefs' file source; briefs re-grep its lines at their entry HEAD and name symbols. Its one question was answered on 2026-10-04 (U24).
-- **Streams** (report A9; R1 and R2 are U-runtime's two agents on one branch):
+Pushed at `22309c0c` and `4b68cffb` (the full section is at commit `53183e19`; design check `/home/daylon/projects/canopi/.rq-scratch/tools/cleanup-design-check.md`). Merges: U-runtime R1 and R2 `b20cd30a`, U-map main M `db420f40`, U-map tail T `67044f09`, hand-offs `dfbfbbc2`, the usefulness pass `220fdcb6` and `f74762ca`, reopen and open fixes `8eea0601`, pre-push fixes `4c1815d3`. U-crs (C, canopi-ji73) was built (`6b598e38`) and reverted from the push (`88011bb3`) for its own redesign step (U27).
 
-| Stream | Beads and items | Test written first | Model | Gates beyond Frontend | Live / Web | Order |
-|---|---|---|---|---|---|---|
-| **R1** view, camera, scene state | canopi-f47t.18, canopi-f47t.19: report §1 rows owned by R1, A24 included | S23, S34, S39 | Opus high | A24's commit: Rust rows, shared contracts; Docs (`map-workspace.md`) | at the U-runtime merge (below) | first; A24 its last commit |
-| **R2** deletions and comments | canopi-f47t.19: rows owned by R2 (p1-17's tool-actions part and the two headers included) | p1-18 with S29, p1-19, D31 | Opus medium | none | at the U-runtime merge: Web check and A9's live smoke | after R1 |
-| **M** U-map main | canopi-f47t.19: the six reuse items, the two re-judge items, then the rows owned by M except S62, which is T's | host rollback (the two-case real-MapLibre test), style-switch sprite, same-map reload, S56 | Opus high (secrets, seams) | none | at its merge: Web check and A9's live smoke | beside U-runtime; order below |
-| **T** U-map tail | canopi-f47t.19: S2, S52, D4, D5, p1-5, S6, S43, S53, S61, S62, S5 | none new | Opus high (camera policy, driver seam) | S5: Rust rows, shared contracts, after C merges | at its merge: Web check with phase-0-refactor on the real driver, A9's live steps; then the final Web check | after R2 and M merge; S2 first, S5 last |
-| **C** U-crs (held, U27) | canopi-ji73 (A2–A6) | the `cs2cs` reference table, the TOWGS84 key, 5698, user-defined RD, 2263 in feet (in `crs.rs`'s tests, reading `analyses::crs_class` unchanged; a needed change there goes to the main agent) | Opus high (Rust maths) | Rust rows with `cargo cov`; both LiDAR lanes; Docs; the third-party-notices test | live: a Dutch AHN tile's hover matches its pixel and the basemap; French 2154 unchanged; the v2 display tile served | beside the others, on the Rust build slot |
+- **Beads.** canopi-f47t.18 closed; canopi-f47t.19 keeps the items phases 2, 3 and R own; canopi-ji73 re-scoped to the U-crs redesign.
+- **Changed for users** (release notes): rulers repaint at once on a theme switch (C14); reopening a Design restores the view it had when saved or closed, in any window, and a file without it opens with the fit inside the visible map area (U28); a Design appears only once its map is drawn, with no chrome over a blank map (bug A, older than the cleanup); the open fit waits for the chrome, so it equals Fit to Design (bug B); MapLibre layers no longer vanish when zooming past about 1:15 (the z25 ceiling); basemap labels and opacity follow the app while a chosen style fails to load; Return to Design places a fit within read-back tolerance of the overview threshold; new Designs no longer write the hidden climate and water rows (C13).
+- **Stored data.** `.canopi` gains the optional `map_view` (a `SavedViewCamera`; version 9, ADR 0021 "Additive"); new Designs stop writing the climate and water rows.
+- **Conventions named at the handoff:** C13, C14, C19 (`maplibre-contour` pinned at 0.1.1), C20 (`__CANOPI_MAP_DEBUG__` gone); U28's details: closing, switching Designs and hiding the page write a view that moved since the last write (best effort, never an unsaved mark or an error; Desktop focus loss writes edits only); a pan-only session writes on close; the open bearing still comes from `LastView` for files without `map_view`; the Design's title-bar fields and Desktop rail wait with its canvas chrome. C15–C18 wait for the U-crs redesign.
+- **Drops** (design check §4): S55; the re-judge's candidate rule; `AbortSignal.timeout`; D10's and D29's optional halves; one metric formatter (canopi-224j); `planeRevision` and `framing.ts`'s duplicate clamp (canopi-224j); the host container rollback reuse item (MapLibre 6.10 cleans up only after a painter failure, so the rollback stays).
+- **Follow-ups filed:** canopi-23p2 (top-centre chips overlap), canopi-try2 (LiDAR import of a missing file), canopi-6spu (Site data notice overflow), canopi-w92x (CRS residuals), canopi-ticv (draw non-east-north grids), canopi-j9ry (blank map while switching Designs), canopi-h4ec (same-name recents).
 
-- **Ownership beyond A9** (from the amendment's check, 2026-10-04; briefs read A9 and A11 with these):
-  - R1, then R2 for D8, owns the tests that build an `InputPlatform` with `engine`: `app/keyboard/key-router.test.ts`, `__tests__/{desktop-keys,web-keys}.test.ts` and `chrome/session-chrome.test.ts`.
-  - R1 owns `__tests__/support/test-view.ts` for S1's bounds type; T takes it after the U-runtime merge.
-  - T owns `scene-runtime/view-surfaces.test.ts` (S52's fakes) and `web/browser-workspace-map-contribution-reads.test.ts` (D4), after the U-runtime merge.
-  - M owns the tests that read S54's counters (`__tests__/{v2-shared-map-scene-layer,saved-view-snapshot}.test.ts`, `__tests__/saved-view-thumbnails-ui.test.tsx`) and holds `app/canvas-map-surface/workspace-activation.test.ts` for S54's trim until M merges; T then owns it (A11).
-  - T takes `app/canvas-map-surface/workspace-map-controls.test.ts` after M merges, for D4's `publishDiagnostics` and `frame: null` lines.
-  - S62 is T's, with `app/canvas-runtime/app-adapter{,.test}.ts` and `__tests__/browser-canvas-runtime.test.ts`, after R1's A24 lines in `app-adapter.test.ts` merge.
-  - Recorded after the merges: M also held `app/canvas-map-surface/workspace-runtime-composition{,.test}.ts`, `workspace-map-contributions{,.test}.ts` and `map-style-readiness.test.ts`; T edited files outside its row for S2, S52, D4, S6, S43 and S53, the fixture lines of `workspace-map-controls.test.ts`, and the new `__tests__/support/geo-to-screen.ts`.
-- **Deletions (A1, extending the bug-fix step's A3).** A stream removes only its own unused-code snapshot, KEPT and policy entries, in the deleting commit; additions and sorted-list merges stay with the main agent. No phase runs during the cleanup, so U-runtime edits the phase-owned files its items need (A8).
-- **U-map: reuse before simplify (user, 2026-10-04).** The reuse items land first: the glyph-range claiming goes, `maplibre-contour` pinned at exactly 0.1.1 with `vendor/maplibre-contour.ts` deleted, MapLibre's own types in `loader.ts`, one `mercatorToGeo`, and basemap opacity and label language through `setGlobalStateProperty`, written whenever a style is installed. Then the re-judge for simplicity of the bug-fix step's basemap and retry code: the basemap claims TileJSON failures by event shape and sprite failures against the one sprite every OpenFreeMap style shares, with no URL patterns, keeping the sprite-in-flight window and the 20 s timeout; activation takes three trims. Behaviour stays as shipped (C4, U22) and the shipped guard tests stay unchanged and green; a simplification must shrink code or concepts. The candidate rule "while loading, an error naming no scene source is the basemap's" is refuted (report §1).
-- **U-crs (U24; held for its redesign, U27: what follows is the first design, kept on `canvas-v2/crs`).** `proj4rs =0.2.0` and `crs-definitions =0.6.0` (default features off, `proj4` and `wkt` on; proj4rs's own `crs-definitions` feature off) carry every transform, through one path; `swiss.rs` and `laea.rs` go; wbprojection keeps only code-less WKT parsing, EPSG identification and areas of use (A4, A5). Proj strings are normalised before parsing: `+k_0` becomes `+k` and `+pm` folds into `lon_0`, without which 323 codes are silently wrong (A2); C files the upstream issues and the main agent files a bead to remove the shim at a fixed pin. The display path agrees with the engine: `geokeys_for` writes `GeogTOWGS84GeoKey` for a non-zero shift or a named datum and nothing for a zero shift, so 2154 output keeps its keys, pixels and placement (U25), and the display profile becomes v2 in the same commit (A3). A code the library cannot read is refused with "EPSG:n is not supported". Reference points come from a committed `cs2cs` script: 1 cm, 8 m for Krovak 5514, 0.5 m for 2973, inverses at 1e-8 degrees and 3e-8 with a datum shift (A6 as amended by U25). The whitebox rule lives in ADR 0014 (not 0002); C rewrites it and the other stale CRS text (DR28). Catalogue rows imported earlier keep their extents until re-imported: no migration (ADR 0021).
-- **Climate and water rows (A24, C13).** New Designs stop writing the hidden `climate` and `water` layer rows (no reader, no roadmap use): one R1 commit with the Rust and contract gates, not a format change.
-- **Drops** (report §4):
-  - S55: 4 lines saved for 17 rewritten call sites through the Retry guards.
-  - The re-judge's candidate rule: refuted.
-  - `AbortSignal.timeout`: escapes the fake timers the basemap tests rely on.
-  - D10's and D29's optional halves: phase-2 or unowned files, no user path.
-  - One metric formatter: visible text would change; canopi-224j decides with the PDF labels.
-  - Cutting `ViewTransform.planeRevision`, and `framing.ts`'s duplicate zoom clamp: canopi-224j.
-  - D5's test-only exports; the spec edits in D4, D5, D7, D8, D10, D11, D12, D17, D41, D46, p1-21 and p1-22 (the spec goes at the release close).
-  - The host's container rollback as a reuse item: kept (`7b5c1c34`), since MapLibre 6.10 cleans up only after a painter failure.
-  - U-crs extras: Krovak better than 8 m, national grids asserted at 1e-3 m, a wbprojection fallback (U24).
-- **Conventions named at the handoff** (report §5; C13 above):
-  - C14. Rulers repaint in the new palette as soon as the theme switches (p1-18, S29).
-  - C15–C18 are held with U-crs (U27).
-  - C15. LiDAR in the Dutch, UK, Belgian, Austrian, Greek, Luxembourg and Czech grids moves 30 m to 1,260 km to its true place, within about 1–5 m (Helmert shifts, no grid files); French NTF Lambert data moves about 17 km; Madrid 1870 (2062) data moves 48 m (U25); Lambert-93, Swiss and LAEA data do not move.
-  - C16. Display tiles regenerate once (v2), and the drawn pixel matches the hover readout in every datum.
-  - C17. Items in those grids imported before the fix keep their old extent until re-imported; items in a code 2.0 refuses lose their display tile, said in the release notes (U25).
-  - C18. EPSG:5698 and about 1,329 more codes import; feet systems are labelled in feet and no longer offer slope, whatever unit a compound CRS's height part uses (`38dae37d`); 384 codes are refused (U26) with "EPSG:n is not supported".
-  - C19. `maplibre-contour` is pinned at exactly 0.1.1 (checked live).
-  - C20. Developer-only: `globalThis.__CANOPI_MAP_DEBUG__` is gone (D4).
-- **Fixes named at the handoff.** Zooming past about 1:15 (z25) no longer blanks the basemap, satellite and other MapLibre layers: they draw over-scaled (`e535f3c4`, test `09b07fae` in `maplibre/workspace-map.test.ts`).
-- **Gates, review, checks.** Section 1 (reviews as changed on 2026-10-04); the Web check after each merge and once after the last; a live check after each merge that changes a faked seam and again before the pre-push review; the main agent adds a container-empty assertion to the Web e2e (A15); all worktrees share the build folder and the Rust steps take turns on the build slot (A10).
-- **Exit.** canopi-f47t.19's U-runtime and U-map items and canopi-f47t.18's remaining items landed or dropped with the reason; canopi-ji73 held for its redesign step (U27); the unused-code check run; C13, C14, C19, C20 and the fixes named at the handoff (C15–C18 wait for the redesign). canopi-f47t.19 stays open for the items phases 2, 3 and R own.
+### U-crs redesign (canopi-ji73, U27; next)
+
+- **Goal.** LiDAR data in national grids lands where it belongs, through one CRS authority so the engine and the display cannot disagree (U27). U24–U26 say which codes import and how accurately unless the design check shows a cheaper rule, asked once.
+- **Entry.** The design check studies GeoLibre's approach first (`/home/daylon/projects/canopi/.rq-scratch/tools/ucrs-geolibre-findings.md`: one path places data on the map, `geotiff-geokeys-to-proj4` plus proj4js warping in `cog-tiler-wasm`, whose roadmap moves the warp to Rust on proj4rs; analysis in the native CRS; refuse what that path cannot read) and Canopi's first build (`canvas-v2/crs`, `canvas-v2/prepush`: proj4rs plus crs-definitions in Rust, live-checked Delft 28992 and Paris 2154 within 1–2 m, 37 fix commits at the Rust/display seam, reusable as input). It names where placement, extents, hover readouts and display tiles get their transform, and what is deleted.
+- **Exit.** canopi-ji73 closed with a live import of the Dutch and French tiles; C15–C18 named at its handoff, rewritten to what ships.
 
 ### 2.0 release close (main agent, after phases 3 and R, the 2.0 bug fixes and the 2.0 cleanup)
 

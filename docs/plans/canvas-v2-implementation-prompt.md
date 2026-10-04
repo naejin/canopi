@@ -1,4 +1,4 @@
-Status: agreed (2026-09-29); scope amended 2026-10-01 (one release; plan §1, "Decisions of 2026-10-01"); phase 0 and phase F done (2026-10-02); phase 1 done (2026-10-03); 2.0 bug fixes done (2026-10-04); 2.0 cleanup next, its design check and amendment done (2026-10-04); completed for a new session 2026-10-02; deleted with the plan at the release close
+Status: agreed (2026-09-29); scope amended 2026-10-01 (one release; plan §1, "Decisions of 2026-10-01"); phase 0 and phase F done (2026-10-02); phase 1 done (2026-10-03); 2.0 bug fixes done (2026-10-04); 2.0 cleanup done (2026-10-05); the U-crs redesign next (U27); completed for a new session 2026-10-02; deleted with the plan at the release close
 
 # Canvas v2: implementation prompt
 
@@ -50,7 +50,7 @@ The user made these decisions on 2026-09-29. They are recorded in ADR 0015 with 
 ## 4. Phase order
 
 ```
-phase 0 (done) ─▶ F (done) ─▶ 1 (done) ─▶ 2.0 bug fixes (done) ─▶ 2.0 cleanup ─▶ U-crs redesign ─▶ 2 ─▶ 3 ─▶ R ─▶ 2.0 release close ─▶ (after 2.0) canopi-224j
+phase 0 (done) ─▶ F (done) ─▶ 1 (done) ─▶ 2.0 bug fixes (done) ─▶ 2.0 cleanup (done) ─▶ U-crs redesign ─▶ 2 ─▶ 3 ─▶ R ─▶ 2.0 release close ─▶ (after 2.0) canopi-224j
 ```
 
 - **Done.** Phase 0, the behaviour-preserving refactor (canopi-f47t.5 and canopi-f47t.5.1 closed): one camera driver host and view transform, one input pipeline, one tool host with narrow tools, a renderer split into `syncScene` and `setView`, and the unused-code check. Canopi 2.0 drops stored-data migrations (ADR 0021; canopi-v2mg closed). Phase F (canopi-f47t.6.1 closed): the key router, Esc chain, focus owner and `armCanvasTool` in their target form, the 3 px mouse and pen drag threshold, the hover end, window listeners only during an owned session, the selection-drag guard. canopi-f47t.6 closed at phase 1's claim; canopi-f47t.6.2 (Windows panel drops) sits under the epic as a known unverified item that gates nothing (U20). Phase 1 (canopi-f47t.7): the map rotates, keys follow the screen, the view keeps its bearing, one PDF Map orientation (plan section 4, "Phase 1: rotation (done)"). The 2.0 bug fixes (closed 2026-10-04 at `a7cfa062`): their beads, conventions, stored-data changes and release-note lines are in plan section 4, "2.0 bug fixes (done 2026-10-04)". Plan section 4 has what shipped, what each later phase finds already built ("Already built" in each phase), and what changed for users.
@@ -170,15 +170,14 @@ Also: the user requires a code review of every change before each push. Work in 
 
 ## 15. What to do first
 
-A new session runs the 2.0 cleanup's step workflow (plan section 4, "2.0 cleanup"), starting at the hand-off commit: the amendment `docs: amend the 2.0 cleanup from its design check and the user's answers (U24), and change the review process` or a later docs commit. The design check (at `66e541b6`), the user's answer (U24) and the amendment are done (2026-10-04). The design-check report `/home/daylon/projects/canopi/.rq-scratch/tools/cleanup-design-check.md` is the briefs' file source: item owners and guard tests (§1), each stream's exclusive files and the collisions (§3, A9 and A11), read with the plan's "Ownership beyond A9".
+The 2.0 cleanup is done (2026-10-05; plan section 4, "2.0 cleanup (done 2026-10-05)"). A new session runs the **U-crs redesign** (canopi-ji73, U27; plan section 4, "U-crs redesign"): LiDAR placement through one CRS authority, GeoLibre's way.
 
-1. Orientation, read-only in the main checkout: `git -C /home/daylon/projects/canopi status --short --branch` (the user's `.beads.gate.lock` is expected; touch nothing there), `df -h /`, `free -h`, `bd show canopi-f47t.19 canopi-f47t.18 canopi-ji73`.
-2. In the integration worktree `/home/daylon/projects/canopi/.rq-scratch/canvas-v2` only: `git status --short --branch` (clean), `git fetch`, `git rev-list --left-right --count HEAD...origin/feature/geolibre-adoption`. Behind: rebase as section 8 says. Ahead: unpushed commits, which go out with the next reviewed push.
-3. Load the `phased-agentic-delivery` skill and read [`docs/guides/agentic-delivery.md`](../guides/agentic-delivery.md); read this prompt to the end, plan sections 1 and 2 and its "2.0 cleanup" section, then the report.
-4. The claim: canopi-f47t.19, canopi-f47t.18 and canopi-ji73 with the step's rows as acceptance (main agent; subagents make no `bd` writes).
-5. The step workflow of section 11 (the skill's `references/workflow-step.js`): R1 then R2 on one branch, M beside them, C beside them on the Rust build slot, T after R2 and M merge (its S5 after C); briefs re-grep the report's lines at their entry HEAD. Reviews, the Web check after each merge and once after the last, and the live checks as section 11 and the plan's stream table say; you add the container-empty assertion to the Web e2e (A15).
-6. The pre-push review of everything since the last push, preceded by a live check, then push and watch CI.
-7. The close: receipts, the usefulness pass of the step's own diff, the unused-code check, the bead to remove U-crs's proj-string shim at a fixed pin, the handoff of section 12 naming C13–C20 (plan section 4, "2.0 cleanup"), and the retrospective.
+1. Orientation, read-only in the main checkout: `git -C /home/daylon/projects/canopi status --short --branch` (the user's `.beads.gate.lock` is expected), `df -h /`, `free -h`, `bd show canopi-ji73`.
+2. In the integration worktree: `git status --short --branch` (clean), `git fetch`, rebase if behind (section 8).
+3. Load the `phased-agentic-delivery` skill and read [`docs/guides/agentic-delivery.md`](../guides/agentic-delivery.md), this prompt, plan sections 1 (U24–U28) and 4 ("U-crs redesign"), ADR 0014, and `/home/daylon/projects/canopi/.rq-scratch/tools/ucrs-geolibre-findings.md`.
+4. The design check (the skill's `references/workflow-design-check.js`), GeoLibre first (U27, AGENTS.md "Reuse before writing"): how GeoLibre and `cog-tiler-wasm` place a raster or point cloud on the map and where analysis runs; Canopi's call sites that transform (import extents and "Covers your site", hover readouts, display tiles, analyses, inspection); the first build on `canvas-v2/crs` and `canvas-v2/prepush` as reusable input; a design with one authority and the list of what it deletes.
+5. One batch of the user's questions, the amendment commit, the claim (`bd update canopi-ji73 --claim`), then the step workflow, the live import of the Dutch and French tiles (`.rq-scratch/reference/cleanup/import/` keeps the Delft and Paris clips), the pre-push review, push, and the close of section 12.
+6. Remove `canvas-v2-crs` and `canvas-v2-prepush` once the redesign no longer needs them as input.
 
 Before each later step, name in its brief the user path or roadmap item behind every planned behaviour and drop what has none (plan section 1, "How a step is chosen"). Every later step (phases 2 and 3, R, the release close) starts the same way: steps 1 and 2, its plan section 4 entry ("Already built" and "Usefulness items" first) and section 8 lines, its design check (phase 2's carries U16), one batch of the user's questions (plan section 8, "Asked in the next batches"), the amendment commit, the claim with the acceptance replaced, then the workflow of section 11. At each close: the handoff and retrospective of section 12, the profile cleanup of plan section 3.1, step 6, and the plan's and spec's finished parts trimmed.
 
