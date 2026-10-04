@@ -5,7 +5,7 @@ import type { CameraDriver } from '../canvas/runtime/view/camera-driver'
 import { createNavigationPolicy, type NavigationPolicy } from '../canvas/runtime/view/navigation-policy'
 import type { ViewTransform } from '../canvas/runtime/view/types'
 import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
-import { WORKSPACE_MAP_MAX_ZOOM, WORKSPACE_MAP_MIN_ZOOM } from '../canvas/workspace-camera-policy'
+import { WORKSPACE_MAP_MIN_ZOOM } from '../canvas/workspace-camera-policy'
 import { BasemapTileAuth } from './basemap-tile-auth'
 import { createMapLibreCameraDriver, type MapLibreCameraDriverMap } from './camera-driver'
 import { createMapLibreEmptyStyle, MAPLIBRE_MAP_MAX_ZOOM } from './config'
@@ -246,7 +246,7 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
         container,
         style: createMapLibreEmptyStyle(),
         center: [request.camera.lon, request.camera.lat],
-        zoom: clampZoom(request.camera.zoom),
+        zoom: request.camera.zoom,
         bearing: request.camera.bearing,
         minZoom: WORKSPACE_MAP_MIN_ZOOM,
         maxZoom: MAPLIBRE_MAP_MAX_ZOOM,
@@ -575,10 +575,6 @@ function snapshotView(origin: { readonly lat: number; readonly lon: number }): S
     plane: createSessionPlane(origin),
     policy: createNavigationPolicy(origin.lat, VIEW_SNAPSHOT_REDUCED_MOTION),
   }
-}
-
-function clampZoom(zoom: number): number {
-  return Math.min(WORKSPACE_MAP_MAX_ZOOM, Math.max(WORKSPACE_MAP_MIN_ZOOM, zoom))
 }
 
 /** `work`, or a rejection with `message` after `timeoutMs`; the timer never outlives the work. */
