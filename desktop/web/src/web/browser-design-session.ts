@@ -499,6 +499,9 @@ export function createBrowserDesignSessionController({
       try {
         settlePendingReplacementForHandoff(session);
         if (session.hasLoadedDocument() && store.hasCurrentDesign()) {
+          // Only the attached canvas knows its view moved (U28): write it now,
+          // synchronously, as a Draft write is.
+          void continuousSave.flush().catch(logBrowserDesignSessionError);
           persistence.settleCanvasHandoff(session);
           store.markCanvasDetachedDirty(store.isCanvasDirty());
         }

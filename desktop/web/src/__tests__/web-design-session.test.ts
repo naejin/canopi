@@ -1367,6 +1367,48 @@ describe('browser Design Session lifecycle', () => {
     }
   })
 
+  it('writes a view that moved to the Draft when the canvas detaches, since nothing can write it afterwards (U28)', () => {
+    const store = createMemoryDesignSessionStore()
+    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+    appDataStore.saveDraft({ id: 'draft-viewed', file: makeCanopiFile({ name: 'Viewed' }), now: NOW.toISOString() })
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore,
+      fileAdapter: testFileAdapter(),
+      now: () => NOW,
+      createDraftId: () => 'draft-next',
+    })
+    let view = { lon: 13, lat: 23, zoom: 18, bearing: 0 }
+    let held = view
+    const canvas = testCanvasDocumentSurface({
+      viewMovedSinceSave: () => view !== held,
+      captureForPersistence: (_metadata, doc) => {
+        const captured = view
+        return {
+          content: { ...doc, map_view: captured },
+          isCurrent: () => true,
+          acknowledgeSaved: () => {
+            held = captured
+            return 'applied' as const
+          },
+        }
+      },
+    })
+    const detach = controller.attachCanvasSession(canvas)
+    expect(controller.restoreLatestDraft()).toBe(true)
+    const page = testPage()
+    const uninstall = controller.installContinuousSave(page)
+
+    try {
+      view = { ...view, bearing: 30 }
+      detach()
+      expect(appDataStore.loadDraft('draft-viewed')?.map_view).toMatchObject({ lon: 13, lat: 23, zoom: 18, bearing: 30 })
+      expect(controller.continuousSave.status.value, 'nothing reads as unsaved').toBe('draft')
+    } finally {
+      uninstall()
+    }
+  })
+
   it('applies every browser replacement through the attached canvas lifecycle', async () => {
     const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
     appDataStore.saveDraft({

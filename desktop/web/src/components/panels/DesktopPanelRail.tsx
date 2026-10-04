@@ -7,5 +7,5 @@ import { PanelRail } from '../shared/PanelRail'
 export function DesktopPanelRail() {
   const projection = appCommandGraphPanelProjection.value
   if (currentDesign.value === null) return null
-  return <PanelRail label={t('panelRail.label')} groups={[projection.design, projection.planning]} />
+  return <PanelRail label={t('panelRail.label')} groups={[projection.design, projection.planning]} designChrome />
 }

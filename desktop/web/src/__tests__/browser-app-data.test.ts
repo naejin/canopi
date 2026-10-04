@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  BrowserDraftChangedError,
   createBrowserAppDataStore,
   type BrowserStorageAdapter,
 } from '../web/browser-app-data'
@@ -59,6 +60,35 @@ describe('browser app data store', () => {
       keepUpdatedAt: true,
     })
     expect(refused.ok).toBe(false)
+  })
+
+  it('refuses a write that keeps updatedAt for a Draft another tab deleted, so a moved view does not bring it back', () => {
+    const store = createBrowserAppDataStore({ storage: memoryStorage() })
+    store.saveDraft({ id: 'draft-x', file: makeDesign({ name: 'X' }), now: '2026-07-04T12:00:00.000Z' })
+    store.saveDraft({ id: 'draft-y', file: makeDesign({ name: 'Y' }), now: '2026-07-04T12:01:00.000Z' })
+    store.deleteDraft('draft-x')
+
+    const viewOnly = store.saveDraft({
+      id: 'draft-x',
+      file: makeDesign({ name: 'X', description: 'moved view' }),
+      now: '2026-07-04T13:00:00.000Z',
+      expectedUpdatedAt: '2026-07-04T12:00:00.000Z',
+      keepUpdatedAt: true,
+    })
+    expect(viewOnly.ok).toBe(false)
+    expect(!viewOnly.ok && viewOnly.error).toBeInstanceOf(BrowserDraftChangedError)
+    expect(store.listDrafts().map((draft) => draft.id)).toEqual(['draft-y'])
+    expect(store.loadDraft('draft-x')).toBeNull()
+
+    // An edit still writes the deleted Draft again rather than losing it.
+    const edit = store.saveDraft({
+      id: 'draft-x',
+      file: makeDesign({ name: 'X', description: 'edited' }),
+      now: '2026-07-04T13:01:00.000Z',
+      expectedUpdatedAt: '2026-07-04T12:00:00.000Z',
+    })
+    expect(edit.ok).toBe(true)
+    expect(store.listDrafts().map((draft) => draft.id)).toEqual(['draft-x', 'draft-y'])
   })
 
   it('stores Draft files in .canopi wire form, keeping unknown fields at the root', () => {

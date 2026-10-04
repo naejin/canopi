@@ -138,6 +138,7 @@ export function BrowserAppShell({
                 aria-label={t("canvas.placeSearch.placeholderShort")}
                 aria-expanded={phoneSearchOpen}
                 data-phone-search
+                data-design-chrome
                 onClick={() => setSearching(!searching)}
               >
                 <ControlIcon name="search" size={20} />
@@ -176,6 +177,7 @@ function TitleBarUndo({ command }: { readonly command: TitleBarCommand }) {
       aria-keyshortcuts={command.ariaShortcut}
       aria-disabled={command.disabled ? true : undefined}
       data-phone-undo
+      data-design-chrome
       onClick={() => { if (!command.disabled) command.action(); }}
     >
       <ToolIcon name="undo" className={styles.undoIcon} />
