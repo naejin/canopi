@@ -146,6 +146,41 @@ function createController(file = makeFile()) {
 }
 
 describe('scene runtime mutation controller', () => {
+  it('copy, move the source, paste twice: each paste is the copy as it was, and the pastes share nothing', () => {
+    const { controller, sceneStore } = createController()
+    sceneStore.setSelection([{ kind: 'plant', id: 'plant-1' }, { kind: 'zone', id: 'zone-1' }])
+    const source = sceneStore.persisted
+    const plantAt = source.plants.find((plant) => plant.id === 'plant-1')!.position
+    const zoneAt = source.zones.find((zone) => zone.id === 'zone-1')!.points
+
+    controller.copy()
+    sceneStore.updatePersisted((draft) => {
+      const plant = draft.plants.find((entry) => entry.id === 'plant-1')!
+      plant.position.x += 40
+      const zone = draft.zones.find((entry) => entry.id === 'zone-1')!
+      zone.points[0]!.y += 40
+    })
+    controller.paste()
+    controller.paste()
+
+    const scene = sceneStore.persisted
+    const pastedPlants = scene.plants.filter((plant) => !['plant-1', 'plant-2'].includes(plant.id))
+    const pastedZones = scene.zones.filter((zone) => zone.id !== 'zone-1')
+    expect(pastedPlants.map((plant) => plant.position.x)).toEqual([plantAt.x + 1, plantAt.x + 2])
+    expect(pastedPlants.map((plant) => plant.position.y)).toEqual([plantAt.y, plantAt.y])
+    expect(pastedZones.map((zone) => zone.points[0]!.y)).toEqual([zoneAt[0]!.y, zoneAt[0]!.y])
+    expect(pastedZones.map((zone) => zone.points[0]!.x)).toEqual([zoneAt[0]!.x + 1, zoneAt[0]!.x + 2])
+
+    // Moving the first paste leaves the second where it was.
+    sceneStore.updatePersisted((draft) => {
+      draft.plants.find((entry) => entry.id === pastedPlants[0]!.id)!.position.y += 7
+      draft.zones.find((entry) => entry.id === pastedZones[0]!.id)!.points[1]!.y += 7
+    })
+    const after = sceneStore.persisted
+    expect(after.plants.find((entry) => entry.id === pastedPlants[1]!.id)!.position).toEqual(pastedPlants[1]!.position)
+    expect(after.zones.find((entry) => entry.id === pastedZones[1]!.id)!.points).toEqual(pastedZones[1]!.points)
+  })
+
   it('locks only the typed selected Design Object when raw ids collide', () => {
     const file = makeFile()
     file.plants = file.plants.map((plant, index) =>
