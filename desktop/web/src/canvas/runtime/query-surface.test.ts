@@ -60,4 +60,21 @@ describe('the runtime query surface', () => {
     stop()
     runtime.destroy()
   })
+
+  it('a pointer feed subscribed before a Retry is heard from the session remountRenderer mounts', async () => {
+    const { runtime, container, events } = await mountedRuntime()
+    const points: (PointerWorld | null)[] = []
+    const stop = runtime.querySurface.subscribePointerWorld((point) => { points.push(point) })
+    await runtime.unmountRenderer()
+
+    await runtime.remountRenderer(container)
+    events.pointerMove({ x: 60, y: 40 }, { target: container, buttons: 0 })
+
+    const expected = runtime.cameraHost.frames.viewFrame.peek().view.screenToWorld({ x: 60, y: 40 })
+    expect(points).toHaveLength(1)
+    expect(points[0]!.world.x).toBeCloseTo(expected.x, 9)
+    expect(points[0]!.world.y).toBeCloseTo(expected.y, 9)
+    stop()
+    runtime.destroy()
+  })
 })
