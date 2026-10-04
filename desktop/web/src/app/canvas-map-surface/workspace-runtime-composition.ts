@@ -134,12 +134,12 @@ export function createWorkspaceRuntimeComposition(
     targetPresentation: options.targetPresentation,
     renderer: rendererComposition.renderer,
   })
-  // The edition sees a map error as retryable only while the workspace could rebuild the map. The
-  // controls' own state is kept, so Retry appears once the workspace allows it (a failure settled).
+  // The one writer of `retryable`: a map error offers Retry only while the workspace could rebuild the map.
+  // The controls' own state is kept, so Retry appears once the workspace allows it (a failure settled).
   let mapState: MapLibreCanvasSurfaceState | null = null
   const publishMapState = (state: MapLibreCanvasSurfaceState) => {
     mapState = state
-    options.onMapStateChange?.(state.retryable && !workspace.canRetry() ? { ...state, retryable: false } : state)
+    options.onMapStateChange?.({ ...state, retryable: state.status === 'error' && workspace.canRetry() })
   }
   const controls = dependencies.createControls({
     container: options.container,
@@ -170,9 +170,9 @@ export function createWorkspaceRuntimeComposition(
     map: controls,
     layer: {},
     readOrigin,
-    // A Retry already on screen is withdrawn once the workspace can no longer rebuild the map.
+    // A map error's Retry follows the workspace: offered once a failure settles, withdrawn once it can no longer rebuild.
     onRetryAvailabilityChange: () => {
-      if (mapState?.retryable) publishMapState(mapState)
+      if (mapState?.status === 'error') publishMapState(mapState)
     },
   })
   const reconciler = new WorkspaceGenerationReconciler({

@@ -354,8 +354,6 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
       this.options.contributions?.onStateChange?.({
         ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
         status: 'error',
-        // No Retry: a new map would find no WebGL2 either.
-        retryable: false,
       })
     } catch (observerError) {
       this.logError('Map state observer failed:', observerError)
