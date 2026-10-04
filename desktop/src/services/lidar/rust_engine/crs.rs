@@ -163,10 +163,11 @@ pub(super) fn from_reference(reference: &str) -> Result<ResolvedCrs, String> {
         wkt: trimmed.to_string(),
         ..resolved
     };
-    if let Some(code) = top_authority(trimmed).filter(|code| definition_of(*code).is_some()) {
+    let nodes = wkt_nodes(trimmed);
+    if let Some(code) = top_authority(&nodes).filter(|code| definition_of(*code).is_some()) {
         return from_epsg(code).map(stored);
     }
-    if let Some(definition) = proj4_extension(trimmed) {
+    if let Some(definition) = proj4_extension(&nodes) {
         return from_proj4(definition).map(stored);
     }
     if let Some(code) = wbprojection::epsg_from_wkt(trimmed)
@@ -177,7 +178,7 @@ pub(super) fn from_reference(reference: &str) -> Result<ResolvedCrs, String> {
     let crs = Crs::from_wkt(trimmed).map_err(|e| format!("unsupported CRS WKT: {e}"))?;
     user_defined(
         crs.projection.params().clone(),
-        wkt_shift(trimmed),
+        wkt_shift(&nodes),
         crs.name.clone(),
         trimmed.to_string(),
     )
@@ -366,14 +367,74 @@ fn datum_shift(definition: &str) -> Option<Vec<f64>> {
     shift.iter().any(|value| *value != 0.0).then_some(shift)
 }
 
+/// One node of a WKT: its keyword, the keywords of the nodes it sits in
+/// (outermost first) and its text between the brackets.
+struct WktNode<'a> {
+    parents: Vec<&'a str>,
+    keyword: &'a str,
+    body: &'a str,
+}
+
+impl WktNode<'_> {
+    /// The values that read as numbers: not its name nor a nested node's code.
+    fn numbers(&self) -> Vec<f64> {
+        self.body
+            .split(',')
+            .filter_map(|value| value.trim().parse().ok())
+            .collect()
+    }
+
+    /// The code an `AUTHORITY["EPSG","n"]` (WKT1) or `ID["EPSG",n]` (WKT2)
+    /// node names.
+    fn epsg(&self) -> Option<u32> {
+        if self.keyword != "AUTHORITY" && self.keyword != "ID" {
+            return None;
+        }
+        let mut values = self
+            .body
+            .split(',')
+            .map(|value| value.trim().trim_matches('"'));
+        (values.next() == Some("EPSG"))
+            .then(|| values.next()?.parse().ok())
+            .flatten()
+    }
+}
+
+/// Every node of a WKT, in the order they open.
+fn wkt_nodes(wkt: &str) -> Vec<WktNode<'_>> {
+    let mut nodes: Vec<WktNode> = Vec::new();
+    let mut open: Vec<(usize, usize)> = Vec::new();
+    let mut quoted = false;
+    for (index, ch) in wkt.char_indices() {
+        match ch {
+            '"' => quoted = !quoted,
+            '[' if !quoted => {
+                let keyword = wkt[..index].rsplit([',', '[']).next().unwrap_or("").trim();
+                let parents = open.iter().map(|(node, _)| nodes[*node].keyword).collect();
+                open.push((nodes.len(), index + 1));
+                nodes.push(WktNode {
+                    parents,
+                    keyword,
+                    body: "",
+                });
+            }
+            ']' if !quoted => {
+                if let Some((node, start)) = open.pop() {
+                    nodes[node].body = &wkt[start..index];
+                }
+            }
+            _ => {}
+        }
+    }
+    nodes
+}
+
 /// The shift a WKT's `TOWGS84` node gives, `None` when it shifts nothing.
-fn wkt_shift(wkt: &str) -> Option<Vec<f64>> {
-    let start = wkt.find("TOWGS84[")? + "TOWGS84[".len();
-    let end = start + wkt[start..].find(']')?;
-    let shift: Vec<f64> = wkt[start..end]
-        .split(',')
-        .map(|value| value.trim().parse().ok())
-        .collect::<Option<_>>()?;
+fn wkt_shift(nodes: &[WktNode]) -> Option<Vec<f64>> {
+    let shift = nodes
+        .iter()
+        .find(|node| node.keyword == "TOWGS84")?
+        .numbers();
     shift.iter().any(|value| *value != 0.0).then_some(shift)
 }
 
@@ -389,38 +450,23 @@ fn with_definition(wkt: &str, definition: &str) -> String {
 }
 
 /// The PROJ definition a WKT's `EXTENSION["PROJ4",..]` node carries.
-fn proj4_extension(wkt: &str) -> Option<&str> {
-    let start = wkt.find("EXTENSION[\"PROJ4\",\"")? + "EXTENSION[\"PROJ4\",\"".len();
-    let end = start + wkt[start..].find('"')?;
-    Some(&wkt[start..end])
+fn proj4_extension<'a>(nodes: &[WktNode<'a>]) -> Option<&'a str> {
+    let extension = nodes.iter().find(|node| node.keyword == "EXTENSION")?;
+    Some(
+        extension
+            .body
+            .strip_prefix("\"PROJ4\",")?
+            .trim()
+            .trim_matches('"'),
+    )
 }
 
-/// The EPSG code a WKT's root names in its own `AUTHORITY["EPSG","n"]`
-/// (WKT1) or `ID["EPSG",n]` (WKT2), not a nested node's.
-fn top_authority(wkt: &str) -> Option<u32> {
-    let mut depth = 0usize;
-    let mut quoted = false;
-    let mut code = None;
-    for (index, ch) in wkt.char_indices() {
-        match ch {
-            '"' => quoted = !quoted,
-            '[' if !quoted => {
-                depth += 1;
-                let keyword = wkt[..index].rsplit([',', '[']).next().unwrap_or("").trim();
-                if depth == 2 && (keyword == "AUTHORITY" || keyword == "ID") {
-                    let mut parts = wkt[index + 1..].split([',', ']']);
-                    let authority = parts.next().map(|part| part.trim().trim_matches('"'));
-                    let number = parts.next().map(|part| part.trim().trim_matches('"'));
-                    if authority == Some("EPSG") {
-                        code = number.and_then(|number| number.parse().ok());
-                    }
-                }
-            }
-            ']' if !quoted => depth = depth.saturating_sub(1),
-            _ => {}
-        }
-    }
-    code
+/// The EPSG code a WKT's root names for itself, not a nested node's.
+fn top_authority(nodes: &[WktNode]) -> Option<u32> {
+    nodes
+        .iter()
+        .filter(|node| node.parents.len() == 1)
+        .find_map(WktNode::epsg)
 }
 
 /// WKT with the authority node GDAL and the parser both key on, so a
@@ -1155,7 +1201,7 @@ mod tests {
         let new_york = crs_definitions::from_code(2263).unwrap().wkt;
         let codeless = new_york.replace(r#",AUTHORITY["EPSG","2263"]]"#, "]");
         let gdal = with_definition(&codeless, definition(2263));
-        assert_eq!(top_authority(&gdal), None);
+        assert_eq!(top_authority(&wkt_nodes(&gdal)), None);
         assert!(
             from_reference(&gdal)
                 .unwrap_err()
