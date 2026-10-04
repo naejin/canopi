@@ -355,7 +355,6 @@ export function createSceneRuntimeConstruction(
     revision,
     sceneStore,
     frames: cameraHost.frames,
-    readViewScale,
     settledReader,
     mutations,
     presentation,

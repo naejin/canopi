@@ -36,10 +36,9 @@ type PointerWorldListener = (point: PointerWorld | null) => void
 interface SceneCanvasQuerySurfaceOptions {
   readonly revision: CanvasQueryRevision
   readonly sceneStore: SceneStateReader & SceneDocumentReader
-  /** The runtime camera's frames: `view`, the label coverage and the frame's scale read them. */
+  /** The runtime camera's frames: `view`, the label coverage and the frame's scale (which sizes screen-sized notes in
+   *  the selection model) read them. */
   readonly frames: ViewFrameSource
-  /** The live frame's px/m, which sizes screen-sized notes in the selection model. Default: the host's frame. */
-  readonly readViewScale?: () => number
   readonly settledReader: SettledSceneReader
   readonly mutations: Pick<
     SceneRuntimeMutationController,
@@ -72,13 +71,10 @@ class SceneCanvasQueryRole implements SceneCanvasQuerySurface {
   readonly view: ViewReadSurface
   private readonly pointerWorldListeners = new Set<PointerWorldListener>()
   private stopPointerWorld: (() => void) | null = null
-  private readonly readViewScale: () => number
 
   constructor(private readonly options: SceneCanvasQuerySurfaceOptions) {
-    const { frames } = options
     // The frames place the Scene's metres; their ground is read on the Scene's plane.
-    this.view = createViewReadSurface(frames)
-    this.readViewScale = options.readViewScale ?? (() => frames.viewFrame.peek().view.pixelsPerMetre)
+    this.view = createViewReadSurface(options.frames)
   }
 
   subscribePointerWorld(listener: PointerWorldListener): () => void {
@@ -147,7 +143,7 @@ class SceneCanvasQueryRole implements SceneCanvasQuerySurface {
         plantNamePinning: { plantIds: [], allPinned: false },
       }
     }
-    const viewportScale = this.readViewScale()
+    const viewportScale = this.options.frames.viewFrame.peek().view.pixelsPerMetre
     const scene = this.options.sceneStore.persisted
     return getDesignObjectSelectionModel(
       scene,
