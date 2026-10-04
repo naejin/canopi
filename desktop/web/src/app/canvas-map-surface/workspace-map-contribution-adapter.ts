@@ -1,5 +1,7 @@
 import type { CanvasQuerySurface } from '../../canvas/runtime/runtime'
-import type { ViewDiagnostics } from '../../canvas/runtime/view/types'
+import { canvasPaintRevision } from '../../canvas/theme-refresh'
+import type { DesignSessionStore } from '../document-session/store'
+import { readPanelTargetOverlaySnapshot } from '../panel-targets/presentation'
 import type { MapLibreApi } from '../../maplibre/loader'
 import type { TerrainLayerState, TerrainProtocolSupport } from '../../maplibre/terrain'
 import type { RasterDisplay, RasterDisplayLayer, RasterDisplayMap, RasterDisplayOptions } from '../../maplibre/raster-display/adapter'
@@ -10,8 +12,6 @@ export interface WorkspaceMapContributionSnapshot {
   readonly lidar: readonly Readonly<RasterDisplayLayer>[]
   readonly terrain: TerrainLayerState
   readonly overlays: CanvasMapSurfaceOverlaySnapshot
-  /** Dev diagnostics of the settled camera. */
-  readonly frame: ViewDiagnostics | null
 }
 
 export interface WorkspaceMapContributionAdapter {
@@ -29,8 +29,40 @@ export interface WorkspaceMapContributionAdapter {
   readonly publishViewBounds?: (bounds: [number, number, number, number] | null) => void
 }
 
+/**
+ * The contributions both editions read: null without a Design or a plane, else the panel Targets (none in overview) over the
+ * edition's LiDAR layers and terrain. Coarse view signals only: the contributions re-read when the Scene changes, the camera
+ * settles, the mode changes or the canvas paint changes (theme, backdrop: overlays already on the map repaint in its colours),
+ * never on a camera frame alone.
+ */
+export function readWorkspaceMapContributions(
+  runtime: CanvasQuerySurface,
+  store: Pick<DesignSessionStore, 'sessionIdentity' | 'hasCurrentDesign'>,
+  edition: () => Pick<WorkspaceMapContributionSnapshot, 'lidar' | 'terrain'>,
+): WorkspaceMapContributionSnapshot | null {
+  const sessionIdentity = store.sessionIdentity.value
+  if (!store.hasCurrentDesign()) return null
+  const plane = runtime.sessionPlane.value
+  if (!plane) return null
+  void runtime.revision.scene.value
+  void runtime.view.settledCamera.value
+  void canvasPaintRevision.value
+  const overview = runtime.view.mode.value === 'overview'
+  const panelTargets = readPanelTargetOverlaySnapshot()
+  return captureWorkspaceMapContributions({
+    sessionIdentity,
+    ...edition(),
+    overlays: {
+      runtime,
+      location: { lat: plane.origin.lat, lon: plane.origin.lon },
+      hoveredTargets: overview ? [] : panelTargets.hoveredTargets,
+      selectedTargets: overview ? [] : panelTargets.selectedTargets,
+    },
+  })
+}
+
 /** Captures presentation values; the read-only Scene query remains a live geometry authority. */
-export function captureWorkspaceMapContributions(
+function captureWorkspaceMapContributions(
   snapshot: WorkspaceMapContributionSnapshot,
 ): WorkspaceMapContributionSnapshot {
   return Object.freeze({
@@ -50,13 +82,6 @@ export function captureWorkspaceMapContributions(
       location: snapshot.overlays.location && Object.freeze({ ...snapshot.overlays.location }),
       hoveredTargets: Object.freeze(snapshot.overlays.hoveredTargets.map((target) => Object.freeze({ ...target }))),
       selectedTargets: Object.freeze(snapshot.overlays.selectedTargets.map((target) => Object.freeze({ ...target }))),
-    }),
-    frame: snapshot.frame && Object.freeze({
-      camera: Object.freeze({ ...snapshot.frame.camera, center: Object.freeze({ ...snapshot.frame.camera.center }) }),
-      centreWorld: Object.freeze({ ...snapshot.frame.centreWorld }),
-      groundQuadGeo: Object.freeze(snapshot.frame.groundQuadGeo.map(
-        (point) => Object.freeze({ ...point }),
-      )) as unknown as ViewDiagnostics['groundQuadGeo'],
     }),
   })
 }

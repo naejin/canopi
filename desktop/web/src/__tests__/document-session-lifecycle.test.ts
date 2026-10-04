@@ -11,7 +11,7 @@ import {
   startAttachedDesignSession,
   teardownAttachedDesignSession,
 } from '../app/document-session/transition'
-import { setCanvasRuntimeSurfaces } from '../canvas/session'
+import { setCurrentCanvasSession } from '../canvas/session'
 import { flushSettingsProjection } from '../app/settings/projection'
 import type {
   WorkspaceRuntimeComposition,
@@ -60,7 +60,7 @@ describe('document session lifecycle', () => {
   let rulerOverlay: HTMLDivElement
 
   beforeEach(() => {
-    setCanvasRuntimeSurfaces(null)
+    setCurrentCanvasSession(null)
     vi.mocked(flushSettingsProjection).mockReset()
     vi.mocked(flushSettingsProjection).mockResolvedValue(undefined)
     vi.mocked(abortFailedAttachedDesignSessionStart).mockReset()
@@ -88,7 +88,7 @@ describe('document session lifecycle', () => {
       const observe = vi.fn<(target: Element) => void>()
       const createResizeObserver = vi.fn(() => ({ observe, disconnect: vi.fn() }))
       const publishSurfaces = vi.fn<(surfaces: CanvasRuntimeSurfaces | null) => void>(
-        setCanvasRuntimeSurfaces,
+        setCurrentCanvasSession,
       )
       const logError = vi.fn<(message?: unknown, ...optionalParams: unknown[]) => void>()
 
@@ -174,7 +174,7 @@ describe('document session lifecycle', () => {
     const documents = createTestCanvasDocumentSurface()
     const surfaces = createTestCanvasRuntimeSurfaces({ documents })
     const publishSurfaces = vi.fn<(surfaces: CanvasRuntimeSurfaces | null) => void>(
-      setCanvasRuntimeSurfaces,
+      setCurrentCanvasSession,
     )
     const dispose = vi.fn(() => compositionDispose.promise)
     const lifecycle = createDesignSessionLifecycle(
@@ -212,7 +212,7 @@ describe('document session lifecycle', () => {
     const destroy = vi.fn(async () => undefined)
     const logError = vi.fn<(message?: unknown, ...optionalParams: unknown[]) => void>()
     const publishSurfaces = vi.fn((next: CanvasRuntimeSurfaces | null) => {
-      setCanvasRuntimeSurfaces(next)
+      setCurrentCanvasSession(next)
       if (next === null) throw unpublicationError
     })
     const lifecycle = createDesignSessionLifecycle(

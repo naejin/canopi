@@ -16,7 +16,6 @@ export interface DriverFrameState {
   readonly screen: ViewScreen
   readonly insets: ScreenInsets
   readonly scaleBounds: { readonly min: number; readonly max: number }
-  readonly overviewPixelsPerMetre: number
   readonly plane: SessionPlane
   readonly planeRevision: number
 }
@@ -31,7 +30,6 @@ export function driverFrameState(
     ...placed,
     camera,
     scaleBounds: scaleBoundsAt(placed.screen, policy, camera.bearingDeg),
-    overviewPixelsPerMetre: policy.overviewPixelsPerMetre,
   }
 }
 
@@ -45,7 +43,7 @@ export function driverFrame(state: DriverFrameState, attached: boolean): ViewFra
   })
   return Object.freeze<ViewFrame>({
     view,
-    mode: isWorkspaceOverviewScale(view.pixelsPerMetre, { overviewScaleThreshold: state.overviewPixelsPerMetre }) ? 'overview' : 'site',
+    mode: isWorkspaceOverviewScale(view.pixelsPerMetre) ? 'overview' : 'site',
     scaleBounds: state.scaleBounds,
     insets: state.insets,
     attached,
@@ -67,7 +65,6 @@ export function sameDriverFrameState(previous: DriverFrameState, next: DriverFra
     && previous.insets.left === next.insets.left
     && previous.scaleBounds.min === next.scaleBounds.min
     && previous.scaleBounds.max === next.scaleBounds.max
-    && previous.overviewPixelsPerMetre === next.overviewPixelsPerMetre
     && previous.plane === next.plane
     && previous.planeRevision === next.planeRevision
 }

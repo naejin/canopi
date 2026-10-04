@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals'
 import { describe, expect, it } from 'vitest'
 import { geoToMercator, MAPLIBRE_WORLD_TILE_SIZE } from '../../projection'
-import { createWorkspaceCameraPolicy, singleWorldEffectiveMinimumZoom } from '../../workspace-camera-policy'
+import { singleWorldEffectiveMinimumZoom } from '../../workspace-camera-policy'
 import {
   angularDistanceToNorth,
   constrainCamera,
@@ -15,7 +15,7 @@ import {
 } from './navigation-policy'
 import type { ViewCamera, ViewScreen } from './types'
 
-const POLICY = createNavigationPolicy(createWorkspaceCameraPolicy(), signal(false))
+const POLICY = createNavigationPolicy(0, signal(false))
 const LANDSCAPE: ViewScreen = { width: 1000, height: 800, devicePixelRatio: 1 }
 const PORTRAIT: ViewScreen = { width: 700, height: 2000, devicePixelRatio: 2 }
 const SMALL: ViewScreen = { width: 400, height: 300, devicePixelRatio: 1 }
@@ -48,9 +48,9 @@ function expectInsideOneWorld(view: ViewCamera, screen: ViewScreen): void {
 }
 
 describe('navigation policy', () => {
-  it('is built from the workspace camera policy', () => {
+  it('is built from the workspace camera limits at the reference latitude', () => {
     const reducedMotion = signal(true)
-    const policy = createNavigationPolicy(createWorkspaceCameraPolicy(48.85), reducedMotion)
+    const policy = createNavigationPolicy(48.85, reducedMotion)
 
     expect(policy).toMatchObject({
       referenceLatitudeDeg: 48.85,

@@ -5,17 +5,19 @@
 // bearing arithmetic (normalising, snapping, steps, shortest arcs).
 
 import type { ReadonlySignal } from '@preact/signals'
-import { MAPLIBRE_WORLD_TILE_SIZE, mercatorToGeo } from '../../projection'
+import { MAPLIBRE_WORLD_TILE_SIZE, mapZoomToStageScale, mercatorToGeo } from '../../projection'
 import {
-  cameraScaleBoundsForPolicy,
   singleWorldEffectiveMinimumZoom,
-  type WorkspaceCameraPolicy,
+  WORKSPACE_MAP_MAX_ZOOM,
+  WORKSPACE_MAP_MIN_ZOOM,
+  WORKSPACE_OVERVIEW_SCALE_THRESHOLD,
 } from '../../workspace-camera-policy'
 import type { ViewCamera, ViewScreen } from './types'
 
 /**
- * Built by createNavigationPolicy(base, reducedMotion) from today's WorkspaceCameraPolicy (canvas/workspace-camera-policy.ts,
- * kept: pure, and P4 lets view/ import it). The reference latitude turns zooms into px/m (cameraScaleBoundsForPolicy → ViewFrame.scaleBounds).
+ * Built by createNavigationPolicy(referenceLatitudeDeg, reducedMotion) from the workspace camera's limits
+ * (canvas/workspace-camera-policy.ts: pure, and P4 lets view/ import it). The reference latitude turns zooms into px/m (scaleBoundsAt →
+ * ViewFrame.scaleBounds).
  */
 export interface NavigationPolicy {
   readonly referenceLatitudeDeg: number    // the session plane's latitude (the driver host's, per plane)
@@ -38,12 +40,12 @@ const FULL_TURN_EPSILON_DEG = 1e-9
 const STEP_EPSILON = 1e-9
 const DEGREES_TO_RADIANS = Math.PI / 180
 
-export function createNavigationPolicy(base: WorkspaceCameraPolicy, reducedMotion: ReadonlySignal<boolean>): NavigationPolicy {
+export function createNavigationPolicy(referenceLatitudeDeg: number, reducedMotion: ReadonlySignal<boolean>): NavigationPolicy {
   return Object.freeze({
-    referenceLatitudeDeg: base.referenceLatitudeDeg,
-    minZoom: base.minimumMapZoom,
-    maxZoom: base.maximumMapZoom,
-    overviewPixelsPerMetre: base.overviewScaleThreshold,
+    referenceLatitudeDeg,
+    minZoom: WORKSPACE_MAP_MIN_ZOOM,
+    maxZoom: WORKSPACE_MAP_MAX_ZOOM,
+    overviewPixelsPerMetre: WORKSPACE_OVERVIEW_SCALE_THRESHOLD,
     reducedMotion,
   })
 }
@@ -94,17 +96,15 @@ export function zoomFloorForArc(screen: ViewScreen, policy: NavigationPolicy, fr
 
 /**
  * ViewFrame.scaleBounds at a bearing (spec §1.1b): the policy's zoom range with the single-world floor for that bearing, in px/m at
- * the reference latitude (cameraScaleBoundsForPolicy over the policy's own values). At bearing 0 on a screen whose larger side is at
- * most 512 px, the policy's zoom range alone: the single-world floor does not bite.
+ * the reference latitude. At bearing 0 on a screen whose larger side is at most 512 px, the policy's zoom range alone: the
+ * single-world floor does not bite.
  */
 export function scaleBoundsAt(screen: ViewScreen, policy: NavigationPolicy, bearingDeg: number): { readonly min: number; readonly max: number } {
-  const bounds = cameraScaleBoundsForPolicy({
-    referenceLatitudeDeg: policy.referenceLatitudeDeg,
-    minimumMapZoom: policy.minZoom,
-    maximumMapZoom: policy.maxZoom,
-    overviewScaleThreshold: policy.overviewPixelsPerMetre,
-  }, zoomFloorForArc(screen, policy, bearingDeg, bearingDeg))
-  return Object.freeze({ min: bounds.minimum, max: bounds.maximum })
+  const minZoom = Math.min(policy.maxZoom, zoomFloorForArc(screen, policy, bearingDeg, bearingDeg))
+  return Object.freeze({
+    min: mapZoomToStageScale(minZoom, policy.referenceLatitudeDeg),
+    max: mapZoomToStageScale(policy.maxZoom, policy.referenceLatitudeDeg),
+  })
 }
 
 /** Any angle to [0, 360); results ≥ 360 − 1e-9 become 0 (so normaliseBearing(-1e-14) === 0). */

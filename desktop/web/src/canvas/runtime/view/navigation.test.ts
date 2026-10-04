@@ -2,7 +2,7 @@ import { signal } from '@preact/signals'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestView, type TestView } from '../../../__tests__/support/test-view'
 import { mapZoomToStageScale } from '../../projection'
-import { createWorkspaceCameraPolicy, singleWorldEffectiveMinimumZoom } from '../../workspace-camera-policy'
+import { singleWorldEffectiveMinimumZoom } from '../../workspace-camera-policy'
 import { getAnnotationWorldBounds } from '../annotation-layout'
 import { getPlantWorldBounds } from '../plant-presentation'
 import type { ScenePersistedState } from '../scene'
@@ -631,7 +631,7 @@ describe('view navigation', () => {
     const view = createTestView({ screen: { width: 1000, height: 800 } })
     const navigation = createViewNavigation({
       driver: view.host,
-      policy: () => createNavigationPolicy(createWorkspaceCameraPolicy(), signal(false)),
+      policy: () => createNavigationPolicy(0, signal(false)),
       readSceneExtent: () => boundsOf(emptyScene()),
       readSelectionPoints: () => [{ x: 10, y: 10 }, { x: 110, y: 60 }],
     })

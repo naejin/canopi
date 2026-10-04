@@ -71,8 +71,7 @@ function snapshot(identity: object, overrides: Partial<WorkspaceMapContributionS
     sessionIdentity: identity,
     lidar: [layer()],
     terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
-    overlays: { runtime: { getSceneSnapshot: () => scene }, location: { lat: 48, lon: 2 }, hoveredTargets: [{ kind: 'zone', zone_id: 'plot' }], selectedTargets: [], paintRevision: 0 },
-    frame: null,
+    overlays: { runtime: { getSceneSnapshot: () => scene }, location: { lat: 48, lon: 2 }, hoveredTargets: [{ kind: 'zone', zone_id: 'plot' }], selectedTargets: [] },
     ...overrides,
   }
 }
@@ -82,17 +81,16 @@ function fixture(loadTerrainSupport = vi.fn(async () => terrainSupport)) {
   const map = new ContributionMap()
   const states: MapLibreCanvasSurfaceState[] = []
   const bounds = vi.fn()
-  const diagnostics = vi.fn()
   const logError = vi.fn()
   const failure = vi.fn()
   let active = true
   let raster!: FakeRasterDisplay
   const manager = new WorkspaceMapContributions({
-    onFailure: failure, loadTerrainSupport, onStateChange: (state) => states.push(state), publishViewBounds: bounds, publishDiagnostics: diagnostics, logError,
+    onFailure: failure, loadTerrainSupport, onStateChange: (state) => states.push(state), publishViewBounds: bounds, logError,
     createRasterDisplay: (_map, options) => { raster = new FakeRasterDisplay(map, options.onLayersChanged!); return raster },
   })
   manager.attach({ key: 'test', map, maplibre: {} as MapLibreApi, preservedViewState: null, lifetime: { on() {}, off() {}, addCleanup() {}, clear() {} }, isCurrent: () => active })
-  return { identity, map, states, failure, bounds, diagnostics, manager, loadTerrainSupport, logError, raster, expire: () => { active = false } }
+  return { identity, map, states, failure, bounds, manager, loadTerrainSupport, logError, raster, expire: () => { active = false } }
 }
 
 function deferred<T>() {
@@ -372,7 +370,7 @@ describe('WorkspaceMapContributions', () => {
     expect(f.states.at(-1)?.status).toBe('idle')
   })
 
-  it('disposes overlays, terrain, rasters, listeners, bounds and diagnostics once with idle state', async () => {
+  it('disposes overlays, terrain, rasters, listeners and bounds once with idle state', async () => {
     const f = fixture()
     f.manager.update(snapshot(f.identity, { terrain: { ...snapshot(f.identity).terrain, hillshadeVisible: true } }))
     f.manager.restoreStyle()
@@ -387,7 +385,6 @@ describe('WorkspaceMapContributions', () => {
     expect(f.map.sources.size).toBe(0)
     expect([...f.map.listeners.values()].every((listeners) => listeners.size === 0)).toBe(true)
     expect(f.bounds).toHaveBeenLastCalledWith(null)
-    expect(f.diagnostics).toHaveBeenLastCalledWith(null)
     expect(f.states.at(-1)).toEqual(IDLE_MAPLIBRE_CANVAS_SURFACE_STATE)
   })
 

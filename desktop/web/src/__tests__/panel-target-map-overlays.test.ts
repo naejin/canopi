@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { targets, speciesTarget } from '../target'
 import { createPanelTargetMapOverlayContract } from '../maplibre/panel-target-overlays'
-import { projectTargetResolutionToMapFeatures } from '../target'
+import { projectTargetResolutionToMapFeatures } from '../target/map-projection'
 import { getCanvasInteractionStrokeVisual, MIN_PLANT_RING_RADIUS_PX } from '../canvas/runtime/scene-visuals'
 
 const LOCATION = { lat: 48.8566, lon: 2.3522 }
@@ -125,28 +125,9 @@ describe('panel-target map overlays', () => {
 
     expect(overlay.source.data.features).toEqual([])
     expect(overlay.hasRenderableFeatures).toBe(false)
-    expect(overlay.unresolvedTargets).toEqual([])
-    expect(overlay.skippedSceneIds).toEqual([])
-    expect(overlay.skippedReason).toBeNull()
   })
 
-  it('carries missing-location skips through the overlay contract', () => {
-    const projection = targets.resolve(
-      [speciesTarget('Malus domestica')],
-      targets.indexScene(createScene()),
-    )
-
-    const overlay = createPanelTargetMapOverlayContract(
-      'hover',
-      projectTargetResolutionToMapFeatures(projection, null),
-    )
-
-    expect(overlay.hasRenderableFeatures).toBe(false)
-    expect(overlay.skippedReason).toBe('missing_location')
-    expect(overlay.skippedSceneIds).toEqual(['plant-1'])
-  })
-
-  it('retains unresolved targets in the pure overlay contract', () => {
+  it('renders nothing for a Target the Scene does not hold', () => {
     const missingTarget = speciesTarget('Pyrus communis')
     const projection = targets.resolve(
       [missingTarget],
@@ -159,7 +140,6 @@ describe('panel-target map overlays', () => {
     )
 
     expect(overlay.hasRenderableFeatures).toBe(false)
-    expect(overlay.unresolvedTargets).toEqual([missingTarget])
   })
 
   it('rings selected plants in the accent highlight over a halo at the finder-ring minimum size', () => {

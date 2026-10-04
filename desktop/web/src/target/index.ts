@@ -12,10 +12,7 @@ export {
   getConsortiumCanonicalName,
   speciesBudgetTarget,
 } from './domain-adapters'
-export {
-  projectTargetResolutionToMapFeatures,
-  projectTargetsToMapFeatures,
-} from './map-projection'
+export { projectTargetsToMapFeatures } from './map-projection'
 export type {
   TargetMapFeature,
   TargetMapProjectionResult,

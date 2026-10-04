@@ -49,14 +49,12 @@ export function captureCurrentView({ id, name, title = '' }: {
   if (!queries || !plane || !design || trimmed.length === 0) return null
   // What is on screen now: the live frame, not the settled camera.
   const capture = queries.view.captureView()
-  const view = geographicViewOfCamera(capture.camera)
-  if (!view) return null
   return {
     view: composeSavedView({
       id,
       name: trimmed,
       title: title.trim() || null,
-      view,
+      view: geographicViewOfCamera(capture.camera),
       screen: capture.screen,
       mapLayers: mapLayers.value,
       sceneLayers: queries.getSceneSnapshot().layers,

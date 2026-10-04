@@ -225,8 +225,7 @@ export function createWorkspaceRuntimeComposition(
               // Before a Design is loaded and fitted the camera shows its
               // default viewport, which is not a view the user chose.
               if (!documents.hasLoadedDocument()) return
-              const view = geographicViewOfCamera(camera)
-              if (view) onViewSettled(view)
+              onViewSettled(geographicViewOfCamera(camera))
             }, WORKSPACE_VIEW_SETTLE_MS)
           })
         }

@@ -1,5 +1,3 @@
-import type { ViewDiagnostics } from '../canvas/runtime/view/types'
-
 type MapLibreCanvasSurfaceStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 /**
@@ -38,19 +36,4 @@ export function mapLibreCanvasSurfaceStateEquals(
     && left.basemapStatus === right.basemapStatus
     && left.retryable === right.retryable
   )
-}
-
-/** Development builds: the settled camera, as the map shows it, for the console. */
-export function publishMapDiagnostics(frame: ViewDiagnostics | null): void {
-  if (!import.meta.env.DEV) return
-  ;(globalThis as { __CANOPI_MAP_DEBUG__?: unknown }).__CANOPI_MAP_DEBUG__ = frame
-    ? {
-      center: [frame.camera.center.lon, frame.camera.center.lat],
-      zoom: frame.camera.zoom,
-      bearing: frame.camera.bearingDeg,
-      pitch: frame.camera.pitchDeg,
-      centreWorld: frame.centreWorld,
-      groundQuadGeo: frame.groundQuadGeo,
-    }
-    : null
 }

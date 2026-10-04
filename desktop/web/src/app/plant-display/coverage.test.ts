@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestCanvasQuerySurface } from '../../__tests__/support/canvas-query-surface'
 import { createTestCanvasRuntimeSurfaces } from '../../__tests__/support/canvas-runtime-surfaces'
 import { createTestView, type TestView } from '../../__tests__/support/test-view'
-import { setCanvasRuntimeSurfaces } from '../../canvas/session'
+import { setCurrentCanvasSession } from '../../canvas/session'
 import { createViewReadSurface, SETTLE_MS } from '../../canvas/runtime/view/frame-source'
 import { plantLabelCoverage } from './coverage'
 
@@ -14,7 +14,7 @@ afterEach(() => {
   vi.useRealTimers()
   stop?.()
   stop = null
-  setCanvasRuntimeSurfaces(null)
+  setCurrentCanvasSession(null)
   view?.dispose()
   view = null
 })
@@ -29,7 +29,7 @@ describe('plant label coverage', () => {
       view: createViewReadSurface(view.frames),
       getPlantLabelCoverage,
     }
-    setCanvasRuntimeSurfaces(createTestCanvasRuntimeSurfaces({ queries }))
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries }))
     const lines: Array<string | undefined> = []
     stop = effect(() => { lines.push(plantLabelCoverage()?.text) })
     expect(lines).toEqual(['Names shown for 70 of 282 plants in view'])

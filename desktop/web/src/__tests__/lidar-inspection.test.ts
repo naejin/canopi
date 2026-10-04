@@ -78,7 +78,7 @@ function libraryWithGeneration(generationId: string) {
   return librarySnapshot([sourceItem('lyr-1', 'Ground', { generation_id: generationId, coverage_cells: '1000' })])
 }
 
-/** One WGS84 point, as the canvas's own `worldToGeo` would report it. */
+/** One WGS84 point, as the session plane's `toGeo` would report it. */
 const POINT = { lat: 48.4312, lon: 0.0911 }
 
 describe('numeric inspection session state', () => {

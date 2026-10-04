@@ -48,7 +48,6 @@ import { createViewNavigation, type ViewNavigation } from '../view/navigation'
 import type { CameraDriverHost } from '../view/camera-driver'
 import { createCameraDriverHost } from '../view/driver-host'
 import type { ViewFrameSource } from '../view/types'
-import { createWorkspaceCameraPolicy } from '../../workspace-camera-policy'
 
 type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
 
@@ -139,7 +138,6 @@ export function createSceneRuntimeConstruction(
   )
   // The runtime's one camera, on the Scene's plane: the policy takes that plane's latitude.
   const cameraHost = createCameraDriverHost({
-    policy: createWorkspaceCameraPolicy(),
     reducedMotion: appAdapter.reducedMotion ?? NO_REDUCED_MOTION,
     plane: () => sceneStore.sessionPlane,
   })

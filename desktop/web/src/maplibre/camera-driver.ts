@@ -34,8 +34,8 @@ import type {
 import type { MapLibreLngLat, MapLibreMapInstance, MapLibreTransformConstrain } from './loader'
 import { redactCredentials } from './redact-credentials'
 
-/** The map operations the driver uses; the four read-backs it cannot work without are checked when it is created. */
-export type MapLibreCameraDriverMap = Pick<MapLibreMapInstance,
+/** The map operations the driver uses: MapLibre 6.10.0 declares every one, so the driver never falls back. */
+export type MapLibreCameraDriverMap = Required<Pick<MapLibreMapInstance,
   | 'jumpTo'
   | 'flyTo'
   | 'stop'
@@ -48,9 +48,8 @@ export type MapLibreCameraDriverMap = Pick<MapLibreMapInstance,
   | 'getPitch'
   | 'setTransformConstrain'
   | 'getCanvas'
->
+>>
 
-const REQUIRED_READ_BACKS = ['getCenter', 'getZoom', 'getBearing'] as const
 const NO_INSETS: ScreenInsets = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 })
 const EMPTY_SCREEN: ViewScreen = Object.freeze({ width: 0, height: 0, devicePixelRatio: 1 })
 
@@ -62,9 +61,9 @@ interface Flight {
 }
 
 /**
- * `createMapLibreCameraDriver(map, plane, deps)` (spec §1.1 Attachment). A map without getCenter, getZoom or getBearing,
- * or one whose read-back pitch is not 0, fails the driver with 'map-error'; its host then detaches it. The driver resizes its map to
- * the container once, starts at the map canvas' CSS size, and changes it only through setScreen.
+ * `createMapLibreCameraDriver(map, plane, deps)` (spec §1.1 Attachment). A map whose camera cannot be read, or whose read-back
+ * pitch is not 0, fails the driver with 'map-error'; its host then detaches it. The driver resizes its map to the container once,
+ * starts at the map canvas' CSS size, and changes it only through setScreen.
  */
 export function createMapLibreCameraDriver(
   map: MapLibreCameraDriverMap,
@@ -81,6 +80,7 @@ export function createMapLibreCameraDriver(
   let disposed = false
   /** Depth of the driver's own map calls: the 'move' and 'moveend' events they fire are not MapLibre's own changes. */
   let ownCalls = 0
+  /** False when the first read failed: dispose then has no guard to take back. */
   let guardInstalled = false
   const queued: Array<() => void> = []
   const failure = signal<CameraDriverFailure | null>(null)
@@ -94,8 +94,6 @@ export function createMapLibreCameraDriver(
     return { center: held.center === candidate.center ? lngLat : sameKindOfLngLat(lngLat, held.center), zoom: held.zoom }
   }
 
-  const missing = REQUIRED_READ_BACKS.filter((name) => typeof map[name] !== 'function')
-  if (missing.length > 0) fail(`The map cannot be driven without ${missing.join(', ')}.`)
   // The map never resizes itself (trackResize: false), and a container resize reported before this driver existed reached only
   // the headless camera: the map takes its container's size once here, before the guard reads the screen.
   if (live()) send(() => map.resize())
@@ -104,16 +102,14 @@ export function createMapLibreCameraDriver(
   if (attached) {
     arc = arcAt(attached.bearingDeg)
     try {
-      if (map.setTransformConstrain) {
-        map.setTransformConstrain(guard)
-        guardInstalled = true
-      }
+      map.setTransformConstrain(guard)
+      guardInstalled = true
     } catch (error) {
       fail(`The map could not take the camera guard: ${messageOf(error)}`)
     }
   }
   // MapLibre applies the guard as soon as it is installed, so the first frame is read after it.
-  let published = frameState((guardInstalled ? readCamera() : attached) ?? placeholderCamera())
+  let published = frameState(readCamera() ?? placeholderCamera())
   const frames = createDriverFrameSource(driverFrame(published, true))
 
   const onMove = () => {
@@ -164,14 +160,14 @@ export function createMapLibreCameraDriver(
   function readCamera(): ViewCamera | null {
     if (failure.peek()) return null
     try {
-      const pitch = map.getPitch?.() ?? 0
+      const pitch = map.getPitch()
       if (pitch !== 0) {
         fail(`The map reported a pitched camera (${pitch}°).`)
         return null
       }
-      const center = map.getCenter!()
-      const zoom = map.getZoom!()
-      const bearing = map.getBearing!()
+      const center = map.getCenter()
+      const zoom = map.getZoom()
+      const bearing = map.getBearing()
       if (![center.lng, center.lat, zoom, bearing].every(Number.isFinite)) {
         fail('The map reported a camera that is not finite.')
         return null
@@ -248,7 +244,7 @@ export function createMapLibreCameraDriver(
     const running = flight
     if (running) {
       flight = null
-      if (!send(() => map.stop?.())) return null
+      if (!send(() => map.stop())) return null
     }
     const camera = readCamera()
     if (!camera) return null
@@ -291,8 +287,7 @@ export function createMapLibreCameraDriver(
   }
 
   function fly(target: ViewCamera, from: ViewCamera): void {
-    const flyTo = map.flyTo
-    if (!flyTo || deps.policy().reducedMotion.peek()) {
+    if (deps.policy().reducedMotion.peek()) {
       jumpTo(constrainCamera(target, screen, deps.policy()))
       return
     }
@@ -301,7 +296,7 @@ export function createMapLibreCameraDriver(
     const held = constrainCamera(target, screen, deps.policy(), arc)
     const running: Flight = { targetBearingDeg: held.bearingDeg, started: false, ended: false }
     flight = running
-    const sent = send(() => flyTo.call(map, { center: [held.center.lon, held.center.lat], zoom: held.zoom, bearing: held.bearingDeg }))
+    const sent = send(() => map.flyTo({ center: [held.center.lon, held.center.lat], zoom: held.zoom, bearing: held.bearingDeg }))
     if (!sent) return
     running.started = true
     if (running.ended && flight === running) endFlight()
@@ -360,7 +355,7 @@ export function createMapLibreCameraDriver(
     stopTween()
     if (flight) {
       flight = null
-      if (!send(() => map.stop?.())) return
+      if (!send(() => map.stop())) return
     }
     refresh()
   }
@@ -384,19 +379,9 @@ export function createMapLibreCameraDriver(
     const before = readCamera()
     if (!before) return
     screen = normalised
-    // MapLibre re-runs the guard at the new size (a running flight keeps its arc); a map without the guard is constrained below.
+    // MapLibre re-runs the guard at the new size (a running flight keeps its arc).
     if (!flight) arc = arcAt(before.bearingDeg)
-    if (!send(() => map.resize())) return
-    const resized = readCamera()
-    if (!resized) return
-    const held = constrainCamera(resized, screen, deps.policy(), arc)
-    if (held === resized) {
-      commit(resized)
-      return
-    }
-    // A jump stops a running flight.
-    flight = null
-    jumpTo(held)
+    if (send(() => map.resize())) refresh()
   }
 
   function setInsets(next: ScreenInsets): void {
@@ -429,10 +414,10 @@ export function createMapLibreCameraDriver(
       }
       if (flight) {
         flight = null
-        release(() => map.stop?.())
+        release(() => map.stop())
       }
       for (const [type, listener] of subscribed.splice(0)) release(() => map.off(type, listener))
-      if (guardInstalled) release(() => map.setTransformConstrain?.(null))
+      if (guardInstalled) release(() => map.setTransformConstrain(null))
       frames.dispose()
       if (errors.length === 1) throw errors[0]
       if (errors.length > 1) throw new MapLibreCameraDriverReleaseError(errors)
@@ -460,9 +445,9 @@ function sameKindOfLngLat(template: MapLibreLngLat, center: GeoPoint): MapLibreL
 
 /** The canvas' CSS size and density, as MapLibre last sized it: the screen the map renders now. */
 function canvasScreen(map: MapLibreCameraDriverMap): ViewScreen {
-  const canvas = map.getCanvas?.()
-  const width = canvas?.clientWidth
-  return normaliseScreen({ width, height: canvas?.clientHeight, devicePixelRatio: canvas && width ? canvas.width / width : undefined })
+  const canvas = map.getCanvas()
+  const width = canvas.clientWidth
+  return normaliseScreen({ width, height: canvas.clientHeight, devicePixelRatio: width ? canvas.width / width : undefined })
 }
 
 function messageOf(error: unknown): string {

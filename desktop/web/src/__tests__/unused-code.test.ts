@@ -65,8 +65,6 @@ const OPTIONS: UnusedCodeOptions = {
  * (`canopi-…`) or the plan section (`canvas-v2-plan.md section N`) that needs it.
  */
 const KEPT: Readonly<Record<string, string>> = {
-  'src/canvas/runtime/view/camera-math.ts#geoToScreen':
-    'canopi-f47t.7 (phase 1 rotation): camera-math API of canvas-v2-spec.md §1.1; the bearing tween and activation tests project through it',
   'src/app/keyboard/escape-chain.ts#describeEscape':
     'canopi-f47t.6 (phase F): the Esc chain\'s hint seam (canvas-v2-spec.md §1.6, §3.7); no F row wires the tool card to it, and escape-chain.test.ts holds it to the next Esc',
 }

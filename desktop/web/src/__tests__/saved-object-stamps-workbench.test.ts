@@ -12,12 +12,12 @@ import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
 import { geoAt } from './support/geo-design'
 import type { SavedObjectStamp } from '../types/saved-object-stamps'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
-import { setCanvasRuntimeSurfaces } from '../canvas/session'
+import { setCurrentCanvasSession } from '../canvas/session'
 import { setCanvasSelection } from '../canvas/session-state'
 
 describe('Saved Object Stamp Workbench', () => {
   afterEach(() => {
-    setCanvasRuntimeSurfaces(null)
+    setCurrentCanvasSession(null)
     setCanvasSelection([])
   })
 
@@ -330,7 +330,7 @@ describe('Saved Object Stamp Workbench', () => {
             sameSpeciesReferenceCanonicalName: null,
           },
     } satisfies CanvasQuerySurface
-    setCanvasRuntimeSurfaces({
+    setCurrentCanvasSession({
       queries: query,
       commands: {} as never,
       documents: {} as never,

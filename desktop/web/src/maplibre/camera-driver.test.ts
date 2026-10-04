@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestView, type TestView } from '../__tests__/support/test-view'
-import { geoToMercator, mapZoomToStageScale, mercatorToGeo, stageScaleToMapZoom, worldToGeo } from '../canvas/projection'
+import { geoToMercator, mapZoomToStageScale, mercatorToGeo, stageScaleToMapZoom } from '../canvas/projection'
 import type { ScenePersistedState } from '../canvas/runtime/scene'
 import type { CameraDriver, CameraDriverDeps } from '../canvas/runtime/view/camera-driver'
 import { createCameraDriverHost } from '../canvas/runtime/view/driver-host'
@@ -11,12 +11,11 @@ import { planarToViewCamera } from '../canvas/runtime/view/camera-math'
 import type { GeoPoint, PlanarCamera, ViewCamera, ViewFrame, ViewScreen } from '../canvas/runtime/view/types'
 import { planarCameraOf } from '../canvas/runtime/view/view-transform'
 import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
-import { createWorkspaceCameraPolicy } from '../canvas/workspace-camera-policy'
 import { createMapLibreCameraDriver } from './camera-driver'
 import type { MapLibreLngLat, MapLibreTransformConstrain } from './loader'
 
 const PLANE = createSessionPlane({ lon: 2.35, lat: 48.85 })
-const POLICY = createNavigationPolicy(createWorkspaceCameraPolicy(PLANE.origin.lat), signal(false))
+const POLICY = createNavigationPolicy(PLANE.origin.lat, signal(false))
 
 /** MapLibre's LngLat class: the constrain must hand back the class it was given. */
 class FakeLngLat implements MapLibreLngLat {
@@ -207,7 +206,6 @@ function viewOn(map: ConsistentMap, viewport?: { x: number; y: number; scale: nu
   const plane = PLANE
   const view = createTestView({
     plane,
-    policy: createWorkspaceCameraPolicy(plane.origin.lat),
     screen: { ...map.size, devicePixelRatio: map.pixelRatio },
     viewport,
   })
@@ -219,8 +217,8 @@ function viewOn(map: ConsistentMap, viewport?: { x: number; y: number; scale: nu
 
 /** The pixel MapLibre shows a plane point at, from the map's own camera (512-px Mercator tiles, north up). */
 function mapPixelOf(map: ConsistentMap, plane: SessionPlane, point: { x: number; y: number }) {
-  const geo = worldToGeo(point.x, point.y, plane.origin.lat, plane.origin.lon)
-  const ground = geoToMercator(geo.lng, geo.lat)
+  const geo = plane.toGeo(point)
+  const ground = geoToMercator(geo.lon, geo.lat)
   const centre = geoToMercator(map.getCenter().lng, map.getCenter().lat)
   const worldSize = 512 * 2 ** map.getZoom()
   return { x: map.size.width / 2 + (ground.x - centre.x) * worldSize, y: map.size.height / 2 + (ground.y - centre.y) * worldSize }
@@ -349,7 +347,7 @@ describe('MapLibre camera driver', () => {
     // The platform preference reaches the driver through its policy; going to a saved view or a story step asks for a
     // flight and the driver alone chooses the jump, read when the move starts.
     const reducedMotion = signal(true)
-    const policy = createNavigationPolicy(createWorkspaceCameraPolicy(PLANE.origin.lat), reducedMotion)
+    const policy = createNavigationPolicy(PLANE.origin.lat, reducedMotion)
     const map = new ConsistentMap({ center: PLANE.origin, zoom: 3, bearing: 0 }, { width: 1000, height: 800 })
     const { driver, published } = attach(map, policy)
     const target: ViewCamera = { center: { lon: 2.4, lat: 48.9 }, zoom: 5, bearingDeg: 90, pitchDeg: 0 }
@@ -395,7 +393,6 @@ describe('MapLibre camera driver', () => {
     const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
     const view = createTestView({
       plane: PLANE,
-      policy: createWorkspaceCameraPolicy(PLANE.origin.lat),
       screen: { ...map.size, devicePixelRatio: map.pixelRatio },
     })
     views.push(view)
@@ -454,19 +451,6 @@ describe('MapLibre camera driver', () => {
     // A failed driver drives nothing.
     driver.apply({ kind: 'pan-by', deltaPx: { x: 10, y: 0 } })
     expect(map.jumpTo).not.toHaveBeenCalled()
-  })
-
-  it('a map without getCenter, getZoom or getBearing fails with map-error', () => {
-    for (const missing of ['getCenter', 'getZoom', 'getBearing'] as const) {
-      const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
-      Object.defineProperty(map, missing, { value: undefined })
-      const { driver } = attach(map)
-
-      expect(driver.failure.value).toMatchObject({ reason: 'map-error' })
-      expect(driver.failure.value!.message).toContain(missing)
-      expect(map.listenerCount()).toBe(0)
-      expect(map.setTransformConstrain).not.toHaveBeenCalled()
-    }
   })
 
   it('a move during a flight stops it and carries its target bearing', () => {
@@ -535,13 +519,13 @@ describe('MapLibre camera driver', () => {
   it('a placement becomes the north-up camera over the plane point at the screen centre', () => {
     const plane = createSessionPlane({ lon: -122.68, lat: 45.52 })
     const map = new ConsistentMap({ center: plane.origin, zoom: 16 }, { width: 1000, height: 800 })
-    const { driver, published } = attach(map, createNavigationPolicy(createWorkspaceCameraPolicy(45.52), signal(false)), plane)
+    const { driver, published } = attach(map, createNavigationPolicy(45.52, signal(false)), plane)
 
     placeOn(driver, plane, { x: -200, y: -100, scale: 2, bearingDeg: 0 })
 
-    const centre = worldToGeo(350, 250, 45.52, -122.68)
+    const centre = plane.toGeo({ x: 350, y: 250 })
     const [options] = map.jumpTo.mock.calls.at(-1)!
-    expect(options.center[0]).toBeCloseTo(centre.lng, 8)
+    expect(options.center[0]).toBeCloseTo(centre.lon, 8)
     expect(options.center[1]).toBeCloseTo(centre.lat, 8)
     expect(options.zoom).toBeCloseTo(stageScaleToMapZoom(2, 45.52), 8)
     expect(options.bearing).toBe(0)
@@ -567,7 +551,7 @@ describe('MapLibre camera driver', () => {
   it('a placement past zoom 27 lands at zoom 27', () => {
     const plane = createSessionPlane({ lon: 0, lat: 0 })
     const map = new ConsistentMap({ center: plane.origin, zoom: 18 }, { width: 1000, height: 800 })
-    const { driver, published } = attach(map, createNavigationPolicy(createWorkspaceCameraPolicy(0), signal(false)), plane)
+    const { driver, published } = attach(map, createNavigationPolicy(0, signal(false)), plane)
 
     placeOn(driver, plane, { x: 0, y: 0, scale: 5000, bearingDeg: 0 })
 
@@ -579,7 +563,7 @@ describe('MapLibre camera driver', () => {
   it('the frame reads back the placed centre and the ground under the four corners', () => {
     const plane = createSessionPlane({ lon: -122.68, lat: 45.52 })
     const map = new ConsistentMap({ center: plane.origin, zoom: 16 }, { width: 1000, height: 800 })
-    const { driver } = attach(map, createNavigationPolicy(createWorkspaceCameraPolicy(45.52), signal(false)), plane)
+    const { driver } = attach(map, createNavigationPolicy(45.52, signal(false)), plane)
 
     placeOn(driver, plane, { x: -200, y: -100, scale: 2, bearingDeg: 0 })
 
@@ -626,7 +610,7 @@ describe('MapLibre camera driver', () => {
   it('publishes the exact zoom-27 scale at a high-latitude session plane origin', () => {
     const plane = createSessionPlane({ lon: 179.9, lat: 80 })
     const map = new ConsistentMap({ center: plane.origin, zoom: 27 })
-    const { driver } = attach(map, createNavigationPolicy(createWorkspaceCameraPolicy(80), signal(false)), plane)
+    const { driver } = attach(map, createNavigationPolicy(80, signal(false)), plane)
 
     const frame = driver.frames.viewFrame.peek()
     expect(frame.view.pixelsPerMetre).toBe(mapZoomToStageScale(27, 80))
@@ -820,7 +804,6 @@ describe('MapLibre camera driver', () => {
 function runtimeCameraOn(map: ConsistentMap) {
   let runtimePlane = PLANE
   const host = createCameraDriverHost({
-    policy: createWorkspaceCameraPolicy(),
     reducedMotion: signal(false),
     plane: () => runtimePlane,
     screen: { width: 400, height: 300, devicePixelRatio: 1 },
@@ -919,7 +902,7 @@ describe('screen-lock validation', () => {
 
   function placedOn(size: { width: number; height: number }, viewport: { x: number; y: number; scale: number }) {
     const map = new ConsistentMap({ center: plane.origin, zoom: 16 }, size)
-    const { driver } = attach(map, createNavigationPolicy(createWorkspaceCameraPolicy(location.lat), signal(false)), plane)
+    const { driver } = attach(map, createNavigationPolicy(location.lat, signal(false)), plane)
     placeOn(driver, plane, { ...viewport, bearingDeg: 0 })
     return map
   }

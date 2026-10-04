@@ -32,9 +32,6 @@ describe('panel target overlay sync', () => {
     const map = fakeMap()
     const overlay = createPanelTargetMapOverlayContract('selection', {
       features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [1.5, 43.6] }, properties: { kind: 'plant' } }],
-      unresolvedTargets: [],
-      skippedSceneIds: [],
-      skippedReason: null,
     } as never)
 
     expect(() => syncPanelTargetMapOverlay(map as never, overlay)).not.toThrow()
@@ -60,9 +57,6 @@ describe('panel target overlay sync', () => {
       const map = fakeMap()
       const contract = () => createPanelTargetMapOverlayContract('selection', {
         features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [1.5, 43.6] }, properties: { kind: 'plant' } }],
-        unresolvedTargets: [],
-        skippedSceneIds: [],
-        skippedReason: null,
       } as never)
       syncPanelTargetMapOverlay(map as never, contract())
       expect(map.layers.get('panel-target-selection-plants')?.['circle-stroke-color']).toBe('#9C5A16')

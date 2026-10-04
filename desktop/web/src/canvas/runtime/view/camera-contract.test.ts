@@ -13,7 +13,6 @@ import { LngLat as SourceLngLatClass } from 'maplibre-gl-source/geo/lng_lat.ts'
 import { MercatorTransform as SourceMercatorTransform } from 'maplibre-gl-source/geo/projection/mercator_transform.ts'
 import { mapZoomToStageScale } from '../../projection'
 import { createSessionPlane, type SessionPlane } from '../../session-plane'
-import { createWorkspaceCameraPolicy } from '../../workspace-camera-policy'
 import type { CameraMove } from './camera-driver'
 import { planarToViewCamera } from './camera-math'
 import { createNavigationPolicy } from './navigation-policy'
@@ -43,7 +42,7 @@ const MercatorTransform = SourceMercatorTransform as new (options: {
 
 const TOLERANCE_PX = 1e-6
 const SCREEN: ViewScreen = { width: 900, height: 600, devicePixelRatio: 1 }
-const POLICY = createNavigationPolicy(createWorkspaceCameraPolicy(), signal(false))
+const POLICY = createNavigationPolicy(0, signal(false))
 
 /** Plane points spread over the screen and a little beyond it. */
 function samplePoints(view: ViewTransform): WorldPoint[] {
@@ -130,6 +129,10 @@ function mapOnTransform(screen: ViewScreen, start: ViewCamera):
       for (const listener of [...moveListeners]) listener()
     },
     resize() {},
+    stop() {},
+    flyTo() {
+      throw new Error('The contract scripts do not fly.')
+    },
     on(type, listener) {
       if (type === 'move') moveListeners.add(listener)
     },
@@ -152,17 +155,16 @@ describe('camera contract', () => {
       { origin: { lon: 2.3522, lat: 48.8566 }, zoom: 18, script: SCRIPT },
       { origin: { lon: -70.65, lat: -33.45 }, zoom: 16.4, script: SCRIPT },
       { origin: { lon: 151.2, lat: 60 }, zoom: 17.2, script: SCRIPT },
-      { origin: { lon: 2.3522, lat: 48.8566 }, zoom: 18, script: CLAMP_SCRIPT, maximumMapZoom: CLAMP_MAX_ZOOM },
+      { origin: { lon: 2.3522, lat: 48.8566 }, zoom: 18, script: CLAMP_SCRIPT, maxZoom: CLAMP_MAX_ZOOM },
     ]
     for (const start of starts) {
       const plane = createSessionPlane(start.origin)
-      const today = createWorkspaceCameraPolicy(plane.origin.lat)
-      const policy = { ...today, maximumMapZoom: start.maximumMapZoom ?? today.maximumMapZoom }
       const scale = mapZoomToStageScale(start.zoom, plane.origin.lat)
       const viewport = { x: SCREEN.width / 2 - 25 * scale, y: SCREEN.height / 2 + 12 * scale, scale }
-      const headless = createTestView({ screen: SCREEN, plane, policy, viewport })
+      const headless = createTestView({ screen: SCREEN, plane, maxZoom: start.maxZoom, viewport })
       const shown = mapOnTransform(SCREEN, planarToViewCamera({ ...viewport, bearingDeg: 0 }, SCREEN, plane))
-      const navigationPolicy = createNavigationPolicy(policy, signal(false))
+      const today = createNavigationPolicy(plane.origin.lat, signal(false))
+      const navigationPolicy = { ...today, maxZoom: start.maxZoom ?? today.maxZoom }
       const attached = createMapLibreCameraDriver(shown.map, plane, { policy: () => navigationPolicy })
       expect(attached.failure.peek()).toBeNull()
       expectProjectsLikeMapLibre(headless.view(), shown.transform, plane)

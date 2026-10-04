@@ -73,12 +73,14 @@ describe('browser workspace map contribution adapter', () => {
       sessionIdentity: signal({}), hasCurrentDesign: () => true,
     })
     const runtime = runtimeWithPlane(createSessionPlane({ lat: 48, lon: 2 }))
-    const revisions: number[] = []
-    const stop = effect(() => { revisions.push(adapter.read(runtime)!.overlays.paintRevision) })
+    let reads = 0
+    const stop = effect(() => {
+      adapter.read(runtime)
+      reads += 1
+    })
     try {
       setCanvasMapBackdrop('satellite')
-      expect(revisions).toHaveLength(2)
-      expect(revisions[1]).toBeGreaterThan(revisions[0]!)
+      expect(reads).toBe(2)
     } finally {
       stop()
       setCanvasMapBackdrop('basemap')

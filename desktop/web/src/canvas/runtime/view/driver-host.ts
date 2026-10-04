@@ -7,7 +7,6 @@
 
 import { signal, type ReadonlySignal } from '@preact/signals'
 import type { SessionPlane } from '../../session-plane'
-import type { WorkspaceCameraPolicy } from '../../workspace-camera-policy'
 import type { CameraDriver, CameraDriverDeps, CameraDriverFailure, CameraDriverHost } from './camera-driver'
 import { planarToViewCamera } from './camera-math'
 import { createViewFrameSource } from './frame-source'
@@ -18,8 +17,8 @@ import type { ScreenInsets, ViewCamera, ViewFrame, ViewScreen } from './types'
 import { planarCameraOf } from './view-transform'
 
 export interface CameraDriverHostOptions {
-  /** The zoom range and overview threshold; the reference latitude is options.plane()'s, rebuilt once per plane. */
-  readonly policy: WorkspaceCameraPolicy
+  /** Default WORKSPACE_MAP_MAX_ZOOM: a test lowers it to compare both drivers at the zoom-in clamp. */
+  readonly maxZoom?: number
   readonly reducedMotion: ReadonlySignal<boolean>
   /** The session plane the runtime works in: headless drivers are built on it, and planeChanged is called with it after a re-origin. */
   readonly plane: () => SessionPlane
@@ -50,10 +49,8 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
     const plane = options.plane()
     if (!navigationPolicy || plane !== policyPlane) {
       policyPlane = plane
-      navigationPolicy = createNavigationPolicy(
-        { ...options.policy, referenceLatitudeDeg: plane.origin.lat },
-        options.reducedMotion,
-      )
+      const policy = createNavigationPolicy(plane.origin.lat, options.reducedMotion)
+      navigationPolicy = options.maxZoom === undefined ? policy : Object.freeze({ ...policy, maxZoom: options.maxZoom })
     }
     return navigationPolicy
   }

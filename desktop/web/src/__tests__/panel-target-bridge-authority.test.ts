@@ -4,7 +4,7 @@ import { hoveredPanelTargets, selectedPanelTargets } from '../app/panel-targets/
 import { selectedObjectIds } from '../canvas/session-state'
 import { createPanelTargetMapOverlayContract } from '../maplibre/panel-target-overlays'
 import { targets, speciesTarget } from '../target'
-import { projectTargetResolutionToMapFeatures } from '../target'
+import { projectTargetResolutionToMapFeatures } from '../target/map-projection'
 
 function createScene() {
   const scene = createDefaultScenePersistedState()

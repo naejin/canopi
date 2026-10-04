@@ -1,4 +1,4 @@
-import { worldToGeo } from '../canvas/projection'
+import { createSessionPlane, type GeoPosition } from '../canvas/session-plane'
 import type { SceneZoneEntity } from '../canvas/runtime/scene'
 import {
   getEllipticalZonePolygon,
@@ -16,11 +16,6 @@ import {
 import type { PanelTarget } from '../types/design'
 
 type TargetMapProjectionPoint = TargetScenePoint
-
-interface TargetMapProjectionLocation {
-  readonly lat: number
-  readonly lon: number
-}
 
 interface TargetMapPlantRef {
   readonly id: string
@@ -78,13 +73,10 @@ interface TargetMapLineZoneFeature {
 
 type TargetMapZoneFeature = TargetMapPolygonZoneFeature | TargetMapLineZoneFeature
 export type TargetMapFeature = TargetMapPlantFeature | TargetMapZoneFeature
-type TargetMapSkippedReason = 'missing_location' | null
 
+/** The resolved Targets' map features; a plant without a position, or a zone with too few points, has none. */
 export interface TargetMapProjectionResult {
   readonly features: readonly TargetMapFeature[]
-  readonly unresolvedTargets: readonly PanelTarget[]
-  readonly skippedSceneIds: readonly string[]
-  readonly skippedReason: TargetMapSkippedReason
 }
 
 function isTargetSceneIndex(
@@ -95,54 +87,24 @@ function isTargetSceneIndex(
 
 export function projectTargetResolutionToMapFeatures(
   resolution: TargetResolution,
-  location: TargetMapProjectionLocation | null,
+  location: GeoPosition,
 ): TargetMapProjectionResult {
-  if (!location) {
-    return {
-      features: [],
-      unresolvedTargets: resolution.unresolvedTargets,
-      skippedSceneIds: resolution.sceneIds,
-      skippedReason: 'missing_location',
-    }
-  }
-
   const features: TargetMapFeature[] = []
-  const skippedSceneIds: string[] = []
-  const skippedFeatureKeys = new Set<string>()
-  const pushSkipped = (key: string, sceneId: string): void => {
-    if (skippedFeatureKeys.has(key)) return
-    skippedFeatureKeys.add(key)
-    skippedSceneIds.push(sceneId)
-  }
+  const plane = createSessionPlane(location)
 
   const projectPoint = (point: TargetMapProjectionPoint): readonly [number, number] => {
-    const geo = worldToGeo(
-      point.x,
-      point.y,
-      location.lat,
-      location.lon,
-    )
-    return [geo.lng, geo.lat]
+    const geo = plane.toGeo(point)
+    return [geo.lon, geo.lat]
   }
 
   for (const ref of resolution.resolvedRefs) {
     if (ref.kind === 'plant') {
-      const key = `plant:${ref.id}`
-      if (!ref.plant.position) {
-        pushSkipped(key, ref.id)
-        continue
-      }
-      const geo = worldToGeo(
-        ref.plant.position.x,
-        ref.plant.position.y,
-        location.lat,
-        location.lon,
-      )
+      if (!ref.plant.position) continue
       features.push({
         type: 'Feature',
         geometry: {
           type: 'Point',
-          coordinates: [geo.lng, geo.lat],
+          coordinates: projectPoint(ref.plant.position),
         },
         properties: {
           kind: 'plant',
@@ -152,13 +114,9 @@ export function projectTargetResolutionToMapFeatures(
       continue
     }
 
-    const key = `zone:${ref.id}`
     if (ref.zone.zoneType === 'line') {
       const points = ref.zone.points
-      if (!points || points.length < 2) {
-        pushSkipped(key, ref.id)
-        continue
-      }
+      if (!points || points.length < 2) continue
       features.push({
         type: 'Feature',
         geometry: {
@@ -174,10 +132,7 @@ export function projectTargetResolutionToMapFeatures(
     }
 
     const points = getZoneProjectionPoints(ref.zone)
-    if (!points || points.length < 3) {
-      pushSkipped(key, ref.id)
-      continue
-    }
+    if (!points || points.length < 3) continue
     const ring = points.map(projectPoint)
     const first = ring[0]!
     const last = ring[ring.length - 1]!
@@ -198,18 +153,13 @@ export function projectTargetResolutionToMapFeatures(
     })
   }
 
-  return {
-    features,
-    unresolvedTargets: resolution.unresolvedTargets,
-    skippedSceneIds,
-    skippedReason: null,
-  }
+  return { features }
 }
 
 export function projectTargetsToMapFeatures(
   values: readonly PanelTarget[],
   scene: TargetMapProjectionScene | TargetSceneIndex,
-  location: TargetMapProjectionLocation | null,
+  location: GeoPosition,
 ): TargetMapProjectionResult {
   const index = isTargetSceneIndex(scene) ? scene : indexTargetScene(scene)
   return projectTargetResolutionToMapFeatures(resolveTargetsInScene(values, index), location)

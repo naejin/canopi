@@ -135,8 +135,8 @@ function galleryViews(tiles: boolean): SavedView[] {
   const queries = currentCanvasQuerySurface.peek()
   const plane = queries?.sessionPlane.peek()
   const capture = queries && plane ? queries.view.captureView() : null
-  const current = capture ? geographicViewOfCamera(capture.camera) : null
-  if (!queries || !capture || !current) return []
+  if (!queries || !capture) return []
+  const current = geographicViewOfCamera(capture.camera)
   const sceneLayers = queries.getSceneSnapshot().layers
   const species = queries.getSceneSnapshot().plants[0]?.canonicalName ?? null
   const view = (name: string, zoomDelta: number, background: 'none' | 'basemap' | 'satellite', options: { layers?: typeof sceneLayers; species?: string | null } = {}) => {

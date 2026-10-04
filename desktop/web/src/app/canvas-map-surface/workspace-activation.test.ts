@@ -21,7 +21,8 @@ import {
 import { createSharedMapSceneRendererComposition, type SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
 import { WorkspaceGenerationReconciler } from './workspace-generation-reconciler'
 import type { MapBackgroundPresentation } from '../../maplibre/map-background'
-import { geoToScreen, screenToGeo } from '../../canvas/runtime/view/camera-math'
+import { geoToScreen } from '../../__tests__/support/geo-to-screen'
+import { screenToGeo } from '../../canvas/runtime/view/camera-math'
 import type { ViewCamera } from '../../canvas/runtime/view/types'
 import { createDetachedCanvasRuntimeAppAdapter } from '../../canvas/runtime/app-adapter'
 import { createCanvasDocumentReplacementToken } from '../../canvas/runtime/runtime'
@@ -77,12 +78,20 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
-/** A consistent MapLibre fake (plan §4, 0A "Attached-map fakes"): its read-backs describe one fixed camera, and jumpTo fires 'move'. */
+/**
+ * A consistent MapLibre fake (plan §4, 0A "Attached-map fakes"): its read-backs describe one fixed camera, jumpTo fires 'move',
+ * flyTo fires 'move' and 'moveend', and the guard is recorded.
+ */
 class FakeMap {
   readonly canvas = document.createElement('canvas')
   readonly context = {} as WebGL2RenderingContext
   readonly camera: ViewCamera = { center: { lon: 0, lat: 0 }, zoom: 18, bearingDeg: 0, pitchDeg: 0 }
   readonly jumpTo = vi.fn(() => this.emit('move'))
+  readonly flyTo = vi.fn(() => {
+    this.emit('move')
+    this.emit('moveend')
+  })
+  readonly setTransformConstrain = vi.fn()
   readonly stop = vi.fn()
   readonly resize = vi.fn()
   readonly remove = vi.fn()
@@ -255,8 +264,7 @@ describe('WorkspaceActivationCoordinator', () => {
     const contribution: WorkspaceMapContributionSnapshot = {
       sessionIdentity: activation.sessionIdentity, lidar: [],
       terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
-      overlays: { runtime: null, location: null, hoveredTargets: [], selectedTargets: [], paintRevision: 0 },
-      frame: null,
+      overlays: { runtime: { getSceneSnapshot: vi.fn() }, location: { lat: 0, lon: 0 }, hoveredTargets: [], selectedTargets: [] },
     }
     f.coordinator.updateMapContributions(contribution)
     expect(f.mapControls.updateMapContributions).not.toHaveBeenCalled()
@@ -277,8 +285,7 @@ describe('WorkspaceActivationCoordinator', () => {
     const contribution = (sessionIdentity: object): WorkspaceMapContributionSnapshot => ({
       sessionIdentity, lidar: [],
       terrain: { contourIntervalMeters: 1, contoursVisible: true, contoursOpacity: 1, hillshadeVisible: true, hillshadeOpacity: 1, isDark: false },
-      overlays: { runtime: null, location: null, hoveredTargets: [], selectedTargets: [], paintRevision: 0 },
-      frame: null,
+      overlays: { runtime: { getSceneSnapshot: vi.fn() }, location: { lat: 0, lon: 0 }, hoveredTargets: [], selectedTargets: [] },
     })
     const first = createActivationSnapshot()
     const second = createActivationSnapshot()
@@ -1039,8 +1046,7 @@ describe('WorkspaceActivationCoordinator', () => {
     const contribution: WorkspaceMapContributionSnapshot = {
       sessionIdentity: activation.sessionIdentity, lidar: [],
       terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
-      overlays: { runtime: null, location: null, hoveredTargets: [], selectedTargets: [], paintRevision: 7 },
-      frame: null,
+      overlays: { runtime: { getSceneSnapshot: vi.fn() }, location: { lat: 7, lon: 7 }, hoveredTargets: [], selectedTargets: [] },
     }
     f.coordinator.updateMapContributions(contribution)
     expect(f.mapControls.updateMapContributions).not.toHaveBeenLastCalledWith(contribution)
