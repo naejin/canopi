@@ -988,8 +988,9 @@ fn names_escape_lint(meta: &Meta) -> bool {
 }
 
 /// Code an expectation on this statement would also cover: a closure, block, async block or a
-/// macro below the statement's own expression. The statement may itself be one macro call
-/// (`tauri::generate_context!()`), the thing under review.
+/// macro below the statement's own expression. The statement may itself be one macro call with
+/// no arguments (`tauri::generate_context!()`), the thing under review; clippy reports a macro's
+/// arguments at their own source, so a macro with arguments counts as nested code.
 fn statement_holds_nested_code(statement: &Stmt) -> bool {
     let expression: &Expr = match statement {
         Stmt::Local(local) => match &local.init {
@@ -998,10 +999,11 @@ fn statement_holds_nested_code(statement: &Stmt) -> bool {
             None => return false,
         },
         Stmt::Expr(expression, _) => expression,
-        Stmt::Macro(_) | Stmt::Item(_) => return false,
+        Stmt::Macro(statement) => return !statement.mac.tokens.is_empty(),
+        Stmt::Item(_) => return false,
     };
-    if matches!(expression, Expr::Macro(_)) {
-        return false;
+    if let Expr::Macro(call) = expression {
+        return !call.mac.tokens.is_empty();
     }
     let mut finder = NestedCodeFinder::default();
     finder.visit_expr(expression);
@@ -1028,43 +1030,49 @@ impl<'ast> Visit<'ast> for NestedCodeFinder {
 }
 
 /// Crate and workspace `[lints]` tables that switch `clippy::disallowed_methods` off, which no
-/// source attribute would show. Read line by line: a table header, then `name = "level"` or
-/// `name = { level = "...", ... }`, with `clippy.name` / `rust.name` keys under `[lints]`.
+/// source attribute would show. Read line by line: each key is joined to its table header
+/// (spaces and quotes dropped, `-` read as `_`), so `[lints.clippy] name = ..`, `[lints]
+/// clippy.name = ..`, a root `lints.clippy.name = ..` and `[lints.clippy.name] level = ..` all
+/// name the same lint; a value holding `allow` or `expect` in either quote style silences it.
 fn audit_manifest_lints(manifests: &[(&str, &str)]) -> Vec<String> {
+    let normalise = |text: &str| {
+        text.chars()
+            .filter(|c| !c.is_whitespace() && *c != '"' && *c != '\'')
+            .map(|c| if c == '-' { '_' } else { c })
+            .collect::<String>()
+    };
     let mut violations = Vec::new();
     for (path, manifest) in manifests {
-        let mut table = None;
+        let mut table = String::new();
         for line in manifest.lines() {
             let line = line.split_once('#').map_or(line, |(code, _)| code).trim();
             if let Some(header) = line
                 .strip_prefix('[')
                 .and_then(|rest| rest.strip_suffix(']'))
             {
-                table = header
-                    .trim()
-                    .strip_prefix("workspace.")
-                    .unwrap_or(header.trim())
-                    .strip_prefix("lints")
-                    .map(str::to_owned);
+                table = normalise(header);
                 continue;
             }
-            let Some(table) = table.as_deref() else {
-                continue;
-            };
             let Some((key, value)) = line.split_once('=') else {
                 continue;
             };
-            let key = key.trim().trim_matches('"');
-            let lint = match table {
-                ".clippy" => format!("clippy::{key}"),
-                ".rust" => key.to_owned(),
-                "" => match key.split_once('.') {
-                    Some(("clippy", name)) => format!("clippy::{name}"),
-                    Some(("rust", name)) => name.to_owned(),
-                    _ => continue,
-                },
+            let key = normalise(key);
+            let full = if table.is_empty() {
+                key
+            } else {
+                format!("{table}.{key}")
+            };
+            let full = full.strip_prefix("workspace.").unwrap_or(&full);
+            let Some(entry) = full.strip_prefix("lints.") else {
+                continue;
+            };
+            let entry = entry.strip_suffix(".level").unwrap_or(entry);
+            let lint = match entry.split_once('.') {
+                Some(("clippy", name)) => format!("clippy::{name}"),
+                Some(("rust", name)) => name.to_owned(),
                 _ => continue,
             };
+            let value = value.replace('\'', "\"");
             let silenced = ["\"allow\"", "\"expect\""]
                 .iter()
                 .any(|level| value.contains(level));
@@ -1703,6 +1711,10 @@ mod tests {
                     std::thread::Builder::new().spawn(hide!(heavy))?;
                     #[expect(clippy::disallowed_methods, reason = "an async block")]
                     let task = runtime.spawn_blocking(async { heavy() });
+                    #[expect(clippy::disallowed_methods, reason = "a macro statement with arguments")]
+                    wrap!(|| std::thread::spawn(heavy));
+                    #[expect(clippy::disallowed_methods, reason = "a macro binding with arguments")]
+                    let wrapped = wrap!(move || { std::thread::spawn(heavy) });
                     #[expect(clippy::disallowed_methods, reason = "the reviewed macro itself")]
                     let context = tauri::generate_context!();
                     let reap = move || child.wait();
@@ -1720,6 +1732,12 @@ mod tests {
                 ),
                 nested(
                     r#"#[expect(clippy::disallowed_methods, reason = "a closure with an expression")]"#
+                ),
+                nested(
+                    r#"#[expect(clippy::disallowed_methods, reason = "a macro binding with arguments")]"#
+                ),
+                nested(
+                    r#"#[expect(clippy::disallowed_methods, reason = "a macro statement with arguments")]"#
                 ),
                 nested(r#"#[expect(clippy::disallowed_methods, reason = "a nested macro")]"#),
                 nested(r#"#[expect(clippy::disallowed_methods, reason = "an async block")]"#),
@@ -1784,7 +1802,20 @@ clippy.style = "expect"
 all = "allow"
 pedantic = "allow"
 "#;
-        let violations = audit_manifest_lints(&[("Cargo.toml", manifest)]);
+        let root_dotted =
+            "lints.clippy.disallowed_methods = \"allow\"\n[package]\nname = \"fixture\"\n";
+        let spelled_otherwise = r#"
+[ lints . clippy ]
+disallowed-methods = 'allow'
+
+[workspace.lints.rust.warnings]
+level = 'expect'
+"#;
+        let violations = audit_manifest_lints(&[
+            ("Cargo.toml", manifest),
+            ("root/Cargo.toml", root_dotted),
+            ("spelled/Cargo.toml", spelled_otherwise),
+        ]);
         let refused = |lint: &str| {
             format!(
                 "a manifest must not switch clippy::disallowed_methods off: Cargo.toml ({lint})"
@@ -1798,6 +1829,9 @@ pedantic = "allow"
                 refused("clippy::disallowed_methods"),
                 refused("clippy::style"),
                 refused("warnings"),
+                "a manifest must not switch clippy::disallowed_methods off: root/Cargo.toml (clippy::disallowed_methods)".to_owned(),
+                "a manifest must not switch clippy::disallowed_methods off: spelled/Cargo.toml (clippy::disallowed_methods)".to_owned(),
+                "a manifest must not switch clippy::disallowed_methods off: spelled/Cargo.toml (warnings)".to_owned(),
             ]
         );
     }
