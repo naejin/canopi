@@ -347,13 +347,15 @@ mark {
   background: var(--color-secondary);
 }
 
-/* Reduced motion */
+/* Reduced motion: instant, not short. Every element transitions `all` once it has a duration, so a short one
+   would animate the size MapLibre gives its canvas on a resize (reduced-motion-transitions.test.ts). */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
   }
 }
 
