@@ -43,6 +43,11 @@ describe('third-party notices', () => {
     expect(notices).toMatch(/Corresponding Source/)
   })
 
+  // crs-definitions carries EPSG data, whose terms of use require the IOGP attribution.
+  it('attributes the EPSG Geodetic Parameter Dataset to IOGP', () => {
+    expect(notices).toMatch(/EPSG Geodetic Parameter Dataset[\s\S]*IOGP/)
+  })
+
   // Every Whitebox or GeoLibre crate compiled into the Canopi binary has a row naming the
   // pinned version and revision, so a new git dependency cannot ship without a notice.
   it('names every opengeos and whitebox crate Cargo.lock pins, at its exact version and revision', () => {
