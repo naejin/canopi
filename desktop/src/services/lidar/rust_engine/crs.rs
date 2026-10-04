@@ -1172,7 +1172,9 @@ mod tests {
     /// The display renderer rebuilds the CRS from the written keys, so a datum
     /// shift travels as GeogTOWGS84GeoKey (2062): Amersfoort's seven
     /// parameters and OSGB36's named datum. A CRS that shifts nothing writes
-    /// no such key, so Lambert-93's keys stay the code and its unit.
+    /// no such key, so Lambert-93's keys stay the code and its unit; only the
+    /// citation changed with the registry, from wbprojection's "RGF93 v1 /
+    /// Lambert-93 (EPSG:2154)" to crs-definitions' name.
     #[test]
     fn written_keys_carry_the_datum_shift_and_nothing_for_a_zero_shift() {
         let shift = |code: u32| match geokeys_for(&from_epsg(code).unwrap()).unwrap().get(2062) {
@@ -1198,7 +1200,6 @@ mod tests {
         let keys: Vec<(u16, GeoKeyValue)> = lambert93
             .entries
             .into_iter()
-            .filter(|entry| entry.key_id != key::GTCitationGeoKey)
             .map(|entry| (entry.key_id, entry.value))
             .collect();
         assert_eq!(
@@ -1206,6 +1207,10 @@ mod tests {
             vec![
                 (key::GTModelTypeGeoKey, GeoKeyValue::Short(1)),
                 (key::GTRasterTypeGeoKey, GeoKeyValue::Short(1)),
+                (
+                    key::GTCitationGeoKey,
+                    GeoKeyValue::Ascii("RGF93 / Lambert-93".to_string())
+                ),
                 (key::ProjectedCSTypeGeoKey, GeoKeyValue::Short(2154)),
                 (key::ProjLinearUnitsGeoKey, GeoKeyValue::Short(9001)),
             ]
