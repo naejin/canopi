@@ -33,7 +33,7 @@ Beads (`bd prime`). Read: `bd show`, `bd ready`, `bd dep tree <id>`, `bd list --
 
 ## Models
 
-Opus at high effort for design checks, complex code, reviews, verification and fixes; Opus at medium effort for mechanical work; Sonnet only for trivial checks; no other model. Weekly usage limits are not a reason to slow work; keep the efficiency habits.
+Opus at high effort for design checks, complex code, bug reviews, verification and fixes; Opus at medium effort for mechanical work and plan-conformance checks; Sonnet only for trivial checks; no other model. Weekly usage limits are not a reason to slow work; keep the efficiency habits.
 
 ## Tools
 
