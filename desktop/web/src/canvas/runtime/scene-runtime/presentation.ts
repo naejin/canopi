@@ -250,35 +250,15 @@ export class SceneRuntimePresentationController {
       }
     }
 
-    const labelsChanged = await this._plantLabels.ensureEntries(canonicalNames, this._getLocale())
-    const plantNamesRevision = this._notePreparedPlantNames(labelsChanged)
-
     const needsSpeciesCache = plants.some((plant) => plant.stratum === null || plant.canopySpreadM === null)
-    if (!needsSpeciesCache) {
-      return {
-        changed: labelsChanged,
-        plantNamesRevision,
-        backfills: null,
-        failure: null,
-      }
-    }
+    if (needsSpeciesCache) return this.refreshSpeciesCacheEntries(canonicalNames, this._getLocale())
 
-    try {
-      const loaded = await this._speciesCache.ensureEntries(canonicalNames, this._getLocale())
-      const backfills = this.derivePresentationBackfills()
-      return {
-        changed: labelsChanged || loaded || backfills !== null,
-        plantNamesRevision,
-        backfills,
-        failure: null,
-      }
-    } catch (error) {
-      return {
-        changed: labelsChanged,
-        plantNamesRevision,
-        backfills: null,
-        failure: { error },
-      }
+    const labelsChanged = await this._plantLabels.ensureEntries(canonicalNames, this._getLocale())
+    return {
+      changed: labelsChanged,
+      plantNamesRevision: this._notePreparedPlantNames(labelsChanged),
+      backfills: null,
+      failure: null,
     }
   }
 
