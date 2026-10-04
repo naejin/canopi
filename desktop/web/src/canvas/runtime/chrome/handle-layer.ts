@@ -2,11 +2,10 @@
 //
 // Owns the DOM handles the ToolHost publishes (ToolHostDeps.chrome.setHandles, spec §1.4): each ToolHandle is drawn at its
 // anchor projected through the view frame plus its screen offset, and moves with every camera frame ('overlays'). The
-// points (zone corners and vertices, guide ends) keep today's control-point look (interaction/control-point-overlay.ts):
-// a 20 px hit box around an 8 px mark that grows under the pointer; the rotate handle keeps today's 28 px button
-// (interaction/selection-rotation-handle.ts), kept inside the visible map area, with its key swallow and click stop
-// (INV-LSN-13). A handle's readout shows as a chip under it, and the handle being dragged is marked active. Presses on a
-// handle are the DOM input source's, which reads data-canvas-handle (input/dom-input-source.ts); the layer listens only on
+// points (zone corners and vertices, guide ends) are a 20 px hit box around an 8 px mark that grows under the pointer;
+// the rotate handle is a 28 px button kept inside the visible map area, with its key swallow and click stop (INV-LSN-13).
+// A handle's readout shows as a chip under it, and the handle being dragged is marked active. Presses on a handle are
+// the DOM input source's, which reads data-canvas-handle (input/dom-input-source.ts); the layer listens only on
 // its own elements (P6).
 
 import { runCanvasRuntimeCleanups } from '../cleanup'
