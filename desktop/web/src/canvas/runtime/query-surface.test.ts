@@ -22,14 +22,12 @@ afterEach(() => {
 })
 
 async function mountedRuntime(): Promise<{ runtime: SceneCanvasRuntime, container: HTMLDivElement, events: SceneInteractionEventHarness }> {
-  const runtime = new SceneCanvasRuntime()
+  const renderer = { id: 'maplibre-pixi' as const, syncScene: vi.fn(), setView: vi.fn(), setDraft: vi.fn(), dispose: vi.fn() }
+  const runtime = new SceneCanvasRuntime({ renderer: { id: 'test', initialize: () => renderer } })
   const container = document.createElement('div')
   document.body.appendChild(container)
   Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
   Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
-  const renderer = { id: 'test', syncScene: vi.fn(), setView: vi.fn(), setDraft: vi.fn(), dispose: vi.fn() }
-  ;(runtime as unknown as { _construction: { replaceRenderer(definition: unknown): void } })
-    ._construction.replaceRenderer({ id: 'test', initialize: () => renderer })
   await runtime.init(container)
   const events = createSceneInteractionEventHarness(container)
   harnesses.push(events)

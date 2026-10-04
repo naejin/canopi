@@ -10,10 +10,6 @@ import { createSceneCanvasQuerySurface } from '../query-surface'
 import { SceneCanvasInspectionOwner } from '../inspection-lens'
 import type { SceneRendererDefinition } from '../renderers/scene-types'
 import type {
-  CanvasPlantLabelSource,
-  CanvasSpeciesPresentationCache,
-} from '../presentation-data'
-import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
   CanvasPlantRowSpacingField,
@@ -68,8 +64,6 @@ const NEW_DESIGN_OVERVIEW_MAX_ZOOM = 5
 export interface SceneRuntimeConstructionOptions {
   appAdapter?: CanvasRuntimeAppAdapter
   targetPresentation?: SceneRuntimePanelTargetAdapter
-  speciesCache?: CanvasSpeciesPresentationCache
-  plantLabels?: CanvasPlantLabelSource
   /** The one scene renderer (ADR 0004). A runtime without one keeps its Scene but cannot mount. */
   renderer?: SceneRendererDefinition
 }
@@ -113,9 +107,6 @@ export interface SceneRuntimeConstruction {
   readonly sceneRevision: Signal<number>
   readonly plantNamesQueryRevision: Signal<number>
   readonly transientHistoryRevision: Signal<number>
-  readonly revision: CanvasQueryRevision
-  /** Test seam: supplies the renderer the next mount uses. */
-  readonly replaceRenderer: (renderer: SceneRendererDefinition) => void
   readonly rendering: SceneRuntimeRenderScheduler
   readonly presentation: SceneRuntimePresentationController
   readonly inspection: SceneCanvasInspectionOwner
@@ -165,7 +156,7 @@ export function createSceneRuntimeConstruction(
     scene: sceneRevision,
     plantNames: plantNamesQueryRevision,
   }
-  let renderer: SceneRendererDefinition | null = options.renderer ?? null
+  const renderer: SceneRendererDefinition | null = options.renderer ?? null
   const history = new SceneHistory({
     reportCleanState: (clean) => appAdapter.cleanState.setCanvasClean(clean),
   })
@@ -187,8 +178,8 @@ export function createSceneRuntimeConstruction(
     getLocale: () => appAdapter.settings.readLocale(),
     resolveHighlightedTargets: callbacks.resolveHighlightedTargets,
     onPlantNamesChanged: callbacks.incrementPlantNamesRevision,
-    speciesCache: options.speciesCache ?? presentationData?.speciesCache,
-    plantLabels: options.plantLabels ?? presentationData?.plantLabels,
+    speciesCache: presentationData?.speciesCache,
+    plantLabels: presentationData?.plantLabels,
   })
   const viewNavigation = createViewNavigation({
     driver: cameraHost,
@@ -385,10 +376,6 @@ export function createSceneRuntimeConstruction(
     sceneRevision,
     plantNamesQueryRevision,
     transientHistoryRevision,
-    revision,
-    replaceRenderer(nextRenderer) {
-      renderer = nextRenderer
-    },
     rendering,
     presentation,
     chrome,
