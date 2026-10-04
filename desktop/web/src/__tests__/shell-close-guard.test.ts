@@ -335,6 +335,7 @@ describe("registerCloseGuard", () => {
     expect(mocks.flushDesign).not.toHaveBeenCalled();
     onFocus({ payload: false });
     expect(mocks.flushDesign).toHaveBeenCalledTimes(1);
+    expect(mocks.flushDesign, "focus loss writes edits, never a view alone (U28)").toHaveBeenCalledWith({ view: false });
 
     lifetime.dispose();
     expect(mocks.unlistenFocus).toHaveBeenCalledTimes(1);

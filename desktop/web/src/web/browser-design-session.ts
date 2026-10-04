@@ -8,6 +8,7 @@ import {
   DesignHomeConflictError,
   type ContinuousSave,
   type DesignHome,
+  type HomeWriteOptions,
   type HomeWriteOutcome,
 } from "../app/document-session/continuous-save";
 import {
@@ -163,7 +164,7 @@ export function createBrowserDesignSessionController({
 
   // Web homes are always browser Design Drafts; a write is one synchronous
   // localStorage record update, so a page-hide flush completes before unload.
-  function writeDraftHome(home: DesignHome): HomeWriteOutcome {
+  function writeDraftHome(home: DesignHome, { viewOnly }: HomeWriteOptions): HomeWriteOutcome {
     if (home.kind !== "draft") throw new Error("Web Designs live in browser Drafts");
     const stamp = draftStamp?.id === home.id ? draftStamp : null;
     const settlement = persistence.beginBrowserDraft().executeImmediately(
@@ -175,6 +176,7 @@ export function createBrowserDesignSessionController({
             file: content,
             now: now().toISOString(),
             expectedUpdatedAt: stamp && !stamp.overwrite ? stamp.updatedAt : undefined,
+            keepUpdatedAt: viewOnly,
           });
           if (!result.ok) {
             if (result.error instanceof BrowserDraftChangedError) {
@@ -249,7 +251,7 @@ export function createBrowserDesignSessionController({
    * nothing to write so a replacement keeps its turn.
    */
   function flushBeforeReplacement(intent: number): true | Promise<boolean> {
-    if (!continuousSave.hasPendingChanges() && !persistence.viewMovedSinceSave()) return true;
+    if (!continuousSave.hasSomethingToWrite()) return true;
     // A retained Canvas replacement cannot be captured; the replacement
     // itself settles or quarantines it first.
     if (canvasSession && replacement.pendingCanvasReplacement(canvasSession)) return true;

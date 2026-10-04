@@ -35,6 +35,32 @@ describe('browser app data store', () => {
     expect([...storage.values.keys()]).toEqual([V2_KEYS.drafts])
   })
 
+  it('keeps a Draft\'s updatedAt and place for a write that keeps it, still refusing one another tab overtook', () => {
+    const store = createBrowserAppDataStore({ storage: memoryStorage() })
+    store.saveDraft({ id: 'draft-a', file: makeDesign({ name: 'A' }), now: '2026-07-04T12:00:00.000Z' })
+    store.saveDraft({ id: 'draft-b', file: makeDesign({ name: 'B' }), now: '2026-07-04T12:01:00.000Z' })
+
+    const kept = store.saveDraft({
+      id: 'draft-a',
+      file: makeDesign({ name: 'A', description: 'moved view' }),
+      now: '2026-07-04T12:05:00.000Z',
+      expectedUpdatedAt: '2026-07-04T12:00:00.000Z',
+      keepUpdatedAt: true,
+    })
+    expect(kept.ok && kept.value.updatedAt).toBe('2026-07-04T12:00:00.000Z')
+    expect(store.listDrafts().map((draft) => draft.id)).toEqual(['draft-b', 'draft-a'])
+    expect(store.loadDraft('draft-a')?.description).toBe('moved view')
+
+    const refused = store.saveDraft({
+      id: 'draft-b',
+      file: makeDesign({ name: 'B' }),
+      now: '2026-07-04T12:06:00.000Z',
+      expectedUpdatedAt: '2026-07-04T11:00:00.000Z',
+      keepUpdatedAt: true,
+    })
+    expect(refused.ok).toBe(false)
+  })
+
   it('stores Draft files in .canopi wire form, keeping unknown fields at the root', () => {
     const storage = memoryStorage()
     const store = createBrowserAppDataStore({ storage })

@@ -255,6 +255,16 @@ describe('Desktop Close Design', () => {
     expect(mocks.requestSaveDecision).not.toHaveBeenCalled()
   })
 
+  it('closes without a prompt when only a moved view cannot be written (U28)', async () => {
+    session.viewMovedSinceSave = () => true
+    mocks.saveDesign.mockRejectedValueOnce(new Error('read-only file'))
+
+    await machine.closeDesign()
+    expect(mocks.saveDesign).toHaveBeenCalledTimes(1)
+    expect(mocks.requestSaveDecision).not.toHaveBeenCalled()
+    expect(machine.continuousSave.status.value).toBe('saved')
+  })
+
   it('ends continuous save: the closed Design home is never written again', async () => {
     vi.useFakeTimers()
     const uninstall = machine.continuousSave.install()

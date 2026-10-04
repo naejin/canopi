@@ -977,6 +977,65 @@ describe('browser Design Session lifecycle', () => {
     await expect(tabA.controller.continuousSave.flush()).resolves.toBe(true)
   })
 
+  it('writes a view that moved without starting or showing a conflict with another tab (U28)', async () => {
+    const storage = memoryStorage()
+    let tick = 0
+    const clock = () => new Date(Date.UTC(2026, 6, 4, 12, 0, tick++))
+    createBrowserAppDataStore({ storage }).saveDraft({
+      id: 'draft-shared',
+      file: makeCanopiFile({ name: 'Shared Garden', description: 'as opened' }),
+      now: clock().toISOString(),
+    })
+    function openTab() {
+      const store = createMemoryDesignSessionStore()
+      const appDataStore = createBrowserAppDataStore({ storage })
+      const requestSaveDecision = vi.fn(async () => 'cancel')
+      const controller = createBrowserDesignSessionController({
+        store,
+        appDataStore,
+        fileAdapter: testFileAdapter(),
+        now: clock,
+        requestSaveDecision: requestSaveDecision as never,
+      })
+      expect(controller.restoreLatestDraft()).toBe(true)
+      return { store, appDataStore, controller, requestSaveDecision }
+    }
+    const tabA = openTab()
+    let view = { lon: 13, lat: 23, zoom: 18, bearing: 0 }
+    let held = view
+    tabA.controller.attachCanvasSession(testCanvasDocumentSurface({
+      viewMovedSinceSave: () => view !== held,
+      captureForPersistence: (_metadata, doc) => {
+        const captured = view
+        return {
+          content: { ...doc, map_view: captured },
+          isCurrent: () => true,
+          acknowledgeSaved: () => {
+            held = captured
+            return 'applied' as const
+          },
+        }
+      },
+    }))
+    const tabB = openTab()
+
+    // Tab A only pans and is hidden: the Draft gets its view, but tab B's edit still writes.
+    view = { ...view, bearing: 30 }
+    await expect(tabA.controller.continuousSave.flush()).resolves.toBe(true)
+    expect(tabA.appDataStore.loadDraft('draft-shared')?.map_view).toMatchObject({ bearing: 30 })
+    editDesignSessionForTest(tabB.store, (design) => ({ ...design, description: 'nudged zone' }))
+    await expect(tabB.controller.continuousSave.flush()).resolves.toBe(true)
+    expect(tabB.controller.continuousSave.status.value).toBe('draft')
+
+    // Tab A pans again after tab B wrote: its view is dropped, tab B's edit stays, and tab A shows nothing.
+    view = { ...view, zoom: 19 }
+    await expect(tabA.controller.continuousSave.flush()).resolves.toBe(true)
+    expect(tabA.appDataStore.loadDraft('draft-shared')?.description).toBe('nudged zone')
+    expect(tabA.controller.continuousSave.status.value, 'no conflict shows').toBe('draft')
+    await tabA.controller.newDesign()
+    expect(tabA.requestSaveDecision).not.toHaveBeenCalled()
+  })
+
   it('asks about a Draft another tab changed before a replacement discards this tab\'s edits', async () => {
     const storage = memoryStorage()
     let tick = 0
