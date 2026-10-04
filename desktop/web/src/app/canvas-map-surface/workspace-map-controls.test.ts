@@ -1774,6 +1774,158 @@ describe('WorkspaceMapControls OpenFreeMap basemap', () => {
     expect(map.remove).not.toHaveBeenCalled()
   })
 
+  /** An offline request the way MapLibre reports it: an AJAXError naming the URL it could not fetch. */
+  function offlineRequest(url: string): Error {
+    return Object.assign(new Error(`AJAXError: Failed to fetch (0): ${url}`), { name: 'AJAXError', status: 0, url })
+  }
+
+  it.each([
+    // The style's sprite fails with no source or layer id.
+    ['sprite', { type: 'error', error: offlineRequest('https://tiles.openfreemap.org/sprites/ofm_f384/ofm.json') }],
+    // A glyph range fails inside a basemap tile's parse.
+    ['glyph range', {
+      type: 'error',
+      sourceId: 'ofm-openmaptiles',
+      error: offlineRequest('https://tiles.openfreemap.org/fonts/Noto%20Sans%20Regular/0-255.pbf'),
+      tile: { tileID: { canonical: { z: 14, x: 1, y: 2 } } },
+    }],
+    // The basemap source's TileJSON fails, which leaves the source empty.
+    ['TileJSON', { type: 'error', sourceId: 'ofm-openmaptiles', error: offlineRequest('https://tiles.openfreemap.org/planet') }],
+    // A captive portal answers the sprite with 200 and HTML: the JSON parse fails with no URL and no source.
+    ['sprite behind a captive portal', { type: 'error', error: new SyntaxError('JSON Parse error: Unrecognized token \'<\'') }],
+    // The connection drops while the sprite body downloads: the body read fails with no URL and no source.
+    ['sprite cut off mid-download', { type: 'error', error: new TypeError('Load failed') }],
+  ])('shows the basemap notice, not a map failure, when the cached basemap style\'s %s fails offline, and Retry installs it again', async (_resource, event) => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const states: MapLibreCanvasSurfaceState[] = []
+      const { controls, maps } = createControls({
+        background: basemapOn(),
+        contributions: { onStateChange: (state) => states.push(state) },
+      })
+      const acquisition = controls.createMap(new AbortController().signal)
+      const map = await waitForMap(maps)
+      map.emit('style.load')
+      const admitted = await acquisition
+      controls.updateMapContributions(targetContribution(controls.sessionIdentity))
+      const reportFailure = vi.fn()
+      controls.watchFailure(admitted, reportFailure)
+      await vi.waitFor(() => expect(states.at(-1)?.basemapStatus).toBe('ok'))
+      expect(map.setSprite).toHaveBeenCalledTimes(1)
+
+      map.emit('error', event)
+
+      expect(reportFailure).not.toHaveBeenCalled()
+      expect(map.remove).not.toHaveBeenCalled()
+      expect(states.at(-1)).toMatchObject({ status: 'ready', basemapStatus: 'failed' })
+      expect(getMapNoticeReadModel({ hasDesign: true, mapVisible: true, mapSurface: states.at(-1)!, t })).toMatchObject({
+        visible: true,
+        tone: 'error',
+        statusText: 'Basemap couldn’t load. Check your connection.',
+        retry: true,
+      })
+      expect(serializedCalls(logged.mock.calls)).toContain('MapLibre workspace basemap resource failed to load')
+
+      controls.retryBasemap()
+
+      // Retry downloads the basemap's sprite, glyphs and TileJSON again by installing it afresh.
+      await vi.waitFor(() => expect(states.at(-1)?.basemapStatus).toBe('ok'))
+      expect(map.setSprite).toHaveBeenCalledTimes(2)
+      expect(hasOpenFreeMapBasemap(map)).toBe(true)
+      expect(reportFailure).not.toHaveBeenCalled()
+      expect(map.remove).not.toHaveBeenCalled()
+    } finally {
+      logged.mockRestore()
+    }
+  })
+
+  it('keeps a failed basemap resource quiet until Retry: a presentation change does not download it again', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const states: MapLibreCanvasSurfaceState[] = []
+      const { controls, maps } = createControls({
+        background: basemapOn(),
+        contributions: { onStateChange: (state) => states.push(state) },
+      })
+      const acquisition = controls.createMap(new AbortController().signal)
+      const map = await waitForMap(maps)
+      map.emit('style.load')
+      await acquisition
+      controls.updateMapContributions(targetContribution(controls.sessionIdentity))
+      await vi.waitFor(() => expect(states.at(-1)?.basemapStatus).toBe('ok'))
+      map.emit('error', { type: 'error', error: offlineRequest('https://tiles.openfreemap.org/sprites/ofm_f384/ofm.json') })
+
+      controls.updateBackgroundPresentation(basemapOn({ opacity: 0.7 }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(map.setSprite).toHaveBeenCalledTimes(1)
+      expect(states.at(-1)?.basemapStatus).toBe('failed')
+    } finally {
+      logged.mockRestore()
+    }
+  })
+
+  it('keeps a single basemap tile failure passive: no notice, the map keeps drawing', async () => {
+    const logError = vi.fn()
+    const states: MapLibreCanvasSurfaceState[] = []
+    const { controls, maps } = createControls({
+      background: basemapOn(),
+      contributions: { onStateChange: (state) => states.push(state) },
+      logError,
+    })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    const admitted = await acquisition
+    controls.updateMapContributions(targetContribution(controls.sessionIdentity))
+    await vi.waitFor(() => expect(states.at(-1)?.basemapStatus).toBe('ok'))
+    const reportFailure = vi.fn()
+    controls.watchFailure(admitted, reportFailure)
+
+    map.emit('error', {
+      type: 'error',
+      sourceId: 'ofm-openmaptiles',
+      error: offlineRequest('https://tiles.openfreemap.org/planet/20250101_001001_pt/14/8299/5636.pbf'),
+      tile: { tileID: { canonical: { z: 14, x: 8299, y: 5636 } } },
+    })
+
+    expect(reportFailure).not.toHaveBeenCalled()
+    expect(states.at(-1)?.basemapStatus).toBe('ok')
+    expect(logError).toHaveBeenCalledWith('Passive MapLibre workspace basemap error:', expect.stringContaining('ofm-openmaptiles'))
+  })
+
+  it('still treats an unattributed error from outside the basemap as a map failure', async () => {
+    const { controls, maps } = createControls({ background: basemapOn(), logError: vi.fn() })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    const admitted = await acquisition
+    await vi.waitFor(() => expect(hasOpenFreeMapBasemap(map)).toBe(true))
+    const reportFailure = vi.fn()
+    controls.watchFailure(admitted, reportFailure)
+
+    map.emit('error', { type: 'error', error: offlineRequest('https://example.test/sprites/other.json') })
+
+    expect(reportFailure).toHaveBeenCalledOnce()
+  })
+
+  it('treats a URL-less unattributed error as a map failure once the map settled after the basemap sprite loaded', async () => {
+    const { controls, maps } = createControls({ background: basemapOn(), logError: vi.fn() })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    const admitted = await acquisition
+    await vi.waitFor(() => expect(hasOpenFreeMapBasemap(map)).toBe(true))
+    const reportFailure = vi.fn()
+    controls.watchFailure(admitted, reportFailure)
+
+    // MapLibre is idle only once the sprite request has settled.
+    map.emit('idle')
+    map.emit('error', { type: 'error', error: new TypeError('Load failed') })
+
+    expect(reportFailure).toHaveBeenCalledOnce()
+  })
+
   it('never installs a basemap that finishes loading after the map is released', async () => {
     let resolveStyle!: (response: Response) => void
     styleFetch.mockImplementationOnce(() => new Promise<Response>((resolve) => { resolveStyle = resolve }))

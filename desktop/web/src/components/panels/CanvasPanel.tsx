@@ -45,8 +45,11 @@ export function CanvasPanel() {
   return (
     <div className={styles.canvasPanel}>
       <div ref={canvasAreaRef} className={styles.canvasArea}>
+        {/* Focusable from script while no session holds it (tabIndex -1, which the session restores when it ends), so
+            focus handed to the map after a Retry lands before the rebuilt session makes it a Tab stop again. */}
         <div
           ref={containerRef}
+          tabIndex={-1}
           className={styles.canvasContainer}
           data-map-active={mapNotice.mapSurfaceVisible ? 'true' : 'false'}
         />

@@ -40,6 +40,7 @@ import {
   writePlantStampDragData,
 } from '../../canvas/plant-stamp-source'
 import { navigateTo } from '../../app/shell/state'
+import { designSessionStore } from '../../app/document-session/store'
 import { useEnglishFallbackNames } from '../../app/plant-finder/catalog-names'
 import { findPlants } from '../../app/plant-finder/matcher'
 import { useMapSelectionSpecies } from '../../app/plant-finder/selection'
@@ -104,6 +105,7 @@ export function FavoritesPanel() {
   const [preview, setPreview] = useState<SavedStampPreview | null>(null)
   const [savedStampReorderPreviewIds, setSavedStampReorderPreviewIds] = useState<readonly string[] | null>(null)
   const [importRefusalKey, setImportRefusalKey] = useState<string | null>(null)
+  const designIdentity = designSessionStore.sessionIdentity.value
 
   useEffect(() => speciesCatalogWorkbench.mount('favorites'), [])
 
@@ -168,10 +170,10 @@ export function FavoritesPanel() {
     clearSavedStampReorderPreviewIfLibraryMatches()
   }, [savedStampsView.revision, savedStampReorderPreviewIds])
 
-  // A refusal notice is about the last import only: a save or any library change clears it.
+  // A refusal notice is about the last import only: a save, any library change or another Design clears it.
   useEffect(() => {
     setImportRefusalKey(null)
-  }, [savedStampsView.revision])
+  }, [savedStampsView.revision, designIdentity])
 
   function saveSelection(): void {
     setImportRefusalKey(null)
@@ -180,13 +182,18 @@ export function FavoritesPanel() {
 
   async function importStampFile(): Promise<void> {
     setImportRefusalKey(null)
+    const startedIn = designSessionStore.sessionIdentity.peek()
+    // An import that settles after another Design opened says nothing there.
+    const refuse = (key: string) => {
+      if (designSessionStore.sessionIdentity.peek() === startedIn) setImportRefusalKey(key)
+    }
     try {
       const outcome = await savedObjectStampWorkbench.importStampFile()
-      if (outcome.status === 'refused') setImportRefusalKey(outcome.messageKey)
+      if (outcome.status === 'refused') refuse(outcome.messageKey)
     } catch (error) {
       // The workbench rejects only when saving the read stamp fails.
       console.error('Saved stamp import failed:', error)
-      setImportRefusalKey('savedObjectStamps.importSaveFailed')
+      refuse('savedObjectStamps.importSaveFailed')
     }
   }
 

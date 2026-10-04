@@ -17,6 +17,7 @@ import type { CanopiFile } from '../types/design'
 import { locale } from '../app/settings/state'
 
 let mockBasemapState: MapLibreCanvasSurfaceState = IDLE_MAPLIBRE_CANVAS_SURFACE_STATE
+let publishMapState: ((state: MapLibreCanvasSurfaceState) => void) | null = null
 const retryMap = vi.fn()
 
 vi.mock('../components/canvas/CanvasChrome', () => ({
@@ -38,6 +39,7 @@ vi.mock('../app/document-session/use-canvas-document-session', () => ({
     onMapStateChange?: (state: MapLibreCanvasSurfaceState) => void
   }) => {
     useEffect(() => {
+      publishMapState = onMapStateChange ?? null
       onMapStateChange?.(mockBasemapState)
     }, [onMapStateChange])
     return { retryMap }
@@ -210,6 +212,27 @@ describe('CanvasPanel basemap feedback', () => {
     expect(retryMap).toHaveBeenCalledOnce()
   })
 
+  it('hands keyboard focus to the map container once a Retried map is back, before its session returns', async () => {
+    designSessionFixture.file = demoDesign()
+    mockBasemapState = { ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'error', retryable: true }
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+    const map = container.querySelector<HTMLElement>('[data-map-active]')!
+    const retry = [...container.querySelectorAll<HTMLButtonElement>('[data-map-notice] button')]
+      .find((button) => button.textContent === 'Retry')!
+    retry.focus()
+
+    // Retry rebuilds the map: the notice shows loading, then goes once the map draws, while the rebuilt interaction
+    // session has not made the host a keyboard stop again yet.
+    await act(async () => { retry.click() })
+    await act(async () => { publishMapState!({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'loading' }) })
+    await act(async () => { publishMapState!({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'ready' }) })
+
+    expect(container.querySelector('[data-map-notice]')).toBeNull()
+    expect(document.activeElement).toBe(map)
+  })
+
   it('surfaces terrain degradation as a skipped layer while keeping the basemap ready', async () => {
     designSessionFixture.file = demoDesign()
     mockBasemapState = {
@@ -284,6 +307,35 @@ describe('WebCanvasWorkspace map notice', () => {
     const button = [...notice.querySelectorAll('button')].find((candidate) => candidate.textContent === 'Retry')!
     await act(async () => { button.click() })
     expect(retry).toHaveBeenCalledOnce()
+  })
+
+  it('hands keyboard focus to the map container once a Retried map is back, before its session returns', async () => {
+    let publish!: (state: MapLibreCanvasSurfaceState) => void
+    const createRuntimeComposition = vi.fn((options: { onMapStateChange?: (state: MapLibreCanvasSurfaceState) => void }) => {
+      publish = (state) => options.onMapStateChange?.(state)
+      publish({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'error', retryable: true })
+      return {
+        surfaces: {} as never,
+        start: () => new Promise<never>(() => {}),
+        dispose: async () => {},
+        retryMap: () => {},
+      } satisfies WorkspaceRuntimeComposition
+    })
+    await act(async () => {
+      render(<WebCanvasWorkspace createRuntimeComposition={createRuntimeComposition} />, container)
+    })
+    await act(async () => { await vi.waitFor(() => expect(createRuntimeComposition).toHaveBeenCalledOnce()) })
+    const map = container.querySelector<HTMLElement>('[data-testid="web-canvas-workspace-surface"]')!
+    const retry = [...container.querySelectorAll<HTMLButtonElement>('[data-map-notice] button')]
+      .find((button) => button.textContent === 'Retry')!
+    retry.focus()
+
+    await act(async () => { retry.click() })
+    await act(async () => { publish({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'loading' }) })
+    await act(async () => { publish({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'ready' }) })
+
+    expect(container.querySelector('[data-map-notice]')).toBeNull()
+    expect(document.activeElement).toBe(map)
   })
 
   it('wraps a long localized notice beside Retry instead of cutting off its advice', () => {

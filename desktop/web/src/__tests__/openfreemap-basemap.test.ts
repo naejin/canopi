@@ -261,6 +261,66 @@ describe('OpenFreeMap vector basemap', () => {
     expect((map.getLayer('ofm:water') as { paint: Record<string, unknown> }).paint['fill-opacity']).toBe(0.4)
   })
 
+  describe('a sprite that fails after its response arrived (no URL on the error)', () => {
+    // MapLibre names the URL only when fetch() rejects or the status is not ok; a captive portal's HTML (SyntaxError),
+    // a body cut off mid-download (TypeError) or an undecodable sprite image reach the map with no URL and no source.
+    const urlLess = [
+      ['captive portal HTML', { type: 'error', error: new SyntaxError('JSON Parse error: Unrecognized token \'<\'') }],
+      ['body cut off', { type: 'error', error: new TypeError('Load failed') }],
+      ['empty sprite image', { type: 'error', error: new Error('Could not load sprite image, the image is empty') }],
+    ] as const
+
+    async function installedLiberty() {
+      const map = new FakeMap()
+      const statuses: string[] = []
+      const basemap = new VectorBasemap(map, {
+        loadStyle: async () => styleDocument('liberty'),
+        onStatus: (status) => statuses.push(status),
+      })
+      basemap.update({ style: 'liberty', visible: true, opacity: 1, locale: 'en' })
+      await settle()
+      return { map, basemap, statuses }
+    }
+
+    it.each(urlLess)('claims a %s error while its sprite is downloading and reports the style failed', async (_case, event) => {
+      const { basemap, statuses } = await installedLiberty()
+      expect(basemap.claimResourceError(event)).toBe(true)
+      expect(statuses.at(-1)).toBe('failed')
+    })
+
+    it.each(urlLess)('leaves a %s error unclaimed once the map has settled since the sprite request', async (_case, event) => {
+      const { basemap, statuses } = await installedLiberty()
+      basemap.noteMapIdle()
+      expect(basemap.claimResourceError(event)).toBe(false)
+      expect(statuses.at(-1)).toBe('ok')
+    })
+
+    it('leaves a URL-less error that names a source or layer unclaimed', async () => {
+      const { basemap } = await installedLiberty()
+      expect(basemap.claimResourceError({ type: 'error', sourceId: 'canopi-scene', error: new TypeError('Load failed') })).toBe(false)
+      expect(basemap.claimResourceError({ type: 'error', layer: { id: 'canopi-scene' }, error: new TypeError('Load failed') })).toBe(false)
+    })
+
+    it('downloads the sprite again on Retry and claims its next URL-less failure too', async () => {
+      const { map, basemap, statuses } = await installedLiberty()
+      expect(basemap.claimResourceError(urlLess[0][1])).toBe(true)
+      basemap.discardFailedResources()
+      map.sprite = null
+      basemap.update({ style: 'liberty', visible: true, opacity: 1, locale: 'en' })
+      await settle()
+      expect(map.sprite).toContain('sprites/liberty')
+      expect(statuses.at(-1)).toBe('ok')
+      expect(basemap.claimResourceError(urlLess[1][1])).toBe(true)
+      expect(statuses.at(-1)).toBe('failed')
+    })
+
+    it('leaves a URL-less error unclaimed when the basemap is hidden', async () => {
+      const { basemap } = await installedLiberty()
+      basemap.update({ style: 'liberty', visible: false, opacity: 1, locale: 'en' })
+      expect(basemap.claimResourceError(urlLess[1][1])).toBe(false)
+    })
+  })
+
   it('scales legacy stop functions and wraps other expressions', () => {
     expect(scaleOpacity({ stops: [[4, 0.4], [10, 1]] }, 0.5)).toEqual({ stops: [[4, 0.2], [10, 0.5]] })
     expect(scaleOpacity(['get', 'o'], 0.5)).toEqual(['*', ['get', 'o'], 0.5])

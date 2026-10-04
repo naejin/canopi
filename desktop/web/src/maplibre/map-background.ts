@@ -90,6 +90,13 @@ export interface MapBackgroundOptions {
 
 export interface MapBackgroundHandle {
   update(presentation: MapBackgroundPresentation): void
+  /** Retry: applies the presentation, downloading a Basemap that couldn't load (its style or its resources) again. */
+  retry(presentation: MapBackgroundPresentation): void
+  /**
+   * Claims a map error about the Basemap's sprite, glyphs or TileJSON (VectorBasemap.claimResourceError), which
+   * names no layer: the Basemap shows it couldn't load, and the map is not failed.
+   */
+  claimMapError(event: unknown): boolean
   /** Re-applies after a same-map style reload emptied the stack. */
   restore(): void
   /**
@@ -123,6 +130,9 @@ export function mountMapBackground(options: MapBackgroundOptions): MapBackground
     ...(options.onError ? { onError: options.onError } : {}),
     ...(options.onBasemapStatus ? { onStatus: options.onBasemapStatus } : {}),
   })
+  // MapLibre is idle only once the Basemap's sprite request has settled (VectorBasemap.claimResourceError).
+  const onIdle = () => vector.noteMapIdle()
+  options.lifetime.on('idle', onIdle)
   let presentation: MapBackgroundPresentation | null = null
   let satellite: SatelliteMountHandle | null = null
   let disposed = false
@@ -184,11 +194,21 @@ export function mountMapBackground(options: MapBackgroundOptions): MapBackground
     })
   }
 
+  const update = (next: MapBackgroundPresentation) => {
+    if (disposed) return
+    presentation = captureMapBackgroundPresentation(next)
+    schedule()
+  }
+
   return {
-    update(next) {
+    update,
+    retry(next) {
       if (disposed) return
-      presentation = captureMapBackgroundPresentation(next)
-      schedule()
+      vector.discardFailedResources()
+      update(next)
+    },
+    claimMapError(event) {
+      return !disposed && vector.claimResourceError(event)
     },
     restore() {
       if (disposed) return
@@ -208,6 +228,7 @@ export function mountMapBackground(options: MapBackgroundOptions): MapBackground
     dispose() {
       if (disposed) return
       disposed = true
+      options.lifetime.off('idle', onIdle)
       cancelReadyWait?.()
       cancelReadyWait = null
       releaseSatellite()

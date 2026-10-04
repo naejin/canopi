@@ -1,5 +1,6 @@
 import type { BasemapStyle } from '../generated/contracts'
 import type { MapLibreBasemapStatus } from './canvas-surface-state'
+import { mapErrorResourceId } from './map-error-owner'
 
 /*
  * OpenFreeMap style presets adapted from GeoLibre
@@ -104,6 +105,8 @@ interface Installed {
   readonly layers: readonly InstalledLayer[]
   opacity: number
   locale: string
+  /** The requests the map makes for this style's sprite, glyphs and TileJSON, which it reports without a layer id. */
+  readonly resources: readonly RegExp[]
 }
 
 /**
@@ -119,6 +122,16 @@ export class VectorBasemap {
   /** The style whose download is running, so a repeated request (Retry) joins it instead of starting over. */
   private loading: BasemapStyle | null = null
   private status: MapLibreBasemapStatus = 'idle'
+  /** The installed style's sprite, glyphs or TileJSON failed to download: only Retry installs it again. */
+  private resourceFailed = false
+  /** Every style's resource requests seen by this map, so a late failure from an earlier style is still the basemap's. */
+  private readonly knownResources: RegExp[] = []
+  /**
+   * The installed style's sprite request may still be running: set by `setSprite`, cleared once the map is idle
+   * (MapLibre is idle only after the sprite settled). A sprite that fails after its response arrived (HTML from a
+   * captive portal, a body cut off, an undecodable image) reaches the map with no URL and no source.
+   */
+  private spriteInFlight = false
   private disposed = false
 
   constructor(
@@ -148,7 +161,8 @@ export class VectorBasemap {
       this.loading = null
       if (installed.opacity !== presentation.opacity) this.applyOpacity(installed, presentation.opacity)
       if (installed.locale !== presentation.locale) this.applyLocale(installed, presentation.locale)
-      this.setStatus('ok')
+      // Nothing downloads on its own (ADR 0004): a style whose resources failed stays failed until Retry.
+      if (!this.resourceFailed) this.setStatus('ok')
       return
     }
     // The settling load reads `desired`, so opacity or locale asked for meanwhile still applies.
@@ -171,6 +185,46 @@ export class VectorBasemap {
       this.setStatus('failed')
       this.options.onError?.(error)
     })
+  }
+
+  /**
+   * Claims a map error about this basemap's sprite, glyphs or TileJSON, which MapLibre reports with no layer id (a
+   * glyph range only through the tile that needed it). Such a failure leaves the basemap blank or unlabelled, so the
+   * installed style is `failed` until Retry; a single tile's failure is not claimed. An error with no URL is claimed
+   * only while the installed style's sprite downloads (`spriteInFlight`). Returns whether it was claimed.
+   */
+  claimResourceError(event: unknown): boolean {
+    if (this.disposed) return false
+    const url = failedRequestUrl(event)
+    if (url === null) return this.claimSpriteError(event)
+    if (!this.knownResources.some((resource) => resource.test(url))) return false
+    const installed = this.installed
+    if (installed && installed.resources.some((resource) => resource.test(url))) {
+      this.resourceFailed = true
+      this.setStatus('failed')
+    }
+    return true
+  }
+
+  /** The map went idle, so the installed style's sprite request has settled: a later URL-less error is not the sprite's. */
+  noteMapIdle(): void {
+    this.spriteInFlight = false
+  }
+
+  /** A URL-less error naming no source or layer, while the installed style's sprite downloads, is that sprite's. */
+  private claimSpriteError(event: unknown): boolean {
+    if (!this.spriteInFlight || !this.installed || mapErrorResourceId(event) !== null) return false
+    this.spriteInFlight = false
+    this.resourceFailed = true
+    this.setStatus('failed')
+    return true
+  }
+
+  /** Retry: a style whose resources failed is removed, so the next update installs it and downloads them again. */
+  discardFailedResources(): void {
+    if (this.disposed || !this.resourceFailed) return
+    this.resourceFailed = false
+    this.uninstall()
   }
 
   /** Reinstalls after a same-map style reload dropped the layers. */
@@ -201,8 +255,16 @@ export class VectorBasemap {
 
   private install(presentation: VectorBasemapPresentation, document: VectorStyleDocument): void {
     const prepared = prepareOpenFreeMapStyle(document, presentation)
+    const resources = styleResourceRequests(document)
+    for (const resource of resources) {
+      if (!this.knownResources.some((known) => known.source === resource.source)) this.knownResources.push(resource)
+    }
+    this.resourceFailed = false
     if (document.glyphs) this.map.setGlyphs(document.glyphs)
-    if (typeof document.sprite === 'string') this.map.setSprite(document.sprite)
+    if (typeof document.sprite === 'string') {
+      this.map.setSprite(document.sprite)
+      this.spriteInFlight = true
+    }
     for (const [id, source] of Object.entries(prepared.sources)) this.map.addSource(id, source)
     const beforeId = this.options.beforeLayerId?.() ?? undefined
     for (const layer of prepared.layers) {
@@ -215,6 +277,7 @@ export class VectorBasemap {
       layers: prepared.installedLayers,
       opacity: presentation.opacity,
       locale: presentation.locale,
+      resources,
     }
   }
 
@@ -222,6 +285,7 @@ export class VectorBasemap {
     const installed = this.installed
     if (!installed) return
     this.installed = null
+    this.spriteInFlight = false
     for (const layer of [...installed.layers].reverse()) {
       if (this.map.getLayer(layer.id)) this.map.removeLayer(layer.id)
     }
@@ -285,6 +349,43 @@ function prepareOpenFreeMapStyle(
     installedLayers.push({ id, baseOpacity, labelled })
   }
   return { sources, layers, installedLayers }
+}
+
+/**
+ * The requests MapLibre makes for a style's own resources: the sprite sheet (`<sprite>[@2x].json|png`), the glyph
+ * ranges (the glyphs template) and each source's TileJSON. A tile URL never matches.
+ */
+function styleResourceRequests(document: VectorStyleDocument): RegExp[] {
+  const resources: RegExp[] = []
+  const sprites = typeof document.sprite === 'string'
+    ? [document.sprite]
+    : Array.isArray(document.sprite)
+      ? document.sprite.flatMap((entry) => typeof entry?.url === 'string' ? [entry.url as string] : [])
+      : []
+  for (const sprite of sprites) resources.push(new RegExp(`^${escapeRegExp(sprite)}(?:@\\d+(?:\\.\\d+)?x)?\\.(?:json|png)(?:[?#].*)?$`))
+  if (document.glyphs) {
+    const glyphs = escapeRegExp(document.glyphs)
+      .replace(/\\\{fontstack\\\}/g, '[^/]+')
+      .replace(/\\\{range\\\}/g, '\\d+-\\d+')
+    resources.push(new RegExp(`^${glyphs}(?:[?#].*)?$`))
+  }
+  for (const source of Object.values(document.sources)) {
+    if (typeof source.url === 'string') resources.push(new RegExp(`^${escapeRegExp(source.url)}(?:[?#].*)?$`))
+  }
+  return resources
+}
+
+/** The URL a failed MapLibre request names: an AJAXError's `url`, else the URL its message ends with. */
+function failedRequestUrl(event: unknown): string | null {
+  const error = typeof event === 'object' && event !== null && 'error' in event ? (event as { error: unknown }).error : event
+  if (typeof error !== 'object' || error === null) return null
+  const { url, message } = error as { url?: unknown; message?: unknown }
+  if (typeof url === 'string' && url.length > 0) return url
+  return typeof message === 'string' ? /(https?:\/\/\S+)\s*$/.exec(message)?.[1] ?? null : null
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function localizedLabel(locale: string): unknown[] {
