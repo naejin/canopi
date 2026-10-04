@@ -117,8 +117,16 @@ fn normalise(definition: &str) -> Result<(String, f64), String> {
     Ok((terms.join(" "), prime_meridian))
 }
 
-/// Read a PROJ definition: a geocentric CRS, and a geographic one on another
-/// meridian than Greenwich (proj4rs ignores its `+pm`), are refused.
+/// The value of one `+name=` term of a PROJ definition.
+fn term<'a>(definition: &'a str, name: &str) -> Option<&'a str> {
+    definition
+        .split_whitespace()
+        .find_map(|term| term.strip_prefix(name))
+}
+
+/// Read a PROJ definition: a geocentric CRS, a geographic one on another
+/// meridian than Greenwich (proj4rs ignores its `+pm`) and a polar LAEA
+/// (proj4rs fails every ellipsoidal south-polar point) are refused (U24).
 fn parse(definition: &str) -> Result<(String, Proj), String> {
     let (normalised, prime_meridian) = normalise(definition)?;
     let proj = Proj::from_proj_string(&normalised).map_err(|e| e.to_string())?;
@@ -127,6 +135,12 @@ fn parse(definition: &str) -> Result<(String, Proj), String> {
     }
     if proj.is_latlong() && prime_meridian != 0.0 {
         return Err("a geographic CRS on a meridian other than Greenwich".to_string());
+    }
+    let polar = term(&normalised, "+lat_0=")
+        .and_then(|lat0| lat0.parse::<f64>().ok())
+        .is_some_and(|lat0| lat0.abs() == 90.0);
+    if term(&normalised, "+proj=") == Some("laea") && polar {
+        return Err("a polar Lambert azimuthal equal-area CRS".to_string());
     }
     Ok((normalised, proj))
 }
@@ -335,18 +349,13 @@ const NAMED_SHIFTS: [(&str, &[f64]); 14] = [
 /// The Helmert shift to WGS84 of a PROJ definition, `None` when it shifts
 /// nothing: its `+towgs84`, or its named datum's.
 fn datum_shift(definition: &str) -> Option<Vec<f64>> {
-    let value = |name: &str| {
-        definition
-            .split_whitespace()
-            .find_map(|term| term.strip_prefix(name))
-    };
-    let shift: Vec<f64> = match value("+towgs84=") {
+    let shift: Vec<f64> = match term(definition, "+towgs84=") {
         Some(values) => values
             .split(',')
             .map(|value| value.trim().parse().ok())
             .collect::<Option<_>>()?,
         None => {
-            let datum = value("+datum=")?;
+            let datum = term(definition, "+datum=")?;
             NAMED_SHIFTS
                 .iter()
                 .find(|(name, _)| name.eq_ignore_ascii_case(datum))?
@@ -1204,11 +1213,11 @@ mod tests {
     }
 
     /// Codes the library cannot read (Cassini, oblique Mercator, a geographic
-    /// CRS on the Paris meridian in grads, an unknown code) are refused by
-    /// name, never approximated.
+    /// CRS on the Paris meridian in grads, polar LAEA north and south, an
+    /// unknown code) are refused by name, never approximated (U24).
     #[test]
     fn codes_the_library_cannot_read_are_refused_by_name() {
-        for code in [3068u32, 2057, 4807, 999_999] {
+        for code in [3068u32, 2057, 4807, 3571, 6932, 999_999] {
             assert_eq!(
                 from_epsg(code).unwrap_err(),
                 format!("EPSG:{code} is not supported")
