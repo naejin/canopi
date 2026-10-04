@@ -56,10 +56,10 @@ pub(crate) fn crs_class(wkt: &str) -> &'static str {
             CRS_UNKNOWN
         };
     }
-    // The CRS's own unit is its last UNIT node (WKT1's PROJCS unit, WKT2's
-    // axis LENGTHUNIT); "METER" also matches inside PARAMETER.
-    let unit = upper.rfind("UNIT[\"").map_or("", |index| &upper[index..]);
-    if unit.starts_with("UNIT[\"METRE\"") || unit.starts_with("UNIT[\"METER\"") {
+    if matches!(
+        super::rust_engine::projected_unit(&upper),
+        Some("METRE" | "METER")
+    ) {
         CRS_PROJECTED_METRE
     } else {
         CRS_PROJECTED_OTHER

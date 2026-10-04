@@ -467,6 +467,23 @@ fn wkt_nodes(wkt: &str) -> Vec<WktNode<'_>> {
     nodes
 }
 
+/// The name of a projected WKT's horizontal unit: the last unit node inside
+/// its PROJCS or PROJCRS. The base geographic CRS's unit comes before it, and
+/// a compound's vertical part lies outside it.
+pub(crate) fn projected_unit(wkt: &str) -> Option<&str> {
+    let node = wkt_nodes(wkt).into_iter().rfind(|node| {
+        matches!(node.keyword, "UNIT" | "LENGTHUNIT")
+            && node
+                .parents
+                .iter()
+                .any(|parent| matches!(*parent, "PROJCS" | "PROJCRS"))
+    })?;
+    node.body
+        .split(',')
+        .next()
+        .map(|name| name.trim().trim_matches('"'))
+}
+
 /// The shift a WKT's `TOWGS84` node gives, `None` when it shifts nothing.
 fn wkt_shift(nodes: &[WktNode]) -> Option<Vec<f64>> {
     let shift = nodes
@@ -1488,7 +1505,8 @@ mod tests {
 
     /// NAD83 / New York Long Island (EPSG:2263) is in US survey feet: points
     /// come out in feet (the reference table), its WKT names the unit and
-    /// its written keys say US feet.
+    /// its written keys say US feet. A compound CRS is classed by its
+    /// horizontal unit, whatever its vertical part's.
     #[test]
     fn feet_systems_are_placed_and_labelled_in_feet() {
         let new_york = from_epsg(2263).unwrap();
@@ -1500,6 +1518,18 @@ mod tests {
             new_york.wkt
         );
         assert_eq!(crs_class(&new_york.wkt), CRS_PROJECTED_OTHER);
+        let compound = |code: u32, unit: &str| {
+            let horizontal = from_epsg(code).unwrap().wkt;
+            let wkt = format!(
+                r#"COMPD_CS["{code} + NAVD88 height",{horizontal},VERT_CS["NAVD88 height",VERT_DATUM["North American Vertical Datum 1988",2005],{unit},AXIS["Gravity-related height",UP]]]"#
+            );
+            crs_class(&from_reference(&wkt).unwrap().wkt)
+        };
+        assert_eq!(compound(2263, r#"UNIT["metre",1]"#), CRS_PROJECTED_OTHER);
+        assert_eq!(
+            compound(26918, r#"UNIT["US survey foot",0.3048006096012192]"#),
+            CRS_PROJECTED_METRE
+        );
         let keys = geokeys_for(&new_york).unwrap();
         assert_eq!(short(&keys, key::ProjLinearUnitsGeoKey), Some(9003));
     }
