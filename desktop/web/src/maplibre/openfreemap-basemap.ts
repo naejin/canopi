@@ -166,11 +166,12 @@ export class VectorBasemap {
       return
     }
     const installed = this.installed
+    // Opacity and language reach the style on screen, also while another style loads or has failed.
+    if (installed) this.applyPresentation(presentation)
     if (installed && installed.style === presentation.style && this.layersPresent(installed)) {
       // The style on screen is the one asked for: a load still running for
       // another style is stale, and an earlier failure no longer applies.
       this.generation += 1
-      this.applyPresentation(presentation)
       // Nothing downloads on its own (ADR 0004): a style whose resources failed stays failed until Retry.
       if (!this.resourceFailed) this.setStatus('ok')
       return
