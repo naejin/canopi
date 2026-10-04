@@ -1186,6 +1186,24 @@ describe('releases the tool did not hear (today\'s pointerup cleanup)', () => {
     events.pointerUp({ x: 50, y: 50 }, { button: 2 })
     expect(navigates()).toBe(1)
   })
+
+  it('a tool whose overview cleanup throws still leaves the session in overview: the release is swallowed', () => {
+    const rectangle = stubTool('rectangle', {
+      cancelTransient: (reason) => {
+        if (reason === 'overview') throw new Error('overview cleanup failed')
+      },
+    })
+    useStubTools(rectangle)
+    const { session } = createSession()
+    session.setTool('rectangle')
+
+    expect(() => enterOverview(testView)).toThrow('overview cleanup failed')
+    expect(testView.viewport().scale).toBeCloseTo(0.05, 9)
+    const before = rectangle.calls.length
+    events.pointerDown({ x: 50, y: 50 }, { button: 2 })
+    events.pointerUp({ x: 50, y: 50 }, { button: 2 })
+    expect(rectangle.calls.slice(before)).toEqual([])
+  })
 })
 
 describe('ruler drags through the session', () => {

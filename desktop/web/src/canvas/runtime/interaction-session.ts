@@ -3,8 +3,8 @@
 // Owns the canvas's interaction session (spec §1.2–1.4, ADRs 0017 and 0018): it composes DomInputSource → normalise →
 // recognise → InputRouter → ToolHost, with the keyboard port the key router reaches (spec §1.6), and prepares the map
 // host as a keyboard stop. Every tool and every drop runs on the host (spec §1.4, "Drops"). The session hears the view's mode on
-// its own 'tools' frame listener, registered after the host's so the host meets overview first: entering or leaving overview
-// reconfigures the recogniser, and entering it releases Space and closes the menu. refreshMeasurements reaches
+// its own 'tools' frame listener, registered before the host's so a host transition that throws cannot leave it on the old
+// mode: entering or leaving overview reconfigures the recogniser, and entering it releases Space and closes the menu. refreshMeasurements reaches
 // ToolHost.sceneChanged(). It builds the host's chrome (chrome/: the handle layer,
 // the text entry, the plant tooltip and the Unlock affordance, whose Unlock it runs), bridges the plant and saved-stamp
 // read models to the armed tool, reads the snapping settings per point, calls ToolHost.rawPress for every raw press on
@@ -347,6 +347,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         transientHistoryChanged: () => _deps.notifyTransientHistoryChange(),
         dropped: (kind) => this._dropped(kind),
       }
+      // Before the host's own listener, so the session hears each mode change even when the host's transition throws.
+      this._stopHearingMode = own(this._frames.onViewFrame('tools', (frame) => this._modeHeard(frame.mode)), (stop) => stop())
       this._toolHost = own(createToolHost(hostDeps), (host) => host.dispose())
       this._router = createInputRouter({ navigation: this._navigation, toolHost: this._toolHost })
       this._port = createCanvasKeyboardPort({
@@ -382,8 +384,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         timers,
         listensToRulers: true,
       })
-      // After the host's own listener, so the host hears each mode change first.
-      this._stopHearingMode = own(this._frames.onViewFrame('tools', (frame) => this._modeHeard(frame.mode)), (stop) => stop())
       this._stopWatchingSources = own(this._watchToolSources(), (stop) => stop())
       this._storyObserver = own(this._observeStoryPresentation(), (observer) => observer?.disconnect())
       this.setTool(this._tool.peek())
