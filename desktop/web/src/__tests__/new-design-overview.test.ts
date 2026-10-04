@@ -66,9 +66,7 @@ function newDesignOverOpenDesign(): { lon: number; lat: number; zoom: number } {
 
   replacement.replace({ file: design('Untitled'), kind: 'new', path: null, name: 'Untitled' }, canvas, () => true)
 
-  const view = geographicViewOfCamera(queries.view.captureView().camera)
-  expect(view).not.toBeNull()
-  return view!
+  return geographicViewOfCamera(queries.view.captureView().camera)
 }
 
 describe('New Design opens at an overview', () => {

@@ -91,7 +91,7 @@ describe('the geographic view of a camera', () => {
   /** The geographic view a camera at this placement shows (ViewReadSurface.captureView's camera). */
   function geographicViewAt(view: { viewport: { x: number; y: number; scale: number }; screenSize: { width: number; height: number } }, onPlane: ReturnType<typeof createSessionPlane>) {
     const camera = createTestView({ plane: onPlane, screen: view.screenSize, viewport: view.viewport })
-    const geographic = geographicViewOfCamera(camera.view().camera)!
+    const geographic = geographicViewOfCamera(camera.view().camera)
     camera.dispose()
     return geographic
   }

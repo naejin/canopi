@@ -54,16 +54,14 @@ export interface GeographicView {
 }
 
 /**
- * A camera's centre, zoom and bearing as a geographic view (ViewReadSurface.captureView), or null when they are not finite. The
- * bearing is the camera's: the stores it feeds fold it with storedBearing (composeSavedView, the settings' last view).
+ * A camera's centre, zoom and bearing as a geographic view (ViewReadSurface.captureView). Every camera comes from a driver frame,
+ * and both drivers refuse a camera that is not finite. The bearing is the camera's: the stores it feeds fold it with storedBearing
+ * (composeSavedView, the settings' last view).
  */
 export function geographicViewOfCamera(
   camera: { readonly center: GeoPosition; readonly zoom: number; readonly bearingDeg: number },
-): GeographicView | null {
-  const { center, zoom, bearingDeg } = camera
-  return [center.lon, center.lat, zoom, bearingDeg].every(Number.isFinite)
-    ? { lon: center.lon, lat: center.lat, zoom, bearing: bearingDeg }
-    : null
+): GeographicView {
+  return { lon: camera.center.lon, lat: camera.center.lat, zoom: camera.zoom, bearing: camera.bearingDeg }
 }
 
 /**
