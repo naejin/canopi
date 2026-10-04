@@ -42,11 +42,9 @@ export interface ViewReadSurface {
   /** The settled frame's revision: changes once per settle, whatever settled (camera, screen, insets, re-origin). The labels count. */
   readonly settledRevision: ReadonlySignal<number>
   /**
-   * Saved-view capture, saved-view snapshot, PDF capture, story restore point: the LIVE frame's camera (viewFrame.peek(),
-   * not the settled one) and the screen it was seen on. User-triggered captures record what
-   * is on screen now, as the camera snapshot's reads did before 0E (current-view.ts:49, :86, snapshot.ts:64, controller.ts:102),
-   * so a capture within 150 ms of a pan, zoom or key pan, or during a flight, never records the previous camera. The last
-   * view (settings) keeps `settledCamera`, as today.
+   * Saved-view capture, saved-view snapshot, PDF capture, story restore point: the LIVE frame's camera (not the settled
+   * one) and the screen it was seen on, so a capture during a pan, zoom or flight records what is on screen now. The last
+   * view (settings) uses `settledCamera`.
    */
   captureView(): { readonly camera: ViewCamera; readonly screen: ViewScreen }
 }
