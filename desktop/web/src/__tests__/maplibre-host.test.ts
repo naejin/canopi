@@ -65,7 +65,10 @@ describe('MapLibre Host', () => {
   let observers: FakeResizeObserver[]
   let maplibre: MapLibreApi
 
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
 
   beforeEach(() => {
     container = document.createElement('div')
@@ -288,7 +291,7 @@ describe('MapLibre Host', () => {
     expect(host.current()).toBeNull()
   })
 
-  it('logs a failed map removal after a post-create failure and still reports the create error', async () => {
+  it('logs a failed map removal after a post-create failure, still removes what its constructor added, and reports the create error', async () => {
     const logError = vi.fn()
     const host = createMapLibreHost({
       loadMapLibre: vi.fn(async () => maplibre),
@@ -297,11 +300,15 @@ describe('MapLibre Host', () => {
     const createError = new Error('post-create setup failed')
     const removeError = new Error('MapLibre removal failed')
     const onCreateError = vi.fn()
+    const existingChild = document.createElement('div')
+    container.append(existingChild)
 
     host.attach(container)
     host.requestMap({
       key: 'street',
       createMap: (api, target) => {
+        target.append(document.createElement('canvas'))
+        target.classList.add('maplibregl-map')
         const map = new api.Map({
           container: target,
           style: { version: 8, sources: {}, layers: [] },
@@ -328,7 +335,36 @@ describe('MapLibre Host', () => {
       'Failed to remove MapLibre map after create failure:',
       removeError,
     )
+    expect(Array.from(container.children)).toEqual([existingChild])
+    expect(container.classList).not.toContain('maplibregl-map')
     expect(host.current()).toBeNull()
+  })
+
+  it('removes what a request built in the container before its createMap threw, so a retry starts clean', async () => {
+    // The World map configures its map after the constructor returns; a throw there never hands the host the map.
+    const host = createMapLibreHost({ loadMapLibre: vi.fn(async () => maplibre) })
+    const existingChild = document.createElement('div')
+    container.append(existingChild)
+    const onCreateError = vi.fn()
+    const request: MapLibreHostRequest = {
+      key: 'world',
+      createMap: (_api, target) => {
+        target.append(document.createElement('div'))
+        target.classList.add('maplibregl-map')
+        throw new Error('keyboard handler unavailable')
+      },
+      onCreateError,
+    }
+
+    host.attach(container)
+    host.requestMap(request)
+    await flushPromises()
+    host.requestMap(request)
+    await flushPromises()
+
+    expect(onCreateError).toHaveBeenCalledTimes(2)
+    expect(Array.from(container.children)).toEqual([existingChild])
+    expect(container.classList).not.toContain('maplibregl-map')
   })
 
   it('removes a map whose synchronous creation went stale', async () => {
@@ -357,13 +393,19 @@ describe('MapLibre Host', () => {
     expect(host.current()).toBeNull()
   })
 
-  it('leaves the container as it was when the real MapLibre constructor fails, and a retry tries again', async () => {
-    // jsdom has no WebGL, so MapLibre 6's constructor throws after it built its canvas and control containers;
-    // MapLibre removes them itself (`_cleanupContainer`), so the host needs no rollback of its own.
+  it.each([
+    // jsdom has no WebGL: the painter throws, and MapLibre removes its own containers (`_cleanupContainer`).
+    ['without WebGL', false, undefined, /WebGL|context/i],
+    // With a painter, a later constructor step throws and MapLibre leaves its canvas and controls behind.
+    ['after its painter was set up', true, [Number.NaN, Number.NaN] as [number, number], /Invalid LngLat/],
+  ])('leaves the container as it was when the real MapLibre constructor fails %s, and a retry tries again', async (_case, painter, center, failure) => {
     vi.stubGlobal('URL', class extends URL {
       static createObjectURL() { return 'blob:map-worker' }
     })
+    vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
     const realMapLibre = await import('maplibre-gl') as unknown as MapLibreApi
+    const realMap = realMapLibre.Map as unknown as { prototype: { _setupPainter(): void } }
+    if (painter) vi.spyOn(realMap.prototype, '_setupPainter').mockImplementation(() => {})
     const logError = vi.fn()
     const host = createMapLibreHost({ loadMapLibre: async () => realMapLibre, logError })
     const existingChild = document.createElement('div')
@@ -375,6 +417,7 @@ describe('MapLibre Host', () => {
       createMap: (api, target) => new api.Map({
         container: target,
         style: { version: 8, sources: {}, layers: [] },
+        center,
         interactive: false,
         pitchWithRotate: false,
         dragRotate: false,
@@ -386,6 +429,7 @@ describe('MapLibre Host', () => {
     host.attach(container)
     host.requestMap(request)
     await vi.waitFor(() => expect(onCreateError).toHaveBeenCalledTimes(1))
+    expect(String(onCreateError.mock.calls[0]![0])).toMatch(failure)
 
     expect(Array.from(container.children)).toEqual([existingChild])
     expect(Array.from(container.classList)).toEqual(['existing-class'])
