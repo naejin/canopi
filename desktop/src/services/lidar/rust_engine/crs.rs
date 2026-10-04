@@ -1051,6 +1051,12 @@ mod tests {
                 (x - (e - 2_000_000.0)).abs() < 1e-3 && (y - (n - 1_000_000.0)).abs() < 1e-3,
                 "LV03 {lon} {lat}: {x} {y}"
             );
+            // GDAL's own coordinates read back within 1e-7 deg (a centimetre).
+            let (back_lon, back_lat) = lv95.transform_to(e, n, &wgs84).unwrap();
+            assert!(
+                (back_lon - lon).abs() < 1e-7 && (back_lat - lat).abs() < 1e-7,
+                "inverse of GDAL's {e} {n}: {back_lon} {back_lat}"
+            );
             // The datum shift's dropped height closes within 3e-8 deg (3 mm).
             let (x, y) = wgs84.transform_to(lon, lat, &lv95).unwrap();
             let (back_lon, back_lat) = lv95.transform_to(x, y, &wgs84).unwrap();
@@ -1101,8 +1107,17 @@ mod tests {
         let reread = from_geokeys(&keys).unwrap().unwrap();
         assert_eq!(reread.epsg, None);
         let (x2, y2) = wgs84.transform_to(2.35, 48.85, &reread).unwrap();
-        // GRS80 keys carry no datum, so only the ellipsoids' 0.1 mm differ.
-        assert!((x2 - x).abs() < 1e-3 && (y2 - y).abs() < 1e-3, "{x2} {y2}");
+        // They place where PROJ does within 1e-6 m; the registry definition's
+        // seven zero shift parameters move proj4rs 0.1 mm off it.
+        let (_, _, _, px, py) = REFERENCE_POINTS
+            .iter()
+            .find(|row| row.0 == 3035)
+            .copied()
+            .unwrap();
+        assert!(
+            (x2 - px).abs() < 1e-6 && (y2 - py).abs() < 1e-6,
+            "{x2} {y2}, PROJ {px} {py}"
+        );
     }
 
     #[test]
