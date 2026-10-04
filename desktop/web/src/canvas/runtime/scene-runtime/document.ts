@@ -1,4 +1,4 @@
-import type { CanopiFile } from '../../../types/design'
+import type { CanopiFile, SavedViewCamera } from '../../../types/design'
 import { serializeScenePersistedState } from '../scene'
 import type {
   CanvasPersistenceCapture,
@@ -65,12 +65,15 @@ export class SceneRuntimeDocumentBridge {
     return { callerFinalizerInvoked }
   }
 
+  /** `mapView`: the view the Design is saved with, a scene-owned field of the canvas part; none writes no `map_view`. */
   captureForPersistence(
     metadata: CanvasRuntimeDocumentMetadata,
     doc: CanopiFile,
+    mapView: SavedViewCamera | null,
   ): CanvasPersistenceCapture {
     const capture = this._authority.capturePersistence()
-    const canvas = serializeScenePersistedState(capture.scene, capture.geo, { now: new Date() })
+    const scene = serializeScenePersistedState(capture.scene, capture.geo, { now: new Date() })
+    const canvas = mapView ? { ...scene, map_view: mapView } : scene
     const content = this._composeDocumentForSave({ metadata, document: doc, canvas })
     return Object.freeze({
       content,

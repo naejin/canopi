@@ -1,5 +1,7 @@
 import type { ReadonlySignal } from '@preact/signals'
-import type { CanopiFile } from '../../types/design'
+import type { CanopiFile, SavedViewCamera } from '../../types/design'
+import { savedViewCameraOf } from '../saved-view-framing'
+import { geographicViewOfCamera } from '../session-plane'
 import {
   CanvasAuthorityBusyError,
   CanvasDocumentReplacementNotAdmittedError,
@@ -26,8 +28,8 @@ interface SceneCanvasDocumentSurfaceOptions {
     SceneRuntimeDocumentBridge,
     'loadDocument' | 'replaceDocument' | 'captureForPersistence'
   >
-  /** The runtime's camera: a resize reaches its live driver. */
-  readonly cameraHost: Pick<CameraDriverHost, 'current'>
+  /** The runtime's camera: a resize reaches its live driver; a save reads its live frame. */
+  readonly cameraHost: Pick<CameraDriverHost, 'current' | 'frames'>
   readonly viewNavigation: Pick<ViewNavigation, 'openAt' | 'clearTemporaryFocus'>
   readonly chrome: Pick<SceneRuntimeChromeCoordinator, 'attach' | 'show' | 'hide' | 'destroy'>
   readonly rendering: Pick<
@@ -51,6 +53,10 @@ export function createSceneCanvasDocumentSurface(
 
 class SceneCanvasDocumentRole implements CanvasDocumentSurface {
   private _documentState: 'absent' | 'settling' | 'loaded' = 'absent'
+  /** The view the open Design's file was saved with (`map_view`), or null. */
+  private _savedMapView: SavedViewCamera | null = null
+  /** The open fit has placed the camera for the open Design: from then on the live view is the Design's view. */
+  private _placed = false
 
   constructor(private readonly options: SceneCanvasDocumentSurfaceOptions) {}
 
@@ -86,6 +92,26 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
   zoomToFit(): void {
     const bearing = this._documentState === 'absent' ? 0 : this.options.readOpeningBearing()
     this.options.viewNavigation.openAt(bearing)
+    if (this._documentState !== 'absent') this._placed = true
+  }
+
+  /**
+   * The view a save writes (`map_view`): the live view once the open fit has placed the camera on a map with a size, else the
+   * view the file was saved with. A camera move never edits the Design: it reaches the file only with the next save.
+   */
+  private _mapViewForSave(): SavedViewCamera | null {
+    const { view } = this.options.cameraHost.frames.viewFrame.peek()
+    if (!this._placed || view.screen.width <= 0 || view.screen.height <= 0) return this._savedMapView
+    return savedViewCameraOf(geographicViewOfCamera(view.camera), view.screen)
+  }
+
+  private _opened(file: CanopiFile): void {
+    this._documentState = 'loaded'
+    this._savedMapView = file.map_view ?? null
+    this._placed = false
+    this.options.rendering.awaitPresentation()
+    this.options.viewNavigation.clearTemporaryFocus()
+    this.options.inspection.reset()
   }
 
   loadDocument(file: CanopiFile): void {
@@ -99,10 +125,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
       if (error instanceof CanvasAuthorityBusyError) this._documentState = previousDocumentState
       throw error
     }
-    this._documentState = 'loaded'
-    this.options.rendering.awaitPresentation()
-    this.options.viewNavigation.clearTemporaryFocus()
-    this.options.inspection.reset()
+    this._opened(file)
   }
 
   replaceDocument(
@@ -114,10 +137,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
     this._documentState = 'settling'
     try {
       const receipt = this.options.documents.replaceDocument(file, token, finalizeReplacement)
-      this._documentState = 'loaded'
-      this.options.rendering.awaitPresentation()
-      this.options.viewNavigation.clearTemporaryFocus()
-      this.options.inspection.reset()
+      this._opened(file)
       return receipt
     } catch (error) {
       if (error instanceof CanvasDocumentReplacementNotAdmittedError) {
@@ -138,7 +158,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
     if (this._documentState === 'settling') {
       throw new CanvasAuthorityBusyError('document-settlement')
     }
-    return this.options.documents.captureForPersistence(metadata, doc)
+    return this.options.documents.captureForPersistence(metadata, doc, this._mapViewForSave())
   }
 
   resize(width: number, height: number): void {

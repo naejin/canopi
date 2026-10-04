@@ -764,8 +764,10 @@ function cloneDocument(file: CanopiFile): CanopiFile {
   return JSON.parse(JSON.stringify(file)) as CanopiFile;
 }
 
+/** What a replacement guards: the content, without the save timestamp or the view (a pan is not a change to guard). */
 function replacementContentFingerprint(file: CanopiFile): string {
-  const { updated_at: _generatedTimestamp, ...stableContent } = file;
+  const { updated_at: _generatedTimestamp, map_view: _view, ...stableContent } = file;
   void _generatedTimestamp;
+  void _view;
   return JSON.stringify(stableContent);
 }
