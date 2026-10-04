@@ -8,14 +8,21 @@
 import { signal } from '@preact/signals'
 import { stageScaleToMapZoom } from '../../projection'
 import type { SessionPlane } from '../../session-plane'
-import { isWorkspaceOverviewScale } from '../../workspace-camera-policy'
 import { startBearingTween, type BearingTween } from './bearing-tween'
 import type { CameraDriver, CameraDriverDeps, CameraDriverFailure, CameraMove } from './camera-driver'
 import { panCamera, rotateCameraAround, zoomCameraAround } from './camera-math'
+import {
+  driverFrame,
+  driverFrameState,
+  finitePoint,
+  normaliseScreen,
+  sameDriverFrameState,
+  zoomFactorWithinRange,
+  type DriverFrameState,
+} from './driver-frame'
 import { createDriverFrameSource } from './frame-source'
-import { constrainCamera, normaliseBearing, scaleBoundsAt, VIEW_EASE_MS, zoomFloorForArc } from './navigation-policy'
-import type { ScreenInsets, ScreenPoint, ViewCamera, ViewFrame, ViewScreen } from './types'
-import { buildViewTransform } from './view-transform'
+import { constrainCamera, normaliseBearing, VIEW_EASE_MS } from './navigation-policy'
+import type { ScreenInsets, ScreenPoint, ViewCamera, ViewScreen } from './types'
 
 export interface HeadlessCameraDriverOptions {
   readonly deps: CameraDriverDeps
@@ -28,17 +35,6 @@ export interface HeadlessCameraDriverOptions {
 }
 
 const NO_INSETS: ScreenInsets = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 })
-
-/** Everything a frame is built from; a move publishes only when one of these changed. */
-interface FrameState {
-  readonly camera: ViewCamera
-  readonly screen: ViewScreen
-  readonly insets: ScreenInsets
-  readonly scaleBounds: { readonly min: number; readonly max: number }
-  readonly overviewPixelsPerMetre: number
-  readonly plane: SessionPlane
-  readonly planeRevision: number
-}
 
 export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions): CameraDriver {
   const { deps } = options
@@ -55,7 +51,7 @@ export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions)
   let camera = constrained(validCamera(options.camera)
     ?? { center: plane.origin, zoom: stageScaleToMapZoom(1, plane.origin.lat), bearingDeg: 0, pitchDeg: 0 })
   let published = frameState()
-  const frames = createDriverFrameSource(buildFrame(published))
+  const frames = createDriverFrameSource(driverFrame(published, false))
 
   /** The zoom range and the one-world hold at the camera's bearing. */
   function constrained(candidate: ViewCamera): ViewCamera {
@@ -63,44 +59,17 @@ export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions)
     return Object.isFrozen(held) ? held : Object.freeze({ ...held, center: Object.freeze({ ...held.center }) })
   }
 
-  function frameState(): FrameState {
-    const policy = deps.policy()
-    return {
-      camera,
-      screen,
-      insets,
-      scaleBounds: scaleBoundsAt(screen, policy, camera.bearingDeg),
-      overviewPixelsPerMetre: policy.overviewPixelsPerMetre,
-      plane,
-      planeRevision,
-    }
-  }
-
-  function buildFrame(state: FrameState): ViewFrame {
-    // The host stamps the revisions readers see.
-    const view = buildViewTransform({
-      camera: state.camera,
-      screen: state.screen,
-      plane: state.plane,
-      planeRevision: state.planeRevision,
-    })
-    return Object.freeze<ViewFrame>({
-      view,
-      mode: isWorkspaceOverviewScale(view.pixelsPerMetre, { overviewScaleThreshold: state.overviewPixelsPerMetre }) ? 'overview' : 'site',
-      scaleBounds: state.scaleBounds,
-      insets: state.insets,
-      attached: false,
-      revision: 0,
-    })
+  function frameState(): DriverFrameState {
+    return driverFrameState(camera, { screen, insets, plane, planeRevision }, deps.policy())
   }
 
   function commit(candidate: ViewCamera | null): void {
     if (!candidate) return
     camera = constrained(candidate)
     const state = frameState()
-    if (sameFrameState(published, state)) return
+    if (sameDriverFrameState(published, state)) return
     published = state
-    frames.publish(buildFrame(state))
+    frames.publish(driverFrame(state, false))
     while (!frames.dispatching && queued.length > 0) queued.shift()!()
   }
 
@@ -142,11 +111,7 @@ export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions)
   /** The zoom factor clamped to the zoom range at the live bearing first, as the MapLibre driver does, so the anchor holds. */
   function zoomAround(anchor: ScreenPoint, factor: number): ViewCamera | null {
     if (!Number.isFinite(factor) || factor <= 0 || !finitePoint(anchor)) return null
-    const policy = deps.policy()
-    const floor = Math.max(policy.minZoom, zoomFloorForArc(screen, policy, camera.bearingDeg, camera.bearingDeg))
-    const wanted = camera.zoom + Math.log2(factor)
-    const zoom = Math.min(policy.maxZoom, Math.max(Math.min(policy.maxZoom, floor), wanted))
-    return zoomCameraAround(camera, screen, anchor, zoom === wanted ? factor : 2 ** (zoom - camera.zoom))
+    return zoomCameraAround(camera, screen, anchor, zoomFactorWithinRange(camera, screen, deps.policy(), factor))
   }
 
   function apply(move: CameraMove): void {
@@ -232,25 +197,6 @@ export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions)
   }
 }
 
-function sameFrameState(previous: FrameState, next: FrameState): boolean {
-  return previous.camera.center.lon === next.camera.center.lon
-    && previous.camera.center.lat === next.camera.center.lat
-    && previous.camera.zoom === next.camera.zoom
-    && previous.camera.bearingDeg === next.camera.bearingDeg
-    && previous.screen.width === next.screen.width
-    && previous.screen.height === next.screen.height
-    && previous.screen.devicePixelRatio === next.screen.devicePixelRatio
-    && previous.insets.top === next.insets.top
-    && previous.insets.right === next.insets.right
-    && previous.insets.bottom === next.insets.bottom
-    && previous.insets.left === next.insets.left
-    && previous.scaleBounds.min === next.scaleBounds.min
-    && previous.scaleBounds.max === next.scaleBounds.max
-    && previous.overviewPixelsPerMetre === next.overviewPixelsPerMetre
-    && previous.plane === next.plane
-    && previous.planeRevision === next.planeRevision
-}
-
 /** A camera with any non-finite value is refused; the bearing is normalised. */
 function validCamera(camera: ViewCamera): ViewCamera | null {
   if (![camera.center.lon, camera.center.lat, camera.zoom, camera.bearingDeg].every(Number.isFinite)) return null
@@ -258,21 +204,6 @@ function validCamera(camera: ViewCamera): ViewCamera | null {
   return bearingDeg === camera.bearingDeg ? camera : { ...camera, bearingDeg }
 }
 
-/** Invalid sizes read as 0, an invalid density as 1. */
-function normaliseScreen(screen: ViewScreen): ViewScreen {
-  const size = (value: number) => (Number.isFinite(value) ? Math.max(0, value) : 0)
-  const density = screen.devicePixelRatio
-  return Object.freeze({
-    width: size(screen.width),
-    height: size(screen.height),
-    devicePixelRatio: Number.isFinite(density) && density > 0 ? density : 1,
-  })
-}
-
 function frozenInsets(insets: ScreenInsets): ScreenInsets {
   return Object.freeze({ top: insets.top, right: insets.right, bottom: insets.bottom, left: insets.left })
-}
-
-function finitePoint(point: ScreenPoint): boolean {
-  return Number.isFinite(point.x) && Number.isFinite(point.y)
 }
