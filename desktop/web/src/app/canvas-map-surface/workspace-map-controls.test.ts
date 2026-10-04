@@ -48,6 +48,7 @@ class FakeMap implements MapLibreMapInstance {
   readonly setLayoutProperty = vi.fn()
   readonly setGlyphs = vi.fn()
   readonly setSprite = vi.fn()
+  readonly setGlobalStateProperty = vi.fn()
   readonly setStyle = vi.fn()
   readonly controls = new Set<unknown>()
   readonly addControl = vi.fn((control: unknown, _position?: string) => { this.controls.add(control) })
@@ -1670,12 +1671,15 @@ describe('WorkspaceMapControls OpenFreeMap basemap', () => {
     expect(map.setGlyphs).toHaveBeenCalledWith(OPENFREEMAP_STYLE.glyphs)
     expect(map.setSprite).toHaveBeenCalledWith(OPENFREEMAP_STYLE.sprite)
     expect(map.getSource('ofm-openmaptiles')).toEqual(OPENFREEMAP_STYLE.sources.openmaptiles)
+    // The row opacity and the label language are the map's global state, which the layers read.
+    expect(map.setGlobalStateProperty).toHaveBeenCalledWith('canopi:basemap-opacity', 0.5)
+    expect(map.setGlobalStateProperty).toHaveBeenCalledWith('canopi:basemap-locale', 'fr')
     expect(map.getLayer('ofm:water')).toMatchObject({
       source: 'ofm-openmaptiles',
-      paint: { 'fill-opacity': 0.4 },
+      paint: { 'fill-opacity': ['*', 0.8, ['global-state', 'canopi:basemap-opacity']] },
     })
     expect(map.getLayer('ofm:place-label')).toMatchObject({
-      layout: { 'text-field': ['coalesce', ['get', 'name:fr'], ['get', 'name']] },
+      layout: { 'text-field': ['coalesce', ['get', ['concat', 'name:', ['global-state', 'canopi:basemap-locale']]], ['get', 'name']] },
     })
     expect(map.layerOrder).toEqual([...OPENFREEMAP_LAYER_IDS, MAPLIBRE_SHARED_SCENE_LAYER_ID])
     expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toBeUndefined()

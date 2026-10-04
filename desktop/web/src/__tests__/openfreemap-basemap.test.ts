@@ -44,6 +44,7 @@ class FakeMap implements VectorBasemapMap {
   readonly calls: string[] = []
   glyphs: string | null = null
   sprite: string | null = null
+  globalState: Record<string, unknown> = {}
   setStyle = () => { throw new Error('setStyle must not be called') }
   getSource(id: string) { return this.sources.get(id) }
   addSource(id: string, source: Record<string, unknown>) { this.sources.set(id, source) }
@@ -68,6 +69,30 @@ class FakeMap implements VectorBasemapMap {
   }
   setGlyphs(url: string | null) { this.glyphs = url }
   setSprite(url: string | null) { this.sprite = url }
+  setGlobalStateProperty(name: string, value: unknown) { this.globalState = { ...this.globalState, [name]: value } }
+  /** What a same-map `setStyle()` does: every source, layer and global state value of the old style is gone. */
+  reloadStyle() {
+    this.sources.clear()
+    this.layers.splice(0, this.layers.length, { id: 'canopi-scene' })
+    this.globalState = {}
+  }
+  /** A layer property as MapLibre evaluates it here: global state read from the map, products and concatenations folded. */
+  resolved(id: string, kind: 'paint' | 'layout', name: string): unknown {
+    const layer = this.getLayer(id) as Record<string, Record<string, unknown> | undefined>
+    return resolveExpression(layer[kind]?.[name], this.globalState)
+  }
+}
+
+function resolveExpression(value: unknown, state: Record<string, unknown>): unknown {
+  if (!Array.isArray(value)) return value
+  if (value[0] === 'global-state') {
+    if (!(value[1] in state)) throw new Error(`global state ${String(value[1])} is not set`)
+    return state[value[1]]
+  }
+  const [operator, ...args] = value.map((entry) => resolveExpression(entry, state))
+  if (operator === '*' && args.every((arg) => typeof arg === 'number')) return (args as number[]).reduce((a, b) => a * b, 1)
+  if (operator === 'concat' && args.every((arg) => typeof arg === 'string')) return args.join('')
+  return [operator, ...args]
 }
 
 async function settle(): Promise<void> {
@@ -107,7 +132,7 @@ describe('OpenFreeMap vector basemap', () => {
     const basemap = install(map)
     basemap.update({ style: 'liberty', visible: true, opacity: 1, locale: 'fr' })
     await settle()
-    const place = () => (map.getLayer('ofm:place') as { layout: Record<string, unknown> }).layout['text-field']
+    const place = () => map.resolved('ofm:place', 'layout', 'text-field')
     expect(place()).toEqual(['coalesce', ['get', 'name:fr'], ['get', 'name']])
     expect((map.getLayer('ofm:shield') as { layout: Record<string, unknown> }).layout['text-field'])
       .toEqual(['to-string', ['get', 'ref']])
@@ -120,14 +145,14 @@ describe('OpenFreeMap vector basemap', () => {
     const basemap = install(map)
     basemap.update({ style: 'liberty', visible: true, opacity: 0.5, locale: 'en' })
     await settle()
-    const paint = (id: string) => (map.getLayer(id) as { paint: Record<string, unknown> }).paint
-    expect(paint('ofm:background')['background-opacity']).toBe(0.5)
-    expect(paint('ofm:water')['fill-opacity']).toBe(0.4)
-    expect(paint('ofm:road')['line-opacity']).toEqual(['interpolate', ['linear'], ['zoom'], 5, 0.1, 12, 0.5])
-    expect(paint('ofm:place')['text-opacity']).toEqual(['step', ['zoom'], 0, 6, 0.5])
-    expect(paint('ofm:place')['icon-opacity']).toBe(0.5)
+    const opacity = (id: string, name: string) => map.resolved(id, 'paint', name)
+    expect(opacity('ofm:background', 'background-opacity')).toBe(0.5)
+    expect(opacity('ofm:water', 'fill-opacity')).toBe(0.4)
+    expect(opacity('ofm:road', 'line-opacity')).toEqual(['interpolate', ['linear'], ['zoom'], 5, 0.1, 12, 0.5])
+    expect(opacity('ofm:place', 'text-opacity')).toEqual(['step', ['zoom'], 0, 6, 0.5])
+    expect(opacity('ofm:place', 'icon-opacity')).toBe(0.5)
     basemap.update({ style: 'liberty', visible: true, opacity: 1, locale: 'en' })
-    expect(paint('ofm:water')['fill-opacity']).toBe(0.8)
+    expect(opacity('ofm:water', 'fill-opacity')).toBe(0.8)
   })
 
   it('removes everything when hidden and switches styles by replacing its own layers', async () => {
@@ -259,7 +284,7 @@ describe('OpenFreeMap vector basemap', () => {
       expect(basemap.installedStyle).toBe('bright')
       expect(statuses).toEqual(['loading', 'ok'])
       expect(requests).toHaveLength(1)
-      expect((map.getLayer('ofm:water') as { paint: Record<string, unknown> }).paint['fill-opacity']).toBe(0.4)
+      expect(map.resolved('ofm:water', 'paint', 'fill-opacity')).toBe(0.4)
       basemap.dispose()
     } finally {
       vi.unstubAllGlobals()
@@ -397,9 +422,27 @@ describe('OpenFreeMap vector basemap', () => {
     })
   })
 
-  it('scales legacy stop functions and wraps other expressions', () => {
-    expect(scaleOpacity({ stops: [[4, 0.4], [10, 1]] }, 0.5)).toEqual({ stops: [[4, 0.2], [10, 0.5]] })
-    expect(scaleOpacity(['get', 'o'], 0.5)).toEqual(['*', ['get', 'o'], 0.5])
-    expect(scaleOpacity(undefined, 0.3)).toBe(0.3)
+  it('keeps the basemap opacity and label language through a same-map style reload', async () => {
+    const map = new FakeMap()
+    const basemap = install(map)
+    basemap.update({ style: 'liberty', visible: true, opacity: 1, locale: 'fr' })
+    await settle()
+    basemap.update({ style: 'liberty', visible: true, opacity: 0.5, locale: 'de' })
+
+    map.reloadStyle()
+    basemap.restore()
+    await settle()
+
+    expect(map.resolved('ofm:water', 'paint', 'fill-opacity')).toBe(0.4)
+    expect(map.resolved('ofm:road', 'paint', 'line-opacity')).toEqual(['interpolate', ['linear'], ['zoom'], 5, 0.1, 12, 0.5])
+    expect(map.resolved('ofm:place', 'paint', 'icon-opacity')).toBe(0.5)
+    expect(map.resolved('ofm:place', 'layout', 'text-field')).toEqual(['coalesce', ['get', 'name:de'], ['get', 'name']])
+  })
+
+  it('wraps other expressions and leaves legacy stop functions, which cannot hold an expression', () => {
+    const factor = ['global-state', 'opacity']
+    expect(scaleOpacity(['get', 'o'], factor)).toEqual(['*', ['get', 'o'], factor])
+    expect(scaleOpacity(undefined, factor)).toBe(factor)
+    expect(scaleOpacity({ stops: [[4, 0.4], [10, 1]] }, factor)).toEqual({ stops: [[4, 0.4], [10, 1]] })
   })
 })

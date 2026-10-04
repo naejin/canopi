@@ -42,8 +42,7 @@ export interface VectorBasemapMap {
   getLayer(id: string): unknown
   addLayer(layer: Record<string, unknown>, beforeId?: string): void
   removeLayer(id: string): void
-  setPaintProperty(id: string, name: string, value: unknown): void
-  setLayoutProperty(id: string, name: string, value: unknown): void
+  setGlobalStateProperty(name: string, value: unknown): void
   setGlyphs(url: string | null): void
   setSprite(url: string | null): void
 }
@@ -79,6 +78,17 @@ const OPACITY_PAINT_PROPERTIES: Readonly<Record<string, readonly string[]>> = {
   heatmap: ['heatmap-opacity'],
 }
 
+/**
+ * The row opacity and the label language live in the map's global state, which the installed layers read: a change
+ * is one state write, not a rewrite of every layer. A style reload empties the state with the layers, and the
+ * reinstall writes it again.
+ */
+const OPACITY_STATE = 'canopi:basemap-opacity'
+const LOCALE_STATE = 'canopi:basemap-locale'
+const OPACITY = ['global-state', OPACITY_STATE]
+/** Labels in the app locale (`name:<locale>`), falling back to `name`. */
+const LOCALIZED_LABEL = ['coalesce', ['get', ['concat', 'name:', ['global-state', LOCALE_STATE]]], ['get', 'name']]
+
 const styleCache = new Map<string, Promise<VectorStyleDocument>>()
 
 /**
@@ -104,18 +114,10 @@ async function fetchStyle(url: string): Promise<VectorStyleDocument> {
   return request
 }
 
-interface InstalledLayer {
-  readonly id: string
-  readonly baseOpacity: Readonly<Record<string, unknown>>
-  readonly labelled: boolean
-}
-
 interface Installed {
   readonly style: BasemapStyle
   readonly sourceIds: readonly string[]
-  readonly layers: readonly InstalledLayer[]
-  opacity: number
-  locale: string
+  readonly layerIds: readonly string[]
   /** The requests the map makes for this style's sprite and TileJSON, which it reports without a layer id. */
   readonly resources: readonly RegExp[]
 }
@@ -124,7 +126,8 @@ interface Installed {
  * Installs one OpenFreeMap vector style onto a live map without `setStyle()`,
  * so the map lifetime, camera and Design edits are untouched. Sources and
  * layers are namespaced; row opacity scales every layer's paint opacity; labels
- * follow the app locale (`name:<locale>`, falling back to `name`).
+ * follow the app locale (`name:<locale>`, falling back to `name`), both through
+ * the map's global state.
  */
 export class VectorBasemap {
   private installed: Installed | null = null
@@ -166,8 +169,7 @@ export class VectorBasemap {
       // The style on screen is the one asked for: a load still running for
       // another style is stale, and an earlier failure no longer applies.
       this.generation += 1
-      if (installed.opacity !== presentation.opacity) this.applyOpacity(installed, presentation.opacity)
-      if (installed.locale !== presentation.locale) this.applyLocale(installed, presentation.locale)
+      this.applyPresentation(presentation)
       // Nothing downloads on its own (ADR 0004): a style whose resources failed stays failed until Retry.
       if (!this.resourceFailed) this.setStatus('ok')
       return
@@ -258,11 +260,11 @@ export class VectorBasemap {
   }
 
   private layersPresent(installed: Installed): boolean {
-    return installed.layers.every((layer) => this.map.getLayer(layer.id))
+    return installed.layerIds.every((id) => this.map.getLayer(id))
   }
 
   private install(presentation: VectorBasemapPresentation, document: VectorStyleDocument): void {
-    const prepared = prepareOpenFreeMapStyle(document, presentation)
+    const prepared = prepareOpenFreeMapStyle(document)
     const resources = styleResourceRequests(document)
     for (const resource of resources) {
       if (!this.knownResources.some((known) => known.source === resource.source)) this.knownResources.push(resource)
@@ -273,6 +275,7 @@ export class VectorBasemap {
       this.map.setSprite(document.sprite)
       this.spriteInFlight = true
     }
+    this.applyPresentation(presentation)
     for (const [id, source] of Object.entries(prepared.sources)) this.map.addSource(id, source)
     const beforeId = this.options.beforeLayerId?.() ?? undefined
     for (const layer of prepared.layers) {
@@ -282,9 +285,7 @@ export class VectorBasemap {
     this.installed = {
       style: presentation.style,
       sourceIds: Object.keys(prepared.sources),
-      layers: prepared.installedLayers,
-      opacity: presentation.opacity,
-      locale: presentation.locale,
+      layerIds: prepared.layers.map((layer) => layer.id),
       resources,
     }
   }
@@ -294,59 +295,41 @@ export class VectorBasemap {
     if (!installed) return
     this.installed = null
     this.spriteInFlight = false
-    for (const layer of [...installed.layers].reverse()) {
-      if (this.map.getLayer(layer.id)) this.map.removeLayer(layer.id)
+    for (const id of [...installed.layerIds].reverse()) {
+      if (this.map.getLayer(id)) this.map.removeLayer(id)
     }
     for (const id of installed.sourceIds) {
       if (this.map.getSource(id)) this.map.removeSource(id)
     }
   }
 
-  private applyOpacity(installed: Installed, opacity: number): void {
-    for (const layer of installed.layers) {
-      for (const [property, base] of Object.entries(layer.baseOpacity)) {
-        this.map.setPaintProperty(layer.id, property, scaleOpacity(base, opacity))
-      }
-    }
-    installed.opacity = opacity
-  }
-
-  private applyLocale(installed: Installed, locale: string): void {
-    for (const layer of installed.layers) {
-      if (layer.labelled) this.map.setLayoutProperty(layer.id, 'text-field', localizedLabel(locale))
-    }
-    installed.locale = locale
+  /** MapLibre repaints only for a value that changed. */
+  private applyPresentation(presentation: VectorBasemapPresentation): void {
+    this.map.setGlobalStateProperty(OPACITY_STATE, presentation.opacity)
+    this.map.setGlobalStateProperty(LOCALE_STATE, presentation.locale)
   }
 }
 
 interface PreparedVectorStyle {
   readonly sources: Record<string, Record<string, unknown>>
-  readonly layers: Record<string, unknown>[]
-  readonly installedLayers: InstalledLayer[]
+  readonly layers: (Record<string, unknown> & { readonly id: string })[]
 }
 
-/** Namespaces, localizes and opacity-scales one style document. Pure. */
-function prepareOpenFreeMapStyle(
-  document: VectorStyleDocument,
-  presentation: Pick<VectorBasemapPresentation, 'opacity' | 'locale'>,
-): PreparedVectorStyle {
+/** Namespaces one style document, its labels reading the locale and its opacities the row opacity. Pure. */
+function prepareOpenFreeMapStyle(document: VectorStyleDocument): PreparedVectorStyle {
   const sources: Record<string, Record<string, unknown>> = {}
   for (const [id, source] of Object.entries(document.sources)) {
     sources[`${OPENFREEMAP_SOURCE_PREFIX}${id}`] = { ...source }
   }
-  const layers: Record<string, unknown>[] = []
-  const installedLayers: InstalledLayer[] = []
+  const layers: (Record<string, unknown> & { readonly id: string })[] = []
   for (const layer of document.layers) {
     const id = `${OPENFREEMAP_LAYER_PREFIX}${layer.id}`
-    const baseOpacity: Record<string, unknown> = {}
     const paint: Record<string, unknown> = { ...(layer.paint ?? {}) }
     for (const property of OPACITY_PAINT_PROPERTIES[layer.type] ?? []) {
-      baseOpacity[property] = layer.paint?.[property]
-      paint[property] = scaleOpacity(layer.paint?.[property], presentation.opacity)
+      paint[property] = scaleOpacity(layer.paint?.[property], OPACITY)
     }
     const layout: Record<string, unknown> = { ...(layer.layout ?? {}) }
-    const labelled = isNameLabel(layout['text-field'])
-    if (labelled) layout['text-field'] = localizedLabel(presentation.locale)
+    if (isNameLabel(layout['text-field'])) layout['text-field'] = LOCALIZED_LABEL
     layers.push({
       ...layer,
       id,
@@ -354,9 +337,8 @@ function prepareOpenFreeMapStyle(
       layout,
       paint,
     })
-    installedLayers.push({ id, baseOpacity, labelled })
   }
-  return { sources, layers, installedLayers }
+  return { sources, layers }
 }
 
 /**
@@ -407,22 +389,17 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-function localizedLabel(locale: string): unknown[] {
-  return ['coalesce', ['get', `name:${locale}`], ['get', 'name']]
-}
-
 function isNameLabel(textField: unknown): boolean {
   return textField !== undefined && JSON.stringify(textField).includes('"name')
 }
 
 /**
- * Multiplies an opacity paint value by `factor`. Zoom curves keep their
- * top-level interpolate/step shape (MapLibre requires it), so only their
- * outputs are scaled.
+ * Multiplies an opacity paint value by `factor`, an expression. Zoom curves keep their top-level interpolate/step shape
+ * (MapLibre requires it), so only their outputs are scaled. A legacy function, which none of the OpenFreeMap styles
+ * uses, cannot hold an expression and keeps its own opacity.
  */
-export function scaleOpacity(value: unknown, factor: number): unknown {
+export function scaleOpacity(value: unknown, factor: unknown): unknown {
   if (value === undefined || value === null) return factor
-  if (typeof value === 'number') return value * factor
   if (Array.isArray(value)) {
     const operator = value[0]
     if (operator === 'interpolate' || operator === 'interpolate-hcl' || operator === 'interpolate-lab') {
@@ -431,11 +408,8 @@ export function scaleOpacity(value: unknown, factor: number): unknown {
     if (operator === 'step') {
       return value.map((entry, index) => index >= 2 && index % 2 === 0 ? scaleOpacity(entry, factor) : entry)
     }
-    return ['*', value, factor]
+  } else if (typeof value === 'object') {
+    return value
   }
-  if (typeof value === 'object' && Array.isArray((value as { stops?: unknown }).stops)) {
-    const legacy = value as { stops: [unknown, unknown][] }
-    return { ...legacy, stops: legacy.stops.map(([zoom, stop]) => [zoom, scaleOpacity(stop, factor)]) }
-  }
-  return value
+  return ['*', value, factor]
 }

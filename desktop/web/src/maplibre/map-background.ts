@@ -64,6 +64,7 @@ function isMapBackgroundLayer(id: string): boolean {
 
 export type MapBackgroundMap = VectorBasemapMap & SatelliteMountOptions['map'] & {
   getLayersOrder(): string[]
+  setPaintProperty(id: string, name: string, value: unknown): void
   isStyleLoaded?(): boolean
   loaded?(): boolean
   getBounds?(): { getWest(): number; getSouth(): number; getEast(): number; getNorth(): number }
