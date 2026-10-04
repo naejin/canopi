@@ -850,7 +850,7 @@ pub fn update_import_progress(
         .execute(
             "UPDATE lidar_import_jobs
              SET progress_phase = ?2, progress_percent = ?3, updated_at = ?4
-             WHERE id = ?1 AND state = 'applying'
+             WHERE id = ?1 AND state IN ('staging', 'applying')
                AND COALESCE(progress_percent, -1) < ?3",
             rusqlite::params![job_id, phase, percent, now_iso()],
         )

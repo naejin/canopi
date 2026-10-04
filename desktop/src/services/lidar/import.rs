@@ -147,26 +147,8 @@ const PREPARATION_SHARE: usize = 40;
 /// converted, under the existing "Preparing raster" phase, within
 /// [`PREPARATION_SHARE`].
 fn record_staging_progress(library: &LidarLibrary, job_id: &str, converted: usize, total: usize) {
-    let percent = (converted.min(total) * PREPARATION_SHARE / total.max(1)) as i64;
-    let result = library.catalogue().and_then(|connection| {
-        connection
-            .execute(
-                "UPDATE lidar_import_jobs
-                 SET progress_phase = ?2, progress_percent = ?3, updated_at = ?4
-                 WHERE id = ?1 AND state = 'staging'
-                   AND COALESCE(progress_percent, -1) < ?3",
-                rusqlite::params![
-                    job_id,
-                    super::import_progress_phase_key(LidarImportProgressPhase::PreparingRaster),
-                    percent,
-                    catalogue::now_iso()
-                ],
-            )
-            .map_err(|e| e.to_string())
-    });
-    if let Err(error) = result {
-        tracing::warn!(job_id, error, "LiDAR import progress update failed");
-    }
+    let percent = (converted.min(total) * PREPARATION_SHARE / total.max(1)) as u8;
+    library.record_import_progress(job_id, LidarImportProgressPhase::PreparingRaster, percent);
 }
 
 /// Move a prepared job to publishing, at the end of preparation's share and
