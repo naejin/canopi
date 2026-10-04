@@ -3,6 +3,7 @@ import { createRulerOverlay, pressRuler } from '../canvas/runtime/chrome/rulers'
 import type { ViewFrame } from '../canvas/runtime/view/types'
 import { mapZoomToStageScale, stageScaleToMapZoom } from '../canvas/projection'
 import { createSessionPlane } from '../canvas/session-plane'
+import { refreshCanvasColorCache } from '../canvas/theme-refresh'
 import { testViewFrame } from './support/test-view'
 import './support/camera-tolerance'
 
@@ -70,6 +71,59 @@ describe('RulerOverlay', () => {
     vi.restoreAllMocks()
     vi.stubGlobal('devicePixelRatio', 2)
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(createContextStub() as never)
+  })
+
+  /** The fill each ruler band was painted with, in draw order. */
+  function recordBandFills(): string[] {
+    const fills: string[] = []
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => {
+      const context = createContextStub()
+      vi.mocked(context.fillRect).mockImplementation(() => { fills.push(String(context.fillStyle)) })
+      return context as never
+    })
+    return fills
+  }
+
+  /** A theme switch as the workspace runs it: the canvas colours re-read from the container's tokens. */
+  function switchTheme(tokens: Record<string, string>): void {
+    const container = document.createElement('div')
+    for (const [name, value] of Object.entries(tokens)) container.style.setProperty(name, value)
+    refreshCanvasColorCache(container)
+  }
+  const LIGHT_RULER = { '--canvas-ruler-bg': '#F3EEE3', '--canvas-ruler-text': '#645A4C', '--color-border': 'rgba(58, 46, 28, 0.14)' }
+  const DARK_RULER = { '--canvas-ruler-bg': '#2A2721', '--canvas-ruler-text': '#B5AC9D', '--color-border': 'rgba(255, 248, 235, 0.12)' }
+
+  it('refreshTheme redraws at once with the new palette', () => {
+    const fills = recordBandFills()
+    const overlay = createRulerOverlay(document.createElement('div'), { onGuideCreate: vi.fn() })
+    overlay.update({ frame: cameraFrame(), chromeVisible: true, rulersVisible: true })
+    fills.length = 0
+    try {
+      switchTheme(DARK_RULER)
+      overlay.refreshTheme()
+      // No new frame came: the theme alone repaints both bands.
+      expect(fills).toEqual(['#2A2721', '#2A2721'])
+    } finally {
+      switchTheme(LIGHT_RULER)
+      overlay.destroy()
+    }
+  })
+
+  it('a dark theme refresh changes the ruler fill', () => {
+    const fills = recordBandFills()
+    const overlay = createRulerOverlay(document.createElement('div'), { onGuideCreate: vi.fn() })
+    const frame = cameraFrame()
+    try {
+      overlay.update({ frame, chromeVisible: true, rulersVisible: true })
+      expect(fills.at(-1)).toBe('#F3EEE3')
+      switchTheme(DARK_RULER)
+      overlay.refreshTheme()
+      overlay.update({ frame, chromeVisible: true, rulersVisible: true })
+      expect(fills.at(-1)).toBe('#2A2721')
+    } finally {
+      switchTheme(LIGHT_RULER)
+      overlay.destroy()
+    }
   })
 
   it('keeps every part hidden until the first visibility snapshot', () => {
