@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SpeciesCatalogWorkbench } from '../app/plant-browser/workbench'
 import { readSavedObjectStampDragData } from '../canvas/saved-object-stamp-source'
 import type { SpeciesListItem } from '../types/species'
+import type { CanopiFile } from '../types/design'
 import {
   createTestSpeciesCatalogWorkbench,
   makeSpeciesListItem,
@@ -440,6 +441,53 @@ describe('FavoritesPanel', () => {
       await flushEffects()
     })
     expect(alert()).toBeNull()
+  })
+
+  it('clears a stamp import refusal once another Design is opened', async () => {
+    const { designSessionStore } = await import('../app/document-session/store')
+    await act(async () => {
+      render(<FavoritesPanel />, container)
+      await flushEffects()
+    })
+    const alert = () => container.querySelector<HTMLElement>('[data-saved-stamps-frame] [role="alert"]')
+    importStampFileMock.mockResolvedValueOnce({ status: 'refused', messageKey: 'savedObjectStamps.summaryEmpty' })
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Import stamps…"]')!.click()
+      await flushEffects()
+    })
+    expect(alert()?.textContent).toBe('No visible objects')
+
+    await act(async () => {
+      designSessionStore.replaceCurrentDesignState(otherDesign(), '/designs/other.canopi', 'Other')
+      await flushEffects()
+    })
+
+    expect(alert()).toBeNull()
+  })
+
+  it('says nothing in another Design about an import refused after it opened', async () => {
+    const { designSessionStore } = await import('../app/document-session/store')
+    let settle!: (outcome: unknown) => void
+    importStampFileMock.mockImplementationOnce(() => new Promise((resolve) => { settle = resolve }))
+    await act(async () => {
+      render(<FavoritesPanel />, container)
+      await flushEffects()
+    })
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Import stamps…"]')!.click()
+      await flushEffects()
+    })
+
+    await act(async () => {
+      designSessionStore.replaceCurrentDesignState(otherDesign(), '/designs/other.canopi', 'Other')
+      await flushEffects()
+    })
+    await act(async () => {
+      settle({ status: 'refused', messageKey: 'savedObjectStamps.summaryEmpty' })
+      await flushEffects()
+    })
+
+    expect(container.querySelector('[data-saved-stamps-frame] [role="alert"]')).toBeNull()
   })
 
   it('tells the user when saving an imported stamp fails', async () => {
@@ -1515,4 +1563,25 @@ async function openStampActions() {
   await act(async () => {
     document.querySelector<HTMLButtonElement>('button[aria-label^="More actions for "]')!.click()
   })
+}
+
+function otherDesign(): CanopiFile {
+  return {
+    version: 9,
+    name: 'Other',
+    description: null,
+    plant_species_colors: {},
+    layers: [],
+    plants: [],
+    zones: [],
+    annotations: [],
+    consortiums: [],
+    groups: [],
+    timeline: [],
+    budget: [],
+    budget_currency: 'EUR',
+    created_at: '2026-04-12T00:00:00.000Z',
+    updated_at: '2026-04-12T00:00:00.000Z',
+    extra: {},
+  }
 }
