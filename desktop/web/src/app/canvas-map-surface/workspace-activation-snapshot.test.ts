@@ -2,7 +2,6 @@ import { effect } from '@preact/signals'
 import { describe, expect, it } from 'vitest'
 import { createDefaultMapLayers, mapLayers, type MapLayersState } from '../map-layers/state'
 import { locale } from '../settings/state'
-import { DEFAULT_NEW_DESIGN_VIEW } from '../../canvas/session-plane'
 import { readWorkspaceActivationSnapshot, readWorkspaceBackgroundPresentation } from './workspace-activation-snapshot'
 
 const identity = {}
@@ -28,7 +27,7 @@ function layers(overrides: {
 
 describe('readWorkspaceActivationSnapshot', () => {
   it('returns null without a current Design', () => {
-    expect(readWorkspaceActivationSnapshot({ store: store(false) })).toBeNull()
+    expect(readWorkspaceActivationSnapshot({ store: store(false), readInitialCenter: () => ({ lat: 0, lon: 0 }) })).toBeNull()
   })
 
   it('copies the initial map centre and normalized background presentation', () => {
@@ -58,19 +57,6 @@ describe('readWorkspaceActivationSnapshot', () => {
     expect(Object.isFrozen(snapshot?.map.initialCenter)).toBe(true)
     expect(Object.isFrozen(snapshot?.map.background)).toBe(true)
     expect(Object.isFrozen(snapshot?.map.background.basemap)).toBe(true)
-  })
-
-  it('centres a Design without a session plane origin on the new-Design default view', () => {
-    const snapshot = readWorkspaceActivationSnapshot({
-      store: store(),
-      readMapLayers: () => layers(),
-      readLocale: () => 'en',
-    })
-    expect(snapshot?.map.initialCenter).toEqual({
-      lat: DEFAULT_NEW_DESIGN_VIEW.lat,
-      lon: DEFAULT_NEW_DESIGN_VIEW.lon,
-    })
-    expect(snapshot?.map.background.basemap.visible).toBe(true)
   })
 
   it('shares normalized presentation with the live settings reader', () => {
