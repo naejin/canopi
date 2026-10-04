@@ -36,7 +36,7 @@ export function SpeciesFocusChip() {
           <b>{name}</b> <span className={styles.muted}>· {t('speciesKey.plantsHighlighted', { count })}</span>
         </span>
         <button type="button" className={styles.button}
-          onClick={() => currentCanvasSceneEditCommandSurface.value?.selectSameSpecies(focused)}>
+          onClick={() => currentCanvasSceneEditCommandSurface.value?.selectSpecies([focused])}>
           {t('speciesKey.selectThese')}
         </button>
         <button type="button" className={styles.quiet} onClick={() => currentCanvasSpeciesFocusCommands.value?.focus(null)}>

@@ -16,13 +16,12 @@ import { initialRecogniserState, recognise } from '../recognise'
 import { DEFAULT_THRESHOLDS, type Thresholds } from '../thresholds'
 
 export const WINDOWS: InputPlatform = Object.freeze({ os: 'windows', gestureEvents: false })
-export const LINUX_WEBKITGTK: InputPlatform = Object.freeze({ os: 'linux', gestureEvents: false })
-export const LINUX_CHROMIUM: InputPlatform = Object.freeze({ os: 'linux', gestureEvents: false })
-export const MAC_WEBKIT: InputPlatform = Object.freeze({ os: 'mac', gestureEvents: true })
-export const MAC_CHROMIUM: InputPlatform = Object.freeze({ os: 'mac', gestureEvents: false })
-export const MAC_GECKO: InputPlatform = Object.freeze({ os: 'mac', gestureEvents: false })
-export const IOS_WEBKIT: InputPlatform = Object.freeze({ os: 'ios', gestureEvents: true })
-export const ANDROID_CHROMIUM: InputPlatform = Object.freeze({ os: 'android', gestureEvents: false })
+export const LINUX: InputPlatform = Object.freeze({ os: 'linux', gestureEvents: false })
+export const MAC: InputPlatform = Object.freeze({ os: 'mac', gestureEvents: false })
+/** Safari and WKWebView, which also send gesture events. */
+export const MAC_GESTURES: InputPlatform = Object.freeze({ os: 'mac', gestureEvents: true })
+export const IOS: InputPlatform = Object.freeze({ os: 'ios', gestureEvents: true })
+export const ANDROID: InputPlatform = Object.freeze({ os: 'android', gestureEvents: false })
 
 export const SURFACE: TargetClass = Object.freeze({ kind: 'surface' })
 export const OWNED_TEXT: TargetClass = Object.freeze({ kind: 'owned-text' })
@@ -304,29 +303,24 @@ export const SEQUENCES = {
     up(200, 180, { button: 2 }),
     contextMenu(200, 180),
   ]),
-  A3_WEBKITGTK: seq('A3 Linux right-click (WebKitGTK)', LINUX_WEBKITGTK, [
+  A3: seq('A3 Linux right-click', LINUX, [
     down(100, 100, { button: 2 }),
     contextMenu(100, 100),
     up(100, 100, { button: 2 }),
   ]),
-  A3_CHROMIUM: seq('A3 Linux right-click (Chromium)', LINUX_CHROMIUM, [
-    down(100, 100, { button: 2 }),
-    contextMenu(100, 100),
-    up(100, 100, { button: 2 }),
-  ]),
-  A4_LINUX: seq('A4 Linux right-drag', LINUX_WEBKITGTK, [
+  A4_LINUX: seq('A4 Linux right-drag', LINUX, [
     down(100, 100, { button: 2 }),
     contextMenu(100, 100),
     ...moves([100, 100], [160, 100], 3, { buttons: 2 }),
     up(160, 100, { button: 2 }),
   ]),
-  A4_MAC: seq('A4 macOS right-drag', MAC_WEBKIT, [
+  A4_MAC: seq('A4 macOS right-drag', MAC_GESTURES, [
     down(100, 100, { button: 2 }),
     contextMenu(100, 100),
     ...moves([100, 100], [160, 100], 3, { buttons: 2 }),
     up(160, 100, { button: 2 }),
   ]),
-  A11: seq('A11 Right pressed during a left drag', LINUX_WEBKITGTK, [
+  A11: seq('A11 Right pressed during a left drag', LINUX, [
     down(100, 100),
     ...moves([100, 100], [120, 110], 2, { buttons: 1 }),
     move(125, 112, { buttons: 3 }),
@@ -335,7 +329,7 @@ export const SEQUENCES = {
     move(145, 122, { buttons: 1 }),
     up(145, 122),
   ]),
-  A12: seq('A12 Shift at the chord moment', LINUX_WEBKITGTK, [
+  A12: seq('A12 Shift at the chord moment', LINUX, [
     down(100, 100),
     ...moves([100, 100], [120, 110], 2, { buttons: 1 }),
     move(125, 112, { buttons: 3, shift: true }),
@@ -352,7 +346,7 @@ export const SEQUENCES = {
     keyState(false, { shift: true }),
     up(160, 100, { button: 2, shift: true }),
   ]),
-  A15: seq('A15 Right-click in the note editor', LINUX_WEBKITGTK, [
+  A15: seq('A15 Right-click in the note editor', LINUX, [
     down(100, 100, { button: 2, target: OWNED_TEXT }),
     contextMenu(100, 100, { target: OWNED_TEXT }),
     up(100, 100, { button: 2, target: OWNED_TEXT }),
@@ -370,22 +364,12 @@ export const SEQUENCES = {
   ]),
 
   // 5.2 macOS Ctrl+click
-  B1_WEBKIT: seq('B1 macOS Ctrl+click (WebKit)', MAC_WEBKIT, [
+  B1: seq('B1 macOS Ctrl+click', MAC_GESTURES, [
     down(100, 100, { ctrl: true }),
     contextMenu(100, 100),
     up(100, 100, { ctrl: true }),
   ]),
-  B1_CHROMIUM: seq('B1 macOS Ctrl+click (Chromium)', MAC_CHROMIUM, [
-    down(100, 100, { ctrl: true }),
-    contextMenu(100, 100),
-    up(100, 100, { ctrl: true }),
-  ]),
-  B1_GECKO: seq('B1 macOS Ctrl+click (Gecko)', MAC_GECKO, [
-    down(100, 100, { ctrl: true }),
-    contextMenu(100, 100),
-    up(100, 100, { ctrl: true }),
-  ]),
-  B2: seq('B2 macOS Ctrl+drag', MAC_WEBKIT, [
+  B2: seq('B2 macOS Ctrl+drag', MAC_GESTURES, [
     down(100, 100, { ctrl: true }),
     contextMenu(100, 100),
     ...moves([100, 100], [150, 140], 3, { buttons: 1, ctrl: true }),
@@ -395,16 +379,16 @@ export const SEQUENCES = {
     down(100, 100, { ctrl: true }),
     up(100, 100, { ctrl: true }),
   ]),
-  B3_LINUX: seq('B3 Ctrl+click on Linux', LINUX_WEBKITGTK, [
+  B3_LINUX: seq('B3 Ctrl+click on Linux', LINUX, [
     down(100, 100, { ctrl: true }),
     up(100, 100, { ctrl: true }),
   ]),
-  B4: seq('B4 macOS two-finger trackpad click', MAC_WEBKIT, [
+  B4: seq('B4 macOS two-finger trackpad click', MAC_GESTURES, [
     down(100, 100, { button: 2 }),
     contextMenu(100, 100),
     up(100, 100, { button: 2 }),
   ]),
-  B6: seq('B6 Mac Ctrl+Shift+click drag', MAC_WEBKIT, [
+  B6: seq('B6 Mac Ctrl+Shift+click drag', MAC_GESTURES, [
     down(100, 100, { ctrl: true, shift: true }),
     ...moves([100, 100], [120, 100], 2, { buttons: 1, ctrl: true, shift: true }),
     keyState(false, { ctrl: true, shift: true, meta: true }),
@@ -414,7 +398,7 @@ export const SEQUENCES = {
   // 5.3 Keyboard menu: the keydown is the keyboard's; the contextmenu arrives marked by the source's echo record.
   C1: seq('C1 Menu key on Windows', WINDOWS, [contextMenu(200, 150, { fromKeyboard: true, t: 40 })]),
   C2_BEFORE_KEYUP: seq('C2 Shift+F10, contextmenu before keyup', WINDOWS, [contextMenu(200, 150, { fromKeyboard: true, t: 20 })]),
-  C2_AFTER_KEYUP: seq('C2 Shift+F10, contextmenu after keyup', LINUX_WEBKITGTK, [contextMenu(200, 150, { fromKeyboard: true, t: 120 })]),
+  C2_AFTER_KEYUP: seq('C2 Shift+F10, contextmenu after keyup', LINUX, [contextMenu(200, 150, { fromKeyboard: true, t: 120 })]),
   C3: seq('C3 Menu key held', WINDOWS, [contextMenu(200, 150, { fromKeyboard: true, t: 300 })]),
   C4: seq('C4 Menu key in the text entry', WINDOWS, [contextMenu(200, 150, { target: OWNED_TEXT, t: 40 })]),
   C5: seq('C5 Late echo', WINDOWS, [contextMenu(200, 150, { fromKeyboard: false, t: 600 })]),
@@ -440,7 +424,7 @@ export const SEQUENCES = {
     up(100, 100, { pointer: 'pen', button: 5 }),
   ]),
   D5: seq('D5 Pen hover', WINDOWS, moves([100, 100], [130, 100], 3, { pointer: 'pen', buttons: 0 })),
-  D6: seq('D6 Wacom as mouse (Firefox on Linux)', LINUX_CHROMIUM, [
+  D6: seq('D6 Wacom as mouse (Firefox on Linux)', LINUX, [
     down(100, 100),
     ...moves([100, 100], [150, 120], 4, { buttons: 1 }),
     up(150, 120),
@@ -453,21 +437,21 @@ export const SEQUENCES = {
   ]),
 
   // 5.5 Touch and trackpad gestures
-  E1: seq('E1 One-finger tap', ANDROID_CHROMIUM, [
+  E1: seq('E1 One-finger tap', ANDROID, [
     down(100, 100, { pointer: 'touch' }),
     up(100, 100, { pointer: 'touch' }),
   ]),
-  E2: seq('E2 One-finger drag', ANDROID_CHROMIUM, [
+  E2: seq('E2 One-finger drag', ANDROID, [
     down(100, 100, { pointer: 'touch' }),
     ...moves([100, 100], [150, 100], 3, { pointer: 'touch', buttons: 1 }),
     up(150, 100, { pointer: 'touch' }),
   ]),
-  E3: seq('E3 Browser steals the touch', ANDROID_CHROMIUM, [
+  E3: seq('E3 Browser steals the touch', ANDROID, [
     down(100, 100, { pointer: 'touch' }),
     ...moves([100, 100], [110, 100], 2, { pointer: 'touch', buttons: 1 }),
     pointerCancel({ pointer: 'touch' }),
   ]),
-  E4: seq('E4 Two-finger pan, zoom, turn', ANDROID_CHROMIUM, [
+  E4: seq('E4 Two-finger pan, zoom, turn', ANDROID, [
     down(100, 100, { pointer: 'touch', id: 1 }),
     down(200, 100, { pointer: 'touch', id: 2 }),
     move(110, 110, { pointer: 'touch', id: 1, buttons: 1 }),
@@ -477,7 +461,7 @@ export const SEQUENCES = {
     up(240, 120, { pointer: 'touch', id: 2 }),
     up(120, 120, { pointer: 'touch', id: 1 }),
   ]),
-  E5: seq('E5 Second finger after a drag started', ANDROID_CHROMIUM, [
+  E5: seq('E5 Second finger after a drag started', ANDROID, [
     down(100, 100, { pointer: 'touch', id: 1 }),
     ...moves([100, 100], [130, 100], 3, { pointer: 'touch', id: 1, buttons: 1 }),
     down(200, 100, { pointer: 'touch', id: 2 }),
@@ -486,37 +470,37 @@ export const SEQUENCES = {
     up(210, 100, { pointer: 'touch', id: 2 }),
     up(140, 100, { pointer: 'touch', id: 1 }),
   ]),
-  E6: seq('E6 Long press on Android', ANDROID_CHROMIUM, [
+  E6: seq('E6 Long press on Android', ANDROID, [
     down(100, 100, { pointer: 'touch', t: 0 }),
     { t: 600, raw: { kind: 'tick' } },
     contextMenu(100, 100, { t: 620 }),
     up(100, 100, { pointer: 'touch', t: 700 }),
   ]),
-  E7: seq('E7 Long press on iOS', IOS_WEBKIT, [
+  E7: seq('E7 Long press on iOS', IOS, [
     down(100, 100, { pointer: 'touch', t: 0 }),
     { t: 600, raw: { kind: 'tick' } },
     up(100, 100, { pointer: 'touch', t: 650 }),
   ]),
-  E8: seq('E8 Long press with movement', ANDROID_CHROMIUM, [
+  E8: seq('E8 Long press with movement', ANDROID, [
     down(100, 100, { pointer: 'touch', t: 0 }),
     move(115, 100, { pointer: 'touch', buttons: 1, t: 200 }),
     { t: 600, raw: { kind: 'tick' } },
     up(115, 100, { pointer: 'touch', t: 700 }),
   ]),
-  E9: seq('E9 Trackpad pinch with rotation drift', MAC_WEBKIT, [
+  E9: seq('E9 Trackpad pinch with rotation drift', MAC_GESTURES, [
     gesture('start', 1, 0),
     gesture('change', 1.2, 4),
     gesture('change', 1.5, -4),
     gesture('end', 1.5, -4),
   ]),
-  E10: seq('E10 Deliberate trackpad twist', MAC_WEBKIT, [
+  E10: seq('E10 Deliberate trackpad twist', MAC_GESTURES, [
     gesture('start', 1, 0),
     gesture('change', 1, 5),
     gesture('change', 1, 12),
     gesture('change', 1, 20),
     gesture('end', 1, 20),
   ]),
-  E11: seq('E11 Touch behaves like today', ANDROID_CHROMIUM, [
+  E11: seq('E11 Touch behaves like today', ANDROID, [
     down(100, 100, { pointer: 'touch', id: 1 }),
     move(120, 100, { pointer: 'touch', id: 1, buttons: 1 }),
     down(200, 200, { pointer: 'touch', id: 2 }),
@@ -525,7 +509,7 @@ export const SEQUENCES = {
     up(210, 200, { pointer: 'touch', id: 2 }),
     up(140, 100, { pointer: 'touch', id: 1 }),
   ]),
-  E12: seq('E12 iOS gesture events alongside pointers', IOS_WEBKIT, [
+  E12: seq('E12 iOS gesture events alongside pointers', IOS, [
     down(100, 100, { pointer: 'touch', id: 1 }),
     down(200, 100, { pointer: 'touch', id: 2 }),
     gesture('start', 1, 0),
@@ -536,19 +520,19 @@ export const SEQUENCES = {
     up(230, 100, { pointer: 'touch', id: 2 }),
     up(110, 100, { pointer: 'touch', id: 1 }),
   ]),
-  E13_PLANT_STAMP: seq('E13 Press-acting tools under a pinch (Plant stamp)', ANDROID_CHROMIUM, [
+  E13_PLANT_STAMP: seq('E13 Press-acting tools under a pinch (Plant stamp)', ANDROID, [
     down(100, 100, { pointer: 'touch', id: 1, t: 0 }),
     down(200, 100, { pointer: 'touch', id: 2, t: 40 }),
     move(90, 100, { pointer: 'touch', id: 1, buttons: 1 }),
     move(220, 100, { pointer: 'touch', id: 2, buttons: 1 }),
   ], { tool: 'plant-stamp' }),
-  E13_POLYGON: seq('E13 Press-acting tools under a pinch (Polygon)', ANDROID_CHROMIUM, [
+  E13_POLYGON: seq('E13 Press-acting tools under a pinch (Polygon)', ANDROID, [
     down(100, 100, { pointer: 'touch', id: 1, t: 0 }),
     down(200, 100, { pointer: 'touch', id: 2, t: 40 }),
     move(90, 100, { pointer: 'touch', id: 1, buttons: 1 }),
     move(220, 100, { pointer: 'touch', id: 2, buttons: 1 }),
   ], { tool: 'polygon' }),
-  E14: seq('E14 Press-acting tools under a long press', ANDROID_CHROMIUM, [
+  E14: seq('E14 Press-acting tools under a long press', ANDROID, [
     down(100, 100, { pointer: 'touch', t: 0 }),
     { t: 600, raw: { kind: 'tick' } },
     up(100, 100, { pointer: 'touch', t: 650 }),
@@ -557,34 +541,34 @@ export const SEQUENCES = {
   // 5.6 Wheel and trackpad
   F1: seq('F1 Windows wheel notch, Mouse', WINDOWS, [wheel(120, 80, { dy: 100 })]),
   F2: seq('F2 Windows wheel notch, Trackpad', WINDOWS, [wheel(120, 80, { dy: 100 })], { pointingDevice: 'trackpad' }),
-  F3: seq('F3 Firefox line mode', LINUX_CHROMIUM, [wheel(120, 80, { dy: 3, mode: 1 })]),
-  F4_MOUSE: seq('F4 Chromium pinch (synthetic Ctrl), Mouse', MAC_CHROMIUM, [wheel(120, 80, { dy: -2.3, ctrl: true })]),
-  F4_TRACKPAD: seq('F4 Chromium pinch (synthetic Ctrl), Trackpad', MAC_CHROMIUM, [wheel(120, 80, { dy: -2.3, ctrl: true })], { pointingDevice: 'trackpad' }),
+  F3: seq('F3 Firefox line mode', LINUX, [wheel(120, 80, { dy: 3, mode: 1 })]),
+  F4_MOUSE: seq('F4 Chromium pinch (synthetic Ctrl), Mouse', MAC, [wheel(120, 80, { dy: -2.3, ctrl: true })]),
+  F4_TRACKPAD: seq('F4 Chromium pinch (synthetic Ctrl), Trackpad', MAC, [wheel(120, 80, { dy: -2.3, ctrl: true })], { pointingDevice: 'trackpad' }),
   F5: seq('F5 Real Ctrl + wheel', WINDOWS, [
     keyState(false, { ctrl: true }),
     wheel(120, 80, { dy: 100, ctrl: true, physicalCtrl: true }),
     keyState(false),
   ], { pointingDevice: 'trackpad' }),
-  F6: seq('F6 Trackpad scroll, Trackpad', MAC_WEBKIT, [wheel(120, 80, { dx: 3.5, dy: -7.25 })], { pointingDevice: 'trackpad' }),
-  F7: seq('F7 Trackpad scroll, Mouse', MAC_WEBKIT, [wheel(120, 80, { dx: 3.5, dy: -7.25 })]),
+  F6: seq('F6 Trackpad scroll, Trackpad', MAC_GESTURES, [wheel(120, 80, { dx: 3.5, dy: -7.25 })], { pointingDevice: 'trackpad' }),
+  F7: seq('F7 Trackpad scroll, Mouse', MAC_GESTURES, [wheel(120, 80, { dx: 3.5, dy: -7.25 })]),
   F8: seq('F8 Shift + wheel, Trackpad, one axis', WINDOWS, [wheel(120, 80, { dy: 100, shift: true })], { pointingDevice: 'trackpad' }),
-  F9: seq('F9 Shift + wheel, macOS swapped', MAC_WEBKIT, [wheel(120, 80, { dx: 100, shift: true })], { pointingDevice: 'trackpad' }),
+  F9: seq('F9 Shift + wheel, macOS swapped', MAC_GESTURES, [wheel(120, 80, { dx: 100, shift: true })], { pointingDevice: 'trackpad' }),
   F10: seq('F10 Shift + wheel, Mouse', WINDOWS, [wheel(120, 80, { dy: 100, shift: true })]),
   F10B: seq('F10b Shift + wheel delivered as dx', WINDOWS, [wheel(120, 80, { dx: 100, shift: true })]),
-  F11: seq('F11 WKWebView pinch and rotate', MAC_WEBKIT, [
+  F11: seq('F11 WKWebView pinch and rotate', MAC_GESTURES, [
     gesture('start', 1, 0),
     gesture('change', 1.2, 5),
     gesture('change', 1.5, 12),
     gesture('end', 1.5, 12),
   ]),
-  F12: seq('F12 WKWebView pinch with Ctrl wheels', MAC_WEBKIT, [
+  F12: seq('F12 WKWebView pinch with Ctrl wheels', MAC_GESTURES, [
     gesture('start', 1, 0),
     wheel(200, 150, { dy: -3, ctrl: true }),
     gesture('change', 1.1, 0),
     wheel(200, 150, { dy: -3, ctrl: true }),
     gesture('end', 1.1, 0),
   ]),
-  F14: seq('F14 Momentum tail', MAC_WEBKIT, [
+  F14: seq('F14 Momentum tail', MAC_GESTURES, [
     ...Array.from({ length: 10 }, (_, index) => wheel(120, 80, { dy: 4 - index * 0.3, t: 16 * (index + 1) })),
     down(120, 80, { t: 170 }),
     ...Array.from({ length: 10 }, (_, index) => wheel(120, 80, { dy: 1 - index * 0.1, t: 176 + 16 * index })),
@@ -605,12 +589,12 @@ export const SEQUENCES = {
   ]),
 
   // 5.7 Middle button and Space
-  G1: seq('G1 Middle-drag', LINUX_CHROMIUM, [
+  G1: seq('G1 Middle-drag', LINUX, [
     down(100, 100, { button: 1 }),
     ...moves([100, 100], [130, 120], 3, { buttons: 4 }),
     up(130, 120, { button: 1 }),
   ]),
-  G2: seq('G2 Middle-click on Linux', LINUX_WEBKITGTK, [
+  G2: seq('G2 Middle-click on Linux', LINUX, [
     down(100, 100, { button: 1 }),
     up(100, 100, { button: 1 }),
   ]),
@@ -644,7 +628,7 @@ export const SEQUENCES = {
     ...moves([100, 100], [130, 100], 3, { buttons: 1 }),
     up(130, 100),
   ]),
-  G6: seq('G6 X11 autorepeat pairs', LINUX_WEBKITGTK, [
+  G6: seq('G6 X11 autorepeat pairs', LINUX, [
     keyState(true),
     down(100, 100),
     move(110, 100, { buttons: 1 }),

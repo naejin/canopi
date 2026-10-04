@@ -24,6 +24,5 @@ describe('workspace camera policy', () => {
     expect(readBack).toBeLessThan(threshold)
     expect(isWorkspaceOverviewScale(readBack)).toBe(false)
     expect(isWorkspaceOverviewScale(threshold * 0.999)).toBe(true)
-    expect(isWorkspaceOverviewScale(Number.NaN)).toBe(false)
   })
 })

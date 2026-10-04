@@ -12,7 +12,6 @@ import { planarToViewCamera } from '../../canvas/runtime/view/camera-math'
 import { createCameraDriverHost } from '../../canvas/runtime/view/driver-host'
 import { createViewNavigation, type ViewNavigation } from '../../canvas/runtime/view/navigation'
 import { planarCameraOf } from '../../canvas/runtime/view/view-transform'
-import { bearingCosSin } from '../../canvas/runtime/view/navigation-policy'
 import type {
   PlanarCamera,
   SceneExtent,
@@ -25,9 +24,6 @@ import type {
 } from '../../canvas/runtime/view/types'
 import { stageScaleToMapZoom } from '../../canvas/projection'
 import { createSessionPlane, type SessionPlane } from '../../canvas/session-plane'
-
-/** A plane-to-plane transform (SessionPlane.transformTo). */
-type SessionPlaneTransform = ReturnType<SessionPlane['transformTo']>
 
 export interface TestViewOptions {
   /** Default { width: 400, height: 300, devicePixelRatio: 1 }: the split files' camera today. */
@@ -52,9 +48,8 @@ export interface TestView {
   setViewport(v: { readonly x: number; readonly y: number; readonly scale: number }): void   // a 'set' to the camera the plane gives, bearing kept
   /** The bearing-0 placement in today's terms (planarCameraOf(view()) without the bearing): the split suites' camera.viewport. */
   viewport(): { readonly x: number; readonly y: number; readonly scale: number }
-  /** CameraController.reprojectViewport's numbers: the placement moved by a plane transform in plane terms, shown
-   *  through the plane, which stays. */
-  reproject(transform: SessionPlaneTransform): void
+  /** The session plane re-origins to `next`: the camera keeps its ground, as the runtime's re-origin moves it (planeChanged). */
+  setPlane(next: SessionPlane): void
   /** The scene the fits frame: its extent at each scale unless `extent` gives the points; an empty scene keeps the view unless
    *  `extent` gives an empty-scene scale. */
   setScene(scene: ScenePersistedState, extent?: Partial<SceneExtent>): void
@@ -64,7 +59,7 @@ export interface TestView {
 const DEFAULT_SCREEN: ViewScreen = { width: 400, height: 300, devicePixelRatio: 1 }
 
 export function createTestView(options: TestViewOptions = {}): TestView {
-  const plane = options.plane ?? createSessionPlane({ lon: 0, lat: 0 })
+  let plane = options.plane ?? createSessionPlane({ lon: 0, lat: 0 })
   const screen: ViewScreen = { ...DEFAULT_SCREEN, ...options.screen }
   const camera: ViewCamera = options.camera
     ? {
@@ -105,8 +100,9 @@ export function createTestView(options: TestViewOptions = {}): TestView {
       const { x, y, scale } = planarCameraOf(host.frames.viewFrame.peek().view)
       return { x, y, scale }
     },
-    reproject(transform) {
-      place(reprojectPlacement(planarCameraOf(host.frames.viewFrame.peek().view), transform))
+    setPlane(next) {
+      plane = next
+      host.current().planeChanged(next)
     },
     setScene(scene, given = {}) {
       extent = {
@@ -129,23 +125,6 @@ export function placeOnHost(
   const { view } = host.frames.viewFrame.peek()
   const target = planarToViewCamera({ ...placement, bearingDeg: placement.bearingDeg ?? 0 }, view.screen, plane)
   host.current().apply({ kind: 'set', target, animation: 'none' })
-}
-
-/**
- * The same placement in the next plane terms (CameraController.reprojectViewport's numbers): screen = turn(p × scale) + { x, y }
- * holds for p' = p × s + o, so the scale is divided by s and the offset, scaled and turned as plane points are, comes off the
- * translation.
- */
-function reprojectPlacement(placement: PlanarCamera, transform: SessionPlaneTransform): PlanarCamera {
-  const scale = placement.scale / transform.scale
-  const [cos, sin] = bearingCosSin(placement.bearingDeg)
-  const offset = { x: transform.offsetX * scale, y: transform.offsetY * scale }
-  return {
-    x: placement.x - (cos * offset.x + sin * offset.y),
-    y: placement.y - (cos * offset.y - sin * offset.x),
-    scale,
-    bearingDeg: placement.bearingDeg,
-  }
 }
 
 /** The frame a test view built with these options shows: for chrome that takes one frame (the rulers, the grid). */

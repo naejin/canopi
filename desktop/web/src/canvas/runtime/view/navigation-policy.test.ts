@@ -56,7 +56,6 @@ describe('navigation policy', () => {
       referenceLatitudeDeg: 48.85,
       minZoom: 0,
       maxZoom: 27,
-      overviewPixelsPerMetre: 0.1,
     })
     expect(policy.reducedMotion).toBe(reducedMotion)
     expect(Object.isFrozen(policy)).toBe(true)

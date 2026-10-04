@@ -184,7 +184,7 @@ export function GalleryCanvasSurface({
       }
       if (!runtimeIsActive()) return
       if (selectAll) activeRuntime.surfaces.commands.sceneEdits.selectAll()
-      else activeRuntime.surfaces.commands.sceneEdits.selectSameSpecies(specimens[0][0])
+      else activeRuntime.surfaces.commands.sceneEdits.selectSpecies([specimens[0][0]])
       if (!runtimeIsActive()) return
       activeResize.observe(container)
       if (!runtimeIsActive()) return
@@ -216,7 +216,7 @@ export function GalleryCanvasSurface({
     // The review surfaces open the right-click menu as the runtime would, beside the map's centre.
     const { sceneEdits } = session.commands
     if (surface === 'menu-mixed') sceneEdits.selectAll()
-    else sceneEdits.selectSameSpecies(specimens[0][0])
+    else sceneEdits.selectSpecies([specimens[0][0]])
     const rect = container.getBoundingClientRect()
     const x = rect.left + rect.width / 2
     const y = rect.top + 96

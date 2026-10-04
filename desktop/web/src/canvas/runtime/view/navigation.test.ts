@@ -213,6 +213,24 @@ describe('view navigation', () => {
     view.dispose()
   })
 
+  it('returns to a fit that reads back as site scale, even just below 0.1 px/m', () => {
+    // A 1000 × 800 fit pads 10 % a side: 800 px across the content. Content this wide fits within read-back tolerance below 0.1 px/m.
+    const scale = 0.1 * (1 - 1e-10)
+    const across = 800 / scale
+    const extent: SceneExtent = { emptySceneScale: 0, extentPoints: () => [{ x: 0, y: 0 }, { x: across, y: 1 }] }
+    const scene = createScene()
+    const view = createTestView({ screen: { width: 1000, height: 800 }, viewport: { x: 100, y: 0, scale: 8 } })
+    view.setScene(scene, extent)
+
+    view.navigation.returnToDesign()
+
+    // The fit, not the plane origin at the 100 m fallback (8 px/m on this screen).
+    expect(view.view().pixelsPerMetre).toBeCloseTo(scale, 12)
+    expect(view.view().pixelsPerMetre).toBeLessThan(0.1)
+    expect(frameOf(view).mode).toBe('site')
+    view.dispose()
+  })
+
   it('rejects nonfinite zoom input without publishing', () => {
     const view = createTestView()
     const before = frameOf(view)

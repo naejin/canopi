@@ -41,12 +41,12 @@ afterEach(() => {
 describe('new Design view', () => {
   it('defaults to the Sahara at zoom 4 without a last view', () => {
     expect(DEFAULT_NEW_DESIGN_VIEW).toEqual({ lon: 13, lat: 23, zoom: 4 })
-    expect(new SceneStore(emptyDesign()).sessionPlane.origin).toEqual({ lon: 13, lat: 23 })
+    expect(new SceneStore().hydrate(emptyDesign()).sessionPlane.origin).toEqual({ lon: 13, lat: 23 })
   })
 
   it('centres an empty Design on the last view', () => {
     const last = { lon: -1.5536, lat: 47.2184 }
-    const store = new SceneStore(emptyDesign(), () => last)
+    const store = new SceneStore(() => last).hydrate(emptyDesign())
     expect(store.sessionPlane.origin).toEqual(last)
     store.hydrate(emptyDesign())
     expect(store.sessionPlane.origin).toEqual(last)
@@ -59,7 +59,7 @@ describe('new Design view', () => {
       pinned_name: false, position: { lon: 5, lat: 45 }, rotation: null, scale: null, notes: null,
       planted_date: null, quantity: null,
     }]
-    const store = new SceneStore(file, () => ({ lon: -1.5536, lat: 47.2184 }))
+    const store = new SceneStore(() => ({ lon: -1.5536, lat: 47.2184 })).hydrate(file)
     expect(store.sessionPlane.origin).toEqual({ lon: 5, lat: 45 })
   })
 

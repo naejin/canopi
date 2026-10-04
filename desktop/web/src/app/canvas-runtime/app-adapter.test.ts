@@ -8,9 +8,6 @@ import { CanvasSpeciesCache } from '../../canvas/runtime/species-cache'
 import { t } from '../../i18n'
 import type { Settings } from '../../types/settings'
 import {
-  createDefaultLayerLockState,
-  createDefaultLayerOpacity,
-  createDefaultLayerVisibility,
   gridVisible,
   layerLockState,
   layerOpacity,
@@ -247,10 +244,15 @@ function createAdapter() {
   return createAppCanvasRuntimeAppAdapter({ presentationData: {} })
 }
 
+// The layer signals as the module starts them: the New Design defaults.
+const NEW_DESIGN_LAYER_VISIBILITY = layerVisibility.peek()
+const NEW_DESIGN_LAYER_LOCKS = layerLockState.peek()
+const NEW_DESIGN_LAYER_OPACITY = layerOpacity.peek()
+
 function resetLayerSignals(): void {
-  layerVisibility.value = createDefaultLayerVisibility()
-  layerLockState.value = createDefaultLayerLockState()
-  layerOpacity.value = createDefaultLayerOpacity()
+  layerVisibility.value = { ...NEW_DESIGN_LAYER_VISIBILITY }
+  layerLockState.value = { ...NEW_DESIGN_LAYER_LOCKS }
+  layerOpacity.value = { ...NEW_DESIGN_LAYER_OPACITY }
   gridVisible.value = true
   rulersVisible.value = true
 }

@@ -37,10 +37,6 @@ export class SceneRuntimeChromeCoordinator {
     this._visible = false
   }
 
-  refreshTheme(): void {
-    this._rulers?.refreshTheme()
-  }
-
   /**
    * Draws the rulers for this frame and returns the editing aids the workspace map draws (the grid and the ruler
    * guides), null while the chrome is hidden or there is nothing to draw.

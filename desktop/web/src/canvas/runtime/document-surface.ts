@@ -30,7 +30,6 @@ interface SceneCanvasDocumentSurfaceOptions {
   readonly viewNavigation: Pick<ViewNavigation, 'openAt' | 'clearTemporaryFocus'>
   readonly chrome: Pick<SceneRuntimeChromeCoordinator, 'attach' | 'show' | 'hide' | 'destroy'>
   readonly rendering: Pick<SceneRuntimeRenderScheduler, 'container' | 'invalidate' | 'resize' | 'dispose'>
-  readonly invalidateViewport: () => void
   readonly renderChrome: () => void
   readonly addGuide: (axis: 'h' | 'v', worldPosition: number) => void
   readonly clearHoveredEntity: () => void
@@ -79,7 +78,6 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
   zoomToFit(): void {
     const bearing = this._documentState === 'absent' ? 0 : this.options.readOpeningBearing()
     this.options.viewNavigation.openAt(bearing)
-    this.options.invalidateViewport()
   }
 
   loadDocument(file: CanopiFile): void {

@@ -83,7 +83,7 @@ function movedFirstPlant(x: number, y: number) {
 }
 
 function createHarness() {
-  const sceneStore = new SceneStore(makeFile())
+  const sceneStore = new SceneStore().hydrate(makeFile())
   const history = new SceneHistory()
   const invalidations: SceneEditInvalidationKind[] = []
   let sceneRevision = 0
@@ -222,7 +222,7 @@ function createAdmissionHarness(options: {
   readonly store: SceneStore
   readonly history: SceneHistory
 } {
-  const store = new SceneStore(options.file ?? makeFile())
+  const store = new SceneStore().hydrate(options.file ?? makeFile())
   const history = options.history ?? new SceneHistory()
   const coordinator = new SceneRuntimeEditCoordinator({
     sceneStore: store,

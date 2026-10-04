@@ -24,13 +24,6 @@ export interface PlanePoint {
   readonly y: number
 }
 
-// Plane-to-plane change: next = previous * scale + offset.
-interface SessionPlaneTransform {
-  readonly scale: number
-  readonly offsetX: number
-  readonly offsetY: number
-}
-
 export const SESSION_PLANE_REORIGIN_DISTANCE_METERS = 10_000
 export const DEFAULT_NEW_DESIGN_VIEW = Object.freeze({ lon: 13.0, lat: 23.0, zoom: 4 })
 
@@ -39,10 +32,6 @@ export interface SessionPlane {
   toPlane(point: GeoPosition): PlanePoint
   toGeo(point: PlanePoint): GeoPosition
   needsReorigin(viewCentre: PlanePoint): boolean
-  transformTo(next: SessionPlane): SessionPlaneTransform
-  // Mercator units per plane metre; exposed for affine camera math.
-  readonly mercatorUnitsPerMeter: number
-  readonly mercatorOrigin: PlanePoint
 }
 
 /** A geographic camera: the view centre, its MapLibre zoom and its bearing (degrees clockwise from north). */
@@ -80,8 +69,6 @@ export function createSessionPlane(origin: GeoPosition): SessionPlane {
   const unitsPerMeter = mercatorUnitsPerMeterAtLat(origin.lat)
   return Object.freeze({
     origin: frozenOrigin,
-    mercatorOrigin,
-    mercatorUnitsPerMeter: unitsPerMeter,
     toPlane(point: GeoPosition): PlanePoint {
       const mercator = geoToMercator(point.lon, point.lat)
       return {
@@ -98,13 +85,6 @@ export function createSessionPlane(origin: GeoPosition): SessionPlane {
     },
     needsReorigin(viewCentre: PlanePoint): boolean {
       return Math.hypot(viewCentre.x, viewCentre.y) > SESSION_PLANE_REORIGIN_DISTANCE_METERS
-    },
-    transformTo(next: SessionPlane): SessionPlaneTransform {
-      return {
-        scale: unitsPerMeter / next.mercatorUnitsPerMeter,
-        offsetX: (mercatorOrigin.x - next.mercatorOrigin.x) / next.mercatorUnitsPerMeter,
-        offsetY: (mercatorOrigin.y - next.mercatorOrigin.y) / next.mercatorUnitsPerMeter,
-      }
     },
   })
 }

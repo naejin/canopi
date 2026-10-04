@@ -20,7 +20,7 @@ import type {
 /** Under this angle from north the view reads as north-up (rulers, the compass hint). */
 const NORTH_UP_TOLERANCE_DEG = 0.05
 
-/** Pitch 0: centre, zoom and bearing + plane.mercatorOrigin / mercatorUnitsPerMeter → similarity. Both drivers, the snapshot map's
+/** Pitch 0: centre, zoom and bearing, through the plane's toPlane → similarity. Both drivers, the snapshot map's
  *  driver and the lens call this. The plane origin lands at turn(−centre × scale, bearing) + the screen centre. */
 export function buildViewTransform(input: {
   readonly camera: ViewCamera

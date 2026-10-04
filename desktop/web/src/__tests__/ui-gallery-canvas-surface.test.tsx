@@ -310,7 +310,7 @@ function fakeRuntimeComposition(
   })
   const commands = createTestCanvasCommandSurface({
     viewport: { zoomOut: vi.fn() },
-    sceneEdits: { selectSameSpecies: vi.fn() },
+    sceneEdits: { selectSpecies: vi.fn() },
   })
   const surfaces = createTestCanvasRuntimeSurfaces({ commands, documents })
   return {

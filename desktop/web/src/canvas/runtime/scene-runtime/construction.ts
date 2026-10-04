@@ -127,7 +127,7 @@ export function createSceneRuntimeConstruction(
     const last = appAdapter.settings.readLastView?.()
     return last ? { lon: last.lon, lat: last.lat, zoom: Math.min(last.zoom, NEW_DESIGN_OVERVIEW_MAX_ZOOM) } : DEFAULT_NEW_DESIGN_VIEW
   }
-  const sceneStore = new SceneStore(undefined, () => {
+  const sceneStore = new SceneStore(() => {
     const view = readEmptyDesignView()
     return { lon: view.lon, lat: view.lat }
   })
@@ -263,7 +263,6 @@ export function createSceneRuntimeConstruction(
     viewNavigation,
     chrome,
     rendering,
-    invalidateViewport: () => callbacks.invalidate('viewport'),
     renderChrome: callbacks.renderChrome,
     addGuide: callbacks.addGuide,
     clearHoveredEntity: () => callbacks.setHoveredTarget(null, { invalidate: false }),

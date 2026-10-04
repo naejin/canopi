@@ -139,7 +139,7 @@ function makeSettledSceneSession(
   file: CanopiFile,
   history = new SceneHistory(),
 ): CanvasDocumentSurface {
-  const sceneStore = new SceneStore(file);
+  const sceneStore = new SceneStore().hydrate(file);
   const authority = new SceneRuntimeEditCoordinator({
     sceneStore,
     history,

@@ -50,27 +50,6 @@ describe('createTestView', () => {
     view.dispose()
   })
 
-  it('reproject moves the placement as CameraController.reprojectViewport did', () => {
-    const view = createTestView({ viewport: { x: 100, y: 50, scale: 2 } })
-    const transform = { scale: 1.25, offsetX: -20, offsetY: 8 }
-    const before = [{ x: 0, y: 0 }, { x: 20, y: 30 }, { x: -7.5, y: 3.25 }].map((point) => ({ point, screen: view.view().worldToScreen(point) }))
-
-    view.reproject(transform)
-
-    // Today's reprojectPlaneViewport: scale / s, and the offset at the new scale off the translation.
-    const placement = view.viewport()
-    expect(placement.scale).toBeCloseTo(1.6, 6)
-    expect(placement.x).toBeCloseTo(132, 6)
-    expect(placement.y).toBeCloseTo(37.2, 6)
-    // A plane point p is p × s + o in the new terms, on the same pixel.
-    for (const { point, screen } of before) {
-      const moved = view.view().worldToScreen({ x: point.x * 1.25 - 20, y: point.y * 1.25 + 8 })
-      expect(moved.x).toBeCloseTo(screen.x, 6)
-      expect(moved.y).toBeCloseTo(screen.y, 6)
-    }
-    view.dispose()
-  })
-
   it('a turn and the settle run on Vitest fake timers', () => {
     vi.useFakeTimers()
     const view = createTestView()

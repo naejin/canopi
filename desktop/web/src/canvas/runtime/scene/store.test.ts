@@ -162,7 +162,7 @@ describe('scene store', () => {
       },
     }
 
-    const store = new SceneStore(file).setSelection([{ kind: 'plant', id: 'plant-1' }])
+    const store = new SceneStore().hydrate(file).setSelection([{ kind: 'plant', id: 'plant-1' }])
 
     expect(store.session.selectedTargets).toContainEqual({ kind: 'plant', id: 'plant-1' })
     expect(store.persisted.plants[0]).toMatchObject({
@@ -228,13 +228,13 @@ describe('scene store', () => {
     const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSceneGeoFrame(TEST_FRAME_ORIGIN))
     delete file.measurement_guides
 
-    const store = new SceneStore(file)
+    const store = new SceneStore().hydrate(file)
     expect(store.persisted.measurementGuides).toEqual([])
 
     const normalizedFile = store.toCanopiFile()
     expect(normalizedFile.measurement_guides).toEqual([])
 
-    const reloadedStore = new SceneStore(normalizedFile)
+    const reloadedStore = new SceneStore().hydrate(normalizedFile)
     expect(reloadedStore.persisted.measurementGuides).toEqual([])
   })
 
@@ -299,7 +299,7 @@ describe('scene store', () => {
       extra: {},
     }
 
-    const serialized = new SceneStore(file).toCanopiFile({ now: new Date(file.updated_at) })
+    const serialized = new SceneStore().hydrate(file).toCanopiFile({ now: new Date(file.updated_at) })
 
     expect(serialized.plants[0]?.locked).toBe(true)
     expect(serialized.zones[0]?.locked).toBe(true)
@@ -343,7 +343,7 @@ describe('scene store', () => {
       extra: {},
     } as CanopiFile
 
-    const store = new SceneStore(file)
+    const store = new SceneStore().hydrate(file)
 
     expect(store.persisted.zones[0]?.rotationDeg).toBe(35)
     expect(store.toCanopiFile({ now: new Date(file.updated_at) }).zones[0]?.rotation).toBe(35)
@@ -384,7 +384,7 @@ describe('scene store', () => {
       extra: {},
     }
 
-    const store = new SceneStore(file)
+    const store = new SceneStore().hydrate(file)
 
     store.updatePersisted((draft) => {
       draft.plants[0]!.stratum = 'high'

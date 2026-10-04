@@ -84,7 +84,7 @@ function sceneFields(file: CanopiFile): string {
 describe('geolocated design codec', () => {
   it('writes every loaded position back byte-identically when nothing changed', () => {
     const file = currentDesign()
-    const store = new SceneStore(file)
+    const store = new SceneStore().hydrate(file)
     expect(sceneFields(store.toCanopiFile())).toBe(sceneFields(file))
   })
 
@@ -98,7 +98,7 @@ describe('geolocated design codec', () => {
 
   it('rewrites only the edited plant, rounded to 1e-9 degree', () => {
     const file = currentDesign()
-    const store = new SceneStore(file)
+    const store = new SceneStore().hydrate(file)
     store.updatePersisted((draft) => {
       draft.plants[0]!.position = { x: draft.plants[0]!.position.x + 1.25, y: draft.plants[0]!.position.y }
     })
@@ -118,7 +118,7 @@ describe('geolocated design codec', () => {
 
   it('keeps every stored lon/lat unchanged across a re-origin beyond 10 km', () => {
     const file = currentDesign()
-    const store = new SceneStore(file)
+    const store = new SceneStore().hydrate(file)
     const farCentre = store.sessionPlane.toGeo({ x: 12_000, y: -3_000 })
     store.commitReorigin(store.beginReorigin(farCentre))
     expect(store.sessionPlane.origin).toEqual(farCentre)
@@ -147,7 +147,7 @@ describe('geolocated design codec', () => {
   })
 
   it('writes new objects with rounded lon/lat', () => {
-    const store = new SceneStore(undefined, ORIGIN)
+    const store = new SceneStore(() => ORIGIN)
     store.updatePersisted((draft) => {
       draft.annotations.push({
         kind: 'annotation', id: 'fresh', locked: false, annotationType: 'text',

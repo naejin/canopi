@@ -29,7 +29,6 @@ export interface RulerOverlayOptions {
  */
 export interface RulerOverlay {
   update(snapshot: RulerOverlaySnapshot): void
-  refreshTheme(): void
   destroy(): void
 }
 
@@ -125,18 +124,12 @@ class HtmlRulerOverlay implements RulerOverlay {
     }
   }
 
-  /** Repaints the latest frame in the canvas colours the theme switch just re-read, without waiting for the next frame. */
-  refreshTheme(): void {
-    if (this._snapshot) this.update(this._snapshot)
-  }
-
   /**
    * A guide released at `at`, in CSS px of the camera's screen (the map host): nothing while the rulers are hidden (off,
    * in overview or turned from north), or inside the ruler's own gutter; otherwise a guide at that world coordinate of
    * the latest camera.
    */
   private _createGuideAt(axis: RulerAxis, at: ScreenPoint): void {
-    if (this._destroyed) return
     const snapshot = this._snapshot
     if (!snapshot || !this._shown) return
     const origin = this._overlayOrigin()

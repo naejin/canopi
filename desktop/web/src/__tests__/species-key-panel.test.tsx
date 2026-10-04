@@ -47,7 +47,6 @@ describe('Plants in this Design', () => {
   let baseQueries: TestCanvasQuerySurface
   let frameBounds: ReturnType<typeof vi.fn<CanvasCommandSurface['viewport']['frameBounds']>>
   let selectSpecies: ReturnType<typeof vi.fn<CanvasCommandSurface['sceneEdits']['selectSpecies']>>
-  let selectSameSpecies: ReturnType<typeof vi.fn<CanvasCommandSurface['sceneEdits']['selectSameSpecies']>>
   let setPlantColorForSpecies: ReturnType<typeof vi.fn<CanvasCommandSurface['plantPresentation']['setPlantColorForSpecies']>>
 
   beforeEach(() => {
@@ -83,7 +82,6 @@ describe('Plants in this Design', () => {
     queries = { ...baseQueries, getSpeciesFocus: () => focus }
     frameBounds = vi.fn<CanvasCommandSurface['viewport']['frameBounds']>(() => true)
     selectSpecies = vi.fn<CanvasCommandSurface['sceneEdits']['selectSpecies']>()
-    selectSameSpecies = vi.fn<CanvasCommandSurface['sceneEdits']['selectSameSpecies']>()
     setPlantColorForSpecies = vi.fn<CanvasCommandSurface['plantPresentation']['setPlantColorForSpecies']>(() => 2)
     commands = createTestCanvasCommandSurface({
       speciesFocus: {
@@ -93,7 +91,7 @@ describe('Plants in this Design', () => {
         },
       },
       viewport: { frameBounds },
-      sceneEdits: { selectSpecies, selectSameSpecies },
+      sceneEdits: { selectSpecies },
       plantPresentation: { setPlantColorForSpecies },
     })
     setCurrentCanvasSession({
@@ -196,7 +194,7 @@ describe('Plants in this Design', () => {
       vi.useRealTimers()
     }
     await act(() => container.querySelector<HTMLButtonElement>('button[aria-label="Select the 2 Pommier cultivé plants on the map"]')!.click())
-    expect(selectSameSpecies).toHaveBeenCalledWith('Malus domestica')
+    expect(selectSpecies).toHaveBeenCalledWith(['Malus domestica'])
 
     expect(container.textContent).toContain('In the catalog, not in this Design')
     const open = container.querySelector<HTMLButtonElement>('button[aria-label="Open Pommier du Japon in the plant catalog"]')!
@@ -237,7 +235,7 @@ describe('Plants in this Design', () => {
     expect(queries.getSceneSnapshot()).toEqual(before)
     expect(container.textContent).toContain('Pommier cultivé · 2 plants highlighted')
     await act(() => buttonNamed('Select these plants').click())
-    expect(selectSameSpecies).toHaveBeenCalledWith('Malus domestica')
+    expect(selectSpecies).toHaveBeenCalledWith(['Malus domestica'])
     await act(() => buttonNamed('Clear').click())
     expect(queries.getSpeciesFocus().canonicalName).toBeNull()
   })

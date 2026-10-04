@@ -40,20 +40,11 @@ export class SceneStore {
   private readonly _plane = signal<SessionPlane | null>(null)
   private readonly _resolveEmptyOrigin: () => GeoPosition
 
-  /** `emptyOrigin` places the session plane of a Design without objects. */
-  constructor(
-    file?: CanopiFile,
-    emptyOrigin: GeoPosition | (() => GeoPosition) = DEFAULT_NEW_DESIGN_VIEW,
-  ) {
-    this._resolveEmptyOrigin = typeof emptyOrigin === 'function' ? emptyOrigin : () => emptyOrigin
-    if (file) {
-      const hydrated = hydrateSceneFromDesign(file, this._resolveEmptyOrigin())
-      this._persisted = hydrated.persisted
-      this._geo = hydrated.geo
-    } else {
-      this._persisted = createDefaultScenePersistedState()
-      this._geo = createSceneGeoFrame(this._resolveEmptyOrigin())
-    }
+  /** `emptyOrigin` places the session plane of a Design without objects; a Design loads through hydrate. */
+  constructor(emptyOrigin: () => GeoPosition = () => DEFAULT_NEW_DESIGN_VIEW) {
+    this._resolveEmptyOrigin = emptyOrigin
+    this._persisted = createDefaultScenePersistedState()
+    this._geo = createSceneGeoFrame(this._resolveEmptyOrigin())
     this._session = createDefaultSceneSessionState()
     this._plane.value = this._geo.plane
   }

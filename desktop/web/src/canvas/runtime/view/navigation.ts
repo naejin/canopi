@@ -4,6 +4,7 @@
 // the temporary-focus bookmark (LiDAR's Fit to data), jumps to a place or a camera, key turns, resets, turning to an edge, and rotation sessions. Every
 // fit is oriented at its bearing (fit.ts) and lands as a 'set' move to the camera that shows its placement.
 
+import { isWorkspaceOverviewScale, WORKSPACE_OVERVIEW_SCALE_THRESHOLD } from '../../workspace-camera-policy'
 import type { CameraDriverHost, CameraMove } from './camera-driver'
 import { placementCentre, screenToGeo } from './camera-math'
 import { acceptsMove } from './driver-frame'
@@ -146,16 +147,15 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
     returnToDesign() {
       // The fit when it reaches site scale and moves the view, else the plane origin centred at a usable scale.
       const bearing = driver().bearingTarget()
-      const policy = deps.policy()
       const framing = fitFrame(bearing)
       const fitted = fitScene(framing, deps.readSceneExtent(), bearing)
-      if (fitted.scale >= policy.overviewPixelsPerMetre && !samePlanar(fitted, framing.current)) {
+      if (!isWorkspaceOverviewScale(fitted.scale) && !samePlanar(fitted, framing.current)) {
         place(fitted)
         return
       }
       const { width, height } = framing.screen
       const scale = Math.min(framing.scaleBounds.max, Math.max(framing.scaleBounds.min, Math.min(width, height) / RETURN_VIEW_METRES))
-      place({ x: width / 2, y: height / 2, scale: Math.max(policy.overviewPixelsPerMetre, scale), bearingDeg: bearing })
+      place({ x: width / 2, y: height / 2, scale: Math.max(WORKSPACE_OVERVIEW_SCALE_THRESHOLD, scale), bearingDeg: bearing })
     },
     focusTemporaryBounds(bounds, options) {
       const focused = boundsFraming(bounds, options)

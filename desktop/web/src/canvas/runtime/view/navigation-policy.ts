@@ -10,7 +10,6 @@ import {
   singleWorldEffectiveMinimumZoom,
   WORKSPACE_MAP_MAX_ZOOM,
   WORKSPACE_MAP_MIN_ZOOM,
-  WORKSPACE_OVERVIEW_SCALE_THRESHOLD,
 } from '../../workspace-camera-policy'
 import type { ViewCamera, ViewScreen } from './types'
 
@@ -23,7 +22,6 @@ export interface NavigationPolicy {
   readonly referenceLatitudeDeg: number    // the session plane's latitude (the driver host's, per plane)
   readonly minZoom: number                 // 0
   readonly maxZoom: number                 // 27
-  readonly overviewPixelsPerMetre: number  // 0.1
   /** prefers-reduced-motion: reduce, a live matchMedia signal made in app/canvas-runtime/app-adapter.ts, declared on canvas/runtime/app-adapter.ts and
    *  passed to createCameraDriverHost; view/ never calls matchMedia (P4). Eases and tweens become 'none' moves while true. */
   readonly reducedMotion: ReadonlySignal<boolean>
@@ -45,7 +43,6 @@ export function createNavigationPolicy(referenceLatitudeDeg: number, reducedMoti
     referenceLatitudeDeg,
     minZoom: WORKSPACE_MAP_MIN_ZOOM,
     maxZoom: WORKSPACE_MAP_MAX_ZOOM,
-    overviewPixelsPerMetre: WORKSPACE_OVERVIEW_SCALE_THRESHOLD,
     reducedMotion,
   })
 }

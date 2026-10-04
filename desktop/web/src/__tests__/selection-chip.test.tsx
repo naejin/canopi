@@ -35,7 +35,7 @@ const PLANTS = [
 describe('Selection chip', () => {
   let container: HTMLDivElement
   let queries: TestCanvasQuerySurface
-  let selectSameSpecies: ReturnType<typeof vi.fn<CanvasCommandSurface['sceneEdits']['selectSameSpecies']>>
+  let selectSpecies: ReturnType<typeof vi.fn<CanvasCommandSurface['sceneEdits']['selectSpecies']>>
   let clearSelection: ReturnType<typeof vi.fn<CanvasCommandSurface['sceneEdits']['clearSelection']>>
 
   beforeEach(() => {
@@ -90,10 +90,10 @@ describe('Selection chip', () => {
       scene: store.persisted,
       localizedNames: new Map([['Prunus armeniaca', 'Apricot'], ['Mentha spicata', null]]),
     })
-    selectSameSpecies = vi.fn<CanvasCommandSurface['sceneEdits']['selectSameSpecies']>()
+    selectSpecies = vi.fn<CanvasCommandSurface['sceneEdits']['selectSpecies']>()
     clearSelection = vi.fn<CanvasCommandSurface['sceneEdits']['clearSelection']>()
     setCurrentCanvasSession({
-      commands: createTestCanvasCommandSurface({ sceneEdits: { selectSameSpecies, clearSelection } }),
+      commands: createTestCanvasCommandSurface({ sceneEdits: { selectSpecies, clearSelection } }),
       queries,
       documents: createTestCanvasDocumentSurface(),
       keyboard: createTestCanvasKeyboardPort(),
@@ -140,7 +140,7 @@ describe('Selection chip', () => {
     }
 
     await act(() => chip()!.querySelector<HTMLButtonElement>('button')!.click())
-    expect(selectSameSpecies).toHaveBeenCalledWith('Prunus armeniaca')
+    expect(selectSpecies).toHaveBeenCalledWith(['Prunus armeniaca'])
     await act(() => [...chip()!.querySelectorAll<HTMLButtonElement>('button')].at(-1)!.click())
     expect(clearSelection).toHaveBeenCalledTimes(1)
   })
@@ -230,7 +230,7 @@ describe('Selection chip', () => {
   it('offers Rename… for one zone, which renames it by its id through the runtime', async () => {
     const renameZone = vi.fn<CanvasCommandSurface['sceneEdits']['renameZone']>(() => true)
     setCurrentCanvasSession({
-      commands: createTestCanvasCommandSurface({ sceneEdits: { selectSameSpecies, clearSelection, renameZone } }),
+      commands: createTestCanvasCommandSurface({ sceneEdits: { selectSpecies, clearSelection, renameZone } }),
       queries,
       documents: createTestCanvasDocumentSurface(),
       keyboard: createTestCanvasKeyboardPort(),

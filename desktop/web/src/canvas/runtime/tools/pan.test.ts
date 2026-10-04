@@ -16,7 +16,7 @@ import { activeTool } from '../../session-state'
 import { CURRENT_BINDINGS } from '../input/bindings'
 import type { Gesture } from '../input/gestures'
 import { createInputRouter } from '../input/input-router'
-import { LINUX_CHROMIUM, down, move, runSequence, seq, up } from '../input/__fixtures__/sequences'
+import { LINUX, down, move, runSequence, seq, up } from '../input/__fixtures__/sequences'
 import type { ToolId } from '../interaction-types'
 import type { ScreenPoint } from '../view/types'
 import { createPanTool } from './pan'
@@ -67,7 +67,7 @@ describe('Pan tool', () => {
       navigation: { panByPx, zoomAroundPx: vi.fn(), beginRotation: vi.fn() },
       toolHost: h.host,
     })
-    const run = runSequence(seq('Pan tool drag', LINUX_CHROMIUM, [
+    const run = runSequence(seq('Pan tool drag', LINUX, [
       down(100, 100),
       move(110, 104, { buttons: 1 }),
       move(130, 120, { buttons: 1 }),

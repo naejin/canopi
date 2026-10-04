@@ -164,8 +164,8 @@ export class SceneRuntimeMutationController {
     this._runCommandWhenSettled(() => this._selectAllWhenSettled(), undefined)
   }
 
-  selectSameSpecies(canonicalName?: string): void {
-    this._runCommandWhenSettled(() => this._selectSameSpeciesWhenSettled(canonicalName), undefined)
+  selectSameSpecies(): void {
+    this._runCommandWhenSettled(() => this._selectSameSpeciesWhenSettled(), undefined)
   }
 
   selectSpecies(canonicalNames: readonly string[]): void {
@@ -435,19 +435,12 @@ export class SceneRuntimeMutationController {
     this._invalidateScene()
   }
 
-  private _selectSameSpeciesWhenSettled(canonicalName?: string): void {
-    const persisted = this._sceneStore.persisted
-    const referenceCanonicalName = canonicalName
-      ?? getSameSpeciesReferenceCanonicalName(persisted, this._getSelectionModel().editableTargets)
-    if (!referenceCanonicalName) return
-
-    const speciesPlantIds = getSelectablePlantIdsForSpecies(persisted, referenceCanonicalName)
-    if (speciesPlantIds.length === 0) return
-
-    const nextSelection = speciesPlantIds.map((id): SceneDesignObjectTarget => ({ kind: 'plant', id }))
-    if (sceneDesignObjectTargetsEqual(nextSelection, this._sceneStore.session.selectedTargets)) return
-    this._selection.set(nextSelection)
-    this._invalidateScene()
+  private _selectSameSpeciesWhenSettled(): void {
+    const referenceCanonicalName = getSameSpeciesReferenceCanonicalName(
+      this._sceneStore.persisted,
+      this._getSelectionModel().editableTargets,
+    )
+    if (referenceCanonicalName) this._selectSpeciesWhenSettled([referenceCanonicalName])
   }
 
   private _selectSpeciesWhenSettled(canonicalNames: readonly string[]): void {
