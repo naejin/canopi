@@ -171,7 +171,8 @@ pub(super) fn from_reference(reference: &str) -> Result<ResolvedCrs, String> {
     if let Some(definition) = proj4_extension(&nodes) {
         return from_proj4(definition).map(stored);
     }
-    let crs = Crs::from_wkt(trimmed).map_err(|e| format!("unsupported CRS WKT: {e}"))?;
+    let crs = Crs::from_wkt(&without_codes(trimmed, &nodes))
+        .map_err(|e| format!("unsupported CRS WKT: {e}"))?;
     let params = crs.projection.params();
     // wbprojection reads the projection in metres from Greenwich, as its keys
     // are written back (a projected CRS's meridian goes into its central
@@ -403,11 +404,13 @@ fn datum_shift(definition: &str) -> Option<Vec<f64>> {
 }
 
 /// One node of a WKT: its keyword, the keywords of the nodes it sits in
-/// (outermost first) and its text between the brackets.
+/// (outermost first), its text between the brackets and where it lies in
+/// the WKT, keyword to closing bracket.
 struct WktNode<'a> {
     parents: Vec<&'a str>,
     keyword: &'a str,
     body: &'a str,
+    span: std::ops::Range<usize>,
 }
 
 impl WktNode<'_> {
@@ -444,18 +447,20 @@ fn wkt_nodes(wkt: &str) -> Vec<WktNode<'_>> {
         match ch {
             '"' => quoted = !quoted,
             '[' if !quoted => {
-                let keyword = wkt[..index].rsplit([',', '[']).next().unwrap_or("").trim();
+                let piece = wkt[..index].rsplit([',', '[']).next().unwrap_or("");
                 let parents = open.iter().map(|(node, _)| nodes[*node].keyword).collect();
                 open.push((nodes.len(), index + 1));
                 nodes.push(WktNode {
                     parents,
-                    keyword,
+                    keyword: piece.trim(),
                     body: "",
+                    span: index - piece.len()..wkt.len(),
                 });
             }
             ']' if !quoted => {
                 if let Some((node, start)) = open.pop() {
                     nodes[node].body = &wkt[start..index];
+                    nodes[node].span.end = index + 1;
                 }
             }
             _ => {}
@@ -554,6 +559,24 @@ fn own_code(nodes: &[WktNode]) -> Option<u32> {
         })
         .min()
         .map(|(_, code)| code)
+}
+
+/// `wkt` without its `AUTHORITY` and `ID` nodes. `Crs::from_wkt` first takes
+/// the registry definition of the last code a WKT names, which in one naming
+/// no code of its own is a nested node's: a projected CRS whose last code is
+/// its geographic CRS's would be read as longitudes and latitudes.
+fn without_codes(wkt: &str, nodes: &[WktNode]) -> String {
+    let mut kept = String::with_capacity(wkt.len());
+    let mut from = 0;
+    for node in nodes {
+        if matches!(node.keyword, "AUTHORITY" | "ID") && node.span.start >= from {
+            let cut = node.span.start - usize::from(wkt[..node.span.start].ends_with(','));
+            kept.push_str(&wkt[from..cut]);
+            from = node.span.end;
+        }
+    }
+    kept.push_str(&wkt[from..]);
+    kept
 }
 
 /// WKT with the authority node GDAL and the parser both key on, so a
@@ -1438,6 +1461,33 @@ mod tests {
                     "EPSG:{code} at {lon} {lat}: {px} {py}, PROJ {x} {y}"
                 );
             }
+        }
+    }
+
+    /// A projected WKT naming no code of its own is read as it is spelled,
+    /// never as the geographic CRS nested in it: with UTM 31N's root and
+    /// unit codes removed, its last code is its GEOGCS's (4326), which
+    /// wbprojection would take as the whole CRS.
+    #[test]
+    fn a_wkt_naming_no_code_is_not_read_as_its_geographic_crs() {
+        let wkt = crs_definitions::from_code(32631)
+            .unwrap()
+            .wkt
+            .replace(r#",AUTHORITY["EPSG","32631"]]"#, "]")
+            .replace(r#",AUTHORITY["EPSG","9001"]"#, "");
+        assert_eq!(own_code(&wkt_nodes(&wkt)), None);
+        let custom = from_reference(&wkt).unwrap();
+        assert_eq!(custom.epsg, None);
+        assert!(custom.is_projected(), "{}", custom.definition);
+        let wgs84 = from_epsg(4326).unwrap();
+        let utm = from_epsg(32631).unwrap();
+        for (lon, lat) in [(3.0, 45.0), (2.35, 48.85)] {
+            let (x, y) = wgs84.transform_to(lon, lat, &utm).unwrap();
+            let (px, py) = wgs84.transform_to(lon, lat, &custom).unwrap();
+            assert!(
+                (px - x).abs() < 0.01 && (py - y).abs() < 0.01,
+                "{lon} {lat}: {px} {py}, EPSG:32631 {x} {y}"
+            );
         }
     }
 
