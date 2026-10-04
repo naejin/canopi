@@ -15,7 +15,7 @@ export interface ZoneMeasurementLabel {
 export function createEllipticalZoneMeasurements(
   center: ScenePoint,
   radii: ScenePoint,
-  rotationDeg = 0,
+  rotationDeg: number,
 ): ZoneMeasurementLabel[] {
   const width = Math.abs(radii.x) * 2
   const height = Math.abs(radii.y) * 2

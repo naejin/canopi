@@ -21,7 +21,7 @@ interface SceneRect {
 export function appendRectangleZoneToDraft(
   draft: ScenePersistedState,
   rect: SceneRect,
-  rotationDeg = 0,
+  rotationDeg: number,
 ): string {
   const zoneId = newZoneId()
   draft.zones = [
@@ -50,7 +50,7 @@ export function appendRectangleZoneToDraft(
 export function appendEllipseZoneToDraft(
   draft: ScenePersistedState,
   rect: SceneRect,
-  rotationDeg = 0,
+  rotationDeg: number,
 ): string {
   const zoneId = newZoneId()
   draft.zones = [
@@ -193,7 +193,7 @@ export function appendTextAnnotationToDraft(
   draft: ScenePersistedState,
   position: ScenePoint,
   text: string,
-  rotationDeg: number | null = null,
+  rotationDeg: number | null,
 ): string {
   const id = createUuid()
   draft.annotations = [

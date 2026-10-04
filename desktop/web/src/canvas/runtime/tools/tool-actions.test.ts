@@ -6,7 +6,7 @@ import { appendEllipseZoneToDraft, appendRectangleZoneToDraft, appendTextAnnotat
 describe('append helpers', () => {
   it('a rectangle keeps its unturned box and turns about its centre', () => {
     const draft = createDefaultScenePersistedState()
-    appendRectangleZoneToDraft(draft, { x: 0, y: 0, width: 4, height: 2 })
+    appendRectangleZoneToDraft(draft, { x: 0, y: 0, width: 4, height: 2 }, 0)
     appendRectangleZoneToDraft(draft, { x: 0, y: 0, width: 4, height: 2 }, 90)
     const [level, turned] = draft.zones
     expect(level?.rotationDeg).toBe(0)
@@ -19,15 +19,15 @@ describe('append helpers', () => {
 
   it('an ellipse keeps its centre and radii and stores the turn', () => {
     const draft = createDefaultScenePersistedState()
-    appendEllipseZoneToDraft(draft, { x: 0, y: 0, width: 4, height: 2 })
+    appendEllipseZoneToDraft(draft, { x: 0, y: 0, width: 4, height: 2 }, 0)
     appendEllipseZoneToDraft(draft, { x: 0, y: 0, width: 4, height: 2 }, 30)
     expect(draft.zones.map(zone => zone.rotationDeg)).toEqual([0, 30])
     expect(draft.zones[1]?.points).toEqual([{ x: 2, y: 1 }, { x: 2, y: 1 }])
   })
 
-  it('a note stores null by default, or the given angle', () => {
+  it('a note stores null (level with north) or the given angle', () => {
     const draft = createDefaultScenePersistedState()
-    appendTextAnnotationToDraft(draft, { x: 1, y: 2 }, 'level')
+    appendTextAnnotationToDraft(draft, { x: 1, y: 2 }, 'level', null)
     appendTextAnnotationToDraft(draft, { x: 1, y: 2 }, 'turned', 30)
     expect(draft.annotations.map(note => note.rotationDeg)).toEqual([null, 30])
   })
