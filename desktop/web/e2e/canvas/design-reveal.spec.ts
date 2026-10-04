@@ -101,3 +101,26 @@ test('a New Design\'s place field has keyboard focus once the Design shows', asy
   await expect(page.locator('[data-start-screen]')).toHaveCount(0)
   await expect(page.locator('[data-site-locate]').getByRole('combobox', { name: 'Place or coordinates' })).toBeFocused()
 })
+
+test('the transparent chrome of a hidden Design takes no pointer input, even where a part asks for it', async ({ page }) => {
+  await page.goto('')
+  await openFixture(page)
+
+  // The hidden window lasts until the first scene is drawn, too short to sample reliably, so the canvas area is given the
+  // attribute the reveal sets: what is under test is the cascade. Rulers set pointer-events: auto inline, and the probe stands
+  // for chrome whose stylesheet does (the place card row, the map notice's Retry).
+  const takesPointer = await page.evaluate(() => {
+    const area = document.querySelector('[data-testid="web-canvas-workspace-surface"]')!.parentElement!
+    const probe = document.createElement('div')
+    probe.innerHTML = '<div><button type="button" style="pointer-events: auto" data-probe>probe</button></div>'
+    area.append(probe)
+    area.setAttribute('data-design-hidden', '')
+    const found = [...area.querySelectorAll<HTMLElement>('*')]
+      .filter((element) => element.closest('[data-start-screen]') === null && getComputedStyle(element).pointerEvents !== 'none')
+      .map((element) => element.outerHTML.slice(0, 120))
+    area.removeAttribute('data-design-hidden')
+    probe.remove()
+    return found
+  })
+  expect(takesPointer).toEqual([])
+})

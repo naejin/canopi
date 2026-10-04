@@ -302,9 +302,11 @@ describe('CanvasPanel opening a Design', () => {
     expect(area, 'the canvas area hides everything but the start screen').not.toBeNull()
     expect(container.querySelector('[data-testid="welcome-screen"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="canvas-chrome"]'), 'mounted, so it registers what it covers').not.toBeNull()
-    // Transparent, not visibility: hidden, which would refuse the focus a field gives itself on mount (e2e/canvas/design-reveal.spec.ts).
+    // Transparent, not visibility: hidden, which would refuse the focus a field gives itself on mount; the real browser checks
+    // focus and that no part of it takes pointer input (e2e/canvas/design-reveal.spec.ts).
     const css = readFileSync('src/components/panels/Panels.module.css', 'utf8')
-    expect(css).toMatch(/\.canvasArea\[data-design-hidden\] > :not\(\[data-start-screen\], :has\(\[data-start-screen\]\)\) \{\s*opacity: 0;\s*pointer-events: none;\s*\}/)
+    expect(css).toMatch(/\.canvasArea\[data-design-hidden\] > :not\(\[data-start-screen\], :has\(\[data-start-screen\]\)\) \{\s*opacity: 0;\s*\}/)
+    expect(css).not.toMatch(/visibility: hidden/)
 
     await act(async () => { presented.value = true })
 

@@ -59,7 +59,9 @@ export class SceneRuntimeRenderScheduler {
   /** Scene renders up to this epoch were started before the latest awaitPresentation; only a later one presents. */
   private _presentAfterEpoch = 0
   private readonly _presented = signal(true)
-  /** Nothing will draw an opened Design: the runtime has no renderer, or unmount released it and no mount has begun since. */
+  /** The runtime has no renderer, or unmount released it and no mount has begun since, so nothing here will draw an opened
+   *  Design. A renderer that is never mounted (no WebGL2, the map failed first) is not covered: presented stays false, and
+   *  the map error shows the Design (app/canvas-map-surface/design-reveal.ts). */
   private _unmounted: boolean
 
   constructor(private readonly _options: SceneRuntimeRenderSchedulerOptions) {

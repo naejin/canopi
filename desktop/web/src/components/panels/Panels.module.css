@@ -34,7 +34,13 @@
    itself on mount (the New Design place field) keeps that focus when it shows. */
 .canvasArea[data-design-hidden] > :not([data-start-screen], :has([data-start-screen])) {
   opacity: 0;
-  pointer-events: none;
+}
+
+/* Transparent chrome stacked over the start screen must not take its clicks, including parts that ask for pointer input
+   (the rulers set it inline, so only !important wins; e2e/canvas/design-reveal.spec.ts). */
+.canvasArea[data-design-hidden] > :not([data-start-screen], :has([data-start-screen])),
+.canvasArea[data-design-hidden] > :not([data-start-screen], :has([data-start-screen])) * {
+  pointer-events: none !important;
 }
 
 /* Rulers start below the floating title bar (and any notice) and right of the tool rail
