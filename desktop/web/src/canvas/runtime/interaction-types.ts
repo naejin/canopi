@@ -5,7 +5,7 @@ import type { SavedObjectStampPayload } from '../saved-object-stamp-payload'
 
 export type PointerKind = 'mouse' | 'pen' | 'touch'
 export interface Modifiers { readonly shift: boolean; readonly ctrl: boolean; readonly alt: boolean; readonly meta: boolean }
-export type CancelReason = 'pointercancel' | 'lost-capture' | 'blur' | 'hidden' | 'escape' | 'multitouch' | 'chord' | 'tool-change'
+export type CancelReason = 'pointercancel' | 'lost-capture' | 'blur' | 'hidden' | 'escape' | 'multitouch' | 'tool-change'
   | 'navigate'                                                  // a Pan-tool press whose drag panned: after its pan end (spec §2.2)
 export type ToolId =
   | 'select' | 'hand' | 'plant-stamp' | 'text' | 'line' | 'measurement-guide' | 'rectangle' | 'ellipse'
