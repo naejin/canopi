@@ -47,7 +47,7 @@ export interface ViewCamera {
 /**
  * A plane placement: a plane point p lands on screen at turn(p × scale, bearingDeg) + { x, y }: scaled, turned counter-clockwise
  * on screen by bearingDeg about the screen origin (so the compass direction bearingDeg points up), then translated, so { x, y } is
- * the plane origin's screen point; at bearing 0 it is today's CameraController viewport. No driver holds one (both hold a
+ * the plane origin's screen point; at bearing 0, screen = p × scale + { x, y }. No driver holds one (both hold a
  * ViewCamera): it is what a fit computes (fit.ts), what planarCameraOf reads off a transform for the chrome, and how tests place
  * the test view. A placement read back from a camera matches within 1e-6 px, not bit for bit.
  */
@@ -73,7 +73,7 @@ export interface ViewTransform {
   /** Bulk billboard projection: reads [x0,y0,x1,y1,…] metres, writes CSS px. No allocation. */
   projectAnchors(world: Float64Array, out: Float32Array, count: number): void
 
-  /** Local ground resolution at a world point (view centre if omitted). Replaces `1 / viewport.scale` and the scale-bar value. */
+  /** Local ground resolution at a world point (view centre if omitted): the scale bar and ratio read it. */
   metresPerPixelAt(p?: WorldPoint): number
   screenDistance(a: WorldPoint, b: WorldPoint): number
   /** Unit world vectors of screen-right and screen-down at a point (view centre if omitted). */
@@ -84,7 +84,7 @@ export interface ViewTransform {
   /** Four projected corners, never two (rotation-handle anchor, menu anchor). */
   worldQuadToScreen(q: WorldQuad): readonly [ScreenPoint, ScreenPoint, ScreenPoint, ScreenPoint]
 
-  readonly pixelsPerMetre: number            // at the plane origin: today's `viewport.scale` (zoom bands, policy)
+  readonly pixelsPerMetre: number            // at the plane origin (zoom bands, policy)
   readonly northUp: boolean                  // angularDistanceToNorth(bearing) < 0.05° and pitch 0
 }
 

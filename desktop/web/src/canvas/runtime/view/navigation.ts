@@ -59,7 +59,7 @@ export interface ViewNavigation extends ViewCommandSurface {
   zoomAroundPx(anchor: ScreenPoint, factor: number): void
 }
 
-/** Zoom in and zoom out: today's CameraController step about the screen centre. */
+/** Zoom in and zoom out: the step about the screen centre. */
 const ZOOM_STEP_FACTOR = 1.1
 /** Return to Design's fallback frames this many metres across the shorter screen side, the plane origin centred. */
 const RETURN_VIEW_METRES = 100
@@ -142,7 +142,7 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
       place(fitScene(fitFrame(bearing), { extentPoints: () => points, emptySceneScale: 0 }, bearing))
     },
     returnToDesign() {
-      // Today's rule: the fit when it reaches site scale and moves the view, else the plane origin centred at a usable scale.
+      // The fit when it reaches site scale and moves the view, else the plane origin centred at a usable scale.
       const bearing = driver().bearingTarget()
       const policy = deps.policy()
       const framing = fitFrame(bearing)

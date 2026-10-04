@@ -95,7 +95,7 @@ export function zoomFloorForArc(screen: ViewScreen, policy: NavigationPolicy, fr
 /**
  * ViewFrame.scaleBounds at a bearing (spec §1.1b): the policy's zoom range with the single-world floor for that bearing, in px/m at
  * the reference latitude (cameraScaleBoundsForPolicy over the policy's own values). At bearing 0 on a screen whose larger side is at
- * most 512 px, today's CameraController bounds.
+ * most 512 px, the policy's zoom range alone: the single-world floor does not bite.
  */
 export function scaleBoundsAt(screen: ViewScreen, policy: NavigationPolicy, bearingDeg: number): { readonly min: number; readonly max: number } {
   const bounds = cameraScaleBoundsForPolicy({
@@ -146,7 +146,7 @@ export function shortestArc(fromDeg: number, toDeg: number): number {
 }
 
 /**
- * cos and sin of a bearing, exact at the four right angles (so bearing 0 is today's arithmetic bit for bit). Screen and plane
+ * cos and sin of a bearing, exact at the four right angles (so bearing 0 is the unturned arithmetic bit for bit). Screen and plane
  * rotations in view/ all go through it.
  */
 export function bearingCosSin(deg: number): readonly [number, number] {

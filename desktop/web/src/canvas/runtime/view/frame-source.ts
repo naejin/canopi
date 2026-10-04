@@ -18,7 +18,7 @@ import type {
 
 /** A frame this long without a newer one is the settled frame. */
 export const SETTLE_MS = 150
-/** The overview pin shows only this many CSS px or more inside every screen edge (today's CanvasOverview margin). */
+/** The overview pin shows only this many CSS px or more inside every screen edge. */
 const DESIGN_PIN_EDGE_MARGIN_PX = 24
 /** One zoom band per factor of 1.25 in px/m: the level-of-detail key. */
 const ZOOM_BAND_FACTOR = 1.25

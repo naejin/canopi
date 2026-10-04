@@ -2,8 +2,8 @@
 //
 // Owns framing: the screen rectangle the chrome leaves, and the oriented fits that place a PlanarCamera inside it (Fit to Design
 // over a scale-dependent point set, temporary focus on a box). A fit projects its points onto the screen axes at the target bearing
-// and fits that extent, never a world-axis box; at bearing 0 each fit is today's CameraController fit, bit for bit (INV-CAM-09,
-// INV-CAM-10).
+// and fits that extent, never a world-axis box; at bearing 0 the projection is the identity, so the fit is the plain planar fit
+// (fit.test.ts holds the numbers).
 
 import { bearingCosSin, normaliseBearing } from './navigation-policy'
 import type { PlanarCamera, SceneBounds, SceneExtent, ScreenInsets, TemporaryBoundsFocusOptions, WorldPoint } from './types'
@@ -153,7 +153,7 @@ export function isEmptyExtent(extent: SceneExtent, pixelsPerMetre: number): bool
   return orientedExtent(extent.extentPoints(pixelsPerMetre), 0) === null
 }
 
-/** Null for an empty or non-finite point set (today's computeSceneBounds returning null). */
+/** Null for an empty or non-finite point set. */
 function orientedExtent(points: readonly WorldPoint[], bearingDeg: number): OrientedExtent | null {
   const [cos, sin] = bearingCosSin(bearingDeg)
   const level = cos === 1 && sin === 0

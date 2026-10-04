@@ -53,7 +53,7 @@ export interface ViewReadSurface {
 export interface ViewCommandSurface {
   zoomIn(): void
   zoomOut(): void
-  zoomBy(factor: number): void                         // kept from today's viewport surface (zoom slider)
+  zoomBy(factor: number): void                         // the scale menu and plant coverage
   zoomToFit(): void                                    // Fit to Design, Home
   zoomToSelection(): void                              // Shift+2
   returnToDesign(): void                               // kept: "Back to my Design"
@@ -66,6 +66,6 @@ export interface ViewCommandSurface {
   rotateBy(direction: 1 | -1): void                    // next absolute 15° multiple in that direction
   beginRotation(pivot: 'centre'): RotationSession      // compass drag
   showCamera(camera: ViewCamera, options?: { readonly motion?: 'fly' | 'jump' }): void   // saved views, stories
-  /** Place search. Returns false when the place cannot be shown (today's boolean `showPlace`). */
+  /** Place search. Returns false when the place cannot be shown. */
   showPlace(place: GeoPoint, zoom: number, options?: { readonly motion?: 'fly' | 'jump' }): boolean
 }
