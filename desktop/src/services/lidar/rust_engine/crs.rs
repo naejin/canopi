@@ -185,7 +185,7 @@ pub(super) fn from_reference(reference: &str) -> Result<ResolvedCrs, String> {
     }
     user_defined(
         params.clone(),
-        wkt_shift(&nodes),
+        wkt_shift(&nodes).or_else(|| geographic_shift(&nodes)),
         crs.name.clone(),
         trimmed.to_string(),
     )
@@ -459,6 +459,23 @@ fn with_definition(wkt: &str, definition: &str) -> String {
         Some(body) => format!("{body},EXTENSION[\"PROJ4\",\"{definition}\"]]"),
         None => wkt.to_string(),
     }
+}
+
+/// The shift of the registry geographic CRS a WKT names inside it, as
+/// `datum_of` takes it for keys: GDAL 3 writes WKT1 without TOWGS84.
+fn geographic_shift(nodes: &[WktNode]) -> Option<Vec<f64>> {
+    let code = nodes
+        .iter()
+        .filter(|node| {
+            node.parents.last().is_some_and(|parent| {
+                matches!(
+                    *parent,
+                    "GEOGCS" | "GEOGCRS" | "BASEGEOGCRS" | "GEODCRS" | "BASEGEODCRS"
+                )
+            })
+        })
+        .find_map(WktNode::epsg)?;
+    datum_shift(&from_epsg(code).ok()?.definition)
 }
 
 /// The PROJ definition a WKT's `EXTENSION["PROJ4",..]` node carries.
@@ -1291,6 +1308,33 @@ mod tests {
         assert_eq!(resolved.epsg, Some(28992));
         let keys = geokeys_for(&resolved).unwrap();
         assert_eq!(short(&keys, key::ProjectedCSTypeGeoKey), Some(28992));
+    }
+
+    /// GDAL 3 writes WKT1 without TOWGS84. A custom grid on a registry datum
+    /// (here RD New and Belgian Lambert 72 with their own codes removed)
+    /// takes the shift of the geographic CRS it names, as keys do, and places
+    /// where PROJ places the code.
+    #[test]
+    fn a_wkt_naming_no_code_takes_its_geographic_codes_shift() {
+        let wgs84 = from_epsg(4326).unwrap();
+        for code in [28992u32, 31370] {
+            let mut wkt = crs_definitions::from_code(code as u16)
+                .unwrap()
+                .wkt
+                .replace(&format!(r#",AUTHORITY["EPSG","{code}"]]"#), "]");
+            let start = wkt.find(",TOWGS84[").unwrap();
+            let end = start + wkt[start..].find(']').unwrap() + 1;
+            wkt.replace_range(start..end, "");
+            let custom = from_reference(&wkt).unwrap();
+            assert_eq!(custom.epsg, None);
+            for &(_, lon, lat, x, y) in REFERENCE_POINTS.iter().filter(|row| row.0 == code) {
+                let (px, py) = wgs84.transform_to(lon, lat, &custom).unwrap();
+                assert!(
+                    (px - x).abs() < 0.01 && (py - y).abs() < 0.01,
+                    "EPSG:{code} at {lon} {lat}: {px} {py}, PROJ {x} {y}"
+                );
+            }
+        }
     }
 
     /// NAD83 / New York Long Island (EPSG:2263) is in US survey feet: points
