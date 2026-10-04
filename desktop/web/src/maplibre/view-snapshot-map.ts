@@ -122,7 +122,6 @@ interface ViewSnapshotMapLibreMap extends SharedMapSceneMap {
   getCenter(): MapLibreLngLat
   getZoom(): number
   getBearing(): number
-  unproject(point: [number, number]): MapLibreLngLat
   setTransformConstrain?(constrain: MapLibreTransformConstrain | null): void
   redraw(): void
   remove(): void

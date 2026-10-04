@@ -30,17 +30,12 @@ export interface MapLibreMapInstance {
   remove(): void
   on(type: 'load' | 'style.load' | 'error' | 'sourcedata' | 'idle' | 'move' | 'moveend' | 'resize' | 'webglcontextlost' | 'webglcontextrestored', listener: (event?: unknown) => void): void
   off(type: 'load' | 'style.load' | 'error' | 'sourcedata' | 'idle' | 'move' | 'moveend' | 'resize' | 'webglcontextlost' | 'webglcontextrestored', listener: (event?: unknown) => void): void
-  project?(lnglat: [number, number]): { x: number; y: number }
-  /** CSS px relative to the canvas' top-left corner → the ground under it. */
-  unproject?(point: [number, number]): MapLibreLngLat
   getPitch?(): number
   /** Degrees in (−180, 180]. */
   getBearing?(): number
   /** Replaces MapLibre's whole default constrain (zoom range and the world hold); null restores it. */
   setTransformConstrain?(constrain: MapLibreTransformConstrain | null): void
   getZoom?(): number
-  getMinZoom?(): number
-  getMaxZoom?(): number
   getCenter?(): { lng: number; lat: number }
   getCanvas?(): HTMLCanvasElement
   getBounds?(): {
@@ -51,7 +46,6 @@ export interface MapLibreMapInstance {
   }
   loaded?(): boolean
   isStyleLoaded?(): boolean
-  isSourceLoaded?(id: string): boolean
   addSource(id: string, source: Record<string, unknown>): void
   getSource(id: string): { setData(data: unknown): void } | undefined
   removeSource(id: string): void
