@@ -1204,6 +1204,29 @@ describe('releases the tool did not hear (today\'s pointerup cleanup)', () => {
     events.pointerUp({ x: 50, y: 50 }, { button: 2 })
     expect(rectangle.calls.slice(before)).toEqual([])
   })
+
+  it('a tool whose cancel throws mid-drag still lets both the session and the host enter overview', () => {
+    const rectangle = stubTool('rectangle', {
+      gesture: (gesture) => {
+        if (gesture.kind === 'cancel') throw new Error('cancel failed')
+        return 'pass'
+      },
+    })
+    useStubTools(rectangle)
+    const { session } = createSession()
+    session.setTool('rectangle')
+    container.focus()
+    events.pointerDown({ x: 20, y: 20 })
+    events.pointerMove({ x: 60, y: 40 })
+    events.holdSpace()
+
+    expect(() => enterOverview(testView)).toThrow('cancel failed')
+    // The host met overview: the tool's overview cleanup ran.
+    expect(rectangle.calls).toContain('cancelTransient:overview')
+    // The session released Space with the recogniser: a modifier key brings no grab back in overview.
+    events.keyDown({ key: 'Shift', code: 'ShiftLeft', target: container })
+    expect(container.style.cursor).not.toBe('grab')
+  })
 })
 
 describe('ruler drags through the session', () => {

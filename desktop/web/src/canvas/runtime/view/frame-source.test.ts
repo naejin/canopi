@@ -69,6 +69,30 @@ describe('view frame source', () => {
     view.dispose()
   })
 
+  it('a listener that throws does not keep the frame from the others; its error follows them and ends the dispatch', () => {
+    const view = createTestView()
+    const initial = view.frames.viewFrame.peek()
+    const frames = createViewFrameSource(initial)
+    const first = { ...initial, revision: 1 } as ViewFrame
+    const waiting = { ...initial, revision: 2 } as ViewFrame
+    const fault = new Error('tools listener failed')
+    const seen: Array<readonly [string, number]> = []
+    frames.onViewFrame('tools', (frame) => {
+      seen.push(['first tools', frame.revision])
+      frames.publish(waiting)
+      throw fault
+    })
+    frames.onViewFrame('tools', (frame) => seen.push(['second tools', frame.revision]))
+    frames.onViewFrame('overlays', (frame) => seen.push(['overlays', frame.revision]))
+
+    expect(() => frames.publish(first)).toThrow(fault)
+    expect(seen).toEqual([['first tools', 1], ['second tools', 1], ['overlays', 1]])
+    expect(frames.viewFrame.peek()).toBe(first)
+    expect(frames.dispatching).toBe(false)
+    frames.dispose()
+    view.dispose()
+  })
+
   it('the read surface signals change only with their own values', () => {
     const view = createTestView({ screen: { width: 400, height: 300 }, viewport: { x: 0, y: 0, scale: 2 } })
     const surface = createViewReadSurface(view.frames)
