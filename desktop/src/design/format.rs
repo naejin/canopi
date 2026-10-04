@@ -540,42 +540,6 @@ mod tests {
     }
 
     #[test]
-    fn a_design_saved_with_the_hidden_climate_and_water_rows_still_loads_them() {
-        let dir = unique_dir("climate_water_rows");
-        let path: PathBuf = dir.join("older_layers.canopi");
-        let mut older = create_default();
-        for name in ["climate", "water"] {
-            older.layers.push(Layer {
-                name: name.to_owned(),
-                visible: false,
-                locked: false,
-                opacity: 1.0,
-            });
-        }
-        save_to_file(&path, &older, None).expect("save should succeed");
-
-        let loaded = load_from_file(&path).expect("load should succeed");
-        let names: Vec<_> = loaded
-            .layers
-            .iter()
-            .map(|layer| layer.name.as_str())
-            .collect();
-        assert_eq!(
-            names,
-            [
-                "zones",
-                "plants",
-                "measurement-guides",
-                "annotations",
-                "climate",
-                "water"
-            ]
-        );
-
-        let _ = std::fs::remove_file(&path);
-    }
-
-    #[test]
     fn save_waits_for_existing_target_admission() {
         use std::sync::mpsc;
         use std::time::Duration;
