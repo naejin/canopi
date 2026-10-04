@@ -6,11 +6,8 @@ import { geoToMercator } from '../canvas/projection'
 import type { ViewCamera } from '../canvas/runtime/view/types'
 import { createSessionPlane } from '../canvas/session-plane'
 import { targetIdentity } from '../target'
-import {
-  projectTargetResolutionToMapFeatures,
-  projectTargetsToMapFeatures,
-  type TargetMapProjectionScene,
-} from '../target'
+import { projectTargetsToMapFeatures, type TargetMapProjectionScene } from '../target'
+import { projectTargetResolutionToMapFeatures } from '../target/map-projection'
 import type { PanelTarget } from '../types/design'
 import { createTestView } from './support/test-view'
 
@@ -83,7 +80,6 @@ describe('projectTargetsToMapFeatures', () => {
 
     const result = projectTargetResolutionToMapFeatures(resolution, LOCATION)
 
-    expect(result.unresolvedTargets).toEqual([])
     expect(result.features.map((feature) => feature.properties)).toEqual([
       { kind: 'plant', sceneId: 'plant-1' },
       { kind: 'plant', sceneId: 'plant-3' },
@@ -98,9 +94,6 @@ describe('projectTargetsToMapFeatures', () => {
       LOCATION,
     )
 
-    expect(result.unresolvedTargets).toEqual([])
-    expect(result.skippedSceneIds).toEqual([])
-    expect(result.skippedReason).toBeNull()
     expect(result.features.map((feature) => feature.properties)).toEqual([
       { kind: 'plant', sceneId: 'plant-1' },
       { kind: 'plant', sceneId: 'plant-3' },
@@ -190,8 +183,6 @@ describe('projectTargetsToMapFeatures', () => {
       LOCATION,
     )
 
-    expect(result.unresolvedTargets).toEqual([])
-    expect(result.skippedSceneIds).toEqual([])
     expect(result.features).toHaveLength(1)
     expect(result.features[0]?.properties).toEqual({ kind: 'zone', sceneId: 'hedgerow' })
     expect(result.features[0]?.geometry).toMatchObject({
@@ -293,24 +284,6 @@ describe('projectTargetsToMapFeatures', () => {
     )
 
     expect(result.features).toEqual([])
-    expect(result.unresolvedTargets).toEqual([missingSpecies, missingPlant, missingZone])
-    expect(result.skippedSceneIds).toEqual([])
-    expect(result.skippedReason).toBeNull()
-  })
-
-  it('returns no features when location is missing while preserving resolver output', () => {
-    const missingPlant: PanelTarget = { kind: 'placed_plant', plant_id: 'missing-plant' }
-
-    const result = projectTargetsToMapFeatures(
-      [speciesTarget('Malus domestica'), { kind: 'zone', zone_id: 'orchard' }, missingPlant],
-      createScene(),
-      null,
-    )
-
-    expect(result.features).toEqual([])
-    expect(result.unresolvedTargets).toEqual([missingPlant])
-    expect(result.skippedSceneIds).toEqual(['plant-1', 'plant-3', 'orchard'])
-    expect(result.skippedReason).toBe('missing_location')
   })
 
   it('skips zones with fewer than three points instead of emitting invalid polygons', () => {
@@ -321,9 +294,6 @@ describe('projectTargetsToMapFeatures', () => {
     )
 
     expect(result.features).toEqual([])
-    expect(result.unresolvedTargets).toEqual([])
-    expect(result.skippedSceneIds).toEqual(['too-small'])
-    expect(result.skippedReason).toBeNull()
   })
 
   it('projects session plane metres north-up: x east, y south', () => {

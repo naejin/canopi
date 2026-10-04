@@ -228,7 +228,7 @@ export class WorkspaceMapContributions {
       this.skippedOverlayKey = null
     }
     try {
-      syncCanvasMapSurfaceOverlays(map, overlays, true)
+      syncCanvasMapSurfaceOverlays(map, overlays)
     } catch (error) {
       if (error === STALE_CONTRIBUTION) throw error
       this.overlayFailed(key, error)

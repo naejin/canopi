@@ -43,9 +43,6 @@ export interface PanelTargetMapOverlayContract {
   readonly variant: PanelTargetMapOverlayVariant
   readonly source: PanelTargetMapOverlaySourceSpec
   readonly layers: readonly PanelTargetMapOverlayLayerSpec[]
-  readonly unresolvedTargets: TargetMapProjectionResult['unresolvedTargets']
-  readonly skippedSceneIds: readonly string[]
-  readonly skippedReason: TargetMapProjectionResult['skippedReason']
   readonly hasRenderableFeatures: boolean
 }
 
@@ -150,9 +147,6 @@ export function createPanelTargetMapOverlayContract(
       },
     },
     layers: createLayerSpecs(variant, sourceId),
-    unresolvedTargets: projection.unresolvedTargets,
-    skippedSceneIds: projection.skippedSceneIds,
-    skippedReason: projection.skippedReason,
     hasRenderableFeatures: projection.features.length > 0,
   }
 }

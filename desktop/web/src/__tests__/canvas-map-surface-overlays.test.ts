@@ -77,7 +77,6 @@ function createSnapshot(
     location: { lat: 48.8566, lon: 2.3522 },
     hoveredTargets: [{ kind: 'zone', zone_id: 'orchard' }],
     selectedTargets: [{ kind: 'placed_plant', plant_id: 'plant-1' }],
-    paintRevision: 0,
     ...overrides,
   }
 }
@@ -85,11 +84,11 @@ function createSnapshot(
 describe('canvas map surface overlay sync', () => {
   it('clears empty overlays without reading Scene geometry', () => {
     const map = new FakeOverlayMap()
-    syncCanvasMapSurfaceOverlays(map, createSnapshot(), true)
+    syncCanvasMapSurfaceOverlays(map, createSnapshot())
     const read = vi.fn(() => createOverlayScene())
     syncCanvasMapSurfaceOverlays(map, createSnapshot({
       runtime: { getSceneSnapshot: read }, hoveredTargets: [], selectedTargets: [],
-    }), true)
+    }))
     expect(read).not.toHaveBeenCalled()
     expect(map.removeSource).toHaveBeenCalledWith('panel-target-selection-source')
     expect(map.removeSource).toHaveBeenCalledWith('panel-target-hover-source')
@@ -98,7 +97,7 @@ describe('canvas map surface overlay sync', () => {
   it('projects panel targets from the lifecycle snapshot into MapLibre overlay contracts', () => {
     const map = new FakeOverlayMap()
 
-    syncCanvasMapSurfaceOverlays(map, createSnapshot(), true)
+    syncCanvasMapSurfaceOverlays(map, createSnapshot())
 
     expect(map.addSource).toHaveBeenCalledWith(
       'panel-target-selection-source',
@@ -112,39 +111,9 @@ describe('canvas map surface overlay sync', () => {
     expect(map.addLayer).toHaveBeenCalledWith(expect.objectContaining({ id: 'panel-target-hover-zones-fill' }))
   })
 
-  it('clears hover and selection overlays when the lifecycle disables overlays', () => {
-    const map = new FakeOverlayMap()
-    syncCanvasMapSurfaceOverlays(map, createSnapshot(), true)
-    map.removeLayer.mockClear()
-    map.removeSource.mockClear()
-
-    syncCanvasMapSurfaceOverlays(map, createSnapshot(), false)
-
-    expect(map.removeLayer).toHaveBeenCalledWith('panel-target-hover-zones-fill')
-    expect(map.removeLayer).toHaveBeenCalledWith('panel-target-selection-plants')
-    expect(map.removeSource).toHaveBeenCalledWith('panel-target-hover-source')
-    expect(map.removeSource).toHaveBeenCalledWith('panel-target-selection-source')
-  })
-
-  it('clears overlays when a snapshot lacks map authority inputs', () => {
-    const map = new FakeOverlayMap()
-    syncCanvasMapSurfaceOverlays(map, createSnapshot(), true)
-    map.removeSource.mockClear()
-
-    syncCanvasMapSurfaceOverlays(map, createSnapshot({ runtime: null }), true)
-    expect(map.removeSource).toHaveBeenCalledWith('panel-target-hover-source')
-    expect(map.removeSource).toHaveBeenCalledWith('panel-target-selection-source')
-
-    syncCanvasMapSurfaceOverlays(map, createSnapshot(), true)
-    map.removeSource.mockClear()
-    syncCanvasMapSurfaceOverlays(map, createSnapshot({ location: null }), true)
-    expect(map.removeSource).toHaveBeenCalledWith('panel-target-hover-source')
-    expect(map.removeSource).toHaveBeenCalledWith('panel-target-selection-source')
-  })
-
   it('exposes explicit clearing for lifecycle teardown and pre-ready errors', () => {
     const map = new FakeOverlayMap()
-    syncCanvasMapSurfaceOverlays(map, createSnapshot(), true)
+    syncCanvasMapSurfaceOverlays(map, createSnapshot())
     map.removeSource.mockClear()
 
     clearCanvasMapSurfaceOverlays(map)

@@ -324,7 +324,6 @@
     "src/platform/geojson.desktop.ts#presentDesktopGeoJsonNotice",
     "src/platform/settings.browser.ts#createBrowserSettingsPlatformAdapter",
     "src/platform/settings.desktop.ts#createDesktopSettingsPlatformAdapter",
-    "src/target/index.ts#projectTargetResolutionToMapFeatures",
     "src/target/map-projection.ts#projectTargetResolutionToMapFeatures",
     "src/utils/species-search-normalization.ts#normalizedSpeciesSearchMatchTier",
     "src/utils/species-search-normalization.ts#speciesSearchQueryTokens",

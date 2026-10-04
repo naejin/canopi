@@ -1,51 +1,40 @@
 import type { CanvasQuerySurface } from '../../canvas/runtime/runtime'
+import { createPanelTargetMapOverlayContract } from '../../maplibre/panel-target-overlays'
 import {
-  clearCanvasPanelTargetOverlays,
-  syncCanvasPanelTargetOverlays,
-  type CanvasOverlayLocation,
-} from '../../maplibre/canvas-overlays'
-import type { MapLibreOverlayMap } from '../../maplibre/panel-target-overlay-sync'
+  clearPanelTargetMapOverlay,
+  syncPanelTargetMapOverlay,
+  type MapLibreOverlayMap,
+} from '../../maplibre/panel-target-overlay-sync'
+import { projectTargetsToMapFeatures } from '../../target'
 import type { PanelTarget } from '../../types/design'
 
+/** The panel Targets the map highlights, and the Scene and plane origin they are projected from. */
 export interface CanvasMapSurfaceOverlaySnapshot {
-  readonly runtime: Pick<CanvasQuerySurface, 'getSceneSnapshot'> | null
-  readonly location: { readonly lat: number; readonly lon: number } | null
+  readonly runtime: Pick<CanvasQuerySurface, 'getSceneSnapshot'>
+  readonly location: { readonly lat: number; readonly lon: number }
   readonly hoveredTargets: readonly PanelTarget[]
   readonly selectedTargets: readonly PanelTarget[]
-  /** `canvasPaintRevision` when read: a new value repaints overlays already on the map. */
-  readonly paintRevision: number
 }
 
 export function clearCanvasMapSurfaceOverlays(map: MapLibreOverlayMap): void {
-  clearCanvasPanelTargetOverlays(map)
+  clearPanelTargetMapOverlay(map, 'hover')
+  clearPanelTargetMapOverlay(map, 'selection')
 }
 
-export function syncCanvasMapSurfaceOverlays(
-  map: MapLibreOverlayMap,
-  snapshot: CanvasMapSurfaceOverlaySnapshot,
-  enabled: boolean,
-): void {
-  if (!enabled || !snapshot.runtime || !snapshot.location
-    || (snapshot.hoveredTargets.length === 0 && snapshot.selectedTargets.length === 0)) {
+/** Paints the hover and selection overlays; with no Targets it clears them without reading the Scene. */
+export function syncCanvasMapSurfaceOverlays(map: MapLibreOverlayMap, snapshot: CanvasMapSurfaceOverlaySnapshot): void {
+  const { hoveredTargets, selectedTargets, location } = snapshot
+  if (hoveredTargets.length === 0 && selectedTargets.length === 0) {
     clearCanvasMapSurfaceOverlays(map)
     return
   }
-  syncCanvasPanelTargetOverlays(
-    map,
-    snapshot.runtime?.getSceneSnapshot() ?? null,
-    toCanvasOverlayLocation(snapshot),
-    snapshot.hoveredTargets,
-    snapshot.selectedTargets,
-    enabled,
-  )
-}
-
-function toCanvasOverlayLocation(
-  snapshot: CanvasMapSurfaceOverlaySnapshot,
-): CanvasOverlayLocation | null {
-  if (!snapshot.location) return null
-  return {
-    lat: snapshot.location.lat,
-    lon: snapshot.location.lon,
-  }
+  const scene = snapshot.runtime.getSceneSnapshot()
+  syncPanelTargetMapOverlay(map, createPanelTargetMapOverlayContract(
+    'selection',
+    projectTargetsToMapFeatures(selectedTargets, scene, location),
+  ))
+  syncPanelTargetMapOverlay(map, createPanelTargetMapOverlayContract(
+    'hover',
+    projectTargetsToMapFeatures(hoveredTargets, scene, location),
+  ))
 }

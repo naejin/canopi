@@ -20,9 +20,6 @@ function fakeMap() {
 function selectionAt(lon: number, lat: number) {
   return createPanelTargetMapOverlayContract('selection', {
     features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [lon, lat] }, properties: { kind: 'plant' } }],
-    unresolvedTargets: [],
-    skippedSceneIds: [],
-    skippedReason: null,
   } as never)
 }
 

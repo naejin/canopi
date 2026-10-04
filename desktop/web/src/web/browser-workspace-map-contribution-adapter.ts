@@ -16,6 +16,8 @@ export function createBrowserWorkspaceMapContributionAdapter(
       // Coarse view signals only: the contributions re-read when the camera settles or the mode changes, never on a camera frame
       // alone.
       void runtime.view.settledCamera.value
+      // A new canvas paint (theme, backdrop) re-reads, so overlays already on the map repaint in its colours.
+      void canvasPaintRevision.value
       const overview = runtime.view.mode.value === 'overview'
       const panelTargets = readPanelTargetOverlaySnapshot()
       const anchor = { lat: plane.origin.lat, lon: plane.origin.lon }
@@ -31,7 +33,6 @@ export function createBrowserWorkspaceMapContributionAdapter(
           location: anchor,
           hoveredTargets: overview ? [] : panelTargets.hoveredTargets,
           selectedTargets: overview ? [] : panelTargets.selectedTargets,
-          paintRevision: canvasPaintRevision.value,
         },
       })
     },
