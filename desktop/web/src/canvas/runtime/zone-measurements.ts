@@ -1,4 +1,5 @@
 import type { ScenePoint } from './scene'
+import { degreesToRadians, polygonArea, rotatePointAround } from './zone-geometry'
 
 type ZoneMeasurementLabelKind = 'edge' | 'dimension' | 'area'
 
@@ -20,16 +21,9 @@ export function createEllipticalZoneMeasurements(
   const height = Math.abs(radii.y) * 2
   if (width < 0.5 || height < 0.5) return []
 
-  const widthPosition = rotatePointAround(
-    { x: center.x, y: center.y - Math.abs(radii.y) },
-    center,
-    rotationDeg,
-  )
-  const heightPosition = rotatePointAround(
-    { x: center.x + Math.abs(radii.x), y: center.y },
-    center,
-    rotationDeg,
-  )
+  const radians = degreesToRadians(rotationDeg)
+  const widthPosition = rotatePointAround({ x: center.x, y: center.y - Math.abs(radii.y) }, center, radians)
+  const heightPosition = rotatePointAround({ x: center.x + Math.abs(radii.x), y: center.y }, center, radians)
 
   return [
     {
@@ -56,16 +50,12 @@ export function createEllipticalZoneMeasurements(
 export function createRectangularZoneMeasurements(points: readonly ScenePoint[]): ZoneMeasurementLabel[] {
   if (points.length < 4) return []
   const corners = points.slice(0, 4)
-  return createClosedPolygonMeasurements(corners)
+  return createPolygonalZoneMeasurements(corners)
 }
 
 export function createLinearZoneMeasurements(start: ScenePoint, end: ScenePoint): ZoneMeasurementLabel[] {
   if (distance(start, end) < 0.5) return []
   return [createEdgeLabel('edge-0', start, end)]
-}
-
-export function createPolygonalZoneMeasurements(points: readonly ScenePoint[]): ZoneMeasurementLabel[] {
-  return createClosedPolygonMeasurements(points)
 }
 
 export function createPolygonalZoneDraftMeasurements(
@@ -99,7 +89,8 @@ export function createPolygonalZoneDraftMeasurements(
   return labels
 }
 
-function createClosedPolygonMeasurements(points: readonly ScenePoint[]): ZoneMeasurementLabel[] {
+/** A closed polygon's edges and area; none under 0.25 m². */
+export function createPolygonalZoneMeasurements(points: readonly ScenePoint[]): ZoneMeasurementLabel[] {
   if (points.length < 3) return []
   const area = Math.abs(polygonArea(points))
   if (area < 0.25) return []
@@ -165,16 +156,6 @@ function averagePoint(points: readonly ScenePoint[]): ScenePoint {
   }
 }
 
-function polygonArea(points: readonly ScenePoint[]): number {
-  let sum = 0
-  for (let index = 0; index < points.length; index += 1) {
-    const current = points[index]!
-    const next = points[(index + 1) % points.length]!
-    sum += current.x * next.y - next.x * current.y
-  }
-  return sum / 2
-}
-
 function formatMetricNumber(value: number): string {
   const rounded = value >= 10 ? Math.round(value) : Math.round(value * 10) / 10
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
@@ -182,20 +163,4 @@ function formatMetricNumber(value: number): string {
 
 function pointsEqual(a: ScenePoint, b: ScenePoint): boolean {
   return Math.abs(a.x - b.x) < 0.0001 && Math.abs(a.y - b.y) < 0.0001
-}
-
-function rotatePointAround(point: ScenePoint, center: ScenePoint, degrees: number): ScenePoint {
-  const radians = (degrees * Math.PI) / 180
-  const dx = point.x - center.x
-  const dy = point.y - center.y
-  const cos = Math.cos(radians)
-  const sin = Math.sin(radians)
-  return {
-    x: cleanMetric(center.x + dx * cos - dy * sin),
-    y: cleanMetric(center.y + dx * sin + dy * cos),
-  }
-}
-
-function cleanMetric(value: number): number {
-  return Math.abs(value) < 0.0000001 ? 0 : value
 }

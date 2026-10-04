@@ -88,13 +88,18 @@ export function measureZone(zone: SceneZoneEntity): ZoneMeasure | null {
   if (!points || points.length < 2) return null
   if (zone.zoneType === 'line') return { areaM2: null, perimeterM: pathLength(points, false) }
   if (points.length < 3) return null
+  return { areaM2: Math.abs(polygonArea(points)), perimeterM: pathLength(points, true) }
+}
+
+/** The shoelace area of a closed polygon, signed by its winding. */
+export function polygonArea(points: readonly ScenePoint[]): number {
   let twiceArea = 0
   for (let index = 0; index < points.length; index += 1) {
     const current = points[index]!
     const next = points[(index + 1) % points.length]!
     twiceArea += current.x * next.y - next.x * current.y
   }
-  return { areaM2: Math.abs(twiceArea) / 2, perimeterM: pathLength(points, true) }
+  return twiceArea / 2
 }
 
 function pathLength(points: readonly ScenePoint[], closed: boolean): number {
@@ -108,7 +113,8 @@ function pathLength(points: readonly ScenePoint[], closed: boolean): number {
   return length
 }
 
-function rotatePointAround(point: ScenePoint, center: ScenePoint, radians: number): ScenePoint {
+/** A point turned about a centre, with near-zero values snapped to 0. */
+export function rotatePointAround(point: ScenePoint, center: ScenePoint, radians: number): ScenePoint {
   const dx = point.x - center.x
   const dy = point.y - center.y
   const cos = Math.cos(radians)
@@ -119,7 +125,7 @@ function rotatePointAround(point: ScenePoint, center: ScenePoint, radians: numbe
   }
 }
 
-function degreesToRadians(degrees: number): number {
+export function degreesToRadians(degrees: number): number {
   return (degrees * Math.PI) / 180
 }
 
