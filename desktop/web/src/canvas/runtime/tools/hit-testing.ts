@@ -10,7 +10,6 @@ import type {
   SceneAnnotationEntity,
   SceneDesignObjectSelection,
   SceneMeasurementGuideEntity,
-  SceneObjectGroupEntity,
   ScenePersistedState,
   ScenePlantEntity,
   ScenePoint,
@@ -32,8 +31,6 @@ import {
   pointsBounds,
 } from '../zone-geometry'
 
-export type TopLevelTarget = SceneDesignObjectTarget
-
 export function hitTestTopLevel(
   scene: ScenePersistedState,
   point: ScenePoint,
@@ -42,7 +39,7 @@ export function hitTestTopLevel(
   getPlantContext: (viewportScale: number) => PlantPresentationContext,
   selection: SceneDesignObjectSelection = [],
   hoverTarget: SceneDesignObjectTarget | null = null,
-): TopLevelTarget | null {
+): SceneDesignObjectTarget | null {
   return hitTestTopLevelWithLayerFilter(
     scene,
     point,
@@ -63,7 +60,7 @@ export function hitTestVisibleTopLevel(
   getPlantContext: (viewportScale: number) => PlantPresentationContext,
   selection: SceneDesignObjectSelection = [],
   hoverTarget: SceneDesignObjectTarget | null = null,
-): TopLevelTarget | null {
+): SceneDesignObjectTarget | null {
   return hitTestTopLevelWithLayerFilter(
     scene,
     point,
@@ -85,7 +82,7 @@ function hitTestTopLevelWithLayerFilter(
   isLayerHitEligible: (scene: ScenePersistedState, layerName: string) => boolean,
   revealedAnnotationId: string | null,
   hoveredAnnotationId: string | null,
-): TopLevelTarget | null {
+): SceneDesignObjectTarget | null {
   const groupedMemberKeys = getSceneGroupedMemberKeys(scene)
   const detail = getCanvasDetailLayout(scene, viewportScale)
   const plantContext = { ...plantPresentationContext(getPlantContext, viewportScale, speciesCache), plants: scene.plants }
@@ -93,7 +90,7 @@ function hitTestTopLevelWithLayerFilter(
   for (let i = scene.groups.length - 1; i >= 0; i -= 1) {
     const group = scene.groups[i]!
     const members = resolveSceneObjectGroupMembers(scene, group)
-    if (!isGroupLayerHitEligible(scene, group, isLayerHitEligible, members)) continue
+    if (!isGroupLayerHitEligible(scene, isLayerHitEligible, members)) continue
     for (const member of members) {
       const plant = member.kind === 'plant' ? scene.plants.find((entry) => entry.id === member.id) : null
       if (plant && hitTestPlant(plant, point, plantContext)) {
@@ -104,7 +101,7 @@ function hitTestTopLevelWithLayerFilter(
       const annotation = member.kind === 'annotation'
         ? scene.annotations.find((entry) => entry.id === member.id)
         : null
-      if (annotation && hitAnnotation(annotation, point, viewportScale, false, detail.annotationIds.has(annotation.id))) return { kind: 'group', id: group.id }
+      if (annotation && isPointInAnnotationPresentation(annotation, point, viewportScale, false, detail.annotationIds.has(annotation.id))) return { kind: 'group', id: group.id }
     }
   }
 
@@ -113,7 +110,7 @@ function hitTestTopLevelWithLayerFilter(
     if (groupedMemberKeys.has(sceneTargetKey({ kind: 'annotation', id: annotation.id }))) continue
     if (!isLayerHitEligible(scene, 'annotations')) continue
     const revealed = annotation.id === revealedAnnotationId || annotation.id === hoveredAnnotationId
-    if (hitAnnotation(annotation, point, viewportScale, revealed, detail.annotationIds.has(annotation.id))) return { kind: 'annotation', id: annotation.id }
+    if (isPointInAnnotationPresentation(annotation, point, viewportScale, revealed, detail.annotationIds.has(annotation.id))) return { kind: 'annotation', id: annotation.id }
   }
 
   let closestPlant: ScenePlantEntity | null = null
@@ -150,7 +147,6 @@ function hitTestTopLevelWithLayerFilter(
 
 function isGroupLayerHitEligible(
   scene: ScenePersistedState,
-  _group: SceneObjectGroupEntity,
   isLayerHitEligible: (scene: ScenePersistedState, layerName: string) => boolean,
   members: readonly SceneConcreteDesignObjectTarget[],
 ): boolean {
@@ -172,8 +168,8 @@ export function queryQuadTopLevel(
   speciesCache: ReadonlyMap<string, SpeciesCacheEntry>,
   getPlantContext: (viewportScale: number) => PlantPresentationContext,
   selection: SceneDesignObjectSelection = [],
-): TopLevelTarget[] {
-  const targets: TopLevelTarget[] = []
+): SceneDesignObjectTarget[] {
+  const targets: SceneDesignObjectTarget[] = []
   const baseContext = getPlantContext
   getPlantContext = (scale) => ({ ...baseContext(scale), plants: scene.plants })
   const groupedMemberKeys = getSceneGroupedMemberKeys(scene)
@@ -182,7 +178,7 @@ export function queryQuadTopLevel(
 
   for (const group of scene.groups) {
     const members = resolveSceneObjectGroupMembers(scene, group)
-    if (!isGroupLayerHitEligible(scene, group, isSceneLayerEditable, members)) continue
+    if (!isGroupLayerHitEligible(scene, isSceneLayerEditable, members)) continue
     const hit = members.some((member) => {
       const plant = member.kind === 'plant' ? scene.plants.find((entry) => entry.id === member.id) : null
       if (plant && plantIntersectsPolygon(plant, area, viewportScale, speciesCache, getPlantContext)) return true
@@ -517,16 +513,12 @@ function zoneBounds(zone: SceneZoneEntity): SimpleRect {
 }
 
 
-function hitAnnotation(annotation: SceneAnnotationEntity, point: ScenePoint, viewportScale: number, revealText = false, textAllowed = true): boolean {
-  return isPointInAnnotationPresentation(annotation, point, viewportScale, revealText, textAllowed)
-}
-
 function annotationIntersectsPolygon(
   annotation: SceneAnnotationEntity,
   area: QueryPolygon,
   viewportScale: number,
-  revealText = false,
-  textAllowed = true,
+  revealText: boolean,
+  textAllowed: boolean,
 ): boolean {
   return polygonsIntersect(getAnnotationVisualWorldCorners(annotation, viewportScale, revealText, undefined, textAllowed), area)
 }
@@ -539,7 +531,7 @@ function isLayerVisible(scene: ScenePersistedState, layerName: string): boolean 
 function plantPresentationContext(
   getPlantContext: (viewportScale: number) => PlantPresentationContext,
   viewportScale: number,
-  speciesCache: ReadonlyMap<string, SpeciesCacheEntry> = new Map(),
+  speciesCache: ReadonlyMap<string, SpeciesCacheEntry>,
 ): PlantPresentationContext {
   const base = getPlantContext(viewportScale)
   return {
