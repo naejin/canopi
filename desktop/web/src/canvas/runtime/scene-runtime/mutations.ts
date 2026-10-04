@@ -251,20 +251,6 @@ export class SceneRuntimeMutationController {
     )
   }
 
-  clearPlantSpeciesColor(canonicalName: string): boolean {
-    return this._runCommandWhenSettled(
-      () => this._clearPlantSpeciesColorWhenSettled(canonicalName),
-      false,
-    )
-  }
-
-  clearPlantSpeciesSymbol(canonicalName: string): boolean {
-    return this._runCommandWhenSettled(
-      () => this._clearPlantSpeciesSymbolWhenSettled(canonicalName),
-      false,
-    )
-  }
-
   private _runCommandWhenSettled<T>(operation: () => T, busyResult: T): T {
     return this._commandAdmission.runWhenSettled(
       operation,
@@ -801,43 +787,6 @@ export class SceneRuntimeMutationController {
     })
 
     return changed
-  }
-
-  private _clearPlantSpeciesColorWhenSettled(canonicalName: string): boolean {
-    const hadColor = normalizeHexColor(this._sceneStore.persisted.plantSpeciesColors[canonicalName] ?? null) !== null
-    if (!hadColor) return false
-    const committed = this._sceneEdits.run('clear-plant-species-color', (tx) => {
-      tx.mutate((persisted) => {
-        const nextSpeciesColors = { ...persisted.plantSpeciesColors }
-        delete nextSpeciesColors[canonicalName]
-        persisted.plantSpeciesColors = nextSpeciesColors
-      })
-    })
-    return committed
-  }
-
-  private _clearPlantSpeciesSymbolWhenSettled(canonicalName: string): boolean {
-    const hadSymbol = Object.prototype.hasOwnProperty.call(this._sceneStore.persisted.plantSpeciesSymbols, canonicalName)
-    if (!hadSymbol) return false
-    const speciesTargets = getSpeciesPlantEditTargets(this._sceneStore.persisted, canonicalName)
-    this._sceneEdits.run('clear-plant-species-symbol', (tx) => {
-      tx.mutate((persisted) => {
-        persisted.plants = persisted.plants.map((plant) => {
-          if (!speciesTargets.plantIds.has(plant.id)) return plant
-          if (speciesTargets.editablePlantIds.has(plant.id) || plant.symbol != null) return plant
-          const currentEffectiveSymbol = resolvePlantSymbolForPlant(plant, persisted.plantSpeciesSymbols)
-          if (currentEffectiveSymbol === resolvePlantSymbolId(null)) return plant
-          return {
-            ...plant,
-            symbol: currentEffectiveSymbol,
-          }
-        })
-        const nextSpeciesSymbols = { ...persisted.plantSpeciesSymbols }
-        delete nextSpeciesSymbols[canonicalName]
-        persisted.plantSpeciesSymbols = nextSpeciesSymbols
-      })
-    })
-    return true
   }
 
   private _reorderSelected(position: 'start' | 'end'): void {

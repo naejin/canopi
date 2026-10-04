@@ -937,8 +937,6 @@ function fakeCommandSurface(): CanvasCommandSurface {
       setSelectedPlantSymbol: vi.fn(() => 0),
       setPlantColorForSpecies: vi.fn(() => 0),
       setPlantSymbolForSpecies: vi.fn(() => 0),
-      clearPlantSpeciesColor: vi.fn(() => false),
-      clearPlantSpeciesSymbol: vi.fn(() => false),
     },
   }
 }

@@ -800,21 +800,6 @@ describe('scene runtime mutation controller', () => {
     expect(state.invalidations).toBe(1)
   })
 
-  it('clears species symbol defaults without rewriting existing plants', () => {
-    const file = makeFile()
-    file.plant_species_symbols = { 'Malus domestica': 'canopy' }
-    file.plants = file.plants.map((plant) => ({ ...plant, symbol: 'conifer' }))
-    const { controller, sceneStore, state } = createController(file)
-
-    const changed = controller.clearPlantSpeciesSymbol('Malus domestica')
-
-    expect(changed).toBe(true)
-    expect(sceneStore.persisted.plantSpeciesSymbols).toEqual({})
-    expect(sceneStore.persisted.plants.map((plant) => plant.symbol)).toEqual(['conifer', 'conifer'])
-    expect(state.dirtyTypes).toEqual(['clear-plant-species-symbol'])
-    expect(state.invalidations).toBe(1)
-  })
-
   it('does not resymbol locked Plants through species-wide symbol edits', () => {
     const file = makeFile()
     file.plants = file.plants.map((plant) =>
@@ -833,25 +818,6 @@ describe('scene runtime mutation controller', () => {
       'Malus domestica': 'canopy',
     })
     expect(state.dirtyTypes).toEqual(['set-plant-symbol-for-species'])
-  })
-
-  it('does not resymbol locked Plants when clearing a species symbol default', () => {
-    const file = makeFile()
-    file.plant_species_symbols = { 'Malus domestica': 'canopy' }
-    file.plants = file.plants.map((plant) =>
-      plant.id === 'plant-2' ? { ...plant, locked: true } : plant,
-    )
-    const { controller, sceneStore, state } = createController(file)
-
-    const changed = controller.clearPlantSpeciesSymbol('Malus domestica')
-    const lockedPlant = sceneStore.persisted.plants.find((plant) => plant.id === 'plant-2')!
-
-    expect(changed).toBe(true)
-    expect(sceneStore.persisted.plantSpeciesSymbols).toEqual({})
-    expect(sceneStore.persisted.plants.find((plant) => plant.id === 'plant-1')?.symbol ?? null).toBeNull()
-    expect(lockedPlant.symbol).toBe('canopy')
-    expect(resolvePlantSymbolForPlant(lockedPlant, sceneStore.persisted.plantSpeciesSymbols)).toBe('canopy')
-    expect(state.dirtyTypes).toEqual(['clear-plant-species-symbol'])
   })
 
   it('does not resymbol Plants inside locked Object Groups through species-wide symbol edits', () => {

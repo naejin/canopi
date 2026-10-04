@@ -19,7 +19,6 @@ describe('PlantColorMenu', () => {
   let querySurface: ReturnType<typeof createTestCanvasQuerySurface>
   const setSelectedPlantColor = vi.fn()
   const setPlantColorForSpecies = vi.fn()
-  const clearPlantSpeciesColor = vi.fn()
   const ensureSpeciesCacheEntries = vi.fn().mockResolvedValue(false)
   const getSelectedPlantColorContext = vi.fn()
   const buttonRef = { current: null as HTMLButtonElement | null }
@@ -31,7 +30,6 @@ describe('PlantColorMenu', () => {
     document.body.appendChild(container)
     setSelectedPlantColor.mockReset()
     setPlantColorForSpecies.mockReset()
-    clearPlantSpeciesColor.mockReset()
     ensureSpeciesCacheEntries.mockClear()
     getSelectedPlantColorContext.mockReset()
     querySurface = createTestCanvasQuerySurface()
@@ -40,7 +38,6 @@ describe('PlantColorMenu', () => {
         plantPresentation: {
           setSelectedPlantColor,
           setPlantColorForSpecies,
-          clearPlantSpeciesColor,
           ensureSpeciesCacheEntries,
         },
       }),

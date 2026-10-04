@@ -1395,7 +1395,7 @@ describe('scene canvas runtime', () => {
     expect(runtime.commandSurface.sceneEdits.canPaste()).toBe(false)
     expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(2)
     expect(runtime.commandSurface.layers.setSceneLayerVisibility('plants', false)).toBe(false)
-    expect(runtime.commandSurface.plantPresentation.clearPlantSpeciesColor('Malus domestica')).toBe(false)
+    expect(runtime.commandSurface.plantPresentation.setPlantColorForSpecies('Malus domestica', '#112233')).toBe(0)
     expect(runtime.querySurface.getSceneSnapshot().layers.find((layer) => layer.name === 'plants')?.visible)
       .toBe(true)
     expect(runtime.querySurface.getSceneSnapshot().plantSpeciesColors['Malus domestica'])

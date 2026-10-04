@@ -181,8 +181,6 @@ export interface CanvasPlantPresentationCommandSurface {
   setSelectedPlantSymbol(symbol: PlantSymbolId | null): number
   setPlantColorForSpecies(canonicalName: string, color: string | null): number
   setPlantSymbolForSpecies(canonicalName: string, symbol: PlantSymbolId): number
-  clearPlantSpeciesColor(canonicalName: string): boolean
-  clearPlantSpeciesSymbol(canonicalName: string): boolean
 }
 
 export interface CanvasCommandSurface {
