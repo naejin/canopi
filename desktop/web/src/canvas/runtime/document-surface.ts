@@ -1,3 +1,4 @@
+import type { ReadonlySignal } from '@preact/signals'
 import type { CanopiFile } from '../../types/design'
 import {
   CanvasAuthorityBusyError,
@@ -29,7 +30,10 @@ interface SceneCanvasDocumentSurfaceOptions {
   readonly cameraHost: Pick<CameraDriverHost, 'current'>
   readonly viewNavigation: Pick<ViewNavigation, 'openAt' | 'clearTemporaryFocus'>
   readonly chrome: Pick<SceneRuntimeChromeCoordinator, 'attach' | 'show' | 'hide' | 'destroy'>
-  readonly rendering: Pick<SceneRuntimeRenderScheduler, 'container' | 'invalidate' | 'resize' | 'dispose'>
+  readonly rendering: Pick<
+    SceneRuntimeRenderScheduler,
+    'container' | 'invalidate' | 'resize' | 'dispose' | 'presented' | 'awaitPresentation'
+  >
   readonly renderChrome: () => void
   readonly addGuide: (axis: 'h' | 'v', worldPosition: number) => void
   readonly clearHoveredEntity: () => void
@@ -49,6 +53,10 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
   private _documentState: 'absent' | 'settling' | 'loaded' = 'absent'
 
   constructor(private readonly options: SceneCanvasDocumentSurfaceOptions) {}
+
+  get presented(): ReadonlySignal<boolean> {
+    return this.options.rendering.presented
+  }
 
   attachInspectionTo(element: HTMLElement): CanvasInspectionHandle {
     return this.options.inspection.mount(element)
@@ -92,6 +100,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
       throw error
     }
     this._documentState = 'loaded'
+    this.options.rendering.awaitPresentation()
     this.options.viewNavigation.clearTemporaryFocus()
     this.options.inspection.reset()
   }
@@ -106,6 +115,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
     try {
       const receipt = this.options.documents.replaceDocument(file, token, finalizeReplacement)
       this._documentState = 'loaded'
+      this.options.rendering.awaitPresentation()
       this.options.viewNavigation.clearTemporaryFocus()
       this.options.inspection.reset()
       return receipt

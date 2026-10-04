@@ -1,3 +1,4 @@
+import { signal } from '@preact/signals'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -131,6 +132,7 @@ function makeSceneSession(file: CanopiFile): SceneSession {
   return {
     history,
     sceneStore,
+    presented: signal(true),
     attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(),

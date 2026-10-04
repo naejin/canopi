@@ -1,3 +1,4 @@
+import { signal } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
 import { createTestView, type TestView } from '../../__tests__/support/test-view'
 import { createSceneCanvasDocumentSurface } from './document-surface'
@@ -18,6 +19,8 @@ function createTestDocumentSurface(
 ): CanvasDocumentSurface {
   const rendering = {
     container: null,
+    presented: signal(true),
+    awaitPresentation: vi.fn(),
     invalidate: vi.fn(),
     resize: vi.fn(),
     dispose: vi.fn(),
@@ -117,6 +120,8 @@ describe('Scene Canvas document surface lifecycle', () => {
       },
       rendering: {
         container: null,
+        presented: signal(true),
+        awaitPresentation: vi.fn(),
         invalidate: vi.fn(),
         resize: vi.fn(),
         dispose: () => {

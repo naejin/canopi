@@ -318,10 +318,11 @@ describe('document session lifecycle', () => {
       await Promise.resolve()
       await flushLifecycle()
 
-      expect(abortFailedAttachedDesignSessionStart).toHaveBeenCalledWith(
-        documents,
-        logError,
-      )
+      // By identity: the surface holds a signal, which Vitest's deep equality cannot compare.
+      expect(abortFailedAttachedDesignSessionStart).toHaveBeenCalledOnce()
+      const [abortedDocuments, abortLog] = vi.mocked(abortFailedAttachedDesignSessionStart).mock.calls[0]!
+      expect(abortedDocuments).toBe(documents)
+      expect(abortLog).toBe(logError)
       expect(publishSurfaces).not.toHaveBeenCalled()
       expect(onInitializationFailure).toHaveBeenCalledOnce()
       expect(logError).toHaveBeenCalledWith(

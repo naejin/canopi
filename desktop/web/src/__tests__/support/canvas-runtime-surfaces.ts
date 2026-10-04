@@ -145,6 +145,7 @@ export function createTestCanvasDocumentSurface(
   overrides: Partial<CanvasDocumentSurface> = {},
 ): CanvasDocumentSurface {
   const surface: CanvasDocumentSurface = {
+    presented: signal(true),
     attachInspectionTo: () => { throw new Error('Inspection view is not configured in this test.') },
     attachRulersTo: () => {},
     showCanvasChrome: () => {},

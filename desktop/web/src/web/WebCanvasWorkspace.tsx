@@ -21,6 +21,7 @@ import {
   type MapLibreCanvasSurfaceState,
 } from '../maplibre/canvas-surface-state'
 import { getMapNoticeReadModel } from '../app/canvas-map-surface/map-notice'
+import { isOpenDesignShown } from '../app/canvas-map-surface/design-reveal'
 import { hasVisibleMapLayer, mapLayers } from '../app/map-layers/state'
 import { MapNotice } from '../components/canvas/MapNotice'
 import { t } from '../i18n'
@@ -219,16 +220,18 @@ export function WebCanvasWorkspace({
     }
   }, [controller, createRuntimeComposition, store])
 
+  const mapSurface = mapState ?? IDLE_MAPLIBRE_CANVAS_SURFACE_STATE
   const mapNotice = getMapNoticeReadModel({
     hasDesign,
     mapVisible: hasVisibleMapLayer(mapLayers.value),
-    mapSurface: mapState ?? IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
+    mapSurface,
     t,
   })
+  const designShown = isOpenDesignShown(hasDesign, mapSurface)
 
   return (
     <div className={panelStyles.canvasPanel} data-testid="web-canvas-workspace">
-      <div ref={canvasAreaRef} className={panelStyles.canvasArea}>
+      <div ref={canvasAreaRef} className={panelStyles.canvasArea} data-design-hidden={hasDesign && !designShown ? '' : undefined}>
         {/* Focusable from script while no session holds it (tabIndex -1, which the session restores when it ends), so
             focus handed to the map after a Retry lands before the rebuilt session makes it a Tab stop again. */}
         <div
@@ -241,7 +244,7 @@ export function WebCanvasWorkspace({
         <div ref={rulerOverlayRef} className={panelStyles.rulerOverlay} />
         {hasDesign && <CanvasChrome projection={workspaceCanvasCommandProjection.value} canvasRef={containerRef} />}
         <MapNotice notice={mapNotice} onRetry={() => runtimeRef.current?.composition.retryMap()} canvasRef={containerRef} />
-        {!hasDesign && <WebWelcomeScreen controller={controller} />}
+        {!designShown && <WebWelcomeScreen controller={controller} />}
       </div>
     </div>
   )

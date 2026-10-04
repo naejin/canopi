@@ -29,6 +29,12 @@
   --tool-card-reserve: calc(var(--canvas-tool-card-left) + 320px + var(--space-2));
 }
 
+/* An opening Design keeps the start screen up until its first scene is drawn (app/canvas-map-surface/design-reveal.ts):
+   its chrome is laid out, so it registers what it covers, but not shown. */
+.canvasArea[data-design-hidden] > :not([data-start-screen], :has([data-start-screen])) {
+  visibility: hidden;
+}
+
 /* Rulers start below the floating title bar (and any notice) and right of the tool rail
    (`--map-inset-left`, published by app/shell/visible-map-area.ts). */
 .rulerOverlay {

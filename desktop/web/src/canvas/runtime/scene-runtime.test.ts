@@ -738,6 +738,51 @@ describe('scene canvas runtime', () => {
     expect(container.hasAttribute('aria-busy'), 'a destroyed runtime leaves the host as it found it').toBe(false)
   })
 
+  describe('presenting an opened Design (its chrome waits for its first drawn scene)', () => {
+    it('a replaced Design is presented only after the frame that draws its scene, and an edit never hides it again', async () => {
+      const runtime = stubbedRuntime()
+      const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
+      const { presented } = runtime.documentSurface
+      await vi.waitFor(() => expect(presented.value).toBe(true))
+      const presentedWhenDrawn: boolean[] = []
+      renderer.syncScene.mockImplementation(() => { presentedWhenDrawn.push(presented.value) })
+
+      runtime.documentSurface.replaceDocument(makeFile(), createCanvasDocumentReplacementToken(), () => {})
+      expect(presented.value).toBe(false)
+      await vi.waitFor(() => expect(presented.value).toBe(true))
+      expect(presentedWhenDrawn, 'not presented while its scene is synced, only once MapLibre drew it').toEqual([false])
+
+      runtime.commandSurface.history.undo()
+      runtime.cameraHost.current().apply({ kind: 'pan-by', deltaPx: { x: 5, y: 0 } })
+      expect(presented.value).toBe(true)
+      runtime.destroy()
+    })
+
+    it('a Design opened before the renderer mounts is presented by init\'s first drawn scene', async () => {
+      const runtime = stubbedRuntime()
+      runtime.documentSurface.loadDocument(makeFile())
+      expect(runtime.documentSurface.presented.value).toBe(false)
+      const init = initRuntimeWithStubbedRenderer(runtime)
+      expect(runtime.documentSurface.presented.value).toBe(false)
+
+      await init
+      await vi.waitFor(() => expect(runtime.documentSurface.presented.value).toBe(true))
+      runtime.destroy()
+    })
+
+    it('a Design is presented once its renderer unmounts (the map failed): nothing will draw it', async () => {
+      const runtime = stubbedRuntime()
+      runtime.documentSurface.loadDocument(makeFile())
+      await initRuntimeWithStubbedRenderer(runtime)
+      expect(runtime.documentSurface.presented.value, 'the first drawn frame has not run yet').toBe(false)
+
+      await runtime.unmountRenderer()
+
+      expect(runtime.documentSurface.presented.value).toBe(true)
+      runtime.destroy()
+    })
+  })
+
   it('rolls back effects acquired before a later subscription fails', () => {
     const disposeTheme = vi.fn()
     const disposeLocale = vi.fn(() => {

@@ -833,6 +833,7 @@ function fakeRuntimeComposition(
 } {
   let loaded = false
   const documents: CanvasDocumentSurface = {
+    presented: signal(true),
     attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(),

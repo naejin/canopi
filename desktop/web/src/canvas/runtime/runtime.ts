@@ -297,6 +297,11 @@ export function createCanvasDocumentReplacementToken(): CanvasDocumentReplacemen
 }
 
 export interface CanvasDocumentSurface {
+  /**
+   * False from a load or replace until that Design's first scene is drawn (or nothing will draw it): the Design's chrome and
+   * the start screen wait for it, so the chrome never shows over an empty map. Camera moves and edits never turn it false.
+   */
+  readonly presented: ReadonlySignal<boolean>
   attachInspectionTo(element: HTMLElement): CanvasInspectionHandle
   attachRulersTo(element: HTMLElement): void
   showCanvasChrome(): void

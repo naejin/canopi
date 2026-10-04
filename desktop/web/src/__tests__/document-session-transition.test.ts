@@ -1,4 +1,4 @@
-import { effect } from "@preact/signals";
+import { effect, signal } from "@preact/signals";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   editDesignSessionForTest,
@@ -111,6 +111,7 @@ function makeFile(name: string): CanopiFile {
 function makeSession(): CanvasDocumentSurface {
   let loaded = false;
   return {
+    presented: signal(true),
     attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(),
@@ -152,6 +153,7 @@ function makeSettledSceneSession(
   let settling = false;
 
   return {
+    presented: signal(true),
     attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(),
@@ -194,6 +196,7 @@ function makePostFinalizerFailureSession(): CanvasDocumentSurface {
   let acceptedToken: object | null = null;
   let retainedFinalizer: (() => void) | null = null;
   return {
+    presented: signal(true),
     attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(),
@@ -230,6 +233,7 @@ function makePostFinalizerFailureSession(): CanvasDocumentSurface {
 function makePreFinalizerFailureSession(): CanvasDocumentSurface {
   let settling = false;
   return {
+    presented: signal(true),
     attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(),
@@ -1185,7 +1189,8 @@ describe("document session transition", () => {
     let acceptedToken: object | null = null;
     let retainedFinalizer: (() => void) | null = null;
     const session: CanvasDocumentSurface = {
-      attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
+      presented: signal(true),
+    attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
       attachRulersTo: vi.fn(),
       showCanvasChrome: vi.fn(),
       hideCanvasChrome: vi.fn(),
@@ -1256,7 +1261,8 @@ describe("document session transition", () => {
       throw new CanvasDocumentReplacementNotAdmittedError(preparationError);
     });
     const session: CanvasDocumentSurface = {
-      attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
+      presented: signal(true),
+    attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
       attachRulersTo: vi.fn(),
       showCanvasChrome: vi.fn(),
       hideCanvasChrome: vi.fn(),
@@ -1323,7 +1329,8 @@ describe("document session transition", () => {
     let acceptedToken: object | null = null;
     let retainedFinalizer: (() => void) | null = null;
     const session: CanvasDocumentSurface = {
-      attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
+      presented: signal(true),
+    attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
       attachRulersTo: vi.fn(),
       showCanvasChrome: vi.fn(),
       hideCanvasChrome: vi.fn(),

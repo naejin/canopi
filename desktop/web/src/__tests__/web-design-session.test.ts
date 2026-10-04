@@ -1,6 +1,6 @@
 import { newDesignDefaults } from '../app/settings/state'
 import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
-import { effect } from '@preact/signals'
+import { effect, signal } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
 import { composeDocumentForSave } from '../app/contracts/document'
 import { decodeCanopiDesign } from '../app/contracts/design-ingestion'
@@ -2283,6 +2283,7 @@ function testCanvasDocumentSurface(
   overrides: Partial<CanvasDocumentSurface> = {},
 ): CanvasDocumentSurface {
   return {
+    presented: signal(true),
     attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(),

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { effect } from "@preact/signals";
+import { effect, signal } from "@preact/signals";
 import { createDesignSessionReplacement } from "../app/document-session/replacement";
 import { createMemoryDesignSessionStore } from "../app/document-session/store";
 import type { DesignSessionWorkflowRunner } from "../app/document-session/workflow-runner";
@@ -788,6 +788,7 @@ function makeWorkflowRunner(events: string[]): DesignSessionWorkflowRunner {
 function makeCanvas(events: string[]): CanvasDocumentSurface {
   let loaded = false;
   return {
+    presented: signal(true),
     attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(() => events.push("canvas.show-chrome")),

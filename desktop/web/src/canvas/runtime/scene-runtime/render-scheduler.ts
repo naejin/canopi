@@ -51,6 +51,9 @@ export class SceneRuntimeRenderScheduler {
   /** The epoch of the latest scene render, until it has drawn or failed; a newer epoch fences it. */
   private _sceneRenderEpoch: number | null = null
   private readonly _scenePending = signal(false)
+  /** Scene renders up to this epoch were started before the latest awaitPresentation; only a later one presents. */
+  private _presentAfterEpoch = 0
+  private readonly _presented = signal(true)
 
   constructor(private readonly _options: SceneRuntimeRenderSchedulerOptions) {}
 
@@ -64,6 +67,22 @@ export class SceneRuntimeRenderScheduler {
    */
   get scenePending(): ReadonlySignal<boolean> {
     return this._scenePending
+  }
+
+  /**
+   * False from awaitPresentation until a scene render started after it has drawn (or failed), or the renderer unmounts and
+   * nothing will draw it. Camera frames and later scene changes never turn it false.
+   */
+  get presented(): ReadonlySignal<boolean> {
+    return this._presented
+  }
+
+  /** A Design was opened: it is presented by the first scene render started from now on (the mount's, if none is mounted yet). */
+  awaitPresentation(): void {
+    // A runtime without a renderer never draws.
+    if (!this._options.getRenderer()) return
+    this._presentAfterEpoch = this._renderEpoch
+    this._presented.value = false
   }
 
   async initialize(container: HTMLElement): Promise<void> {
@@ -165,6 +184,7 @@ export class SceneRuntimeRenderScheduler {
     const renderer = this._renderer
     this._renderer = null
     this._publishScenePending()
+    this._presented.value = true
     if (renderer) await disposeRenderer(renderer)
   }
 
@@ -182,6 +202,7 @@ export class SceneRuntimeRenderScheduler {
     if (this._sceneRenderEpoch !== renderEpoch) return
     this._sceneRenderEpoch = null
     this._publishScenePending()
+    if (renderEpoch > this._presentAfterEpoch) this._presented.value = true
   }
 
   /** A scene invalidation waits for its frame, or the latest scene render has not drawn yet. */
