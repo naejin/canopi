@@ -3,9 +3,8 @@ import { googleMapsApiKey } from '../app/settings/state'
 import { MAPLIBRE_SATELLITE_SOURCE_ID } from '../maplibre/config'
 import { mountMapBackground, type MapBackgroundPresentation } from '../maplibre/map-background'
 import type { VectorStyleDocument } from '../maplibre/openfreemap-basemap'
-import { mapStyleReadiness, mountSatelliteLifecycle } from '../maplibre/satellite-bind'
+import { mapStyleReadiness, mountSatelliteLifecycle, type SatelliteMountOptions } from '../maplibre/satellite-bind'
 import { SatelliteImageryProvider, type SatelliteHttp } from '../maplibre/satellite-provider-session'
-import type { SatelliteReconcileTarget } from '../maplibre/satellite-contribution'
 
 const STYLE: VectorStyleDocument = {
   glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
@@ -248,7 +247,7 @@ describe('satellite mount style-ready wait', () => {
     const readiness = mapStyleReadiness(map, lifetime)
     const mount = () => mountSatelliteLifecycle({
       provider: new SatelliteImageryProvider(inertHttp, () => ({ googleMapsApiKey: null, locale: 'en' })),
-      map: map as unknown as SatelliteReconcileTarget,
+      map: map as unknown as SatelliteMountOptions['map'],
       tileAuth: null,
       readViewport: () => ({ west: -1, south: 48, east: 1, north: 49, zoom: 14 }),
       styleReady: readiness,

@@ -33,6 +33,10 @@ import {
 } from '../maplibre/satellite-provider'
 import type { SatelliteState } from '../maplibre/satellite-provider-session'
 
+/** Reconcile options for a map whose transport resolves official tiles, and for one without that transport. */
+const RESOLVABLE = { officialTilesResolvable: true, beforeLayerId: () => null }
+const NO_TRANSPORT = { officialTilesResolvable: false, beforeLayerId: () => null }
+
 /** Google's keyless public tiles. */
 function descriptor(overrides: Partial<SatelliteDescriptor> = {}): SatelliteDescriptor {
   return {
@@ -111,7 +115,7 @@ describe('satellite contribution reconciliation', () => {
     reconcileSatelliteContribution(target, {
       state: 'ready',
       descriptor: descriptor(),
-    })
+    }, NO_TRANSPORT)
     expect(readSource(sources, MAPLIBRE_SATELLITE_SOURCE_ID)?.tiles).toEqual([GOOGLE_KEYLESS_TILES])
     expect(readLayer(layers, MAPLIBRE_SATELLITE_LAYER_ID)?.layout.visibility).toBe('visible')
   })
@@ -124,7 +128,7 @@ describe('satellite contribution reconciliation', () => {
         state: 'ready',
         descriptor: googleDescriptor({ tileSize: 512 }),
       },
-      { officialTilesResolvable: true },
+      RESOLVABLE,
     )
     const source = readSource(sources, MAPLIBRE_SATELLITE_SOURCE_ID)
     expect(source?.tileSize).toBe(512)
@@ -139,14 +143,14 @@ describe('satellite contribution reconciliation', () => {
     reconcileSatelliteContribution(target, {
       state: 'ready',
       descriptor: descriptor(),
-    })
+    }, NO_TRANSPORT)
     reconcileSatelliteContribution(
       target,
       {
         state: 'ready',
         descriptor: googleDescriptor(),
       },
-      { officialTilesResolvable: true },
+      RESOLVABLE,
     )
     expect(sources.size).toBe(1)
     expect(readSource(sources, MAPLIBRE_SATELLITE_SOURCE_ID)?.tiles).toEqual([GOOGLE_SESSION_TILES])
@@ -172,8 +176,8 @@ describe('satellite contribution reconciliation', () => {
       reconcileSatelliteContribution(target, {
         state: 'ready',
         descriptor: descriptor(),
-      })
-      reconcileSatelliteContribution(target, state)
+      }, NO_TRANSPORT)
+      reconcileSatelliteContribution(target, state, NO_TRANSPORT)
       // Leaving the previous tiles up would present keyless imagery as if the
       // configured key were serving it.
       expect(sources.size).toBe(0)
@@ -186,11 +190,11 @@ describe('satellite contribution reconciliation', () => {
     reconcileSatelliteContribution(target, {
       state: 'ready',
       descriptor: descriptor(),
-    })
+    }, NO_TRANSPORT)
     expect(sources.size).toBe(1)
     // Loading with an already-installed source keeps the object and hides it,
     // so a pending metadata request cannot present falsely attributed imagery.
-    reconcileSatelliteContribution(target, { state: 'loading' })
+    reconcileSatelliteContribution(target, { state: 'loading' }, NO_TRANSPORT)
     expect(sources.size).toBe(1)
     expect(layers.size).toBe(1)
   })
@@ -200,22 +204,22 @@ describe('satellite contribution reconciliation', () => {
     reconcileSatelliteContribution(target, {
       state: 'ready',
       descriptor: descriptor(),
-    })
+    }, NO_TRANSPORT)
     // Without a transport to resolve `{session}` every tile would fail, so the
     // honest outcome is no contribution rather than a broken official source
     // or the previous keyless imagery under the official copyright.
     reconcileSatelliteContribution(target, {
       state: 'ready',
       descriptor: googleDescriptor(),
-    })
+    }, NO_TRANSPORT)
     expect(sources.size).toBe(0)
     expect(layers.size).toBe(0)
   })
 
   it('removes an idempotent contribution without error', () => {
     const { target, sources } = recordingTarget()
-    reconcileSatelliteContribution(target, { state: 'idle' })
-    reconcileSatelliteContribution(target, { state: 'idle' })
+    reconcileSatelliteContribution(target, { state: 'idle' }, NO_TRANSPORT)
+    reconcileSatelliteContribution(target, { state: 'idle' }, NO_TRANSPORT)
     expect(sources.size).toBe(0)
   })
 
@@ -224,7 +228,7 @@ describe('satellite contribution reconciliation', () => {
     reconcileSatelliteContribution(target, {
       state: 'ready',
       descriptor: descriptor(),
-    })
+    }, NO_TRANSPORT)
     const before = readSource(sources, MAPLIBRE_SATELLITE_SOURCE_ID)
     setSatelliteContributionVisibility(target, false)
     expect(readLayer(layers, MAPLIBRE_SATELLITE_LAYER_ID)?.layout.visibility).toBe('none')

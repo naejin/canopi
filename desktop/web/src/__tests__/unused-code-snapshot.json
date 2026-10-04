@@ -189,7 +189,6 @@
     "src/maplibre/raster-display/diagnostics.ts#RasterDiagnosticEvent",
     "src/maplibre/raster-display/pool.ts#RasterPoolOptions",
     "src/maplibre/raster-display/pool.ts#RasterProxySource",
-    "src/maplibre/satellite-contribution.ts#SatelliteContributionOptions",
     "src/maplibre/satellite-provider-session.ts#BasemapViewportMetadata",
     "src/maplibre/shared-scene-layer.ts#SharedMapSceneDraftSink",
     "src/maplibre/shared-scene-layer.ts#SharedPixiRendererInitOptions",

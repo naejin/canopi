@@ -10,7 +10,6 @@ import {
 } from '../maplibre/config'
 import { mountSatelliteLifecycle, type SatelliteMountOptions } from '../maplibre/satellite-bind'
 import { BasemapTileAuth } from '../maplibre/basemap-tile-auth'
-import type { SatelliteReconcileTarget } from '../maplibre/satellite-contribution'
 
 const API_KEY = 'fake-google-key-0123456789'
 const SESSION_TOKEN = 'fake-session-token'
@@ -23,7 +22,7 @@ function recordingMap() {
   const sources = new Map<string, Record<string, unknown>>()
   const layers = new Map<string, Record<string, unknown>>()
   const layout = new Map<string, Record<string, unknown>>()
-  const target: SatelliteReconcileTarget = {
+  const target: SatelliteMountOptions['map'] = {
     getSource: (id) => sources.get(id),
     getLayer: (id) => layers.get(id),
     removeLayer: (id) => void layers.delete(id),
@@ -42,7 +41,7 @@ const STYLE_READY: SatelliteMountOptions['styleReady'] = { isReady: () => true, 
 /** Mounts `provider` at VIEWPORT; the style is ready unless `overrides` says otherwise. */
 function mountOn(
   provider: SatelliteImageryProvider,
-  map: SatelliteReconcileTarget,
+  map: SatelliteMountOptions['map'],
   tileAuth: BasemapTileAuth | null,
   overrides: Partial<SatelliteMountOptions> = {},
 ) {
@@ -297,7 +296,7 @@ describe('Google official provider drives the live map', () => {
     let ready = false
     const readyListeners: Array<() => void> = []
     const added: string[] = []
-    const target: SatelliteReconcileTarget = {
+    const target: SatelliteMountOptions['map'] = {
       ...map.target,
       addSource: (id, source) => {
         added.push(id)
@@ -343,7 +342,7 @@ describe('Google official provider drives the live map', () => {
     let ready = true
     const readyListeners: Array<() => void> = []
     const added: string[] = []
-    const target: SatelliteReconcileTarget = {
+    const target: SatelliteMountOptions['map'] = {
       ...map.target,
       addSource: (id, source) => {
         added.push(id)

@@ -177,7 +177,8 @@ const RECHECK_EVENTS = ['idle', 'data', 'sourcedata', 'styledata'] as const
 export interface SatelliteMountOptions {
   /** The provider this mount drives and disposes (`createSatelliteImagery`). */
   readonly provider: SatelliteImageryProvider
-  readonly map: SatelliteReconcileTarget
+  /** The map's own methods; the mount adds the credit callback. */
+  readonly map: Omit<SatelliteReconcileTarget, 'replaceSatelliteAttribution'>
   /**
    * The map's credential owner, created with its request transform. Without it
    * an official provider has nothing to authenticate its tiles and the mount
@@ -226,11 +227,13 @@ export function mountSatelliteLifecycle(options: SatelliteMountOptions): Satelli
   let pending: SatelliteState | null = null
   let cancelReadyWait: (() => void) | null = null
 
+  const contribute = (state: SatelliteState): void => reconcileSatelliteContribution(target, state, {
+    officialTilesResolvable: tileAuth?.installed === true,
+    beforeLayerId: options.beforeLayerId,
+  })
+
   const reconcile = (state: SatelliteState): void => {
-    reconcileSatelliteContribution(target, state, {
-      officialTilesResolvable: tileAuth?.installed === true,
-      beforeLayerId: options.beforeLayerId,
-    })
+    contribute(state)
     // Loading official metadata must not expose cached imagery.
     setSatelliteContributionVisibility(target, state.state === 'ready')
     options.afterApply()
@@ -285,7 +288,7 @@ export function mountSatelliteLifecycle(options: SatelliteMountOptions): Satelli
       // Withdraw the contribution so teardown leaves no source, layer or
       // basemap-owned credit on a map that outlives the mount.
       try {
-        reconcileSatelliteContribution(target, { state: 'idle' })
+        contribute({ state: 'idle' })
       } catch {
         // A map that rejects withdrawal still tears down its own resources.
       }

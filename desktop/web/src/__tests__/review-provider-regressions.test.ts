@@ -60,6 +60,10 @@ function scriptedHttp(
   }
 }
 
+/** Reconcile options for a map whose transport resolves official tiles, and for one without that transport. */
+const RESOLVABLE = { officialTilesResolvable: true, beforeLayerId: () => null }
+const NO_TRANSPORT = { officialTilesResolvable: false, beforeLayerId: () => null }
+
 /** A ready style, no layer anchor, no events: what a mount needs beyond its provider, map and viewport. */
 const MOUNT_DEFAULTS = {
   tileAuth: null,
@@ -312,12 +316,12 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       descriptor: descriptor({ attribution: 'first' }),
       copyright: 'first',
     }
-    reconcileSatelliteContribution(target, first, { officialTilesResolvable: true })
+    reconcileSatelliteContribution(target, first, RESOLVABLE)
     expect(sources.size).toBe(1)
     const addCount = order.filter((entry) => entry.startsWith('addSource')).length
 
     // Identical publication retains source identity and loaded state.
-    reconcileSatelliteContribution(target, first, { officialTilesResolvable: true })
+    reconcileSatelliteContribution(target, first, RESOLVABLE)
     expect(sources.size).toBe(1)
     expect(order.filter((entry) => entry.startsWith('removeSource')).length).toBe(0)
     expect(order.filter((entry) => entry.startsWith('addSource')).length).toBe(addCount)
@@ -329,7 +333,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
         state: 'ready',
         descriptor: descriptor({ attribution: 'second' }),
       },
-      { officialTilesResolvable: true },
+      RESOLVABLE,
     )
     expect(sources.size).toBe(1)
     expect(order.filter((entry) => entry.startsWith('removeSource')).length).toBe(0)
@@ -341,12 +345,12 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     reconcileSatelliteContribution(
       target,
       { state: 'ready', descriptor: descriptor({ maxzoom: 18 }) },
-      { officialTilesResolvable: true },
+      RESOLVABLE,
     )
     reconcileSatelliteContribution(
       target,
       { state: 'ready', descriptor: descriptor({ maxzoom: 20 }) },
-      { officialTilesResolvable: true },
+      RESOLVABLE,
     )
     expect(order.filter((entry) => entry.startsWith('removeSource')).length).toBe(1)
     expect(order.filter((entry) => entry.startsWith('addSource')).length).toBe(2)
@@ -360,12 +364,12 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       descriptor: descriptor({ attribution: 'A' }),
       copyright: 'A',
     }
-    reconcileSatelliteContribution(target, first, { officialTilesResolvable: true })
+    reconcileSatelliteContribution(target, first, RESOLVABLE)
     const addCount = order.filter((entry) => entry.startsWith('addSource')).length
     reconcileSatelliteContribution(
       target,
       { state: 'ready', descriptor: descriptor({ attribution: 'B' }) },
-      { officialTilesResolvable: true },
+      RESOLVABLE,
     )
     expect(sources.size).toBe(1)
     expect(order.filter((entry) => entry.startsWith('removeSource')).length).toBe(0)
@@ -378,11 +382,11 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     reconcileSatelliteContribution(
       target,
       { state: 'ready', descriptor: descriptor() },
-      { officialTilesResolvable: true },
+      RESOLVABLE,
     )
     const layer = layers.get(MAPLIBRE_SATELLITE_LAYER_ID) as { layout?: { visibility?: string } } | undefined
     expect(layer?.layout?.visibility).toBe('visible')
-    reconcileSatelliteContribution(target, { state: 'loading' })
+    reconcileSatelliteContribution(target, { state: 'loading' }, NO_TRANSPORT)
     expect((layers.get(MAPLIBRE_SATELLITE_LAYER_ID) as { layout?: { visibility?: string } })?.layout?.visibility)
       .toBe('none')
   })
@@ -532,10 +536,10 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     reconcileSatelliteContribution(target, {
       state: 'ready',
       descriptor: descriptor({ attribution: 'A' }),
-    }, { officialTilesResolvable: true })
+    }, RESOLVABLE)
     expect(credits.at(-1)).toBe('A')
     expect(sources.size).toBe(1)
-    reconcileSatelliteContribution(target, { state: 'idle' })
+    reconcileSatelliteContribution(target, { state: 'idle' }, NO_TRANSPORT)
     expect(sources.size).toBe(0)
     expect(credits.at(-1)).toBe('')
   })

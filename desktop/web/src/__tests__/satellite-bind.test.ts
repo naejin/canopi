@@ -5,7 +5,6 @@ import {
   MAPLIBRE_SATELLITE_SOURCE_ID,
 } from '../maplibre/config'
 import { mountSatelliteLifecycle, type SatelliteMountOptions } from '../maplibre/satellite-bind'
-import type { SatelliteReconcileTarget } from '../maplibre/satellite-contribution'
 import { BasemapTileAuth } from '../maplibre/basemap-tile-auth'
 import { GOOGLE_KEYLESS_TILES, GOOGLE_SESSION_TILES } from '../maplibre/satellite-provider'
 
@@ -17,7 +16,7 @@ function recordingMap() {
   const layers = new Map<string, unknown>()
   const layout = new Map<string, unknown>()
   const calls: string[] = []
-  const target: SatelliteReconcileTarget = {
+  const target: SatelliteMountOptions['map'] = {
     getSource: (id) => {
       calls.push(`getSource:${id}`)
       return sources.get(id)
@@ -52,7 +51,7 @@ function recordingMap() {
 }
 
 /** Mounts `provider` on a map whose style is ready, at VIEWPORT. */
-function mountOn(provider: SatelliteImageryProvider, map: SatelliteReconcileTarget, tileAuth: BasemapTileAuth | null = null) {
+function mountOn(provider: SatelliteImageryProvider, map: SatelliteMountOptions['map'], tileAuth: BasemapTileAuth | null = null) {
   const options: SatelliteMountOptions = {
     provider,
     map,
