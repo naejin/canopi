@@ -47,7 +47,7 @@ import {
   type SettledSceneReader,
 } from './scene-runtime/transactions'
 
-type CommandInvalidationKind = 'scene' | 'viewport' | 'chrome'
+type CommandInvalidationKind = 'scene' | 'chrome'
 
 const DESIGN_OBJECTS_NOT_IMPORTED: CanvasDesignObjectImportReceipt = Object.freeze({
   committed: false,
