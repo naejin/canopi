@@ -6,14 +6,13 @@ export const MEASUREMENT_GUIDE_DASH_PX = 6
 export const MEASUREMENT_GUIDE_GAP_PX = 4
 export const MEASUREMENT_GUIDE_TICK_HALF_PX = 5
 export const MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX = 11
-export const MEASUREMENT_GUIDE_LABEL_CLEARANCE_PX = 4
+const MEASUREMENT_GUIDE_LABEL_CLEARANCE_PX = 4
 export const MEASUREMENT_GUIDE_LABEL_OFFSET_PX =
   MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX / 2 + MEASUREMENT_GUIDE_LABEL_CLEARANCE_PX
 
 /** A guide in world metres; its label's place on screen comes from a view (`measurementGuideLabelPoseIn`). */
 export interface MeasurementGuidePresentation {
   readonly text: string
-  readonly midpointWorld: ScenePoint
   readonly normalWorld: ScenePoint
   readonly lengthWorld: number
 }
@@ -29,10 +28,6 @@ export function createMeasurementGuidePresentation(
 
   return {
     text: formatMetricDistance(lengthWorld),
-    midpointWorld: {
-      x: (guide.start.x + guide.end.x) / 2,
-      y: (guide.start.y + guide.end.y) / 2,
-    },
     normalWorld: {
       x: dy / lengthWorld,
       y: -dx / lengthWorld,
