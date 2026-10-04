@@ -52,7 +52,7 @@ describe('shared workspace without WebGL2', () => {
       retryable: false,
     })
     // "Map unavailable" stays: Retry is refused and builds no map.
-    composition.retryMap!()
+    composition.retryMap()
     await Promise.resolve()
     expect(canCreateWebGL2Context).toHaveBeenCalledOnce()
     expect(states.at(-1)).toMatchObject({ status: 'error', retryable: false })
