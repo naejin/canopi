@@ -180,7 +180,6 @@
     "src/components/species-detail/SpeciesDetailLayout.tsx#SpeciesDetailIdentity",
     "src/ipc/geocoding.ts#GeoResult",
     "src/maplibre/basemap-tile-auth.ts#BasemapTileCredentials",
-    "src/maplibre/canvas-surface-camera.ts#MapLibreSurfaceCameraRuntime",
     "src/maplibre/openfreemap-basemap.ts#VectorBasemapOptions",
     "src/maplibre/openfreemap-basemap.ts#VectorBasemapPresentation",
     "src/maplibre/raster-display/diagnostics.ts#RasterDiagnosticEvent",

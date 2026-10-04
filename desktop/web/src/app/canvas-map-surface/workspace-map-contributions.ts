@@ -1,11 +1,9 @@
 import { logMapError } from '../../maplibre/redact-credentials'
-import type { ViewDiagnostics } from '../../canvas/runtime/view/types'
 import type { MapLibreSurfaceContext } from '../../maplibre/surface-adapter'
 import type { MapLibreMapInstance } from '../../maplibre/loader'
 import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   mapLibreCanvasSurfaceStateEquals,
-  publishMapDiagnostics,
   type MapLibreBasemapStatus,
   type MapLibreCanvasSurfaceState,
 } from '../../maplibre/canvas-surface-state'
@@ -29,7 +27,6 @@ export interface WorkspaceMapContributionsOptions {
   readonly createRasterDisplay?: WorkspaceMapContributionAdapter['createRasterDisplay']
   readonly publishViewBounds?: WorkspaceMapContributionAdapter['publishViewBounds']
   readonly onStateChange?: (state: MapLibreCanvasSurfaceState) => void
-  readonly publishDiagnostics?: (frame: ViewDiagnostics | null) => void
   readonly logError?: (message?: unknown, ...args: unknown[]) => void
 }
 
@@ -186,8 +183,6 @@ export class WorkspaceMapContributions {
           this.publishState({ ...this.state, status: 'ready', layerSkipped: this.layerSkipped() })
           if (!this.current(revision)) continue
           this.publishBounds()
-          if (!this.current(revision)) continue
-          this.publishDiagnostics(snapshot.frame)
           if (!this.current(revision)) continue
           void this.syncTerrain(map, snapshot, revision)
         } catch (error) {
@@ -352,7 +347,6 @@ export class WorkspaceMapContributions {
     this.terrain = null
     this.terrainTouched = false
     this.attempt('Failed to clear map view bounds:', () => this.options.publishViewBounds?.(null))
-    this.attempt('Failed to clear map diagnostics:', () => this.publishDiagnostics(null))
   }
 
   private current(revision: number): boolean {
@@ -389,12 +383,6 @@ export class WorkspaceMapContributions {
     if (mapLibreCanvasSurfaceStateEquals(this.state, state)) return
     this.state = state
     this.attempt('Map contribution state observer failed:', () => this.options.onStateChange?.(state))
-  }
-
-  private publishDiagnostics(frame: ViewDiagnostics | null): void {
-    this.attempt('Map contribution diagnostics observer failed:', () => {
-      (this.options.publishDiagnostics ?? publishMapDiagnostics)(frame)
-    })
   }
 
   private attempt(message: string, run: () => void): void {

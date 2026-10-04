@@ -259,7 +259,6 @@ function targetContribution(sessionIdentity: object): WorkspaceMapContributionSn
     sessionIdentity, lidar: [],
     terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
     overlays: { runtime: { getSceneSnapshot: () => scene }, location: { lat: 48, lon: 2 }, hoveredTargets: [{ kind: 'zone', zone_id: 'plot' }], selectedTargets: [], paintRevision: 0 },
-    frame: null,
   }
 }
 
@@ -615,10 +614,9 @@ describe('WorkspaceMapControls', () => {
 
   it('rebuilds contribution layers after style reload on one map and clears them before removal', async () => {
     const bounds = vi.fn()
-    const diagnostics = vi.fn()
     const states = vi.fn()
     const { controls, maps, observers } = createControls({
-      contributions: { publishViewBounds: bounds, publishDiagnostics: diagnostics, onStateChange: states },
+      contributions: { publishViewBounds: bounds, onStateChange: states },
     })
     const acquisition = controls.createMap(new AbortController().signal)
     const input: WorkspaceMapContributionSnapshot = {
@@ -626,7 +624,6 @@ describe('WorkspaceMapControls', () => {
       lidar: [],
       terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
       overlays: { runtime: null, location: null, hoveredTargets: [], selectedTargets: [], paintRevision: 0 },
-      frame: null,
     }
     controls.updateMapContributions(input)
     const map = await waitForMap(maps)
@@ -644,7 +641,6 @@ describe('WorkspaceMapControls', () => {
     map.remove.mockImplementation(() => {
       expect([...map.listeners.values()].every((listeners) => listeners.size === 0)).toBe(true)
       expect(bounds).toHaveBeenLastCalledWith(null)
-      expect(diagnostics).toHaveBeenLastCalledWith(null)
       expect(states.mock.lastCall?.[0].status).toBe('idle')
     })
     controls.releaseMap(admitted)

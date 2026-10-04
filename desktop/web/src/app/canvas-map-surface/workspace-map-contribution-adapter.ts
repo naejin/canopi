@@ -1,5 +1,4 @@
 import type { CanvasQuerySurface } from '../../canvas/runtime/runtime'
-import type { ViewDiagnostics } from '../../canvas/runtime/view/types'
 import type { MapLibreApi } from '../../maplibre/loader'
 import type { TerrainLayerState, TerrainProtocolSupport } from '../../maplibre/terrain'
 import type { RasterDisplay, RasterDisplayLayer, RasterDisplayMap, RasterDisplayOptions } from '../../maplibre/raster-display/adapter'
@@ -10,8 +9,6 @@ export interface WorkspaceMapContributionSnapshot {
   readonly lidar: readonly Readonly<RasterDisplayLayer>[]
   readonly terrain: TerrainLayerState
   readonly overlays: CanvasMapSurfaceOverlaySnapshot
-  /** Dev diagnostics of the settled camera. */
-  readonly frame: ViewDiagnostics | null
 }
 
 export interface WorkspaceMapContributionAdapter {
@@ -50,13 +47,6 @@ export function captureWorkspaceMapContributions(
       location: snapshot.overlays.location && Object.freeze({ ...snapshot.overlays.location }),
       hoveredTargets: Object.freeze(snapshot.overlays.hoveredTargets.map((target) => Object.freeze({ ...target }))),
       selectedTargets: Object.freeze(snapshot.overlays.selectedTargets.map((target) => Object.freeze({ ...target }))),
-    }),
-    frame: snapshot.frame && Object.freeze({
-      camera: Object.freeze({ ...snapshot.frame.camera, center: Object.freeze({ ...snapshot.frame.camera.center }) }),
-      centreWorld: Object.freeze({ ...snapshot.frame.centreWorld }),
-      groundQuadGeo: Object.freeze(snapshot.frame.groundQuadGeo.map(
-        (point) => Object.freeze({ ...point }),
-      )) as unknown as ViewDiagnostics['groundQuadGeo'],
     }),
   })
 }

@@ -9,7 +9,6 @@ import { theme } from '../settings/state'
 import { canvasPaintRevision } from '../../canvas/theme-refresh'
 import { loadMapLibreTerrainSupport } from '../../maplibre/terrain-loader'
 import { createRasterDisplay } from '../../maplibre/raster-display/adapter'
-import { resolveMapLibreSurfaceDiagnostics } from '../../maplibre/canvas-surface-camera'
 import { captureWorkspaceMapContributions, type WorkspaceMapContributionAdapter } from './workspace-map-contribution-adapter'
 
 export function createDesktopWorkspaceMapContributionAdapter(): WorkspaceMapContributionAdapter {
@@ -43,7 +42,6 @@ export function createDesktopWorkspaceMapContributionAdapter(): WorkspaceMapCont
           selectedTargets: overview ? [] : panelTargets.selectedTargets,
           paintRevision: canvasPaintRevision.value,
         },
-        frame: resolveMapLibreSurfaceDiagnostics(runtime),
       })
     },
   }

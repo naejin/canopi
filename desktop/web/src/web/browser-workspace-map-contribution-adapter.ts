@@ -1,6 +1,5 @@
 import { designSessionStore, type DesignSessionStore } from '../app/document-session/store'
 import { readPanelTargetOverlaySnapshot } from '../app/panel-targets/presentation'
-import { resolveMapLibreSurfaceDiagnostics } from '../maplibre/canvas-surface-camera'
 import { canvasPaintRevision } from '../canvas/theme-refresh'
 import { captureWorkspaceMapContributions, type WorkspaceMapContributionAdapter } from '../app/canvas-map-surface/workspace-map-contribution-adapter'
 
@@ -34,7 +33,6 @@ export function createBrowserWorkspaceMapContributionAdapter(
           selectedTargets: overview ? [] : panelTargets.selectedTargets,
           paintRevision: canvasPaintRevision.value,
         },
-        frame: resolveMapLibreSurfaceDiagnostics(runtime),
       })
     },
   }

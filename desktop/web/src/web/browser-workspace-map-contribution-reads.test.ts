@@ -18,7 +18,6 @@ import { createBrowserWorkspaceMapContributionAdapter } from './browser-workspac
 
 afterEach(() => {
   vi.useRealTimers()
-  vi.unstubAllEnvs()
 })
 
 function design(): CanopiFile {
@@ -81,42 +80,10 @@ describe('browser workspace map contribution reads', () => {
 
         vi.advanceTimersByTime(SETTLE_MS)
         expect(reads).toHaveLength(2)
-        expect(reads[1]!.frame!.camera).toEqual(runtime.querySurface.view.captureView().camera)
 
         // Overview drops the panel Targets at once.
         camera.setViewport({ x: 0, y: 0, scale: 0.01 })
         expect(reads).toHaveLength(3)
-      } finally {
-        stop()
-      }
-    } finally {
-      runtime.destroy()
-    }
-  })
-
-  it('a production build re-reads on a settled camera too, and resolves no diagnostics', () => {
-    vi.stubEnv('DEV', false)
-    vi.useFakeTimers()
-    const runtime = new SceneCanvasRuntime()
-    try {
-      runtime.documentSurface.loadDocument(design())
-      runtime.documentSurface.resize(400, 300)
-      const camera = cameraOf(runtime)
-      camera.setViewport({ x: 0, y: 0, scale: 2 })
-      vi.advanceTimersByTime(SETTLE_MS)
-      const captureView = vi.spyOn(runtime.querySurface.view, 'captureView')
-      const adapter = createBrowserWorkspaceMapContributionAdapter({ sessionIdentity: signal({}), hasCurrentDesign: () => true })
-      const reads: Array<WorkspaceMapContributionSnapshot | null> = []
-      const stop = effect(() => { reads.push(adapter.read(runtime.querySurface)) })
-      try {
-        camera.panBy({ x: 12, y: 0 })
-        expect(reads).toHaveLength(1)
-
-        vi.advanceTimersByTime(SETTLE_MS)
-        expect(reads).toHaveLength(2)
-        // The diagnostics' one consumer publishes in development builds only: a production read captures no view for them.
-        expect(reads.map((read) => read!.frame)).toEqual([null, null])
-        expect(captureView).not.toHaveBeenCalled()
       } finally {
         stop()
       }

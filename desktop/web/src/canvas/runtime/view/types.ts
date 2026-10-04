@@ -117,13 +117,3 @@ export interface DriverFrameSource {
   onViewFrame(listener: (frame: ViewFrame) => void): () => void
 }
 
-/**
- * Dev diagnostics published with the map contributions and the surface state. Replaces `MapFrame`
- * and its `diagnostics` (canvas/maplibre-camera.ts, deleted end of 0A); `viewportCenterWorld` is renamed `centreWorld`.
- */
-export interface ViewDiagnostics {
-  readonly camera: ViewCamera
-  readonly centreWorld: WorldPoint
-  /** Ground under the four screen corners, TL, TR, BR, BL (was viewportCornerGeo). */
-  readonly groundQuadGeo: readonly [GeoPoint, GeoPoint, GeoPoint, GeoPoint]
-}
