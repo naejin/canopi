@@ -56,7 +56,6 @@ type RasterDisplayLayerState = 'loading' | 'ready' | 'error'
 export interface RasterDisplayOptions {
   /** The engine added, replaced or removed map layers after an async load. */
   readonly onLayersChanged?: () => void
-  readonly onLayerStateChange?: (id: string, state: RasterDisplayLayerState, error?: Error) => void
   readonly loadRasterModule?: () => Promise<RasterModule>
   readonly pool?: RasterWorkerPool
 }
@@ -77,8 +76,6 @@ export interface RasterDisplay {
   sync(layers: readonly RasterDisplayLayer[], beforeId: string | undefined): void
   /** Layer ids the manager currently owns, bottom first. */
   layerIds(): string[]
-  state(id: string): RasterDisplayLayerState | undefined
-  readonly disposed: boolean
   dispose(): void
 }
 
@@ -136,7 +133,6 @@ export function createRasterDisplay(
     if (states.get(id) === next) return
     states.set(id, next)
     recordRaster({ kind: `layer-${next}`, id, detail: error?.message })
-    options.onLayerStateChange?.(id, next, error)
   }
 
   const load = options.loadRasterModule ?? (() => import('maplibre-gl-raster'))
@@ -236,10 +232,6 @@ export function createRasterDisplay(
     },
     layerIds() {
       return manager ? manager.getLayers().map((layer) => layer.id) : []
-    },
-    state: (id) => states.get(id),
-    get disposed() {
-      return disposed
     },
     dispose() {
       if (disposed) return

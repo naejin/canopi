@@ -61,7 +61,6 @@ class FakeRasterDisplay implements RasterDisplay {
     this.onLayersChanged()
   }
   layerIds() { return this.added.filter((id) => this.map.order.includes(id)) }
-  state() { return undefined }
   dispose() { this.disposed = true; this.disposeCalls += 1 }
 }
 
