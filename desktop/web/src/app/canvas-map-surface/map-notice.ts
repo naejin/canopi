@@ -40,16 +40,10 @@ export function getMapNoticeReadModel({
   return {
     visible: notice !== null,
     mapSurfaceVisible,
-    tone: notice?.tone ?? getMapStatusTone(mapSurface),
+    tone: notice?.tone ?? 'ready', // a hidden notice's tone is never shown
     statusText: notice?.text ?? '',
     retry: notice?.retry ?? false,
   }
-}
-
-function getMapStatusTone(mapSurface: MapLibreCanvasSurfaceState): MapNoticeTone {
-  if (mapSurface.status === 'error') return 'error'
-  if (mapSurface.status === 'ready') return 'ready'
-  return 'loading'
 }
 
 interface MapNotice {
@@ -72,10 +66,9 @@ function readMapFailure(mapSurface: MapLibreCanvasSurfaceState, t: (key: string)
 function readMapNotice(mapSurface: MapLibreCanvasSurfaceState, t: (key: string) => string): MapNotice | null {
   if (mapSurface.basemapStatus === 'failed') return { text: t('canvas.layers.basemapFailed'), tone: 'error', retry: true }
   if (mapSurface.basemapStatus === 'loading') return { text: t('canvas.layers.basemapLoading'), tone: 'loading', retry: false }
-  const tone = getMapStatusTone(mapSurface)
-  if (mapSurface.status !== 'ready') return { text: t('canvas.layers.basemapLoading'), tone, retry: false }
+  if (mapSurface.status !== 'ready') return { text: t('canvas.layers.basemapLoading'), tone: 'loading', retry: false }
   if (mapSurface.terrainStatus === 'error' || mapSurface.layerSkipped) {
-    return { text: t('canvas.layers.layerSkipped'), tone, retry: false }
+    return { text: t('canvas.layers.layerSkipped'), tone: 'ready', retry: false }
   }
   return null
 }
