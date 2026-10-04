@@ -65,9 +65,13 @@ function readMapFailure(mapSurface: MapLibreCanvasSurfaceState, t: (key: string)
     : { text: t('canvas.layers.mapUnavailable'), tone: 'error', retry: false }
 }
 
-/** Below a map failure, by rank: a basemap that couldn't load, loading, then a skipped layer or terrain. */
+/**
+ * Below a map failure, by rank: a basemap that couldn't load, loading (the map or a basemap download, so a Retry
+ * shows progress and cannot restart it), then a skipped layer or terrain.
+ */
 function readMapNotice(mapSurface: MapLibreCanvasSurfaceState, t: (key: string) => string): MapNotice | null {
   if (mapSurface.basemapStatus === 'failed') return { text: t('canvas.layers.basemapFailed'), tone: 'error', retry: true }
+  if (mapSurface.basemapStatus === 'loading') return { text: t('canvas.layers.basemapLoading'), tone: 'loading', retry: false }
   const tone = getMapStatusTone(mapSurface)
   if (mapSurface.status !== 'ready') return { text: t('canvas.layers.basemapLoading'), tone, retry: false }
   if (mapSurface.terrainStatus === 'error' || mapSurface.layerSkipped) {

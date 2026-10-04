@@ -57,7 +57,7 @@ export function CanvasPanel() {
             <InspectionStatus />
           </CanvasChrome>
         )}
-        <MapNotice notice={mapNotice} onRetry={retryMap} />
+        <MapNotice notice={mapNotice} onRetry={retryMap} canvasRef={containerRef} />
         {!hasDesign && <WelcomeScreen />}
       </div>
     </div>

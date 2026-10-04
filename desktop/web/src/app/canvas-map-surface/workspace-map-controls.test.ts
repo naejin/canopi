@@ -1764,6 +1764,10 @@ describe('WorkspaceMapControls OpenFreeMap basemap', () => {
 
     controls.retryBasemap()
 
+    // Retry shows the download running and withdraws the button until it settles.
+    expect(states.at(-1)?.basemapStatus).toBe('loading')
+    expect(getMapNoticeReadModel({ hasDesign: true, mapVisible: true, mapSurface: states.at(-1)!, t }))
+      .toMatchObject({ visible: true, tone: 'loading', retry: false })
     await vi.waitFor(() => expect(states.at(-1)?.basemapStatus).toBe('ok'))
     expect(hasOpenFreeMapBasemap(map)).toBe(true)
     expect(getMapNoticeReadModel({ hasDesign: true, mapVisible: true, mapSurface: states.at(-1)!, t }).visible).toBe(false)
