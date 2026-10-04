@@ -26,12 +26,17 @@ import type { SceneDesignObjectTarget } from '../scene/design-object-targets'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
 import type { WorldPoint } from '../view/types'
 import { getRectangularZoneCorners } from '../zone-geometry'
-import { constrainPointTo45Degrees } from './constraints'
+import { applyToolConstraint } from './constraints'
 import type { DraftPresentation, DraftShape, ToolHandle } from './draft'
 import { measureLabelShapes, selectedZoneMeasurementLabels } from './measure-labels'
 import type { ToolReply } from './tool'
 import { createContextMenuPort, createToolScene } from './tool-host'
 import '../../../__tests__/support/camera-tolerance'
+
+/** Shift at bearing 0: the nearest 45° direction from `origin` against the world axes, its length kept. */
+function constrainPointTo45Degrees(origin: WorldPoint, point: WorldPoint): WorldPoint {
+  return applyToolConstraint({ kind: 'direction', origin, stepDeg: 45 }, point, { right: { x: 1, y: 0 }, down: { x: 0, y: 1 } })
+}
 
 vi.mock('./registry', () => ({ TOOL_REGISTRY: {} }))
 

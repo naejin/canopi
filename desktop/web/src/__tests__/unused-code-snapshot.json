@@ -300,7 +300,6 @@
     "src/canvas/runtime/scene/store.ts#createDefaultSceneSessionState",
     "src/canvas/runtime/selection-labels.ts#computePinnedPlantNameLabels",
     "src/canvas/runtime/selection-labels.ts#computeSelectionLabels",
-    "src/canvas/runtime/tools/constraints.ts#constrainPointTo45Degrees",
     "src/canvas/runtime/tools/saved-object-stamp.ts#canPlaceSavedObjectStamp",
     "src/canvas/runtime/tools/select/rotate-handle.ts#rotationReadout",
     "src/canvas/runtime/view/fit.ts#framingRect",

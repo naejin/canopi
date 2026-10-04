@@ -3,7 +3,7 @@
 // Owns the angle constraints the ToolHost applies to a tool's point while Shift is held (CanvasTool.constraint, spec §1.4):
 // a direction from an origin turned to the nearest step against the screen axes, its length kept; and a point turned about
 // a pivot so that the angle since the press is a step multiple (relative steps, bearing-independent). At bearing 0 the
-// screen axes are the world axes and a 45° direction is today's constrainPointTo45Degrees bit for bit.
+// screen axes are the world axes.
 
 import type { WorldPoint, WorldVector } from '../view/types'
 import type { ToolConstraint } from './tool'
@@ -14,21 +14,6 @@ export interface ScreenAxes {
   readonly down: WorldVector
 }
 
-/** Shift while drawing: the point along the nearest 45° direction from `origin`, its length kept. */
-export function constrainPointTo45Degrees(origin: WorldPoint, point: WorldPoint): WorldPoint {
-  const dx = point.x - origin.x
-  const dy = point.y - origin.y
-  const length = Math.hypot(dx, dy)
-  if (length <= 0.000001) return { ...origin }
-
-  const angle = Math.atan2(dy, dx)
-  const constrainedAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4)
-  return {
-    x: origin.x + Math.cos(constrainedAngle) * length,
-    y: origin.y + Math.sin(constrainedAngle) * length,
-  }
-}
-
 /** The point under `constraint`, against the screen axes the host passes (world axes at bearing 0). */
 export function applyToolConstraint(constraint: ToolConstraint, point: WorldPoint, axes: ScreenAxes): WorldPoint {
   if (constraint.kind === 'direction') return constrainDirection(constraint.origin, point, constraint.stepDeg, axes)
@@ -36,7 +21,6 @@ export function applyToolConstraint(constraint: ToolConstraint, point: WorldPoin
 }
 
 function constrainDirection(origin: WorldPoint, point: WorldPoint, stepDeg: number, axes: ScreenAxes): WorldPoint {
-  if (stepDeg === 45 && isWorldAligned(axes)) return constrainPointTo45Degrees(origin, point)
   const dx = point.x - origin.x
   const dy = point.y - origin.y
   // Screen-axis coordinates of origin → point.
@@ -70,8 +54,4 @@ function signedAngleDeltaDeg(startDeg: number, currentDeg: number): number {
   if (delta > 180) delta -= 360
   if (delta <= -180) delta += 360
   return delta
-}
-
-function isWorldAligned(axes: ScreenAxes): boolean {
-  return axes.right.x === 1 && axes.right.y === 0 && axes.down.x === 0 && axes.down.y === 1
 }

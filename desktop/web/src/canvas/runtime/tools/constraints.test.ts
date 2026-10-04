@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WorldPoint } from '../view/types'
-import { applyToolConstraint, constrainPointTo45Degrees } from './constraints'
+import { applyToolConstraint } from './constraints'
 
 const WORLD_AXES = { right: { x: 1, y: 0 }, down: { x: 0, y: 1 } } as const
 
@@ -24,6 +24,8 @@ const SAMPLE_POINTS: readonly WorldPoint[] = [
 describe('tool constraints', () => {
   it('puts a point on the nearest 45 degree direction from the origin and keeps its length', () => {
     const origin = { x: 1.5, y: -2.25 }
+    const constrainPointTo45Degrees = (from: WorldPoint, point: WorldPoint) =>
+      applyToolConstraint({ kind: 'direction', origin: from, stepDeg: 45 }, point, WORLD_AXES)
     for (const point of SAMPLE_POINTS) {
       const constrained = constrainPointTo45Degrees(origin, point)
       const length = Math.hypot(point.x - origin.x, point.y - origin.y)
@@ -33,14 +35,6 @@ describe('tool constraints', () => {
     }
     expect(constrainPointTo45Degrees(origin, { x: 11.5, y: -1.25 })).toEqual({ x: origin.x + Math.hypot(10, 1), y: origin.y })
     expect(constrainPointTo45Degrees(origin, origin)).toEqual(origin)
-  })
-
-  it('at bearing 0 a direction constraint is today\'s 45 degree constraint bit for bit', () => {
-    const origin = { x: 10.125, y: -4.5 }
-    for (const point of SAMPLE_POINTS) {
-      expect(applyToolConstraint({ kind: 'direction', origin, stepDeg: 45 }, point, WORLD_AXES))
-        .toEqual(constrainPointTo45Degrees(origin, point))
-    }
   })
 
   it('turns a direction to the step against the screen axes and keeps its length', () => {
