@@ -65,7 +65,7 @@ export function drawInspectionLensScene(
   view: ViewTransform,
   options: InspectionLensDrawOptions,
 ): void {
-  const dpr = Math.max(options.dpr, 1)
+  const dpr = options.dpr
   const widthPx = Math.max(1, options.widthPx)
   const heightPx = Math.max(1, options.heightPx)
 
