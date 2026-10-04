@@ -702,7 +702,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._rulerPointer = null
     if (!press) return
     press.end()
-    if (this._frames.viewFrame.peek().view.northUp) press.createGuideAt(press.axis, at)
+    if (this._frames.viewFrame.peek().view.northUp) press.createGuideAt(at)
   }
 
   private _endRulerPress(): void {

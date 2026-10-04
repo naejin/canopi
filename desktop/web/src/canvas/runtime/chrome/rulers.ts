@@ -25,13 +25,11 @@ export interface RulerOverlayOptions {
 
 /**
  * Draws the rulers and creates the guides dragged out of them. The overlay listens to nothing (policy P6): the DOM input
- * source takes ruler presses, and `pressRuler` finds the pressed ruler's overlay. `createGuideAt` is today's gutter, origin
- * and visibility checks.
+ * source takes ruler presses, and `pressRuler` finds the pressed ruler's overlay, whose press lands the guide.
  */
 export interface RulerOverlay {
   update(snapshot: RulerOverlaySnapshot): void
   refreshTheme(): void
-  createGuideAt(axis: RulerAxis, at: ScreenPoint): void
   destroy(): void
 }
 
@@ -41,9 +39,8 @@ export interface RulerOverlay {
  * destroyed lands no guide.
  */
 export interface RulerPress {
-  readonly axis: RulerAxis
   /** The guide released at `at`, in CSS px of the camera's screen (the map host), unless the rulers hid since the press. */
-  createGuideAt(axis: RulerAxis, at: ScreenPoint): void
+  createGuideAt(at: ScreenPoint): void
   /** The pointer moved during the drag: today's resize cursor on the overlay, until the drag ends. */
   drag(): void
   /** The drag is over: the overlay's cursor comes back. Idempotent; the overlay ends it itself when the rulers hide. */
@@ -138,7 +135,7 @@ class HtmlRulerOverlay implements RulerOverlay {
    * in overview or turned from north), or inside the ruler's own gutter; otherwise a guide at that world coordinate of
    * the latest camera.
    */
-  createGuideAt(axis: RulerAxis, at: ScreenPoint): void {
+  private _createGuideAt(axis: RulerAxis, at: ScreenPoint): void {
     if (this._destroyed) return
     const snapshot = this._snapshot
     if (!snapshot || !this._shown) return
@@ -158,9 +155,8 @@ class HtmlRulerOverlay implements RulerOverlay {
     const previousCursor = this._container.style.cursor
     let active = true
     const press: RulerPress = {
-      axis,
-      createGuideAt: (guideAxis, at) => {
-        if (this._hides === hides) this.createGuideAt(guideAxis, at)
+      createGuideAt: (at) => {
+        if (this._hides === hides) this._createGuideAt(axis, at)
       },
       drag: () => {
         if (active) this._container.style.cursor = axis === 'h' ? 's-resize' : 'e-resize'
@@ -399,17 +395,11 @@ class RulerLabelSpacing {
   private _previousEnd = Number.NEGATIVE_INFINITY
 
   admit(context: CanvasRenderingContext2D, label: string, center: number): boolean {
-    const half = measureRulerLabel(context, label) / 2
+    const half = context.measureText(label).width / 2
     if (center - half < this._previousEnd + RULER_LABEL_GAP_PX) return false
     this._previousEnd = center + half
     return true
   }
-}
-
-function measureRulerLabel(context: CanvasRenderingContext2D, label: string): number {
-  const measured = typeof context.measureText === 'function' ? context.measureText(label).width : NaN
-  // Without metrics (no layout engine) assume a generous 0.6 em per character.
-  return Number.isFinite(measured) && measured > 0 ? measured : label.length * CANVAS_RULER_LABEL_FONT_SIZE_PX * 0.6
 }
 
 const RULER_DISTANCES = NICE_DISTANCES.filter((distance) => distance >= 0.1)
