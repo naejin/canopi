@@ -36,9 +36,6 @@ import { mapZoomToStageScale } from '../../projection'
 import { SceneRuntimePresentationController } from './presentation'
 import { SceneRuntimeRenderScheduler } from './render-scheduler'
 import {
-  syncCanvasSignalsFromDocument,
-} from './scene-sync'
-import {
   SceneRuntimeEditCoordinator,
   type SceneCommandAdmission,
   type SceneEditCoordinator,
@@ -243,8 +240,7 @@ export function createSceneRuntimeConstruction(
     clearHoveredTargets: () => callbacks.syncHoveredCanvasTargets(null),
     clearPanelOriginTargets: () => panelTargetAdapter.clearPanelOriginTargets(),
     composeDocumentForSave: (input) => appAdapter.document.composeDocumentForSave(input),
-    syncCanvasSignalsFromDocument: (file) =>
-      syncCanvasSignalsFromDocument(file, appAdapter.settings.layerProjections),
+    syncCanvasSignalsFromDocument: (file) => appAdapter.settings.layerProjections.syncFromLayers(file.layers),
   })
   const inspection = new SceneCanvasInspectionOwner({
     frames: cameraHost.frames,
