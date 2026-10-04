@@ -1,40 +1,12 @@
-import type { StyleSpecification } from 'maplibre-gl'
+import type { AddProtocolAction, MapOptions } from 'maplibre-gl'
 
-export interface MapLibreMapConstructorOptions {
-  container: HTMLElement
-  style: string | StyleSpecification
-  center?: [number, number]
-  zoom?: number
-  minZoom?: number
-  maxZoom?: number
-  bearing?: number
-  renderWorldCopies?: boolean
-  canvasContextAttributes?: WebGLContextAttributes
-  pixelRatio?: number
-  fadeDuration?: number
-  attributionControl?: false | { compact?: boolean }
-  interactive: boolean
-  pitchWithRotate: boolean
-  dragRotate: boolean
-  touchZoomRotate: boolean
-  /** False on the workspace and snapshot maps: their camera driver's setScreen is the one resize owner (spec §1.1 "Resize"). */
-  trackResize?: boolean
-  /**
-   * MapLibre's request seam, used to authenticate official provider tiles with
-   * the live session. Set once at creation, because a map's transform is a
-   * construction option; it closes over the map's own credential owner so a
-   * session renewal reaches requests without touching the style or the source.
-   */
-  transformRequest?: (url: string) => MapLibreRequestParameters
-}
-
-interface MapLibreRequestParameters {
-  url: string
-}
-
-interface MapLibreGetResourceResponse<T = ArrayBuffer> {
-  data: T
-}
+/**
+ * MapLibre's own constructor options, with an element container. The workspace and snapshot maps pass
+ * `trackResize: false` (their camera driver's setScreen is the one resize owner, spec §1.1 "Resize") and a
+ * `transformRequest` closing over the map's credential owner, so a session renewal reaches requests without
+ * touching the style or the source.
+ */
+export type MapLibreMapConstructorOptions = MapOptions & { readonly container: HTMLElement }
 
 /** MapLibre's LngLat as the transform constrain receives and returns it. */
 export interface MapLibreLngLat {
@@ -93,13 +65,7 @@ export interface MapLibreMapInstance {
 
 export interface MapLibreApi {
   Map: new (options: MapLibreMapConstructorOptions) => MapLibreMapInstance
-  addProtocol(
-    id: string,
-    protocol: (
-      requestParameters: MapLibreRequestParameters,
-      abortController: AbortController,
-    ) => Promise<MapLibreGetResourceResponse>,
-  ): void
+  addProtocol(id: string, protocol: AddProtocolAction): void
 }
 
 let mapLibreModulePromise: Promise<MapLibreApi> | null = null

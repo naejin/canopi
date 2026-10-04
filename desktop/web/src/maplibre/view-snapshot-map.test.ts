@@ -47,7 +47,7 @@ class FakeMap {
 
   constructor(readonly options: MapLibreMapConstructorOptions) {
     FakeMap.instances.push(this)
-    this.center = options.center ?? [0, 0]
+    this.center = (options.center ?? [0, 0]) as [number, number]
     this.zoom = options.zoom ?? 0
     this.bearing = options.bearing ?? 0
     this.canvas = document.createElement('canvas')

@@ -1994,7 +1994,7 @@ describe('WorkspaceMapControls Google satellite', () => {
       const outgoing = transform!(
         (map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID) as { tiles: string[] }).tiles[0]!
           .split('{z}').join('14').split('{x}').join('8192').split('{y}').join('5461'),
-      )
+      ) as { url: string }
       expect(outgoing.url).toContain('session=fake-session-token')
       expect(outgoing.url).toContain('key=fake-canvas-google-key')
       expect(outgoing.url).not.toContain('{session}')
