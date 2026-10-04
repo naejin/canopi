@@ -20,20 +20,22 @@ impl FolderRevealer for SystemFolderRevealer {
             .spawn()
             .map_err(|error| format!("Failed to open the file manager: {error}"))?;
         // The opener may run as long as the file manager it hands off to, so
-        // reap it off the calling thread instead of leaving a zombie.
+        // reap it off the calling thread instead of leaving a zombie. The
+        // closure sits outside the reviewed statement so clippy still checks it.
+        let reap = move || {
+            if let Err(error) = child.wait() {
+                tracing::warn!("Folder opener could not be reaped: {error}");
+            }
+        };
         #[expect(
             clippy::disallowed_methods,
             reason = "the opener may live as long as the file manager; holding an executor \
                       slot for it would starve bounded work"
         )]
-        std::thread::Builder::new()
+        let reaper = std::thread::Builder::new()
             .name("folder-reveal-reaper".to_owned())
-            .spawn(move || {
-                if let Err(error) = child.wait() {
-                    tracing::warn!("Folder opener could not be reaped: {error}");
-                }
-            })
-            .map_err(|error| format!("Failed to watch the folder opener: {error}"))?;
+            .spawn(reap);
+        reaper.map_err(|error| format!("Failed to watch the folder opener: {error}"))?;
         Ok(())
     }
 }
