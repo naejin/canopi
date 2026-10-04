@@ -27,6 +27,8 @@ mod crs_reference_points;
 mod source;
 mod tiff;
 
+pub(crate) use crs::projected_unit;
+
 #[cfg(test)]
 use super::engine::RasterStatistics;
 use super::engine::{

@@ -6,6 +6,7 @@ import {
   type ScenePoint,
 } from '../scene'
 import { createUuid } from '../../../utils/ids'
+import { polygonArea } from '../zone-geometry'
 import { newZoneId } from '../zone-identity'
 
 /** An unturned box in the session plane: a zone's `rotationDeg` turns it about its centre (zone-geometry.ts), as
@@ -218,14 +219,4 @@ function isValidPolygon(points: readonly ScenePoint[]): boolean {
 
 function isValidLine(start: ScenePoint, end: ScenePoint): boolean {
   return Math.hypot(end.x - start.x, end.y - start.y) >= 0.5
-}
-
-function polygonArea(points: readonly ScenePoint[]): number {
-  let sum = 0
-  for (let index = 0; index < points.length; index += 1) {
-    const current = points[index]!
-    const next = points[(index + 1) % points.length]!
-    sum += current.x * next.y - next.x * current.y
-  }
-  return sum / 2
 }

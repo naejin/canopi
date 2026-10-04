@@ -584,6 +584,18 @@ const FORBIDDEN_IMPORT_POLICIES = [
 
 const CONFINED_IMPORTER_POLICIES = [
   {
+    // docs/guides/map-workspace.md "Do not": the runtime is published only as its role surfaces, so nothing else names
+    // the raw runtime to hold or cast it. Type-only edges count.
+    kind: 'confine-importers',
+    name: 'Only the workspace composition holds the raw scene runtime',
+    targets: ['src/canvas/runtime/scene-runtime.ts'],
+    allowedFrom: [
+      'src/app/canvas-map-surface/workspace-runtime-composition.ts',
+      'src/app/canvas-map-surface/workspace-activation.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+  },
+  {
     kind: 'confine-importers',
     name: 'Species Catalog state stays private to its Workbench',
     targets: ['src/app/plant-browser/search-session.ts'],
@@ -2474,6 +2486,25 @@ describe('declarative frontend architecture policies', () => {
     ])
   })
 
+  it('rejects the raw scene runtime outside the workspace composition, type-only edges included', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/scene-runtime.ts', ['export class SceneCanvasRuntime {}']),
+      plantedSource('src/app/canvas-map-surface/workspace-runtime-composition.ts', ["import { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'"]),
+      plantedSource('src/app/canvas-map-surface/workspace-activation.ts', ["import type { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'"]),
+      plantedSource('src/app/canvas-runtime/app-adapter.ts', ["import type { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'"]),
+      plantedSource('src/components/canvas/Planted.tsx', ["import { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'"]),
+      plantedSource('src/canvas/runtime/scene-runtime.test.ts', ["import { SceneCanvasRuntime } from './scene-runtime'"]),
+    ])
+    const policies = FRONTEND_ARCHITECTURE_POLICIES.filter(
+      ({ name }) => name === 'Only the workspace composition holds the raw scene runtime',
+    )
+
+    expect(collectArchitecturePolicyViolations(graph, policies)).toEqual([
+      expect.stringContaining('src/app/canvas-runtime/app-adapter.ts:1:1 imports src/canvas/runtime/scene-runtime.ts'),
+      expect.stringContaining('src/components/canvas/Planted.tsx:1:1 imports src/canvas/runtime/scene-runtime.ts'),
+    ])
+  })
+
   it('keeps every discovered TypeScript source within its owned dependency seams', () => {
     const graph = discoveredSourceGraph()
     const paths = graph.map(({ path }) => path)
@@ -3335,4 +3366,21 @@ describe('map error logging', () => {
     expect(scanned).toBeGreaterThan(10)
     expect(offenders).toEqual([])
   })
+})
+
+describe('one zone geometry', () => {
+  // docs/guides/map-workspace.md: one zone geometry (canvas/runtime/zone-geometry.ts). A second shoelace drifts from it.
+  const KEPT_COPIES = [
+    'src/canvas/runtime/tools/select/reshape.ts', // phase 2
+    'src/app/saved-object-stamps/thumbnail-renderer.ts', // canopi-224j
+  ]
+
+  it('declares polygonArea only in zone-geometry.ts', () => {
+    const declaring = discoveredSourceGraph()
+      .filter(({ path }) => !path.startsWith('src/__tests__/') && !/\.test\.tsx?$/.test(path))
+      .filter(({ source }) => /\b(?:function\s+polygonArea|(?:const|let)\s+polygonArea\s*=)/.test(source))
+      .map(({ path }) => path)
+
+    expect(declaring).toEqual(['src/canvas/runtime/zone-geometry.ts', ...KEPT_COPIES].sort((left, right) => left.localeCompare(right)))
+  }, 20_000)
 })

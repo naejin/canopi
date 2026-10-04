@@ -177,18 +177,15 @@ pub(super) fn from_reference(reference: &str) -> Result<ResolvedCrs, String> {
     // are written back (a projected CRS's meridian goes into its central
     // meridian), while the raster's coordinates keep the WKT's own unit and a
     // geographic CRS's longitudes their own meridian.
-    // The last unit node is the CRS's own (the geographic base's comes first).
-    let number = |keywords: [&str; 2]| {
-        let node = nodes
-            .iter()
-            .rfind(|node| keywords.contains(&node.keyword))?;
-        node.numbers().first().copied()
-    };
     let geographic = matches!(params.kind, ProjectionKind::Geographic);
-    if geographic && number(["PRIMEM", "PRIMEMERIDIAN"]).is_some_and(|pm| pm != 0.0) {
+    let meridian = nodes
+        .iter()
+        .rfind(|node| matches!(node.keyword, "PRIMEM" | "PRIMEMERIDIAN"))
+        .and_then(|node| node.numbers().first().copied());
+    if geographic && meridian.is_some_and(|pm| pm != 0.0) {
         return Err(not_supported(OTHER_MERIDIAN));
     }
-    if !geographic && number(["UNIT", "LENGTHUNIT"]).is_some_and(|unit| unit != 1.0) {
+    if !geographic && projected_unit(trimmed).is_some_and(|metres| metres != 1.0) {
         return Err(not_supported(OTHER_UNIT));
     }
     user_defined(
@@ -465,6 +462,25 @@ fn wkt_nodes(wkt: &str) -> Vec<WktNode<'_>> {
         }
     }
     nodes
+}
+
+/// A projected WKT's horizontal unit in metres: the last unit node inside its
+/// PROJCS or PROJCRS. The base geographic CRS's unit comes before it, and a
+/// compound's vertical part (or an ESRI .prj's trailing VERTCS) lies outside
+/// it.
+pub(crate) fn projected_unit(wkt: &str) -> Option<f64> {
+    wkt_nodes(wkt)
+        .into_iter()
+        .rfind(|node| {
+            matches!(node.keyword, "UNIT" | "LENGTHUNIT")
+                && node
+                    .parents
+                    .iter()
+                    .any(|parent| matches!(*parent, "PROJCS" | "PROJCRS"))
+        })?
+        .numbers()
+        .first()
+        .copied()
 }
 
 /// The shift a WKT's `TOWGS84` node gives, `None` when it shifts nothing.
@@ -1155,7 +1171,7 @@ mod tests {
         assert!(from_geokeys(&geocentric).is_err());
     }
 
-    use super::super::super::analyses::{CRS_PROJECTED_METRE, crs_class};
+    use super::super::super::analyses::{CRS_PROJECTED_METRE, CRS_PROJECTED_OTHER, crs_class};
     use super::super::crs_reference_points::REFERENCE_POINTS;
 
     /// Metres in one linear unit of a code in the reference table.
@@ -1339,6 +1355,39 @@ mod tests {
         }
     }
 
+    /// An ESRI .prj naming no code may end with a VERTCS in another unit:
+    /// the grid's own unit decides, so a metre grid with a feet height is
+    /// read and classed in metres, and a feet grid with a metre height is
+    /// refused.
+    #[test]
+    fn an_esri_prj_is_read_by_its_horizontal_unit_not_its_height() {
+        let vertical = |unit: &str| {
+            format!(
+                r#",VERTCS["NAVD_1988",VDATUM["North_American_Vertical_Datum_1988"],PARAMETER["Vertical_Shift",0.0],PARAMETER["Direction",1.0],{unit}]"#
+            )
+        };
+        let utm_metres = r#"PROJCS["NAD_1983_UTM_Zone_18N",GEOGCS["GCS_North_American_1983",DATUM["D_North_American_1983",SPHEROID["GRS_1980",6378137.0,298.257222101]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],PARAMETER["False_Easting",500000.0],PARAMETER["False_Northing",0.0],PARAMETER["Central_Meridian",-75.0],PARAMETER["Scale_Factor",0.9996],PARAMETER["Latitude_Of_Origin",0.0],UNIT["Meter",1.0]]"#;
+        let metres_with_feet_height = format!(
+            "{utm_metres}{}",
+            vertical(r#"UNIT["Foot_US",0.3048006096012192]"#)
+        );
+        let read = from_reference(&metres_with_feet_height).unwrap();
+        assert_eq!(crs_class(&read.wkt), CRS_PROJECTED_METRE);
+
+        let feet_with_metre_height = format!(
+            "{ESRI_LONG_ISLAND_FEET}{}",
+            vertical(r#"UNIT["Meter",1.0]"#)
+        );
+        let refused = from_reference(&feet_with_metre_height).map(|crs| crs.definition);
+        assert!(
+            refused
+                .as_ref()
+                .is_err_and(|e| e.contains("a linear unit other than the metre")),
+            "{refused:?}"
+        );
+        assert_eq!(crs_class(&feet_with_metre_height), CRS_PROJECTED_OTHER);
+    }
+
     /// A WKT names its own code at its root, or for a compound CRS naming
     /// none in its horizontal part. A nested node's code is never the CRS's: with the
     /// root's removed, Long Island's last nested code is its unit's (9003,
@@ -1488,7 +1537,8 @@ mod tests {
 
     /// NAD83 / New York Long Island (EPSG:2263) is in US survey feet: points
     /// come out in feet (the reference table), its WKT names the unit and
-    /// its written keys say US feet.
+    /// its written keys say US feet. A compound CRS is classed by its
+    /// horizontal unit, whatever its vertical part's.
     #[test]
     fn feet_systems_are_placed_and_labelled_in_feet() {
         let new_york = from_epsg(2263).unwrap();
@@ -1498,6 +1548,19 @@ mod tests {
                 .contains(r#"UNIT["US survey foot",0.3048006096012192"#),
             "{}",
             new_york.wkt
+        );
+        assert_eq!(crs_class(&new_york.wkt), CRS_PROJECTED_OTHER);
+        let compound = |code: u32, unit: &str| {
+            let horizontal = from_epsg(code).unwrap().wkt;
+            let wkt = format!(
+                r#"COMPD_CS["{code} + NAVD88 height",{horizontal},VERT_CS["NAVD88 height",VERT_DATUM["North American Vertical Datum 1988",2005],{unit},AXIS["Gravity-related height",UP]]]"#
+            );
+            crs_class(&from_reference(&wkt).unwrap().wkt)
+        };
+        assert_eq!(compound(2263, r#"UNIT["metre",1]"#), CRS_PROJECTED_OTHER);
+        assert_eq!(
+            compound(26918, r#"UNIT["US survey foot",0.3048006096012192]"#),
+            CRS_PROJECTED_METRE
         );
         let keys = geokeys_for(&new_york).unwrap();
         assert_eq!(short(&keys, key::ProjLinearUnitsGeoKey), Some(9003));

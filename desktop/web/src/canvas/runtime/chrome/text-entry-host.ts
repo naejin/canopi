@@ -155,7 +155,7 @@ function sameEntry(open: TextEntryRequest, next: TextEntryRequest): boolean {
     && open.initialText === next.initialText
 }
 
-/** Today's two fields: the new note's (text-annotation-tool.ts) and the in-place editor's (annotation-inline-editor.ts). */
+/** Styles both entries: a new note's ('create') and a note edited in place ('edit'), which takes the note's font size. */
 function styleEntry({ request, textarea }: OpenEntry): void {
   Object.assign(textarea.style, {
     position: 'absolute',

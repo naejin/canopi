@@ -221,23 +221,23 @@ export function savedObjectStampGhostShapes(
 
 /**
  * Places the saved stamp with its anchor at `at` (snapped by the caller), turned by `rotationDeg`, as one
- * 'interaction-saved-object-stamp' edit that selects the copies; false when it cannot be placed or the edit did not
- * commit. The tool's press, and the drop route's drop.
+ * 'interaction-saved-object-stamp' edit that selects the copies; `onCommitted` runs once the edit commits, and nothing
+ * happens when the stamp cannot be placed. The tool's press, and the drop route's drop.
  */
 export function placeSavedObjectStamp(
   edits: SceneEditCoordinator,
   scene: StampScene,
   stamp: SavedObjectStampPayload,
   at: WorldPoint,
-  options: { readonly rotationDeg?: number; readonly onCommitted?: () => void } = {},
-): boolean {
-  if (!canPlaceSavedObjectStamp(scene, stamp)) return false
-  return createSceneArrangementPlacement({ sceneEdits: edits }).place({
+  options: { readonly rotationDeg?: number; readonly onCommitted: () => void },
+): void {
+  if (!canPlaceSavedObjectStamp(scene, stamp)) return
+  createSceneArrangementPlacement({ sceneEdits: edits }).place({
     template: rotateArrangementTemplate(savedObjectStampArrangementTemplate(stamp), stamp.anchor, options.rotationDeg ?? 0),
     translateBy: stampDelta(stamp, at),
     historyType: 'interaction-saved-object-stamp',
     onCommitted: options.onCommitted,
-  }).committed
+  })
 }
 
 function requiredLayers(stamp: SavedObjectStampPayload): string[] {

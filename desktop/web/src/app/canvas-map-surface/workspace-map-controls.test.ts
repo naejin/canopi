@@ -364,7 +364,7 @@ describe('WorkspaceMapControls', () => {
     }
   })
 
-  it('configures the production map shell for zoom 27 and one world', async () => {
+  it('configures the production map shell at MapLibre\'s tile ceiling (z25; the camera guard reaches 27) and one world', async () => {
     const { controls, maps } = createControls({ background: hidden() })
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
@@ -374,7 +374,7 @@ describe('WorkspaceMapControls', () => {
     try {
       expect(map.options).toMatchObject({
         minZoom: 0,
-        maxZoom: 27,
+        maxZoom: 25,
         renderWorldCopies: false,
         interactive: false,
       })

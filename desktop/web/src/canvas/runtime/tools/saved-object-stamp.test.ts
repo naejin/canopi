@@ -519,7 +519,7 @@ describe('saved object stamp tool', () => {
       expect(ghostsIn(preview)[0]!.entity).toMatchObject({ anchor: at, rotationDeg: 0 })
 
       const onCommitted = vi.fn()
-      expect(placeSavedObjectStamp(h.edits, scene, GUILD, at, { onCommitted })).toBe(true)
+      placeSavedObjectStamp(h.edits, scene, GUILD, at, { onCommitted })
 
       expect(onCommitted).toHaveBeenCalledOnce()
       expect(commits).toEqual(['interaction-saved-object-stamp'])
@@ -537,7 +537,9 @@ describe('saved object stamp tool', () => {
       lockLayer(h, 'zones')
       expect(canPlaceSavedObjectStamp(scene, LOCKED_ZONE_ONLY)).toBe(false)
       expect(savedObjectStampGhostShapes(scene, LOCKED_ZONE_ONLY, { x: 10, y: 10 })).toBeNull()
-      expect(placeSavedObjectStamp(h.edits, scene, LOCKED_ZONE_ONLY, { x: 10, y: 10 })).toBe(false)
+      const onCommitted = vi.fn()
+      placeSavedObjectStamp(h.edits, scene, LOCKED_ZONE_ONLY, { x: 10, y: 10 }, { onCommitted })
+      expect(onCommitted).not.toHaveBeenCalled()
       h.store.updatePersisted((draft) => {
         draft.layers = draft.layers.map((layer) => layer.name === 'plants' ? { ...layer, visible: false } : layer)
       })

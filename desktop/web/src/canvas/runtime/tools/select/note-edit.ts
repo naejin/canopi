@@ -1,11 +1,11 @@
 // canvas/runtime/tools/select/note-edit.ts
 //
-// Owns the in-place editing of a text note under Select (today's interaction/annotation-inline-editor.ts, without its
-// textarea, which is the host's text entry in 'edit' mode): opening a note's entry, and its submit on Enter or blur. The
+// Owns the in-place editing of a text note under Select, whose field is the host's text entry in 'edit' mode: opening a
+// note's entry, and its submit on Enter or blur. The
 // submit writes the text as one 'interaction-annotation-text' Scene Edit, deletes the note (and its group membership)
 // when the text is blank, and changes nothing for the same text or a note that can no longer be edited (gone, locked,
 // grouped, or on a hidden or locked layer), closing the entry in each case; while the scene refuses the edit the same
-// entry stays open with its text, as today.
+// entry stays open with its text.
 
 import { getSceneGroupedMemberKeys, sceneObjectGroupMemberKey } from '../../scene/group-members'
 import { isSceneDesignObjectLocked } from '../../scene/locks'

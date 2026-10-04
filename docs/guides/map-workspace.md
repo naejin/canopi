@@ -34,7 +34,7 @@ Canvas v2 ([plan](../plans/canvas-v2-plan.md), [spec](../plans/canvas-v2-spec.md
 - A drag-to-create tool holds one Scene Edit from gesture start to commit or cancel; a nudge series (0.1 m or the large step, 800 ms idle) is one undo; cancellation runs once, in capture phase. (the `canvas-interaction-e2e` suites)
 - Controls follow ADR 0015 (target; until plan phases 1–2 ship, Shift is the large nudge and the menu opens at right press): left click and drag select or draw; right-, middle- and Space+drag pan in every tool; a still right-click opens the menu; Shift+right- or middle-drag, Shift+Left/Right, the compass and a two-finger twist turn the view; N, Shift+N or Shift+Up resets north. Arrows nudge 10 cm along the screen (Ctrl or Cmd: 1 m) or pan with nothing selected. The stored `scroll_wheel` (`zoom` or `pan`) sets the plain wheel; pinch and Ctrl wheel zoom. (phase 1–2 tests)
 - On a turned map, zones, notes, grid, guides and snapping keep map axes and turn with it; plant symbols, labels, readouts, badges and handles stay upright; rulers show only north up. Rectangles, ellipses and notes drawn while turned are level to the screen. (tests in the plan's rotation phase)
-- One placement authority (`scene-runtime/arrangement-placement.ts`; `__tests__/scene-arrangement-placement.test.ts`), one zone geometry (`canvas/runtime/zone-geometry.ts`; advice), one selection rotation (`scene-runtime/mutations.test.ts`), one rename (`sceneEdits.renameZone`; `canvas-context-menu-entries.test.ts`).
+- One placement authority (`scene-runtime/arrangement-placement.ts`; `__tests__/scene-arrangement-placement.test.ts`), one zone geometry (`canvas/runtime/zone-geometry.ts`; policy test), one selection rotation (`scene-runtime/mutations.test.ts`), one rename (`sceneEdits.renameZone`; `canvas-context-menu-entries.test.ts`).
 - Text and rings over the map follow the map backdrop and the strokes of `canvas/runtime/scene-visuals.ts`, never the UI theme; every overlay stroke has a casing. (`__tests__/canvas-map-backdrop-ink.test.ts`, `canvas-overlay-casing.test.ts`, `canvas-map-surface-overlays.test.ts`)
 - Place search requests on Enter only, `NOMINATIM_MIN_INTERVAL_MS` (1100, `app/geocoding/registry.ts`) apart; confirm is camera-only; Desktop reaches `geocode_address` only through `#geocoding-transport`. (`__tests__/place-search.test.ts`, `place-search-ui.test.tsx`, policy test)
 - View snapshots run one at a time on the single hidden map (released after 30 s idle, at most 4096 device px a side), return an image, flags and credit text, never a URL, and touch neither the visible map nor the Design. (`maplibre/view-snapshot-map.test.ts`, `__tests__/saved-view-snapshot.test.ts`)
@@ -42,7 +42,7 @@ Canvas v2 ([plan](../plans/canvas-v2-plan.md), [spec](../plans/canvas-v2-spec.md
 
 ## Do not
 
-- Publish a raw `SceneCanvasRuntime` or cast it to a role; tests use `createTestCanvasRuntimeSurfaces()`.
+- Publish a raw `SceneCanvasRuntime` or cast it to a role; tests use `createTestCanvasRuntimeSurfaces()` (policy test).
 - Read the plane origin from the document; use `CanvasQuerySurface.sessionPlane`.
 - Fit with a map-only `fitBounds`, call MapLibre camera methods outside the camera driver, project through a workspace map (P2), or convert world to screen outside the view transform.
 - Await an owner operation from a child setup or disposal promise.

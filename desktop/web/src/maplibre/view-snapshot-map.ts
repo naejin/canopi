@@ -8,7 +8,7 @@ import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
 import { WORKSPACE_MAP_MAX_ZOOM, WORKSPACE_MAP_MIN_ZOOM } from '../canvas/workspace-camera-policy'
 import { BasemapTileAuth } from './basemap-tile-auth'
 import { createMapLibreCameraDriver, type MapLibreCameraDriverMap } from './camera-driver'
-import { createMapLibreEmptyStyle } from './config'
+import { createMapLibreEmptyStyle, MAPLIBRE_MAP_MAX_ZOOM } from './config'
 import { loadMapLibreModule, type MapLibreMapConstructorOptions } from './loader'
 import {
   mountMapBackground,
@@ -249,7 +249,7 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
         zoom: clampZoom(request.camera.zoom),
         bearing: request.camera.bearing,
         minZoom: WORKSPACE_MAP_MIN_ZOOM,
-        maxZoom: WORKSPACE_MAP_MAX_ZOOM,
+        maxZoom: MAPLIBRE_MAP_MAX_ZOOM,
         renderWorldCopies: false,
         // The snapshot's camera driver resizes the map; MapLibre never resizes itself behind it.
         trackResize: false,

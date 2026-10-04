@@ -83,7 +83,8 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       environment: "jsdom",
-      // Test-only: MapLibre's TypeScript sources, for the camera contract test (view/camera-contract.test.ts). Builds never resolve it.
+      // Test-only: MapLibre's TypeScript sources, for tests that run MapLibre's own code (view/camera-contract.test.ts,
+      // maplibre/workspace-map.test.ts, __tests__/openfreemap-basemap.test.ts). Builds never resolve it.
       alias: { 'maplibre-gl-source': fileURLToPath(new URL('./node_modules/maplibre-gl/src', import.meta.url)) },
       // Playwright specs (e2e/) run under Playwright's own runner; its `test()` throws in vitest.
       exclude: [...configDefaults.exclude, "e2e/**"],
@@ -92,7 +93,7 @@ export default defineConfig(({ mode }) => {
       coverage: {
         provider: "v8",
         include: ["src/**/*.{ts,tsx}"],
-        exclude: ["src/**/*.test.{ts,tsx}", "src/__tests__/**", "src/generated/**", "src/vendor/**"],
+        exclude: ["src/**/*.test.{ts,tsx}", "src/__tests__/**", "src/generated/**"],
         reporter: ["text-summary", "json-summary"],
         // Ratchet: the floor is the measured baseline; raise it, never lower it.
         thresholds: { statements: 89.9, branches: 82.1, functions: 90.75, lines: 92.9 },
