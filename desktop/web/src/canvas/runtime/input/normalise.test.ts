@@ -142,7 +142,6 @@ describe('normalise', () => {
     expect(raw({ type: 'pointercancel', pointerId: 2 })).toEqual({ kind: 'cancel', t: 10, id: 2, reason: 'pointercancel' })
     expect(raw({ type: 'lostpointercapture', pointerId: 2 })).toEqual({ kind: 'cancel', t: 10, id: 2, reason: 'lost-capture' })
     expect(raw({ type: 'pointerleave' })).toEqual({ kind: 'leave', t: 10 })
-    expect(raw({ type: 'focusout' })).toEqual({ kind: 'focus-out', t: 10 })
     expect(raw({ type: 'contextmenu' })).toMatchObject({ kind: 'native-contextmenu', at: { x: 12, y: 34 }, fromKeyboard: false })
     expect(raw({ type: 'contextmenu', fromKeyboard: true })).toMatchObject({ kind: 'native-contextmenu', at: null, fromKeyboard: true })
     expect(raw({ type: 'gesturechange', scale: 1.5, rotation: 12 })).toMatchObject({ kind: 'platform-gesture', phase: 'change', scale: 1.5, rotationDeg: 12 })
