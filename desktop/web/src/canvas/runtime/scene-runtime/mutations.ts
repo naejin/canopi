@@ -56,7 +56,6 @@ import {
   centerOfBounds,
 } from './selection-rotation'
 import {
-  applySpeciesSelection,
   getSameSpeciesReferenceCanonicalName,
   getSelectablePlantIdsForSpecies,
 } from './species-selection'
@@ -165,11 +164,8 @@ export class SceneRuntimeMutationController {
     this._runCommandWhenSettled(() => this._selectAllWhenSettled(), undefined)
   }
 
-  selectSameSpecies(canonicalName?: string, options: { additive?: boolean } = {}): void {
-    this._runCommandWhenSettled(
-      () => this._selectSameSpeciesWhenSettled(canonicalName, options),
-      undefined,
-    )
+  selectSameSpecies(canonicalName?: string): void {
+    this._runCommandWhenSettled(() => this._selectSameSpeciesWhenSettled(canonicalName), undefined)
   }
 
   selectSpecies(canonicalNames: readonly string[]): void {
@@ -439,10 +435,7 @@ export class SceneRuntimeMutationController {
     this._invalidateScene()
   }
 
-  private _selectSameSpeciesWhenSettled(
-    canonicalName?: string,
-    options: { additive?: boolean } = {},
-  ): void {
+  private _selectSameSpeciesWhenSettled(canonicalName?: string): void {
     const persisted = this._sceneStore.persisted
     const referenceCanonicalName = canonicalName
       ?? getSameSpeciesReferenceCanonicalName(persisted, this._getSelectionModel().editableTargets)
@@ -451,11 +444,7 @@ export class SceneRuntimeMutationController {
     const speciesPlantIds = getSelectablePlantIdsForSpecies(persisted, referenceCanonicalName)
     if (speciesPlantIds.length === 0) return
 
-    const nextSelection = applySpeciesSelection(
-      this._sceneStore.session.selectedTargets,
-      speciesPlantIds,
-      options.additive === true,
-    )
+    const nextSelection = speciesPlantIds.map((id): SceneDesignObjectTarget => ({ kind: 'plant', id }))
     if (sceneDesignObjectTargetsEqual(nextSelection, this._sceneStore.session.selectedTargets)) return
     this._selection.set(nextSelection)
     this._invalidateScene()
@@ -467,7 +456,7 @@ export class SceneRuntimeMutationController {
       getSelectablePlantIdsForSpecies(persisted, canonicalName)))
     const plantIds = persisted.plants.filter((plant) => selectable.has(plant.id)).map((plant) => plant.id)
     if (plantIds.length === 0) return
-    const nextSelection = applySpeciesSelection(this._sceneStore.session.selectedTargets, plantIds, false)
+    const nextSelection = plantIds.map((id): SceneDesignObjectTarget => ({ kind: 'plant', id }))
     if (sceneDesignObjectTargetsEqual(nextSelection, this._sceneStore.session.selectedTargets)) return
     this._selection.set(nextSelection)
     this._invalidateScene()

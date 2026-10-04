@@ -188,7 +188,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       toggleSelectedPlantNamePins: () => this.options.mutations.toggleSelectedPlantNamePins(),
       deleteSelected: () => this.runSpatialEdit(() => this.options.mutations.deleteSelected()),
       selectAll: () => this.options.mutations.selectAll(),
-      selectSameSpecies: (canonicalName, options) => this.options.mutations.selectSameSpecies(canonicalName, options),
+      selectSameSpecies: (canonicalName) => this.options.mutations.selectSameSpecies(canonicalName),
       selectSpecies: (canonicalNames) => this.options.mutations.selectSpecies(canonicalNames),
       clearSelection: () => this.options.mutations.clearSelection(),
       bringToFront: () => this.runSpatialEdit(() => this.options.mutations.bringToFront()),
