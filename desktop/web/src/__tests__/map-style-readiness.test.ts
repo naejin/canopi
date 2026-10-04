@@ -3,9 +3,8 @@ import { googleMapsApiKey } from '../app/settings/state'
 import { MAPLIBRE_SATELLITE_SOURCE_ID } from '../maplibre/config'
 import { mountMapBackground, type MapBackgroundPresentation } from '../maplibre/map-background'
 import type { VectorStyleDocument } from '../maplibre/openfreemap-basemap'
-import { bindSatelliteImagery, mapStyleReadiness } from '../maplibre/satellite-bind'
+import { mapStyleReadiness, mountSatelliteLifecycle, type SatelliteMountOptions } from '../maplibre/satellite-bind'
 import { SatelliteImageryProvider, type SatelliteHttp } from '../maplibre/satellite-provider-session'
-import type { SatelliteReconcileTarget } from '../maplibre/satellite-contribution'
 
 const STYLE: VectorStyleDocument = {
   glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
@@ -241,21 +240,26 @@ const inertHttp: SatelliteHttp = {
   },
 }
 
-describe('satellite binding style-ready wait', () => {
-  it('does not accumulate waits across repeated bindings and disposes them before ready', () => {
+describe('satellite mount style-ready wait', () => {
+  it('does not accumulate waits across repeated mounts and disposes them before ready', () => {
     const map = createMap()
     const lifetime = fakeLifetime()
     const readiness = mapStyleReadiness(map, lifetime)
-    const provider = new SatelliteImageryProvider(inertHttp, () => ({ googleMapsApiKey: null, locale: 'en' }))
-    // Toggling Satellite off and on before the style is ready rebinds each time.
-    for (let i = 0; i < 5; i += 1) {
-      const unbind = bindSatelliteImagery({ provider, map: map as unknown as SatelliteReconcileTarget, styleReady: readiness })
-      unbind()
-    }
+    const mount = () => mountSatelliteLifecycle({
+      provider: new SatelliteImageryProvider(inertHttp, () => ({ googleMapsApiKey: null, locale: 'en' })),
+      map: map as unknown as SatelliteMountOptions['map'],
+      readViewport: () => ({ west: -1, south: 48, east: 1, north: 49, zoom: 14 }),
+      styleReady: readiness,
+      beforeLayerId: () => null,
+      afterApply: () => {},
+      events: { on: () => {}, off: () => {} },
+      replaceSatelliteAttribution: () => {},
+    })
+    // Toggling Satellite off and on before the style is ready remounts each time.
+    for (let i = 0; i < 5; i += 1) mount().dispose()
     expect(lifetime.readyCount()).toBe(0)
 
-    const unbind = bindSatelliteImagery({ provider, map: map as unknown as SatelliteReconcileTarget, styleReady: readiness })
-    provider.update({ west: -1, south: 48, east: 1, north: 49, zoom: 14 })
+    const satellite = mount()
     expect(lifetime.readyCount()).toBe(2)
     map.state.ready = true
     lifetime.emit('load')
@@ -264,7 +268,6 @@ describe('satellite binding style-ready wait', () => {
     expect(lifetime.readyCount()).toBe(0)
     lifetime.emit('style.load')
     expect(satelliteAdds(map)).toBe(1)
-    unbind()
-    provider.dispose()
+    satellite.dispose()
   })
 })

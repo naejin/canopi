@@ -26,7 +26,6 @@ vi.mock('../maplibre/view-snapshot-map', async (importOriginal) => {
             timings: { mapSetupMs: 0, settleMs: 0, readMs: 0, encodeMs: 0, totalMs: 0 },
           }
         },
-        diagnostics: { live: true, mapsCreated: 1, captures: 1, contextLosses: 0 },
         dispose: async () => { snapshotOwner.disposed += 1 },
       }
     },

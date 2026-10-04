@@ -58,6 +58,7 @@ function createMap() {
     },
     setGlyphs: vi.fn(),
     setSprite: vi.fn(),
+    setGlobalStateProperty: vi.fn(),
     getZoom: () => 16,
     addControl: (control: FakeControl) => { controls.push(control) },
     removeControl: (control: FakeControl) => {

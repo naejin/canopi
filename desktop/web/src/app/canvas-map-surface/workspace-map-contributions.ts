@@ -21,10 +21,9 @@ import { mapErrorResourceId } from '../../maplibre/map-error-owner'
 import type { RasterDisplay, RasterDisplayLayer } from '../../maplibre/raster-display/adapter'
 import { clearCanvasMapSurfaceOverlays, syncCanvasMapSurfaceOverlays, type CanvasMapSurfaceOverlaySnapshot } from './overlays'
 import { createMapLayerStackDescriptors, reconcileMapLayerStack } from '../map-layers/bands'
-import { captureWorkspaceMapContributions, type WorkspaceMapContributionAdapter, type WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
+import type { WorkspaceMapContributionAdapter, WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 
 export interface WorkspaceMapContributionsOptions {
-  readonly sessionIdentity: object
   readonly onFailure: (error: unknown) => void
   readonly loadTerrainSupport?: WorkspaceMapContributionAdapter['loadTerrainSupport']
   readonly createRasterDisplay?: WorkspaceMapContributionAdapter['createRasterDisplay']
@@ -77,11 +76,11 @@ export class WorkspaceMapContributions {
   }
 
   update(snapshot: WorkspaceMapContributionSnapshot | null): void {
-    if (this.disposed || this.failed || (snapshot && snapshot.sessionIdentity !== this.options.sessionIdentity)) return
+    if (this.disposed || this.failed) return
     if (!snapshot || !this.snapshot || classifyTerrainSync(this.snapshot.terrain, snapshot.terrain) !== 'noop') {
       this.terrainUnavailable = false
     }
-    this.snapshot = snapshot && captureWorkspaceMapContributions(snapshot)
+    this.snapshot = snapshot
     this.revision += 1
     this.terrainGeneration += 1
     this.dirty = true

@@ -18,7 +18,6 @@
  * client rejects its queued work and closes its sources in every lane.
  */
 import type {
-  RasterLaneUsage,
   RasterRenderOptions,
   RasterSourceMetadata,
   RasterWorkerReply,
@@ -35,7 +34,7 @@ export interface RasterWorkerLike {
 }
 
 export interface RasterPoolOptions {
-  /** Worker lanes shared by every client (plan §5: start with two). */
+  /** Worker lanes shared by every client (two). */
   readonly lanes: number
   /** Aggregate decoded-block budget, split evenly across lanes. */
   readonly budgetBytes: number
@@ -80,10 +79,6 @@ export interface RasterPoolClient {
   ): Promise<Uint8Array>
   /** Report whether a queued tile still matters; checked just before dispatch. */
   setRelevance(relevance: RasterTileRelevance | null): void
-  /** Re-check queued tiles against the current relevance (call after the viewport moves). */
-  prune(): void
-  usage(): Promise<RasterLaneUsage[]>
-  readonly disposed: boolean
   dispose(): void
 }
 
@@ -163,11 +158,6 @@ export class RasterWorkerPool {
       renderPreview: (urls, bbox, size, render) => pool.renderPreview(state, urls, bbox, size, render),
       setRelevance(relevance) {
         state.relevance = relevance
-      },
-      prune: () => pool.dispatch(),
-      usage: () => pool.usage(),
-      get disposed() {
-        return state.disposed
       },
       dispose: () => pool.release(state),
     }
@@ -441,10 +431,6 @@ export class RasterWorkerPool {
     }
   }
 
-  private async usage(): Promise<RasterLaneUsage[]> {
-    return Promise.all(this.lanes.map((lane) => this.post<RasterLaneUsage>(lane, { id: 0, op: 'usage' })))
-  }
-
   private release(client: ClientState): void {
     if (client.disposed) return
     client.disposed = true
@@ -483,7 +469,7 @@ export class RasterWorkerPool {
   }
 }
 
-/** Decoded-block cache shared by all display sources (plan §5: 128 MiB). */
+/** Decoded-block cache shared by all display sources (128 MiB). */
 const RASTER_DECODED_CACHE_BYTES = 128 * 1024 * 1024
 
 let workspacePool: RasterWorkerPool | null = null

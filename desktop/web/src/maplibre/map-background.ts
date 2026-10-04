@@ -12,6 +12,7 @@ import {
   type VectorStyleDocument,
 } from './openfreemap-basemap'
 import {
+  createSatelliteImagery,
   mapStyleReadiness,
   mountSatelliteLifecycle,
   type SatelliteMountHandle,
@@ -64,6 +65,7 @@ function isMapBackgroundLayer(id: string): boolean {
 
 export type MapBackgroundMap = VectorBasemapMap & SatelliteMountOptions['map'] & {
   getLayersOrder(): string[]
+  setPaintProperty(id: string, name: string, value: unknown): void
   isStyleLoaded?(): boolean
   loaded?(): boolean
   getBounds?(): { getWest(): number; getSouth(): number; getEast(): number; getNorth(): number }
@@ -93,7 +95,7 @@ export interface MapBackgroundHandle {
   /** Retry: applies the presentation, downloading a Basemap that couldn't load (its style or its resources) again. */
   retry(presentation: MapBackgroundPresentation): void
   /**
-   * Claims a map error about the Basemap's sprite, glyphs or TileJSON (VectorBasemap.claimResourceError), which
+   * Claims a map error about the Basemap's sprite or TileJSON (VectorBasemap.claimResourceError), which
    * names no layer: the Basemap shows it couldn't load, and the map is not failed.
    */
   claimMapError(event: unknown): boolean
@@ -163,8 +165,8 @@ export function mountMapBackground(options: MapBackgroundOptions): MapBackground
     }
     if (!satellite) {
       satellite = mountSatelliteLifecycle({
+        provider: createSatelliteImagery(options.tileAuth),
         map,
-        tileAuth: options.tileAuth,
         readViewport: () => readViewport(map),
         styleReady: readiness,
         beforeLayerId,

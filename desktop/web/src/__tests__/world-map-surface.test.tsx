@@ -166,6 +166,7 @@ class FakeWorldMap {
   readonly setPaintProperty = vi.fn()
   readonly setGlyphs = vi.fn()
   readonly setSprite = vi.fn()
+  readonly setGlobalStateProperty = vi.fn()
 
   getLayer(id: string) {
     return this.layers.get(id)

@@ -33,7 +33,7 @@ export function createWorkspaceMapLibreMap(
     // The camera driver's setScreen resizes the map; MapLibre never resizes itself behind it.
     trackResize: false,
     canvasContextAttributes: { antialias: true },
-    // Attribution is owned by the basemap mount's single control (E4).
+    // Attribution is owned by the basemap mount's single control.
     attributionControl: false,
     interactive: false,
     pitchWithRotate: false,

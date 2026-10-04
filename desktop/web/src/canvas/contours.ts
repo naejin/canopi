@@ -10,21 +10,11 @@
 // via the contour interval signal in app/canvas-settings/signals.
 // ---------------------------------------------------------------------------
 
-/**
- * Contour tile options matching the maplibre-contour API.
- * Defined here to avoid deep path imports from the package.
- */
-interface ContourThresholds {
-  [zoom: number]: number | number[]
-}
+import type mapLibreContour from 'maplibre-contour'
 
-interface ContourProtocolOptions {
-  thresholds: ContourThresholds
-  elevationKey?: string
-  levelKey?: string
-  contourLayer?: string
-  overzoom?: number
-}
+/** maplibre-contour's DemSource, as set up on MapLibre. */
+export type DemSource = InstanceType<typeof mapLibreContour.DemSource>
+type ContourThresholds = Parameters<DemSource['contourProtocolUrl']>[0]['thresholds']
 
 // ── Interval ladder ─────────────────────────────────────────────────────────
 
@@ -65,7 +55,7 @@ export const DEM_ENCODING = 'terrarium' as const
  * @param userInterval - optional user override interval in meters (0 = use adaptive)
  */
 export function getContourSourceConfig(
-  contourProtocolUrl: (options: ContourProtocolOptions) => string,
+  contourProtocolUrl: DemSource['contourProtocolUrl'],
   userInterval: number,
 ): { tiles: string[]; type: 'vector'; maxzoom: number } {
   const thresholds = userInterval > 0

@@ -6,25 +6,35 @@ import {
   type VectorBasemapMap,
   type VectorStyleDocument,
 } from '../maplibre/openfreemap-basemap'
+// MapLibre's own sources (the test-only `maplibre-gl-source` alias, vite.config.ts): the prepared style through the
+// validation `addLayer` runs and the layers' evaluation against the map's global state.
+import { createStyleLayer } from 'maplibre-gl-source/style/create_style_layer.ts'
+import { EvaluationParameters } from 'maplibre-gl-source/style/evaluation_parameters.ts'
+import { validateStyle } from 'maplibre-gl-source/style/validate_style.ts'
+
+/** The one sprite every OpenFreeMap style names (checked against the four live style documents, 2026-10-04). */
+const OFM_SPRITE = 'https://tiles.openfreemap.org/sprites/ofm_f384/ofm'
 
 function styleDocument(name: string): VectorStyleDocument {
   return {
     glyphs: `https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf#${name}`,
-    sprite: `https://tiles.openfreemap.org/sprites/${name}`,
+    sprite: OFM_SPRITE,
     sources: { openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' } },
     layers: [
       { id: 'background', type: 'background', paint: { 'background-color': '#fff' } },
-      { id: 'water', type: 'fill', source: 'openmaptiles', paint: { 'fill-opacity': 0.8 } },
+      { id: 'water', type: 'fill', source: 'openmaptiles', 'source-layer': 'water', paint: { 'fill-opacity': 0.8 } },
       {
         id: 'road',
         type: 'line',
         source: 'openmaptiles',
+        'source-layer': 'transportation',
         paint: { 'line-opacity': ['interpolate', ['linear'], ['zoom'], 5, 0.2, 12, 1] },
       },
       {
         id: 'place',
         type: 'symbol',
         source: 'openmaptiles',
+        'source-layer': 'place',
         layout: { 'text-field': ['coalesce', ['get', 'name_en'], ['get', 'name']] },
         paint: { 'text-opacity': ['step', ['zoom'], 0, 6, 1] },
       },
@@ -32,6 +42,7 @@ function styleDocument(name: string): VectorStyleDocument {
         id: 'shield',
         type: 'symbol',
         source: 'openmaptiles',
+        'source-layer': 'transportation_name',
         layout: { 'text-field': ['to-string', ['get', 'ref']] },
       },
     ],
@@ -44,6 +55,7 @@ class FakeMap implements VectorBasemapMap {
   readonly calls: string[] = []
   glyphs: string | null = null
   sprite: string | null = null
+  globalState: Record<string, unknown> = {}
   setStyle = () => { throw new Error('setStyle must not be called') }
   getSource(id: string) { return this.sources.get(id) }
   addSource(id: string, source: Record<string, unknown>) { this.sources.set(id, source) }
@@ -68,6 +80,30 @@ class FakeMap implements VectorBasemapMap {
   }
   setGlyphs(url: string | null) { this.glyphs = url }
   setSprite(url: string | null) { this.sprite = url }
+  setGlobalStateProperty(name: string, value: unknown) { this.globalState = { ...this.globalState, [name]: value } }
+  /** What a same-map `setStyle()` does: every source, layer and global state value of the old style is gone. */
+  reloadStyle() {
+    this.sources.clear()
+    this.layers.splice(0, this.layers.length, { id: 'canopi-scene' })
+    this.globalState = {}
+  }
+  /** A layer property as MapLibre evaluates it here: global state read from the map, products and concatenations folded. */
+  resolved(id: string, kind: 'paint' | 'layout', name: string): unknown {
+    const layer = this.getLayer(id) as Record<string, Record<string, unknown> | undefined>
+    return resolveExpression(layer[kind]?.[name], this.globalState)
+  }
+}
+
+function resolveExpression(value: unknown, state: Record<string, unknown>): unknown {
+  if (!Array.isArray(value)) return value
+  if (value[0] === 'global-state') {
+    if (!(value[1] in state)) throw new Error(`global state ${String(value[1])} is not set`)
+    return state[value[1]]
+  }
+  const [operator, ...args] = value.map((entry) => resolveExpression(entry, state))
+  if (operator === '*' && args.every((arg) => typeof arg === 'number')) return (args as number[]).reduce((a, b) => a * b, 1)
+  if (operator === 'concat' && args.every((arg) => typeof arg === 'string')) return args.join('')
+  return [operator, ...args]
 }
 
 async function settle(): Promise<void> {
@@ -99,7 +135,7 @@ describe('OpenFreeMap vector basemap', () => {
     ])
     expect(map.layers[1]!.source).toBe('ofm-openmaptiles')
     expect(map.glyphs).toContain('fonts/{fontstack}')
-    expect(map.sprite).toContain('sprites/liberty')
+    expect(map.sprite).toBe(OFM_SPRITE)
   })
 
   it('labels places in the app locale and keeps non-name labels', async () => {
@@ -107,7 +143,7 @@ describe('OpenFreeMap vector basemap', () => {
     const basemap = install(map)
     basemap.update({ style: 'liberty', visible: true, opacity: 1, locale: 'fr' })
     await settle()
-    const place = () => (map.getLayer('ofm:place') as { layout: Record<string, unknown> }).layout['text-field']
+    const place = () => map.resolved('ofm:place', 'layout', 'text-field')
     expect(place()).toEqual(['coalesce', ['get', 'name:fr'], ['get', 'name']])
     expect((map.getLayer('ofm:shield') as { layout: Record<string, unknown> }).layout['text-field'])
       .toEqual(['to-string', ['get', 'ref']])
@@ -120,14 +156,14 @@ describe('OpenFreeMap vector basemap', () => {
     const basemap = install(map)
     basemap.update({ style: 'liberty', visible: true, opacity: 0.5, locale: 'en' })
     await settle()
-    const paint = (id: string) => (map.getLayer(id) as { paint: Record<string, unknown> }).paint
-    expect(paint('ofm:background')['background-opacity']).toBe(0.5)
-    expect(paint('ofm:water')['fill-opacity']).toBe(0.4)
-    expect(paint('ofm:road')['line-opacity']).toEqual(['interpolate', ['linear'], ['zoom'], 5, 0.1, 12, 0.5])
-    expect(paint('ofm:place')['text-opacity']).toEqual(['step', ['zoom'], 0, 6, 0.5])
-    expect(paint('ofm:place')['icon-opacity']).toBe(0.5)
+    const opacity = (id: string, name: string) => map.resolved(id, 'paint', name)
+    expect(opacity('ofm:background', 'background-opacity')).toBe(0.5)
+    expect(opacity('ofm:water', 'fill-opacity')).toBe(0.4)
+    expect(opacity('ofm:road', 'line-opacity')).toEqual(['interpolate', ['linear'], ['zoom'], 5, 0.1, 12, 0.5])
+    expect(opacity('ofm:place', 'text-opacity')).toEqual(['step', ['zoom'], 0, 6, 0.5])
+    expect(opacity('ofm:place', 'icon-opacity')).toBe(0.5)
     basemap.update({ style: 'liberty', visible: true, opacity: 1, locale: 'en' })
-    expect(paint('ofm:water')['fill-opacity']).toBe(0.8)
+    expect(opacity('ofm:water', 'fill-opacity')).toBe(0.8)
   })
 
   it('removes everything when hidden and switches styles by replacing its own layers', async () => {
@@ -138,7 +174,7 @@ describe('OpenFreeMap vector basemap', () => {
     await settle()
     basemap.update({ style: 'dark', visible: true, opacity: 1, locale: 'en' })
     await settle()
-    expect(map.sprite).toContain('sprites/dark')
+    expect(map.glyphs).toContain('#dark')
     expect(map.layers.filter((layer) => String(layer.id).startsWith('ofm:'))).toHaveLength(5)
     basemap.update({ style: 'dark', visible: false, opacity: 1, locale: 'en' })
     expect(map.layers.map((layer) => layer.id)).toEqual(['canopi-scene'])
@@ -159,7 +195,7 @@ describe('OpenFreeMap vector basemap', () => {
     await settle()
     releaseLiberty()
     await settle()
-    expect(map.sprite).toContain('positron')
+    expect(map.glyphs).toContain('#positron')
   })
 
   it('reports a rejected style as failed until a later load installs it, and idle once hidden', async () => {
@@ -183,7 +219,7 @@ describe('OpenFreeMap vector basemap', () => {
     expect(statuses).toEqual(['loading', 'failed', 'loading'])
     await settle()
     expect(statuses).toEqual(['loading', 'failed', 'loading', 'ok'])
-    expect(map.sprite).toContain('liberty')
+    expect(map.glyphs).toContain('#liberty')
 
     basemap.update({ ...shown, visible: false })
     expect(statuses).toEqual(['loading', 'failed', 'loading', 'ok', 'idle'])
@@ -259,11 +295,39 @@ describe('OpenFreeMap vector basemap', () => {
       expect(basemap.installedStyle).toBe('bright')
       expect(statuses).toEqual(['loading', 'ok'])
       expect(requests).toHaveLength(1)
-      expect((map.getLayer('ofm:water') as { paint: Record<string, unknown> }).paint['fill-opacity']).toBe(0.4)
+      expect(map.resolved('ofm:water', 'paint', 'fill-opacity')).toBe(0.4)
       basemap.dispose()
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+
+  it('claims a late failure of the shared sprite as the shown style\'s after a style switch, and silently once hidden', async () => {
+    const map = new FakeMap()
+    const statuses: string[] = []
+    const basemap = new VectorBasemap(map, {
+      loadStyle: async (url) => styleDocument(url.split('/').pop()!),
+      onStatus: (status) => statuses.push(status),
+    })
+    basemap.update({ style: 'liberty', visible: true, opacity: 1, locale: 'en' })
+    await settle()
+    basemap.update({ style: 'dark', visible: true, opacity: 1, locale: 'en' })
+    await settle()
+    expect(basemap.installedStyle).toBe('dark')
+    const offline = (url: string) => ({
+      type: 'error',
+      error: Object.assign(new Error(`AJAXError: Failed to fetch (0): ${url}`), { name: 'AJAXError', status: 0, url }),
+    })
+
+    // Liberty's sprite request was still running when Dark set the same sprite: Dark's own request fails too.
+    expect(basemap.claimResourceError(offline(`${OFM_SPRITE}@2x.json`))).toBe(true)
+    expect(statuses.at(-1)).toBe('failed')
+
+    basemap.update({ style: 'dark', visible: false, opacity: 1, locale: 'en' })
+    expect(basemap.claimResourceError(offline(`${OFM_SPRITE}@2x.png?v=1`))).toBe(true)
+    expect(statuses.at(-1)).toBe('idle')
+
+    expect(basemap.claimResourceError(offline('https://example.com/sprites/other@2x.json'))).toBe(false)
   })
 
   describe('a sprite that fails after its response arrived (no URL on the error)', () => {
@@ -324,6 +388,14 @@ describe('OpenFreeMap vector basemap', () => {
       expect(basemap.claimResourceError({ type: 'error', layer: { id: 'canopi-scene' }, error: new TypeError('Load failed') })).toBe(false)
     })
 
+    it('still claims the sprite\'s captive-portal error when the TileJSON\'s arrives first', async () => {
+      const { basemap, statuses } = await installedLiberty()
+      const portal = () => new SyntaxError('JSON Parse error: Unrecognized token \'<\'')
+      expect(basemap.claimResourceError({ type: 'error', sourceId: 'ofm-openmaptiles', error: portal() })).toBe(true)
+      expect(basemap.claimResourceError({ type: 'error', error: portal() })).toBe(true)
+      expect(statuses.at(-1)).toBe('failed')
+    })
+
     it('downloads the sprite again on Retry and claims its next URL-less failure too', async () => {
       const { map, basemap, statuses } = await installedLiberty()
       expect(basemap.claimResourceError(urlLess[0][1])).toBe(true)
@@ -331,7 +403,7 @@ describe('OpenFreeMap vector basemap', () => {
       map.sprite = null
       basemap.update({ style: 'liberty', visible: true, opacity: 1, locale: 'en' })
       await settle()
-      expect(map.sprite).toContain('sprites/liberty')
+      expect(map.sprite).toBe(OFM_SPRITE)
       expect(statuses.at(-1)).toBe('ok')
       expect(basemap.claimResourceError(urlLess[1][1])).toBe(true)
       expect(statuses.at(-1)).toBe('failed')
@@ -397,9 +469,61 @@ describe('OpenFreeMap vector basemap', () => {
     })
   })
 
-  it('scales legacy stop functions and wraps other expressions', () => {
-    expect(scaleOpacity({ stops: [[4, 0.4], [10, 1]] }, 0.5)).toEqual({ stops: [[4, 0.2], [10, 0.5]] })
-    expect(scaleOpacity(['get', 'o'], 0.5)).toEqual(['*', ['get', 'o'], 0.5])
-    expect(scaleOpacity(undefined, 0.3)).toBe(0.3)
+  it('keeps the basemap opacity and label language through a same-map style reload', async () => {
+    const map = new FakeMap()
+    const basemap = install(map)
+    basemap.update({ style: 'liberty', visible: true, opacity: 1, locale: 'fr' })
+    await settle()
+    basemap.update({ style: 'liberty', visible: true, opacity: 0.5, locale: 'de' })
+
+    map.reloadStyle()
+    basemap.restore()
+    await settle()
+
+    expect(map.resolved('ofm:water', 'paint', 'fill-opacity')).toBe(0.4)
+    expect(map.resolved('ofm:road', 'paint', 'line-opacity')).toEqual(['interpolate', ['linear'], ['zoom'], 5, 0.1, 12, 0.5])
+    expect(map.resolved('ofm:place', 'paint', 'icon-opacity')).toBe(0.5)
+    expect(map.resolved('ofm:place', 'layout', 'text-field')).toEqual(['coalesce', ['get', 'name:de'], ['get', 'name']])
+  })
+
+  it('installs a style MapLibre accepts, whose opacity and labels follow the map\'s global state', async () => {
+    const map = new FakeMap()
+    const basemap = install(map)
+    basemap.update({ style: 'liberty', visible: true, opacity: 0.5, locale: 'fr' })
+    await settle()
+    const layers = map.layers.filter((layer) => String(layer.id).startsWith('ofm:'))
+    const style = { version: 8, glyphs: map.glyphs, sprite: map.sprite, sources: Object.fromEntries(map.sources), layers }
+    expect(validateStyle(style)).toEqual([])
+
+    // MapLibre's layers read the global state object the map writes into.
+    const state: Record<string, unknown> = { ...map.globalState }
+    const styleLayer = (id: string) => {
+      const layer = createStyleLayer(layers.find((entry) => entry.id === id) as never, state)
+      layer.recalculate(new EvaluationParameters(12), [])
+      return layer as unknown as {
+        paint: { get(name: string): { constantOr(fallback: unknown): unknown } }
+        layout: { get(name: string): { evaluate(feature: unknown, featureState: unknown): unknown } }
+      }
+    }
+    const opacity = (id: string, name: string) => styleLayer(id).paint.get(name).constantOr(null)
+    expect(opacity('ofm:water', 'fill-opacity')).toBeCloseTo(0.4)
+    expect(opacity('ofm:road', 'line-opacity')).toBeCloseTo(0.5)
+    const label = () => String(styleLayer('ofm:place').layout.get('text-field').evaluate(
+      { type: 1, properties: { name: 'Paris', 'name:fr': 'Paris (fr)', 'name:de': 'Paris (de)' }, geometry: [] }, {},
+    ))
+    expect(label()).toBe('Paris (fr)')
+
+    basemap.update({ style: 'liberty', visible: true, opacity: 0.25, locale: 'de' })
+    Object.assign(state, map.globalState)
+    expect(opacity('ofm:water', 'fill-opacity')).toBeCloseTo(0.2)
+    expect(opacity('ofm:road', 'line-opacity')).toBeCloseTo(0.25)
+    expect(label()).toBe('Paris (de)')
+  })
+
+  it('wraps other expressions and leaves legacy stop functions, which cannot hold an expression', () => {
+    const factor = ['global-state', 'opacity']
+    expect(scaleOpacity(['get', 'o'], factor)).toEqual(['*', ['get', 'o'], factor])
+    expect(scaleOpacity(undefined, factor)).toBe(factor)
+    expect(scaleOpacity({ stops: [[4, 0.4], [10, 1]] }, factor)).toEqual({ stops: [[4, 0.4], [10, 1]] })
   })
 })

@@ -134,10 +134,11 @@ describe('createWorkspaceDocumentSurface', () => {
         getWebGL2Context: () => null,
         updateMapContributions: () => {},
         updateBackgroundPresentation: () => {},
+        setAttributionCompact: () => {},
         retryBasemap: vi.fn(),
         installStyleRestorer: () => () => {},
+        watchFailure: () => () => {},
       },
-      layer: {},
       readOrigin: () => ({ lat: 0, lon: 0 }),
     })
     const activation = workspace.activate({

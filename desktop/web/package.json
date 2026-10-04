@@ -61,7 +61,7 @@
     "geotiff": "3.0.5",
     "geotiff-geokeys-to-proj4": "2026.8.16",
     "i18next": "^24.0.0",
-    "maplibre-contour": "^0.1.0",
+    "maplibre-contour": "0.1.1",
     "maplibre-gl": "6.10.0",
     "maplibre-gl-raster": "0.14.15",
     "pdfkit": "0.20.2",

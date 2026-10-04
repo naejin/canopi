@@ -15,6 +15,7 @@ import { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'
 import {
   MAPLIBRE_SHARED_SCENE_LAYER_ID,
   type SharedMapSceneLayer,
+  type SharedMapSceneLayerOptions,
   type SharedPixiRenderer,
 } from '../../maplibre/shared-scene-layer'
 import { createSharedMapSceneRendererComposition, type SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
@@ -176,10 +177,7 @@ function createComposition(options: {
       render: () => {},
     },
     get diagnostics() {
-      return {
-        phase, initializeCount: 0, renderCount: 0, sceneSyncCount: 0,
-        disposeCount: 0, lastFailure: null,
-      }
+      return { phase, sceneSyncCount: 0 }
     },
     initialize: vi.fn(async () => {
       await options.initialize?.()
@@ -219,15 +217,14 @@ function createCoordinator(input: {
     updateMapContributions: vi.fn(),
     updateBackgroundPresentation: vi.fn(),
     retryBasemap: vi.fn(),
+    setAttributionCompact: vi.fn(),
     installStyleRestorer: input.installStyleRestorer ?? vi.fn(() => () => {}),
-    watchFailure: input.watchFailure
-      ?? (input.unwatchFailure ? () => input.unwatchFailure! : undefined),
+    watchFailure: input.watchFailure ?? (() => input.unwatchFailure ?? (() => {})),
   }
   const readOrigin = input.readOrigin ?? (() => ({ lat: 0, lon: 0 }))
   const coordinator = new TestWorkspaceActivationCoordinator({
     container: document.createElement('div'), runtime, camera, composition,
     map: mapControls,
-    layer: {},
     readOrigin,
   })
   return { coordinator, camera, composition, runtime, map, mapControls, readOrigin }
@@ -275,6 +272,33 @@ describe('WorkspaceActivationCoordinator', () => {
     expect(f.map.remove).toHaveBeenCalledOnce()
   })
 
+  it('a contribution snapshot of another session never reaches the map', async () => {
+    const f = createCoordinator()
+    const contribution = (sessionIdentity: object): WorkspaceMapContributionSnapshot => ({
+      sessionIdentity, lidar: [],
+      terrain: { contourIntervalMeters: 1, contoursVisible: true, contoursOpacity: 1, hillshadeVisible: true, hillshadeOpacity: 1, isDark: false },
+      overlays: { runtime: null, location: null, hoveredTargets: [], selectedTargets: [], paintRevision: 0 },
+      frame: null,
+    })
+    const first = createActivationSnapshot()
+    const second = createActivationSnapshot()
+    const forwarded = () => vi.mocked(f.mapControls.updateMapContributions).mock.calls
+      .map(([snapshot]) => snapshot?.sessionIdentity ?? null)
+
+    // Buffered before the map exists, from a session that is not the one that opens.
+    f.coordinator.updateMapContributions(contribution(first.sessionIdentity))
+    await f.coordinator.activate(second)
+    // Live, from the session the map no longer shows.
+    f.coordinator.updateMapContributions(contribution(first.sessionIdentity))
+    // Its own session's snapshot does reach it.
+    f.coordinator.updateMapContributions(contribution(second.sessionIdentity))
+    // A late snapshot of the replaced session, after the Design changes again.
+    await f.coordinator.activate(first)
+    f.coordinator.updateMapContributions(contribution(second.sessionIdentity))
+
+    expect(forwarded().filter((identity) => identity !== null)).toEqual([second.sessionIdentity])
+  })
+
   it('destroys its constructed runtime once when torn down before activation', async () => {
     const runtime = createRuntime()
     const { coordinator } = createCoordinator({ runtime })
@@ -286,7 +310,7 @@ describe('WorkspaceActivationCoordinator', () => {
     expect(runtime.init).not.toHaveBeenCalled()
   })
 
-  it('captures caller-owned activation values before asynchronous admission', async () => {
+  it('hands the activation snapshot to map creation and attaches the runtime camera in the plane of the live origin', async () => {
     const created = deferred<WorkspaceActivationMap>()
     let capturedMapSnapshot: WorkspaceActivationSnapshot['map'] | null = null
     const createMap = vi.fn((
@@ -310,15 +334,12 @@ describe('WorkspaceActivationCoordinator', () => {
     })
 
     const activation = coordinator.activate(snapshot)
-    ;(snapshot.map.initialCenter as { lat: number; lon: number }).lat = 90
     await vi.waitFor(() => expect(createMap).toHaveBeenCalledOnce())
     expect(capturedMapSnapshot).toEqual(expect.objectContaining({
       initialCenter: { lat: 10, lon: 20 },
       background: background({ opacity: 0.3 }),
     }))
 
-    ;(snapshot.map.initialCenter as { lat: number; lon: number }).lon = 91
-    ;(snapshot.map.background.basemap as { opacity: number }).opacity = 0.92
     created.resolve(map as unknown as WorkspaceActivationMap)
 
     await expect(activation).resolves.toBe('shared-ready')
@@ -361,13 +382,13 @@ describe('WorkspaceActivationCoordinator', () => {
     const addLayerCount = map.addLayer.mock.calls.length
 
     coordinator.updateBackgroundPresentation(background(
-      { visible: true, opacity: 1.5 },
-      { visible: true, opacity: -0.5 },
+      { visible: true, opacity: 0.5 },
+      { visible: true, opacity: 0.25 },
     ))
 
     expect(updateBackgroundPresentation).toHaveBeenCalledWith(background(
-      { visible: true, opacity: 1 },
-      { visible: true, opacity: 0 },
+      { visible: true, opacity: 0.5 },
+      { visible: true, opacity: 0.25 },
     ))
     expect(map.addLayer).toHaveBeenCalledTimes(addLayerCount)
     expect(runtime.init).toHaveBeenCalledOnce()
@@ -1924,20 +1945,22 @@ describe('WorkspaceActivationCoordinator', () => {
       destroy: vi.fn(), context: { extensions: {} },
     }
     const coordinator = new WorkspaceActivationCoordinator({
-      container, runtime, camera, composition,
+      container, runtime, camera,
+      composition: withLayerFactories(composition, {
+        createRenderer: () => renderer,
+        createStage: () => ({ destroy: vi.fn() }) as never,
+        createPresentation: () => ({ dispose() {}, resize() {}, setView() {}, setDraft() {}, syncScene() {} }),
+      }),
       map: {
         createMap: async () => map as unknown as WorkspaceActivationMap,
         releaseMap: () => map.remove(),
         getWebGL2Context: () => map.context,
         updateMapContributions: () => {},
         updateBackgroundPresentation: () => {},
+        setAttributionCompact: () => {},
         retryBasemap: vi.fn(),
         installStyleRestorer: () => () => {},
-      },
-      layer: {
-        createRenderer: () => renderer,
-        createStage: () => ({ destroy: vi.fn() }) as never,
-        createPresentation: () => ({ dispose() {}, resize() {}, setView() {}, setDraft() {}, syncScene() {} }),
+        watchFailure: () => () => {},
       },
       readOrigin: () => ({ lat: 0, lon: 0 }),
     })
@@ -1974,6 +1997,14 @@ class MovableFakeMap extends FakeMap {
  * The production composition with a real SceneCanvasRuntime, coordinator and renderer composition; only MapLibre
  * (the map controls) and Pixi (the layer's renderer) are fakes. Each map reports failures like the real controls.
  */
+/** The renderer composition with the layer's Pixi factories replaced, as jsdom has no WebGL. */
+function withLayerFactories(
+  composition: SharedMapSceneRendererComposition,
+  factories: Pick<SharedMapSceneLayerOptions, 'createRenderer' | 'createStage' | 'createPresentation'>,
+): SharedMapSceneRendererComposition {
+  return { renderer: composition.renderer, createLayer: (options) => composition.createLayer({ ...options, ...factories }) }
+}
+
 function realComposition(options: {
   failRuntimeInit?: boolean
   runtimeInit?: Promise<void>
@@ -2000,7 +2031,6 @@ function realComposition(options: {
       options.onMapStateChange?.(state)
     },
     readSnapshot: () => createActivationSnapshot(),
-    readAttributionCompact: () => false,
   }, {
     createRuntime: (runtimeOptions) => {
       runtime = new SceneCanvasRuntime(runtimeOptions)
@@ -2010,17 +2040,17 @@ function realComposition(options: {
     },
     createWorkspace: (workspaceOptions) => new WorkspaceActivationCoordinator({
       ...workspaceOptions,
-      layer: {
+      composition: withLayerFactories(workspaceOptions.composition, {
         createRenderer: () => pixi,
         createStage: () => ({ destroy: vi.fn() }) as never,
         createPresentation: () => ({ dispose() {}, resize() {}, setView() {}, setDraft() {}, syncScene() {} }),
-      },
+      }),
     }),
     createControls: (controlOptions) => ({
       createMap: async () => {
         const map = new MovableFakeMap()
         maps.push(map)
-        controlOptions.contributions?.onStateChange?.({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'ready' })
+        controlOptions.contributions.onStateChange?.({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'ready' })
         return map as unknown as WorkspaceActivationMap
       },
       // Like WorkspaceMapContributions.dispose: a map publishes its end once, at the reported failure or at release.
@@ -2035,6 +2065,7 @@ function realComposition(options: {
       getWebGL2Context: (map) => (map as unknown as FakeMap).context,
       updateMapContributions: () => {},
       updateBackgroundPresentation: () => {},
+      setAttributionCompact: () => {},
       retryBasemap: vi.fn(),
       installStyleRestorer: () => () => {},
       // Like WorkspaceMapControls.reportRestorationFailure: the error is published before the coordinator hears of it.

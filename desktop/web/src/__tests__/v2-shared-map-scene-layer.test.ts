@@ -132,9 +132,9 @@ describe('createSharedMapSceneLayer', () => {
     adapter.layer.render(gl, {} as never)
     expect(presentation.syncScene).toHaveBeenCalledOnce()
     expect(presentation.setView).toHaveBeenCalledOnce()
-    expect(adapter.diagnostics).toMatchObject({
-      phase: 'attached', initializeCount: 1, renderCount: 2, sceneSyncCount: 1,
-    })
+    expect(renderer.init).toHaveBeenCalledOnce()
+    expect(renderer.render).toHaveBeenCalledTimes(2)
+    expect(adapter.diagnostics).toMatchObject({ phase: 'attached', sceneSyncCount: 1 })
   })
 
   it('rasterizes scene text at twice the MapLibre canvas density', async () => {
@@ -215,7 +215,8 @@ describe('createSharedMapSceneLayer', () => {
 
     expect(presentation.setView).toHaveBeenCalledTimes(2)
     expect(presentation.setView.mock.calls[1]![0].screen).toMatchObject({ width: 300, height: 150 })
-    expect(adapter.diagnostics).toMatchObject({ renderCount: 2, sceneSyncCount: 1 })
+    expect(renderer.render).toHaveBeenCalledTimes(2)
+    expect(adapter.diagnostics.sceneSyncCount).toBe(1)
     const disposal = adapter.dispose()
     adapter.layer.render(gl, {} as never)
     await disposal
@@ -248,7 +249,7 @@ describe('createSharedMapSceneLayer', () => {
     expect(renderer.destroy).toHaveBeenCalledOnce()
     expect(renderer.context.extensions.loseContext).toBeUndefined()
     expect(remove).not.toHaveBeenCalled()
-    expect(adapter.diagnostics).toMatchObject({ phase: 'disposed', initializeCount: 1, disposeCount: 1 })
+    expect(adapter.diagnostics.phase).toBe('disposed')
   })
 
   it('disposes an initialization that completes after its final owner has gone away', async () => {
@@ -267,7 +268,7 @@ describe('createSharedMapSceneLayer', () => {
     await disposal
 
     expect(renderer.destroy).toHaveBeenCalledOnce()
-    expect(adapter.diagnostics).toMatchObject({ phase: 'disposed', disposeCount: 1 })
+    expect(adapter.diagnostics.phase).toBe('disposed')
   })
 
   it('lets MapLibre resize first without changing its backing dimensions', async () => {
@@ -342,10 +343,7 @@ describe('createSharedMapSceneLayer', () => {
     expect(onFailure).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
       message: 'presentation failed',
     }))
-    expect(adapter.diagnostics).toMatchObject({
-      phase: 'failed',
-      lastFailure: 'presentation failed',
-    })
+    expect(adapter.diagnostics.phase).toBe('failed')
     await adapter.dispose({ mapWillBeRemoved: true })
   })
 

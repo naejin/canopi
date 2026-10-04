@@ -1,19 +1,15 @@
 import { logMapError } from '../../maplibre/redact-credentials'
-import { captureWorkspaceMapContributions, type WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
+import type { WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import { throwCanvasRuntimeCleanupErrors } from '../../canvas/runtime/cleanup'
 import type { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'
 import type { MapLibreMapInstance } from '../../maplibre/loader'
 import {
   type WorkspaceMapSnapshot,
 } from '../../maplibre/workspace-map'
-import {
-  captureMapBackgroundPresentation,
-  type MapBackgroundPresentation,
-} from '../../maplibre/map-background'
+import type { MapBackgroundPresentation } from '../../maplibre/map-background'
 import {
   MAPLIBRE_SHARED_SCENE_LAYER_ID,
   type SharedMapSceneLayer,
-  type SharedMapSceneLayerOptions,
   type SharedMapSceneMap,
 } from '../../maplibre/shared-scene-layer'
 import type { SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
@@ -61,20 +57,19 @@ export interface WorkspaceActivationMapControls {
   createMap(
     signal: AbortSignal,
     snapshot: WorkspaceMapSnapshot,
-    sessionIdentity: object,
   ): Promise<WorkspaceActivationMap>
   releaseMap(map: WorkspaceActivationMap, failure?: unknown): void
   getWebGL2Context(map: WorkspaceActivationMap): WebGL2RenderingContext | null
   updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void
   updateBackgroundPresentation(presentation: MapBackgroundPresentation): void
   /** Folds the map credits into their (i) button, now and on every later map. */
-  setAttributionCompact?(compact: boolean): void
+  setAttributionCompact(compact: boolean): void
   /** The user's Retry for a Basemap that couldn't load: downloads it again on the live map. */
   retryBasemap(): void
   /** Restores same-map style contributions after initial style admission. */
   installStyleRestorer(map: WorkspaceActivationMap, restore: () => void): () => void
   /** Map/context failures that happen outside the custom layer. */
-  watchFailure?(
+  watchFailure(
     map: WorkspaceActivationMap,
     reportFailure: (error: unknown) => void,
   ): () => void
@@ -96,10 +91,6 @@ export interface WorkspaceActivationOptions {
   readonly camera: CameraDriverHost
   readonly composition: SharedMapSceneRendererComposition
   readonly map: WorkspaceActivationMapControls
-  readonly layer: Omit<
-    SharedMapSceneLayerOptions,
-    'id' | 'frames' | 'onFailure'
-  >
   /** Live session plane origin of the runtime's open Design. */
   readonly readOrigin: () => { readonly lat: number; readonly lon: number }
   /** Called when `canRetry()` may have changed, so a Retry already on screen can be withdrawn. */
@@ -159,8 +150,8 @@ export class WorkspaceActivationCoordinator {
   /** unmountRenderer ran after the runtime initialized: a rebuilt map remounts instead of initializing. */
   private rendererUnmounted = false
   private mapUnavailable = false
-  /** Why the map became unavailable, kept until a Retry clears it. */
-  private unavailableCause: unknown = null
+  /** The map failed for lack of WebGL2: no map can be built, so Retry is never offered. */
+  private webGL2Missing = false
   private disposed = false
 
   constructor(private readonly options: WorkspaceActivationOptions) {}
@@ -174,12 +165,11 @@ export class WorkspaceActivationCoordinator {
   private async activateGeneration(
     snapshot: WorkspaceActivationSnapshot,
   ): Promise<WorkspaceActivationOutcome> {
-    const ownedSnapshot = captureActivationSnapshot(snapshot)
     if (this.disposed) return 'cancelled'
     const request = ++this.activationRequest
     this.pendingBackgroundPresentation = {
       request,
-      presentation: ownedSnapshot.map.background,
+      presentation: snapshot.map.background,
       hasUpdate: false,
     }
     const priorCleanup = this.cleanupActiveGeneration()
@@ -194,8 +184,8 @@ export class WorkspaceActivationCoordinator {
     if (this.mapUnavailable) return 'map-unavailable'
     const current: ActivationGeneration = {
       id: ++this.generation,
-      snapshot: ownedSnapshot,
-      presentation: this.pendingPresentationFor(request, ownedSnapshot.map),
+      snapshot,
+      presentation: this.pendingPresentationFor(request, snapshot.map),
       map: null,
       layer: null,
       disposeStyleRestorer: null,
@@ -220,11 +210,7 @@ export class WorkspaceActivationCoordinator {
       try {
         mapPromise = this.runOwnedCallback(
           'map creation',
-          () => this.options.map.createMap(
-            current.abortController.signal,
-            current.snapshot.map,
-            current.snapshot.sessionIdentity,
-          ),
+          () => this.options.map.createMap(current.abortController.signal, current.snapshot.map),
         )
       } finally {
         finishMapCreation()
@@ -239,24 +225,22 @@ export class WorkspaceActivationCoordinator {
         return 'cancelled'
       }
       current.map = map
-      if (this.options.map.watchFailure) {
-        const finishFailureWatcher = this.beginSetup(current)
-        let unwatchFailure: () => void
-        try {
-          unwatchFailure = this.runOwnedCallback(
-            'map failure watcher installation',
-            () => this.options.map.watchFailure!(map, (error) => {
-              this.observeFailure(current, error)
-            }),
-          )
-        } catch (error) {
-          finishFailureWatcher()
-          throw error
-        }
-        current.unwatchFailure = unwatchFailure
+      const finishFailureWatcher = this.beginSetup(current)
+      let unwatchFailure: () => void
+      try {
+        unwatchFailure = this.runOwnedCallback(
+          'map failure watcher installation',
+          () => this.options.map.watchFailure(map, (error) => {
+            this.observeFailure(current, error)
+          }),
+        )
+      } catch (error) {
         finishFailureWatcher()
-        if (!this.isCurrent(current)) return 'cancelled'
+        throw error
       }
+      current.unwatchFailure = unwatchFailure
+      finishFailureWatcher()
+      if (!this.isCurrent(current)) return 'cancelled'
       if (current.failure) return current.failure
 
       const finishContextAcquisition = this.beginSetup(current)
@@ -280,7 +264,6 @@ export class WorkspaceActivationCoordinator {
         layer = this.runOwnedCallback(
           'shared scene layer creation',
           () => this.options.composition.createLayer({
-            ...this.options.layer,
             id: MAPLIBRE_SHARED_SCENE_LAYER_ID,
             frames: this.cameraHost().frames,
             onFailure: (error) => {
@@ -427,12 +410,11 @@ export class WorkspaceActivationCoordinator {
    * is still being handled (`retry()` refuses until it settles, so Retry is not offered before).
    */
   canRetry(): boolean {
-    const current = this.active
-    return !this.disposed
-      && !(current && !current.failureSettled)
+    // A teardown publishes its result before it disposes, so it covers a disposed coordinator too.
+    return (this.active?.failureSettled ?? true)
       && !this.runtimeDestroyed
       && !this.terminalTeardownResult
-      && !(this.unavailableCause instanceof WorkspaceWebGL2UnavailableError)
+      && !this.webGL2Missing
   }
 
   /**
@@ -442,27 +424,21 @@ export class WorkspaceActivationCoordinator {
    */
   retry(): boolean {
     if (!this.mapUnavailable || !this.canRetry()) return false
-    if (this.active) this.retireFailedGeneration()
+    // The failed generation's failure transaction already reported every error, so the rebuilt map waits for its
+    // cleanup but never fails on those errors a second time.
+    if (this.active) {
+      this.retainedCleanup = this.cleanupActiveGeneration().catch((error) => {
+        logMapError('Shared workspace cleanup before a map Retry failed:', error)
+      })
+    }
     this.mapUnavailable = false
-    this.unavailableCause = null
     return true
   }
 
-  /**
-   * Ends the failed generation before a Retry. Its failure transaction already reported every error,
-   * so the rebuilt map waits for this cleanup but never fails on those errors a second time.
-   */
-  private retireFailedGeneration(): void {
-    const cleanup = this.cleanupActiveGeneration()
-    this.retainedCleanup = cleanup.catch((error) => {
-      logMapError('Shared workspace cleanup before a map Retry failed:', error)
-    })
-  }
-
   updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void {
-    if (this.disposed || this.terminalTeardownResult) return
+    if (this.terminalTeardownResult) return
     // Kept while the map is unavailable, so a rebuilt map starts from the latest contributions.
-    this.contributions = snapshot && captureWorkspaceMapContributions(snapshot)
+    this.contributions = snapshot
     if (this.mapUnavailable) return
     const current = this.active
     if (!current || !this.isCurrent(current)) return
@@ -471,21 +447,20 @@ export class WorkspaceActivationCoordinator {
   }
 
   updateBackgroundPresentation(presentation: MapBackgroundPresentation): void {
-    const next = captureMapBackgroundPresentation(presentation)
     if (this.disposed || this.mapUnavailable || this.terminalTeardownResult) return
     const pending = this.pendingBackgroundPresentation
     if (pending?.request === this.activationRequest) {
       this.pendingBackgroundPresentation = {
         request: pending.request,
-        presentation: next,
+        presentation,
         hasUpdate: true,
       }
       return
     }
     const current = this.active
     if (!current || !this.isCurrent(current)) return
-    current.presentation = next
-    this.options.map.updateBackgroundPresentation(next)
+    current.presentation = presentation
+    this.options.map.updateBackgroundPresentation(presentation)
   }
 
   private pendingPresentationFor(
@@ -681,7 +656,7 @@ export class WorkspaceActivationCoordinator {
 
   private markMapUnavailable(cause: unknown): void {
     this.mapUnavailable = true
-    this.unavailableCause = cause
+    if (cause instanceof WorkspaceWebGL2UnavailableError) this.webGL2Missing = true
     this.notifyRetryAvailability()
   }
 
@@ -982,26 +957,6 @@ export class WorkspaceActivationCoordinator {
 
 class WorkspaceActivationOwnershipError extends Error {
   override readonly name = 'WorkspaceActivationOwnershipError'
-}
-
-function captureActivationSnapshot(
-  snapshot: WorkspaceActivationSnapshot,
-): WorkspaceActivationSnapshot {
-  const map = captureMapSnapshot(snapshot.map)
-  return Object.freeze({
-    sessionIdentity: snapshot.sessionIdentity,
-    map,
-  })
-}
-
-function captureMapSnapshot(snapshot: WorkspaceMapSnapshot): WorkspaceMapSnapshot {
-  return Object.freeze({
-    initialCenter: Object.freeze({
-      lat: snapshot.initialCenter.lat,
-      lon: snapshot.initialCenter.lon,
-    }),
-    background: captureMapBackgroundPresentation(snapshot.background),
-  })
 }
 
 /** A turned camera is never a failure: the map is unavailable only when its driver fails. */

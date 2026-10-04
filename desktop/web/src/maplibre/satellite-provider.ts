@@ -44,9 +44,7 @@ const GOOGLE_MAX_ZOOM = 22
 const GOOGLE_KEYLESS_MAX_ZOOM = 20
 
 /** Keyless public tiles without a key; official session tiles with one. */
-export function resolveSatelliteDescriptor(
-  config: SatelliteConfig = {},
-): SatelliteDescriptor {
+export function resolveSatelliteDescriptor(config: SatelliteConfig): SatelliteDescriptor {
   if (!config.googleMapsApiKey?.trim()) {
     return {
       tiles: [GOOGLE_KEYLESS_TILES],

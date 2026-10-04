@@ -1,5 +1,5 @@
 import { WorkspaceMapContributions, type WorkspaceMapContributionsOptions } from './workspace-map-contributions'
-import { captureWorkspaceMapContributions, type WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
+import type { WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import type { MapLibreSurfaceAdapter } from '../../maplibre/surface-adapter'
 import { createMapLibreSurfaceAdapter } from '../../maplibre/surface-adapter'
 import {
@@ -9,7 +9,6 @@ import {
 } from '../../maplibre/config'
 import { BasemapTileAuth } from '../../maplibre/basemap-tile-auth'
 import {
-  captureMapBackgroundPresentation,
   mountMapBackground,
   type MapBackgroundHandle,
   type MapBackgroundMap,
@@ -37,7 +36,6 @@ import {
 } from './workspace-activation'
 
 interface WorkspaceMapAttempt {
-  readonly sessionIdentity: object
   readonly contributions: WorkspaceMapContributions
   contributionSnapshot: WorkspaceMapContributionSnapshot | null
   readonly signal: AbortSignal
@@ -49,7 +47,6 @@ interface WorkspaceMapAttempt {
   background: MapBackgroundHandle | null
   lifetime: MapLibreSurfaceLifetime | null
   map: WorkspaceActivationMap | null
-  maplibre: unknown
   settled: boolean
   released: boolean
   admitted: boolean
@@ -66,7 +63,7 @@ interface WorkspaceMapAttempt {
 }
 
 export interface WorkspaceActivationMapControlsOptions {
-  readonly contributions?: Omit<WorkspaceMapContributionsOptions, 'sessionIdentity' | 'onFailure'>
+  readonly contributions: Omit<WorkspaceMapContributionsOptions, 'onFailure'>
   readonly container: HTMLElement
   readonly surface?: MapLibreSurfaceAdapter<MapLibreMapInstance>
   readonly logError?: (message?: unknown, ...optionalParams: unknown[]) => void
@@ -75,7 +72,7 @@ export interface WorkspaceActivationMapControlsOptions {
    * The workspace request's resize owner (spec §1.1 "Resize"): the map container's new size goes to the camera, whose driver
    * resizes the map (CameraDriver.setScreen). The MapLibre host never resizes the map itself.
    */
-  readonly setScreen?: (screen: ViewScreen) => void
+  readonly setScreen: (screen: ViewScreen) => void
 }
 
 /**
@@ -96,9 +93,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
   createMap(
     signal: AbortSignal,
     snapshot: WorkspaceMapSnapshot,
-    sessionIdentity: object,
   ): Promise<WorkspaceActivationMap> {
-    const ownedSnapshot = captureMapSnapshot(snapshot)
     const previous = this.attempt
     if (previous && !previous.settled) {
       this.rejectAttempt(previous, abortError())
@@ -114,22 +109,19 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
 
     return new Promise<WorkspaceActivationMap>((resolve, reject) => {
       const attempt: WorkspaceMapAttempt = {
-        sessionIdentity,
         contributions: new WorkspaceMapContributions({
           ...this.options.contributions,
-          sessionIdentity,
           logError: this.logError,
           onFailure: (error) => this.reportRestorationFailure(attempt, error),
         }),
         contributionSnapshot: null,
         signal,
-        snapshot: ownedSnapshot,
-        presentation: ownedSnapshot.background,
+        snapshot,
+        presentation: snapshot.background,
         tileAuth: new BasemapTileAuth(),
         background: null,
         lifetime: null,
         map: null,
-        maplibre: null,
         settled: false,
         released: false,
         admitted: false,
@@ -171,13 +163,13 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
           if (!isLive()) return
           // Errors are classified by owner. After admission, an error naming an
           // optional contribution or the background band, or a request for the
-          // Basemap's own sprite, glyphs or TileJSON, only skips that
+          // Basemap's own sprite or TileJSON, only skips that
           // contribution; context loss, pre-admission engine failure and any
           // other unattributed error or one naming the shared scene layer are core.
           const reportMapError = (event: unknown) => {
             if (!isLive()) return
             if (attempt.admitted && attempt.contributions.handleMapError(event)) return
-            // The Basemap's sprite, glyphs or TileJSON failed (offline): its notice shows, the map keeps drawing.
+            // The Basemap's sprite or TileJSON failed (offline): its notice shows, the map keeps drawing.
             if (attempt.admitted && attempt.background?.claimMapError(event)) {
               this.logError('MapLibre workspace basemap resource failed to load:', describeMapErrorEvent(event))
               return
@@ -243,7 +235,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
         },
         onResize: (_context, size) => {
           if (attempt.released) return
-          this.options.setScreen?.({ width: size.width, height: size.height, devicePixelRatio: window.devicePixelRatio })
+          this.options.setScreen({ width: size.width, height: size.height, devicePixelRatio: window.devicePixelRatio })
         },
         onCreateError: (error) => this.rejectAttempt(attempt, error),
       })
@@ -264,7 +256,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
   updateBackgroundPresentation(presentation: MapBackgroundPresentation): void {
     const attempt = this.attempt
     if (!attempt || attempt.released || attempt.failureReported) return
-    attempt.presentation = captureMapBackgroundPresentation(presentation)
+    attempt.presentation = presentation
     if (!attempt.map || !attempt.admitted) return
     attempt.pendingPresentationSync = true
     this.drainReconciliation(attempt)
@@ -287,9 +279,8 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
   updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void {
     const attempt = this.attempt
     if (!attempt || attempt.released || attempt.failureReported) return
-    if (snapshot && snapshot.sessionIdentity !== attempt.sessionIdentity) return
-    attempt.contributionSnapshot = snapshot && captureWorkspaceMapContributions(snapshot)
-    attempt.contributions.update(attempt.contributionSnapshot)
+    attempt.contributionSnapshot = snapshot
+    attempt.contributions.update(snapshot)
   }
 
   watchFailure(
@@ -351,7 +342,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
 
   private publishUnavailable(): void {
     try {
-      this.options.contributions?.onStateChange?.({
+      this.options.contributions.onStateChange?.({
         ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
         status: 'error',
       })
@@ -366,7 +357,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     if (!map || !lifetime) return
     attempt.background ??= mountMapBackground({
       map: map as unknown as MapBackgroundMap,
-      maplibre: (this.surface as { maplibre?: unknown }).maplibre,
+      maplibre: this.surface.maplibre,
       tileAuth: attempt.tileAuth,
       lifetime,
       onError: (error) => this.logError('Map basemap style failed to load:', error),
@@ -483,16 +474,6 @@ function canCreateWebGL2Context(): boolean {
   } catch {
     return false
   }
-}
-
-function captureMapSnapshot(snapshot: WorkspaceMapSnapshot): WorkspaceMapSnapshot {
-  return Object.freeze({
-    initialCenter: Object.freeze({
-      lat: snapshot.initialCenter.lat,
-      lon: snapshot.initialCenter.lon,
-    }),
-    background: captureMapBackgroundPresentation(snapshot.background),
-  })
 }
 
 function abortError(): Error {

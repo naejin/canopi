@@ -77,11 +77,8 @@ function detachPixiFromHost(renderer: SharedPixiRenderer): void {
 
 interface SharedMapSceneDiagnostics {
   readonly phase: 'new' | 'initializing' | 'initialized' | 'attached' | 'detached' | 'disposing' | 'disposed' | 'failed'
-  readonly initializeCount: number
-  readonly renderCount: number
+  /** Scene snapshots presented so far: the snapshot map waits for one after its capture's scene. */
   readonly sceneSyncCount: number
-  readonly disposeCount: number
-  readonly lastFailure: string | null
 }
 
 export interface SharedMapSceneLayerOptions {
@@ -147,25 +144,16 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
   let rendererDestroyed = false
   let attached = false
   let rendererSize: { width: number; height: number; resolution: number } | null = null
-  let initializeCount = 0
-  let renderCount = 0
   let sceneSyncCount = 0
-  let disposeCount = 0
-  let lastFailure: string | null = null
   let failureReported = false
 
   const diagnostics = (): SharedMapSceneDiagnostics => ({
     phase,
-    initializeCount,
-    renderCount,
     sceneSyncCount,
-    disposeCount,
-    lastFailure,
   })
 
   const fail = (failure: string | Error): void => {
     const error = failure instanceof Error ? failure : new Error(failure)
-    lastFailure = error.message
     phase = 'failed'
     if (failureReported) return
     failureReported = true
@@ -229,7 +217,6 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
           sceneSyncCount += 1
         }
         renderer.render({ container: stage, clear: false })
-        renderCount += 1
       } catch (error) {
         fail(error instanceof Error ? error : 'Shared map scene rendering failed.')
       }
@@ -250,11 +237,11 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
       canvas = nextMap.getCanvas()
       const size = getMapLibreCanvasSize(canvas)
       if (!size) {
-        fail('MapLibre canvas has no stable CSS-pixel backing size for shared rendering.')
-        throw new Error(lastFailure ?? 'MapLibre canvas size is invalid.')
+        const error = new Error('MapLibre canvas has no stable CSS-pixel backing size for shared rendering.')
+        fail(error)
+        throw error
       }
       phase = 'initializing'
-      initializeCount += 1
       const nextRenderer = (options.createRenderer ?? (() => new WebGLRenderer()))()
       renderer = nextRenderer
       const initialBackingSize = { width: canvas.width, height: canvas.height }
@@ -308,7 +295,6 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
       if (disposePromise) return disposePromise
       disposeRequested = true
       phase = 'disposing'
-      disposeCount += 1
       disposePromise = new Promise<void>((resolve, reject) => {
         resolveDispose = resolve
         rejectDispose = reject
@@ -326,7 +312,6 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
           }
           if (!disposeOptions.mapWillBeRemoved && map) {
             const error = new Error('Detached shared rendering must be reattached for disposal, or disposed immediately before MapLibre removal.')
-            lastFailure = error.message
             const reject = rejectDispose
             disposeRequested = false
             phase = 'detached'

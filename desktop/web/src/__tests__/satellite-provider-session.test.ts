@@ -73,7 +73,7 @@ function recorder(provider: SatelliteImageryProvider): SatelliteState[] {
 describe('satellite provider session lifecycle', () => {
   it('serves Google without a key from the keyless tiles without any session request', () => {
     const { http, calls } = scriptedHttp([ok({})])
-    const provider = new SatelliteImageryProvider(http, { googleMapsApiKey: '  ' })
+    const provider = new SatelliteImageryProvider(http, () => ({ googleMapsApiKey: '  ' }))
     const seen = recorder(provider)
 
     provider.update(VIEWPORT)
@@ -94,10 +94,10 @@ describe('satellite provider session lifecycle', () => {
       ok(sessionBody()),
       ok(viewportBody({ copyright: 'Imagery &copy; Google' })),
     ])
-    const provider = new SatelliteImageryProvider(http, {
+    const provider = new SatelliteImageryProvider(http, () => ({
       googleMapsApiKey: 'fake-key',
       locale: 'fr-FR',
-    })
+    }))
     const seen = recorder(provider)
 
     provider.update(VIEWPORT)
@@ -108,7 +108,7 @@ describe('satellite provider session lifecycle', () => {
       if (last.state !== 'ready') throw new Error('not ready yet')
       // The provider's own tile size wins over the descriptor default.
       if (last.descriptor.tileSize !== 512) throw new Error('tile size not adopted')
-      if (last.copyright !== 'Imagery &copy; Google') throw new Error('copyright not adopted')
+      if (last.descriptor.attribution !== 'Imagery &copy; Google') throw new Error('copyright not adopted')
     })
 
     // Ready is published only once: session alone is not enough; validated
@@ -127,7 +127,7 @@ describe('satellite provider session lifecycle', () => {
   it('reports an authentication failure as actionable and never downgrades to keyless', async () => {
     // A 403 is not retryable: sending the same bad key again cannot help.
     const { http, calls } = scriptedHttp([failure(403)])
-    const provider = new SatelliteImageryProvider(http, { googleMapsApiKey: 'fake-bad-key' })
+    const provider = new SatelliteImageryProvider(http, () => ({ googleMapsApiKey: 'fake-bad-key' }))
 
     provider.update(VIEWPORT)
     await vi.waitFor(() => {
@@ -147,7 +147,7 @@ describe('satellite provider session lifecycle', () => {
     const { http, calls } = scriptedHttp([failure(500)])
     const provider = new SatelliteImageryProvider(
       http,
-      { googleMapsApiKey: 'fake-key' },
+      () => ({ googleMapsApiKey: 'fake-key' }),
       () => 4_000_000_000_000,
       async () => {},
     )
@@ -172,7 +172,7 @@ describe('satellite provider session lifecycle', () => {
     ])
     const provider = new SatelliteImageryProvider(
       http,
-      { googleMapsApiKey: 'fake-key' },
+      () => ({ googleMapsApiKey: 'fake-key' }),
       () => 4_000_000_000_000,
       async () => {},
     )
@@ -192,7 +192,7 @@ describe('satellite provider session lifecycle', () => {
     const { http, calls } = scriptedHttp([failure(429, 30)])
     const provider = new SatelliteImageryProvider(
       http,
-      { googleMapsApiKey: 'fake-key' },
+      () => ({ googleMapsApiKey: 'fake-key' }),
       () => 4_000_000_000_000,
       async () => {},
     )
@@ -242,7 +242,7 @@ describe('satellite provider session lifecycle', () => {
 
   it('stops publishing once disposed', async () => {
     const { http } = scriptedHttp([ok(sessionBody())])
-    const provider = new SatelliteImageryProvider(http, { googleMapsApiKey: 'fake-key' })
+    const provider = new SatelliteImageryProvider(http, () => ({ googleMapsApiKey: 'fake-key' }))
     const seen = recorder(provider)
     provider.dispose()
 
@@ -257,7 +257,7 @@ describe('satellite provider session lifecycle', () => {
     const { http, calls } = scriptedHttp([ok(sessionBody()), ok(viewportBody())])
     const provider = new SatelliteImageryProvider(
       http,
-      { googleMapsApiKey: 'fake-key', locale: 'not a locale' },
+      () => ({ googleMapsApiKey: 'fake-key', locale: 'not a locale' }),
     )
     provider.update(VIEWPORT)
     await vi.waitFor(() => {

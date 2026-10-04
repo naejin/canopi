@@ -1,5 +1,6 @@
 import { signal } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
+import { mapAttributionFolded } from '../shell/visible-map-area'
 import { createDetachedCanvasRuntimeAppAdapter } from '../../canvas/runtime/app-adapter'
 import { CanvasRuntimeCleanupError } from '../../canvas/runtime/cleanup'
 import { MAPLIBRE_SCENE_RENDERER_ID } from '../../canvas/runtime/renderers/maplibre-scene'
@@ -111,19 +112,21 @@ describe('createWorkspaceRuntimeComposition', () => {
   })
 
   it('folds the map credits as the visible map area asks, until disposal', async () => {
-    const folded = signal(false)
-    const fixture = compositionFixture({
-      readSnapshot: () => workspaceSnapshot(),
-      readAttributionCompact: () => folded.value,
-    })
-    await fixture.composition.start()
-    expect(fixture.controls.setAttributionCompact).toHaveBeenLastCalledWith(false)
-    folded.value = true
-    expect(fixture.controls.setAttributionCompact).toHaveBeenLastCalledWith(true)
-    await fixture.composition.dispose()
-    fixture.controls.setAttributionCompact.mockClear()
-    folded.value = false
-    expect(fixture.controls.setAttributionCompact).not.toHaveBeenCalled()
+    const previous = mapAttributionFolded.peek()
+    mapAttributionFolded.value = false
+    try {
+      const fixture = compositionFixture({ readSnapshot: () => workspaceSnapshot() })
+      await fixture.composition.start()
+      expect(fixture.controls.setAttributionCompact).toHaveBeenLastCalledWith(false)
+      mapAttributionFolded.value = true
+      expect(fixture.controls.setAttributionCompact).toHaveBeenLastCalledWith(true)
+      await fixture.composition.dispose()
+      fixture.controls.setAttributionCompact.mockClear()
+      mapAttributionFolded.value = false
+      expect(fixture.controls.setAttributionCompact).not.toHaveBeenCalled()
+    } finally {
+      mapAttributionFolded.value = previous
+    }
   })
 
   it('forwards reactive contribution snapshots through the lifecycle and disposes the reader effect', async () => {
@@ -316,7 +319,6 @@ interface CompositionFixtureOptions {
   readonly mapContributions?: WorkspaceMapContributionAdapter
   readonly readSnapshot: () => WorkspaceActivationSnapshot | null
   readonly readBackgroundPresentation?: () => MapBackgroundPresentation
-  readonly readAttributionCompact?: () => boolean
   readonly onFailure?: (error: unknown) => void
   readonly activate?: (snapshot: WorkspaceActivationSnapshot) => Promise<WorkspaceActivationOutcome>
   readonly teardown?: () => Promise<void>
@@ -367,6 +369,7 @@ function compositionFixture(options: CompositionFixtureOptions) {
     setAttributionCompact: vi.fn(),
     retryBasemap: vi.fn(),
     installStyleRestorer: vi.fn(() => () => {}),
+    watchFailure: vi.fn(() => () => {}),
   }
   const workspace = {
     requestGenerationDisconnect: vi.fn(async () => {}),
@@ -398,7 +401,6 @@ function compositionFixture(options: CompositionFixtureOptions) {
     onFailure: options.onFailure,
     readSnapshot: options.readSnapshot,
     readBackgroundPresentation: options.readBackgroundPresentation,
-    readAttributionCompact: options.readAttributionCompact ?? (() => false),
     onViewSettled: options.onViewSettled,
   }, dependencies)
 

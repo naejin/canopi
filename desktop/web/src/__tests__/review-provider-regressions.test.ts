@@ -12,6 +12,7 @@ import {
   type SatelliteReconcileTarget,
 } from '../maplibre/satellite-contribution'
 import { MAPLIBRE_SATELLITE_LAYER_ID, MAPLIBRE_SATELLITE_SOURCE_ID } from '../maplibre/config'
+import { createSatelliteImagery, mountSatelliteLifecycle } from '../maplibre/satellite-bind'
 import { GOOGLE_SESSION_TILES, type SatelliteDescriptor } from '../maplibre/satellite-provider'
 
 const VIEWPORT_A: SatelliteViewport = { west: -1, south: 48, east: 1, north: 49, zoom: 14 }
@@ -58,6 +59,19 @@ function scriptedHttp(
     },
   }
 }
+
+/** Reconcile options for a map whose transport resolves official tiles, and for one without that transport. */
+const RESOLVABLE = { officialTilesResolvable: true, beforeLayerId: () => null }
+const NO_TRANSPORT = { officialTilesResolvable: false, beforeLayerId: () => null }
+
+/** A ready style, no layer anchor, no events: what a mount needs beyond its provider, map and viewport. */
+const MOUNT_DEFAULTS = {
+  styleReady: { isReady: () => true, whenReady: () => () => {} },
+  beforeLayerId: () => null,
+  afterApply: () => {},
+  events: { on: () => {}, off: () => {} },
+  replaceSatelliteAttribution: () => {},
+} as const
 
 function recorder(provider: SatelliteImageryProvider): SatelliteState[] {
   const seen: SatelliteState[] = []
@@ -157,7 +171,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
         }),
       ok(viewportBody(20, 'new')),
     ])
-    const provider = new SatelliteImageryProvider(http, { googleMapsApiKey: 'key' })
+    const provider = new SatelliteImageryProvider(http, () => ({ googleMapsApiKey: 'key' }))
     provider.update(VIEWPORT_A)
     await vi.waitFor(() => {
       if (calls.length < 2) throw new Error('session not settled')
@@ -169,7 +183,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     await vi.waitFor(() => {
       const last = provider.snapshot()
       if (last.state !== 'ready') throw new Error('not ready')
-      if (last.copyright !== 'new') throw new Error('stale viewport published')
+      if (last.descriptor.attribution !== 'new') throw new Error('stale viewport published')
     })
     const viewportCalls = calls.filter((call) => call.url.includes('viewport'))
     expect(viewportCalls.length).toBeGreaterThanOrEqual(2)
@@ -185,7 +199,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
           gate.release = () => resolve(ok(viewportBody()))
         }),
     ])
-    const provider = new SatelliteImageryProvider(http, { googleMapsApiKey: 'key' })
+    const provider = new SatelliteImageryProvider(http, () => ({ googleMapsApiKey: 'key' }))
     const seen = recorder(provider)
     provider.update(VIEWPORT_A)
     await vi.waitFor(() => {
@@ -220,7 +234,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     ])
     const provider = new SatelliteImageryProvider(
       http,
-      { googleMapsApiKey: 'key' },
+      () => ({ googleMapsApiKey: 'key' }),
       () => 0,
       async () => {},
     )
@@ -234,7 +248,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     await vi.waitFor(() => {
       const last = provider.snapshot()
       if (last.state !== 'ready') throw new Error('not recovered')
-      if (last.copyright !== 'recovered') throw new Error('wrong copyright')
+      if (last.descriptor.attribution !== 'recovered') throw new Error('wrong copyright')
     })
     expect(calls.filter((c) => c.url.includes('viewport')).length).toBeGreaterThanOrEqual(2)
     provider.dispose()
@@ -247,7 +261,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       ok(viewportBody(20)),
       ok(viewportBody(12)),
     ])
-    const provider = new SatelliteImageryProvider(http, { googleMapsApiKey: 'key' })
+    const provider = new SatelliteImageryProvider(http, () => ({ googleMapsApiKey: 'key' }))
     provider.update(VIEWPORT_A)
     await vi.waitFor(() => {
       const last = provider.snapshot()
@@ -301,12 +315,12 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       descriptor: descriptor({ attribution: 'first' }),
       copyright: 'first',
     }
-    reconcileSatelliteContribution(target, first, { officialTilesResolvable: true })
+    reconcileSatelliteContribution(target, first, RESOLVABLE)
     expect(sources.size).toBe(1)
     const addCount = order.filter((entry) => entry.startsWith('addSource')).length
 
     // Identical publication retains source identity and loaded state.
-    reconcileSatelliteContribution(target, first, { officialTilesResolvable: true })
+    reconcileSatelliteContribution(target, first, RESOLVABLE)
     expect(sources.size).toBe(1)
     expect(order.filter((entry) => entry.startsWith('removeSource')).length).toBe(0)
     expect(order.filter((entry) => entry.startsWith('addSource')).length).toBe(addCount)
@@ -317,9 +331,8 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       {
         state: 'ready',
         descriptor: descriptor({ attribution: 'second' }),
-        copyright: 'second',
       },
-      { officialTilesResolvable: true },
+      RESOLVABLE,
     )
     expect(sources.size).toBe(1)
     expect(order.filter((entry) => entry.startsWith('removeSource')).length).toBe(0)
@@ -330,13 +343,13 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     const { target, sources, order } = recordingTarget()
     reconcileSatelliteContribution(
       target,
-      { state: 'ready', descriptor: descriptor({ maxzoom: 18 }), copyright: 'a' },
-      { officialTilesResolvable: true },
+      { state: 'ready', descriptor: descriptor({ maxzoom: 18 }) },
+      RESOLVABLE,
     )
     reconcileSatelliteContribution(
       target,
-      { state: 'ready', descriptor: descriptor({ maxzoom: 20 }), copyright: 'a' },
-      { officialTilesResolvable: true },
+      { state: 'ready', descriptor: descriptor({ maxzoom: 20 }) },
+      RESOLVABLE,
     )
     expect(order.filter((entry) => entry.startsWith('removeSource')).length).toBe(1)
     expect(order.filter((entry) => entry.startsWith('addSource')).length).toBe(2)
@@ -350,12 +363,12 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       descriptor: descriptor({ attribution: 'A' }),
       copyright: 'A',
     }
-    reconcileSatelliteContribution(target, first, { officialTilesResolvable: true })
+    reconcileSatelliteContribution(target, first, RESOLVABLE)
     const addCount = order.filter((entry) => entry.startsWith('addSource')).length
     reconcileSatelliteContribution(
       target,
-      { state: 'ready', descriptor: descriptor({ attribution: 'B' }), copyright: 'B' },
-      { officialTilesResolvable: true },
+      { state: 'ready', descriptor: descriptor({ attribution: 'B' }) },
+      RESOLVABLE,
     )
     expect(sources.size).toBe(1)
     expect(order.filter((entry) => entry.startsWith('removeSource')).length).toBe(0)
@@ -367,12 +380,12 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     const { target, layers } = recordingTarget()
     reconcileSatelliteContribution(
       target,
-      { state: 'ready', descriptor: descriptor(), copyright: 'A' },
-      { officialTilesResolvable: true },
+      { state: 'ready', descriptor: descriptor() },
+      RESOLVABLE,
     )
     const layer = layers.get(MAPLIBRE_SATELLITE_LAYER_ID) as { layout?: { visibility?: string } } | undefined
     expect(layer?.layout?.visibility).toBe('visible')
-    reconcileSatelliteContribution(target, { state: 'loading' })
+    reconcileSatelliteContribution(target, { state: 'loading' }, NO_TRANSPORT)
     expect((layers.get(MAPLIBRE_SATELLITE_LAYER_ID) as { layout?: { visibility?: string } })?.layout?.visibility)
       .toBe('none')
   })
@@ -522,17 +535,15 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     reconcileSatelliteContribution(target, {
       state: 'ready',
       descriptor: descriptor({ attribution: 'A' }),
-      copyright: 'A',
-    }, { officialTilesResolvable: true })
+    }, RESOLVABLE)
     expect(credits.at(-1)).toBe('A')
     expect(sources.size).toBe(1)
-    reconcileSatelliteContribution(target, { state: 'idle' })
+    reconcileSatelliteContribution(target, { state: 'idle' }, NO_TRANSPORT)
     expect(sources.size).toBe(0)
     expect(credits.at(-1)).toBe('')
   })
 
   it('M1: mountSatelliteLifecycle applies current configuration without waiting for events', async () => {
-    const { mountSatelliteLifecycle } = await import('../maplibre/satellite-bind')
     const sources = new Map<string, Record<string, unknown>>()
     const layers = new Map<string, Record<string, unknown>>()
     const map = {
@@ -548,10 +559,10 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       },
     }
     const teardown = mountSatelliteLifecycle({
+      ...MOUNT_DEFAULTS,
+      provider: createSatelliteImagery(null),
       map,
-      tileAuth: null,
       readViewport: () => ({ west: -10, south: -10, east: 10, north: 10, zoom: 2 }),
-      readVisible: () => true,
     })
     // No movement, settings or style-ready event: keyless Google imagery
     // must already be applied from current configuration.
@@ -563,7 +574,6 @@ describe('provider lifecycle regressions after 26eca68a', () => {
   })
 
   it('M2: mountSatelliteLifecycle keeps a class-based map\'s prototype methods with an attribution seam', async () => {
-    const { mountSatelliteLifecycle } = await import('../maplibre/satellite-bind')
     // A real MapLibre map exposes its methods on the prototype, so a mount that
     // copies the map into a plain object loses every one of them.
     class PrototypeMap {
@@ -580,8 +590,9 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     const map = new PrototypeMap()
     const credits: string[] = []
     const mount = mountSatelliteLifecycle({
+      ...MOUNT_DEFAULTS,
+      provider: createSatelliteImagery(null),
       map,
-      tileAuth: null,
       readViewport: () => ({ west: -10, south: -10, east: 10, north: 10, zoom: 2 }),
       replaceSatelliteAttribution: (credit: string) => credits.push(credit),
     })
@@ -612,7 +623,6 @@ describe('provider lifecycle regressions after 26eca68a', () => {
   })
 
   it('E1: mountSatelliteLifecycle registers moveend and updates viewport metadata', async () => {
-    const { mountSatelliteLifecycle } = await import('../maplibre/satellite-bind')
     const sources = new Map<string, Record<string, unknown>>()
     const layers = new Map<string, Record<string, unknown>>()
     const listeners = new Map<string, Set<() => void>>()
@@ -642,13 +652,13 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     }
     const credits: string[] = []
     const mount = mountSatelliteLifecycle({
+      ...MOUNT_DEFAULTS,
+      provider: createSatelliteImagery(null),
       map,
-      tileAuth: null,
       readViewport: () => {
         readCount += 1
         return viewport
       },
-      readVisible: () => true,
       events,
       replaceSatelliteAttribution: (credit: string) => credits.push(credit),
     })

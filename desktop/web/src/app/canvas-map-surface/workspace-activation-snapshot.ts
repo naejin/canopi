@@ -7,14 +7,10 @@ import {
   type MapBackgroundPresentation,
 } from '../../maplibre/map-background'
 import type { WorkspaceActivationSnapshot } from './workspace-activation'
-import { DEFAULT_NEW_DESIGN_VIEW } from '../../canvas/session-plane'
 
 export interface WorkspaceActivationSnapshotReaderOptions {
   readonly store?: Pick<DesignSessionStore, 'hasCurrentDesign' | 'sessionIdentity'>
-  /** Initial map centre; the runtime's session plane origin in production. */
-  readonly readInitialCenter?: () => { readonly lat: number; readonly lon: number }
   readonly readMapLayers?: () => MapLayersState
-  readonly readLocale?: () => string
 }
 
 /** The background band as the map layer store (or a presented story step) and locale describe it. */
@@ -26,17 +22,19 @@ export function readWorkspaceBackgroundPresentation(
   return captureMapBackgroundPresentation({
     basemap: { ...layers.basemap, opacity: effectiveBackgroundOpacity(layers, 'basemap') },
     satellite: { ...layers.satellite, opacity: effectiveBackgroundOpacity(layers, 'satellite') },
-    locale: (options.readLocale ?? (() => locale.value))(),
+    locale: locale.value,
   })
 }
 
 export function readWorkspaceActivationSnapshot(
-  options: WorkspaceActivationSnapshotReaderOptions = {},
+  options: WorkspaceActivationSnapshotReaderOptions & {
+    /** Initial map centre: the runtime's session plane origin. */
+    readonly readInitialCenter: () => { readonly lat: number; readonly lon: number }
+  },
 ): WorkspaceActivationSnapshot | null {
   const store = options.store ?? designSessionStore
   if (!store.hasCurrentDesign()) return null
-  const center = options.readInitialCenter?.()
-    ?? { lat: DEFAULT_NEW_DESIGN_VIEW.lat, lon: DEFAULT_NEW_DESIGN_VIEW.lon }
+  const center = options.readInitialCenter()
   return Object.freeze({
     sessionIdentity: store.sessionIdentity.peek(),
     map: Object.freeze({

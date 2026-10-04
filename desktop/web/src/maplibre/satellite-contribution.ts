@@ -24,14 +24,11 @@ export interface SatelliteReconcileTarget {
   addLayer(layer: Record<string, unknown>, beforeId?: string): void
   setLayoutProperty?(id: string, name: string, value: unknown): void
   /**
-   * Optional: update basemap attribution without removing the tile source.
-   *
-   * Installed MapLibre has no dynamic raster-source attribution setter, so a
-   * map-owned attribution control adapter is the supported way to change only
-   * the copyright. When absent, a copyright-only change is applied by replacing
-   * the attribution-bearing source only if tile configuration also changed.
+   * Sets the Satellite credit on the map-owned attribution control. MapLibre has
+   * no setter for a raster source's attribution, so the credit lives on the
+   * control and a copyright-only change never rebuilds the tile source.
    */
-  replaceSatelliteAttribution?(attribution: string): void
+  replaceSatelliteAttribution(attribution: string): void
 }
 
 export interface SatelliteRasterSource {
@@ -50,23 +47,7 @@ export interface SatelliteRasterLayer {
   readonly layout: { readonly visibility: 'visible' | 'none' }
 }
 
-/**
- * Apply one published provider state to a live map by reconciling only the
- * basemap source and layer.
- *
- * This is the map side of the provider boundary, and it deliberately never
- * calls `setStyle()` and never recreates the map. A key change or a new
- * session therefore cannot disturb the camera, the scene
- * runtime or any other layer — which is the property the product contract
- * requires and the reason key changes are safe mid-edit.
- *
- * Tile configuration (template, tile size, zoom limits) is compared
- * separately from attribution and visibility. Identical publications are
- * no-ops; copyright-only changes update attribution without removing the tile
- * source; a source is rebuilt only when its actual tile configuration requires
- * it, preserving layer order, opacity and overlays.
- */
-export interface SatelliteContributionOptions {
+interface SatelliteContributionOptions {
   /**
    * Whether the map's tile transport can resolve an official session template.
    *
@@ -75,15 +56,13 @@ export interface SatelliteContributionOptions {
    * every tile. Withdrawing the contribution is the honest outcome; installing
    * a source that cannot load would look like a provider outage.
    */
-  readonly officialTilesResolvable?: boolean
+  readonly officialTilesResolvable: boolean
   /**
-   * Where the raster layer belongs in the target's own stack.
-   *
-   * The canvas keeps a local background layer beneath the basemap, so the
-   * contribution is inserted directly above it rather than appended over the
-   * shared scene. Read per reconciliation because the stack changes.
+   * Where the raster layer belongs in the target's own stack: beneath the first
+   * layer that is not background. Read per reconciliation because the stack
+   * changes.
    */
-  readonly beforeLayerId?: () => string | null
+  readonly beforeLayerId: () => string | null
 }
 
 function readInstalledSource(target: SatelliteReconcileTarget): SatelliteRasterSource | null {
@@ -106,20 +85,32 @@ function sameTileConfig(
   return a.tileSize === tileSize && a.maxzoom === maxzoom && sameTiles(a.tiles, tiles)
 }
 
+/**
+ * Apply one published provider state to a live map by reconciling only the
+ * basemap source and layer.
+ *
+ * This is the map side of the provider boundary, and it deliberately never
+ * calls `setStyle()` and never recreates the map. A key change or a new
+ * session therefore cannot disturb the camera, the scene
+ * runtime or any other layer — which is the property the product contract
+ * requires and the reason key changes are safe mid-edit.
+ *
+ * Tile configuration (template, tile size, zoom limits) is compared
+ * separately from attribution and visibility. Identical publications are
+ * no-ops; copyright-only changes update attribution without removing the tile
+ * source; a source is rebuilt only when its actual tile configuration requires
+ * it, preserving layer order, opacity and overlays.
+ */
 export function reconcileSatelliteContribution(
   target: SatelliteReconcileTarget,
   state: SatelliteState,
-  options: SatelliteContributionOptions = {},
+  options: SatelliteContributionOptions,
 ): void {
-  const descriptor = state.state === 'ready' ? state.descriptor : null
-  const tiles = descriptor?.tiles ?? []
-
   // A loading official provider may keep an already-installed source whose tile
   // configuration is unchanged, hidden via visibility so it cannot present
   // falsely attributed imagery while metadata is pending.
   if (state.state === 'loading') {
-    const installed = readInstalledSource(target)
-    if (installed) {
+    if (readInstalledSource(target)) {
       setSatelliteContributionVisibility(target, false)
       return
     }
@@ -131,33 +122,25 @@ export function reconcileSatelliteContribution(
   // contribution is withdrawn. A generation that cannot serve must not leave
   // the previous generation's tiles on screen: that would present keyless
   // imagery as if the configured key were serving it.
-  if (tiles.length === 0) {
+  const descriptor = state.state === 'ready' ? state.descriptor : null
+  if (!descriptor || descriptor.tiles.length === 0) {
     removeContribution(target)
     return
   }
 
   // An official template is only usable through the transport that resolves its
   // session for this fixed endpoint.
-  if (
-    descriptor?.official
-    && tiles.some(hasUnresolvedSession)
-    && options.officialTilesResolvable !== true
-  ) {
+  const { tiles, tileSize, maxzoom, attribution } = descriptor
+  if (descriptor.official && tiles.some(hasUnresolvedSession) && !options.officialTilesResolvable) {
     removeContribution(target)
     return
   }
 
-  const tileSize = descriptor?.tileSize ?? 256
-  const maxzoom = descriptor?.maxzoom ?? 19
-  const attribution = descriptor?.attribution ?? ''
   const installed = readInstalledSource(target)
-
   if (installed && sameTileConfig(installed, tiles, tileSize, maxzoom)) {
     // Identical tile configuration retains the source and its loaded state.
     // Copyright-only: update attribution without removing the tile source.
-    if (typeof target.replaceSatelliteAttribution === 'function') {
-      target.replaceSatelliteAttribution(attribution)
-    }
+    target.replaceSatelliteAttribution(attribution)
     setSatelliteContributionVisibility(target, true)
     return
   }
@@ -166,32 +149,16 @@ export function reconcileSatelliteContribution(
   // removed before its source because MapLibre refuses to drop a source that a
   // layer still references; layer order is re-applied by the insertion anchor.
   removeContribution(target)
-  const hasAttributionAdapter = typeof target.replaceSatelliteAttribution === 'function'
-  target.addSource(MAPLIBRE_SATELLITE_SOURCE_ID, {
-    type: 'raster',
-    tiles: [...tiles],
-    tileSize,
-    // With an attribution adapter the credit lives on the map-owned control so
-    // a copyright-only change never rebuilds the source. Without one, the
-    // source carries the credit so the required attribution cannot disappear.
-    attribution: hasAttributionAdapter ? '' : attribution,
-    maxzoom,
-  })
-  if (hasAttributionAdapter) {
-    target.replaceSatelliteAttribution?.(attribution)
-  }
-  const layer = {
+  // The credit lives on the map-owned control, so the source carries none.
+  target.addSource(MAPLIBRE_SATELLITE_SOURCE_ID, { type: 'raster', tiles: [...tiles], tileSize, attribution: '', maxzoom })
+  target.replaceSatelliteAttribution(attribution)
+  target.addLayer({
     id: MAPLIBRE_SATELLITE_LAYER_ID,
-    type: 'raster' as const,
+    type: 'raster',
     source: MAPLIBRE_SATELLITE_SOURCE_ID,
     minzoom: 0,
-    layout: { visibility: 'visible' as const },
-  }
-  // The anchor is optional rather than `undefined`, so a target that takes no
-  // insertion point is called with exactly the layer it must add.
-  const beforeId = options.beforeLayerId?.() ?? null
-  if (beforeId) target.addLayer(layer, beforeId)
-  else target.addLayer(layer)
+    layout: { visibility: 'visible' },
+  }, options.beforeLayerId() ?? undefined)
 }
 
 /** Withdraw the basemap contribution and its owned credit when there is one. */
@@ -205,9 +172,7 @@ function removeContribution(target: SatelliteReconcileTarget): void {
   // Clearing the basemap-owned credit on withdrawal keeps Idle/Unavailable
   // from retaining stale credit after imagery is gone, while credits belonging
   // to other sources remain untouched.
-  if (target.replaceSatelliteAttribution) {
-    target.replaceSatelliteAttribution('')
-  }
+  target.replaceSatelliteAttribution('')
 }
 
 /** Hide or show the current basemap without touching its source. */

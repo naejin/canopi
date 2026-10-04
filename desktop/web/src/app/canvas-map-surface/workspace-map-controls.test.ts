@@ -48,6 +48,7 @@ class FakeMap implements MapLibreMapInstance {
   readonly setLayoutProperty = vi.fn()
   readonly setGlyphs = vi.fn()
   readonly setSprite = vi.fn()
+  readonly setGlobalStateProperty = vi.fn()
   readonly setStyle = vi.fn()
   readonly controls = new Set<unknown>()
   readonly addControl = vi.fn((control: unknown, _position?: string) => { this.controls.add(control) })
@@ -211,10 +212,10 @@ function createControls(options: {
   const controls = new TestWorkspaceMapControls({
     container,
     surface,
-    contributions: options.contributions,
+    contributions: options.contributions ?? {},
     ...(options.logError ? { logError: options.logError } : {}),
     canCreateWebGL2Context: options.canCreateWebGL2Context ?? (() => true),
-    ...(options.setScreen ? { setScreen: options.setScreen } : {}),
+    setScreen: options.setScreen ?? vi.fn(),
   }, snapshot)
   createdControls.push({ controls, maps })
   return { controls, maps, observers, container }
@@ -242,7 +243,7 @@ class TestWorkspaceMapControls extends WorkspaceMapControls {
   }
 
   override createMap(signal: AbortSignal, snapshot = this.defaultSnapshot) {
-    return super.createMap(signal, snapshot, this.sessionIdentity)
+    return super.createMap(signal, snapshot)
   }
 }
 
@@ -921,7 +922,7 @@ describe('WorkspaceMapControls', () => {
     expect(mapB.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toBeDefined()
   })
 
-  it('owns the call-time map snapshot through admission and later style reload', async () => {
+  it('keeps the creation snapshot\'s background through admission and a later style reload', async () => {
     const { controls, maps } = createControls()
     const snapshot: WorkspaceMapSnapshot = {
       initialCenter: { lat: 11, lon: 22 },
@@ -929,12 +930,6 @@ describe('WorkspaceMapControls', () => {
     }
     const acquisition = controls.createMap(new AbortController().signal, snapshot)
     const map = await waitForMap(maps)
-
-    ;(snapshot.initialCenter as { lat: number; lon: number }).lat = 81
-    ;(snapshot.initialCenter as { lat: number; lon: number }).lon = 82
-    ;(snapshot.background.satellite as { visible: boolean }).visible = false
-    ;(snapshot.background.satellite as { opacity: number }).opacity = 0.95
-    ;(snapshot.background.basemap as { visible: boolean }).visible = true
 
     map.emit('style.load')
     await acquisition
@@ -1348,11 +1343,13 @@ describe('WorkspaceMapControls', () => {
     const controls = new WorkspaceMapControls({
       container: document.createElement('div'), surface,
       canCreateWebGL2Context: () => true,
+      setScreen: vi.fn(),
+      contributions: {},
     })
     await expect(controls.createMap(new AbortController().signal, {
       initialCenter: { lat: 0, lon: 0 },
       background: satelliteOn(1),
-    }, {})).rejects.toBe(error)
+    })).rejects.toBe(error)
   })
 
   it('rejects unavailable WebGL2 before constructing a MapLibre map', async () => {
@@ -1404,12 +1401,14 @@ describe('WorkspaceMapControls', () => {
       const controls = new WorkspaceMapControls({
         container: document.createElement('div'),
         surface,
+        setScreen: vi.fn(),
+        contributions: {},
       })
 
       await expect(controls.createMap(new AbortController().signal, {
         initialCenter: { lat: 0, lon: 0 },
         background: satelliteOn(1),
-      }, {})).rejects.toThrow('WebGL2 is unavailable')
+      })).rejects.toThrow('WebGL2 is unavailable')
 
       expect(getContext).not.toHaveBeenCalled()
       expect(loadMapLibre).not.toHaveBeenCalled()
@@ -1559,7 +1558,8 @@ describe('WorkspaceMapControls', () => {
     const reportFailure = vi.fn()
     controls.watchFailure(map as never, reportFailure)
 
-    const event = { sourceId: 'ofm-openmaptiles', error: new Error('vector tile unavailable') }
+    // A tile's failure carries the tile; a source failure without one is the TileJSON's.
+    const event = { sourceId: 'ofm-openmaptiles', error: new Error('vector tile unavailable'), tile: {} }
     map.emit('error', event)
 
     expect(map.remove).not.toHaveBeenCalled()
@@ -1670,12 +1670,15 @@ describe('WorkspaceMapControls OpenFreeMap basemap', () => {
     expect(map.setGlyphs).toHaveBeenCalledWith(OPENFREEMAP_STYLE.glyphs)
     expect(map.setSprite).toHaveBeenCalledWith(OPENFREEMAP_STYLE.sprite)
     expect(map.getSource('ofm-openmaptiles')).toEqual(OPENFREEMAP_STYLE.sources.openmaptiles)
+    // The row opacity and the label language are the map's global state, which the layers read.
+    expect(map.setGlobalStateProperty).toHaveBeenCalledWith('canopi:basemap-opacity', 0.5)
+    expect(map.setGlobalStateProperty).toHaveBeenCalledWith('canopi:basemap-locale', 'fr')
     expect(map.getLayer('ofm:water')).toMatchObject({
       source: 'ofm-openmaptiles',
-      paint: { 'fill-opacity': 0.4 },
+      paint: { 'fill-opacity': ['*', 0.8, ['global-state', 'canopi:basemap-opacity']] },
     })
     expect(map.getLayer('ofm:place-label')).toMatchObject({
-      layout: { 'text-field': ['coalesce', ['get', 'name:fr'], ['get', 'name']] },
+      layout: { 'text-field': ['coalesce', ['get', ['concat', 'name:', ['global-state', 'canopi:basemap-locale']]], ['get', 'name']] },
     })
     expect(map.layerOrder).toEqual([...OPENFREEMAP_LAYER_IDS, MAPLIBRE_SHARED_SCENE_LAYER_ID])
     expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toBeUndefined()
@@ -1779,15 +1782,10 @@ describe('WorkspaceMapControls OpenFreeMap basemap', () => {
   it.each([
     // The style's sprite fails with no source or layer id.
     ['sprite', { type: 'error', error: offlineRequest('https://tiles.openfreemap.org/sprites/ofm_f384/ofm.json') }],
-    // A glyph range fails inside a basemap tile's parse.
-    ['glyph range', {
-      type: 'error',
-      sourceId: 'ofm-openmaptiles',
-      error: offlineRequest('https://tiles.openfreemap.org/fonts/Noto%20Sans%20Regular/0-255.pbf'),
-      tile: { tileID: { canonical: { z: 14, x: 1, y: 2 } } },
-    }],
     // The basemap source's TileJSON fails, which leaves the source empty.
     ['TileJSON', { type: 'error', sourceId: 'ofm-openmaptiles', error: offlineRequest('https://tiles.openfreemap.org/planet') }],
+    // A captive portal answers the TileJSON with 200 and HTML: the JSON parse fails naming the source and no URL.
+    ['TileJSON behind a captive portal', { type: 'error', sourceId: 'ofm-openmaptiles', error: new SyntaxError('JSON Parse error: Unrecognized token \'<\'') }],
     // A captive portal answers the sprite with 200 and HTML: the JSON parse fails with no URL and no source.
     ['sprite behind a captive portal', { type: 'error', error: new SyntaxError('JSON Parse error: Unrecognized token \'<\'') }],
     // The connection drops while the sprite body downloads: the body read fails with no URL and no source.
@@ -1825,7 +1823,7 @@ describe('WorkspaceMapControls OpenFreeMap basemap', () => {
 
       controls.retryBasemap()
 
-      // Retry downloads the basemap's sprite, glyphs and TileJSON again by installing it afresh.
+      // Retry downloads the basemap's sprite and TileJSON again by installing it afresh.
       await vi.waitFor(() => expect(states.at(-1)?.basemapStatus).toBe('ok'))
       expect(map.setSprite).toHaveBeenCalledTimes(2)
       expect(hasOpenFreeMapBasemap(map)).toBe(true)
@@ -2001,7 +1999,7 @@ describe('WorkspaceMapControls Google satellite', () => {
       const outgoing = transform!(
         (map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID) as { tiles: string[] }).tiles[0]!
           .split('{z}').join('14').split('{x}').join('8192').split('{y}').join('5461'),
-      )
+      ) as { url: string }
       expect(outgoing.url).toContain('session=fake-session-token')
       expect(outgoing.url).toContain('key=fake-canvas-google-key')
       expect(outgoing.url).not.toContain('{session}')

@@ -22,6 +22,7 @@
 import type { RasterTileRequest, RasterWorkerPool } from './pool'
 import { rasterWorkerPool } from './pool'
 import { recordRaster } from './diagnostics'
+import { mercatorToGeo } from '../../canvas/projection'
 
 type RasterModule = typeof import('maplibre-gl-raster')
 type LayerManager = InstanceType<RasterModule['LayerManager']>
@@ -55,7 +56,6 @@ type RasterDisplayLayerState = 'loading' | 'ready' | 'error'
 export interface RasterDisplayOptions {
   /** The engine added, replaced or removed map layers after an async load. */
   readonly onLayersChanged?: () => void
-  readonly onLayerStateChange?: (id: string, state: RasterDisplayLayerState, error?: Error) => void
   readonly loadRasterModule?: () => Promise<RasterModule>
   readonly pool?: RasterWorkerPool
 }
@@ -76,8 +76,6 @@ export interface RasterDisplay {
   sync(layers: readonly RasterDisplayLayer[], beforeId: string | undefined): void
   /** Layer ids the manager currently owns, bottom first. */
   layerIds(): string[]
-  state(id: string): RasterDisplayLayerState | undefined
-  readonly disposed: boolean
   dispose(): void
 }
 
@@ -135,7 +133,6 @@ export function createRasterDisplay(
     if (states.get(id) === next) return
     states.set(id, next)
     recordRaster({ kind: `layer-${next}`, id, detail: error?.message })
-    options.onLayerStateChange?.(id, next, error)
   }
 
   const load = options.loadRasterModule ?? (() => import('maplibre-gl-raster'))
@@ -236,10 +233,6 @@ export function createRasterDisplay(
     layerIds() {
       return manager ? manager.getLayers().map((layer) => layer.id) : []
     },
-    state: (id) => states.get(id),
-    get disposed() {
-      return disposed
-    },
     dispose() {
       if (disposed) return
       disposed = true
@@ -310,11 +303,8 @@ export function tileIsRelevant(map: RasterDisplayMap, tile: RasterTileRequest): 
   if (!bounds || zoom === undefined) return true
   if (tile.z < Math.floor(zoom) - 2 || tile.z > Math.ceil(zoom) + 1) return false
   const n = 2 ** tile.z
-  const tileWest = (tile.x / n) * 360 - 180
-  const tileEast = ((tile.x + 1) / n) * 360 - 180
-  const lat = (row: number) => (Math.atan(Math.sinh(Math.PI * (1 - (2 * row) / n))) * 180) / Math.PI
-  const tileNorth = lat(tile.y)
-  const tileSouth = lat(tile.y + 1)
+  const { lng: tileWest, lat: tileNorth } = mercatorToGeo(tile.x / n, tile.y / n)
+  const { lng: tileEast, lat: tileSouth } = mercatorToGeo((tile.x + 1) / n, (tile.y + 1) / n)
   const padX = 360 / n
   const padY = Math.max(tileNorth - tileSouth, 1e-9)
   const west = bounds.getWest() - padX

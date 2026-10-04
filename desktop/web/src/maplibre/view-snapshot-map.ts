@@ -122,7 +122,6 @@ interface ViewSnapshotMapLibreMap extends SharedMapSceneMap {
   getCenter(): MapLibreLngLat
   getZoom(): number
   getBearing(): number
-  unproject(point: [number, number]): MapLibreLngLat
   setTransformConstrain?(constrain: MapLibreTransformConstrain | null): void
   redraw(): void
   remove(): void
@@ -156,14 +155,6 @@ export interface ViewSnapshotMapOptions {
   readonly now?: () => number
 }
 
-interface ViewSnapshotMapDiagnostics {
-  /** Whether an off-screen map (one WebGL context) is alive now. */
-  readonly live: boolean
-  readonly mapsCreated: number
-  readonly captures: number
-  readonly contextLosses: number
-}
-
 /**
  * The one owner of the off-screen snapshot map: a hidden MapLibre map with the
  * production background band and its own shared scene layer. It never touches
@@ -171,7 +162,6 @@ interface ViewSnapshotMapDiagnostics {
  */
 export interface ViewSnapshotMap {
   capture(request: ViewSnapshotRequest): Promise<ViewSnapshotCapture>
-  readonly diagnostics: ViewSnapshotMapDiagnostics
   /** Releases the map and its WebGL context; later captures reject. */
   dispose(): Promise<void>
 }
@@ -223,9 +213,6 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
   let pending = 0
   let releaseTimer: ReturnType<typeof setTimeout> | null = null
   let disposed = false
-  let mapsCreated = 0
-  let captures = 0
-  let contextLosses = 0
 
   const cancelRelease = () => {
     if (releaseTimer !== null) clearTimeout(releaseTimer)
@@ -297,7 +284,6 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
       container.remove()
       throw error
     }
-    mapsCreated += 1
     const created: SnapshotInstance = {
       container,
       map,
@@ -315,7 +301,6 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
       releaseListeners: () => undefined,
     }
     const onContextLost = () => {
-      contextLosses += 1
       created.broken = new Error('The snapshot map lost its WebGL context.')
       created.teardown.abort()
     }
@@ -440,7 +425,6 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
       'The snapshot frame did not encode in time.',
     )
     const encodeMs = now() - encodeStartedAt
-    captures += 1
     return {
       blob,
       width: settled.frame.width,
@@ -535,9 +519,6 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
         scheduleRelease()
       })
       return run
-    },
-    get diagnostics() {
-      return { live: instance !== null, mapsCreated, captures, contextLosses }
     },
     async dispose() {
       if (disposed) return
