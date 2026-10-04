@@ -49,11 +49,9 @@ export function createAppCanvasRuntimeAppAdapter(
     document: { composeDocumentForSave },
     contextMenu: { open: openCanvasContextMenu, close: closeCanvasContextMenu },
     // Read per gesture, so an inspection session needs no runtime rebuild, and
-    // absent in an edition that has no raster capability.
-    ...(capabilities.tryInspectAt ? { tryInspectAt: capabilities.tryInspectAt } : {}),
-    ...(capabilities.savedObjectStamps
-      ? { savedObjectStamps: capabilities.savedObjectStamps }
-      : {}),
+    // undefined in an edition that has no raster capability.
+    tryInspectAt: capabilities.tryInspectAt,
+    savedObjectStamps: capabilities.savedObjectStamps,
     presentationData: capabilities.presentationData,
     plantDisplay: {
       // A presented story step shows its own labels; the Design's choice is untouched.

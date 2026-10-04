@@ -66,7 +66,6 @@ describe('Canvas Runtime app adapter composition', () => {
     })
 
     expect(adapter.savedObjectStamps).toBeUndefined()
-    expect('savedObjectStamps' in adapter).toBe(false)
   })
 
   it('delegates clean state, document composition, and translation to app authorities', () => {
