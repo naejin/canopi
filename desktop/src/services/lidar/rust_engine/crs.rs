@@ -263,7 +263,9 @@ pub(super) fn from_proj4(definition: &str) -> Result<ResolvedCrs, String> {
 const OTHER_UNIT: &str = "a linear unit other than the metre";
 
 /// Why a geographic CRS on another meridian is refused: proj4rs ignores its
-/// `+pm`, and keys spell a CRS with no code from Greenwich.
+/// `+pm`, and keys spell a CRS with no code from Greenwich. Keys on another
+/// meridian are refused projected too: readers disagree on whether their
+/// projection longitudes count from it.
 const OTHER_MERIDIAN: &str = "a prime meridian other than Greenwich";
 
 fn not_supported(reason: &str) -> String {
@@ -710,7 +712,9 @@ fn user_defined_projected(keys: &GeoKeyDirectory) -> Result<ResolvedCrs, String>
 /// geographic code's own, or the keys' ellipsoid, shifted only by a
 /// `GeogTOWGS84GeoKey`. An unknown datum shifts nothing, as GDAL treats it.
 fn datum_of(keys: &GeoKeyDirectory) -> Result<(Datum, Option<Vec<f64>>), String> {
-    // IGN's tiles write a user-defined meridian with no longitude: Greenwich.
+    // Geographic or projected keys on another meridian are refused
+    // (`OTHER_MERIDIAN`). IGN's tiles write a user-defined meridian with no
+    // longitude: Greenwich.
     let greenwich = match short(keys, key::GeogPrimeMeridianGeoKey) {
         None | Some(8901) => true,
         Some(USER_DEFINED) => {
