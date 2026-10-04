@@ -271,6 +271,28 @@ describe('OpenFreeMap vector basemap', () => {
     expect(statuses).toEqual(['loading', 'ok', 'loading', 'ok'])
   })
 
+  // Liberty in Russian at 40%; Bright cannot be downloaded, so Liberty stays on screen. A language or opacity change
+  // meanwhile reaches the style still shown, not only the one that would follow.
+  it.each([
+    ['hangs', () => new Promise<never>(() => {})],
+    ['fails', () => Promise.reject(new Error('Basemap style request failed (503).'))],
+  ] as const)('applies a new language and opacity to the style still on screen while the chosen style %s', async (_, loadBright) => {
+    const map = new FakeMap()
+    const basemap = new VectorBasemap(map, {
+      loadStyle: (url) => url.endsWith('bright') ? loadBright() : Promise.resolve(styleDocument('liberty')),
+    })
+    const liberty = { style: 'liberty', visible: true, opacity: 0.4, locale: 'ru' } as const
+    basemap.update(liberty)
+    await settle()
+    basemap.update({ ...liberty, style: 'bright' })
+    await settle()
+
+    basemap.update({ style: 'bright', visible: true, opacity: 0.2, locale: 'en' })
+    await settle()
+    expect(basemap.installedStyle).toBe('liberty')
+    expect(map.globalState).toEqual({ 'canopi:basemap-opacity': 0.2, 'canopi:basemap-locale': 'en' })
+  })
+
   it('reports loading while a style downloads, and a repeated request joins the download already running', async () => {
     // Through the real style download: Bright, which no other test downloads, so the shared cache starts empty for it.
     const requests: string[] = []
