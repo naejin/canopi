@@ -1623,7 +1623,7 @@ pub struct LastView {
 }
 ```
 
-Stored data: `.canopi` gains only the optional top-level `map_view`, the view a save writes (U28; `SavedViewCamera.bearing` exists; writers normalise to [0, 360), locally, P10). Settings gain `LastView.bearing` with a one-line default. PDF setups are not persisted, so Map orientation and the layout angle live in memory only; `PdfPrintArea` gains no angle (U3; decided with the user, 2026-10-01). `scroll_wheel` keeps its field and values; only its UI is relabelled.
+Stored data: `.canopi` gains the optional top-level `map_view`, the view a save writes (U28), and the optional `SavedViewCamera.ground_size_m`, and loses `SavedView.extent` (§4.10); the version stays 9 (ADR 0021, "Additive `.canopi` changes"). `SavedViewCamera.bearing` exists; writers normalise it to [0, 360), locally (P10). Settings gain `LastView.bearing` with a one-line default. PDF setups are not persisted, so Map orientation and the layout angle live in memory only; `PdfPrintArea` gains no angle (U3; decided with the user, 2026-10-01). `scroll_wheel` keeps its field and values; only its UI is relabelled.
 
 ### 1.8 Module layout: what later phases add
 
@@ -2295,7 +2295,7 @@ When pitch ships (this paragraph is the recipe; the main agent notes it on canop
 
 | Store | Change |
 |---|---|
-| `.canopi` | version stays 9. `SavedViewCamera.bearing` is now written (normalised); optional `SavedViewCamera.ground_size_m` added and `SavedView.extent` deleted (§4.10; ADR 0021, "Additive `.canopi` changes"). Notes, rectangles and ellipses created rotated store the bearing in their existing `rotationDeg`. |
+| `.canopi` | version stays 9. `SavedViewCamera.bearing` is now written (normalised); optional `SavedViewCamera.ground_size_m` added and `SavedView.extent` deleted (§4.10); optional top-level `map_view` added (U28, §4.15; ADR 0021, "Additive `.canopi` changes"). Notes, rectangles and ellipses created rotated store the bearing in their existing `rotationDeg`. |
 | Settings | `LastView.bearing`, `#[serde(default)]` 0: a one-line default, no migration; older builds ignore it. `scroll_wheel` values unchanged. |
 | PDF | `PdfSetup.mapOrientation?` (default North up), in memory only; one layout angle, the view's bearing read at each capture (`PdfInput.viewBearingDeg`), also in memory; Print Areas and offsets in plan metres, independent of the frame. `PdfPrintArea.rotationDeg` is dropped (user, 2026-10-01): no stored format replaces it, since PDF setups are not saved (plan §8). |
 | User DB, LiDAR catalogue, plant catalog | none |
