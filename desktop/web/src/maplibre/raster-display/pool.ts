@@ -34,7 +34,7 @@ export interface RasterWorkerLike {
 }
 
 export interface RasterPoolOptions {
-  /** Worker lanes shared by every client (plan §5: start with two). */
+  /** Worker lanes shared by every client (two). */
   readonly lanes: number
   /** Aggregate decoded-block budget, split evenly across lanes. */
   readonly budgetBytes: number
@@ -469,7 +469,7 @@ export class RasterWorkerPool {
   }
 }
 
-/** Decoded-block cache shared by all display sources (plan §5: 128 MiB). */
+/** Decoded-block cache shared by all display sources (128 MiB). */
 const RASTER_DECODED_CACHE_BYTES = 128 * 1024 * 1024
 
 let workspacePool: RasterWorkerPool | null = null
