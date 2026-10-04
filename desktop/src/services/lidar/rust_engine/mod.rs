@@ -1,10 +1,12 @@
 //! The pure-Rust raster engine (ADR 0014).
 //!
-//! In-process reading, conversion, statistics and reprojection on the
-//! `whitebox_next_gen` crates: `wbgeotiff` for TIFF/COG primitives,
-//! `wbraster` for the other raster formats and `wbprojection` for
-//! coordinate reference systems. Nothing is bundled or discovered at run
-//! time; the engine is always available and its version names the crates.
+//! In-process reading, conversion, statistics and reprojection: `wbgeotiff`
+//! for TIFF/COG primitives and `wbraster` for the other raster formats (the
+//! `whitebox_next_gen` crates), `proj4rs` with the EPSG definitions of
+//! `crs-definitions` for coordinate reference systems, and `wbprojection`
+//! for WKT without a code and EPSG identification (`crs.rs`). Nothing is
+//! bundled or discovered at run time; the engine is always available and its
+//! version names the crates.
 //!
 //! Memory: a GeoTIFF converts through the one writer in row windows of at
 //! most the library's capacity limit (`import::MAX_RAW_EXTRACTION_CELLS`),
@@ -20,9 +22,9 @@ mod cog;
 #[cfg(test)]
 mod comparison;
 mod crs;
-mod laea;
+#[cfg(test)]
+mod crs_reference_points;
 mod source;
-mod swiss;
 mod tiff;
 
 #[cfg(test)]
@@ -41,11 +43,13 @@ pub(super) const WBGEOTIFF_VERSION: &str = "0.1.2";
 pub(super) const WBGEOTIFF_REVISION: &str = "9c0ff4fdf3513f27b89c78e294610c3b418b3a4f";
 pub(super) const WBPROJECTION_VERSION: &str = "0.3.3";
 pub(super) const WBRASTER_VERSION: &str = "0.2.1";
+pub(super) const PROJ4RS_VERSION: &str = "0.2.0";
+pub(super) const CRS_DEFINITIONS_VERSION: &str = "0.6.0";
 
 /// What a manifest records as the engine that produced a numeric output.
 pub(super) fn engine_version() -> String {
     format!(
-        "canopi-raster-engine (wbgeotiff {WBGEOTIFF_VERSION}@{}, wbprojection {WBPROJECTION_VERSION}, wbraster {WBRASTER_VERSION})",
+        "canopi-raster-engine (wbgeotiff {WBGEOTIFF_VERSION}@{}, wbprojection {WBPROJECTION_VERSION}, wbraster {WBRASTER_VERSION}, proj4rs {PROJ4RS_VERSION}, crs-definitions {CRS_DEFINITIONS_VERSION})",
         &WBGEOTIFF_REVISION[..7]
     )
 }
@@ -1321,6 +1325,8 @@ mod tests {
         );
         assert_eq!(pinned("wbprojection")[0].0, WBPROJECTION_VERSION);
         assert_eq!(pinned("wbraster")[0].0, WBRASTER_VERSION);
+        assert_eq!(pinned("proj4rs")[0].0, PROJ4RS_VERSION);
+        assert_eq!(pinned("crs-definitions")[0].0, CRS_DEFINITIONS_VERSION);
         assert!(engine_version().contains("wbgeotiff 0.1.2@9c0ff4f"));
     }
 }

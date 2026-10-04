@@ -35,12 +35,18 @@ ureq = "3"
 sys-locale = "0.3"
 tauri-plugin-mcp-bridge = { version = "=0.13.0", optional = true }
 # The pure-Rust raster engine (ADR 0014): GeoTIFF/COG primitives selected by
-# GeoLibre (ADR 0002), map projections and the other raster formats. Reached
-# only through `services/lidar/rust_engine/` and the bounded reader in
-# `services/lidar/prepared_raster.rs`.
+# GeoLibre (ADR 0002), the other raster formats and coordinate systems.
+# Reached only through `services/lidar/rust_engine/` and the bounded reader in
+# `services/lidar/prepared_raster.rs`. Every transform goes through `proj4rs`
+# with the EPSG definitions of `crs-definitions` (its own `crs-definitions`
+# feature stays off; exact pins, since `crs.rs` normalises PROJ strings for
+# this proj4rs); `wbprojection` only reads WKT that names no code, identifies
+# codes and gives areas of use.
 wbgeotiff = { git = "https://github.com/opengeos/whitebox-wasm", rev = "9c0ff4fdf3513f27b89c78e294610c3b418b3a4f" }
 wbprojection = "0.3.3"
 wbraster = "0.2.1"
+proj4rs = { version = "=0.2.0", default-features = false }
+crs-definitions = { version = "=0.6.0", default-features = false, features = ["proj4", "wkt"] }
 
 [dev-dependencies]
 # Managed command state without a window/event loop in native boundary tests.

@@ -265,9 +265,7 @@ fn probe_other(
     {
         Some(crs::from_reference(wkt)?)
     } else if let Some(proj4) = raster.crs.proj4.as_deref().filter(|p| !p.trim().is_empty()) {
-        let crs = wbprojection::from_proj_string(proj4)
-            .map_err(|e| format!("unsupported PROJ definition: {e}"))?;
-        Some(crs::from_reference(&crs.to_wkt())?)
+        Some(crs::from_proj4(proj4)?)
     } else {
         None
     };

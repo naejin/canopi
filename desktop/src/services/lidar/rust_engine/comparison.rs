@@ -445,15 +445,25 @@ fn compare_overviews(
     }
 }
 
-/// The EPSG area of use of each compared CRS, where Canopi rasters sit.
-/// `wbprojection` knows the UTM and Web Mercator boxes; the others are the
-/// registry's own extents.
+/// The EPSG area of use of each compared CRS, where Canopi rasters sit:
+/// the registry's own extent (as `projinfo` gives it), `wbprojection`'s for
+/// the UTM zones.
 fn area_of_use(code: &str) -> (f64, f64, f64, f64) {
     match code {
-        "EPSG:2154" => (-9.86, 41.15, 10.38, 51.56),
+        "EPSG:2154" | "EPSG:5698" => (-9.86, 41.15, 10.38, 51.56),
         "EPSG:2056" => (5.96, 45.82, 10.49, 47.81),
         "EPSG:3035" => (-16.1, 32.88, 40.18, 84.73),
         "EPSG:3857" => (-20.0, -60.0, 40.0, 80.0),
+        "EPSG:28992" => (3.2, 50.75, 7.22, 53.7),
+        "EPSG:27700" => (-9.01, 49.75, 2.01, 61.01),
+        "EPSG:31370" => (2.5, 49.5, 6.4, 51.51),
+        "EPSG:31287" => (9.53, 46.4, 17.17, 49.02),
+        "EPSG:2100" => (19.57, 34.88, 28.3, 41.75),
+        "EPSG:2169" => (5.73, 49.44, 6.53, 50.19),
+        "EPSG:27572" => (-4.87, 42.33, 8.23, 51.14),
+        "EPSG:23700" => (16.11, 45.74, 22.9, 48.58),
+        "EPSG:31467" => (7.5, 47.27, 10.51, 55.09),
+        "EPSG:5514" => (12.09, 47.73, 22.56, 51.06),
         other => {
             let number: u32 = other.trim_start_matches("EPSG:").parse().expect("code");
             let bbox = wbprojection::epsg_area_of_use(number).expect("area of use");
@@ -462,8 +472,64 @@ fn area_of_use(code: &str) -> (f64, f64, f64, f64) {
     }
 }
 
-/// Point transforms on a 9×9 lon/lat grid inside each CRS's area of use, in
-/// both directions: forward within 1e-3 m, inverse within 1e-7 deg.
+/// The largest forward (m) and inverse (deg) deviation between the engines
+/// on a 9×9 lon/lat grid inside `code`'s area of use, reported.
+fn transform_deviation(
+    report: &mut Report,
+    gdal: &GdalEngine,
+    rust: &RustRasterEngine,
+    code: &str,
+) -> (f64, f64) {
+    let c = cancel();
+    let (lon_min, lat_min, lon_max, lat_max) = area_of_use(code);
+    let mut geographic = Vec::new();
+    for i in 0..9 {
+        for j in 0..9 {
+            geographic.push((
+                lon_min + (lon_max - lon_min) * f64::from(i) / 8.0,
+                lat_min + (lat_max - lat_min) * f64::from(j) / 8.0,
+            ));
+        }
+    }
+    let a = gdal
+        .transform_points("EPSG:4326", code, &geographic, &c)
+        .expect("GDAL forward");
+    let b = rust
+        .transform_points("EPSG:4326", code, &geographic, &c)
+        .expect("Rust forward");
+    let mut forward = 0f64;
+    let mut projected = Vec::new();
+    for (index, (x, y)) in a.iter().zip(&b).enumerate() {
+        let (Some(x), Some(y)) = (x, y) else {
+            panic!("{code}: point {index} placed by one engine only ({x:?} vs {y:?})");
+        };
+        forward = forward.max((x.0 - y.0).abs().max((x.1 - y.1).abs()));
+        projected.push(*x);
+    }
+    let a = gdal
+        .transform_points(code, "EPSG:4326", &projected, &c)
+        .expect("GDAL inverse");
+    let b = rust
+        .transform_points(code, "EPSG:4326", &projected, &c)
+        .expect("Rust inverse");
+    let mut inverse = 0f64;
+    for (x, y) in a.iter().zip(&b) {
+        let (Some(x), Some(y)) = (x, y) else {
+            panic!("{code}: inverse placed by one engine only");
+        };
+        inverse = inverse.max((x.0 - y.0).abs().max((x.1 - y.1).abs()));
+    }
+    report.note(format!(
+        "{code}: forward max deviation {forward:.3e} m over {} points in [{lon_min}, {lon_max}]x[{lat_min}, {lat_max}], inverse {inverse:.3e} deg",
+        geographic.len()
+    ));
+    (forward, inverse)
+}
+
+/// Point transforms in both directions: forward within 1e-3 m, inverse
+/// within 1e-7 deg. The national grids are noted against 1e-2 m, not
+/// asserted: GDAL takes whatever datum grids the machine holds (NTF, DHDN,
+/// OSTN), where the engine applies the definition's Helmert shift.
 fn compare_transforms(report: &mut Report, gdal: &GdalEngine, rust: &RustRasterEngine) {
     let c = cancel();
     for code in [
@@ -474,53 +540,30 @@ fn compare_transforms(report: &mut Report, gdal: &GdalEngine, rust: &RustRasterE
         "EPSG:2056",
         "EPSG:3035",
     ] {
-        let (lon_min, lat_min, lon_max, lat_max) = area_of_use(code);
-        let mut geographic = Vec::new();
-        for i in 0..9 {
-            for j in 0..9 {
-                geographic.push((
-                    lon_min + (lon_max - lon_min) * f64::from(i) / 8.0,
-                    lat_min + (lat_max - lat_min) * f64::from(j) / 8.0,
-                ));
-            }
-        }
-        let a = gdal
-            .transform_points("EPSG:4326", code, &geographic, &c)
-            .expect("GDAL forward");
-        let b = rust
-            .transform_points("EPSG:4326", code, &geographic, &c)
-            .expect("Rust forward");
-        let mut forward = 0f64;
-        let mut projected = Vec::new();
-        for (index, (x, y)) in a.iter().zip(&b).enumerate() {
-            let (Some(x), Some(y)) = (x, y) else {
-                panic!("{code}: point {index} placed by one engine only ({x:?} vs {y:?})");
-            };
-            forward = forward.max((x.0 - y.0).abs().max((x.1 - y.1).abs()));
-            projected.push(*x);
-        }
-        let a = gdal
-            .transform_points(code, "EPSG:4326", &projected, &c)
-            .expect("GDAL inverse");
-        let b = rust
-            .transform_points(code, "EPSG:4326", &projected, &c)
-            .expect("Rust inverse");
-        let mut inverse = 0f64;
-        for (x, y) in a.iter().zip(&b) {
-            let (Some(x), Some(y)) = (x, y) else {
-                panic!("{code}: inverse placed by one engine only");
-            };
-            inverse = inverse.max((x.0 - y.0).abs().max((x.1 - y.1).abs()));
-        }
-        report.note(format!(
-            "{code}: forward max deviation {forward:.3e} m over {} points in [{lon_min}, {lon_max}]x[{lat_min}, {lat_max}], inverse {inverse:.3e} deg",
-            geographic.len()
-        ));
+        let (forward, inverse) = transform_deviation(report, gdal, rust, code);
         assert!(forward <= 1e-3, "{code}: forward deviation {forward} m");
         assert!(inverse <= 1e-7, "{code}: inverse deviation {inverse} deg");
     }
-    // Outside a UTM zone the transverse Mercator series diverges from PROJ's
-    // extended algorithm; recorded, not asserted, so the ADR's caveat has numbers.
+    for code in [
+        "EPSG:5698",
+        "EPSG:28992",
+        "EPSG:27700",
+        "EPSG:31370",
+        "EPSG:31287",
+        "EPSG:2100",
+        "EPSG:2169",
+        "EPSG:27572",
+        "EPSG:23700",
+        "EPSG:31467",
+        "EPSG:5514",
+    ] {
+        let (forward, _) = transform_deviation(report, gdal, rust, code);
+        report.note(format!(
+            "{code}: {} 1e-2 m (noted, not asserted)",
+            if forward <= 1e-2 { "within" } else { "beyond" }
+        ));
+    }
+    // Far outside a UTM zone; recorded, not asserted, so the ADR has numbers.
     let mut points = Vec::new();
     for offset in [0.0, 3.0, 6.0, 9.0, 12.0, 15.0] {
         points.push((9.0 + offset, 48.0));
