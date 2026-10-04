@@ -8,7 +8,6 @@ import type { SessionPlane } from '../../session-plane'
 import { angularDistanceToNorth, bearingCosSin } from './navigation-policy'
 import type {
   PlanarCamera,
-  ScreenInsets,
   ScreenPoint,
   ViewCamera,
   ViewScreen,
@@ -20,7 +19,6 @@ import type {
 
 /** Under this angle from north the view reads as north-up (rulers, the compass hint). */
 const NORTH_UP_TOLERANCE_DEG = 0.05
-const NO_INSETS: ScreenInsets = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 })
 
 /** Pitch 0: centre, zoom and bearing + plane.mercatorOrigin / mercatorUnitsPerMeter → similarity. Both drivers, the snapshot map's
  *  driver and the lens call this. The plane origin lands at turn(−centre × scale, bearing) + the screen centre. */
@@ -49,9 +47,6 @@ export function planarCameraOf(view: ViewTransform): PlanarCamera {
   return { x: affine[4], y: affine[5], scale: view.pixelsPerMetre, bearingDeg: view.camera.bearingDeg }
 }
 
-// Pitch phase (not written now: no declaration, no stub; spec §6). When pitch ships, this module adds
-//   homographyViewTransform(input: { camera, screen, plane, homography: Float64Array, planeRevision }): ViewTransform
-
 /** screen = turn(p × scale, bearing) + { x, y }: Pixi's [a, b, c, d, tx, ty] with a = d = scale·cos, c = −b = scale·sin. */
 function similarityTransform(
   camera: ViewCamera,
@@ -76,19 +71,6 @@ function similarityTransform(
     right: Object.freeze<WorldVector>({ x: cos, y: sin }),
     down: Object.freeze<WorldVector>({ x: 0 - sin, y: cos }),
   })
-
-  const screenCorners = (insets: ScreenInsets): WorldQuad => {
-    const left = insets.left
-    const top = insets.top
-    const right = screen.width - insets.right
-    const bottom = screen.height - insets.bottom
-    return [
-      screenToWorld({ x: left, y: top }),
-      screenToWorld({ x: right, y: top }),
-      screenToWorld({ x: right, y: bottom }),
-      screenToWorld({ x: left, y: bottom }),
-    ]
-  }
 
   return Object.freeze<ViewTransform>({
     planeRevision: input.planeRevision,
@@ -117,8 +99,13 @@ function similarityTransform(
     screenAxesInWorld(): { readonly right: WorldVector; readonly down: WorldVector } {
       return axes
     },
-    visibleWorldQuad(insets: ScreenInsets = NO_INSETS): WorldQuad {
-      return screenCorners(insets)
+    visibleWorldQuad(): WorldQuad {
+      return [
+        screenToWorld({ x: 0, y: 0 }),
+        screenToWorld({ x: screen.width, y: 0 }),
+        screenToWorld({ x: screen.width, y: screen.height }),
+        screenToWorld({ x: 0, y: screen.height }),
+      ]
     },
     worldQuadToScreen(q: WorldQuad): readonly [ScreenPoint, ScreenPoint, ScreenPoint, ScreenPoint] {
       return [worldToScreen(q[0]), worldToScreen(q[1]), worldToScreen(q[2]), worldToScreen(q[3])]

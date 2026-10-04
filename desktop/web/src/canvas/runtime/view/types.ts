@@ -55,7 +55,7 @@ export interface PlanarCamera { readonly x: number; readonly y: number; readonly
 
 export interface ViewScreen { readonly width: number; readonly height: number; readonly devicePixelRatio: number }
 
-/** Renderer and bulk-projection fast path. Pitch re-derives a nullable one (spec §6). */
+/** Renderer and bulk-projection fast path. */
 export interface PlanarProjection {
   /** 2x3 affine in Pixi order [a, b, c, d, tx, ty]. */
   readonly affine: readonly [number, number, number, number, number, number]
@@ -68,7 +68,7 @@ export interface ViewTransform {
   readonly planar: PlanarProjection
 
   worldToScreen(p: WorldPoint): ScreenPoint
-  /** The ground under a screen point. Pitch widens it to null above the horizon (spec §6). */
+  /** The ground under a screen point. */
   screenToWorld(s: ScreenPoint): WorldPoint
   /** Bulk billboard projection: reads [x0,y0,x1,y1,…] metres, writes CSS px. No allocation. */
   projectAnchors(world: Float64Array, out: Float32Array, count: number): void
@@ -79,7 +79,8 @@ export interface ViewTransform {
   /** Unit world vectors of screen-right and screen-down at a point (view centre if omitted). */
   screenAxesInWorld(at?: WorldPoint): { readonly right: WorldVector; readonly down: WorldVector }
 
-  visibleWorldQuad(insets?: ScreenInsets): WorldQuad
+  /** The ground under the whole screen's corners; framing inside the insets is fit.ts's framingRect. */
+  visibleWorldQuad(): WorldQuad
   /** Four projected corners, never two (rotation-handle anchor, menu anchor). */
   worldQuadToScreen(q: WorldQuad): readonly [ScreenPoint, ScreenPoint, ScreenPoint, ScreenPoint]
 

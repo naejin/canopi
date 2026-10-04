@@ -116,9 +116,6 @@ describe('view transform', () => {
     view.visibleWorldQuad().forEach((corner, index) => expectClose(corner, [
       { x: 100, y: 50 }, { x: 600, y: 50 }, { x: 600, y: 450 }, { x: 100, y: 450 },
     ][index]!))
-    view.visibleWorldQuad({ top: 20, right: 100, bottom: 0, left: 40 }).forEach((corner, index) => expectClose(corner, [
-      { x: 120, y: 60 }, { x: 550, y: 60 }, { x: 550, y: 450 }, { x: 120, y: 450 },
-    ][index]!))
     const quad = view.visibleWorldQuad()
     view.worldQuadToScreen(quad).forEach((corner, index) => expectClose(corner, [
       { x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 1000, y: 800 }, { x: 0, y: 800 },
