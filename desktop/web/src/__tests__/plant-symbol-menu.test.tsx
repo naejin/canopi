@@ -16,7 +16,6 @@ describe('PlantSymbolMenu', () => {
   let querySurface: ReturnType<typeof createTestCanvasQuerySurface>
   const setSelectedPlantSymbol = vi.fn()
   const setPlantSymbolForSpecies = vi.fn()
-  const clearPlantSpeciesSymbol = vi.fn()
   const getSelectedPlantSymbolContext = vi.fn()
   const buttonRef = { current: null as HTMLButtonElement | null }
 
@@ -27,7 +26,6 @@ describe('PlantSymbolMenu', () => {
     document.body.appendChild(container)
     setSelectedPlantSymbol.mockReset()
     setPlantSymbolForSpecies.mockReset()
-    clearPlantSpeciesSymbol.mockReset()
     getSelectedPlantSymbolContext.mockReset()
     querySurface = createTestCanvasQuerySurface()
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
@@ -35,7 +33,6 @@ describe('PlantSymbolMenu', () => {
         plantPresentation: {
           setSelectedPlantSymbol,
           setPlantSymbolForSpecies,
-          clearPlantSpeciesSymbol,
         },
       }),
       queries: {

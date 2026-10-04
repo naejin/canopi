@@ -937,8 +937,6 @@ function fakeCommandSurface(): CanvasCommandSurface {
       setSelectedPlantSymbol: vi.fn(() => 0),
       setPlantColorForSpecies: vi.fn(() => 0),
       setPlantSymbolForSpecies: vi.fn(() => 0),
-      clearPlantSpeciesColor: vi.fn(() => false),
-      clearPlantSpeciesSymbol: vi.fn(() => false),
     },
   }
 }
@@ -955,7 +953,7 @@ function fakeQuerySurface(): CanvasQuerySurface {
     getPlantLabelCoverage: () => ({ labelled: 0, inView: 0 }),
     capturePrintSnapshot: () => null,
     captureViewScene: () => null,
-    getScenePhysicalExtentMeters: () => null,
+    sceneHasObjects: () => false,
     getSceneSnapshot: vi.fn(() => createDefaultScenePersistedState()),
     getSelection: vi.fn(() => []),
     getDesignObjectSelection: vi.fn(() => ({

@@ -1,5 +1,5 @@
 import { batch, computed, signal, type ReadonlySignal } from '@preact/signals'
-import type { GeoPosition, SessionPlaneTransform } from '../../session-plane'
+import type { GeoPosition } from '../../session-plane'
 
 import type { CanopiFile } from '../../../types/design'
 import { throwCanvasRuntimeCleanupErrors } from '../cleanup'
@@ -341,11 +341,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       },
       wasHistoryRecorded: (token) => this._history.hasRecorded(token),
       noteCommitted: (command) => this._noteCommitted(command),
-      incrementDocumentRevision: () => {
-        this._sceneStore.updateSession((session) => {
-          session.documentRevision += 1
-        })
-      },
       syncCanvasSignalsFromScene: this._syncCanvasSignalsFromScene,
       incrementSceneRevision: this._incrementSceneRevision,
       invalidate: this._invalidate,
@@ -393,17 +388,16 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
   /**
    * Rebuilds the session plane at `origin` while settled. The scene and every
    * undo command move through one reprojector, so stored lon/lat is unchanged
-   * and nothing is dirtied or recorded. Returns the plane-to-plane transform,
-   * or null when not settled.
+   * and nothing is dirtied or recorded; the camera follows through the plane
+   * effect. When not settled it does nothing.
    */
-  reoriginSessionPlane(origin: GeoPosition): SessionPlaneTransform | null {
+  reoriginSessionPlane(origin: GeoPosition): void {
     if (
       this._persistenceDisposed
       || this._active
       || this._replacementHandoff
       || this._isPresentationMaintenanceBusy()
-    ) return null
-    const previous = this._sceneStore.sessionPlane
+    ) return
     const reprojector = this._sceneStore.beginReorigin(origin)
     const reprojectPatch = (patch: SceneCommandPatch): SceneCommandPatch => patch.persisted
       ? { ...patch, persisted: reprojector.persisted(patch.persisted) }
@@ -418,7 +412,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       this._incrementSceneRevision()
       this._invalidate('scene')
     })
-    return previous.transformTo(this._sceneStore.sessionPlane)
   }
 
   capturePersistence(): ScenePersistenceCapture {
@@ -711,7 +704,8 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
   }
 
   private _noteCommitted(command: SceneCommand): void {
-    if (command.diffs.some((diff) => diff !== 'selection')) {
+    // A command that changed persisted state (a re-origin keeps the patch present).
+    if (command.after.persisted !== undefined) {
       this._contentRevision += 1
       this._dropStaleDeferredBackfills()
       return
@@ -1155,7 +1149,6 @@ interface SceneRuntimeEditTransactionOptions {
   recordHistory(command: SceneCommand, token: object): void
   wasHistoryRecorded(token: object): boolean
   noteCommitted(command: SceneCommand): void
-  incrementDocumentRevision(): void
   syncCanvasSignalsFromScene(): void
   incrementSceneRevision(): void
   invalidate(kind: SceneEditInvalidationKind): void
@@ -1177,7 +1170,6 @@ class SceneRuntimeEditTransaction implements SceneEditTransaction {
   private _command: SceneCommand | null | undefined
   private _historyAccepted = false
   private _historyPublished = false
-  private _documentRevisionIncremented = false
   private _outcomeRecorded = false
   private _signalsSynced = false
   private _sceneRevisionIncremented = false
@@ -1279,10 +1271,6 @@ class SceneRuntimeEditTransaction implements SceneEditTransaction {
             this._historyAccepted = this._options.wasHistoryRecorded(this)
             throw error
           }
-        }
-        if (!this._documentRevisionIncremented) {
-          this._options.incrementDocumentRevision()
-          this._documentRevisionIncremented = true
         }
         if (!this._outcomeRecorded) {
           this._options.noteCommitted(command)

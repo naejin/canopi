@@ -302,6 +302,30 @@ describe('scene hit testing', () => {
     expect(queryQuadTopLevel(scene, box({ x: 8, y: 8, width: 0.01, height: 0.01 }), 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
       .toEqual([{ kind: 'annotation', id: 'annotation-1' }])
   })
+  it('a zero-length zone or guide is hit within tolerance', () => {
+    const scene = createScene()
+    scene.plants = []
+    scene.layers.push({ kind: 'layer', name: 'measurement-guides', visible: true, locked: false, opacity: 1 })
+    // At 10 000 px/m the 6 px line tolerance is 0.6 mm.
+    const scale = 10_000
+    const hit = (x: number, y: number) =>
+      hitTestTopLevel(scene, { x, y }, scale, new Map(), getPlantContext)
+
+    // A guide pressed out without a drag: its two ends meet.
+    scene.measurementGuides = [{ kind: 'measurement-guide', id: 'dot', locked: false, start: { x: 0, y: 0 }, end: { x: 0, y: 0 } }]
+    expect(hit(0.0005, 0)).toEqual({ kind: 'measurement-guide', id: 'dot' })
+    expect(hit(0.0007, 0)).toBeNull()
+
+    // A 0.9 mm line zone (shorter than a millimetre): 4 px past its far end is near it, though 13 px from its start.
+    scene.measurementGuides = []
+    scene.zones = [{
+      kind: 'zone', id: 'stub', name: null, locked: false, zoneType: 'line',
+      points: [{ x: 10, y: 0 }, { x: 10.0009, y: 0 }], rotationDeg: 0, fillColor: null, notes: null,
+    }]
+    expect(hit(10.0013, 0)).toEqual({ kind: 'zone', id: 'stub' })
+    expect(hit(10.0016, 0)).toBeNull()
+  })
+
   it('with a pixel tolerance, the nearest polygon, rectangle or line edge', () => {
     const zone = (id: string, zoneType: SceneZoneEntity['zoneType'], points: ScenePoint[], rotationDeg = 0): SceneZoneEntity =>
       ({ kind: 'zone', id, name: null, locked: false, zoneType, points, rotationDeg, fillColor: null, notes: null })

@@ -147,7 +147,7 @@ describe('geolocated design codec', () => {
   })
 
   it('writes new objects with rounded lon/lat', () => {
-    const store = new SceneStore(undefined, {}, ORIGIN)
+    const store = new SceneStore(undefined, ORIGIN)
     store.updatePersisted((draft) => {
       draft.annotations.push({
         kind: 'annotation', id: 'fresh', locked: false, annotationType: 'text',
@@ -184,8 +184,8 @@ describe('geolocated design codec', () => {
     const labels = (items: { text: string }[]) => items.map((item) => item.text)
     expect(labels(createRectangularZoneMeasurements(zones[0]!.points)))
       .toEqual(labels(createRectangularZoneMeasurements(rect)))
-    expect(labels(createEllipticalZoneMeasurements(zones[1]!.points[0]!, zones[1]!.points[1]!)))
-      .toEqual(labels(createEllipticalZoneMeasurements({ x: 23, y: 2 }, { x: 3, y: 2 })))
+    expect(labels(createEllipticalZoneMeasurements(zones[1]!.points[0]!, zones[1]!.points[1]!, zones[1]!.rotationDeg)))
+      .toEqual(labels(createEllipticalZoneMeasurements({ x: 23, y: 2 }, { x: 3, y: 2 }, 0)))
   })
 
   it('serializes with an explicit frame so saved content never depends on hidden state', () => {

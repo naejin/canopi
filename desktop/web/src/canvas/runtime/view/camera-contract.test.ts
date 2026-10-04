@@ -15,8 +15,8 @@ import { mapZoomToStageScale } from '../../projection'
 import { createSessionPlane, type SessionPlane } from '../../session-plane'
 import { createWorkspaceCameraPolicy } from '../../workspace-camera-policy'
 import type { CameraMove } from './camera-driver'
-import { cameraKeepingPoint, planarToViewCamera } from './camera-math'
-import { constrainCamera, createNavigationPolicy, normaliseBearing } from './navigation-policy'
+import { planarToViewCamera } from './camera-math'
+import { createNavigationPolicy } from './navigation-policy'
 import type { ScreenPoint, ViewCamera, ViewScreen, ViewTransform, WorldPoint } from './types'
 
 /** The members of MapLibre's LngLat and MercatorTransform this test calls. */
@@ -44,36 +44,6 @@ const MercatorTransform = SourceMercatorTransform as new (options: {
 const TOLERANCE_PX = 1e-6
 const SCREEN: ViewScreen = { width: 900, height: 600, devicePixelRatio: 1 }
 const POLICY = createNavigationPolicy(createWorkspaceCameraPolicy(), signal(false))
-
-/** A MercatorTransform with the same constrain the MapLibre driver installs, for the bearing it is about to set. */
-function mapLibreTransform(screen: ViewScreen): { transform: SourceTransform; show(camera: ViewCamera): ViewCamera } {
-  const transform = new MercatorTransform({ minZoom: POLICY.minZoom, maxZoom: POLICY.maxZoom, renderWorldCopies: false })
-  transform.resize(screen.width, screen.height)
-  let bearingDeg = 0
-  transform.setConstrainOverride((center, zoom) => {
-    const constrained = constrainCamera(
-      { center: { lon: center.lng, lat: center.lat }, zoom, bearingDeg, pitchDeg: 0 },
-      screen,
-      POLICY,
-    )
-    return { center: new LngLat(constrained.center.lon, constrained.center.lat), zoom: constrained.zoom }
-  })
-  return {
-    transform,
-    show(camera) {
-      bearingDeg = camera.bearingDeg
-      transform.setBearing(camera.bearingDeg)
-      transform.setZoom(camera.zoom)
-      transform.setCenter(new LngLat(camera.center.lon, camera.center.lat))
-      return {
-        center: { lon: transform.center.lng, lat: transform.center.lat },
-        zoom: transform.zoom,
-        bearingDeg: normaliseBearing(transform.bearing),
-        pitchDeg: 0,
-      }
-    },
-  }
-}
 
 /** Plane points spread over the screen and a little beyond it. */
 function samplePoints(view: ViewTransform): WorldPoint[] {
@@ -214,25 +184,6 @@ describe('camera contract', () => {
       }
       attached.dispose()
       headless.dispose()
-    }
-  })
-
-  it('a camera keeping a ground point puts it under the screen point on MercatorTransform', () => {
-    const plane = createSessionPlane({ lon: 2.3522, lat: 48.8566 })
-    const ground = { lon: 2.3531, lat: 48.8559 }
-    for (const bearingDeg of [0, 30, 181.5]) {
-      const start = constrainCamera({ center: plane.origin, zoom: 17.5, bearingDeg, pitchDeg: 0 }, SCREEN, POLICY)
-      for (const screenPoint of [{ x: 450, y: 300 }, { x: 12.5, y: 580 }, { x: 870, y: 40 }]) {
-        const kept = cameraKeepingPoint(start, SCREEN, ground, screenPoint)
-        expect(kept.zoom).toBe(start.zoom)
-        expect(kept.bearingDeg).toBe(start.bearingDeg)
-
-        const map = mapLibreTransform(SCREEN)
-        expect(map.show(kept).center).toEqual(kept.center)
-        const underPoint = map.transform.locationToScreenPoint(new LngLat(ground.lon, ground.lat))
-        expect(Math.abs(underPoint.x - screenPoint.x)).toBeLessThanOrEqual(TOLERANCE_PX)
-        expect(Math.abs(underPoint.y - screenPoint.y)).toBeLessThanOrEqual(TOLERANCE_PX)
-      }
     }
   })
 })

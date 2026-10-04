@@ -14,14 +14,15 @@ export interface GeoPoint { readonly lon: number; readonly lat: number }
 
 /** World-axis box in plane metres. */
 export interface SceneBounds { readonly minX: number; readonly minY: number; readonly maxX: number; readonly maxY: number }
-export interface SceneBoundsOptions {
+/** What Fit to Design, Return to Design and the opening fit frame. */
+export interface SceneExtent {
   /** The scene's extent at a candidate scale: corner points of every plant, zone and note footprint, in plane metres.
-   *  Notes and default-mode plants are screen-sized, so the extent depends on the scale. The runtime supplies it
-   *  (command-surface.ts, document-surface.ts) through canvas/runtime/scene-extent.ts, from plant-presentation.ts,
-   *  annotation-layout.ts and zone-geometry.ts, so view/ imports none of them (P4). Without it a fit sees an empty scene. */
-  readonly extentPoints?: (pixelsPerMetre: number) => readonly WorldPoint[]
-  /** Scale that frames an empty Design, centred on the session plane origin. */
-  readonly emptySceneScale?: number
+   *  Notes and default-mode plants are screen-sized, so the extent depends on the scale. The runtime supplies it through
+   *  canvas/runtime/scene-extent.ts, from plant-presentation.ts, annotation-layout.ts and zone-geometry.ts, so view/ imports
+   *  none of them (P4). */
+  readonly extentPoints: (pixelsPerMetre: number) => readonly WorldPoint[]
+  /** Scale that frames an empty Design, centred on the session plane origin; not above zero keeps the view. */
+  readonly emptySceneScale: number
 }
 export interface TemporaryBoundsFocusOptions {
   /** Symmetric CSS-pixel padding reserved by the caller's presentation. */
@@ -29,8 +30,6 @@ export interface TemporaryBoundsFocusOptions {
   /** Optional external ceiling, such as a MapLibre zoom-limit equivalent. */
   readonly maximumScale?: number
 }
-// This file uses no scene type. A view/ file that needs one (navigation.ts: ScenePersistedState) imports it type-only from
-// '../scene/types' (P4 allows it), never the barrel '../scene' (P4 would reject it); files outside view/ keep today's barrel imports.
 
 /**
  * The geographic camera in MapLibre's terms. bearingDeg: the compass direction that is
@@ -48,7 +47,7 @@ export interface ViewCamera {
 /**
  * A plane placement: a plane point p lands on screen at turn(p × scale, bearingDeg) + { x, y }: scaled, turned counter-clockwise
  * on screen by bearingDeg about the screen origin (so the compass direction bearingDeg points up), then translated, so { x, y } is
- * the plane origin's screen point; at bearing 0 it is today's CameraController viewport. No driver holds one (both hold a
+ * the plane origin's screen point; at bearing 0, screen = p × scale + { x, y }. No driver holds one (both hold a
  * ViewCamera): it is what a fit computes (fit.ts), what planarCameraOf reads off a transform for the chrome, and how tests place
  * the test view. A placement read back from a camera matches within 1e-6 px, not bit for bit.
  */
@@ -56,36 +55,36 @@ export interface PlanarCamera { readonly x: number; readonly y: number; readonly
 
 export interface ViewScreen { readonly width: number; readonly height: number; readonly devicePixelRatio: number }
 
-/** Renderer and bulk-projection fast path. Pitch re-derives a nullable one (spec §6). */
+/** Renderer and bulk-projection fast path. */
 export interface PlanarProjection {
   /** 2x3 affine in Pixi order [a, b, c, d, tx, ty]. */
   readonly affine: readonly [number, number, number, number, number, number]
 }
 
 export interface ViewTransform {
-  readonly revision: number          // increments on every build
   readonly planeRevision: number     // session-plane identity; stale transforms are refused after re-origin
   readonly camera: ViewCamera
   readonly screen: ViewScreen
   readonly planar: PlanarProjection
 
   worldToScreen(p: WorldPoint): ScreenPoint
-  /** The ground under a screen point. Pitch widens it to null above the horizon (spec §6). */
+  /** The ground under a screen point. */
   screenToWorld(s: ScreenPoint): WorldPoint
   /** Bulk billboard projection: reads [x0,y0,x1,y1,…] metres, writes CSS px. No allocation. */
   projectAnchors(world: Float64Array, out: Float32Array, count: number): void
 
-  /** Local ground resolution at a world point (view centre if omitted). Replaces `1 / viewport.scale` and the scale-bar value. */
+  /** Local ground resolution at a world point (view centre if omitted): the scale bar and ratio read it. */
   metresPerPixelAt(p?: WorldPoint): number
   screenDistance(a: WorldPoint, b: WorldPoint): number
   /** Unit world vectors of screen-right and screen-down at a point (view centre if omitted). */
   screenAxesInWorld(at?: WorldPoint): { readonly right: WorldVector; readonly down: WorldVector }
 
-  visibleWorldQuad(insets?: ScreenInsets): WorldQuad
+  /** The ground under the whole screen's corners; framing inside the insets is fit.ts's framingRect. */
+  visibleWorldQuad(): WorldQuad
   /** Four projected corners, never two (rotation-handle anchor, menu anchor). */
   worldQuadToScreen(q: WorldQuad): readonly [ScreenPoint, ScreenPoint, ScreenPoint, ScreenPoint]
 
-  readonly pixelsPerMetre: number            // at the plane origin: today's `viewport.scale` (zoom bands, policy)
+  readonly pixelsPerMetre: number            // at the plane origin (zoom bands, policy)
   readonly northUp: boolean                  // angularDistanceToNorth(bearing) < 0.05° and pitch 0
 }
 

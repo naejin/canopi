@@ -494,7 +494,6 @@ describe('draft layer', () => {
       { tone: 'measure-quiet', font: CANVAS_CHROME_MONO_FONT_FAMILY, weight: '400', lineHeight: 15, text: 'chip-text', background: 'chip-surface-muted', placement: 'centre', padding: { x: 5, y: 2 } },
       { tone: 'hint', font: CANVAS_CHROME_FONT_FAMILY, weight: '600', lineHeight: 20, text: 'chip-text', background: 'chip-surface', placement: 'above', padding: { x: 6, y: 2 } },
       { tone: 'hint-primary', font: CANVAS_CHROME_FONT_FAMILY, weight: '600', lineHeight: 20, text: 'chip-primary', background: 'chip-surface', placement: 'above', padding: { x: 8, y: 4 } },
-      { tone: 'warning', font: CANVAS_CHROME_FONT_FAMILY, weight: '600', lineHeight: 20, text: 'chip-text', background: 'chip-surface', placement: 'above', padding: { x: 6, y: 2 } },
     ] as const
     for (const expected of cases) {
       const layer = mountLayer()
@@ -623,9 +622,9 @@ describe('draft layer', () => {
     const layer = mountLayer()
     layer.setDraft({ shapes: [
       { kind: 'polygon', points: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 4 }], style: { token: 'draft', widthPx: 0 }, fill: { token: 'draft-fill' } },
-      { kind: 'polyline', points: [{ x: 0, y: 0 }, { x: 4, y: 0 }], style: { token: 'warning', widthPx: 2, dash: [0, 0] } },
-      { kind: 'polyline', points: [{ x: 0, y: 0 }], style: { token: 'draft-muted', widthPx: 2 } },
-      { kind: 'quad', corners: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }], style: { token: 'draft', widthPx: 1, dash: [3] }, fill: { token: 'warning-fill' } },
+      { kind: 'polyline', points: [{ x: 0, y: 0 }, { x: 4, y: 0 }], style: { token: 'draft', widthPx: 2, dash: [0, 0] } },
+      { kind: 'polyline', points: [{ x: 0, y: 0 }], style: { token: 'draft', widthPx: 2 } },
+      { kind: 'quad', corners: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }], style: { token: 'draft', widthPx: 1, dash: [3] }, fill: { token: 'draft-fill' } },
     ] })
     layer.setView(at({ x: 0, y: 0 }, 1))
     const [fillOnly, undashed, single, dashedQuad] = layer.worldDraftRoot.children as Graphics[]

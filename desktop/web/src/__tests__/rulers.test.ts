@@ -3,6 +3,7 @@ import { createRulerOverlay, pressRuler } from '../canvas/runtime/chrome/rulers'
 import type { ViewFrame } from '../canvas/runtime/view/types'
 import { mapZoomToStageScale, stageScaleToMapZoom } from '../canvas/projection'
 import { createSessionPlane } from '../canvas/session-plane'
+import { refreshCanvasColorCache } from '../canvas/theme-refresh'
 import { testViewFrame } from './support/test-view'
 import './support/camera-tolerance'
 
@@ -48,7 +49,14 @@ function createContextStub() {
     textAlign: 'left' as CanvasTextAlign,
     textBaseline: 'alphabetic' as CanvasTextBaseline,
     lineCap: 'butt' as CanvasLineCap,
+    measureText: (text: string) => ({ width: text.length * 7 }),
   } as unknown as CanvasRenderingContext2D
+}
+
+/** A guide pulled out of the host's `axis` ruler and released at `at`, as the session lands it. */
+function pullGuide(host: HTMLElement, axis: 'h' | 'v', at: { x: number; y: number }): void {
+  const part = host.querySelector(`[data-canvas-ruler="${axis}"]`)
+  pressRuler(part)?.createGuideAt(at)
 }
 
 function setHostRect(host: HTMLElement, left = 100, top = 50): void {
@@ -72,6 +80,59 @@ describe('RulerOverlay', () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(createContextStub() as never)
   })
 
+  /** The fill each ruler band was painted with, in draw order. */
+  function recordBandFills(): string[] {
+    const fills: string[] = []
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => {
+      const context = createContextStub()
+      vi.mocked(context.fillRect).mockImplementation(() => { fills.push(String(context.fillStyle)) })
+      return context as never
+    })
+    return fills
+  }
+
+  /** A theme switch as the workspace runs it: the canvas colours re-read from the container's tokens. */
+  function switchTheme(tokens: Record<string, string>): void {
+    const container = document.createElement('div')
+    for (const [name, value] of Object.entries(tokens)) container.style.setProperty(name, value)
+    refreshCanvasColorCache(container)
+  }
+  const LIGHT_RULER = { '--canvas-ruler-bg': '#F3EEE3', '--canvas-ruler-text': '#645A4C', '--color-border': 'rgba(58, 46, 28, 0.14)' }
+  const DARK_RULER = { '--canvas-ruler-bg': '#2A2721', '--canvas-ruler-text': '#B5AC9D', '--color-border': 'rgba(255, 248, 235, 0.12)' }
+
+  it('refreshTheme redraws at once with the new palette', () => {
+    const fills = recordBandFills()
+    const overlay = createRulerOverlay(document.createElement('div'), { onGuideCreate: vi.fn() })
+    overlay.update({ frame: cameraFrame(), chromeVisible: true, rulersVisible: true })
+    fills.length = 0
+    try {
+      switchTheme(DARK_RULER)
+      overlay.refreshTheme()
+      // No new frame came: the theme alone repaints both bands.
+      expect(fills).toEqual(['#2A2721', '#2A2721'])
+    } finally {
+      switchTheme(LIGHT_RULER)
+      overlay.destroy()
+    }
+  })
+
+  it('a dark theme refresh changes the ruler fill', () => {
+    const fills = recordBandFills()
+    const overlay = createRulerOverlay(document.createElement('div'), { onGuideCreate: vi.fn() })
+    const frame = cameraFrame()
+    try {
+      overlay.update({ frame, chromeVisible: true, rulersVisible: true })
+      expect(fills.at(-1)).toBe('#F3EEE3')
+      switchTheme(DARK_RULER)
+      overlay.refreshTheme()
+      overlay.update({ frame, chromeVisible: true, rulersVisible: true })
+      expect(fills.at(-1)).toBe('#2A2721')
+    } finally {
+      switchTheme(LIGHT_RULER)
+      overlay.destroy()
+    }
+  })
+
   it('keeps every part hidden until the first visibility snapshot', () => {
     const host = document.createElement('div')
     const overlay = createRulerOverlay(host, { onGuideCreate: vi.fn() })
@@ -90,22 +151,22 @@ describe('RulerOverlay', () => {
     const onGuideCreate = vi.fn()
     const overlay = createRulerOverlay(host, { onGuideCreate })
 
-    overlay.createGuideAt('h', { x: 80, y: 100 })
+    pullGuide(host, 'h', { x: 80, y: 100 })
     expect(onGuideCreate).not.toHaveBeenCalled()
 
     overlay.update({ frame: cameraFrame({ x: 12, y: 20, scale: 4 }), chromeVisible: true, rulersVisible: true })
-    overlay.createGuideAt('h', { x: 80, y: 100 })
-    overlay.createGuideAt('v', { x: 52, y: 10 })
-    overlay.createGuideAt('h', { x: 80, y: 24 })
-    overlay.createGuideAt('v', { x: 24, y: 80 })
+    pullGuide(host, 'h', { x: 80, y: 100 })
+    pullGuide(host, 'v', { x: 52, y: 10 })
+    pullGuide(host, 'h', { x: 80, y: 24 })
+    pullGuide(host, 'v', { x: 24, y: 80 })
     expect(onGuideCreate.mock.calls).toEqual([['h', 20], ['v', 10]])
     expect(findPart<HTMLCanvasElement>(host, 'horizontal').dataset.canvasRuler).toBe('h')
     expect(findPart<HTMLCanvasElement>(host, 'vertical').dataset.canvasRuler).toBe('v')
 
     overlay.update({ frame: cameraFrame({ x: 12, y: 20, scale: 4 }), chromeVisible: true, rulersVisible: false })
-    overlay.createGuideAt('h', { x: 80, y: 100 })
+    pullGuide(host, 'h', { x: 80, y: 100 })
     overlay.destroy()
-    overlay.createGuideAt('h', { x: 80, y: 100 })
+    pullGuide(host, 'h', { x: 80, y: 100 })
     expect(onGuideCreate).toHaveBeenCalledTimes(2)
   })
 
@@ -124,13 +185,13 @@ describe('RulerOverlay', () => {
     // Turned, the rulers hide and no guide can be pulled, not even by a press made at north.
     overlay.update({ frame: turned, chromeVisible: true, rulersVisible: true })
     expect(display()).toEqual(['none', 'none', 'none'])
-    overlay.createGuideAt('h', { x: 80, y: 100 })
-    press?.createGuideAt('h', { x: 80, y: 100 })
+    pullGuide(host, 'h', { x: 80, y: 100 })
+    press?.createGuideAt({ x: 80, y: 100 })
     expect(onGuideCreate).not.toHaveBeenCalled()
 
     overlay.update({ frame: north, chromeVisible: true, rulersVisible: true })
     expect(display()).toEqual(['block', 'block', 'block'])
-    overlay.createGuideAt('h', { x: 80, y: 100 })
+    pullGuide(host, 'h', { x: 80, y: 100 })
     expect(onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 20)
     overlay.destroy()
   })
@@ -188,11 +249,11 @@ describe('RulerOverlay', () => {
     const overlay = createRulerOverlay(host, { onGuideCreate })
 
     overlay.update({ frame: cameraFrame({ scale: 0.01 }), chromeVisible: true, rulersVisible: true })
-    overlay.createGuideAt('h', { x: 80, y: 100 })
+    pullGuide(host, 'h', { x: 80, y: 100 })
     expect(onGuideCreate).not.toHaveBeenCalled()
 
     overlay.update({ frame: cameraFrame({ y: 20, scale: 4 }), chromeVisible: true, rulersVisible: true })
-    overlay.createGuideAt('h', { x: 80, y: 100 })
+    pullGuide(host, 'h', { x: 80, y: 100 })
     expect(onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 20)
     overlay.destroy()
   })
@@ -208,8 +269,7 @@ describe('RulerOverlay', () => {
     secondOverlay.update({ frame: cameraFrame({ x: 10, y: 20, scale: 2 }), chromeVisible: true, rulersVisible: true })
 
     const vertical = pressRuler(findPart<HTMLCanvasElement>(second, 'vertical'))
-    expect(vertical?.axis).toBe('v')
-    vertical?.createGuideAt('v', { x: 100, y: 80 })
+    vertical?.createGuideAt({ x: 100, y: 80 })
     expect(secondGuide).toHaveBeenCalledExactlyOnceWith('v', 45)
     expect(firstGuide).not.toHaveBeenCalled()
 
@@ -238,19 +298,19 @@ describe('RulerOverlay', () => {
       const press = pressRuler(horizontal)
       overlay.update(hidden)
       overlay.update(visible)
-      press?.createGuideAt('h', { x: 80, y: 100 })
+      press?.createGuideAt({ x: 80, y: 100 })
     }
     expect(onGuideCreate).not.toHaveBeenCalled()
 
     // A press after the rulers came back lands, and so does one across an update that keeps them shown.
     const press = pressRuler(horizontal)
     overlay.update({ ...visible, frame: cameraFrame({ y: 40, scale: 4 }) })
-    press?.createGuideAt('h', { x: 80, y: 100 })
+    press?.createGuideAt({ x: 80, y: 100 })
     expect(onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 15)
 
     const beforeDestroy = pressRuler(horizontal)
     overlay.destroy()
-    beforeDestroy?.createGuideAt('h', { x: 80, y: 100 })
+    beforeDestroy?.createGuideAt({ x: 80, y: 100 })
     expect(onGuideCreate).toHaveBeenCalledOnce()
   })
 
@@ -309,8 +369,8 @@ describe('RulerOverlay', () => {
 
     // A guide released at camera y 100 (the map host's screen) lands at world 10; the gutter ends below the inset.
     const press = pressRuler(findPart<HTMLCanvasElement>(host, 'horizontal'))
-    press?.createGuideAt('h', { x: 80, y: 64 + 24 })
-    press?.createGuideAt('h', { x: 80, y: 100 })
+    press?.createGuideAt({ x: 80, y: 64 + 24 })
+    press?.createGuideAt({ x: 80, y: 100 })
     expect(onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 10)
     overlay.destroy()
   })
@@ -320,8 +380,6 @@ describe('RulerOverlay', () => {
     const context = createContextStub()
     const fonts: string[] = []
     vi.mocked(context.fillText).mockImplementation(() => { fonts.push(context.font) })
-    ;(context as unknown as { measureText: (text: string) => { width: number } }).measureText =
-      (text: string) => ({ width: text.length * 7 })
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context as never)
     const overlay = createRulerOverlay(host, { onGuideCreate: vi.fn() })
 

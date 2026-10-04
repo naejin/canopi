@@ -11,21 +11,18 @@ import type { GeoPoint, PlanarCamera, ScreenPoint, ViewCamera, ViewScreen, World
 
 interface Vector { readonly x: number; readonly y: number }
 
-/** Web Mercator + bearing: the camera that keeps `ground` under `screenPoint`. */
-export function cameraKeepingPoint(camera: ViewCamera, screen: ViewScreen, ground: GeoPoint, screenPoint: ScreenPoint): ViewCamera {
-  const center = centreKeeping(geoToMercator(ground.lon, ground.lat), camera.zoom, camera.bearingDeg, screen, screenPoint)
-  return { center, zoom: camera.zoom, bearingDeg: camera.bearingDeg, pitchDeg: 0 }
-}
-
 export function panCamera(camera: ViewCamera, screen: ViewScreen, deltaPx: ScreenPoint): ViewCamera {
   if (deltaPx.x === 0 && deltaPx.y === 0) return camera
   const centre = screenToMercator(camera, screen, { x: screen.width / 2 - deltaPx.x, y: screen.height / 2 - deltaPx.y })
   return { center: geoPoint(centre), zoom: camera.zoom, bearingDeg: camera.bearingDeg, pitchDeg: 0 }
 }
 
-/** A factor of 1 (the driver's clamped factor when the zoom limit is reached) returns the camera itself: no centre-only move. */
+/**
+ * A factor of 1 (the driver's clamped factor when the zoom limit is reached) returns the camera itself: no centre-only move. The
+ * drivers refuse a factor that is not finite and positive before calling it.
+ */
 export function zoomCameraAround(camera: ViewCamera, screen: ViewScreen, anchorPx: ScreenPoint, factor: number): ViewCamera {
-  if (factor === 1 || !(factor > 0) || !Number.isFinite(factor)) return camera
+  if (factor === 1) return camera
   const zoom = camera.zoom + Math.log2(factor)
   const center = centreKeeping(screenToMercator(camera, screen, anchorPx), zoom, camera.bearingDeg, screen, anchorPx)
   return { center, zoom, bearingDeg: camera.bearingDeg, pitchDeg: 0 }

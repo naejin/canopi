@@ -3,8 +3,6 @@ import { describe, expect, it } from 'vitest'
 import { createTestView } from '../../__tests__/support/test-view'
 import {
   createMeasurementGuidePresentation,
-  MEASUREMENT_GUIDE_LABEL_CLEARANCE_PX,
-  MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX,
   MEASUREMENT_GUIDE_LABEL_OFFSET_PX,
   measurementGuideLabelPoseIn,
 } from './measurement-guides'
@@ -12,9 +10,6 @@ import type { SceneMeasurementGuideEntity, ScenePoint } from './scene'
 
 describe('createMeasurementGuidePresentation', () => {
   it('places labels centered, parallel, upright, and clear of the guide line', () => {
-    const expectedCenterOffset = MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX / 2 + MEASUREMENT_GUIDE_LABEL_CLEARANCE_PX
-    expect(MEASUREMENT_GUIDE_LABEL_OFFSET_PX).toBe(expectedCenterOffset)
-
     const cases: Array<{
       name: string
       start: ScenePoint
@@ -29,7 +24,7 @@ describe('createMeasurementGuidePresentation', () => {
         end: { x: 40, y: 0 },
         midpointWorld: { x: 20, y: 0 },
         rotationRad: 0,
-        labelScreenPoint: { x: 20, y: -expectedCenterOffset },
+        labelScreenPoint: { x: 20, y: -MEASUREMENT_GUIDE_LABEL_OFFSET_PX },
       },
       {
         name: 'vertical',
@@ -37,7 +32,7 @@ describe('createMeasurementGuidePresentation', () => {
         end: { x: 0, y: 40 },
         midpointWorld: { x: 0, y: 20 },
         rotationRad: Math.PI / 2,
-        labelScreenPoint: { x: expectedCenterOffset, y: 20 },
+        labelScreenPoint: { x: MEASUREMENT_GUIDE_LABEL_OFFSET_PX, y: 20 },
       },
       {
         name: 'diagonal',
@@ -46,8 +41,8 @@ describe('createMeasurementGuidePresentation', () => {
         midpointWorld: { x: 20, y: 20 },
         rotationRad: Math.PI / 4,
         labelScreenPoint: {
-          x: 20 + Math.SQRT1_2 * expectedCenterOffset,
-          y: 20 - Math.SQRT1_2 * expectedCenterOffset,
+          x: 20 + Math.SQRT1_2 * MEASUREMENT_GUIDE_LABEL_OFFSET_PX,
+          y: 20 - Math.SQRT1_2 * MEASUREMENT_GUIDE_LABEL_OFFSET_PX,
         },
       },
       {
@@ -57,8 +52,8 @@ describe('createMeasurementGuidePresentation', () => {
         midpointWorld: { x: 20, y: 20 },
         rotationRad: -Math.PI / 4,
         labelScreenPoint: {
-          x: 20 - Math.SQRT1_2 * expectedCenterOffset,
-          y: 20 - Math.SQRT1_2 * expectedCenterOffset,
+          x: 20 - Math.SQRT1_2 * MEASUREMENT_GUIDE_LABEL_OFFSET_PX,
+          y: 20 - Math.SQRT1_2 * MEASUREMENT_GUIDE_LABEL_OFFSET_PX,
         },
       },
     ]
@@ -70,8 +65,6 @@ describe('createMeasurementGuidePresentation', () => {
       const presentation = createMeasurementGuidePresentation(guide)
       const label = measurementGuideLabelPoseIn(guide, view.view())
       expect(presentation, testCase.name).not.toBeNull()
-      expect(presentation?.midpointWorld.x, testCase.name).toBeCloseTo(testCase.midpointWorld.x)
-      expect(presentation?.midpointWorld.y, testCase.name).toBeCloseTo(testCase.midpointWorld.y)
       expect(label.rotationRad, testCase.name).toBeCloseTo(testCase.rotationRad)
       expect(Math.abs(label.rotationRad), testCase.name).toBeLessThanOrEqual(Math.PI / 2)
       expect(label.point.x, testCase.name).toBeCloseTo(testCase.labelScreenPoint.x)

@@ -53,8 +53,6 @@ export class SceneHistory {
   private _checkpoints = new WeakMap<SceneHistoryCheckpoint, SceneHistoryCheckpointState>()
   private _recordOperations = new WeakMap<object, SceneHistoryRecordState>()
   private _replayOperations = new WeakMap<object, SceneHistoryReplayState>()
-  private _directRecord: { command: SceneCommand; token: object } | null = null
-  private _directReplay: { direction: SceneHistoryReplayDirection; token: object } | null = null
   private readonly _reportCleanState: (clean: boolean) => void
 
   readonly canUndo = signal(false)
@@ -68,9 +66,9 @@ export class SceneHistory {
     return this._currentState === this._savedState
   }
 
-  record(command: SceneCommand, transaction?: object): boolean {
-    const token = transaction ?? this._directRecordToken(command)
-    let state = this._recordOperations.get(token)
+  /** Records once per transaction token: a retry with the same token finishes what a failed call left. */
+  record(command: SceneCommand, transaction: object): boolean {
+    let state = this._recordOperations.get(transaction)
     if (!state) {
       state = {
         entry: {
@@ -81,7 +79,7 @@ export class SceneHistory {
         cursorApplied: false,
         publicationApplied: false,
       }
-      this._recordOperations.set(token, state)
+      this._recordOperations.set(transaction, state)
     }
 
     const newlyRecorded = !state.cursorApplied
@@ -96,7 +94,6 @@ export class SceneHistory {
       this._updateSignals()
       state.publicationApplied = true
     }
-    if (!transaction) this._directRecord = null
     return newlyRecorded
   }
 
@@ -104,11 +101,11 @@ export class SceneHistory {
     return this._recordOperations.get(transaction)?.cursorApplied === true
   }
 
-  undo(apply: (command: SceneCommand) => void, operation?: object): boolean {
+  undo(apply: (command: SceneCommand) => void, operation: object): boolean {
     return this._replay('undo', apply, operation)
   }
 
-  redo(apply: (command: SceneCommand) => void, operation?: object): boolean {
+  redo(apply: (command: SceneCommand) => void, operation: object): boolean {
     return this._replay('redo', apply, operation)
   }
 
@@ -117,8 +114,6 @@ export class SceneHistory {
     this._future = []
     this._recordOperations = new WeakMap<object, SceneHistoryRecordState>()
     this._replayOperations = new WeakMap<object, SceneHistoryReplayState>()
-    this._directRecord = null
-    this._directReplay = null
     this._generation += 1
     this._currentState = {}
     this._savedState = this._currentState
@@ -174,16 +169,12 @@ export class SceneHistory {
   private _replay(
     direction: SceneHistoryReplayDirection,
     apply: (command: SceneCommand) => void,
-    operation?: object,
+    operation: object,
   ): boolean {
-    const token = operation ?? this._directReplayToken(direction)
-    let state = this._replayOperations.get(token)
+    let state = this._replayOperations.get(operation)
     if (!state) {
       const entry = direction === 'undo' ? this._past.at(-1) : this._future.at(-1)
-      if (!entry) {
-        if (!operation) this._directReplay = null
-        return false
-      }
+      if (!entry) return false
       state = {
         direction,
         entry,
@@ -191,7 +182,7 @@ export class SceneHistory {
         cursorApplied: false,
         publicationApplied: false,
       }
-      this._replayOperations.set(token, state)
+      this._replayOperations.set(operation, state)
     }
     if (state.direction !== direction) {
       throw new Error(`Scene history ${state.direction} is still finalizing`)
@@ -209,30 +200,7 @@ export class SceneHistory {
       this._updateSignals()
       state.publicationApplied = true
     }
-    if (!operation) this._directReplay = null
     return true
-  }
-
-  private _directReplayToken(direction: SceneHistoryReplayDirection): object {
-    if (this._directReplay?.direction === direction) return this._directReplay.token
-    if (this._directReplay) {
-      throw new Error(`Scene history ${this._directReplay.direction} is still finalizing`)
-    }
-    const token = {}
-    this._directReplay = { direction, token }
-    return token
-  }
-
-  private _directRecordToken(command: SceneCommand): object {
-    if (this._directRecord) {
-      if (this._directRecord.command !== command) {
-        throw new Error('Scene history record publication is still finalizing')
-      }
-      return this._directRecord.token
-    }
-    const token = {}
-    this._directRecord = { command, token }
-    return token
   }
 
   private _applyReplayCursor(state: SceneHistoryReplayState): void {

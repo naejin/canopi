@@ -25,7 +25,7 @@ export interface PlanePoint {
 }
 
 // Plane-to-plane change: next = previous * scale + offset.
-export interface SessionPlaneTransform {
+interface SessionPlaneTransform {
   readonly scale: number
   readonly offsetX: number
   readonly offsetY: number

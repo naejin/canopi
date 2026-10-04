@@ -133,14 +133,15 @@ describe('Place plants tool', () => {
     const scene = createToolScene(createToolSceneSource(h.store))
     const committed = vi.fn()
 
-    expect(placePlantFromSpecies({ edits: h.edits, scene }, APPLE, { x: 12, y: 9 }, 'interaction-drop', committed)).toBe(true)
+    placePlantFromSpecies({ edits: h.edits, scene }, APPLE, { x: 12, y: 9 }, 'interaction-drop', committed)
 
     expect(h.store.persisted.plants).toMatchObject([{ canonicalName: 'Malus domestica', position: { x: 12, y: 9 } }])
     expect(h.store.session.selectedTargets).toEqual([{ kind: 'plant', id: h.store.persisted.plants[0]!.id }])
     expect(committed).toHaveBeenCalledOnce()
     const closed = { isLayerOpenForCreation: () => false }
-    expect(placePlantFromSpecies({ edits: h.edits, scene: closed }, APPLE, { x: 1, y: 1 }, 'interaction-drop')).toBe(false)
+    placePlantFromSpecies({ edits: h.edits, scene: closed }, APPLE, { x: 1, y: 1 }, 'interaction-drop', committed)
     expect(h.store.persisted.plants).toHaveLength(1)
+    expect(committed).toHaveBeenCalledOnce()
   })
 
   describe('the hover preview', () => {
@@ -154,7 +155,7 @@ describe('Place plants tool', () => {
           ],
         },
       })
-      const before = h.store.snapshot().persisted
+      const before = h.store.persisted
 
       expect(h.hover({ x: 130, y: 140 })).toEqual({})
 

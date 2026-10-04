@@ -7,6 +7,7 @@ import { getStratumColor } from './plants'
 import { DEFAULT_PLANT_DISPLAY } from './runtime/plant-display'
 import { resolvePlantDisplayColor } from './runtime/plant-presentation'
 import type { SceneRendererSnapshot } from './runtime/renderers/scene-types'
+import { createDetachedCanvasRuntimeAppAdapter } from './runtime/app-adapter'
 import { SceneCanvasRuntime } from './runtime/scene-runtime'
 import type { SpeciesCacheEntry } from './runtime/species-cache'
 
@@ -16,21 +17,28 @@ describe('pinned plant name legend through the runtime', () => {
   // draws them and bumps the scene revision DisplayLegend reads, so the legend, which reads only the Scene, matches.
   it('shows an opened plant in the colour the canvas paints it once the species catalog loads', async () => {
     const speciesCache = new Map<string, SpeciesCacheEntry>()
+    const renderer = { id: 'maplibre-pixi' as const, syncScene: vi.fn(), setView: vi.fn(), setDraft: vi.fn(), dispose: vi.fn() }
     const runtime = new SceneCanvasRuntime({
-      speciesCache: {
-        getCache: () => speciesCache,
-        ensureEntries: async (canonicalNames) => {
-          for (const name of canonicalNames) {
-            speciesCache.set(name, { canonical_name: name, stratum: 'high', width_max_m: 4 } as SpeciesCacheEntry)
-          }
-          return true
+      renderer: { id: 'test', initialize: () => renderer },
+      appAdapter: {
+        ...createDetachedCanvasRuntimeAppAdapter(),
+        presentationData: {
+          speciesCache: {
+            getCache: () => speciesCache,
+            ensureEntries: async (canonicalNames) => {
+              for (const name of canonicalNames) {
+                speciesCache.set(name, { canonical_name: name, stratum: 'high', width_max_m: 4 } as SpeciesCacheEntry)
+              }
+              return true
+            },
+            getSuggestedPlantColor: () => null,
+          },
+          plantLabels: {
+            getLocaleSnapshot: () => new Map(),
+            getEnglishFallbackSnapshot: () => new Map(),
+            ensureEntries: async () => false,
+          },
         },
-        getSuggestedPlantColor: () => null,
-      },
-      plantLabels: {
-        getLocaleSnapshot: () => new Map(),
-        getEnglishFallbackSnapshot: () => new Map(),
-        ensureEntries: async () => false,
       },
     })
     runtime.documentSurface.loadDocument(openedDesignWithPinnedPlant())
@@ -39,8 +47,6 @@ describe('pinned plant name legend through the runtime', () => {
     expect(runtime.querySurface.getSceneSnapshot().plants[0]?.stratum).toBeNull()
     expect(legendColor()).not.toBe(getStratumColor('high'))
     const sceneRevision = runtime.querySurface.revision.scene.value
-    const renderer = { id: 'test', syncScene: vi.fn(), setView: vi.fn(), setDraft: vi.fn(), dispose: vi.fn() }
-    ;(runtime as any)._construction.replaceRenderer({ id: 'test', initialize: () => renderer })
     const host = document.createElement('div')
     Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
     Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })

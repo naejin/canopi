@@ -56,6 +56,5 @@ describe('scene text presentation', () => {
       .toEqual([['plant-1'], [], [], ['plant-2'], []])
     expect(labels.map(({ selectionLabels }) => selectionLabels.length)).toEqual([0, 0, 0, 0, 1])
     expect(store.persisted).toEqual(before)
-    expect(store.session.documentRevision).toBe(0)
   })
 })

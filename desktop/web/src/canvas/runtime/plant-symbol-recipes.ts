@@ -521,7 +521,7 @@ export const PLANT_SYMBOL_FAMILIES: Readonly<Record<PlantSymbolFamily, readonly 
 }
 
 /** Pure and deterministic: the same artwork yields the same contours every time. */
-export function buildPlantSymbolRecipes(): Record<PlantSymbolId, PlantSymbolRecipe> {
+function buildPlantSymbolRecipes(): Record<PlantSymbolId, PlantSymbolRecipe> {
   const recipes = {} as Record<PlantSymbolId, PlantSymbolRecipe>
   for (const [symbol, drawing] of Object.entries(drawings()) as [PlantSymbolId, Drawing][]) {
     const body = finish(drawing.body)

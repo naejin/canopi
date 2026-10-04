@@ -20,7 +20,6 @@ interface SceneRuntimeChromeSnapshot {
 export class SceneRuntimeChromeCoordinator {
   private _rulers: RulerOverlay | null = null
   private _visible = false
-  private _rulersSnapshot: Parameters<RulerOverlay['update']>[0] | null = null
 
   attach(
     container: HTMLElement,
@@ -40,7 +39,6 @@ export class SceneRuntimeChromeCoordinator {
 
   refreshTheme(): void {
     this._rulers?.refreshTheme()
-    if (this._rulersSnapshot) this._rulers?.update(this._rulersSnapshot)
   }
 
   /**
@@ -48,8 +46,7 @@ export class SceneRuntimeChromeCoordinator {
    * guides), null while the chrome is hidden or there is nothing to draw.
    */
   update({ frame, rulersVisible, gridVisible, guidesVisible, guides }: SceneRuntimeChromeSnapshot): SceneEditingAids | null {
-    this._rulersSnapshot = { frame, rulersVisible, chromeVisible: this._visible }
-    this._rulers?.update(this._rulersSnapshot)
+    this._rulers?.update({ frame, rulersVisible, chromeVisible: this._visible })
     if (!this._visible) return null
     const ink = gridVisible ? getMapBackdropInk() : null
     const rulerGuides = guidesVisible ? guides.map(({ axis, position }) => ({ axis, position })) : []
@@ -60,6 +57,5 @@ export class SceneRuntimeChromeCoordinator {
   destroy(): void {
     this._rulers?.destroy()
     this._rulers = null
-    this._rulersSnapshot = null
   }
 }

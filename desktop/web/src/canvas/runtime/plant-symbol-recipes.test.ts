@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { PLANT_SYMBOL_IDS } from './scene/plant-symbols'
 import {
-  buildPlantSymbolRecipes,
   getPlantSymbolArt,
   PLANT_SYMBOL_FAMILIES,
   PLANT_SYMBOL_RECIPES,
@@ -86,11 +85,6 @@ describe('plant symbol recipes', () => {
       expect(getPlantSymbolArt(symbol, 12)).toBe(recipe.compact)
       expect(getPlantSymbolArt(symbol, 16)).toBe(recipe.detailed)
     }
-  })
-
-  it('is deterministic: rebuilding the artwork yields identical contours', () => {
-    expect(buildPlantSymbolRecipes()).toEqual(PLANT_SYMBOL_RECIPES)
-    expect(JSON.stringify(buildPlantSymbolRecipes())).toBe(JSON.stringify(PLANT_SYMBOL_RECIPES))
   })
 
   it('winds every contour the same way so one nonzero fill is the union of the parts', () => {

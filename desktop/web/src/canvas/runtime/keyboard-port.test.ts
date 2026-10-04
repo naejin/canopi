@@ -8,7 +8,6 @@ import {
 } from './keyboard-port'
 import type { CanvasKeyState } from './runtime'
 import type { ToolCommand, ToolReply } from './tools/tool'
-import type { ViewFrameSource } from './view/types'
 
 /** What the port needs from the interaction session. */
 type KeySession = Parameters<typeof createCanvasKeyboardPort>[0]['session']
@@ -103,7 +102,6 @@ function fixture(options: { readonly tool?: ToolId; readonly reply?: (c: ToolCom
     toolHost: hostFake,
     hasSelection: () => state.selected,
     navigation,
-    frames: {} as ViewFrameSource,
     session,
   })
   return result as unknown as Fixture

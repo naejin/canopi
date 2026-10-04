@@ -74,10 +74,11 @@ import {
   type SceneEditCoordinator,
   type SceneEditTransaction,
 } from './scene-runtime/transactions'
-import type {
-  CanvasRuntimeAppAdapter,
-  CanvasRuntimeDocumentCompositionInput,
-  CanvasRuntimeSettingsAdapter,
+import {
+  createDetachedCanvasRuntimeAppAdapter,
+  type CanvasRuntimeAppAdapter,
+  type CanvasRuntimeDocumentCompositionInput,
+  type CanvasRuntimeSettingsAdapter,
 } from './app-adapter'
 import { getCommonNames } from '../../ipc/species'
 
@@ -270,7 +271,7 @@ function fileWithGroupedPair(): CanopiFile {
 
 function createRendererStub() {
   return {
-    id: 'test',
+    id: 'maplibre-pixi' as const,
     syncScene: vi.fn(),
     setView: vi.fn<(view: ViewTransform) => void>(),
     // The draft sink the runtime hands the session (ToolHostDeps.renderer): drafts and the host's chips draw in Pixi.
@@ -342,12 +343,20 @@ function createRuntimeContainer(): HTMLDivElement {
   return container
 }
 
+const stubbedRenderers = new WeakMap<SceneCanvasRuntime, RendererStub>()
+
+/** A runtime whose every mount gets the same renderer stub, which initRuntimeWithStubbedRenderer returns. */
+function stubbedRuntime(options: ConstructorParameters<typeof SceneCanvasRuntime>[0] = {}): SceneCanvasRuntime {
+  const renderer = createRendererStub()
+  const runtime = new SceneCanvasRuntime({ ...options, renderer: { id: 'test', initialize: () => renderer } })
+  stubbedRenderers.set(runtime, renderer)
+  return runtime
+}
+
 async function initRuntimeWithStubbedRenderer(runtime: SceneCanvasRuntime) {
   const container = createRuntimeContainer()
-
-  const renderer = createRendererStub()
-  ;(runtime as any)._construction.replaceRenderer({ id: 'test', initialize: () => renderer })
-
+  const renderer = stubbedRenderers.get(runtime)
+  if (!renderer) throw new Error('Build the runtime with stubbedRuntime')
   await runtime.init(container)
   return { container, renderer }
 }
@@ -412,7 +421,7 @@ function clickAt(
 }
 
 function createRuntimeWithAppPanelTargets(appAdapter?: CanvasRuntimeAppAdapter): SceneCanvasRuntime {
-  return new SceneCanvasRuntime({
+  return stubbedRuntime({
     appAdapter,
     targetPresentation: createAppSceneRuntimePanelTargetAdapter(),
   })
@@ -573,7 +582,7 @@ describe('scene canvas runtime', () => {
     }
 
     it('init frames a Design opened before it: the first frame is the fit, with no 100 m frame between two fits', async () => {
-      const runtime = new SceneCanvasRuntime()
+      const runtime = stubbedRuntime()
       runtime.documentSurface.resize(400, 300)
       runtime.documentSurface.loadDocument(makeFile())
       const seen: ViewFrame[] = []
@@ -594,7 +603,7 @@ describe('scene canvas runtime', () => {
     })
 
     it('init frames a Design loaded before the screen had a size', async () => {
-      const runtime = new SceneCanvasRuntime()
+      const runtime = stubbedRuntime()
       runtime.documentSurface.loadDocument(makeFile())
       try {
         await initRuntimeWithStubbedRenderer(runtime)
@@ -607,7 +616,7 @@ describe('scene canvas runtime', () => {
     })
 
     it('init shows the new-Design overview for an empty Design', async () => {
-      const runtime = new SceneCanvasRuntime()
+      const runtime = stubbedRuntime()
       try {
         await initRuntimeWithStubbedRenderer(runtime)
 
@@ -625,7 +634,7 @@ describe('scene canvas runtime', () => {
     })
 
     it('a Design loaded after init: the last frame before its first scene render is the load\'s fit', async () => {
-      const runtime = new SceneCanvasRuntime()
+      const runtime = stubbedRuntime()
       try {
         const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
         const atSceneRender: Array<{ x: number; y: number; scale: number }> = []
@@ -646,7 +655,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('a zoom with a selected plant keeps the rotation handle above the plant\'s top', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     try {
       // Two plants, since one plant alone does not rotate; the top plant's footprint is sized at the live scale.
@@ -676,7 +685,7 @@ describe('scene canvas runtime', () => {
     let language = 'en'
     let notifyLocale = (): void => {}
     const cleanState = createCleanStateAdapterProbe()
-    const runtime = new SceneCanvasRuntime({
+    const runtime = stubbedRuntime({
       appAdapter: {
         ...cleanState.adapter,
         translate: (key, options?: Readonly<Record<string, unknown>>) =>
@@ -705,7 +714,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('marks the Design map aria-busy until a scene change is drawn, never for a camera frame', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const { container, renderer } = await initRuntimeWithStubbedRenderer(runtime)
     const busyWhenDrawn: Array<string | null> = []
     renderer.syncScene.mockImplementation(() => { busyWhenDrawn.push(container.getAttribute('aria-busy')) })
@@ -792,7 +801,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('publishes a tool change only after the live Session transition succeeds', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
@@ -840,7 +849,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('keeps the app\'s own tool state on the tool the session kept when leaving it fails', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     await initRuntimeWithStubbedRenderer(runtime)
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
     setInteractionViewport(runtime)
@@ -858,7 +867,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('falls back to Select, in the app\'s own tool state too, when a registered tool\'s activation throws', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     await initRuntimeWithStubbedRenderer(runtime)
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
     setInteractionViewport(runtime)
@@ -882,7 +891,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('retries interaction cancellation before replacing a document', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
@@ -948,7 +957,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('reserves replacement authority before a live gesture releases', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
@@ -1000,7 +1009,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('cannot commit an old Annotation editor into a replacement document', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     runtime.documentSurface.loadDocument(fileWithOnlyAnnotation('Old document'))
@@ -1023,7 +1032,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('cannot invoke an old Context Menu action against a replacement document', async () => {
-    const runtime = new SceneCanvasRuntime({
+    const runtime = stubbedRuntime({
       appAdapter: createAppCanvasRuntimeAppAdapter({ presentationData: {} }),
     })
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
@@ -1054,7 +1063,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('restores the live Session tool when post-transition refresh fails', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
@@ -1088,7 +1097,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('restores the previous tool adapter when post-transition refresh fails', async () => {
-    const runtime = new SceneCanvasRuntime({
+    const runtime = stubbedRuntime({
       appAdapter: createDesktopCanvasRuntimeAppAdapter(),
     })
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
@@ -1386,7 +1395,7 @@ describe('scene canvas runtime', () => {
     expect(runtime.commandSurface.sceneEdits.canPaste()).toBe(false)
     expect(runtime.querySurface.getSceneSnapshot().plants).toHaveLength(2)
     expect(runtime.commandSurface.layers.setSceneLayerVisibility('plants', false)).toBe(false)
-    expect(runtime.commandSurface.plantPresentation.clearPlantSpeciesColor('Malus domestica')).toBe(false)
+    expect(runtime.commandSurface.plantPresentation.setPlantColorForSpecies('Malus domestica', '#112233')).toBe(0)
     expect(runtime.querySurface.getSceneSnapshot().layers.find((layer) => layer.name === 'plants')?.visible)
       .toBe(true)
     expect(runtime.querySurface.getSceneSnapshot().plantSpeciesColors['Malus domestica'])
@@ -1441,16 +1450,20 @@ describe('scene canvas runtime', () => {
     const localizedCommonNames = new Map<string, string | null>([
       ['Malus domestica', 'Orchard Apple'],
     ])
+    const desktop = createDesktopCanvasRuntimeAppAdapter()
     const runtime = new SceneCanvasRuntime({
       appAdapter: {
-        ...createDesktopCanvasRuntimeAppAdapter(),
+        ...desktop,
         settings: createTestSettingsAdapter(),
         savedObjectStamps: { saveCurrentSelection },
-      },
-      plantLabels: {
-        getLocaleSnapshot: () => localizedCommonNames,
-        getEnglishFallbackSnapshot: () => new Map(),
-        ensureEntries: async () => false,
+        presentationData: {
+          ...desktop.presentationData,
+          plantLabels: {
+            getLocaleSnapshot: () => localizedCommonNames,
+            getEnglishFallbackSnapshot: () => new Map(),
+            ensureEntries: async () => false,
+          },
+        },
       },
     })
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
@@ -1478,7 +1491,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('advertises Saved Object Stamp actions only when the edition supplies the capability', async () => {
-    const withoutStamps = new SceneCanvasRuntime({
+    const withoutStamps = stubbedRuntime({
       appAdapter: createAppCanvasRuntimeAppAdapter({ presentationData: {} }),
     })
     const withoutStampsMount = await initRuntimeWithStubbedRenderer(withoutStamps)
@@ -1493,7 +1506,7 @@ describe('scene canvas runtime', () => {
     withoutStamps.destroy()
     expect(canvasContextMenuRequest.value).toBeNull()
 
-    const withStamps = new SceneCanvasRuntime({
+    const withStamps = stubbedRuntime({
       appAdapter: createAppCanvasRuntimeAppAdapter({
         presentationData: {},
         savedObjectStamps: { saveCurrentSelection: vi.fn() },
@@ -1639,7 +1652,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('excludes a locked Plant selected for unlock from plant color edits', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     const file = fileWithOnlyPlants('plant-1')
@@ -1665,7 +1678,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('excludes a locked Plant selected for unlock from plant symbol edits', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     const file = fileWithOnlyPlants('plant-1')
@@ -1688,7 +1701,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('applies selected plant color only to editable Plants in a mixed locked selection', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     const file = makeFile()
@@ -1756,7 +1769,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('publishes viewport-only camera changes through the canonical snapshot', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     await initRuntimeWithStubbedRenderer(runtime)
     const before = frameOf(runtime)
 
@@ -1770,7 +1783,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('renders externally published camera frames and releases the owner on destroy', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const disposeCamera = vi.spyOn(runtime.cameraHost as CameraDriverHostController, 'dispose')
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
     renderer.setView.mockClear()
@@ -1792,7 +1805,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('does not publish a viewport change when document hydration leaves the camera unchanged', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     await initRuntimeWithStubbedRenderer(runtime)
     // The scale bounds follow the plane's latitude: a first load moves them to the Design's, a second one finds them unchanged.
     runtime.documentSurface.loadDocument(makeFile())
@@ -2014,10 +2027,9 @@ describe('scene canvas runtime', () => {
   })
 
   it('rolls back renderer ownership when interaction Session construction fails', async () => {
-    const runtime = new SceneCanvasRuntime()
     const container = createRuntimeContainer()
     const renderer = createRendererStub()
-    ;(runtime as any)._construction.replaceRenderer({ id: 'test', initialize: () => renderer })
+    const runtime = new SceneCanvasRuntime({ renderer: { id: 'test', initialize: () => renderer } })
     const appendChild = vi.spyOn(container, 'appendChild').mockImplementation(() => {
       throw new Error('interaction construction failed')
     })
@@ -2034,14 +2046,13 @@ describe('scene canvas runtime', () => {
   })
 
   it('rolls back Session listeners and renderer ownership when the initial render fails', async () => {
-    const runtime = new SceneCanvasRuntime()
     const container = createRuntimeContainer()
     const events = createSceneInteractionEventHarness(container, { trackListeners: true })
     const renderer = createRendererStub()
     renderer.syncScene.mockImplementation(() => {
       throw new Error('initial render failed')
     })
-    ;(runtime as any)._construction.replaceRenderer({ id: 'test', initialize: () => renderer })
+    const runtime = new SceneCanvasRuntime({ renderer: { id: 'test', initialize: () => renderer } })
 
     await expect(runtime.init(container)).rejects.toThrow('initial render failed')
 
@@ -2069,17 +2080,22 @@ describe('scene canvas runtime', () => {
       }
       return true
     })
+    const renderer = createRendererStub()
     const runtime = new SceneCanvasRuntime({
-      speciesCache: {
-        getCache: () => cache,
-        ensureEntries,
-        getSuggestedPlantColor: () => null,
+      appAdapter: {
+        ...createDetachedCanvasRuntimeAppAdapter(),
+        presentationData: {
+          speciesCache: {
+            getCache: () => cache,
+            ensureEntries,
+            getSuggestedPlantColor: () => null,
+          },
+        },
       },
+      renderer: { id: 'test', initialize: () => renderer },
     })
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
     const container = createRuntimeContainer()
-    const renderer = createRendererStub()
-    ;(runtime as any)._construction.replaceRenderer({ id: 'test', initialize: () => renderer })
     const initialize = runtime.init(container)
     await vi.waitFor(() => expect(ensureEntries).toHaveBeenCalledOnce())
     const sceneRevision = runtime.querySurface.revision.scene.value
@@ -2112,10 +2128,15 @@ describe('scene canvas runtime', () => {
       return true
     })
     const runtime = new SceneCanvasRuntime({
-      speciesCache: {
-        getCache: () => cache,
-        ensureEntries,
-        getSuggestedPlantColor: () => null,
+      appAdapter: {
+        ...createDetachedCanvasRuntimeAppAdapter(),
+        presentationData: {
+          speciesCache: {
+            getCache: () => cache,
+            ensureEntries,
+            getSuggestedPlantColor: () => null,
+          },
+        },
       },
     })
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
@@ -2146,31 +2167,33 @@ describe('scene canvas runtime', () => {
     let activeLocale = 'en'
     let failSpeciesRefresh = false
     const appAdapterProbe = createCleanStateAdapterProbe()
-    const runtime = new SceneCanvasRuntime({
+    const runtime = stubbedRuntime({
       appAdapter: {
         ...appAdapterProbe.adapter,
         settings: createTestSettingsAdapter({
           readLocale: () => activeLocale,
         }),
-      },
-      plantLabels: {
-        getLocaleSnapshot: (locale) => labelsByLocale.get(locale) ?? new Map(),
-        getEnglishFallbackSnapshot: () => new Map(),
-        ensureEntries: async (_canonicalNames, locale) => {
-          if (labelsByLocale.has(locale)) return false
-          labelsByLocale.set(locale, new Map([
-            ['Malus domestica', locale === 'fr' ? 'Pommier' : 'Apple'],
-          ]))
-          return true
+        presentationData: {
+          plantLabels: {
+            getLocaleSnapshot: (locale) => labelsByLocale.get(locale) ?? new Map(),
+            getEnglishFallbackSnapshot: () => new Map(),
+            ensureEntries: async (_canonicalNames, locale) => {
+              if (labelsByLocale.has(locale)) return false
+              labelsByLocale.set(locale, new Map([
+                ['Malus domestica', locale === 'fr' ? 'Pommier' : 'Apple'],
+              ]))
+              return true
+            },
+          },
+          speciesCache: {
+            getCache: () => new Map(),
+            ensureEntries: async () => {
+              if (failSpeciesRefresh) throw speciesFailure
+              return false
+            },
+            getSuggestedPlantColor: () => null,
+          },
         },
-      },
-      speciesCache: {
-        getCache: () => new Map(),
-        ensureEntries: async () => {
-          if (failSpeciesRefresh) throw speciesFailure
-          return false
-        },
-        getSuggestedPlantColor: () => null,
       },
     })
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
@@ -2199,20 +2222,25 @@ describe('scene canvas runtime', () => {
     const labels = new Map<string, string | null>()
     let labelsLoaded = false
     const runtime = new SceneCanvasRuntime({
-      plantLabels: {
-        getLocaleSnapshot: () => labels,
-        getEnglishFallbackSnapshot: () => new Map(),
-        ensureEntries: async () => {
-          if (labelsLoaded) return false
-          labelsLoaded = true
-          labels.set('Malus domestica', 'Apple')
-          return true
+      appAdapter: {
+        ...createDetachedCanvasRuntimeAppAdapter(),
+        presentationData: {
+          plantLabels: {
+            getLocaleSnapshot: () => labels,
+            getEnglishFallbackSnapshot: () => new Map(),
+            ensureEntries: async () => {
+              if (labelsLoaded) return false
+              labelsLoaded = true
+              labels.set('Malus domestica', 'Apple')
+              return true
+            },
+          },
+          speciesCache: {
+            getCache: () => new Map(),
+            ensureEntries: async () => false,
+            getSuggestedPlantColor: () => null,
+          },
         },
-      },
-      speciesCache: {
-        getCache: () => new Map(),
-        ensureEntries: async () => false,
-        getSuggestedPlantColor: () => null,
       },
     })
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
@@ -2244,18 +2272,23 @@ describe('scene canvas runtime', () => {
     })
     const ensureSpeciesEntries = vi.fn(() => speciesRefresh)
     const runtime = new SceneCanvasRuntime({
-      plantLabels: {
-        getLocaleSnapshot: () => labels,
-        getEnglishFallbackSnapshot: () => new Map(),
-        ensureEntries: async () => {
-          labels.set('Malus domestica', 'Apple')
-          return true
+      appAdapter: {
+        ...createDetachedCanvasRuntimeAppAdapter(),
+        presentationData: {
+          plantLabels: {
+            getLocaleSnapshot: () => labels,
+            getEnglishFallbackSnapshot: () => new Map(),
+            ensureEntries: async () => {
+              labels.set('Malus domestica', 'Apple')
+              return true
+            },
+          },
+          speciesCache: {
+            getCache: () => new Map(),
+            ensureEntries: ensureSpeciesEntries,
+            getSuggestedPlantColor: () => null,
+          },
         },
-      },
-      speciesCache: {
-        getCache: () => new Map(),
-        ensureEntries: ensureSpeciesEntries,
-        getSuggestedPlantColor: () => null,
       },
     })
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
@@ -2327,7 +2360,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('refreshes Zone Measurements when runtime selection changes', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const file = makeFile()
     file.zones = [{
       id: 'zone-1', name: null,
@@ -2467,7 +2500,7 @@ describe('scene canvas runtime', () => {
 
   it('uses the injected panel target adapter for highlights and canvas-origin hover', async () => {
     const panelTargetProbe = createPanelTargetAdapterProbe()
-    const runtime = new SceneCanvasRuntime({ targetPresentation: panelTargetProbe.adapter })
+    const runtime = stubbedRuntime({ targetPresentation: panelTargetProbe.adapter })
     runtime.documentSurface.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
@@ -2680,7 +2713,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('uses the viewport-only renderer path for zoom updates', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
     setInteractionViewport(runtime, { x: 50, y: 0, scale: 3 })
 
@@ -2691,6 +2724,21 @@ describe('scene canvas runtime', () => {
 
     expect(renderer.setView).toHaveBeenCalled()
     expect(renderer.syncScene).not.toHaveBeenCalled()
+    runtime.destroy()
+  })
+
+  it('a view command the camera refuses does not redraw', async () => {
+    const runtime = stubbedRuntime()
+    const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
+    setInteractionViewport(runtime, { x: 50, y: 0, scale: 3 })
+    const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    await nextFrame()
+
+    renderer.setView.mockClear()
+    runtime.commandSurface.viewport.zoomBy(Number.NaN)
+    await nextFrame()
+
+    expect(renderer.setView).not.toHaveBeenCalled()
     runtime.destroy()
   })
 
@@ -2734,7 +2782,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('records Object Stamp plant placement in history without replacing the clipboard', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     const file = makeFile()
@@ -2768,7 +2816,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('records Object Stamp group placement as one undoable edit with cloned members', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     const file = makeFile()
@@ -2805,7 +2853,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('records Saved Object Stamp placement as one undoable scene edit', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     const file = makeFile()
@@ -2865,7 +2913,7 @@ describe('scene canvas runtime', () => {
   it('records Plant Spacing commit as one undoable scene edit', async () => {
     const cleanState = createCleanStateAdapterProbe()
     cleanState.adapter.settings.commitPlantSpacingIntervalMeters(5)
-    const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
+    const runtime = stubbedRuntime({ appAdapter: cleanState.adapter })
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     const file = makeFile()
@@ -2895,7 +2943,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('nudges the editable selection as one undoable edit per series, never moving locked objects', async () => {
-    const runtime = new SceneCanvasRuntime({ appAdapter: createCleanStateAdapterProbe().adapter })
+    const runtime = stubbedRuntime({ appAdapter: createCleanStateAdapterProbe().adapter })
     await initRuntimeWithStubbedRenderer(runtime)
     const file = makeFile()
     file.plants = file.plants.map((plant) => plant.id === 'plant-2' ? { ...plant, locked: true } : plant)
@@ -2937,7 +2985,7 @@ describe('scene canvas runtime', () => {
 
   it('records nothing for a nudge series that returns to where it started', async () => {
     const cleanState = createCleanStateAdapterProbe()
-    const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
+    const runtime = stubbedRuntime({ appAdapter: cleanState.adapter })
     await initRuntimeWithStubbedRenderer(runtime)
     const file = fileWithOnlyPlants('plant-1')
     runtime.documentSurface.loadDocument(file)
@@ -2960,14 +3008,15 @@ describe('scene canvas runtime', () => {
   })
 
   it('mounts the renderer and editing again after a map failure, keeping the Scene, view, selection and undo', async () => {
-    const runtime = new SceneCanvasRuntime()
     const renderers: RendererStub[] = []
-    ;(runtime as any)._construction.replaceRenderer({
-      id: 'test',
-      initialize: () => {
-        const renderer = createRendererStub()
-        renderers.push(renderer)
-        return renderer
+    const runtime = new SceneCanvasRuntime({
+      renderer: {
+        id: 'test',
+        initialize: () => {
+          const renderer = createRendererStub()
+          renderers.push(renderer)
+          return renderer
+        },
       },
     })
     const container = createRuntimeContainer()
@@ -3001,15 +3050,16 @@ describe('scene canvas runtime', () => {
   })
 
   it('leaves nothing mounted when a remount fails', async () => {
-    const runtime = new SceneCanvasRuntime()
     const renderer = createRendererStub()
     let initializations = 0
-    ;(runtime as any)._construction.replaceRenderer({
-      id: 'test',
-      initialize: () => {
-        initializations += 1
-        if (initializations > 1) throw new Error('renderer remount failed')
-        return renderer
+    const runtime = new SceneCanvasRuntime({
+      renderer: {
+        id: 'test',
+        initialize: () => {
+          initializations += 1
+          if (initializations > 1) throw new Error('renderer remount failed')
+          return renderer
+        },
       },
     })
     const container = createRuntimeContainer()
@@ -3023,18 +3073,19 @@ describe('scene canvas runtime', () => {
   })
 
   it('keeps editing unmounted when the map fails between the renderer remount and the interaction remount', async () => {
-    const runtime = new SceneCanvasRuntime()
     const renderers: RendererStub[] = []
     let resolveSecond: (renderer: RendererStub) => void = () => {}
-    ;(runtime as any)._construction.replaceRenderer({
-      id: 'test',
-      initialize: () => {
-        const renderer = createRendererStub()
-        renderers.push(renderer)
-        if (renderers.length === 1) return renderer
-        return new Promise<RendererStub>((resolve) => {
-          resolveSecond = () => resolve(renderer)
-        })
+    const runtime = new SceneCanvasRuntime({
+      renderer: {
+        id: 'test',
+        initialize: () => {
+          const renderer = createRendererStub()
+          renderers.push(renderer)
+          if (renderers.length === 1) return renderer
+          return new Promise<RendererStub>((resolve) => {
+            resolveSecond = () => resolve(renderer)
+          })
+        },
       },
     })
     const container = createRuntimeContainer()
@@ -3060,7 +3111,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('nudges from the arrow keys on the focused map through the runtime command', async () => {
-    const runtime = new SceneCanvasRuntime({ appAdapter: createCleanStateAdapterProbe().adapter })
+    const runtime = stubbedRuntime({ appAdapter: createCleanStateAdapterProbe().adapter })
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
@@ -3089,7 +3140,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('records Measurement Guide creation as one undoable scene edit', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const { container, renderer } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     const file = makeFile()
@@ -3137,7 +3188,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('selects a newly created Measurement Guide instead of keeping a stale object selection', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     const file = makeFile()
@@ -3174,7 +3225,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('keeps the current selection when a Measurement Guide drag creates no guide', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     const file = makeFile()
@@ -3202,7 +3253,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('selects and moves Measurement Guides as undoable Design Objects', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     runtime.documentSurface.loadDocument(fileWithMeasurementGuide())
@@ -3241,7 +3292,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('duplicates, copy/pastes, and deletes Measurement Guides', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     runtime.documentSurface.loadDocument(fileWithMeasurementGuide())
@@ -3279,7 +3330,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('respects direct Measurement Guide locks and layer locks for selection and mutation', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     runtime.documentSurface.loadDocument(fileWithMeasurementGuide({ locked: true }))
@@ -3308,7 +3359,7 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
     selectedObjectIds.value = new Set()
 
-    const lockedLayerRuntime = new SceneCanvasRuntime()
+    const lockedLayerRuntime = stubbedRuntime()
     const { container: lockedLayerContainer } = await initRuntimeWithStubbedRenderer(lockedLayerRuntime)
     const lockedLayerEvents = createSceneInteractionEventHarness(lockedLayerContainer)
     const lockedLayerFile = fileWithMeasurementGuide()
@@ -3328,7 +3379,7 @@ describe('scene canvas runtime', () => {
     lockedLayerRuntime.destroy()
     selectedObjectIds.value = new Set()
 
-    const hiddenLayerRuntime = new SceneCanvasRuntime()
+    const hiddenLayerRuntime = stubbedRuntime()
     const { container: hiddenLayerContainer } = await initRuntimeWithStubbedRenderer(hiddenLayerRuntime)
     const hiddenLayerEvents = createSceneInteractionEventHarness(hiddenLayerContainer)
     const hiddenLayerFile = fileWithMeasurementGuide()
@@ -3371,7 +3422,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('does not create Measurement Guides when their layer is locked or hidden', async () => {
-    const lockedRuntime = new SceneCanvasRuntime()
+    const lockedRuntime = stubbedRuntime()
     const { container: lockedContainer, renderer: lockedRenderer } = await initRuntimeWithStubbedRenderer(lockedRuntime)
     const lockedEvents = createSceneInteractionEventHarness(lockedContainer)
     const lockedFile = makeFile()
@@ -3400,7 +3451,7 @@ describe('scene canvas runtime', () => {
     lockedEvents.dispose()
     lockedRuntime.destroy()
 
-    const hiddenRuntime = new SceneCanvasRuntime()
+    const hiddenRuntime = stubbedRuntime()
     const { container: hiddenContainer, renderer: hiddenRenderer } = await initRuntimeWithStubbedRenderer(hiddenRuntime)
     const hiddenEvents = createSceneInteractionEventHarness(hiddenContainer)
     const hiddenFile = makeFile()
@@ -3431,7 +3482,7 @@ describe('scene canvas runtime', () => {
   })
 
   it('routes history commands through polygonal zone draft vertices before scene history', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = stubbedRuntime()
     const { container, renderer } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     runtime.documentSurface.loadDocument(makeFile())
@@ -3602,7 +3653,7 @@ describe('scene canvas runtime', () => {
       .mockResolvedValueOnce({ 'Malus domestica': 'Apple' })
       .mockResolvedValueOnce({ 'Malus domestica': 'Pommier' })
 
-    const runtime = new SceneCanvasRuntime({
+    const runtime = stubbedRuntime({
       appAdapter: createDesktopCanvasRuntimeAppAdapter(),
     })
     runtime.documentSurface.loadDocument(makeFile())
@@ -3629,7 +3680,7 @@ describe('scene canvas runtime', () => {
       .mockResolvedValueOnce({ 'Malus domestica': 'Apple' })
       .mockResolvedValueOnce({ 'Malus domestica': 'Pommier' })
 
-    const runtime = new SceneCanvasRuntime({
+    const runtime = stubbedRuntime({
       appAdapter: createDesktopCanvasRuntimeAppAdapter(),
     })
     runtime.documentSurface.loadDocument(makeFile())

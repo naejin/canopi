@@ -11,7 +11,7 @@ import type { ButtonRole, RawInput, TargetClass } from './raw-input'
 
 /** The fields normalise reads; a DOM event satisfies it structurally, and fixtures pass literals. */
 export interface DomEventLike {
-  readonly type: 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel' | 'lostpointercapture' | 'pointerleave' | 'focusout'
+  readonly type: 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel' | 'lostpointercapture' | 'pointerleave'
     | 'wheel' | 'contextmenu' | 'gesturestart' | 'gesturechange' | 'gestureend' | 'dragover' | 'dragleave' | 'drop'
   readonly timeStamp: number
   readonly clientX: number; readonly clientY: number          // converted to host-relative CSS px by the source before normalise
@@ -101,8 +101,6 @@ export function normalise(
       return { kind: 'cancel', t, id: e.pointerId ?? 0, reason: 'lost-capture' }
     case 'pointerleave':
       return { kind: 'leave', t }
-    case 'focusout':
-      return { kind: 'focus-out', t }
     case 'wheel': {
       // deltaMode is read before the deltas: a page is the host width for deltaX and its height for deltaY.
       const mode = e.deltaMode ?? 0

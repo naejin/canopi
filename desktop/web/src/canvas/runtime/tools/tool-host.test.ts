@@ -26,12 +26,17 @@ import type { SceneDesignObjectTarget } from '../scene/design-object-targets'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
 import type { WorldPoint } from '../view/types'
 import { getRectangularZoneCorners } from '../zone-geometry'
-import { constrainPointTo45Degrees } from './constraints'
+import { applyToolConstraint } from './constraints'
 import type { DraftPresentation, DraftShape, ToolHandle } from './draft'
 import { measureLabelShapes, selectedZoneMeasurementLabels } from './measure-labels'
 import type { ToolReply } from './tool'
 import { createContextMenuPort, createToolScene } from './tool-host'
 import '../../../__tests__/support/camera-tolerance'
+
+/** Shift at bearing 0: the nearest 45° direction from `origin` against the world axes, its length kept. */
+function constrainPointTo45Degrees(origin: WorldPoint, point: WorldPoint): WorldPoint {
+  return applyToolConstraint({ kind: 'direction', origin, stepDeg: 45 }, point, { right: { x: 1, y: 0 }, down: { x: 0, y: 1 } })
+}
 
 vi.mock('./registry', () => ({ TOOL_REGISTRY: {} }))
 
@@ -689,7 +694,7 @@ describe('ToolHost', () => {
       h.click({ x: 300, y: 250 })
       expect(h.chrome.textEntry).toBeNull()
       expect(select.count('press')).toBe(0)
-      // and entering overview keeps the entry, as today's setOverviewMode kept Text's field.
+      // and entering overview keeps a new note's entry.
       h.host.command({ kind: 'edit-text' })
       h.view.setViewport(OVERVIEW)
       h.advance(0)
@@ -697,8 +702,7 @@ describe('ToolHost', () => {
       h.view.setViewport({ x: 0, y: 0, scale: 1 })
       h.advance(0)
 
-      // An in-place editor's committing press goes on to the tool, even under Text, and overview closes the editor, as
-      // today's setOverviewMode cancelled the annotation editor.
+      // An in-place editor's committing press goes on to the tool, even under Text, and overview closes the editor.
       h.arm('text')
       h.host.command({ kind: 'edit-text' })
       h.click({ x: 300, y: 250 })

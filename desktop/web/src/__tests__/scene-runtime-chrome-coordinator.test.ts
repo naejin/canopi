@@ -28,6 +28,7 @@ function createContextStub() {
     save: vi.fn(),
     restore: vi.fn(),
     setLineDash: vi.fn(),
+    measureText: (text: string) => ({ width: text.length * 7 }),
   }
 }
 
@@ -80,7 +81,7 @@ describe('SceneRuntimeChromeCoordinator', () => {
 
     coordinator.attach(secondHost, secondGuideCreate)
     firstPress?.end()
-    firstPress?.createGuideAt('h', { x: 80, y: 100 })
+    firstPress?.createGuideAt({ x: 80, y: 100 })
 
     expect(firstHost.style.cursor).toBe('crosshair')
     expect(firstHost.childElementCount).toBe(0)
@@ -95,7 +96,7 @@ describe('SceneRuntimeChromeCoordinator', () => {
     })
     const secondPress = pressRuler(secondHost.querySelector<HTMLCanvasElement>('[data-ruler-overlay-part="vertical"]'))
     secondPress?.end()
-    secondPress?.createGuideAt('v', { x: 100, y: 100 })
+    secondPress?.createGuideAt({ x: 100, y: 100 })
 
     expect(secondGuideCreate).toHaveBeenCalledWith('v', 45)
     coordinator.destroy()
@@ -133,7 +134,7 @@ describe('SceneRuntimeChromeCoordinator', () => {
 
     // What the session does with a ruler press: the pressed ruler's guide port, handed the release in camera screen px
     // (client 180, 150 on the map host at 100, 50).
-    pressRuler(host.querySelector<HTMLCanvasElement>('[data-ruler-overlay-part="horizontal"]'))?.createGuideAt('h', { x: 80, y: 100 })
+    pressRuler(host.querySelector<HTMLCanvasElement>('[data-ruler-overlay-part="horizontal"]'))?.createGuideAt({ x: 80, y: 100 })
 
     expect(onGuideCreate).toHaveBeenCalledWith('h', 20)
     coordinator.destroy()
@@ -158,7 +159,7 @@ describe('SceneRuntimeChromeCoordinator', () => {
     // The drag ends with the rulers: its cursor comes back, and its release lands no guide.
     expect(host.style.cursor).toBe('')
     press!.drag()
-    press!.createGuideAt('h', { x: 80, y: 100 })
+    press!.createGuideAt({ x: 80, y: 100 })
 
     expect(host.childElementCount).toBe(0)
     expect(host.style.cursor).toBe('')

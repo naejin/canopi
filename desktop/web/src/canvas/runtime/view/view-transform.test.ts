@@ -13,7 +13,7 @@ function fromPlane(planar: PlanarCamera, plane: SessionPlane, screen: ViewScreen
 }
 
 function fromCamera(camera: ViewCamera, plane: SessionPlane, screen: ViewScreen = SCREEN) {
-  return buildViewTransform({ camera, screen, plane, planeRevision: 3, revision: 7 })
+  return buildViewTransform({ camera, screen, plane, planeRevision: 3 })
 }
 
 function expectClose(actual: WorldPoint | null, expected: WorldPoint, digits = 6): void {
@@ -54,7 +54,6 @@ describe('view transform', () => {
         expect(view.pixelsPerMetre).toBeCloseTo(scale, 9)
         expect(view.northUp).toBe(true)
         expect(view.screenAxesInWorld()).toEqual({ right: { x: 1, y: 0 }, down: { x: 0, y: 1 } })
-        expect(view.revision).toBe(7)
         expect(view.planeRevision).toBe(3)
 
         const geographic = fromCamera(view.camera, plane)
@@ -116,9 +115,6 @@ describe('view transform', () => {
     expect(view.camera.zoom).toBeCloseTo(Math.log2(mapZoomToStageScale(0, 45.52) ** -1 * 2), 12)
     view.visibleWorldQuad().forEach((corner, index) => expectClose(corner, [
       { x: 100, y: 50 }, { x: 600, y: 50 }, { x: 600, y: 450 }, { x: 100, y: 450 },
-    ][index]!))
-    view.visibleWorldQuad({ top: 20, right: 100, bottom: 0, left: 40 }).forEach((corner, index) => expectClose(corner, [
-      { x: 120, y: 60 }, { x: 550, y: 60 }, { x: 550, y: 450 }, { x: 120, y: 450 },
     ][index]!))
     const quad = view.visibleWorldQuad()
     view.worldQuadToScreen(quad).forEach((corner, index) => expectClose(corner, [

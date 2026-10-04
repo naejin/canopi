@@ -323,7 +323,19 @@ export function createInteractionDeps(
     publishToolGuidance: overrides.publishToolGuidance ?? setCanvasToolGuidance,
     nudge: overrides.nudge ?? { nudgeSelected: vi.fn(() => true), endNudge: vi.fn() },
     renderer: createRecordingRenderer(),
+    readScrollWheel: () => 'zoom',
+    notifyTransientHistoryChange: () => {},
   }
+}
+
+/**
+ * Zooms the test view to 0.05 px/m, below the overview line (0.1 px/m), keeping the plane origin's screen point, as a zoom-out
+ * would reach overview; returns the step back to the site placement.
+ */
+export function enterOverview(view: Pick<TestView, 'viewport' | 'setViewport'>): () => void {
+  const site = view.viewport()
+  view.setViewport({ ...site, scale: 0.05 })
+  return () => view.setViewport(site)
 }
 
 export function createSelectionCommands(

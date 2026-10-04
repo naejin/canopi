@@ -26,7 +26,7 @@ afterEach(() => {
 function deps(): DomInputSourceDeps {
   return {
     host,
-    platform: { os: 'linux', engine: 'webkitgtk', gestureEvents: false },
+    platform: { os: 'linux', gestureEvents: false },
     bindings: () => CURRENT_BINDINGS,
     keys: { physicalCtrl: () => false, lastKeyboardMenuAt: () => null },
     clock: () => 0,

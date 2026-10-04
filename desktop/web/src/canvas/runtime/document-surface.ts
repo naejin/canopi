@@ -8,7 +8,6 @@ import {
   type CanvasPersistenceCapture,
   type CanvasRuntimeDocumentMetadata,
 } from './runtime'
-import type { ScenePersistedState } from './scene'
 import type { SceneRuntimeChromeCoordinator } from './scene-runtime/chrome-coordinator'
 import type { SceneRuntimeDocumentBridge } from './scene-runtime/document'
 import type { SceneRuntimeRenderScheduler } from './scene-runtime/render-scheduler'
@@ -31,7 +30,6 @@ interface SceneCanvasDocumentSurfaceOptions {
   readonly viewNavigation: Pick<ViewNavigation, 'openAt' | 'clearTemporaryFocus'>
   readonly chrome: Pick<SceneRuntimeChromeCoordinator, 'attach' | 'show' | 'hide' | 'destroy'>
   readonly rendering: Pick<SceneRuntimeRenderScheduler, 'container' | 'invalidate' | 'resize' | 'dispose'>
-  readonly getSceneSnapshot: () => ScenePersistedState
   readonly invalidateViewport: () => void
   readonly renderChrome: () => void
   readonly addGuide: (axis: 'h' | 'v', worldPosition: number) => void
@@ -80,7 +78,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
    */
   zoomToFit(): void {
     const bearing = this._documentState === 'absent' ? 0 : this.options.readOpeningBearing()
-    this.options.viewNavigation.openAt(this.options.getSceneSnapshot(), bearing)
+    this.options.viewNavigation.openAt(bearing)
     this.options.invalidateViewport()
   }
 

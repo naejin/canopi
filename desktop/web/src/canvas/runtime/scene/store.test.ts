@@ -3,18 +3,15 @@ import type { CanopiFile } from '../../../types/design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-format'
 import { geoAt } from '../../../__tests__/support/geo-design'
 import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../../../target'
-import {
-  SceneStore,
-  createDefaultScenePersistedState,
-  createDefaultSceneSessionState,
-  serializeScenePersistedState,
-} from './store'
+import { SceneStore } from './store'
+import { createDefaultScenePersistedState, createDefaultSceneSessionState } from './defaults'
+import { serializeScenePersistedState } from './codec'
 import { createSceneGeoFrame } from './geo-frame'
 
 const TEST_FRAME_ORIGIN = { lon: 13, lat: 23 }
 
 describe('scene store', () => {
-  it('projects guides and current physical extent without cloning the full scene', () => {
+  it('reads guides and whether it holds objects without cloning the full scene', () => {
     const store = new SceneStore()
     store.updatePersisted((draft) => {
       draft.guides.push({ id: 'guide', axis: 'h', position: 7 })
@@ -23,18 +20,14 @@ describe('scene store', () => {
     })
     const read = vi.spyOn(store, 'persisted', 'get')
     try {
-      expect(store.physicalExtentMeters).toBe(5)
+      expect(store.hasObjects).toBe(true)
       const guides = store.guides
       guides[0]!.position = 99
       expect(store.guides[0]!.position).toBe(7)
-      store.updatePersisted((draft) => { draft.annotations[0]!.position = { x: 6, y: 8 } })
-      expect(store.physicalExtentMeters).toBe(10)
+      store.updatePersisted((draft) => { draft.annotations = [] })
+      expect(store.hasObjects).toBe(false)
       expect(read).not.toHaveBeenCalled()
     } finally { read.mockRestore() }
-  })
-
-  it('keeps camera viewport state out of Scene Session state', () => {
-    expect(new SceneStore().session).not.toHaveProperty('viewport')
   })
 
   it('owns committed persisted drafts after the mutator returns', () => {
@@ -169,13 +162,9 @@ describe('scene store', () => {
       },
     }
 
-    const store = SceneStore.fromCanopi(file, {
-      selectedTargets: [{ kind: 'plant', id: 'plant-1' }],
-    })
+    const store = new SceneStore(file).setSelection([{ kind: 'plant', id: 'plant-1' }])
 
     expect(store.session.selectedTargets).toContainEqual({ kind: 'plant', id: 'plant-1' })
-    expect(store.session).not.toHaveProperty('activeEntityId')
-    expect(store.session).not.toHaveProperty('activeLayerName')
     expect(store.persisted.plants[0]).toMatchObject({
       stratum: null,
       canopySpreadM: 1.2,
@@ -183,11 +172,9 @@ describe('scene store', () => {
 
     store.updateSession((draft) => {
       draft.hoveredTarget = { kind: 'zone', id: 'zone-a' }
-      draft.documentRevision = 3
     })
 
     expect(store.session.hoveredTarget).toEqual({ kind: 'zone', id: 'zone-a' })
-    expect(store.session.documentRevision).toBe(3)
 
     // toCanopiFile serializes canvas-entity fields; non-canvas sections
     // (consortiums, timeline, budget) are emitted as empty placeholders —
@@ -205,7 +192,6 @@ describe('scene store', () => {
     expect(roundTripped.extra).toEqual({ guides: file.extra?.guides })
     expect(roundTripped.name).toBe('Untitled')
     expect(roundTripped.description).toBeNull()
-    expect(roundTripped).not.toHaveProperty('spatial_frame')
     expect(roundTripped.version).toBe(CURRENT_CANOPI_FILE_VERSION)
     // Non-canvas sections must be empty placeholders, NOT the input values
     expect(roundTripped.consortiums).toEqual([])
@@ -214,31 +200,27 @@ describe('scene store', () => {
   })
 
   it('creates a usable default scene state', () => {
-    const persisted = createDefaultScenePersistedState(new Date('2026-04-02T00:00:00.000Z'))
-    const secondPersisted = createDefaultScenePersistedState(new Date('2026-04-02T00:00:00.000Z'))
+    const persisted = createDefaultScenePersistedState()
+    const secondPersisted = createDefaultScenePersistedState()
     const session = createDefaultSceneSessionState()
     const firstLayer = persisted.layers[0]
     const secondLayer = secondPersisted.layers[0]
     if (!firstLayer || !secondLayer) throw new Error('canonical layer catalog is empty')
 
-    expect(persisted.layers).toHaveLength(6)
+    expect(persisted.layers).toHaveLength(4)
     expect(firstLayer).not.toBe(secondLayer)
     expect(persisted.plantSpeciesSymbols).toEqual({})
     expect(persisted.layers.map((layer: { name: string; visible: boolean }) => [layer.name, layer.visible])).toEqual([
-      ['climate', false],
       ['zones', true],
-      ['water', false],
       ['plants', true],
       ['measurement-guides', true],
       ['annotations', true],
     ])
-    firstLayer.visible = true
-    expect(secondLayer.visible).toBe(false)
+    firstLayer.visible = false
+    expect(secondLayer.visible).toBe(true)
     expect(persisted.plants).toHaveLength(0)
     expect(persisted.measurementGuides).toEqual([])
     expect(session.selectedTargets).toEqual([])
-    expect(session).not.toHaveProperty('activeEntityId')
-    expect(session).not.toHaveProperty('activeLayerName')
     expect(serializeScenePersistedState(persisted, createSceneGeoFrame(TEST_FRAME_ORIGIN), { now: new Date('2026-04-02T00:00:00.000Z') }).version).toBe(CURRENT_CANOPI_FILE_VERSION)
   })
 
@@ -246,13 +228,13 @@ describe('scene store', () => {
     const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSceneGeoFrame(TEST_FRAME_ORIGIN))
     delete file.measurement_guides
 
-    const store = SceneStore.fromCanopi(file)
+    const store = new SceneStore(file)
     expect(store.persisted.measurementGuides).toEqual([])
 
     const normalizedFile = store.toCanopiFile()
     expect(normalizedFile.measurement_guides).toEqual([])
 
-    const reloadedStore = SceneStore.fromCanopi(normalizedFile)
+    const reloadedStore = new SceneStore(normalizedFile)
     expect(reloadedStore.persisted.measurementGuides).toEqual([])
   })
 
@@ -317,7 +299,7 @@ describe('scene store', () => {
       extra: {},
     }
 
-    const serialized = SceneStore.fromCanopi(file).toCanopiFile({ now: new Date(file.updated_at) })
+    const serialized = new SceneStore(file).toCanopiFile({ now: new Date(file.updated_at) })
 
     expect(serialized.plants[0]?.locked).toBe(true)
     expect(serialized.zones[0]?.locked).toBe(true)
@@ -361,7 +343,7 @@ describe('scene store', () => {
       extra: {},
     } as CanopiFile
 
-    const store = SceneStore.fromCanopi(file)
+    const store = new SceneStore(file)
 
     expect(store.persisted.zones[0]?.rotationDeg).toBe(35)
     expect(store.toCanopiFile({ now: new Date(file.updated_at) }).zones[0]?.rotation).toBe(35)
@@ -402,7 +384,7 @@ describe('scene store', () => {
       extra: {},
     }
 
-    const store = SceneStore.fromCanopi(file)
+    const store = new SceneStore(file)
 
     store.updatePersisted((draft) => {
       draft.plants[0]!.stratum = 'high'
@@ -420,7 +402,7 @@ describe('scene store', () => {
   })
 
   it('serializes extra metadata under the extra key', () => {
-    const persisted = createDefaultScenePersistedState(new Date('2026-04-02T00:00:00.000Z'))
+    const persisted = createDefaultScenePersistedState()
     persisted.guides = [{ id: 'g-1', axis: 'h', position: 0 }, { id: 'g-2', axis: 'v', position: 0 }]
 
     const file = serializeScenePersistedState(persisted, createSceneGeoFrame(TEST_FRAME_ORIGIN), {

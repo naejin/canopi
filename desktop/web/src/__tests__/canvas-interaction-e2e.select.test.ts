@@ -1042,37 +1042,6 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('snaps Rotation Handle drags to 15 degree increments while Shift is held', () => {
-    store.updatePersisted((draft) => {
-      draft.zones = [makeRectZone('zone-1', [
-        { x: 20, y: 80 },
-        { x: 120, y: 80 },
-        { x: 120, y: 140 },
-        { x: 20, y: 140 },
-      ])]
-    })
-    const deps = createInteractionDeps(container, store, testView, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
-    })
-    const session = createTestSession(deps)
-    deps.setSelection([zoneTarget('zone-1')])
-    session.refreshMeasurements()
-
-    const handle = rotationHandle(container)!
-    const start = {
-      x: Number.parseFloat(handle.style.left) + 14,
-      y: Number.parseFloat(handle.style.top) + 14,
-    }
-
-    events.pointerDown(start, { button: 0, target: handle })
-    events.pointerMove({ x: 82, y: 53 }, { button: 0, shiftKey: true })
-
-    expect(store.persisted.zones[0]?.rotationDeg).toBe(15)
-    // As today, the readout is hidden with its handle during the turn (tools/select/rotate-handle.test.ts reads '+15°').
-    expect(rotationHandle(container)).toBeNull()
-    session.dispose()
-  })
-
   it('aborts an active Rotation Handle drag on pointer cancellation without creating history', () => {
     store.updatePersisted((draft) => {
       draft.zones = [makeRectZone('zone-1', [
@@ -1138,39 +1107,6 @@ describe('SceneInteractionSession', () => {
     expect(store.persisted.zones[0]?.rotationDeg).toBeCloseTo(90)
     expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-rotate')
-    session.dispose()
-  })
-
-  it('aborts tiny Rotation Handle deltas without dirtying history', () => {
-    store.updatePersisted((draft) => {
-      draft.zones = [makeRectZone('zone-1', [
-        { x: 20, y: 80 },
-        { x: 120, y: 80 },
-        { x: 120, y: 140 },
-        { x: 20, y: 140 },
-      ])]
-    })
-    const onSceneEditCommit = vi.fn()
-    const deps = createInteractionDeps(container, store, testView, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, testView),
-      onSceneEditCommit,
-    })
-    const session = createTestSession(deps)
-    deps.setSelection([zoneTarget('zone-1')])
-    session.refreshMeasurements()
-
-    const handle = rotationHandle(container)!
-    const start = {
-      x: Number.parseFloat(handle.style.left) + 14,
-      y: Number.parseFloat(handle.style.top) + 14,
-    }
-
-    events.pointerDown(start, { button: 0, target: handle })
-    events.pointerMove({ x: start.x + 0.1, y: start.y }, { button: 0 })
-    events.pointerUp({ x: start.x + 0.1, y: start.y }, { button: 0 })
-
-    expect(store.persisted.zones[0]?.rotationDeg).toBe(0)
-    expect(onSceneEditCommit).not.toHaveBeenCalled()
     session.dispose()
   })
 
@@ -1593,7 +1529,7 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
     session.setTool('select')
     baseDeps.setSelection([plantTarget('plant-1')])
-    const before = store.snapshot().persisted
+    const before = store.persisted
 
     events.pointerDown({ x: 120, y: 30 }, { pointerId: 43 })
     events.pointerMove({ x: 150, y: 60 }, { pointerId: 43 })
@@ -4389,7 +4325,7 @@ describe('SceneInteractionSession', () => {
       const session = createTestSession(deps)
       session.setTool('select')
       session.refreshMeasurements()
-      const persistedBefore = store.snapshot().persisted
+      const persistedBefore = store.persisted
       // A zone turns, so its rotation handle shows once the selection is settled; a guide does not.
       const settledRotationHandle = kind !== 'Measurement Guide Control Point'
       expect(rotationHandle(container) !== null).toBe(settledRotationHandle)
@@ -4471,7 +4407,7 @@ describe('SceneInteractionSession', () => {
       const session = createTestSession(deps)
       session.setTool('select')
       session.refreshMeasurements()
-      const persistedBefore = store.snapshot().persisted
+      const persistedBefore = store.persisted
       const handle = kind === 'Rotation Handle'
         ? rotationHandle(container)!
         : kind === 'Zone Control Point'
@@ -4601,7 +4537,7 @@ describe('SceneInteractionSession', () => {
     const deps: SceneInteractionSessionDeps = { ...baseDeps, sceneEdits: abortFailure.sceneEdits }
     const session = createTestSession(deps)
     session.setTool('select')
-    const persistedBefore = store.snapshot().persisted
+    const persistedBefore = store.persisted
 
     events.pointerDown({ x: 20, y: 30 }, { pointerId: 26 })
     events.pointerMove({ x: 40, y: 50 }, { pointerId: 26 })
@@ -4638,7 +4574,7 @@ describe('SceneInteractionSession', () => {
     const deps: SceneInteractionSessionDeps = { ...baseDeps, sceneEdits: abortFailure.sceneEdits }
     const session = createTestSession(deps)
     session.setTool('select')
-    const persistedBefore = store.snapshot().persisted
+    const persistedBefore = store.persisted
 
     events.pointerDown({ x: 20, y: 30 }, { pointerId: 28 })
     events.pointerMove({ x: 40, y: 50 }, { pointerId: 28 })
@@ -4678,7 +4614,7 @@ describe('SceneInteractionSession', () => {
     const deps: SceneInteractionSessionDeps = { ...baseDeps, sceneEdits: abortFailure.sceneEdits }
     const session = createTestSession(deps)
     session.setTool('select')
-    const persistedBefore = store.snapshot().persisted
+    const persistedBefore = store.persisted
 
     events.pointerDown({ x: 20, y: 30 }, { pointerId: 29 })
     events.pointerMove({ x: 40, y: 50 }, { pointerId: 29 })
@@ -4742,7 +4678,7 @@ describe('SceneInteractionSession', () => {
     const deps: SceneInteractionSessionDeps = { ...baseDeps, sceneEdits: abortFailure.sceneEdits }
     const session = createTestSession(deps)
     session.setTool('select')
-    const persistedBefore = store.snapshot().persisted
+    const persistedBefore = store.persisted
 
     events.pointerDown({ x: 20, y: 30 }, { pointerId: 30 })
     events.pointerMove({ x: 40, y: 50 }, { pointerId: 30 })

@@ -16,7 +16,6 @@ import {
 } from '../app/shell/visible-map-area'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { framingRect } from '../canvas/runtime/view/fit'
-import { sceneExtentPoints } from '../canvas/runtime/scene-extent'
 import type { ScenePersistedState } from '../canvas/runtime/scene'
 import { plantFinderMapMatches, zoomToPlantFinderMatches } from '../app/plant-finder/map-matches'
 import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
@@ -133,7 +132,8 @@ describe('visible map area', () => {
     expect(viewport.x).toBeGreaterThanOrEqual(236 + 72 - 1e-6)
 
     const scene = emptyScene({ x: 0, y: 0 }, { x: 40, y: 20 })
-    camera.navigation.zoomToFit(scene, { extentPoints: sceneExtentPoints(scene) })
+    camera.setScene(scene)
+    camera.navigation.zoomToFit()
     const fitted = camera.viewport()
     const centre = { x: 20 * fitted.scale + fitted.x, y: 10 * fitted.scale + fitted.y }
     expect(centre.x).toBeCloseTo(236 + 588 / 2, 0)

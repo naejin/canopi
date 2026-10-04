@@ -117,8 +117,6 @@ export function createTestCanvasCommandSurface(
       setSelectedPlantSymbol: () => 0,
       setPlantColorForSpecies: () => 0,
       setPlantSymbolForSpecies: () => 0,
-      clearPlantSpeciesColor: () => false,
-      clearPlantSpeciesSymbol: () => false,
     },
   }
 

@@ -7,7 +7,7 @@ import type { ButtonRole, RawInput, RecogniserConfig, RecogniserState, TargetCla
 import { initialRecogniserState, recognise, type PointerSession } from './recognise'
 import { DEFAULT_THRESHOLDS } from './thresholds'
 
-const PLATFORM: InputPlatform = { os: 'linux', engine: 'webkitgtk', gestureEvents: false }
+const PLATFORM: InputPlatform = { os: 'linux', gestureEvents: false }
 const CONFIG: RecogniserConfig = { platform: PLATFORM, bindings: CURRENT_BINDINGS, thresholds: DEFAULT_THRESHOLDS }
 const RUNS = 400
 const STEPS = 60

@@ -1,10 +1,9 @@
 // canvas/runtime/scene-extent.ts
 //
-// Owns a scene's extent for the view's fits (SceneBoundsOptions.extentPoints, spec §1.1): the corner points of every plant, zone
-// and note footprint at a candidate scale, in plane metres, and the selected objects' outlines for zoom to selection. Notes and
+// Owns a scene's extent for the view's fits (SceneExtent.extentPoints, spec §1.1): the corner points of every plant, zone and note
+// footprint at a candidate scale, in plane metres, and the selected objects' outlines for zoom to selection. Notes and
 // default-mode plants are screen-sized, so an extent depends on the scale. It sits outside view/ because it measures the scene
-// (P4): the command and document surfaces pass it to the fits, the runtime's navigation reads the selection's, and the legacy
-// camera facade falls back to the scene's when a caller passes no extent.
+// (P4): the runtime's construction gives both to the navigation's readSceneExtent and readSelectionPoints.
 
 import { getAnnotationVisualWorldCorners, getAnnotationWorldBounds } from './annotation-layout'
 import { getCanvasDetailLayout } from './automatic-detail'
@@ -20,12 +19,12 @@ const OUTLINE_SIDES = 32
 interface Box { readonly x: number; readonly y: number; readonly width: number; readonly height: number }
 
 /**
- * `plantContext` sizes the plants as the renderer does (species symbols, canopy spreads); without it, plants use a fresh species
- * cache at each scale. The context's own viewport is replaced by the candidate scale.
+ * `plantContext` sizes the plants as the renderer does (species symbols, canopy spreads). Its own scale is replaced by the
+ * candidate scale.
  */
 export function sceneExtentPoints(
   scene: ScenePersistedState,
-  plantContext?: PlantPresentationContext,
+  plantContext: PlantPresentationContext,
 ): (pixelsPerMetre: number) => readonly WorldPoint[] {
   return (pixelsPerMetre) => {
     const points: WorldPoint[] = []
@@ -38,7 +37,7 @@ export function sceneExtentPoints(
       )
     }
     const plantsAtScale: PlantPresentationContext = {
-      ...(plantContext ?? { speciesCache: new Map() }),
+      ...plantContext,
       pixelsPerMetre,
       plants: scene.plants,
     }
@@ -61,12 +60,12 @@ export function sceneExtentPoints(
 export function selectionExtentPoints(
   scene: ScenePersistedState,
   targets: readonly SceneDesignObjectTarget[],
-  options: { readonly plantContext?: PlantPresentationContext; readonly revealedAnnotationId?: string | null },
+  options: { readonly plantContext: PlantPresentationContext; readonly revealedAnnotationId?: string | null },
 ): (pixelsPerMetre: number) => readonly WorldPoint[] {
   return (pixelsPerMetre) => {
     const points: WorldPoint[] = []
     const plantsAtScale: PlantPresentationContext = {
-      ...(options.plantContext ?? { speciesCache: new Map() }),
+      ...options.plantContext,
       pixelsPerMetre,
       plants: scene.plants,
     }

@@ -1,6 +1,5 @@
 import { locale } from '../../app/settings/state'
 import { plantColorMenuOpen } from '../../canvas/plant-color-menu-state'
-import { plantSpeciesColorDefaults } from '../../canvas/plant-species-color-defaults'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import {
   currentCanvasPlantPresentationCommandSurface,
@@ -52,9 +51,10 @@ function closeMenu(buttonRef?: AppearanceAnchorRef) {
 
 export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
   void currentCanvasSelection.value
-  void plantSpeciesColorDefaults.value
   const commandSurface = currentCanvasPlantPresentationCommandSurface.value
   const querySurface = currentCanvasQuerySurface.value
+  // A species colour set elsewhere, or undone, moves the scene revision.
+  void querySurface?.revision.scene.value
   void querySurface?.revision.plantNames.value
   const activeLocale = locale.value
   const menuOpen = plantColorMenuOpen.value

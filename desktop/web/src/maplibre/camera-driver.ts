@@ -7,7 +7,6 @@
 
 import { signal } from '@preact/signals'
 import type { SessionPlane } from '../canvas/session-plane'
-import { isWorkspaceOverviewScale } from '../canvas/workspace-camera-policy'
 import { startBearingTween, type BearingTween } from '../canvas/runtime/view/bearing-tween'
 import type { CameraDriver, CameraDriverDeps, CameraDriverFailure, CameraMove } from '../canvas/runtime/view/camera-driver'
 import {
@@ -15,23 +14,23 @@ import {
   rotateCameraAround,
   zoomCameraAround,
 } from '../canvas/runtime/view/camera-math'
-import { createDriverFrameSource } from '../canvas/runtime/view/frame-source'
 import {
-  constrainCamera,
-  normaliseBearing,
-  scaleBoundsAt,
-  VIEW_EASE_MS,
-  zoomFloorForArc,
-} from '../canvas/runtime/view/navigation-policy'
+  acceptsMove,
+  driverFrame,
+  driverFrameState,
+  normaliseScreen,
+  sameDriverFrameState,
+  zoomFactorWithinRange,
+  type DriverFrameState,
+} from '../canvas/runtime/view/driver-frame'
+import { createDriverFrameSource } from '../canvas/runtime/view/frame-source'
+import { constrainCamera, normaliseBearing, VIEW_EASE_MS } from '../canvas/runtime/view/navigation-policy'
 import type {
   GeoPoint,
   ScreenInsets,
-  ScreenPoint,
   ViewCamera,
-  ViewFrame,
   ViewScreen,
 } from '../canvas/runtime/view/types'
-import { buildViewTransform } from '../canvas/runtime/view/view-transform'
 import type { MapLibreLngLat, MapLibreMapInstance, MapLibreTransformConstrain } from './loader'
 import { redactCredentials } from './redact-credentials'
 
@@ -54,17 +53,6 @@ export type MapLibreCameraDriverMap = Pick<MapLibreMapInstance,
 const REQUIRED_READ_BACKS = ['getCenter', 'getZoom', 'getBearing'] as const
 const NO_INSETS: ScreenInsets = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 })
 const EMPTY_SCREEN: ViewScreen = Object.freeze({ width: 0, height: 0, devicePixelRatio: 1 })
-
-/** Everything a frame is built from; a change publishes only when one of these moved. */
-interface FrameState {
-  readonly camera: ViewCamera
-  readonly screen: ViewScreen
-  readonly insets: ScreenInsets
-  readonly scaleBounds: { readonly min: number; readonly max: number }
-  readonly overviewPixelsPerMetre: number
-  readonly plane: SessionPlane
-  readonly planeRevision: number
-}
 
 interface Flight {
   readonly targetBearingDeg: number
@@ -126,7 +114,7 @@ export function createMapLibreCameraDriver(
   }
   // MapLibre applies the guard as soon as it is installed, so the first frame is read after it.
   let published = frameState((guardInstalled ? readCamera() : attached) ?? placeholderCamera())
-  const frames = createDriverFrameSource(buildFrame(published))
+  const frames = createDriverFrameSource(driverFrame(published, true))
 
   const onMove = () => {
     if (ownCalls > 0 || !live()) return
@@ -195,44 +183,16 @@ export function createMapLibreCameraDriver(
     }
   }
 
-  function frameState(camera: ViewCamera): FrameState {
-    const policy = deps.policy()
-    return {
-      camera,
-      screen,
-      insets,
-      scaleBounds: scaleBoundsAt(screen, policy, camera.bearingDeg),
-      overviewPixelsPerMetre: policy.overviewPixelsPerMetre,
-      plane,
-      planeRevision,
-    }
-  }
-
-  function buildFrame(state: FrameState): ViewFrame {
-    const view = buildViewTransform({
-      camera: state.camera,
-      screen: state.screen,
-      plane: state.plane,
-      planeRevision: state.planeRevision,
-      revision: 0,
-    })
-    return Object.freeze<ViewFrame>({
-      view,
-      mode: isWorkspaceOverviewScale(view.pixelsPerMetre, { overviewScaleThreshold: state.overviewPixelsPerMetre }) ? 'overview' : 'site',
-      scaleBounds: state.scaleBounds,
-      insets: state.insets,
-      attached: true,
-      revision: 0,
-    })
+  function frameState(camera: ViewCamera): DriverFrameState {
+    return driverFrameState(camera, { screen, insets, plane, planeRevision }, deps.policy())
   }
 
   /** Publishes one frame when anything in it changed, then runs the calls queued meanwhile. */
   function commit(camera: ViewCamera): void {
     const state = frameState(camera)
-    if (sameFrameState(published, state)) return
+    if (sameDriverFrameState(published, state)) return
     published = state
-    const frame = buildFrame(state)
-    frames.publish(frame)
+    frames.publish(driverFrame(state, true))
     while (!frames.dispatching && queued.length > 0 && live()) queued.shift()!()
   }
 
@@ -330,15 +290,6 @@ export function createMapLibreCameraDriver(
     commit(camera)
   }
 
-  /** The zoom factor clamped to the zoom range at the live bearing first, as the headless driver clamps the scale before anchoring. */
-  function zoomAround(camera: ViewCamera, anchorPx: ScreenPoint, factor: number): ViewCamera {
-    const policy = deps.policy()
-    const floor = Math.max(policy.minZoom, zoomFloorForArc(screen, policy, camera.bearingDeg, camera.bearingDeg))
-    const wanted = camera.zoom + Math.log2(factor)
-    const zoom = Math.min(policy.maxZoom, Math.max(Math.min(policy.maxZoom, floor), wanted))
-    return zoomCameraAround(camera, screen, anchorPx, zoom === wanted ? factor : 2 ** (zoom - camera.zoom))
-  }
-
   function fly(target: ViewCamera, from: ViewCamera): void {
     const flyTo = map.flyTo
     if (!flyTo || deps.policy().reducedMotion.peek()) {
@@ -358,23 +309,23 @@ export function createMapLibreCameraDriver(
   }
 
   function apply(move: CameraMove): void {
-    if (!live() || queuedWhileDispatching(() => apply(move))) return
+    if (!live() || !acceptsMove(move) || queuedWhileDispatching(() => apply(move))) return
     switch (move.kind) {
       case 'pan-by': {
-        if (!finitePoint(move.deltaPx)) return
         // A pan during a tween composes with it: the tween's next step starts from the panned camera.
         const start = startingCamera(true)
         if (start) moveTo(constrainCamera(panCamera(start.camera, screen, move.deltaPx), screen, deps.policy()), start)
         return
       }
       case 'zoom-around': {
-        if (!Number.isFinite(move.factor) || move.factor <= 0 || !finitePoint(move.anchorPx)) return
         const start = startingCamera(true)
-        if (start) moveTo(constrainCamera(zoomAround(start.camera, move.anchorPx, move.factor), screen, deps.policy()), start)
+        if (!start) return
+        // The factor is held inside the zoom range at the live bearing first, as the headless driver holds it, so the anchor holds.
+        const factor = zoomFactorWithinRange(start.camera, screen, deps.policy(), move.factor)
+        moveTo(constrainCamera(zoomCameraAround(start.camera, screen, move.anchorPx, factor), screen, deps.policy()), start)
         return
       }
       case 'rotate-around': {
-        if (!Number.isFinite(move.bearingDeg) || (move.anchorPx !== 'centre' && !finitePoint(move.anchorPx))) return
         const start = startingCamera(false)
         if (!start) return
         if (move.animation === 'ease' && !deps.policy().reducedMotion.peek()) {
@@ -392,7 +343,6 @@ export function createMapLibreCameraDriver(
       }
       case 'set': {
         const { target } = move
-        if (![target.center.lon, target.center.lat, target.zoom, target.bearingDeg].every(Number.isFinite)) return
         const start = startingCamera(false)
         if (!start) return
         const normalised: ViewCamera = { ...target, bearingDeg: normaliseBearing(target.bearingDeg), pitchDeg: 0 }
@@ -511,49 +461,10 @@ function sameKindOfLngLat(template: MapLibreLngLat, center: GeoPoint): MapLibreL
 /** The canvas' CSS size and density, as MapLibre last sized it: the screen the map renders now. */
 function canvasScreen(map: MapLibreCameraDriverMap): ViewScreen {
   const canvas = map.getCanvas?.()
-  const width = finiteSize(canvas?.clientWidth)
-  const height = finiteSize(canvas?.clientHeight)
-  const density = canvas && width > 0 ? canvas.width / width : Number.NaN
-  return normaliseScreen({ width, height, devicePixelRatio: density })
-}
-
-/** Invalid sizes read as 0 and an invalid density as 1, as the headless driver reads them. */
-function normaliseScreen(screen: ViewScreen): ViewScreen {
-  const density = screen.devicePixelRatio
-  return Object.freeze({
-    width: finiteSize(screen.width),
-    height: finiteSize(screen.height),
-    devicePixelRatio: Number.isFinite(density) && density > 0 ? density : 1,
-  })
-}
-
-function finiteSize(value: number | undefined): number {
-  return value !== undefined && Number.isFinite(value) ? Math.max(0, value) : 0
-}
-
-function finitePoint(point: ScreenPoint): boolean {
-  return Number.isFinite(point.x) && Number.isFinite(point.y)
+  const width = canvas?.clientWidth
+  return normaliseScreen({ width, height: canvas?.clientHeight, devicePixelRatio: canvas && width ? canvas.width / width : undefined })
 }
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
-}
-
-function sameFrameState(previous: FrameState, next: FrameState): boolean {
-  return previous.camera.center.lon === next.camera.center.lon
-    && previous.camera.center.lat === next.camera.center.lat
-    && previous.camera.zoom === next.camera.zoom
-    && previous.camera.bearingDeg === next.camera.bearingDeg
-    && previous.screen.width === next.screen.width
-    && previous.screen.height === next.screen.height
-    && previous.screen.devicePixelRatio === next.screen.devicePixelRatio
-    && previous.insets.top === next.insets.top
-    && previous.insets.right === next.insets.right
-    && previous.insets.bottom === next.insets.bottom
-    && previous.insets.left === next.insets.left
-    && previous.scaleBounds.min === next.scaleBounds.min
-    && previous.scaleBounds.max === next.scaleBounds.max
-    && previous.overviewPixelsPerMetre === next.overviewPixelsPerMetre
-    && previous.plane === next.plane
-    && previous.planeRevision === next.planeRevision
 }

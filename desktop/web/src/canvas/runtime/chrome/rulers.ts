@@ -25,13 +25,11 @@ export interface RulerOverlayOptions {
 
 /**
  * Draws the rulers and creates the guides dragged out of them. The overlay listens to nothing (policy P6): the DOM input
- * source takes ruler presses, and `pressRuler` finds the pressed ruler's overlay. `createGuideAt` is today's gutter, origin
- * and visibility checks.
+ * source takes ruler presses, and `pressRuler` finds the pressed ruler's overlay, whose press lands the guide.
  */
 export interface RulerOverlay {
   update(snapshot: RulerOverlaySnapshot): void
   refreshTheme(): void
-  createGuideAt(axis: RulerAxis, at: ScreenPoint): void
   destroy(): void
 }
 
@@ -41,9 +39,8 @@ export interface RulerOverlay {
  * destroyed lands no guide.
  */
 export interface RulerPress {
-  readonly axis: RulerAxis
   /** The guide released at `at`, in CSS px of the camera's screen (the map host), unless the rulers hid since the press. */
-  createGuideAt(axis: RulerAxis, at: ScreenPoint): void
+  createGuideAt(at: ScreenPoint): void
   /** The pointer moved during the drag: today's resize cursor on the overlay, until the drag ends. */
   drag(): void
   /** The drag is over: the overlay's cursor comes back. Idempotent; the overlay ends it itself when the rulers hide. */
@@ -63,19 +60,7 @@ export function pressRuler(target: EventTarget | null): RulerPress | null {
   return overlay.press(axis)
 }
 
-interface RulerPalette {
-  readonly background: string
-  readonly text: string
-  readonly border: string
-  readonly labelFont: string
-}
-
-const DEFAULT_PALETTE: RulerPalette = {
-  background: getCanvasColor('ruler-bg'),
-  text: getCanvasColor('ruler-text'),
-  border: 'rgba(58, 46, 28, 0.14)',
-  labelFont: `${CANVAS_RULER_LABEL_FONT_SIZE_PX}px ${CANVAS_CHROME_FONT_FAMILY}`,
-}
+const RULER_LABEL_FONT = `${CANVAS_RULER_LABEL_FONT_SIZE_PX}px ${CANVAS_CHROME_FONT_FAMILY}`
 
 export function createRulerOverlay(
   container: HTMLElement,
@@ -89,7 +74,6 @@ class HtmlRulerOverlay implements RulerOverlay {
   private readonly _verticalCanvas = document.createElement('canvas')
   private readonly _corner = document.createElement('div')
   private _snapshot: RulerOverlaySnapshot | null = null
-  private _palette = DEFAULT_PALETTE
   /** The press whose drag cursor shows; a new press, a hide or destroy ends it (today's active drag). */
   private _activePress: RulerPress | null = null
   /** Bumped each time the rulers hide and at destroy: a press made before lands no guide. */
@@ -106,7 +90,6 @@ class HtmlRulerOverlay implements RulerOverlay {
       this._container.appendChild(this._horizontalCanvas)
       this._container.appendChild(this._verticalCanvas)
       this._container.appendChild(this._corner)
-      this.refreshTheme()
     } catch (error) {
       this._removeParts()
       this._destroyed = true
@@ -137,14 +120,14 @@ class HtmlRulerOverlay implements RulerOverlay {
 
     if (mode === 'site' && view.northUp) {
       const origin = this._overlayOrigin()
-      drawHorizontalRuler(this._horizontalCanvas, snapshot.frame, this._palette, origin)
-      drawVerticalRuler(this._verticalCanvas, snapshot.frame, this._palette, origin)
+      drawHorizontalRuler(this._horizontalCanvas, snapshot.frame, origin)
+      drawVerticalRuler(this._verticalCanvas, snapshot.frame, origin)
     }
   }
 
+  /** Repaints the latest frame in the canvas colours the theme switch just re-read, without waiting for the next frame. */
   refreshTheme(): void {
-    if (this._destroyed) return
-    this._palette = readRulerPalette(this._container)
+    if (this._snapshot) this.update(this._snapshot)
   }
 
   /**
@@ -152,7 +135,7 @@ class HtmlRulerOverlay implements RulerOverlay {
    * in overview or turned from north), or inside the ruler's own gutter; otherwise a guide at that world coordinate of
    * the latest camera.
    */
-  createGuideAt(axis: RulerAxis, at: ScreenPoint): void {
+  private _createGuideAt(axis: RulerAxis, at: ScreenPoint): void {
     if (this._destroyed) return
     const snapshot = this._snapshot
     if (!snapshot || !this._shown) return
@@ -172,9 +155,8 @@ class HtmlRulerOverlay implements RulerOverlay {
     const previousCursor = this._container.style.cursor
     let active = true
     const press: RulerPress = {
-      axis,
-      createGuideAt: (guideAxis, at) => {
-        if (this._hides === hides) this.createGuideAt(guideAxis, at)
+      createGuideAt: (at) => {
+        if (this._hides === hides) this._createGuideAt(axis, at)
       },
       drag: () => {
         if (active) this._container.style.cursor = axis === 'h' ? 's-resize' : 'e-resize'
@@ -240,9 +222,9 @@ class HtmlRulerOverlay implements RulerOverlay {
       height: ${RULER_SIZE}px;
       z-index: 17;
       pointer-events: none;
-      background: var(--canvas-ruler-bg, ${DEFAULT_PALETTE.background});
-      border-right: 1px solid var(--color-border, ${DEFAULT_PALETTE.border});
-      border-bottom: 1px solid var(--color-border, ${DEFAULT_PALETTE.border});
+      background: var(--canvas-ruler-bg);
+      border-right: 1px solid var(--color-border);
+      border-bottom: 1px solid var(--color-border);
       box-sizing: border-box;
       display: none;
     `
@@ -263,17 +245,6 @@ class HtmlRulerOverlay implements RulerOverlay {
   }
 }
 
-function readRulerPalette(container: HTMLElement): RulerPalette {
-  const style = getComputedStyle(container)
-  const text = style.getPropertyValue('--canvas-ruler-text').trim() || DEFAULT_PALETTE.text
-  return {
-    background: style.getPropertyValue('--canvas-ruler-bg').trim() || DEFAULT_PALETTE.background,
-    text,
-    border: style.getPropertyValue('--color-border').trim() || DEFAULT_PALETTE.border,
-    labelFont: DEFAULT_PALETTE.labelFont,
-  }
-}
-
 interface RulerOverlayOrigin {
   readonly x: number
   readonly y: number
@@ -282,7 +253,6 @@ interface RulerOverlayOrigin {
 function drawHorizontalRuler(
   canvas: HTMLCanvasElement,
   frame: ViewFrame,
-  palette: RulerPalette,
   origin: RulerOverlayOrigin,
 ): void {
   const dpr = window.devicePixelRatio || 1
@@ -300,9 +270,9 @@ function drawHorizontalRuler(
   context.setTransform(dpr, 0, 0, dpr, 0, 0)
 
   const view = frame.view
-  context.fillStyle = palette.background
+  context.fillStyle = getCanvasColor('ruler-bg')
   context.fillRect(0, 0, cssWidth, cssHeight)
-  context.strokeStyle = palette.border
+  context.strokeStyle = getCanvasColor('ruler-border')
   context.lineWidth = 1
   context.beginPath()
   context.moveTo(0, cssHeight - 0.5)
@@ -318,11 +288,11 @@ function drawHorizontalRuler(
   const startWorld = Math.floor(worldLeft / tickInterval) * tickInterval
   const labels = new RulerLabelSpacing()
 
-  context.fillStyle = palette.text
-  context.font = palette.labelFont
+  context.fillStyle = getCanvasColor('ruler-text')
+  context.font = RULER_LABEL_FONT
   context.textAlign = 'center'
   context.textBaseline = 'bottom'
-  context.strokeStyle = palette.text
+  context.strokeStyle = getCanvasColor('ruler-text')
   context.lineWidth = 1
 
   for (let world = startWorld; world <= worldRight; world += tickInterval) {
@@ -345,7 +315,6 @@ function drawHorizontalRuler(
 function drawVerticalRuler(
   canvas: HTMLCanvasElement,
   frame: ViewFrame,
-  palette: RulerPalette,
   origin: RulerOverlayOrigin,
 ): void {
   const dpr = window.devicePixelRatio || 1
@@ -363,9 +332,9 @@ function drawVerticalRuler(
   context.setTransform(dpr, 0, 0, dpr, 0, 0)
 
   const view = frame.view
-  context.fillStyle = palette.background
+  context.fillStyle = getCanvasColor('ruler-bg')
   context.fillRect(0, 0, cssWidth, cssHeight)
-  context.strokeStyle = palette.border
+  context.strokeStyle = getCanvasColor('ruler-border')
   context.lineWidth = 1
   context.beginPath()
   context.moveTo(cssWidth - 0.5, 0)
@@ -380,9 +349,9 @@ function drawVerticalRuler(
   const startWorld = Math.floor(worldTop / tickInterval) * tickInterval
   const labels = new RulerLabelSpacing()
 
-  context.fillStyle = palette.text
-  context.font = palette.labelFont
-  context.strokeStyle = palette.text
+  context.fillStyle = getCanvasColor('ruler-text')
+  context.font = RULER_LABEL_FONT
+  context.strokeStyle = getCanvasColor('ruler-text')
   context.lineWidth = 1
 
   for (let world = startWorld; world <= worldBottom; world += tickInterval) {
@@ -426,17 +395,11 @@ class RulerLabelSpacing {
   private _previousEnd = Number.NEGATIVE_INFINITY
 
   admit(context: CanvasRenderingContext2D, label: string, center: number): boolean {
-    const half = measureRulerLabel(context, label) / 2
+    const half = context.measureText(label).width / 2
     if (center - half < this._previousEnd + RULER_LABEL_GAP_PX) return false
     this._previousEnd = center + half
     return true
   }
-}
-
-function measureRulerLabel(context: CanvasRenderingContext2D, label: string): number {
-  const measured = typeof context.measureText === 'function' ? context.measureText(label).width : NaN
-  // Without metrics (no layout engine) assume a generous 0.6 em per character.
-  return Number.isFinite(measured) && measured > 0 ? measured : label.length * CANVAS_RULER_LABEL_FONT_SIZE_PX * 0.6
 }
 
 const RULER_DISTANCES = NICE_DISTANCES.filter((distance) => distance >= 0.1)

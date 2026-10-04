@@ -9,11 +9,11 @@ interface SceneRuntimeReoriginOptions {
   readonly commandAdmission: SceneCommandAdmission
 }
 
-/** What the controller last looked at: a frame that keeps all of it (a hydration, an inset change) is not observed. */
 /** Placements this close are the same: a micropixel, and a billionth of the scale. */
 const SAME_PLACEMENT_PX = 1e-6
 const SAME_SCALE_RATIO = 1e-9
 
+/** What the controller last looked at: a frame that keeps all of it (a hydration, an inset change) is not observed. */
 interface ObservedFrame {
   readonly x: number
   readonly y: number

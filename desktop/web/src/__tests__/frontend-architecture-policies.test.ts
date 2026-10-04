@@ -574,15 +574,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'Scene physical extent depends only on canonical Zone geometry',
-    from: ['src/canvas/runtime/scene-physical-extent.ts'],
-    targets: ['**'],
-    exceptTargets: ['src/canvas/runtime/zone-geometry.ts'],
-    allowTypeOnlyTargets: ['src/canvas/runtime/scene/index.ts'],
-    edgeKinds: ['static', 'dynamic', 'import-type', 'reexport'],
-  },
-  {
-    kind: 'forbid-imports',
     name: 'Plant finder matcher stays pure over the search normalization authority',
     from: ['src/app/plant-finder/matcher.ts'],
     targets: ['**'],
@@ -1122,14 +1113,6 @@ const NAMED_IMPORT_POLICIES = [
       'ShellCommandIdForCapability',
       'ShellCommandState',
     ],
-  },
-  {
-    kind: 'named-imports',
-    name: 'Scene physical extent delegates every Zone shape to canonical geometry',
-    from: ['src/canvas/runtime/scene-physical-extent.ts'],
-    target: 'src/canvas/runtime/zone-geometry.ts',
-    requiredNames: ['getZoneRadialExtentMeters'],
-    allowedNames: ['getZoneRadialExtentMeters'],
   },
   {
     kind: 'named-imports',
@@ -1920,15 +1903,14 @@ const CANVAS_V2_POLICIES = [
     names: ['worldToScreen', 'screenToWorld'],
   },
   {
-    // The camera driver builds the frame it publishes; the lens builds its own transform from a camera at its centre;
-    // test support builds one for a test view.
+    // Both camera drivers build their frames through view/driver-frame.ts; the lens builds its own transform from a camera at
+    // its centre; test support builds one for a test view.
     kind: 'confine-symbols',
-    name: 'P3 only the view module, the camera driver and the lens build a view transform',
+    name: 'P3 only the view module and the lens build a view transform',
     from: ['src/**'],
     names: ['buildViewTransform'],
     allowedFrom: [
       'src/canvas/runtime/view/**',
-      'src/maplibre/camera-driver.ts',
       'src/canvas/runtime/inspection-lens.ts',
       ...TEST_SOURCE_PATTERNS,
     ],
@@ -2689,7 +2671,7 @@ const P1_MAP_TYPE = '[P1 the camera driver imports the MapLibre map type]'
 const P2 = '[P2 nobody projects through MapLibre]'
 const P3_SYMBOLS = '[P3 the legacy camera, its viewport snapshots and the planar camera maths stay deleted]'
 const P3_EXPORTS = '[P3 no module exports a free worldToScreen or screenToWorld]'
-const P3_BUILDER = '[P3 only the view module, the camera driver and the lens build a view transform]'
+const P3_BUILDER = '[P3 only the view module and the lens build a view transform]'
 const P4_IMPORTS = '[P4 the view module imports only its pure dependencies]'
 const P5_IMPORTS = '[P5 tools import no MapLibre, DOM or Pixi]'
 const P5_SYMBOLS = '[P5 tools name no DOM event, element or camera]'
@@ -2844,17 +2826,15 @@ describe('canvas v2 policies', () => {
     ])
   })
 
-  it('P3 confines building a view transform to the view module, the camera driver, the lens and tests', () => {
+  it('P3 confines building a view transform to the view module, the lens and tests', () => {
     const allowed = [
       'src/canvas/runtime/view/**',
-      'src/maplibre/camera-driver.ts',
       'src/canvas/runtime/inspection-lens.ts',
       ...TEST_SOURCE_PATTERNS,
     ].join(', ')
     const build = ['export const view = buildViewTransform(camera, screen, plane)']
     const graph = createTypeScriptSourceGraph([
       plantedSource('src/canvas/runtime/view/headless-driver.ts', build),
-      plantedSource('src/maplibre/camera-driver.ts', build),
       plantedSource('src/canvas/runtime/inspection-lens.ts', build),
       plantedSource('src/__tests__/support/test-view.ts', build),
       plantedSource('src/canvas/runtime/chrome/rulers.ts', build),

@@ -66,7 +66,6 @@ export class SceneCanvasInspectionOwner {
     let magnification = 1
     let highlightedId: string | null = null
     let frame: number | null = null
-    let lensViewRevision = 0
     /** The lens's view as last painted: its screen axes turn a lens drag or arrow into ground. */
     let lensView: ViewTransform | null = null
     let released = false
@@ -122,7 +121,6 @@ export class SceneCanvasInspectionOwner {
         screen: { width, height, devicePixelRatio: dpr },
         plane,
         planeRevision: mainView.planeRevision,
-        revision: ++lensViewRevision,
       })
       lensView = view
       const laidOut = inspectionLayout(visible, view, snapshot.localizedCommonNames,

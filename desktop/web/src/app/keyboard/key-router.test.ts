@@ -41,7 +41,7 @@ function install(overrides: Partial<KeyRouterDeps> = {}): KeyRouterHandle {
     singleKeys,
     focus: { cycleRegion },
     isModalOpen: () => modal,
-    platform: { os: 'linux', engine: 'chromium', gestureEvents: false },
+    platform: { os: 'linux', gestureEvents: false },
     document,
     ...overrides,
   })
@@ -458,7 +458,7 @@ describe('key router', () => {
     expect(fake.port.command).toHaveBeenCalledExactlyOnceWith({ kind: 'rotate-view', direction: 1 })
 
     router?.dispose()
-    install({ platform: { os: 'mac', engine: 'webkit', gestureEvents: false } })
+    install({ platform: { os: 'mac', gestureEvents: false } })
     fake.port.command.mockClear()
     expect(press({ key: 'ArrowRight', metaKey: true }, host).defaultPrevented).toBe(true)
     expect(fake.port.command).toHaveBeenCalledExactlyOnceWith({ kind: 'arrow', dir: 'right', large: true })
@@ -469,7 +469,7 @@ describe('key router', () => {
   })
 
   it('a Mac Cmd+←/→ away from the map runs nothing and never reaches the browser, which would go Back (H17)', () => {
-    install({ platform: { os: 'mac', engine: 'chromium', gestureEvents: false } })
+    install({ platform: { os: 'mac', gestureEvents: false } })
     const zoomIn = document.createElement('button')
     host.append(zoomIn)
     const dock = document.createElement('div')
@@ -720,7 +720,7 @@ describe('key router', () => {
 
   it('lets go of every held key when Meta comes up, on blur and when the page hides (H10)', () => {
     const save: KeymapRow = { command: 'file.save', chords: [{ key: 's', mod: true, ctrl: false, shift: false, alt: false }], scope: 'global', singleKey: 'n/a', worksInTextFields: true }
-    install({ keymap: [save], platform: { os: 'mac', engine: 'webkit', gestureEvents: false } })
+    install({ keymap: [save], platform: { os: 'mac', gestureEvents: false } })
     host.focus()
     const up = (key: string, code: string) => host.dispatchEvent(new KeyboardEvent('keyup', { key, code, bubbles: true }))
     const released = () => fake.port.keyState.mock.calls.filter(([k]) => k.type === 'keyup').map(([k]) => k.code)
@@ -748,7 +748,7 @@ describe('key router', () => {
   })
 
   it('lets go of a Space held from before Cmd when Meta comes up, since its keyup may be lost', () => {
-    install({ platform: { os: 'mac', engine: 'webkit', gestureEvents: false } })
+    install({ platform: { os: 'mac', gestureEvents: false } })
     host.focus()
     const up = (key: string, code: string) => host.dispatchEvent(new KeyboardEvent('keyup', { key, code, bubbles: true }))
     const released = () => fake.port.keyState.mock.calls.filter(([k]) => k.type === 'keyup').map(([k]) => k.code)

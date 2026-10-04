@@ -10,10 +10,7 @@ import type {
 import type { SessionPlane } from '../../session-plane'
 import type { SceneSelectionTarget } from './selection'
 import type { SceneArrangementTemplate } from './arrangement-placement'
-import {
-  cloneSceneObjectGroupMembers,
-  resolveSceneObjectGroupMembers,
-} from '../scene'
+import { resolveSceneObjectGroupMembers } from '../scene'
 
 export interface SceneClipboardPayload {
   /** The session plane the metre positions below are expressed in. */
@@ -32,50 +29,16 @@ export function createClipboardPayload(
   plane: SessionPlane,
 ): SceneClipboardPayload | null {
   if (selected.length === 0) return null
-
-  const plantIds = new Set<string>()
-  const zoneIds = new Set<string>()
-  const annotationIds = new Set<string>()
-  const measurementGuideIds = new Set<string>()
-  const groupIds = new Set<string>()
-
-  for (const target of selected) {
-    if (target.kind === 'plant') {
-      plantIds.add(target.id)
-      continue
-    }
-    if (target.kind === 'zone') {
-      zoneIds.add(target.id)
-      continue
-    }
-    if (target.kind === 'annotation') {
-      annotationIds.add(target.id)
-      continue
-    }
-    if (target.kind === 'measurement-guide') {
-      measurementGuideIds.add(target.id)
-      continue
-    }
-    groupIds.add(target.id)
-    const group = persisted.groups.find((entry) => entry.id === target.id)
-    if (!group) continue
-    for (const member of resolveSceneObjectGroupMembers(persisted, group)) {
-      if (member.kind === 'plant') plantIds.add(member.id)
-      else if (member.kind === 'zone') zoneIds.add(member.id)
-      else annotationIds.add(member.id)
-    }
-  }
-
+  const { plantIds, zoneIds, annotationIds, measurementGuideIds, groupIds } = resolveSelectedEntitySets(persisted, selected)
+  // `persisted` is the store's own fresh copy, so the payload takes its objects as they are.
   return {
     plane,
-    plants: persisted.plants.filter((plant) => plantIds.has(plant.id)).map(clonePlantEntity),
-    zones: persisted.zones.filter((zone) => zoneIds.has(zone.id)).map(cloneZoneEntity),
-    annotations: persisted.annotations.filter((annotation) => annotationIds.has(annotation.id)).map(cloneAnnotationEntity),
-    measurementGuides: persisted.measurementGuides
-      .filter((guide) => measurementGuideIds.has(guide.id))
-      .map(cloneMeasurementGuideEntity),
-    groups: persisted.groups.filter((group) => groupIds.has(group.id)).map(cloneGroupEntity),
-    sourceTargets: selected.map(cloneSelectionTarget),
+    plants: persisted.plants.filter((plant) => plantIds.has(plant.id)),
+    zones: persisted.zones.filter((zone) => zoneIds.has(zone.id)),
+    annotations: persisted.annotations.filter((annotation) => annotationIds.has(annotation.id)),
+    measurementGuides: persisted.measurementGuides.filter((guide) => measurementGuideIds.has(guide.id)),
+    groups: persisted.groups.filter((group) => groupIds.has(group.id)),
+    sourceTargets: [...selected],
   }
 }
 
@@ -118,73 +81,68 @@ export function reprojectClipboardPayload(
   }
 }
 
+/** The payload as a placement template; placing rebuilds every nested field, so the payload stays for the next paste. */
 export function createClipboardArrangementTemplate(
   payload: SceneClipboardPayload,
   options: { preservePinnedNames?: boolean } = {},
 ): SceneArrangementTemplate {
+  const entry = <T extends { readonly id: string }>(entity: T) => ({ sourceId: entity.id, entity })
   return {
-    plants: payload.plants.map((plant) => ({
-      sourceId: plant.id,
-      entity: {
-        ...clonePlantEntity(plant),
-        pinnedName: options.preservePinnedNames === true ? plant.pinnedName === true : false,
-      },
+    plants: payload.plants.map((plant) => entry({
+      ...plant,
+      pinnedName: options.preservePinnedNames === true ? plant.pinnedName === true : false,
     })),
-    zones: payload.zones.map((zone) => ({
-      sourceId: zone.id,
-      entity: cloneZoneEntity(zone),
-    })),
-    annotations: payload.annotations.map((annotation) => ({
-      sourceId: annotation.id,
-      entity: cloneAnnotationEntity(annotation),
-    })),
-    measurementGuides: payload.measurementGuides.map((guide) => ({
-      sourceId: guide.id,
-      entity: cloneMeasurementGuideEntity(guide),
-    })),
-    groups: payload.groups.map((group) => ({
-      sourceId: group.id,
-      entity: cloneGroupEntity(group),
-    })),
+    zones: payload.zones.map(entry),
+    annotations: payload.annotations.map(entry),
+    measurementGuides: payload.measurementGuides.map(entry),
+    groups: payload.groups.map(entry),
   }
 }
 
-function clonePlantEntity(plant: ScenePlantEntity): ScenePlantEntity {
-  return {
-    ...plant,
-    position: { ...plant.position },
-  }
-}
+/** The ids a selection covers, a group's members included. */
+export function resolveSelectedEntitySets(
+  persisted: ScenePersistedState,
+  selected: readonly SceneSelectionTarget[],
+): {
+  plantIds: Set<string>
+  zoneIds: Set<string>
+  annotationIds: Set<string>
+  measurementGuideIds: Set<string>
+  groupIds: Set<string>
+} {
+  const plantIds = new Set<string>()
+  const zoneIds = new Set<string>()
+  const annotationIds = new Set<string>()
+  const measurementGuideIds = new Set<string>()
+  const groupIds = new Set<string>()
 
-function cloneZoneEntity(zone: SceneZoneEntity): SceneZoneEntity {
-  return {
-    ...zone,
-    points: zone.points.map((point) => ({ ...point })),
-  }
-}
+  for (const target of selected) {
+    if (target.kind === 'plant') {
+      plantIds.add(target.id)
+      continue
+    }
+    if (target.kind === 'zone') {
+      zoneIds.add(target.id)
+      continue
+    }
+    if (target.kind === 'annotation') {
+      annotationIds.add(target.id)
+      continue
+    }
+    if (target.kind === 'measurement-guide') {
+      measurementGuideIds.add(target.id)
+      continue
+    }
 
-function cloneAnnotationEntity(annotation: SceneAnnotationEntity): SceneAnnotationEntity {
-  return {
-    ...annotation,
-    position: { ...annotation.position },
+    groupIds.add(target.id)
+    const group = persisted.groups.find((entry) => entry.id === target.id)
+    if (!group) continue
+    for (const member of resolveSceneObjectGroupMembers(persisted, group)) {
+      if (member.kind === 'plant') plantIds.add(member.id)
+      else if (member.kind === 'zone') zoneIds.add(member.id)
+      else annotationIds.add(member.id)
+    }
   }
-}
 
-function cloneMeasurementGuideEntity(guide: SceneMeasurementGuideEntity): SceneMeasurementGuideEntity {
-  return {
-    ...guide,
-    start: { ...guide.start },
-    end: { ...guide.end },
-  }
-}
-
-function cloneGroupEntity(group: SceneObjectGroupEntity): SceneObjectGroupEntity {
-  return {
-    ...group,
-    members: cloneSceneObjectGroupMembers(group.members),
-  }
-}
-
-function cloneSelectionTarget(target: SceneSelectionTarget): SceneSelectionTarget {
-  return { ...target }
+  return { plantIds, zoneIds, annotationIds, measurementGuideIds, groupIds }
 }

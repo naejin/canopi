@@ -2,20 +2,8 @@
   "contract_version": 1,
   "layers": [
     {
-      "name": "climate",
-      "visible": false,
-      "locked": false,
-      "opacity": 1.0
-    },
-    {
       "name": "zones",
       "visible": true,
-      "locked": false,
-      "opacity": 1.0
-    },
-    {
-      "name": "water",
-      "visible": false,
       "locked": false,
       "opacity": 1.0
     },

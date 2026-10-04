@@ -146,6 +146,41 @@ function createController(file = makeFile()) {
 }
 
 describe('scene runtime mutation controller', () => {
+  it('copy, move the source, paste twice: each paste is the copy as it was, and the pastes share nothing', () => {
+    const { controller, sceneStore } = createController()
+    sceneStore.setSelection([{ kind: 'plant', id: 'plant-1' }, { kind: 'zone', id: 'zone-1' }])
+    const source = sceneStore.persisted
+    const plantAt = source.plants.find((plant) => plant.id === 'plant-1')!.position
+    const zoneAt = source.zones.find((zone) => zone.id === 'zone-1')!.points
+
+    controller.copy()
+    sceneStore.updatePersisted((draft) => {
+      const plant = draft.plants.find((entry) => entry.id === 'plant-1')!
+      plant.position.x += 40
+      const zone = draft.zones.find((entry) => entry.id === 'zone-1')!
+      zone.points[0]!.y += 40
+    })
+    controller.paste()
+    controller.paste()
+
+    const scene = sceneStore.persisted
+    const pastedPlants = scene.plants.filter((plant) => !['plant-1', 'plant-2'].includes(plant.id))
+    const pastedZones = scene.zones.filter((zone) => zone.id !== 'zone-1')
+    expect(pastedPlants.map((plant) => plant.position.x)).toEqual([plantAt.x + 1, plantAt.x + 2])
+    expect(pastedPlants.map((plant) => plant.position.y)).toEqual([plantAt.y, plantAt.y])
+    expect(pastedZones.map((zone) => zone.points[0]!.y)).toEqual([zoneAt[0]!.y, zoneAt[0]!.y])
+    expect(pastedZones.map((zone) => zone.points[0]!.x)).toEqual([zoneAt[0]!.x + 1, zoneAt[0]!.x + 2])
+
+    // Moving the first paste leaves the second where it was.
+    sceneStore.updatePersisted((draft) => {
+      draft.plants.find((entry) => entry.id === pastedPlants[0]!.id)!.position.y += 7
+      draft.zones.find((entry) => entry.id === pastedZones[0]!.id)!.points[1]!.y += 7
+    })
+    const after = sceneStore.persisted
+    expect(after.plants.find((entry) => entry.id === pastedPlants[1]!.id)!.position).toEqual(pastedPlants[1]!.position)
+    expect(after.zones.find((entry) => entry.id === pastedZones[1]!.id)!.points).toEqual(pastedZones[1]!.points)
+  })
+
   it('locks only the typed selected Design Object when raw ids collide', () => {
     const file = makeFile()
     file.plants = file.plants.map((plant, index) =>
@@ -765,21 +800,6 @@ describe('scene runtime mutation controller', () => {
     expect(state.invalidations).toBe(1)
   })
 
-  it('clears species symbol defaults without rewriting existing plants', () => {
-    const file = makeFile()
-    file.plant_species_symbols = { 'Malus domestica': 'canopy' }
-    file.plants = file.plants.map((plant) => ({ ...plant, symbol: 'conifer' }))
-    const { controller, sceneStore, state } = createController(file)
-
-    const changed = controller.clearPlantSpeciesSymbol('Malus domestica')
-
-    expect(changed).toBe(true)
-    expect(sceneStore.persisted.plantSpeciesSymbols).toEqual({})
-    expect(sceneStore.persisted.plants.map((plant) => plant.symbol)).toEqual(['conifer', 'conifer'])
-    expect(state.dirtyTypes).toEqual(['clear-plant-species-symbol'])
-    expect(state.invalidations).toBe(1)
-  })
-
   it('does not resymbol locked Plants through species-wide symbol edits', () => {
     const file = makeFile()
     file.plants = file.plants.map((plant) =>
@@ -798,25 +818,6 @@ describe('scene runtime mutation controller', () => {
       'Malus domestica': 'canopy',
     })
     expect(state.dirtyTypes).toEqual(['set-plant-symbol-for-species'])
-  })
-
-  it('does not resymbol locked Plants when clearing a species symbol default', () => {
-    const file = makeFile()
-    file.plant_species_symbols = { 'Malus domestica': 'canopy' }
-    file.plants = file.plants.map((plant) =>
-      plant.id === 'plant-2' ? { ...plant, locked: true } : plant,
-    )
-    const { controller, sceneStore, state } = createController(file)
-
-    const changed = controller.clearPlantSpeciesSymbol('Malus domestica')
-    const lockedPlant = sceneStore.persisted.plants.find((plant) => plant.id === 'plant-2')!
-
-    expect(changed).toBe(true)
-    expect(sceneStore.persisted.plantSpeciesSymbols).toEqual({})
-    expect(sceneStore.persisted.plants.find((plant) => plant.id === 'plant-1')?.symbol ?? null).toBeNull()
-    expect(lockedPlant.symbol).toBe('canopy')
-    expect(resolvePlantSymbolForPlant(lockedPlant, sceneStore.persisted.plantSpeciesSymbols)).toBe('canopy')
-    expect(state.dirtyTypes).toEqual(['clear-plant-species-symbol'])
   })
 
   it('does not resymbol Plants inside locked Object Groups through species-wide symbol edits', () => {

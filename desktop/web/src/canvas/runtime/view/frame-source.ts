@@ -18,7 +18,7 @@ import type {
 
 /** A frame this long without a newer one is the settled frame. */
 export const SETTLE_MS = 150
-/** The overview pin shows only this many CSS px or more inside every screen edge (today's CanvasOverview margin). */
+/** The overview pin shows only this many CSS px or more inside every screen edge. */
 const DESIGN_PIN_EDGE_MARGIN_PX = 24
 /** One zoom band per factor of 1.25 in px/m: the level-of-detail key. */
 const ZOOM_BAND_FACTOR = 1.25
@@ -30,7 +30,8 @@ export interface ViewFramePublisher extends ViewFrameSource {
   readonly dispatching: boolean
   /**
    * Sets viewFrame, runs the 'tools' and then the 'overlays' listeners synchronously, and restarts the settle timer. A frame published
-   * while listeners run (a move made on a frame the driver host relays itself, at a swap) is dispatched after them, in order.
+   * while listeners run (a move made on a frame the driver host relays itself, at a swap) is dispatched after them, in order. A
+   * listener that throws does not keep the frame from the others; the first error is rethrown after them and ends the dispatch.
    */
   publish(frame: ViewFrame): void
   /** Stops the settle timer; later publishes are ignored. */
@@ -78,13 +79,23 @@ export function createViewFrameSource(initial: ViewFrame): ViewFramePublisher {
           if (settleTimer !== null) clearTimeout(settleTimer)
           settleTimer = setTimeout(settle, SETTLE_MS)
           viewFrame.value = next
+          // Every listener hears the frame even when another throws: the session and the tool host each meet a mode change.
+          let failure: { readonly error: unknown } | null = null
           for (const phase of FRAME_PHASES) {
-            for (const listener of listeners[phase]) listener.run(next)
+            for (const listener of listeners[phase]) {
+              try {
+                listener.run(next)
+              } catch (error) {
+                failure ??= { error }
+              }
+            }
           }
+          if (failure) throw failure.error
         }
       } finally {
         dispatching = false
-        // A listener that threw ends the dispatch: the frames it left waiting are not dispatched out of order later.
+        // A listener that threw ends the dispatch once the frame has reached every listener: the frames it left waiting are
+        // not dispatched out of order later.
         deferred.length = 0
       }
     },

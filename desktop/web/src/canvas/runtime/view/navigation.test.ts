@@ -9,7 +9,7 @@ import type { ScenePersistedState } from '../scene'
 import { getZoneWorldBounds } from '../zone-geometry'
 import { createViewNavigation } from './navigation'
 import { createNavigationPolicy } from './navigation-policy'
-import type { PlanarCamera, SceneBoundsOptions, ViewFrame, WorldPoint } from './types'
+import type { PlanarCamera, SceneExtent, ViewFrame, WorldPoint } from './types'
 import { planarCameraOf } from './view-transform'
 
 const EQUATOR_MAX_SCALE = mapZoomToStageScale(27, 0)
@@ -70,7 +70,7 @@ function emptyScene(): ScenePersistedState {
 }
 
 /** Corner points of every plant, zone and note footprint at a scale, from the helpers today's computeSceneBounds reads. */
-function boundsOf(scene: ScenePersistedState, emptySceneScale?: number): SceneBoundsOptions {
+function boundsOf(scene: ScenePersistedState, emptySceneScale = 0): SceneExtent {
   return {
     emptySceneScale,
     extentPoints(pixelsPerMetre) {
@@ -137,9 +137,9 @@ describe('view navigation', () => {
   it('clamps viewport scale to the configured map zoom range', () => {
     const view = createTestView({ screen: { width: 1000, height: 800 } })
 
-    view.navigation.centerOn({ x: 0, y: 0 }, 5000)
+    view.navigation.showCamera({ center: { lon: 0, lat: 0 }, zoom: 30, bearingDeg: 0, pitchDeg: 0 })
     expect(view.view().pixelsPerMetre).toBe(EQUATOR_MAX_SCALE)
-    view.navigation.centerOn({ x: 0, y: 0 }, 0.000001)
+    view.navigation.showCamera({ center: { lon: 0, lat: 0 }, zoom: -5, bearingDeg: 0, pitchDeg: 0 })
     expect(view.view().pixelsPerMetre).toBe(WIDE_FLOOR_SCALE)
     view.dispose()
   })
@@ -303,6 +303,25 @@ describe('view navigation', () => {
     }
   })
 
+  it('a move the camera refuses keeps the bookmark', () => {
+    const refused: ReadonlyArray<readonly [string, (view: TestView) => void]> = [
+      ...[Number.NaN, 0, Number.POSITIVE_INFINITY, -2].map((factor) =>
+        [`zoom by ${factor}`, (view: TestView) => view.navigation.zoomBy(factor)] as const),
+      ['zoom about a non-finite point', (view) => view.navigation.zoomAroundPx({ x: Number.NaN, y: 0 }, 2)],
+      ['pan by a non-finite delta', (view) => view.navigation.panByPx({ x: Number.POSITIVE_INFINITY, y: 0 })],
+      ['jump to an invalid camera', (view) => view.navigation.showCamera({ center: { lon: Number.NaN, lat: 0 }, zoom: 10, bearingDeg: 0, pitchDeg: 0 })],
+    ]
+    for (const [name, move] of refused) {
+      const view = createTestView({ viewport: { x: 10, y: 20, scale: 2 } })
+      expect(view.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 100, maxY: 50 }, { paddingCssPx: 48 }), name).toBe(true)
+      const focused = frameOf(view)
+      move(view)
+      expect(frameOf(view), name).toBe(focused)
+      expect(view.navigation.returnFromTemporaryFocus(), name).toBe(true)
+      view.dispose()
+    }
+  })
+
   it('rejects invalid temporary bounds without publishing a frame', () => {
     const view = createTestView({ screen: { width: 0, height: 0 } })
     expect(view.navigation.focusTemporaryBounds(
@@ -345,7 +364,7 @@ describe('view navigation', () => {
     // The opening fit (openAt) is today's initialize; clearTemporaryFocus is what a disposal calls.
     const view = sceneView(400, 300, createScene())
     view.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
-    view.navigation.openAt(createScene(), 0)
+    view.navigation.openAt(0)
     expect(view.navigation.returnFromTemporaryFocus()).toBe(false)
 
     view.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
@@ -422,7 +441,7 @@ describe('view navigation', () => {
     const view = sceneView(1000, 800, scene, { x: 3, y: -7, scale: 2 })
     view.navigation.setFramingInsets(insets)
     // Today's CameraController after the same calls on the same screen, placement and insets (zoomToFit, zoomIn and zoomOut twice,
-    // zoomAroundScreenPoint about the centre, panBy, focusTemporaryBounds, returnFromTemporaryFocus, centerOn, returnToDesign),
+    // zoomAroundScreenPoint about the centre, panBy, focusTemporaryBounds, returnFromTemporaryFocus, returnToDesign),
     // recorded at 52cbff10 before the class became the legacy shim.
     const today: ReadonlyArray<readonly [number, number, number]> = [
       [339.14286269122294, 114, 8.171427461755401],
@@ -444,7 +463,7 @@ describe('view navigation', () => {
       expect(actual.bearingDeg).toBe(0)
     }
 
-    view.navigation.zoomToFit(scene, boundsOf(scene))
+    view.navigation.zoomToFit()
     expectSame()
     view.navigation.zoomIn()
     view.navigation.zoomOut()
@@ -458,7 +477,8 @@ describe('view navigation', () => {
     expectSame()
     view.navigation.returnFromTemporaryFocus()
     expectSame()
-    view.navigation.centerOn({ x: 250.5, y: -91 }, 6.5)
+    // Today's centerOn({ x: 250.5, y: -91 }, 6.5): the point at the screen centre at 6.5 px/m.
+    view.setViewport({ x: 500 - 250.5 * 6.5, y: 400 + 91 * 6.5, scale: 6.5 })
     expectSame()
     view.navigation.returnToDesign()
     expectSame()
@@ -580,7 +600,7 @@ describe('view navigation', () => {
     const scene = createScene()
     const view = sceneView(1000, 800, scene, { x: 100, y: 0, scale: 8 })
 
-    view.navigation.openAt(scene, 90)
+    view.navigation.openAt(90)
 
     const opened = view.view()
     expect(opened.camera.bearingDeg).toBe(90)
@@ -600,7 +620,7 @@ describe('view navigation', () => {
     const view = createTestView({ screen: { width: 1000, height: 800 }, camera: { bearingDeg: 30 } })
     view.setScene(scene, boundsOf(scene, 4))
 
-    view.navigation.openAt(scene, 30)
+    view.navigation.openAt(30)
 
     // The new-Design overview: the plane origin at the screen centre, at the empty scene's scale, north up.
     expectPlacement(placement(view), { x: 500, y: 400, scale: 4, bearingDeg: 0 })
@@ -612,7 +632,8 @@ describe('view navigation', () => {
     const navigation = createViewNavigation({
       driver: view.host,
       policy: () => createNavigationPolicy(createWorkspaceCameraPolicy(), signal(false)),
-      readScene: () => ({ persisted: emptyScene(), selection: [{ x: 10, y: 10 }, { x: 110, y: 60 }], bounds: {} }),
+      readSceneExtent: () => boundsOf(emptyScene()),
+      readSelectionPoints: () => [{ x: 10, y: 10 }, { x: 110, y: 60 }],
     })
 
     navigation.zoomToSelection()

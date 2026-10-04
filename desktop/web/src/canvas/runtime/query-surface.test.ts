@@ -22,14 +22,12 @@ afterEach(() => {
 })
 
 async function mountedRuntime(): Promise<{ runtime: SceneCanvasRuntime, container: HTMLDivElement, events: SceneInteractionEventHarness }> {
-  const runtime = new SceneCanvasRuntime()
+  const renderer = { id: 'maplibre-pixi' as const, syncScene: vi.fn(), setView: vi.fn(), setDraft: vi.fn(), dispose: vi.fn() }
+  const runtime = new SceneCanvasRuntime({ renderer: { id: 'test', initialize: () => renderer } })
   const container = document.createElement('div')
   document.body.appendChild(container)
   Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
   Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
-  const renderer = { id: 'test', syncScene: vi.fn(), setView: vi.fn(), setDraft: vi.fn(), dispose: vi.fn() }
-  ;(runtime as unknown as { _construction: { replaceRenderer(definition: unknown): void } })
-    ._construction.replaceRenderer({ id: 'test', initialize: () => renderer })
   await runtime.init(container)
   const events = createSceneInteractionEventHarness(container)
   harnesses.push(events)
@@ -59,6 +57,23 @@ describe('the runtime query surface', () => {
     expect(runtime.keyboardPort).toBeNull()
     events.pointerMove({ x: 120, y: 90 }, { target: container, buttons: 0 })
     expect(points).toHaveLength(2)
+    stop()
+    runtime.destroy()
+  })
+
+  it('a pointer feed subscribed before a Retry is heard from the session remountRenderer mounts', async () => {
+    const { runtime, container, events } = await mountedRuntime()
+    const points: (PointerWorld | null)[] = []
+    const stop = runtime.querySurface.subscribePointerWorld((point) => { points.push(point) })
+    await runtime.unmountRenderer()
+
+    await runtime.remountRenderer(container)
+    events.pointerMove({ x: 60, y: 40 }, { target: container, buttons: 0 })
+
+    const expected = runtime.cameraHost.frames.viewFrame.peek().view.screenToWorld({ x: 60, y: 40 })
+    expect(points).toHaveLength(1)
+    expect(points[0]!.world.x).toBeCloseTo(expected.x, 9)
+    expect(points[0]!.world.y).toBeCloseTo(expected.y, 9)
     stop()
     runtime.destroy()
   })

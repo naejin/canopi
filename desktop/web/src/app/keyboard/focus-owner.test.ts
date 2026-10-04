@@ -154,18 +154,15 @@ describe('F6 regions through the focus owner', () => {
     press(true)
     expect(document.activeElement).toBe(map)
 
-    // From outside the map too, and through focusRegion.
+    // From outside the map too.
     unlock.focus()
     menu.focus()
     press()
     press()
     expect(document.activeElement).toBe(map)
-    menu.focus()
-    focusOwner.focusRegion('map', 'region-cycle')
-    expect(document.activeElement).toBe(map)
   })
 
-  it('registerRegion replaces registerFocusRegion for its five users', async () => {
+  it('F6 reaches a region registered through useFocusRegion until it unmounts', async () => {
     // The title bar, tool rail, map, dock and phone sheet register through useFocusRegion, which registers with the owner.
     for (const release of releases.splice(0)) release()
     const host = document.createElement('div')
@@ -178,12 +175,12 @@ describe('F6 regions through the focus owner', () => {
     await act(async () => { render(h(Rail, null), host) })
     const tool = host.querySelector<HTMLButtonElement>('[data-rail-tool]')!
     document.body.focus()
-    focusOwner.focusRegion('tool-rail', 'region-cycle')
+    expect(focusOwner.cycleRegion(1)).toBe(true)
     expect(document.activeElement).toBe(tool)
 
     await act(async () => { render(null, host) })
     document.body.focus()
-    focusOwner.focusRegion('tool-rail', 'region-cycle')
+    expect(focusOwner.cycleRegion(1)).toBe(false)
     expect(document.activeElement).toBe(document.body)
   })
 })

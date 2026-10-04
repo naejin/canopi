@@ -7,7 +7,7 @@ import {
   createCanvasDocumentReplacementToken,
   type CanvasDocumentSurface,
 } from './runtime'
-import { createDefaultScenePersistedState, SceneStore } from './scene'
+import { SceneStore } from './scene'
 
 function createTestDocumentSurface(
   documents: Parameters<typeof createSceneCanvasDocumentSurface>[0]['documents'],
@@ -36,7 +36,6 @@ function createTestDocumentSurface(
       destroy: vi.fn(),
     },
     rendering,
-    getSceneSnapshot: createDefaultScenePersistedState,
     invalidateViewport: vi.fn(),
     renderChrome: vi.fn(),
     addGuide: vi.fn(),
@@ -125,7 +124,6 @@ describe('Scene Canvas document surface lifecycle', () => {
           calls.push('rendering')
         },
       },
-      getSceneSnapshot: createDefaultScenePersistedState,
       invalidateViewport: vi.fn(),
       renderChrome: vi.fn(),
       addGuide: vi.fn(),

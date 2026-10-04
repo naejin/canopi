@@ -11,6 +11,7 @@ import {
   createInteractionDeps,
   expectPointCloseTo,
   installSceneInteractionFixture,
+  enterOverview,
 } from './support/canvas-interaction-setup'
 import './support/camera-tolerance'
 
@@ -45,13 +46,13 @@ describe('SceneInteractionSession', () => {
     expect(contextMenuHost.current).toBeNull()
 
     openContextMenu({ x: 200, y: 180 })
-    session.setOverviewMode(true)
+    const leaveOverview = enterOverview(testView)
     expect(contextMenuHost.current).toBeNull()
     const overviewContext = openContextMenu({ x: 200, y: 180 })
     expect(overviewContext.defaultPrevented).toBe(true)
     expect(contextMenuHost.current).toBeNull()
 
-    session.setOverviewMode(false)
+    leaveOverview()
     openContextMenu({ x: 200, y: 180 })
     session.dispose()
     expect(contextMenuHost.current).toBeNull()

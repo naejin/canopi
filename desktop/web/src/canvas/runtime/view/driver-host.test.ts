@@ -149,7 +149,6 @@ describe('camera driver host', () => {
 
     const revisions = published.map((frame) => frame.revision)
     expect(revisions).toEqual(revisions.map((_, index) => index + 1))
-    expect(published.map((frame) => frame.view.revision)).toEqual(revisions)
     // The same plane across the swaps; one re-origin.
     expect(published.map((frame) => frame.view.planeRevision)).toEqual([0, 0, 0, 1, 1, 1])
     view.dispose()

@@ -40,7 +40,7 @@ export const siteLocateOpen = computed(() => {
   if (current?.locateRequested) return true
   if (designSessionStore.designPath.value !== null || current?.locateDone) return false
   void queries.revision.scene.value
-  return queries.getScenePhysicalExtentMeters() === null
+  return !queries.sceneHasObjects()
 })
 
 // The first object settles the question for a session that has no answer yet
@@ -49,7 +49,7 @@ const disposeFirstObjectLatch = effect(() => {
   const queries = currentCanvasQuerySurface.value
   if (!queries || currentSession()) return
   void queries.revision.scene.value
-  if (queries.getScenePhysicalExtentMeters() === null) return
+  if (!queries.sceneHasObjects()) return
   update({ locateDone: true, locateRequested: false, startCardOpen: false, placeLabel: null })
 })
 

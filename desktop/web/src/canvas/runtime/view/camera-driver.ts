@@ -52,7 +52,7 @@ export interface CameraDriverDeps {
 export interface CameraDriverFailure { readonly reason: 'map-error'; readonly message: string }
 
 /**
- * Owns the runtime's one camera across attach, detach and failure; replaces CameraController's detached mode.
+ * Owns the runtime's one camera across attach, detach and failure.
  * The runtime starts on a HeadlessCameraDriver (tests, before attach). `frames` is stable across swaps.
  */
 export interface CameraDriverHost {

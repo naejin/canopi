@@ -11,7 +11,7 @@ import type { ToolHost } from './interaction-ports'
 import type { Modifiers, ToolId } from './interaction-types'
 import type { CanvasEscapeLayer, CanvasKeyboardPort, CanvasKeyCommand, CanvasKeyState, CanvasKeyVerdict } from './runtime'
 import type { ViewNavigation } from './view/navigation'
-import type { ScreenPoint, ViewFrameSource } from './view/types'
+import type { ScreenPoint } from './view/types'
 
 /** Arrow-key pan steps with nothing selected, in screen pixels. */
 const ARROW_PAN_STEP_PX = 64
@@ -33,7 +33,6 @@ export interface CanvasKeyboardPortDeps {
   hasSelection(): boolean
   /** Arrow pans (64 or 256 px), + / −, Shift+N and Shift+←/→/↑ (N runs View › Reset north through the edition's sink). */
   readonly navigation: Pick<ViewNavigation, 'panByPx' | 'zoomIn' | 'zoomOut' | 'resetNorth' | 'rotateBy'>
-  readonly frames: ViewFrameSource
   /** The interaction session's side of the keys. */
   readonly session: CanvasKeySession
 }

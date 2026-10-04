@@ -3,7 +3,6 @@ import {
 } from './group-members'
 import {
   sceneTargetKey,
-  type SceneConcreteDesignObjectTarget,
   type SceneDesignObjectTarget,
 } from './design-object-targets'
 import type { ScenePersistedState } from './types'
@@ -39,14 +38,13 @@ function isSceneGroupLockedByMember(state: ScenePersistedState, id: string): boo
   const group = state.groups.find((entry) => entry.id === id)
   if (!group) return false
   return resolveSceneObjectGroupMembers(state, group)
-    .some((member) => isDirectSceneDesignObjectTargetLocked(state, member))
+    .some((member) => isDirectSceneDesignObjectLocked(state, member))
 }
 
-function isDirectSceneDesignObjectTargetLocked(
-  state: ScenePersistedState,
-  target: SceneConcreteDesignObjectTarget,
-): boolean {
-  return isDirectSceneDesignObjectLocked(state, target)
+/** Whether a layer takes edits and new objects: neither hidden nor locked. A layer the Design does not list is editable. */
+export function isSceneLayerEditable(state: ScenePersistedState, layerName: string): boolean {
+  const layer = state.layers.find((entry) => entry.name === layerName)
+  return layer?.visible !== false && layer?.locked !== true
 }
 
 export function setSceneDesignObjectLocks(

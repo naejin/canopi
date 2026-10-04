@@ -1,5 +1,5 @@
 import type { SceneBounds } from '../view/types'
-import { pointsBounds } from '../zone-geometry'
+import { degreesToRadians, pointsBounds, rotatePointAround } from '../zone-geometry'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
 import {
   resolveSceneObjectGroupMembers,
@@ -145,7 +145,7 @@ export function applyRotationTransformToDraft(
     if (!start) return plant
     return {
       ...plant,
-      position: rotatePointAround(start, pivot, deltaDeg),
+      position: rotateByDegrees(start, pivot, deltaDeg),
     }
   })
 
@@ -154,7 +154,7 @@ export function applyRotationTransformToDraft(
     if (!start) return annotation
     return {
       ...annotation,
-      position: rotatePointAround(start.position, pivot, deltaDeg),
+      position: rotateByDegrees(start.position, pivot, deltaDeg),
       rotationDeg: normalizeRotationDeg(start.rotationDeg + deltaDeg),
     }
   })
@@ -174,13 +174,13 @@ export function applyRotationTransformToDraft(
  * at an angle use it, so a rotated stamp lands as if it had been rotated after.
  */
 export function rotatePlantAbout<T extends ScenePlantEntity>(plant: T, pivot: ScenePoint, degrees: number): T {
-  return { ...plant, position: rotatePointAround(plant.position, pivot, degrees) }
+  return { ...plant, position: rotateByDegrees(plant.position, pivot, degrees) }
 }
 
 export function rotateAnnotationAbout<T extends SceneAnnotationEntity>(annotation: T, pivot: ScenePoint, degrees: number): T {
   return {
     ...annotation,
-    position: rotatePointAround(annotation.position, pivot, degrees),
+    position: rotateByDegrees(annotation.position, pivot, degrees),
     rotationDeg: normalizeRotationDeg((annotation.rotationDeg ?? 0) + degrees),
   }
 }
@@ -199,7 +199,7 @@ function rotateZone<T extends ScenePersistedState['zones'][number]>(
     return {
       ...zone,
       points: [
-        rotatePointAround(start.points[0]!, pivot, deltaDeg),
+        rotateByDegrees(start.points[0]!, pivot, deltaDeg),
         { ...start.points[1]! },
       ],
       rotationDeg: normalizeRotationDeg(start.rotationDeg + deltaDeg),
@@ -214,28 +214,20 @@ function rotateZone<T extends ScenePersistedState['zones'][number]>(
     }
     return {
       ...zone,
-      points: rectPointsAroundCenter(rotatePointAround(center, pivot, deltaDeg), bounds.width, bounds.height),
+      points: rectPointsAroundCenter(rotateByDegrees(center, pivot, deltaDeg), bounds.width, bounds.height),
       rotationDeg: normalizeRotationDeg(start.rotationDeg + deltaDeg),
     }
   }
 
   return {
     ...zone,
-    points: start.points.map((point) => rotatePointAround(point, pivot, deltaDeg)),
+    points: start.points.map((point) => rotateByDegrees(point, pivot, deltaDeg)),
     rotationDeg: start.rotationDeg,
   }
 }
 
-function rotatePointAround(point: ScenePoint, pivot: ScenePoint, degrees: number): ScenePoint {
-  const radians = (degrees * Math.PI) / 180
-  const dx = point.x - pivot.x
-  const dy = point.y - pivot.y
-  const cos = Math.cos(radians)
-  const sin = Math.sin(radians)
-  return {
-    x: cleanDegrees(pivot.x + dx * cos - dy * sin),
-    y: cleanDegrees(pivot.y + dx * sin + dy * cos),
-  }
+function rotateByDegrees(point: ScenePoint, pivot: ScenePoint, degrees: number): ScenePoint {
+  return rotatePointAround(point, pivot, degreesToRadians(degrees))
 }
 
 function rectPointsAroundCenter(center: ScenePoint, width: number, height: number): ScenePoint[] {

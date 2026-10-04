@@ -88,13 +88,18 @@ export function measureZone(zone: SceneZoneEntity): ZoneMeasure | null {
   if (!points || points.length < 2) return null
   if (zone.zoneType === 'line') return { areaM2: null, perimeterM: pathLength(points, false) }
   if (points.length < 3) return null
+  return { areaM2: Math.abs(polygonArea(points)), perimeterM: pathLength(points, true) }
+}
+
+/** The shoelace area of a closed polygon, signed by its winding. */
+export function polygonArea(points: readonly ScenePoint[]): number {
   let twiceArea = 0
   for (let index = 0; index < points.length; index += 1) {
     const current = points[index]!
     const next = points[(index + 1) % points.length]!
     twiceArea += current.x * next.y - next.x * current.y
   }
-  return { areaM2: Math.abs(twiceArea) / 2, perimeterM: pathLength(points, true) }
+  return twiceArea / 2
 }
 
 function pathLength(points: readonly ScenePoint[], closed: boolean): number {
@@ -108,136 +113,8 @@ function pathLength(points: readonly ScenePoint[], closed: boolean): number {
   return length
 }
 
-export function getZoneRadialExtentMeters(zone: SceneZoneEntity): number | null {
-  const ellipticalExtent = getEllipticalZoneRadialExtent(zone)
-  if (ellipticalExtent !== null) return ellipticalExtent
-
-  const physicalPoints = getRectangularZoneCorners(zone) ?? zone.points
-  if (physicalPoints.length === 0) return null
-  return physicalPoints.reduce(
-    (extent, point) => Math.max(extent, Math.hypot(point.x, point.y)),
-    0,
-  )
-}
-
-function getEllipticalZoneRadialExtent(zone: SceneZoneEntity): number | null {
-  if (zone.zoneType !== 'ellipse' || zone.points.length < 2) return null
-  const center = zone.points[0]!
-  const radii = zone.points[1]!
-  const rotationRad = degreesToRadians(zone.rotationDeg)
-  const cos = Math.cos(rotationRad)
-  const sin = Math.sin(rotationRad)
-  const localCenter = {
-    x: center.x * cos + center.y * sin,
-    y: -center.x * sin + center.y * cos,
-  }
-  return axisAlignedEllipseRadialExtent(
-    localCenter,
-    Math.abs(radii.x),
-    Math.abs(radii.y),
-  )
-}
-
-function axisAlignedEllipseRadialExtent(
-  center: ScenePoint,
-  radiusX: number,
-  radiusY: number,
-): number {
-  const magnitudeScale = Math.max(
-    Math.abs(center.x),
-    Math.abs(center.y),
-    radiusX,
-    radiusY,
-  )
-  if (magnitudeScale === 0) return 0
-  if (!Number.isFinite(magnitudeScale)) return magnitudeScale
-  return magnitudeScale * axisAlignedEllipseRadialExtentNormalized(
-    {
-      x: center.x / magnitudeScale,
-      y: center.y / magnitudeScale,
-    },
-    radiusX / magnitudeScale,
-    radiusY / magnitudeScale,
-  )
-}
-
-function axisAlignedEllipseRadialExtentNormalized(
-  center: ScenePoint,
-  radiusX: number,
-  radiusY: number,
-): number {
-  if (radiusX === radiusY) return Math.hypot(center.x, center.y) + radiusX
-
-  const xIsMajor = radiusX > radiusY
-  const majorRadius = xIsMajor ? radiusX : radiusY
-  const minorRadius = xIsMajor ? radiusY : radiusX
-  const majorCenter = xIsMajor ? center.x : center.y
-  const minorCenter = xIsMajor ? center.y : center.x
-  const majorSquared = majorRadius ** 2
-  const minorSquared = minorRadius ** 2
-  const majorLinear = majorRadius * majorCenter
-  const minorLinear = minorRadius * minorCenter
-  const computationScale = Math.max(
-    1,
-    majorSquared,
-    Math.abs(majorLinear),
-    Math.abs(minorLinear),
-  )
-
-  // The farthest-point problem is a two-dimensional trust-region problem.
-  // When the center has no component on the major axis, its maximum can lie
-  // between the ellipse's cardinal points (the trust-region "hard case").
-  if (Math.abs(majorLinear) <= Number.EPSILON * 32 * computationScale) {
-    const minorCoordinate = minorLinear / (majorSquared - minorSquared)
-    if (Math.abs(minorCoordinate) <= 1) {
-      const majorCoordinate = (
-        Math.sign(majorLinear) || 1
-      ) * Math.sqrt(Math.max(0, 1 - minorCoordinate ** 2))
-      return Math.hypot(
-        majorCenter + majorRadius * majorCoordinate,
-        minorCenter + minorRadius * minorCoordinate,
-      )
-    }
-    return Math.hypot(
-      majorCenter,
-      minorCenter + minorRadius * Math.sign(minorLinear),
-    )
-  }
-
-  const squaredRadiusDifference = majorSquared - minorSquared
-  const constraint = (delta: number): number => (
-    (majorLinear / delta) ** 2
-    + (minorLinear / (delta + squaredRadiusDifference)) ** 2
-  )
-  // Solving for the offset above the major squared radius avoids subtracting
-  // nearly equal values when the solution is close to the hard case.
-  let lower = 0
-  let span = Math.max(
-    Math.hypot(majorLinear, minorLinear),
-    Number.EPSILON * computationScale * 64,
-  )
-  let upper = span
-  while (constraint(upper) > 1) {
-    span *= 2
-    upper = span
-  }
-
-  for (let iteration = 0; iteration < 128; iteration += 1) {
-    const delta = lower + (upper - lower) / 2
-    if (delta === lower || delta === upper) break
-    if (constraint(delta) > 1) lower = delta
-    else upper = delta
-  }
-
-  const majorCoordinate = majorLinear / upper
-  const minorCoordinate = minorLinear / (upper + squaredRadiusDifference)
-  return Math.hypot(
-    majorCenter + majorRadius * majorCoordinate,
-    minorCenter + minorRadius * minorCoordinate,
-  )
-}
-
-function rotatePointAround(point: ScenePoint, center: ScenePoint, radians: number): ScenePoint {
+/** A point turned about a centre, with near-zero values snapped to 0. */
+export function rotatePointAround(point: ScenePoint, center: ScenePoint, radians: number): ScenePoint {
   const dx = point.x - center.x
   const dy = point.y - center.y
   const cos = Math.cos(radians)
@@ -248,7 +125,7 @@ function rotatePointAround(point: ScenePoint, center: ScenePoint, radians: numbe
   }
 }
 
-function degreesToRadians(degrees: number): number {
+export function degreesToRadians(degrees: number): number {
   return (degrees * Math.PI) / 180
 }
 

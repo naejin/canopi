@@ -82,7 +82,7 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
   const frames = createViewFrameSource(stamp(live.frames.viewFrame.peek()))
 
   function stamp(frame: ViewFrame): ViewFrame {
-    const view = Object.freeze({ ...frame.view, revision, planeRevision })
+    const view = Object.freeze({ ...frame.view, planeRevision })
     return Object.freeze<ViewFrame>({ ...frame, view, attached, revision })
   }
 

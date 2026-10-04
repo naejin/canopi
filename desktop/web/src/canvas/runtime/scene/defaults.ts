@@ -11,12 +11,11 @@ export function createDefaultSceneSessionState(overrides: Partial<SceneSessionSt
     hoveredTarget: overrides.hoveredTarget
       ? cloneSceneDesignObjectTarget(overrides.hoveredTarget)
       : null,
-    documentRevision: overrides.documentRevision ?? 0,
     speciesFocus: { canonicalName: null, ...overrides.speciesFocus },
   }
 }
 
-export function createDefaultScenePersistedState(_now: Date = new Date()): ScenePersistedState {
+export function createDefaultScenePersistedState(): ScenePersistedState {
   return {
     plantSpeciesColors: {},
     plantSpeciesSymbols: {},

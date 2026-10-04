@@ -32,16 +32,13 @@ import type { ViewFrameSource } from './view/types'
 const OVERVIEW_POLICY = createWorkspaceCameraPolicy()
 
 type PointerWorldListener = (point: PointerWorld | null) => void
-/** The interaction session's ToolHost.subscribePointerWorld. */
-export type PointerWorldSource = (listener: PointerWorldListener) => () => void
 
 interface SceneCanvasQuerySurfaceOptions {
   readonly revision: CanvasQueryRevision
   readonly sceneStore: SceneStateReader & SceneDocumentReader
-  /** The runtime camera's frames: `view`, the label coverage and the frame's scale read them. */
+  /** The runtime camera's frames: `view`, the label coverage and the frame's scale (which sizes screen-sized notes in
+   *  the selection model) read them. */
   readonly frames: ViewFrameSource
-  /** The live frame's px/m, which sizes screen-sized notes in the selection model. Default: the host's frame. */
-  readonly readViewScale?: () => number
   readonly settledReader: SettledSceneReader
   readonly mutations: Pick<
     SceneRuntimeMutationController,
@@ -57,31 +54,27 @@ interface SceneCanvasQuerySurfaceOptions {
   >
 }
 
-export function createSceneCanvasQuerySurface(
-  options: SceneCanvasQuerySurfaceOptions,
-): CanvasQuerySurface {
+/**
+ * The runtime's query surface. It outlives interaction sessions (the map can unmount and mount again): subscribePointerWorld
+ * listeners stay with the surface, and scene-runtime.ts binds the live session's ToolHost.subscribePointerWorld to it with
+ * bindPointerWorld (null when the session ends).
+ */
+export interface SceneCanvasQuerySurface extends CanvasQuerySurface {
+  bindPointerWorld(source: ((listener: PointerWorldListener) => () => void) | null): void
+}
+
+export function createSceneCanvasQuerySurface(options: SceneCanvasQuerySurfaceOptions): SceneCanvasQuerySurface {
   return new SceneCanvasQueryRole(options)
 }
 
-/**
- * The query surface outlives interaction sessions (the map can unmount and mount again): subscribePointerWorld listeners
- * stay with the surface, and scene-runtime.ts binds the live session's ToolHost here (null when it ends).
- */
-export function bindQuerySurfacePointerWorld(surface: CanvasQuerySurface, source: PointerWorldSource | null): void {
-  if (surface instanceof SceneCanvasQueryRole) surface.bindPointerWorld(source)
-}
-
-class SceneCanvasQueryRole implements CanvasQuerySurface {
+class SceneCanvasQueryRole implements SceneCanvasQuerySurface {
   readonly view: ViewReadSurface
   private readonly pointerWorldListeners = new Set<PointerWorldListener>()
   private stopPointerWorld: (() => void) | null = null
-  private readonly readViewScale: () => number
 
   constructor(private readonly options: SceneCanvasQuerySurfaceOptions) {
-    const { frames } = options
     // The frames place the Scene's metres; their ground is read on the Scene's plane.
-    this.view = createViewReadSurface(frames)
-    this.readViewScale = options.readViewScale ?? (() => frames.viewFrame.peek().view.pixelsPerMetre)
+    this.view = createViewReadSurface(options.frames)
   }
 
   subscribePointerWorld(listener: PointerWorldListener): () => void {
@@ -91,7 +84,7 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
     }
   }
 
-  bindPointerWorld(source: PointerWorldSource | null): void {
+  bindPointerWorld(source: ((listener: PointerWorldListener) => () => void) | null): void {
     this.stopPointerWorld?.()
     this.stopPointerWorld = source?.((point) => {
       for (const listener of [...this.pointerWorldListeners]) listener(point)
@@ -119,7 +112,7 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
       null,
     )
   }
-  getScenePhysicalExtentMeters(): number | null { return this.options.sceneStore.physicalExtentMeters }
+  sceneHasObjects(): boolean { return this.options.sceneStore.hasObjects }
   getSceneSnapshot(): ScenePersistedState { return this.options.sceneStore.persisted }
   getSpeciesFocus() { return this.options.sceneStore.session.speciesFocus }
   getPlantLabelCoverage(): CanvasPlantLabelCoverage {
@@ -150,7 +143,7 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
         plantNamePinning: { plantIds: [], allPinned: false },
       }
     }
-    const viewportScale = this.readViewScale()
+    const viewportScale = this.options.frames.viewFrame.peek().view.pixelsPerMetre
     const scene = this.options.sceneStore.persisted
     return getDesignObjectSelectionModel(
       scene,

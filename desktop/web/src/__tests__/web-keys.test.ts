@@ -27,7 +27,7 @@ function installWebKeys(catalog: BrowserShellCatalog = [], os: 'linux' | 'mac' =
   keys = installWebKeyRouter({
     catalog,
     readState: () => ({ hasDesign: true, revertAvailable: false, activePanel: 'canvas', sidePanel: null }),
-  }, { os, engine: 'chromium', gestureEvents: false })
+  }, { os, gestureEvents: false })
   return keys
 }
 

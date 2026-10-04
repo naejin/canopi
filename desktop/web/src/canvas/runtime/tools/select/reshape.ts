@@ -4,7 +4,7 @@
 // a line's two ends and a polygon's vertices ('vertex'), a rectangle's four corners ('corner') and an ellipse's four
 // axis ends ('vertex'), as ToolHandle data the host shows through the handle layer, and the geometry of dragging one
 // (a 0.5 m minimum side, a 0.25 m² minimum polygon area). The drag itself is point-handle.ts's, edit type
-// 'interaction-zone-control-point'. Labels keep today's literal English (phase 0).
+// 'interaction-zone-control-point'. Each handle's label is translated ('canvas.zoneControlPoint.label').
 
 import type { ToolHandleId } from '../../interaction-types'
 import type { CanvasDesignObjectSelectionModel } from '../../runtime'

@@ -46,7 +46,7 @@ describe('new Design view', () => {
 
   it('centres an empty Design on the last view', () => {
     const last = { lon: -1.5536, lat: 47.2184 }
-    const store = new SceneStore(emptyDesign(), {}, () => last)
+    const store = new SceneStore(emptyDesign(), () => last)
     expect(store.sessionPlane.origin).toEqual(last)
     store.hydrate(emptyDesign())
     expect(store.sessionPlane.origin).toEqual(last)
@@ -59,7 +59,7 @@ describe('new Design view', () => {
       pinned_name: false, position: { lon: 5, lat: 45 }, rotation: null, scale: null, notes: null,
       planted_date: null, quantity: null,
     }]
-    const store = new SceneStore(file, {}, () => ({ lon: -1.5536, lat: 47.2184 }))
+    const store = new SceneStore(file, () => ({ lon: -1.5536, lat: 47.2184 }))
     expect(store.sessionPlane.origin).toEqual({ lon: 5, lat: 45 })
   })
 
@@ -67,17 +67,12 @@ describe('new Design view', () => {
     const camera = createTestView(START)
     const { scaleBounds } = camera.frames.viewFrame.peek()
     const scale = mapZoomToStageScale(17, 47.2184)
-    camera.navigation.zoomToFit(createDefaultScenePersistedState(), { emptySceneScale: scale })
+    camera.setScene(createDefaultScenePersistedState(), { emptySceneScale: scale })
+    camera.navigation.zoomToFit()
     const viewport = camera.viewport()
     expect(viewport.x).toBe(400)
     expect(viewport.y).toBe(300)
     expect(viewport.scale).toBeCloseTo(Math.min(Math.max(scale, scaleBounds.min), scaleBounds.max), 12)
-  })
-
-  it('keeps the current view when an empty Design has no requested scale', () => {
-    const camera = createTestView(START)
-    camera.navigation.zoomToFit(createDefaultScenePersistedState(), {})
-    expect(camera.viewport()).toEqual(START.viewport)
   })
 
   it('remembers the settled view, its bearing included, as the last view', () => {

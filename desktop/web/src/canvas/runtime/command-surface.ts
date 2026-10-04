@@ -5,10 +5,7 @@ import type {
   CanvasRuntimeSavedObjectStampAdapter,
   CanvasRuntimeSettingsAdapter,
 } from './app-adapter'
-import type { SceneBounds, TemporaryBoundsFocusOptions } from './view/types'
-import { sceneExtentPoints } from './scene-extent'
 import type { SceneRuntimePresentationController } from './scene-runtime/presentation'
-import type { ViewNavigation } from './view/navigation'
 import { getDesignObjectSelectionModel } from './scene-runtime/selection'
 import type {
   CanvasChromeCommandSurface,
@@ -59,15 +56,10 @@ const DESIGN_OBJECTS_NOT_IMPORTED: CanvasDesignObjectImportReceipt = Object.free
 type SceneLayerEdit = Partial<Pick<SceneLayerEntity, 'visible' | 'locked' | 'opacity'>>
 
 interface SceneCanvasCommandSurfaceOptions {
-  readonly readEmptySceneScale?: () => number
   readonly speciesFocus: SpeciesFocusCommands
   readonly sceneStore: SceneStateReader
-  /** The view's navigation over the runtime's driver host: every viewport command, each with today's viewport render (spec §1.1a). */
-  readonly viewNavigation: Pick<
-    ViewNavigation,
-    | 'zoomIn' | 'zoomOut' | 'zoomBy' | 'zoomToFit' | 'returnToDesign' | 'focusTemporaryBounds' | 'frameBounds' | 'returnFromTemporaryFocus'
-    | 'showPlace' | 'setFramingInsets' | 'zoomToSelection' | 'resetNorth' | 'rotateBy' | 'beginRotation' | 'showCamera'
-  >
+  /** The view's navigation over the runtime's driver host: the viewport commands, as they are. */
+  readonly viewNavigation: CanvasViewportCommandSurface
   /** The live frame's px/m, which sizes screen-sized notes and plants. */
   readonly readViewScale: () => number
   readonly history: SceneHistoryCommands
@@ -107,8 +99,6 @@ interface SceneCanvasCommandSurfaceOptions {
     | 'setSelectedPlantSymbol'
     | 'setPlantColorForSpecies'
     | 'setPlantSymbolForSpecies'
-    | 'clearPlantSpeciesColor'
-    | 'clearPlantSpeciesSymbol'
   >
   readonly sceneEdits: SceneEditCoordinator
   readonly presentationMaintenance: ScenePresentationMaintenance
@@ -122,7 +112,7 @@ interface SceneCanvasCommandSurfaceOptions {
   >
   readonly settings: Pick<
     CanvasRuntimeSettingsAdapter,
-    'toggleGridVisible' | 'toggleSnapToGrid' | 'toggleRulersVisible' | 'layerProjections'
+    'toggleGridVisible' | 'toggleSnapToGrid' | 'toggleRulersVisible'
   >
   readonly setInteractionTool: (name: string) => void
   /** The tool the interaction session has armed now, or null without a session. */
@@ -178,28 +168,9 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       setTool: (name) => this.setTool(name),
       plantRowSpacing: options.plantRowSpacing,
     }
-    this.viewport = {
-      zoomIn: () => this.zoomIn(),
-      zoomOut: () => this.zoomOut(),
-      zoomBy: (factor) => this.zoomBy(factor),
-      zoomToFit: () => this.zoomToFit(),
-      returnToDesign: () => this.returnToDesign(),
-      focusTemporaryBounds: (bounds, options) => this.focusTemporaryBounds(bounds, options),
-      frameBounds: (bounds, options) => this.frameBounds(bounds, options),
-      showPlace: (place, zoom, options) => this.showPlace(place, zoom, options),
-      returnFromTemporaryFocus: () => this.returnFromTemporaryFocus(),
-      setFramingInsets: (insets) => {
-        this.options.viewNavigation.setFramingInsets(insets)
-        // Chrome placed inside the visible map area (rulers) redraws against the new edges.
-        this.options.invalidate('viewport')
-      },
-      zoomToSelection: () => this.moveView(() => this.options.viewNavigation.zoomToSelection()),
-      resetNorth: () => this.moveView(() => this.options.viewNavigation.resetNorth()),
-      rotateBy: (direction) => this.moveView(() => this.options.viewNavigation.rotateBy(direction)),
-      beginRotation: (pivot) => this.options.viewNavigation.beginRotation(pivot),
-      // A new camera command drops the temporary focus, as showPlace does.
-      showCamera: (camera, options) => this.moveView(() => this.options.viewNavigation.showCamera(camera, options)),
-    }
+    // View commands go to navigation as they are: every frame the camera publishes redraws the view and the chrome placed
+    // against it (rulers inside the visible map area, after new framing insets), so a refused move redraws nothing.
+    this.viewport = options.viewNavigation
     this.history = {
       canUndo,
       canRedo,
@@ -217,7 +188,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       toggleSelectedPlantNamePins: () => this.options.mutations.toggleSelectedPlantNamePins(),
       deleteSelected: () => this.runSpatialEdit(() => this.options.mutations.deleteSelected()),
       selectAll: () => this.options.mutations.selectAll(),
-      selectSameSpecies: (canonicalName, options) => this.options.mutations.selectSameSpecies(canonicalName, options),
+      selectSameSpecies: (canonicalName) => this.options.mutations.selectSameSpecies(canonicalName),
       selectSpecies: (canonicalNames) => this.options.mutations.selectSpecies(canonicalNames),
       clearSelection: () => this.options.mutations.clearSelection(),
       bringToFront: () => this.runSpatialEdit(() => this.options.mutations.bringToFront()),
@@ -254,8 +225,6 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
         this.options.mutations.setPlantColorForSpecies(canonicalName, color),
       setPlantSymbolForSpecies: (canonicalName, symbol) =>
         this.options.mutations.setPlantSymbolForSpecies(canonicalName, symbol),
-      clearPlantSpeciesColor: (canonicalName) => this.options.mutations.clearPlantSpeciesColor(canonicalName),
-      clearPlantSpeciesSymbol: (canonicalName) => this.options.mutations.clearPlantSpeciesSymbol(canonicalName),
     }
   }
 
@@ -379,81 +348,9 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     }, DESIGN_OBJECTS_NOT_IMPORTED, { resumePending: true })
   }
 
-  private zoomIn(): void {
-    this.options.viewNavigation.zoomIn()
-    this.options.invalidate('viewport')
-  }
-
-  private zoomOut(): void {
-    this.options.viewNavigation.zoomOut()
-    this.options.invalidate('viewport')
-  }
-
-  /** Zoom about the screen centre; the scale menu picks the factor for a map scale. */
-  private zoomBy(factor: number): void {
-    if (!Number.isFinite(factor) || factor <= 0) return
-    this.options.viewNavigation.zoomBy(factor)
-    this.options.invalidate('viewport')
-  }
-
-  private showPlace(
-    place: { readonly lon: number; readonly lat: number },
-    zoom: number,
-    options?: { readonly motion?: 'fly' | 'jump' },
-  ): boolean {
-    // The geographic target and MapLibre zoom go to the camera as they are: no plane round trip.
-    if (!this.options.viewNavigation.showPlace(place, zoom, options)) return false
-    this.options.invalidate('viewport')
-    return true
-  }
-
-  private zoomToFit(): void {
-    const scene = this.options.sceneStore.persisted
-    this.options.viewNavigation.zoomToFit(scene, {
-      extentPoints: sceneExtentPoints(scene, this.options.presentation.createPlantPresentationContext(this.options.readViewScale())),
-      emptySceneScale: this.options.readEmptySceneScale?.(),
-    })
-    this.options.invalidate('viewport')
-  }
-
-  private returnToDesign(): void {
-    const scene = this.options.sceneStore.persisted
-    this.options.viewNavigation.returnToDesign(scene, {
-      extentPoints: sceneExtentPoints(scene, this.options.presentation.createPlantPresentationContext(this.options.readViewScale())),
-    })
-    this.options.invalidate('viewport')
-  }
-
-  /** A view command: the chrome placed against the view redraws with it. */
-  private moveView(move: () => void): void {
-    move()
-    this.options.invalidate('viewport')
-  }
-
   private runSpatialEdit(operation: () => void): void {
     if (!this.options.isSpatialEditingEnabled()) return
     operation()
-  }
-
-  private focusTemporaryBounds(
-    bounds: SceneBounds,
-    options: TemporaryBoundsFocusOptions,
-  ): boolean {
-    const changed = this.options.viewNavigation.focusTemporaryBounds(bounds, options)
-    if (changed) this.options.invalidate('viewport')
-    return changed
-  }
-
-  private frameBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean {
-    const changed = this.options.viewNavigation.frameBounds(bounds, options)
-    if (changed) this.options.invalidate('viewport')
-    return changed
-  }
-
-  private returnFromTemporaryFocus(): boolean {
-    const changed = this.options.viewNavigation.returnFromTemporaryFocus()
-    if (changed) this.options.invalidate('viewport')
-    return changed
   }
 
   private undo(): void {

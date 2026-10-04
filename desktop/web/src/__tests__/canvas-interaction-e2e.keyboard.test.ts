@@ -25,6 +25,7 @@ import {
   getDesignObjectSelectionFromStore,
   installSceneInteractionFixture,
   rotationHandle,
+  enterOverview,
 } from './support/canvas-interaction-setup'
 import './support/camera-tolerance'
 
@@ -450,10 +451,13 @@ describe('SceneInteractionSession', () => {
       session.setTool('polygon')
       events.keyDown({ key: 'ArrowRight', target: container })
       session.setTool('select')
-      session.setOverviewMode(true)
+      expect(testView.viewport().x).toBeCloseTo(before.x - 64, 6)
+      const leaveOverview = enterOverview(testView)
+      const overview = testView.viewport()
       events.keyDown({ key: 'ArrowRight', target: container })
-      session.setOverviewMode(false)
-      expect(testView.viewport().x).toBeCloseTo(before.x - 128, 6)
+      expect(testView.viewport().x).toBeCloseTo(overview.x - 64, 6)
+      leaveOverview()
+      const site = testView.viewport()
 
       const field = document.createElement('textarea')
       container.append(field)
@@ -463,15 +467,15 @@ describe('SceneInteractionSession', () => {
       field.remove()
       container.focus()
       events.keyDown({ key: 'ArrowRight', altKey: true, target: container })
-      expect(testView.viewport().x).toBeCloseTo(before.x - 128, 6)
+      expect(testView.viewport().x).toBeCloseTo(site.x, 6)
       // mod is the large step (it was Shift before phase 1).
       events.keyDown({ key: 'ArrowRight', ctrlKey: true, target: container })
-      expect(testView.viewport().x).toBeCloseTo(before.x - 128 - 256, 6)
+      expect(testView.viewport().x).toBeCloseTo(site.x - 256, 6)
 
       // With a selection the same key nudges instead.
       deps.setSelection([plantTarget('plant-1')])
       events.keyDown({ key: 'ArrowRight', target: container })
-      expect(testView.viewport().x).toBeCloseTo(before.x - 128 - 256, 6)
+      expect(testView.viewport().x).toBeCloseTo(site.x - 256, 6)
       expect(deps.nudge!.nudgeSelected).toHaveBeenCalledExactlyOnceWith({ x: 0.1, y: 0 })
     })
 

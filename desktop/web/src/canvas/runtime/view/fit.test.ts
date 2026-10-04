@@ -4,6 +4,9 @@ import type { SceneAnnotationEntity, ScenePersistedState } from '../scene'
 import { fitScene, fitTemporaryBounds, framingRect, type FitFrame } from './fit'
 import type { PlanarCamera, SceneBounds, ScreenInsets, WorldPoint } from './types'
 
+/** Plants sized without species data, as the renderer sizes a plant whose species is not cached. */
+const PLANTS = { pixelsPerMetre: 1, speciesCache: new Map() }
+
 function note(id: string, x: number, y: number, text: string, rotationDeg: number | null): SceneAnnotationEntity {
   return { kind: 'annotation', id, annotationType: 'text', locked: false, position: { x, y }, text, fontSize: 16, rotationDeg }
 }
@@ -44,7 +47,7 @@ function scene(): ScenePersistedState {
 
 /** The scene's extent (scene-extent.ts), counting the scales it is measured at. */
 function countedExtent(design: ScenePersistedState, calls: { count: number }) {
-  const extent = sceneExtentPoints(design)
+  const extent = sceneExtentPoints(design, PLANTS)
   return (pixelsPerMetre: number): readonly WorldPoint[] => {
     calls.count += 1
     return extent(pixelsPerMetre)
@@ -204,20 +207,20 @@ describe('fit', () => {
         [0.05, 1, 14, 1000].forEach((scale, start) => {
           const frame = fitFrame(1000, 800, [3, -7, scale], insets)
 
-          expectPlacement(fitScene(frame, { extentPoints: sceneExtentPoints(design) }, 0), today[name]![insetCase]![start]!)
+          expectPlacement(fitScene(frame, { extentPoints: sceneExtentPoints(design, PLANTS), emptySceneScale: 0 }, 0), today[name]![insetCase]![start]!)
         })
       })
     }
 
-    // An empty scene: today's placement without an empty-scene scale, else that scale (clamped) about the screen centre.
+    // An empty scene: today's placement under a zero empty-scene scale, else that scale (clamped) about the screen centre.
     const empty = { ...scene(), plants: [], zones: [], annotations: [] }
     const frame = fitFrame(1000, 800, [3, -7, 2])
-    const todayEmpty: readonly Placement[] = [[3, -7, 2], [3, -7, 2], [500, 400, 25], [500, 400, 1716.6895781438734]]
-    ;[undefined, 0, 25, 1e9].forEach((emptySceneScale, index) => {
-      expectPlacement(fitScene(frame, { extentPoints: sceneExtentPoints(empty), emptySceneScale }, 0), todayEmpty[index]!)
+    const todayEmpty: readonly Placement[] = [[3, -7, 2], [500, 400, 25], [500, 400, 1716.6895781438734]]
+    ;[0, 25, 1e9].forEach((emptySceneScale, index) => {
+      expectPlacement(fitScene(frame, { extentPoints: sceneExtentPoints(empty, PLANTS), emptySceneScale }, 0), todayEmpty[index]!)
     })
     const unsized = fitFrame(0, 0, [3, -7, 2])
-    expect(fitScene(unsized, { extentPoints: sceneExtentPoints(scene()) }, 0)).toBe(unsized.current)
+    expect(fitScene(unsized, { extentPoints: sceneExtentPoints(scene(), PLANTS), emptySceneScale: 0 }, 0)).toBe(unsized.current)
   })
 
   it('screen-sized notes converge within 20 rounds', () => {
@@ -233,7 +236,7 @@ describe('fit', () => {
         const calls = { count: 0 }
         const extentPoints = countedExtent(notesOnly, calls)
 
-        const fitted = fitScene(frame, { extentPoints }, bearingDeg)
+        const fitted = fitScene(frame, { extentPoints, emptySceneScale: 0 }, bearingDeg)
 
         expect(calls.count).toBeLessThanOrEqual(20)
         expect(fitted.bearingDeg).toBe(bearingDeg)
@@ -343,7 +346,7 @@ describe('scene extent', () => {
 
   /** The world-axis box of the extent at a scale (1 px/m unless given, as computeSceneBounds defaulted). */
   function extentBox(design: ScenePersistedState, pixelsPerMetre = 1): SceneBounds | null {
-    return worldAxisBox(sceneExtentPoints(design)(pixelsPerMetre))
+    return worldAxisBox(sceneExtentPoints(design, PLANTS)(pixelsPerMetre))
   }
 
   it('uses the symbolic Placed Plant Visual Footprint for plant-only bounds', () => {
@@ -395,6 +398,6 @@ describe('scene extent', () => {
   })
 
   it('an empty scene has no extent', () => {
-    expect(sceneExtentPoints({ ...boundsScene(), plants: [], zones: [] })(1)).toEqual([])
+    expect(sceneExtentPoints({ ...boundsScene(), plants: [], zones: [] }, PLANTS)(1)).toEqual([])
   })
 })

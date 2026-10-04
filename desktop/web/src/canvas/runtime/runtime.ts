@@ -121,7 +121,7 @@ export interface CanvasSceneEditCommandSurface {
   toggleSelectedPlantNamePins(): void
   deleteSelected(): void
   selectAll(): void
-  selectSameSpecies(canonicalName?: string, options?: { additive?: boolean }): void
+  selectSameSpecies(canonicalName?: string): void
   /** Replaces the selection with every selectable plant of these species. */
   selectSpecies(canonicalNames: readonly string[]): void
   /** Empties the selection (session state: no edit, history or dirty state). */
@@ -181,8 +181,6 @@ export interface CanvasPlantPresentationCommandSurface {
   setSelectedPlantSymbol(symbol: PlantSymbolId | null): number
   setPlantColorForSpecies(canonicalName: string, color: string | null): number
   setPlantSymbolForSpecies(canonicalName: string, symbol: PlantSymbolId): number
-  clearPlantSpeciesColor(canonicalName: string): boolean
-  clearPlantSpeciesSymbol(canonicalName: string): boolean
 }
 
 export interface CanvasCommandSurface {
@@ -229,7 +227,8 @@ export interface CanvasQuerySurface {
    * the Scene. Never changes session state.
    */
   captureViewScene(request: CanvasViewSceneRequest): SceneRendererSnapshot | null
-  getScenePhysicalExtentMeters(): number | null
+  /** Whether the Scene holds any plant, note, measurement guide, or zone with a point ("Where is your site?"). */
+  sceneHasObjects(): boolean
   getSceneSnapshot(): ScenePersistedState
   getSelection(): SceneDesignObjectTarget[]
   getDesignObjectSelection(): CanvasDesignObjectSelectionModel

@@ -89,7 +89,7 @@ describe('canvas chrome fonts', () => {
       const context = {
         setTransform: vi.fn(), clearRect: vi.fn(), fillRect: vi.fn(), beginPath: vi.fn(),
         moveTo: vi.fn(), lineTo: vi.fn(), stroke: vi.fn(), fillText: vi.fn(), translate: vi.fn(),
-        rotate: vi.fn(), save: vi.fn(), restore: vi.fn(),
+        rotate: vi.fn(), save: vi.fn(), restore: vi.fn(), measureText: (text: string) => ({ width: text.length * 7 }),
         fillStyle: '', strokeStyle: '', lineWidth: 0, font: '', textAlign: 'left', textBaseline: 'alphabetic', lineCap: 'butt',
       } as unknown as CanvasRenderingContext2D
       contexts.push(context)

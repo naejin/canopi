@@ -15,14 +15,14 @@ import type { AdapterEffect, RawInput, RecogniserState, TargetClass } from '../r
 import { initialRecogniserState, recognise } from '../recognise'
 import { DEFAULT_THRESHOLDS, type Thresholds } from '../thresholds'
 
-export const WINDOWS: InputPlatform = Object.freeze({ os: 'windows', engine: 'chromium', gestureEvents: false })
-export const LINUX_WEBKITGTK: InputPlatform = Object.freeze({ os: 'linux', engine: 'webkitgtk', gestureEvents: false })
-export const LINUX_CHROMIUM: InputPlatform = Object.freeze({ os: 'linux', engine: 'chromium', gestureEvents: false })
-export const MAC_WEBKIT: InputPlatform = Object.freeze({ os: 'mac', engine: 'webkit', gestureEvents: true })
-export const MAC_CHROMIUM: InputPlatform = Object.freeze({ os: 'mac', engine: 'chromium', gestureEvents: false })
-export const MAC_GECKO: InputPlatform = Object.freeze({ os: 'mac', engine: 'gecko', gestureEvents: false })
-export const IOS_WEBKIT: InputPlatform = Object.freeze({ os: 'ios', engine: 'webkit', gestureEvents: true })
-export const ANDROID_CHROMIUM: InputPlatform = Object.freeze({ os: 'android', engine: 'chromium', gestureEvents: false })
+export const WINDOWS: InputPlatform = Object.freeze({ os: 'windows', gestureEvents: false })
+export const LINUX_WEBKITGTK: InputPlatform = Object.freeze({ os: 'linux', gestureEvents: false })
+export const LINUX_CHROMIUM: InputPlatform = Object.freeze({ os: 'linux', gestureEvents: false })
+export const MAC_WEBKIT: InputPlatform = Object.freeze({ os: 'mac', gestureEvents: true })
+export const MAC_CHROMIUM: InputPlatform = Object.freeze({ os: 'mac', gestureEvents: false })
+export const MAC_GECKO: InputPlatform = Object.freeze({ os: 'mac', gestureEvents: false })
+export const IOS_WEBKIT: InputPlatform = Object.freeze({ os: 'ios', gestureEvents: true })
+export const ANDROID_CHROMIUM: InputPlatform = Object.freeze({ os: 'android', gestureEvents: false })
 
 export const SURFACE: TargetClass = Object.freeze({ kind: 'surface' })
 export const OWNED_TEXT: TargetClass = Object.freeze({ kind: 'owned-text' })

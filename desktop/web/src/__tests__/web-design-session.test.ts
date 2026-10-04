@@ -85,9 +85,7 @@ describe('browser Design Session lifecycle', () => {
       plant_species_colors: {},
       plant_species_symbols: {},
       layers: [
-        { name: 'climate', visible: false, locked: false, opacity: 1 },
         { name: 'zones', visible: true, locked: false, opacity: 1 },
-        { name: 'water', visible: false, locked: false, opacity: 1 },
         { name: 'plants', visible: true, locked: false, opacity: 1 },
         { name: 'measurement-guides', visible: true, locked: false, opacity: 1 },
         { name: 'annotations', visible: true, locked: false, opacity: 1 },
@@ -124,9 +122,9 @@ describe('browser Design Session lifecycle', () => {
     if (!firstLayer || !secondLayer) throw new Error('canonical layer catalog is empty')
 
     expect(firstLayer).not.toBe(secondLayer)
-    expect(secondLayer.visible).toBe(false)
-    firstLayer.visible = true
-    expect(secondLayer.visible).toBe(false)
+    expect(secondLayer.visible).toBe(true)
+    firstLayer.visible = false
+    expect(secondLayer.visible).toBe(true)
   })
 
   it('composes a new browser Design as the current version through draft and download', async () => {

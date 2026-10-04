@@ -1,5 +1,6 @@
 import {
   getSceneGroupedMemberKeys,
+  isSceneLayerEditable,
   normalizeSceneDesignObjectTargets,
   sceneTargetKey,
   type SceneDesignObjectSelection,
@@ -12,7 +13,7 @@ export function getSelectablePlantIdsForSpecies(
   scene: ScenePersistedState,
   canonicalName: string,
 ): string[] {
-  if (!isPlantsLayerEditable(scene)) return []
+  if (!isSceneLayerEditable(scene, 'plants')) return []
   const groupedMemberKeys = getSceneGroupedMemberKeys(scene)
 
   return scene.plants
@@ -57,9 +58,4 @@ export function getSameSpeciesReferenceCanonicalName(
     if (canonicalNames.size > 1) return null
   }
   return [...canonicalNames][0] ?? null
-}
-
-function isPlantsLayerEditable(scene: ScenePersistedState): boolean {
-  const layer = scene.layers.find((entry) => entry.name === 'plants')
-  return layer?.visible !== false && layer?.locked !== true
 }

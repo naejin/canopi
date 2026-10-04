@@ -146,19 +146,15 @@ export function annotationScreenFrameAt(
   }
 }
 
-function getAnnotationWorldCorners(
-  annotation: SceneAnnotationEntity,
-  viewportScale: number,
-  paddingPx: { x: number; y: number } = { x: 0, y: 0 },
-): ScenePoint[] {
+function getAnnotationWorldCorners(annotation: SceneAnnotationEntity, viewportScale: number): ScenePoint[] {
   const safeScale = Math.max(viewportScale, 0.001)
   const metrics = getAnnotationTextMetrics(annotation)
   return rotatedRectCorners({
     origin: annotation.position,
     width: metrics.widthPx / safeScale,
     height: metrics.heightPx / safeScale,
-    paddingX: paddingPx.x / safeScale,
-    paddingY: paddingPx.y / safeScale,
+    paddingX: 0,
+    paddingY: 0,
     rotationDeg: annotation.rotationDeg ?? 0,
   })
 }

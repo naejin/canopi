@@ -5,6 +5,7 @@ import {
   createInteractionDeps,
   makePlant,
   plantTarget,
+  enterOverview,
 } from '../../__tests__/support/canvas-interaction-setup'
 import {
   createSceneInteractionEventHarness,
@@ -62,7 +63,7 @@ vi.mock('./tools/tool-host', async (importOriginal) => {
   }
 })
 
-const PLATFORM: InputPlatform = { os: 'linux', engine: 'webkitgtk', gestureEvents: false }
+const PLATFORM: InputPlatform = { os: 'linux', gestureEvents: false }
 const SPECIES = { canonical_name: 'Malus domestica', common_name: 'Apple', stratum: 'mid', width_max_m: 4 }
 const SAVED_STAMP_MIME = 'application/x.canopi.saved-object-stamp+json'
 
@@ -494,7 +495,7 @@ describe('the interaction session', () => {
   })
 
   it('on a Mac, Cmd pressed and released during a still Shift+middle rotate steps the view, then frees it (A8)', () => {
-    createSession({ platform: { os: 'mac', engine: 'webkit', gestureEvents: true } })
+    createSession({ platform: { os: 'mac', gestureEvents: true } })
     const bearing = () => testView.view().camera.bearingDeg
 
     events.pointerDown({ x: 100, y: 100 }, { pointerId: 4, button: 1, buttons: 4, shiftKey: true })
@@ -529,7 +530,7 @@ describe('the interaction session', () => {
   })
 
   it('a WebKit pinch is no live pointer session until its twist passes 10°: Esc and the arrows keep working', () => {
-    const { session } = createSession({ platform: { os: 'mac', engine: 'webkit', gestureEvents: true } })
+    const { session } = createSession({ platform: { os: 'mac', gestureEvents: true } })
     const gesture = (type: string, rotation: number) => {
       const event = Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
         clientX: 200, clientY: 150, scale: 1.2, rotation, shiftKey: false, ctrlKey: false, altKey: false, metaKey: false,
@@ -1165,12 +1166,12 @@ describe('releases the tool did not hear (today\'s pointerup cleanup)', () => {
     expect(navigates()).toBe(0)
 
     // Overview swallows a release with no session instead.
-    session.setOverviewMode(true)
+    const leaveOverview = enterOverview(testView)
     const before = rectangle.calls.length
     events.pointerDown({ x: 50, y: 50 }, { button: 2 })
     events.pointerUp({ x: 50, y: 50 }, { button: 2 })
     expect(rectangle.calls.slice(before)).toEqual([])
-    session.setOverviewMode(false)
+    leaveOverview()
 
     // A press and release beside the map are the page's (phase F: no window listener without a press on the map).
     const panel = document.createElement('div')
@@ -1184,6 +1185,47 @@ describe('releases the tool did not hear (today\'s pointerup cleanup)', () => {
     events.pointerDown({ x: 50, y: 50 }, { button: 2 })
     events.pointerUp({ x: 50, y: 50 }, { button: 2 })
     expect(navigates()).toBe(1)
+  })
+
+  it('a tool whose overview cleanup throws still leaves the session in overview: the release is swallowed', () => {
+    const rectangle = stubTool('rectangle', {
+      cancelTransient: (reason) => {
+        if (reason === 'overview') throw new Error('overview cleanup failed')
+      },
+    })
+    useStubTools(rectangle)
+    const { session } = createSession()
+    session.setTool('rectangle')
+
+    expect(() => enterOverview(testView)).toThrow('overview cleanup failed')
+    expect(testView.viewport().scale).toBeCloseTo(0.05, 9)
+    const before = rectangle.calls.length
+    events.pointerDown({ x: 50, y: 50 }, { button: 2 })
+    events.pointerUp({ x: 50, y: 50 }, { button: 2 })
+    expect(rectangle.calls.slice(before)).toEqual([])
+  })
+
+  it('a tool whose cancel throws mid-drag still lets both the session and the host enter overview', () => {
+    const rectangle = stubTool('rectangle', {
+      gesture: (gesture) => {
+        if (gesture.kind === 'cancel') throw new Error('cancel failed')
+        return 'pass'
+      },
+    })
+    useStubTools(rectangle)
+    const { session } = createSession()
+    session.setTool('rectangle')
+    container.focus()
+    events.pointerDown({ x: 20, y: 20 })
+    events.pointerMove({ x: 60, y: 40 })
+    events.holdSpace()
+
+    expect(() => enterOverview(testView)).toThrow('cancel failed')
+    // The host met overview: the tool's overview cleanup ran.
+    expect(rectangle.calls).toContain('cancelTransient:overview')
+    // The session released Space with the recogniser: a modifier key brings no grab back in overview.
+    events.keyDown({ key: 'Shift', code: 'ShiftLeft', target: container })
+    expect(container.style.cursor).not.toBe('grab')
   })
 })
 

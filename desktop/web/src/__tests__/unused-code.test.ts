@@ -65,10 +65,6 @@ const OPTIONS: UnusedCodeOptions = {
  * (`canopi-…`) or the plan section (`canvas-v2-plan.md section N`) that needs it.
  */
 const KEPT: Readonly<Record<string, string>> = {
-  'src/canvas/runtime/view/navigation-policy.ts#SNAP_TO_NORTH_DEG':
-    'canopi-f47t.7 (phase 1 rotation): free gestures and the compass snap to north within 7° (canvas-v2-spec.md §4)',
-  'src/canvas/runtime/view/camera-math.ts#cameraKeepingPoint':
-    'canopi-f47t.7 (phase 1 rotation): camera-math API of canvas-v2-spec.md §1.1; camera-contract.test.ts holds it to MapLibre',
   'src/canvas/runtime/view/camera-math.ts#geoToScreen':
     'canopi-f47t.7 (phase 1 rotation): camera-math API of canvas-v2-spec.md §1.1; the bearing tween and activation tests project through it',
   'src/app/keyboard/escape-chain.ts#describeEscape':

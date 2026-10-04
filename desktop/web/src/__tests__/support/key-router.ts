@@ -8,7 +8,7 @@ import type { InputPlatform } from '../../canvas/runtime/input/platform'
 import type { CanvasKeyboardPort } from '../../canvas/runtime/runtime'
 
 /** The platform the key routers of tests run on unless a test names another: Ctrl is mod. */
-export const TEST_KEY_PLATFORM: InputPlatform = { os: 'linux', engine: 'chromium', gestureEvents: false }
+export const TEST_KEY_PLATFORM: InputPlatform = { os: 'linux', gestureEvents: false }
 
 /** The canvas rows over one port, with a command sink that consumes nothing. */
 export function installCanvasKeyRouter(canvas: () => CanvasKeyboardPort | null): KeyRouterHandle {
@@ -43,7 +43,6 @@ export function keyLike(key: string, init: Partial<KeyboardEventLike> = {}): Key
     ctrlKey: false,
     altKey: false,
     metaKey: false,
-    repeat: false,
     isComposing: false,
     defaultPrevented: false,
     cancelable: true,
@@ -51,7 +50,6 @@ export function keyLike(key: string, init: Partial<KeyboardEventLike> = {}): Key
     target: null,
     preventDefault() {},
     stopPropagation() {},
-    stopImmediatePropagation() {},
     ...init,
   }
 }

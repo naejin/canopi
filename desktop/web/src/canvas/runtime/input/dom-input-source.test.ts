@@ -12,7 +12,7 @@ import type { RawInput, RecogniserConfig } from './raw-input'
 import { initialRecogniserState, recognise } from './recognise'
 import { DEFAULT_THRESHOLDS } from './thresholds'
 
-const PLATFORM = { os: 'linux', engine: 'webkitgtk', gestureEvents: false } as const
+const PLATFORM = { os: 'linux', gestureEvents: false } as const
 const RECOGNISER_CONFIG: RecogniserConfig = { platform: PLATFORM, bindings: CURRENT_BINDINGS, thresholds: DEFAULT_THRESHOLDS }
 
 let host: HTMLDivElement
@@ -738,7 +738,7 @@ describe('createDomInputSource', () => {
   })
 
   it('gesture listeners attach only with trackpad gestures on WebKit, copy the rotation, prevent the default and detach', () => {
-    const MAC_WEBKIT = { os: 'mac', engine: 'webkit', gestureEvents: true } as const
+    const MAC_WEBKIT = { os: 'mac', gestureEvents: true } as const
     const GESTURE_TYPES = ['gesturestart', 'gesturechange', 'gestureend']
     const gestureListeners = (spy: { mock: { calls: unknown[][] } }) =>
       listenerCalls(spy).map(([type]) => type).filter((type) => GESTURE_TYPES.includes(type))
@@ -788,7 +788,7 @@ describe('createDomInputSource', () => {
   })
 
   it('a twist that starts over the text entry or owned chrome, or while the text entry is open, is prevented and never delivered', () => {
-    const MAC_WEBKIT = { os: 'mac', engine: 'webkit', gestureEvents: true } as const
+    const MAC_WEBKIT = { os: 'mac', gestureEvents: true } as const
     const config: RecogniserConfig = { ...RECOGNISER_CONFIG, platform: MAC_WEBKIT }
     let state = initialRecogniserState()
     const turns: number[] = []
@@ -832,7 +832,7 @@ describe('createDomInputSource', () => {
   })
 
   it('a live twist ends where it was when the text entry opens, and the rest of it is prevented and never delivered', () => {
-    const MAC_WEBKIT = { os: 'mac', engine: 'webkit', gestureEvents: true } as const
+    const MAC_WEBKIT = { os: 'mac', gestureEvents: true } as const
     const config: RecogniserConfig = { ...RECOGNISER_CONFIG, platform: MAC_WEBKIT }
     let state = initialRecogniserState()
     const turns: Array<[string, number]> = []

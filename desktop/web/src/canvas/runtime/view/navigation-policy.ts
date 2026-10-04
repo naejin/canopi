@@ -22,18 +22,16 @@ export interface NavigationPolicy {
   readonly minZoom: number                 // 0
   readonly maxZoom: number                 // 27
   readonly overviewPixelsPerMetre: number  // 0.1
-  readonly referencePixelsPerMetre: number // 20 px/m = 100 %
   /** prefers-reduced-motion: reduce, a live matchMedia signal made in app/canvas-runtime/app-adapter.ts, declared on canvas/runtime/app-adapter.ts and
    *  passed to createCameraDriverHost; view/ never calls matchMedia (P4). Eases and tweens become 'none' moves while true. */
   readonly reducedMotion: ReadonlySignal<boolean>
 }
 
 export const ROTATE_DEG_PER_PX = 0.8                                  // MapLibre's rate
-export const SNAP_TO_NORTH_DEG = 7
+/** Free gestures and the compass snap to north within this angle on release. */
+const SNAP_TO_NORTH_DEG = 7
 export const VIEW_EASE_MS = 300
 
-/** 100 % zoom: today's CameraController reference scale. */
-const REFERENCE_PIXELS_PER_METRE = 20
 /** Bearings this close to a whole multiple of 360 read as north. */
 const FULL_TURN_EPSILON_DEG = 1e-9
 /** A step count this close to a whole number is that multiple (bearings arrive through float arithmetic). */
@@ -46,7 +44,6 @@ export function createNavigationPolicy(base: WorkspaceCameraPolicy, reducedMotio
     minZoom: base.minimumMapZoom,
     maxZoom: base.maximumMapZoom,
     overviewPixelsPerMetre: base.overviewScaleThreshold,
-    referencePixelsPerMetre: REFERENCE_PIXELS_PER_METRE,
     reducedMotion,
   })
 }
@@ -98,7 +95,7 @@ export function zoomFloorForArc(screen: ViewScreen, policy: NavigationPolicy, fr
 /**
  * ViewFrame.scaleBounds at a bearing (spec §1.1b): the policy's zoom range with the single-world floor for that bearing, in px/m at
  * the reference latitude (cameraScaleBoundsForPolicy over the policy's own values). At bearing 0 on a screen whose larger side is at
- * most 512 px, today's CameraController bounds.
+ * most 512 px, the policy's zoom range alone: the single-world floor does not bite.
  */
 export function scaleBoundsAt(screen: ViewScreen, policy: NavigationPolicy, bearingDeg: number): { readonly min: number; readonly max: number } {
   const bounds = cameraScaleBoundsForPolicy({
@@ -149,7 +146,7 @@ export function shortestArc(fromDeg: number, toDeg: number): number {
 }
 
 /**
- * cos and sin of a bearing, exact at the four right angles (so bearing 0 is today's arithmetic bit for bit). Screen and plane
+ * cos and sin of a bearing, exact at the four right angles (so bearing 0 is the unturned arithmetic bit for bit). Screen and plane
  * rotations in view/ all go through it.
  */
 export function bearingCosSin(deg: number): readonly [number, number] {

@@ -42,18 +42,18 @@ function setup() {
 afterEach(() => vi.restoreAllMocks())
 
 describe('scene query snapshot reuse', () => {
-  it('projects physical extent from live edits without cloning a scene snapshot', () => {
+  it('reads whether the Scene holds objects from live edits without cloning a scene snapshot', () => {
     const { store, authority, query } = setup()
     const read = vi.spyOn(store, 'persisted', 'get')
-    expect(query.getScenePhysicalExtentMeters()).toBe(3)
+    expect(query.sceneHasObjects()).toBe(true)
     expect(read).not.toHaveBeenCalled()
-    const edit = authority.begin('move')
-    edit.mutate((draft) => { draft.plants[0]!.position.x = 10 })
+    const edit = authority.begin('delete')
+    edit.mutate((draft) => { draft.plants = [] })
     read.mockClear()
-    expect(query.getScenePhysicalExtentMeters()).toBe(10)
+    expect(query.sceneHasObjects()).toBe(false)
     expect(read).not.toHaveBeenCalled()
     edit.abort()
-    expect(query.getScenePhysicalExtentMeters()).toBe(3)
+    expect(query.sceneHasObjects()).toBe(true)
   })
 
   it('observes live-preview movement, abort, commit, and viewport changes on each call', () => {
