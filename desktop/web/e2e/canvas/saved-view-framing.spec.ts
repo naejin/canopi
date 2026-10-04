@@ -2,9 +2,7 @@
 // A view records the ground the whole map shows when it is saved; going to it, or presenting a step
 // that shows it, fits that ground into the whole map now (panels and story card included). The unit
 // tests drive the fit through a fake map; this scenario drives it through the real MapLibre container
-// in Chromium and WebKit, saving at 1400 x 900, going back at 1000 x 700, then growing the window back
-// (a map lost when growing it from 700 px high under reduced motion no longer reproduces, neither at
-// 82635c12 nor after c05ee2b5).
+// in Chromium and WebKit, saving at 1400 x 900, going back at 1000 x 700, then growing the window back.
 // The selected zone's handles are the DOM's measure of where the Design is drawn: the camera jumps
 // under reduced motion (support/canvas.ts), and every read is polled until the handles settle.
 // A presentation shows no handles, so its refit is compared with a fresh fit by pixels, within the run.
