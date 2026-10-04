@@ -63,7 +63,6 @@ export interface PlanarProjection {
 }
 
 export interface ViewTransform {
-  readonly revision: number          // increments on every build
   readonly planeRevision: number     // session-plane identity; stale transforms are refused after re-origin
   readonly camera: ViewCamera
   readonly screen: ViewScreen

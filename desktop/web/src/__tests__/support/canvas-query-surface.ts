@@ -217,7 +217,6 @@ function testViewFrame(placement: TestPlacement, screen: ViewScreen, plane: Sess
     screen,
     plane,
     planeRevision: 0,
-    revision,
   })
   return {
     view,

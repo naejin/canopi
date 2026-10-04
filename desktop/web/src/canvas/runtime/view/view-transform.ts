@@ -29,7 +29,6 @@ export function buildViewTransform(input: {
   readonly screen: ViewScreen
   readonly plane: SessionPlane
   readonly planeRevision: number
-  readonly revision: number
 }): ViewTransform {
   const { camera, screen, plane } = input
   const scale = mapZoomToStageScale(camera.zoom, plane.origin.lat)
@@ -51,13 +50,13 @@ export function planarCameraOf(view: ViewTransform): PlanarCamera {
 }
 
 // Pitch phase (not written now: no declaration, no stub; spec §6). When pitch ships, this module adds
-//   homographyViewTransform(input: { camera, screen, plane, homography: Float64Array, planeRevision, revision }): ViewTransform
+//   homographyViewTransform(input: { camera, screen, plane, homography: Float64Array, planeRevision }): ViewTransform
 
 /** screen = turn(p × scale, bearing) + { x, y }: Pixi's [a, b, c, d, tx, ty] with a = d = scale·cos, c = −b = scale·sin. */
 function similarityTransform(
   camera: ViewCamera,
   planar: PlanarCamera,
-  input: { readonly screen: ViewScreen; readonly plane: SessionPlane; readonly planeRevision: number; readonly revision: number },
+  input: { readonly screen: ViewScreen; readonly plane: SessionPlane; readonly planeRevision: number },
 ): ViewTransform {
   const { screen, plane } = input
   const { x: tx, y: ty, scale } = planar
@@ -92,7 +91,6 @@ function similarityTransform(
   }
 
   return Object.freeze<ViewTransform>({
-    revision: input.revision,
     planeRevision: input.planeRevision,
     camera,
     screen,

@@ -13,7 +13,7 @@ function fromPlane(planar: PlanarCamera, plane: SessionPlane, screen: ViewScreen
 }
 
 function fromCamera(camera: ViewCamera, plane: SessionPlane, screen: ViewScreen = SCREEN) {
-  return buildViewTransform({ camera, screen, plane, planeRevision: 3, revision: 7 })
+  return buildViewTransform({ camera, screen, plane, planeRevision: 3 })
 }
 
 function expectClose(actual: WorldPoint | null, expected: WorldPoint, digits = 6): void {
@@ -54,7 +54,6 @@ describe('view transform', () => {
         expect(view.pixelsPerMetre).toBeCloseTo(scale, 9)
         expect(view.northUp).toBe(true)
         expect(view.screenAxesInWorld()).toEqual({ right: { x: 1, y: 0 }, down: { x: 0, y: 1 } })
-        expect(view.revision).toBe(7)
         expect(view.planeRevision).toBe(3)
 
         const geographic = fromCamera(view.camera, plane)

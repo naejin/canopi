@@ -259,7 +259,6 @@ describe('headless camera driver', () => {
     expect(frame.insets).toEqual({ top: 0, right: 0, bottom: 0, left: 0 })
     expect(frame.attached).toBe(false)
     expect(frame.revision).toBe(0)
-    expect(frame.view.revision).toBe(0)
     view.dispose()
   })
 

@@ -58,8 +58,6 @@ export function createTestSceneRendererSnapshot(
   }
 }
 
-let testViewRevision = 0
-
 /**
  * A renderer test's view: the plane placed as today's viewport places it (screen = world × scale + { x, y } at bearing 0),
  * turned by `bearingDeg` about the screen origin, on a 400 × 300 screen unless given.
@@ -75,6 +73,5 @@ export function createTestRendererView(
     screen,
     plane,
     planeRevision: 0,
-    revision: ++testViewRevision,
   })
 }

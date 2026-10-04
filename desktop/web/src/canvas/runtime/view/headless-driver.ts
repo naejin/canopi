@@ -83,7 +83,6 @@ export function createHeadlessCameraDriver(options: HeadlessCameraDriverOptions)
       screen: state.screen,
       plane: state.plane,
       planeRevision: state.planeRevision,
-      revision: 0,
     })
     return Object.freeze<ViewFrame>({
       view,
