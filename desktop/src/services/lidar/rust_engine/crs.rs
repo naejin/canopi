@@ -226,8 +226,9 @@ pub(super) fn from_epsg(code: u32) -> Result<ResolvedCrs, String> {
 
 /// Resolve the PROJ string another raster format carries; `wbprojection`
 /// reads the normalised string for the projection the keys written back
-/// spell out. Keys spell a user-defined CRS in metres, so a string in another
-/// linear unit is refused.
+/// spell out. Keys spell a user-defined CRS in metres, and only the
+/// projections `projection_terms` names, so a string in another linear unit
+/// or projection is refused here rather than when its keys are written.
 pub(super) fn from_proj4(definition: &str) -> Result<ResolvedCrs, String> {
     let unsupported = |e: String| format!("unsupported PROJ definition: {e}");
     let (definition, proj) = parse(definition).map_err(unsupported)?;
@@ -236,6 +237,7 @@ pub(super) fn from_proj4(definition: &str) -> Result<ResolvedCrs, String> {
     }
     let crs =
         wbprojection::from_proj_string(&definition).map_err(|e| unsupported(e.to_string()))?;
+    projection_terms(crs.projection.params()).map_err(unsupported)?;
     Ok(ResolvedCrs {
         epsg: None,
         wkt: with_definition(&crs.to_wkt(), &definition),
@@ -1407,6 +1409,28 @@ mod tests {
                 .is_err_and(|e| e.contains("a linear unit other than the metre")),
             "{refused:?}"
         );
+    }
+
+    /// A PROJ string names no code, so it is written back as user-defined
+    /// keys: a projection keys cannot spell (spherical Web Mercator, Swiss
+    /// oblique Mercator, Krovak) is refused when probed, not when written.
+    #[test]
+    fn a_proj_string_keys_cannot_spell_is_refused_when_probed() {
+        let definition = |code: u16| crs_definitions::from_code(code).unwrap().proj4;
+        for proj4 in [
+            "+proj=merc +a=6378137 +b=6378137 +lat_ts=0 +lon_0=0 +x_0=0 +y_0=0 +k=1 +units=m +no_defs",
+            definition(3857),
+            definition(2056),
+            definition(5514),
+        ] {
+            let refused = from_proj4(proj4).map(|crs| crs.definition);
+            assert!(
+                refused
+                    .as_ref()
+                    .is_err_and(|e| e.contains("is not supported")),
+                "{proj4}: {refused:?}"
+            );
+        }
     }
 
     /// NAD83 / New York Long Island (EPSG:2263) is in US survey feet: points
