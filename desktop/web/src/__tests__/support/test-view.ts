@@ -24,8 +24,11 @@ import type {
   ViewTransform,
 } from '../../canvas/runtime/view/types'
 import { stageScaleToMapZoom } from '../../canvas/projection'
-import { createSessionPlane, type SessionPlane, type SessionPlaneTransform } from '../../canvas/session-plane'
+import { createSessionPlane, type SessionPlane } from '../../canvas/session-plane'
 import { createWorkspaceCameraPolicy, type WorkspaceCameraPolicy } from '../../canvas/workspace-camera-policy'
+
+/** A plane-to-plane transform (SessionPlane.transformTo). */
+type SessionPlaneTransform = ReturnType<SessionPlane['transformTo']>
 
 export interface TestViewOptions {
   /** Default { width: 400, height: 300, devicePixelRatio: 1 }: the split files' camera today. */
