@@ -5,8 +5,8 @@ import type { InputPlatform } from './platform'
 import type { TargetClass } from './raw-input'
 
 const SURFACE: TargetClass = { kind: 'surface' }
-const WINDOWS: InputPlatform = { os: 'windows', engine: 'chromium', gestureEvents: false }
-const MAC: InputPlatform = { os: 'mac', engine: 'webkit', gestureEvents: true }
+const WINDOWS: InputPlatform = { os: 'windows', gestureEvents: false }
+const MAC: InputPlatform = { os: 'mac', gestureEvents: true }
 const HOST = { width: 400, height: 300 }
 const NO_CTRL = { physicalCtrl: false }
 

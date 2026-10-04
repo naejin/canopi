@@ -63,7 +63,7 @@ vi.mock('./tools/tool-host', async (importOriginal) => {
   }
 })
 
-const PLATFORM: InputPlatform = { os: 'linux', engine: 'webkitgtk', gestureEvents: false }
+const PLATFORM: InputPlatform = { os: 'linux', gestureEvents: false }
 const SPECIES = { canonical_name: 'Malus domestica', common_name: 'Apple', stratum: 'mid', width_max_m: 4 }
 const SAVED_STAMP_MIME = 'application/x.canopi.saved-object-stamp+json'
 
@@ -495,7 +495,7 @@ describe('the interaction session', () => {
   })
 
   it('on a Mac, Cmd pressed and released during a still Shift+middle rotate steps the view, then frees it (A8)', () => {
-    createSession({ platform: { os: 'mac', engine: 'webkit', gestureEvents: true } })
+    createSession({ platform: { os: 'mac', gestureEvents: true } })
     const bearing = () => testView.view().camera.bearingDeg
 
     events.pointerDown({ x: 100, y: 100 }, { pointerId: 4, button: 1, buttons: 4, shiftKey: true })
@@ -530,7 +530,7 @@ describe('the interaction session', () => {
   })
 
   it('a WebKit pinch is no live pointer session until its twist passes 10°: Esc and the arrows keep working', () => {
-    const { session } = createSession({ platform: { os: 'mac', engine: 'webkit', gestureEvents: true } })
+    const { session } = createSession({ platform: { os: 'mac', gestureEvents: true } })
     const gesture = (type: string, rotation: number) => {
       const event = Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
         clientX: 200, clientY: 150, scale: 1.2, rotation, shiftKey: false, ctrlKey: false, altKey: false, metaKey: false,

@@ -11,14 +11,14 @@ const ANDROID_CHROME = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537
 
 describe('detectPlatform', () => {
   it.each([
-    ['WebView2', WINDOWS_WEBVIEW2, 'Win32', { os: 'windows', engine: 'chromium' }],
-    ['WKWebView', MAC_WKWEBVIEW, 'MacIntel', { os: 'mac', engine: 'webkit' }],
-    ['Firefox on macOS', MAC_FIREFOX, 'MacIntel', { os: 'mac', engine: 'gecko' }],
-    ['WebKitGTK', LINUX_WEBKITGTK, 'Linux x86_64', { os: 'linux', engine: 'webkitgtk' }],
-    ['Chrome on Linux', LINUX_CHROME, 'Linux x86_64', { os: 'linux', engine: 'chromium' }],
-    ['Chrome on iPad', IPAD_CHROME, 'iPad', { os: 'ios', engine: 'webkit' }],
-    ['Chrome on Android', ANDROID_CHROME, 'Linux armv8l', { os: 'android', engine: 'chromium' }],
-    ['an unknown agent', 'Unknown/1.0', '', { os: 'other', engine: 'webkit' }],
+    ['WebView2', WINDOWS_WEBVIEW2, 'Win32', { os: 'windows' }],
+    ['WKWebView', MAC_WKWEBVIEW, 'MacIntel', { os: 'mac' }],
+    ['Firefox on macOS', MAC_FIREFOX, 'MacIntel', { os: 'mac' }],
+    ['WebKitGTK', LINUX_WEBKITGTK, 'Linux x86_64', { os: 'linux' }],
+    ['Chrome on Linux', LINUX_CHROME, 'Linux x86_64', { os: 'linux' }],
+    ['Chrome on iPad', IPAD_CHROME, 'iPad', { os: 'ios' }],
+    ['Chrome on Android', ANDROID_CHROME, 'Linux armv8l', { os: 'android' }],
+    ['an unknown agent', 'Unknown/1.0', '', { os: 'other' }],
   ])('reads %s from its user agent', (_name, userAgent, platform, expected) => {
     expect(detectPlatform({ userAgent, platform }, {})).toEqual({ ...expected, gestureEvents: false })
   })

@@ -82,7 +82,7 @@ function commandFor(
     singleKeys: signal(options.singleKeys ?? true),
     focus: { cycleRegion: () => false },
     isModalOpen: () => false,
-    platform: { engine: 'chromium', gestureEvents: false, ...(options.platform ?? LINUX) },
+    platform: { gestureEvents: false, ...(options.platform ?? LINUX) },
     document,
   })
   try {

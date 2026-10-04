@@ -22,7 +22,7 @@ import { expectScreenPx } from '../../../__tests__/support/camera-tolerance'
 
 vi.mock('../tools/registry', () => ({ TOOL_REGISTRY: {} }))
 
-const PLATFORM: InputPlatform = { os: 'linux', engine: 'webkitgtk', gestureEvents: false }
+const PLATFORM: InputPlatform = { os: 'linux', gestureEvents: false }
 const CORNER: ToolHandle = {
   id: 'vertex:zone-1:0' as ToolHandleId,
   anchor: { x: 40, y: 60 },
