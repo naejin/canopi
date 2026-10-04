@@ -6,6 +6,7 @@ import { SceneRendererMountCancelledError } from './scene-runtime/render-schedul
 import { effect } from '@preact/signals'
 import { stageScaleToMapZoom } from '../projection'
 import { DEFAULT_NEW_DESIGN_VIEW } from '../session-plane'
+import { refreshCanvasColorCache } from '../theme-refresh'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import '../../__tests__/support/camera-tolerance'
 
@@ -2740,6 +2741,58 @@ describe('scene canvas runtime', () => {
 
     expect(renderer.setView).not.toHaveBeenCalled()
     runtime.destroy()
+  })
+
+  it('a theme switch repaints the rulers at once in the new palette', async () => {
+    const fills: string[] = []
+    const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => {
+      const context = new Proxy({ fillStyle: '' } as Record<string | symbol, unknown>, {
+        get: (target, key) => {
+          if (key in target) return target[key]
+          if (key === 'fillRect') return () => { fills.push(String(target.fillStyle)) }
+          if (key === 'measureText') return () => ({ width: 0 })
+          return () => undefined
+        },
+        set: (target, key, value) => { target[key] = value; return true },
+      })
+      return context as never
+    })
+    let onTheme = () => {}
+    const runtime = stubbedRuntime({
+      appAdapter: {
+        ...createCleanStateAdapterProbe().adapter,
+        settings: createTestSettingsAdapter({
+          readChromeOverlay: () => ({ gridVisible: false, rulersVisible: true, guidesVisible: true }),
+          subscribeTheme: (onChange) => {
+            onTheme = onChange
+            return () => {}
+          },
+        }),
+      },
+    })
+    const lightTheme = document.createElement('div')
+    lightTheme.style.setProperty('--canvas-ruler-bg', '#F3EEE3')
+    runtime.documentSurface.loadDocument(makeFile())
+    // The workspace container carries the dark theme's tokens; the canvas colours still hold the light ones.
+    const container = createRuntimeContainer()
+    container.style.setProperty('--canvas-ruler-bg', '#2A2721')
+    await runtime.init(container)
+    try {
+      runtime.documentSurface.attachRulersTo(document.createElement('div'))
+      refreshCanvasColorCache(lightTheme)
+      runtime.documentSurface.showCanvasChrome()
+      expect(fills.at(-1)).toBe('#F3EEE3')
+      fills.length = 0
+
+      onTheme()
+
+      // No new frame came: the theme alone repaints both bands.
+      expect(fills).toEqual(['#2A2721', '#2A2721'])
+    } finally {
+      runtime.destroy()
+      refreshCanvasColorCache(lightTheme)
+      getContext.mockRestore()
+    }
   })
 
   it('the open fit draws the fitted view in the next frame', async () => {

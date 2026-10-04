@@ -29,7 +29,6 @@ export interface RulerOverlayOptions {
  */
 export interface RulerOverlay {
   update(snapshot: RulerOverlaySnapshot): void
-  refreshTheme(): void
   destroy(): void
 }
 
@@ -123,11 +122,6 @@ class HtmlRulerOverlay implements RulerOverlay {
       drawHorizontalRuler(this._horizontalCanvas, snapshot.frame, origin)
       drawVerticalRuler(this._verticalCanvas, snapshot.frame, origin)
     }
-  }
-
-  /** Repaints the latest frame in the canvas colours the theme switch just re-read, without waiting for the next frame. */
-  refreshTheme(): void {
-    if (this._snapshot) this.update(this._snapshot)
   }
 
   /**

@@ -386,7 +386,7 @@ export class SceneCanvasRuntime {
         if (container) {
           refreshCanvasColorCache(container)
         }
-        this._chrome.refreshTheme()
+        this._renderChrome()
         this._construction.inspection.refresh()
         this._invalidate('scene')
       },

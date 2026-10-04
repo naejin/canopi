@@ -100,22 +100,6 @@ describe('RulerOverlay', () => {
   const LIGHT_RULER = { '--canvas-ruler-bg': '#F3EEE3', '--canvas-ruler-text': '#645A4C', '--color-border': 'rgba(58, 46, 28, 0.14)' }
   const DARK_RULER = { '--canvas-ruler-bg': '#2A2721', '--canvas-ruler-text': '#B5AC9D', '--color-border': 'rgba(255, 248, 235, 0.12)' }
 
-  it('refreshTheme redraws at once with the new palette', () => {
-    const fills = recordBandFills()
-    const overlay = createRulerOverlay(document.createElement('div'), { onGuideCreate: vi.fn() })
-    overlay.update({ frame: cameraFrame(), chromeVisible: true, rulersVisible: true })
-    fills.length = 0
-    try {
-      switchTheme(DARK_RULER)
-      overlay.refreshTheme()
-      // No new frame came: the theme alone repaints both bands.
-      expect(fills).toEqual(['#2A2721', '#2A2721'])
-    } finally {
-      switchTheme(LIGHT_RULER)
-      overlay.destroy()
-    }
-  })
-
   it('a dark theme refresh changes the ruler fill', () => {
     const fills = recordBandFills()
     const overlay = createRulerOverlay(document.createElement('div'), { onGuideCreate: vi.fn() })
@@ -124,7 +108,6 @@ describe('RulerOverlay', () => {
       overlay.update({ frame, chromeVisible: true, rulersVisible: true })
       expect(fills.at(-1)).toBe('#F3EEE3')
       switchTheme(DARK_RULER)
-      overlay.refreshTheme()
       overlay.update({ frame, chromeVisible: true, rulersVisible: true })
       expect(fills.at(-1)).toBe('#2A2721')
     } finally {
@@ -467,7 +450,6 @@ describe('RulerOverlay', () => {
 
     overlay.destroy()
     overlay.destroy()
-    overlay.refreshTheme()
     overlay.update({
       frame: cameraFrame(),
       chromeVisible: true,
