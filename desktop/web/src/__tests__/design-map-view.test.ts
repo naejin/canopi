@@ -10,7 +10,10 @@ import {
   prepareDesignWriteDestination,
   prepareSynchronousDesignWriteDestination,
 } from '../app/document-session/write-admission'
-import { savedViewCameraOf } from '../canvas/saved-view-framing'
+import { persistLastView } from '../app/canvas-map-surface/last-view'
+import { resetSettingsProjectionForTests } from '../app/settings/projection'
+import { lastView } from '../app/settings/state'
+import { savedViewCameraOf, savedViewZoom } from '../canvas/saved-view-framing'
 import { geographicViewOfCamera } from '../canvas/session-plane'
 import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
 import type { CanopiFile } from '../types/design'
@@ -48,13 +51,18 @@ const hosts: CanvasRuntimeHost[] = []
 
 afterEach(async () => {
   for (const host of hosts.splice(0)) await host.destroy()
+  resetSettingsProjectionForTests()
+  lastView.value = null
 })
 
-/** The orchard opened from its file through the replacement path, on a 1200 x 800 map whose clean state reaches `store`. */
-function openOrchard(): { host: CanvasRuntimeHost; store: ReturnType<typeof createMemoryDesignSessionStore> } {
+/** A file opened through the replacement path, on a map of `screen` (1200 x 800) whose clean state reaches `store`. */
+function openOrchard(
+  file: CanopiFile = orchard(),
+  screen = { width: 1200, height: 800 },
+): { host: CanvasRuntimeHost; store: ReturnType<typeof createMemoryDesignSessionStore> } {
   const store = createMemoryDesignSessionStore({ file: null })
   const host = createLiveTestCanvasRuntimeHost({
-    screen: { width: 1200, height: 800 },
+    screen,
     appAdapter: {
       ...createAppCanvasRuntimeAppAdapter({ presentationData: {} }),
       cleanState: { setCanvasClean: (clean) => store.setCanvasClean(clean) },
@@ -62,7 +70,7 @@ function openOrchard(): { host: CanvasRuntimeHost; store: ReturnType<typeof crea
   })
   hosts.push(host)
   const replacement = createDesignSessionReplacement({ store, workflowRunner: { install: vi.fn(), dispose: vi.fn() } })
-  replacement.replace({ file: orchard(), kind: 'loaded', path: PATH, name: 'Orchard' }, host.surfaces.documents, () => true)
+  replacement.replace({ file, kind: 'loaded', path: PATH, name: file.name }, host.surfaces.documents, () => true)
   return { host, store }
 }
 
@@ -121,5 +129,79 @@ describe('the view a Design is saved with', () => {
     expect(store.canvasChangeRevision.value, 'continuous save writes on a canvas change').toBe(canvasRevision)
     expect(store.committedDesignRevision.value, 'or on a Design change').toBe(designRevision)
     expect(guard?.isCurrent(), 'a pan is not a change a replacement must guard').toBe(true)
+  })
+})
+
+/** The orchard as saved after a pan, zoom and turn on a 1200 x 800 map. */
+function savedOrchard(): CanopiFile {
+  const { host } = openOrchard()
+  moveTheView(host)
+  return { ...orchard(), map_view: liveMapView(host) }
+}
+
+function cameraOf(host: CanvasRuntimeHost) {
+  return host.surfaces.queries.view.captureView().camera
+}
+
+function expectCameraAt(host: CanvasRuntimeHost, at: { lon: number; lat: number; zoom: number; bearing: number }): void {
+  const camera = cameraOf(host)
+  expect(camera.center.lon).toBeCloseTo(at.lon, 9)
+  expect(camera.center.lat).toBeCloseTo(at.lat, 9)
+  expect(camera.zoom).toBeCloseTo(at.zoom, 9)
+  expect(camera.bearingDeg).toBeCloseTo(at.bearing, 9)
+}
+
+describe('opening a Design at the view it was saved with', () => {
+  it('the window it was saved in restores the exact camera', () => {
+    const file = savedOrchard()
+    const { host } = openOrchard(file)
+
+    expectCameraAt(host, file.map_view!)
+  })
+
+  it('a smaller window zooms out just enough to show the framed ground, at the same centre and bearing', () => {
+    const file = savedOrchard()
+    const smaller = { width: 800, height: 600 }
+    const { host } = openOrchard(file, smaller)
+
+    const zoom = savedViewZoom(file.map_view!, smaller)
+    expect(zoom).toBeLessThan(file.map_view!.zoom - 0.1)
+    expectCameraAt(host, { ...file.map_view!, zoom })
+  })
+
+  it('an empty Design with a saved view opens north up on the new-Design overview', () => {
+    const file = { ...orchard(), plants: [], map_view: savedOrchard().map_view }
+    const { host } = openOrchard(file)
+
+    expect(cameraOf(host).bearingDeg).toBe(0)
+    expect(host.surfaces.queries.view.mode.value).toBe('overview')
+  })
+
+  it('a file without one opens with the fit at the last view\'s bearing', () => {
+    persistLastView({ ...SITE, zoom: 18, bearing: 30 })
+    const saved = savedOrchard()
+    const { host } = openOrchard()
+
+    expect(cameraOf(host).bearingDeg).toBeCloseTo(30, 6)
+    expect(cameraOf(host).zoom).not.toBeCloseTo(saved.map_view!.zoom, 3)
+  })
+
+  it('a cold open restores it, and the renderer mount does not fit over it', async () => {
+    const file = savedOrchard()
+    const host = createLiveTestCanvasRuntimeHost({
+      screen: { width: 1200, height: 800 },
+      renderer: { id: 'test', initialize: () => ({ id: 'maplibre-pixi', syncScene: () => {}, setView: () => {}, setDraft: () => {}, dispose: () => {} }) },
+    })
+    hosts.push(host)
+    host.surfaces.documents.loadDocument(file)
+    host.surfaces.documents.zoomToFit()
+    expectCameraAt(host, file.map_view!)
+
+    const container = document.createElement('div')
+    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 1200 })
+    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 800 })
+    await host.init(container)
+
+    expectCameraAt(host, file.map_view!)
   })
 })

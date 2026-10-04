@@ -1,6 +1,6 @@
 import type { ReadonlySignal } from '@preact/signals'
 import type { CanopiFile, SavedViewCamera } from '../../types/design'
-import { savedViewCameraOf } from '../saved-view-framing'
+import { savedViewCameraOf, savedViewZoom } from '../saved-view-framing'
 import { geographicViewOfCamera } from '../session-plane'
 import {
   CanvasAuthorityBusyError,
@@ -19,6 +19,7 @@ import type { CanvasInspectionHandle } from '../inspection'
 import type { SceneCanvasInspectionOwner } from './inspection-lens'
 import type { CameraDriverHost } from './view/camera-driver'
 import type { ViewNavigation } from './view/navigation'
+import type { ViewCamera } from './view/types'
 
 interface SceneCanvasDocumentSurfaceOptions {
   /** The bearing a loaded Design opens at; read once per open of a loaded Design (scene-runtime/construction.ts). */
@@ -86,13 +87,31 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
   }
 
   /**
-   * The open fit: every open path (the first load, a replace, the first generation) ends here, never Fit to Design. It opens
-   * at the opening bearing (spec §4.15); an empty scene, and the first frame before any Design, open north up (openAt).
+   * The open fit: every open path (the first load, a replace, the first generation) ends here, never Fit to Design. A Design
+   * saved with its view (`map_view`, U28) opens at that view's centre and bearing, its framed ground fitted into the whole map
+   * by the saved-view rule; any other opens on the fit at the opening bearing (spec §4.15). An empty scene, and the first
+   * frame before any Design, open north up (openAt).
    */
   zoomToFit(): void {
-    const bearing = this._documentState === 'absent' ? 0 : this.options.readOpeningBearing()
-    this.options.viewNavigation.openAt(bearing)
-    if (this._documentState !== 'absent') this._placed = true
+    if (this._documentState === 'absent') {
+      this.options.viewNavigation.openAt(0)
+      return
+    }
+    this.options.viewNavigation.openAt(this.options.readOpeningBearing(), this._savedCamera())
+    this._placed = true
+  }
+
+  /** The camera the open Design was saved with, framed for the whole map now; null without one. */
+  private _savedCamera(): ViewCamera | null {
+    const saved = this._savedMapView
+    if (!saved) return null
+    const { screen } = this.options.cameraHost.frames.viewFrame.peek().view
+    return {
+      center: { lon: saved.lon, lat: saved.lat },
+      zoom: savedViewZoom(saved, screen),
+      bearingDeg: saved.bearing,
+      pitchDeg: 0,
+    }
   }
 
   /**

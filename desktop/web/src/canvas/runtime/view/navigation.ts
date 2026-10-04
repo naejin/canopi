@@ -48,9 +48,10 @@ export interface ViewNavigation extends ViewCommandSurface {
   focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
   returnFromTemporaryFocus(): boolean        // bookmark is a ViewCamera: re-origin cannot invalidate it
   clearTemporaryFocus(): void
-  /** Opening a Design: oriented fit at the given bearing; an empty scene opens at 0 (spec §4.15). Every open path calls it
-   *  through document-surface.ts's open fit; Fit to Design stays zoomToFit. */
-  openAt(bearingDeg: number): void
+  /** Opening a Design: the camera it was saved with (`saved`, already framed for this map) or else the oriented fit at the
+   *  given bearing; an empty scene opens on the north-up fit either way (spec §4.15). Every open path calls it through
+   *  document-surface.ts's open fit; Fit to Design stays zoomToFit. */
+  openAt(bearingDeg: number, saved?: ViewCamera | null): void
 
   // rotation
   turnToEdge(a: WorldPoint, b: WorldPoint): void   // smaller turn that makes a→b horizontal; never snapped
@@ -187,10 +188,15 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
       const valid = [insets.top, insets.right, insets.bottom, insets.left].every((edge) => Number.isFinite(edge) && edge >= 0)
       driver().setInsets(valid ? insets : NO_INSETS)
     },
-    openAt(bearingDeg) {
+    openAt(bearingDeg, saved) {
       const extent = deps.readSceneExtent()
       // A new or empty Design opens north up: "Where is your site?" appears over a north-up overview.
-      const bearing = isEmptyExtent(extent, frame().view.pixelsPerMetre) ? 0 : normaliseBearing(bearingDeg)
+      const empty = isEmptyExtent(extent, frame().view.pixelsPerMetre)
+      if (saved && !empty) {
+        jump(saved)
+        return
+      }
+      const bearing = empty ? 0 : normaliseBearing(bearingDeg)
       const fitted = fitScene(fitFrame(bearing), extent, bearing)
       // A fit that kept another bearing turns about the screen centre: the same centre and scale at the opening bearing.
       const { view } = frame()
