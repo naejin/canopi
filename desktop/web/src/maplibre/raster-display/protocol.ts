@@ -43,14 +43,7 @@ export type RasterWorkerRequest =
   }
   | { readonly id: number; readonly op: 'encode'; readonly rgba: Uint8ClampedArray; readonly width: number; readonly height: number }
   | { readonly id: number; readonly op: 'close'; readonly handle: number }
-  | { readonly id: number; readonly op: 'usage' }
 
 export type RasterWorkerReply =
   | { readonly id: number; readonly ok: true; readonly value: unknown }
   | { readonly id: number; readonly ok: false; readonly error: string }
-
-export interface RasterLaneUsage {
-  readonly cacheBytes: number
-  readonly cacheBlocks: number
-  readonly openSources: number
-}

@@ -184,8 +184,6 @@ async function handle(request: RasterWorkerRequest): Promise<{ value: unknown; t
       }
       return { value: true, transfer: [] }
     }
-    case 'usage':
-      return { value: { cacheBytes: usedBytes, cacheBlocks: lru.size, openSources: sources.size }, transfer: [] }
   }
 }
 

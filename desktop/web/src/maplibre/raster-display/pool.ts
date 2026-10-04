@@ -18,7 +18,6 @@
  * client rejects its queued work and closes its sources in every lane.
  */
 import type {
-  RasterLaneUsage,
   RasterRenderOptions,
   RasterSourceMetadata,
   RasterWorkerReply,
@@ -80,10 +79,6 @@ export interface RasterPoolClient {
   ): Promise<Uint8Array>
   /** Report whether a queued tile still matters; checked just before dispatch. */
   setRelevance(relevance: RasterTileRelevance | null): void
-  /** Re-check queued tiles against the current relevance (call after the viewport moves). */
-  prune(): void
-  usage(): Promise<RasterLaneUsage[]>
-  readonly disposed: boolean
   dispose(): void
 }
 
@@ -163,11 +158,6 @@ export class RasterWorkerPool {
       renderPreview: (urls, bbox, size, render) => pool.renderPreview(state, urls, bbox, size, render),
       setRelevance(relevance) {
         state.relevance = relevance
-      },
-      prune: () => pool.dispatch(),
-      usage: () => pool.usage(),
-      get disposed() {
-        return state.disposed
       },
       dispose: () => pool.release(state),
     }
@@ -439,10 +429,6 @@ export class RasterWorkerPool {
       const lane = this.lanes[laneIndex]
       if (lane) void this.post(lane, { id: 0, op: 'close', handle }).catch(() => {})
     }
-  }
-
-  private async usage(): Promise<RasterLaneUsage[]> {
-    return Promise.all(this.lanes.map((lane) => this.post<RasterLaneUsage>(lane, { id: 0, op: 'usage' })))
   }
 
   private release(client: ClientState): void {
