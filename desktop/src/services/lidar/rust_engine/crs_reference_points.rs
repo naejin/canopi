@@ -4,7 +4,7 @@
 //! PROJ_NETWORK=OFF, no grid files); do not edit by hand.
 
 /// `(EPSG code, longitude, latitude, x, y)`: WGS84 degrees in, the code's
-/// easting and northing out, in its own linear unit.
+/// coordinates out in the order GDAL stores them, in its own linear unit.
 pub(super) const REFERENCE_POINTS: &[(u32, f64, f64, f64, f64)] = &[
     (2154, 2.35, 48.85, 652301.564831, 6861302.725900),
     (2056, 8.0, 47.0, 2642695.420155, 1205590.522287),
@@ -45,4 +45,6 @@ pub(super) const REFERENCE_POINTS: &[(u32, f64, f64, f64, f64)] = &[
     (2972, -52.3, 4.9, 355855.438441, 541750.163564),
     (31467, 9.0, 50.0, 3500074.525406, 5540407.107230),
     (2062, -3.7, 40.4, 598929.425386, 644362.680626),
+    (5513, 17.325, 49.395, 1144001.643667, 544005.258663),
+    (2065, 17.325, 49.395, 1144001.643667, 544005.258663),
 ];

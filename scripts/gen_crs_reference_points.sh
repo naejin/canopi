@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Writes desktop/src/services/lidar/rust_engine/crs_reference_points.rs: PROJ's
 # coordinates of one point per code, which the raster engine's CRS tests must
-# match: 1 cm; 8 m for Krovak 5514, whose PROJ method differs from proj4rs;
-# 0.5 m for Martinique 2973, whose definition carries EPSG's 10 m Helmert shift
+# match: 1 cm; 8 m for Krovak (5514, 5513, 2065), whose PROJ method differs
+# from proj4rs; 0.5 m for Martinique 2973, whose definition carries EPSG's 10 m Helmert shift
 # where PROJ takes the 0.1 m one. The engine's own inverse closes within 1e-8
 # deg, 3e-8 deg (3 mm) for a code with a datum shift, which moves the
 # ellipsoidal height a 2-D transform drops.
@@ -12,8 +12,10 @@
 # Needs cs2cs and projinfo from PROJ 9.4.0. Grids are kept out
 # (PROJ_NETWORK=OFF and a PROJ_DATA holding only proj.db), so every datum step
 # is the Helmert shift the engine applies, whatever grids the machine has.
-# Output axes are put in easting, northing order from projinfo's axis
-# directions; values stay in each code's own linear unit (US feet for 2263).
+# Output axes are put in the order GDAL stores them, from projinfo's axis
+# directions: a northing-first grid swapped to easting first, a south-west
+# Krovak (5513, 2065) left southing first; values stay in each code's own
+# linear unit (US feet for 2263).
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -75,6 +77,8 @@ points=$(cat <<'P'
 2972 4.9 -52.3
 31467 50.0 9.0
 2062 40.4 -3.7
+5513 49.395 17.325
+2065 49.395 17.325
 P
 )
 
@@ -85,13 +89,13 @@ P
   echo "//! PROJ_NETWORK=OFF, no grid files); do not edit by hand."
   echo
   echo "/// \`(EPSG code, longitude, latitude, x, y)\`: WGS84 degrees in, the code's"
-  echo "/// easting and northing out, in its own linear unit."
+  echo "/// coordinates out in the order GDAL stores them, in its own linear unit."
   echo "pub(super) const REFERENCE_POINTS: &[(u32, f64, f64, f64, f64)] = &["
   while read -r code lat lon; do
     first=$(projinfo -q -o WKT2_2019 "EPSG:$code" | grep -oE 'AXIS\["[^"]*",(east|north|west|south)' | head -1 | sed 's/.*,//')
     read -r a b _ <<<"$(echo "$lat $lon" | cs2cs -f %.6f EPSG:4326 "EPSG:$code")"
     case "$first" in
-      north | south) x=$b y=$a ;;
+      north) x=$b y=$a ;;
       *) x=$a y=$b ;;
     esac
     echo "    ($code, $lon, $lat, $x, $y),"

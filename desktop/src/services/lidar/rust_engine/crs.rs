@@ -205,11 +205,21 @@ fn definition_of(code: u32) -> Option<crs_definitions::Def> {
         .and_then(crs_definitions::from_code)
 }
 
+/// The codes whose `crs-definitions` definition drops the south-west axis
+/// PROJ gives them (every code checked against `projinfo`); without it a
+/// tile lands 2,400 km away with its axes negated and swapped.
+const SOUTH_WEST_AXIS: [u32; 2] = [2065, 5513];
+
 /// Resolve a registry code.
 pub(super) fn from_epsg(code: u32) -> Result<ResolvedCrs, String> {
     let unsupported = || format!("EPSG:{code} is not supported");
     let def = definition_of(code).ok_or_else(unsupported)?;
-    let (definition, proj) = parse(def.proj4).map_err(|_| unsupported())?;
+    let axis = if SOUTH_WEST_AXIS.contains(&code) {
+        " +axis=swu"
+    } else {
+        ""
+    };
+    let (definition, proj) = parse(&format!("{}{axis}", def.proj4)).map_err(|_| unsupported())?;
     Ok(ResolvedCrs {
         epsg: Some(code),
         wkt: with_authority(def.wkt, code),
@@ -1125,7 +1135,7 @@ mod tests {
     }
 
     /// Every code of the reference table against PROJ: forward within 1 cm
-    /// (8 m for Krovak 5514, whose PROJ method proj4rs approximates; 0.5 m
+    /// (8 m for Krovak, whose PROJ method proj4rs approximates; 0.5 m
     /// for Martinique 2973, where PROJ takes the 0.1 m Helmert shift and the
     /// definition carries the 10 m one), and the engine's own inverse returns
     /// the input within 1e-8 deg. A datum shift moves the ellipsoidal height
@@ -1145,7 +1155,7 @@ mod tests {
             };
             let (px, py) = wgs84.transform_to(lon, lat, &crs).unwrap();
             let tolerance = match code {
-                5514 => 8.0,
+                5514 | 5513 | 2065 => 8.0,
                 2973 => 0.5,
                 _ if !crs.is_projected() => 1e-7,
                 _ => 0.01 / unit_metres(code),
