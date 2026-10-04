@@ -182,18 +182,13 @@ export function FavoritesPanel() {
 
   async function importStampFile(): Promise<void> {
     setImportRefusalKey(null)
-    const startedIn = designSessionStore.sessionIdentity.peek()
-    // An import that settles after another Design opened says nothing there.
-    const refuse = (key: string) => {
-      if (designSessionStore.sessionIdentity.peek() === startedIn) setImportRefusalKey(key)
-    }
     try {
       const outcome = await savedObjectStampWorkbench.importStampFile()
-      if (outcome.status === 'refused') refuse(outcome.messageKey)
+      if (outcome.status === 'refused') setImportRefusalKey(outcome.messageKey)
     } catch (error) {
       // The workbench rejects only when saving the read stamp fails.
       console.error('Saved stamp import failed:', error)
-      refuse('savedObjectStamps.importSaveFailed')
+      setImportRefusalKey('savedObjectStamps.importSaveFailed')
     }
   }
 
