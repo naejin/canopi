@@ -28,7 +28,8 @@ export interface NavigationPolicy {
 }
 
 export const ROTATE_DEG_PER_PX = 0.8                                  // MapLibre's rate
-export const SNAP_TO_NORTH_DEG = 7
+/** Free gestures and the compass snap to north within this angle on release. */
+const SNAP_TO_NORTH_DEG = 7
 export const VIEW_EASE_MS = 300
 
 /** Bearings this close to a whole multiple of 360 read as north. */
