@@ -6,6 +6,7 @@
 
 import { signal } from '@preact/signals'
 import type { ScenePersistedState } from '../../canvas/runtime/scene'
+import { sceneExtentPoints } from '../../canvas/runtime/scene-extent'
 import type { CameraDriverHost } from '../../canvas/runtime/view/camera-driver'
 import { planarToViewCamera } from '../../canvas/runtime/view/camera-math'
 import { createCameraDriverHost } from '../../canvas/runtime/view/driver-host'
@@ -14,7 +15,7 @@ import { planarCameraOf } from '../../canvas/runtime/view/view-transform'
 import { bearingCosSin } from '../../canvas/runtime/view/navigation-policy'
 import type {
   PlanarCamera,
-  SceneBoundsOptions,
+  SceneExtent,
   ScreenInsets,
   ViewCamera,
   ViewFrame,
@@ -44,7 +45,7 @@ export interface TestView {
   /** Starts on a HeadlessCameraDriver, built with the production factories. */
   readonly host: CameraDriverHost
   readonly frames: ViewFrameSource            // host.frames
-  readonly navigation: ViewNavigation         // readScene returns an empty scene unless the test passes one to setScene
+  readonly navigation: ViewNavigation         // fits see an empty scene unless the test passes one to setScene
   view(): ViewTransform                       // frames.viewFrame.peek().view
   setViewport(v: { readonly x: number; readonly y: number; readonly scale: number }): void   // a 'set' to the camera the plane gives, bearing kept
   /** The bearing-0 placement in today's terms (planarCameraOf(view()) without the bearing): the split suites' camera.viewport. */
@@ -52,7 +53,9 @@ export interface TestView {
   /** CameraController.reprojectViewport's numbers: the placement moved by a plane transform in plane terms, shown
    *  through the plane, which stays. */
   reproject(transform: SessionPlaneTransform): void
-  setScene(scene: ScenePersistedState, bounds?: SceneBoundsOptions): void
+  /** The scene the fits frame: its extent at each scale unless `extent` gives the points; an empty scene keeps the view unless
+   *  `extent` gives an empty-scene scale. */
+  setScene(scene: ScenePersistedState, extent?: Partial<SceneExtent>): void
   dispose(): void
 }
 
@@ -78,11 +81,12 @@ export function createTestView(options: TestViewOptions = {}): TestView {
     camera,
     insets: options.insets,
   })
-  let scene: { persisted: ScenePersistedState; bounds: SceneBoundsOptions } = { persisted: emptyScene(), bounds: {} }
+  let extent: SceneExtent = { extentPoints: () => [], emptySceneScale: 0 }
   const navigation = createViewNavigation({
     driver: host,
     policy: host.driverDeps.policy,
-    readScene: () => ({ persisted: scene.persisted, selection: [], bounds: scene.bounds }),
+    readSceneExtent: () => extent,
+    readSelectionPoints: () => [],
   })
 
   const place = (placement: PlanarCamera): void => placeOnHost(host, plane, placement)
@@ -103,8 +107,11 @@ export function createTestView(options: TestViewOptions = {}): TestView {
     reproject(transform) {
       place(reprojectPlacement(planarCameraOf(host.frames.viewFrame.peek().view), transform))
     },
-    setScene(persisted, bounds = {}) {
-      scene = { persisted, bounds }
+    setScene(scene, given = {}) {
+      extent = {
+        extentPoints: given.extentPoints ?? sceneExtentPoints(scene, { pixelsPerMetre: 1, speciesCache: new Map() }),
+        emptySceneScale: given.emptySceneScale ?? 0,
+      }
     },
     dispose() {
       host.dispose()
@@ -146,19 +153,4 @@ export function testViewFrame(options: TestViewOptions = {}): ViewFrame {
   const frame = view.frames.viewFrame.peek()
   view.dispose()
   return frame
-}
-
-function emptyScene(): ScenePersistedState {
-  return {
-    plantSpeciesColors: {},
-    plantSpeciesSymbols: {},
-    plantSpeciesCodes: {},
-    layers: [],
-    plants: [],
-    zones: [],
-    annotations: [],
-    measurementGuides: [],
-    groups: [],
-    guides: [],
-  }
 }

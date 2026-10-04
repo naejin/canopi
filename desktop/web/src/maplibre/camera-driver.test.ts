@@ -2,8 +2,7 @@ import { signal } from '@preact/signals'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestView, type TestView } from '../__tests__/support/test-view'
 import { geoToMercator, mapZoomToStageScale, mercatorToGeo, stageScaleToMapZoom, worldToGeo } from '../canvas/projection'
-import { createDefaultScenePersistedState, type ScenePersistedState } from '../canvas/runtime/scene'
-import { sceneExtentPoints } from '../canvas/runtime/scene-extent'
+import type { ScenePersistedState } from '../canvas/runtime/scene'
 import type { CameraDriver, CameraDriverDeps } from '../canvas/runtime/view/camera-driver'
 import { createCameraDriverHost } from '../canvas/runtime/view/driver-host'
 import { createViewNavigation } from '../canvas/runtime/view/navigation'
@@ -830,7 +829,8 @@ function runtimeCameraOn(map: ConsistentMap) {
   const navigation = createViewNavigation({
     driver: host,
     policy: host.driverDeps.policy,
-    readScene: () => ({ persisted: createDefaultScenePersistedState(), selection: [], bounds: {} }),
+    readSceneExtent: () => ({ extentPoints: () => [], emptySceneScale: 0 }),
+    readSelectionPoints: () => [],
   })
   // Attached on the host, as the workspace activation attaches each map.
   host.attach(createMapLibreCameraDriver(map, PLANE, host.driverDeps))
@@ -933,7 +933,8 @@ describe('screen-lock validation', () => {
   function fittedViewport(scene: ScenePersistedState, size: { width: number; height: number }) {
     const view = createTestView({ screen: size, viewport: { x: size.width / 2 - 50 * 8, y: size.height / 2 - 50 * 8, scale: 8 } })
     views.push(view)
-    view.navigation.zoomToFit(scene, { extentPoints: sceneExtentPoints(scene) })
+    view.setScene(scene)
+    view.navigation.zoomToFit()
     const { x, y, scale } = planarCameraOf(view.view())
     return { x, y, scale }
   }

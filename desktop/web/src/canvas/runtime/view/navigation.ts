@@ -4,10 +4,9 @@
 // the temporary-focus bookmark (LiDAR's Fit to data), jumps to a place or a camera, key turns, resets, turning to an edge, and rotation sessions. Every
 // fit is oriented at its bearing (fit.ts) and lands as a 'set' move to the camera that shows its placement.
 
-import type { ScenePersistedState } from '../scene/types'
 import type { CameraDriverHost, CameraMove } from './camera-driver'
 import { placementCentre, screenToGeo } from './camera-math'
-import { fitScene, fitTemporaryBounds, isEmptyExtent, type FitExtent, type FitFrame } from './fit'
+import { fitScene, fitTemporaryBounds, isEmptyExtent, type FitFrame } from './fit'
 import {
   nextStep,
   normaliseBearing,
@@ -21,7 +20,7 @@ import type { RotationSession, ViewCommandSurface } from './read-surface'
 import type {
   PlanarCamera,
   SceneBounds,
-  SceneBoundsOptions,
+  SceneExtent,
   ScreenInsets,
   ScreenPoint,
   TemporaryBoundsFocusOptions,
@@ -34,14 +33,15 @@ import { planarCameraOf } from './view-transform'
 export interface ViewNavigationDeps {
   readonly driver: CameraDriverHost                   // the only CameraDriver user
   readonly policy: () => NavigationPolicy
-  /** The scene for zoomToFit, returnToDesign and zoomToSelection without arguments. */
-  readonly readScene: () => { readonly persisted: ScenePersistedState; readonly selection: readonly WorldPoint[]; readonly bounds: SceneBoundsOptions }
+  /** The current scene's extent, for Fit to Design, Return to Design and the opening fit. */
+  readonly readSceneExtent: () => SceneExtent
+  /** The selected objects' outlines at the live scale, for zoom to selection. */
+  readonly readSelectionPoints: () => readonly WorldPoint[]
 }
 
 export interface ViewNavigation extends ViewCommandSurface {
-  /** Without arguments (the surface call) the navigation reads the current scene from its construction deps. */
-  zoomToFit(scene?: ScenePersistedState, options?: SceneBoundsOptions): void   // keeps the bearing
-  returnToDesign(scene?: ScenePersistedState, options?: SceneBoundsOptions): void
+  zoomToFit(): void   // keeps the bearing
+  returnToDesign(): void
   /** Oriented at the current bearing: the box's four corners are fitted, not the box on screen axes. */
   focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
   returnFromTemporaryFocus(): boolean        // bookmark is a ViewCamera: re-origin cannot invalidate it
@@ -49,7 +49,7 @@ export interface ViewNavigation extends ViewCommandSurface {
   centerOn(point: WorldPoint, pixelsPerMetre: number, options?: { readonly animate?: boolean; readonly bearingDeg?: number | 'keep' }): void
   /** Opening a Design: oriented fit at the given bearing; an empty scene opens at 0 (spec §4.15). Every open path calls it
    *  through document-surface.ts's open fit; Fit to Design stays zoomToFit. */
-  openAt(scene: ScenePersistedState, bearingDeg: number): void
+  openAt(bearingDeg: number): void
 
   // rotation
   turnToEdge(a: WorldPoint, b: WorldPoint): void   // smaller turn that makes a→b horizontal; never snapped
@@ -67,10 +67,7 @@ const RETURN_VIEW_METRES = 100
 const ROTATION_STEP_DEG = 15
 const NO_INSETS: ScreenInsets = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 })
 
-/**
- * view/ cannot measure a scene (P4): a fit's extent is `options.extentPoints`, or the runtime's extent for the current scene from
- * `readScene`, so the `scene` arguments name the scene without being read.
- */
+/** view/ cannot measure a scene (P4): every fit reads the runtime's extent of the current scene from `readSceneExtent`. */
 export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
   /**
    * The view to go back to: the one before the first unreturned temporary focus, a camera so a re-origin cannot invalidate it.
@@ -110,10 +107,6 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
     }
   }
 
-  function extentOf(bounds: SceneBoundsOptions): FitExtent {
-    return { extentPoints: bounds.extentPoints ?? (() => []), emptySceneScale: bounds.emptySceneScale }
-  }
-
   /** A temporary focus's framing of `bounds` at the current bearing, or null when they cannot be framed. */
   function boundsFraming(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): PlanarCamera | null {
     const bearing = driver().bearingTarget()
@@ -139,22 +132,23 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
       if (!Number.isFinite(factor) || factor <= 0) return
       zoomAroundPx(screenCentre(), factor)
     },
-    zoomToFit(_scene, options) {
+    zoomToFit() {
       const bearing = driver().bearingTarget()
-      place(fitScene(fitFrame(bearing), extentOf(options ?? deps.readScene().bounds), bearing))
+      place(fitScene(fitFrame(bearing), deps.readSceneExtent(), bearing))
     },
     zoomToSelection() {
-      const points = deps.readScene().selection
+      const points = deps.readSelectionPoints()
       if (points.length === 0) return
       const bearing = driver().bearingTarget()
-      place(fitScene(fitFrame(bearing), { extentPoints: () => points }, bearing))
+      // Never empty here, so no empty-scene scale applies.
+      place(fitScene(fitFrame(bearing), { extentPoints: () => points, emptySceneScale: 0 }, bearing))
     },
-    returnToDesign(_scene, options) {
+    returnToDesign() {
       // Today's rule: the fit when it reaches site scale and moves the view, else the plane origin centred at a usable scale.
       const bearing = driver().bearingTarget()
       const policy = deps.policy()
       const framing = fitFrame(bearing)
-      const fitted = fitScene(framing, extentOf(options ?? deps.readScene().bounds), bearing)
+      const fitted = fitScene(framing, deps.readSceneExtent(), bearing)
       if (fitted.scale >= policy.overviewPixelsPerMetre && !samePlanar(fitted, framing.current)) {
         place(fitted)
         return
@@ -202,9 +196,9 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
         animation: options?.animate && attached ? 'fly' : 'none',
       })
     },
-    openAt(_scene, bearingDeg) {
+    openAt(bearingDeg) {
       if (!Number.isFinite(bearingDeg)) return
-      const extent = extentOf(deps.readScene().bounds)
+      const extent = deps.readSceneExtent()
       // A new or empty Design opens north up: "Where is your site?" appears over a north-up overview.
       const bearing = isEmptyExtent(extent, frame().view.pixelsPerMetre) ? 0 : normaliseBearing(bearingDeg)
       const fitted = fitScene(fitFrame(bearing), extent, bearing)

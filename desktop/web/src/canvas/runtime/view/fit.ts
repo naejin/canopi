@@ -6,7 +6,7 @@
 // INV-CAM-10).
 
 import { bearingCosSin, normaliseBearing } from './navigation-policy'
-import type { PlanarCamera, SceneBounds, ScreenInsets, TemporaryBoundsFocusOptions, WorldPoint } from './types'
+import type { PlanarCamera, SceneBounds, SceneExtent, ScreenInsets, TemporaryBoundsFocusOptions, WorldPoint } from './types'
 
 const FIT_PADDING = 0.1
 const FIT_MAX_ROUNDS = 20
@@ -32,13 +32,6 @@ export interface FitFrame {
   readonly scaleBounds: { readonly min: number; readonly max: number }
   /** The live placement: its scale seeds the extent loop, and it is kept when there is nothing to fit. */
   readonly current: PlanarCamera
-}
-
-/** A scene's extent for Fit to Design: SceneBoundsOptions with the extent the runtime supplies (canvas/runtime/scene-extent.ts). */
-export interface FitExtent {
-  readonly extentPoints: (pixelsPerMetre: number) => readonly WorldPoint[]
-  /** Scale that frames an empty Design, centred on the session plane origin. */
-  readonly emptySceneScale?: number
 }
 
 /** Extent of a point set along the screen axes at a bearing: across = right, down = down. */
@@ -68,7 +61,7 @@ export function framingRect(screen: { readonly width: number; readonly height: n
  * Fit to Design at a bearing. Notes and default-mode plants are screen-sized, so the extent depends on the scale: the fit
  * recomputes it at each candidate scale until the scale changes by less than 0.01 % (at most 20 rounds; typically 2–3).
  */
-export function fitScene(frame: FitFrame, extent: FitExtent, bearingDeg: number): PlanarCamera {
+export function fitScene(frame: FitFrame, extent: SceneExtent, bearingDeg: number): PlanarCamera {
   if (frame.screen.width <= 0 || frame.screen.height <= 0) return frame.current
   const rect = framingRect(frame.screen, frame.insets)
   const bearing = normaliseBearing(bearingDeg)
@@ -156,7 +149,7 @@ export function fitTemporaryBounds(
 }
 
 /** Whether a scene has nothing to frame at a scale: the empty-scene branch of fitScene. */
-export function isEmptyExtent(extent: FitExtent, pixelsPerMetre: number): boolean {
+export function isEmptyExtent(extent: SceneExtent, pixelsPerMetre: number): boolean {
   return orientedExtent(extent.extentPoints(pixelsPerMetre), 0) === null
 }
 
@@ -182,8 +175,8 @@ function orientedExtent(points: readonly WorldPoint[], bearingDeg: number): Orie
 }
 
 /** An empty Design frames the session plane origin at the centre of the whole screen, or keeps the placement. */
-function emptyScenePlacement(frame: FitFrame, emptySceneScale: number | undefined, bearingDeg: number): PlanarCamera {
-  if (emptySceneScale === undefined || !(emptySceneScale > 0)) return frame.current
+function emptyScenePlacement(frame: FitFrame, emptySceneScale: number, bearingDeg: number): PlanarCamera {
+  if (!(emptySceneScale > 0)) return frame.current
   const scale = clampScale(emptySceneScale, frame.scaleBounds)
   return { x: frame.screen.width / 2, y: frame.screen.height / 2, scale, bearingDeg }
 }

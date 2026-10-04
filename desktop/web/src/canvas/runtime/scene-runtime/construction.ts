@@ -193,23 +193,18 @@ export function createSceneRuntimeConstruction(
   const viewNavigation = createViewNavigation({
     driver: cameraHost,
     policy: cameraHost.driverDeps.policy,
-    readScene: () => {
-      const persisted = sceneStore.persisted
+    readSceneExtent: () => ({
+      extentPoints: sceneExtentPoints(sceneStore.persisted, presentation.createPlantPresentationContext(readViewScale())),
+      emptySceneScale: readEmptySceneScale(),
+    }),
+    readSelectionPoints: () => {
       const scale = readViewScale()
-      const plantContext = presentation.createPlantPresentationContext(scale)
       // The objects the selection model frames (editable and locked), by their outlines at the live scale.
       const { editableTargets, lockedTargets } = querySurface.getDesignObjectSelection()
-      return {
-        persisted,
-        selection: selectionExtentPoints(persisted, [...editableTargets, ...lockedTargets], {
-          plantContext,
-          revealedAnnotationId: getRevealedAnnotationId(sceneStore.session.selectedTargets),
-        })(scale),
-        bounds: {
-          extentPoints: sceneExtentPoints(persisted, plantContext),
-          emptySceneScale: readEmptySceneScale(),
-        },
-      }
+      return selectionExtentPoints(sceneStore.persisted, [...editableTargets, ...lockedTargets], {
+        plantContext: presentation.createPlantPresentationContext(scale),
+        revealedAnnotationId: getRevealedAnnotationId(sceneStore.session.selectedTargets),
+      })(scale)
     },
   })
   const chrome = new SceneRuntimeChromeCoordinator()
@@ -284,7 +279,6 @@ export function createSceneRuntimeConstruction(
     viewNavigation,
     chrome,
     rendering,
-    getSceneSnapshot: () => sceneStore.persisted,
     invalidateViewport: () => callbacks.invalidate('viewport'),
     renderChrome: callbacks.renderChrome,
     addGuide: callbacks.addGuide,
@@ -342,7 +336,6 @@ export function createSceneRuntimeConstruction(
     callbacks.invalidate('scene')
   }
   const commandSurface = createSceneCanvasCommandSurface({
-    readEmptySceneScale,
     speciesFocus: {
       focus: focusSpecies,
     },

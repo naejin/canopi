@@ -6,7 +6,6 @@ import type {
   CanvasRuntimeSettingsAdapter,
 } from './app-adapter'
 import type { SceneBounds, TemporaryBoundsFocusOptions } from './view/types'
-import { sceneExtentPoints } from './scene-extent'
 import type { SceneRuntimePresentationController } from './scene-runtime/presentation'
 import type { ViewNavigation } from './view/navigation'
 import { getDesignObjectSelectionModel } from './scene-runtime/selection'
@@ -59,7 +58,6 @@ const DESIGN_OBJECTS_NOT_IMPORTED: CanvasDesignObjectImportReceipt = Object.free
 type SceneLayerEdit = Partial<Pick<SceneLayerEntity, 'visible' | 'locked' | 'opacity'>>
 
 interface SceneCanvasCommandSurfaceOptions {
-  readonly readEmptySceneScale?: () => number
   readonly speciesFocus: SpeciesFocusCommands
   readonly sceneStore: SceneStateReader
   /** The view's navigation over the runtime's driver host: every viewport command, each with today's viewport render (spec §1.1a). */
@@ -122,7 +120,7 @@ interface SceneCanvasCommandSurfaceOptions {
   >
   readonly settings: Pick<
     CanvasRuntimeSettingsAdapter,
-    'toggleGridVisible' | 'toggleSnapToGrid' | 'toggleRulersVisible' | 'layerProjections'
+    'toggleGridVisible' | 'toggleSnapToGrid' | 'toggleRulersVisible'
   >
   readonly setInteractionTool: (name: string) => void
   /** The tool the interaction session has armed now, or null without a session. */
@@ -179,11 +177,11 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       plantRowSpacing: options.plantRowSpacing,
     }
     this.viewport = {
-      zoomIn: () => this.zoomIn(),
-      zoomOut: () => this.zoomOut(),
+      zoomIn: () => this.moveView(() => this.options.viewNavigation.zoomIn()),
+      zoomOut: () => this.moveView(() => this.options.viewNavigation.zoomOut()),
       zoomBy: (factor) => this.zoomBy(factor),
-      zoomToFit: () => this.zoomToFit(),
-      returnToDesign: () => this.returnToDesign(),
+      zoomToFit: () => this.moveView(() => this.options.viewNavigation.zoomToFit()),
+      returnToDesign: () => this.moveView(() => this.options.viewNavigation.returnToDesign()),
       focusTemporaryBounds: (bounds, options) => this.focusTemporaryBounds(bounds, options),
       frameBounds: (bounds, options) => this.frameBounds(bounds, options),
       showPlace: (place, zoom, options) => this.showPlace(place, zoom, options),
@@ -379,16 +377,6 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     }, DESIGN_OBJECTS_NOT_IMPORTED, { resumePending: true })
   }
 
-  private zoomIn(): void {
-    this.options.viewNavigation.zoomIn()
-    this.options.invalidate('viewport')
-  }
-
-  private zoomOut(): void {
-    this.options.viewNavigation.zoomOut()
-    this.options.invalidate('viewport')
-  }
-
   /** Zoom about the screen centre; the scale menu picks the factor for a map scale. */
   private zoomBy(factor: number): void {
     if (!Number.isFinite(factor) || factor <= 0) return
@@ -405,23 +393,6 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     if (!this.options.viewNavigation.showPlace(place, zoom, options)) return false
     this.options.invalidate('viewport')
     return true
-  }
-
-  private zoomToFit(): void {
-    const scene = this.options.sceneStore.persisted
-    this.options.viewNavigation.zoomToFit(scene, {
-      extentPoints: sceneExtentPoints(scene, this.options.presentation.createPlantPresentationContext(this.options.readViewScale())),
-      emptySceneScale: this.options.readEmptySceneScale?.(),
-    })
-    this.options.invalidate('viewport')
-  }
-
-  private returnToDesign(): void {
-    const scene = this.options.sceneStore.persisted
-    this.options.viewNavigation.returnToDesign(scene, {
-      extentPoints: sceneExtentPoints(scene, this.options.presentation.createPlantPresentationContext(this.options.readViewScale())),
-    })
-    this.options.invalidate('viewport')
   }
 
   /** A view command: the chrome placed against the view redraws with it. */

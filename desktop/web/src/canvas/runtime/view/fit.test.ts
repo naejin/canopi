@@ -204,20 +204,20 @@ describe('fit', () => {
         [0.05, 1, 14, 1000].forEach((scale, start) => {
           const frame = fitFrame(1000, 800, [3, -7, scale], insets)
 
-          expectPlacement(fitScene(frame, { extentPoints: sceneExtentPoints(design) }, 0), today[name]![insetCase]![start]!)
+          expectPlacement(fitScene(frame, { extentPoints: sceneExtentPoints(design), emptySceneScale: 0 }, 0), today[name]![insetCase]![start]!)
         })
       })
     }
 
-    // An empty scene: today's placement without an empty-scene scale, else that scale (clamped) about the screen centre.
+    // An empty scene: today's placement under a zero empty-scene scale, else that scale (clamped) about the screen centre.
     const empty = { ...scene(), plants: [], zones: [], annotations: [] }
     const frame = fitFrame(1000, 800, [3, -7, 2])
-    const todayEmpty: readonly Placement[] = [[3, -7, 2], [3, -7, 2], [500, 400, 25], [500, 400, 1716.6895781438734]]
-    ;[undefined, 0, 25, 1e9].forEach((emptySceneScale, index) => {
+    const todayEmpty: readonly Placement[] = [[3, -7, 2], [500, 400, 25], [500, 400, 1716.6895781438734]]
+    ;[0, 25, 1e9].forEach((emptySceneScale, index) => {
       expectPlacement(fitScene(frame, { extentPoints: sceneExtentPoints(empty), emptySceneScale }, 0), todayEmpty[index]!)
     })
     const unsized = fitFrame(0, 0, [3, -7, 2])
-    expect(fitScene(unsized, { extentPoints: sceneExtentPoints(scene()) }, 0)).toBe(unsized.current)
+    expect(fitScene(unsized, { extentPoints: sceneExtentPoints(scene()), emptySceneScale: 0 }, 0)).toBe(unsized.current)
   })
 
   it('screen-sized notes converge within 20 rounds', () => {
@@ -233,7 +233,7 @@ describe('fit', () => {
         const calls = { count: 0 }
         const extentPoints = countedExtent(notesOnly, calls)
 
-        const fitted = fitScene(frame, { extentPoints }, bearingDeg)
+        const fitted = fitScene(frame, { extentPoints, emptySceneScale: 0 }, bearingDeg)
 
         expect(calls.count).toBeLessThanOrEqual(20)
         expect(fitted.bearingDeg).toBe(bearingDeg)

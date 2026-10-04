@@ -14,14 +14,15 @@ export interface GeoPoint { readonly lon: number; readonly lat: number }
 
 /** World-axis box in plane metres. */
 export interface SceneBounds { readonly minX: number; readonly minY: number; readonly maxX: number; readonly maxY: number }
-export interface SceneBoundsOptions {
+/** What Fit to Design, Return to Design and the opening fit frame. */
+export interface SceneExtent {
   /** The scene's extent at a candidate scale: corner points of every plant, zone and note footprint, in plane metres.
-   *  Notes and default-mode plants are screen-sized, so the extent depends on the scale. The runtime supplies it
-   *  (command-surface.ts, document-surface.ts) through canvas/runtime/scene-extent.ts, from plant-presentation.ts,
-   *  annotation-layout.ts and zone-geometry.ts, so view/ imports none of them (P4). Without it a fit sees an empty scene. */
-  readonly extentPoints?: (pixelsPerMetre: number) => readonly WorldPoint[]
-  /** Scale that frames an empty Design, centred on the session plane origin. */
-  readonly emptySceneScale?: number
+   *  Notes and default-mode plants are screen-sized, so the extent depends on the scale. The runtime supplies it through
+   *  canvas/runtime/scene-extent.ts, from plant-presentation.ts, annotation-layout.ts and zone-geometry.ts, so view/ imports
+   *  none of them (P4). */
+  readonly extentPoints: (pixelsPerMetre: number) => readonly WorldPoint[]
+  /** Scale that frames an empty Design, centred on the session plane origin; not above zero keeps the view. */
+  readonly emptySceneScale: number
 }
 export interface TemporaryBoundsFocusOptions {
   /** Symmetric CSS-pixel padding reserved by the caller's presentation. */
@@ -29,8 +30,6 @@ export interface TemporaryBoundsFocusOptions {
   /** Optional external ceiling, such as a MapLibre zoom-limit equivalent. */
   readonly maximumScale?: number
 }
-// This file uses no scene type. A view/ file that needs one (navigation.ts: ScenePersistedState) imports it type-only from
-// '../scene/types' (P4 allows it), never the barrel '../scene' (P4 would reject it); files outside view/ keep today's barrel imports.
 
 /**
  * The geographic camera in MapLibre's terms. bearingDeg: the compass direction that is

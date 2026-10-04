@@ -9,7 +9,7 @@ import type { ScenePersistedState } from '../scene'
 import { getZoneWorldBounds } from '../zone-geometry'
 import { createViewNavigation } from './navigation'
 import { createNavigationPolicy } from './navigation-policy'
-import type { PlanarCamera, SceneBoundsOptions, ViewFrame, WorldPoint } from './types'
+import type { PlanarCamera, SceneExtent, ViewFrame, WorldPoint } from './types'
 import { planarCameraOf } from './view-transform'
 
 const EQUATOR_MAX_SCALE = mapZoomToStageScale(27, 0)
@@ -70,7 +70,7 @@ function emptyScene(): ScenePersistedState {
 }
 
 /** Corner points of every plant, zone and note footprint at a scale, from the helpers today's computeSceneBounds reads. */
-function boundsOf(scene: ScenePersistedState, emptySceneScale?: number): SceneBoundsOptions {
+function boundsOf(scene: ScenePersistedState, emptySceneScale = 0): SceneExtent {
   return {
     emptySceneScale,
     extentPoints(pixelsPerMetre) {
@@ -345,7 +345,7 @@ describe('view navigation', () => {
     // The opening fit (openAt) is today's initialize; clearTemporaryFocus is what a disposal calls.
     const view = sceneView(400, 300, createScene())
     view.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
-    view.navigation.openAt(createScene(), 0)
+    view.navigation.openAt(0)
     expect(view.navigation.returnFromTemporaryFocus()).toBe(false)
 
     view.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
@@ -444,7 +444,7 @@ describe('view navigation', () => {
       expect(actual.bearingDeg).toBe(0)
     }
 
-    view.navigation.zoomToFit(scene, boundsOf(scene))
+    view.navigation.zoomToFit()
     expectSame()
     view.navigation.zoomIn()
     view.navigation.zoomOut()
@@ -580,7 +580,7 @@ describe('view navigation', () => {
     const scene = createScene()
     const view = sceneView(1000, 800, scene, { x: 100, y: 0, scale: 8 })
 
-    view.navigation.openAt(scene, 90)
+    view.navigation.openAt(90)
 
     const opened = view.view()
     expect(opened.camera.bearingDeg).toBe(90)
@@ -600,7 +600,7 @@ describe('view navigation', () => {
     const view = createTestView({ screen: { width: 1000, height: 800 }, camera: { bearingDeg: 30 } })
     view.setScene(scene, boundsOf(scene, 4))
 
-    view.navigation.openAt(scene, 30)
+    view.navigation.openAt(30)
 
     // The new-Design overview: the plane origin at the screen centre, at the empty scene's scale, north up.
     expectPlacement(placement(view), { x: 500, y: 400, scale: 4, bearingDeg: 0 })
@@ -612,7 +612,8 @@ describe('view navigation', () => {
     const navigation = createViewNavigation({
       driver: view.host,
       policy: () => createNavigationPolicy(createWorkspaceCameraPolicy(), signal(false)),
-      readScene: () => ({ persisted: emptyScene(), selection: [{ x: 10, y: 10 }, { x: 110, y: 60 }], bounds: {} }),
+      readSceneExtent: () => boundsOf(emptyScene()),
+      readSelectionPoints: () => [{ x: 10, y: 10 }, { x: 110, y: 60 }],
     })
 
     navigation.zoomToSelection()
