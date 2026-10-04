@@ -31,8 +31,6 @@ export interface ScenePlantEntity {
   canopySpreadM: number | null
   position: ScenePoint
   rotationDeg: number | null
-  // Deprecated persisted compatibility mirror for canopySpreadM.
-  scale: number | null
   notes: string | null
   plantedDate: string | null
   quantity: number | null
@@ -40,7 +38,10 @@ export interface ScenePlantEntity {
 
 export interface SceneZoneEntity {
   kind: 'zone'
-  name: string
+  /** Stable identity; targets, groups and saved views refer to it. */
+  id: string
+  /** The name the user gave, or null; labels then use the type and size. */
+  name: string | null
   locked: boolean
   zoneType: string
   points: ScenePoint[]
@@ -95,12 +96,6 @@ export interface ScenePersistedState {
   measurementGuides: SceneMeasurementGuideEntity[]
   groups: SceneObjectGroupEntity[]
   guides: SceneGuide[]
-}
-
-export interface SceneViewportState {
-  x: number
-  y: number
-  scale: number
 }
 
 export interface SceneSessionState {

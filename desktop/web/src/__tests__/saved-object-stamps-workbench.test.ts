@@ -6,7 +6,10 @@ import {
 import type { CanvasRuntimeSavedObjectStampCapture } from '../canvas/runtime/app-adapter'
 import type { CanvasQuerySurface } from '../canvas/runtime/runtime'
 import { createSavedObjectStampWorkbench } from '../app/saved-object-stamps/workbench'
+import { parseSavedObjectStampPayload } from '../canvas/saved-object-stamp-payload'
 import type { CanopiFile } from '../types/design'
+import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
+import { geoAt } from './support/geo-design'
 import type { SavedObjectStamp } from '../types/saved-object-stamps'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { setCanvasRuntimeSurfaces } from '../canvas/session'
@@ -42,10 +45,9 @@ describe('Saved Object Stamp Workbench', () => {
   }
 
   const importableFile = (): CanopiFile => ({
-    version: 6,
+    version: CURRENT_CANOPI_FILE_VERSION,
     name: 'Imported stamp',
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     plant_species_symbols: {},
     layers: [],
@@ -54,7 +56,7 @@ describe('Saved Object Stamp Workbench', () => {
     annotations: [{
       id: 'note-1',
       annotation_type: 'text',
-      position: { x: 1, y: 2 },
+      position: geoAt(1, 2),
       text: 'Guild note',
       font_size: 12,
       rotation: null,
@@ -198,10 +200,9 @@ describe('Saved Object Stamp Workbench', () => {
       color: '#c0442e',
       symbol: 'canopy',
       stratum: null,
-      canopySpreadM: null,
+      canopySpreadM: 2,
       position: { x: 12, y: 24 },
       rotationDeg: 15,
-      scale: 2,
       notes: 'nursery note',
       plantedDate: '2026-04-01',
       quantity: 3,
@@ -274,7 +275,6 @@ describe('Saved Object Stamp Workbench', () => {
       canopySpreadM: null,
       position: { x: 4, y: 5 },
       rotationDeg: null,
-      scale: null,
       notes: null,
       plantedDate: null,
       quantity: null,
@@ -334,6 +334,7 @@ describe('Saved Object Stamp Workbench', () => {
       queries: query,
       commands: {} as never,
       documents: {} as never,
+      keyboard: {} as never,
     })
     const workbench = createSavedObjectStampWorkbench({
       getSavedObjectStamps: async () => [],
@@ -394,14 +395,13 @@ describe('Saved Object Stamp Workbench', () => {
       canopySpreadM: null,
       position: { x: 2, y: 3 },
       rotationDeg: null,
-      scale: null,
       notes: null,
       plantedDate: null,
       quantity: null,
     }]
     scene.zones = [{
       kind: 'zone',
-      name: 'Source zone',
+      id: 'Source zone', name: 'Source zone',
       locked: true,
       zoneType: 'polygon',
       points: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 4 }],
@@ -474,7 +474,7 @@ describe('Saved Object Stamp Workbench', () => {
     const scene = createDefaultScenePersistedState()
     scene.zones = [{
       kind: 'zone',
-      name: 'Water',
+      id: 'Water', name: 'Water',
       locked: false,
       zoneType: 'polygon',
       points: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 4 }],
@@ -698,18 +698,30 @@ describe('Saved Object Stamp Workbench', () => {
     expect(workbench.library.value.items[0]?.name).toBe('Initial')
   })
 
-  it('arms placement through the canvas placement adapter', () => {
-    const stamp = makeStamp('stamp-1', 'Guild', 0)
-    const beginPlacement = vi.fn(() => true)
+  it('arms Place a stamp with the stamp and its caller through armCanvasTool', () => {
+    const stamp: SavedObjectStamp = {
+      ...makeStamp('stamp-1', ' Guild ', 0),
+      payload_json: JSON.stringify({ version: 2, anchor: { x: 0, y: 0 }, plants: [], zones: [], annotations: [], groups: [] }),
+    }
+    expect(parseSavedObjectStampPayload(stamp.payload_json)).not.toBeNull()
+    const arm = vi.fn(() => true)
     const workbench = createSavedObjectStampWorkbench({
       getSavedObjectStamps: async () => [stamp],
       createSavedObjectStamp: async () => stamp,
       getCanvasQuerySurface: () => null,
-      beginPlacement,
+      arm,
     })
 
-    expect(workbench.placeStamp(stamp)).toBe(true)
-    expect(beginPlacement).toHaveBeenCalledWith(stamp)
+    expect(workbench.placeStamp(stamp, 'panel')).toBe(true)
+    expect(arm).toHaveBeenCalledWith('saved-object-stamp', {
+      from: 'panel',
+      source: { kind: 'saved-stamp', stamp: parseSavedObjectStampPayload(stamp.payload_json), name: 'Guild' },
+    })
+    // A stamp whose payload cannot be read arms nothing.
+    expect(workbench.placeStamp({ ...stamp, payload_json: '{' }, 'card')).toBe(false)
+    expect(arm).toHaveBeenCalledTimes(1)
+    workbench.dispose()
+    expect(workbench.placeStamp(stamp, 'card')).toBe(false)
   })
 
   it('exports a saved stamp as a Canopi file without touching the Design Session', async () => {
@@ -717,7 +729,7 @@ describe('Saved Object Stamp Workbench', () => {
       id: 'stamp-1',
       name: 'Apple guild',
       payload_json: JSON.stringify({
-        version: 1,
+        version: 2,
         anchor: { x: 0, y: 0 },
         plants: [{
           id: 'plant-1',
@@ -727,7 +739,6 @@ describe('Saved Object Stamp Workbench', () => {
           symbol: null,
           position: { x: 0, y: 0 },
           rotationDeg: null,
-          scale: null,
         }],
         zones: [],
         annotations: [],
@@ -758,20 +769,17 @@ describe('Saved Object Stamp Workbench', () => {
     expect(exportSavedObjectStamp).toHaveBeenCalledTimes(1)
     const [file, defaultName] = exportSavedObjectStamp.mock.calls[0]!
     expect(defaultName).toBe('Apple guild.canopi')
+    expect(file).not.toHaveProperty('spatial_frame')
     expect(file).toMatchObject({
+      version: CURRENT_CANOPI_FILE_VERSION,
       name: 'Apple guild',
-      spatial_frame: {
-        anchor_longitude_deg: 13,
-        anchor_latitude_deg: 23,
-        north_bearing_deg: 0,
-        placement_status: 'provisional',
-        location_metadata: { altitude_m: null },
-      },
       description: null,
       plants: [{
         id: 'plant-1',
         locked: false,
         canonical_name: 'Malus domestica',
+        // Stamp files place the arrangement around 0°/0°.
+        position: { lon: 0, lat: 0 },
         notes: null,
         planted_date: null,
         quantity: null,
@@ -784,10 +792,9 @@ describe('Saved Object Stamp Workbench', () => {
 
   it('imports a Canopi file as a saved stamp without touching the Design Session', async () => {
     const file: CanopiFile = {
-      version: 6,
+      version: CURRENT_CANOPI_FILE_VERSION,
       name: 'Imported design',
       description: 'Ignored description',
-      spatial_frame: { anchor_longitude_deg: 3, anchor_latitude_deg: 45, north_bearing_deg: 12, placement_status: 'confirmed', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       plant_species_symbols: {},
       layers: [{ name: 'plants', visible: true, locked: true, opacity: 1 }],
@@ -798,7 +805,7 @@ describe('Saved Object Stamp Workbench', () => {
         common_name: 'Apple',
         color: null,
         symbol: null,
-        position: { x: 2, y: 3 },
+        position: geoAt(2, 3),
         rotation: null,
         scale: null,
         notes: 'private note',
@@ -814,7 +821,7 @@ describe('Saved Object Stamp Workbench', () => {
       budget_currency: 'USD',
       created_at: '2026-06-01T00:00:00.000Z',
       updated_at: '2026-06-02T00:00:00.000Z',
-      extra: { guides: [{ axis: 'h', position: 10 }] },
+      extra: { guides: [{ id: 'guide-1', axis: 'h', lat: 23 }] },
     }
     const importSavedObjectStampFile = vi.fn(async (): Promise<CanopiFile> => file)
     const createStamp = vi.fn(async (name: string, payloadJson: string): Promise<SavedObjectStamp> => ({
@@ -835,15 +842,18 @@ describe('Saved Object Stamp Workbench', () => {
       getCanvasQuerySurface,
     })
 
-    const saved = await workbench.importStampFile()
+    const outcome = await workbench.importStampFile()
+    const saved = outcome.status === 'imported' ? outcome.stamp : null
 
     expect(saved?.name).toBe('Imported design')
     expect(getCanvasQuerySurface).not.toHaveBeenCalled()
     expect(createStamp).toHaveBeenCalledTimes(1)
     const payload = JSON.parse(createStamp.mock.calls[0]![1])
+    // The stamp is relative: its only plant frames the import plane.
+    expect(payload.anchor.x).toBeCloseTo(0, 6)
+    expect(payload.anchor.y).toBeCloseTo(0, 6)
     expect(payload).toMatchObject({
-      version: 1,
-      anchor: { x: 2, y: 3 },
+      version: 2,
       plants: [{
         id: 'source-plant',
         canonicalName: 'Malus domestica',
@@ -874,17 +884,16 @@ describe('Saved Object Stamp Workbench', () => {
     workbench.dispose()
     pendingImport.resolve(importableFile())
 
-    await expect(importing).resolves.toBeNull()
+    await expect(importing).resolves.toEqual({ status: 'cancelled' })
     expect(createStamp).not.toHaveBeenCalled()
     expect(workbench.library.value.items).toEqual([])
   })
 
-  it('does not create a saved stamp from an empty Canopi import', async () => {
+  it('does not create a saved stamp from an empty Canopi import, and says it has no visible objects', async () => {
     const importSavedObjectStampFile = vi.fn(async (): Promise<CanopiFile> => ({
-      version: 6,
+      version: CURRENT_CANOPI_FILE_VERSION,
       name: 'Empty design',
       description: null,
-      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       plant_species_symbols: {},
       layers: [],
@@ -908,9 +917,44 @@ describe('Saved Object Stamp Workbench', () => {
       getCanvasQuerySurface: () => null,
     })
 
-    const saved = await workbench.importStampFile()
+    const outcome = await workbench.importStampFile()
 
-    expect(saved).toBeNull()
+    expect(outcome).toEqual({ status: 'refused', messageKey: 'savedObjectStamps.summaryEmpty' })
     expect(createStamp).not.toHaveBeenCalled()
+  })
+
+  it('refuses a stamp file saved before 2.0 with the typed older-version message', async () => {
+    const createStamp = vi.fn()
+    const workbench = createSavedObjectStampWorkbench({
+      getSavedObjectStamps: async () => [],
+      createSavedObjectStamp: createStamp,
+      // The shape `load_saved_object_stamp_canopi_file` rejects with: a
+      // serialized DesignLoadFailure (pinned by the Rust test
+      // load_design_file_refuses_a_file_saved_before_2_0_as_older_version).
+      importSavedObjectStampFile: async () => {
+        throw { kind: 'older_version', message: 'unsupported_version: 7' }
+      },
+      getCanvasQuerySurface: () => null,
+    })
+
+    await expect(workbench.importStampFile()).resolves.toEqual({
+      status: 'refused',
+      messageKey: 'start.cantReadOlderVersion',
+    })
+    expect(createStamp).not.toHaveBeenCalled()
+    expect(workbench.library.value.items).toEqual([])
+  })
+
+  it('refuses an unreadable stamp file with the generic message, and treats a closed dialog as cancelled', async () => {
+    let failure: unknown = new Error('Failed to read file')
+    const workbench = createSavedObjectStampWorkbench({
+      getSavedObjectStamps: async () => [],
+      importSavedObjectStampFile: async () => { throw failure },
+      getCanvasQuerySurface: () => null,
+    })
+
+    await expect(workbench.importStampFile()).resolves.toEqual({ status: 'refused', messageKey: 'start.cantRead' })
+    failure = new Error('Dialog cancelled')
+    await expect(workbench.importStampFile()).resolves.toEqual({ status: 'cancelled' })
   })
 })

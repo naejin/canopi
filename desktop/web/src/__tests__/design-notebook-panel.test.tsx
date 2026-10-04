@@ -11,10 +11,9 @@ describe('DesignNotebookPanel', () => {
 
   function testDesign(): CanopiFile {
     return {
-      version: 6,
+      version: 9,
       name: 'Current Design',
       description: null,
-      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -141,6 +140,9 @@ describe('DesignNotebookPanel', () => {
     expect(container.querySelector('[aria-label="Design notebook"]')).not.toBeNull()
     expect(container.textContent).toContain('Terrace Guild')
     expect(container.textContent).toContain('Forest Edge')
+    expect(container.textContent).toContain('12 plants')
+    // The rows show how many Designs there are; the header carries no bare count.
+    expect(container.querySelector('header')?.textContent).not.toMatch(/\d/)
     expect(container.textContent).not.toContain('All Designs')
     expect(container.textContent).not.toContain('Pinned designs')
     expect(container.querySelector('input[aria-label="Search designs"]')).toBeNull()
@@ -269,7 +271,7 @@ describe('DesignNotebookPanel', () => {
     expect(container.querySelector('button[aria-label="Pin Forest Edge"]')).toBeNull()
 
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="Remove Forest Edge from Notebook"]')
+      container.querySelector<HTMLButtonElement>('button[aria-label="Remove Forest Edge from the notebook"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await Promise.resolve()
     })
@@ -344,14 +346,14 @@ describe('DesignNotebookPanel', () => {
     const workbench = createDesignNotebookWorkbench({
       activePath: signal('/designs/current.canopi'), currentDesign: signal(testDesign()),
       loadNotebook: vi.fn().mockResolvedValue({ entries: [], sections: [{ id: 'garden', name: 'Garden', sort_order: 0, created_at: '', updated_at: '' }] }),
-      saveCurrent: async () => ({ status: 'applied', path: '/designs/current.canopi', content: testDesign() }),
+      saveCurrent: async () => true,
       addDesignReference, moveEntryToSection,
     })
     await act(async () => { render(<DesignNotebookPanel workbench={workbench} />, container); await flushEffects() })
     await act(flushEffects)
     expect(container.textContent).toContain('Garden')
     expect(container.querySelector('[aria-label="Notebook section for current Design"]')).toBeNull()
-    await act(async () => { container.querySelector<HTMLButtonElement>('[aria-label="Add current design to notebook"]')!.click(); await flushEffects() })
+    await act(async () => { container.querySelector<HTMLButtonElement>('[aria-label="Add the current Design to the notebook"]')!.click(); await flushEffects() })
     expect(addDesignReference).toHaveBeenCalledWith('/designs/current.canopi', testDesign())
     expect(moveEntryToSection).toHaveBeenCalledWith('/designs/current.canopi', 'garden')
     workbench.dispose()
@@ -399,7 +401,7 @@ describe('DesignNotebookPanel', () => {
     })
     await act(flushEffects)
 
-    const addButton = container.querySelector<HTMLButtonElement>('button[aria-label="Add current design to notebook"]')
+    const addButton = container.querySelector<HTMLButtonElement>('button[aria-label="Add the current Design to the notebook"]')
     if (!addButton) throw new Error('Missing add-current button')
 
     await act(async () => {
@@ -410,7 +412,7 @@ describe('DesignNotebookPanel', () => {
 
     expect(saveAsCurrent).toHaveBeenCalledTimes(1)
     expect(container.textContent).toContain('Current Design')
-    expect(container.querySelector<HTMLButtonElement>('button[aria-label="Add current design to notebook"]')?.disabled).toBe(true)
+    expect(container.querySelector<HTMLButtonElement>('button[aria-label="Add the current Design to the notebook"]')?.disabled).toBe(true)
   })
 
   it('drags Notebook Sections directly by title', async () => {

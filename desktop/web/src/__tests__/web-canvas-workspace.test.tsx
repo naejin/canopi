@@ -7,9 +7,8 @@ import {
   layerVisibility,
 } from '../app/canvas-settings/signals'
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
-import { currentCanvasReady, currentCanvasSession } from '../canvas/session'
+import { currentCanvasSession } from '../canvas/session'
 import { CanvasRuntimeCleanupError } from '../canvas/runtime/cleanup'
-import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
 import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
@@ -17,9 +16,18 @@ import type {
   CanvasRuntimeSurfaces,
 } from '../canvas/runtime/runtime'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
+import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
+import { TEST_GEO_ORIGIN } from './support/geo-design'
+import { createTestViewReadSurface } from './support/canvas-query-surface'
+import { createTestCanvasKeyboardPort } from './support/canvas-runtime-surfaces'
 import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/browser-app-data'
 import { createBrowserDesignSessionController, type BrowserDesignFileAdapter } from '../web/browser-design-session'
 import { WebCanvasWorkspace } from '../web/WebCanvasWorkspace'
+
+// The floating chrome has its own tests; here it only marks where the workspace mounts it.
+vi.mock('../components/canvas/CanvasChrome', () => ({
+  CanvasChrome: () => <div data-testid="canvas-chrome" />,
+}))
 import type {
   WorkspaceRuntimeComposition,
   WorkspaceRuntimeStartOutcome,
@@ -49,7 +57,7 @@ describe('Web Edition canvas workspace', () => {
     layerVisibility.value = createDefaultLayerVisibility()
   })
 
-  it.each<WorkspaceRuntimeStartOutcome>(['shared-ready', 'fallback-ready'])(
+  it.each<WorkspaceRuntimeStartOutcome>(['shared-ready', 'map-unavailable'])(
     'mounts the shared canvas runtime surface after %s without deferred desktop panels',
     async (outcome) => {
       container = document.createElement('div')
@@ -62,10 +70,11 @@ describe('Web Edition canvas workspace', () => {
       })
       const runtime = fakeRuntimeComposition(outcome)
       const attachCanvasSession = vi.spyOn(controller, 'attachCanvasSession')
+      // Only the workspace's observer of the canvas area; floating chrome has its own.
       const observe = vi.fn<(target: Element) => void>()
       const OriginalResizeObserver = globalThis.ResizeObserver
       globalThis.ResizeObserver = class {
-        observe = observe
+        observe = (target: Element) => { if (isCanvasArea(target)) observe(target) }
         unobserve() {}
         disconnect() {}
       } as unknown as typeof ResizeObserver
@@ -90,7 +99,6 @@ describe('Web Edition canvas workspace', () => {
         await flushMicrotasks()
 
         expect(runtime.composition.start).toHaveBeenCalledOnce()
-        expect(runtime.documents.initializeViewport).not.toHaveBeenCalled()
         expect(runtime.documents.loadDocument).toHaveBeenCalledWith(expect.objectContaining({ name: 'Untitled' }))
         expect(runtime.documents.showCanvasChrome).toHaveBeenCalled()
         expect(currentCanvasSession.value).toBe(runtime.composition.surfaces)
@@ -171,24 +179,30 @@ describe('Web Edition canvas workspace', () => {
     })
     const first = fakeRuntimeComposition()
     const second = fakeRuntimeComposition()
+    // Only the workspace's observer of the canvas area; floating chrome has its own.
     const observe = vi.fn()
     const disconnect = vi.fn()
     const OriginalResizeObserver = globalThis.ResizeObserver
     globalThis.ResizeObserver = class {
-      observe = observe
+      private watchesCanvasArea = false
+      observe = (target: Element) => {
+        if (!isCanvasArea(target)) return
+        this.watchesCanvasArea = true
+        observe(target)
+      }
       unobserve() {}
-      disconnect = disconnect
+      disconnect = () => { if (this.watchesCanvasArea) disconnect() }
     } as unknown as typeof ResizeObserver
     let releasedFirst = false
     const disposePublicationEffect = effect(() => {
+      const published = currentCanvasSession.value
       if (
         !releasedFirst
-        && currentCanvasSession.value === first.composition.surfaces
+        && published === first.composition.surfaces
       ) {
         releasedFirst = true
         render(null, container)
       }
-      void currentCanvasReady.value
     })
     await controller.newDesign()
 
@@ -213,7 +227,6 @@ describe('Web Edition canvas workspace', () => {
       expect(observe.mock.invocationCallOrder[0]).toBeLessThan(destroyOrder)
       expect(disconnect).toHaveBeenCalledOnce()
       expect(currentCanvasSession.value).toBeNull()
-      expect(currentCanvasReady.value).toBe(false)
 
       await act(async () => {
         render(
@@ -363,7 +376,6 @@ describe('Web Edition canvas workspace', () => {
 
     // The mounted owner cannot attach or publish after the component releases
     // its lease while composition start is pending.
-    expect(runtime.documents.initializeViewport).not.toHaveBeenCalled()
     expect(runtime.documents.attachRulersTo).not.toHaveBeenCalled()
     expect(currentCanvasSession.value).toBeNull()
     expect(runtime.composition.dispose).toHaveBeenCalledOnce()
@@ -468,14 +480,15 @@ describe('Web Edition canvas workspace', () => {
     expect(runtime.documents.hideCanvasChrome).toHaveBeenCalled()
     expect(currentCanvasSession.value).toBe(runtime.composition.surfaces)
     expect(container.querySelector('[data-testid="web-welcome-screen"]')).not.toBeNull()
-    expect(container.querySelector('img[alt="Canopi"]')).not.toBeNull()
+    expect(container.querySelector('h1')?.textContent).toBe('Canopi')
+    expect(container.querySelector('[data-testid="canvas-chrome"]')).toBeNull()
     expect(container.textContent).toContain('New Design')
-    expect(container.textContent).toContain('Open Design')
+    expect(container.textContent).toContain('Open a .canopi file…')
     expect(container.textContent).not.toContain('Recent Files')
     expect(container.textContent).not.toContain('No Design loaded')
 
     await act(async () => {
-      buttonByText(container, 'Open Design').click()
+      buttonByText(container, 'Open a .canopi file…Ctrl O').click()
     })
     expect(fileAdapter.openCanopiFile).toHaveBeenCalledOnce()
 
@@ -518,6 +531,33 @@ describe('Web Edition canvas workspace', () => {
     expect(store.readDesignName()).toBe('Renamed outside the canvas')
     expect(store.isDesignDirty()).toBe(true)
     expect(runtime.documents.replaceDocument).not.toHaveBeenCalled()
+  })
+
+  it('mounts the shared floating chrome once a Design is open', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const store = createMemoryDesignSessionStore()
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
+      now: () => new Date('2026-07-04T12:00:00.000Z'),
+    })
+    const runtime = fakeRuntimeComposition()
+
+    await controller.newDesign()
+    await act(async () => {
+      render(
+        <WebCanvasWorkspace
+          controller={controller}
+          store={store}
+          createRuntimeComposition={() => runtime.composition}
+        />,
+        container,
+      )
+      await flushMicrotasks()
+    })
+
+    expect(container.querySelector('[data-testid="canvas-chrome"]')).not.toBeNull()
   })
 
   it('releases a runtime whose Design attachment fails', async () => {
@@ -617,10 +657,12 @@ describe('Web Edition canvas workspace', () => {
     const second = fakeRuntimeComposition()
     const disconnect = vi.fn()
     const OriginalResizeObserver = globalThis.ResizeObserver
+    // Only the workspace's observer of the canvas area; floating chrome has its own.
     globalThis.ResizeObserver = class {
-      observe() {}
+      private watchesCanvasArea = false
+      observe(target: Element) { if (isCanvasArea(target)) this.watchesCanvasArea = true }
       unobserve() {}
-      disconnect = disconnect
+      disconnect = () => { if (this.watchesCanvasArea) disconnect() }
     } as unknown as typeof ResizeObserver
     await controller.newDesign()
 
@@ -699,10 +741,12 @@ describe('Web Edition canvas workspace', () => {
       throw destroyError
     })
     const OriginalResizeObserver = globalThis.ResizeObserver
+    // Only the workspace's observer of the canvas area; floating chrome has its own.
     globalThis.ResizeObserver = class {
-      observe() {}
+      private watchesCanvasArea = false
+      observe(target: Element) { if (isCanvasArea(target)) this.watchesCanvasArea = true }
       unobserve() {}
-      disconnect = disconnect
+      disconnect = () => { if (this.watchesCanvasArea) disconnect() }
     } as unknown as typeof ResizeObserver
     const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     await controller.newDesign()
@@ -787,7 +831,6 @@ function fakeRuntimeComposition(
 } {
   let loaded = false
   const documents: CanvasDocumentSurface = {
-    initializeViewport: vi.fn(),
     attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: vi.fn(),
     showCanvasChrome: vi.fn(),
@@ -815,8 +858,10 @@ function fakeRuntimeComposition(
       commands: fakeCommandSurface(),
       queries: fakeQuerySurface(),
       documents,
+      keyboard: createTestCanvasKeyboardPort(),
     } satisfies CanvasRuntimeSurfaces,
     start: vi.fn(async () => outcome),
+    retryMap: vi.fn(),
     dispose: vi.fn(),
   }
   return { composition, documents }
@@ -824,15 +869,24 @@ function fakeRuntimeComposition(
 
 function fakeCommandSurface(): CanvasCommandSurface {
   return {
-    speciesFocus: { focus: () => {}, showCodes: () => {} },
-    tools: { setTool: vi.fn() },
+    speciesFocus: { focus: () => {} },
+    tools: { setTool: vi.fn(), plantRowSpacing: { input: vi.fn(), commit: vi.fn(), blur: vi.fn(), cancel: vi.fn() } },
     viewport: {
       zoomIn: vi.fn(),
       zoomOut: vi.fn(),
       zoomToFit: vi.fn(),
       returnToDesign: vi.fn(),
       focusTemporaryBounds: vi.fn(() => false),
+      frameBounds: vi.fn(() => false),
       returnFromTemporaryFocus: vi.fn(() => false),
+      showPlace: vi.fn(() => false),
+      zoomBy: vi.fn(),
+      setFramingInsets: vi.fn(),
+      zoomToSelection: vi.fn(),
+      resetNorth: vi.fn(),
+      rotateBy: vi.fn(),
+      beginRotation: vi.fn(() => ({ update: vi.fn(), end: vi.fn(), cancel: vi.fn() })),
+      showCamera: vi.fn(),
     },
     history: {
       canUndo: signal(false),
@@ -842,6 +896,7 @@ function fakeCommandSurface(): CanvasCommandSurface {
     },
     sceneEdits: {
       saveSelectionAsObjectStamp: vi.fn(),
+      importDesignObjects: vi.fn(() => ({ committed: false, createdCount: 0 })),
       copy: vi.fn(),
       paste: vi.fn(),
       pasteAt: vi.fn(),
@@ -851,12 +906,19 @@ function fakeCommandSurface(): CanvasCommandSurface {
       deleteSelected: vi.fn(),
       selectAll: vi.fn(),
       selectSameSpecies: vi.fn(),
+      selectSpecies: vi.fn(),
+      clearSelection: vi.fn(),
       bringToFront: vi.fn(),
       sendToBack: vi.fn(),
       lockSelected: vi.fn(),
       unlockSelected: vi.fn(),
       groupSelected: vi.fn(),
       ungroupSelected: vi.fn(),
+      renameZone: vi.fn(() => true),
+      rotateSelected: vi.fn(),
+      unlockAll: vi.fn(),
+      nudgeSelected: vi.fn(() => false),
+      endNudge: vi.fn(),
     },
     chrome: {
       toggleGrid: vi.fn(),
@@ -867,6 +929,7 @@ function fakeCommandSurface(): CanvasCommandSurface {
       setSceneLayerVisibility: vi.fn(() => true),
       setSceneLayerOpacity: vi.fn(() => true),
       setSceneLayerLocked: vi.fn(() => true),
+      presentLayers: vi.fn(),
     },
     plantPresentation: {
       ensureSpeciesCacheEntries: vi.fn(async () => false),
@@ -886,19 +949,12 @@ function fakeQuerySurface(): CanvasQuerySurface {
       scene: signal(0),
       plantNames: signal(0),
     },
-    viewport: signal<CameraViewportSnapshot>({
-      viewport: { x: 0, y: 0, scale: 1 },
-      screenSize: { width: 800, height: 600 },
-      devicePixelRatio: 1,
-      referenceScale: 1,
-      scaleBounds: { minimum: 0.00001, maximum: 2000 },
-      overviewScaleThreshold: 0.1,
-      mode: 'site',
-      groundMetersPerCssPixel: null,
-      revision: 0,
-    }),
-    getSpeciesFocus: () => ({ canonicalName: null, showCodes: false }),
+    sessionPlane: signal<SessionPlane | null>(createSessionPlane(TEST_GEO_ORIGIN)),
+    view: createTestViewReadSurface(),
+    getSpeciesFocus: () => ({ canonicalName: null }),
+    getPlantLabelCoverage: () => ({ labelled: 0, inView: 0 }),
     capturePrintSnapshot: () => null,
+    captureViewScene: () => null,
     getScenePhysicalExtentMeters: () => null,
     getSceneSnapshot: vi.fn(() => createDefaultScenePersistedState()),
     getSelection: vi.fn(() => []),
@@ -929,7 +985,10 @@ function fakeQuerySurface(): CanvasQuerySurface {
     })),
     getPlacedPlants: vi.fn(() => []),
     getSettledPlacedPlants: vi.fn(() => []),
+    getSettledDesignObjects: vi.fn(() => null),
     getLocalizedCommonNames: vi.fn(() => new Map()),
+    getEnglishFallbackNames: vi.fn(() => new Map()),
+    subscribePointerWorld: () => () => {},
   }
 }
 
@@ -938,4 +997,8 @@ function buttonByText(container: HTMLElement, text: string): HTMLButtonElement {
     .find((candidate) => candidate.textContent?.trim() === text)
   if (!button) throw new Error(`Missing button ${text}`)
   return button
+}
+
+function isCanvasArea(target: Element): boolean {
+  return target.firstElementChild?.getAttribute('data-testid') === 'web-canvas-workspace-surface'
 }

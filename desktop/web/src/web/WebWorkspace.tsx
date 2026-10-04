@@ -2,19 +2,18 @@ import { useMemo } from 'preact/hooks'
 import type { BrowserDesignSessionController } from './browser-design-session'
 import { WebCanvasWorkspace } from './WebCanvasWorkspace'
 import { WebLayersPanel } from './WebLayersPanel'
-import { WebLocalRasterPanel } from './WebLocalRasterPanel'
-import { WebLocationPanel } from './WebLocationPanel'
-import { t } from '../i18n'
 import { WebSpeciesCatalogPanel, WebSpeciesKeyPanel } from './WebSpeciesCatalogPanel'
 import { BudgetPanel } from '../components/panels/BudgetPanel'
 import { CalendarPanel } from '../components/panels/CalendarPanel'
 import { ConsortiumPanel } from '../components/panels/ConsortiumPanel'
+import { StoriesPanel } from '../components/panels/StoriesPanel'
 import {
   WorkspaceComposition,
   type WorkspacePanelProjection,
   type WorkspaceSurfaces,
 } from '../components/workspace/WorkspaceComposition'
 import { lazy } from 'preact/compat'
+import type { PanelRailCommand } from '../components/shared/PanelRail'
 
 const WorldMapPanel = lazy(async () => {
   const module = await import('../components/panels/WorldMapPanel')
@@ -24,34 +23,29 @@ const WorldMapPanel = lazy(async () => {
 export function WebWorkspace({
   controller,
   panelProjection,
+  phoneTabs,
   templatesEnabled,
 }: {
   readonly controller: BrowserDesignSessionController
   readonly panelProjection: WorkspacePanelProjection
+  /** The side panel commands, as the phone sheet's tabs. */
+  readonly phoneTabs: readonly PanelRailCommand[]
   readonly templatesEnabled: boolean
 }) {
   const surfaces = useMemo<WorkspaceSurfaces>(() => {
     const Canvas = () => <WebCanvasWorkspace controller={controller} />
-    // Web preserves raster references but renders and processes no local
-    // assets, so both surfaces state that instead of offering dead controls.
-    const WebData = () => <WebLocalRasterPanel title={t('canvas.lidar.data.title')} />
-    const WebAnalysis = () => (
-      <WebLocalRasterPanel title={t('canvas.lidar.analysis.title')} />
-    )
     return {
       primary: {
         canvas: Canvas,
-        location: WebLocationPanel,
         ...(templatesEnabled ? { templates: WorldMapPanel } : {}),
       },
       side: {
         'species-key': WebSpeciesKeyPanel,
-        data: WebData,
-        analysis: WebAnalysis,
         layers: WebLayersPanel,
         calendar: CalendarPanel,
         budget: BudgetPanel,
         consortium: ConsortiumPanel,
+        stories: StoriesPanel,
         'plant-db': WebCatalog,
         favorites: WebFavorites,
       },
@@ -63,6 +57,7 @@ export function WebWorkspace({
       panelProjection={panelProjection}
       surfaces={surfaces}
       responsive
+      phoneTabs={phoneTabs}
     />
   )
 }

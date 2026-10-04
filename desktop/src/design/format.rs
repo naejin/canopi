@@ -1,17 +1,21 @@
 use common_types::design::{
     CURRENT_CANOPI_FILE_VERSION, CanopiDesignIngestionErrorKind, CanopiFile,
-    DEFAULT_BUDGET_CURRENCY, Layer, MISSING_CANOPI_FILE_VERSION,
-    validate_and_normalize_spatial_frame,
+    DEFAULT_BUDGET_CURRENCY, DesignLoadFailure, DesignLoadFailureKind, Layer,
+    MISSING_CANOPI_FILE_VERSION, OBSOLETE_CANOPI_ROOT_KEYS, admit_design_identities_and_ranges,
+    validate_design_geometry,
 };
+use common_types::views::validate_views_and_stories;
 use std::fmt;
 use std::path::Path;
 
-use super::new_design_defaults::{NEW_DESIGN_LAYER_DEFAULTS, new_design_spatial_frame};
+use super::new_design_defaults::NEW_DESIGN_LAYER_DEFAULTS;
 
 #[derive(Debug)]
-struct CanopiDesignIngestionError {
+pub(crate) struct CanopiDesignIngestionError {
     kind: CanopiDesignIngestionErrorKind,
     message: String,
+    /// The file's version when it is one this build does not open.
+    unsupported_version: Option<u64>,
 }
 
 impl CanopiDesignIngestionError {
@@ -19,7 +23,32 @@ impl CanopiDesignIngestionError {
         Self {
             kind,
             message: message.into(),
+            unsupported_version: None,
         }
+    }
+
+    fn unsupported_version(version: u64) -> Self {
+        Self {
+            unsupported_version: Some(version),
+            ..Self::new(
+                CanopiDesignIngestionErrorKind::UnsupportedVersion,
+                format!(
+                    "$.version: unsupported Canopi Design version {version}; Canopi 2.0 and later open only version {CURRENT_CANOPI_FILE_VERSION}",
+                ),
+            )
+        }
+    }
+
+    /// The version of a well-formed Design this build does not open, if that is the error.
+    pub(crate) fn found_unsupported_version(&self) -> Option<u64> {
+        self.unsupported_version
+    }
+
+    /// Whether the unsupported version is older than the current format
+    /// (written before Canopi 2.0, ADR 0021) as opposed to newer than this build.
+    pub(crate) fn is_older_than_supported(&self) -> bool {
+        self.unsupported_version
+            .is_some_and(|version| version < u64::from(CURRENT_CANOPI_FILE_VERSION))
     }
 }
 
@@ -29,121 +58,233 @@ impl fmt::Display for CanopiDesignIngestionError {
     }
 }
 
-/// Save a `CanopiFile` to disk atomically.
-///
-/// Steps:
-/// 1. If the target file already exists, copy it to `{path}.prev` as a backup.
-/// 2. Serialize and write to an operation-owned temporary sidecar.
-/// 3. Rename the temporary sidecar to `{path}`.
-///
-/// On any write/rename error the operation's sidecar is removed before returning.
-pub fn save_to_file(path: &Path, content: &CanopiFile) -> Result<(), String> {
-    let json = serde_json::to_string_pretty(content)
+/// Largest `.canopi` file this build opens, matching the GeoJSON import limit.
+pub(crate) const MAX_CANOPI_FILE_BYTES: u64 = 64 * 1024 * 1024;
+
+/// Why a `.canopi` file could not be opened. Messages never name the file:
+/// the caller knows the path, and they reach logs and Problem Reports.
+#[derive(Debug)]
+pub(crate) enum DesignLoadError {
+    Read { source: std::io::Error },
+    TooLarge { limit: u64 },
+    InvalidJson { source: serde_json::Error },
+    Ingestion { source: CanopiDesignIngestionError },
+}
+
+impl DesignLoadError {
+    pub(crate) fn failure(&self) -> DesignLoadFailure {
+        let kind = match self {
+            Self::Read { source } if source.kind() == std::io::ErrorKind::NotFound => {
+                DesignLoadFailureKind::Missing
+            }
+            Self::Read { .. } => DesignLoadFailureKind::Unreadable,
+            Self::TooLarge { .. } => DesignLoadFailureKind::TooLarge,
+            Self::InvalidJson { .. } => DesignLoadFailureKind::InvalidJson,
+            Self::Ingestion { source } => match source.found_unsupported_version() {
+                Some(_) if source.is_older_than_supported() => DesignLoadFailureKind::OlderVersion,
+                Some(_) => DesignLoadFailureKind::NewerVersion,
+                None => DesignLoadFailureKind::InvalidDocument,
+            },
+        };
+        DesignLoadFailure {
+            kind,
+            message: self.to_string(),
+        }
+    }
+}
+
+impl fmt::Display for DesignLoadError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Read { source } => write!(formatter, "Failed to read the Design file: {source}"),
+            Self::TooLarge { limit } => write!(
+                formatter,
+                "The Design file exceeds the {} MiB limit",
+                limit / (1024 * 1024)
+            ),
+            Self::InvalidJson { source } => {
+                write!(formatter, "The Design file is not valid JSON: {source}")
+            }
+            Self::Ingestion { source } => {
+                write!(formatter, "Failed to parse the Design: {source}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for DesignLoadError {}
+
+/// Encode a Design as `.canopi` wire bytes: the one encoder for saves, drafts
+/// and exports. Refuses an encoding over [`MAX_CANOPI_FILE_BYTES`], so nothing
+/// is ever written that this build would then refuse to open.
+pub(crate) fn encode_design(content: &CanopiFile) -> Result<Vec<u8>, String> {
+    let bytes = serde_json::to_vec_pretty(content)
         .map_err(|e| format!("Failed to serialize design: {e}"))?;
-    let backup = path.with_extension("canopi.prev");
-    super::with_write_admissions(&[path, backup.as_path()], || {
-        save_to_file_admitted(path, &backup, &json)
+    if bytes.len() as u64 > MAX_CANOPI_FILE_BYTES {
+        return Err(format!(
+            "The Design is larger than the {} MiB a Design file may hold; remove some story images or objects before saving",
+            MAX_CANOPI_FILE_BYTES / (1024 * 1024)
+        ));
+    }
+    Ok(bytes)
+}
+
+/// Result of [`save_to_file`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SaveResult {
+    /// Written; the fingerprint of the bytes now on disk.
+    Saved { fingerprint: String },
+    /// The file no longer has the expected fingerprint; nothing was written.
+    Conflict { current_fingerprint: Option<String> },
+}
+
+/// Durably save a `CanopiFile` to `path`.
+///
+/// With `expected_fingerprint`, the write happens only while the file on disk
+/// still has that fingerprint (a missing file has none); otherwise nothing is
+/// written and the current fingerprint is returned. `None` overwrites
+/// unconditionally (Save As, or keeping this copy over an outside change). The
+/// check and the write run under one write admission for the target.
+pub(crate) fn save_to_file(
+    path: &Path,
+    content: &CanopiFile,
+    expected_fingerprint: Option<&str>,
+) -> Result<SaveResult, String> {
+    let bytes = encode_design(content)?;
+    super::with_write_admission(path, || {
+        if let Some(expected) = expected_fingerprint {
+            let current = super::fingerprint_file(path)
+                .map_err(|e| format!("Failed to check {} before saving: {e}", path.display()))?;
+            if current.as_deref() != Some(expected) {
+                return Ok(SaveResult::Conflict {
+                    current_fingerprint: current,
+                });
+            }
+        }
+        super::write_file_durably(path, &bytes, "tmp")
+            .map_err(|e| format!("Failed to save {}: {e}", path.display()))?;
+        Ok(SaveResult::Saved {
+            fingerprint: super::fingerprint(&bytes),
+        })
     })
 }
 
-fn save_to_file_admitted(path: &Path, backup: &Path, json: &str) -> Result<(), String> {
-    // Backup the existing file, ignoring errors (e.g. first save).
-    if path.exists()
-        && let Err(e) = std::fs::copy(path, backup)
-    {
-        tracing::warn!("Could not create backup at {}: {e}", backup.display());
-    }
-
-    let tmp_path = super::operation_sidecar_path(path, "tmp");
-
-    // Write to the operation's sidecar first.
-    if let Err(e) = std::fs::write(&tmp_path, json) {
-        let _ = std::fs::remove_file(&tmp_path);
-        return Err(format!("Failed to write {}: {e}", tmp_path.display()));
-    }
-
-    // Atomic replace .tmp → final path (cross-platform safe).
-    if let Err(e) = super::atomic_replace(&tmp_path, path) {
-        let _ = std::fs::remove_file(&tmp_path);
-        return Err(format!(
-            "Failed to finalise save at {}: {e}",
-            path.display()
-        ));
-    }
-
-    Ok(())
+/// Write a standalone `.canopi` export (a Saved Object Stamp file).
+///
+/// An export is derived output, not a Design save: it has no fingerprint check
+/// and is not recorded as a Recent Design.
+pub fn export_to_file(path: &Path, content: &CanopiFile) -> Result<(), String> {
+    let bytes = encode_design(content)?;
+    super::write_derived_file(path, &bytes)
+        .map_err(|e| format!("Failed to export {}: {e}", path.display()))
 }
 
 /// Load a `CanopiFile` from disk.
 ///
-/// Reads the file, deserializes as `serde_json::Value` first for strict
-/// version admission, then deserializes into `CanopiFile`.
-/// Unknown fields are preserved in `CanopiFile::extra` via `#[serde(flatten)]`.
-pub fn load_from_file(path: &Path) -> Result<CanopiFile, String> {
-    let content = std::fs::read_to_string(path)
-        .map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
-
-    // Parse to Value so we can inspect the version before full deserialization.
-    let value: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| format!("Invalid JSON in {}: {e}", path.display()))?;
-
-    decode_design_value(value)
-        .map_err(|error| format!("Failed to parse design from {}: {error}", path.display()))
+/// Refuses files over [`MAX_CANOPI_FILE_BYTES`], parses JSON to a value for
+/// strict version admission (only the current format opens, ADR 0021), then
+/// deserializes `CanopiFile`. Unknown root fields are preserved in `CanopiFile::extra`.
+pub(crate) fn load_from_file(path: &Path) -> Result<CanopiFile, DesignLoadError> {
+    Ok(load_with_fingerprint(path)?.0)
 }
 
-fn decode_design_value(
+/// [`load_from_file`] plus the [`super::fingerprint`] of the exact bytes read.
+pub(crate) fn load_with_fingerprint(path: &Path) -> Result<(CanopiFile, String), DesignLoadError> {
+    let content = read_bounded(path, MAX_CANOPI_FILE_BYTES)?;
+    let fingerprint = super::fingerprint(&content);
+    let decoded = decode_design_bytes(&content)?;
+    Ok((decoded, fingerprint))
+}
+
+/// Load a Design only when its file is at most `limit` bytes, with the same
+/// admission as [`load_with_fingerprint`]. Recent Design previews read
+/// through it so a very large file is skipped rather than parsed.
+pub(crate) fn load_within(path: &Path, limit: u64) -> Result<CanopiFile, DesignLoadError> {
+    let content = read_bounded(path, limit.min(MAX_CANOPI_FILE_BYTES))?;
+    decode_design_bytes(&content)
+}
+
+fn read_bounded(path: &Path, limit: u64) -> Result<Vec<u8>, DesignLoadError> {
+    use std::io::Read;
+    let file = std::fs::File::open(path).map_err(|source| DesignLoadError::Read { source })?;
+    let length = file
+        .metadata()
+        .map_err(|source| DesignLoadError::Read { source })?
+        .len();
+    if length > limit {
+        return Err(DesignLoadError::TooLarge { limit });
+    }
+    let mut content = Vec::new();
+    // Read one byte past the limit so a file that grows while it is read is
+    // still refused without buffering it whole.
+    file.take(limit + 1)
+        .read_to_end(&mut content)
+        .map_err(|source| DesignLoadError::Read { source })?;
+    if content.len() as u64 > limit {
+        return Err(DesignLoadError::TooLarge { limit });
+    }
+    Ok(content)
+}
+
+fn decode_design_bytes(content: &[u8]) -> Result<CanopiFile, DesignLoadError> {
+    let value: serde_json::Value = serde_json::from_slice(content)
+        .map_err(|source| DesignLoadError::InvalidJson { source })?;
+    decode_design_value(value).map_err(|source| DesignLoadError::Ingestion { source })
+}
+
+/// Version admission, then current-format admission. Canopi 2.0 breaks
+/// stored data (ADR 0021): there is no migration ladder, and any version
+/// other than the current one is refused as `unsupported_version`.
+fn decode_design_value(value: serde_json::Value) -> Result<CanopiFile, CanopiDesignIngestionError> {
+    let version = read_design_version(&value)?;
+    if version != u64::from(CURRENT_CANOPI_FILE_VERSION) {
+        return Err(CanopiDesignIngestionError::unsupported_version(version));
+    }
+    admit_current_design_value(value)
+}
+
+#[expect(
+    clippy::expect_used,
+    reason = "checked to be an object by `read_design_version`"
+)]
+fn admit_current_design_value(
     mut value: serde_json::Value,
 ) -> Result<CanopiFile, CanopiDesignIngestionError> {
-    let version = read_design_version(&value)?;
-    if version != CURRENT_CANOPI_FILE_VERSION as u64 {
-        return Err(CanopiDesignIngestionError::new(
-            CanopiDesignIngestionErrorKind::UnsupportedVersion,
-            format!(
-                "$.version: unsupported Canopi Design version {version}; current version is {CURRENT_CANOPI_FILE_VERSION}",
-            ),
-        ));
-    }
-
     let object = value
         .as_object()
-        .expect("version admission requires an object");
-    if object.contains_key("location") || object.contains_key("north_bearing_deg") {
+        .expect("checked to be an object by `read_design_version`");
+    // `extra` is the in-memory bag for unknown root fields, never a wire key:
+    // the canonical encoder writes unknown fields at the root.
+    if object.contains_key("extra") {
         return Err(CanopiDesignIngestionError::new(
             CanopiDesignIngestionErrorKind::InvalidDocument,
-            "$: v6 replaces root location and north_bearing_deg with spatial_frame",
+            "$.extra: reserved root field; unknown fields are stored at the root",
+        ));
+    }
+    if let Some(key) = OBSOLETE_CANOPI_ROOT_KEYS
+        .iter()
+        .find(|key| object.contains_key(**key))
+    {
+        return Err(CanopiDesignIngestionError::new(
+            CanopiDesignIngestionErrorKind::InvalidDocument,
+            format!("$.{key}: obsolete root field; Designs store lon/lat on each design object"),
         ));
     }
 
-    value["version"] = serde_json::json!(version);
+    value["version"] = serde_json::json!(CURRENT_CANOPI_FILE_VERSION);
     let mut file: CanopiFile = serde_json::from_value(value).map_err(|error| {
         CanopiDesignIngestionError::new(
             CanopiDesignIngestionErrorKind::InvalidDocument,
             format!("$: {error}"),
         )
     })?;
-    validate_and_normalize_spatial_frame(&mut file.spatial_frame).map_err(|error| {
-        CanopiDesignIngestionError::new(CanopiDesignIngestionErrorKind::InvalidDocument, error)
-    })?;
-    normalize_loaded_extra(&mut file);
+    validate_design_geometry(&file)
+        .and_then(|()| admit_design_identities_and_ranges(&mut file))
+        .and_then(|()| validate_views_and_stories(&file.views, &file.stories))
+        .map_err(|error| {
+            CanopiDesignIngestionError::new(CanopiDesignIngestionErrorKind::InvalidDocument, error)
+        })?;
     Ok(file)
-}
-
-fn normalize_loaded_extra(file: &mut CanopiFile) {
-    let Some(serde_json::Value::Object(nested)) = file.extra.remove("extra") else {
-        return;
-    };
-    for (key, value) in nested {
-        if is_known_canopi_key(&key) {
-            continue;
-        }
-        file.extra.entry(key).or_insert(value);
-    }
-}
-
-fn is_known_canopi_key(key: &str) -> bool {
-    common_types::design::DESIGN_FILE_FIELDS
-        .iter()
-        .any(|field| field.key == key)
 }
 
 fn read_design_version(value: &serde_json::Value) -> Result<u64, CanopiDesignIngestionError> {
@@ -198,7 +339,6 @@ pub(crate) fn create_new_design(
         version: CURRENT_CANOPI_FILE_VERSION,
         name: name.into(),
         description: None,
-        spatial_frame: new_design_spatial_frame(),
         plant_species_colors: std::collections::HashMap::new(),
         plant_species_symbols: std::collections::HashMap::new(),
         plant_species_codes: std::collections::HashMap::new(),
@@ -212,6 +352,8 @@ pub(crate) fn create_new_design(
         timeline: Vec::new(),
         budget: Vec::new(),
         budget_currency: DEFAULT_BUDGET_CURRENCY.to_owned(),
+        views: Vec::new(),
+        stories: Vec::new(),
         created_at: timestamp.clone(),
         updated_at: timestamp,
         extra: std::collections::HashMap::new(),
@@ -221,11 +363,28 @@ pub(crate) fn create_new_design(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common_types::design::{MIN_SUPPORTED_CANOPI_FILE_VERSION, PanelTarget};
+    use crate::test_scratch::TestScratch;
+    use common_types::design::PanelTarget;
     use std::path::PathBuf;
 
     fn create_default() -> CanopiFile {
         create_new_design("Untitled", "2026-07-02T00:00:00Z")
+    }
+
+    #[test]
+    fn a_design_that_would_not_reopen_is_refused_before_it_is_written() {
+        let mut design = create_default();
+        // One description just past the file limit: the encoder must refuse
+        // it rather than write a file this build then refuses to load.
+        design.description = Some("x".repeat(MAX_CANOPI_FILE_BYTES as usize + 1));
+        let error = encode_design(&design).unwrap_err();
+        assert!(error.contains("MiB"), "{error}");
+
+        let dir = unique_dir("oversized");
+        let path = dir.join("huge.canopi");
+        assert!(save_to_file(&path, &design, None).is_err());
+        assert!(export_to_file(&path, &design).is_err());
+        assert!(!path.exists(), "nothing is written for a refused Design");
     }
 
     #[test]
@@ -241,7 +400,6 @@ mod tests {
             serde_json::json!({
                 "current_version": CURRENT_CANOPI_FILE_VERSION,
                 "missing_version": MISSING_CANOPI_FILE_VERSION,
-                "minimum_supported_version": MIN_SUPPORTED_CANOPI_FILE_VERSION,
                 "future_version_policy": common_types::design::FUTURE_CANOPI_FILE_VERSION_POLICY,
                 "error_kinds": CanopiDesignIngestionErrorKind::ALL
                     .iter()
@@ -300,13 +458,7 @@ mod tests {
             .collect::<Vec<_>>()
         {
             let value = object.remove(&key).expect("collected key should exist");
-            if key == "extra" {
-                if let Some(entries) = value.as_object() {
-                    extra.extend(entries.clone());
-                }
-            } else {
-                extra.insert(key, value);
-            }
+            extra.insert(key, value);
         }
         object.insert("extra".to_owned(), serde_json::Value::Object(extra));
         wire
@@ -328,19 +480,11 @@ mod tests {
     }
 
     #[test]
-    fn test_create_default_has_eight_layers() {
+    fn test_create_default_has_six_layers() {
         let design = create_default();
         assert_eq!(design.version, CURRENT_CANOPI_FILE_VERSION);
         assert_eq!(design.name, "Untitled");
-        assert_eq!(design.spatial_frame.anchor_longitude_deg, 13.0);
-        assert_eq!(design.spatial_frame.anchor_latitude_deg, 23.0);
-        assert_eq!(design.spatial_frame.north_bearing_deg, 0.0);
-        assert!(matches!(
-            design.spatial_frame.placement_status,
-            common_types::design::PlacementStatus::Provisional
-        ));
-        assert_eq!(design.spatial_frame.location_metadata.altitude_m, None);
-        assert_eq!(design.layers.len(), 8);
+        assert_eq!(design.layers.len(), 6);
         assert!(design.measurement_guides.is_empty());
     }
 
@@ -355,7 +499,7 @@ mod tests {
         assert_eq!(second.name, "Second Design");
         assert_eq!(second.created_at, "2026-07-03T00:00:00Z");
         first.layers[0].name = "changed".to_owned();
-        assert_eq!(second.layers[0].name, "base");
+        assert_eq!(second.layers[0].name, "climate");
     }
 
     #[test]
@@ -369,8 +513,6 @@ mod tests {
         assert_eq!(
             by_name,
             std::collections::HashMap::from([
-                ("base", false),
-                ("contours", false),
                 ("climate", false),
                 ("zones", true),
                 ("water", false),
@@ -383,21 +525,20 @@ mod tests {
 
     #[test]
     fn test_save_and_load_round_trip() {
-        let dir = std::env::temp_dir();
+        let dir = unique_dir("round_trip");
         let path: PathBuf = dir.join("canopi_test_round_trip.canopi");
 
         let original = create_default();
-        save_to_file(&path, &original).expect("save should succeed");
+        save_to_file(&path, &original, None).expect("save should succeed");
         assert!(path.exists());
 
         let loaded = load_from_file(&path).expect("load should succeed");
         assert_eq!(loaded.name, original.name);
         assert_eq!(loaded.version, original.version);
-        assert_eq!(loaded.layers.len(), 8);
+        assert_eq!(loaded.layers.len(), 6);
 
         // Clean up
         let _ = std::fs::remove_file(&path);
-        let _ = std::fs::remove_file(path.with_extension("canopi.prev"));
     }
 
     #[test]
@@ -405,15 +546,7 @@ mod tests {
         use std::sync::mpsc;
         use std::time::Duration;
 
-        let dir = std::env::temp_dir().join(format!(
-            "canopi_save_admission_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = unique_dir("save_admission");
         let path = dir.join("garden.canopi");
         let initial = create_default();
         std::fs::write(&path, serde_json::to_string_pretty(&initial).unwrap()).unwrap();
@@ -427,7 +560,7 @@ mod tests {
             let writer = std::thread::spawn(move || {
                 started_tx.send(()).unwrap();
                 finished_tx
-                    .send(save_to_file(&writer_path, &replacement))
+                    .send(save_to_file(&writer_path, &replacement, None))
                     .unwrap();
             });
             started_rx.recv().unwrap();
@@ -446,79 +579,17 @@ mod tests {
             .expect("save should succeed");
         writer.join().unwrap();
         assert_eq!(load_from_file(&path).unwrap().name, "Admitted replacement");
-
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
-    fn primary_save_waits_for_admitted_stable_backup_target() {
-        use std::sync::mpsc;
-        use std::time::Duration;
-
-        let dir = std::env::temp_dir().join(format!(
-            "canopi_save_family_admission_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let primary_path = dir.join("garden.canopi");
-        let backup_path = primary_path.with_extension("canopi.prev");
-        let mut design = create_default();
-        design.name = "Overlapping backup target".to_owned();
-        let writer_path = primary_path.clone();
-        let (started_tx, started_rx) = mpsc::channel();
-        let (finished_tx, finished_rx) = mpsc::channel();
-
-        let writer = crate::design::with_write_admission(&backup_path, || {
-            let writer = std::thread::spawn(move || {
-                started_tx.send(()).unwrap();
-                finished_tx
-                    .send(save_to_file(&writer_path, &design))
-                    .unwrap();
-            });
-            started_rx.recv().unwrap();
-            assert!(
-                finished_rx
-                    .recv_timeout(Duration::from_millis(250))
-                    .is_err(),
-                "a primary save entered while its stable backup target was admitted"
-            );
-            writer
-        });
-
-        finished_rx
-            .recv_timeout(Duration::from_secs(2))
-            .expect("primary save should continue after backup admission releases")
-            .expect("primary save should succeed");
-        writer.join().unwrap();
-        assert_eq!(
-            load_from_file(&primary_path).unwrap().name,
-            "Overlapping backup target"
-        );
-
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn concurrent_saves_preserve_final_and_previous_designs() {
+    fn concurrent_saves_leave_one_complete_design() {
         use std::sync::{Arc, Barrier};
 
-        let dir = std::env::temp_dir().join(format!(
-            "canopi_concurrent_saves_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = unique_dir("concurrent_saves");
         let path = dir.join("garden.canopi");
         let mut initial = create_default();
         initial.name = "Initial".to_owned();
-        save_to_file(&path, &initial).unwrap();
+        save_to_file(&path, &initial, None).unwrap();
 
         let writer_count = 8;
         let barrier = Arc::new(Barrier::new(writer_count + 1));
@@ -533,7 +604,7 @@ mod tests {
             let writer_barrier = Arc::clone(&barrier);
             writers.push(std::thread::spawn(move || {
                 writer_barrier.wait();
-                save_to_file(&writer_path, &design)
+                save_to_file(&writer_path, &design, None)
             }));
         }
         barrier.wait();
@@ -542,10 +613,7 @@ mod tests {
         }
 
         let final_design = load_from_file(&path).unwrap();
-        let previous_design = load_from_file(&path.with_extension("canopi.prev")).unwrap();
         assert!(expected_names.contains(&final_design.name));
-        assert!(expected_names.contains(&previous_design.name));
-        assert_ne!(final_design.name, previous_design.name);
         assert!(
             owned_sidecars(&dir, "tmp").is_empty(),
             "concurrent saves must not leak owned temporary sidecars"
@@ -554,25 +622,15 @@ mod tests {
             owned_sidecars(&dir, "old").is_empty(),
             "concurrent saves must not leak owned rollback sidecars"
         );
-
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
     fn test_atomic_write_creates_tmp_then_final() {
-        let dir = std::env::temp_dir().join(format!(
-            "canopi_atomic_save_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = unique_dir("atomic_save");
         let path: PathBuf = dir.join("garden.canopi");
 
         let design = create_default();
-        save_to_file(&path, &design).expect("save should succeed");
+        save_to_file(&path, &design, None).expect("save should succeed");
 
         assert!(path.exists(), "final file should exist");
         assert!(
@@ -583,66 +641,29 @@ mod tests {
             owned_sidecars(&dir, "old").is_empty(),
             "successful save must not leak an owned rollback sidecar"
         );
-
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
     fn save_does_not_claim_an_existing_legacy_temp_sidecar() {
-        let dir = std::env::temp_dir().join(format!(
-            "canopi_owned_save_temp_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = unique_dir("owned_save_temp");
         let path = dir.join("garden.canopi");
         let legacy_tmp = path.with_extension("canopi.tmp");
         std::fs::write(&legacy_tmp, "another operation owns this").unwrap();
 
-        save_to_file(&path, &create_default()).expect("save should succeed");
+        save_to_file(&path, &create_default(), None).expect("save should succeed");
 
         assert_eq!(
             std::fs::read_to_string(&legacy_tmp).unwrap(),
             "another operation owns this"
         );
         assert!(load_from_file(&path).is_ok());
-
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn test_backup_created_on_overwrite() {
-        let dir = std::env::temp_dir();
-        let path: PathBuf = dir.join("canopi_test_backup.canopi");
-        let prev_path = path.with_extension("canopi.prev");
-
-        let _ = std::fs::remove_file(&path);
-        let _ = std::fs::remove_file(&prev_path);
-
-        let design = create_default();
-        // First save — no backup yet.
-        save_to_file(&path, &design).expect("first save");
-        assert!(
-            !prev_path.exists(),
-            ".prev should not exist after first save"
-        );
-
-        // Second save — should create .prev.
-        save_to_file(&path, &design).expect("second save");
-        assert!(prev_path.exists(), ".prev should exist after second save");
-
-        let _ = std::fs::remove_file(&path);
-        let _ = std::fs::remove_file(&prev_path);
     }
 
     #[test]
     fn test_extra_fields_preserved_on_round_trip() {
         use serde_json::json;
 
-        let dir = std::env::temp_dir();
+        let dir = unique_dir("extra");
         let path: PathBuf = dir.join("canopi_test_extra.canopi");
 
         // Build a design with an unknown future field injected at JSON level.
@@ -651,7 +672,7 @@ mod tests {
             .extra
             .insert("future_field".into(), json!("from_future"));
 
-        save_to_file(&path, &design).expect("save");
+        save_to_file(&path, &design, None).expect("save");
         let loaded = load_from_file(&path).expect("load");
 
         assert_eq!(
@@ -661,24 +682,36 @@ mod tests {
         );
 
         let _ = std::fs::remove_file(&path);
-        let _ = std::fs::remove_file(path.with_extension("canopi.prev"));
     }
 
     #[test]
-    fn test_v6_panel_sections_spatial_frame_and_unknown_fields_round_trip() {
+    fn geolocated_objects_panel_sections_and_unknown_fields_round_trip() {
         use serde_json::json;
 
-        let dir = std::env::temp_dir();
-        let path: PathBuf = dir.join("canopi_test_v6_panel_round_trip.canopi");
+        let dir = unique_dir("geolocated_round_trip");
+        let path: PathBuf = dir.join("canopi_test_geolocated_round_trip.canopi");
 
         let mut value = serde_json::to_value(create_default()).expect("default design serializes");
-        value["spatial_frame"] = json!({
-            "anchor_longitude_deg": 2.3522,
-            "anchor_latitude_deg": 48.8566,
-            "north_bearing_deg": -14.0,
-            "placement_status": "confirmed",
-            "location_metadata": { "altitude_m": 35.0 }
-        });
+        value["plants"] = json!([{
+            "id": "plant-1",
+            "canonical_name": "Quercus robur",
+            "position": { "lon": 2.352_212_345_6, "lat": 48.856_612_345_6 }
+        }]);
+        value["zones"] = json!([{
+            "id": "zone-north",
+            "name": "North bed",
+            "zone_type": "rect",
+            "points": [
+                { "lon": 2.3522, "lat": 48.8567 },
+                { "lon": 2.3523, "lat": 48.8566 }
+            ],
+            "rotation": 30.0
+        }]);
+        value["measurement_guides"] = json!([{
+            "id": "guide-1",
+            "start": { "lon": -180.0, "lat": -85.0511287798066 },
+            "end": { "lon": 180.0, "lat": 85.0511287798066 }
+        }]);
         value["future_panel_field"] = json!({ "preserve": true });
         value["consortiums"] = json!([
             {
@@ -698,7 +731,7 @@ mod tests {
                 "recurrence": null,
                 "targets": [
                     { "kind": "species", "canonical_name": "Quercus robur" },
-                    { "kind": "zone", "zone_name": "North bed" }
+                    { "kind": "zone", "zone_id": "zone-north" }
                 ],
                 "depends_on": null,
                 "completed": false,
@@ -717,15 +750,37 @@ mod tests {
         ]);
 
         std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap())
-            .expect("write v6 file");
-        let loaded = load_from_file(&path).expect("v6 file should load");
-        save_to_file(&path, &loaded).expect("v6 file should save");
-        let reloaded = load_from_file(&path).expect("saved v6 file should reload");
+            .expect("write current-version file");
+        let loaded = load_from_file(&path).expect("current-version file should load");
+        save_to_file(&path, &loaded, None).expect("current-version file should save");
+        let reloaded = load_from_file(&path).expect("saved file should reload");
 
         assert_eq!(reloaded.version, CURRENT_CANOPI_FILE_VERSION);
-        assert_eq!(reloaded.spatial_frame.anchor_latitude_deg, 48.8566);
-        assert_eq!(reloaded.spatial_frame.anchor_longitude_deg, 2.3522);
-        assert_eq!(reloaded.spatial_frame.north_bearing_deg, 346.0);
+        let reloaded_value = serde_json::to_value(&reloaded).expect("reloaded design serializes");
+        assert_eq!(
+            reloaded_value["plants"][0]["position"],
+            value["plants"][0]["position"]
+        );
+        assert_eq!(
+            reloaded_value["zones"][0]["points"],
+            value["zones"][0]["points"]
+        );
+        assert_eq!(reloaded_value["zones"][0]["rotation"], json!(30.0));
+        assert_eq!(reloaded_value["zones"][0]["id"], json!("zone-north"));
+        assert_eq!(reloaded_value["zones"][0]["name"], json!("North bed"));
+        assert_eq!(
+            reloaded_value["timeline"][0]["targets"][1],
+            json!({ "kind": "zone", "zone_id": "zone-north" })
+        );
+        assert_eq!(
+            reloaded_value["measurement_guides"][0]["start"],
+            value["measurement_guides"][0]["start"]
+        );
+        assert_eq!(
+            reloaded_value["measurement_guides"][0]["end"],
+            value["measurement_guides"][0]["end"]
+        );
+        assert!(reloaded_value.get("spatial_frame").is_none());
         assert_eq!(reloaded.consortiums.len(), 1);
         assert_eq!(reloaded.timeline.len(), 1);
         assert_eq!(reloaded.timeline[0].targets.len(), 2);
@@ -748,7 +803,6 @@ mod tests {
         );
 
         let _ = std::fs::remove_file(&path);
-        let _ = std::fs::remove_file(path.with_extension("canopi.prev"));
     }
 
     #[test]
@@ -762,13 +816,457 @@ mod tests {
         assert_eq!(loaded.budget_currency, "USD");
         assert!(!loaded.extra.contains_key("budget_currency"));
 
-        let mut legacy_value = serde_json::to_value(create_default()).expect("serialize");
-        legacy_value
+        let mut without_currency = serde_json::to_value(create_default()).expect("serialize");
+        without_currency
             .as_object_mut()
             .expect("default design serializes to object")
             .remove("budget_currency");
 
-        let legacy: CanopiFile = serde_json::from_value(legacy_value).expect("deserialize legacy");
-        assert_eq!(legacy.budget_currency, DEFAULT_BUDGET_CURRENCY);
+        let defaulted: CanopiFile =
+            serde_json::from_value(without_currency).expect("budget_currency is optional");
+        assert_eq!(defaulted.budget_currency, DEFAULT_BUDGET_CURRENCY);
+    }
+
+    fn unique_dir(label: &str) -> TestScratch {
+        TestScratch::new(&format!("format-{label}"))
+    }
+
+    #[test]
+    fn a_root_extra_key_is_refused_not_flattened() {
+        let mut value = serde_json::to_value(create_default()).expect("serialize");
+        value["extra"] = serde_json::json!({ "future_field": true });
+
+        let error = decode_design_value(value).expect_err("root extra must be refused");
+
+        assert_eq!(error.kind, CanopiDesignIngestionErrorKind::InvalidDocument);
+        assert!(error.message.starts_with("$.extra:"), "{error}");
+    }
+
+    /// Canopi 2.0 breaks stored data (ADR 0021): the 2.0 previews' formats
+    /// (v7, v8) are refused as older, with the message naming the one
+    /// version this build opens, and nothing is upgraded in memory.
+    #[test]
+    fn designs_written_before_2_0_are_refused_as_older() {
+        for version in [
+            CURRENT_CANOPI_FILE_VERSION - 2,
+            CURRENT_CANOPI_FILE_VERSION - 1,
+        ] {
+            let mut value = serde_json::to_value(create_default()).expect("serialize");
+            value["version"] = serde_json::json!(version);
+
+            let error = decode_design_value(value).expect_err("an earlier format is refused");
+
+            assert_eq!(
+                error.kind,
+                CanopiDesignIngestionErrorKind::UnsupportedVersion
+            );
+            assert!(error.is_older_than_supported(), "v{version}");
+            assert_eq!(
+                error.message,
+                format!(
+                    "$.version: unsupported Canopi Design version {version}; Canopi 2.0 and later open only version {CURRENT_CANOPI_FILE_VERSION}"
+                ),
+            );
+        }
+    }
+
+    #[test]
+    fn a_newer_version_is_refused_and_told_apart_from_an_older_one() {
+        let mut value = serde_json::to_value(create_default()).expect("serialize");
+        value["version"] = serde_json::json!(CURRENT_CANOPI_FILE_VERSION + 1);
+
+        let error = decode_design_value(value).expect_err("newer Designs are refused");
+
+        assert_eq!(
+            error.kind,
+            CanopiDesignIngestionErrorKind::UnsupportedVersion
+        );
+        assert!(!error.is_older_than_supported());
+    }
+
+    /// A Canopi 1.2 file (format v6, local metres under a `spatial_frame`) is
+    /// below the floor: it is refused as an older version, never as damaged,
+    /// and nothing about it is read past its version.
+    #[test]
+    fn a_canopi_1_2_design_is_refused_as_an_older_version() {
+        let dir = unique_dir("older_version");
+        let path = dir.join("canopi-1.2.canopi");
+        std::fs::write(
+            &path,
+            serde_json::to_string_pretty(&serde_json::json!({
+                "version": 6,
+                "spatial_frame": {
+                    "anchor_longitude_deg": 2.3522,
+                    "anchor_latitude_deg": 48.8566,
+                    "north_bearing_deg": 0.0,
+                    "placement_status": "confirmed"
+                },
+                "name": "Canopi 1.2 garden",
+                "plant_species_colors": {},
+                "layers": [],
+                "plants": [{
+                    "id": "plant-1",
+                    "canonical_name": "Malus domestica",
+                    "position": { "x": 10.0, "y": -10.0 }
+                }],
+                "zones": [],
+                "created_at": "2026-07-15T00:00:00.000Z",
+                "updated_at": "2026-07-15T00:00:00.000Z"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let error = load_from_file(&path).expect_err("a v6 Design is below the floor");
+        let failure = error.failure();
+        assert_eq!(failure.kind, DesignLoadFailureKind::OlderVersion);
+        assert!(
+            failure
+                .message
+                .contains("unsupported Canopi Design version 6"),
+            "{}",
+            failure.message
+        );
+        assert!(
+            !failure.message.contains("canopi-1.2"),
+            "no paths: {}",
+            failure.message
+        );
+        assert!(load_with_fingerprint(&path).is_err());
+    }
+
+    /// Open the user's own Designs: every `.canopi` in
+    /// `CANOPI_REAL_DESIGNS_DIR` either opens at the current version or is
+    /// refused as older (ADR 0021). Run with `--ignored`; the files are
+    /// private and never enter the repository.
+    #[test]
+    #[ignore = "needs CANOPI_REAL_DESIGNS_DIR with the user's Designs"]
+    fn real_designs_open_or_are_refused_as_older() {
+        let Ok(dir) = std::env::var("CANOPI_REAL_DESIGNS_DIR") else {
+            panic!("set CANOPI_REAL_DESIGNS_DIR");
+        };
+        let mut checked = 0;
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.extension().and_then(|e| e.to_str()) != Some("canopi") {
+                continue;
+            }
+            let name = path.file_name().unwrap().to_string_lossy().into_owned();
+            match load_from_file(&path) {
+                Ok(file) => {
+                    assert_eq!(file.version, CURRENT_CANOPI_FILE_VERSION, "{name}");
+                    eprintln!(
+                        "{name}: opens with {} plants, {} zones",
+                        file.plants.len(),
+                        file.zones.len()
+                    );
+                }
+                Err(error) => {
+                    assert_eq!(
+                        error.failure().kind,
+                        DesignLoadFailureKind::OlderVersion,
+                        "{name}: {error}"
+                    );
+                    eprintln!("{name}: refused as older");
+                }
+            }
+            checked += 1;
+        }
+        assert!(checked > 0, "no Designs found in {dir}");
+    }
+
+    #[test]
+    fn load_failures_name_a_kind_and_never_the_path() {
+        let dir = unique_dir("failures");
+        let missing = dir.join("missing.canopi");
+        let error = load_from_file(&missing).expect_err("missing file");
+        assert_eq!(error.failure().kind, DesignLoadFailureKind::Missing);
+        assert!(!error.to_string().contains("missing.canopi"), "{error}");
+
+        let garbage = dir.join("garbage.canopi");
+        std::fs::write(&garbage, "not json").unwrap();
+        assert_eq!(
+            load_from_file(&garbage).unwrap_err().failure().kind,
+            DesignLoadFailureKind::InvalidJson
+        );
+
+        let invalid = dir.join("invalid.canopi");
+        std::fs::write(&invalid, r#"{"version": 9, "plants": 3}"#).unwrap();
+        assert_eq!(
+            load_from_file(&invalid).unwrap_err().failure().kind,
+            DesignLoadFailureKind::InvalidDocument
+        );
+
+        let old = dir.join("old.canopi");
+        std::fs::write(&old, r#"{"version": 4, "name": "Canopi 1.1"}"#).unwrap();
+        let error = load_from_file(&old).unwrap_err();
+        assert_eq!(error.failure().kind, DesignLoadFailureKind::OlderVersion);
+        assert!(!error.failure().message.contains("old.canopi"));
+
+        let newer = dir.join("newer.canopi");
+        std::fs::write(&newer, r#"{"version": 99, "name": "Next"}"#).unwrap();
+        assert_eq!(
+            load_from_file(&newer).unwrap_err().failure().kind,
+            DesignLoadFailureKind::NewerVersion
+        );
+
+        let folder = dir.join("folder.canopi");
+        std::fs::create_dir(&folder).unwrap();
+        assert_eq!(
+            load_from_file(&folder).unwrap_err().failure().kind,
+            DesignLoadFailureKind::Unreadable
+        );
+    }
+
+    fn with_views_and_stories() -> CanopiFile {
+        let mut value = serde_json::to_value(create_default()).expect("serialize");
+        value["views"] = serde_json::json!([{
+            "id": "view-1",
+            "name": "Berry hedges",
+            "camera": { "lon": 2.294_481_234_5, "lat": 48.858_370_123_4, "zoom": 19.25, "bearing": 0.0 },
+            "visible_layers": {
+                "background": { "kind": "satellite" },
+                "terrain": { "contours": false, "hillshade": false },
+                "scene_layers": ["plants", "zones"],
+                "site_data": []
+            },
+            "highlighted": {
+                "species": ["Lycium barbarum"],
+                "objects": [{ "kind": "zone", "id": "Hedge" }]
+            },
+            "title": "Berry hedges",
+            "text": []
+        }]);
+        value["stories"] = serde_json::json!([{
+            "id": "story-1",
+            "name": "Client visit",
+            "steps": [{
+                "id": "step-1",
+                "view_id": "view-1",
+                "title": "Berry hedges",
+                "text": [{ "kind": "paragraph", "spans": [
+                    { "text": "Two hedges", "bold": true, "italic": false, "link": null }
+                ] }],
+                "images": [{ "src": "https://example.org/hedge.jpg", "alt": "Hedge" }]
+            }]
+        }]);
+        decode_design_value(value).expect("views and stories should be admitted")
+    }
+
+    #[test]
+    fn views_and_stories_save_byte_identically_when_unchanged() {
+        let dir = unique_dir("views_round_trip");
+        let path = dir.join("stories.canopi");
+        let bytes = encode_design(&with_views_and_stories()).expect("encode");
+        std::fs::write(&path, &bytes).unwrap();
+
+        let loaded = load_from_file(&path).expect("load");
+        save_to_file(&path, &loaded, None).expect("save");
+
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        assert_eq!(loaded.views[0].camera.lon, 2.294_481_234_5);
+        assert_eq!(loaded.stories[0].steps[0].view_id, "view-1");
+    }
+
+    #[test]
+    fn a_story_step_without_its_saved_view_is_refused() {
+        let mut value = serde_json::to_value(with_views_and_stories()).expect("serialize");
+        value["views"] = serde_json::json!([]);
+
+        let error = decode_design_value(value).expect_err("dangling step must be refused");
+
+        assert_eq!(error.kind, CanopiDesignIngestionErrorKind::InvalidDocument);
+        assert!(
+            error.message.starts_with("$.stories[0].steps[0].view_id"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn opening_a_design_over_the_size_limit_is_refused() {
+        let dir = unique_dir("too_large");
+        let path = dir.join("huge.canopi");
+        let file = std::fs::File::create(&path).unwrap();
+        file.set_len(MAX_CANOPI_FILE_BYTES + 1).unwrap();
+        drop(file);
+
+        let error = load_from_file(&path).expect_err("oversized Design must be refused");
+
+        assert!(matches!(error, DesignLoadError::TooLarge { .. }), "{error}");
+        assert!(error.to_string().contains("64 MiB"), "{error}");
+    }
+
+    #[test]
+    fn export_writes_a_loadable_design_without_leaving_a_temporary() {
+        let dir = unique_dir("export");
+        let path = dir.join("stamp.canopi");
+        std::fs::write(&path, "an earlier export").unwrap();
+
+        export_to_file(&path, &create_default()).expect("export should succeed");
+
+        assert_eq!(load_from_file(&path).unwrap().name, "Untitled");
+        assert!(owned_sidecars(&dir, "export").is_empty());
+    }
+
+    fn named(name: &str) -> CanopiFile {
+        let mut design = create_default();
+        design.name = name.to_owned();
+        design
+    }
+
+    fn saved_fingerprint(result: SaveResult) -> String {
+        match result {
+            SaveResult::Saved { fingerprint } => fingerprint,
+            SaveResult::Conflict { .. } => panic!("expected the save to be written"),
+        }
+    }
+
+    /// A folder the user can write into but not list: the Design is renamed
+    /// into place, but the parent directory cannot be opened to sync it.
+    #[cfg(unix)]
+    #[test]
+    fn a_save_whose_directory_sync_fails_after_the_replace_is_still_saved() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = unique_dir("unlistable");
+        let folder = dir.join("write-only");
+        std::fs::create_dir(&folder).unwrap();
+        let path = folder.join("garden.canopi");
+        std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o333)).unwrap();
+        let restore =
+            || std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o755)).unwrap();
+        if std::fs::File::open(&folder).is_ok() {
+            // Running with privileges that bypass directory permissions.
+            restore();
+            return;
+        }
+
+        let first = save_to_file(&path, &named("Garden"), None);
+        let second = first
+            .as_ref()
+            .ok()
+            .and_then(|result| match result {
+                SaveResult::Saved { fingerprint } => Some(fingerprint.clone()),
+                SaveResult::Conflict { .. } => None,
+            })
+            .map(|fingerprint| save_to_file(&path, &named("Garden 2"), Some(&fingerprint)));
+        let on_disk = std::fs::read(&path);
+        restore();
+
+        let saved = saved_fingerprint(first.expect("a replaced Design is a successful save"));
+        // The next continuous save with that fingerprint writes, not conflicts,
+        // and reports the fingerprint of the bytes now on disk.
+        let next = saved_fingerprint(
+            second
+                .expect("the first save returned its fingerprint")
+                .expect("the next save succeeds"),
+        );
+        assert_ne!(next, saved);
+        assert_eq!(next, crate::design::fingerprint(&on_disk.unwrap()));
+    }
+
+    #[test]
+    fn saved_and_loaded_fingerprints_are_the_sha256_of_the_file_bytes() {
+        let dir = unique_dir("fingerprint");
+        let path = dir.join("garden.canopi");
+
+        let saved = saved_fingerprint(save_to_file(&path, &named("Garden"), None).unwrap());
+        let (loaded, loaded_fingerprint) = load_with_fingerprint(&path).unwrap();
+
+        let bytes = std::fs::read(&path).unwrap();
+        assert_eq!(saved, crate::design::fingerprint(&bytes));
+        assert_eq!(loaded_fingerprint, saved);
+        assert_eq!(saved.len(), 64);
+        assert!(
+            saved
+                .chars()
+                .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c))
+        );
+        assert_eq!(loaded.name, "Garden");
+    }
+
+    #[test]
+    fn a_save_expecting_the_current_fingerprint_writes_and_returns_the_next_one() {
+        let dir = unique_dir("fingerprint_match");
+        let path = dir.join("garden.canopi");
+        let first = saved_fingerprint(save_to_file(&path, &named("First"), None).unwrap());
+
+        let second =
+            saved_fingerprint(save_to_file(&path, &named("Second"), Some(&first)).unwrap());
+
+        assert_ne!(second, first);
+        assert_eq!(load_from_file(&path).unwrap().name, "Second");
+        let third = saved_fingerprint(save_to_file(&path, &named("Third"), Some(&second)).unwrap());
+        assert_eq!(load_with_fingerprint(&path).unwrap().1, third);
+        let entries = std::fs::read_dir(&dir).unwrap().count();
+        assert_eq!(entries, 1, "a save leaves only the Design file, no backup");
+    }
+
+    #[test]
+    fn a_save_after_an_outside_change_is_a_conflict_and_writes_nothing() {
+        let dir = unique_dir("fingerprint_conflict");
+        let path = dir.join("garden.canopi");
+        let opened = saved_fingerprint(save_to_file(&path, &named("Mine"), None).unwrap());
+        std::fs::write(&path, "changed by another program").unwrap();
+
+        let result = save_to_file(&path, &named("Mine, edited"), Some(&opened)).unwrap();
+
+        assert_eq!(
+            result,
+            SaveResult::Conflict {
+                current_fingerprint: Some(crate::design::fingerprint(
+                    b"changed by another program"
+                )),
+            }
+        );
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "changed by another program"
+        );
+    }
+
+    #[test]
+    fn a_save_expecting_a_deleted_file_is_a_conflict_and_does_not_recreate_it() {
+        let dir = unique_dir("fingerprint_deleted");
+        let path = dir.join("garden.canopi");
+        let opened = saved_fingerprint(save_to_file(&path, &named("Mine"), None).unwrap());
+        std::fs::remove_file(&path).unwrap();
+
+        let result = save_to_file(&path, &named("Mine"), Some(&opened)).unwrap();
+
+        assert_eq!(
+            result,
+            SaveResult::Conflict {
+                current_fingerprint: None
+            }
+        );
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn a_save_without_an_expected_fingerprint_overwrites_an_outside_change() {
+        let dir = unique_dir("fingerprint_overwrite");
+        let path = dir.join("garden.canopi");
+        std::fs::write(&path, "changed by another program").unwrap();
+
+        let fingerprint =
+            saved_fingerprint(save_to_file(&path, &named("Keep mine"), None).unwrap());
+
+        let (loaded, loaded_fingerprint) = load_with_fingerprint(&path).unwrap();
+        assert_eq!(loaded.name, "Keep mine");
+        assert_eq!(loaded_fingerprint, fingerprint);
+    }
+
+    #[test]
+    fn a_save_that_cannot_check_the_target_fails_without_writing() {
+        let dir = unique_dir("fingerprint_unreadable");
+        // A directory at the target cannot be read as a file.
+        let path = dir.join("garden.canopi");
+        std::fs::create_dir(&path).unwrap();
+
+        let result = save_to_file(&path, &named("Mine"), Some("0"));
+
+        assert!(result.is_err(), "{result:?}");
+        assert!(path.is_dir());
+        assert!(owned_sidecars(&dir, "tmp").is_empty());
     }
 }

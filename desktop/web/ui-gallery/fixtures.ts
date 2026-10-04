@@ -1,7 +1,8 @@
 import type { SpeciesDetail, SpeciesListItem } from '../src/types/species'
-import type { CanopiFile } from '../src/types/design'
+import type { CanopiFile, RichTextBlock, SavedView, Story } from '../src/types/design'
 import { createDefaultScenePersistedState } from '../src/canvas/runtime/scene'
-import { serializeScenePersistedState } from '../src/canvas/runtime/scene'
+import { createSceneGeoFrame, PLANT_SYMBOL_IDS, serializeScenePersistedState } from '../src/canvas/runtime/scene'
+import { PLANT_COLOR_PALETTE } from '../src/canvas/plant-colors'
 
 export const detail: SpeciesDetail = {
   "canonical_name": "Malus domestica",
@@ -173,6 +174,7 @@ const baseSpecies: SpeciesListItem = {
   "hardiness_zone_max": null,
   "growth_rate": null,
   "stratum": "high",
+  "habit": null,
   "climate_zones": [
     "temperate"
   ],
@@ -193,9 +195,92 @@ export const specimens = [
   ['Fragaria vesca', 'Wild strawberry', 'groundcover', '#C44230'],
 ] as const
 export const species: SpeciesListItem[] = specimens.map(([canonical_name, common_name]) => ({ ...baseSpecies, canonical_name, common_name }))
+/** Every symbol in close orchard rows (8 of each), neighbours always different, in the palette colours. */
+function symbolPlanting() {
+  const designed = PLANT_SYMBOL_IDS.slice(0, 29)
+  const columns = 16
+  return Array.from({ length: 8 * designed.length }, (_, index) => {
+    const row = Math.floor(index / columns)
+    const column = index % columns
+    const [canonicalName, commonName] = specimens[index % specimens.length]!
+    return {
+      kind: 'plant' as const, id: `planting-${index}`, canonicalName, commonName,
+      position: { x: column * .42 + (row % 2) * .21, y: row * .36 },
+      color: PLANT_COLOR_PALETTE[(index * 5) % PLANT_COLOR_PALETTE.length]!.hex,
+      symbol: designed[(index * 7) % designed.length]!,
+      stratum: null, canopySpreadM: .5, rotationDeg: null, scale: .5,
+      notes: null, plantedDate: null, quantity: null, locked: false,
+    }
+  })
+}
+
+/** A small drawn hedge (PNG) so a story step shows an embedded image offline. */
+const HEDGE_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABACAIAAABqVuVZAAABnklEQVR42u2avQ3CMBCFiZUBGAAxAjNQUVCwAS0lygjUVIiSlg0oqZiAggEoECUFI1BEQlFCQuz4fuy8J4ooSOD78i7ns51c768BVC8DBAAEQAAEQHqVio9gs1vUfpWdxIeXSJX5Bi6qSAkAskIjjokVkDMaQUwmLDoef0eXg7xEtXxO8ovj6MbmIxMcnfyazUfkDipFUnSBG52veHxkROjUxazwfWRE6ATEKIxWo5qPVhmqEZD3B1skUqJDaqKU0wWlnLJ1AZtrxFKswQU/K1f+ibBZ7e55B68RlXyNL2miehdzFRMUAAUISHDWE4yDrOodqVK13pblQt7Nt6/0bv09T42XTzHv/X1UgFTNd9ibVcalddL/wjxIDtDfB+tlvkNtVSNr/o7zHYZE5tj2IVrQ4nnNsWz7EEQS1b6Y93g4SyTj1rOnqJj35nG6Qx8gB0z9Oh/UnlSvT5gVtV9NqzfXh0vfm9W+txpxKMm2c/FBvM+P6s3hbAwHIcXCl4pFeyXZBAcBEAABEAABEAABEARAAARAAARAAARAAAQNPj3bsVHRU8u5AAAAAElFTkSuQmCC'
+
+const plain = (text: string, marks: { bold?: boolean; italic?: boolean; link?: string } = {}) => ({
+  text, bold: marks.bold ?? false, italic: marks.italic ?? false, link: marks.link ?? null,
+})
+
+function storyView(id: string, name: string, origin: { lon: number; lat: number }, offset: [number, number], zoom: number, species: string[], background: SavedView['visible_layers']['background'] = { kind: 'none' }): SavedView {
+  return {
+    id, name,
+    camera: { lon: origin.lon + offset[0], lat: origin.lat + offset[1], zoom, bearing: 0 },
+    visible_layers: {
+      background,
+      terrain: { contours: false, hillshade: false },
+      scene_layers: ['zones', 'water', 'plants', 'measurement-guides', 'annotations'],
+      site_data: [],
+    },
+    highlighted: { species, objects: [] },
+    title: null,
+    text: [],
+  }
+}
+
+/** Saved views and a four-step story over the fixture planting (StoryAuthor board). */
+function storyFixture(origin: { lon: number; lat: number }, long: boolean): { views: SavedView[]; stories: Story[] } {
+  const views = [
+    storyView('view-site', 'The site', origin, [0.00008, -0.00003], 21.2, []),
+    storyView('view-rows', 'Rows and strata', origin, [0.00005, -0.00002], 22, []),
+    // Satellite shows as "Satellite" in the step's tags; offline, its snapshot waits and reads without tiles.
+    storyView('view-hedges', 'Berry hedges', origin, [0.00013, -0.00004], 23, ['Fragaria vesca'], { kind: 'satellite' }),
+    storyView('view-year-one', 'Year one planting', origin, [0.00002, -0.00002], 22.5, ['Malus domestica']),
+  ]
+  const text = (first: string, rest: RichTextBlock[] = []): RichTextBlock[] => [{ kind: 'paragraph', spans: [plain(first)] }, ...rest]
+  const hedgesText: RichTextBlock[] = [
+    { kind: 'paragraph', spans: [
+      plain('Two hedges of '), plain('strawberry and hazel', { bold: true }),
+      plain(' run along the drip line of the fruit trees. They crop from '), plain('year two', { italic: true }),
+      plain(' and shelter the young trees from the west wind.'),
+    ] },
+    { kind: 'bullets', items: [
+      { spans: [plain('Mulch in autumn')] },
+      { spans: [plain('See the '), plain('planting notes', { link: 'https://example.org/hedges' })] },
+    ] },
+  ]
+  const steps = [
+    { id: 'step-site', view_id: 'view-site', title: 'The site', text: text('Where the orchard sits and how water moves across it.'), images: [] },
+    { id: 'step-rows', view_id: 'view-rows', title: 'Rows and strata', text: text('Six rows, from the apple canopy down to groundcover.'), images: [] },
+    {
+      id: 'step-hedges', view_id: 'view-hedges',
+      title: long ? 'Berry hedges along the northern drip line, with a particularly long title' : 'Berry hedges',
+      text: hedgesText,
+      images: [{ src: HEDGE_PNG, alt: 'The hedge in June, heavy with berries' }],
+    },
+    { id: 'step-year-one', view_id: 'view-year-one', title: 'Year one planting', text: text('What goes in this winter, and in what order.'), images: [] },
+  ]
+  return {
+    views,
+    stories: [
+      { id: 'story-visit', name: 'Orchard · client visit', steps },
+      { id: 'story-open-day', name: 'Open day', steps: [{ ...steps[0]!, id: 'step-open-site' }] },
+    ],
+  }
+}
+
 export function designFixture(state = 'populated'): CanopiFile {
   const scene = createDefaultScenePersistedState()
-  const plants = state === 'empty' ? [] : specimens.flatMap(([canonicalName, commonName], speciesIndex) =>
+  const plants = state === 'empty' || state === 'zone' ? [] : state === 'planting' ? symbolPlanting() : specimens.flatMap(([canonicalName, commonName], speciesIndex) =>
     Array.from({ length: speciesIndex === 0 ? 3 : 8 }, (_, i) => ({
       kind: 'plant' as const, id: `plant-${speciesIndex}-${i}`, canonicalName,
       commonName: state === 'long' ? `${commonName} — a particularly long local cultivar name` : commonName,
@@ -207,18 +292,25 @@ export function designFixture(state = 'populated'): CanopiFile {
   const activeSpecies = state === 'empty' ? [] : specimens.map(([canonicalName]) => canonicalName)
   return {
     ...serializeScenePersistedState({ ...scene, plants,
+      // `state=zone`: one rectangle drawn and never named.
+      zones: state === 'zone' ? [{
+        kind: 'zone' as const, id: 'zone-ee08f9f9-634f-4723-bbde-1200610562dc', name: null, locked: false, zoneType: 'rect',
+        rotationDeg: 0, fillColor: null, notes: null,
+        points: [{ x: 0, y: 0 }, { x: 12, y: 0 }, { x: 12, y: 10 }, { x: 0, y: 10 }],
+      }] : [],
       plantSpeciesColors: Object.fromEntries(specimens.map(([name, , , color]) => [name, color])),
       plantSpeciesSymbols: Object.fromEntries(specimens.map(([name, , symbol]) => [name, symbol])),
-    }, { now: new Date('2026-01-01T00:00:00Z') }),
+    }, createSceneGeoFrame(state === 'located'
+      ? { lon: 0.033854, lat: 48.220272 }
+      : { lon: 13, lat: 23 }), { now: new Date('2026-01-01T00:00:00Z') }),
     name: 'Orchard notebook',
-    spatial_frame: state === 'located' || state === 'overview-confirmed'
-      ? { anchor_longitude_deg: 0.033854, anchor_latitude_deg: 48.220272, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 118 } }
-      : { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
+    ...(state === 'empty' ? {} : storyFixture(state === 'located' ? { lon: 0.033854, lat: 48.220272 } : { lon: 13, lat: 23 }, state === 'long')),
     lidar: state === 'empty' ? null : {
       schema_version: 1,
       entries: [
         { kind: 'Source', id: 'lidar-ground', visible: true, opacity: 0.82, order: 0, style: null },
-        { kind: 'Analysis', id: 'lidar-slope', visible: true, opacity: 0.66, order: 1, style: null },
+        { kind: 'Derived', id: 'lidar-slope', visible: true, opacity: 0.66, order: 1, style: null },
+        { kind: 'Derived', id: 'lidar-slope-percent', visible: false, opacity: 0.66, order: 2, style: null },
       ],
     },
     budget_currency: 'EUR',
@@ -259,11 +351,62 @@ export function designFixture(state = 'populated'): CanopiFile {
     consortiums: [
       ...activeSpecies.map((canonicalName, index) => ({
         target: { kind: 'species' as const, canonical_name: canonicalName },
-        stratum: ['emergent', 'high', 'medium', 'low', 'unassigned', 'legacy-layer'][index]!,
+        stratum: ['emergent', 'high', 'medium', 'low', 'unassigned', 'unknown-stratum'][index]!,
         start_phase: Math.min(index, 3),
         end_phase: Math.min(6, index + 2),
       })),
       { target: { kind: 'species' as const, canonical_name: 'Absent retained species' }, stratum: 'high', start_phase: 0, end_phase: 6 },
     ],
   }
+}
+
+/**
+ * Species detail fixtures: a full catalog record for Apple (values as the plant DB serves
+ * them), French names for some species (the rest show the English fallback), and three
+ * photos for Apple drawn locally so the gallery stays offline.
+ */
+export const appleDetail: SpeciesDetail = {
+  ...detail,
+  common_name: 'Apple', family: 'Rosaceae', genus: 'Malus',
+  height_max_m: 15, width_max_m: 8, hardiness_zone_min: 3, hardiness_zone_max: 8,
+  growth_rate: 'Medium', is_annual: false, is_biennial: false, is_perennial: true,
+  deciduous_evergreen: 'Deciduous', habit: 'Tree', growth_form_type: 'Tree', woody: true,
+  bloom_period: 'Mid Spring', flower_color: 'White', pollinators: 'Insects',
+  tolerates_full_sun: true, tolerates_semi_shade: true, tolerates_full_shade: false, frost_tender: false,
+  drought_tolerance: 'Medium', soil_ph_min: 5, soil_ph_max: 7.5, well_drained: true, heavy_clay: true,
+  tolerates_light_soil: true, tolerates_medium_soil: true, tolerates_heavy_soil: true,
+  fertility_requirement: 'Medium', moisture_use: 'Medium', root_depth_min_cm: 243.84,
+  stratum: 'high', succession_stage: 'secondary_ii', nitrogen_fixer: false, attracts_wildlife: true,
+  edibility_rating: 5, medicinal_rating: 2, other_uses_rating: 4,
+  uses: [
+    { use_category: 'Edible fruit', use_description: 'Fruit eaten raw, cooked or dried; juice made into cider.' },
+    { use_category: 'Medicinal', use_description: 'The fruit is mildly laxative.' },
+    { use_category: 'Wood', use_description: 'Hard, fine-grained wood used for turnery and firewood.' },
+  ],
+  propagated_by_seed: true, propagated_by_cuttings: false,
+  fruit_type: 'Pome', seed_mass_mg: 22.36,
+  biogeographic_status: 'Introduced', introduced_distribution: 'Alabama, Arkansas, Armenia, Australia, British Columbia, California, Canada',
+  climate_zones: 'Continental, Temperate, Subtropical, Arid, Mediterranean',
+}
+
+export const frenchNames: Readonly<Record<string, string>> = {
+  'Malus domestica': 'Pommier cultivé',
+  'Lavandula angustifolia': 'Lavande vraie',
+  'Corylus avellana': 'Noisetier',
+}
+
+export const applePhotos = [
+  'http://commons.wikimedia.org/wiki/Special:FilePath/Tree%20with%20red%20apples.jpg',
+  'https://inaturalist-open-data.s3.amazonaws.com/photos/471845/medium.jpg',
+  'https://inaturalist-open-data.s3.amazonaws.com/photos/585657/medium.jpg',
+]
+
+/** A drawn stand-in for a cached photo: sky, grass and one tree, tinted per photo. */
+export function drawnPhoto(url: string): string {
+  const hue = [95, 120, 70][Math.max(0, applePhotos.indexOf(url))] ?? 95
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400"><defs><linearGradient id="s" x2="0" y2="1"><stop offset="0" stop-color="hsl(205 60% 78%)"/><stop offset="1" stop-color="hsl(45 60% 90%)"/></linearGradient></defs>`
+    + `<rect width="600" height="400" fill="url(#s)"/><rect y="290" width="600" height="110" fill="hsl(${hue} 35% 42%)"/>`
+    + `<rect x="285" y="200" width="30" height="110" fill="hsl(25 35% 30%)"/><circle cx="300" cy="170" r="110" fill="hsl(${hue} 40% 35%)"/>`
+    + `<circle cx="260" cy="150" r="12" fill="hsl(5 70% 48%)"/><circle cx="330" cy="190" r="12" fill="hsl(5 70% 48%)"/><circle cx="300" cy="120" r="12" fill="hsl(5 70% 48%)"/></svg>`
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
 }

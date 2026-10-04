@@ -1,0 +1,113 @@
+import { signal } from '@preact/signals'
+import { render } from 'preact'
+import { act } from 'preact/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setCurrentCanvasSession } from '../../canvas/session'
+import type { ViewScreen } from '../../canvas/runtime/view/types'
+import type { SavedView } from '../../types/design'
+import { createTestCanvasQuerySurface } from '../../__tests__/support/canvas-query-surface'
+import { createTestCanvasRuntimeSurfaces } from '../../__tests__/support/canvas-runtime-surfaces'
+
+const capture = vi.hoisted(() => vi.fn(async () => ({ blob: new Blob(['webp'], { type: 'image/webp' }) })))
+
+vi.mock('./snapshot', async (importOriginal) => ({
+  ...await importOriginal<object>(),
+  captureSavedViewSnapshot: capture,
+}))
+
+const { useSavedViewThumbnail } = await import('./thumbnails')
+
+const VIEW: SavedView = {
+  id: 'hedges',
+  name: 'Hedges',
+  camera: { lon: 13, lat: 23, zoom: 19, bearing: 30 },
+  visible_layers: {
+    background: { kind: 'none' },
+    terrain: { contours: false, hillshade: false },
+    scene_layers: ['plants'],
+    site_data: [],
+  },
+  highlighted: { species: [], objects: [] },
+  title: null,
+  text: [],
+}
+
+/** A workspace whose live screen a test resizes, and whose settled frame it settles. */
+function workspace(width: number, height: number) {
+  const queries = createTestCanvasQuerySurface()
+  const base = queries.view
+  let screen: ViewScreen = { width, height, devicePixelRatio: 1 }
+  const settledRevision = signal(0)
+  const view = {
+    ...base,
+    settledRevision,
+    captureView: () => ({ ...base.captureView(), screen }),
+  }
+  setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries: { ...queries, view } }))
+  return {
+    resize(nextWidth: number, nextHeight: number) {
+      screen = { width: nextWidth, height: nextHeight, devicePixelRatio: 1 }
+    },
+    async settle() {
+      await act(() => { settledRevision.value += 1 })
+    },
+  }
+}
+
+function Thumbnail({ view }: { view: SavedView }) {
+  return <span>{useSavedViewThumbnail(view).status}</span>
+}
+
+let container: HTMLElement
+
+beforeEach(() => {
+  vi.useFakeTimers()
+  vi.stubGlobal('URL', Object.assign(Object.create(URL), { createObjectURL: () => 'blob:thumb', revokeObjectURL: () => {} }))
+  container = document.createElement('div')
+  capture.mockClear()
+})
+
+afterEach(() => {
+  render(null, container)
+  setCurrentCanvasSession(null)
+  vi.unstubAllGlobals()
+  vi.useRealTimers()
+})
+
+describe('saved view thumbnails in the workspace', () => {
+  it('without their framed area, are drawn again once the workspace size settles, since each is fitted to it (spec §4.10)', async () => {
+    const host = workspace(1600, 900)
+    await act(() => { render(<Thumbnail view={VIEW} />, container) })
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(capture).toHaveBeenCalledTimes(1)
+
+    // A pan that settles at the same size draws nothing.
+    await host.settle()
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(capture).toHaveBeenCalledTimes(1)
+
+    // A drag-resize draws nothing until it settles, then draws once.
+    host.resize(1200, 700)
+    await vi.advanceTimersByTimeAsync(1_000)
+    host.resize(800, 450)
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(capture).toHaveBeenCalledTimes(1)
+    await host.settle()
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(capture).toHaveBeenCalledTimes(2)
+  })
+
+  it('with their framed area, are never drawn again for a workspace size change', async () => {
+    // The image shows the ground the view framed, which no window changes (spec §4.10).
+    const framed: SavedView = { ...VIEW, camera: { ...VIEW.camera, ground_size_m: { width: 400, height: 250 } } }
+    const host = workspace(1600, 900)
+    await act(() => { render(<Thumbnail view={framed} />, container) })
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(capture).toHaveBeenCalledTimes(1)
+
+    host.resize(800, 450)
+    await host.settle()
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(capture).toHaveBeenCalledTimes(1)
+  })
+})

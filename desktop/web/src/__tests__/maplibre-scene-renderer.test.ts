@@ -1,35 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
-import { RendererHost } from '../canvas/runtime/renderers/host'
 import {
   MAPLIBRE_SCENE_RENDERER_ID,
   MapLibreSceneRendererBridge,
   type MapLibreSceneRenderTarget,
 } from '../canvas/runtime/renderers/maplibre-scene'
-import type {
-  SceneRendererContext,
-  SceneRendererDefinition,
-  SceneRendererInstance,
-  SceneRendererSnapshot,
-} from '../canvas/runtime/renderers/scene-types'
-import type { RendererCapabilities } from '../canvas/runtime/renderers/types'
+import type { SceneChangeSet, SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
 import { createSharedMapSceneRendererComposition } from '../maplibre/shared-scene-renderer'
 import type { SharedMapSceneMap, SharedPixiRenderer } from '../maplibre/shared-scene-layer'
-import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
+import { createTestRendererView, createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
+import { createTestView } from './support/test-view'
 
-const TEST_CAPABILITIES: RendererCapabilities = {
-  domCanvas: true,
-  canvas2d: true,
-  offscreenCanvas: false,
-  offscreenCanvas2d: false,
-  webgl: true,
-  webgl2: true,
-  webgpu: false,
-  imageBitmap: false,
-  createImageBitmap: false,
-  worker: false,
-  devicePixelRatio: 2,
-  prefersReducedMotion: false,
-}
+const WHOLE_SCENE: SceneChangeSet = { scene: true, selection: true, hover: [], style: true, labels: true }
 
 function createTarget() {
   const target = {
@@ -45,15 +26,14 @@ describe('MapLibre scene renderer bridge', () => {
     const container = document.createElement('div')
     const instance = await bridge.createRenderer().initialize(
       { container },
-      { capabilities: TEST_CAPABILITIES, backendId: MAPLIBRE_SCENE_RENDERER_ID },
     )
     const first = createTestSceneRendererSnapshot()
     const latest = createTestSceneRendererSnapshot({
-      viewport: { x: 30, y: 40, scale: 5 },
+      speciesFocus: { canonicalName: 'Malus domestica' },
     })
 
-    instance.renderScene(first)
-    instance.renderScene(latest)
+    instance.syncScene(first, WHOLE_SCENE)
+    instance.syncScene(latest, WHOLE_SCENE)
     const target = createTarget()
     bridge.connect(target)
 
@@ -68,12 +48,11 @@ describe('MapLibre scene renderer bridge', () => {
     const requestFrame = vi.spyOn(window, 'requestAnimationFrame')
     const instance = await bridge.createRenderer().initialize(
       { container: document.createElement('div') },
-      { capabilities: TEST_CAPABILITIES, backendId: MAPLIBRE_SCENE_RENDERER_ID },
     )
     const snapshot = createTestSceneRendererSnapshot()
 
-    instance.renderScene(snapshot)
-    instance.setViewport({ x: 80, y: 90, scale: 10 })
+    instance.syncScene(snapshot, WHOLE_SCENE)
+    instance.setView(createTestRendererView({ x: 80, y: 90, scale: 10 }))
 
     expect(target.setSnapshot).toHaveBeenCalledExactlyOnceWith(snapshot)
     expect(target.requestRender).toHaveBeenCalledOnce()
@@ -81,7 +60,7 @@ describe('MapLibre scene renderer bridge', () => {
     requestFrame.mockRestore()
   })
 
-  it('ignores stale disconnect and failure notifications after target replacement', async () => {
+  it('ignores a stale disconnect after target replacement', async () => {
     const bridge = new MapLibreSceneRendererBridge()
     const firstTarget = createTarget()
     const firstConnection = bridge.connect(firstTarget)
@@ -89,64 +68,28 @@ describe('MapLibre scene renderer bridge', () => {
     bridge.connect(secondTarget)
     const instance = await bridge.createRenderer().initialize(
       { container: document.createElement('div') },
-      { capabilities: TEST_CAPABILITIES, backendId: MAPLIBRE_SCENE_RENDERER_ID },
     )
 
-    firstConnection.fail(new Error('stale map failed'))
     firstConnection.disconnect()
     const snapshot = createTestSceneRendererSnapshot()
-    instance.renderScene(snapshot)
+    instance.syncScene(snapshot, WHOLE_SCENE)
 
     expect(firstTarget.setSnapshot).not.toHaveBeenCalled()
     expect(secondTarget.setSnapshot).toHaveBeenCalledExactlyOnceWith(snapshot)
   })
 
-  it('surfaces an active target failure through RendererHost failover', async () => {
-    const bridge = new MapLibreSceneRendererBridge()
-    const target = createTarget()
-    const connection = bridge.connect(target)
-    const fallbackRenderScene = vi.fn()
-    const fallbackDispose = vi.fn()
-    const fallback: SceneRendererDefinition = {
-      id: 'canvas2d',
-      initialize: async (): Promise<SceneRendererInstance> => ({
-        id: 'canvas2d',
-        dispose: fallbackDispose,
-        resize: vi.fn(),
-        renderScene: fallbackRenderScene,
-        setViewport: vi.fn(),
-      }),
-    }
-    const host = new RendererHost<SceneRendererContext, SceneRendererInstance>({
-      capabilities: TEST_CAPABILITIES,
-      backends: [bridge.createRenderer(), fallback],
-    })
-    await host.initialize({ container: document.createElement('div') })
-    connection.fail(new Error('map context was lost'))
-    const snapshot = createTestSceneRendererSnapshot()
+  it('offers exactly one renderer with no selection or fallback metadata', () => {
+    const composition = createSharedMapSceneRendererComposition()
 
-    await host.run((renderer) => renderer.renderScene(snapshot))
-
-    expect(host.snapshot.activeBackendId).toBe('canvas2d')
-    expect(host.snapshot.failedBackendIds).toEqual([MAPLIBRE_SCENE_RENDERER_ID])
-    expect(fallbackRenderScene).toHaveBeenCalledExactlyOnceWith(snapshot)
-    expect(fallbackDispose).not.toHaveBeenCalled()
+    expect(composition.renderer.id).toBe(MAPLIBRE_SCENE_RENDERER_ID)
+    expect(MAPLIBRE_SCENE_RENDERER_ID).toBe('maplibre-pixi')
+    expect(Object.keys(composition.renderer).sort()).toEqual(['id', 'initialize'])
+    expect(Object.keys(composition).sort()).toEqual(['createLayer', 'renderer'])
   })
 
-  it('composes custom-layer failure into RendererHost failover', async () => {
+  it('reports custom-layer failure to the layer owner instead of swapping renderers', async () => {
     const composition = createSharedMapSceneRendererComposition()
-    const fallbackRenderScene = vi.fn()
-    const fallback: SceneRendererDefinition = {
-      id: 'canvas2d',
-      initialize: async (): Promise<SceneRendererInstance> => ({
-        id: 'canvas2d', dispose: vi.fn(), resize: vi.fn(),
-        renderScene: fallbackRenderScene, setViewport: vi.fn(),
-      }),
-    }
-    const host = new RendererHost<SceneRendererContext, SceneRendererInstance>({
-      capabilities: TEST_CAPABILITIES,
-      backends: [composition.renderer, fallback],
-    })
+    const onFailure = vi.fn()
     const canvas = document.createElement('canvas')
     Object.defineProperties(canvas, {
       clientWidth: { value: 200 }, clientHeight: { value: 100 },
@@ -154,92 +97,35 @@ describe('MapLibre scene renderer bridge', () => {
     })
     const map = {
       getCanvas: () => canvas,
-      getPitch: () => 0,
       triggerRepaint: vi.fn(),
-      project: vi.fn()
-        .mockReturnValueOnce({ x: 40, y: 30 })
-        .mockReturnValueOnce({ x: 44, y: 30 })
-        .mockReturnValueOnce({ x: 40, y: 34 }),
     } satisfies SharedMapSceneMap
     const renderer: SharedPixiRenderer = {
       init: vi.fn(async () => {}), render: vi.fn(), resize: vi.fn(), resetState: vi.fn(),
       destroy: vi.fn(), context: { extensions: { loseContext: { loseContext: vi.fn() } } },
     }
     const layer = composition.createLayer({
-      id: 'design', anchor: { lat: 0, lon: 0 }, northBearingDeg: 0,
+      id: 'design', onFailure,
+      frames: createTestView({ screen: { width: 200, height: 100, devicePixelRatio: 2 }, viewport: { x: 40, y: 30, scale: 4 } }).frames,
       createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
       createPresentation: () => ({
-        dispose() {}, resize() {}, setViewport() {},
-        renderScene() { throw new Error('shared scene failed') },
+        dispose() {}, resize() {}, setView() {}, setDraft() {},
+        syncScene() { throw new Error('shared scene failed') },
       }),
     })
     const gl = {} as WebGL2RenderingContext
     await layer.initialize(map, gl)
     layer.layer.onAdd!(map as never, gl)
-    await host.initialize({ container: document.createElement('div') })
+    const active = await composition.renderer.initialize({ container: document.createElement('div') })
     const snapshot = createTestSceneRendererSnapshot()
-    await host.run((active) => active.renderScene(snapshot))
+    active.syncScene(snapshot, WHOLE_SCENE)
     layer.layer.render(gl, {} as never)
 
-    await host.run((active) => active.renderScene(snapshot))
-
-    expect(host.snapshot.activeBackendId).toBe('canvas2d')
-    expect(fallbackRenderScene).toHaveBeenCalledExactlyOnceWith(snapshot)
+    expect(onFailure).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ message: 'shared scene failed' }))
+    // The renderer keeps publishing; the workspace coordinator owns unmounting it.
+    expect(() => active.syncScene(snapshot, WHOLE_SCENE)).not.toThrow()
     await layer.dispose({ mapWillBeRemoved: true })
-    await host.dispose()
-  })
-
-  it('surfaces map construction failure before layer initialization', async () => {
-    const composition = createSharedMapSceneRendererComposition()
-    const fallbackRenderScene = vi.fn()
-    const host = new RendererHost<SceneRendererContext, SceneRendererInstance>({
-      capabilities: TEST_CAPABILITIES,
-      backends: [composition.renderer, {
-        id: 'canvas2d',
-        initialize: async () => ({
-          id: 'canvas2d', dispose: vi.fn(), resize: vi.fn(),
-          renderScene: fallbackRenderScene, setViewport: vi.fn(),
-        }),
-      }],
-    })
-    const layer = composition.createLayer({
-      id: 'design', anchor: { lat: 0, lon: 0 }, northBearingDeg: 0,
-    })
-    await host.initialize({ container: document.createElement('div') })
-    composition.failActiveLayer(new Error('MapLibre failed to start'))
-    const snapshot = createTestSceneRendererSnapshot()
-
-    await host.run((active) => active.renderScene(snapshot))
-
-    expect(host.snapshot.activeBackendId).toBe('canvas2d')
-    expect(fallbackRenderScene).toHaveBeenCalledExactlyOnceWith(snapshot)
-    await layer.dispose({ mapWillBeRemoved: true })
-    await host.dispose()
-  })
-
-  it('retains an admission failure that happens before any layer target connects', async () => {
-    const composition = createSharedMapSceneRendererComposition()
-    const fallbackRenderScene = vi.fn()
-    const host = new RendererHost<SceneRendererContext, SceneRendererInstance>({
-      capabilities: TEST_CAPABILITIES,
-      backends: [composition.renderer, {
-        id: 'canvas2d',
-        initialize: async () => ({
-          id: 'canvas2d', dispose: vi.fn(), resize: vi.fn(),
-          renderScene: fallbackRenderScene, setViewport: vi.fn(),
-        }),
-      }],
-    })
-    composition.failActiveLayer(new Error('WebGL2 context unavailable'))
-    await host.initialize({ container: document.createElement('div') })
-    const snapshot = createTestSceneRendererSnapshot()
-
-    await host.run((active) => active.renderScene(snapshot))
-
-    expect(host.snapshot.activeBackendId).toBe('canvas2d')
-    expect(fallbackRenderScene).toHaveBeenCalledExactlyOnceWith(snapshot)
-    await host.dispose()
+    await active.dispose()
   })
 
   it('unregisters runtime ownership without disposing the map-owned target', async () => {
@@ -249,9 +135,8 @@ describe('MapLibre scene renderer bridge', () => {
     bridge.connect(target)
     const instance = await bridge.createRenderer().initialize(
       { container: document.createElement('div') },
-      { capabilities: TEST_CAPABILITIES, backendId: MAPLIBRE_SCENE_RENDERER_ID },
     )
-    instance.renderScene(createTestSceneRendererSnapshot())
+    instance.syncScene(createTestSceneRendererSnapshot(), WHOLE_SCENE)
 
     await instance.dispose()
     const replacement = createTarget()

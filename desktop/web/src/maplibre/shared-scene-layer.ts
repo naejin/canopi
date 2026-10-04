@@ -1,59 +1,97 @@
-import { Container, Text, WebGLRenderer } from 'pixi.js'
+// Production CSP rejects Pixi's generated functions; its shim avoids eval.
+import { logMapError } from './redact-credentials'
+import 'pixi.js/unsafe-eval'
+// The one extension the layer registers itself (skipExtensionImports leaves it out): the plant
+// layer's opacity and species dim and the placement ghosts draw through an AlphaFilter.
+import 'pixi.js/filters'
+import { Container, Text, Ticker, WebGLRenderer, type WebGLOptions } from 'pixi.js'
 import type { CustomLayerInterface, CustomRenderMethodInput } from 'maplibre-gl'
 import { createPixiScenePresentation, type PixiScenePresentation } from '../canvas/runtime/renderers/pixi-scene'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
-import { deriveSharedMapSceneViewport, type SharedMapProjector } from './scene-camera-transform'
+import type { DraftPresentation } from '../canvas/runtime/tools/draft'
+import type { ViewFrameSource, ViewTransform } from '../canvas/runtime/view/types'
 
 /** The one production custom layer which all map-owned raster bands sit below. */
 export const MAPLIBRE_SHARED_SCENE_LAYER_ID = 'canopi-shared-scene'
 
-export interface SharedMapSceneMap extends SharedMapProjector {
+export interface SharedMapSceneMap {
   getCanvas(): HTMLCanvasElement
-  getPitch(): number
   triggerRepaint(): void
 }
 
+/** Pixi's real renderer options, so the layer's choices are checked against them. */
+export type SharedPixiRendererInitOptions = Partial<WebGLOptions>
+
 export interface SharedPixiRenderer {
-  init(options: {
-    readonly canvas: HTMLCanvasElement
-    readonly context: WebGL2RenderingContext
-    readonly width: number
-    readonly height: number
-    readonly resolution: number
-    readonly autoDensity: false
-    readonly antialias: true
-    readonly backgroundAlpha: 0
-    readonly clearBeforeRender: false
-    readonly premultipliedAlpha: true
-  }): Promise<void>
+  init(options: SharedPixiRendererInitOptions): Promise<void>
   render(options: { readonly container: Container; readonly clear: false }): void
   resize(width: number, height: number, resolution: number): void
   resetState(): void
   destroy(options: { readonly removeView: false }): void
   readonly context: { readonly extensions: { loseContext?: { loseContext(): void } } }
+  /** Pixi's event system, which `init` installs on the canvas; the layer detaches it. */
+  readonly events?: { setTargetElement(element: HTMLElement | null): void }
 }
 
-export interface SharedMapSceneDiagnostics {
+export interface SharedPixiRendererView {
+  readonly canvas: HTMLCanvasElement
+  readonly context: WebGL2RenderingContext
+  readonly width: number
+  readonly height: number
+  readonly resolution: number
+}
+
+/**
+ * Pixi draws inside MapLibre's context and frame loop (ADR 0004): it imports
+ * no extensions but the filters (registered above), clears nothing, collects no GPU resources on a schedule of
+ * its own, and its containers take no events. Pixi still installs its
+ * EventSystem on the canvas and its scheduler on `Ticker.system` during
+ * `init`; `detachPixiFromHost` undoes both right after.
+ */
+export function sharedPixiRendererInitOptions(view: SharedPixiRendererView): SharedPixiRendererInitOptions {
+  return {
+    ...view,
+    autoDensity: false,
+    antialias: true,
+    backgroundAlpha: 0,
+    clearBeforeRender: false,
+    premultipliedAlpha: true,
+    skipExtensionImports: true,
+    eventMode: 'none',
+    eventFeatures: { move: false, globalMove: false, click: false, wheel: false },
+    textureGCActive: false,
+    renderableGCActive: false,
+  }
+}
+
+/**
+ * Canvas input belongs to `DomInputSource`, the only DOM listener on the map
+ * (ADR 0017), and MapLibre runs the only frame loop. Pixi's canvas listeners
+ * go, and `Ticker.system`, which Pixi's scheduler started, stops; nothing of
+ * ours listens on it.
+ */
+function detachPixiFromHost(renderer: SharedPixiRenderer): void {
+  renderer.events?.setTargetElement(null)
+  Ticker.system.stop()
+}
+
+interface SharedMapSceneDiagnostics {
   readonly phase: 'new' | 'initializing' | 'initialized' | 'attached' | 'detached' | 'disposing' | 'disposed' | 'failed'
   readonly initializeCount: number
   readonly renderCount: number
   readonly sceneSyncCount: number
-  readonly viewportSyncCount: number
-  readonly resizeCount: number
-  readonly repaintCount: number
-  readonly skippedRenderCount: number
-  readonly resetStateCount: number
   readonly disposeCount: number
-  readonly disposeInRenderCount: number
-  readonly recentRenderDurationsMs: readonly number[]
   readonly lastFailure: string | null
 }
 
 export interface SharedMapSceneLayerOptions {
   readonly id: string
-  readonly anchor: { readonly lat: number; readonly lon: number }
-  readonly northBearingDeg: number
-  readonly maximumWorldExtentMeters?: number
+  /**
+   * The camera's frames: the runtime's host for the workspace map, the snapshot map's own driver. The layer reads the latest
+   * frame in `render` and never derives a transform from the map (spec §1.5). It presents a view whenever the frame's view is a new
+   * object, never by revision: the snapshot map's driver keeps none, so all its frames carry revision 0.
+   */
+  readonly frames: Pick<ViewFrameSource, 'viewFrame'>
   readonly onFailure?: (error: Error) => void
   readonly createRenderer?: () => SharedPixiRenderer
   readonly createStage?: () => Container
@@ -61,6 +99,7 @@ export interface SharedMapSceneLayerOptions {
     readonly stage: Container
     readonly createText: () => Text
     readonly viewSize: { width: number; height: number }
+    readonly requestRepaint: () => void
   }) => PixiScenePresentation
 }
 
@@ -77,9 +116,17 @@ export interface SharedMapSceneLayer {
   dispose(options?: { readonly mapWillBeRemoved?: boolean }): Promise<void>
 }
 
+/**
+ * What the MapLibre scene bridge forwards to the layer for the Pixi draft layer (0B): the ToolHost's draft. The layer
+ * keeps the latest until its presentation exists, and drops it on dispose.
+ */
+export interface SharedMapSceneDraftSink {
+  setDraft(draft: DraftPresentation | null): void
+}
+
 type Phase = SharedMapSceneDiagnostics['phase']
 
-export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): SharedMapSceneLayer {
+export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): SharedMapSceneLayer & SharedMapSceneDraftSink {
   let phase: Phase = 'new'
   let map: SharedMapSceneMap | null = null
   let context: WebGL2RenderingContext | null = null
@@ -89,7 +136,9 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
   let presentation: PixiScenePresentation | null = null
   let pendingSnapshot: SceneRendererSnapshot | null = null
   let renderedSnapshot: SceneRendererSnapshot | null = null
-  let presentedViewport: SceneRendererSnapshot['viewport'] | null = null
+  /** The view last given to the presentation, compared by identity (see `frames`). */
+  let presentedView: ViewTransform | null = null
+  let draft: DraftPresentation | null = null
   let initializePromise: Promise<void> | null = null
   let disposePromise: Promise<void> | null = null
   let resolveDispose: (() => void) | null = null
@@ -101,14 +150,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
   let initializeCount = 0
   let renderCount = 0
   let sceneSyncCount = 0
-  let viewportSyncCount = 0
-  let resizeCount = 0
-  let repaintCount = 0
-  let skippedRenderCount = 0
-  let resetStateCount = 0
   let disposeCount = 0
-  let disposeInRenderCount = 0
-  const recentRenderDurationsMs: number[] = []
   let lastFailure: string | null = null
   let failureReported = false
 
@@ -117,14 +159,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
     initializeCount,
     renderCount,
     sceneSyncCount,
-    viewportSyncCount,
-    resizeCount,
-    repaintCount,
-    skippedRenderCount,
-    resetStateCount,
     disposeCount,
-    disposeInRenderCount,
-    recentRenderDurationsMs: [...recentRenderDurationsMs],
     lastFailure,
   })
 
@@ -137,7 +172,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
     try {
       options.onFailure?.(error)
     } catch (observerError) {
-      console.error('Shared map scene failure observer failed:', observerError)
+      logMapError('Shared map scene failure observer failed:', observerError)
     }
   }
 
@@ -165,64 +200,38 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
       phase = disposeRequested ? 'disposing' : 'detached'
     },
     render(gl: WebGL2RenderingContext, _input: CustomRenderMethodInput) {
-      if (gl !== context || !renderer) {
-        skippedRenderCount += 1
-        return
-      }
+      if (gl !== context || !renderer) return
       if (disposeRequested) {
-        disposeInRenderCount += 1
         destroyOwnedResources()
         finishDispose()
         return
       }
-      if (phase !== 'attached' || !map || !stage || !presentation || (!pendingSnapshot && !renderedSnapshot)) {
-        skippedRenderCount += 1
-        return
-      }
+      if (phase !== 'attached' || !map || !stage || !presentation || (!pendingSnapshot && !renderedSnapshot)) return
       const nextSize = syncMapLibreOwnedSize(canvas, renderer, rendererSize)
       if (!nextSize) {
-        skippedRenderCount += 1
         fail('MapLibre canvas backing size changed outside the shared renderer contract.')
         return
       }
-      const sizeChanged = !sameRendererSize(rendererSize, nextSize)
-      if (sizeChanged) resizeCount += 1
       rendererSize = nextSize
-      const transform = deriveSharedMapSceneViewport({
-        project: point => map!.project(point),
-        anchor: options.anchor,
-        northBearingDeg: options.northBearingDeg,
-        pitchDeg: map.getPitch(),
-        maximumWorldExtentMeters: options.maximumWorldExtentMeters ?? 10_000,
-      })
-      if (!transform.accepted) {
-        skippedRenderCount += 1
-        fail(`Shared map scene cannot render: ${transform.reason}.`)
-        return
-      }
+      // The camera published this frame before MapLibre drew (its driver reads the map on 'move'); a resize publishes one too.
+      const { view } = options.frames.viewFrame.peek()
       try {
-        const startedAt = performance.now()
         renderer.resetState()
-        resetStateCount += 1
         presentation.resize(rendererSize.width, rendererSize.height)
+        if (view !== presentedView) {
+          presentation.setView(view)
+          presentedView = view
+        }
         if (pendingSnapshot) {
           renderedSnapshot = pendingSnapshot
           pendingSnapshot = null
-          presentation.renderScene({ ...renderedSnapshot, viewport: transform.viewport })
-          presentedViewport = transform.viewport
+          presentation.syncScene(renderedSnapshot)
           sceneSyncCount += 1
-        } else if (sizeChanged || !sameViewport(presentedViewport, transform.viewport)) {
-          presentation.setViewport(transform.viewport)
-          presentedViewport = transform.viewport
-          viewportSyncCount += 1
         }
         renderer.render({ container: stage, clear: false })
         renderCount += 1
-        recentRenderDurationsMs.push(performance.now() - startedAt)
-        if (recentRenderDurationsMs.length > 512) recentRenderDurationsMs.shift()
       } catch (error) {
         fail(error instanceof Error ? error : 'Shared map scene rendering failed.')
-        skippedRenderCount += 1
       }
     },
   } satisfies CustomLayerInterface
@@ -246,30 +255,33 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
       }
       phase = 'initializing'
       initializeCount += 1
-      const nextRenderer = (options.createRenderer ?? (() => new WebGLRenderer() as unknown as SharedPixiRenderer))()
+      const nextRenderer = (options.createRenderer ?? (() => new WebGLRenderer()))()
       renderer = nextRenderer
       const initialBackingSize = { width: canvas.width, height: canvas.height }
-      initializePromise = nextRenderer.init({
+      initializePromise = nextRenderer.init(sharedPixiRendererInitOptions({
         canvas,
         context: gl,
         width: size.width,
         height: size.height,
         resolution: size.resolution,
-        autoDensity: false,
-        antialias: true,
-        backgroundAlpha: 0,
-        clearBeforeRender: false,
-        premultipliedAlpha: true,
-      }).then(() => {
+      })).then(() => {
+        detachPixiFromHost(nextRenderer)
         if (canvas?.width !== initialBackingSize.width || canvas.height !== initialBackingSize.height) {
           throw new Error('Pixi initialization changed MapLibre canvas backing dimensions.')
         }
         rendererSize = size
         if (disposeRequested) return
         stage = (options.createStage ?? (() => new Container()))()
-        presentation = (options.createPresentation ?? createDefaultPresentation)(
-          { stage, createText: () => new Text({ resolution: size.resolution * 2 }), viewSize: { width: size.width, height: size.height } },
+        presentation = (options.createPresentation ?? createPixiScenePresentation)(
+          {
+            stage,
+            createText: () => new Text({ resolution: size.resolution * 2 }),
+            viewSize: { width: size.width, height: size.height },
+            requestRepaint,
+          },
         )
+        // A draft set while the layer initialized is still live.
+        if (draft) presentation.setDraft(draft)
         phase = 'initialized'
       }).catch((error: unknown) => {
         fail(error instanceof Error ? error : 'Shared map scene initialization failed.')
@@ -284,6 +296,12 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
     },
     requestRender() {
       if (phase === 'disposed') return
+      requestRepaint()
+    },
+    setDraft(nextDraft) {
+      if (phase === 'disposed') return
+      draft = nextDraft
+      presentation?.setDraft(nextDraft)
       requestRepaint()
     },
     dispose(disposeOptions = {}) {
@@ -328,7 +346,6 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
   function requestRepaint(): void {
     if (!map) return
     map.triggerRepaint()
-    repaintCount += 1
   }
 
   function destroyOwnedResources(): void {
@@ -353,7 +370,8 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
     renderer = null
     pendingSnapshot = null
     renderedSnapshot = null
-    presentedViewport = null
+    presentedView = null
+    draft = null
     map = null
     context = null
     canvas = null
@@ -362,21 +380,6 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
     resolveDispose = null
     rejectDispose = null
   }
-}
-
-function sameViewport(
-  left: SceneRendererSnapshot['viewport'] | null,
-  right: SceneRendererSnapshot['viewport'],
-): boolean {
-  return left?.x === right.x && left.y === right.y && left.scale === right.scale
-}
-
-function createDefaultPresentation(input: {
-  readonly stage: Container
-  readonly createText: () => Text
-  readonly viewSize: { width: number; height: number }
-}): PixiScenePresentation {
-  return createPixiScenePresentation({ ...input, requestDraw: () => {} })
 }
 
 function getMapLibreCanvasSize(canvas: HTMLCanvasElement): { width: number; height: number; resolution: number } | null {

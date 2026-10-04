@@ -1,9 +1,15 @@
-import type { CanopiDesignIngestionErrorKind } from '../../generated/canopi-design-format'
+import {
+  CURRENT_CANOPI_FILE_VERSION,
+  type CanopiDesignIngestionErrorKind,
+} from '../../generated/canopi-design-format'
+import type { DesignLoadFailure, DesignLoadFailureKind } from '../../types/design'
 
 export class CanopiDesignIngestionError extends Error {
   constructor(
     readonly kind: CanopiDesignIngestionErrorKind,
     message: string,
+    /** The file's version when `kind` is `unsupported_version`. */
+    readonly unsupportedVersion: number | null = null,
   ) {
     super(message)
     this.name = 'CanopiDesignIngestionError'
@@ -16,4 +22,62 @@ export function asCanopiDesignIngestionError(error: unknown): CanopiDesignIngest
     'invalid_document',
     error instanceof Error ? error.message : String(error),
   )
+}
+
+const DESIGN_LOAD_FAILURE_KINDS: readonly DesignLoadFailureKind[] = [
+  'missing',
+  'unreadable',
+  'too_large',
+  'invalid_json',
+  'older_version',
+  'newer_version',
+  'invalid_document',
+  'internal',
+]
+
+/**
+ * The typed failure a native `load_design` rejection carries, or the
+ * equivalent for a Web ingestion error; null for anything else (a cancelled
+ * dialog, an unexpected exception).
+ */
+export function designLoadFailureOf(error: unknown): DesignLoadFailure | null {
+  if (error instanceof CanopiDesignIngestionError) {
+    const newer = error.unsupportedVersion !== null && error.unsupportedVersion > CURRENT_CANOPI_FILE_VERSION
+    return {
+      kind: error.kind === 'unsupported_version'
+        ? (newer ? 'newer_version' : 'older_version')
+        : 'invalid_document',
+      message: error.message,
+    }
+  }
+  if (
+    error !== null
+    && typeof error === 'object'
+    && 'kind' in error
+    && 'message' in error
+    && typeof error.message === 'string'
+    && (DESIGN_LOAD_FAILURE_KINDS as readonly unknown[]).includes(error.kind)
+  ) {
+    return { kind: error.kind as DesignLoadFailureKind, message: error.message }
+  }
+  return null
+}
+
+/** The Start-screen string that says why a Design could not be opened. */
+export function designLoadFailureMessageKey(kind: DesignLoadFailureKind): string {
+  switch (kind) {
+    case 'missing':
+      return 'start.cantReadMissing'
+    case 'older_version':
+      return 'start.cantReadOlderVersion'
+    case 'newer_version':
+      return 'start.cantReadNewerVersion'
+    case 'invalid_json':
+    case 'invalid_document':
+      return 'start.cantReadDamaged'
+    case 'unreadable':
+    case 'too_large':
+    case 'internal':
+      return 'start.cantRead'
+  }
 }

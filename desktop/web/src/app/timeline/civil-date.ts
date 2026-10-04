@@ -5,7 +5,15 @@ export interface CivilDate {
 }
 
 const CIVIL_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
-const SUNDAY_START_LOCALES = new Set(['en', 'pt', 'zh', 'ja', 'ko'])
+/**
+ * First weekday (0 Sunday … 6 Saturday) by tag or language, for engines
+ * without Intl week info (older WebKit). Matches CLDR for the app locales:
+ * `pt` is Brazilian Portuguese and `zh` Simplified Chinese (China).
+ */
+const WEEK_START_FALLBACK: Readonly<Record<string, number>> = {
+  'en-US': 0, en: 0, pt: 0, ja: 0, ko: 0,
+  'en-GB': 1, fr: 1, de: 1, es: 1, it: 1, nl: 1, ru: 1, zh: 1,
+}
 
 export function parseCivilDate(value: string | null | undefined): CivilDate | null {
   if (!value) return null
@@ -74,14 +82,31 @@ export function endOfCivilMonth(date: CivilDate): CivilDate {
   }
 }
 
-export function civilWeekStartsOnSunday(locale: string): boolean {
-  return SUNDAY_START_LOCALES.has(locale.split('-')[0] ?? locale)
+type LocaleWeekInfo = { readonly firstDay?: number }
+
+/** The locale's first weekday as a `Date.getDay()` number (0 Sunday … 6 Saturday). */
+export function civilWeekStartDay(locale: string): number {
+  try {
+    const intlLocale = new Intl.Locale(locale) as Intl.Locale & {
+      getWeekInfo?: () => LocaleWeekInfo
+      weekInfo?: LocaleWeekInfo
+    }
+    const firstDay = (typeof intlLocale.getWeekInfo === 'function' ? intlLocale.getWeekInfo() : intlLocale.weekInfo)?.firstDay
+    // Intl numbers weekdays 1 Monday … 7 Sunday.
+    if (typeof firstDay === 'number' && firstDay >= 1 && firstDay <= 7) return firstDay % 7
+  } catch {
+    // An unknown tag falls through to the table.
+  }
+  return WEEK_START_FALLBACK[locale] ?? WEEK_START_FALLBACK[locale.split('-')[0] ?? locale] ?? 1
+}
+
+/** Days from the locale's week start to `date` (0 … 6). */
+export function civilWeekdayOffset(date: CivilDate, locale: string): number {
+  return (civilDateToLocalDate(date).getDay() - civilWeekStartDay(locale) + 7) % 7
 }
 
 export function startOfCivilWeek(date: CivilDate, locale: string): CivilDate {
-  const weekday = civilDateToLocalDate(date).getDay()
-  const offset = civilWeekStartsOnSunday(locale) ? weekday : (weekday + 6) % 7
-  return addCivilDays(date, -offset)
+  return addCivilDays(date, -civilWeekdayOffset(date, locale))
 }
 
 export function buildCivilMonthGrid(month: CivilDate, locale: string): CivilDate[][] {

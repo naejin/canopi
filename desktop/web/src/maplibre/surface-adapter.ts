@@ -1,13 +1,13 @@
+import { logMapError } from './redact-credentials'
 import {
   createMapLibreHost,
   type MapLibreHost,
   type MapLibreHostContext,
   type MapLibreHostDeps,
+  type MapLibreHostSize,
   type MapLibreHostViewState,
 } from './host'
 import type { MapLibreApi, MapLibreMapInstance } from './loader'
-
-export type { MapLibreHostViewState } from './host'
 
 type MapLibreSurfaceEventListener = (event?: unknown) => void
 type MapLibreSurfaceLogError = (message?: unknown, ...optionalParams: unknown[]) => void
@@ -20,7 +20,7 @@ interface EventCapableMap {
 export interface MapLibreSurfaceLifetime {
   on(type: string, listener: MapLibreSurfaceEventListener): void
   /** Unregister a listener registered through `on` before lifetime clear. */
-  off?(type: string, listener: MapLibreSurfaceEventListener): void
+  off(type: string, listener: MapLibreSurfaceEventListener): void
   addCleanup(cleanup: () => void): void
   clear(): void
 }
@@ -34,7 +34,7 @@ export interface MapLibreSurfaceContext<TMap extends MapLibreMapInstance> {
   isCurrent(): boolean
 }
 
-export interface MapLibreSurfaceRequest<TMap extends MapLibreMapInstance> {
+interface MapLibreSurfaceRequest<TMap extends MapLibreMapInstance> {
   readonly key: string
   createMap(
     maplibre: MapLibreApi,
@@ -43,7 +43,8 @@ export interface MapLibreSurfaceRequest<TMap extends MapLibreMapInstance> {
   ): TMap
   captureViewState?(context: MapLibreSurfaceContext<TMap>): MapLibreHostViewState | null
   onCreate?(context: MapLibreSurfaceContext<TMap>): void
-  onResize?(context: MapLibreSurfaceContext<TMap>): void
+  /** The request's own resize owner: the host never resizes a map (see MapLibreHostRequest.onResize). */
+  onResize?(context: MapLibreSurfaceContext<TMap>, size: MapLibreHostSize): void
   onDestroy?(context: MapLibreSurfaceContext<TMap>): void
   onCreateError?(error: unknown): void
 }
@@ -76,7 +77,7 @@ class HostedMapLibreSurfaceAdapter<TMap extends MapLibreMapInstance>
 
   constructor(deps: MapLibreHostDeps) {
     this.host = createMapLibreHost(deps)
-    this.logError = deps.logError ?? console.error
+    this.logError = deps.logError ?? logMapError
   }
 
   get map(): TMap | null {
@@ -107,7 +108,7 @@ class HostedMapLibreSurfaceAdapter<TMap extends MapLibreMapInstance>
         request.onCreate?.(this.contextFromHost(context))
       },
       onResize: request.onResize
-        ? (context) => request.onResize!(this.contextFromHost(context))
+        ? (context, size) => request.onResize!(this.contextFromHost(context), size)
         : undefined,
       onDestroy: (context) => {
         const surfaceContext = this.contextFromHost(context)
@@ -257,6 +258,7 @@ class MapLibreSurfaceLifetimeRegistry implements MapLibreSurfaceLifetime {
 
 const DETACHED_SURFACE_LIFETIME: MapLibreSurfaceLifetime = {
   on: () => {},
+  off: () => {},
   addCleanup: () => {},
   clear: () => {},
 }

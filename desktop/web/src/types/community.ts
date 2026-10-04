@@ -1,11 +1,9 @@
-import type { Location } from './design'
-
 export interface TemplateMeta {
   id: string
   title: string
   author: string
   description: string
-  location: Location
+  location: { lat: number; lon: number }
   plant_count: number
   climate_zone: string
   tags: string[]

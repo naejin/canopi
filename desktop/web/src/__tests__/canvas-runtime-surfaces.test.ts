@@ -5,36 +5,36 @@ import {
   currentCanvasCommandSurface,
   currentCanvasDocumentSurface,
   currentCanvasQuerySurface,
-  getCurrentCanvasTool,
+  currentCanvasTool,
   setCanvasRuntimeSurfaces,
   setCurrentCanvasSession,
 } from '../canvas/session'
 import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
-import { createCanvasRuntimeSurfaces } from '../canvas/runtime/surfaces'
-import { createDefaultScenePersistedState, serializeScenePersistedState } from '../canvas/runtime/scene'
+import { createForwardingCanvasKeyboardPort } from '../canvas/runtime/keyboard-port'
+import {
+  createDefaultScenePersistedState,
+  createSceneGeoFrame,
+  serializeScenePersistedState,
+} from '../canvas/runtime/scene'
+import { createSessionPlane, DEFAULT_NEW_DESIGN_VIEW } from '../canvas/session-plane'
 import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
   CanvasQuerySurface,
+  CanvasRuntimeSurfaces,
 } from '../canvas/runtime/runtime'
 import { createCanvasDocumentReplacementToken } from '../canvas/runtime/runtime'
+import { createTestViewReadSurface } from './support/canvas-query-surface'
 
 function createQuerySurface() {
   return {
     revision: { scene: signal(0), plantNames: signal(0) },
-    viewport: signal({
-      viewport: { x: 0, y: 0, scale: 1 },
-      screenSize: { width: 400, height: 300 },
-      devicePixelRatio: 1,
-      referenceScale: 1,
-      scaleBounds: { minimum: 0.00001, maximum: 2000 },
-      overviewScaleThreshold: 0.1,
-      mode: 'site',
-      groundMetersPerCssPixel: null,
-      revision: 0,
-    }),
-    getSpeciesFocus: () => ({ canonicalName: null, showCodes: false }),
+    sessionPlane: signal(createSessionPlane(DEFAULT_NEW_DESIGN_VIEW)),
+    view: createTestViewReadSurface(),
+    getSpeciesFocus: () => ({ canonicalName: null }),
+    getPlantLabelCoverage: () => ({ labelled: 0, inView: 0 }),
     capturePrintSnapshot: () => null,
+    captureViewScene: () => null,
     getScenePhysicalExtentMeters: () => null,
     getSceneSnapshot: () => createDefaultScenePersistedState(),
     getSelection: () => [],
@@ -65,15 +65,19 @@ function createQuerySurface() {
     }),
     getPlacedPlants: () => [],
     getSettledPlacedPlants: () => [],
+    getSettledDesignObjects: () => null,
     getLocalizedCommonNames: () => new Map<string, string | null>(),
+    getEnglishFallbackNames: () => new Map<string, string>(),
+    subscribePointerWorld: () => () => {},
   } satisfies CanvasQuerySurface
 }
 
 function createCommandSurface() {
   return {
-    speciesFocus: { focus: () => {}, showCodes: () => {} },
+    speciesFocus: { focus: () => {} },
     tools: {
       setTool: (_name: string) => {},
+      plantRowSpacing: { input: () => {}, commit: () => {}, blur: () => {}, cancel: () => {} },
     },
     viewport: {
       zoomIn: () => {},
@@ -81,7 +85,16 @@ function createCommandSurface() {
       zoomToFit: () => {},
       returnToDesign: () => {},
       focusTemporaryBounds: () => false,
+      frameBounds: () => false,
       returnFromTemporaryFocus: () => false,
+      showPlace: () => false,
+      zoomBy: () => {},
+      setFramingInsets: () => {},
+      zoomToSelection: () => {},
+      resetNorth: () => {},
+      rotateBy: () => {},
+      beginRotation: () => ({ update: () => {}, end: () => {}, cancel: () => {} }),
+      showCamera: () => {},
     },
     history: {
       canUndo: signal(false),
@@ -91,6 +104,7 @@ function createCommandSurface() {
     },
     sceneEdits: {
       saveSelectionAsObjectStamp: () => {},
+      importDesignObjects: () => ({ committed: false, createdCount: 0 }),
       copy: () => {},
       paste: () => {},
       pasteAt: () => {},
@@ -100,12 +114,19 @@ function createCommandSurface() {
       deleteSelected: () => {},
       selectAll: () => {},
       selectSameSpecies: () => {},
+      selectSpecies: () => {},
+      clearSelection: () => {},
       bringToFront: () => {},
       sendToBack: () => {},
       lockSelected: () => {},
       unlockSelected: () => {},
       groupSelected: () => {},
       ungroupSelected: () => {},
+      renameZone: () => false,
+      rotateSelected: () => {},
+      unlockAll: () => {},
+      nudgeSelected: () => false,
+      endNudge: () => {},
     },
     chrome: {
       toggleGrid: () => {},
@@ -116,6 +137,7 @@ function createCommandSurface() {
       setSceneLayerVisibility: () => false,
       setSceneLayerOpacity: () => false,
       setSceneLayerLocked: () => false,
+      presentLayers: () => undefined,
     },
     plantPresentation: {
       ensureSpeciesCacheEntries: async () => true,
@@ -131,7 +153,6 @@ function createCommandSurface() {
 
 function createDocumentSurface() {
   return {
-    initializeViewport: () => {},
     attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
     attachRulersTo: () => {},
     showCanvasChrome: () => {},
@@ -153,6 +174,15 @@ function createDocumentSurface() {
   } satisfies CanvasDocumentSurface
 }
 
+function createCanvasRuntimeSurfaces(runtime: SceneCanvasRuntime): CanvasRuntimeSurfaces {
+  return {
+    commands: runtime.commandSurface,
+    queries: runtime.querySurface,
+    documents: runtime.documentSurface,
+    keyboard: createForwardingCanvasKeyboardPort(() => runtime.keyboardPort, document.createElement('div')),
+  }
+}
+
 function readPackageSource(path: string): string {
   const sourcePath = new URL(path, import.meta.url).pathname
   return readFileSync(sourcePath.startsWith('/src/') ? `.${sourcePath}` : sourcePath, 'utf8')
@@ -163,8 +193,8 @@ describe('canvas runtime surfaces', () => {
     setCurrentCanvasSession(null)
   })
 
-  it('composes internal role modules behind the public runtime surface factory', () => {
-    const surfacesSource = readPackageSource('../canvas/runtime/surfaces.ts')
+  it('composes workspace surfaces from the runtime role modules', () => {
+    const surfacesSource = readPackageSource('../app/canvas-map-surface/workspace-runtime-composition.ts')
 
     expect(surfacesSource).toContain('commands: runtime.commandSurface')
     expect(surfacesSource).toContain('queries: runtime.querySurface')
@@ -223,8 +253,6 @@ describe('canvas runtime surfaces', () => {
     expect(querySurfaceSource).not.toContain("from './scene-runtime'")
     expect(querySurfaceSource).not.toContain('this.runtime.')
     expect(querySurfaceSource).toContain('getSceneSnapshot()')
-    expect(querySurfaceSource).toContain('get viewport()')
-    expect(querySurfaceSource).toContain('this.options.camera.snapshot')
     expect(querySurfaceSource).toContain('getSelection()')
     expect(querySurfaceSource).toContain('getPlacedPlants()')
     expect(querySurfaceSource).toContain('SettledSceneReader')
@@ -247,7 +275,7 @@ describe('canvas runtime surfaces', () => {
   it('keeps computed command availability on the observational settled-read role', () => {
     const commandSurfaceSource = readPackageSource('../canvas/runtime/command-surface.ts')
     const mutationsSource = readPackageSource('../canvas/runtime/scene-runtime/mutations.ts')
-    const interactionSource = readPackageSource('../canvas/runtime/scene-interaction.ts')
+    const sessionSource = readPackageSource('../canvas/runtime/interaction-session.ts')
     const canUndoSource = commandSurfaceSource.slice(
       commandSurfaceSource.indexOf('const canUndo = computed'),
       commandSurfaceSource.indexOf('const canRedo = computed'),
@@ -266,8 +294,7 @@ describe('canvas runtime surfaces', () => {
     }
     expect(mutationsSource).toContain('settledReader: SettledSceneReader')
     expect(mutationsSource).toContain('this._settledReader.readWhenSettled(')
-    expect(interactionSource).toContain('settledReader: SettledSceneReader')
-    expect(interactionSource).toContain('this._deps.settledReader.readWhenSettled(')
+    expect(sessionSource).toContain('settledReader: SettledSceneReader')
   })
 
   it('keeps command mutation behavior inside the command role module', () => {
@@ -299,9 +326,8 @@ describe('canvas runtime surfaces', () => {
 
     expect(runtimeSource).toContain("from './scene-runtime/construction'")
     expect(constructionSource).toContain('createSceneRuntimeConstruction')
-    expect(constructionSource).toContain('new SceneStore()')
-    expect(constructionSource).toContain('camera?: WorkspaceCameraOwner')
-    expect(constructionSource).toContain('options.camera ?? new CameraController()')
+    expect(constructionSource).toContain('new SceneStore(')
+    expect(constructionSource).toContain('createCameraDriverHost(')
     expect(constructionSource).toContain('new SceneRuntimeDocumentBridge')
     expect(constructionSource).toContain('new SceneRuntimeEditCoordinator')
     expect(constructionSource).toContain('createSceneCanvasCommandSurface')
@@ -335,13 +361,13 @@ describe('canvas runtime surfaces', () => {
   it('routes representative command, query, and document behavior through role surfaces', () => {
     const runtime = new SceneCanvasRuntime()
     const surfaces = createCanvasRuntimeSurfaces(runtime)
-    const file = serializeScenePersistedState(createDefaultScenePersistedState())
+    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSceneGeoFrame(DEFAULT_NEW_DESIGN_VIEW))
 
     try {
       surfaces.commands.tools.setTool('hand')
       surfaces.documents.loadDocument(file)
 
-      expect(getCurrentCanvasTool()).toBe('hand')
+      expect(currentCanvasTool.value).toBe('hand')
       expect(surfaces.documents.hasLoadedDocument()).toBe(true)
       expect(surfaces.queries.getSceneSnapshot()).toEqual(createDefaultScenePersistedState())
     } finally {
@@ -353,7 +379,7 @@ describe('canvas runtime surfaces', () => {
     const querySurface = createQuerySurface()
 
     expect(querySurface.getSceneSnapshot().plants).toEqual([])
-    expect(querySurface.viewport.value.screenSize).toEqual({ width: 400, height: 300 })
+    expect(querySurface.view.captureView().screen).toMatchObject({ width: 400, height: 300 })
     // @ts-expect-error query surfaces cannot issue tool commands.
     querySurface.setTool
     // @ts-expect-error query surfaces cannot replace documents.
@@ -375,7 +401,7 @@ describe('canvas runtime surfaces', () => {
 
   it('keeps document consumers away from panel queries and toolbar commands', () => {
     const documentSurface = createDocumentSurface()
-    const file = serializeScenePersistedState(createDefaultScenePersistedState())
+    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSceneGeoFrame(DEFAULT_NEW_DESIGN_VIEW))
     const replacementToken = createCanvasDocumentReplacementToken()
 
     if (false) {
@@ -395,7 +421,7 @@ describe('canvas runtime surfaces', () => {
   it('reports whether a runtime has loaded a document without caller monkey-patching', () => {
     const runtime = new SceneCanvasRuntime()
     const surfaces = createCanvasRuntimeSurfaces(runtime)
-    const file = serializeScenePersistedState(createDefaultScenePersistedState())
+    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSceneGeoFrame(DEFAULT_NEW_DESIGN_VIEW))
 
     try {
       expect(surfaces.documents.hasLoadedDocument()).toBe(false)

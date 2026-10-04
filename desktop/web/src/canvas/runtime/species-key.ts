@@ -6,7 +6,43 @@ import {
 import { resolvePlantBaseColor } from './plant-presentation'
 import type { SpeciesCacheEntry } from './species-cache'
 
-const EMPTY_SPECIES_CACHE = new Map<string, SpeciesCacheEntry>()
+/** No catalog entries: colours come from the plant and the Design alone. */
+export const EMPTY_SPECIES_CACHE: ReadonlyMap<string, SpeciesCacheEntry> = new Map()
+
+/** A species' symbol and colour on the map. */
+export interface SpeciesAppearance {
+  readonly symbol: PlantSymbolId
+  readonly color: string
+}
+
+/**
+ * The symbol and colour a new plant of this species takes in this Design:
+ * the Design's species symbol and colour, else the default symbol and the
+ * stratum colour. The same rules as a placed plant without overrides.
+ */
+export function speciesPlacementAppearance(
+  scene: Pick<ScenePersistedState, 'plantSpeciesSymbols' | 'plantSpeciesColors'>,
+  species: { readonly canonicalName: string; readonly stratum: string | null },
+): SpeciesAppearance {
+  return {
+    symbol: resolvePlantSymbolForPlant({ canonicalName: species.canonicalName }, scene.plantSpeciesSymbols),
+    color: resolvePlantBaseColor({
+      kind: 'plant',
+      id: '',
+      canonicalName: species.canonicalName,
+      commonName: null,
+      color: scene.plantSpeciesColors[species.canonicalName] ?? null,
+      stratum: species.stratum,
+      canopySpreadM: null,
+      position: { x: 0, y: 0 },
+      rotationDeg: null,
+      notes: null,
+      plantedDate: null,
+      quantity: 1,
+      locked: false,
+    }, EMPTY_SPECIES_CACHE),
+  }
+}
 
 /** Codes belong to a Design; removed species keep their reservation. */
 export function allocateSpeciesCodes(
@@ -52,24 +88,54 @@ export function allocateSpeciesCodes(
 
 export interface SpeciesFocus {
   readonly canonicalName: string | null
-  readonly showCodes: boolean
 }
 
 export interface SpeciesFocusCommands {
   focus(canonicalName: string | null): void
-  showCodes(visible: boolean): void
 }
+
+/** Opacity of the plants Species Focus leaves out, applied to each one as a whole. */
+export const SPECIES_FOCUS_DIM_OPACITY = 0.16
 
 export function speciesFocusOpacity(
   focus: SpeciesFocus,
   canonicalName: string,
 ): number {
-  return focus.canonicalName && focus.canonicalName !== canonicalName ? 0.16 : 1
+  return focus.canonicalName && focus.canonicalName !== canonicalName ? SPECIES_FOCUS_DIM_OPACITY : 1
+}
+
+const NO_ENGLISH_FALLBACKS: ReadonlyMap<string, string> = new Map()
+
+/**
+ * The species names lists show: the name in the UI language, else the English
+ * catalog name (see `CanvasQuerySurface.getEnglishFallbackNames`).
+ */
+export function speciesDisplayNames(
+  localizedNames: ReadonlyMap<string, string | null>,
+  englishFallbackNames: ReadonlyMap<string, string>,
+): ReadonlyMap<string, string | null> {
+  if (englishFallbackNames.size === 0) return localizedNames
+  const names = new Map(localizedNames)
+  for (const [canonicalName, englishName] of englishFallbackNames) {
+    if (!names.get(canonicalName)) names.set(canonicalName, englishName)
+  }
+  return names
+}
+
+/** Whether `shownName` is the English fallback name resolved for the species. */
+export function isEnglishFallbackName(
+  englishFallbackNames: ReadonlyMap<string, string>,
+  canonicalName: string,
+  shownName: string | null | undefined,
+): boolean {
+  return Boolean(shownName) && englishFallbackNames.get(canonicalName) === shownName
 }
 
 export interface SpeciesKeyEntry {
   readonly canonicalName: string
   readonly commonName: string | null
+  /** The common name is the English catalog name: none exists in the UI language. */
+  readonly englishFallback: boolean
   readonly code: string
   readonly count: number
   readonly appearances: readonly { symbol: PlantSymbolId; color: string }[]
@@ -78,12 +144,14 @@ export interface SpeciesKeyEntry {
 export function buildSpeciesKey(
   scene: ScenePersistedState,
   localizedNames: ReadonlyMap<string, string | null>,
+  englishFallbackNames: ReadonlyMap<string, string> = NO_ENGLISH_FALLBACKS,
 ): SpeciesKeyEntry[] {
   const entries = new Map<
     string,
     {
       canonicalName: string
       commonName: string | null
+      englishFallback: boolean
       code: string
       count: number
       appearances: { symbol: PlantSymbolId; color: string }[]
@@ -94,7 +162,11 @@ export function buildSpeciesKey(
     if (!entry) {
       entry = {
         canonicalName: plant.canonicalName,
-        commonName: localizedNames.get(plant.canonicalName) || plant.commonName,
+        commonName: localizedNames.get(plant.canonicalName)
+          || englishFallbackNames.get(plant.canonicalName)
+          || plant.commonName,
+        englishFallback: !localizedNames.get(plant.canonicalName)
+          && Boolean(englishFallbackNames.get(plant.canonicalName)),
         code: scene.plantSpeciesCodes[plant.canonicalName] ?? '',
         count: 0,
         appearances: [],

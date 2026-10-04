@@ -1,4 +1,5 @@
-import { computed, signal, type ReadonlySignal } from '@preact/signals'
+import { batch, computed, signal, type ReadonlySignal } from '@preact/signals'
+import type { GeoPosition, SessionPlaneTransform } from '../../session-plane'
 
 import type { CanopiFile } from '../../../types/design'
 import { throwCanvasRuntimeCleanupErrors } from '../cleanup'
@@ -12,6 +13,7 @@ import {
   cloneScenePersistedState,
   type SceneDesignObjectTarget,
   type ScenePersistedState,
+  type SceneGeoFrame,
   type ScenePlantEntity,
   type SceneStore,
 } from '../scene'
@@ -68,16 +70,15 @@ export interface SettledSceneReader {
 export interface SceneHistoryCommands {
   readonly canUndo: ReadonlySignal<boolean>
   readonly canRedo: ReadonlySignal<boolean>
-  readonly nextUndoSequence: ReadonlySignal<number | null>
-  readonly nextRedoSequence: ReadonlySignal<number | null>
   undo(): boolean
   redo(): boolean
 }
 
-export type ScenePersistenceAcknowledgement = 'applied' | 'stale'
+type ScenePersistenceAcknowledgement = 'applied' | 'stale'
 
 export interface ScenePersistenceCapture {
   readonly scene: ScenePersistedState
+  readonly geo: SceneGeoFrame
   isCurrent(): boolean
   acknowledgeSaved(): ScenePersistenceAcknowledgement
 }
@@ -118,7 +119,7 @@ export interface SceneDocumentReplacementStages {
   readonly finalizeReplacement?: () => void
 }
 
-export type SceneRuntimeAuthority = SceneEditCoordinator
+type SceneRuntimeAuthority = SceneEditCoordinator
   & SceneCommandAdmission
   & SettledSceneReader
   & SceneHistoryCommands
@@ -158,7 +159,7 @@ interface DeferredBackfill {
 
 type MaintainedPlantPresentation = Pick<
   ScenePlantEntity,
-  'canonicalName' | 'stratum' | 'canopySpreadM' | 'scale'
+  'canonicalName' | 'stratum' | 'canopySpreadM'
 >
 
 interface SceneAuthorityOperation {
@@ -216,12 +217,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       && !this._isPresentationMaintenanceBusy()
       && this._history.canRedo.value
   })
-  readonly nextUndoSequence = computed(() => this.canUndo.value
-    ? this._history.nextUndoSequence.value
-    : null)
-  readonly nextRedoSequence = computed(() => this.canRedo.value
-    ? this._history.nextRedoSequence.value
-    : null)
 
   constructor(options: SceneRuntimeEditCoordinatorOptions) {
     this._sceneStore = options.sceneStore
@@ -395,6 +390,37 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
     return replay.resume()
   }
 
+  /**
+   * Rebuilds the session plane at `origin` while settled. The scene and every
+   * undo command move through one reprojector, so stored lon/lat is unchanged
+   * and nothing is dirtied or recorded. Returns the plane-to-plane transform,
+   * or null when not settled.
+   */
+  reoriginSessionPlane(origin: GeoPosition): SessionPlaneTransform | null {
+    if (
+      this._persistenceDisposed
+      || this._active
+      || this._replacementHandoff
+      || this._isPresentationMaintenanceBusy()
+    ) return null
+    const previous = this._sceneStore.sessionPlane
+    const reprojector = this._sceneStore.beginReorigin(origin)
+    const reprojectPatch = (patch: SceneCommandPatch): SceneCommandPatch => patch.persisted
+      ? { ...patch, persisted: reprojector.persisted(patch.persisted) }
+      : patch
+    batch(() => {
+      this._history.remapCommands((command) => ({
+        ...command,
+        before: reprojectPatch(command.before),
+        after: reprojectPatch(command.after),
+      }))
+      this._sceneStore.commitReorigin(reprojector)
+      this._incrementSceneRevision()
+      this._invalidate('scene')
+    })
+    return previous.transformTo(this._sceneStore.sessionPlane)
+  }
+
   capturePersistence(): ScenePersistenceCapture {
     if (this._persistenceDisposed) {
       throw new SceneEditBusyError('runtime-disposed')
@@ -426,6 +452,7 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
 
     return Object.freeze({
       scene: cloneScenePersistedState(scene),
+      geo: this._sceneStore.geoFrame,
       isCurrent: captureIsCurrent,
       acknowledgeSaved: (): ScenePersistenceAcknowledgement => {
         if (acknowledgement) return acknowledgement
@@ -692,15 +719,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
     this._drainDeferredBackfills()
   }
 
-  private _noteHistoryChange(command: SceneCommand): void {
-    if (command.diffs.some((diff) => diff !== 'selection')) {
-      this._contentRevision += 1
-      this._dropStaleDeferredBackfills()
-      return
-    }
-    this._drainDeferredBackfills()
-  }
-
   private _isTicketCurrent(ticket: PresentationTicketState): boolean {
     return ticket.generation === this._documentGeneration
       && ticket.contentRevision === this._contentRevision
@@ -764,7 +782,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
         if (
           next.stratum === plant.stratum
           && next.canopySpreadM === plant.canopySpreadM
-          && next.scale === plant.scale
         ) {
           return plant
         }
@@ -773,7 +790,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
           ...plant,
           stratum: next.stratum,
           canopySpreadM: next.canopySpreadM,
-          scale: next.scale,
         }
       })
     })
@@ -797,7 +813,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
           canonicalName: presentation.canonicalName,
           stratum: presentation.stratum,
           canopySpreadM: presentation.canopySpreadM,
-          scale: presentation.scale,
         },
       )
     }
@@ -841,7 +856,7 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       direction,
       history: this._history,
       applyPatch: (patch) => this._applyPatch(patch, { preservePlantPresentation: true }),
-      noteHistoryChange: (command) => this._noteHistoryChange(command),
+      noteHistoryChange: (command) => this._noteCommitted(command),
       syncCanvasSignalsFromScene: this._syncCanvasSignalsFromScene,
       incrementSceneRevision: this._incrementSceneRevision,
       invalidate: this._invalidate,
@@ -1381,7 +1396,6 @@ function preserveCurrentPlantPresentation(
       ...plant,
       stratum: presentation.stratum,
       canopySpreadM: presentation.canopySpreadM,
-      scale: presentation.scale,
     }
   })
 }

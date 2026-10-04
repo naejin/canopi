@@ -5,7 +5,7 @@ import {
   type ScenePersistedState,
 } from './scene'
 
-export type SceneDiffKind =
+type SceneDiffKind =
   | 'layers'
   | 'plants'
   | 'zones'

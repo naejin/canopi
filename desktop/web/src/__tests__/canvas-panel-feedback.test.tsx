@@ -1,44 +1,27 @@
+import { readFileSync } from 'node:fs'
 import { useEffect } from 'preact/hooks'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { hillshadeVisible, layerVisibility } from '../app/canvas-settings/signals'
+import { layerVisibility } from '../app/canvas-settings/signals'
+import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
 import { CanvasPanel } from '../components/panels/CanvasPanel'
-import { designSessionFixture } from './support/design-session-state'
-import { northBearingAvailable, northBearingDeg } from '../canvas/scene-metadata-state'
-import { locale } from '../app/settings/state'
+import { WebCanvasWorkspace } from '../web/WebCanvasWorkspace'
 import {
-  CANVAS_NOTICE_MARGIN_PX,
-  CANVAS_RULER_SIZE_PX,
-} from '../canvas/canvas-notice-layout'
-import { SCALE_BAR_CANVAS_WIDTH, SCALE_BAR_RESERVED_BOTTOM_PX } from '../canvas/scale-bar'
+  IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
+  type MapLibreCanvasSurfaceState,
+} from '../maplibre/canvas-surface-state'
+import type { WorkspaceRuntimeComposition } from '../app/canvas-map-surface/workspace-runtime-composition'
+import { designSessionFixture } from './support/design-session-state'
+import type { CanopiFile } from '../types/design'
+import { locale } from '../app/settings/state'
 
-let mockBasemapState: {
-  status: 'idle' | 'loading' | 'ready' | 'error'
-  errorMessage: string | null
-  terrainStatus: 'idle' | 'loading' | 'ready' | 'error'
-  terrainErrorMessage: string | null
-  precisionWarning: boolean
-  designExtentMeters: number | null
-} = {
-  status: 'idle',
-  errorMessage: null,
-  terrainStatus: 'idle',
-  terrainErrorMessage: null,
-  precisionWarning: false,
-  designExtentMeters: null,
-}
+let mockBasemapState: MapLibreCanvasSurfaceState = IDLE_MAPLIBRE_CANVAS_SURFACE_STATE
+let publishMapState: ((state: MapLibreCanvasSurfaceState) => void) | null = null
+const retryMap = vi.fn()
 
-vi.mock('../components/canvas/CanvasToolbar', () => ({
-  CanvasToolbar: () => <div data-testid="canvas-toolbar" />,
-}))
-
-vi.mock('../components/canvas/DisplayLegend', () => ({
-  DisplayLegend: () => <div data-testid="display-legend" />,
-}))
-
-vi.mock('../components/canvas/ZoomControls', () => ({
-  ZoomControls: () => <div data-testid="zoom-controls" />,
+vi.mock('../components/canvas/CanvasChrome', () => ({
+  CanvasChrome: () => <div data-testid="canvas-chrome" />,
 }))
 
 vi.mock('../components/canvas/LayerPanel', () => ({
@@ -53,11 +36,13 @@ vi.mock('../app/document-session/use-canvas-document-session', () => ({
   useCanvasDocumentSession: vi.fn(({
     onMapStateChange,
   }: {
-    onMapStateChange?: (state: typeof mockBasemapState) => void
+    onMapStateChange?: (state: MapLibreCanvasSurfaceState) => void
   }) => {
     useEffect(() => {
+      publishMapState = onMapStateChange ?? null
       onMapStateChange?.(mockBasemapState)
     }, [onMapStateChange])
+    return { retryMap }
   }),
 }))
 
@@ -73,19 +58,11 @@ describe('CanvasPanel basemap feedback', () => {
     document.body.innerHTML = ''
     document.body.appendChild(container)
     locale.value = 'en'
-    layerVisibility.value = { base: true, plants: true, zones: true, annotations: true }
-    hillshadeVisible.value = false
-    northBearingDeg.value = 0
-    northBearingAvailable.value = false
+    layerVisibility.value = { plants: true, zones: true, annotations: true }
+    mapLayers.value = createDefaultMapLayers()
     designSessionFixture.file = null
-    mockBasemapState = {
-      status: 'idle',
-      errorMessage: null,
-      terrainStatus: 'idle',
-      terrainErrorMessage: null,
-      precisionWarning: false,
-      designExtentMeters: null,
-    }
+    mockBasemapState = IDLE_MAPLIBRE_CANVAS_SURFACE_STATE
+    retryMap.mockClear()
   })
 
   afterEach(() => {
@@ -93,26 +70,9 @@ describe('CanvasPanel basemap feedback', () => {
     container.remove()
   })
 
-  it('does not show a Location Notice when no design location is saved', async () => {
-    designSessionFixture.file = {
-      version: 6,
-      name: 'Demo',
-      description: null,
-      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
-    }
+  it('does not show a Map Notice or activate the map surface without an open Design', async () => {
+    designSessionFixture.file = null
+    mockBasemapState = { ...mockBasemapState, status: 'loading' }
 
     await act(async () => {
       render(<CanvasPanel />, container)
@@ -122,33 +82,12 @@ describe('CanvasPanel basemap feedback', () => {
     expect(container.querySelector('[data-map-active="true"]')).toBeNull()
   })
 
-  it('places loading feedback as a bottom-left Location Notice above the scale bar', async () => {
-    designSessionFixture.file = {
-      version: 6,
-      name: 'Demo',
-      description: null,
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
-    }
+  it('shows loading feedback as one quiet status chip over the map with the floating chrome', async () => {
+    designSessionFixture.file = demoDesign()
     mockBasemapState = {
+      ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
       status: 'loading',
-      errorMessage: null,
       terrainStatus: 'idle',
-      terrainErrorMessage: null,
-      precisionWarning: false,
-      designExtentMeters: null,
     }
 
     await act(async () => {
@@ -157,133 +96,17 @@ describe('CanvasPanel basemap feedback', () => {
 
     const status = container.querySelector<HTMLElement>('[role="status"]')!
     expect(status.textContent).toContain('Loading')
-    expect(status.dataset.locationNoticePlacement).toBe('bottom-left-above-scale-bar')
-    expect(status.style.left).toBe(`${CANVAS_RULER_SIZE_PX + CANVAS_NOTICE_MARGIN_PX}px`)
-    expect(status.style.bottom).toBe(`${SCALE_BAR_RESERVED_BOTTOM_PX + CANVAS_NOTICE_MARGIN_PX}px`)
-    expect(status.style.top).toBe('auto')
-  })
-
-  it('shifts Location Notices to the right of the scale bar when canvas height is tight', async () => {
-    const widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(640)
-    const heightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(72)
-    designSessionFixture.file = {
-      version: 6,
-      name: 'Demo',
-      description: null,
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
-    }
-    mockBasemapState = {
-      status: 'loading',
-      errorMessage: null,
-      terrainStatus: 'idle',
-      terrainErrorMessage: null,
-      precisionWarning: false,
-      designExtentMeters: null,
-    }
-
-    try {
-      await act(async () => {
-        render(<CanvasPanel />, container)
-      })
-
-      const status = container.querySelector<HTMLElement>('[role="status"]')!
-      expect(status.dataset.locationNoticePlacement).toBe('bottom-left-right-of-scale-bar')
-      expect(status.style.left).toBe(`${SCALE_BAR_CANVAS_WIDTH + CANVAS_NOTICE_MARGIN_PX}px`)
-      expect(status.style.bottom).toBe(`${CANVAS_NOTICE_MARGIN_PX}px`)
-    } finally {
-      widthSpy.mockRestore()
-      heightSpy.mockRestore()
-    }
-  })
-
-  it('keeps compact Location Notices visible under severe layout pressure', async () => {
-    const widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(300)
-    const heightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(72)
-    designSessionFixture.file = {
-      version: 6,
-      name: 'Demo',
-      description: null,
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
-    }
-    mockBasemapState = {
-      status: 'loading',
-      errorMessage: null,
-      terrainStatus: 'idle',
-      terrainErrorMessage: null,
-      precisionWarning: false,
-      designExtentMeters: null,
-    }
-
-    try {
-      await act(async () => {
-        render(<CanvasPanel />, container)
-      })
-
-      const status = container.querySelector<HTMLElement>('[role="status"]')!
-      expect(status.dataset.locationNoticePlacement).toBe('bottom-left-compact')
-      expect(status.dataset.compact).toBe('true')
-      expect(Number.parseFloat(status.style.maxWidth)).toBeLessThan(240)
-      expect(status.querySelector('[aria-hidden="true"]')).not.toBeNull()
-      expect(status.textContent).toContain('Loading')
-    } finally {
-      widthSpy.mockRestore()
-      heightSpy.mockRestore()
-    }
+    expect(container.querySelector<HTMLElement>('[data-map-notice]')!.dataset.tone).toBe('loading')
+    expect(status.getAttribute('aria-live')).toBe('polite')
+    expect(container.querySelector('[data-testid="canvas-chrome"]')).not.toBeNull()
   })
 
   it('shows a loading basemap notice until the map becomes active', async () => {
-    designSessionFixture.file = {
-      version: 6,
-      name: 'Demo',
-      description: null,
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
-    }
+    designSessionFixture.file = demoDesign()
     mockBasemapState = {
+      ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
       status: 'loading',
-      errorMessage: null,
       terrainStatus: 'idle',
-      terrainErrorMessage: null,
-      precisionWarning: false,
-      designExtentMeters: null,
     }
 
     await act(async () => {
@@ -292,37 +115,15 @@ describe('CanvasPanel basemap feedback', () => {
 
     const status = container.querySelector('[role="status"]')
     expect(status?.textContent).toContain('Loading')
-    expect((status as HTMLElement | null)?.dataset.locationNoticePlacement).toBe('bottom-left-above-scale-bar')
     expect(container.querySelector('[data-map-active="true"]')).not.toBeNull()
   })
 
-  it('hides the clean ready Location Notice once the basemap becomes active', async () => {
-    designSessionFixture.file = {
-      version: 6,
-      name: 'Demo',
-      description: null,
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
-    }
+  it('hides the clean ready Map Notice once the basemap becomes active', async () => {
+    designSessionFixture.file = demoDesign()
     mockBasemapState = {
+      ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
       status: 'ready',
-      errorMessage: null,
       terrainStatus: 'idle',
-      terrainErrorMessage: null,
-      precisionWarning: false,
-      designExtentMeters: null,
     }
 
     await act(async () => {
@@ -334,34 +135,18 @@ describe('CanvasPanel basemap feedback', () => {
   })
 
   it('keeps the canvas map surface active for terrain-only visibility', async () => {
-    designSessionFixture.file = {
-      version: 6,
-      name: 'Demo',
-      description: null,
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
+    designSessionFixture.file = demoDesign()
+    const defaults = createDefaultMapLayers()
+    mapLayers.value = {
+      ...defaults,
+      basemap: { ...defaults.basemap, visible: false },
+      satellite: { ...defaults.satellite, visible: false },
+      hillshade: { ...defaults.hillshade, visible: true },
     }
-    layerVisibility.value = { base: false, plants: true, zones: true, annotations: true }
-    hillshadeVisible.value = true
     mockBasemapState = {
+      ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
       status: 'ready',
-      errorMessage: null,
       terrainStatus: 'ready',
-      terrainErrorMessage: null,
-      precisionWarning: false,
-      designExtentMeters: null,
     }
 
     await act(async () => {
@@ -372,110 +157,32 @@ describe('CanvasPanel basemap feedback', () => {
     expect(container.querySelector('[role="status"]')).toBeNull()
   })
 
-  it('shows a basemap error when the surface reports a load failure', async () => {
-    designSessionFixture.file = {
-      version: 6,
-      name: 'Demo',
-      description: null,
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
+  it('keeps the canvas map surface active when only Satellite is visible', async () => {
+    designSessionFixture.file = demoDesign()
+    const defaults = createDefaultMapLayers()
+    mapLayers.value = {
+      ...defaults,
+      basemap: { ...defaults.basemap, visible: false },
+      satellite: { ...defaults.satellite, visible: true },
     }
     mockBasemapState = {
-      status: 'error',
-      errorMessage: 'style fetch failed',
-      terrainStatus: 'idle',
-      terrainErrorMessage: null,
-      precisionWarning: false,
-      designExtentMeters: null,
-    }
-
-    await act(async () => {
-      render(<CanvasPanel />, container)
-    })
-
-    const status = container.querySelector('[role="status"]')
-    expect(status?.textContent).toContain('Basemap unavailable')
-    expect(status?.textContent).toContain('style fetch failed')
-  })
-
-  it('surfaces terrain degradation while keeping the basemap ready', async () => {
-    designSessionFixture.file = {
-      version: 6,
-      name: 'Demo',
-      description: null,
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
-    }
-    mockBasemapState = {
+      ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
       status: 'ready',
-      errorMessage: null,
-      terrainStatus: 'error',
-      terrainErrorMessage: 'dem fetch failed',
-      precisionWarning: false,
-      designExtentMeters: null,
+      terrainStatus: 'idle',
     }
 
     await act(async () => {
       render(<CanvasPanel />, container)
     })
 
-    const status = container.querySelector('[role="status"]')
-    expect(status?.textContent).toContain('Map Layers: dem fetch failed')
-    expect(status?.textContent).not.toContain('48.8566, 2.3522')
     expect(container.querySelector('[data-map-active="true"]')).toBeTruthy()
   })
 
-  it('surfaces a precision warning for large designs', async () => {
-    designSessionFixture.file = {
-      version: 6,
-      name: 'Demo',
-      description: null,
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
-    }
+  it('shows a map failure with a fixed message and never the engine text', async () => {
+    designSessionFixture.file = demoDesign()
     mockBasemapState = {
-      status: 'ready',
-      errorMessage: null,
-      terrainStatus: 'idle',
-      terrainErrorMessage: null,
-      precisionWarning: true,
-      designExtentMeters: 12_000,
+      ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
+      status: 'error',
     }
 
     await act(async () => {
@@ -483,7 +190,181 @@ describe('CanvasPanel basemap feedback', () => {
     })
 
     const status = container.querySelector('[role="status"]')
-    expect(status?.textContent).toContain('Precision may degrade for large designs')
-    expect(status?.textContent).not.toContain('48.8566, 2.3522')
+    expect(status?.textContent).toBe('Map unavailable')
+    expect(container.querySelector('button')).toBeNull()
+  })
+
+  it('offers Retry when the map stopped drawing and hands it to the Design session', async () => {
+    designSessionFixture.file = demoDesign()
+    mockBasemapState = {
+      ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
+      status: 'error',
+      retryable: true,
+    }
+
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+
+    const notice = container.querySelector<HTMLElement>('[data-map-notice]')!
+    expect(notice.querySelector('[role="status"]')!.textContent).toBe('The map stopped drawing. Your Design is safe.')
+    await act(async () => { notice.querySelector('button')!.click() })
+    expect(retryMap).toHaveBeenCalledOnce()
+  })
+
+  it('hands keyboard focus to the map container once a Retried map is back, before its session returns', async () => {
+    designSessionFixture.file = demoDesign()
+    mockBasemapState = { ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'error', retryable: true }
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+    const map = container.querySelector<HTMLElement>('[data-map-active]')!
+    const retry = [...container.querySelectorAll<HTMLButtonElement>('[data-map-notice] button')]
+      .find((button) => button.textContent === 'Retry')!
+    retry.focus()
+
+    // Retry rebuilds the map: the notice shows loading, then goes once the map draws, while the rebuilt interaction
+    // session has not made the host a keyboard stop again yet.
+    await act(async () => { retry.click() })
+    await act(async () => { publishMapState!({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'loading' }) })
+    await act(async () => { publishMapState!({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'ready' }) })
+
+    expect(container.querySelector('[data-map-notice]')).toBeNull()
+    expect(document.activeElement).toBe(map)
+  })
+
+  it('surfaces terrain degradation as a skipped layer while keeping the basemap ready', async () => {
+    designSessionFixture.file = demoDesign()
+    mockBasemapState = {
+      ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
+      status: 'ready',
+      terrainStatus: 'error',
+    }
+
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+
+    const status = container.querySelector('[role="status"]')
+    expect(status?.textContent).toBe('A map layer couldn’t be shown')
+    expect(container.querySelector('[data-map-active="true"]')).toBeTruthy()
+  })
+
+  it('offers Retry on a basemap that couldn’t load and hands it to the Design session', async () => {
+    designSessionFixture.file = demoDesign()
+    mockBasemapState = { ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'ready', basemapStatus: 'failed' }
+
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+
+    const notice = container.querySelector<HTMLElement>('[data-map-notice]')!
+    expect(notice.dataset.tone).toBe('error')
+    expect(notice.querySelector('[role="status"]')!.textContent).toBe('Basemap couldn’t load. Check your connection.')
+    const retry = [...notice.querySelectorAll('button')].find((button) => button.textContent === 'Retry')!
+    await act(async () => { retry.click() })
+    expect(retryMap).toHaveBeenCalledOnce()
   })
 })
+
+describe('WebCanvasWorkspace map notice', () => {
+  let container: HTMLDivElement
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.innerHTML = ''
+    document.body.appendChild(container)
+    locale.value = 'en'
+    mapLayers.value = createDefaultMapLayers()
+    designSessionFixture.file = demoDesign()
+  })
+
+  afterEach(async () => {
+    await act(async () => { render(null, container) })
+    container.remove()
+    designSessionFixture.file = null
+  })
+
+  it('shows the same basemap notice as the desktop and Retry reaches its composition', async () => {
+    const retry = vi.fn()
+    const createRuntimeComposition = vi.fn((options: { onMapStateChange?: (state: MapLibreCanvasSurfaceState) => void }) => {
+      options.onMapStateChange?.({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'ready', basemapStatus: 'failed' })
+      return {
+        surfaces: {} as never,
+        start: () => new Promise<never>(() => {}),
+        dispose: async () => {},
+        retryMap: retry,
+      } satisfies WorkspaceRuntimeComposition
+    })
+
+    await act(async () => {
+      render(<WebCanvasWorkspace createRuntimeComposition={createRuntimeComposition} />, container)
+    })
+    await act(async () => { await vi.waitFor(() => expect(createRuntimeComposition).toHaveBeenCalledOnce()) })
+
+    const notice = container.querySelector<HTMLElement>('[data-map-notice]')!
+    expect(notice.querySelector('[role="status"]')!.textContent).toBe('Basemap couldn’t load. Check your connection.')
+    const button = [...notice.querySelectorAll('button')].find((candidate) => candidate.textContent === 'Retry')!
+    await act(async () => { button.click() })
+    expect(retry).toHaveBeenCalledOnce()
+  })
+
+  it('hands keyboard focus to the map container once a Retried map is back, before its session returns', async () => {
+    let publish!: (state: MapLibreCanvasSurfaceState) => void
+    const createRuntimeComposition = vi.fn((options: { onMapStateChange?: (state: MapLibreCanvasSurfaceState) => void }) => {
+      publish = (state) => options.onMapStateChange?.(state)
+      publish({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'error', retryable: true })
+      return {
+        surfaces: {} as never,
+        start: () => new Promise<never>(() => {}),
+        dispose: async () => {},
+        retryMap: () => {},
+      } satisfies WorkspaceRuntimeComposition
+    })
+    await act(async () => {
+      render(<WebCanvasWorkspace createRuntimeComposition={createRuntimeComposition} />, container)
+    })
+    await act(async () => { await vi.waitFor(() => expect(createRuntimeComposition).toHaveBeenCalledOnce()) })
+    const map = container.querySelector<HTMLElement>('[data-testid="web-canvas-workspace-surface"]')!
+    const retry = [...container.querySelectorAll<HTMLButtonElement>('[data-map-notice] button')]
+      .find((button) => button.textContent === 'Retry')!
+    retry.focus()
+
+    await act(async () => { retry.click() })
+    await act(async () => { publish({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'loading' }) })
+    await act(async () => { publish({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'ready' }) })
+
+    expect(container.querySelector('[data-map-notice]')).toBeNull()
+    expect(document.activeElement).toBe(map)
+  })
+
+  it('wraps a long localized notice beside Retry instead of cutting off its advice', () => {
+    // jsdom has no layout: the chip's text rule must let the sentence wrap (German basemapFailed plus Retry is ~550 px).
+    const css = readFileSync('src/components/panels/Panels.module.css', 'utf8')
+    const text = /\.basemapFeedbackText\s*\{(?<body>[^}]*)\}/.exec(css)?.groups?.body
+    expect(text).toBeDefined()
+    expect(text).not.toMatch(/white-space:\s*nowrap/)
+    expect(text).not.toMatch(/text-overflow:\s*ellipsis/)
+  })
+})
+
+function demoDesign(): CanopiFile {
+  return {
+    version: 9,
+    name: 'Demo',
+    description: null,
+    plant_species_colors: {},
+    layers: [],
+    plants: [],
+    zones: [],
+    annotations: [],
+    consortiums: [],
+    groups: [],
+    timeline: [],
+    budget: [],
+    budget_currency: 'EUR',
+    created_at: '2026-04-12T00:00:00.000Z',
+    updated_at: '2026-04-12T00:00:00.000Z',
+    extra: {},
+  }
+}

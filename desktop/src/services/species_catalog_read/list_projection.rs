@@ -16,6 +16,7 @@ const SPECIES_LIST_ITEM_COLUMNS: &[&str] = &[
     "hardiness_zone_max",
     "growth_rate",
     "stratum",
+    "habit",
     "climate_zones",
     "is_annual",
     "is_biennial",
@@ -72,6 +73,7 @@ pub(super) fn map_species_list_row_with_favorite(
         hardiness_zone_max: cursor.read("hardiness_zone_max")?,
         growth_rate: cursor.read("growth_rate")?,
         stratum: cursor.read("stratum")?,
+        habit: cursor.read("habit")?,
         climate_zones: parse_json_array_field(cursor.read("climate_zones")?),
         life_cycles: life_cycles_from_flags(
             cursor.read_optional_flag("is_annual")?,
@@ -135,6 +137,7 @@ mod tests {
                 "width_max_m" => "3.0 AS width_max_m".to_owned(),
                 "edibility_rating" => "5 AS edibility_rating".to_owned(),
                 "medicinal_rating" => "1 AS medicinal_rating".to_owned(),
+                "habit" => "'Tree' AS habit".to_owned(),
                 _ => format!("NULL AS {column}"),
             })
             .collect::<Vec<_>>()
@@ -160,6 +163,7 @@ mod tests {
         assert_eq!(item.width_max_m, Some(3.0));
         assert_eq!(item.edibility_rating, Some(5));
         assert_eq!(item.medicinal_rating, Some(1));
+        assert_eq!(item.habit.as_deref(), Some("Tree"));
         assert!(item.is_favorite);
     }
 }

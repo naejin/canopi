@@ -12,36 +12,21 @@ import {
 export interface SharedMapSceneRendererComposition {
   readonly renderer: SceneRendererDefinition
   createLayer(options: SharedMapSceneLayerOptions): SharedMapSceneLayer
-  failActiveLayer(error: unknown): void
 }
 
 /**
- * Builds the Scene Runtime backend and its map-owned custom layers as one
- * composition so adapter failures cannot bypass RendererHost failover.
+ * Builds the Scene Runtime renderer and its map-owned custom layers as one
+ * composition. Layer failures go to the layer's `onFailure` observer; the
+ * workspace coordinator then unmounts the renderer.
  */
 export function createSharedMapSceneRendererComposition(): SharedMapSceneRendererComposition {
   const bridge = new MapLibreSceneRendererBridge()
-  let activeConnection: MapLibreSceneRenderTargetConnection | null = null
 
   return {
     renderer: bridge.createRenderer(),
-    failActiveLayer(error) {
-      // An admission failure can happen before createLayer() has connected a
-      // target. Keep it visible to the active renderer in that case too.
-      bridge.failActiveBackend(error)
-      activeConnection?.fail(error)
-    },
     createLayer(options) {
-      let connection: MapLibreSceneRenderTargetConnection | null = null
-      const adapter = createSharedMapSceneLayer({
-        ...options,
-        onFailure: (error) => {
-          connection?.fail(error)
-          options.onFailure?.(error)
-        },
-      })
-      connection = bridge.connect(adapter)
-      activeConnection = connection
+      const adapter = createSharedMapSceneLayer(options)
+      let connection: MapLibreSceneRenderTargetConnection | null = bridge.connect(adapter)
 
       return {
         layer: adapter.layer,
@@ -52,7 +37,6 @@ export function createSharedMapSceneRendererComposition(): SharedMapSceneRendere
         async dispose(disposeOptions) {
           await adapter.dispose(disposeOptions)
           connection?.disconnect()
-          if (activeConnection === connection) activeConnection = null
           connection = null
         },
       }

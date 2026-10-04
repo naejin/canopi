@@ -48,7 +48,7 @@
 }
 
 .swatch:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
 
@@ -82,7 +82,7 @@
 }
 
 .moreColorsButton:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
 
@@ -177,11 +177,11 @@
 }
 
 .customInput:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
 
-.colorSquare:focus-visible, .hueStrip:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.colorSquare:focus-visible, .hueStrip:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 
 .suggestion:hover { color: var(--color-primary); }
-.suggestion:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.suggestion:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }

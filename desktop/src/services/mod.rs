@@ -1,11 +1,14 @@
+pub(crate) mod app_folders;
 pub mod design_files;
 pub mod design_notebook;
 pub mod export;
+pub(crate) mod folder_reveal;
 pub mod geocoding;
 pub mod health;
 pub mod lidar;
 pub mod plant_browser;
 pub mod problem_report;
+pub mod recent_design_previews;
 pub mod saved_object_stamps;
 pub mod settings;
 pub mod species_catalog;

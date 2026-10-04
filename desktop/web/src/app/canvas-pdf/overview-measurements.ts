@@ -3,7 +3,6 @@ import type { PdfLabels, PdfOperation } from './types'
 import type { PdfTextEngine } from './text'
 import { insideZone, type ZoneMeasurements } from './zone-measurements'
 import { MM, pathOp, rectPath, textOp } from './page-drawing'
-import { fieldLabels } from './labels'
 
 export function groupedGuides(zones: readonly ZoneMeasurements[], guides: CanvasPrintSnapshot['measurements']): ReadonlyMap<string, string> {
   const result = new Map<string, string>()
@@ -19,7 +18,7 @@ export function groupedGuides(zones: readonly ZoneMeasurements[], guides: Canvas
 export function overviewMeasurements(zones: readonly ZoneMeasurements[], guides: CanvasPrintSnapshot['measurements'],
   geometry: (index: number) => PrintBounds, text: PdfTextEngine, locale: string, labels: PdfLabels,
   guideValues: readonly string[] = []): PdfOperation[][] {
-  const pages: PdfOperation[][] = [], wording = fieldLabels(labels)
+  const pages: PdfOperation[][] = []
   const number = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   const compact = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }), homes = groupedGuides(zones, guides)
   let operations!: PdfOperation[], frame!: PrintBounds, columns!: number[], y = 0
@@ -28,11 +27,11 @@ export function overviewMeasurements(zones: readonly ZoneMeasurements[], guides:
     if (pages.length >= 199) throw new Error('coverage-too-large')
     frame = geometry(pages.length); operations = []; pages.push(operations)
     columns = [frame.x, frame.x + frame.width * .30, frame.x + frame.width * .54, frame.x + frame.width * .60]
-    emit(zones.length ? wording.measurementSummary : labels.notes, frame.x, frame.y + 9, 9, true)
+    emit(zones.length ? labels.measurementSummary : labels.notes, frame.x, frame.y + 9, 9, true)
     if (zones.length) {
-      emit(`${wording.metres} · Ø ${wording.diameters}`, frame.x, frame.y + 22, 7)
+      emit(`${labels.metres} · Ø ${labels.diameters}`, frame.x, frame.y + 22, 7)
       operations.push(pathOp(rectPath({ x: frame.x - 2, y: frame.y + 28, width: frame.width + 4, height: 17 }), null, '#f1efe9', 0))
-      const headings = [wording.zone, wording.longSide, wording.width, wording.guides]
+      const headings = [labels.zone, labels.longSide, labels.width, labels.guides]
       headings.forEach((heading, i) => { const line = text.line(heading, 7, true); emit(heading, columns[i]! - (i === 1 || i === 2 ? line.width : 0), frame.y + 39, 7, true) })
       operations.push(pathOp(`M${frame.x} ${frame.y + 44} h${frame.width}`, '#a29c91', null, .2 * MM))
     }
@@ -48,7 +47,7 @@ export function overviewMeasurements(zones: readonly ZoneMeasurements[], guides:
     }
     const values = [...counts].sort((a, b) => a[0] - b[0]).map(([n, count]) => compact.format(n) + (count > 1 ? ` ×${count}` : '')).join(' · ') || '—'
     const lines = text.wrap(values, 7.2, frame!.width * .4)
-    const name = item.zone.name !== item.reference && !/^(?:zone-)?[0-9a-f]{8}-[0-9a-f-]+$/i.test(item.zone.name) ? item.zone.name : ''
+    const name = item.zone.name !== null && item.zone.name !== item.reference ? item.zone.name : ''
     const names = name ? text.wrap(name, 7, frame!.width * .16) : []
     const rows = Math.max(item.lengths.length, lines.length, names.length + 1)
     room(Math.min(rows * 9 + 3, frame!.height - 60))
@@ -69,7 +68,7 @@ export function overviewMeasurements(zones: readonly ZoneMeasurements[], guides:
   }
   if (zones.some(z => z.lengths.length > 1)) {
     room(14); y! += 4
-    emit(`* ${wording.outerSides}`, frame!.x, y!, 7); y! += 10
+    emit(`* ${labels.outerSides}`, frame!.x, y!, 7); y! += 10
   }
   y! += 6
   for (const value of guideValues) {

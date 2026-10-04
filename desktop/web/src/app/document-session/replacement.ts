@@ -6,11 +6,19 @@ import {
   type CanvasDocumentSurface,
 } from "../../canvas/runtime/runtime";
 import type { CanopiFile } from "../../types/design";
-import { normalizeLoadedDocument, normalizeNewDocument } from "../contracts/document";
+import { CURRENT_CANOPI_FILE_VERSION } from "../../generated/canopi-design-format";
+import { NEW_DESIGN_LAYER_DEFAULTS } from "../../generated/new-design-defaults";
+import {
+  DEFAULT_BUDGET_CURRENCY,
+  normalizeLoadedDocument,
+  normalizeNewDocument,
+} from "../contracts/document";
+import { PLANT_DISPLAY_EXTRA_KEY } from "../design-edit/plant-display";
 import type { DesignSessionStore } from "./store";
 import type { DesignSessionWorkflowRunner } from "./workflow-runner";
 
-export type DesignReplacementKind = "new" | "loaded";
+/** `close` ends the session: the Canvas gets an empty Scene and the store no Design. */
+type DesignReplacementKind = "new" | "loaded" | "close";
 
 export interface ResolvedDesignReplacement {
   readonly file: CanopiFile;
@@ -21,7 +29,7 @@ export interface ResolvedDesignReplacement {
   readonly onDesignFinalized?: () => void;
 }
 
-export interface DesignSessionApplicationReceipt {
+interface DesignSessionApplicationReceipt {
   readonly file: CanopiFile | null;
   readonly canvasHydrated: boolean;
 }
@@ -32,13 +40,13 @@ export interface DesignSessionPendingCanvasReplacementIdentity {
   readonly [designSessionPendingCanvasReplacementBrand]: true;
 }
 
-export interface PendingDesignReplacementStatus {
+interface PendingDesignReplacementStatus {
   readonly identity: DesignSessionPendingCanvasReplacementIdentity;
   readonly isDesignBaselineCurrent: boolean;
   readonly designWasApplied: boolean;
 }
 
-export interface DesignReplacementSettlementReceipt {
+interface DesignReplacementSettlementReceipt {
   readonly preservedCurrentDesign: boolean;
 }
 
@@ -72,6 +80,7 @@ export interface DesignSessionReplacementDeps {
 
 interface PendingDesignReplacement {
   readonly identity: DesignSessionPendingCanvasReplacementIdentity;
+  readonly closes: boolean;
   readonly key: string;
   readonly file: CanopiFile;
   readonly finalization: DesignReplacementFinalizer;
@@ -222,12 +231,13 @@ function createPendingDesignReplacement(
   const ownedFile = cloneDocument(file);
   return {
     identity: Object.freeze({}) as DesignSessionPendingCanvasReplacementIdentity,
+    closes: input.kind === "close",
     key,
     file: ownedFile,
     isDesignBaselineCurrent,
     finalization: createDesignReplacementFinalizer(
       store,
-      ownedFile,
+      input.kind === "close" ? null : ownedFile,
       input.path,
       input.name,
       input.onDesignFinalized,
@@ -279,10 +289,15 @@ function finishCanvasApplication(
   workflowRunner: DesignSessionWorkflowRunner,
 ): void {
   if (!canvasApplication.chromeShown) {
-    canvasApplication.canvas.showCanvasChrome();
+    if (operation.closes) {
+      canvasApplication.canvas.hideCanvasChrome();
+    } else {
+      canvasApplication.canvas.showCanvasChrome();
+    }
     canvasApplication.chromeShown = true;
   }
-  if (!canvasApplication.zoomedToFit) {
+  // A closed Design keeps the camera where it was.
+  if (!canvasApplication.zoomedToFit && !operation.closes) {
     canvasApplication.canvas.zoomToFit();
     canvasApplication.zoomedToFit = true;
   }
@@ -292,9 +307,10 @@ function finishCanvasApplication(
   }
 }
 
+/** `file` null closes the current Design instead of replacing it. */
 function createDesignReplacementFinalizer(
   store: DesignSessionStore,
-  file: CanopiFile,
+  file: CanopiFile | null,
   path: string | null,
   name: string,
   onDesignFinalized: () => void = () => {},
@@ -314,12 +330,16 @@ function createDesignReplacementFinalizer(
       batch(() => {
         try {
           store.resetDirtyBaselines();
-          store.replaceCurrentDesignState(file, path, name);
+          if (file) {
+            store.replaceCurrentDesignState(file, path, name);
+          } else {
+            store.clearCurrentDesign();
+          }
         } finally {
           const identity = store.readIdentity();
-          const identityApplied = identity.file === file
-            && identity.path === path
-            && identity.name === name;
+          const identityApplied = file
+            ? identity.file === file && identity.path === path && identity.name === name
+            : identity.file === null && identity.path === null;
           if (identityApplied && !extensionFinalized) {
             onDesignFinalized();
             extensionFinalized = true;
@@ -352,9 +372,56 @@ function designReplacementKey(
   ]);
 }
 
+/**
+ * Close the current Design through the shared replacement path: the Canvas
+ * settles an empty Scene (clearing undo history) and finalization empties the
+ * store; `onDesignClosed` ends the edition's continuous-save session there.
+ */
+export function createCloseDesignReplacement(
+  onDesignClosed: () => void,
+): ResolvedDesignReplacement {
+  return {
+    file: emptySceneDocument(),
+    kind: "close",
+    path: null,
+    name: "",
+    finalizationIdentity: "close",
+    onDesignFinalized: onDesignClosed,
+  };
+}
+
+// Fixed timestamps keep a retried close's replacement key stable.
+function emptySceneDocument(): CanopiFile {
+  return {
+    version: CURRENT_CANOPI_FILE_VERSION,
+    name: "",
+    description: null,
+    plant_species_colors: {},
+    plant_species_symbols: {},
+    layers: NEW_DESIGN_LAYER_DEFAULTS.map((layer) => ({ ...layer })),
+    plants: [],
+    zones: [],
+    annotations: [],
+    measurement_guides: [],
+    groups: [],
+    consortiums: [],
+    timeline: [],
+    budget: [],
+    budget_currency: DEFAULT_BUDGET_CURRENCY,
+    views: [],
+    stories: [],
+    created_at: "1970-01-01T00:00:00.000Z",
+    updated_at: "1970-01-01T00:00:00.000Z",
+    extra: {},
+  };
+}
+
+/** What a new Design may carry in `extra`: its Settings › New Designs display options. */
+const NEW_DESIGN_EXTRA_KEYS: readonly string[] = [PLANT_DISPLAY_EXTRA_KEY];
+
 function normalizeReplacement(input: ResolvedDesignReplacement): CanopiFile {
-  return input.kind === "new"
-    ? normalizeNewDocument(input.file)
+  return input.kind !== "loaded"
+    ? normalizeNewDocument(input.file, NEW_DESIGN_EXTRA_KEYS)
     : normalizeLoadedDocument(input.file);
 }
 

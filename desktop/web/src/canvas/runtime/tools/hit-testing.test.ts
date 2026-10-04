@@ -1,0 +1,346 @@
+import { describe, expect, it } from 'vitest'
+
+import type { PlantPresentationContext } from '../plant-presentation'
+import type { ScenePersistedState, ScenePoint, SceneZoneEntity } from '../scene'
+import { hitTestTopLevel, hitTestVisibleTopLevel, hitZoneEdge, queryQuadTopLevel, zoneEdgeSegment } from './hit-testing'
+
+function createScene(): ScenePersistedState {
+  return {
+    plantSpeciesColors: {},
+    plantSpeciesSymbols: {},
+    plantSpeciesCodes: {},
+    layers: [
+      { kind: 'layer', name: 'plants', visible: true, locked: false, opacity: 1 },
+      { kind: 'layer', name: 'zones', visible: true, locked: false, opacity: 1 },
+    ],
+    plants: [{
+      kind: 'plant',
+      locked: false,
+      id: 'plant-1',
+      canonicalName: 'Malus domestica',
+      commonName: 'Apple',
+      color: null,
+      stratum: null,
+      canopySpreadM: null,
+      position: { x: 10, y: 20 },
+      rotationDeg: null,
+      notes: null,
+      plantedDate: null,
+      quantity: null,
+    }],
+    zones: [],
+    annotations: [],
+    measurementGuides: [],
+    groups: [],
+    guides: [],
+  }
+}
+
+/** A band level with the world axes, as its four corners. */
+function box(rect: { x: number; y: number; width: number; height: number }): ScenePoint[] {
+  return [
+    { x: rect.x, y: rect.y },
+    { x: rect.x + rect.width, y: rect.y },
+    { x: rect.x + rect.width, y: rect.y + rect.height },
+    { x: rect.x, y: rect.y + rect.height },
+  ]
+}
+
+function getPlantContext(viewportScale: number): PlantPresentationContext {
+  return {
+    pixelsPerMetre: viewportScale,
+    speciesCache: new Map(),
+  }
+}
+
+describe('scene hit testing', () => {
+  it('keeps a crowded annotation discoverable without letting its hidden text steal a plant hit at working zoom', () => {
+    const scene = createScene()
+    scene.annotations = [{ kind: 'annotation', id: 'note', annotationType: 'text',
+      position: { x: 0, y: 20 }, text: 'A long note over the plant', fontSize: 16, rotationDeg: null, locked: false }]
+    expect(hitTestTopLevel(scene, { x: 10, y: 20 }, 20, new Map(), getPlantContext))
+      .toEqual({ kind: 'plant', id: 'plant-1' })
+    expect(hitTestTopLevel(scene, { x: 0, y: 20 }, 20, new Map(), getPlantContext))
+      .toEqual({ kind: 'annotation', id: 'note' })
+    expect(queryQuadTopLevel(scene, box({ x: 5, y: 20, width: .1, height: .1 }), 20, new Map(), getPlantContext))
+      .toEqual([])
+    expect(hitTestTopLevel(scene, { x: 5, y: 20 }, 20, new Map(), getPlantContext, [], { kind: 'annotation', id: 'note' }))
+      .toEqual({ kind: 'annotation', id: 'note' })
+    expect(hitTestVisibleTopLevel(scene, { x: 5, y: 20 }, 20, new Map(), getPlantContext, [], { kind: 'annotation', id: 'note' }))
+      .toEqual({ kind: 'annotation', id: 'note' })
+  })
+
+  it('chooses the closest visible plant when dense position marks share pointer padding', () => {
+    const scene = createScene()
+    scene.plants = [
+      { ...scene.plants[0]!, id: 'a', position: { x: 0, y: 0 } },
+      { ...scene.plants[0]!, id: 'b', position: { x: .27, y: 0 } },
+    ]
+    expect(hitTestTopLevel(scene, { x: 0, y: 0 }, 10, new Map(), getPlantContext))
+      .toEqual({ kind: 'plant', id: 'a' })
+    expect(queryQuadTopLevel(scene, box({ x: -.3, y: 0, width: .01, height: .01 }), 10, new Map(), getPlantContext))
+      .toEqual([])
+  })
+
+  it('hits the overview note marker without letting hidden text steal a plant hit', () => {
+    const scene = createScene()
+    scene.annotations = [{ kind: 'annotation', id: 'note', annotationType: 'text',
+      position: { x: 0, y: 20 }, text: 'A long note over the plant', fontSize: 16, rotationDeg: null, locked: false }]
+    expect(hitTestTopLevel(scene, { x: -6, y: 20 }, 1, new Map(), getPlantContext))
+      .toEqual({ kind: 'annotation', id: 'note' })
+    expect(hitTestTopLevel(scene, { x: 10, y: 20 }, 1, new Map(), getPlantContext))
+      .toEqual({ kind: 'plant', id: 'plant-1' })
+    expect(queryQuadTopLevel(scene, box({ x: 30, y: 22, width: 2, height: 2 }), 1, new Map(), getPlantContext))
+      .toEqual([])
+  })
+
+  it('uses the symbolic Placed Plant Visual Footprint for band selection bounds', () => {
+    const scene = createScene()
+    const targets = queryQuadTopLevel(
+      scene,
+      box({ x: 10.34, y: 20, width: 0.01, height: 0.01 }),
+      10,
+      new Map(),
+      getPlantContext,
+    )
+
+    expect(targets).toEqual([{ kind: 'plant', id: 'plant-1' }])
+  })
+
+  it('detects visible locked-Layer targets for hover without making them editable', () => {
+    const scene = createScene()
+    scene.layers = [{ kind: 'layer', name: 'plants', visible: true, locked: true, opacity: 1 }]
+
+    expect(hitTestTopLevel(scene, { x: 10, y: 20 }, 10, new Map(), getPlantContext))
+      .toBeNull()
+    expect(hitTestVisibleTopLevel(scene, { x: 10, y: 20 }, 10, new Map(), getPlantContext))
+      .toEqual({ kind: 'plant', id: 'plant-1' })
+  })
+
+  it('hides hidden-Layer targets from editable and hover hit testing', () => {
+    const scene = createScene()
+    scene.layers = [{ kind: 'layer', name: 'plants', visible: false, locked: false, opacity: 1 }]
+
+    expect(hitTestTopLevel(scene, { x: 10, y: 20 }, 10, new Map(), getPlantContext))
+      .toBeNull()
+    expect(hitTestVisibleTopLevel(scene, { x: 10, y: 20 }, 10, new Map(), getPlantContext))
+      .toBeNull()
+  })
+
+  it('hit-tests rotated Rectangular Zones by oriented boundary proximity', () => {
+    const scene = createScene()
+    scene.plants = []
+    scene.zones = [{
+      kind: 'zone',
+      id: 'zone-1', name: null,
+      locked: false,
+      zoneType: 'rect',
+      points: [
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+        { x: 10, y: 4 },
+        { x: 0, y: 4 },
+      ],
+      rotationDeg: 45,
+      fillColor: null,
+      notes: null,
+    }]
+
+    expect(hitTestTopLevel(scene, { x: 6.4, y: 0.6 }, 10, new Map(), getPlantContext))
+      .toEqual({ kind: 'zone', id: 'zone-1' })
+    expect(hitTestTopLevel(scene, { x: 5, y: 2 }, 10, new Map(), getPlantContext))
+      .toBeNull()
+    expect(hitTestTopLevel(scene, { x: -5, y: -5 }, 10, new Map(), getPlantContext))
+      .toBeNull()
+  })
+
+  it('band-selects rotated Rectangular Zones by their oriented geometry', () => {
+    const scene = createScene()
+    scene.plants = []
+    scene.zones = [{
+      kind: 'zone',
+      id: 'zone-1', name: null,
+      locked: false,
+      zoneType: 'rect',
+      points: [
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+        { x: 10, y: 4 },
+        { x: 0, y: 4 },
+      ],
+      rotationDeg: 45,
+      fillColor: null,
+      notes: null,
+    }]
+
+    expect(queryQuadTopLevel(scene, box({ x: 5, y: 2, width: 0.01, height: 0.01 }), 1, new Map(), getPlantContext))
+      .toEqual([{ kind: 'zone', id: 'zone-1' }])
+    expect(queryQuadTopLevel(scene, box({ x: 1, y: 1, width: 0.01, height: 0.01 }), 1, new Map(), getPlantContext))
+      .toEqual([])
+  })
+
+  it('hit-tests rotated Elliptical Zones by oriented boundary proximity', () => {
+    const scene = createScene()
+    scene.plants = []
+    scene.zones = [{
+      kind: 'zone',
+      id: 'zone-1', name: null,
+      locked: false,
+      zoneType: 'ellipse',
+      points: [
+        { x: 0, y: 0 },
+        { x: 4, y: 1 },
+      ],
+      rotationDeg: 90,
+      fillColor: null,
+      notes: null,
+    }]
+
+    expect(hitTestTopLevel(scene, { x: 0, y: 4 }, 10, new Map(), getPlantContext))
+      .toEqual({ kind: 'zone', id: 'zone-1' })
+    expect(hitTestTopLevel(scene, { x: 0, y: 0 }, 10, new Map(), getPlantContext))
+      .toBeNull()
+    expect(hitTestTopLevel(scene, { x: 3, y: 0 }, 10, new Map(), getPlantContext))
+      .toBeNull()
+  })
+
+  it('keeps large Elliptical Zone boundary hits screen-stable at high zoom', () => {
+    const scene = createScene()
+    scene.plants = []
+    scene.zones = [{
+      kind: 'zone',
+      id: 'zone-1', name: null,
+      locked: false,
+      zoneType: 'ellipse',
+      points: [
+        { x: 0, y: 0 },
+        { x: 100, y: 100 },
+      ],
+      rotationDeg: 0,
+      fillColor: null,
+      notes: null,
+    }]
+    const midpointBetweenFixedSamplesRad = (3.75 * Math.PI) / 180
+
+    expect(hitTestTopLevel(
+      scene,
+      {
+        x: Math.cos(midpointBetweenFixedSamplesRad) * 100,
+        y: Math.sin(midpointBetweenFixedSamplesRad) * 100,
+      },
+      100,
+      new Map(),
+      getPlantContext,
+    )).toEqual({ kind: 'zone', id: 'zone-1' })
+  })
+
+  it('band-selects rotated Elliptical Zones by their oriented geometry', () => {
+    const scene = createScene()
+    scene.plants = []
+    scene.zones = [{
+      kind: 'zone',
+      id: 'zone-1', name: null,
+      locked: false,
+      zoneType: 'ellipse',
+      points: [
+        { x: 0, y: 0 },
+        { x: 4, y: 1 },
+      ],
+      rotationDeg: 90,
+      fillColor: null,
+      notes: null,
+    }]
+
+    expect(queryQuadTopLevel(scene, box({ x: 0, y: 3, width: 0.01, height: 0.01 }), 1, new Map(), getPlantContext))
+      .toEqual([{ kind: 'zone', id: 'zone-1' }])
+    expect(queryQuadTopLevel(scene, box({ x: 3, y: 0, width: 0.01, height: 0.01 }), 1, new Map(), getPlantContext))
+      .toEqual([])
+  })
+
+  it('hit-tests selected rotated text annotations by their oriented text geometry', () => {
+    const scene = createScene()
+    scene.plants = []
+    scene.annotations = [{
+      kind: 'annotation',
+      id: 'annotation-1',
+      locked: false,
+      annotationType: 'text',
+      position: { x: 10, y: 20 },
+      text: 'ABCD',
+      fontSize: 10,
+      rotationDeg: 90,
+    }]
+
+    expect(hitTestTopLevel(scene, { x: 0, y: 30 }, 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
+      .toEqual({ kind: 'annotation', id: 'annotation-1' })
+    expect(hitTestTopLevel(scene, { x: 20, y: 25 }, 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
+      .toBeNull()
+    expect(queryQuadTopLevel(scene, box({ x: 0, y: 30, width: 0.01, height: 0.01 }), 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
+      .toEqual([{ kind: 'annotation', id: 'annotation-1' }])
+    expect(queryQuadTopLevel(scene, box({ x: 20, y: 25, width: 0.01, height: 0.01 }), 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
+      .toEqual([])
+  })
+
+  it('band-selects revealed rotated text annotations by their oriented geometry instead of empty AABB corners', () => {
+    const scene = createScene()
+    scene.plants = []
+    scene.annotations = [{
+      kind: 'annotation',
+      id: 'annotation-1',
+      locked: false,
+      annotationType: 'text',
+      position: { x: 0, y: 0 },
+      text: 'ABCD',
+      fontSize: 10,
+      rotationDeg: 45,
+    }]
+
+    expect(hitTestTopLevel(scene, { x: 16, y: 2 }, 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
+      .toBeNull()
+    expect(queryQuadTopLevel(scene, box({ x: 16, y: 2, width: 0.01, height: 0.01 }), 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
+      .toEqual([])
+    expect(queryQuadTopLevel(scene, box({ x: 8, y: 8, width: 0.01, height: 0.01 }), 1, new Map(), getPlantContext, [{ kind: 'annotation', id: 'annotation-1' }]))
+      .toEqual([{ kind: 'annotation', id: 'annotation-1' }])
+  })
+  it('with a pixel tolerance, the nearest polygon, rectangle or line edge', () => {
+    const zone = (id: string, zoneType: SceneZoneEntity['zoneType'], points: ScenePoint[], rotationDeg = 0): SceneZoneEntity =>
+      ({ kind: 'zone', id, name: null, locked: false, zoneType, points, rotationDeg, fillColor: null, notes: null })
+    const scene = createScene()
+    scene.plants = []
+    scene.layers = [
+      { kind: 'layer', name: 'plants', visible: true, locked: false, opacity: 1 },
+      // A locked layer still offers its edges: turning the view moves no object.
+      { kind: 'layer', name: 'zones', visible: true, locked: true, opacity: 1 },
+    ]
+    scene.zones = [
+      zone('triangle', 'polygon', [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 0, y: 20 }]),
+      // A 10 × 4 bed turned 90° about its centre (5, 32): its long edges run north-south at x = 3 and x = 7.
+      zone('bed', 'rect', [{ x: 0, y: 30 }, { x: 10, y: 30 }, { x: 10, y: 34 }, { x: 0, y: 34 }], 90),
+      zone('hedge', 'line', [{ x: 40, y: 0 }, { x: 40, y: 20 }]),
+      zone('pond', 'ellipse', [{ x: 70, y: 10 }, { x: 5, y: 3 }]),
+    ]
+    const at = (x: number, y: number, tolerancePx = 8, scale = 2) => hitZoneEdge(scene, { x, y }, tolerancePx, scale)
+
+    // The hypotenuse (edge 1) is nearer than the bottom edge (edge 0); 2 px/m: distances read in pixels.
+    expect(at(10, 9)).toEqual({ zoneId: 'triangle', edgeIndex: 1, distancePx: expect.closeTo(Math.SQRT2, 6) })
+    expect(at(10, -3)).toEqual({ zoneId: 'triangle', edgeIndex: 0, distancePx: expect.closeTo(6, 6) })
+    // Beyond the tolerance, or deep inside a zone: no edge.
+    expect(at(10, -5)).toBeNull()
+    expect(at(6, 6, 4, 1)).toBeNull()
+    // The rectangle by its turned corners.
+    const bedEdge = at(7.5, 32)!
+    expect(bedEdge).toMatchObject({ zoneId: 'bed', distancePx: expect.closeTo(1, 6) })
+    const [a, b] = zoneEdgeSegment(scene.zones[1]!, bedEdge.edgeIndex)!
+    expect(a.x).toBeCloseTo(7, 6)
+    expect(b.x).toBeCloseTo(7, 6)
+    expect(Math.abs(b.y - a.y)).toBeCloseTo(10, 6)
+    expect(at(41, 10)).toEqual({ zoneId: 'hedge', edgeIndex: 0, distancePx: expect.closeTo(2, 6) })
+    expect(zoneEdgeSegment(scene.zones[2]!, 0)).toEqual([{ x: 40, y: 0 }, { x: 40, y: 20 }])
+    // An ellipse has no edge.
+    expect(at(75, 10)).toBeNull()
+    expect(zoneEdgeSegment(scene.zones[3]!, 0)).toBeNull()
+
+    scene.layers = scene.layers.map((layer) => layer.name === 'zones' ? { ...layer, visible: false } : layer)
+    expect(at(10, 9)).toBeNull()
+  })
+})

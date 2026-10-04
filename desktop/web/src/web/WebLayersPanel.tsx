@@ -1,58 +1,34 @@
-import {
-  currentCanvasQuerySurface,
-  getCurrentCanvasLayerCommandSurface,
-} from '../canvas/session'
-import { activeLayerName } from '../app/canvas-settings/signals'
 import { LayerPanel } from '../components/canvas/LayerPanel'
+import { Notice } from '../components/shared/Notice'
+import { LAYER_PANEL_ACTIONS } from '../app/canvas-layer-presentation/panel-actions'
+import { readCanvasLayerPresentation } from '../app/canvas-layer-presentation/presentation'
+import { currentDesign } from '../app/document-session/store'
 import { t } from '../i18n'
+import styles from './web-layers-panel.module.css'
 
+/** Web has no local terrain or LiDAR: its map rows are the Background (Satellite, Map or None). */
+const WEB_REFERENCE_ROWS: ReadonlySet<string> = new Set(['basemap', 'satellite'])
+
+/**
+ * Web Layers. Site data states why it is empty: terrain and height data need
+ * Canopi Desktop. A Design's references to them round-trip unchanged and show
+ * again there.
+ */
 export function WebLayersPanel() {
-  const queries = currentCanvasQuerySurface.value
-  void queries?.revision.scene.value
-  const layers = queries?.getSceneSnapshot().layers ?? []
-  const rows = ['annotations', 'plants', 'measurement-guides', 'zones'].flatMap(
-    (name) => {
-      const layer = layers.find((entry) => entry.name === name)
-      return layer
-        ? [
-            {
-              id: layer.name,
-              label: t(`canvas.layers.${layer.name}`),
-              authority: 'scene' as const,
-              active: activeLayerName.value === layer.name,
-              visible: layer.visible,
-              locked: layer.locked,
-              opacity: layer.opacity,
-              canLock: true,
-              detail: { type: 'scene' as const },
-            },
-          ]
-        : []
-    },
-  )
+  const rows = readCanvasLayerPresentation().rows.filter((row) =>
+    row.authority === 'scene' || WEB_REFERENCE_ROWS.has(row.id))
+  const kept = currentDesign.value?.lidar?.entries.length ?? 0
   return (
     <LayerPanel
       rows={rows}
-      actions={{
-        active: (id) => {
-          activeLayerName.value = id
-        },
-        visibility: (id, visible) => {
-          getCurrentCanvasLayerCommandSurface()?.setSceneLayerVisibility(
-            id,
-            visible,
-          )
-        },
-        locked: (id, locked) => {
-          getCurrentCanvasLayerCommandSurface()?.setSceneLayerLocked(id, locked)
-        },
-        opacity: (id, opacity) => {
-          getCurrentCanvasLayerCommandSurface()?.setSceneLayerOpacity(
-            id,
-            opacity,
-          )
-        },
-      }}
+      actions={LAYER_PANEL_ACTIONS}
+      siteData={(
+        <div className={styles.notice}>
+          <Notice tone="info">
+            {kept > 0 ? t('canvas.lidar.webKept', { count: kept }) : t('canvas.lidar.webUnavailable')}
+          </Notice>
+        </div>
+      )}
     />
   )
 }

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { MANUAL_TARGET, NONE_TARGET, speciesTarget } from '../target'
-import { createMapFrame } from '../canvas/maplibre-camera'
+import { MANUAL_TARGET, speciesTarget } from '../target'
+
+const NONE_TARGET = { kind: 'none' } as const
 import { geoToMercator } from '../canvas/projection'
+import type { ViewCamera } from '../canvas/runtime/view/types'
+import { createSessionPlane } from '../canvas/session-plane'
 import { targetIdentity } from '../target'
 import {
   projectTargetResolutionToMapFeatures,
@@ -9,10 +12,10 @@ import {
   type TargetMapProjectionScene,
 } from '../target'
 import type { PanelTarget } from '../types/design'
+import { createTestView } from './support/test-view'
 
 const LOCATION = { lat: 48.8566, lon: 2.3522 }
 const MAPLIBRE_WORLD_TILE_SIZE = 512
-const DEGREES_TO_RADIANS = Math.PI / 180
 
 function projectWorldToCanvasScreen(
   viewport: { x: number; y: number; scale: number },
@@ -27,21 +30,18 @@ function projectWorldToCanvasScreen(
 function projectGeoToMapScreen(
   lng: number,
   lat: number,
-  frame: NonNullable<ReturnType<typeof createMapFrame>>,
+  camera: ViewCamera,
   screenSize: { width: number; height: number },
 ) {
   const point = geoToMercator(lng, lat)
-  const center = geoToMercator(frame.center[0], frame.center[1])
-  const worldSizePx = MAPLIBRE_WORLD_TILE_SIZE * (2 ** frame.zoom)
+  const center = geoToMercator(camera.center.lon, camera.center.lat)
+  const worldSizePx = MAPLIBRE_WORLD_TILE_SIZE * (2 ** camera.zoom)
   const deltaX = (point.x - center.x) * worldSizePx
   const deltaY = (point.y - center.y) * worldSizePx
-  const bearingRad = frame.bearing * DEGREES_TO_RADIANS
-  const cos = Math.cos(bearingRad)
-  const sin = Math.sin(bearingRad)
 
   return {
-    x: screenSize.width / 2 + deltaX * cos + deltaY * sin,
-    y: screenSize.height / 2 - deltaX * sin + deltaY * cos,
+    x: screenSize.width / 2 + deltaX,
+    y: screenSize.height / 2 + deltaY,
   }
 }
 
@@ -54,7 +54,7 @@ function createScene(overrides: Partial<TargetMapProjectionScene> = {}): TargetM
     ],
     zones: [
       {
-        name: 'orchard',
+        id: 'orchard',
         points: [
           { x: 0, y: 0 },
           { x: 10, y: 0 },
@@ -63,7 +63,7 @@ function createScene(overrides: Partial<TargetMapProjectionScene> = {}): TargetM
         ],
       },
       {
-        name: 'too-small',
+        id: 'too-small',
         points: [
           { x: 0, y: 0 },
           { x: 10, y: 0 },
@@ -77,7 +77,7 @@ function createScene(overrides: Partial<TargetMapProjectionScene> = {}): TargetM
 describe('projectTargetsToMapFeatures', () => {
   it('projects an identity resolution through the map adapter interface', () => {
     const resolution = targetIdentity.resolve(
-      [speciesTarget('Malus domestica'), { kind: 'zone', zone_name: 'orchard' }],
+      [speciesTarget('Malus domestica'), { kind: 'zone', zone_id: 'orchard' }],
       targetIdentity.indexScene(createScene()),
     )
 
@@ -130,7 +130,7 @@ describe('projectTargetsToMapFeatures', () => {
   it('projects a zone target to a closed polygon and keeps colliding IDs typed', () => {
     const result = projectTargetsToMapFeatures(
       [
-        { kind: 'zone', zone_name: 'plant-1' },
+        { kind: 'zone', zone_id: 'plant-1' },
         { kind: 'placed_plant', plant_id: 'orchard' },
       ],
       createScene({
@@ -140,7 +140,7 @@ describe('projectTargetsToMapFeatures', () => {
         ],
         zones: [
           {
-            name: 'plant-1',
+            id: 'plant-1',
             points: [
               { x: 0, y: 0 },
               { x: 4, y: 0 },
@@ -148,7 +148,7 @@ describe('projectTargetsToMapFeatures', () => {
             ],
           },
           {
-            name: 'orchard',
+            id: 'orchard',
             points: [
               { x: 0, y: 0 },
               { x: 6, y: 0 },
@@ -174,11 +174,11 @@ describe('projectTargetsToMapFeatures', () => {
 
   it('projects a Linear Zone target to a line feature', () => {
     const result = projectTargetsToMapFeatures(
-      [{ kind: 'zone', zone_name: 'hedgerow' }],
+      [{ kind: 'zone', zone_id: 'hedgerow' }],
       createScene({
         zones: [
           {
-            name: 'hedgerow',
+            id: 'hedgerow',
             zoneType: 'line',
             points: [
               { x: 0, y: 0 },
@@ -201,10 +201,10 @@ describe('projectTargetsToMapFeatures', () => {
 
   it('projects a rotated rectangular Zone target to its oriented polygon', () => {
     const result = projectTargetsToMapFeatures(
-      [{ kind: 'zone', zone_name: 'rotated-bed' }],
+      [{ kind: 'zone', zone_id: 'rotated-bed' }],
       createScene({
         zones: [{
-          name: 'rotated-bed',
+          id: 'rotated-bed',
           zoneType: 'rect',
           rotationDeg: 90,
           points: [
@@ -218,10 +218,10 @@ describe('projectTargetsToMapFeatures', () => {
       LOCATION,
     )
     const expected = projectTargetsToMapFeatures(
-      [{ kind: 'zone', zone_name: 'rotated-bed' }],
+      [{ kind: 'zone', zone_id: 'rotated-bed' }],
       createScene({
         zones: [{
-          name: 'rotated-bed',
+          id: 'rotated-bed',
           zoneType: 'polygon',
           points: [
             { x: 7, y: -3 },
@@ -241,10 +241,10 @@ describe('projectTargetsToMapFeatures', () => {
 
   it('projects a rotated elliptical Zone target to its oriented polygon', () => {
     const result = projectTargetsToMapFeatures(
-      [{ kind: 'zone', zone_name: 'ellipse-bed' }],
+      [{ kind: 'zone', zone_id: 'ellipse-bed' }],
       createScene({
         zones: [{
-          name: 'ellipse-bed',
+          id: 'ellipse-bed',
           zoneType: 'ellipse',
           rotationDeg: 90,
           points: [
@@ -284,7 +284,7 @@ describe('projectTargetsToMapFeatures', () => {
   it('reports missing scene-backed targets and treats manual and none as intentionally empty', () => {
     const missingSpecies = speciesTarget('Pyrus communis')
     const missingPlant: PanelTarget = { kind: 'placed_plant', plant_id: 'missing-plant' }
-    const missingZone: PanelTarget = { kind: 'zone', zone_name: 'missing-zone' }
+    const missingZone: PanelTarget = { kind: 'zone', zone_id: 'missing-zone' }
 
     const result = projectTargetsToMapFeatures(
       [MANUAL_TARGET, NONE_TARGET, missingSpecies, missingPlant, missingZone],
@@ -302,7 +302,7 @@ describe('projectTargetsToMapFeatures', () => {
     const missingPlant: PanelTarget = { kind: 'placed_plant', plant_id: 'missing-plant' }
 
     const result = projectTargetsToMapFeatures(
-      [speciesTarget('Malus domestica'), { kind: 'zone', zone_name: 'orchard' }, missingPlant],
+      [speciesTarget('Malus domestica'), { kind: 'zone', zone_id: 'orchard' }, missingPlant],
       createScene(),
       null,
     )
@@ -315,7 +315,7 @@ describe('projectTargetsToMapFeatures', () => {
 
   it('skips zones with fewer than three points instead of emitting invalid polygons', () => {
     const result = projectTargetsToMapFeatures(
-      [{ kind: 'zone', zone_name: 'too-small' }],
+      [{ kind: 'zone', zone_id: 'too-small' }],
       createScene(),
       LOCATION,
     )
@@ -326,50 +326,36 @@ describe('projectTargetsToMapFeatures', () => {
     expect(result.skippedReason).toBeNull()
   })
 
-  it('projects features through the same north-bearing transform as the map camera', () => {
+  it('projects session plane metres north-up: x east, y south', () => {
     const result = projectTargetsToMapFeatures(
-      [{ kind: 'placed_plant', plant_id: 'plant-2' }],
-      createScene(),
-      { ...LOCATION, northBearingDeg: 90 },
-    )
-    const northUp = projectTargetsToMapFeatures(
       [{ kind: 'placed_plant', plant_id: 'plant-2' }],
       createScene(),
       LOCATION,
     )
 
     expect(result.features).toHaveLength(1)
-    expect(northUp.features).toHaveLength(1)
-    const rotatedPoint = result.features[0]
-    const northUpPoint = northUp.features[0]
-    expect(rotatedPoint?.geometry.type).toBe('Point')
-    expect(northUpPoint?.geometry.type).toBe('Point')
-    const rotatedCoords = rotatedPoint?.geometry.type === 'Point' ? rotatedPoint.geometry.coordinates : null
-    const northUpCoords = northUpPoint?.geometry.type === 'Point' ? northUpPoint.geometry.coordinates : null
-    expect(rotatedCoords?.[0]).not.toBeCloseTo(
-      northUpCoords![0],
-      8,
-    )
-    expect(rotatedCoords?.[1]).not.toBeCloseTo(
-      northUpCoords![1],
-      8,
-    )
-    expect(rotatedCoords?.[0]).toBeLessThan(northUpCoords![0])
+    const point = result.features[0]
+    expect(point?.geometry.type).toBe('Point')
+    const coords = point?.geometry.type === 'Point' ? point.geometry.coordinates : null
+    // plant-2 sits 12 m east and 6 m north of the origin.
+    expect(coords![0]).toBeGreaterThan(LOCATION.lon)
+    expect(coords![1]).toBeGreaterThan(LOCATION.lat)
   })
 
   it('keeps projected plant overlays screen-locked to the same canonical map frame', () => {
     const scene = createScene()
     const viewport = { x: -180, y: 64, scale: 2.4 }
     const screenSize = { width: 1200, height: 800 }
-    const northBearingDeg = 32
-    const frame = createMapFrame(viewport, screenSize, LOCATION, northBearingDeg)
+    // The map camera the canvas viewport corresponds to, on the session plane at the Design's location.
+    const view = createTestView({ screen: screenSize, viewport, plane: createSessionPlane(LOCATION) })
+    const { camera } = view.view()
+    view.dispose()
     const result = projectTargetsToMapFeatures(
       [{ kind: 'placed_plant', plant_id: 'plant-2' }],
       scene,
-      { ...LOCATION, northBearingDeg },
+      LOCATION,
     )
 
-    expect(frame).not.toBeNull()
     expect(result.features).toHaveLength(1)
     const plant = scene.plants.find((entry) => entry.id === 'plant-2')
     const feature = result.features[0]
@@ -377,7 +363,7 @@ describe('projectTargetsToMapFeatures', () => {
     expect(feature?.geometry.type).toBe('Point')
     const coordinates = feature?.geometry.type === 'Point' ? feature.geometry.coordinates : null
     const mapScreen = coordinates
-      ? projectGeoToMapScreen(coordinates[0], coordinates[1], frame!, screenSize)
+      ? projectGeoToMapScreen(coordinates[0], coordinates[1], camera, screenSize)
       : null
     const canvasScreen = projectWorldToCanvasScreen(viewport, plant!.position)
 

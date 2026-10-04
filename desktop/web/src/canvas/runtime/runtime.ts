@@ -2,26 +2,35 @@ import type { SpeciesFocus, SpeciesFocusCommands } from './species-key'
 import type { CanvasPrintSnapshot } from '../print'
 import type { CanvasInspectionHandle } from '../inspection'
 import type { ReadonlySignal } from '@preact/signals'
-import type { CanopiFile, PlacedPlant, SpatialFrame } from '../../types/design'
+import type {
+  Annotation,
+  CanopiFile,
+  MeasurementGuide,
+  ObjectGroup,
+  PlacedPlant,
+  Zone,
+} from '../../types/design'
+import type { SessionPlane } from '../session-plane'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import type { SelectedPlantSymbolContext } from '../plant-symbol-context'
 import type { PlantSymbolId, SceneDesignObjectTarget, ScenePoint } from './scene'
-import type {
-  CameraViewportSnapshot,
-  SceneBounds,
-  TemporaryBoundsFocusOptions,
-} from './camera'
+import type { SceneBounds } from './view/types'
 import type { ScenePersistedState } from './scene'
+import type { PlantLabelMode } from './plant-display'
+import type { SceneRendererSnapshot } from './renderers/scene-types'
+import type { PointerWorld } from './interaction-ports'
+import type { Modifiers } from './interaction-types'
+import type { ViewCommandSurface, ViewReadSurface } from './view/read-surface'
+import type { ViewTransform } from './view/types'
 
 export interface CanvasRuntimeDocumentMetadata {
   name: string
   description?: string | null
-  spatialFrame?: SpatialFrame
 }
 
 export type CanvasDesignObjectSelectionTarget = SceneDesignObjectTarget
 
-export type CanvasDesignObjectSelectionBlockReason =
+type CanvasDesignObjectSelectionBlockReason =
   | 'grouped-member'
   | 'hidden-layer'
   | 'locked-layer'
@@ -52,18 +61,28 @@ export interface CanvasQueryRevision {
   readonly plantNames: ReadonlySignal<number>
 }
 
-export interface CanvasToolCommandSurface {
-  setTool(name: string): void
+/** Plant a row's spacing field, which the tool card shows while a plant is picked. */
+export interface CanvasPlantRowSpacingField {
+  /** The text changed: the preview follows a valid spacing. */
+  input(text: string): void
+  /** Enter: keeps a valid spacing and gives the map focus back; an invalid one keeps the field focused. */
+  commit(text: string): void
+  /** The field lost focus: keeps a valid spacing without moving focus. */
+  blur(text: string): void
+  /** Esc in the field: drops the picked plant and gives the map focus back. */
+  cancel(): void
 }
 
-export interface CanvasViewportCommandSurface {
-  zoomIn(): void
-  zoomOut(): void
-  zoomToFit(): void
-  returnToDesign(): void
-  focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
-  returnFromTemporaryFocus(): boolean
+export interface CanvasToolCommandSurface {
+  setTool(name: string): void
+  readonly plantRowSpacing: CanvasPlantRowSpacingField
 }
+
+/**
+ * The viewport commands app code may give: the view's command surface (spec §1.1a). The name stays for `canvas/session.ts`
+ * (`currentCanvasViewportCommandSurface`).
+ */
+export type CanvasViewportCommandSurface = ViewCommandSurface
 
 export interface CanvasHistoryCommandSurface {
   readonly canUndo: ReadonlySignal<boolean>
@@ -72,8 +91,28 @@ export interface CanvasHistoryCommandSurface {
   redo(): void
 }
 
+/** Design objects in their persisted lon/lat form (no metres). */
+export interface CanvasDesignObjects {
+  readonly plants: readonly PlacedPlant[]
+  readonly zones: readonly Zone[]
+  readonly annotations: readonly Annotation[]
+  readonly measurementGuides: readonly MeasurementGuide[]
+  readonly groups: readonly ObjectGroup[]
+}
+
+export interface CanvasDesignObjectImportReceipt {
+  readonly committed: boolean
+  readonly createdCount: number
+}
+
 export interface CanvasSceneEditCommandSurface {
   saveSelectionAsObjectStamp(): void
+  /**
+   * Adds lon/lat design objects as one undoable edit: positions enter the
+   * session plane, identities are re-allocated, locks are cleared and the new
+   * objects become the selection. Group members refer to the given ids.
+   */
+  importDesignObjects(objects: CanvasDesignObjects): CanvasDesignObjectImportReceipt
   copy(): void
   paste(): void
   pasteAt(point: ScenePoint): void
@@ -83,12 +122,39 @@ export interface CanvasSceneEditCommandSurface {
   deleteSelected(): void
   selectAll(): void
   selectSameSpecies(canonicalName?: string, options?: { additive?: boolean }): void
+  /** Replaces the selection with every selectable plant of these species. */
+  selectSpecies(canonicalNames: readonly string[]): void
+  /** Empties the selection (session state: no edit, history or dirty state). */
+  clearSelection(): void
   bringToFront(): void
   sendToBack(): void
   lockSelected(): void
   unlockSelected(): void
+  /** Unlocks every locked Design Object in the Design as one edit; layer locks stay. */
+  unlockAll(): void
   groupSelected(): void
   ungroupSelected(): void
+  /**
+   * Gives a zone a display name as one undoable edit; a blank name clears it,
+   * and lists then name the zone by its type and size. The zone's id, which
+   * Calendar and Budget targets and groups refer to, never changes. False when
+   * nothing changed (unknown or locked zone, locked layer, same name).
+   */
+  renameZone(zoneId: string, name: string | null): boolean
+  /**
+   * Turns the editable selection about its centre by `degrees`, clockwise on
+   * the map for positive values, as one undoable edit. A selection holding a
+   * locked object, a measurement or a single plant does not turn.
+   */
+  rotateSelected(degrees: number): void
+  /**
+   * Moves the editable selection by `delta` session-plane metres (the arrow
+   * keys on the map). Nudges until `endNudge()` are one undoable edit; locked
+   * objects never move. False when nothing editable moved.
+   */
+  nudgeSelected(delta: ScenePoint): boolean
+  /** Ends the nudge series: commits it as one edit, or restores it with `abort`. */
+  endNudge(options?: { readonly abort?: boolean }): void
 }
 
 export interface CanvasChromeCommandSurface {
@@ -101,6 +167,12 @@ export interface CanvasLayerCommandSurface {
   setSceneLayerVisibility(name: string, visible: boolean): boolean
   setSceneLayerOpacity(name: string, opacity: number): boolean
   setSceneLayerLocked(name: string, locked: boolean): boolean
+  /**
+   * Presenting a story: the map shows only these Design layers and no
+   * selection or hover until `null`. Session state only: never a Scene edit,
+   * history entry or dirty state.
+   */
+  presentLayers(visibleLayerNames: readonly string[] | null): void
 }
 
 export interface CanvasPlantPresentationCommandSurface {
@@ -124,11 +196,39 @@ export interface CanvasCommandSurface {
   readonly plantPresentation: CanvasPlantPresentationCommandSurface
 }
 
+export interface CanvasViewSceneRequest {
+  /** The view the scene is captured for: its scale decides overview. */
+  readonly view: ViewTransform
+  /** Design layers drawn; every other layer is hidden. */
+  readonly visibleLayerNames: readonly string[]
+  /** Species the view focuses; others are dimmed as Species Focus does. */
+  readonly focusedSpecies: string | null
+  /** Labels the view shows; absent, the workspace's choice. */
+  readonly plantLabels?: PlantLabelMode
+}
+
+/** How many plants in view carry a label on the map now ("Codes shown for 70 of 282 plants in view"). */
+export interface CanvasPlantLabelCoverage {
+  readonly labelled: number
+  readonly inView: number
+}
+
 export interface CanvasQuerySurface {
   getSpeciesFocus(): SpeciesFocus
+  /** Labels drawn for the plants in view; zero in overview and while nothing is mounted. */
+  getPlantLabelCoverage(): CanvasPlantLabelCoverage
   readonly revision: CanvasQueryRevision
-  readonly viewport: ReadonlySignal<CameraViewportSnapshot>
+  /** What app code observes of the view (spec §1.1a): coarse signals and the capture of what is on screen. */
+  readonly view: ViewReadSurface
+  // The open Design's metre frame; null only before the first hydration.
+  readonly sessionPlane: ReadonlySignal<SessionPlane | null>
   capturePrintSnapshot(): CanvasPrintSnapshot | null
+  /**
+   * The settled scene as a saved view shows it in `view`, for an off-screen
+   * snapshot: no selection, hover or panel highlight. Null while an edit owns
+   * the Scene. Never changes session state.
+   */
+  captureViewScene(request: CanvasViewSceneRequest): SceneRendererSnapshot | null
   getScenePhysicalExtentMeters(): number | null
   getSceneSnapshot(): ScenePersistedState
   getSelection(): SceneDesignObjectTarget[]
@@ -137,7 +237,19 @@ export interface CanvasQuerySurface {
   getSelectedPlantSymbolContext(): SelectedPlantSymbolContext
   getPlacedPlants(): PlacedPlant[]
   getSettledPlacedPlants(): PlacedPlant[] | null
+  /** Canonical lon/lat design objects, as a save would write them; null while busy. */
+  getSettledDesignObjects(): CanvasDesignObjects | null
   getLocalizedCommonNames(): ReadonlyMap<string, string | null>
+  /**
+   * English catalog names for the Design's species with no name in the UI
+   * language (empty in English). Lists show them marked as English.
+   */
+  getEnglishFallbackNames(): ReadonlyMap<string, string>
+  /**
+   * Forwards ToolHost.subscribePointerWorld (§1.1a): the pointer's world and screen points over the map, null when it leaves.
+   * The inspection lens reads it instead of its own map-host pointermove. Before the interaction session exists it hears nothing.
+   */
+  subscribePointerWorld(listener: (point: PointerWorld | null) => void): () => void
 }
 
 export interface CanvasDocumentReplacementReceipt {
@@ -187,7 +299,6 @@ export function createCanvasDocumentReplacementToken(): CanvasDocumentReplacemen
 
 export interface CanvasDocumentSurface {
   attachInspectionTo(element: HTMLElement): CanvasInspectionHandle
-  initializeViewport(): void
   attachRulersTo(element: HTMLElement): void
   showCanvasChrome(): void
   hideCanvasChrome(): void
@@ -207,14 +318,50 @@ export interface CanvasDocumentSurface {
   destroy(): void
 }
 
+export type CanvasEscapeLayer = 'gesture' | 'nudge-series' | 'tool-transient' | 'tool' | 'selection'
+
+export interface CanvasKeyboardPort {
+  escapeLayers(): readonly CanvasEscapeLayer[]            // live canvas layers now, by Esc priority (spec §3.7)
+  /** Runs a live layer; app/keyboard/escape-chain.ts decides which, from the focus. */
+  escape(layer: CanvasEscapeLayer): void
+  /** What the next Esc will do, for the tool-card hint (same source as behaviour). */
+  describeEscape(): CanvasEscapeLayer | null
+  /** False when nothing consumed it. confirm, remove-last, rotate-held, edit-text and context-menu return false in overview;
+   *  edit-text only under Select, and confirm under Select edits the one selected note (Enter). context-menu stamps the
+   *  keyboard-menu echo with the time keyState recorded for a Menu key or Shift+F10, only when that was the last keydown. */
+  command(c: CanvasKeyCommand): boolean
+  /** The key router's first call for every keydown (capture) and keyup: the nudge commit on any key but an arrow, a
+   *  modifier or Esc, the physical Ctrl, the Menu key's time and the Space hold (code Space, not text, and a live pointer
+   *  session or not a control). The verdict tells the router what to do; the port never touches the event. */
+  keyState(k: CanvasKeyState): CanvasKeyVerdict
+  readonly host: HTMLElement
+}
+export interface CanvasKeyState {
+  readonly type: 'keydown' | 'keyup'
+  readonly key: string             // 'Control' sets the physical Ctrl; arrows, modifiers and Escape keep a nudge series
+  readonly code: string            // 'Space'
+  readonly mods: Modifiers
+  readonly timeStamp: number       // KeyboardEvent.timeStamp: the clock of the contextmenu echo
+  readonly text: boolean           // the target is a text field
+  readonly onCanvas: boolean       // focus is the map host (not a control in it) or nothing (app/keyboard/target-class.ts)
+}
+/** held: the router prevents and Space is held for panning, nothing else runs; pass-live and pass: the router goes on, with a
+ *  pointer session live or not. */
+export type CanvasKeyVerdict = 'held' | 'pass-live' | 'pass'
+
+/** The router reaches the live session's port here: keyboard-port.ts implements it, and workspace-runtime-composition.ts
+ *  exposes a forwarding port that reaches the session's once it exists (spec §1.2a, §1.6). */
 export interface CanvasRuntimeSurfaces {
   readonly commands: CanvasCommandSurface
   readonly queries: CanvasQuerySurface
   readonly documents: CanvasDocumentSurface
+  readonly keyboard: CanvasKeyboardPort          // canvas/session.ts exports currentCanvasKeyboardPort
 }
 
-export interface CanvasRuntimeHost {
-  readonly surfaces: CanvasRuntimeSurfaces
-  init(container: HTMLElement): Promise<void>
-  destroy(): Promise<void>
-}
+export type CanvasKeyCommand =
+  | { kind: 'confirm' } | { kind: 'remove-last' } | { kind: 'edit-text' } | { kind: 'delete-handle' }
+  | { kind: 'rotate-held'; stepDeg: 15 | -15 }
+  | { kind: 'arrow'; dir: 'up' | 'down' | 'left' | 'right'; large: boolean }   // keyboard-port.ts: ToolHost.nudge; 'handled' and 'refused' take it, on 'pass' panByPx with nothing selected
+  | { kind: 'rotate-view'; direction: 1 | -1 } | { kind: 'reset-north' }
+  | { kind: 'zoom-step'; direction: 1 | -1 }                                    // plain + / − with map focus
+  | { kind: 'context-menu' }                                                    // Menu key, Shift+F10

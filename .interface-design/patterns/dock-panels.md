@@ -1,47 +1,52 @@
 # Dock panels
 
-Read the [design contract](../system.md). Gallery: `?surface=workspace` exercises the complete Desktop composition; add `edition=web` for the Web composition. Direct panel review remains available through `?surface=key|layers|favorites|notebook`; include empty and long states.
+Read the [design system](../system.md) first; ownership: [frontend guide](../../docs/guides/frontend.md). Boards: Workspace, FindPlants, SelectedToList, Layers, AddDataMenu, AddData, ImportProgress, AnalyzeDialog, SlopeAnalysis, Library, ResultDetails, LayersDark, Calendar, CalendarAction, Budget, Consortium, Notebook, Favorites, StoryAuthor; AnalyzeWater, WaterFlow and CanopyAnalysis show planned analyses.
 
-`WorkspaceComposition` validates the shell command projection against its edition's registered surfaces, chooses the primary surface, and mounts the single `SidePanelDock`. Its side-surface wrapper is a column flex container with bounded height; preserve that containing block because Catalog, Favorites, and planning panels depend on it for internal scrolling and virtualization. Default dock width is 352px, bounded by the existing minimum and viewport maximum; explicit user resize takes precedence. Web retains its narrow-screen stacked layout. `SidePanelDock` owns the pointer and keyboard resize lifecycle. `DockPanelHeader` uses shared sentence-case title/quiet count/close chrome and restores focus to the corresponding rail button. The shell owns which panel is open. Species Key and Layers are followed by Calendar, Budget, and Consortium in the Design group; opening or switching them keeps the canvas mounted.
+## Panel frame
+
+- A floating panel on the right (top 72, right 76, bottom 64): Literata 18 title, optional muted subtitle, head actions (Expand, Back on the left), close. Body scrolls; footers hold totals and apply actions. Width 380, or 440 for Budget, Consortium and Stories.
+- No bare count beside the title: a summary is a labelled sentence ("N plants · N species") in the subtitle or finder line. Counts go through `formatCount`, or `{{count, number}}` with plural forms.
+
+## The plant finder
+
+- Every panel that lists plants starts with the shared `PlantFinder`: the field (label "Find plants", placeholder "Name, scientific name or code", Ctrl F key cap until there is text), a "Quick filters" group of pressed-toggle chips and menu chips, and one `role="status"` line (the correction or the selection filter in words; nothing while unfiltered).
+- Plants in this Design, Budget, Consortium and the Place plants chooser follow "Selected on map" with Stratum and Form menus: Stratum is the Design's own (Emergent, High, Mid, Low, No stratum yet), Form the catalog habit (Tree, Shrub, Herbaceous, Climber, Not recorded).
+- Matches are marked with `<mark>` (`--color-mark`); rows keep the species row layout (`species-row.module.css`). Found and filtered-out states use `EmptyState` with `status`; panel empties use `EmptyState` with the panel icon and one action, usually "Open plant catalog".
+- Only Plants in this Design rings its matches on the map, with the top chip "N plants match “q” · Zoom to them · Select all N · Clear". Other lists filter without touching the map.
+
+## Plants in this Design
+
+- Title with a muted "N plants · N species" subtitle, then a collapsible "Display on the map" section: Color by (Species / Stratum / One color; One color adds a swatch, Stratum a legend whose swatches recolour a whole stratum, with "Reset stratum colors" once one is changed), Symbol size (50–200 %), Outline, Labels (None / Codes / Names with the "Codes shown for …" line, "Zoom in to see codes" when none shows), Soften background ("Kept on this device"), then a one-line hint.
+- Species rows with a colour swatch first while colouring by species; the glyph always shows the colour the map draws. A swatch recolours the whole species. Options are saved with the Design, except Soften background. Activating a row highlights that species on the map with a top chip (name · N plants highlighted · Select these plants · Clear).
+
+## Layers, data and analysis
+
+- One list in three sections, front to back: **Design** (Annotations, Plants, Measurement guides, Zones, with counts, eye and lock), **Site data** (the Design's terrain and height items; results nest under their source with "from <source> · <units>"; then **Online elevation** with Contour lines and Hillshading), **Background** (one radio group: Satellite, Map, None). No section counts.
+- "Add data" (the only entry, beside the Site data heading) opens a menu: Terrain or height from files…, Design objects from GeoJSON…, From your library ▸ (items already here are disabled), Data library….
+- One row is active across Layers. The active site item's footer: name and type, out-of-date notice with Refresh, legend with range, Opacity, Fit to data (then Return to Design), Read values (pressed while active), Analyze… on sources, Details, Move forward and back (Alt ↑/↓), and Remove from Design with "Your library keeps the data."
+- Details replace the list (Back to Layers): out-of-date notice with Refresh, facts and provenance, Run again with changes…, Rename…, Open in the Data library, Processing history.
+- Import dialog (after the native picker): what Canopi accepts (single-band GeoTIFF), name, what the values measure and unit, ordered files. A notice says whether the files cover the Design and never blocks the import. Progress shows on its own row under Site data with Cancel import and "You can keep working."
+- Analyze dialog is generated from the analysis registry (ADR 0011): it names its source and where results go, lists options with one-line explanations, marks existing results "Already in Layers", shows parameters inline, and says "Unavailable: the GeoLibre engine is missing." when the sidecar is absent.
+- Data library (dialog): search, type filter (`Dropdown`), Import…; rows with preview, type and resolution or units, and "In this Design" or Add to Design; the footer counts items and disk space, with Show in folder (ghost) and Done. A rebuilt library shows a warning naming Retry at the top; one refused as newer or unopenable shows an error saying it is read-only.
+- Web: no terrain import; Site data says terrain and height data need Canopi Desktop.
 
 ## Planning
 
-Calendar, Budget, and Consortium consume Planning Projection read models and write through their feature workbenches into Design Edit. Their search, filter, sort, month, expansion, and scroll state belongs to the session-scoped Planning View owner and resets only when the Design Session identity changes.
+- **Calendar:** month grid with single-day marks and range bars, today underlined, the selected day a ringed cell; action types have a colour and a shape. The week starts on the locale's first day (`civilWeekStartDay`). Agenda for the selected day with done checkboxes and Edit; "Add action for this date"; footer "N unscheduled" switches to the agenda.
+- **Calendar action editor:** `SurfaceHeader` with Back, title and Close; a multi-line Description, Action type, the schedule as a `SegmentedControl` (Range · One day · Unscheduled) with inclusive Start and End dates, targets (Whole Design, Species with the finder picker and "Add all N", Current selection, Zone), Completed as a `Switch`, then Delete · Cancel · Save.
+- **Budget:** finder with "Missing a price · N" and sort; rows with code, plant count, unit cost field (locale decimals) and total in compact columns (6 px gaps, plants 28, unit cost 76, total 72). Footer: plants and "N of M species priced", the grand total, a meter that filters to unpriced species, currency and Export CSV….
+- **Consortium:** "N species · N have no stratum yet"; finder (a dot marks every cell containing a match); a stratum × phase table with grouped phase headers and durations in words, a neutral bark heat ramp; the list below shows the cell or the matches with full phase names.
 
-Calendar uses a mini month with an agenda at normal dock widths. Expand temporarily grows the same dock and shows the full month grid above the 640px content threshold; Reduce or a manual resize returns to the normal saved width. Budget is a searchable species ledger with inline unit costs and a persistent totals/export footer. Consortium uses a fixed stratum-by-phase matrix to filter a grouped compact species list. Hover presentation routes through Target Presentation, and identity actions route through Species Focus.
+## Favorites and stamps
 
-On narrow Web layouts, planning panels receive the larger stacked-dock share. Budget and Consortium fall back to whole-panel scrolling so their rows, editors, and totals remain reachable at short heights; Budget keeps its footer visible when the viewport has room and lets it join that scroll on short viewports.
+Search; Plants (star first, row opens details, Place and More); Saved stamps (reorder handle with Alt ↑/↓, glyph group, name, "N plants · N zones · N annotations", Place and More with Rename, Export…, Delete); Import stamps… (icon) and Save selection. Web has Plants and Recently viewed, no stamps.
 
-## Species Key
+## Stories
 
-SurfaceSearch precedes the show-codes toggle and plant total. Rows read actual placed species: effective glyph variants, common/scientific names through SpeciesIdentity, quiet mono code, count, separate detail action. Preserve every appearance variant.
+Title "Stories"; a row with the story `Dropdown`, its More menu (Rename story…, Delete story with Undo) and New story. Body: step rows (60 px: reorder handle with Alt ↑/↓, number, a 64 × 40 thumbnail, the title over the first line of its text, More: Duplicate, Move up/down, Move to ▸ another story, Delete with Undo); the selected row is the ochre-edged selected row. Then "Add the current view as a step" (disabled until the Design is on a map).
 
-The main row toggles species focus without editing or selecting plants. Details opens the existing detail surface. Focus remains clearable while searching or switching panels; the canvas chip is independent of panel lifetime. Distinguish an empty Design from no search matches. Avoid a tall explanatory introduction.
-
-## Layers
-
-Show the scene stack before Site references. Each row has visibility, a neutral layer icon, name/active target, a live scene-object count where applicable, and a separate lock when supported. Label the scene stack top-to-bottom; Site references are independent of scene order. Active layer has an ochre edge; locked inactive layers do not receive another active-looking row fill.
-
-Active-layer settings stay below the complete stack so switching layers does not move rows. Preserve scene opacity, location setup, map opacity, contour interval and hillshade controls. Sliders have visible values and accessible names. Hidden and locked remain independent from active; controls remain readable.
-
-## Favorites
-
-Plants and Saved stamps are sibling frames with equal section-heading/count treatment and a resizable split. Retain Favorites navigation. Plants get search, only common/scientific names, and visible Place/favorite actions. Omit climate, life cycle, alternate common names and other metadata from these compact rows; those belong in plant information. A separate information chevron opens plant database information across the whole dock, like Species Key. Keep the underlying list mounted; Back restores its search, scroll and initiating button (or search if that row disappeared). Keep Back available through loading/error states. The row body retains drag-to-canvas. Web Favorites uses the same detail navigation and retains Recently Viewed instead of adding desktop Saved Stamps.
-
-Saved stamps use ruled rows: six-dot reorder grip, user name/composition summary, a plus icon for Place, and ActionMenu containing Export/Rename/Delete. Import is a compact header action; Save selection is a left-aligned outlined action with a plus icon and the existing availability rule. Explain an unavailable selection in its tooltip, without an extra strip above the rows. Keep inline rename/delete confirmation, hover/focus recognition preview, separate body placement drag, and pointer/keyboard reorder. Rows keep their natural height when names wrap; scroll the list instead of compressing row content. Never substitute generated codes for user names.
-
-Split height is a user setting, not Design state. Pointer resize previews locally and persists on completion. Respect both frames' minimum height and available panel size. French library copy uses planche/Planches; tampon remains for stamping tools.
-
-Persistence queues, cancellation and preview cleanup: [frontend workbenches](../../docs/agent/frontend-workbenches.md#saved-object-stamps).
+The selected step's editor card: "Step n", Title, Text (a small toolbar; links only to web and e-mail addresses), Images (thumbnail, a required Description and Remove), "This step shows" tags, then Use the current map view and Go to this view. Footer: "N steps · saved with the Design" and Present (primary; disabled without a step or a map), from the selected step ([Canvas workspace](canvas-workspace.md#presenting-a-story)). No stories yet is an `EmptyState` with New story.
 
 ## Design notebook
 
-Use DockPanelHeader for sentence-case title, quiet count and close. Compact Add current design / New section commands precede a single open sectioned ledger. Keep Add current design visible but disabled when already included; preserve save-before-add. Add directly to the first section (or Unsectioned when none exists), without a destination dropdown. Reorganize entries by dragging within the ledger. Each ruled row has a document icon, saved name, quiet date/plant count, and removal action. Mark the active reference with an ochre edge and Open now; keep the full path in its tooltip for disambiguation.
-
-Preserve direct row/section-title ordering, section creation/rename/removal, and Design Session navigation. Removal only removes the notebook reference. No file-manager split, invented statuses, separate notebook labels or browser-local Notebook. See the workbench guide for authority and edition boundaries.
-
-## LiDAR band section (Layers dock)
-
-The Layers dock ends with a LiDAR section (`components/panels/lidar/LidarLayersSection.tsx`) that follows the compact ruled-row pattern. Its quiet group heading has one Add-layer command. Each source row has disclosure, an independent eye, a readable wrapping name with quiet measurement/status metadata, and one `ActionMenu`. Analysis results indent below their source and keep their own eye and menu; hiding or collapsing a source never changes result visibility. Selecting a row opens settings below the complete list without changing the active scene drawing layer. Put opacity, coverage facts, Add TIFFs, supported analyses and view controls in those settings; keep History and deletion in the row menu. A Location gate and actual map/coverage-bounds intersection distinguish missing Location, remote coverage, empty coverage and failed preparation. `View coverage` changes only the camera and exposes `Return to Design Location`.
-
-Import uses a dedicated Layers-dock subview so status survives panel switching. It leads with job state, destination/source details and uncovered/overlap area, with exact cell counts in disclosure. Keep the independent add-uncovered and replace-overlap decisions, disable no-op Apply, explain unavailable replacement, and keep the sticky Apply/Cancel footer reachable in short windows. Before and After share one scale and use tabs at dock width. A changed decision must not present the default preview as its result. Back leaves background work running; Cancel and Escape cancel active work and publish nothing. Applying shows backend-owned, monotonic phase and percentage progress; source staging stays indeterminate until it has measurable work. Terminal success, failure and cancellation require a clear acknowledgement. Use deterministic `state=located|long|lidar-review|lidar-progress` gallery fixtures, `canvas.lidar.*` keys in all locales and existing tokens only.
+A shortcut list of saved Designs in sections (Desktop). Add current Design; New section; rows with name, plant count and date, "Open now" on the current row, drag between sections, and a remove button that never deletes the file.

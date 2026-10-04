@@ -1,5 +1,5 @@
-import type { BasemapStyle } from '../generated/contracts'
-import { createMapLibreBasemapStyle } from './config'
+import { createMapLibreEmptyStyle } from './config'
+import { logMapError } from './redact-credentials'
 import type {
   MapLibreApi,
   MapLibreHostViewState,
@@ -17,6 +17,7 @@ export interface WorldMapLibreMap extends MapLibreMapInstance {
   }): void
   getCenter(): { lng: number; lat: number }
   getZoom(): number
+  readonly keyboard: { disableRotation(): void }
 }
 
 export interface WorldMapMarker {
@@ -42,7 +43,6 @@ interface WorldMapLibreApi extends MapLibreApi {
 }
 
 export interface WorldMapLibreOptions {
-  readonly basemapStyle: BasemapStyle
   readonly center: [number, number]
   readonly zoom: number
   /** The request seam that authenticates official provider tiles. */
@@ -56,11 +56,10 @@ export function createWorldMapLibreMap(
 ): WorldMapLibreMap {
   const map = new maplibre.Map({
     container,
-    style: createMapLibreBasemapStyle(options.basemapStyle),
+    style: createMapLibreEmptyStyle(),
     center: options.center,
     zoom: options.zoom,
-    // Attribution is owned by the basemap mount's single control, not the
-    // map's automatic AttributionControl (E4).
+    // Attribution is owned by the map background's single control.
     attributionControl: false,
     interactive: true,
     pitchWithRotate: false,
@@ -68,6 +67,16 @@ export function createWorldMapLibreMap(
     touchZoomRotate: false,
     ...(options.transformRequest ? { transformRequest: options.transformRequest } : {}),
   }) as unknown as WorldMapLibreMap
+
+  // MapLibre prints an error event nobody listens to on the console, and a
+  // failed official tile's message carries its URL with the Google key and
+  // session. Every World map error is passive (tiles, sources), so it is only
+  // logged, redacted.
+  map.on('error', (event) => logMapError('Passive MapLibre World map error:', event))
+
+  // The World map stays north-up: its keyboard handler keeps arrow pans and
+  // +/- zoom, but Shift+arrows neither turn nor tilt it (INV-CAM-46).
+  map.keyboard.disableRotation()
 
   try {
     const NavigationControl = (maplibre as WorldMapLibreApi).NavigationControl

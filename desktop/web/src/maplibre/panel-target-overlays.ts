@@ -1,3 +1,8 @@
+import {
+  getCanvasInteractionStrokeVisual,
+  MIN_PLANT_RING_RADIUS_PX,
+  type CanvasInteractionStrokeVisual,
+} from '../canvas/runtime/scene-visuals'
 import type {
   TargetMapFeature,
   TargetMapProjectionResult,
@@ -10,7 +15,7 @@ export interface PanelTargetMapOverlayFeatureCollection {
   readonly features: readonly TargetMapFeature[]
 }
 
-export interface PanelTargetMapOverlaySourceSpec {
+interface PanelTargetMapOverlaySourceSpec {
   readonly id: string
   readonly type: 'geojson'
   readonly data: PanelTargetMapOverlayFeatureCollection
@@ -26,7 +31,7 @@ type PanelTargetMapOverlayLayerFilter =
   | PanelTargetMapOverlayKindFilter
   | readonly ['all', PanelTargetMapOverlayKindFilter, PanelTargetMapOverlayGeometryFilter]
 
-export interface PanelTargetMapOverlayLayerSpec {
+interface PanelTargetMapOverlayLayerSpec {
   readonly id: string
   readonly source: string
   readonly type: 'circle' | 'fill' | 'line'
@@ -44,67 +49,86 @@ export interface PanelTargetMapOverlayContract {
   readonly hasRenderableFeatures: boolean
 }
 
-const OVERLAY_STYLE = {
-  hover: {
-    plantColor: '#f59e0b',
-    zoneFillColor: '#f59e0b',
-    zoneLineColor: '#b45309',
-    zoneFillOpacity: 0.22,
-    lineWidth: 2,
-    circleRadius: 6,
-    circleStrokeColor: '#fff7ed',
-  },
-  selection: {
-    plantColor: '#0f766e',
-    zoneFillColor: '#0f766e',
-    zoneLineColor: '#134e4a',
-    zoneFillOpacity: 0.24,
-    lineWidth: 2.5,
-    circleRadius: 7,
-    circleStrokeColor: '#ecfeff',
-  },
-} as const
+/**
+ * Panel highlights speak the scene's ring language: a selection is the accent
+ * highlight ring over its halo, a panel hover the hover stroke; both read the
+ * canvas colour tokens and keep the finder-ring minimum size on screen.
+ */
+function overlayVisual(variant: PanelTargetMapOverlayVariant): CanvasInteractionStrokeVisual {
+  return getCanvasInteractionStrokeVisual(variant === 'selection' ? 'highlight' : 'hover')
+}
+
+const ZONE_FILL_OPACITY: Readonly<Record<PanelTargetMapOverlayVariant, number>> = {
+  hover: 0.08,
+  selection: 0.12,
+}
 
 function createLayerSpecs(
   variant: PanelTargetMapOverlayVariant,
   sourceId: string,
 ): readonly PanelTargetMapOverlayLayerSpec[] {
   const prefix = `panel-target-${variant}`
-  const style = OVERLAY_STYLE[variant]
+  const visual = overlayVisual(variant)
+  const zoneFilter = ['==', ['get', 'kind'], 'zone'] as const
+  const plantFilter = ['==', ['get', 'kind'], 'plant'] as const
+  // MapLibre strokes a circle outside its radius; centre each stroke on the ring radius.
+  const ringRadius = (strokeWidth: number) => MIN_PLANT_RING_RADIUS_PX - strokeWidth / 2
 
   return [
     {
       id: `${prefix}-zones-fill`,
       source: sourceId,
       type: 'fill',
-      filter: ['all', ['==', ['get', 'kind'], 'zone'], ['==', ['geometry-type'], 'Polygon']],
+      filter: ['all', zoneFilter, ['==', ['geometry-type'], 'Polygon']],
       paint: {
-        'fill-color': style.zoneFillColor,
-        'fill-opacity': style.zoneFillOpacity,
+        'fill-color': visual.color,
+        'fill-opacity': ZONE_FILL_OPACITY[variant],
+      },
+    },
+    {
+      id: `${prefix}-zones-casing`,
+      source: sourceId,
+      type: 'line',
+      filter: zoneFilter,
+      paint: {
+        'line-color': visual.casingColor,
+        'line-width': visual.casingWidthPx,
       },
     },
     {
       id: `${prefix}-zones-line`,
       source: sourceId,
       type: 'line',
-      filter: ['==', ['get', 'kind'], 'zone'],
+      filter: zoneFilter,
       paint: {
-        'line-color': style.zoneLineColor,
-        'line-opacity': 0.95,
-        'line-width': style.lineWidth,
+        'line-color': visual.color,
+        'line-opacity': visual.alpha,
+        'line-width': visual.widthPx,
+      },
+    },
+    {
+      id: `${prefix}-plants-halo`,
+      source: sourceId,
+      type: 'circle',
+      filter: plantFilter,
+      paint: {
+        'circle-opacity': 0,
+        'circle-radius': ringRadius(visual.casingWidthPx),
+        'circle-stroke-color': visual.casingColor,
+        'circle-stroke-width': visual.casingWidthPx,
       },
     },
     {
       id: `${prefix}-plants`,
       source: sourceId,
       type: 'circle',
-      filter: ['==', ['get', 'kind'], 'plant'],
+      filter: plantFilter,
       paint: {
-        'circle-color': style.plantColor,
-        'circle-opacity': 0.95,
-        'circle-radius': style.circleRadius,
-        'circle-stroke-color': style.circleStrokeColor,
-        'circle-stroke-width': 2,
+        'circle-opacity': 0,
+        'circle-radius': ringRadius(visual.widthPx),
+        'circle-stroke-color': visual.color,
+        'circle-stroke-opacity': visual.alpha,
+        'circle-stroke-width': visual.widthPx,
       },
     },
   ]

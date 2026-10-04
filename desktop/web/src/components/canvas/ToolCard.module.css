@@ -1,0 +1,274 @@
+/* The tool card: top left beside the tool rail, in the slot the Panels
+   stylesheet publishes (`--canvas-tool-card-left`), below the title bar. */
+.card {
+  position: absolute;
+  z-index: 25;
+  top: var(--chrome-rail-top);
+  left: var(--canvas-tool-card-left);
+  width: min(320px, calc(100% - var(--canvas-tool-card-left) - var(--chrome-inset)));
+  box-sizing: border-box;
+  padding: var(--space-3) calc(var(--space-3) + var(--space-0-5));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-glass);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(16px);
+  color: var(--color-text);
+}
+
+/* No card: the live region stays mounted but takes no room. */
+.idle {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space-2) + var(--space-0-5));
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+/* The species or stamp glyph at the start of the card, as on the boards. */
+.lead {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--color-text-secondary);
+}
+
+.subject {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.instruction {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  overflow-wrap: break-word;
+}
+
+/* Below its subject the instruction starts its own sentence. */
+.afterSubject {
+  margin-top: 0;
+}
+
+.afterSubject::first-letter {
+  text-transform: uppercase;
+}
+
+/* Plant a row: the spacing field and the row's count. */
+.field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.fieldLabel {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.fieldInput {
+  width: 84px;
+  min-height: var(--control-size-md);
+  box-sizing: border-box;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.fieldInput:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.fieldInput[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
+.count {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.count[data-density="dense"] {
+  color: var(--color-accent-ink);
+  font-weight: 600;
+}
+
+.count[data-density="blocked"] {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.hints {
+  display: block;
+  margin-top: var(--space-1-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* Change species: a quiet link in the title row. */
+.link {
+  float: right;
+  margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-2)) 0 var(--space-2);
+  min-height: var(--control-size-md);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-accent-ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.link:hover {
+  background: var(--color-control-hover);
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Place plants' species chooser: the plant finder over a short list. */
+.chooser {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+.options {
+  max-height: min(280px, calc(100cqh - var(--chrome-rail-top) - 260px));
+  min-height: 96px;
+  overflow-y: auto;
+  margin: 0 calc(-1 * var(--space-1));
+}
+
+.section {
+  margin: 0;
+  padding: var(--space-1-5) var(--space-1) var(--space-0-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+}
+
+.optionList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.option {
+  width: 100%;
+  min-height: var(--control-size-xl, 40px);
+  padding: var(--space-1) var(--space-1);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.optionNames {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.option:hover {
+  background: var(--color-control-hover);
+}
+
+.option:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.optionName {
+  font-weight: 600;
+}
+
+.optionLatin {
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+
+.empty {
+  margin: 0;
+  padding: var(--space-2) var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.catalogLink {
+  align-self: flex-start;
+  min-height: var(--control-size-md);
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-accent-ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.catalogLink:hover {
+  background: var(--color-control-hover);
+}
+
+.catalogLink:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Place a stamp's chooser: saved stamps as rows with the stamp icon. */
+.stampOption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.stampGlyph {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--color-text-secondary);
+}

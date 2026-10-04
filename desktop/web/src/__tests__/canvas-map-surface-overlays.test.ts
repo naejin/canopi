@@ -22,6 +22,7 @@ class FakeOverlayMap implements MapLibreOverlayMap {
   readonly removeLayer = vi.fn((id: string) => {
     this.layers.delete(id)
   })
+  readonly setPaintProperty = vi.fn()
 
   readonly sources = new Map<string, { source: Record<string, unknown>; setData(data: unknown): void }>()
   readonly layers = new Set<string>()
@@ -41,7 +42,6 @@ function createOverlayScene() {
       canopySpreadM: null,
       position: { x: 0, y: 0 },
       rotationDeg: null,
-      scale: null,
       notes: null,
       plantedDate: null,
       quantity: null,
@@ -51,7 +51,7 @@ function createOverlayScene() {
     {
       kind: 'zone',
       locked: false,
-      name: 'orchard',
+      id: 'orchard', name: 'orchard',
       zoneType: 'polygon',
       rotationDeg: 0,
       points: [
@@ -75,9 +75,9 @@ function createSnapshot(
       getSceneSnapshot: () => scene,
     },
     location: { lat: 48.8566, lon: 2.3522 },
-    northBearingDeg: 12,
-    hoveredTargets: [{ kind: 'zone', zone_name: 'orchard' }],
+    hoveredTargets: [{ kind: 'zone', zone_id: 'orchard' }],
     selectedTargets: [{ kind: 'placed_plant', plant_id: 'plant-1' }],
+    paintRevision: 0,
     ...overrides,
   }
 }

@@ -22,13 +22,13 @@ vi.mock('../ipc/lidar', async (importOriginal) => {
 })
 
 const { currentDesign, replaceCurrentDesignState } = await import(
-  '../app/document-session/store'
+  './support/design-session-state'
 )
 const { lidarLibrary } = await import('../app/lidar/library-store')
 const {
   beginInspection,
   endInspection,
-  hasInspectionPointerHandler,
+  hasInspectionPointerHandlerForTests,
   inspectionLocation,
   inspectionSample,
   inspectionTarget,
@@ -37,22 +37,18 @@ const {
   sampleInspectionCentre,
   sampleInspectionPoint,
 } = await import('../app/lidar/inspection')
+const { librarySnapshot, slopeItem, sourceItem } = await import('./support/library-fixtures')
 const { setCurrentCanvasSession } = await import('../canvas/session')
 const { createTestCanvasRuntimeSurfaces } = await import('./support/canvas-runtime-surfaces')
+const { createTestCanvasQuerySurface } = await import('./support/canvas-query-surface')
+const { createSessionPlane } = await import('../canvas/session-plane')
 
 /** A Design whose only presentation entry is a visible source layer. */
 function designWithPresentedLayer(): Parameters<typeof replaceCurrentDesignState>[0] {
   return {
-    version: 6,
+    version: 9,
     name: 'Inspect',
     description: null,
-    spatial_frame: {
-      anchor_longitude_deg: 0.0911,
-      anchor_latitude_deg: 48.4312,
-      north_bearing_deg: 12,
-      placement_status: 'confirmed',
-      location_metadata: { altitude_m: null },
-    },
     plant_species_colors: {},
     plant_species_symbols: {},
     plant_species_codes: {},
@@ -79,34 +75,7 @@ function designWithPresentedLayer(): Parameters<typeof replaceCurrentDesignState
 }
 
 function libraryWithGeneration(generationId: string) {
-  return {
-    layers: [
-      {
-        id: 'lyr-1',
-        name: 'Ground',
-        measurement_kind: 'GroundElevation',
-        units: 'm',
-        state: 'Ready',
-        resolution_m: 0.5,
-        coverage_cells: '1000',
-        bounds: [0, 0, 1, 1],
-        value_range: null,
-        analysis_count: 0,
-        tilesets: [
-          {
-            style: 'elevation',
-            source: { kind: 'native-generation', generation_id: generationId },
-            min_zoom: 13,
-            max_zoom: 17,
-            tile_size: 256,
-            bounds: [0, 0, 1, 1],
-          },
-        ],
-      },
-    ],
-    analyses: [],
-    engine: { available: true, version: null, detail: null },
-  }
+  return librarySnapshot([sourceItem('lyr-1', 'Ground', { generation_id: generationId, coverage_cells: '1000' })])
 }
 
 /** One WGS84 point, as the canvas's own `worldToGeo` would report it. */
@@ -299,17 +268,17 @@ describe('numeric inspection session state', () => {
     expect(inspectionTarget.value).toBeNull()
     expect(inspectionSample.value.kind).not.toBe('value')
     // The replaced session also releases the canvas gesture it installed.
-    expect(hasInspectionPointerHandler()).toBe(false)
+    expect(hasInspectionPointerHandlerForTests()).toBe(false)
   })
 
   it('releases the canvas gesture when inspection ends or is reconciled away', () => {
     beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
-    expect(hasInspectionPointerHandler()).toBe(true)
+    expect(hasInspectionPointerHandlerForTests()).toBe(true)
     endInspection()
-    expect(hasInspectionPointerHandler()).toBe(false)
+    expect(hasInspectionPointerHandlerForTests()).toBe(false)
 
     beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
-    expect(hasInspectionPointerHandler()).toBe(true)
+    expect(hasInspectionPointerHandlerForTests()).toBe(true)
 
     const design = designWithPresentedLayer() as unknown as {
       lidar: { entries: Array<Record<string, unknown>> }
@@ -322,7 +291,7 @@ describe('numeric inspection session state', () => {
     )
     reconcileInspectionWithPresentation()
     expect(inspectionTarget.value).toBeNull()
-    expect(hasInspectionPointerHandler()).toBe(false)
+    expect(hasInspectionPointerHandlerForTests()).toBe(false)
   })
 
   /**
@@ -335,7 +304,10 @@ describe('numeric inspection session state', () => {
   it('samples the viewport centre through the same command as a click', async () => {
     // The centre button reads the live viewport through the existing canvas
     // query surface, so the test provides one rather than a second camera owner.
-    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces())
+    const plane = createSessionPlane(POINT)
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: createTestCanvasQuerySurface({ sessionPlane: plane }),
+    }))
     beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
     const submitted = sampleInspectionCentre()
     expect(submitted).toBe(true)
@@ -348,6 +320,11 @@ describe('numeric inspection session state', () => {
     expect(request.expected_generation_id).toBe('gen-1')
     expect(Number.isFinite(request.longitude)).toBe(true)
     expect(Number.isFinite(request.latitude)).toBe(true)
+    // The test query surface's 400x300 view at the identity viewport is
+    // centred on plane (200, 150); the sample is that point's geography.
+    const centre = plane.toGeo({ x: 200, y: 150 })
+    expect(request.longitude).toBeCloseTo(centre.lon, 12)
+    expect(request.latitude).toBeCloseTo(centre.lat, 12)
     // The displayed coordinate is the sampled point, not an anchor.
     expect(inspectionLocation.value).toEqual({
       lat: request.latitude,
@@ -370,7 +347,7 @@ describe('numeric inspection session state', () => {
       lidar: { entries: Array<Record<string, unknown>> }
     }
     design.lidar.entries.push({
-      kind: 'Analysis',
+      kind: 'Derived',
       id: 'adef-absent',
       visible: true,
       opacity: 1,
@@ -384,13 +361,30 @@ describe('numeric inspection session state', () => {
     )
     lidarLibrary.value = libraryWithGeneration('gen-1') as never
 
-    beginInspection({ kind: 'Analysis', id: 'adef-absent', name: 'Absent' })
+    beginInspection({ kind: 'Derived', id: 'adef-absent', name: 'Absent' })
     await sampleInspectionPoint(POINT)
     expect(inspectionSample.value).toEqual({
       kind: 'unavailable',
       reason: 'missing-generation',
     })
     expect(samplePixel).not.toHaveBeenCalled()
+  })
+
+  it('samples a derived result by its library role and generation', async () => {
+    const design = designWithPresentedLayer() as unknown as {
+      lidar: { entries: Array<Record<string, unknown>> }
+    }
+    design.lidar.entries.push({ kind: 'Derived', id: 'slope-1', visible: true, opacity: 1, order: 1, style: null })
+    replaceCurrentDesignState(design as unknown as Parameters<typeof replaceCurrentDesignState>[0], null, 'Inspect')
+    lidarLibrary.value = librarySnapshot([
+      sourceItem('lyr-1', 'Ground', { generation_id: 'gen-1' }),
+      slopeItem('slope-1', 'lyr-1', { generation_id: 'sgen-1' }),
+    ])
+
+    beginInspection({ kind: 'Derived', id: 'slope-1', name: 'Slope' })
+    void sampleInspectionPoint(POINT)
+    await Promise.resolve()
+    expect(samplePixel.mock.calls[0]?.[0]).toMatchObject({ kind: 'Derived', entity_id: 'slope-1', expected_generation_id: 'sgen-1' })
   })
 
   it('ends inspection at entry when the layer is not presented at all', () => {
@@ -466,7 +460,7 @@ describe('numeric inspection session state', () => {
     expect(inspectionSample.value).toEqual({ kind: 'stale' })
     // The target stays armed so the user can re-aim for a fresh sample.
     expect(inspectionTarget.value?.id).toBe('lyr-1')
-    expect(hasInspectionPointerHandler()).toBe(true)
+    expect(hasInspectionPointerHandlerForTests()).toBe(true)
   })
 
   it('cancels a pending lookup when the head changes before the answer', async () => {
@@ -530,16 +524,16 @@ describe('numeric inspection session state', () => {
     expect(inspectionSample.value).toEqual({ kind: 'unavailable', reason: 'bad-point' })
   })
 
-  it('ends inspection and releases the gesture when navigating to Location', async () => {
+  it('ends inspection and releases the gesture when leaving the Canvas surface', async () => {
     const { activePanel } = await import('../app/shell/state')
     beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
     const reading = sampleInspectionPoint(POINT)
-    expect(hasInspectionPointerHandler()).toBe(true)
+    expect(hasInspectionPointerHandlerForTests()).toBe(true)
 
-    activePanel.value = 'location'
+    activePanel.value = 'plant-db'
     // The observer ends the session without waiting for a later reconcile.
     expect(inspectionTarget.value).toBeNull()
-    expect(hasInspectionPointerHandler()).toBe(false)
+    expect(hasInspectionPointerHandlerForTests()).toBe(false)
 
     pending[0]?.({ Value: { generation_id: 'gen-1', value: 1, units: 'm' } })
     await reading

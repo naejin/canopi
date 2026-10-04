@@ -1,3 +1,4 @@
+import { projectBrowserShellForTest } from './support/browser-shell-projection'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -26,38 +27,35 @@ vi.mock('../components/panels/WorldMapPanel', () => ({
 }))
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
 import { activePanel, navigateTo, sidePanel } from '../app/shell/state'
+import { closeSettingsDialog } from '../app/shell/dialogs'
 import { locale, theme } from '../app/settings/state'
 import {
   installSettingsProjection,
-  mutateSettingsProjection,
   resetSettingsProjectionForTests,
 } from '../app/settings/projection'
 import type { Settings } from '../types/settings'
 import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/browser-app-data'
 import { createBrowserDesignSessionController, type BrowserDesignFileAdapter } from '../web/browser-design-session'
 import { BrowserAppShell } from '../web/BrowserAppShell'
-import { createBrowserShellCommandProjection } from '../web/browser-shell-commands'
+import { phoneLayout } from '../app/shell/phone-layout'
+import { requestPlaceSearchFocus } from '../app/geocoding/place-search-ui'
 import { WebApp } from '../web/WebApp'
+import { SettingsDialog } from '../components/shared/SettingsDialog'
 import { editDesignSessionForTest } from './support/design-session-edit'
 
-function commandIds(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll<HTMLElement>('[data-web-command-id]'))
-    .map((element) => element.dataset.webCommandId ?? '')
-}
-
 function panelBarCommandIds(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll<HTMLElement>('[data-web-panelbar-command-id]'))
-    .map((element) => element.dataset.webPanelbarCommandId ?? '')
+  return Array.from(container.querySelectorAll<HTMLElement>('[data-panel-rail] [data-command-id]'))
+    .map((element) => element.dataset.commandId ?? '')
 }
 
 function panelBarLabels(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll<HTMLButtonElement>('[data-web-panelbar-command-id]'))
+  return Array.from(container.querySelectorAll<HTMLButtonElement>('[data-panel-rail] [data-command-id]'))
     .map((button) => button.getAttribute('aria-label') ?? '')
 }
 
 function panelBarButton(container: HTMLElement, id: string): HTMLButtonElement {
-  const button = container.querySelector<HTMLButtonElement>(`[data-web-panelbar-command-id="${id}"]`)
-  if (!button) throw new Error(`Missing panel bar command ${id}`)
+  const button = container.querySelector<HTMLButtonElement>(`[data-panel-rail] [data-command-id="${id}"]`)
+  if (!button) throw new Error(`Missing panel rail command ${id}`)
   return button
 }
 
@@ -67,18 +65,29 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     theme: 'light',
     snap_to_grid: true,
     snap_to_guides: true,
-    auto_save_interval_s: 60,
     side_panel_width: null,
     saved_stamps_frame_height: null,
-    map_layer_visible: true,
-    map_style: 'street',
-    map_opacity: 1,
+    basemap_style: 'liberty',
+    basemap_visible: true,
+    basemap_opacity: 1,
+    satellite_visible: false,
+    satellite_opacity: 1,
     contour_visible: false,
     contour_opacity: 1,
     contour_interval: 0,
     hillshade_visible: false,
     hillshade_opacity: 0.55,
+    soften_background: false,
     plant_spacing_interval_m: 0.5,
+    last_view: null,
+    used_canvas_tools: [],
+    tool_names_visible: null,
+    single_key_shortcuts: true,
+    scroll_wheel: 'zoom',
+    new_design_satellite: false,
+    new_design_symbol_scale: 1,
+    new_design_labels: 'names',
+    satellite_source: null,
     ...overrides,
   }
 }
@@ -90,21 +99,23 @@ function shellCommandProjection({
   readonly templatesEnabled?: boolean
   readonly downloadCanopiEnabled?: boolean
 } = {}) {
-  return createBrowserShellCommandProjection({
+  return projectBrowserShellForTest({
     currentPanel: activePanel.value,
     currentSidePanel: sidePanel.value,
     downloadCanopiEnabled,
+    revertAvailable: false,
+    geoJsonEnabled: downloadCanopiEnabled,
     templatesEnabled,
     capabilities: {
       newDesign: () => undefined,
       openCanopi: () => undefined,
       downloadCanopi: () => undefined,
+      revertDesign: () => undefined,
+      importGeoJson: () => undefined,
+      exportGeoJson: () => undefined,
+      exportBudgetCsv: () => undefined,
+      closeDesign: () => undefined,
       navigate: navigateTo,
-      toggleTheme: () => {
-        mutateSettingsProjection((settings) => {
-          settings.theme = settings.theme === 'dark' ? 'light' : 'dark'
-        }, { persist: 'immediate' })
-      },
     },
   })
 }
@@ -125,6 +136,8 @@ describe('Web Edition Browser App Shell', () => {
   })
 
   afterEach(() => {
+    // A Settings dialog left open would make the next test's shell inert.
+    closeSettingsDialog()
     render(null, container)
     container.remove()
     resetSettingsProjectionForTests()
@@ -142,28 +155,27 @@ describe('Web Edition Browser App Shell', () => {
     expect(openMenuCommandIds(container)).toEqual([
       'file.new',
       'file.openCanopi',
+      'file.rename',
       'file.downloadCanopi',
-      'file.exportCanvasPdf',
+      'file.revert',
+      'file.importGeoJson',
+      'app.settings',
+      'file.close',
     ])
-    expect(container.textContent).toContain('Open .canopi')
-    expect(container.textContent).toContain('Download .canopi')
+    expect(container.textContent).toContain('Open a .canopi file…')
+    expect(container.textContent).toContain('Download a copy')
+    expect(container.textContent).not.toContain('Quit')
     expect(container.querySelector('[data-testid="browser-drafts-list"]')).toBeNull()
-    expect(container.querySelector('[data-web-locale-control]')?.textContent).toContain('EN')
-    expect(container.querySelector('[data-web-theme-control]')).not.toBeNull()
-    expect(commandIds(container)).toContain('view.toggleTheme')
-    expect(commandIds(container)).not.toContain('settings.theme')
+    expect(container.querySelector('button[aria-label="Open a .canopi file"]')).not.toBeNull()
     expect(panelBarCommandIds(container)).toEqual([
-      'nav.canvas',
-      'nav.location',
-      'nav.speciesKey',
-      'nav.data',
-      'nav.analysis',
       'nav.layers',
+      'nav.speciesKey',
+      'nav.plantDb',
+      'nav.favorites',
       'nav.calendar',
       'nav.budget',
       'nav.consortium',
-      'nav.plantDb',
-      'nav.favorites',
+      'nav.stories',
     ])
   })
 
@@ -173,11 +185,11 @@ describe('Web Edition Browser App Shell', () => {
     })
 
     expect(container.querySelector('img[alt="Canopi"]')).not.toBeNull()
-    expect(Array.from(container.querySelectorAll('[data-web-menu-id]')).map((element) => element.textContent)).toEqual([
-      'File',
+    expect(Array.from(container.querySelectorAll('[data-menu-id]')).map((element) => element.textContent)).toEqual([
+      'File', 'Edit', 'View', 'Tools', 'Help',
     ])
-    expect(container.querySelector('[data-web-locale-control]')?.textContent).toContain('EN')
-    expect(container.querySelector<HTMLButtonElement>('[data-web-theme-control]')).not.toBeNull()
+    expect(container.querySelector('button[aria-label="Keyboard shortcuts"]')?.getAttribute('aria-keyshortcuts')).toBe('F1')
+    expect(container.querySelector('button[aria-label="Settings…"]')).not.toBeNull()
   })
 
   it('groups web-safe top bar commands in desktop-like menus', async () => {
@@ -187,8 +199,6 @@ describe('Web Edition Browser App Shell', () => {
 
     expect(container.querySelector('[role="menubar"]')).not.toBeNull()
     expect(menuTrigger(container, 'file').textContent).toBe('File')
-    expect(container.querySelector('[data-web-locale-control]')?.textContent).toContain('EN')
-    expect(container.querySelector('[data-web-theme-control]')).not.toBeNull()
 
     await act(async () => {
       menuTrigger(container, 'file').click()
@@ -197,8 +207,12 @@ describe('Web Edition Browser App Shell', () => {
     expect(openMenuCommandIds(container)).toEqual([
       'file.new',
       'file.openCanopi',
+      'file.rename',
       'file.downloadCanopi',
-      'file.exportCanvasPdf',
+      'file.revert',
+      'file.importGeoJson',
+      'app.settings',
+      'file.close',
     ])
   })
 
@@ -213,8 +227,12 @@ describe('Web Edition Browser App Shell', () => {
     expect(openMenuCommandIds(container)).toEqual([
       'file.new',
       'file.openCanopi',
+      'file.rename',
       'file.downloadCanopi',
-      'file.exportCanvasPdf',
+      'file.revert',
+      'file.importGeoJson',
+      'app.settings',
+      'file.close',
     ])
 
     await act(async () => {
@@ -241,10 +259,10 @@ describe('Web Edition Browser App Shell', () => {
       render(<BrowserAppShell commandProjection={shellCommandProjection({ templatesEnabled: true })} />, container)
     })
 
-    expect(commandIds(container)).toContain('nav.templates')
+    expect(panelBarCommandIds(container)).toContain('nav.templates')
 
     await act(async () => {
-      clickCommand(container, 'nav.templates')
+      panelBarButton(container, 'nav.templates').click()
     })
 
     expect(activePanel.value).toBe('templates')
@@ -256,34 +274,30 @@ describe('Web Edition Browser App Shell', () => {
       render(<BrowserAppShell commandProjection={shellCommandProjection({ templatesEnabled: true })} />, container)
     })
 
-    expect(container.querySelector('[data-testid="web-panel-bar"]')).not.toBeNull()
+    expect(container.querySelector('[data-panel-rail]')).not.toBeNull()
     expect(panelBarCommandIds(container)).toEqual([
       'nav.canvas',
-      'nav.location',
       'nav.templates',
-      'nav.speciesKey',
-      'nav.data',
-      'nav.analysis',
       'nav.layers',
+      'nav.speciesKey',
+      'nav.plantDb',
+      'nav.favorites',
       'nav.calendar',
       'nav.budget',
       'nav.consortium',
-      'nav.plantDb',
-      'nav.favorites',
+      'nav.stories',
     ])
     expect(panelBarLabels(container)).toEqual([
-      'Design Canvas',
-      'Design Location',
-      'World Map',
-      'Species key',
-      'Data',
-      'Analysis',
+      'Design canvas',
+      'World map',
       'Layers',
+      'Plants in this Design',
+      'Plant catalog',
+      'Favorites and stamps',
       'Calendar',
       'Budget',
       'Consortium',
-      'Plant Database',
-      'Favorites',
+      'Stories',
     ])
     await act(async () => {
       panelBarButton(container, 'nav.plantDb').click()
@@ -322,7 +336,7 @@ describe('Web Edition Browser App Shell', () => {
     expect(container.querySelector('[data-workspace-composition]')).not.toBeNull()
     expect(container.querySelector('[data-workspace-composition]')?.getAttribute('data-workspace-sidebar-open')).toBe('true')
     expect(container.querySelector('[data-workspace-side-panel="plant-db"]')).not.toBeNull()
-    expect(panelBarButton(container, 'nav.plantDb').getAttribute('aria-pressed')).toBe('true')
+    expect(panelBarButton(container, 'nav.plantDb').getAttribute('aria-expanded')).toBe('true')
 
     await act(async () => {
       panelBarButton(container, 'nav.favorites').click()
@@ -330,7 +344,7 @@ describe('Web Edition Browser App Shell', () => {
 
     expect(container.querySelector('[data-workspace-side-panel="plant-db"]')).toBeNull()
     expect(container.querySelector('[data-workspace-side-panel="favorites"]')).not.toBeNull()
-    expect(panelBarButton(container, 'nav.favorites').getAttribute('aria-pressed')).toBe('true')
+    expect(panelBarButton(container, 'nav.favorites').getAttribute('aria-expanded')).toBe('true')
 
     await act(async () => {
       panelBarButton(container, 'nav.favorites').click()
@@ -338,10 +352,10 @@ describe('Web Edition Browser App Shell', () => {
 
     expect(container.querySelector('[data-workspace-side-panel]')).toBeNull()
     expect(container.querySelector('[data-workspace-composition]')?.getAttribute('data-workspace-sidebar-open')).toBeNull()
-    expect(panelBarButton(container, 'nav.favorites').getAttribute('aria-pressed')).toBe('false')
+    expect(panelBarButton(container, 'nav.favorites').getAttribute('aria-expanded')).toBe('false')
   })
 
-  it('allocates the larger responsive dock variant only to planning panels', async () => {
+  it('opens Budget and Consortium in the wider dock and every other panel at the default width', async () => {
     const store = createMemoryDesignSessionStore()
     const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
     const controller = createBrowserDesignSessionController({
@@ -356,11 +370,11 @@ describe('Web Edition Browser App Shell', () => {
 
     await act(async () => { panelBarButton(container, 'nav.budget').click() })
     expect(container.querySelector('[data-workspace-side-panel="budget"]')).not.toBeNull()
-    expect(container.querySelector('[data-responsive-size]')?.getAttribute('data-responsive-size')).toBe('large')
+    expect(container.querySelector('[data-dock-width]')?.getAttribute('data-dock-width')).toBe('wide')
 
     await act(async () => { panelBarButton(container, 'nav.plantDb').click() })
     expect(container.querySelector('[data-workspace-side-panel="plant-db"]')).not.toBeNull()
-    expect(container.querySelector('[data-responsive-size]')?.getAttribute('data-responsive-size')).toBe('default')
+    expect(container.querySelector('[data-dock-width]')?.getAttribute('data-dock-width')).toBe('default')
   })
 
   it('preserves the canvas across side panels and releases it for the Templates primary route', async () => {
@@ -405,17 +419,15 @@ describe('Web Edition Browser App Shell', () => {
     expect(workspaceCanvasLifecycle.mounted).toHaveBeenCalledTimes(2)
   })
 
-  it('exposes Web Location placement while keeping address search out of browser chrome', async () => {
+  it('keeps Location placement and address search out of browser chrome', async () => {
     await act(async () => {
       render(<BrowserAppShell commandProjection={shellCommandProjection()} />, container)
     })
 
-    // ADR 0028 replaced the old "Web omits Location entirely" restriction, so the
-    // entry point is expected now. What must stay absent is geocoding: the
-    // browser bundle has no address search, and the panel composes the
-    // coordinate workbench directly instead.
-    expect(panelBarCommandIds(container)).toContain('nav.location')
-    expect(container.textContent).toContain('Design Location')
+    // Canopi v2 removed the Location tab: Designs are geolocated per object,
+    // so the browser shell has no Location entry point and no geocoding.
+    expect(panelBarCommandIds(container)).not.toContain('nav.location')
+    expect(container.textContent).not.toContain('Design Location')
     expect(container.textContent).not.toContain('Search for a location')
     const emitted = container.innerHTML
     expect(emitted).not.toContain('ipc/geocoding')
@@ -427,13 +439,19 @@ describe('Web Edition Browser App Shell', () => {
       newDesign: vi.fn(),
       openCanopi: vi.fn(),
       downloadCanopi: vi.fn(),
+      revertDesign: vi.fn(),
+      importGeoJson: vi.fn(),
+      exportGeoJson: vi.fn(),
+      exportBudgetCsv: vi.fn(),
+      closeDesign: vi.fn(),
       navigate: vi.fn(),
-      toggleTheme: vi.fn(),
     }
-    const commandProjection = createBrowserShellCommandProjection({
+    const commandProjection = projectBrowserShellForTest({
       currentPanel: 'canvas',
       currentSidePanel: null,
       downloadCanopiEnabled: true,
+      revertAvailable: false,
+      geoJsonEnabled: true,
       templatesEnabled: false,
       capabilities,
     })
@@ -444,24 +462,22 @@ describe('Web Edition Browser App Shell', () => {
     await clickShellCommand(container, 'file.new')
     await clickShellCommand(container, 'file.openCanopi')
     await clickShellCommand(container, 'file.downloadCanopi')
-    await clickThemeControl(container)
-    await selectLocale(container, 'fr')
+    await clickShellCommand(container, 'file.importGeoJson')
+    await clickShellCommand(container, 'file.exportGeoJson')
     await act(async () => {
-      clickCommand(container, 'nav.plantDb')
-      clickCommand(container, 'nav.favorites')
-      clickCommand(container, 'nav.canvas')
+      panelBarButton(container, 'nav.plantDb').click()
+      panelBarButton(container, 'nav.favorites').click()
     })
 
     expect(capabilities.newDesign).toHaveBeenCalledOnce()
     expect(capabilities.openCanopi).toHaveBeenCalledOnce()
     expect(capabilities.downloadCanopi).toHaveBeenCalledOnce()
-    expect(capabilities.toggleTheme).toHaveBeenCalledOnce()
+    expect(capabilities.importGeoJson).toHaveBeenCalledOnce()
+    expect(capabilities.exportGeoJson).toHaveBeenCalledOnce()
     expect(capabilities.navigate.mock.calls).toEqual([
       ['plant-db'],
       ['favorites'],
-      ['canvas'],
     ])
-    expect(locale.value).toBe('fr')
   })
 
   it('persists the browser theme command through the Settings Projection', async () => {
@@ -491,7 +507,7 @@ describe('Web Edition Browser App Shell', () => {
     })
 
     await act(async () => {
-      render(<BrowserAppShell commandProjection={shellCommandProjection()} />, container)
+      render(<><BrowserAppShell commandProjection={shellCommandProjection()} /><SettingsDialog /></>, container)
     })
     await selectLocale(container, 'fr')
 
@@ -525,68 +541,31 @@ describe('Web Edition Browser App Shell', () => {
     await clickShellCommand(container, 'file.new')
 
     await act(async () => {
-      const titleButton = container.querySelector<HTMLButtonElement>('[data-web-design-title-button]')
+      const titleButton = container.querySelector<HTMLButtonElement>('button[aria-label^="Rename Design: "]')
       if (!titleButton) throw new Error('Missing rename title button')
-      titleButton.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+      titleButton.click()
     })
     await act(async () => {
-      const input = container.querySelector<HTMLInputElement>('[data-web-design-title-input]')
+      const input = container.querySelector<HTMLInputElement>('input[aria-label="Design name"]')
       if (!input) throw new Error('Missing rename title input')
       input.value = 'Terrace Garden'
       input.dispatchEvent(new Event('input', { bubbles: true }))
     })
     await act(async () => {
-      const input = container.querySelector<HTMLInputElement>('[data-web-design-title-input]')
+      const input = container.querySelector<HTMLInputElement>('input[aria-label="Design name"]')
       if (!input) throw new Error('Missing rename title input')
       input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
     })
 
     expect(store.readDesignName()).toBe('Terrace Garden')
     expect(store.readCurrentDesign()?.name).toBe('Terrace Garden')
-    expect(container.querySelector('[data-web-design-title]')?.textContent).toBe('Terrace Garden')
+    expect(container.querySelector('button[aria-label^="Rename Design: "]')?.textContent).toBe('Terrace Garden')
+    await act(async () => {
+      await controller.continuousSave.flush()
+    })
     expect(appDataStore.listDrafts()[0]?.name).toBe('Terrace Garden')
   })
 
-  it('restores the newest browser Draft when the Web app mounts', async () => {
-    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
-    const seedStore = createMemoryDesignSessionStore()
-    const seedController = createBrowserDesignSessionController({
-      store: seedStore,
-      appDataStore,
-      fileAdapter: testFileAdapter(),
-      now: () => new Date('2026-07-04T12:00:00.000Z'),
-      createDraftId: () => 'draft-reload-recovery',
-    })
-    await seedController.newDesign()
-    seedController.renameDesign('Recovered Garden')
-    editDesignSessionForTest(seedStore, (design) => ({
-      ...design,
-      description: 'Recovered after reload',
-    }))
-    seedController.saveCurrentDraft()
-
-    const store = createMemoryDesignSessionStore()
-    const controller = createBrowserDesignSessionController({
-      store,
-      appDataStore,
-      fileAdapter: testFileAdapter(),
-      now: () => new Date('2026-07-04T13:00:00.000Z'),
-    })
-
-    await act(async () => {
-      render(
-        <WebApp
-          controller={controller}
-          workspace={<div data-testid="stub-workspace" />}
-        />,
-        container,
-      )
-    })
-
-    expect(store.readDesignName()).toBe('Recovered Garden')
-    expect(store.readCurrentDesign()?.description).toBe('Recovered after reload')
-    expect(container.querySelector('[data-web-design-title]')?.textContent).toBe('Recovered Garden')
-  })
 
   it('enables Download .canopi only after a Browser Design is active', async () => {
     const store = createMemoryDesignSessionStore()
@@ -611,13 +590,13 @@ describe('Web Edition Browser App Shell', () => {
     })
 
     await openCommandMenu(container, 'file.downloadCanopi')
-    expect(commandButton(container, 'file.downloadCanopi').disabled).toBe(true)
+    expect(commandButton(container, 'file.downloadCanopi').getAttribute('aria-disabled')).toBe('true')
 
     await clickShellCommand(container, 'file.new')
 
     await openCommandMenu(container, 'file.downloadCanopi')
     const download = commandButton(container, 'file.downloadCanopi')
-    expect(download.disabled).toBe(false)
+    expect(download.getAttribute('aria-disabled')).toBeNull()
 
     await act(async () => {
       download.click()
@@ -626,7 +605,7 @@ describe('Web Edition Browser App Shell', () => {
     expect(fileAdapter.downloadCanopiFile).toHaveBeenCalledOnce()
   })
 
-  it('shows the active Browser Design identity and dirty state in the top bar', async () => {
+  it('shows the active Browser Design identity and continuous-save status in the top bar', async () => {
     const store = createMemoryDesignSessionStore()
     const storage = memoryStorage()
     const appDataStore = createBrowserAppDataStore({ storage })
@@ -648,30 +627,147 @@ describe('Web Edition Browser App Shell', () => {
       )
     })
 
-    expect(container.querySelector('[data-web-design-title]')?.textContent).toBe('Canopi')
+    expect(container.querySelector('button[aria-label^="Rename Design: "]')).toBeNull()
+    expect(container.querySelector('[data-save-status]')).toBeNull()
 
     await clickShellCommand(container, 'file.new')
 
-    expect(container.querySelector('[data-web-design-title]')?.textContent).toBe('Untitled Design')
-    expect(container.querySelector('[data-web-design-dirty]')).toBeNull()
+    expect(container.querySelector('button[aria-label^="Rename Design: "]')?.textContent).toBe('Untitled Design')
+    expect(container.querySelector('[data-save-status] [role="status"]')?.textContent).toBe('Saved in this browser')
+    expect(container.querySelector('[data-save-status] button')?.textContent).toBe('Download a copy')
 
     storage.failWrites = true
     await act(async () => {
       editDesignSessionForTest(store, (design) => ({ ...design, description: 'Browser edit' }))
     })
+    expect(container.querySelector('[data-save-status] [role="status"]')?.textContent).toBe('Saved in this browser')
 
-    expect(container.querySelector('[data-web-design-title]')?.textContent).toBe('Untitled Design')
-    expect(container.querySelector('[data-web-design-dirty]')).not.toBeNull()
+    await act(async () => {
+      await controller.continuousSave.flush()
+    })
+    const status = container.querySelector('[data-save-status]')
+    expect(status?.getAttribute('data-save-status')).toBe('error')
+    expect(status?.querySelector('[role="alert"]')?.textContent).toBe('Couldn’t save')
+
+    storage.failWrites = false
+    await act(async () => {
+      status?.querySelector('button')?.click()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      Array.from(status?.querySelectorAll<HTMLButtonElement>('[role="dialog"] button') ?? [])
+        .find((button) => button.textContent === 'Retry')?.click()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      await controller.continuousSave.flush()
+    })
+    expect(container.querySelector('[data-save-status] [role="status"]')?.textContent).toBe('Saved in this browser')
+    expect(appDataStore.loadDraft('draft-identity-state')?.description).toBe('Browser edit')
+  })
+  it('offers Resolve… when another browser tab changed the open Draft', async () => {
+    const onResolveSaveConflict = vi.fn()
+    await act(async () => {
+      render(
+        <BrowserAppShell
+          commandProjection={shellCommandProjection()}
+          designIdentity={{ name: 'Orchard', saveStatus: 'conflict', saveFailureReason: null }}
+          onResolveSaveConflict={onResolveSaveConflict}
+        />,
+        container,
+      )
+    })
+    const status = container.querySelector<HTMLElement>('[data-save-status="conflict"]')!
+    expect(status.querySelector('[role="alert"]')?.textContent).toBe('Changed in another tab')
+    await act(async () => { status.querySelector('button')!.click() })
+    expect(onResolveSaveConflict).toHaveBeenCalledOnce()
+  })
+
+  describe('on a phone', () => {
+    const size = { width: window.innerWidth, height: window.innerHeight }
+    const resizeTo = (width: number, height: number) => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: height })
+      window.dispatchEvent(new Event('resize'))
+    }
+
+    afterEach(() => {
+      resizeTo(size.width, size.height)
+    })
+
+    it('turns the title bar into the 44 px top bar with Undo and a place search card, and drops the rail', async () => {
+      const undo = vi.fn()
+      resizeTo(390, 844)
+      await act(async () => {
+        render(
+          <BrowserAppShell
+            commandProjection={shellCommandProjection()}
+            designIdentity={{ name: 'Orchard', saveStatus: 'draft', saveFailureReason: null }}
+            placeSearch
+            undo={{ label: 'Undo', shortcut: 'Ctrl Z', ariaShortcut: 'Control+Z', disabled: false, action: undo }}
+          />,
+          container,
+        )
+      })
+      const shell = container.querySelector<HTMLElement>('[data-testid="browser-app-shell"]')!
+      expect(shell.dataset.phoneLayout).toBe('portrait')
+      expect(container.querySelector('[data-panel-rail]')).toBeNull()
+      expect(container.querySelector('[role="combobox"]')).toBeNull()
+
+      const undoButton = container.querySelector<HTMLButtonElement>('button[data-phone-undo]')!
+      expect(undoButton.getAttribute('aria-label')).toBe('Undo')
+      await act(async () => { undoButton.click() })
+      expect(undo).toHaveBeenCalledTimes(1)
+
+      const search = container.querySelector<HTMLButtonElement>('button[data-phone-search]')!
+      expect(search.getAttribute('aria-label')).toBe('Search a place')
+      expect(search.getAttribute('aria-expanded')).toBe('false')
+      await act(async () => { search.click() })
+      const card = container.querySelector<HTMLElement>('[data-phone-search-card]')!
+      expect(card.getAttribute('role')).toBe('search')
+      expect(card.querySelector('[role="combobox"]')).not.toBeNull()
+      expect(search.getAttribute('aria-expanded')).toBe('true')
+      await act(async () => {
+        card.querySelector('button')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+      })
+      expect(container.querySelector('[data-phone-search-card]')).toBeNull()
+      expect(document.activeElement).toBe(search)
+
+      // Back closes it too.
+      await act(async () => { search.click() })
+      await act(async () => {
+        container.querySelector<HTMLButtonElement>('[data-phone-search-card] button[aria-label="Back to the map"]')!.click()
+      })
+      expect(container.querySelector('[data-phone-search-card]')).toBeNull()
+
+      // Search a place (Ctrl K) opens the card where no field waits in the bar.
+      await act(async () => { requestPlaceSearchFocus() })
+      expect(container.querySelector('[data-phone-search-card]')).not.toBeNull()
+
+      await act(async () => { resizeTo(1280, 800) })
+      expect(shell.dataset.phoneLayout).toBeUndefined()
+      expect(container.querySelector('[data-panel-rail]')).not.toBeNull()
+      expect(container.querySelector('[data-phone-search-card]')).toBeNull()
+      expect(container.querySelector('button[data-phone-undo]')).toBeNull()
+      expect(container.querySelector('[role="combobox"]')).not.toBeNull()
+    })
+
+    it('uses the side layout when the phone lies on its side, and the desktop layout again once released', async () => {
+      resizeTo(844, 390)
+      await act(async () => {
+        render(<BrowserAppShell commandProjection={shellCommandProjection()} />, container)
+      })
+      expect(container.querySelector<HTMLElement>('[data-testid="browser-app-shell"]')!.dataset.phoneLayout).toBe('landscape')
+      expect(container.querySelector('button[data-phone-search]')).toBeNull()
+      await act(async () => { render(null, container) })
+      expect(phoneLayout.value).toBeNull()
+    })
   })
 })
 
-function clickCommand(container: HTMLElement, id: string): void {
-  ensureCommandMenuOpen(container, id)
-  commandButton(container, id).click()
-}
-
 async function clickShellCommand(container: HTMLElement, id: string): Promise<void> {
   await openCommandMenu(container, id)
+  if (id === 'file.exportGeoJson' || id === 'file.exportCanvasPdf') await openExportSubmenu(container)
   await act(async () => {
     commandButton(container, id).click()
   })
@@ -692,25 +788,35 @@ function ensureCommandMenuOpen(container: HTMLElement, id: string): void {
   }
 }
 
+/** Export ▸ items live in a submenu; hovering its parent opens it. */
+async function openExportSubmenu(container: HTMLElement): Promise<void> {
+  await act(async () => {
+    container.querySelector('[data-submenu-id="submenu.export"]')!
+      .parentElement!.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }))
+  })
+}
+
 function menuIdForCommand(id: string): string | null {
-  if (id.startsWith('file.')) return 'file'
+  if (id.startsWith('file.') || id === 'app.settings') return 'file'
+  if (id.startsWith('view.')) return 'view'
   return null
 }
 
 async function clickThemeControl(container: HTMLElement): Promise<void> {
-  await act(async () => {
-    commandButton(container, 'view.toggleTheme').click()
-  })
+  await clickShellCommand(container, 'view.toggleTheme')
 }
 
 async function selectLocale(container: HTMLElement, code: string): Promise<void> {
-  const picker = container.querySelector<HTMLElement>('[data-web-locale-control]')
-  if (!picker) throw new Error('Missing locale control')
+  const names: Record<string, string> = { fr: 'Français', en: 'English' }
   await act(async () => {
-    picker.querySelector<HTMLButtonElement>('button')?.click()
+    container.querySelector<HTMLButtonElement>('button[aria-label="Settings…"]')!.click()
   })
-  const option = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="option"]'))
-    .find((button) => button.textContent === code.toUpperCase())
+  await act(async () => {
+    Array.from(document.body.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'))
+      .find((button) => button.getAttribute('aria-haspopup') === 'listbox')!.click()
+  })
+  const option = Array.from(document.body.querySelectorAll<HTMLButtonElement>('[role="option"]'))
+    .find((button) => button.textContent === names[code])
   if (!option) throw new Error(`Missing locale option ${code}`)
   await act(async () => {
     option.click()
@@ -718,20 +824,20 @@ async function selectLocale(container: HTMLElement, code: string): Promise<void>
 }
 
 function commandButton(container: HTMLElement, id: string): HTMLButtonElement {
-  const button = container.querySelector<HTMLButtonElement>(`[data-web-command-id="${id}"]`)
+  const button = container.querySelector<HTMLButtonElement>(`[data-menu-popup="root"] [data-command-id="${id}"]`)
   if (!button) throw new Error(`Missing command ${id}`)
   return button
 }
 
 function menuTrigger(container: HTMLElement, id: string): HTMLButtonElement {
-  const button = container.querySelector<HTMLButtonElement>(`[data-web-menu-id="${id}"]`)
+  const button = container.querySelector<HTMLButtonElement>(`[data-menu-id="${id}"]`)
   if (!button) throw new Error(`Missing menu ${id}`)
   return button
 }
 
 function openMenuCommandIds(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll<HTMLElement>('[data-web-menu-open="true"] [data-web-command-id]'))
-    .map((element) => element.dataset.webCommandId ?? '')
+  return Array.from(container.querySelectorAll<HTMLElement>('[data-menu-popup="root"] [data-menu-root-item][data-command-id]'))
+    .map((element) => element.dataset.commandId ?? '')
 }
 
 interface MemoryStorage extends BrowserStorageAdapter {

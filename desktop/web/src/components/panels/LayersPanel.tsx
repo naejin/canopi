@@ -1,31 +1,29 @@
 import { useEffect } from 'preact/hooks'
 import { LayerPanel } from '../canvas/LayerPanel'
-import { LidarLayersSection } from './lidar/LidarLayersSection'
-import { runAppCommand } from '../../commands/registry'
-import {
-  readCanvasLayerPresentation,
-  setCanvasLayerPresentationActiveLayer,
-  setCanvasLayerPresentationVisibility,
-  setCanvasLayerPresentationLocked,
-  setCanvasLayerPresentationOpacity,
-  setCanvasLayerPresentationContourIntervalMeters,
-} from '../../app/canvas-layer-presentation/presentation'
+import { AddDataMenu, SiteDataInspector, SiteDataRows } from './lidar/SiteData'
+import { SiteDataDetails } from './lidar/SiteDataDetails'
+import { readCanvasLayerPresentation } from '../../app/canvas-layer-presentation/presentation'
+import { LAYER_PANEL_ACTIONS } from '../../app/canvas-layer-presentation/panel-actions'
+import { siteDataDetails } from '../../app/lidar/library-navigation'
 import { installLidarLibraryObserver } from '../../app/lidar/library-store'
 
-export function LayersPanel({ onLocation = () => runAppCommand('nav.location') }: { onLocation?: () => void } = {}) {
+/**
+ * Desktop Layers: the shared panel with the Design's site data (terrain and
+ * height items, their results nested under them, and Add data), or one site
+ * item's details. `importGeoJson` is the File › Import GeoJSON command, offered
+ * again in Add data.
+ */
+export function LayersPanel({ importGeoJson }: { readonly importGeoJson: () => void }) {
   useEffect(() => installLidarLibraryObserver(), [])
+  const details = siteDataDetails.value
+  if (details) return <SiteDataDetails id={details} />
   return (
     <LayerPanel
       rows={readCanvasLayerPresentation().rows}
-      trailingSection={<LidarLayersSection />}
-      actions={{
-        active: setCanvasLayerPresentationActiveLayer,
-        visibility: setCanvasLayerPresentationVisibility,
-        locked: setCanvasLayerPresentationLocked,
-        opacity: setCanvasLayerPresentationOpacity,
-        contourInterval: setCanvasLayerPresentationContourIntervalMeters,
-        location: onLocation,
-      }}
+      actions={LAYER_PANEL_ACTIONS}
+      siteData={<SiteDataRows />}
+      siteAction={<AddDataMenu importGeoJson={importGeoJson} />}
+      siteFooter={<SiteDataInspector />}
     />
   )
 }

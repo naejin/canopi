@@ -4,12 +4,14 @@ use specta::Type;
 pub const DEFAULT_BUDGET_CURRENCY: &str = "EUR";
 pub const DEFAULT_PLANT_SYMBOL_ID: &str = "round";
 /// Current `.canopi` format version shared by native loading and generated Web facts.
-pub const CURRENT_CANOPI_FILE_VERSION: u32 = 6;
+pub const CURRENT_CANOPI_FILE_VERSION: u32 = 9;
 /// Missing versions are interpreted as the first public `.canopi` format.
 pub const MISSING_CANOPI_FILE_VERSION: u32 = 1;
-pub const MIN_SUPPORTED_CANOPI_FILE_VERSION: u32 = 6;
 pub const FUTURE_CANOPI_FILE_VERSION_POLICY: &str = "reject";
 pub const WEB_MERCATOR_MAX_LATITUDE_DEG: f64 = 85.051_128_779_806_6;
+/// Root keys of earlier formats. A current-version document carrying one is
+/// malformed and is rejected instead of being preserved as an unknown field.
+pub const OBSOLETE_CANOPI_ROOT_KEYS: &[&str] = &["location", "north_bearing_deg", "spatial_frame"];
 
 fn deserialize_json_u32<'de, D>(deserializer: D) -> Result<u32, D::Error>
 where
@@ -93,6 +95,7 @@ impl CanopiDesignIngestionErrorKind {
         }
     }
 }
+/// Plant forms, what a plant gives, what it does, then abstract marks.
 pub const PLANT_SYMBOL_IDS: &[&str] = &[
     "canopy",
     "conifer",
@@ -106,6 +109,23 @@ pub const PLANT_SYMBOL_IDS: &[&str] = &[
     "groundcover",
     "rosette",
     "cactus",
+    "apple",
+    "nut",
+    "berry",
+    "grape",
+    "flower",
+    "pod",
+    "carrot",
+    "grain",
+    "chili",
+    "medicinal",
+    "bee",
+    "biomass",
+    "timber",
+    "fodder",
+    "windbreak",
+    "soil",
+    "mushroom",
     "round",
     "square",
     "triangle",
@@ -146,10 +166,6 @@ pub const DESIGN_FILE_FIELDS: &[DesignFileField] = &[
     },
     DesignFileField {
         key: "description",
-        owner: DesignFileFieldOwner::Document,
-    },
-    DesignFileField {
-        key: "spatial_frame",
         owner: DesignFileFieldOwner::Document,
     },
     DesignFileField {
@@ -209,6 +225,14 @@ pub const DESIGN_FILE_FIELDS: &[DesignFileField] = &[
         owner: DesignFileFieldOwner::Document,
     },
     DesignFileField {
+        key: "views",
+        owner: DesignFileFieldOwner::Document,
+    },
+    DesignFileField {
+        key: "stories",
+        owner: DesignFileFieldOwner::Document,
+    },
+    DesignFileField {
         key: "created_at",
         owner: DesignFileFieldOwner::Document,
     },
@@ -230,7 +254,6 @@ pub struct CanopiFile {
     pub name: String,
     #[cfg_attr(feature = "design-schema", schemars(default))]
     pub description: Option<String>,
-    pub spatial_frame: SpatialFrame,
     pub plant_species_colors: std::collections::HashMap<String, String>,
     #[serde(default)]
     pub plant_species_symbols: std::collections::HashMap<String, String>,
@@ -257,6 +280,12 @@ pub struct CanopiFile {
     // document stores display settings only, never raster bytes or paths.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lidar: Option<crate::lidar::LidarPresentationSection>,
+    // Named map views (ADR 0011).
+    #[serde(default)]
+    pub views: Vec<crate::views::SavedView>,
+    // Ordered presentations of saved views (ADR 0011).
+    #[serde(default)]
+    pub stories: Vec<crate::views::Story>,
     pub created_at: String,
     pub updated_at: String,
     /// Preserves unknown fields for forward compatibility — round-trips fields
@@ -266,125 +295,14 @@ pub struct CanopiFile {
     pub extra: std::collections::HashMap<String, serde_json::Value>,
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "schema serialization of an authored type cannot fail"
+)]
 #[cfg(feature = "design-schema")]
 pub fn canopi_file_json_schema() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(CanopiFile))
         .expect("CanopiFile JSON Schema should serialize")
-}
-
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct SpatialFrame {
-    #[cfg_attr(
-        feature = "design-schema",
-        schemars(range(min = -180.0, max = 180.0))
-    )]
-    pub anchor_longitude_deg: f64,
-    #[cfg_attr(
-        feature = "design-schema",
-        schemars(range(min = -85.0511287798066, max = 85.0511287798066))
-    )]
-    pub anchor_latitude_deg: f64,
-    pub north_bearing_deg: f64,
-    pub placement_status: PlacementStatus,
-    pub location_metadata: LocationMetadata,
-}
-
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(rename_all = "snake_case")]
-pub enum PlacementStatus {
-    Provisional,
-    Confirmed,
-}
-
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Type)]
-pub struct LocationMetadata {
-    #[cfg_attr(
-        feature = "design-schema",
-        schemars(required, schema_with = "required_nullable_f64_schema")
-    )]
-    pub altitude_m: Option<f64>,
-}
-
-#[cfg(feature = "design-schema")]
-fn required_nullable_f64_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-    generator.subschema_for::<Option<f64>>()
-}
-
-impl<'de> Deserialize<'de> for LocationMetadata {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct LocationMetadataVisitor;
-
-        impl<'de> serde::de::Visitor<'de> for LocationMetadataVisitor {
-            type Value = LocationMetadata;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("a location metadata object with altitude_m")
-            }
-
-            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-            where
-                A: serde::de::MapAccess<'de>,
-            {
-                let mut altitude_m: Option<Option<f64>> = None;
-                while let Some(key) = map.next_key::<String>()? {
-                    if key == "altitude_m" {
-                        if altitude_m.is_some() {
-                            return Err(serde::de::Error::duplicate_field("altitude_m"));
-                        }
-                        altitude_m = Some(map.next_value()?);
-                    } else {
-                        map.next_value::<serde::de::IgnoredAny>()?;
-                    }
-                }
-
-                Ok(LocationMetadata {
-                    altitude_m: altitude_m
-                        .ok_or_else(|| serde::de::Error::missing_field("altitude_m"))?,
-                })
-            }
-        }
-
-        deserializer.deserialize_map(LocationMetadataVisitor)
-    }
-}
-
-/// Validate a v6 spatial frame and canonicalize its clockwise north bearing.
-pub fn validate_and_normalize_spatial_frame(frame: &mut SpatialFrame) -> Result<(), &'static str> {
-    if !frame.anchor_longitude_deg.is_finite()
-        || !(-180.0..=180.0).contains(&frame.anchor_longitude_deg)
-    {
-        return Err(
-            "$.spatial_frame.anchor_longitude_deg: expected a finite longitude in [-180, 180]",
-        );
-    }
-    if !frame.anchor_latitude_deg.is_finite()
-        || !(-WEB_MERCATOR_MAX_LATITUDE_DEG..=WEB_MERCATOR_MAX_LATITUDE_DEG)
-            .contains(&frame.anchor_latitude_deg)
-    {
-        return Err("$.spatial_frame.anchor_latitude_deg: expected a finite Web Mercator latitude");
-    }
-    if !frame.north_bearing_deg.is_finite() {
-        return Err("$.spatial_frame.north_bearing_deg: expected a finite number");
-    }
-    if frame
-        .location_metadata
-        .altitude_m
-        .is_some_and(|altitude| !altitude.is_finite())
-    {
-        return Err(
-            "$.spatial_frame.location_metadata.altitude_m: expected a finite number or null",
-        );
-    }
-
-    let normalized = frame.north_bearing_deg.rem_euclid(360.0);
-    frame.north_bearing_deg = if normalized == 0.0 { 0.0 } else { normalized };
-    Ok(())
 }
 
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
@@ -412,7 +330,7 @@ pub struct PlacedPlant {
     pub symbol: Option<String>,
     #[serde(default)]
     pub pinned_name: bool,
-    pub position: Position,
+    pub position: GeoPoint,
     #[cfg_attr(feature = "design-schema", schemars(default))]
     pub rotation: Option<f64>,
     #[cfg_attr(feature = "design-schema", schemars(default))]
@@ -439,7 +357,7 @@ struct PlacedPlantInput {
     symbol: Option<String>,
     #[serde(default)]
     pinned_name: bool,
-    position: Position,
+    position: GeoPoint,
     rotation: Option<f64>,
     scale: Option<f64>,
     notes: Option<String>,
@@ -472,21 +390,220 @@ impl<'de> Deserialize<'de> for PlacedPlant {
     }
 }
 
+// A WGS84 position in degrees. Every persisted design object position is a
+// `GeoPoint`; metres exist only in the runtime's session plane.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct Position {
-    pub x: f64,
-    pub y: f64,
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
+pub struct GeoPoint {
+    #[cfg_attr(
+        feature = "design-schema",
+        schemars(range(min = -180.0, max = 180.0))
+    )]
+    pub lon: f64,
+    #[cfg_attr(
+        feature = "design-schema",
+        schemars(range(min = -85.0511287798066, max = 85.0511287798066))
+    )]
+    pub lat: f64,
+}
+
+impl GeoPoint {
+    pub fn is_valid(&self) -> bool {
+        self.lon.is_finite()
+            && (-180.0..=180.0).contains(&self.lon)
+            && self.lat.is_finite()
+            && (-WEB_MERCATOR_MAX_LATITUDE_DEG..=WEB_MERCATOR_MAX_LATITUDE_DEG).contains(&self.lat)
+    }
+}
+
+/// Check every persisted position of an admitted Design. Serde accepts any
+/// finite `f64`; the WGS84 and Web Mercator ranges are enforced here so native
+/// admission matches the generated Web schema.
+pub fn validate_design_geometry(file: &CanopiFile) -> Result<(), String> {
+    let check = |point: &GeoPoint, path: String| {
+        if point.is_valid() {
+            Ok(())
+        } else {
+            Err(format!(
+                "{path}: expected lon in [-180, 180] and a Web Mercator latitude"
+            ))
+        }
+    };
+    for (index, plant) in file.plants.iter().enumerate() {
+        check(&plant.position, format!("$.plants[{index}].position"))?;
+    }
+    for (index, zone) in file.zones.iter().enumerate() {
+        for (point_index, point) in zone.points.iter().enumerate() {
+            check(point, format!("$.zones[{index}].points[{point_index}]"))?;
+        }
+        if !zone.rotation.is_finite() {
+            return Err(format!(
+                "$.zones[{index}].rotation: expected a finite number"
+            ));
+        }
+    }
+    for (index, annotation) in file.annotations.iter().enumerate() {
+        check(
+            &annotation.position,
+            format!("$.annotations[{index}].position"),
+        )?;
+    }
+    for (index, guide) in file.measurement_guides.iter().enumerate() {
+        check(&guide.start, format!("$.measurement_guides[{index}].start"))?;
+        check(&guide.end, format!("$.measurement_guides[{index}].end"))?;
+    }
+    Ok(())
+}
+
+/// Identities and ranges of an admitted Design, checked after version
+/// admission. Zones, annotations and groups need unique, non-empty ids because
+/// targets, groups and saved views refer to them. A plant or measurement
+/// guide without an id (an id is optional in the file) is repaired with a generated
+/// one that no other entry uses, wherever it appears; a duplicate explicit id
+/// is refused. Opacities, scales and font sizes must be
+/// finite and in range, and the LiDAR section must be the schema this build
+/// writes.
+pub fn admit_design_identities_and_ranges(file: &mut CanopiFile) -> Result<(), String> {
+    let mut plant_ids = explicit_ids("plants", file.plants.iter().map(|plant| plant.id.as_str()))?;
+    for (index, plant) in file.plants.iter_mut().enumerate() {
+        if plant.id.is_empty() {
+            plant.id = generated_id("plant", index, &mut plant_ids);
+        }
+        if plant
+            .scale
+            .is_some_and(|scale| !(scale.is_finite() && scale > 0.0))
+        {
+            return Err(format!(
+                "$.plants[{index}].scale: expected a finite number above 0"
+            ));
+        }
+        if plant.rotation.is_some_and(|rotation| !rotation.is_finite()) {
+            return Err(format!(
+                "$.plants[{index}].rotation: expected a finite number"
+            ));
+        }
+    }
+    let mut guide_ids = explicit_ids(
+        "measurement_guides",
+        file.measurement_guides
+            .iter()
+            .map(|guide| guide.id.as_str()),
+    )?;
+    for (index, guide) in file.measurement_guides.iter_mut().enumerate() {
+        if guide.id.is_empty() {
+            guide.id = generated_id("measurement-guide", index, &mut guide_ids);
+        }
+    }
+    check_unique_ids("zones", file.zones.iter().map(|zone| zone.id.as_str()))?;
+    check_unique_ids(
+        "annotations",
+        file.annotations
+            .iter()
+            .map(|annotation| annotation.id.as_str()),
+    )?;
+    check_unique_ids("groups", file.groups.iter().map(|group| group.id.as_str()))?;
+    for (index, annotation) in file.annotations.iter().enumerate() {
+        if !(annotation.font_size.is_finite() && annotation.font_size > 0.0) {
+            return Err(format!(
+                "$.annotations[{index}].font_size: expected a finite number above 0"
+            ));
+        }
+        if annotation
+            .rotation
+            .is_some_and(|rotation| !rotation.is_finite())
+        {
+            return Err(format!(
+                "$.annotations[{index}].rotation: expected a finite number"
+            ));
+        }
+    }
+    for (index, layer) in file.layers.iter().enumerate() {
+        if !(layer.opacity.is_finite() && (0.0..=1.0).contains(&layer.opacity)) {
+            return Err(format!(
+                "$.layers[{index}].opacity: expected a number in [0, 1]"
+            ));
+        }
+    }
+    if let Some(lidar) = &file.lidar {
+        if lidar.schema_version != crate::lidar::LIDAR_PRESENTATION_SCHEMA_VERSION {
+            return Err(format!(
+                "$.lidar.schema_version: expected {}",
+                crate::lidar::LIDAR_PRESENTATION_SCHEMA_VERSION
+            ));
+        }
+        for (index, entry) in lidar.entries.iter().enumerate() {
+            if !(entry.opacity.is_finite() && (0.0..=1.0).contains(&entry.opacity)) {
+                return Err(format!(
+                    "$.lidar.entries[{index}].opacity: expected a number in [0, 1]"
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Every explicit (non-empty) id of a list that may repair missing ids,
+/// refusing a duplicate among them. Collected before any id is generated, so
+/// a generated id never takes an explicit id that appears later in the list.
+fn explicit_ids<'a>(
+    key: &str,
+    ids: impl Iterator<Item = &'a str>,
+) -> Result<std::collections::HashSet<String>, String> {
+    let mut seen = std::collections::HashSet::new();
+    for (index, id) in ids.enumerate() {
+        if !id.is_empty() && !seen.insert(id.to_owned()) {
+            return Err(format!("$.{key}[{index}].id: duplicate id {id:?}"));
+        }
+    }
+    Ok(seen)
+}
+
+/// The first free `{prefix}-{n}` from `index + 1`, recorded as taken.
+fn generated_id(
+    prefix: &str,
+    index: usize,
+    taken: &mut std::collections::HashSet<String>,
+) -> String {
+    let mut n = index + 1;
+    loop {
+        let candidate = format!("{prefix}-{n}");
+        if taken.insert(candidate.clone()) {
+            return candidate;
+        }
+        n += 1;
+    }
+}
+
+fn check_unique_ids<'a>(key: &str, ids: impl Iterator<Item = &'a str>) -> Result<(), String> {
+    let mut seen = std::collections::HashSet::new();
+    for (index, id) in ids.enumerate() {
+        if id.is_empty() {
+            return Err(format!("$.{key}[{index}].id: expected a non-empty id"));
+        }
+        if !seen.insert(id) {
+            return Err(format!("$.{key}[{index}].id: duplicate id {id:?}"));
+        }
+    }
+    Ok(())
 }
 
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct Zone {
-    pub name: String,
+    // Stable identity: Calendar and Budget targets, groups and saved views
+    // refer to it. Renaming a zone never changes it.
+    pub id: String,
+    // Display name the user gave; `None` until then, and the interface labels
+    // the zone by its type and size.
+    #[cfg_attr(feature = "design-schema", schemars(default))]
+    pub name: Option<String>,
     #[cfg_attr(feature = "design-schema", schemars(default))]
     pub locked: bool,
     pub zone_type: String,
-    pub points: Vec<Position>,
+    // Polygon and line zones list their vertices. Rectangle and ellipse zones
+    // list opposite corners of their unrotated bounding box.
+    pub points: Vec<GeoPoint>,
+    // Degrees clockwise from true north, about the zone's centre.
     #[cfg_attr(feature = "design-schema", schemars(default))]
     pub rotation: f64,
     #[cfg_attr(feature = "design-schema", schemars(default))]
@@ -497,11 +614,12 @@ pub struct Zone {
 
 #[derive(Deserialize)]
 struct ZoneInput {
-    name: String,
+    id: String,
+    name: Option<String>,
     #[serde(default)]
     locked: bool,
     zone_type: String,
-    points: Vec<Position>,
+    points: Vec<GeoPoint>,
     #[serde(default)]
     rotation: f64,
     fill_color: Option<String>,
@@ -515,6 +633,7 @@ impl<'de> Deserialize<'de> for Zone {
     {
         let input = ZoneInput::deserialize(deserializer)?;
         Ok(Self {
+            id: input.id,
             name: input.name,
             locked: input.locked,
             zone_type: input.zone_type,
@@ -533,7 +652,7 @@ pub struct Annotation {
     #[cfg_attr(feature = "design-schema", schemars(default))]
     pub locked: bool,
     pub annotation_type: String,
-    pub position: Position,
+    pub position: GeoPoint,
     pub text: String,
     pub font_size: f64,
     #[cfg_attr(feature = "design-schema", schemars(default))]
@@ -547,8 +666,8 @@ pub struct MeasurementGuide {
     pub id: String,
     #[serde(default)]
     pub locked: bool,
-    pub start: Position,
-    pub end: Position,
+    pub start: GeoPoint,
+    pub end: GeoPoint,
 }
 
 #[derive(Deserialize)]
@@ -557,7 +676,7 @@ struct AnnotationInput {
     #[serde(default)]
     locked: bool,
     annotation_type: String,
-    position: Position,
+    position: GeoPoint,
     text: String,
     font_size: f64,
     rotation: Option<f64>,
@@ -601,7 +720,7 @@ pub enum PanelTarget {
     #[serde(rename = "species")]
     Species { canonical_name: String },
     #[serde(rename = "zone")]
-    Zone { zone_name: String },
+    Zone { zone_id: String },
     #[default]
     #[serde(rename = "manual")]
     Manual,
@@ -720,7 +839,87 @@ pub struct DesignSummary {
     pub path: String,
     pub name: String,
     pub updated_at: String,
-    pub plant_count: u32,
+}
+
+/// Longest side of a [`DesignSketch`] frame, in sketch units.
+pub const DESIGN_SKETCH_GRID: u16 = 1000;
+/// At most this many plants are drawn in a sketch; larger Designs are sampled evenly.
+pub const DESIGN_SKETCH_MAX_PLANTS: usize = 2000;
+/// At most this many zone outline points are drawn in a sketch, across all zones.
+pub const DESIGN_SKETCH_MAX_ZONE_POINTS: usize = 2000;
+
+/// A north-up WGS84 box around a Design's plants and zones. `west == east` or
+/// `south == north` when they sit on one line or point.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
+pub struct DesignGroundBounds {
+    pub west: f64,
+    pub south: f64,
+    pub east: f64,
+    pub north: f64,
+}
+
+/// One zone of a [`DesignSketch`]: `points` are flat `x, y` pairs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct DesignSketchZone {
+    /// False for a line zone, which is drawn open.
+    pub closed: bool,
+    pub points: Vec<u16>,
+}
+
+/// A symbolic mini-map of a Design: zones as outlines and plants as dots over
+/// its ground bounds, north up. Coordinates are sketch units in a
+/// `width` × `height` frame whose longer side is [`DESIGN_SKETCH_GRID`]; `x`
+/// grows east and `y` grows south, as on screen.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct DesignSketch {
+    pub width: u16,
+    pub height: u16,
+    /// Flat `x, y` pairs, one per drawn plant.
+    pub plants: Vec<u16>,
+    pub zones: Vec<DesignSketchZone>,
+}
+
+/// What a Recent Design's file says about it, read when the list is shown.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum RecentDesignPreview {
+    Read {
+        plant_count: u32,
+        zone_count: u32,
+        /// `None` when the Design has no plants or zones yet.
+        bounds: Option<DesignGroundBounds>,
+        sketch: Option<DesignSketch>,
+    },
+    /// The file is larger than previews read; the row shows its name only.
+    TooLarge,
+    /// The file cannot be opened, and why when that is known.
+    Unreadable {
+        reason: RecentDesignUnreadableReason,
+    },
+}
+
+/// Why a Recent Design's file cannot be opened.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum RecentDesignUnreadableReason {
+    /// Nothing is at the path any more: the file was moved, renamed or deleted.
+    Missing,
+    /// A Design older than the current format (written before Canopi 2.0),
+    /// which Canopi 2.0 and later do not open (ADR 0021).
+    OlderVersion,
+    /// A Design from a newer file version than this build knows.
+    NewerVersion,
+    /// The file is not a valid Design (not JSON, or not a valid document).
+    Damaged,
+    /// The file exists but could not be read (permissions, a folder, an I/O error).
+    Unknown,
+}
+
+/// A Recent Design's preview, keyed by its path on the list.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct RecentDesignSummary {
+    pub path: String,
+    pub preview: RecentDesignPreview,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -748,11 +947,60 @@ pub struct DesignNotebookSnapshot {
     pub sections: Vec<DesignNotebookSection>,
 }
 
+/// A Design read from a file, with the fingerprint (SHA-256 of the file's
+/// bytes) its next continuous save must still find on disk.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct AutosaveEntry {
-    pub path: String,
+pub struct LoadedDesign {
+    pub file: CanopiFile,
+    pub fingerprint: String,
+}
+
+/// Why a Design file could not be opened. `kind` is what the interface maps
+/// to a message; `message` is for logs and Problem Reports and never names a
+/// path.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct DesignLoadFailure {
+    pub kind: DesignLoadFailureKind,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum DesignLoadFailureKind {
+    /// Nothing is at the path.
+    Missing,
+    /// The file exists but could not be read (permissions, a folder, an I/O error).
+    Unreadable,
+    TooLarge,
+    InvalidJson,
+    /// Older than the current format (written before Canopi 2.0), which
+    /// Canopi 2.0 and later do not open (ADR 0021).
+    OlderVersion,
+    /// Newer than this build.
+    NewerVersion,
+    InvalidDocument,
+    /// The native side failed before it reached the file (an executor error).
+    Internal,
+}
+
+/// The result of writing a Design to its file.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum DesignSaveOutcome {
+    /// Written; `fingerprint` is what the next save must expect.
+    Saved { path: String, fingerprint: String },
+    /// The file changed outside Canopi since `expected_fingerprint`; nothing
+    /// was written. `current_fingerprint` is `None` when the file is gone.
+    Conflict { current_fingerprint: Option<String> },
+}
+
+/// A Design draft: an unsaved (Untitled) Design kept in app data until the
+/// user saves it as a file or deletes it.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct DesignDraftSummary {
+    pub id: String,
     pub name: String,
-    pub saved_at: String,
+    pub updated_at: String,
 }
 
 #[cfg(test)]
@@ -760,49 +1008,86 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    #[test]
-    fn spatial_frame_validation_rejects_non_finite_values_and_normalizes_bearing() {
-        let mut frame = SpatialFrame {
-            anchor_longitude_deg: 13.0,
-            anchor_latitude_deg: 23.0,
-            north_bearing_deg: -450.0,
-            placement_status: PlacementStatus::Provisional,
-            location_metadata: LocationMetadata { altitude_m: None },
-        };
+    fn geo_file(plants: serde_json::Value) -> CanopiFile {
+        serde_json::from_value(json!({
+            "version": 9,
+            "name": "Geo",
+            "plant_species_colors": {},
+            "layers": [],
+            "plants": plants,
+            "zones": [],
+            "created_at": "2026-09-25T00:00:00.000Z",
+            "updated_at": "2026-09-25T00:00:00.000Z"
+        }))
+        .expect("current design should deserialize")
+    }
 
-        validate_and_normalize_spatial_frame(&mut frame).expect("valid frame should normalize");
-        assert_eq!(frame.north_bearing_deg, 270.0);
-
-        frame.location_metadata.altitude_m = Some(f64::INFINITY);
-        assert_eq!(
-            validate_and_normalize_spatial_frame(&mut frame),
-            Err("$.spatial_frame.location_metadata.altitude_m: expected a finite number or null"),
-        );
+    fn plant_at(lon: f64, lat: f64) -> serde_json::Value {
+        json!({
+            "id": "plant-1",
+            "canonical_name": "Malus domestica",
+            "position": { "lon": lon, "lat": lat }
+        })
     }
 
     #[test]
-    fn location_metadata_requires_explicit_nullable_altitude() {
-        let result = serde_json::from_value::<LocationMetadata>(json!({}));
-
-        assert!(
-            result.is_err(),
-            "v6 metadata must name its nullable altitude"
+    fn design_positions_are_lon_lat_and_round_trip_exactly() {
+        let file = geo_file(json!([plant_at(2.294_481_234_5, 48.858_370_123_4)]));
+        assert_eq!(
+            file.plants[0].position,
+            GeoPoint {
+                lon: 2.294_481_234_5,
+                lat: 48.858_370_123_4
+            }
         );
+        validate_design_geometry(&file).expect("in-range positions are valid");
+        let value = serde_json::to_value(&file).expect("design should serialize");
+        assert_eq!(
+            value["plants"][0]["position"],
+            json!({ "lon": 2.294_481_234_5, "lat": 48.858_370_123_4 })
+        );
+        assert!(value.get("spatial_frame").is_none());
+    }
+
+    #[test]
+    fn design_geometry_rejects_out_of_range_positions() {
+        for (lon, lat) in [(180.0001, 0.0), (-180.0001, 0.0), (0.0, 85.0511287798067)] {
+            let file = geo_file(json!([plant_at(lon, lat)]));
+            assert_eq!(
+                validate_design_geometry(&file),
+                Err(
+                    "$.plants[0].position: expected lon in [-180, 180] and a Web Mercator latitude"
+                        .to_owned()
+                ),
+            );
+        }
+    }
+
+    #[test]
+    fn design_positions_reject_local_metre_points() {
+        let result = serde_json::from_value::<CanopiFile>(json!({
+            "version": 9,
+            "name": "Metres",
+            "plant_species_colors": {},
+            "layers": [],
+            "plants": [{
+                "id": "plant-1",
+                "canonical_name": "Malus domestica",
+                "position": { "x": 1.0, "y": 2.0 }
+            }],
+            "zones": [],
+            "created_at": "2026-09-25T00:00:00.000Z",
+            "updated_at": "2026-09-25T00:00:00.000Z"
+        }));
+        assert!(result.is_err(), "design positions must be lon/lat");
     }
 
     #[test]
     fn design_objects_missing_lock_state_load_unlocked_and_serialize_explicitly() {
         let file: CanopiFile = serde_json::from_value(json!({
-            "version": 6,
-            "name": "Legacy locks",
+            "version": 9,
+            "name": "Implicit locks",
             "description": null,
-            "spatial_frame": {
-                "anchor_longitude_deg": 13.0,
-                "anchor_latitude_deg": 23.0,
-                "north_bearing_deg": 0.0,
-                "placement_status": "provisional",
-                "location_metadata": { "altitude_m": null }
-            },
             "plant_species_colors": {},
             "layers": [
                 { "name": "plants", "visible": true, "locked": false, "opacity": 1.0 }
@@ -812,7 +1097,7 @@ mod tests {
                     "id": "plant-1",
                     "canonical_name": "Malus domestica",
                     "common_name": "Apple",
-                    "position": { "x": 1.0, "y": 2.0 },
+                    "position": { "lon": 13.0, "lat": 23.0 },
                     "rotation": null,
                     "scale": null,
                     "notes": null,
@@ -822,12 +1107,12 @@ mod tests {
             ],
             "zones": [
                 {
-                    "name": "zone-1",
+                    "id": "zone-1",
                     "zone_type": "rect",
                     "points": [
-                        { "x": 0.0, "y": 0.0 },
-                        { "x": 1.0, "y": 0.0 },
-                        { "x": 1.0, "y": 1.0 }
+                        { "lon": 13.0, "lat": 23.0 },
+                        { "lon": 13.00001, "lat": 23.0 },
+                        { "lon": 13.00001, "lat": 22.99999 }
                     ],
                     "fill_color": null,
                     "notes": null
@@ -837,7 +1122,7 @@ mod tests {
                 {
                     "id": "annotation-1",
                     "annotation_type": "text",
-                    "position": { "x": 2.0, "y": 3.0 },
+                    "position": { "lon": 13.00002, "lat": 23.00003 },
                     "text": "Note",
                     "font_size": 16.0,
                     "rotation": null
@@ -860,7 +1145,7 @@ mod tests {
             "created_at": "2026-04-02T00:00:00.000Z",
             "updated_at": "2026-04-02T00:00:00.000Z"
         }))
-        .expect("legacy design objects without locked fields should load");
+        .expect("design objects without locked fields should load");
 
         assert!(!file.plants[0].locked);
         assert!(!file.zones[0].locked);
@@ -876,27 +1161,220 @@ mod tests {
         assert_eq!(value["groups"][0]["locked"], json!(false));
     }
 
+    fn admitted(value: serde_json::Value) -> Result<CanopiFile, String> {
+        let mut file: CanopiFile = serde_json::from_value(value).map_err(|e| e.to_string())?;
+        admit_design_identities_and_ranges(&mut file)?;
+        Ok(file)
+    }
+
+    fn design_with(overrides: serde_json::Value) -> serde_json::Value {
+        let mut value = json!({
+            "version": 9,
+            "name": "Admission",
+            "plant_species_colors": {},
+            "layers": [],
+            "plants": [],
+            "zones": [],
+            "created_at": "2026-09-28T00:00:00.000Z",
+            "updated_at": "2026-09-28T00:00:00.000Z"
+        });
+        for (key, override_value) in overrides.as_object().expect("object overrides") {
+            value[key] = override_value.clone();
+        }
+        value
+    }
+
+    #[test]
+    fn plants_and_guides_without_ids_are_repaired_and_duplicates_refused() {
+        let file = admitted(design_with(json!({
+            "plants": [
+                { "canonical_name": "Malus domestica", "position": { "lon": 13.0, "lat": 23.0 } },
+                { "id": "plant-2", "canonical_name": "Pyrus communis", "position": { "lon": 13.0, "lat": 23.0 } },
+                { "canonical_name": "Prunus avium", "position": { "lon": 13.0, "lat": 23.0 } }
+            ],
+            "measurement_guides": [
+                { "start": { "lon": 13.0, "lat": 23.0 }, "end": { "lon": 13.001, "lat": 23.0 } }
+            ]
+        })))
+        .expect("missing ids are generated");
+        assert_eq!(
+            file.plants
+                .iter()
+                .map(|p| p.id.as_str())
+                .collect::<Vec<_>>(),
+            ["plant-1", "plant-2", "plant-3"]
+        );
+        assert_eq!(file.measurement_guides[0].id, "measurement-guide-1");
+
+        let duplicate = admitted(design_with(json!({
+            "plants": [
+                { "id": "plant-1", "canonical_name": "Malus domestica", "position": { "lon": 13.0, "lat": 23.0 } },
+                { "id": "plant-1", "canonical_name": "Pyrus communis", "position": { "lon": 13.0, "lat": 23.0 } }
+            ]
+        })));
+        assert_eq!(
+            duplicate.unwrap_err(),
+            "$.plants[1].id: duplicate id \"plant-1\""
+        );
+    }
+
+    #[test]
+    fn generated_ids_avoid_explicit_ids_that_come_later() {
+        let file = admitted(design_with(json!({
+            "plants": [
+                { "canonical_name": "Malus domestica", "position": { "lon": 13.0, "lat": 23.0 } },
+                { "canonical_name": "Prunus avium", "position": { "lon": 13.0, "lat": 23.0 } },
+                { "id": "plant-2", "canonical_name": "Pyrus communis", "position": { "lon": 13.0, "lat": 23.0 } }
+            ],
+            "measurement_guides": [
+                { "start": { "lon": 13.0, "lat": 23.0 }, "end": { "lon": 13.001, "lat": 23.0 } },
+                { "id": "measurement-guide-1", "start": { "lon": 13.0, "lat": 23.0 }, "end": { "lon": 13.002, "lat": 23.0 } }
+            ]
+        })))
+        .expect("a generated id never takes an explicit id");
+        assert_eq!(
+            file.plants
+                .iter()
+                .map(|p| p.id.as_str())
+                .collect::<Vec<_>>(),
+            ["plant-1", "plant-3", "plant-2"]
+        );
+        assert_eq!(
+            file.measurement_guides
+                .iter()
+                .map(|g| g.id.as_str())
+                .collect::<Vec<_>>(),
+            ["measurement-guide-2", "measurement-guide-1"]
+        );
+    }
+
+    #[test]
+    fn zones_annotations_and_groups_need_unique_non_empty_ids() {
+        let zone = |id: &str| json!({ "id": id, "zone_type": "rect", "points": [] });
+        assert_eq!(
+            admitted(design_with(json!({ "zones": [zone("bed"), zone("bed")] }))).unwrap_err(),
+            "$.zones[1].id: duplicate id \"bed\""
+        );
+        assert_eq!(
+            admitted(design_with(json!({ "zones": [zone("")] }))).unwrap_err(),
+            "$.zones[0].id: expected a non-empty id"
+        );
+        let note = |id: &str| {
+            json!({
+                "id": id, "annotation_type": "text", "position": { "lon": 13.0, "lat": 23.0 },
+                "text": "Note", "font_size": 14.0
+            })
+        };
+        assert_eq!(
+            admitted(design_with(
+                json!({ "annotations": [note("n"), note("n")] })
+            ))
+            .unwrap_err(),
+            "$.annotations[1].id: duplicate id \"n\""
+        );
+        let group = |id: &str| json!({ "id": id, "name": null, "members": [] });
+        assert_eq!(
+            admitted(design_with(json!({ "groups": [group("g"), group("g")] }))).unwrap_err(),
+            "$.groups[1].id: duplicate id \"g\""
+        );
+    }
+
+    #[test]
+    fn ranges_are_checked_after_deserialization() {
+        let plant = |scale: serde_json::Value| {
+            json!({
+                "id": "plant-1", "canonical_name": "Malus domestica",
+                "position": { "lon": 13.0, "lat": 23.0 }, "scale": scale
+            })
+        };
+        assert!(admitted(design_with(json!({ "plants": [plant(json!(0.0))] }))).is_err());
+        assert!(admitted(design_with(json!({ "plants": [plant(json!(-1.0))] }))).is_err());
+        assert!(admitted(design_with(json!({ "plants": [plant(json!(0.2))] }))).is_ok());
+        assert!(
+            admitted(design_with(
+                json!({ "plants": [plant(serde_json::Value::Null)] })
+            ))
+            .is_ok()
+        );
+        assert!(admitted(design_with(json!({
+            "annotations": [{ "id": "n", "annotation_type": "text", "position": { "lon": 13.0, "lat": 23.0 }, "text": "x", "font_size": 0.0 }]
+        }))).is_err());
+        assert!(
+            admitted(design_with(json!({
+                "layers": [{ "name": "plants", "visible": true, "locked": false, "opacity": 1.5 }]
+            })))
+            .is_err()
+        );
+        assert!(
+            admitted(design_with(json!({
+                "lidar": { "schema_version": 2, "entries": [] }
+            })))
+            .is_err()
+        );
+        assert!(admitted(design_with(json!({
+            "lidar": { "schema_version": 1, "entries": [
+                { "kind": "Source", "id": "dem", "visible": true, "opacity": 1.2, "order": 0, "style": null }
+            ] }
+        }))).is_err());
+        assert!(admitted(design_with(json!({
+            "lidar": { "schema_version": 1, "entries": [
+                { "kind": "Derived", "id": "slope", "visible": true, "opacity": 0.4, "order": 0, "style": null }
+            ] }
+        }))).is_ok());
+    }
+
+    fn zone_file(zone: serde_json::Value) -> Result<CanopiFile, serde_json::Error> {
+        serde_json::from_value(json!({
+            "version": 9,
+            "name": "Zones",
+            "plant_species_colors": {},
+            "layers": [],
+            "plants": [],
+            "zones": [zone],
+            "created_at": "2026-09-27T00:00:00.000Z",
+            "updated_at": "2026-09-27T00:00:00.000Z"
+        }))
+    }
+
+    #[test]
+    fn zones_keep_a_stable_id_beside_an_optional_display_name() {
+        let named = zone_file(json!({
+            "id": "zone-1",
+            "name": "North bed",
+            "zone_type": "rect",
+            "points": []
+        }))
+        .expect("a named zone loads");
+        assert_eq!(named.zones[0].id, "zone-1");
+        assert_eq!(named.zones[0].name.as_deref(), Some("North bed"));
+
+        let unnamed = zone_file(json!({ "id": "zone-2", "zone_type": "line", "points": [] }))
+            .expect("an unnamed zone loads");
+        assert_eq!(unnamed.zones[0].name, None);
+        let value = serde_json::to_value(&unnamed).expect("design should serialize");
+        assert_eq!(value["zones"][0]["id"], json!("zone-2"));
+        assert_eq!(value["zones"][0]["name"], json!(null));
+
+        // A v8 zone, whose name was its identity, has no id and is refused.
+        assert!(
+            zone_file(json!({ "name": "North bed", "zone_type": "rect", "points": [] })).is_err()
+        );
+    }
+
     #[test]
     fn general_deserialization_rejects_obsolete_object_group_shape() {
         let result = serde_json::from_value::<CanopiFile>(json!({
-            "version": 6,
+            "version": 9,
             "name": "Legacy groups require ingestion",
-            "spatial_frame": {
-                "anchor_longitude_deg": 13.0,
-                "anchor_latitude_deg": 23.0,
-                "north_bearing_deg": 0.0,
-                "placement_status": "provisional",
-                "location_metadata": { "altitude_m": null }
-            },
             "plant_species_colors": {},
             "layers": [],
             "plants": [{
                 "id": "plant-1",
                 "canonical_name": "Malus domestica",
-                "position": { "x": 1.0, "y": 2.0 }
+                "position": { "lon": 13.0, "lat": 23.0 }
             }],
             "zones": [{
-                "name": "zone-1",
+                "id": "zone-1",
                 "zone_type": "rect",
                 "points": []
             }],
@@ -910,7 +1388,7 @@ mod tests {
 
         assert!(
             result.is_err(),
-            "obsolete Object Groups must not enter the v6 runtime",
+            "obsolete Object Groups must not enter the runtime",
         );
     }
 }

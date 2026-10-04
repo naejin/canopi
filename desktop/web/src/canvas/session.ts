@@ -1,16 +1,15 @@
-import { batch, computed, signal } from '@preact/signals'
+import { computed, signal } from '@preact/signals'
 import {
   canvasHasSelectionState,
-  canvasReadyState,
   canvasSelectionState,
+  canvasToolGuidanceState,
   canvasToolState,
-  getCanvasTool,
-  setCanvasReadyState,
   setCanvasTool,
 } from './session-state'
 import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
+  CanvasKeyboardPort,
   CanvasLayerCommandSurface,
   CanvasPlantPresentationCommandSurface,
   CanvasQuerySurface,
@@ -30,7 +29,7 @@ export const currentCanvasToolCommandSurface = computed<CanvasToolCommandSurface
 export const currentCanvasViewportCommandSurface = computed<CanvasViewportCommandSurface | null>(() =>
   commandSurfaceFrom(currentCanvasSession.value)?.viewport ?? null,
 )
-export const currentCanvasLayerCommandSurface = computed<CanvasLayerCommandSurface | null>(() =>
+const currentCanvasLayerCommandSurface = computed<CanvasLayerCommandSurface | null>(() =>
   commandSurfaceFrom(currentCanvasSession.value)?.layers ?? null,
 )
 export const currentCanvasSceneEditCommandSurface = computed<CanvasSceneEditCommandSurface | null>(() =>
@@ -49,20 +48,22 @@ export const currentCanvasDocumentSurface = computed<CanvasDocumentSurface | nul
   documentSurfaceFrom(currentCanvasSession.value),
 )
 export const currentCanvasTool = canvasToolState
+/** The active tool's gesture and stamp state, for the tool card. */
+export const currentCanvasToolGuidance = canvasToolGuidanceState
 export const currentCanvasSelection = canvasSelectionState
 export const currentCanvasHasSelection = canvasHasSelectionState
-export const currentCanvasReady = canvasReadyState
 
 export function getCurrentCanvasSession(): CanvasRuntimeSurfaces | null {
   return currentCanvasSession.value
 }
 
-export function getCurrentCanvasCommandSurface(): CanvasCommandSurface | null {
-  return currentCanvasCommandSurface.value
+/** The live session's keyboard port, which the key router hands every key (spec §1.6); null with no canvas. */
+export function currentCanvasKeyboardPort(): CanvasKeyboardPort | null {
+  return currentCanvasSession.peek()?.keyboard ?? null
 }
 
-export function getCurrentCanvasToolCommandSurface(): CanvasToolCommandSurface | null {
-  return currentCanvasToolCommandSurface.value
+export function getCurrentCanvasCommandSurface(): CanvasCommandSurface | null {
+  return currentCanvasCommandSurface.value
 }
 
 export function getCurrentCanvasViewportCommandSurface(): CanvasViewportCommandSurface | null {
@@ -78,10 +79,7 @@ export function getCurrentCanvasDocumentSurface(): CanvasDocumentSurface | null 
 }
 
 export function setCanvasRuntimeSurfaces(surfaces: CanvasRuntimeSurfaces | null): void {
-  batch(() => {
-    currentCanvasSession.value = surfaces
-    setCanvasReadyState(surfaces !== null)
-  })
+  currentCanvasSession.value = surfaces
 }
 
 export function setCurrentCanvasSession(session: CanvasRuntimeSurfaces | null): void {
@@ -105,10 +103,6 @@ export function setCurrentCanvasTool(name: string): void {
     return
   }
   setCanvasTool(name)
-}
-
-export function getCurrentCanvasTool(): string {
-  return getCanvasTool()
 }
 
 function isCanvasRuntimeSurfaces(value: unknown): value is CanvasRuntimeSurfaces {

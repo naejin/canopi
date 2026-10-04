@@ -19,11 +19,11 @@ import type {
 describe('Scene Arrangement Placement', () => {
   it('places a mixed Group and ungrouped objects with typed remapping in one edit', () => {
     const destination = createDefaultScenePersistedState()
-    destination.zones = [zone('Bed', 'rect', [{ x: 0, y: 0 }, { x: 2, y: 2 }])]
+    destination.zones = [zone('zone-wire-id', 'rect', [{ x: 0, y: 0 }, { x: 2, y: 2 }], 'Bed')]
     const harness = createPlacementHarness(destination)
     const template = mixedTemplate()
     const originalTemplate = structuredClone(template)
-    const ids = ['plant-clone', 'annotation-clone', 'guide-clone', 'group-clone']
+    const ids = ['plant-clone', 'bed-clone', 'strip-clone', 'annotation-clone', 'guide-clone', 'group-clone']
     const placement = createSceneArrangementPlacement({
       sceneEdits: harness.sceneEdits,
       createId: () => ids.shift() ?? 'unexpected-id',
@@ -41,13 +41,18 @@ describe('Scene Arrangement Placement', () => {
       createdCount: 6,
       selectedTopLevelTargets: [
         { kind: 'group', id: 'group-clone' },
-        { kind: 'zone', id: 'Bed copy 2' },
+        { kind: 'zone', id: 'zone-strip-clone' },
         { kind: 'annotation', id: 'annotation-clone' },
         { kind: 'measurement-guide', id: 'measurement-guide-guide-clone' },
       ],
     })
     expect(harness.runTypes).toEqual(['test-arrangement'])
-    expect(scene.zones.map((entry) => entry.name)).toEqual(['Bed', 'Bed copy', 'Bed copy 2'])
+    // Copies are new zones with new ids; each keeps its display name.
+    expect(scene.zones.map((entry) => [entry.id, entry.name])).toEqual([
+      ['zone-wire-id', 'Bed'],
+      ['zone-bed-clone', 'Bed'],
+      ['zone-strip-clone', null],
+    ])
     expect(scene.zones[1]?.points).toEqual([{ x: 15, y: 26 }, { x: 3, y: 4 }])
     expect(scene.zones[2]?.points).toEqual([{ x: 18, y: 29 }, { x: 20, y: 31 }])
     expect(scene.groups[0]).toMatchObject({
@@ -55,7 +60,7 @@ describe('Scene Arrangement Placement', () => {
       locked: false,
       members: [
         { kind: 'plant', id: 'plant-clone' },
-        { kind: 'zone', id: 'Bed copy' },
+        { kind: 'zone', id: 'zone-bed-clone' },
       ],
     })
     expect(template).toEqual(originalTemplate)
@@ -131,16 +136,16 @@ describe('Scene Arrangement Placement', () => {
     expect(receipt.selectedTopLevelTargets).toEqual([{ kind: 'plant', id: 'plant-clone' }])
   })
 
-  it('reuses an immutable template with fresh identities and Zone names', () => {
+  it('reuses an immutable template with fresh identities, keeping Zone names', () => {
     const harness = createPlacementHarness()
-    const ids = ['plant-1', 'plant-2']
+    const ids = ['plant-1', 'guild-1', 'plant-2', 'guild-2']
     const placement = createSceneArrangementPlacement({
       sceneEdits: harness.sceneEdits,
       createId: () => ids.shift()!,
     })
     const template: SceneArrangementTemplate = {
       plants: [{ sourceId: 'plant-source', entity: plant('plant-source', 0, 0) }],
-      zones: [{ sourceId: 'zone-source', entity: zone('Guild', 'ellipse', [{ x: 0, y: 0 }, { x: 2, y: 1 }]) }],
+      zones: [{ sourceId: 'zone-source', entity: zone('zone-source', 'ellipse', [{ x: 0, y: 0 }, { x: 2, y: 1 }], 'Guild') }],
       annotations: [],
       measurementGuides: [],
       groups: [],
@@ -150,9 +155,12 @@ describe('Scene Arrangement Placement', () => {
     placement.place({ template, translateBy: { x: 2, y: 0 }, historyType: 'second' })
 
     expect(harness.readScene().plants.map((entry) => entry.id)).toEqual(['plant-1', 'plant-2'])
-    expect(harness.readScene().zones.map((entry) => entry.name)).toEqual(['Guild', 'Guild copy'])
+    expect(harness.readScene().zones.map((entry) => [entry.id, entry.name])).toEqual([
+      ['zone-guild-1', 'Guild'],
+      ['zone-guild-2', 'Guild'],
+    ])
     expect(template.plants[0]?.entity.id).toBe('plant-source')
-    expect(template.zones[0]?.entity.name).toBe('Guild')
+    expect(template.zones[0]?.entity.id).toBe('zone-source')
   })
 
   it('keeps Zone selection identities distinct from existing non-Zone identities', () => {
@@ -174,8 +182,9 @@ describe('Scene Arrangement Placement', () => {
       historyType: 'cross-kind-collision',
     })
 
-    expect(harness.readScene().zones[0]?.name).toBe('Guild copy')
-    expect(receipt.selectedTopLevelTargets).toEqual([{ kind: 'zone', id: 'Guild copy' }])
+    const placed = harness.readScene().zones[0]!.id
+    expect(placed).toMatch(/^zone-/)
+    expect(receipt.selectedTopLevelTargets).toEqual([{ kind: 'zone', id: placed }])
   })
 
   it('returns a non-committed receipt for an empty template', () => {
@@ -285,11 +294,11 @@ function mixedTemplate(): SceneArrangementTemplate {
     zones: [
       {
         sourceId: 'zone-wire-id',
-        entity: zone('Bed', 'ellipse', [{ x: 5, y: 6 }, { x: 3, y: 4 }]),
+        entity: zone('zone-wire-id', 'ellipse', [{ x: 5, y: 6 }, { x: 3, y: 4 }], 'Bed'),
       },
       {
         sourceId: 'ungrouped-zone-wire-id',
-        entity: zone('Bed', 'rect', [{ x: 8, y: 9 }, { x: 10, y: 11 }]),
+        entity: zone('ungrouped-zone-wire-id', 'rect', [{ x: 8, y: 9 }, { x: 10, y: 11 }]),
       },
     ],
     annotations: [{
@@ -355,7 +364,6 @@ function plant(id: string, x: number, y: number): ScenePlantEntity {
     canopySpreadM: null,
     position: { x, y },
     rotationDeg: null,
-    scale: null,
     notes: null,
     plantedDate: null,
     quantity: null,
@@ -363,12 +371,14 @@ function plant(id: string, x: number, y: number): ScenePlantEntity {
 }
 
 function zone(
-  name: string,
+  id: string,
   zoneType: string,
   points: SceneZoneEntity['points'],
+  name: string | null = null,
 ): SceneZoneEntity {
   return {
     kind: 'zone',
+    id,
     name,
     locked: false,
     zoneType,

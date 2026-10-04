@@ -106,6 +106,7 @@ describe('TypeScript architecture source facts', () => {
           import '../shared/module'
           import './settings.browser'
           import '#platform'
+          import Worker from './worker?worker&inline'
         `,
       },
       { path: 'src/canvas/command.ts', source: 'export const command = 1' },
@@ -113,6 +114,7 @@ describe('TypeScript architecture source facts', () => {
       { path: 'src/shared/lazy.tsx', source: 'export const lazy = 1' },
       { path: 'src/shared/module.mts', source: 'export const moduleValue = 1' },
       { path: 'src/app/settings.browser.ts', source: 'export const settings = 1' },
+      { path: 'src/app/worker.ts', source: 'export {}' },
     ])
 
     expect(graph[0]?.imports.map((edge) => edge.target)).toEqual([
@@ -122,6 +124,7 @@ describe('TypeScript architecture source facts', () => {
       'src/shared/module.mts',
       'src/app/settings.browser.ts',
       '#platform',
+      'src/app/worker.ts',
     ])
   })
 
@@ -487,6 +490,24 @@ describe('TypeScript architecture source facts', () => {
       '[Tests use public runtime member surfaces] src/__tests__/consumer.test.ts:3 calls runtime.getSceneStore',
       '[Tests use public runtime member surfaces] src/__tests__/consumer.test.ts:4 calls runtime[\'getSceneStore\']',
       '[Tests use public runtime direct surfaces] src/__tests__/consumer.test.ts:6 calls getSceneStore',
+    ])
+  })
+
+  it('records the member name of a non-null or parenthesised callee', () => {
+    const facts = parseTypeScriptSource('src/maplibre/consumer.ts', `
+      map.flyTo!(target);
+      (map.easeTo)(target);
+      ((map.jumpTo!))(target);
+      map!.stop();
+      jumpTo(target);
+    `)
+
+    expect(facts.calls.map(({ target, property }) => ({ target, property }))).toEqual([
+      { target: 'map.flyTo!', property: 'flyTo' },
+      { target: '(map.easeTo)', property: 'easeTo' },
+      { target: '((map.jumpTo!))', property: 'jumpTo' },
+      { target: 'map!.stop', property: 'stop' },
+      { target: 'jumpTo', property: null },
     ])
   })
 })

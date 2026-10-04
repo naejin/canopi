@@ -1,12 +1,10 @@
 import { effect } from '@preact/signals'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  currentCanvasReady,
   currentCanvasSession,
   currentCanvasTool,
   getCurrentCanvasCommandSurface,
   getCurrentCanvasSession,
-  getCurrentCanvasToolCommandSurface,
   getCurrentCanvasViewportCommandSurface,
   setCurrentCanvasSession,
   setCurrentCanvasTool,
@@ -29,27 +27,23 @@ describe('canvas session seam', () => {
 
     expect(getCurrentCanvasSession()).toBe(surfaces)
     expect(currentCanvasSession.value).toBe(surfaces)
-    expect(currentCanvasReady.value).toBe(true)
 
     setCurrentCanvasSession(null)
 
     expect(currentCanvasSession.value).toBe(null)
-    expect(currentCanvasReady.value).toBe(false)
   })
 
-  it('publishes session identity and readiness atomically across reentrant release', () => {
+  it('publishes the session identity consistently across reentrant release', () => {
     const surfaces = createTestCanvasRuntimeSurfaces()
     const disposeEffect = effect(() => {
       if (currentCanvasSession.value === surfaces) {
         setCurrentCanvasSession(null)
       }
-      void currentCanvasReady.value
     })
 
     setCurrentCanvasSession(surfaces)
 
     expect(currentCanvasSession.value).toBeNull()
-    expect(currentCanvasReady.value).toBe(false)
     disposeEffect()
   })
 
@@ -58,7 +52,6 @@ describe('canvas session seam', () => {
       /explicit canvas runtime surfaces/,
     )
     expect(currentCanvasSession.value).toBe(null)
-    expect(currentCanvasReady.value).toBe(false)
   })
 
   it('primes tool state before mount and delegates through the command surface after mount', () => {
@@ -79,7 +72,6 @@ describe('canvas session seam', () => {
     setCurrentCanvasTool('hand')
 
     expect(getCurrentCanvasCommandSurface()).toBe(currentCanvasSession.value?.commands)
-    expect(getCurrentCanvasToolCommandSurface()).toBe(currentCanvasSession.value?.commands.tools)
     expect(getCurrentCanvasViewportCommandSurface()).toBe(currentCanvasSession.value?.commands.viewport)
     expect(setTool).toHaveBeenCalledWith('hand')
     expect(currentCanvasTool.value).toBe('hand')

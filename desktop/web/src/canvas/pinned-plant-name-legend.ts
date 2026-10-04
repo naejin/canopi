@@ -1,6 +1,7 @@
-import { DEFAULT_PLANT_COLOR, normalizeHexColor } from './plant-colors'
 import { resolvePlantSymbolForPlant, type PlantSymbolId, type ScenePersistedState } from './runtime/scene'
-import { getStratumColor } from './plants'
+import type { PlantDisplay } from './runtime/plant-display'
+import { resolvePlantDisplayColor } from './runtime/plant-presentation'
+import { EMPTY_SPECIES_CACHE } from './runtime/species-key'
 
 export interface PinnedPlantNameLegendEntry {
   readonly label: string
@@ -16,6 +17,7 @@ export interface PinnedPlantNameLegendSource {
 
 export function buildPinnedPlantNameLegendEntries(
   source: PinnedPlantNameLegendSource,
+  display: PlantDisplay,
 ): PinnedPlantNameLegendEntry[] {
   const scene = source.getSceneSnapshot()
   const plantLayer = scene.layers.find((layer) => layer.name === 'plants')
@@ -28,7 +30,8 @@ export function buildPinnedPlantNameLegendEntries(
     if (plant.pinnedName !== true) continue
 
     const label = localizedNames.get(plant.canonicalName) ?? plant.commonName ?? plant.canonicalName
-    const color = normalizeHexColor(plant.color) ?? getStratumColor(plant.stratum) ?? DEFAULT_PLANT_COLOR
+    // No species cache needed: the runtime writes the catalog stratum into the Scene before it first draws a plant.
+    const color = resolvePlantDisplayColor(plant, EMPTY_SPECIES_CACHE, display)
     const symbol = resolvePlantSymbolForPlant(plant, scene.plantSpeciesSymbols)
     const key = `${label}\u0000${symbol}\u0000${color}`
     const existing = groups.get(key)

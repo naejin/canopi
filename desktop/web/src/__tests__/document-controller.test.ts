@@ -3,7 +3,7 @@ import {
   editCurrentDesign,
   editDesignArray,
   reconcileCurrentDesign,
-} from '../app/design-edit'
+} from '../app/design-edit/core'
 import { speciesBudgetTarget } from '../target'
 import {
   designSessionFixture,
@@ -14,10 +14,9 @@ import {
 beforeEach(() => {
   designSessionFixture.nonCanvasRevision = 0
   designSessionFixture.file = {
-    version: 6,
+    version: 9,
     name: 'test',
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [],
     plants: [],

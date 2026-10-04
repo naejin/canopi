@@ -15,22 +15,21 @@ import {
 } from './identity'
 import type { PanelTarget } from '../types/design'
 
-export type TargetMapProjectionPoint = TargetScenePoint
+type TargetMapProjectionPoint = TargetScenePoint
 
-export interface TargetMapProjectionLocation {
+interface TargetMapProjectionLocation {
   readonly lat: number
   readonly lon: number
-  readonly northBearingDeg?: number | null
 }
 
-export interface TargetMapPlantRef {
+interface TargetMapPlantRef {
   readonly id: string
   readonly canonicalName: string
   readonly position: TargetMapProjectionPoint
 }
 
-export interface TargetMapZoneRef {
-  readonly name: string
+interface TargetMapZoneRef {
+  readonly id: string
   readonly zoneType?: string
   readonly points: readonly TargetMapProjectionPoint[]
   readonly rotationDeg?: number
@@ -41,7 +40,7 @@ export interface TargetMapProjectionScene {
   readonly zones: readonly TargetMapZoneRef[]
 }
 
-export interface TargetMapPlantFeature {
+interface TargetMapPlantFeature {
   readonly type: 'Feature'
   readonly geometry: {
     readonly type: 'Point'
@@ -53,7 +52,7 @@ export interface TargetMapPlantFeature {
   }
 }
 
-export interface TargetMapPolygonZoneFeature {
+interface TargetMapPolygonZoneFeature {
   readonly type: 'Feature'
   readonly geometry: {
     readonly type: 'Polygon'
@@ -65,7 +64,7 @@ export interface TargetMapPolygonZoneFeature {
   }
 }
 
-export interface TargetMapLineZoneFeature {
+interface TargetMapLineZoneFeature {
   readonly type: 'Feature'
   readonly geometry: {
     readonly type: 'LineString'
@@ -77,9 +76,9 @@ export interface TargetMapLineZoneFeature {
   }
 }
 
-export type TargetMapZoneFeature = TargetMapPolygonZoneFeature | TargetMapLineZoneFeature
+type TargetMapZoneFeature = TargetMapPolygonZoneFeature | TargetMapLineZoneFeature
 export type TargetMapFeature = TargetMapPlantFeature | TargetMapZoneFeature
-export type TargetMapSkippedReason = 'missing_location' | null
+type TargetMapSkippedReason = 'missing_location' | null
 
 export interface TargetMapProjectionResult {
   readonly features: readonly TargetMapFeature[]
@@ -122,7 +121,6 @@ export function projectTargetResolutionToMapFeatures(
       point.y,
       location.lat,
       location.lon,
-      location.northBearingDeg ?? 0,
     )
     return [geo.lng, geo.lat]
   }
@@ -139,7 +137,6 @@ export function projectTargetResolutionToMapFeatures(
         ref.plant.position.y,
         location.lat,
         location.lon,
-        location.northBearingDeg ?? 0,
       )
       features.push({
         type: 'Feature',
@@ -170,7 +167,7 @@ export function projectTargetResolutionToMapFeatures(
         },
         properties: {
           kind: 'zone',
-          sceneId: ref.zone.name,
+          sceneId: ref.zone.id,
         },
       })
       continue
@@ -196,7 +193,7 @@ export function projectTargetResolutionToMapFeatures(
       },
       properties: {
         kind: 'zone',
-        sceneId: ref.zone.name,
+        sceneId: ref.zone.id,
       },
     })
   }
@@ -235,7 +232,8 @@ function getZoneProjectionPoints(zone: TargetZoneRef): readonly TargetMapProject
 function targetZoneToSceneZone(zone: TargetZoneRef): SceneZoneEntity {
   return {
     kind: 'zone',
-    name: zone.name,
+    id: zone.id,
+    name: null,
     locked: false,
     zoneType: zone.zoneType ?? 'polygon',
     points: zone.points ? zone.points.map((point) => ({ x: point.x, y: point.y })) : [],
@@ -244,8 +242,3 @@ function targetZoneToSceneZone(zone: TargetZoneRef): SceneZoneEntity {
     notes: null,
   }
 }
-
-export const targetMapProjection = {
-  project: projectTargetResolutionToMapFeatures,
-  projectTargets: projectTargetsToMapFeatures,
-} as const

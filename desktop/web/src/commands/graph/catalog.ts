@@ -2,16 +2,13 @@ import { canvasPdf, canExportCanvasPdf } from '../../app/canvas-pdf/live'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
   canvasCommandDefinitions,
-  createCanvasCommandProjection,
+  canvasCommandDisplayKey,
   dispatchCanvasCommandIntent,
   isCanvasCommandDisabled,
   type CanvasCommandDefinition,
+  type CanvasCommandFrom,
   type CanvasCommandId,
-  type CanvasCommandIntent,
-  type CanvasCommandIntentAdapter,
   type CanvasCommandProjection,
-  type CanvasCommandProjectionState,
-  type CanvasToolId,
 } from '../../app/canvas-commands'
 import {
   composeShellCommandCatalog,
@@ -19,177 +16,99 @@ import {
   type ShellCommandIdForCapability,
   type ShellCommandState,
 } from '../../app/shell-commands'
+import { formatShortcut } from '../../app/shell-commands/shortcut-text'
+import { singleKeyShortcuts } from '../../app/settings/state'
+import { currentDesign } from '../../app/document-session/store'
+import { desktopGeoJsonWorkflow as desktopGeoJson } from '../../platform/geojson.desktop'
 import {
-  gridVisible,
-  rulersVisible,
-  snapToGridEnabled,
-} from '../../app/canvas-settings/signals'
-import { currentDesign, designDirty } from '../../app/document-session/store'
-import {
+  closeDesign,
+  designRevertAvailable,
   newDesignAction,
   openDesign,
+  revertDesign,
   saveAsCurrentDesign,
   saveCurrentDesign,
 } from '../../app/document-session/actions'
+import { openCommandPalette } from '../../app/shell/dialogs'
 import { activePanel, navigateTo, sidePanel, type Panel } from '../../app/shell/state'
 import {
   diagnosticMessageFromError,
   recordFrontendDiagnostic,
 } from '../../app/problem-report/diagnostics'
 import { openProblemReportDialog } from '../../app/problem-report/submission'
-import { openAboutCanopiDialog } from '../../app/about/state'
-import { mutateSettingsProjection } from '../../app/settings/projection'
+import { exportCurrentBudgetCsv } from '../../app/budget/export'
+import { beginDataImport, openDataLibrary } from '../../app/lidar/library-navigation'
+import { createWorkspaceShellCapabilities } from '../../app/workspace-commands/capabilities'
 import {
-  currentCanvasHasSelection,
-  currentCanvasQuerySurface,
-  currentCanvasTool,
-  getCurrentCanvasCommandSurface,
-  setCurrentCanvasTool,
-} from '../../canvas/session'
-import type { CanvasCommandSurface } from '../../canvas/runtime/runtime'
+  readWorkspaceCanvasProjectionState,
+  workspaceCanvasCommandProjection,
+  workspaceCanvasIntentAdapter,
+} from '../../app/workspace-commands/canvas-actions'
 import { t } from '../../i18n'
-import { VIEW_SHORTCUTS } from '../../shortcuts/definitions'
-
-type NonToolbarAppCommandId =
-  | 'view.zoomIn'
-  | 'view.zoomOut'
-  | 'view.fitToContent'
-  | 'help.aboutCanopi'
-  | 'help.reportProblem'
-  | 'canvas.copy'
-  | 'canvas.paste'
-  | 'canvas.duplicateSelected'
-  | 'canvas.deleteSelected'
-  | 'canvas.selectAll'
-  | 'canvas.bringToFront'
-  | 'canvas.sendToBack'
-  | 'canvas.lockOrUnlockSelected'
-  | 'canvas.groupSelected'
-  | 'canvas.ungroupSelected'
 
 type DesktopShellCapabilityId =
   | 'newDesign'
   | 'openDesign'
+  | 'renameDesign'
   | 'saveDesign'
   | 'saveDesignAs'
+  | 'revertDesign'
+  | 'addData'
+  | 'openDataLibrary'
+  | 'importGeoJson'
   | 'exportCanvasPdf'
+  | 'exportGeoJson'
+  | 'exportBudgetCsv'
+  | 'openSettings'
+  | 'findPlants'
+  | 'saveCurrentView'
+  | 'manageViews'
+  | 'closeDesign'
   | 'exitApp'
   | 'navigateCanvas'
-  | 'navigateLocation'
-  | 'navigatePlantDatabase'
-  | 'navigateSpeciesKey'
-  | 'navigateData'
-  | 'navigateAnalysis'
   | 'navigateLayers'
+  | 'navigateSpeciesKey'
+  | 'navigatePlantDatabase'
+  | 'navigateFavorites'
   | 'navigateCalendar'
   | 'navigateBudget'
   | 'navigateConsortium'
-  | 'navigateFavorites'
   | 'navigateDesignNotebook'
+  | 'navigateStories'
+  | 'toggleToolNames'
+  | 'showSatellite'
+  | 'showMap'
+  | 'showNoBackground'
   | 'toggleTheme'
+  | 'showCommandPalette'
+  | 'showShortcuts'
+  | 'gettingStarted'
+  | 'reportProblem'
+  | 'aboutCanopi'
 
 export type DesktopShellCommandId = ShellCommandIdForCapability<DesktopShellCapabilityId>
 
-export type AppCommandId = NonToolbarAppCommandId | DesktopShellCommandId | CanvasCommandId
+export type AppCommandId = DesktopShellCommandId | CanvasCommandId
 
-export interface AppCommandState extends ShellCommandState {
-  readonly canvas: CanvasCommandSurface | null
-  readonly canvasHasSelection: boolean
-  readonly canvasSpatialEditingAvailable: boolean
-}
+export interface AppCommandState extends ShellCommandState {}
 
 export interface AppCommandDefinition {
   readonly id: AppCommandId
-  readonly label?: () => string
+  readonly label: () => string
+  /** Display text, e.g. "Ctrl Shift S". */
   readonly shortcut?: string
-  readonly palette?: boolean
-  readonly run: (state: AppCommandState) => void
+  readonly palette: boolean
+  /** `from` is the surface that ran it; a canvas tool arms with it. */
+  readonly run: (state: AppCommandState, from: CanvasCommandFrom) => void
   readonly disabled?: (state: AppCommandState) => boolean
 }
 
 export function readAppCommandState(): AppCommandState {
   return {
     hasDesign: currentDesign.value !== null,
-    designDirty: designDirty.value,
-    canvas: getCurrentCanvasCommandSurface(),
-    canvasHasSelection: currentCanvasHasSelection.value,
-    canvasSpatialEditingAvailable: currentCanvasQuerySurface.value?.viewport.value.mode !== 'overview',
+    revertAvailable: designRevertAvailable.value,
     activePanel: activePanel.value,
     sidePanel: sidePanel.value,
-  }
-}
-
-function switchPanel(panel: Panel): void {
-  navigateTo(panel)
-}
-
-function switchTool(tool: CanvasToolId): void {
-  if (activePanel.value !== 'canvas') {
-    navigateTo('canvas')
-  }
-  setCurrentCanvasTool(tool)
-}
-
-function cycleTheme(): void {
-  mutateSettingsProjection((settings) => {
-    settings.theme = settings.theme === 'dark' ? 'light' : 'dark'
-  }, { persist: 'immediate' })
-}
-
-function showProblemReportDialog(): void {
-  openProblemReportDialog()
-}
-
-function showAboutCanopiDialog(): void {
-  openAboutCanopiDialog()
-}
-
-function runCanvas(
-  state: AppCommandState,
-  command: (canvas: CanvasCommandSurface) => void,
-): void {
-  if (state.canvas) command(state.canvas)
-}
-
-function canvasProjectionState(state: AppCommandState): CanvasCommandProjectionState {
-  return {
-    activeTool: currentCanvasTool.value,
-    toolSelectionAvailable: true,
-    spatialEditingAvailable: state.canvasSpatialEditingAvailable,
-    canUndo: state.canvas?.history.canUndo.value ?? false,
-    canRedo: state.canvas?.history.canRedo.value ?? false,
-    settingsAvailable: state.canvas !== null,
-    gridVisible: gridVisible.value,
-    snapToGridEnabled: snapToGridEnabled.value,
-    rulersVisible: rulersVisible.value,
-  }
-}
-
-function desktopCanvasIntentAdapter(state: AppCommandState): CanvasCommandIntentAdapter {
-  return {
-    selectTool: switchTool,
-    undo: () => runCanvas(state, (canvas) => canvas.history.undo()),
-    redo: () => runCanvas(state, (canvas) => canvas.history.redo()),
-    toggleGrid: () => runCanvas(state, (canvas) => canvas.chrome.toggleGrid()),
-    toggleSnapToGrid: () => runCanvas(state, (canvas) => canvas.chrome.toggleSnapToGrid()),
-    toggleRulers: () => runCanvas(state, (canvas) => canvas.chrome.toggleRulers()),
-  }
-}
-
-function dispatchCurrentDesktopCanvasIntent(intent: CanvasCommandIntent): void {
-  const state = readAppCommandState()
-  if (isCanvasCommandDisabled(intent, canvasProjectionState(state))) return
-  dispatchCanvasCommandIntent(intent, desktopCanvasIntentAdapter(state))
-}
-
-function liveDesktopCanvasIntentAdapter(): CanvasCommandIntentAdapter {
-  return {
-    selectTool: (tool) => dispatchCurrentDesktopCanvasIntent({ type: 'select-tool', tool }),
-    undo: () => dispatchCurrentDesktopCanvasIntent({ type: 'undo' }),
-    redo: () => dispatchCurrentDesktopCanvasIntent({ type: 'redo' }),
-    toggleGrid: () => dispatchCurrentDesktopCanvasIntent({ type: 'toggle-grid' }),
-    toggleSnapToGrid: () => dispatchCurrentDesktopCanvasIntent({ type: 'toggle-snap-to-grid' }),
-    toggleRulers: () => dispatchCurrentDesktopCanvasIntent({ type: 'toggle-rulers' }),
   }
 }
 
@@ -199,35 +118,19 @@ function canvasAppCommandDefinition(
   return {
     id: definition.commandId,
     label: () => t(definition.labelKey),
-    shortcut: definition.displayShortcut,
+    // Read when shown: the language and Settings › Keyboard can change.
+    get shortcut() {
+      const shortcut = canvasCommandDisplayKey(definition, { characterKeys: singleKeyShortcuts.value })
+      return shortcut ? formatShortcut(shortcut, t) : undefined
+    },
     palette: definition.palette,
-    run: (state) => dispatchCanvasCommandIntent(
-      definition.intent,
-      desktopCanvasIntentAdapter(state),
-    ),
-    disabled: (state) => isCanvasCommandDisabled(
-      definition.intent,
-      canvasProjectionState(state),
-    ),
+    run: (_state, from) => dispatchCanvasCommandIntent(definition.intent, workspaceCanvasIntentAdapter, from),
+    disabled: () => isCanvasCommandDisabled(definition.intent, readWorkspaceCanvasProjectionState()),
   }
 }
 
-const CANVAS_HISTORY_COMMANDS = canvasCommandDefinitions
-  .filter((definition) => definition.kind === 'history')
-  .map(canvasAppCommandDefinition)
-
-const CANVAS_TOOL_AND_SETTINGS_COMMANDS = canvasCommandDefinitions
-  .filter((definition) => definition.kind !== 'history')
-  .map(canvasAppCommandDefinition)
-
-export function createDesktopCanvasCommandProjection(
-  state: AppCommandState,
-): CanvasCommandProjection {
-  return createCanvasCommandProjection({
-    state: canvasProjectionState(state),
-    intents: liveDesktopCanvasIntentAdapter(),
-    translate: t,
-  })
+export function createDesktopCanvasCommandProjection(): CanvasCommandProjection {
+  return workspaceCanvasCommandProjection.value
 }
 
 function logCommandFailure(label: string, error: unknown): void {
@@ -243,8 +146,20 @@ function runAsyncCommand(label: string, action: () => Promise<unknown>): void {
   void action().catch((error) => logCommandFailure(label, error))
 }
 
+function isGeoJsonTransferDisabled(state: { readonly hasDesign: boolean }): boolean {
+  return !state.hasDesign || !desktopGeoJson.isAvailable()
+}
+
+function designPanel(panel: Panel) {
+  return {
+    execute: () => navigateTo(panel),
+    // An open panel can always close, even after its Design went away.
+    isExecutionDisabled: (state: ShellCommandState) => !state.hasDesign && state.sidePanel !== panel,
+  }
+}
+
 export const DESKTOP_SHELL_COMMAND_CATALOG = composeShellCommandCatalog({
-  exportCanvasPdf: { execute: () => canvasPdf.show(), isExecutionDisabled: () => !canExportCanvasPdf(), isProjectionDisabled: () => !canExportCanvasPdf() },
+  ...createWorkspaceShellCapabilities(),
   newDesign: {
     execute: () => runAsyncCommand('New design', newDesignAction),
   },
@@ -253,66 +168,65 @@ export const DESKTOP_SHELL_COMMAND_CATALOG = composeShellCommandCatalog({
   },
   saveDesign: {
     execute: () => runAsyncCommand('Save design', saveCurrentDesign),
-    isExecutionDisabled: (state) => !state.hasDesign || !state.designDirty,
+    isExecutionDisabled: (state) => !state.hasDesign,
   },
   saveDesignAs: {
     execute: () => runAsyncCommand('Save design as', saveAsCurrentDesign),
+    isExecutionDisabled: (state) => !state.hasDesign,
+  },
+  revertDesign: {
+    execute: () => runAsyncCommand('Revert design', revertDesign),
+    isExecutionDisabled: (state) => !state.hasDesign || !state.revertAvailable,
+  },
+  importGeoJson: {
+    execute: () => runAsyncCommand('Import GeoJSON', desktopGeoJson.importGeoJson),
+    isExecutionDisabled: isGeoJsonTransferDisabled,
+  },
+  exportCanvasPdf: {
+    execute: () => canvasPdf.show(),
+    isExecutionDisabled: () => !canExportCanvasPdf(),
+  },
+  exportGeoJson: {
+    execute: () => runAsyncCommand('Export GeoJSON', desktopGeoJson.exportGeoJson),
+    isExecutionDisabled: isGeoJsonTransferDisabled,
+  },
+  // File › Add data… picks files and imports them into the open Design's site data.
+  addData: {
+    execute: () => runAsyncCommand('Add data', () => beginDataImport()),
+    isExecutionDisabled: (state) => !state.hasDesign,
+  },
+  openDataLibrary: { execute: () => openDataLibrary() },
+  exportBudgetCsv: {
+    execute: () => runAsyncCommand('Export budget CSV', exportCurrentBudgetCsv),
+    isExecutionDisabled: (state) => !state.hasDesign,
+  },
+  closeDesign: {
+    execute: () => runAsyncCommand('Close design', closeDesign),
     isExecutionDisabled: (state) => !state.hasDesign,
   },
   exitApp: {
     execute: () => runAsyncCommand('Close window', () => getCurrentWindow().close()),
   },
   navigateCanvas: {
-    execute: () => switchPanel('canvas'),
+    execute: () => navigateTo('canvas'),
   },
-  navigateLocation: {
-    execute: () => switchPanel('location'),
-    isExecutionDisabled: (state) => !state.hasDesign,
-  },
+  navigateLayers: designPanel('layers'),
+  navigateSpeciesKey: designPanel('species-key'),
   navigatePlantDatabase: {
-    execute: () => switchPanel('plant-db'),
-    isProjectionDisabled: (state) =>
-      !(state.activePanel === 'canvas' && state.sidePanel === 'plant-db')
-        && !state.hasDesign,
+    // The catalog runs from the start screen; the rail offers it with a Design.
+    execute: () => navigateTo('plant-db'),
+    isProjectionDisabled: (state) => !state.hasDesign && state.sidePanel !== 'plant-db',
   },
-  navigateSpeciesKey: {
-    execute: () => navigateTo('species-key'),
-    isExecutionDisabled: (state) => !state.hasDesign && state.sidePanel !== 'species-key',
-  },
-  navigateData: {
-    execute: () => navigateTo('data'),
-    isExecutionDisabled: (state) => !state.hasDesign && state.sidePanel !== 'data',
-  },
-  navigateAnalysis: {
-    execute: () => navigateTo('analysis'),
-    isExecutionDisabled: (state) => !state.hasDesign && state.sidePanel !== 'analysis',
-  },
-  navigateLayers: {
-    execute: () => navigateTo('layers'),
-    isExecutionDisabled: (state) => !state.hasDesign && state.sidePanel !== 'layers',
-  },
-  navigateCalendar: {
-    execute: () => navigateTo('calendar'),
-    isExecutionDisabled: (state) => !state.hasDesign && state.sidePanel !== 'calendar',
-  },
-  navigateBudget: {
-    execute: () => navigateTo('budget'),
-    isExecutionDisabled: (state) => !state.hasDesign && state.sidePanel !== 'budget',
-  },
-  navigateConsortium: {
-    execute: () => navigateTo('consortium'),
-    isExecutionDisabled: (state) => !state.hasDesign && state.sidePanel !== 'consortium',
-  },
-  navigateFavorites: {
-    execute: () => switchPanel('favorites'),
-    isExecutionDisabled: (state) => !state.hasDesign,
-  },
+  navigateFavorites: designPanel('favorites'),
+  navigateCalendar: designPanel('calendar'),
+  navigateBudget: designPanel('budget'),
+  navigateConsortium: designPanel('consortium'),
   navigateDesignNotebook: {
-    execute: () => switchPanel('design-notebook'),
+    execute: () => navigateTo('design-notebook'),
   },
-  toggleTheme: {
-    execute: cycleTheme,
-  },
+  navigateStories: designPanel('stories'),
+  reportProblem: { execute: openProblemReportDialog },
+  showCommandPalette: { execute: openCommandPalette },
 })
 
 function shellAppCommandDefinition(
@@ -321,126 +235,26 @@ function shellAppCommandDefinition(
   return {
     id: command.id,
     label: () => t(command.labelKey),
-    shortcut: command.shortcut,
+    // Read when shown: the language can change after the catalog is built.
+    get shortcut() {
+      return command.shortcut ? formatShortcut(command.shortcut, t) : undefined
+    },
     palette: command.palette,
     run: () => command.execute(),
     disabled: (state) => command.isExecutionDisabled(state),
   }
 }
 
-function desktopShellAppCommands(
-  family: ShellCommandCatalogEntry['family'],
-): readonly AppCommandDefinition[] {
-  return DESKTOP_SHELL_COMMAND_CATALOG
-    .filter((command) => command.family === family)
-    .map(shellAppCommandDefinition)
-}
-
-const DESKTOP_FILE_COMMANDS = desktopShellAppCommands('file')
-const DESKTOP_NAVIGATION_COMMANDS = desktopShellAppCommands('navigation')
-const DESKTOP_SETTINGS_COMMANDS = desktopShellAppCommands('settings')
-
 export const APP_COMMANDS: readonly AppCommandDefinition[] = [
-  ...DESKTOP_FILE_COMMANDS,
-  ...CANVAS_HISTORY_COMMANDS,
-  {
-    id: 'view.zoomIn',
-    label: () => t('menu.view.zoomIn'),
-    shortcut: VIEW_SHORTCUTS.zoomIn,
-    palette: true,
-    run: (state) => runCanvas(state, (canvas) => canvas.viewport.zoomIn()),
-    disabled: (state) => !state.canvas,
-  },
-  {
-    id: 'view.zoomOut',
-    label: () => t('menu.view.zoomOut'),
-    shortcut: VIEW_SHORTCUTS.zoomOut,
-    palette: true,
-    run: (state) => runCanvas(state, (canvas) => canvas.viewport.zoomOut()),
-    disabled: (state) => !state.canvas,
-  },
-  {
-    id: 'view.fitToContent',
-    label: () => t('menu.view.fitToContent'),
-    shortcut: VIEW_SHORTCUTS.fitToContent,
-    palette: true,
-    run: (state) => runCanvas(state, (canvas) => canvas.viewport.zoomToFit()),
-    disabled: (state) => !state.canvas,
-  },
-  {
-    id: 'help.aboutCanopi',
-    label: () => t('menu.help.aboutCanopi'),
-    palette: true,
-    run: showAboutCanopiDialog,
-  },
-  {
-    id: 'help.reportProblem',
-    label: () => t('menu.help.reportProblem'),
-    palette: true,
-    run: showProblemReportDialog,
-  },
-  ...DESKTOP_NAVIGATION_COMMANDS,
-  ...DESKTOP_SETTINGS_COMMANDS,
-  ...CANVAS_TOOL_AND_SETTINGS_COMMANDS,
-  {
-    id: 'canvas.copy',
-    run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.copy()),
-    disabled: (state) => !state.canvas,
-  },
-  {
-    id: 'canvas.paste',
-    run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.paste()),
-    disabled: (state) => !state.canvas || !state.canvasSpatialEditingAvailable,
-  },
-  {
-    id: 'canvas.duplicateSelected',
-    run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.duplicateSelected()),
-    disabled: (state) => !state.canvas || !state.canvasSpatialEditingAvailable,
-  },
-  {
-    id: 'canvas.deleteSelected',
-    run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.deleteSelected()),
-    disabled: (state) => !state.canvas || !state.canvasSpatialEditingAvailable,
-  },
-  {
-    id: 'canvas.selectAll',
-    run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.selectAll()),
-    disabled: (state) => !state.canvas,
-  },
-  {
-    id: 'canvas.bringToFront',
-    run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.bringToFront()),
-    disabled: (state) => !state.canvas || !state.canvasSpatialEditingAvailable,
-  },
-  {
-    id: 'canvas.sendToBack',
-    run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.sendToBack()),
-    disabled: (state) => !state.canvas || !state.canvasSpatialEditingAvailable,
-  },
-  {
-    id: 'canvas.lockOrUnlockSelected',
-    run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.lockSelected()),
-    disabled: (state) => !state.canvas
-      || !state.canvasHasSelection
-      || !state.canvasSpatialEditingAvailable,
-  },
-  {
-    id: 'canvas.groupSelected',
-    run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.groupSelected()),
-    disabled: (state) => !state.canvas || !state.canvasSpatialEditingAvailable,
-  },
-  {
-    id: 'canvas.ungroupSelected',
-    run: (state) => runCanvas(state, (canvas) => canvas.sceneEdits.ungroupSelected()),
-    disabled: (state) => !state.canvas || !state.canvasSpatialEditingAvailable,
-  },
+  ...DESKTOP_SHELL_COMMAND_CATALOG.map(shellAppCommandDefinition),
+  ...canvasCommandDefinitions.map(canvasAppCommandDefinition),
 ]
 
 const commandById = new Map<AppCommandId, AppCommandDefinition>(
   APP_COMMANDS.map((command) => [command.id, command]),
 )
 
-export function getAppCommandDefinition(id: AppCommandId): AppCommandDefinition | null {
+function getAppCommandDefinition(id: AppCommandId): AppCommandDefinition | null {
   return commandById.get(id) ?? null
 }
 
@@ -451,11 +265,11 @@ export function isCatalogCommandDisabled(id: AppCommandId): boolean {
   return command.disabled?.(state) ?? false
 }
 
-export function runCatalogCommand(id: AppCommandId): boolean {
+export function runCatalogCommand(id: AppCommandId, from: CanvasCommandFrom): boolean {
   const command = getAppCommandDefinition(id)
   if (!command) return false
   const state = readAppCommandState()
   if (command.disabled?.(state)) return false
-  command.run(state)
+  command.run(state, from)
   return true
 }

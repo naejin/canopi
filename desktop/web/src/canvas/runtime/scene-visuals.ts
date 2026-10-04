@@ -1,8 +1,12 @@
-import { getCanvasColor, isThemeManagedZoneFill } from '../theme-refresh'
+import { CANVAS_CHROME_FONT_FAMILY, CANVAS_CHROME_MONO_FONT_FAMILY } from '../chrome-fonts'
+import { getCanvasColor, isThemeManagedZoneFill, markCanvasPaintChanged } from '../theme-refresh'
+import { contrastRatio } from '../plant-colors'
+import { getCanvasPlantDisplay } from './plant-display'
 import type {
   ScenePersistedState,
   SceneZoneEntity,
 } from './scene'
+import type { DraftFill, DraftShape, DraftStroke } from './tools/draft'
 
 export interface SceneLayerStyle {
   visible: boolean
@@ -13,19 +17,32 @@ export interface SceneLayerStyle {
 export interface SceneZoneVisual {
   fill: string
   stroke: string
+  /** Drawn under the stroke so the zone edge reads on bright or dark imagery. */
+  casing: string
 }
 
 export type CanvasInteractionVisualState =
   | 'hover'
+  /** A plant a panel points at (finder matches, panel hover and selection). */
+  | 'highlight'
   | 'selected'
   | 'locked-design-object'
   | 'locked-layer'
+
+/** Plant rings never shrink below this on screen, so a ring reads at the whole-Design zoom. */
+export const MIN_PLANT_RING_RADIUS_PX = 8
 
 export interface CanvasInteractionStrokeVisual {
   color: string
   widthPx: number
   alpha: number
+  /** Drawn first, under the stroke, at the same alpha. */
+  casingColor: string
+  casingWidthPx: number
 }
+
+/** Light overlay strokes (zones, guides, drafts) sit on a casing this much wider. */
+export const OVERLAY_CASING_EXTRA_PX = 2
 
 export function getSceneLayerStyle(
   scene: ScenePersistedState,
@@ -47,73 +64,285 @@ export function resolveZoneVisual(zone: SceneZoneEntity): SceneZoneVisual {
   return {
     fill,
     stroke: getCanvasColor('zone-stroke'),
+    casing: getCanvasColor('overlay-casing'),
   }
 }
 
+/** Guides and drawing previews over the map: a light stroke on a dark casing. */
+export function getGuideLineVisual(): { color: string; casing: string } {
+  return { color: getCanvasColor('guide-line'), casing: getCanvasColor('overlay-casing') }
+}
+
+/** A draft stroke's colour over a casing `OVERLAY_CASING_EXTRA_PX` wider. */
+export interface DraftStrokeVisual {
+  readonly color: string
+  readonly casing: string
+}
+
+export interface DraftFillVisual {
+  readonly color: string
+}
+
+/**
+ * Draft tokens (tools/draft.ts) in the colours today's DOM previews use: a
+ * light draft on the dark overlay casing, the ochre band on the interaction
+ * casing and its translucent fill. `draft-muted` and `warning` (and
+ * `warning-fill`) draw as `draft` until the phase that first emits one gives
+ * it a canvas colour.
+ */
+export function getDraftVisual(token: DraftStroke['token']): DraftStrokeVisual
+export function getDraftVisual(token: DraftFill['token']): DraftFillVisual
+export function getDraftVisual(token: DraftStroke['token'] | DraftFill['token']): DraftStrokeVisual | DraftFillVisual {
+  switch (token) {
+    case 'selection':
+      return { color: getCanvasColor('selection-stroke'), casing: getCanvasColor('interaction-casing') }
+    case 'draft':
+    case 'draft-muted':
+    case 'warning':
+      return getGuideLineVisual()
+    case 'selection-fill':
+      return { color: getCanvasColor('selection-fill') }
+    case 'draft-fill':
+    case 'warning-fill':
+      return { color: getCanvasColor('zone-fill') }
+  }
+}
+
+export type DraftLabelTone = Extract<DraftShape, { kind: 'label' }>['tone']
+
+/** A CSS box shadow: offsets and blur in CSS px. */
+export interface CanvasShadowVisual {
+  readonly offsetXPx: number
+  readonly offsetYPx: number
+  readonly blurPx: number
+  readonly color: string
+}
+
+/** A draft label's chip: today's DOM chip, drawn upright in Pixi. */
+export interface DraftLabelVisual {
+  /** Centred on the point, or bottom-centre `gapPx` above it. */
+  readonly placement: 'centre' | 'above'
+  readonly gapPx: number
+  readonly fontFamily: string
+  readonly fontWeight: '400' | '600'
+  readonly fontSizePx: number
+  /** The text's line box; the chip's height is this plus padding and border. */
+  readonly lineHeightPx: number
+  readonly paddingPx: { readonly x: number; readonly y: number }
+  readonly color: string
+  readonly background: string
+  readonly border: string
+  readonly borderWidthPx: number
+  readonly radiusPx: number
+  readonly shadow: CanvasShadowVisual | null
+}
+
+// `--text-xs`, `--radius-sm` and `--space-1` in styles/global.css, where
+// `:root:lang(zh|ja|ko)` raises `--text-xs` to the 13 px CJK floor.
+const DRAFT_LABEL_FONT_SIZE_PX = 12.5
+const DRAFT_LABEL_CJK_FONT_SIZE_PX = 13
+const CJK_LANGUAGE = /^(zh|ja|ko)(-|$)/i
+const DRAFT_LABEL_RADIUS_PX = 5
+const DRAFT_LABEL_GAP_PX = 4
+// Today's hint chips set no line-height and sit in the map container, so they inherit the 20 px of
+// `.maplibregl-map { font: 12px/20px … }` (maplibre-gl.css) at every font size.
+const DRAFT_LABEL_HINT_LINE_HEIGHT_PX = 20
+
+/** `--text-xs` in the page language, which utils/theme.ts keeps on the root element. */
+function draftLabelFontSizePx(): number {
+  return CJK_LANGUAGE.test(document.documentElement.lang) ? DRAFT_LABEL_CJK_FONT_SIZE_PX : DRAFT_LABEL_FONT_SIZE_PX
+}
+
+/**
+ * The chip each label tone names (canvas v2 spec §1.4, label tones), with
+ * today's padding: measurements are centred mono chips on the muted surface
+ * (today's (a4c86d39) zone-measurement-overlay.ts), hints bottom-centre sans chips on the surface
+ * (today's (a4c86d39) plant-placement-preview.ts), Plant a row's length in the
+ * primary colour (today's (a4c86d39) plant-spacing-overlay.ts). `warning`
+ * draws as `hint` until a phase gives it a colour.
+ */
+export function getDraftLabelVisual(tone: DraftLabelTone): DraftLabelVisual {
+  const fontSizePx = draftLabelFontSizePx()
+  const chip = {
+    gapPx: DRAFT_LABEL_GAP_PX,
+    fontSizePx,
+    border: getCanvasColor('chip-border'),
+    borderWidthPx: 1,
+    radiusPx: DRAFT_LABEL_RADIUS_PX,
+    shadow: parseCanvasShadow(getCanvasColor('chip-shadow')),
+  }
+  if (tone === 'measure' || tone === 'measure-quiet') {
+    return {
+      ...chip,
+      placement: 'centre',
+      fontFamily: CANVAS_CHROME_MONO_FONT_FAMILY,
+      fontWeight: tone === 'measure' ? '600' : '400',
+      lineHeightPx: fontSizePx * 1.2,
+      paddingPx: { x: 5, y: 2 },
+      color: getCanvasColor('chip-text'),
+      background: getCanvasColor('chip-surface-muted'),
+    }
+  }
+  return {
+    ...chip,
+    placement: 'above',
+    fontFamily: CANVAS_CHROME_FONT_FAMILY,
+    fontWeight: '600',
+    lineHeightPx: DRAFT_LABEL_HINT_LINE_HEIGHT_PX,
+    paddingPx: tone === 'hint-primary' ? { x: 8, y: 4 } : { x: 6, y: 2 },
+    color: getCanvasColor(tone === 'hint-primary' ? 'chip-primary' : 'chip-text'),
+    background: getCanvasColor('chip-surface'),
+  }
+}
+
+/** The first shadow of a CSS `box-shadow` value (`x y blur [spread] colour`); null for `none` or anything else. */
+function parseCanvasShadow(value: string): CanvasShadowVisual | null {
+  const match = value.trim().match(/^(-?[\d.]+)(?:px)?\s+(-?[\d.]+)(?:px)?\s+([\d.]+)(?:px)?\s+(?:-?[\d.]+(?:px)?\s+)?(#[0-9a-f]+|rgba?\([^)]*\))/i)
+  if (!match) return null
+  return {
+    offsetXPx: Number.parseFloat(match[1]!),
+    offsetYPx: Number.parseFloat(match[2]!),
+    blurPx: Number.parseFloat(match[3]!),
+    color: match[4]!,
+  }
+}
+
+/**
+ * What shows under the Design on the map. The UI theme never decides label
+ * ink: the basemap stays light in a dark UI and satellite imagery stays dark
+ * in a light one, so text, halos, badges and the grid follow the backdrop.
+ */
+export type CanvasMapBackdrop = 'basemap' | 'dark-basemap' | 'satellite' | 'paper'
+
+/**
+ * A representative colour for each backdrop. `paper` equals the background
+ * layer of the map's empty style (`maplibre/config.ts`), which does not
+ * follow the UI theme.
+ */
+export const CANVAS_MAP_BACKDROP_COLORS: { readonly [K in CanvasMapBackdrop]: string } = {
+  basemap: '#F8F4F0',
+  'dark-basemap': '#1A1A1A',
+  satellite: '#3B4232',
+  paper: '#F3EFE4',
+}
+
+export interface CanvasBackdropInk {
+  readonly text: string
+  /** Drawn under text and markers so they read on busy imagery. */
+  readonly halo: string
+  readonly badgeBackground: string
+  readonly badgeText: string
+  readonly grid: string
+  readonly gridMajor: string
+}
+
+// Dark ink on a cream halo for light backdrops; cream ink on a dark halo
+// (the zone and guide stroke colours) for dark ones.
+const INK_FOR_LIGHT_BACKDROP: CanvasBackdropInk = {
+  text: '#27231D',
+  halo: '#FFF8EC',
+  badgeBackground: '#27231D',
+  badgeText: '#FBF3E4',
+  grid: 'rgba(39, 35, 29, 0.07)',
+  gridMajor: 'rgba(39, 35, 29, 0.14)',
+}
+
+const INK_FOR_DARK_BACKDROP: CanvasBackdropInk = {
+  text: '#FFF3D6',
+  halo: '#14100A',
+  badgeBackground: '#EFE8DA',
+  badgeText: '#1D1A14',
+  grid: 'rgba(239, 232, 218, 0.06)',
+  gridMajor: 'rgba(239, 232, 218, 0.12)',
+}
+
+// The workspace map's backdrop, set by the runtime from its app adapter.
+let mapBackdrop: CanvasMapBackdrop = 'basemap'
+
+/** Returns true when the backdrop changed and the canvas must redraw. */
+export function setCanvasMapBackdrop(backdrop: CanvasMapBackdrop): boolean {
+  if (backdrop === mapBackdrop) return false
+  mapBackdrop = backdrop
+  markCanvasPaintChanged()
+  return true
+}
+
+/** The ink that contrasts more with `background` (a #RRGGBB colour). */
+export function resolveBackdropInk(background: string): CanvasBackdropInk {
+  return contrastRatio(INK_FOR_LIGHT_BACKDROP.text, background) >= contrastRatio(INK_FOR_DARK_BACKDROP.text, background)
+    ? INK_FOR_LIGHT_BACKDROP
+    : INK_FOR_DARK_BACKDROP
+}
+
+function mapBackdropColor(): string {
+  return CANVAS_MAP_BACKDROP_COLORS[mapBackdrop]
+}
+
+/** The ink for text and chrome drawn over the workspace map. */
+export function getMapBackdropInk(): CanvasBackdropInk {
+  return resolveBackdropInk(mapBackdropColor())
+}
+
 export function getAnnotationTextColor(): string {
-  return getCanvasColor('annotation-text')
+  return getMapBackdropInk().text
 }
 
 export function getPlantLabelColor(): string {
-  return getCanvasColor('plant-label')
+  return getMapBackdropInk().text
+}
+
+/** The halo stroked under map text of this size; the stroke is centred on the glyph edge. */
+export function getLabelHalo(fontSizePx: number): { color: string; widthPx: number } {
+  return { color: getMapBackdropInk().halo, widthPx: Math.max(3, Math.round(fontSizePx / 4)) }
 }
 
 export function getCanvasInteractionStrokeVisual(
   state: CanvasInteractionVisualState,
 ): CanvasInteractionStrokeVisual {
-  if (state === 'selected') {
-    return {
-      color: getCanvasColor('selection-stroke'),
-      widthPx: 4.5,
-      alpha: 1,
-    }
-  }
+  // Selected: 2.5 px ochre over a 5.5 px casing; every state keeps its casing
+  // so rings and outlines read on satellite imagery and plain basemaps alike.
+  if (state === 'selected') return interactionStroke('selection-stroke', 2.5, 1, 5.5)
+  // Highlight rings must read at any zoom and on any backdrop: solid ochre on a full halo.
+  if (state === 'highlight') return interactionStroke('selection-stroke', 2, 1, 5)
+  if (state === 'locked-design-object') return interactionStroke('locked-object-stroke', 2.25, 0.86, 4.25)
+  if (state === 'locked-layer') return interactionStroke('locked-layer-stroke', 2.25, 0.9, 4.25)
+  return interactionStroke('hover-stroke', 2, 0.72, 4)
+}
 
-  if (state === 'locked-design-object') {
-    return {
-      color: getCanvasColor('locked-object-stroke'),
-      widthPx: 2.75,
-      alpha: 0.86,
-    }
-  }
-
-  if (state === 'locked-layer') {
-    return {
-      color: getCanvasColor('locked-layer-stroke'),
-      widthPx: 2.75,
-      alpha: 0.9,
-    }
-  }
-
+function interactionStroke(
+  token: 'selection-stroke' | 'locked-object-stroke' | 'locked-layer-stroke' | 'hover-stroke',
+  widthPx: number,
+  alpha: number,
+  casingWidthPx: number,
+): CanvasInteractionStrokeVisual {
   return {
-    color: getCanvasColor('hover-stroke'),
-    widthPx: 2.5,
-    alpha: 0.72,
+    color: getCanvasColor(token),
+    widthPx,
+    alpha,
+    casingColor: getCanvasColor('interaction-casing'),
+    casingWidthPx,
   }
 }
 
-export function getStackBadgeBackgroundColor(): string {
-  return getCanvasColor('stack-badge-bg')
+export function getStackBadgeBackgroundColor(background = mapBackdropColor()): string {
+  return resolveBackdropInk(background).badgeBackground
 }
 
-export function getStackBadgeTextColor(): string {
-  return getCanvasColor('stack-badge-text')
+export function getStackBadgeTextColor(background = mapBackdropColor()): string {
+  return resolveBackdropInk(background).badgeText
 }
 
-/** A thin edge separates silhouettes from Zones without replacing authored color. */
-export function getPlantSymbolEdgeColor(color: string): string {
-  const background = getCanvasColor('background')
-  const a = hexLuminance(color), b = hexLuminance(background)
-  return (Math.max(a, b) + .05) / (Math.min(a, b) + .05) < 3
-    ? getCanvasColor('plant-label') : background
+/**
+ * The halo and cut-out colour of a plant symbol: the backdrop it sits on, or
+ * the backdrop's ink when the plant colour is too close to the backdrop.
+ */
+export function getPlantSymbolEdgeColor(color: string, background = mapBackdropColor()): string {
+  return contrastRatio(color, background) < 3 ? resolveBackdropInk(background).text : background
 }
 
+/** The halo width around a plant symbol; 0 when Display › Outline is off. */
 export function getPlantSymbolEdgeWidth(diameterPx: number): number {
+  if (!getCanvasPlantDisplay().outline) return 0
   return diameterPx < 10 ? .5 : .7
 }
 
-function hexLuminance(color: string): number {
-  const rgb = [1, 3, 5].map((offset) => Number.parseInt(color.slice(offset, offset + 2), 16) / 255)
-    .map((channel) => channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4)
-  return rgb[0]! * .2126 + rgb[1]! * .7152 + rgb[2]! * .0722
-}

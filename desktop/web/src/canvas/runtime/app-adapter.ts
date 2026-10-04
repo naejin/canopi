@@ -1,13 +1,19 @@
-import type { CanopiFile } from '../../types/design'
 import type { ReadonlySignal } from '@preact/signals'
-import { cloneSpatialFrame } from '../../spatial-frame'
+import type { CanopiFile } from '../../types/design'
 import { FALLBACK_PLANT_SPACING_INTERVAL_M } from '../plant-spacing-interval'
 import type {
   CanvasPlantLabelSource,
   CanvasSpeciesPresentationCache,
 } from './presentation-data'
-import type { ScenePersistedState } from './scene'
-import type { CanvasDesignObjectSelectionModel, CanvasRuntimeDocumentMetadata } from './runtime'
+import type { ScenePersistedState, ScenePoint } from './scene'
+import type { CanvasMapBackdrop } from './scene-visuals'
+import type { PlantDisplay } from './plant-display'
+import type {
+  CanvasDesignObjectSelectionModel,
+  CanvasRuntimeDocumentMetadata,
+  CanvasSceneEditCommandSurface,
+} from './runtime'
+import { SCENE_OWNED_EXTRA_KEYS } from './scene-extra-keys'
 
 export interface CanvasRuntimeLayerProjectionSource {
   readonly name: string
@@ -16,26 +22,15 @@ export interface CanvasRuntimeLayerProjectionSource {
   readonly opacity: number
 }
 
-export interface CanvasRuntimeChromeSettingsSnapshot {
+interface CanvasRuntimeChromeSettingsSnapshot {
   readonly gridVisible: boolean
   readonly rulersVisible: boolean
+  /** The Design's ruler guides; the app hides them while it presents the map. */
+  readonly guidesVisible: boolean
 }
 
-export interface CanvasRuntimeCleanStateAdapter {
+interface CanvasRuntimeCleanStateAdapter {
   setCanvasClean(clean: boolean): void
-}
-
-export interface CanvasRuntimeCoordinatedHistoryAdapter {
-  readonly revision: ReadonlySignal<number>
-  readonly canUndo: ReadonlySignal<boolean>
-  readonly canRedo: ReadonlySignal<boolean>
-  readonly nextUndoSequence: ReadonlySignal<number | null>
-  readonly nextRedoSequence: ReadonlySignal<number | null>
-  reserveSequence(): number
-  announceBranch(): void
-  subscribeToBranches(onBranch: () => void): () => void
-  undo(): boolean
-  redo(): boolean
 }
 
 export interface CanvasRuntimeDocumentCompositionInput {
@@ -44,7 +39,7 @@ export interface CanvasRuntimeDocumentCompositionInput {
   readonly canvas: CanopiFile
 }
 
-export interface CanvasRuntimeDocumentAdapter {
+interface CanvasRuntimeDocumentAdapter {
   composeDocumentForSave(input: CanvasRuntimeDocumentCompositionInput): CanopiFile
 }
 
@@ -58,12 +53,93 @@ export interface CanvasRuntimeSavedObjectStampAdapter {
   saveCurrentSelection(capture: CanvasRuntimeSavedObjectStampCapture): void | Promise<unknown>
 }
 
+/** The scene edits a right-click menu may run; there is no other mutation path. */
+export type CanvasContextMenuCommands = Pick<
+  CanvasSceneEditCommandSurface,
+  | 'copy'
+  | 'pasteAt'
+  | 'canPaste'
+  | 'duplicateSelected'
+  | 'toggleSelectedPlantNamePins'
+  | 'deleteSelected'
+  | 'selectAll'
+  | 'selectSameSpecies'
+  | 'bringToFront'
+  | 'sendToBack'
+  | 'lockSelected'
+  | 'unlockSelected'
+  | 'groupSelected'
+  | 'ungroupSelected'
+  | 'renameZone'
+  | 'rotateSelected'
+>
+
+/** A viewport (client) rectangle; a pointer is a rectangle of zero size. */
+export interface CanvasContextMenuAnchor {
+  readonly left: number
+  readonly top: number
+  readonly right: number
+  readonly bottom: number
+}
+
+export interface CanvasContextMenuRequest {
+  /** The menu opens below and right of this rectangle, flipping to stay in view. */
+  readonly anchor: CanvasContextMenuAnchor
+  /** Where Paste puts the clipboard, in the session plane. */
+  readonly world: ScenePoint
+  /**
+   * The selection the menu acts on (already retargeted to the right-clicked
+   * object), or `null` for the empty map.
+   */
+  readonly selection: CanvasDesignObjectSelectionModel | null
+  readonly commands: CanvasContextMenuCommands
+  /** Present only in an edition that keeps saved stamps. */
+  readonly saveSelectionAsObjectStamp?: () => void
+  /**
+   * Place plants here (the empty map): arms Place plants and places the
+   * chosen species at `world`, or, with none chosen yet, the next one picked.
+   */
+  readonly placePlantsAt?: (world: ScenePoint) => void
+  /**
+   * Turn view to this edge: present only when the menu opened on a zone's edge (spec §4.16). Turns the view the smaller
+   * way until that edge is level on screen.
+   */
+  readonly turnViewToEdge?: () => void
+  /** Gives keyboard focus back to the map. */
+  returnFocus(): void
+  /**
+   * The app calls this once the request's menu has closed, however it
+   * closed: a command, Esc or Tab (before returnFocus), a press or focus
+   * elsewhere, a resize, a scroll, a newer request or the runtime's own
+   * close. The runtime's menu state follows it.
+   */
+  closed?(): void
+}
+
+/**
+ * The right-click menu is app chrome: the runtime decides what it acts on and
+ * where it opens, the app renders it and runs its commands on `commands`.
+ */
+export interface CanvasRuntimeContextMenuAdapter {
+  open(request: CanvasContextMenuRequest): void
+  /** Closes this request's menu if it is still the open one. */
+  close(request: CanvasContextMenuRequest): void
+}
+
+/** Settings › Canvas › Scroll wheel: a plain wheel zooms or pans the map. */
+export type CanvasScrollWheelSetting = 'zoom' | 'pan'
+
 export interface CanvasRuntimeSettingsAdapter {
   readLocale(): string
   readChromeOverlay(): CanvasRuntimeChromeSettingsSnapshot
   readSnapToGridEnabled(): boolean
   readSnapToGuidesEnabled(): boolean
+  /** Settings › Canvas › Scroll wheel: what a plain wheel does; pinch and Ctrl wheel always zoom. */
+  readScrollWheel(): CanvasScrollWheelSetting
   readPlantSpacingIntervalMeters(): number
+  /** The app's last view as stored, if any: the first Design opened turns to its bearing, and a new or empty Design opens at
+   *  its centre, zoomed out (spec §4.15; the clamp is the runtime's, scene-runtime/construction.ts). */
+  readLastView?(): { readonly lon: number; readonly lat: number; readonly zoom: number; readonly bearing?: number } | null
   commitPlantSpacingIntervalMeters(meters: number): void
   toggleGridVisible(): void
   toggleSnapToGrid(): void
@@ -71,13 +147,20 @@ export interface CanvasRuntimeSettingsAdapter {
   subscribeTheme(onChange: () => void): () => void
   subscribeLocale(onChange: () => void): () => void
   subscribeChromeOverlay(onChange: () => void): () => void
+  /** Calls `onChange` now and whenever the map background under the Design changes. */
+  subscribeMapBackdrop(onChange: (backdrop: CanvasMapBackdrop) => void): () => void
   readonly layerProjections: CanvasRuntimeLayerProjectionAdapter
 }
 
 export interface CanvasRuntimeLayerProjectionAdapter {
-  isAppOwnedLayerProjection(name: string): boolean
   syncFromLayers(layers: ReadonlyArray<CanvasRuntimeLayerProjectionSource>): void
   syncLayer(layer: CanvasRuntimeLayerProjectionSource): void
+}
+
+/** Display on the map: how plants are coloured, sized, outlined and labelled. */
+export interface CanvasRuntimePlantDisplayAdapter {
+  /** Calls `onChange` now and whenever the display changes. */
+  subscribe(onChange: (display: PlantDisplay) => void): () => void
 }
 
 export interface CanvasRuntimePresentationDataAdapter {
@@ -92,9 +175,10 @@ export type CanvasRuntimeTranslator = (
 
 export interface CanvasRuntimeAppAdapter {
   readonly cleanState: CanvasRuntimeCleanStateAdapter
-  readonly coordinatedHistory?: CanvasRuntimeCoordinatedHistoryAdapter
   readonly document: CanvasRuntimeDocumentAdapter
   readonly savedObjectStamps?: CanvasRuntimeSavedObjectStampAdapter
+  /** Absent in a detached runtime, where right-click only suppresses the native menu. */
+  readonly contextMenu?: CanvasRuntimeContextMenuAdapter
   /**
    * Numeric inspection hook, when a surface has inspection active.
    *
@@ -105,8 +189,21 @@ export interface CanvasRuntimeAppAdapter {
    */
   readonly tryInspectAt?: (point: { readonly x: number; readonly y: number }) => boolean
   readonly presentationData?: CanvasRuntimePresentationDataAdapter
+  /** Absent in a detached runtime, which draws the default display. */
+  readonly plantDisplay?: CanvasRuntimePlantDisplayAdapter
   readonly settings: CanvasRuntimeSettingsAdapter
   readonly translate: CanvasRuntimeTranslator
+  /** prefers-reduced-motion: reduce, live (app/canvas-runtime/app-adapter.ts): the view's eases and tweens jump while it is
+   *  true (spec §4.3). Absent in a detached runtime, which always eases. */
+  readonly reducedMotion?: ReadonlySignal<boolean>
+  /** How ToolHostDeps.focus leaves the runtime: app/canvas-runtime/app-adapter.ts passes the FocusOwner; absent (a
+   *  detached runtime), interaction-session.ts focuses its host itself. */
+  readonly focus?: CanvasFocusPort
+}
+
+/** How a tool's focus request (ToolEffects.requestFocus) leaves the runtime. The FocusOwner implements it. */
+export interface CanvasFocusPort {
+  focusMap(reason: 'tool-requested' | 'text-entry-closed'): void
 }
 
 export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter {
@@ -127,9 +224,10 @@ export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter
     translate: detachedCanvasRuntimeTranslator,
     settings: {
       readLocale: () => 'en',
-      readChromeOverlay: () => ({ gridVisible, rulersVisible }),
+      readChromeOverlay: () => ({ gridVisible, rulersVisible, guidesVisible: true }),
       readSnapToGridEnabled: () => snapToGrid,
       readSnapToGuidesEnabled: () => snapToGuides,
+      readScrollWheel: () => 'zoom',
       readPlantSpacingIntervalMeters: () => plantSpacingIntervalM,
       commitPlantSpacingIntervalMeters: (meters) => {
         plantSpacingIntervalM = meters
@@ -146,8 +244,11 @@ export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter
       subscribeTheme: subscribeImmediately,
       subscribeLocale: subscribeImmediately,
       subscribeChromeOverlay: subscribeImmediately,
+      subscribeMapBackdrop: (onChange) => {
+        onChange('basemap')
+        return () => {}
+      },
       layerProjections: {
-        isAppOwnedLayerProjection: () => false,
         syncFromLayers: (layers) => {
           layerProjections.clear()
           for (const layer of layers) layerProjections.set(layer.name, layer)
@@ -182,7 +283,6 @@ function composeDetachedCanvasDocument({
     ...canvas,
     name: metadata.name,
     description: metadata.description ?? document.description ?? null,
-    spatial_frame: cloneSpatialFrame(metadata.spatialFrame ?? document.spatial_frame),
     consortiums: document.consortiums,
     timeline: document.timeline,
     budget: document.budget,
@@ -192,6 +292,11 @@ function composeDetachedCanvasDocument({
   }
 }
 
+/**
+ * Scene-owned `extra` keys come from the scene, every other key from the
+ * document. The app composer (app/contracts/document.ts) applies the same
+ * rule with the format's owner table; this is the detached runtime's.
+ */
 function composeDetachedDocumentExtra(
   documentExtra: CanopiFile['extra'],
   canvasExtra: CanopiFile['extra'],
@@ -199,10 +304,12 @@ function composeDetachedDocumentExtra(
   const nextExtra = normalizeDetachedExtra(documentExtra)
   const sceneExtra = normalizeDetachedExtra(canvasExtra)
 
-  if (Object.prototype.hasOwnProperty.call(sceneExtra, 'guides')) {
-    nextExtra.guides = sceneExtra.guides
-  } else {
-    delete nextExtra.guides
+  for (const key of SCENE_OWNED_EXTRA_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(sceneExtra, key)) {
+      nextExtra[key] = sceneExtra[key]
+    } else {
+      delete nextExtra[key]
+    }
   }
 
   return nextExtra

@@ -2,51 +2,75 @@ import type { SpeciesFocusCommands } from './species-key'
 import { computed, type ReadonlySignal } from '@preact/signals'
 import { setCanvasTool } from '../session-state'
 import type {
-  CanvasRuntimeCoordinatedHistoryAdapter,
   CanvasRuntimeSavedObjectStampAdapter,
   CanvasRuntimeSettingsAdapter,
 } from './app-adapter'
-import type {
-  SceneBounds,
-  TemporaryBoundsFocusOptions,
-  WorkspaceCameraFrameReader,
-  WorkspaceCameraNavigation,
-} from './camera'
+import type { SceneBounds, TemporaryBoundsFocusOptions } from './view/types'
+import { sceneExtentPoints } from './scene-extent'
 import type { SceneRuntimePresentationController } from './scene-runtime/presentation'
+import type { ViewNavigation } from './view/navigation'
 import { getDesignObjectSelectionModel } from './scene-runtime/selection'
 import type {
   CanvasChromeCommandSurface,
   CanvasCommandSurface,
+  CanvasDesignObjectImportReceipt,
+  CanvasDesignObjects,
   CanvasHistoryCommandSurface,
   CanvasLayerCommandSurface,
   CanvasPlantPresentationCommandSurface,
+  CanvasPlantRowSpacingField,
   CanvasSceneEditCommandSurface,
   CanvasToolCommandSurface,
   CanvasViewportCommandSurface,
 } from './runtime'
-import type { SceneLayerEntity, SceneStateReader } from './scene'
+import {
+  createSceneGeoFrame,
+  hydrateScenePersistedStateInFrame,
+  type SceneLayerEntity,
+  type ScenePoint,
+  type SceneStateReader,
+} from './scene'
+import {
+  applySceneDragDeltaToDraft,
+  captureSceneDragState,
+  createSceneDragState,
+  type SceneDragState,
+} from './scene-runtime/drag-state'
+import { createSceneArrangementPlacement } from './scene-runtime/arrangement-placement'
+import { CURRENT_CANOPI_FILE_VERSION } from '../../generated/canopi-design-format'
+import { DEFAULT_BUDGET_CURRENCY } from '../../generated/known-canopi-keys'
 import type { SceneRuntimeMutationController } from './scene-runtime/mutations'
-import type {
-  SceneCommandAdmission,
-  SceneEditCoordinator,
-  SceneHistoryCommands,
-  ScenePresentationMaintenance,
-  SettledSceneReader,
+import {
+  SceneEditBusyError,
+  type SceneCommandAdmission,
+  type SceneEditCoordinator,
+  type SceneEditTransaction,
+  type SceneHistoryCommands,
+  type ScenePresentationMaintenance,
+  type SettledSceneReader,
 } from './scene-runtime/transactions'
 
 type CommandInvalidationKind = 'scene' | 'viewport' | 'chrome'
+
+const DESIGN_OBJECTS_NOT_IMPORTED: CanvasDesignObjectImportReceipt = Object.freeze({
+  committed: false,
+  createdCount: 0,
+})
 type SceneLayerEdit = Partial<Pick<SceneLayerEntity, 'visible' | 'locked' | 'opacity'>>
 
 interface SceneCanvasCommandSurfaceOptions {
+  readonly readEmptySceneScale?: () => number
   readonly speciesFocus: SpeciesFocusCommands
   readonly sceneStore: SceneStateReader
-  readonly camera: Pick<WorkspaceCameraFrameReader, 'viewport'>
-  readonly cameraNavigation: Pick<
-    WorkspaceCameraNavigation,
-    'zoomIn' | 'zoomOut' | 'zoomToFit' | 'returnToDesign' | 'focusTemporaryBounds' | 'returnFromTemporaryFocus'
+  /** The view's navigation over the runtime's driver host: every viewport command, each with today's viewport render (spec §1.1a). */
+  readonly viewNavigation: Pick<
+    ViewNavigation,
+    | 'zoomIn' | 'zoomOut' | 'zoomBy' | 'zoomToFit' | 'returnToDesign' | 'focusTemporaryBounds' | 'frameBounds' | 'returnFromTemporaryFocus'
+    | 'showPlace' | 'setFramingInsets' | 'zoomToSelection' | 'resetNorth' | 'rotateBy' | 'beginRotation' | 'showCamera'
   >
+  /** The live frame's px/m, which sizes screen-sized notes and plants. */
+  readonly readViewScale: () => number
   readonly history: SceneHistoryCommands
-  readonly coordinatedHistory?: CanvasRuntimeCoordinatedHistoryAdapter
   readonly commandAdmission: SceneCommandAdmission
   readonly settledReader: SettledSceneReader
   readonly savedObjectStamps?: CanvasRuntimeSavedObjectStampAdapter
@@ -68,12 +92,17 @@ interface SceneCanvasCommandSurfaceOptions {
     | 'deleteSelected'
     | 'selectAll'
     | 'selectSameSpecies'
+    | 'selectSpecies'
+    | 'clearSelection'
     | 'bringToFront'
     | 'sendToBack'
     | 'lockSelected'
     | 'unlockSelected'
+    | 'unlockAll'
     | 'groupSelected'
     | 'ungroupSelected'
+    | 'renameZone'
+    | 'rotateSelected'
     | 'setSelectedPlantColor'
     | 'setSelectedPlantSymbol'
     | 'setPlantColorForSpecies'
@@ -89,12 +118,17 @@ interface SceneCanvasCommandSurfaceOptions {
     | 'getLocalizedCommonNames'
     | 'refreshSpeciesCacheEntries'
     | 'publishRefresh'
+    | 'presentLayers'
   >
   readonly settings: Pick<
     CanvasRuntimeSettingsAdapter,
     'toggleGridVisible' | 'toggleSnapToGrid' | 'toggleRulersVisible' | 'layerProjections'
   >
   readonly setInteractionTool: (name: string) => void
+  /** The tool the interaction session has armed now, or null without a session. */
+  readonly readInteractionTool: () => string | null
+  /** The active interaction session's Plant a row spacing field. */
+  readonly plantRowSpacing: CanvasPlantRowSpacingField
   readonly invalidate: (kind: CommandInvalidationKind) => void
   readonly isRuntimeActive: () => boolean
   readonly isSpatialEditingEnabled: () => boolean
@@ -116,26 +150,25 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   readonly layers: CanvasLayerCommandSurface
   readonly plantPresentation: CanvasPlantPresentationCommandSurface
 
+  /** The open keyboard nudge series: one Scene Edit until `endNudge()`. */
+  private nudge: { readonly edit: SceneEditTransaction; readonly state: SceneDragState; total: ScenePoint } | null = null
+
   constructor(private readonly options: SceneCanvasCommandSurfaceOptions) {
     const canUndo = computed(() => {
       void options.transientHistory.revision.value
       void options.settledReader.revision.value
-      void options.coordinatedHistory?.revision.value
       return options.settledReader.readWhenSettled(
         () => options.transientHistory.canUndo()
-          || options.history.canUndo.value
-          || options.coordinatedHistory?.canUndo.value === true,
+          || options.history.canUndo.value,
         false,
       )
     })
     const canRedo = computed(() => {
       void options.transientHistory.revision.value
       void options.settledReader.revision.value
-      void options.coordinatedHistory?.revision.value
       return options.settledReader.readWhenSettled(
         () => options.transientHistory.canRedo()
-          || options.history.canRedo.value
-          || options.coordinatedHistory?.canRedo.value === true,
+          || options.history.canRedo.value,
         false,
       )
     })
@@ -143,14 +176,29 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     this.speciesFocus = options.speciesFocus
     this.tools = {
       setTool: (name) => this.setTool(name),
+      plantRowSpacing: options.plantRowSpacing,
     }
     this.viewport = {
       zoomIn: () => this.zoomIn(),
       zoomOut: () => this.zoomOut(),
+      zoomBy: (factor) => this.zoomBy(factor),
       zoomToFit: () => this.zoomToFit(),
       returnToDesign: () => this.returnToDesign(),
       focusTemporaryBounds: (bounds, options) => this.focusTemporaryBounds(bounds, options),
+      frameBounds: (bounds, options) => this.frameBounds(bounds, options),
+      showPlace: (place, zoom, options) => this.showPlace(place, zoom, options),
       returnFromTemporaryFocus: () => this.returnFromTemporaryFocus(),
+      setFramingInsets: (insets) => {
+        this.options.viewNavigation.setFramingInsets(insets)
+        // Chrome placed inside the visible map area (rulers) redraws against the new edges.
+        this.options.invalidate('viewport')
+      },
+      zoomToSelection: () => this.moveView(() => this.options.viewNavigation.zoomToSelection()),
+      resetNorth: () => this.moveView(() => this.options.viewNavigation.resetNorth()),
+      rotateBy: (direction) => this.moveView(() => this.options.viewNavigation.rotateBy(direction)),
+      beginRotation: (pivot) => this.options.viewNavigation.beginRotation(pivot),
+      // A new camera command drops the temporary focus, as showPlace does.
+      showCamera: (camera, options) => this.moveView(() => this.options.viewNavigation.showCamera(camera, options)),
     }
     this.history = {
       canUndo,
@@ -160,6 +208,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     }
     this.sceneEdits = {
       saveSelectionAsObjectStamp: () => this.saveSelectionAsObjectStamp(),
+      importDesignObjects: (objects) => this.importDesignObjects(objects),
       copy: () => this.options.mutations.copy(),
       paste: () => this.runSpatialEdit(() => this.options.mutations.paste()),
       pasteAt: (point) => this.runSpatialEdit(() => this.options.mutations.pasteAt(point)),
@@ -169,12 +218,19 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       deleteSelected: () => this.runSpatialEdit(() => this.options.mutations.deleteSelected()),
       selectAll: () => this.options.mutations.selectAll(),
       selectSameSpecies: (canonicalName, options) => this.options.mutations.selectSameSpecies(canonicalName, options),
+      selectSpecies: (canonicalNames) => this.options.mutations.selectSpecies(canonicalNames),
+      clearSelection: () => this.options.mutations.clearSelection(),
       bringToFront: () => this.runSpatialEdit(() => this.options.mutations.bringToFront()),
       sendToBack: () => this.runSpatialEdit(() => this.options.mutations.sendToBack()),
       lockSelected: () => this.runSpatialEdit(() => this.options.mutations.lockSelected()),
       unlockSelected: () => this.runSpatialEdit(() => this.options.mutations.unlockSelected()),
+      unlockAll: () => this.runSpatialEdit(() => this.options.mutations.unlockAll()),
       groupSelected: () => this.runSpatialEdit(() => this.options.mutations.groupSelected()),
       ungroupSelected: () => this.runSpatialEdit(() => this.options.mutations.ungroupSelected()),
+      renameZone: (zoneId, name) => this.options.mutations.renameZone(zoneId, name),
+      rotateSelected: (degrees) => this.runSpatialEdit(() => this.options.mutations.rotateSelected(degrees)),
+      nudgeSelected: (delta) => this.nudgeSelected(delta),
+      endNudge: (options) => this.endNudge(options),
     }
     this.chrome = {
       toggleGrid: () => this.options.settings.toggleGridVisible(),
@@ -185,6 +241,9 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       setSceneLayerVisibility: (name, visible) => this.setSceneLayerState(name, { visible }),
       setSceneLayerOpacity: (name, opacity) => this.setSceneLayerOpacity(name, opacity),
       setSceneLayerLocked: (name, locked) => this.setSceneLayerState(name, { locked }),
+      presentLayers: (names) => {
+        if (this.options.presentation.presentLayers(names)) this.options.invalidate('scene')
+      },
     }
     this.plantPresentation = {
       ensureSpeciesCacheEntries: (canonicalNames, activeLocale) =>
@@ -201,8 +260,60 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   }
 
   private setTool(name: string): void {
-    this.options.setInteractionTool(name)
+    try {
+      this.options.setInteractionTool(name)
+    } catch (error) {
+      // A failed switch leaves the session on the tool it kept or fell back to (Select after a failed activation,
+      // the tool being left when leaving it failed): the app's own tool state follows the session, not the request.
+      const kept = this.options.readInteractionTool()
+      if (kept) setCanvasTool(kept)
+      throw error
+    }
     setCanvasTool(name)
+  }
+
+  private nudgeSelected(delta: ScenePoint): boolean {
+    if (!this.options.isSpatialEditingEnabled() || !Number.isFinite(delta.x) || !Number.isFinite(delta.y)) return false
+    if (!this.nudge) {
+      const scene = this.options.sceneStore.persisted
+      const viewportScale = this.options.readViewScale()
+      const selection = getDesignObjectSelectionModel(scene, this.options.sceneStore.session.selectedTargets, {
+        annotationViewportScale: viewportScale,
+        plantContext: this.options.presentation.createPlantPresentationContext(viewportScale),
+      })
+      if (selection.editableTargets.length === 0) return false
+      const state = createSceneDragState()
+      captureSceneDragState(state, scene, selection.editableTargets)
+      let edit: SceneEditTransaction
+      try {
+        edit = this.options.sceneEdits.begin('keyboard-nudge')
+      } catch (error) {
+        // Another edit owns the Scene (a drag in progress): the key does nothing.
+        if (error instanceof SceneEditBusyError) return false
+        throw error
+      }
+      this.nudge = { edit, state, total: { x: 0, y: 0 } }
+    }
+    const series = this.nudge
+    // Sum in whole micrometres: equal and opposite steps must cancel exactly,
+    // or a series that returns home would still record an edit.
+    series.total = {
+      x: roundToMicrometre(series.total.x + delta.x),
+      y: roundToMicrometre(series.total.y + delta.y),
+    }
+    const total = series.total
+    series.edit.mutate((draft) => applySceneDragDeltaToDraft(draft, series.state, total))
+    this.options.invalidate('scene')
+    return true
+  }
+
+  private endNudge(options: { readonly abort?: boolean } = {}): void {
+    const series = this.nudge
+    if (!series) return
+    this.nudge = null
+    if (options.abort || (series.total.x === 0 && series.total.y === 0)) series.edit.abort()
+    else series.edit.commit({ invalidate: 'scene' })
+    this.options.invalidate('scene')
   }
 
   private saveSelectionAsObjectStamp(): void {
@@ -211,7 +322,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       if (!savedObjectStamps) return
 
       const scene = this.options.sceneStore.persisted
-      const viewportScale = this.options.camera.viewport.scale
+      const viewportScale = this.options.readViewScale()
       const selection = getDesignObjectSelectionModel(
         scene,
         this.options.sceneStore.session.selectedTargets,
@@ -228,27 +339,94 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     }, undefined, { resumePending: true })
   }
 
+  // Hydrates through a frame at the runtime's own plane origin, so imported
+  // lon/lat land in the same session-plane metres as the open Design.
+  private importDesignObjects(objects: CanvasDesignObjects): CanvasDesignObjectImportReceipt {
+    return this.options.commandAdmission.runWhenSettled(() => {
+      const scene = hydrateScenePersistedStateInFrame(
+        {
+          version: CURRENT_CANOPI_FILE_VERSION,
+          name: '',
+          description: null,
+          plant_species_colors: {},
+          layers: [],
+          plants: [...objects.plants],
+          zones: [...objects.zones],
+          annotations: [...objects.annotations],
+          measurement_guides: [...objects.measurementGuides],
+          consortiums: [],
+          groups: [...objects.groups],
+          timeline: [],
+          budget: [],
+          budget_currency: DEFAULT_BUDGET_CURRENCY,
+          created_at: '',
+          updated_at: '',
+        },
+        createSceneGeoFrame(this.options.sceneStore.sessionPlane.origin),
+      )
+      const receipt = createSceneArrangementPlacement({ sceneEdits: this.options.sceneEdits }).place({
+        template: {
+          plants: scene.plants.map((entity) => ({ sourceId: entity.id, entity })),
+          zones: scene.zones.map((entity) => ({ sourceId: entity.id, entity })),
+          annotations: scene.annotations.map((entity) => ({ sourceId: entity.id, entity })),
+          measurementGuides: scene.measurementGuides.map((entity) => ({ sourceId: entity.id, entity })),
+          groups: scene.groups.map((entity) => ({ sourceId: entity.id, entity })),
+        },
+        translateBy: { x: 0, y: 0 },
+        historyType: 'import-design-objects',
+      })
+      return { committed: receipt.committed, createdCount: receipt.createdCount }
+    }, DESIGN_OBJECTS_NOT_IMPORTED, { resumePending: true })
+  }
+
   private zoomIn(): void {
-    this.options.cameraNavigation.zoomIn()
+    this.options.viewNavigation.zoomIn()
     this.options.invalidate('viewport')
   }
 
   private zoomOut(): void {
-    this.options.cameraNavigation.zoomOut()
+    this.options.viewNavigation.zoomOut()
     this.options.invalidate('viewport')
   }
 
+  /** Zoom about the screen centre; the scale menu picks the factor for a map scale. */
+  private zoomBy(factor: number): void {
+    if (!Number.isFinite(factor) || factor <= 0) return
+    this.options.viewNavigation.zoomBy(factor)
+    this.options.invalidate('viewport')
+  }
+
+  private showPlace(
+    place: { readonly lon: number; readonly lat: number },
+    zoom: number,
+    options?: { readonly motion?: 'fly' | 'jump' },
+  ): boolean {
+    // The geographic target and MapLibre zoom go to the camera as they are: no plane round trip.
+    if (!this.options.viewNavigation.showPlace(place, zoom, options)) return false
+    this.options.invalidate('viewport')
+    return true
+  }
+
   private zoomToFit(): void {
-    this.options.cameraNavigation.zoomToFit(this.options.sceneStore.persisted, {
-      plantContext: this.options.presentation.createPlantPresentationContext(this.options.camera.viewport.scale),
+    const scene = this.options.sceneStore.persisted
+    this.options.viewNavigation.zoomToFit(scene, {
+      extentPoints: sceneExtentPoints(scene, this.options.presentation.createPlantPresentationContext(this.options.readViewScale())),
+      emptySceneScale: this.options.readEmptySceneScale?.(),
     })
     this.options.invalidate('viewport')
   }
 
   private returnToDesign(): void {
-    this.options.cameraNavigation.returnToDesign(this.options.sceneStore.persisted, {
-      plantContext: this.options.presentation.createPlantPresentationContext(this.options.camera.viewport.scale),
+    const scene = this.options.sceneStore.persisted
+    this.options.viewNavigation.returnToDesign(scene, {
+      extentPoints: sceneExtentPoints(scene, this.options.presentation.createPlantPresentationContext(this.options.readViewScale())),
     })
+    this.options.invalidate('viewport')
+  }
+
+  /** A view command: the chrome placed against the view redraws with it. */
+  private moveView(move: () => void): void {
+    move()
     this.options.invalidate('viewport')
   }
 
@@ -261,13 +439,19 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     bounds: SceneBounds,
     options: TemporaryBoundsFocusOptions,
   ): boolean {
-    const changed = this.options.cameraNavigation.focusTemporaryBounds(bounds, options)
+    const changed = this.options.viewNavigation.focusTemporaryBounds(bounds, options)
+    if (changed) this.options.invalidate('viewport')
+    return changed
+  }
+
+  private frameBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean {
+    const changed = this.options.viewNavigation.frameBounds(bounds, options)
     if (changed) this.options.invalidate('viewport')
     return changed
   }
 
   private returnFromTemporaryFocus(): boolean {
-    const changed = this.options.cameraNavigation.returnFromTemporaryFocus()
+    const changed = this.options.viewNavigation.returnFromTemporaryFocus()
     if (changed) this.options.invalidate('viewport')
     return changed
   }
@@ -275,15 +459,6 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   private undo(): void {
     this.options.commandAdmission.runWhenSettled(() => {
       if (this.options.transientHistory.undo()) return
-      const sceneSequence = this.options.history.nextUndoSequence.value
-      const designSequence = this.options.coordinatedHistory?.nextUndoSequence.value ?? null
-      if (
-        designSequence !== null
-        && (sceneSequence === null || designSequence > sceneSequence)
-      ) {
-        if (this.options.coordinatedHistory?.undo()) this.options.invalidate('scene')
-        return
-      }
       this.options.history.undo()
     }, undefined, { resumePending: true })
   }
@@ -291,15 +466,6 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   private redo(): void {
     this.options.commandAdmission.runWhenSettled(() => {
       if (this.options.transientHistory.redo()) return
-      const sceneSequence = this.options.history.nextRedoSequence.value
-      const designSequence = this.options.coordinatedHistory?.nextRedoSequence.value ?? null
-      if (
-        designSequence !== null
-        && (sceneSequence === null || designSequence < sceneSequence)
-      ) {
-        if (this.options.coordinatedHistory?.redo()) this.options.invalidate('scene')
-        return
-      }
       this.options.history.redo()
     }, undefined, { resumePending: true })
   }
@@ -327,8 +493,6 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   }
 
   private setSceneLayerStateWhenSettled(name: string, edit: SceneLayerEdit): boolean {
-    if (this.options.settings.layerProjections.isAppOwnedLayerProjection(name)) return false
-
     return this.options.sceneEdits.run('scene-layer-settings', (tx) => {
       tx.mutate((draft) => {
         const layer = draft.layers.find((entry) => entry.name === name)
@@ -360,4 +524,8 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     if (result.changed || plantNamesPublished) this.options.invalidate('scene')
     return result.changed || plantNamesPublished || backfillResult === 'applied'
   }
+}
+
+function roundToMicrometre(metres: number): number {
+  return Math.round(metres * 1e6) / 1e6 || 0
 }

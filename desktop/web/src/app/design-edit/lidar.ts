@@ -1,4 +1,3 @@
-import type { CanopiFile } from '../../types/design'
 import type {
   LidarPresentationEntry,
   LidarPresentationEntryKind,
@@ -11,18 +10,8 @@ const LIDAR_PRESENTATION_SCHEMA_VERSION = 1
 
 import { editCurrentDesign } from './core'
 
-export type { LidarPresentationEntry, LidarPresentationSection, LidarPresentationEntryKind }
-
 function emptySection(): LidarPresentationSection {
   return { schema_version: LIDAR_PRESENTATION_SCHEMA_VERSION, entries: [] }
-}
-
-export function readLidarSection(design: CanopiFile): LidarPresentationSection | null {
-  return design.lidar ?? null
-}
-
-export function readLidarEntries(design: CanopiFile): LidarPresentationEntry[] {
-  return design.lidar?.entries ?? []
 }
 
 /** Immutable patch of one entry; entries are matched by stable library id. */
@@ -148,40 +137,22 @@ function nextOrder(entries: LidarPresentationEntry[]): number {
 }
 
 /**
- * Move one presentation entry one position earlier or later in saved order.
+ * Set the saved order of several entries at once.
  *
  * Order is the document's own presentation order, so this is a Design Edit: it
- * dirties the current Design and travels through document history, which is
- * what makes the move undoable. Reordering presentation changes no numeric data
- * and starts no computation — it is display order only.
- *
- * A move that would leave the order unchanged returns the Design untouched, so
- * nudging the first entry up does not create a history entry for nothing.
+ * dirties the current Design for continuous save and, like every Design Edit,
+ * has no undo. Reordering presentation changes no numeric data
+ * and starts no computation; it is display order only. Orders that are already
+ * saved leave the Design untouched.
  */
-export function moveLidarEntry(id: string, direction: 'up' | 'down'): void {
+export function setLidarEntryOrders(orders: ReadonlyMap<string, number>): void {
   editCurrentDesign((design) => {
     const section = design.lidar
     if (!section) {
       return design
     }
-    const ordered = [...section.entries].sort((left, right) => left.order - right.order)
-    const index = ordered.findIndex((entry) => entry.id === id)
-    if (index < 0) {
-      return design
-    }
-    const target = direction === 'up' ? index - 1 : index + 1
-    if (target < 0 || target >= ordered.length) {
-      return design
-    }
-    const moved = ordered[index]!
-    const displaced = ordered[target]!
-    ordered[index] = displaced
-    ordered[target] = moved
-    // Renumber densely from zero so saved order stays stable and comparable
-    // rather than accumulating gaps across repeated moves.
-    const positions = new Map(ordered.map((entry, position) => [entry.id, position]))
     const nextEntries = section.entries.map((entry) => {
-      const order = positions.get(entry.id)
+      const order = orders.get(entry.id)
       return order === undefined || order === entry.order ? entry : { ...entry, order }
     })
     if (nextEntries.every((entry, position) => entry === section.entries[position])) {

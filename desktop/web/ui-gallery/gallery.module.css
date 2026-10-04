@@ -12,5 +12,23 @@
 .canvasWorkspace { display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
 .canvasArea { position: relative; flex: 1; min-width: 0; }
 .canvas { position: absolute; inset: 0; overflow: hidden; }
-.canvasZoom { position: absolute; right: var(--space-2); bottom: var(--space-2); z-index: 20; }
 .status { padding: var(--space-1) var(--space-3); border-top: 1px solid var(--color-border); font-size: var(--text-xs); color: var(--color-text-muted); }
+.symbolSheet { flex: 1; overflow: auto; padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-4); }
+.symbolFamily h2 { margin: 0 0 var(--space-2); font-size: var(--text-sm); font-weight: 600; color: var(--color-text-muted); }
+.symbolRow { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.symbolCell { margin: 0; width: 92px; display: flex; flex-direction: column; align-items: center; gap: var(--space-1); padding: var(--space-2) var(--space-1); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+.symbolLarge { color: var(--color-text); display: flex; }
+.symbolLadder, .symbolMap { display: flex; align-items: center; justify-content: center; gap: var(--space-1); min-height: 28px; width: 100%; }
+/* A fixed dark foliage strip stands in for satellite imagery in both themes. */
+.symbolMap { background: #2F3A24; border-radius: var(--radius-sm); }
+.symbolCell figcaption { font-size: var(--text-xs); text-align: center; line-height: 1.2; }
+/* Off-screen view snapshots over the live workspace (surface=snapshots). */
+.snapshots { position: absolute; top: var(--space-2); right: var(--space-2); bottom: var(--space-2); width: min(360px, calc(100% - var(--space-4))); overflow: auto; padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); font-size: var(--text-xs); z-index: 5; }
+.snapshots header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.snapshots header button { margin-left: auto; padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); background: var(--color-surface); cursor: pointer; }
+.snapshots ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-3); }
+.snapshots img, .snapshotMissing { display: block; width: 100%; aspect-ratio: 8 / 5; object-fit: contain; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-bg); }
+.snapshotMissing { display: grid; place-items: center; color: var(--color-text-muted); }
+.snapshots dl { margin: var(--space-1) 0 0; display: grid; grid-template-columns: auto 1fr; gap: 2px var(--space-2); }
+.snapshots dt { color: var(--color-text-muted); }
+.snapshots dd { margin: 0; overflow-wrap: anywhere; }

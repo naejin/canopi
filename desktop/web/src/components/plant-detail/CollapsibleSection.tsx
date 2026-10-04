@@ -1,34 +1,36 @@
 import type { ComponentChildren } from 'preact';
+import { useId } from 'preact/hooks';
 import { t } from '../../i18n';
+import { ControlIcon } from '../shared/ControlIcon';
 import styles from './PlantDetail.module.css';
 
 interface Props {
   id: string;
-  icon: string;
   titleKey: string;
-  accentClass?: string;
   expanded: Set<string>;
   onToggle: (id: string) => void;
   children: ComponentChildren;
-  /** Optional suffix after the title (e.g., count badge) */
-  titleSuffix?: string;
 }
 
-export function CollapsibleSection({ id, icon, titleKey, accentClass, expanded, onToggle, children, titleSuffix }: Props) {
+/** One catalog section: a disclosure with a chevron; closed until the reader opens it. */
+export function CollapsibleSection({ id, titleKey, expanded, onToggle, children }: Props) {
   const open = expanded.has(id);
+  const bodyId = useId();
   return (
-    <section className={`${styles.section} ${accentClass ?? ''}`} aria-label={t(titleKey)}>
-      <button
-        type="button"
-        className={`${styles.sectionTitleToggle} ${open ? styles.sectionTitleToggleOpen : ''}`}
-        onClick={() => onToggle(id)}
-        aria-expanded={open}
-      >
-        <span className={styles.sectionIcon}>{icon}</span>
-        {t(titleKey)}{titleSuffix ?? ''}
-        <span className={`${styles.sectionArrow} ${open ? styles.sectionArrowOpen : ''}`}>›</span>
-      </button>
-      {open && <div className={styles.sectionBody}>{children}</div>}
+    <section className={styles.section} aria-label={t(titleKey)} data-section={id}>
+      <h3 className={styles.sectionHeading}>
+        <button
+          type="button"
+          className={styles.sectionToggle}
+          onClick={() => onToggle(id)}
+          aria-expanded={open}
+          aria-controls={bodyId}
+        >
+          <span className={styles.sectionTitle}>{t(titleKey)}</span>
+          <ControlIcon name="chevron-down" className={styles.sectionChevron} />
+        </button>
+      </h3>
+      <div id={bodyId} className={styles.sectionBody} hidden={!open}>{open && children}</div>
     </section>
   );
 }

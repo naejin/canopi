@@ -95,7 +95,7 @@ describe('MoreFiltersPanel outside-click behavior', () => {
     })
 
     const climateButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Climate & Soil'))
+      .find((button) => button.textContent?.includes('Climate & soil'))
     expect(climateButton).toBeTruthy()
 
     await act(async () => {

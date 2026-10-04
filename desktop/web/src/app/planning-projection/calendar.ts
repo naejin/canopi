@@ -1,6 +1,8 @@
 import type { PanelTarget, PlacedPlant, TimelineAction } from '../../types/design'
 import { normalizeSearchText } from '../../utils/normalize-search'
 import type { CalendarCompletionFilter } from '../planning-view/state'
+import { missingZoneLabel } from '../map-selection/zone-label'
+import { isEnglishFallbackName } from '../../canvas/runtime/species-key'
 import {
   buildCivilMonthGrid,
   civilDateInRange,
@@ -17,7 +19,15 @@ export interface CalendarTargetLabel {
   readonly target: PanelTarget
   readonly kind: PanelTarget['kind']
   readonly label: string
+  /** `label` is a species' English catalog name: it has none in the UI language. */
+  readonly englishFallback: boolean
   readonly unavailable: boolean
+}
+
+/** A zone a Calendar action can target: its identity and how lists show it. */
+export interface PlanningZoneOption {
+  readonly id: string
+  readonly label: string
 }
 
 export interface CalendarPlanningAction {
@@ -46,7 +56,7 @@ export interface CalendarDayProjection {
   readonly actions: readonly CalendarPlanningAction[]
 }
 
-export interface CalendarAgendaGroup {
+interface CalendarAgendaGroup {
   readonly date: CivilDate
   readonly dateKey: string
   readonly actions: readonly CalendarPlanningAction[]
@@ -63,8 +73,10 @@ export interface CalendarPlanningProjection {
 export function buildCalendarPlanningProjection(options: {
   readonly actions: readonly TimelineAction[]
   readonly plants: readonly PlacedPlant[]
+  /** Names in the UI language, with English fallbacks filled in. */
   readonly localizedNames?: ReadonlyMap<string, string | null>
-  readonly zoneNames?: readonly string[]
+  readonly englishFallbackNames?: ReadonlyMap<string, string>
+  readonly zones?: readonly PlanningZoneOption[]
   readonly month: string
   readonly search: string
   readonly actionType: string
@@ -78,7 +90,8 @@ export function buildCalendarPlanningProjection(options: {
     action,
     options.plants,
     options.localizedNames,
-    options.zoneNames ?? [],
+    options.englishFallbackNames ?? NO_ENGLISH_NAMES,
+    options.zones ?? [],
   ))
   const needle = normalizeSearchText(options.search.trim())
   const filtered = projected.filter((action) => {
@@ -133,11 +146,14 @@ export function buildCalendarPlanningProjection(options: {
   }
 }
 
-export function projectCalendarAction(
+const NO_ENGLISH_NAMES: ReadonlyMap<string, string> = new Map()
+
+function projectCalendarAction(
   action: TimelineAction,
   plants: readonly PlacedPlant[],
   localizedNames: ReadonlyMap<string, string | null> | undefined,
-  zoneNames: readonly string[],
+  englishFallbackNames: ReadonlyMap<string, string>,
+  zones: readonly PlanningZoneOption[],
 ): CalendarPlanningAction {
   const parsedStart = parseCivilDate(action.start_date)
   const parsedEnd = parseCivilDate(action.end_date)
@@ -145,7 +161,8 @@ export function projectCalendarAction(
     target,
     plants,
     localizedNames,
-    zoneNames,
+    englishFallbackNames,
+    zones,
   ))
   return {
     id: action.id,
@@ -170,7 +187,7 @@ export function projectCalendarAction(
   }
 }
 
-export function compareCalendarActions(
+function compareCalendarActions(
   left: CalendarPlanningAction,
   right: CalendarPlanningAction,
 ): number {
@@ -192,21 +209,26 @@ function projectCalendarTargetLabel(
   target: PanelTarget,
   plants: readonly PlacedPlant[],
   localizedNames: ReadonlyMap<string, string | null> | undefined,
-  zoneNames: readonly string[],
+  englishFallbackNames: ReadonlyMap<string, string>,
+  zones: readonly PlanningZoneOption[],
 ): CalendarTargetLabel {
+  const species = (canonicalName: string, label: string) => ({
+    label,
+    englishFallback: isEnglishFallbackName(englishFallbackNames, canonicalName, label),
+  })
   switch (target.kind) {
     case 'manual':
-      return { target, kind: target.kind, label: '', unavailable: false }
+      return { target, kind: target.kind, label: '', englishFallback: false, unavailable: false }
     case 'none':
-      return { target, kind: target.kind, label: '', unavailable: false }
+      return { target, kind: target.kind, label: '', englishFallback: false, unavailable: false }
     case 'species': {
       const plant = plants.find((candidate) => candidate.canonical_name === target.canonical_name)
       return {
         target,
         kind: target.kind,
-        label: localizedNames?.get(target.canonical_name)
+        ...species(target.canonical_name, localizedNames?.get(target.canonical_name)
           ?? plant?.common_name
-          ?? target.canonical_name,
+          ?? target.canonical_name),
         unavailable: plant === undefined,
       }
     }
@@ -215,18 +237,21 @@ function projectCalendarTargetLabel(
       return {
         target,
         kind: target.kind,
-        label: plant
-          ? localizedNames?.get(plant.canonical_name) ?? plant.common_name ?? plant.canonical_name
-          : target.plant_id,
+        ...plant
+          ? species(plant.canonical_name, localizedNames?.get(plant.canonical_name) ?? plant.common_name ?? plant.canonical_name)
+          : { label: target.plant_id, englishFallback: false },
         unavailable: plant === undefined,
       }
     }
-    case 'zone':
+    case 'zone': {
+      const zone = zones.find((candidate) => candidate.id === target.zone_id)
       return {
         target,
         kind: target.kind,
-        label: target.zone_name,
-        unavailable: !zoneNames.includes(target.zone_name),
+        label: zone?.label ?? missingZoneLabel(),
+        englishFallback: false,
+        unavailable: zone === undefined,
       }
+    }
   }
 }

@@ -1,30 +1,36 @@
-import type { MapFrame } from '../../canvas/maplibre-camera'
+import { logMapError } from '../../maplibre/redact-credentials'
+import type { ViewDiagnostics } from '../../canvas/runtime/view/types'
 import type { MapLibreSurfaceContext } from '../../maplibre/surface-adapter'
 import type { MapLibreMapInstance } from '../../maplibre/loader'
 import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   mapLibreCanvasSurfaceStateEquals,
-  mergeMapLibreCanvasSurfaceState,
   publishMapDiagnostics,
+  type MapLibreBasemapStatus,
   type MapLibreCanvasSurfaceState,
-  type MapLibreCanvasSurfaceStateInput,
 } from '../../maplibre/canvas-surface-state'
-import { toMapLibreSurfaceErrorMessage } from '../../maplibre/canvas-surface-errors'
 import { applyTerrainPaintUpdates, classifyTerrainSync, clearTerrain, rebuildTerrain } from '../../maplibre/terrain-sync'
-import { TERRAIN_CONTOUR_SOURCE_ID, TERRAIN_DEM_SOURCE_ID, type TerrainLayerState } from '../../maplibre/terrain'
-import { applyLidarSync, classifyLidarSync, clearLidarSync, type LidarMapLayer } from './lidar-sync'
-import { clearCanvasMapSurfaceOverlays, syncCanvasMapSurfaceOverlays } from './overlays'
-import { createMapLayerStackDescriptors, reconcileMapLayerStack } from './layer-stack'
+import {
+  TERRAIN_CONTOUR_LAYER_IDS,
+  TERRAIN_CONTOUR_SOURCE_ID,
+  TERRAIN_DEM_SOURCE_ID,
+  TERRAIN_HILLSHADE_LAYER_ID,
+  type TerrainLayerState,
+} from '../../maplibre/terrain'
+import { mapErrorResourceId } from '../../maplibre/map-error-owner'
+import type { RasterDisplay, RasterDisplayLayer } from '../../maplibre/raster-display/adapter'
+import { clearCanvasMapSurfaceOverlays, syncCanvasMapSurfaceOverlays, type CanvasMapSurfaceOverlaySnapshot } from './overlays'
+import { createMapLayerStackDescriptors, reconcileMapLayerStack } from '../map-layers/bands'
 import { captureWorkspaceMapContributions, type WorkspaceMapContributionAdapter, type WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 
 export interface WorkspaceMapContributionsOptions {
   readonly sessionIdentity: object
   readonly onFailure: (error: unknown) => void
   readonly loadTerrainSupport?: WorkspaceMapContributionAdapter['loadTerrainSupport']
-  readonly installRasterProtocol?: WorkspaceMapContributionAdapter['installRasterProtocol']
+  readonly createRasterDisplay?: WorkspaceMapContributionAdapter['createRasterDisplay']
   readonly publishViewBounds?: WorkspaceMapContributionAdapter['publishViewBounds']
   readonly onStateChange?: (state: MapLibreCanvasSurfaceState) => void
-  readonly publishDiagnostics?: (frame: MapFrame | null, extent: number | null) => void
+  readonly publishDiagnostics?: (frame: ViewDiagnostics | null) => void
   readonly logError?: (message?: unknown, ...args: unknown[]) => void
 }
 
@@ -33,13 +39,11 @@ export class WorkspaceMapContributions {
   private snapshot: WorkspaceMapContributionSnapshot | null = null
   private context: MapLibreSurfaceContext<MapLibreMapInstance> | null = null
   private state = IDLE_MAPLIBRE_CANVAS_SURFACE_STATE
-  private appliedLidar: LidarMapLayer[] = []
-  private readonly touchedLidar = new Map<string, LidarMapLayer>()
-  private readonly knownLidar = new Set<string>()
+  /** Map-lifetime owner of the upstream raster renderer (Desktop only). */
+  private raster: RasterDisplay | null = null
   private terrain: TerrainLayerState | null = null
   private terrainTouched = false
   private terrainUnavailable = false
-  private readonly unavailableLidar = new Map<string, LidarMapLayer>()
   private terrainGeneration = 0
   private revision = 0
   private styleReady = false
@@ -47,6 +51,9 @@ export class WorkspaceMapContributions {
   private draining = false
   private failed = false
   private disposed = false
+  /** Target set whose overlay failed; skipped until the Targets change. */
+  private skippedOverlayKey: string | null = null
+  private rasterSkipped = false
   private readonly removeListeners: Array<() => void> = []
 
   constructor(private readonly options: WorkspaceMapContributionsOptions) {}
@@ -54,9 +61,11 @@ export class WorkspaceMapContributions {
   attach(context: MapLibreSurfaceContext<MapLibreMapInstance>): void {
     if (this.disposed) return
     this.context = context
-    // A native tile source has no asset template, so its protocol must exist
-    // before any lidar layer that names it is added to the map.
-    this.options.installRasterProtocol?.(context.maplibre)
+    // The raster renderer adds its layers asynchronously after its module and
+    // headers load; each change re-establishes the semantic band order.
+    this.raster = this.options.createRasterDisplay?.(context.map, {
+      onLayersChanged: () => this.reorderAfterRasterChange(),
+    }) ?? null
     const publishBounds = () => {
       if (this.live() && this.styleReady && this.snapshot) this.publishBounds()
     }
@@ -73,13 +82,6 @@ export class WorkspaceMapContributions {
       this.terrainUnavailable = false
     }
     this.snapshot = snapshot && captureWorkspaceMapContributions(snapshot)
-    for (const layer of snapshot?.lidar ?? []) this.knownLidar.add(layer.id)
-    for (const [id, failed] of this.unavailableLidar) {
-      const next = snapshot?.lidar.find((layer) => layer.id === id)
-      if (!next || classifyLidarSync([failed], [next]).some((action) => action.type !== 'paint')) {
-        this.unavailableLidar.delete(id)
-      }
-    }
     this.revision += 1
     this.terrainGeneration += 1
     this.dirty = true
@@ -91,40 +93,28 @@ export class WorkspaceMapContributions {
     this.styleReady = true
     this.revision += 1
     this.terrainGeneration += 1
-    this.appliedLidar = []
     this.terrain = null
-    this.unavailableLidar.clear()
     this.terrainUnavailable = false
     this.dirty = true
     this.drain()
   }
 
-  /** Known passive source failures must not fail the shared graphics backend. */
-  handleSourceError(event: unknown): boolean {
-    if (!this.live() || !event || typeof event !== 'object' || !('sourceId' in event)) return false
-    const id = event.sourceId
-    if (typeof id !== 'string') return false
-    if (this.knownLidar.has(id)) {
-      const layer = this.snapshot?.lidar.find((candidate) => candidate.id === id)
-      if (!layer) return true
-      this.unavailableLidar.set(id, layer)
-      this.revision += 1
-      this.dirty = true
-      const revision = this.revision
-      try {
-        applyLidarSync(this.guardedMap(revision), [{ type: 'remove', id }])
-      } catch (error) {
-        if (error !== STALE_CONTRIBUTION) this.fail(error)
-        return true
-      }
-      if (!this.current(revision)) return true
-      this.appliedLidar = this.appliedLidar.filter((layer) => layer.id !== id)
-      this.log('Passive shared workspace LiDAR error:', event)
-      this.drain()
+  /**
+   * Routes a MapLibre error that names a resource this owner contributed.
+   * Contributions are optional: a failing one is skipped, logged and noticed,
+   * and the map stays admitted. Returns false for anything it does not own.
+   */
+  handleMapError(event: unknown): boolean {
+    const id = mapErrorResourceId(event)
+    if (id === null || !this.live()) return id !== null && isContributionResource(id)
+    if (/^mlrcog\d+-src-/.test(id) || this.raster?.layerIds().includes(id)) {
+      // The upstream renderer draws a failed tile as transparent and keeps the
+      // rest of the band; a source error is passive display degradation.
+      this.log('Passive shared workspace raster error:', event)
       return true
     }
-    if (id === TERRAIN_DEM_SOURCE_ID || id === TERRAIN_CONTOUR_SOURCE_ID) {
-      const enabled = id === TERRAIN_DEM_SOURCE_ID
+    if (TERRAIN_DEM_IDS.has(id) || TERRAIN_CONTOUR_IDS.has(id)) {
+      const enabled = TERRAIN_DEM_IDS.has(id)
         ? this.snapshot?.terrain.hillshadeVisible
         : this.snapshot?.terrain.contoursVisible
       if (!enabled) return true
@@ -134,7 +124,21 @@ export class WorkspaceMapContributions {
       this.terrainFailed(event)
       return true
     }
+    if (id.startsWith(PANEL_TARGET_PREFIX)) {
+      // MapLibre validation emits instead of throwing, often mid-sync; the
+      // drain removes the partial overlay on its next pass.
+      if (this.skippedOverlayKey === null && this.snapshot) this.overlayFailed(overlayKey(this.snapshot.overlays), event)
+      this.dirty = true
+      this.drain()
+      return true
+    }
     return false
+  }
+
+  /** The Basemap's download status, kept until the map goes. */
+  setBasemapStatus(basemapStatus: MapLibreBasemapStatus): void {
+    if (this.disposed) return
+    this.publishState({ ...this.state, basemapStatus })
   }
 
   dispose(error?: unknown): void {
@@ -146,10 +150,16 @@ export class WorkspaceMapContributions {
     this.publishState({
       ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
       status: error ? 'error' : 'idle',
-      errorMessage: error ? toMapLibreSurfaceErrorMessage(error) : null,
+      // A map that failed once it existed can be built again; whether the runtime allows it is the composition's call.
+      retryable: Boolean(error),
     })
     for (const remove of this.removeListeners.splice(0)) this.attempt('Failed to remove map contribution listener:', remove)
     this.clear()
+    // Map-lifetime teardown: the manager's layers, sources, protocol and
+    // listeners go, and its worker client rejects queued and in-flight work.
+    const raster = this.raster
+    this.raster = null
+    this.attempt('Failed to dispose the raster display:', () => raster?.dispose())
     this.context = null
   }
 
@@ -173,14 +183,14 @@ export class WorkspaceMapContributions {
         // Synchronous callbacks may replace or dispose the session during any map mutation.
         const map = this.guardedMap(revision)
         try {
-          this.syncLidar(map, snapshot.lidar)
-          syncCanvasMapSurfaceOverlays(map, snapshot.overlays, true)
+          this.syncRaster(map, snapshot.lidar)
+          this.syncOverlays(map, snapshot.overlays)
           this.reconcileOrder(map, snapshot)
-          this.publishState({ ...this.state, status: 'ready', errorMessage: null })
+          this.publishState({ ...this.state, status: 'ready', layerSkipped: this.layerSkipped() })
           if (!this.current(revision)) continue
           this.publishBounds()
           if (!this.current(revision)) continue
-          this.publishDiagnostics(snapshot.frame, snapshot.designExtentMeters)
+          this.publishDiagnostics(snapshot.frame)
           if (!this.current(revision)) continue
           void this.syncTerrain(map, snapshot, revision)
         } catch (error) {
@@ -192,30 +202,66 @@ export class WorkspaceMapContributions {
     }
   }
 
-  private syncLidar(map: MapLibreMapInstance, layers: readonly Readonly<LidarMapLayer>[]): void {
-    for (const previous of this.touchedLidar.values()) {
-      if (layers.some((layer) => layer.id === previous.id)) continue
-      applyLidarSync(map, [{ type: 'remove', id: previous.id }])
-      this.touchedLidar.delete(previous.id)
+  /** Hand the desired band to the renderer, beneath the first higher Canopi layer. */
+  private syncRaster(map: MapLibreMapInstance, layers: readonly Readonly<RasterDisplayLayer>[]): void {
+    if (!this.raster) return
+    const order = map.getLayersOrder()
+    const anchor = createMapLayerStackDescriptors([])
+      .filter((descriptor) => descriptor.band !== 'basemap')
+      .map((descriptor) => descriptor.id)
+      .find((id) => order.includes(id))
+    try {
+      this.raster.sync(layers, anchor)
+      this.rasterSkipped = false
+    } catch (error) {
+      // Raster display is passive: a renderer that rejects the band never
+      // disables editing or the other contributions.
+      this.rasterSkipped = true
+      this.log('Failed to sync the raster band:', error)
     }
-    const applied: LidarMapLayer[] = []
-    for (const layer of layers) {
-      if (this.unavailableLidar.has(layer.id)) continue
-      this.touchedLidar.set(layer.id, layer)
-      try {
-        const previous = this.appliedLidar.filter((item) => item.id === layer.id)
-        // Reentrant or failed additions can leave only a source; repair that layer alone.
-        const intact = map.getLayer(layer.id) != null && map.getSource(layer.id) != null
-        applyLidarSync(map, classifyLidarSync(intact ? previous : [], [layer]))
-        applied.push(layer)
-      } catch (error) {
-        if (error === STALE_CONTRIBUTION) throw error
-        this.unavailableLidar.set(layer.id, layer)
-        this.log('Failed to sync LiDAR layer:', error)
-        applyLidarSync(map, [{ type: 'remove', id: layer.id }])
+  }
+
+  /**
+   * Panel Target overlays are optional decoration. A failing sync is rolled
+   * back and skipped until the Targets change; a rollback that cannot remove
+   * the partial overlay escapes to the hard failure path.
+   */
+  private syncOverlays(map: MapLibreMapInstance, overlays: CanvasMapSurfaceOverlaySnapshot): void {
+    const key = overlayKey(overlays)
+    if (this.skippedOverlayKey !== null) {
+      if (this.skippedOverlayKey === key) {
+        clearCanvasMapSurfaceOverlays(map)
+        return
       }
+      this.skippedOverlayKey = null
     }
-    this.appliedLidar = applied
+    try {
+      syncCanvasMapSurfaceOverlays(map, overlays, true)
+    } catch (error) {
+      if (error === STALE_CONTRIBUTION) throw error
+      this.overlayFailed(key, error)
+      clearCanvasMapSurfaceOverlays(map)
+    }
+  }
+
+  private overlayFailed(key: string, error: unknown): void {
+    this.skippedOverlayKey = key
+    this.log('Skipped a map overlay that failed to sync:', error)
+  }
+
+  private layerSkipped(): boolean {
+    return this.skippedOverlayKey !== null || this.rasterSkipped
+  }
+
+  /** The renderer changed map layers asynchronously; restore the semantic order. */
+  private reorderAfterRasterChange(): void {
+    if (!this.live() || !this.styleReady || !this.snapshot || this.draining) return
+    const revision = this.revision
+    try {
+      this.reconcileOrder(this.guardedMap(revision), this.snapshot)
+    } catch (error) {
+      if (error !== STALE_CONTRIBUTION) this.fail(error)
+    }
   }
 
   private async syncTerrain(map: MapLibreMapInstance, snapshot: WorkspaceMapContributionSnapshot, revision: number): Promise<void> {
@@ -234,7 +280,7 @@ export class WorkspaceMapContributions {
         applyTerrainPaintUpdates(map, next)
         this.terrain = next
       } else if (mode === 'rebuild') {
-        this.publishState({ ...this.state, terrainStatus: 'loading', terrainErrorMessage: null })
+        this.publishState({ ...this.state, terrainStatus: 'loading' })
         if (!current()) return
         if (!this.options.loadTerrainSupport) throw new Error('Terrain support is unavailable in this workspace.')
         const support = await this.options.loadTerrainSupport(this.context!.maplibre)
@@ -260,7 +306,7 @@ export class WorkspaceMapContributions {
         return
       }
     }
-    if (current()) this.publishState({ ...this.state, terrainStatus: this.terrain ? 'ready' : 'idle', terrainErrorMessage: null })
+    if (current()) this.publishState({ ...this.state, terrainStatus: this.terrain ? 'ready' : 'idle' })
   }
 
   private fail(error: unknown): void {
@@ -286,12 +332,15 @@ export class WorkspaceMapContributions {
     }
     if (!this.current(revision)) return
     this.terrain = null
-    this.publishState({ ...this.state, terrainStatus: 'error', terrainErrorMessage: toMapLibreSurfaceErrorMessage(error) })
+    this.publishState({ ...this.state, terrainStatus: 'error' })
     this.log('Failed to sync terrain layers:', error)
   }
 
   private reconcileOrder(map: MapLibreMapInstance, snapshot: WorkspaceMapContributionSnapshot): void {
-    reconcileMapLayerStack(map, createMapLayerStackDescriptors(snapshot.lidar.map((layer) => layer.id)))
+    // Only layers the renderer has actually added take part; a layer still
+    // loading its header is placed when it arrives.
+    const present = this.raster?.layerIds() ?? []
+    reconcileMapLayerStack(map, createMapLayerStackDescriptors(snapshot.lidar.map((layer) => layer.id).filter((id) => present.includes(id))))
   }
 
   private clear(): void {
@@ -300,17 +349,13 @@ export class WorkspaceMapContributions {
     if (map) {
       this.attempt('Failed to clear map target overlays:', () => clearCanvasMapSurfaceOverlays(map))
       this.attempt('Failed to clear map terrain:', () => clearTerrain(map))
-      for (const layer of this.touchedLidar.values()) {
-        this.attempt('Failed to clear map LiDAR:', () => clearLidarSync(map, [layer]))
-      }
+      this.attempt('Failed to clear map rasters:', () => this.raster?.sync([], undefined))
     }
     if (this.revision !== revision) return
-    this.touchedLidar.clear()
-    this.appliedLidar = []
     this.terrain = null
     this.terrainTouched = false
     this.attempt('Failed to clear map view bounds:', () => this.options.publishViewBounds?.(null))
-    this.attempt('Failed to clear map diagnostics:', () => this.publishDiagnostics(null, null))
+    this.attempt('Failed to clear map diagnostics:', () => this.publishDiagnostics(null))
   }
 
   private current(revision: number): boolean {
@@ -343,16 +388,15 @@ export class WorkspaceMapContributions {
     })
   }
 
-  private publishState(next: MapLibreCanvasSurfaceStateInput): void {
-    const state = mergeMapLibreCanvasSurfaceState(next, this.snapshot?.designExtentMeters ?? null)
+  private publishState(state: MapLibreCanvasSurfaceState): void {
     if (mapLibreCanvasSurfaceStateEquals(this.state, state)) return
     this.state = state
     this.attempt('Map contribution state observer failed:', () => this.options.onStateChange?.(state))
   }
 
-  private publishDiagnostics(frame: MapFrame | null, extent: number | null): void {
+  private publishDiagnostics(frame: ViewDiagnostics | null): void {
     this.attempt('Map contribution diagnostics observer failed:', () => {
-      (this.options.publishDiagnostics ?? publishMapDiagnostics)(frame, extent)
+      (this.options.publishDiagnostics ?? publishMapDiagnostics)(frame)
     })
   }
 
@@ -361,8 +405,24 @@ export class WorkspaceMapContributions {
   }
 
   private log(message: string, error: unknown): void {
-    (this.options.logError ?? console.error)(message, error)
+    (this.options.logError ?? logMapError)(message, error)
   }
 }
 
 const STALE_CONTRIBUTION = Symbol('stale-map-contribution')
+const PANEL_TARGET_PREFIX = 'panel-target-'
+const TERRAIN_DEM_IDS = new Set<string>([TERRAIN_DEM_SOURCE_ID, TERRAIN_HILLSHADE_LAYER_ID])
+const TERRAIN_CONTOUR_IDS = new Set<string>([TERRAIN_CONTOUR_SOURCE_ID, ...TERRAIN_CONTOUR_LAYER_IDS])
+
+/** Late errors from a contribution this owner already removed stay passive. */
+function isContributionResource(id: string): boolean {
+  return /^mlrcog\d+-/.test(id)
+    || TERRAIN_DEM_IDS.has(id)
+    || TERRAIN_CONTOUR_IDS.has(id)
+    || id.startsWith(PANEL_TARGET_PREFIX)
+}
+
+/** Identity of the Target set an overlay draws; geometry is re-read on each sync. */
+function overlayKey(overlays: CanvasMapSurfaceOverlaySnapshot): string {
+  return JSON.stringify([overlays.hoveredTargets, overlays.selectedTargets])
+}

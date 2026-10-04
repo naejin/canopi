@@ -2,13 +2,12 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createDefaultScenePersistedState, type ScenePlantEntity } from '../canvas/runtime/scene'
-import { SCALE_BAR_RESERVED_BOTTOM_PX } from '../canvas/scale-bar'
+import { readFileSync } from 'node:fs'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { DisplayLegend } from '../components/canvas/DisplayLegend'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 
-const DISPLAY_LEGEND_TOP_RESERVED_PX = 32
 
 describe('DisplayLegend', () => {
   let container: HTMLDivElement
@@ -91,11 +90,36 @@ describe('DisplayLegend', () => {
       await Promise.resolve()
     })
 
-    const legend = container.querySelector<HTMLElement>('[data-pinned-plant-name-legend]')
-    expect(legend?.style.maxHeight).toBe(
-      `calc(100% - ${SCALE_BAR_RESERVED_BOTTOM_PX + DISPLAY_LEGEND_TOP_RESERVED_PX}px)`,
+    expect(container.querySelectorAll('[data-pinned-plant-name-entry]')).toHaveLength(12)
+    // Between the title bar and the bottom chrome, then it scrolls.
+    const css = readFileSync('src/components/canvas/DisplayLegend.module.css', 'utf8')
+    const legendRule = /\.legend \{(?<body>[^}]*)\}/.exec(css)?.groups?.body ?? ''
+    expect(legendRule).toContain('max-height: calc(100% - var(--chrome-rail-top) - var(--chrome-bottom))')
+    expect(legendRule).toContain('overflow-y: auto')
+  })
+
+  it('rises above the rulers hint while the hint shows, so the hint never covers its last rows (spec §4.6)', () => {
+    // The hint (data-rulers-north-hint) stands above the view chip in the chip's wrapper, a sibling before the legend.
+    const css = readFileSync('src/components/canvas/DisplayLegend.module.css', 'utf8')
+    const raised = /:global\(\*:has\(> \[data-rulers-north-hint\]\)\) ~ \.legend \{(?<body>[^}]*)\}/.exec(css)?.groups?.body ?? ''
+    expect(raised).toContain(
+      'bottom: calc(var(--chrome-inset) + var(--control-size-3xl) + var(--space-2) + var(--control-size-2xl) + var(--space-2))',
     )
-    expect(legend?.style.overflowY).toBe('auto')
+    expect(raised).toContain(
+      'max-height: calc(100% - var(--chrome-rail-top) - var(--chrome-inset) - var(--control-size-3xl) - var(--control-size-2xl) - 2 * var(--space-2))',
+    )
+  })
+
+  it('stays at the bottom chrome on a narrow canvas, where the view chip and the rulers hint are hidden', () => {
+    // The chip's narrow-canvas rule hides its wrapper but the hint stays in the DOM, so the raised rule must carry the
+    // complementary container condition or the legend floats over an empty gap with a shortened max-height.
+    const chip = readFileSync('src/components/canvas/ViewChip.module.css', 'utf8')
+    const breakpoint = /@container \(max-width: (?<px>\d+)px\) \{\s*\.wrapper \{\s*display: none;/.exec(chip)?.groups?.px
+    expect(breakpoint).toBe('600')
+    const css = readFileSync('src/components/canvas/DisplayLegend.module.css', 'utf8')
+    const wide = new RegExp(`@container \\(width > ${breakpoint}px\\) \\{(?<body>[\\s\\S]*?)\\n\\}`).exec(css)
+    expect(wide?.groups?.body ?? '').toMatch(/:global\(\*:has\(> \[data-rulers-north-hint\]\)\) ~ \.legend \{/)
+    expect(css.replace(wide?.[0] ?? '', '')).not.toContain('data-rulers-north-hint')
   })
 
   it('updates pinned plant names when pins or localized names change', async () => {
@@ -167,7 +191,6 @@ function plant(overrides: Partial<ScenePlantEntity> = {}): ScenePlantEntity {
     canopySpreadM: null,
     position: { x: 0, y: 0 },
     rotationDeg: null,
-    scale: null,
     notes: null,
     plantedDate: null,
     quantity: null,

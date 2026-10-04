@@ -46,13 +46,13 @@ pub fn get_filter_options(conn: &Connection) -> Result<FilterOptions, String> {
     ];
 
     let mut sun_tolerances = Vec::new();
-    if boolean_exists(conn, "tolerates_full_sun") {
+    if boolean_exists(conn, "tolerates_full_sun")? {
         sun_tolerances.push("full_sun".to_owned());
     }
-    if boolean_exists(conn, "tolerates_semi_shade") {
+    if boolean_exists(conn, "tolerates_semi_shade")? {
         sun_tolerances.push("semi_shade".to_owned());
     }
-    if boolean_exists(conn, "tolerates_full_shade") {
+    if boolean_exists(conn, "tolerates_full_shade")? {
         sun_tolerances.push("full_shade".to_owned());
     }
 
@@ -103,7 +103,7 @@ pub fn get_dynamic_filter_options(
             PlantFilterFieldKind::Numeric => {
                 // Safety: column_name comes from validated_column() allowlist — not user input.
                 // Column identifiers cannot be bound as SQL parameters.
-                let range_result: Result<Option<(f64, f64)>, _> = conn
+                let range: Option<(f64, f64)> = conn
                     .query_row(
                         &format!(
                             "SELECT MIN(CAST({column_name} AS REAL)), MAX(CAST({column_name} AS REAL)) \
@@ -116,13 +116,13 @@ pub fn get_dynamic_filter_options(
                             Ok(min.zip(max))
                         },
                     )
-                    .map_err(|e| format!("Failed to query range for {field}: {e}"));
+                    .map_err(|e| format!("Failed to query range for {field}: {e}"))?;
 
                 results.push(DynamicFilterOptions {
                     field: field.clone(),
                     field_type: "numeric".to_owned(),
                     values: None,
-                    range: range_result.ok().flatten(),
+                    range,
                 });
             }
             PlantFilterFieldKind::Categorical => {
@@ -138,12 +138,15 @@ pub fn get_dynamic_filter_options(
                 let values: Vec<FilterValue> = stmt
                     .query_map([], |row| row.get::<_, String>(0))
                     .map_err(|e| format!("Failed to fetch values for {field}: {e}"))?
-                    .filter_map(|result| result.ok())
-                    .map(|value| FilterValue {
-                        label: translate_composite_value(conn, field, &value, locale),
-                        value,
+                    .map(|result| {
+                        result
+                            .map(|value| FilterValue {
+                                label: translate_composite_value(conn, field, &value, locale),
+                                value,
+                            })
+                            .map_err(|e| format!("Failed to read a value for {field}: {e}"))
                     })
-                    .collect();
+                    .collect::<Result<_, _>>()?;
 
                 results.push(DynamicFilterOptions {
                     field: field.clone(),
@@ -184,11 +187,27 @@ fn distinct_text_values(conn: &Connection, sql: &str, label: &str) -> Result<Vec
 }
 
 /// Safety: column_name is a hardcoded value from get_filter_options — not user input.
-fn boolean_exists(conn: &Connection, column_name: &str) -> bool {
+fn boolean_exists(conn: &Connection, column_name: &str) -> Result<bool, String> {
     conn.query_row(
         &format!("SELECT EXISTS(SELECT 1 FROM species WHERE {column_name} = 1)"),
         [],
         |row| row.get(0),
     )
-    .unwrap_or(false)
+    .map_err(|e| format!("Failed to check {column_name} filter options: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use rusqlite::Connection;
+
+    #[test]
+    fn filter_option_queries_report_database_errors() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE species (family TEXT, growth_rate TEXT);")
+            .unwrap();
+
+        let error = super::get_filter_options(&conn)
+            .expect_err("a missing tolerance column must not read as \"no species\"");
+        assert!(error.contains("tolerates_full_sun"), "{error}");
+    }
 }

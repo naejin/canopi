@@ -1,0 +1,217 @@
+/* Floating title bar: glass over the full-bleed map, 50 px tall, inset from the window edges. */
+.titleBar {
+  position: absolute;
+  top: var(--chrome-top);
+  right: var(--chrome-inset);
+  left: var(--chrome-inset);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space-2) + var(--space-0-5));
+  height: var(--title-bar-height);
+  padding: 0 var(--space-2) 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-glass);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(16px);
+  cursor: default;
+}
+
+.logo {
+  width: var(--icon-size-xl);
+  height: var(--icon-size-xl);
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.rule {
+  align-self: stretch;
+  width: 1px;
+  margin: var(--space-3) var(--space-1);
+  background: var(--color-border);
+  flex-shrink: 0;
+}
+
+.design {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space-2) + var(--space-0-5));
+  min-width: 0;
+}
+
+.spacer {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.nameButton {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  height: var(--control-size-xl);
+  padding: 0 var(--space-1-5);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.nameButton:hover {
+  background: var(--color-control-hover);
+}
+
+.nameText {
+  display: block;
+  min-width: 0;
+  max-width: 440px;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: var(--text-title-bar);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nameInput {
+  width: min(360px, 40vw);
+  height: var(--control-size-xl);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-focus);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  box-shadow: 0 0 0 1px var(--color-focus);
+  color: var(--color-text);
+  font-family: var(--font-display);
+  font-size: var(--text-title-bar);
+  font-weight: 600;
+  outline: none;
+}
+
+.iconButton {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--control-size-2xl);
+  height: var(--control-size-2xl);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  background: var(--color-control-hover);
+}
+
+.iconButton[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.nameButton:focus-visible,
+.iconButton:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.wide {
+  display: contents;
+}
+
+@media (max-width: 900px) {
+  .nameText {
+    max-width: 22vw;
+  }
+}
+
+/* Narrow windows: one Menu button, the Design name over its status, then the place field.
+   Help, Settings and file actions stay in the menu. */
+@media (max-width: 760px) {
+  .titleBar {
+    top: var(--space-2);
+    right: var(--space-2);
+    left: var(--space-2);
+    gap: var(--space-1);
+    height: auto;
+    min-height: var(--title-bar-height);
+    padding: var(--space-1);
+  }
+
+  .logo,
+  .rule,
+  .wide {
+    display: none;
+  }
+
+  .design {
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+
+  .nameText {
+    max-width: 100%;
+    font-size: var(--text-md);
+  }
+
+  .spacer {
+    display: none;
+  }
+}
+
+/* Web on phones, upright or on its side (`data-phone-layout` on the Web shell,
+   board WebPhone): a 44 px top bar with Menu, the Design name over its status,
+   Undo and the place search button. */
+:global([data-phone-layout]) .titleBar {
+  right: calc(var(--chrome-inset) + env(safe-area-inset-right));
+  left: calc(var(--chrome-inset) + env(safe-area-inset-left));
+  gap: var(--space-0-5);
+  height: var(--title-bar-height);
+  min-height: 0;
+  padding: var(--space-1);
+}
+
+:global([data-phone-layout]) .logo,
+:global([data-phone-layout]) .rule,
+:global([data-phone-layout]) .wide,
+:global([data-phone-layout]) .spacer {
+  display: none;
+}
+
+:global([data-phone-layout]) .design {
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  padding-left: var(--space-1);
+}
+
+/* The name shares the bar's 44 px with its status, so it keeps the 24 px minimum target. */
+:global([data-phone-layout]) .nameButton {
+  max-width: 100%;
+  height: auto;
+  min-height: var(--control-size-sm);
+  padding: 0 var(--space-1);
+}
+
+:global([data-phone-layout]) .nameText {
+  max-width: 100%;
+  font-size: var(--text-md);
+}
+
+:global([data-phone-layout]) .nameInput {
+  width: 100%;
+  font-size: var(--text-touch);
+}
+
+:global([data-phone-layout]) .iconButton {
+  width: var(--control-size-touch);
+  height: var(--control-size-touch);
+}

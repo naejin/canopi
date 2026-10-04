@@ -10,19 +10,28 @@ import {
 } from '../components/workspace/WorkspaceComposition'
 import { activePanel, navigateTo, sidePanel, type Panel } from '../app/shell/state'
 
+const locating = vi.hoisted(() => ({ open: null as null | { value: boolean } }))
+vi.mock('../app/site-onboarding/state', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../app/site-onboarding/state')>()
+  const { signal } = await import('@preact/signals')
+  const open = signal(false)
+  locating.open = open
+  return { ...original, siteLocateOpen: open }
+})
+
 function projection({
   primary = ['canvas'],
   design = [],
-  side = [],
+  planning = [],
 }: {
   readonly primary?: readonly Panel[]
   readonly design?: readonly Panel[]
-  readonly side?: readonly Panel[]
+  readonly planning?: readonly Panel[]
 } = {}): WorkspacePanelProjection {
   return {
     primary: primary.map(projectedCommand),
     design: design.map(projectedCommand),
-    side: side.map(projectedCommand),
+    planning: planning.map(projectedCommand),
   }
 }
 
@@ -115,14 +124,14 @@ describe('shared edition workspace composition', () => {
       return <div data-testid="canvas" />
     }
     const surfaces: WorkspaceSurfaces = {
-      primary: { canvas: Canvas, location: Location },
+      primary: { canvas: Canvas, templates: Templates },
       side: { calendar: Calendar },
     }
 
     await act(async () => {
       render(
         <WorkspaceComposition
-          panelProjection={projection({ primary: ['canvas', 'location'], design: ['calendar'] })}
+          panelProjection={projection({ primary: ['canvas', 'templates'], design: ['calendar'] })}
           surfaces={surfaces}
         />,
         container,
@@ -132,13 +141,36 @@ describe('shared edition workspace composition', () => {
     expect(container.querySelector('[data-workspace-side-panel="calendar"]')).not.toBeNull()
     expect(unmounted).not.toHaveBeenCalled()
 
-    await act(async () => { navigateTo('location') })
-    expect(container.querySelector('[data-testid="location"]')).not.toBeNull()
+    await act(async () => { navigateTo('templates') })
+    expect(container.querySelector('[data-testid="templates"]')).not.toBeNull()
     expect(container.querySelector('[data-workspace-side-panel]')).toBeNull()
     expect(unmounted).toHaveBeenCalledOnce()
 
     await act(async () => { navigateTo('canvas') })
     expect(container.querySelector('[data-testid="canvas"]')).not.toBeNull()
+  })
+
+  it('hides the open dock panel while "Where is your site?" is showing, and keeps it for afterwards', async () => {
+    sidePanel.value = 'layers'
+    const Layers = () => <p data-testid="layers">Layers</p>
+    await act(async () => {
+      render(
+        <WorkspaceComposition
+          panelProjection={projection({ design: ['layers'] })}
+          surfaces={{ primary: { canvas: Canvas }, side: { layers: Layers } }}
+        />,
+        container,
+      )
+      await Promise.resolve()
+    })
+    expect(container.querySelector('[data-testid="layers"]')).not.toBeNull()
+
+    await act(async () => { locating.open!.value = true })
+    expect(container.querySelector('[data-workspace-side-panel]')).toBeNull()
+    expect(sidePanel.value).toBe('layers')
+
+    await act(async () => { locating.open!.value = false })
+    expect(container.querySelector('[data-testid="layers"]')).not.toBeNull()
   })
 
   it('closes a stale side-panel selection that the active edition does not support', async () => {
@@ -181,8 +213,8 @@ function Canvas() {
   return <div data-testid="canvas" />
 }
 
-function Location() {
-  return <div data-testid="location" />
+function Templates() {
+  return <div data-testid="templates" />
 }
 
 function Calendar() {

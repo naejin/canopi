@@ -14,10 +14,9 @@ import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfac
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 6,
+    version: 9,
     name: 'test',
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [],
     plants: [],
@@ -41,7 +40,7 @@ function makePlant(canonical_name: string): PlacedPlant {
     canonical_name,
     common_name: null,
     color: null,
-    position: { x: 0, y: 0 },
+    position: { lon: 13, lat: 23 },
     rotation: null,
     scale: null,
     notes: null,
@@ -154,10 +153,18 @@ describe('consortium-sync-workflow', () => {
     expect(currentDesign.value).toBe(snapshotAfterFirst)
   })
 
-  it('disposes cleanly without errors', () => {
+  it('stops deriving consortiums once disposed, and a second dispose is harmless', () => {
+    const session = mockSession([makePlant('Quercus robur')])
+    session.setSettled(false)
+    designSessionFixture.file = makeDesign()
+    mountQuerySurface(session)
+
     workflowRunner.install()
-    expect(() => workflowRunner.dispose()).not.toThrow()
-    // Double dispose is safe
-    expect(() => workflowRunner.dispose()).not.toThrow()
+    workflowRunner.dispose()
+    workflowRunner.dispose()
+
+    session.setSettled(true)
+    session.bumpSceneRevision()
+    expect(currentDesign.value!.consortiums).toEqual([])
   })
 })

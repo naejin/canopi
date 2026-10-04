@@ -11,6 +11,17 @@
 
 use std::path::{Path, PathBuf};
 
+/// Catalogue file name inside the library root.
+pub const CATALOGUE_FILE: &str = "lidar-library.sqlite";
+
+/// Name prefix of an analysis job's scratch directory; the rest is its job id.
+pub const ANALYSIS_SCRATCH_PREFIX: &str = "scratch-analysis-";
+
+/// Managed library root under the app data directory.
+pub fn library_root(app_data_dir: &Path) -> PathBuf {
+    app_data_dir.join("lidar")
+}
+
 #[derive(Debug, Clone)]
 pub struct LidarPaths {
     root: PathBuf,
@@ -18,15 +29,16 @@ pub struct LidarPaths {
 
 impl LidarPaths {
     pub fn open(app_data_dir: &Path) -> Result<Self, String> {
-        let root = app_data_dir.join("lidar");
+        let root = library_root(app_data_dir);
         for dir in [
             root.clone(),
             self_sources_dir(&root),
             self_prepared_dir(&root),
-            self_display_dir(&root),
-            root.join("display-tiles"),
+            root.join("display-cog"),
+            root.join("display-cog-staging"),
             root.join("assets"),
             root.join("jobs"),
+            root.join("engine-logs"),
         ] {
             std::fs::create_dir_all(&dir)
                 .map_err(|e| format!("Failed to create LiDAR dir {}: {e}", dir.display()))?;
@@ -35,7 +47,7 @@ impl LidarPaths {
     }
 
     pub fn catalogue_path(&self) -> PathBuf {
-        self.root.join("lidar-library.sqlite")
+        self.root.join(CATALOGUE_FILE)
     }
 
     /// Library root. Catalogue asset references stay relative to it, so a
@@ -46,12 +58,6 @@ impl LidarPaths {
 
     pub fn display_cache_path(&self) -> PathBuf {
         self.root.join("lidar-display-cache.sqlite")
-    }
-
-    /// Reproducible on-demand display tiles. Never authority: entries are
-    /// derivatives of immutable generations and may be evicted at any time.
-    pub fn tile_cache_dir(&self) -> PathBuf {
-        self.root.join("display-tiles")
     }
 
     /// Content-addressed immutable resolved/quality COG assets.
@@ -78,41 +84,45 @@ impl LidarPaths {
         self.source_dir(sha256).join("original")
     }
 
-    pub fn source_manifest(&self, sha256: &str) -> PathBuf {
-        self.source_dir(sha256).join("manifest.json")
+    /// The derived record beside an original that a catalogue rebuild reads
+    /// (`source_meta.rs`).
+    pub fn source_meta(&self, sha256: &str) -> PathBuf {
+        self.source_dir(sha256).join(super::source_meta::META_FILE)
     }
 
-    /// Prepared per-layer generation mosaics, staging dirs and coverage masks.
-    pub fn layer_pipeline_dir(&self, layer_id: &str) -> PathBuf {
-        self.prepared_dir().join("layers").join(layer_id)
+    /// Catalogues an older or corrupt library left behind, kept byte for byte.
+    pub fn set_aside_dir(&self) -> PathBuf {
+        self.root.join(super::recovery::SET_ASIDE_DIR)
     }
 
-    /// Prepared analysis outputs, staging dirs and quality masks.
-    pub fn analysis_pipeline_dir(&self, definition_id: &str) -> PathBuf {
-        self.prepared_dir().join("analysis").join(definition_id)
-    }
-
+    /// Holds only per-job analysis scratch directories.
     pub fn prepared_dir(&self) -> PathBuf {
         self.root.join("prepared")
     }
 
-    pub fn display_dir(&self) -> PathBuf {
-        self.root.join("display")
+    /// One analysis job's scratch; removed when the job settles and swept at
+    /// startup if a crash left it.
+    pub fn analysis_scratch_dir(&self, job_id: &str) -> PathBuf {
+        self.prepared_dir()
+            .join(format!("{ANALYSIS_SCRATCH_PREFIX}{job_id}"))
     }
 
-    /// Bounded display tile pyramid for one published entity generation.
-    pub fn display_generation_dir(
-        &self,
-        entity_kind: &str,
-        entity_id: &str,
-        generation_id: &str,
-        style: &str,
-    ) -> PathBuf {
-        self.display_dir()
-            .join(entity_kind)
-            .join(entity_id)
-            .join(generation_id)
-            .join(style)
+    /// Captured stdout and stderr of running engine children; swept at startup.
+    pub fn engine_log_dir(&self) -> PathBuf {
+        self.root.join("engine-logs")
+    }
+
+    /// Published display derivatives: immutable, content-keyed tiled COGs the
+    /// WebView reads through the scoped asset protocol. Regenerable, never
+    /// numeric authority.
+    pub fn display_cog_dir(&self) -> PathBuf {
+        self.root.join("display-cog")
+    }
+
+    /// Derivatives being written; outside the asset scope so a partial file is
+    /// never readable. A file is renamed into `display_cog_dir` only once complete.
+    pub fn display_cog_staging_dir(&self) -> PathBuf {
+        self.root.join("display-cog-staging")
     }
 
     pub fn jobs_dir(&self) -> PathBuf {
@@ -225,10 +235,6 @@ fn self_sources_dir(root: &Path) -> PathBuf {
 
 fn self_prepared_dir(root: &Path) -> PathBuf {
     root.join("prepared")
-}
-
-fn self_display_dir(root: &Path) -> PathBuf {
-    root.join("display")
 }
 
 /// Test-only seam for the capacity observation.

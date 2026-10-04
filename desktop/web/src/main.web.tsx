@@ -2,10 +2,11 @@ import { render } from "preact";
 import { bootstrapPlatform } from "#platform";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles/global.css";
-import { WebApp } from "./web/WebApp";
-import { installWebCanvasShortcuts } from "./web/canvas-shortcuts";
+import { createWebAppCatalog, createWebShellShortcutSource, WebApp } from "./web/WebApp";
+import { installWebKeyRouter } from "./web/browser-shell-commands";
 
 bootstrapPlatform();
-installWebCanvasShortcuts();
+const catalog = createWebAppCatalog();
+installWebKeyRouter(createWebShellShortcutSource(catalog));
 
-render(<WebApp />, document.getElementById("app")!);
+render(<WebApp catalog={catalog} />, document.getElementById("app")!);

@@ -18,8 +18,9 @@ import {
   type HslColor,
 } from '../../canvas/plant-colors'
 import { t } from '../../i18n'
+import { ESCAPE_PRIORITY, registerEscapeLayer } from '../../app/keyboard/escape-chain'
 import { PlantSymbolGlyph } from './PlantSymbolGlyph'
-import { navigateAppearanceChoices, useAppearancePopover } from './useAppearancePopover'
+import { navigateAppearanceChoices, useAppearancePopover, type AppearanceAnchorRef } from './useAppearancePopover'
 import { createPortal } from 'preact/compat'
 import { SurfaceHeader } from '../shared/SurfaceHeader'
 import { AppearanceSelection } from './AppearanceSelection'
@@ -27,7 +28,7 @@ import shared from './appearance.module.css'
 import styles from './PlantColorMenu.module.css'
 
 interface PlantColorMenuProps {
-  buttonRef: { current: HTMLButtonElement | null }
+  buttonRef: AppearanceAnchorRef
 }
 
 const DEFAULT_HSL = hexToHsl(DEFAULT_PLANT_COLOR) ?? { h: 122, s: 39, l: 49 }
@@ -44,7 +45,7 @@ const HUE_STRIP_BACKGROUND = `
   )
 `
 
-function closeMenu(buttonRef?: { current: HTMLButtonElement | null }) {
+function closeMenu(buttonRef?: AppearanceAnchorRef) {
   plantColorMenuOpen.value = false
   buttonRef?.current?.focus()
 }
@@ -187,19 +188,25 @@ export function PlantColorMenu({ buttonRef }: PlantColorMenuProps) {
       closeMenu()
     }
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        closeMenu(buttonRef)
-      }
-    }
-
     document.addEventListener('pointerup', handlePointerUp)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('pointerup', handlePointerUp)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [menuOpen, buttonRef])
+    return () => document.removeEventListener('pointerup', handlePointerUp)
+  }, [menuOpen])
+
+  // An Esc from outside the menu closes it, and only it (the Esc chain's popover layer, fixture I8); inside, the
+  // menu's own handler takes the Esc first.
+  const shown = menuOpen && hasSelectedPlants
+  useEffect(() => {
+    if (!shown) return
+    return registerEscapeLayer({
+      id: 'plant-color-menu',
+      priority: ESCAPE_PRIORITY.popover,
+      isActive: () => true,
+      escape: () => {
+        closeMenu(buttonRef)
+        return true
+      },
+    })
+  }, [shown, buttonRef])
 
   if (!menuOpen || !hasSelectedPlants) return null
 

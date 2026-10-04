@@ -14,7 +14,7 @@ interface ImportPolicyBase {
   readonly edgeKinds?: readonly ImportKind[]
 }
 
-export interface ForbidImportsPolicy extends ImportPolicyBase {
+interface ForbidImportsPolicy extends ImportPolicyBase {
   readonly kind: 'forbid-imports'
   readonly from: readonly string[]
   readonly targets: readonly string[]
@@ -24,7 +24,7 @@ export interface ForbidImportsPolicy extends ImportPolicyBase {
   readonly importedNames?: readonly string[]
 }
 
-export interface ForbidTransitiveImportsPolicy extends ImportPolicyBase {
+interface ForbidTransitiveImportsPolicy extends ImportPolicyBase {
   readonly kind: 'forbid-transitive-imports'
   readonly from: readonly string[]
   readonly targets: readonly string[]
@@ -32,26 +32,26 @@ export interface ForbidTransitiveImportsPolicy extends ImportPolicyBase {
   readonly exceptTargets?: readonly string[]
 }
 
-export interface ForbidNonLiteralDynamicImportsPolicy {
+interface ForbidNonLiteralDynamicImportsPolicy {
   readonly kind: 'forbid-nonliteral-dynamic-imports'
   readonly name: string
   readonly from: readonly string[]
   readonly exceptFrom?: readonly string[]
 }
 
-export interface ConfineImportersPolicy extends ImportPolicyBase {
+interface ConfineImportersPolicy extends ImportPolicyBase {
   readonly kind: 'confine-importers'
   readonly targets: readonly string[]
   readonly allowedFrom: readonly string[]
 }
 
-export interface RequireImportsPolicy extends ImportPolicyBase {
+interface RequireImportsPolicy extends ImportPolicyBase {
   readonly kind: 'require-imports'
   readonly from: readonly string[]
   readonly targets: readonly string[]
 }
 
-export interface NamedImportsPolicy extends ImportPolicyBase {
+interface NamedImportsPolicy extends ImportPolicyBase {
   readonly kind: 'named-imports'
   readonly from: readonly string[]
   readonly target: string
@@ -59,21 +59,22 @@ export interface NamedImportsPolicy extends ImportPolicyBase {
   readonly allowedNames: readonly string[]
 }
 
-export interface ForbidExportsPolicy {
+interface ForbidExportsPolicy {
   readonly kind: 'forbid-exports'
   readonly name: string
   readonly from: readonly string[]
+  readonly exceptFrom?: readonly string[]
   readonly names: readonly string[]
 }
 
-export interface ForbidSourceSymbolsPolicy {
+interface ForbidSourceSymbolsPolicy {
   readonly kind: 'forbid-source-symbols'
   readonly name: string
   readonly from: readonly string[]
   readonly names: readonly string[]
 }
 
-export interface ConfineSymbolsPolicy {
+interface ConfineSymbolsPolicy {
   readonly kind: 'confine-symbols'
   readonly name: string
   readonly from?: readonly string[]
@@ -81,7 +82,7 @@ export interface ConfineSymbolsPolicy {
   readonly allowedFrom: readonly string[]
 }
 
-export interface ForbidWritesPolicy {
+interface ForbidWritesPolicy {
   readonly kind: 'forbid-writes'
   readonly name: string
   readonly from: readonly string[]
@@ -92,7 +93,7 @@ export interface ForbidWritesPolicy {
   readonly writeKinds?: readonly WriteKind[]
 }
 
-export interface ForbidCallsPolicy {
+interface ForbidCallsPolicy {
   readonly kind: 'forbid-calls'
   readonly name: string
   readonly from: readonly string[]
@@ -102,7 +103,7 @@ export interface ForbidCallsPolicy {
   readonly callKinds?: readonly CallKind[]
 }
 
-export interface SourceTombstonesPolicy {
+interface SourceTombstonesPolicy {
   readonly kind: 'source-tombstones'
   readonly name: string
   readonly files?: readonly string[]
@@ -156,6 +157,7 @@ export function collectArchitecturePolicyViolations(
         break
       case 'forbid-exports':
         for (const source of matchingSources(graph, policy.from)) {
+          if (matchesAny(source.path, policy.exceptFrom ?? [])) continue
           for (const name of policy.names) {
             if (source.exportedNames.includes(name)) {
               violations.push(`[${policy.name}] ${source.path} exports forbidden symbol ${name}`)
@@ -178,6 +180,99 @@ export function collectArchitecturePolicyViolations(
       case 'source-tombstones':
         collectSourceTombstoneViolations(graph, policy, violations)
         break
+    }
+  }
+
+  return violations
+}
+
+/**
+ * Reports policy paths that name no source in `graph`, so a rule whose area
+ * was moved or deleted fails instead of passing silently: a glob `from`
+ * (`collectArchitecturePolicyViolations` already checks literal ones), and
+ * every `src/` entry of an import policy's `targets`, a `named-imports`
+ * `target` or an `allowedFrom`. Run it on the discovered graph (planted graphs
+ * name only the files they plant, so only this check's own tests plant one). Package specifiers, `#` aliases and
+ * other non-`src/` entries, `forbid-calls` callee text, `forbid-writes` target
+ * text, `exceptFrom`, `exceptTargets`, `allowTypeOnlyTargets` and
+ * `source-tombstones` (whose paths are meant to be absent) are not checked;
+ * `collectUnusedExemptionViolations` reports an `exceptFrom` that excuses nothing.
+ */
+export function collectPolicyPathDriftViolations(
+  graph: readonly TypeScriptSourceFact[],
+  policies: readonly ArchitecturePolicy[],
+): string[] {
+  const paths = graph.map((source) => source.path)
+  const violations: string[] = []
+  const check = (
+    policy: ArchitecturePolicy,
+    field: string,
+    patterns: readonly string[],
+    include: (pattern: string) => boolean,
+  ): void => {
+    for (const pattern of patterns) {
+      if (!include(pattern) || paths.some((path) => matchesPathPattern(path, pattern))) continue
+      violations.push(`[${policy.name}] ${field} matches no source: ${pattern}`)
+    }
+  }
+  const isGlob = (pattern: string) => pattern.includes('*')
+  const isSourcePath = (pattern: string) => pattern.startsWith('src/')
+
+  for (const policy of policies) {
+    if (policy.kind === 'source-tombstones') continue
+    if (policy.from) check(policy, 'from', policy.from, isGlob)
+
+    switch (policy.kind) {
+      case 'forbid-imports':
+      case 'forbid-transitive-imports':
+      case 'require-imports':
+        check(policy, 'targets', policy.targets, isSourcePath)
+        break
+      case 'confine-importers':
+        check(policy, 'targets', policy.targets, isSourcePath)
+        check(policy, 'allowedFrom', policy.allowedFrom, isSourcePath)
+        break
+      case 'named-imports':
+        check(policy, 'target', [policy.target], isSourcePath)
+        break
+      case 'confine-symbols':
+        check(policy, 'allowedFrom', policy.allowedFrom, isSourcePath)
+        break
+    }
+  }
+
+  return violations
+}
+
+/**
+ * Reports source exemptions that excuse nothing: an `exceptFrom` or `allowedFrom` entry is unused when, with every
+ * entry of that list removed, no new violation comes from a source it matches. An exemption that permits what no file
+ * does can only hide a regression, so drop it. Entries in `ignored` (the test-source patterns most rules carry) are
+ * not reported. Run it on the graph each policy list is checked against.
+ */
+export function collectUnusedExemptionViolations(
+  graph: readonly TypeScriptSourceFact[],
+  policies: readonly ArchitecturePolicy[],
+  ignored: readonly string[] = [],
+): string[] {
+  const violations: string[] = []
+
+  for (const policy of policies) {
+    const field = 'exceptFrom' in policy && policy.exceptFrom
+      ? 'exceptFrom'
+      : 'allowedFrom' in policy ? 'allowedFrom' : null
+    if (!field) continue
+    const entries = (policy as unknown as Record<string, readonly string[]>)[field]!
+    const baseline = new Set(collectArchitecturePolicyViolations(graph, [policy]))
+    const unexempted = { ...policy, [field]: [] } as ArchitecturePolicy
+    const excusedSources = collectArchitecturePolicyViolations(graph, [unexempted])
+      .filter((violation) => !baseline.has(violation))
+      .map((violation) => /^\[[^\]]*\] ([^\s:]+)/.exec(violation)?.[1] ?? '')
+
+    for (const entry of entries) {
+      if (ignored.includes(entry)) continue
+      if (excusedSources.some((path) => matchesPathPattern(path, entry))) continue
+      violations.push(`[${policy.name}] ${field} entry excuses nothing: ${entry}`)
     }
   }
 
@@ -500,7 +595,7 @@ export function matchesPathPattern(value: string, pattern: string): boolean {
   return new RegExp(`^${expression}$`).test(value)
 }
 
-export interface CssPolicyException {
+interface CssPolicyException {
   readonly file: string
   readonly rule: string
   readonly atRules: readonly string[]

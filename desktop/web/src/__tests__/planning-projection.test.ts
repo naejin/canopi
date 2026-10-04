@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
-  buildBudgetPlanningProjection,
   buildBudgetListProjection,
-  buildCalendarPlanningProjection,
   buildConsortiumListProjection,
-  buildConsortiumPlanningProjection,
 } from '../app/planning-projection'
+import { buildBudgetPlanningProjection } from '../app/planning-projection/budget'
+import { buildCalendarPlanningProjection } from '../app/planning-projection/calendar'
+import { buildConsortiumPlanningProjection } from '../app/planning-projection/consortium'
+import { buildTimelineSpeciesOptions } from '../app/planning-projection/timeline'
+import { speciesDisplayNames } from '../canvas/runtime/species-key'
 import { MANUAL_TARGET, speciesBudgetTarget, speciesTarget } from '../target'
 import type { BudgetItem, Consortium, PlacedPlant, TimelineAction } from '../types/design'
 
@@ -15,7 +17,7 @@ function makePlant(canonicalName: string, commonName: string | null = null): Pla
     canonical_name: canonicalName,
     common_name: commonName,
     color: null,
-    position: { x: 0, y: 0 },
+    position: { lon: 13, lat: 23 },
     rotation: null,
     scale: null,
     notes: null,
@@ -96,7 +98,7 @@ describe('Planning Projection', () => {
     })
   })
 
-  it('filters and sorts Budget rows without conflating zero and missing prices', () => {
+  it('filters Budget rows by finder matches, map selection and missing prices without conflating zero and missing prices', () => {
     const projection = buildBudgetPlanningProjection({
       plants: [
         makePlant('Acer campestre', 'Field maple'),
@@ -114,30 +116,57 @@ describe('Planning Projection', () => {
       currency: 'EUR',
       locale: 'fr',
       speciesKey: [
-        { canonicalName: 'Acer campestre', commonName: 'Érable champêtre', code: 'ACH', count: 1, appearances: [{ symbol: 'canopy', color: '#A06B1F' }] },
-        { canonicalName: 'Malus domestica', commonName: 'Apple', code: 'POM', count: 2, appearances: [] },
-        { canonicalName: 'Tilia cordata', commonName: 'Lime', code: 'TCO', count: 3, appearances: [] },
+        { canonicalName: 'Acer campestre', commonName: 'Érable champêtre', code: 'ACH', englishFallback: false, count: 1, appearances: [{ symbol: 'canopy', color: '#A06B1F' }] },
+        { canonicalName: 'Malus domestica', commonName: 'Apple', code: 'POM', englishFallback: false, count: 2, appearances: [] },
+        { canonicalName: 'Tilia cordata', commonName: 'Lime', code: 'TCO', englishFallback: false, count: 3, appearances: [] },
       ],
     })
 
+    const all = { matches: null, selectedSpecies: null, missingPriceOnly: false, locale: 'fr' } as const
     expect(buildBudgetListProjection(projection, {
-      search: 'erable', sort: 'name', priceFilter: 'all', locale: 'fr',
+      ...all, matches: new Set(['Acer campestre']), sort: 'name',
     }).rows.map((row) => row.canonical)).toEqual(['Acer campestre'])
     expect(buildBudgetListProjection(projection, {
-      search: 'pom', sort: 'name', priceFilter: 'all', locale: 'fr',
-    }).rows.map((row) => row.canonical)).toEqual(['Malus domestica'])
+      ...all, selectedSpecies: new Set(['Malus domestica', 'Tilia cordata']), sort: 'most-plants',
+    }).rows.map((row) => row.canonical)).toEqual(['Tilia cordata', 'Malus domestica'])
     expect(buildBudgetListProjection(projection, {
-      search: '', sort: 'highest-total', priceFilter: 'all', locale: 'fr',
+      ...all, sort: 'highest-total',
     }).rows.map((row) => row.canonical)).toEqual(['Acer campestre', 'Malus domestica', 'Tilia cordata'])
-    expect(buildBudgetListProjection(projection, {
-      search: '', sort: 'name', priceFilter: 'zero-price', locale: 'fr',
-    }).rows.map((row) => row.canonical)).toEqual(['Malus domestica'])
     const missing = buildBudgetListProjection(projection, {
-      search: '', sort: 'name', priceFilter: 'no-price', locale: 'fr',
+      ...all, missingPriceOnly: true, sort: 'name',
     })
     expect(missing.rows.map((row) => row.canonical)).toEqual(['Tilia cordata'])
+    expect(missing.restricted).toBe(true)
     expect(missing.shownSubtotal).toBe(0)
     expect(projection.grandTotal).toBe(4)
+  })
+
+  it('flags Consortium and Calendar species shown by their English catalog name', () => {
+    const englishFallbackNames = new Map([['Prunus avium', 'Wild cherry']])
+    const localizedNames = speciesDisplayNames(
+      new Map([['Malus domestica', 'Pommier'], ['Prunus avium', null]]),
+      englishFallbackNames,
+    )
+    const plants = [makePlant('Malus domestica', 'Apple'), makePlant('Prunus avium', 'Merisier stocké')]
+    const consortium = buildConsortiumPlanningProjection({
+      consortiums: [
+        { target: speciesTarget('Malus domestica'), stratum: 'high', start_phase: 1, end_phase: 3 },
+        { target: speciesTarget('Prunus avium'), stratum: 'high', start_phase: 1, end_phase: 3 },
+      ],
+      plants,
+      localizedNames,
+      englishFallbackNames,
+    })
+    expect(consortium.rows.map((row) => [row.canonicalName, row.commonName, row.englishFallback])).toEqual([
+      ['Malus domestica', 'Pommier', false],
+      ['Prunus avium', 'Wild cherry', true],
+    ])
+
+    const calendar = buildTimelineSpeciesOptions(plants, localizedNames, 'fr', [], englishFallbackNames)
+    expect(calendar.map((option) => [option.canonical_name, option.common_name, option.english_fallback])).toEqual([
+      ['Malus domestica', 'Pommier', false],
+      ['Prunus avium', 'Wild cherry', true],
+    ])
   })
 
   it('builds inclusive Consortium matrix counts without stale or duplicate species', () => {
@@ -165,15 +194,22 @@ describe('Planning Projection', () => {
     expect(projection.groups.find((group) => group.stratum === 'mystery')).toMatchObject({ supported: false })
 
     const filtered = buildConsortiumListProjection(projection, {
-      search: 'pommier',
+      matches: new Set(['Malus domestica']),
+      selectedSpecies: null,
       filter: { stratum: 'high', phase: 2 },
     })
     expect(filtered.visibleCount).toBe(1)
     expect(filtered.groups[0]?.rows[0]?.canonicalName).toBe('Malus domestica')
     expect(buildConsortiumListProjection(projection, {
-      search: 'cerisier',
+      matches: new Set(['Prunus avium']),
+      selectedSpecies: null,
       filter: { stratum: 'high', phase: 2 },
     }).visibleCount).toBe(0)
+    expect(buildConsortiumListProjection(projection, {
+      matches: null,
+      selectedSpecies: new Set(['Prunus avium']),
+      filter: null,
+    }).groups.flatMap((group) => group.rows.map((row) => row.canonicalName))).toEqual(['Prunus avium'])
   })
 
   it('projects Calendar ranges, clipped agenda entries, malformed dates, and filters safely', () => {
@@ -206,10 +242,10 @@ describe('Planning Projection', () => {
   it('keeps unavailable saved Calendar targets visible in the projection', () => {
     const projection = buildCalendarPlanningProjection({
       actions: [makeAction({
-        targets: [speciesTarget('Missing species'), { kind: 'zone', zone_name: 'Missing zone' }],
+        targets: [speciesTarget('Missing species'), { kind: 'zone', zone_id: 'zone-missing' }],
       })],
       plants: [],
-      zoneNames: [],
+      zones: [],
       month: '2026-04-01',
       search: '',
       actionType: 'all',
@@ -219,7 +255,8 @@ describe('Planning Projection', () => {
 
     expect(projection.agenda[0]?.actions[0]?.targetLabels).toEqual([
       expect.objectContaining({ label: 'Missing species', unavailable: true }),
-      expect.objectContaining({ label: 'Missing zone', unavailable: true }),
+      // A zone's id is never shown: a deleted zone is plain "Zone".
+      expect.objectContaining({ label: 'Zone', unavailable: true }),
     ])
   })
 

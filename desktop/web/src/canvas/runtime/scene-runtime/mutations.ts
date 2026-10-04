@@ -4,6 +4,7 @@ import type { PlantPresentationContext } from '../plant-presentation'
 import { normalizeHexColor } from '../../plant-colors'
 import type { SelectedPlantColorContext } from '../../plant-color-context'
 import type { SelectedPlantSymbolContext } from '../../plant-symbol-context'
+import { zoneDisplayName } from '../zone-identity'
 import type {
   PlantSymbolId,
   SceneObjectGroupEntity,
@@ -16,6 +17,7 @@ import {
   dedupeSceneObjectGroupMembers,
   getSceneGroupedMemberKeys,
   isSceneDesignObjectLocked,
+  lockedSceneDesignObjectTargets,
   normalizeSceneDesignObjectTargets,
   resolveSceneObjectGroupMembers,
   resolvePlantSymbolForPlant,
@@ -32,6 +34,7 @@ import {
 import {
   createClipboardArrangementTemplate,
   createClipboardPayload,
+  reprojectClipboardPayload,
   type SceneClipboardPayload,
 } from './clipboard'
 import {
@@ -45,6 +48,11 @@ import {
   type SceneSelectionReadModelOptions,
   type SceneSelectionTarget,
 } from './selection'
+import {
+  applyRotationTransformToDraft,
+  captureRotationTransformState,
+  centerOfBounds,
+} from './selection-rotation'
 import {
   applySpeciesSelection,
   getSameSpeciesReferenceCanonicalName,
@@ -77,6 +85,8 @@ const EMPTY_PLANT_SYMBOL_CONTEXT: SelectedPlantSymbolContext = {
 }
 
 const NORMAL_PASTE_OFFSET_M: ScenePoint = { x: 1, y: 0 }
+/** A whole turn, or less than this, leaves the selection where it is. */
+const ROTATION_EPSILON_DEG = 1e-6
 
 interface SceneRuntimeMutationControllerOptions {
   sceneStore: SceneStateReader
@@ -160,6 +170,14 @@ export class SceneRuntimeMutationController {
     )
   }
 
+  selectSpecies(canonicalNames: readonly string[]): void {
+    this._runCommandWhenSettled(() => this._selectSpeciesWhenSettled(canonicalNames), undefined)
+  }
+
+  clearSelection(): void {
+    this._runCommandWhenSettled(() => this._clearSelectionWhenSettled(), undefined)
+  }
+
   bringToFront(): void {
     this._runCommandWhenSettled(() => this._bringToFrontWhenSettled(), undefined)
   }
@@ -176,12 +194,31 @@ export class SceneRuntimeMutationController {
     this._runCommandWhenSettled(() => this._unlockSelectedWhenSettled(), undefined)
   }
 
+  /** Unlocks every locked Design Object; layer locks stay. */
+  unlockAll(): void {
+    this._runCommandWhenSettled(() => this._unlockAllWhenSettled(), undefined)
+  }
+
   groupSelected(): void {
     this._runCommandWhenSettled(() => this._groupSelectedWhenSettled(), undefined)
   }
 
+  /** Turns the selection about its centre, clockwise for positive degrees. */
+  rotateSelected(degrees: number): void {
+    this._runCommandWhenSettled(() => this._rotateSelectedWhenSettled(degrees), undefined)
+  }
+
   ungroupSelected(): void {
     this._runCommandWhenSettled(() => this._ungroupSelectedWhenSettled(), undefined)
+  }
+
+  /**
+   * Gives a zone a display name as one undoable edit; a blank name clears it.
+   * Its identity, which targets and groups refer to, never changes. False when
+   * nothing changed: an unknown, locked or layer-locked zone, or the same name.
+   */
+  renameZone(zoneId: string, name: string | null): boolean {
+    return this._runCommandWhenSettled(() => this._renameZoneWhenSettled(zoneId, name), false)
   }
 
   setSelectedPlantColor(color: string | null): number {
@@ -238,16 +275,25 @@ export class SceneRuntimeMutationController {
     const persisted = this._sceneStore.persisted
     const selectionOptions = this._getSelectionReadModelOptions()
     const selected = this._getSelectionModel(selectionOptions).editableTargets
-    this._clipboard = createClipboardPayload(persisted, selected)
+    this._clipboard = createClipboardPayload(persisted, selected, this._sceneStore.sessionPlane)
     this._normalPasteCount = 0
   }
 
+  // The clipboard in the current session plane; copies made before a
+  // re-origin or in another Design keep their lon/lat.
+  private _currentClipboard(): SceneClipboardPayload | null {
+    if (!this._clipboard) return null
+    this._clipboard = reprojectClipboardPayload(this._clipboard, this._sceneStore.sessionPlane)
+    return this._clipboard
+  }
+
   private _pasteWhenSettled(): void {
-    if (!this._clipboard) return
+    const clipboard = this._currentClipboard()
+    if (!clipboard) return
 
     const offset = normalPasteOffset(this._normalPasteCount + 1)
     this._arrangementPlacement.place({
-      template: createClipboardArrangementTemplate(this._clipboard),
+      template: createClipboardArrangementTemplate(clipboard),
       translateBy: offset,
       historyType: 'paste',
       onCommitted: () => {
@@ -257,8 +303,9 @@ export class SceneRuntimeMutationController {
   }
 
   private _pasteAtWhenSettled(point: ScenePoint): void {
-    if (!this._clipboard) return
-    const sourceCenter = this._getClipboardSourceCenter(this._clipboard)
+    const clipboard = this._currentClipboard()
+    if (!clipboard) return
+    const sourceCenter = this._getClipboardSourceCenter(clipboard)
     if (!sourceCenter) return
 
     const offset = {
@@ -266,7 +313,7 @@ export class SceneRuntimeMutationController {
       y: point.y - sourceCenter.y,
     }
     this._arrangementPlacement.place({
-      template: createClipboardArrangementTemplate(this._clipboard),
+      template: createClipboardArrangementTemplate(clipboard),
       translateBy: offset,
       historyType: 'paste',
     })
@@ -280,7 +327,7 @@ export class SceneRuntimeMutationController {
     const persisted = this._sceneStore.persisted
     const selectionOptions = this._getSelectionReadModelOptions()
     const selected = this._getSelectionModel(selectionOptions).editableTargets
-    const payload = createClipboardPayload(persisted, selected)
+    const payload = createClipboardPayload(persisted, selected, this._sceneStore.sessionPlane)
     if (!payload) return
 
     this._arrangementPlacement.place({
@@ -288,6 +335,21 @@ export class SceneRuntimeMutationController {
       translateBy: NORMAL_PASTE_OFFSET_M,
       historyType: 'duplicate-selected',
     })
+  }
+
+  private _renameZoneWhenSettled(zoneId: string, name: string | null): boolean {
+    const persisted = this._sceneStore.persisted
+    const zone = persisted.zones.find((candidate) => candidate.id === zoneId)
+    if (!zone || zone.locked || !isSceneLayerEditable(sceneLayerState(persisted).zones)) return false
+    if (getEffectivelyLockedGroupMemberKeys(persisted).has(sceneTargetKey({ kind: 'zone', id: zoneId }))) return false
+    const nextName = zoneDisplayName({ name })
+    if (zoneDisplayName(zone) === nextName) return false
+    this._sceneEdits.run('rename-zone', (tx) => {
+      tx.mutate((draft) => {
+        draft.zones = draft.zones.map((candidate) => candidate.id === zoneId ? { ...candidate, name: nextName } : candidate)
+      })
+    })
+    return true
   }
 
   private _toggleSelectedPlantNamePinsWhenSettled(): void {
@@ -320,7 +382,7 @@ export class SceneRuntimeMutationController {
     this._sceneEdits.run('delete-selected', (tx) => {
       tx.mutate((draft) => {
         draft.plants = draft.plants.filter((plant) => !deleted.plantIds.has(plant.id))
-        draft.zones = draft.zones.filter((zone) => !deleted.zoneIds.has(zone.name))
+        draft.zones = draft.zones.filter((zone) => !deleted.zoneIds.has(zone.id))
         draft.annotations = draft.annotations.filter((annotation) => !deleted.annotationIds.has(annotation.id))
         draft.measurementGuides = draft.measurementGuides
           .filter((guide) => !deleted.measurementGuideIds.has(guide.id))
@@ -357,8 +419,8 @@ export class SceneRuntimeMutationController {
 
     if (isSceneLayerEditable(layerState.zones)) {
       for (const zone of persisted.zones) {
-        if (groupedMemberKeys.has(sceneTargetKey({ kind: 'zone', id: zone.name })) || zone.locked) continue
-        targets.push({ kind: 'zone', id: zone.name })
+        if (groupedMemberKeys.has(sceneTargetKey({ kind: 'zone', id: zone.id })) || zone.locked) continue
+        targets.push({ kind: 'zone', id: zone.id })
       }
     }
 
@@ -412,6 +474,24 @@ export class SceneRuntimeMutationController {
     this._invalidateScene()
   }
 
+  private _selectSpeciesWhenSettled(canonicalNames: readonly string[]): void {
+    const persisted = this._sceneStore.persisted
+    const selectable = new Set([...new Set(canonicalNames)].flatMap((canonicalName) =>
+      getSelectablePlantIdsForSpecies(persisted, canonicalName)))
+    const plantIds = persisted.plants.filter((plant) => selectable.has(plant.id)).map((plant) => plant.id)
+    if (plantIds.length === 0) return
+    const nextSelection = applySpeciesSelection(this._sceneStore.session.selectedTargets, plantIds, false)
+    if (sceneDesignObjectTargetsEqual(nextSelection, this._sceneStore.session.selectedTargets)) return
+    this._selection.set(nextSelection)
+    this._invalidateScene()
+  }
+
+  private _clearSelectionWhenSettled(): void {
+    if (this._sceneStore.session.selectedTargets.length === 0) return
+    this._selection.set([])
+    this._invalidateScene()
+  }
+
   private _bringToFrontWhenSettled(): void {
     this._reorderSelected('end')
   }
@@ -438,6 +518,29 @@ export class SceneRuntimeMutationController {
     this._sceneEdits.run('unlock-selected', (tx) => {
       tx.mutate((draft) => {
         setSceneDesignObjectLocks(draft, selected, false)
+      })
+    })
+  }
+
+  private _rotateSelectedWhenSettled(degrees: number): void {
+    if (!Number.isFinite(degrees)) return
+    const turn = degrees % 360
+    if (Math.abs(turn) < ROTATION_EPSILON_DEG) return
+    const selection = this._getSelectionModel()
+    const state = captureRotationTransformState(this._sceneStore.persisted, selection)
+    if (!state || !selection.bounds) return
+    const pivot = centerOfBounds(selection.bounds)
+    this._sceneEdits.run('rotate-selected', (tx) => {
+      tx.mutate((draft) => applyRotationTransformToDraft(draft, state, pivot, turn))
+    })
+  }
+
+  private _unlockAllWhenSettled(): void {
+    const locked = lockedSceneDesignObjectTargets(this._sceneStore.persisted)
+    if (locked.length === 0) return
+    this._sceneEdits.run('unlock-all', (tx) => {
+      tx.mutate((draft) => {
+        setSceneDesignObjectLocks(draft, locked, false)
       })
     })
   }
@@ -747,7 +850,7 @@ export class SceneRuntimeMutationController {
     this._sceneEdits.run(position === 'start' ? 'send-to-back' : 'bring-to-front', (tx) => {
       tx.mutate((draft) => {
         draft.plants = reorderSceneEntities(draft.plants, resolved.plantIds, position, (plant) => plant.id)
-        draft.zones = reorderSceneEntities(draft.zones, resolved.zoneIds, position, (zone) => zone.name)
+        draft.zones = reorderSceneEntities(draft.zones, resolved.zoneIds, position, (zone) => zone.id)
         draft.annotations = reorderSceneEntities(draft.annotations, resolved.annotationIds, position, (annotation) => annotation.id)
         draft.measurementGuides = reorderSceneEntities(
           draft.measurementGuides,
@@ -793,14 +896,15 @@ export class SceneRuntimeMutationController {
       measurementGuides: payload.measurementGuides,
       groups: payload.groups,
     }
-    return centerOfBounds(getCombinedTargetBounds(
+    const bounds = getCombinedTargetBounds(
       clipboardScene,
       payload.sourceTargets,
       {
         ...this._getSelectionReadModelOptions(),
         revealedAnnotationId: getRevealedAnnotationId(payload.sourceTargets),
       },
-    ))
+    )
+    return bounds ? centerOfBounds(bounds) : null
   }
 }
 
@@ -811,15 +915,6 @@ function normalPasteOffset(step: number): ScenePoint {
   }
 }
 
-function centerOfBounds(
-  bounds: { minX: number; minY: number; maxX: number; maxY: number } | null,
-): ScenePoint | null {
-  if (!bounds) return null
-  return {
-    x: bounds.minX + (bounds.maxX - bounds.minX) / 2,
-    y: bounds.minY + (bounds.maxY - bounds.minY) / 2,
-  }
-}
 
 function sceneLayerState(
   persisted: ScenePersistedState,
@@ -982,7 +1077,7 @@ function isConcreteDesignObjectTargetLocked(
     return persisted.plants.some((plant) => plant.id === target.id && plant.locked)
   }
   if (target.kind === 'zone') {
-    return persisted.zones.some((zone) => zone.name === target.id && zone.locked)
+    return persisted.zones.some((zone) => zone.id === target.id && zone.locked)
   }
   return persisted.annotations.some((annotation) => annotation.id === target.id && annotation.locked)
 }

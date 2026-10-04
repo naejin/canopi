@@ -1,34 +1,87 @@
+/* Status chip for highlighted plants: top centre of the visible map, between
+   the tool rail and the panel rail or open dock (`--map-inset-*`, published by
+   app/shell/visible-map-area.ts), and right of the tool card. It wraps when
+   that area is narrow. */
 .chip {
   position: absolute;
-  z-index: 5;
-  top: var(--space-7);
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: 60%;
+  z-index: 34;
+  top: var(--chrome-rail-top);
+  right: calc(var(--map-inset-right, 0px) + var(--space-4));
+  /* Right of the tool card while one shows (`--tool-card-reserve`). */
+  left: max(calc(var(--map-inset-left, 0px) + var(--space-4)), var(--tool-card-reserve, 0px));
+  width: fit-content;
+  max-width: 640px;
+  margin-inline: auto;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-accent);
-  border-radius: var(--radius-sm);
+  min-height: var(--control-size-3xl);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-glass);
+  box-shadow: var(--shadow-float);
+  color: var(--color-text);
+  font-size: var(--text-base);
+}
+
+.text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.text b {
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+.button,
+.quiet {
+  position: relative;
+  flex-shrink: 0;
+  min-height: var(--control-size-md);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
   background: var(--color-surface);
   color: var(--color-text);
   font: inherit;
   font-size: var(--text-sm);
+  font-weight: 600;
   cursor: pointer;
 }
-.chip:hover {
+
+.button:hover,
+.quiet:hover {
   background: var(--color-control-hover);
 }
-.chip:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+
+.primary {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
 }
-.count {
-  color: var(--color-text-muted);
-  font-variant-numeric: tabular-nums;
+
+.primary:hover {
+  background: var(--color-accent-ink);
+}
+
+.quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.button:focus-visible,
+.quiet:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 @media (max-width: 480px) {
-  .chip { top: calc(var(--space-7) + var(--control-size-lg)); }
+  .chip { top: calc(var(--chrome-rail-top) + var(--control-size-3xl) + var(--space-2)); }
 }

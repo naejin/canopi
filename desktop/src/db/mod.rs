@@ -13,7 +13,7 @@ pub mod user_db;
 use common_types::health::PlantDbStatus;
 use rusqlite::{Connection, InterruptHandle};
 use std::ops::Deref;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 pub use user_db::UserDbInitError;
@@ -87,10 +87,71 @@ impl Deref for PlantDbConnectionGuard<'_> {
 #[derive(Clone)]
 pub struct UserDb(Arc<Mutex<Connection>>);
 
+/// How [`UserDb::open`] found the file it opened.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UserDbOpened {
+    /// A current database, or a new one where there was none.
+    Ready,
+    /// A database from before Canopi 2.0 was moved aside (ADR 0021); the user
+    /// is told once.
+    MovedAside,
+    /// A damaged database was set aside as corrupt.
+    ReplacedCorrupt,
+}
+
+/// Why a database file is set aside: the suffix its new name carries.
+#[derive(Debug, Clone, Copy)]
+enum SetAsideReason {
+    Before2_0,
+    Corrupt,
+}
+
+impl SetAsideReason {
+    fn suffix(self) -> &'static str {
+        match self {
+            Self::Before2_0 => "before-2.0",
+            Self::Corrupt => "corrupt",
+        }
+    }
+}
+
 impl UserDb {
-    pub fn open(path: impl AsRef<Path>) -> Result<Self, UserDbInitError> {
-        let connection = Connection::open(path).map_err(UserDbInitError::Open)?;
-        Self::initialize(connection)
+    /// Open the user database at `path`.
+    ///
+    /// Canopi 2.0 breaks stored data (ADR 0021): a database from before 2.0
+    /// is renamed to `<file>.before-2.0-<unix-seconds>` and replaced by an
+    /// empty current one. A file that is not a SQLite database, is damaged
+    /// or fails its integrity checks is renamed to
+    /// `<file>.corrupt-<unix-seconds>` the same way. Neither rename
+    /// overwrites an earlier one, and companion files move with the database.
+    /// A newer database is refused as-is with
+    /// [`UserDbInitError::NewerSchemaVersion`].
+    pub fn open(path: impl AsRef<Path>) -> Result<(Self, UserDbOpened), UserDbInitError> {
+        let path = path.as_ref();
+        let error = match Self::initialize(Connection::open(path).map_err(UserDbInitError::Open)?) {
+            Ok(user_db) => return Ok((user_db, UserDbOpened::Ready)),
+            Err(error) => error,
+        };
+        let (reason, opened) = match error {
+            UserDbInitError::OlderSchemaVersion { .. } => {
+                (SetAsideReason::Before2_0, UserDbOpened::MovedAside)
+            }
+            _ if error.sets_aside_as_corrupt() => {
+                (SetAsideReason::Corrupt, UserDbOpened::ReplacedCorrupt)
+            }
+            _ => return Err(error),
+        };
+        let aside = set_aside_user_db(path, &set_aside_name(path, reason))
+            .map_err(|source| UserDbInitError::SetAside { source })?;
+        tracing::warn!(
+            "Set aside the user database ({error}) as {}; starting with an empty one",
+            aside
+                .file_name()
+                .map(|name| name.to_string_lossy())
+                .unwrap_or_default()
+        );
+        let user_db = Self::initialize(Connection::open(path).map_err(UserDbInitError::Open)?)?;
+        Ok((user_db, opened))
     }
 
     pub fn initialize(connection: Connection) -> Result<Self, UserDbInitError> {
@@ -101,6 +162,90 @@ impl UserDb {
     pub(crate) fn acquire(&self) -> MutexGuard<'_, Connection> {
         acquire(&self.0, "UserDb")
     }
+}
+
+/// SQLite companion files that belong to a database file and move with it.
+/// The user DB uses the rollback journal; `-wal`/`-shm` are moved too in case
+/// another tool switched the file to WAL.
+const USER_DB_COMPANION_SUFFIXES: [&str; 3] = ["-journal", "-wal", "-shm"];
+
+fn set_aside_name(path: &Path, reason: SetAsideReason) -> String {
+    let file_name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "user.db".to_owned());
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    format!("{file_name}.{}-{seconds}", reason.suffix())
+}
+
+/// Rename the database at `path` and its companion files to `base`, or to
+/// `base-<n>` when that name is taken. Either everything moves or, on failure,
+/// what moved is moved back.
+fn set_aside_user_db(path: &Path, base: &str) -> std::io::Result<PathBuf> {
+    let companion = |target: &Path, suffix: &str| {
+        let mut name = target.as_os_str().to_owned();
+        name.push(suffix);
+        PathBuf::from(name)
+    };
+    let aside = (1u32..=10_000)
+        .map(|attempt| match attempt {
+            1 => path.with_file_name(base),
+            n => path.with_file_name(format!("{base}-{n}")),
+        })
+        .find(|candidate| {
+            !candidate.exists()
+                && USER_DB_COMPANION_SUFFIXES
+                    .iter()
+                    .all(|suffix| !companion(candidate, suffix).exists())
+        })
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                "no free name to set the user database aside",
+            )
+        })?;
+
+    std::fs::rename(path, &aside)?;
+    let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
+    for suffix in USER_DB_COMPANION_SUFFIXES {
+        let from = companion(path, suffix);
+        if !from.exists() {
+            continue;
+        }
+        let to = companion(&aside, suffix);
+        if let Err(error) = std::fs::rename(&from, &to) {
+            // A companion left behind would be applied to the fresh database,
+            // so restore the original set before reporting the failure.
+            let mut rollback_errors = Vec::new();
+            for (original, renamed) in moved.iter().rev() {
+                if let Err(rollback) = std::fs::rename(renamed, original) {
+                    rollback_errors.push(rollback.to_string());
+                }
+            }
+            if let Err(rollback) = std::fs::rename(&aside, path) {
+                rollback_errors.push(rollback.to_string());
+            }
+            return Err(if rollback_errors.is_empty() {
+                std::io::Error::new(
+                    error.kind(),
+                    format!("could not move the {suffix} companion file: {error}"),
+                )
+            } else {
+                std::io::Error::new(
+                    error.kind(),
+                    format!(
+                        "could not move the {suffix} companion file: {error}; restoring the original files also failed: {}",
+                        rollback_errors.join("; ")
+                    ),
+                )
+            });
+        }
+        moved.push((from, to));
+    }
+    Ok(aside)
 }
 
 pub fn acquire<'a, T>(mutex: &'a Mutex<T>, name: &str) -> MutexGuard<'a, T> {
@@ -135,6 +280,7 @@ pub(crate) fn require_plant_db(plant_db: &PlantDb) -> Result<PlantDbConnectionGu
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_scratch::TestScratch;
 
     fn connection_with_identity(schema_version: i32, fingerprint: &str) -> Connection {
         let connection = Connection::open_in_memory().unwrap();
@@ -149,6 +295,94 @@ mod tests {
             .pragma_update(None, "user_version", schema_version)
             .unwrap();
         connection
+    }
+
+    fn temp_database_path(scratch: &TestScratch, label: &str) -> PathBuf {
+        scratch.join(format!("set_aside_{label}.db"))
+    }
+
+    fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
+        let mut name = path.as_os_str().to_owned();
+        name.push(suffix);
+        PathBuf::from(name)
+    }
+
+    #[test]
+    fn set_aside_moves_the_rollback_journal_with_the_database() {
+        let scratch = TestScratch::new("db-set-aside-moves-the-rollback-journal-with-the-database");
+        let path = temp_database_path(&scratch, "journal");
+        std::fs::write(&path, b"damaged database").unwrap();
+        std::fs::write(with_suffix(&path, "-journal"), b"rollback journal").unwrap();
+
+        let aside =
+            set_aside_user_db(&path, &set_aside_name(&path, SetAsideReason::Corrupt)).unwrap();
+
+        assert!(!path.exists());
+        assert!(
+            !with_suffix(&path, "-journal").exists(),
+            "a journal left behind would be applied to the fresh database"
+        );
+        assert!(
+            aside
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .contains(".corrupt-")
+        );
+        assert_eq!(std::fs::read(&aside).unwrap(), b"damaged database");
+        assert_eq!(
+            std::fs::read(with_suffix(&aside, "-journal")).unwrap(),
+            b"rollback journal"
+        );
+
+        let _ = std::fs::remove_file(&aside);
+        let _ = std::fs::remove_file(with_suffix(&aside, "-journal"));
+    }
+
+    #[test]
+    fn set_aside_never_overwrites_an_earlier_set_aside_or_its_journal() {
+        let scratch =
+            TestScratch::new("db-set-aside-never-overwrites-an-earlier-set-aside-or-its-journal");
+        let path = temp_database_path(&scratch, "unique");
+        let base = format!("{}.corrupt-0", path.file_name().unwrap().to_string_lossy());
+        std::fs::write(&path, b"first").unwrap();
+        let first = set_aside_user_db(&path, &base).unwrap();
+        // An orphan journal of an earlier set-aside name also blocks that name.
+        std::fs::write(
+            with_suffix(
+                &path.with_file_name(format!(
+                    "{}-2",
+                    first.file_name().unwrap().to_string_lossy()
+                )),
+                "-journal",
+            ),
+            b"orphan",
+        )
+        .unwrap();
+        std::fs::write(&path, b"second").unwrap();
+        let second = set_aside_user_db(&path, &base).unwrap();
+
+        assert_ne!(first, second);
+        assert!(
+            second.to_string_lossy().ends_with(".corrupt-0-3"),
+            "{second:?}"
+        );
+        assert_eq!(std::fs::read(&first).unwrap(), b"first");
+        assert_eq!(std::fs::read(&second).unwrap(), b"second");
+
+        for file in [
+            first.clone(),
+            second,
+            with_suffix(
+                &path.with_file_name(format!(
+                    "{}-2",
+                    first.file_name().unwrap().to_string_lossy()
+                )),
+                "-journal",
+            ),
+        ] {
+            let _ = std::fs::remove_file(file);
+        }
     }
 
     #[test]

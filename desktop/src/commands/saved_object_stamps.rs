@@ -1,6 +1,6 @@
 use crate::db::UserDb;
 use crate::native_operation::{NativeOperationClass, NativeOperationExecutor};
-use common_types::design::CanopiFile;
+use common_types::design::{CanopiFile, DesignLoadFailure, DesignLoadFailureKind};
 use common_types::saved_object_stamps::SavedObjectStamp;
 use tauri::State;
 
@@ -110,16 +110,24 @@ pub async fn export_saved_object_stamp_canopi_file(
         .await
 }
 
+/// Failures are typed (`DesignLoadFailure`), as for `load_design`, so the
+/// interface can say a stamp file was saved before 2.0.
 #[tauri::command]
 pub async fn load_saved_object_stamp_canopi_file(
     executor: State<'_, NativeOperationExecutor>,
     path: String,
-) -> Result<CanopiFile, String> {
+) -> Result<CanopiFile, DesignLoadFailure> {
     executor
         .run(
             NativeOperationClass::Local,
             "saved object stamp import",
-            move || crate::services::design_files::load_design_file(path),
+            move || Ok(crate::services::design_files::load_design_file(path)),
         )
         .await
+        .unwrap_or_else(|message| {
+            Err(DesignLoadFailure {
+                kind: DesignLoadFailureKind::Internal,
+                message,
+            })
+        })
 }

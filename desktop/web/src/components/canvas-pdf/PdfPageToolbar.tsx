@@ -16,7 +16,8 @@ export function PdfPageToolbar({ page, workflow, disabled, inspecting, onInspect
     if (!input.validity.valid || !Number.isFinite(input.valueAsNumber)) { setDraft(String(zoom)); return }
     workflow.setPageView(page.id, { zoom: input.valueAsNumber })
   }
-  return <div className={styles.pageToolbar}>
+  return <section className={styles.pageOptions} aria-label={t('pdf.pageOptions')}>
+    <h3 className={styles.optionLabel}>{t('pdf.pageOptions')}</h3>
     <fieldset disabled={disabled || inspecting} className={styles.toolbarGroup} aria-label={t('pdf.canvasZoom')}>
       {page.kind !== 'legend' && <>
         <button type="button" onClick={() => { setDraft('100'); workflow.fitPage(page.id) }}>{t('pdf.resetFit')}</button>
@@ -37,5 +38,5 @@ export function PdfPageToolbar({ page, workflow, disabled, inspecting, onInspect
     </fieldset>
     {page.kind === 'detail' && <button type="button" disabled={disabled || !onSplit} onClick={onSplit}>{t('pdf.splitSheets')}</button>}
     <button type="button" aria-pressed={inspecting} disabled={disabled} onClick={onInspect}>{t(inspecting ? 'pdf.doneInspect' : 'pdf.inspect')}</button>
-  </div>
+  </section>
 }

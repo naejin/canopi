@@ -59,6 +59,7 @@ function makePlant(canonicalName: string, isFavorite = false): SpeciesListItem {
     hardiness_zone_max: null,
     growth_rate: null,
     stratum: null,
+    habit: null,
     climate_zones: [],
     life_cycles: [],
     edibility_rating: null,
@@ -323,7 +324,7 @@ describe('Species Catalog Workbench lifecycle', () => {
       filters: expect.any(Object),
       cursor: 'offset:50',
       limit: 50,
-      sort: 'Name',
+      sort: 'Recommended',
       locale: 'en',
       include_total: false,
     }))

@@ -1,60 +1,74 @@
-# Canopi interface design contract
+# Canopi interface design system
 
-Canopi is a field notebook for designing a living landscape: parchment, ink, restrained ochre, dense useful controls. The main canvas screen is the visual reference. Extend its hierarchy, spacing, border treatment, and interaction rhythm whenever a new surface is introduced.
+Canopi is a field atlas for designing a living landscape on the map: parchment, ink and ochre floating over satellite or map, with dense, readable controls. Reasons: [ADR 0010](../docs/adr/0010-map-first-interface.md). The target is the design boards in [`boards/`](boards/README.md); the UI gallery shows what shipped.
 
-## Start with the right reference
+Read this file, then the one pattern file for the surface you touch:
 
-Read this contract, then the relevant family guide. Do not read every guide or rediscover every component for each task.
-
-| Surface | Reference |
+| Surface | Pattern |
 | --- | --- |
-| Plant Color and Plant Symbol | [Appearance editors](patterns/appearance-editors.md) |
-| Species Key, Layers, Calendar, Budget, Consortium, Favorites, Design Notebook | [Dock panels](patterns/dock-panels.md) |
-| Inspection Lens | [Inspection overlays](patterns/inspection-overlays.md) |
-| Catalog, filters, species detail and photos | [Catalog and details](patterns/catalog-and-details.md) |
-| Main canvas, tools, notices, plant labels | [Canvas workspace](patterns/canvas-workspace.md) |
-| Shell, dropdowns, sliders, section toggles, charts | [Controls and shell](patterns/controls-and-shell.md) |
+| Map canvas, rails, view chip, zoom, annotations, selection and canvas menu, inspection lens, symbol and colour, stories | [Canvas workspace](patterns/canvas-workspace.md) |
+| Pan, zoom and turn the map, compass, Pointing device, F1 gestures, PDF map orientation | [Canvas navigation](patterns/canvas-navigation.md) |
+| Plants in this Design, Layers, data library and analysis, Calendar, Budget, Consortium, Favorites, Design notebook, Stories, finder | [Dock panels](patterns/dock-panels.md) |
+| Plant catalog, filters, species detail, photos | [Catalog and details](patterns/catalog-and-details.md) |
+| Title bar, menus, start screen, dialogs, settings, notices, empty/loading/error states, PDF export, Web on phones | [Controls and shell](patterns/controls-and-shell.md) |
 
-Implementation and ownership rules start at [frontend guidance](../docs/agent/frontend-patterns.md). Domain terms remain in CONTEXT.md; this contract does not redefine them.
+## Direction
 
-## Visual hierarchy
+- Parchment, ink and ochre, in light and dark. Green never appears in chrome; it is plant data.
+- Floating surfaces (`--color-glass`, blur, soft shadow, 14 px radius) over a full-bleed map.
+- One meaning per colour: ochre = selected, active or primary; blue ring = keyboard focus; amber = warning; red = error or destruction. Never ochre for decoration or warnings.
+- Type: Literata 600 for titles (28 display, 20 dialog, 18 panel), Source Sans 3 for UI (15 body, 14 controls, 12.5 captions), IBM Plex Mono 600 12 for species codes. Weights 400 and 600 only; nothing below 12 px (13 for CJK).
 
-Use existing tokens in desktop/web/src/styles/global.css as the single source for palette, spacing, typography, radii, control sizes, transitions, and semantic data colors. Inspect the relevant declarations when choosing a value. Do not copy token tables into guides or introduce a parallel theme.
+## Workspace layout
 
-Parchment is the workspace; differentiated surfaces support controls and panels. Borders establish grouping and depth. Keep shadows restrained where an existing floating-control pattern needs them; avoid dramatic elevation. Green is reserved for plant artwork and existing semantic plant data, never general UI chrome. Ochre signals active state, focus, and primary actions. Destructive actions use the existing danger tokens.
+- Title bar (floating, 50 px): logo, menubar (File, Edit, View, Tools, Help), Design name (click to rename), save status with its one action, place search (Ctrl K), Help, Settings.
+- Left: tool rail (Select · Place plants, Plant a row, Place a stamp · Polygon, Rectangle, Ellipse, Line · Text note, Measure · Undo, Redo), labelled with keys until each tool is used once, then icons; in a short window the last tools fold into More tools, never Undo and Redo. Pan (H) is off the rail, in View and Tools.
+- Right: panel rail (Ctrl 1–9; folds into More in a short window) and one panel at a time: 380 px, or 440 px for Budget, Consortium and Stories; Calendar can Expand.
+- Bottom left: view chip with pressed toggles (Grid, Snap to grid, Rulers). Bottom right: attribution pill, then zoom group (scale bar, −, scale ratio menu, +, Fit to Design, compass).
+- Tool cards sit top-left beside the rail (320 px). Status chips (40 px) sit top- or bottom-centre of the visible map area.
 
-Use only 400 and 600 font weights. A surface title is sentence case and semibold. Species rows lead with the common name, then a muted italic scientific name; scientific name stands alone when a common name is unavailable. Counts and codes are quiet secondary information with tabular numerals or mono code styling. Do not make every label an uppercase heading or every count an accent badge. Existing specialist section patterns may retain their documented treatment.
+## Tokens
 
-Use spacing and control tokens. Structural dimensions can differ by surface when justified by its job, but do not invent new spacing or type scales. Choose borders and shared control states before custom decoration. Plant glyphs come from PlantSymbolGlyph and shared symbol recipes; use effective appearance for identity and preview, neutral ink for symbol choices.
+`desktop/web/src/styles/global.css` is the single source for colour, spacing, type, radii, control sizes, shadows and transitions. CSS Modules use tokens only: no raw `rgba()`, `white` or `black`, weights 400 and 600.
+
+- Palette: paper `--color-bg`, `--color-surface` (panels, menus, dialogs), `--color-surface-alt` (wells, tracks, info notices), `--color-glass` (floating chrome), ink `--color-text` / `-secondary` / `-muted`, ochre `--color-accent` / `-ink` / `-soft` / `--color-on-accent`, `--color-focus`, amber `--color-warning` / `-bg` / `-line`, red `--color-danger` / `-bg` / `--color-on-danger`, `--color-tip` / `--color-on-tip` (tooltips, toasts), `--color-mark` (match highlight).
+- Radii: `--radius-md` 7 (menu items, tips, segments), `--radius-control` 8 (buttons, fields), `--radius-lg` 11 (menus, notices, toasts), `--radius-panel` 14 (floating chrome, panels, dialogs). Shadows: `--shadow-sm` (tips), `--shadow-float` (floating chrome, menus, dialogs).
+- Type: `--font-display`, `--font-sans`, `--font-mono`; `--text-2xs` 12 · `--text-xs` 12.5 · `--text-sm` 13 · `--text-base` 14 · `--text-dialog` 14.5 · `--text-md` 15 · `--text-lg` 18 · `--text-xl` 20 · `--text-display` 28.
+- Control boundaries (`--color-border-strong`) reach 3:1 against the surface; the off switch, selected segment and radio ring too.
+- Selected rows: `--color-accent-soft` fill and a 3 px inset `--color-accent` edge. Selected tiles and cells: soft fill and 2 px inset ring. Selected swatches: 2 px gap then a 2 px ring. Pressed toggles: soft fill, accent border and ink, and a check icon.
+- Focus: `outline: 2px solid var(--color-focus); outline-offset: 2px` on `:focus-visible` everywhere; text fields show focus with `:focus-within`.
+
+## Icons and icon-only buttons
+
+- In-house inline SVG only: `components/canvas/toolbar-icons.tsx` (tools and actions), `components/shared/PanelIcon.tsx` (panels), `components/shared/ControlIcon.tsx` (control glyphs); 20×20, 1.6 stroke, round caps, `currentColor`, `aria-hidden`. Dotted icons use filled circles. No emoji or text glyphs as icons.
+- Every icon-only button has a localized `aria-label` naming the action and its object, a `ButtonTooltip` with the same label and its shortcut (`aria-keyshortcuts`), a visible focus ring and a size token (28 px in rows, 36–40 px in rails, 44 px on touch).
+
+## Plants
+
+- Symbols: 29 single-colour glyphs from the shared recipes (`canvas/runtime/plant-symbol-recipes.ts`) in three families (plant form, what it gives, what it does) plus four abstract marks; the picker shows them by family, five to a row.
+- Colour by species (default), stratum or one colour; any species takes any colour. Stratum colours are Okabe-Ito hues (Emergent blue, High bluish green, Mid orange, Low reddish purple) plus a grey for "No stratum yet"; the stratum is the Design's (Consortium), never the catalog's. Display never changes a stored colour. Plant forms are not strata.
+- One species row: glyph 22 · common name (600) over italic scientific name (`lang="la"`) · mono code (44 px, right-aligned) · count (40 px, tabular) · actions. Never a code instead of a name; no name in the interface language shows the English name marked "(en)".
+- Every plant list uses the shared finder: search (Ctrl F) over names in every language, scientific names, synonyms and codes, tolerant of accents, capitals and small typos; quick filters (Selected on map, Stratum and Form, then list-specific ones); a live count.
 
 ## Layout and interaction
 
-Keep the canvas visible and useful. A panel has one clear title, an obvious close action, compact task controls, and a scrollable content area. Keep apply actions visible when choices scroll. Use progressive disclosure for secondary controls, without hiding the primary task or removing capabilities.
+- Keep the map visible and useful. A panel has one title, a close action, compact controls and a scrolling body; apply actions stay visible.
+- Preview before mutation; each action keeps its command or workbench authority. Selection, focus, hover, visibility and locks are distinct states.
+- Destructive actions confirm and name what is lost, or show an Undo toast (also Ctrl Z). Toasts do not time out while hovered or focused.
+- Keyboard: every pointer action has a keyboard path, turning the map included; one keyboard owner routes keys. F6 and Shift F6 cycle title bar, tool rail, map and open panel. One Esc does one thing, the tool's first: menu or dialog → text entry → gesture → held pick or draft → Select → selection. Single keys work anywhere except text fields and dialogs and can be turned off; Shift N always resets north.
+- Popups anchor to their trigger and stay in the viewport: flipped above, or capped and scrolling, when too tall. Dialogs are modal, trap focus and return it. Layering uses only the stacking scale in `global.css` (`stacking-order.test.ts`).
+- Locale: numbers, dates, currency and units through `Intl`; message formats for plurals and names inside sentences; buttons, footers and segments wrap instead of clipping; terms from the [UI glossary](../docs/guides/ui-glossary.md).
 
-Separate preview from mutation. Appearance choices preview until the user chooses a clear apply scope. Species focus, inspection, and hover are independent of real selection and document edits. Each action must retain its existing command/workbench authority.
+## Reuse before adding a pattern
 
-A selected item gets restrained ochre feedback. Visibility, locks, active layer, focus, and selection are different states; do not reuse the same treatment for all of them. Prefer quiet metadata and ruled rows over nested cards. Search must have a clear action and useful empty result. Preserve user-resized dimensions.
-
-Keyboard access is part of the design: labelled controls, visible focus, logical tab order, Escape dismissal and focus return. Custom grids need arrow navigation. Custom pointer controls need a keyboard path. A popup must fit its viewport and avoid being clipped by a parent scroll area. Use readable wrapped names and explicit secondary actions instead of overlapping or truncating essential commands.
-
-## Reuse before introducing another pattern
-
-Production building blocks live in desktop/web/src/components/shared/: SurfaceHeader, DockPanelHeader, SurfaceSearch, SpeciesIdentity, ActionMenu, Dropdown, ButtonTooltip, and the pointer lifecycle hooks. Appearance editors share their selection band and layout CSS. These components own presentation or a defined interaction lifecycle; callers retain domain actions.
-
-Prefer these components over copying JSX or CSS from screenshots. Add a shared component when multiple real callers need the same behavior and its interface removes duplication. Avoid a universal panel framework with dozens of options. Reuse should make implementation and review smaller.
+Shared blocks live in `desktop/web/src/components/shared/` (`SurfaceHeader`, `DockPanelHeader`, `SurfaceSearch`, `SpeciesIdentity`, `ActionMenu`, `Dropdown`, `DatePicker`, `ButtonTooltip`, `SegmentedControl`, `Switch`, `Notice`, `Toast`, `EmptyState`, `ControlIcon`, `usePointerResize`, `usePointerReorder`, `PlantFinder`). They own presentation or an interaction lifecycle; callers keep domain actions.
 
 ## Working method
 
-1. Inspect the affected production surface live alongside the main screen. Read only its family guide, component, authority seam, and relevant tests.
-2. State the user task, preserved capabilities, and consequential design uncertainty. Reuse accepted patterns directly. Build an isolated interactive prototype only when a consequential layout or interaction remains undecided.
-3. Implement through existing authorities. Use focused behavioral tests for new interactions and regressions; avoid snapshots of CSS spelling or tests that merely repeat implementation.
-4. Review real interactions in context: populated and empty states, mixed selections, long translated names, light/dark, narrow and short viewports, keyboard and pointer paths. Check scrolling, persistent controls, focus restoration, and overlays near edges.
-5. Perform a fresh combined review, fix findings, and rerun affected checks. Update the relevant guide and gallery fixture when the change establishes a reusable decision. Remove superseded prototypes after accepted behavior exists in production.
+1. Find the surface on its board and in the gallery. Read its pattern file, component, authority seam and tests.
+2. Implement through existing authorities with focused behavioural tests. Review populated, empty, long and French states, light and dark, keyboard and pointer, narrow and short viewports.
+3. When the change sets a reusable decision, update the pattern file, the board and a gallery fixture in the same change.
 
 ## Executable reference
 
-Run `cd desktop/web && npm run dev:ui`, then open http://127.0.0.1:1422/. Use `?surface=workspace` for the production Desktop workspace composition and add `edition=web` for the Web composition. Direct panel links use `?surface=color|symbol|key|layers|favorites|notebook|lens`; add `state=empty|mixed|long|located|dense`, `theme=dark`, or `locale=fr`.
-
-The gallery mounts production components and a real canvas runtime with deterministic memory data. Its edition links perform a normal page load, so one disposable runtime owns the canvas at a time. Reload resets it. Use `npm run check:ui` for its type check. Gallery controls are development tools, not product UI. Native file dialogs are simulated in memory; verify platform delivery separately when changing file behavior.
-
-Accepted reasoning belongs here or in a family guide. Reproducible states belong in gallery fixtures. Exact visual values belong in tokens. This keeps future context small while making the reference verifiable.
+Boards: `python3 .interface-design/boards/build.py`, then `serve.py`. Gallery: `cd desktop/web && npm run dev:ui`, `http://127.0.0.1:1422/`; `?surface=workspace` mounts the Desktop workspace (add `edition=web` for Web); direct surfaces take `state=empty|mixed|long|located|dense|planting|zone|overview|max-zoom|lidar-progress`, `theme=dark` or `locale=fr`. `npm run check:ui` type-checks the gallery.

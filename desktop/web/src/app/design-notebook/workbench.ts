@@ -25,10 +25,11 @@ import type {
   DesignNotebookSnapshot,
   DesignSummary,
 } from '../../types/design'
+import { createMutationQueue } from '../mutation-queue'
 
 const MAX_RECENT_DESIGNS = 5
 
-export interface DesignNotebookView {
+interface DesignNotebookView {
   readonly entries: readonly DesignNotebookEntry[]
   readonly visibleEntries: readonly DesignNotebookEntry[]
   readonly sections: readonly DesignNotebookSection[]
@@ -103,12 +104,9 @@ export function createDesignNotebookWorkbench(
   const loading = signal(false)
   const loadError = signal(false)
 
-  let disposed = false
-  let lifetimeGeneration = 0
+  const queue = createMutationQueue()
   let generation = 0
   let recentGeneration = 0
-  let snapshotEpoch = 0
-  let mutationTail: Promise<void> | null = null
 
   const view = computed<DesignNotebookView>(() => {
     const currentPath = activePath.value
@@ -128,11 +126,11 @@ export function createDesignNotebookWorkbench(
   })
 
   async function load(): Promise<void> {
-    if (disposed) return
+    if (queue.disposed) return
     const requestGeneration = ++generation
-    const requestSnapshotEpoch = snapshotEpoch
-    const admittedLifetime = lifetimeGeneration
-    const mutationBarrier = mutationTail
+    const requestSnapshotEpoch = queue.epoch
+    const admittedLifetime = queue.lifetime
+    const mutationBarrier = queue.tail
     loading.value = true
     loadError.value = false
 
@@ -140,13 +138,13 @@ export function createDesignNotebookWorkbench(
       if (mutationBarrier) {
         await mutationBarrier
         if (
-          !isLifetimeCurrent(admittedLifetime)
+          !queue.isCurrent(admittedLifetime)
           || isLoadStale(requestGeneration, requestSnapshotEpoch)
         ) return
       }
       const snapshot = await loadNotebook()
       if (
-        !isLifetimeCurrent(admittedLifetime)
+        !queue.isCurrent(admittedLifetime)
         || isLoadStale(requestGeneration, requestSnapshotEpoch)
       ) return
       writeSnapshot(snapshot)
@@ -164,19 +162,19 @@ export function createDesignNotebookWorkbench(
   }
 
   async function loadRecentDesigns(): Promise<void> {
-    if (disposed) return
+    if (queue.disposed) return
     const requestGeneration = ++recentGeneration
-    const admittedLifetime = lifetimeGeneration
+    const admittedLifetime = queue.lifetime
     try {
       const nextRecentEntries = (await loadRecentDesignsAdapter()).slice(0, MAX_RECENT_DESIGNS)
       if (
-        !isLifetimeCurrent(admittedLifetime)
+        !queue.isCurrent(admittedLifetime)
         || isRecentStale(requestGeneration)
       ) return
       recentEntries.value = nextRecentEntries
     } catch {
       if (
-        !isLifetimeCurrent(admittedLifetime)
+        !queue.isCurrent(admittedLifetime)
         || isRecentStale(requestGeneration)
       ) return
       recentEntries.value = []
@@ -184,15 +182,15 @@ export function createDesignNotebookWorkbench(
   }
 
   function isLoadStale(requestGeneration: number, requestSnapshotEpoch: number): boolean {
-    return !isCurrentLoad(requestGeneration) || requestSnapshotEpoch !== snapshotEpoch
+    return !isCurrentLoad(requestGeneration) || requestSnapshotEpoch !== queue.epoch
   }
 
   function isCurrentLoad(requestGeneration: number): boolean {
-    return !disposed && requestGeneration === generation
+    return !queue.disposed && requestGeneration === generation
   }
 
   function isRecentStale(requestGeneration: number): boolean {
-    return disposed || requestGeneration !== recentGeneration
+    return queue.disposed || requestGeneration !== recentGeneration
   }
 
   function writeSnapshot(snapshot: DesignNotebookSnapshot): void {
@@ -201,10 +199,10 @@ export function createDesignNotebookWorkbench(
   }
 
   async function openEntry(path: string): Promise<void> {
-    if (disposed) return
-    const admittedLifetime = lifetimeGeneration
+    if (queue.disposed) return
+    const admittedLifetime = queue.lifetime
     await openDesign(path)
-    if (!isLifetimeCurrent(admittedLifetime)) return
+    if (!queue.isCurrent(admittedLifetime)) return
   }
 
   function addCurrentDesignToNotebook(sectionId: string | null): Promise<boolean> {
@@ -212,29 +210,39 @@ export function createDesignNotebookWorkbench(
     if (admittedDesign === null) return Promise.resolve(false)
     const admittedPath = activePath.value
 
-    return enqueueMutation(false, async (admittedLifetime) => {
+    return queue.enqueue(false, async (admittedLifetime) => {
       if (
         currentDesign.value !== admittedDesign
         || activePath.value !== admittedPath
       ) return false
-      const settlement = admittedPath
-        ? await saveCurrent()
-        : await saveAsCurrent()
-      if (!isLifetimeCurrent(admittedLifetime)) return false
-      if (settlement?.status !== 'applied' || !settlement.path) return false
-      const savedPath = settlement.path
-      const savedDesign = settlement.content
+      let savedPath: string
+      let savedDesign: CanopiFile
+      if (admittedPath) {
+        // A file home: continuous save writes it; the reference names that file.
+        const written = await saveCurrent()
+        if (!queue.isCurrent(admittedLifetime)) return false
+        const design = currentDesign.value
+        if (!written || activePath.value !== admittedPath || !design) return false
+        savedPath = admittedPath
+        savedDesign = design
+      } else {
+        const settlement = await saveAsCurrent()
+        if (!queue.isCurrent(admittedLifetime)) return false
+        if (settlement?.status !== 'applied' || !settlement.path) return false
+        savedPath = settlement.path
+        savedDesign = settlement.content
+      }
 
       await addDesignReferenceAdapter(savedPath, savedDesign)
-      if (!isLifetimeCurrent(admittedLifetime)) return false
+      if (!queue.isCurrent(admittedLifetime)) return false
       const snapshot = await loadNotebook()
-      if (!isLifetimeCurrent(admittedLifetime)) return false
+      if (!queue.isCurrent(admittedLifetime)) return false
       writeSnapshot(snapshot)
 
       const targetSectionId = validSectionId(sectionId, sections.value)
       if (targetSectionId) {
         await moveEntryToSectionAdapter(savedPath, targetSectionId)
-        if (!isLifetimeCurrent(admittedLifetime)) return false
+        if (!queue.isCurrent(admittedLifetime)) return false
         entries.value = entries.value.map((entry) =>
           entry.path === savedPath
             ? { ...entry, section_id: targetSectionId }
@@ -248,9 +256,9 @@ export function createDesignNotebookWorkbench(
 
   function removeEntry(path: string): Promise<void> {
     if (path.trim().length === 0) return Promise.resolve()
-    return enqueueMutation(undefined, async (admittedLifetime) => {
+    return queue.enqueue(undefined, async (admittedLifetime) => {
       await removeEntryAdapter(path)
-      if (!isLifetimeCurrent(admittedLifetime)) return
+      if (!queue.isCurrent(admittedLifetime)) return
       entries.value = entries.value.filter((entry) => entry.path !== path)
     })
   }
@@ -258,9 +266,9 @@ export function createDesignNotebookWorkbench(
   function createSection(name: string): Promise<void> {
     const normalizedName = normalizeSectionName(name)
     if (!normalizedName) return Promise.resolve()
-    return enqueueMutation(undefined, async (admittedLifetime) => {
+    return queue.enqueue(undefined, async (admittedLifetime) => {
       const section = await createSectionAdapter(normalizedName)
-      if (!isLifetimeCurrent(admittedLifetime)) return
+      if (!queue.isCurrent(admittedLifetime)) return
       sections.value = [...sections.value, section].sort(compareNotebookSections)
     })
   }
@@ -268,9 +276,9 @@ export function createDesignNotebookWorkbench(
   function renameSection(sectionId: string, name: string): Promise<void> {
     const normalizedName = normalizeSectionName(name)
     if (!normalizedName) return Promise.resolve()
-    return enqueueMutation(undefined, async (admittedLifetime) => {
+    return queue.enqueue(undefined, async (admittedLifetime) => {
       await renameSectionAdapter(sectionId, normalizedName)
-      if (!isLifetimeCurrent(admittedLifetime)) return
+      if (!queue.isCurrent(admittedLifetime)) return
       sections.value = sections.value.map((section) =>
         section.id === sectionId
           ? { ...section, name: normalizedName }
@@ -280,9 +288,9 @@ export function createDesignNotebookWorkbench(
   }
 
   function deleteSection(sectionId: string): Promise<void> {
-    return enqueueMutation(undefined, async (admittedLifetime) => {
+    return queue.enqueue(undefined, async (admittedLifetime) => {
       await deleteSectionAdapter(sectionId)
-      if (!isLifetimeCurrent(admittedLifetime)) return
+      if (!queue.isCurrent(admittedLifetime)) return
       sections.value = sections.value.filter((section) => section.id !== sectionId)
       entries.value = entries.value.map((entry) =>
         entry.section_id === sectionId
@@ -293,9 +301,9 @@ export function createDesignNotebookWorkbench(
   }
 
   function moveEntryToSection(path: string, sectionId: string | null): Promise<void> {
-    return enqueueMutation(undefined, async (admittedLifetime) => {
+    return queue.enqueue(undefined, async (admittedLifetime) => {
       await moveEntryToSectionAdapter(path, sectionId)
-      if (!isLifetimeCurrent(admittedLifetime)) return
+      if (!queue.isCurrent(admittedLifetime)) return
       entries.value = entries.value.map((entry) =>
         entry.path === path
           ? { ...entry, section_id: sectionId }
@@ -306,9 +314,9 @@ export function createDesignNotebookWorkbench(
 
   function reorderSections(sectionIds: readonly string[]): Promise<void> {
     const nextOrder = [...sectionIds]
-    return enqueueMutation(undefined, async (admittedLifetime) => {
+    return queue.enqueue(undefined, async (admittedLifetime) => {
       await reorderSectionsAdapter(nextOrder)
-      if (!isLifetimeCurrent(admittedLifetime)) return
+      if (!queue.isCurrent(admittedLifetime)) return
       sections.value = applyManualOrder(
         sections.value,
         nextOrder,
@@ -321,9 +329,9 @@ export function createDesignNotebookWorkbench(
 
   function reorderEntries(paths: readonly string[]): Promise<void> {
     const nextOrder = [...paths]
-    return enqueueMutation(undefined, async (admittedLifetime) => {
+    return queue.enqueue(undefined, async (admittedLifetime) => {
       await reorderEntriesAdapter(nextOrder)
-      if (!isLifetimeCurrent(admittedLifetime)) return
+      if (!queue.isCurrent(admittedLifetime)) return
       entries.value = applyManualOrder(
         entries.value,
         nextOrder,
@@ -336,14 +344,14 @@ export function createDesignNotebookWorkbench(
 
   function relocateEntry(path: string, sectionId: string | null, paths: readonly string[]): Promise<void> {
     const nextOrder = [...paths]
-    const lifetime = lifetimeGeneration
-    return enqueueMutation(undefined, async (admittedLifetime) => {
+    const lifetime = queue.lifetime
+    return queue.enqueue(undefined, async (admittedLifetime) => {
       if (!entries.value.some((entry) => entry.path === path)
         || (sectionId !== null && !sections.value.some((section) => section.id === sectionId))) {
         throw new Error('Design Notebook relocation destination is no longer available')
       }
       await relocateEntryAdapter(path, sectionId, nextOrder)
-      if (!isLifetimeCurrent(admittedLifetime)) return
+      if (!queue.isCurrent(admittedLifetime)) return
       entries.value = applyManualOrder(
         entries.value.map((entry) => entry.path === path ? { ...entry, section_id: sectionId } : entry),
         nextOrder,
@@ -353,67 +361,18 @@ export function createDesignNotebookWorkbench(
       )
     }).catch(async (error) => {
       // Refresh only after releasing mutation admission: load joins that queue.
-      if (isLifetimeCurrent(lifetime)) await load()
+      if (queue.isCurrent(lifetime)) await load()
       throw error
     })
   }
 
   function dispose(): void {
-    if (disposed) return
-    disposed = true
-    lifetimeGeneration += 1
+    if (queue.disposed) return
+    queue.dispose()
     generation += 1
     recentGeneration += 1
   }
 
-  function enqueueMutation<T>(
-    disposedResult: T,
-    operation: (admittedLifetime: number) => Promise<T>,
-  ): Promise<T> {
-    if (disposed) return Promise.resolve(disposedResult)
-    snapshotEpoch += 1
-    const admittedLifetime = lifetimeGeneration
-    const run = () => isLifetimeCurrent(admittedLifetime)
-      ? operation(admittedLifetime)
-      : disposedResult
-    const precedingTail = mutationTail
-    if (precedingTail) {
-      const result = precedingTail.then(run, run)
-      let settledTail: Promise<void>
-      settledTail = result.then(
-        () => {
-          if (mutationTail === settledTail) mutationTail = null
-        },
-        () => {
-          if (mutationTail === settledTail) mutationTail = null
-        },
-      )
-      mutationTail = settledTail
-      return result
-    }
-
-    let releaseAdmission!: () => void
-    const admissionTail = new Promise<void>((resolve) => {
-      releaseAdmission = resolve
-    })
-    mutationTail = admissionTail
-    let result: Promise<T>
-    try {
-      result = Promise.resolve(run())
-    } catch (error) {
-      result = Promise.reject(error)
-    }
-    const settleAdmission = () => {
-      releaseAdmission()
-      if (mutationTail === admissionTail) mutationTail = null
-    }
-    void result.then(settleAdmission, settleAdmission)
-    return result
-  }
-
-  function isLifetimeCurrent(admittedLifetime: number): boolean {
-    return !disposed && admittedLifetime === lifetimeGeneration
-  }
 
   return {
     view,
@@ -475,4 +434,10 @@ function compareNotebookEntries(left: DesignNotebookEntry, right: DesignNotebook
   return left.sort_order - right.sort_order
     || right.updated_at.localeCompare(left.updated_at)
     || left.path.localeCompare(right.path)
+}
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    designNotebookWorkbench.dispose()
+  })
 }

@@ -15,7 +15,14 @@ export interface MapLibreOverlayMap {
   addLayer(layer: Record<string, unknown>): void
   getLayer(id: string): unknown
   removeLayer(id: string): void
+  setPaintProperty?(layerId: string, name: string, value: unknown): void
 }
+
+/**
+ * The data each overlay source was last given, by source: a re-sync that projects the same ground (a settled camera, a repaint)
+ * leaves the source alone, so the overlays change only with their Targets, the Scene or the plane.
+ */
+const sourceData = new WeakMap<MapLibreGeoJsonSource, string>()
 
 export function panelTargetMapOverlayIds(variant: PanelTargetMapOverlayVariant) {
   const sourceId = `panel-target-${variant}-source`
@@ -23,7 +30,9 @@ export function panelTargetMapOverlayIds(variant: PanelTargetMapOverlayVariant) 
     sourceId,
     layerIds: [
       `panel-target-${variant}-zones-fill`,
+      `panel-target-${variant}-zones-casing`,
       `panel-target-${variant}-zones-line`,
+      `panel-target-${variant}-plants-halo`,
       `panel-target-${variant}-plants`,
     ] as const,
   }
@@ -49,16 +58,29 @@ export function syncPanelTargetMapOverlay(
     return
   }
 
+  const data = JSON.stringify(overlay.source.data)
   const existingSource = map.getSource(overlay.source.id)
   if (existingSource) {
-    existingSource.setData(overlay.source.data)
+    if (sourceData.get(existingSource) !== data) {
+      existingSource.setData(overlay.source.data)
+      sourceData.set(existingSource, data)
+    }
   } else {
-    map.addSource(overlay.source.id, overlay.source as unknown as Record<string, unknown>)
+    // The id names the source; MapLibre rejects it inside the specification.
+    const { id, ...specification } = overlay.source
+    map.addSource(id, specification as unknown as Record<string, unknown>)
+    const added = map.getSource(id)
+    if (added) sourceData.set(added, data)
   }
 
   for (const layer of overlay.layers) {
     if (!map.getLayer(layer.id)) {
       map.addLayer(layer as unknown as Record<string, unknown>)
+      continue
     }
+    // The contract reads the current canvas colours; a layer added under
+    // another theme or backdrop takes them without being re-added. MapLibre
+    // ignores a paint value equal to the current one.
+    for (const [name, value] of Object.entries(layer.paint)) map.setPaintProperty?.(layer.id, name, value)
   }
 }

@@ -1,5 +1,5 @@
 import { computed, effect, signal } from '@preact/signals'
-import type { LidarSampleOutcome } from '../../generated/contracts'
+import type { LidarPresentationEntryKind, LidarSampleOutcome } from '../../generated/contracts'
 import { lidarCancelSamplePixel, lidarSamplePixel } from '../../ipc/lidar'
 import { currentDesign, designSessionStore } from '../document-session/store'
 import { activePanel } from '../shell/state'
@@ -24,9 +24,9 @@ export type InspectionSample =
   | { readonly kind: 'stale' }
   | { readonly kind: 'unavailable'; readonly reason: string }
 
-/** One inspected entity, or none. */
+/** One inspected entity, or none. `kind` is the Design entry kind that presents it. */
 export interface InspectionTarget {
-  readonly kind: 'Source' | 'Analysis'
+  readonly kind: LidarPresentationEntryKind
   readonly id: string
   readonly name: string
 }
@@ -258,11 +258,11 @@ let inspectionObserverDisposer: (() => void) | null = null
  * Install one disposable observer of Design identity, entity presence and
  * displayed generation for the active inspection session.
  *
- * Hide/remove, Design replacement, Location navigation and a published head
+ * Hide/remove, Design replacement, leaving Canvas and a published head
  * change all arrive here reactively, so a completed answer cannot silently
  * outlive the generation it was read from even when no action module runs.
  */
-export function installInspectionObserver(): () => void {
+function installInspectionObserver(): () => void {
   disposeInspectionObserver()
   inspectionObserverDisposer = effect(() => {
     const target = inspectionSession.value
@@ -275,7 +275,7 @@ export function installInspectionObserver(): () => void {
       lastObservedGenerationId = null
       return
     }
-    // Leaving Canvas for Location (or any other primary surface) ends the
+    // Leaving Canvas for any other primary surface ends the
     // canvas gesture and releases its inspection session.
     if (panel !== 'canvas') {
       endInspection()
@@ -286,7 +286,7 @@ export function installInspectionObserver(): () => void {
   return disposeInspectionObserver
 }
 
-export function disposeInspectionObserver(): void {
+function disposeInspectionObserver(): void {
   inspectionObserverDisposer?.()
   inspectionObserverDisposer = null
 }
@@ -397,25 +397,15 @@ export function interpretOutcome(outcome: LidarSampleOutcome): InspectionSample 
 /**
  * The immutable generation presentation currently reports for one entity.
  *
- * A source reports its tileset's native generation; an analysis reports its own
- * result generation. Reading it here keeps the expected-generation fence derived
- * from the same presentation the map is drawing.
+ * Reading it from the library snapshot keeps the expected-generation fence
+ * derived from the same generation the map display descriptor is drawing.
  */
 function readCurrentGenerationId(target: InspectionTarget): string | null {
   const library = lidarLibrary.value
   if (!library) return null
-  if (target.kind === 'Source') {
-    const layer = library.layers.find((candidate) => candidate.id === target.id)
-    const tileset = layer?.tilesets.find(
-      (candidate) => candidate.source.kind === 'native-generation',
-    )
-    return tileset && 'generation_id' in tileset.source ? tileset.source.generation_id : null
-  }
-  const analysis = library.analyses.find((candidate) => candidate.id === target.id)
-  const tileset = analysis?.tilesets.find(
-    (candidate) => candidate.source.kind === 'native-generation',
-  )
-  return tileset && 'generation_id' in tileset.source ? tileset.source.generation_id : null
+  const role = target.kind
+  const entity = library.items.find((candidate) => candidate.id === target.id && candidate.role === role)
+  return entity?.generation_id ?? null
 }
 
 /**
@@ -430,7 +420,7 @@ function readCurrentGenerationId(target: InspectionTarget): string | null {
 let pointerHandler: ((point: { x: number; y: number }) => boolean) | null = null
 
 /** Publish or withdraw the handler the canvas gesture consults. */
-export function setInspectionPointerHandler(
+function setInspectionPointerHandler(
   handler: ((point: { x: number; y: number }) => boolean) | null,
 ): void {
   pointerHandler = handler
@@ -453,7 +443,7 @@ export function tryInspectAt(point: { x: number; y: number }): boolean {
  * release it: a leaked handler would keep claiming clicks for a session that no
  * longer exists.
  */
-export function installInspectionPointerHandler(): () => void {
+function installInspectionPointerHandler(): () => void {
   setInspectionPointerHandler((point) => sampleInspectionScenePoint(point))
   const dispose = () => setInspectionPointerHandler(null)
   pointerDisposer = dispose
@@ -461,13 +451,13 @@ export function installInspectionPointerHandler(): () => void {
 }
 
 /** Release the installed pointer handler, if one is installed. */
-export function releaseInspectionPointerHandler(): void {
+function releaseInspectionPointerHandler(): void {
   pointerDisposer?.()
   pointerDisposer = null
 }
 
 /** Whether a canvas gesture handler is currently installed. */
-export function hasInspectionPointerHandler(): boolean {
+export function hasInspectionPointerHandlerForTests(): boolean {
   return pointerHandler !== null
 }
 
@@ -478,12 +468,9 @@ export function hasInspectionPointerHandler(): boolean {
  * calls the same session and the same native command as a click, so a user
  * without a pointer can still read a value.
  */
-export function sampleInspectionScenePoint(point: { x: number; y: number }): boolean {
+function sampleInspectionScenePoint(point: { x: number; y: number }): boolean {
   if (!inspectionTarget.value) return false
-  const aim = inspectionPointForScenePoint(
-    point,
-    currentDesign.value?.spatial_frame ?? null,
-  )
+  const aim = inspectionPointForScenePoint(point)
   if (!aim) return false
   void sampleInspectionPoint(aim)
   return true

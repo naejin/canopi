@@ -11,7 +11,6 @@ import {
 export interface CanvasOverlayLocation {
   readonly lat: number
   readonly lon: number
-  readonly northBearingDeg: number | null
 }
 
 export function clearCanvasPanelTargetOverlays(map: MapLibreOverlayMap): void {

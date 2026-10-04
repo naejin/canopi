@@ -1,4 +1,3 @@
-import { SpeciesFocusChip } from '../components/canvas/SpeciesFocusChip'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import {
   designSessionStore,
@@ -8,9 +7,8 @@ import { getCurrentCanvasSession, setCanvasRuntimeSurfaces } from '../canvas/ses
 import { CanvasRuntimeCleanupError } from '../canvas/runtime/cleanup'
 import type { CanvasDocumentSurface } from '../canvas/runtime/runtime'
 import { acquireCanvasRuntimeLifecycle } from '../canvas/runtime/lifecycle-owner'
-import { ZoomControls } from '../components/canvas/ZoomControls'
-import { InspectionLens } from '../components/canvas/InspectionLens'
-import { CanvasOverview } from '../components/canvas/CanvasOverview'
+import { CanvasChrome } from '../components/canvas/CanvasChrome'
+import { workspaceCanvasCommandProjection } from '../app/workspace-commands/canvas-actions'
 import panelStyles from '../components/panels/Panels.module.css'
 import { browserDesignSessionController, type BrowserDesignSessionController } from './browser-design-session'
 import {
@@ -18,9 +16,16 @@ import {
   type BrowserWorkspaceRuntimeMountOptions,
 } from './browser-workspace-runtime'
 import type { WorkspaceRuntimeComposition } from '../app/canvas-map-surface/workspace-runtime-composition'
-import type { MapLibreCanvasSurfaceState } from '../maplibre/canvas-surface-state'
-import { WebCanvasToolbar } from './WebCanvasToolbar'
+import {
+  IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
+  type MapLibreCanvasSurfaceState,
+} from '../maplibre/canvas-surface-state'
+import { getMapNoticeReadModel } from '../app/canvas-map-surface/map-notice'
+import { hasVisibleMapLayer, mapLayers } from '../app/map-layers/state'
+import { MapNotice } from '../components/canvas/MapNotice'
+import { t } from '../i18n'
 import { WebWelcomeScreen } from './WebWelcomeScreen'
+import { useMapArea } from '../components/shared/useMapChrome'
 
 interface WebCanvasWorkspaceProps {
   readonly controller?: BrowserDesignSessionController
@@ -43,6 +48,7 @@ export function WebCanvasWorkspace({
 }: WebCanvasWorkspaceProps) {
   const hasDesign = store.currentDesign.value !== null
   const canvasAreaRef = useRef<HTMLDivElement>(null)
+  useMapArea(canvasAreaRef)
   const containerRef = useRef<HTMLDivElement>(null)
   const rulerOverlayRef = useRef<HTMLDivElement>(null)
   const runtimeRef = useRef<MountedRuntime | null>(null)
@@ -213,35 +219,29 @@ export function WebCanvasWorkspace({
     }
   }, [controller, createRuntimeComposition, store])
 
+  const mapNotice = getMapNoticeReadModel({
+    hasDesign,
+    mapVisible: hasVisibleMapLayer(mapLayers.value),
+    mapSurface: mapState ?? IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
+    t,
+  })
+
   return (
     <div className={panelStyles.canvasPanel} data-testid="web-canvas-workspace">
-      {hasDesign && <WebCanvasToolbar />}
-      <div className={panelStyles.canvasColumn}>
-        <div className={panelStyles.canvasRow}>
-          <div ref={canvasAreaRef} className={panelStyles.canvasArea}>
-            <div
-              ref={containerRef}
-              className={panelStyles.canvasContainer}
-              data-map-active={mapState?.status === 'ready' ? 'true' : 'false'}
-              data-testid="web-canvas-workspace-surface"
-            />
-            <div ref={rulerOverlayRef} className={panelStyles.rulerOverlay} />
-            {hasDesign && <InspectionLens canvasRef={containerRef} />}
-            {hasDesign && <SpeciesFocusChip />}
-            {hasDesign && <CanvasOverview />}
-            {!hasDesign && (
-              <div className={panelStyles.canvasEmptyState}>
-                <WebWelcomeScreen controller={controller} />
-              </div>
-            )}
-          </div>
-        </div>
-        {hasDesign && (
-          <div className={panelStyles.canvasBar}>
-            <div className={panelStyles.canvasBarSpacer} />
-            <ZoomControls />
-          </div>
-        )}
+      <div ref={canvasAreaRef} className={panelStyles.canvasArea}>
+        {/* Focusable from script while no session holds it (tabIndex -1, which the session restores when it ends), so
+            focus handed to the map after a Retry lands before the rebuilt session makes it a Tab stop again. */}
+        <div
+          ref={containerRef}
+          tabIndex={-1}
+          className={panelStyles.canvasContainer}
+          data-map-active={mapState?.status === 'ready' ? 'true' : 'false'}
+          data-testid="web-canvas-workspace-surface"
+        />
+        <div ref={rulerOverlayRef} className={panelStyles.rulerOverlay} />
+        {hasDesign && <CanvasChrome projection={workspaceCanvasCommandProjection.value} canvasRef={containerRef} />}
+        <MapNotice notice={mapNotice} onRetry={() => runtimeRef.current?.composition.retryMap()} canvasRef={containerRef} />
+        {!hasDesign && <WebWelcomeScreen controller={controller} />}
       </div>
     </div>
   )

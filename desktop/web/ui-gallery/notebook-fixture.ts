@@ -23,7 +23,7 @@ export const notebookWorkbench = createDesignNotebookWorkbench({
   activePath, currentDesign: signal(file),
   loadNotebook: async () => structuredClone(notebook),
   openDesign: async path => { activePath.value = path; activity.value = 'Opened the notebook reference in memory.' },
-  saveCurrent: async () => ({ status: 'applied', path: activePath.value, content: file }),
+  saveCurrent: async () => true,
   saveAsCurrent: async () => ({ status: 'applied', path: activePath.value, content: file }),
   addDesignReference: async (path, content) => { notebook.entries.push({ path, name: content.name, updated_at: content.updated_at, plant_count: content.plants.length, section_id: null, sort_order: notebook.entries.length }) },
   removeEntry: async path => { notebook.entries = notebook.entries.filter(entry => entry.path !== path) },

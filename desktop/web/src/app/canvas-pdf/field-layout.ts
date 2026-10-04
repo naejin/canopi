@@ -10,7 +10,7 @@ import { FieldSpace, type FieldLabel } from './field-placement'
 import { fieldDimensions } from './field-dimensions'
 import { appearanceKey, assignFieldIdentity, drawEnclosure, enclosureRadius, fieldIdentity } from './field-identity'
 import { directAnnotation } from './field-annotations'
-import { zoneMeasurements } from './zone-measurements'
+import type { ZoneMeasurements } from './zone-measurements'
 import { zoneLabels } from './zone-labels'
 import { protectZoneInk } from './zone-ink'
 
@@ -22,6 +22,8 @@ export interface FieldReferences {
   allPlants?: readonly PrintPlant[]
   identities?: ReadonlyMap<string, PdfEnclosure>
   measurementHomes?: ReadonlyMap<string, string>
+  /** Zone codes and sizes, measured once per plan. */
+  zones: readonly ZoneMeasurements[]
 }
 export interface FieldNote {
   id: string
@@ -49,15 +51,22 @@ const INK = '#24211c', OCHRE = '#A06B1F'
 const paper = (r: PrintBounds): PrintBounds => ({ x: r.x * MM, y: r.y * MM, width: r.width * MM, height: r.height * MM })
 
 /** Allocate once from the whole Design: cropping and locale never renumber a species. */
-export function fieldReferences(input: PdfInput, fields?: readonly PrintBounds[]): FieldReferences {
+/** N, P and M follow the unturned `plan` (top, then left, then id), so a code names the same object at every Map orientation. */
+export function fieldReferences(input: PdfInput, plan: CanvasPrintSnapshot, zones: readonly ZoneMeasurements[], fields?: readonly PrintBounds[]): FieldReferences {
   const codes = new Map(input.canvas.plants.map(p => [p.canonicalName, p.speciesCode ?? p.canonicalName]))
   const names = [...codes.keys()].sort((a, b) => codes.get(a)!.localeCompare(codes.get(b)!, 'en') || a.localeCompare(b, 'en'))
-  const ordered = <T extends { id: string; position: PrintPoint }>(items: readonly T[], prefix: string) => new Map([...items]
-    .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x || a.id.localeCompare(b.id))
-    .map((p, i) => [p.id, `${prefix}${i + 1}`]))
-  return { allPlants: input.canvas.plants, identities: assignFieldIdentity(input.canvas.plants, fields), species: new Map(names.map((name, i) => [name, String(i + 1).padStart(2, '0')])),
-    notes: ordered(input.canvas.annotations, 'N'), plants: ordered(input.canvas.plants, 'P'),
-    measurements: ordered(input.canvas.measurements.map(g => ({ ...g, position: g.start })), 'M') }
+  return { zones, allPlants: input.canvas.plants, identities: assignFieldIdentity(input.canvas.plants, fields), species: new Map(names.map((name, i) => [name, String(i + 1).padStart(2, '0')])),
+    notes: ordered(plan.annotations, 'N'), plants: ordered(plan.plants, 'P'),
+    measurements: measurementReferences(plan) }
+}
+
+const ordered = <T extends { id: string; position: PrintPoint }>(items: readonly T[], prefix: string) => new Map([...items]
+  .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x || a.id.localeCompare(b.id))
+  .map((p, i) => [p.id, `${prefix}${i + 1}`]))
+
+/** Every guide's M code, from the unturned `plan`: the overview and the detail pages print the same one. */
+export function measurementReferences(plan: CanvasPrintSnapshot): ReadonlyMap<string, string> {
+  return ordered(plan.measurements.map(g => ({ ...g, position: g.start })), 'M')
 }
 
 export function visibleFieldCanvas(canvas: CanvasPrintSnapshot, ground: PrintBounds): CanvasPrintSnapshot {
@@ -122,7 +131,7 @@ function layoutField(input: PdfInput, frame: PrintBounds, ground: PrintBounds, s
     const key = appearanceKey(plant), peers = codePeers.get(key) ?? []
     peers.push(plant.id); codePeers.set(key, peers)
   }
-  const legend = identifyPlants(canvas.plants, input.commonNames, input.locale).map(entry => ({ ...entry, enclosures: entry.appearances.map(p => identities.get(p.id)!), reference: references.species.get(entry.canonicalName)!,
+  const legend = identifyPlants(canvas.plants, input).map(entry => ({ ...entry, enclosures: entry.appearances.map(p => identities.get(p.id)!), reference: references.species.get(entry.canonicalName)!,
     count: canvas.plants.filter(p => p.canonicalName === entry.canonicalName).length })).sort((a, b) => Number(a.reference) - Number(b.reference))
   operations.push({ kind: 'clip', bounds: frame })
   const zonePaths = new Set<PdfOperation>()
@@ -217,7 +226,7 @@ function layoutField(input: PdfInput, frame: PrintBounds, ground: PrintBounds, s
     .filter(n => !directAnnotation(n, point(n.position), scale, space, opacity('annotations'), operations)).map((n): FieldNote => ({ id: n.id, reference: references.notes.get(n.id)!, text: n.text, position: n.position, kind: 'annotation' }))
     .sort((a, b) => Number(a.reference.slice(1)) - Number(b.reference.slice(1))))
   for (const note of notes.filter(n => !n.species)) { const p = point(note.position); space.mark(note.id, { x: p.x - .7, y: p.y - .7, width: 1.4, height: 1.4 }) }
-  const zones = zoneMeasurements(canvas.zones)
+  const zones = references.zones
   operations.push(...zoneLabels(zones, ground, point, space))
   placeDimensions()
   space.addSegments(zoneSegments)

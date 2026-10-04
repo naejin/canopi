@@ -1,6 +1,4 @@
 import { invoke } from '@tauri-apps/api/core';
-import { plantDbStatus } from '../app/health/state';
-import { plantDbUnavailableMessage } from './plant-db-errors';
 import type {
   SpeciesListItem,
   SpeciesDetail,
@@ -13,24 +11,12 @@ import type {
   FlowerColorResolution,
 } from '../types/species';
 
-/** Returns true when plant DB is not available — all queries should short-circuit. */
-function isDegraded(): boolean {
-  return plantDbStatus.value !== 'available';
-}
+// Plain transport: the plant DB health gate lives in app/plant-browser/live.desktop.ts.
 
 export async function searchSpecies(
   request: SpeciesSearchRequest,
 ): Promise<PaginatedResult<SpeciesListItem>> {
-  if (isDegraded()) throw new Error(plantDbUnavailableMessage(plantDbStatus.value));
-  return invoke('search_species', {
-    text: request.text,
-    filters: request.filters,
-    cursor: request.cursor ?? null,
-    limit: request.limit,
-    sort: request.sort,
-    locale: request.locale,
-    includeTotal: request.include_total,
-  });
+  return invoke('search_species', { request });
 }
 
 export async function supersedeSpeciesSearch(): Promise<void> {
@@ -41,12 +27,10 @@ export async function getSpeciesDetail(
   canonicalName: string,
   locale = 'en',
 ): Promise<SpeciesDetail> {
-  if (isDegraded()) throw new Error(plantDbUnavailableMessage(plantDbStatus.value));
   return invoke('get_species_detail', { canonicalName, locale });
 }
 
 export async function getFilterOptions(): Promise<FilterOptions> {
-  if (isDegraded()) return { families: [], growth_rates: [], climate_zones: [], habits: [], life_cycles: [], sun_tolerances: [], soil_tolerances: [] };
   return invoke('get_filter_options');
 }
 
@@ -54,7 +38,6 @@ export async function getDynamicFilterOptions(
   fields: string[],
   locale: string,
 ): Promise<DynamicFilterOptions[]> {
-  if (isDegraded()) return [];
   return invoke('get_dynamic_filter_options', { fields, locale });
 }
 
@@ -63,8 +46,12 @@ export async function getCommonNames(
   canonicalNames: string[],
   locale: string,
 ): Promise<Record<string, string>> {
-  if (isDegraded()) return {};
   return invoke('get_common_names', { canonicalNames, locale });
+}
+
+/** Batch lookup: returns canonical_name → catalog habit (`Tree`, `Shrub`, ...) where the catalog has one. */
+export async function getSpeciesHabits(canonicalNames: string[]): Promise<Record<string, string>> {
+  return invoke('get_species_habits', { canonicalNames });
 }
 
 /** Batch-fetch full detail records for multiple species. */
@@ -72,14 +59,12 @@ export async function getSpeciesBatch(
   canonicalNames: string[],
   locale: string,
 ): Promise<SpeciesDetail[]> {
-  if (isDegraded()) return [];
   return invoke('get_species_batch', { canonicalNames, locale });
 }
 
 export async function getFlowerColorBatch(
   canonicalNames: string[],
 ): Promise<FlowerColorResolution[]> {
-  if (isDegraded()) return [];
   return invoke('get_flower_color_batch', { canonicalNames });
 }
 
@@ -88,7 +73,6 @@ export async function getLocaleCommonNames(
   canonicalName: string,
   locale: string,
 ): Promise<CommonNameEntry[]> {
-  if (isDegraded()) return [];
   return invoke('get_locale_common_names', { canonicalName, locale });
 }
 
@@ -96,7 +80,6 @@ export async function getLocaleCommonNames(
 export async function getSpeciesImages(
   canonicalName: string,
 ): Promise<SpeciesImage[]> {
-  if (isDegraded()) return [];
   return invoke('get_species_images', { canonicalName });
 }
 

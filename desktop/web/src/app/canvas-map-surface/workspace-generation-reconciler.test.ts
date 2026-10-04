@@ -24,15 +24,14 @@ describe('WorkspaceGenerationReconciler', () => {
 
   it('activates one initial Design and publishes its non-cancelled outcome', async () => {
     const A = snapshot()
-    const onOutcome = vi.fn()
     const workspace = lifecycle()
     const reconciler = new WorkspaceGenerationReconciler({
-      workspace, readSnapshot: () => A, onOutcome,
+      workspace, readSnapshot: () => A,
     })
 
     await expect(reconciler.reconcileInitialGeneration()).resolves.toBe('shared-ready')
     expect(workspace.activate).toHaveBeenCalledExactlyOnceWith(A)
-    expect(onOutcome).toHaveBeenCalledExactlyOnceWith('shared-ready')
+    await expect(workspace.activate.mock.results[0]!.value).resolves.toBe('shared-ready')
   })
 
   it('observes one initial snapshot read failure without rejecting startup', async () => {
@@ -51,14 +50,13 @@ describe('WorkspaceGenerationReconciler', () => {
     const A = snapshot({ sessionIdentity: {}, latitude: 10 })
     const B = snapshot({ sessionIdentity: {}, latitude: 20 })
     let current = A
-    const onOutcome = vi.fn()
     const workspace = lifecycle({
       activate: vi.fn()
         .mockImplementationOnce(() => initial.promise)
         .mockResolvedValue('shared-ready'),
     })
     const reconciler = new WorkspaceGenerationReconciler({
-      workspace, readSnapshot: () => current, onOutcome,
+      workspace, readSnapshot: () => current,
     })
 
     const startup = reconciler.reconcileInitialGeneration()
@@ -69,15 +67,15 @@ describe('WorkspaceGenerationReconciler', () => {
     initial.resolve('shared-ready')
 
     await expect(startup).resolves.toBe('cancelled')
-    await vi.waitFor(() => expect(onOutcome).toHaveBeenCalledExactlyOnceWith('shared-ready'))
+    expect(workspace.activate).toHaveBeenLastCalledWith(B)
+    await expect(workspace.activate.mock.results[1]!.value).resolves.toBe('shared-ready')
   })
 
   it('invalidates a late initial activation when disposed', async () => {
     const activation = deferred<'shared-ready'>()
-    const onOutcome = vi.fn()
     const workspace = lifecycle({ activate: () => activation.promise })
     const reconciler = new WorkspaceGenerationReconciler({
-      workspace, readSnapshot: () => snapshot(), onOutcome,
+      workspace, readSnapshot: () => snapshot(),
     })
 
     const startup = reconciler.reconcileInitialGeneration()
@@ -86,36 +84,6 @@ describe('WorkspaceGenerationReconciler', () => {
     activation.resolve('shared-ready')
 
     await expect(startup).resolves.toBe('cancelled')
-    expect(onOutcome).not.toHaveBeenCalled()
-  })
-
-  it('routes a queued outcome callback failure once without leaking its microtask', async () => {
-    const error = new Error('viewport failed')
-    const onFailure = vi.fn()
-    const reconciler = new WorkspaceGenerationReconciler({
-      workspace: lifecycle(),
-      readSnapshot: () => snapshot(),
-      onOutcome: () => { throw error },
-      onFailure,
-    })
-
-    reconciler.reconcileAfterDocumentReplacement(reconciler.suspendForDocumentReplacement())
-
-    await vi.waitFor(() => expect(onFailure).toHaveBeenCalledExactlyOnceWith(error))
-  })
-
-  it('downgrades initial readiness when its outcome callback fails', async () => {
-    const error = new Error('initial viewport failed')
-    const onFailure = vi.fn()
-    const reconciler = new WorkspaceGenerationReconciler({
-      workspace: lifecycle(),
-      readSnapshot: () => snapshot(),
-      onOutcome: () => { throw error },
-      onFailure,
-    })
-
-    await expect(reconciler.reconcileInitialGeneration()).resolves.toBe('cancelled')
-    expect(onFailure).toHaveBeenCalledExactlyOnceWith(error)
   })
 
   it('contains a throwing failure observer during queued snapshot reconciliation', async () => {
@@ -407,6 +375,45 @@ describe('WorkspaceGenerationReconciler', () => {
     expect(workspace.activate).not.toHaveBeenCalled()
   })
 
+  it('activates the current Design again on a Retry the workspace accepts', async () => {
+    const A = snapshot()
+    const B = snapshot()
+    let current = A
+    const workspace = lifecycle({ activate: vi.fn().mockResolvedValueOnce('map-unavailable').mockResolvedValue('shared-ready') })
+    const reconciler = new WorkspaceGenerationReconciler({ workspace, readSnapshot: () => current })
+    await expect(reconciler.reconcileInitialGeneration()).resolves.toBe('map-unavailable')
+    current = B
+
+    expect(reconciler.retry()).toBe(true)
+
+    expect(workspace.retry).toHaveBeenCalledOnce()
+    expect(workspace.activate).toHaveBeenLastCalledWith(B)
+    // A second press while that activation runs is refused rather than queued.
+    expect(reconciler.retry()).toBe(false)
+    await vi.waitFor(() => expect(reconciler.retry()).toBe(true))
+    expect(workspace.activate).toHaveBeenCalledTimes(3)
+  })
+
+  it('refuses Retry without a Design, when the workspace refuses, during a replacement and after disposal', async () => {
+    let current: WorkspaceActivationSnapshot | null = null
+    const workspace = lifecycle({ retry: () => false })
+    const reconciler = new WorkspaceGenerationReconciler({ workspace, readSnapshot: () => current })
+    expect(reconciler.retry()).toBe(false)
+    expect(workspace.retry).not.toHaveBeenCalled()
+
+    current = snapshot()
+    expect(reconciler.retry()).toBe(false)
+    expect(workspace.retry).toHaveBeenCalledOnce()
+
+    workspace.retry.mockImplementation(() => true)
+    reconciler.suspendForDocumentReplacement()
+    expect(reconciler.retry()).toBe(false)
+
+    await reconciler.dispose()
+    expect(reconciler.retry()).toBe(false)
+    expect(workspace.activate).not.toHaveBeenCalled()
+  })
+
   it('ignores a late activation settlement after disposal', async () => {
     const activation = deferred<'shared-ready'>()
     const A = snapshot({ sessionIdentity: {}, latitude: 10 })
@@ -430,10 +437,12 @@ function lifecycle(overrides: Partial<WorkspaceGenerationLifecycle> = {}) {
   const requestGenerationDisconnect = overrides.requestGenerationDisconnect ?? (async () => {})
   const activate = overrides.activate ?? (async () => 'shared-ready' as const)
   const teardown = overrides.teardown ?? (async () => {})
+  const retry = overrides.retry ?? (() => true)
   return {
     requestGenerationDisconnect: vi.fn(requestGenerationDisconnect),
     activate: vi.fn(activate),
     teardown: vi.fn(teardown),
+    retry: vi.fn(retry),
   }
 }
 
@@ -444,18 +453,18 @@ function snapshot({
   return {
     sessionIdentity,
     map: {
-      anchor: { lat: latitude, lon: 2.3522 },
-      northBearingDeg: 0,
-      placementStatus: 'confirmed',
-      basemapStyle: 'street',
-      basemapVisible: true,
-      basemapOpacity: 1,
+      initialCenter: { lat: latitude, lon: 2.3522 },
+      background: {
+        basemap: { style: 'liberty', visible: true, opacity: 1 },
+        satellite: { visible: false, opacity: 1 },
+        locale: 'en',
+      },
     },
   }
 }
 
 function label(candidate: WorkspaceActivationSnapshot): string {
-  return candidate.map.anchor.lat === 10 ? 'A' : 'B'
+  return candidate.map.initialCenter.lat === 10 ? 'A' : 'B'
 }
 
 function deferred<T>() {

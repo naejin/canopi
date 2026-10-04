@@ -1,0 +1,563 @@
+// maplibre/camera-driver.ts
+//
+// Owns one MapLibre map's camera while it is attached (ADR 0016): the only code that calls camera methods (jumpTo, flyTo, stop,
+// resize) on the workspace and snapshot maps. Targets come from view/camera-math and constrainCamera; the map receives explicit
+// jumpTo values (one per tween frame) and flyTo for flights, and every frame is built from MapLibre's read-backs. The map's
+// transformConstrain is an adapter over the same constrainCamera, with a bearing arc this driver sets before each call.
+
+import { signal } from '@preact/signals'
+import type { SessionPlane } from '../canvas/session-plane'
+import { isWorkspaceOverviewScale } from '../canvas/workspace-camera-policy'
+import { startBearingTween, type BearingTween } from '../canvas/runtime/view/bearing-tween'
+import type { CameraDriver, CameraDriverDeps, CameraDriverFailure, CameraMove } from '../canvas/runtime/view/camera-driver'
+import {
+  panCamera,
+  rotateCameraAround,
+  zoomCameraAround,
+} from '../canvas/runtime/view/camera-math'
+import { createDriverFrameSource } from '../canvas/runtime/view/frame-source'
+import {
+  constrainCamera,
+  normaliseBearing,
+  scaleBoundsAt,
+  VIEW_EASE_MS,
+  zoomFloorForArc,
+} from '../canvas/runtime/view/navigation-policy'
+import type {
+  GeoPoint,
+  ScreenInsets,
+  ScreenPoint,
+  ViewCamera,
+  ViewFrame,
+  ViewScreen,
+} from '../canvas/runtime/view/types'
+import { buildViewTransform } from '../canvas/runtime/view/view-transform'
+import type { MapLibreLngLat, MapLibreMapInstance, MapLibreTransformConstrain } from './loader'
+import { redactCredentials } from './redact-credentials'
+
+/** The map operations the driver uses; the four read-backs it cannot work without are checked when it is created. */
+export type MapLibreCameraDriverMap = Pick<MapLibreMapInstance,
+  | 'jumpTo'
+  | 'flyTo'
+  | 'stop'
+  | 'resize'
+  | 'on'
+  | 'off'
+  | 'getCenter'
+  | 'getZoom'
+  | 'getBearing'
+  | 'getPitch'
+  | 'setTransformConstrain'
+  | 'getCanvas'
+>
+
+const REQUIRED_READ_BACKS = ['getCenter', 'getZoom', 'getBearing'] as const
+const NO_INSETS: ScreenInsets = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 })
+const EMPTY_SCREEN: ViewScreen = Object.freeze({ width: 0, height: 0, devicePixelRatio: 1 })
+
+/** Everything a frame is built from; a change publishes only when one of these moved. */
+interface FrameState {
+  readonly camera: ViewCamera
+  readonly screen: ViewScreen
+  readonly insets: ScreenInsets
+  readonly scaleBounds: { readonly min: number; readonly max: number }
+  readonly overviewPixelsPerMetre: number
+  readonly moving: boolean
+  readonly plane: SessionPlane
+  readonly planeRevision: number
+}
+
+interface Flight {
+  readonly targetBearingDeg: number
+  /** False while flyTo itself runs: a flight MapLibre completes inside that call (reduced motion) ends there. */
+  started: boolean
+  ended: boolean
+}
+
+/**
+ * `createMapLibreCameraDriver(map, plane, deps)` (spec §1.1 Attachment). A map without getCenter, getZoom or getBearing,
+ * or one whose read-back pitch is not 0, fails the driver with 'map-error'; its host then detaches it. The driver resizes its map to
+ * the container once, starts at the map canvas' CSS size, and changes it only through setScreen.
+ */
+export function createMapLibreCameraDriver(
+  map: MapLibreCameraDriverMap,
+  initialPlane: SessionPlane,
+  deps: CameraDriverDeps,
+): CameraDriver {
+  let plane = initialPlane
+  let planeRevision = 0
+  let screen: ViewScreen = EMPTY_SCREEN
+  let insets = NO_INSETS
+  let tween: BearingTween | null = null
+  let frameRequest: number | null = null
+  let flight: Flight | null = null
+  let disposed = false
+  /** Depth of the driver's own map calls: the 'move' and 'moveend' events they fire are not MapLibre's own changes. */
+  let ownCalls = 0
+  let guardInstalled = false
+  const queued: Array<() => void> = []
+  const failure = signal<CameraDriverFailure | null>(null)
+
+  /** The guard's bearing arc: [b, b] for a jump, [from, to] for a flight. It never reads map.getBearing(). */
+  let arc = { fromDeg: 0, toDeg: 0 }
+  const guard: MapLibreTransformConstrain = (lngLat, zoom) => {
+    const candidate: ViewCamera = { center: { lon: lngLat.lng, lat: lngLat.lat }, zoom, bearingDeg: arc.toDeg, pitchDeg: 0 }
+    const held = constrainCamera(candidate, screen, deps.policy(), arc)
+    if (held === candidate) return { center: lngLat, zoom }
+    return { center: held.center === candidate.center ? lngLat : sameKindOfLngLat(lngLat, held.center), zoom: held.zoom }
+  }
+
+  const missing = REQUIRED_READ_BACKS.filter((name) => typeof map[name] !== 'function')
+  if (missing.length > 0) fail(`The map cannot be driven without ${missing.join(', ')}.`)
+  // The map never resizes itself (trackResize: false), and a container resize reported before this driver existed reached only
+  // the headless camera: the map takes its container's size once here, before the guard reads the screen.
+  if (live()) send(() => map.resize())
+  screen = canvasScreen(map)
+  const attached = readCamera()
+  if (attached) {
+    arc = arcAt(attached.bearingDeg)
+    try {
+      if (map.setTransformConstrain) {
+        map.setTransformConstrain(guard)
+        guardInstalled = true
+      }
+    } catch (error) {
+      fail(`The map could not take the camera guard: ${messageOf(error)}`)
+    }
+  }
+  // MapLibre applies the guard as soon as it is installed, so the first frame is read after it.
+  let published = frameState((guardInstalled ? readCamera() : attached) ?? placeholderCamera())
+  const frames = createDriverFrameSource(buildFrame(published))
+
+  const onMove = () => {
+    if (ownCalls > 0 || !live()) return
+    if (queuedWhileDispatching(refresh)) return
+    refresh()
+  }
+  const onMoveEnd = () => {
+    const running = flight
+    if (!running || !live()) return
+    if (!running.started) {
+      running.ended = true
+      return
+    }
+    if (ownCalls > 0) return
+    endFlight()
+  }
+  const listeners = [['move', onMove], ['moveend', onMoveEnd]] as const
+  const subscribed: Array<(typeof listeners)[number]> = []
+  if (live()) {
+    try {
+      for (const entry of listeners) {
+        map.on(entry[0], entry[1])
+        subscribed.push(entry)
+      }
+    } catch (error) {
+      fail(`The map could not report its camera: ${messageOf(error)}`)
+    }
+  }
+
+  function live(): boolean {
+    return !disposed && failure.peek() === null
+  }
+
+  function fail(message: string): void {
+    if (failure.peek()) return
+    stopTween()
+    flight = null
+    queued.length = 0
+    failure.value = { reason: 'map-error', message: redactCredentials(message) }
+  }
+
+  function placeholderCamera(): ViewCamera {
+    return { center: plane.origin, zoom: deps.policy().minZoom, bearingDeg: 0, pitchDeg: 0 }
+  }
+
+  /** MapLibre's camera, the bearing normalised from its (−180, 180] to [0, 360). Null (and the driver failed) when it cannot be read. */
+  function readCamera(): ViewCamera | null {
+    if (failure.peek()) return null
+    try {
+      const pitch = map.getPitch?.() ?? 0
+      if (pitch !== 0) {
+        fail(`The map reported a pitched camera (${pitch}°).`)
+        return null
+      }
+      const center = map.getCenter!()
+      const zoom = map.getZoom!()
+      const bearing = map.getBearing!()
+      if (![center.lng, center.lat, zoom, bearing].every(Number.isFinite)) {
+        fail('The map reported a camera that is not finite.')
+        return null
+      }
+      return { center: { lon: center.lng, lat: center.lat }, zoom, bearingDeg: normaliseBearing(bearing), pitchDeg: 0 }
+    } catch (error) {
+      fail(`The map camera could not be read: ${messageOf(error)}`)
+      return null
+    }
+  }
+
+  function frameState(camera: ViewCamera): FrameState {
+    const policy = deps.policy()
+    return {
+      camera,
+      screen,
+      insets,
+      scaleBounds: scaleBoundsAt(screen, policy, camera.bearingDeg),
+      overviewPixelsPerMetre: policy.overviewPixelsPerMetre,
+      moving: tween !== null || flight !== null,
+      plane,
+      planeRevision,
+    }
+  }
+
+  function buildFrame(state: FrameState): ViewFrame {
+    const view = buildViewTransform({
+      camera: state.camera,
+      screen: state.screen,
+      plane: state.plane,
+      planeRevision: state.planeRevision,
+      revision: 0,
+    })
+    return Object.freeze<ViewFrame>({
+      view,
+      mode: isWorkspaceOverviewScale(view.pixelsPerMetre, { overviewScaleThreshold: state.overviewPixelsPerMetre }) ? 'overview' : 'site',
+      scaleBounds: state.scaleBounds,
+      insets: state.insets,
+      attached: true,
+      moving: state.moving,
+      revision: 0,
+    })
+  }
+
+  /** Publishes one frame when anything in it changed, then runs the calls queued meanwhile. */
+  function commit(camera: ViewCamera): void {
+    const state = frameState(camera)
+    if (sameFrameState(published, state)) return
+    published = state
+    const frame = buildFrame(state)
+    frames.publish(frame)
+    while (!frames.dispatching && queued.length > 0 && live()) queued.shift()!()
+  }
+
+  function refresh(): void {
+    const camera = readCamera()
+    if (camera) commit(camera)
+  }
+
+  /** A call made while a frame is dispatched runs once, after every listener, in the same task. */
+  function queuedWhileDispatching(run: () => void): boolean {
+    if (!frames.dispatching) return false
+    queued.push(run)
+    return true
+  }
+
+  /** Runs one of the driver's own map calls; a throw fails the driver. */
+  function send(call: () => void): boolean {
+    ownCalls += 1
+    try {
+      call()
+      return true
+    } catch (error) {
+      fail(`The map could not move: ${messageOf(error)}`)
+      return false
+    } finally {
+      ownCalls -= 1
+    }
+  }
+
+  /** Sends the target (already constrained) as explicit jumpTo values and publishes the read-back frame. */
+  function jumpTo(target: ViewCamera): void {
+    arc = arcAt(target.bearingDeg)
+    const sent = send(() => map.jumpTo({
+      center: [target.center.lon, target.center.lat],
+      zoom: target.zoom,
+      bearing: target.bearingDeg,
+      pitch: 0,
+    }))
+    if (sent) refresh()
+  }
+
+  /** Sends the target unless the move changed nothing (the shown camera back from camera-math): then only the frame is refreshed. */
+  function moveTo(target: ViewCamera, start: { readonly camera: ViewCamera; readonly shown: boolean }): void {
+    if (start.shown && target === start.camera) refresh()
+    else jumpTo(target)
+  }
+
+  /**
+   * The camera a move starts from, and whether the map shows it now. A flight is stopped by any other move; an incremental move
+   * (pan, zoom) carries the flight's target bearing, so its jump is sent even when the move itself changes nothing.
+   */
+  function startingCamera(carryFlightBearing: boolean): { readonly camera: ViewCamera; readonly shown: boolean } | null {
+    const running = flight
+    if (running) {
+      flight = null
+      if (!send(() => map.stop?.())) return null
+    }
+    const camera = readCamera()
+    if (!camera) return null
+    if (!running || !carryFlightBearing) return { camera, shown: !running }
+    return { camera: rotateCameraAround(camera, screen, 'centre', running.targetBearingDeg), shown: false }
+  }
+
+  function startTween(next: BearingTween): void {
+    stopTween()
+    tween = next
+    frameRequest = requestAnimationFrame(stepTween)
+    refresh()
+  }
+
+  function stopTween(): void {
+    if (frameRequest !== null) cancelAnimationFrame(frameRequest)
+    frameRequest = null
+    tween = null
+  }
+
+  function stepTween(nowMs: number): void {
+    frameRequest = null
+    const running = tween
+    if (!running || !live()) return
+    const current = readCamera()
+    if (!current) return
+    const { camera, done } = running.step(current, screen, nowMs)
+    if (done) tween = null
+    // Every tween frame goes through constrainCamera at that frame's bearing.
+    moveTo(constrainCamera(camera, screen, deps.policy()), { camera: current, shown: true })
+    if (!done && tween === running && live()) frameRequest = requestAnimationFrame(stepTween)
+  }
+
+  function endFlight(): void {
+    flight = null
+    const camera = readCamera()
+    if (!camera) return
+    arc = arcAt(camera.bearingDeg)
+    commit(camera)
+  }
+
+  /** The zoom factor clamped to the zoom range at the live bearing first, as the headless driver clamps the scale before anchoring. */
+  function zoomAround(camera: ViewCamera, anchorPx: ScreenPoint, factor: number): ViewCamera {
+    const policy = deps.policy()
+    const floor = Math.max(policy.minZoom, zoomFloorForArc(screen, policy, camera.bearingDeg, camera.bearingDeg))
+    const wanted = camera.zoom + Math.log2(factor)
+    const zoom = Math.min(policy.maxZoom, Math.max(Math.min(policy.maxZoom, floor), wanted))
+    return zoomCameraAround(camera, screen, anchorPx, zoom === wanted ? factor : 2 ** (zoom - camera.zoom))
+  }
+
+  function fly(target: ViewCamera, from: ViewCamera): void {
+    const flyTo = map.flyTo
+    if (!flyTo || deps.policy().reducedMotion.peek()) {
+      jumpTo(constrainCamera(target, screen, deps.policy()))
+      return
+    }
+    // The guard covers every bearing the flight passes through, for the whole flight.
+    arc = { fromDeg: from.bearingDeg, toDeg: target.bearingDeg }
+    const held = constrainCamera(target, screen, deps.policy(), arc)
+    const running: Flight = { targetBearingDeg: held.bearingDeg, started: false, ended: false }
+    flight = running
+    const sent = send(() => flyTo.call(map, { center: [held.center.lon, held.center.lat], zoom: held.zoom, bearing: held.bearingDeg }))
+    if (!sent) return
+    running.started = true
+    if (running.ended && flight === running) endFlight()
+    else refresh()
+  }
+
+  function apply(move: CameraMove): void {
+    if (!live() || queuedWhileDispatching(() => apply(move))) return
+    switch (move.kind) {
+      case 'pan-by': {
+        if (!finitePoint(move.deltaPx)) return
+        // A pan during a tween composes with it: the tween's next step starts from the panned camera.
+        const start = startingCamera(true)
+        if (start) moveTo(constrainCamera(panCamera(start.camera, screen, move.deltaPx), screen, deps.policy()), start)
+        return
+      }
+      case 'zoom-around': {
+        if (!Number.isFinite(move.factor) || move.factor <= 0 || !finitePoint(move.anchorPx)) return
+        const start = startingCamera(true)
+        if (start) moveTo(constrainCamera(zoomAround(start.camera, move.anchorPx, move.factor), screen, deps.policy()), start)
+        return
+      }
+      case 'rotate-around': {
+        if (!Number.isFinite(move.bearingDeg) || (move.anchorPx !== 'centre' && !finitePoint(move.anchorPx))) return
+        const start = startingCamera(false)
+        if (!start) return
+        if (move.animation === 'ease' && !deps.policy().reducedMotion.peek()) {
+          startTween(startBearingTween(start.camera, {
+            bearingDeg: move.bearingDeg,
+            anchorPx: move.anchorPx,
+            durationMs: VIEW_EASE_MS,
+          }, performance.now()))
+          return
+        }
+        stopTween()
+        const turned = rotateCameraAround(start.camera, screen, move.anchorPx, move.bearingDeg)
+        moveTo(constrainCamera(turned, screen, deps.policy()), start)
+        return
+      }
+      case 'set': {
+        const { target } = move
+        if (![target.center.lon, target.center.lat, target.zoom, target.bearingDeg].every(Number.isFinite)) return
+        const start = startingCamera(false)
+        if (!start) return
+        const normalised: ViewCamera = { ...target, bearingDeg: normaliseBearing(target.bearingDeg), pitchDeg: 0 }
+        stopTween()
+        if (move.animation === 'fly') fly(normalised, start.camera)
+        else jumpTo(constrainCamera(normalised, screen, deps.policy()))
+        return
+      }
+    }
+  }
+
+  function stopAnimation(): void {
+    if (!live() || queuedWhileDispatching(stopAnimation)) return
+    if (!tween && !flight) return
+    stopTween()
+    if (flight) {
+      flight = null
+      if (!send(() => map.stop?.())) return
+    }
+    refresh()
+  }
+
+  function planeChanged(next: SessionPlane): void {
+    if (!live() || queuedWhileDispatching(() => planeChanged(next)) || next === plane) return
+    // MapLibre's camera is geographic: only the plane the frame is expressed in changes.
+    plane = next
+    planeRevision += 1
+    refresh()
+  }
+
+  function setScreen(next: ViewScreen): void {
+    if (!live() || queuedWhileDispatching(() => setScreen(next))) return
+    const normalised = normaliseScreen(next)
+    if (
+      normalised.width === screen.width
+      && normalised.height === screen.height
+      && normalised.devicePixelRatio === screen.devicePixelRatio
+    ) return
+    const before = readCamera()
+    if (!before) return
+    screen = normalised
+    // MapLibre re-runs the guard at the new size (a running flight keeps its arc); a map without the guard is constrained below.
+    if (!flight) arc = arcAt(before.bearingDeg)
+    if (!send(() => map.resize())) return
+    const resized = readCamera()
+    if (!resized) return
+    const held = constrainCamera(resized, screen, deps.policy(), arc)
+    if (held === resized) {
+      commit(resized)
+      return
+    }
+    // A jump stops a running flight.
+    flight = null
+    jumpTo(held)
+  }
+
+  function setInsets(next: ScreenInsets): void {
+    if (!live() || queuedWhileDispatching(() => setInsets(next))) return
+    insets = Object.freeze({ top: next.top, right: next.right, bottom: next.bottom, left: next.left })
+    refresh()
+  }
+
+  return {
+    frames,
+    failure,
+    apply,
+    bearingTarget: () => tween?.targetBearingDeg ?? flight?.targetBearingDeg ?? published.camera.bearingDeg,
+    stopAnimation,
+    planeChanged,
+    setScreen,
+    setInsets,
+    dispose() {
+      if (disposed) return
+      disposed = true
+      stopTween()
+      queued.length = 0
+      const errors: unknown[] = []
+      const release = (step: () => void) => {
+        try {
+          step()
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+      if (flight) {
+        flight = null
+        release(() => map.stop?.())
+      }
+      for (const [type, listener] of subscribed.splice(0)) release(() => map.off(type, listener))
+      if (guardInstalled) release(() => map.setTransformConstrain?.(null))
+      frames.dispose()
+      if (errors.length === 1) throw errors[0]
+      if (errors.length > 1) throw new MapLibreCameraDriverReleaseError(errors)
+    },
+  }
+}
+
+class MapLibreCameraDriverReleaseError extends Error {
+  constructor(readonly errors: readonly unknown[]) {
+    super('The MapLibre camera driver could not release its map.')
+  }
+}
+
+function arcAt(bearingDeg: number): { fromDeg: number; toDeg: number } {
+  return { fromDeg: bearingDeg, toDeg: bearingDeg }
+}
+
+/** MapLibre keeps the returned centre as its transform's LngLat, so it is built with the class MapLibre passed in. */
+function sameKindOfLngLat(template: MapLibreLngLat, center: GeoPoint): MapLibreLngLat {
+  const LngLat: unknown = template.constructor
+  return typeof LngLat === 'function' && LngLat !== Object
+    ? new (LngLat as new (lng: number, lat: number) => MapLibreLngLat)(center.lon, center.lat)
+    : { lng: center.lon, lat: center.lat }
+}
+
+/** The canvas' CSS size and density, as MapLibre last sized it: the screen the map renders now. */
+function canvasScreen(map: MapLibreCameraDriverMap): ViewScreen {
+  const canvas = map.getCanvas?.()
+  const width = finiteSize(canvas?.clientWidth)
+  const height = finiteSize(canvas?.clientHeight)
+  const density = canvas && width > 0 ? canvas.width / width : Number.NaN
+  return normaliseScreen({ width, height, devicePixelRatio: density })
+}
+
+/** Invalid sizes read as 0 and an invalid density as 1, as the headless driver reads them. */
+function normaliseScreen(screen: ViewScreen): ViewScreen {
+  const density = screen.devicePixelRatio
+  return Object.freeze({
+    width: finiteSize(screen.width),
+    height: finiteSize(screen.height),
+    devicePixelRatio: Number.isFinite(density) && density > 0 ? density : 1,
+  })
+}
+
+function finiteSize(value: number | undefined): number {
+  return value !== undefined && Number.isFinite(value) ? Math.max(0, value) : 0
+}
+
+function finitePoint(point: ScreenPoint): boolean {
+  return Number.isFinite(point.x) && Number.isFinite(point.y)
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function sameFrameState(previous: FrameState, next: FrameState): boolean {
+  return previous.camera.center.lon === next.camera.center.lon
+    && previous.camera.center.lat === next.camera.center.lat
+    && previous.camera.zoom === next.camera.zoom
+    && previous.camera.bearingDeg === next.camera.bearingDeg
+    && previous.screen.width === next.screen.width
+    && previous.screen.height === next.screen.height
+    && previous.screen.devicePixelRatio === next.screen.devicePixelRatio
+    && previous.insets.top === next.insets.top
+    && previous.insets.right === next.insets.right
+    && previous.insets.bottom === next.insets.bottom
+    && previous.insets.left === next.insets.left
+    && previous.scaleBounds.min === next.scaleBounds.min
+    && previous.scaleBounds.max === next.scaleBounds.max
+    && previous.overviewPixelsPerMetre === next.overviewPixelsPerMetre
+    && previous.moving === next.moving
+    && previous.plane === next.plane
+    && previous.planeRevision === next.planeRevision
+}

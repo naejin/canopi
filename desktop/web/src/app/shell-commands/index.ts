@@ -1,28 +1,51 @@
 import type { Panel, SidePanel } from '../shell/state'
+import {
+  ariaKeyShortcuts,
+  formatShortcut,
+} from './shortcut-text'
 
-export type ShellCommandIdByCapability = {
+type ShellCommandIdByCapability = {
   readonly newDesign: 'file.new'
   readonly openDesign: 'file.open'
   readonly openCanopi: 'file.openCanopi'
+  readonly renameDesign: 'file.rename'
   readonly saveDesign: 'file.save'
   readonly saveDesignAs: 'file.saveAs'
   readonly downloadCanopi: 'file.downloadCanopi'
+  readonly revertDesign: 'file.revert'
+  readonly addData: 'file.addData'
+  readonly openDataLibrary: 'file.dataLibrary'
+  readonly importGeoJson: 'file.importGeoJson'
   readonly exportCanvasPdf: 'file.exportCanvasPdf'
+  readonly exportGeoJson: 'file.exportGeoJson'
+  readonly exportBudgetCsv: 'file.exportBudgetCsv'
+  readonly openSettings: 'app.settings'
+  readonly findPlants: 'edit.findPlants'
+  readonly closeDesign: 'file.close'
   readonly exitApp: 'file.exit'
   readonly navigateCanvas: 'nav.canvas'
-  readonly navigateLocation: 'nav.location'
   readonly navigateTemplates: 'nav.templates'
-  readonly navigatePlantDatabase: 'nav.plantDb'
-  readonly navigateDesignNotebook: 'nav.designNotebook'
-  readonly navigateFavorites: 'nav.favorites'
-  readonly navigateSpeciesKey: 'nav.speciesKey'
-  readonly navigateData: 'nav.data'
-  readonly navigateAnalysis: 'nav.analysis'
   readonly navigateLayers: 'nav.layers'
+  readonly navigateSpeciesKey: 'nav.speciesKey'
+  readonly navigatePlantDatabase: 'nav.plantDb'
+  readonly navigateFavorites: 'nav.favorites'
   readonly navigateCalendar: 'nav.calendar'
   readonly navigateBudget: 'nav.budget'
   readonly navigateConsortium: 'nav.consortium'
+  readonly navigateDesignNotebook: 'nav.designNotebook'
+  readonly navigateStories: 'nav.stories'
+  readonly saveCurrentView: 'view.saveCurrentView'
+  readonly manageViews: 'view.manageViews'
+  readonly toggleToolNames: 'view.toggleToolNames'
+  readonly showSatellite: 'view.backgroundSatellite'
+  readonly showMap: 'view.backgroundMap'
+  readonly showNoBackground: 'view.backgroundNone'
   readonly toggleTheme: 'view.toggleTheme'
+  readonly showCommandPalette: 'help.commandPalette'
+  readonly showShortcuts: 'help.shortcuts'
+  readonly gettingStarted: 'help.gettingStarted'
+  readonly reportProblem: 'help.reportProblem'
+  readonly aboutCanopi: 'help.aboutCanopi'
 }
 
 export type ShellCommandCapabilityId = keyof ShellCommandIdByCapability
@@ -31,65 +54,57 @@ export type ShellCommandIdForCapability<
   Capability extends ShellCommandCapabilityId,
 > = ShellCommandIdByCapability[Capability]
 
-const SHELL_FILE_SHORTCUTS = {
-  newDesign: 'Ctrl+N',
-  openDesign: 'Ctrl+O',
-  saveDesign: 'Ctrl+S',
-  saveDesignAs: 'Ctrl+Shift+S',
-} as const
-
-const SHELL_PANEL_SHORTCUTS = {
-  canvas: 'Ctrl+1',
-  plantDb: 'Ctrl+2',
-} as const
+type ShellMenuId = 'file' | 'edit' | 'view' | 'help'
+export type ShellSubmenuId = 'export' | 'background'
+type ShellPanelGroup = 'primary' | 'design' | 'planning'
 
 export interface ShellCommandState {
   readonly hasDesign: boolean
-  readonly designDirty: boolean
+  /** The current Design changed since it was opened or created. */
+  readonly revertAvailable: boolean
   readonly activePanel: Panel
   readonly sidePanel: SidePanel | null
 }
 
-export interface ShellCommandCapability {
+interface ShellCommandCapability {
   execute(): void
   isExecutionDisabled?(state: ShellCommandState): boolean
   isProjectionDisabled?(state: ShellCommandState): boolean
-}
-
-export interface ShellCommandShortcutInput {
-  readonly key: string
-  readonly ctrlKey: boolean
-  readonly metaKey: boolean
-  readonly shiftKey: boolean
-  readonly altKey: boolean
+  /** Current value of a checkable command (theme, tool names, background). */
+  isChecked?(): boolean
 }
 
 export type ShellCommandCapabilities = Partial<
   Record<ShellCommandCapabilityId, ShellCommandCapability>
 >
 
+interface ShellCommandMenuPlacement {
+  readonly id: ShellMenuId
+  readonly section: number
+  readonly submenu?: ShellSubmenuId
+}
+
 export interface ShellCommandCatalogEntry<
   Id extends ShellCommandId = ShellCommandId,
 > {
   readonly capabilityId: ShellCommandCapabilityId
   readonly id: Id
-  readonly family: 'file' | 'navigation' | 'settings'
+  readonly family: 'file' | 'navigation' | 'settings' | 'help'
   readonly labelKey: string
-  readonly chromeLabelKey: string
+  /** Canonical shortcut (`Ctrl+Shift+S`); see `shortcut-text.ts`. */
   readonly shortcut?: string
   readonly palette: boolean
-  readonly menu?: {
-    readonly id: 'file'
-    readonly section: number
-  }
+  readonly check?: 'checkbox' | 'radio'
+  readonly menu?: ShellCommandMenuPlacement
   readonly panel?: {
     readonly panel: Panel
-    readonly group: 'primary' | 'design' | 'side'
+    readonly group: ShellPanelGroup
     readonly order: number
   }
   execute(): void
   isExecutionDisabled(state: ShellCommandState): boolean
   isProjectionDisabled(state: ShellCommandState): boolean
+  isChecked(): boolean | undefined
 }
 
 export interface ProjectedShellCommand<
@@ -97,19 +112,23 @@ export interface ProjectedShellCommand<
 > {
   readonly id: Id
   readonly label: string
+  /** Display text, e.g. "Ctrl Shift S". */
   readonly shortcut?: string
+  readonly ariaShortcut?: string
   readonly disabled: boolean
   readonly active?: boolean
+  readonly checked?: boolean
+  readonly check?: 'checkbox' | 'radio'
+  readonly submenu?: ShellSubmenuId
   readonly panel?: Panel
   action(): void
 }
 
-export interface ShellMenuProjection<
+interface ShellMenuProjection<
   Id extends ShellCommandId = ShellCommandId,
 > {
-  readonly id: 'file'
+  readonly id: ShellMenuId
   readonly label: string
-  readonly items: readonly ProjectedShellCommand<Id>[]
   readonly sections: readonly (readonly ProjectedShellCommand<Id>[])[]
 }
 
@@ -118,7 +137,7 @@ export interface ShellPanelBarProjection<
 > {
   readonly primary: readonly ProjectedShellCommand<Id>[]
   readonly design: readonly ProjectedShellCommand<Id>[]
-  readonly side: readonly ProjectedShellCommand<Id>[]
+  readonly planning: readonly ProjectedShellCommand<Id>[]
 }
 
 export interface ShellChromeProjection<
@@ -129,6 +148,11 @@ export interface ShellChromeProjection<
   readonly panelBar: ShellPanelBarProjection<Id>
 }
 
+export interface ShellProjectionOptions {
+  /** Shortcuts the edition cannot receive (a browser keeps Ctrl N or Ctrl 1 for itself). */
+  readonly unavailableShortcuts?: ReadonlySet<string>
+}
+
 type ShellCommandDescriptor = {
   [Capability in ShellCommandCapabilityId]: Omit<
     ShellCommandCatalogEntry,
@@ -137,184 +161,67 @@ type ShellCommandDescriptor = {
     | 'execute'
     | 'isExecutionDisabled'
     | 'isProjectionDisabled'
+    | 'isChecked'
   > & {
     readonly capabilityId: Capability
     readonly id: ShellCommandIdByCapability[Capability]
   }
 }[ShellCommandCapabilityId]
 
+const file = (section: number, submenu?: ShellSubmenuId): ShellCommandMenuPlacement => ({ id: 'file', section, submenu })
+const panel = (panelId: Panel, group: ShellPanelGroup, order: number) => ({ panel: panelId, group, order })
+
 const SHELL_COMMAND_DESCRIPTORS: readonly ShellCommandDescriptor[] = [
-  {
-    capabilityId: 'newDesign',
-    id: 'file.new',
-    family: 'file',
-    labelKey: 'canvas.file.new',
-    chromeLabelKey: 'canvas.file.new',
-    shortcut: SHELL_FILE_SHORTCUTS.newDesign,
-    palette: true,
-    menu: { id: 'file', section: 0 },
-  },
-  {
-    capabilityId: 'openDesign',
-    id: 'file.open',
-    family: 'file',
-    labelKey: 'canvas.file.open',
-    chromeLabelKey: 'canvas.file.open',
-    shortcut: SHELL_FILE_SHORTCUTS.openDesign,
-    palette: true,
-    menu: { id: 'file', section: 0 },
-  },
-  {
-    capabilityId: 'openCanopi',
-    id: 'file.openCanopi',
-    family: 'file',
-    labelKey: 'webShell.openCanopi',
-    chromeLabelKey: 'webShell.openCanopi',
-    palette: false,
-    menu: { id: 'file', section: 0 },
-  },
-  {
-    capabilityId: 'saveDesign',
-    id: 'file.save',
-    family: 'file',
-    labelKey: 'canvas.file.save',
-    chromeLabelKey: 'canvas.file.save',
-    shortcut: SHELL_FILE_SHORTCUTS.saveDesign,
-    palette: true,
-    menu: { id: 'file', section: 1 },
-  },
-  {
-    capabilityId: 'saveDesignAs',
-    id: 'file.saveAs',
-    family: 'file',
-    labelKey: 'canvas.file.saveAs',
-    chromeLabelKey: 'canvas.file.saveAs',
-    shortcut: SHELL_FILE_SHORTCUTS.saveDesignAs,
-    palette: true,
-    menu: { id: 'file', section: 1 },
-  },
-  {
-    capabilityId: 'downloadCanopi',
-    id: 'file.downloadCanopi',
-    family: 'file',
-    labelKey: 'webShell.downloadCanopi',
-    chromeLabelKey: 'webShell.downloadCanopi',
-    palette: false,
-    menu: { id: 'file', section: 1 },
-  },
-  {
-    capabilityId: 'exportCanvasPdf', id: 'file.exportCanvasPdf', family: 'file',
-    labelKey: 'pdf.title', chromeLabelKey: 'pdf.title', palette: true, menu: { id: 'file', section: 1 },
-  },
-  {
-    capabilityId: 'exitApp',
-    id: 'file.exit',
-    family: 'file',
-    labelKey: 'menu.file.exit',
-    chromeLabelKey: 'menu.file.exit',
-    palette: false,
-    menu: { id: 'file', section: 2 },
-  },
-  {
-    capabilityId: 'navigateCanvas',
-    id: 'nav.canvas',
-    family: 'navigation',
-    labelKey: 'commands.canvas',
-    chromeLabelKey: 'nav.canvas',
-    shortcut: SHELL_PANEL_SHORTCUTS.canvas,
-    palette: true,
-    panel: { panel: 'canvas', group: 'primary', order: 0 },
-  },
-  {
-    capabilityId: 'navigateLocation',
-    id: 'nav.location',
-    family: 'navigation',
-    labelKey: 'canvas.location.title',
-    chromeLabelKey: 'canvas.location.title',
-    palette: true,
-    panel: { panel: 'location', group: 'primary', order: 1 },
-  },
-  {
-    capabilityId: 'navigateTemplates',
-    id: 'nav.templates',
-    family: 'navigation',
-    labelKey: 'worldMap.title',
-    chromeLabelKey: 'worldMap.title',
-    palette: false,
-    panel: { panel: 'templates', group: 'primary', order: 1 },
-  },
-  {
-    capabilityId: 'navigateSpeciesKey', id: 'nav.speciesKey', family: 'navigation',
-    labelKey: 'speciesKey.title', chromeLabelKey: 'speciesKey.title', palette: true,
-    panel: { panel: 'species-key', group: 'design', order: 0 },
-  },
-  {
-    capabilityId: 'navigateData', id: 'nav.data', family: 'navigation',
-    labelKey: 'canvas.lidar.data.title', chromeLabelKey: 'canvas.lidar.data.title', palette: true,
-    panel: { panel: 'data', group: 'design', order: 1 },
-  },
-  {
-    capabilityId: 'navigateAnalysis', id: 'nav.analysis', family: 'navigation',
-    labelKey: 'canvas.lidar.analysis.title', chromeLabelKey: 'canvas.lidar.analysis.title', palette: true,
-    panel: { panel: 'analysis', group: 'design', order: 2 },
-  },
-  {
-    capabilityId: 'navigateLayers', id: 'nav.layers', family: 'navigation',
-    labelKey: 'canvas.layers.layerPanel', chromeLabelKey: 'canvas.layers.layerPanel', palette: true,
-    panel: { panel: 'layers', group: 'design', order: 3 },
-  },
-  {
-    capabilityId: 'navigateCalendar', id: 'nav.calendar', family: 'navigation',
-    labelKey: 'canvas.calendar.title', chromeLabelKey: 'canvas.calendar.title', palette: true,
-    panel: { panel: 'calendar', group: 'design', order: 4 },
-  },
-  {
-    capabilityId: 'navigateBudget', id: 'nav.budget', family: 'navigation',
-    labelKey: 'canvas.budget.title', chromeLabelKey: 'canvas.budget.title', palette: true,
-    panel: { panel: 'budget', group: 'design', order: 5 },
-  },
-  {
-    capabilityId: 'navigateConsortium', id: 'nav.consortium', family: 'navigation',
-    labelKey: 'canvas.consortium.title', chromeLabelKey: 'canvas.consortium.title', palette: true,
-    panel: { panel: 'consortium', group: 'design', order: 6 },
-  },
-  {
-    capabilityId: 'navigatePlantDatabase',
-    id: 'nav.plantDb',
-    family: 'navigation',
-    labelKey: 'commands.plantDb',
-    chromeLabelKey: 'nav.plantDb',
-    shortcut: SHELL_PANEL_SHORTCUTS.plantDb,
-    palette: true,
-    panel: { panel: 'plant-db', group: 'side', order: 1 },
-  },
-  {
-    capabilityId: 'navigateFavorites',
-    id: 'nav.favorites',
-    family: 'navigation',
-    labelKey: 'nav.favorites',
-    chromeLabelKey: 'nav.favorites',
-    palette: true,
-    panel: { panel: 'favorites', group: 'side', order: 2 },
-  },
-  {
-    capabilityId: 'navigateDesignNotebook',
-    id: 'nav.designNotebook',
-    family: 'navigation',
-    labelKey: 'nav.designNotebook',
-    chromeLabelKey: 'nav.designNotebook',
-    palette: true,
-    panel: { panel: 'design-notebook', group: 'side', order: 0 },
-  },
-  {
-    capabilityId: 'toggleTheme',
-    id: 'view.toggleTheme',
-    family: 'settings',
-    labelKey: 'commands.toggleTheme',
-    chromeLabelKey: 'status.theme',
-    palette: true,
-  },
+  { capabilityId: 'newDesign', id: 'file.new', family: 'file', labelKey: 'menu.file.new', shortcut: 'Ctrl+N', palette: true, menu: file(0) },
+  { capabilityId: 'openDesign', id: 'file.open', family: 'file', labelKey: 'menu.file.open', shortcut: 'Ctrl+O', palette: true, menu: file(0) },
+  { capabilityId: 'openCanopi', id: 'file.openCanopi', family: 'file', labelKey: 'webShell.openCanopi', shortcut: 'Ctrl+O', palette: true, menu: file(0) },
+  { capabilityId: 'renameDesign', id: 'file.rename', family: 'file', labelKey: 'menu.file.rename', shortcut: 'F2', palette: true, menu: file(1) },
+  { capabilityId: 'saveDesign', id: 'file.save', family: 'file', labelKey: 'menu.file.save', shortcut: 'Ctrl+S', palette: true, menu: file(1) },
+  { capabilityId: 'saveDesignAs', id: 'file.saveAs', family: 'file', labelKey: 'menu.file.saveAs', shortcut: 'Ctrl+Shift+S', palette: true, menu: file(1) },
+  { capabilityId: 'downloadCanopi', id: 'file.downloadCanopi', family: 'file', labelKey: 'webShell.downloadCanopi', shortcut: 'Ctrl+S', palette: true, menu: file(1) },
+  { capabilityId: 'revertDesign', id: 'file.revert', family: 'file', labelKey: 'menu.file.revert', palette: true, menu: file(1) },
+  { capabilityId: 'addData', id: 'file.addData', family: 'file', labelKey: 'menu.file.addData', palette: true, menu: file(2) },
+  { capabilityId: 'openDataLibrary', id: 'file.dataLibrary', family: 'file', labelKey: 'canvas.lidar.layers.openLibrary', palette: true, menu: file(2) },
+  { capabilityId: 'importGeoJson', id: 'file.importGeoJson', family: 'file', labelKey: 'geojson.import', palette: true, menu: file(2) },
+  { capabilityId: 'exportCanvasPdf', id: 'file.exportCanvasPdf', family: 'file', labelKey: 'menu.file.exportPlantingPlan', shortcut: 'Ctrl+P', palette: true, menu: file(2, 'export') },
+  { capabilityId: 'exportGeoJson', id: 'file.exportGeoJson', family: 'file', labelKey: 'menu.file.exportGeoJson', palette: true, menu: file(2, 'export') },
+  { capabilityId: 'exportBudgetCsv', id: 'file.exportBudgetCsv', family: 'file', labelKey: 'menu.file.exportBudgetCsv', palette: true, menu: file(2, 'export') },
+  { capabilityId: 'openSettings', id: 'app.settings', family: 'settings', labelKey: 'menu.file.settings', shortcut: 'Ctrl+,', palette: true, menu: file(3) },
+  { capabilityId: 'findPlants', id: 'edit.findPlants', family: 'settings', labelKey: 'menu.edit.findPlants', shortcut: 'Ctrl+F', palette: true, menu: { id: 'edit', section: 0 } },
+  { capabilityId: 'closeDesign', id: 'file.close', family: 'file', labelKey: 'menu.file.close', shortcut: 'Ctrl+W', palette: true, menu: file(4) },
+  { capabilityId: 'exitApp', id: 'file.exit', family: 'file', labelKey: 'menu.file.exit', shortcut: 'Ctrl+Q', palette: false, menu: file(4) },
+  { capabilityId: 'navigateCanvas', id: 'nav.canvas', family: 'navigation', labelKey: 'panelRail.canvas', palette: false, panel: panel('canvas', 'primary', 0) },
+  { capabilityId: 'navigateTemplates', id: 'nav.templates', family: 'navigation', labelKey: 'worldMap.title', palette: false, panel: panel('templates', 'primary', 1) },
+  { capabilityId: 'navigateLayers', id: 'nav.layers', family: 'navigation', labelKey: 'panelRail.layers', shortcut: 'Ctrl+1', palette: true, panel: panel('layers', 'design', 0) },
+  { capabilityId: 'navigateSpeciesKey', id: 'nav.speciesKey', family: 'navigation', labelKey: 'panelRail.plants', shortcut: 'Ctrl+2', palette: true, panel: panel('species-key', 'design', 2) },
+  { capabilityId: 'navigatePlantDatabase', id: 'nav.plantDb', family: 'navigation', labelKey: 'panelRail.catalog', shortcut: 'Ctrl+3', palette: true, panel: panel('plant-db', 'design', 3) },
+  { capabilityId: 'navigateFavorites', id: 'nav.favorites', family: 'navigation', labelKey: 'panelRail.favorites', shortcut: 'Ctrl+4', palette: true, panel: panel('favorites', 'design', 4) },
+  { capabilityId: 'navigateCalendar', id: 'nav.calendar', family: 'navigation', labelKey: 'panelRail.calendar', shortcut: 'Ctrl+5', palette: true, panel: panel('calendar', 'planning', 0) },
+  { capabilityId: 'navigateBudget', id: 'nav.budget', family: 'navigation', labelKey: 'panelRail.budget', shortcut: 'Ctrl+6', palette: true, panel: panel('budget', 'planning', 1) },
+  { capabilityId: 'navigateConsortium', id: 'nav.consortium', family: 'navigation', labelKey: 'panelRail.consortium', shortcut: 'Ctrl+7', palette: true, panel: panel('consortium', 'planning', 2) },
+  { capabilityId: 'navigateDesignNotebook', id: 'nav.designNotebook', family: 'navigation', labelKey: 'panelRail.notebook', shortcut: 'Ctrl+8', palette: true, panel: panel('design-notebook', 'planning', 3) },
+  { capabilityId: 'navigateStories', id: 'nav.stories', family: 'navigation', labelKey: 'panelRail.stories', shortcut: 'Ctrl+9', palette: true, panel: panel('stories', 'planning', 4) },
+  { capabilityId: 'saveCurrentView', id: 'view.saveCurrentView', family: 'settings', labelKey: 'menu.view.saveCurrentView', palette: true, menu: { id: 'view', section: 2 } },
+  { capabilityId: 'manageViews', id: 'view.manageViews', family: 'settings', labelKey: 'menu.view.manageViews', palette: true, menu: { id: 'view', section: 2 } },
+  { capabilityId: 'toggleToolNames', id: 'view.toggleToolNames', family: 'settings', labelKey: 'menu.view.toolNames', palette: true, check: 'checkbox', menu: { id: 'view', section: 0 } },
+  { capabilityId: 'showSatellite', id: 'view.backgroundSatellite', family: 'settings', labelKey: 'menu.view.backgroundSatellite', palette: true, check: 'radio', menu: { id: 'view', section: 1, submenu: 'background' } },
+  { capabilityId: 'showMap', id: 'view.backgroundMap', family: 'settings', labelKey: 'menu.view.backgroundMap', palette: true, check: 'radio', menu: { id: 'view', section: 1, submenu: 'background' } },
+  { capabilityId: 'showNoBackground', id: 'view.backgroundNone', family: 'settings', labelKey: 'menu.view.backgroundNone', palette: true, check: 'radio', menu: { id: 'view', section: 1, submenu: 'background' } },
+  { capabilityId: 'toggleTheme', id: 'view.toggleTheme', family: 'settings', labelKey: 'menu.view.darkTheme', palette: true, check: 'checkbox', menu: { id: 'view', section: 1 } },
+  // Not listed in the palette it opens; its shortcut is discoverable in Help and the F1 list.
+  { capabilityId: 'showCommandPalette', id: 'help.commandPalette', family: 'help', labelKey: 'menu.help.commandPalette', shortcut: 'Ctrl+Shift+P', palette: false, menu: { id: 'help', section: 0 } },
+  { capabilityId: 'showShortcuts', id: 'help.shortcuts', family: 'help', labelKey: 'menu.help.shortcuts', shortcut: 'F1', palette: true, menu: { id: 'help', section: 0 } },
+  { capabilityId: 'gettingStarted', id: 'help.gettingStarted', family: 'help', labelKey: 'menu.help.gettingStarted', palette: true, menu: { id: 'help', section: 0 } },
+  { capabilityId: 'reportProblem', id: 'help.reportProblem', family: 'help', labelKey: 'menu.help.reportProblem', palette: true, menu: { id: 'help', section: 1 } },
+  { capabilityId: 'aboutCanopi', id: 'help.aboutCanopi', family: 'help', labelKey: 'menu.help.aboutCanopi', palette: true, menu: { id: 'help', section: 1 } },
 ]
+
+const MENU_LABEL_KEYS: Record<ShellMenuId, string> = {
+  file: 'menu.file',
+  edit: 'menu.edit',
+  view: 'menu.view',
+  help: 'menu.help',
+}
 
 export function composeShellCommandCatalog<
   const Capabilities extends ShellCommandCapabilities,
@@ -335,6 +242,7 @@ export function composeShellCommandCatalog<
         capability.isProjectionDisabled?.(state)
           ?? capability.isExecutionDisabled?.(state)
           ?? false,
+      isChecked: () => descriptor.check ? capability.isChecked?.() ?? false : undefined,
     }]
   })
   // Entries are emitted only when their descriptor's capability key exists.
@@ -347,16 +255,24 @@ export function projectShellCommandCatalog<Id extends ShellCommandId>(
   catalog: readonly ShellCommandCatalogEntry<Id>[],
   state: ShellCommandState,
   translate: (key: string) => string,
+  options: ShellProjectionOptions = {},
 ): ShellChromeProjection<Id> {
   const commands = new Map<Id, ProjectedShellCommand<Id>>()
   for (const command of catalog) {
     const disabled = command.isProjectionDisabled(state)
+    const shortcut = command.shortcut && !options.unavailableShortcuts?.has(command.shortcut)
+      ? command.shortcut
+      : undefined
     commands.set(command.id, {
       id: command.id,
-      label: translate(command.chromeLabelKey),
-      shortcut: command.shortcut,
+      label: translate(command.labelKey),
+      shortcut: shortcut ? formatShortcut(shortcut, translate) : undefined,
+      ariaShortcut: shortcut ? ariaKeyShortcuts(shortcut) : undefined,
       disabled,
       active: command.panel ? isPanelCommandActive(command.panel, state) : undefined,
+      checked: command.isChecked(),
+      check: command.check,
+      submenu: command.menu?.submenu,
       panel: command.panel?.panel,
       action: () => {
         if (!disabled) command.execute()
@@ -364,16 +280,26 @@ export function projectShellCommandCatalog<Id extends ShellCommandId>(
     })
   }
 
-  const fileSectionsById = new Map<number, ProjectedShellCommand<Id>[]>()
-  for (const command of catalog) {
-    if (command.menu?.id !== 'file') continue
-    const section = fileSectionsById.get(command.menu.section) ?? []
-    section.push(requireProjectedCommand(commands, command.id))
-    fileSectionsById.set(command.menu.section, section)
+  const menus: ShellMenuProjection<Id>[] = []
+  for (const menuId of ['file', 'edit', 'view', 'help'] as const) {
+    const sections = new Map<number, ProjectedShellCommand<Id>[]>()
+    for (const command of catalog) {
+      if (command.menu?.id !== menuId) continue
+      const section = sections.get(command.menu.section) ?? []
+      section.push(requireProjectedCommand(commands, command.id))
+      sections.set(command.menu.section, section)
+    }
+    if (sections.size === 0) continue
+    menus.push({
+      id: menuId,
+      label: translate(MENU_LABEL_KEYS[menuId]),
+      sections: [...sections.entries()]
+        .sort(([left], [right]) => left - right)
+        .map(([, section]) => section),
+    })
   }
-  const fileSections = [...fileSectionsById.values()]
-  const fileItems = fileSections.flat()
-  const panelCommands = (group: 'primary' | 'design' | 'side') => catalog
+
+  const panelCommands = (group: ShellPanelGroup) => catalog
     .flatMap((command) => command.panel?.group === group
       ? [{ command, panel: command.panel }]
       : [])
@@ -382,49 +308,13 @@ export function projectShellCommandCatalog<Id extends ShellCommandId>(
 
   return {
     commands,
-    menus: fileItems.length > 0
-      ? [{
-          id: 'file',
-          label: translate('menu.file'),
-          items: fileItems,
-          sections: fileSections,
-        }]
-      : [],
+    menus,
     panelBar: {
       primary: panelCommands('primary'),
       design: panelCommands('design'),
-      side: panelCommands('side'),
+      planning: panelCommands('planning'),
     },
   }
-}
-
-export function matchShellCommandShortcut<Id extends ShellCommandId>(
-  catalog: readonly ShellCommandCatalogEntry<Id>[],
-  input: ShellCommandShortcutInput,
-): ShellCommandCatalogEntry<Id> | null {
-  return catalog.find((command) =>
-    command.shortcut && matchesShellShortcut(command.shortcut, input)
-  ) ?? null
-}
-
-function matchesShellShortcut(
-  shortcut: string,
-  input: ShellCommandShortcutInput,
-): boolean {
-  const parts = shortcut.split('+')
-  const key = parts.at(-1)
-  if (!key) return false
-
-  const requiresPrimaryModifier = parts.includes('Ctrl')
-  const requiresShift = parts.includes('Shift')
-  const requiresAlt = parts.includes('Alt')
-  const primaryModifierMatches = requiresPrimaryModifier
-    ? input.ctrlKey !== input.metaKey
-    : !input.ctrlKey && !input.metaKey
-  return primaryModifierMatches
-    && input.shiftKey === requiresShift
-    && input.altKey === requiresAlt
-    && input.key.toLowerCase() === key.toLowerCase()
 }
 
 function requireProjectedCommand<Id extends ShellCommandId>(
@@ -437,14 +327,14 @@ function requireProjectedCommand<Id extends ShellCommandId>(
 }
 
 function isPanelCommandActive(
-  panel: NonNullable<ShellCommandCatalogEntry['panel']>,
+  panelPlacement: NonNullable<ShellCommandCatalogEntry['panel']>,
   state: ShellCommandState,
 ): boolean {
-  if (panel.group !== 'primary') {
-    return state.activePanel === 'canvas' && state.sidePanel === panel.panel
+  if (panelPlacement.group !== 'primary') {
+    return state.activePanel === 'canvas' && state.sidePanel === panelPlacement.panel
   }
-  if (panel.panel === 'canvas') {
+  if (panelPlacement.panel === 'canvas') {
     return state.activePanel === 'canvas' && state.sidePanel === null
   }
-  return state.activePanel === panel.panel
+  return state.activePanel === panelPlacement.panel
 }

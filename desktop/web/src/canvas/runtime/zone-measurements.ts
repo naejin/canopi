@@ -1,13 +1,6 @@
 import type { ScenePoint } from './scene'
 
-export interface ZoneMeasurementRect {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
-export type ZoneMeasurementLabelKind = 'edge' | 'dimension' | 'area'
+type ZoneMeasurementLabelKind = 'edge' | 'dimension' | 'area'
 
 export interface ZoneMeasurementLabel {
   id: string
@@ -16,19 +9,6 @@ export interface ZoneMeasurementLabel {
   worldPosition: ScenePoint
   worldStart?: ScenePoint
   worldEnd?: ScenePoint
-}
-
-export function createRectangularZoneMeasurementsFromRect(rect: ZoneMeasurementRect): ZoneMeasurementLabel[] {
-  if (rect.width < 0.5 || rect.height < 0.5) return []
-  return createRectangularZoneMeasurements(rectanglePoints(rect))
-}
-
-export function createEllipticalZoneMeasurementsFromRect(rect: ZoneMeasurementRect): ZoneMeasurementLabel[] {
-  if (rect.width < 0.5 || rect.height < 0.5) return []
-  return createEllipticalZoneMeasurements(
-    { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 },
-    { x: rect.width / 2, y: rect.height / 2 },
-  )
 }
 
 export function createEllipticalZoneMeasurements(
@@ -148,15 +128,6 @@ function createEdgeLabel(id: string, start: ScenePoint, end: ScenePoint): ZoneMe
     worldStart: start,
     worldEnd: end,
   }
-}
-
-export function rectanglePoints(rect: ZoneMeasurementRect): ScenePoint[] {
-  return [
-    { x: rect.x, y: rect.y },
-    { x: rect.x + rect.width, y: rect.y },
-    { x: rect.x + rect.width, y: rect.y + rect.height },
-    { x: rect.x, y: rect.y + rect.height },
-  ]
 }
 
 export function formatMetricDistance(value: number): string {

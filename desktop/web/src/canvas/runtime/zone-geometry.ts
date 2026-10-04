@@ -68,6 +68,46 @@ export function getEllipticalZonePolygon(zone: SceneZoneEntity, segmentCount = 4
   return points
 }
 
+/** A zone's area and perimeter in the session plane's metres. */
+export interface ZoneMeasure {
+  /** Null for a line zone, which encloses nothing. */
+  readonly areaM2: number | null
+  /** The distance around the zone; a line zone's length. */
+  readonly perimeterM: number
+}
+
+/** Pure: a zone's area and perimeter (Ramanujan's approximation for an ellipse); null without enough points. */
+export function measureZone(zone: SceneZoneEntity): ZoneMeasure | null {
+  if (zone.zoneType === 'ellipse') {
+    if (zone.points.length < 2) return null
+    const a = Math.abs(zone.points[1]!.x)
+    const b = Math.abs(zone.points[1]!.y)
+    return { areaM2: Math.PI * a * b, perimeterM: Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b))) }
+  }
+  const points = zone.zoneType === 'rect' ? getRectangularZoneCorners(zone) : zone.points
+  if (!points || points.length < 2) return null
+  if (zone.zoneType === 'line') return { areaM2: null, perimeterM: pathLength(points, false) }
+  if (points.length < 3) return null
+  let twiceArea = 0
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index]!
+    const next = points[(index + 1) % points.length]!
+    twiceArea += current.x * next.y - next.x * current.y
+  }
+  return { areaM2: Math.abs(twiceArea) / 2, perimeterM: pathLength(points, true) }
+}
+
+function pathLength(points: readonly ScenePoint[], closed: boolean): number {
+  let length = 0
+  const segments = closed ? points.length : points.length - 1
+  for (let index = 0; index < segments; index += 1) {
+    const start = points[index]!
+    const end = points[(index + 1) % points.length]!
+    length += Math.hypot(end.x - start.x, end.y - start.y)
+  }
+  return length
+}
+
 export function getZoneRadialExtentMeters(zone: SceneZoneEntity): number | null {
   const ellipticalExtent = getEllipticalZoneRadialExtent(zone)
   if (ellipticalExtent !== null) return ellipticalExtent
@@ -212,7 +252,8 @@ function degreesToRadians(degrees: number): number {
   return (degrees * Math.PI) / 180
 }
 
-function pointsBounds(points: readonly ScenePoint[]): { x: number; y: number; width: number; height: number } {
+/** Axis-aligned bounds of plane points, with near-zero values snapped to 0. */
+export function pointsBounds(points: readonly ScenePoint[]): { x: number; y: number; width: number; height: number } {
   let minX = Infinity
   let minY = Infinity
   let maxX = -Infinity

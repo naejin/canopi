@@ -1,21 +1,21 @@
 import type { PanelTarget, SpeciesPanelTarget } from '../types/design'
 
-export type Target = PanelTarget
-export type SpeciesTarget = SpeciesPanelTarget
+type Target = PanelTarget
+type SpeciesTarget = SpeciesPanelTarget
 
 export interface TargetScenePoint {
   readonly x: number
   readonly y: number
 }
 
-export interface TargetPlantRef {
+interface TargetPlantRef {
   readonly id: string
   readonly canonicalName: string
   readonly position?: TargetScenePoint
 }
 
 export interface TargetZoneRef {
-  readonly name: string
+  readonly id: string
   readonly zoneType?: string
   readonly points?: readonly TargetScenePoint[]
   readonly rotationDeg?: number
@@ -29,10 +29,10 @@ export interface TargetSceneInput {
 export interface TargetSceneIndex {
   readonly plantsById: ReadonlyMap<string, TargetPlantRef>
   readonly plantIdsBySpecies: ReadonlyMap<string, readonly string[]>
-  readonly zonesByName: ReadonlyMap<string, TargetZoneRef>
+  readonly zonesById: ReadonlyMap<string, TargetZoneRef>
 }
 
-export type ResolvedTargetRef =
+type ResolvedTargetRef =
   | { readonly kind: 'plant'; readonly id: string; readonly plant: TargetPlantRef }
   | { readonly kind: 'zone'; readonly id: string; readonly zone: TargetZoneRef }
 
@@ -45,7 +45,6 @@ export interface TargetResolution {
 }
 
 export const MANUAL_TARGET: Target = { kind: 'manual' }
-export const NONE_TARGET: Target = { kind: 'none' }
 
 export function speciesTarget(canonicalName: string): SpeciesTarget {
   return { kind: 'species', canonical_name: canonicalName }
@@ -55,14 +54,14 @@ export function isSpeciesTarget(target: Target): target is SpeciesTarget {
   return target.kind === 'species'
 }
 
-export function targetKey(target: Target): string {
+function targetKey(target: Target): string {
   switch (target.kind) {
     case 'placed_plant':
       return `placed_plant:${target.plant_id}`
     case 'species':
       return `species:${target.canonical_name}`
     case 'zone':
-      return `zone:${target.zone_name}`
+      return `zone:${target.zone_id}`
     case 'manual':
       return 'manual'
     case 'none':
@@ -70,7 +69,7 @@ export function targetKey(target: Target): string {
   }
 }
 
-export function targetListsEqual(left: readonly Target[], right: readonly Target[]): boolean {
+function targetListsEqual(left: readonly Target[], right: readonly Target[]): boolean {
   if (left.length !== right.length) return false
   for (let i = 0; i < left.length; i++) {
     if (targetKey(left[i]!) !== targetKey(right[i]!)) return false
@@ -78,14 +77,14 @@ export function targetListsEqual(left: readonly Target[], right: readonly Target
   return true
 }
 
-export function targetsEqual(left: Target, right: Target): boolean {
+function targetsEqual(left: Target, right: Target): boolean {
   return targetKey(left) === targetKey(right)
 }
 
 export function indexTargetScene(scene: TargetSceneInput): TargetSceneIndex {
   const plantsById = new Map<string, TargetPlantRef>()
   const plantIdsBySpecies = new Map<string, string[]>()
-  const zonesByName = new Map<string, TargetZoneRef>()
+  const zonesById = new Map<string, TargetZoneRef>()
 
   for (const plant of scene.plants) {
     plantsById.set(plant.id, plant)
@@ -95,10 +94,10 @@ export function indexTargetScene(scene: TargetSceneInput): TargetSceneIndex {
   }
 
   for (const zone of scene.zones) {
-    zonesByName.set(zone.name, zone)
+    zonesById.set(zone.id, zone)
   }
 
-  return { plantsById, plantIdsBySpecies, zonesByName }
+  return { plantsById, plantIdsBySpecies, zonesById }
 }
 
 export function resolveTargetsInScene(
@@ -158,8 +157,8 @@ export function resolveTargetsInScene(
         break
       }
       case 'zone': {
-        const zone = index.zonesByName.get(target.zone_name)
-        if (zone) addZone(target.zone_name, zone)
+        const zone = index.zonesById.get(target.zone_id)
+        if (zone) addZone(target.zone_id, zone)
         else unresolvedTargets.push(target)
         break
       }

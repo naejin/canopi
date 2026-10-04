@@ -1,0 +1,53 @@
+/* The compass (pattern canvas-navigation.md): size, hover and focus come from the zoom group's button class. */
+
+.compass {
+  /* A drag on the face turns the view by touch too. */
+  touch-action: none;
+}
+
+.compass[data-dragging="true"],
+.compass[data-dragging="true"]:hover:not([aria-disabled="true"]) {
+  background: var(--color-accent-soft);
+  cursor: grabbing;
+}
+
+.glyph {
+  flex-shrink: 0;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+
+.ring {
+  fill: none;
+  stroke: var(--color-text-secondary);
+}
+
+/* North up: a muted needle; the button stays enabled, since a drag still turns the view. */
+.north {
+  fill: var(--color-text-muted);
+  stroke: var(--color-text-muted);
+}
+
+.south {
+  fill: none;
+  stroke: var(--color-text-muted);
+}
+
+.compass[data-turned="true"] .north {
+  fill: var(--color-accent);
+  stroke: var(--color-accent);
+}
+
+.compass[data-turned="true"] .south {
+  stroke: var(--color-text);
+}
+
+/* The bearing text the button's aria-describedby names: read, not shown. */
+.description {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

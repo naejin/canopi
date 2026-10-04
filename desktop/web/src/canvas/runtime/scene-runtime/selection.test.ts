@@ -22,7 +22,6 @@ function makeScene(): ScenePersistedState {
         canopySpreadM: null,
         position: { x: 10, y: 10 },
         rotationDeg: null,
-        scale: null,
         notes: null,
         plantedDate: null,
         quantity: null,
@@ -38,7 +37,6 @@ function makeScene(): ScenePersistedState {
         canopySpreadM: null,
         position: { x: 30, y: 30 },
         rotationDeg: null,
-        scale: null,
         notes: null,
         plantedDate: null,
         quantity: null,
@@ -47,7 +45,7 @@ function makeScene(): ScenePersistedState {
     zones: [
       {
         kind: 'zone',
-        name: 'zone-1',
+        id: 'zone-1', name: null,
         locked: false,
         zoneType: 'rect',
         points: [
@@ -92,7 +90,7 @@ function readModel(scene: ScenePersistedState, selectedTargets: readonly SceneDe
   return getDesignObjectSelectionModel(scene, selectedTargets, {
     annotationViewportScale: 1,
     plantContext: {
-      viewport: { x: 0, y: 0, scale: 1 },
+      pixelsPerMetre: 1,
       speciesCache: new Map(),
       localizedCommonNames: new Map(),
     },

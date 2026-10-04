@@ -4,7 +4,8 @@ const mocks = vi.hoisted(() => ({
   disposeCloseGuard: vi.fn(),
   disposeSettings: vi.fn(),
   disposeTheme: vi.fn(),
-  initShortcuts: vi.fn(),
+  installDesktopKeyRouter: vi.fn(),
+  disposeKeyRouter: vi.fn(),
   initTheme: vi.fn(),
   installSettingsProjection: vi.fn(),
   invoke: vi.fn(),
@@ -17,14 +18,46 @@ const mocks = vi.hoisted(() => ({
     load: vi.fn(),
     save: vi.fn(),
   },
+  restoreLatestDraft: vi.fn(),
+  installContinuousSave: vi.fn(),
+  uninstallContinuousSave: vi.fn(),
+  installPlaceSearchSession: vi.fn(),
+  disposePlaceSearchSession: vi.fn(),
+  installToolRailLearning: vi.fn(),
+  disposeToolRailLearning: vi.fn(),
+  setAsideDataFromBefore2_0: vi.fn(),
+  showBrowserShellNotice: vi.fn(),
+}));
+
+vi.mock("../web/browser-app-data", () => ({
+  browserAppDataStore: { setAsideDataFromBefore2_0: mocks.setAsideDataFromBefore2_0 },
+}));
+
+vi.mock("../web/browser-shell-notice", () => ({
+  showBrowserShellNotice: mocks.showBrowserShellNotice,
+}));
+
+vi.mock("../app/tool-rail/learning", () => ({
+  installToolRailLearning: mocks.installToolRailLearning,
+}));
+
+vi.mock("../web/browser-design-session", () => ({
+  browserDesignSessionController: {
+    restoreLatestDraft: mocks.restoreLatestDraft,
+    installContinuousSave: mocks.installContinuousSave,
+  },
+}));
+
+vi.mock("../app/geocoding/place-search-session", () => ({
+  installPlaceSearchSession: mocks.installPlaceSearchSession,
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: mocks.invoke,
 }));
 
-vi.mock("../shortcuts/manager", () => ({
-  initShortcuts: mocks.initShortcuts,
+vi.mock("../commands/registry", () => ({
+  installDesktopKeyRouter: mocks.installDesktopKeyRouter,
 }));
 
 vi.mock("../utils/theme", () => ({
@@ -53,16 +86,30 @@ describe("settings platform bootstrap", () => {
     mocks.disposeCloseGuard.mockReset();
     mocks.disposeSettings.mockReset();
     mocks.disposeTheme.mockReset();
-    mocks.initShortcuts.mockReset();
+    mocks.disposeKeyRouter.mockReset();
+    mocks.installDesktopKeyRouter.mockReset().mockReturnValue({ dispose: mocks.disposeKeyRouter });
     mocks.initTheme.mockReset().mockReturnValue(mocks.disposeTheme);
     mocks.installSettingsProjection.mockReset().mockReturnValue({
       ready: Promise.resolve(),
       dispose: mocks.disposeSettings,
     });
-    mocks.invoke.mockReset().mockResolvedValue({ plant_db: "missing" });
+    mocks.invoke.mockReset().mockResolvedValue({
+      plant_db: "missing",
+      lidar_library: { kind: "recovered", items: 2, generated: 1 },
+      local_data: { kind: "moved_aside" },
+    });
     mocks.registerCloseGuard.mockReset().mockReturnValue({
       dispose: mocks.disposeCloseGuard,
     });
+    mocks.restoreLatestDraft.mockReset().mockReturnValue(true);
+    mocks.uninstallContinuousSave.mockReset();
+    mocks.installContinuousSave.mockReset().mockReturnValue(mocks.uninstallContinuousSave);
+    mocks.disposePlaceSearchSession.mockReset();
+    mocks.installPlaceSearchSession.mockReset().mockReturnValue(mocks.disposePlaceSearchSession);
+    mocks.disposeToolRailLearning.mockReset();
+    mocks.installToolRailLearning.mockReset().mockReturnValue(mocks.disposeToolRailLearning);
+    mocks.setAsideDataFromBefore2_0.mockReset().mockReturnValue({ movedAside: false, keptInPlace: false, error: null });
+    mocks.showBrowserShellNotice.mockReset();
   });
 
   afterEach(() => {
@@ -88,6 +135,97 @@ describe("settings platform bootstrap", () => {
     expect(mocks.disposeTheme).toHaveBeenCalledOnce();
   });
 
+  it("owns the Web Design Session lifetime: restores the newest Draft, then saves continuously", async () => {
+    const { bootstrapPlatform } = await import("../platform/browser");
+
+    bootstrapPlatform();
+
+    expect(mocks.restoreLatestDraft).toHaveBeenCalledOnce();
+    expect(mocks.installContinuousSave).toHaveBeenCalledOnce();
+    expect(mocks.installPlaceSearchSession).toHaveBeenCalledOnce();
+    expect(mocks.installSettingsProjection.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.restoreLatestDraft.mock.invocationCallOrder[0]!,
+    );
+    expect(mocks.restoreLatestDraft.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.installContinuousSave.mock.invocationCallOrder[0]!,
+    );
+
+    bootstrapPlatform();
+
+    expect(mocks.uninstallContinuousSave).toHaveBeenCalledOnce();
+    expect(mocks.disposePlaceSearchSession).toHaveBeenCalledOnce();
+    expect(mocks.installToolRailLearning).toHaveBeenCalledTimes(2);
+    expect(mocks.disposeToolRailLearning).toHaveBeenCalledOnce();
+    expect(mocks.installContinuousSave).toHaveBeenCalledTimes(2);
+  });
+
+  it("moves browser data from before Canopi 2.0 aside before restoring a Draft, and says so once", async () => {
+    mocks.setAsideDataFromBefore2_0.mockReturnValue({ movedAside: true, keptInPlace: false, error: null });
+    const { t } = await import("../i18n");
+    const { bootstrapPlatform } = await import("../platform/browser");
+
+    bootstrapPlatform();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mocks.setAsideDataFromBefore2_0).toHaveBeenCalledOnce();
+    expect(mocks.setAsideDataFromBefore2_0.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.restoreLatestDraft.mock.invocationCallOrder[0]!,
+    );
+    expect(mocks.showBrowserShellNotice).toHaveBeenCalledOnce();
+    expect(mocks.showBrowserShellNotice).toHaveBeenCalledWith({
+      tone: "info",
+      title: t("health.localDataMovedAsideTitle"),
+      message: t("health.localDataMovedAside"),
+    });
+  });
+
+  it("says once that earlier browser data stays in place when it could not be moved aside", async () => {
+    const error = new Error("quota");
+    mocks.setAsideDataFromBefore2_0.mockReturnValue({ movedAside: true, keptInPlace: true, error });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { t } = await import("../i18n");
+    const { bootstrapPlatform } = await import("../platform/browser");
+
+    bootstrapPlatform();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mocks.showBrowserShellNotice).toHaveBeenCalledOnce();
+    expect(mocks.showBrowserShellNotice).toHaveBeenCalledWith({
+      tone: "info",
+      title: t("health.localDataKeptInPlaceTitle"),
+      message: t("health.localDataKeptInPlace"),
+    });
+    expect(mocks.restoreLatestDraft).toHaveBeenCalledOnce();
+  });
+
+  it("says nothing when no browser data from before Canopi 2.0 was found", async () => {
+    const error = new Error("quota");
+    mocks.setAsideDataFromBefore2_0.mockReturnValue({ movedAside: false, keptInPlace: false, error });
+    const logError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { bootstrapPlatform } = await import("../platform/browser");
+
+    bootstrapPlatform();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mocks.showBrowserShellNotice).not.toHaveBeenCalled();
+    expect(logError).toHaveBeenCalledWith("Failed to set aside browser data from before Canopi 2.0:", error);
+    expect(mocks.restoreLatestDraft).toHaveBeenCalledOnce();
+  });
+
+  it("still saves continuously when restoring the newest Draft fails", async () => {
+    const error = new Error("storage unavailable");
+    mocks.restoreLatestDraft.mockImplementation(() => {
+      throw error;
+    });
+    const logError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { bootstrapPlatform } = await import("../platform/browser");
+
+    bootstrapPlatform();
+
+    expect(logError).toHaveBeenCalledWith("Failed to restore the latest Design Draft:", error);
+    expect(mocks.installContinuousSave).toHaveBeenCalledOnce();
+  });
+
   it("does not report a Browser settings failure from a replaced bootstrap", async () => {
     let rejectFirstLoad!: (error: unknown) => void;
     const firstReady = new Promise<void>((_resolve, reject) => {
@@ -109,9 +247,15 @@ describe("settings platform bootstrap", () => {
 
   it("replaces the Desktop shell lifecycle while preserving the close guard", async () => {
     const { bootstrapPlatform } = await import("../platform/desktop");
+    const { installKeyRouter } = await import("../app/keyboard/key-router");
 
     bootstrapPlatform();
     bootstrapPlatform();
+
+    // The one Desktop key router: replaced with the rest of the platform lifetime.
+    expect(mocks.installDesktopKeyRouter).toHaveBeenCalledTimes(2);
+    expect(mocks.installDesktopKeyRouter).toHaveBeenLastCalledWith(installKeyRouter, expect.objectContaining({ target: window }));
+    expect(mocks.disposeKeyRouter).toHaveBeenCalledOnce();
 
     expect(mocks.installSettingsProjection).toHaveBeenCalledTimes(2);
     expect(mocks.installSettingsProjection).toHaveBeenNthCalledWith(
@@ -120,6 +264,10 @@ describe("settings platform bootstrap", () => {
     );
     expect(mocks.registerCloseGuard).toHaveBeenCalledTimes(2);
     expect(mocks.disposeCloseGuard).toHaveBeenCalledOnce();
+    expect(mocks.installPlaceSearchSession).toHaveBeenCalledTimes(2);
+    expect(mocks.disposePlaceSearchSession).toHaveBeenCalledOnce();
+    expect(mocks.installToolRailLearning).toHaveBeenCalledTimes(2);
+    expect(mocks.disposeToolRailLearning).toHaveBeenCalledOnce();
     expect(mocks.disposeSettings).toHaveBeenCalledOnce();
     expect(mocks.disposeTheme).toHaveBeenCalledOnce();
   });
@@ -136,7 +284,6 @@ describe("settings platform bootstrap", () => {
     await bootstrap.ready;
 
     expect(mocks.initTheme).toHaveBeenCalledTimes(1);
-    expect(mocks.initShortcuts).toHaveBeenCalledTimes(1);
     expect(mocks.installSettingsProjection).toHaveBeenCalledWith(settingsAdapter);
     expect(mocks.initTheme.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.installSettingsProjection.mock.invocationCallOrder[0]!,
@@ -144,6 +291,8 @@ describe("settings platform bootstrap", () => {
     expect(mocks.invoke).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith("get_health");
     expect(healthState.plantDbStatus.value).toBe("missing");
+    expect(healthState.lidarLibraryStatus.value).toEqual({ kind: "recovered", items: 2, generated: 1 });
+    expect(healthState.localDataStatus.value).toEqual({ kind: "moved_aside" });
 
     bootstrap.dispose();
 
@@ -185,22 +334,24 @@ describe("settings platform bootstrap", () => {
   });
 
   it("ignores health returned after its shell lifetime is disposed", async () => {
-    let resolveHealth!: (health: { plant_db: "missing" }) => void;
+    let resolveHealth!: (health: { plant_db: "missing"; lidar_library: { kind: "unavailable" } }) => void;
     mocks.invoke.mockReturnValue(new Promise((resolve) => {
       resolveHealth = resolve;
     }));
     const { bootstrapShell } = await import("../app/shell/bootstrap");
-    const { plantDbStatus } = await import("../app/health/state");
+    const { lidarLibraryStatus, plantDbStatus } = await import("../app/health/state");
     plantDbStatus.value = "available";
+    lidarLibraryStatus.value = { kind: "ready" };
     const bootstrap = bootstrapShell({
       load: vi.fn(),
       save: vi.fn().mockResolvedValue(undefined),
     });
 
     bootstrap.dispose();
-    resolveHealth({ plant_db: "missing" });
+    resolveHealth({ plant_db: "missing", lidar_library: { kind: "unavailable" } });
     await bootstrap.ready;
 
     expect(plantDbStatus.value).toBe("available");
+    expect(lidarLibraryStatus.value).toEqual({ kind: "ready" });
   });
 });

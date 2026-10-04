@@ -4,12 +4,13 @@ import { plantSymbolMenuOpen } from '../../canvas/plant-symbol-menu-state'
 import { DEFAULT_PLANT_COLOR, normalizeHexColor } from '../../canvas/plant-colors'
 import {
   DEFAULT_PLANT_SYMBOL_ID,
-  PLANT_SYMBOL_IDS,
   type PlantSymbolId,
 } from '../../canvas/runtime/scene'
+import { PLANT_SYMBOL_FAMILIES, type PlantSymbolFamily } from '../../canvas/runtime/plant-symbol-recipes'
 import { t } from '../../i18n'
+import { ESCAPE_PRIORITY, registerEscapeLayer } from '../../app/keyboard/escape-chain'
 import { PlantSymbolGlyph } from './PlantSymbolGlyph'
-import { navigateAppearanceChoices, useAppearancePopover } from './useAppearancePopover'
+import { navigateAppearanceChoices, useAppearancePopover, type AppearanceAnchorRef } from './useAppearancePopover'
 import { createPortal } from 'preact/compat'
 import { SurfaceHeader } from '../shared/SurfaceHeader'
 import { AppearanceSelection } from './AppearanceSelection'
@@ -17,13 +18,12 @@ import shared from './appearance.module.css'
 import styles from './PlantSymbolMenu.module.css'
 
 interface PlantSymbolMenuProps {
-  buttonRef: { current: HTMLButtonElement | null }
+  buttonRef: AppearanceAnchorRef
 }
 
-const ABSTRACT_SYMBOLS = ['round', 'square', 'triangle', 'cross'] as const satisfies readonly PlantSymbolId[]
-const BOTANICAL_SYMBOLS = PLANT_SYMBOL_IDS.filter((symbol) => !ABSTRACT_SYMBOLS.some((abstract) => abstract === symbol))
+const SYMBOL_GRID_COLUMNS = 5
 
-function closeMenu(buttonRef?: { current: HTMLButtonElement | null }) {
+function closeMenu(buttonRef?: AppearanceAnchorRef) {
   plantSymbolMenuOpen.value = false
   buttonRef?.current?.focus()
 }
@@ -73,19 +73,25 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
       closeMenu()
     }
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        closeMenu(buttonRef)
-      }
-    }
-
     document.addEventListener('pointerup', handlePointerUp)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('pointerup', handlePointerUp)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [menuOpen, buttonRef])
+    return () => document.removeEventListener('pointerup', handlePointerUp)
+  }, [menuOpen])
+
+  // An Esc from outside the menu closes it, and only it (the Esc chain's popover layer, fixture I8); inside, the
+  // menu's own handler takes the Esc first.
+  const shown = menuOpen && hasSelectedPlants
+  useEffect(() => {
+    if (!shown) return
+    return registerEscapeLayer({
+      id: 'plant-symbol-menu',
+      priority: ESCAPE_PRIORITY.popover,
+      isActive: () => true,
+      escape: () => {
+        closeMenu(buttonRef)
+        return true
+      },
+    })
+  }, [shown, buttonRef])
 
   if (!menuOpen || !hasSelectedPlants) return null
 
@@ -115,13 +121,13 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
   return createPortal(
     <div
       ref={menuRef}
-      className={shared.menu}
+      className={`${shared.menu} ${shared.menuWide}`}
       role="dialog"
       aria-label={t('canvas.plantSymbol.label')}
       data-preserve-overlays="true"
       onKeyDown={event => {
         if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeMenu(buttonRef) }
-        else navigateAppearanceChoices(event, 3)
+        else navigateAppearanceChoices(event, SYMBOL_GRID_COLUMNS)
       }}
     >
       <SurfaceHeader title={t('canvas.plantSymbol.label')} closeLabel={t('window.close')} onClose={() => closeMenu(buttonRef)} />
@@ -136,8 +142,9 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
       />
       <div className={shared.body}>
         <div role="listbox" aria-label={t('canvas.plantSymbol.label')}>
-          <SymbolGrid label={t('canvas.plantSymbol.botanical')} symbols={BOTANICAL_SYMBOLS} activeSymbol={activeSymbol} onSelect={setActiveSymbol} />
-          <SymbolGrid label={t('canvas.plantSymbol.abstract')} symbols={ABSTRACT_SYMBOLS} activeSymbol={activeSymbol} onSelect={setActiveSymbol} />
+          {(Object.entries(PLANT_SYMBOL_FAMILIES) as [PlantSymbolFamily, readonly PlantSymbolId[]][]).map(([family, symbols]) => (
+            <SymbolGrid key={family} family={family} label={t(`canvas.plantSymbol.families.${family}`)} symbols={symbols} activeSymbol={activeSymbol} onSelect={setActiveSymbol} />
+          ))}
         </div>
       </div>
 
@@ -156,18 +163,20 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
 }
 
 function SymbolGrid({
+  family,
   label,
   symbols,
   activeSymbol,
   onSelect,
 }: {
+  family: PlantSymbolFamily
   label: string
   symbols: readonly PlantSymbolId[]
   activeSymbol: PlantSymbolId
   onSelect(symbol: PlantSymbolId): void
 }) {
   return (
-    <div className={styles.symbolGroup} role="group" aria-label={label}>
+    <div className={styles.symbolGroup} role="group" aria-label={label} data-symbol-family={family}>
       <div className={styles.groupLabel} aria-hidden="true">{label}</div>
       <div className={styles.grid}>
         {symbols.map((symbol) => {

@@ -1,21 +1,25 @@
 import type { PrintBounds, PrintPlant, PrintPoint } from '../../canvas/print'
 import { PdfTextError, type TextLine } from './text'
-import type { PdfInput, PdfLegendEntry, PdfOperation } from './types'
+import type { PdfHabit, PdfInput, PdfLegendEntry, PdfOperation } from './types'
+import { contrastingInk } from '../../canvas/plant-colors'
 
 import { MM, PRINT } from './print-style'
 export { MM, PRINT } from './print-style'
 const IDENTITY = [1, 0, 0, 1, 0, 0] as const
-export function identifyPlants(plants: readonly PrintPlant[], names: Readonly<Record<string, string>>, locale: string): PdfLegendEntry[] {
-  const bySpecies = new Map<string, { canonicalName: string; name: string; code?: string; appearances: PrintPlant[] }>()
+export function identifyPlants(plants: readonly PrintPlant[], input: Pick<PdfInput, 'commonNames' | 'locale' | 'habits' | 'englishFallbacks'>): PdfLegendEntry[] {
+  const bySpecies = new Map<string, { canonicalName: string; name: string; code?: string; appearances: PrintPlant[]; habit: PdfHabit; englishFallback?: true }>()
+  const fallbacks = new Set(input.englishFallbacks)
   for (const plant of plants) {
     let entry = bySpecies.get(plant.canonicalName)
     if (!entry) {
-      entry = { canonicalName: plant.canonicalName, code: plant.speciesCode, name: names[plant.canonicalName]?.trim() || plant.canonicalName, appearances: [] }
+      const name = input.commonNames[plant.canonicalName]?.trim()
+      entry = { canonicalName: plant.canonicalName, code: plant.speciesCode, name: name || plant.canonicalName, appearances: [],
+        habit: input.habits?.[plant.canonicalName] ?? 'other', ...name && fallbacks.has(plant.canonicalName) ? { englishFallback: true as const } : {} }
       bySpecies.set(plant.canonicalName, entry)
     }
     if (!entry.appearances.some((a) => a.symbol === plant.symbol && a.color === plant.color)) entry.appearances.push(plant)
   }
-  const collator = new Intl.Collator(locale)
+  const collator = new Intl.Collator(input.locale)
   return Array.from(bySpecies.values()).sort((a, b) => collator.compare(a.name, b.name) || collator.compare(a.canonicalName, b.canonicalName))
 }
 interface ExtentAnchor { point: PrintPoint; left: number; top: number; right: number; bottom: number }
@@ -51,9 +55,10 @@ export function fitOverview(input: PdfInput, frame: PrintBounds, coverage: reado
 export function drawMark(plant: PrintPlant, x: number, y: number, radius: number, opacity: number, operations: PdfOperation[]): void {
   // PDF units are points; 16 CSS px corresponds to 12pt at 96px/in.
   const marks = radius * 2 < 12 ? plant.smallMark ?? plant.mark : plant.mark
+  // Print has no outline, so cut-outs flip between paper and ink for contrast with the symbol colour.
+  const cutout = contrastingInk(plant.color, PRINT.paper, PRINT.ink)
   for (const mark of marks) operations.push({ kind: 'path', d: mark.d, matrix: [radius, 0, 0, radius, x, y],
-    fill: mark.fill ? plant.color : null, stroke: mark.stroke ? plant.color : null,
-    width: Math.max(mark.strokeWidth, .12 * MM / radius), opacity })
+    fill: mark.paint === 'symbol' ? plant.color : cutout, stroke: null, width: 0, opacity })
 }
 export function textOp(line: TextLine, x: number, y: number, size: number, rotation = 0, opacity = 1): Extract<PdfOperation, { kind: 'text' }> {
   return { kind: 'text', line, x, y, size, rotation, opacity }

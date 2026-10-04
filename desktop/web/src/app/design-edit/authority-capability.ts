@@ -1,47 +1,11 @@
 import type { CanopiFile } from '../../types/design'
-import type { DesignHistoryParticipant } from './history'
 
-export type DesignProjector = (design: CanopiFile) => CanopiFile
-
-export type DesignPreviewOutcome =
-  | { readonly status: 'committed'; readonly changed: boolean }
-  | { readonly status: 'aborted' }
-  | { readonly status: 'superseded' }
-
-export interface DesignPreviewTransaction {
-  readonly hasMutated: boolean
-  preview(projector: DesignProjector): void
-  commit(): DesignPreviewOutcome
-  abort(): DesignPreviewOutcome
-}
-
-export interface DesignPreviewOptions {
-  readonly history?: {
-    readonly type: string
-    readonly field: 'spatial_frame'
-  }
-}
+type DesignProjector = (design: CanopiFile) => CanopiFile
 
 export interface DesignEditAuthorityCapability {
-  readonly history: DesignHistoryParticipant
   editCommitted(projector: DesignProjector): CanopiFile | null
   reconcileCommitted(projector: DesignProjector): CanopiFile | null
   markCommittedDirty(): void
-  beginPreview(intent: string, options?: DesignPreviewOptions): DesignPreviewTransaction
-}
-
-export class DesignEditBusyError extends Error {
-  constructor(readonly activeIntent: string) {
-    super(`Design Edit '${activeIntent}' is still active`)
-    this.name = 'DesignEditBusyError'
-  }
-}
-
-export class DesignEditUnavailableError extends Error {
-  constructor() {
-    super('Cannot begin a Design Edit without an active Design')
-    this.name = 'DesignEditUnavailableError'
-  }
 }
 
 const authorities = new WeakMap<object, DesignEditAuthorityCapability>()

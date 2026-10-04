@@ -278,8 +278,28 @@ jobs:
           fi
           echo "Bundled DB checksum matches preflight: $actual_db_sha256"
 
+      # The sidecar must exist before `tauri build`: build.rs bundles it only
+      # when desktop/binaries holds it for the target (the runner's host).
+      - uses: ./.github/actions/build-geolibre-cli
+
       - name: Build Tauri app
-        run: npx --prefix desktop/web @tauri-apps/cli build --target ${{ matrix.target }} ${{ matrix.bundle_args }}
+        run: npx --prefix desktop/web @tauri-apps/cli build --target ${{ matrix.target }} ${{ matrix.bundle_args }} -- --locked
+
+      - name: Windows app selects Common Controls v6
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          python -m pip install --quiet pefile
+          exe=""
+          for name in canopi-desktop.exe Canopi.exe; do
+            if [ -f "target/${{ matrix.target }}/release/$name" ]; then exe="target/${{ matrix.target }}/release/$name"; break; fi
+          done
+          test -n "$exe" || { echo "no Canopi executable under target/${{ matrix.target }}/release" >&2; exit 1; }
+          python scripts/check_windows_manifest.py "$exe"
+
+      - name: Packaged sidecar runs from the installed layout
+        shell: bash
+        run: scripts/smoke-bundled-sidecar.sh ${{ matrix.target }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

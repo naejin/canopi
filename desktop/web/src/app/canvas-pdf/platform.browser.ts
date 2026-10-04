@@ -1,6 +1,4 @@
-import { resolvePdfCommonNames } from '../plant-browser/live.browser'
 import type { PdfDelivery } from './workflow'
-export const resolvePdfNames = resolvePdfCommonNames
 export function createPdfDelivery(): PdfDelivery {
   const pending = new Map<string, ReturnType<typeof setTimeout>>()
   const release = (url: string) => { const timer = pending.get(url); if (timer) clearTimeout(timer); pending.delete(url); URL.revokeObjectURL(url) }

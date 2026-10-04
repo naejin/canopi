@@ -1,6 +1,4 @@
 import type { CanopiFile } from '../../types/design'
-import type { WorkspaceCameraFrameReader, WorkspaceCameraNavigation } from './camera'
-import type { PlantPresentationContext } from './plant-presentation'
 import {
   CanvasAuthorityBusyError,
   CanvasDocumentReplacementNotAdmittedError,
@@ -17,22 +15,23 @@ import type { SceneRuntimeRenderScheduler } from './scene-runtime/render-schedul
 import { runCanvasRuntimeCleanups } from './cleanup'
 import type { CanvasInspectionHandle } from '../inspection'
 import type { SceneCanvasInspectionOwner } from './inspection-lens'
+import type { CameraDriverHost } from './view/camera-driver'
+import type { ViewNavigation } from './view/navigation'
 
 interface SceneCanvasDocumentSurfaceOptions {
+  /** The bearing a loaded Design opens at; read once per open of a loaded Design (scene-runtime/construction.ts). */
+  readonly readOpeningBearing: () => number
   readonly inspection: Pick<SceneCanvasInspectionOwner, 'mount' | 'reset' | 'dispose'>
   readonly documents: Pick<
     SceneRuntimeDocumentBridge,
     'loadDocument' | 'replaceDocument' | 'captureForPersistence'
   >
-  readonly camera: Pick<WorkspaceCameraFrameReader, 'viewport'>
-  readonly cameraNavigation: Pick<
-    WorkspaceCameraNavigation,
-    'initialize' | 'resize' | 'zoomToFit' | 'clearTemporaryFocus'
-  >
+  /** The runtime's camera: a resize reaches its live driver. */
+  readonly cameraHost: Pick<CameraDriverHost, 'current'>
+  readonly viewNavigation: Pick<ViewNavigation, 'openAt' | 'clearTemporaryFocus'>
   readonly chrome: Pick<SceneRuntimeChromeCoordinator, 'attach' | 'show' | 'hide' | 'destroy'>
   readonly rendering: Pick<SceneRuntimeRenderScheduler, 'container' | 'invalidate' | 'resize' | 'dispose'>
   readonly getSceneSnapshot: () => ScenePersistedState
-  readonly createPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
   readonly invalidateViewport: () => void
   readonly renderChrome: () => void
   readonly addGuide: (axis: 'h' | 'v', worldPosition: number) => void
@@ -58,16 +57,6 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
     return this.options.inspection.mount(element)
   }
 
-  initializeViewport(): void {
-    const container = this.options.rendering.container
-    if (!container) return
-    this.options.cameraNavigation.initialize({
-      width: Math.max(1, container.clientWidth),
-      height: Math.max(1, container.clientHeight),
-    })
-    this.options.rendering.invalidate('scene')
-  }
-
   attachRulersTo(element: HTMLElement): void {
     this.options.chrome.attach(element, (axis, worldPosition) => {
       this.options.addGuide(axis, worldPosition)
@@ -85,18 +74,29 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
     this.options.renderChrome()
   }
 
+  /**
+   * The open fit: every open path (the first load, a replace, the first generation) ends here, never Fit to Design. It opens
+   * at the opening bearing (spec §4.15); an empty scene, and the first frame before any Design, open north up (openAt).
+   */
   zoomToFit(): void {
-    this.options.cameraNavigation.zoomToFit(this.options.getSceneSnapshot(), {
-      plantContext: this.options.createPlantPresentationContext(this.options.camera.viewport.scale),
-    })
+    const bearing = this._documentState === 'absent' ? 0 : this.options.readOpeningBearing()
+    this.options.viewNavigation.openAt(this.options.getSceneSnapshot(), bearing)
     this.options.invalidateViewport()
   }
 
   loadDocument(file: CanopiFile): void {
+    const previousDocumentState = this._documentState
     this._documentState = 'settling'
-    this.options.documents.loadDocument(file)
+    try {
+      this.options.documents.loadDocument(file)
+    } catch (error) {
+      // Refused before touching the Scene (an edit still owns it): the
+      // previous document is intact and stays saveable.
+      if (error instanceof CanvasAuthorityBusyError) this._documentState = previousDocumentState
+      throw error
+    }
     this._documentState = 'loaded'
-    this.options.cameraNavigation.clearTemporaryFocus()
+    this.options.viewNavigation.clearTemporaryFocus()
     this.options.inspection.reset()
   }
 
@@ -110,7 +110,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
     try {
       const receipt = this.options.documents.replaceDocument(file, token, finalizeReplacement)
       this._documentState = 'loaded'
-      this.options.cameraNavigation.clearTemporaryFocus()
+      this.options.viewNavigation.clearTemporaryFocus()
       this.options.inspection.reset()
       return receipt
     } catch (error) {
@@ -136,7 +136,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
   }
 
   resize(width: number, height: number): void {
-    this.options.cameraNavigation.resize({ width, height })
+    this.options.cameraHost.current().setScreen({ width, height, devicePixelRatio: window.devicePixelRatio })
     this.options.rendering.resize(width, height)
   }
 

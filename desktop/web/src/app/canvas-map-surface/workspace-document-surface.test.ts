@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createCanvasDocumentReplacementToken, type CanvasDocumentSurface } from '../../canvas/runtime/runtime'
 import { createTestCanvasDocumentSurface } from '../../__tests__/support/canvas-runtime-surfaces'
-import { MapLibreWorkspaceCameraOwner } from '../../maplibre/workspace-camera'
+import { createTestView } from '../../__tests__/support/test-view'
 import type { WorkspaceMapSnapshot } from '../../maplibre/workspace-map'
 import {
   WorkspaceActivationCoordinator,
@@ -24,6 +24,7 @@ describe('createWorkspaceDocumentSurface', () => {
       }),
       activate: vi.fn(async () => 'cancelled' as const),
       teardown: vi.fn(async () => {}),
+      retry: vi.fn(() => false),
     }
     const documents = createTestCanvasDocumentSurface({
       replaceDocument: (_file, _token, finalizeReplacement) => {
@@ -65,7 +66,6 @@ describe('createWorkspaceDocumentSurface', () => {
     const element = document.createElement('div')
 
     surface.attachInspectionTo(element)
-    surface.initializeViewport()
     surface.attachRulersTo(element)
     surface.showCanvasChrome()
     surface.hideCanvasChrome()
@@ -78,7 +78,6 @@ describe('createWorkspaceDocumentSurface', () => {
 
     expect(workspace.requestGenerationDisconnect).not.toHaveBeenCalled()
     expect(documents.attachInspectionTo).toHaveBeenCalledWith(element)
-    expect(documents.initializeViewport).toHaveBeenCalledOnce()
     expect(documents.attachRulersTo).toHaveBeenCalledWith(element)
     expect(documents.showCanvasChrome).toHaveBeenCalledOnce()
     expect(documents.hideCanvasChrome).toHaveBeenCalledOnce()
@@ -112,20 +111,19 @@ describe('createWorkspaceDocumentSurface', () => {
     const created = deferred<WorkspaceActivationMap>()
     let signal: AbortSignal | null = null
     const releaseMap = vi.fn()
-    const camera = new MapLibreWorkspaceCameraOwner()
-    camera.initialize({ width: 400, height: 300 })
+    const camera = createTestView().host
     const workspace = new WorkspaceActivationCoordinator({
       container: document.createElement('div'),
       runtime: {
         init: async () => {},
-        reportRendererFailure: async () => {},
+        unmountRenderer: async () => {},
+        remountRenderer: async () => {},
         destroy: () => {},
       },
       camera,
       composition: {
         renderer: {} as never,
         createLayer: vi.fn(),
-        failActiveLayer: vi.fn(),
       },
       map: {
         createMap: (candidateSignal) => {
@@ -135,20 +133,22 @@ describe('createWorkspaceDocumentSurface', () => {
         releaseMap,
         getWebGL2Context: () => null,
         updateMapContributions: () => {},
-        updateBasemapPresentation: () => {},
+        updateBackgroundPresentation: () => {},
+        retryBasemap: vi.fn(),
         installStyleRestorer: () => () => {},
       },
       layer: {},
+      readOrigin: () => ({ lat: 0, lon: 0 }),
     })
     const activation = workspace.activate({
       sessionIdentity: {},
       map: {
-        anchor: { lat: 0, lon: 0 },
-        northBearingDeg: 0,
-        placementStatus: 'confirmed',
-        basemapStyle: 'street',
-        basemapVisible: true,
-        basemapOpacity: 1,
+        initialCenter: { lat: 0, lon: 0 },
+        background: {
+          basemap: { style: 'liberty', visible: true, opacity: 1 },
+          satellite: { visible: false, opacity: 1 },
+          locale: 'en',
+        },
       },
     })
     await vi.waitFor(() => expect(signal).not.toBeNull())
@@ -193,7 +193,6 @@ function createDocumentSurfaceSpy(): CanvasDocumentSurface {
   return {
     ...surface,
     attachInspectionTo: vi.fn(surface.attachInspectionTo),
-    initializeViewport: vi.fn(surface.initializeViewport),
     attachRulersTo: vi.fn(surface.attachRulersTo),
     showCanvasChrome: vi.fn(surface.showCanvasChrome),
     hideCanvasChrome: vi.fn(surface.hideCanvasChrome),
@@ -211,6 +210,7 @@ function createWorkspaceLifecycle() {
     requestGenerationDisconnect: vi.fn(async () => {}),
     activate: vi.fn(async () => 'cancelled' as const),
     teardown: vi.fn(async () => {}),
+    retry: vi.fn(() => false),
   }
 }
 
@@ -223,11 +223,11 @@ function createReconciler(workspace: ReturnType<typeof createWorkspaceLifecycle>
 
 function mapSnapshot(): WorkspaceMapSnapshot {
   return {
-    anchor: { lat: 0, lon: 0 },
-    northBearingDeg: 0,
-    placementStatus: 'confirmed' as const,
-    basemapStyle: 'street',
-    basemapVisible: true,
-    basemapOpacity: 1,
+    initialCenter: { lat: 0, lon: 0 },
+    background: {
+      basemap: { style: 'liberty', visible: true, opacity: 1 },
+      satellite: { visible: false, opacity: 1 },
+      locale: 'en',
+    },
   }
 }

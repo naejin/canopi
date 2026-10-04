@@ -3,22 +3,7 @@ import { designSessionStore } from '../document-session/store'
 import {
   designEditAuthorityCapability,
   disposeDesignEditAuthority,
-  type DesignPreviewOptions,
-  type DesignPreviewOutcome,
-  type DesignPreviewTransaction,
 } from './authority-capability'
-import type { DesignHistoryParticipant } from './history'
-
-export type { DesignPreviewOutcome, DesignPreviewTransaction }
-
-export type DesignArrayEditKey = 'timeline' | 'consortiums'
-
-export interface DesignArrayEditTransaction<K extends DesignArrayEditKey> {
-  preview(updater: (items: CanopiFile[K]) => CanopiFile[K]): void
-  commit(): void
-  abort(): void
-  readonly hasMutated: boolean
-}
 
 export function editCurrentDesign(
   updater: (design: CanopiFile) => CanopiFile,
@@ -26,21 +11,20 @@ export function editCurrentDesign(
   return designEditAuthorityCapability(designSessionStore).editCommitted(updater)
 }
 
+/** The open Design as committed, for a command that decides before it edits. */
+export function readCurrentDesign(): CanopiFile | null {
+  return designSessionStore.currentDesign.peek()
+}
+
+/** The open Design session's identity; session-only Design Edit state keys on it and goes with it. */
+export function currentDesignSessionKey(): object {
+  return designSessionStore.sessionIdentity.peek()
+}
+
 export function reconcileCurrentDesign(
   updater: (design: CanopiFile) => CanopiFile,
 ): CanopiFile | null {
   return designEditAuthorityCapability(designSessionStore).reconcileCommitted(updater)
-}
-
-export function beginDesignPreview(
-  intent: string,
-  options?: DesignPreviewOptions,
-): DesignPreviewTransaction {
-  return designEditAuthorityCapability(designSessionStore).beginPreview(intent, options)
-}
-
-export function getDesignHistoryParticipant(): DesignHistoryParticipant {
-  return designEditAuthorityCapability(designSessionStore).history
 }
 
 export function setDesignName(name: string): void {
@@ -59,41 +43,6 @@ export function editDesignArray<K extends keyof CanopiFile>(
     const next = updater(design[key])
     return next === design[key] ? design : { ...design, [key]: next }
   })
-}
-
-class StoreDesignArrayEditTransaction<K extends DesignArrayEditKey>
-  implements DesignArrayEditTransaction<K> {
-  private readonly transaction: DesignPreviewTransaction
-
-  constructor(private readonly key: K) {
-    this.transaction = beginDesignPreview(`Design ${key} preview`)
-  }
-
-  get hasMutated(): boolean {
-    return this.transaction.hasMutated
-  }
-
-  preview(updater: (items: CanopiFile[K]) => CanopiFile[K]): void {
-    this.transaction.preview((design) => {
-      const items = design[this.key]
-      const next = updater(items)
-      return next === items ? design : { ...design, [this.key]: next }
-    })
-  }
-
-  commit(): void {
-    this.transaction.commit()
-  }
-
-  abort(): void {
-    this.transaction.abort()
-  }
-}
-
-export function beginDesignArrayEdit<K extends DesignArrayEditKey>(
-  key: K,
-): DesignArrayEditTransaction<K> {
-  return new StoreDesignArrayEditTransaction(key)
 }
 
 if (import.meta.hot) {

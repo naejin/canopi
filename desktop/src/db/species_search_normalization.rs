@@ -113,6 +113,10 @@ pub(crate) enum SpeciesSearchAdmission {
     ActiveText,
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "the normalization contract is an authored constant checked by tests"
+)]
 fn contract() -> &'static LoadedNormalizationContract {
     static CONTRACT: OnceLock<LoadedNormalizationContract> = OnceLock::new();
     CONTRACT.get_or_init(|| {
@@ -318,6 +322,10 @@ fn scalar_range_is_covered(ranges: &[[u32; 2]], start: u32, end: u32) -> bool {
     false
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "Hangul scalars are computed from validated syllable offsets"
+)]
 pub(crate) fn normalize_species_search(raw: &str) -> NormalizedSpeciesSearch {
     let contract = contract();
     let mut decomposed = String::with_capacity(raw.len());

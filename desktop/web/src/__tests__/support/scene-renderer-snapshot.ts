@@ -5,11 +5,14 @@ import type {
   ScenePersistedState,
 } from '../../canvas/runtime/scene'
 import { projectSceneSelectionEntityIds } from '../../canvas/runtime/scene-runtime/selection'
+import type { ViewScreen, ViewTransform } from '../../canvas/runtime/view/types'
+import { planarToViewCamera } from '../../canvas/runtime/view/camera-math'
+import { buildViewTransform } from '../../canvas/runtime/view/view-transform'
+import { createSessionPlane } from '../../canvas/session-plane'
 
 export interface TestSceneRendererSnapshotOptions {
   readonly speciesFocus?: SceneRendererSnapshot['speciesFocus']
   readonly scene?: Partial<ScenePersistedState>
-  readonly viewport?: SceneRendererSnapshot['viewport']
   readonly selectedTargets?: SceneDesignObjectSelection
   readonly highlightedPlantIds?: SceneRendererSnapshot['highlightedPlantIds']
   readonly highlightedZoneIds?: SceneRendererSnapshot['highlightedZoneIds']
@@ -17,8 +20,6 @@ export interface TestSceneRendererSnapshotOptions {
   readonly localizedCommonNames?: SceneRendererSnapshot['localizedCommonNames']
   readonly hoveredCanonicalName?: SceneRendererSnapshot['hoveredCanonicalName']
   readonly hoverTarget?: SceneRendererSnapshot['hoverTarget']
-  readonly pinnedPlantNameLabels?: SceneRendererSnapshot['pinnedPlantNameLabels']
-  readonly selectionLabels?: SceneRendererSnapshot['selectionLabels']
 }
 
 export function createTestSceneRendererSnapshot(
@@ -44,18 +45,36 @@ export function createTestSceneRendererSnapshot(
 
   return {
     scene,
-    viewport: options.viewport ?? { x: 0, y: 0, scale: 1 },
     selectionLabelPlantIds: new Set(singleSelectedPlant ? [singleSelectedPlant.id] : []),
     revealedAnnotationId: getRevealedAnnotationId(selectedTargets),
     ...selectionProjection,
-    speciesFocus: options.speciesFocus ?? { canonicalName: null, showCodes: false },
+    speciesFocus: options.speciesFocus ?? { canonicalName: null },
     highlightedPlantIds: new Set(options.highlightedPlantIds ?? []),
     highlightedZoneIds: new Set(options.highlightedZoneIds ?? []),
     speciesCache: new Map(options.speciesCache ?? []),
     localizedCommonNames: new Map(options.localizedCommonNames ?? []),
     hoveredCanonicalName: options.hoveredCanonicalName ?? null,
     hoverTarget: options.hoverTarget ?? null,
-    pinnedPlantNameLabels: options.pinnedPlantNameLabels ?? [],
-    selectionLabels: options.selectionLabels ?? [],
   }
+}
+
+let testViewRevision = 0
+
+/**
+ * A renderer test's view: the plane placed as today's viewport places it (screen = world × scale + { x, y } at bearing 0),
+ * turned by `bearingDeg` about the screen origin, on a 400 × 300 screen unless given.
+ */
+export function createTestRendererView(
+  viewport: { readonly x: number; readonly y: number; readonly scale: number },
+  options: { readonly bearingDeg?: number; readonly screen?: Partial<ViewScreen> } = {},
+): ViewTransform {
+  const screen = { width: 400, height: 300, devicePixelRatio: 1, ...options.screen }
+  const plane = createSessionPlane({ lon: 0, lat: 0 })
+  return buildViewTransform({
+    camera: planarToViewCamera({ ...viewport, bearingDeg: options.bearingDeg ?? 0 }, screen, plane),
+    screen,
+    plane,
+    planeRevision: 0,
+    revision: ++testViewRevision,
+  })
 }

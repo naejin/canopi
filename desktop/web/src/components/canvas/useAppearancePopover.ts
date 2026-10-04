@@ -1,7 +1,13 @@
 import { useLayoutEffect, useRef } from 'preact/hooks'
+import type { PlantAppearanceAnchor } from '../../app/canvas-context-menu/state'
+
+/** What a popover opens beside (the right-click menu item) and returns focus to on close. */
+export interface AppearanceAnchorRef {
+  readonly current: PlantAppearanceAnchor | null
+}
 
 /** The appearance popover owns its viewport positioning and resize subscription. */
-export function useAppearancePopover(open: boolean, buttonRef: { current: HTMLButtonElement | null }) {
+export function useAppearancePopover(open: boolean, buttonRef: AppearanceAnchorRef) {
   const menuRef = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     const menu = menuRef.current

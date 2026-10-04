@@ -1,37 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LidarImportJob, LidarLibrarySnapshot } from '../generated/contracts'
+import type { LibrarySnapshot, LidarImportJob } from '../generated/contracts'
+import { librarySnapshot, slopeItem, sourceItem } from './support/library-fixtures'
 
 const listLibraryMock = vi.hoisted(() => vi.fn())
-const getImportJobMock = vi.hoisted(() => vi.fn())
 
-vi.mock('../ipc/lidar', () => ({
-  lidarListLibrary: listLibraryMock,
-  lidarGetImportJob: getImportJobMock,
-}))
+vi.mock('../ipc/lidar', () => ({ lidarListLibrary: listLibraryMock }))
 
 import {
   ensureLidarPolling,
+  hasActiveLibraryWork,
   installLidarLibraryObserver,
   lidarLibrary,
-  openImportJob,
+  lidarStatusMessage,
+  readLidarPresentation,
   stopLidarPolling,
-  trackImportJob,
 } from '../app/lidar/library-store'
+import { locale } from '../app/settings/state'
 
-const emptyLibrary: LidarLibrarySnapshot = {
-  layers: [],
-  analyses: [],
-  engine: { available: true, version: '3.8.4', detail: null },
-}
+const emptyLibrary: LibrarySnapshot = librarySnapshot([])
 
-function importJob(state: LidarImportJob['state']): LidarImportJob {
-  return {
-    job_id: 'job-1',
-    layer_id: 'layer-1',
-    state,
-    message: null,
-    progress: null,
-  }
+function importing(state: LidarImportJob['state']): LibrarySnapshot {
+  return librarySnapshot([sourceItem('layer-1', 'Ground', {
+    generation_id: state === 'Complete' ? 'generation-1' : null,
+    state: state === 'Complete' ? 'Ready' : 'Preparing',
+    import_job: { job_id: 'job-1', layer_id: 'layer-1', state, message: null, progress: null },
+  })])
 }
 
 async function flushMicrotasks(): Promise<void> {
@@ -43,182 +36,131 @@ describe('LiDAR library polling', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     listLibraryMock.mockReset().mockResolvedValue(emptyLibrary)
-    getImportJobMock.mockReset()
     lidarLibrary.value = null
-    openImportJob.value = null
     stopLidarPolling()
   })
 
   afterEach(() => {
     stopLidarPolling()
-    openImportJob.value = null
     vi.useRealTimers()
   })
 
-  it('tracks a running import and stops polling once it settles', async () => {
-    // The one-step route settles at complete; there is no review state to wait
-    // for, so polling must stop when the job is no longer working.
-    getImportJobMock
-      .mockResolvedValueOnce(importJob('Staging'))
-      .mockResolvedValueOnce(importJob('Complete'))
-
-    await trackImportJob('job-1')
-    await flushMicrotasks()
-
-    expect(openImportJob.value?.state).toBe('Complete')
-    expect(getImportJobMock).toHaveBeenCalledTimes(2)
-
-    await vi.advanceTimersByTimeAsync(5_000)
-    expect(getImportJobMock).toHaveBeenCalledTimes(2)
+  it('treats running imports and calculations as active work, settled ones as idle', () => {
+    expect(hasActiveLibraryWork(importing('Staging'))).toBe(true)
+    expect(hasActiveLibraryWork(importing('Applying'))).toBe(true)
+    expect(hasActiveLibraryWork(importing('Failed'))).toBe(false)
+    expect(hasActiveLibraryWork(importing('Complete'))).toBe(false)
+    expect(hasActiveLibraryWork(null)).toBe(false)
   })
 
-  it('does not poll failed or incomplete analysis states forever', async () => {
-    listLibraryMock.mockResolvedValue({
-      ...emptyLibrary,
-      analyses: [{
-        id: 'analysis-1',
-        source_layer_id: 'layer-1',
-        kind: 'Slope',
-        state: 'Failed',
-        detail: 'generation failed',
-        bounds: null,
-        value_range: null,
-        tilesets: [],
-      }],
-    })
+  it('treats a running analysis as active work, including a refresh of a published result', () => {
+    const running = { job_id: 'j', state: 'Preparing' as const, message: null }
+    expect(hasActiveLibraryWork(librarySnapshot([slopeItem('s', 'a', { generation_id: null, state: 'Preparing', run: running })]))).toBe(true)
+    expect(hasActiveLibraryWork(librarySnapshot([slopeItem('s', 'a', { run: running })]))).toBe(true)
+    expect(hasActiveLibraryWork(librarySnapshot([slopeItem('s', 'a')]))).toBe(false)
+  })
 
+  it('polls a running import until it settles, then stops', async () => {
+    listLibraryMock.mockResolvedValue(importing('Staging'))
     ensureLidarPolling()
     await flushMicrotasks()
-    const settledCalls = listLibraryMock.mock.calls.length
-    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.advanceTimersByTimeAsync(1_500)
+    const running = listLibraryMock.mock.calls.length
+    expect(running).toBeGreaterThanOrEqual(2)
 
-    expect(settledCalls).toBe(1)
-    expect(listLibraryMock).toHaveBeenCalledTimes(settledCalls)
+    listLibraryMock.mockResolvedValue(importing('Complete'))
+    await vi.advanceTimersByTimeAsync(1_500)
+    const settled = listLibraryMock.mock.calls.length
+    await vi.advanceTimersByTimeAsync(6_000)
+
+    expect(listLibraryMock).toHaveBeenCalledTimes(settled)
+    expect(lidarLibrary.value?.items[0]?.generation_id).toBe('generation-1')
   })
 
-  it('panel unmount does not stop an active import from settling', async () => {
-    // R33: Data/Analysis/Layers subscribe; they must not own the shared timer.
-    getImportJobMock.mockResolvedValue(importJob('Staging'))
-    const disposeData = installLidarLibraryObserver()
-    await trackImportJob('job-1')
+  it('does not poll a failed import forever', async () => {
+    listLibraryMock.mockResolvedValue(importing('Failed'))
+    ensureLidarPolling()
     await flushMicrotasks()
+    await vi.advanceTimersByTimeAsync(6_000)
+    expect(listLibraryMock.mock.calls.length).toBeLessThanOrEqual(2)
+  })
 
-    // Closing Data must leave the tracked job polling.
-    disposeData()
-    getImportJobMock.mockResolvedValue(importJob('Complete'))
+  it('closing the dock does not stop an import from settling', async () => {
+    listLibraryMock.mockResolvedValue(importing('Staging'))
+    const dispose = installLidarLibraryObserver()
+    await flushMicrotasks()
+    dispose()
+
+    listLibraryMock.mockResolvedValue(importing('Complete'))
     await vi.advanceTimersByTimeAsync(1_500)
     await flushMicrotasks()
-
-    expect(openImportJob.value?.state).toBe('Complete')
+    expect(lidarLibrary.value?.items[0]?.import_job?.state).toBe('Complete')
   })
 
-  it('reopening a panel refreshes immediately and observes current progress', async () => {
-    getImportJobMock.mockResolvedValue(importJob('Staging'))
-    await trackImportJob('job-1')
+  it('reopening the dock refreshes at once', async () => {
+    installLidarLibraryObserver()
     await flushMicrotasks()
     const before = listLibraryMock.mock.calls.length
+    listLibraryMock.mockResolvedValue(importing('Complete'))
 
-    // Reopen Data: the observer refreshes at once rather than waiting a tick.
-    listLibraryMock.mockResolvedValue({
-      ...emptyLibrary,
-      layers: [{
-        id: 'layer-1',
-        name: 'Ground',
-        measurement_kind: 'GroundElevation',
-        units: 'm',
-        state: 'Ready',
-        resolution_m: 0.5,
-        coverage_cells: '10',
-        bounds: [0, 0, 1, 1],
-        value_range: null,
-        analysis_count: 0,
-        tilesets: [],
-      }],
-    })
     installLidarLibraryObserver()
     await flushMicrotasks()
     expect(listLibraryMock.mock.calls.length).toBeGreaterThan(before)
-    expect(lidarLibrary.value?.layers).toHaveLength(1)
+    expect(lidarLibrary.value?.items).toHaveLength(1)
   })
 
-  it('L2: refreshLidarLibraryFresh returns the snapshot it published', async () => {
-    const snapshot = {
-      ...emptyLibrary,
-      layers: [{
-        id: 'layer-1',
-        name: 'Ground',
-        measurement_kind: 'GroundElevation',
-        units: 'm',
-        state: 'Ready',
-        resolution_m: 0.5,
-        coverage_cells: '10',
-        bounds: [0, 0, 1, 1],
-        value_range: null,
-        analysis_count: 0,
-        tilesets: [],
-      }],
-    }
-    listLibraryMock.mockResolvedValueOnce(snapshot)
-    const { refreshLidarLibraryFresh } = await import('../app/lidar/library-store')
-    const returned = await refreshLidarLibraryFresh()
-    expect(returned).toBe(snapshot)
-    expect(lidarLibrary.value).toBe(snapshot)
+  it('refuses a malformed snapshot as a failed read and stops polling', async () => {
+    listLibraryMock.mockResolvedValue({ plant_db: 'missing' })
+    ensureLidarPolling()
+    await flushMicrotasks()
+    await flushMicrotasks()
+    expect(lidarLibrary.value).toBeNull()
+    expect(lidarStatusMessage.value).toMatch(/malformed/i)
+    const calls = listLibraryMock.mock.calls.length
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(listLibraryMock.mock.calls.length).toBe(calls)
+  })
+})
+
+describe('LiDAR presentation join', () => {
+  beforeEach(() => {
+    locale.value = 'en'
   })
 
-  it('L3: a queued fresh read only serves callers whose fence it started after', async () => {
-    const { refreshLidarLibraryFresh } = await import('../app/lidar/library-store')
-    const gate: { release: ((snapshot: unknown) => void) | null } = { release: null }
-    listLibraryMock.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          gate.release = resolve
-        }),
+  it('joins Design entries with their items, typed and in their own units, back to front', () => {
+    const library = librarySnapshot([
+      sourceItem('ground', 'Ground', { display_range: { min: 100, max: 180, basis: 'Exact' } }),
+      slopeItem('slope', 'ground', {
+        units: '%',
+        freshness: { state: 'Stale', reasons: [{ reason: 'InputUpdated', input_key: 'dem', item_id: 'ground' }] },
+      }),
+    ])
+    const design = { lidar: { entries: [
+      { kind: 'Derived' as const, id: 'slope', visible: true, opacity: 0.5, order: 1, style: null },
+      { kind: 'Source' as const, id: 'ground', visible: false, opacity: 1, order: 0, style: null },
+      { kind: 'Derived' as const, id: 'gone', visible: true, opacity: 1, order: 2, style: null },
+    ] } }
+
+    const [ground, slope, gone] = readLidarPresentation(design, library)
+    expect(ground).toMatchObject({ kind: 'Source', role: 'Source', name: 'Ground', units: 'm', displayRange: [100, 180], definitionId: null })
+    expect(slope).toMatchObject({
+      kind: 'Derived',
+      role: 'Derived',
+      name: 'Ground · Slope',
+      itemType: { kind: 'Raster', quantity: 'Slope' },
+      units: '%',
+      definitionId: 'slope-def',
+      freshness: { state: 'Stale' },
+    })
+    expect(gone).toMatchObject({ role: 'Derived', state: 'unavailable', itemType: null, name: 'gone' })
+  })
+
+  it('never joins an entry to an item of the other role', () => {
+    const library = librarySnapshot([sourceItem('same', 'Ground')])
+    const [entry] = readLidarPresentation(
+      { lidar: { entries: [{ kind: 'Derived', id: 'same', visible: true, opacity: 1, order: 0, style: null }] } },
+      library,
     )
-    // Read A starts before B's terminal observation.
-    const readA = refreshLidarLibraryFresh()
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(gate.release).not.toBeNull()
-    const snapshotB = {
-      ...emptyLibrary,
-      layers: [{
-        id: 'layer-b', name: 'B', measurement_kind: 'GroundElevation', units: 'm',
-        state: 'Ready', resolution_m: 0.5, coverage_cells: '1', bounds: null,
-        value_range: null, analysis_count: 0, tilesets: [],
-      }],
-    }
-    listLibraryMock.mockResolvedValueOnce(snapshotB)
-    // B observes Complete after A already started: B must not join A.
-    const readB = refreshLidarLibraryFresh()
-    expect(readB).not.toBe(readA)
-    gate.release?.(emptyLibrary)
-    const resultA = await readA
-    expect(resultA).toBe(emptyLibrary)
-    const resultB = await readB
-    expect(resultB).toBe(snapshotB)
-  })
-
-  it('L4: an older passive response cannot overwrite a newer snapshot', async () => {
-    const { refreshLidarLibrary, refreshLidarLibraryFresh } = await import('../app/lidar/library-store')
-    const oldGate: { release: ((snapshot: unknown) => void) | null } = { release: null }
-    const oldSnapshot = { ...emptyLibrary, engine: { available: true, version: 'old', detail: null } }
-    const newSnapshot = { ...emptyLibrary, engine: { available: true, version: 'new', detail: null } }
-    listLibraryMock.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          oldGate.release = resolve
-        }),
-    )
-    const passive = refreshLidarLibrary()
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(oldGate.release).not.toBeNull()
-    listLibraryMock.mockResolvedValueOnce(newSnapshot)
-    await refreshLidarLibraryFresh()
-    expect(lidarLibrary.value).toBe(newSnapshot)
-    // The older passive read resolves last and must not regress the store.
-    oldGate.release?.(oldSnapshot)
-    await passive
-    expect(lidarLibrary.value).toBe(newSnapshot)
+    expect(entry?.state).toBe('unavailable')
   })
 })

@@ -1,5 +1,4 @@
 import { getRevealedAnnotationId } from '../annotation-layout'
-import { projectScenePlantLabels } from '../renderers/viewport-presentation'
 import {
   resolvePlantCanopySpreadM,
   resolvePlantStratum,
@@ -11,13 +10,13 @@ import {
   type CanvasPlantLabelSource,
   type CanvasSpeciesPresentationCache,
 } from '../presentation-data'
-import type { SceneRendererHoverTarget, SceneRendererSnapshot } from '../renderers/scene-types'
+import type { SceneEditingAids, SceneRendererHoverTarget, SceneRendererSnapshot } from '../renderers/scene-types'
+import type { PlantLabelMode } from '../plant-display'
 import type {
   SceneDesignObjectTarget,
   ScenePersistedState,
   ScenePlantEntity,
   SceneStateReader,
-  SceneViewportState,
 } from '../scene'
 import { isSceneDesignObjectLocked } from '../scene'
 import { resolveSceneObjectGroupMembers, sceneObjectGroupMemberLayerName } from '../scene'
@@ -25,7 +24,8 @@ import { projectSceneSelectionEntityIds } from './selection'
 
 interface SceneRuntimePresentationControllerOptions {
   sceneStore: SceneStateReader
-  getViewport(): SceneViewportState
+  /** The live frame's scale, for plant presentation contexts (`view.pixelsPerMetre`). */
+  readPixelsPerMetre(): number
   getLocale(): string
   resolveHighlightedTargets(scene: ScenePersistedState): {
     plantIds: readonly string[]
@@ -48,12 +48,11 @@ export interface PlantPresentationBackfill {
   canonicalName: string
   stratum: string | null
   canopySpreadM: number | null
-  scale: number | null
 }
 
 export class SceneRuntimePresentationController {
   private readonly _sceneStore: SceneStateReader
-  private readonly _getViewport: () => SceneViewportState
+  private readonly _readPixelsPerMetre: () => number
   private readonly _getLocale: () => string
   private readonly _resolveHighlightedTargets: SceneRuntimePresentationControllerOptions['resolveHighlightedTargets']
   private readonly _onPlantNamesChanged: () => void
@@ -61,10 +60,14 @@ export class SceneRuntimePresentationController {
   private readonly _plantLabels: CanvasPlantLabelSource
   private _preparedPlantNamesRevision = 0
   private _publishedPlantNamesRevision = 0
+  /** Layers a presented story shows; null when nothing is presented. */
+  private _presentedLayerNames: ReadonlySet<string> | null = null
+  /** The workspace's grid and ruler guides (the chrome coordinator's); null draws none. */
+  private _editingAids: SceneEditingAids | null = null
 
   constructor(options: SceneRuntimePresentationControllerOptions) {
     this._sceneStore = options.sceneStore
-    this._getViewport = options.getViewport
+    this._readPixelsPerMetre = options.readPixelsPerMetre
     this._getLocale = options.getLocale
     this._resolveHighlightedTargets = options.resolveHighlightedTargets
     this._onPlantNamesChanged = options.onPlantNamesChanged
@@ -80,31 +83,58 @@ export class SceneRuntimePresentationController {
     return this._plantLabels.getLocaleSnapshot(this._getLocale())
   }
 
+  getEnglishFallbackNames(): ReadonlyMap<string, string> {
+    return this._plantLabels.getEnglishFallbackSnapshot(this._getLocale())
+  }
+
   getSuggestedPlantColor(canonicalName: string): string | null {
     return this._speciesCache.getSuggestedPlantColor(canonicalName)
   }
 
   createPlantPresentationContext(
-    viewportScale = this._getViewport().scale,
+    viewportScale = this._readPixelsPerMetre(),
     plants: readonly ScenePlantEntity[] = this._sceneStore.persisted.plants,
   ): PlantPresentationContext {
     return {
       plants,
-      viewport: {
-        x: 0,
-        y: 0,
-        scale: viewportScale,
-      },
+      pixelsPerMetre: viewportScale,
       speciesCache: this._speciesCache.getCache(),
       localizedCommonNames: this.getLocalizedCommonNames(),
     }
   }
 
+  /**
+   * While a story is presented the map shows only the named Design layers and
+   * no selection, hover or measurement guides; null shows the Design as it is again. Session
+   * presentation only: the Scene, its history and dirty state never change.
+   * Returns whether anything changed.
+   */
+  presentLayers(visibleLayerNames: readonly string[] | null): boolean {
+    const next = visibleLayerNames ? new Set(visibleLayerNames) : null
+    const current = this._presentedLayerNames
+    if (next === null && current === null) return false
+    if (next && current && next.size === current.size && [...next].every((name) => current.has(name))) return false
+    this._presentedLayerNames = next
+    return true
+  }
+
+  /**
+   * The grid and ruler guides the workspace map draws, the pattern of `presentLayers`: only the workspace snapshot
+   * carries them, never the overview, a capture or a presented story. Returns whether they changed, so the caller
+   * syncs the scene only then.
+   */
+  setEditingAids(aids: SceneEditingAids | null): boolean {
+    if (editingAidsEqual(this._editingAids, aids)) return false
+    this._editingAids = aids
+    return true
+  }
+
   buildRendererSnapshot(options: { overview?: boolean } = {}): SceneRendererSnapshot {
+    const presented = this._presentedLayerNames
+    if (presented) return this.buildPresentedSnapshot(presented, options.overview === true)
     const scene = this._sceneStore.persisted
     const session = this._sceneStore.session
-    const viewport = this._getViewport()
-    if (options.overview) return buildOverviewRendererSnapshot(scene, session.speciesFocus, viewport)
+    if (options.overview) return buildOverviewRendererSnapshot(scene, session.speciesFocus)
     const hoveredPlant = session.hoveredTarget?.kind === 'plant'
       ? scene.plants.find((plant) => plant.id === session.hoveredTarget?.id)
       : null
@@ -120,7 +150,6 @@ export class SceneRuntimePresentationController {
     return {
       scene,
       speciesFocus: session.speciesFocus,
-      viewport,
       selectionLabelPlantIds,
       revealedAnnotationId: getRevealedAnnotationId(session.selectedTargets),
       ...selectionProjection,
@@ -130,8 +159,57 @@ export class SceneRuntimePresentationController {
       localizedCommonNames,
       hoveredCanonicalName: hoveredPlant?.canonicalName ?? null,
       hoverTarget: getRendererHoverTarget(scene, session.hoveredTarget),
-      ...projectScenePlantLabels({ scene, viewport, localizedCommonNames, selectionLabelPlantIds,
-        speciesCache: this._speciesCache.getCache() }),
+      ...this._editingAids ? { editingAids: this._editingAids } : {},
+    }
+  }
+
+  private buildPresentedSnapshot(visible: ReadonlySet<string>, overview: boolean): SceneRendererSnapshot {
+    const snapshot = this.buildViewCaptureSnapshot({
+      overview,
+      visibleLayerNames: [...visible],
+      focusedSpecies: this._sceneStore.session.speciesFocus.canonicalName,
+    })
+    // Measurement guides are an editing aid, like the grid and the ruler guides, which a presented story never draws.
+    return { ...snapshot, scene: { ...snapshot.scene, measurementGuides: [] } }
+  }
+
+  /**
+   * A snapshot for an off-screen view capture: the persisted scene with only
+   * the requested layers visible, no selection, hover or panel highlight.
+   */
+  buildViewCaptureSnapshot(request: {
+    readonly overview: boolean
+    readonly visibleLayerNames: readonly string[]
+    readonly focusedSpecies: string | null
+    readonly plantLabels?: PlantLabelMode
+  }): SceneRendererSnapshot {
+    const persisted = this._sceneStore.persisted
+    const visible = new Set(request.visibleLayerNames)
+    const scene: ScenePersistedState = {
+      ...persisted,
+      layers: persisted.layers.map((layer) => ({ ...layer, visible: visible.has(layer.name) })),
+    }
+    const speciesFocus = { canonicalName: request.focusedSpecies }
+    if (request.overview) return buildOverviewRendererSnapshot(scene, speciesFocus)
+    const localizedCommonNames = this.getLocalizedCommonNames()
+    const speciesCache = this._speciesCache.getCache()
+    const selectionLabelPlantIds = new Set<string>()
+    return {
+      scene,
+      speciesFocus,
+      selectionLabelPlantIds,
+      revealedAnnotationId: null,
+      selectedPlantIds: new Set(),
+      selectedZoneIds: new Set(),
+      selectedAnnotationIds: new Set(),
+      selectedMeasurementGuideIds: new Set(),
+      highlightedPlantIds: new Set(),
+      highlightedZoneIds: new Set(),
+      speciesCache,
+      localizedCommonNames,
+      hoveredCanonicalName: null,
+      hoverTarget: null,
+      ...request.plantLabels ? { plantLabels: request.plantLabels } : {},
     }
   }
 
@@ -221,12 +299,11 @@ export class SceneRuntimePresentationController {
     const backfills: PlantPresentationBackfill[] = []
     for (const plant of this._sceneStore.persisted.plants) {
       const nextStratum = resolvePlantStratum(plant, speciesCache)
-      const nextCanopySpreadM = resolvePlantCanopySpreadM(plant, speciesCache)
-      const nextScale = nextCanopySpreadM ?? plant.scale
+      // A spread the species data cannot resolve keeps the saved value.
+      const nextCanopySpreadM = resolvePlantCanopySpreadM(plant, speciesCache) ?? plant.canopySpreadM
       if (
         nextStratum === plant.stratum
         && nextCanopySpreadM === plant.canopySpreadM
-        && nextScale === plant.scale
       ) {
         continue
       }
@@ -235,17 +312,24 @@ export class SceneRuntimePresentationController {
         canonicalName: plant.canonicalName,
         stratum: nextStratum,
         canopySpreadM: nextCanopySpreadM,
-        scale: nextScale,
       })
     }
     return backfills.length > 0 ? backfills : null
   }
 }
 
+function editingAidsEqual(a: SceneEditingAids | null, b: SceneEditingAids | null): boolean {
+  if (a === null || b === null) return a === b
+  if (a.grid?.ink !== b.grid?.ink || a.grid?.majorInk !== b.grid?.majorInk) return false
+  return a.rulerGuides.length === b.rulerGuides.length && a.rulerGuides.every((guide, index) => {
+    const other = b.rulerGuides[index]!
+    return guide.axis === other.axis && guide.position === other.position
+  })
+}
+
 function buildOverviewRendererSnapshot(
   scene: ScenePersistedState,
   speciesFocus: SceneRendererSnapshot['speciesFocus'],
-  viewport: SceneViewportState,
 ): SceneRendererSnapshot {
   return {
     scene: {
@@ -258,7 +342,6 @@ function buildOverviewRendererSnapshot(
       guides: [],
     },
     speciesFocus,
-    viewport,
     selectionLabelPlantIds: new Set(),
     revealedAnnotationId: null,
     selectedPlantIds: new Set(),
@@ -271,8 +354,6 @@ function buildOverviewRendererSnapshot(
     localizedCommonNames: new Map(),
     hoveredCanonicalName: null,
     hoverTarget: null,
-    pinnedPlantNameLabels: [],
-    selectionLabels: [],
   }
 }
 
@@ -296,7 +377,7 @@ function containsHoverTarget(
 ): boolean {
   if (target.kind === 'group') return scene.groups.some((group) => group.id === target.id)
   if (target.kind === 'plant') return scene.plants.some((plant) => plant.id === target.id)
-  if (target.kind === 'zone') return scene.zones.some((zone) => zone.name === target.id)
+  if (target.kind === 'zone') return scene.zones.some((zone) => zone.id === target.id)
   if (target.kind === 'annotation') {
     return scene.annotations.some((annotation) => annotation.id === target.id)
   }

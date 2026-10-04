@@ -7,15 +7,13 @@ import type {
   DocumentFileFieldOwner,
   KnownCanopiKey,
 } from '../../generated/known-canopi-keys'
-import type { CanopiFile, SpatialFrame } from '../../types/design'
-import { cloneSpatialFrame } from '../../spatial-frame'
+import type { CanopiFile } from '../../types/design'
 
-export { DEFAULT_BUDGET_CURRENCY, KNOWN_CANOPI_KEYS }
+export { DEFAULT_BUDGET_CURRENCY }
 
-export interface DocumentFileSaveMetadata {
+interface DocumentFileSaveMetadata {
   name: string
   description?: string | null
-  spatialFrame?: SpatialFrame
 }
 
 export interface ComposeDocumentForSaveOptions {
@@ -26,7 +24,7 @@ export interface ComposeDocumentForSaveOptions {
 
 export const DOCUMENT_FILE_FIELD_OWNERS = GENERATED_DOCUMENT_FILE_FIELD_OWNERS
 
-export const DOCUMENT_FILE_KNOWN_KEYS = KNOWN_CANOPI_KEYS
+const DOCUMENT_FILE_KNOWN_KEYS = KNOWN_CANOPI_KEYS
 
 const KNOWN_CANOPI_KEY_SET = new Set<string>(DOCUMENT_FILE_KNOWN_KEYS)
 const SHARED_EXTRA_FIELD_OWNERS = {
@@ -73,10 +71,19 @@ export function normalizeLoadedDocument(file: CanopiFile): CanopiFile {
   }
 }
 
-export function normalizeNewDocument(file: CanopiFile): CanopiFile {
+/**
+ * A new Design starts with an empty `extra`, except the keys its creator set
+ * on purpose (`keepExtraKeys`: Settings › New Designs display options).
+ */
+export function normalizeNewDocument(file: CanopiFile, keepExtraKeys: readonly string[] = []): CanopiFile {
+  const persisted = normalizePersistedExtra(file.extra)
+  const extra: Record<string, unknown> = {}
+  for (const key of keepExtraKeys) {
+    if (Object.prototype.hasOwnProperty.call(persisted, key)) extra[key] = persisted[key]
+  }
   return {
     ...normalizeDocumentKnownFields(file),
-    extra: {},
+    extra,
   }
 }
 
@@ -93,7 +100,6 @@ export function composeDocumentForSave({
     ...composed,
     name: metadata.name,
     description: metadata.description ?? composed.description ?? null,
-    spatial_frame: cloneSpatialFrame(metadata.spatialFrame ?? composed.spatial_frame),
   }
 }
 
@@ -127,7 +133,6 @@ function normalizeDocumentKnownFields(file: CanopiFile): CanopiFile {
     version: file.version,
     name: file.name,
     description: file.description ?? null,
-    spatial_frame: cloneSpatialFrame(file.spatial_frame),
     plant_species_colors: file.plant_species_colors,
     plant_species_symbols: file.plant_species_symbols ?? {},
     plant_species_codes: file.plant_species_codes ?? {},
@@ -142,6 +147,8 @@ function normalizeDocumentKnownFields(file: CanopiFile): CanopiFile {
     budget: file.budget ?? [],
     budget_currency: file.budget_currency ?? DEFAULT_BUDGET_CURRENCY,
     ...(file.lidar == null ? {} : { lidar: file.lidar }),
+    views: file.views ?? [],
+    stories: file.stories ?? [],
     created_at: file.created_at,
     updated_at: file.updated_at,
     extra: normalizePersistedExtra(file.extra),

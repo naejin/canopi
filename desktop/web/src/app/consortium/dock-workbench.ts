@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
-import { useSignal } from '@preact/signals'
+import { batch, useSignal } from '@preact/signals'
 import { currentCanvasQuerySurface, currentCanvasSpeciesFocusCommands } from '../../canvas/session'
 import { consortiumTarget } from '../../target'
 import { moveConsortiumEntry } from '../design-edit'
@@ -13,17 +13,26 @@ import {
   type ConsortiumPlanningRow,
 } from '../planning-projection'
 import { usePlanningViewState, type ConsortiumListFilter } from '../planning-view/state'
+import type { PlantFinderResult } from '../plant-finder/matcher'
+import {
+  NO_SPECIES_QUICK_FILTERS,
+  useSpeciesQuickFilters,
+  type SpeciesQuickFilters,
+  type SpeciesQuickFilterValue,
+} from '../plant-finder/quick-filters'
+import { useMapSelectionSpecies } from '../plant-finder/selection'
+import { usePlantFinder } from '../plant-finder/use-plant-finder'
 import { CONSORTIUM_STRATA, SUCCESSION_PHASE_COUNT } from './time-model'
 
 const consortiumTargetPresentation = createPanelTargetPresentationController('consortium')
 
-export interface ConsortiumEditDraft {
+interface ConsortiumEditDraft {
   readonly stratum: string
   readonly startPhase: number
   readonly endPhase: number
 }
 
-export interface ConsortiumEditorState {
+interface ConsortiumEditorState {
   readonly canonicalName: string
   readonly sessionIdentity: object
   readonly draft: ConsortiumEditDraft
@@ -34,6 +43,13 @@ export interface ConsortiumDockWorkbench {
   readonly list: ConsortiumListProjection
   readonly activeLocale: string
   readonly search: string
+  readonly finder: PlantFinderResult<string>
+  readonly selectedOnMap: boolean
+  readonly mapSelectionPlantCount: number
+  /** Stratum and Form, with their counts. */
+  readonly quickFilters: SpeciesQuickFilters
+  /** Species the finder, the quick filters or the map selection narrow to; null when none is on. */
+  readonly highlightedSpecies: ReadonlySet<string> | null
   readonly filter: ConsortiumListFilter | null
   readonly expandedStrata: ReadonlySet<string>
   readonly editor: ConsortiumEditorState | null
@@ -42,6 +58,9 @@ export interface ConsortiumDockWorkbench {
   readonly focusedCanonical: string | null
   readonly scrollTop: number
   readonly setSearch: (value: string) => void
+  readonly setSelectedOnMap: (value: boolean) => void
+  readonly setQuickFilters: (value: SpeciesQuickFilterValue) => void
+  readonly clearFilters: () => void
   readonly setFilter: (filter: ConsortiumListFilter | null) => void
   readonly toggleStratum: (stratum: string) => void
   readonly setScrollTop: (value: number) => void
@@ -61,6 +80,7 @@ export function useConsortiumDockWorkbench(): ConsortiumDockWorkbench {
   const view = usePlanningViewState()
   const sessionIdentity = designSessionStore.sessionIdentity.value
   const search = view.consortiumSearch.value
+  const selectedOnMap = view.consortiumSelectedOnMap.value
   const filter = view.consortiumFilter.value
   const expandedStrata = view.consortiumExpandedStrata.value
   const editor = useSignal<ConsortiumEditorState | null>(null)
@@ -68,10 +88,31 @@ export function useConsortiumDockWorkbench(): ConsortiumDockWorkbench {
   const movedOutsideFilter = useSignal(false)
   const projectionRef = useRef(surface.projection)
   projectionRef.current = surface.projection
+  const mapSelection = useMapSelectionSpecies()
+  const finderSpecies = useMemo(() => surface.projection.rows.map((row) => ({
+    canonicalName: row.canonicalName,
+    commonName: row.commonName,
+    code: row.code,
+  })), [surface.projection.rows])
+  const finder = usePlantFinder(finderSpecies, search)
+  const matches = useMemo(() => finder.active ? new Set(finder.byKey.keys()) : null, [finder])
+  const selectedSpecies = useMemo(
+    () => selectedOnMap ? new Set(mapSelection.plantCountBySpecies.keys()) : null,
+    [mapSelection, selectedOnMap],
+  )
+  const canonicalNames = useMemo(() => surface.projection.rows.map((row) => row.canonicalName), [surface.projection.rows])
+  const quickFilters = useSpeciesQuickFilters(canonicalNames, view.consortiumQuickFilters.value)
+  const highlightedSpecies = useMemo(() => {
+    const narrowing = [matches, selectedSpecies, quickFilters.allowed].filter((set): set is ReadonlySet<string> => set !== null)
+    if (narrowing.length <= 1) return narrowing[0] ?? null
+    return new Set([...narrowing[0]!].filter((name) => narrowing.every((set) => set.has(name))))
+  }, [matches, quickFilters, selectedSpecies])
   const list = useMemo(() => buildConsortiumListProjection(surface.projection, {
-    search,
+    matches,
+    selectedSpecies,
+    quickFilterSpecies: quickFilters.allowed,
     filter,
-  }), [filter, search, surface.projection])
+  }), [filter, matches, quickFilters, selectedSpecies, surface.projection])
 
   useEffect(() => {
     if (view.consortiumExpansionInitialized.peek()) return
@@ -195,6 +236,11 @@ export function useConsortiumDockWorkbench(): ConsortiumDockWorkbench {
     list,
     activeLocale: surface.activeLocale,
     search,
+    finder,
+    selectedOnMap,
+    mapSelectionPlantCount: mapSelection.plantCount,
+    quickFilters,
+    highlightedSpecies,
     filter,
     expandedStrata,
     editor: editor.value,
@@ -203,6 +249,17 @@ export function useConsortiumDockWorkbench(): ConsortiumDockWorkbench {
     focusedCanonical: currentCanvasQuerySurface.value?.getSpeciesFocus().canonicalName ?? null,
     scrollTop: view.consortiumScrollTop,
     setSearch: (value) => { view.consortiumSearch.value = value },
+    setSelectedOnMap: (value) => { view.consortiumSelectedOnMap.value = value },
+    setQuickFilters: (value) => { view.consortiumQuickFilters.value = value },
+    clearFilters: () => {
+      batch(() => {
+        view.consortiumSearch.value = ''
+        view.consortiumSelectedOnMap.value = false
+        view.consortiumQuickFilters.value = NO_SPECIES_QUICK_FILTERS
+        view.consortiumFilter.value = null
+        movedOutsideFilter.value = false
+      })
+    },
     setFilter,
     toggleStratum,
     setScrollTop: (value) => { view.consortiumScrollTop = value },

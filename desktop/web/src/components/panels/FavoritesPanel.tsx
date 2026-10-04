@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useId, useMemo, useRef, useState } from 'preact/hooks'
 import { t } from '../../i18n'
+import { formatCount } from '../../utils/format-count'
 import {
   MIN_FAVORITES_FRAME_HEIGHT,
   locale,
@@ -21,12 +22,13 @@ import {
   clearSavedObjectStampDragSource,
   writeSavedObjectStampDragData,
 } from '../../canvas/saved-object-stamp-source'
-import type { SavedObjectStamp } from '../../types/saved-object-stamps'
-import { PlantRow } from '../plant-db/PlantRow'
 import {
-  filterFavoriteSpecies,
-  useFavoriteSpeciesDetailNavigation,
-} from '../plant-db/favorite-species-presentation'
+  isSavedObjectStampPayloadFromBefore2_0,
+  parseSavedObjectStampPayload,
+} from '../../canvas/saved-object-stamp-payload'
+import type { SavedObjectStamp } from '../../types/saved-object-stamps'
+import type { SpeciesListItem } from '../../types/species'
+import { useFavoriteSpeciesDetailNavigation } from '../plant-db/favorite-species-presentation'
 import { PlantDetailCard } from '../plant-detail/PlantDetailCard'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 import { usePointerResize } from '../shared/usePointerResize'
@@ -34,11 +36,26 @@ import { usePointerReorder } from '../shared/usePointerReorder'
 import plantDetailStyles from '../plant-detail/PlantDetail.module.css'
 import { currentCanvasQuerySurface } from '../../canvas/session'
 import { resolvePlantSymbolId } from '../../canvas/runtime/scene'
+import {
+  writePlantStampDragData,
+} from '../../canvas/plant-stamp-source'
+import { navigateTo } from '../../app/shell/state'
+import { designSessionStore } from '../../app/document-session/store'
+import { useEnglishFallbackNames } from '../../app/plant-finder/catalog-names'
+import { findPlants } from '../../app/plant-finder/matcher'
+import { useMapSelectionSpecies } from '../../app/plant-finder/selection'
+import { usePlantFinder } from '../../app/plant-finder/use-plant-finder'
 import { PlantSymbolGlyph } from '../canvas/PlantSymbolGlyph'
 import { DockPanelHeader } from '../shared/DockPanelHeader'
-import { SurfaceSearch } from '../shared/SurfaceSearch'
+import { EmptyState } from '../shared/EmptyState'
+import { PanelIcon } from '../shared/PanelIcon'
+import { PlantFinder, finderHighlight } from '../shared/PlantFinder'
+import { SpeciesIdentity } from '../shared/SpeciesIdentity'
 import { ActionMenu } from '../shared/ActionMenu'
+import { ControlIcon } from '../shared/ControlIcon'
+import row from '../shared/species-row.module.css'
 import styles from './FavoritesPanel.module.css'
+import { placeSpeciesOnMap } from '../plant-db/place-species'
 
 const SAVED_STAMP_PREVIEW_DELAY_MS = 120
 const SAVED_STAMP_PREVIEW_GAP = 8
@@ -58,11 +75,15 @@ interface SavedStampReorderSession {
   readonly sourceId: string
   direction: SavedStampReorderDirection | null
   lastClientY: number
+  /** The full library order when the gesture began; hidden (searched-out) stamps keep their slots. */
+  readonly baseIds: readonly string[]
   latestIds: readonly string[]
 }
 
 export function FavoritesPanel() {
   const [search, setSearch] = useState('')
+  const [selectedOnMap, setSelectedOnMap] = useState(false)
+  const mapSelection = useMapSelectionSpecies()
   const queries = currentCanvasQuerySurface.value
   void queries?.revision.scene.value
   const scene = queries?.getSceneSnapshot()
@@ -83,6 +104,8 @@ export function FavoritesPanel() {
   const [, setLayoutRevision] = useState(0)
   const [preview, setPreview] = useState<SavedStampPreview | null>(null)
   const [savedStampReorderPreviewIds, setSavedStampReorderPreviewIds] = useState<readonly string[] | null>(null)
+  const [importRefusalKey, setImportRefusalKey] = useState<string | null>(null)
+  const designIdentity = designSessionStore.sessionIdentity.value
 
   useEffect(() => speciesCatalogWorkbench.mount('favorites'), [])
 
@@ -115,17 +138,64 @@ export function FavoritesPanel() {
   }, [])
 
   const items = favoritesView.items
-  const visibleItems = filterFavoriteSpecies(items, search)
+  const finderSpecies = useMemo(() => items.map((item) => ({
+    canonicalName: item.canonical_name,
+    commonName: item.common_name,
+    code: scene?.plantSpeciesCodes[item.canonical_name],
+  })), [items, scene])
+  const finder = usePlantFinder(finderSpecies, search)
+  const englishNames = useEnglishFallbackNames(finderSpecies)
+  const visibleItems = useMemo(() => {
+    const shown = items.filter((item) => (
+      (!selectedOnMap || mapSelection.plantCountBySpecies.has(item.canonical_name))
+      && (!finder.active || finder.byKey.has(item.canonical_name))
+    ))
+    if (!finder.active) return shown
+    const rank = new Map(finder.hits.map((hit, index) => [hit.key, index]))
+    return shown.sort((left, right) => rank.get(left.canonical_name)! - rank.get(right.canonical_name)!)
+  }, [finder, items, mapSelection, selectedOnMap])
   const count = items.length
   const isLoading = favoritesView.loading
   const savedStampItems = savedStampsView.items
   savedStampItemsRef.current = savedStampItems
+  const stampMatches = useMemo(() => findPlants(savedStampItems.map((stamp) => ({
+    key: stamp.id,
+    names: [{ text: stamp.name, kind: 'common' as const }],
+  })), search), [savedStampItems, search])
   const orderedSavedStampItems = orderSavedStampsForPreview(savedStampItems, savedStampReorderPreviewIds)
+    .filter((stamp) => !stampMatches.active || stampMatches.byKey.has(stamp.id))
   const savedStampsChrome = [headerRef.current, resizeHandleRef.current]
 
   useEffect(() => {
     clearSavedStampReorderPreviewIfLibraryMatches()
   }, [savedStampsView.revision, savedStampReorderPreviewIds])
+
+  // A refusal notice is about the last import only: a save, any library change or another Design clears it.
+  useEffect(() => {
+    setImportRefusalKey(null)
+  }, [savedStampsView.revision, designIdentity])
+
+  function saveSelection(): void {
+    setImportRefusalKey(null)
+    saveCanvasSelectionAsObjectStamp()
+  }
+
+  async function importStampFile(): Promise<void> {
+    setImportRefusalKey(null)
+    const startedIn = designSessionStore.sessionIdentity.peek()
+    // An import that settles after another Design opened says nothing there.
+    const refuse = (key: string) => {
+      if (designSessionStore.sessionIdentity.peek() === startedIn) setImportRefusalKey(key)
+    }
+    try {
+      const outcome = await savedObjectStampWorkbench.importStampFile()
+      if (outcome.status === 'refused') refuse(outcome.messageKey)
+    } catch (error) {
+      // The workbench rejects only when saving the read stamp fails.
+      console.error('Saved stamp import failed:', error)
+      refuse('savedObjectStamps.importSaveFailed')
+    }
+  }
 
   function showStampPreview(stamp: SavedObjectStamp, anchor: HTMLElement): void {
     clearPreviewTimer(previewTimerRef)
@@ -158,11 +228,13 @@ export function FavoritesPanel() {
     clearPreviewTimer(previewTimerRef)
     setPreview(null)
 
-    const ids = orderedSavedStampItems.map((item) => item.id)
+    // Reorder over the full library order so a searched list never saves a partial order.
+    const ids = orderSavedStampsForPreview(savedStampItems, savedStampReorderPreviewIds).map((item) => item.id)
     beginReorder(event, {
       sourceId,
       direction: null,
       lastClientY: event.clientY,
+      baseIds: ids,
       latestIds: ids,
     })
     setSavedStampReorderPreviewIds(ids)
@@ -194,7 +266,10 @@ export function FavoritesPanel() {
     const direction = savedStampReorderDirectionForPointer(session, event.clientY)
     session.direction = direction
     session.lastClientY = event.clientY
-    session.latestIds = reorderSavedStampIdsForPointer(session.sourceId, event.clientY, direction)
+    session.latestIds = mergeVisibleStampOrder(
+      session.baseIds,
+      reorderSavedStampIdsForPointer(session.sourceId, event.clientY, direction),
+    )
     setSavedStampReorderPreviewIds((current) => sameIdOrder(current, session.latestIds) ? current : session.latestIds)
   }
 
@@ -263,7 +338,26 @@ export function FavoritesPanel() {
         aria-hidden={selected !== null}
         inert={selected !== null}
       >
-        <div ref={headerRef}><DockPanelHeader title={t('nav.favorites')} /></div>
+        <div ref={headerRef} className={styles.head}>
+          <DockPanelHeader title={t('nav.favorites')} />
+          <div className={styles.finder}>
+            <PlantFinder
+              value={search}
+              onChange={setSearch}
+              label={t('favorites.searchAll')}
+              placeholder={t('favorites.searchAll')}
+              correction={finder.correction}
+              selectedOnMap={{
+                pressed: selectedOnMap,
+                plantCount: mapSelection.plantCount,
+                onChange: setSelectedOnMap,
+              }}
+              summary={finder.active || selectedOnMap
+                ? t('plantFinder.species', { count: visibleItems.length })
+                : undefined}
+            />
+          </div>
+        </div>
 
         <section
           className={styles.plantsFrame}
@@ -273,33 +367,32 @@ export function FavoritesPanel() {
           <div className={styles.frameHeader}>
             <span id="favorite-plants-title" className={styles.title}>{t('canvas.layers.plants')}</span>
             {count > 0 && (
-              <span className={styles.count}>{count}</span>
+              <span className={styles.count}>{formatCount(count, locale.value)}</span>
             )}
           </div>
-          <div className={styles.search}><SurfaceSearch value={search} onChange={setSearch} label={t('favorites.search')} /></div>
           <div className={styles.plantsFrameBody}>
             {isLoading ? (
               <div className={styles.loading} aria-live="polite" aria-busy="true">
                 {t('plantDb.loading')}
               </div>
             ) : count === 0 ? (
-              <div className={styles.empty} aria-live="polite">
-                <svg className={styles.emptyIcon} width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-                <span className={styles.emptyTitle}>{t('favorites.empty')}</span>
-                <span className={styles.emptyHint}>{t('favorites.emptyHint')}</span>
-              </div>
+              <EmptyState icon={<PanelIcon panel="favorites" />} action={{ label: t('speciesKey.openCatalog'), onClick: () => navigateTo('plant-db') }}>
+                {t('favorites.empty')}
+              </EmptyState>
             ) : visibleItems.length === 0 ? (
-              <div className={styles.empty} role="status">{t('speciesKey.noResults')}</div>
+              <EmptyState status>{t('speciesKey.noResults')}</EmptyState>
             ) : (
               <div className={styles.list} role="list" aria-label={t('canvas.layers.plants')}>
                 {visibleItems.map((plant) => (
-                  <PlantRow key={plant.canonical_name} plant={plant} variant="favorites" mark={
-                    <span style={{ color: scene?.plantSpeciesColors[plant.canonical_name] ?? 'var(--color-text-muted)' }}>
-                      <PlantSymbolGlyph symbol={resolvePlantSymbolId(scene?.plantSpeciesSymbols[plant.canonical_name])} size={24} />
-                    </span>
-                  } />
+                  <FavoriteSpeciesRow
+                    key={plant.canonical_name}
+                    plant={plant}
+                    englishName={englishNames.get(plant.canonical_name)}
+                    code={scene?.plantSpeciesCodes[plant.canonical_name] ?? ''}
+                    color={scene?.plantSpeciesColors[plant.canonical_name] ?? null}
+                    symbol={scene?.plantSpeciesSymbols[plant.canonical_name]}
+                    highlight={finderHighlight(finder.byKey.get(plant.canonical_name))}
+                  />
                 ))}
               </div>
             )}
@@ -321,18 +414,18 @@ export function FavoritesPanel() {
         >
           <div className={styles.frameHeader}>
             <div className={styles.savedStampsTitleGroup}>
-              <span id="saved-object-stamps-title" className={styles.title}>
+              <span id="saved-object-stamps-title" className={styles.title} tabIndex={-1}>
                 {t('savedObjectStamps.title')}
               </span>
             </div>
             {savedStampsView.items.length > 0 && (
-              <span className={styles.count}>{savedStampsView.items.length}</span>
+              <span className={styles.count}>{formatCount(savedStampsView.items.length, locale.value)}</span>
             )}
             <button
               type="button"
               className={styles.importStampButton}
               aria-label={t('savedObjectStamps.import')}
-              onClick={() => void savedObjectStampWorkbench.importStampFile()}
+              onClick={importStampFile}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true"><path d="M8 2v8M5 7l3 3 3-3M3 11v3h10v-3" /></svg><ButtonTooltip label={t('savedObjectStamps.import')} side="left" />
             </button>
@@ -343,11 +436,13 @@ export function FavoritesPanel() {
               className={styles.saveStampButton}
               disabled={!savedStampSelection.canSave}
               title={!savedStampSelection.canSave ? t('savedObjectStamps.selectHint') : undefined}
-              onClick={saveCanvasSelectionAsObjectStamp}
+              onClick={saveSelection}
             >
               <PlusIcon />{t('savedObjectStamps.saveSelection')}
             </button>
-
+            {importRefusalKey && (
+              <p className={styles.savedStampsImportRefusal} role="alert">{t(importRefusalKey)}</p>
+            )}
           </div>
           {savedStampsView.loading ? (
             <div className={styles.savedStampsLoading} aria-live="polite" aria-busy="true">
@@ -496,6 +591,17 @@ function measuredElementHeight(element: HTMLElement | null): number {
   return Number.isFinite(height) && height > 0 ? height : 0
 }
 
+/** Permutes only the visible ids inside the full order; hidden ids stay in their slots. */
+function mergeVisibleStampOrder(
+  fullIds: readonly string[],
+  visibleIds: readonly string[],
+): readonly string[] {
+  const visible = new Set(visibleIds)
+  const queue = visibleIds.filter((id) => fullIds.includes(id))
+  let next = 0
+  return fullIds.map((id) => (visible.has(id) ? queue[next++] ?? id : id))
+}
+
 function orderSavedStampsForPreview(
   stamps: readonly SavedObjectStamp[],
   orderedIds: readonly string[] | null,
@@ -516,6 +622,60 @@ function clearPreviewTimer(ref: { current: ReturnType<typeof globalThis.setTimeo
   if (ref.current === null) return
   globalThis.clearTimeout(ref.current)
   ref.current = null
+}
+
+/** One favourite species: star first, the row opens details, Place arms placement. */
+function FavoriteSpeciesRow({ plant, englishName, code, color, symbol, highlight }: {
+  plant: SpeciesListItem
+  /** The English catalog name, shown marked "(en)" when the species has none in the interface language. */
+  englishName: string | undefined
+  code: string
+  color: string | null
+  symbol: string | undefined
+  highlight: ((text: string) => ComponentChildren) | undefined
+}) {
+  const commonName = plant.common_name || englishName
+  const name = commonName || plant.canonical_name
+  return (
+    <div className={row.row} role="listitem" data-favorite-species={plant.canonical_name}>
+      <button
+        type="button"
+        className={styles.star}
+        aria-pressed={true}
+        aria-label={t('favorites.remove', { name })}
+        onClick={() => { void speciesCatalogWorkbench.toggleFavorite(plant.canonical_name) }}
+      >
+        <ControlIcon name="star" size={18} />
+        <ButtonTooltip label={t('favorites.remove', { name })} side="right" />
+      </button>
+      <button
+        type="button"
+        className={row.main}
+        data-species-detail={plant.canonical_name}
+        draggable={true}
+        onDragStart={(event) => writePlantStampDragData(event.dataTransfer, plant)}
+        onClick={() => speciesCatalogWorkbench.selectSpecies(plant.canonical_name)}
+      >
+        <span className={row.srOnly}>{t('favorites.detailsFor')} </span>
+        <span className={row.glyph} aria-hidden="true" style={{ color: color ?? 'var(--color-text-muted)' }}>
+          <PlantSymbolGlyph symbol={resolvePlantSymbolId(symbol)} size={22} />
+        </span>
+        <SpeciesIdentity
+          commonName={commonName}
+          canonicalName={plant.canonical_name}
+          englishFallback={!plant.common_name && Boolean(englishName)}
+          highlight={highlight}
+        />
+        <span className={row.code}>{code}</span>
+      </button>
+      <button
+        type="button"
+        className={styles.placeButton}
+        aria-label={t('favorites.place', { name })}
+        onClick={() => placeSpeciesOnMap(plant)}
+      >{t('savedObjectStamps.place')}</button>
+    </div>
+  )
 }
 
 function SavedStampRecognitionOverlay({
@@ -628,6 +788,15 @@ function SavedObjectStampRow({
   const [isRenaming, setIsRenaming] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const renameInputRef = useRef<HTMLInputElement>(null)
+  const actionsRef = useRef<HTMLDivElement>(null)
+  const cancelDeleteRef = useRef<HTMLButtonElement>(null)
+  const rowRef = useRef<HTMLDivElement>(null)
+  // Set when the user opens or cancels the Delete confirmation, whose buttons replace the one that had focus.
+  const deleteConfirmToggledRef = useRef(false)
+  // Canopi 2.0 cannot place, drag, export or convert a stamp saved before 2.0 (ADR 0021): it offers only Delete.
+  const before2_0 = useMemo(() => isSavedObjectStampPayloadFromBefore2_0(stamp.payload_json), [stamp.payload_json])
+  const summaryId = useId()
+  const deleteCopyId = useId()
 
   useEffect(() => {
     setDraftName(stamp.name)
@@ -640,6 +809,49 @@ function SavedObjectStampRow({
     input.focus()
     input.setSelectionRange(0, input.value.length)
   }, [isRenaming])
+
+  // The confirmation's buttons replace the control that opened it, and back on Cancel: move focus with
+  // them so a keyboard user stays on the row. Cancel is the safe choice and reads the question.
+  useEffect(() => {
+    if (!deleteConfirmToggledRef.current) return
+    deleteConfirmToggledRef.current = false
+    if (confirmingDelete) {
+      cancelDeleteRef.current?.focus()
+      return
+    }
+    // The row's last action opened it: Delete on a stamp saved before 2.0, otherwise the actions menu.
+    const actions = actionsRef.current?.querySelectorAll<HTMLButtonElement>('button')
+    actions?.[actions.length - 1]?.focus()
+  }, [confirmingDelete])
+
+  function setDeleteConfirmation(next: boolean): void {
+    deleteConfirmToggledRef.current = true
+    setConfirmingDelete(next)
+  }
+
+  // The deleted row takes the focused Confirm with it: once it is gone, focus the next row, else the previous
+  // one, else the list's heading, unless focus has already gone somewhere else.
+  const focusAfterDeleteRef = useRef<HTMLElement | null>(null)
+  useEffect(() => () => {
+    const target = focusAfterDeleteRef.current
+    if (!target) return
+    queueMicrotask(() => {
+      const active = document.activeElement
+      if (active && active !== document.body && active.isConnected) return
+      if (target.isConnected) target.focus()
+    })
+  }, [])
+
+  function confirmDelete(): void {
+    const row = rowRef.current
+    const neighbour = (row?.nextElementSibling ?? row?.previousElementSibling)?.querySelector<HTMLElement>('[data-saved-stamp-grip]')
+    focusAfterDeleteRef.current = neighbour
+      ?? row?.closest('[data-saved-stamps-frame]')?.querySelector<HTMLElement>('#saved-object-stamps-title')
+      ?? null
+    void savedObjectStampWorkbench.deleteStamp(stamp.id).then((deleted) => {
+      if (!deleted) focusAfterDeleteRef.current = null
+    })
+  }
 
   function commitRename(): void {
     const next = (renameInputRef.current?.value ?? draftName).trim()
@@ -661,7 +873,7 @@ function SavedObjectStampRow({
 
   function handleStampDragStart(event: DragEvent): void {
     const target = event.target
-    if (target instanceof HTMLElement && target.closest('button, input')) {
+    if (before2_0 || (target instanceof HTMLElement && target.closest('button, input'))) {
       event.preventDefault()
       return
     }
@@ -676,6 +888,7 @@ function SavedObjectStampRow({
 
   return (
     <div
+      ref={rowRef}
       className={styles.savedStampRow}
       role="listitem"
       data-saved-stamp-row={stamp.id}
@@ -683,10 +896,12 @@ function SavedObjectStampRow({
       <button
         type="button"
         className={styles.savedStampGrip}
-        aria-label={t('savedObjectStamps.reorderLabel')}
+        aria-label={t('savedObjectStamps.reorderNamed', { name: stamp.name })}
+        aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+        data-saved-stamp-grip
         onPointerDown={(event) => onReorderBegin(stamp.id, event)}
         onKeyDown={event => {
-          if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+          if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return
           event.preventDefault()
           const ids = savedObjectStampWorkbench.library.value.items.map(item => item.id)
           const index = ids.indexOf(stamp.id)
@@ -701,23 +916,23 @@ function SavedObjectStampRow({
       <div
         className={styles.savedStampContent}
         data-saved-stamp-body={stamp.id}
-        draggable={!isRenaming && !confirmingDelete}
+        draggable={!before2_0 && !isRenaming && !confirmingDelete}
         onDragStart={handleStampDragStart}
         onDragEnd={handleStampDragEnd}
-        tabIndex={confirmingDelete ? -1 : 0}
+        tabIndex={before2_0 ? undefined : confirmingDelete ? -1 : 0}
         onPointerEnter={(event) => {
-          if (isRenaming || confirmingDelete) return
+          if (before2_0 || isRenaming || confirmingDelete) return
           onPreviewSchedule(stamp, event.currentTarget as HTMLElement)
         }}
         onPointerLeave={onPreviewClear}
         onFocus={(event) => {
-          if (isRenaming || confirmingDelete) return
+          if (before2_0 || isRenaming || confirmingDelete) return
           onPreviewRequest(stamp, event.currentTarget as HTMLElement)
         }}
         onBlur={onPreviewClear}
       >
         {confirmingDelete ? (
-          <span className={styles.savedStampDeleteCopy}>{t('savedObjectStamps.deleteConfirmCopy')}</span>
+          <span id={deleteCopyId} className={styles.savedStampDeleteCopy}>{t('savedObjectStamps.deleteConfirmCopy')}</span>
         ) : isRenaming ? (
           <input
             ref={renameInputRef}
@@ -750,28 +965,43 @@ function SavedObjectStampRow({
         ) : (
           <span className={styles.savedStampName}>{stamp.name}</span>
         )}
-        {!confirmingDelete && <span className={styles.savedStampSummary}>{savedStampSummary(stamp)}</span>}
+        {!confirmingDelete && (before2_0
+          ? <span id={summaryId} className={`${styles.savedStampSummary} ${styles.savedStampSummaryBefore2_0}`}>{t('savedObjectStamps.summaryBefore2_0')}</span>
+          : <span className={styles.savedStampSummary}>{savedStampSummary(stamp)}</span>)}
       </div>
-      <div className={styles.savedStampActions}>
+      <div ref={actionsRef} className={styles.savedStampActions}>
         {confirmingDelete ? (
           <>
             <button
               type="button"
               className={styles.savedStampDangerButton}
               aria-label={t('savedObjectStamps.confirmDelete')}
-              onClick={() => void savedObjectStampWorkbench.deleteStamp(stamp.id)}
+              aria-describedby={deleteCopyId}
+              onClick={confirmDelete}
             >
               {t('savedObjectStamps.confirmDelete')}
             </button>
             <button
+              ref={cancelDeleteRef}
               type="button"
               className={styles.savedStampSecondaryButton}
               aria-label={t('savedObjectStamps.cancelDelete')}
-              onClick={() => setConfirmingDelete(false)}
+              aria-describedby={deleteCopyId}
+              onClick={() => setDeleteConfirmation(false)}
             >
               {t('savedObjectStamps.cancelDelete')}
             </button>
           </>
+        ) : before2_0 ? (
+          <button
+            type="button"
+            className={styles.savedStampSecondaryButton}
+            aria-label={t('savedObjectStamps.deleteNamed', { name: stamp.name })}
+            aria-describedby={summaryId}
+            onClick={() => setDeleteConfirmation(true)}
+          >
+            {t('savedObjectStamps.delete')}
+          </button>
         ) : isRenaming ? (
           <>
             <SavedStampIconButton
@@ -793,17 +1023,17 @@ function SavedObjectStampRow({
         ) : (
           <>
             <SavedStampIconButton
-              label={t('savedObjectStamps.place')}
-              onClick={() => savedObjectStampWorkbench.placeStamp(stamp)}
+              label={t('savedObjectStamps.placeNamed', { name: stamp.name })}
+              onClick={() => { savedObjectStampWorkbench.placeStamp(stamp, 'panel') }}
               onFocus={(anchor) => onPreviewRequest(stamp, anchor)}
               onBlur={onPreviewClear}
             >
               <PlusIcon />
             </SavedStampIconButton>
-            <ActionMenu label={t('savedObjectStamps.actions')} items={[
+            <ActionMenu label={t('savedObjectStamps.actionsFor', { name: stamp.name })} items={[
               { label: t('savedObjectStamps.export'), run: () => { void savedObjectStampWorkbench.exportStamp(stamp) } },
               { label: t('savedObjectStamps.rename'), run: () => { setConfirmingDelete(false); setDraftName(stamp.name); setIsRenaming(true) } },
-              { label: t('savedObjectStamps.delete'), danger: true, run: () => { setIsRenaming(false); setConfirmingDelete(true) } },
+              { label: t('savedObjectStamps.delete'), danger: true, run: () => { setIsRenaming(false); setDeleteConfirmation(true) } },
             ]} />
           </>
         )}
@@ -894,21 +1124,14 @@ function sameIdOrder(left: readonly string[] | null, right: readonly string[]): 
 }
 
 function savedStampSummary(stamp: SavedObjectStamp): string {
-  try {
-    const payload = JSON.parse(stamp.payload_json) as {
-      plants?: unknown[]
-      zones?: unknown[]
-      annotations?: unknown[]
-    }
-    const parts = [
-      countPart(payload.plants?.length ?? 0, 'summaryPlantOne', 'summaryPlantOther'),
-      countPart(payload.zones?.length ?? 0, 'summaryZoneOne', 'summaryZoneOther'),
-      countPart(payload.annotations?.length ?? 0, 'summaryAnnotationOne', 'summaryAnnotationOther'),
-    ].filter((part): part is string => part !== null)
-    return parts.length > 0 ? parts.join(' · ') : t('savedObjectStamps.summaryEmpty')
-  } catch {
-    return t('savedObjectStamps.summaryUnavailable')
-  }
+  const payload = parseSavedObjectStampPayload(stamp.payload_json)
+  if (!payload) return t('savedObjectStamps.summaryUnavailable')
+  const parts = [
+    countPart(payload.plants.length, 'summaryPlantOne', 'summaryPlantOther'),
+    countPart(payload.zones.length, 'summaryZoneOne', 'summaryZoneOther'),
+    countPart(payload.annotations.length, 'summaryAnnotationOne', 'summaryAnnotationOther'),
+  ].filter((part): part is string => part !== null)
+  return parts.length > 0 ? parts.join(' · ') : t('savedObjectStamps.summaryEmpty')
 }
 
 function countPart(

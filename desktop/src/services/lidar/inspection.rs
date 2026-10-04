@@ -7,53 +7,29 @@
 //! decodes a colourised tile, never interpolates between pixels, and never
 //! returns a value from a generation the caller did not ask for.
 //!
-//! Source layers and analysis results are different storage contracts, so they
-//! are resolved separately: a source is an ordered collection or a published
-//! chunk store described by `import::GenerationManifest`, while a result is
-//! described by `analysis::ResultManifest` and always reads through resolved
-//! chunks. Units come from whichever contract owns the bytes — a result reports
-//! its own degrees/percent choice rather than the source layer's unit string.
+//! Sources and derived items are different storage contracts, so they are
+//! resolved separately: a source is an ordered collection described by
+//! `import::GenerationManifest`, while a derived item is described by
+//! `analyses::DerivedManifest` and always reads through resolved chunks. Units
+//! come from the item that owns the bytes: a derived item reports the units its
+//! analysis recorded (a slope in percent is not an elevation in metres).
 
 use std::sync::atomic::AtomicBool;
 
-use common_types::lidar::{
-    LidarSampleEntityKind, LidarSampleOutcome, LidarSampleRequest, LidarSampleUnavailableReason,
-    LidarSlopeUnit,
-};
+use common_types::library::LibraryItemRole;
+use common_types::lidar::{LidarSampleOutcome, LidarSampleRequest, LidarSampleUnavailableReason};
 
-use super::analysis;
-use super::engine::{GdalEngine, GdalProgram};
+use super::analyses;
+use super::engine::RasterEngine;
 use super::grid::RasterGrid;
 use super::{LidarLibrary, catalogue, collection, generation, import};
 
-/// Degrees, the unit every slope result carries unless it chose percent.
-const DEGREES_UNIT: &str = "°";
-/// Percent, the unit a slope result chooses explicitly.
-const PERCENT_UNIT: &str = "%";
-
-/// One analysis definition's own row, by definition id.
-fn analysis_definition_layer(
-    connection: &rusqlite::Connection,
-    definition_id: &str,
-) -> Result<Option<String>, String> {
-    use rusqlite::OptionalExtension as _;
-    let mut statement = connection
-        .prepare("SELECT layer_id FROM lidar_analysis_definitions WHERE id = ?1")
-        .map_err(|e| e.to_string())?;
-    statement
-        .query_row([definition_id], |row| row.get::<_, String>(0))
-        .optional()
-        .map_err(|e| e.to_string())
-}
-
 /// Which reader serves a target's numbers.
 enum TargetRead {
-    /// Published resolved chunks: a sparse source generation or any result.
+    /// Published result chunks of a derived item.
     Chunks,
     /// An ordered source collection, resolved on demand from its members.
     Collection(Box<import::GenerationManifest>),
-    /// A preserved dense mosaic, read through one compatibility lease.
-    PreservedDense,
 }
 
 /// The generation a request's entity currently resolves to, with everything a
@@ -79,7 +55,7 @@ fn resolve_target(
 ) -> Result<Option<SampleTarget>, String> {
     let connection = library.catalogue()?;
     match request.kind {
-        LidarSampleEntityKind::Source => {
+        LibraryItemRole::Source => {
             let Some(row) = catalogue::head_generation(&connection, &request.entity_id)? else {
                 return Ok(None);
             };
@@ -88,13 +64,7 @@ fn resolve_target(
                 .map(|layer| layer.units)
                 .unwrap_or_default();
             let manifest = import::read_generation_manifest(&row.manifest_json)?;
-            let read = match manifest.format {
-                import::GenerationStorageFormat::CogChunksV1 => TargetRead::Chunks,
-                import::GenerationStorageFormat::OrderedMembersV1 => {
-                    TargetRead::Collection(Box::new(manifest.clone()))
-                }
-                import::GenerationStorageFormat::LegacyDenseV1 => TargetRead::PreservedDense,
-            };
+            let read = TargetRead::Collection(Box::new(manifest.clone()));
             Ok(Some(SampleTarget {
                 generation_id: row.id,
                 grid: manifest.grid.clone(),
@@ -103,47 +73,33 @@ fn resolve_target(
                 read,
             }))
         }
-        LidarSampleEntityKind::Analysis => {
-            // The definition owns the result, so a definition that no longer
-            // exists has no generation to sample even if a row survived.
-            if analysis_definition_layer(&connection, &request.entity_id)?.is_none() {
-                return Ok(None);
-            }
-            let Some(row) = catalogue::head_analysis_generation(&connection, &request.entity_id)?
-            else {
+        LibraryItemRole::Derived => {
+            // The item owns its result, so an item that no longer exists has no
+            // generation to sample even if a row survived.
+            let Some(item) = catalogue::get_derived_item(&connection, &request.entity_id)? else {
                 return Ok(None);
             };
-            let manifest: analysis::ResultManifest = serde_json::from_str(&row.manifest_json)
-                .map_err(|e| format!("Invalid analysis manifest: {e}"))?;
-            // A result reports the measurement it was computed in, not the unit
-            // string of the layer it was derived from: a slope in percent is not
-            // a source elevation in metres.
-            let units = match manifest.parameters.slope_unit {
-                Some(LidarSlopeUnit::Percent) => PERCENT_UNIT.to_string(),
-                _ => DEGREES_UNIT.to_string(),
+            let Some(row) = catalogue::derived_head(&connection, &request.entity_id)? else {
+                return Ok(None);
             };
-            let read = if manifest.format == import::GenerationStorageFormat::LegacyDenseV1 {
-                TargetRead::PreservedDense
-            } else {
-                TargetRead::Chunks
-            };
+            let manifest = analyses::read_derived_manifest(&row.manifest_json)?;
             Ok(Some(SampleTarget {
                 generation_id: row.id,
-                grid: manifest.grid.clone(),
-                crs_wkt: manifest.crs_wkt.clone(),
-                units,
-                read,
+                grid: manifest.grid,
+                crs_wkt: manifest.crs_wkt,
+                units: item.units,
+                read: TargetRead::Chunks,
             }))
         }
     }
 }
 
-/// Transform one WGS84 point into the generation's CRS through GDAL.
+/// Transform one WGS84 point into the generation's CRS through the engine.
 ///
-/// Uses the same bounded stdin/stdout contract as the display path, so the
-/// transform shares its timeout, cancellation and output limits.
+/// A point the transform cannot place is `None`, which the caller reports as
+/// a failed transform rather than an error.
 fn transform_point(
-    engine: &GdalEngine,
+    engine: &dyn RasterEngine,
     cancel: &AtomicBool,
     crs_wkt: &str,
     longitude: f64,
@@ -152,32 +108,11 @@ fn transform_point(
     if crs_wkt.trim().is_empty() {
         return Ok(None);
     }
-    let input = format!("{longitude} {latitude}\n");
-    let output = engine.run_with_input(
-        GdalProgram::Transform,
-        &[
-            "-s_srs".to_string(),
-            "EPSG:4326".to_string(),
-            "-t_srs".to_string(),
-            crs_wkt.to_string(),
-        ],
-        input.as_bytes(),
-        Some(cancel),
-    )?;
-    let Some(line) = output.stdout.lines().next() else {
-        return Ok(None);
-    };
-    let mut parts = line.split_whitespace();
-    let (Some(x), Some(y)) = (parts.next(), parts.next()) else {
-        return Ok(None);
-    };
-    let (Ok(x), Ok(y)) = (x.parse::<f64>(), y.parse::<f64>()) else {
-        return Err(format!("gdaltransform produced an unreadable row: {line}"));
-    };
-    if !x.is_finite() || !y.is_finite() {
-        return Ok(None);
-    }
-    Ok(Some((x, y)))
+    Ok(engine
+        .transform_points("EPSG:4326", crs_wkt, &[(longitude, latitude)], cancel)?
+        .into_iter()
+        .next()
+        .flatten())
 }
 
 /// The largest lattice index this read will carry into a window.
@@ -221,11 +156,8 @@ fn containing_pixel(grid: &RasterGrid, x: f64, y: f64) -> Option<(i64, i64)> {
 
 /// Bind the reader that owns one target's numbers, limited to one cell.
 ///
-/// Each format keeps the reader it already publishes through: an ordered
-/// collection resolves only the occurrences that can reach the cell, a sparse
-/// source or a result reads its published chunks, and a preserved dense mosaic
-/// is read through the library's single compatibility lease. No format falls
-/// back to another format's bytes.
+/// A source item resolves only the ordered members that can reach the cell; a
+/// result reads its published chunks.
 fn read_one_cell(
     library: &LidarLibrary,
     target: &SampleTarget,
@@ -257,15 +189,6 @@ fn read_one_cell(
                 Some(bounds),
                 cancel,
             )?;
-            Ok(reader.map(|reader| generation::GenerationReader::Collection(Box::new(reader))))
-        }
-        TargetRead::PreservedDense => {
-            let member = collection::preserved_member(library, &target.generation_id, cancel)?;
-            let lattice = member.grid.clone();
-            let reader = generation::CollectionReader::new(
-                vec![(format!("inspection-{}", target.generation_id), member)],
-                lattice,
-            )?;
             Ok(Some(generation::GenerationReader::Collection(Box::new(
                 reader,
             ))))
@@ -296,7 +219,7 @@ fn cell_window(pixel: (i64, i64)) -> Result<generation::LatticeWindow, String> {
 /// product rule that out-of-coverage is no data rather than an error.
 pub(super) fn sample(
     library: &LidarLibrary,
-    engine: &GdalEngine,
+    engine: &dyn RasterEngine,
     cancel: &AtomicBool,
     request: &LidarSampleRequest,
 ) -> Result<LidarSampleOutcome, String> {
@@ -311,8 +234,8 @@ pub(super) fn sample(
         });
     };
     // Currency is checked against the generation the read will actually use, not
-    // against a cached head: a reorder, undo or refresh between aim and answer
-    // makes the answer stale rather than wrong.
+    // against a cached head: a head that changed (or went away) between aim and
+    // answer makes the answer stale rather than wrong.
     if target.generation_id != request.expected_generation_id {
         return Ok(LidarSampleOutcome::Unavailable {
             reason: LidarSampleUnavailableReason::StaleGeneration,
@@ -446,7 +369,7 @@ mod tests {
 
     /// Web Mercator, derived independently of the engine.
     ///
-    /// Written here rather than read from GDAL so the oracle cannot agree with a
+    /// Written here rather than read from the engine so the oracle cannot agree with a
     /// broken transform by sharing its source. The formula is the published one:
     /// `x = R * lambda`, `y = R * ln(tan(pi/4 + phi/2))` with the ellipsoid
     /// replaced by the sphere Web Mercator actually uses.
@@ -464,17 +387,16 @@ mod tests {
     /// oracle, at a non-equatorial latitude.
     ///
     /// The other tests in this module exercise the half-open convention in
-    /// isolation. This one runs the actual `gdaltransform` call and then selects
-    /// the containing pixel from the projected point, so a wrong `-t_srs` axis
+    /// isolation. This one runs the engine's real transform and then selects
+    /// the containing pixel from the projected point, so a wrong axis
     /// order, a swapped coordinate pair or an off-by-one in the row inversion
     /// would all surface here rather than passing as a plausible number. The
     /// grid is deliberately placed away from the equator: a transform that
     /// silently ignored latitude scaling would still land inside a
     /// Mercator-centred rectangle but not inside this one.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn the_real_transform_lands_in_the_expected_cell() {
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         // A 250-metre Web Mercator grid whose north-west corner is the
         // projection of (-0.6°, 48.9°), north and west of every sample below, so
@@ -582,22 +504,5 @@ mod tests {
         let mut broken = grid();
         broken.geotransform[5] = 0.0;
         assert_eq!(containing_pixel(&broken, 1.0, 1.0), None);
-    }
-
-    /// A result's unit is its own parameter, not its source layer's.
-    #[test]
-    fn a_slope_result_reports_the_unit_it_was_computed_in() {
-        for (unit, expected) in [
-            (Some(LidarSlopeUnit::Degrees), DEGREES_UNIT),
-            (Some(LidarSlopeUnit::Percent), PERCENT_UNIT),
-            // A manifest written before the choice existed is in degrees.
-            (None, DEGREES_UNIT),
-        ] {
-            let units = match unit {
-                Some(LidarSlopeUnit::Percent) => PERCENT_UNIT.to_string(),
-                _ => DEGREES_UNIT.to_string(),
-            };
-            assert_eq!(units, expected);
-        }
     }
 }

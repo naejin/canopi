@@ -1,14 +1,19 @@
 import { signal, type Signal } from '@preact/signals'
-import { getLocaleCommonNames, getSpeciesDetail } from '../../ipc/species'
+import { getLocaleCommonNames, getSpeciesDetail, getSpeciesHabits } from '../../ipc/species'
+import { speciesCatalogWorkbench, type SpeciesDisplayNameResolver } from '../plant-browser'
 import type { CommonNameEntry, SpeciesDetail } from '../../types/species'
 
-export type PlantDetailLoadState = 'loading' | 'loaded' | 'error'
+type PlantDetailLoadState = 'loading' | 'loaded' | 'error'
 
 export interface PlantDetailController {
   detail: Signal<SpeciesDetail | null>
   loadState: Signal<PlantDetailLoadState>
   errorMessage: Signal<string | null>
   secondaryNames: Signal<CommonNameEntry[]>
+  /** The English name shown, marked "(en)", when the species has none in the interface language. */
+  englishName: Signal<string | null>
+  /** The catalog habit key (`Tree`, `Shrub`, …) that picks the glyph of a species not in the Design. */
+  habitKey: Signal<string | null>
   setTarget(canonicalName: string, locale: string): void
   retry(): void
   dispose(): void
@@ -17,6 +22,9 @@ export interface PlantDetailController {
 interface CreatePlantDetailControllerOptions {
   loadDetail?: typeof getSpeciesDetail
   loadLocaleCommonNames?: typeof getLocaleCommonNames
+  /** The catalog's display-name projection; the title's "(en)" fallback comes from it. */
+  resolveDisplayNames?: SpeciesDisplayNameResolver
+  loadHabits?: typeof getSpeciesHabits
 }
 
 export function createPlantDetailController(
@@ -24,11 +32,16 @@ export function createPlantDetailController(
 ): PlantDetailController {
   const loadDetail = options.loadDetail ?? getSpeciesDetail
   const loadLocaleCommonNames = options.loadLocaleCommonNames ?? getLocaleCommonNames
+  const resolveDisplayNames = options.resolveDisplayNames
+    ?? ((names, locale) => speciesCatalogWorkbench.resolveDisplayNames(names, locale))
+  const loadHabits = options.loadHabits ?? getSpeciesHabits
 
   const detail = signal<SpeciesDetail | null>(null)
   const loadState = signal<PlantDetailLoadState>('loading')
   const errorMessage = signal<string | null>(null)
   const secondaryNames = signal<CommonNameEntry[]>([])
+  const englishName = signal<string | null>(null)
+  const habitKey = signal<string | null>(null)
 
   let currentCanonicalName = ''
   let currentLocale = ''
@@ -43,10 +56,21 @@ export function createPlantDetailController(
     loadState.value = 'loading'
     errorMessage.value = null
     secondaryNames.value = []
+    englishName.value = null
+    habitKey.value = null
+    const canonicalName = currentCanonicalName
+    const requestLocale = currentLocale
+    const isCurrent = () => !disposed && requestGeneration === generation
 
-    void loadDetail(currentCanonicalName, currentLocale)
-      .then((nextDetail) => {
-        if (disposed || requestGeneration !== generation) return
+    void loadDetail(canonicalName, requestLocale)
+      .then(async (nextDetail) => {
+        if (!isCurrent()) return
+        // Resolved before publishing so the title does not change under the reader.
+        if (!nextDetail.common_name?.trim() && requestLocale.split('-')[0] !== 'en') {
+          const display = await resolveDisplayNames([canonicalName], requestLocale).catch(() => null)
+          if (!isCurrent()) return
+          englishName.value = display?.englishFallbacks.includes(canonicalName) ? display.names[canonicalName] ?? null : null
+        }
         detail.value = nextDetail
         loadState.value = 'loaded'
       })
@@ -63,6 +87,14 @@ export function createPlantDetailController(
       })
       .catch(() => {
         // Secondary locale names are optional and should not block detail rendering.
+      })
+
+    void loadHabits([canonicalName])
+      .then((habits) => {
+        if (isCurrent()) habitKey.value = habits[canonicalName] ?? null
+      })
+      .catch(() => {
+        // The habit only picks a glyph; the detail renders without it.
       })
   }
 
@@ -87,6 +119,8 @@ export function createPlantDetailController(
     loadState,
     errorMessage,
     secondaryNames,
+    englishName,
+    habitKey,
     setTarget,
     retry,
     dispose,

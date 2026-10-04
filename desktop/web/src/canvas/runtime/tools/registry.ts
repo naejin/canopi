@@ -1,0 +1,34 @@
+// canvas/runtime/tools/registry.ts
+//
+// Owns which tools the ToolHost runs: one factory per tool id, every tool id listed since the 0B-3 streams moved their tools
+// here (plan §4 0B). An id it does not list arms no tool.
+
+import type { ToolId } from '../interaction-types'
+import { createMeasurementGuideTool } from './measurement-guide'
+import { createObjectStampTool } from './object-stamp'
+import { createPanTool } from './pan'
+import { createPlantRowTool } from './plant-row'
+import { createPlantStampTool } from './plant-stamp'
+import { createPolygonTool } from './polygon'
+import { createSavedObjectStampTool } from './saved-object-stamp'
+import { createSelectTool } from './select/select-tool'
+import { createTextNoteTool } from './text-note'
+import type { CanvasTool } from './tool'
+import { createZoneDragTool } from './zone-drag'
+
+export type ToolFactory = () => CanvasTool
+
+export const TOOL_REGISTRY: Readonly<Partial<Record<ToolId, ToolFactory>>> = Object.freeze({
+  select: createSelectTool,
+  hand: createPanTool,
+  text: createTextNoteTool,
+  'plant-stamp': createPlantStampTool,
+  'plant-spacing': createPlantRowTool,
+  'object-stamp': createObjectStampTool,
+  'saved-object-stamp': createSavedObjectStampTool,
+  line: () => createZoneDragTool('line'),
+  rectangle: () => createZoneDragTool('rectangle'),
+  ellipse: () => createZoneDragTool('ellipse'),
+  polygon: createPolygonTool,
+  'measurement-guide': createMeasurementGuideTool,
+})

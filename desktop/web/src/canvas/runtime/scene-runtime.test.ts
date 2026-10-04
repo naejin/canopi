@@ -1,16 +1,37 @@
+import type { SceneRendererSnapshot } from './renderers/scene-types'
+import type { DraftPresentation } from './tools/draft'
+import type { ViewFrame, ViewTransform } from './view/types'
+import { planarCameraOf } from './view/view-transform'
+import { SceneRendererMountCancelledError } from './scene-runtime/render-scheduler'
 import { effect } from '@preact/signals'
+import { stageScaleToMapZoom } from '../projection'
+import { DEFAULT_NEW_DESIGN_VIEW } from '../session-plane'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import '../../__tests__/support/camera-tolerance'
 
-vi.mock('../../ipc/species', () => ({
+vi.mock('../../ipc/species', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../ipc/species')>(),
   getSpeciesBatch: vi.fn(async () => []),
   getFlowerColorBatch: vi.fn(async () => []),
   getCommonNames: vi.fn(async () => ({})),
 }))
+// The Desktop adapter reads labels from the live workbench, whose cache would
+// outlive a test; answer straight from the mocked lookup instead.
+vi.mock('../../app/plant-browser', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../app/plant-browser')>()
+  const { getCommonNames: lookup } = await import('../../ipc/species')
+  return {
+    ...original,
+    speciesCatalogWorkbench: {
+      ...original.speciesCatalogWorkbench,
+      resolveDisplayNames: async (names: readonly string[], locale: string) => ({ names: await lookup([...names], locale), englishFallbacks: [] }),
+    },
+  }
+})
 import {
   snapToGridEnabled,
 } from '../../app/canvas-settings/signals'
 import { layerLockState, layerOpacity, layerVisibility } from '../../app/canvas-settings/signals'
-import { guides } from '../scene-metadata-state'
 import { plantColorMenuOpen } from '../plant-color-menu-state'
 import {
   clearPlantStampSource,
@@ -21,7 +42,7 @@ import {
   clearSavedObjectStampSource,
   selectSavedObjectStampSource,
 } from '../saved-object-stamp-source'
-import { activeTool, selectedObjectIds } from '../session-state'
+import { activeTool, canvasToolGuidanceState as currentCanvasToolGuidance, selectedObjectIds } from '../session-state'
 import {
   hoveredCanvasTargets,
   hoveredPanelTargets,
@@ -29,17 +50,23 @@ import {
   selectedPanelTargets,
 } from '../../app/panel-targets/state'
 import { createAppCanvasRuntimeAppAdapter } from '../../app/canvas-runtime/app-adapter'
+import { canvasContextMenuRequest } from '../../app/canvas-context-menu/state'
 import { createDesktopCanvasRuntimeAppAdapter } from '../../app/canvas-runtime/desktop-adapter'
 import { createAppSceneRuntimePanelTargetAdapter } from '../../app/canvas-runtime/panel-target-adapter'
 import { locale, plantSpacingIntervalM } from '../../app/settings/state'
 import type { CanopiFile, PanelTarget } from '../../types/design'
+import { CURRENT_CANOPI_FILE_VERSION } from '../../generated/canopi-design-format'
+import { geoAt } from '../../__tests__/support/geo-design'
+import { installCanvasKeyRouter } from '../../__tests__/support/key-router'
+import { placeOnHost } from '../../__tests__/support/test-view'
+import { createTestRendererView } from '../../__tests__/support/scene-renderer-snapshot'
 import { speciesTarget } from '../../target'
 import {
   CanvasDocumentReplacementNotAdmittedError,
   createCanvasDocumentReplacementToken,
 } from './runtime'
 import { SceneCanvasRuntime } from './scene-runtime.ts'
-import type { PlantNameLabel } from './selection-labels'
+import { projectScenePlantLabels } from './selection-labels'
 import type { SceneRuntimePanelTargetAdapter } from './scene-runtime/panel-target-adapter'
 import type { ScenePresentationRefreshResult } from './scene-runtime/presentation'
 import {
@@ -53,19 +80,46 @@ import type {
   CanvasRuntimeSettingsAdapter,
 } from './app-adapter'
 import { getCommonNames } from '../../ipc/species'
+
+/** Toggled from inside a test to make the real Rectangle tool's activation throw. */
+const rectangleActivation = vi.hoisted(() => ({ fails: false, deactivateFails: false }))
+vi.mock('./tools/registry', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./tools/registry')>()
+  return {
+    ...actual,
+    TOOL_REGISTRY: {
+      ...actual.TOOL_REGISTRY,
+      rectangle: () => {
+        const tool = actual.TOOL_REGISTRY.rectangle!()
+        const deactivate = tool.deactivate.bind(tool)
+        tool.deactivate = (...args) => {
+          if (rectangleActivation.deactivateFails) throw new Error('deactivation failed')
+          return deactivate(...args)
+        }
+        if (!rectangleActivation.fails) return tool
+        return { ...tool, activate: () => { throw new Error('activation failed') } }
+      },
+    },
+  }
+})
 import { t } from '../../i18n'
-import { createSceneInteractionEventHarness } from '../../__tests__/support/scene-interaction-events'
-import { CameraController } from './camera'
+import { createSceneInteractionEventHarness } from '../../__tests__/support/canvas-interaction-events'
+import type { CameraDriverHostController } from './view/driver-host'
+
+// Fixtures are authored in metres around the equator, where Mercator scale is
+// stationary, so re-centring the session plane on them keeps their metre
+// distances exact to well below the tools' 1 µm tolerances.
+const FIXTURE_ORIGIN = { lon: 0, lat: 0 }
+const at = (x: number, y: number) => geoAt(x, y, FIXTURE_ORIGIN)
 
 const plantTarget = (id: string) => ({ kind: 'plant' as const, id })
 const zoneTarget = (id: string) => ({ kind: 'zone' as const, id })
 
 function makeFile(): CanopiFile {
   return {
-    version: 6,
+    version: CURRENT_CANOPI_FILE_VERSION,
     name: 'Runtime demo',
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [
       { name: 'plants', visible: true, locked: false, opacity: 1 },
@@ -77,7 +131,7 @@ function makeFile(): CanopiFile {
         canonical_name: 'Malus domestica',
         common_name: 'Apple',
         color: null,
-        position: { x: 10, y: 10 },
+        position: at(10, 10),
         rotation: null,
         scale: null,
         notes: null,
@@ -90,7 +144,7 @@ function makeFile(): CanopiFile {
         canonical_name: 'Malus domestica',
         common_name: 'Apple',
         color: null,
-        position: { x: 20, y: 20 },
+        position: at(20, 20),
         rotation: null,
         scale: null,
         notes: null,
@@ -101,14 +155,14 @@ function makeFile(): CanopiFile {
     ],
     zones: [
       {
-        name: 'zone-1',
+        id: 'zone-1', name: null,
         zone_type: 'rect',
         rotation: 0,
         points: [
-          { x: 0, y: 0 },
-          { x: 5, y: 0 },
-          { x: 5, y: 5 },
-          { x: 0, y: 5 },
+          at(0, 0),
+          at(5, 0),
+          at(5, 5),
+          at(0, 5),
         ],
         fill_color: null,
         notes: null,
@@ -147,7 +201,7 @@ function fileWithOnlyAnnotation(text: string): CanopiFile {
     annotations: [{
       id: 'annotation-1',
       annotation_type: 'text',
-      position: { x: 24, y: 32 },
+      position: at(24, 32),
       text,
       font_size: 20,
       rotation: null,
@@ -190,8 +244,8 @@ function fileWithMeasurementGuide(overrides: Partial<TestMeasurementGuideFileEnt
     measurement_guides: [{
       id: 'measurement-guide-1',
       locked: false,
-      start: { x: 10, y: 10 },
-      end: { x: 40, y: 10 },
+      start: at(10, 10),
+      end: at(40, 10),
       ...overrides,
     }],
   }
@@ -217,11 +271,68 @@ function fileWithGroupedPair(): CanopiFile {
 function createRendererStub() {
   return {
     id: 'test',
-    resize: vi.fn(),
-    renderScene: vi.fn(),
-    setViewport: vi.fn(),
+    syncScene: vi.fn(),
+    setView: vi.fn<(view: ViewTransform) => void>(),
+    // The draft sink the runtime hands the session (ToolHostDeps.renderer): drafts and the host's chips draw in Pixi.
+    setDraft: vi.fn<(draft: DraftPresentation | null) => void>(),
     dispose: vi.fn(),
   }
+}
+
+type RendererStub = ReturnType<typeof createRendererStub>
+
+/** Where the last view handed to the renderer placed the plane, in the camera's viewport terms; null before one. */
+function lastRenderedViewport(renderer: RendererStub): { x: number; y: number; scale: number } | null {
+  const view = renderer.setView.mock.calls.at(-1)?.[0]
+  if (!view) return null
+  const { x, y, scale } = planarCameraOf(view)
+  return { x, y, scale }
+}
+
+/** The runtime camera's live frame. */
+function frameOf(runtime: SceneCanvasRuntime): ViewFrame {
+  return runtime.cameraHost.frames.viewFrame.peek()
+}
+
+/** A placement on the runtime's live camera, bearing 0, through the runtime's plane. */
+function placeOn(runtime: SceneCanvasRuntime, placement: { x: number; y: number; scale: number }): void {
+  placeOnHost(runtime.cameraHost, runtime.querySurface.sessionPlane.peek()!, placement)
+}
+
+/** A pan of the runtime's live camera, as a map gesture moves it. */
+function panOn(runtime: SceneCanvasRuntime, deltaPx: { x: number; y: number }): void {
+  runtime.cameraHost.current().apply({ kind: 'pan-by', deltaPx })
+}
+
+/** The runtime camera's bearing-0 placement in today's terms. */
+function placementOf(runtime: SceneCanvasRuntime): { x: number; y: number; scale: number } {
+  const { x, y, scale } = planarCameraOf(frameOf(runtime).view)
+  return { x, y, scale }
+}
+
+/** The last draft the runtime handed its renderer, or null. */
+function lastDraft(renderer: RendererStub): DraftPresentation | null {
+  return renderer.setDraft.mock.calls.at(-1)?.[0] ?? null
+}
+
+/** The chips of the last draft (today's zone measurement labels), in draw order. */
+function draftLabelTexts(renderer: RendererStub): string[] {
+  return lastDraft(renderer)?.shapes.flatMap((shape) => (shape.kind === 'label' ? [shape.text] : [])) ?? []
+}
+
+/** The polygon draft's rubber band (today's SVG draft line), in plane metres; null without one. */
+function draftBand(renderer: RendererStub): readonly { x: number; y: number }[] | null {
+  const band = lastDraft(renderer)?.shapes.find((shape) => shape.kind === 'polyline')
+  return band?.kind === 'polyline' ? band.points : null
+}
+
+function expectBandNear(
+  runtime: SceneCanvasRuntime,
+  band: readonly { x: number; y: number }[] | null,
+  points: readonly (readonly [number, number])[],
+): void {
+  expect(band).toHaveLength(points.length)
+  points.forEach(([x, y], index) => expectPointNear(band?.[index], planeAt(runtime, x, y)))
 }
 
 function createRuntimeContainer(): HTMLDivElement {
@@ -235,22 +346,61 @@ async function initRuntimeWithStubbedRenderer(runtime: SceneCanvasRuntime) {
   const container = createRuntimeContainer()
 
   const renderer = createRendererStub()
-  ;(runtime as any)._construction.replaceRendererHost({
-    initialize: async () => renderer,
-    run: async (operation: (instance: typeof renderer) => unknown) => operation(renderer),
-    dispose: async () => {},
-  })
+  ;(runtime as any)._construction.replaceRenderer({ id: 'test', initialize: () => renderer })
 
   await runtime.init(container)
   return { container, renderer }
+}
+
+// Loading a Design centres the session plane on its objects. Offset the
+// viewport by where the fixtures' authoring origin landed so the screen
+// points below keep addressing the authored metres (x, y) around it.
+function authoringOffset(runtime: SceneCanvasRuntime): { x: number; y: number } {
+  const plane = runtime.querySurface.sessionPlane.value
+  return plane ? plane.toPlane(FIXTURE_ORIGIN) : { x: 0, y: 0 }
 }
 
 function setInteractionViewport(
   runtime: SceneCanvasRuntime,
   viewport: { x: number; y: number; scale: number } = { x: 0, y: 0, scale: 1 },
 ): void {
-  ;(runtime as any)._camera.setViewport(viewport)
+  const offset = authoringOffset(runtime)
+  placeOn(runtime, {
+    x: viewport.x - offset.x * viewport.scale,
+    y: viewport.y - offset.y * viewport.scale,
+    scale: viewport.scale,
+  })
   runtime.documentSurface.resize(400, 300)
+}
+
+// Plane metres of an authored fixture point in the runtime's current plane.
+function planeAt(runtime: SceneCanvasRuntime, x: number, y: number): { x: number; y: number } {
+  const offset = authoringOffset(runtime)
+  return { x: offset.x + x, y: offset.y + y }
+}
+
+function expectGuideNear(
+  runtime: SceneCanvasRuntime,
+  guide: { start: { x: number; y: number }; end: { x: number; y: number } } | undefined,
+  start: readonly [number, number],
+  end: readonly [number, number],
+): void {
+  expectPointNear(guide?.start, planeAt(runtime, start[0], start[1]))
+  expectPointNear(guide?.end, planeAt(runtime, end[0], end[1]))
+}
+
+// Changed positions are saved at 1e-9 degree precision.
+function geoNear(point: { lon: number; lat: number }) {
+  return { lon: expect.closeTo(point.lon, 8), lat: expect.closeTo(point.lat, 8) }
+}
+
+function expectPointNear(
+  actual: { x: number; y: number } | undefined,
+  expected: { x: number; y: number },
+  digits = 6,
+): void {
+  expect(actual?.x).toBeCloseTo(expected.x, digits)
+  expect(actual?.y).toBeCloseTo(expected.y, digits)
 }
 
 function clickAt(
@@ -259,11 +409,6 @@ function clickAt(
 ): void {
   events.pointerDown(point)
   events.pointerUp(point)
-}
-
-function zoneMeasurementTexts(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll('[data-zone-measurement-label]'))
-    .map((label) => label.textContent ?? '')
 }
 
 function createRuntimeWithAppPanelTargets(appAdapter?: CanvasRuntimeAppAdapter): SceneCanvasRuntime {
@@ -300,9 +445,10 @@ function createTestSettingsAdapter(
   let plantSpacingIntervalM = 0.5
   return {
     readLocale: () => 'en',
-    readChromeOverlay: () => ({ gridVisible, rulersVisible }),
+    readChromeOverlay: () => ({ gridVisible, rulersVisible, guidesVisible: true }),
     readSnapToGridEnabled: () => snapToGrid,
     readSnapToGuidesEnabled: () => snapToGuides,
+    readScrollWheel: () => 'zoom',
     readPlantSpacingIntervalMeters: () => plantSpacingIntervalM,
     commitPlantSpacingIntervalMeters: (meters) => {
       plantSpacingIntervalM = meters
@@ -328,8 +474,11 @@ function createTestSettingsAdapter(
       onChange()
       return () => {}
     },
+    subscribeMapBackdrop: (onChange) => {
+      onChange('basemap')
+      return () => {}
+    },
     layerProjections: {
-      isAppOwnedLayerProjection: (name) => name === 'base' || name === 'contours',
       syncFromLayers: () => {},
       syncLayer: () => {},
     },
@@ -347,12 +496,6 @@ function composeTestDocumentForSave({
     ...canvas,
     name: metadata.name,
     description: metadata.description ?? document.description ?? null,
-    spatial_frame: {
-      ...(metadata.spatialFrame ?? document.spatial_frame),
-      location_metadata: {
-        ...(metadata.spatialFrame ?? document.spatial_frame).location_metadata,
-      },
-    },
     extra: {
       ...document.extra,
       ...canvas.extra,
@@ -403,7 +546,6 @@ describe('scene canvas runtime', () => {
     clearPlantStampSource()
     clearSavedObjectStampSource()
     snapToGridEnabled.value = false
-    guides.value = []
     hoveredCanvasTargets.value = []
     hoveredPanelTargets.value = []
     selectedPanelTargetOrigin.value = null
@@ -414,6 +556,120 @@ describe('scene canvas runtime', () => {
     plantSpacingIntervalM.value = 0.5
     vi.mocked(getCommonNames).mockReset()
     vi.mocked(getCommonNames).mockResolvedValue({})
+  })
+
+  describe('the start frame (plan §1, exception 3)', () => {
+    /**
+     * Fits the runtime's camera again; a frame that already shows the fit stays where it is. Plants and notes are sized at the
+     * scale a fit starts from, so a second fit can land a few micro-pixels from the first: 1e-3 px tells a fit from any other frame.
+     */
+    function expectShowsTheFit(runtime: SceneCanvasRuntime): void {
+      const shown = placementOf(runtime)
+      runtime.documentSurface.zoomToFit()
+      const fitted = placementOf(runtime)
+      expect(shown.x).toBeCloseTo(fitted.x, 3)
+      expect(shown.y).toBeCloseTo(fitted.y, 3)
+      expect(shown.scale).toBeCloseTo(fitted.scale, 3)
+    }
+
+    it('init frames a Design opened before it: the first frame is the fit, with no 100 m frame between two fits', async () => {
+      const runtime = new SceneCanvasRuntime()
+      runtime.documentSurface.resize(400, 300)
+      runtime.documentSurface.loadDocument(makeFile())
+      const seen: ViewFrame[] = []
+      const stop = effect(() => { seen.push(runtime.cameraHost.frames.viewFrame.value) })
+      try {
+        await initRuntimeWithStubbedRenderer(runtime)
+        stop()
+
+        // One frame during init, and it is the Design's fit: 100 m across the shorter side (3 px/m here) is never shown.
+        expect(seen).toHaveLength(2)
+        expect(seen[1]).toBe(frameOf(runtime))
+        expect(placementOf(runtime).scale).not.toBeCloseTo(3, 3)
+        expectShowsTheFit(runtime)
+      } finally {
+        stop()
+        runtime.destroy()
+      }
+    })
+
+    it('init frames a Design loaded before the screen had a size', async () => {
+      const runtime = new SceneCanvasRuntime()
+      runtime.documentSurface.loadDocument(makeFile())
+      try {
+        await initRuntimeWithStubbedRenderer(runtime)
+
+        expect(frameOf(runtime).view.screen).toMatchObject({ width: 400, height: 300 })
+        expectShowsTheFit(runtime)
+      } finally {
+        runtime.destroy()
+      }
+    })
+
+    it('init shows the new-Design overview for an empty Design', async () => {
+      const runtime = new SceneCanvasRuntime()
+      try {
+        await initRuntimeWithStubbedRenderer(runtime)
+
+        // The empty Design's fit: the plane origin at the screen centre, at the new-Design overview's scale.
+        const { view } = frameOf(runtime)
+        const origin = view.worldToScreen({ x: 0, y: 0 })
+        expect(origin.x).toBeCloseTo(200, 6)
+        expect(origin.y).toBeCloseTo(150, 6)
+        const plane = runtime.querySurface.sessionPlane.value!
+        expect(stageScaleToMapZoom(view.pixelsPerMetre, plane.origin.lat)).toBeCloseTo(DEFAULT_NEW_DESIGN_VIEW.zoom, 6)
+        expect(frameOf(runtime).mode).toBe('overview')
+      } finally {
+        runtime.destroy()
+      }
+    })
+
+    it('a Design loaded after init: the last frame before its first scene render is the load\'s fit', async () => {
+      const runtime = new SceneCanvasRuntime()
+      try {
+        const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
+        const atSceneRender: Array<{ x: number; y: number; scale: number }> = []
+        renderer.syncScene.mockImplementation(() => { atSceneRender.push(placementOf(runtime)) })
+
+        runtime.documentSurface.loadDocument(makeFile())
+        runtime.documentSurface.zoomToFit()
+        const fitted = placementOf(runtime)
+        await vi.waitFor(() => expect(atSceneRender).not.toHaveLength(0))
+
+        expect(atSceneRender[0]!.x).toBeCloseTo(fitted.x, 6)
+        expect(atSceneRender[0]!.y).toBeCloseTo(fitted.y, 6)
+        expect(atSceneRender[0]!.scale).toBeCloseTo(fitted.scale, 6)
+      } finally {
+        runtime.destroy()
+      }
+    })
+  })
+
+  it('a zoom with a selected plant keeps the rotation handle above the plant\'s top', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    try {
+      // Two plants, since one plant alone does not rotate; the top plant's footprint is sized at the live scale.
+      runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1', 'plant-2'))
+      setInteractionViewport(runtime, { x: 100, y: 120, scale: 4 })
+      runtime.commandSurface.tools.setTool('select')
+      runtime.commandSurface.sceneEdits.selectAll()
+
+      // Zoom about the screen centre, away from the plants: they move on screen, and the handle with them (INV-REN-11).
+      for (let step = 0; step < 3; step += 1) runtime.commandSurface.viewport.zoomIn()
+
+      const bounds = runtime.querySurface.getDesignObjectSelection().bounds!
+      const { view } = frameOf(runtime)
+      const top = view.worldToScreen({ x: (bounds.minX + bounds.maxX) / 2, y: bounds.minY })
+      const handle = container.querySelector<HTMLElement>('[data-canvas-handle="rotate"]')!
+      // The handle is anchored on the selection's top edge at the new scale, and its 28 px button sits wholly above it.
+      expect(handle.style.display).not.toBe('none')
+      expect(Number(handle.dataset.canvasHandleScreenX)).toBeCloseTo(top.x, 6)
+      expect(Number(handle.dataset.canvasHandleScreenY)).toBeCloseTo(top.y, 6)
+      expect(Number.parseFloat(handle.style.top) + 28).toBeLessThanOrEqual(top.y)
+    } finally {
+      runtime.destroy()
+    }
   })
 
   it('routes locale subscriptions through the mounted interaction translation refresh', async () => {
@@ -436,17 +692,40 @@ describe('scene canvas runtime', () => {
     })
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     runtime.commandSurface.tools.setTool('plant-spacing')
-    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
 
-    expect(hud.textContent).toContain('en:canvas.plantSpacing.selectSource')
+    // The map host is named by the runtime's translator.
+    expect(container.getAttribute('aria-label')).toBe('en:canvas.map.label')
 
     language = 'fr'
     notifyLocale()
 
-    expect(container.querySelector('[data-plant-spacing-hud]')).toBe(hud)
-    expect(hud.style.display).toBe('block')
-    expect(hud.textContent).toContain('fr:canvas.plantSpacing.selectSource')
+    expect(container.getAttribute('aria-label')).toBe('fr:canvas.map.label')
+    expect(currentCanvasToolGuidance.value.plantRow).toMatchObject({ phase: 'pick' })
     runtime.destroy()
+  })
+
+  it('marks the Design map aria-busy until a scene change is drawn, never for a camera frame', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const { container, renderer } = await initRuntimeWithStubbedRenderer(runtime)
+    const busyWhenDrawn: Array<string | null> = []
+    renderer.syncScene.mockImplementation(() => { busyWhenDrawn.push(container.getAttribute('aria-busy')) })
+    expect(container.getAttribute('aria-busy'), 'the opening render draws in the next frame').toBe('true')
+    await vi.waitFor(() => expect(container.hasAttribute('aria-busy')).toBe(false))
+
+    runtime.documentSurface.loadDocument(makeFile())
+    expect(container.getAttribute('aria-busy')).toBe('true')
+    await vi.waitFor(() => expect(container.hasAttribute('aria-busy')).toBe(false))
+    expect(busyWhenDrawn, 'busy until the renderer drew the loaded Design').toEqual(['true'])
+
+    panOn(runtime, { x: 12, y: -8 })
+    expect(container.hasAttribute('aria-busy'), 'a camera frame moves the drawing, it does not redraw it').toBe(false)
+    await vi.waitFor(() => expect(lastRenderedViewport(renderer)).toEqual(placementOf(runtime)))
+    expect(container.hasAttribute('aria-busy')).toBe(false)
+
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    expect(container.getAttribute('aria-busy')).toBe('true')
+    runtime.destroy()
+    expect(container.hasAttribute('aria-busy'), 'a destroyed runtime leaves the host as it found it').toBe(false)
   })
 
   it('rolls back effects acquired before a later subscription fails', () => {
@@ -560,6 +839,48 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('keeps the app\'s own tool state on the tool the session kept when leaving it fails', async () => {
+    const runtime = new SceneCanvasRuntime()
+    await initRuntimeWithStubbedRenderer(runtime)
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    setInteractionViewport(runtime)
+    rectangleActivation.deactivateFails = true
+    try {
+      runtime.commandSurface.tools.setTool('rectangle')
+      expect(activeTool.value).toBe('rectangle')
+      // Leaving Rectangle throws before Ellipse is armed: the session stays on Rectangle, and so must the toolbar.
+      expect(() => runtime.commandSurface.tools.setTool('ellipse')).toThrow('deactivation failed')
+      expect(activeTool.value).toBe('rectangle')
+    } finally {
+      rectangleActivation.deactivateFails = false
+    }
+    runtime.destroy()
+  })
+
+  it('falls back to Select, in the app\'s own tool state too, when a registered tool\'s activation throws', async () => {
+    const runtime = new SceneCanvasRuntime()
+    await initRuntimeWithStubbedRenderer(runtime)
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    setInteractionViewport(runtime)
+    runtime.commandSurface.tools.setTool('line')
+    expect(activeTool.value).toBe('line')
+
+    rectangleActivation.fails = true
+    try {
+      // Rectangle's activation throws: the host falls back to Select, and the app's own tool state (session-state.ts,
+      // read here as `activeTool`) must follow it, not stay on the tool that was armed before the failed attempt.
+      expect(() => runtime.commandSurface.tools.setTool('rectangle')).toThrow('activation failed')
+      expect(activeTool.value).toBe('select')
+    } finally {
+      rectangleActivation.fails = false
+    }
+
+    runtime.commandSurface.tools.setTool('rectangle')
+    expect(activeTool.value).toBe('rectangle')
+
+    runtime.destroy()
+  })
+
   it('retries interaction cancellation before replacing a document', async () => {
     const runtime = new SceneCanvasRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
@@ -610,13 +931,14 @@ describe('scene canvas runtime', () => {
       )
 
       expect(abortCalls).toBe(2)
+      // A lone Plant frames the replacement's session plane at its origin.
       expect(runtime.querySurface.getSceneSnapshot().plants).toEqual([
-        expect.objectContaining({ id: 'plant-2', position: { x: 20, y: 20 } }),
+        expect.objectContaining({ id: 'plant-2', position: { x: 0, y: 0 } }),
       ])
 
       events.pointerUp({ x: 30, y: 30 }, { pointerId: 61 })
       expect(runtime.querySurface.getSceneSnapshot().plants).toEqual([
-        expect.objectContaining({ id: 'plant-2', position: { x: 20, y: 20 } }),
+        expect.objectContaining({ id: 'plant-2', position: { x: 0, y: 0 } }),
       ])
     } finally {
       beginSpy.mockRestore()
@@ -701,7 +1023,9 @@ describe('scene canvas runtime', () => {
   })
 
   it('cannot invoke an old Context Menu action against a replacement document', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = new SceneCanvasRuntime({
+      appAdapter: createAppCanvasRuntimeAppAdapter({ presentationData: {} }),
+    })
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
@@ -714,23 +1038,17 @@ describe('scene canvas runtime', () => {
       clientX: point.x,
       clientY: point.y,
     }))
-    const remove = container.querySelector<HTMLButtonElement>(
-      '[data-canvas-context-command="delete"]',
-    )!
-    remove.focus()
+    expect(canvasContextMenuRequest.value).not.toBeNull()
 
     runtime.documentSurface.replaceDocument(
       fileWithOnlyPlants('plant-2'),
       createCanvasDocumentReplacementToken(),
       () => {},
     )
-    remove.click()
 
+    expect(canvasContextMenuRequest.value).toBeNull()
     expect(runtime.querySurface.getSceneSnapshot().plants.map((plant) => plant.id))
       .toEqual(['plant-2'])
-    expect(container.querySelector<HTMLElement>('[data-canvas-context-menu]')?.style.display)
-      .toBe('none')
-    expect(document.activeElement).not.toBe(remove)
     events.dispose()
     runtime.destroy()
   })
@@ -756,12 +1074,12 @@ describe('scene canvas runtime', () => {
     expect(container.style.cursor).toBe('grab')
 
     selection.mockRestore()
-    const beforeFreshPan = runtime.querySurface.viewport.value.viewport
+    const beforeFreshPan = placementOf(runtime)
     events.pointerDown({ x: 100, y: 100 }, { pointerId: 53 })
     events.pointerMove({ x: 130, y: 120 }, { pointerId: 53 })
     events.pointerUp({ x: 130, y: 120 }, { pointerId: 53 })
 
-    expect(runtime.querySurface.viewport.value.viewport).toMatchObject({
+    expect(placementOf(runtime)).toMatchObject({
       x: beforeFreshPan.x + 30,
       y: beforeFreshPan.y + 20,
     })
@@ -786,14 +1104,13 @@ describe('scene canvas runtime', () => {
     expect(() => runtime.commandSurface.tools.setTool('select'))
       .toThrow('selection refresh failed')
     expect(activeTool.value).toBe('plant-spacing')
-    const plantSpacingHud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')
-    expect(plantSpacingHud?.style.display).toBe('block')
-    expect(plantSpacingHud?.textContent).toContain('Select a placed plant')
+    // The tool card still explains Plant a row.
+    expect(currentCanvasToolGuidance.value.plantRow).toMatchObject({ phase: 'pick', plantName: null })
 
     selection.mockRestore()
     clickAt(events, { x: 10, y: 10 })
 
-    expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
+    expect(currentCanvasToolGuidance.value.plantRow).toMatchObject({ phase: 'row' })
     events.dispose()
     runtime.destroy()
   })
@@ -820,8 +1137,57 @@ describe('scene canvas runtime', () => {
     expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(20)
     expect(runtime.commandSurface.history.canUndo.value).toBe(true)
     runtime.commandSurface.history.undo()
-    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(10)
+    // A lone Plant frames the session plane at its origin.
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(0)
     runtime.destroy()
+  })
+
+  it('renames a zone as one undoable edit that keeps its id', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(makeFile())
+    const edits = runtime.commandSurface.sceneEdits
+    const zone = () => runtime.querySurface.getSceneSnapshot().zones[0]!
+
+    expect(edits.renameZone('zone-1', '  North bed ')).toBe(true)
+    expect(zone()).toMatchObject({ id: 'zone-1', name: 'North bed' })
+    expect(edits.renameZone('zone-1', 'North bed')).toBe(false)
+    expect(edits.renameZone('zone-missing', 'Pond')).toBe(false)
+
+    // A blank name clears it; lists then name the zone by its type and size.
+    expect(edits.renameZone('zone-1', '   ')).toBe(true)
+    expect(zone()).toMatchObject({ id: 'zone-1', name: null })
+
+    runtime.commandSurface.history.undo()
+    expect(zone()).toMatchObject({ id: 'zone-1', name: 'North bed' })
+    runtime.commandSurface.history.undo()
+    expect(zone()).toMatchObject({ id: 'zone-1', name: null })
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+    runtime.destroy()
+  })
+
+  it('does not rename a zone inside a locked group', () => {
+    const file = makeFile()
+    file.groups = [{ id: 'group-1', name: null, locked: true, members: [{ kind: 'zone', id: 'zone-1' }] }]
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(file)
+    expect(runtime.commandSurface.sceneEdits.renameZone('zone-1', 'North bed')).toBe(false)
+    expect(runtime.querySurface.getSceneSnapshot().zones[0]!.name).toBeNull()
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+    runtime.destroy()
+  })
+
+  it('does not rename a locked zone or a zone on a locked layer', () => {
+    const file = makeFile()
+    for (const locked of [
+      { ...file, zones: [{ ...file.zones[0]!, locked: true }] },
+      { ...file, layers: file.layers.map((layer) => layer.name === 'zones' ? { ...layer, locked: true } : layer) },
+    ]) {
+      const runtime = new SceneCanvasRuntime()
+      runtime.documentSurface.loadDocument(locked)
+      expect(runtime.commandSurface.sceneEdits.renameZone('zone-1', 'North bed')).toBe(false)
+      expect(runtime.querySurface.getSceneSnapshot().zones[0]!.name).toBeNull()
+      runtime.destroy()
+    }
   })
 
   it('captures print content only after an edit settles without changing history or dirty state', () => {
@@ -829,16 +1195,135 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
     const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
     const before = runtime.querySurface.getSceneSnapshot()
-    expect(runtime.querySurface.capturePrintSnapshot()?.plants[0]?.position.x).toBe(10)
+    // A lone Plant frames the session plane at its origin.
+    expect(runtime.querySurface.capturePrintSnapshot()?.plants[0]?.position.x).toBe(0)
     expect(runtime.commandSurface.history.canUndo.value).toBe(false)
     const active = sceneEdits.begin('interaction-drag')
     active.mutate((draft) => { draft.plants[0]!.position.x = 30 })
     expect(runtime.querySurface.capturePrintSnapshot()).toBeNull()
     expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(30)
     active.abort()
-    expect(runtime.querySurface.capturePrintSnapshot()?.plants[0]?.position.x).toBe(10)
+    expect(runtime.querySurface.capturePrintSnapshot()?.plants[0]?.position.x).toBe(0)
     expect(runtime.querySurface.getSceneSnapshot()).toEqual(before)
     expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+    runtime.destroy()
+  })
+
+  it('captures a saved view scene without selection or session changes, and not during an edit', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    runtime.commandSurface.sceneEdits.selectAll()
+    const selection = runtime.querySurface.getSelection()
+    const scene = runtime.querySurface.getSceneSnapshot()
+    const layerNames = scene.layers.map((layer) => layer.name)
+    expect(selection.length).toBeGreaterThan(0)
+    const view = createTestRendererView({ x: 100, y: 80, scale: 4 })
+
+    const capture = runtime.querySurface.captureViewScene({
+      view,
+      visibleLayerNames: [layerNames[0]!],
+      focusedSpecies: 'Malus domestica',
+    })
+
+    expect(capture?.scene.layers.map((layer) => layer.visible)).toEqual(layerNames.map((_, index) => index === 0))
+    expect(capture?.speciesFocus).toEqual({ canonicalName: 'Malus domestica' })
+    expect(capture?.selectedPlantIds.size).toBe(0)
+    expect(capture?.hoverTarget).toBeNull()
+    expect(runtime.querySurface.captureViewScene({ view: createTestRendererView({ x: 0, y: 0, scale: 0.001 }), visibleLayerNames: [], focusedSpecies: null })
+      ?.scene.layers.every((layer) => !layer.visible)).toBe(true)
+    expect(runtime.querySurface.getSelection()).toEqual(selection)
+    expect(runtime.querySurface.getSceneSnapshot()).toEqual(scene)
+    expect(runtime.querySurface.getSpeciesFocus().canonicalName).toBeNull()
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+
+    const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
+    const active = sceneEdits.begin('interaction-drag')
+    active.mutate((draft) => { draft.plants[0]!.position.x = 30 })
+    expect(runtime.querySurface.captureViewScene({ view, visibleLayerNames: layerNames, focusedSpecies: null })).toBeNull()
+    active.abort()
+    runtime.destroy()
+  })
+
+  it('presents only a story step’s layers, without selection or measurement guides, and changes nothing in the Scene', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
+    sceneEdits.run('guide-add', (tx) => {
+      tx.mutate((draft) => {
+        draft.measurementGuides.push({ kind: 'measurement-guide', id: 'measure-1', locked: false, start: { x: 0, y: 0 }, end: { x: 5, y: 0 } })
+      })
+    })
+    const canUndo = runtime.commandSurface.history.canUndo.value
+    runtime.commandSurface.sceneEdits.selectAll()
+    const selection = runtime.querySurface.getSelection()
+    const scene = runtime.querySurface.getSceneSnapshot()
+    const layerNames = scene.layers.map((layer) => layer.name)
+    const presentation = (runtime as unknown as {
+      _presentation: { buildRendererSnapshot(options?: { overview?: boolean }): SceneRendererSnapshot }
+    })._presentation
+    expect(presentation.buildRendererSnapshot().selectedPlantIds.size).toBeGreaterThan(0)
+
+    runtime.commandSurface.layers.presentLayers([layerNames[1]!])
+    const presented = presentation.buildRendererSnapshot()
+    expect(presented.scene.layers.map((layer) => layer.visible)).toEqual(layerNames.map((_, index) => index === 1))
+    expect(presented.selectedPlantIds.size).toBe(0)
+    expect(presented.hoverTarget).toBeNull()
+    // Measurement guides are an editing aid: a presented story never shows them.
+    runtime.commandSurface.layers.presentLayers(layerNames)
+    expect(scene.measurementGuides.length).toBeGreaterThan(0)
+    expect(presentation.buildRendererSnapshot().scene.measurementGuides).toEqual([])
+
+    runtime.commandSurface.layers.presentLayers(null)
+    expect(presentation.buildRendererSnapshot().scene.layers.map((layer) => layer.visible))
+      .toEqual(scene.layers.map((layer) => layer.visible))
+    expect(runtime.querySurface.getSelection()).toEqual(selection)
+    expect(runtime.querySurface.getSceneSnapshot()).toEqual(scene)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(canUndo)
+    runtime.destroy()
+  })
+
+  it('shows a searched place by moving only the view', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    const scene = runtime.querySurface.getSceneSnapshot()
+    const plane = runtime.querySurface.sessionPlane.value!
+    const before = placementOf(runtime)
+    const place = plane.toGeo({ x: 250, y: -120 })
+
+    expect(runtime.commandSurface.viewport.showPlace(place, 17)).toBe(true)
+
+    const after = placementOf(runtime)
+    expect(after).not.toEqual(before)
+    expect(runtime.querySurface.getSceneSnapshot()).toEqual(scene)
+    expect(runtime.querySurface.sessionPlane.value).toBe(plane)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+    expect(runtime.commandSurface.viewport.showPlace({ lon: Number.NaN, lat: 0 }, 17)).toBe(false)
+    runtime.destroy()
+  })
+
+  it('shows a place far from the plane origin at the MapLibre zoom it asked for', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    const plane = runtime.querySurface.sessionPlane.value!
+    const oslo = { lon: 10.75, lat: plane.origin.lat + 11 }
+
+    expect(runtime.commandSurface.viewport.showPlace(oslo, 17)).toBe(true)
+
+    const scale = placementOf(runtime).scale
+    expect(stageScaleToMapZoom(scale, plane.origin.lat)).toBeCloseTo(17, 9)
+    runtime.destroy()
+  })
+
+  it('asks the camera to fly to a place only for fly motion', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    const apply = vi.spyOn(runtime.cameraHost.current(), 'apply')
+    const place = runtime.querySurface.sessionPlane.value!.toGeo({ x: 40, y: 10 })
+
+    runtime.commandSurface.viewport.showPlace(place, 18, { motion: 'fly' })
+    runtime.commandSurface.viewport.showPlace(place, 18)
+
+    expect(apply.mock.calls.map(([move]) => move.kind === 'set' ? move.animation : move.kind)).toEqual(['fly', 'none'])
     runtime.destroy()
   })
 
@@ -862,14 +1347,15 @@ describe('scene canvas runtime', () => {
     expect(runtime.commandSurface.history.canUndo.value).toBe(false)
     expect(runtime.commandSurface.history.canRedo.value).toBe(false)
     expect(invalidate).toHaveBeenCalledTimes(1)
-    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(10)
+    // A lone Plant frames the session plane at its origin.
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(0)
 
     runtime.commandSurface.history.undo()
 
     expect(invalidate).toHaveBeenCalledTimes(2)
     expect(runtime.commandSurface.history.canUndo.value).toBe(false)
     expect(runtime.commandSurface.history.canRedo.value).toBe(true)
-    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(10)
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(0)
     invalidate.mockRestore()
     runtime.destroy()
   })
@@ -923,14 +1409,10 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1', 'plant-2'))
     runtime.commandSurface.sceneEdits.selectAll()
     runtime.commandSurface.sceneEdits.copy()
-    ;(runtime as unknown as { _camera: CameraController })._camera.setViewport({
-      x: 0,
-      y: 0,
-      scale: 0.01,
-    })
+    placeOn(runtime, { x: 0, y: 0, scale: 0.01 })
     const before = runtime.querySurface.getSceneSnapshot()
 
-    expect(runtime.querySurface.viewport.value.mode).toBe('overview')
+    expect(frameOf(runtime).mode).toBe('overview')
     expect(runtime.commandSurface.sceneEdits.canPaste()).toBe(false)
     runtime.commandSurface.sceneEdits.paste()
     runtime.commandSurface.sceneEdits.pasteAt({ x: 30, y: 40 })
@@ -967,6 +1449,7 @@ describe('scene canvas runtime', () => {
       },
       plantLabels: {
         getLocaleSnapshot: () => localizedCommonNames,
+        getEnglishFallbackSnapshot: () => new Map(),
         ensureEntries: async () => false,
       },
     })
@@ -1000,12 +1483,15 @@ describe('scene canvas runtime', () => {
     })
     const withoutStampsMount = await initRuntimeWithStubbedRenderer(withoutStamps)
     withoutStamps.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    // A load after init takes its own fit, as Design loads do (init showed the empty Design's overview).
+    withoutStamps.documentSurface.zoomToFit()
     withoutStamps.commandSurface.sceneEdits.selectAll()
+    openContextMenuFromKeyboard(withoutStamps, withoutStampsMount.container)
 
-    expect(withoutStampsMount.container.querySelector(
-      '[data-selection-action-command="save-object-stamp"]',
-    )).toBeNull()
+    expect(canvasContextMenuRequest.value?.selection?.editableTargets).toHaveLength(1)
+    expect(canvasContextMenuRequest.value?.saveSelectionAsObjectStamp).toBeUndefined()
     withoutStamps.destroy()
+    expect(canvasContextMenuRequest.value).toBeNull()
 
     const withStamps = new SceneCanvasRuntime({
       appAdapter: createAppCanvasRuntimeAppAdapter({
@@ -1015,11 +1501,12 @@ describe('scene canvas runtime', () => {
     })
     const withStampsMount = await initRuntimeWithStubbedRenderer(withStamps)
     withStamps.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    // A load after init takes its own fit, as Design loads do (init showed the empty Design's overview).
+    withStamps.documentSurface.zoomToFit()
     withStamps.commandSurface.sceneEdits.selectAll()
+    openContextMenuFromKeyboard(withStamps, withStampsMount.container)
 
-    expect(withStampsMount.container.querySelector(
-      '[data-selection-action-command="save-object-stamp"]',
-    )).not.toBeNull()
+    expect(canvasContextMenuRequest.value?.saveSelectionAsObjectStamp).toBeTypeOf('function')
     withStamps.destroy()
   })
 
@@ -1066,7 +1553,7 @@ describe('scene canvas runtime', () => {
       },
     ]
     file.zones = file.zones.map((zone) =>
-      zone.name === 'zone-1' ? { ...zone, locked: true } : zone,
+      zone.id === 'zone-1' ? { ...zone, locked: true } : zone,
     )
     runtime.documentSurface.loadDocument(file)
 
@@ -1084,8 +1571,7 @@ describe('scene canvas runtime', () => {
     const print = runtime.querySurface.capturePrintSnapshot()
     expect(scene.plantSpeciesCodes).toEqual({ 'Malus domestica': 'MDO' })
     runtime.commandSurface.speciesFocus.focus('Malus domestica')
-    runtime.commandSurface.speciesFocus.showCodes(true)
-    expect(runtime.querySurface.getSpeciesFocus()).toEqual({ canonicalName: 'Malus domestica', showCodes: true })
+    expect(runtime.querySurface.getSpeciesFocus()).toEqual({ canonicalName: 'Malus domestica' })
     expect(runtime.querySurface.getSelection()).toEqual(selection)
     expect(runtime.querySurface.getSceneSnapshot()).toEqual(scene)
     expect(runtime.querySurface.capturePrintSnapshot()).toEqual(print)
@@ -1093,7 +1579,7 @@ describe('scene canvas runtime', () => {
     runtime.commandSurface.speciesFocus.focus('Missing species')
     expect(runtime.querySurface.getSpeciesFocus().canonicalName).toBe('Malus domestica')
     runtime.documentSurface.loadDocument(fileWithGroupedPair())
-    expect(runtime.querySurface.getSpeciesFocus()).toEqual({ canonicalName: null, showCodes: false })
+    expect(runtime.querySurface.getSpeciesFocus()).toEqual({ canonicalName: null })
     runtime.destroy()
     runtime.commandSurface.speciesFocus.focus('Malus domestica')
     expect(runtime.querySurface.getSpeciesFocus().canonicalName).toBe(null)
@@ -1270,49 +1756,56 @@ describe('scene canvas runtime', () => {
   })
 
   it('publishes viewport-only camera changes through the canonical snapshot', async () => {
-    const camera = new CameraController()
-    const runtime = new SceneCanvasRuntime({ camera })
+    const runtime = new SceneCanvasRuntime()
     await initRuntimeWithStubbedRenderer(runtime)
-    expect(runtime.querySurface.viewport).toBe(camera.snapshot)
+    const before = frameOf(runtime)
 
-    const before = runtime.querySurface.viewport.value.revision
     runtime.commandSurface.viewport.zoomIn()
 
-    expect(runtime.querySurface.viewport.value.revision).toBe(before + 1)
+    const after = frameOf(runtime)
+    expect(after).not.toBe(before)
+    expect(after.view.pixelsPerMetre).toBeGreaterThan(before.view.pixelsPerMetre)
+    expect(after.view.screen).toEqual(before.view.screen)
     runtime.destroy()
   })
 
   it('renders externally published camera frames and releases the owner on destroy', async () => {
-    const camera = new CameraController()
-    const disposeCamera = vi.spyOn(camera, 'dispose')
-    const runtime = new SceneCanvasRuntime({ camera })
+    const runtime = new SceneCanvasRuntime()
+    const disposeCamera = vi.spyOn(runtime.cameraHost as CameraDriverHostController, 'dispose')
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
-    renderer.setViewport.mockClear()
+    renderer.setView.mockClear()
 
-    camera.panBy({ x: 12, y: -8 })
+    panOn(runtime, { x: 12, y: -8 })
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     await Promise.resolve()
 
-    expect(renderer.setViewport).toHaveBeenCalledWith(camera.viewport)
+    expect(lastRenderedViewport(renderer)).toEqual(placementOf(runtime))
 
     runtime.destroy()
     expect(disposeCamera).toHaveBeenCalledOnce()
-    renderer.setViewport.mockClear()
+    renderer.setView.mockClear()
 
-    camera.panBy({ x: 1, y: 1 })
+    panOn(runtime, { x: 1, y: 1 })
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
 
-    expect(renderer.setViewport).not.toHaveBeenCalled()
+    expect(renderer.setView).not.toHaveBeenCalled()
   })
 
   it('does not publish a viewport change when document hydration leaves the camera unchanged', async () => {
     const runtime = new SceneCanvasRuntime()
     await initRuntimeWithStubbedRenderer(runtime)
-    const before = runtime.querySurface.viewport.value.revision
+    // The scale bounds follow the plane's latitude: a first load moves them to the Design's, a second one finds them unchanged.
+    runtime.documentSurface.loadDocument(makeFile())
+    const before = frameOf(runtime)
 
     runtime.documentSurface.loadDocument(makeFile())
 
-    expect(runtime.querySurface.viewport.value.revision).toBe(before)
+    // The hydration's new plane may publish a frame (a viewport render, coalesced per animation frame); it shows the same view.
+    const after = frameOf(runtime)
+    expect(after.view.camera).toEqual(before.view.camera)
+    expect(after.view.screen).toEqual(before.view.screen)
+    expect(after.mode).toBe(before.mode)
+    expect(after.scaleBounds).toEqual(before.scaleBounds)
     runtime.destroy()
   })
 
@@ -1338,7 +1831,6 @@ describe('scene canvas runtime', () => {
         canonicalName: 'Malus domestica',
         stratum: 'canopy',
         canopySpreadM: 4,
-        scale: 4,
       }],
       failure: null,
     })
@@ -1390,7 +1882,7 @@ describe('scene canvas runtime', () => {
   it('publishes the UI selection mirror when only the selected target kind changes', () => {
     const file = makeFile()
     file.plants[0] = { ...file.plants[0]!, id: 'shared-id' }
-    file.zones[0] = { ...file.zones[0]!, name: 'shared-id' }
+    file.zones[0] = { ...file.zones[0]!, id: 'shared-id' }
     const runtime = new SceneCanvasRuntime()
     runtime.documentSurface.loadDocument(file)
     const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
@@ -1417,7 +1909,7 @@ describe('scene canvas runtime', () => {
   it('returns an owned typed selection snapshot with stable collision order', () => {
     const file = makeFile()
     file.plants[0] = { ...file.plants[0]!, id: 'shared-id' }
-    file.zones[0] = { ...file.zones[0]!, name: 'shared-id' }
+    file.zones[0] = { ...file.zones[0]!, id: 'shared-id' }
     const runtime = new SceneCanvasRuntime()
     runtime.documentSurface.loadDocument(file)
     const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
@@ -1525,12 +2017,7 @@ describe('scene canvas runtime', () => {
     const runtime = new SceneCanvasRuntime()
     const container = createRuntimeContainer()
     const renderer = createRendererStub()
-    const disposeRenderer = vi.fn(async () => {})
-    ;(runtime as any)._construction.replaceRendererHost({
-      initialize: async () => renderer,
-      run: async (operation: (instance: typeof renderer) => unknown) => operation(renderer),
-      dispose: disposeRenderer,
-    })
+    ;(runtime as any)._construction.replaceRenderer({ id: 'test', initialize: () => renderer })
     const appendChild = vi.spyOn(container, 'appendChild').mockImplementation(() => {
       throw new Error('interaction construction failed')
     })
@@ -1541,7 +2028,7 @@ describe('scene canvas runtime', () => {
       appendChild.mockRestore()
     }
 
-    expect(disposeRenderer).toHaveBeenCalledTimes(1)
+    expect(renderer.dispose).toHaveBeenCalledTimes(1)
     expect((runtime as any)._rendering.container).toBeNull()
     runtime.destroy()
   })
@@ -1551,21 +2038,18 @@ describe('scene canvas runtime', () => {
     const container = createRuntimeContainer()
     const events = createSceneInteractionEventHarness(container, { trackListeners: true })
     const renderer = createRendererStub()
-    renderer.renderScene.mockImplementation(() => {
+    renderer.syncScene.mockImplementation(() => {
       throw new Error('initial render failed')
     })
-    const disposeRenderer = vi.fn(async () => {})
-    ;(runtime as any)._construction.replaceRendererHost({
-      initialize: async () => renderer,
-      run: async (operation: (instance: typeof renderer) => unknown) => operation(renderer),
-      dispose: disposeRenderer,
-    })
+    ;(runtime as any)._construction.replaceRenderer({ id: 'test', initialize: () => renderer })
 
     await expect(runtime.init(container)).rejects.toThrow('initial render failed')
 
-    expect(disposeRenderer).toHaveBeenCalledTimes(1)
-    expect(events.listenerLog?.containerRemoves('pointerdown')).toHaveLength(1)
-    expect(events.listenerLog?.windowRemoves('pointermove')).toHaveLength(1)
+    expect(renderer.dispose).toHaveBeenCalledTimes(1)
+    // The source's press listener and the selection-drag guard's.
+    expect(events.listenerLog?.containerRemoves('pointerdown')).toHaveLength(2)
+    expect(events.listenerLog?.containerRemoves('pointermove')).toHaveLength(1)
+    expect(events.listenerLog?.windowRemoves('blur')).toHaveLength(1)
     expect(container.querySelector('[data-hover-tooltip]')).toBeNull()
     expect((runtime as any)._rendering.container).toBeNull()
     events.dispose()
@@ -1595,11 +2079,7 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
     const container = createRuntimeContainer()
     const renderer = createRendererStub()
-    ;(runtime as any)._construction.replaceRendererHost({
-      initialize: async () => renderer,
-      run: async (operation: (instance: typeof renderer) => unknown) => operation(renderer),
-      dispose: async () => {},
-    })
+    ;(runtime as any)._construction.replaceRenderer({ id: 'test', initialize: () => renderer })
     const initialize = runtime.init(container)
     await vi.waitFor(() => expect(ensureEntries).toHaveBeenCalledOnce())
     const sceneRevision = runtime.querySurface.revision.scene.value
@@ -1613,7 +2093,6 @@ describe('scene canvas runtime', () => {
     expect(runtime.querySurface.getSceneSnapshot().plants[0]).toMatchObject({
       stratum: null,
       canopySpreadM: null,
-      scale: null,
     })
     expect(runtime.querySurface.revision.scene.value).toBe(sceneRevision)
     expect(invalidate).not.toHaveBeenCalled()
@@ -1656,7 +2135,6 @@ describe('scene canvas runtime', () => {
     expect(runtime.querySurface.getSceneSnapshot().plants[0]).toMatchObject({
       stratum: null,
       canopySpreadM: null,
-      scale: null,
     })
     expect(runtime.querySurface.revision.scene.value).toBe(sceneRevision)
     expect(invalidate).not.toHaveBeenCalled()
@@ -1677,6 +2155,7 @@ describe('scene canvas runtime', () => {
       },
       plantLabels: {
         getLocaleSnapshot: (locale) => labelsByLocale.get(locale) ?? new Map(),
+        getEnglishFallbackSnapshot: () => new Map(),
         ensureEntries: async (_canonicalNames, locale) => {
           if (labelsByLocale.has(locale)) return false
           labelsByLocale.set(locale, new Map([
@@ -1697,7 +2176,7 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
     const plantNamesRevision = runtime.querySurface.revision.plantNames.value
-    const initialRenderCount = renderer.renderScene.mock.calls.length
+    const initialRenderCount = renderer.syncScene.mock.calls.length
     activeLocale = 'fr'
     failSpeciesRefresh = true
 
@@ -1706,10 +2185,10 @@ describe('scene canvas runtime', () => {
       'fr',
     )).rejects.toBe(speciesFailure)
     await vi.waitFor(() => {
-      expect(renderer.renderScene.mock.calls.length).toBeGreaterThan(initialRenderCount)
+      expect(renderer.syncScene.mock.calls.length).toBeGreaterThan(initialRenderCount)
     })
 
-    const rendered = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    const rendered = renderer.syncScene.mock.calls[renderer.syncScene.mock.calls.length - 1]?.[0]
     expect(rendered?.localizedCommonNames.get('Malus domestica')).toBe('Pommier')
     expect(runtime.querySurface.getLocalizedCommonNames().get('Malus domestica')).toBe('Pommier')
     expect(runtime.querySurface.revision.plantNames.value).toBe(plantNamesRevision + 1)
@@ -1722,6 +2201,7 @@ describe('scene canvas runtime', () => {
     const runtime = new SceneCanvasRuntime({
       plantLabels: {
         getLocaleSnapshot: () => labels,
+        getEnglishFallbackSnapshot: () => new Map(),
         ensureEntries: async () => {
           if (labelsLoaded) return false
           labelsLoaded = true
@@ -1766,6 +2246,7 @@ describe('scene canvas runtime', () => {
     const runtime = new SceneCanvasRuntime({
       plantLabels: {
         getLocaleSnapshot: () => labels,
+        getEnglishFallbackSnapshot: () => new Map(),
         ensureEntries: async () => {
           labels.set('Malus domestica', 'Apple')
           return true
@@ -1802,11 +2283,17 @@ describe('scene canvas runtime', () => {
 
     runtime.commandSurface.sceneEdits.selectAll()
 
-    expect(runtime.querySurface.getDesignObjectSelection()).toEqual({
+    const selection = runtime.querySurface.getDesignObjectSelection()
+    // The lone 5 m square Zone frames the session plane around its centre.
+    expect(selection.bounds?.minX).toBeCloseTo(-2.5, 6)
+    expect(selection.bounds?.minY).toBeCloseTo(-2.5, 6)
+    expect(selection.bounds?.maxX).toBeCloseTo(2.5, 6)
+    expect(selection.bounds?.maxY).toBeCloseTo(2.5, 6)
+    expect(selection).toEqual({
       editableTargets: [{ kind: 'zone', id: 'zone-1' }],
       lockedTargets: [],
       blockedTargets: [],
-      bounds: { minX: 0, minY: 0, maxX: 5, maxY: 5 },
+      bounds: expect.any(Object),
       sameSpeciesReferenceCanonicalName: null,
       plantNamePinning: {
         plantIds: [],
@@ -1843,25 +2330,20 @@ describe('scene canvas runtime', () => {
     const runtime = new SceneCanvasRuntime()
     const file = makeFile()
     file.zones = [{
-      name: 'zone-1',
+      id: 'zone-1', name: null,
       zone_type: 'rect',
       rotation: 0,
-      points: [
-        { x: 10, y: 10 },
-        { x: 110, y: 10 },
-        { x: 110, y: 90 },
-        { x: 10, y: 90 },
-      ],
+      points: [at(10, 10), at(110, 10), at(110, 90), at(10, 90)],
       fill_color: null,
       notes: null,
       locked: false,
     }]
     runtime.documentSurface.loadDocument(fileWithOnlyZone(file.zones[0]!))
-    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
     runtime.commandSurface.sceneEdits.selectAll()
 
-    expect(zoneMeasurementTexts(container)).toEqual([
+    expect(draftLabelTexts(renderer)).toEqual([
       '100 m',
       '80 m',
       '100 m',
@@ -1875,7 +2357,7 @@ describe('scene canvas runtime', () => {
       () => {},
     )
 
-    expect(zoneMeasurementTexts(container)).toEqual([])
+    expect(draftLabelTexts(renderer)).toEqual([])
     runtime.destroy()
   })
 
@@ -1884,18 +2366,18 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
-    renderer.renderScene.mockClear()
+    renderer.syncScene.mockClear()
     hoveredPanelTargets.value = [
       speciesTarget('Malus domestica'),
-      { kind: 'zone', zone_name: 'zone-1' },
+      { kind: 'zone', zone_id: 'zone-1' },
       { kind: 'placed_plant', plant_id: 'missing-plant' },
     ]
 
     await vi.waitFor(() => {
-      expect(renderer.renderScene).toHaveBeenCalled()
+      expect(renderer.syncScene).toHaveBeenCalled()
     })
 
-    const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    const snapshot = renderer.syncScene.mock.calls[renderer.syncScene.mock.calls.length - 1]?.[0]
     expect(snapshot?.highlightedPlantIds).toEqual(new Set(['plant-1', 'plant-2']))
     expect(snapshot?.highlightedZoneIds).toEqual(new Set(['zone-1']))
     expect(runtime.querySurface.getSelection().length).toBe(0)
@@ -1910,17 +2392,17 @@ describe('scene canvas runtime', () => {
     cleanState.setCanvasClean.mockClear()
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
-    renderer.renderScene.mockClear()
+    renderer.syncScene.mockClear()
     selectedPanelTargets.value = [
       speciesTarget('Malus domestica'),
-      { kind: 'zone', zone_name: 'zone-1' },
+      { kind: 'zone', zone_id: 'zone-1' },
     ]
 
     await vi.waitFor(() => {
-      expect(renderer.renderScene).toHaveBeenCalled()
+      expect(renderer.syncScene).toHaveBeenCalled()
     })
 
-    const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    const snapshot = renderer.syncScene.mock.calls[renderer.syncScene.mock.calls.length - 1]?.[0]
     expect(snapshot?.highlightedPlantIds).toEqual(new Set(['plant-1', 'plant-2']))
     expect(snapshot?.highlightedZoneIds).toEqual(new Set(['zone-1']))
     expect(runtime.querySurface.getSelection().length).toBe(0)
@@ -1929,7 +2411,7 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
-  it('keeps typed panel target highlights separate when plant IDs and zone names collide', async () => {
+  it('keeps typed panel target highlights separate when plant and zone ids collide', async () => {
     const runtime = createRuntimeWithAppPanelTargets()
     runtime.documentSurface.loadDocument({
       ...makeFile(),
@@ -1944,20 +2426,20 @@ describe('scene canvas runtime', () => {
       zones: [
         {
           ...makeFile().zones[0]!,
-          name: 'colliding-id',
+          id: 'colliding-id',
         },
       ],
     })
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
-    renderer.renderScene.mockClear()
-    hoveredPanelTargets.value = [{ kind: 'zone', zone_name: 'colliding-id' }]
+    renderer.syncScene.mockClear()
+    hoveredPanelTargets.value = [{ kind: 'zone', zone_id: 'colliding-id' }]
 
     await vi.waitFor(() => {
-      expect(renderer.renderScene).toHaveBeenCalled()
+      expect(renderer.syncScene).toHaveBeenCalled()
     })
 
-    const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    const snapshot = renderer.syncScene.mock.calls[renderer.syncScene.mock.calls.length - 1]?.[0]
     expect(snapshot?.highlightedPlantIds).toEqual(new Set())
     expect(snapshot?.highlightedZoneIds).toEqual(new Set(['colliding-id']))
     runtime.destroy()
@@ -1968,12 +2450,12 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
-    renderer.renderScene.mockClear()
+    renderer.syncScene.mockClear()
     selectedPanelTargets.value = [speciesTarget('Malus domestica')]
-    hoveredPanelTargets.value = [{ kind: 'zone', zone_name: 'zone-1' }]
+    hoveredPanelTargets.value = [{ kind: 'zone', zone_id: 'zone-1' }]
 
     await vi.waitFor(() => {
-      const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+      const snapshot = renderer.syncScene.mock.calls[renderer.syncScene.mock.calls.length - 1]?.[0]
       expect(snapshot?.highlightedPlantIds).toEqual(new Set(['plant-1', 'plant-2']))
       expect(snapshot?.highlightedZoneIds).toEqual(new Set(['zone-1']))
     })
@@ -1989,20 +2471,20 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
-    renderer.renderScene.mockClear()
+    renderer.syncScene.mockClear()
     panelTargetProbe.setPanelOriginTargets([speciesTarget('Malus domestica')])
 
     await vi.waitFor(() => {
-      expect(renderer.renderScene).toHaveBeenCalled()
+      expect(renderer.syncScene).toHaveBeenCalled()
     })
 
-    const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    const snapshot = renderer.syncScene.mock.calls[renderer.syncScene.mock.calls.length - 1]?.[0]
     expect(snapshot?.highlightedPlantIds).toEqual(new Set(['plant-1', 'plant-2']))
 
     ;(runtime as any)._interaction._deps.setHoveredTarget(plantTarget('plant-1'))
     expect(panelTargetProbe.canvasHoverTargets).toEqual([speciesTarget('Malus domestica')])
 
-    panelTargetProbe.setPanelOriginTargets([{ kind: 'zone', zone_name: 'zone-1' }])
+    panelTargetProbe.setPanelOriginTargets([{ kind: 'zone', zone_id: 'zone-1' }])
     runtime.documentSurface.replaceDocument(
       makeFile(),
       createCanvasDocumentReplacementToken(),
@@ -2088,7 +2570,6 @@ describe('scene canvas runtime', () => {
     const file = {
       ...makeFile(),
       description: 'Loaded description',
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 18, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
       consortiums: [{
         target: { kind: 'species', canonical_name: 'Malus domestica' },
         stratum: 'canopy',
@@ -2136,7 +2617,7 @@ describe('scene canvas runtime', () => {
 
     expect(serialized.name).toBe('Detached save')
     expect(serialized.description).toBe('Loaded description')
-    expect(serialized.spatial_frame).toEqual(file.spatial_frame)
+    expect(serialized).not.toHaveProperty('spatial_frame')
     expect(serialized.consortiums).toEqual(file.consortiums)
     expect(serialized.timeline).toEqual(file.timeline)
     expect(serialized.budget).toEqual(file.budget)
@@ -2146,23 +2627,18 @@ describe('scene canvas runtime', () => {
     expect(serialized.plants[0]?.color).toBe('#228833')
   })
 
-  it('preserves the required spatial frame in detached composition', () => {
+  it('saves unchanged loaded positions back verbatim in detached composition', () => {
     const runtime = new SceneCanvasRuntime()
-    const file = {
-      ...makeFile(),
-      spatial_frame: {
-        ...makeFile().spatial_frame,
-        north_bearing_deg: 315,
-      },
-    }
+    const file = makeFile()
     runtime.documentSurface.loadDocument(file)
 
     const serialized = runtime.documentSurface.captureForPersistence(
-      { name: 'Required frame' },
+      { name: 'Verbatim positions' },
       file,
     ).content
 
-    expect(serialized.spatial_frame).toEqual(file.spatial_frame)
+    expect(serialized.plants.map((plant) => plant.position)).toEqual(file.plants.map((plant) => plant.position))
+    expect(serialized.zones.map((zone) => zone.points)).toEqual(file.zones.map((zone) => zone.points))
   })
 
   it('publishes canvas-origin species hover targets without mutating selection', async () => {
@@ -2196,42 +2672,25 @@ describe('scene canvas runtime', () => {
     ;(runtime as any)._interaction._deps.setHoveredTarget(plantTarget('plant-1'))
     expect(hoveredCanvasTargets.value).toEqual([speciesTarget('Malus domestica')])
 
-    renderer.renderScene.mockClear()
+    renderer.syncScene.mockClear()
     runtime.destroy()
 
     expect(hoveredCanvasTargets.value).toEqual([])
-    expect(renderer.renderScene).not.toHaveBeenCalled()
+    expect(renderer.syncScene).not.toHaveBeenCalled()
   })
 
   it('uses the viewport-only renderer path for zoom updates', async () => {
     const runtime = new SceneCanvasRuntime()
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
-    const viewport = (runtime as any)._camera.initialize({ width: 400, height: 300 })
-    setInteractionViewport(runtime, viewport)
+    setInteractionViewport(runtime, { x: 50, y: 0, scale: 3 })
 
-    renderer.renderScene.mockClear()
+    renderer.syncScene.mockClear()
     runtime.commandSurface.viewport.zoomIn()
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(renderer.setViewport).toHaveBeenCalled()
-    expect(renderer.renderScene).not.toHaveBeenCalled()
-    runtime.destroy()
-  })
-
-  it('publishes zoom and effective resize updates exactly once', async () => {
-    const runtime = new SceneCanvasRuntime()
-    await initRuntimeWithStubbedRenderer(runtime)
-    const initialRevision = runtime.querySurface.viewport.value.revision
-
-    runtime.commandSurface.viewport.zoomIn()
-    expect(runtime.querySurface.viewport.value.revision).toBe(initialRevision + 1)
-
-    runtime.documentSurface.resize(600, 450)
-    expect(runtime.querySurface.viewport.value.revision).toBe(initialRevision + 2)
-
-    runtime.documentSurface.resize(600, 450)
-    expect(runtime.querySurface.viewport.value.revision).toBe(initialRevision + 2)
+    expect(renderer.setView).toHaveBeenCalled()
+    expect(renderer.syncScene).not.toHaveBeenCalled()
     runtime.destroy()
   })
 
@@ -2252,10 +2711,10 @@ describe('scene canvas runtime', () => {
     selectedObjectIds.value = new Set(['plant-1'])
     hoveredPanelTargets.value = [speciesTarget('Malus domestica')]
     selectedPanelTargetOrigin.value = 'timeline'
-    selectedPanelTargets.value = [{ kind: 'zone', zone_name: 'zone-1' }]
+    selectedPanelTargets.value = [{ kind: 'zone', zone_id: 'zone-1' }]
     runtime.commandSurface.sceneEdits.selectAll()
 
-    renderer.renderScene.mockClear()
+    renderer.syncScene.mockClear()
     runtime.documentSurface.replaceDocument(
       makeFile(),
       createCanvasDocumentReplacementToken(),
@@ -2303,7 +2762,7 @@ describe('scene canvas runtime', () => {
     expect(pasted.canonicalName).toBe('Malus domestica')
     expect(pasted.symbol).toBe('conifer')
     expect(pasted.pinnedName).toBe(false)
-    expect(pasted.position).toEqual({ x: 21, y: 20 })
+    expectPointNear(pasted.position, planeAt(runtime, 21, 20))
     events.dispose()
     runtime.destroy()
   })
@@ -2357,7 +2816,7 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(file)
     setInteractionViewport(runtime)
     selectSavedObjectStampSource({
-      version: 1,
+      version: 2,
       anchor: { x: 10, y: 10 },
       plants: [{
         id: 'plant-1',
@@ -2435,9 +2894,203 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('nudges the editable selection as one undoable edit per series, never moving locked objects', async () => {
+    const runtime = new SceneCanvasRuntime({ appAdapter: createCleanStateAdapterProbe().adapter })
+    await initRuntimeWithStubbedRenderer(runtime)
+    const file = makeFile()
+    file.plants = file.plants.map((plant) => plant.id === 'plant-2' ? { ...plant, locked: true } : plant)
+    runtime.documentSurface.loadDocument({ ...file, zones: [], annotations: [], groups: [] })
+    setInteractionViewport(runtime)
+    const position = (id: string) => runtime.querySurface.getSceneSnapshot().plants.find((plant) => plant.id === id)!.position
+    const start1 = { ...position('plant-1') }
+    const start2 = { ...position('plant-2') }
+    runtime.commandSurface.sceneEdits.selectAll()
+    expect(runtime.querySurface.getSelection().length).toBeGreaterThan(0)
+
+    expect(runtime.commandSurface.sceneEdits.nudgeSelected({ x: 0.1, y: 0 })).toBe(true)
+    expect(runtime.commandSurface.sceneEdits.nudgeSelected({ x: 0.1, y: 0 })).toBe(true)
+    expect(runtime.commandSurface.sceneEdits.nudgeSelected({ x: 0, y: -1 })).toBe(true)
+    expect(position('plant-1').x).toBeCloseTo(start1.x + 0.2, 6)
+    expect(position('plant-1').y).toBeCloseTo(start1.y - 1, 6)
+    expect(position('plant-2')).toEqual(start2)
+    runtime.commandSurface.sceneEdits.endNudge()
+    expect(runtime.commandSurface.history.canUndo.value).toBe(true)
+
+    runtime.commandSurface.history.undo()
+    expect(position('plant-1').x).toBeCloseTo(start1.x, 6)
+    expect(position('plant-1').y).toBeCloseTo(start1.y, 6)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+
+    // Aborting a series restores the objects and records nothing.
+    runtime.commandSurface.history.redo()
+    runtime.commandSurface.history.undo()
+    runtime.commandSurface.sceneEdits.nudgeSelected({ x: 1, y: 0 })
+    runtime.commandSurface.sceneEdits.endNudge({ abort: true })
+    expect(position('plant-1').x).toBeCloseTo(start1.x, 6)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+
+    // Nothing editable selected: nothing moves.
+    runtime.commandSurface.sceneEdits.clearSelection()
+    expect(runtime.commandSurface.sceneEdits.nudgeSelected({ x: 1, y: 0 })).toBe(false)
+    runtime.destroy()
+  })
+
+  it('records nothing for a nudge series that returns to where it started', async () => {
+    const cleanState = createCleanStateAdapterProbe()
+    const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
+    await initRuntimeWithStubbedRenderer(runtime)
+    const file = fileWithOnlyPlants('plant-1')
+    runtime.documentSurface.loadDocument(file)
+    runtime.documentSurface.captureForPersistence({ name: file.name }, file).acknowledgeSaved()
+    setInteractionViewport(runtime)
+    const position = () => runtime.querySurface.getSceneSnapshot().plants[0]!.position
+    const start = { ...position() }
+    runtime.commandSurface.sceneEdits.selectAll()
+    cleanState.setCanvasClean.mockClear()
+
+    // 3 × 0.1 m right then 3 × 0.1 m left sums to 2.8e-17 in floating point, not 0.
+    for (let step = 0; step < 3; step += 1) runtime.commandSurface.sceneEdits.nudgeSelected({ x: 0.1, y: 0 })
+    for (let step = 0; step < 3; step += 1) runtime.commandSurface.sceneEdits.nudgeSelected({ x: -0.1, y: 0 })
+    runtime.commandSurface.sceneEdits.endNudge()
+
+    expect(position()).toEqual(start)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+    expect(cleanState.setCanvasClean.mock.calls.some(([clean]) => clean === false)).toBe(false)
+    runtime.destroy()
+  })
+
+  it('mounts the renderer and editing again after a map failure, keeping the Scene, view, selection and undo', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const renderers: RendererStub[] = []
+    ;(runtime as any)._construction.replaceRenderer({
+      id: 'test',
+      initialize: () => {
+        const renderer = createRendererStub()
+        renderers.push(renderer)
+        return renderer
+      },
+    })
+    const container = createRuntimeContainer()
+    await runtime.init(container)
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    setInteractionViewport(runtime)
+    runtime.commandSurface.sceneEdits.selectAll()
+    runtime.commandSurface.sceneEdits.nudgeSelected({ x: 1, y: 0 })
+    runtime.commandSurface.sceneEdits.endNudge()
+    expect(runtime.commandSurface.history.canUndo.value).toBe(true)
+    panOn(runtime, { x: 40, y: 10 })
+    const placement = placementOf(runtime)
+    const scene = runtime.querySurface.getSceneSnapshot()
+
+    await runtime.unmountRenderer()
+    expect(runtime.keyboardPort).toBeNull()
+    await runtime.remountRenderer(container)
+
+    expect(renderers).toHaveLength(2)
+    expect(renderers[0]!.dispose).toHaveBeenCalledOnce()
+    expect(renderers[1]!.syncScene).toHaveBeenCalled()
+    expect(runtime.keyboardPort).not.toBeNull()
+    expect(runtime.querySurface.getSceneSnapshot()).toEqual(scene)
+    expect(runtime.querySurface.getSelection()).toEqual([{ kind: 'plant', id: 'plant-1' }])
+    const kept = placementOf(runtime)
+    expect(kept.x).toBeCloseTo(placement.x, 6)
+    expect(kept.y).toBeCloseTo(placement.y, 6)
+    expect(kept.scale).toBeCloseTo(placement.scale, 6)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(true)
+    runtime.destroy()
+  })
+
+  it('leaves nothing mounted when a remount fails', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const renderer = createRendererStub()
+    let initializations = 0
+    ;(runtime as any)._construction.replaceRenderer({
+      id: 'test',
+      initialize: () => {
+        initializations += 1
+        if (initializations > 1) throw new Error('renderer remount failed')
+        return renderer
+      },
+    })
+    const container = createRuntimeContainer()
+    await runtime.init(container)
+    await runtime.unmountRenderer()
+
+    await expect(runtime.remountRenderer(container)).rejects.toThrow('renderer remount failed')
+
+    expect(runtime.keyboardPort).toBeNull()
+    runtime.destroy()
+  })
+
+  it('keeps editing unmounted when the map fails between the renderer remount and the interaction remount', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const renderers: RendererStub[] = []
+    let resolveSecond: (renderer: RendererStub) => void = () => {}
+    ;(runtime as any)._construction.replaceRenderer({
+      id: 'test',
+      initialize: () => {
+        const renderer = createRendererStub()
+        renderers.push(renderer)
+        if (renderers.length === 1) return renderer
+        return new Promise<RendererStub>((resolve) => {
+          resolveSecond = () => resolve(renderer)
+        })
+      },
+    })
+    const container = createRuntimeContainer()
+    await runtime.init(container)
+    await runtime.unmountRenderer()
+
+    const remount = runtime.remountRenderer(container)
+    await Promise.resolve()
+    expect(renderers).toHaveLength(2)
+    // A failure reported from a microtask already queued when the renderer resolves, deferred one tick as the
+    // workspace defers its failure handling: it lands after the renderer mounted and before editing does.
+    let failureUnmount: Promise<void> | null = null
+    queueMicrotask(() => {
+      failureUnmount = Promise.resolve().then(() => runtime.unmountRenderer())
+    })
+    resolveSecond(renderers[1]!)
+    await expect(remount).rejects.toBeInstanceOf(SceneRendererMountCancelledError)
+    await failureUnmount
+
+    expect(runtime.keyboardPort).toBeNull()
+    expect(renderers[1]!.dispose).toHaveBeenCalledOnce()
+    runtime.destroy()
+  })
+
+  it('nudges from the arrow keys on the focused map through the runtime command', async () => {
+    const runtime = new SceneCanvasRuntime({ appAdapter: createCleanStateAdapterProbe().adapter })
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const events = createSceneInteractionEventHarness(container)
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    setInteractionViewport(runtime)
+    const position = () => runtime.querySurface.getSceneSnapshot().plants[0]!.position
+    const start = { ...position() }
+    runtime.commandSurface.sceneEdits.selectAll()
+    // Key routing listens on the window, so the map must be in the document.
+    document.body.append(container)
+    container.focus()
+    const keys = installCanvasKeyRouter(() => runtime.keyboardPort)
+
+    events.keyDown({ key: 'ArrowRight', target: container })
+    events.keyDown({ key: 'ArrowRight', ctrlKey: true, target: container })
+    expect(position().x).toBeCloseTo(start.x + 1.1, 6)
+    // Another key ends the series: one edit to undo.
+    events.keyDown({ key: 'Control', target: container })
+    events.keyDown({ key: 'a', target: container })
+    runtime.commandSurface.history.undo()
+    expect(position().x).toBeCloseTo(start.x, 6)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+    keys.dispose()
+    events.dispose()
+    runtime.destroy()
+    container.remove()
+  })
+
   it('records Measurement Guide creation as one undoable scene edit', async () => {
     const runtime = new SceneCanvasRuntime()
-    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const { container, renderer } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     const file = makeFile()
     file.layers = [
@@ -2452,19 +3105,15 @@ describe('scene canvas runtime', () => {
     events.pointerDown({ x: 10, y: 10 })
     events.pointerMove({ x: 40, y: 10 })
 
-    expect(zoneMeasurementTexts(container)).toEqual(['30 m'])
+    expect(draftLabelTexts(renderer)).toEqual(['30 m'])
 
     events.pointerUp({ x: 40, y: 10 })
 
     const created = runtime.querySurface.getSceneSnapshot().measurementGuides
     expect(created).toHaveLength(1)
     const createdGuide = created?.[0]!
-    expect(createdGuide).toMatchObject({
-      kind: 'measurement-guide',
-      locked: false,
-      start: { x: 10, y: 10 },
-      end: { x: 40, y: 10 },
-    })
+    expect(createdGuide).toMatchObject({ kind: 'measurement-guide', locked: false })
+    expectGuideNear(runtime, createdGuide, [10, 10], [40, 10])
     expect(runtime.commandSurface.history.canUndo.value).toBe(true)
 
     const serialized = runtime.documentSurface.captureForPersistence({ name: file.name }, file).content
@@ -2472,8 +3121,8 @@ describe('scene canvas runtime', () => {
       {
         id: createdGuide.id,
         locked: false,
-        start: { x: 10, y: 10 },
-        end: { x: 40, y: 10 },
+        start: geoNear(at(10, 10)),
+        end: geoNear(at(40, 10)),
       },
     ])
 
@@ -2575,23 +3224,18 @@ describe('scene canvas runtime', () => {
       kind: 'measurement-guide',
       id: 'measurement-guide-1',
       locked: false,
-      start: { x: 20, y: 20 },
-      end: { x: 50, y: 20 },
+      start: expect.any(Object),
+      end: expect.any(Object),
     }])
+    expectGuideNear(runtime, runtime.querySurface.getSceneSnapshot().measurementGuides[0], [20, 20], [50, 20])
     expect(runtime.commandSurface.history.canUndo.value).toBe(true)
 
     runtime.commandSurface.history.undo()
-    expect(runtime.querySurface.getSceneSnapshot().measurementGuides[0]).toMatchObject({
-      start: { x: 10, y: 10 },
-      end: { x: 40, y: 10 },
-    })
+    expectGuideNear(runtime, runtime.querySurface.getSceneSnapshot().measurementGuides[0], [10, 10], [40, 10])
     expect(runtime.commandSurface.history.canRedo.value).toBe(true)
 
     runtime.commandSurface.history.redo()
-    expect(runtime.querySurface.getSceneSnapshot().measurementGuides[0]).toMatchObject({
-      start: { x: 20, y: 20 },
-      end: { x: 50, y: 20 },
-    })
+    expectGuideNear(runtime, runtime.querySurface.getSceneSnapshot().measurementGuides[0], [20, 20], [50, 20])
     events.dispose()
     runtime.destroy()
   })
@@ -2610,11 +3254,8 @@ describe('scene canvas runtime', () => {
     let guides = runtime.querySurface.getSceneSnapshot().measurementGuides
     expect(guides).toHaveLength(2)
     const duplicate = guides.find((guide) => guide.id !== 'measurement-guide-1')
-    expect(duplicate).toMatchObject({
-      locked: false,
-      start: { x: 11, y: 10 },
-      end: { x: 41, y: 10 },
-    })
+    expect(duplicate).toMatchObject({ locked: false })
+    expectGuideNear(runtime, duplicate, [11, 10], [41, 10])
     expect(selectedObjectIds.value).toEqual(new Set([duplicate!.id]))
 
     runtime.commandSurface.sceneEdits.copy()
@@ -2623,11 +3264,9 @@ describe('scene canvas runtime', () => {
     guides = runtime.querySurface.getSceneSnapshot().measurementGuides
     expect(guides).toHaveLength(3)
     const pastedId = [...selectedObjectIds.value][0]!
-    expect(guides.find((guide) => guide.id === pastedId)).toMatchObject({
-      locked: false,
-      start: { x: 12, y: 10 },
-      end: { x: 42, y: 10 },
-    })
+    const pasted = guides.find((guide) => guide.id === pastedId)
+    expect(pasted).toMatchObject({ locked: false })
+    expectGuideNear(runtime, pasted, [12, 10], [42, 10])
 
     runtime.commandSurface.sceneEdits.deleteSelected()
 
@@ -2733,7 +3372,7 @@ describe('scene canvas runtime', () => {
 
   it('does not create Measurement Guides when their layer is locked or hidden', async () => {
     const lockedRuntime = new SceneCanvasRuntime()
-    const { container: lockedContainer } = await initRuntimeWithStubbedRenderer(lockedRuntime)
+    const { container: lockedContainer, renderer: lockedRenderer } = await initRuntimeWithStubbedRenderer(lockedRuntime)
     const lockedEvents = createSceneInteractionEventHarness(lockedContainer)
     const lockedFile = makeFile()
     lockedFile.layers = [
@@ -2754,7 +3393,7 @@ describe('scene canvas runtime', () => {
     lockedEvents.pointerMove({ x: 40, y: 10 })
     lockedEvents.pointerUp({ x: 40, y: 10 })
 
-    expect(zoneMeasurementTexts(lockedContainer)).toEqual([])
+    expect(draftLabelTexts(lockedRenderer)).toEqual([])
     expect(lockedRuntime.querySurface.getSceneSnapshot().measurementGuides).toHaveLength(0)
     expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
     expect(lockedRuntime.commandSurface.history.canUndo.value).toBe(false)
@@ -2762,7 +3401,7 @@ describe('scene canvas runtime', () => {
     lockedRuntime.destroy()
 
     const hiddenRuntime = new SceneCanvasRuntime()
-    const { container: hiddenContainer } = await initRuntimeWithStubbedRenderer(hiddenRuntime)
+    const { container: hiddenContainer, renderer: hiddenRenderer } = await initRuntimeWithStubbedRenderer(hiddenRuntime)
     const hiddenEvents = createSceneInteractionEventHarness(hiddenContainer)
     const hiddenFile = makeFile()
     hiddenFile.layers = [
@@ -2783,7 +3422,7 @@ describe('scene canvas runtime', () => {
     hiddenEvents.pointerMove({ x: 40, y: 10 })
     hiddenEvents.pointerUp({ x: 40, y: 10 })
 
-    expect(zoneMeasurementTexts(hiddenContainer)).toEqual([])
+    expect(draftLabelTexts(hiddenRenderer)).toEqual([])
     expect(hiddenRuntime.querySurface.getSceneSnapshot().measurementGuides).toHaveLength(0)
     expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
     expect(hiddenRuntime.commandSurface.history.canUndo.value).toBe(false)
@@ -2793,7 +3432,7 @@ describe('scene canvas runtime', () => {
 
   it('routes history commands through polygonal zone draft vertices before scene history', async () => {
     const runtime = new SceneCanvasRuntime()
-    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const { container, renderer } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     runtime.documentSurface.loadDocument(makeFile())
     setInteractionViewport(runtime)
@@ -2808,15 +3447,13 @@ describe('scene canvas runtime', () => {
 
     runtime.commandSurface.history.undo()
 
-    const afterUndo = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
-    expect(afterUndo?.getAttribute('points')).toBe('10,10 60,50')
+    expectBandNear(runtime, draftBand(renderer), [[10, 10], [60, 50]])
     expect(runtime.querySurface.getSceneSnapshot().zones).toHaveLength(1)
     expect(runtime.commandSurface.history.canRedo.value).toBe(true)
 
     runtime.commandSurface.history.redo()
 
-    const afterRedo = container.querySelector<SVGPolylineElement>('[data-polygon-draft-line]')
-    expect(afterRedo?.getAttribute('points')).toBe('10,10 60,10 60,50')
+    expectBandNear(runtime, draftBand(renderer), [[10, 10], [60, 10], [60, 50]])
     expect(runtime.querySurface.getSceneSnapshot().zones).toHaveLength(1)
     events.dispose()
     runtime.destroy()
@@ -2913,7 +3550,7 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
-  it('edits guides through the scene edit history and projection signals', () => {
+  it('edits guides through the scene edit history', () => {
     const cleanState = createCleanStateAdapterProbe()
     const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
     const file = makeFile()
@@ -2924,15 +3561,18 @@ describe('scene canvas runtime', () => {
     ;(runtime as any)._addGuide('v', 42)
 
     const serialized = runtime.documentSurface.captureForPersistence({ name: file.name }, file).content
+    // Ruler guides persist as a longitude (vertical) or latitude (horizontal).
+    const guideLon = runtime.querySurface.sessionPlane.value!.toGeo({ x: 42, y: 0 }).lon
     expect(serialized.extra).toEqual({
-      guides: [{ id: expect.any(String), axis: 'v', position: 42 }],
+      guides: [{ id: expect.any(String), axis: 'v', lon: expect.closeTo(guideLon, 9) }],
     })
-    expect(guides.value).toEqual([{ id: expect.any(String), axis: 'v', position: 42 }])
+    const sceneGuides = () => (runtime as any)._sceneState.persisted.guides
+    expect(sceneGuides()).toEqual([{ id: expect.any(String), axis: 'v', position: 42 }])
     expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
 
     runtime.commandSurface.history.undo()
     expect(runtime.documentSurface.captureForPersistence({ name: file.name }, file).content.extra).toEqual({})
-    expect(guides.value).toEqual([])
+    expect(sceneGuides()).toEqual([])
   })
 
   it('marks the canvas dirty when only the species default color changes', () => {
@@ -2970,16 +3610,16 @@ describe('scene canvas runtime', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    const initialSnapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    const initialSnapshot = renderer.syncScene.mock.calls[renderer.syncScene.mock.calls.length - 1]?.[0]
     expect(initialSnapshot?.localizedCommonNames.get('Malus domestica')).toBe('Apple')
-    const initialRenderCount = renderer.renderScene.mock.calls.length
+    const initialRenderCount = renderer.syncScene.mock.calls.length
 
     locale.value = 'fr'
     await vi.waitFor(() => {
-      expect(renderer.renderScene.mock.calls.length).toBeGreaterThan(initialRenderCount)
+      expect(renderer.syncScene.mock.calls.length).toBeGreaterThan(initialRenderCount)
     })
 
-    const localizedSnapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    const localizedSnapshot = renderer.syncScene.mock.calls[renderer.syncScene.mock.calls.length - 1]?.[0]
     expect(localizedSnapshot?.localizedCommonNames.get('Malus domestica')).toBe('Pommier')
     runtime.destroy()
   })
@@ -2995,25 +3635,27 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(makeFile())
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
     setInteractionViewport(runtime, { x: 0, y: 0, scale: 20 })
+    const pinnedNames = (snapshot: SceneRendererSnapshot) => projectScenePlantLabels(snapshot, 20)
+      .pinnedPlantNameLabels.map((label) => label.text)
     runtime.commandSurface.sceneEdits.selectAll()
     runtime.commandSurface.sceneEdits.toggleSelectedPlantNamePins()
     expect(runtime.querySurface.getSceneSnapshot().plants.map((plant) => plant.pinnedName)).toEqual([true, true])
 
     await vi.waitFor(() => {
-      const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+      const snapshot = renderer.syncScene.mock.calls[renderer.syncScene.mock.calls.length - 1]?.[0]
       if (!snapshot) throw new Error('Expected a renderer snapshot')
-      expect(snapshot.pinnedPlantNameLabels.map((label: PlantNameLabel) => label.text)).toEqual(['Apple', 'Apple'])
+      expect(pinnedNames(snapshot)).toEqual(['Apple', 'Apple'])
     })
-    const initialRenderCount = renderer.renderScene.mock.calls.length
+    const initialRenderCount = renderer.syncScene.mock.calls.length
 
     locale.value = 'fr'
     await vi.waitFor(() => {
-      expect(renderer.renderScene.mock.calls.length).toBeGreaterThan(initialRenderCount)
+      expect(renderer.syncScene.mock.calls.length).toBeGreaterThan(initialRenderCount)
     })
 
-    const localizedSnapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
+    const localizedSnapshot = renderer.syncScene.mock.calls[renderer.syncScene.mock.calls.length - 1]?.[0]
     if (!localizedSnapshot) throw new Error('Expected a localized renderer snapshot')
-    expect(localizedSnapshot.pinnedPlantNameLabels.map((label: PlantNameLabel) => label.text)).toEqual(['Pommier', 'Pommier'])
+    expect(pinnedNames(localizedSnapshot)).toEqual(['Pommier', 'Pommier'])
     runtime.destroy()
   })
 
@@ -3037,3 +3679,15 @@ describe('scene canvas runtime', () => {
     expect(runtime.querySurface.getSelectedPlantSymbolContext().singleSpeciesCommonName).toBe('Pommier')
   })
 })
+
+/** The Menu key while the map has focus opens the right-click menu for the selection. */
+function openContextMenuFromKeyboard(runtime: SceneCanvasRuntime, container: HTMLElement): void {
+  // The key router listens on the window, so the map must be in the document.
+  document.body.appendChild(container)
+  container.tabIndex = -1
+  container.focus()
+  const keys = installCanvasKeyRouter(() => runtime.keyboardPort)
+  container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ContextMenu', bubbles: true, cancelable: true }))
+  keys.dispose()
+  container.remove()
+}

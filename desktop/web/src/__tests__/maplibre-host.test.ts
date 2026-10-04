@@ -113,8 +113,8 @@ describe('MapLibre Host', () => {
     expect(observers[0]!.observe).toHaveBeenCalledWith(container)
 
     observers[0]!.emit()
-    expect(maps[0]!.resize).toHaveBeenCalled()
-    expect(resizeSync).toHaveBeenCalledWith(expect.objectContaining({ map: maps[0] }))
+    expect(maps[0]!.resize).not.toHaveBeenCalled()
+    expect(resizeSync).toHaveBeenCalledWith(expect.objectContaining({ map: maps[0] }), { width: 0, height: 0 })
 
     host.requestMap({
       key: 'satellite',
@@ -143,6 +143,53 @@ describe('MapLibre Host', () => {
     host.destroy()
     expect(observers[1]!.disconnect).toHaveBeenCalled()
     expect(maps[1]!.remove).toHaveBeenCalled()
+  })
+
+  it("a resize calls the surface request's resize hook, not map.resize", async () => {
+    const host = createMapLibreHost({
+      loadMapLibre: vi.fn(async () => maplibre),
+      createResizeObserver: (callback) => {
+        const observer = new FakeResizeObserver(callback)
+        observers.push(observer)
+        return observer
+      },
+    })
+    let size = { width: 640, height: 480 }
+    Object.defineProperties(container, {
+      clientWidth: { get: () => size.width },
+      clientHeight: { get: () => size.height },
+    })
+    const createMap = (api: MapLibreApi, target: HTMLElement) => new api.Map({
+      container: target,
+      style: { version: 8, sources: {}, layers: [] },
+      interactive: false,
+      pitchWithRotate: false,
+      dragRotate: false,
+      touchZoomRotate: false,
+    })
+    const onResize = vi.fn()
+
+    host.attach(container)
+    host.requestMap({ key: 'workspace', createMap, onResize })
+    await flushPromises()
+    observers[0]!.emit()
+
+    // The request owns its map's resize (spec §1.1 "Resize"); the host reports the container's CSS size.
+    expect(onResize).toHaveBeenCalledTimes(1)
+    expect(onResize).toHaveBeenCalledWith(expect.objectContaining({ map: maps[0] }), { width: 640, height: 480 })
+    expect(maps[0]!.resize).not.toHaveBeenCalled()
+
+    size = { width: 320, height: 200 }
+    host.resize()
+    expect(onResize).toHaveBeenLastCalledWith(expect.objectContaining({ map: maps[0] }), { width: 320, height: 200 })
+
+    // A request without a hook: nothing resizes its map.
+    host.requestMap({ key: 'other', createMap })
+    await flushPromises()
+    observers[1]!.emit()
+    expect(maps[1]!.resize).not.toHaveBeenCalled()
+    expect(onResize).toHaveBeenCalledTimes(2)
+    host.destroy()
   })
 
   it('tears down partially initialized maps when post-create setup fails', async () => {

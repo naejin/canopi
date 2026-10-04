@@ -1,4 +1,11 @@
 import { speciesCatalogWorkbench } from '../plant-browser'
+import { selectPanel } from '../shell/state'
+
+/** Opens a species' detail in the Plant catalog (the map's right-click Species details). */
+export function openSpeciesDetail(canonicalName: string): void {
+  selectPanel('plant-db')
+  speciesCatalogWorkbench.selectSpecies(canonicalName)
+}
 
 export function resolvePlantDetailName(canonicalName: string): string {
   return speciesCatalogWorkbench.selectedCanonicalName.value ?? canonicalName

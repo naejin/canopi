@@ -5,17 +5,13 @@ import {
   DEFAULT_CONSORTIUM_END_PHASE,
   DEFAULT_CONSORTIUM_START_PHASE,
   DEFAULT_CONSORTIUM_STRATUM,
-  LAST_SUCCESSION_PHASE_INDEX,
-  clampSuccessionPhaseBoundary,
-  clampSuccessionPhaseIndex,
+  SUCCESSION_PHASE_COUNT,
   createDefaultConsortiumEntry,
-  stratumAtRow,
-  stratumToRow,
 } from '../app/consortium/time-model'
 import { getConsortiumCanonicalName } from '../target'
 
 describe('Consortium time model', () => {
-  it('owns Succession Phase labels, durations, and index limits', () => {
+  it('owns Succession Phase labels, durations, and count', () => {
     expect(CONSORTIUM_SUCCESSION_PHASES.map((phase) => phase.key)).toEqual([
       'placenta1',
       'placenta2',
@@ -29,23 +25,12 @@ describe('Consortium time model', () => {
       labelKey: 'canvas.consortium.phase_placenta1',
       durationKey: 'canvas.consortium.duration_90d',
     })
-    expect(LAST_SUCCESSION_PHASE_INDEX).toBe(6)
+    expect(SUCCESSION_PHASE_COUNT).toBe(7)
   })
 
-  it('clamps phase indexes and right-edge boundaries separately', () => {
-    expect(clampSuccessionPhaseIndex(-1)).toBe(0)
-    expect(clampSuccessionPhaseIndex(99)).toBe(LAST_SUCCESSION_PHASE_INDEX)
-    expect(clampSuccessionPhaseBoundary(-1)).toBe(0)
-    expect(clampSuccessionPhaseBoundary(99)).toBe(CONSORTIUM_SUCCESSION_PHASES.length)
-  })
-
-  it('owns Stratum ordering and unknown fallback', () => {
+  it('owns Stratum ordering and the default Stratum', () => {
     expect(CONSORTIUM_STRATA).toEqual(['emergent', 'high', 'medium', 'low', 'unassigned'])
     expect(DEFAULT_CONSORTIUM_STRATUM).toBe('unassigned')
-    expect(stratumToRow('emergent')).toBe(0)
-    expect(stratumToRow('unknown')).toBe(stratumToRow(DEFAULT_CONSORTIUM_STRATUM))
-    expect(stratumAtRow(-10)).toBe('emergent')
-    expect(stratumAtRow(99)).toBe(DEFAULT_CONSORTIUM_STRATUM)
   })
 
   it('creates default Consortium entries for newly placed species', () => {

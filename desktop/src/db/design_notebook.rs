@@ -1,4 +1,4 @@
-use common_types::design::{DesignNotebookEntry, DesignNotebookSection, DesignSummary};
+use common_types::design::{DesignNotebookEntry, DesignNotebookSection};
 use rusqlite::Connection;
 
 pub fn record_design_reference(
@@ -34,27 +34,6 @@ pub fn record_design_reference(
         rusqlite::params![path, name, plant_count],
     )?;
     Ok(())
-}
-
-pub fn get_design_notebook_entries(
-    conn: &Connection,
-) -> Result<Vec<DesignSummary>, rusqlite::Error> {
-    let mut stmt = conn.prepare(
-        "SELECT path, name, updated_at, plant_count
-         FROM design_notebook_entries
-         ORDER BY sort_order ASC, last_opened DESC, created_at DESC, path ASC",
-    )?;
-
-    let rows = stmt.query_map([], |row| {
-        Ok(DesignSummary {
-            path: row.get(0)?,
-            name: row.get(1)?,
-            updated_at: row.get(2)?,
-            plant_count: row.get(3)?,
-        })
-    })?;
-
-    rows.collect()
 }
 
 pub fn remove_design_reference(conn: &Connection, path: &str) -> Result<(), rusqlite::Error> {
@@ -324,7 +303,7 @@ mod tests {
 
         super::record_design_reference(&conn, "/designs/forest.canopi", "Forest Edge", 7).unwrap();
 
-        let entries = super::get_design_notebook_entries(&conn).unwrap();
+        let entries = super::get_design_notebook_entries_with_sections(&conn).unwrap();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].path, "/designs/forest.canopi");
         assert_eq!(entries[0].name, "Forest Edge");
@@ -342,7 +321,7 @@ mod tests {
         super::remove_design_reference(&conn, "/designs/forest.canopi").unwrap();
 
         assert!(
-            super::get_design_notebook_entries(&conn)
+            super::get_design_notebook_entries_with_sections(&conn)
                 .unwrap()
                 .is_empty()
         );

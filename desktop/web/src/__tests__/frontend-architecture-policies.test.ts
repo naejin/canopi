@@ -9,6 +9,8 @@ import {
 } from './support/architecture/source-facts'
 import {
   collectArchitecturePolicyViolations,
+  collectPolicyPathDriftViolations,
+  collectUnusedExemptionViolations,
   type ArchitecturePolicy,
 } from './support/architecture/policy-harness'
 
@@ -40,6 +42,12 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
+    name: 'Web sources do not import the Settings Projection',
+    from: ['src/web/**'],
+    targets: ['src/app/settings/projection.ts'],
+  },
+  {
+    kind: 'forbid-imports',
     name: 'Web Edition sources stay free of Desktop-only capabilities',
     from: ['src/web/**'],
     targets: [
@@ -57,19 +65,64 @@ const FORBIDDEN_IMPORT_POLICIES = [
       'src/app/document-session/transition.ts',
       'src/app/document-session/state-machine.ts',
       'src/app/problem-report/**',
-      // ADR 0028 authorizes Web Location placement, so the shared coordinate
-      // workbench and its map-editing host are now legitimate Web imports: Web
-      // composes them directly and runs the same validation, preview, confirm,
-      // cancel and undo semantics Desktop does.
-      //
-      // The geocoding boundary is unchanged and is what this guard still
-      // protects: the `app/location` barrel pulls the search controller in with
-      // it, so both stay forbidden and Web must import the coordinate seams
-      // individually.
-      'src/app/location/index.ts',
-      'src/app/location/search-controller.ts',
       'src/commands/registry.ts',
       'src/commands/graph/**',
+    ],
+  },
+  {
+    kind: 'forbid-imports',
+    name: 'IPC transports import nothing from app',
+    from: ['src/ipc/**'],
+    // ipc/design.ts still composes Design write admission and dialogs for app/document-session (canopi-m4v0).
+    exceptFrom: ['src/ipc/design.ts'],
+    targets: ['src/app/**'],
+    // A transport may implement an app port's interface (GeoJsonFileAdapter); only types cross.
+    allowTypeOnlyTargets: ['src/app/**'],
+  },
+  {
+    kind: 'forbid-imports',
+    name: 'Components reach native capabilities through app actions',
+    from: ['src/components/**'],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+    targets: ['@tauri-apps/**', 'src/ipc/**'],
+  },
+  {
+    kind: 'forbid-imports',
+    name: 'App controllers stay leaves',
+    from: ['src/app/*/controller.ts'],
+    targets: ['src/app/*/controller.ts'],
+  },
+  {
+    kind: 'forbid-imports',
+    // The presentation controller writes the story overrides; the map, the runtime
+    // adapter and the target overlays only read them, so they never start or end one.
+    name: 'Map presentation reads story overrides, not the presentation controller',
+    from: [
+      'src/app/canvas-map-surface/**',
+      'src/app/canvas-runtime/**',
+      'src/app/panel-targets/**',
+      'src/web/browser-workspace-map-contribution-adapter.ts',
+    ],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+    targets: ['src/app/story-presentation/controller.ts', 'src/app/story-presentation/index.ts'],
+  },
+  {
+    kind: 'forbid-imports',
+    name: 'App modules do not import components',
+    from: ['src/app/**'],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+    targets: ['src/components/**'],
+  },
+  {
+    kind: 'forbid-imports',
+    name: 'Place Search consumes geocoding through its session owner',
+    from: ['src/components/canvas/PlaceSearch.tsx'],
+    targets: [
+      '#geocoding-transport',
+      'src/app/geocoding/transport.*.ts',
+      'src/app/geocoding/place-search.ts',
+      '@tauri-apps/**',
+      'src/ipc/**',
     ],
   },
   {
@@ -108,28 +161,10 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'Scene Canvas Runtime host stays in runtime core',
-    from: ['src/canvas/runtime/host.ts'],
-    targets: ['@tauri-apps/**', 'src/app/**', 'src/web/**', 'src/ipc/**'],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'Production workspace mounts do not restore standalone Canvas hosts or surfaces',
-    from: [
-      'src/app/document-session/lifecycle.ts',
-      'src/app/canvas-map-surface/desktop-workspace-runtime.ts',
-      'src/web/WebCanvasWorkspace.tsx',
-      'src/web/browser-workspace-runtime.ts',
-    ],
-    targets: [
-      'src/canvas/runtime/host.ts',
-      'src/app/canvas-runtime/host.ts',
-      'src/components/canvas/MapLibreCanvasSurface.tsx',
-      'src/components/canvas/maplibre-surface-controller.ts',
-      'src/app/canvas-map-surface/lifecycle.ts',
-      'src/app/canvas-map-surface/snapshot.ts',
-      'src/app/canvas-map-surface/reconciliation.ts',
-    ],
+    name: 'Production code does not import the UI gallery',
+    from: ['src/**'],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+    targets: ['ui-gallery/**'],
   },
   {
     kind: 'forbid-imports',
@@ -141,7 +176,7 @@ const FORBIDDEN_IMPORT_POLICIES = [
       'src/app/canvas-runtime/desktop-adapter.ts',
       'src/app/canvas-map-surface/desktop-workspace-runtime.ts',
       'src/app/canvas-map-surface/desktop-workspace-map-contribution-adapter.ts',
-      'src/app/canvas-map-surface/lidar.ts',
+      'src/maplibre/raster-display/**',
       'src/app/lidar/**',
     ],
   },
@@ -184,6 +219,12 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
+    name: 'Shared Species detail presentation stays edition-neutral',
+    from: ['src/components/species-detail/**'],
+    targets: ['@tauri-apps/**', 'src/ipc/**', 'src/web/**', 'src/app/plant-detail/**', 'src/components/plant-detail/**'],
+  },
+  {
+    kind: 'forbid-imports',
     name: 'Workflow components do not import Design IPC',
     from: ['src/components/shared/WelcomeScreen.tsx', 'src/components/panels/BudgetPanel.tsx'],
     targets: ['src/ipc/design.ts'],
@@ -215,42 +256,10 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'Canvas Runtime reads do not depend on mirror modules',
-    from: ['src/canvas/runtime/**'],
-    exceptFrom: [
-      'src/canvas/runtime/**/*.test.ts',
-      'src/canvas/runtime/**/*.test.tsx',
-      'src/canvas/runtime/scene-runtime/scene-sync.ts',
-    ],
-    targets: ['src/canvas/scene-metadata-state.ts', 'src/canvas/runtime-mirror-state.ts'],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'Canvas guides do not read scene metadata mirrors',
-    from: ['src/canvas/guides.ts'],
-    targets: ['src/canvas/scene-metadata-state.ts'],
-  },
-  {
-    kind: 'forbid-imports',
     name: 'App-facing tests use explicit Canvas Runtime surfaces',
     from: ['src/__tests__/**/*.test.ts', 'src/__tests__/**/*.test.tsx'],
-    exceptFrom: [
-      'src/__tests__/canvas-runtime-surfaces.test.ts',
-      'src/__tests__/frontend-architecture-policies.test.ts',
-    ],
+    exceptFrom: ['src/__tests__/canvas-runtime-surfaces.test.ts'],
     targets: ['src/canvas/runtime/scene-runtime.ts'],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'Layer Panel renders Canvas Layer Presentation',
-    from: ['src/components/canvas/LayerPanel.tsx'],
-    targets: ['src/app/canvas-settings/state.ts', 'src/app/canvas-settings/controller.ts'],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'Planning Projection does not depend on Canvas2D renderers',
-    from: ['src/app/planning-projection/consortium.ts'],
-    targets: ['src/canvas/consortium-renderer.ts'],
   },
   {
     kind: 'forbid-imports',
@@ -269,9 +278,8 @@ const FORBIDDEN_IMPORT_POLICIES = [
       'src/app/canvas-settings/signals.ts',
       'src/app/settings/state.ts',
       'src/i18n/index.ts',
-      'src/shortcuts/definitions.ts',
       'src/canvas/session.ts',
-      'src/canvas/runtime/interaction/pointer-utils.ts',
+      'src/canvas/runtime/input/editable-target.ts',
       'src/app/shell/state.ts',
     ],
   },
@@ -279,20 +287,33 @@ const FORBIDDEN_IMPORT_POLICIES = [
     kind: 'forbid-imports',
     name: 'Command consumers do not bypass the registry',
     from: [
-      'src/shortcuts/manager.ts',
+      'src/platform/desktop.ts',
       'src/components/shared/MenuBar.tsx',
-      'src/components/panels/PanelBar.tsx',
-      'src/components/canvas/CanvasToolbar.tsx',
-      'src/components/shared/menu-definitions.ts',
+      'src/components/shared/TitleBar.tsx',
+      'src/components/panels/DesktopPanelRail.tsx',
+      'src/components/panels/CanvasPanel.tsx',
       'src/components/shared/CommandPalette.tsx',
+      'src/app.tsx',
     ],
     targets: ['src/commands/graph/**'],
   },
   {
     kind: 'forbid-imports',
     name: 'Command consumers do not bypass their projections',
-    from: ['src/shortcuts/manager.ts'],
+    from: ['src/app/keyboard/key-router.ts', 'src/app/keyboard/keymap.ts'],
     targets: ['src/app/document-session/actions.ts', 'src/canvas/session.ts'],
+  },
+  {
+    kind: 'forbid-imports',
+    name: 'Tool Rail renders its projection without reading Canvas state',
+    from: ['src/components/canvas/ToolRail.tsx'],
+    targets: ['src/canvas/session.ts', 'src/canvas/plant-color-menu-state.ts', 'src/canvas/plant-symbol-menu-state.ts'],
+  },
+  {
+    kind: 'forbid-imports',
+    name: 'The right-click menu runs only its request’s scene edits',
+    from: ['src/app/canvas-context-menu/**', 'src/components/canvas/CanvasContextMenu.tsx'],
+    targets: ['src/canvas/session.ts', 'src/app/workspace-commands/**', 'src/commands/**'],
   },
   {
     kind: 'forbid-imports',
@@ -302,8 +323,8 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'Panel Bar does not own shell or settings state',
-    from: ['src/components/panels/PanelBar.tsx'],
+    name: 'Panel Rail does not own shell or settings state',
+    from: ['src/components/shared/PanelRail.tsx'],
     targets: [
       'src/app/document-session/store.ts',
       'src/app/shell/state.ts',
@@ -312,15 +333,15 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'Canvas Toolbar does not mutate Canvas settings directly',
-    from: ['src/components/canvas/CanvasToolbar.tsx'],
+    name: 'Tool Rail does not mutate Canvas settings directly',
+    from: ['src/components/canvas/ToolRail.tsx', 'src/components/canvas/ViewChip.tsx', 'src/components/canvas/ZoomControls.tsx'],
     targets: ['src/app/canvas-settings/signals.ts'],
   },
   {
     kind: 'forbid-imports',
     name: 'Command Palette does not own shortcut registration',
     from: ['src/components/shared/CommandPalette.tsx'],
-    targets: ['src/shortcuts/manager.ts'],
+    targets: ['src/app/keyboard/key-router.ts'],
   },
   {
     kind: 'forbid-imports',
@@ -355,7 +376,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
       'src/components/panels/ConsortiumPanel.tsx',
     ],
     targets: [
-      'src/canvas/runtime-mirror-state.ts',
       'src/canvas/session.ts',
       'src/app/document-session/store.ts',
     ],
@@ -366,7 +386,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
     from: ['src/components/panels/BudgetPanel.tsx'],
     targets: [
       'src/app/planning-projection/**',
-      'src/app/budget/controller.ts',
       'src/app/budget/export.ts',
     ],
   },
@@ -378,24 +397,11 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'Planning Projection runtime does not use retired mirrors',
-    from: ['src/app/planning-projection/runtime.ts'],
-    targets: ['src/canvas/runtime-mirror-state.ts'],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'App presentation layers do not import retired runtime mirrors',
-    from: ['src/app/**', 'src/components/**', 'src/maplibre/**'],
-    targets: ['src/canvas/runtime-mirror-state.ts'],
-  },
-  {
-    kind: 'forbid-imports',
     name: 'Document Session workflows do not own stores or Canvas sessions',
     from: ['src/app/document-session/workflows.ts'],
     targets: [
       '@preact/signals',
       'src/canvas/session.ts',
-      'src/app/document/controller.ts',
       'src/app/document-session/store.ts',
       'src/app/consortium/time-model.ts',
     ],
@@ -409,25 +415,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
       'src/app/document-session/state-machine.ts',
       'src/app/document-session/workflows.ts',
     ],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'Non-canvas Design writes do not use retired controller seams',
-    from: ['src/app/**', 'src/components/**'],
-    exceptFrom: ['src/app/design-edit/**'],
-    targets: [
-      'src/app/document/controller.ts',
-      'src/app/document/edit-transaction.ts',
-      'src/app/budget/controller.ts',
-      'src/app/timeline/controller.ts',
-      'src/app/consortium/controller.ts',
-    ],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'Planning Projection does not own Target presentation lifecycle',
-    from: ['src/app/planning-projection/index.ts'],
-    targets: ['src/app/planning-projection/target-presentation.ts'],
   },
   {
     kind: 'forbid-imports',
@@ -475,7 +462,9 @@ const FORBIDDEN_IMPORT_POLICIES = [
       'src/canvas/runtime/scene-runtime.ts',
       'src/canvas/runtime/scene-runtime/effects.ts',
       'src/canvas/runtime/scene-runtime/scene-sync.ts',
-      'src/canvas/runtime/scene-interaction.ts',
+      'src/canvas/runtime/interaction-session.ts',
+      'src/canvas/runtime/input/**',
+      'src/canvas/runtime/tools/**',
     ],
     targets: ['src/app/settings/**', 'src/app/canvas-settings/**'],
   },
@@ -486,17 +475,30 @@ const FORBIDDEN_IMPORT_POLICIES = [
     targets: ['src/canvas/runtime/plant-labels.ts', 'src/canvas/runtime/species-cache.ts'],
   },
   {
+    // The role surfaces and the construction module stand alone: the runtime composes them, never the reverse.
+    // Type-only edges count, so no role module types itself against the runtime.
+    kind: 'forbid-imports',
+    name: 'Canvas runtime role modules do not import ./scene-runtime',
+    from: [
+      'src/canvas/runtime/command-surface.ts',
+      'src/canvas/runtime/query-surface.ts',
+      'src/canvas/runtime/document-surface.ts',
+      'src/canvas/runtime/scene-runtime/construction.ts',
+    ],
+    targets: ['src/canvas/runtime/scene-runtime.ts'],
+  },
+  {
     kind: 'forbid-imports',
     name: 'Canvas Runtime core stays free of app imports',
     from: ['src/canvas/runtime/**'],
-    exceptFrom: ['src/canvas/runtime/**/*.test.ts', 'src/canvas/runtime/**/*.test.tsx'],
+    exceptFrom: ['src/canvas/runtime/**/*.test.ts'],
     targets: ['src/app.tsx', 'src/app/**'],
   },
   {
     kind: 'forbid-transitive-imports',
     name: 'Canvas Runtime translations and settings stay behind the App Adapter',
     from: ['src/canvas/runtime/**'],
-    exceptFrom: ['src/canvas/runtime/**/*.test.ts', 'src/canvas/runtime/**/*.test.tsx'],
+    exceptFrom: ['src/canvas/runtime/**/*.test.ts'],
     targets: ['src/i18n/**', 'src/app/settings/**', 'src/app/canvas-settings/**'],
   },
   {
@@ -521,12 +523,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'Scene interaction does not depend on Planning Canvas',
-    from: ['src/canvas/runtime/scene-interaction.ts'],
-    targets: ['src/app/planning-canvas/**'],
-  },
-  {
-    kind: 'forbid-imports',
     name: 'Calendar component delegates mutations and authority reads to its Workbench',
     from: ['src/components/panels/CalendarPanel.tsx'],
     targets: [
@@ -541,7 +537,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
     from: ['src/app/document-session/use-canvas-document-session.ts'],
     targets: [
       'src/canvas/runtime/scene-runtime.ts',
-      'src/canvas/runtime/surfaces.ts',
       'src/app/document-session/transition.ts',
       'src/app/document-session/persistence.ts',
       'src/app/document-session/state-machine.ts',
@@ -554,7 +549,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
     from: ['src/app/document-session/lifecycle.ts'],
     targets: [
       'src/canvas/runtime/scene-runtime.ts',
-      'src/canvas/runtime/surfaces.ts',
       'src/app/document-session/persistence.ts',
       'src/app/document-session/state-machine.ts',
     ],
@@ -587,19 +581,17 @@ const FORBIDDEN_IMPORT_POLICIES = [
     allowTypeOnlyTargets: ['src/canvas/runtime/scene/index.ts'],
     edgeKinds: ['static', 'dynamic', 'import-type', 'reexport'],
   },
+  {
+    kind: 'forbid-imports',
+    name: 'Plant finder matcher stays pure over the search normalization authority',
+    from: ['src/app/plant-finder/matcher.ts'],
+    targets: ['**'],
+    exceptTargets: ['src/utils/species-search-normalization.ts'],
+    edgeKinds: ['static', 'dynamic', 'import-type', 'reexport'],
+  },
 ] satisfies readonly ArchitecturePolicy[]
 
 const CONFINED_IMPORTER_POLICIES = [
-  {
-    kind: 'confine-importers',
-    name: 'Web settings mutations use the shared Settings Projection',
-    from: ['src/web/**'],
-    targets: ['src/app/settings/projection.ts'],
-    allowedFrom: [
-      'src/web/BrowserAppShell.tsx',
-      'src/web/browser-shell-commands.ts',
-    ],
-  },
   {
     kind: 'confine-importers',
     name: 'Species Catalog state stays private to its Workbench',
@@ -636,7 +628,6 @@ const CONFINED_IMPORTER_POLICIES = [
     targets: ['src/app/design-edit/authority-capability.ts'],
     allowedFrom: [
       'src/app/design-edit/core.ts',
-      'src/app/design-edit/index.ts',
       'src/app/document-session/store.ts',
       ...TEST_SOURCE_PATTERNS,
     ],
@@ -658,7 +649,7 @@ const REQUIRED_IMPORT_POLICIES = [
     name: 'Species Search consumers delegate shared normalization',
     from: [
       'src/app/plant-browser/search-session.ts',
-      'src/web/reduced-species-catalog.ts',
+      'src/__tests__/support/in-memory-reduced-species-catalog.ts',
       'src/web/duckdb-wasm-catalog.ts',
       'src/components/plant-db/favorite-species-presentation.ts',
     ],
@@ -667,11 +658,10 @@ const REQUIRED_IMPORT_POLICIES = [
   {
     kind: 'require-imports',
     name: 'Control Point adapters delegate shared lifecycle ownership',
-    from: [
-      'src/canvas/runtime/interaction/zone-control-points.ts',
-      'src/canvas/runtime/interaction/measurement-guide-control-points.ts',
-    ],
-    targets: ['src/canvas/runtime/interaction/control-point-overlay.ts'],
+    // Select's reshape and guide-end handles are ToolHandle data (tools/select/{reshape,guide-ends}.ts, no chrome);
+    // the session builds the one handle layer that shows them into ToolHostDeps.chrome.
+    from: ['src/canvas/runtime/interaction-session.ts'],
+    targets: ['src/canvas/runtime/chrome/handle-layer.ts'],
   },
   {
     kind: 'require-imports',
@@ -747,10 +737,10 @@ const REQUIRED_IMPORT_POLICIES = [
   },
   {
     kind: 'require-imports',
-    name: 'Web settings callers mutate through the shared projection',
+    name: 'Shell settings callers mutate through the shared projection',
     from: [
-      'src/web/BrowserAppShell.tsx',
-      'src/web/browser-shell-commands.ts',
+      'src/app/workspace-commands/capabilities.ts',
+      'src/components/shared/SettingsDialog.tsx',
     ],
     targets: ['src/app/settings/projection.ts'],
   },
@@ -768,11 +758,10 @@ const REQUIRED_IMPORT_POLICIES = [
   },
   {
     kind: 'require-imports',
-    name: 'Target barrel exposes identity, resolution, and map projection',
+    name: 'Target barrel exposes identity and map projection',
     from: ['src/target/index.ts'],
     targets: [
       'src/target/identity.ts',
-      'src/target/resolution.ts',
       'src/target/map-projection.ts',
     ],
     edgeKinds: ['reexport'],
@@ -798,10 +787,9 @@ const REQUIRED_IMPORT_POLICIES = [
   },
   {
     kind: 'require-imports',
-    name: 'Command graph composes its catalog and projections',
+    name: 'Command graph composes its projections and shortcuts',
     from: ['src/commands/graph/index.ts'],
     targets: [
-      'src/commands/graph/catalog.ts',
       'src/commands/graph/projections.ts',
       'src/commands/graph/shortcuts.ts',
     ],
@@ -822,19 +810,19 @@ const REQUIRED_IMPORT_POLICIES = [
     kind: 'require-imports',
     name: 'Command consumers depend on the registry',
     from: [
-      'src/shortcuts/manager.ts',
-      'src/components/panels/PanelBar.tsx',
-      'src/components/canvas/CanvasToolbar.tsx',
-      'src/components/shared/menu-definitions.ts',
+      'src/platform/desktop.ts',
+      'src/components/panels/DesktopPanelRail.tsx',
+      'src/components/panels/CanvasPanel.tsx',
+      'src/components/shared/TitleBar.tsx',
       'src/components/shared/CommandPalette.tsx',
     ],
     targets: ['src/commands/registry.ts'],
   },
   {
     kind: 'require-imports',
-    name: 'Menu Bar consumes menu definitions',
+    name: 'Menu Bar renders the shared workspace menu model',
     from: ['src/components/shared/MenuBar.tsx'],
-    targets: ['src/components/shared/menu-definitions.ts'],
+    targets: ['src/app/shell-commands/menus.ts'],
   },
   {
     kind: 'require-imports',
@@ -872,21 +860,19 @@ const REQUIRED_IMPORT_POLICIES = [
     from: [
       'src/components/panels/PlantDbPanel.tsx',
       'src/components/panels/FavoritesPanel.tsx',
-      'src/components/plant-db/SearchBar.tsx',
+      'src/components/plant-db/CatalogBrowser.tsx',
       'src/components/plant-db/ResultsList.tsx',
       'src/components/plant-db/FilterStrip.tsx',
       'src/components/plant-db/ActiveChips.tsx',
       'src/components/plant-db/MoreFiltersPanel.tsx',
       'src/components/plant-db/PlantRow.tsx',
-      'src/components/plant-db/PlantCard.tsx',
-      'src/components/plant-db/ViewModeToggle.tsx',
     ],
     targets: ['src/app/plant-browser/index.ts'],
   },
   {
     kind: 'require-imports',
-    name: 'Plant cards use the shared stamp source',
-    from: ['src/components/plant-db/PlantRow.tsx', 'src/components/plant-db/PlantCard.tsx'],
+    name: 'Catalog rows use the shared stamp source',
+    from: ['src/components/plant-db/PlantRow.tsx'],
     targets: ['src/canvas/plant-stamp-source.ts'],
   },
   {
@@ -941,7 +927,6 @@ const REQUIRED_IMPORT_POLICIES = [
     kind: 'require-imports',
     name: 'Non-canvas Design writers consume Design Edit',
     from: [
-      'src/app/location/controller.ts',
       'src/app/budget/workbench.ts',
       'src/app/timeline/calendar-workbench.ts',
       'src/app/consortium/dock-workbench.ts',
@@ -1118,9 +1103,9 @@ const NAMED_IMPORT_POLICIES = [
     kind: 'named-imports',
     name: 'Desktop shortcuts match the neutral shell catalog',
     from: ['src/commands/graph/shortcuts.ts'],
-    target: 'src/app/shell-commands/index.ts',
-    requiredNames: ['matchShellCommandShortcut'],
-    allowedNames: ['matchShellCommandShortcut'],
+    target: 'src/app/keyboard/keymap.ts',
+    requiredNames: ['shellKeymapRows', 'CANVAS_KEYMAP_ROWS'],
+    allowedNames: ['shellKeymapRows', 'CANVAS_KEYMAP_ROWS', 'CommandSink', 'KeymapRow'],
   },
   {
     kind: 'named-imports',
@@ -1133,7 +1118,9 @@ const NAMED_IMPORT_POLICIES = [
       'projectShellCommandCatalog',
       'ProjectedShellCommand',
       'ShellChromeProjection',
+      'ShellCommandCatalogEntry',
       'ShellCommandIdForCapability',
+      'ShellCommandState',
     ],
   },
   {
@@ -1171,10 +1158,11 @@ const NAMED_IMPORT_POLICIES = [
   {
     kind: 'named-imports',
     name: 'Plant database rows use tool commands only',
-    from: ['src/components/plant-db/PlantRow.tsx', 'src/components/plant-db/PlantCard.tsx'],
+    from: ['src/components/plant-db/PlantRow.tsx'],
     target: 'src/canvas/session.ts',
-    requiredNames: ['currentCanvasToolCommandSurface'],
-    allowedNames: ['currentCanvasToolCommandSurface'],
+    // Place arms through armCanvasTool (placeSpeciesOnMap), so the row needs no session import.
+    requiredNames: [],
+    allowedNames: [],
   },
   {
     kind: 'named-imports',
@@ -1194,8 +1182,8 @@ const NAMED_IMPORT_POLICIES = [
   },
   {
     kind: 'named-imports',
-    name: 'Canvas Toolbar reads Canvas queries and selection only',
-    from: ['src/components/canvas/CanvasToolbar.tsx'],
+    name: 'Plant appearance popovers read Canvas queries and selection only',
+    from: ['src/components/canvas/PlantAppearancePopovers.tsx'],
     target: 'src/canvas/session.ts',
     requiredNames: ['currentCanvasQuerySurface', 'currentCanvasSelection'],
     allowedNames: ['currentCanvasQuerySurface', 'currentCanvasSelection'],
@@ -1212,7 +1200,7 @@ const FORBIDDEN_EXPORT_POLICIES = [
   {
     kind: 'forbid-exports',
     name: 'Renderer contracts omit retired priority and probe aliases',
-    from: ['src/canvas/runtime/renderers/types.ts'],
+    from: ['src/canvas/runtime/renderers/scene-types.ts'],
     names: ['RendererBackendPriority', 'RendererBackendProbe'],
   },
   {
@@ -1242,7 +1230,6 @@ const FORBIDDEN_EXPORT_POLICIES = [
     name: 'Public Design Edit surface does not expose authority capabilities',
     from: ['src/app/design-edit/index.ts'],
     names: [
-      'DesignPreviewTransaction',
       'designEditAuthorityCapability',
       'disposeDesignEditAuthority',
     ],
@@ -1251,7 +1238,7 @@ const FORBIDDEN_EXPORT_POLICIES = [
     kind: 'forbid-exports',
     name: 'Design IPC does not expose retired write orchestration',
     from: ['src/ipc/design.ts'],
-    names: ['saveDesignAs', 'saveDesign', 'autosaveDesign'],
+    names: ['saveDesignAs', 'saveDesign', 'saveDesignDraft', 'autosaveDesign', 'prepareRecoveryWrite'],
   },
 ] satisfies readonly ArchitecturePolicy[]
 
@@ -1260,6 +1247,11 @@ const SOURCE_TOMBSTONE_POLICIES = [
     kind: 'source-tombstones',
     name: 'Retired frontend seams stay deleted',
     files: [
+      'src/canvas/runtime/scene-interaction.ts',
+      'src/canvas/runtime/interaction/saved-object-stamp-tool.ts',
+      'src/canvas/runtime/interaction/overlay-ui.ts',
+      'src/canvas/runtime/interaction/selection-action-toolbar.ts',
+      'src/canvas/runtime/interaction/frame.ts',
       'src/app/adaptation/index.ts',
       'src/app/adaptation/controller.ts',
       'src/ipc/adaptation.ts',
@@ -1310,7 +1302,108 @@ const SOURCE_TOMBSTONE_POLICIES = [
       'src/web/browser-theme.ts',
       'src/web/browser-shell-projection.ts',
       'src/state/design.ts',
+      'src/canvas/runtime/host.ts',
+      'src/canvas/runtime/surfaces.ts',
+      'src/canvas/timeline-math.ts',
+      'src/app/canvas-runtime/host.ts',
+      'src/components/canvas/MapLibreCanvasSurface.tsx',
+      'src/components/canvas/maplibre-surface-controller.ts',
+      'src/app/canvas-map-surface/lifecycle.ts',
+      'src/app/canvas-map-surface/snapshot.ts',
+      'src/app/canvas-map-surface/reconciliation.ts',
+      'src/app/canvas-settings/state.ts',
+      'src/app/canvas-settings/controller.ts',
+      // Canopi v2 (ADR 0001): Location placement, spatial frame and
+      // coordinated Design history are gone.
+      'src/spatial-frame.ts',
+      'src/maplibre/location-map.ts',
+      'src/app/design-edit/history.ts',
+      'src/app/design-edit/location.ts',
+      'src/app/location/index.ts',
+      'src/app/location/controller.ts',
+      'src/app/location/workbench.ts',
+      'src/app/location/search-controller.ts',
+      'src/components/canvas/LocationTab.tsx',
+      'src/components/panels/LocationPanel.tsx',
+      // Canopi v2 (ADR 0004): one renderer; the Canvas2D and standalone Pixi
+      // backends, renderer selection, probing and profiling are gone.
+      'src/canvas/runtime/renderers/canvas2d-scene.ts',
+      'src/canvas/runtime/renderers/capabilities.ts',
+      'src/canvas/runtime/renderers/host.ts',
+      'src/canvas/runtime/renderers/profile.ts',
+      'src/canvas/runtime/renderers/types.ts',
+      'src/canvas/runtime/renderers/index.ts',
+      'src/canvas/canvas2d-utils.ts',
+      // Canvas v2 (ADR 0016), end of 0A: MapFrame and its viewport diagnostics
+      // gave way to the view transform's frame.
+      'src/canvas/maplibre-camera.ts',
+      // Canvas v2 0B-5 and 0D2 (ADR 0016, 0019): the view agreement probe went
+      // (camera-contract.test.ts is the projection guard), and the layer stopped
+      // deriving its transform from MapLibre's camera.
+      'src/maplibre/view-agreement.ts',
+      'src/maplibre/scene-camera-transform.ts',
+      // P11, end of 0E (ADR 0016): the runtime drives its one CameraDriverHost
+      // through ViewNavigation; the legacy facade, the camera module, the
+      // MapLibre shim and the viewport presentation are gone.
+      'src/canvas/runtime/legacy-camera-facade.ts',
+      'src/canvas/runtime/camera.ts',
+      'src/maplibre/workspace-camera.ts',
+      'src/canvas/runtime/renderers/viewport-presentation.ts',
+      // P11, phase F (spec §1.6): one key router owns the window key
+      // listeners and one focus owner holds the F6 regions and the map's focus.
+      'src/app/shell/focus-regions.ts',
+      'src/shortcuts/manager.ts',
+      'src/web/canvas-shortcuts.ts',
+      // P11, phase 1 (spec §1.5): the grid and guides draw in the world layers;
+      // the Canvas2D scene chrome is gone.
+      'src/canvas/runtime/scene-chrome.ts',
     ],
+    symbols: [
+      {
+        from: ['src/**'],
+        names: ['LOCAL_MERCATOR_PROJECTION_ID', 'viewportCenterGeo', 'viewportCornerGeoPoints'],
+      },
+      {
+        // P11, end of 0B (ADR 0018): tools run on the ToolHost; the adapter
+        // interface, its DOM pointer event and the frame's handlers are gone
+        // with scene-interaction.ts and interaction/frame.ts (files above).
+        from: ['src/**'],
+        names: ['SceneToolAdapter', 'SceneToolPointerEvent', 'SceneInteractionFrame', 'SceneInteractionFrameHandlers'],
+      },
+      {
+        // P11, end of 0E: the shim's origin refresh (the runtime's plane
+        // effect re-origins), the planar hold tolerance and the annotation
+        // screen frame went with the planar camera.
+        from: ['src/**'],
+        names: ['refreshOrigin', 'HOLD_NOISE_DEG', 'getAnnotationScreenFrame'],
+      },
+      {
+        // P11, phase F: the map takes focus through the focus owner, and the
+        // recogniser has one bindings constant, no frozen legacy copy.
+        from: ['src/**'],
+        names: ['focusMapSurface', 'LEGACY_BINDINGS'],
+      },
+      {
+        // P11, phase 1: the overlay went with scene-chrome.ts (file above).
+        from: ['src/**'],
+        names: ['SceneChromeOverlay'],
+      },
+    ],
+  },
+  {
+    // P11, phase F: the free focusRegion(id) went with focus-regions.ts. The
+    // focus owner's method keeps the name (spec §1.6), so the tombstone is the
+    // bare call and the export, not the identifier.
+    kind: 'forbid-calls',
+    name: 'Retired frontend seams stay deleted: the free focusRegion is not called',
+    from: ['src/**'],
+    targets: ['focusRegion'],
+  },
+  {
+    kind: 'forbid-exports',
+    name: 'Retired frontend seams stay deleted: no module exports focusRegion',
+    from: ['src/**'],
+    names: ['focusRegion'],
   },
 ] satisfies readonly ArchitecturePolicy[]
 
@@ -1335,7 +1428,7 @@ const SYMBOL_OWNERSHIP_POLICIES = [
   {
     kind: 'forbid-source-symbols',
     name: 'Desktop shortcut adapter does not revive shell command switches or aliases',
-    from: ['src/commands/graph/shortcuts.ts', 'src/shortcuts/definitions.ts'],
+    from: ['src/commands/graph/shortcuts.ts'],
     names: [
       'panelCommandId',
       'fileShortcutCommand',
@@ -1345,9 +1438,21 @@ const SYMBOL_OWNERSHIP_POLICIES = [
     ],
   },
   {
+    kind: 'forbid-exports',
+    name: 'Command Registry exposes projections, not raw command execution',
+    from: ['src/commands/registry.ts', 'src/commands/graph/index.ts', 'src/commands/graph/projections.ts'],
+    names: ['runAppCommand', 'isAppCommandDisabled', 'getAppCommand', 'commands', 'getMenuDefinitions'],
+  },
+  {
+    kind: 'forbid-source-symbols',
+    name: 'Production Web catalog does not carry the in-memory test reader',
+    from: ['src/web/**'],
+    names: ['createInMemoryReducedSpeciesCatalogReader'],
+  },
+  {
     kind: 'forbid-source-symbols',
     name: 'Scene Interaction uses the Control Point Overlay collection',
-    from: ['src/canvas/runtime/scene-interaction.ts'],
+    from: ['src/canvas/runtime/tools/tool-host.ts', 'src/canvas/runtime/tools/select/**'],
     names: ['_zoneControlPoints', '_measurementGuideControlPoints'],
   },
   {
@@ -1363,8 +1468,32 @@ const SYMBOL_OWNERSHIP_POLICIES = [
   {
     kind: 'forbid-source-symbols',
     name: 'Renderer definitions keep retired priority metadata deleted',
-    from: ['src/canvas/runtime/renderers/types.ts'],
+    from: ['src/canvas/runtime/renderers/scene-types.ts'],
     names: ['RendererBackendPriority', 'RendererBackendProbe', 'priority'],
+  },
+  {
+    // ADR 0004: one renderer (Pixi inside MapLibre); no selection, probing or fallback.
+    kind: 'forbid-source-symbols',
+    name: 'Scene rendering keeps renderer selection and fallback deleted',
+    from: [
+      'src/canvas/**',
+      'src/maplibre/**',
+      'src/app/canvas-map-surface/**',
+      'src/app/document-session/**',
+      'src/web/**',
+    ],
+    names: [
+      'RendererHost',
+      'RendererCapabilities',
+      'detectRendererCapabilities',
+      'createCanvas2DSceneRenderer',
+      'createPixiSceneRenderer',
+      'renderCanvas2DSceneSnapshot',
+      'instrumentSceneRenderer',
+      'reportRendererFailure',
+      'failActiveLayer',
+      'failActiveBackend',
+    ],
   },
   {
     kind: 'forbid-source-symbols',
@@ -1399,7 +1528,6 @@ const SYMBOL_OWNERSHIP_POLICIES = [
     name: 'Design Edit public barrel does not mention authority capabilities',
     from: ['src/app/design-edit/index.ts'],
     names: [
-      'DesignPreviewTransaction',
       'designEditAuthorityCapability',
       'disposeDesignEditAuthority',
     ],
@@ -1407,7 +1535,7 @@ const SYMBOL_OWNERSHIP_POLICIES = [
   {
     kind: 'confine-symbols',
     name: 'Raw Design persistence capture stays in persistence',
-    from: ['src/app/**', 'src/components/**', 'src/ipc/**', 'src/state/**', 'src/web/**'],
+    from: ['src/app/**', 'src/components/**', 'src/ipc/**', 'src/web/**'],
     names: ['captureForPersistence'],
     allowedFrom: ['src/app/document-session/persistence.ts', ...TEST_SOURCE_PATTERNS],
   },
@@ -1456,17 +1584,10 @@ const SYMBOL_OWNERSHIP_POLICIES = [
     ],
   },
   {
-    kind: 'confine-symbols',
-    name: 'Committed Design state stays private to the document store',
-    from: ['src/**'],
-    names: ['committedDesign'],
-    allowedFrom: ['src/app/document-session/store.ts', ...TEST_SOURCE_PATTERNS],
-  },
-  {
     kind: 'forbid-source-symbols',
     name: 'Retired Design mutation escape hatches stay absent',
-    from: ['src/app/**', 'src/canvas/**', 'src/components/**', 'src/ipc/**', 'src/state/**', 'src/web/**'],
-    names: ['DocumentMutationOptions', 'markDesignEdited'],
+    from: ['src/app/**', 'src/canvas/**', 'src/components/**', 'src/ipc/**', 'src/web/**'],
+    names: ['DocumentMutationOptions', 'markDesignEdited', 'committedDesign'],
   },
   {
     kind: 'forbid-source-symbols',
@@ -1666,7 +1787,6 @@ const SYMBOL_OWNERSHIP_POLICIES = [
     name: 'Browser Canvas Runtime does not rebuild shared app policy',
     from: ['src/web/browser-canvas-runtime.ts'],
     names: [
-      'APP_OWNED_LAYER_PROJECTIONS',
       'mutateSettingsProjection',
       'syncFromLayers',
       'syncLayer',
@@ -1677,7 +1797,7 @@ const SYMBOL_OWNERSHIP_POLICIES = [
   {
     kind: 'forbid-writes',
     name: 'Design mutation dirty-state bypass stays retired',
-    from: ['src/app/**', 'src/canvas/**', 'src/components/**', 'src/ipc/**', 'src/state/**', 'src/web/**'],
+    from: ['src/app/**', 'src/canvas/**', 'src/components/**', 'src/ipc/**', 'src/web/**'],
     exceptFrom: [...TEST_SOURCE_PATTERNS],
     properties: ['markDirty'],
     values: ['false'],
@@ -1693,17 +1813,6 @@ const SYMBOL_OWNERSHIP_POLICIES = [
     name: 'App-facing tests do not call an unbound Scene Store escape hatch',
     from: ['src/__tests__/**/*.test.ts', 'src/__tests__/**/*.test.tsx'],
     targets: ['getSceneStore'],
-  },
-  {
-    kind: 'forbid-calls',
-    name: 'Design mutation capability calls stay in store and Design Edit core',
-    from: ['src/app/**', 'src/canvas/**', 'src/components/**', 'src/ipc/**', 'src/state/**', 'src/web/**'],
-    exceptFrom: [
-      'src/app/document-session/store.ts',
-      'src/app/design-edit/core.ts',
-      ...TEST_SOURCE_PATTERNS,
-    ],
-    properties: ['mutateCurrentDesign', 'reconcileCurrentDesign', 'updateDesignArray'],
   },
   {
     kind: 'confine-symbols',
@@ -1728,6 +1837,306 @@ const SYMBOL_OWNERSHIP_POLICIES = [
   },
 ] satisfies readonly ArchitecturePolicy[]
 
+/**
+ * Callee text of a call on a MapLibre map (`map.x`, `this.map!.x`, `map?.x`, `workspaceMap.x`), for the names that other
+ * objects also carry (P1's second rule and P2). Plan section 5 lists the first four; `*Map!.*` and `*Map?.*` give a
+ * `…Map` receiver the same non-null and optional forms.
+ */
+const MAP_RECEIVER_TARGETS = ['*map.*', '*map!.*', '*map?.*', '*Map.*', '*Map!.*', '*Map?.*'] as const
+
+/** The World map's components drive their own north-up map without a camera driver, so P1 exempts them. */
+const WORLD_MAP_SOURCES = ['src/components/world-map/**'] as const
+
+/** P5's and P5c's scope: every tool module. */
+const TOOLS_SOURCES = 'src/canvas/runtime/tools/**'
+
+/** The tools' own seams, which P5 exempts: the host and the scene index. */
+const TOOL_SEAM_SOURCES = [
+  'src/canvas/runtime/tools/tool-host.ts',
+  'src/canvas/runtime/tools/spatial-index.ts',
+] as const
+
+/** P2: screen positions come from the view transform (`view/camera-contract.test.ts` guards it against MapLibre). */
+const P2_PROJECTION_POLICY = {
+  kind: 'forbid-calls',
+  name: 'P2 nobody projects through MapLibre',
+  from: ['src/**'],
+  exceptFrom: [...TEST_SOURCE_PATTERNS],
+  targets: [...MAP_RECEIVER_TARGETS],
+  properties: ['project', 'unproject'],
+} satisfies ArchitecturePolicy
+
+/**
+ * Canvas v2 policies (docs/plans/canvas-v2-plan.md section 5). Each name starts with its P-id.
+ */
+const CANVAS_V2_POLICIES = [
+  {
+    kind: 'forbid-calls',
+    name: 'P1 only the camera driver calls MapLibre camera methods',
+    from: ['src/**'],
+    exceptFrom: ['src/maplibre/camera-driver.ts', ...WORLD_MAP_SOURCES, ...TEST_SOURCE_PATTERNS],
+    properties: [
+      'jumpTo', 'easeTo', 'flyTo', 'panTo', 'rotateTo', 'setBearing', 'setPitch', 'snapToNorth', 'resetNorthPitch',
+      'fitScreenCoordinates', 'fitBounds', 'zoomTo', 'setCenter',
+      'setMaxBounds', 'setMinZoom', 'setMaxZoom', 'setPadding',
+    ],
+  },
+  {
+    // zoomIn, zoomOut and resetNorth are also ViewCommandSurface methods, so this rule matches map receivers only.
+    kind: 'forbid-calls',
+    name: 'P1 only the camera driver stops, pans, zooms, resizes or resets north a map',
+    from: ['src/**'],
+    exceptFrom: ['src/maplibre/camera-driver.ts', ...WORLD_MAP_SOURCES, ...TEST_SOURCE_PATTERNS],
+    targets: [...MAP_RECEIVER_TARGETS],
+    properties: ['stop', 'panBy', 'setZoom', 'zoomIn', 'zoomOut', 'resize', 'resetNorth'],
+  },
+  {
+    // Fails closed: if the driver moves or stops typing its map, the two rules above no longer name the camera's owner.
+    kind: 'require-imports',
+    name: 'P1 the camera driver imports the MapLibre map type',
+    from: ['src/maplibre/camera-driver.ts'],
+    targets: ['src/maplibre/loader.ts'],
+  },
+  P2_PROJECTION_POLICY,
+  {
+    // Tests included: the legacy camera, its snapshots and the planar camera maths stay deleted (0E).
+    kind: 'forbid-source-symbols',
+    name: 'P3 the legacy camera, its viewport snapshots and the planar camera maths stay deleted',
+    from: ['src/**'],
+    names: [
+      'SceneViewportState', 'deriveSharedMapSceneViewport', 'createMapFrame', 'viewportCenterWorld', 'CameraController',
+      'reprojectPlaneViewport', 'recordResolvedMinimum', 'WorkspaceCameraFrameReader', 'CameraViewportSnapshot',
+      'WorkspaceCameraNavigation', 'WorkspaceCameraOwner', 'MapLibreWorkspaceCameraOwner', 'MapLibreWorkspaceCameraMap',
+      'geographicViewOf', 'legacyCamera', 'fitCameraViewport', 'cameraFramingRect',
+      'buildViewTransformFromPlane', 'viewCameraToPlanar',
+      'reprojectPlanar', 'panPlanar', 'zoomPlanarToScale', 'rotatePlanarAround', 'planarCentredOn',
+    ],
+  },
+  {
+    // World-to-screen is a ViewTransform method (view/view-transform.ts builds it); no module exports a free one.
+    kind: 'forbid-exports',
+    name: 'P3 no module exports a free worldToScreen or screenToWorld',
+    from: ['src/**'],
+    names: ['worldToScreen', 'screenToWorld'],
+  },
+  {
+    // The camera driver builds the frame it publishes; the lens builds its own transform from a camera at its centre;
+    // test support builds one for a test view.
+    kind: 'confine-symbols',
+    name: 'P3 only the view module, the camera driver and the lens build a view transform',
+    from: ['src/**'],
+    names: ['buildViewTransform'],
+    allowedFrom: [
+      'src/canvas/runtime/view/**',
+      'src/maplibre/camera-driver.ts',
+      'src/canvas/runtime/inspection-lens.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+  },
+  {
+    // view/ reaches no DOM module, MapLibre, Pixi or scene barrel: outside its own files it imports the pure canvas
+    // modules and signals, and scene/types.ts type-only (ScenePersistedState, ScenePlantEntity). Since 0E it calls
+    // performance.now, requestAnimationFrame and the window's timers itself (tests use Vitest fake timers), so P4 has
+    // no symbol rule.
+    kind: 'forbid-imports',
+    name: 'P4 the view module imports only its pure dependencies',
+    from: ['src/canvas/runtime/view/**'],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+    targets: ['**'],
+    exceptTargets: [
+      'src/canvas/runtime/view/**',
+      'src/canvas/projection.ts',
+      'src/canvas/session-plane.ts',
+      'src/canvas/workspace-camera-policy.ts',
+      '@preact/signals',
+    ],
+    allowTypeOnlyTargets: ['src/canvas/runtime/scene/types.ts'],
+  },
+  {
+    // A tool reads the shared vocabulary from interaction-types.ts (type-only imports), never interaction-ports.ts;
+    // the host and the scene index are the tools' own seams (ADR 0018).
+    kind: 'forbid-imports',
+    name: 'P5 tools import no MapLibre, DOM or Pixi',
+    from: [TOOLS_SOURCES],
+    exceptFrom: [...TOOL_SEAM_SOURCES, ...TEST_SOURCE_PATTERNS],
+    targets: [
+      'maplibre-gl', 'pixi.js', '@preact/signals',
+      'src/maplibre/**', 'src/app/**', 'src/components/**',
+      'src/canvas/runtime/view/**', 'src/canvas/runtime/input/**', 'src/canvas/runtime/renderers/**',
+      'src/canvas/runtime/chrome/**', 'src/canvas/runtime/interaction-ports.ts',
+    ],
+    allowTypeOnlyTargets: ['src/canvas/runtime/view/types.ts'],
+  },
+  {
+    // Only the host converts screen to world: a tool names no DOM event, element or camera.
+    kind: 'confine-symbols',
+    name: 'P5 tools name no DOM event, element or camera',
+    from: [TOOLS_SOURCES],
+    names: [
+      'document', 'window', 'HTMLElement', 'PointerEvent', 'KeyboardEvent', 'clientX', 'addEventListener',
+      'getBoundingClientRect', 'requestAnimationFrame', 'ViewTransform', 'CameraDriver', 'ViewNavigation',
+    ],
+    allowedFrom: ['src/canvas/runtime/tools/tool-host.ts', ...TEST_SOURCE_PATTERNS],
+  },
+  {
+    // Walks type-only edges too, so a helper's type import cannot carry MapLibre or Pixi into a tool; no exemption.
+    kind: 'forbid-transitive-imports',
+    name: 'P5c tools reach no MapLibre or Pixi through other modules',
+    from: [TOOLS_SOURCES],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+    targets: ['maplibre-gl', 'pixi.js', 'src/maplibre/**'],
+  },
+  {
+    kind: 'confine-symbols',
+    name: 'P6 only the DOM input source captures the pointer',
+    from: ['src/canvas/**'],
+    names: ['setPointerCapture', 'releasePointerCapture'],
+    allowedFrom: ['src/canvas/runtime/input/dom-input-source.ts', ...TEST_SOURCE_PATTERNS],
+  },
+  {
+    // The chrome files listen on their own elements only (canvas-boundaries.test.ts forbids their host and container
+    // listeners); the lens listens to document.fonts.
+    kind: 'confine-symbols',
+    name: 'P6 only the DOM input source adds canvas listeners',
+    from: ['src/canvas/**'],
+    names: ['addEventListener'],
+    allowedFrom: [
+      'src/canvas/runtime/input/dom-input-source.ts',
+      // The copied GeoLibre guard the DOM source installs on the map host (phase F).
+      'src/canvas/runtime/input/selection-drag-guard.ts',
+      'src/canvas/runtime/chrome/text-entry-host.ts',
+      'src/canvas/runtime/chrome/handle-layer.ts',
+      'src/canvas/runtime/chrome/locked-affordance.ts',
+      'src/canvas/runtime/inspection-lens.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+  },
+  {
+    // MapLibre's own events go through map.on; the listeners here are abort signals of snapshot and tile requests.
+    kind: 'confine-symbols',
+    name: 'P6 MapLibre modules add listeners only to abort signals',
+    from: ['src/maplibre/**'],
+    names: ['addEventListener'],
+    allowedFrom: [
+      'src/maplibre/view-snapshot-map.ts',
+      'src/maplibre/satellite-provider-session.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+  },
+  {
+    // normalise and recognise run without a browser: time and platform are inputs.
+    kind: 'confine-symbols',
+    name: 'P7 the input core reaches no browser global or DOM event',
+    from: ['src/canvas/runtime/input/**'],
+    names: ['window', 'document', 'Date', 'performance', 'setTimeout', 'navigator', 'PointerEvent', 'WheelEvent'],
+    allowedFrom: ['src/canvas/runtime/input/dom-input-source.ts', ...TEST_SOURCE_PATTERNS],
+  },
+  {
+    // Per-frame view data stays in the runtime and the map layer; the overview pin's ViewReadSurface.designPin is the
+    // one per-frame read components get (spec §1.1).
+    kind: 'confine-symbols',
+    name: 'P10 only the runtime and the map layer read per-frame view signals',
+    from: ['src/**'],
+    names: ['viewFrame', 'settledViewFrame', 'onViewFrame'],
+    allowedFrom: ['src/canvas/runtime/**', 'src/maplibre/**', ...TEST_SOURCE_PATTERNS],
+  },
+  {
+    // Type-only: the read surface and view types, and the driver host types the composition and the activation wire
+    // (spec §1.1a); no value import, so no app module can build a camera.
+    kind: 'forbid-imports',
+    name: 'P10 the app, components and Web import view types only',
+    from: ['src/app/**', 'src/components/**', 'src/web/**'],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+    targets: ['src/canvas/runtime/view/**'],
+    allowTypeOnlyTargets: [
+      'src/canvas/runtime/view/read-surface.ts',
+      'src/canvas/runtime/view/types.ts',
+      'src/canvas/runtime/view/camera-driver.ts',
+    ],
+  },
+  {
+    // World content moves by the world-root matrix, never per-point projection (world-layers.test.ts "a pan
+    // re-tessellates no zone" is the behavioural half). Upright billboards, the billboard drafts and label admission
+    // project anchors; overlays live in chrome/, outside the rule.
+    kind: 'confine-symbols',
+    name: 'P12 the renderer learns the camera one way',
+    from: ['src/canvas/runtime/renderers/**'],
+    names: ['worldToScreen', 'projectAnchors', 'worldQuadToScreen'],
+    allowedFrom: [
+      'src/canvas/runtime/renderers/billboard-layer.ts',
+      'src/canvas/runtime/renderers/draft-layer.ts',
+      'src/canvas/runtime/renderers/label-admission.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+  },
+  {
+    // armCanvasTool decides focus and rail learning once (spec §1.6); the session and its signal setter sit below it.
+    kind: 'confine-symbols',
+    name: 'P9 only armCanvasTool and the session arm a tool',
+    from: ['src/**'],
+    names: ['selectCanvasTool', 'setCurrentCanvasTool', 'setCanvasTool'],
+    allowedFrom: [
+      'src/app/keyboard/arming.ts',
+      'src/canvas/session.ts',
+      'src/canvas/session-state.ts',
+      'src/canvas/runtime/command-surface.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+  },
+  {
+    // Any receiver, through `?.`, `!` and brackets: `tools?.setTool`, `commandSurface?.setTool`, `surface['setTool']`.
+    kind: 'forbid-calls',
+    name: 'P9 app code calls no tool surface setTool but through armCanvasTool',
+    from: ['src/app/**', 'src/components/**', 'src/web/**', 'src/canvas/*-source.ts'],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+    properties: ['setTool'],
+  },
+  {
+    // Fails closed: each caller keeps its import, so a caller that drops arming for a local setter is seen.
+    kind: 'require-imports',
+    name: 'P9 the arming callers import armCanvasTool',
+    from: [
+      'src/components/plant-db/place-species.ts',
+      'src/components/canvas/SiteOnboarding.tsx',
+      'src/components/canvas/StampChooser.tsx',
+      'src/app/saved-object-stamps/workbench.ts',
+      'src/app/workspace-commands/canvas-actions.ts',
+    ],
+    targets: ['src/app/keyboard/arming.ts'],
+  },
+  {
+    // Desktop and Web share one keyboard owner; each edition composes its keymap and command sink outside it
+    // (Desktop: commands/registry.ts installDesktopKeyRouter, called by platform/desktop.ts; Web:
+    // web/browser-shell-commands.ts).
+    kind: 'forbid-imports',
+    name: 'P14 the keyboard module is neutral',
+    from: ['src/app/keyboard/**'],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+    targets: ['src/commands/**', 'src/web/**', 'src/platform/**', 'src/components/**'],
+  },
+] satisfies readonly ArchitecturePolicy[]
+
+/**
+ * P5b, checked on the runtime graph: type-only imports of tools/ (interaction-ports.ts, renderers/scene-types.ts and
+ * the chrome read tool.ts and draft.ts types) enter no bundle, so only value imports are confined.
+ */
+const TOOL_HOST_RUNTIME_GRAPH_POLICIES = [
+  {
+    kind: 'confine-importers',
+    name: 'P5b tool modules are value-imported only inside tools/ and by the interaction session',
+    targets: [TOOLS_SOURCES],
+    allowedFrom: [TOOLS_SOURCES, 'src/canvas/runtime/interaction-session.ts', ...TEST_SOURCE_PATTERNS],
+  },
+  {
+    // The session builds the ToolScene with createToolScene, which tool-host.ts re-exports (spec §1.2a).
+    kind: 'forbid-imports',
+    name: 'P5b the interaction session value-imports only the tool host',
+    from: ['src/canvas/runtime/interaction-session.ts'],
+    targets: [TOOLS_SOURCES],
+    exceptTargets: ['src/canvas/runtime/tools/tool-host.ts'],
+  },
+] satisfies readonly ArchitecturePolicy[]
+
 const FRONTEND_ARCHITECTURE_POLICIES = [
   ...FORBIDDEN_IMPORT_POLICIES,
   ...CONFINED_IMPORTER_POLICIES,
@@ -1736,7 +2145,98 @@ const FRONTEND_ARCHITECTURE_POLICIES = [
   ...FORBIDDEN_EXPORT_POLICIES,
   ...SOURCE_TOMBSTONE_POLICIES,
   ...SYMBOL_OWNERSHIP_POLICIES,
+  ...CANVAS_V2_POLICIES,
 ] satisfies readonly ArchitecturePolicy[]
+
+/**
+ * Runtime-graph policies ignore type-only edges (they enter no bundle) and
+ * leave `#edition` aliases unresolved, so an alias is the only permitted seam
+ * from shared code to edition-specific platform code.
+ */
+const SHARED_RUNTIME_GRAPH_POLICIES = [
+  {
+    kind: 'forbid-transitive-imports',
+    name: 'GeoJSON, continuous save and map layers stay free of Desktop capabilities',
+    from: [
+      'src/app/geojson/**',
+      'src/app/document-session/continuous-save.ts',
+      'src/app/map-layers/**',
+    ],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+    targets: ['@tauri-apps/**', 'src/ipc/**'],
+  },
+  {
+    kind: 'forbid-transitive-imports',
+    name: 'Place Search reaches native geocoding only through the edition transport',
+    from: ['src/components/canvas/PlaceSearch.tsx'],
+    targets: ['@tauri-apps/**', 'src/ipc/**'],
+  },
+] satisfies readonly ArchitecturePolicy[]
+
+/** Checked on the runtime graph with `#edition` aliases resolved to their Web targets. */
+const WEB_EDITION_RUNTIME_GRAPH_POLICIES = [
+  {
+    kind: 'forbid-transitive-imports',
+    name: 'Web entry graph stays free of Desktop capabilities',
+    from: ['src/main.web.tsx'],
+    targets: ['@tauri-apps/**', 'src/ipc/**'],
+  },
+] satisfies readonly ArchitecturePolicy[]
+
+/** Checked on the runtime graph: type-only Scene query contracts do not enter either edition's runtime bundle. */
+const BROWSER_WORKSPACE_GRAPH_POLICIES = [
+  {
+    kind: 'forbid-transitive-imports',
+    name: 'Browser workspace and shared map contributions stay free of Desktop capabilities',
+    from: [
+      'src/web/browser-workspace-runtime.ts',
+      'src/web/browser-workspace-map-contribution-adapter.ts',
+      'src/app/canvas-map-surface/workspace-map-contributions.ts',
+    ],
+    targets: [
+      '@tauri-apps/**', 'src/ipc/**',
+      'src/app/canvas-map-surface/desktop-workspace-map-contribution-adapter.ts',
+      'src/maplibre/raster-display/**',
+      'src/app/lidar/library-store.ts', 'src/app/lidar/display.ts',
+    ],
+  },
+] satisfies readonly ArchitecturePolicy[]
+
+/** Mirrors the `isWebEdition` branch of vite.config.ts `resolve.alias`. */
+const WEB_EDITION_ALIAS_TARGETS: Readonly<Record<string, string>> = {
+  '#platform': 'src/platform/browser.ts',
+  '#canvas-pdf-platform': 'src/app/canvas-pdf/platform.browser.ts',
+  '#budget-export-platform': 'src/app/budget/platform.browser.ts',
+  '#geocoding-transport': 'src/app/geocoding/transport.browser.ts',
+  '#species-catalog-live': 'src/app/plant-browser/live.browser.ts',
+}
+
+type SourceGraph = ReturnType<typeof discoverTypeScriptSourceGraph>
+
+let sourceGraphCache: SourceGraph | null = null
+
+/** The repository's source graph, parsed once per run: every policy below reads the same tree. */
+function discoveredSourceGraph(): SourceGraph {
+  sourceGraphCache ??= discoverTypeScriptSourceGraph(new URL('../', import.meta.url), 'src')
+  return sourceGraphCache
+}
+
+function runtimeGraph(graph: SourceGraph): SourceGraph {
+  return graph.map((source) => ({
+    ...source,
+    imports: source.imports.filter((edge) => !edge.typeOnly),
+  }))
+}
+
+function resolveWebEditionAliases(graph: SourceGraph): SourceGraph {
+  return graph.map((source) => ({
+    ...source,
+    imports: source.imports.map((edge) => {
+      const target = WEB_EDITION_ALIAS_TARGETS[edge.target]
+      return target ? { ...edge, target } : edge
+    }),
+  }))
+}
 
 const DESIGN_SESSION_TEST_BOUNDARY_POLICY_NAMES = new Set([
   'Production code cannot acquire the Design Session test fixture',
@@ -1756,6 +2256,11 @@ const DESIGN_SESSION_TEST_FIXTURE_OWNER_SOURCE = {
 
 const DESIGN_SESSION_TEST_FIXTURE_ALLOWED_SOURCES =
   'src/app/document-session/store.ts, src/__tests__/**, src/**/*.test.ts, src/**/*.test.tsx'
+
+const PATH_DRIFT_LIVE_SOURCE = {
+  path: 'src/app/live/module.ts',
+  source: 'export const live = 1',
+} as const
 
 describe('declarative frontend architecture policies', () => {
   it('rejects platform imports from the neutral shell command catalog', () => {
@@ -1891,30 +2396,105 @@ describe('declarative frontend architecture policies', () => {
   })
 
   it('keeps the browser workspace graph free of Desktop runtime dependencies', () => {
-    // Type-only Scene query contracts do not enter either edition's runtime bundle.
-    const graph = discoverTypeScriptSourceGraph(new URL('../', import.meta.url), 'src')
-      .map((source) => ({ ...source, imports: source.imports.filter((edge) => !edge.typeOnly) }))
-    expect(collectArchitecturePolicyViolations(graph, [
-      {
-        kind: 'forbid-transitive-imports',
-        name: 'Browser workspace and shared map contributions stay free of Desktop capabilities',
-        from: [
-          'src/web/browser-workspace-runtime.ts',
-          'src/web/browser-workspace-map-contribution-adapter.ts',
-          'src/app/canvas-map-surface/workspace-map-contributions.ts',
-        ],
-        targets: [
-          '@tauri-apps/**', 'src/ipc/**',
-          'src/app/canvas-map-surface/desktop-workspace-map-contribution-adapter.ts',
-          'src/app/canvas-map-surface/lidar.ts',
-          'src/app/lidar/library-store.ts', 'src/app/lidar/tile-urls.ts',
-        ],
-      },
-    ])).toEqual([])
+    const graph = runtimeGraph(discoveredSourceGraph())
+    expect(collectArchitecturePolicyViolations(graph, BROWSER_WORKSPACE_GRAPH_POLICIES)).toEqual([])
   }, 20_000)
 
+  it('keeps tool modules behind the one tool host in the runtime graph', () => {
+    const graph = runtimeGraph(discoveredSourceGraph())
+    expect(collectArchitecturePolicyViolations(graph, TOOL_HOST_RUNTIME_GRAPH_POLICIES)).toEqual([])
+  }, 20_000)
+
+  it('keeps shared modules and the Web entry graph free of Desktop runtime dependencies', () => {
+    const graph = runtimeGraph(discoveredSourceGraph())
+    expect(collectArchitecturePolicyViolations(graph, SHARED_RUNTIME_GRAPH_POLICIES)).toEqual([])
+    expect(collectArchitecturePolicyViolations(
+      resolveWebEditionAliases(graph),
+      WEB_EDITION_RUNTIME_GRAPH_POLICIES,
+    )).toEqual([])
+  }, 20_000)
+
+  it('resolves every edition alias to the Web target Vite uses', () => {
+    const graph = discoveredSourceGraph()
+    const paths = new Set(graph.map(({ path }) => path))
+    const aliases = new Set(graph.flatMap(({ imports }) =>
+      imports.map(({ target }) => target).filter((target) => target.startsWith('#'))))
+    const viteConfig = readFileSync(new URL('../../vite.config.ts', import.meta.url), 'utf8')
+    const tsconfig = readFileSync(new URL('../../tsconfig.json', import.meta.url), 'utf8')
+    const tsconfigAliases = [...tsconfig.matchAll(/"(#[\w-]+)"\s*:/g)].map(([, alias]) => alias)
+
+    expect([...aliases].sort()).toEqual(Object.keys(WEB_EDITION_ALIAS_TARGETS).sort())
+    expect(tsconfigAliases.sort()).toEqual(Object.keys(WEB_EDITION_ALIAS_TARGETS).sort())
+    for (const [alias, target] of Object.entries(WEB_EDITION_ALIAS_TARGETS)) {
+      expect(paths.has(target), `${alias} -> ${target}`).toBe(true)
+      expect(viteConfig).toContain(`'${alias}'`)
+      expect(viteConfig).toContain(`'./${target}'`)
+    }
+  }, 20_000)
+
+  it('rejects planted native, controller, component and Web entry dependencies', () => {
+    const graph = createTypeScriptSourceGraph([
+      { path: 'src/components/shared/Chrome.tsx', source: `import { getCurrentWindow } from '@tauri-apps/api/window'\nvoid getCurrentWindow` },
+      { path: 'src/components/panels/Lidar.tsx', source: `import type { LidarLayer } from '../../ipc/lidar'\nexport type Layer = LidarLayer` },
+      { path: 'src/ipc/lidar.ts', source: `import { invoke } from '@tauri-apps/api/core'\nexport type LidarLayer = string\nvoid invoke` },
+      { path: 'src/app/one/controller.ts', source: `import { two } from '../two/controller'\nvoid two` },
+      { path: 'src/app/two/controller.ts', source: `export const two = 2` },
+      { path: 'src/app/panel/actions.ts', source: `import { Chrome } from '../../components/shared/Chrome'\nvoid Chrome` },
+      { path: 'src/app/map-layers/state.ts', source: `import { bridge } from '../bridge'\nvoid bridge` },
+      { path: 'src/app/document-session/continuous-save.ts', source: `export const save = 1` },
+      { path: 'src/app/bridge.ts', source: `import { invoke } from '@tauri-apps/api/core'\nexport const bridge = invoke` },
+      { path: 'src/components/canvas/PlaceSearch.tsx', source: `import { bridge } from '../../app/geo'\nimport { transport } from '#geocoding-transport'\nvoid bridge\nvoid transport` },
+      { path: 'src/app/geo.ts', source: `export { lidar as bridge } from '../ipc/lidar'` },
+      { path: 'src/main.web.tsx', source: `import { place } from '#geocoding-transport'\nvoid place` },
+      { path: 'src/app/geocoding/transport.browser.ts', source: `import { bridge } from '../bridge'\nexport const place = bridge` },
+    ])
+    const violations = [
+      ...collectArchitecturePolicyViolations(graph, FRONTEND_ARCHITECTURE_POLICIES.filter(({ name }) => [
+        'Components reach native capabilities through app actions',
+        'App controllers stay leaves',
+        'App modules do not import components',
+        'Place Search consumes geocoding through its session owner',
+      ].includes(name))),
+      ...collectArchitecturePolicyViolations(runtimeGraph(graph), SHARED_RUNTIME_GRAPH_POLICIES),
+      ...collectArchitecturePolicyViolations(
+        resolveWebEditionAliases(runtimeGraph(graph)),
+        WEB_EDITION_RUNTIME_GRAPH_POLICIES,
+      ),
+    ]
+
+    expect(violations).toEqual([
+      expect.stringContaining('[Components reach native capabilities through app actions] src/components/shared/Chrome.tsx'),
+      expect.stringContaining('[Components reach native capabilities through app actions] src/components/panels/Lidar.tsx'),
+      expect.stringContaining('[App controllers stay leaves] src/app/one/controller.ts'),
+      expect.stringContaining('[App modules do not import components] src/app/panel/actions.ts'),
+      expect.stringContaining('[Place Search consumes geocoding through its session owner] src/components/canvas/PlaceSearch.tsx:2:1 imports #geocoding-transport'),
+      expect.stringContaining('[GeoJSON, continuous save and map layers stay free of Desktop capabilities] src/app/map-layers/state.ts transitively imports @tauri-apps/api/core'),
+      expect.stringContaining('[Place Search reaches native geocoding only through the edition transport] src/components/canvas/PlaceSearch.tsx transitively imports src/ipc/lidar.ts'),
+      expect.stringContaining('[Web entry graph stays free of Desktop capabilities] src/main.web.tsx transitively imports @tauri-apps/api/core via src/main.web.tsx -> src/app/geocoding/transport.browser.ts'),
+    ])
+  })
+
+  it('rejects a canvas runtime role module importing the scene runtime, type-only edges included', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/scene-runtime.ts', ['export class SceneCanvasRuntime {}']),
+      plantedSource('src/canvas/runtime/command-surface.ts', ["import { SceneCanvasRuntime } from './scene-runtime'"]),
+      plantedSource('src/canvas/runtime/query-surface.ts', ["import type { SceneCanvasRuntime } from './scene-runtime'"]),
+      plantedSource('src/canvas/runtime/document-surface.ts', ['export const documents = 1']),
+      plantedSource('src/canvas/runtime/scene-runtime/construction.ts', ["import { SceneCanvasRuntime } from '../scene-runtime'"]),
+    ])
+    const policies = FRONTEND_ARCHITECTURE_POLICIES.filter(
+      ({ name }) => name === 'Canvas runtime role modules do not import ./scene-runtime',
+    )
+
+    expect(collectArchitecturePolicyViolations(graph, policies)).toEqual([
+      expect.stringContaining('src/canvas/runtime/command-surface.ts:1:1 imports src/canvas/runtime/scene-runtime.ts'),
+      expect.stringContaining('src/canvas/runtime/query-surface.ts:1:1 imports src/canvas/runtime/scene-runtime.ts'),
+      expect.stringContaining('src/canvas/runtime/scene-runtime/construction.ts:1:1 imports src/canvas/runtime/scene-runtime.ts'),
+    ])
+  })
+
   it('keeps every discovered TypeScript source within its owned dependency seams', () => {
-    const graph = discoverTypeScriptSourceGraph(new URL('../', import.meta.url), 'src')
+    const graph = discoveredSourceGraph()
     const paths = graph.map(({ path }) => path)
 
     expect(paths).toEqual([...paths].sort((left, right) => left.localeCompare(right)))
@@ -1924,4 +2504,863 @@ describe('declarative frontend architecture policies', () => {
     expect(paths.length).toBeGreaterThan(400)
     expect(collectArchitecturePolicyViolations(graph, FRONTEND_ARCHITECTURE_POLICIES)).toEqual([])
   }, 20_000)
+
+  it('names only existing sources in every policy list checked against the real graph', () => {
+    expect(collectPolicyPathDriftViolations(discoveredSourceGraph(), [
+      ...FRONTEND_ARCHITECTURE_POLICIES,
+      ...SHARED_RUNTIME_GRAPH_POLICIES,
+      ...WEB_EDITION_RUNTIME_GRAPH_POLICIES,
+      ...BROWSER_WORKSPACE_GRAPH_POLICIES,
+      ...TOOL_HOST_RUNTIME_GRAPH_POLICIES,
+    ])).toEqual([])
+  }, 20_000)
+
+  it('names only source exemptions that excuse a real file', () => {
+    // Each kept entry names why it stays although nothing needs it today.
+    const kept = [
+      // Label admission projects anchors once phase R lands; drop it at the R close if R does not project.
+      '[P12 the renderer learns the camera one way] allowedFrom entry excuses nothing: src/canvas/runtime/renderers/label-admission.ts',
+    ]
+    const graph = discoveredSourceGraph()
+    const runtime = runtimeGraph(graph)
+    expect([
+      ...collectUnusedExemptionViolations(graph, FRONTEND_ARCHITECTURE_POLICIES, TEST_SOURCE_PATTERNS),
+      ...collectUnusedExemptionViolations(runtime, SHARED_RUNTIME_GRAPH_POLICIES, TEST_SOURCE_PATTERNS),
+      ...collectUnusedExemptionViolations(
+        resolveWebEditionAliases(runtime),
+        WEB_EDITION_RUNTIME_GRAPH_POLICIES,
+        TEST_SOURCE_PATTERNS,
+      ),
+      ...collectUnusedExemptionViolations(runtime, BROWSER_WORKSPACE_GRAPH_POLICIES, TEST_SOURCE_PATTERNS),
+      ...collectUnusedExemptionViolations(runtime, TOOL_HOST_RUNTIME_GRAPH_POLICIES, TEST_SOURCE_PATTERNS),
+    ]).toEqual(kept)
+  }, 60_000)
+
+  it('reports an exceptFrom or allowedFrom entry that excuses nothing, but not an ignored one', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/app/uses.ts', ["import { invoke } from '@tauri-apps/api/core'", 'export const live = invoke']),
+      plantedSource('src/app/clean.ts', ['export const clean = 1']),
+    ])
+
+    expect(collectUnusedExemptionViolations(graph, [
+      {
+        kind: 'forbid-imports',
+        name: 'Planted exceptFrom',
+        from: ['src/app/**'],
+        exceptFrom: ['src/app/uses.ts', 'src/app/clean.ts', 'src/app/gone/**', 'src/**/*.test.ts'],
+        targets: ['@tauri-apps/**'],
+      },
+      {
+        kind: 'confine-symbols',
+        name: 'Planted allowedFrom',
+        names: ['live'],
+        allowedFrom: ['src/app/uses.ts', 'src/app/clean.ts'],
+      },
+    ], ['src/**/*.test.ts'])).toEqual([
+      '[Planted exceptFrom] exceptFrom entry excuses nothing: src/app/clean.ts',
+      '[Planted exceptFrom] exceptFrom entry excuses nothing: src/app/gone/**',
+      '[Planted allowedFrom] allowedFrom entry excuses nothing: src/app/clean.ts',
+    ])
+  })
+
+  it('rejects a policy glob from that matches no source', () => {
+    const graph = createTypeScriptSourceGraph([PATH_DRIFT_LIVE_SOURCE])
+
+    expect(collectPolicyPathDriftViolations(graph, [
+      {
+        kind: 'forbid-source-symbols',
+        name: 'Planted glob from',
+        from: ['src/app/**', 'src/app/live/module.ts', 'src/state/**'],
+        names: ['live'],
+      },
+    ])).toEqual([
+      '[Planted glob from] from matches no source: src/state/**',
+    ])
+  })
+
+  it('rejects a src/ literal target that matches no source in every import kind', () => {
+    const graph = createTypeScriptSourceGraph([PATH_DRIFT_LIVE_SOURCE])
+    const targets = ['src/app/live/module.ts', 'src/app/gone.ts']
+
+    expect(collectPolicyPathDriftViolations(graph, [
+      { kind: 'forbid-imports', name: 'Planted forbid-imports', from: ['src/app/**'], targets },
+      { kind: 'forbid-transitive-imports', name: 'Planted forbid-transitive-imports', from: ['src/app/**'], targets },
+      { kind: 'require-imports', name: 'Planted require-imports', from: ['src/app/**'], targets },
+      { kind: 'confine-importers', name: 'Planted confine-importers', targets, allowedFrom: ['src/app/**'] },
+      {
+        kind: 'named-imports',
+        name: 'Planted named-imports',
+        from: ['src/app/**'],
+        target: 'src/app/gone.ts',
+        requiredNames: [],
+        allowedNames: [],
+      },
+    ])).toEqual([
+      '[Planted forbid-imports] targets matches no source: src/app/gone.ts',
+      '[Planted forbid-transitive-imports] targets matches no source: src/app/gone.ts',
+      '[Planted require-imports] targets matches no source: src/app/gone.ts',
+      '[Planted confine-importers] targets matches no source: src/app/gone.ts',
+      '[Planted named-imports] target matches no source: src/app/gone.ts',
+    ])
+  })
+
+  it('rejects a src/ glob target that matches no source', () => {
+    const graph = createTypeScriptSourceGraph([PATH_DRIFT_LIVE_SOURCE])
+
+    expect(collectPolicyPathDriftViolations(graph, [
+      {
+        kind: 'forbid-imports',
+        name: 'Planted glob target',
+        from: ['src/app/**'],
+        targets: ['src/app/live/**', 'src/app/planning-canvas/**'],
+      },
+    ])).toEqual([
+      '[Planted glob target] targets matches no source: src/app/planning-canvas/**',
+    ])
+  })
+
+  it('rejects a src/ allowedFrom entry that matches no source', () => {
+    const graph = createTypeScriptSourceGraph([PATH_DRIFT_LIVE_SOURCE])
+
+    expect(collectPolicyPathDriftViolations(graph, [
+      {
+        kind: 'confine-symbols',
+        name: 'Planted confine-symbols',
+        from: ['src/**'],
+        names: ['live'],
+        allowedFrom: ['src/app/live/module.ts', 'src/app/gone.ts'],
+      },
+      {
+        kind: 'confine-importers',
+        name: 'Planted confine-importers',
+        targets: ['src/app/live/module.ts'],
+        allowedFrom: ['src/app/live/**', 'src/app/gone/**'],
+      },
+    ])).toEqual([
+      '[Planted confine-symbols] allowedFrom matches no source: src/app/gone.ts',
+      '[Planted confine-importers] allowedFrom matches no source: src/app/gone/**',
+    ])
+  })
+
+  it('skips package specifiers, aliases, callee and write text, exceptions and tombstones in the path-drift check', () => {
+    const graph = createTypeScriptSourceGraph([PATH_DRIFT_LIVE_SOURCE])
+
+    expect(collectPolicyPathDriftViolations(graph, [
+      {
+        kind: 'forbid-imports',
+        name: 'Planted non-path targets and exceptions',
+        from: ['src/app/**'],
+        exceptFrom: ['src/gone/**'],
+        targets: ['maplibre-gl', '@tauri-apps/api/window', '@tauri-apps/**', '#platform', '**', 'ui-gallery/**'],
+        exceptTargets: ['src/gone.ts'],
+        allowTypeOnlyTargets: ['src/gone/**'],
+      },
+      {
+        kind: 'forbid-calls',
+        name: 'Planted callee text',
+        from: ['src/app/**'],
+        exceptFrom: ['src/gone/**'],
+        targets: ['maplibre.**', 'src/gone.fn'],
+      },
+      {
+        kind: 'forbid-writes',
+        name: 'Planted write text',
+        from: ['src/app/**'],
+        exceptFrom: ['src/gone/**'],
+        targets: ['src/gone.value'],
+      },
+      {
+        kind: 'source-tombstones',
+        name: 'Planted tombstones',
+        files: ['src/gone.ts'],
+        symbols: [{ from: ['src/gone/**'], names: ['gone'] }],
+      },
+      // A literal from is collectArchitecturePolicyViolations's missing-source check, not this one.
+      { kind: 'forbid-exports', name: 'Planted literal from', from: ['src/app/gone.ts'], names: ['gone'] },
+    ])).toEqual([])
+  })
+})
+
+function canvasV2Policies(id: string): readonly ArchitecturePolicy[] {
+  return CANVAS_V2_POLICIES.filter(({ name }) => name.startsWith(`${id} `))
+}
+
+function plantedSource(path: string, lines: readonly string[]) {
+  return { path, source: lines.join('\n') }
+}
+
+const P1_CAMERA_METHODS = '[P1 only the camera driver calls MapLibre camera methods]'
+const P1_MAP_RECEIVERS = '[P1 only the camera driver stops, pans, zooms, resizes or resets north a map]'
+const P1_MAP_TYPE = '[P1 the camera driver imports the MapLibre map type]'
+const P2 = '[P2 nobody projects through MapLibre]'
+const P3_SYMBOLS = '[P3 the legacy camera, its viewport snapshots and the planar camera maths stay deleted]'
+const P3_EXPORTS = '[P3 no module exports a free worldToScreen or screenToWorld]'
+const P3_BUILDER = '[P3 only the view module, the camera driver and the lens build a view transform]'
+const P4_IMPORTS = '[P4 the view module imports only its pure dependencies]'
+const P5_IMPORTS = '[P5 tools import no MapLibre, DOM or Pixi]'
+const P5_SYMBOLS = '[P5 tools name no DOM event, element or camera]'
+const P5B_IMPORTERS = '[P5b tool modules are value-imported only inside tools/ and by the interaction session]'
+const P5B_SESSION = '[P5b the interaction session value-imports only the tool host]'
+const P5C = '[P5c tools reach no MapLibre or Pixi through other modules]'
+const P6_CAPTURE = '[P6 only the DOM input source captures the pointer]'
+const P6_LISTENERS = '[P6 only the DOM input source adds canvas listeners]'
+const P6_MAPLIBRE = '[P6 MapLibre modules add listeners only to abort signals]'
+const P7 = '[P7 the input core reaches no browser global or DOM event]'
+const P10_SIGNALS = '[P10 only the runtime and the map layer read per-frame view signals]'
+const P10_IMPORTS = '[P10 the app, components and Web import view types only]'
+const P12 = '[P12 the renderer learns the camera one way]'
+const P11 = '[Retired frontend seams stay deleted]'
+const P11_FOCUS_REGION_CALL = '[Retired frontend seams stay deleted: the free focusRegion is not called]'
+const P11_FOCUS_REGION_EXPORT = '[Retired frontend seams stay deleted: no module exports focusRegion]'
+const P9_SYMBOLS = '[P9 only armCanvasTool and the session arm a tool]'
+const P9_CALLS = '[P9 app code calls no tool surface setTool but through armCanvasTool]'
+const P9_IMPORTS = '[P9 the arming callers import armCanvasTool]'
+const P14 = '[P14 the keyboard module is neutral]'
+const TEST_SOURCES = TEST_SOURCE_PATTERNS.join(', ')
+
+const PLANTED_MAP_LOADER = plantedSource('src/maplibre/loader.ts', ['export interface MapLibreMapInstance { stop(): void }'])
+const PLANTED_CAMERA_DRIVER = plantedSource('src/maplibre/camera-driver.ts', [
+  "import type { MapLibreMapInstance } from './loader'",
+  'export function drive(map: MapLibreMapInstance) { map.jumpTo({}); map.flyTo({}); map.stop(); map.resize() }',
+])
+
+describe('canvas v2 policies', () => {
+  it('P1 rejects camera moves and resizes on a map outside the camera driver and the World map components', () => {
+    const graph = createTypeScriptSourceGraph([
+      PLANTED_MAP_LOADER,
+      PLANTED_CAMERA_DRIVER,
+      plantedSource('src/maplibre/planted.ts', [
+        'instance.easeTo({ zoom: 3 });',
+        'this.mapInstance.jumpTo({ zoom: 3 });',
+        'map.flyTo!({ zoom: 3 });',
+        'map.resetNorth();',
+        'this.map!.zoomIn();',
+        'workspaceMap?.resize();',
+        'map?.stop();',
+        'surface.resetNorth();',
+        'commands.viewport.zoomIn();',
+        'this.options.cameraNavigation.panBy(1, 2);',
+        'raster.stop();',
+      ]),
+      plantedSource('src/components/world-map/WorldMapSurface.tsx', ['map.flyTo({ zoom: 3 }); map.fitBounds(b); map.resize()']),
+      plantedSource('src/maplibre/world-map.ts', ['map.jumpTo({ zoom: 3 })']),
+      plantedSource('src/maplibre/camera-driver.test.ts', ['map.jumpTo({ zoom: 3 }); map.stop()']),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P1'))).toEqual([
+      `${P1_CAMERA_METHODS} src/maplibre/planted.ts:1 calls instance.easeTo`,
+      `${P1_CAMERA_METHODS} src/maplibre/planted.ts:2 calls this.mapInstance.jumpTo`,
+      `${P1_CAMERA_METHODS} src/maplibre/planted.ts:3 calls map.flyTo!`,
+      `${P1_CAMERA_METHODS} src/maplibre/world-map.ts:1 calls map.jumpTo`,
+      `${P1_MAP_RECEIVERS} src/maplibre/planted.ts:4 calls map.resetNorth`,
+      `${P1_MAP_RECEIVERS} src/maplibre/planted.ts:5 calls this.map!.zoomIn`,
+      `${P1_MAP_RECEIVERS} src/maplibre/planted.ts:6 calls workspaceMap?.resize`,
+      `${P1_MAP_RECEIVERS} src/maplibre/planted.ts:7 calls map?.stop`,
+    ])
+  })
+
+  it('P1 fails closed when the camera driver stops importing the map type or moves', () => {
+    const untyped = createTypeScriptSourceGraph([
+      PLANTED_MAP_LOADER,
+      plantedSource('src/maplibre/camera-driver.ts', ['export function drive(map: { stop(): void }) { map.stop() }']),
+    ])
+    const moved = createTypeScriptSourceGraph([
+      PLANTED_MAP_LOADER,
+      plantedSource('src/maplibre/map-camera.ts', ["import type { MapLibreMapInstance } from './loader'"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(untyped, canvasV2Policies('P1'))).toEqual([
+      `${P1_MAP_TYPE} src/maplibre/camera-driver.ts is missing required import matching src/maplibre/loader.ts`,
+    ])
+    expect(collectArchitecturePolicyViolations(moved, canvasV2Policies('P1'))).toEqual([
+      `${P1_MAP_TYPE} required policy source is missing: src/maplibre/camera-driver.ts`,
+    ])
+  })
+
+  it('P2 rejects map projections everywhere but tests, the World map included', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/maplibre/planted.ts', [
+        'map.project([1, 2]);',
+        'this.map?.unproject([1, 2]);',
+        'workspaceMap!.project([1, 2]);',
+        'plane.project(point);',
+        'input.project(point);',
+      ]),
+      plantedSource('src/maplibre/shared-scene-layer.ts', ['map!.project([1, 2])']),
+      plantedSource('src/components/world-map/WorldMapSurface.tsx', ['map.project([1, 2])']),
+      plantedSource('src/maplibre/camera-driver.test.ts', ['map.unproject([1, 2])']),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P2'))).toEqual([
+      `${P2} src/maplibre/planted.ts:1 calls map.project`,
+      `${P2} src/maplibre/planted.ts:2 calls this.map?.unproject`,
+      `${P2} src/maplibre/planted.ts:3 calls workspaceMap!.project`,
+      `${P2} src/maplibre/shared-scene-layer.ts:1 calls map!.project`,
+      `${P2} src/components/world-map/WorldMapSurface.tsx:1 calls map.project`,
+    ])
+  })
+
+  it('P3 rejects the retired camera symbols anywhere, tests included', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/view/planted.ts', [
+        'export const transform = buildViewTransformFromPlane(plane, viewCameraToPlanar(camera))',
+        'export const moved = panPlanar(zoomPlanarToScale(camera, 4), 1, 2)',
+        '// CameraController and SceneViewportState in a comment are not identifiers',
+      ]),
+      plantedSource('src/app/planted.test.ts', [
+        'const camera = new CameraController()',
+        'export const snapshot: CameraViewportSnapshot = camera.snapshot',
+        "export const name = 'legacyCamera in a string is not an identifier'",
+      ]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P3'))).toEqual([
+      `${P3_SYMBOLS} src/canvas/runtime/view/planted.ts contains forbidden symbol buildViewTransformFromPlane`,
+      `${P3_SYMBOLS} src/canvas/runtime/view/planted.ts contains forbidden symbol viewCameraToPlanar`,
+      `${P3_SYMBOLS} src/canvas/runtime/view/planted.ts contains forbidden symbol panPlanar`,
+      `${P3_SYMBOLS} src/canvas/runtime/view/planted.ts contains forbidden symbol zoomPlanarToScale`,
+      `${P3_SYMBOLS} src/app/planted.test.ts contains forbidden symbol CameraController`,
+      `${P3_SYMBOLS} src/app/planted.test.ts contains forbidden symbol CameraViewportSnapshot`,
+    ])
+  })
+
+  it('P3 rejects a free world-to-screen export, the view transform module included', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/view/view-transform.ts', [
+        'export function worldToScreen(p: number) { return p }',
+        'export function screenToWorld(p: number) { return p }',
+      ]),
+      plantedSource('src/canvas/runtime/annotation-layout.ts', [
+        'export function worldToScreen(p: number) { return p }',
+      ]),
+      plantedSource('src/canvas/projection.ts', [
+        'const screenToWorld = (p: number) => p',
+        'export { screenToWorld }',
+      ]),
+      plantedSource('src/canvas/runtime/view/types.ts', [
+        'export interface ViewTransform { worldToScreen(p: number): number }',
+      ]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P3'))).toEqual([
+      `${P3_EXPORTS} src/canvas/runtime/view/view-transform.ts exports forbidden symbol worldToScreen`,
+      `${P3_EXPORTS} src/canvas/runtime/view/view-transform.ts exports forbidden symbol screenToWorld`,
+      `${P3_EXPORTS} src/canvas/runtime/annotation-layout.ts exports forbidden symbol worldToScreen`,
+      `${P3_EXPORTS} src/canvas/projection.ts exports forbidden symbol screenToWorld`,
+    ])
+  })
+
+  it('P3 confines building a view transform to the view module, the camera driver, the lens and tests', () => {
+    const allowed = [
+      'src/canvas/runtime/view/**',
+      'src/maplibre/camera-driver.ts',
+      'src/canvas/runtime/inspection-lens.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ].join(', ')
+    const build = ['export const view = buildViewTransform(camera, screen, plane)']
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/view/headless-driver.ts', build),
+      plantedSource('src/maplibre/camera-driver.ts', build),
+      plantedSource('src/canvas/runtime/inspection-lens.ts', build),
+      plantedSource('src/__tests__/support/test-view.ts', build),
+      plantedSource('src/canvas/runtime/chrome/rulers.ts', build),
+      plantedSource('src/app/canvas-map-surface/planted.ts', build),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P3'))).toEqual([
+      `${P3_BUILDER} src/canvas/runtime/chrome/rulers.ts contains confined symbol buildViewTransform; allowed sources: ${allowed}`,
+      `${P3_BUILDER} src/app/canvas-map-surface/planted.ts contains confined symbol buildViewTransform; allowed sources: ${allowed}`,
+    ])
+  })
+
+  it('P4 rejects view imports other than its pure dependencies', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/projection.ts', ['export const project = 1']),
+      plantedSource('src/canvas/session-plane.ts', ['export const plane = 1']),
+      plantedSource('src/canvas/workspace-camera-policy.ts', ['export const policy = 1']),
+      plantedSource('src/canvas/runtime/scene/types.ts', ['export interface ScenePlantEntity { readonly id: string }']),
+      plantedSource('src/canvas/runtime/scene/index.ts', ["export * from './types'"]),
+      plantedSource('src/maplibre/loader.ts', ['export const load = 1']),
+      plantedSource('src/canvas/runtime/view/types.ts', ['export const frame = 1']),
+      plantedSource('src/canvas/runtime/view/fit.ts', [
+        "import { project } from '../../projection'",
+        "import { plane } from '../../session-plane'",
+        "import { policy } from '../../workspace-camera-policy'",
+        "import type { ScenePlantEntity } from '../scene/types'",
+        "import { signal } from '@preact/signals'",
+        "import { frame } from './types'",
+      ]),
+      plantedSource('src/canvas/runtime/view/planted.ts', [
+        "import maplibregl from 'maplibre-gl'",
+        "import { load } from '../../../maplibre/loader'",
+        "import { ScenePlantEntity } from '../scene/types'",
+        "import type { ScenePlantEntity as Barrel } from '../scene'",
+        "import { Application } from 'pixi.js'",
+      ]),
+      plantedSource('src/canvas/runtime/view/camera-contract.test.ts', [
+        "import { MercatorTransform } from 'maplibre-gl-source/geo/projection/mercator_transform.ts'",
+      ]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P4'))).toEqual([
+      `${P4_IMPORTS} src/canvas/runtime/view/planted.ts:1:1 imports maplibre-gl via "maplibre-gl" (static)`,
+      `${P4_IMPORTS} src/canvas/runtime/view/planted.ts:2:1 imports src/maplibre/loader.ts via "../../../maplibre/loader" (static)`,
+      `${P4_IMPORTS} src/canvas/runtime/view/planted.ts:3:1 imports src/canvas/runtime/scene/types.ts via "../scene/types" (static)`,
+      `${P4_IMPORTS} src/canvas/runtime/view/planted.ts:4:1 imports src/canvas/runtime/scene/index.ts via "../scene" (static)`,
+      `${P4_IMPORTS} src/canvas/runtime/view/planted.ts:5:1 imports pixi.js via "pixi.js" (static)`,
+    ])
+  })
+})
+
+describe('canvas v2 policies, end of 0B', () => {
+  it('P5 rejects tool imports of MapLibre, Pixi, signals, the app, input, the view, renderers, chrome and the ports', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/maplibre/loader.ts', ['export const load = 1']),
+      plantedSource('src/app/keyboard/arming.ts', ['export const arm = 1']),
+      plantedSource('src/components/canvas/ToolCard.tsx', ['export const card = 1']),
+      plantedSource('src/canvas/runtime/view/types.ts', ['export interface ViewFrame { readonly scale: number }']),
+      plantedSource('src/canvas/runtime/view/navigation.ts', ['export const navigate = 1']),
+      plantedSource('src/canvas/runtime/input/input-router.ts', ['export const route = 1']),
+      plantedSource('src/canvas/runtime/renderers/draft-layer.ts', ['export const draw = 1']),
+      plantedSource('src/canvas/runtime/chrome/handle-layer.ts', ['export const handles = 1']),
+      plantedSource('src/canvas/runtime/interaction-ports.ts', ['export const ports = 1']),
+      plantedSource('src/canvas/runtime/interaction-types.ts', ['export interface ToolPoint { readonly x: number }']),
+      plantedSource('src/canvas/runtime/tools/planted.ts', [
+        "import maplibregl from 'maplibre-gl'",
+        "import { Graphics } from 'pixi.js'",
+        "import { signal } from '@preact/signals'",
+        "import { load } from '../../../maplibre/loader'",
+        "import { arm } from '../../../app/keyboard/arming'",
+        "import { card } from '../../../components/canvas/ToolCard'",
+        "import { navigate } from '../view/navigation'",
+        "import { ViewFrame } from '../view/types'",
+        "import { route } from '../input/input-router'",
+        "import { draw } from '../renderers/draft-layer'",
+        "import { handles } from '../chrome/handle-layer'",
+        "import { ports } from '../interaction-ports'",
+      ]),
+      plantedSource('src/canvas/runtime/tools/polygon.ts', [
+        "import type { ViewFrame } from '../view/types'",
+        "import type { ToolPoint } from '../interaction-types'",
+      ]),
+      plantedSource('src/canvas/runtime/tools/tool-host.ts', [
+        "import { signal } from '@preact/signals'",
+        "import { route } from '../input/input-router'",
+      ]),
+      plantedSource('src/canvas/runtime/tools/pan.test.ts', ["import { route } from '../input/input-router'"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P5'))).toEqual([
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:1:1 imports maplibre-gl via "maplibre-gl" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:2:1 imports pixi.js via "pixi.js" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:3:1 imports @preact/signals via "@preact/signals" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:4:1 imports src/maplibre/loader.ts via "../../../maplibre/loader" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:5:1 imports src/app/keyboard/arming.ts via "../../../app/keyboard/arming" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:6:1 imports src/components/canvas/ToolCard.tsx via "../../../components/canvas/ToolCard" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:7:1 imports src/canvas/runtime/view/navigation.ts via "../view/navigation" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:8:1 imports src/canvas/runtime/view/types.ts via "../view/types" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:9:1 imports src/canvas/runtime/input/input-router.ts via "../input/input-router" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:10:1 imports src/canvas/runtime/renderers/draft-layer.ts via "../renderers/draft-layer" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:11:1 imports src/canvas/runtime/chrome/handle-layer.ts via "../chrome/handle-layer" (static)`,
+      `${P5_IMPORTS} src/canvas/runtime/tools/planted.ts:12:1 imports src/canvas/runtime/interaction-ports.ts via "../interaction-ports" (static)`,
+    ])
+  })
+
+  it('P5 confines DOM, event and camera names in tools to the tool host', () => {
+    // One tool reaching every name of plan §5 P5: dropping any name from the rule drops its line here.
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/tools/planted.ts', [
+        'export function planted(event: PointerEvent, key: KeyboardEvent, element: HTMLElement) {',
+        '  const box = element.getBoundingClientRect()',
+        '  window.addEventListener(key.type, () => requestAnimationFrame(() => document.title = `${event.clientX - box.x}`))',
+        '}',
+        'export interface Planted { readonly view: ViewTransform; readonly driver: CameraDriver; readonly nav: ViewNavigation }',
+      ]),
+      plantedSource('src/canvas/runtime/tools/tool-host.ts', [
+        'export function toWorld(event: PointerEvent, view: ViewTransform) { return event.clientX * view.scale }',
+      ]),
+      plantedSource('src/canvas/runtime/tools/polygon.test.ts', ['document.body.dispatchEvent(new PointerEvent("pointerdown"))']),
+    ])
+
+    const confined = [
+      'document', 'window', 'HTMLElement', 'PointerEvent', 'KeyboardEvent', 'clientX', 'addEventListener',
+      'getBoundingClientRect', 'requestAnimationFrame', 'ViewTransform', 'CameraDriver', 'ViewNavigation',
+    ]
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P5'))).toEqual(
+      confined.map(
+        (name) =>
+          `${P5_SYMBOLS} src/canvas/runtime/tools/planted.ts contains confined symbol ${name}; allowed sources: src/canvas/runtime/tools/tool-host.ts, ${TEST_SOURCES}`,
+      ),
+    )
+  })
+
+  it('P5b rejects value imports of a tool module outside tools/ and of a tool other than the host from the session', () => {
+    const graph = runtimeGraph(createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/tools/tool.ts', ['export interface Tool { readonly id: string }']),
+      plantedSource('src/canvas/runtime/tools/polygon.ts', ["import type { Tool } from './tool'", 'export const polygon = 1']),
+      plantedSource('src/canvas/runtime/tools/tool-host.ts', ["import { polygon } from './polygon'", 'export const host = 1']),
+      plantedSource('src/canvas/runtime/input/input-router.ts', [
+        "import { polygon } from '../tools/polygon'",
+        "import type { Tool } from '../tools/tool'",
+      ]),
+      plantedSource('src/canvas/runtime/interaction-session.ts', [
+        "import { host } from './tools/tool-host'",
+        "import { polygon } from './tools/polygon'",
+      ]),
+      plantedSource('src/canvas/runtime/tools/polygon.test.ts', ["import { polygon } from './polygon'"]),
+    ]))
+    const allowed = `src/canvas/runtime/tools/**, src/canvas/runtime/interaction-session.ts, ${TEST_SOURCES}`
+
+    expect(collectArchitecturePolicyViolations(graph, TOOL_HOST_RUNTIME_GRAPH_POLICIES)).toEqual([
+      `${P5B_IMPORTERS} src/canvas/runtime/input/input-router.ts:1:1 imports src/canvas/runtime/tools/polygon.ts via "../tools/polygon" (static); allowed importers: ${allowed}`,
+      `${P5B_SESSION} src/canvas/runtime/interaction-session.ts:2:1 imports src/canvas/runtime/tools/polygon.ts via "./tools/polygon" (static)`,
+    ])
+  })
+
+  it('P5c rejects MapLibre and Pixi reached from a tool through helpers, type-only edges included', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/maplibre/loader.ts', ['export interface MapLibreMapInstance { stop(): void }']),
+      plantedSource('src/canvas/runtime/helper.ts', ["import { Graphics } from 'pixi.js'", 'export const helper = 1']),
+      plantedSource('src/canvas/runtime/legacy-shim.ts', [
+        "import type { MapLibreMapInstance } from '../../maplibre/loader'",
+        'export type Shim = MapLibreMapInstance',
+      ]),
+      plantedSource('src/canvas/runtime/runtime.ts', ["export type { Shim } from './legacy-shim'"]),
+      plantedSource('src/canvas/runtime/tools/tool.ts', ["import type { Shim } from '../runtime'"]),
+      plantedSource('src/canvas/runtime/tools/polygon.ts', ["import { helper } from '../helper'"]),
+      plantedSource('src/canvas/runtime/tools/tool-host.ts', ["import type { MapLibreMapInstance } from '../../../maplibre/loader'"]),
+      plantedSource('src/canvas/runtime/tools/polygon.test.ts', ["import maplibregl from 'maplibre-gl'"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P5c'))).toEqual([
+      `${P5C} src/canvas/runtime/tools/tool.ts transitively imports src/maplibre/loader.ts via src/canvas/runtime/tools/tool.ts -> src/canvas/runtime/runtime.ts -> src/canvas/runtime/legacy-shim.ts -> src/maplibre/loader.ts`,
+      `${P5C} src/canvas/runtime/tools/polygon.ts transitively imports pixi.js via src/canvas/runtime/tools/polygon.ts -> src/canvas/runtime/helper.ts -> pixi.js`,
+      `${P5C} src/canvas/runtime/tools/tool-host.ts transitively imports src/maplibre/loader.ts via src/canvas/runtime/tools/tool-host.ts -> src/maplibre/loader.ts`,
+    ])
+  })
+
+  it('P6 confines pointer capture and canvas listeners to the DOM input source and the named element owners', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/planted.ts', [
+        'export function planted(host: HTMLElement) {',
+        "  host.addEventListener('pointerdown', (event) => host.setPointerCapture(event.pointerId))",
+        '  host.releasePointerCapture(1)',
+        '}',
+      ]),
+      plantedSource('src/canvas/planted-source.ts', ["window.addEventListener('wheel', () => {})"]),
+      plantedSource('src/canvas/runtime/input/dom-input-source.ts', [
+        "host.addEventListener('pointerdown', () => {}); host.setPointerCapture(1); host.releasePointerCapture(1)",
+      ]),
+      plantedSource('src/canvas/runtime/chrome/handle-layer.ts', ["element.addEventListener('pointerenter', () => {})"]),
+      plantedSource('src/canvas/runtime/chrome/text-entry-host.ts', ["textarea.addEventListener('blur', () => {})"]),
+      plantedSource('src/canvas/runtime/chrome/locked-affordance.ts', ["button.addEventListener('click', () => {})"]),
+      plantedSource('src/canvas/runtime/inspection-lens.ts', ["document.fonts?.addEventListener('loadingdone', () => {})"]),
+      plantedSource('src/canvas/runtime/chrome/rulers.ts', ["element.addEventListener('pointerdown', () => {})"]),
+      plantedSource('src/maplibre/workspace-map.ts', ["container.addEventListener('pointerdown', () => {})"]),
+      plantedSource('src/maplibre/view-snapshot-map.ts', ["signal.addEventListener('abort', () => {})"]),
+      plantedSource('src/canvas/runtime/planted.test.ts', ['host.setPointerCapture(1); host.addEventListener("pointerup", () => {})']),
+    ])
+    const listenerOwners = [
+      'src/canvas/runtime/input/dom-input-source.ts',
+      'src/canvas/runtime/input/selection-drag-guard.ts',
+      'src/canvas/runtime/chrome/text-entry-host.ts',
+      'src/canvas/runtime/chrome/handle-layer.ts',
+      'src/canvas/runtime/chrome/locked-affordance.ts',
+      'src/canvas/runtime/inspection-lens.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ].join(', ')
+    const captureOwners = `src/canvas/runtime/input/dom-input-source.ts, ${TEST_SOURCES}`
+    const abortOwners = `src/maplibre/view-snapshot-map.ts, src/maplibre/satellite-provider-session.ts, ${TEST_SOURCES}`
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P6'))).toEqual([
+      `${P6_CAPTURE} src/canvas/runtime/planted.ts contains confined symbol setPointerCapture; allowed sources: ${captureOwners}`,
+      `${P6_CAPTURE} src/canvas/runtime/planted.ts contains confined symbol releasePointerCapture; allowed sources: ${captureOwners}`,
+      `${P6_LISTENERS} src/canvas/runtime/planted.ts contains confined symbol addEventListener; allowed sources: ${listenerOwners}`,
+      `${P6_LISTENERS} src/canvas/planted-source.ts contains confined symbol addEventListener; allowed sources: ${listenerOwners}`,
+      `${P6_LISTENERS} src/canvas/runtime/chrome/rulers.ts contains confined symbol addEventListener; allowed sources: ${listenerOwners}`,
+      `${P6_MAPLIBRE} src/maplibre/workspace-map.ts contains confined symbol addEventListener; allowed sources: ${abortOwners}`,
+    ])
+  })
+
+  it('P7 confines browser globals and DOM events in the input core to the DOM input source', () => {
+    // One input module reaching every name of plan §5 P7: dropping any name from the rule drops its line here.
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/input/recognise.ts', [
+        'export function recognise(event: PointerEvent | WheelEvent) {',
+        '  setTimeout(() => {}, Date.now() - performance.now())',
+        '  return window.devicePixelRatio + document.title.length + navigator.maxTouchPoints + event.timeStamp',
+        '}',
+      ]),
+      plantedSource('src/canvas/runtime/input/normalise.ts', [
+        '// Time arrives as an input: no Date, performance or setTimeout here.',
+        'export function normalise(raw: { readonly timeStamp: number }, now: () => number) { return now() - raw.timeStamp }',
+      ]),
+      plantedSource('src/canvas/runtime/input/dom-input-source.ts', [
+        "export function install(event: PointerEvent) { window.addEventListener('blur', () => performance.now()) }",
+      ]),
+      plantedSource('src/canvas/runtime/input/recognise.test.ts', ['new PointerEvent("pointerdown"); Date.now()']),
+    ])
+
+    const confined = ['window', 'document', 'Date', 'performance', 'setTimeout', 'navigator', 'PointerEvent', 'WheelEvent']
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P7'))).toEqual(
+      confined.map(
+        (name) =>
+          `${P7} src/canvas/runtime/input/recognise.ts contains confined symbol ${name}; allowed sources: src/canvas/runtime/input/dom-input-source.ts, ${TEST_SOURCES}`,
+      ),
+    )
+  })
+
+  it('P12 confines per-point projection in the renderers to the billboards, the billboard drafts and label admission', () => {
+    // One world-layer module reaching every name of plan §5 P12: dropping any name from the rule drops its line here.
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/renderers/world-layers.ts', [
+        'export function paint(view: RendererView, quad: WorldQuad, out: Float64Array) {',
+        '  view.projectAnchors(new Float64Array(2), out, 1)',
+        '  return [view.worldToScreen({ x: 0, y: 0 }), view.worldQuadToScreen(quad)]',
+        '}',
+      ]),
+      plantedSource('src/canvas/runtime/renderers/billboard-layer.ts', [
+        'export function place(view: RendererView, out: Float64Array) { view.projectAnchors(out, out, 1); view.worldToScreen({ x: 0, y: 0 }) }',
+      ]),
+      plantedSource('src/canvas/runtime/renderers/draft-layer.ts', ['export function draft(at: RendererView, out: Float64Array) { at.projectAnchors(out, out, 1) }']),
+      plantedSource('src/canvas/runtime/renderers/label-admission.ts', ['export function admit(view: RendererView) { return view.worldToScreen({ x: 0, y: 0 }) }']),
+      plantedSource('src/canvas/runtime/renderers/world-layers.test.ts', ['view.worldToScreen({ x: 0, y: 0 })']),
+      plantedSource('src/canvas/runtime/chrome/handle-layer.ts', ['export function place(view: RendererView) { return view.worldToScreen({ x: 0, y: 0 }) }']),
+    ])
+    const allowed = [
+      'src/canvas/runtime/renderers/billboard-layer.ts',
+      'src/canvas/runtime/renderers/draft-layer.ts',
+      'src/canvas/runtime/renderers/label-admission.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ].join(', ')
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P12'))).toEqual(
+      ['worldToScreen', 'projectAnchors', 'worldQuadToScreen'].map(
+        (name) => `${P12} src/canvas/runtime/renderers/world-layers.ts contains confined symbol ${name}; allowed sources: ${allowed}`,
+      ),
+    )
+  })
+
+  it('P10 confines per-frame view signals to the runtime, the map layer and tests', () => {
+    const allowed = ['src/canvas/runtime/**', 'src/maplibre/**', ...TEST_SOURCE_PATTERNS].join(', ')
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/scene-runtime/effects.ts', ['export const read = frames.viewFrame.value']),
+      plantedSource('src/maplibre/shared-scene-layer.ts', ['export const read = frames.viewFrame.value']),
+      plantedSource('src/components/canvas/Planted.tsx', ['export const read = query.viewFrame.value']),
+      plantedSource('src/app/planted.ts', ['export const off = frames.onViewFrame(() => frames.settledViewFrame.value)']),
+      plantedSource('src/components/canvas/Planted.test.tsx', ['export const read = query.viewFrame.value']),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P10'))).toEqual([
+      `${P10_SIGNALS} src/components/canvas/Planted.tsx contains confined symbol viewFrame; allowed sources: ${allowed}`,
+      `${P10_SIGNALS} src/app/planted.ts contains confined symbol settledViewFrame; allowed sources: ${allowed}`,
+      `${P10_SIGNALS} src/app/planted.ts contains confined symbol onViewFrame; allowed sources: ${allowed}`,
+    ])
+  })
+
+  it('P10 rejects value imports of the view module and type imports beyond its read surface, types and driver host', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/view/types.ts', ['export interface ViewScreen { readonly width: number }']),
+      plantedSource('src/canvas/runtime/view/read-surface.ts', ['export interface ViewReadSurface { readonly x: number }']),
+      plantedSource('src/canvas/runtime/view/camera-driver.ts', ['export interface CameraDriverHost { readonly x: number }']),
+      plantedSource('src/canvas/runtime/view/driver-host.ts', ['export function createCameraDriverHost() {}']),
+      plantedSource('src/canvas/runtime/view/camera-math.ts', ['export interface Placement { readonly x: number }']),
+      plantedSource('src/app/canvas-map-surface/workspace-activation.ts', [
+        "import type { CameraDriverHost } from '../../canvas/runtime/view/camera-driver'",
+        "import type { ViewScreen } from '../../canvas/runtime/view/types'",
+        "import type { ViewReadSurface } from '../../canvas/runtime/view/read-surface'",
+      ]),
+      plantedSource('src/app/canvas-map-surface/planted.ts', [
+        "import { createCameraDriverHost } from '../../canvas/runtime/view/driver-host'",
+        "import type { Placement } from '../../canvas/runtime/view/camera-math'",
+      ]),
+      plantedSource('src/components/canvas/Planted.tsx', ["import { ViewScreen } from '../../canvas/runtime/view/types'"]),
+      plantedSource('src/web/planted.test.ts', ["import { createCameraDriverHost } from '../canvas/runtime/view/driver-host'"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P10'))).toEqual([
+      `${P10_IMPORTS} src/app/canvas-map-surface/planted.ts:1:1 imports src/canvas/runtime/view/driver-host.ts via "../../canvas/runtime/view/driver-host" (static)`,
+      `${P10_IMPORTS} src/app/canvas-map-surface/planted.ts:2:1 imports src/canvas/runtime/view/camera-math.ts via "../../canvas/runtime/view/camera-math" (static)`,
+      `${P10_IMPORTS} src/components/canvas/Planted.tsx:1:1 imports src/canvas/runtime/view/types.ts via "../../canvas/runtime/view/types" (static)`,
+    ])
+  })
+
+  it('P11 rejects the retired tool adapter seam, its symbols and scene-interaction.ts', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/scene-interaction.ts', ['export const session = 1']),
+      plantedSource('src/canvas/runtime/tools/planted.ts', [
+        'export interface SceneToolAdapter { onPointerDown(event: SceneToolPointerEvent): void }',
+        'export type SceneToolPointerEvent = { readonly x: number }',
+        'export type Frame = SceneInteractionFrame & SceneInteractionFrameHandlers',
+      ]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, SOURCE_TOMBSTONE_POLICIES)).toEqual([
+      `${P11} retired source still exists: src/canvas/runtime/scene-interaction.ts`,
+      `${P11} src/canvas/runtime/tools/planted.ts contains retired symbol SceneToolAdapter`,
+      `${P11} src/canvas/runtime/tools/planted.ts contains retired symbol SceneToolPointerEvent`,
+      `${P11} src/canvas/runtime/tools/planted.ts contains retired symbol SceneInteractionFrame`,
+      `${P11} src/canvas/runtime/tools/planted.ts contains retired symbol SceneInteractionFrameHandlers`,
+    ])
+  })
+
+  it('P11 rejects the retired camera files and the shim and planar camera symbols', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/legacy-camera-facade.ts', ['export const facade = 1']),
+      plantedSource('src/canvas/runtime/camera.ts', ['export const camera = 1']),
+      plantedSource('src/maplibre/workspace-camera.ts', ['export const shim = 1']),
+      plantedSource('src/canvas/runtime/renderers/viewport-presentation.ts', ['export const presentation = 1']),
+      plantedSource('src/canvas/runtime/view/planted.ts', [
+        'export const HOLD_NOISE_DEG = 1e-9',
+        'export function refreshOrigin() { return getAnnotationScreenFrame() }',
+      ]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, SOURCE_TOMBSTONE_POLICIES)).toEqual([
+      `${P11} retired source still exists: src/canvas/runtime/legacy-camera-facade.ts`,
+      `${P11} retired source still exists: src/canvas/runtime/camera.ts`,
+      `${P11} retired source still exists: src/maplibre/workspace-camera.ts`,
+      `${P11} retired source still exists: src/canvas/runtime/renderers/viewport-presentation.ts`,
+      `${P11} src/canvas/runtime/view/planted.ts contains retired symbol refreshOrigin`,
+      `${P11} src/canvas/runtime/view/planted.ts contains retired symbol HOLD_NOISE_DEG`,
+      `${P11} src/canvas/runtime/view/planted.ts contains retired symbol getAnnotationScreenFrame`,
+    ])
+  })
+
+  it('P11 rejects the retired focus regions, shortcut managers, focusMapSurface, the free focusRegion and LEGACY_BINDINGS', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/app/shell/focus-regions.ts', ['export const regions = 1']),
+      plantedSource('src/shortcuts/manager.ts', ['export const manager = 1']),
+      plantedSource('src/web/canvas-shortcuts.ts', ['export const shortcuts = 1']),
+      plantedSource('src/components/plant-db/planted.ts', [
+        'export function focusRegion(id: string) { return id }',
+        "focusRegion('map')",
+        'export function focusMapSurface() {}',
+      ]),
+      plantedSource('src/canvas/runtime/input/planted.test.ts', ['export const bindings = LEGACY_BINDINGS']),
+      // The focus owner's method keeps the name: a declaration, an object method and a call on the owner pass.
+      plantedSource('src/app/keyboard/focus-owner.ts', [
+        "export interface FocusOwner { focusRegion(region: string, reason: string): void }",
+        "export const focusOwner: FocusOwner = { focusRegion(region) { return void region } }",
+        "focusOwner.focusRegion('map', 'region-cycle')",
+      ]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, SOURCE_TOMBSTONE_POLICIES)).toEqual([
+      `${P11} retired source still exists: src/app/shell/focus-regions.ts`,
+      `${P11} retired source still exists: src/shortcuts/manager.ts`,
+      `${P11} retired source still exists: src/web/canvas-shortcuts.ts`,
+      `${P11} src/components/plant-db/planted.ts contains retired symbol focusMapSurface`,
+      `${P11} src/canvas/runtime/input/planted.test.ts contains retired symbol LEGACY_BINDINGS`,
+      `${P11_FOCUS_REGION_CALL} src/components/plant-db/planted.ts:2 calls focusRegion`,
+      `${P11_FOCUS_REGION_EXPORT} src/components/plant-db/planted.ts exports forbidden symbol focusRegion`,
+    ])
+  })
+
+  it('P11 rejects the retired scene chrome file and SceneChromeOverlay', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/scene-chrome.ts', ['export const chrome = 1']),
+      plantedSource('src/canvas/runtime/scene-runtime/planted.ts', ['export class SceneChromeOverlay {}']),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, SOURCE_TOMBSTONE_POLICIES)).toEqual([
+      `${P11} retired source still exists: src/canvas/runtime/scene-chrome.ts`,
+      `${P11} src/canvas/runtime/scene-runtime/planted.ts contains retired symbol SceneChromeOverlay`,
+    ])
+  })
+
+  it('P9 rejects arming a tool outside armCanvasTool: a bare selectCanvasTool and a surface setTool', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/app/keyboard/arming.ts', [
+        "import { setCurrentCanvasTool } from '../../canvas/session'",
+        'export function armCanvasTool(tool: string) { setCurrentCanvasTool(tool); surface.setTool(tool) }',
+      ]),
+      plantedSource('src/canvas/session.ts', ['export function setCurrentCanvasTool(name: string) { setCanvasTool(name) }']),
+      plantedSource('src/canvas/runtime/scene-runtime.ts', ['export const set = (name: string) => tools.setTool(name)']),
+      plantedSource('src/components/canvas/Planted.tsx', [
+        "selectCanvasTool('polygon')",
+        "surface.setTool('line')",
+        "tools?.setTool('select')",
+        "commands!['setTool']('rectangle')",
+      ]),
+      plantedSource('src/canvas/planted-source.ts', ["commandSurface?.setTool('plant-stamp')"]),
+      plantedSource('src/web/planted.test.ts', ["selectCanvasTool('polygon'); surface.setTool('line')"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P9').filter(({ kind }) => kind !== 'require-imports'))).toEqual([
+      `${P9_SYMBOLS} src/components/canvas/Planted.tsx contains confined symbol selectCanvasTool; allowed sources: src/app/keyboard/arming.ts, src/canvas/session.ts, src/canvas/session-state.ts, src/canvas/runtime/command-surface.ts, ${TEST_SOURCES}`,
+      `${P9_CALLS} src/app/keyboard/arming.ts:2 calls surface.setTool`,
+      `${P9_CALLS} src/components/canvas/Planted.tsx:2 calls surface.setTool`,
+      `${P9_CALLS} src/components/canvas/Planted.tsx:3 calls tools?.setTool`,
+      `${P9_CALLS} src/components/canvas/Planted.tsx:4 calls commands!['setTool']`,
+      `${P9_CALLS} src/canvas/planted-source.ts:1 calls commandSurface?.setTool`,
+    ])
+  })
+
+  it('P9 fails when an arming caller stops importing armCanvasTool', () => {
+    const callers = [
+      'src/components/plant-db/place-species.ts',
+      'src/components/canvas/SiteOnboarding.tsx',
+      'src/components/canvas/StampChooser.tsx',
+      'src/app/saved-object-stamps/workbench.ts',
+    ]
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/app/keyboard/arming.ts', ['export function armCanvasTool(tool: string) { return tool }']),
+      ...callers.map((path) => plantedSource(path, [
+        `import { armCanvasTool } from '${'../'.repeat(path.split('/').length - 2)}app/keyboard/arming'`,
+        "armCanvasTool('select')",
+      ])),
+      plantedSource('src/app/workspace-commands/canvas-actions.ts', ["export const selectTool = (tool: string) => tool"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P9').filter(({ kind }) => kind === 'require-imports'))).toEqual([
+      `${P9_IMPORTS} src/app/workspace-commands/canvas-actions.ts is missing required import matching src/app/keyboard/arming.ts`,
+    ])
+  })
+
+  it('P14 rejects keyboard imports of commands, Web, the platforms and components, not in tests', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/commands/registry.ts', ['export const registry = 1']),
+      plantedSource('src/web/browser-shell-commands.ts', ['export const web = 1']),
+      plantedSource('src/platform/desktop.ts', ['export const desktop = 1']),
+      plantedSource('src/components/canvas/ToolRail.tsx', ['export const rail = 1']),
+      plantedSource('src/app/shell-commands/index.ts', ['export const shell = 1']),
+      plantedSource('src/app/keyboard/planted.ts', [
+        "import { registry } from '../../commands/registry'",
+        "import type { web } from '../../web/browser-shell-commands'",
+        "import { desktop } from '../../platform/desktop'",
+        "import { rail } from '../../components/canvas/ToolRail'",
+        "import { shell } from '../shell-commands'",
+      ]),
+      plantedSource('src/app/keyboard/planted.test.ts', ["import { rail } from '../../components/canvas/ToolRail'"]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P14'))).toEqual([
+      `${P14} src/app/keyboard/planted.ts:1:1 imports src/commands/registry.ts via "../../commands/registry" (static)`,
+      `${P14} src/app/keyboard/planted.ts:2:1 imports src/web/browser-shell-commands.ts via "../../web/browser-shell-commands" (static)`,
+      `${P14} src/app/keyboard/planted.ts:3:1 imports src/platform/desktop.ts via "../../platform/desktop" (static)`,
+      `${P14} src/app/keyboard/planted.ts:4:1 imports src/components/canvas/ToolRail.tsx via "../../components/canvas/ToolRail" (static)`,
+    ])
+  })
+})
+
+describe('map error logging', () => {
+  it('routes every map-layer console write through the credential redactor', async () => {
+    const { readdirSync } = await import('node:fs')
+    const roots = ['../maplibre', '../app/canvas-map-surface']
+    const offenders: string[] = []
+    let scanned = 0
+    for (const root of roots) {
+      const dir = new URL(`${root}/`, import.meta.url)
+      for (const name of readdirSync(dir)) {
+        if (!/\.tsx?$/.test(name) || /\.test\.tsx?$/.test(name) || name === 'redact-credentials.ts') continue
+        scanned += 1
+        const source = readFileSync(new URL(name, dir), 'utf8')
+        if (/\bconsole\.(error|warn|log|info|debug)\b/.test(source)) offenders.push(`${root}/${name}`)
+      }
+    }
+    // The map modules must have been found, or the check proves nothing.
+    expect(scanned).toBeGreaterThan(10)
+    expect(offenders).toEqual([])
+  })
 })

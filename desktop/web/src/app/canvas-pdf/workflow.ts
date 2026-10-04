@@ -1,16 +1,27 @@
 import { batch, signal } from '@preact/signals'
 import type { PrintBounds } from '../../canvas/print'
-import { splitFieldBounds } from './split-sheets'
-import { contains } from './field-geometry'
-import { PDF_ZOOM, pdfAreaKey, type PdfPageView } from './types'
+import { splitPrintArea } from './split-sheets'
+import { areaContains, areaFromFrame, layoutAngle, pageFrame } from './page-frame'
+import { PDF_HABITS, PDF_ZOOM, pdfAreaKey, type PdfHabit, type PdfPageView } from './types'
 import type { PdfPreparation } from './prepare'
+import type { SpeciesDisplayNames } from '../plant-browser/workbench'
 import type { PdfInput, PdfLabels, PdfSetup, PreparedPdf, PdfPlan, PdfLayoutCache } from './types'
-export interface PdfCapture { readonly identity: object; readonly input: PdfInput; isCurrent(): boolean }
-export type PdfDeliveryResult = 'saved' | 'downloaded' | 'cancelled'
+export interface PdfCapture {
+  readonly identity: object
+  readonly input: PdfInput
+  /** The view is still turning: its live bearing is not the settled one, so `viewBearingDeg` may be an angle the turn only
+   *  passes through. `isCurrent` turns false once the view settles. */
+  readonly turning?: boolean
+  isCurrent(): boolean
+}
+type PdfDeliveryResult = 'saved' | 'downloaded' | 'cancelled'
 export interface PdfDelivery { save(bytes: Uint8Array, name: string, signal: AbortSignal): Promise<PdfDeliveryResult>; dispose(): void }
 export interface PdfWorkflowDependencies {
   capture(): PdfCapture | null
-  resolveNames(names: readonly string[], locale: string): Promise<Record<string, string>>
+  /** The catalog's display-name projection: the chosen language's names, English marked for the rest. */
+  resolveDisplayNames(names: readonly string[], locale: string): Promise<SpeciesDisplayNames>
+  /** Catalog habit (`Tree`, `Shrub`, ...) by canonical name. */
+  resolveHabits(names: readonly string[]): Promise<Record<string, string>>
   prepare(input: PdfPreparation, signal: AbortSignal, progress?: (plan: PdfPlan) => void): Promise<PreparedPdf>
   readonly delivery: PdfDelivery
   labels(): PdfLabels
@@ -36,6 +47,9 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   let nextAreaId = 0
   let identity: object | null = null
   let capture: PdfCapture | null = null
+  // As on screen lays pages out at the bearing the view rests at when the workspace opens, held until it closes:
+  // a turn still easing then is waited for (ADR 0015), and any later turn never moves the pages.
+  let heldBearing: number | null = null
   let controller: AbortController | null = null
   let generation = 0
   let disposed = false
@@ -50,7 +64,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   function synchronize(nextIdentity: object) {
     if (disposed) return
     if (identity !== null && identity !== nextIdentity) {
-      stop(); cache = {}; splitPreview.value = null; identity = null; capture = null; nextAreaId = 0
+      stop(); cache = {}; splitPreview.value = null; identity = null; capture = null; heldBearing = null; nextAreaId = 0
       batch(() => { open.value = false; state.value = IDLE; setup.value = defaults(); availableLayers.value = [] })
     } else if (open.peek() && ((capture && !capture.isCurrent()) || state.peek().error === 'canvas-busy')) {
       refreshSoon()
@@ -66,10 +80,16 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     if (!next) { state.value = { status: 'error', error: 'canvas-busy', result: null }; return }
     if (identity !== next.identity) {
       identity = next.identity
+      heldBearing = null
       nextAreaId = 0
       setup.value = { paper: 'A4', layers: next.input.canvas.layers.filter((l) => EXPORTABLE.has(l.name) && l.visible).map((l) => l.name) }
     }
     availableLayers.value = next.input.canvas.layers.filter((layer) => EXPORTABLE.has(layer.name)).map((layer) => layer.name)
+    if (heldBearing === null && next.turning) {
+      capture = next; state.value = { status: 'preparing', error: null, result: null }; return
+    }
+    heldBearing ??= next.input.viewBearingDeg
+    next = { ...next, input: { ...next.input, viewBearingDeg: heldBearing } }
     capture = next
     if (setup.peek().layers.some((name) => !availableLayers.peek().includes(name))) {
       state.value = { status: 'error', error: 'selection-missing', result: null }; return
@@ -92,15 +112,16 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
         if (!current()) return
         progress(overview.plan)
       }
+      const frame = pageFrame(layoutAngle(choices, next.input))
       const names = choices.areas?.length && choices.layers.includes('plants')
         ? Array.from(new Set(next.input.canvas.plants.filter(plant => choices.areas!.some(area => {
           // A manually displaced/zoomed view can include plants outside its original rectangle.
-          return choices.views?.[pdfAreaKey(area)] ? true : contains(area.bounds, plant.position)
+          return choices.views?.[pdfAreaKey(area)] || area.wholeDesign ? true : areaContains(frame, area.bounds, plant.position, area.pivot)
         })).map(plant => plant.canonicalName))) : []
       // Catalog failure retains full canonical identities on chosen detail sheets.
-      const commonNames = names.length ? await resolvePrintNames(deps.resolveNames, names, next.input.locale, abort.signal) : {}
+      const identities = names.length ? await resolvePrintIdentities(deps, names, next.input.locale, abort.signal) : { commonNames: {} }
       if (!current()) return
-      const result = await deps.prepare({ input: { ...next.input, commonNames }, setup: choices, labels: deps.labels(),
+      const result = await deps.prepare({ input: { ...next.input, ...identities }, setup: choices, labels: deps.labels(),
         fontBaseUrl: deps.fontBaseUrl(), cache, priority }, abort.signal, progress)
       if (!current()) return
       cache = result.layoutCache ?? {}
@@ -108,7 +129,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     } catch (error) {
       if (!current()) return
       const message = error instanceof Error ? error.message : ''
-      state.value = { status: 'error', error: ['unsupported-text', 'text-too-wide', 'prepare-timeout', 'selection-missing', 'coverage-too-large', 'invalid-page-view'].includes(message) ? message : 'prepare-failed', result: null }
+      state.value = { status: 'error', error: ['unsupported-text', 'text-too-wide', 'prepare-timeout', 'coverage-too-large'].includes(message) ? message : 'prepare-failed', result: null }
     } finally {
       if (controller === abort) controller = null
     }
@@ -116,7 +137,7 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
   function show(): void { if (disposed) return; open.value = true; void rebuild() }
   function close(): void {
     if (state.peek().status === 'delivering') return
-    stop(); cache = {}; splitPreview.value = null; capture = null; batch(() => { open.value = false; state.value = IDLE; availableLayers.value = [] })
+    stop(); cache = {}; splitPreview.value = null; capture = null; heldBearing = null; batch(() => { open.value = false; state.value = IDLE; availableLayers.value = [] })
   }
   function configure(value: Partial<PdfSetup>): void {
     if (disposed || state.peek().status === 'delivering') return
@@ -128,23 +149,27 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
     const layers = setup.peek().layers.filter((layer) => layer !== name)
     configure({ layers: selected ? [...layers, name] : layers })
   }
-  function addPrintArea(bounds: PrintBounds): string | undefined {
+  /** `bounds` is the area in plan metres: an unturned box about its centre (`PdfPrintArea`). */
+  function addPrintArea(bounds: PrintBounds): string | undefined { return addArea(bounds, false) }
+  function addArea(bounds: PrintBounds, wholeDesign: boolean): string | undefined {
     if (!open.peek() || disposed || state.peek().status === 'delivering') return
     if (![bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) || bounds.width <= 0 || bounds.height <= 0) return
     const number = ++nextAreaId
     priority = `area:${number}`
-    configure({ areas: [...setup.peek().areas ?? [], { id: String(number), name: deps.namePrintArea(number), bounds: { ...bounds } }] })
+    configure({ areas: [...setup.peek().areas ?? [], { id: String(number), name: deps.namePrintArea(number), bounds: { ...bounds },
+      ...wholeDesign ? { wholeDesign } : {} }] })
     return `area:${number}`
   }
   function addWholeDesign(): string | undefined {
-    const page = state.peek().result?.plan.pickerPage
-    return page ? addPrintArea(page.ground) : undefined
+    const plan = state.peek().result?.plan
+    return plan?.pickerPage ? addArea(areaFromFrame(pageFrame(plan.angleDeg), plan.pickerPage.ground), true) : undefined
   }
   function previewSplit(id: string): void {
-    const page = state.peek().result?.plan.pages.find(p => p.id === id && p.kind === 'detail')
+    const plan = state.peek().result?.plan, page = plan?.pages.find(p => p.id === id && p.kind === 'detail')
     if (!page || !capture?.isCurrent() || !['ready', 'saved', 'downloaded', 'error'].includes(state.peek().status)) return
-    const bounds = splitFieldBounds(page.ground, setup.peek().layers.includes('plants') ? capture.input.canvas.plants : [])
-    const areas = bounds.map((bounds, index) => ({ id: String(nextAreaId + index + 1), name: deps.namePrintArea(nextAreaId + index + 1), bounds }))
+    const parent = setup.peek().areas?.find(area => pdfAreaKey(area) === id)
+    const parts = splitPrintArea(page.ground, setup.peek().layers.includes('plants') ? capture.input.canvas.plants : [], pageFrame(plan!.angleDeg), parent?.pivot)
+    const areas = parts.map((part, index) => ({ id: String(nextAreaId + index + 1), name: deps.namePrintArea(nextAreaId + index + 1), ...part }))
     const views = Object.fromEntries(Object.entries(setup.peek().views ?? {}).filter(([key]) => key !== id && !key.startsWith(`${id}:legend:`)))
     splitPreview.value = { ...setup.peek(), areas: setup.peek().areas?.flatMap(a => pdfAreaKey(a) === id ? areas : [a]), views }
     priority = pdfAreaKey(areas[0]!)
@@ -189,23 +214,42 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
       state.value = { ...snapshot, status: 'error', error: 'delivery-failed' }
     } finally { if (controller === abort) controller = null }
   }
-  function dispose(): void { if (disposed) return; disposed = true; stop(); cache = {}; splitPreview.value = null; deps.delivery.dispose(); open.value = false; state.value = IDLE; capture = null; setup.value = defaults(); availableLayers.value = [] }
+  function dispose(): void { if (disposed) return; disposed = true; stop(); cache = {}; splitPreview.value = null; deps.delivery.dispose(); open.value = false; state.value = IDLE; capture = null; heldBearing = null; setup.value = defaults(); availableLayers.value = [] }
   return { open, state, setup, splitPreview, availableLayers, prioritize, addWholeDesign, previewSplit, applySplit, cancelSplit, show, close, rebuild, configure, selectLayer, addPrintArea, removeArea, setPageView, fitPage, save, synchronize, dispose }
 }
 export type PdfWorkflow = ReturnType<typeof createPdfWorkflow>
 
 // The catalog reader is shared with the app. Stop waiting without disposing it;
 // a late answer must not keep an export job or its captured Design alive.
-function resolvePrintNames(resolveNames: PdfWorkflowDependencies['resolveNames'], names: readonly string[], locale: string,
-  signal: AbortSignal): Promise<Record<string, string>> {
-  return new Promise((resolve, reject) => {
-    let settled = false
-    const cleanup = () => { clearTimeout(timer); signal.removeEventListener('abort', abort) }
-    const finish = (value: Record<string, string>) => { if (settled) return; settled = true; cleanup(); resolve(value) }
-    const abort = () => { if (settled) return; settled = true; cleanup(); reject(new DOMException('Aborted', 'AbortError')) }
-    const timer = setTimeout(() => finish({}), 30_000)
-    signal.addEventListener('abort', abort, { once: true })
-    if (signal.aborted) { abort(); return }
-    try { void resolveNames(names, locale).then(finish, () => finish({})) } catch { finish({}) }
+type PrintIdentities = Pick<PdfInput, 'commonNames' | 'englishFallbacks' | 'habits'>
+/**
+ * Names in the chosen language, English for the rest (marked as fallbacks), and catalog habits.
+ * One deadline bounds every lookup; a failed or late lookup contributes nothing.
+ */
+const NO_DISPLAY_NAMES: SpeciesDisplayNames = { names: {}, englishFallbacks: [] }
+async function resolvePrintIdentities(deps: PdfWorkflowDependencies, names: readonly string[], locale: string, signal: AbortSignal): Promise<PrintIdentities> {
+  let timer: ReturnType<typeof setTimeout> | undefined, onAbort = () => {}
+  const expired = new Promise<void>(resolve => { timer = setTimeout(resolve, 30_000) })
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => { clearTimeout(timer); reject(new DOMException('Aborted', 'AbortError')) }
+    if (signal.aborted) onAbort(); else signal.addEventListener('abort', onAbort, { once: true })
   })
+  aborted.catch(() => {})
+  const bounded = <T>(lookup: () => Promise<T>, fallback: T) =>
+    Promise.race([(async () => { try { return await lookup() } catch { return fallback } })(), expired.then(() => fallback), aborted])
+  try {
+    const [display, catalogHabits] = await Promise.all([
+      bounded(() => deps.resolveDisplayNames(names, locale), NO_DISPLAY_NAMES),
+      bounded(() => deps.resolveHabits(names), {} as Record<string, string>),
+    ])
+    const habits: Record<string, PdfHabit> = {}
+    for (const [name, habit] of Object.entries(catalogHabits)) {
+      const key = habit.trim().toLowerCase() as PdfHabit
+      if (PDF_HABITS.includes(key)) habits[name] = key
+    }
+    return { commonNames: { ...display.names },
+      ...display.englishFallbacks.length ? { englishFallbacks: [...display.englishFallbacks] } : {}, ...Object.keys(habits).length ? { habits } : {} }
+  } finally {
+    clearTimeout(timer); signal.removeEventListener('abort', onAbort)
+  }
 }

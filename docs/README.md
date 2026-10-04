@@ -1,51 +1,36 @@
 # Documentation map
 
-Start with the narrowest authority for the task. Current implementation guidance belongs in `docs/agent/`; historical evidence is useful context, not an operating contract.
+Every document answers one of four questions. Start with the narrowest one for your task. Code shows current behaviour; these documents state the intended boundaries.
 
-| Need | Authority |
+| Question | Where |
 | --- | --- |
-| Repository workflow, quality gates, architecture rules | [`AGENTS.md`](../AGENTS.md) |
-| Domain vocabulary | [`CONTEXT.md`](../CONTEXT.md) |
-| Subsystem implementation guidance | [`docs/agent/`](agent/) via the links in `AGENTS.md` |
-| Desktop/Web/gallery daily development | [`docs/agent/edition-development.md`](agent/edition-development.md) |
-| Agent workflow, issue tracking, and integration | [`docs/workflow/`](workflow/delivery.md) |
-| Architecture ownership, implementation handoffs and user-mediated review | [Architecture ownership](workflow/architecture-ownership.md) |
-| UI hierarchy and reusable interaction patterns | [`.interface-design/system.md`](../.interface-design/system.md) |
-| Durable architecture decisions and supersession history | [`docs/adr/`](adr/) |
-| Release operation | [`docs/release.md`](release.md) and [`docs/agent/build-release.md`](agent/build-release.md) |
-| Canvas PDF acceptance behavior | [`docs/canvas-pdf.md`](canvas-pdf.md) |
+| What must never change, and why? | [`AGENTS.md`](../AGENTS.md), [`architecture.md`](architecture.md), [`adr/`](adr/) |
+| What does the finished thing look like? | [`.interface-design/system.md`](../.interface-design/system.md), its pattern files and [boards](../.interface-design/boards/README.md), the UI gallery (`cd desktop/web && npm run dev:ui`) |
+| Where is this area's boundary? | one guide per area in [`guides/`](guides/) (see below) |
+| What changed for users? | [`release-notes/`](release-notes/), the in-app Getting started |
 
-## Evidence and history
+Also: [`workflow.md`](workflow.md) for beads, branches, ownership and delivery; [`review-checklist.md`](review-checklist.md) for what to try before a release; [`plans/`](plans/) for agreed but unbuilt work (the canvas v2 [implementation prompt](plans/canvas-v2-implementation-prompt.md), to start from, and its [plan](plans/canvas-v2-plan.md), [spec](plans/canvas-v2-spec.md) and [inventory](plans/canvas-v2-inventory.md) carry out ADRs [0015](adr/0015-rotating-map-and-canvas-controls.md) to [0020](adr/0020-focus-and-keyboard-ownership.md)); [`CONTEXT.md`](../CONTEXT.md) for product vocabulary.
 
-Implementation specifications and completed design records live under `docs/design/`. Proposed work must not override current operating guides before implementation. The [completed Desktop/Web convergence record](design/edition-convergence/handoff.md) points to the delivered [edition development guide](agent/edition-development.md); its implementation history remains in bd epic `canopi-dp4s`.
+## Guides
 
-The [LiDAR guide](agent/lidar.md) routes current implementation work. Its [foundation record](design/lidar-library.md) retains storage and scientific invariants; the rework below replaces the old future-delivery plan, and bd owns executable scope. The [scientific evidence](design/lidar-agroecology/report.md) records measured inputs and interpretation limits.
+| Area | Guide |
+| --- | --- |
+| Map canvas, scene runtime, renderer, camera, input, tools, snapshots | [map-workspace.md](guides/map-workspace.md) |
+| `.canopi` format, Design Edit, settings, views and stories | [design-document.md](guides/design-document.md) |
+| LiDAR library, Layers, analyses | [data-library.md](guides/data-library.md) |
+| Frontend structure, commands, keys and focus, localisation, tests | [frontend.md](guides/frontend.md) |
+| Terms per locale and copy rules | [ui-glossary.md](guides/ui-glossary.md) |
+| Desktop, Web, phones, the gallery | [editions.md](guides/editions.md) |
+| Plant catalog and search | [species-catalog.md](guides/species-catalog.md) |
+| Planting-plan PDF | [pdf-export.md](guides/pdf-export.md) |
+| Native rules, build, release, problem reports | [native-and-release.md](guides/native-and-release.md) |
+| How agents run multi-agent steps: places, commands, live check, tracker | [agentic-delivery.md](guides/agentic-delivery.md) |
 
-The [raster, Data and Analysis rework](design/raster-data-analysis-rework.md) owns the product contract. The [completion prompt](design/raster-rework/completion-agent-prompt.md) and [completion contract](design/raster-rework/completion-design.md) are the sole current assignment: retain the repaired [reviewer-authored acceptance packet](design/raster-rework/completion-acceptance-tests.md) and retain the local repairs completed after `82354620` and follow the [current receipt and remaining qualification](design/raster-rework/completion-receipt.md#current-correction-acceptance) in `canopi-j571.3` under `canopi-j571.1` using the [correction decisions](design/raster-rework/completion-correction-design.md), apply the [ownership correction and TDD acceptance cases](design/raster-rework/completion-ownership-design.md), finish [independent source import](design/raster-rework/source-import-design.md), and verify the combined Desktop/Web candidate. Foundation integration is complete at `f61f8494`; the new candidate is not independently accepted. The ordered correction at `34e4ded4` is [accepted in its named scope](design/raster-rework/ordered-cog-review.md#accepted-correction-at-34e4ded4), with integration/release separate. [ADR 0027](adr/0027-ordered-cog-data-layers.md) retains the ordered-source decision and exact historical compatibility. Q stays frozen. The [receipt](design/raster-rework/completion-receipt.md) records measurements; [debrief](design/raster-rework/review-and-debrief.md#whole-rework-delivery-and-improvement) records tested improvements and remaining proposals; bd owns execution state.
+## Rules for these documents
 
-The v2 spatial workspace is implemented. [ADR 0025](adr/0025-always-anchored-spatial-workspace.md) records its accepted contracts; [Canvas runtime](agent/canvas-runtime.md), [MapLibre](agent/maplibre.md), and [Document lifecycle](agent/document-lifecycle.md) route current work. The [completed v2 plan](design/geolibre-spatial-review.md) retains historical contracts and qualification evidence. Do not restart it or recreate its closed epic. Implementation, verification, integration, and public release are distinct states; see [delivery](workflow/delivery.md).
-
-The [Canvas world zoom and overview implementation record](design/canvas-zoom-world-overview.md) defines the delivered zoom-0–27 camera policy, single-world overview safety, Return behavior, shared Desktop/Web chrome, and its browser qualification contract.
-
-Release notes in [`release-notes/`](release-notes/) describe shipped versions. PDF validation, canvas-performance reports, Web Catalog performance evidence, and the Windows compression benchmark are dated evidence for decisions or release gates. They do not override current agent guides or ADRs. Files under `docs/assets/` and `docs/evidence/` support those records and must not become runtime or test dependencies.
-
-Superseded ADRs remain in place with their status and replacement link. Closed bead metadata remains historical even when it names a prototype or experiment that was intentionally removed after integration.
-
-Two historical records use number `0007`. Refer to them by filename: `0007-design-notebook-user-db-library.md` is the accepted Notebook decision, while `0007-design-report-pdf-renderer.md` is superseded by ADR 0011. Do not renumber either record and invalidate existing links.
-
-## Placement rules
-
-- Update an existing `docs/agent/` guide when code ownership, commands, or recurring implementation constraints change. Delete superseded guidance instead of appending exceptions.
-- Record a durable architectural choice in `docs/adr/`; do not use an evidence report as hidden architecture authority.
-- Put reproducible current gates beside the code or scripts they validate. Keep large one-time captures and rejected prototypes out of Git once their conclusion is recorded.
-- Keep only material that helps implement, verify, release, or maintain the project: contracts, rationale for consequential decisions, ownership, commands, fixtures, and measured limitations. Remove conversational history, expired kickoff prompts, model assignments, and checkout-specific instructions after delivery.
-- Link rather than duplicate commands, workflow rules, or numeric constants owned elsewhere. Release notes consumed by tooling and evidence supporting current acceptance limits remain useful; do not delete them merely because they are historical.
-- Add a new top-level document only when it serves a distinct development or release task. Link it from this map or the relevant authority so it is discoverable.
-
-## Authority and maintenance
-
-Repository workflow belongs in `AGENTS.md` and linked `docs/workflow/` guides; current subsystem contracts belong in `docs/agent/`; rationale and supersession belong in ADRs; task state and execution receipts belong in bd. `CONTEXT.md` owns vocabulary. Historical evidence never overrides those contracts. Code demonstrates current behavior; a mismatch with an accepted contract is a defect to record, not permission to weaken that contract.
-
-Design records carry a `Status:`, `Tracking:`, and `Current guidance:` header. Status is `proposed`, `active`, `partial`, `completed`, `retired`, or `evidence`. Completion retires execution instructions and links to current guides. Preserve original decisions and measured limitations as history, clearly separated from instructions for new work. ADRs carry `Status:` or existing `status` frontmatter; superseded ADRs name an existing `superseded_by` record. Avoid copying live bead statuses throughout prose.
-
-Run `python3 scripts/check_docs.py` for local Markdown targets, section links, and lifecycle headers. It works offline without bd. During bead closure, reconcile the corresponding design record and current guides; during integration, verify branch ancestry and delivered code separately. `docs/agents/` contains compatibility redirects for installed skills; maintain workflow instructions only under `docs/workflow/`.
+- A guide states authorities, boundaries, rules with the test that enforces each, mistakes to avoid and where to look. It never narrates how code is wired; that lives in module comments and policy tests.
+- A guide is rewritten when a rule or boundary changes. Nothing is appended. `python3 scripts/check_docs.py` enforces the size budgets (12 KB per guide, 600 characters per paragraph) and the links.
+- ADRs are at most 60 lines with a `Status:` header. A replaced ADR is marked `Superseded` with `superseded_by:`.
+- Plans carry a `Status:` line and are deleted once built. Receipts, evidence and task state live in bd, not here.
+- Release notes are written once per release, for users.
+- Once per release, each guide is read against the code and stale text deleted.

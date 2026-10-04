@@ -97,10 +97,6 @@ vi.mock('../components/plant-db/PlantRow', () => ({
   PlantRow: ({ plant }: { plant: SpeciesListItem }) => <div>{plant.canonical_name}</div>,
 }))
 
-vi.mock('../components/plant-db/PlantCard', () => ({
-  PlantCard: ({ plant }: { plant: SpeciesListItem }) => <div>{plant.canonical_name}</div>,
-}))
-
 async function flushMicrotasks(): Promise<void> {
   await Promise.resolve()
   await Promise.resolve()
@@ -135,7 +131,6 @@ describe('ResultsList', () => {
       locale,
       search: async () => searchResponses.shift() ?? emptySpeciesSearchResult(),
     })
-    workbench.setViewMode('list')
     vi.doMock('../app/plant-browser', async () => {
       const actual = await vi.importActual<typeof import('../app/plant-browser')>('../app/plant-browser')
       return {
@@ -157,6 +152,26 @@ describe('ResultsList', () => {
     vi.doUnmock('../app/plant-browser')
   })
 
+  it('says why plant search is off when the plant database is unavailable, not the internal error', async () => {
+    const { plantDbStatus } = await import('../app/health/state')
+    plantDbStatus.value = 'missing'
+    searchResponses.push(Promise.reject(new Error('Plant database unavailable: bundled plant database is missing')))
+    try {
+      workbench.mount()
+      await flushMicrotasks()
+      await act(async () => {
+        render(<ResultsList designSpecies={new Map()} />, container)
+      })
+      const alert = container.querySelector('[role="alert"]')!
+      expect(alert.textContent).toContain("The plant catalog's database file is missing")
+      expect(alert.textContent).not.toContain('bundled plant database')
+      // Retrying cannot bring the file back.
+      expect(alert.querySelector('button')).toBeNull()
+    } finally {
+      plantDbStatus.value = 'available'
+    }
+  })
+
   it('keeps the existing virtualizer when only more rows are appended', async () => {
     searchResponses.push({
       items: [
@@ -171,7 +186,7 @@ describe('ResultsList', () => {
     await flushMicrotasks()
 
     await act(async () => {
-      render(<ResultsList />, container)
+      render(<ResultsList designSpecies={new Map()} />, container)
     })
 
     expect(virtualCoreMocks.instances).toHaveLength(1)
@@ -206,7 +221,7 @@ describe('ResultsList', () => {
     await flushMicrotasks()
 
     await act(async () => {
-      render(<ResultsList />, container)
+      render(<ResultsList designSpecies={new Map()} />, container)
     })
 
     expect(virtualCoreMocks.instances).toHaveLength(1)

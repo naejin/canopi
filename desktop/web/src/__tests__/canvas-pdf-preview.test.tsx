@@ -13,7 +13,7 @@ it('emits native SVG clipping and stroke attributes so the physical drawing matc
     operations: [{ kind: 'clip', bounds: frame }, { kind: 'path', d: 'M0 0 H100 V100', matrix: [10, 0, 0, 10, 20, 20],
       fill: null, stroke: '#24211c', width: .025, opacity: 1 }, { kind: 'unclip' }] }
   try {
-    await act(async () => { render(<PdfPagePreview page={page} plan={{ pages: [page], outlines: {}, blocked: null }} />, container) })
+    await act(async () => { render(<PdfPagePreview page={page} plan={{ pages: [page], angleDeg: 0, outlines: {}, blocked: null }} />, container) })
     const path = container.querySelector('path')!
     expect(path.getAttribute('stroke-width')).toBe('0.025')
     expect(path.getAttribute('stroke-linecap')).toBe('round')
@@ -30,7 +30,7 @@ it('lists a single overview followed by adjacent detail/key pairs', async () => 
     width: 100, height: 100, frame, ground: frame, pointsPerMeter: 1, legend: [], operations: [] })
   const pages = [make('overview', 1, 'overview'), make('area:a', 2, 'detail'), make('area:a:legend:0', 3, 'legend', 'area:a')]
   try {
-    await act(async () => { render(<PdfPageRail plan={{ pages, outlines: {}, blocked: null }} setup={{ paper: 'A4', layers: [], areas: [{ id: 'a', name: 'Bed', bounds: frame }] }}
+    await act(async () => { render(<PdfPageRail plan={{ pages, angleDeg: 0, outlines: {}, blocked: null }} setup={{ paper: 'A4', layers: [], areas: [{ id: 'a', name: 'Bed', bounds: frame }] }}
       selected="overview" disabled={false} onSelect={() => {}} onRemove={() => {}} onHover={() => {}} />, container) })
     const titles = [...container.querySelectorAll('button[aria-label^="View page"]')].map(button => button.getAttribute('aria-label'))
     expect(titles).toEqual(['View page: Overview', 'View page: Bed', 'View page: 1 · Key and notes · Page 3'])

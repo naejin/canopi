@@ -1,21 +1,23 @@
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
-import { createAppCanvasRuntimeAppAdapter } from '../src/app/canvas-runtime/app-adapter'
-import { savedObjectStampWorkbench } from '../src/app/saved-object-stamps'
-import { InspectionLens } from '../src/components/canvas/InspectionLens'
-import { CanvasOverview } from '../src/components/canvas/CanvasOverview'
-import { SpeciesFocusChip } from '../src/components/canvas/SpeciesFocusChip'
-import { ZoomControls } from '../src/components/canvas/ZoomControls'
-import { createSceneCanvasRuntimeHost } from '../src/canvas/runtime/host'
+import type { WorkspaceRuntimeComposition } from '../src/app/canvas-map-surface/workspace-runtime-composition'
+import { CanvasChrome } from '../src/components/canvas/CanvasChrome'
+import type { StampChooserProps } from '../src/components/canvas/ToolCard'
+import type { FunctionComponent } from 'preact'
+import { workspaceCanvasCommandProjection } from '../src/app/workspace-commands/canvas-actions'
+import panelStyles from '../src/components/panels/Panels.module.css'
 import { CanvasRuntimeCleanupError } from '../src/canvas/runtime/cleanup'
 import { acquireCanvasRuntimeLifecycle } from '../src/canvas/runtime/lifecycle-owner'
-import type { CanvasRuntimeHost } from '../src/canvas/runtime/runtime'
-import { SceneCanvasRuntime } from '../src/canvas/runtime/scene-runtime'
 import { getCurrentCanvasSession, setCurrentCanvasSession } from '../src/canvas/session'
+import { closeCanvasContextMenu, openCanvasContextMenu } from '../src/app/canvas-context-menu/state'
 import type { CanopiFile } from '../src/types/design'
-import { WebCanvasToolbar } from '../src/web/WebCanvasToolbar'
+import {
+  createGalleryWorkspaceRuntimeComposition,
+  type GalleryWorkspaceRuntimeOptions,
+} from './gallery-workspace-runtime'
 import { activity } from './memory-backend'
-import { specimens, species } from './fixtures'
+import { specimens } from './fixtures'
+import { useMapArea } from '../src/components/shared/useMapChrome'
 import styles from './gallery.module.css'
 
 interface GallerySurfaceSignal {
@@ -27,8 +29,14 @@ interface GalleryCanvasSurfaceProps {
   readonly design: CanopiFile
   readonly dense: boolean
   readonly cameraState?: 'site' | 'overview' | 'maximum'
+  /** Select everything instead of the first species (a fixture without plants). */
+  readonly selectAll?: boolean
+  /** The view's bearing after the fit, clockwise from north (`bearing=`); 0 keeps north up. */
+  readonly bearingDeg?: number
   readonly onReadyChange: (ready: boolean) => void
-  readonly createRuntimeHost?: (design: CanopiFile) => CanvasRuntimeHost
+  /** Place a stamp's saved-stamp chooser, as the Desktop canvas hands it over; none on Web. */
+  readonly stampChooser?: FunctionComponent<StampChooserProps>
+  readonly createRuntimeComposition?: (options: GalleryWorkspaceRuntimeOptions) => WorkspaceRuntimeComposition
 }
 
 export function GalleryCanvasSurface({
@@ -36,10 +44,17 @@ export function GalleryCanvasSurface({
   design,
   dense,
   cameraState = 'site',
+  selectAll = false,
+  bearingDeg = 0,
   onReadyChange,
-  createRuntimeHost = createGalleryRuntimeHost,
+  stampChooser,
+  createRuntimeComposition = createGalleryWorkspaceRuntimeComposition,
 }: GalleryCanvasSurfaceProps) {
   const canvas = useRef<HTMLDivElement>(null)
+  // As in both editions: the map area frames fits and centres chips, and rulers draw beside the chrome.
+  const canvasArea = useRef<HTMLDivElement>(null)
+  const rulers = useRef<HTMLDivElement>(null)
+  useMapArea(canvasArea)
   const ready = useSignal(false)
 
   useEffect(() => {
@@ -47,7 +62,7 @@ export function GalleryCanvasSurface({
     if (!container) return
 
     let cancelled = false
-    let runtime: CanvasRuntimeHost | null = null
+    let runtime: WorkspaceRuntimeComposition | null = null
     let resize: ResizeObserver | null = null
     let released = false
     let releaseLease: (() => Promise<void>) | null = null
@@ -67,7 +82,7 @@ export function GalleryCanvasSurface({
         errors.push(error)
       }
       try {
-        await activeRuntime?.destroy()
+        await activeRuntime?.dispose()
       } catch (error) {
         errors.push(error)
       }
@@ -115,7 +130,14 @@ export function GalleryCanvasSurface({
         finishRuntimeCreation = resolve
       })
       try {
-        runtime = createRuntimeHost(design)
+        runtime = createRuntimeComposition({
+          container,
+          design,
+          onMapStateChange: (state) => {
+            if (state.status === 'error') activity.value = 'Map unavailable'
+          },
+          onFailure: (error) => console.error('Gallery workspace failed:', error),
+        })
       } finally {
         finishRuntimeCreation()
         runtimeCreationSettlement = null
@@ -131,13 +153,24 @@ export function GalleryCanvasSurface({
         return
       }
 
-      await activeRuntime.init(container)
+      const outcome = await activeRuntime.start()
+      if (outcome === 'cancelled' || outcome === 'no-design') {
+        throw new Error(`Gallery workspace did not start (${outcome}).`)
+      }
+      if (!runtimeIsActive()) return
+      if (rulers.current) activeRuntime.surfaces.documents.attachRulersTo(rulers.current)
       if (!runtimeIsActive()) return
       activeRuntime.surfaces.documents.loadDocument(design)
+      activeRuntime.surfaces.documents.showCanvasChrome()
       if (!runtimeIsActive()) return
       activeRuntime.surfaces.documents.resize(container.clientWidth, container.clientHeight)
       if (!runtimeIsActive()) return
       activeRuntime.surfaces.documents.zoomToFit()
+      if (bearingDeg !== 0) {
+        // Turned about the fitted centre at the same zoom, as a restored view is: no animation, never snapped.
+        const { camera } = activeRuntime.surfaces.queries.view.captureView()
+        activeRuntime.surfaces.commands.viewport.showCamera({ ...camera, bearingDeg }, { motion: 'jump' })
+      }
       if (dense) {
         for (let i = 0; i < 6; i++) {
           if (!runtimeIsActive()) return
@@ -150,7 +183,8 @@ export function GalleryCanvasSurface({
         for (let i = 0; i < 100; i++) activeRuntime.surfaces.commands.viewport.zoomIn()
       }
       if (!runtimeIsActive()) return
-      activeRuntime.surfaces.commands.sceneEdits.selectSameSpecies(specimens[0][0])
+      if (selectAll) activeRuntime.surfaces.commands.sceneEdits.selectAll()
+      else activeRuntime.surfaces.commands.sceneEdits.selectSameSpecies(specimens[0][0])
       if (!runtimeIsActive()) return
       activeResize.observe(container)
       if (!runtimeIsActive()) return
@@ -172,46 +206,55 @@ export function GalleryCanvasSurface({
       cancelled = true
       release()
     }
-  }, [cameraState, createRuntimeHost, dense, design, onReadyChange])
+  }, [bearingDeg, cameraState, createRuntimeComposition, dense, design, onReadyChange, selectAll])
+
+  useEffect(() => {
+    const surface = activeSurface.value
+    const session = getCurrentCanvasSession()
+    const container = canvas.current
+    if (!ready.value || !surface.startsWith('menu-') || !session || !container) return
+    // The review surfaces open the right-click menu as the runtime would, beside the map's centre.
+    const { sceneEdits } = session.commands
+    if (surface === 'menu-mixed') sceneEdits.selectAll()
+    else sceneEdits.selectSameSpecies(specimens[0][0])
+    const rect = container.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + 96
+    const request = {
+      anchor: { left: x, top: y, right: x, bottom: y },
+      world: { x: 0, y: 0 },
+      selection: surface === 'menu-empty' ? null : session.queries.getDesignObjectSelection(),
+      commands: sceneEdits,
+      saveSelectionAsObjectStamp: () => sceneEdits.saveSelectionAsObjectStamp(),
+      returnFocus: () => container.focus(),
+    }
+    // Opened after the first layout settles: a resize or scroll closes a context menu.
+    const timer = window.setTimeout(() => openCanvasContextMenu(request), 1500)
+    return () => {
+      window.clearTimeout(timer)
+      closeCanvasContextMenu(request)
+    }
+  }, [activeSurface.value, ready.value])
 
   useEffect(() => {
     if (!ready.value || activeSurface.value !== 'lens') return
-    canvas.current?.parentElement?.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()
+    canvas.current?.parentElement?.querySelector<HTMLButtonElement>('button[data-inspection-launcher][aria-expanded="false"]')?.click()
   }, [activeSurface.value, ready.value])
 
   return (
     <div className={styles.canvasWorkspace}>
-      {ready.value && <WebCanvasToolbar />}
-      <div className={styles.canvasArea}>
+      <div ref={canvasArea} className={`${panelStyles.canvasArea} ${styles.canvasArea}`}>
         <div ref={canvas} className={styles.canvas} />
+        <div ref={rulers} className={panelStyles.rulerOverlay} />
         {ready.value ? (
-          <>
-            <InspectionLens key={activeSurface.value === 'lens' ? 'lens' : 'other'} canvasRef={canvas} />
-            <SpeciesFocusChip />
-            <CanvasOverview />
-            <div className={styles.canvasZoom}><ZoomControls /></div>
-          </>
+          <CanvasChrome
+            key={activeSurface.value === 'lens' ? 'lens' : 'other'}
+            projection={workspaceCanvasCommandProjection.value}
+            canvasRef={canvas}
+            stampChooser={stampChooser}
+          />
         ) : null}
       </div>
     </div>
   )
-}
-
-function createGalleryRuntimeHost(design: CanopiFile): CanvasRuntimeHost {
-  const names = new Map(design.plants.map(plant => [plant.canonical_name, plant.common_name]))
-  return createSceneCanvasRuntimeHost(new SceneCanvasRuntime({
-    appAdapter: createAppCanvasRuntimeAppAdapter({
-      presentationData: {
-        plantLabels: { getLocaleSnapshot: () => names, ensureEntries: async () => false },
-        speciesCache: {
-          getCache: () => new Map(species.map(plant => [plant.canonical_name, { ...plant }])),
-          ensureEntries: async () => false,
-          getSuggestedPlantColor: () => '#E9D28B',
-        },
-      },
-      savedObjectStamps: {
-        saveCurrentSelection: capture => savedObjectStampWorkbench.saveSelection(capture),
-      },
-    }),
-  }))
 }

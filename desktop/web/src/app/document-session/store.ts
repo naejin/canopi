@@ -1,35 +1,15 @@
 import { batch, computed, signal, type ReadonlySignal, type Signal } from '@preact/signals'
-import type { CanopiFile, SpatialFrame } from '../../types/design'
-import { cloneSpatialFrame } from '../../spatial-frame'
-import {
-  DesignEditBusyError,
-  DesignEditUnavailableError,
-  registerDesignEditAuthorityCapability,
-  type DesignPreviewOptions,
-  type DesignPreviewOutcome,
-  type DesignPreviewTransaction,
-  type DesignProjector,
-} from '../design-edit/authority-capability'
-import { DesignHistory } from '../design-edit/history'
+import type { CanopiFile } from '../../types/design'
+import { registerDesignEditAuthorityCapability } from '../design-edit/authority-capability'
 import {
   registerDesignSessionPersistenceCapability,
   type DesignSessionPersistenceCapture,
 } from './persistence-capability'
 
-export interface PendingTemplateImport {
-  readonly identity: object
-  readonly file: CanopiFile
-  readonly name: string
-}
-
 export interface DesignSessionIdentity {
   readonly file: CanopiFile | null
   readonly path: string | null
   readonly name: string
-}
-
-export interface DesignSessionMetadataSnapshot {
-  readonly spatialFrame: SpatialFrame | null
 }
 
 export interface DesignSessionStore {
@@ -39,11 +19,11 @@ export interface DesignSessionStore {
   readonly designName: ReadonlySignal<string>
   readonly designDirty: ReadonlySignal<boolean>
   readonly canvasDirty: ReadonlySignal<boolean>
-  readonly autosaveFailed: ReadonlySignal<boolean>
   readonly committedDesignRevision: ReadonlySignal<number>
+  /** Counts Scene history reports; a committed canvas change advances it. */
+  readonly canvasChangeRevision: ReadonlySignal<number>
 
   readIdentity(): DesignSessionIdentity
-  readMetadata(): DesignSessionMetadataSnapshot
   readCurrentDesign(): CanopiFile | null
   readDesignPath(): string | null
   readDesignName(): string
@@ -53,17 +33,16 @@ export interface DesignSessionStore {
 
   replaceCurrentDesignState(file: CanopiFile, path: string | null, name: string): void
   replaceCurrentDesignSnapshot(file: CanopiFile): void
+  /** End the session: no current Design, clean baselines, a new session identity. */
+  clearCurrentDesign(): void
   renameCurrentDesign(name: string): boolean
 
   resetDirtyBaselines(): void
   markCanvasDetachedDirty(dirty: boolean): void
   setCanvasClean(clean: boolean): void
-  setAutosaveFailed(failed: boolean): void
 
   readPendingDesignPath(): string | null
   setPendingDesignPath(path: string | null): void
-  readPendingTemplateImport(): PendingTemplateImport | null
-  setPendingTemplateImport(template: PendingTemplateImport | null): void
 }
 
 declare const persistenceCapableDesignSessionStoreBrand: unique symbol
@@ -79,24 +58,20 @@ interface DesignSessionStoreSignals {
   readonly nonCanvasRevision: Signal<number>
   readonly nonCanvasSavedRevision: Signal<number>
   readonly persistenceDiverged: Signal<boolean>
-  readonly autosaveFailed: Signal<boolean>
   readonly canvasClean: Signal<boolean>
   readonly detachedCanvasDirty: Signal<boolean>
   readonly pendingDesignPath: Signal<string | null>
-  readonly pendingTemplateImport: Signal<PendingTemplateImport | null>
   readonly canvasDirty: ReadonlySignal<boolean>
   readonly designDirty: ReadonlySignal<boolean>
 }
 
-export interface DesignSessionStoreTestState extends Partial<DesignSessionIdentity> {
+interface DesignSessionStoreTestState extends Partial<DesignSessionIdentity> {
   readonly nonCanvasRevision?: number
   readonly nonCanvasSavedRevision?: number
   readonly persistenceDiverged?: boolean
-  readonly autosaveFailed?: boolean
   readonly canvasClean?: boolean
   readonly detachedCanvasDirty?: boolean
   readonly pendingDesignPath?: string | null
-  readonly pendingTemplateImport?: PendingTemplateImport | null
 }
 
 export interface DesignSessionStoreTestFixture {
@@ -106,7 +81,6 @@ export interface DesignSessionStoreTestFixture {
   readonly canvasClean: ReadonlySignal<boolean>
   readonly detachedCanvasDirty: ReadonlySignal<boolean>
   readonly pendingDesignPath: ReadonlySignal<string | null>
-  readonly pendingTemplateImport: ReadonlySignal<PendingTemplateImport | null>
   reset(initial?: DesignSessionStoreTestState): void
   setState(state: DesignSessionStoreTestState): void
   markSaved(): void
@@ -123,11 +97,10 @@ function createDesignSessionStore(
   const nonCanvasRevision = signal(0)
   const nonCanvasSavedRevision = signal(0)
   const persistenceDiverged = signal(false)
-  const autosaveFailed = signal(false)
+  const canvasChangeRevision = signal(0)
   const canvasClean = signal(true)
   const detachedCanvasDirty = signal(false)
   const pendingDesignPath = signal<string | null>(null)
-  const pendingTemplateImport = signal<PendingTemplateImport | null>(null)
   const canvasDirty = computed(() => detachedCanvasDirty.value || !canvasClean.value)
   const designDirty = computed(() =>
     canvasDirty.value
@@ -141,11 +114,9 @@ function createDesignSessionStore(
     nonCanvasRevision,
     nonCanvasSavedRevision,
     persistenceDiverged,
-    autosaveFailed,
     canvasClean,
     detachedCanvasDirty,
     pendingDesignPath,
-    pendingTemplateImport,
     canvasDirty,
     designDirty,
   }
@@ -155,73 +126,22 @@ function createDesignSessionStore(
   let sessionGeneration = 0
   let detachedCanvasRevision = 0
   let committedContentRevision = 0
-  let previewGeneration = 0
   let acknowledgementGeneration = 0
-  let committedDesign = signals.currentDesign.value
   const committedDesignRevision = signal(0)
-  const designPreviewActive = signal(false)
-  let activePreview: {
-    readonly identity: object
-    readonly intent: string
-    projector: DesignProjector | null
-    mutated: boolean
-    readonly options: DesignPreviewOptions
-  } | null = null
-  const designHistory = new DesignHistory({
-    applySpatialFrame: (spatialFrame) => {
-      if (activePreview) throw new DesignEditBusyError(activePreview.intent)
-      applyCommittedDesign((design) => ({
-        ...design,
-        spatial_frame: cloneSpatialFrame(spatialFrame),
-      }), true)
-    },
-  })
-  const designHistoryRevision = computed(() => {
-    const historyRevision = designHistory.revision.value
-    return historyRevision * 2 + (designPreviewActive.value ? 1 : 0)
-  })
-  const designHistoryParticipant = Object.freeze({
-    revision: designHistoryRevision,
-    canUndo: computed(() => !designPreviewActive.value && designHistory.canUndo.value),
-    canRedo: computed(() => !designPreviewActive.value && designHistory.canRedo.value),
-    nextUndoSequence: computed(() => designPreviewActive.value
-      ? null
-      : designHistory.nextUndoSequence.value),
-    nextRedoSequence: computed(() => designPreviewActive.value
-      ? null
-      : designHistory.nextRedoSequence.value),
-    reserveSequence: () => designHistory.reserveSequence(),
-    announceBranch: () => designHistory.announceBranch(),
-    subscribeToBranches: (onBranch: () => void) => designHistory.subscribeToBranches(onBranch),
-    undo: () => !designPreviewActive.value && batch(() => designHistory.undo()),
-    redo: () => !designPreviewActive.value && batch(() => designHistory.redo()),
-  })
-
-  function invalidateActivePreview(): void {
-    if (activePreview) previewGeneration += 1
-    activePreview = null
-  }
-
-  function visibleProjectionFor(file: CanopiFile): CanopiFile {
-    return activePreview?.projector?.(file) ?? file
-  }
 
   function applyCommittedDesign(
     updater: (design: CanopiFile) => CanopiFile,
     markDirty: boolean,
   ): CanopiFile | null {
-    const current = committedDesign
+    const current = signals.currentDesign.peek()
     if (!current) return null
 
     const next = updater(current)
     if (next === current) return current
-    const visible = visibleProjectionFor(next)
 
-    committedDesign = next
     committedContentRevision += 1
-    if (activePreview) activePreview.mutated = visible !== next
     batch(() => {
-      signals.currentDesign.value = visible
+      signals.currentDesign.value = next
       committedDesignRevision.value += 1
       if (markDirty) {
         signals.nonCanvasRevision.value += 1
@@ -230,103 +150,8 @@ function createDesignSessionStore(
     return next
   }
 
-  function beginPreview(
-    intent: string,
-    options: DesignPreviewOptions = {},
-  ): DesignPreviewTransaction {
-    const current = committedDesign
-    if (!current) throw new DesignEditUnavailableError()
-    if (activePreview) throw new DesignEditBusyError(activePreview.intent)
-
-    const identity = Object.freeze({})
-    let outcome: DesignPreviewOutcome | null = null
-    activePreview = {
-      identity,
-      intent,
-      projector: null,
-      mutated: false,
-      options,
-    }
-    designPreviewActive.value = true
-    previewGeneration += 1
-
-    const isCurrent = () => activePreview?.identity === identity
-    const superseded = (): DesignPreviewOutcome => {
-      outcome ??= Object.freeze({ status: 'superseded' })
-      return outcome
-    }
-
-    return Object.freeze({
-      get hasMutated() {
-        return isCurrent() ? activePreview!.mutated : outcome?.status === 'committed'
-          ? outcome.changed
-          : false
-      },
-      preview(projector: DesignProjector) {
-        if (!isCurrent()) return
-        const next = projector(committedDesign!)
-        const mutated = next !== committedDesign
-        activePreview!.projector = projector
-        activePreview!.mutated = mutated
-        previewGeneration += 1
-        signals.currentDesign.value = next
-      },
-      commit(): DesignPreviewOutcome {
-        if (outcome) return outcome
-        if (!isCurrent()) return superseded()
-        const before = committedDesign!
-        const next = activePreview!.projector?.(before) ?? before
-        const changed = next !== before
-        const beforeSpatialFrame = before.spatial_frame
-        const previewOptions = activePreview!.options
-        if (changed && previewOptions.history?.field === 'spatial_frame') {
-          assertOnlySpatialFrameChanged(before, next)
-        }
-        activePreview = null
-        previewGeneration += 1
-        if (changed) {
-          committedDesign = next
-          committedContentRevision += 1
-        }
-        outcome = Object.freeze({ status: 'committed', changed })
-        batch(() => {
-          signals.currentDesign.value = committedDesign
-          if (changed) committedDesignRevision.value += 1
-          if (changed) signals.nonCanvasRevision.value += 1
-          if (changed && previewOptions.history?.field === 'spatial_frame') {
-            designHistory.recordSpatialFrame(
-              previewOptions.history.type,
-              beforeSpatialFrame,
-              next.spatial_frame,
-            )
-          }
-          designPreviewActive.value = false
-        })
-        return outcome
-      },
-      abort(): DesignPreviewOutcome {
-        if (outcome) return outcome
-        if (!isCurrent()) return superseded()
-        activePreview = null
-        previewGeneration += 1
-        outcome = Object.freeze({ status: 'aborted' })
-        batch(() => {
-          signals.currentDesign.value = committedDesign
-          designPreviewActive.value = false
-        })
-        return outcome
-      },
-    })
-  }
-
   function rolloverDesignEditAuthority(): void {
     sessionGeneration += 1
-    previewGeneration += 1
-    activePreview = null
-    batch(() => {
-      signals.currentDesign.value = committedDesign
-      designPreviewActive.value = false
-    })
   }
 
   const store = {
@@ -336,22 +161,14 @@ function createDesignSessionStore(
     designName: signals.designName,
     designDirty: signals.designDirty,
     canvasDirty: signals.canvasDirty,
-    autosaveFailed: signals.autosaveFailed,
     committedDesignRevision,
+    canvasChangeRevision,
 
     readIdentity() {
       return {
         file: signals.currentDesign.value,
         path: signals.designPath.value,
         name: signals.designName.value,
-      }
-    },
-
-    readMetadata() {
-      return {
-        spatialFrame: signals.currentDesign.value
-          ? cloneSpatialFrame(signals.currentDesign.value.spatial_frame)
-          : null,
       }
     },
 
@@ -383,11 +200,7 @@ function createDesignSessionStore(
       sessionGeneration += 1
       detachedCanvasRevision = 0
       committedContentRevision += 1
-      invalidateActivePreview()
-      committedDesign = file
       batch(() => {
-        designHistory.clear()
-        designPreviewActive.value = false
         sessionIdentity.value = Object.freeze({})
         signals.currentDesign.value = file
         committedDesignRevision.value += 1
@@ -397,28 +210,40 @@ function createDesignSessionStore(
       })
     },
 
+    clearCurrentDesign() {
+      sessionGeneration += 1
+      detachedCanvasRevision = 0
+      committedContentRevision += 1
+      batch(() => {
+        sessionIdentity.value = Object.freeze({})
+        signals.currentDesign.value = null
+        committedDesignRevision.value += 1
+        signals.designPath.value = null
+        signals.designName.value = 'Untitled'
+        signals.canvasClean.value = true
+        signals.detachedCanvasDirty.value = false
+        signals.nonCanvasRevision.value = 0
+        signals.nonCanvasSavedRevision.value = 0
+        signals.persistenceDiverged.value = false
+      })
+    },
+
     replaceCurrentDesignSnapshot(file) {
-      const visible = visibleProjectionFor(file)
       detachedCanvasRevision += 1
       committedContentRevision += 1
-      committedDesign = file
-      if (activePreview) activePreview.mutated = visible !== file
       batch(() => {
-        signals.currentDesign.value = visible
+        signals.currentDesign.value = file
         committedDesignRevision.value += 1
       })
     },
 
     renameCurrentDesign(name) {
-      const design = committedDesign
+      const design = signals.currentDesign.peek()
       if (!design || name === signals.designName.value) return false
       const next = { ...design, name }
-      const visible = visibleProjectionFor(next)
-      committedDesign = next
       committedContentRevision += 1
-      if (activePreview) activePreview.mutated = visible !== next
       batch(() => {
-        signals.currentDesign.value = visible
+        signals.currentDesign.value = next
         committedDesignRevision.value += 1
         signals.designName.value = name
         signals.nonCanvasRevision.value += 1
@@ -428,13 +253,11 @@ function createDesignSessionStore(
 
     resetDirtyBaselines() {
       batch(() => {
-        designHistory.clear()
         signals.canvasClean.value = true
         signals.detachedCanvasDirty.value = false
         signals.nonCanvasRevision.value = 0
         signals.nonCanvasSavedRevision.value = 0
         signals.persistenceDiverged.value = false
-        signals.autosaveFailed.value = false
       })
     },
 
@@ -443,11 +266,10 @@ function createDesignSessionStore(
     },
 
     setCanvasClean(clean) {
-      signals.canvasClean.value = clean
-    },
-
-    setAutosaveFailed(failed) {
-      signals.autosaveFailed.value = failed
+      batch(() => {
+        signals.canvasClean.value = clean
+        canvasChangeRevision.value += 1
+      })
     },
 
     readPendingDesignPath() {
@@ -457,39 +279,26 @@ function createDesignSessionStore(
     setPendingDesignPath(path) {
       signals.pendingDesignPath.value = path
     },
-
-    readPendingTemplateImport() {
-      return signals.pendingTemplateImport.value
-    },
-
-    setPendingTemplateImport(template) {
-      signals.pendingTemplateImport.value = template
-        ? { ...template, file: cloneDocument(template.file) }
-        : null
-    },
   } as PersistenceCapableDesignSessionStore
 
   registerDesignEditAuthorityCapability(
     store,
     {
-      history: designHistoryParticipant,
       editCommitted: (projector) => applyCommittedDesign(projector, true),
       reconcileCommitted: (projector) => applyCommittedDesign(projector, false),
       markCommittedDirty: () => {
         signals.nonCanvasRevision.value += 1
       },
-      beginPreview,
     },
     rolloverDesignEditAuthority,
   )
 
   registerDesignSessionPersistenceCapability(store, () => {
     const capturedLifetime = lifetime
-    const file = committedDesign
+    const file = signals.currentDesign.peek()
     const generation = sessionGeneration
     const canvasRevision = detachedCanvasRevision
     const contentRevision = committedContentRevision
-    const capturedPreviewGeneration = previewGeneration
     const nonCanvasRevision = signals.nonCanvasRevision.value
     const persistenceDiverged = signals.persistenceDiverged.value
     // A guard captured while dirty may survive the exact Save that cleans it;
@@ -507,7 +316,6 @@ function createDesignSessionStore(
         && generation === sessionGeneration
         && canvasRevision === detachedCanvasRevision
         && contentRevision === committedContentRevision
-        && capturedPreviewGeneration === previewGeneration
         && nonCanvasRevision === signals.nonCanvasRevision.value
         && divergenceBaselineIsCurrent(),
       acknowledgeSaved(options = {}) {
@@ -524,7 +332,6 @@ function createDesignSessionStore(
           if (options.canvasDetached) signals.canvasClean.value = true
           signals.nonCanvasSavedRevision.value = nonCanvasRevision
           signals.persistenceDiverged.value = contentRevision !== committedContentRevision
-          signals.autosaveFailed.value = false
         })
         if (
           acknowledgement === acknowledgementGeneration
@@ -546,15 +353,6 @@ function createDesignSessionStore(
         signals.designPath.value = path
         return true
       },
-      setAutosaveFailed(failed) {
-        if (
-          capturedLifetime !== lifetime
-          || generation !== sessionGeneration
-          || canvasRevision !== detachedCanvasRevision
-        ) return false
-        signals.autosaveFailed.value = failed
-        return true
-      },
     }
     return Object.freeze(capture)
   })
@@ -566,31 +364,23 @@ function createDesignSessionStore(
     canvasClean: signals.canvasClean,
     detachedCanvasDirty: signals.detachedCanvasDirty,
     pendingDesignPath: signals.pendingDesignPath,
-    pendingTemplateImport: signals.pendingTemplateImport,
     reset(state: DesignSessionStoreTestState = {}) {
       lifetime = Object.freeze({})
       sessionGeneration = 0
       detachedCanvasRevision = 0
       committedContentRevision = 0
-      previewGeneration = 0
       acknowledgementGeneration = 0
-      activePreview = null
-      committedDesign = state.file ?? null
       batch(() => {
-        designHistory.clear()
-        designPreviewActive.value = false
         sessionIdentity.value = Object.freeze({})
-        signals.currentDesign.value = committedDesign
+        signals.currentDesign.value = state.file ?? null
         signals.designPath.value = state.path ?? null
         signals.designName.value = state.name ?? state.file?.name ?? 'Untitled'
         signals.nonCanvasRevision.value = state.nonCanvasRevision ?? 0
         signals.nonCanvasSavedRevision.value = state.nonCanvasSavedRevision ?? 0
         signals.persistenceDiverged.value = state.persistenceDiverged ?? false
-        signals.autosaveFailed.value = state.autosaveFailed ?? false
         signals.canvasClean.value = state.canvasClean ?? true
         signals.detachedCanvasDirty.value = state.detachedCanvasDirty ?? false
         signals.pendingDesignPath.value = state.pendingDesignPath ?? null
-        signals.pendingTemplateImport.value = state.pendingTemplateImport ?? null
         committedDesignRevision.value = 0
       })
     },
@@ -601,15 +391,11 @@ function createDesignSessionStore(
         sessionGeneration += 1
         detachedCanvasRevision = 0
         committedContentRevision += 1
-        invalidateActivePreview()
-        committedDesign = state.file ?? null
       }
       batch(() => {
         if (has('file')) {
-          designHistory.clear()
-          designPreviewActive.value = false
           sessionIdentity.value = Object.freeze({})
-          signals.currentDesign.value = committedDesign
+          signals.currentDesign.value = state.file ?? null
           committedDesignRevision.value += 1
         }
         if (has('path')) signals.designPath.value = state.path ?? null
@@ -623,18 +409,12 @@ function createDesignSessionStore(
         if (has('persistenceDiverged')) {
           signals.persistenceDiverged.value = state.persistenceDiverged ?? false
         }
-        if (has('autosaveFailed')) {
-          signals.autosaveFailed.value = state.autosaveFailed ?? false
-        }
         if (has('canvasClean')) signals.canvasClean.value = state.canvasClean ?? true
         if (has('detachedCanvasDirty')) {
           signals.detachedCanvasDirty.value = state.detachedCanvasDirty ?? false
         }
         if (has('pendingDesignPath')) {
           signals.pendingDesignPath.value = state.pendingDesignPath ?? null
-        }
-        if (has('pendingTemplateImport')) {
-          signals.pendingTemplateImport.value = state.pendingTemplateImport ?? null
         }
       })
     },
@@ -645,7 +425,6 @@ function createDesignSessionStore(
         signals.canvasClean.value = true
         signals.nonCanvasSavedRevision.value = signals.nonCanvasRevision.value
         signals.persistenceDiverged.value = false
-        signals.autosaveFailed.value = false
       })
     },
   } satisfies DesignSessionStoreTestFixture)
@@ -673,42 +452,10 @@ export const designSessionStore: PersistenceCapableDesignSessionStore = createDe
 export const currentDesign = designSessionStore.currentDesign
 export const designPath = designSessionStore.designPath
 export const designName = designSessionStore.designName
-export const designDirty = designSessionStore.designDirty
-export const canvasDirty = designSessionStore.canvasDirty
-export const autosaveFailed = designSessionStore.autosaveFailed
-
-export const readCurrentDesign = () => designSessionStore.readCurrentDesign()
-export const readDesignPath = () => designSessionStore.readDesignPath()
-export const readDesignName = () => designSessionStore.readDesignName()
-export const replaceCurrentDesignState = (
-  file: CanopiFile,
-  path: string | null,
-  name: string,
-) => designSessionStore.replaceCurrentDesignState(file, path, name)
-export const replaceCurrentDesignSnapshot = (file: CanopiFile) =>
-  designSessionStore.replaceCurrentDesignSnapshot(file)
-export const resetDirtyBaselines = () => designSessionStore.resetDirtyBaselines()
-export const markCanvasDetachedDirty = (dirty: boolean) =>
-  designSessionStore.markCanvasDetachedDirty(dirty)
 export const setCanvasClean = (clean: boolean) => designSessionStore.setCanvasClean(clean)
-export const setAutosaveFailed = (failed: boolean) =>
-  designSessionStore.setAutosaveFailed(failed)
 export const setPendingDesignPath = (path: string | null) =>
   designSessionStore.setPendingDesignPath(path)
-export const setPendingTemplateImport = (template: PendingTemplateImport | null) =>
-  designSessionStore.setPendingTemplateImport(template)
 
 function cloneDocument(file: CanopiFile): CanopiFile {
   return JSON.parse(JSON.stringify(file)) as CanopiFile
-}
-
-function assertOnlySpatialFrameChanged(before: CanopiFile, after: CanopiFile): void {
-  const keys = new Set<keyof CanopiFile>([
-    ...Object.keys(before),
-    ...Object.keys(after),
-  ] as Array<keyof CanopiFile>)
-  for (const key of keys) {
-    if (key === 'spatial_frame' || before[key] === after[key]) continue
-    throw new Error(`Design history preview changed undeclared field '${key}'`)
-  }
 }

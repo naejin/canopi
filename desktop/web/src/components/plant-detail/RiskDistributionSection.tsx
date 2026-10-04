@@ -21,21 +21,20 @@ export function RiskDistributionSection({ d, expanded, onToggle }: Props) {
   if (!hasData) return null;
 
   return (
-    <CollapsibleSection id="risk" icon="⚠" titleKey="plantDetail.riskDistribution"
-      accentClass={styles.sectionRisk} expanded={expanded} onToggle={onToggle}>
+    <CollapsibleSection id="risk" titleKey="plantDetail.riskDistribution" expanded={expanded} onToggle={onToggle}>
       <TextBlock label={t('plantDetail.toxicity')} text={d.toxicity} />
-      <div className={styles.attrGrid}>
+      <dl className={styles.attrGrid}>
         <Attr label={t('plantDetail.invasivePotential')} value={d.invasive_potential} />
         <Attr label={t('plantDetail.biogeographicStatus')} value={d.biogeographic_status} />
         <Attr label={t('plantDetail.fireTolerance')} value={d.fire_tolerance} />
         <Attr label={t('plantDetail.hedgeTolerance')} value={d.hedge_tolerance} />
-      </div>
-      <div className={styles.boolRow}>
+      </dl>
+      <ul className={styles.boolRow}>
         <BoolChip label={t('plantDetail.noxiousStatus')} value={d.noxious_status} />
         <BoolChip label={t('plantDetail.weedPotential')} value={d.weed_potential} />
         <BoolChip label={t('plantDetail.invasiveUsda')} value={d.invasive_usda} />
         <BoolChip label={t('plantDetail.fireResistant')} value={d.fire_resistant} />
-      </div>
+      </ul>
       <TextBlock label={t('plantDetail.nativeDistribution')} text={d.native_distribution} />
       <TextBlock label={t('plantDetail.introducedDistribution')} text={d.introduced_distribution} />
     </CollapsibleSection>

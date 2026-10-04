@@ -1,452 +1,233 @@
-//! Bounded adapter around the external GDAL command-line engine.
+//! The raster engine seam of the Data library.
 //!
-//! The LiDAR subsystem never shells out ad hoc: every raster operation goes
-//! through this adapter, which discovers the pinned tool set once, builds
-//! fixed argument vectors (no shell), caps captured output, and honors a
-//! cancellation flag while a child process runs. Engine detection results are
-//! recorded so manifests can prove which engine produced a numeric output.
+//! Every numeric raster operation the library performs on files goes through
+//! [`RasterEngine`]: header probes, exact statistics, whole-raster Float32
+//! reads under the capacity limit, the two controlled output profiles
+//! (numeric COG and display COG), the tiled GeoTIFF handed to the GeoLibre
+//! sidecar, and point transforms between coordinate reference systems.
+//! Production has one implementation, `rust_engine::RustRasterEngine`
+//! (ADR 0014); the test-only GDAL oracle in `gdal_engine.rs` implements the
+//! same trait so the comparison lane can hold both to the same contract.
+//! Vocabulary (driver, band type, mask flags, compression names) stays
+//! GDAL's, which the catalogue and admission rules were written against.
+//!
+//! Every operation takes the caller's cancellation flag and returns
+//! `Err("cancelled")` when it is set between phases.
 
-use std::io::Write as _;
-use std::path::PathBuf;
-use std::process::{Child, Command, Stdio};
+use super::grid::RasterGrid;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 
-const DEFAULT_PROCESS_TIMEOUT: Duration = Duration::from_secs(600);
-const MAX_OUTPUT_BYTES: usize = 2 * 1024 * 1024;
-/// GDAL's block cache for every engine process.
+/// Header facts of one raster, read without decoding samples wherever the
+/// format allows. Persisted verbatim in the source manifest so provenance
+/// survives reimports; no absolute path is ever part of it.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct RasterProbe {
+    /// Format identity in GDAL's short-name vocabulary (`GTiff` for every
+    /// TIFF), so admission has one name to check.
+    pub driver: String,
+    pub width: u32,
+    pub height: u32,
+    pub band_count: u32,
+    /// Band 1's sample type in GDAL's vocabulary (`Float32`, `Int16`, ...).
+    pub band_type: String,
+    pub nodata: Option<f32>,
+    pub scale: f64,
+    pub offset: f64,
+    pub unit: Option<String>,
+    /// Validity mask flags in GDAL's vocabulary; anything but `ALL_VALID`
+    /// names a dataset mask admission refuses.
+    pub mask_flags: Vec<String>,
+    /// `[origin_x, pixel_w, rot_x, origin_y, rot_y, pixel_h]`.
+    pub geotransform: [f64; 6],
+    /// The horizontal CRS as WKT, or empty when the file declares none.
+    pub crs_wkt: String,
+    /// Band 1's native block: `[tile_w, tile_h]` or `[width, rows_per_strip]`.
+    pub block: [u32; 2],
+    /// Compression in GDAL's vocabulary (`NONE`, `DEFLATE`, `LZW`, ...).
+    pub compression: String,
+    /// Reduced-resolution levels stored with band 1.
+    pub overview_count: u32,
+}
+
+/// Exact statistics over a raster's valid samples: finite and not the
+/// declared NoData. Mean and standard deviation are the population values
+/// over those samples, as `gdalinfo -stats` reports them (GDAL differs only
+/// by counting `±inf`, which Canopi's validity rule never does).
 ///
-/// Matches the resource policy's 128 MiB reserve for decoded raster data, so a
-/// conversion cannot take memory the pipeline has not budgeted.
-/// The GDAL block-cache ceiling every managed child is launched with.
-pub(super) const GDAL_CACHE_BYTES: u64 = 128 * 1024 * 1024;
-const MAX_OUTPUT_FILE_BYTES: u64 = (MAX_OUTPUT_BYTES as u64) * 2;
-const CANCEL_POLL_INTERVAL: Duration = Duration::from_millis(50);
-
-#[derive(Debug, Clone)]
-pub struct GdalEngine {
-    discovery: ArcDiscovery,
+/// Production never needs whole-raster statistics (facts are read in bounded
+/// windows); the fixture and comparison lanes use them to prove outputs.
+#[cfg(test)]
+#[derive(Debug, Clone, PartialEq)]
+pub struct RasterStatistics {
+    pub minimum: f64,
+    pub maximum: f64,
+    pub mean: f64,
+    pub std_dev: f64,
+    /// Valid samples as a percentage of all cells, `0.0..=100.0`.
+    pub valid_percent: f64,
 }
 
-#[derive(Clone)]
-struct ArcDiscovery(Arc<Mutex<Option<Result<DiscoveredTools, String>>>>);
-
-impl std::fmt::Debug for ArcDiscovery {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("ArcDiscovery").finish()
-    }
+/// Where an output raster sits: its grid and horizontal CRS (`EPSG:n` or WKT).
+#[derive(Debug, Clone, Copy)]
+pub struct RasterGeoref<'a> {
+    pub grid: &'a RasterGrid,
+    pub crs: &'a str,
 }
 
-#[derive(Debug, Clone)]
-pub struct DiscoveredTools {
-    pub gdalinfo: PathBuf,
-    pub gdal_translate: PathBuf,
-    pub gdalwarp: PathBuf,
-    pub gdaldem: PathBuf,
-    pub gdaltransform: PathBuf,
-    pub version: String,
+/// What a conversion reads.
+#[derive(Debug, Clone, Copy)]
+pub enum RasterInput<'a> {
+    /// Any raster file the engine can read; band 1 is converted.
+    File(&'a Path),
+    /// Row-major Float32 samples of `grid`; the caller supplies the georef.
+    Samples {
+        grid: &'a RasterGrid,
+        values: &'a [f32],
+    },
 }
 
-impl GdalEngine {
-    pub fn new() -> Self {
-        Self {
-            discovery: ArcDiscovery(Arc::new(Mutex::new(None))),
-        }
-    }
+/// The operations the Data library needs from a raster engine.
+pub trait RasterEngine: Send + Sync + std::fmt::Debug {
+    /// The engine's identity, recorded in manifests; an error names why the
+    /// engine is unavailable.
+    fn version(&self) -> Result<String, String>;
 
-    /// Detect the tool set once per process; detection failures are cached so
-    /// a missing engine degrades to explicit errors instead of repeated PATH
-    /// scans.
-    pub fn discover(&self) -> Result<DiscoveredTools, String> {
-        let mut guard = self
-            .discovery
-            .0
-            .lock()
-            .map_err(|_| "LiDAR engine discovery lock poisoned".to_string())?;
-        if let Some(cached) = guard.as_ref() {
-            return cached.clone();
-        }
-        let discovered = Self::discover_uncached();
-        *guard = Some(discovered.clone());
-        discovered
-    }
+    /// Header facts of `raster`. Fails when the file is unreadable or not
+    /// georeferenced; a missing CRS leaves `crs_wkt` empty.
+    fn probe(&self, raster: &Path, cancel: &AtomicBool) -> Result<RasterProbe, String>;
 
-    fn discover_uncached() -> Result<DiscoveredTools, String> {
-        let search_dir = std::env::var_os("CANOPI_LIDAR_GDAL_BIN").map(PathBuf::from);
-        let find = |name: &str| -> Result<PathBuf, String> {
-            if let Some(dir) = &search_dir {
-                let candidate = dir.join(name);
-                if candidate.is_file() {
-                    return Ok(candidate);
-                }
-                return Err(format!("GDAL tool {name} not found in {}", dir.display()));
-            }
-            which_on_path(name).ok_or_else(|| format!("GDAL tool {name} not found on PATH"))
-        };
+    /// Exact statistics over band 1's valid samples (test lanes only).
+    #[cfg(test)]
+    fn statistics(&self, raster: &Path, cancel: &AtomicBool) -> Result<RasterStatistics, String>;
 
-        let gdalinfo = find("gdalinfo")?;
-        let tools = DiscoveredTools {
-            gdalinfo: gdalinfo.clone(),
-            gdal_translate: find("gdal_translate")?,
-            gdalwarp: find("gdalwarp")?,
-            gdaldem: find("gdaldem")?,
-            gdaltransform: find("gdaltransform")?,
-            version: String::new(),
-        };
-        let version_output = Self::run_once(
-            &gdalinfo,
-            &["--version".to_string()],
-            None,
-            None,
-            Some(DEFAULT_PROCESS_TIMEOUT),
-        )?;
-        let mut tools = tools;
-        tools.version = version_output.stdout.trim().to_string();
-        if tools.version.is_empty() {
-            return Err("GDAL engine reported an empty version".to_string());
-        }
-        Ok(tools)
-    }
+    /// The WGS84 box `[west, south, east, north]` around the raster's corners.
+    /// Never writes anything beside the file.
+    fn wgs84_extent(&self, raster: &Path, cancel: &AtomicBool) -> Result<[f64; 4], String>;
 
-    /// Run one GDAL tool to completion. Fixed argv, no shell, bounded output,
-    /// bounded duration, cancellable while running.
-    pub fn run(
+    /// Band 1 of `raster` as row-major Float32, exactly `width * height`
+    /// samples; integer and Float64 samples convert as a Float32 cast does.
+    fn read_f32(
         &self,
-        program: GdalProgram,
-        args: &[String],
-        cancel: Option<&AtomicBool>,
-    ) -> Result<RunOutput, String> {
-        let tools = self.discover()?;
-        let path = match program {
-            GdalProgram::Info => tools.gdalinfo,
-            GdalProgram::Translate => tools.gdal_translate,
-            GdalProgram::Warp => tools.gdalwarp,
-            GdalProgram::Dem => tools.gdaldem,
-            GdalProgram::Transform => tools.gdaltransform,
-        };
-        Self::run_once(&path, args, None, cancel, Some(DEFAULT_PROCESS_TIMEOUT))
-    }
+        raster: &Path,
+        width: u32,
+        height: u32,
+        cancel: &AtomicBool,
+    ) -> Result<Vec<f32>, String>;
 
-    /// Run the controlled source-conversion call with no elapsed-time ceiling.
-    ///
-    /// Only this call may outlive the common finite deadline: a real large
-    /// conversion is the one operation the product contract exempts. Explicit
-    /// cancel and shutdown still terminate and reap the child, and every call
-    /// retains bounded output and process-reaping behavior. OS read/write/fsync
-    /// stalls are not made interruptible by an atomic flag.
-    pub fn run_uncapped_conversion(
+    /// Write a georeferenced, tiled, Deflate-compressed Float32 GeoTIFF with
+    /// a NoData tag: the exchange format handed to the GeoLibre CLI and the
+    /// authored fixture format.
+    fn write_geotiff(
         &self,
-        program: GdalProgram,
-        args: &[String],
-        cancel: Option<&AtomicBool>,
-    ) -> Result<RunOutput, String> {
-        let tools = self.discover()?;
-        let path = match program {
-            GdalProgram::Info => tools.gdalinfo,
-            GdalProgram::Translate => tools.gdal_translate,
-            GdalProgram::Warp => tools.gdalwarp,
-            GdalProgram::Dem => tools.gdaldem,
-            GdalProgram::Transform => tools.gdaltransform,
-        };
-        Self::run_once(&path, args, None, cancel, None)
-    }
+        output: &Path,
+        georef: RasterGeoref<'_>,
+        nodata: f32,
+        values: &[f32],
+        cancel: &AtomicBool,
+    ) -> Result<(), String>;
 
-    /// Run a GDAL tool with a small caller-owned stdin payload. This keeps
-    /// transform operations under the same timeout, cancellation and output
-    /// limits as every other engine command.
-    pub fn run_with_input(
+    /// Write the controlled numeric profile (`cog-f32-t256-raw-v1`): band 1
+    /// as Float32, 256×256 tiles, uncompressed, no overviews, no mask.
+    /// `georef` overrides the input's placement (required for samples);
+    /// `nodata` overrides the input's tag, `None` keeps it (samples get none).
+    fn write_controlled_cog(
         &self,
-        program: GdalProgram,
-        args: &[String],
-        input: &[u8],
-        cancel: Option<&AtomicBool>,
-    ) -> Result<RunOutput, String> {
-        if input.len() > MAX_OUTPUT_BYTES {
-            return Err("raster process input exceeds the adapter limit".to_string());
-        }
-        let tools = self.discover()?;
-        let path = match program {
-            GdalProgram::Info => tools.gdalinfo,
-            GdalProgram::Translate => tools.gdal_translate,
-            GdalProgram::Warp => tools.gdalwarp,
-            GdalProgram::Dem => tools.gdaldem,
-            GdalProgram::Transform => tools.gdaltransform,
-        };
-        Self::run_once(
-            &path,
-            args,
-            Some(input),
-            cancel,
-            Some(DEFAULT_PROCESS_TIMEOUT),
-        )
+        input: RasterInput<'_>,
+        output: &Path,
+        georef: Option<RasterGeoref<'_>>,
+        nodata: Option<f32>,
+        cancel: &AtomicBool,
+    ) -> Result<(), String>;
+
+    /// Write the display profile (`display-cog-deflate256-v1`): band 1 as
+    /// Float32, 256×256 tiles, Deflate, averaged valid-data overviews, the
+    /// NoData tag readers compare samples against. Same override rules as
+    /// [`RasterEngine::write_controlled_cog`].
+    fn write_display_cog(
+        &self,
+        input: RasterInput<'_>,
+        output: &Path,
+        georef: Option<RasterGeoref<'_>>,
+        nodata: Option<f32>,
+        cancel: &AtomicBool,
+    ) -> Result<(), String>;
+
+    /// Transform `points` from `source_crs` to `target_crs` (`EPSG:n` or
+    /// WKT). A point the transform cannot place is `None`, never an error.
+    fn transform_points(
+        &self,
+        source_crs: &str,
+        target_crs: &str,
+        points: &[(f64, f64)],
+        cancel: &AtomicBool,
+    ) -> Result<Vec<Option<(f64, f64)>>, String>;
+}
+
+/// `Err("cancelled")` once the caller's flag is set.
+pub fn check_cancel(cancel: &AtomicBool) -> Result<(), String> {
+    if cancel.load(Ordering::Relaxed) {
+        return Err("cancelled".to_string());
     }
+    Ok(())
+}
 
-    fn run_once(
-        path: &std::path::Path,
-        args: &[String],
-        input: Option<&[u8]>,
-        cancel: Option<&AtomicBool>,
-        timeout: Option<Duration>,
-    ) -> Result<RunOutput, String> {
-        let started = Instant::now();
-        // Output is captured through temp files instead of pipes so no
-        // worker thread is needed and cancellation still kills the child.
-        let token = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
-        let stdout_path = std::env::temp_dir().join(format!("canopi-gdal-out-{token}.log"));
-        let stderr_path = std::env::temp_dir().join(format!("canopi-gdal-err-{token}.log"));
-        let stdout_file = std::fs::File::create(&stdout_path)
-            .map_err(|e| format!("Failed to create engine output file: {e}"))?;
-        let stderr_file = std::fs::File::create(&stderr_path)
-            .map_err(|e| format!("Failed to create engine error file: {e}"))?;
-        let child = Command::new(path)
-            .args(args)
-            // GDAL's block cache defaults to a share of *system* RAM, not to
-            // anything this pipeline budgeted: measured on the representative
-            // 400-million-cell plane it grew to the size of the whole raster
-            // (1.66 GiB) while converting, which breaks the combined working-set
-            // gate on its own. The resource policy already reserves 128 MiB for
-            // decoded raster data, so the engine is given exactly that and no
-            // tool can silently exceed the pipeline's own bound.
-            .env("GDAL_CACHEMAX", GDAL_CACHE_BYTES.to_string())
-            .stdin(if input.is_some() {
-                Stdio::piped()
-            } else {
-                Stdio::null()
-            })
-            .stdout(Stdio::from(stdout_file))
-            .stderr(Stdio::from(stderr_file))
-            .spawn()
-            .map_err(|e| format!("Failed to start {}: {e}", path.display()))?;
-        let mut child = child;
-        if let Some(input) = input {
-            let write_result = match child.stdin.as_mut() {
-                Some(stdin) => stdin.write_all(input),
-                None => {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    let _ = std::fs::remove_file(&stdout_path);
-                    let _ = std::fs::remove_file(&stderr_path);
-                    return Err("Failed to open raster process input".to_string());
-                }
-            };
-            drop(child.stdin.take());
-            if let Err(error) = write_result {
-                let _ = child.kill();
-                let _ = child.wait();
-                let _ = std::fs::remove_file(&stdout_path);
-                let _ = std::fs::remove_file(&stderr_path);
-                return Err(format!("Failed to write raster process input: {error}"));
-            }
-        }
-
-        let status = wait_cancellable(&mut child, cancel, timeout, [&stdout_path, &stderr_path]);
-        let status = match status {
-            Ok(status) => status,
-            Err(error) => {
-                let _ = child.kill();
-                let _ = std::fs::remove_file(&stdout_path);
-                let _ = std::fs::remove_file(&stderr_path);
-                return Err(error);
-            }
-        };
-        let stdout = read_capped_file(&stdout_path);
-        let stderr = read_capped_file(&stderr_path);
-        let _ = std::fs::remove_file(&stdout_path);
-        let _ = std::fs::remove_file(&stderr_path);
-
-        let output = RunOutput {
-            stdout: String::from_utf8_lossy(&stdout).into_owned(),
-            stderr: String::from_utf8_lossy(&stderr).into_owned(),
-            exit_code: status.code().unwrap_or(-1),
-            duration: started.elapsed(),
-        };
-
-        if !status.success() {
-            return Err(format!(
-                "{} failed (exit {}): {}",
-                path.display(),
-                output.exit_code,
-                truncate_message(&output.stderr),
-            ));
-        }
-        Ok(output)
+/// The WGS84 box around a set of transformed corners; `None` when no corner
+/// could be placed.
+pub(super) fn bounds_of(points: &[Option<(f64, f64)>]) -> Option<[f64; 4]> {
+    let mut bounds = [
+        f64::INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::NEG_INFINITY,
+    ];
+    for (x, y) in points.iter().flatten() {
+        bounds[0] = bounds[0].min(*x);
+        bounds[1] = bounds[1].min(*y);
+        bounds[2] = bounds[2].max(*x);
+        bounds[3] = bounds[3].max(*y);
     }
+    bounds
+        .iter()
+        .all(|value| value.is_finite())
+        .then_some(bounds)
 }
 
-impl Default for GdalEngine {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GdalProgram {
-    Info,
-    Translate,
-    Warp,
-    Dem,
-    Transform,
-}
-
-#[derive(Debug)]
-pub struct RunOutput {
-    pub stdout: String,
-    pub stderr: String,
-    pub exit_code: i32,
-    #[allow(dead_code)]
-    pub duration: Duration,
-}
-
-fn wait_cancellable(
-    child: &mut Child,
-    cancel: Option<&AtomicBool>,
-    timeout: Option<Duration>,
-    output_paths: [&std::path::Path; 2],
-) -> Result<std::process::ExitStatus, String> {
-    let started = Instant::now();
-    loop {
-        if cancel.is_some_and(|flag| flag.load(Ordering::Relaxed)) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err("cancelled".to_string());
-        }
-        match child.try_wait() {
-            Ok(Some(status)) => return Ok(status),
-            Ok(None) => {}
-            Err(e) => return Err(format!("Failed to poll raster process: {e}")),
-        }
-        if let Some(timeout) = timeout
-            && started.elapsed() > timeout
-        {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err("raster process timed out".to_string());
-        }
-        if output_paths.iter().any(|path| {
-            std::fs::metadata(path)
-                .map(|metadata| metadata.len() > MAX_OUTPUT_FILE_BYTES)
-                .unwrap_or(false)
-        }) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err("raster process output exceeds the adapter limit".to_string());
-        }
-        std::thread::sleep(CANCEL_POLL_INTERVAL);
-    }
-}
-
-fn read_capped_file(path: &std::path::Path) -> Vec<u8> {
-    let Ok(mut file) = std::fs::File::open(path) else {
-        return Vec::new();
-    };
-    use std::io::Read;
-    let mut buf = Vec::new();
-    let mut chunk = [0u8; 8192];
-    loop {
-        match file.read(&mut chunk) {
-            Ok(0) => break,
-            Ok(n) => {
-                let remaining = MAX_OUTPUT_BYTES - buf.len();
-                let take = n.min(remaining);
-                buf.extend_from_slice(&chunk[..take]);
-                if buf.len() >= MAX_OUTPUT_BYTES {
-                    break;
-                }
-            }
-            Err(_) => break,
-        }
-    }
-    buf
-}
-
-fn truncate_message(message: &str) -> String {
-    const LIMIT: usize = 2000;
-    if message.len() <= LIMIT {
-        message.to_string()
-    } else {
-        let mut cut = LIMIT;
-        while !message.is_char_boundary(cut) {
-            cut -= 1;
-        }
-        format!("{}…", &message[..cut])
-    }
-}
-
-fn which_on_path(name: &str) -> Option<PathBuf> {
-    let path_var = std::env::var_os("PATH")?;
-    std::env::split_paths(&path_var)
-        .map(|dir| dir.join(name))
-        .find(|candidate| candidate.is_file())
+/// The four corners of a grid in its own CRS, clockwise from the origin.
+pub(super) fn grid_corners(grid: &RasterGrid) -> [(f64, f64); 4] {
+    let [min_x, min_y, max_x, max_y] = grid.bounds();
+    [
+        (min_x, max_y),
+        (max_x, max_y),
+        (max_x, min_y),
+        (min_x, min_y),
+    ]
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// A stalled bounded child is killed and reaped when its finite deadline
-    /// expires, without waiting for the full production timeout.
-    ///
-    /// Uses a portable fixture process; Unix `sleep` is only a convenience on
-    /// hosts that have it. Windows is explicitly unverified for this lane.
-    #[cfg(unix)]
     #[test]
-    fn a_stalled_bounded_child_is_killed_and_reaped_on_timeout() {
-        let mut child = Command::new("sleep")
-            .arg("30")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("sleep spawns");
-        let out = std::env::temp_dir().join("canopi-engine-timeout-out.log");
-        let err = std::env::temp_dir().join("canopi-engine-timeout-err.log");
-        let started = Instant::now();
-        let result = wait_cancellable(
-            &mut child,
-            None,
-            Some(Duration::from_millis(120)),
-            [&out, &err],
+    fn bounds_cover_every_placed_corner_and_need_at_least_one() {
+        assert_eq!(
+            bounds_of(&[Some((1.0, 5.0)), None, Some((-2.0, 3.0))]),
+            Some([-2.0, 3.0, 1.0, 5.0])
         );
-        let _ = std::fs::remove_file(&out);
-        let _ = std::fs::remove_file(&err);
-        assert!(result.is_err(), "timeout must report an error");
-        assert!(
-            started.elapsed() < Duration::from_secs(5),
-            "timeout settled in {:?}",
-            started.elapsed()
-        );
-        // The child was killed and reaped: try_wait reports a status, not a hang.
-        let status = child.try_wait().expect("reaped child polls");
-        assert!(status.is_some(), "child must be reaped after timeout");
+        assert_eq!(bounds_of(&[None, None]), None);
+        assert_eq!(bounds_of(&[]), None);
     }
 
-    /// An explicit cancel settles a running child within the contract bound
-    /// even when the elapsed deadline is absent (the source-conversion mode).
-    #[cfg(unix)]
     #[test]
-    fn an_explicit_cancel_settles_an_uncapped_child() {
-        let cancel = AtomicBool::new(false);
-        let mut child = Command::new("sleep")
-            .arg("30")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("sleep spawns");
-        let out = std::env::temp_dir().join("canopi-engine-cancel-out.log");
-        let err = std::env::temp_dir().join("canopi-engine-cancel-err.log");
-        let started = Instant::now();
-        cancel.store(true, Ordering::Relaxed);
-        let result = wait_cancellable(&mut child, Some(&cancel), None, [&out, &err]);
-        let _ = std::fs::remove_file(&out);
-        let _ = std::fs::remove_file(&err);
-        assert!(result.is_err(), "cancel must report an error");
-        assert!(
-            started.elapsed() < Duration::from_secs(5),
-            "cancel settled in {:?}",
-            started.elapsed()
+    fn corners_walk_the_grid_clockwise_from_its_origin() {
+        let grid = RasterGrid {
+            width: 4,
+            height: 2,
+            geotransform: [10.0, 0.5, 0.0, 20.0, 0.0, -0.5],
+        };
+        assert_eq!(
+            grid_corners(&grid),
+            [(10.0, 20.0), (12.0, 20.0), (12.0, 19.0), (10.0, 19.0)]
         );
     }
 }

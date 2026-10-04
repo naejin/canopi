@@ -11,15 +11,20 @@ import type {
 import { speciesSearchAdmission } from '../../utils/species-search-normalization'
 import { createEmptySpeciesFilter, plantFilterModel } from './plant-filter-model'
 
-export { createEmptySpeciesFilter }
-
 export type PlantSearchStatus = 'idle' | 'loading-first-page' | 'loading-next-page' | 'error'
+
+/** Browse orders a user can pick; an active search text always ranks by relevance. */
+export type SpeciesBrowseSort = Exclude<SpeciesSearchRequest['sort'], 'Relevance'>
+
+const DEFAULT_SPECIES_BROWSE_SORT: SpeciesBrowseSort = 'Recommended'
 
 export interface PlantSearchIntent {
   readonly text: string
   readonly filters: SpeciesFilter
   readonly extraFilters: readonly DynamicFilter[]
   readonly sort: SpeciesSearchRequest['sort']
+  /** The chosen browse order, kept while a search text ranks by relevance. */
+  readonly browseSort: SpeciesBrowseSort
   readonly locale: string
 }
 
@@ -32,10 +37,11 @@ export interface PlantSearchResultState {
   readonly error: string | null
 }
 
-export interface PlantSearchSession {
+interface PlantSearchSession {
   readonly intent: ReadonlySignal<PlantSearchIntent>
   readonly results: ReadonlySignal<PlantSearchResultState>
   setText(text: string): void
+  setBrowseSort(sort: SpeciesBrowseSort): void
   patchFilters(patch: Partial<SpeciesFilter>): void
   retry(): void
   loadNextPage(): Promise<void>
@@ -53,8 +59,9 @@ export type DynamicFilterOptionsAdapter = (
   locale: string,
 ) => Promise<DynamicFilterOptions[]>
 
-export interface PlantSearchSessionSignals {
+interface PlantSearchSessionSignals {
   readonly text: Signal<string>
+  readonly browseSort: Signal<SpeciesBrowseSort>
   readonly filters: Signal<SpeciesFilter>
   readonly extraFilters: Signal<DynamicFilter[]>
   readonly items: Signal<SpeciesListItem[]>
@@ -153,6 +160,7 @@ export function createPlantSearchSession({
   timers = defaultTimers,
 }: PlantSearchSessionOptions): ManagedPlantSearchSession {
   const text = signal('')
+  const browseSort = signal<SpeciesBrowseSort>(DEFAULT_SPECIES_BROWSE_SORT)
   const filters = signal<SpeciesFilter>(createEmptySpeciesFilter())
   const extraFilters = signal<DynamicFilter[]>([])
   const items = signal<SpeciesListItem[]>([])
@@ -170,7 +178,7 @@ export function createPlantSearchSession({
       return 'Relevance'
     }
 
-    return 'Name'
+    return browseSort.value
   })
 
   const intent = computed<PlantSearchIntent>(() => ({
@@ -178,6 +186,7 @@ export function createPlantSearchSession({
     filters: filters.value,
     extraFilters: extraFilters.value,
     sort: effectiveSort.value,
+    browseSort: browseSort.value,
     locale: locale.value,
   }))
 
@@ -485,6 +494,7 @@ export function createPlantSearchSession({
     results,
     signals: {
       text,
+      browseSort,
       filters,
       extraFilters,
       items,
@@ -501,6 +511,10 @@ export function createPlantSearchSession({
     setText(nextText) {
       if (disposed) return
       text.value = nextText
+    },
+    setBrowseSort(sort) {
+      if (disposed) return
+      browseSort.value = sort
     },
     patchFilters(patch) {
       if (disposed) return

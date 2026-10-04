@@ -12,6 +12,7 @@ import {
   type CalendarActionFormData,
 } from '../design-edit'
 import { designSessionStore } from '../document-session/store'
+import { calendarAddRequest } from './calendar-request'
 import { createPanelTargetPresentationController } from '../panel-targets/presentation'
 import { usePlanningViewState, type CalendarCompletionFilter, type CalendarDisplay } from '../planning-view/state'
 import {
@@ -19,6 +20,7 @@ import {
   useCalendarPlanningSurface,
   type CalendarPlanningAction,
   type CalendarPlanningProjection,
+  type PlanningZoneOption,
   type TimelineSpeciesOption,
 } from '../planning-projection'
 import {
@@ -33,16 +35,16 @@ import {
 const calendarTargetPresentation = createPanelTargetPresentationController('timeline')
 
 export type CalendarTargetMode = 'preserve' | 'design' | 'species' | 'selection' | 'zone'
-export type CalendarEditorError = 'date-order' | 'empty-targets' | null
+type CalendarEditorError = 'date-order' | 'empty-targets' | null
 
-export interface CalendarActionDraft extends CalendarActionFormData {
+interface CalendarActionDraft extends CalendarActionFormData {
   readonly scheduled: boolean
   readonly range: boolean
   readonly targetMode: CalendarTargetMode
   readonly targetsChanged: boolean
 }
 
-export interface CalendarEditorState {
+interface CalendarEditorState {
   readonly mode: 'add' | 'edit'
   readonly actionId: string | null
   readonly sessionIdentity: object
@@ -53,13 +55,15 @@ export interface CalendarWorkbench {
   readonly projection: CalendarPlanningProjection
   readonly actions: readonly TimelineAction[]
   readonly speciesList: readonly TimelineSpeciesOption[]
-  readonly zoneNames: readonly string[]
+  readonly zones: readonly PlanningZoneOption[]
   readonly selectedPlantCount: number
   readonly activeLocale: string
   readonly month: string
   readonly search: string
   readonly actionType: string
   readonly completion: CalendarCompletionFilter
+  /** Search, type or completion differs from the default open-actions view. */
+  readonly filtersActive: boolean
   readonly selectedDate: string | null
   readonly display: CalendarDisplay
   readonly expanded: boolean
@@ -67,6 +71,7 @@ export interface CalendarWorkbench {
   readonly scrollTop: number
   readonly editor: CalendarEditorState | null
   readonly editorError: CalendarEditorError
+  readonly clearFilters: () => void
   readonly setSearch: (value: string) => void
   readonly setActionType: (value: string) => void
   readonly setCompletion: (value: CalendarCompletionFilter) => void
@@ -85,7 +90,9 @@ export interface CalendarWorkbench {
   readonly setRange: (range: boolean) => void
   readonly setTargetMode: (mode: Exclude<CalendarTargetMode, 'preserve'>) => void
   readonly toggleSpeciesTarget: (canonicalName: string) => void
-  readonly setZoneTarget: (zoneName: string) => void
+  /** Adds every given species to the targets; ones already chosen stay once. */
+  readonly addSpeciesTargets: (canonicalNames: readonly string[]) => void
+  readonly setZoneTarget: (zoneId: string) => void
   readonly saveEditor: () => boolean
   readonly cancelEditor: () => void
   readonly deleteEditorAction: () => void
@@ -258,11 +265,29 @@ export function useCalendarWorkbench(): CalendarWorkbench {
     calendarTargetPresentation.setSelectedTargets(targets)
   }, [editor, editorError])
 
-  const setZoneTarget = useCallback((zoneName: string) => {
+  const addSpeciesTargets = useCallback((canonicalNames: readonly string[]) => {
     const current = editor.value
     if (!current) return
-    const targets: readonly PanelTarget[] = zoneName
-      ? [{ kind: 'zone', zone_name: zoneName }]
+    const existing = current.draft.targets.filter((target) => target.kind === 'species')
+    const chosen = new Set(existing.map((target) => target.canonical_name))
+    const added = canonicalNames
+      .filter((name) => !chosen.has(name))
+      .map((name) => ({ kind: 'species' as const, canonical_name: name }))
+    if (added.length === 0) return
+    const targets = [...existing, ...added]
+    editor.value = {
+      ...current,
+      draft: { ...current.draft, targetMode: 'species', targets, targetsChanged: true },
+    }
+    editorError.value = null
+    calendarTargetPresentation.setSelectedTargets(targets)
+  }, [editor, editorError])
+
+  const setZoneTarget = useCallback((zoneId: string) => {
+    const current = editor.value
+    if (!current) return
+    const targets: readonly PanelTarget[] = zoneId
+      ? [{ kind: 'zone', zone_id: zoneId }]
       : []
     editor.value = {
       ...current,
@@ -344,11 +369,22 @@ export function useCalendarWorkbench(): CalendarWorkbench {
     view.calendarMonth.value = formatCivilDate(startOfCivilMonth(addCivilMonths(current, amount)))
   }, [view])
 
+  // Add to calendar… from the map: a new action aimed at the selected plants or one zone.
+  const addRequest = calendarAddRequest.value
+  useEffect(() => {
+    if (!addRequest) return
+    calendarAddRequest.value = null
+    if (addRequest.sessionIdentity !== designSessionStore.sessionIdentity.peek()) return
+    openAdd()
+    if (addRequest.target.kind === 'zone') setZoneTarget(addRequest.target.zoneId)
+    else setTargetMode('selection')
+  }, [addRequest, openAdd, setTargetMode, setZoneTarget])
+
   return {
     projection: surface.projection,
     actions: surface.actions,
     speciesList: surface.speciesList,
-    zoneNames: surface.zoneNames,
+    zones: surface.zones,
     selectedPlantCount: surface.selectedPlantIds.length,
     activeLocale: surface.activeLocale,
     month,
@@ -362,6 +398,12 @@ export function useCalendarWorkbench(): CalendarWorkbench {
     scrollTop: view.calendarScrollTop,
     editor: editor.value,
     editorError: editorError.value,
+    filtersActive: search !== '' || actionType !== 'all' || completion !== 'open',
+    clearFilters: () => {
+      view.calendarSearch.value = ''
+      view.calendarActionType.value = 'all'
+      view.calendarCompletion.value = 'open'
+    },
     setSearch: (value) => { view.calendarSearch.value = value },
     setActionType: (value) => { view.calendarActionType.value = value },
     setCompletion: (value) => { view.calendarCompletion.value = value },
@@ -384,6 +426,7 @@ export function useCalendarWorkbench(): CalendarWorkbench {
     setRange,
     setTargetMode,
     toggleSpeciesTarget,
+    addSpeciesTargets,
     setZoneTarget,
     saveEditor,
     cancelEditor,

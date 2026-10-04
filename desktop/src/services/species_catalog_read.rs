@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::db::PlantDbConnectionGuard;
 use common_types::species::{
     CommonNameEntry, DynamicFilterOptions, FilterOptions, FlowerColorResolution, PaginatedResult,
-    SpeciesDetail, SpeciesExternalLink, SpeciesImage, SpeciesListItem, SpeciesSearchRequest,
+    SpeciesDetail, SpeciesImage, SpeciesListItem, SpeciesSearchRequest,
 };
 
 mod common_names;
@@ -12,6 +12,7 @@ mod detail_projection;
 mod detail_row_map;
 mod filters;
 mod flower;
+mod habit;
 mod list_items;
 mod list_projection;
 mod media;
@@ -68,6 +69,13 @@ impl<'guard, 'connection> SpeciesCatalogRead<'guard, 'connection> {
         common_names::localized_names_for_canonical_names(self.conn, canonical_names, locale)
     }
 
+    pub(crate) fn habits_for_canonical_names(
+        &self,
+        canonical_names: &[String],
+    ) -> Result<HashMap<String, String>, String> {
+        habit::read_projection(self.conn, canonical_names)
+    }
+
     pub(crate) fn locale_common_names_for_canonical_name(
         &self,
         canonical_name: &str,
@@ -100,13 +108,6 @@ impl<'guard, 'connection> SpeciesCatalogRead<'guard, 'connection> {
         canonical_name: &str,
     ) -> Result<Vec<SpeciesImage>, String> {
         media::read_images_projection(self.conn, canonical_name)
-    }
-
-    pub(crate) fn external_links_for_canonical_name(
-        &self,
-        canonical_name: &str,
-    ) -> Result<Vec<SpeciesExternalLink>, String> {
-        media::read_external_links_projection(self.conn, canonical_name)
     }
 }
 
@@ -232,10 +233,6 @@ mod tests {
         assert_eq!(images.len(), 1);
         assert_eq!(images[0].url, "https://example.test/apple.jpg");
 
-        let links = catalog.external_links_for_canonical_name("Apple").unwrap();
-        assert_eq!(links.len(), 1);
-        assert_eq!(links[0].link_type, "pfaf");
-
         let names = catalog
             .locale_common_names_for_canonical_name("Apple", "fr")
             .unwrap();
@@ -273,6 +270,22 @@ mod tests {
 
         assert_eq!(french_detail.common_name, None);
         assert_eq!(english_detail.common_name.as_deref(), Some("Plum"));
+    }
+
+    #[test]
+    fn habit_projection_reads_catalog_habits_through_the_reader_seam() {
+        let plant_db = detail_projection_test_db();
+        let conn = crate::db::require_plant_db(&plant_db).unwrap();
+        conn.execute("UPDATE species SET habit = 'Tree' WHERE id = 'sp-1'", [])
+            .unwrap();
+        let catalog = SpeciesCatalogRead::new(&conn);
+
+        let habits = catalog
+            .habits_for_canonical_names(&["Apple".to_owned(), "Pear".to_owned()])
+            .unwrap();
+
+        assert_eq!(habits.len(), 1);
+        assert_eq!(habits["Apple"], "Tree");
     }
 
     #[test]
@@ -417,6 +430,7 @@ mod tests {
             include_str!("species_catalog_read/detail_row_map.rs"),
             include_str!("species_catalog_read/filters.rs"),
             include_str!("species_catalog_read/flower.rs"),
+            include_str!("species_catalog_read/habit.rs"),
             include_str!("species_catalog_read/list_items.rs"),
             include_str!("species_catalog_read/list_projection.rs"),
             include_str!("species_catalog_read/media.rs"),

@@ -1,6 +1,8 @@
 import { effect } from '@preact/signals'
-import type { CanvasRuntimeSettingsAdapter } from '../app-adapter'
-import type { WorkspaceCameraFrameReader } from '../camera'
+import type { CanvasRuntimePlantDisplayAdapter, CanvasRuntimeSettingsAdapter } from '../app-adapter'
+import type { PlantDisplay } from '../plant-display'
+import type { ViewFrameSource } from '../view/types'
+import type { CanvasMapBackdrop } from '../scene-visuals'
 import {
   runCanvasRuntimeCleanups,
   throwCanvasRuntimeCleanupErrors,
@@ -10,12 +12,16 @@ interface SceneRuntimeEffectsDeps {
   onTheme: () => void
   onLocale: () => void
   onChromeOverlay: () => void
+  onMapBackdrop: (backdrop: CanvasMapBackdrop) => void
+  onPlantDisplay: (display: PlantDisplay) => void
+  plantDisplay?: CanvasRuntimePlantDisplayAdapter
   onPanelTargetHover: () => void
-  camera: Pick<WorkspaceCameraFrameReader, 'snapshot'>
+  /** The runtime camera's frames: each frame after the first invalidates (render invalidation coalesces per animation frame). */
+  frames: Pick<ViewFrameSource, 'viewFrame'>
   onCameraFrame: () => void
   settings: Pick<
     CanvasRuntimeSettingsAdapter,
-    'subscribeTheme' | 'subscribeLocale' | 'subscribeChromeOverlay'
+    'subscribeTheme' | 'subscribeLocale' | 'subscribeChromeOverlay' | 'subscribeMapBackdrop'
   >
   subscribePanelOriginTargetChanges(onChange: () => void): () => void
 }
@@ -25,7 +31,7 @@ export function installSceneRuntimeEffects(deps: SceneRuntimeEffectsDeps): Array
   try {
     let initialCameraFrame = true
     disposers.push(effect(() => {
-      void deps.camera.snapshot.value
+      void deps.frames.viewFrame.value
       if (initialCameraFrame) {
         initialCameraFrame = false
         return
@@ -35,6 +41,8 @@ export function installSceneRuntimeEffects(deps: SceneRuntimeEffectsDeps): Array
     disposers.push(deps.settings.subscribeTheme(deps.onTheme))
     disposers.push(deps.settings.subscribeLocale(deps.onLocale))
     disposers.push(deps.settings.subscribeChromeOverlay(deps.onChromeOverlay))
+    disposers.push(deps.settings.subscribeMapBackdrop(deps.onMapBackdrop))
+    if (deps.plantDisplay) disposers.push(deps.plantDisplay.subscribe(deps.onPlantDisplay))
     disposers.push(deps.subscribePanelOriginTargetChanges(deps.onPanelTargetHover))
     return disposers
   } catch (error) {

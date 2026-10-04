@@ -124,6 +124,10 @@ impl NativeOperationExecutor {
         })
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "the production limits are constants validated by tests"
+    )]
     pub fn production() -> Self {
         Self::new(NativeOperationLimits::production())
             .expect("production native operation limits must be valid")
@@ -174,7 +178,8 @@ impl NativeOperationExecutor {
             .map_err(|_| format!("{label} native operation executor is unavailable"))?;
         let queued_ms = duration_millis(queued_at.elapsed());
 
-        let task = tauri::async_runtime::spawn_blocking(move || {
+        // The closure sits outside the reviewed statement so clippy still checks it.
+        let run = move || {
             tracing::debug!(
                 native_operation_class = class.as_str(),
                 native_operation = label,
@@ -210,7 +215,12 @@ impl NativeOperationExecutor {
                     resume_unwind(panic_payload)
                 }
             }
-        });
+        };
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "the executor owns the blocking pool; every native operation reaches it here"
+        )]
+        let task = tauri::async_runtime::spawn_blocking(run);
 
         match task.await {
             Ok(result) => result,

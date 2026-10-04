@@ -1,22 +1,25 @@
 import type { CanvasDocumentSurface } from "../../canvas/runtime/runtime";
-import type { DesignTemplateEnvelope } from "../design-template-import/types";
+import { computed } from "@preact/signals";
 import {
   type DocumentTransitionResult,
+  closeDesignSession,
   consumeQueuedDocumentLoad,
   createNewDesignSession,
+  designContinuousSave,
+  openDesignDraftSession,
   openDesignSessionFromDialog,
   openDesignSessionFromPath,
-  openTemplateDesignSession,
+  resolveDesignSaveConflict,
+  revertDesignSessionToOpenedVersion,
   saveCurrentDesign,
   saveAsCurrentDesign,
 } from "./transition";
+import { presentDesignOpenFailure } from "./open-failure";
 
 interface DocumentLoadOptions {
   session?: CanvasDocumentSurface | null;
   isCancelled?: () => boolean;
 }
-
-export type TemplateOpenResult = "opened" | "queued" | "cancelled";
 
 export {
   consumeQueuedDocumentLoad,
@@ -24,10 +27,42 @@ export {
   saveAsCurrentDesign,
 };
 
+/** Continuous-save status of the current Design. */
+export const designSaveStatus = computed(() => designContinuousSave.status.value);
+
+/** Why the last continuous save failed; null unless the status is `error`. */
+export const designSaveFailureReason = computed(() => designContinuousSave.failureReason.value);
+
+/** The current Design changed since it was opened or created. */
+export const designRevertAvailable = computed(() => designContinuousSave.revertAvailable.value);
+
+/** Retry a failed continuous save now. */
+export async function retryDesignSave(): Promise<void> {
+  await designContinuousSave.flush();
+}
+
+/** Open the dialog that resolves a file changed outside Canopi. */
+export async function resolveDesignConflict(): Promise<void> {
+  throwIfFailed(await resolveDesignSaveConflict());
+}
+
+/** Replace the current Design with the version it had when opened. */
+export async function revertDesign(): Promise<void> {
+  throwIfFailed(await revertDesignSessionToOpenedVersion());
+}
+
+/** Open a Design Draft through the shared replacement path. */
+export async function openDesignDraft(id: string): Promise<void> {
+  const result = await openDesignDraftSession(id);
+  presentIfFailed(result);
+  throwIfFailed(result);
+}
+
 /** Open file dialog and replace the active document through the shared guard. */
 export async function openDesign(): Promise<void> {
   const result = await openDesignSessionFromDialog();
 
+  presentIfFailed(result);
   throwIfFailed(result);
 }
 
@@ -41,22 +76,8 @@ export async function openDesignFromPath(
     isCancelled: options.isCancelled,
   });
 
+  presentIfFailed(result);
   throwIfFailed(result);
-}
-
-/** Open a decoded template as a new unsaved design through the shared guard. */
-export async function openDesignAsTemplate(
-  envelope: DesignTemplateEnvelope,
-  options: DocumentLoadOptions = {},
-): Promise<TemplateOpenResult> {
-  const result = await openTemplateDesignSession(envelope, {
-    session: options.session,
-    isCancelled: options.isCancelled,
-  });
-
-  throwIfFailed(result);
-  if (result.status === "queued") return "queued";
-  return result.status === "applied" ? "opened" : "cancelled";
 }
 
 /** Create a new blank design through the shared replacement guard. */
@@ -66,8 +87,21 @@ export async function newDesignAction(): Promise<void> {
   throwIfFailed(result);
 }
 
-function throwIfFailed(result: DocumentTransitionResult): void {
-  if (result.status === "failed") {
+/**
+ * Close the current Design and return to the Start screen. Continuous save
+ * writes it home first; only a failed write asks (Cancel keeps it open).
+ */
+export async function closeDesign(): Promise<void> {
+  throwIfFailed(await closeDesignSession());
+}
+
+/** A Design that could not be opened is told to the user before the caller sees the error. */
+function presentIfFailed(result: DocumentTransitionResult | null): void {
+  if (result?.status === "failed") presentDesignOpenFailure(result.error);
+}
+
+function throwIfFailed(result: DocumentTransitionResult | null): void {
+  if (result?.status === "failed") {
     throw result.error;
   }
 }

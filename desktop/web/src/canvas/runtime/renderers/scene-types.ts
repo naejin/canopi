@@ -1,8 +1,9 @@
 import type { SpeciesFocus } from '../species-key'
-import type { RendererBackendDefinition, RendererBackendInstance } from './types'
-import type { ScenePersistedState, SceneViewportState } from '../scene'
-import type { PlantNameLabel, SelectionLabel } from '../selection-labels'
+import type { SceneDesignObjectTarget, ScenePersistedState } from '../scene'
+import type { DraftPresentation } from '../tools/draft'
+import type { ViewTransform } from '../view/types'
 import type { SpeciesCacheEntry } from '../species-cache'
+import type { PlantLabelMode } from '../plant-display'
 
 export type SceneRendererHoverState =
   | 'hover'
@@ -16,10 +17,20 @@ export type SceneRendererHoverTarget =
   | { kind: 'measurement-guide'; id: string; state: SceneRendererHoverState }
   | { kind: 'group'; id: string; state: SceneRendererHoverState }
 
+/**
+ * The workspace map's editing aids (spec §1.5): the grid, null when off, and the ruler guides, drawn in the world root
+ * under every billboard. The grid's interval follows the scale through `canvas/grid.ts`'s `gridInterval`, the lattice
+ * snapping uses; its ink follows the map backdrop.
+ */
+export interface SceneEditingAids {
+  readonly grid: { readonly ink: string; readonly majorInk: string } | null
+  /** World east-west lines at y = `position` (`h`) and north-south ones at x = `position` (`v`). */
+  readonly rulerGuides: readonly { readonly axis: 'h' | 'v'; readonly position: number }[]
+}
+
 export interface SceneRendererSnapshot {
   readonly speciesFocus: SpeciesFocus
   readonly scene: ScenePersistedState
-  readonly viewport: SceneViewportState
   readonly revealedAnnotationId: string | null
   readonly selectionLabelPlantIds: ReadonlySet<string>
   readonly selectedPlantIds: ReadonlySet<string>
@@ -32,21 +43,40 @@ export interface SceneRendererSnapshot {
   readonly localizedCommonNames: ReadonlyMap<string, string | null>
   readonly hoveredCanonicalName: string | null
   readonly hoverTarget: SceneRendererHoverTarget | null
-  readonly pinnedPlantNameLabels: readonly PlantNameLabel[]
-  readonly selectionLabels: readonly SelectionLabel[]
+  /** Labels a saved view's snapshot draws; absent, the workspace's plant display decides. */
+  readonly plantLabels?: PlantLabelMode
+  /** Set only for the workspace map; absent, nothing is drawn (thumbnails, the overview, a presented story, the lens). */
+  readonly editingAids?: SceneEditingAids
 }
 
-export interface SceneRendererContext {
+interface SceneRendererContext {
   readonly container: HTMLElement
 }
 
-export interface SceneRendererInstance extends RendererBackendInstance {
-  // Resize the backing surface only; the caller follows with a scene or viewport render.
-  resize(width: number, height: number): void
-  // Full scene/content refresh. Retain unchanged graphics across selection/presentation changes.
-  renderScene(snapshot: SceneRendererSnapshot): void
-  // Camera-only update. Must not assume the runtime will provide a fresh scene snapshot.
-  setViewport(viewport: SceneViewportState): void
+/** The one scene renderer the runtime mounts (ADR 0004): there is no selection or fallback. */
+export interface SceneRendererDefinition {
+  readonly id: string
+  initialize(context: SceneRendererContext): SceneRenderer | PromiseLike<SceneRenderer>
 }
 
-export type SceneRendererDefinition = RendererBackendDefinition<SceneRendererContext, SceneRendererInstance>
+export interface SceneChangeSet {
+  readonly scene: boolean                                   // document revision
+  readonly selection: boolean
+  readonly hover: readonly SceneDesignObjectTarget[]        // old and new hover target only: a two-node restyle
+  readonly style: boolean                                   // theme, backdrop, plant display settings
+  readonly labels: boolean                                  // label admission recomputed (each scale change; from phase R, settle or band change)
+}
+
+/**
+ * The mounted scene renderer (spec §1.5). MapLibre owns the drawing surface, its size and its frame loop, so the renderer
+ * receives retained scene data through `syncScene` and the camera through `setView`, and nothing else.
+ */
+export interface SceneRenderer {
+  readonly id: 'maplibre-pixi'
+  /** Data, selection, hover, style or label admission changed. Never called for a pan. No camera in the snapshot. */
+  syncScene(snapshot: SceneRendererSnapshot, changes: SceneChangeSet): void
+  /** The only per-frame entry: world-root matrix, visible set, billboard anchors, zoom-band re-key. */
+  setView(view: ViewTransform): void
+  setDraft(draft: DraftPresentation | null): void
+  dispose(): void | PromiseLike<void>
+}

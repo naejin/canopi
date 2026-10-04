@@ -20,7 +20,6 @@ function createScene() {
       canopySpreadM: null,
       position: { x: 0, y: 0 },
       rotationDeg: null,
-      scale: null,
       notes: null,
       plantedDate: null,
       quantity: null,

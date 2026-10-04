@@ -1,13 +1,23 @@
-import { effect } from "@preact/signals";
 import { decodeCanopiDesign } from "../app/contracts/design-ingestion";
+import { asCanopiDesignIngestionError } from "../app/contracts/canopi-design-errors";
 import { encodeCanopiDesign } from "../app/contracts/canopi-design-wire";
 import { DEFAULT_BUDGET_CURRENCY } from "../app/contracts/document";
 import type { DesignTemplateEnvelope } from "../app/design-template-import/types";
 import {
+  createContinuousSave,
+  DesignHomeConflictError,
+  type ContinuousSave,
+  type DesignHome,
+  type HomeWriteOutcome,
+} from "../app/document-session/continuous-save";
+import {
+  createCloseDesignReplacement,
   createDesignSessionReplacement,
   type DesignSessionPendingCanvasReplacementIdentity,
   type ResolvedDesignReplacement,
 } from "../app/document-session/replacement";
+import { presentDesignOpenFailure } from "../app/document-session/open-failure";
+import { requestSaveProblemDecision } from "../app/document-session/save-problem";
 import {
   designSessionStore,
   type PersistenceCapableDesignSessionStore,
@@ -31,18 +41,23 @@ import {
   type CanvasDocumentSurface,
 } from "../canvas/runtime/runtime";
 import type { CanopiFile } from "../types/design";
+import {
+  applyNewDesignBackground,
+  withNewDesignDisplay,
+} from "../app/settings/new-design-defaults";
 import { CURRENT_CANOPI_FILE_VERSION } from "../generated/canopi-design-format";
 import {
   NEW_DESIGN_LAYER_DEFAULTS,
 } from "../generated/new-design-defaults";
-import { newDesignSpatialFrame } from "../spatial-frame";
 import {
   browserAppDataStore,
+  BrowserDraftChangedError,
   type BrowserAppDataStore,
   type BrowserAppDataWriteResult,
   type BrowserDraftSummary,
 } from "./browser-app-data";
 import type { BrowserShellDesignIdentity } from "./browser-shell-commands";
+import { downloadBrowserTextFile, pickBrowserTextFile } from "./browser-text-files";
 
 export interface BrowserOpenedCanopiFile {
   readonly fileName: string;
@@ -59,6 +74,12 @@ export interface BrowserDesignFileAdapter {
   downloadCanopiFile(download: BrowserCanopiDownload): Promise<void>;
 }
 
+/** Page events that end a visit; continuous save flushes on them. */
+export interface BrowserPageLifecycleTarget {
+  readonly document: Pick<Document, "addEventListener" | "removeEventListener" | "visibilityState">;
+  readonly window: Pick<Window, "addEventListener" | "removeEventListener">;
+}
+
 interface BrowserDesignSessionControllerOptions {
   readonly store?: PersistenceCapableDesignSessionStore;
   readonly fileAdapter?: BrowserDesignFileAdapter;
@@ -66,12 +87,19 @@ interface BrowserDesignSessionControllerOptions {
   readonly now?: () => Date;
   readonly createDraftId?: () => string;
   readonly workflowRunner?: DesignSessionWorkflowRunner;
+  readonly requestSaveDecision?: typeof requestSaveProblemDecision;
+  /** Tells the user why a picked file cannot be opened (older, newer, damaged). */
+  readonly presentOpenFailure?: (error: unknown) => void;
+  readonly saveDelayMs?: number;
 }
 
 export interface BrowserDesignSessionController {
+  readonly continuousSave: Pick<ContinuousSave, "status" | "revertAvailable" | "flush">;
   hasCurrentDesign(): boolean;
   readDesignIdentity(): BrowserShellDesignIdentity | null;
   newDesign(): Promise<void>;
+  /** Write the Design to its Draft, then close it; false when cancelled or nothing was open. */
+  closeDesign(): Promise<boolean>;
   openCanopi(): Promise<boolean>;
   openCanopiTemplate(
     template: DesignTemplateEnvelope,
@@ -79,16 +107,15 @@ export interface BrowserDesignSessionController {
   ): Promise<"opened" | "cancelled">;
   downloadCanopi(): Promise<void>;
   renameDesign(name: string): void;
-  saveCurrentDraft(): BrowserAppDataWriteResult<BrowserDraftSummary> | null;
+  revertDesign(): Promise<boolean>;
+  /** Ask how to settle a Draft another browser tab changed, then act on it. */
+  resolveSaveConflict(): Promise<void>;
   listDrafts(): readonly BrowserDraftSummary[];
-  openDraft(id: string): boolean;
+  openDraft(id: string): Promise<boolean>;
+  deleteDraft(id: string): BrowserAppDataWriteResult<null>;
   restoreLatestDraft(): boolean;
   attachCanvasSession(session: CanvasDocumentSurface): () => void;
-  installAutosave(options?: BrowserDesignSessionAutosaveOptions): () => void;
-}
-
-export interface BrowserDesignSessionAutosaveOptions {
-  readonly onDraftSaved?: () => void;
+  installContinuousSave(page?: BrowserPageLifecycleTarget): () => void;
 }
 
 export const browserDesignFileAdapter: BrowserDesignFileAdapter = {
@@ -103,11 +130,11 @@ export function createBrowserDesignSessionController({
   now = () => new Date(),
   createDraftId = createBrowserDraftId,
   workflowRunner = createDesignSessionWorkflowRunner(DESIGN_SESSION_WORKFLOWS),
+  requestSaveDecision = requestSaveProblemDecision,
+  presentOpenFailure = presentDesignOpenFailure,
+  saveDelayMs,
 }: BrowserDesignSessionControllerOptions = {}): BrowserDesignSessionController {
-  let activeDraftId: string | null = null;
   let canvasSession: CanvasDocumentSurface | null = null;
-  let draftWriteEpoch = 0;
-  let latestDraftedCommittedRevision: number | null = null;
   let nextDownloadWrite = 0;
   let replacementIntent = 0;
   let workflowInstallAttempt = 0;
@@ -122,6 +149,66 @@ export function createBrowserDesignSessionController({
     },
   });
   const persistence = createDesignSessionPersistence({ store });
+  const continuousSave = createContinuousSave({
+    store,
+    writeHome: writeDraftHome,
+    delayMs: saveDelayMs,
+  });
+
+  // What this tab last read or wrote for its Draft. Every tab of the Web
+  // Edition shares the same Drafts, so a write checks that no other tab has
+  // written the Draft since; `overwrite` is the user's "keep my version".
+  let draftStamp: { id: string; updatedAt: string | null; overwrite: boolean } | null = null;
+
+  // Web homes are always browser Design Drafts; a write is one synchronous
+  // localStorage record update, so a page-hide flush completes before unload.
+  function writeDraftHome(home: DesignHome): HomeWriteOutcome {
+    if (home.kind !== "draft") throw new Error("Web Designs live in browser Drafts");
+    const stamp = draftStamp?.id === home.id ? draftStamp : null;
+    const settlement = persistence.beginBrowserDraft().executeImmediately(
+      prepareSynchronousDesignWriteDestination({
+        resource: "browser-app-data:drafts",
+        write(content) {
+          const result = appDataStore.saveDraft({
+            id: home.id,
+            file: content,
+            now: now().toISOString(),
+            expectedUpdatedAt: stamp && !stamp.overwrite ? stamp.updatedAt : undefined,
+          });
+          if (!result.ok) {
+            if (result.error instanceof BrowserDraftChangedError) {
+              throw new DesignHomeConflictError(false);
+            }
+            throw new BrowserDraftStorageError(result);
+          }
+          draftStamp = { id: home.id, updatedAt: result.value.updatedAt, overwrite: false };
+          return undefined;
+        },
+      }),
+    );
+    return settlement.status === "stale" ? { kind: "stale" } : { kind: "written" };
+  }
+
+  function storedDraftUpdatedAt(id: string): string | null {
+    return appDataStore.listDrafts().find((draft) => draft.id === id)?.updatedAt ?? null;
+  }
+
+  function draftReplacement(
+    input: Omit<ResolvedDesignReplacement, "path" | "finalizationIdentity" | "onDesignFinalized">,
+    draftId: string,
+    writePending: boolean,
+    draftUpdatedAt: string | null = null,
+  ): ResolvedDesignReplacement {
+    return {
+      ...input,
+      path: null,
+      finalizationIdentity: `browser-draft:${draftId}:${writePending}`,
+      onDesignFinalized: () => {
+        draftStamp = { id: draftId, updatedAt: draftUpdatedAt, overwrite: false };
+        continuousSave.beginSession({ draftId, fingerprint: null, writePending });
+      },
+    };
+  }
 
   function applyDesignReplacement(
     input: ResolvedDesignReplacement,
@@ -155,21 +242,53 @@ export function createBrowserDesignSessionController({
     }
   }
 
+  /**
+   * Write the current Design first; ask only when that write fails. Resolves
+   * synchronously when nothing is pending so a replacement keeps its turn.
+   */
+  function flushBeforeReplacement(intent: number): true | Promise<boolean> {
+    if (!continuousSave.hasPendingChanges()) return true;
+    // A retained Canvas replacement cannot be captured; the replacement
+    // itself settles or quarantines it first.
+    if (canvasSession && replacement.pendingCanvasReplacement(canvasSession)) return true;
+    return flushPendingBeforeReplacement(intent);
+  }
+
+  async function flushPendingBeforeReplacement(intent: number): Promise<boolean> {
+    for (;;) {
+      if (await continuousSave.flush()) return intent === replacementIntent;
+      if (intent !== replacementIntent) return false;
+      const conflict = continuousSave.conflict.peek() !== null;
+      const choice = await requestSaveDecision(conflict
+        ? { kind: "flush-failed", purpose: "replace", conflict, where: "another-tab" }
+        : { kind: "flush-failed", purpose: "replace", conflict });
+      if (intent !== replacementIntent) return false;
+      if (choice === "discard") return true;
+      if (choice === "cancel") return false;
+    }
+  }
+
   async function newDesign(): Promise<void> {
-    replacementIntent += 1;
-    const file = createNewWebCanopiFile("Untitled", now().toISOString());
-    const draftId = createDraftId();
-    applyDesignReplacement({
+    const intent = ++replacementIntent;
+    const flushed = flushBeforeReplacement(intent);
+    if (flushed !== true && !(await flushed)) return;
+    const file = withNewDesignDisplay(createNewWebCanopiFile("Untitled", now().toISOString()));
+    applyDesignReplacement(draftReplacement({
       file,
       kind: "new",
-      path: null,
       name: file.name,
-      finalizationIdentity: `browser-draft:${draftId}`,
-      onDesignFinalized: () => {
-        activeDraftId = draftId;
-      },
-    });
-    saveCurrentDraft();
+    }, createDraftId(), false));
+    applyNewDesignBackground();
+  }
+
+  async function closeDesign(): Promise<boolean> {
+    if (!store.hasCurrentDesign()) return false;
+    const intent = ++replacementIntent;
+    const flushed = flushBeforeReplacement(intent);
+    if (flushed !== true && !(await flushed)) return false;
+    if (intent !== replacementIntent || !store.hasCurrentDesign()) return false;
+    applyDesignReplacement(createCloseDesignReplacement(() => continuousSave.endSession()));
+    return true;
   }
 
   async function openCanopi(): Promise<boolean> {
@@ -182,6 +301,8 @@ export function createBrowserDesignSessionController({
       resumeExactPendingCanvasReplacement(canvas, pendingIdentity);
       return false;
     }
+    const flushed = flushBeforeReplacement(intent);
+    if (flushed !== true && !(await flushed)) return false;
     const guardCapture = persistence.beginReplacementGuard();
     let replacementGuard = guardCapture.guard;
     if (!replacementGuard) {
@@ -198,24 +319,24 @@ export function createBrowserDesignSessionController({
     const opened = await fileAdapter.openCanopiFile();
     if (intent !== replacementIntent || !replacementGuard.isCurrent()) return false;
     if (!opened) return false;
-    if (!opened.fileName.toLowerCase().endsWith(".canopi")) {
-      throw new Error(`Expected a .canopi file, received ${opened.fileName}.`);
+    let file: CanopiFile;
+    try {
+      if (!opened.fileName.toLowerCase().endsWith(".canopi")) {
+        throw new Error(`Expected a .canopi file, received ${opened.fileName}.`);
+      }
+      file = parseCanopiJson(opened.text);
+    } catch (error) {
+      // A refused file leaves the open Design as it was and says why.
+      presentOpenFailure(error);
+      return false;
     }
-
-    const file = parseCanopiJson(opened.text);
     const draftId = createDraftId();
     if (intent !== replacementIntent || !replacementGuard.isCurrent()) return false;
-    applyDesignReplacement({
+    applyDesignReplacement(draftReplacement({
       file,
       kind: "loaded",
-      path: null,
       name: file.name || nameFromFileName(opened.fileName),
-      finalizationIdentity: `browser-draft:${draftId}`,
-      onDesignFinalized: () => {
-        activeDraftId = draftId;
-      },
-    }, guardCapture);
-    saveCurrentDraft();
+    }, draftId, true), guardCapture);
     return true;
   }
 
@@ -223,21 +344,16 @@ export function createBrowserDesignSessionController({
     template: DesignTemplateEnvelope,
     options: { readonly isCancelled?: () => boolean } = {},
   ): Promise<"opened" | "cancelled"> {
-    replacementIntent += 1;
+    const intent = ++replacementIntent;
     if (options.isCancelled?.()) return "cancelled";
-    const file = template.file;
-    const draftId = createDraftId();
-    applyDesignReplacement({
-      file,
+    const flushed = flushBeforeReplacement(intent);
+    if (flushed !== true && !(await flushed)) return "cancelled";
+    if (options.isCancelled?.()) return "cancelled";
+    applyDesignReplacement(draftReplacement({
+      file: template.file,
       kind: "loaded",
-      path: null,
       name: template.name,
-      finalizationIdentity: `browser-draft:${draftId}`,
-      onDesignFinalized: () => {
-        activeDraftId = draftId;
-      },
-    });
-    saveCurrentDraft();
+    }, createDraftId(), true));
     return "opened";
   }
 
@@ -257,7 +373,6 @@ export function createBrowserDesignSessionController({
         });
       },
     }));
-    saveCurrentDraft();
   }
 
   function renameDesign(name: string): void {
@@ -271,73 +386,81 @@ export function createBrowserDesignSessionController({
     store.renameCurrentDesign(nextName);
   }
 
-  function saveCurrentDraft(): BrowserAppDataWriteResult<BrowserDraftSummary> | null {
-    if (!store.hasCurrentDesign()) return null;
-
-    const capturedCommittedRevision = store.committedDesignRevision.value;
-    draftWriteEpoch += 1;
-    const draftId = activeDraftId ?? createDraftId();
-    const operation = persistence.beginBrowserDraft();
-    const previousDraftId = activeDraftId;
-    const resultBox: {
-      current: Extract<
-        BrowserAppDataWriteResult<BrowserDraftSummary>,
-        { readonly ok: true }
-      > | null;
-    } = { current: null };
-    try {
-      operation.executeImmediately(prepareSynchronousDesignWriteDestination({
-        resource: "browser-app-data:drafts",
-        write(content) {
-          const result = appDataStore.saveDraft({
-            id: draftId,
-            file: content,
-            now: now().toISOString(),
-          });
-          if (!result.ok) throw new BrowserDraftStorageError(result);
-          resultBox.current = result;
-          activeDraftId = result.value.id;
-          return undefined;
-        },
-      }));
-    } catch (error) {
-      if (error instanceof BrowserDraftStorageError) return error.result;
-      throw error;
+  async function revertDesign(): Promise<boolean> {
+    const token = continuousSave.sessionToken();
+    if (!token || !continuousSave.readSnapshot() || continuousSave.readHome()?.kind !== "draft") {
+      return false;
     }
-    const result = resultBox.current;
-    if (!result) throw new Error("Browser Draft write completed without a result");
-    latestDraftedCommittedRevision = capturedCommittedRevision;
-    if (previousDraftId && previousDraftId !== result.value.id) {
-      const deleted = appDataStore.deleteDraft(previousDraftId);
-      if (!deleted.ok) store.setAutosaveFailed(true);
-    }
-    return result;
+    const intent = replacementIntent;
+    if (await requestSaveDecision({ kind: "revert" }) !== "revert") return false;
+    // The confirmation covers only the session that asked: another replacement voids it.
+    if (continuousSave.sessionToken() !== token || replacementIntent !== intent) return false;
+    replacementIntent += 1;
+    const snapshot = continuousSave.readSnapshot();
+    const home = continuousSave.readHome();
+    if (!snapshot || home?.kind !== "draft") return false;
+    applyDesignReplacement(draftReplacement({
+      file: snapshot,
+      kind: "loaded",
+      name: snapshot.name || "Untitled",
+    }, home.id, true, draftStamp?.id === home.id ? draftStamp.updatedAt : null));
+    return true;
   }
 
-  function openDraft(id: string): boolean {
-    replacementIntent += 1;
+  async function resolveSaveConflict(): Promise<void> {
+    const token = continuousSave.sessionToken();
+    const home = continuousSave.readHome();
+    if (!continuousSave.conflict.peek() || !token || home?.kind !== "draft") return;
+    const intent = replacementIntent;
+    const choice = await requestSaveDecision({
+      kind: "conflict",
+      fileGone: false,
+      where: "another-tab",
+    });
+    // The answer belongs to the Design that asked; a replacement during the dialog voids it.
+    if (continuousSave.sessionToken() !== token || replacementIntent !== intent) return;
+    if (choice === "keep-mine") {
+      draftStamp = { id: home.id, updatedAt: null, overwrite: true };
+      await continuousSave.overwriteHome(token);
+      return;
+    }
+    if (choice === "use-file") {
+      replacementIntent += 1;
+      applyDraft(home.id);
+    }
+  }
+
+  function applyDraft(id: string): boolean {
     const draft = appDataStore.loadDraft(id);
     if (!draft) return false;
-
-    const file = draft;
-    applyDesignReplacement({
-      file,
+    applyDesignReplacement(draftReplacement({
+      file: draft,
       kind: "loaded",
-      path: null,
-      name: file.name || "Untitled",
-      finalizationIdentity: `browser-draft:${id}`,
-      onDesignFinalized: () => {
-        activeDraftId = id;
-      },
-    });
-    saveCurrentDraft();
+      name: draft.name || "Untitled",
+    }, id, false, storedDraftUpdatedAt(id)));
     return true;
+  }
+
+  async function openDraft(id: string): Promise<boolean> {
+    const intent = ++replacementIntent;
+    const flushed = flushBeforeReplacement(intent);
+    if (flushed !== true && !(await flushed)) return false;
+    return applyDraft(id);
+  }
+
+  function deleteDraft(id: string): BrowserAppDataWriteResult<null> {
+    const home = continuousSave.readHome();
+    if (home?.kind === "draft" && home.id === id) {
+      return { ok: false, error: new Error("The open Design's Draft cannot be deleted") };
+    }
+    return appDataStore.deleteDraft(id);
   }
 
   function restoreLatestDraft(): boolean {
     if (store.hasCurrentDesign()) return false;
+    replacementIntent += 1;
     const latestDraft = appDataStore.listDrafts()[0];
-    return latestDraft ? openDraft(latestDraft.id) : false;
+    return latestDraft ? applyDraft(latestDraft.id) : false;
   }
 
   function attachCanvasSession(session: CanvasDocumentSurface): () => void {
@@ -395,89 +518,51 @@ export function createBrowserDesignSessionController({
     }
   }
 
-  function installAutosave({ onDraftSaved }: BrowserDesignSessionAutosaveOptions = {}): () => void {
-    let lastCommittedRevision = store.committedDesignRevision.value;
-    let lastDirty = false;
-    let disposed = false;
-    let scheduled = false;
-    const scheduleAutosave = () => {
-      if (scheduled || disposed) return;
-      scheduled = true;
-      const scheduledWriteEpoch = draftWriteEpoch;
-      queueMicrotask(() => {
-        scheduled = false;
-        if (disposed) return;
-        if (scheduledWriteEpoch !== draftWriteEpoch) {
-          const current = store.readCurrentDesign();
-          if (
-            current
-            && (
-              store.isDesignDirty()
-              || store.committedDesignRevision.value !== latestDraftedCommittedRevision
-            )
-          ) {
-            scheduleAutosave();
-          }
-          return;
-        }
-        let result: BrowserAppDataWriteResult<BrowserDraftSummary> | null;
-        try {
-          result = saveCurrentDraft();
-        } catch (error) {
-          try {
-            store.setAutosaveFailed(true);
-          } catch (publicationError) {
-            logBrowserDesignSessionError(publicationError);
-          }
-          logBrowserDesignSessionError(error);
-          return;
-        }
-        if (!result?.ok) return;
-        try {
-          onDraftSaved?.();
-        } catch (error) {
-          logBrowserDesignSessionError(error);
-        }
-      });
+  function installContinuousSave(
+    page: BrowserPageLifecycleTarget = { document: globalThis.document, window: globalThis.window },
+  ): () => void {
+    const uninstall = continuousSave.install();
+    const flush = () => {
+      void continuousSave.flush().catch(logBrowserDesignSessionError);
     };
-    const disposeEffect = effect(() => {
-      const committedRevision = store.committedDesignRevision.value;
-      const dirty = store.designDirty.value;
-      const shouldSchedule = committedRevision !== lastCommittedRevision
-        || (dirty && !lastDirty);
-      lastCommittedRevision = committedRevision;
-      lastDirty = dirty;
-      if (!shouldSchedule || !store.hasCurrentDesign()) return;
-
-      scheduleAutosave();
-    });
+    const flushWhenHidden = () => {
+      if (page.document.visibilityState === "hidden") flush();
+    };
+    page.document.addEventListener("visibilitychange", flushWhenHidden);
+    page.window.addEventListener("pagehide", flush);
     return () => {
-      disposed = true;
-      disposeEffect();
+      page.document.removeEventListener("visibilitychange", flushWhenHidden);
+      page.window.removeEventListener("pagehide", flush);
+      uninstall();
     };
   }
 
   return {
+    continuousSave,
     hasCurrentDesign: () => store.currentDesign.value !== null,
     readDesignIdentity() {
       const design = store.currentDesign.value;
       if (!design) return null;
       return {
         name: store.designName.value || design.name || "Untitled",
-        dirty: store.designDirty.value,
+        saveStatus: continuousSave.status.value,
+        saveFailureReason: continuousSave.failureReason.value,
       };
     },
     newDesign,
+    closeDesign,
     openCanopi,
     openCanopiTemplate,
     downloadCanopi,
     renameDesign,
-    saveCurrentDraft,
+    revertDesign,
+    resolveSaveConflict,
     listDrafts: () => appDataStore.listDrafts(),
     openDraft,
+    deleteDraft,
     restoreLatestDraft,
     attachCanvasSession,
-    installAutosave,
+    installContinuousSave,
   };
 }
 
@@ -501,7 +586,6 @@ function createNewWebCanopiFile(name: string, timestamp: string): CanopiFile {
     version: CURRENT_CANOPI_FILE_VERSION,
     name,
     description: null,
-    spatial_frame: newDesignSpatialFrame(),
     plant_species_colors: {},
     plant_species_symbols: {},
     layers: NEW_DESIGN_LAYER_DEFAULTS.map((layer) => ({ ...layer })),
@@ -514,6 +598,8 @@ function createNewWebCanopiFile(name: string, timestamp: string): CanopiFile {
     timeline: [],
     budget: [],
     budget_currency: DEFAULT_BUDGET_CURRENCY,
+    views: [],
+    stories: [],
     created_at: timestamp,
     updated_at: timestamp,
     extra: {},
@@ -521,64 +607,22 @@ function createNewWebCanopiFile(name: string, timestamp: string): CanopiFile {
 }
 
 function parseCanopiJson(text: string): CanopiFile {
-  const parsed: unknown = JSON.parse(text);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    // Unparseable text is a damaged Design, like any other refused document.
+    throw asCanopiDesignIngestionError(error);
+  }
   return decodeCanopiDesign(parsed);
 }
 
 async function openCanopiFile(): Promise<BrowserOpenedCanopiFile | null> {
-  const input = document.createElement("input");
-  input.type = "file";
-  input.accept = ".canopi,application/json";
-  input.multiple = false;
-  input.style.display = "none";
-  document.body.appendChild(input);
-
-  try {
-    return await new Promise<BrowserOpenedCanopiFile | null>((resolve, reject) => {
-      let settled = false;
-      const finish = (value: BrowserOpenedCanopiFile | null) => {
-        if (settled) return;
-        settled = true;
-        resolve(value);
-      };
-      const fail = (error: unknown) => {
-        if (settled) return;
-        settled = true;
-        reject(error);
-      };
-      input.addEventListener("change", () => {
-        const file = input.files?.[0] ?? null;
-        if (!file) {
-          finish(null);
-          return;
-        }
-        file.text()
-          .then((text) => finish({ fileName: file.name, text }))
-          .catch(fail);
-      }, { once: true });
-      input.addEventListener("cancel", () => finish(null), { once: true });
-      input.click();
-    });
-  } finally {
-    input.remove();
-  }
+  return pickBrowserTextFile(".canopi,application/json");
 }
 
 async function downloadCanopiFile({ fileName, text }: BrowserCanopiDownload): Promise<void> {
-  const blob = new Blob([text], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  link.style.display = "none";
-  document.body.appendChild(link);
-
-  try {
-    link.click();
-  } finally {
-    link.remove();
-    URL.revokeObjectURL(url);
-  }
+  downloadBrowserTextFile(fileName, text, "application/json");
 }
 
 function nameFromFileName(fileName: string): string {

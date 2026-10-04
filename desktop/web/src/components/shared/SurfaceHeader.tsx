@@ -1,25 +1,34 @@
 import type { ComponentChildren } from 'preact'
 import { ButtonTooltip } from './ButtonTooltip'
+import { ControlIcon } from './ControlIcon'
 import styles from './SurfaceHeader.module.css'
 
-/** Shared chrome; callers retain navigation and dismissal ownership. */
-export function SurfaceHeader({ title, count, actions, onClose, closeLabel }: {
+/**
+ * Shared chrome; callers retain navigation and dismissal ownership. No bare
+ * count beside the title: the rows show it, and a summary worth reading is a
+ * labelled sentence in the panel body.
+ */
+export function SurfaceHeader({ title, actions, onClose, closeLabel, back }: {
   title: string
-  count?: number
   actions?: ComponentChildren
   onClose(): void
   closeLabel: string
+  /** A sub-view (an editor over a list) leads with Back to its parent view. */
+  back?: { readonly label: string; onClick(): void }
 }) {
   return (
     <header className={styles.header}>
+      {back && (
+        <button type="button" className={`${styles.close} ${styles.back}`} aria-label={back.label} onClick={back.onClick}>
+          <ControlIcon name="chevron-left" size={18} />
+          <ButtonTooltip label={back.label} side="bottom" />
+        </button>
+      )}
       <h2 className={styles.title}>{title}</h2>
-      {count !== undefined && <span className={styles.count}>{count}</span>}
       <div className={styles.actions}>
         {actions}
         <button type="button" className={styles.close} aria-label={closeLabel} onClick={onClose}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-            <path d="m6 6 12 12M6 18 18 6" />
-          </svg>
+          <ControlIcon name="close" size={18} />
           <ButtonTooltip label={closeLabel} side="left" />
         </button>
       </div>

@@ -13,5 +13,7 @@ export async function exportFile(
     filters: [{ name: filterName, extensions: filterExt }],
   })
   if (!filePath) throw new Error('Dialog cancelled')
-  return invoke('export_file', { data, path: filePath })
+  // The native boundary accepts only the exported formats' extensions.
+  const hasExtension = filterExt.some((ext) => filePath.toLowerCase().endsWith(`.${ext.toLowerCase()}`))
+  return invoke('export_file', { data, path: hasExtension ? filePath : `${filePath}.${filterExt[0]}` })
 }

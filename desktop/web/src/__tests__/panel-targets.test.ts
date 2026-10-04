@@ -1,30 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MANUAL_TARGET,
-  NONE_TARGET,
   getBudgetHoverTarget,
   getBudgetSpeciesTarget,
-  getTimelineHoverTargets,
   speciesBudgetTarget,
-  speciesTarget,
 } from '../target'
-import type { BudgetItem, TimelineAction } from '../types/design'
-
-function makeAction(overrides: Partial<TimelineAction> = {}): TimelineAction {
-  return {
-    id: 'task-1',
-    action_type: 'planting',
-    description: 'Plant apple',
-    start_date: '2026-04-10',
-    end_date: null,
-    recurrence: null,
-    targets: [MANUAL_TARGET],
-    depends_on: null,
-    completed: false,
-    order: 0,
-    ...overrides,
-  }
-}
+import type { BudgetItem } from '../types/design'
 
 function makeBudgetItem(overrides: Partial<BudgetItem> = {}): BudgetItem {
   return {
@@ -39,13 +19,6 @@ function makeBudgetItem(overrides: Partial<BudgetItem> = {}): BudgetItem {
 }
 
 describe('panel target hover helpers', () => {
-  it('returns timeline action targets as-is for hover', () => {
-    const targets = [speciesTarget('Malus domestica'), MANUAL_TARGET, NONE_TARGET]
-    const action = makeAction({ targets })
-
-    expect(getTimelineHoverTargets(action)).toBe(targets)
-  })
-
   it('prefers the existing budget item target for hover', () => {
     const target = { kind: 'placed_plant', plant_id: 'plant-1' } as const
     const item = makeBudgetItem({ target })

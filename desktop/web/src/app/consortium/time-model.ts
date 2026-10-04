@@ -24,28 +24,6 @@ export const DEFAULT_CONSORTIUM_START_PHASE = 0
 export const DEFAULT_CONSORTIUM_END_PHASE = 2
 
 export const SUCCESSION_PHASE_COUNT = CONSORTIUM_SUCCESSION_PHASES.length
-export const LAST_SUCCESSION_PHASE_INDEX = SUCCESSION_PHASE_COUNT - 1
-export const SUCCESSION_PHASE_BOUNDARY_COUNT = SUCCESSION_PHASE_COUNT
-export const CONSORTIUM_STRATUM_COUNT = CONSORTIUM_STRATA.length
-export const DEFAULT_CONSORTIUM_STRATUM_ROW = CONSORTIUM_STRATUM_COUNT - 1
-
-export function clampSuccessionPhaseIndex(phase: number): number {
-  return Math.max(0, Math.min(LAST_SUCCESSION_PHASE_INDEX, phase))
-}
-
-export function clampSuccessionPhaseBoundary(phase: number): number {
-  return Math.max(0, Math.min(SUCCESSION_PHASE_BOUNDARY_COUNT, phase))
-}
-
-export function stratumToRow(stratum: string): number {
-  const index = (CONSORTIUM_STRATA as readonly string[]).indexOf(stratum)
-  return index === -1 ? DEFAULT_CONSORTIUM_STRATUM_ROW : index
-}
-
-export function stratumAtRow(rowIndex: number): string {
-  const clamped = Math.max(0, Math.min(DEFAULT_CONSORTIUM_STRATUM_ROW, rowIndex))
-  return CONSORTIUM_STRATA[clamped] ?? DEFAULT_CONSORTIUM_STRATUM
-}
 
 export function createDefaultConsortiumEntry(canonicalName: string): Consortium {
   return {

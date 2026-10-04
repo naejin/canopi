@@ -1,16 +1,19 @@
-import { setCanvasSelection } from '../session-state'
+import { batch, effect, type ReadonlySignal } from '@preact/signals'
+import { setCanvasSelection, setCanvasToolGuidance } from '../session-state'
 import { refreshCanvasColorCache } from '../theme-refresh'
+import { setCanvasMapBackdrop } from './scene-visuals'
+import { DEFAULT_PLANT_DISPLAY, setCanvasPlantDisplay } from './plant-display'
 import { createUuid } from '../../utils/ids'
 import {
   createSceneInteractionSession,
   type SceneInteractionSession,
-} from './scene-interaction'
+} from './interaction-session'
 import {
   resetTransientRuntimeState,
   syncCanvasSignalsFromScene,
 } from './scene-runtime/scene-sync'
 import { installSceneRuntimeEffects } from './scene-runtime/effects'
-import type { SceneRuntimeRenderKind } from './scene-runtime/render-scheduler'
+import { SceneRendererMountCancelledError, type SceneRuntimeRenderKind } from './scene-runtime/render-scheduler'
 import {
   normalizeSceneDesignObjectTargets,
   sceneDesignObjectTargetsEqual,
@@ -26,10 +29,13 @@ import {
 import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
+  CanvasKeyboardPort,
   CanvasQuerySurface,
 } from './runtime'
+import { bindQuerySurfacePointerWorld } from './query-surface'
 import { targets, speciesTarget } from '../../target'
 import { runCanvasRuntimeCleanups, throwCanvasRuntimeCleanupErrors } from './cleanup'
+import type { CameraDriverHost } from './view/camera-driver'
 
 type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
 
@@ -38,6 +44,8 @@ export type SceneCanvasRuntimeOptions = SceneRuntimeConstructionOptions
 export class SceneCanvasRuntime {
   private readonly _construction: SceneRuntimeConstruction
   private _interaction: SceneInteractionSession | null = null
+  /** Counts unmountRenderer calls, so a remount that an unmount overtook stops before editing mounts. */
+  private _rendererUnmounts = 0
   private _cameraMode: 'site' | 'overview'
 
   constructor(options: SceneCanvasRuntimeOptions = {}) {
@@ -56,6 +64,7 @@ export class SceneCanvasRuntime {
       disposeInteraction: () => {
         const interaction = this._interaction
         this._interaction = null
+        bindQuerySurfacePointerWorld(this._querySurface, null)
         try {
           interaction?.dispose()
         } finally {
@@ -70,8 +79,15 @@ export class SceneCanvasRuntime {
       setInteractionTool: (name) => {
         this._interaction?.setTool(name)
       },
+      readInteractionTool: () => this._interaction?.tool ?? null,
+      plantRowSpacing: {
+        input: (text) => this._interaction?.plantRowSpacing.input(text),
+        commit: (text) => this._interaction?.plantRowSpacing.commit(text),
+        blur: (text) => this._interaction?.plantRowSpacing.blur(text),
+        cancel: () => this._interaction?.plantRowSpacing.cancel(),
+      },
     })
-    this._cameraMode = this._camera.snapshot.peek().mode
+    this._cameraMode = this._construction.frames.viewFrame.peek().mode
     this._installEffects()
   }
 
@@ -81,14 +97,6 @@ export class SceneCanvasRuntime {
 
   private get _sceneSession(): SceneRuntimeConstruction['sceneSession'] {
     return this._construction.sceneSession
-  }
-
-  private get _camera(): SceneRuntimeConstruction['camera'] {
-    return this._construction.camera
-  }
-
-  private get _cameraNavigation(): SceneRuntimeConstruction['cameraNavigation'] {
-    return this._construction.cameraNavigation
   }
 
   private get _sceneRevision(): SceneRuntimeConstruction['sceneRevision'] {
@@ -150,62 +158,21 @@ export class SceneCanvasRuntime {
   async init(container: HTMLElement): Promise<void> {
     try {
       refreshCanvasColorCache(container)
+      this._disposeEffects.push(markBusyWhileScenePending(container, this._rendering.scenePending))
       await this._rendering.initialize(container)
-      this._cameraNavigation.initialize({
-        width: Math.max(1, container.clientWidth),
-        height: Math.max(1, container.clientHeight),
+      // The first frame is the fit (plan §1, exception 3): the Design's for one loaded before init, else the new-Design overview.
+      // One batch, so the screen size and the fit reach the runtime's effects as one frame. An attached map keeps its own screen.
+      batch(() => {
+        if (!this._construction.frames.viewFrame.peek().attached) {
+          this.cameraHost.current().setScreen({
+            width: Math.max(1, container.clientWidth),
+            height: Math.max(1, container.clientHeight),
+            devicePixelRatio: window.devicePixelRatio,
+          })
+        }
+        this._documentSurface.zoomToFit()
       })
-      this._interaction = createSceneInteractionSession({
-        container,
-        getSceneStore: () => this._sceneState,
-        camera: this._camera,
-        cameraNavigation: this._cameraNavigation,
-        getSpeciesCache: () => this._presentation.getSpeciesCache(),
-        getPlantPresentationContext: (viewportScale) =>
-          this._presentation.createPlantPresentationContext(viewportScale),
-        getSelection: () => this._sceneState.session.selectedTargets,
-        setSelection: (targets) => {
-          this._sceneCommands.runWhenSettled(
-            () => this._setSelection(targets),
-            undefined,
-            { resumePending: true },
-          )
-        },
-        clearSelection: () => {
-          this._sceneCommands.runWhenSettled(
-            () => this._setSelection([]),
-            undefined,
-            { resumePending: true },
-          )
-        },
-        sceneEdits: this._sceneCommands,
-        commandAdmission: this._sceneCommands,
-        settledReader: this._settledReader,
-        tryInspectAt: this._appAdapter.tryInspectAt,
-        getDesignObjectSelection: () => this._querySurface.getDesignObjectSelection(),
-        selectionCommands: this._commandSurface.sceneEdits,
-        contextualCommands: this._appAdapter.savedObjectStamps
-          ? {
-              saveSelectionAsObjectStamp: () =>
-                this._commandSurface.sceneEdits.saveSelectionAsObjectStamp(),
-            }
-          : undefined,
-        setTool: (name) => this._commandSurface.tools.setTool(name),
-        render: (kind) => this._invalidate(kind),
-        readSnapToGridEnabled: () => this._appAdapter.settings.readSnapToGridEnabled(),
-        readSnapToGuidesEnabled: () => this._appAdapter.settings.readSnapToGuidesEnabled(),
-        readPlantSpacingIntervalMeters: () => this._appAdapter.settings.readPlantSpacingIntervalMeters(),
-        commitPlantSpacingIntervalMeters: (meters) =>
-          this._appAdapter.settings.commitPlantSpacingIntervalMeters(meters),
-        translate: this._appAdapter.translate,
-        getLocalizedCommonNames: () => this._presentation.getLocalizedCommonNames(),
-        notifyTransientHistoryChange: () => this._notifyTransientHistoryChanged(),
-        setHoveredTarget: (target) => {
-          this._setHoveredTarget(target)
-        },
-      })
-      this._interaction.setOverviewMode(this._camera.snapshot.peek().mode === 'overview')
-      await this._rendering.renderScene()
+      await this._mountInteraction(container)
     } catch (error) {
       const errors: unknown[] = [error]
       try {
@@ -215,6 +182,76 @@ export class SceneCanvasRuntime {
       }
       throwCanvasRuntimeCleanupErrors(errors, 'Scene Canvas runtime initialization failed')
     }
+  }
+
+  /** Creates the interaction session over the mounted renderer and draws the Scene. */
+  private async _mountInteraction(container: HTMLElement): Promise<void> {
+    this._interaction = createSceneInteractionSession({
+      container,
+      getSceneStore: () => this._sceneState,
+      getSpeciesCache: () => this._presentation.getSpeciesCache(),
+      getPlantPresentationContext: (viewportScale) =>
+        this._presentation.createPlantPresentationContext(viewportScale),
+      getSelection: () => this._sceneState.session.selectedTargets,
+      setSelection: (targets) => {
+        this._sceneCommands.runWhenSettled(
+          () => this._setSelection(targets),
+          undefined,
+          { resumePending: true },
+        )
+      },
+      clearSelection: () => {
+        this._sceneCommands.runWhenSettled(
+          () => this._setSelection([]),
+          undefined,
+          { resumePending: true },
+        )
+      },
+      sceneEdits: this._sceneCommands,
+      commandAdmission: this._sceneCommands,
+      settledReader: this._settledReader,
+      tryInspectAt: this._appAdapter.tryInspectAt,
+      getDesignObjectSelection: () => this._querySurface.getDesignObjectSelection(),
+      selectionCommands: this._commandSurface.sceneEdits,
+      contextualCommands: this._appAdapter.savedObjectStamps
+        ? {
+            saveSelectionAsObjectStamp: () =>
+              this._commandSurface.sceneEdits.saveSelectionAsObjectStamp(),
+          }
+        : undefined,
+      contextMenu: this._appAdapter.contextMenu,
+      setTool: (name) => this._commandSurface.tools.setTool(name),
+      render: (kind) => this._invalidate(kind),
+      readSnapToGridEnabled: () => this._appAdapter.settings.readSnapToGridEnabled(),
+      readSnapToGuidesEnabled: () => this._appAdapter.settings.readSnapToGuidesEnabled(),
+      readScrollWheel: () => this._appAdapter.settings.readScrollWheel(),
+      readPlantSpacingIntervalMeters: () => this._appAdapter.settings.readPlantSpacingIntervalMeters(),
+      commitPlantSpacingIntervalMeters: (meters) =>
+        this._appAdapter.settings.commitPlantSpacingIntervalMeters(meters),
+      translate: this._appAdapter.translate,
+      getLocalizedCommonNames: () => this._presentation.getLocalizedCommonNames(),
+      notifyTransientHistoryChange: () => this._notifyTransientHistoryChanged(),
+      publishToolGuidance: setCanvasToolGuidance,
+      nudge: this._commandSurface.sceneEdits,
+      setHoveredTarget: (target) => {
+        this._setHoveredTarget(target)
+      },
+      frames: this._construction.frames,
+      viewNavigation: this._construction.viewNavigation,
+      renderer: {
+        setDraft: (draft) => this._rendering.setDraft(draft),
+      },
+      ...(this._appAdapter.focus ? { focus: this._appAdapter.focus } : {}),
+    })
+    const interaction = this._interaction
+    bindQuerySurfacePointerWorld(this._querySurface, (listener) => interaction.subscribePointerWorld(listener))
+    this._interaction.setOverviewMode(this._construction.frames.viewFrame.peek().mode === 'overview')
+    await this._rendering.renderScene()
+  }
+
+  /** The runtime's one camera: the workspace activation attaches each map to it; destroy disposes it. */
+  get cameraHost(): CameraDriverHost {
+    return this._construction.cameraHost
   }
 
   get commandSurface(): CanvasCommandSurface {
@@ -229,9 +266,52 @@ export class SceneCanvasRuntime {
     return this._querySurface
   }
 
-  /** Internal workspace-lifecycle control; intentionally excluded from CanvasRuntimeSurfaces. */
-  async reportRendererFailure(id: string, error: unknown): Promise<void> {
-    await this._rendering.reportRendererFailure(id, error)
+  /** The live interaction session's key handling, null before init and after the map unmounts (the surfaces forward to it). */
+  get keyboardPort(): CanvasKeyboardPort | null {
+    return this._interaction?.keyboard ?? null
+  }
+
+  /**
+   * Internal workspace-lifecycle control, excluded from CanvasRuntimeSurfaces.
+   * The map became unavailable: release the renderer and the interaction
+   * session so nothing draws or edits blind. The Scene stays loaded, so the
+   * Design can still be saved.
+   */
+  async unmountRenderer(): Promise<void> {
+    this._rendererUnmounts += 1
+    const interaction = this._interaction
+    this._interaction = null
+    bindQuerySurfacePointerWorld(this._querySurface, null)
+    try {
+      interaction?.dispose()
+    } finally {
+      this._notifyTransientHistoryChanged()
+      await this._rendering.unmount()
+    }
+  }
+
+  /**
+   * Internal workspace-lifecycle control: a user Retry built a new map after unmountRenderer. The
+   * renderer and the interaction session mount again over the loaded Scene, which keeps its camera,
+   * selection and undo history. A failed remount leaves nothing mounted, and so does an unmount (a map failure)
+   * that lands once the renderer mounted but before editing did: the remount rejects as cancelled.
+   */
+  async remountRenderer(container: HTMLElement): Promise<void> {
+    const unmounts = this._rendererUnmounts
+    try {
+      refreshCanvasColorCache(container)
+      await this._rendering.initialize(container)
+      if (unmounts !== this._rendererUnmounts) throw new SceneRendererMountCancelledError()
+      await this._mountInteraction(container)
+    } catch (error) {
+      const errors: unknown[] = [error]
+      try {
+        await this.unmountRenderer()
+      } catch (cleanupError) {
+        errors.push(cleanupError)
+      }
+      throwCanvasRuntimeCleanupErrors(errors, 'Scene Canvas renderer remount failed')
+    }
   }
 
   destroy(): void {
@@ -299,6 +379,8 @@ export class SceneCanvasRuntime {
   }
 
   private _installEffects(): void {
+    // The display is module state shared with drawing and hit testing; the next runtime starts from the default.
+    this._disposeEffects.push(() => { setCanvasPlantDisplay(DEFAULT_PLANT_DISPLAY) })
     this._disposeEffects.push(...installSceneRuntimeEffects({
       onTheme: () => {
         const container = this._rendering.container
@@ -317,12 +399,23 @@ export class SceneCanvasRuntime {
       onChromeOverlay: () => {
         this._renderChrome()
       },
+      onMapBackdrop: (backdrop) => {
+        if (!setCanvasMapBackdrop(backdrop)) return
+        this._renderChrome()
+        this._invalidate('scene')
+      },
+      onPlantDisplay: (display) => {
+        if (!setCanvasPlantDisplay(display)) return
+        this._construction.inspection.refresh()
+        this._invalidate('scene')
+      },
+      plantDisplay: this._appAdapter.plantDisplay,
       onPanelTargetHover: () => {
         this._invalidate('scene')
       },
-      camera: this._camera,
+      frames: this._construction.frames,
       onCameraFrame: () => {
-        const mode = this._camera.snapshot.peek().mode
+        const mode = this._construction.frames.viewFrame.peek().mode
         if (mode !== this._cameraMode) {
           this._cameraMode = mode
           this._interaction?.setOverviewMode(mode === 'overview')
@@ -346,19 +439,24 @@ export class SceneCanvasRuntime {
   }
 
   private _notifyTransientHistoryChanged(): void {
-    this._transientHistoryRevision.value += 1
+    // A write that reads nothing: the host bumps it from tool calls and settling commits inside the runtime's effects.
+    this._transientHistoryRevision.value = this._transientHistoryRevision.peek() + 1
   }
 
   private _renderChrome(): void {
     const container = this._rendering.container
     if (!container) return
     const chromeSettings = this._appAdapter.settings.readChromeOverlay()
-    this._chrome.update({
-      camera: this._camera.snapshot.peek(),
+    const editingAids = this._chrome.update({
+      frame: this._construction.frames.viewFrame.peek(),
       rulersVisible: chromeSettings.rulersVisible,
       gridVisible: chromeSettings.gridVisible,
+      guidesVisible: chromeSettings.guidesVisible,
       guides: this._sceneState.guides,
     })
+    // The grid and ruler guides are scene content (spec §1.5): a change syncs the scene, since 'chrome' never does.
+    // Every chrome render passes here (settings, a new guide, an undo, showing or hiding the chrome); a frame changes nothing.
+    if (this._presentation.setEditingAids(editingAids)) this._invalidate('scene')
   }
 
   private _addGuide(axis: 'h' | 'v', position: number): void {
@@ -378,4 +476,17 @@ export class SceneCanvasRuntime {
       targets.indexScene(scene),
     )
   }
+}
+
+/**
+ * The Design map is aria-busy from a Design change until the renderer has drawn it, so
+ * assistive technology and the Web browser checks can wait for the drawing; the DOM (chips,
+ * tools, Undo) changes at once. Camera frames never mark it.
+ */
+function markBusyWhileScenePending(host: HTMLElement, scenePending: ReadonlySignal<boolean>): () => void {
+  return effect(() => {
+    if (!scenePending.value) return
+    host.setAttribute('aria-busy', 'true')
+    return () => host.removeAttribute('aria-busy')
+  })
 }

@@ -14,9 +14,6 @@ node_modules/
 dist/
 *.tsbuildinfo
 
-# Tauri
-desktop/web/src/bindings.ts
-
 # Root-level package files (not part of the app — real deps in desktop/web/)
 /package.json
 /package-lock.json
@@ -66,5 +63,16 @@ desktop/web/dist-web-artifacts/
 desktop/web/public/pdf-fonts/
 desktop/web/dist-pdf-validation/
 
-# Raster qualification scratch (Q slice): local clones, fixtures, measurement output
+# Local agent scratch: worktrees, fixtures, measurement output
 .rq-scratch/
+
+# Rendered design boards (python3 .interface-design/boards/build.py)
+/.interface-design/boards/out/
+
+# Locally built sidecars (scripts/build-geolibre-cli.sh)
+/desktop/binaries/
+desktop/web/coverage/
+
+# Playwright output (desktop/web/playwright.config.ts): results, traces, the HTML report
+desktop/web/test-results/
+desktop/web/playwright-report/

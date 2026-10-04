@@ -57,6 +57,23 @@ describe('Species Catalog view demand', () => {
     stop(); s.workbench.dispose()
   })
 
+  it('refreshes the recently-viewed projection once a selection is recorded', async () => {
+    const locale = signal('en')
+    const recorded: string[] = []
+    const getRecentlyViewed = vi.fn(async () => recorded.map((name) => makeSpeciesListItem(name)))
+    const workbench = createSpeciesCatalogWorkbench({
+      favoritesIncludeRecentlyViewed: true, locale, getRecentlyViewed,
+      onSpeciesSelected: (name) => { recorded.unshift(name) },
+    })
+    const stop = workbench.mount('favorites')
+    await vi.waitFor(() => expect(getRecentlyViewed).toHaveBeenCalledOnce())
+    expect(workbench.sidebar.value.recentlyViewed).toEqual([])
+
+    workbench.selectSpecies('Malus domestica')
+    await vi.waitFor(() => expect(workbench.sidebar.value.recentlyViewed.map((item) => item.canonical_name)).toEqual(['Malus domestica']))
+    stop(); workbench.dispose()
+  })
+
   it('shares a favorites refresh across active Catalog and Favorites views and refreshes after a toggle', async () => {
     const s = setup()
     const catalog = s.workbench.mount('catalog')
@@ -75,5 +92,94 @@ describe('Species Catalog view demand', () => {
     expect(s.getRecentlyViewed).toHaveBeenCalledOnce()
     expect(s.search).toHaveBeenCalledOnce()
     favorites(); s.workbench.dispose()
+  })
+})
+
+describe('Species Catalog lookups for plant lists', () => {
+  it('searches close matches outside the catalog view session and resolves names per language', async () => {
+    const locale = signal('fr')
+    const search = vi.fn(async () => ({ items: [makeSpeciesListItem('Malus floribunda')], next_cursor: null, total_estimate: 0 }))
+    const resolveCommonNames = vi.fn(async (names: readonly string[], language: string) => (
+      Object.fromEntries(names.map((name) => [name, `${name} (${language})`]))
+    ))
+    const workbench = createSpeciesCatalogWorkbench({ locale, search, resolveCommonNames })
+
+    expect(await workbench.searchCloseMatches('p', 4)).toEqual([])
+    expect(search).not.toHaveBeenCalled()
+    const found = await workbench.searchCloseMatches('pommier', 4)
+    expect(found.map((item) => item.canonical_name)).toEqual(['Malus floribunda'])
+    expect(search).toHaveBeenCalledWith(expect.objectContaining({
+      text: 'pommier', cursor: null, limit: 4, locale: 'fr', include_total: false,
+    }))
+    expect(workbench.intent.value.text).toBe('')
+
+    expect(await workbench.resolveCommonNames(['Malus domestica'], 'de')).toEqual({ 'Malus domestica': 'Malus domestica (de)' })
+    expect(await workbench.resolveCommonNames([], 'de')).toEqual({})
+    expect(resolveCommonNames).toHaveBeenCalledOnce()
+    workbench.dispose()
+    expect(await workbench.searchCloseMatches('pommier', 4)).toEqual([])
+  })
+
+  it('projects display names once per species and language: locale names, English marked for the rest', async () => {
+    const locale = signal('fr')
+    const catalog: Record<string, Record<string, string>> = {
+      fr: { 'Malus domestica': 'Pommier' },
+      en: { 'Malus domestica': 'Apple', 'Ficus carica': 'Fig' },
+    }
+    const resolveCommonNames = vi.fn(async (names: readonly string[], language: string) => (
+      Object.fromEntries(names.flatMap((name) => catalog[language]?.[name] ? [[name, catalog[language]![name]!]] : []))
+    ))
+    const workbench = createSpeciesCatalogWorkbench({ locale, resolveCommonNames })
+
+    const [first, second] = await Promise.all([
+      workbench.resolveDisplayNames(['Malus domestica', 'Ficus carica', 'Rubus idaeus'], 'fr'),
+      workbench.resolveDisplayNames(['Ficus carica'], 'fr'),
+    ])
+    expect(first).toEqual({ names: { 'Malus domestica': 'Pommier', 'Ficus carica': 'Fig' }, englishFallbacks: ['Ficus carica'] })
+    expect(second).toEqual({ names: { 'Ficus carica': 'Fig' }, englishFallbacks: ['Ficus carica'] })
+    // One lookup per language for the whole batch; the concurrent caller shared it.
+    expect(resolveCommonNames.mock.calls).toEqual([
+      [['Malus domestica', 'Ficus carica', 'Rubus idaeus'], 'fr'],
+      [['Ficus carica', 'Rubus idaeus'], 'en'],
+    ])
+
+    expect(await workbench.resolveDisplayNames(['Malus domestica', 'Ficus carica'], 'en'))
+      .toEqual({ names: { 'Malus domestica': 'Apple', 'Ficus carica': 'Fig' }, englishFallbacks: [] })
+    expect(await workbench.resolveCommonNames(['Rubus idaeus'], 'fr')).toEqual({})
+    // Only the apple's English name was new; the fig's came from the fallback lookup.
+    expect(resolveCommonNames).toHaveBeenCalledTimes(3)
+    expect(resolveCommonNames).toHaveBeenLastCalledWith(['Malus domestica'], 'en')
+
+    resolveCommonNames.mockRejectedValueOnce(new Error('catalog unavailable'))
+    await expect(workbench.resolveDisplayNames(['Prunus avium'], 'fr')).rejects.toThrow('catalog unavailable')
+    // A failed lookup caches nothing: the next call asks again, in the language and then in English.
+    expect(await workbench.resolveDisplayNames(['Prunus avium'], 'fr')).toEqual({ names: {}, englishFallbacks: [] })
+    expect(resolveCommonNames).toHaveBeenCalledTimes(6)
+    expect(resolveCommonNames).toHaveBeenLastCalledWith(['Prunus avium'], 'en')
+    workbench.dispose()
+  })
+
+  it('resolves an English fallback name for a detail without a name in the interface language', async () => {
+    const locale = signal('fr')
+    const detail = (commonName: string | null) => ({
+      canonical_name: 'Ribes nigrum', common_name: commonName, common_names: commonName ? [commonName] : [],
+      climate_zones: [], habit: null, growth_form: null, life_cycles: [], image: null,
+    })
+    const getSpeciesDetail = vi.fn(async () => detail(null))
+    const resolveCommonNames = vi.fn(async () => ({ 'Ribes nigrum': 'Blackcurrant' }))
+    const workbench = createSpeciesCatalogWorkbench({ locale, getSpeciesDetail, resolveCommonNames })
+    const stop = workbench.mount('favorites')
+    workbench.selectSpecies('Ribes nigrum')
+    await vi.waitFor(() => expect(workbench.detail.value.loading).toBe(false))
+    expect(resolveCommonNames).toHaveBeenCalledWith(['Ribes nigrum'], 'en')
+    expect(workbench.detail.value.englishName).toBe('Blackcurrant')
+
+    getSpeciesDetail.mockResolvedValue(detail('Cassis'))
+    resolveCommonNames.mockClear()
+    workbench.selectSpecies('Ribes nigrum')
+    await vi.waitFor(() => expect(workbench.detail.value.detail?.common_name).toBe('Cassis'))
+    expect(resolveCommonNames).not.toHaveBeenCalled()
+    expect(workbench.detail.value.englishName).toBeNull()
+    stop(); workbench.dispose()
   })
 })

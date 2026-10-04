@@ -2,9 +2,11 @@ name: Build & Test
 
 on:
   push:
-    branches: [main]
+    # All Canopi v2 work lands on feature/geolibre-adoption (AGENTS.md), so the
+    # gates run there as well as on main.
+    branches: [main, feature/geolibre-adoption]
   pull_request:
-    branches: [main]
+    branches: [main, feature/geolibre-adoption]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
@@ -44,13 +46,21 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Unused crates
+        run: |
+          python3 -m unittest scripts.test_check_unused_crates
+          python3 scripts/check_unused_crates.py
 
       - name: Species Catalog contract tests
         run: python3 -m unittest scripts.test_species_search_normalization scripts.test_species_catalog_contract scripts.test_prepare_db scripts.test_web_catalog_artifact_contract scripts.test_generate_web_catalog
 
       - name: Check Species Search Unicode facts
         run: python3 scripts/species_search_unicode_facts.py check
+
+      - name: Species Catalog contract check
+        run: python3 scripts/species_catalog_contract.py check
 
       - name: Release promotion tests
         run: python3 -m unittest scripts.test_promote_release
@@ -81,6 +91,8 @@ jobs:
       - uses: actions/checkout@v4
       - id: rust-toolchain
         uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          components: llvm-tools-preview
       - uses: ./.github/actions/cache-rust
         with:
           toolchain: ${{ steps.rust-toolchain.outputs.cachekey }}
@@ -89,8 +101,14 @@ jobs:
       - name: Install Linux dependencies
         uses: ./.github/actions/install-linux-deps
 
-      - name: Rust tests
-        run: cargo test --workspace
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      # `cargo cov` (.cargo/config.toml) runs the workspace tests instrumented
+      # and fails below the recorded coverage floor.
+      - name: Rust tests with coverage ratchet
+        run: cargo cov
 
       - uses: actions/setup-node@v4
         with:
@@ -101,8 +119,20 @@ jobs:
       - name: Install frontend deps
         run: npm ci --prefix desktop/web
 
-      - name: Frontend tests
-        run: npm test --prefix desktop/web
+      - name: Geolocation precision and round-trip suite
+        working-directory: desktop/web
+        run: >-
+          npx vitest run
+          src/__tests__/session-plane.test.ts
+          src/__tests__/geolocated-design-codec.test.ts
+          src/canvas/runtime/scene-runtime/reorigin.test.ts
+          src/__tests__/new-design-view.test.ts
+
+      - name: Frontend source-policy tests (the coverage run leaves them out)
+        run: npm run test:policies --prefix desktop/web
+
+      - name: Frontend coverage ratchet
+        run: npm run test:coverage --prefix desktop/web
 
       - name: Frontend build
         run: npm run build --prefix desktop/web
@@ -110,19 +140,13 @@ jobs:
       - name: Web Edition build and browser-boundary scan
         run: npm run build:web --prefix desktop/web
 
-  test-platform:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            package: lib-c
-          - os: macos-14
-            package: lib-swift
-          - os: windows-latest
-            package: lib-cpp
-
-    runs-on: ${{ matrix.os }}
+  lidar-native:
+    # GeoLibre-backed LiDAR lanes (ignored in the default suite); the engine
+    # comparison lane skips itself here, as CI installs no GDAL. Fixture e2e
+    # lanes stay local: they need IGN tiles.
+    runs-on: ubuntu-24.04
+    env:
+      CANOPI_SKIP_BUNDLED_DB: "1"
     steps:
       - uses: actions/checkout@v4
       - id: rust-toolchain
@@ -130,21 +154,24 @@ jobs:
       - uses: ./.github/actions/cache-rust
         with:
           toolchain: ${{ steps.rust-toolchain.outputs.cachekey }}
-          workload: platform-${{ matrix.package }}
+          workload: lidar-native
 
       - name: Install Linux dependencies
-        if: runner.os == 'Linux'
         uses: ./.github/actions/install-linux-deps
 
-      - name: Platform-specific tests (${{ matrix.package }})
-        run: cargo test -p ${{ matrix.package }}
+      - uses: ./.github/actions/build-geolibre-cli
+
+      - name: LiDAR native lanes
+        run: |
+          export CANOPI_GEOLIBRE_BIN="$PWD/desktop/binaries/geolibre-$(rustc -vV | sed -n 's/^host: //p')"
+          cargo test -p canopi-desktop --lib --locked services::lidar -- --ignored --test-threads=1 --skip e2e_
 
   build:
-    needs: [lint, test, test-platform]
+    needs: [lint, test]
     if: >-
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
-    timeout-minutes: 45
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -215,8 +242,36 @@ jobs:
           --profile prepared
           desktop/resources/canopi-core.db
 
+      # The test job runs the suite on Linux only. File saving, atomic
+      # replace, directory sync, locking and paths differ on Windows and
+      # macOS, so the native tests run on those runners too, before packaging.
+      - name: Rust tests on this platform
+        if: runner.os != 'Linux'
+        shell: bash
+        run: cargo test --workspace --locked --target ${{ matrix.target }}
+
+      # The sidecar must exist before `tauri build`: build.rs bundles it only
+      # when desktop/binaries holds it for the target (the runner's host).
+      - uses: ./.github/actions/build-geolibre-cli
+
       - name: Build Tauri app
-        run: npx --prefix desktop/web @tauri-apps/cli build --target ${{ matrix.target }} ${{ matrix.bundle_args }}
+        run: npx --prefix desktop/web @tauri-apps/cli build --target ${{ matrix.target }} ${{ matrix.bundle_args }} -- --locked
+
+      - name: Windows app selects Common Controls v6
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          python -m pip install --quiet pefile
+          exe=""
+          for name in canopi-desktop.exe Canopi.exe; do
+            if [ -f "target/${{ matrix.target }}/release/$name" ]; then exe="target/${{ matrix.target }}/release/$name"; break; fi
+          done
+          test -n "$exe" || { echo "no Canopi executable under target/${{ matrix.target }}/release" >&2; exit 1; }
+          python scripts/check_windows_manifest.py "$exe"
+
+      - name: Packaged sidecar runs from the installed layout
+        shell: bash
+        run: scripts/smoke-bundled-sidecar.sh ${{ matrix.target }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

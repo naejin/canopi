@@ -1,136 +1,235 @@
 import { canvasPdf, canExportCanvasPdf } from '../app/canvas-pdf/live'
 import { navigateTo, type Panel, type SidePanel } from '../app/shell/state'
-import { mutateSettingsProjection } from '../app/settings/projection'
 import {
   composeShellCommandCatalog,
   projectShellCommandCatalog,
   type ProjectedShellCommand,
   type ShellChromeProjection,
+  type ShellCommandCatalogEntry,
   type ShellCommandIdForCapability,
+  type ShellCommandState,
 } from '../app/shell-commands'
+import { composeWorkspaceMenus, type MenuDefinition } from '../app/shell-commands/menus'
+import { setShortcutPlatform } from '../app/shell-commands/shortcut-text'
+import { createWorkspaceShellCapabilities } from '../app/workspace-commands/capabilities'
+import { savedViewMenuActions } from '../app/saved-views'
+import { plantLabelMenuActions } from '../app/plant-display/menu'
+import { exportCurrentBudgetCsv } from '../app/budget/export'
+import { canvasCommandDefinitions, type CanvasCommandProjection } from '../app/canvas-commands'
+import { installKeyRouter, type KeyRouterHandle } from '../app/keyboard/key-router'
+import { CANVAS_KEYMAP_ROWS, shellKeymapRows, type CommandSink } from '../app/keyboard/keymap'
+import { saveProblem } from '../app/document-session/save-problem'
+import { savedViewDialogOpen } from '../app/saved-views/dialogs'
+import { singleKeyShortcuts } from '../app/settings/state'
+import { focusOwner } from '../app/keyboard/focus-owner'
+import { modalLayerOpen } from '../app/shell/modal-layer'
+import { dispatchWorkspaceCanvasIntent } from '../app/workspace-commands/canvas-actions'
+import { currentCanvasKeyboardPort } from '../canvas/session'
+import { detectPlatform, type InputPlatform } from '../canvas/runtime/input/platform'
 import { t } from '../i18n'
+import type { DesignSaveStatus } from '../app/document-session/continuous-save'
+import type { GeoJsonWorkflow } from '../app/geojson/workflow'
 
 type BrowserShellCapabilityId =
   | 'newDesign'
   | 'openCanopi'
+  | 'renameDesign'
   | 'downloadCanopi'
+  | 'revertDesign'
+  | 'importGeoJson'
   | 'exportCanvasPdf'
+  | 'exportGeoJson'
+  | 'exportBudgetCsv'
+  | 'closeDesign'
+  | 'openSettings'
+  | 'findPlants'
+  | 'saveCurrentView'
+  | 'manageViews'
   | 'navigateCanvas'
-  | 'navigateLocation'
   | 'navigateTemplates'
+  | 'navigateLayers'
+  | 'navigateSpeciesKey'
   | 'navigatePlantDatabase'
   | 'navigateFavorites'
-  | 'navigateSpeciesKey'
-  | 'navigateData'
-  | 'navigateAnalysis'
-  | 'navigateLayers'
   | 'navigateCalendar'
   | 'navigateBudget'
   | 'navigateConsortium'
+  | 'navigateStories'
+  | 'toggleToolNames'
+  | 'showSatellite'
+  | 'showMap'
+  | 'showNoBackground'
   | 'toggleTheme'
+  | 'showShortcuts'
+  | 'gettingStarted'
+  | 'aboutCanopi'
 
 type BrowserShellCommandId = ShellCommandIdForCapability<BrowserShellCapabilityId>
 
 export type BrowserShellProjectedCommand = ProjectedShellCommand<BrowserShellCommandId>
+export type BrowserShellCatalog = readonly ShellCommandCatalogEntry<BrowserShellCommandId>[]
+
 export interface BrowserShellChromeProjection extends ShellChromeProjection<BrowserShellCommandId> {
-  readonly theme: BrowserShellProjectedCommand
+  /** File, Edit, View, Tools and Help, ready to render. */
+  readonly workspaceMenus: readonly MenuDefinition[]
+}
+
+/**
+ * The panels as the phone sheet lists them: the Design and planning panels,
+ * then the primary views (the Design map and Templates) when there are two.
+ */
+export function browserPhoneSheetTabs<Command>(panelBar: {
+  readonly primary: readonly Command[]
+  readonly design: readonly Command[]
+  readonly planning: readonly Command[]
+}): readonly Command[] {
+  return [...panelBar.design, ...panelBar.planning, ...(panelBar.primary.length > 1 ? panelBar.primary : [])]
 }
 
 export interface BrowserShellDesignIdentity {
   readonly name: string
-  readonly dirty: boolean
+  readonly saveStatus: DesignSaveStatus
+  readonly saveFailureReason: string | null
 }
 
 export interface BrowserShellCapabilities {
   newDesign(): void
   openCanopi(): void
   downloadCanopi(): void
+  revertDesign(): void
+  importGeoJson(): void
+  exportGeoJson(): void
+  exportBudgetCsv(): void
+  closeDesign(): void
   navigate(panel: Panel): void
-  toggleTheme(): void
 }
 
 export interface BrowserDesignShellCommands {
   newDesign(): Promise<void>
   openCanopi(): Promise<boolean>
   downloadCanopi(): Promise<void>
+  revertDesign(): Promise<unknown>
+  closeDesign(): Promise<unknown>
 }
+
+/**
+ * A browser keeps these for itself (new window, tab switching), so the Web
+ * Edition neither shows nor listens for them.
+ */
+const BROWSER_RESERVED_SHORTCUTS: ReadonlySet<string> = new Set([
+  'Ctrl+N',
+  'Ctrl+Q',
+  'Ctrl+W',
+  'Ctrl+1',
+  'Ctrl+2',
+  'Ctrl+3',
+  'Ctrl+4',
+  'Ctrl+5',
+  'Ctrl+6',
+  'Ctrl+7',
+  'Ctrl+8',
+  'Ctrl+9',
+])
 
 export function createBrowserShellCapabilities(
   commands: BrowserDesignShellCommands,
   onError: (error: unknown) => void,
+  geoJson: Pick<GeoJsonWorkflow, 'importGeoJson' | 'exportGeoJson'>,
 ): BrowserShellCapabilities {
   return {
     newDesign: () => runBrowserDesignCommand(() => commands.newDesign(), onError),
     openCanopi: () => runBrowserDesignCommand(() => commands.openCanopi(), onError),
     downloadCanopi: () => runBrowserDesignCommand(() => commands.downloadCanopi(), onError),
+    revertDesign: () => runBrowserDesignCommand(() => commands.revertDesign(), onError),
+    importGeoJson: () => runBrowserDesignCommand(() => geoJson.importGeoJson(), onError),
+    exportGeoJson: () => runBrowserDesignCommand(() => geoJson.exportGeoJson(), onError),
+    exportBudgetCsv: () => runBrowserDesignCommand(exportCurrentBudgetCsv, onError),
+    closeDesign: () => runBrowserDesignCommand(() => commands.closeDesign(), onError),
     navigate: navigateTo,
-    toggleTheme: () => {
-      mutateSettingsProjection((settings) => {
-        settings.theme = settings.theme === 'dark' ? 'light' : 'dark'
-      }, { persist: 'immediate' })
-    },
   }
 }
 
-export interface BrowserShellProjectionInput {
-  readonly currentPanel: Panel
-  readonly currentSidePanel: SidePanel | null
-  readonly downloadCanopiEnabled: boolean
+export interface BrowserShellCatalogOptions {
   readonly templatesEnabled: boolean
-  readonly capabilities: BrowserShellCapabilities
+  /** A Design is open in a mounted canvas runtime (GeoJSON needs one). */
+  readonly canvasReady: () => boolean
 }
 
-export function createBrowserShellCommandProjection({
-  currentPanel,
-  currentSidePanel,
-  downloadCanopiEnabled,
-  templatesEnabled,
-  capabilities,
-}: BrowserShellProjectionInput): BrowserShellChromeProjection {
-  const catalog = composeShellCommandCatalog({
-    exportCanvasPdf: { execute: () => canvasPdf.show(), isExecutionDisabled: () => !canExportCanvasPdf(), isProjectionDisabled: () => !canExportCanvasPdf() },
+/** The Web Edition command catalog; availability reads the live state it is given. */
+export function createBrowserShellCatalog(
+  capabilities: BrowserShellCapabilities,
+  { templatesEnabled, canvasReady }: BrowserShellCatalogOptions,
+): BrowserShellCatalog {
+  const designPanel = (panel: SidePanel) => ({
+    execute: () => capabilities.navigate(panel),
+    isExecutionDisabled: (state: ShellCommandState) => !state.hasDesign && state.sidePanel !== panel,
+  })
+  const needsDesign = (state: ShellCommandState) => !state.hasDesign
+  return composeShellCommandCatalog({
+    ...createWorkspaceShellCapabilities(),
     newDesign: { execute: () => capabilities.newDesign() },
     openCanopi: { execute: () => capabilities.openCanopi() },
     downloadCanopi: {
       execute: () => capabilities.downloadCanopi(),
-      isExecutionDisabled: () => !downloadCanopiEnabled,
-      isProjectionDisabled: () => !downloadCanopiEnabled,
+      isExecutionDisabled: needsDesign,
+    },
+    revertDesign: {
+      execute: () => capabilities.revertDesign(),
+      isExecutionDisabled: (state) => !state.hasDesign || !state.revertAvailable,
+    },
+    importGeoJson: {
+      execute: () => capabilities.importGeoJson(),
+      isExecutionDisabled: (state) => !state.hasDesign || !canvasReady(),
+    },
+    exportCanvasPdf: {
+      execute: () => canvasPdf.show(),
+      isExecutionDisabled: () => !canExportCanvasPdf(),
+    },
+    exportGeoJson: {
+      execute: () => capabilities.exportGeoJson(),
+      isExecutionDisabled: (state) => !state.hasDesign || !canvasReady(),
+    },
+    exportBudgetCsv: {
+      execute: () => capabilities.exportBudgetCsv(),
+      isExecutionDisabled: needsDesign,
+    },
+    closeDesign: {
+      execute: () => capabilities.closeDesign(),
+      isExecutionDisabled: needsDesign,
     },
     navigateCanvas: { execute: () => capabilities.navigate('canvas') },
-    // Location placement is now a Web capability under ADR 0028; it stays
-    // disabled without a Design because there is nothing to place.
-    navigateLocation: { execute: () => capabilities.navigate('location'), isExecutionDisabled: () => !downloadCanopiEnabled },
     ...(templatesEnabled
       ? { navigateTemplates: { execute: () => capabilities.navigate('templates') } }
       : {}),
+    navigateLayers: designPanel('layers'),
+    navigateSpeciesKey: designPanel('species-key'),
     navigatePlantDatabase: { execute: () => capabilities.navigate('plant-db') },
-    navigateSpeciesKey: { execute: () => capabilities.navigate('species-key'), isExecutionDisabled: () => !downloadCanopiEnabled && currentSidePanel !== 'species-key' },
-    navigateData: { execute: () => capabilities.navigate('data'), isExecutionDisabled: () => !downloadCanopiEnabled && currentSidePanel !== 'data' },
-    navigateAnalysis: { execute: () => capabilities.navigate('analysis'), isExecutionDisabled: () => !downloadCanopiEnabled && currentSidePanel !== 'analysis' },
-    navigateLayers: { execute: () => capabilities.navigate('layers'), isExecutionDisabled: () => !downloadCanopiEnabled && currentSidePanel !== 'layers' },
-    navigateCalendar: { execute: () => capabilities.navigate('calendar'), isExecutionDisabled: () => !downloadCanopiEnabled && currentSidePanel !== 'calendar' },
-    navigateBudget: { execute: () => capabilities.navigate('budget'), isExecutionDisabled: () => !downloadCanopiEnabled && currentSidePanel !== 'budget' },
-    navigateConsortium: { execute: () => capabilities.navigate('consortium'), isExecutionDisabled: () => !downloadCanopiEnabled && currentSidePanel !== 'consortium' },
     navigateFavorites: { execute: () => capabilities.navigate('favorites') },
-    toggleTheme: { execute: () => capabilities.toggleTheme() },
+    navigateCalendar: designPanel('calendar'),
+    navigateBudget: designPanel('budget'),
+    navigateConsortium: designPanel('consortium'),
+    navigateStories: designPanel('stories'),
   })
+}
 
-  const projection = projectShellCommandCatalog(
-    catalog,
-    {
-      hasDesign: downloadCanopiEnabled,
-      designDirty: false,
-      activePanel: currentPanel,
-      sidePanel: currentSidePanel,
-    },
-    t,
-  )
-  const themeDefinition = catalog.find((command) => command.capabilityId === 'toggleTheme')
-  const theme = themeDefinition
-    ? projection.commands.get(themeDefinition.id)
-    : undefined
-  if (!theme) throw new Error('Browser shell projection requires the theme command')
-  return { ...projection, theme }
+export interface BrowserShellProjectionInput {
+  readonly catalog: BrowserShellCatalog
+  readonly state: ShellCommandState
+  readonly canvas: CanvasCommandProjection
+}
+
+export function createBrowserShellCommandProjection({
+  catalog,
+  state,
+  canvas,
+}: BrowserShellProjectionInput): BrowserShellChromeProjection {
+  const shell = projectShellCommandCatalog(catalog, state, t, {
+    unavailableShortcuts: BROWSER_RESERVED_SHORTCUTS,
+  })
+  return {
+    ...shell,
+    workspaceMenus: composeWorkspaceMenus({ shell, canvas, translate: t, savedViews: savedViewMenuActions(), plantLabels: plantLabelMenuActions() }),
+  }
 }
 
 function runBrowserDesignCommand(
@@ -142,4 +241,60 @@ function runBrowserDesignCommand(
   } catch (error) {
     onError(error)
   }
+}
+
+/** What the Web keys need to run shell commands against the live state. */
+export interface WebShellShortcutSource {
+  readonly catalog: BrowserShellCatalog
+  readState(): ShellCommandState
+}
+
+let activeKeyRouter: KeyRouterHandle | null = null
+
+/**
+ * The Web Edition key router (spec §1.6): its shell rows, less the shortcuts a browser keeps, then the canvas rows. A
+ * shell shortcut takes its key even when its command is disabled; a canvas command takes it only when it ran.
+ * Installing again replaces the router; main.web.tsx installs it once, on the browser's own platform, which also
+ * names the mod key in every shortcut label (Cmd on a Mac).
+ */
+export function installWebKeyRouter(
+  shell: WebShellShortcutSource,
+  platform: InputPlatform = detectPlatform(navigator, window as unknown as { readonly GestureEvent?: unknown }),
+): KeyRouterHandle {
+  activeKeyRouter?.dispose()
+  setShortcutPlatform(platform)
+  const commands: CommandSink = {
+    run(command) {
+      const entry = shell.catalog.find((candidate) => candidate.id === command)
+      if (entry) {
+        if (!entry.isExecutionDisabled(shell.readState())) entry.execute()
+        return true
+      }
+      const definition = canvasCommandDefinitions.find((candidate) => candidate.commandId === command)
+      return definition ? dispatchWorkspaceCanvasIntent(definition.intent, 'shortcut') : false
+    },
+  }
+  const router = installKeyRouter({
+    target: window,
+    keymap: [...shellKeymapRows(shell.catalog, { omit: BROWSER_RESERVED_SHORTCUTS }), ...CANVAS_KEYMAP_ROWS],
+    commands,
+    canvas: currentCanvasKeyboardPort,
+    singleKeys: singleKeyShortcuts,
+    focus: focusOwner,
+    isModalOpen: () => saveProblem.peek() !== null || savedViewDialogOpen.peek() || modalLayerOpen.peek(),
+    platform,
+    document,
+  })
+  const handle: KeyRouterHandle = {
+    dispose() {
+      router.dispose()
+      if (activeKeyRouter === handle) activeKeyRouter = null
+    },
+  }
+  activeKeyRouter = handle
+  return handle
+}
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => activeKeyRouter?.dispose())
 }

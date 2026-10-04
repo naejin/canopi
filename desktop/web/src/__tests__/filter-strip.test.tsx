@@ -84,7 +84,7 @@ describe('FilterStrip', () => {
 
 describe('Species Catalog filter region layout', () => {
   it('lets always-visible choice rows reserve wrapped ribbon height in normal flow', () => {
-    const panelSource = readSource('../components/panels/PlantDbPanel.tsx')
+    const panelSource = readSource('../components/plant-db/CatalogBrowser.tsx')
     const stripSource = readSource('../components/plant-db/FilterStrip.tsx')
     const css = readSource('../components/plant-db/PlantDb.module.css')
     const moreFiltersCss = readSource('../components/plant-db/MoreFiltersPanel.module.css')
