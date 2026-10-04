@@ -6,6 +6,11 @@ import {
   type VectorBasemapMap,
   type VectorStyleDocument,
 } from '../maplibre/openfreemap-basemap'
+// MapLibre's own sources (the test-only `maplibre-gl-source` alias, vite.config.ts): the prepared style through the
+// validation `addLayer` runs and the layers' evaluation against the map's global state.
+import { createStyleLayer } from 'maplibre-gl-source/style/create_style_layer.ts'
+import { EvaluationParameters } from 'maplibre-gl-source/style/evaluation_parameters.ts'
+import { validateStyle } from 'maplibre-gl-source/style/validate_style.ts'
 
 /** The one sprite every OpenFreeMap style names (checked against the four live style documents, 2026-10-04). */
 const OFM_SPRITE = 'https://tiles.openfreemap.org/sprites/ofm_f384/ofm'
@@ -17,17 +22,19 @@ function styleDocument(name: string): VectorStyleDocument {
     sources: { openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' } },
     layers: [
       { id: 'background', type: 'background', paint: { 'background-color': '#fff' } },
-      { id: 'water', type: 'fill', source: 'openmaptiles', paint: { 'fill-opacity': 0.8 } },
+      { id: 'water', type: 'fill', source: 'openmaptiles', 'source-layer': 'water', paint: { 'fill-opacity': 0.8 } },
       {
         id: 'road',
         type: 'line',
         source: 'openmaptiles',
+        'source-layer': 'transportation',
         paint: { 'line-opacity': ['interpolate', ['linear'], ['zoom'], 5, 0.2, 12, 1] },
       },
       {
         id: 'place',
         type: 'symbol',
         source: 'openmaptiles',
+        'source-layer': 'place',
         layout: { 'text-field': ['coalesce', ['get', 'name_en'], ['get', 'name']] },
         paint: { 'text-opacity': ['step', ['zoom'], 0, 6, 1] },
       },
@@ -35,6 +42,7 @@ function styleDocument(name: string): VectorStyleDocument {
         id: 'shield',
         type: 'symbol',
         source: 'openmaptiles',
+        'source-layer': 'transportation_name',
         layout: { 'text-field': ['to-string', ['get', 'ref']] },
       },
     ],
@@ -468,6 +476,40 @@ describe('OpenFreeMap vector basemap', () => {
     expect(map.resolved('ofm:road', 'paint', 'line-opacity')).toEqual(['interpolate', ['linear'], ['zoom'], 5, 0.1, 12, 0.5])
     expect(map.resolved('ofm:place', 'paint', 'icon-opacity')).toBe(0.5)
     expect(map.resolved('ofm:place', 'layout', 'text-field')).toEqual(['coalesce', ['get', 'name:de'], ['get', 'name']])
+  })
+
+  it('installs a style MapLibre accepts, whose opacity and labels follow the map\'s global state', async () => {
+    const map = new FakeMap()
+    const basemap = install(map)
+    basemap.update({ style: 'liberty', visible: true, opacity: 0.5, locale: 'fr' })
+    await settle()
+    const layers = map.layers.filter((layer) => String(layer.id).startsWith('ofm:'))
+    const style = { version: 8, glyphs: map.glyphs, sprite: map.sprite, sources: Object.fromEntries(map.sources), layers }
+    expect(validateStyle(style)).toEqual([])
+
+    // MapLibre's layers read the global state object the map writes into.
+    const state: Record<string, unknown> = { ...map.globalState }
+    const styleLayer = (id: string) => {
+      const layer = createStyleLayer(layers.find((entry) => entry.id === id) as never, state)
+      layer.recalculate(new EvaluationParameters(12), [])
+      return layer as unknown as {
+        paint: { get(name: string): { constantOr(fallback: unknown): unknown } }
+        layout: { get(name: string): { evaluate(feature: unknown, featureState: unknown): unknown } }
+      }
+    }
+    const opacity = (id: string, name: string) => styleLayer(id).paint.get(name).constantOr(null)
+    expect(opacity('ofm:water', 'fill-opacity')).toBeCloseTo(0.4)
+    expect(opacity('ofm:road', 'line-opacity')).toBeCloseTo(0.5)
+    const label = () => String(styleLayer('ofm:place').layout.get('text-field').evaluate(
+      { type: 1, properties: { name: 'Paris', 'name:fr': 'Paris (fr)', 'name:de': 'Paris (de)' }, geometry: [] }, {},
+    ))
+    expect(label()).toBe('Paris (fr)')
+
+    basemap.update({ style: 'liberty', visible: true, opacity: 0.25, locale: 'de' })
+    Object.assign(state, map.globalState)
+    expect(opacity('ofm:water', 'fill-opacity')).toBeCloseTo(0.2)
+    expect(opacity('ofm:road', 'line-opacity')).toBeCloseTo(0.25)
+    expect(label()).toBe('Paris (de)')
   })
 
   it('wraps other expressions and leaves legacy stop functions, which cannot hold an expression', () => {
