@@ -1,10 +1,11 @@
-// A Design opened from the start screen shows in the frame its first scene is drawn (app/canvas-map-surface/design-reveal.ts):
-// until then the start screen stays up and the Design's chrome is laid out but transparent, so its chrome never sits over an
-// empty map. The unit tests drive the signal through a stub renderer; these scenarios sample every animation frame of the real
-// page while a Design opens, cold, after Close Design and over another open Design, and check that no frame shows the map
-// with neither the start screen nor the drawn scene, and that a switch never shows the start screen. A real browser also
-// checks what jsdom cannot: a field that focuses itself while hidden keeps its focus. The map is aria-busy until its
-// renderer has drawn the latest scene (support/canvas.ts).
+// An open Design shows in the frame its first scene is drawn (app/canvas-map-surface/design-reveal.ts), so its chrome never
+// sits over an empty map; until then the chrome is laid out but transparent. One opened from the start screen keeps the start
+// screen up meanwhile; one already open when the canvas mounts (a reload restoring a Draft) never shows it. The unit tests
+// drive the signal through a stub renderer; these scenarios sample every animation frame of the real page while a Design
+// opens, cold, after Close Design, over another open Design and on a reload, and check that an open from the start screen
+// shows no frame with neither the start screen nor the drawn scene, and that a switch or a reload never shows the start
+// screen. A real browser also checks what jsdom cannot: a field that focuses itself while hidden keeps its focus. The map is
+// aria-busy until its renderer has drawn the latest scene (support/canvas.ts).
 // No baselines: nothing here is compared with a recorded screenshot.
 import { fileURLToPath } from 'node:url'
 import type { Page } from '@playwright/test'
@@ -20,24 +21,26 @@ interface FrameSample {
 }
 
 /** Records, in every animation frame from now on, whether the start screen, the tool rail and the drawn scene are shown. */
-async function startSampling(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const page = window as unknown as { __revealSamples?: FrameSample[] }
-    const sampling = page.__revealSamples !== undefined
-    page.__revealSamples = []
-    if (sampling) return
-    const sample = () => {
-      const rail = document.querySelector('[data-tool-rail]')
-      const map = document.querySelector('[role="application"]')
-      page.__revealSamples!.push({
-        startScreen: document.querySelector('[data-start-screen]') !== null,
-        chromeShown: rail !== null && rail.checkVisibility({ opacityProperty: true, visibilityProperty: true }),
-        sceneDrawn: map !== null && map.getAttribute('aria-busy') !== 'true',
-      })
-      requestAnimationFrame(sample)
-    }
+function sampleEveryFrame(): void {
+  const page = window as unknown as { __revealSamples?: FrameSample[] }
+  const sampling = page.__revealSamples !== undefined
+  page.__revealSamples = []
+  if (sampling) return
+  const sample = () => {
+    const rail = document.querySelector('[data-tool-rail]')
+    const map = document.querySelector('[role="application"]')
+    page.__revealSamples!.push({
+      startScreen: document.querySelector('[data-start-screen]') !== null,
+      chromeShown: rail !== null && rail.checkVisibility({ opacityProperty: true, visibilityProperty: true }),
+      sceneDrawn: map !== null && map.getAttribute('aria-busy') !== 'true',
+    })
     requestAnimationFrame(sample)
-  })
+  }
+  requestAnimationFrame(sample)
+}
+
+async function startSampling(page: Page): Promise<void> {
+  await page.evaluate(sampleEveryFrame)
 }
 
 /** The frames sampled since startSampling, once a frame has sampled the shown Design. */
@@ -90,6 +93,24 @@ test('opening another Design over an open one never brings the start screen back
   const frames = await samples(page)
   const startScreen = frames.findIndex((frame) => frame.startScreen)
   expect(startScreen, `frame ${startScreen} shows the start screen during the switch`).toBe(-1)
+})
+
+test('a reload that restores the latest Draft never shows the start screen, nor the chrome over an empty map', async ({ page }) => {
+  await page.goto('')
+  await openFixture(page)
+
+  // Leaving the page writes the Draft; the reload reopens it before the canvas mounts, so the start screen's buttons would
+  // replace a Design the user never left.
+  await page.addInitScript(sampleEveryFrame)
+  await page.reload()
+  await expect(page.getByRole('toolbar', { name: 'Tools' })).toBeVisible()
+  await expectCanvasDrawn(page)
+
+  const frames = await samples(page)
+  const startScreen = frames.findIndex((frame) => frame.startScreen)
+  expect(startScreen, `frame ${startScreen} shows the start screen after the reload`).toBe(-1)
+  const chromeOverEmptyMap = frames.findIndex((frame) => frame.chromeShown && !frame.sceneDrawn)
+  expect(chromeOverEmptyMap, 'the chrome never shows before the scene is drawn').toBe(-1)
 })
 
 test('a New Design\'s place field has keyboard focus once the Design shows', async ({ page }) => {

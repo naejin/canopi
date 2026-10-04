@@ -279,6 +279,7 @@ describe('CanvasPanel opening a Design', () => {
     document.body.appendChild(container)
     locale.value = 'en'
     mapLayers.value = createDefaultMapLayers()
+    designSessionFixture.file = null
     mockBasemapState = { ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'ready' }
   })
 
@@ -292,11 +293,12 @@ describe('CanvasPanel opening a Design', () => {
   it('keeps the start screen up and the chrome laid out but hidden until the Design\'s first scene is drawn', async () => {
     const presented = signal(false)
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ presented }) }))
-    designSessionFixture.file = demoDesign()
-
     await act(async () => {
       render(<CanvasPanel />, container)
     })
+    expect(container.querySelector('[data-testid="welcome-screen"]')).not.toBeNull()
+
+    await act(async () => { designSessionFixture.file = demoDesign() })
 
     const area = container.querySelector<HTMLElement>('[data-design-hidden]')
     expect(area, 'the canvas area hides everything but the start screen').not.toBeNull()
@@ -336,6 +338,23 @@ describe('CanvasPanel opening a Design', () => {
     expect(container.querySelector('[data-testid="welcome-screen"]')).not.toBeNull()
     await act(async () => { designSessionFixture.file = demoDesign() })
     expect(container.querySelector('[data-design-hidden]'), 'opened from the start screen: hidden until drawn').not.toBeNull()
+  })
+
+  it('never shows the start screen for a Design already open when the canvas mounts, as a reload restoring a Draft', async () => {
+    const presented = signal(false)
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ presented }) }))
+    designSessionFixture.file = demoDesign()
+
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+
+    expect(container.querySelector('[data-testid="welcome-screen"]'), 'its buttons would replace the open Design').toBeNull()
+    expect(container.querySelector('[data-design-hidden]'), 'no chrome over an empty map either').not.toBeNull()
+
+    await act(async () => { presented.value = true })
+    expect(container.querySelector('[data-design-hidden]')).toBeNull()
+    expect(container.querySelector('[data-testid="welcome-screen"]')).toBeNull()
   })
 
   it('shows the Design at once on a map that failed: nothing will draw its scene', async () => {

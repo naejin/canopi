@@ -8,7 +8,7 @@ import {
 import { WelcomeScreen } from '../shared/WelcomeScreen'
 import { hasVisibleMapLayer, mapLayers } from '../../app/map-layers/state'
 import { getMapNoticeReadModel } from '../../app/canvas-map-surface/map-notice'
-import { useOpenDesignShown } from '../../app/canvas-map-surface/design-reveal'
+import { useDesignReveal } from '../../app/canvas-map-surface/design-reveal'
 import { currentDesign } from '../../app/document-session/store'
 import { appCommandGraphToolbarProjection } from '../../commands/registry'
 import { CanvasChrome } from '../canvas/CanvasChrome'
@@ -36,7 +36,7 @@ export function CanvasPanel() {
   })
 
   const hasDesign = currentDesign.value !== null
-  const designShown = useOpenDesignShown(hasDesign, basemapState)
+  const reveal = useDesignReveal(hasDesign, basemapState)
   const mapNotice = getMapNoticeReadModel({
     hasDesign,
     mapVisible: hasVisibleMapLayer(mapLayers.value),
@@ -46,7 +46,7 @@ export function CanvasPanel() {
 
   return (
     <div className={styles.canvasPanel}>
-      <div ref={canvasAreaRef} className={styles.canvasArea} data-design-hidden={hasDesign && !designShown ? '' : undefined}>
+      <div ref={canvasAreaRef} className={styles.canvasArea} data-design-hidden={hasDesign && !reveal.shown ? '' : undefined}>
         {/* Focusable from script while no session holds it (tabIndex -1, which the session restores when it ends), so
             focus handed to the map after a Retry lands before the rebuilt session makes it a Tab stop again. */}
         <div
@@ -63,7 +63,7 @@ export function CanvasPanel() {
           </CanvasChrome>
         )}
         <MapNotice notice={mapNotice} onRetry={retryMap} canvasRef={containerRef} />
-        {!designShown && <WelcomeScreen />}
+        {reveal.startScreen && <WelcomeScreen />}
       </div>
     </div>
   )

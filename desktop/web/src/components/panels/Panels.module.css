@@ -29,7 +29,7 @@
   --tool-card-reserve: calc(var(--canvas-tool-card-left) + 320px + var(--space-2));
 }
 
-/* A Design opened from the start screen keeps it up until its first scene is drawn (app/canvas-map-surface/design-reveal.ts):
+/* An open Design is hidden until its first scene is drawn (app/canvas-map-surface/design-reveal.ts):
    its chrome is laid out, so it registers what it covers, and transparent rather than hidden, so a field that focuses
    itself on mount (the New Design place field) keeps that focus when it shows. */
 .canvasArea[data-design-hidden] > :not([data-start-screen], :has([data-start-screen])) {
