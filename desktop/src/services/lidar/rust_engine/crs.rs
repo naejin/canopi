@@ -150,6 +150,9 @@ pub(super) fn from_reference(reference: &str) -> Result<ResolvedCrs, String> {
     if let Some(code) = top_authority(trimmed).filter(|code| definition_of(*code).is_some()) {
         return from_epsg(code).map(stored);
     }
+    if let Some(definition) = proj4_extension(trimmed) {
+        return from_proj4(definition).map(stored);
+    }
     if let Some(code) = wbprojection::epsg_from_wkt(trimmed)
         && let Ok(resolved) = from_epsg(code)
     {
@@ -190,16 +193,22 @@ pub(super) fn from_epsg(code: u32) -> Result<ResolvedCrs, String> {
 }
 
 /// Resolve the PROJ string another raster format carries; `wbprojection`
-/// reads the normalised string for the WKT and the keys written back.
+/// reads the normalised string for the projection the keys written back
+/// spell out. Keys spell a user-defined CRS in metres, so a string in another
+/// linear unit is refused.
 pub(super) fn from_proj4(definition: &str) -> Result<ResolvedCrs, String> {
     let unsupported = |e: String| format!("unsupported PROJ definition: {e}");
     let (definition, proj) = parse(definition).map_err(unsupported)?;
+    if !proj.is_latlong() && proj.to_meter() != 1.0 {
+        return Err(unsupported(
+            "a linear unit other than the metre".to_string(),
+        ));
+    }
     let crs =
         wbprojection::from_proj_string(&definition).map_err(|e| unsupported(e.to_string()))?;
-    let shift = datum_shift(&definition);
     Ok(ResolvedCrs {
         epsg: None,
-        wkt: with_shift(&crs.to_wkt(), shift.as_deref()),
+        wkt: with_definition(&crs.to_wkt(), &definition),
         name: crs.name.clone(),
         definition,
         proj,
@@ -228,7 +237,7 @@ fn user_defined(
         .map_err(|e| format!("the raster's coordinate system is not supported: {e}"))?;
     Ok(ResolvedCrs {
         epsg: None,
-        wkt,
+        wkt: with_definition(&wkt, &definition),
         name,
         definition,
         proj,
@@ -357,39 +366,22 @@ fn wkt_shift(wkt: &str) -> Option<Vec<f64>> {
     shift.iter().any(|value| *value != 0.0).then_some(shift)
 }
 
-/// `wkt` with the shift as a `TOWGS84` node at the end of its `DATUM`, where
-/// GDAL writes it: wbprojection writes none, and a user-defined CRS must keep
-/// its shift through the WKT the catalogue stores.
-fn with_shift(wkt: &str, shift: Option<&[f64]>) -> String {
-    let datum_end = wkt
-        .find("DATUM[")
-        .and_then(|start| node_end(wkt, start + "DATUM".len()));
-    match (shift, datum_end) {
-        (Some(shift), Some(end)) => {
-            format!("{},TOWGS84[{}]{}", &wkt[..end], list(shift), &wkt[end..])
-        }
-        _ => wkt.to_string(),
+/// `wkt` carrying the PROJ definition it was resolved through, as GDAL's
+/// `EXTENSION["PROJ4",..]` node: wbprojection's WKT writer drops the scale
+/// of a one-parallel Lambert, a named datum's ellipsoid and the datum shift,
+/// so a CRS with no registry code resolves again through the definition.
+fn with_definition(wkt: &str, definition: &str) -> String {
+    match wkt.trim_end().strip_suffix(']') {
+        Some(body) => format!("{body},EXTENSION[\"PROJ4\",\"{definition}\"]]"),
+        None => wkt.to_string(),
     }
 }
 
-/// The index of the `]` closing the node whose `[` is at `open`.
-fn node_end(wkt: &str, open: usize) -> Option<usize> {
-    let mut depth = 0usize;
-    let mut quoted = false;
-    for (index, ch) in wkt[open..].char_indices() {
-        match ch {
-            '"' => quoted = !quoted,
-            '[' if !quoted => depth += 1,
-            ']' if !quoted => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(open + index);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
+/// The PROJ definition a WKT's `EXTENSION["PROJ4",..]` node carries.
+fn proj4_extension(wkt: &str) -> Option<&str> {
+    let start = wkt.find("EXTENSION[\"PROJ4\",\"")? + "EXTENSION[\"PROJ4\",\"".len();
+    let end = start + wkt[start..].find('"')?;
+    Some(&wkt[start..end])
 }
 
 /// The EPSG code a WKT's root names in its own `AUTHORITY["EPSG","n"]`
@@ -493,8 +485,7 @@ pub(super) fn from_geokeys(keys: &GeoKeyDirectory) -> Result<Option<ResolvedCrs>
                 .unwrap_or_else(|| "user-defined geographic CRS".to_string());
             let crs = Crs::new(name.clone(), datum, params.clone())
                 .map_err(|e| format!("unsupported geographic CRS: {e}"))?;
-            let wkt = with_shift(&crs.to_wkt(), shift.as_deref());
-            user_defined(params, shift, name, wkt).map(Some)
+            user_defined(params, shift, name, crs.to_wkt()).map(Some)
         }
         Some(3) => Err("geocentric rasters are not supported".to_string()),
         None => Ok(None),
@@ -583,8 +574,7 @@ fn user_defined_projected(keys: &GeoKeyDirectory) -> Result<ResolvedCrs, String>
     {
         return Ok(resolved);
     }
-    let wkt = with_shift(&crs.to_wkt(), shift.as_deref());
-    user_defined(params, shift, name, wkt)
+    user_defined(params, shift, name, crs.to_wkt())
 }
 
 /// The datum of a user-defined CRS and its shift to WGS84: a registry
@@ -665,7 +655,7 @@ pub(super) fn geokeys_for(resolved: &ResolvedCrs) -> Result<GeoKeyDirectory, Str
         ),
     ];
     match (resolved.epsg, &resolved.user) {
-        (_, Some(params)) => entries.extend(user_defined_entries(params, projected)?),
+        (_, Some(params)) => entries.extend(user_defined_entries(params, &resolved.proj)?),
         (Some(code), None) => {
             let code = u16::try_from(code)
                 .map_err(|_| format!("EPSG:{code} cannot be written as GeoTIFF keys"))?;
@@ -695,32 +685,30 @@ pub(super) fn geokeys_for(resolved: &ResolvedCrs) -> Result<GeoKeyDirectory, Str
     })
 }
 
+/// The keys of a CRS with no registry code: the projection as `params`
+/// spell it, the ellipsoid as `proj` transforms through.
 fn user_defined_entries(
     params: &ProjectionParams,
-    projected: bool,
+    proj: &Proj,
 ) -> Result<Vec<GeoKeyEntry>, String> {
-    let ellipsoid = &params.ellipsoid;
+    let (a, b) = proj.ellipse_parameters();
     let mut entries = Vec::new();
-    let wgs84 = (ellipsoid.a - Ellipsoid::WGS84.a).abs() < 1e-6
-        && (ellipsoid.f - Ellipsoid::WGS84.f).abs() < 1e-12;
+    let wgs84 = (a - Ellipsoid::WGS84.a).abs() < 1e-6 && (b - Ellipsoid::WGS84.b).abs() < 1e-6;
     if wgs84 {
         entries.push(short_entry(key::GeographicTypeGeoKey, 4326));
     } else {
         entries.push(short_entry(key::GeographicTypeGeoKey, USER_DEFINED));
         entries.push(short_entry(key::GeogGeodeticDatumGeoKey, USER_DEFINED));
         entries.push(short_entry(key::GeogEllipsoidGeoKey, USER_DEFINED));
-        entries.push(double_entry(key::GeogSemiMajorAxisGeoKey, ellipsoid.a));
-        if ellipsoid.f.abs() > 0.0 {
-            entries.push(double_entry(
-                key::GeogInvFlatteningGeoKey,
-                1.0 / ellipsoid.f,
-            ));
+        entries.push(double_entry(key::GeogSemiMajorAxisGeoKey, a));
+        if a > b {
+            entries.push(double_entry(key::GeogInvFlatteningGeoKey, a / (a - b)));
         } else {
-            entries.push(double_entry(key::GeogSemiMinorAxisGeoKey, ellipsoid.b));
+            entries.push(double_entry(key::GeogSemiMinorAxisGeoKey, b));
         }
     }
     entries.push(short_entry(key::GeogAngularUnitsGeoKey, 9102));
-    if !projected {
+    if proj.is_latlong() {
         return Ok(entries);
     }
     entries.push(short_entry(key::ProjectedCSTypeGeoKey, USER_DEFINED));
@@ -1120,22 +1108,37 @@ mod tests {
         }
     }
 
-    /// Another format's PROJ string keeps its `+towgs84` and `+k_0`, which
-    /// wbprojection's parser drops.
+    /// Another format's PROJ string places where PROJ places its code, and
+    /// keeps doing so through the WKT the catalogue stores, the keys written
+    /// back and those keys' own stored WKT: its `+towgs84`, `+k_0`, named
+    /// datum and ellipsoid survive every route. A string in feet is refused.
     #[test]
-    fn a_proj_string_keeps_its_datum_shift_and_scale() {
+    fn a_proj_string_places_the_same_through_its_stored_wkt_and_written_keys() {
         let wgs84 = from_epsg(4326).unwrap();
-        for code in [28992u32, 27572] {
-            let definition = crs_definitions::from_code(code as u16).unwrap().proj4;
-            let resolved = from_proj4(definition).unwrap();
+        let definition = |code: u32| crs_definitions::from_code(code as u16).unwrap().proj4;
+        for code in [28992u32, 27572, 27571, 31287] {
+            let resolved = from_proj4(definition(code)).unwrap();
+            let stored = from_reference(&resolved.wkt).unwrap();
+            let rewritten = from_geokeys(&geokeys_for(&resolved).unwrap())
+                .unwrap()
+                .unwrap();
+            let rewritten_stored = from_reference(&rewritten.wkt).unwrap();
             for &(_, lon, lat, x, y) in REFERENCE_POINTS.iter().filter(|row| row.0 == code) {
-                let (px, py) = wgs84.transform_to(lon, lat, &resolved).unwrap();
-                assert!(
-                    (px - x).abs() < 0.01 && (py - y).abs() < 0.01,
-                    "EPSG:{code} at {lon} {lat}: {px} {py}"
-                );
+                for (label, crs) in [
+                    ("PROJ string", &resolved),
+                    ("stored WKT", &stored),
+                    ("written keys", &rewritten),
+                    ("their stored WKT", &rewritten_stored),
+                ] {
+                    let (px, py) = wgs84.transform_to(lon, lat, crs).unwrap();
+                    assert!(
+                        (px - x).abs() < 0.01 && (py - y).abs() < 0.01,
+                        "EPSG:{code} through its {label} at {lon} {lat}: {px} {py}, PROJ {x} {y}"
+                    );
+                }
             }
         }
+        assert!(from_proj4(definition(2263)).is_err());
     }
 
     /// NAD83 / New York Long Island (EPSG:2263) is in US survey feet: points
