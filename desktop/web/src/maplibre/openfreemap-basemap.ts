@@ -1,5 +1,6 @@
 import type { BasemapStyle } from '../generated/contracts'
 import type { MapLibreBasemapStatus } from './canvas-surface-state'
+import { mapErrorResourceId } from './map-error-owner'
 
 /*
  * OpenFreeMap style presets adapted from GeoLibre
@@ -125,6 +126,12 @@ export class VectorBasemap {
   private resourceFailed = false
   /** Every style's resource requests seen by this map, so a late failure from an earlier style is still the basemap's. */
   private readonly knownResources: RegExp[] = []
+  /**
+   * The installed style's sprite request may still be running: set by `setSprite`, cleared once the map is idle
+   * (MapLibre is idle only after the sprite settled). A sprite that fails after its response arrived (HTML from a
+   * captive portal, a body cut off, an undecodable image) reaches the map with no URL and no source.
+   */
+  private spriteInFlight = false
   private disposed = false
 
   constructor(
@@ -183,17 +190,33 @@ export class VectorBasemap {
   /**
    * Claims a map error about this basemap's sprite, glyphs or TileJSON, which MapLibre reports with no layer id (a
    * glyph range only through the tile that needed it). Such a failure leaves the basemap blank or unlabelled, so the
-   * installed style is `failed` until Retry; a single tile's failure is not claimed. Returns whether it was claimed.
+   * installed style is `failed` until Retry; a single tile's failure is not claimed. An error with no URL is claimed
+   * only while the installed style's sprite downloads (`spriteInFlight`). Returns whether it was claimed.
    */
   claimResourceError(event: unknown): boolean {
     if (this.disposed) return false
     const url = failedRequestUrl(event)
-    if (url === null || !this.knownResources.some((resource) => resource.test(url))) return false
+    if (url === null) return this.claimSpriteError(event)
+    if (!this.knownResources.some((resource) => resource.test(url))) return false
     const installed = this.installed
     if (installed && installed.resources.some((resource) => resource.test(url))) {
       this.resourceFailed = true
       this.setStatus('failed')
     }
+    return true
+  }
+
+  /** The map went idle, so the installed style's sprite request has settled: a later URL-less error is not the sprite's. */
+  noteMapIdle(): void {
+    this.spriteInFlight = false
+  }
+
+  /** A URL-less error naming no source or layer, while the installed style's sprite downloads, is that sprite's. */
+  private claimSpriteError(event: unknown): boolean {
+    if (!this.spriteInFlight || !this.installed || mapErrorResourceId(event) !== null) return false
+    this.spriteInFlight = false
+    this.resourceFailed = true
+    this.setStatus('failed')
     return true
   }
 
@@ -238,7 +261,10 @@ export class VectorBasemap {
     }
     this.resourceFailed = false
     if (document.glyphs) this.map.setGlyphs(document.glyphs)
-    if (typeof document.sprite === 'string') this.map.setSprite(document.sprite)
+    if (typeof document.sprite === 'string') {
+      this.map.setSprite(document.sprite)
+      this.spriteInFlight = true
+    }
     for (const [id, source] of Object.entries(prepared.sources)) this.map.addSource(id, source)
     const beforeId = this.options.beforeLayerId?.() ?? undefined
     for (const layer of prepared.layers) {
@@ -259,6 +285,7 @@ export class VectorBasemap {
     const installed = this.installed
     if (!installed) return
     this.installed = null
+    this.spriteInFlight = false
     for (const layer of [...installed.layers].reverse()) {
       if (this.map.getLayer(layer.id)) this.map.removeLayer(layer.id)
     }
