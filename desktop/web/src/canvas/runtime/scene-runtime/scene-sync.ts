@@ -1,7 +1,6 @@
 import { batch } from '@preact/signals'
 import { plantColorMenuOpen } from '../../plant-color-menu-state'
 import { plantSymbolMenuOpen } from '../../plant-symbol-menu-state'
-import { syncPlantSpeciesColorDefaults } from '../../plant-species-color-defaults'
 import type { CanopiFile } from '../../../types/design'
 import { setCanvasSelection } from '../../session-state'
 import type { SceneStateReader } from '../scene'
@@ -21,7 +20,6 @@ function syncCanvasSignalsFromDocument(
 ): void {
   batch(() => {
     layerProjections.syncFromLayers(file.layers)
-    syncPlantSpeciesColorDefaults(file.plant_species_colors)
   })
 }
 
@@ -33,7 +31,6 @@ function syncCanvasSignalsFromPersistedScene(
 
   batch(() => {
     layerProjections.syncFromLayers(persisted.layers)
-    syncPlantSpeciesColorDefaults(persisted.plantSpeciesColors)
   })
 }
 

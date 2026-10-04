@@ -6,6 +6,9 @@ import { setCurrentCanvasSession } from '../canvas/session'
 import { plantColorMenuOpen } from '../canvas/plant-color-menu-state'
 import { selectedObjectIds } from '../canvas/session-state'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import { createLiveTestCanvasRuntimeHost } from './support/live-canvas-runtime'
+import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
+import type { CanopiFile } from '../types/design'
 import {
   createTestCanvasCommandSurface,
   createTestCanvasRuntimeSurfaces,
@@ -388,4 +391,61 @@ describe('PlantColorMenu', () => {
     expect(setSelectedPlantColor).toHaveBeenCalledWith('#123ABC')
   })
 
+})
+
+describe('PlantColorMenu on a live Scene', () => {
+  const design: CanopiFile = {
+    version: CURRENT_CANOPI_FILE_VERSION,
+    name: 'Orchard',
+    description: null,
+    plant_species_colors: { 'Malus domestica': '#112233' },
+    layers: [{ name: 'plants', visible: true, locked: false, opacity: 1 }],
+    plants: [{
+      id: 'plant-1', canonical_name: 'Malus domestica', common_name: 'Apple', color: null,
+      position: { lon: 0, lat: 0 }, rotation: null, scale: null, notes: null, planted_date: null, quantity: 1, locked: false,
+    }],
+    zones: [],
+    annotations: [],
+    consortiums: [],
+    groups: [],
+    timeline: [],
+    budget: [],
+    budget_currency: 'EUR',
+    created_at: '2026-04-01T00:00:00.000Z',
+    updated_at: '2026-04-01T00:00:00.000Z',
+    extra: {},
+  }
+
+  afterEach(() => {
+    plantColorMenuOpen.value = false
+    setCurrentCanvasSession(null)
+    vi.unstubAllGlobals()
+  })
+
+  it('the open menu shows the species colour after undo', async () => {
+    vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const host = createLiveTestCanvasRuntimeHost()
+    const { commands, documents } = host.surfaces
+    const shownColor = () => document.querySelector('[role="dialog"]')?.textContent?.match(/#[0-9A-F]{6}/i)?.[0]?.toUpperCase()
+    try {
+      documents.loadDocument(design)
+      setCurrentCanvasSession(host.surfaces)
+      commands.sceneEdits.selectAll()
+      plantColorMenuOpen.value = true
+      await act(async () => render(<PlantColorMenu buttonRef={{ current: null }} />, container))
+      expect(shownColor()).toBe('#112233')
+
+      // Another surface (the species key) changes the species colour while the menu stays open.
+      await act(async () => { commands.plantPresentation.setPlantColorForSpecies('Malus domestica', '#C44230') })
+      expect(shownColor()).toBe('#C44230')
+      await act(async () => { commands.history.undo() })
+      expect(shownColor()).toBe('#112233')
+    } finally {
+      render(null, container)
+      container.remove()
+      await host.destroy()
+    }
+  })
 })
