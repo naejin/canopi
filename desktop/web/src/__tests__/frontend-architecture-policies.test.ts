@@ -760,7 +760,7 @@ const REQUIRED_IMPORT_POLICIES = [
   {
     kind: 'require-imports',
     name: 'Map overlays and Canvas Runtime consume the Target module',
-    from: ['src/canvas/runtime/scene-runtime.ts'],
+    from: ['src/app/canvas-map-surface/overlays.ts', 'src/canvas/runtime/scene-runtime.ts'],
     targets: ['src/target/index.ts'],
   },
   {
