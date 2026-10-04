@@ -710,7 +710,15 @@ fn user_defined_projected(keys: &GeoKeyDirectory) -> Result<ResolvedCrs, String>
 /// geographic code's own, or the keys' ellipsoid, shifted only by a
 /// `GeogTOWGS84GeoKey`. An unknown datum shifts nothing, as GDAL treats it.
 fn datum_of(keys: &GeoKeyDirectory) -> Result<(Datum, Option<Vec<f64>>), String> {
-    if short(keys, key::GeogPrimeMeridianGeoKey).is_some_and(|meridian| meridian != 8901) {
+    // IGN's tiles write a user-defined meridian with no longitude: Greenwich.
+    let greenwich = match short(keys, key::GeogPrimeMeridianGeoKey) {
+        None | Some(8901) => true,
+        Some(USER_DEFINED) => {
+            double(keys, key::GeogPrimeMeridianLongGeoKey).is_none_or(|meridian| meridian == 0.0)
+        }
+        Some(_) => false,
+    };
+    if !greenwich {
         return Err(not_supported(OTHER_MERIDIAN));
     }
     let written = match keys.get(GEOG_TOWGS84) {
@@ -954,6 +962,8 @@ mod tests {
                 ),
                 short_entry(key::GeographicTypeGeoKey, USER_DEFINED),
                 short_entry(key::GeogGeodeticDatumGeoKey, USER_DEFINED),
+                // A user-defined meridian with no longitude: Greenwich.
+                short_entry(key::GeogPrimeMeridianGeoKey, USER_DEFINED),
                 short_entry(key::GeogAngularUnitsGeoKey, 9102),
                 short_entry(key::GeogEllipsoidGeoKey, USER_DEFINED),
                 short_entry(key::ProjectedCSTypeGeoKey, USER_DEFINED),
