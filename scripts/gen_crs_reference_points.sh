@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Writes desktop/src/services/lidar/rust_engine/crs_reference_points.rs: PROJ's
 # coordinates of one point per code, which the raster engine's CRS tests must
-# match (1 cm; 8 m for Krovak 5514, whose PROJ method differs from proj4rs).
+# match: 1 cm; 8 m for Krovak 5514, whose PROJ method differs from proj4rs;
+# 0.5 m for Martinique 2973, whose definition carries EPSG's 10 m Helmert shift
+# where PROJ takes the 0.1 m one. The engine's own inverse closes within 1e-8
+# deg, 3e-8 deg (3 mm) for a code with a datum shift, which moves the
+# ellipsoidal height a 2-D transform drops.
 #
 #   scripts/gen_crs_reference_points.sh
 #
