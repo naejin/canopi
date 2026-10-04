@@ -92,7 +92,7 @@ function makeFile(): CanopiFile {
 }
 
 function createController(file = makeFile()) {
-  const sceneStore = new SceneStore(file)
+  const sceneStore = new SceneStore().hydrate(file)
   const state = {
     invalidations: 0,
     dirtyTypes: [] as string[],

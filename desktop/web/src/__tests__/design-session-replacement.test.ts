@@ -249,7 +249,7 @@ describe("Design Session replacement", () => {
         }
       },
     });
-    const sceneStore = new SceneStore(makeFile("Previous"));
+    const sceneStore = new SceneStore().hydrate(makeFile("Previous"));
     const authority = new SceneRuntimeEditCoordinator({
       sceneStore,
       history,
@@ -367,7 +367,7 @@ describe("Design Session replacement", () => {
         }
       },
     });
-    const sceneStore = new SceneStore(makeFile("Previous"));
+    const sceneStore = new SceneStore().hydrate(makeFile("Previous"));
     const authority = new SceneRuntimeEditCoordinator({
       sceneStore,
       history,
@@ -447,7 +447,7 @@ describe("Design Session replacement", () => {
       quantity: 1,
       locked: false,
     }];
-    const sceneStore = new SceneStore(makeFile("Previous"));
+    const sceneStore = new SceneStore().hydrate(makeFile("Previous"));
     const authority = new SceneRuntimeEditCoordinator({
       sceneStore,
       history: new SceneHistory(),
@@ -531,7 +531,7 @@ describe("Design Session replacement", () => {
       }
     });
     const resetBaselines = vi.spyOn(store, "resetDirtyBaselines");
-    const sceneStore = new SceneStore(makeFile("Previous"));
+    const sceneStore = new SceneStore().hydrate(makeFile("Previous"));
     const authority = new SceneRuntimeEditCoordinator({
       sceneStore,
       history: new SceneHistory(),
@@ -695,7 +695,7 @@ describe("Design Session replacement", () => {
       path: "/previous.canopi",
       name: "Previous",
     });
-    const sceneStore = new SceneStore(makeFile("Previous"));
+    const sceneStore = new SceneStore().hydrate(makeFile("Previous"));
     const authority = new SceneRuntimeEditCoordinator({
       sceneStore,
       history: new SceneHistory({

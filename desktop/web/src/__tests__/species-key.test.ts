@@ -74,7 +74,7 @@ it('reserves codes across edits, serialization and reopening', () => {
       { ...plant, id: 'comfrey', canonicalName: 'Symphytum officinale' },
     ]
   })
-  const reopened = new SceneStore(
+  const reopened = new SceneStore().hydrate(
     decodeCanopiDesign(encodeCanopiDesign(store.toCanopiFile())),
   )
   expect(reopened.persisted.plantSpeciesCodes).toEqual({

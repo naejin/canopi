@@ -71,7 +71,7 @@ function makeFile(): CanopiFile {
 }
 
 function createController() {
-  const sceneStore = new SceneStore(makeFile())
+  const sceneStore = new SceneStore().hydrate(makeFile())
   const state = {
     locale: 'fr',
     viewport: { x: 0, y: 0, scale: 2 },

@@ -119,7 +119,7 @@ interface SceneSession extends CanvasDocumentSurface {
 // through the Scene content and undo history it leaves behind.
 function makeSceneSession(file: CanopiFile): SceneSession {
   const history = new SceneHistory()
-  const sceneStore = new SceneStore(file)
+  const sceneStore = new SceneStore().hydrate(file)
   const authority = new SceneRuntimeEditCoordinator({
     sceneStore,
     history,
