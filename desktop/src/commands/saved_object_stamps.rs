@@ -1,6 +1,7 @@
+use super::design::internal_load_failure;
 use crate::db::UserDb;
 use crate::native_operation::{NativeOperationClass, NativeOperationExecutor};
-use common_types::design::{CanopiFile, DesignLoadFailure, DesignLoadFailureKind};
+use common_types::design::{CanopiFile, DesignLoadFailure};
 use common_types::saved_object_stamps::SavedObjectStamp;
 use tauri::State;
 
@@ -124,10 +125,5 @@ pub async fn load_saved_object_stamp_canopi_file(
             move || Ok(crate::services::design_files::load_design_file(path)),
         )
         .await
-        .unwrap_or_else(|message| {
-            Err(DesignLoadFailure {
-                kind: DesignLoadFailureKind::Internal,
-                message,
-            })
-        })
+        .unwrap_or_else(|message| Err(internal_load_failure(message)))
 }
