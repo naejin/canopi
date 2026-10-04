@@ -68,8 +68,10 @@ describe('workspace runtime composition origin effect', () => {
         getWebGL2Context: vi.fn(() => null),
         updateMapContributions: vi.fn(),
         updateBackgroundPresentation: vi.fn(),
+        setAttributionCompact: vi.fn(),
         retryBasemap: vi.fn(),
         installStyleRestorer: vi.fn(() => () => {}),
+        watchFailure: vi.fn(() => () => {}),
       }),
       createWorkspace,
     })

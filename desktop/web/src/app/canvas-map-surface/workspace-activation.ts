@@ -64,13 +64,13 @@ export interface WorkspaceActivationMapControls {
   updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void
   updateBackgroundPresentation(presentation: MapBackgroundPresentation): void
   /** Folds the map credits into their (i) button, now and on every later map. */
-  setAttributionCompact?(compact: boolean): void
+  setAttributionCompact(compact: boolean): void
   /** The user's Retry for a Basemap that couldn't load: downloads it again on the live map. */
   retryBasemap(): void
   /** Restores same-map style contributions after initial style admission. */
   installStyleRestorer(map: WorkspaceActivationMap, restore: () => void): () => void
   /** Map/context failures that happen outside the custom layer. */
-  watchFailure?(
+  watchFailure(
     map: WorkspaceActivationMap,
     reportFailure: (error: unknown) => void,
   ): () => void
@@ -230,24 +230,22 @@ export class WorkspaceActivationCoordinator {
         return 'cancelled'
       }
       current.map = map
-      if (this.options.map.watchFailure) {
-        const finishFailureWatcher = this.beginSetup(current)
-        let unwatchFailure: () => void
-        try {
-          unwatchFailure = this.runOwnedCallback(
-            'map failure watcher installation',
-            () => this.options.map.watchFailure!(map, (error) => {
-              this.observeFailure(current, error)
-            }),
-          )
-        } catch (error) {
-          finishFailureWatcher()
-          throw error
-        }
-        current.unwatchFailure = unwatchFailure
+      const finishFailureWatcher = this.beginSetup(current)
+      let unwatchFailure: () => void
+      try {
+        unwatchFailure = this.runOwnedCallback(
+          'map failure watcher installation',
+          () => this.options.map.watchFailure(map, (error) => {
+            this.observeFailure(current, error)
+          }),
+        )
+      } catch (error) {
         finishFailureWatcher()
-        if (!this.isCurrent(current)) return 'cancelled'
+        throw error
       }
+      current.unwatchFailure = unwatchFailure
+      finishFailureWatcher()
+      if (!this.isCurrent(current)) return 'cancelled'
       if (current.failure) return current.failure
 
       const finishContextAcquisition = this.beginSetup(current)

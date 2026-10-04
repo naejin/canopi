@@ -238,7 +238,7 @@ export function createWorkspaceRuntimeComposition(
           workspace.updateBackgroundPresentation(
             (options.readBackgroundPresentation ?? readWorkspaceBackgroundPresentation)(),
           )
-          controls.setAttributionCompact?.((options.readAttributionCompact ?? readMapAttributionFolded)())
+          controls.setAttributionCompact((options.readAttributionCompact ?? readMapAttributionFolded)())
         })
         void reconciler.reconcileInitialGeneration().then(
           resolveStart,

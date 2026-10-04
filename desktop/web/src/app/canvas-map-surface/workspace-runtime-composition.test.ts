@@ -367,6 +367,7 @@ function compositionFixture(options: CompositionFixtureOptions) {
     setAttributionCompact: vi.fn(),
     retryBasemap: vi.fn(),
     installStyleRestorer: vi.fn(() => () => {}),
+    watchFailure: vi.fn(() => () => {}),
   }
   const workspace = {
     requestGenerationDisconnect: vi.fn(async () => {}),

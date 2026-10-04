@@ -216,9 +216,9 @@ function createCoordinator(input: {
     updateMapContributions: vi.fn(),
     updateBackgroundPresentation: vi.fn(),
     retryBasemap: vi.fn(),
+    setAttributionCompact: vi.fn(),
     installStyleRestorer: input.installStyleRestorer ?? vi.fn(() => () => {}),
-    watchFailure: input.watchFailure
-      ?? (input.unwatchFailure ? () => input.unwatchFailure! : undefined),
+    watchFailure: input.watchFailure ?? (() => input.unwatchFailure ?? (() => {})),
   }
   const readOrigin = input.readOrigin ?? (() => ({ lat: 0, lon: 0 }))
   const coordinator = new TestWorkspaceActivationCoordinator({
@@ -1952,8 +1952,10 @@ describe('WorkspaceActivationCoordinator', () => {
         getWebGL2Context: () => map.context,
         updateMapContributions: () => {},
         updateBackgroundPresentation: () => {},
+        setAttributionCompact: () => {},
         retryBasemap: vi.fn(),
         installStyleRestorer: () => () => {},
+        watchFailure: () => () => {},
       },
       layer: {
         createRenderer: () => renderer,
@@ -2041,7 +2043,7 @@ function realComposition(options: {
       createMap: async () => {
         const map = new MovableFakeMap()
         maps.push(map)
-        controlOptions.contributions?.onStateChange?.({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'ready' })
+        controlOptions.contributions.onStateChange?.({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'ready' })
         return map as unknown as WorkspaceActivationMap
       },
       // Like WorkspaceMapContributions.dispose: a map publishes its end once, at the reported failure or at release.
@@ -2056,6 +2058,7 @@ function realComposition(options: {
       getWebGL2Context: (map) => (map as unknown as FakeMap).context,
       updateMapContributions: () => {},
       updateBackgroundPresentation: () => {},
+      setAttributionCompact: () => {},
       retryBasemap: vi.fn(),
       installStyleRestorer: () => () => {},
       // Like WorkspaceMapControls.reportRestorationFailure: the error is published before the coordinator hears of it.

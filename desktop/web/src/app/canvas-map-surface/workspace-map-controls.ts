@@ -63,7 +63,7 @@ interface WorkspaceMapAttempt {
 }
 
 export interface WorkspaceActivationMapControlsOptions {
-  readonly contributions?: Omit<WorkspaceMapContributionsOptions, 'onFailure'>
+  readonly contributions: Omit<WorkspaceMapContributionsOptions, 'onFailure'>
   readonly container: HTMLElement
   readonly surface?: MapLibreSurfaceAdapter<MapLibreMapInstance>
   readonly logError?: (message?: unknown, ...optionalParams: unknown[]) => void
@@ -72,7 +72,7 @@ export interface WorkspaceActivationMapControlsOptions {
    * The workspace request's resize owner (spec §1.1 "Resize"): the map container's new size goes to the camera, whose driver
    * resizes the map (CameraDriver.setScreen). The MapLibre host never resizes the map itself.
    */
-  readonly setScreen?: (screen: ViewScreen) => void
+  readonly setScreen: (screen: ViewScreen) => void
 }
 
 /**
@@ -235,7 +235,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
         },
         onResize: (_context, size) => {
           if (attempt.released) return
-          this.options.setScreen?.({ width: size.width, height: size.height, devicePixelRatio: window.devicePixelRatio })
+          this.options.setScreen({ width: size.width, height: size.height, devicePixelRatio: window.devicePixelRatio })
         },
         onCreateError: (error) => this.rejectAttempt(attempt, error),
       })
@@ -342,7 +342,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
 
   private publishUnavailable(): void {
     try {
-      this.options.contributions?.onStateChange?.({
+      this.options.contributions.onStateChange?.({
         ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
         status: 'error',
       })

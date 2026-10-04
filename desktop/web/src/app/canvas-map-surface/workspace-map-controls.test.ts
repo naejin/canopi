@@ -212,10 +212,10 @@ function createControls(options: {
   const controls = new TestWorkspaceMapControls({
     container,
     surface,
-    contributions: options.contributions,
+    contributions: options.contributions ?? {},
     ...(options.logError ? { logError: options.logError } : {}),
     canCreateWebGL2Context: options.canCreateWebGL2Context ?? (() => true),
-    ...(options.setScreen ? { setScreen: options.setScreen } : {}),
+    setScreen: options.setScreen ?? vi.fn(),
   }, snapshot)
   createdControls.push({ controls, maps })
   return { controls, maps, observers, container }
@@ -1343,6 +1343,8 @@ describe('WorkspaceMapControls', () => {
     const controls = new WorkspaceMapControls({
       container: document.createElement('div'), surface,
       canCreateWebGL2Context: () => true,
+      setScreen: vi.fn(),
+      contributions: {},
     })
     await expect(controls.createMap(new AbortController().signal, {
       initialCenter: { lat: 0, lon: 0 },
@@ -1399,6 +1401,8 @@ describe('WorkspaceMapControls', () => {
       const controls = new WorkspaceMapControls({
         container: document.createElement('div'),
         surface,
+        setScreen: vi.fn(),
+        contributions: {},
       })
 
       await expect(controls.createMap(new AbortController().signal, {
