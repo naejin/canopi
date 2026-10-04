@@ -24,6 +24,7 @@ export type DesignLoadFailure = Contracts.DesignLoadFailure
 export type DesignLoadFailureKind = Contracts.DesignLoadFailureKind
 export type Consortium = Contracts.Consortium
 export type SavedView = Contracts.SavedView
+export type SavedViewCamera = Contracts.SavedViewCamera
 export type SavedViewBackground = Contracts.SavedViewBackground
 export type SavedViewObject = Contracts.SavedViewObject
 export type RichTextBlock = Contracts.RichTextBlock

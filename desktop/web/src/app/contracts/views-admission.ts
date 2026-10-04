@@ -68,7 +68,7 @@ function groundSizeProblem(camera: SavedView['camera'], path: string): string | 
 }
 
 /** Whether a saved view's recorded ground is one the format admits: finite, above 0 and at most 1e8 m on each side. */
-export function isAdmittedGroundSize(ground: { readonly width: number; readonly height: number }): boolean {
+function isAdmittedGroundSize(ground: { readonly width: number; readonly height: number }): boolean {
   return [ground.width, ground.height].every((side) => Number.isFinite(side) && side > 0 && side <= SAVED_VIEW_MAX_GROUND_SIZE_M)
 }
 

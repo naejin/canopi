@@ -11,7 +11,7 @@ import { currentDesign } from '../document-session/store'
 import { mapLayers } from '../map-layers/state'
 import { currentPlantDisplay } from '../plant-display/state'
 import type { PlantLabelMode } from '../../canvas/runtime/plant-display'
-import { savedViewZoom } from './framing'
+import { savedViewZoom } from '../../canvas/saved-view-framing'
 import { composeSavedView } from './model'
 
 /** The views of the open Design, in saved order. */
