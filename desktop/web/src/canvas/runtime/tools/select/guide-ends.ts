@@ -4,7 +4,7 @@
 // interaction/measurement-guide-control-points.ts): its two ends as ToolHandle data the host shows through the handle
 // layer, the geometry of dragging one (a 0.5 m minimum length) and the length chip the drag shows beside the selected
 // zone's chips, as today (tools/measure-labels.ts, `measure-quiet`). The drag itself is point-handle.ts's, edit type
-// 'interaction-measurement-guide-control-point'. Labels keep today's literal English (phase 0).
+// 'interaction-measurement-guide-control-point'. Each handle's label is translated ('canvas.guideEnd.label').
 
 import type { ToolHandleId } from '../../interaction-types'
 import { createMeasurementGuideDraftMeasurements } from '../../measurement-guides'
