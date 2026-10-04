@@ -79,9 +79,6 @@ type HandleList = Parameters<ToolHostDeps['chrome']['setHandles']>[0]
 type HandleId = Parameters<ToolHostDeps['chrome']['setHandles']>[1]
 type PassiveHoverAt = NonNullable<Parameters<ToolHostDeps['chrome']['setTooltip']>[0]>
 
-const NO_DRAFTS: Pick<SceneRenderer, 'setDraft'> = Object.freeze({
-  setDraft() {},
-})
 const NO_HANDLES: HandleList = Object.freeze([])
 
 let descriptionSequence = 0
@@ -119,24 +116,24 @@ export interface SceneInteractionSessionDeps {
   render: (kind: 'scene' | 'viewport') => void
   readSnapToGridEnabled: () => boolean
   readSnapToGuidesEnabled: () => boolean
-  /** Settings › Canvas › Scroll wheel; `zoom` when absent. Pinch and Ctrl wheel zoom either way. */
-  readScrollWheel?: () => CanvasScrollWheelSetting
+  /** Settings › Canvas › Scroll wheel. Pinch and Ctrl wheel zoom either way. */
+  readScrollWheel: () => CanvasScrollWheelSetting
   readPlantSpacingIntervalMeters: () => number
   commitPlantSpacingIntervalMeters: (meters: number) => void
   translate: CanvasRuntimeTranslator
   setHoveredTarget: (target: SceneDesignObjectTarget | null) => void
   getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
-  notifyTransientHistoryChange?: () => void
+  notifyTransientHistoryChange: () => void
   /** Mirrors the active tool's gesture and stamp state for the tool card. */
-  publishToolGuidance?: (guidance: CanvasToolGuidance) => void
+  publishToolGuidance: (guidance: CanvasToolGuidance) => void
   /** The arrow keys' nudges, through the runtime's scene-edit commands. */
-  nudge?: Pick<CanvasSceneEditCommandSurface, 'nudgeSelected' | 'endNudge'>
+  nudge: Pick<CanvasSceneEditCommandSurface, 'nudgeSelected' | 'endNudge'>
   /** The view's frames (scene-runtime/construction.ts). */
   readonly frames: ViewFrameSource
   /** The view's navigation: pans, zooms, turns and north. */
   readonly viewNavigation: ViewNavigation
-  /** The mounted renderer's draft sink (scene-runtime.ts, over the render scheduler); absent, drafts go nowhere. */
-  readonly renderer?: Pick<SceneRenderer, 'setDraft'>
+  /** The mounted renderer's draft sink (scene-runtime.ts, over the render scheduler). */
+  readonly renderer: Pick<SceneRenderer, 'setDraft'>
   /** The app's focus port (CanvasRuntimeAppAdapter.focus); absent, the session focuses the map host itself, as today. */
   readonly focus?: CanvasFocusPort
   /** Injected for tests; detected from the browser otherwise (0C moves the call to the platform modules). */
@@ -238,7 +235,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._pointingDevice = this._readPointingDevice()
     const navigation = _deps.viewNavigation
     this._frames = overrideMode(_deps.frames, this._overview)
-    this._renderer = _deps.renderer ?? NO_DRAFTS
+    this._renderer = _deps.renderer
     this._storyPresented = isStoryPresented()
     const container = _deps.container
     const clock = () => Date.now()
@@ -301,7 +298,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         scene,
         selectionModel: _deps.getDesignObjectSelection,
       }), (menu) => menu.close())
-      const nudge = _deps.nudge
       const hostDeps: ToolHostDeps = {
         frames: this._frames,
         scene,
@@ -333,7 +329,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         },
         menu: this._menu,
         focus,
-        guidance: (guidance) => _deps.publishToolGuidance?.(guidance ? { ...IDLE_CANVAS_TOOL_GUIDANCE, ...guidance } : IDLE_CANVAS_TOOL_GUIDANCE),
+        guidance: (guidance) => _deps.publishToolGuidance(guidance ? { ...IDLE_CANVAS_TOOL_GUIDANCE, ...guidance } : IDLE_CANVAS_TOOL_GUIDANCE),
         toolState: { active: this._tool, set: (id) => this._switchTool(id) },
         settings: {
           plantSpacingIntervalM: _deps.readPlantSpacingIntervalMeters,
@@ -342,18 +338,12 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         snapping: () => ({ grid: _deps.readSnapToGridEnabled(), guides: _deps.readSnapToGuidesEnabled() }),
         translate: _deps.translate as ToolHostDeps['translate'],
         navigation: { turnToEdge: (a, b) => navigation.turnToEdge(a, b) },
-        nudge: {
-          nudgeSelected: (delta) => nudge?.nudgeSelected(delta) ?? false,
-          endNudge: (options) => {
-            if (options) nudge?.endNudge(options)
-            else nudge?.endNudge()
-          },
-        },
+        nudge: _deps.nudge,
         timers: { ...timers, clock },
         hover: (target) => _deps.setHoveredTarget(target),
         inspect: _deps.tryInspectAt,
         capturePress: (pointerId) => this._capturePress(pointerId),
-        transientHistoryChanged: () => _deps.notifyTransientHistoryChange?.(),
+        transientHistoryChanged: () => _deps.notifyTransientHistoryChange(),
         dropped: (kind) => this._dropped(kind),
       }
       this._toolHost = own(createToolHost(hostDeps), (host) => host.dispose())
@@ -784,7 +774,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   private _readPointingDevice(): 'mouse' | 'trackpad' {
-    return (this._deps.readScrollWheel?.() ?? 'zoom') === 'pan' ? 'trackpad' : 'mouse'
+    return this._deps.readScrollWheel() === 'pan' ? 'trackpad' : 'mouse'
   }
 
   /** Arms a tool as a tool's own request does: the runtime's setTool first, then the session if it did not follow. */

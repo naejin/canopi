@@ -323,6 +323,8 @@ export function createInteractionDeps(
     publishToolGuidance: overrides.publishToolGuidance ?? setCanvasToolGuidance,
     nudge: overrides.nudge ?? { nudgeSelected: vi.fn(() => true), endNudge: vi.fn() },
     renderer: createRecordingRenderer(),
+    readScrollWheel: () => 'zoom',
+    notifyTransientHistoryChange: () => {},
   }
 }
 
