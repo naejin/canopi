@@ -1,15 +1,12 @@
 import { logMapError } from '../../maplibre/redact-credentials'
-import { captureWorkspaceMapContributions, type WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
+import type { WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import { throwCanvasRuntimeCleanupErrors } from '../../canvas/runtime/cleanup'
 import type { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'
 import type { MapLibreMapInstance } from '../../maplibre/loader'
 import {
   type WorkspaceMapSnapshot,
 } from '../../maplibre/workspace-map'
-import {
-  captureMapBackgroundPresentation,
-  type MapBackgroundPresentation,
-} from '../../maplibre/map-background'
+import type { MapBackgroundPresentation } from '../../maplibre/map-background'
 import {
   MAPLIBRE_SHARED_SCENE_LAYER_ID,
   type SharedMapSceneLayer,
@@ -61,7 +58,6 @@ export interface WorkspaceActivationMapControls {
   createMap(
     signal: AbortSignal,
     snapshot: WorkspaceMapSnapshot,
-    sessionIdentity: object,
   ): Promise<WorkspaceActivationMap>
   releaseMap(map: WorkspaceActivationMap, failure?: unknown): void
   getWebGL2Context(map: WorkspaceActivationMap): WebGL2RenderingContext | null
@@ -174,12 +170,11 @@ export class WorkspaceActivationCoordinator {
   private async activateGeneration(
     snapshot: WorkspaceActivationSnapshot,
   ): Promise<WorkspaceActivationOutcome> {
-    const ownedSnapshot = captureActivationSnapshot(snapshot)
     if (this.disposed) return 'cancelled'
     const request = ++this.activationRequest
     this.pendingBackgroundPresentation = {
       request,
-      presentation: ownedSnapshot.map.background,
+      presentation: snapshot.map.background,
       hasUpdate: false,
     }
     const priorCleanup = this.cleanupActiveGeneration()
@@ -194,8 +189,8 @@ export class WorkspaceActivationCoordinator {
     if (this.mapUnavailable) return 'map-unavailable'
     const current: ActivationGeneration = {
       id: ++this.generation,
-      snapshot: ownedSnapshot,
-      presentation: this.pendingPresentationFor(request, ownedSnapshot.map),
+      snapshot,
+      presentation: this.pendingPresentationFor(request, snapshot.map),
       map: null,
       layer: null,
       disposeStyleRestorer: null,
@@ -220,11 +215,7 @@ export class WorkspaceActivationCoordinator {
       try {
         mapPromise = this.runOwnedCallback(
           'map creation',
-          () => this.options.map.createMap(
-            current.abortController.signal,
-            current.snapshot.map,
-            current.snapshot.sessionIdentity,
-          ),
+          () => this.options.map.createMap(current.abortController.signal, current.snapshot.map),
         )
       } finally {
         finishMapCreation()
@@ -455,7 +446,7 @@ export class WorkspaceActivationCoordinator {
   updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void {
     if (this.terminalTeardownResult) return
     // Kept while the map is unavailable, so a rebuilt map starts from the latest contributions.
-    this.contributions = snapshot && captureWorkspaceMapContributions(snapshot)
+    this.contributions = snapshot
     if (this.mapUnavailable) return
     const current = this.active
     if (!current || !this.isCurrent(current)) return
@@ -464,21 +455,20 @@ export class WorkspaceActivationCoordinator {
   }
 
   updateBackgroundPresentation(presentation: MapBackgroundPresentation): void {
-    const next = captureMapBackgroundPresentation(presentation)
     if (this.disposed || this.mapUnavailable || this.terminalTeardownResult) return
     const pending = this.pendingBackgroundPresentation
     if (pending?.request === this.activationRequest) {
       this.pendingBackgroundPresentation = {
         request: pending.request,
-        presentation: next,
+        presentation,
         hasUpdate: true,
       }
       return
     }
     const current = this.active
     if (!current || !this.isCurrent(current)) return
-    current.presentation = next
-    this.options.map.updateBackgroundPresentation(next)
+    current.presentation = presentation
+    this.options.map.updateBackgroundPresentation(presentation)
   }
 
   private pendingPresentationFor(
@@ -975,26 +965,6 @@ export class WorkspaceActivationCoordinator {
 
 class WorkspaceActivationOwnershipError extends Error {
   override readonly name = 'WorkspaceActivationOwnershipError'
-}
-
-function captureActivationSnapshot(
-  snapshot: WorkspaceActivationSnapshot,
-): WorkspaceActivationSnapshot {
-  const map = captureMapSnapshot(snapshot.map)
-  return Object.freeze({
-    sessionIdentity: snapshot.sessionIdentity,
-    map,
-  })
-}
-
-function captureMapSnapshot(snapshot: WorkspaceMapSnapshot): WorkspaceMapSnapshot {
-  return Object.freeze({
-    initialCenter: Object.freeze({
-      lat: snapshot.initialCenter.lat,
-      lon: snapshot.initialCenter.lon,
-    }),
-    background: captureMapBackgroundPresentation(snapshot.background),
-  })
 }
 
 /** A turned camera is never a failure: the map is unavailable only when its driver fails. */

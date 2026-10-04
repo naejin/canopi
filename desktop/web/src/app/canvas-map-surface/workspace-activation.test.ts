@@ -272,6 +272,33 @@ describe('WorkspaceActivationCoordinator', () => {
     expect(f.map.remove).toHaveBeenCalledOnce()
   })
 
+  it('a contribution snapshot of another session never reaches the map', async () => {
+    const f = createCoordinator()
+    const contribution = (sessionIdentity: object): WorkspaceMapContributionSnapshot => ({
+      sessionIdentity, lidar: [],
+      terrain: { contourIntervalMeters: 1, contoursVisible: true, contoursOpacity: 1, hillshadeVisible: true, hillshadeOpacity: 1, isDark: false },
+      overlays: { runtime: null, location: null, hoveredTargets: [], selectedTargets: [], paintRevision: 0 },
+      frame: null,
+    })
+    const first = createActivationSnapshot()
+    const second = createActivationSnapshot()
+    const forwarded = () => vi.mocked(f.mapControls.updateMapContributions).mock.calls
+      .map(([snapshot]) => snapshot?.sessionIdentity ?? null)
+
+    // Buffered before the map exists, from a session that is not the one that opens.
+    f.coordinator.updateMapContributions(contribution(first.sessionIdentity))
+    await f.coordinator.activate(second)
+    // Live, from the session the map no longer shows.
+    f.coordinator.updateMapContributions(contribution(first.sessionIdentity))
+    // Its own session's snapshot does reach it.
+    f.coordinator.updateMapContributions(contribution(second.sessionIdentity))
+    // A late snapshot of the replaced session, after the Design changes again.
+    await f.coordinator.activate(first)
+    f.coordinator.updateMapContributions(contribution(second.sessionIdentity))
+
+    expect(forwarded().filter((identity) => identity !== null)).toEqual([second.sessionIdentity])
+  })
+
   it('destroys its constructed runtime once when torn down before activation', async () => {
     const runtime = createRuntime()
     const { coordinator } = createCoordinator({ runtime })
@@ -283,7 +310,7 @@ describe('WorkspaceActivationCoordinator', () => {
     expect(runtime.init).not.toHaveBeenCalled()
   })
 
-  it('captures caller-owned activation values before asynchronous admission', async () => {
+  it('hands the activation snapshot to map creation and attaches the runtime camera in the plane of the live origin', async () => {
     const created = deferred<WorkspaceActivationMap>()
     let capturedMapSnapshot: WorkspaceActivationSnapshot['map'] | null = null
     const createMap = vi.fn((
@@ -307,15 +334,12 @@ describe('WorkspaceActivationCoordinator', () => {
     })
 
     const activation = coordinator.activate(snapshot)
-    ;(snapshot.map.initialCenter as { lat: number; lon: number }).lat = 90
     await vi.waitFor(() => expect(createMap).toHaveBeenCalledOnce())
     expect(capturedMapSnapshot).toEqual(expect.objectContaining({
       initialCenter: { lat: 10, lon: 20 },
       background: background({ opacity: 0.3 }),
     }))
 
-    ;(snapshot.map.initialCenter as { lat: number; lon: number }).lon = 91
-    ;(snapshot.map.background.basemap as { opacity: number }).opacity = 0.92
     created.resolve(map as unknown as WorkspaceActivationMap)
 
     await expect(activation).resolves.toBe('shared-ready')
@@ -358,13 +382,13 @@ describe('WorkspaceActivationCoordinator', () => {
     const addLayerCount = map.addLayer.mock.calls.length
 
     coordinator.updateBackgroundPresentation(background(
-      { visible: true, opacity: 1.5 },
-      { visible: true, opacity: -0.5 },
+      { visible: true, opacity: 0.5 },
+      { visible: true, opacity: 0.25 },
     ))
 
     expect(updateBackgroundPresentation).toHaveBeenCalledWith(background(
-      { visible: true, opacity: 1 },
-      { visible: true, opacity: 0 },
+      { visible: true, opacity: 0.5 },
+      { visible: true, opacity: 0.25 },
     ))
     expect(map.addLayer).toHaveBeenCalledTimes(addLayerCount)
     expect(runtime.init).toHaveBeenCalledOnce()

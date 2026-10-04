@@ -243,7 +243,7 @@ class TestWorkspaceMapControls extends WorkspaceMapControls {
   }
 
   override createMap(signal: AbortSignal, snapshot = this.defaultSnapshot) {
-    return super.createMap(signal, snapshot, this.sessionIdentity)
+    return super.createMap(signal, snapshot)
   }
 }
 
@@ -922,7 +922,7 @@ describe('WorkspaceMapControls', () => {
     expect(mapB.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toBeDefined()
   })
 
-  it('owns the call-time map snapshot through admission and later style reload', async () => {
+  it('keeps the creation snapshot\'s background through admission and a later style reload', async () => {
     const { controls, maps } = createControls()
     const snapshot: WorkspaceMapSnapshot = {
       initialCenter: { lat: 11, lon: 22 },
@@ -930,12 +930,6 @@ describe('WorkspaceMapControls', () => {
     }
     const acquisition = controls.createMap(new AbortController().signal, snapshot)
     const map = await waitForMap(maps)
-
-    ;(snapshot.initialCenter as { lat: number; lon: number }).lat = 81
-    ;(snapshot.initialCenter as { lat: number; lon: number }).lon = 82
-    ;(snapshot.background.satellite as { visible: boolean }).visible = false
-    ;(snapshot.background.satellite as { opacity: number }).opacity = 0.95
-    ;(snapshot.background.basemap as { visible: boolean }).visible = true
 
     map.emit('style.load')
     await acquisition
@@ -1353,7 +1347,7 @@ describe('WorkspaceMapControls', () => {
     await expect(controls.createMap(new AbortController().signal, {
       initialCenter: { lat: 0, lon: 0 },
       background: satelliteOn(1),
-    }, {})).rejects.toBe(error)
+    })).rejects.toBe(error)
   })
 
   it('rejects unavailable WebGL2 before constructing a MapLibre map', async () => {
@@ -1410,7 +1404,7 @@ describe('WorkspaceMapControls', () => {
       await expect(controls.createMap(new AbortController().signal, {
         initialCenter: { lat: 0, lon: 0 },
         background: satelliteOn(1),
-      }, {})).rejects.toThrow('WebGL2 is unavailable')
+      })).rejects.toThrow('WebGL2 is unavailable')
 
       expect(getContext).not.toHaveBeenCalled()
       expect(loadMapLibre).not.toHaveBeenCalled()

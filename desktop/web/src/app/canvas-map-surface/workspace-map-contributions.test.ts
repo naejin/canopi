@@ -88,7 +88,7 @@ function fixture(loadTerrainSupport = vi.fn(async () => terrainSupport)) {
   let active = true
   let raster!: FakeRasterDisplay
   const manager = new WorkspaceMapContributions({
-    sessionIdentity: identity, onFailure: failure, loadTerrainSupport, onStateChange: (state) => states.push(state), publishViewBounds: bounds, publishDiagnostics: diagnostics, logError,
+    onFailure: failure, loadTerrainSupport, onStateChange: (state) => states.push(state), publishViewBounds: bounds, publishDiagnostics: diagnostics, logError,
     createRasterDisplay: (_map, options) => { raster = new FakeRasterDisplay(map, options.onLayersChanged!); return raster },
   })
   manager.attach({ key: 'test', map, maplibre: {} as MapLibreApi, preservedViewState: null, lifetime: { on() {}, off() {}, addCleanup() {}, clear() {} }, isCurrent: () => active })
@@ -287,7 +287,7 @@ describe('WorkspaceMapContributions', () => {
     expect(f.states.at(-1)?.terrainStatus).toBe('ready')
   })
 
-  it.each(['null', 'disposed', 'expired'] as const)('fences pending terrain after %s and rejects another session', async (reason) => {
+  it.each(['null', 'disposed', 'expired'] as const)('fences pending terrain after %s', async (reason) => {
     const pending = deferred<TerrainProtocolSupport>()
     const f = fixture(vi.fn(() => pending.promise))
     f.manager.update(snapshot(f.identity, { terrain: { ...snapshot(f.identity).terrain, hillshadeVisible: true } }))
@@ -296,7 +296,6 @@ describe('WorkspaceMapContributions', () => {
     else if (reason === 'disposed') f.manager.dispose()
     else f.expire()
     f.map.addSource.mockClear()
-    f.manager.update(snapshot({}))
     pending.resolve(terrainSupport)
     await flush()
     expect(f.map.addSource).not.toHaveBeenCalled()

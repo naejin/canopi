@@ -1,5 +1,5 @@
 import { WorkspaceMapContributions, type WorkspaceMapContributionsOptions } from './workspace-map-contributions'
-import { captureWorkspaceMapContributions, type WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
+import type { WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import type { MapLibreSurfaceAdapter } from '../../maplibre/surface-adapter'
 import { createMapLibreSurfaceAdapter } from '../../maplibre/surface-adapter'
 import {
@@ -9,7 +9,6 @@ import {
 } from '../../maplibre/config'
 import { BasemapTileAuth } from '../../maplibre/basemap-tile-auth'
 import {
-  captureMapBackgroundPresentation,
   mountMapBackground,
   type MapBackgroundHandle,
   type MapBackgroundMap,
@@ -37,7 +36,6 @@ import {
 } from './workspace-activation'
 
 interface WorkspaceMapAttempt {
-  readonly sessionIdentity: object
   readonly contributions: WorkspaceMapContributions
   contributionSnapshot: WorkspaceMapContributionSnapshot | null
   readonly signal: AbortSignal
@@ -65,7 +63,7 @@ interface WorkspaceMapAttempt {
 }
 
 export interface WorkspaceActivationMapControlsOptions {
-  readonly contributions?: Omit<WorkspaceMapContributionsOptions, 'sessionIdentity' | 'onFailure'>
+  readonly contributions?: Omit<WorkspaceMapContributionsOptions, 'onFailure'>
   readonly container: HTMLElement
   readonly surface?: MapLibreSurfaceAdapter<MapLibreMapInstance>
   readonly logError?: (message?: unknown, ...optionalParams: unknown[]) => void
@@ -95,9 +93,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
   createMap(
     signal: AbortSignal,
     snapshot: WorkspaceMapSnapshot,
-    sessionIdentity: object,
   ): Promise<WorkspaceActivationMap> {
-    const ownedSnapshot = captureMapSnapshot(snapshot)
     const previous = this.attempt
     if (previous && !previous.settled) {
       this.rejectAttempt(previous, abortError())
@@ -113,17 +109,15 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
 
     return new Promise<WorkspaceActivationMap>((resolve, reject) => {
       const attempt: WorkspaceMapAttempt = {
-        sessionIdentity,
         contributions: new WorkspaceMapContributions({
           ...this.options.contributions,
-          sessionIdentity,
           logError: this.logError,
           onFailure: (error) => this.reportRestorationFailure(attempt, error),
         }),
         contributionSnapshot: null,
         signal,
-        snapshot: ownedSnapshot,
-        presentation: ownedSnapshot.background,
+        snapshot,
+        presentation: snapshot.background,
         tileAuth: new BasemapTileAuth(),
         background: null,
         lifetime: null,
@@ -262,7 +256,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
   updateBackgroundPresentation(presentation: MapBackgroundPresentation): void {
     const attempt = this.attempt
     if (!attempt || attempt.released || attempt.failureReported) return
-    attempt.presentation = captureMapBackgroundPresentation(presentation)
+    attempt.presentation = presentation
     if (!attempt.map || !attempt.admitted) return
     attempt.pendingPresentationSync = true
     this.drainReconciliation(attempt)
@@ -285,9 +279,8 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
   updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void {
     const attempt = this.attempt
     if (!attempt || attempt.released || attempt.failureReported) return
-    if (snapshot && snapshot.sessionIdentity !== attempt.sessionIdentity) return
-    attempt.contributionSnapshot = snapshot && captureWorkspaceMapContributions(snapshot)
-    attempt.contributions.update(attempt.contributionSnapshot)
+    attempt.contributionSnapshot = snapshot
+    attempt.contributions.update(snapshot)
   }
 
   watchFailure(
@@ -481,16 +474,6 @@ function canCreateWebGL2Context(): boolean {
   } catch {
     return false
   }
-}
-
-function captureMapSnapshot(snapshot: WorkspaceMapSnapshot): WorkspaceMapSnapshot {
-  return Object.freeze({
-    initialCenter: Object.freeze({
-      lat: snapshot.initialCenter.lat,
-      lon: snapshot.initialCenter.lon,
-    }),
-    background: captureMapBackgroundPresentation(snapshot.background),
-  })
 }
 
 function abortError(): Error {
