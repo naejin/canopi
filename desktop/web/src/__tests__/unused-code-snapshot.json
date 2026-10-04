@@ -288,7 +288,6 @@
     "src/canvas/runtime/plant-display.ts#plantDisplaysEqual",
     "src/canvas/runtime/plant-presentation.ts#resolveStackBadgeDecisions",
     "src/canvas/runtime/plant-symbol-recipes.ts#PLANT_SYMBOL_RECIPES",
-    "src/canvas/runtime/plant-symbol-recipes.ts#buildPlantSymbolRecipes",
     "src/canvas/runtime/plant-symbol-recipes.ts#tracePlantSymbolContour",
     "src/canvas/runtime/renderers/maplibre-scene.ts#MAPLIBRE_SCENE_RENDERER_ID",
     "src/canvas/runtime/renderers/pixi-scene.ts#createDraftScenePainters",
