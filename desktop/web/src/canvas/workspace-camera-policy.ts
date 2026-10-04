@@ -22,5 +22,5 @@ export function singleWorldEffectiveMinimumZoom(
 }
 
 export function isWorkspaceOverviewScale(scale: number): boolean {
-  return Number.isFinite(scale) && !scaleReaches(scale, WORKSPACE_OVERVIEW_SCALE_THRESHOLD)
+  return !scaleReaches(scale, WORKSPACE_OVERVIEW_SCALE_THRESHOLD)
 }
