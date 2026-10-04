@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createMapLibreHost,
   type MapLibreHostRequest,
@@ -64,6 +64,8 @@ describe('MapLibre Host', () => {
   let maps: FakeMap[]
   let observers: FakeResizeObserver[]
   let maplibre: MapLibreApi
+
+  afterEach(() => vi.unstubAllGlobals())
 
   beforeEach(() => {
     container = document.createElement('div')
@@ -286,22 +288,59 @@ describe('MapLibre Host', () => {
     expect(host.current()).toBeNull()
   })
 
-  it('rolls back constructor-owned container children after repeated create failures and supports retry', async () => {
+  it('logs a failed map removal after a post-create failure and still reports the create error', async () => {
+    const logError = vi.fn()
+    const host = createMapLibreHost({
+      loadMapLibre: vi.fn(async () => maplibre),
+      logError,
+    })
+    const createError = new Error('post-create setup failed')
+    const removeError = new Error('MapLibre removal failed')
+    const onCreateError = vi.fn()
+
+    host.attach(container)
+    host.requestMap({
+      key: 'street',
+      createMap: (api, target) => {
+        const map = new api.Map({
+          container: target,
+          style: { version: 8, sources: {}, layers: [] },
+          interactive: false,
+          pitchWithRotate: false,
+          dragRotate: false,
+          touchZoomRotate: false,
+        }) as FakeMap
+        map.remove.mockImplementation(() => {
+          throw removeError
+        })
+        return map
+      },
+      onCreate: () => {
+        throw createError
+      },
+      onCreateError,
+    })
+    await flushPromises()
+
+    expect(maps[0]!.remove).toHaveBeenCalledOnce()
+    expect(onCreateError).toHaveBeenCalledWith(createError)
+    expect(logError).toHaveBeenCalledWith(
+      'Failed to remove MapLibre map after create failure:',
+      removeError,
+    )
+    expect(host.current()).toBeNull()
+  })
+
+  it('removes a map whose synchronous creation went stale', async () => {
     const host = createMapLibreHost({
       loadMapLibre: vi.fn(async () => maplibre),
     })
-    const existingChild = document.createElement('div')
-    const createError = new Error('WebGL is unavailable')
-    const onCreateError = vi.fn()
-    let attempts = 0
-    const request: MapLibreHostRequest = {
+
+    host.attach(container)
+    host.requestMap({
       key: 'street',
       createMap: (api, target) => {
-        attempts += 1
-        if (attempts < 3) {
-          target.append(document.createElement('canvas'), document.createElement('div'))
-          throw createError
-        }
+        host.destroy()
         return new api.Map({
           container: target,
           style: { version: 8, sources: {}, layers: [] },
@@ -311,199 +350,54 @@ describe('MapLibre Host', () => {
           touchZoomRotate: false,
         })
       },
-      onCreateError,
-    }
-    container.append(existingChild)
-
-    host.attach(container)
-    host.requestMap(request)
+    })
     await flushPromises()
-
-    expect(onCreateError).toHaveBeenCalledWith(createError)
-    expect(Array.from(container.children)).toEqual([existingChild])
-    expect(host.current()).toBeNull()
-
-    host.requestMap(request)
-    await flushPromises()
-
-    expect(onCreateError).toHaveBeenCalledTimes(2)
-    expect(Array.from(container.children)).toEqual([existingChild])
-    expect(host.current()).toBeNull()
-
-    host.requestMap(request)
-    await flushPromises()
-
-    expect(host.current()?.map).toBe(maps[0])
-    expect(Array.from(container.children)).toEqual([existingChild])
-
-    host.destroy()
 
     expect(maps[0]!.remove).toHaveBeenCalledOnce()
-    expect(Array.from(container.children)).toEqual([existingChild])
-  })
-
-  it('removes returned map constructor remnants on destroy without touching later container changes', async () => {
-    const host = createMapLibreHost({
-      loadMapLibre: vi.fn(async () => maplibre),
-    })
-    const existingChild = document.createElement('div')
-    const laterChild = document.createElement('div')
-    let attempts = 0
-    const createdMap: { partial: FakeMap | null, retry: FakeMap | null } = {
-      partial: null,
-      retry: null,
-    }
-    container.append(existingChild)
-    container.classList.add('existing-class')
-
-    host.attach(container)
-    host.requestMap({
-      key: 'street',
-      createMap: (_api, target) => {
-        attempts += 1
-        if (attempts === 1) {
-          const wrapper = document.createElement('div')
-          wrapper.append(document.createElement('canvas'))
-          target.append(wrapper)
-          target.classList.add('maplibregl-map')
-          createdMap.partial = new FakeMap({
-            container: target,
-            style: { version: 8, sources: {}, layers: [] },
-            interactive: false,
-            pitchWithRotate: false,
-            dragRotate: false,
-            touchZoomRotate: false,
-          })
-          return createdMap.partial
-        }
-        createdMap.retry = new FakeMap({
-          container: target,
-          style: { version: 8, sources: {}, layers: [] },
-          interactive: false,
-          pitchWithRotate: false,
-          dragRotate: false,
-          touchZoomRotate: false,
-        })
-        return createdMap.retry
-      },
-    })
-    await flushPromises()
-
-    container.append(laterChild)
-    container.classList.add('later-class')
-    host.destroy()
-
-    expect(createdMap.partial?.remove).toHaveBeenCalledOnce()
-    expect(Array.from(container.children)).toEqual([existingChild, laterChild])
-    expect(container.classList).toContain('existing-class')
-    expect(container.classList).toContain('later-class')
-    expect(container.classList).not.toContain('maplibregl-map')
-
-    host.destroy()
-    expect(createdMap.partial?.remove).toHaveBeenCalledOnce()
-
-    host.attach(container)
-    await flushPromises()
-
-    expect(host.current()).not.toBeNull()
-    host.destroy()
-    expect(createdMap.retry?.remove).toHaveBeenCalledOnce()
-    expect(Array.from(container.children)).toEqual([existingChild, laterChild])
-  })
-
-  it('rolls back returned constructor remnants after post-create failure even when map removal throws', async () => {
-    const logError = vi.fn()
-    const host = createMapLibreHost({
-      loadMapLibre: vi.fn(async () => maplibre),
-      logError,
-    })
-    const existingChild = document.createElement('div')
-    const laterChild = document.createElement('div')
-    const createError = new Error('post-create setup failed')
-    const removeError = new Error('MapLibre removal failed')
-    const onCreateError = vi.fn()
-    const createdMap: { partial: FakeMap | null } = { partial: null }
-    container.append(existingChild)
-    container.classList.add('existing-class')
-
-    host.attach(container)
-    host.requestMap({
-      key: 'street',
-      createMap: (_api, target) => {
-        const wrapper = document.createElement('div')
-        wrapper.append(document.createElement('canvas'))
-        target.append(wrapper)
-        target.classList.add('maplibregl-map')
-        createdMap.partial = new FakeMap({
-          container: target,
-          style: { version: 8, sources: {}, layers: [] },
-          interactive: false,
-          pitchWithRotate: false,
-          dragRotate: false,
-          touchZoomRotate: false,
-        })
-        createdMap.partial.remove.mockImplementation(() => {
-          throw removeError
-        })
-        return createdMap.partial
-      },
-      onCreate: () => {
-        container.append(laterChild)
-        container.classList.add('later-class')
-        throw createError
-      },
-      onCreateError,
-    })
-    await flushPromises()
-
-    expect(createdMap.partial?.remove).toHaveBeenCalledOnce()
-    expect(onCreateError).toHaveBeenCalledWith(createError)
-    expect(logError).toHaveBeenCalledWith(
-      'Failed to remove MapLibre map after create failure:',
-      removeError,
-    )
-    expect(Array.from(container.children)).toEqual([existingChild, laterChild])
-    expect(container.classList).toContain('existing-class')
-    expect(container.classList).toContain('later-class')
-    expect(container.classList).not.toContain('maplibregl-map')
-  })
-
-  it('rolls back returned constructor remnants when a synchronous creation is stale', async () => {
-    const host = createMapLibreHost({
-      loadMapLibre: vi.fn(async () => maplibre),
-    })
-    const existingChild = document.createElement('div')
-    const createdMap: { partial: FakeMap | null } = { partial: null }
-    container.append(existingChild)
-    container.classList.add('existing-class')
-
-    host.attach(container)
-    host.requestMap({
-      key: 'street',
-      createMap: (_api, target) => {
-        const wrapper = document.createElement('div')
-        wrapper.append(document.createElement('canvas'))
-        target.append(wrapper)
-        target.classList.add('maplibregl-map')
-        host.destroy()
-        createdMap.partial = new FakeMap({
-          container: target,
-          style: { version: 8, sources: {}, layers: [] },
-          interactive: false,
-          pitchWithRotate: false,
-          dragRotate: false,
-          touchZoomRotate: false,
-        })
-        return createdMap.partial
-      },
-    })
-    await flushPromises()
-
-    expect(createdMap.partial?.remove).toHaveBeenCalledOnce()
-    expect(Array.from(container.children)).toEqual([existingChild])
-    expect(container.classList).toContain('existing-class')
-    expect(container.classList).not.toContain('maplibregl-map')
     expect(host.current()).toBeNull()
+  })
+
+  it('leaves the container as it was when the real MapLibre constructor fails, and a retry tries again', async () => {
+    // jsdom has no WebGL, so MapLibre 6's constructor throws after it built its canvas and control containers;
+    // MapLibre removes them itself (`_cleanupContainer`), so the host needs no rollback of its own.
+    vi.stubGlobal('URL', class extends URL {
+      static createObjectURL() { return 'blob:map-worker' }
+    })
+    const realMapLibre = await import('maplibre-gl') as unknown as MapLibreApi
+    const logError = vi.fn()
+    const host = createMapLibreHost({ loadMapLibre: async () => realMapLibre, logError })
+    const existingChild = document.createElement('div')
+    container.append(existingChild)
+    container.classList.add('existing-class')
+    const onCreateError = vi.fn()
+    const request: MapLibreHostRequest = {
+      key: 'street',
+      createMap: (api, target) => new api.Map({
+        container: target,
+        style: { version: 8, sources: {}, layers: [] },
+        interactive: false,
+        pitchWithRotate: false,
+        dragRotate: false,
+        touchZoomRotate: false,
+      }),
+      onCreateError,
+    }
+
+    host.attach(container)
+    host.requestMap(request)
+    await vi.waitFor(() => expect(onCreateError).toHaveBeenCalledTimes(1))
+
+    expect(Array.from(container.children)).toEqual([existingChild])
+    expect(Array.from(container.classList)).toEqual(['existing-class'])
+    expect(host.current()).toBeNull()
+
+    host.requestMap(request)
+    await vi.waitFor(() => expect(onCreateError).toHaveBeenCalledTimes(2))
+
+    expect(Array.from(container.children)).toEqual([existingChild])
+    expect(Array.from(container.classList)).toEqual(['existing-class'])
+    expect(host.current()).toBeNull()
+    expect(logError).not.toHaveBeenCalled()
   })
 
   it('does not create a map after its pending load is cancelled', async () => {
