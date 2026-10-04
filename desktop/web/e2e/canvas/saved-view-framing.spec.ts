@@ -3,7 +3,7 @@
 // that shows it, fits that ground into the whole map now (panels and story card included). The unit
 // tests drive the fit through a fake map; this scenario drives it through the real MapLibre container
 // in Chromium and WebKit, saving at 1400 x 900 and going back at 1000 x 700. Both tests only ever shrink
-// the window: in Chromium, growing it back from 700 px high loses the map, a separate bug.
+// the window: in Chromium, growing it back from 700 px high loses the map, a separate bug (canopi-f47t.22).
 // The selected zone's handles are the DOM's measure of where the Design is drawn: the camera jumps
 // under reduced motion (support/canvas.ts), and every read is polled until the handles settle.
 // A presentation shows no handles, so its refit is compared with a fresh fit by pixels, within the run.
