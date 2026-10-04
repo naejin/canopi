@@ -7,11 +7,11 @@ import { mapErrorResourceId } from './map-error-owner'
  * packages/core/src/types.ts (OPENFREEMAP_BASEMAPS) at commit e9df9e2.
  * Copyright (c) 2026 Qiusheng Wu. MIT License; see THIRD_PARTY_NOTICES.
  */
-export const OPENFREEMAP_BASEMAPS: Readonly<Record<BasemapStyle, { readonly name: string; readonly styleUrl: string }>> = {
-  liberty: { name: 'Liberty', styleUrl: 'https://tiles.openfreemap.org/styles/liberty' },
-  positron: { name: 'Positron', styleUrl: 'https://tiles.openfreemap.org/styles/positron' },
-  bright: { name: 'Bright', styleUrl: 'https://tiles.openfreemap.org/styles/bright' },
-  dark: { name: 'Dark', styleUrl: 'https://tiles.openfreemap.org/styles/dark' },
+export const OPENFREEMAP_BASEMAPS: Readonly<Record<BasemapStyle, { readonly styleUrl: string }>> = {
+  liberty: { styleUrl: 'https://tiles.openfreemap.org/styles/liberty' },
+  positron: { styleUrl: 'https://tiles.openfreemap.org/styles/positron' },
+  bright: { styleUrl: 'https://tiles.openfreemap.org/styles/bright' },
+  dark: { styleUrl: 'https://tiles.openfreemap.org/styles/dark' },
 }
 
 export const OPENFREEMAP_LAYER_PREFIX = 'ofm:'
