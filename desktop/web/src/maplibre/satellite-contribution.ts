@@ -22,7 +22,7 @@ export interface SatelliteReconcileTarget {
   // keeps the reconciler from reaching beyond a raster source and layer.
   addSource(id: string, source: Record<string, unknown>): void
   addLayer(layer: Record<string, unknown>, beforeId?: string): void
-  setLayoutProperty?(id: string, name: string, value: unknown): void
+  setLayoutProperty(id: string, name: string, value: unknown): void
   /**
    * Sets the Satellite credit on the map-owned attribution control. MapLibre has
    * no setter for a raster source's attribution, so the credit lives on the
@@ -181,7 +181,7 @@ export function setSatelliteContributionVisibility(
   visible: boolean,
 ): void {
   if (!target.getLayer(MAPLIBRE_SATELLITE_LAYER_ID)) return
-  target.setLayoutProperty?.(
+  target.setLayoutProperty(
     MAPLIBRE_SATELLITE_LAYER_ID,
     'visibility',
     visible ? 'visible' : 'none',

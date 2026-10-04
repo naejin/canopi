@@ -217,7 +217,7 @@ export function mountSatelliteLifecycle(options: SatelliteMountOptions): Satelli
     removeSource: (id) => map.removeSource(id),
     addSource: (id, source) => map.addSource(id, source),
     addLayer: (layer, beforeId) => map.addLayer(layer, beforeId),
-    setLayoutProperty: (id, name, value) => map.setLayoutProperty?.(id, name, value),
+    setLayoutProperty: (id, name, value) => map.setLayoutProperty(id, name, value),
     replaceSatelliteAttribution: options.replaceSatelliteAttribution,
   }
   let disposed = false
