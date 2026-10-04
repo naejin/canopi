@@ -130,7 +130,6 @@ class HtmlRulerOverlay implements RulerOverlay {
    * the latest camera.
    */
   private _createGuideAt(axis: RulerAxis, at: ScreenPoint): void {
-    if (this._destroyed) return
     const snapshot = this._snapshot
     if (!snapshot || !this._shown) return
     const origin = this._overlayOrigin()
