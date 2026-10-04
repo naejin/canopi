@@ -10,7 +10,7 @@ import type { ToolHandleId } from '../../interaction-types'
 import type { CanvasDesignObjectSelectionModel } from '../../runtime'
 import type { ScenePersistedState, SceneZoneEntity } from '../../scene/types'
 import type { WorldPoint } from '../../view/types'
-import { getRectangularZoneCorners } from '../../zone-geometry'
+import { getRectangularZoneCorners, polygonArea } from '../../zone-geometry'
 import type { ToolHandle } from '../draft'
 import type { ToolContext } from '../tool'
 import type { PointHandleSubject } from './point-handle'
@@ -248,16 +248,6 @@ function midpoint(a: WorldPoint, b: WorldPoint): WorldPoint {
 
 function distance(a: WorldPoint, b: WorldPoint): number {
   return Math.hypot(b.x - a.x, b.y - a.y)
-}
-
-function polygonArea(points: readonly WorldPoint[]): number {
-  let sum = 0
-  for (let index = 0; index < points.length; index += 1) {
-    const current = points[index]!
-    const next = points[(index + 1) % points.length]!
-    sum += current.x * next.y - next.x * current.y
-  }
-  return sum / 2
 }
 
 function dot(a: WorldPoint, b: WorldPoint): number {

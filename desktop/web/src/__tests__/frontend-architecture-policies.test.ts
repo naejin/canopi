@@ -3370,17 +3370,12 @@ describe('map error logging', () => {
 
 describe('one zone geometry', () => {
   // docs/guides/map-workspace.md: one zone geometry (canvas/runtime/zone-geometry.ts). A second shoelace drifts from it.
-  const KEPT_COPIES = [
-    'src/canvas/runtime/tools/select/reshape.ts', // phase 2
-    'src/app/saved-object-stamps/thumbnail-renderer.ts', // canopi-224j
-  ]
-
   it('declares polygonArea only in zone-geometry.ts', () => {
     const declaring = discoveredSourceGraph()
       .filter(({ path }) => !path.startsWith('src/__tests__/') && !/\.test\.tsx?$/.test(path))
       .filter(({ source }) => /\b(?:function\s+polygonArea|(?:const|let)\s+polygonArea\s*=)/.test(source))
       .map(({ path }) => path)
 
-    expect(declaring).toEqual(['src/canvas/runtime/zone-geometry.ts', ...KEPT_COPIES].sort((left, right) => left.localeCompare(right)))
+    expect(declaring).toEqual(['src/canvas/runtime/zone-geometry.ts'])
   }, 20_000)
 })
