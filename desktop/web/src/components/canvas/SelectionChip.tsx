@@ -46,7 +46,7 @@ export function SelectionChip() {
           type="button"
           className={styles.button}
           aria-keyshortcuts={SELECT_SAME_SPECIES.shortcuts?.[0] ? ariaKeyShortcuts(SELECT_SAME_SPECIES.shortcuts[0]) : undefined}
-          onClick={() => currentCanvasSceneEditCommandSurface.value?.selectSameSpecies(only!.canonicalName)}
+          onClick={() => currentCanvasSceneEditCommandSurface.value?.selectSpecies([only!.canonicalName])}
         >
           {t(SELECT_SAME_SPECIES.labelKey)}
         </button>

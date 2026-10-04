@@ -415,7 +415,7 @@ function SpeciesRow({ entry, result, focused, detail, onOpenDetail }: {
           type="button"
           className={styles.rowAction}
           aria-label={t('speciesKey.selectPlants', { count: entry.count, name })}
-          onClick={() => currentCanvasSceneEditCommandSurface.value?.selectSameSpecies(entry.canonicalName)}
+          onClick={() => currentCanvasSceneEditCommandSurface.value?.selectSpecies([entry.canonicalName])}
         >{t('speciesKey.select')}</button>
       )}
       {detail && (

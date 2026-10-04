@@ -121,7 +121,7 @@ export interface CanvasSceneEditCommandSurface {
   toggleSelectedPlantNamePins(): void
   deleteSelected(): void
   selectAll(): void
-  selectSameSpecies(canonicalName?: string): void
+  selectSameSpecies(): void
   /** Replaces the selection with every selectable plant of these species. */
   selectSpecies(canonicalNames: readonly string[]): void
   /** Empties the selection (session state: no edit, history or dirty state). */

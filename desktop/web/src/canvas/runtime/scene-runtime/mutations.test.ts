@@ -631,6 +631,31 @@ describe('scene runtime mutation controller', () => {
     expect(sceneStore.session.selectedTargets).toHaveLength(3)
   })
 
+  it('selectSpecies with one name selects that species as the chip and the key panel ask', () => {
+    const file = makeFile()
+    const plant = file.plants[0]!
+    file.plants = [
+      ...file.plants,
+      { ...plant, id: 'plant-3', canonical_name: 'Pyrus communis', position: geoAt(30, 30) },
+      { ...plant, id: 'plant-4', position: geoAt(40, 40), locked: true },
+      { ...plant, id: 'plant-5', position: geoAt(50, 50) },
+    ]
+    file.groups = [{ id: 'group-1', name: null, locked: false, members: [{ kind: 'plant', id: 'plant-5' }] }]
+    const { controller, sceneStore, state } = createController(file)
+    sceneStore.setSelection([{ kind: 'plant', id: 'plant-3' }])
+
+    controller.selectSpecies([plant.canonical_name])
+
+    expect(sceneStore.session.selectedTargets).toEqual([
+      { kind: 'plant', id: 'plant-1' },
+      { kind: 'plant', id: 'plant-2' },
+    ])
+    expect(state.dirtyTypes).toEqual([])
+    expect(state.invalidations).toBe(1)
+    controller.selectSpecies([plant.canonical_name])
+    expect(state.invalidations).toBe(1)
+  })
+
   it('rotates the selection about its centre as one undoable edit', () => {
     const { controller, sceneStore, state } = createController()
     sceneStore.setSelection([{ kind: 'plant', id: 'plant-1' }, { kind: 'plant', id: 'plant-2' }])
