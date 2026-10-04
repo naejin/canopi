@@ -1818,7 +1818,7 @@ mod tests {
     /// The display renderer (cog-tiler-wasm through proj4js) draws every
     /// CRS east-north, so a registry code whose axes point west and south
     /// (the South African Lo grids 2046-2055 and 22275-22293, Schwarzeck
-    /// 29371-29385, S-JTSK/05 8352) would draw in the opposite hemisphere
+    /// 29371-29385, S-JTSK [JTSK03] 8352) would draw in the opposite hemisphere
     /// from where import places it; such codes are refused by name. 5513 and
     /// 2065 stay accepted until the user decides on them (U25 names them).
     #[test]
