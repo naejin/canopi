@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  BASEMAP_STYLE_TIMEOUT_MS,
   OPENFREEMAP_BASEMAPS,
   scaleOpacity,
   VectorBasemap,
@@ -341,6 +340,9 @@ describe('OpenFreeMap vector basemap', () => {
   })
 
   describe('a style download that hangs (a captive portal or weak hotspot holding the request open)', () => {
+    /** `BASEMAP_STYLE_TIMEOUT_MS` in openfreemap-basemap.ts. */
+    const BASEMAP_STYLE_TIMEOUT_MS = 20_000
+
     afterEach(() => {
       vi.useRealTimers()
       vi.unstubAllGlobals()

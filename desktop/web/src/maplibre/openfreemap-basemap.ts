@@ -85,7 +85,7 @@ const styleCache = new Map<string, Promise<VectorStyleDocument>>()
  * How long a style download may take, body included. A captive portal or weak hotspot can hold the request open for
  * minutes; past this it fails, so the notice offers Retry (ADR 0004) and the next request starts over.
  */
-export const BASEMAP_STYLE_TIMEOUT_MS = 20_000
+const BASEMAP_STYLE_TIMEOUT_MS = 20_000
 
 async function fetchStyle(url: string): Promise<VectorStyleDocument> {
   const cached = styleCache.get(url)
