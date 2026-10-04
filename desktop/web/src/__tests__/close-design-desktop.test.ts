@@ -147,6 +147,7 @@ function makeSceneSession(file: CanopiFile): SceneSession {
       }),
     })),
     hasLoadedDocument: vi.fn(() => true),
+    viewMovedSinceSave: () => false,
     captureForPersistence: vi.fn((metadata, document) => {
       const capture = authority.capturePersistence()
       return {
@@ -231,6 +232,27 @@ describe('Desktop Close Design', () => {
     expect(session.history.canUndo.value).toBe(false)
     expect(session.hideCanvasChrome).toHaveBeenCalled()
     expect(session.showCanvasChrome).not.toHaveBeenCalled()
+  })
+
+  it('Save and Close write a view that moved, though nothing is unsaved (U28)', async () => {
+    let moved = true
+    const capture = session.captureForPersistence
+    session.viewMovedSinceSave = () => moved
+    session.captureForPersistence = (metadata, document) => {
+      const captured = capture(metadata, document)
+      return { ...captured, acknowledgeSaved: () => { moved = false; return captured.acknowledgeSaved() } }
+    }
+    expect(machine.continuousSave.hasPendingChanges()).toBe(false)
+
+    await expect(machine.saveCurrentDesign()).resolves.toBe(true)
+    expect(mocks.saveDesign).toHaveBeenCalledTimes(1)
+    await expect(machine.saveCurrentDesign()).resolves.toBe(true)
+    expect(mocks.saveDesign, 'the file holds that view now').toHaveBeenCalledTimes(1)
+
+    moved = true
+    await machine.closeDesign()
+    expect(mocks.saveDesign).toHaveBeenCalledTimes(2)
+    expect(mocks.requestSaveDecision).not.toHaveBeenCalled()
   })
 
   it('ends continuous save: the closed Design home is never written again', async () => {

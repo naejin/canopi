@@ -94,6 +94,7 @@ function makeSceneSession(): SceneSession {
       }),
     })),
     hasLoadedDocument: vi.fn(() => true),
+    viewMovedSinceSave: () => false,
     captureForPersistence: vi.fn((metadata, document): CanvasPersistenceCapture => {
       const capture = authority.capturePersistence()
       return {

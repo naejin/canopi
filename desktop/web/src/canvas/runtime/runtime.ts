@@ -314,6 +314,9 @@ export interface CanvasDocumentSurface {
     finalizeReplacement: () => void,
   ): CanvasDocumentReplacementReceipt
   hasLoadedDocument(): boolean
+  /** The live view moved from the one the Design's home holds (the view it opened at, or the last acknowledged save's): a flush
+   *  writes it, though a camera move alone marks nothing unsaved and schedules no write (U28). */
+  viewMovedSinceSave(): boolean
   captureForPersistence(
     metadata: CanvasRuntimeDocumentMetadata,
     doc: CanopiFile,

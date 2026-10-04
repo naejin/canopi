@@ -56,6 +56,11 @@ export interface ContinuousSaveOptions {
    * a page-hide flush completes before the page goes away.
    */
   writeHome(home: DesignHome): HomeWriteOutcome | Promise<HomeWriteOutcome>
+  /**
+   * The live view moved from the one the home holds (`DesignSessionPersistence.viewMovedSinceSave`). A camera move marks nothing
+   * unsaved and schedules no write, but every flush (Save, close, switching Designs, page hide) writes a view that moved (U28).
+   */
+  readonly viewMoved?: () => boolean
   readonly delayMs?: number
   readonly logError?: (message?: unknown, ...optionalParams: unknown[]) => void
 }
@@ -103,6 +108,7 @@ interface SessionHomeRecord {
 export function createContinuousSave({
   store,
   writeHome,
+  viewMoved = () => false,
   delayMs = CONTINUOUS_SAVE_DELAY_MS,
   logError = (message, ...rest) => console.error(message, ...rest),
 }: ContinuousSaveOptions): ContinuousSave {
@@ -204,7 +210,7 @@ export function createContinuousSave({
     const home = readHome()
     if (!session || !home || !store.hasCurrentDesign()) return !pending.peek()
     if (conflict.peek()) return false
-    if (!pending.peek()) return true
+    if (!pending.peek() && !viewMoved()) return true
 
     const pendingAtStart = writePending.peek()
     if (store.designDirty.peek()) changed.value = true
@@ -267,7 +273,7 @@ export function createContinuousSave({
   async function flush(): Promise<boolean> {
     clearTimer()
     if (!store.hasCurrentDesign()) return true
-    if (!pending.peek() && !active) return true
+    if (!pending.peek() && !active && !viewMoved()) return true
     if (conflict.peek()) return false
     const written = await requestWrite()
     return written && !pending.peek() && !conflict.peek()

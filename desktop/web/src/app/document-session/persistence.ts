@@ -81,6 +81,8 @@ export interface DesignSessionPersistence {
   isCanvasAttached(session: CanvasDocumentSurface): boolean;
   /** The Canvas whose persistence lease is current, if any. */
   attachedCanvas(): CanvasDocumentSurface | null;
+  /** The attached Canvas's view moved from the one the home holds: continuous save's next flush writes it (U28). */
+  viewMovedSinceSave(): boolean;
   attachCanvas(session: CanvasDocumentSurface): DesignPersistenceCanvasLease;
   acquireDetachedCanvasLease(): DesignPersistenceCanvasLease;
   beginReplacementGuard(): DesignReplacementGuardCapture;
@@ -630,6 +632,7 @@ export function createDesignSessionPersistence({
   return {
     isCanvasAttached,
     attachedCanvas: () => attachedCanvas,
+    viewMovedSinceSave: () => attachedCanvas?.viewMovedSinceSave() ?? false,
     attachCanvas,
     acquireDetachedCanvasLease,
     beginReplacementGuard,

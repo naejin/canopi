@@ -152,6 +152,7 @@ export function createBrowserDesignSessionController({
   const continuousSave = createContinuousSave({
     store,
     writeHome: writeDraftHome,
+    viewMoved: () => persistence.viewMovedSinceSave(),
     delayMs: saveDelayMs,
   });
 
@@ -243,11 +244,12 @@ export function createBrowserDesignSessionController({
   }
 
   /**
-   * Write the current Design first; ask only when that write fails. Resolves
-   * synchronously when nothing is pending so a replacement keeps its turn.
+   * Write the current Design first, or only its view when that alone moved;
+   * ask only when that write fails. Resolves synchronously when there is
+   * nothing to write so a replacement keeps its turn.
    */
   function flushBeforeReplacement(intent: number): true | Promise<boolean> {
-    if (!continuousSave.hasPendingChanges()) return true;
+    if (!continuousSave.hasPendingChanges() && !persistence.viewMovedSinceSave()) return true;
     // A retained Canvas replacement cannot be captured; the replacement
     // itself settles or quarantines it first.
     if (canvasSession && replacement.pendingCanvasReplacement(canvasSession)) return true;

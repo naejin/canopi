@@ -39,6 +39,7 @@ vi.mock("../app/canvas-map-surface/desktop-workspace-runtime", () => ({
         return { callerFinalizerInvoked: true };
       }),
       hasLoadedDocument: vi.fn(() => loaded),
+      viewMovedSinceSave: () => false,
       captureForPersistence: vi.fn((_metadata, doc) => ({
         content: doc,
         isCurrent: vi.fn(() => true),

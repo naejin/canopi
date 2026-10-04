@@ -111,6 +111,7 @@ describe('purpose-aware Design persistence operations', () => {
         return { callerFinalizerInvoked: true }
       }),
       hasLoadedDocument: vi.fn(() => true),
+      viewMovedSinceSave: () => false,
       captureForPersistence: vi.fn((metadata, doc) => ({
         content: capture(metadata, doc),
         isCurrent: () => true,

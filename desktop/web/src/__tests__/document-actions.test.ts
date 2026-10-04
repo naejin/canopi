@@ -153,6 +153,7 @@ function makeSession() {
     hideCanvasChrome: vi.fn(),
     zoomToFit: vi.fn(),
     hasLoadedDocument: vi.fn(() => loaded),
+    viewMovedSinceSave: () => false,
     captureForPersistence: vi.fn((metadata: { name: string }, doc: CanopiFile) => ({
       content: { ...doc, name: metadata.name },
       isCurrent: () => true,
