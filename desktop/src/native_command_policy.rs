@@ -828,11 +828,16 @@ fn audit_escape_allowlist(sources: &[(&str, &str)], allowlist: &[EscapeAllowance
         }
     }
     for entry in allowlist {
-        if !found.iter().any(|escape| escape.matches(entry)) {
-            violations.push(format!(
+        match found.iter().filter(|escape| escape.matches(entry)).count() {
+            0 => violations.push(format!(
                 "stale BLOCKING_ESCAPE_ALLOWLIST entry: {} ({})",
                 entry.path, entry.escape
-            ));
+            )),
+            1 => {}
+            count => violations.push(format!(
+                "a BLOCKING_ESCAPE_ALLOWLIST entry covers {count} escapes, not one: {} ({})",
+                entry.path, entry.escape
+            )),
         }
     }
     violations.sort();
@@ -1809,6 +1814,36 @@ mod tests {
                 "a reviewed escape is missing from BLOCKING_ESCAPE_ALLOWLIST: src/lib.rs (reaps the opener)",
                 "a reviewed escape is missing from BLOCKING_ESCAPE_ALLOWLIST: src/services/fixture.rs (faster)",
                 "stale BLOCKING_ESCAPE_ALLOWLIST entry: src/services/fixture.rs (tokio::task::spawn_blocking)",
+            ]
+        );
+    }
+
+    #[test]
+    fn one_allowlist_entry_covers_exactly_one_escape() {
+        let allowlist = [EscapeAllowance {
+            path: "src/services/fixture.rs",
+            escape: ".spawn",
+            reason: "reaps the opener",
+        }];
+        let violations = audit_escape_allowlist(
+            &[(
+                "src/services/fixture.rs",
+                r#"
+                    fn reviewed() {
+                        #[expect(clippy::disallowed_methods, reason = "reaps the opener")]
+                        let reaper = std::thread::Builder::new().spawn(reap);
+                        #[expect(clippy::disallowed_methods, reason = "reaps the opener")]
+                        let second = std::thread::Builder::new().spawn(reap);
+                    }
+                "#,
+            )],
+            &allowlist,
+        );
+
+        assert_eq!(
+            violations,
+            [
+                "a BLOCKING_ESCAPE_ALLOWLIST entry covers 2 escapes, not one: src/services/fixture.rs (.spawn)"
             ]
         );
     }
