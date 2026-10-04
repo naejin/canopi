@@ -22,7 +22,6 @@ export interface NavigationPolicy {
   readonly minZoom: number                 // 0
   readonly maxZoom: number                 // 27
   readonly overviewPixelsPerMetre: number  // 0.1
-  readonly referencePixelsPerMetre: number // 20 px/m = 100 %
   /** prefers-reduced-motion: reduce, a live matchMedia signal made in app/canvas-runtime/app-adapter.ts, declared on canvas/runtime/app-adapter.ts and
    *  passed to createCameraDriverHost; view/ never calls matchMedia (P4). Eases and tweens become 'none' moves while true. */
   readonly reducedMotion: ReadonlySignal<boolean>
@@ -32,8 +31,6 @@ export const ROTATE_DEG_PER_PX = 0.8                                  // MapLibr
 export const SNAP_TO_NORTH_DEG = 7
 export const VIEW_EASE_MS = 300
 
-/** 100 % zoom: today's CameraController reference scale. */
-const REFERENCE_PIXELS_PER_METRE = 20
 /** Bearings this close to a whole multiple of 360 read as north. */
 const FULL_TURN_EPSILON_DEG = 1e-9
 /** A step count this close to a whole number is that multiple (bearings arrive through float arithmetic). */
@@ -46,7 +43,6 @@ export function createNavigationPolicy(base: WorkspaceCameraPolicy, reducedMotio
     minZoom: base.minimumMapZoom,
     maxZoom: base.maximumMapZoom,
     overviewPixelsPerMetre: base.overviewScaleThreshold,
-    referencePixelsPerMetre: REFERENCE_PIXELS_PER_METRE,
     reducedMotion,
   })
 }

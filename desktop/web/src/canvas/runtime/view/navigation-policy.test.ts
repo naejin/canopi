@@ -57,7 +57,6 @@ describe('navigation policy', () => {
       minZoom: 0,
       maxZoom: 27,
       overviewPixelsPerMetre: 0.1,
-      referencePixelsPerMetre: 20,
     })
     expect(policy.reducedMotion).toBe(reducedMotion)
     expect(Object.isFrozen(policy)).toBe(true)
