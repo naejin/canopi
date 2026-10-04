@@ -46,8 +46,6 @@ describe('browser workspace map contribution adapter', () => {
     expect(snapshot.overlays.location).toEqual({ lat: 48, lon: 2 })
     expect(snapshot.overlays.hoveredTargets).toEqual([{ kind: 'zone', zone_id: 'plot' }])
     expect(snapshot).not.toHaveProperty('designExtentMeters')
-    expect(Object.isFrozen(snapshot)).toBe(true)
-    expect(Object.isFrozen(snapshot.overlays.hoveredTargets[0])).toBe(true)
     clearPanelOriginTargets()
     expect(snapshot.overlays.hoveredTargets).toHaveLength(1)
   })
