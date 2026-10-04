@@ -11,12 +11,6 @@ import type { GeoPoint, PlanarCamera, ScreenPoint, ViewCamera, ViewScreen, World
 
 interface Vector { readonly x: number; readonly y: number }
 
-/** Web Mercator + bearing: the camera that keeps `ground` under `screenPoint`. */
-export function cameraKeepingPoint(camera: ViewCamera, screen: ViewScreen, ground: GeoPoint, screenPoint: ScreenPoint): ViewCamera {
-  const center = centreKeeping(geoToMercator(ground.lon, ground.lat), camera.zoom, camera.bearingDeg, screen, screenPoint)
-  return { center, zoom: camera.zoom, bearingDeg: camera.bearingDeg, pitchDeg: 0 }
-}
-
 export function panCamera(camera: ViewCamera, screen: ViewScreen, deltaPx: ScreenPoint): ViewCamera {
   if (deltaPx.x === 0 && deltaPx.y === 0) return camera
   const centre = screenToMercator(camera, screen, { x: screen.width / 2 - deltaPx.x, y: screen.height / 2 - deltaPx.y })
