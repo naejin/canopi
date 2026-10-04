@@ -269,7 +269,8 @@ describe('view snapshot map', () => {
     expect(container.getAttribute('aria-hidden')).toBe('true')
     expect(container.style.visibility).toBe('hidden')
     expect(container.style.position).toBe('fixed')
-    expect(owner.diagnostics).toMatchObject({ live: true, mapsCreated: 1, captures: 1 })
+    expect(FakeMap.instances).toHaveLength(1)
+    expect(map!.removed).toBe(false)
     await owner.dispose()
   })
 
@@ -478,7 +479,6 @@ describe('view snapshot map', () => {
     expect(retina).toMatchObject({ width: 640, height: 400 })
     expect(FakeMap.instances).toHaveLength(2)
     expect(FakeMap.instances[0]!.removed).toBe(true)
-    expect(owner.diagnostics.mapsCreated).toBe(2)
     await owner.dispose()
   })
 
@@ -497,7 +497,6 @@ describe('view snapshot map', () => {
     expect(layers[0]!.disposals).toEqual([{ mapWillBeRemoved: true }])
     expect(backgrounds[0]!.disposed).toBe(true)
     expect(map.listenerCount('error')).toBe(0)
-    expect(owner.diagnostics.live).toBe(false)
 
     await owner.capture(request())
     expect(FakeMap.instances).toHaveLength(2)
@@ -514,7 +513,6 @@ describe('view snapshot map', () => {
     })
     await owner.capture(request())
     await vi.advanceTimersByTimeAsync(1_000)
-    expect(owner.diagnostics.live).toBe(false)
     expect(FakeMap.instances[0]!.removed).toBe(false)
 
     const next = owner.capture(request())
@@ -543,7 +541,6 @@ describe('view snapshot map', () => {
     await expect(pending).rejects.toThrow('did not load in time')
     expect(FakeMap.instances[0]!.removed).toBe(true)
     expect(FakeMap.instances[0]!.options.container.isConnected).toBe(false)
-    expect(owner.diagnostics.live).toBe(false)
     await owner.dispose()
   })
 
@@ -561,7 +558,6 @@ describe('view snapshot map', () => {
     await vi.advanceTimersByTimeAsync(1_000)
     await expect(pending).rejects.toThrow('did not initialize in time')
     expect(FakeMap.instances[0]!.removed).toBe(true)
-    expect(owner.diagnostics.live).toBe(false)
     await owner.dispose()
   })
 
@@ -574,7 +570,6 @@ describe('view snapshot map', () => {
     const pending = owner.capture(request())
     await vi.advanceTimersByTimeAsync(1_000)
     await expect(pending).rejects.toThrow('did not encode in time')
-    expect(owner.diagnostics.live).toBe(true)
     expect(FakeMap.instances[0]!.removed).toBe(false)
     await owner.dispose()
   })
@@ -586,7 +581,6 @@ describe('view snapshot map', () => {
     await vi.waitFor(() => expect(FakeMap.instances[0]?.listenerCount('idle')).toBe(1))
     FakeMap.instances[0]!.fire('webglcontextlost')
     await expect(pending).rejects.toThrow('lost its WebGL context')
-    expect(owner.diagnostics.contextLosses).toBe(1)
 
     FakeMap.autoIdle = true
     await owner.capture(request())
@@ -604,7 +598,7 @@ describe('view snapshot map', () => {
     controller.abort()
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
     expect(FakeMap.instances[0]!.listenerCount('idle')).toBe(0)
-    expect(owner.diagnostics.live).toBe(true)
+    expect(FakeMap.instances[0]!.removed).toBe(false)
 
     const aborted = new AbortController()
     aborted.abort()
@@ -655,7 +649,6 @@ describe('view snapshot map', () => {
     })
     await expect(owner.capture(request())).rejects.toThrow('no pixi')
     expect(FakeMap.instances[0]!.removed).toBe(true)
-    expect(owner.diagnostics.live).toBe(false)
     await owner.dispose()
   })
   it('copies the frame to a 2D canvas and encodes it, failing without 2D or an encoder result', async () => {
@@ -690,7 +683,6 @@ describe('view snapshot map', () => {
     controller.abort()
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
     expect(FakeMap.instances[0]!.removed).toBe(true)
-    expect(owner.diagnostics.live).toBe(false)
     await owner.dispose()
   })
 

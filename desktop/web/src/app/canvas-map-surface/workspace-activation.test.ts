@@ -176,10 +176,7 @@ function createComposition(options: {
       render: () => {},
     },
     get diagnostics() {
-      return {
-        phase, initializeCount: 0, renderCount: 0, sceneSyncCount: 0,
-        disposeCount: 0, lastFailure: null,
-      }
+      return { phase, sceneSyncCount: 0 }
     },
     initialize: vi.fn(async () => {
       await options.initialize?.()
