@@ -116,7 +116,7 @@ interface Installed {
   readonly layers: readonly InstalledLayer[]
   opacity: number
   locale: string
-  /** The requests the map makes for this style's sprite, glyphs and TileJSON, which it reports without a layer id. */
+  /** The requests the map makes for this style's sprite and TileJSON, which it reports without a layer id. */
   readonly resources: readonly RegExp[]
 }
 
@@ -131,7 +131,7 @@ export class VectorBasemap {
   private desired: VectorBasemapPresentation | null = null
   private generation = 0
   private status: MapLibreBasemapStatus = 'idle'
-  /** The installed style's sprite, glyphs or TileJSON failed to download: only Retry installs it again. */
+  /** The installed style's sprite or TileJSON failed to download: only Retry installs it again. */
   private resourceFailed = false
   /** Every style's resource requests seen by this map, so a late failure from an earlier style is still the basemap's. */
   private readonly knownResources: RegExp[] = []
@@ -192,9 +192,9 @@ export class VectorBasemap {
   }
 
   /**
-   * Claims a map error about this basemap's sprite, glyphs or TileJSON, which MapLibre reports with no layer id (a
-   * glyph range only through the tile that needed it). Such a failure leaves the basemap blank or unlabelled, so the
-   * installed style is `failed` until Retry; a single tile's failure is not claimed. An error with no URL is claimed
+   * Claims a map error about this basemap's sprite or TileJSON, which MapLibre reports with no layer id. Such a failure
+   * leaves the basemap blank or without icons, so the installed style is `failed` until Retry; a single tile's failure
+   * is not claimed (nor a glyph range: MapLibre draws its glyphs locally and only warns). An error with no URL is claimed
    * only in a sprite's failure shapes while the installed style's sprite downloads (`spriteInFlight`). Returns whether
    * it was claimed.
    */
@@ -360,20 +360,14 @@ function prepareOpenFreeMapStyle(
 }
 
 /**
- * The requests MapLibre makes for a style's own resources: the sprite sheet (`<sprite>[@2x].json|png`), the glyph
- * ranges (the glyphs template) and each source's TileJSON. A tile URL never matches.
+ * The requests MapLibre makes for a style's own resources: the sprite sheet (`<sprite>[@2x].json|png`) and each
+ * source's TileJSON. A tile URL never matches.
  */
 function styleResourceRequests(document: VectorStyleDocument): RegExp[] {
   const resources: RegExp[] = []
   // install() sets only a string sprite, so only its requests can fail.
   if (typeof document.sprite === 'string') {
     resources.push(new RegExp(`^${escapeRegExp(document.sprite)}(?:@\\d+(?:\\.\\d+)?x)?\\.(?:json|png)(?:[?#].*)?$`))
-  }
-  if (document.glyphs) {
-    const glyphs = escapeRegExp(document.glyphs)
-      .replace(/\\\{fontstack\\\}/g, '[^/]+')
-      .replace(/\\\{range\\\}/g, '\\d+-\\d+')
-    resources.push(new RegExp(`^${glyphs}(?:[?#].*)?$`))
   }
   for (const source of Object.values(document.sources)) {
     if (typeof source.url === 'string') resources.push(new RegExp(`^${escapeRegExp(source.url)}(?:[?#].*)?$`))

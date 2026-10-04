@@ -93,7 +93,7 @@ export interface MapBackgroundHandle {
   /** Retry: applies the presentation, downloading a Basemap that couldn't load (its style or its resources) again. */
   retry(presentation: MapBackgroundPresentation): void
   /**
-   * Claims a map error about the Basemap's sprite, glyphs or TileJSON (VectorBasemap.claimResourceError), which
+   * Claims a map error about the Basemap's sprite or TileJSON (VectorBasemap.claimResourceError), which
    * names no layer: the Basemap shows it couldn't load, and the map is not failed.
    */
   claimMapError(event: unknown): boolean

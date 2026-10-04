@@ -171,13 +171,13 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
           if (!isLive()) return
           // Errors are classified by owner. After admission, an error naming an
           // optional contribution or the background band, or a request for the
-          // Basemap's own sprite, glyphs or TileJSON, only skips that
+          // Basemap's own sprite or TileJSON, only skips that
           // contribution; context loss, pre-admission engine failure and any
           // other unattributed error or one naming the shared scene layer are core.
           const reportMapError = (event: unknown) => {
             if (!isLive()) return
             if (attempt.admitted && attempt.contributions.handleMapError(event)) return
-            // The Basemap's sprite, glyphs or TileJSON failed (offline): its notice shows, the map keeps drawing.
+            // The Basemap's sprite or TileJSON failed (offline): its notice shows, the map keeps drawing.
             if (attempt.admitted && attempt.background?.claimMapError(event)) {
               this.logError('MapLibre workspace basemap resource failed to load:', describeMapErrorEvent(event))
               return

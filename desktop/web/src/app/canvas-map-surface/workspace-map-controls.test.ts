@@ -1779,13 +1779,6 @@ describe('WorkspaceMapControls OpenFreeMap basemap', () => {
   it.each([
     // The style's sprite fails with no source or layer id.
     ['sprite', { type: 'error', error: offlineRequest('https://tiles.openfreemap.org/sprites/ofm_f384/ofm.json') }],
-    // A glyph range fails inside a basemap tile's parse.
-    ['glyph range', {
-      type: 'error',
-      sourceId: 'ofm-openmaptiles',
-      error: offlineRequest('https://tiles.openfreemap.org/fonts/Noto%20Sans%20Regular/0-255.pbf'),
-      tile: { tileID: { canonical: { z: 14, x: 1, y: 2 } } },
-    }],
     // The basemap source's TileJSON fails, which leaves the source empty.
     ['TileJSON', { type: 'error', sourceId: 'ofm-openmaptiles', error: offlineRequest('https://tiles.openfreemap.org/planet') }],
     // A captive portal answers the sprite with 200 and HTML: the JSON parse fails with no URL and no source.
@@ -1825,7 +1818,7 @@ describe('WorkspaceMapControls OpenFreeMap basemap', () => {
 
       controls.retryBasemap()
 
-      // Retry downloads the basemap's sprite, glyphs and TileJSON again by installing it afresh.
+      // Retry downloads the basemap's sprite and TileJSON again by installing it afresh.
       await vi.waitFor(() => expect(states.at(-1)?.basemapStatus).toBe('ok'))
       expect(map.setSprite).toHaveBeenCalledTimes(2)
       expect(hasOpenFreeMapBasemap(map)).toBe(true)
