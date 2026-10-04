@@ -943,11 +943,9 @@ describe('SceneInteractionSession', () => {
     const secondVertexGeo = previous.toGeo({ x: 60, y: 10 })
 
     // Panning 20 km east re-origins the plane; the camera follows it.
-    const transform = (deps.sceneEdits as SceneRuntimeEditCoordinator)
-      .reoriginSessionPlane(previous.toGeo({ x: 20_000, y: 0 }))!
-    expect(transform).not.toBeNull()
-    testView.reproject(transform)
+    ;(deps.sceneEdits as SceneRuntimeEditCoordinator).reoriginSessionPlane(previous.toGeo({ x: 20_000, y: 0 }))
     expect(store.sessionPlane).not.toBe(previous)
+    testView.reproject(previous.transformTo(store.sessionPlane))
 
     events.pointerDown({ x: 60, y: 50 }, { button: 0 })
     events.keyDown({ key: 'Enter' })

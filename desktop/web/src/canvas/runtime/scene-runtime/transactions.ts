@@ -1,5 +1,5 @@
 import { batch, computed, signal, type ReadonlySignal } from '@preact/signals'
-import type { GeoPosition, SessionPlaneTransform } from '../../session-plane'
+import type { GeoPosition } from '../../session-plane'
 
 import type { CanopiFile } from '../../../types/design'
 import { throwCanvasRuntimeCleanupErrors } from '../cleanup'
@@ -393,17 +393,16 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
   /**
    * Rebuilds the session plane at `origin` while settled. The scene and every
    * undo command move through one reprojector, so stored lon/lat is unchanged
-   * and nothing is dirtied or recorded. Returns the plane-to-plane transform,
-   * or null when not settled.
+   * and nothing is dirtied or recorded; the camera follows through the plane
+   * effect. When not settled it does nothing.
    */
-  reoriginSessionPlane(origin: GeoPosition): SessionPlaneTransform | null {
+  reoriginSessionPlane(origin: GeoPosition): void {
     if (
       this._persistenceDisposed
       || this._active
       || this._replacementHandoff
       || this._isPresentationMaintenanceBusy()
-    ) return null
-    const previous = this._sceneStore.sessionPlane
+    ) return
     const reprojector = this._sceneStore.beginReorigin(origin)
     const reprojectPatch = (patch: SceneCommandPatch): SceneCommandPatch => patch.persisted
       ? { ...patch, persisted: reprojector.persisted(patch.persisted) }
@@ -418,7 +417,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       this._incrementSceneRevision()
       this._invalidate('scene')
     })
-    return previous.transformTo(this._sceneStore.sessionPlane)
   }
 
   capturePersistence(): ScenePersistenceCapture {
