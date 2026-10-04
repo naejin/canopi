@@ -50,8 +50,10 @@ export interface FieldDrawing {
 const INK = '#24211c', OCHRE = '#A06B1F'
 const paper = (r: PrintBounds): PrintBounds => ({ x: r.x * MM, y: r.y * MM, width: r.width * MM, height: r.height * MM })
 
-/** Allocate once from the whole Design: cropping and locale never renumber a species. */
-/** N, P and M follow the unturned `plan` (top, then left, then id), so a code names the same object at every Map orientation. */
+/**
+ * Allocated once from the whole Design, so cropping and locale never renumber a species; N, P and M follow the unturned
+ * `plan` (top, then left, then id), so a code names the same object at every Map orientation.
+ */
 export function fieldReferences(input: PdfInput, plan: CanvasPrintSnapshot, zones: readonly ZoneMeasurements[], fields?: readonly PrintBounds[]): FieldReferences {
   const codes = new Map(input.canvas.plants.map(p => [p.canonicalName, p.speciesCode ?? p.canonicalName]))
   const names = [...codes.keys()].sort((a, b) => codes.get(a)!.localeCompare(codes.get(b)!, 'en') || a.localeCompare(b, 'en'))
