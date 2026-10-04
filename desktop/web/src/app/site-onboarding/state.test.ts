@@ -101,6 +101,18 @@ describe('Where is your site?', () => {
     expect(siteLocateOpen.value).toBe(true)
   })
 
+  it('a zone with no points does not settle the site question', () => {
+    open(design('Untitled'), 'new')
+    host.surfaces.commands.sceneEdits.importDesignObjects({
+      plants: [],
+      zones: [{ id: 'empty', name: null, zone_type: 'polygon', rotation: 0, points: [], fill_color: null, notes: null, locked: false }],
+      annotations: [], measurementGuides: [], groups: [],
+    })
+    expect(host.surfaces.queries.getSceneSnapshot().zones).toHaveLength(1)
+
+    expect(siteLocateOpen.value).toBe(true)
+  })
+
   it('a Design opened with no objects asks where its site is', () => {
     open(design('Orchard', [plant('apple', 0, 0)]), 'loaded')
     open(design('Empty Draft'), 'loaded')
