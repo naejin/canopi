@@ -2826,7 +2826,7 @@ describe('canvas v2 policies', () => {
     ])
   })
 
-  it('P3 confines building a view transform to the view module, the camera driver, the lens and tests', () => {
+  it('P3 confines building a view transform to the view module, the lens and tests', () => {
     const allowed = [
       'src/canvas/runtime/view/**',
       'src/canvas/runtime/inspection-lens.ts',
