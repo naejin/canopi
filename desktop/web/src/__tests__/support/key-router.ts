@@ -43,7 +43,6 @@ export function keyLike(key: string, init: Partial<KeyboardEventLike> = {}): Key
     ctrlKey: false,
     altKey: false,
     metaKey: false,
-    repeat: false,
     isComposing: false,
     defaultPrevented: false,
     cancelable: true,
@@ -51,7 +50,6 @@ export function keyLike(key: string, init: Partial<KeyboardEventLike> = {}): Key
     target: null,
     preventDefault() {},
     stopPropagation() {},
-    stopImmediatePropagation() {},
     ...init,
   }
 }

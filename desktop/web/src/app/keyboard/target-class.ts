@@ -50,8 +50,6 @@ const ARROW_OWNING_SELECTOR = [
 
 export interface KeyTarget {
   readonly focus: FocusClass
-  /** Inside a control, field, menu or dialog (a modal counts as one). */
-  readonly control: boolean
   /** A text field: it types the key. */
   readonly text: boolean
   /** Nothing is focused (<body>) and no modal is open, whatever the last press: Space holds for panning there (spec §1.6,
@@ -78,14 +76,14 @@ export function classifyKeyTarget(
   const element = elementOf(target)
   // jsdom leaves isContentEditable undefined on plain elements.
   const text = isEditableTarget(target) === true
-  const control = modal || (element?.closest(CONTROL_SELECTOR) ?? null) !== null
+  const control = (element?.closest(CONTROL_SELECTOR) ?? null) !== null
   const unfocused = !element || element === document.body || element === document.documentElement
   const dock = unfocused ? last.inDock : isInDock(element)
-  if (modal) return { focus: 'modal', control, text, unfocused: false, dock }
-  if (text) return { focus: 'text', control, text, unfocused, dock }
-  if (unfocused) return { focus: host && last.onMap ? 'map' : 'other', control, text, unfocused, dock }
-  if (host && host.contains(element) && !control) return { focus: 'map', control, text, unfocused, dock }
-  return { focus: 'other', control, text, unfocused, dock }
+  if (modal) return { focus: 'modal', text, unfocused: false, dock }
+  if (text) return { focus: 'text', text, unfocused, dock }
+  if (unfocused) return { focus: host && last.onMap ? 'map' : 'other', text, unfocused, dock }
+  if (host && host.contains(element) && !control) return { focus: 'map', text, unfocused, dock }
+  return { focus: 'other', text, unfocused, dock }
 }
 
 /** Inside the side-panel dock or the phone sheet. */

@@ -13,12 +13,11 @@ export interface KeyboardEventLike {
   readonly type: 'keydown' | 'keyup'
   readonly key: string; readonly code: string; readonly keyCode: number
   readonly shiftKey: boolean; readonly ctrlKey: boolean; readonly altKey: boolean; readonly metaKey: boolean
-  readonly repeat: boolean; readonly isComposing: boolean; readonly defaultPrevented: boolean
+  readonly isComposing: boolean; readonly defaultPrevented: boolean
   readonly cancelable: boolean; readonly timeStamp: number
   readonly target: EventTarget | null
   preventDefault(): void
   stopPropagation(): void
-  stopImmediatePropagation(): void
 }
 
 /** mod = Cmd on Mac, Ctrl elsewhere. A physical Ctrl on Mac is `ctrl`, never `mod`. Letters are lower case; named keys
