@@ -35,6 +35,7 @@ function createScheduler(
     prepareSceneRender: async () => ({
       publish: () => createTestSceneRendererSnapshot(),
     }),
+    placeOpenedDesign: () => {},
     renderChrome: vi.fn(),
     ...overrides,
   })

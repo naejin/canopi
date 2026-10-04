@@ -385,6 +385,7 @@ describe('createSharedMapSceneLayer', () => {
       getRenderer: () => composition.renderer,
       getView: () => createTestRendererView({ x: 0, y: 0, scale: 1 }),
       prepareSceneRender: async () => ({ publish: () => createTestSceneRendererSnapshot() }),
+      placeOpenedDesign: () => {},
       renderChrome: vi.fn(),
     })
     await scheduler.initialize(document.createElement('div'))

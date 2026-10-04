@@ -22,6 +22,11 @@ interface SceneRuntimeRenderSchedulerOptions {
   /** The live frame's view, handed to the renderer on every camera frame. */
   getView(): ViewTransform
   prepareSceneRender(): Promise<SceneRuntimePreparedRender>
+  /**
+   * Runs first in every scene render: a waiting open fit places the camera (document-surface.ts), so the render draws the
+   * opened Design where it opens, inside the chrome mounted since the open. A view-mode change it causes is this render's.
+   */
+  placeOpenedDesign(): void
   renderChrome(): void
 }
 
@@ -131,6 +136,8 @@ export class SceneRuntimeRenderScheduler {
     const renderer = this._renderer
     if (!renderer) return
 
+    // Before the frame is cancelled and the epoch taken: a scene invalidation the placement raises folds into this render.
+    this._options.placeOpenedDesign()
     this._cancelFrame()
     const renderEpoch = ++this._renderEpoch
     this._sceneRenderEpoch = renderEpoch

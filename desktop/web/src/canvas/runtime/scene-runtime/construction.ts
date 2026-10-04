@@ -5,13 +5,12 @@ import {
   type CanvasRuntimeAppAdapter,
 } from '../app-adapter'
 import { createSceneCanvasCommandSurface } from '../command-surface'
-import { createSceneCanvasDocumentSurface } from '../document-surface'
+import { createSceneCanvasDocumentSurface, type SceneCanvasDocumentSurface } from '../document-surface'
 import { createSceneCanvasQuerySurface, type SceneCanvasQuerySurface } from '../query-surface'
 import { SceneCanvasInspectionOwner } from '../inspection-lens'
 import type { SceneRendererDefinition } from '../renderers/scene-types'
 import type {
   CanvasCommandSurface,
-  CanvasDocumentSurface,
   CanvasPlantRowSpacingField,
   CanvasQueryRevision,
 } from '../runtime'
@@ -110,7 +109,7 @@ export interface SceneRuntimeConstruction {
   readonly commandSurface: CanvasCommandSurface
   readonly sceneCommands: SceneEditCoordinator & SceneCommandAdmission
   readonly settledReader: SettledSceneReader
-  readonly documentSurface: CanvasDocumentSurface
+  readonly documentSurface: SceneCanvasDocumentSurface
   readonly querySurface: SceneCanvasQuerySurface
   readonly panelTargetAdapter: SceneRuntimePanelTargetAdapter
   readonly disposeEffects: Array<() => void>
@@ -230,6 +229,7 @@ export function createSceneRuntimeConstruction(
         },
       }
     },
+    placeOpenedDesign: () => documentSurface.applyPendingOpen(),
     renderChrome: callbacks.renderChrome,
   })
   const documents = new SceneRuntimeDocumentBridge({

@@ -46,18 +46,26 @@ interface SceneCanvasDocumentSurfaceOptions {
   readonly disposeEffects: () => void
 }
 
+/** The runtime's document role: the app's surface, and the open fit's step in the scene render (construction.ts). */
+export interface SceneCanvasDocumentSurface extends CanvasDocumentSurface {
+  /** The scene render's first step (render-scheduler.ts): places the camera for a waiting open fit. */
+  applyPendingOpen(): void
+}
+
 export function createSceneCanvasDocumentSurface(
   options: SceneCanvasDocumentSurfaceOptions,
-): CanvasDocumentSurface {
+): SceneCanvasDocumentSurface {
   return new SceneCanvasDocumentRole(options)
 }
 
-class SceneCanvasDocumentRole implements CanvasDocumentSurface {
+class SceneCanvasDocumentRole implements SceneCanvasDocumentSurface {
   private _documentState: 'absent' | 'settling' | 'loaded' = 'absent'
   /** The view the open Design's file was saved with (`map_view`), or null. */
   private _savedMapView: SavedViewCamera | null = null
   /** The open fit has placed the camera for the open Design: from then on the live view is the Design's view. */
   private _placed = false
+  /** An open fit waits for the next scene render's publish step. */
+  private _openPending = false
 
   constructor(private readonly options: SceneCanvasDocumentSurfaceOptions) {}
 
@@ -90,9 +98,26 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
    * The open fit: every open path (the first load, a replace, the first generation) ends here, never Fit to Design. A Design
    * saved with its view (`map_view`, U28) opens at that view's centre and bearing, its framed ground fitted into the whole map
    * by the saved-view rule; any other opens on the fit at the opening bearing (spec §4.15). An empty scene, and the first
-   * frame before any Design, open north up (openAt).
+   * frame before any Design, open north up (openAt). With a renderer mounted the placement waits for the next scene render,
+   * which applies it first (applyPendingOpen), so it frames inside the chrome the opened Design mounts meanwhile and the
+   * camera and the scene land in one frame; with none, nothing draws and it places now.
    */
   zoomToFit(): void {
+    if (this.options.rendering.container === null) {
+      this._open()
+      return
+    }
+    this._openPending = true
+    this.options.rendering.invalidate('scene')
+  }
+
+  applyPendingOpen(): void {
+    if (!this._openPending) return
+    this._openPending = false
+    this._open()
+  }
+
+  private _open(): void {
     if (this._documentState === 'absent') {
       this.options.viewNavigation.openAt(0)
       return
@@ -128,6 +153,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
     this._documentState = 'loaded'
     this._savedMapView = file.map_view ?? null
     this._placed = false
+    this._openPending = false
     this.options.rendering.awaitPresentation()
     this.options.viewNavigation.clearTemporaryFocus()
     this.options.inspection.reset()
