@@ -118,8 +118,6 @@ interface Installed {
   readonly style: BasemapStyle
   readonly sourceIds: readonly string[]
   readonly layerIds: readonly string[]
-  /** The sprite set on the map, if the style has one. */
-  readonly sprite: string | null
 }
 
 /**
@@ -136,8 +134,11 @@ export class VectorBasemap {
   private status: MapLibreBasemapStatus = 'idle'
   /** The installed style's sprite or TileJSON failed to download: only Retry installs it again. */
   private resourceFailed = false
-  /** Every style's sprite set on this map, so a late failure from an earlier style's sprite is still the basemap's. */
-  private readonly knownSprites = new Set<string>()
+  /**
+   * The sprite last set on this map. Every OpenFreeMap style names the same one, so a late failure of it is the
+   * installed style's whichever style asked, and is claimed silently while none is installed.
+   */
+  private sprite: string | null = null
   /**
    * The installed style's sprite request may still be running: set by `setSprite`, cleared once the map is idle
    * (MapLibre is idle only after the sprite settled). A sprite that fails after its response arrived (HTML from a
@@ -195,12 +196,12 @@ export class VectorBasemap {
 
   /**
    * Claims a map error about this basemap's sprite or TileJSON. Such a failure leaves the basemap blank or without
-   * icons, so the installed style is `failed` until Retry; a failure from an earlier style is claimed silently. A
+   * icons, so the installed style is `failed` until Retry; one while no style is installed is claimed silently. A
    * TileJSON failure names a basemap source and no tile, with or without a URL (a captive portal's HTML fails to parse
    * after its response arrived); a single tile's failure is not claimed (nor a glyph range: MapLibre draws its glyphs
-   * locally and only warns). A sprite failure names its URL and no
-   * source, or, after its response arrived, neither: then it is claimed only in a sprite's failure shapes while the
-   * installed style's sprite downloads (`spriteInFlight`). Returns whether it was claimed.
+   * locally and only warns). A sprite failure names its URL and no source, or, after its response arrived, neither:
+   * then it is claimed only in a sprite's failure shapes while the installed style's sprite downloads
+   * (`spriteInFlight`). Returns whether it was claimed.
    */
   claimResourceError(event: unknown): boolean {
     if (this.disposed) return false
@@ -212,9 +213,8 @@ export class VectorBasemap {
     }
     const url = failedRequestUrl(event)
     if (url === null) return this.claimSpriteError(event)
-    const sprite = spriteOf(url)
-    if (!this.knownSprites.has(sprite)) return false
-    if (this.installed?.sprite === sprite) this.markFailed()
+    if (spriteOf(url) !== this.sprite) return false
+    if (this.installed) this.markFailed()
     return true
   }
 
@@ -279,7 +279,7 @@ export class VectorBasemap {
     this.resourceFailed = false
     if (document.glyphs) this.map.setGlyphs(document.glyphs)
     if (sprite !== null) {
-      this.knownSprites.add(sprite)
+      this.sprite = sprite
       this.map.setSprite(sprite)
       this.spriteInFlight = true
     }
@@ -294,7 +294,6 @@ export class VectorBasemap {
       style: presentation.style,
       sourceIds: Object.keys(prepared.sources),
       layerIds: prepared.layers.map((layer) => layer.id),
-      sprite,
     }
   }
 

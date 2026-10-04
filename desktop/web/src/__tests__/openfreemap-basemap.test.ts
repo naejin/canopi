@@ -7,10 +7,13 @@ import {
   type VectorStyleDocument,
 } from '../maplibre/openfreemap-basemap'
 
+/** The one sprite every OpenFreeMap style names (checked against the four live style documents, 2026-10-04). */
+const OFM_SPRITE = 'https://tiles.openfreemap.org/sprites/ofm_f384/ofm'
+
 function styleDocument(name: string): VectorStyleDocument {
   return {
     glyphs: `https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf#${name}`,
-    sprite: `https://tiles.openfreemap.org/sprites/${name}`,
+    sprite: OFM_SPRITE,
     sources: { openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' } },
     layers: [
       { id: 'background', type: 'background', paint: { 'background-color': '#fff' } },
@@ -124,7 +127,7 @@ describe('OpenFreeMap vector basemap', () => {
     ])
     expect(map.layers[1]!.source).toBe('ofm-openmaptiles')
     expect(map.glyphs).toContain('fonts/{fontstack}')
-    expect(map.sprite).toContain('sprites/liberty')
+    expect(map.sprite).toBe(OFM_SPRITE)
   })
 
   it('labels places in the app locale and keeps non-name labels', async () => {
@@ -163,7 +166,7 @@ describe('OpenFreeMap vector basemap', () => {
     await settle()
     basemap.update({ style: 'dark', visible: true, opacity: 1, locale: 'en' })
     await settle()
-    expect(map.sprite).toContain('sprites/dark')
+    expect(map.glyphs).toContain('#dark')
     expect(map.layers.filter((layer) => String(layer.id).startsWith('ofm:'))).toHaveLength(5)
     basemap.update({ style: 'dark', visible: false, opacity: 1, locale: 'en' })
     expect(map.layers.map((layer) => layer.id)).toEqual(['canopi-scene'])
@@ -184,7 +187,7 @@ describe('OpenFreeMap vector basemap', () => {
     await settle()
     releaseLiberty()
     await settle()
-    expect(map.sprite).toContain('positron')
+    expect(map.glyphs).toContain('#positron')
   })
 
   it('reports a rejected style as failed until a later load installs it, and idle once hidden', async () => {
@@ -208,7 +211,7 @@ describe('OpenFreeMap vector basemap', () => {
     expect(statuses).toEqual(['loading', 'failed', 'loading'])
     await settle()
     expect(statuses).toEqual(['loading', 'failed', 'loading', 'ok'])
-    expect(map.sprite).toContain('liberty')
+    expect(map.glyphs).toContain('#liberty')
 
     basemap.update({ ...shown, visible: false })
     expect(statuses).toEqual(['loading', 'failed', 'loading', 'ok', 'idle'])
@@ -291,7 +294,7 @@ describe('OpenFreeMap vector basemap', () => {
     }
   })
 
-  it('claims a sprite failure from the previous style after a style switch silently, and the shown style\'s own loudly', async () => {
+  it('claims a late failure of the shared sprite as the shown style\'s after a style switch, and silently once hidden', async () => {
     const map = new FakeMap()
     const statuses: string[] = []
     const basemap = new VectorBasemap(map, {
@@ -308,12 +311,15 @@ describe('OpenFreeMap vector basemap', () => {
       error: Object.assign(new Error(`AJAXError: Failed to fetch (0): ${url}`), { name: 'AJAXError', status: 0, url }),
     })
 
-    // Liberty's sprite request was still running when Dark replaced it.
-    expect(basemap.claimResourceError(offline('https://tiles.openfreemap.org/sprites/liberty@2x.json'))).toBe(true)
-    expect(statuses.at(-1)).toBe('ok')
-
-    expect(basemap.claimResourceError(offline('https://tiles.openfreemap.org/sprites/dark@2x.png?v=1'))).toBe(true)
+    // Liberty's sprite request was still running when Dark set the same sprite: Dark's own request fails too.
+    expect(basemap.claimResourceError(offline(`${OFM_SPRITE}@2x.json`))).toBe(true)
     expect(statuses.at(-1)).toBe('failed')
+
+    basemap.update({ style: 'dark', visible: false, opacity: 1, locale: 'en' })
+    expect(basemap.claimResourceError(offline(`${OFM_SPRITE}@2x.png?v=1`))).toBe(true)
+    expect(statuses.at(-1)).toBe('idle')
+
+    expect(basemap.claimResourceError(offline('https://example.com/sprites/other@2x.json'))).toBe(false)
   })
 
   describe('a sprite that fails after its response arrived (no URL on the error)', () => {
@@ -381,7 +387,7 @@ describe('OpenFreeMap vector basemap', () => {
       map.sprite = null
       basemap.update({ style: 'liberty', visible: true, opacity: 1, locale: 'en' })
       await settle()
-      expect(map.sprite).toContain('sprites/liberty')
+      expect(map.sprite).toBe(OFM_SPRITE)
       expect(statuses.at(-1)).toBe('ok')
       expect(basemap.claimResourceError(urlLess[1][1])).toBe(true)
       expect(statuses.at(-1)).toBe('failed')
