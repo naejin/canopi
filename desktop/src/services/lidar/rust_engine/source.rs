@@ -256,12 +256,17 @@ fn probe_other(
         return Err("raster has degenerate pixel size (zero geotransform scale)".to_string());
     }
     // The WKT first: wbraster's code is the WKT's last nested one when its
-    // root names none.
+    // root names none. A WKT wbraster generated from a bare code (a
+    // GeoPackage's srs_id) names no code, so that code resolves instead.
+    let generated = raster
+        .crs
+        .epsg
+        .and_then(|code| wbprojection::to_ogc_wkt(code).ok());
     let crs = if let Some(wkt) = raster
         .crs
         .wkt
         .as_deref()
-        .filter(|wkt| !wkt.trim().is_empty())
+        .filter(|wkt| !wkt.trim().is_empty() && Some(*wkt) != generated.as_deref())
     {
         Some(crs::from_reference(wkt)?)
     } else if let Some(code) = raster.crs.epsg {
@@ -301,6 +306,37 @@ fn probe_other(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A GeoPackage names only its srs_id; wbraster fills a WKT from it
+    /// that carries no code, so the probe resolves the code, not that WKT.
+    #[test]
+    fn a_geopackage_is_placed_by_its_srs_id() {
+        let dir = crate::test_scratch::TestScratch::new("rust-engine-source-gpkg");
+        for code in [28992, 3857] {
+            let gpkg = dir.join(format!("grid-{code}.gpkg"));
+            let mut raster = wbraster::Raster::new(wbraster::RasterConfig {
+                cols: 2,
+                rows: 2,
+                bands: 1,
+                x_min: 155_000.0,
+                y_min: 463_000.0,
+                cell_size: 10.0,
+                nodata: 0.0,
+                data_type: wbraster::raster::DataType::U8,
+                crs: wbraster::CrsInfo::from_epsg(code),
+                ..Default::default()
+            });
+            raster.set(0, 0, 0, 1.0).unwrap();
+            raster
+                .write(&gpkg, wbraster::RasterFormat::GeoPackage)
+                .unwrap();
+            let read = read_other(&gpkg).unwrap();
+            let (_, resolved) = probe_other(&gpkg, &read).unwrap();
+            let resolved = resolved.unwrap();
+            assert_eq!(resolved.epsg, Some(code));
+            assert_eq!(resolved.wkt, crs::from_epsg(code).unwrap().wkt);
+        }
+    }
 
     /// An Esri ASCII grid whose .prj names no code of its own: wbraster
     /// identifies it by its last nested code (its unit's, 9003), so the
