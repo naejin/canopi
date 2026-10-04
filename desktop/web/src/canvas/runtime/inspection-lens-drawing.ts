@@ -48,9 +48,10 @@ export interface InspectionLensDrawOptions {
   readonly dpr: number
   /**
    * An offscreen context of the given backing size, for a translucent Plants layer: its symbols and hover ring are
-   * drawn opaque there and composited once, so overlaps are no darker than one plant.
+   * drawn opaque there and composited once, so overlaps are no darker than one plant. Null when none can be made: the
+   * layer is then drawn opaque, which keeps the preview.
    */
-  scratch(widthPx: number, heightPx: number): CanvasRenderingContext2D
+  scratch(widthPx: number, heightPx: number): CanvasRenderingContext2D | null
 }
 
 /**

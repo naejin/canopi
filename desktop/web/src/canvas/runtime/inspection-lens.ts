@@ -25,14 +25,6 @@ interface InspectionOwnerOptions {
   setHoveredTarget(target: SceneDesignObjectTarget | null): void
 }
 
-/** The reused offscreen context at the given backing size. */
-function sizedScratch(scratch: CanvasRenderingContext2D, widthPx: number, heightPx: number): CanvasRenderingContext2D {
-  if (scratch.canvas.width !== widthPx || scratch.canvas.height !== heightPx) {
-    scratch.canvas.width = widthPx; scratch.canvas.height = heightPx
-  }
-  return scratch
-}
-
 export class SceneCanvasInspectionOwner {
   private readonly views = new Set<{ reset(): void; refresh(): void; dispose(): void }>()
   private disposed = false
@@ -43,16 +35,25 @@ export class SceneCanvasInspectionOwner {
     const canvas = document.createElement('canvas')
     canvas.style.width = '100%'; canvas.style.height = '100%'
     canvas.setAttribute('aria-hidden', 'true')
-    // The lens's context and an offscreen one, reused, that a translucent Plants layer is composited from once. Without
-    // both there is no preview.
     let ctx: CanvasRenderingContext2D | null = null
-    let scratch: CanvasRenderingContext2D | null = null
-    try {
-      ctx = canvas.getContext('2d')
-      scratch = ctx && document.createElement('canvas').getContext('2d')
-    } catch (error) { console.error('Canvas inspection preview unavailable:', error) }
-    if (!scratch) ctx = null
+    try { ctx = canvas.getContext('2d') } catch (error) { console.error('Canvas inspection preview unavailable:', error) }
     container.appendChild(canvas)
+    // Offscreen, made on the first translucent Plants layer and reused: the plants are composited from it once. Asked for
+    // once; without one they are drawn opaque, and an opaque layer never needs it.
+    let scratch: CanvasRenderingContext2D | null = null
+    let scratchAsked = false
+    function sizedScratch(widthPx: number, heightPx: number): CanvasRenderingContext2D | null {
+      if (!scratchAsked) {
+        scratchAsked = true
+        try { scratch = document.createElement('canvas').getContext('2d') } catch (error) {
+          console.error('Canvas inspection plant compositing unavailable:', error)
+        }
+      }
+      if (scratch && (scratch.canvas.width !== widthPx || scratch.canvas.height !== heightPx)) {
+        scratch.canvas.width = widthPx; scratch.canvas.height = heightPx
+      }
+      return scratch
+    }
     // The inspected point in session-plane metres, and the plane it belongs to.
     let point: InspectionPoint | null = null
     let pointPlane: SessionPlane | null = null
@@ -128,12 +129,11 @@ export class SceneCanvasInspectionOwner {
         value => ctx ? ctx.measureText(value).width : Array.from(value).length * 12)
       if (highlightedId && !laidOut.some(plant => plant.id === highlightedId)) clearHighlight()
       footprint.value = view.visibleWorldQuad()
-      if (ctx && scratch) {
-        const offscreen = scratch
+      if (ctx) {
         canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr)
         try {
           drawInspectionLensScene(ctx, { scene: snapshot.scene, speciesCache: snapshot.speciesCache, hoveredPlantId: highlightedId },
-            view, { widthPx: width, heightPx: height, dpr, scratch: (w, h) => sizedScratch(offscreen, w, h) })
+            view, { widthPx: width, heightPx: height, dpr, scratch: sizedScratch })
         } catch (error) {
           console.error('Canvas inspection preview unavailable:', error)
           ctx = null
