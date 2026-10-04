@@ -176,8 +176,19 @@ pub(super) fn from_reference(reference: &str) -> Result<ResolvedCrs, String> {
         return Ok(stored(resolved));
     }
     let crs = Crs::from_wkt(trimmed).map_err(|e| format!("unsupported CRS WKT: {e}"))?;
+    let params = crs.projection.params();
+    // wbprojection reads the projection in metres, as its keys are written
+    // back, while the raster's coordinates are in the WKT's own unit.
+    let unit = nodes
+        .iter()
+        .rev()
+        .find(|node| node.keyword == "UNIT" || node.keyword == "LENGTHUNIT")
+        .and_then(|node| node.numbers().first().copied());
+    if !matches!(params.kind, ProjectionKind::Geographic) && unit.is_some_and(|unit| unit != 1.0) {
+        return Err(not_supported(OTHER_UNIT));
+    }
     user_defined(
-        crs.projection.params().clone(),
+        params.clone(),
         wkt_shift(&nodes),
         crs.name.clone(),
         trimmed.to_string(),
@@ -217,9 +228,7 @@ pub(super) fn from_proj4(definition: &str) -> Result<ResolvedCrs, String> {
     let unsupported = |e: String| format!("unsupported PROJ definition: {e}");
     let (definition, proj) = parse(definition).map_err(unsupported)?;
     if !proj.is_latlong() && proj.to_meter() != 1.0 {
-        return Err(unsupported(
-            "a linear unit other than the metre".to_string(),
-        ));
+        return Err(unsupported(OTHER_UNIT.to_string()));
     }
     let crs =
         wbprojection::from_proj_string(&definition).map_err(|e| unsupported(e.to_string()))?;
@@ -231,6 +240,14 @@ pub(super) fn from_proj4(definition: &str) -> Result<ResolvedCrs, String> {
         proj,
         user: Some(crs.projection.params().clone()),
     })
+}
+
+/// Why a CRS with no registry code in another linear unit is refused: its
+/// keys are written back in metres.
+const OTHER_UNIT: &str = "a linear unit other than the metre";
+
+fn not_supported(reason: &str) -> String {
+    format!("the raster's coordinate system is not supported: {reason}")
 }
 
 /// A CRS with no registry code: its projection, ellipsoid and datum shift.
@@ -250,8 +267,7 @@ fn user_defined(
     if let Some(shift) = &shift {
         definition.push_str(&format!(" +towgs84={}", list(shift)));
     }
-    let (definition, proj) = parse(&definition)
-        .map_err(|e| format!("the raster's coordinate system is not supported: {e}"))?;
+    let (definition, proj) = parse(&definition).map_err(|e| not_supported(&e))?;
     Ok(ResolvedCrs {
         epsg: None,
         wkt: with_definition(&wkt, &definition),
@@ -1207,6 +1223,36 @@ mod tests {
                 .unwrap_err()
                 .contains("a linear unit other than the metre")
         );
+    }
+
+    /// `wkt` without any `AUTHORITY` node, as a hand-made or ESRI-style WKT.
+    fn without_authorities(wkt: &str) -> String {
+        let mut wkt = wkt.to_string();
+        while let Some(start) = wkt.find(",AUTHORITY[") {
+            let end = start + wkt[start..].find(']').unwrap() + 1;
+            wkt.replace_range(start..end, "");
+        }
+        wkt
+    }
+
+    const ESRI_LONG_ISLAND_FEET: &str = r#"PROJCS["NAD_1983_StatePlane_New_York_Long_Island_FIPS_3104_Feet",GEOGCS["GCS_North_American_1983",DATUM["D_North_American_1983",SPHEROID["GRS_1980",6378137.0,298.257222101]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Lambert_Conformal_Conic"],PARAMETER["False_Easting",984250.0],PARAMETER["False_Northing",0.0],PARAMETER["Central_Meridian",-74.0],PARAMETER["Standard_Parallel_1",40.66666666666666],PARAMETER["Standard_Parallel_2",41.03333333333333],PARAMETER["Latitude_Of_Origin",40.16666666666666],UNIT["Foot_US",0.3048006096012192]]"#;
+
+    /// wbprojection reads a WKT naming no code in metres, as its keys are
+    /// written back, so one in feet is refused rather than placed 3.28 times
+    /// too far from its false origin: GDAL's Long Island with every authority
+    /// stripped, and an ESRI .prj in Foot_US.
+    #[test]
+    fn a_wkt_naming_no_code_in_feet_is_refused() {
+        let gdal = without_authorities(crs_definitions::from_code(2263).unwrap().wkt);
+        for wkt in [gdal.as_str(), ESRI_LONG_ISLAND_FEET] {
+            let refused = from_reference(wkt).map(|crs| crs.definition);
+            assert!(
+                refused
+                    .as_ref()
+                    .is_err_and(|e| e.contains("a linear unit other than the metre")),
+                "{refused:?}"
+            );
+        }
     }
 
     /// NAD83 / New York Long Island (EPSG:2263) is in US survey feet: points
