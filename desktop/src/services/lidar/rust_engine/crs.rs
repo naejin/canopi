@@ -189,12 +189,11 @@ pub(super) fn from_reference(reference: &str) -> Result<ResolvedCrs, String> {
     if !geographic && projected_unit(trimmed).is_some_and(|metres| metres != 1.0) {
         return Err(not_supported(OTHER_UNIT));
     }
-    user_defined(
-        params.clone(),
-        wkt_shift(&nodes).or_else(|| geographic_shift(&nodes)),
-        crs.name.clone(),
-        trimmed.to_string(),
-    )
+    let shift = match wkt_shift(&nodes) {
+        Some(shift) => Some(shift),
+        None => geographic_shift(&nodes)?,
+    };
+    user_defined(params.clone(), shift, crs.name.clone(), trimmed.to_string())
 }
 
 fn definition_of(code: u32) -> Option<crs_definitions::Def> {
@@ -509,9 +508,10 @@ fn with_definition(wkt: &str, definition: &str) -> String {
 }
 
 /// The shift of the registry geographic CRS a WKT names inside it, as
-/// `datum_of` takes it for keys: GDAL 3 writes WKT1 without TOWGS84.
-fn geographic_shift(nodes: &[WktNode]) -> Option<Vec<f64>> {
-    let code = nodes
+/// `datum_of` takes it for keys: GDAL 3 writes WKT1 without TOWGS84. A code
+/// the engine refuses is refused here too.
+fn geographic_shift(nodes: &[WktNode]) -> Result<Option<Vec<f64>>, String> {
+    let Some(code) = nodes
         .iter()
         .filter(|node| {
             node.parents.last().is_some_and(|parent| {
@@ -521,8 +521,11 @@ fn geographic_shift(nodes: &[WktNode]) -> Option<Vec<f64>> {
                 )
             })
         })
-        .find_map(WktNode::epsg)?;
-    datum_shift(&from_epsg(code).ok()?.definition)
+        .find_map(WktNode::epsg)
+    else {
+        return Ok(None);
+    };
+    Ok(datum_shift(&from_epsg(code)?.definition))
 }
 
 /// The PROJ definition a WKT's `EXTENSION["PROJ4",..]` node carries.
@@ -1462,6 +1465,21 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A WKT naming no code on a registry geographic CRS the engine refuses
+    /// (NAD27, which needs grids) is refused as keys naming it are, rather
+    /// than placed with its datum shift dropped.
+    #[test]
+    fn a_wkt_naming_no_code_on_a_refused_geographic_crs_is_refused() {
+        let wkt = crs_definitions::from_code(26717)
+            .unwrap()
+            .wkt
+            .replace(r#",AUTHORITY["EPSG","26717"]]"#, "]")
+            .replace(r#",AUTHORITY["EPSG","9001"]"#, "");
+        assert_eq!(own_code(&wkt_nodes(&wkt)), None);
+        let refused = from_reference(&wkt).map(|crs| crs.definition);
+        assert_eq!(refused, Err("EPSG:4267 is not supported".to_string()));
     }
 
     /// A projected WKT naming no code of its own is read as it is spelled,
