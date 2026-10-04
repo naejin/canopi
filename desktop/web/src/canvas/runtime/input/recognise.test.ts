@@ -4,7 +4,7 @@ import type { Gesture } from './gestures'
 import {
   FOREIGN,
   HORIZONTAL_RULER,
-  MAC_WEBKIT,
+  MAC_GESTURES,
   OWNED_CHROME,
   OWNED_TEXT,
   ROTATE_HANDLE,
@@ -73,11 +73,8 @@ describe('recognise: 5.1 secondary button', () => {
     expect(effectKinds(SEQUENCES.A2)).toEqual(['prevent-default'])
   })
 
-  it.each([
-    ['WebKitGTK', SEQUENCES.A3_WEBKITGTK],
-    ['Chromium', SEQUENCES.A3_CHROMIUM],
-  ])('A3 Linux right-click (%s): the menu at the contextmenu', (_engine, sequence) => {
-    const result = run(sequence)
+  it('A3 Linux right-click: the menu at the contextmenu', () => {
+    const result = run(SEQUENCES.A3)
     expect(result.steps[1]!.gestures).toEqual([{ kind: 'menu-request', at: { x: 100, y: 100 }, source: 'native' }])
     expect(result.gestures).toHaveLength(1)
   })
@@ -133,12 +130,8 @@ describe('recognise: 5.1 secondary button', () => {
 })
 
 describe('recognise: 5.2 macOS Ctrl+click', () => {
-  it.each([
-    ['WebKit', SEQUENCES.B1_WEBKIT],
-    ['Chromium', SEQUENCES.B1_CHROMIUM],
-    ['Gecko', SEQUENCES.B1_GECKO],
-  ])('B1 macOS Ctrl+click (%s): an additive tap and the native menu', (_engine, sequence) => {
-    const result = run(sequence)
+  it('B1 macOS Ctrl+click: an additive tap and the native menu', () => {
+    const result = run(SEQUENCES.B1)
     expect(kinds(result.gestures)).toEqual(['press', 'menu-request', 'tap'])
     const press = result.gestures[0]
     expect(press).toMatchObject({ kind: 'press', mods: { ctrl: true, meta: false }, target: { kind: 'surface' } })
@@ -162,7 +155,7 @@ describe('recognise: 5.2 macOS Ctrl+click', () => {
   })
 
   it('B4 macOS two-finger trackpad click: as A3', () => {
-    expect(run(SEQUENCES.B4).gestures).toEqual(run(SEQUENCES.A3_WEBKITGTK).gestures)
+    expect(run(SEQUENCES.B4).gestures).toEqual(run(SEQUENCES.A3).gestures)
   })
 
   it('B6 Mac Ctrl+Shift+click drag: a band, never a rotate', () => {
@@ -304,7 +297,7 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
   })
 
   it('a twist the other way subtracts the threshold the other way', () => {
-    const result = run(seq('anticlockwise twist', MAC_WEBKIT, [
+    const result = run(seq('anticlockwise twist', MAC_GESTURES, [
       gesture('start', 1, 0),
       gesture('change', 1, -15),
       gesture('change', 1, -4),
@@ -320,7 +313,7 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
     ['blur', blur(), 'blur'],
     ['configure', configure({ tool: 'polygon', mode: 'site', pointingDevice: 'trackpad' }), 'tool-change'],
   ] as const)('%s cancels a live twist, and the rest of the twist turns nothing', (_fence, fence, reason) => {
-    const result = run(seq('fenced twist', MAC_WEBKIT, [
+    const result = run(seq('fenced twist', MAC_GESTURES, [
       gesture('start', 1, 0),
       gesture('change', 1, 20),
       fence,
@@ -334,7 +327,7 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
   })
 
   it('a twist is ignored during a pointer pan or rotate, and a press during a twist is ignored', () => {
-    const duringPan = run(seq('twist during a pan', MAC_WEBKIT, [
+    const duringPan = run(seq('twist during a pan', MAC_GESTURES, [
       down(100, 100, { button: 1 }),
       gesture('start', 1, 0),
       gesture('change', 1, 20),
@@ -343,7 +336,7 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
       up(120, 100, { button: 1 }),
     ]))
     expect(kinds(duringPan.gestures)).toEqual(['pan:start', 'pan:move', 'pan:end'])
-    const duringRotate = run(seq('twist during a rotate', MAC_WEBKIT, [
+    const duringRotate = run(seq('twist during a rotate', MAC_GESTURES, [
       down(100, 100, { button: 1, shift: true }),
       move(120, 100, { buttons: 4, shift: true }),
       gesture('start', 1, 0),
@@ -353,7 +346,7 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
     ]))
     expect(duringRotate.gestures.every((gesture) => gesture.kind === 'rotate' && gesture.source === 'auxiliary-drag')).toBe(true)
     expect(kinds(duringRotate.gestures)).toEqual(['rotate:start', 'rotate:move', 'rotate:end'])
-    const pressDuringTwist = run(seq('press during a twist', MAC_WEBKIT, [
+    const pressDuringTwist = run(seq('press during a twist', MAC_GESTURES, [
       gesture('start', 1, 0),
       gesture('change', 1, 20),
       down(100, 100),
@@ -577,7 +570,7 @@ describe('recognise: 5.7 middle button and Space', () => {
       [rotate(16, true)], [rotate(16, false)], [rotate(16, false)], [rotate(20, true)],
     ])
     // On a Mac mod is Cmd: Ctrl never steps.
-    const mac = steps(MAC_WEBKIT)
+    const mac = steps(MAC_GESTURES)
     expect(mac.slice(2).map((step) => step.gestures)).toEqual([
       [rotate(16, false)], [rotate(16, true)], [rotate(16, false)], [rotate(20, false)],
     ])
