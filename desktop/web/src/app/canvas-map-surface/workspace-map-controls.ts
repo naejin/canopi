@@ -49,7 +49,6 @@ interface WorkspaceMapAttempt {
   background: MapBackgroundHandle | null
   lifetime: MapLibreSurfaceLifetime | null
   map: WorkspaceActivationMap | null
-  maplibre: unknown
   settled: boolean
   released: boolean
   admitted: boolean
@@ -129,7 +128,6 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
         background: null,
         lifetime: null,
         map: null,
-        maplibre: null,
         settled: false,
         released: false,
         admitted: false,
@@ -366,7 +364,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     if (!map || !lifetime) return
     attempt.background ??= mountMapBackground({
       map: map as unknown as MapBackgroundMap,
-      maplibre: (this.surface as { maplibre?: unknown }).maplibre,
+      maplibre: this.surface.maplibre,
       tileAuth: attempt.tileAuth,
       lifetime,
       onError: (error) => this.logError('Map basemap style failed to load:', error),
