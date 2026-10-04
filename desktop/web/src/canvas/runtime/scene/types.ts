@@ -102,5 +102,4 @@ export interface SceneSessionState {
   speciesFocus: SpeciesFocus
   selectedTargets: SceneDesignObjectSelection
   hoveredTarget: SceneDesignObjectTarget | null
-  documentRevision: number
 }

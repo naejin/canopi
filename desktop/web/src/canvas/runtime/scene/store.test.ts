@@ -183,11 +183,9 @@ describe('scene store', () => {
 
     store.updateSession((draft) => {
       draft.hoveredTarget = { kind: 'zone', id: 'zone-a' }
-      draft.documentRevision = 3
     })
 
     expect(store.session.hoveredTarget).toEqual({ kind: 'zone', id: 'zone-a' })
-    expect(store.session.documentRevision).toBe(3)
 
     // toCanopiFile serializes canvas-entity fields; non-canvas sections
     // (consortiums, timeline, budget) are emitted as empty placeholders —

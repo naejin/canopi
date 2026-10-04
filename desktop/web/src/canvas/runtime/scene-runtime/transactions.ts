@@ -341,11 +341,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       },
       wasHistoryRecorded: (token) => this._history.hasRecorded(token),
       noteCommitted: (command) => this._noteCommitted(command),
-      incrementDocumentRevision: () => {
-        this._sceneStore.updateSession((session) => {
-          session.documentRevision += 1
-        })
-      },
       syncCanvasSignalsFromScene: this._syncCanvasSignalsFromScene,
       incrementSceneRevision: this._incrementSceneRevision,
       invalidate: this._invalidate,
@@ -1154,7 +1149,6 @@ interface SceneRuntimeEditTransactionOptions {
   recordHistory(command: SceneCommand, token: object): void
   wasHistoryRecorded(token: object): boolean
   noteCommitted(command: SceneCommand): void
-  incrementDocumentRevision(): void
   syncCanvasSignalsFromScene(): void
   incrementSceneRevision(): void
   invalidate(kind: SceneEditInvalidationKind): void
@@ -1176,7 +1170,6 @@ class SceneRuntimeEditTransaction implements SceneEditTransaction {
   private _command: SceneCommand | null | undefined
   private _historyAccepted = false
   private _historyPublished = false
-  private _documentRevisionIncremented = false
   private _outcomeRecorded = false
   private _signalsSynced = false
   private _sceneRevisionIncremented = false
@@ -1278,10 +1271,6 @@ class SceneRuntimeEditTransaction implements SceneEditTransaction {
             this._historyAccepted = this._options.wasHistoryRecorded(this)
             throw error
           }
-        }
-        if (!this._documentRevisionIncremented) {
-          this._options.incrementDocumentRevision()
-          this._documentRevisionIncremented = true
         }
         if (!this._outcomeRecorded) {
           this._options.noteCommitted(command)
