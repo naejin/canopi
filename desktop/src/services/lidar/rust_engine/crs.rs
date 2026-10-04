@@ -57,14 +57,16 @@ impl ResolvedCrs {
     }
 }
 
-/// The prime meridians proj4rs 0.2.0 knows by name (`prime_meridians.rs`),
-/// in degrees east of Greenwich.
+/// The prime meridians the registry's definitions name, in degrees east of
+/// Greenwich as EPSG defines them: PROJ and proj4rs 0.2.0 keep an older
+/// Madrid (3°41'16.58" W, 48 m west of EPSG's) and proj4rs an older
+/// Copenhagen, while PROJ places EPSG:2062 at EPSG's Madrid.
 const PRIME_MERIDIANS: [(&str, f64); 14] = [
     ("greenwich", 0.0),
     ("lisbon", -9.131_906_111_111),
     ("paris", 2.337_229_166_667),
     ("bogota", -74.080_916_666_667),
-    ("madrid", -3.687_938_888_889),
+    ("madrid", -3.687_375),
     ("rome", 12.452_333_333_333),
     ("bern", 7.439_583_333_333),
     ("jakarta", 106.807_719_444_444),
@@ -73,7 +75,7 @@ const PRIME_MERIDIANS: [(&str, f64); 14] = [
     ("stockholm", 18.058_277_777_778),
     ("athens", 23.716_337_5),
     ("oslo", 10.722_916_666_667),
-    ("copenhagen", 12.577_88),
+    ("copenhagen", 12.577_875),
 ];
 
 /// A PROJ string as proj4rs 0.2.0 reads it right, with its prime meridian.
