@@ -18,6 +18,7 @@ import type {
 } from '../scene'
 import {
   getSceneGroupedMemberKeys,
+  isSceneLayerEditable,
   resolveSceneObjectGroupMembers,
   sceneObjectGroupMemberLayerName,
   sceneTargetKey,
@@ -48,7 +49,7 @@ export function hitTestTopLevel(
     viewportScale,
     speciesCache,
     getPlantContext,
-    isLayerInteractive,
+    isSceneLayerEditable,
     getRevealedAnnotationId(selection),
     hoverTarget?.kind === 'annotation' ? hoverTarget.id : null,
   )
@@ -181,7 +182,7 @@ export function queryQuadTopLevel(
 
   for (const group of scene.groups) {
     const members = resolveSceneObjectGroupMembers(scene, group)
-    if (!isGroupLayerHitEligible(scene, group, isLayerInteractive, members)) continue
+    if (!isGroupLayerHitEligible(scene, group, isSceneLayerEditable, members)) continue
     const hit = members.some((member) => {
       const plant = member.kind === 'plant' ? scene.plants.find((entry) => entry.id === member.id) : null
       if (plant && plantIntersectsPolygon(plant, area, viewportScale, speciesCache, getPlantContext)) return true
@@ -197,14 +198,14 @@ export function queryQuadTopLevel(
 
   for (const plant of scene.plants) {
     if (groupedMemberKeys.has(sceneTargetKey({ kind: 'plant', id: plant.id }))) continue
-    if (!isLayerInteractive(scene, 'plants')) continue
+    if (!isSceneLayerEditable(scene, 'plants')) continue
     if (plantIntersectsPolygon(plant, area, viewportScale, speciesCache, getPlantContext)) {
       targets.push({ kind: 'plant', id: plant.id })
     }
   }
 
   for (const guide of scene.measurementGuides) {
-    if (!isLayerInteractive(scene, 'measurement-guides')) continue
+    if (!isSceneLayerEditable(scene, 'measurement-guides')) continue
     if (segmentIntersectsPolygon(guide.start, guide.end, area)) {
       targets.push({ kind: 'measurement-guide', id: guide.id })
     }
@@ -212,13 +213,13 @@ export function queryQuadTopLevel(
 
   for (const zone of scene.zones) {
     if (groupedMemberKeys.has(sceneTargetKey({ kind: 'zone', id: zone.id }))) continue
-    if (!isLayerInteractive(scene, 'zones')) continue
+    if (!isSceneLayerEditable(scene, 'zones')) continue
     if (zoneIntersectsPolygon(zone, area)) targets.push({ kind: 'zone', id: zone.id })
   }
 
   for (const annotation of scene.annotations) {
     if (groupedMemberKeys.has(sceneTargetKey({ kind: 'annotation', id: annotation.id }))) continue
-    if (!isLayerInteractive(scene, 'annotations')) continue
+    if (!isSceneLayerEditable(scene, 'annotations')) continue
     if (annotationIntersectsPolygon(annotation, area, viewportScale, annotation.id === getRevealedAnnotationId(selection), detail.annotationIds.has(annotation.id))) {
       targets.push({ kind: 'annotation', id: annotation.id })
     }
@@ -533,11 +534,6 @@ function annotationIntersectsPolygon(
   textAllowed = true,
 ): boolean {
   return polygonsIntersect(getAnnotationVisualWorldCorners(annotation, viewportScale, revealText, undefined, textAllowed), area)
-}
-
-function isLayerInteractive(scene: ScenePersistedState, layerName: string): boolean {
-  const layer = scene.layers.find((entry) => entry.name === layerName)
-  return layer?.visible !== false && layer?.locked !== true
 }
 
 function isLayerVisible(scene: ScenePersistedState, layerName: string): boolean {
