@@ -40,14 +40,6 @@ export function screenToGeo(camera: ViewCamera, screen: ViewScreen, s: ScreenPoi
   return geoPoint(screenToMercator(camera, screen, s))
 }
 
-export function geoToScreen(camera: ViewCamera, screen: ViewScreen, g: GeoPoint): ScreenPoint {
-  const point = geoToMercator(g.lon, g.lat)
-  const centre = geoToMercator(camera.center.lon, camera.center.lat)
-  const worldSize = worldSizeAt(camera.zoom)
-  const onScreen = planeToScreenAxes({ x: (point.x - centre.x) * worldSize, y: (point.y - centre.y) * worldSize }, camera.bearingDeg)
-  return { x: onScreen.x + screen.width / 2, y: onScreen.y + screen.height / 2 }
-}
-
 /** The camera that shows a plane placement: the driver host's follow of a new plane keeps the placement through it. */
 export function planarToViewCamera(camera: PlanarCamera, screen: ViewScreen, plane: SessionPlane): ViewCamera {
   return {
@@ -89,13 +81,6 @@ function centreKeeping(point: Vector, zoom: number, bearingDeg: number, screen: 
 function geoPoint(mercator: Vector): GeoPoint {
   const { lng, lat } = mercatorToGeo(mercator.x, mercator.y)
   return { lon: lng, lat }
-}
-
-/** A plane (or Mercator) vector in screen axes: turned counter-clockwise on screen by the bearing. The identity at bearing 0. */
-function planeToScreenAxes(vector: Vector, bearingDeg: number): Vector {
-  const [cos, sin] = bearingCosSin(bearingDeg)
-  if (cos === 1 && sin === 0) return vector
-  return { x: cos * vector.x + sin * vector.y, y: cos * vector.y - sin * vector.x }
 }
 
 /** A screen-axis vector in plane (or Mercator) axes: the inverse turn. The identity at bearing 0. */

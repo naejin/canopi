@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { geoToScreen, panCamera, screenToGeo } from './camera-math'
+import { geoToScreen } from '../../../__tests__/support/geo-to-screen'
+import { panCamera, screenToGeo } from './camera-math'
 import { startBearingTween } from './bearing-tween'
 import type { ViewCamera, ViewScreen } from './types'
 
