@@ -179,7 +179,8 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     this.viewport = {
       zoomIn: () => this.moveView(() => this.options.viewNavigation.zoomIn()),
       zoomOut: () => this.moveView(() => this.options.viewNavigation.zoomOut()),
-      zoomBy: (factor) => this.zoomBy(factor),
+      // The scale menu picks the factor for a map scale; the camera driver refuses a factor that is not finite and positive.
+      zoomBy: (factor) => this.moveView(() => this.options.viewNavigation.zoomBy(factor)),
       zoomToFit: () => this.moveView(() => this.options.viewNavigation.zoomToFit()),
       returnToDesign: () => this.moveView(() => this.options.viewNavigation.returnToDesign()),
       focusTemporaryBounds: (bounds, options) => this.focusTemporaryBounds(bounds, options),
@@ -375,13 +376,6 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       })
       return { committed: receipt.committed, createdCount: receipt.createdCount }
     }, DESIGN_OBJECTS_NOT_IMPORTED, { resumePending: true })
-  }
-
-  /** Zoom about the screen centre; the scale menu picks the factor for a map scale. */
-  private zoomBy(factor: number): void {
-    if (!Number.isFinite(factor) || factor <= 0) return
-    this.options.viewNavigation.zoomBy(factor)
-    this.options.invalidate('viewport')
   }
 
   private showPlace(

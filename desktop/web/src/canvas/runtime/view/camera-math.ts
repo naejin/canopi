@@ -23,9 +23,12 @@ export function panCamera(camera: ViewCamera, screen: ViewScreen, deltaPx: Scree
   return { center: geoPoint(centre), zoom: camera.zoom, bearingDeg: camera.bearingDeg, pitchDeg: 0 }
 }
 
-/** A factor of 1 (the driver's clamped factor when the zoom limit is reached) returns the camera itself: no centre-only move. */
+/**
+ * A factor of 1 (the driver's clamped factor when the zoom limit is reached) returns the camera itself: no centre-only move. The
+ * drivers refuse a factor that is not finite and positive before calling it.
+ */
 export function zoomCameraAround(camera: ViewCamera, screen: ViewScreen, anchorPx: ScreenPoint, factor: number): ViewCamera {
-  if (factor === 1 || !(factor > 0) || !Number.isFinite(factor)) return camera
+  if (factor === 1) return camera
   const zoom = camera.zoom + Math.log2(factor)
   const center = centreKeeping(screenToMercator(camera, screen, anchorPx), zoom, camera.bearingDeg, screen, anchorPx)
   return { center, zoom, bearingDeg: camera.bearingDeg, pitchDeg: 0 }

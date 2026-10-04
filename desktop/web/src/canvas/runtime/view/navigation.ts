@@ -128,7 +128,6 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
       zoomAroundPx(screenCentre(), 1 / ZOOM_STEP_FACTOR)
     },
     zoomBy(factor) {
-      if (!Number.isFinite(factor) || factor <= 0) return
       zoomAroundPx(screenCentre(), factor)
     },
     zoomToFit() {
