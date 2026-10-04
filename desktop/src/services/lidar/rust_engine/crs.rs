@@ -1122,7 +1122,9 @@ mod tests {
     /// Another format's PROJ string places where PROJ places its code, and
     /// keeps doing so through the WKT the catalogue stores, the keys written
     /// back and those keys' own stored WKT: its `+towgs84`, `+k_0`, named
-    /// datum and ellipsoid survive every route. A string in feet is refused.
+    /// datum and ellipsoid survive every route. A string in feet is refused,
+    /// and so is a WKT naming no code whose GDAL `EXTENSION["PROJ4",..]`
+    /// node is in feet, rather than identified by its parameters.
     #[test]
     fn a_proj_string_places_the_same_through_its_stored_wkt_and_written_keys() {
         let wgs84 = from_epsg(4326).unwrap();
@@ -1150,6 +1152,15 @@ mod tests {
             }
         }
         assert!(from_proj4(definition(2263)).is_err());
+        let new_york = crs_definitions::from_code(2263).unwrap().wkt;
+        let codeless = new_york.replace(r#",AUTHORITY["EPSG","2263"]]"#, "]");
+        let gdal = with_definition(&codeless, definition(2263));
+        assert_eq!(top_authority(&gdal), None);
+        assert!(
+            from_reference(&gdal)
+                .unwrap_err()
+                .contains("a linear unit other than the metre")
+        );
     }
 
     /// NAD83 / New York Long Island (EPSG:2263) is in US survey feet: points
