@@ -372,8 +372,15 @@ describe('OpenFreeMap vector basemap', () => {
       expect(statuses).toEqual(['first:loading', 'first:failed'])
       expect(errors).toHaveLength(1)
 
-      // Retry (the same instance) and a rebuilt map (a new instance) both start a fresh download.
+      // Retry on the same instance downloads again, rather than returning early on the failed load.
       first.update(positron)
+      expect(requests).toEqual([
+        OPENFREEMAP_BASEMAPS.positron.styleUrl,
+        OPENFREEMAP_BASEMAPS.positron.styleUrl,
+      ])
+      expect(statuses).toEqual(['first:loading', 'first:failed', 'first:loading'])
+
+      // A rebuilt map (a new instance) joins that fresh download instead of the timed-out one.
       const second = new VectorBasemap(new FakeMap(), { onStatus: (status) => statuses.push(`second:${status}`) })
       second.update(positron)
       expect(requests).toEqual([
