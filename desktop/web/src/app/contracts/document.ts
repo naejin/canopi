@@ -27,6 +27,8 @@ export const DOCUMENT_FILE_FIELD_OWNERS = GENERATED_DOCUMENT_FILE_FIELD_OWNERS
 const DOCUMENT_FILE_KNOWN_KEYS = KNOWN_CANOPI_KEYS
 
 const KNOWN_CANOPI_KEY_SET = new Set<string>(DOCUMENT_FILE_KNOWN_KEYS)
+/** Optional sections a Design writes only when it has them (the Rust side skips them when None). */
+const WRITTEN_ONLY_WHEN_PRESENT: ReadonlySet<KnownCanopiKey> = new Set(['lidar', 'map_view'])
 const SHARED_EXTRA_FIELD_OWNERS = {
   guides: 'scene',
 } as const satisfies Record<string, DocumentFileFieldOwner>
@@ -112,7 +114,7 @@ function composeKnownDocumentFields(
   for (const key of DOCUMENT_FILE_KNOWN_KEYS) {
     if (key === 'extra') continue
     const value = ownedFieldSource(key, document, canvas)[key]
-    if (key === 'lidar' && value == null) continue
+    if (WRITTEN_ONLY_WHEN_PRESENT.has(key) && value == null) continue
     output[key] = value
   }
 
@@ -149,6 +151,7 @@ function normalizeDocumentKnownFields(file: CanopiFile): CanopiFile {
     ...(file.lidar == null ? {} : { lidar: file.lidar }),
     views: file.views ?? [],
     stories: file.stories ?? [],
+    ...(file.map_view == null ? {} : { map_view: file.map_view }),
     created_at: file.created_at,
     updated_at: file.updated_at,
     extra: normalizePersistedExtra(file.extra),

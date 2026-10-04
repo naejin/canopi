@@ -123,6 +123,7 @@ export type CanopiFile = {
 	lidar?: LidarPresentationSection | null,
 	views?: SavedView[],
 	stories?: Story[],
+	map_view?: SavedViewCamera | null,
 	created_at: string,
 	updated_at: string,
 };
