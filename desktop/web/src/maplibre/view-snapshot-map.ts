@@ -7,14 +7,9 @@ import type { ViewTransform } from '../canvas/runtime/view/types'
 import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
 import { WORKSPACE_MAP_MAX_ZOOM, WORKSPACE_MAP_MIN_ZOOM } from '../canvas/workspace-camera-policy'
 import { BasemapTileAuth } from './basemap-tile-auth'
-import { createMapLibreCameraDriver } from './camera-driver'
+import { createMapLibreCameraDriver, type MapLibreCameraDriverMap } from './camera-driver'
 import { createMapLibreEmptyStyle } from './config'
-import {
-  loadMapLibreModule,
-  type MapLibreLngLat,
-  type MapLibreMapConstructorOptions,
-  type MapLibreTransformConstrain,
-} from './loader'
+import { loadMapLibreModule, type MapLibreMapConstructorOptions } from './loader'
 import {
   mountMapBackground,
   type MapBackgroundHandle,
@@ -111,14 +106,7 @@ interface ViewSnapshotFrame {
 }
 
 /** What the snapshot owner needs from a MapLibre map; its camera driver moves and resizes it. */
-interface ViewSnapshotMapLibreMap extends SharedMapSceneMap {
-  jumpTo(options: { center: [number, number]; zoom: number; bearing: number; pitch?: number }): void
-  stop(): void
-  resize(): void
-  getCenter(): MapLibreLngLat
-  getZoom(): number
-  getBearing(): number
-  setTransformConstrain?(constrain: MapLibreTransformConstrain | null): void
+interface ViewSnapshotMapLibreMap extends SharedMapSceneMap, MapLibreCameraDriverMap {
   redraw(): void
   remove(): void
   on(type: string, listener: (event?: unknown) => void): void

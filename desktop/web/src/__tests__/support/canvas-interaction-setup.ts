@@ -96,12 +96,18 @@ export function createPlantPresentationContext(viewportScale: number) {
 
 /**
  * A consistent MapLibre fake with a fixed camera: the geographic camera that shows today's attached viewport { x: 100, y: 50, scale: 2 }
- * on the plane of the attached test's origin (Paris). jumpTo is recorded and fires 'move', and the read-backs stay put.
+ * on the plane of the attached test's origin (Paris). jumpTo is recorded and fires 'move', flyTo fires 'move' and 'moveend' (a
+ * flight MapLibre ends at once), the guard is recorded, and the read-backs stay put.
  */
 export class AttachedInteractionMap implements MapLibreCameraDriverMap {
   readonly canvas = document.createElement('canvas')
   readonly listeners = new Map<string, Set<() => void>>()
   readonly jumpTo = vi.fn(() => this.fire('move'))
+  readonly flyTo = vi.fn(() => {
+    this.fire('move')
+    this.fire('moveend')
+  })
+  readonly setTransformConstrain = vi.fn()
   readonly resize = vi.fn()
   readonly stop = vi.fn()
   readonly on = vi.fn((type: string, listener: () => void) => {

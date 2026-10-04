@@ -129,6 +129,10 @@ function mapOnTransform(screen: ViewScreen, start: ViewCamera):
       for (const listener of [...moveListeners]) listener()
     },
     resize() {},
+    stop() {},
+    flyTo() {
+      throw new Error('The contract scripts do not fly.')
+    },
     on(type, listener) {
       if (type === 'move') moveListeners.add(listener)
     },

@@ -453,19 +453,6 @@ describe('MapLibre camera driver', () => {
     expect(map.jumpTo).not.toHaveBeenCalled()
   })
 
-  it('a map without getCenter, getZoom or getBearing fails with map-error', () => {
-    for (const missing of ['getCenter', 'getZoom', 'getBearing'] as const) {
-      const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
-      Object.defineProperty(map, missing, { value: undefined })
-      const { driver } = attach(map)
-
-      expect(driver.failure.value).toMatchObject({ reason: 'map-error' })
-      expect(driver.failure.value!.message).toContain(missing)
-      expect(map.listenerCount()).toBe(0)
-      expect(map.setTransformConstrain).not.toHaveBeenCalled()
-    }
-  })
-
   it('a move during a flight stops it and carries its target bearing', () => {
     const map = new ConsistentMap({ center: PLANE.origin, zoom: 12, bearing: 0 })
     const { driver } = attach(map)

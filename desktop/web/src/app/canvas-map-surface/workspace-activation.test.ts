@@ -77,12 +77,20 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
-/** A consistent MapLibre fake (plan §4, 0A "Attached-map fakes"): its read-backs describe one fixed camera, and jumpTo fires 'move'. */
+/**
+ * A consistent MapLibre fake (plan §4, 0A "Attached-map fakes"): its read-backs describe one fixed camera, jumpTo fires 'move',
+ * flyTo fires 'move' and 'moveend', and the guard is recorded.
+ */
 class FakeMap {
   readonly canvas = document.createElement('canvas')
   readonly context = {} as WebGL2RenderingContext
   readonly camera: ViewCamera = { center: { lon: 0, lat: 0 }, zoom: 18, bearingDeg: 0, pitchDeg: 0 }
   readonly jumpTo = vi.fn(() => this.emit('move'))
+  readonly flyTo = vi.fn(() => {
+    this.emit('move')
+    this.emit('moveend')
+  })
+  readonly setTransformConstrain = vi.fn()
   readonly stop = vi.fn()
   readonly resize = vi.fn()
   readonly remove = vi.fn()

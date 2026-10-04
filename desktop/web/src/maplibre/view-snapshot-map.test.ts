@@ -92,7 +92,12 @@ class FakeMap {
     this.jumps.push({ center: options.center, zoom: options.zoom })
     this.fire('move')
   }
+  flyTo(options: { center: [number, number]; zoom: number; bearing: number }): void {
+    this.jumpTo(options)
+    this.fire('moveend')
+  }
   stop(): void {}
+  setTransformConstrain(): void {}
   resize(): void {
     this.resizes += 1
     this.syncCanvasSize()
