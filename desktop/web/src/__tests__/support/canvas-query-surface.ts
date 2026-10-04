@@ -225,7 +225,6 @@ function testViewFrame(placement: TestPlacement, screen: ViewScreen, plane: Sess
     scaleBounds: SCALE_BOUNDS,
     insets: NO_INSETS,
     attached: false,
-    moving: false,
     revision,
   }
 }

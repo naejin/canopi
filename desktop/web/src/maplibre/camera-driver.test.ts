@@ -326,7 +326,6 @@ describe('MapLibre camera driver', () => {
     expect(map.flyTo).toHaveBeenCalledWith({ center: [2.4, 48.9], zoom: 5, bearing: 90 })
     expect(map.jumpTo).not.toHaveBeenCalled()
     expect(driver.bearingTarget()).toBe(90)
-    expect(published.at(-1)!.moving).toBe(true)
     // For the whole flight the floor is the arc's: largest near 45°, above both ends.
     expect(floorAt(0, 90)).toBeGreaterThan(floorAt(0, 0) + 0.1)
     expect(floorAt(0, 90)).toBeGreaterThan(floorAt(90, 90) + 0.1)
@@ -337,12 +336,10 @@ describe('MapLibre camera driver', () => {
     // Flight frames are MapLibre's own moves: each rebuilds the frame from the read-backs.
     map.flightFrame({ center: { lon: 2.38, lat: 48.88 }, zoom: 4, bearing: 45 })
     expect(published.at(-1)!.view.camera).toMatchObject({ zoom: 4, bearingDeg: 45 })
-    expect(published.at(-1)!.moving).toBe(true)
     expect(guard(0).zoom).toBeCloseTo(floorAt(0, 90), 12)
 
     map.endFlight()
     const landed = published.at(-1)!
-    expect(landed.moving).toBe(false)
     expect(landed.view.camera).toEqual({ center: { lon: 2.4, lat: 48.9 }, zoom: 5, bearingDeg: 90, pitchDeg: 0 })
     expect(driver.bearingTarget()).toBe(90)
     // Landed, the arc is the live bearing's alone.
@@ -363,7 +360,6 @@ describe('MapLibre camera driver', () => {
     expect(map.flyTo).not.toHaveBeenCalled()
     expect(map.jumpTo).toHaveBeenCalledTimes(1)
     expect(map.jumpTo).toHaveBeenCalledWith({ center: [2.4, 48.9], zoom: 5, bearing: 90, pitch: 0 })
-    expect(published.at(-1)!.moving).toBe(false)
     expect(published.at(-1)!.view.camera).toEqual(target)
 
     reducedMotion.value = false
@@ -476,7 +472,7 @@ describe('MapLibre camera driver', () => {
 
   it('a move during a flight stops it and carries its target bearing', () => {
     const map = new ConsistentMap({ center: PLANE.origin, zoom: 12, bearing: 0 })
-    const { driver, published } = attach(map)
+    const { driver } = attach(map)
     driver.apply({ kind: 'set', target: { center: { lon: 2.5, lat: 49 }, zoom: 14, bearingDeg: 60, pitchDeg: 0 }, animation: 'fly' })
     map.flightFrame({ center: { lon: 2.4, lat: 48.9 }, zoom: 13, bearing: 20 })
 
@@ -485,7 +481,6 @@ describe('MapLibre camera driver', () => {
     expect(map.stop).toHaveBeenCalled()
     expect(map.flight).toBeNull()
     expect(map.jumpTo).toHaveBeenLastCalledWith(expect.objectContaining({ bearing: 60, zoom: 13 }))
-    expect(published.at(-1)!.moving).toBe(false)
     expect(driver.bearingTarget()).toBe(60)
   })
 
@@ -897,11 +892,9 @@ describe('the runtime camera on an attached map', () => {
       expect(map.jumpTo).not.toHaveBeenCalledWith(expect.objectContaining({ zoom: 14 }))
       expect(map.flight).not.toBeNull()
       const during = camera.host.frames.viewFrame.peek()
-      expect(during.moving).toBe(true)
       expect(during.view.camera.zoom).toBe(14)
       map.endFlight()
       const landed = camera.host.frames.viewFrame.peek()
-      expect(landed.moving).toBe(false)
       expect(landed.view.camera.zoom).toBeCloseTo(17, 9)
       // The landed frame carries the new latitude's scale bounds and is expressed in the new plane.
       expect(landed.scaleBounds.max).toBeCloseTo(mapZoomToStageScale(27, next.origin.lat), 6)

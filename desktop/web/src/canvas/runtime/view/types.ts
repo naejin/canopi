@@ -96,7 +96,6 @@ export interface ViewFrame {
   readonly scaleBounds: { readonly min: number; readonly max: number }   // the effective bounds: policy zooms with the single-world floor at the live bearing (§1.1b)
   readonly insets: ScreenInsets              // from the visible-map-area seam
   readonly attached: boolean
-  readonly moving: boolean                   // gesture, rotation session, tween or flight in flight
   readonly revision: number
 }
 

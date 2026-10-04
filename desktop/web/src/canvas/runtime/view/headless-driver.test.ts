@@ -95,7 +95,6 @@ describe('headless camera driver', () => {
     // No map, no flight: a 'fly' jumps in one frame, as today's detached camera did.
     driver.apply({ kind: 'set', target: targets[0]!, animation: 'fly' })
     expect(published).toHaveLength(3)
-    expect(published[2]!.moving).toBe(false)
     expect(published[2]!.view.camera.zoom).toBeCloseTo(18.25, 9)
     view.dispose()
   })
@@ -104,29 +103,27 @@ describe('headless camera driver', () => {
     vi.useFakeTimers()
     const view = createTestView()
     const { driver, published } = driverOf(view)
+    const start = driver.frames.viewFrame.peek()
 
     driver.apply({ kind: 'rotate-around', anchorPx: 'centre', bearingDeg: 90, animation: 'ease' })
     expect(driver.bearingTarget()).toBe(90)
-    // The tween starts moving and waits for the first animation frame.
-    expect(published).toHaveLength(1)
-    expect(published[0]!.moving).toBe(true)
-    expect(published[0]!.view.camera.bearingDeg).toBe(0)
+    // The tween waits for the first animation frame.
+    expect(published).toHaveLength(0)
+    expect(start.view.camera.bearingDeg).toBe(0)
 
     vi.advanceTimersByTime(100)
     const midway = published.at(-1)!
-    expect(published.length).toBeGreaterThan(1)
-    expect(midway.moving).toBe(true)
+    expect(published.length).toBeGreaterThan(0)
     expect(midway.view.camera.bearingDeg).toBeGreaterThan(0)
     expect(midway.view.camera.bearingDeg).toBeLessThan(90)
 
     vi.advanceTimersByTime(220)
     const landed = published.at(-1)!
     expect(landed.view.camera.bearingDeg).toBe(90)
-    expect(landed.moving).toBe(false)
     expect(driver.bearingTarget()).toBe(90)
     // The ground under the screen centre stayed put.
     const centre = { x: 200, y: 150 }
-    const startCentre = published[0]!.view.screenToWorld(centre)
+    const startCentre = start.view.screenToWorld(centre)
     const endCentre = landed.view.screenToWorld(centre)
     expect(endCentre.x).toBeCloseTo(startCentre.x, 6)
     expect(endCentre.y).toBeCloseTo(startCentre.y, 6)
@@ -261,7 +258,6 @@ describe('headless camera driver', () => {
     expect(frame.mode).toBe('site')
     expect(frame.insets).toEqual({ top: 0, right: 0, bottom: 0, left: 0 })
     expect(frame.attached).toBe(false)
-    expect(frame.moving).toBe(false)
     expect(frame.revision).toBe(0)
     expect(frame.view.revision).toBe(0)
     view.dispose()

@@ -79,13 +79,12 @@ describe('createTestView', () => {
     const settled = view.frames.settledViewFrame.peek()
 
     view.navigation.rotateBy(1)
-    expect(published).toHaveLength(1)
+    expect(published).toHaveLength(0)
 
     // The tween lands on an animation frame; the settle has not run while it moved.
     vi.advanceTimersByTime(320)
     const landed = published.at(-1)!
     expect(landed.view.camera.bearingDeg).toBe(15)
-    expect(landed.moving).toBe(false)
     expect(view.frames.settledViewFrame.peek()).toBe(settled)
 
     // 150 ms after the last frame the settle timer publishes it as the settled frame.
