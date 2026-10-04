@@ -42,7 +42,7 @@ Canvas v2 ([plan](../plans/canvas-v2-plan.md), [spec](../plans/canvas-v2-spec.md
 
 ## Do not
 
-- Publish a raw `SceneCanvasRuntime` or cast it to a role; tests use `createTestCanvasRuntimeSurfaces()`.
+- Publish a raw `SceneCanvasRuntime` or cast it to a role; tests use `createTestCanvasRuntimeSurfaces()`. (policy test: only the workspace composition and activation import it)
 - Read the plane origin from the document; use `CanvasQuerySurface.sessionPlane`.
 - Fit with a map-only `fitBounds`, call MapLibre camera methods outside the camera driver, project through a workspace map (P2), or convert world to screen outside the view transform.
 - Await an owner operation from a child setup or disposal promise.

@@ -584,6 +584,18 @@ const FORBIDDEN_IMPORT_POLICIES = [
 
 const CONFINED_IMPORTER_POLICIES = [
   {
+    // docs/guides/map-workspace.md "Do not": the runtime is published only as its role surfaces, so nothing else names
+    // the raw runtime to hold or cast it. Type-only edges count.
+    kind: 'confine-importers',
+    name: 'Only the workspace composition holds the raw scene runtime',
+    targets: ['src/canvas/runtime/scene-runtime.ts'],
+    allowedFrom: [
+      'src/app/canvas-map-surface/workspace-runtime-composition.ts',
+      'src/app/canvas-map-surface/workspace-activation.ts',
+      ...TEST_SOURCE_PATTERNS,
+    ],
+  },
+  {
     kind: 'confine-importers',
     name: 'Species Catalog state stays private to its Workbench',
     targets: ['src/app/plant-browser/search-session.ts'],
@@ -2471,6 +2483,25 @@ describe('declarative frontend architecture policies', () => {
       expect.stringContaining('src/canvas/runtime/command-surface.ts:1:1 imports src/canvas/runtime/scene-runtime.ts'),
       expect.stringContaining('src/canvas/runtime/query-surface.ts:1:1 imports src/canvas/runtime/scene-runtime.ts'),
       expect.stringContaining('src/canvas/runtime/scene-runtime/construction.ts:1:1 imports src/canvas/runtime/scene-runtime.ts'),
+    ])
+  })
+
+  it('rejects the raw scene runtime outside the workspace composition, type-only edges included', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/scene-runtime.ts', ['export class SceneCanvasRuntime {}']),
+      plantedSource('src/app/canvas-map-surface/workspace-runtime-composition.ts', ["import { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'"]),
+      plantedSource('src/app/canvas-map-surface/workspace-activation.ts', ["import type { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'"]),
+      plantedSource('src/app/canvas-runtime/app-adapter.ts', ["import type { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'"]),
+      plantedSource('src/components/canvas/Planted.tsx', ["import { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'"]),
+      plantedSource('src/canvas/runtime/scene-runtime.test.ts', ["import { SceneCanvasRuntime } from './scene-runtime'"]),
+    ])
+    const policies = FRONTEND_ARCHITECTURE_POLICIES.filter(
+      ({ name }) => name === 'Only the workspace composition holds the raw scene runtime',
+    )
+
+    expect(collectArchitecturePolicyViolations(graph, policies)).toEqual([
+      expect.stringContaining('src/app/canvas-runtime/app-adapter.ts:1:1 imports src/canvas/runtime/scene-runtime.ts'),
+      expect.stringContaining('src/components/canvas/Planted.tsx:1:1 imports src/canvas/runtime/scene-runtime.ts'),
     ])
   })
 
