@@ -30,9 +30,9 @@ function fakeMap() {
 describe('panel target overlay sync', () => {
   it('adds the overlay source with a valid MapLibre source specification', () => {
     const map = fakeMap()
-    const overlay = createPanelTargetMapOverlayContract('selection', {
-      features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [1.5, 43.6] }, properties: { kind: 'plant' } }],
-    } as never)
+    const overlay = createPanelTargetMapOverlayContract('selection', [
+      { type: 'Feature', geometry: { type: 'Point', coordinates: [1.5, 43.6] }, properties: { kind: 'plant' } },
+    ] as never)
 
     expect(() => syncPanelTargetMapOverlay(map as never, overlay)).not.toThrow()
     expect(map.addSource).toHaveBeenCalledWith('panel-target-selection-source', {
@@ -55,9 +55,9 @@ describe('panel target overlay sync', () => {
 
     it('repaints an overlay already on the map through the canvas colours, without re-adding it', () => {
       const map = fakeMap()
-      const contract = () => createPanelTargetMapOverlayContract('selection', {
-        features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [1.5, 43.6] }, properties: { kind: 'plant' } }],
-      } as never)
+      const contract = () => createPanelTargetMapOverlayContract('selection', [
+        { type: 'Feature', geometry: { type: 'Point', coordinates: [1.5, 43.6] }, properties: { kind: 'plant' } },
+      ] as never)
       syncPanelTargetMapOverlay(map as never, contract())
       expect(map.layers.get('panel-target-selection-plants')?.['circle-stroke-color']).toBe('#9C5A16')
       const added = map.addLayer.mock.calls.length

@@ -49,7 +49,7 @@ export function readWorkspaceMapContributions(
   void canvasPaintRevision.value
   const overview = runtime.view.mode.value === 'overview'
   const panelTargets = readPanelTargetOverlaySnapshot()
-  return captureWorkspaceMapContributions({
+  return {
     sessionIdentity,
     ...edition(),
     overlays: {
@@ -58,30 +58,5 @@ export function readWorkspaceMapContributions(
       hoveredTargets: overview ? [] : panelTargets.hoveredTargets,
       selectedTargets: overview ? [] : panelTargets.selectedTargets,
     },
-  })
-}
-
-/** Captures presentation values; the read-only Scene query remains a live geometry authority. */
-function captureWorkspaceMapContributions(
-  snapshot: WorkspaceMapContributionSnapshot,
-): WorkspaceMapContributionSnapshot {
-  return Object.freeze({
-    ...snapshot,
-    lidar: Object.freeze(snapshot.lidar.map((layer) => Object.freeze({
-      ...layer,
-      bounds: Object.freeze([...layer.bounds]) as RasterDisplayLayer['bounds'],
-      rescale: Object.freeze([...layer.rescale]) as RasterDisplayLayer['rescale'],
-      assets: Object.freeze(layer.assets.map((asset) => Object.freeze({
-        ...asset,
-        bbox: Object.freeze([...asset.bbox]) as RasterDisplayLayer['bounds'],
-      }))),
-    }))),
-    terrain: Object.freeze({ ...snapshot.terrain }),
-    overlays: Object.freeze({
-      ...snapshot.overlays,
-      location: snapshot.overlays.location && Object.freeze({ ...snapshot.overlays.location }),
-      hoveredTargets: Object.freeze(snapshot.overlays.hoveredTargets.map((target) => Object.freeze({ ...target }))),
-      selectedTargets: Object.freeze(snapshot.overlays.selectedTargets.map((target) => Object.freeze({ ...target }))),
-    }),
-  })
+  }
 }

@@ -39,8 +39,6 @@ type ResolvedTargetRef =
 export interface TargetResolution {
   readonly plantIds: readonly string[]
   readonly zoneIds: readonly string[]
-  readonly sceneIds: readonly string[]
-  readonly unresolvedTargets: readonly Target[]
   readonly resolvedRefs: readonly ResolvedTargetRef[]
 }
 
@@ -104,23 +102,13 @@ export function resolveTargetsInScene(
   values: readonly Target[],
   index: TargetSceneIndex,
 ): TargetResolution {
-  const seenSceneIds = new Set<string>()
   const seenFeatureKeys = new Set<string>()
   const plantIds: string[] = []
   const zoneIds: string[] = []
-  const sceneIds: string[] = []
-  const unresolvedTargets: Target[] = []
   const resolvedRefs: ResolvedTargetRef[] = []
-
-  const addSceneId = (id: string): void => {
-    if (seenSceneIds.has(id)) return
-    seenSceneIds.add(id)
-    sceneIds.push(id)
-  }
 
   const addPlant = (id: string, plant: TargetPlantRef): void => {
     if (!plantIds.includes(id)) plantIds.push(id)
-    addSceneId(id)
     const featureKey = `plant:${id}`
     if (seenFeatureKeys.has(featureKey)) return
     seenFeatureKeys.add(featureKey)
@@ -129,7 +117,6 @@ export function resolveTargetsInScene(
 
   const addZone = (id: string, zone: TargetZoneRef): void => {
     if (!zoneIds.includes(id)) zoneIds.push(id)
-    addSceneId(id)
     const featureKey = `zone:${id}`
     if (seenFeatureKeys.has(featureKey)) return
     seenFeatureKeys.add(featureKey)
@@ -139,12 +126,7 @@ export function resolveTargetsInScene(
   for (const target of values) {
     switch (target.kind) {
       case 'species': {
-        const speciesPlantIds = index.plantIdsBySpecies.get(target.canonical_name) ?? []
-        if (speciesPlantIds.length === 0) {
-          unresolvedTargets.push(target)
-          break
-        }
-        for (const plantId of speciesPlantIds) {
+        for (const plantId of index.plantIdsBySpecies.get(target.canonical_name) ?? []) {
           const plant = index.plantsById.get(plantId)
           if (plant) addPlant(plantId, plant)
         }
@@ -153,13 +135,11 @@ export function resolveTargetsInScene(
       case 'placed_plant': {
         const plant = index.plantsById.get(target.plant_id)
         if (plant) addPlant(target.plant_id, plant)
-        else unresolvedTargets.push(target)
         break
       }
       case 'zone': {
         const zone = index.zonesById.get(target.zone_id)
         if (zone) addZone(target.zone_id, zone)
-        else unresolvedTargets.push(target)
         break
       }
       case 'manual':
@@ -168,13 +148,7 @@ export function resolveTargetsInScene(
     }
   }
 
-  return {
-    plantIds,
-    zoneIds,
-    sceneIds,
-    unresolvedTargets,
-    resolvedRefs,
-  }
+  return { plantIds, zoneIds, resolvedRefs }
 }
 
 export const targetIdentity = {

@@ -3,10 +3,7 @@ import {
   MIN_PLANT_RING_RADIUS_PX,
   type CanvasInteractionStrokeVisual,
 } from '../canvas/runtime/scene-visuals'
-import type {
-  TargetMapFeature,
-  TargetMapProjectionResult,
-} from '../target'
+import type { TargetMapFeature } from '../target'
 
 export type PanelTargetMapOverlayVariant = 'hover' | 'selection'
 
@@ -133,7 +130,7 @@ function createLayerSpecs(
 
 export function createPanelTargetMapOverlayContract(
   variant: PanelTargetMapOverlayVariant,
-  projection: TargetMapProjectionResult,
+  features: readonly TargetMapFeature[],
 ): PanelTargetMapOverlayContract {
   const sourceId = `panel-target-${variant}-source`
   return {
@@ -143,10 +140,10 @@ export function createPanelTargetMapOverlayContract(
       type: 'geojson',
       data: {
         type: 'FeatureCollection',
-        features: projection.features,
+        features,
       },
     },
     layers: createLayerSpecs(variant, sourceId),
-    hasRenderableFeatures: projection.features.length > 0,
+    hasRenderableFeatures: features.length > 0,
   }
 }

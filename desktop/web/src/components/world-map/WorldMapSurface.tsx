@@ -56,7 +56,7 @@ export function WorldMapSurface({
     const tileAuth = tileAuthRef.current ?? new BasemapTileAuth()
     surface.requestMap({
       // Deliberately independent of the provider: a basemap change is
-      // reconciled into the live map by the binding below, so it cannot reset
+      // reconciled into the live map by the background mount below, so it cannot reset
       // the camera, the scene or any other layer.
       key: 'world-map',
       createMap: (maplibre, target, preservedView) => createWorldMapLibreMap(

@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   OPENFREEMAP_BASEMAPS,
-  scaleOpacity,
   VectorBasemap,
   type VectorBasemapMap,
   type VectorStyleDocument,
@@ -179,7 +178,7 @@ describe('OpenFreeMap vector basemap', () => {
     basemap.update({ style: 'dark', visible: false, opacity: 1, locale: 'en' })
     expect(map.layers.map((layer) => layer.id)).toEqual(['canopi-scene'])
     expect(map.sources.size).toBe(0)
-    expect(loads).toEqual([OPENFREEMAP_BASEMAPS.liberty.styleUrl, OPENFREEMAP_BASEMAPS.dark.styleUrl])
+    expect(loads).toEqual([OPENFREEMAP_BASEMAPS.liberty, OPENFREEMAP_BASEMAPS.dark])
   })
 
   it('ignores a style that arrives after a newer request', async () => {
@@ -310,7 +309,7 @@ describe('OpenFreeMap vector basemap', () => {
       basemap.update(bright)
       basemap.update({ ...bright, opacity: 0.5 })
       expect(statuses).toEqual(['loading'])
-      expect(requests).toEqual([OPENFREEMAP_BASEMAPS.bright.styleUrl])
+      expect(requests).toEqual([OPENFREEMAP_BASEMAPS.bright])
 
       respond()
       await settle()
@@ -474,8 +473,8 @@ describe('OpenFreeMap vector basemap', () => {
       // Retry on the same instance downloads again, rather than returning early on the failed load.
       first.update(positron)
       expect(requests).toEqual([
-        OPENFREEMAP_BASEMAPS.positron.styleUrl,
-        OPENFREEMAP_BASEMAPS.positron.styleUrl,
+        OPENFREEMAP_BASEMAPS.positron,
+        OPENFREEMAP_BASEMAPS.positron,
       ])
       expect(statuses).toEqual(['first:loading', 'first:failed', 'first:loading'])
 
@@ -483,8 +482,8 @@ describe('OpenFreeMap vector basemap', () => {
       const second = new VectorBasemap(new FakeMap(), { onStatus: (status) => statuses.push(`second:${status}`) })
       second.update(positron)
       expect(requests).toEqual([
-        OPENFREEMAP_BASEMAPS.positron.styleUrl,
-        OPENFREEMAP_BASEMAPS.positron.styleUrl,
+        OPENFREEMAP_BASEMAPS.positron,
+        OPENFREEMAP_BASEMAPS.positron,
       ])
       first.dispose()
       second.dispose()
@@ -542,10 +541,31 @@ describe('OpenFreeMap vector basemap', () => {
     expect(label()).toBe('Paris (de)')
   })
 
-  it('wraps other expressions and leaves legacy stop functions, which cannot hold an expression', () => {
-    const factor = ['global-state', 'opacity']
-    expect(scaleOpacity(['get', 'o'], factor)).toEqual(['*', ['get', 'o'], factor])
-    expect(scaleOpacity(undefined, factor)).toBe(factor)
-    expect(scaleOpacity({ stops: [[4, 0.4], [10, 1]] }, factor)).toEqual({ stops: [[4, 0.4], [10, 1]] })
+  it('scales data-driven opacities and leaves legacy stop functions, which cannot hold an expression', async () => {
+    // A downloaded style is untrusted input: a legacy function must reach the map unchanged, never wrapped.
+    const map = new FakeMap()
+    const document = styleDocument('liberty')
+    const basemap = new VectorBasemap(map, {
+      loadStyle: async () => ({
+        ...document,
+        layers: [
+          ...document.layers,
+          { id: 'park', type: 'fill', source: 'openmaptiles', 'source-layer': 'park', paint: { 'fill-opacity': ['get', 'o'] } },
+          {
+            id: 'landuse',
+            type: 'fill',
+            source: 'openmaptiles',
+            'source-layer': 'landuse',
+            paint: { 'fill-opacity': { stops: [[4, 0.4], [10, 1]] } },
+          },
+        ],
+      }),
+      beforeLayerId: () => 'canopi-scene',
+    })
+    basemap.update({ style: 'liberty', visible: true, opacity: 0.5, locale: 'en' })
+    await settle()
+
+    expect(map.resolved('ofm:park', 'paint', 'fill-opacity')).toEqual(['*', ['get', 'o'], 0.5])
+    expect(map.resolved('ofm:landuse', 'paint', 'fill-opacity')).toEqual({ stops: [[4, 0.4], [10, 1]] })
   })
 })

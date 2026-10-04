@@ -79,7 +79,7 @@ export interface MapBackgroundOptions {
   readonly map: MapBackgroundMap
   readonly maplibre: unknown
   /** The map's credential owner, created with its request transform. */
-  readonly tileAuth: BasemapTileAuth | null
+  readonly tileAuth: BasemapTileAuth
   readonly lifetime: {
     on(type: string, listener: (event?: unknown) => void): void
     off(type: string, listener: (event?: unknown) => void): void

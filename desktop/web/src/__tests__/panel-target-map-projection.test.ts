@@ -80,7 +80,7 @@ describe('projectTargetsToMapFeatures', () => {
 
     const result = projectTargetResolutionToMapFeatures(resolution, LOCATION)
 
-    expect(result.features.map((feature) => feature.properties)).toEqual([
+    expect(result.map((feature) => feature.properties)).toEqual([
       { kind: 'plant', sceneId: 'plant-1' },
       { kind: 'plant', sceneId: 'plant-3' },
       { kind: 'zone', sceneId: 'orchard' },
@@ -94,13 +94,13 @@ describe('projectTargetsToMapFeatures', () => {
       LOCATION,
     )
 
-    expect(result.features.map((feature) => feature.properties)).toEqual([
+    expect(result.map((feature) => feature.properties)).toEqual([
       { kind: 'plant', sceneId: 'plant-1' },
       { kind: 'plant', sceneId: 'plant-3' },
     ])
 
-    const first = result.features[0]
-    const second = result.features[1]
+    const first = result[0]
+    const second = result[1]
     expect(first?.geometry.type).toBe('Point')
     expect(first?.geometry.coordinates[0]).toBeCloseTo(LOCATION.lon, 10)
     expect(first?.geometry.coordinates[1]).toBeCloseTo(LOCATION.lat, 10)
@@ -116,8 +116,8 @@ describe('projectTargetsToMapFeatures', () => {
       LOCATION,
     )
 
-    expect(result.features).toHaveLength(1)
-    expect(result.features[0]?.properties).toEqual({ kind: 'plant', sceneId: 'plant-2' })
+    expect(result).toHaveLength(1)
+    expect(result[0]?.properties).toEqual({ kind: 'plant', sceneId: 'plant-2' })
   })
 
   it('projects a zone target to a closed polygon and keeps colliding IDs typed', () => {
@@ -153,12 +153,12 @@ describe('projectTargetsToMapFeatures', () => {
       LOCATION,
     )
 
-    expect(result.features.map((feature) => feature.properties)).toEqual([
+    expect(result.map((feature) => feature.properties)).toEqual([
       { kind: 'zone', sceneId: 'plant-1' },
       { kind: 'plant', sceneId: 'orchard' },
     ])
 
-    const zone = result.features.find((feature) => feature.properties.kind === 'zone')
+    const zone = result.find((feature) => feature.properties.kind === 'zone')
     expect(zone?.geometry.type).toBe('Polygon')
     const ring = zone?.geometry.type === 'Polygon' ? zone.geometry.coordinates[0] : []
     expect(ring).toHaveLength(4)
@@ -183,9 +183,9 @@ describe('projectTargetsToMapFeatures', () => {
       LOCATION,
     )
 
-    expect(result.features).toHaveLength(1)
-    expect(result.features[0]?.properties).toEqual({ kind: 'zone', sceneId: 'hedgerow' })
-    expect(result.features[0]?.geometry).toMatchObject({
+    expect(result).toHaveLength(1)
+    expect(result[0]?.properties).toEqual({ kind: 'zone', sceneId: 'hedgerow' })
+    expect(result[0]?.geometry).toMatchObject({
       type: 'LineString',
     })
   })
@@ -225,9 +225,9 @@ describe('projectTargetsToMapFeatures', () => {
       LOCATION,
     )
 
-    expect(result.features).toHaveLength(1)
-    expect(result.features[0]?.geometry.type).toBe('Polygon')
-    expect(result.features[0]).toEqual(expected.features[0])
+    expect(result).toHaveLength(1)
+    expect(result[0]?.geometry.type).toBe('Polygon')
+    expect(result[0]).toEqual(expected[0])
   })
 
   it('projects a rotated elliptical Zone target to its oriented polygon', () => {
@@ -257,13 +257,13 @@ describe('projectTargetsToMapFeatures', () => {
       LOCATION,
     )
 
-    expect(result.features).toHaveLength(1)
-    expect(result.features[0]?.geometry.type).toBe('Polygon')
-    const ring = result.features[0]?.geometry.type === 'Polygon'
-      ? result.features[0].geometry.coordinates[0]
+    expect(result).toHaveLength(1)
+    expect(result[0]?.geometry.type).toBe('Polygon')
+    const ring = result[0]?.geometry.type === 'Polygon'
+      ? result[0].geometry.coordinates[0]
       : []
-    const expected = expectedMajorAxisPoint.features[0]?.geometry.type === 'Point'
-      ? expectedMajorAxisPoint.features[0].geometry.coordinates
+    const expected = expectedMajorAxisPoint[0]?.geometry.type === 'Point'
+      ? expectedMajorAxisPoint[0].geometry.coordinates
       : null
 
     expect(ring).toHaveLength(49)
@@ -283,7 +283,7 @@ describe('projectTargetsToMapFeatures', () => {
       LOCATION,
     )
 
-    expect(result.features).toEqual([])
+    expect(result).toEqual([])
   })
 
   it('skips zones with fewer than three points instead of emitting invalid polygons', () => {
@@ -293,7 +293,7 @@ describe('projectTargetsToMapFeatures', () => {
       LOCATION,
     )
 
-    expect(result.features).toEqual([])
+    expect(result).toEqual([])
   })
 
   it('projects session plane metres north-up: x east, y south', () => {
@@ -303,8 +303,8 @@ describe('projectTargetsToMapFeatures', () => {
       LOCATION,
     )
 
-    expect(result.features).toHaveLength(1)
-    const point = result.features[0]
+    expect(result).toHaveLength(1)
+    const point = result[0]
     expect(point?.geometry.type).toBe('Point')
     const coords = point?.geometry.type === 'Point' ? point.geometry.coordinates : null
     // plant-2 sits 12 m east and 6 m north of the origin.
@@ -326,9 +326,9 @@ describe('projectTargetsToMapFeatures', () => {
       LOCATION,
     )
 
-    expect(result.features).toHaveLength(1)
+    expect(result).toHaveLength(1)
     const plant = scene.plants.find((entry) => entry.id === 'plant-2')
-    const feature = result.features[0]
+    const feature = result[0]
     expect(plant).toBeDefined()
     expect(feature?.geometry.type).toBe('Point')
     const coordinates = feature?.geometry.type === 'Point' ? feature.geometry.coordinates : null

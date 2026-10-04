@@ -7,8 +7,8 @@ const NONE_TARGET = { kind: 'none' } as const
 
 /** The resolution the canvas overlays project, without its resolved references. */
 function resolveTargets(values: readonly PanelTarget[], scene: TargetSceneInput) {
-  const { plantIds, zoneIds, sceneIds, unresolvedTargets } = resolveTargetsInScene(values, indexTargetScene(scene))
-  return { plantIds, zoneIds, sceneIds, unresolvedTargets }
+  const { plantIds, zoneIds } = resolveTargetsInScene(values, indexTargetScene(scene))
+  return { plantIds, zoneIds }
 }
 
 function createScene(overrides: Partial<TargetSceneInput> = {}): TargetSceneInput {
@@ -33,8 +33,6 @@ describe('resolveTargets', () => {
     expect(result).toEqual({
       plantIds: ['plant-1', 'plant-3'],
       zoneIds: [],
-      sceneIds: ['plant-1', 'plant-3'],
-      unresolvedTargets: [],
     })
   })
 
@@ -46,8 +44,6 @@ describe('resolveTargets', () => {
     expect(result).toEqual({
       plantIds: ['plant-2'],
       zoneIds: [],
-      sceneIds: ['plant-2'],
-      unresolvedTargets: [],
     })
   })
 
@@ -59,8 +55,6 @@ describe('resolveTargets', () => {
     expect(result).toEqual({
       plantIds: [],
       zoneIds: ['orchard'],
-      sceneIds: ['orchard'],
-      unresolvedTargets: [],
     })
   })
 
@@ -70,12 +64,10 @@ describe('resolveTargets', () => {
     expect(result).toEqual({
       plantIds: [],
       zoneIds: [],
-      sceneIds: [],
-      unresolvedTargets: [],
     })
   })
 
-  it('resolves mixed targets and reports only missing scene-backed targets', () => {
+  it('resolves mixed targets and skips missing scene-backed targets', () => {
     const missingSpecies = speciesTarget('Pyrus communis')
     const missingPlant: PanelTarget = { kind: 'placed_plant', plant_id: 'plant-missing' }
     const missingZone: PanelTarget = { kind: 'zone', zone_id: 'missing-zone' }
@@ -97,12 +89,10 @@ describe('resolveTargets', () => {
     expect(result).toEqual({
       plantIds: ['plant-1', 'plant-3', 'plant-2'],
       zoneIds: ['pond-edge'],
-      sceneIds: ['plant-1', 'plant-3', 'plant-2', 'pond-edge'],
-      unresolvedTargets: [missingSpecies, missingPlant, missingZone],
     })
   })
 
-  it('deduplicates scene IDs while preserving first discovery order', () => {
+  it('deduplicates plant IDs while preserving first discovery order', () => {
     const result = resolveTargets(
       [
         { kind: 'placed_plant', plant_id: 'plant-3' },
@@ -115,8 +105,6 @@ describe('resolveTargets', () => {
     expect(result).toEqual({
       plantIds: ['plant-3', 'plant-1'],
       zoneIds: [],
-      sceneIds: ['plant-3', 'plant-1'],
-      unresolvedTargets: [],
     })
   })
 
@@ -141,8 +129,6 @@ describe('resolveTargets', () => {
     expect(result).toEqual({
       plantIds: ['orchard'],
       zoneIds: ['plant-1'],
-      sceneIds: ['plant-1', 'orchard'],
-      unresolvedTargets: [],
     })
   })
 })

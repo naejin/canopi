@@ -15,7 +15,6 @@ export {
 export { projectTargetsToMapFeatures } from './map-projection'
 export type {
   TargetMapFeature,
-  TargetMapProjectionResult,
   TargetMapProjectionScene,
 } from './map-projection'
 export { targetIdentity as targets } from './identity'

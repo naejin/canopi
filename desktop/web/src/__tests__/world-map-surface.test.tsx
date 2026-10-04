@@ -308,7 +308,7 @@ describe('WorldMapSurface', () => {
     // The credential owner is the one the map was created with, so Google
     // sessions authenticate through this map's own request transform.
     expect(mount.options.tileAuth).toBeInstanceOf(BasemapTileAuth)
-    expect(maps[0]!.options.transformRequest).toBe(mount.options.tileAuth?.transformRequest)
+    expect(maps[0]!.options.transformRequest).toBe(mount.options.tileAuth.transformRequest)
     expect(mount.update).toHaveBeenLastCalledWith(readWorkspaceBackgroundPresentation())
 
     act(() => {

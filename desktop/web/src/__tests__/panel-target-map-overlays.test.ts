@@ -170,7 +170,7 @@ describe('panel-target map overlays', () => {
       .filter(([key]) => key.endsWith('-color')).map(([, value]) => value))
     expect(colours.every((colour) => colour === highlight.color || colour === highlight.casingColor)).toBe(true)
     // The stored geometry is untouched: the overlay only draws projected points.
-    expect(overlay.source.data.features).toBe(features.features)
+    expect(overlay.source.data.features).toBe(features)
     expect(scene.plants[0]!.position).toEqual({ x: 0, y: 0 })
   })
 

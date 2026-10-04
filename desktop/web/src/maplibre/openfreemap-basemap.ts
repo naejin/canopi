@@ -7,11 +7,11 @@ import { mapErrorResourceId } from './map-error-owner'
  * packages/core/src/types.ts (OPENFREEMAP_BASEMAPS) at commit e9df9e2.
  * Copyright (c) 2026 Qiusheng Wu. MIT License; see THIRD_PARTY_NOTICES.
  */
-export const OPENFREEMAP_BASEMAPS: Readonly<Record<BasemapStyle, { readonly styleUrl: string }>> = {
-  liberty: { styleUrl: 'https://tiles.openfreemap.org/styles/liberty' },
-  positron: { styleUrl: 'https://tiles.openfreemap.org/styles/positron' },
-  bright: { styleUrl: 'https://tiles.openfreemap.org/styles/bright' },
-  dark: { styleUrl: 'https://tiles.openfreemap.org/styles/dark' },
+export const OPENFREEMAP_BASEMAPS: Readonly<Record<BasemapStyle, string>> = {
+  liberty: 'https://tiles.openfreemap.org/styles/liberty',
+  positron: 'https://tiles.openfreemap.org/styles/positron',
+  bright: 'https://tiles.openfreemap.org/styles/bright',
+  dark: 'https://tiles.openfreemap.org/styles/dark',
 }
 
 export const OPENFREEMAP_LAYER_PREFIX = 'ofm:'
@@ -181,7 +181,7 @@ export class VectorBasemap {
     const generation = ++this.generation
     this.setStatus('loading')
     const load = this.options.loadStyle ?? fetchStyle
-    load(OPENFREEMAP_BASEMAPS[presentation.style].styleUrl).then((document) => {
+    load(OPENFREEMAP_BASEMAPS[presentation.style]).then((document) => {
       if (this.disposed || generation !== this.generation) return
       const desired = this.desired
       if (!desired?.visible || desired.style !== presentation.style) return
@@ -335,7 +335,7 @@ function prepareOpenFreeMapStyle(document: VectorStyleDocument): PreparedVectorS
     const id = `${OPENFREEMAP_LAYER_PREFIX}${layer.id}`
     const paint: Record<string, unknown> = { ...(layer.paint ?? {}) }
     for (const property of OPACITY_PAINT_PROPERTIES[layer.type] ?? []) {
-      paint[property] = scaleOpacity(layer.paint?.[property], OPACITY)
+      paint[property] = scaleOpacity(layer.paint?.[property])
     }
     const layout: Record<string, unknown> = { ...(layer.layout ?? {}) }
     if (isNameLabel(layout['text-field'])) layout['text-field'] = LOCALIZED_LABEL
@@ -388,22 +388,22 @@ function isNameLabel(textField: unknown): boolean {
 }
 
 /**
- * Multiplies an opacity paint value by `factor`, an expression. Zoom curves keep their top-level interpolate/step shape
+ * Multiplies an opacity paint value by the row opacity's global state. Zoom curves keep their top-level interpolate/step shape
  * (MapLibre requires it), so only their outputs are scaled. A legacy function, which none of the OpenFreeMap styles
  * uses, cannot hold an expression and keeps its own opacity.
  */
-export function scaleOpacity(value: unknown, factor: unknown): unknown {
-  if (value === undefined || value === null) return factor
+function scaleOpacity(value: unknown): unknown {
+  if (value === undefined || value === null) return OPACITY
   if (Array.isArray(value)) {
     const operator = value[0]
     if (operator === 'interpolate' || operator === 'interpolate-hcl' || operator === 'interpolate-lab') {
-      return value.map((entry, index) => index >= 4 && (index - 4) % 2 === 0 ? scaleOpacity(entry, factor) : entry)
+      return value.map((entry, index) => index >= 4 && (index - 4) % 2 === 0 ? scaleOpacity(entry) : entry)
     }
     if (operator === 'step') {
-      return value.map((entry, index) => index >= 2 && index % 2 === 0 ? scaleOpacity(entry, factor) : entry)
+      return value.map((entry, index) => index >= 2 && index % 2 === 0 ? scaleOpacity(entry) : entry)
     }
   } else if (typeof value === 'object') {
     return value
   }
-  return ['*', value, factor]
+  return ['*', value, OPACITY]
 }

@@ -76,8 +76,6 @@ describe('targets identity seam', () => {
 
     expect(resolution.plantIds).toEqual(['plant-1', 'plant-3', 'plant-2'])
     expect(resolution.zoneIds).toEqual(['orchard'])
-    expect(resolution.sceneIds).toEqual(['plant-1', 'plant-3', 'plant-2', 'orchard'])
-    expect(resolution.unresolvedTargets).toEqual([missingSpecies, missingPlant, missingZone])
     expect(resolution.resolvedRefs.map((ref) => ({ kind: ref.kind, id: ref.id }))).toEqual([
       { kind: 'plant', id: 'plant-1' },
       { kind: 'plant', id: 'plant-3' },
@@ -101,7 +99,6 @@ describe('targets identity seam', () => {
 
     expect(resolution.plantIds).toEqual(['plant-3', 'plant-1'])
     expect(resolution.zoneIds).toEqual(['orchard'])
-    expect(resolution.sceneIds).toEqual(['plant-3', 'plant-1', 'orchard'])
     expect(resolution.resolvedRefs.map((ref) => ({ kind: ref.kind, id: ref.id }))).toEqual([
       { kind: 'plant', id: 'plant-3' },
       { kind: 'plant', id: 'plant-1' },
@@ -109,7 +106,7 @@ describe('targets identity seam', () => {
     ])
   })
 
-  it('reports unresolved targets without mutating panel hover or selection state', () => {
+  it('resolves missing targets to nothing without mutating panel hover or selection state', () => {
     const hovered = [targetIdentity.species('Hovered')]
     const selected = [targetIdentity.species('Selected')]
     hoveredPanelTargets.value = hovered
@@ -126,12 +123,7 @@ describe('targets identity seam', () => {
 
     expect(resolution.plantIds).toEqual([])
     expect(resolution.zoneIds).toEqual([])
-    expect(resolution.sceneIds).toEqual([])
-    expect(resolution.unresolvedTargets).toEqual([
-      targetIdentity.species('Missing species'),
-      { kind: 'placed_plant', plant_id: 'missing-plant' },
-      { kind: 'zone', zone_id: 'missing-zone' },
-    ])
+    expect(resolution.resolvedRefs).toEqual([])
     expect(hoveredPanelTargets.value).toBe(hovered)
     expect(selectedPanelTargets.value).toBe(selected)
   })

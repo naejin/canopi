@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { googleMapsApiKey } from '../app/settings/state'
 import { MAPLIBRE_SATELLITE_SOURCE_ID } from '../maplibre/config'
+import { BasemapTileAuth } from '../maplibre/basemap-tile-auth'
 import { mountMapBackground, type MapBackgroundPresentation } from '../maplibre/map-background'
 import type { VectorStyleDocument } from '../maplibre/openfreemap-basemap'
 import { mapStyleReadiness, mountSatelliteLifecycle, type SatelliteMountOptions } from '../maplibre/satellite-bind'
@@ -104,7 +105,7 @@ function mount() {
   const background = mountMapBackground({
     map: map as never,
     maplibre: { AttributionControl: FakeControl },
-    tileAuth: null,
+    tileAuth: new BasemapTileAuth(),
     lifetime,
     loadStyle: async () => STYLE,
   })
