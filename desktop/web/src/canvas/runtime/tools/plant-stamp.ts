@@ -25,26 +25,25 @@ const PREVIEW_PLANT_ID = 'plant-placement-preview'
 const SPREAD_RING_STROKE = Object.freeze({ token: 'draft', widthPx: 1.5, dash: Object.freeze([6, 5]) } as const)
 
 /**
- * Places one plant of `species` at `world` (already snapped) as one Scene Edit of `type`, the plant selected. Nothing is
- * placed, and false is returned, while the plants layer is closed for creation. Place plants' press uses it, and so does
- * the host's species drop (spec §1.4, "Drops"; today's _dropWhenSettled) with 'interaction-drop'.
+ * Places one plant of `species` at `world` (already snapped) as one Scene Edit of `type`, the plant selected, then calls
+ * `onCommitted`. Nothing is placed while the plants layer is closed for creation. Place plants' press uses it, and so
+ * does the host's species drop (spec §1.4, "Drops"; today's _dropWhenSettled) with 'interaction-drop'.
  */
 export function placePlantFromSpecies(
   target: { readonly edits: SceneEditCoordinator; readonly scene: Pick<ToolScene, 'isLayerOpenForCreation'> },
   species: PlantStampSourceInput,
   world: WorldPoint,
   type: 'interaction-stamp-plant' | 'interaction-drop',
-  onCommitted?: () => void,
-): boolean {
-  if (!target.scene.isLayerOpenForCreation('plants')) return false
+  onCommitted: () => void,
+): void {
+  if (!target.scene.isLayerOpenForCreation('plants')) return
   target.edits.run(type, (tx) => {
     let placedPlantId = ''
     tx.mutate((draft) => {
       placedPlantId = appendPlantStampSourceToDraft(draft, species, world)
     })
-    if (placedPlantId) tx.setSelection([{ kind: 'plant', id: placedPlantId }])
-  }, onCommitted ? { onCommitted } : undefined)
-  return true
+    tx.setSelection([{ kind: 'plant', id: placedPlantId }])
+  }, { onCommitted })
 }
 
 export function createPlantStampTool(): CanvasTool {
