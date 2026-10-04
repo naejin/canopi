@@ -607,8 +607,11 @@ pub(super) fn from_geokeys(keys: &GeoKeyDirectory) -> Result<Option<ResolvedCrs>
     }
 }
 
-/// A projected CRS spelled out key by key (no registry code).
+/// A projected CRS spelled out key by key (no registry code), in metres.
 fn user_defined_projected(keys: &GeoKeyDirectory) -> Result<ResolvedCrs, String> {
+    if short(keys, key::ProjLinearUnitsGeoKey).is_some_and(|unit| unit != 9001) {
+        return Err(not_supported(OTHER_UNIT));
+    }
     let transformation = short(keys, key::ProjCoordTransGeoKey).ok_or_else(|| {
         "the raster declares a user-defined projection without a coordinate transformation"
             .to_string()
@@ -1382,6 +1385,28 @@ mod tests {
                 "{refused:?}"
             );
         }
+    }
+
+    /// Keys spelling a projection with no code in US feet give their false
+    /// origin and coordinates in feet; the engine reads and writes such keys
+    /// in metres, so they are refused as a PROJ string in feet is.
+    #[test]
+    fn user_defined_keys_in_feet_are_refused() {
+        let mut keys = lambert93_keys();
+        keys.entries
+            .retain(|entry| entry.key_id != key::GTCitationGeoKey);
+        for entry in &mut keys.entries {
+            if entry.key_id == key::ProjLinearUnitsGeoKey {
+                entry.value = GeoKeyValue::Short(9003);
+            }
+        }
+        let refused = from_geokeys(&keys).map(|crs| crs.map(|crs| crs.definition));
+        assert!(
+            refused
+                .as_ref()
+                .is_err_and(|e| e.contains("a linear unit other than the metre")),
+            "{refused:?}"
+        );
     }
 
     /// NAD83 / New York Long Island (EPSG:2263) is in US survey feet: points
