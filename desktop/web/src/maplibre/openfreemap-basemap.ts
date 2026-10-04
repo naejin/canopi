@@ -373,12 +373,10 @@ function prepareOpenFreeMapStyle(
  */
 function styleResourceRequests(document: VectorStyleDocument): RegExp[] {
   const resources: RegExp[] = []
-  const sprites = typeof document.sprite === 'string'
-    ? [document.sprite]
-    : Array.isArray(document.sprite)
-      ? document.sprite.flatMap((entry) => typeof entry?.url === 'string' ? [entry.url as string] : [])
-      : []
-  for (const sprite of sprites) resources.push(new RegExp(`^${escapeRegExp(sprite)}(?:@\\d+(?:\\.\\d+)?x)?\\.(?:json|png)(?:[?#].*)?$`))
+  // install() sets only a string sprite, so only its requests can fail.
+  if (typeof document.sprite === 'string') {
+    resources.push(new RegExp(`^${escapeRegExp(document.sprite)}(?:@\\d+(?:\\.\\d+)?x)?\\.(?:json|png)(?:[?#].*)?$`))
+  }
   if (document.glyphs) {
     const glyphs = escapeRegExp(document.glyphs)
       .replace(/\\\{fontstack\\\}/g, '[^/]+')
