@@ -814,20 +814,16 @@ fn user_defined_entries(
     proj: &Proj,
 ) -> Result<Vec<GeoKeyEntry>, String> {
     let (a, b) = proj.ellipse_parameters();
-    let mut entries = Vec::new();
-    let wgs84 = (a - Ellipsoid::WGS84.a).abs() < 1e-6 && (b - Ellipsoid::WGS84.b).abs() < 1e-6;
-    if wgs84 {
-        entries.push(short_entry(key::GeographicTypeGeoKey, 4326));
+    let mut entries = vec![
+        short_entry(key::GeographicTypeGeoKey, USER_DEFINED),
+        short_entry(key::GeogGeodeticDatumGeoKey, USER_DEFINED),
+        short_entry(key::GeogEllipsoidGeoKey, USER_DEFINED),
+        double_entry(key::GeogSemiMajorAxisGeoKey, a),
+    ];
+    if a > b {
+        entries.push(double_entry(key::GeogInvFlatteningGeoKey, a / (a - b)));
     } else {
-        entries.push(short_entry(key::GeographicTypeGeoKey, USER_DEFINED));
-        entries.push(short_entry(key::GeogGeodeticDatumGeoKey, USER_DEFINED));
-        entries.push(short_entry(key::GeogEllipsoidGeoKey, USER_DEFINED));
-        entries.push(double_entry(key::GeogSemiMajorAxisGeoKey, a));
-        if a > b {
-            entries.push(double_entry(key::GeogInvFlatteningGeoKey, a / (a - b)));
-        } else {
-            entries.push(double_entry(key::GeogSemiMinorAxisGeoKey, b));
-        }
+        entries.push(double_entry(key::GeogSemiMinorAxisGeoKey, b));
     }
     entries.push(short_entry(key::GeogAngularUnitsGeoKey, 9102));
     if proj.is_latlong() {
@@ -1431,6 +1427,24 @@ mod tests {
                 "{proj4}: {refused:?}"
             );
         }
+    }
+
+    /// A user-defined CRS on the WGS84 ellipsoid with a datum shift keeps
+    /// the shift through the keys written back, so hover reads the written
+    /// file where import placed it (and where the display tile draws it).
+    #[test]
+    fn a_shifted_crs_on_the_wgs84_ellipsoid_keeps_its_shift_in_written_keys() {
+        let wgs84 = from_epsg(4326).unwrap();
+        let source = from_proj4("+proj=longlat +ellps=WGS84 +towgs84=-84,-22,209").unwrap();
+        let reread = from_geokeys(&geokeys_for(&source).unwrap())
+            .unwrap()
+            .unwrap();
+        let (lon, lat) = source.transform_to(2.35, 48.85, &wgs84).unwrap();
+        let (again_lon, again_lat) = reread.transform_to(2.35, 48.85, &wgs84).unwrap();
+        assert!(
+            (again_lon - lon).abs() < 1e-9 && (again_lat - lat).abs() < 1e-9,
+            "{again_lon} {again_lat}, import placed {lon} {lat}"
+        );
     }
 
     /// NAD83 / New York Long Island (EPSG:2263) is in US survey feet: points
