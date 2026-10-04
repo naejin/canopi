@@ -1155,7 +1155,7 @@ mod tests {
         assert!(from_geokeys(&geocentric).is_err());
     }
 
-    use super::super::super::analyses::{CRS_PROJECTED_METRE, crs_class};
+    use super::super::super::analyses::{CRS_PROJECTED_METRE, CRS_PROJECTED_OTHER, crs_class};
     use super::super::crs_reference_points::REFERENCE_POINTS;
 
     /// Metres in one linear unit of a code in the reference table.
@@ -1499,6 +1499,7 @@ mod tests {
             "{}",
             new_york.wkt
         );
+        assert_eq!(crs_class(&new_york.wkt), CRS_PROJECTED_OTHER);
         let keys = geokeys_for(&new_york).unwrap();
         assert_eq!(short(&keys, key::ProjLinearUnitsGeoKey), Some(9003));
     }
