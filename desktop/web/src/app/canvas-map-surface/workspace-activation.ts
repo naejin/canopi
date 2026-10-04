@@ -159,8 +159,8 @@ export class WorkspaceActivationCoordinator {
   /** unmountRenderer ran after the runtime initialized: a rebuilt map remounts instead of initializing. */
   private rendererUnmounted = false
   private mapUnavailable = false
-  /** Why the map became unavailable, kept until a Retry clears it. */
-  private unavailableCause: unknown = null
+  /** The map failed for lack of WebGL2: no map can be built, so Retry is never offered. */
+  private webGL2Missing = false
   private disposed = false
 
   constructor(private readonly options: WorkspaceActivationOptions) {}
@@ -427,12 +427,11 @@ export class WorkspaceActivationCoordinator {
    * is still being handled (`retry()` refuses until it settles, so Retry is not offered before).
    */
   canRetry(): boolean {
-    const current = this.active
-    return !this.disposed
-      && !(current && !current.failureSettled)
+    // A teardown publishes its result before it disposes, so it covers a disposed coordinator too.
+    return (this.active?.failureSettled ?? true)
       && !this.runtimeDestroyed
       && !this.terminalTeardownResult
-      && !(this.unavailableCause instanceof WorkspaceWebGL2UnavailableError)
+      && !this.webGL2Missing
   }
 
   /**
@@ -442,25 +441,19 @@ export class WorkspaceActivationCoordinator {
    */
   retry(): boolean {
     if (!this.mapUnavailable || !this.canRetry()) return false
-    if (this.active) this.retireFailedGeneration()
+    // The failed generation's failure transaction already reported every error, so the rebuilt map waits for its
+    // cleanup but never fails on those errors a second time.
+    if (this.active) {
+      this.retainedCleanup = this.cleanupActiveGeneration().catch((error) => {
+        logMapError('Shared workspace cleanup before a map Retry failed:', error)
+      })
+    }
     this.mapUnavailable = false
-    this.unavailableCause = null
     return true
   }
 
-  /**
-   * Ends the failed generation before a Retry. Its failure transaction already reported every error,
-   * so the rebuilt map waits for this cleanup but never fails on those errors a second time.
-   */
-  private retireFailedGeneration(): void {
-    const cleanup = this.cleanupActiveGeneration()
-    this.retainedCleanup = cleanup.catch((error) => {
-      logMapError('Shared workspace cleanup before a map Retry failed:', error)
-    })
-  }
-
   updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void {
-    if (this.disposed || this.terminalTeardownResult) return
+    if (this.terminalTeardownResult) return
     // Kept while the map is unavailable, so a rebuilt map starts from the latest contributions.
     this.contributions = snapshot && captureWorkspaceMapContributions(snapshot)
     if (this.mapUnavailable) return
@@ -681,7 +674,7 @@ export class WorkspaceActivationCoordinator {
 
   private markMapUnavailable(cause: unknown): void {
     this.mapUnavailable = true
-    this.unavailableCause = cause
+    if (cause instanceof WorkspaceWebGL2UnavailableError) this.webGL2Missing = true
     this.notifyRetryAvailability()
   }
 
