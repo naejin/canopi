@@ -5,11 +5,7 @@ import type { CameraDriver } from '../canvas/runtime/view/camera-driver'
 import { createNavigationPolicy, type NavigationPolicy } from '../canvas/runtime/view/navigation-policy'
 import type { ViewTransform } from '../canvas/runtime/view/types'
 import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
-import {
-  createWorkspaceCameraPolicy,
-  WORKSPACE_MAP_MAX_ZOOM,
-  WORKSPACE_MAP_MIN_ZOOM,
-} from '../canvas/workspace-camera-policy'
+import { WORKSPACE_MAP_MAX_ZOOM, WORKSPACE_MAP_MIN_ZOOM } from '../canvas/workspace-camera-policy'
 import { BasemapTileAuth } from './basemap-tile-auth'
 import { createMapLibreCameraDriver } from './camera-driver'
 import { createMapLibreEmptyStyle } from './config'
@@ -589,7 +585,7 @@ function validateRequest(request: ViewSnapshotRequest): string | null {
 function snapshotView(origin: { readonly lat: number; readonly lon: number }): SnapshotView {
   return {
     plane: createSessionPlane(origin),
-    policy: createNavigationPolicy(createWorkspaceCameraPolicy(origin.lat), VIEW_SNAPSHOT_REDUCED_MOTION),
+    policy: createNavigationPolicy(origin.lat, VIEW_SNAPSHOT_REDUCED_MOTION),
   }
 }
 

@@ -25,7 +25,6 @@ import type {
 } from '../../canvas/runtime/view/types'
 import { stageScaleToMapZoom } from '../../canvas/projection'
 import { createSessionPlane, type SessionPlane } from '../../canvas/session-plane'
-import { createWorkspaceCameraPolicy, type WorkspaceCameraPolicy } from '../../canvas/workspace-camera-policy'
 
 /** A plane-to-plane transform (SessionPlane.transformTo). */
 type SessionPlaneTransform = ReturnType<SessionPlane['transformTo']>
@@ -39,8 +38,8 @@ export interface TestViewOptions {
   readonly camera?: Partial<ViewCamera>
   /** Default createSessionPlane({ lon: 0, lat: 0 }). */
   readonly plane?: SessionPlane
-  /** Default: createWorkspaceCameraPolicy(). The host takes its latitude from the plane. */
-  readonly policy?: WorkspaceCameraPolicy
+  /** The host's zoom-in limit; default WORKSPACE_MAP_MAX_ZOOM. */
+  readonly maxZoom?: number
   readonly insets?: ScreenInsets
 }
 
@@ -75,9 +74,8 @@ export function createTestView(options: TestViewOptions = {}): TestView {
       pitchDeg: 0,
     }
     : planarToViewCamera({ ...(options.viewport ?? { x: 0, y: 0, scale: 1 }), bearingDeg: 0 }, screen, plane)
-  const policy = options.policy ?? createWorkspaceCameraPolicy()
   const host = createCameraDriverHost({
-    policy,
+    maxZoom: options.maxZoom,
     reducedMotion: signal(false),
     plane: () => plane,
     screen,

@@ -1,55 +1,14 @@
-import { mapZoomToStageScale, scaleReaches } from './projection'
+// canvas/workspace-camera-policy.ts  (pure)
+//
+// The workspace camera's limits: the map's zoom range, the overview threshold and the single-world zoom floor. The navigation
+// policy (canvas/runtime/view/navigation-policy.ts) carries them to both camera drivers.
+
+import { MAPLIBRE_WORLD_TILE_SIZE, scaleReaches } from './projection'
 
 export const WORKSPACE_MAP_MIN_ZOOM = 0
 export const WORKSPACE_MAP_MAX_ZOOM = 27
-const WORKSPACE_OVERVIEW_SCALE_THRESHOLD = 0.1
-
-const MAPLIBRE_WORLD_TILE_SIZE = 512
-
-export interface WorkspaceCameraPolicy {
-  readonly referenceLatitudeDeg: number
-  readonly minimumMapZoom: number
-  readonly maximumMapZoom: number
-  readonly overviewScaleThreshold: number
-}
-
-export interface WorkspaceCameraScaleBounds {
-  readonly minimum: number
-  readonly maximum: number
-}
-
-export function createWorkspaceCameraPolicy(
-  referenceLatitudeDeg = 0,
-): WorkspaceCameraPolicy {
-  if (!Number.isFinite(referenceLatitudeDeg) || referenceLatitudeDeg <= -90 || referenceLatitudeDeg >= 90) {
-    throw new Error('Workspace camera policy requires a finite reference latitude between -90 and 90 degrees.')
-  }
-  return Object.freeze({
-    referenceLatitudeDeg,
-    minimumMapZoom: WORKSPACE_MAP_MIN_ZOOM,
-    maximumMapZoom: WORKSPACE_MAP_MAX_ZOOM,
-    overviewScaleThreshold: WORKSPACE_OVERVIEW_SCALE_THRESHOLD,
-  })
-}
-
-export function cameraScaleBoundsForPolicy(
-  policy: WorkspaceCameraPolicy,
-  effectiveMinimumMapZoom = policy.minimumMapZoom,
-  effectiveMaximumMapZoom = policy.maximumMapZoom,
-): WorkspaceCameraScaleBounds {
-  const minimumZoom = Math.min(
-    effectiveMaximumMapZoom,
-    Math.max(policy.minimumMapZoom, effectiveMinimumMapZoom),
-  )
-  const maximumZoom = Math.max(
-    minimumZoom,
-    Math.min(policy.maximumMapZoom, effectiveMaximumMapZoom),
-  )
-  return Object.freeze({
-    minimum: mapZoomToStageScale(minimumZoom, policy.referenceLatitudeDeg),
-    maximum: mapZoomToStageScale(maximumZoom, policy.referenceLatitudeDeg),
-  })
-}
+/** Overview starts below this many pixels per metre, the same at every latitude. */
+export const WORKSPACE_OVERVIEW_SCALE_THRESHOLD = 0.1
 
 /** Baseline for MapLibre 6.10.0's single-world viewport constraint. */
 export function singleWorldEffectiveMinimumZoom(
@@ -62,9 +21,6 @@ export function singleWorldEffectiveMinimumZoom(
   return Math.max(configuredMinimumZoom, Math.log2(viewportExtent / MAPLIBRE_WORLD_TILE_SIZE))
 }
 
-export function isWorkspaceOverviewScale(
-  scale: number,
-  policy: Pick<WorkspaceCameraPolicy, 'overviewScaleThreshold'>,
-): boolean {
-  return Number.isFinite(scale) && !scaleReaches(scale, policy.overviewScaleThreshold)
+export function isWorkspaceOverviewScale(scale: number): boolean {
+  return Number.isFinite(scale) && !scaleReaches(scale, WORKSPACE_OVERVIEW_SCALE_THRESHOLD)
 }

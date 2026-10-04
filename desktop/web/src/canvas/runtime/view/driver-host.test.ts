@@ -2,7 +2,8 @@ import { signal } from '@preact/signals'
 import { describe, expect, it } from 'vitest'
 import { createTestView } from '../../../__tests__/support/test-view'
 import { createSessionPlane, type SessionPlane } from '../../session-plane'
-import { cameraScaleBoundsForPolicy, createWorkspaceCameraPolicy } from '../../workspace-camera-policy'
+import { mapZoomToStageScale } from '../../projection'
+import { WORKSPACE_MAP_MAX_ZOOM, WORKSPACE_MAP_MIN_ZOOM } from '../../workspace-camera-policy'
 import type { CameraDriver, CameraDriverFailure } from './camera-driver'
 import { createCameraDriverHost } from './driver-host'
 import { createHeadlessCameraDriver } from './headless-driver'
@@ -22,7 +23,7 @@ function cameraAt(plane: SessionPlane, placement: PlanarCamera): ViewCamera {
 function standInDriver(plane: SessionPlane): CameraDriver {
   return createHeadlessCameraDriver({
     deps: {
-      policy: () => createNavigationPolicy(createWorkspaceCameraPolicy(), signal(false)),
+      policy: () => createNavigationPolicy(0, signal(false)),
     },
     plane,
     screen: SCREEN,
@@ -158,18 +159,16 @@ describe('camera driver host', () => {
     const first = createSessionPlane({ lon: 2.35, lat: 48.85 })
     let runtimePlane = first
     const host = createCameraDriverHost({
-      // The zoom range and overview threshold; the latitude given here is not the one the bounds use.
-      policy: createWorkspaceCameraPolicy(0),
       reducedMotion: signal(false),
       plane: () => runtimePlane,
       screen: SCREEN,
       camera: cameraAt(first, { x: 40, y: -25, scale: 3, bearingDeg: 0 }),
     })
     const expectBoundsAt = (lat: number) => {
-      const expected = cameraScaleBoundsForPolicy(createWorkspaceCameraPolicy(lat))
+      // A 400 x 300 screen at bearing 0: the single-world floor does not bite, so the bounds are the zoom range at `lat`.
       const { scaleBounds } = host.frames.viewFrame.peek()
-      expect(scaleBounds.min / expected.minimum).toBeCloseTo(1, 6)
-      expect(scaleBounds.max / expected.maximum).toBeCloseTo(1, 6)
+      expect(scaleBounds.min / mapZoomToStageScale(WORKSPACE_MAP_MIN_ZOOM, lat)).toBeCloseTo(1, 6)
+      expect(scaleBounds.max / mapZoomToStageScale(WORKSPACE_MAP_MAX_ZOOM, lat)).toBeCloseTo(1, 6)
     }
     expectBoundsAt(48.85)
     expect(host.driverDeps.policy().referenceLatitudeDeg).toBe(48.85)
@@ -190,7 +189,6 @@ describe('camera driver host', () => {
     const first = createSessionPlane({ lon: 2.35, lat: 48.85 })
     let runtimePlane = first
     const host = createCameraDriverHost({
-      policy: createWorkspaceCameraPolicy(),
       reducedMotion: signal(false),
       plane: () => runtimePlane,
       screen: SCREEN,

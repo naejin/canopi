@@ -1,7 +1,7 @@
 import { buildCanvasPrintSnapshot } from './print-snapshot'
 import { getCanvasPlantNameLabels } from './automatic-detail'
 import { getSceneLayerStyle } from './scene-visuals'
-import { createWorkspaceCameraPolicy, isWorkspaceOverviewScale } from '../workspace-camera-policy'
+import { isWorkspaceOverviewScale } from '../workspace-camera-policy'
 import type { PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import type { SelectedPlantSymbolContext } from '../plant-symbol-context'
@@ -27,9 +27,6 @@ import type { SettledSceneReader } from './scene-runtime/transactions'
 import { createViewReadSurface } from './view/frame-source'
 import type { ViewReadSurface } from './view/read-surface'
 import type { ViewFrameSource } from './view/types'
-
-/** Overview starts below the policy's threshold, the same at every latitude. */
-const OVERVIEW_POLICY = createWorkspaceCameraPolicy()
 
 type PointerWorldListener = (point: PointerWorld | null) => void
 
@@ -106,7 +103,7 @@ class SceneCanvasQueryRole implements SceneCanvasQuerySurface {
   captureViewScene(request: CanvasViewSceneRequest) {
     void this.options.settledReader.revision.value
     const { view, ...layers } = request
-    const overview = isWorkspaceOverviewScale(view.pixelsPerMetre, OVERVIEW_POLICY)
+    const overview = isWorkspaceOverviewScale(view.pixelsPerMetre)
     return this.options.settledReader.readWhenSettled(
       () => this.options.presentation.buildViewCaptureSnapshot({ ...layers, overview }),
       null,

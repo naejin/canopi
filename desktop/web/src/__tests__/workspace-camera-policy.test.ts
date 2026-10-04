@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { mapZoomToStageScale, stageScaleToMapZoom } from '../canvas/projection'
 import {
-  createWorkspaceCameraPolicy,
   isWorkspaceOverviewScale,
   singleWorldEffectiveMinimumZoom,
+  WORKSPACE_OVERVIEW_SCALE_THRESHOLD,
 } from '../canvas/workspace-camera-policy'
 
 describe('workspace camera policy', () => {
@@ -19,11 +19,11 @@ describe('workspace camera policy', () => {
   })
 
   it('a scale placed at exactly the overview threshold is not overview, though it reads back a hair under', () => {
-    const policy = createWorkspaceCameraPolicy()
-    const readBack = mapZoomToStageScale(stageScaleToMapZoom(policy.overviewScaleThreshold, 52.52), 52.52)
-    expect(readBack).toBeLessThan(policy.overviewScaleThreshold)
-    expect(isWorkspaceOverviewScale(readBack, policy)).toBe(false)
-    expect(isWorkspaceOverviewScale(policy.overviewScaleThreshold * 0.999, policy)).toBe(true)
-    expect(isWorkspaceOverviewScale(Number.NaN, policy)).toBe(false)
+    const threshold = WORKSPACE_OVERVIEW_SCALE_THRESHOLD
+    const readBack = mapZoomToStageScale(stageScaleToMapZoom(threshold, 52.52), 52.52)
+    expect(readBack).toBeLessThan(threshold)
+    expect(isWorkspaceOverviewScale(readBack)).toBe(false)
+    expect(isWorkspaceOverviewScale(threshold * 0.999)).toBe(true)
+    expect(isWorkspaceOverviewScale(Number.NaN)).toBe(false)
   })
 })
