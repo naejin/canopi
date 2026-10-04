@@ -230,12 +230,13 @@ export class VectorBasemap {
   private claimSpriteError(event: unknown): boolean {
     if (!this.spriteInFlight || !this.installed || mapErrorResourceId(event) !== null) return false
     if (!isSpriteShapedError(event)) return false
+    this.spriteInFlight = false
     this.markFailed()
     return true
   }
 
+  /** Leaves the sprite window open: a TileJSON failure can arrive before the sprite's own. */
   private markFailed(): void {
-    this.spriteInFlight = false
     this.resourceFailed = true
     this.setStatus('failed')
   }

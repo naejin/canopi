@@ -388,6 +388,14 @@ describe('OpenFreeMap vector basemap', () => {
       expect(basemap.claimResourceError({ type: 'error', layer: { id: 'canopi-scene' }, error: new TypeError('Load failed') })).toBe(false)
     })
 
+    it('still claims the sprite\'s captive-portal error when the TileJSON\'s arrives first', async () => {
+      const { basemap, statuses } = await installedLiberty()
+      const portal = () => new SyntaxError('JSON Parse error: Unrecognized token \'<\'')
+      expect(basemap.claimResourceError({ type: 'error', sourceId: 'ofm-openmaptiles', error: portal() })).toBe(true)
+      expect(basemap.claimResourceError({ type: 'error', error: portal() })).toBe(true)
+      expect(statuses.at(-1)).toBe('failed')
+    })
+
     it('downloads the sprite again on Retry and claims its next URL-less failure too', async () => {
       const { map, basemap, statuses } = await installedLiberty()
       expect(basemap.claimResourceError(urlLess[0][1])).toBe(true)
