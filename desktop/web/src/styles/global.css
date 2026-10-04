@@ -367,3 +367,16 @@ html[data-story-presenting] [data-locked-object-affordance],
 html[data-story-presenting] [data-hover-tooltip] {
   display: none !important;
 }
+
+/* An open Design's chrome outside the canvas area (its title-bar fields, the
+   Desktop panel rail) waits with its canvas chrome while the Design is hidden
+   (app/canvas-map-surface/design-reveal.ts), so the start screen covers the
+   wait alone: laid out, transparent and inert (e2e/canvas/design-reveal.spec.ts). */
+:root:has([data-design-hidden]) [data-design-chrome] {
+  opacity: 0;
+}
+
+:root:has([data-design-hidden]) [data-design-chrome],
+:root:has([data-design-hidden]) [data-design-chrome] * {
+  pointer-events: none !important;
+}

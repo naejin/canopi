@@ -111,6 +111,18 @@ describe('Panel rail', () => {
     expect(container.querySelector('nav')).toBeNull()
   })
 
+  it('marks the Desktop rail as the open Design\'s chrome, which waits while the Design is hidden (global.css)', async () => {
+    await act(async () => {
+      render(<DesktopPanelRail />, container)
+    })
+    expect(container.querySelector('nav')?.hasAttribute('data-design-chrome')).toBe(true)
+
+    await act(async () => {
+      render(<ProjectedRail />, container)
+    })
+    expect(container.querySelector('nav')?.hasAttribute('data-design-chrome'), 'the Web rail also serves the start screen').toBe(false)
+  })
+
   it('disables design-dependent panel entry points when no design is open', async () => {
     designSessionFixture.file = null
 

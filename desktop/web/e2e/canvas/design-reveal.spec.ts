@@ -145,3 +145,32 @@ test('the transparent chrome of a hidden Design takes no pointer input, even whe
   })
   expect(takesPointer).toEqual([])
 })
+
+test('the title bar shows what the start screen shows until the hidden Design shows', async ({ page }) => {
+  await page.goto('')
+  await openFixture(page)
+
+  // As above, the canvas area is given the attribute the reveal sets: the Design's name, save status and place field sit
+  // outside the canvas area, yet must not show over the start screen nor take its clicks while the Design loads.
+  const visibleWhileHidden = await page.evaluate(() => {
+    const area = document.querySelector('[data-testid="web-canvas-workspace-surface"]')!.parentElement!
+    const titleBar = document.querySelector('[data-workspace-title-bar]')!
+    const parts = {
+      name: titleBar.querySelector<HTMLElement>('[aria-label^="Rename Design"]')!,
+      saveStatus: titleBar.querySelector<HTMLElement>('[data-save-status]')!,
+      placeField: titleBar.querySelector<HTMLElement>('[role="combobox"]')!,
+      menus: titleBar.querySelector<HTMLElement>('[role="menubar"]')!,
+    }
+    const shown = (element: HTMLElement) => element.checkVisibility({ opacityProperty: true, visibilityProperty: true })
+      && getComputedStyle(element).pointerEvents !== 'none'
+    area.setAttribute('data-design-hidden', '')
+    const hidden = Object.fromEntries(Object.entries(parts).map(([name, element]) => [name, shown(element)]))
+    area.removeAttribute('data-design-hidden')
+    const revealed = Object.fromEntries(Object.entries(parts).map(([name, element]) => [name, shown(element)]))
+    return { hidden, revealed }
+  })
+  expect(visibleWhileHidden).toEqual({
+    hidden: { name: false, saveStatus: false, placeField: false, menus: true },
+    revealed: { name: true, saveStatus: true, placeField: true, menus: true },
+  })
+})

@@ -5,7 +5,10 @@ import { currentCanvasDocumentSurface } from '../../canvas/session'
 import type { MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
 
 interface DesignReveal {
-  /** The open Design's chrome shows; until then it is laid out but transparent, so it registers what it covers. */
+  /**
+   * The open Design's chrome shows; until then it is laid out but transparent, so it registers what it covers. Chrome outside
+   * the canvas area waits too when marked `data-design-chrome` (global.css).
+   */
   readonly shown: boolean
   /** The start screen shows: no Design is open, or one opened from it has not shown yet. */
   readonly startScreen: boolean

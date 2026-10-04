@@ -132,6 +132,7 @@ export function PlaceCombobox({ variant, onPick, disabled = false, autoFocus = f
       ref={root}
       className={`${styles.root} ${variant === 'dialog' ? styles.dialogVariant : styles.titleBarVariant}`}
       data-preserve-overlays="true"
+      data-design-chrome={variant === 'title-bar' ? '' : undefined}
       onFocusOut={(event) => {
         const next = event.relatedTarget as Node | null
         if (variant === 'title-bar' && (!next || !root.current?.contains(next))) setExpanded(false)

@@ -70,8 +70,8 @@ function WorkspaceTitleBarContent({
       <MenuBar menus={menus} label={t('titleBar.menus')} compactLabel={t('titleBar.menu')} onMenuOpen={onMenuOpen} />
       {design && (
         <>
-          <span className={styles.rule} aria-hidden="true" />
-          <div className={styles.design}>{design}</div>
+          <span className={styles.rule} aria-hidden="true" data-design-chrome />
+          <div className={styles.design} data-design-chrome>{design}</div>
         </>
       )}
       <span className={styles.spacer} />

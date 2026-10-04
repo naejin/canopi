@@ -34,14 +34,17 @@ export interface PanelRailCommand {
 export function PanelRail(props: {
   readonly groups: readonly (readonly PanelRailCommand[])[]
   readonly label: string
+  /** The rail belongs to the open Design (Desktop): it waits with the Design's chrome while the Design is hidden. */
+  readonly designChrome?: boolean
 }) {
   // A presented story fills the window: the rail steps aside until it ends.
   return storyPresentationActive.value ? null : <PanelRailContent {...props} />
 }
 
-function PanelRailContent({ groups, label }: {
+function PanelRailContent({ groups, label, designChrome = false }: {
   readonly groups: readonly (readonly PanelRailCommand[])[]
   readonly label: string
+  readonly designChrome?: boolean
 }) {
   const visibleGroups = groups
     .map((group) => group.filter((command) => command.panel))
@@ -100,7 +103,7 @@ function PanelRailContent({ groups, label }: {
   )
 
   return (
-    <nav ref={rail} className={styles.rail} aria-label={label} data-panel-rail>
+    <nav ref={rail} className={styles.rail} aria-label={label} data-panel-rail data-design-chrome={designChrome ? '' : undefined}>
       {railGroups.map((group, index) => (group.length > 0 || (index === 0 && lastKept < 0 && more)) && (
         <div key={index} className={styles.group}>
           {index > 0 && group.length > 0 && <div className={styles.rule} role="separator" />}
