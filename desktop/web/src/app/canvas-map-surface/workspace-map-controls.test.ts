@@ -1662,7 +1662,7 @@ describe('WorkspaceMapControls OpenFreeMap basemap', () => {
     await vi.waitFor(() => expect(hasOpenFreeMapBasemap(map)).toBe(true))
 
     expect(map.setStyle).not.toHaveBeenCalled()
-    expect(styleFetch).toHaveBeenCalledWith(OPENFREEMAP_BASEMAPS.bright.styleUrl, expect.anything())
+    expect(styleFetch).toHaveBeenCalledWith(OPENFREEMAP_BASEMAPS.bright, expect.anything())
     expect(map.setGlyphs).toHaveBeenCalledWith(OPENFREEMAP_STYLE.glyphs)
     expect(map.setSprite).toHaveBeenCalledWith(OPENFREEMAP_STYLE.sprite)
     expect(map.getSource('ofm-openmaptiles')).toEqual(OPENFREEMAP_STYLE.sources.openmaptiles)
@@ -1925,7 +1925,7 @@ describe('WorkspaceMapControls OpenFreeMap basemap', () => {
     const map = await waitForMap(maps)
     map.emit('style.load')
     const admitted = await acquisition
-    await vi.waitFor(() => expect(styleFetch).toHaveBeenCalledWith(OPENFREEMAP_BASEMAPS.positron.styleUrl, expect.anything()))
+    await vi.waitFor(() => expect(styleFetch).toHaveBeenCalledWith(OPENFREEMAP_BASEMAPS.positron, expect.anything()))
 
     controls.releaseMap(admitted)
     resolveStyle(new Response(JSON.stringify(OPENFREEMAP_STYLE), { status: 200 }))

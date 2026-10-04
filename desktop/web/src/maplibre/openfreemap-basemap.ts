@@ -7,11 +7,11 @@ import { mapErrorResourceId } from './map-error-owner'
  * packages/core/src/types.ts (OPENFREEMAP_BASEMAPS) at commit e9df9e2.
  * Copyright (c) 2026 Qiusheng Wu. MIT License; see THIRD_PARTY_NOTICES.
  */
-export const OPENFREEMAP_BASEMAPS: Readonly<Record<BasemapStyle, { readonly styleUrl: string }>> = {
-  liberty: { styleUrl: 'https://tiles.openfreemap.org/styles/liberty' },
-  positron: { styleUrl: 'https://tiles.openfreemap.org/styles/positron' },
-  bright: { styleUrl: 'https://tiles.openfreemap.org/styles/bright' },
-  dark: { styleUrl: 'https://tiles.openfreemap.org/styles/dark' },
+export const OPENFREEMAP_BASEMAPS: Readonly<Record<BasemapStyle, string>> = {
+  liberty: 'https://tiles.openfreemap.org/styles/liberty',
+  positron: 'https://tiles.openfreemap.org/styles/positron',
+  bright: 'https://tiles.openfreemap.org/styles/bright',
+  dark: 'https://tiles.openfreemap.org/styles/dark',
 }
 
 export const OPENFREEMAP_LAYER_PREFIX = 'ofm:'
@@ -181,7 +181,7 @@ export class VectorBasemap {
     const generation = ++this.generation
     this.setStatus('loading')
     const load = this.options.loadStyle ?? fetchStyle
-    load(OPENFREEMAP_BASEMAPS[presentation.style].styleUrl).then((document) => {
+    load(OPENFREEMAP_BASEMAPS[presentation.style]).then((document) => {
       if (this.disposed || generation !== this.generation) return
       const desired = this.desired
       if (!desired?.visible || desired.style !== presentation.style) return

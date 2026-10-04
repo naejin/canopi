@@ -179,7 +179,7 @@ describe('OpenFreeMap vector basemap', () => {
     basemap.update({ style: 'dark', visible: false, opacity: 1, locale: 'en' })
     expect(map.layers.map((layer) => layer.id)).toEqual(['canopi-scene'])
     expect(map.sources.size).toBe(0)
-    expect(loads).toEqual([OPENFREEMAP_BASEMAPS.liberty.styleUrl, OPENFREEMAP_BASEMAPS.dark.styleUrl])
+    expect(loads).toEqual([OPENFREEMAP_BASEMAPS.liberty, OPENFREEMAP_BASEMAPS.dark])
   })
 
   it('ignores a style that arrives after a newer request', async () => {
@@ -310,7 +310,7 @@ describe('OpenFreeMap vector basemap', () => {
       basemap.update(bright)
       basemap.update({ ...bright, opacity: 0.5 })
       expect(statuses).toEqual(['loading'])
-      expect(requests).toEqual([OPENFREEMAP_BASEMAPS.bright.styleUrl])
+      expect(requests).toEqual([OPENFREEMAP_BASEMAPS.bright])
 
       respond()
       await settle()
@@ -474,8 +474,8 @@ describe('OpenFreeMap vector basemap', () => {
       // Retry on the same instance downloads again, rather than returning early on the failed load.
       first.update(positron)
       expect(requests).toEqual([
-        OPENFREEMAP_BASEMAPS.positron.styleUrl,
-        OPENFREEMAP_BASEMAPS.positron.styleUrl,
+        OPENFREEMAP_BASEMAPS.positron,
+        OPENFREEMAP_BASEMAPS.positron,
       ])
       expect(statuses).toEqual(['first:loading', 'first:failed', 'first:loading'])
 
@@ -483,8 +483,8 @@ describe('OpenFreeMap vector basemap', () => {
       const second = new VectorBasemap(new FakeMap(), { onStatus: (status) => statuses.push(`second:${status}`) })
       second.update(positron)
       expect(requests).toEqual([
-        OPENFREEMAP_BASEMAPS.positron.styleUrl,
-        OPENFREEMAP_BASEMAPS.positron.styleUrl,
+        OPENFREEMAP_BASEMAPS.positron,
+        OPENFREEMAP_BASEMAPS.positron,
       ])
       first.dispose()
       second.dispose()
