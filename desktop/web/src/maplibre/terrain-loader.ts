@@ -5,7 +5,6 @@ import {
 } from '../canvas/contours'
 import type { MapLibreApi } from './loader'
 import type { TerrainProtocolSupport } from './terrain'
-import { loadMapLibreContourApi } from '../vendor/maplibre-contour'
 
 const TERRAIN_PROTOCOL_ID = 'canopi-terrain'
 
@@ -15,9 +14,9 @@ export async function loadMapLibreTerrainSupport(
   maplibre: MapLibreApi,
 ): Promise<TerrainProtocolSupport> {
   if (!terrainSupportPromise) {
-    terrainSupportPromise = loadMapLibreContourApi()
-      .then((contourApi) => {
-        const demSource = new contourApi.DemSource({
+    terrainSupportPromise = import('maplibre-contour')
+      .then(({ default: contour }) => {
+        const demSource = new contour.DemSource({
           url: DEM_TILES_URL,
           id: TERRAIN_PROTOCOL_ID,
           encoding: DEM_ENCODING,

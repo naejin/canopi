@@ -205,7 +205,6 @@
     "src/utils/floating-position.ts#FloatingPositionResult",
     "src/utils/floating-position.ts#PopupVerticalPlacement",
     "src/utils/species-search-normalization.ts#NormalizedSpeciesSearch",
-    "src/vendor/maplibre-contour.ts#LoadedMapLibreContourApi",
     "src/web/browser-app-data.ts#BrowserSetAsideOutcome",
     "src/web/browser-shell-commands.ts#BrowserDesignShellCommands",
     "src/web/browser-shell-commands.ts#BrowserShellCatalogOptions",
