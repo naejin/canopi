@@ -156,24 +156,20 @@ pub(super) fn from_reference(reference: &str) -> Result<ResolvedCrs, String> {
             .ok_or_else(|| format!("unrecognised coordinate reference system {trimmed}"))?;
         return from_epsg(code);
     }
-    // A stored WKT names its code at the top. wbprojection's identification
-    // by parameters misreads hundreds of codes, so it is asked only when the
-    // WKT names none the registry has.
+    // A WKT names its own code at the top. A nested node's code is a
+    // datum's, a unit's or a parameter's, and identification by parameters
+    // misreads hundreds of codes, so a WKT naming no code the registry has is
+    // read as it is spelled.
     let stored = |resolved: ResolvedCrs| ResolvedCrs {
         wkt: trimmed.to_string(),
         ..resolved
     };
     let nodes = wkt_nodes(trimmed);
-    if let Some(code) = top_authority(&nodes).filter(|code| definition_of(*code).is_some()) {
+    if let Some(code) = own_code(&nodes) {
         return from_epsg(code).map(stored);
     }
     if let Some(definition) = proj4_extension(&nodes) {
         return from_proj4(definition).map(stored);
-    }
-    if let Some(code) = wbprojection::epsg_from_wkt(trimmed)
-        && let Ok(resolved) = from_epsg(code)
-    {
-        return Ok(stored(resolved));
     }
     let crs = Crs::from_wkt(trimmed).map_err(|e| format!("unsupported CRS WKT: {e}"))?;
     let params = crs.projection.params();
@@ -477,12 +473,28 @@ fn proj4_extension<'a>(nodes: &[WktNode<'a>]) -> Option<&'a str> {
     )
 }
 
-/// The EPSG code a WKT's root names for itself, not a nested node's.
-fn top_authority(nodes: &[WktNode]) -> Option<u32> {
+/// The registry code a WKT names for itself, not a nested node's: its
+/// root's, or else a compound CRS's horizontal part's.
+fn own_code(nodes: &[WktNode]) -> Option<u32> {
     nodes
         .iter()
-        .filter(|node| node.parents.len() == 1)
-        .find_map(WktNode::epsg)
+        .filter(|node| match node.parents.as_slice() {
+            [_] => true,
+            [root, part] => {
+                matches!(*root, "COMPD_CS" | "COMPOUNDCRS")
+                    && matches!(
+                        *part,
+                        "PROJCS" | "GEOGCS" | "PROJCRS" | "GEOGCRS" | "GEODCRS"
+                    )
+            }
+            _ => false,
+        })
+        .filter_map(|node| {
+            let code = node.epsg().filter(|code| definition_of(*code).is_some())?;
+            Some((node.parents.len(), code))
+        })
+        .min()
+        .map(|(_, code)| code)
 }
 
 /// WKT with the authority node GDAL and the parser both key on, so a
@@ -1217,7 +1229,7 @@ mod tests {
         let new_york = crs_definitions::from_code(2263).unwrap().wkt;
         let codeless = new_york.replace(r#",AUTHORITY["EPSG","2263"]]"#, "]");
         let gdal = with_definition(&codeless, definition(2263));
-        assert_eq!(top_authority(&wkt_nodes(&gdal)), None);
+        assert_eq!(own_code(&wkt_nodes(&gdal)), None);
         assert!(
             from_reference(&gdal)
                 .unwrap_err()
@@ -1253,6 +1265,32 @@ mod tests {
                 "{refused:?}"
             );
         }
+    }
+
+    /// A WKT names its own code at its root, or for a compound CRS naming
+    /// none in its horizontal part. A nested node's code is never the CRS's: with the
+    /// root's removed, Long Island's last nested code is its unit's (9003,
+    /// IGS97 geographic in the registry), so it is read as the feet WKT it
+    /// is, not as longitudes and latitudes.
+    #[test]
+    fn a_wkt_is_identified_by_its_own_code_only() {
+        let long_island = crs_definitions::from_code(2263).unwrap().wkt;
+        let rootless = long_island.replace(r#",AUTHORITY["EPSG","2263"]]"#, "]");
+        let refused = from_reference(&rootless).map(|crs| crs.definition);
+        assert!(
+            refused
+                .as_ref()
+                .is_err_and(|e| e.contains("a linear unit other than the metre")),
+            "{refused:?}"
+        );
+        let rd = crs_definitions::from_code(28992).unwrap().wkt;
+        let compound = format!(
+            r#"COMPD_CS["Amersfoort / RD New + NAP height",{rd},VERT_CS["NAP height",VERT_DATUM["Normaal Amsterdams Peil",2005,AUTHORITY["EPSG","5109"]],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["Gravity-related height",UP],AUTHORITY["EPSG","5709"]]]"#
+        );
+        let resolved = from_reference(&compound).unwrap();
+        assert_eq!(resolved.epsg, Some(28992));
+        let keys = geokeys_for(&resolved).unwrap();
+        assert_eq!(short(&keys, key::ProjectedCSTypeGeoKey), Some(28992));
     }
 
     /// NAD83 / New York Long Island (EPSG:2263) is in US survey feet: points

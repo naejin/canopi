@@ -255,15 +255,17 @@ fn probe_other(
     if raster.cell_size_x == 0.0 || raster.cell_size_y == 0.0 {
         return Err("raster has degenerate pixel size (zero geotransform scale)".to_string());
     }
-    let crs = if let Some(code) = raster.crs.epsg {
-        Some(crs::from_epsg(code)?)
-    } else if let Some(wkt) = raster
+    // The WKT first: wbraster's code is the WKT's last nested one when its
+    // root names none.
+    let crs = if let Some(wkt) = raster
         .crs
         .wkt
         .as_deref()
         .filter(|wkt| !wkt.trim().is_empty())
     {
         Some(crs::from_reference(wkt)?)
+    } else if let Some(code) = raster.crs.epsg {
+        Some(crs::from_epsg(code)?)
     } else if let Some(proj4) = raster.crs.proj4.as_deref().filter(|p| !p.trim().is_empty()) {
         Some(crs::from_proj4(proj4)?)
     } else {
@@ -294,4 +296,36 @@ fn probe_other(
         overview_count: 0,
     };
     Ok((probe, crs))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// An Esri ASCII grid whose .prj names no code of its own: wbraster
+    /// identifies it by its last nested code (its unit's, 9003), so the
+    /// probe reads the WKT itself and refuses the feet grid by name.
+    #[test]
+    fn another_format_is_placed_by_its_wkt_not_a_nested_code() {
+        let dir = crate::test_scratch::TestScratch::new("rust-engine-source-prj");
+        let asc = dir.join("grid.asc");
+        std::fs::write(
+            &asc,
+            "ncols 2\nnrows 2\nxllcorner 1000000\nyllcorner 200000\ncellsize 10\nNODATA_value -1\n1 2\n3 4\n",
+        )
+        .unwrap();
+        let long_island = crs_definitions::from_code(2263).unwrap().wkt;
+        std::fs::write(
+            dir.join("grid.prj"),
+            long_island.replace(r#",AUTHORITY["EPSG","2263"]]"#, "]"),
+        )
+        .unwrap();
+        let refused = probe(&asc).map(|probe| probe.crs_wkt);
+        assert!(
+            refused
+                .as_ref()
+                .is_err_and(|e| e.contains("a linear unit other than the metre")),
+            "{refused:?}"
+        );
+    }
 }
