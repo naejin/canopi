@@ -99,9 +99,10 @@ export class SceneStore {
     return this
   }
 
-  // Rebuilds the session plane at `origin`. The returned reprojector has
-  // already moved the persisted scene; callers apply it to every other metre
-  // holder (history, clipboard, camera) before publishing.
+  /**
+   * Starts a re-origin at `origin`; commitReorigin moves the scene, and the caller re-projects history with the same
+   * reprojector.
+   */
   beginReorigin(origin: GeoPosition): ScenePlaneReprojector {
     return new ScenePlaneReprojector(this._geo, origin)
   }
