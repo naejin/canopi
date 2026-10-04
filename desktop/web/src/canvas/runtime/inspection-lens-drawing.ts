@@ -48,9 +48,9 @@ export interface InspectionLensDrawOptions {
   readonly dpr: number
   /**
    * An offscreen context of the given backing size, for a translucent Plants layer: its symbols and hover ring are
-   * drawn opaque there and composited once, so overlaps are no darker than one plant. Null draws them per shape.
+   * drawn opaque there and composited once, so overlaps are no darker than one plant.
    */
-  scratch(widthPx: number, heightPx: number): CanvasRenderingContext2D | null
+  scratch(widthPx: number, heightPx: number): CanvasRenderingContext2D
 }
 
 /**
@@ -155,7 +155,6 @@ function drawPlants(
   const backingWidth = Math.round(widthPx * dpr), backingHeight = Math.round(heightPx * dpr)
   const scratch = layer.opacity < 1 ? createScratch(backingWidth, backingHeight) : null
   const target = scratch ?? ctx
-  const symbolOpacity = scratch ? 1 : layer.opacity
   if (scratch) {
     // The scratch is reused: clear its whole backing in device pixels, which a CSS-pixel clear misses at a fractional dpr.
     scratch.setTransform(1, 0, 0, 1, 0, 0)
@@ -191,7 +190,7 @@ function drawPlants(
   }
   for (const entry of entries) {
     if (turned) upright(entry.plant.position)
-    drawPlantSymbolGlyph(target, entry, symbolOpacity, scale)
+    drawPlantSymbolGlyph(target, entry, scale)
     if (turned) target.restore()
   }
 
@@ -202,7 +201,7 @@ function drawPlants(
     const ring = getCanvasInteractionStrokeVisual('hover')
     target.beginPath()
     target.arc(hovered.plant.position.x, hovered.plant.position.y, hovered.radiusWorld * 1.4, 0, Math.PI * 2)
-    target.globalAlpha = ring.alpha * symbolOpacity
+    target.globalAlpha = ring.alpha
     target.strokeStyle = ring.casingColor
     target.lineWidth = ring.casingWidthPx / scale
     target.stroke()
@@ -232,13 +231,12 @@ function drawPlants(
 function drawPlantSymbolGlyph(
   ctx: CanvasRenderingContext2D,
   entry: PlantPresentationEntry,
-  opacity: number,
   viewportScale: number,
 ): void {
   const symbol = entry.lod === 'dot' || entry.usesCanopyRadius ? 'round' : entry.symbol
   const { x, y } = entry.plant.position
   const r = entry.radiusWorld
-  ctx.globalAlpha = opacity
+  ctx.globalAlpha = 1
   ctx.fillStyle = entry.color
   if (entry.lod === 'dot' || symbol === 'round') {
     ctx.beginPath()

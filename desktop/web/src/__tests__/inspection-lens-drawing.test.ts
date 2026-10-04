@@ -16,7 +16,7 @@ interface LensScene {
 function draw(
   ctx: ReturnType<typeof createMockCanvasContext>,
   scene: LensScene,
-  options: { widthPx?: number; heightPx?: number; dpr?: number; scratch?: (widthPx: number, heightPx: number) => CanvasRenderingContext2D | null } = {},
+  options: { widthPx?: number; heightPx?: number; dpr?: number; scratch?: (widthPx: number, heightPx: number) => CanvasRenderingContext2D } = {},
 ): void {
   const widthPx = options.widthPx ?? 400
   const heightPx = options.heightPx ?? 300
@@ -27,7 +27,7 @@ function draw(
     widthPx,
     heightPx,
     dpr: options.dpr ?? 1,
-    scratch: options.scratch ?? (() => null),
+    scratch: options.scratch ?? (() => { throw new Error('an opaque Plants layer draws on the page') }),
   })
 }
 
