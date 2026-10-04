@@ -2742,6 +2742,25 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('the open fit draws the fitted view in the next frame', async () => {
+    const runtime = stubbedRuntime()
+    runtime.documentSurface.loadDocument(makeFile())
+    const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
+    setInteractionViewport(runtime, { x: 50, y: 0, scale: 3 })
+    const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    await nextFrame()
+    const before = placementOf(runtime)
+
+    renderer.setView.mockClear()
+    runtime.documentSurface.zoomToFit()
+    await nextFrame()
+
+    expect(placementOf(runtime)).not.toEqual(before)
+    expect(renderer.setView).toHaveBeenCalledOnce()
+    expect(lastRenderedViewport(renderer)).toEqual(placementOf(runtime))
+    runtime.destroy()
+  })
+
   it('resets transient runtime state before replacing the document', async () => {
     const runtime = createRuntimeWithAppPanelTargets()
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)

@@ -263,7 +263,6 @@ export function createSceneRuntimeConstruction(
     viewNavigation,
     chrome,
     rendering,
-    invalidateViewport: () => callbacks.invalidate('viewport'),
     renderChrome: callbacks.renderChrome,
     addGuide: callbacks.addGuide,
     clearHoveredEntity: () => callbacks.setHoveredTarget(null, { invalidate: false }),

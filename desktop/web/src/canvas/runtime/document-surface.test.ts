@@ -36,7 +36,6 @@ function createTestDocumentSurface(
       destroy: vi.fn(),
     },
     rendering,
-    invalidateViewport: vi.fn(),
     renderChrome: vi.fn(),
     addGuide: vi.fn(),
     clearHoveredEntity: vi.fn(),
@@ -124,7 +123,6 @@ describe('Scene Canvas document surface lifecycle', () => {
           calls.push('rendering')
         },
       },
-      invalidateViewport: vi.fn(),
       renderChrome: vi.fn(),
       addGuide: vi.fn(),
       clearHoveredEntity: () => {
