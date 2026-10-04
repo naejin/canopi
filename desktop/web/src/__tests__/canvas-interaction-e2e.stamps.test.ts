@@ -12,7 +12,7 @@ import {
 } from '../canvas/saved-object-stamp-source'
 import { armCanvasTool } from '../app/keyboard/arming'
 import { parseSavedObjectStampPayload } from '../canvas/saved-object-stamp-payload'
-import { setCanvasRuntimeSurfaces } from '../canvas/session'
+import { setCurrentCanvasSession } from '../canvas/session'
 import { createTestCanvasCommandSurface, createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 import type { CanvasToolGuidance } from '../canvas/session-state'
 import type { DraftPresentation } from '../canvas/runtime/tools/draft'
@@ -210,7 +210,7 @@ describe('SceneInteractionSession', () => {
     expect(ghost()).toEqual({ anchor: { x: 100, y: 100 }, rotationDeg: 15, plants: ['Malus domestica'] })
 
     // Favorites' click: arming writes the read model, then arms the tool again (the session's setTool runs the cancellation).
-    setCanvasRuntimeSurfaces(createTestCanvasRuntimeSurfaces({
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       commands: createTestCanvasCommandSurface({ tools: { setTool: (name) => session.setTool(name) } }),
     }))
     const pear = parseSavedObjectStampPayload(PEAR_STAMP.payload_json)!

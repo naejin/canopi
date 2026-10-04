@@ -13,7 +13,7 @@ import { clearPlantStampSource, selectPlantStampSource } from '../canvas/plant-s
 import {
   clearSavedObjectStampSource,
 } from '../canvas/saved-object-stamp-source'
-import { setCanvasRuntimeSurfaces } from '../canvas/session'
+import { setCurrentCanvasSession } from '../canvas/session'
 import {
   IDLE_CANVAS_TOOL_GUIDANCE,
   setCanvasTool,
@@ -74,7 +74,7 @@ describe('Tool card', () => {
     scrollWheel.value = 'zoom'
     container = document.createElement('div')
     document.body.append(container)
-    setCanvasRuntimeSurfaces({
+    setCurrentCanvasSession({
       commands: createTestCanvasCommandSurface(),
       queries: createTestCanvasQuerySurface(),
       documents: createTestCanvasDocumentSurface(),
@@ -91,7 +91,7 @@ describe('Tool card', () => {
     clearPlantStampSource()
     clearSavedObjectStampSource()
     locating.open!.value = false
-    setCanvasRuntimeSurfaces(null)
+    setCurrentCanvasSession(null)
     sidePanel.value = null
     activePanel.value = 'canvas'
   })
@@ -141,7 +141,7 @@ describe('Tool card', () => {
   it('names a species with no name in the interface language by its English name, marked', async () => {
     await act(() => {
       locale.value = 'fr'
-      setCanvasRuntimeSurfaces({
+      setCurrentCanvasSession({
         commands: createTestCanvasCommandSurface(),
         queries: createTestCanvasQuerySurface({ englishFallbackNames: new Map([['Malus domestica', 'Apple']]) }),
         documents: createTestCanvasDocumentSurface(),
@@ -160,7 +160,7 @@ describe('Tool card', () => {
   it('prefers the name in the interface language over the one saved with the source', async () => {
     await act(() => {
       locale.value = 'fr'
-      setCanvasRuntimeSurfaces({
+      setCurrentCanvasSession({
         commands: createTestCanvasCommandSurface(),
         queries: createTestCanvasQuerySurface({ localizedNames: new Map([['Malus domestica', 'Pommier']]) }),
         documents: createTestCanvasDocumentSurface(),
@@ -174,7 +174,7 @@ describe('Tool card', () => {
 
   it('leads the card with the species glyph in the colour and symbol a click places', async () => {
     await act(() => {
-      setCanvasRuntimeSurfaces({
+      setCurrentCanvasSession({
         commands: createTestCanvasCommandSurface(),
         queries: createTestCanvasQuerySurface({
           scene: {
@@ -285,7 +285,7 @@ describe('Tool card', () => {
       map.tabIndex = 0
       document.body.append(map)
       const releaseMap = focusOwner.registerRegion('map', map)
-      setCanvasRuntimeSurfaces({
+      setCurrentCanvasSession({
         commands: createTestCanvasCommandSurface({ tools: { setTool } }),
         queries: createTestCanvasQuerySurface(),
         documents: createTestCanvasDocumentSurface(),
@@ -342,7 +342,7 @@ describe('Tool card', () => {
 
     it('offers copying an object from the map instead, and closes on Esc', async () => {
       const setTool = vi.fn((tool: string) => setCanvasTool(tool))
-      setCanvasRuntimeSurfaces({
+      setCurrentCanvasSession({
         commands: createTestCanvasCommandSurface({ tools: { setTool } }),
         queries: createTestCanvasQuerySurface(),
         documents: createTestCanvasDocumentSurface(),
@@ -404,7 +404,7 @@ describe('Tool card', () => {
     beforeEach(async () => {
       spacing = { input: vi.fn(), commit: vi.fn(), blur: vi.fn(), cancel: vi.fn() }
       await act(() => {
-        setCanvasRuntimeSurfaces({
+        setCurrentCanvasSession({
           commands: createTestCanvasCommandSurface({ tools: { plantRowSpacing: spacing } }),
           queries: createTestCanvasQuerySurface(),
           documents: createTestCanvasDocumentSurface(),
@@ -528,7 +528,7 @@ describe('Tool card', () => {
 
     await act(() => {
       locating.open!.value = false
-      setCanvasRuntimeSurfaces({
+      setCurrentCanvasSession({
         commands: createTestCanvasCommandSurface(),
         queries: createTestCanvasQuerySurface({ placement: { x: 0, y: 0, scale: 0.01 } }),
         documents: createTestCanvasDocumentSurface(),

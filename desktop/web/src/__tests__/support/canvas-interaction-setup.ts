@@ -16,7 +16,7 @@ import { h, render as renderPreact } from 'preact'
 import { setupRerender, teardown as teardownPreactTestUtils } from 'preact/test-utils'
 import { ToolCard } from '../../components/canvas/ToolCard'
 import { focusOwner } from '../../app/keyboard/focus-owner'
-import { setCanvasRuntimeSurfaces } from '../../canvas/session'
+import { setCurrentCanvasSession } from '../../canvas/session'
 import {
   createTestCanvasCommandSurface,
   createTestCanvasDocumentSurface,
@@ -800,7 +800,7 @@ export function installSceneInteractionFixture(
     events = createSceneInteractionEventHarness(container)
     flushToolCard = setupRerender()
     const latest = () => sessions[sessions.length - 1]?.plantRowSpacing
-    setCanvasRuntimeSurfaces({
+    setCurrentCanvasSession({
       commands: createTestCanvasCommandSurface({
         tools: {
           plantRowSpacing: {
@@ -854,7 +854,7 @@ export function installSceneInteractionFixture(
     toolCardHost.remove()
     releaseMapRegion()
     teardownPreactTestUtils()
-    setCanvasRuntimeSurfaces(null)
+    setCurrentCanvasSession(null)
     setCanvasTool('select')
     setCanvasToolGuidance(IDLE_CANVAS_TOOL_GUIDANCE)
     container.remove()

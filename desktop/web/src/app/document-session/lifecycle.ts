@@ -1,6 +1,6 @@
 import {
   getCurrentCanvasSession,
-  setCanvasRuntimeSurfaces,
+  setCurrentCanvasSession,
 } from "../../canvas/session";
 import type { CanvasDocumentSurface, CanvasRuntimeSurfaces } from "../../canvas/runtime/runtime";
 import {
@@ -48,7 +48,7 @@ interface DesignSessionLifecycleDeps {
 
 const DEFAULT_LIFECYCLE_DEPS: DesignSessionLifecycleDeps = {
   createRuntimeComposition: createDesktopWorkspaceRuntimeComposition,
-  publishSurfaces: setCanvasRuntimeSurfaces,
+  publishSurfaces: setCurrentCanvasSession,
   createResizeObserver: (callback) => {
     if (typeof ResizeObserver === "undefined") return null;
     return new ResizeObserver(callback);

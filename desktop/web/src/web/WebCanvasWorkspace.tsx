@@ -3,7 +3,7 @@ import {
   designSessionStore,
   type DesignSessionStore,
 } from '../app/document-session/store'
-import { getCurrentCanvasSession, setCanvasRuntimeSurfaces } from '../canvas/session'
+import { getCurrentCanvasSession, setCurrentCanvasSession } from '../canvas/session'
 import { CanvasRuntimeCleanupError } from '../canvas/runtime/cleanup'
 import type { CanvasDocumentSurface } from '../canvas/runtime/runtime'
 import { acquireCanvasRuntimeLifecycle } from '../canvas/runtime/lifecycle-owner'
@@ -106,7 +106,7 @@ export function WebCanvasWorkspace({
       if (mounted) runtimeRef.current = null
       try {
         if (getCurrentCanvasSession() === activeComposition.surfaces) {
-          setCanvasRuntimeSurfaces(null)
+          setCurrentCanvasSession(null)
         }
       } catch (error) {
         errors.push(error)
@@ -204,7 +204,7 @@ export function WebCanvasWorkspace({
         release()
         return
       }
-      setCanvasRuntimeSurfaces(activeComposition.surfaces)
+      setCurrentCanvasSession(activeComposition.surfaces)
       if (!runtimeIsActive()) release()
     })().catch((error: unknown) => {
       release()

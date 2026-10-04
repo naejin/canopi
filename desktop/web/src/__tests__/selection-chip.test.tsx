@@ -10,7 +10,7 @@ import { plantFinderMapMatches } from '../app/plant-finder/map-matches'
 import { SceneStore } from '../canvas/runtime/scene/store'
 import type { SceneDesignObjectSelection } from '../canvas/runtime/scene'
 import type { CanvasCommandSurface } from '../canvas/runtime/runtime'
-import { setCanvasRuntimeSurfaces } from '../canvas/session'
+import { setCurrentCanvasSession } from '../canvas/session'
 import { selectedObjectIds } from '../canvas/session-state'
 import {
   createTestCanvasCommandSurface,
@@ -92,7 +92,7 @@ describe('Selection chip', () => {
     })
     selectSameSpecies = vi.fn<CanvasCommandSurface['sceneEdits']['selectSameSpecies']>()
     clearSelection = vi.fn<CanvasCommandSurface['sceneEdits']['clearSelection']>()
-    setCanvasRuntimeSurfaces({
+    setCurrentCanvasSession({
       commands: createTestCanvasCommandSurface({ sceneEdits: { selectSameSpecies, clearSelection } }),
       queries,
       documents: createTestCanvasDocumentSurface(),
@@ -105,7 +105,7 @@ describe('Selection chip', () => {
     container.remove()
     selectedObjectIds.value = new Set()
     plantFinderMapMatches.value = null
-    setCanvasRuntimeSurfaces(null)
+    setCurrentCanvasSession(null)
   })
 
   async function select(targets: SceneDesignObjectSelection): Promise<void> {
@@ -229,7 +229,7 @@ describe('Selection chip', () => {
 
   it('offers Rename… for one zone, which renames it by its id through the runtime', async () => {
     const renameZone = vi.fn<CanvasCommandSurface['sceneEdits']['renameZone']>(() => true)
-    setCanvasRuntimeSurfaces({
+    setCurrentCanvasSession({
       commands: createTestCanvasCommandSurface({ sceneEdits: { selectSameSpecies, clearSelection, renameZone } }),
       queries,
       documents: createTestCanvasDocumentSurface(),

@@ -13,7 +13,7 @@ import {
   selectPlantStampSource,
 } from '../canvas/plant-stamp-source'
 import { SceneStore } from '../canvas/runtime/scene/store'
-import { setCanvasRuntimeSurfaces } from '../canvas/session'
+import { setCurrentCanvasSession } from '../canvas/session'
 import {
   IDLE_CANVAS_TOOL_GUIDANCE,
   getCanvasTool,
@@ -102,7 +102,7 @@ describe('Place plants species chooser', () => {
       scene: store.persisted,
       localizedNames: new Map([['Malus domestica', 'Pommier'], ['Ficus carica', null]]),
     })
-    setCanvasRuntimeSurfaces({
+    setCurrentCanvasSession({
       commands: createTestCanvasCommandSurface(),
       queries,
       documents: createTestCanvasDocumentSurface(),
@@ -130,7 +130,7 @@ describe('Place plants species chooser', () => {
     clearPlantStampSource()
     recentPlantStampSources.value = []
     favorites.englishNames = {}
-    setCanvasRuntimeSurfaces(null)
+    setCurrentCanvasSession(null)
     sidePanel.value = null
     activePanel.value = 'canvas'
   })

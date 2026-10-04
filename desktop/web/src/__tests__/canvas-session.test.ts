@@ -47,13 +47,6 @@ describe('canvas session seam', () => {
     disposeEffect()
   })
 
-  it('rejects mounted runtime publication until it is adapted into explicit surfaces', () => {
-    expect(() => setCurrentCanvasSession({ commandSurface: {} } as never)).toThrow(
-      /explicit canvas runtime surfaces/,
-    )
-    expect(currentCanvasSession.value).toBe(null)
-  })
-
   it('primes tool state before mount and delegates through the command surface after mount', () => {
     setCurrentCanvasTool('rectangle')
     expect(currentCanvasTool.value).toBe('rectangle')

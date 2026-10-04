@@ -6,7 +6,6 @@ import {
   currentCanvasDocumentSurface,
   currentCanvasQuerySurface,
   currentCanvasTool,
-  setCanvasRuntimeSurfaces,
   setCurrentCanvasSession,
 } from '../canvas/session'
 import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
@@ -221,7 +220,7 @@ describe('canvas runtime surfaces', () => {
     const surfaces = createCanvasRuntimeSurfaces(runtime)
 
     try {
-      setCanvasRuntimeSurfaces(surfaces)
+      setCurrentCanvasSession(surfaces)
 
       expect(currentCanvasCommandSurface.value).toBe(surfaces.commands)
       expect(currentCanvasQuerySurface.value).toBe(surfaces.queries)

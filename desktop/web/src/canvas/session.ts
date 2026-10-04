@@ -78,22 +78,8 @@ export function getCurrentCanvasDocumentSurface(): CanvasDocumentSurface | null 
   return currentCanvasDocumentSurface.value
 }
 
-export function setCanvasRuntimeSurfaces(surfaces: CanvasRuntimeSurfaces | null): void {
+export function setCurrentCanvasSession(surfaces: CanvasRuntimeSurfaces | null): void {
   currentCanvasSession.value = surfaces
-}
-
-export function setCurrentCanvasSession(session: CanvasRuntimeSurfaces | null): void {
-  if (!session) {
-    setCanvasRuntimeSurfaces(null)
-    return
-  }
-
-  if (isCanvasRuntimeSurfaces(session)) {
-    setCanvasRuntimeSurfaces(session)
-    return
-  }
-
-  throw new Error('Canvas session publication requires explicit canvas runtime surfaces.')
 }
 
 export function setCurrentCanvasTool(name: string): void {
@@ -103,16 +89,6 @@ export function setCurrentCanvasTool(name: string): void {
     return
   }
   setCanvasTool(name)
-}
-
-function isCanvasRuntimeSurfaces(value: unknown): value is CanvasRuntimeSurfaces {
-  return Boolean(
-    value
-    && typeof value === 'object'
-    && 'commands' in value
-    && 'queries' in value
-    && 'documents' in value,
-  )
 }
 
 function commandSurfaceFrom(session: CanvasRuntimeSurfaces | null): CanvasCommandSurface | null {
