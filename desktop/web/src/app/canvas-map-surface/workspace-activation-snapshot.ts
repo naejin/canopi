@@ -11,7 +11,6 @@ import type { WorkspaceActivationSnapshot } from './workspace-activation'
 export interface WorkspaceActivationSnapshotReaderOptions {
   readonly store?: Pick<DesignSessionStore, 'hasCurrentDesign' | 'sessionIdentity'>
   readonly readMapLayers?: () => MapLayersState
-  readonly readLocale?: () => string
 }
 
 /** The background band as the map layer store (or a presented story step) and locale describe it. */
@@ -23,7 +22,7 @@ export function readWorkspaceBackgroundPresentation(
   return captureMapBackgroundPresentation({
     basemap: { ...layers.basemap, opacity: effectiveBackgroundOpacity(layers, 'basemap') },
     satellite: { ...layers.satellite, opacity: effectiveBackgroundOpacity(layers, 'satellite') },
-    locale: (options.readLocale ?? (() => locale.value))(),
+    locale: locale.value,
   })
 }
 

@@ -2023,7 +2023,6 @@ function realComposition(options: {
       options.onMapStateChange?.(state)
     },
     readSnapshot: () => createActivationSnapshot(),
-    readAttributionCompact: () => false,
   }, {
     createRuntime: (runtimeOptions) => {
       runtime = new SceneCanvasRuntime(runtimeOptions)

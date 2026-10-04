@@ -82,8 +82,6 @@ export interface WorkspaceRuntimeCompositionOptions {
     readInitialCenter: () => { readonly lat: number; readonly lon: number },
   ) => WorkspaceActivationSnapshot | null
   readonly readBackgroundPresentation?: () => ReturnType<typeof readWorkspaceBackgroundPresentation>
-  /** Whether the map credits fold into their (i) button; the visible map area decides by default. */
-  readonly readAttributionCompact?: () => boolean
   /** Called with the settled camera, `WORKSPACE_VIEW_SETTLE_MS` after it last changed, on a Design. */
   readonly onViewSettled?: (view: WorkspaceSettledView) => void
 }
@@ -238,7 +236,8 @@ export function createWorkspaceRuntimeComposition(
           workspace.updateBackgroundPresentation(
             (options.readBackgroundPresentation ?? readWorkspaceBackgroundPresentation)(),
           )
-          controls.setAttributionCompact((options.readAttributionCompact ?? readMapAttributionFolded)())
+          // Whether the map credits fold into their (i) button: the visible map area decides.
+          controls.setAttributionCompact(mapAttributionFolded.value)
         })
         void reconciler.reconcileInitialGeneration().then(
           resolveStart,
@@ -306,8 +305,4 @@ function reportCompositionFailure(
   } catch (observerError) {
     logMapError('Shared workspace failure observer failed:', observerError)
   }
-}
-
-function readMapAttributionFolded(): boolean {
-  return mapAttributionFolded.value
 }

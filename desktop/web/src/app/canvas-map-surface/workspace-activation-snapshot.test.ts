@@ -2,6 +2,7 @@ import { effect } from '@preact/signals'
 import { describe, expect, it } from 'vitest'
 import { createDefaultMapLayers, mapLayers, type MapLayersState } from '../map-layers/state'
 import { locale } from '../settings/state'
+import type { Locale } from '../../generated/contracts'
 import { readWorkspaceActivationSnapshot, readWorkspaceBackgroundPresentation } from './workspace-activation-snapshot'
 
 const identity = {}
@@ -25,6 +26,17 @@ function layers(overrides: {
   }
 }
 
+/** Reads with the app locale set to `value`, restoring it afterwards. */
+function inLocale<T>(value: Locale, read: () => T): T {
+  const previous = locale.peek()
+  locale.value = value
+  try {
+    return read()
+  } finally {
+    locale.value = previous
+  }
+}
+
 describe('readWorkspaceActivationSnapshot', () => {
   it('returns null without a current Design', () => {
     expect(readWorkspaceActivationSnapshot({ store: store(false), readInitialCenter: () => ({ lat: 0, lon: 0 }) })).toBeNull()
@@ -32,12 +44,11 @@ describe('readWorkspaceActivationSnapshot', () => {
 
   it('copies the initial map centre and normalized background presentation', () => {
     const basemap = { style: 'positron' as const, visible: true, opacity: Number.NaN }
-    const snapshot = readWorkspaceActivationSnapshot({
+    const snapshot = inLocale('fr', () => readWorkspaceActivationSnapshot({
       store: store(),
       readInitialCenter: () => ({ lat: 48.86, lon: 2.35 }),
       readMapLayers: () => ({ ...layers(), basemap }),
-      readLocale: () => 'fr',
-    })
+    }))
     expect(snapshot).toEqual(expect.objectContaining({
       sessionIdentity: identity,
       map: expect.objectContaining({
@@ -60,13 +71,12 @@ describe('readWorkspaceActivationSnapshot', () => {
   })
 
   it('shares normalized presentation with the live settings reader', () => {
-    expect(readWorkspaceBackgroundPresentation({
+    expect(inLocale('de', () => readWorkspaceBackgroundPresentation({
       readMapLayers: () => layers({
         basemap: { style: 'dark', visible: false, opacity: 2 },
         satellite: { visible: true, opacity: -1 },
       }),
-      readLocale: () => 'de',
-    })).toEqual({
+    }))).toEqual({
       basemap: { style: 'dark', visible: false, opacity: 1 },
       satellite: { visible: true, opacity: 0 },
       locale: 'de',
@@ -76,7 +86,6 @@ describe('readWorkspaceActivationSnapshot', () => {
   it('never carries the Google key into the background presentation', () => {
     const presentation = readWorkspaceBackgroundPresentation({
       readMapLayers: () => layers({ satellite: { visible: true } }),
-      readLocale: () => 'en',
     })
     expect(Object.keys(presentation.satellite).sort()).toEqual(['opacity', 'visible'])
   })
