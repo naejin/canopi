@@ -13,7 +13,7 @@ import {
   syncCanvasSignalsFromScene,
 } from './scene-runtime/scene-sync'
 import { installSceneRuntimeEffects } from './scene-runtime/effects'
-import type { SceneRuntimeRenderKind } from './scene-runtime/render-scheduler'
+import { SceneRendererMountCancelledError, type SceneRuntimeRenderKind } from './scene-runtime/render-scheduler'
 import {
   normalizeSceneDesignObjectTargets,
   sceneDesignObjectTargetsEqual,
@@ -44,6 +44,8 @@ export type SceneCanvasRuntimeOptions = SceneRuntimeConstructionOptions
 export class SceneCanvasRuntime {
   private readonly _construction: SceneRuntimeConstruction
   private _interaction: SceneInteractionSession | null = null
+  /** Counts unmountRenderer calls, so a remount that an unmount overtook stops before editing mounts. */
+  private _rendererUnmounts = 0
   private _cameraMode: 'site' | 'overview'
 
   constructor(options: SceneCanvasRuntimeOptions = {}) {
@@ -276,6 +278,7 @@ export class SceneCanvasRuntime {
    * Design can still be saved.
    */
   async unmountRenderer(): Promise<void> {
+    this._rendererUnmounts += 1
     const interaction = this._interaction
     this._interaction = null
     bindQuerySurfacePointerWorld(this._querySurface, null)
@@ -290,12 +293,15 @@ export class SceneCanvasRuntime {
   /**
    * Internal workspace-lifecycle control: a user Retry built a new map after unmountRenderer. The
    * renderer and the interaction session mount again over the loaded Scene, which keeps its camera,
-   * selection and undo history. A failed remount leaves nothing mounted.
+   * selection and undo history. A failed remount leaves nothing mounted, and so does an unmount (a map failure)
+   * that lands once the renderer mounted but before editing did: the remount rejects as cancelled.
    */
   async remountRenderer(container: HTMLElement): Promise<void> {
+    const unmounts = this._rendererUnmounts
     try {
       refreshCanvasColorCache(container)
       await this._rendering.initialize(container)
+      if (unmounts !== this._rendererUnmounts) throw new SceneRendererMountCancelledError()
       await this._mountInteraction(container)
     } catch (error) {
       const errors: unknown[] = [error]

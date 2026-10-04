@@ -72,6 +72,15 @@ export function addSavedView(view: SavedView, display: SavedViewDisplay | null =
 }
 
 /**
+ * A view as stored JSON, with `null` fields left out: Desktop's loader writes
+ * an absent optional field (a view's `ground_size_m`) as `null`, which reads
+ * the same as a missing key.
+ */
+function savedViewJson(view: SavedView): string {
+  return JSON.stringify(view, (_key, value: unknown) => (value === null ? undefined : value))
+}
+
+/**
  * Points an existing view at what the map shows now: camera (with the ground
  * it frames), layers, highlights and labels. Its name, title and text stay.
  * Every step that shows the view shows the new capture. The view is built from
@@ -92,7 +101,7 @@ export function recaptureSavedView(id: string, capture: SavedView, display: Save
       title: current.title,
       ...(current.text === undefined ? {} : { text: current.text }),
     }
-    const sameCapture = JSON.stringify(next) === JSON.stringify(current)
+    const sameCapture = savedViewJson(next) === savedViewJson(current)
     const sameDisplay = display === null || readSavedViewDisplay(design, id)?.labels === display.labels
     if (sameCapture && sameDisplay) return design
     const nextViews = [...views]

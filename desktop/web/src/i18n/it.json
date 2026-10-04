@@ -1279,6 +1279,7 @@
     "title": "Timbri salvati",
     "saveSelection": "Salva selezione",
     "import": "Importa timbri…",
+    "importSaveFailed": "Impossibile salvare il timbro importato.",
     "place": "Posiziona",
     "export": "Esporta timbro…",
     "rename": "Rinomina",

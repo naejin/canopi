@@ -79,7 +79,7 @@ Every copied file keeps an MIT header naming its source and commit and an entry 
 
 ## Native execution
 
-Every `#[tauri::command]` is registered once and is executor-backed async or one of the reviewed bounded synchronous commands in `desktop/src/native_command_policy.rs`. Filesystem, SQLite, network, rendering, encoding, compression, process, sleep and unbounded CPU work never run synchronously on a command thread; direct blocking-pool calls belong only in `desktop/src/native_operation.rs` (`native_command_policy::tests`; [native and release](guides/native-and-release.md)).
+Every `#[tauri::command]` is registered once and is executor-backed async or one of the reviewed bounded synchronous commands in `desktop/src/native_command_policy.rs`. Filesystem, SQLite, network, rendering, encoding, compression, process, sleep and unbounded CPU work never run synchronously on a command thread; direct blocking-pool calls belong only in `desktop/src/native_operation.rs` (`clippy.toml` `disallowed-methods`, `native_command_policy::tests`; [native and release](guides/native-and-release.md)).
 
 ## Persistence of app data
 

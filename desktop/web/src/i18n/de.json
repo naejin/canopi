@@ -1279,6 +1279,7 @@
     "title": "Gespeicherte Stempel",
     "saveSelection": "Auswahl speichern",
     "import": "Stempel importieren…",
+    "importSaveFailed": "Der importierte Stempel konnte nicht gespeichert werden.",
     "place": "Setzen",
     "export": "Stempel exportieren…",
     "rename": "Umbenennen",

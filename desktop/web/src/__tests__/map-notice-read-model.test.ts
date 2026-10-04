@@ -88,6 +88,21 @@ describe('Map Notice read model', () => {
     })).toMatchObject({ statusText: 'Map unavailable', retry: false })
   })
 
+  it('reports a basemap download in progress as loading, without Retry', () => {
+    expect(getMapNoticeReadModel({
+      hasDesign: true,
+      mapVisible: true,
+      mapSurface: { ...READY_MAP_STATE, basemapStatus: 'loading', layerSkipped: true },
+      t: translate,
+    })).toEqual({
+      visible: true,
+      mapSurfaceVisible: true,
+      tone: 'loading',
+      statusText: 'Loading',
+      retry: false,
+    })
+  })
+
   it('reports a terrain failure as a skipped layer, never the engine text', () => {
     expect(getMapNoticeReadModel({
       hasDesign: true,

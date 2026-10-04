@@ -176,16 +176,17 @@ describe('OpenFreeMap vector basemap', () => {
     const shown = { style: 'liberty', visible: true, opacity: 1, locale: 'en' } as const
     basemap.update(shown)
     await settle()
-    expect(statuses).toEqual(['failed'])
+    expect(statuses).toEqual(['loading', 'failed'])
 
     reject = false
     basemap.update(shown)
+    expect(statuses).toEqual(['loading', 'failed', 'loading'])
     await settle()
-    expect(statuses).toEqual(['failed', 'ok'])
+    expect(statuses).toEqual(['loading', 'failed', 'loading', 'ok'])
     expect(map.sprite).toContain('liberty')
 
     basemap.update({ ...shown, visible: false })
-    expect(statuses).toEqual(['failed', 'ok', 'idle'])
+    expect(statuses).toEqual(['loading', 'failed', 'loading', 'ok', 'idle'])
   })
 
   it('clears a failed style once the user returns to the style still on screen', async () => {
@@ -205,12 +206,12 @@ describe('OpenFreeMap vector basemap', () => {
     reject = true
     basemap.update({ ...liberty, style: 'dark' })
     await settle()
-    expect(statuses).toEqual(['ok', 'failed'])
+    expect(statuses).toEqual(['loading', 'ok', 'loading', 'failed'])
 
     basemap.update(liberty)
     await settle()
     expect(basemap.installedStyle).toBe('liberty')
-    expect(statuses).toEqual(['ok', 'failed', 'ok'])
+    expect(statuses).toEqual(['loading', 'ok', 'loading', 'failed', 'ok'])
   })
 
   it('ignores a style that fails after the user returned to the style on screen', async () => {
@@ -231,7 +232,33 @@ describe('OpenFreeMap vector basemap', () => {
     rejectDark()
     await settle()
     expect(basemap.installedStyle).toBe('liberty')
-    expect(statuses).toEqual(['ok'])
+    expect(statuses).toEqual(['loading', 'ok', 'loading', 'ok'])
+  })
+
+  it('reports loading while a style downloads, and a repeated request keeps the download already running', async () => {
+    const map = new FakeMap()
+    const statuses: string[] = []
+    const loads: string[] = []
+    let release!: () => void
+    const basemap = new VectorBasemap(map, {
+      loadStyle: (url) => {
+        loads.push(url)
+        return new Promise((resolve) => { release = () => resolve(styleDocument('liberty')) })
+      },
+      onStatus: (status) => statuses.push(status),
+    })
+    const liberty = { style: 'liberty', visible: true, opacity: 1, locale: 'en' } as const
+    basemap.update(liberty)
+    basemap.update(liberty)
+    basemap.update({ ...liberty, opacity: 0.5 })
+    expect(statuses).toEqual(['loading'])
+    expect(loads).toEqual([OPENFREEMAP_BASEMAPS.liberty.styleUrl])
+
+    release()
+    await settle()
+    expect(basemap.installedStyle).toBe('liberty')
+    expect(statuses).toEqual(['loading', 'ok'])
+    expect((map.getLayer('ofm:water') as { paint: Record<string, unknown> }).paint['fill-opacity']).toBe(0.4)
   })
 
   it('scales legacy stop functions and wraps other expressions', () => {

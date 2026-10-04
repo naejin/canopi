@@ -60,7 +60,10 @@ export interface VectorBasemapOptions {
   /** The first Canopi layer the basemap must stay beneath. */
   readonly beforeLayerId?: () => string | null
   readonly onError?: (error: unknown) => void
-  /** `failed` when the shown style could not be downloaded, `ok` once a style is installed, `idle` when hidden. */
+  /**
+   * `loading` while the shown style downloads, `failed` when it could not be downloaded, `ok` once a style is
+   * installed, `idle` when hidden.
+   */
   readonly onStatus?: (status: MapLibreBasemapStatus) => void
 }
 
@@ -113,6 +116,8 @@ export class VectorBasemap {
   private installed: Installed | null = null
   private desired: VectorBasemapPresentation | null = null
   private generation = 0
+  /** The style whose download is running, so a repeated request (Retry) joins it instead of starting over. */
+  private loading: BasemapStyle | null = null
   private status: MapLibreBasemapStatus = 'idle'
   private disposed = false
 
@@ -130,6 +135,7 @@ export class VectorBasemap {
     this.desired = presentation
     if (!presentation.visible) {
       this.generation += 1
+      this.loading = null
       this.uninstall()
       this.setStatus('idle')
       return
@@ -139,15 +145,21 @@ export class VectorBasemap {
       // The style on screen is the one asked for: a load still running for
       // another style is stale, and an earlier failure no longer applies.
       this.generation += 1
+      this.loading = null
       if (installed.opacity !== presentation.opacity) this.applyOpacity(installed, presentation.opacity)
       if (installed.locale !== presentation.locale) this.applyLocale(installed, presentation.locale)
       this.setStatus('ok')
       return
     }
+    // The settling load reads `desired`, so opacity or locale asked for meanwhile still applies.
+    if (this.loading === presentation.style) return
     const generation = ++this.generation
+    this.loading = presentation.style
+    this.setStatus('loading')
     const load = this.options.loadStyle ?? fetchStyle
     load(OPENFREEMAP_BASEMAPS[presentation.style].styleUrl).then((document) => {
       if (this.disposed || generation !== this.generation) return
+      this.loading = null
       const desired = this.desired
       if (!desired?.visible || desired.style !== presentation.style) return
       this.uninstall()
@@ -155,6 +167,7 @@ export class VectorBasemap {
       this.setStatus('ok')
     }).catch((error: unknown) => {
       if (this.disposed || generation !== this.generation) return
+      this.loading = null
       this.setStatus('failed')
       this.options.onError?.(error)
     })
@@ -172,6 +185,7 @@ export class VectorBasemap {
     if (this.disposed) return
     this.disposed = true
     this.generation += 1
+    this.loading = null
     this.uninstall()
   }
 

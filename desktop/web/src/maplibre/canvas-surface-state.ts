@@ -2,8 +2,11 @@ import type { ViewDiagnostics } from '../canvas/runtime/view/types'
 
 type MapLibreCanvasSurfaceStatus = 'idle' | 'loading' | 'ready' | 'error'
 
-/** The OpenFreeMap Basemap: `failed` from a failed style download until it loads, is hidden or Satellite is chosen. */
-export type MapLibreBasemapStatus = 'idle' | 'ok' | 'failed'
+/**
+ * The OpenFreeMap Basemap: `loading` while a style downloads, `failed` from a failed download until a new one
+ * starts, it is hidden or Satellite is chosen.
+ */
+export type MapLibreBasemapStatus = 'idle' | 'loading' | 'ok' | 'failed'
 
 /** Engine text never enters this state: notices are fixed, localized sentences and the cause goes to the log. */
 export interface MapLibreCanvasSurfaceState {

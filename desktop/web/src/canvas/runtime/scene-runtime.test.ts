@@ -2,6 +2,7 @@ import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { DraftPresentation } from './tools/draft'
 import type { ViewFrame, ViewTransform } from './view/types'
 import { planarCameraOf } from './view/view-transform'
+import { SceneRendererMountCancelledError } from './scene-runtime/render-scheduler'
 import { effect } from '@preact/signals'
 import { stageScaleToMapZoom } from '../projection'
 import { DEFAULT_NEW_DESIGN_VIEW } from '../session-plane'
@@ -3018,6 +3019,43 @@ describe('scene canvas runtime', () => {
     await expect(runtime.remountRenderer(container)).rejects.toThrow('renderer remount failed')
 
     expect(runtime.keyboardPort).toBeNull()
+    runtime.destroy()
+  })
+
+  it('keeps editing unmounted when the map fails between the renderer remount and the interaction remount', async () => {
+    const runtime = new SceneCanvasRuntime()
+    const renderers: RendererStub[] = []
+    let resolveSecond: (renderer: RendererStub) => void = () => {}
+    ;(runtime as any)._construction.replaceRenderer({
+      id: 'test',
+      initialize: () => {
+        const renderer = createRendererStub()
+        renderers.push(renderer)
+        if (renderers.length === 1) return renderer
+        return new Promise<RendererStub>((resolve) => {
+          resolveSecond = () => resolve(renderer)
+        })
+      },
+    })
+    const container = createRuntimeContainer()
+    await runtime.init(container)
+    await runtime.unmountRenderer()
+
+    const remount = runtime.remountRenderer(container)
+    await Promise.resolve()
+    expect(renderers).toHaveLength(2)
+    // A failure reported from a microtask already queued when the renderer resolves, deferred one tick as the
+    // workspace defers its failure handling: it lands after the renderer mounted and before editing does.
+    let failureUnmount: Promise<void> | null = null
+    queueMicrotask(() => {
+      failureUnmount = Promise.resolve().then(() => runtime.unmountRenderer())
+    })
+    resolveSecond(renderers[1]!)
+    await expect(remount).rejects.toBeInstanceOf(SceneRendererMountCancelledError)
+    await failureUnmount
+
+    expect(runtime.keyboardPort).toBeNull()
+    expect(renderers[1]!.dispose).toHaveBeenCalledOnce()
     runtime.destroy()
   })
 

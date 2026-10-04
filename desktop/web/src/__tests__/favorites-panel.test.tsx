@@ -442,7 +442,7 @@ describe('FavoritesPanel', () => {
     expect(alert()).toBeNull()
   })
 
-  it('handles a failed stamp import instead of dropping the promise', async () => {
+  it('tells the user when saving an imported stamp fails', async () => {
     const failure = new Error('database is locked')
     importStampFileMock.mockRejectedValueOnce(failure)
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -455,6 +455,8 @@ describe('FavoritesPanel', () => {
         container.querySelector<HTMLButtonElement>('button[aria-label="Import stamps…"]')!.click()
         await flushEffects()
       })
+      expect(container.querySelector('[role="alert"]')?.textContent)
+        .toBe('Couldn’t save the imported stamp.')
       expect(consoleError).toHaveBeenCalledWith('Saved stamp import failed:', failure)
     } finally {
       consoleError.mockRestore()

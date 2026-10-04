@@ -94,7 +94,7 @@ describe('CanvasPanel basemap feedback', () => {
 
     const status = container.querySelector<HTMLElement>('[role="status"]')!
     expect(status.textContent).toContain('Loading')
-    expect(status.dataset.tone).toBe('loading')
+    expect(container.querySelector<HTMLElement>('[data-map-notice]')!.dataset.tone).toBe('loading')
     expect(status.getAttribute('aria-live')).toBe('polite')
     expect(container.querySelector('[data-testid="canvas-chrome"]')).not.toBeNull()
   })
@@ -204,9 +204,9 @@ describe('CanvasPanel basemap feedback', () => {
       render(<CanvasPanel />, container)
     })
 
-    const status = container.querySelector<HTMLElement>('[role="status"]')!
-    expect(status.textContent).toBe('The map stopped drawing. Your Design is safe.Retry')
-    await act(async () => { status.querySelector('button')!.click() })
+    const notice = container.querySelector<HTMLElement>('[data-map-notice]')!
+    expect(notice.querySelector('[role="status"]')!.textContent).toBe('The map stopped drawing. Your Design is safe.')
+    await act(async () => { notice.querySelector('button')!.click() })
     expect(retryMap).toHaveBeenCalledOnce()
   })
 
@@ -235,10 +235,10 @@ describe('CanvasPanel basemap feedback', () => {
       render(<CanvasPanel />, container)
     })
 
-    const status = container.querySelector<HTMLElement>('[role="status"]')!
-    expect(status.dataset.tone).toBe('error')
-    expect(status.textContent).toContain('Basemap couldn’t load. Check your connection.')
-    const retry = [...status.querySelectorAll('button')].find((button) => button.textContent === 'Retry')!
+    const notice = container.querySelector<HTMLElement>('[data-map-notice]')!
+    expect(notice.dataset.tone).toBe('error')
+    expect(notice.querySelector('[role="status"]')!.textContent).toBe('Basemap couldn’t load. Check your connection.')
+    const retry = [...notice.querySelectorAll('button')].find((button) => button.textContent === 'Retry')!
     await act(async () => { retry.click() })
     expect(retryMap).toHaveBeenCalledOnce()
   })
@@ -279,9 +279,9 @@ describe('WebCanvasWorkspace map notice', () => {
     })
     await act(async () => { await vi.waitFor(() => expect(createRuntimeComposition).toHaveBeenCalledOnce()) })
 
-    const status = container.querySelector<HTMLElement>('[role="status"]')!
-    expect(status.textContent).toContain('Basemap couldn’t load. Check your connection.')
-    const button = [...status.querySelectorAll('button')].find((candidate) => candidate.textContent === 'Retry')!
+    const notice = container.querySelector<HTMLElement>('[data-map-notice]')!
+    expect(notice.querySelector('[role="status"]')!.textContent).toBe('Basemap couldn’t load. Check your connection.')
+    const button = [...notice.querySelectorAll('button')].find((candidate) => candidate.textContent === 'Retry')!
     await act(async () => { button.click() })
     expect(retry).toHaveBeenCalledOnce()
   })
