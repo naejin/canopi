@@ -1,9 +1,6 @@
-import { createMapLibreEmptyStyle } from './config'
+import { createMapLibreEmptyStyle, MAPLIBRE_MAP_MAX_ZOOM } from './config'
 import type { MapLibreApi, MapLibreMapInstance } from './loader'
-import {
-  WORKSPACE_MAP_MAX_ZOOM,
-  WORKSPACE_MAP_MIN_ZOOM,
-} from '../canvas/workspace-camera-policy'
+import { WORKSPACE_MAP_MIN_ZOOM } from '../canvas/workspace-camera-policy'
 import type { MapBackgroundPresentation } from './map-background'
 
 export interface WorkspaceMapSnapshot {
@@ -28,7 +25,7 @@ export function createWorkspaceMapLibreMap(
     center: [snapshot.initialCenter.lon, snapshot.initialCenter.lat],
     bearing: 0,
     minZoom: WORKSPACE_MAP_MIN_ZOOM,
-    maxZoom: WORKSPACE_MAP_MAX_ZOOM,
+    maxZoom: MAPLIBRE_MAP_MAX_ZOOM,
     renderWorldCopies: false,
     // The camera driver's setScreen resizes the map; MapLibre never resizes itself behind it.
     trackResize: false,
