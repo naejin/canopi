@@ -1,10 +1,9 @@
 // canvas/runtime/tools/distance-guides.ts  (pure)
 //
-// Owns the plant distance guide as draft shapes: a dashed draft line from a plant to a neighbour with a `measure` chip, as
-// today's DOM guide drew it (interaction/plant-drag-distance-overlay.ts: 1.5 px dashed 4 4 over its casing, mono 600 chip).
-// The Select move-drag guides the dragged plant to the two nearest plants left behind, by distance then id, in a linear
-// scan of the scene as today (nothing while the plants layer is hidden); Place plants and the stamps draw their own guide
-// with ToolScene.nearestPlant, which keeps today's scene order on a tie instead.
+// Owns the plant distance guide as draft shapes: a 1.5 px draft line dashed 4 4 over its casing, from a plant to a
+// neighbour, with a `measure` chip (mono 600). The Select move-drag guides the dragged plant to the two nearest plants
+// left behind, by distance then id, in a linear scan of the scene (nothing while the plants layer is hidden); Place plants
+// and the stamps draw their own guide with ToolScene.nearestPlant, which keeps the scene order on a tie instead.
 
 import type { ScenePlantEntity } from '../scene/types'
 import type { ScreenPoint, WorldPoint } from '../view/types'

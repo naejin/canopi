@@ -14,7 +14,7 @@ export interface Thresholds {
 
 export const DEFAULT_THRESHOLDS: Thresholds = Object.freeze({
   longPressMs: 500,
-  // scene-interaction.ts KEYBOARD_CONTEXT_MENU_ECHO_MS.
+  // As before v2 (at a4c86d39, scene-interaction.ts KEYBOARD_CONTEXT_MENU_ECHO_MS).
   menuEchoMs: 500,
   windowsMenuTrailMs: 250,
   twistStartArcPx: 25,

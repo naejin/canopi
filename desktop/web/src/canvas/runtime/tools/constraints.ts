@@ -39,7 +39,7 @@ function constrainDirection(origin: WorldPoint, point: WorldPoint, stepDeg: numb
   }
 }
 
-/** Today's rotate handle: the signed angle turned since the press, rounded to the step (selection-rotation-handle.ts). */
+/** The rotate handle's step: the signed angle turned since the press, rounded to the step. */
 function constrainRotation(pivot: WorldPoint, startDeg: number, point: WorldPoint, stepDeg: number): WorldPoint {
   const radius = Math.hypot(point.x - pivot.x, point.y - pivot.y)
   if (radius <= 0.000001) return { ...point }

@@ -1,7 +1,7 @@
 // canvas/runtime/tools/text-note.ts
 //
 // Owns the Text tool (spec §1.4, §3.2): a press on the map opens a new note's text entry where it lands (the host's
-// text entry in 'create' mode: today's interaction/text-annotation-tool.ts without its textarea), level with the screen:
+// text entry in 'create' mode), level with the screen:
 // the note stores the bearing at the press as its rotation (spec §4.7; 0 when north is up). Enter or a blur hands
 // the text to the submit, which writes the note as one 'interaction-text' Scene Edit, selects it and closes the entry
 // once the edit has committed (a commit that settles later closes it then); blank text, or an Annotations layer hidden
