@@ -421,9 +421,10 @@ export interface ViewNavigation extends ViewCommandSurface {
    *  zoom buttons, Fit to Design, Return to Design) and the jumps (openAt, centerOn, showPlace, showCamera); frameBounds keeps it. */
   clearTemporaryFocus(): void
   centerOn(point: WorldPoint, pixelsPerMetre: number, options?: { readonly animate?: boolean; readonly bearingDeg?: number | 'keep' }): void
-  /** Opening a Design: oriented fit at the given bearing; an empty scene opens at 0 (§4.15). Every open path calls it through
+  /** Opening a Design: the camera it was saved with (`saved`, from `map_view`, already framed for this map) or else the oriented
+   *  fit at the given bearing; an empty scene opens on the north-up fit either way (§4.15). Every open path calls it through
    *  document-surface.ts's open fit; Fit to Design stays zoomToFit. */
-  openAt(scene: ScenePersistedState, bearingDeg: number): void
+  openAt(bearingDeg: number, saved?: ViewCamera | null): void
 
   // rotation
   turnToEdge(a: WorldPoint, b: WorldPoint): void   // smaller turn that makes a→b horizontal; never snapped
@@ -1622,7 +1623,7 @@ pub struct LastView {
 }
 ```
 
-Stored data: `.canopi` does not change (`SavedViewCamera.bearing` exists; writers normalise to [0, 360), locally, P10). Settings gain `LastView.bearing` with a one-line default. PDF setups are not persisted, so Map orientation and the layout angle live in memory only; `PdfPrintArea` gains no angle (U3; decided with the user, 2026-10-01). `scroll_wheel` keeps its field and values; only its UI is relabelled.
+Stored data: `.canopi` gains only the optional top-level `map_view`, the view a save writes (U28; `SavedViewCamera.bearing` exists; writers normalise to [0, 360), locally, P10). Settings gain `LastView.bearing` with a one-line default. PDF setups are not persisted, so Map orientation and the layout angle live in memory only; `PdfPrintArea` gains no angle (U3; decided with the user, 2026-10-01). `scroll_wheel` keeps its field and values; only its UI is relabelled.
 
 ### 1.8 Module layout: what later phases add
 
@@ -2057,7 +2058,7 @@ The scale bar and 1:N ratio read the ground resolution at the screen centre, whi
 
 ### 4.15 Opening a Design and the last view
 
-Every open (the first load, a replace, the first generation) goes through `document-surface.ts`'s open fit, which calls `openAt(scene, openingBearing)`. The opening bearing is the stored `LastView.bearing` on the runtime's first open, then the live `bearingTarget()` for later opens in the session, which keeps the per-device convention without the 750 ms settle lag. `readLastView` returns the raw view with its bearing; the new-Design clamp lives in `construction.ts`. Reopening a Design with content therefore restores the last bearing (user). `openAt` opens an empty scene at 0, so a new or empty Design opens north-up at the zoomed-out last-view centre and "Where is your site?" appears over a north-up overview (convention). `LastView` is per device: the bearing carries over to whichever Design opens next. Fit, Fit to Design, zoom to selection, temporary focus and place search keep the current bearing.
+Every open (the first load, a replace, the first generation) goes through `document-surface.ts`'s open fit, which calls `openAt(openingBearing, saved)`. A file saved with its view (`map_view`, U28) opens at that view's centre and bearing, its framed ground fitted into the whole map by the saved-view rule (U21, U23), in any window (user, 2026-10-04). A file without it opens on the fit at the opening bearing: the stored `LastView.bearing` on the runtime's first open, then the live `bearingTarget()` for later opens in the session, which keeps the per-device convention without the 750 ms settle lag. `readLastView` returns the raw view with its bearing; the new-Design clamp lives in `construction.ts`. `openAt` opens an empty scene at 0, so a new or empty Design opens north-up at the zoomed-out last-view centre and "Where is your site?" appears over a north-up overview (convention). `LastView` is per device: the bearing carries over to whichever Design opens next. Fit, Fit to Design, zoom to selection, temporary focus and place search keep the current bearing.
 
 ### 4.16 Turn view to this edge
 
