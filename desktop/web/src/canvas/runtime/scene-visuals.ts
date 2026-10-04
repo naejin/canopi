@@ -86,9 +86,7 @@ export interface DraftFillVisual {
 /**
  * Draft tokens (tools/draft.ts) in the colours today's DOM previews use: a
  * light draft on the dark overlay casing, the ochre band on the interaction
- * casing and its translucent fill. `draft-muted` and `warning` (and
- * `warning-fill`) draw as `draft` until the phase that first emits one gives
- * it a canvas colour.
+ * casing and its translucent fill.
  */
 export function getDraftVisual(token: DraftStroke['token']): DraftStrokeVisual
 export function getDraftVisual(token: DraftFill['token']): DraftFillVisual
@@ -97,13 +95,10 @@ export function getDraftVisual(token: DraftStroke['token'] | DraftFill['token'])
     case 'selection':
       return { color: getCanvasColor('selection-stroke'), casing: getCanvasColor('interaction-casing') }
     case 'draft':
-    case 'draft-muted':
-    case 'warning':
       return getGuideLineVisual()
     case 'selection-fill':
       return { color: getCanvasColor('selection-fill') }
     case 'draft-fill':
-    case 'warning-fill':
       return { color: getCanvasColor('zone-fill') }
   }
 }
@@ -158,8 +153,7 @@ function draftLabelFontSizePx(): number {
  * today's padding: measurements are centred mono chips on the muted surface
  * (today's (a4c86d39) zone-measurement-overlay.ts), hints bottom-centre sans chips on the surface
  * (today's (a4c86d39) plant-placement-preview.ts), Plant a row's length in the
- * primary colour (today's (a4c86d39) plant-spacing-overlay.ts). `warning`
- * draws as `hint` until a phase gives it a colour.
+ * primary colour (today's (a4c86d39) plant-spacing-overlay.ts).
  */
 export function getDraftLabelVisual(tone: DraftLabelTone): DraftLabelVisual {
   const fontSizePx = draftLabelFontSizePx()

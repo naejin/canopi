@@ -40,10 +40,6 @@ describe('scene visuals', () => {
       .toEqual({ color: getCanvasColor('selection-stroke'), casing: getCanvasColor('interaction-casing') })
     expect(getDraftVisual('draft-fill')).toEqual({ color: getCanvasColor('zone-fill') })
     expect(getDraftVisual('selection-fill')).toEqual({ color: getCanvasColor('selection-fill') })
-    // No phase-0 draft is muted or a warning; both draw as a draft until a phase gives them a colour.
-    expect(getDraftVisual('draft-muted')).toEqual(getDraftVisual('draft'))
-    expect(getDraftVisual('warning')).toEqual(getDraftVisual('draft'))
-    expect(getDraftVisual('warning-fill')).toEqual(getDraftVisual('draft-fill'))
   })
 
   it('gives each draft label tone today\'s chip style', () => {
@@ -66,7 +62,6 @@ describe('scene visuals', () => {
       color: getCanvasColor('chip-text'), background: getCanvasColor('chip-surface'), paddingPx: { x: 6, y: 2 },
     })
     expect(getDraftLabelVisual('hint-primary')).toEqual({ ...hint, color: getCanvasColor('chip-primary'), paddingPx: { x: 8, y: 4 } })
-    expect(getDraftLabelVisual('warning')).toEqual(hint)
   })
 
   it('sizes draft label chips as --text-xs in the page language', () => {
@@ -75,7 +70,7 @@ describe('scene visuals', () => {
     expect([latin, cjk]).toEqual([12.5, 13])
     for (const [lang, size] of [['en', latin], ['fr', latin], ['', latin], ['zh', cjk], ['ja', cjk], ['ko', cjk], ['zh-Hant', cjk]] as const) {
       document.documentElement.lang = lang
-      for (const tone of ['measure', 'measure-quiet', 'hint', 'hint-primary', 'warning'] as const) {
+      for (const tone of ['measure', 'measure-quiet', 'hint', 'hint-primary'] as const) {
         expect(getDraftLabelVisual(tone).fontSizePx, `${lang} ${tone}`).toBe(size)
       }
       expect(getDraftLabelVisual('measure').lineHeightPx, lang).toBeCloseTo(size * 1.2)
@@ -89,7 +84,7 @@ describe('scene visuals', () => {
     expect(inherited).toBe(20)
     for (const lang of ['en', 'zh']) {
       document.documentElement.lang = lang
-      for (const tone of ['hint', 'hint-primary', 'warning'] as const) {
+      for (const tone of ['hint', 'hint-primary'] as const) {
         expect(getDraftLabelVisual(tone).lineHeightPx, `${lang} ${tone}`).toBe(inherited)
       }
     }
