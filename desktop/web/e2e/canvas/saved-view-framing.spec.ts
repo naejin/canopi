@@ -2,8 +2,8 @@
 // A view records the ground the whole map shows when it is saved; going to it, or presenting a step
 // that shows it, fits that ground into the whole map now (panels and story card included). The unit
 // tests drive the fit through a fake map; this scenario drives it through the real MapLibre container
-// in Chromium and WebKit, saving at 1400 x 900 and going back at 1000 x 700. Both tests only ever shrink
-// the window: in Chromium, growing it back from 700 px high loses the map, a separate bug (canopi-f47t.22).
+// in Chromium and WebKit, saving at 1400 x 900, going back at 1000 x 700, then growing the window back
+// (canopi-f47t.22: growing it from 700 px high used to lose the map under reduced motion, fixed by c05ee2b5).
 // The selected zone's handles are the DOM's measure of where the Design is drawn: the camera jumps
 // under reduced motion (support/canvas.ts), and every read is polled until the handles settle.
 // A presentation shows no handles, so its refit is compared with a fresh fit by pixels, within the run.
@@ -23,6 +23,8 @@ const RECT_ZONE_CHIP = 'Rectangle zone · 112 m² · 44 m'
 const PAN_BEFORE_SAVE_PX = 240
 /** The window the view is opened in afterwards: 400 px narrower and 200 px shorter than playwright.config.ts's (the width sets the fit). */
 const SMALLER = { width: 1000, height: 700 }
+/** playwright.config.ts's window, which each test grows back to. */
+const LARGER = { width: 1400, height: 900 }
 /**
  * Both engines lay boxes out in 1/64 px units, and the saved camera is rounded (centre to 1e-9°, zoom to 1e-5),
  * which moves a handle 600 px from the centre by under 0.01 px; 1/16 px is far below any framing mistake.
@@ -167,6 +169,16 @@ test('a saved view gives back its camera in the window it was saved in, and keep
       expect(y, `corner ${index + 1} is above the map's bottom edge`).toBeLessThan(smallerMap.y + smallerMap.height)
     }
   })
+
+  await test.step('grown back to the window it was saved in, the view gives back its exact camera again', async () => {
+    await page.setViewportSize(LARGER)
+    await expect.poll(async () => (await mapBox(page)).width, 'the map host grows with the window').toBe(savedMap.width)
+    await expectCanvasDrawn(page)
+    await panBy(page, 150)
+    await goToView(page, name)
+    await expect.poll(() => cornerError(page, saved), 'every corner is back where it was saved').toBeLessThanOrEqual(LAYOUT_TOLERANCE_PX)
+    await expect(scaleChip(page)).toHaveText(savedScale ?? '')
+  })
 })
 
 /**
@@ -233,4 +245,16 @@ test('a presented step keeps its frame when the window gets smaller', async ({ p
     await test.info().attach('opened in the smaller window', { body: opened, contentType: 'image/png' })
   }
   expect(refitted.equals(opened), 'the refitted step shows what the step opened in the smaller window shows').toBe(true)
+
+  // Grown back and made smaller again while presenting: the map keeps drawing and the step refits the same way.
+  await page.setViewportSize(LARGER)
+  await expect.poll(async () => (await mapBox(page)).width, 'the map host grows with the window').toBe(largerMap.width)
+  await expectCanvasDrawn(page)
+  await page.setViewportSize(SMALLER)
+  await expect.poll(async () => (await mapBox(page)).width, 'the map host shrinks with the window').toBeLessThan(largerMap.width)
+  const refittedAgain = await quietScreenshot(page)
+  if (!refittedAgain.equals(opened)) {
+    await test.info().attach('refitted after growing back', { body: refittedAgain, contentType: 'image/png' })
+  }
+  expect(refittedAgain.equals(opened), 'after growing back and shrinking again, the step shows the same frame').toBe(true)
 })
