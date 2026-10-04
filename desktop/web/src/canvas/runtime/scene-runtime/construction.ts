@@ -6,7 +6,7 @@ import {
 } from '../app-adapter'
 import { createSceneCanvasCommandSurface } from '../command-surface'
 import { createSceneCanvasDocumentSurface } from '../document-surface'
-import { createSceneCanvasQuerySurface } from '../query-surface'
+import { createSceneCanvasQuerySurface, type SceneCanvasQuerySurface } from '../query-surface'
 import { SceneCanvasInspectionOwner } from '../inspection-lens'
 import type { SceneRendererDefinition } from '../renderers/scene-types'
 import type {
@@ -14,7 +14,6 @@ import type {
   CanvasDocumentSurface,
   CanvasPlantRowSpacingField,
   CanvasQueryRevision,
-  CanvasQuerySurface,
 } from '../runtime'
 import {
   SceneStore,
@@ -116,7 +115,7 @@ export interface SceneRuntimeConstruction {
   readonly sceneCommands: SceneEditCoordinator & SceneCommandAdmission
   readonly settledReader: SettledSceneReader
   readonly documentSurface: CanvasDocumentSurface
-  readonly querySurface: CanvasQuerySurface
+  readonly querySurface: SceneCanvasQuerySurface
   readonly panelTargetAdapter: SceneRuntimePanelTargetAdapter
   readonly disposeEffects: Array<() => void>
 }

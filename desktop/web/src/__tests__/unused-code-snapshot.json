@@ -125,7 +125,6 @@
     "src/canvas/runtime/plant-presentation.ts#PlantWorldBounds",
     "src/canvas/runtime/plant-symbol-recipes.ts#PlantSymbolPathTarget",
     "src/canvas/runtime/plant-symbol-recipes.ts#PlantSymbolRecipe",
-    "src/canvas/runtime/query-surface.ts#PointerWorldSource",
     "src/canvas/runtime/renderers/billboard-layer.ts#BillboardLayer",
     "src/canvas/runtime/renderers/billboard-layer.ts#BillboardLayerOptions",
     "src/canvas/runtime/renderers/draft-layer.ts#DraftLayerOptions",

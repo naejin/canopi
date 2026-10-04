@@ -32,8 +32,6 @@ import type { ViewFrameSource } from './view/types'
 const OVERVIEW_POLICY = createWorkspaceCameraPolicy()
 
 type PointerWorldListener = (point: PointerWorld | null) => void
-/** The interaction session's ToolHost.subscribePointerWorld. */
-export type PointerWorldSource = (listener: PointerWorldListener) => () => void
 
 interface SceneCanvasQuerySurfaceOptions {
   readonly revision: CanvasQueryRevision
@@ -57,21 +55,20 @@ interface SceneCanvasQuerySurfaceOptions {
   >
 }
 
-export function createSceneCanvasQuerySurface(
-  options: SceneCanvasQuerySurfaceOptions,
-): CanvasQuerySurface {
+/**
+ * The runtime's query surface. It outlives interaction sessions (the map can unmount and mount again): subscribePointerWorld
+ * listeners stay with the surface, and scene-runtime.ts binds the live session's ToolHost.subscribePointerWorld to it with
+ * bindPointerWorld (null when the session ends).
+ */
+export interface SceneCanvasQuerySurface extends CanvasQuerySurface {
+  bindPointerWorld(source: ((listener: PointerWorldListener) => () => void) | null): void
+}
+
+export function createSceneCanvasQuerySurface(options: SceneCanvasQuerySurfaceOptions): SceneCanvasQuerySurface {
   return new SceneCanvasQueryRole(options)
 }
 
-/**
- * The query surface outlives interaction sessions (the map can unmount and mount again): subscribePointerWorld listeners
- * stay with the surface, and scene-runtime.ts binds the live session's ToolHost here (null when it ends).
- */
-export function bindQuerySurfacePointerWorld(surface: CanvasQuerySurface, source: PointerWorldSource | null): void {
-  if (surface instanceof SceneCanvasQueryRole) surface.bindPointerWorld(source)
-}
-
-class SceneCanvasQueryRole implements CanvasQuerySurface {
+class SceneCanvasQueryRole implements SceneCanvasQuerySurface {
   readonly view: ViewReadSurface
   private readonly pointerWorldListeners = new Set<PointerWorldListener>()
   private stopPointerWorld: (() => void) | null = null
@@ -91,7 +88,7 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
     }
   }
 
-  bindPointerWorld(source: PointerWorldSource | null): void {
+  bindPointerWorld(source: ((listener: PointerWorldListener) => () => void) | null): void {
     this.stopPointerWorld?.()
     this.stopPointerWorld = source?.((point) => {
       for (const listener of [...this.pointerWorldListeners]) listener(point)

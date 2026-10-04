@@ -32,7 +32,7 @@ import type {
   CanvasKeyboardPort,
   CanvasQuerySurface,
 } from './runtime'
-import { bindQuerySurfacePointerWorld } from './query-surface'
+import type { SceneCanvasQuerySurface } from './query-surface'
 import { targets, speciesTarget } from '../../target'
 import { runCanvasRuntimeCleanups, throwCanvasRuntimeCleanupErrors } from './cleanup'
 import type { CameraDriverHost } from './view/camera-driver'
@@ -64,7 +64,7 @@ export class SceneCanvasRuntime {
       disposeInteraction: () => {
         const interaction = this._interaction
         this._interaction = null
-        bindQuerySurfacePointerWorld(this._querySurface, null)
+        this._querySurface.bindPointerWorld(null)
         try {
           interaction?.dispose()
         } finally {
@@ -143,7 +143,7 @@ export class SceneCanvasRuntime {
     return this._construction.documentSurface
   }
 
-  private get _querySurface(): CanvasQuerySurface {
+  private get _querySurface(): SceneCanvasQuerySurface {
     return this._construction.querySurface
   }
 
@@ -244,7 +244,7 @@ export class SceneCanvasRuntime {
       ...(this._appAdapter.focus ? { focus: this._appAdapter.focus } : {}),
     })
     const interaction = this._interaction
-    bindQuerySurfacePointerWorld(this._querySurface, (listener) => interaction.subscribePointerWorld(listener))
+    this._querySurface.bindPointerWorld((listener) => interaction.subscribePointerWorld(listener))
     await this._rendering.renderScene()
   }
 
@@ -280,7 +280,7 @@ export class SceneCanvasRuntime {
     this._rendererUnmounts += 1
     const interaction = this._interaction
     this._interaction = null
-    bindQuerySurfacePointerWorld(this._querySurface, null)
+    this._querySurface.bindPointerWorld(null)
     try {
       interaction?.dispose()
     } finally {
