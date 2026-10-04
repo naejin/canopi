@@ -166,7 +166,6 @@ export function createWorkspaceRuntimeComposition(
     camera: runtime.cameraHost,
     composition: rendererComposition,
     map: controls,
-    layer: {},
     readOrigin,
     // A map error's Retry follows the workspace: offered once a failure settles, withdrawn once it can no longer rebuild.
     onRetryAvailabilityChange: () => {

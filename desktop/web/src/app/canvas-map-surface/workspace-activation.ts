@@ -10,7 +10,6 @@ import type { MapBackgroundPresentation } from '../../maplibre/map-background'
 import {
   MAPLIBRE_SHARED_SCENE_LAYER_ID,
   type SharedMapSceneLayer,
-  type SharedMapSceneLayerOptions,
   type SharedMapSceneMap,
 } from '../../maplibre/shared-scene-layer'
 import type { SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
@@ -92,10 +91,6 @@ export interface WorkspaceActivationOptions {
   readonly camera: CameraDriverHost
   readonly composition: SharedMapSceneRendererComposition
   readonly map: WorkspaceActivationMapControls
-  readonly layer: Omit<
-    SharedMapSceneLayerOptions,
-    'id' | 'frames' | 'onFailure'
-  >
   /** Live session plane origin of the runtime's open Design. */
   readonly readOrigin: () => { readonly lat: number; readonly lon: number }
   /** Called when `canRetry()` may have changed, so a Retry already on screen can be withdrawn. */
@@ -269,7 +264,6 @@ export class WorkspaceActivationCoordinator {
         layer = this.runOwnedCallback(
           'shared scene layer creation',
           () => this.options.composition.createLayer({
-            ...this.options.layer,
             id: MAPLIBRE_SHARED_SCENE_LAYER_ID,
             frames: this.cameraHost().frames,
             onFailure: (error) => {

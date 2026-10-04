@@ -139,7 +139,6 @@ describe('createWorkspaceDocumentSurface', () => {
         installStyleRestorer: () => () => {},
         watchFailure: () => () => {},
       },
-      layer: {},
       readOrigin: () => ({ lat: 0, lon: 0 }),
     })
     const activation = workspace.activate({

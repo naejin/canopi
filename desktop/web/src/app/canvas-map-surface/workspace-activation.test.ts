@@ -15,6 +15,7 @@ import { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'
 import {
   MAPLIBRE_SHARED_SCENE_LAYER_ID,
   type SharedMapSceneLayer,
+  type SharedMapSceneLayerOptions,
   type SharedPixiRenderer,
 } from '../../maplibre/shared-scene-layer'
 import { createSharedMapSceneRendererComposition, type SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
@@ -224,7 +225,6 @@ function createCoordinator(input: {
   const coordinator = new TestWorkspaceActivationCoordinator({
     container: document.createElement('div'), runtime, camera, composition,
     map: mapControls,
-    layer: {},
     readOrigin,
   })
   return { coordinator, camera, composition, runtime, map, mapControls, readOrigin }
@@ -1945,7 +1945,12 @@ describe('WorkspaceActivationCoordinator', () => {
       destroy: vi.fn(), context: { extensions: {} },
     }
     const coordinator = new WorkspaceActivationCoordinator({
-      container, runtime, camera, composition,
+      container, runtime, camera,
+      composition: withLayerFactories(composition, {
+        createRenderer: () => renderer,
+        createStage: () => ({ destroy: vi.fn() }) as never,
+        createPresentation: () => ({ dispose() {}, resize() {}, setView() {}, setDraft() {}, syncScene() {} }),
+      }),
       map: {
         createMap: async () => map as unknown as WorkspaceActivationMap,
         releaseMap: () => map.remove(),
@@ -1956,11 +1961,6 @@ describe('WorkspaceActivationCoordinator', () => {
         retryBasemap: vi.fn(),
         installStyleRestorer: () => () => {},
         watchFailure: () => () => {},
-      },
-      layer: {
-        createRenderer: () => renderer,
-        createStage: () => ({ destroy: vi.fn() }) as never,
-        createPresentation: () => ({ dispose() {}, resize() {}, setView() {}, setDraft() {}, syncScene() {} }),
       },
       readOrigin: () => ({ lat: 0, lon: 0 }),
     })
@@ -1997,6 +1997,14 @@ class MovableFakeMap extends FakeMap {
  * The production composition with a real SceneCanvasRuntime, coordinator and renderer composition; only MapLibre
  * (the map controls) and Pixi (the layer's renderer) are fakes. Each map reports failures like the real controls.
  */
+/** The renderer composition with the layer's Pixi factories replaced, as jsdom has no WebGL. */
+function withLayerFactories(
+  composition: SharedMapSceneRendererComposition,
+  factories: Pick<SharedMapSceneLayerOptions, 'createRenderer' | 'createStage' | 'createPresentation'>,
+): SharedMapSceneRendererComposition {
+  return { renderer: composition.renderer, createLayer: (options) => composition.createLayer({ ...options, ...factories }) }
+}
+
 function realComposition(options: {
   failRuntimeInit?: boolean
   runtimeInit?: Promise<void>
@@ -2032,11 +2040,11 @@ function realComposition(options: {
     },
     createWorkspace: (workspaceOptions) => new WorkspaceActivationCoordinator({
       ...workspaceOptions,
-      layer: {
+      composition: withLayerFactories(workspaceOptions.composition, {
         createRenderer: () => pixi,
         createStage: () => ({ destroy: vi.fn() }) as never,
         createPresentation: () => ({ dispose() {}, resize() {}, setView() {}, setDraft() {}, syncScene() {} }),
-      },
+      }),
     }),
     createControls: (controlOptions) => ({
       createMap: async () => {
