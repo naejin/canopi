@@ -46,7 +46,6 @@ import { initialRecogniserState, recognise } from './input/recognise'
 import { DEFAULT_THRESHOLDS } from './input/thresholds'
 import type { GestureOutcome, InputRouterDeps, PointerWorld, ToolHost, ToolHostDeps } from './interaction-ports'
 import type { Modifiers, ToolId } from './interaction-types'
-import { isSceneLayerOpenForCreation, type SceneCreationLayerName } from './interaction/layer-guards'
 import { createCanvasKeyboardPort } from './keyboard-port'
 import type { PlantPresentationContext } from './plant-presentation'
 import type { SceneRenderer } from './renderers/scene-types'
@@ -56,7 +55,7 @@ import type {
   CanvasPlantRowSpacingField,
   CanvasSceneEditCommandSurface,
 } from './runtime'
-import type { SceneDesignObjectSelection, SceneDesignObjectTarget, ScenePoint, SceneStateReader } from './scene'
+import { isSceneLayerEditable, type SceneDesignObjectSelection, type SceneDesignObjectTarget, type ScenePoint, type SceneStateReader } from './scene'
 import { setSceneDesignObjectLocks } from './scene/locks'
 import type { SceneCommandAdmission, SceneEditCoordinator, SettledSceneReader } from './scene-runtime/transactions'
 import type { SpeciesCacheEntry } from './species-cache'
@@ -283,8 +282,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       const scene = createToolScene({
         store: liveStoreReader(_deps),
         selection: _deps.getSelection,
-        isLayerOpenForCreation: (layer) =>
-          isSceneLayerOpenForCreation(_deps.getSceneStore().persisted, layer as SceneCreationLayerName),
+        isLayerOpenForCreation: (layer) => isSceneLayerEditable(_deps.getSceneStore().persisted, layer),
         pixelsPerMetre: () => this._frames.viewFrame.peek().view.pixelsPerMetre,
         speciesCache: _deps.getSpeciesCache,
         plantContext: _deps.getPlantPresentationContext,

@@ -16,7 +16,9 @@ import type {
 import {
   dedupeSceneObjectGroupMembers,
   getSceneGroupedMemberKeys,
+  isDirectSceneDesignObjectLocked,
   isSceneDesignObjectLocked,
+  isSceneLayerEditable,
   lockedSceneDesignObjectTargets,
   normalizeSceneDesignObjectTargets,
   resolveSceneObjectGroupMembers,
@@ -28,7 +30,6 @@ import {
   sceneObjectGroupMemberLayerName,
   sceneTargetKey,
   setSceneDesignObjectLocks,
-  type SceneConcreteDesignObjectTarget,
   type SceneDesignObjectTarget,
 } from '../scene'
 import {
@@ -340,7 +341,7 @@ export class SceneRuntimeMutationController {
   private _renameZoneWhenSettled(zoneId: string, name: string | null): boolean {
     const persisted = this._sceneStore.persisted
     const zone = persisted.zones.find((candidate) => candidate.id === zoneId)
-    if (!zone || zone.locked || !isSceneLayerEditable(sceneLayerState(persisted).zones)) return false
+    if (!zone || zone.locked || !isSceneLayerEditable(persisted, 'zones')) return false
     if (getEffectivelyLockedGroupMemberKeys(persisted).has(sceneTargetKey({ kind: 'zone', id: zoneId }))) return false
     const nextName = zoneDisplayName({ name })
     if (zoneDisplayName(zone) === nextName) return false
@@ -408,30 +409,29 @@ export class SceneRuntimeMutationController {
     const persisted = this._sceneStore.persisted
     const targets: SceneDesignObjectTarget[] = []
     const groupedMemberKeys = getSceneGroupedMemberKeys(persisted)
-    const layerState = sceneLayerState(persisted)
 
-    if (isSceneLayerEditable(layerState.plants)) {
+    if (isSceneLayerEditable(persisted, 'plants')) {
       for (const plant of persisted.plants) {
         if (groupedMemberKeys.has(sceneTargetKey({ kind: 'plant', id: plant.id })) || plant.locked) continue
         targets.push({ kind: 'plant', id: plant.id })
       }
     }
 
-    if (isSceneLayerEditable(layerState.zones)) {
+    if (isSceneLayerEditable(persisted, 'zones')) {
       for (const zone of persisted.zones) {
         if (groupedMemberKeys.has(sceneTargetKey({ kind: 'zone', id: zone.id })) || zone.locked) continue
         targets.push({ kind: 'zone', id: zone.id })
       }
     }
 
-    if (isSceneLayerEditable(layerState.annotations)) {
+    if (isSceneLayerEditable(persisted, 'annotations')) {
       for (const annotation of persisted.annotations) {
         if (groupedMemberKeys.has(sceneTargetKey({ kind: 'annotation', id: annotation.id })) || annotation.locked) continue
         targets.push({ kind: 'annotation', id: annotation.id })
       }
     }
 
-    if (isSceneLayerEditable(layerState['measurement-guides'])) {
+    if (isSceneLayerEditable(persisted, 'measurement-guides')) {
       for (const guide of persisted.measurementGuides) {
         if (guide.locked) continue
         targets.push({ kind: 'measurement-guide', id: guide.id })
@@ -440,7 +440,7 @@ export class SceneRuntimeMutationController {
 
     for (const group of persisted.groups) {
       if (
-        !isSceneObjectGroupLayerEditable(persisted, group, layerState)
+        !isSceneObjectGroupLayerEditable(persisted, group)
         || isSceneDesignObjectLocked(persisted, { kind: 'group', id: group.id })
       ) continue
       targets.push({ kind: 'group', id: group.id })
@@ -582,13 +582,12 @@ export class SceneRuntimeMutationController {
     )
     if (selectedGroupIds.size === 0) return
 
-    const layerState = sceneLayerState(persisted)
     const memberTargets = persisted.groups
       .filter((group) => selectedGroupIds.has(group.id))
       .flatMap((group) => resolveSceneObjectGroupMembers(persisted, group))
       .filter((target) =>
-        isSceneLayerEditable(layerState[sceneObjectGroupMemberLayerName(target)])
-        && !isConcreteDesignObjectTargetLocked(persisted, target),
+        isSceneLayerEditable(persisted, sceneObjectGroupMemberLayerName(target))
+        && !isDirectSceneDesignObjectLocked(persisted, target),
       )
 
     this._sceneEdits.run('ungroup-selected', (tx) => {
@@ -916,28 +915,10 @@ function normalPasteOffset(step: number): ScenePoint {
 }
 
 
-function sceneLayerState(
-  persisted: ScenePersistedState,
-): Readonly<Record<string, { visible: boolean; locked: boolean } | undefined>> {
-  return Object.fromEntries(
-    persisted.layers.map((layer) => [layer.name, { visible: layer.visible, locked: layer.locked }]),
-  )
-}
-
-function isSceneLayerEditable(
-  layer: { visible: boolean; locked: boolean } | undefined,
-): boolean {
-  return layer?.visible !== false && layer?.locked !== true
-}
-
-function isSceneObjectGroupLayerEditable(
-  persisted: ScenePersistedState,
-  group: SceneObjectGroupEntity,
-  layerState: Readonly<Record<string, { visible: boolean; locked: boolean } | undefined>>,
-): boolean {
+function isSceneObjectGroupLayerEditable(persisted: ScenePersistedState, group: SceneObjectGroupEntity): boolean {
   const members = resolveSceneObjectGroupMembers(persisted, group)
   if (members.length === 0) return false
-  return members.every((member) => isSceneLayerEditable(layerState[sceneObjectGroupMemberLayerName(member)]))
+  return members.every((member) => isSceneLayerEditable(persisted, sceneObjectGroupMemberLayerName(member)))
 }
 
 interface GroupSelectedPlan {
@@ -993,13 +974,12 @@ function getSpeciesPlantEditTargets(
 ): { plantIds: Set<string>; editablePlantIds: Set<string> } {
   const plantIds = new Set<string>()
   const editablePlantIds = new Set<string>()
-  const layerState = sceneLayerState(persisted)
   const groupLockedMemberKeys = getEffectivelyLockedGroupMemberKeys(persisted)
   for (const plant of persisted.plants) {
     if (plant.canonicalName !== canonicalName) continue
     plantIds.add(plant.id)
     if (
-      isSceneLayerEditable(layerState.plants)
+      isSceneLayerEditable(persisted, 'plants')
       && !plant.locked
       && !groupLockedMemberKeys.has(sceneTargetKey({ kind: 'plant', id: plant.id }))
     ) {
@@ -1067,19 +1047,6 @@ function resolveSelectedEntitySets(
   }
 
   return { plantIds, zoneIds, annotationIds, measurementGuideIds, groupIds }
-}
-
-function isConcreteDesignObjectTargetLocked(
-  persisted: ScenePersistedState,
-  target: SceneConcreteDesignObjectTarget,
-): boolean {
-  if (target.kind === 'plant') {
-    return persisted.plants.some((plant) => plant.id === target.id && plant.locked)
-  }
-  if (target.kind === 'zone') {
-    return persisted.zones.some((zone) => zone.id === target.id && zone.locked)
-  }
-  return persisted.annotations.some((annotation) => annotation.id === target.id && annotation.locked)
 }
 
 function reorderSceneEntities<T>(
