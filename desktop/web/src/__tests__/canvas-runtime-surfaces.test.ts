@@ -304,7 +304,7 @@ describe('canvas runtime surfaces', () => {
     expect(commandSurfaceSource).not.toContain("from './scene-runtime'")
     expect(commandSurfaceSource).not.toContain('runtime.')
     expect(commandSurfaceSource).toContain('setTool(name')
-    expect(commandSurfaceSource).toContain('zoomIn()')
+    expect(commandSurfaceSource).toContain('this.viewport = options.viewNavigation')
     expect(commandSurfaceSource).toContain('undo()')
     expect(commandSurfaceSource).toContain('setSceneLayerVisibility')
     expect(commandSurfaceSource).toContain('ensureSpeciesCacheEntries')
