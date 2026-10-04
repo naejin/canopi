@@ -177,18 +177,15 @@ pub(super) fn from_reference(reference: &str) -> Result<ResolvedCrs, String> {
     // are written back (a projected CRS's meridian goes into its central
     // meridian), while the raster's coordinates keep the WKT's own unit and a
     // geographic CRS's longitudes their own meridian.
-    // The last unit node is the CRS's own (the geographic base's comes first).
-    let number = |keywords: [&str; 2]| {
-        let node = nodes
-            .iter()
-            .rfind(|node| keywords.contains(&node.keyword))?;
-        node.numbers().first().copied()
-    };
     let geographic = matches!(params.kind, ProjectionKind::Geographic);
-    if geographic && number(["PRIMEM", "PRIMEMERIDIAN"]).is_some_and(|pm| pm != 0.0) {
+    let meridian = nodes
+        .iter()
+        .rfind(|node| matches!(node.keyword, "PRIMEM" | "PRIMEMERIDIAN"))
+        .and_then(|node| node.numbers().first().copied());
+    if geographic && meridian.is_some_and(|pm| pm != 0.0) {
         return Err(not_supported(OTHER_MERIDIAN));
     }
-    if !geographic && number(["UNIT", "LENGTHUNIT"]).is_some_and(|unit| unit != 1.0) {
+    if !geographic && projected_unit(trimmed).is_some_and(|metres| metres != 1.0) {
         return Err(not_supported(OTHER_UNIT));
     }
     user_defined(
@@ -467,21 +464,23 @@ fn wkt_nodes(wkt: &str) -> Vec<WktNode<'_>> {
     nodes
 }
 
-/// The name of a projected WKT's horizontal unit: the last unit node inside
-/// its PROJCS or PROJCRS. The base geographic CRS's unit comes before it, and
-/// a compound's vertical part lies outside it.
-pub(crate) fn projected_unit(wkt: &str) -> Option<&str> {
-    let node = wkt_nodes(wkt).into_iter().rfind(|node| {
-        matches!(node.keyword, "UNIT" | "LENGTHUNIT")
-            && node
-                .parents
-                .iter()
-                .any(|parent| matches!(*parent, "PROJCS" | "PROJCRS"))
-    })?;
-    node.body
-        .split(',')
-        .next()
-        .map(|name| name.trim().trim_matches('"'))
+/// A projected WKT's horizontal unit in metres: the last unit node inside its
+/// PROJCS or PROJCRS. The base geographic CRS's unit comes before it, and a
+/// compound's vertical part (or an ESRI .prj's trailing VERTCS) lies outside
+/// it.
+pub(crate) fn projected_unit(wkt: &str) -> Option<f64> {
+    wkt_nodes(wkt)
+        .into_iter()
+        .rfind(|node| {
+            matches!(node.keyword, "UNIT" | "LENGTHUNIT")
+                && node
+                    .parents
+                    .iter()
+                    .any(|parent| matches!(*parent, "PROJCS" | "PROJCRS"))
+        })?
+        .numbers()
+        .first()
+        .copied()
 }
 
 /// The shift a WKT's `TOWGS84` node gives, `None` when it shifts nothing.
@@ -1354,6 +1353,39 @@ mod tests {
                 "{refused:?}"
             );
         }
+    }
+
+    /// An ESRI .prj naming no code may end with a VERTCS in another unit:
+    /// the grid's own unit decides, so a metre grid with a feet height is
+    /// read and classed in metres, and a feet grid with a metre height is
+    /// refused.
+    #[test]
+    fn an_esri_prj_is_read_by_its_horizontal_unit_not_its_height() {
+        let vertical = |unit: &str| {
+            format!(
+                r#",VERTCS["NAVD_1988",VDATUM["North_American_Vertical_Datum_1988"],PARAMETER["Vertical_Shift",0.0],PARAMETER["Direction",1.0],{unit}]"#
+            )
+        };
+        let utm_metres = r#"PROJCS["NAD_1983_UTM_Zone_18N",GEOGCS["GCS_North_American_1983",DATUM["D_North_American_1983",SPHEROID["GRS_1980",6378137.0,298.257222101]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],PARAMETER["False_Easting",500000.0],PARAMETER["False_Northing",0.0],PARAMETER["Central_Meridian",-75.0],PARAMETER["Scale_Factor",0.9996],PARAMETER["Latitude_Of_Origin",0.0],UNIT["Meter",1.0]]"#;
+        let metres_with_feet_height = format!(
+            "{utm_metres}{}",
+            vertical(r#"UNIT["Foot_US",0.3048006096012192]"#)
+        );
+        let read = from_reference(&metres_with_feet_height).unwrap();
+        assert_eq!(crs_class(&read.wkt), CRS_PROJECTED_METRE);
+
+        let feet_with_metre_height = format!(
+            "{ESRI_LONG_ISLAND_FEET}{}",
+            vertical(r#"UNIT["Meter",1.0]"#)
+        );
+        let refused = from_reference(&feet_with_metre_height).map(|crs| crs.definition);
+        assert!(
+            refused
+                .as_ref()
+                .is_err_and(|e| e.contains("a linear unit other than the metre")),
+            "{refused:?}"
+        );
+        assert_eq!(crs_class(&feet_with_metre_height), CRS_PROJECTED_OTHER);
     }
 
     /// A WKT names its own code at its root, or for a compound CRS naming

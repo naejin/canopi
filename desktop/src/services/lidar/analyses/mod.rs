@@ -56,10 +56,7 @@ pub(crate) fn crs_class(wkt: &str) -> &'static str {
             CRS_UNKNOWN
         };
     }
-    if matches!(
-        super::rust_engine::projected_unit(&upper),
-        Some("METRE" | "METER")
-    ) {
+    if super::rust_engine::projected_unit(&upper) == Some(1.0) {
         CRS_PROJECTED_METRE
     } else {
         CRS_PROJECTED_OTHER
