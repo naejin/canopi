@@ -118,8 +118,8 @@ interface Installed {
   readonly style: BasemapStyle
   readonly sourceIds: readonly string[]
   readonly layerIds: readonly string[]
-  /** The requests the map makes for this style's sprite and TileJSON, which it reports without a layer id. */
-  readonly resources: readonly RegExp[]
+  /** The sprite set on the map, if the style has one. */
+  readonly sprite: string | null
 }
 
 /**
@@ -136,8 +136,8 @@ export class VectorBasemap {
   private status: MapLibreBasemapStatus = 'idle'
   /** The installed style's sprite or TileJSON failed to download: only Retry installs it again. */
   private resourceFailed = false
-  /** Every style's resource requests seen by this map, so a late failure from an earlier style is still the basemap's. */
-  private readonly knownResources: RegExp[] = []
+  /** Every style's sprite set on this map, so a late failure from an earlier style's sprite is still the basemap's. */
+  private readonly knownSprites = new Set<string>()
   /**
    * The installed style's sprite request may still be running: set by `setSprite`, cleared once the map is idle
    * (MapLibre is idle only after the sprite settled). A sprite that fails after its response arrived (HTML from a
@@ -194,22 +194,26 @@ export class VectorBasemap {
   }
 
   /**
-   * Claims a map error about this basemap's sprite or TileJSON, which MapLibre reports with no layer id. Such a failure
-   * leaves the basemap blank or without icons, so the installed style is `failed` until Retry; a single tile's failure
-   * is not claimed (nor a glyph range: MapLibre draws its glyphs locally and only warns). An error with no URL is claimed
-   * only in a sprite's failure shapes while the installed style's sprite downloads (`spriteInFlight`). Returns whether
-   * it was claimed.
+   * Claims a map error about this basemap's sprite or TileJSON. Such a failure leaves the basemap blank or without
+   * icons, so the installed style is `failed` until Retry; a failure from an earlier style is claimed silently. A
+   * TileJSON failure is a failed request naming a basemap source and no tile; a single tile's failure is not claimed
+   * (nor a glyph range: MapLibre draws its glyphs locally and only warns). A sprite failure names its URL and no
+   * source, or, after its response arrived, neither: then it is claimed only in a sprite's failure shapes while the
+   * installed style's sprite downloads (`spriteInFlight`). Returns whether it was claimed.
    */
   claimResourceError(event: unknown): boolean {
     if (this.disposed) return false
     const url = failedRequestUrl(event)
-    if (url === null) return this.claimSpriteError(event)
-    if (!this.knownResources.some((resource) => resource.test(url))) return false
-    const installed = this.installed
-    if (installed && installed.resources.some((resource) => resource.test(url))) {
-      this.resourceFailed = true
-      this.setStatus('failed')
+    const sourceId = mapErrorResourceId(event)
+    if (url !== null && sourceId?.startsWith(OPENFREEMAP_SOURCE_PREFIX)) {
+      if (typeof event === 'object' && event !== null && 'tile' in event) return false
+      if (this.installed?.sourceIds.includes(sourceId)) this.markFailed()
+      return true
     }
+    if (url === null) return this.claimSpriteError(event)
+    const sprite = spriteOf(url)
+    if (!this.knownSprites.has(sprite)) return false
+    if (this.installed?.sprite === sprite) this.markFailed()
     return true
   }
 
@@ -225,10 +229,14 @@ export class VectorBasemap {
   private claimSpriteError(event: unknown): boolean {
     if (!this.spriteInFlight || !this.installed || mapErrorResourceId(event) !== null) return false
     if (!isSpriteShapedError(event)) return false
+    this.markFailed()
+    return true
+  }
+
+  private markFailed(): void {
     this.spriteInFlight = false
     this.resourceFailed = true
     this.setStatus('failed')
-    return true
   }
 
   /** Retry: a style whose resources failed is removed, so the next update installs it and downloads them again. */
@@ -265,14 +273,13 @@ export class VectorBasemap {
 
   private install(presentation: VectorBasemapPresentation, document: VectorStyleDocument): void {
     const prepared = prepareOpenFreeMapStyle(document)
-    const resources = styleResourceRequests(document)
-    for (const resource of resources) {
-      if (!this.knownResources.some((known) => known.source === resource.source)) this.knownResources.push(resource)
-    }
+    // install() sets only a string sprite, so only its requests can fail.
+    const sprite = typeof document.sprite === 'string' ? document.sprite : null
     this.resourceFailed = false
     if (document.glyphs) this.map.setGlyphs(document.glyphs)
-    if (typeof document.sprite === 'string') {
-      this.map.setSprite(document.sprite)
+    if (sprite !== null) {
+      this.knownSprites.add(sprite)
+      this.map.setSprite(sprite)
       this.spriteInFlight = true
     }
     this.applyPresentation(presentation)
@@ -286,7 +293,7 @@ export class VectorBasemap {
       style: presentation.style,
       sourceIds: Object.keys(prepared.sources),
       layerIds: prepared.layers.map((layer) => layer.id),
-      resources,
+      sprite,
     }
   }
 
@@ -341,20 +348,9 @@ function prepareOpenFreeMapStyle(document: VectorStyleDocument): PreparedVectorS
   return { sources, layers }
 }
 
-/**
- * The requests MapLibre makes for a style's own resources: the sprite sheet (`<sprite>[@2x].json|png`) and each
- * source's TileJSON. A tile URL never matches.
- */
-function styleResourceRequests(document: VectorStyleDocument): RegExp[] {
-  const resources: RegExp[] = []
-  // install() sets only a string sprite, so only its requests can fail.
-  if (typeof document.sprite === 'string') {
-    resources.push(new RegExp(`^${escapeRegExp(document.sprite)}(?:@\\d+(?:\\.\\d+)?x)?\\.(?:json|png)(?:[?#].*)?$`))
-  }
-  for (const source of Object.values(document.sources)) {
-    if (typeof source.url === 'string') resources.push(new RegExp(`^${escapeRegExp(source.url)}(?:[?#].*)?$`))
-  }
-  return resources
+/** The sprite a sprite sheet request belongs to: MapLibre requests `<sprite>[@2x].json|png`, query and hash after. */
+function spriteOf(url: string): string {
+  return url.replace(/[?#].*$/, '').replace(/(?:@2x)?\.(?:json|png)$/, '')
 }
 
 /** The URL a failed MapLibre request names: an AJAXError's `url`, else the URL its message ends with. */
@@ -383,10 +379,6 @@ function isSpriteShapedError(event: unknown): boolean {
   if (name === 'InvalidStateError' || name === 'EncodingError') return true
   if (name === 'TypeError') return CUT_OFF_BODY.test(text)
   return /^Could not load (?:sprite )?image\b/.test(text)
-}
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function isNameLabel(textField: unknown): boolean {

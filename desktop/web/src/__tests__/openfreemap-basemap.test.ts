@@ -291,6 +291,31 @@ describe('OpenFreeMap vector basemap', () => {
     }
   })
 
+  it('claims a sprite failure from the previous style after a style switch silently, and the shown style\'s own loudly', async () => {
+    const map = new FakeMap()
+    const statuses: string[] = []
+    const basemap = new VectorBasemap(map, {
+      loadStyle: async (url) => styleDocument(url.split('/').pop()!),
+      onStatus: (status) => statuses.push(status),
+    })
+    basemap.update({ style: 'liberty', visible: true, opacity: 1, locale: 'en' })
+    await settle()
+    basemap.update({ style: 'dark', visible: true, opacity: 1, locale: 'en' })
+    await settle()
+    expect(basemap.installedStyle).toBe('dark')
+    const offline = (url: string) => ({
+      type: 'error',
+      error: Object.assign(new Error(`AJAXError: Failed to fetch (0): ${url}`), { name: 'AJAXError', status: 0, url }),
+    })
+
+    // Liberty's sprite request was still running when Dark replaced it.
+    expect(basemap.claimResourceError(offline('https://tiles.openfreemap.org/sprites/liberty@2x.json'))).toBe(true)
+    expect(statuses.at(-1)).toBe('ok')
+
+    expect(basemap.claimResourceError(offline('https://tiles.openfreemap.org/sprites/dark@2x.png?v=1'))).toBe(true)
+    expect(statuses.at(-1)).toBe('failed')
+  })
+
   describe('a sprite that fails after its response arrived (no URL on the error)', () => {
     // MapLibre names the URL only when fetch() rejects or the status is not ok; a captive portal's HTML (SyntaxError),
     // a body cut off mid-download (TypeError) or an undecodable sprite image reach the map with no URL and no source.
