@@ -340,6 +340,41 @@ describe('MapLibre Host', () => {
     expect(host.current()).toBeNull()
   })
 
+  it('still removes what a map\'s creation added to the container when its removal throws on teardown', async () => {
+    const host = createMapLibreHost({ loadMapLibre: vi.fn(async () => maplibre) })
+    const removeError = new Error('MapLibre removal failed')
+    const existingChild = document.createElement('div')
+    container.append(existingChild)
+
+    host.attach(container)
+    host.requestMap({
+      key: 'street',
+      createMap: (api, target) => {
+        target.append(document.createElement('canvas'))
+        target.classList.add('maplibregl-map')
+        const map = new api.Map({
+          container: target,
+          style: { version: 8, sources: {}, layers: [] },
+          interactive: false,
+          pitchWithRotate: false,
+          dragRotate: false,
+          touchZoomRotate: false,
+        }) as FakeMap
+        map.remove.mockImplementation(() => {
+          throw removeError
+        })
+        return map
+      },
+    })
+    await flushPromises()
+    expect(host.current()?.map).toBe(maps[0])
+
+    expect(() => host.destroy()).toThrow(removeError)
+    expect(Array.from(container.children)).toEqual([existingChild])
+    expect(container.classList).not.toContain('maplibregl-map')
+    expect(host.current()).toBeNull()
+  })
+
   it('removes what a request built in the container before its createMap threw, so a retry starts clean', async () => {
     // The World map configures its map after the constructor returns; a throw there never hands the host the map.
     const host = createMapLibreHost({ loadMapLibre: vi.fn(async () => maplibre) })
