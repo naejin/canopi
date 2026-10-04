@@ -206,8 +206,7 @@ pub(super) fn from_reference(reference: &str) -> Result<ResolvedCrs, String> {
 /// when that code's projection and ellipsoid are the WKT's: an ESRI .prj
 /// names its datum only by name (D_OSGB_1936), so the code gives the shift.
 /// Identification alone misreads codes (an ESRI Lambert-93 comes back as
-/// EPSG:2918), so the WKT with the code's shift must place as the code does
-/// at points 50 km around its false origin.
+/// EPSG:2918), so the WKT with the code's shift must place as the code does.
 fn identified(codeless: &str, params: &ProjectionParams) -> Option<ResolvedCrs> {
     let registry = from_epsg(wbprojection::identify_epsg_from_wkt(codeless)?).ok()?;
     let spelled = user_defined(
@@ -217,7 +216,14 @@ fn identified(codeless: &str, params: &ProjectionParams) -> Option<ResolvedCrs> 
         String::new(),
     )
     .ok()?;
-    let (step, x0, y0) = if spelled.is_projected() {
+    places_as(&spelled, &registry, params).then_some(registry)
+}
+
+/// Whether `a`, spelled by `params`, places points as `b` does: four points
+/// 50 km (half a degree in a geographic CRS) around its false origin agree
+/// to a centimetre.
+fn places_as(a: &ResolvedCrs, b: &ResolvedCrs, params: &ProjectionParams) -> bool {
+    let (step, x0, y0) = if a.is_projected() {
         (50_000.0, params.false_easting, params.false_northing)
     } else {
         (0.5, params.lon0, params.lat0)
@@ -227,11 +233,9 @@ fn identified(codeless: &str, params: &ProjectionParams) -> Option<ResolvedCrs> 
         .into_iter()
         .all(|(dx, dy)| {
             let (x, y) = (x0 + dx, y0 + dy);
-            spelled
-                .transform_to(x, y, &registry)
-                .is_ok_and(|(rx, ry)| (rx - x).abs() < tolerance && (ry - y).abs() < tolerance)
+            a.transform_to(x, y, b)
+                .is_ok_and(|(bx, by)| (bx - x).abs() < tolerance && (by - y).abs() < tolerance)
         })
-        .then_some(registry)
 }
 
 fn definition_of(code: u32) -> Option<crs_definitions::Def> {
@@ -273,7 +277,9 @@ pub(super) fn from_epsg(code: u32) -> Result<ResolvedCrs, String> {
 /// reads the normalised string for the projection the keys written back
 /// spell out. Keys spell a user-defined CRS in metres, and only the
 /// projections `projection_terms` names, so a string in another linear unit
-/// or projection is refused here rather than when its keys are written.
+/// or projection, or one whose keys would place elsewhere (wbprojection
+/// drops a Mercator's `+lat_ts` and every `+axis`), is refused here rather
+/// than drawn from keys that disagree with the import.
 pub(super) fn from_proj4(definition: &str) -> Result<ResolvedCrs, String> {
     let unsupported = |e: String| format!("unsupported PROJ definition: {e}");
     let (definition, proj) = parse(definition).map_err(unsupported)?;
@@ -282,15 +288,24 @@ pub(super) fn from_proj4(definition: &str) -> Result<ResolvedCrs, String> {
     }
     let crs =
         wbprojection::from_proj_string(&definition).map_err(|e| unsupported(e.to_string()))?;
-    projection_terms(crs.projection.params()).map_err(unsupported)?;
-    Ok(ResolvedCrs {
+    let params = crs.projection.params();
+    projection_terms(params).map_err(unsupported)?;
+    let resolved = ResolvedCrs {
         epsg: None,
         wkt: with_definition(&crs.to_wkt(), &definition),
         name: crs.name.clone(),
         definition,
         proj,
-        user: Some(crs.projection.params().clone()),
-    })
+        user: Some(params.clone()),
+    };
+    let keyed = from_geokeys(&geokeys_for(&resolved)?)?
+        .ok_or_else(|| unsupported("its keys name no CRS".to_string()))?;
+    if !places_as(&resolved, &keyed, params) {
+        return Err(unsupported(
+            "a definition GeoTIFF keys cannot spell is not supported".to_string(),
+        ));
+    }
+    Ok(resolved)
 }
 
 /// Why a CRS with no registry code in another linear unit is refused: its
@@ -1603,12 +1618,16 @@ mod tests {
 
     /// A PROJ string names no code, so it is written back as user-defined
     /// keys: a projection keys cannot spell (spherical Web Mercator, Swiss
-    /// oblique Mercator, Krovak) is refused when probed, not when written.
+    /// oblique Mercator, Krovak) is refused when probed, not when written,
+    /// and so is one whose keys would place elsewhere than the string does
+    /// (a Mercator's true-scale latitude, a south-west axis).
     #[test]
     fn a_proj_string_keys_cannot_spell_is_refused_when_probed() {
         let definition = |code: u16| crs_definitions::from_code(code).unwrap().proj4;
         for proj4 in [
             "+proj=merc +a=6378137 +b=6378137 +lat_ts=0 +lon_0=0 +x_0=0 +y_0=0 +k=1 +units=m +no_defs",
+            "+proj=merc +lat_ts=20 +ellps=WGS84 +units=m",
+            "+proj=tmerc +lat_0=0 +lon_0=25 +k=1 +x_0=0 +y_0=0 +axis=wsu +ellps=WGS84 +units=m",
             definition(3857),
             definition(2056),
             definition(5514),
