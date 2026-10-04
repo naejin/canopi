@@ -53,13 +53,16 @@ export interface GeographicView {
   readonly bearing: number
 }
 
-/** A camera's centre, zoom and bearing as a geographic view (ViewReadSurface.captureView), or null when they are not finite. */
+/**
+ * A camera's centre, zoom and bearing as a geographic view (ViewReadSurface.captureView), or null when they are not finite. The
+ * bearing is the camera's: the stores it feeds fold it with storedBearing (composeSavedView, the settings' last view).
+ */
 export function geographicViewOfCamera(
   camera: { readonly center: GeoPosition; readonly zoom: number; readonly bearingDeg: number },
 ): GeographicView | null {
   const { center, zoom, bearingDeg } = camera
   return [center.lon, center.lat, zoom, bearingDeg].every(Number.isFinite)
-    ? { lon: center.lon, lat: center.lat, zoom, bearing: storedBearing(bearingDeg) }
+    ? { lon: center.lon, lat: center.lat, zoom, bearing: bearingDeg }
     : null
 }
 
