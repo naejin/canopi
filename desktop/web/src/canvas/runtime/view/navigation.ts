@@ -46,7 +46,6 @@ export interface ViewNavigation extends ViewCommandSurface {
   focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
   returnFromTemporaryFocus(): boolean        // bookmark is a ViewCamera: re-origin cannot invalidate it
   clearTemporaryFocus(): void
-  centerOn(point: WorldPoint, pixelsPerMetre: number, options?: { readonly animate?: boolean; readonly bearingDeg?: number | 'keep' }): void
   /** Opening a Design: oriented fit at the given bearing; an empty scene opens at 0 (spec §4.15). Every open path calls it
    *  through document-surface.ts's open fit; Fit to Design stays zoomToFit. */
   openAt(bearingDeg: number): void
@@ -186,15 +185,6 @@ export function createViewNavigation(deps: ViewNavigationDeps): ViewNavigation {
     setFramingInsets(insets) {
       const valid = [insets.top, insets.right, insets.bottom, insets.left].every((edge) => Number.isFinite(edge) && edge >= 0)
       driver().setInsets(valid ? insets : NO_INSETS)
-    },
-    centerOn(point, pixelsPerMetre, options) {
-      const bearing = options?.bearingDeg === undefined || options.bearingDeg === 'keep' ? driver().bearingTarget() : options.bearingDeg
-      const { view, attached } = frame()
-      apply({
-        kind: 'set',
-        target: cameraCentredOn(view, point, pixelsPerMetre, normaliseBearing(bearing)),
-        animation: options?.animate && attached ? 'fly' : 'none',
-      })
     },
     openAt(bearingDeg) {
       const extent = deps.readSceneExtent()

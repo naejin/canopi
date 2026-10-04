@@ -137,9 +137,9 @@ describe('view navigation', () => {
   it('clamps viewport scale to the configured map zoom range', () => {
     const view = createTestView({ screen: { width: 1000, height: 800 } })
 
-    view.navigation.centerOn({ x: 0, y: 0 }, 5000)
+    view.navigation.showCamera({ center: { lon: 0, lat: 0 }, zoom: 30, bearingDeg: 0, pitchDeg: 0 })
     expect(view.view().pixelsPerMetre).toBe(EQUATOR_MAX_SCALE)
-    view.navigation.centerOn({ x: 0, y: 0 }, 0.000001)
+    view.navigation.showCamera({ center: { lon: 0, lat: 0 }, zoom: -5, bearingDeg: 0, pitchDeg: 0 })
     expect(view.view().pixelsPerMetre).toBe(WIDE_FLOOR_SCALE)
     view.dispose()
   })
@@ -422,7 +422,7 @@ describe('view navigation', () => {
     const view = sceneView(1000, 800, scene, { x: 3, y: -7, scale: 2 })
     view.navigation.setFramingInsets(insets)
     // Today's CameraController after the same calls on the same screen, placement and insets (zoomToFit, zoomIn and zoomOut twice,
-    // zoomAroundScreenPoint about the centre, panBy, focusTemporaryBounds, returnFromTemporaryFocus, centerOn, returnToDesign),
+    // zoomAroundScreenPoint about the centre, panBy, focusTemporaryBounds, returnFromTemporaryFocus, returnToDesign),
     // recorded at 52cbff10 before the class became the legacy shim.
     const today: ReadonlyArray<readonly [number, number, number]> = [
       [339.14286269122294, 114, 8.171427461755401],
@@ -458,7 +458,8 @@ describe('view navigation', () => {
     expectSame()
     view.navigation.returnFromTemporaryFocus()
     expectSame()
-    view.navigation.centerOn({ x: 250.5, y: -91 }, 6.5)
+    // Today's centerOn({ x: 250.5, y: -91 }, 6.5): the point at the screen centre at 6.5 px/m.
+    view.setViewport({ x: 500 - 250.5 * 6.5, y: 400 + 91 * 6.5, scale: 6.5 })
     expectSame()
     view.navigation.returnToDesign()
     expectSame()

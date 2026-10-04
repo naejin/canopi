@@ -720,7 +720,7 @@ describe('MapLibre camera driver', () => {
     expect(returned.zoom).toBeCloseTo(before.zoom, 9)
     // A new camera command drops the bookmark.
     view.navigation.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 100, maxY: 50 }, { paddingCssPx: 48 })
-    view.navigation.centerOn({ x: 0, y: 0 }, 2)
+    view.navigation.panByPx({ x: 5, y: 0 })
     expect(view.navigation.returnFromTemporaryFocus()).toBe(false)
   })
 
@@ -792,14 +792,13 @@ describe('MapLibre camera driver', () => {
     expect(view.frames.viewFrame.peek()).toBe(settled)
   })
 
-  it('centerOn flies an attached map when asked to animate, and jumps otherwise', () => {
+  it('showPlace flies an attached map when asked to, and jumps otherwise', () => {
     const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
     const { view } = viewOn(map)
     const jumps = map.jumpTo.mock.calls.length
-    const scale = mapZoomToStageScale(19, PLANE.origin.lat)
     const target = PLANE.toGeo({ x: 40, y: 25 })
 
-    view.navigation.centerOn({ x: 40, y: 25 }, scale, { animate: true })
+    expect(view.navigation.showPlace(target, 19, { motion: 'fly' })).toBe(true)
 
     expect(map.flyTo).toHaveBeenCalledTimes(1)
     const [flight] = map.flyTo.mock.calls[0]!
@@ -809,7 +808,7 @@ describe('MapLibre camera driver', () => {
     expect(flight.bearing).toBe(0)
     expect(map.jumpTo).toHaveBeenCalledTimes(jumps)
 
-    view.navigation.centerOn({ x: 40, y: 25 }, scale)
+    expect(view.navigation.showPlace(target, 19)).toBe(true)
     expect(map.flyTo).toHaveBeenCalledTimes(1)
     expect(map.jumpTo).toHaveBeenCalledTimes(jumps + 1)
   })
@@ -879,7 +878,7 @@ describe('the runtime camera on an attached map', () => {
     try {
       const far = { x: 30_000, y: -60_000 }
       const target = PLANE.toGeo(far)
-      camera.navigation.centerOn(far, mapZoomToStageScale(17, PLANE.origin.lat), { animate: true })
+      camera.navigation.showCamera({ center: target, zoom: 17, bearingDeg: 0, pitchDeg: 0 }, { motion: 'fly' })
       expect(map.flight).not.toBeNull()
       map.flightFrame({ center: target, zoom: 14, bearing: 0 })
 
