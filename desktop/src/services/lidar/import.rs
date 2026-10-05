@@ -212,7 +212,17 @@ pub fn stage_import(
 ) -> Result<(), String> {
     let engine = library.inner.engine.as_ref();
     let paths = &library.inner.paths;
-    validate_selection(source_paths, &admission::source_name)?;
+    // A rebuilt item's saved selection holds managed originals: every
+    // message names a source by the file it was imported as, the rule the
+    // Retry check uses too.
+    let names = library.saved_source_names(source_paths)?;
+    let name_of = |path: &Path| {
+        names
+            .get(path)
+            .cloned()
+            .unwrap_or_else(|| admission::source_name(path))
+    };
+    validate_selection(source_paths, &name_of)?;
 
     let layer = {
         let connection = library.catalogue()?;
@@ -233,10 +243,7 @@ pub fn stage_import(
         // A source this batch cannot use refuses the whole batch, and the
         // refusal names the user's own file: "the probe failed on a hashed copy"
         // is not an answer anyone can act on.
-        let filename = source_path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| source_path.display().to_string());
+        let filename = name_of(source_path);
         let earlier = ordered_processing_cost(&staged.iter().collect::<Vec<_>>())?;
         let staged_source = stage_source(
             engine,
@@ -245,6 +252,7 @@ pub fn stage_import(
             &layer.quantity,
             &layer.units,
             source_path,
+            &filename,
             &earlier,
             job_id,
             &job_dir,
@@ -581,16 +589,12 @@ fn stage_source(
     quantity: &str,
     units: &str,
     source_path: &Path,
+    filename: &str,
     earlier: &[admission::ProcessingCost],
     job_id: &str,
     job_dir: &Path,
     cancel: &AtomicBool,
 ) -> Result<StagedSource, String> {
-    let filename = source_path
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "unnamed".to_string());
-
     // Stream the source once into job-owned staging while hashing it. This
     // avoids loading an arbitrary TIFF into memory and lets an existing
     // deduplicated original be verified before it is trusted.
@@ -742,7 +746,7 @@ fn stage_source(
         )
         .map_err(|e| format!("Failed to record interpretation: {e}"))?;
     Ok(StagedSource {
-        filename,
+        filename: filename.to_string(),
         sha256,
         managed_original,
         interp_hash,

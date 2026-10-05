@@ -614,27 +614,39 @@ fn a_refused_retry_returns_its_reason_when_the_row_cannot_be_updated() {
 /// rebuilt from `source`'s bytes kept as the managed original of `sha256`, which
 /// was imported as `elsewhere.tif`. Returns the library and the item.
 fn rebuilt_library(root: &Path, source: &Path, sha256: &str) -> (LidarLibrary, String) {
+    rebuilt_item(root, &[(source, sha256, "elsewhere.tif")])
+}
+
+/// A library the catalogue rebuild made, whose one item "Orchard" has
+/// `members` (source bytes, sha256, the name it was imported as) in order.
+fn rebuilt_item(root: &Path, members: &[(&Path, &str, &str)]) -> (LidarLibrary, String) {
     let lidar = paths::library_root(root);
-    let dir = lidar.join("sources").join(sha256);
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::copy(source, dir.join("original")).unwrap();
-    let meta = source_meta::SourceMeta {
-        version: source_meta::META_VERSION,
-        sha256: sha256.to_string(),
-        original_filename: "elsewhere.tif".to_string(),
-        size_bytes: std::fs::metadata(source).unwrap().len(),
-        imported_at: "10".to_string(),
-        items: vec![source_meta::ItemMeta {
-            id: "lyr-rebuilt".to_string(),
-            name: "Orchard".to_string(),
-            quantity: RasterQuantity::GroundElevation.key().to_string(),
-            units: "m".to_string(),
-            created_at: "10".to_string(),
-            members: vec![sha256.to_string()],
-            analyses: Vec::new(),
-        }],
+    let item = source_meta::ItemMeta {
+        id: "lyr-rebuilt".to_string(),
+        name: "Orchard".to_string(),
+        quantity: RasterQuantity::GroundElevation.key().to_string(),
+        units: "m".to_string(),
+        created_at: "10".to_string(),
+        members: members
+            .iter()
+            .map(|(_, sha256, _)| sha256.to_string())
+            .collect(),
+        analyses: Vec::new(),
     };
-    source_meta::write(&dir.join(source_meta::META_FILE), &meta).unwrap();
+    for (source, sha256, name) in members {
+        let dir = lidar.join("sources").join(sha256);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::copy(source, dir.join("original")).unwrap();
+        let meta = source_meta::SourceMeta {
+            version: source_meta::META_VERSION,
+            sha256: sha256.to_string(),
+            original_filename: name.to_string(),
+            size_bytes: std::fs::metadata(source).unwrap().len(),
+            imported_at: "10".to_string(),
+            items: vec![item.clone()],
+        };
+        source_meta::write(&dir.join(source_meta::META_FILE), &meta).unwrap();
+    }
     std::fs::write(lidar.join(paths::CATALOGUE_FILE), b"not a catalogue").unwrap();
     let library = attached_library(root);
     assert!(matches!(
@@ -646,6 +658,49 @@ fn rebuilt_library(root: &Path, source: &Path, sha256: &str) -> (LidarLibrary, S
         recovery::RECOVERED_IMPORT_MESSAGE
     );
     (library, "lyr-rebuilt".to_string())
+}
+
+/// A rebuilt item whose Retry passes the check but whose import then refuses
+/// one member (south-up, found only while preparing): the failure on the
+/// item's row names that member's imported file, never "original".
+#[test]
+fn a_rebuilt_item_whose_import_refuses_a_member_names_the_imported_file() {
+    let workbench = scratch("retry-rebuilt-south-up-tiles");
+    let west = plane(&attached_library(&workbench), &workbench, "west", 445_000.0);
+    // A positive pixel height is written as a negative ModelPixelScale y,
+    // which reads back as a south-up grid.
+    let east = workbench.join("east.tif");
+    wbgeotiff::GeoTiffWriter::new(4, 4, 1)
+        .geo_transform(wbgeotiff::GeoTransform::north_up(
+            445_064.0,
+            1.0,
+            6_806_000.0,
+            1.0,
+        ))
+        .epsg(2154)
+        .no_data(-9999.0)
+        .write_f32(&east, &[5.0; 16])
+        .unwrap();
+    let root = scratch("retry-rebuilt-south-up");
+    let (library, layer_id) = rebuilt_item(
+        &root,
+        &[
+            (west.as_path(), "sha-west", "west.tif"),
+            (east.as_path(), "sha-east", "east.tif"),
+        ],
+    );
+    let receipt = library.retry_import(&layer_id).unwrap();
+    assert_eq!(
+        await_import(&library, &receipt.job_id),
+        LidarImportJobState::Failed
+    );
+    let message = row_message(&library, &layer_id);
+    assert!(message.contains("east.tif"), "{message}");
+    assert!(message.contains("south-up"), "{message}");
+    assert!(
+        !message.contains("original"),
+        "no managed name in: {message}"
+    );
 }
 
 /// U31 on a rebuilt item: a Retry whose managed original is in a refused code
