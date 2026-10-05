@@ -72,7 +72,8 @@ runs:
         "$sidecar" version
 
     # Another matrix leg or a concurrent run may create the release or upload
-    # the same asset first; both are treated as success.
+    # the same asset first; both are treated as success. An asset left
+    # incomplete by a cancelled upload is replaced.
     - name: Publish the built GeoLibre CLI
       if: >-
         steps.download.outputs.hit != 'true' &&
@@ -94,7 +95,12 @@ runs:
             || gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
         fi
         if ! gh release upload "$TAG" "desktop/binaries/$ASSET" --repo "$GITHUB_REPOSITORY"; then
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' \
-            | grep -qxF "$ASSET" || { echo "::error::upload of $ASSET to $TAG failed" >&2; exit 1; }
-          echo "$ASSET was uploaded by another job"
+          complete="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[] | select(.name == env.ASSET and .state == "uploaded" and .size > 0) | .name')"
+          if [ "$complete" = "$ASSET" ]; then
+            echo "$ASSET was uploaded by another job"
+          else
+            echo "Replacing an incomplete $ASSET on $TAG"
+            gh release upload "$TAG" "desktop/binaries/$ASSET" --repo "$GITHUB_REPOSITORY" --clobber
+          fi
         fi
