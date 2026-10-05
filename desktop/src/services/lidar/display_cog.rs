@@ -1287,6 +1287,72 @@ mod library_tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// Whether the committed fixture JSON is what the engine gives now:
+    /// positions (`bounds`, a probe's `longitude` and `latitude`) within
+    /// 1e-12°, since they pass through the platform's libm, which may round
+    /// the last bit differently on the Windows and macOS runners; everything
+    /// else, values included, exactly.
+    fn same_fixture(committed: &serde_json::Value, expected: &serde_json::Value) -> bool {
+        use serde_json::Value;
+        fn near(a: &Value, b: &Value) -> bool {
+            match (a, b) {
+                (Value::Array(a), Value::Array(b)) => {
+                    a.len() == b.len() && a.iter().zip(b).all(|(a, b)| near(a, b))
+                }
+                (Value::Number(a), Value::Number(b)) => a
+                    .as_f64()
+                    .zip(b.as_f64())
+                    .is_some_and(|(a, b)| (a - b).abs() <= 1e-12),
+                _ => a == b,
+            }
+        }
+        match (committed, expected) {
+            (Value::Object(a), Value::Object(b)) => {
+                a.len() == b.len()
+                    && a.iter().all(|(key, value)| {
+                        b.get(key).is_some_and(|other| {
+                            if matches!(key.as_str(), "bounds" | "longitude" | "latitude") {
+                                near(value, other)
+                            } else {
+                                same_fixture(value, other)
+                            }
+                        })
+                    })
+            }
+            (Value::Array(a), Value::Array(b)) => {
+                a.len() == b.len() && a.iter().zip(b).all(|(a, b)| same_fixture(a, b))
+            }
+            _ => committed == expected,
+        }
+    }
+
+    /// Positions may differ in their last bit between platforms, values and
+    /// everything else may not.
+    #[test]
+    fn the_fixture_check_allows_last_bit_position_differences_only() {
+        let committed = serde_json::json!({
+            "bounds": [4.35, 52.0, 4.36, 52.01],
+            "nodata": -9999.0,
+            "width": 24,
+            "probes": [{ "longitude": 4.355, "latitude": 52.005, "value": 3.25 }],
+        });
+        let next = |value: f64| serde_json::json!(f64::from_bits(value.to_bits() + 1));
+        let mut moved = committed.clone();
+        moved["probes"][0]["latitude"] = next(52.005);
+        moved["probes"][0]["longitude"] = next(4.355);
+        moved["bounds"][3] = next(52.01);
+        assert!(same_fixture(&committed, &moved), "a last-bit move");
+        let mut changed = committed.clone();
+        changed["probes"][0]["value"] = next(3.25);
+        assert!(!same_fixture(&committed, &changed), "a changed value");
+        let mut shifted = committed.clone();
+        shifted["probes"][0]["longitude"] = serde_json::json!(4.355_001);
+        assert!(!same_fixture(&committed, &shifted), "a moved probe");
+        let mut resized = committed.clone();
+        resized["width"] = serde_json::json!(25);
+        assert!(!same_fixture(&committed, &resized), "a resized derivative");
+    }
+
     /// The web suite opens this derivative with the real cog-tiler-wasm
     /// (`raster-display/rust-display-cog.test.ts`) and reads the probes back,
     /// so the fixture must be what the engine writes now. Rewrite it with
@@ -1337,7 +1403,10 @@ mod library_tests {
             "the web display fixture is stale: rerun this test with CANOPI_UPDATE_FIXTURES=1";
         let committed: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&json).expect(stale)).expect(stale);
-        assert_eq!(committed, expected, "{stale}");
+        assert!(
+            same_fixture(&committed, &expected),
+            "{stale}\ncommitted: {committed}\nnow: {expected}"
+        );
         let engine = library.inner.engine.as_ref();
         let cancel = AtomicBool::new(false);
         let committed_probe = engine.probe(&tif, &cancel).expect(stale);
