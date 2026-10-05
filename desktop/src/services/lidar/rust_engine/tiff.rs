@@ -123,7 +123,7 @@ fn read_directories(reader: &mut TiffReader<BufReader<File>>) -> Result<Vec<Ifd>
         if ifds.len() == MAX_DIRECTORIES {
             return Err(format!("more than {MAX_DIRECTORIES} image directories"));
         }
-        value_bytes += directory_value_bytes(reader, offset)?;
+        value_bytes = value_bytes.saturating_add(directory_value_bytes(reader, offset)?);
         if value_bytes > MAX_DIRECTORY_VALUE_BYTES {
             return Err(format!(
                 "its tags declare more than {} MiB of values",
@@ -974,5 +974,31 @@ mod tests {
         std::fs::write(&path, bytes).unwrap();
         let error = read_header(&path).err().expect("refused");
         assert!(error.contains("entries"), "{error}");
+    }
+
+    #[test]
+    fn a_later_directory_cannot_wrap_the_value_budget() {
+        // BigTIFF: directory 1 declares 8 bytes, directory 2 a ModelPixelScale
+        // of 2^61 doubles, which saturates its own total; added to the first,
+        // a plain sum would wrap past the budget in a release build.
+        let mut bytes = b"II+\0".to_vec();
+        bytes.extend(8u16.to_le_bytes());
+        bytes.extend(0u16.to_le_bytes());
+        bytes.extend(16u64.to_le_bytes());
+        let directory = |bytes: &mut Vec<u8>, code: u16, kind: u16, count: u64, next: u64| {
+            bytes.extend(1u64.to_le_bytes());
+            bytes.extend(code.to_le_bytes());
+            bytes.extend(kind.to_le_bytes());
+            bytes.extend(count.to_le_bytes());
+            bytes.extend(0u64.to_le_bytes());
+            bytes.extend(next.to_le_bytes());
+        };
+        directory(&mut bytes, tag::ImageWidth, 3, 4, 52);
+        directory(&mut bytes, tag::ModelPixelScaleTag, 12, 1u64 << 61, 0);
+        let root = crate::test_scratch::TestScratch::new("tiff-wrap-budget");
+        let path = root.join("crafted.tif");
+        std::fs::write(&path, bytes).unwrap();
+        let error = read_header(&path).err().expect("refused");
+        assert!(error.contains("MiB"), "{error}");
     }
 }
