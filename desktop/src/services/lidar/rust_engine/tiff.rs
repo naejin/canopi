@@ -12,8 +12,8 @@ use std::io::{BufReader, Read as _, Seek as _, SeekFrom};
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use wbgeotiff::geo_keys::GeoKeyDirectory;
-use wbgeotiff::ifd::{ByteOrder, Ifd, TiffReader};
-use wbgeotiff::tags::{Compression, SampleFormat, tag};
+use wbgeotiff::ifd::{ByteOrder, Ifd, TiffReader, TiffVariant};
+use wbgeotiff::tags::{Compression, DataType, SampleFormat, tag};
 
 /// How band samples are chunked in the file.
 #[derive(Clone)]
@@ -97,12 +97,95 @@ fn text(ifd: &Ifd, code: u16) -> Option<String> {
     })
 }
 
+/// At most this many image directories are read: a full image, its
+/// overviews and their masks fit with room to spare.
+const MAX_DIRECTORIES: usize = 64;
+/// At most this many entries per directory; a GeoTIFF writes a few dozen.
+const MAX_DIRECTORY_ENTRIES: u64 = 1024;
+/// At most this many bytes of tag values across the chain. A 2 GiB source's
+/// strip or tile index takes a few MiB.
+const MAX_DIRECTORY_VALUE_BYTES: u64 = 64 * 1024 * 1024;
+
+/// Read the directory chain without trusting it. wbgeotiff follows
+/// next-directory offsets and sizes its buffers from the header's counts
+/// unchecked, so a loop, a long chain, a huge entry count or tag values
+/// beyond the budget are refused here, from the raw entries, before it reads
+/// a directory. This keeps the header read bounded (U32 runs it on UserData).
+fn read_directories(reader: &mut TiffReader<BufReader<File>>) -> Result<Vec<Ifd>, String> {
+    let mut seen = std::collections::HashSet::new();
+    let mut value_bytes = 0u64;
+    let mut ifds = Vec::new();
+    let mut offset = reader.first_ifd_offset;
+    while offset != 0 {
+        if !seen.insert(offset) {
+            return Err("its image directories loop".to_string());
+        }
+        if ifds.len() == MAX_DIRECTORIES {
+            return Err(format!("more than {MAX_DIRECTORIES} image directories"));
+        }
+        value_bytes += directory_value_bytes(reader, offset)?;
+        if value_bytes > MAX_DIRECTORY_VALUE_BYTES {
+            return Err(format!(
+                "its tags declare more than {} MiB of values",
+                MAX_DIRECTORY_VALUE_BYTES / (1024 * 1024)
+            ));
+        }
+        let ifd = reader.read_ifd(offset).map_err(|e| e.to_string())?;
+        offset = ifd.next_ifd_offset;
+        ifds.push(ifd);
+    }
+    Ok(ifds)
+}
+
+/// The bytes of tag values the directory at `offset` declares, read from its
+/// raw entries.
+fn directory_value_bytes(
+    reader: &mut TiffReader<BufReader<File>>,
+    offset: u64,
+) -> Result<u64, String> {
+    let order = reader.byte_order;
+    // Bytes of the entry count, of each entry, and of an entry's value count.
+    let (entries_size, entry_size, value_count_size) = match reader.variant {
+        TiffVariant::Classic => (2, 12, 4),
+        TiffVariant::BigTiff => (8, 20, 8),
+    };
+    let file = reader.inner_mut();
+    file.seek(SeekFrom::Start(offset))
+        .map_err(|e| e.to_string())?;
+    let mut read = |size: usize| -> Result<Vec<u8>, String> {
+        let mut bytes = vec![0u8; size];
+        file.read_exact(&mut bytes).map_err(|e| e.to_string())?;
+        Ok(bytes)
+    };
+    let entries = uint(&read(entries_size)?, order);
+    if entries > MAX_DIRECTORY_ENTRIES {
+        return Err(format!("an image directory with {entries} entries"));
+    }
+    let mut total = 0u64;
+    for _ in 0..entries {
+        let entry = read(entry_size)?;
+        let kind = uint(&entry[2..4], order) as u16;
+        let count = uint(&entry[4..4 + value_count_size], order);
+        let size = DataType::from_u16(kind).map_or(0, |kind| kind.byte_size() as u64);
+        total = total.saturating_add(count.saturating_mul(size));
+    }
+    Ok(total)
+}
+
+/// An unsigned integer of 2, 4 or 8 bytes in the file's byte order.
+fn uint(bytes: &[u8], order: ByteOrder) -> u64 {
+    let push = |value: u64, byte: &u8| (value << 8) | u64::from(*byte);
+    match order {
+        ByteOrder::BigEndian => bytes.iter().fold(0, push),
+        ByteOrder::LittleEndian => bytes.iter().rev().fold(0, push),
+    }
+}
+
 /// Read the directory of a TIFF without touching its samples.
 pub(super) fn read_header(path: &Path) -> Result<TiffHeader, String> {
     let mut reader = open(path)?;
     let byte_order = reader.byte_order;
-    let ifds = reader
-        .read_all_ifds()
+    let ifds = read_directories(&mut reader)
         .map_err(|e| format!("{} has an unreadable directory: {e}", path.display()))?;
     let Some(first) = ifds.first() else {
         return Err(format!("{} has no image directory", path.display()));
@@ -833,5 +916,63 @@ mod tests {
         assert_eq!(compression_name(50000), "ZSTD");
         assert!(codec(50000).is_err());
         assert_eq!(codec(32946).unwrap(), Compression::Deflate);
+    }
+
+    /// A classic little-endian TIFF whose one directory, at offset 8, holds
+    /// `entries` (tag, type, count, value) and points its next directory at
+    /// `next`.
+    fn crafted_tiff(
+        root: &Path,
+        entries: &[(u16, u16, u32, u32)],
+        next: u32,
+    ) -> std::path::PathBuf {
+        let mut bytes = b"II*\0".to_vec();
+        bytes.extend(8u32.to_le_bytes());
+        bytes.extend((entries.len() as u16).to_le_bytes());
+        for (code, kind, count, value) in entries {
+            bytes.extend(code.to_le_bytes());
+            bytes.extend(kind.to_le_bytes());
+            bytes.extend(count.to_le_bytes());
+            bytes.extend(value.to_le_bytes());
+        }
+        bytes.extend(next.to_le_bytes());
+        let path = root.join("crafted.tif");
+        std::fs::write(&path, bytes).unwrap();
+        path
+    }
+
+    /// wbgeotiff follows next-directory offsets and sizes its buffers from
+    /// header counts unchecked; the header read must stay bounded on a
+    /// crafted file (U32 runs it on the UserData lane).
+    #[test]
+    fn a_directory_chain_that_loops_is_refused() {
+        // ImageWidth = 16, and the next directory is this one again.
+        let root = crate::test_scratch::TestScratch::new("tiff-ifd-loop");
+        let path = crafted_tiff(&root, &[(tag::ImageWidth, 3, 1, 16)], 8);
+        let error = read_header(&path).err().expect("refused");
+        assert!(error.contains("loop"), "{error}");
+    }
+
+    #[test]
+    fn a_tag_declaring_gigabytes_of_values_is_refused_before_they_are_read() {
+        // ModelPixelScale as 2^32 - 1 doubles: 32 GiB.
+        let root = crate::test_scratch::TestScratch::new("tiff-huge-tag");
+        let path = crafted_tiff(&root, &[(tag::ModelPixelScaleTag, 12, u32::MAX, 26)], 0);
+        let error = read_header(&path).err().expect("refused");
+        assert!(error.contains("MiB"), "{error}");
+    }
+
+    #[test]
+    fn a_bigtiff_directory_declaring_too_many_entries_is_refused() {
+        let mut bytes = b"II+\0".to_vec();
+        bytes.extend(8u16.to_le_bytes());
+        bytes.extend(0u16.to_le_bytes());
+        bytes.extend(16u64.to_le_bytes());
+        bytes.extend((1u64 << 60).to_le_bytes());
+        let root = crate::test_scratch::TestScratch::new("tiff-huge-ifd");
+        let path = root.join("crafted.tif");
+        std::fs::write(&path, bytes).unwrap();
+        let error = read_header(&path).err().expect("refused");
+        assert!(error.contains("entries"), "{error}");
     }
 }
