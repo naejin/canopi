@@ -478,7 +478,7 @@ impl RasterEngine for RustRasterEngine {
         let transformer = crs::Transformer::new(
             &crs::from_reference(source_crs)?,
             &crs::from_reference(target_crs)?,
-        )?;
+        );
         Ok(points
             .iter()
             .map(|(x, y)| {

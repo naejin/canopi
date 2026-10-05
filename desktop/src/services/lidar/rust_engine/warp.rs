@@ -121,7 +121,7 @@ pub(super) fn zoom<'a>(
 /// The latitude of `extent` (native `[min_x, min_y, max_x, max_y]`) nearest
 /// the equator, from points along its edges; 0 when it spans the equator.
 fn latitude_nearest_equator(native: &ResolvedCrs, extent: [f64; 4]) -> Result<f64, String> {
-    let to_wgs84 = Transformer::new(native, &crs::from_reference("EPSG:4326")?)?;
+    let to_wgs84 = Transformer::new(native, &crs::from_reference("EPSG:4326")?);
     let [min_x, min_y, max_x, max_y] = extent;
     let (mut south, mut north) = (f64::INFINITY, f64::NEG_INFINITY);
     for step in 0..=EXTENT_EDGE_POINTS {
@@ -270,8 +270,7 @@ pub(super) fn lattice(
     zoom: u32,
 ) -> Result<RasterGrid, String> {
     let mercator = crs::from_reference("EPSG:3857")?;
-    place(grid, &Transformer::new(native, &mercator)?, rung_at(zoom))
-        .map(|placement| placement.grid)
+    place(grid, &Transformer::new(native, &mercator), rung_at(zoom)).map(|placement| placement.grid)
 }
 
 /// Native points of the mesh nodes over a block of lattice pixels.
@@ -468,13 +467,13 @@ pub(super) fn write(
         );
     }
     let mercator = crs::from_reference("EPSG:3857")?;
-    let placement = place(grid, &Transformer::new(native, &mercator)?, rung_at(zoom))?;
+    let placement = place(grid, &Transformer::new(native, &mercator), rung_at(zoom))?;
     let geo_keys = crs::geokeys_for(&mercator)?;
     let mut filled = Filled {
         warp: Warp {
             band,
             native: grid.clone(),
-            to_native: Transformer::new(&mercator, native)?,
+            to_native: Transformer::new(&mercator, native),
             placement: &placement,
             budget: budget / 2,
         },
@@ -624,7 +623,7 @@ mod tests {
         let resolution =
             super::rung_at(super::zoom(&native, [&rd(85_000.0, 447_500.0, 1, 1)]).unwrap());
         assert!((resolution - ZOOM_18).abs() < 1e-12);
-        let to_native = Transformer::new(&mercator, &native).unwrap();
+        let to_native = Transformer::new(&mercator, &native);
         let (column, row) = (
             ((486_208.0 + HALF_WORLD) / resolution) as i64,
             ((HALF_WORLD - 6_801_382.0) / resolution) as i64,

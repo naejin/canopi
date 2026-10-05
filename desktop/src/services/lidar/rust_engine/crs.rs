@@ -44,9 +44,14 @@ impl ResolvedCrs {
         self.kind() != CrsKind::Geographic
     }
 
-    fn proj(&self) -> Result<Proj, String> {
-        Proj::from_proj_string(self.row.proj)
-            .map_err(|e| format!("EPSG:{} cannot be read: {e}", self.row.code))
+    /// Every row's definition is a static string that parses, which
+    /// `rows_are_written_in_the_form_proj4rs_reads` asserts for each row.
+    #[expect(
+        clippy::expect_used,
+        reason = "every row parses: rows_are_written_in_the_form_proj4rs_reads"
+    )]
+    fn proj(&self) -> Proj {
+        Proj::from_proj_string(self.row.proj).expect("every CRS row parses")
     }
 }
 
@@ -103,6 +108,7 @@ pub(super) struct Transformer {
     source: Step,
     target: Step,
     identity: bool,
+    wgs84: Proj,
 }
 
 /// One side of the hub: `None` when the side is WGS84 itself.
@@ -112,21 +118,22 @@ struct Step {
 }
 
 impl Step {
-    fn of(crs: &ResolvedCrs) -> Result<Self, String> {
-        Ok(Self {
-            proj: (crs.code() != 4326).then(|| crs.proj()).transpose()?,
+    fn of(crs: &ResolvedCrs) -> Self {
+        Self {
+            proj: (crs.code() != 4326).then(|| crs.proj()),
             geographic: crs.kind() == CrsKind::Geographic,
-        })
+        }
     }
 }
 
 impl Transformer {
-    pub(super) fn new(source: &ResolvedCrs, target: &ResolvedCrs) -> Result<Self, String> {
-        Ok(Self {
-            source: Step::of(source)?,
-            target: Step::of(target)?,
+    pub(super) fn new(source: &ResolvedCrs, target: &ResolvedCrs) -> Self {
+        Self {
+            source: Step::of(source),
+            target: Step::of(target),
             identity: source.code() == target.code(),
-        })
+            wgs84: wgs84(),
+        }
     }
 
     /// One point; `Err` where a projection does not reach it.
@@ -134,7 +141,7 @@ impl Transformer {
         if self.identity {
             return Ok((x, y));
         }
-        let wgs84 = wgs84()?;
+        let wgs84 = &self.wgs84;
         let (lon, lat) = match &self.source.proj {
             None => (x, y),
             Some(proj) => {
@@ -143,7 +150,7 @@ impl Transformer {
                 } else {
                     (x, y, 0.0)
                 };
-                transform(proj, &wgs84, &mut point).map_err(|e| e.to_string())?;
+                transform(proj, wgs84, &mut point).map_err(|e| e.to_string())?;
                 (point.0.to_degrees(), point.1.to_degrees())
             }
         };
@@ -151,7 +158,7 @@ impl Transformer {
             None => Ok((lon, lat)),
             Some(proj) => {
                 let mut point = (lon.to_radians(), lat.to_radians(), 0.0);
-                transform(&wgs84, proj, &mut point).map_err(|e| e.to_string())?;
+                transform(wgs84, proj, &mut point).map_err(|e| e.to_string())?;
                 Ok(if self.target.geographic {
                     (point.0.to_degrees(), point.1.to_degrees())
                 } else {
@@ -162,8 +169,12 @@ impl Transformer {
     }
 }
 
-fn wgs84() -> Result<Proj, String> {
-    from_code(4326)?.proj()
+#[expect(
+    clippy::expect_used,
+    reason = "EPSG:4326 is a row: every_row_matches_proj_on_its_reference_grid"
+)]
+fn wgs84() -> Proj {
+    from_code(4326).expect("EPSG:4326 is a row").proj()
 }
 
 fn short(keys: &GeoKeyDirectory, id: u16) -> Option<u16> {
@@ -541,8 +552,8 @@ mod tests {
                 .collect();
             assert_eq!(points.len(), 9, "EPSG:{} has a reference grid", row.code);
             let crs = from_code(row.code).unwrap();
-            let forward = Transformer::new(&wgs84_crs(), &crs).unwrap();
-            let inverse = Transformer::new(&crs, &wgs84_crs()).unwrap();
+            let forward = Transformer::new(&wgs84_crs(), &crs);
+            let inverse = Transformer::new(&crs, &wgs84_crs());
             let geographic = crs.kind() == CrsKind::Geographic;
             // Degrees for a geographic row, as metres along a meridian.
             let scale = if geographic { 1.0 / 111_320.0 } else { 1.0 };
@@ -592,7 +603,7 @@ mod tests {
     #[test]
     fn krovak_holds_its_stated_accuracy_at_its_worst_point() {
         let row = crs_table::row_of(5514).unwrap();
-        let forward = Transformer::new(&wgs84_crs(), &from_code(5514).unwrap()).unwrap();
+        let forward = Transformer::new(&wgs84_crs(), &from_code(5514).unwrap());
         let (x, y) = forward.apply(22.18, 48.44).unwrap();
         let distance = (x - -196_087.506_472).hypot(y - -1_273_498.060_529);
         assert!(
