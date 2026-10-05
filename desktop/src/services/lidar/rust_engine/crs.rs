@@ -504,10 +504,10 @@ fn short_entry(key_id: u16, value: u16) -> GeoKeyEntry {
     }
 }
 
-/// The GeoTIFF keys of a written file: the code only.
-pub(super) fn geokeys_for(resolved: &ResolvedCrs) -> Result<GeoKeyDirectory, String> {
-    let code = u16::try_from(resolved.code())
-        .map_err(|_| format!("EPSG:{} cannot be written as GeoTIFF keys", resolved.code()))?;
+/// The GeoTIFF keys of a written file: the code only. Every row's code fits
+/// a GeoKey short (`rows_are_written_in_the_form_proj4rs_reads`).
+pub(super) fn geokeys_for(resolved: &ResolvedCrs) -> GeoKeyDirectory {
+    let code = resolved.code() as u16;
     let mut entries = vec![short_entry(key::GTRasterTypeGeoKey, 1)];
     if resolved.is_projected() {
         entries.push(short_entry(key::GTModelTypeGeoKey, 1));
@@ -519,12 +519,12 @@ pub(super) fn geokeys_for(resolved: &ResolvedCrs) -> Result<GeoKeyDirectory, Str
         entries.push(short_entry(key::GeogAngularUnitsGeoKey, 9102));
     }
     entries.sort_by_key(|entry| entry.key_id);
-    Ok(GeoKeyDirectory {
+    GeoKeyDirectory {
         version: 1,
         key_revision: 1,
         minor_revision: 0,
         entries,
-    })
+    }
 }
 
 #[cfg(test)]
@@ -621,6 +621,11 @@ mod tests {
         let mut codes = std::collections::HashSet::new();
         for row in crs_table::ROWS {
             assert!(codes.insert(row.code), "EPSG:{} is listed twice", row.code);
+            assert!(
+                row.code <= u32::from(u16::MAX),
+                "EPSG:{} does not fit a GeoKey",
+                row.code
+            );
             let proj = row.proj;
             assert!(!proj.contains("+pm="), "EPSG:{}: {proj}", row.code);
             assert!(!proj.contains("+k_0="), "EPSG:{}: {proj}", row.code);
@@ -694,7 +699,7 @@ mod tests {
     fn written_keys_are_code_keys_and_read_back_to_the_row() {
         for code in [2154u32, 3857, 4326, 32632, 2056, 3035, 4471, 28992] {
             let resolved = from_code(code).unwrap();
-            let keys = geokeys_for(&resolved).unwrap();
+            let keys = geokeys_for(&resolved);
             assert!(
                 keys.entries
                     .iter()

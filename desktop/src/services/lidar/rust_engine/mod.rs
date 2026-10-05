@@ -310,7 +310,7 @@ impl RustRasterEngine {
             output,
             cog::CogGeoref {
                 grid: &prepared.grid,
-                geo_keys: Some(&crs::geokeys_for(&prepared.crs)?),
+                geo_keys: Some(&crs::geokeys_for(&prepared.crs)),
             },
             prepared.nodata,
             band,
@@ -617,9 +617,7 @@ mod tests {
             file.push(0);
         }
         let (key_words, key_doubles, key_text) =
-            crs::geokeys_for(&crs::from_reference("EPSG:2154").unwrap())
-                .unwrap()
-                .encode();
+            crs::geokeys_for(&crs::from_reference("EPSG:2154").unwrap()).encode();
         let geotransform = grid(width, height).geotransform;
         let shorts = |values: &[u16]| {
             (

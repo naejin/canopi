@@ -468,7 +468,7 @@ pub(super) fn write(
     }
     let mercator = crs::from_reference("EPSG:3857")?;
     let placement = place(grid, &Transformer::new(native, &mercator), rung_at(zoom))?;
-    let geo_keys = crs::geokeys_for(&mercator)?;
+    let geo_keys = crs::geokeys_for(&mercator);
     let mut filled = Filled {
         warp: Warp {
             band,
