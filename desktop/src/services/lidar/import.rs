@@ -410,15 +410,10 @@ fn layer_lattice_grid(
 
 /// Validate a selection against the one admission policy.
 ///
-/// Returns the total selected bytes so callers reuse the counted value instead
-/// of re-deriving it. Every bound comes from `admission`, so an authorized
-/// representative run can raise it for its own thread and nothing else changes.
-/// Import calls it before anything is recorded and Retry once its job is
-/// recorded, then each reads every header
-/// ([`admission::check_sources_placeable`]); staging calls it again and probes
-/// its managed copies. Refusals name the user's file only, never its folder or
-/// a system error.
-pub(super) fn validate_source_selection(source_paths: &[PathBuf]) -> Result<u64, String> {
+/// Every bound comes from `admission`, so an authorized representative run
+/// can raise it for its own thread and nothing else changes. Refusals name the
+/// user's file only, never its folder or a system error.
+pub(super) fn validate_source_selection(source_paths: &[PathBuf]) -> Result<(), String> {
     validate_named_selection(source_paths, &admission::source_name)
 }
 
@@ -428,7 +423,7 @@ pub(super) fn validate_source_selection(source_paths: &[PathBuf]) -> Result<u64,
 pub(super) fn validate_named_selection(
     source_paths: &[PathBuf],
     name_of: &dyn Fn(&Path) -> String,
-) -> Result<u64, String> {
+) -> Result<(), String> {
     if source_paths.is_empty() {
         return Err("select at least one raster source".to_string());
     }
@@ -450,8 +445,7 @@ pub(super) fn validate_named_selection(
             .checked_add(metadata.len())
             .ok_or_else(|| "selected source sizes overflow the import budget".to_string())?;
     }
-    admission::check_import_bytes(total_bytes)?;
-    Ok(total_bytes)
+    admission::check_import_bytes(total_bytes)
 }
 
 pub(crate) fn validate_working_grid(grid: &RasterGrid, operation: &str) -> Result<(), String> {
