@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Boundaries for Canopi Desktop's local store of LiDAR terrain rasters (imported sources and derived analysis results), their display on the map and the analysis registry. Why: [ADR 0002](../adr/0002-geolibre-module-reuse.md), [ADR 0021](../adr/0021-canopi-2-breaks-stored-data.md), [ADR 0011](../adr/0011-analyses-provenance-and-stories.md), [ADR 0012](../adr/0012-vegetation-analysis.md), [ADR 0014](../adr/0014-pure-rust-raster-engine.md). Rust paths are under `desktop/src/services/lidar/`, frontend paths under `desktop/web/src/`; each rule ends with its enforcing test, or "(advice)".
+Boundaries for Canopi Desktop's local store of LiDAR terrain rasters (imported and derived), their display on the map and the analysis registry. Why: [ADR 0002](../adr/0002-geolibre-module-reuse.md), [ADR 0021](../adr/0021-canopi-2-breaks-stored-data.md), [ADR 0011](../adr/0011-analyses-provenance-and-stories.md), [ADR 0012](../adr/0012-vegetation-analysis.md), [ADR 0014](../adr/0014-pure-rust-raster-engine.md). Rust paths are under `desktop/src/services/lidar/`, frontend paths under `desktop/web/src/`; each rule ends with its enforcing test, or "(advice)".
 
 ## Authorities and boundaries
 
@@ -33,8 +33,8 @@ Boundaries for Canopi Desktop's local store of LiDAR terrain rasters (imported s
 - Delete from library is separate from Remove from Design; an item other results depend on is refused with the count (`lidar_delete_impact`), rechecked inside the transaction. The catalogue tracks no Design references and the confirmation says so. (`mod.rs` tests, `__tests__/lidar-actions.test.ts`)
 - Import and analysis started from Layers attach results only to the Design session that asked (`pendingAttachments`, `app/lidar/actions.ts`); a switch, failure or cancel drops the attachment. (`__tests__/lidar-actions.test.ts`)
 - Add to Design is idempotent and never moves the camera; Fit uses the viewport command, 48 px padding, capped at zoom 18 (`app/lidar/camera-request.ts`). (`__tests__/lidar-camera-navigation.test.ts`)
-- Every LiDAR command is executor-backed except the three bounded cancels; raster, header and disk-scanning work uses `Local`, catalogue reads `UserData`. (`native_command_policy::tests`)
-- Raster work runs in process on `rust_engine/`, the only production `RasterEngine`; probes read headers only. The test-only GDAL oracle `gdal_engine.rs` checks it in the comparison lane. (`rust_engine` tests)
+- LiDAR commands are executor-backed except the three bounded cancels: raster and disk-scanning work on `Local`; catalogue work and Import's and Retry's header check (a few KB a file, 24 files) on `UserData`. (`native_command_policy::tests`)
+- Raster work runs in process on `rust_engine/`, the only production `RasterEngine`, checked by the test-only GDAL oracle `gdal_engine.rs` (comparison lane); probes read headers only. (`rust_engine` tests)
 - One CRS authority (ADR 0014): `rust_engine/crs.rs` on the `crs_table.rs` rows (`proj4rs`), every transform via WGS84, serves placement, extents, coverage, hover and the display warp. References are `EPSG:n` in `crs_ref`; `crs_class` comes from the row; written keys are codes only; analysis stays native. A new code is a row, its reference points and its `ROW_DIGESTS` line. (`crs.rs` tests, `a_pixel_centre_shows_the_value_hover_reads_there`)
 - A GeoTIFF converts in row windows of at most `MAX_RAW_EXTRACTION_CELLS`, byte-identical to a whole conversion; a compressed chunk decoding above 64 MiB loads whole. (`geotiff_sources_stream_under_the_limit_into_the_whole_raster_bytes`)
 - The GeoLibre child runs with fixed argv, no shell, bounded output and duration, logging under `engine-logs/`; a cancelled child is killed and publishes nothing. (`process.rs`, `geolibre.rs` tests)
@@ -43,7 +43,7 @@ Boundaries for Canopi Desktop's local store of LiDAR terrain rasters (imported s
 ## Environment and commands
 
 - Raster engine: built in; nothing to install or discover.
-- GeoLibre CLI: `CANOPI_GEOLIBRE_BIN`, beside the executable, then `PATH` (`geolibre.rs` tests); pinned by `GEOLIBRE_REVISION` in `geolibre.rs`, built by `scripts/build-geolibre-cli.sh` and bundled as a Tauri sidecar beside the executable ([native and release](native-and-release.md)).
+- GeoLibre CLI: `CANOPI_GEOLIBRE_BIN`, beside the executable, then `PATH` (`geolibre.rs` tests); pinned by `GEOLIBRE_REVISION` in `geolibre.rs`, built by `scripts/build-geolibre-cli.sh` and bundled as a Tauri sidecar ([native and release](native-and-release.md)).
 - Engine lane (CI job `lidar-native`): `CANOPI_GEOLIBRE_BIN=<path> CANOPI_SKIP_BUNDLED_DB=1 cargo test -p canopi-desktop --lib services::lidar -- --ignored --test-threads=1 --skip e2e_`.
 - Comparison lane (local; `gdalinfo`, `gdal_translate`, `gdalwarp`, `gdaltransform` via `CANOPI_LIDAR_GDAL_BIN` or `PATH`; skips without them): `cargo test -p canopi-desktop --lib rust_engine::comparison -- --ignored --nocapture`.
 - Fixture lanes (local; no fixtures is not a pass): `CANOPI_LIDAR_E2E_FIXTURE=<IGN MNT GeoTIFF>`, `CANOPI_LIDAR_MNH_DIR=<IGN MNH tiles>`, then `cargo test -p canopi-desktop --lib -- --ignored --test-threads=1 --nocapture` for the `e2e_*` tests in `e2e.rs`.
@@ -55,7 +55,7 @@ Boundaries for Canopi Desktop's local store of LiDAR terrain rasters (imported s
 - Transform coordinates outside `crs.rs`, through `wbprojection`, or from the GeoLibre CLI's WGS84 output.
 - Store a library path, pixel or runtime URL in a `.canopi`, log or Problem Report.
 - Materialise a merged raster, union grid or absent-coordinate walk.
-- Read a raster in the poll, in offers or in a `UserData` command.
+- Read raster pixels in the poll, in offers or on `UserData`.
 - Add an analysis by code alone: registry entry, one executor, locale keys ([AGENTS.md](../../AGENTS.md)).
 
 ## Where to look
