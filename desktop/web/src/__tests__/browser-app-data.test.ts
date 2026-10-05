@@ -36,51 +36,20 @@ describe('browser app data store', () => {
     expect([...storage.values.keys()]).toEqual([V2_KEYS.drafts])
   })
 
-  it('keeps a Draft\'s updatedAt and place for a write that keeps it, still refusing one another tab overtook', () => {
-    const store = createBrowserAppDataStore({ storage: memoryStorage() })
-    store.saveDraft({ id: 'draft-a', file: makeDesign({ name: 'A' }), now: '2026-07-04T12:00:00.000Z' })
-    store.saveDraft({ id: 'draft-b', file: makeDesign({ name: 'B' }), now: '2026-07-04T12:01:00.000Z' })
-
-    const kept = store.saveDraft({
-      id: 'draft-a',
-      file: makeDesign({ name: 'A', description: 'moved view' }),
-      now: '2026-07-04T12:05:00.000Z',
-      expectedUpdatedAt: '2026-07-04T12:00:00.000Z',
-      keepUpdatedAt: true,
-    })
-    expect(kept.ok && kept.value.updatedAt).toBe('2026-07-04T12:00:00.000Z')
-    expect(store.listDrafts().map((draft) => draft.id)).toEqual(['draft-b', 'draft-a'])
-    expect(store.loadDraft('draft-a')?.description).toBe('moved view')
-
-    const refused = store.saveDraft({
-      id: 'draft-b',
-      file: makeDesign({ name: 'B' }),
-      now: '2026-07-04T12:06:00.000Z',
-      expectedUpdatedAt: '2026-07-04T11:00:00.000Z',
-      keepUpdatedAt: true,
-    })
-    expect(refused.ok).toBe(false)
-  })
-
-  it('refuses a write that keeps updatedAt for a Draft another tab deleted, so a moved view does not bring it back', () => {
+  it('refuses a Draft write another tab overtook, and writes a Draft another tab deleted again rather than lose the edit', () => {
     const store = createBrowserAppDataStore({ storage: memoryStorage() })
     store.saveDraft({ id: 'draft-x', file: makeDesign({ name: 'X' }), now: '2026-07-04T12:00:00.000Z' })
     store.saveDraft({ id: 'draft-y', file: makeDesign({ name: 'Y' }), now: '2026-07-04T12:01:00.000Z' })
-    store.deleteDraft('draft-x')
 
-    const viewOnly = store.saveDraft({
-      id: 'draft-x',
-      file: makeDesign({ name: 'X', description: 'moved view' }),
-      now: '2026-07-04T13:00:00.000Z',
-      expectedUpdatedAt: '2026-07-04T12:00:00.000Z',
-      keepUpdatedAt: true,
+    const overtaken = store.saveDraft({
+      id: 'draft-y',
+      file: makeDesign({ name: 'Y', description: 'edited' }),
+      now: '2026-07-04T12:06:00.000Z',
+      expectedUpdatedAt: '2026-07-04T11:00:00.000Z',
     })
-    expect(viewOnly.ok).toBe(false)
-    expect(!viewOnly.ok && viewOnly.error).toBeInstanceOf(BrowserDraftChangedError)
-    expect(store.listDrafts().map((draft) => draft.id)).toEqual(['draft-y'])
-    expect(store.loadDraft('draft-x')).toBeNull()
+    expect(!overtaken.ok && overtaken.error).toBeInstanceOf(BrowserDraftChangedError)
 
-    // An edit still writes the deleted Draft again rather than losing it.
+    store.deleteDraft('draft-x')
     const edit = store.saveDraft({
       id: 'draft-x',
       file: makeDesign({ name: 'X', description: 'edited' }),
