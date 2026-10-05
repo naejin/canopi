@@ -14,7 +14,8 @@ export interface RasterRenderOptions {
 export interface RasterSourceMetadata {
   readonly boundsLonLat: number[]
   readonly levels: readonly { width: number; height: number }[]
-  readonly mode: '3857' | 'warp'
+  /** Display COGs are EPSG:3857; the worker refuses any other source at open. */
+  readonly mode: '3857'
   readonly crsLabel: string
   readonly hasPalette: boolean
 }
