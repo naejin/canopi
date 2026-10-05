@@ -18,6 +18,11 @@ it('a notice wraps its buttons onto a second line when their labels are wider th
   expect(action).toMatch(/max-width: 100%;/)
 })
 
+it('a notice keeps its buttons at the right edge when they wrap onto a second line (canopi-6spu, French at 320 px)', () => {
+  // At full width margin-left: auto has no free space to use, so the buttons themselves are pushed right.
+  expect(rule('.action')).toMatch(/justify-content: flex-end;/)
+})
+
 it('a notice breaks a long word such as a file path and keeps a readable width before wrapping (canopi-6spu)', () => {
   const body = rule('.body')
   expect(body).toMatch(/overflow-wrap: anywhere;/)
