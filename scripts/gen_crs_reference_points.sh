@@ -7,10 +7,9 @@
 #
 # Two references per point, both from cs2cs:
 #   - from WGS84 longitude and latitude to the row's own PROJ definition, so
-#     the same Helmert shift (the authority must match it within 1 cm;
-#     Krovak, whose PROJ method differs, 10 m);
+#     the same Helmert shift (the authority must match it within 1 cm);
 #   - from EPSG:4326 to EPSG:n, so PROJ's own choice of operation (within the
-#     row's stated accuracy).
+#     row's stated accuracy, at most 10 m).
 # Grids are kept out (PROJ_NETWORK=OFF and a PROJ_DATA holding only proj.db),
 # so PROJ's choice is a Helmert shift whatever grids the machine has. Output
 # axes are put easting first (longitude first for a geographic code), the

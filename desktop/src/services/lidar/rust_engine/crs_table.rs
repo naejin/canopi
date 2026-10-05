@@ -3,14 +3,15 @@
 //! One row per EPSG code: its PROJ definition in the form the CRS authority
 //! (`crs.rs`) reads correctly, with the Helmert shift to WGS84 written out,
 //! no `+pm` (the Paris meridian is folded into `+lon_0`), `+k` for the scale
-//! factor and no datum on Web Mercator. A row's EPSG area of use bounds its
-//! reference points (`crs_reference_points.rs`, written by
+//! factor and no datum on Web Mercator. A row's area bounds its reference
+//! points (`crs_reference_points.rs`, written by
 //! `scripts/gen_crs_reference_points.sh` from PROJ's `cs2cs`). The authority
 //! matches PROJ within 1 cm for the row's own shift, and its stated accuracy
 //! is how far PROJ's own choice of operation may sit from the row: 1 cm, and
-//! 12 m for Krovak (5514), where PROJ takes another shift in Slovakia. Every
-//! other code is refused by name. Adding a code is one row here plus a run
-//! of the script.
+//! 3 m for Krovak (5514), whose row takes PROJ's Czech shift (EPSG:1623)
+//! where PROJ takes its Slovak one in Slovakia; U31 allows 10 m. Every other
+//! code is refused by name. Adding a code is one row here plus a run of the
+//! script.
 //!
 //! The definitions are derived from the EPSG Geodetic Parameter Dataset
 //! (IOGP), see `THIRD_PARTY_NOTICES.md`.
@@ -28,7 +29,10 @@ pub(crate) struct CrsRow {
     pub code: u32,
     pub name: &'static str,
     pub proj: &'static str,
-    /// EPSG area of use: west, south, east, north in degrees.
+    /// West, south, east, north in degrees: the EPSG area of use's bounding
+    /// box, but for Krovak a band across Czechia and Slovakia, because its
+    /// box's corners lie in Austria and Poland, where PROJ has only its 6 m
+    /// shift.
     pub area: [f64; 4],
     /// Metres between this row and PROJ's own choice of operation.
     pub accuracy_m: f64,
@@ -100,7 +104,7 @@ pub(crate) const ROWS: &[CrsRow] = &[
     row(27700, "OSGB36 / British National Grid", "+proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +towgs84=446.448,-125.157,542.06,0.15,0.247,0.842,-20.489 +units=m +no_defs", [-9.01, 49.75, 2.01, 61.01], 0.01),
     row(31287, "MGI / Austria Lambert", "+proj=lcc +lat_0=47.5 +lon_0=13.3333333333333 +lat_1=49 +lat_2=46 +x_0=400000 +y_0=400000 +ellps=bessel +towgs84=577.326,90.129,463.919,5.137,1.474,5.297,2.4232 +units=m +no_defs", [9.53, 46.4, 17.17, 49.02], 0.01),
     row(2100, "GGRS87 / Greek Grid", "+proj=tmerc +lat_0=0 +lon_0=24 +k=0.9996 +x_0=500000 +y_0=0 +ellps=GRS80 +towgs84=-199.87,74.79,246.62,0,0,0,0 +units=m +no_defs", [19.57, 34.88, 28.3, 41.75], 0.01),
-    row(5514, "S-JTSK / Krovak East North", "+proj=krovak +lat_0=49.5 +lon_0=24.8333333333333 +alpha=30.2881397527778 +k=0.9999 +x_0=0 +y_0=0 +ellps=bessel +towgs84=589,76,480,0,0,0,0 +units=m +no_defs", [12.09, 47.73, 22.56, 51.06], 12.0),
+    row(5514, "S-JTSK / Krovak East North", "+proj=krovak +lat_0=49.5 +lon_0=24.8333333333333 +alpha=30.2881397527778 +k=0.9999 +x_0=0 +y_0=0 +ellps=bessel +towgs84=570.8,85.7,462.8,4.998,1.587,5.261,3.56 +units=m +no_defs", [12.8, 48.9, 22.0, 49.4], 3.0),
     row(3035, "ETRS89-extended / LAEA Europe", "+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs", [-35.58, 24.6, 44.83, 84.73], 0.01),
     row(3857, "WGS 84 / Pseudo-Mercator", "+proj=merc +a=6378137 +b=6378137 +lat_ts=0 +lon_0=0 +x_0=0 +y_0=0 +k=1 +units=m +nadgrids=@null +wktext +no_defs", [-180.0, -85.0, 180.0, 85.0], 0.01),
     row(4326, "WGS 84", "+proj=longlat +datum=WGS84 +no_defs", [-180.0, -90.0, 180.0, 90.0], 0.01),

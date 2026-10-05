@@ -501,11 +501,12 @@ mod tests {
         from_code(4326).unwrap()
     }
 
-    /// Each row against PROJ on its 3x3 reference grid: within 1 cm of PROJ
-    /// with the row's own Helmert shift, within the row's stated accuracy of
-    /// PROJ's own operation, and back to the same longitude and latitude
-    /// within 3e-8 deg (3 mm: a 2-D transform drops the ellipsoidal height a
-    /// datum shift moves; 2.2e-8 measured for the Greek Grid).
+    /// Each row against PROJ on its 3x3 reference grid, as a distance: within
+    /// 1 cm of PROJ with the row's own Helmert shift, within the row's stated
+    /// accuracy of PROJ's own operation, which no row puts beyond 10 m (U31),
+    /// and back to the same longitude and latitude within 3e-8 deg (3 mm: a
+    /// 2-D transform drops the ellipsoidal height a datum shift moves; 2.2e-8
+    /// measured for the Greek Grid).
     #[test]
     fn every_row_matches_proj_on_its_reference_grid() {
         let mut worst: Vec<(u32, f64, f64)> = Vec::new();
@@ -524,8 +525,8 @@ mod tests {
             let (mut by_row, mut by_code) = (0f64, 0f64);
             for (_, lon, lat, row_x, row_y, code_x, code_y) in points {
                 let (x, y) = forward.apply(*lon, *lat).unwrap();
-                by_row = by_row.max((x - row_x).abs().max((y - row_y).abs()) / scale);
-                by_code = by_code.max((x - code_x).abs().max((y - code_y).abs()) / scale);
+                by_row = by_row.max((x - row_x).hypot(y - row_y) / scale);
+                by_code = by_code.max((x - code_x).hypot(y - code_y) / scale);
                 let (back_lon, back_lat) = inverse.apply(x, y).unwrap();
                 assert!(
                     (back_lon - lon).abs() <= 3e-8 && (back_lat - lat).abs() <= 3e-8,
@@ -537,6 +538,12 @@ mod tests {
                 by_row <= 0.01,
                 "EPSG:{} is {by_row} m from PROJ with the same shift",
                 row.code
+            );
+            assert!(
+                row.accuracy_m <= 10.0,
+                "EPSG:{} states {} m, beyond U31's 10 m",
+                row.code,
+                row.accuracy_m
             );
             assert!(
                 by_code <= row.accuracy_m,
