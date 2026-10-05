@@ -303,9 +303,9 @@ They do not need forest-inventory scaffolding, stem diameters or research voxel 
   - `maxima.rs`: OptimizeGaussianOnMaximaNumber, FilterMaximaByNeighbourhood02, CreateMaximaCloud.
   - `delaunay.rs`: a thin adapter.
 - **Reuse before writing (principle 3).** The pinned `opengeos/whitebox-wasm` rev `9c0ff4f` that Canopi already depends on for `wbgeotiff` also contains:
-  - `wblidar`: LAS/LAZ/COPC read, streaming `PointReader::read_point`, COPC `data_node_keys_bbox`, CRS; MIT OR Apache-2.0; minimal deps (`wide`, `wbprojection`, `wbhdf`).
+  - `wblidar`: LAS/LAZ/COPC read, streaming `PointReader::read_point`, COPC `data_node_keys_bbox`, CRS; MIT OR Apache-2.0; minimal deps (`wide`, `wbprojection`, `wbhdf`); its CRS is read for the code only, never to place points.
   - `wbtopology`: `delaunay_triangulation`, robust predicates; deps `wbvector`, `robust`.
-  - `wbprojection`: EPSG and WKT transforms, for the WGS84 GeoJSON output.
+  - Not `wbprojection`: it places national grids 30 m to 1,262 km off. Every lon/lat step goes through the raster engine's CRS authority, `rust_engine/crs.rs` (ADR 0014, A12).
   - Use these as git deps at the same rev. `las` 0.11.1 (MIT) plus `laz` 0.13.0 (Apache-2.0) and `copc-rs` 0.5.0 are the fallback if `wblidar` falls short. `spade` 2.15.1 (MIT/Apache) is the Delaunay fallback.
   - No OpenCV or Qt.
 - **Execution:** in-process in the existing analysis job:
@@ -575,13 +575,13 @@ Registry type additions:
 7. Global materialisation: the in-process lane reads windows into memory. The global-lane "scratch GeoTIFF + CLI" path stays GeoLibre-only.
 8. Vector canonicalisation:
    - input coordinates are **projected** (the ONF output is in the input CRS);
-   - the canonicaliser reprojects to WGS84 through `wbprojection` (same pinned rev) and checks against the item's bounds.
-   - Check that `wbprojection` handles EPSG:2154 and the GeoTIFF/LAS WKT forms Canopi sees. Otherwise use the transform Canopi already uses for inspection.
+   - the canonicaliser reprojects to WGS84 through `rust_engine/crs.rs`, the one CRS authority, and checks against the item's bounds;
+   - a LAS/LAZ CRS resolves to a table row by its horizontal code (compound 7415 reads as 28992, 5698/5699 as 2154); WKT reading is built with the LAZ reader, and anything else is refused by name.
 9. ADR 0011 context and decision lines ("canopy analysis … through GeoLibre …; Computree only as an optional integration") and bead `canopi-5ys2.2`'s title and description must be rewritten. Propose **ADR 0012 "ONF canopy methods as a native Rust lane"**:
    - decision (a);
    - the LGPL crate boundary;
    - GeoLibre kept for slope and hydrology;
-   - `wblidar`/`wbtopology`/`wbprojection` as the GeoLibre-family reuse;
+   - `wblidar`/`wbtopology` as the GeoLibre-family reuse, native coordinates only;
    - Computree integration dropped.
    - Also a line in `docs/architecture.md` "GeoLibre reuse boundary", and in principle-3 wording if needed.
 10. Guides:

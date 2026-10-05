@@ -95,7 +95,7 @@ Beads:
   - `ResultManifest`.
 - `slope_eligibility`, run at job time, checks:
   - the values are in metres;
-  - the raster's CRS (`wbprojection` from its GeoKeys/WKT) is projected with metre units.
+  - the raster's CRS (a row of the CRS authority, `rust_engine/crs.rs`, resolved from its GeoKeys) is projected with ground-metre units.
 - `compute_slope_block`, per window:
   1. Read core plus halo, write raw, then `raw_to_tif`.
   2. Run `geolibre slope`.
@@ -136,7 +136,7 @@ Beads:
 - Native pixel read. For analyses it uses `result_units(manifest.parameters.slope_unit)` (`°` or `%`).
 
 **`services/lidar/display_cog.rs`** (1264 lines)
-- Display derivatives, profile `display-cog-deflate256-v1`.
+- Display derivatives in EPSG:3857 on one global lattice, profile `display-cog-3857-v2`.
 - Results are read in chunk parts of at most 8×8 chunks, with the -2^127 sentinel.
 - Kind-agnostic except for test fixtures.
 
@@ -164,7 +164,7 @@ Beads:
 - Meta and sources:
   - `lidar_catalogue_meta`
   - `lidar_sources` (sha256 originals)
-  - `lidar_interpretations` (measurement kind, units, CRS WKT, nodata, geotransform, valid cells, range)
+  - `lidar_interpretations` (measurement kind, units, CRS reference `crs_ref` as canonical `EPSG:n`, nodata, geotransform, valid cells, range)
 - Layers:
   - `lidar_source_layers(id, name, measurement_kind, units, created_at)`
   - `lidar_layer_generations` (manifest, coverage, min/max, display range and basis, bounds_3857)
@@ -183,7 +183,7 @@ Beads:
 **Today's result record** is a definition row, plus a generation row, plus a `ResultManifest` in `manifest_json`:
 
 ```
-{definition_id, kind:"slope", source_generation_id, parameters:{slope_unit,name}, engine_version, grid, crs_wkt, created_at}
+{definition_id, kind:"slope", source_generation_id, parameters:{slope_unit,name}, engine_version, grid, crs_ref, created_at}
 ```
 
 About half of the provenance is already there (input generation, engine version, method/recipe). It is typed only for slope, and it has no tool ids, no input keys and no history.
@@ -373,9 +373,8 @@ All of these are present, and HEAD equals the pin. \* = required parameter.
 
 **Vector formats and CRS**
 - The vector writer picks the format from the file extension; `.geojson`, `.gpkg` and `.shp` were verified.
-- GeoJSON output is written in WGS84 lon/lat, even when the input raster is Lambert-93.
-- GeoJSON pour points are read as WGS84 and reprojected to the raster CRS. GeoJSON with projected coordinates fails with "latitude out of range".
-- This matches principle 2 exactly: Canopi stores and exchanges vectors in lon/lat.
+- GeoJSON output is written in WGS84 lon/lat, even when the input raster is Lambert-93, through the CLI's own `wbprojection`; GeoJSON pour points are read as WGS84 and reprojected to the raster CRS, and projected coordinates fail with "latitude out of range".
+- That reprojection misplaces national grids by up to kilometres, so Canopi never trusts it (ADR 0014, A12): tools read and write native coordinates (`.gpkg` or `.shp` in the raster CRS), and every lon/lat step, pour points in and vectors out, goes through the CRS authority `rust_engine/crs.rs`. Canopi still stores and exchanges vectors in lon/lat (principle 2).
 
 **Measured on a 3000×3000 Float32 DEM**
 
@@ -627,7 +626,7 @@ lidar_generation_vectors(generation_id PK, asset_sha256 REFERENCES lidar_vector_
 **Kept or changed**
 - Raster chunks stay in `lidar_generation_chunks`; `generation_id` is now the derived generation id.
 - Id prefixes: `lyr-` sources, `item-` derived items, `adef-` definitions, `anl-` jobs, `dgen-` generations.
-- The result manifest becomes `{item_id, output_key, grid, crs_wkt, storage: "chunks"|"vector"}`. It holds only what sampling needs; provenance lives in the tables, not duplicated in JSON.
+- The result manifest becomes `{item_id, output_key, grid, crs_ref, storage: "chunks"|"vector"}`. It holds only what sampling needs; provenance lives in the tables, not duplicated in JSON.
 
 **`.canopi`**
 - No format change is needed for parts a–c.
