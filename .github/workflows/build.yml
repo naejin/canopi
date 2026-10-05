@@ -26,7 +26,13 @@ env:
 jobs:
   # Docs, bead and design-board changes run only lint (which checks the docs);
   # the tests, LiDAR lanes and installer builds run when anything else changed.
+  # A same-repo PR from main or the v2 branch (PR 33) runs nothing: the push
+  # run already checks its head commit and saves the caches a PR run cannot.
   changes:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name != github.repository ||
+      (github.head_ref != 'main' && github.head_ref != 'feature/geolibre-adoption')
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.diff.outputs.code }}
@@ -66,6 +72,7 @@ jobs:
           echo "matrix=$(jq -c "$filter" <<<"$all")" >> "$GITHUB_OUTPUT"
 
   lint:
+    needs: changes
     runs-on: ubuntu-latest
     env:
       CANOPI_SKIP_BUNDLED_DB: "1"
