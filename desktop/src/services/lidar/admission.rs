@@ -95,11 +95,15 @@ pub(crate) fn source_name(path: &Path) -> String {
 /// managed-original copy/hash loop — reports through this one check, so an
 /// authorized run cannot be stopped by a second hard-coded ceiling.
 pub(crate) fn check_source_bytes(path: &Path, bytes: u64) -> Result<(), String> {
+    check_named_source_bytes(&source_name(path), bytes)
+}
+
+/// [`check_source_bytes`] for a source a caller names itself.
+pub(crate) fn check_named_source_bytes(name: &str, bytes: u64) -> Result<(), String> {
     let limits = limits();
     if bytes > limits.source_bytes {
         return Err(format!(
-            "{} is larger than the {} MiB per-source limit",
-            source_name(path),
+            "{name} is larger than the {} MiB per-source limit",
             limits.source_bytes / (1024 * 1024),
         ));
     }
@@ -109,18 +113,23 @@ pub(crate) fn check_source_bytes(path: &Path, bytes: u64) -> Result<(), String> 
 /// Refuse a selection Canopi cannot place: a source that is not a GeoTIFF,
 /// declares no coordinate system or one that is refused (U31).
 ///
-/// Import and Retry run it on the user's files before anything is recorded, so
-/// the refusal shows in the dialog and leaves no item or job (canopi-try2).
-/// Each source's header is read here and read again when staging probes its
-/// managed copy; that is cheap, and only the header is read.
+/// Import runs it on the user's files before anything is recorded, so the
+/// refusal shows in the dialog and leaves no item or job (canopi-try2). Retry
+/// runs it on the saved files after recording its job and fails that job with
+/// the refusal, so the reason stays on the item's row. `name_of` names each
+/// source in a refusal: [`source_name`] for the user's files, the imported
+/// file name for a managed original. Each source's header is read here and
+/// read again when staging probes its managed copy; that is cheap, and only
+/// the header is read.
 pub(crate) fn check_sources_placeable(
     engine: &dyn RasterEngine,
     paths: &[PathBuf],
+    name_of: &dyn Fn(&Path) -> String,
     cancel: &AtomicBool,
 ) -> Result<(), String> {
     for path in paths {
-        check_source_format(path)?;
-        let name = source_name(path);
+        let name = name_of(path);
+        check_source_format(path, &name)?;
         let probe = engine.probe(path, cancel).map_err(|error| {
             // An engine message may spell out the whole path; the user sees
             // the file name in its place.
@@ -144,9 +153,8 @@ pub(crate) fn check_sources_placeable(
 ///
 /// Only GeoTIFF sources import, and this reads four bytes, so a file in
 /// another format is refused before any reader parses it whole.
-fn check_source_format(path: &Path) -> Result<(), String> {
+fn check_source_format(path: &Path, name: &str) -> Result<(), String> {
     use std::io::Read as _;
-    let name = source_name(path);
     let unreadable = || format!("{name} cannot be read; choose the files again");
     let mut file = std::fs::File::open(path).map_err(|_| unreadable())?;
     let mut magic = [0u8; 4];

@@ -536,23 +536,85 @@ fn retrying_an_import_whose_file_is_gone_is_refused_and_the_reason_stays() {
     assert_eq!(row_message(&library, &layer_id), error);
 }
 
-/// U31 on a rebuilt item: a Retry whose saved file is in a refused code is
-/// refused with the typed message, which replaces the rebuild's "Retry
+/// A library the catalogue rebuild made: its one item, named "Orchard", is
+/// rebuilt from `source`'s bytes kept as the managed original of `sha256`, which
+/// was imported as `elsewhere.tif`. Returns the library and the item.
+fn rebuilt_library(root: &Path, source: &Path, sha256: &str) -> (LidarLibrary, String) {
+    let lidar = paths::library_root(root);
+    let dir = lidar.join("sources").join(sha256);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(source, dir.join("original")).unwrap();
+    let meta = source_meta::SourceMeta {
+        version: source_meta::META_VERSION,
+        sha256: sha256.to_string(),
+        original_filename: "elsewhere.tif".to_string(),
+        size_bytes: std::fs::metadata(source).unwrap().len(),
+        imported_at: "10".to_string(),
+        items: vec![source_meta::ItemMeta {
+            id: "lyr-rebuilt".to_string(),
+            name: "Orchard".to_string(),
+            quantity: RasterQuantity::GroundElevation.key().to_string(),
+            units: "m".to_string(),
+            created_at: "10".to_string(),
+            members: vec![sha256.to_string()],
+            analyses: Vec::new(),
+        }],
+    };
+    source_meta::write(&dir.join(source_meta::META_FILE), &meta).unwrap();
+    std::fs::write(lidar.join(paths::CATALOGUE_FILE), b"not a catalogue").unwrap();
+    let library = attached_library(root);
+    assert!(matches!(
+        library.open_status(),
+        recovery::LibraryOpenStatus::Recovered { items: 1, .. }
+    ));
+    assert_eq!(
+        row_message(&library, "lyr-rebuilt"),
+        recovery::RECOVERED_IMPORT_MESSAGE
+    );
+    (library, "lyr-rebuilt".to_string())
+}
+
+/// U31 on a rebuilt item: a Retry whose managed original is in a refused code
+/// is refused with the typed message, naming the file the user imported rather
+/// than the managed copy, and that message replaces the rebuild's "Retry
 /// prepares this item again" on the row instead of vanishing with the dialog.
 #[test]
-fn retrying_an_import_in_a_refused_code_keeps_the_refusal_on_the_item() {
+fn retrying_a_rebuilt_item_in_a_refused_code_keeps_the_refusal_on_the_item() {
+    let workbench = scratch("retry-refused-code-tile");
+    let tile = plane_in_code(&attached_library(&workbench), &workbench, "tile", 65_000);
     let root = scratch("retry-refused-code");
-    let library = attached_library(&root);
-    let source = plane_in_code(&library, &root, "elsewhere", 65_000);
-    let layer_id = failed_import(&library, source, recovery::RECOVERED_IMPORT_MESSAGE);
+    let (library, layer_id) = rebuilt_library(&root, &tile, "sha-refused");
     let error = library.retry_import(&layer_id).unwrap_err();
     assert!(
         error.contains("65000"),
         "the refusal names the code: {error}"
     );
+    assert!(
+        error.contains("elsewhere.tif"),
+        "the refusal names the imported file: {error}"
+    );
+    assert!(!error.contains("original"), "no managed name in: {error}");
+    assert!(!error.contains(&root.display().to_string()), "{error}");
     assert_eq!(row_message(&library, &layer_id), error);
     assert!(
         library.record_import_retry(&layer_id).is_ok(),
         "the item still offers Retry"
     );
+}
+
+/// A rebuilt item whose managed original has gone is refused under the name it
+/// was imported with, never as "original".
+#[test]
+fn retrying_a_rebuilt_item_whose_original_is_gone_names_the_imported_file() {
+    let workbench = scratch("retry-rebuilt-gone-tile");
+    let tile = plane(&attached_library(&workbench), &workbench, "tile", 445_000.0);
+    let root = scratch("retry-rebuilt-gone");
+    let (library, layer_id) = rebuilt_library(&root, &tile, "sha-gone");
+    std::fs::remove_file(library.inner.paths.source_original("sha-gone")).unwrap();
+    let error = library.retry_import(&layer_id).unwrap_err();
+    assert!(
+        error.starts_with("elsewhere.tif cannot be found"),
+        "{error}"
+    );
+    assert_eq!(row_message(&library, &layer_id), error);
 }

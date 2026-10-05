@@ -1264,6 +1264,7 @@ impl LidarLibrary {
         admission::check_sources_placeable(
             self.inner.engine.as_ref(),
             &paths,
+            &admission::source_name,
             &AtomicBool::new(false),
         )?;
         let (layer_id, job_id) =
@@ -1280,10 +1281,18 @@ impl LidarLibrary {
         // checks them after the job is recorded: a refusal fails that job and
         // stays on the item's row as its reason.
         let (layer_id, job_id, paths) = self.record_import_retry(layer_id)?;
-        let checked = import::validate_source_selection(&paths).and_then(|_| {
+        let checked = self.saved_source_names(&paths).and_then(|names| {
+            let name_of = |path: &std::path::Path| {
+                names
+                    .get(path)
+                    .cloned()
+                    .unwrap_or_else(|| admission::source_name(path))
+            };
+            import::validate_named_selection(&paths, &name_of)?;
             admission::check_sources_placeable(
                 self.inner.engine.as_ref(),
                 &paths,
+                &name_of,
                 &AtomicBool::new(false),
             )
         });
@@ -1292,6 +1301,39 @@ impl LidarLibrary {
             return Err(error);
         }
         self.start_recorded_import(&layer_id, &job_id, paths)
+    }
+
+    /// The file names a saved selection's managed originals were imported
+    /// under, so a refusal never calls one "original" (a rebuilt item's saved
+    /// selection holds only managed originals). A user's file is absent and
+    /// keeps its own name.
+    fn saved_source_names(&self, paths: &[PathBuf]) -> Result<HashMap<PathBuf, String>, String> {
+        let connection = self.catalogue()?;
+        let mut names = HashMap::new();
+        for path in paths {
+            let Some(sha256) = path
+                .parent()
+                .and_then(|dir| dir.file_name())
+                .and_then(|sha256| sha256.to_str())
+            else {
+                continue;
+            };
+            if *path != self.inner.paths.source_original(sha256) {
+                continue;
+            }
+            let name: Option<String> = connection
+                .query_row(
+                    "SELECT original_filename FROM lidar_sources WHERE sha256 = ?1",
+                    [sha256],
+                    |row| row.get(0),
+                )
+                .optional()
+                .map_err(|e| format!("Failed to read the source name: {e}"))?;
+            if let Some(name) = name {
+                names.insert(path.clone(), name);
+            }
+        }
+        Ok(names)
     }
 
     fn start_recorded_import(
