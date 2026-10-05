@@ -140,9 +140,15 @@ pub trait RasterEngine: Send + Sync + std::fmt::Debug {
         cancel: &AtomicBool,
     ) -> Result<(), String>;
 
-    /// Write the display profile (`display-cog-deflate256-v1`): band 1 as
-    /// Float32, 256×256 tiles, Deflate, averaged valid-data overviews, the
-    /// NoData tag readers compare samples against. Same override rules as
+    /// Write the display profile (`display_cog::DISPLAY_PROFILE`): band 1
+    /// warped to EPSG:3857 on the global Web Mercator lattice by nearest
+    /// neighbour, each pixel whose centre falls inside the input's grid
+    /// showing the native cell under it and every other pixel NoData (the
+    /// input's tag, or [`DISPLAY_NODATA`] when it declares none); Float32,
+    /// 256×256 tiles, Deflate, averaged valid-data overviews and the NoData
+    /// tag readers compare samples against. `zoom` is the item's rung
+    /// (`rust_engine::display_zoom` over all its parts), so the parts of one
+    /// item share one lattice. Same override rules as
     /// [`RasterEngine::write_controlled_cog`].
     fn write_display_cog(
         &self,
@@ -150,6 +156,7 @@ pub trait RasterEngine: Send + Sync + std::fmt::Debug {
         output: &Path,
         georef: Option<RasterGeoref<'_>>,
         nodata: Option<f32>,
+        zoom: u32,
         cancel: &AtomicBool,
     ) -> Result<(), String>;
 
@@ -163,6 +170,13 @@ pub trait RasterEngine: Send + Sync + std::fmt::Debug {
         cancel: &AtomicBool,
     ) -> Result<Vec<Option<(f64, f64)>>, String>;
 }
+
+/// The NoData of a display derivative whose input declares none, and of the
+/// cells a composed part leaves empty: -2^127, exactly representable in
+/// Float32 and Float64 and written with a round-trip decimal, so every reader
+/// that compares samples with the tag in either precision sees the same
+/// value. No stored elevation, height or slope holds it.
+pub(super) const DISPLAY_NODATA: f32 = -1.701_411_8e38;
 
 /// `Err("cancelled")` once the caller's flag is set.
 pub fn check_cancel(cancel: &AtomicBool) -> Result<(), String> {

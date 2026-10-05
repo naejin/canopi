@@ -25,13 +25,15 @@ mod crs_reference_points;
 pub(crate) mod crs_table;
 mod source;
 mod tiff;
+mod warp;
 
 pub(crate) use crs_table::CrsKind;
 
 #[cfg(test)]
 use super::engine::RasterStatistics;
 use super::engine::{
-    RasterEngine, RasterGeoref, RasterInput, RasterProbe, bounds_of, check_cancel, grid_corners,
+    DISPLAY_NODATA, RasterEngine, RasterGeoref, RasterInput, RasterProbe, bounds_of, check_cancel,
+    grid_corners,
 };
 use super::grid::RasterGrid;
 use super::import::{raw_extraction_cells, validate_working_grid};
@@ -49,6 +51,29 @@ pub(super) const WBRASTER_VERSION: &str = "0.2.1";
 /// does not place.
 pub(crate) fn crs_kind(reference: &str) -> Option<CrsKind> {
     crs::from_reference(reference).ok().map(|crs| crs.kind())
+}
+
+/// The display zoom of an item whose parts are `grids` in `crs_ref`: every
+/// part's derivative is written at it, so the parts share one lattice (A2).
+pub(crate) fn display_zoom<'a>(
+    crs_ref: &str,
+    grids: impl IntoIterator<Item = &'a RasterGrid>,
+) -> Result<u32, String> {
+    warp::zoom(&crs::from_reference(crs_ref)?, grids)
+}
+
+/// The Web Mercator lattice grid a display derivative of `grid` in
+/// `crs_ref` is written on at `zoom`, and the row's definition: what the
+/// GDAL oracle warps with (A6).
+#[cfg(test)]
+pub(crate) fn display_lattice(
+    grid: &RasterGrid,
+    crs_ref: &str,
+    zoom: u32,
+) -> Result<(RasterGrid, &'static str), String> {
+    let native = crs::from_reference(crs_ref)?;
+    let row = crs_table::row_of(native.code()).ok_or_else(|| format!("{crs_ref} has no row"))?;
+    Ok((warp::lattice(grid, &native, zoom)?, row.proj))
 }
 
 /// What a manifest records as the engine that produced a numeric output.
@@ -161,6 +186,14 @@ enum PreparedBand<'a> {
     Source(source::Band),
 }
 
+/// What the one writer writes.
+enum Target {
+    /// The band in its own CRS with this profile.
+    Native(cog::CogProfile),
+    /// A display derivative warped to Web Mercator at the item's zoom.
+    Display { zoom: u32 },
+}
+
 impl RustRasterEngine {
     fn prepare<'a>(
         input: RasterInput<'a>,
@@ -239,10 +272,9 @@ impl RustRasterEngine {
     fn write(
         prepared: Prepared<'_>,
         output: &Path,
-        profile: cog::CogProfile,
+        target: Target,
         cancel: &AtomicBool,
     ) -> Result<(), String> {
-        let geo_keys = crs::geokeys_for(&prepared.crs)?;
         let width = prepared.grid.width;
         let mut slice;
         let mut reader;
@@ -260,11 +292,26 @@ impl RustRasterEngine {
                 &mut reader
             }
         };
+        let profile = match target {
+            Target::Native(profile) => profile,
+            Target::Display { zoom } => {
+                return warp::write(
+                    output,
+                    &prepared.grid,
+                    &prepared.crs,
+                    zoom,
+                    band,
+                    prepared.nodata.unwrap_or(DISPLAY_NODATA),
+                    raw_extraction_cells(),
+                    cancel,
+                );
+            }
+        };
         cog::write(
             output,
             cog::CogGeoref {
                 grid: &prepared.grid,
-                geo_keys: Some(&geo_keys),
+                geo_keys: Some(&crs::geokeys_for(&prepared.crs)?),
             },
             prepared.nodata,
             band,
@@ -380,10 +427,10 @@ impl RasterEngine for RustRasterEngine {
         Self::write(
             prepared,
             output,
-            cog::CogProfile {
+            Target::Native(cog::CogProfile {
                 compression: Compression::Deflate,
                 overviews: false,
-            },
+            }),
             cancel,
         )
     }
@@ -400,10 +447,10 @@ impl RasterEngine for RustRasterEngine {
         Self::write(
             prepared,
             output,
-            cog::CogProfile {
+            Target::Native(cog::CogProfile {
                 compression: Compression::None,
                 overviews: false,
-            },
+            }),
             cancel,
         )
     }
@@ -414,18 +461,11 @@ impl RasterEngine for RustRasterEngine {
         output: &Path,
         georef: Option<RasterGeoref<'_>>,
         nodata: Option<f32>,
+        zoom: u32,
         cancel: &AtomicBool,
     ) -> Result<(), String> {
         let prepared = Self::prepare(input, georef, nodata, "the display derivative", cancel)?;
-        Self::write(
-            prepared,
-            output,
-            cog::CogProfile {
-                compression: Compression::Deflate,
-                overviews: true,
-            },
-            cancel,
-        )
+        Self::write(prepared, output, Target::Display { zoom }, cancel)
     }
 
     fn transform_points(
@@ -717,41 +757,32 @@ mod tests {
             );
             let read = engine.read_f32(&source, width, height, &cancel()).unwrap();
             assert_same_samples(&read, &authored);
-            for display in [false, true] {
-                let convert = |input: RasterInput<'_>, output: &Path, nodata: Option<f32>| {
-                    if display {
-                        engine.write_display_cog(input, output, Some(georef), nodata, &cancel())
-                    } else {
-                        engine.write_controlled_cog(input, output, Some(georef), nodata, &cancel())
-                    }
-                };
-                let whole = dir.join(format!("{label}-{display}-whole.tif"));
-                convert(
-                    RasterInput::Samples {
-                        grid: &grid,
-                        values: &authored,
-                    },
-                    &whole,
-                    Some(-9999.0),
-                )
-                .unwrap();
-                let streamed = dir.join(format!("{label}-{display}-streamed.tif"));
-                let peak = {
-                    let _limit = super::super::import::extraction_limit_probe::set(LIMIT);
-                    high_water::reset();
-                    convert(RasterInput::File(&source), &streamed, None)
-                        .unwrap_or_else(|error| panic!("{label} display={display}: {error}"));
-                    high_water::peak()
-                };
-                assert!(
-                    peak > 0 && peak <= LIMIT,
-                    "{label} display={display} held {peak} cells"
-                );
-                assert!(
-                    std::fs::read(&whole).unwrap() == std::fs::read(&streamed).unwrap(),
-                    "{label} display={display}: the streamed output differs from the whole one"
-                );
-            }
+            let convert = |input: RasterInput<'_>, output: &Path, nodata: Option<f32>| {
+                engine.write_controlled_cog(input, output, Some(georef), nodata, &cancel())
+            };
+            let whole = dir.join(format!("{label}-whole.tif"));
+            convert(
+                RasterInput::Samples {
+                    grid: &grid,
+                    values: &authored,
+                },
+                &whole,
+                Some(-9999.0),
+            )
+            .unwrap();
+            let streamed = dir.join(format!("{label}-streamed.tif"));
+            let peak = {
+                let _limit = super::super::import::extraction_limit_probe::set(LIMIT);
+                high_water::reset();
+                convert(RasterInput::File(&source), &streamed, None)
+                    .unwrap_or_else(|error| panic!("{label}: {error}"));
+                high_water::peak()
+            };
+            assert!(peak > 0 && peak <= LIMIT, "{label} held {peak} cells");
+            assert!(
+                std::fs::read(&whole).unwrap() == std::fs::read(&streamed).unwrap(),
+                "{label}: the streamed output differs from the whole one"
+            );
         }
     }
 
@@ -990,11 +1021,26 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    /// On a source already on the Web Mercator lattice the warp is the
+    /// identity, so the profile's own layout shows.
     #[test]
     fn the_display_profile_carries_averaged_valid_overviews_and_the_tag() {
         let dir = scratch("display");
         let engine = RustRasterEngine;
         let (width, height) = (600u32, 400u32);
+        let zoom_18 = 2.0 * 20_037_508.342_789_244 / 256.0 / 262_144.0;
+        let grid = RasterGrid {
+            width,
+            height,
+            geotransform: [
+                -20_037_508.342_789_244 + 34_000_000.0 * zoom_18,
+                zoom_18,
+                0.0,
+                20_037_508.342_789_244 - 22_000_000.0 * zoom_18,
+                0.0,
+                -zoom_18,
+            ],
+        };
         // An x-ramp with a NoData hole, so overviews must average around it.
         let mut authored = Vec::with_capacity((width * height) as usize);
         for row in 0..height {
@@ -1003,7 +1049,6 @@ mod tests {
                 authored.push(if hole { -9999.0 } else { column as f32 * 0.5 });
             }
         }
-        let grid = grid(width, height);
         let path = dir.join("display.tif");
         engine
             .write_display_cog(
@@ -1014,13 +1059,18 @@ mod tests {
                 &path,
                 Some(RasterGeoref {
                     grid: &grid,
-                    crs: "EPSG:2154",
+                    crs: "EPSG:3857",
                 }),
                 Some(-9999.0),
+                super::display_zoom("EPSG:3857", [&grid]).unwrap(),
                 &cancel(),
             )
             .unwrap();
         let probe = engine.probe(&path, &cancel()).unwrap();
+        assert_eq!(
+            (probe.geotransform, probe.crs_ref.as_str()),
+            (grid.geotransform, "EPSG:3857")
+        );
         assert_eq!(probe.compression, "DEFLATE");
         assert_eq!(
             probe.overview_count, 2,
@@ -1594,6 +1644,7 @@ mod tests {
                     crs: "EPSG:3857",
                 }),
                 None,
+                18,
                 &flag,
             )
             .unwrap_err();

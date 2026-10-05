@@ -4,9 +4,10 @@
 //! numeric readers require. The renderer instead needs tiled, compressed files
 //! with overviews, so each displayed entity gets **display derivatives**: a
 //! versioned profile of DEFLATE, 256-pixel blocks and averaged valid-data
-//! overviews in the source CRS. They are regenerable display data only — never
-//! a source member, a head or a result — and every read of physical values
-//! keeps using the exact numeric generation.
+//! overviews, warped to EPSG:3857 on one global lattice by the engine, so the
+//! renderer does no coordinate work (U31). They are regenerable display data
+//! only — never a source member, a head or a result — and every read of
+//! physical values keeps using the exact numeric generation.
 //!
 //! One derivative is produced per display source, in the entity's saved
 //! priority order (top-first):
@@ -23,7 +24,7 @@
 //! read a partial derivative. Keys include the generation or content identity
 //! and the profile, so a newer generation never reuses an older URL.
 
-use super::engine::{RasterGeoref, RasterInput};
+use super::engine::{DISPLAY_NODATA, RasterGeoref, RasterInput};
 use super::grid::RasterGrid;
 use super::{LidarLibrary, catalogue, collection, generation};
 use common_types::library::LibraryItemRole;
@@ -35,17 +36,23 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// Versioned display profile; part of every derivative key.
-pub(super) const DISPLAY_PROFILE: &str = "display-cog-deflate256-v1";
+/// Versioned display profile; every derivative key starts with it, and the
+/// startup prune drops derivatives of any other. v2: derivatives are warped
+/// to EPSG:3857 (U31), so every earlier one regenerates once.
+pub(super) const DISPLAY_PROFILE: &str = "display-cog-3857-v2";
+/// SHA-256 of what places and draws this profile's pixels beyond each CRS
+/// row's own definition (proj4rs, the Web Mercator and WGS84 rows, the
+/// warp's lattices for sample grids and the web fixture derivative); a test
+/// fails when any changes, so the profile is bumped with it. Each row's
+/// definition is recorded on its own (`ROW_DIGESTS` in the tests), so a new
+/// row needs no bump and an edited one does.
+#[cfg(test)]
+const DISPLAY_PROFILE_DIGEST: &str =
+    "2e4ed2b2fa51a71af44dfece8b15ac2d6659dde5b45f95346ffb288553381a3d";
 /// Largest side of a composed part, in 1024-cell chunks: a part is composed
 /// in memory and converted whole, so 4×4 chunks keep it inside the engine's
 /// capacity limit (`import::MAX_RAW_EXTRACTION_CELLS`).
 const PART_CHUNKS: i64 = 4;
-/// Invalid cells in a composed part: -2^127, exactly representable in Float32
-/// and Float64 and written with a round-trip decimal, so every reader that
-/// compares samples with the tag in either precision sees the same value. No
-/// stored elevation, height or slope holds it.
-const PART_NODATA: f32 = -1.701_411_8e38;
 
 /// How one derivative is produced.
 #[derive(Clone)]
@@ -79,6 +86,8 @@ pub(super) struct DisplayPlan {
     entity_id: String,
     generation_id: String,
     crs_ref: String,
+    /// The item's display zoom: every part is drawn on its lattice.
+    zoom: u32,
     parts: Vec<PartSpec>,
 }
 
@@ -132,16 +141,17 @@ fn build_plan(
                 ));
             };
             let manifest = super::import::read_generation_manifest(&head.manifest_json)?;
-            let parts = collection::snapshot_members(library, &head.id, cancel)?
+            let members = collection::snapshot_members(library, &head.id, cancel)?;
+            let zoom = super::rust_engine::display_zoom(
+                &manifest.crs_ref,
+                members.iter().map(|member| &member.resolved.grid),
+            )?;
+            let parts = members
                 .into_iter()
                 .map(|member| {
                     let cog = &member.resolved.cog;
                     PartSpec {
-                        key: format!(
-                            "asset-{}-{}",
-                            cog.sha256,
-                            nodata_tag(member.resolved.nodata)
-                        ),
+                        key: asset_key(&cog.sha256, member.resolved.nodata, zoom),
                         source: PartSource::Asset {
                             path: cog.path.clone(),
                             nodata: member.resolved.nodata,
@@ -154,6 +164,7 @@ fn build_plan(
                 entity_id: entity_id.to_string(),
                 generation_id: head.id,
                 crs_ref: manifest.crs_ref,
+                zoom,
                 parts,
             })))
         }
@@ -177,6 +188,14 @@ fn build_plan(
                     generation::RESULT_ROLE,
                 )?
             };
+            let chunk_grids: Vec<RasterGrid> = coordinates
+                .iter()
+                .map(|(x, y)| generation::chunk_grid(&manifest.grid, *x, *y))
+                .collect();
+            let zoom = super::rust_engine::display_zoom(
+                &manifest.crs_ref,
+                std::iter::once(&manifest.grid).chain(&chunk_grids),
+            )?;
             let reader = Arc::new(WindowReader {
                 reader: generation::GenerationReader::Chunks(
                     generation::GenerationChunkReader::new(&result.id, generation::RESULT_ROLE),
@@ -184,16 +203,31 @@ fn build_plan(
                 lattice: manifest.grid.clone(),
                 crs_ref: manifest.crs_ref.clone(),
             });
-            let parts = grouped_parts(&format!("gen-{}", result.id), &reader, coordinates);
+            let parts = grouped_parts(
+                &format!("{DISPLAY_PROFILE}-gen-{}", result.id),
+                &reader,
+                coordinates,
+            );
             Ok(Planned::Plan(Arc::new(DisplayPlan {
                 kind,
                 entity_id: entity_id.to_string(),
                 generation_id: result.id,
                 crs_ref: manifest.crs_ref,
+                zoom,
                 parts,
             })))
         }
     }
+}
+
+/// The derivative key of one numeric COG under its NoData rule, drawn at
+/// its item's zoom: an asset shared by items at different latitudes gets one
+/// derivative per zoom.
+fn asset_key(sha256: &str, nodata: Option<f32>, zoom: u32) -> String {
+    format!(
+        "{DISPLAY_PROFILE}-asset-{sha256}-{}-z{zoom}",
+        nodata_tag(nodata)
+    )
 }
 
 /// Group occupied chunks into parts of at most `PART_CHUNKS`² chunks.
@@ -465,7 +499,7 @@ impl LidarLibrary {
             if ready_part(self, &part.key)?.is_some() {
                 continue;
             }
-            let (prepared, bytes) = self.prepare_part(part, &plan.crs_ref, cancel)?;
+            let (prepared, bytes) = self.prepare_part(part, &plan.crs_ref, plan.zoom, cancel)?;
             let display = self.display()?;
             record(&display, &part.key, &prepared, bytes)?;
         }
@@ -476,6 +510,7 @@ impl LidarLibrary {
         &self,
         part: &PartSpec,
         crs_ref: &str,
+        zoom: u32,
         cancel: &AtomicBool,
     ) -> Result<(Prepared, u64), String> {
         let staging = self.inner.paths.display_cog_staging_dir();
@@ -502,6 +537,7 @@ impl LidarLibrary {
                     &staged,
                     None,
                     *nodata,
+                    zoom,
                     cancel,
                 );
                 if let Err(error) = converted {
@@ -510,7 +546,8 @@ impl LidarLibrary {
                 }
             }
             PartSource::Windows { reader, chunks } => {
-                let written = self.write_part_windows(reader, chunks, &staged, crs_ref, cancel);
+                let written =
+                    self.write_part_windows(reader, chunks, &staged, crs_ref, zoom, cancel);
                 match written {
                     Ok(true) => {}
                     Ok(false) => {
@@ -557,6 +594,7 @@ impl LidarLibrary {
         chunks: &[(i64, i64)],
         staged: &Path,
         crs_ref: &str,
+        zoom: u32,
         cancel: &AtomicBool,
     ) -> Result<bool, String> {
         let side = generation::CHUNK_SIDE;
@@ -577,7 +615,7 @@ impl LidarLibrary {
         let occupied: HashSet<(i64, i64)> = chunks.iter().copied().collect();
         // The part is composed in memory: at most `PART_CHUNKS`² chunks, and
         // empty space between distant chunks is never part of one group.
-        let mut samples = vec![PART_NODATA; width * height];
+        let mut samples = vec![DISPLAY_NODATA; width * height];
         let mut any_valid = false;
         for chunk_y in min_y..=max_y {
             for chunk_x in min_x..=max_x {
@@ -644,7 +682,8 @@ impl LidarLibrary {
                 },
                 staged,
                 Some(RasterGeoref { grid: &grid, crs }),
-                Some(PART_NODATA),
+                Some(DISPLAY_NODATA),
+                zoom,
                 cancel,
             )
             .map(|_| true)
@@ -660,10 +699,25 @@ impl LidarLibrary {
         staging: &super::import::StagedImport,
         cancel: &AtomicBool,
     ) -> Result<(), String> {
+        // The whole batch is compatible (one CRS) and publishes as one item,
+        // so its zoom is the published plan's.
+        let Some(first) = staging.sources.first() else {
+            return Ok(());
+        };
+        let grids: Vec<RasterGrid> = staging
+            .sources
+            .iter()
+            .map(|source| RasterGrid {
+                width: source.width,
+                height: source.height,
+                geotransform: source.geotransform,
+            })
+            .collect();
+        let zoom = super::rust_engine::display_zoom(&first.crs_ref, &grids)?;
         for source in &staging.sources {
             let cog = &source.source_cog;
             let part = PartSpec {
-                key: format!("asset-{}-{}", cog.sha256, nodata_tag(cog.nodata)),
+                key: asset_key(&cog.sha256, cog.nodata, zoom),
                 source: PartSource::Asset {
                     path: cog.resolve(&self.inner.paths, &source.job_id)?,
                     nodata: cog.nodata,
@@ -672,7 +726,7 @@ impl LidarLibrary {
             if ready_part(self, &part.key)?.is_some() {
                 continue;
             }
-            let (prepared, bytes) = self.prepare_part(&part, &source.crs_ref, cancel)?;
+            let (prepared, bytes) = self.prepare_part(&part, &source.crs_ref, zoom, cancel)?;
             let display = self.display()?;
             record(&display, &part.key, &prepared, bytes)?;
         }
@@ -680,7 +734,8 @@ impl LidarLibrary {
     }
 }
 
-/// Remove staging leftovers and published files the registry does not own.
+/// Remove staging leftovers, derivatives of an earlier profile and published
+/// files the registry does not own.
 ///
 /// Runs at startup, when no WebView reader can hold a derivative open, so an
 /// unreferenced file can go without racing an admitted read.
@@ -691,6 +746,12 @@ pub(super) fn prune_display_derivatives(library: &LidarLibrary) -> Result<(), St
     }
     let owned: HashSet<String> = {
         let display = library.display()?;
+        display
+            .execute(
+                "DELETE FROM display_cogs WHERE instr(key, ?1) != 1",
+                [format!("{DISPLAY_PROFILE}-")],
+            )
+            .map_err(|e| e.to_string())?;
         let mut statement = display
             .prepare("SELECT file FROM display_cogs WHERE file != ''")
             .map_err(|e| e.to_string())?;
@@ -743,11 +804,11 @@ mod tests {
 
     #[test]
     fn the_part_sentinel_round_trips_through_its_decimal_tag() {
-        assert_eq!(PART_NODATA, -(2.0_f32.powi(127)));
-        let tag = format!("{:?}", f64::from(PART_NODATA));
+        assert_eq!(DISPLAY_NODATA, -(2.0_f32.powi(127)));
+        let tag = format!("{:?}", f64::from(DISPLAY_NODATA));
         let parsed: f64 = tag.parse().unwrap();
-        assert_eq!(parsed, f64::from(PART_NODATA), "{tag}");
-        assert_eq!(parsed as f32, PART_NODATA);
+        assert_eq!(parsed, f64::from(DISPLAY_NODATA), "{tag}");
+        assert_eq!(parsed as f32, DISPLAY_NODATA);
     }
 
     #[test]
@@ -947,6 +1008,775 @@ mod library_tests {
         assert_eq!(before, after);
         let _ = std::fs::remove_dir_all(&root);
     }
+
+    /// The import job prepares the derivatives the published item's plan
+    /// asks for: every part is ready the moment the item appears, so the
+    /// first display regenerates nothing.
+    #[test]
+    fn derivatives_prepared_at_import_are_the_ones_the_item_displays() {
+        let root = crate::test_scratch::TestScratch::new("canopi-display-staged");
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let cancel = AtomicBool::new(false);
+        let west = plane_source(&library, &root, "west", 445_000.0);
+        let east = plane_source(&library, &root, "east", 445_600.0);
+        let layer_id = library
+            .create_layer("staged", RasterQuantity::GroundElevation, None, false)
+            .unwrap();
+        let job_id = library.record_import_job(&layer_id).unwrap();
+        super::super::import::stage_import(&library, &job_id, &layer_id, &[west, east], &cancel)
+            .unwrap();
+        let staging = super::super::import::read_staged_import(&library, &job_id).unwrap();
+        library.prepare_staged_display(&staging, &cancel).unwrap();
+        super::super::import::apply_import(&library, &staging, &cancel).unwrap();
+        let Planned::Plan(plan) =
+            build_plan(&library, LibraryItemRole::Source, &layer_id, &cancel).unwrap()
+        else {
+            panic!("a published item has a plan")
+        };
+        assert_eq!(plan.parts.len(), 2);
+        for part in &plan.parts {
+            assert!(
+                ready_part(&library, &part.key).unwrap().is_some(),
+                "{} was not prepared at import",
+                part.key
+            );
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A derivative an earlier display profile wrote is never served: the
+    /// startup prune drops its row and file, and the item regenerates.
+    #[test]
+    fn derivatives_of_an_earlier_profile_are_pruned_and_regenerated() {
+        let root = crate::test_scratch::TestScratch::new("canopi-display-profile");
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let cancel = AtomicBool::new(false);
+        let source = plane_source(&library, &root, "tile", 445_000.0);
+        let layer_id = library
+            .create_layer("tile", RasterQuantity::GroundElevation, None, false)
+            .unwrap();
+        let job_id = library.record_import_job(&layer_id).unwrap();
+        super::super::import::stage_and_publish(&library, &job_id, &layer_id, &[source], &cancel)
+            .unwrap();
+        library
+            .prepare_display_now(LibraryItemRole::Source, &layer_id)
+            .unwrap();
+        // Rewrite each row as the first profile keyed it: without a profile.
+        {
+            let display = library.display().unwrap();
+            let keys: Vec<String> = display
+                .prepare("SELECT key FROM display_cogs")
+                .unwrap()
+                .query_map([], |row| row.get(0))
+                .unwrap()
+                .collect::<Result<_, _>>()
+                .unwrap();
+            assert!(!keys.is_empty());
+            for key in keys {
+                assert!(key.starts_with(&format!("{DISPLAY_PROFILE}-")), "{key}");
+                let earlier = &key[DISPLAY_PROFILE.len() + 1..];
+                display
+                    .execute(
+                        "UPDATE display_cogs SET key = ?1 WHERE key = ?2",
+                        [earlier, key.as_str()],
+                    )
+                    .unwrap();
+            }
+        }
+
+        prune_display_derivatives(&library).unwrap();
+        let display_dir = library.inner.paths.display_cog_dir();
+        assert_eq!(std::fs::read_dir(&display_dir).unwrap().count(), 0);
+        let Planned::Plan(plan) =
+            build_plan(&library, LibraryItemRole::Source, &layer_id, &cancel).unwrap()
+        else {
+            panic!("a published item has a plan")
+        };
+        for part in &plan.parts {
+            assert!(
+                ready_part(&library, &part.key).unwrap().is_none(),
+                "{}",
+                part.key
+            );
+        }
+        library
+            .prepare_display_now(LibraryItemRole::Source, &layer_id)
+            .unwrap();
+        for part in &plan.parts {
+            assert!(
+                ready_part(&library, &part.key).unwrap().is_some(),
+                "{}",
+                part.key
+            );
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A published RD New item near Delft: a ramp of distinct values with a
+    /// -9999 hole and a few NaN cells. Returns its id and generation.
+    fn publish_rd_item(
+        library: &LidarLibrary,
+        root: &Path,
+        name: &str,
+        width: u32,
+        height: u32,
+    ) -> (String, String) {
+        let engine = &library.inner.engine;
+        let cancel = AtomicBool::new(false);
+        let mut values = Vec::with_capacity((width * height) as usize);
+        for row in 0..height {
+            for column in 0..width {
+                values.push(if (row * 7 + column * 3) % 41 == 0 {
+                    -9999.0
+                } else if (row * 5 + column) % 97 == 0 {
+                    f32::NAN
+                } else {
+                    (row * width + column) as f32 * 0.25 + 1.0
+                });
+            }
+        }
+        let raw = root.join(format!("{name}.raw"));
+        super::super::import::write_f32_raw(&raw, &values).unwrap();
+        let source = root.join(format!("{name}.tif"));
+        super::super::import::raw_to_tif(
+            engine.as_ref(),
+            &cancel,
+            &raw,
+            &source,
+            &RasterGrid {
+                width,
+                height,
+                geotransform: [85_000.25, 0.5, 0.0, 447_499.75, 0.0, -0.5],
+            },
+            "EPSG:28992",
+            -9999.0,
+        )
+        .unwrap();
+        let layer_id = library
+            .create_layer(name, RasterQuantity::GroundElevation, None, false)
+            .unwrap();
+        let job_id = library.record_import_job(&layer_id).unwrap();
+        super::super::import::stage_and_publish(library, &job_id, &layer_id, &[source], &cancel)
+            .unwrap();
+        let generation_id = library
+            .library_snapshot()
+            .unwrap()
+            .items
+            .into_iter()
+            .find(|layer| layer.id == layer_id)
+            .and_then(|layer| layer.generation_id)
+            .expect("published head");
+        (layer_id, generation_id)
+    }
+
+    /// The one derivative of a published item, with its descriptor bounds.
+    fn prepared_asset(library: &LidarLibrary, layer_id: &str) -> (PathBuf, [f64; 4]) {
+        library
+            .prepare_display_now(LibraryItemRole::Source, layer_id)
+            .unwrap();
+        let descriptor = library
+            .display_descriptor(&LidarDisplayRequest {
+                kind: LibraryItemRole::Source,
+                entity_id: layer_id.to_string(),
+                expected_generation_id: None,
+                retry: false,
+            })
+            .unwrap();
+        assert_eq!(descriptor.state, LidarDisplayState::Ready, "{descriptor:?}");
+        assert_eq!(descriptor.assets.len(), 1);
+        let asset = &descriptor.assets[0];
+        (PathBuf::from(&asset.path), asset.bounds)
+    }
+
+    /// What hover reads at each Web Mercator point: the value, or `None`
+    /// for NoData.
+    fn hover(
+        library: &LidarLibrary,
+        layer_id: &str,
+        generation_id: &str,
+        points: &[(f64, f64)],
+    ) -> Vec<(f64, f64, Option<f64>)> {
+        use common_types::lidar::{LidarSampleOutcome, LidarSampleRequest};
+        let engine = library.inner.engine.as_ref();
+        let cancel = AtomicBool::new(false);
+        let placed = engine
+            .transform_points("EPSG:3857", "EPSG:4326", points, &cancel)
+            .unwrap();
+        placed
+            .into_iter()
+            .map(|point| {
+                let (longitude, latitude) = point.expect("a pixel centre places in WGS84");
+                let outcome = super::super::inspection::sample(
+                    library,
+                    engine,
+                    &cancel,
+                    &LidarSampleRequest {
+                        kind: LibraryItemRole::Source,
+                        entity_id: layer_id.to_string(),
+                        expected_generation_id: generation_id.to_string(),
+                        request_id: "pixel-centre".to_string(),
+                        longitude,
+                        latitude,
+                    },
+                )
+                .unwrap();
+                let value = match outcome {
+                    LidarSampleOutcome::Value { value, .. } => Some(value),
+                    LidarSampleOutcome::NoData { .. } => None,
+                    other => panic!("hover at ({longitude}, {latitude}): {other:?}"),
+                };
+                (longitude, latitude, value)
+            })
+            .collect()
+    }
+
+    /// The centre of pixel `(column, row)` of a derivative.
+    fn pixel_centre(
+        probe: &super::super::engine::RasterProbe,
+        column: u32,
+        row: u32,
+    ) -> (f64, f64) {
+        let gt = probe.geotransform;
+        (
+            gt[0] + (f64::from(column) + 0.5) * gt[1],
+            gt[3] + (f64::from(row) + 0.5) * gt[5],
+        )
+    }
+
+    /// A4: at the centre of a drawn Web Mercator pixel the display shows the
+    /// value hover reads there, NoData included.
+    #[test]
+    fn a_pixel_centre_shows_the_value_hover_reads_there() {
+        let root = crate::test_scratch::TestScratch::new("canopi-display-hover");
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let (layer_id, generation_id) = publish_rd_item(&library, &root, "delft", 120, 80);
+        let (path, _) = prepared_asset(&library, &layer_id);
+        let probe = info(&library, &path.display().to_string());
+        assert_eq!(probe.crs_ref, "EPSG:3857");
+        let drawn = library
+            .inner
+            .engine
+            .read_f32(&path, probe.width, probe.height, &AtomicBool::new(false))
+            .unwrap();
+        let pixels: Vec<(u32, u32)> = (0..probe.height)
+            .step_by(3)
+            .flat_map(|row| (0..probe.width).step_by(3).map(move |column| (column, row)))
+            .collect();
+        let centres: Vec<(f64, f64)> = pixels
+            .iter()
+            .map(|(column, row)| pixel_centre(&probe, *column, *row))
+            .collect();
+        let read = hover(&library, &layer_id, &generation_id, &centres);
+        let (mut values, mut empty) = (0usize, 0usize);
+        for ((column, row), (_, _, hovered)) in pixels.iter().zip(read) {
+            let shown = drawn[(row * probe.width + column) as usize];
+            let shown_value =
+                (shown.is_finite() && Some(shown) != probe.nodata).then_some(f64::from(shown));
+            assert_eq!(shown_value, hovered, "pixel ({column}, {row})");
+            if hovered.is_some() {
+                values += 1;
+            } else {
+                empty += 1;
+            }
+        }
+        assert!(
+            values > 1_000 && empty > 100,
+            "{values} values, {empty} NoData"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Whether the committed fixture JSON is what the engine gives now:
+    /// positions (`bounds`, a probe's `longitude` and `latitude`) within
+    /// 1e-12°, since they pass through the platform's libm, which may round
+    /// the last bit differently on the Windows and macOS runners; everything
+    /// else, values included, exactly.
+    fn same_fixture(committed: &serde_json::Value, expected: &serde_json::Value) -> bool {
+        use serde_json::Value;
+        fn near(a: &Value, b: &Value) -> bool {
+            match (a, b) {
+                (Value::Array(a), Value::Array(b)) => {
+                    a.len() == b.len() && a.iter().zip(b).all(|(a, b)| near(a, b))
+                }
+                (Value::Number(a), Value::Number(b)) => a
+                    .as_f64()
+                    .zip(b.as_f64())
+                    .is_some_and(|(a, b)| (a - b).abs() <= 1e-12),
+                _ => a == b,
+            }
+        }
+        match (committed, expected) {
+            (Value::Object(a), Value::Object(b)) => {
+                a.len() == b.len()
+                    && a.iter().all(|(key, value)| {
+                        b.get(key).is_some_and(|other| {
+                            if matches!(key.as_str(), "bounds" | "longitude" | "latitude") {
+                                near(value, other)
+                            } else {
+                                same_fixture(value, other)
+                            }
+                        })
+                    })
+            }
+            (Value::Array(a), Value::Array(b)) => {
+                a.len() == b.len() && a.iter().zip(b).all(|(a, b)| same_fixture(a, b))
+            }
+            _ => committed == expected,
+        }
+    }
+
+    /// Positions may differ in their last bit between platforms, values and
+    /// everything else may not.
+    #[test]
+    fn the_fixture_check_allows_last_bit_position_differences_only() {
+        let committed = serde_json::json!({
+            "bounds": [4.35, 52.0, 4.36, 52.01],
+            "nodata": -9999.0,
+            "width": 24,
+            "probes": [{ "longitude": 4.355, "latitude": 52.005, "value": 3.25 }],
+        });
+        let next = |value: f64| serde_json::json!(f64::from_bits(value.to_bits() + 1));
+        let mut moved = committed.clone();
+        moved["probes"][0]["latitude"] = next(52.005);
+        moved["probes"][0]["longitude"] = next(4.355);
+        moved["bounds"][3] = next(52.01);
+        assert!(same_fixture(&committed, &moved), "a last-bit move");
+        let mut changed = committed.clone();
+        changed["probes"][0]["value"] = next(3.25);
+        assert!(!same_fixture(&committed, &changed), "a changed value");
+        let mut shifted = committed.clone();
+        shifted["probes"][0]["longitude"] = serde_json::json!(4.355_001);
+        assert!(!same_fixture(&committed, &shifted), "a moved probe");
+        let mut resized = committed.clone();
+        resized["width"] = serde_json::json!(25);
+        assert!(!same_fixture(&committed, &resized), "a resized derivative");
+    }
+
+    /// The web suite opens this derivative with the real cog-tiler-wasm
+    /// (`raster-display/rust-display-cog.test.ts`) and reads the probes back,
+    /// so the fixture must be what the engine writes now. Rewrite it with
+    /// `CANOPI_UPDATE_FIXTURES=1`.
+    #[test]
+    fn the_web_display_fixture_is_what_the_engine_writes() {
+        let root = crate::test_scratch::TestScratch::new("canopi-display-fixture");
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let (layer_id, generation_id) = publish_rd_item(&library, &root, "fixture", 24, 16);
+        let (path, bounds) = prepared_asset(&library, &layer_id);
+        let probe = info(&library, &path.display().to_string());
+        let pixels: Vec<(u32, u32)> = (0..probe.height)
+            .step_by(5)
+            .flat_map(|row| (0..probe.width).step_by(5).map(move |column| (column, row)))
+            .collect();
+        let centres: Vec<(f64, f64)> = pixels
+            .iter()
+            .map(|(column, row)| pixel_centre(&probe, *column, *row))
+            .collect();
+        let probes: Vec<serde_json::Value> = hover(&library, &layer_id, &generation_id, &centres)
+            .into_iter()
+            .map(|(longitude, latitude, value)| {
+                serde_json::json!({ "longitude": longitude, "latitude": latitude, "value": value })
+            })
+            .collect();
+        let expected = serde_json::json!({
+            "bounds": bounds,
+            "nodata": probe.nodata,
+            "width": probe.width,
+            "height": probe.height,
+            "probes": probes,
+        });
+        let fixtures =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("web/src/maplibre/raster-display/fixtures");
+        let tif = fixtures.join("rust-display-cog.tif");
+        let json = fixtures.join("rust-display-cog.json");
+        if std::env::var_os("CANOPI_UPDATE_FIXTURES").is_some() {
+            std::fs::create_dir_all(&fixtures).unwrap();
+            std::fs::copy(&path, &tif).unwrap();
+            std::fs::write(
+                &json,
+                serde_json::to_string_pretty(&expected).unwrap() + "\n",
+            )
+            .unwrap();
+        }
+        let stale =
+            "the web display fixture is stale: rerun this test with CANOPI_UPDATE_FIXTURES=1";
+        let committed: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&json).expect(stale)).expect(stale);
+        assert!(
+            same_fixture(&committed, &expected),
+            "{stale}\ncommitted: {committed}\nnow: {expected}"
+        );
+        let engine = library.inner.engine.as_ref();
+        let cancel = AtomicBool::new(false);
+        let committed_probe = engine.probe(&tif, &cancel).expect(stale);
+        assert_eq!(
+            (
+                committed_probe.geotransform,
+                committed_probe.crs_ref.as_str()
+            ),
+            (probe.geotransform, probe.crs_ref.as_str()),
+            "{stale}"
+        );
+        let read = |raster: &Path| {
+            engine
+                .read_f32(raster, probe.width, probe.height, &cancel)
+                .expect(stale)
+                .into_iter()
+                .map(f32::to_bits)
+                .collect::<Vec<_>>()
+        };
+        assert!(read(&tif) == read(&path), "{stale}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// What decides a display pixel's place and value beyond each row's own
+    /// definition: proj4rs and the Web Mercator and WGS84 rows every
+    /// transform passes through, the lattice the warp gives fixed sample
+    /// grids in each kind of projection at four cell sizes (its rung, edge
+    /// and padding rules), and the bytes of the web fixture derivative (its
+    /// sampling, mesh and file layout). A change to any must bump
+    /// `DISPLAY_PROFILE` (and then the digest): derivatives written before
+    /// it would otherwise be served again beside new ones. Lattices are
+    /// whole pixel indices, so a last-bit difference in a platform's libm
+    /// cannot change them. Other rows stay out, since a new row moves no
+    /// existing pixel; each is recorded on its own in [`ROW_DIGESTS`].
+    fn profile_digest_inputs() -> String {
+        use super::super::rust_engine::{crs_table, display_lattice, display_zoom};
+        use sha2::Digest as _;
+        const HALF_WORLD: f64 = 20_037_508.342_789_244;
+        // Top-left corners in native units, and a cell size unit.
+        let samples = [
+            ("EPSG:28992", 85_000.0, 447_500.0, 1.0),
+            ("EPSG:2154", 650_000.0, 6_862_000.0, 1.0),
+            ("EPSG:25833", 391_000.0, 5_820_000.0, 1.0),
+            ("EPSG:32633", 500_000.0, 7_770_000.0, 1.0),
+            ("EPSG:5514", -740_000.0, -1_045_000.0, 1.0),
+            ("EPSG:3035", 3_900_000.0, 3_200_000.0, 1.0),
+            ("EPSG:3857", 486_000.0, 6_802_000.0, 1.0),
+            ("EPSG:4326", 4.35, 52.0, 1.0 / 111_320.0),
+        ];
+        let mut lattices = String::new();
+        for (reference, x, y, unit) in samples {
+            for cell in [0.5, 1.0, 5.0, 25.0] {
+                let grid = RasterGrid {
+                    width: 1500,
+                    height: 1100,
+                    geotransform: [x, cell * unit, 0.0, y, 0.0, -cell * unit],
+                };
+                let zoom = display_zoom(reference, [&grid]).expect("a sample has a zoom");
+                let (lattice, _) =
+                    display_lattice(&grid, reference, zoom).expect("a sample is placed");
+                let gt = lattice.geotransform;
+                let column = ((gt[0] + HALF_WORLD) / gt[1]).round() as i64;
+                let row = ((HALF_WORLD - gt[3]) / gt[1]).round() as i64;
+                lattices.push_str(&format!(
+                    "{reference} {cell}: z{zoom} {column} {row} {} {}\n",
+                    lattice.width, lattice.height
+                ));
+            }
+        }
+        let fixture = std::fs::read(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("web/src/maplibre/raster-display/fixtures/rust-display-cog.tif"),
+        )
+        .expect("the web display fixture");
+        format!(
+            "{:?}|{:?}|proj4rs {}|{lattices}|fixture {:x}",
+            crs_table::row_of(3857),
+            crs_table::row_of(4326),
+            super::super::rust_engine::PROJ4RS_VERSION,
+            sha2::Sha256::digest(&fixture)
+        )
+    }
+
+    /// U31: adding a code later is one row plus a reference point. A row
+    /// moves no pixel of any other row's derivatives, so it stays out of the
+    /// profile digest, and adding one never regenerates every library's
+    /// display derivatives.
+    #[test]
+    fn a_crs_row_added_later_leaves_the_display_profile_alone() {
+        use super::super::rust_engine::crs_table;
+        let inputs = profile_digest_inputs();
+        for row in crs_table::ROWS
+            .iter()
+            .filter(|row| ![3857, 4326].contains(&row.code))
+        {
+            assert!(
+                !inputs.contains(row.proj),
+                "EPSG:{} enters the display profile digest",
+                row.code
+            );
+        }
+    }
+
+    /// Each readable code (rows and aliases) with the first 16 hex digits
+    /// of the SHA-256 of the PROJ definition it is read with, as recorded
+    /// under `DISPLAY_PROFILE`. A new code adds a line; an edited one moves
+    /// pixels in derivatives users already have, so it bumps the profile.
+    const ROW_DIGESTS: &str = "\
+2056 299374e00df0843b
+2100 4d3c4277d45710eb
+2154 6f46dcd489d2aa67
+2169 2717ba968a395c0d
+2972 f1aeba19af41bbd3
+2975 6bff6f711311c136
+3035 743cbe1b4e3347df
+3812 d63f383e5337736d
+3857 00ec30c2eb6aa0a6
+3942 8eca8f35f82dedb2
+3943 3d53495cd228b4f7
+3944 55afb61416b01786
+3945 a0dcb0c7334f98b8
+3946 c21003c2afed0c5d
+3947 cf5bd4e0406003b3
+3948 83d09ac7c306c754
+3949 1dd822049d6bcb4c
+3950 c9c156976d566b00
+4171 1b8468790c7a0b42
+4258 1b8468790c7a0b42
+4326 88239a63bf06662a
+4471 84411064ff67da9a
+4559 6ab54543cbf94783
+5490 6ab54543cbf94783
+5514 abc8796d8e59a6f0
+5698 6f46dcd489d2aa67
+5699 6f46dcd489d2aa67
+7415 a8b6ae08039fdc9e
+21781 87c280362e8e310d
+25828 9c865d877836d9e2
+25829 b8fa5243a310ed34
+25830 c6811a6321f1d601
+25831 e928142a05b9a7ed
+25832 a7fc0cbd6f210359
+25833 d5b7d9b7d5305c89
+25834 14c80471fa3fd33b
+25835 41c90776dcad89f0
+25836 8658975f732fcc6f
+25837 351b88d9e55367be
+25838 2210b236dbea82f6
+27572 5d2807918bb8f426
+27700 f0b39268d10f88ca
+28992 a8b6ae08039fdc9e
+31287 26aa002814c76c58
+31370 c488995a6e11d34c
+32601 6ca7c6de52a2cd96
+32602 3cfae13bc5729eaa
+32603 1def0cac9ef9fce4
+32604 269158898e087ee3
+32605 127d981e5fe9b68c
+32606 157acf2234bf4471
+32607 97135e2f4822c8f1
+32608 69458294f75d0bb4
+32609 e96db910a95e5c85
+32610 e240383c11a156c2
+32611 d25d0242aff9ecfa
+32612 dba0c69497ff16f5
+32613 f0c01871954ea3f2
+32614 75596be93acbf13b
+32615 9dca60c9a992bf74
+32616 df322022bd3fb02b
+32617 1b398697acf02751
+32618 028c9e724a0e1de7
+32619 70d586bd6896c797
+32620 b7162c880d1f92a4
+32621 62b79385619f535e
+32622 4aa230b9266b1e1b
+32623 fb7cd3519d640bb7
+32624 f0249443521a9691
+32625 8d6f106ff5c4f8dd
+32626 129b27e7d488b614
+32627 d1901902896ac420
+32628 ba3526568356b2d7
+32629 7ebc6ebff2b2adc5
+32630 6e615b79c3da0c94
+32631 d26c0354a6b514f4
+32632 c63ba2239d1d6ea3
+32633 46f994704f0c11d4
+32634 80a189a18cdb5100
+32635 7645c73e6caba198
+32636 aa7bc2849f32e299
+32637 8d4bf53f0c4594f0
+32638 18f301abe3901ff5
+32639 898398358c57fb0e
+32640 6b017f4b59c70fd8
+32641 577dcee5784bbb52
+32642 22f8b3afd36816e5
+32643 382e716b590fe613
+32644 03fca9b2d4948fe2
+32645 ee4a7c0690e91e70
+32646 e89559f5cd86228f
+32647 6e258504bba7e71d
+32648 9b9ab6902ee321b0
+32649 1398ec9ee40f07ed
+32650 058c3eabe5714255
+32651 fdb16ce4a89aa392
+32652 f3b40d2addd46e17
+32653 62dc8d4c983e8cc7
+32654 506d40f1e99a1462
+32655 87f1375587266407
+32656 2711d138c758bd4c
+32657 66924886430b7be4
+32658 67125e3332cd5f6e
+32659 27a1e553fd6e6a40
+32660 77ea6ad19b6c72f5
+32701 257895543bf23fc8
+32702 e3a78cb299975ab9
+32703 3b188721d7c44d4e
+32704 4678ed1863661d5f
+32705 6f60226226369fee
+32706 d6b5a421c2e622a6
+32707 c953f53d82464451
+32708 7f4f44f2ce254e49
+32709 53d55e131c41dbe3
+32710 56165b4ab2b35130
+32711 5d68607659943b33
+32712 30eda9f07f6ca830
+32713 0697e74b3fc8915b
+32714 8697ebbb7d5b549b
+32715 e8bd31ed39d2b7e3
+32716 8bfa602b88a8d372
+32717 6cfdc7a0c93555f4
+32718 81e898d02981e939
+32719 81a91fb4ce03e2a8
+32720 64e61e6c0520dda5
+32721 9ff3cdf277b582f1
+32722 efaf52eafb5deb63
+32723 7d156766a2c18fc1
+32724 e5ae864b91f141d8
+32725 a781a64ce312042f
+32726 e014df21f9f3d20f
+32727 164f8a2e6f71ab70
+32728 74634fe8d8be4424
+32729 65c77102467fb598
+32730 8b8b55204641aa0d
+32731 d737ee833137a69a
+32732 acb0d5fa1b1ab390
+32733 045b4ec6317f4119
+32734 aee61e30e085e1f6
+32735 e082169ec96f80f9
+32736 f543c886d145e8f4
+32737 d7a2e7bd3b717aba
+32738 716767141b066e76
+32739 97573a5a5bd22d62
+32740 01313080446c9665
+32741 256eb6ac2ec27109
+32742 544bed981a577078
+32743 762b2bd3be29bfa5
+32744 32aa236e2f1f5f43
+32745 8391a4b277f01d0a
+32746 2819f422a1325a97
+32747 a3d9ed3405becfde
+32748 5eac432ba2c6f002
+32749 6c9965affd1f82f5
+32750 41446ec67ba32508
+32751 8ab1146f9976f68f
+32752 6ffe971d672ee8fd
+32753 281be5d365d2082e
+32754 b738e7e4b6ffc649
+32755 dba577848a963f17
+32756 217c481d865c02fb
+32757 ddc7d755aaeb3ffc
+32758 64662f6a70656250
+32759 e7927d716867803a
+32760 2202ccee0a176760
+";
+
+    /// The current `code digest` lines of every readable code.
+    fn current_row_digests() -> BTreeMap<u32, String> {
+        use super::super::rust_engine::crs_table;
+        use sha2::Digest as _;
+        crs_table::ROWS
+            .iter()
+            .map(|row| row.code)
+            .chain(crs_table::ALIASES.iter().map(|(alias, _)| *alias))
+            .map(|code| {
+                let proj = crs_table::row_of(code).expect("a readable code").proj;
+                let digest = format!("{:x}", sha2::Sha256::digest(proj.as_bytes()));
+                (code, digest[..16].to_string())
+            })
+            .collect()
+    }
+
+    /// Codes whose definition changed since it was recorded, codes with no
+    /// record yet, and records of codes no longer read.
+    fn row_digest_changes(
+        recorded: &str,
+        current: &BTreeMap<u32, String>,
+    ) -> (Vec<u32>, Vec<u32>, Vec<u32>) {
+        let recorded: BTreeMap<u32, &str> = recorded
+            .lines()
+            .filter_map(|line| line.split_once(' '))
+            .map(|(code, digest)| (code.parse().expect("a recorded code"), digest))
+            .collect();
+        let edited = current
+            .iter()
+            .filter(|(code, digest)| recorded.get(code).is_some_and(|d| d != digest))
+            .map(|(code, _)| *code)
+            .collect();
+        let added = current
+            .keys()
+            .filter(|code| !recorded.contains_key(code))
+            .copied()
+            .collect();
+        let removed = recorded
+            .keys()
+            .filter(|code| !current.contains_key(code))
+            .copied()
+            .collect();
+        (edited, added, removed)
+    }
+
+    #[test]
+    fn an_edited_crs_row_is_told_apart_from_an_added_or_removed_one() {
+        let current = BTreeMap::from([
+            (2154, "aaaa".to_string()),
+            (28992, "bbbb".to_string()),
+            (32633, "cccc".to_string()),
+        ]);
+        assert_eq!(
+            row_digest_changes("2154 aaaa\n28992 ffff\n4559 dddd\n", &current),
+            (vec![28992], vec![32633], vec![4559])
+        );
+    }
+
+    /// The display profile digest leaves CRS rows out so a new code needs
+    /// no bump; an edited row or a re-pointed alias moves the pixels of its
+    /// items' derivatives, so it must bump `DISPLAY_PROFILE`.
+    #[test]
+    fn an_edited_crs_row_bumps_the_display_profile() {
+        let current = current_row_digests();
+        let (edited, added, removed) = row_digest_changes(ROW_DIGESTS, &current);
+        let table: String = current
+            .iter()
+            .map(|(code, digest)| format!("{code} {digest}\n"))
+            .collect();
+        assert!(
+            edited.is_empty(),
+            "the definition of {edited:?} changed: bump DISPLAY_PROFILE, then record \
+             ROW_DIGESTS as:\n{table}"
+        );
+        assert!(
+            added.is_empty() && removed.is_empty(),
+            "codes {added:?} added and {removed:?} removed: record ROW_DIGESTS as \
+             (no profile bump):\n{table}"
+        );
+    }
+
+    /// The profile names everything in [`profile_digest_inputs`].
+    #[test]
+    fn the_profile_records_what_places_and_draws_display_pixels() {
+        use sha2::Digest as _;
+        let inputs = profile_digest_inputs();
+        let digest = format!("{:x}", sha2::Sha256::digest(inputs.as_bytes()));
+        assert_eq!(
+            (DISPLAY_PROFILE, digest.as_str()),
+            (DISPLAY_PROFILE, DISPLAY_PROFILE_DIGEST),
+            "display placement or drawing changed: bump DISPLAY_PROFILE, then record the new digest"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -1009,19 +1839,24 @@ mod chunk_display_tests {
                 .engine
                 .probe(Path::new(&asset.path), &AtomicBool::new(false))
                 .unwrap();
-            assert_eq!(
-                (info.width, info.height),
-                (1024, 1024),
-                "a part covers its own chunk only"
+            // One 1024 m chunk near the equator spans about 0.0092 degrees.
+            let [west, south, east, north] = asset.bounds;
+            assert!(
+                east - west < 0.0095 && north - south < 0.0095,
+                "a part covers its own chunk only: {:?}",
+                asset.bounds
             );
             // A probe reports the tag at Float32 precision; the renderer parses
             // the TIFF tag itself, so check the stored text round-trips.
             assert_eq!(
                 info.nodata,
-                Some(PART_NODATA),
+                Some(DISPLAY_NODATA),
                 "invalid cells use the display sentinel"
             );
-            assert_eq!(stored_nodata_tag(&asset.path), Some(f64::from(PART_NODATA)));
+            assert_eq!(
+                stored_nodata_tag(&asset.path),
+                Some(f64::from(DISPLAY_NODATA))
+            );
         }
         // The far part starts 300 chunks east of the near one.
         let west: Vec<f64> = descriptor
