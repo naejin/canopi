@@ -11,13 +11,9 @@ export interface RasterRenderOptions {
   readonly gamma?: number
 }
 
+/** What the open reply carries: the one fact the layer manager reads. */
 export interface RasterSourceMetadata {
   readonly boundsLonLat: number[]
-  readonly levels: readonly { width: number; height: number }[]
-  /** Display COGs are EPSG:3857; the worker refuses any other source at open. */
-  readonly mode: '3857'
-  readonly crsLabel: string
-  readonly hasPalette: boolean
 }
 
 export type RasterWorkerRequest =

@@ -62,7 +62,7 @@ describe('raster display worker', () => {
     expect(reply).toEqual({
       id: 1,
       ok: true,
-      value: { boundsLonLat: [4.3, 51.9, 4.4, 52.0], levels: [{ width: 256, height: 256 }], mode: '3857', crsLabel: 'EPSG:3857', hasPalette: false },
+      value: { boundsLonLat: [4.3, 51.9, 4.4, 52.0] },
     })
   })
 })
