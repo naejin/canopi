@@ -19,6 +19,10 @@ Paths are relative to `/home/daylon/projects/canopi`; use them absolute in comma
 - **Web check** on any merge touching the renderer, camera, input or map: `cd desktop/web && npm run build:web`, then from the worktree root `docker run --rm --ipc=host -v "$PWD":/work -w /work/desktop/web --user $(id -u):$(id -g) -e HOME=/tmp mcr.microsoft.com/playwright:v1.63.0-noble npx playwright test e2e/canvas --reporter=line`.
 - **CI**: `Build & Test` and `Web Edition browsers` on every push; a push touching only `docs/`, `.beads/`, `.interface-design/` or Markdown runs lint (with the docs checks) and skips the tests, LiDAR lanes, installer builds and browsers; a newer push cancels the branch's older run (main always finishes), so check the newest commit's runs: `gh run list --branch feature/geolibre-adoption --event push`, then poll `gh run view <id> --json status,conclusion`.
 
+## Review lenses
+
+Each stream's lens names the resources its code spends (disk space, memory, the executor lane, worker time) and the numerical assumptions it rests on (scale factors, tolerances, units), besides its inputs and states: U-crs stream B had two review rounds and still shipped a too-small free-space check and a zoom that ignored the projection's scale, both found only by the pre-push review.
+
 ## Stored data within a step
 
 A stored-format version (the LiDAR catalogue, the user DB, `.canopi`) bumps once per push: a later change in the same unpushed work reuses that bump and adds no test for a version that never shipped (U-crs bumped the catalogue three times in one step and wrote a rebuild test for each, deleted before the push).
