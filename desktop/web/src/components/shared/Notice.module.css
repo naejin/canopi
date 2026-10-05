@@ -1,6 +1,7 @@
 .notice {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: calc(var(--space-2) + var(--space-0-5));
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
@@ -11,8 +12,9 @@
 }
 
 .body {
-  flex: 1 1 auto;
+  flex: 1 1 12rem;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .action {
@@ -20,6 +22,8 @@
   flex-wrap: wrap;
   gap: var(--space-2);
   flex-shrink: 0;
+  max-width: 100%;
+  margin-left: auto;
 }
 
 .info {
