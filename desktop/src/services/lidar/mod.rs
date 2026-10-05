@@ -1259,7 +1259,6 @@ impl LidarLibrary {
             self.inner.engine.as_ref(),
             paths,
             &admission::source_name,
-            &AtomicBool::new(false),
         )
     }
 
@@ -1327,12 +1326,7 @@ impl LidarLibrary {
                 .unwrap_or_else(|| admission::source_name(path))
         };
         import::validate_named_selection(&selection.paths, &name_of)?;
-        admission::check_sources_placeable(
-            self.inner.engine.as_ref(),
-            &selection.paths,
-            &name_of,
-            &AtomicBool::new(false),
-        )
+        admission::check_sources_placeable(self.inner.engine.as_ref(), &selection.paths, &name_of)
     }
 
     /// Retry, last step, on the UserData lane. A refusal adds no job: it

@@ -130,12 +130,13 @@ pub(crate) fn check_sources_placeable(
     engine: &dyn RasterEngine,
     paths: &[PathBuf],
     name_of: &dyn Fn(&Path) -> String,
-    cancel: &AtomicBool,
 ) -> Result<(), String> {
+    // A header check no one can cancel.
+    let cancel = AtomicBool::new(false);
     for path in paths {
         let name = name_of(path);
         check_source_format(path, &name)?;
-        let probe = engine.probe(path, cancel).map_err(|error| {
+        let probe = engine.probe(path, &cancel).map_err(|error| {
             // An engine message may spell out the whole path; the user sees
             // the file name in its place.
             let error = error.replace(&path.display().to_string(), &name);
