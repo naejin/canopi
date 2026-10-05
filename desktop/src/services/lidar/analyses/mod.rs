@@ -284,7 +284,10 @@ fn unavailable_message(key: &str, reason: &AnalysisUnavailable) -> String {
             format!("input '{key}' must hold values in metres; it reports '{units}'")
         }
         AnalysisUnavailable::GridNotProjectedMetres => {
-            format!("input '{key}' must be on a projected grid with metre units")
+            format!(
+                "input '{key}' must be on a projected grid in ground metres, \
+                 not Web Mercator or longitude and latitude"
+            )
         }
         AnalysisUnavailable::EngineMissing { detail } => detail.clone(),
     }

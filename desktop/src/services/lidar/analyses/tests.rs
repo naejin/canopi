@@ -275,6 +275,12 @@ fn invalid_requests_are_refused_by_name_and_create_nothing() {
         RasterQuantity::GroundElevation,
         "geographic",
     );
+    let (mercator, _) = source_with_head(
+        &library,
+        "Mercator",
+        RasterQuantity::GroundElevation,
+        CRS_PROJECTED_OTHER,
+    );
     let unpublished = library
         .create_layer("Pending", RasterQuantity::GroundElevation, None, false)
         .unwrap();
@@ -298,6 +304,8 @@ fn invalid_requests_are_refused_by_name_and_create_nothing() {
         slope_request(&geographic, "degrees", None),
         "projected grid",
     );
+    // Web Mercator is projected and in metres, but not ground metres.
+    refuse(slope_request(&mercator, "degrees", None), "ground metres");
     refuse(
         slope_request(&unpublished, "degrees", None),
         "no published data",
