@@ -28,6 +28,7 @@ mod tiff;
 mod warp;
 
 pub(crate) use crs_table::CrsKind;
+pub(crate) use tiff::is_tiff;
 
 #[cfg(test)]
 use super::engine::RasterStatistics;

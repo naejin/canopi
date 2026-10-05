@@ -23,6 +23,7 @@
 //! and no environment variable can enable a production bypass.
 
 use super::engine::RasterEngine;
+use super::rust_engine::is_tiff;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
@@ -153,29 +154,19 @@ pub(crate) fn check_sources_placeable(
     Ok(())
 }
 
-/// Refuse a source that does not start with a classic or BigTIFF signature.
+/// Refuse a source that does not start with a classic or BigTIFF signature,
+/// the engine's own rule ([`is_tiff`]).
 ///
 /// Only GeoTIFF sources import, and this reads four bytes, so a file in
 /// another format is refused before any reader parses it whole.
 fn check_source_format(path: &Path, name: &str) -> Result<(), String> {
-    use std::io::Read as _;
-    let unreadable = || format!("{name} cannot be read; choose the files again");
-    let mut file = std::fs::File::open(path).map_err(|_| unreadable())?;
-    let mut magic = [0u8; 4];
-    match file.read_exact(&mut magic) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => {}
-        Err(_) => return Err(unreadable()),
+    match is_tiff(path) {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(format!(
+            "{name} is not a GeoTIFF; Canopi imports GeoTIFF rasters"
+        )),
+        Err(_) => Err(format!("{name} cannot be read; choose the files again")),
     }
-    if matches!(
-        &magic,
-        b"II\x2a\x00" | b"MM\x00\x2a" | b"II\x2b\x00" | b"MM\x00\x2b"
-    ) {
-        return Ok(());
-    }
-    Err(format!(
-        "{name} is not a GeoTIFF; Canopi imports GeoTIFF rasters"
-    ))
 }
 
 /// Refuse a selection whose total bytes exceed the per-import bound.

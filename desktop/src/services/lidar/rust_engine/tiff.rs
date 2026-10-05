@@ -55,7 +55,7 @@ pub(super) struct TiffHeader {
 }
 
 /// Whether the file starts with a classic or BigTIFF signature.
-pub(super) fn is_tiff(path: &Path) -> Result<bool, String> {
+pub(crate) fn is_tiff(path: &Path) -> Result<bool, String> {
     let mut file =
         File::open(path).map_err(|e| format!("Failed to open {}: {e}", path.display()))?;
     let mut magic = [0u8; 4];

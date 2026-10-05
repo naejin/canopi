@@ -496,6 +496,35 @@ fn importing_a_file_that_is_not_a_geotiff_is_refused_before_it_is_read() {
     assert_refused_in_dialog(&library, &root, &error, "dem.asc");
 }
 
+/// A chosen file that cannot be opened is refused by name, without its
+/// folder or the system's error, and creates nothing.
+#[cfg(unix)]
+#[test]
+fn importing_a_file_that_cannot_be_opened_is_refused_by_name() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let root = scratch("import-unopenable");
+    let library = attached_library(&root);
+    let source = root.join("locked.tif");
+    std::fs::write(&source, b"II\x2a\x00 a locked GeoTIFF").unwrap();
+    std::fs::set_permissions(&source, std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::File::open(&source).is_ok() {
+        // Permissions do not bind this user (root): nothing to observe.
+        return;
+    }
+    let error = library
+        .import_item(
+            "Grid",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            vec![source.clone()],
+        )
+        .unwrap_err();
+    std::fs::set_permissions(&source, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert!(error.contains("cannot be read"), "{error}");
+    assert_refused_in_dialog(&library, &root, &error, "locked.tif");
+}
+
 /// The failed import Retry is offered on: its job's message is what the item's
 /// row shows.
 fn failed_import(library: &LidarLibrary, source: PathBuf, message: &str) -> String {
