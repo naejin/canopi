@@ -3401,7 +3401,6 @@ pub(crate) fn import_job_summary(
     }))
 }
 
-/// An unpublished item's latest import that may be retried.
 /// A Retry's saved selection, carried from its UserData read through the
 /// Local header check to its UserData record.
 pub struct RetrySelection {
