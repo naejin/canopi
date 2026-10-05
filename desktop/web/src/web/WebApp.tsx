@@ -99,7 +99,7 @@ export function WebApp({
         designIdentity={designIdentity}
         onRenameDesign={(name) => controller.renameDesign(name)}
         onRetrySave={() => {
-          void controller.continuousSave.flush().catch(logWebAppCommandError);
+          void controller.continuousSave.save().catch(logWebAppCommandError);
         }}
         onResolveSaveConflict={() => {
           void controller.resolveSaveConflict().catch(logWebAppCommandError);

@@ -665,6 +665,48 @@ describe('Web Edition Browser App Shell', () => {
     expect(container.querySelector('[data-save-status] [role="status"]')?.textContent).toBe('Saved in this browser')
     expect(appDataStore.loadDraft('draft-identity-state')?.description).toBe('Browser edit')
   })
+
+  it('Retry writes the Draft again after a failed write even when an undo left nothing pending', async () => {
+    const store = createMemoryDesignSessionStore()
+    const storage = memoryStorage()
+    const appDataStore = createBrowserAppDataStore({ storage })
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore,
+      fileAdapter: testFileAdapter(),
+      now: () => new Date('2026-07-04T12:00:00.000Z'),
+      createDraftId: () => 'draft-retry-clean',
+    })
+    await act(async () => {
+      render(<WebApp controller={controller} workspace={<div data-testid="stub-workspace" />} />, container)
+    })
+    await clickShellCommand(container, 'file.new')
+
+    storage.failWrites = true
+    await act(async () => {
+      store.setCanvasClean(false)
+      await controller.continuousSave.flush()
+    })
+    const status = container.querySelector('[data-save-status]')
+    expect(status?.getAttribute('data-save-status')).toBe('error')
+
+    // Undo back to the clean point: nothing is pending, but the error stays until a write lands.
+    storage.failWrites = false
+    await act(async () => { store.setCanvasClean(true) })
+    expect(container.querySelector('[data-save-status]')?.getAttribute('data-save-status')).toBe('error')
+
+    await act(async () => {
+      status?.querySelector('button')?.click()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      Array.from(status?.querySelectorAll<HTMLButtonElement>('[role="dialog"] button') ?? [])
+        .find((button) => button.textContent === 'Retry')?.click()
+      await Promise.resolve()
+    })
+    await act(async () => { await controller.continuousSave.flush() })
+    expect(container.querySelector('[data-save-status] [role="status"]')?.textContent).toBe('Saved in this browser')
+  })
   it('offers Resolve… when another browser tab changed the open Draft', async () => {
     const onResolveSaveConflict = vi.fn()
     await act(async () => {

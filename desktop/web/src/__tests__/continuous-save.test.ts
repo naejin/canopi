@@ -244,6 +244,22 @@ describe('continuous save', () => {
     expect(save.status.value).toBe('saved')
   })
 
+  it('does not keep a Save refused by a conflict for a later write', async () => {
+    openSession({ path: '/designs/garden.canopi', draftId: null, fingerprint: 'fp-1' })
+    writeHome.mockResolvedValueOnce({ kind: 'conflict', fileGone: false })
+    edit('a')
+    await expect(save.flush()).resolves.toBe(false)
+    await expect(save.save()).resolves.toBe(false)
+
+    // Save As resolves the conflict: the copy holds every change and the session moves to it.
+    const token = save.sessionToken()
+    fixture.markSaved()
+    save.rehome(token, { draftId: 'draft-copy' })
+    fixture.setState({ path: null })
+    await expect(save.flush()).resolves.toBe(true)
+    expect(writeHome).toHaveBeenCalledTimes(1)
+  })
+
   it('drops the previous session schedule, failure and conflict on replacement', async () => {
     openSession({ path: '/designs/a.canopi', draftId: null, fingerprint: 'fp' })
     writeHome.mockResolvedValueOnce({ kind: 'conflict', fileGone: true })
