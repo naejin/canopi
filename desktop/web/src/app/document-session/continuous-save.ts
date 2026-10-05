@@ -85,6 +85,8 @@ export interface ContinuousSave {
   hasPendingChanges(): boolean
   /** Write now; true when the home holds every committed change. */
   flush(): Promise<boolean>
+  /** A manual Save: write now even with nothing pending, so the home also holds the live view. */
+  save(): Promise<boolean>
   /** Resolve a conflict by overwriting the file with the Design of the session `token` names. */
   overwriteHome(token: object | null): Promise<boolean>
   /** Resolves when no write is in flight or queued. */
@@ -344,6 +346,12 @@ export function createContinuousSave({
     hasPendingChanges: () => pending.peek(),
 
     flush,
+
+    save() {
+      // The home no longer holds what the user sees (the view moves without an edit): write even if clean.
+      writePending.value = true
+      return flush()
+    },
 
     async overwriteHome(token) {
       const current = peekRecord()

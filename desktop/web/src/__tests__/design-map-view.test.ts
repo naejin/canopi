@@ -1,6 +1,7 @@
 // U28 and U30: a Design keeps the view it was saved with (`map_view`, GeoLibre's mapView). Every write that happens anyway
-// (Save, Save As, continuous save after an edit, a Draft write) carries the live view; panning alone edits nothing and writes
-// nothing, so closing, switching Designs, page hide and focus loss write only what they would write without it. Driven through
+// (continuous save after an edit, a Draft write) carries the live view, and a manual Save or Save As always writes it; panning
+// alone edits nothing and writes nothing, so closing, switching Designs, page hide and focus loss write only what they would
+// write without it. Driven through
 // the real runtime and the real persistence, continuous-save, replacement and session paths.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAppCanvasRuntimeAppAdapter } from '../app/canvas-runtime/app-adapter'
@@ -227,8 +228,11 @@ function editTheDesign(host: CanvasRuntimeHost): void {
 
 const SAVE_AS_PATH = '/designs/orchard-copy.canopi'
 
-/** The orchard opened from its file on Desktop through the real session state machine; `writes` collects each file write. */
-async function openOnDesktop(file: CanopiFile = orchard()) {
+/**
+ * The orchard opened from its file on Desktop through the real session state machine; `writes` collects each file write.
+ * A write records its content when it starts and settles once `settle` (when given) resolves.
+ */
+async function openOnDesktop(file: CanopiFile = orchard(), settle?: () => Promise<void>) {
   const store = createMemoryDesignSessionStore({ file: null })
   const host = liveHost(store)
   const writes: { path: string; content: CanopiFile }[] = []
@@ -242,7 +246,9 @@ async function openOnDesktop(file: CanopiFile = orchard()) {
       destinationPath: path,
       write: async (content) => {
         writes.push({ path, content })
-        onWritten(`fp-${writes.length}`)
+        const fingerprint = `fp-${writes.length}`
+        await settle?.()
+        onWritten(fingerprint)
       },
     }),
     prepareDraftWrite: (id) => prepareDesignWriteDestination({
@@ -331,6 +337,39 @@ describe('the view reaches the home only with a write that already happens (U30)
     host.cameraHost.current().apply({ kind: 'pan-by', deltaPx: { x: 30, y: 0 } })
     await expect(machine.saveAsCurrentDesign()).resolves.toMatchObject({ status: 'applied' })
     expect(writes.map((write) => write.path)).toEqual([PATH, SAVE_AS_PATH])
+    expect(writes[1]?.content.map_view).toEqual(liveMapView(host))
+  })
+
+  it('a manual Save after panning only writes the live view, and reopening restores it', async () => {
+    const { host, machine, writes, requestSaveDecision } = await openOnDesktop()
+    moveTheView(host)
+    const panned = liveMapView(host)
+
+    await expect(machine.saveCurrentDesign()).resolves.toBe(true)
+
+    expect(writes.map((write) => [write.path, write.content.map_view])).toEqual([[PATH, panned]])
+    expect(machine.continuousSave.status.value).toBe('saved')
+    expect(machine.continuousSave.hasPendingChanges()).toBe(false)
+    expect(requestSaveDecision).not.toHaveBeenCalled()
+    const { host: reopened } = openOrchard(writes[0]!.content)
+    expectCameraAt(reopened, panned)
+  })
+
+  it('a manual Save while a continuous save is writing follows it with the view moved since', async () => {
+    let release = () => {}
+    const held = new Promise<void>((resolve) => { release = resolve })
+    const { host, machine, writes } = await openOnDesktop(orchard(), () => held)
+    editTheDesign(host)
+    const inFlight = machine.continuousSave.flush()
+    expect(writes).toHaveLength(1)
+    moveTheView(host)
+
+    const saved = machine.saveCurrentDesign()
+    release()
+
+    await inFlight
+    await expect(saved).resolves.toBe(true)
+    expect(writes).toHaveLength(2)
     expect(writes[1]?.content.map_view).toEqual(liveMapView(host))
   })
 

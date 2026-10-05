@@ -276,7 +276,7 @@ export class DesignSessionStateMachine {
     this.replacement.attach(session);
   }
 
-  /** Save: write a file home now; a draft home has no file yet, so Save As. */
+  /** Save: write a file home now, with the live view; a draft home has no file yet, so Save As. */
   async saveCurrentDesign(
     options: SaveCurrentDesignOptions = {},
   ): Promise<boolean> {
@@ -285,7 +285,7 @@ export class DesignSessionStateMachine {
       return !this.continuousSave.hasPendingChanges();
     }
     if (this.continuousSave.readHome()?.kind === "file") {
-      return this.continuousSave.flush();
+      return this.continuousSave.save();
     }
     const settlement = await this.saveAsCurrentDesign(options);
     return settlement?.status === "applied";
