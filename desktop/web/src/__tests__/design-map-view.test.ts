@@ -5,6 +5,7 @@
 // the real runtime and the real persistence, continuous-save, replacement and session paths.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAppCanvasRuntimeAppAdapter } from '../app/canvas-runtime/app-adapter'
+import { retryDesignSave } from '../app/document-session/actions'
 import { createDesignSessionPersistence } from '../app/document-session/persistence'
 import { createDesignSessionReplacement } from '../app/document-session/replacement'
 import { createDesignSessionStateMachine } from '../app/document-session/state-machine'
@@ -52,12 +53,23 @@ function orchard(): CanopiFile {
   }
 }
 
+// The title bar's Retry acts on the app's Design Session; these tests point it at the session they opened.
+const retryTarget = vi.hoisted(() => ({ continuousSave: null as unknown }))
+vi.mock('../app/document-session/transition', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../app/document-session/transition')>()
+  return {
+    ...original,
+    get designContinuousSave() { return retryTarget.continuousSave ?? original.designContinuousSave },
+  }
+})
+
 const hosts: CanvasRuntimeHost[] = []
 
 afterEach(async () => {
   for (const host of hosts.splice(0)) await host.destroy()
   resetSettingsProjectionForTests()
   lastView.value = null
+  retryTarget.continuousSave = null
 })
 
 /** A live runtime on a map of `screen` whose clean state reaches `store`. */
@@ -416,6 +428,58 @@ describe('the view reaches the home only with a write that already happens (U30)
 
       expect(writes, 'only the Save tried to write').toHaveLength(1)
       expect(requestSaveDecision).not.toHaveBeenCalled()
+    } finally {
+      failures.mockRestore()
+    }
+  })
+
+  it('Retry after a Save the file refused with only the view moved writes the live view again, and clears the error once it lands', async () => {
+    const failures = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      let refuse = true
+      const { host, machine, writes } = await openOnDesktop(orchard(), async () => {
+        if (refuse) throw new Error('EACCES: permission denied')
+      })
+      retryTarget.continuousSave = machine.continuousSave
+      moveTheView(host)
+      await expect(machine.saveCurrentDesign()).resolves.toBe(false)
+      expect(machine.continuousSave.status.value).toBe('error')
+
+      await retryDesignSave()
+      expect(writes, 'Retry tries the Save again').toHaveLength(2)
+      expect(machine.continuousSave.status.value, 'a refused Retry keeps the error').toBe('error')
+
+      refuse = false
+      host.cameraHost.current().apply({ kind: 'pan-by', deltaPx: { x: 25, y: 10 } })
+      await retryDesignSave()
+      expect(writes.map((write) => write.content.map_view)).toHaveLength(3)
+      expect(writes[2]?.content.map_view).toEqual(liveMapView(host))
+      expect(machine.continuousSave.status.value).toBe('saved')
+      expect(machine.continuousSave.hasPendingChanges()).toBe(false)
+    } finally {
+      failures.mockRestore()
+    }
+  })
+
+  it('Retry after a Save the file refused with an edit pending writes the edit', async () => {
+    const failures = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      let refuse = true
+      const { host, machine, writes } = await openOnDesktop(orchard(), async () => {
+        if (refuse) throw new Error('EACCES: permission denied')
+      })
+      retryTarget.continuousSave = machine.continuousSave
+      editTheDesign(host)
+      await expect(machine.saveCurrentDesign()).resolves.toBe(false)
+      expect(machine.continuousSave.status.value).toBe('error')
+      expect(machine.continuousSave.hasPendingChanges()).toBe(true)
+
+      refuse = false
+      await retryDesignSave()
+      expect(writes).toHaveLength(2)
+      expect(writes[1]?.content.plants.every((plant) => plant.locked)).toBe(true)
+      expect(machine.continuousSave.status.value).toBe('saved')
+      expect(machine.continuousSave.hasPendingChanges()).toBe(false)
     } finally {
       failures.mockRestore()
     }

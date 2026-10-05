@@ -38,9 +38,12 @@ export const designSaveFailureReason = computed(() => designContinuousSave.failu
 /** The current Design changed since it was opened or created. */
 export const designRevertAvailable = computed(() => designContinuousSave.revertAvailable.value);
 
-/** Retry a failed continuous save now. */
+/**
+ * Retry a failed save: the same write Save asks for, so a refused Save of a moved view writes again even with no edit
+ * pending (U30); a refusal keeps the error and a write that lands clears it.
+ */
 export async function retryDesignSave(): Promise<void> {
-  await designContinuousSave.flush();
+  await designContinuousSave.save();
 }
 
 /** Open the dialog that resolves a file changed outside Canopi. */
