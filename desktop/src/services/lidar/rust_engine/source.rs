@@ -6,6 +6,10 @@
 //! unless one compressed chunk alone would decode above the streamed working
 //! set. Such a file, and every other format `wbraster` knows (read whole, as
 //! that library works), is loaded whole after the capacity limit.
+//!
+//! Only a GeoTIFF's keys name a CRS (`crs::from_geokeys`). Other formats read
+//! none, whatever sidecar they carry, so import refuses them as not GeoTIFF
+//! (A8); reading WKT comes with the LAZ reader on the roadmap.
 
 use super::super::engine::RasterProbe;
 use super::super::grid::RasterGrid;
@@ -50,7 +54,7 @@ pub(super) fn probe(path: &Path) -> Result<RasterProbe, String> {
         return probe_tiff(&header);
     }
     let raster = read_other(path)?;
-    Ok(probe_other(path, &raster)?.0)
+    probe_other(path, &raster)
 }
 
 /// Band 1 of any raster the engine reads: a GeoTIFF is streamed when its
@@ -81,7 +85,7 @@ pub(super) fn open(path: &Path, operation: &str, cancel: &AtomicBool) -> Result<
         });
     }
     let raster = read_other(path)?;
-    let (probe, crs) = probe_other(path, &raster)?;
+    let probe = probe_other(path, &raster)?;
     let grid = grid_of(&probe);
     validate_working_grid(&grid, operation)?;
     let cells = grid.width as usize * grid.height as usize;
@@ -102,7 +106,7 @@ pub(super) fn open(path: &Path, operation: &str, cancel: &AtomicBool) -> Result<
     }
     Ok(Opened {
         grid,
-        crs,
+        crs: None,
         nodata: probe.nodata,
         band: Band::Whole(Cells::new(samples)),
     })
@@ -146,7 +150,7 @@ fn probe_tiff(header: &tiff::TiffHeader) -> Result<RasterProbe, String> {
     }
     let crs_ref = match &header.geo_keys {
         Some(keys) => crs::from_geokeys(keys)?
-            .map(|resolved| resolved.wkt)
+            .map(|resolved| resolved.reference())
             .unwrap_or_default(),
         None => String::new(),
     };
@@ -243,10 +247,7 @@ fn band_type_name(data_type: wbraster::raster::DataType) -> String {
     .to_string()
 }
 
-fn probe_other(
-    path: &Path,
-    raster: &wbraster::Raster,
-) -> Result<(RasterProbe, Option<ResolvedCrs>), String> {
+fn probe_other(path: &Path, raster: &wbraster::Raster) -> Result<RasterProbe, String> {
     let width = u32::try_from(raster.cols).map_err(|_| "raster width exceeds this platform")?;
     let height = u32::try_from(raster.rows).map_err(|_| "raster height exceeds this platform")?;
     if width == 0 || height == 0 {
@@ -255,22 +256,6 @@ fn probe_other(
     if raster.cell_size_x == 0.0 || raster.cell_size_y == 0.0 {
         return Err("raster has degenerate pixel size (zero geotransform scale)".to_string());
     }
-    let crs = if let Some(code) = raster.crs.epsg {
-        Some(crs::from_epsg(code)?)
-    } else if let Some(wkt) = raster
-        .crs
-        .wkt
-        .as_deref()
-        .filter(|wkt| !wkt.trim().is_empty())
-    {
-        Some(crs::from_reference(wkt)?)
-    } else if let Some(proj4) = raster.crs.proj4.as_deref().filter(|p| !p.trim().is_empty()) {
-        let crs = wbprojection::from_proj_string(proj4)
-            .map_err(|e| format!("unsupported PROJ definition: {e}"))?;
-        Some(crs::from_reference(&crs.to_wkt())?)
-    } else {
-        None
-    };
     let probe = RasterProbe {
         driver: driver_name(path),
         width,
@@ -290,10 +275,10 @@ fn probe_other(
             0.0,
             -raster.cell_size_y,
         ],
-        crs_ref: crs.as_ref().map(|c| c.wkt.clone()).unwrap_or_default(),
+        crs_ref: String::new(),
         block: [width, 1],
         compression: "NONE".to_string(),
         overview_count: 0,
     };
-    Ok((probe, crs))
+    Ok(probe)
 }

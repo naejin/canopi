@@ -18,7 +18,8 @@ build pins.
 | maplibre-gl | 6.10.0 | https://github.com/maplibre/maplibre-gl-js | BSD-3-Clause |
 | wbgeotiff | 0.1.2 at 9c0ff4fdf3513f27b89c78e294610c3b418b3a4f | https://github.com/opengeos/whitebox-wasm | MIT OR Apache-2.0 |
 | wbraster | 0.2.1 | https://github.com/jblindsay/whitebox_next_gen (crates.io) | MIT OR Apache-2.0 |
-| wbprojection | 0.3.3 | https://github.com/jblindsay/whitebox_next_gen (crates.io) | MIT OR Apache-2.0 |
+| proj4rs | 0.2.0 | https://github.com/3liz/proj4rs | MIT OR Apache-2.0 |
+| wbprojection | 0.3.3 | https://github.com/jblindsay/whitebox_next_gen (crates.io, through wbraster) | MIT OR Apache-2.0 |
 | wbhdf | 0.1.0 | https://github.com/jblindsay/whitebox_next_gen (crates.io, through wbraster) | MIT OR Apache-2.0 |
 | geolibre-cli (geolibre-rust) | 1.5.3 at aac2b743978666f3c3119b5c93de1b30963b1493 | https://github.com/opengeos/geolibre-rust | MIT |
 | wbspatialstats | 0.1.0 at 9c0ff4fdf3513f27b89c78e294610c3b418b3a4f, in the GeoLibre CLI sidecar and the whitebox-wasm module, not the Canopi binary | https://github.com/opengeos/whitebox-wasm | AGPL-3.0-or-later |
@@ -26,12 +27,23 @@ build pins.
 The Canopi binary compiles in the pure-Rust raster engine (`desktop/Cargo.toml`,
 ADR 0014): `wbgeotiff` from the `opengeos/whitebox-wasm` fork at the revision
 above, which a `[patch.crates-io]` entry also serves to `wbraster`, plus
-`wbraster` and `wbprojection` from crates.io. Their notable transitive crates
+`wbraster` (with `wbprojection`) and `proj4rs`, the raster engine's coordinate
+reference system authority, from crates.io. Their notable transitive crates
 are `flate2`, `weezl`, `lz4_flex`, `ruzstd`, `zip`, `tar`, `png`,
 `jpeg-decoder`, `jpeg-encoder`, `rayon` and `wide` (each MIT and/or
 Apache-2.0; `zlib-rs` under Zlib, `zopfli` under Apache-2.0). The test
 `third-party-notices.test.ts` checks every `opengeos` crate in `Cargo.lock`
 has a row above.
+
+The coordinate reference system rows compiled into the binary
+(`desktop/src/services/lidar/rust_engine/crs_table.rs`: PROJ definitions and
+areas of use of about 160 codes) are derived from the
+EPSG Geodetic Parameter Dataset, owned by the International Association of
+Oil & Gas Producers (IOGP) and used under its terms of use
+(https://epsg.org/terms-of-use.html). Canopi
+writes each definition in an equivalent form `proj4rs` reads (the Paris
+meridian folded into the central meridian, the scale factor as `+k`, the
+Helmert shift to WGS84 stated).
 
 `wbspatialstats` is not linked into the Canopi binary. The GeoLibre CLI
 sidecar statically links the Whitebox tool registry it is built with

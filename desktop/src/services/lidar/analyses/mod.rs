@@ -32,34 +32,25 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 
-/// A projected CRS with metre horizontal units.
+/// A projected CRS in ground metres.
 pub(crate) const CRS_PROJECTED_METRE: &str = "projected-metre";
+/// A projected CRS whose metres are not ground metres (Web Mercator).
 pub(crate) const CRS_PROJECTED_OTHER: &str = "projected-other";
 pub(crate) const CRS_GEOGRAPHIC: &str = "geographic";
 const CRS_UNKNOWN: &str = "unknown";
 
-/// Classify a stored CRS for offers.
+/// Classify a stored CRS reference (`EPSG:n`) for offers, from its table row.
 ///
-/// Import records the class of the WKT the raster engine reported, so offers
-/// are computed from the catalogue on every poll without a raster read; a run
-/// rechecks the stored raster with the engine, which stays the projection
-/// authority.
-pub(crate) fn crs_class(wkt: &str) -> &'static str {
-    let upper = wkt.trim().to_ascii_uppercase();
-    if upper.is_empty() {
-        return CRS_UNKNOWN;
-    }
-    if !upper.contains("PROJCS[") && !upper.contains("PROJCRS[") {
-        return if upper.contains("GEOGCS[") || upper.contains("GEOGCRS[") {
-            CRS_GEOGRAPHIC
-        } else {
-            CRS_UNKNOWN
-        };
-    }
-    if upper.contains("METRE") || upper.contains("METER") {
-        CRS_PROJECTED_METRE
-    } else {
-        CRS_PROJECTED_OTHER
+/// Import records the class of the reference the raster engine reported, so
+/// offers are computed from the catalogue on every poll without a raster
+/// read; a run rechecks the stored raster with the engine, which stays the
+/// projection authority.
+pub(crate) fn crs_class(reference: &str) -> &'static str {
+    match super::rust_engine::crs_kind(reference) {
+        Some(super::rust_engine::CrsKind::ProjectedMetre) => CRS_PROJECTED_METRE,
+        Some(super::rust_engine::CrsKind::ProjectedOther) => CRS_PROJECTED_OTHER,
+        Some(super::rust_engine::CrsKind::Geographic) => CRS_GEOGRAPHIC,
+        None => CRS_UNKNOWN,
     }
 }
 
@@ -293,7 +284,10 @@ fn unavailable_message(key: &str, reason: &AnalysisUnavailable) -> String {
             format!("input '{key}' must hold values in metres; it reports '{units}'")
         }
         AnalysisUnavailable::GridNotProjectedMetres => {
-            format!("input '{key}' must be on a projected grid with metre units")
+            format!(
+                "input '{key}' must be on a projected grid in ground metres, \
+                 not Web Mercator or longitude and latitude"
+            )
         }
         AnalysisUnavailable::EngineMissing { detail } => detail.clone(),
     }
@@ -971,7 +965,7 @@ pub(crate) mod test_support {
             r#"[{{"key":"dem","item_id":"{source_layer_id}","generation_id":"{source_generation_id}"}}]"#
         );
         let manifest = format!(
-            r#"{{"item_id":"{item_id}","output_key":"slope","grid":{{"width":1024,"height":1024,"geotransform":[0.0,1.0,0.0,0.0,0.0,-1.0]}},"crs_ref":"EPSG:3857","storage":"chunks"}}"#
+            r#"{{"item_id":"{item_id}","output_key":"slope","grid":{{"width":1024,"height":1024,"geotransform":[0.0,1.0,0.0,0.0,0.0,-1.0]}},"crs_ref":"EPSG:32631","storage":"chunks"}}"#
         );
         let tool = r#"{"engine":"geolibre","version":"geolibre-cli 1.5.3","revision":"aac2b743978666f3c3119b5c93de1b30963b1493","tools":["slope"]}"#;
         connection

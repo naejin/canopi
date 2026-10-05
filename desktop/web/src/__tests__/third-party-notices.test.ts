@@ -43,6 +43,26 @@ describe('third-party notices', () => {
     expect(notices).toMatch(/Corresponding Source/)
   })
 
+  // proj4rs is the raster engine's one CRS authority (U31); its row names the version
+  // Cargo.lock pins.
+  it('names the proj4rs version Cargo.lock pins', () => {
+    const lock = readFileSync(resolve(desktop, '../Cargo.lock'), 'utf8')
+    const version = /\[\[package\]\]\nname = "proj4rs"\nversion = "([^"]+)"/.exec(lock)?.[1]
+    expect(version).toBeDefined()
+    expect(notices).toContain(`| proj4rs | ${version} | https://github.com/3liz/proj4rs | MIT OR Apache-2.0 |`)
+  })
+
+  // crs_table.rs carries rows derived from the EPSG Geodetic Parameter Dataset, whose terms
+  // of use require the IOGP attribution, in both notices: the shipped one and the one for
+  // copied code.
+  it('attributes the EPSG Geodetic Parameter Dataset to IOGP in both notices', () => {
+    const copied = readFileSync(resolve(desktop, '../THIRD_PARTY_NOTICES.md'), 'utf8')
+    for (const text of [notices, copied]) {
+      expect(text).toMatch(/EPSG Geodetic Parameter Dataset[\s\S]*IOGP/)
+      expect(text).toContain('crs_table.rs')
+    }
+  })
+
   // Every Whitebox or GeoLibre crate compiled into the Canopi binary has a row naming the
   // pinned version and revision, so a new git dependency cannot ship without a notice.
   it('names every opengeos and whitebox crate Cargo.lock pins, at its exact version and revision', () => {

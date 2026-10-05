@@ -1,10 +1,10 @@
 //! The pure-Rust raster engine (ADR 0014).
 //!
-//! In-process reading, conversion, statistics and reprojection on the
-//! `whitebox_next_gen` crates: `wbgeotiff` for TIFF/COG primitives,
-//! `wbraster` for the other raster formats and `wbprojection` for
-//! coordinate reference systems. Nothing is bundled or discovered at run
-//! time; the engine is always available and its version names the crates.
+//! In-process reading, conversion, statistics and reprojection: `wbgeotiff`
+//! for TIFF/COG primitives, `wbraster` for the other raster formats and the
+//! one CRS authority (`crs.rs` on `proj4rs` over the `crs_table.rs` rows).
+//! Nothing is bundled or discovered at run time; the engine is always
+//! available and its version names the crates.
 //!
 //! Memory: a GeoTIFF converts through the one writer in row windows of at
 //! most the library's capacity limit (`import::MAX_RAW_EXTRACTION_CELLS`),
@@ -20,10 +20,13 @@ mod cog;
 #[cfg(test)]
 mod comparison;
 mod crs;
-mod laea;
+#[cfg(test)]
+mod crs_reference_points;
+pub(crate) mod crs_table;
 mod source;
-mod swiss;
 mod tiff;
+
+pub(crate) use crs_table::CrsKind;
 
 #[cfg(test)]
 use super::engine::RasterStatistics;
@@ -39,13 +42,19 @@ use wbgeotiff::tags::Compression;
 /// The crate versions this build compiles in; `tests` pins them to `Cargo.lock`.
 pub(super) const WBGEOTIFF_VERSION: &str = "0.1.2";
 pub(super) const WBGEOTIFF_REVISION: &str = "9c0ff4fdf3513f27b89c78e294610c3b418b3a4f";
-pub(super) const WBPROJECTION_VERSION: &str = "0.3.3";
+pub(crate) const PROJ4RS_VERSION: &str = "0.2.0";
 pub(super) const WBRASTER_VERSION: &str = "0.2.1";
+
+/// The kind of a stored reference's row; `None` for a reference Canopi
+/// does not place.
+pub(crate) fn crs_kind(reference: &str) -> Option<CrsKind> {
+    crs::from_reference(reference).ok().map(|crs| crs.kind())
+}
 
 /// What a manifest records as the engine that produced a numeric output.
 pub(super) fn engine_version() -> String {
     format!(
-        "canopi-raster-engine (wbgeotiff {WBGEOTIFF_VERSION}@{}, wbprojection {WBPROJECTION_VERSION}, wbraster {WBRASTER_VERSION})",
+        "canopi-raster-engine (wbgeotiff {WBGEOTIFF_VERSION}@{}, proj4rs {PROJ4RS_VERSION}, wbraster {WBRASTER_VERSION})",
         &WBGEOTIFF_REVISION[..7]
     )
 }
@@ -427,13 +436,15 @@ impl RasterEngine for RustRasterEngine {
         cancel: &AtomicBool,
     ) -> Result<Vec<Option<(f64, f64)>>, String> {
         check_cancel(cancel)?;
-        let source = crs::from_reference(source_crs)?;
-        let target = crs::from_reference(target_crs)?;
+        let transformer = crs::Transformer::new(
+            &crs::from_reference(source_crs)?,
+            &crs::from_reference(target_crs)?,
+        )?;
         Ok(points
             .iter()
             .map(|(x, y)| {
-                source
-                    .transform_to(*x, *y, &target)
+                transformer
+                    .apply(*x, *y)
                     .ok()
                     .filter(|(x, y)| x.is_finite() && y.is_finite())
             })
@@ -862,7 +873,7 @@ mod tests {
         assert_eq!(probe.compression, "DEFLATE");
         assert_eq!(probe.overview_count, 0);
         assert!(probe.mask_flags.is_empty());
-        assert!(probe.crs_ref.contains("2154"), "{}", probe.crs_ref);
+        assert_eq!(probe.crs_ref, "EPSG:2154");
         assert_eq!(
             super::super::analyses::crs_class(&probe.crs_ref),
             super::super::analyses::CRS_PROJECTED_METRE
@@ -962,7 +973,7 @@ mod tests {
         let probe = engine.probe(&from_file, &cancel()).unwrap();
         assert_eq!(probe.geotransform, moved.geotransform);
         assert_eq!(probe.nodata, Some(-9999.0), "the input's tag is kept");
-        assert!(probe.crs_ref.contains("3857"));
+        assert_eq!(probe.crs_ref, "EPSG:3857");
         let mut reader = PreparedRaster::open_committed(&from_file, &moved, Some(-9999.0)).unwrap();
         let window = reader
             .read_window(
@@ -1113,6 +1124,425 @@ mod tests {
         assert!((south - 48.2953405).abs() < 1e-6, "{south}");
         assert!((east - -0.4259494).abs() < 1e-6, "{east}");
         assert!((north - 48.3047203).abs() < 1e-6, "{north}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// A 4x4 Float32 GeoTIFF at `origin` (top-left, 0.5 m cells) whose CRS
+    /// is `keys`, written by wbgeotiff as other tools write them.
+    fn tiff_with_keys(path: &Path, origin: (f64, f64), keys: wbgeotiff::geo_keys::GeoKeyDirectory) {
+        wbgeotiff::GeoTiffWriter::new(4, 4, 1)
+            .geo_transform(wbgeotiff::GeoTransform::north_up(
+                origin.0, 0.5, origin.1, -0.5,
+            ))
+            .geo_key_directory(keys)
+            .write_f32(path, &[1.0; 16])
+            .unwrap();
+    }
+
+    fn keys(
+        shorts: &[(u16, u16)],
+        doubles: &[(u16, f64)],
+        citation: Option<&str>,
+    ) -> wbgeotiff::geo_keys::GeoKeyDirectory {
+        let mut builder = wbgeotiff::geo_keys::GeoKeyBuilder::new();
+        for (id, value) in shorts {
+            builder = builder.short(*id, *value);
+        }
+        for (id, value) in doubles {
+            builder = builder.double(*id, *value);
+        }
+        if let Some(text) = citation {
+            builder = builder.ascii(1026, format!("{text}|"));
+        }
+        builder.build()
+    }
+
+    fn close(got: (f64, f64), expected: (f64, f64), tolerance: f64, label: &str) {
+        let deviation = (got.0 - expected.0).abs().max((got.1 - expected.1).abs());
+        assert!(
+            deviation <= tolerance,
+            "{label}: {got:?} is {deviation:e} from {expected:?}"
+        );
+    }
+
+    /// A1: every transform runs source → WGS84 lon/lat → target, so the
+    /// datum shift is kept on the way to Web Mercator, which has no datum.
+    /// References: cs2cs (PROJ 9.4.0, no grids).
+    #[test]
+    fn every_transform_runs_through_wgs84_longitude_and_latitude() {
+        let engine = RustRasterEngine;
+        let one = |from: &str, to: &str, point: (f64, f64)| {
+            engine
+                .transform_points(from, to, &[point], &cancel())
+                .unwrap()[0]
+                .unwrap_or_else(|| panic!("{from} to {to} placed nothing"))
+        };
+        close(
+            one("EPSG:28992", "EPSG:3857", (85_000.0, 447_000.0)),
+            (486_208.294_8, 6_801_382.038_1),
+            0.05,
+            "RD New to Web Mercator",
+        );
+        for (code, mercator, expected) in [
+            (
+                "EPSG:2056",
+                (890_555.926_346, 5_942_074.072_431),
+                (2_642_695.420_2, 1_205_590.522_3),
+            ),
+            (
+                "EPSG:27700",
+                (-166_979.236_190, 6_982_997.920_390),
+                (433_653.297_0, 344_858.882_7),
+            ),
+            (
+                "EPSG:31370",
+                (489_805.759_490, 6_585_991.998_100),
+                (152_202.884_1, 165_505.135_5),
+            ),
+        ] {
+            close(one("EPSG:3857", code, mercator), expected, 0.05, code);
+            close(one(code, "EPSG:3857", expected), mercator, 0.05, code);
+        }
+    }
+
+    /// The test tiles' keys as the producers wrote them: the AHN tile names
+    /// 28992 with GDAL's citation; the IGN tile spells Lambert-93 out key by
+    /// key, every code user-defined, and is placed as 2154 by matching a row.
+    #[test]
+    fn delft_and_paris_tiles_probe_to_their_codes_and_land_where_proj_places_them() {
+        let dir = scratch("tiles");
+        let engine = RustRasterEngine;
+        let delft = dir.join("ahn_dsm_delft.tif");
+        tiff_with_keys(
+            &delft,
+            (84_400.0, 447_500.0),
+            keys(
+                &[
+                    (1024, 1),
+                    (1025, 1),
+                    (2054, 9102),
+                    (3072, 28992),
+                    (3076, 9001),
+                ],
+                &[],
+                Some("Amersfoort / RD New"),
+            ),
+        );
+        let paris = dir.join("ign_mns_paris.tif");
+        tiff_with_keys(
+            &paris,
+            (652_000.0, 6_862_400.0),
+            keys(
+                &[
+                    (1024, 1),
+                    (1025, 1),
+                    (2048, 32767),
+                    (2050, 32767),
+                    (2051, 32767),
+                    (2052, 9001),
+                    (2054, 9102),
+                    (2056, 32767),
+                    (3072, 32767),
+                    (3074, 32767),
+                    (3075, 8),
+                    (3076, 9001),
+                ],
+                &[
+                    (3078, 49.0),
+                    (3079, 44.0),
+                    (3084, 3.0),
+                    (3085, 46.5),
+                    (3086, 700_000.0),
+                    (3087, 6_600_000.0),
+                ],
+                Some("EPSG:2154"),
+            ),
+        );
+        // cs2cs EPSG:28992 / EPSG:2154 to EPSG:4326 of each tile's origin.
+        for (path, code, origin, expected) in [
+            (
+                &delft,
+                "EPSG:28992",
+                (84_400.0, 447_500.0),
+                (4.358_842_937, 52.011_366_569),
+            ),
+            (
+                &paris,
+                "EPSG:2154",
+                (652_000.0, 6_862_400.0),
+                (2.345_766_791, 48.859_845_296),
+            ),
+        ] {
+            let probe = engine.probe(path, &cancel()).unwrap();
+            assert_eq!(probe.crs_ref, code);
+            let placed = engine
+                .transform_points(&probe.crs_ref, "EPSG:4326", &[origin], &cancel())
+                .unwrap()[0]
+                .unwrap();
+            // 1e-7 deg is about a centimetre.
+            close(placed, expected, 1e-7, code);
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// A7: keys spelled to EPSG's precision match the row within the matcher
+    /// tolerances (1e-9 deg, 1e-3 m), and the file's ellipsoid must agree.
+    #[test]
+    fn epsg_precise_belgian_lambert_keys_match_31370_and_another_ellipsoid_is_refused() {
+        let dir = scratch("lambert72");
+        let engine = RustRasterEngine;
+        let lambert72 = |ellipsoid: u16| {
+            keys(
+                &[
+                    (1024, 1),
+                    (2048, 32767),
+                    (2056, ellipsoid),
+                    (3072, 32767),
+                    (3075, 8),
+                    (3076, 9001),
+                ],
+                &[
+                    (3078, 51.166_667_233_333_33),
+                    (3079, 49.833_333_9),
+                    (3084, 4.367_486_666_666_666),
+                    (3085, 90.0),
+                    (3086, 150_000.012_56),
+                    (3087, 5_400_088.437_8),
+                ],
+                None,
+            )
+        };
+        let path = dir.join("lambert72.tif");
+        tiff_with_keys(&path, (150_000.0, 170_000.0), lambert72(7022));
+        assert_eq!(
+            engine.probe(&path, &cancel()).unwrap().crs_ref,
+            "EPSG:31370"
+        );
+        // The same projection on GRS80 is not Belgian Lambert 72.
+        let grs80 = dir.join("lambert72-grs80.tif");
+        tiff_with_keys(&grs80, (150_000.0, 170_000.0), lambert72(7019));
+        let error = engine.probe(&grs80, &cancel()).unwrap_err();
+        assert!(error.contains("user-defined"), "{error}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// GDAL's keys when only the geographic CRS has a code: the projection
+    /// spelled out, GeographicType naming the datum's code and no ellipsoid
+    /// keys. RD New on Amersfoort (4289) matches 28992; on BD72 (4313, the
+    /// International ellipsoid) it matches nothing.
+    #[test]
+    fn spelled_out_keys_on_a_coded_geographic_system_match_by_its_ellipsoid() {
+        let dir = scratch("coded-gcs");
+        let engine = RustRasterEngine;
+        let rd_new = |geographic: u16| {
+            keys(
+                &[
+                    (1024, 1),
+                    (2048, geographic),
+                    (3072, 32767),
+                    (3075, 16),
+                    (3076, 9001),
+                ],
+                &[
+                    (3080, 5.387_638_888_888_89),
+                    (3081, 52.156_160_555_555_55),
+                    (3082, 155_000.0),
+                    (3083, 463_000.0),
+                    (3092, 0.999_907_9),
+                ],
+                None,
+            )
+        };
+        let amersfoort = dir.join("rd-new-4289.tif");
+        tiff_with_keys(&amersfoort, (84_400.0, 447_500.0), rd_new(4289));
+        assert_eq!(
+            engine.probe(&amersfoort, &cancel()).unwrap().crs_ref,
+            "EPSG:28992"
+        );
+        let bd72 = dir.join("rd-new-4313.tif");
+        tiff_with_keys(&bd72, (84_400.0, 447_500.0), rd_new(4313));
+        let error = engine.probe(&bd72, &cancel()).unwrap_err();
+        assert!(error.contains("user-defined"), "{error}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// The overseas UTM rows sit on their own GRS80 systems, which GDAL names
+    /// in GeographicType when it spells the projection out: RGFG95, RGR92,
+    /// RGM04, RRAF 1991 and RGAF09. RRAF 1991 / UTM 20N (4559) has RGAF09 /
+    /// UTM 20N's definition, so either code places it the same.
+    #[test]
+    fn spelled_out_utm_keys_on_an_overseas_system_match_its_row() {
+        let dir = scratch("overseas-gcs");
+        let engine = RustRasterEngine;
+        let cases: [(u16, f64, f64, &[&str]); 5] = [
+            (4624, -51.0, 0.0, &["EPSG:2972"]),
+            (4627, 57.0, 10_000_000.0, &["EPSG:2975"]),
+            (4470, 45.0, 10_000_000.0, &["EPSG:4471"]),
+            (4558, -63.0, 0.0, &["EPSG:4559", "EPSG:5490"]),
+            (5489, -63.0, 0.0, &["EPSG:5490"]),
+        ];
+        for (geographic, lon_0, y_0, expected) in cases {
+            let utm = keys(
+                &[
+                    (1024, 1),
+                    (2048, geographic),
+                    (3072, 32767),
+                    (3075, 1),
+                    (3076, 9001),
+                ],
+                &[
+                    (3080, lon_0),
+                    (3081, 0.0),
+                    (3082, 500_000.0),
+                    (3083, y_0),
+                    (3092, 0.9996),
+                ],
+                None,
+            );
+            let path = dir.join(format!("utm-{geographic}.tif"));
+            tiff_with_keys(&path, (400_000.0, 1_000_000.0), utm);
+            let probe = engine.probe(&path, &cancel());
+            assert!(
+                probe
+                    .as_ref()
+                    .is_ok_and(|probe| expected.contains(&probe.crs_ref.as_str())),
+                "GeographicType {geographic}: {:?}",
+                probe.map(|probe| probe.crs_ref)
+            );
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// A projected model with only a geographic code, here ETRS89 and the
+    /// GeoTIFF 1.0 ProjectionGeoKey for UTM 32N, names no projection
+    /// Canopi reads, so it is refused rather than read as degrees.
+    #[test]
+    fn a_projected_model_with_only_a_geographic_row_is_refused() {
+        let dir = scratch("projected-geographic");
+        let engine = RustRasterEngine;
+        let path = dir.join("utm.tif");
+        tiff_with_keys(
+            &path,
+            (500_000.0, 5_800_000.0),
+            keys(&[(1024, 1), (2048, 4258), (3074, 16032)], &[], None),
+        );
+        let error = engine.probe(&path, &cancel()).unwrap_err();
+        assert!(
+            error.starts_with("The raster's user-defined system is not a supported"),
+            "{error}"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// Compound codes read as their horizontal part.
+    #[test]
+    fn compound_codes_read_as_their_horizontal_row() {
+        let dir = scratch("aliases");
+        let engine = RustRasterEngine;
+        for (code, expected) in [
+            (7415u16, "EPSG:28992"),
+            (5698, "EPSG:2154"),
+            (5699, "EPSG:2154"),
+        ] {
+            let path = dir.join(format!("{code}.tif"));
+            tiff_with_keys(
+                &path,
+                (0.0, 0.0),
+                keys(&[(1024, 1), (3072, code)], &[], None),
+            );
+            assert_eq!(
+                engine.probe(&path, &cancel()).unwrap().crs_ref,
+                expected,
+                "{code}"
+            );
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// U31: a code outside the table is refused by name, with the systems
+    /// Canopi supports: feet (2263), south-west Krovak (2065), and a code
+    /// the table does not list (SWEREF99 TM, 3006).
+    #[test]
+    fn codes_outside_the_table_are_refused_naming_the_code_and_the_supported_systems() {
+        let dir = scratch("refused");
+        let engine = RustRasterEngine;
+        for code in [2263u16, 2065, 3006] {
+            let path = dir.join(format!("{code}.tif"));
+            tiff_with_keys(
+                &path,
+                (0.0, 0.0),
+                keys(&[(1024, 1), (3072, code)], &[], None),
+            );
+            let error = engine.probe(&path, &cancel()).unwrap_err();
+            assert!(
+                error.contains(&format!("EPSG:{code} is not a supported coordinate system"))
+                    && error.contains("Lambert-93 (EPSG:2154)"),
+                "{error}"
+            );
+            let error = engine
+                .transform_points(
+                    &format!("EPSG:{code}"),
+                    "EPSG:4326",
+                    &[(0.0, 0.0)],
+                    &cancel(),
+                )
+                .unwrap_err();
+            assert!(error.contains(&format!("EPSG:{code}")), "{error}");
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// A8: a format other than GeoTIFF reads no CRS, even with a sidecar,
+    /// so import refuses it as not GeoTIFF.
+    #[test]
+    fn a_non_tiff_source_reads_no_crs_even_with_a_prj_sidecar() {
+        let dir = scratch("non-tiff");
+        let engine = RustRasterEngine;
+        let path = dir.join("grid.asc");
+        std::fs::write(
+            &path,
+            "ncols 3\nnrows 2\nxllcorner 100\nyllcorner 200\ncellsize 10\nNODATA_value -1\n1 2 -1\n4.5 5 6\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("grid.prj"),
+            r#"PROJCS["RGF93 v1 / Lambert-93",GEOGCS["RGF93 v1",DATUM["Reseau_Geodesique_Francais_1993_v1",SPHEROID["GRS 1980",6378137,298.257222101]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]],PROJECTION["Lambert_Conformal_Conic_2SP"],PARAMETER["latitude_of_origin",46.5],PARAMETER["central_meridian",3],PARAMETER["standard_parallel_1",49],PARAMETER["standard_parallel_2",44],PARAMETER["false_easting",700000],PARAMETER["false_northing",6600000],UNIT["metre",1],AUTHORITY["EPSG","2154"]]"#,
+        )
+        .unwrap();
+        assert_eq!(engine.probe(&path, &cancel()).unwrap().crs_ref, "");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// A7: wbgeotiff, which the GeoLibre CLI writes its outputs with, keys any
+    /// 4xxx code as geographic; RGM04 / UTM 38S (4471) is still read by its
+    /// row, projected in metres.
+    #[test]
+    fn a_4471_output_keyed_as_geographic_is_read_by_its_projected_row() {
+        let dir = scratch("4471");
+        let engine = RustRasterEngine;
+        let path = dir.join("mayotte.tif");
+        wbgeotiff::GeoTiffWriter::new(4, 4, 1)
+            .geo_transform(wbgeotiff::GeoTransform::north_up(
+                516_000.0,
+                0.5,
+                8_585_000.0,
+                -0.5,
+            ))
+            .epsg(4471)
+            .write_f32(&path, &[1.0; 16])
+            .unwrap();
+        let probe = engine.probe(&path, &cancel()).unwrap();
+        assert_eq!(probe.crs_ref, "EPSG:4471");
+        assert_eq!(
+            super::super::analyses::crs_class(&probe.crs_ref),
+            super::super::analyses::CRS_PROJECTED_METRE
+        );
+        // cs2cs EPSG:4326 to EPSG:4471.
+        let placed = engine
+            .transform_points("EPSG:4326", &probe.crs_ref, &[(45.15, -12.8)], &cancel())
+            .unwrap()[0]
+            .unwrap();
+        close(placed, (516_279.147_9, 8_584_976.634_4), 0.01, "4471");
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -1319,7 +1749,7 @@ mod tests {
             "{}",
             geotiff[0].1
         );
-        assert_eq!(pinned("wbprojection")[0].0, WBPROJECTION_VERSION);
+        assert_eq!(pinned("proj4rs")[0].0, PROJ4RS_VERSION);
         assert_eq!(pinned("wbraster")[0].0, WBRASTER_VERSION);
         assert!(engine_version().contains("wbgeotiff 0.1.2@9c0ff4f"));
     }
