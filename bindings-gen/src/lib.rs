@@ -198,8 +198,21 @@ mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::{Mutex, MutexGuard, PoisonError};
 
     static NEXT_TEMP_ROOT: AtomicU64 = AtomicU64::new(0);
+
+    // `execute_generation` spawns rustfmt. A child forked while another test
+    // holds its admission flock inherits that descriptor until exec, so a
+    // concurrent test can see its own admission as still held (canopi-he4e).
+    // The CLI runs one generation per process; only parallel tests race.
+    static GENERATION_RUNS: Mutex<()> = Mutex::new(());
+
+    fn serialize_generation_runs() -> MutexGuard<'static, ()> {
+        GENERATION_RUNS
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
 
     struct TempRoot(PathBuf);
 
@@ -278,6 +291,7 @@ mod tests {
 
     #[test]
     fn late_renderer_failure_leaves_every_destination_unchanged() {
+        let _generation_run = serialize_generation_runs();
         let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
         let destination = TempRoot::new();
         let relative_paths = [
@@ -330,6 +344,7 @@ mod tests {
 
     #[test]
     fn generation_admission_is_held_through_external_rendering() {
+        let _generation_run = serialize_generation_runs();
         let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
         let destination = TempRoot::new();
         let renderer = AdmissionLifetimeProbe {
@@ -355,6 +370,7 @@ mod tests {
 
     #[test]
     fn drift_check_admission_is_held_through_external_rendering() {
+        let _generation_run = serialize_generation_runs();
         let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
         let destination = TempRoot::new();
         let renderer = AdmissionLifetimeProbe {
