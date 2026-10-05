@@ -34,6 +34,9 @@ jobs:
       github.event.pull_request.head.repo.full_name != github.repository ||
       (github.head_ref != 'main' && github.head_ref != 'feature/geolibre-adoption')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     outputs:
       code: ${{ steps.diff.outputs.code }}
       packaging: ${{ steps.packaging.outputs.matrix }}
@@ -41,9 +44,24 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      # A push diffs from the head of the branch's last successful push run, not
+      # from `before`: a newer push cancels the older run, so a docs-only push
+      # would otherwise hide the cancelled push's code. None found: run everything.
+      - id: base
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            sha="$PR_BASE"
+          else
+            sha="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build.yml --branch "$GITHUB_REF_NAME" \
+              --event push --status success --limit 1 --json headSha --jq '.[0].headSha // ""')" || sha=""
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
       - id: diff
         env:
-          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          BASE: ${{ steps.base.outputs.sha }}
         run: |
           if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
             echo "code=true" >> "$GITHUB_OUTPUT"
@@ -59,7 +77,7 @@ jobs:
       - id: packaging
         env:
           FEATURE_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/feature/geolibre-adoption' }}
-          BASE: ${{ github.event.before }}
+          BASE: ${{ steps.base.outputs.sha }}
         run: |
           set -euo pipefail
           all='[
