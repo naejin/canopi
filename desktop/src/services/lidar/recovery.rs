@@ -770,4 +770,25 @@ mod tests {
         }
         std::fs::remove_dir_all(root).unwrap();
     }
+
+    /// Version 23 stored each item's bounds as the envelope of the whole
+    /// 1024-cell chunks it touched, so its rows must not be reused: the library
+    /// is rebuilt and every item is prepared again with its rasters' extent.
+    #[test]
+    fn a_catalogue_with_chunk_envelope_bounds_is_rebuilt() {
+        let root = crate::test_scratch::TestScratch::new("canopi-chunk-bounds");
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("c.sqlite");
+        drop(catalogue::open(&path).unwrap());
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute(
+                "UPDATE lidar_catalogue_meta SET value = '23' WHERE key = 'schema_version'",
+                [],
+            )
+            .unwrap();
+        drop(connection);
+        assert_eq!(inspect(&path), CatalogueState::Older(23));
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }

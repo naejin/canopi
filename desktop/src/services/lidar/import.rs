@@ -2352,6 +2352,76 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// An item's stored coverage ends at its rasters' own edges, not at the
+    /// edge of the last 1024-cell chunk they touch, so Fit to data frames the
+    /// data itself. Sizes that are not chunk multiples (an 800-pixel IGN tile,
+    /// a 1000-cell tile) and a pair whose second source extends past the
+    /// first (the lattice keeps the first source's size) both hold it.
+    #[test]
+    fn an_items_bounds_equal_its_rasters_extent_through_the_crs_authority() {
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
+        let cancel = AtomicBool::new(false);
+        let root = crate::test_scratch::TestScratch::new("canopi-item-bounds");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let (x0, y0) = (652_000.0, 6_863_000.0);
+        let single = write_crs_fixture(
+            &engine,
+            &root,
+            "tile",
+            "EPSG:2154",
+            x0,
+            y0,
+            1000,
+            1000,
+            35.0,
+        );
+        let west = write_crs_fixture(&engine, &root, "west", "EPSG:2154", x0, y0, 800, 800, 35.0);
+        let east = write_crs_fixture(
+            &engine,
+            &root,
+            "east",
+            "EPSG:2154",
+            x0 + 800.0,
+            y0 - 100.0,
+            800,
+            800,
+            36.0,
+        );
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let grid = |x: f64, y: f64, width: u32, height: u32| RasterGrid {
+            width,
+            height,
+            geotransform: [x, 1.0, 0.0, y, 0.0, -1.0],
+        };
+        for (sources, extent) in [
+            (vec![single], grid(x0, y0, 1000, 1000)),
+            (vec![west, east], grid(x0, y0, 1600, 900)),
+        ] {
+            let layer_id = library
+                .create_layer(
+                    "item bounds",
+                    common_types::library::RasterQuantity::GroundElevation,
+                    None,
+                    false,
+                )
+                .unwrap();
+            let (_job, staging) = stage_review(&library, &layer_id, &sources, &cancel);
+            apply_import(&library, &staging, &cancel).expect("the item publishes");
+            let stored: Vec<f64> =
+                serde_json::from_str(&head_of(&library, &layer_id).bounds_3857).unwrap();
+            let expected = raster_bounds_3857(&engine, &cancel, &extent, "EPSG:2154").unwrap();
+            assert_eq!(stored.len(), 4, "{stored:?}");
+            for (got, want) in stored.iter().zip(expected) {
+                assert!(
+                    (got - want).abs() <= 1e-6 * want.abs().max(1.0),
+                    "stored bounds {stored:?} equal the rasters' extent {expected:?}"
+                );
+            }
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     /// canopi-dfc0: one bar covers the whole job, so the percentage never
     /// falls. Preparation fills its share once per converted source, the job
     /// moves to publishing at that share under "Rendering map" (the worker's
