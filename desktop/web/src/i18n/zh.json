@@ -1627,7 +1627,7 @@
       "WrongInput": "需要：{{expected}}。",
       "NotReady": "需要已完成导入的数据。",
       "ValuesNotMetres": "需要以米为单位的数值；此数据的单位为 {{units}}。",
-      "GridNotProjectedMetres": "需要以米为单位的投影格网。",
+      "GridNotProjectedMetres": "需要以地面米为单位的投影格网，不能是 Web Mercator 或经纬度。",
       "EngineMissing": "不可用：缺少 GeoLibre 引擎。",
       "NeedsDesktop": "需要 Canopi Desktop。",
       "AlreadyInLayers": "已在图层中。"

@@ -1627,7 +1627,7 @@
       "WrongInput": "Necesita: {{expected}}.",
       "NotReady": "Necesita datos cuya importación haya terminado.",
       "ValuesNotMetres": "Necesita valores en metros; estos datos están en {{units}}.",
-      "GridNotProjectedMetres": "Necesita una cuadrícula proyectada en metros.",
+      "GridNotProjectedMetres": "Necesita una cuadrícula proyectada en metros sobre el terreno, no Web Mercator ni longitud y latitud.",
       "EngineMissing": "No disponible: falta el motor GeoLibre.",
       "NeedsDesktop": "Necesita Canopi Desktop.",
       "AlreadyInLayers": "Ya está en Capas."

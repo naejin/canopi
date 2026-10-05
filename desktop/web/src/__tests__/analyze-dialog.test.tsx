@@ -201,7 +201,7 @@ describe('Analyze dialog', () => {
       { analysis_id: 'hydrology.flow', unavailable: { reason: 'GridNotProjectedMetres' } },
     ] })
     expect(container.textContent).toContain('Needs values in metres; this data is in ft.')
-    expect(container.textContent).toContain('Needs a projected grid in metres.')
+    expect(container.textContent).toContain('Needs a projected grid in ground metres, not Web Mercator or longitude and latitude.')
     const run = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Run')!
     expect(run.disabled).toBe(true)
   })

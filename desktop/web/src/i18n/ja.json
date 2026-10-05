@@ -1627,7 +1627,7 @@
       "WrongInput": "{{expected}}が必要です。",
       "NotReady": "インポートが完了したデータが必要です。",
       "ValuesNotMetres": "メートル単位の値が必要です。このデータの単位は {{units}} です。",
-      "GridNotProjectedMetres": "メートル単位の投影グリッドが必要です。",
+      "GridNotProjectedMetres": "地上のメートル単位の投影グリッドが必要です。Web Mercator や経緯度は使えません。",
       "EngineMissing": "利用できません：GeoLibre エンジンがありません。",
       "NeedsDesktop": "Canopi Desktop が必要です。",
       "AlreadyInLayers": "すでにレイヤーにあります。"

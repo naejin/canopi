@@ -201,7 +201,7 @@ fn check_requirements(
     Ok(())
 }
 
-/// Refuse a raster whose engine-reported CRS is not projected in metres.
+/// Refuse a raster whose engine-reported CRS is not projected in ground metres.
 pub(super) fn check_projected_metre_grid(
     library: &crate::services::lidar::LidarLibrary,
     cancel: &AtomicBool,
@@ -211,7 +211,9 @@ pub(super) fn check_projected_metre_grid(
     match crs_class(&probe.crs_ref) {
         super::CRS_PROJECTED_METRE => Ok(()),
         super::CRS_PROJECTED_OTHER => {
-            Err("the grid declares horizontal units other than metres".to_string())
+            Err("the grid is in Web Mercator, whose metres are not ground metres; \
+                 a projected grid in ground metres is needed"
+                .to_string())
         }
         super::CRS_GEOGRAPHIC => {
             Err("the grid is geographic; a projected metre grid is needed".to_string())

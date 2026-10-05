@@ -233,7 +233,7 @@ pub enum AnalysisUnavailable {
     NotReady,
     /// The analysis needs values in metres.
     ValuesNotMetres { units: String },
-    /// The analysis needs a projected grid with metre units.
+    /// The analysis needs a projected grid in ground metres, not Web Mercator.
     GridNotProjectedMetres,
     /// The engine the analysis runs on is not installed.
     EngineMissing { detail: String },

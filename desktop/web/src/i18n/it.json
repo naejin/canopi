@@ -1627,7 +1627,7 @@
       "WrongInput": "Richiede: {{expected}}.",
       "NotReady": "Richiede dati con l’importazione completata.",
       "ValuesNotMetres": "Richiede valori in metri; questi dati sono in {{units}}.",
-      "GridNotProjectedMetres": "Richiede una griglia proiettata in metri.",
+      "GridNotProjectedMetres": "Richiede una griglia proiettata in metri al suolo, non Web Mercator né longitudine e latitudine.",
       "EngineMissing": "Non disponibile: manca il motore GeoLibre.",
       "NeedsDesktop": "Richiede Canopi Desktop.",
       "AlreadyInLayers": "Già nei Livelli."
