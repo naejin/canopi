@@ -1,6 +1,6 @@
 # Narrow tool interface
 
-Status: Accepted (2026-09-29, Canopi v2); amended 2026-09-30 and 2026-10-03 (stamp picks)
+Status: Accepted (2026-09-29, Canopi v2); amended 2026-09-30, 2026-10-03 (stamp picks) and 2026-10-05 (U33: no ruler presses)
 
 Builds on [ADR 0016](0016-one-view-transform.md) and [ADR 0017](0017-input-pipeline-and-gestures.md). Product rules: [ADR 0015](0015-rotating-map-and-canvas-controls.md).
 
@@ -14,7 +14,7 @@ Tools implemented a wide `SceneToolAdapter`: raw pointer events, DOM predicates,
 - **They act only through `ToolEffects`**: the unchanged Scene Edit transaction API, world-space drafts and selection previews drawn by the renderer, DOM handles, guidance, cursor, tool requests, text entry, menu and focus requests routed to their owners. There is no navigation handle: a tool cannot move the camera.
 - **Tools never import** MapLibre, Pixi, signals, DOM types, app or component modules, the view module's values, the input pipeline or renderers. The vocabulary shared with input (pointer kind, modifiers, cancel reasons, tool and handle ids, drop payloads) lives in one neutral types file both import.
 - **The ToolHost** converts screen to world at event time, constrains and snaps once: a tool names its constraint (`constraint()`: a direction from the last corner, the row source or the line start at 45°; for the rotate handle, a 15° step of the angle turned since the press, as today). The host turns the direction against the screen axes and keeps the length; grid and guides stay on world axes. From phase 2 it then snaps the length along the ray; before that it keeps today's order (Polygon snaps, then constrains), so porting changes nothing.
-- **The ToolHost also** classifies handle and ruler presses, runs interceptors (unsettled-scene quarantine, text-entry commit, inspection probe, overview rule), re-emits the last drag or hover on every camera frame so a draft's fixed corner stays on the ground and its free corner under the cursor, and re-projects drafts through lon/lat on re-origin.
+- **The ToolHost also** classifies handle presses, runs interceptors (unsettled-scene quarantine, text-entry commit, inspection probe, overview rule), re-emits the last drag or hover on every camera frame so a draft's fixed corner stays on the ground and its free corner under the cursor, and re-projects drafts through lon/lat on re-origin.
 - **Screen-relative behaviour lives in the host:** arrows become world vectors along the screen axes; the host is the only opener of the canvas menu: it retargets the selection and offers "Turn view to this edge" and "Finish shape"; modifiers are resolved per platform and phase (additive Shift or Cmd/Ctrl, subtractive Alt, constrain Shift, Plant a row's no-snap).
 - **The Pan tool** keeps an id and a module for cursor and guidance only; its drags become `pan` in the recogniser and never reach it.
 - **Esc queries** (`hasTransient`, `escapeHint`, `cancelTransient`) feed the keyboard owner's Esc chain.

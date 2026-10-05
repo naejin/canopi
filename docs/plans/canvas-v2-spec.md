@@ -1140,7 +1140,7 @@ export interface ToolContext {
   readonly scene: ToolScene
   readonly effects: ToolEffects
   readonly settings: ToolSettingsPort
-  /** The host's grid and guide snapping of any world point (the move-drag snaps the dragged object's reference point, not the pointer). */
+  /** The host's grid snapping of any world point (the move-drag snaps the dragged object's reference point, not the pointer). */
   snap(point: WorldPoint): WorldPoint
   now(): number                                         // the host's clock (ToolHostDeps.timers.clock): double-click windows
   readonly translate: (key: string, options?: Readonly<Record<string, unknown>>) => string
@@ -1847,7 +1847,7 @@ Where the rotation rows live (phase 1): Shift+←/→ and Shift+↑ (`view-arrow
 | Shift+2 | zoom to the selection at the current bearing | `command` | follows (spec: like Shift+G) | 2 |
 | Ctrl+Alt+R | rotate the selection | `outside-dock` | n/a | F (was `command`) |
 | Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y | undo, redo; during a polygon draft they undo and redo corners | `command` | n/a | unchanged |
-| Ctrl+X, C, D, A, Shift+A, G, Shift+G, Shift+L | cut, copy, duplicate, select all, same species, group, ungroup, lock: they act on the map's selection from any focus but a text field and the dock or phone sheet, so a panel keeps the browser's copy and select all. Cut, which deletes the selection, does nothing while a pointer session (a still drag, twist or rotate included) is live: the key is consumed (from 1) | `outside-dock` | n/a | F (was `command`) |
+| Ctrl+X, C, D, A, Shift+A, G, Shift+G, Shift+L | cut, copy, duplicate, select all, same species, group, ungroup, lock: they act on the map's selection from any focus but a text field and the dock or phone sheet, so a panel keeps the browser's copy and select all. Cut, which deletes the selection, does nothing while a pointer session (a still drag, twist or rotate included) or a tool draft (`tool-transient`) is live: the key is consumed (pointer session from 1; draft from 2, U33, canopi-f47t.21) | `outside-dock` | n/a | F (was `command`) |
 | Ctrl+V | paste | `command` | n/a | unchanged |
 | Ctrl+K, Ctrl+S, F1, F6 | place search, save, shortcuts, next region; work in text fields, as every shell shortcut but a single key does (F2 included) | `global` | n/a | unchanged |
 | Tab, Shift+Tab | focus navigation | browser | n/a | unchanged |

@@ -2,7 +2,7 @@
 
 Status: Accepted (2026-09-26, Canopi v2)
 
-Amended by [ADR 0015](0015-rotating-map-and-canvas-controls.md) (2026-09-29): saved views and stories restore their bearing; 2026-10-03 (U21, U23): a view records the ground it frames and keeps that frame in any window; the extent record is deleted.
+Amended by [ADR 0015](0015-rotating-map-and-canvas-controls.md) (2026-09-29): saved views and stories restore their bearing; 2026-10-03 (U21, U23): a view records the ground it frames and keeps that frame in any window; the extent record is deleted; 2026-10-05 (U33): the ground size is required.
 
 ## Context
 
@@ -20,7 +20,7 @@ v2.0 ships one analysis (slope) wired directly into the LiDAR workflow. Planned 
 - **Provenance.** Every derived item records its input items and generations, analysis id and recipe version, parameters and tool version. Refresh re-runs a result in place (every Design that uses it sees the new result; the run stays in the processing history); stale results are flagged with their reason (input, recipe or tool changed); refresh is always explicit, never automatic.
 - **Saved views.**
   - A Design can hold named views: camera (lon, lat, zoom, bearing, and optionally the ground the whole map framed, width × height in metres in the view's turned frame), visible layers, highlighted species or objects, and optional title and text. Views are Design data (Design Edit authority), stored in lon/lat like everything else.
-  - Showing a view or story step restores centre and bearing exactly, never snapping to north, and fits the framed ground into the whole map, panels and story card included: the same window gives the exact saved camera, a smaller one zooms out until nothing framed is cut off, a larger one never zooms in past the saved zoom. A view without the ground size keeps its camera zoom.
+  - Showing a view or story step restores centre and bearing exactly, never snapping to north, and fits the framed ground into the whole map, panels and story card included: the same window gives the exact saved camera, a smaller one zooms out until nothing framed is cut off, a larger one never zooms in past the saved zoom. Every view records its ground size (user, 2026-10-05, U33, replacing U21's camera-zoom fallback for a view without it).
   - Thumbnails fit the same ground into the image; presenting refits the step on screen when the map settles at another size.
   - Adding the field and deleting the old extent record kept the `.canopi` version ([ADR 0021](0021-canopi-2-breaks-stored-data.md), "Additive `.canopi` changes").
 - **Stories.** A story is an ordered list of saved views with rich text and optional images, authored in a Story panel beside the live map and presented full-window inside Canopi (keyboard and click navigation, reduced-motion jumps). Export to a self-contained web page and PDF comes from the same model. Canopi does not depend on ArcGIS StoryMaps.

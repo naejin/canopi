@@ -155,7 +155,7 @@ Add: the unused-code check's result (what it found and deleted, or why an entry 
 - If building a phase shows that the design is wrong, the agent stops and amends the ADR and spec (and tells the user) instead of working around it in code. The user allows changing docs and ADRs when a rule blocks a better design.
 - Each phase ends with a Web Edition cross-engine smoke test in Chromium and WebKit, committed as a CI job (bead canopi-9x95), so Windows and macOS webviews stay covered without hardware.
 
-How the definition of done reads under the user's 2026-10-01 decision (one release): the docs, gallery, release notes and the cross-engine scenario of the later phases are done once, at the release close; every phase still ends with the CI job green in Chromium and WebKit on its pushed commit, and with its review and live check. Windows and macOS are covered only by that CI job and the recogniser fixtures; no Windows or Mac hand check gates the release (U20).
+How the definition of done reads under the user's 2026-10-01 decision (one release): the docs, gallery, release notes and the cross-engine scenario of the later phases are done once, at the release close; every phase still ends with the CI job green in Chromium and WebKit on its pushed commit, and with its review and live check. Windows and macOS are covered only by that CI job and the recogniser fixtures; no Windows or Mac hand check gates the release (U20). Under U33 (2026-10-05) rulers are removed, so the rotated list's "rulers" no longer applies.
 
 ## 14. Operational notes (verbatim)
 
