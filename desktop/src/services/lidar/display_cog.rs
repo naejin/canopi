@@ -48,7 +48,7 @@ pub(super) const DISPLAY_PROFILE: &str = "display-cog-3857-v2";
 /// row needs no bump and an edited one does.
 #[cfg(test)]
 const DISPLAY_PROFILE_DIGEST: &str =
-    "e00cd648788208919af0819c86f4e02716b1cd524cd5c819f4377862ad9ff8d5";
+    "b1aa9c381fac462998b1f2013e1b74f7eca20e3541a04120f6455e4d4538ae4f";
 /// Largest side of a composed part, in 1024-cell chunks: a part is composed
 /// in memory and converted whole, so 4×4 chunks keep it inside the engine's
 /// capacity limit (`import::MAX_RAW_EXTRACTION_CELLS`).
