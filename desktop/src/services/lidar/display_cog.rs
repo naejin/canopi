@@ -521,11 +521,9 @@ impl LidarLibrary {
                 let bytes = std::fs::metadata(path)
                     .map_err(|e| format!("Display source {} is unavailable: {e}", path.display()))?
                     .len();
-                // Compressed output plus overviews never exceeds the
-                // uncompressed input by more than a third.
                 super::paths::require_free_space(
                     &staging,
-                    bytes.saturating_add(bytes / 3),
+                    display_free_bytes(bytes),
                     "Display preparation",
                 )?;
                 let converted = engine.write_display_cog(
@@ -766,9 +764,90 @@ pub(super) fn prune_display_derivatives(library: &LidarLibrary) -> Result<(), St
     Ok(())
 }
 
+/// Free bytes a display derivative of a raw (uncompressed) source asset of
+/// `source_bytes` may need.
+fn display_free_bytes(source_bytes: u64) -> u64 {
+    // The Web Mercator rung can hold about four times the source's pixels,
+    // and Deflate without a predictor barely shrinks Float32: values it
+    // cannot compress measured about twice the raw source with overviews
+    // (a test), so three times is the ceiling.
+    source_bytes.saturating_mul(3)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The free-space check before a derivative covers what the warp writes
+    /// at its worst: values Deflate cannot shrink, at the rung that gives
+    /// about four times the source's pixels (0.82 m Lambert-93 cells near
+    /// 46°N draw at zoom 18).
+    #[test]
+    fn the_free_space_asked_for_a_derivative_covers_the_finest_rung() {
+        use super::super::engine::{RasterEngine, RasterGeoref, RasterInput};
+        let engine = super::super::rust_engine::RustRasterEngine;
+        let cancel = AtomicBool::new(false);
+        let root = crate::test_scratch::TestScratch::new("canopi-display-free-space");
+        std::fs::create_dir_all(&root).unwrap();
+        let side = 512u32;
+        let mut state = 12_345u64;
+        let values: Vec<f32> = (0..side * side)
+            .map(|_| {
+                state = state
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+                // Random mantissa bits in [128, 256): nothing to compress.
+                f32::from_bits(((state >> 33) as u32 & 0x007f_ffff) | 0x4300_0000)
+            })
+            .collect();
+        let grid = RasterGrid {
+            width: side,
+            height: side,
+            geotransform: [700_000.0, 0.82, 0.0, 6_600_000.0, 0.0, -0.82],
+        };
+        let source = root.join("source.tif");
+        engine
+            .write_controlled_cog(
+                RasterInput::Samples {
+                    grid: &grid,
+                    values: &values,
+                },
+                &source,
+                Some(RasterGeoref {
+                    grid: &grid,
+                    crs: "EPSG:2154",
+                }),
+                Some(-9999.0),
+                &cancel,
+            )
+            .unwrap();
+        let zoom = super::super::rust_engine::display_zoom("EPSG:2154", [&grid]).unwrap();
+        let display = root.join("display.tif");
+        engine
+            .write_display_cog(
+                RasterInput::File(&source),
+                &display,
+                None,
+                Some(-9999.0),
+                zoom,
+                &cancel,
+            )
+            .unwrap();
+        let probe = engine.probe(&display, &cancel).unwrap();
+        let pixels = f64::from(probe.width) * f64::from(probe.height);
+        assert!(
+            pixels > 3.5 * f64::from(side * side),
+            "the fixture draws at the finest rung: {pixels} pixels"
+        );
+        let source_bytes = std::fs::metadata(&source).unwrap().len();
+        let display_bytes = std::fs::metadata(&display).unwrap().len();
+        assert!(
+            display_bytes <= display_free_bytes(source_bytes),
+            "{display_bytes} bytes written, {} asked for",
+            display_free_bytes(source_bytes)
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn distant_chunks_form_separate_parts_without_the_gap_between() {
