@@ -20,6 +20,8 @@
 //! pixels, so each overview level halves exactly and its pixels sit on the
 //! lattice of that level: adjacent parts' overview pixels coincide, and the
 //! one straddling their seam shows either part's average of its own side.
+//! A raster across the 180° meridian is refused: its footprint would wrap
+//! into a world-wide derivative.
 //!
 //! **Placement** (A4). A pixel centre goes Web Mercator → WGS84 → native
 //! through the CRS authority, on cog-tiler's mesh: nodes every [`MESH`]
@@ -181,18 +183,31 @@ fn place(
         f64::NEG_INFINITY,
         f64::NEG_INFINITY,
     ];
+    // The last x placed along each edge: a step of more than half the world
+    // between neighbours is the edge wrapping at the 180° meridian.
+    let mut previous = [None::<f64>; 4];
     for step in 0..=points {
         let t = f64::from(step) / f64::from(points);
-        for (u, v) in [
+        for (edge, (u, v)) in [
             (t * width, 0.0),
             (t * width, height),
             (0.0, t * height),
             (width, t * height),
-        ] {
+        ]
+        .into_iter()
+        .enumerate()
+        {
             let Ok((x, y)) = to_mercator.apply(gt[0] + u * gt[1], gt[3] + v * gt[5]) else {
                 continue;
             };
             if x.is_finite() && y.is_finite() {
+                if previous[edge].is_some_and(|last: f64| (x - last).abs() > HALF_WORLD) {
+                    return Err(
+                        "rasters across the 180° meridian are not supported by the display"
+                            .to_string(),
+                    );
+                }
+                previous[edge] = Some(x);
                 bounds = [
                     bounds[0].min(x),
                     bounds[1].min(y),
@@ -668,6 +683,29 @@ mod tests {
         };
         assert_eq!(super::zoom(&native, [&south]).unwrap(), 17);
         assert_eq!(super::zoom(&native, [&far_north, &south]).unwrap(), 17);
+    }
+
+    /// A raster across the 180° meridian (Taveuni, Fiji, in UTM 60S) is
+    /// refused at once, by name: its Web Mercator footprint would otherwise
+    /// wrap into a world-wide derivative written for hours. Its neighbour
+    /// ending just west of the meridian places as usual.
+    #[test]
+    fn a_raster_across_the_antimeridian_is_refused_at_once() {
+        use super::super::crs::from_reference;
+        let native = from_reference("EPSG:32760").unwrap();
+        let across = RasterGrid {
+            width: 200,
+            height: 100,
+            geotransform: [819_000.0, 10.0, 0.0, 8_142_000.0, 0.0, -10.0],
+        };
+        let error = super::lattice(&across, &native, 14).unwrap_err();
+        assert!(error.contains("180°"), "{error}");
+        let west = RasterGrid {
+            geotransform: [817_000.0, 10.0, 0.0, 8_142_000.0, 0.0, -10.0],
+            ..across
+        };
+        let lattice = super::lattice(&west, &native, 14).unwrap();
+        assert!(lattice.width < 1024, "{lattice:?}");
     }
 
     /// A2: the derivative carries the Web Mercator code keys, its pixel is a
