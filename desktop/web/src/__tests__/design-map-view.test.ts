@@ -6,6 +6,7 @@ import { createAppCanvasRuntimeAppAdapter } from '../app/canvas-runtime/app-adap
 import { createContinuousSave } from '../app/document-session/continuous-save'
 import { createDesignSessionPersistence } from '../app/document-session/persistence'
 import { createDesignSessionReplacement } from '../app/document-session/replacement'
+import { createDesignSessionStateMachine } from '../app/document-session/state-machine'
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
 import {
   prepareDesignWriteDestination,
@@ -56,12 +57,11 @@ afterEach(async () => {
   lastView.value = null
 })
 
-/** A file opened through the replacement path, on a map of `screen` (1200 x 800) whose clean state reaches `store`. */
-function openOrchard(
-  file: CanopiFile = orchard(),
+/** A live runtime on a map of `screen` whose clean state reaches `store`. */
+function liveHost(
+  store: ReturnType<typeof createMemoryDesignSessionStore>,
   screen = { width: 1200, height: 800 },
-): { host: CanvasRuntimeHost; store: ReturnType<typeof createMemoryDesignSessionStore> } {
-  const store = createMemoryDesignSessionStore({ file: null })
+): CanvasRuntimeHost {
   const host = createLiveTestCanvasRuntimeHost({
     screen,
     appAdapter: {
@@ -70,6 +70,16 @@ function openOrchard(
     },
   })
   hosts.push(host)
+  return host
+}
+
+/** A file opened through the replacement path, on a map of `screen` (1200 x 800) whose clean state reaches `store`. */
+function openOrchard(
+  file: CanopiFile = orchard(),
+  screen = { width: 1200, height: 800 },
+): { host: CanvasRuntimeHost; store: ReturnType<typeof createMemoryDesignSessionStore> } {
+  const store = createMemoryDesignSessionStore({ file: null })
+  const host = liveHost(store, screen)
   const replacement = createDesignSessionReplacement({ store, workflowRunner: { install: vi.fn(), dispose: vi.fn() } })
   replacement.replace({ file, kind: 'loaded', path: PATH, name: file.name }, host.surfaces.documents, () => true)
   return { host, store }
@@ -264,5 +274,85 @@ describe('opening a Design at the view it was saved with', () => {
     await host.init(container)
 
     expectCameraAt(host, file.map_view!)
+  })
+})
+
+/** One undoable Scene edit: every plant is locked. */
+function editTheDesign(host: CanvasRuntimeHost): void {
+  host.surfaces.commands.sceneEdits.selectAll()
+  host.surfaces.commands.sceneEdits.lockSelected()
+}
+
+const SAVE_AS_PATH = '/designs/orchard-copy.canopi'
+
+/** The orchard opened from its file on Desktop through the real session state machine; `writes` collects each file write. */
+async function openOnDesktop(file: CanopiFile = orchard()) {
+  const store = createMemoryDesignSessionStore({ file: null })
+  const host = liveHost(store)
+  const writes: { path: string; content: CanopiFile }[] = []
+  const requestSaveDecision = vi.fn(async () => 'cancel')
+  const machine = createDesignSessionStateMachine({
+    store,
+    getCurrentSession: () => host.surfaces.documents,
+    selectDesignSavePath: async () => SAVE_AS_PATH,
+    prepareDesignWrite: (path, _expectedFingerprint, onWritten) => prepareDesignWriteDestination({
+      resource: `native-design:${path}`,
+      destinationPath: path,
+      write: async (content) => {
+        writes.push({ path, content })
+        onWritten(`fp-${writes.length}`)
+      },
+    }),
+    prepareDraftWrite: (id) => prepareDesignWriteDestination({
+      resource: `native-draft:${id}`,
+      write: () => { throw new Error('the orchard has a file home') },
+    }),
+    deleteDesignDraft: async () => undefined,
+    requestSaveDecision: requestSaveDecision as never,
+    workflowRunner: { install: vi.fn(), dispose: vi.fn() },
+  })
+  machine.beginEmptyDocumentSession(host.surfaces.documents)
+  await expect(machine.transitionDocument({
+    source: 'open-path',
+    dirtyGuard: 'flush',
+    session: host.surfaces.documents,
+    load: async () => ({ file, path: PATH, name: file.name, fingerprint: 'fp-0' }),
+  })).resolves.toMatchObject({ status: 'applied' })
+  return { host, store, machine, writes, requestSaveDecision }
+}
+
+describe('the view reaches the home only with a write that already happens (U30)', () => {
+  it('an edit, then a pan: the next continuous save writes the panned view, and reopening restores it', async () => {
+    vi.useFakeTimers()
+    try {
+      const { host, machine, writes } = await openOnDesktop()
+      const uninstall = machine.continuousSave.install()
+      editTheDesign(host)
+      moveTheView(host)
+      const panned = liveMapView(host)
+
+      await vi.advanceTimersByTimeAsync(10_000)
+      uninstall()
+
+      expect(writes.map((write) => write.content.map_view)).toEqual([panned])
+      const { host: reopened } = openOrchard(writes[0]!.content)
+      expectCameraAt(reopened, panned)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a manual Save writes the live view with the edits, and Save As writes it with no edit', async () => {
+    const { host, machine, writes } = await openOnDesktop()
+    editTheDesign(host)
+    moveTheView(host)
+
+    await expect(machine.saveCurrentDesign()).resolves.toBe(true)
+    expect(writes.map((write) => [write.path, write.content.map_view])).toEqual([[PATH, liveMapView(host)]])
+
+    host.cameraHost.current().apply({ kind: 'pan-by', deltaPx: { x: 30, y: 0 } })
+    await expect(machine.saveAsCurrentDesign()).resolves.toMatchObject({ status: 'applied' })
+    expect(writes.map((write) => write.path)).toEqual([PATH, SAVE_AS_PATH])
+    expect(writes[1]?.content.map_view).toEqual(liveMapView(host))
   })
 })
