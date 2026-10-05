@@ -374,9 +374,6 @@ fn renaming_a_result_changes_only_its_name() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// Asserts a refusal shown in the import dialog: it names the user's file and
-/// nothing about where it lives or how the system failed, and the refused
-/// import left no item and no job behind.
 /// A library wired like the app's, so an admitted import would start.
 fn attached_library(root: &Path) -> LidarLibrary {
     let library = LidarLibrary::open(root).unwrap();
@@ -384,6 +381,9 @@ fn attached_library(root: &Path) -> LidarLibrary {
     library
 }
 
+/// Asserts a refusal shown in the import dialog: it names the user's file and
+/// nothing about where it lives or how the system failed, and the refused
+/// import left no item and no job behind.
 fn assert_refused_in_dialog(library: &LidarLibrary, root: &Path, error: &str, name: &str) {
     assert!(error.contains(name), "the refusal names {name}: {error}");
     let root = root.display().to_string();
