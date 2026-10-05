@@ -576,7 +576,7 @@ pub struct LibrarySnapshot { pub items: Vec<LibraryItemSummary>, pub engines: En
 **Grid facts without a raster read in the poll path**
 - `slope_eligibility` probes the raster at job time, but offers are computed on every 1.5 s poll.
 - So import records two facts on the generation: `crs_class` (`projected-metre`, `projected-other`, `geographic` or `unknown`) and extent cells.
-- Offers read those columns. The job still rechecks with the raster engine, which stays authoritative.
+- Offers and the job read those columns; `crs_class` comes from the CRS table row the engine reads, so no raster is probed again.
 
 ### 3.3 Catalogue v21 (no migration)
 

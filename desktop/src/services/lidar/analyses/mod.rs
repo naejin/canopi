@@ -43,8 +43,7 @@ const CRS_UNKNOWN: &str = "unknown";
 ///
 /// Import records the class of the reference the raster engine reported, so
 /// offers are computed from the catalogue on every poll without a raster
-/// read; a run rechecks the stored raster with the engine, which stays the
-/// projection authority.
+/// read; the class comes from the same table row the engine reads.
 pub(crate) fn crs_class(reference: &str) -> &'static str {
     match super::rust_engine::crs_kind(reference) {
         Some(super::rust_engine::CrsKind::ProjectedMetre) => CRS_PROJECTED_METRE,

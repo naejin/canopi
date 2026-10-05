@@ -1427,60 +1427,6 @@ fn cancelling_a_geolibre_run_kills_its_child_and_publishes_nothing() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-#[test]
-fn the_run_rechecks_the_grid_with_the_rust_engine() {
-    let root = scratch_root("grid-check");
-    let library = LidarLibrary::open(&root).unwrap();
-    let values = vec![1.0f32; 48];
-    let projected = raster(&root, "projected", &values, 8, 6, 0.0);
-    windowed::check_projected_metre_grid(&library, &AtomicBool::new(false), &projected)
-        .expect("a projected metre plane is eligible");
-    let geographic = root.join("geographic.tif");
-    let engine = crate::services::lidar::rust_engine::RustRasterEngine;
-    let raw = root.join("geographic.raw");
-    import::write_f32_raw(&raw, &values).unwrap();
-    import::raw_to_tif(
-        &engine,
-        &AtomicBool::new(false),
-        &raw,
-        &geographic,
-        &RasterGrid {
-            width: 8,
-            height: 6,
-            geotransform: [2.0, 0.001, 0.0, 48.0, 0.0, -0.001],
-        },
-        "EPSG:4326",
-        -9999.0,
-    )
-    .unwrap();
-    let error =
-        windowed::check_projected_metre_grid(&library, &AtomicBool::new(false), &geographic)
-            .unwrap_err();
-    assert!(error.contains("geographic"), "{error}");
-    // Web Mercator's metres are 1/cos(latitude) ground metres.
-    let mercator = root.join("mercator.tif");
-    import::write_f32_raw(&raw, &values).unwrap();
-    import::raw_to_tif(
-        &engine,
-        &AtomicBool::new(false),
-        &raw,
-        &mercator,
-        &RasterGrid {
-            width: 8,
-            height: 6,
-            geotransform: [261_000.0, 1.0, 0.0, 6_250_000.0, 0.0, -1.0],
-        },
-        "EPSG:3857",
-        -9999.0,
-    )
-    .unwrap();
-    let error = windowed::check_projected_metre_grid(&library, &AtomicBool::new(false), &mercator)
-        .expect_err("a Web Mercator grid is not a ground metre grid");
-    assert!(error.contains("ground metres"), "{error}");
-    drop(library);
-    let _ = std::fs::remove_dir_all(&root);
-}
-
 /// A run cancelled before its first window publishes nothing and leaves no
 /// scratch or unpublished rows.
 #[test]
