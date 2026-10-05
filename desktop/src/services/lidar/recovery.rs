@@ -657,6 +657,76 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    /// A v22 catalogue built between the column rename and the canonical
+    /// reference can hold WKT in `crs_ref`, which `crs::from_reference`
+    /// refuses; opening it as is would break placement for every item, so it
+    /// is set aside and rebuilt from the originals with every id kept.
+    #[test]
+    fn a_v22_catalogue_with_wkt_refs_is_set_aside_and_rebuilt_with_its_ids_kept() {
+        let root = crate::test_scratch::TestScratch::new("lidar-v22-library");
+        let paths = LidarPaths::open(&root).unwrap();
+        let connection = catalogue::open(&paths.catalogue_path()).unwrap();
+        source_meta::test_support::seed_published_item(
+            &connection,
+            "lyr-delft",
+            "Delft",
+            DEFAULT_QUANTITY_KEY,
+            "m",
+            &[("sha-delft", "delft.tif")],
+        );
+        std::fs::create_dir_all(paths.source_dir("sha-delft")).unwrap();
+        std::fs::write(paths.source_original("sha-delft"), b"tile").unwrap();
+        source_meta::refresh(&connection, &paths).unwrap();
+        // The v22 shape of that window: WKT in `crs_ref`, version 22.
+        connection
+            .execute(
+                "UPDATE lidar_interpretations SET crs_ref = 'PROJCS[\"Amersfoort / RD New\"]'",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "UPDATE lidar_catalogue_meta SET value = '22' WHERE key = 'schema_version'",
+                [],
+            )
+            .unwrap();
+        drop(connection);
+
+        let opened = open_catalogue(&paths).unwrap();
+        assert!(
+            matches!(
+                opened.status,
+                LibraryOpenStatus::Recovered {
+                    reason: RecoveryReason::OlderVersion(22),
+                    items: 1,
+                    ..
+                }
+            ),
+            "{:?}",
+            opened.status
+        );
+        let ids: Vec<String> = opened
+            .connection
+            .prepare("SELECT id FROM lidar_source_layers")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(ids, vec!["lyr-delft".to_string()]);
+        let wkt_refs: i64 = opened
+            .connection
+            .query_row(
+                "SELECT COUNT(*) FROM lidar_interpretations WHERE crs_ref NOT LIKE 'EPSG:%'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(wkt_refs, 0, "no WKT reference survives the rebuild");
+        drop(opened);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     fn has_column(connection: &Connection, table: &str, column: &str) -> bool {
         connection
             .prepare("SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2")
