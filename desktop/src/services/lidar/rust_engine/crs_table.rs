@@ -16,10 +16,14 @@
 //! The definitions are derived from the EPSG Geodetic Parameter Dataset
 //! (IOGP), see `THIRD_PARTY_NOTICES.md`.
 
-/// Whether a row's coordinates are projected metres or geographic degrees.
+/// Whether a row's coordinates are ground metres, projected metres that are
+/// not ground metres, or geographic degrees.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CrsKind {
     ProjectedMetre,
+    /// Mercator (Web Mercator): its metres grow as 1/cos(latitude), about
+    /// 1.5 ground metres at 48N, so distances and slopes on it are wrong.
+    ProjectedOther,
     Geographic,
 }
 
@@ -42,6 +46,8 @@ impl CrsRow {
     pub(crate) fn kind(&self) -> CrsKind {
         if self.proj.starts_with("+proj=longlat") {
             CrsKind::Geographic
+        } else if self.proj.starts_with("+proj=merc") {
+            CrsKind::ProjectedOther
         } else {
             CrsKind::ProjectedMetre
         }

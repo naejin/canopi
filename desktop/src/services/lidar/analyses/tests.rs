@@ -106,6 +106,11 @@ fn every_registry_entry_has_exactly_one_executor() {
 fn crs_classes_come_from_the_row_of_the_stored_reference() {
     assert_eq!(crs_class("EPSG:2154"), CRS_PROJECTED_METRE);
     assert_eq!(crs_class("EPSG:4471"), CRS_PROJECTED_METRE);
+    assert_eq!(
+        crs_class("EPSG:3857"),
+        CRS_PROJECTED_OTHER,
+        "Web Mercator metres are not ground metres"
+    );
     assert_eq!(crs_class("EPSG:4326"), "geographic");
     assert_eq!(crs_class("EPSG:4171"), "geographic");
     assert_eq!(crs_class("EPSG:2263"), "unknown", "feet are not a row");
@@ -383,7 +388,7 @@ fn stage_fake(library: &LidarLibrary, digest: &str) -> StagedRaster {
             width: 1,
             height: 1,
             geotransform: "[0,1,0,0,0,-1]".to_string(),
-            crs_ref: "EPSG:3857".to_string(),
+            crs_ref: "EPSG:32631".to_string(),
             nodata: None,
         },
     )
@@ -411,7 +416,7 @@ fn stage_fake(library: &LidarLibrary, digest: &str) -> StagedRaster {
             height: 1024,
             geotransform: [0.0, 1.0, 0.0, 0.0, 0.0, -1.0],
         },
-        crs_ref: "EPSG:3857".to_string(),
+        crs_ref: "EPSG:32631".to_string(),
         crs_class: CRS_PROJECTED_METRE.to_string(),
         bounds_3857: "[0,0,1,1]".to_string(),
         coverage_cells: 4,
@@ -1011,7 +1016,8 @@ fn publish_source(library: &LidarLibrary, layer_id: &str, source: &Path) {
     .expect("the batch publishes");
 }
 
-/// A plane rising one metre per metre eastward in EPSG:3857, with a NoData
+/// A plane rising one metre per metre eastward in EPSG:32631 (a ground
+/// metre grid; Web Mercator's metres are not), with a NoData
 /// hole at columns 8..10, rows 6..8.
 fn plane_layer(library: &LidarLibrary, root: &Path, width: u32, height: u32) -> String {
     let values: Vec<f32> = (0..height)
@@ -1054,7 +1060,7 @@ fn raster(
             height,
             geotransform: [origin_x, 1.0, 0.0, f64::from(height), 0.0, -1.0],
         },
-        "EPSG:3857",
+        "EPSG:32631",
         -9999.0,
     )
     .unwrap();
@@ -1151,14 +1157,19 @@ fn result_window(
     )
 }
 
-/// The WGS84 point of a Web Mercator cell centre, derived independently of the
-/// transform under test.
+/// The WGS84 point of a fixture cell centre, through the CRS authority,
+/// which `rust_engine::crs` tests hold to PROJ.
 fn lon_lat(easting: f64, northing: f64) -> (f64, f64) {
-    const R: f64 = 6_378_137.0;
-    (
-        (easting / R).to_degrees(),
-        (2.0 * (northing / R).exp().atan() - std::f64::consts::FRAC_PI_2).to_degrees(),
-    )
+    use crate::services::lidar::engine::RasterEngine;
+    crate::services::lidar::rust_engine::RustRasterEngine
+        .transform_points(
+            "EPSG:32631",
+            "EPSG:4326",
+            &[(easting, northing)],
+            &AtomicBool::new(false),
+        )
+        .unwrap()[0]
+        .unwrap()
 }
 
 /// A published slope is readable through inspection in the units it was
@@ -1438,6 +1449,25 @@ fn the_run_rechecks_the_grid_with_the_rust_engine() {
         windowed::check_projected_metre_grid(&library, &AtomicBool::new(false), &geographic)
             .unwrap_err();
     assert!(error.contains("geographic"), "{error}");
+    // Web Mercator's metres are 1/cos(latitude) ground metres.
+    let mercator = root.join("mercator.tif");
+    import::write_f32_raw(&raw, &values).unwrap();
+    import::raw_to_tif(
+        &engine,
+        &AtomicBool::new(false),
+        &raw,
+        &mercator,
+        &RasterGrid {
+            width: 8,
+            height: 6,
+            geotransform: [261_000.0, 1.0, 0.0, 6_250_000.0, 0.0, -1.0],
+        },
+        "EPSG:3857",
+        -9999.0,
+    )
+    .unwrap();
+    windowed::check_projected_metre_grid(&library, &AtomicBool::new(false), &mercator)
+        .expect_err("a Web Mercator grid is not a ground metre grid");
     drop(library);
     let _ = std::fs::remove_dir_all(&root);
 }

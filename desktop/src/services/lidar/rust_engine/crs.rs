@@ -41,7 +41,7 @@ impl ResolvedCrs {
     }
 
     pub(super) fn is_projected(&self) -> bool {
-        self.kind() == CrsKind::ProjectedMetre
+        self.kind() != CrsKind::Geographic
     }
 
     fn proj(&self) -> Result<Proj, String> {
@@ -593,7 +593,7 @@ mod tests {
             } else {
                 assert!(datum, "EPSG:{} states its datum: {proj}", row.code);
             }
-            if row.kind() == CrsKind::ProjectedMetre {
+            if row.kind() != CrsKind::Geographic {
                 assert!(proj.contains("+units=m"), "EPSG:{}: {proj}", row.code);
             }
             assert!(Proj::from_proj_string(proj).is_ok(), "EPSG:{}", row.code);

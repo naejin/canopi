@@ -450,6 +450,8 @@ fn gdal_crs_class(wkt: &str) -> &'static str {
     let wkt = wkt.trim_start();
     if wkt.starts_with("GEOGCRS[") {
         super::super::analyses::CRS_GEOGRAPHIC
+    } else if wkt.contains("METHOD[\"Popular Visualisation Pseudo Mercator\"") {
+        super::super::analyses::CRS_PROJECTED_OTHER
     } else if wkt.starts_with("PROJCRS[") && wkt.contains("LENGTHUNIT[\"metre\",1]") {
         super::super::analyses::CRS_PROJECTED_METRE
     } else {
