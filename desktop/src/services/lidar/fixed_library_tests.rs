@@ -496,28 +496,63 @@ fn importing_a_file_that_is_not_a_geotiff_is_refused_before_it_is_read() {
     assert_refused_in_dialog(&library, &root, &error, "dem.asc");
 }
 
-/// Retry checks the saved selection before it records anything: a file that
-/// has gone since refuses the Retry by name and adds no job.
-#[test]
-fn retrying_an_import_whose_file_is_gone_is_refused_and_adds_no_job() {
-    let root = scratch("retry-missing");
-    let library = attached_library(&root);
+/// The failed import Retry is offered on: its job's message is what the item's
+/// row shows.
+fn failed_import(library: &LidarLibrary, source: PathBuf, message: &str) -> String {
     let (layer_id, job_id) = library
         .record_import_item(
             "Orchard",
             RasterQuantity::GroundElevation,
             None,
             false,
-            &[root.join("gone.tif")],
+            &[source],
         )
         .unwrap();
-    library.fail_import_job(&job_id, "gone.tif cannot be found");
+    library.fail_import_job(&job_id, message);
+    layer_id
+}
+
+/// The message the item's row shows, once its latest import has failed.
+fn row_message(library: &LidarLibrary, layer_id: &str) -> String {
+    let snapshot = library.library_snapshot().unwrap();
+    let job = item(&snapshot.items, layer_id)
+        .import_job
+        .as_ref()
+        .expect("a retryable import");
+    assert_eq!(job.state, LidarImportJobState::Failed);
+    job.message.clone().unwrap_or_default()
+}
+
+/// A Retry whose saved file has gone is refused by name, and the refusal
+/// stays on the item's row as its failed import's message.
+#[test]
+fn retrying_an_import_whose_file_is_gone_is_refused_and_the_reason_stays() {
+    let root = scratch("retry-missing");
+    let library = attached_library(&root);
+    let layer_id = failed_import(&library, root.join("gone.tif"), "first failure");
     let error = library.retry_import(&layer_id).unwrap_err();
     assert!(error.contains("gone.tif cannot be found"), "{error}");
     assert!(!error.contains(&root.display().to_string()), "{error}");
-    assert_eq!(
-        count(&library, "SELECT COUNT(*) FROM lidar_import_jobs"),
-        1,
-        "the refused Retry recorded no job"
+    assert_eq!(row_message(&library, &layer_id), error);
+}
+
+/// U31 on a rebuilt item: a Retry whose saved file is in a refused code is
+/// refused with the typed message, which replaces the rebuild's "Retry
+/// prepares this item again" on the row instead of vanishing with the dialog.
+#[test]
+fn retrying_an_import_in_a_refused_code_keeps_the_refusal_on_the_item() {
+    let root = scratch("retry-refused-code");
+    let library = attached_library(&root);
+    let source = plane_in_code(&library, &root, "elsewhere", 65_000);
+    let layer_id = failed_import(&library, source, recovery::RECOVERED_IMPORT_MESSAGE);
+    let error = library.retry_import(&layer_id).unwrap_err();
+    assert!(
+        error.contains("65000"),
+        "the refusal names the code: {error}"
+    );
+    assert_eq!(row_message(&library, &layer_id), error);
+    assert!(
+        library.record_import_retry(&layer_id).is_ok(),
+        "the item still offers Retry"
     );
 }
