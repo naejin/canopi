@@ -29,7 +29,6 @@ const TARGETS: readonly TargetClass[] = [
   { kind: 'surface' },
   { kind: 'surface' },
   { kind: 'handle', id: 'rotate' as ToolHandleId },
-  { kind: 'ruler', axis: 'v' },
   { kind: 'owned-chrome' },
   { kind: 'owned-chrome', lockedAffordance: true },
   { kind: 'owned-text' },

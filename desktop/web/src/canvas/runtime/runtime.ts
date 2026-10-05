@@ -161,7 +161,6 @@ export interface CanvasSceneEditCommandSurface {
 export interface CanvasChromeCommandSurface {
   toggleGrid(): void
   toggleSnapToGrid(): void
-  toggleRulers(): void
 }
 
 export interface CanvasLayerCommandSurface {
@@ -309,7 +308,6 @@ export interface CanvasDocumentSurface {
    */
   readonly presented: ReadonlySignal<boolean>
   attachInspectionTo(element: HTMLElement): CanvasInspectionHandle
-  attachRulersTo(element: HTMLElement): void
   showCanvasChrome(): void
   hideCanvasChrome(): void
   zoomToFit(): void

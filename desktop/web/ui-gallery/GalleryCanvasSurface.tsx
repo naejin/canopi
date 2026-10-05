@@ -51,9 +51,8 @@ export function GalleryCanvasSurface({
   createRuntimeComposition = createGalleryWorkspaceRuntimeComposition,
 }: GalleryCanvasSurfaceProps) {
   const canvas = useRef<HTMLDivElement>(null)
-  // As in both editions: the map area frames fits and centres chips, and rulers draw beside the chrome.
+  // As in both editions: the map area frames fits and centres chips.
   const canvasArea = useRef<HTMLDivElement>(null)
-  const rulers = useRef<HTMLDivElement>(null)
   useMapArea(canvasArea)
   const ready = useSignal(false)
 
@@ -158,8 +157,6 @@ export function GalleryCanvasSurface({
         throw new Error(`Gallery workspace did not start (${outcome}).`)
       }
       if (!runtimeIsActive()) return
-      if (rulers.current) activeRuntime.surfaces.documents.attachRulersTo(rulers.current)
-      if (!runtimeIsActive()) return
       activeRuntime.surfaces.documents.loadDocument(design)
       activeRuntime.surfaces.documents.showCanvasChrome()
       if (!runtimeIsActive()) return
@@ -245,7 +242,6 @@ export function GalleryCanvasSurface({
     <div className={styles.canvasWorkspace}>
       <div ref={canvasArea} className={`${panelStyles.canvasArea} ${styles.canvasArea}`}>
         <div ref={canvas} className={styles.canvas} />
-        <div ref={rulers} className={panelStyles.rulerOverlay} />
         {ready.value ? (
           <CanvasChrome
             key={activeSurface.value === 'lens' ? 'lens' : 'other'}

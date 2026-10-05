@@ -41,7 +41,6 @@ function deps(overrides: Partial<DomInputSourceDeps> = {}): DomInputSourceDeps {
     keys: { physicalCtrl: () => false, lastKeyboardMenuAt: () => null },
     clock: () => 1000,
     timers: { set: vi.fn(() => 1), clear: vi.fn() },
-    listensToRulers: false,
     ...overrides,
   }
 }
@@ -71,7 +70,7 @@ describe('createDomInputSource', () => {
       documentAdd: vi.spyOn(document, 'addEventListener'),
       documentRemove: vi.spyOn(document, 'removeEventListener'),
     }
-    const source = createDomInputSource(deps({ listensToRulers: true }))
+    const source = createDomInputSource(deps())
     const dispose = attachRecording(source)
 
     const hostAdds = listenerCalls(spies.hostAdd)
@@ -93,7 +92,7 @@ describe('createDomInputSource', () => {
     ])
     expect(hostAdds.find(([type]) => type === 'wheel')?.[2]).toEqual({ passive: false })
     expect(listenerCalls(spies.windowAdd).map(([type, , options]) => [type, captureFlag(options)])).toEqual([['blur', false]])
-    expect(listenerCalls(spies.documentAdd).map(([type, , options]) => [type, captureFlag(options)])).toEqual([['pointerdown', true]])
+    expect(listenerCalls(spies.documentAdd)).toEqual([])
     // A press on the map owns its pointer: the window listeners follow it, and detach removes them with the rest.
     events.pointerDown({ x: 10, y: 10 })
     expect(listenerCalls(spies.windowAdd).map(([type, , options]) => [type, captureFlag(options)])).toEqual([
@@ -120,7 +119,7 @@ describe('createDomInputSource', () => {
     for (const spy of Object.values(spies)) spy.mockRestore()
   })
 
-  it('installs no key listener (the key router owns them), and no ruler listener unless told to listen', () => {
+  it('installs no key listener (the key router owns them) and nothing on the document', () => {
     const windowAdd = vi.spyOn(window, 'addEventListener')
     const documentAdd = vi.spyOn(document, 'addEventListener')
     const dispose = attachRecording(createDomInputSource(deps()))
@@ -244,28 +243,6 @@ describe('createDomInputSource', () => {
       panel.remove()
       dispose()
     }
-  })
-
-  it('a ruler press of any mouse button becomes a ruler target', () => {
-    const ruler = document.createElement('canvas')
-    ruler.dataset.canvasRuler = 'v'
-    document.body.appendChild(ruler)
-    const dispose = attachRecording(createDomInputSource(deps({ listensToRulers: true })))
-
-    for (const button of [0, 1, 2, 3, 4]) events.pointerDownClient({ x: 15, y: 120 }, { target: ruler, button, pointerId: 5 })
-    events.pointerDownClient({ x: 15, y: 120 }, { target: ruler, pointerType: 'pen', pointerId: 6 })
-    events.pointerDownClient({ x: 15, y: 120 }, { target: ruler, pointerType: 'touch', pointerId: 7 })
-
-    // A pen press is one too (today's ruler heard its compatibility mousedown); a touch press is dropped.
-    expect(received.map((input) => input.kind === 'down' && [input.role, input.target, input.at])).toEqual(
-      Array(6).fill(['primary', { kind: 'ruler', axis: 'v' }, { x: 5, y: 100 }]),
-    )
-    expect(received[5]).toMatchObject({ pointer: 'pen', id: 6 })
-    // A press inside the map is the host listener's alone.
-    events.pointerDown({ x: 50, y: 50 })
-    expect(received).toHaveLength(7)
-    expect(received[6]).toMatchObject({ kind: 'down', target: { kind: 'surface' } })
-    dispose()
   })
 
   it('reads host-relative points and keeps a captured session\'s press rect', () => {

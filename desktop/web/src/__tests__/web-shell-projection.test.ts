@@ -31,11 +31,10 @@ function canvasProjection(): CanvasCommandProjection {
       settingsAvailable: false,
       gridVisible: false,
       snapToGridEnabled: true,
-      rulersVisible: false,
     },
     intents: {
       selectTool: vi.fn(), undo: vi.fn(), redo: vi.fn(), toggleGrid: vi.fn(), toggleSnapToGrid: vi.fn(),
-      toggleRulers: vi.fn(), edit: vi.fn(), view: vi.fn(),
+      edit: vi.fn(), view: vi.fn(),
     },
     translate: (key) => key,
   })

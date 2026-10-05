@@ -12,7 +12,6 @@ import {
   layerLockState,
   layerOpacity,
   layerVisibility,
-  rulersVisible,
 } from '../canvas-settings/signals'
 import { composeDocumentForSave } from '../contracts/document'
 import { setCanvasClean } from '../document-session/store'
@@ -112,11 +111,10 @@ describe('Canvas Runtime app adapter composition', () => {
       theme.value = 'dark'
       locale.value = 'fr'
       gridVisible.value = false
-      rulersVisible.value = false
 
       expect(onTheme).toHaveBeenCalledTimes(2)
       expect(onLocale).toHaveBeenCalledTimes(2)
-      expect(onChromeOverlay).toHaveBeenCalledTimes(3)
+      expect(onChromeOverlay).toHaveBeenCalledTimes(2)
 
       disposeTheme()
       disposeLocale()
@@ -127,7 +125,7 @@ describe('Canvas Runtime app adapter composition', () => {
 
       expect(onTheme).toHaveBeenCalledTimes(2)
       expect(onLocale).toHaveBeenCalledTimes(2)
-      expect(onChromeOverlay).toHaveBeenCalledTimes(3)
+      expect(onChromeOverlay).toHaveBeenCalledTimes(2)
     } finally {
       disposeTheme()
       disposeLocale()
@@ -254,7 +252,6 @@ function resetLayerSignals(): void {
   layerLockState.value = { ...NEW_DESIGN_LAYER_LOCKS }
   layerOpacity.value = { ...NEW_DESIGN_LAYER_OPACITY }
   gridVisible.value = true
-  rulersVisible.value = true
 }
 
 function baseSettings(overrides: Partial<Settings> = {}): Settings {

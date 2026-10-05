@@ -191,7 +191,6 @@ describe('scene runtime presentation controller', () => {
 
     expect(snapshot.scene.plants).toEqual([])
     expect(snapshot.scene.zones).toEqual([])
-    expect(snapshot.scene.guides).toEqual([])
     expect(snapshot.selectedPlantIds).toEqual(new Set())
     expect(snapshot.hoverTarget).toBeNull()
     expect(projectScenePlantLabels(snapshot, 2).pinnedPlantNameLabels).toEqual([])

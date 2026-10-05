@@ -272,7 +272,6 @@ function createRendererSnapshot(overrides: {
       plantSpeciesColors: {},
       plantSpeciesSymbols: overrides.plantSpeciesSymbols ?? {},
       measurementGuides: overrides.measurementGuides ?? [],
-      guides: [],
     },
     selectedTargets: overrides.selectedTargets,
   })

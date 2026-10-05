@@ -131,7 +131,6 @@ function createCommandSurface() {
     chrome: {
       toggleGrid: () => {},
       toggleSnapToGrid: () => {},
-      toggleRulers: () => {},
     },
     layers: {
       setSceneLayerVisibility: () => false,
@@ -153,7 +152,6 @@ function createDocumentSurface() {
   return {
     presented: signal(true),
     attachInspectionTo: () => { throw new Error('Inspection is not used by this fixture.') },
-    attachRulersTo: () => {},
     showCanvasChrome: () => {},
     hideCanvasChrome: () => {},
     zoomToFit: () => {},

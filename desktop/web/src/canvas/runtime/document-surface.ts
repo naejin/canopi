@@ -11,7 +11,6 @@ import {
   type CanvasPersistenceCapture,
   type CanvasRuntimeDocumentMetadata,
 } from './runtime'
-import type { SceneRuntimeChromeCoordinator } from './scene-runtime/chrome-coordinator'
 import type { SceneRuntimeDocumentBridge } from './scene-runtime/document'
 import type { SceneRuntimeRenderScheduler } from './scene-runtime/render-scheduler'
 import { runCanvasRuntimeCleanups } from './cleanup'
@@ -32,13 +31,12 @@ interface SceneCanvasDocumentSurfaceOptions {
   /** The runtime's camera: a resize reaches its live driver; a save reads its live frame. */
   readonly cameraHost: Pick<CameraDriverHost, 'current' | 'frames'>
   readonly viewNavigation: Pick<ViewNavigation, 'openAt' | 'clearTemporaryFocus'>
-  readonly chrome: Pick<SceneRuntimeChromeCoordinator, 'attach' | 'show' | 'hide' | 'destroy'>
   readonly rendering: Pick<
     SceneRuntimeRenderScheduler,
     'container' | 'invalidate' | 'resize' | 'dispose' | 'presented' | 'awaitPresentation'
   >
-  readonly renderChrome: () => void
-  readonly addGuide: (axis: 'h' | 'v', worldPosition: number) => void
+  /** Shows (true) or hides the Design's canvas chrome: the grid draws only while it shows. */
+  readonly setChromeShown: (shown: boolean) => void
   readonly clearHoveredEntity: () => void
   readonly disposeRuntime: () => void
   readonly disposeInteraction: () => void
@@ -77,21 +75,12 @@ class SceneCanvasDocumentRole implements SceneCanvasDocumentSurface {
     return this.options.inspection.mount(element)
   }
 
-  attachRulersTo(element: HTMLElement): void {
-    this.options.chrome.attach(element, (axis, worldPosition) => {
-      this.options.addGuide(axis, worldPosition)
-    })
-    this.options.renderChrome()
-  }
-
   showCanvasChrome(): void {
-    this.options.chrome.show()
-    this.options.renderChrome()
+    this.options.setChromeShown(true)
   }
 
   hideCanvasChrome(): void {
-    this.options.chrome.hide()
-    this.options.renderChrome()
+    this.options.setChromeShown(false)
   }
 
   /**
@@ -217,7 +206,6 @@ class SceneCanvasDocumentRole implements SceneCanvasDocumentSurface {
       () => this.options.disposeRuntime(),
       () => this.options.clearHoveredEntity(),
       () => this.options.disposeInteraction(),
-      () => this.options.chrome.destroy(),
       () => this.options.disposeEffects(),
       () => this.options.disposeCamera(),
       () => this.options.rendering.dispose(),

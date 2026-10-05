@@ -52,7 +52,7 @@ export class SceneRuntimePresentationController {
   private _publishedPlantNamesRevision = 0
   /** Layers a presented story shows; null when nothing is presented. */
   private _presentedLayerNames: ReadonlySet<string> | null = null
-  /** The workspace's grid and ruler guides (the chrome coordinator's); null draws none. */
+  /** The workspace's grid (SceneCanvasRuntime's, while the chrome shows and the grid is on); null draws none. */
   private _editingAids: SceneEditingAids | null = null
 
   constructor(options: SceneRuntimePresentationControllerOptions) {
@@ -109,9 +109,8 @@ export class SceneRuntimePresentationController {
   }
 
   /**
-   * The grid and ruler guides the workspace map draws, the pattern of `presentLayers`: only the workspace snapshot
-   * carries them, never the overview, a capture or a presented story. Returns whether they changed, so the caller
-   * syncs the scene only then.
+   * The grid the workspace map draws, the pattern of `presentLayers`: only the workspace snapshot carries it, never
+   * the overview, a capture or a presented story. Returns whether it changed, so the caller syncs the scene only then.
    */
   setEditingAids(aids: SceneEditingAids | null): boolean {
     if (editingAidsEqual(this._editingAids, aids)) return false
@@ -159,7 +158,7 @@ export class SceneRuntimePresentationController {
       visibleLayerNames: [...visible],
       focusedSpecies: this._sceneStore.session.speciesFocus.canonicalName,
     })
-    // Measurement guides are an editing aid, like the grid and the ruler guides, which a presented story never draws.
+    // Measurement guides are an editing aid, like the grid, which a presented story never draws.
     return { ...snapshot, scene: { ...snapshot.scene, measurementGuides: [] } }
   }
 
@@ -242,11 +241,7 @@ export class SceneRuntimePresentationController {
 
 function editingAidsEqual(a: SceneEditingAids | null, b: SceneEditingAids | null): boolean {
   if (a === null || b === null) return a === b
-  if (a.grid?.ink !== b.grid?.ink || a.grid?.majorInk !== b.grid?.majorInk) return false
-  return a.rulerGuides.length === b.rulerGuides.length && a.rulerGuides.every((guide, index) => {
-    const other = b.rulerGuides[index]!
-    return guide.axis === other.axis && guide.position === other.position
-  })
+  return a.grid.ink === b.grid.ink && a.grid.majorInk === b.grid.majorInk
 }
 
 function buildOverviewRendererSnapshot(
@@ -261,7 +256,6 @@ function buildOverviewRendererSnapshot(
       annotations: [],
       measurementGuides: [],
       groups: [],
-      guides: [],
     },
     speciesFocus,
     selectionLabelPlantIds: new Set(),

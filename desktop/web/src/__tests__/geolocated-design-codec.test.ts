@@ -63,7 +63,7 @@ function currentDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
     budget_currency: 'EUR',
     created_at: '2026-09-25T00:00:00.000Z',
     updated_at: '2026-09-25T00:00:00.000Z',
-    extra: { guides: [{ id: 'r1', axis: 'h', lat: 48.8584 }, { id: 'r2', axis: 'v', lon: 2.2945 }] },
+    extra: {},
     ...overrides,
   }
 }
@@ -75,7 +75,7 @@ function plant(id: string, position: { lon: number; lat: number }): CanopiFile['
   }
 }
 
-const SCENE_FIELDS = ['plants', 'zones', 'annotations', 'measurement_guides', 'extra'] as const
+const SCENE_FIELDS = ['plants', 'zones', 'annotations', 'measurement_guides'] as const
 
 function sceneFields(file: CanopiFile): string {
   return JSON.stringify(SCENE_FIELDS.map((key) => file[key]))
@@ -136,14 +136,6 @@ describe('geolocated design codec', () => {
     expect(pond.points[0]!.x).toBeCloseTo((first!.x + second!.x) / 2, 9)
     expect(pond.points[1]!.x).toBeCloseTo((second!.x - first!.x) / 2, 9)
     expect(pond.points[1]!.y).toBeCloseTo((second!.y - first!.y) / 2, 9)
-  })
-
-  it('stores ruler guides as a latitude or a longitude', () => {
-    const { persisted, geo } = hydrateSceneFromDesign(currentDesign())
-    const horizontal = persisted.guides.find((guide) => guide.axis === 'h')!
-    const vertical = persisted.guides.find((guide) => guide.axis === 'v')!
-    expect(geo.plane.toGeo({ x: 0, y: horizontal.position }).lat).toBeCloseTo(48.8584, 10)
-    expect(geo.plane.toGeo({ x: vertical.position, y: 0 }).lon).toBeCloseTo(2.2945, 10)
   })
 
   it('writes new objects with rounded lon/lat', () => {

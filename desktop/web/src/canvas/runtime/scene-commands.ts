@@ -15,7 +15,6 @@ type PersistedPatchKey =
   | 'annotations'
   | 'measurementGuides'
   | 'groups'
-  | 'guides'
 
 export interface SceneCommandSnapshot {
   persisted: ScenePersistedState
@@ -43,7 +42,6 @@ const PATCH_KEYS: PersistedPatchKey[] = [
   'annotations',
   'measurementGuides',
   'groups',
-  'guides',
 ]
 
 export function createScenePatchCommand(

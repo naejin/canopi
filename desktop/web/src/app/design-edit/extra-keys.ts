@@ -5,10 +5,10 @@ import { recordFrontendDiagnostic } from '../problem-report/diagnostics'
  * The root `extra` keys Design Edit owns. The format keeps them as unknown
  * `extra` (ADR 0011), so their names live here and nowhere else: readers go
  * through `readExtra`, writers through `withExtra`, and a stored value that
- * reads back repaired is reported once. Scene-owned keys belong to the runtime
- * (`canvas/runtime/scene-extra-keys.ts`); the file composer in
- * app/contracts/document.ts merges both (canopi-skhg: derive its owner table
- * and the new-Design key list from these registries).
+ * reads back repaired is reported once. The scene owns no `extra` key: the
+ * file composer in app/contracts/document.ts writes the document's `extra`
+ * as it is, other keys included (canopi-skhg: derive the new-Design key list
+ * from this registry).
  */
 export const DESIGN_EDIT_EXTRA_KEYS = Object.freeze({
   /** Display on the map; a new Design carries it from Settings › New Designs. */

@@ -375,7 +375,7 @@ describe('object stamp tool', () => {
   it('snaps Object Stamp placement by the sampled plant anchor', () => {
     const h = stampHarness(
       { plants: [plantEntity('plant-1', 'Malus domestica', { x: 10, y: 10 }, { commonName: 'Apple', canopySpreadM: 4 })] },
-      { viewport: { x: 0, y: 0, scale: 4 }, snapping: { grid: true, guides: false } },
+      { viewport: { x: 0, y: 0, scale: 4 }, snapping: { grid: true } },
     )
 
     // Screen (44, 44) -> world (11, 11), so the sampled anchor is +1,+1 from the plant position.
@@ -557,7 +557,7 @@ describe('object stamp tool', () => {
   it('snaps Object Stamp placement by the sampled annotation anchor', () => {
     const h = stampHarness(
       { annotations: [textNote('annotation-1', { x: 10, y: 10 }, 'Note', { fontSize: 20 })] },
-      { viewport: { x: 0, y: 0, scale: 4 }, snapping: { grid: true, guides: false } },
+      { viewport: { x: 0, y: 0, scale: 4 }, snapping: { grid: true } },
     )
 
     // Screen (44, 44) -> world (11, 11), so the sampled anchor is +1,+1 from the annotation position.

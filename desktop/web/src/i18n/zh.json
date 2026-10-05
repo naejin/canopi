@@ -184,9 +184,7 @@
     "grid": {
       "grid": "网格",
       "snapToGrid": "吸附网格",
-      "rulers": "标尺",
-      "zoom": "缩放",
-      "rulersNorthUpOnly": "北向上时显示标尺"
+      "zoom": "缩放"
     },
     "overview": {
       "zoomInToEdit": "放大以编辑。此比例下植物已隐藏。",

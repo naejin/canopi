@@ -4,7 +4,6 @@ import { activeTool } from '../canvas/session-state'
 import { activePanel, sidePanel } from '../app/shell/state'
 import {
   gridVisible,
-  rulersVisible,
   snapToGridEnabled,
 } from '../app/canvas-settings/signals'
 import { singleKeyShortcuts, theme } from '../app/settings/state'
@@ -85,7 +84,6 @@ describe('command registry canvas tool switching', () => {
     designSessionFixture.nonCanvasSavedRevision = 0
     gridVisible.value = true
     snapToGridEnabled.value = false
-    rulersVisible.value = true
     settingsProjection.resetSettingsProjectionForTests()
     problemReportDialogOpen.value = false
     resetFrontendDiagnosticsForTests()
@@ -100,7 +98,6 @@ describe('command registry canvas tool switching', () => {
     theme.value = 'light'
     gridVisible.value = true
     snapToGridEnabled.value = false
-    rulersVisible.value = true
     problemReportDialogOpen.value = false
     resetFrontendDiagnosticsForTests()
   })
@@ -442,7 +439,6 @@ describe('command registry canvas tool switching', () => {
     const undo = vi.fn()
     const toggleGrid = vi.fn()
     const toggleSnapToGrid = vi.fn()
-    const toggleRulers = vi.fn()
 
     const railTool = (tool: string) => appCommandGraphToolbarProjection.value.toolGroups
       .flatMap((group) => group.tools)
@@ -494,11 +490,6 @@ describe('command registry canvas tool switching', () => {
       disabled: true,
       pressed: false,
     })
-    expect(settingToggle('rulers')).toMatchObject({
-      commandId: 'canvas.toggleRulers',
-      disabled: true,
-      pressed: true,
-    })
 
     mountCanvasCommandSurface({
       tools: { setTool },
@@ -509,7 +500,6 @@ describe('command registry canvas tool switching', () => {
       chrome: {
         toggleGrid,
         toggleSnapToGrid,
-        toggleRulers,
       },
     })
     snapToGridEnabled.value = true
@@ -522,7 +512,6 @@ describe('command registry canvas tool switching', () => {
     historyAction('undo').action()
     settingToggle('grid').action()
     settingToggle('snap').action()
-    settingToggle('rulers').action()
 
     expect(activePanel.value).toBe('canvas')
     expect(setTool).toHaveBeenCalledWith('ellipse')
@@ -530,7 +519,6 @@ describe('command registry canvas tool switching', () => {
     expect(undo).toHaveBeenCalledTimes(1)
     expect(toggleGrid).toHaveBeenCalledTimes(1)
     expect(toggleSnapToGrid).toHaveBeenCalledTimes(1)
-    expect(toggleRulers).toHaveBeenCalledTimes(1)
   })
 
   it('re-acquires the live Canvas surface for retained toolbar actions', () => {
@@ -721,7 +709,7 @@ describe('command registry canvas tool switching', () => {
       'view.zoomIn', 'view.zoomOut', 'view.fitToDesign',
       'view.resetNorth', 'view.turnViewLeft', 'view.turnViewRight', 'view.searchPlace',
       'view.saveCurrentView', 'view.manageViews',
-      'canvas.toggleGrid', 'canvas.toggleSnapToGrid', 'canvas.toggleRulers',
+      'canvas.toggleGrid', 'canvas.toggleSnapToGrid',
       'view.labels:none', 'view.labels:codes', 'view.labels:names', 'view.toggleToolNames',
       'nav.layers', 'nav.speciesKey', 'nav.plantDb', 'nav.favorites',
       'nav.calendar', 'nav.budget', 'nav.consortium', 'nav.designNotebook', 'nav.stories',

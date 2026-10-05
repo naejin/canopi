@@ -10,9 +10,7 @@
 // read models to the armed tool, reads the snapping settings per point, calls ToolHost.rawPress for every raw press on
 // the map host, ToolHost.released() after a release that ended no press of the tool's and ToolHost.interrupted() after a
 // window blur, follows a placed drop (the saved stamp's drag source, the map's focus on the next frame), owns the
-// navigation cursor, and passes on no draft or handles while a story is presented. Ruler presses reach the source
-// beside the map: the session finds the pressed ruler's overlay (chrome/rulers.ts) and runs today's ruler drag under
-// any tool (its cursor, its end on a blur, its guide at the release), whatever the host does with the input.
+// navigation cursor, and passes on no draft or handles while a story is presented.
 
 import { effect, signal } from '@preact/signals'
 import { readPlantStampSource, clearPlantStampSource } from '../plant-stamp-source'
@@ -33,7 +31,6 @@ import type {
 import { createHandleLayer, type HandleLayer } from './chrome/handle-layer'
 import { createHoverTooltip, type HoverTooltipController } from './chrome/hover-tooltip'
 import { createLockedAffordance, type LockedAffordanceController } from './chrome/locked-affordance'
-import { pressRuler, type RulerPress } from './chrome/rulers'
 import { createTextEntryHost, type TextEntryHost } from './chrome/text-entry-host'
 import { runCanvasRuntimeCleanups, throwCanvasRuntimeCleanupErrors } from './cleanup'
 import { CURRENT_BINDINGS } from './input/bindings'
@@ -61,7 +58,7 @@ import type { SceneCommandAdmission, SceneEditCoordinator, SettledSceneReader } 
 import type { SpeciesCacheEntry } from './species-cache'
 import { createContextMenuPort, createToolHost, createToolScene } from './tools/tool-host'
 import type { ViewNavigation } from './view/navigation'
-import type { ScreenPoint, ViewFrame, ViewFrameSource } from './view/types'
+import type { ViewFrame, ViewFrameSource } from './view/types'
 
 /** Attributes the session sets on the map host and restores when it ends. */
 const HOST_ATTRIBUTES = ['tabindex', 'role', 'aria-label', 'aria-describedby'] as const
@@ -115,7 +112,6 @@ export interface SceneInteractionSessionDeps {
   setTool: (name: string) => void
   render: (kind: 'scene' | 'viewport') => void
   readSnapToGridEnabled: () => boolean
-  readSnapToGuidesEnabled: () => boolean
   /** Settings › Canvas › Scroll wheel. Pinch and Ctrl wheel zoom either way. */
   readScrollWheel: () => CanvasScrollWheelSetting
   readPlantSpacingIntervalMeters: () => number
@@ -216,9 +212,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _draft: DraftPresentation | null = null
   private _handles: HandleList = NO_HANDLES
   private _activeHandle: HandleId = null
-  /** The ruler pressed now, and its pointer: today's ruler drag, whose guide the session lands at the release. */
-  private _rulerPress: RulerPress | null = null
-  private _rulerPointer: number | null = null
   private _storyPresented = false
   /** Routing a move made with a button held: its hover reaches the host and the tool, not the lens (today's). */
   private _buttonHeld = false
@@ -336,7 +329,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
           plantSpacingIntervalM: _deps.readPlantSpacingIntervalMeters,
           commitPlantSpacingIntervalM: _deps.commitPlantSpacingIntervalMeters,
         },
-        snapping: () => ({ grid: _deps.readSnapToGridEnabled(), guides: _deps.readSnapToGuidesEnabled() }),
+        snapping: () => ({ grid: _deps.readSnapToGridEnabled() }),
         translate: _deps.translate as ToolHostDeps['translate'],
         navigation: { turnToEdge: (a, b) => navigation.turnToEdge(a, b) },
         nudge: _deps.nudge,
@@ -380,7 +373,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         },
         clock,
         timers,
-        listensToRulers: true,
       })
       this._stopWatchingSources = own(this._watchToolSources(), (stop) => stop())
       this._storyObserver = own(this._observeStoryPresentation(), (observer) => observer?.disconnect())
@@ -499,7 +491,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
     const tool = this._tool.peek()
     attempt(() => this._detachSource())
-    attempt(() => this._endRulerPress())
     attempt(() => this._storyObserver?.disconnect())
     attempt(() => this._stopHearingMode())
     attempt(() => this._stopWatchingSources())
@@ -528,7 +519,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   private _dispatch(input: RawInput): void {
-    const event = this._source.currentEvent()
     switch (input.kind) {
       case 'drop':
         this._routeDrop(input)
@@ -537,16 +527,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         this._toolHost.endNudgeSeries(true)
         return
       case 'down':
-        // A ruler sits beside the map host: its press is no press on the map (today's host listener never heard it).
-        if (input.target.kind === 'ruler') this._pressRuler(input.id, event)
-        else this._toolHost.rawPress(input.role === 'auxiliary' ? 'middle' : input.role, input.target, input.id)
+        this._toolHost.rawPress(input.role === 'auxiliary' ? 'middle' : input.role, input.target, input.id)
         break
       case 'wheel':
         this._syncPointingDevice()
-        break
-      case 'cancel':
-        // Today's ruler heard the blur itself: its drag ends with no guide, however the tool's blur fails.
-        if (input.id === 'all') this._endRulerPress()
         break
       default:
         break
@@ -562,21 +546,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     ], 'Scene Interaction window blur failed')
   }
 
-  /**
-   * The host's path, then today's ruler drag, which heard its own mousemove and mouseup: the drag cursor follows the
-   * pointer and the guide lands at the release whatever the tool did with the event, failure included.
-   */
-  private _route(input: RawInput): void {
-    try {
-      this._routeToHost(input)
-    } finally {
-      if (input.kind === 'move' && input.id === this._rulerPointer) this._rulerPress?.drag()
-      if (input.kind === 'up' && input.id === this._rulerPointer) this._releaseRuler(input.at)
-    }
-  }
-
   /** The input: recognised, routed, and the recogniser's and the host's effects applied to the event. */
-  private _routeToHost(input: RawInput): void {
+  private _route(input: RawInput): void {
     const result = recognise(this._recogniser, input, this._config)
     this._recogniser = result.state
     const wheel = input.kind === 'wheel'
@@ -623,7 +594,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
    * capture) would have run the cancellation (ToolHost.released): the up, cancel or Esc that ends a pointer pan or turn,
    * or an up with no press of the map's at all. Today's exceptions hold for the latter: nothing while another pointer's press is
    * live, in overview (the recogniser swallows the up), or over the note editor, a handle or the Unlock affordance. The
-   * host handles the tap or drag-end of a ruler drag or of a press the tool never heard itself.
+   * host handles the tap or drag-end of a press the tool never heard itself.
    */
   private _releasesOutsideTool(input: RawInput, gestures: readonly Gesture[]): boolean {
     if (gestures.some(endsPointerNavigation)) return input.kind === 'up' || (input.kind === 'cancel' && input.id !== 'all')
@@ -653,7 +624,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
    */
   private _routeDrop(input: Extract<RawInput, { kind: 'drop' }>): void {
     try {
-      this._routeToHost(input)
+      this._route(input)
     } catch (error) {
       if (input.phase === 'over') this._source.apply(NO_DROP)
       else if (input.phase === 'drop') this._source.apply(PREVENT_DEFAULT)
@@ -680,35 +651,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (this._dropFocusFrame === null) return
     window.cancelAnimationFrame(this._dropFocusFrame)
     this._dropFocusFrame = null
-  }
-
-  // ── Rulers ──────────────────────────────────────────────────────────────────────────────────────────────────────
-
-  /** A press on a ruler: its overlay's port for this press, found from the element under the pointer (the drag starts). */
-  private _pressRuler(pointerId: number, event: Event | null): void {
-    this._endRulerPress()
-    this._rulerPress = pressRuler(event?.target ?? null)
-    this._rulerPointer = this._rulerPress ? pointerId : null
-  }
-
-  /**
-   * Today's ruler drag at its release: the cursor comes back, then the guide lands where the pointer let go, only while
-   * north is up (spec §4.6), under any tool.
-   */
-  private _releaseRuler(at: ScreenPoint): void {
-    const press = this._rulerPress
-    this._rulerPress = null
-    this._rulerPointer = null
-    if (!press) return
-    press.end()
-    if (this._frames.viewFrame.peek().view.northUp) press.createGuideAt(at)
-  }
-
-  private _endRulerPress(): void {
-    const press = this._rulerPress
-    this._rulerPress = null
-    this._rulerPointer = null
-    press?.end()
   }
 
   /** After a window blur has reached the recogniser (Space released, live sessions ended) and the armed tool's path, even
@@ -1031,7 +973,6 @@ function liveStoreReader(deps: SceneInteractionSessionDeps): SceneStateReader {
   return {
     get persisted() { return deps.getSceneStore().persisted },
     get session() { return deps.getSceneStore().session },
-    get guides() { return deps.getSceneStore().guides },
     get hasObjects() { return deps.getSceneStore().hasObjects },
     get sessionPlane() { return deps.getSceneStore().sessionPlane },
     get sessionPlaneSignal() { return deps.getSceneStore().sessionPlaneSignal },

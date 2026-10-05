@@ -132,7 +132,7 @@ describe('Polygon tool', () => {
   it('Polygon closes on its first corner under snapping and Shift', () => {
     // Scale 1: the grid is 20 m. A Shift point would turn the closing edge to 45° from the last corner, 14 px away from
     // the first; the close test reads the snapped point without the constraint (today's snap(raw)).
-    const h = harness({ snapping: { grid: true, guides: false } })
+    const h = harness({ snapping: { grid: true } })
 
     h.click({ x: 21, y: 19 })
     h.click({ x: 99, y: 22 })

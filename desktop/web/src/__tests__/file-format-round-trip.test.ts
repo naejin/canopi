@@ -109,22 +109,23 @@ const FIXTURE: CanopiFile = {
 }
 
 describe('file format round-trip', () => {
-  it('canvas codec round-trips scene-owned entity fields and guide metadata', () => {
+  it('canvas codec round-trips scene-owned entity fields and writes no extra', () => {
     const now = new Date('2026-04-09T12:00:00.000Z')
     const hydrated = hydrateSceneFromDesign(FIXTURE)
     const serialized = serializeScenePersistedState(hydrated.persisted, hydrated.geo, { now })
 
     // updated_at is regenerated from `now`; document-owned metadata is emitted as placeholders.
-    // Unchanged lon/lat positions are written back verbatim.
+    // Unchanged lon/lat positions are written back verbatim. `extra` is Design Edit's: the scene writes none, and the
+    // file's leftover `extra.guides` does not pass through it.
+    const { extra: _extra, ...sceneOwned } = FIXTURE
     expect(serialized.updated_at).toBe(now.toISOString())
     expect(serialized).toEqual({
-      ...FIXTURE,
+      ...sceneOwned,
       version: 9,
       name: 'Untitled',
       description: null,
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
-      extra: { guides: [{ id: 'guide-1', axis: 'h', lat: 23.0004 }, { id: 'guide-2', axis: 'v', lon: 12.9997 }] },
     })
     expect(serialized).not.toHaveProperty('spatial_frame')
   })

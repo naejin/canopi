@@ -325,7 +325,6 @@ describe('LayerPanel', () => {
           annotations: [],
           measurementGuides: [],
           groups: [],
-          guides: [],
         },
       }),
     }))

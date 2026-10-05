@@ -4,6 +4,7 @@ import {
   composeDocumentForSave,
   DOCUMENT_FILE_FIELD_OWNERS,
   normalizeLoadedDocument,
+  normalizeNewDocument,
 } from '../app/contracts/document'
 import { KNOWN_CANOPI_KEYS } from '../generated/known-canopi-keys'
 import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../target'
@@ -186,9 +187,6 @@ describe('document format contract', () => {
       views: [savedView('canvas-view')],
       stories: [],
       updated_at: '2026-04-13T02:00:00.000Z',
-      extra: {
-        guides: [{ id: 'canvas-guide', axis: 'v', lon: 13.002 }],
-      },
     } satisfies CanopiFile
 
     const saved = composeDocumentForSave({
@@ -211,13 +209,21 @@ describe('document format contract', () => {
     expect(saved.name).toBe('Metadata name')
     expect(saved.description).toBe('Document-owned description')
     expect(saved).not.toHaveProperty('spatial_frame')
-    expect(saved.extra).toEqual({
-      future_panel_field: { source: 'document' },
-      guides: [{ id: 'canvas-guide', axis: 'v', lon: 13.002 }],
-    })
+    // `extra` is all the document's: a key left in a development file stays as unknown extra (ADR 0011).
+    expect(saved.extra).toEqual(document.extra)
   })
 
-  it('normalizes raw loaded files into extra while the scene codec keeps only scene-owned extra', () => {
+  it('a new Design\'s save writes no extra.guides', () => {
+    const document = normalizeNewDocument({ ...BASE_DOCUMENT, extra: {} })
+    const hydrated = hydrateSceneFromDesign(document)
+    const canvas = serializeScenePersistedState(hydrated.persisted, hydrated.geo)
+
+    const saved = composeDocumentForSave({ metadata: { name: 'New Design' }, document, canvas })
+
+    expect(saved.extra).toEqual({})
+  })
+
+  it('normalizes raw loaded files into extra while the scene codec writes none', () => {
     const normalized = normalizeLoadedDocument(RAW_DOCUMENT as unknown as CanopiFile)
 
     expect(normalized.extra).toEqual({
@@ -235,7 +241,7 @@ describe('document format contract', () => {
     const hydrated = hydrateSceneFromDesign(normalized)
     const roundTripped = serializeScenePersistedState(hydrated.persisted, hydrated.geo, { now })
 
-    expect(roundTripped.extra).toEqual({})
+    expect(roundTripped).not.toHaveProperty('extra')
     expect(roundTripped.updated_at).toBe(now.toISOString())
   })
 
@@ -432,9 +438,6 @@ describe('document format contract', () => {
         members: [{ kind: 'plant', id: 'plant-1' }],
       }],
       updated_at: '2026-04-13T12:00:00.000Z',
-      extra: {
-        guides: [{ id: 'new-guide', axis: 'v', lon: 13.042 }],
-      },
     } satisfies CanopiFile
 
     const saved = composeDocumentForSave({
@@ -470,7 +473,7 @@ describe('document format contract', () => {
     expect(saved.groups[0]).not.toHaveProperty('position')
     expect(saved.groups[0]).not.toHaveProperty('rotation')
     expect(saved.extra).toEqual({
-      guides: [{ id: 'new-guide', axis: 'v', lon: 13.042 }],
+      guides: [{ id: 'old-guide', axis: 'h', lat: 23.012 }],
       future_panel_field: { preserve: true },
     })
     expect('future_top_level' in (saved as unknown as Record<string, unknown>)).toBe(false)

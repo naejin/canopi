@@ -147,15 +147,6 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
     clickCount: input.detail,
   } as const
 
-  if (input.target.kind === 'ruler') {
-    // Today's ruler drag (normalise makes any mouse button primary there): no capture, the drag follows the pointer anywhere.
-    step.effects.push({ kind: 'prevent-default' })
-    const pressTarget: PressTarget = { kind: 'ruler', axis: input.target.axis }
-    putSession(step, { ...base, mode: 'pending', captured: false, pressTarget, navigation: null, pressed: true })
-    step.gestures.push(pressOf(input, pressTarget))
-    return
-  }
-
   const pressTarget: PressTarget = input.target.kind === 'handle' ? { kind: 'handle', id: input.target.id } : { kind: 'surface' }
   const panIn = (panContext: 'hand-tool' | 'overview'): boolean => bindings.primaryDragPansIn.includes(panContext)
 
@@ -358,7 +349,7 @@ function hover(step: Step, input: RawOf<'move'>): void {
 
 function nativeContextMenu(step: Step, input: RawOf<'native-contextmenu'>): void {
   // The note editor and anything outside the map keep the native menu (copy and paste).
-  if (input.target.kind === 'owned-text' || input.target.kind === 'foreign' || input.target.kind === 'ruler') return
+  if (input.target.kind === 'owned-text' || input.target.kind === 'foreign') return
   step.effects.push({ kind: 'prevent-default' })
   if (step.state.context.mode === 'overview') return
   // The Menu key already opened the menu from keydown; its trailing event is the echo.

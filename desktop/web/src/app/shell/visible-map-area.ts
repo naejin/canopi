@@ -6,9 +6,9 @@ import { currentCanvasViewportCommandSurface } from '../../canvas/session'
  * fills the window; the title bar, the tool and panel rails, the open dock and
  * the bottom chrome float over it. Each registers here, and this module is the
  * one source of the visible map frame: fitting and temporary focus frame into
- * it (through the camera), status chips centre in it and the rulers start at
- * its left edge (through `--map-inset-*` on the map area), and the map credits
- * fold when the bottom band leaves them too little room. Both rails also
+ * it (through the camera), status chips centre in it (through `--map-inset-*`
+ * on the map area), and the map credits fold when the bottom band leaves them
+ * too little room. Both rails also
  * register the room they have above the chrome under their column (the view
  * chip under the tool rail; the inspection launcher and the zoom group under
  * the panel rail), so a short window folds their last entries into a More
@@ -85,8 +85,8 @@ export function measureVisibleMapFrame(map: DOMRect, occluders: Iterable<MapOccl
 /**
  * Pure: the free width of the bottom band, between the bottom chrome on the
  * left (the view chip) and on the right (the zoom group), where the map
- * credits sit. Chrome standing wholly above the band (the rulers hint above
- * the view chip) takes none of its room. The whole map width when no bottom
+ * credits sit. Chrome standing wholly above the band takes none of its room.
+ * The whole map width when no bottom
  * chrome is registered.
  */
 export function measureBottomBandRoom(map: DOMRect, occluders: Iterable<MapOccluderBox>): number {

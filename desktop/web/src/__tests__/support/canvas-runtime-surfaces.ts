@@ -103,7 +103,6 @@ export function createTestCanvasCommandSurface(
     chrome: {
       toggleGrid: () => {},
       toggleSnapToGrid: () => {},
-      toggleRulers: () => {},
     },
     layers: {
       setSceneLayerVisibility: () => false,
@@ -147,7 +146,6 @@ export function createTestCanvasDocumentSurface(
   const surface: CanvasDocumentSurface = {
     presented: signal(true),
     attachInspectionTo: () => { throw new Error('Inspection view is not configured in this test.') },
-    attachRulersTo: () => {},
     showCanvasChrome: () => {},
     hideCanvasChrome: () => {},
     zoomToFit: () => {},

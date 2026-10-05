@@ -110,8 +110,7 @@ const HAND_ROLLED_PROJECTION = new RegExp([
 
 /**
  * P3b's permanent allowlist: sizes, never positions (counted at the end of 0E, recorded in canopi-f47t.5; re-counted
- * at the Renderer merge of phase 1, when the phase-1 allowlist emptied: the scene chrome went and the rulers place
- * through the view transform).
+ * at the Renderer merge of phase 1, when the phase-1 allowlist emptied and the scene chrome went).
  */
 const P3B_SIZE_ONLY: Readonly<Record<string, number>> = {
   // The lens's stroke widths and its plants' presentation scale.
@@ -236,7 +235,6 @@ describe('canvas v2 regex policies', () => {
       { path: 'src/canvas/runtime/chrome/handle-layer.ts', text: "host.addEventListener('pointerdown', press)" },
       { path: 'src/canvas/runtime/chrome/text-entry-host.ts', text: "this.container.addEventListener('keydown', keys)" },
       { path: 'src/canvas/runtime/chrome/locked-affordance.ts', text: "button.addEventListener('click', unlock)\n// host.addEventListener('x', y)" },
-      { path: 'src/canvas/runtime/chrome/rulers.ts', text: "host.addEventListener('pointerdown', press)" },
     ])).toEqual({
       'src/canvas/runtime/chrome/handle-layer.ts': 1,
       'src/canvas/runtime/chrome/text-entry-host.ts': 1,
@@ -325,11 +323,6 @@ describe('canvas v2 regex policies', () => {
       { path: 'src/canvas/runtime/chrome/planted-comment.ts', text: '// p.x * view.pixelsPerMetre\n/* viewport.x */' },
       { path: 'src/canvas/runtime/view/planted.ts', text: 'const sx = (p.x - c.x) * view.pixelsPerMetre + w / 2' },
       { path: 'src/app/canvas-pdf/planted.ts', text: 'const sx = frame.x + (p.x - ground.x) * scale.pixelsPerMetre' },
-      // The rulers left the phase-1 allowlist: a projection there counts again.
-      { path: 'src/canvas/runtime/chrome/rulers.ts', text: 'const sx = viewport.x + x * scale' },
-    ])).toEqual({
-      ...Object.fromEntries(sources.map(({ path }) => [path, 1])),
-      'src/canvas/runtime/chrome/rulers.ts': 1,
-    })
+    ])).toEqual(Object.fromEntries(sources.map(({ path }) => [path, 1])))
   })
 })

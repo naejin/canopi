@@ -49,7 +49,7 @@ export function normalise(
   switch (e.type) {
     case 'pointerdown': {
       const pointer = pointerKindOf(e.pointerType)
-      const press = e.target.kind === 'ruler' ? rulerPressRole(pointer) : pressRole(e, pointer, platform, bindings)
+      const press = pressRole(e, pointer, platform, bindings)
       if (!press) return null
       return {
         kind: 'down',
@@ -82,8 +82,8 @@ export function normalise(
       const pointer = pointerKindOf(e.pointerType)
       const release = pressRole(e, pointer, platform, bindings)
       // An up is never dropped: it ends its pointer's session whatever the button, as today's pointerup did. A button no
-      // press takes reads as primary: a mouse's back and forward (which only a ruler press accepts), and a pen's eraser or
-      // its barrel under 'ignore' (a drag whose tip lifted before the barrel).
+      // press takes reads as primary: a mouse's back and forward, and a pen's eraser or its barrel under 'ignore' (a drag
+      // whose tip lifted before the barrel).
       return {
         kind: 'up',
         t,
@@ -179,14 +179,6 @@ function pressRole(
   if (button === BUTTON_AUXILIARY) return { role: 'auxiliary', ctrlConsumed: false }
   if (button === BUTTON_SECONDARY) return { role: 'secondary', ctrlConsumed: false }
   return null   // back and forward (3, 4)
-}
-
-/**
- * Today's ruler drag listened for mousedown: a mouse or pen press of any button (a pen sends compatibility mouse events)
- * is a primary press; a touch press is dropped, since a touch sends its mousedown only after it lifts.
- */
-function rulerPressRole(pointer: PointerKind): { readonly role: ButtonRole; readonly ctrlConsumed: boolean } | null {
-  return pointer === 'touch' ? null : { role: 'primary', ctrlConsumed: false }
 }
 
 function buttonRoles(buttons: number, pointer: PointerKind, bindings: Bindings): ReadonlySet<ButtonRole> {

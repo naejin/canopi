@@ -184,9 +184,7 @@
     "grid": {
       "grid": "Griglia",
       "snapToGrid": "Aggancia alla griglia",
-      "rulers": "Righelli",
-      "zoom": "Zoom",
-      "rulersNorthUpOnly": "I righelli compaiono quando il nord è in alto"
+      "zoom": "Zoom"
     },
     "overview": {
       "zoomInToEdit": "Ingrandisci per modificare. A questa scala le piante sono nascoste.",

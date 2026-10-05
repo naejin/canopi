@@ -6,7 +6,8 @@ import { SceneRendererMountCancelledError } from './scene-runtime/render-schedul
 import { effect } from '@preact/signals'
 import { stageScaleToMapZoom } from '../projection'
 import { DEFAULT_NEW_DESIGN_VIEW } from '../session-plane'
-import { refreshCanvasColorCache } from '../theme-refresh'
+import { getMapBackdropInk } from './scene-visuals'
+import type { SceneRuntimePresentationController } from './scene-runtime/presentation'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import '../../__tests__/support/camera-tolerance'
 
@@ -449,15 +450,12 @@ function createTestSettingsAdapter(
   overrides: Partial<CanvasRuntimeSettingsAdapter> = {},
 ): CanvasRuntimeSettingsAdapter {
   let gridVisible = false
-  let rulersVisible = false
   let snapToGrid = false
-  let snapToGuides = false
   let plantSpacingIntervalM = 0.5
   return {
     readLocale: () => 'en',
-    readChromeOverlay: () => ({ gridVisible, rulersVisible, guidesVisible: true }),
+    readChromeOverlay: () => ({ gridVisible }),
     readSnapToGridEnabled: () => snapToGrid,
-    readSnapToGuidesEnabled: () => snapToGuides,
     readScrollWheel: () => 'zoom',
     readPlantSpacingIntervalMeters: () => plantSpacingIntervalM,
     commitPlantSpacingIntervalMeters: (meters) => {
@@ -468,9 +466,6 @@ function createTestSettingsAdapter(
     },
     toggleSnapToGrid: () => {
       snapToGrid = !snapToGrid
-    },
-    toggleRulersVisible: () => {
-      rulersVisible = !rulersVisible
     },
     subscribeTheme: (onChange) => {
       onChange()
@@ -1337,6 +1332,52 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('draws the grid on the workspace map only while its chrome shows and the grid is on, never in the overview, a view capture or a story', () => {
+    let gridVisible = true
+    let onChromeOverlay = () => {}
+    const runtime = new SceneCanvasRuntime({
+      appAdapter: {
+        ...createCleanStateAdapterProbe().adapter,
+        settings: createTestSettingsAdapter({
+          readChromeOverlay: () => ({ gridVisible }),
+          subscribeChromeOverlay: (onChange) => {
+            onChromeOverlay = onChange
+            onChange()
+            return () => {}
+          },
+        }),
+      },
+    })
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    const presentation = (runtime as unknown as { _presentation: SceneRuntimePresentationController })._presentation
+    const aids = () => presentation.buildRendererSnapshot().editingAids
+    const ink = getMapBackdropInk()
+
+    // Hidden chrome (a Design opening, a document replacement) draws no grid.
+    expect(aids()).toBeUndefined()
+    runtime.documentSurface.showCanvasChrome()
+    expect(aids()).toEqual({ grid: { ink: ink.grid, majorInk: ink.gridMajor } })
+
+    // The overview, a saved view's or story's thumbnail and a presented story draw none.
+    expect(presentation.buildRendererSnapshot({ overview: true }).editingAids).toBeUndefined()
+    expect(presentation.buildViewCaptureSnapshot({
+      overview: false, visibleLayerNames: ['plants'], focusedSpecies: null,
+    }).editingAids).toBeUndefined()
+    runtime.commandSurface.layers.presentLayers(['plants'])
+    expect(aids()).toBeUndefined()
+    runtime.commandSurface.layers.presentLayers(null)
+
+    gridVisible = false
+    onChromeOverlay()
+    expect(aids()).toBeUndefined()
+    gridVisible = true
+    onChromeOverlay()
+    expect(aids()).toEqual({ grid: { ink: ink.grid, majorInk: ink.gridMajor } })
+    runtime.documentSurface.hideCanvasChrome()
+    expect(aids()).toBeUndefined()
+    runtime.destroy()
+  })
+
   it('shows a searched place by moving only the view', () => {
     const runtime = new SceneCanvasRuntime()
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
@@ -1791,25 +1832,21 @@ describe('scene canvas runtime', () => {
     const adapterProbe = createCleanStateAdapterProbe()
     const toggleGridVisible = vi.fn()
     const toggleSnapToGrid = vi.fn()
-    const toggleRulersVisible = vi.fn()
     const runtime = new SceneCanvasRuntime({
       appAdapter: {
         ...adapterProbe.adapter,
         settings: createTestSettingsAdapter({
           toggleGridVisible,
           toggleSnapToGrid,
-          toggleRulersVisible,
         }),
       },
     })
 
     runtime.commandSurface.chrome.toggleGrid()
     runtime.commandSurface.chrome.toggleSnapToGrid()
-    runtime.commandSurface.chrome.toggleRulers()
 
     expect(toggleGridVisible).toHaveBeenCalledTimes(1)
     expect(toggleSnapToGrid).toHaveBeenCalledTimes(1)
-    expect(toggleRulersVisible).toHaveBeenCalledTimes(1)
   })
 
   it('publishes viewport-only camera changes through the canonical snapshot', async () => {
@@ -2771,58 +2808,6 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
-  it('a theme switch repaints the rulers at once in the new palette', async () => {
-    const fills: string[] = []
-    const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => {
-      const context = new Proxy({ fillStyle: '' } as Record<string | symbol, unknown>, {
-        get: (target, key) => {
-          if (key in target) return target[key]
-          if (key === 'fillRect') return () => { fills.push(String(target.fillStyle)) }
-          if (key === 'measureText') return () => ({ width: 0 })
-          return () => undefined
-        },
-        set: (target, key, value) => { target[key] = value; return true },
-      })
-      return context as never
-    })
-    let onTheme = () => {}
-    const runtime = stubbedRuntime({
-      appAdapter: {
-        ...createCleanStateAdapterProbe().adapter,
-        settings: createTestSettingsAdapter({
-          readChromeOverlay: () => ({ gridVisible: false, rulersVisible: true, guidesVisible: true }),
-          subscribeTheme: (onChange) => {
-            onTheme = onChange
-            return () => {}
-          },
-        }),
-      },
-    })
-    const lightTheme = document.createElement('div')
-    lightTheme.style.setProperty('--canvas-ruler-bg', '#F3EEE3')
-    runtime.documentSurface.loadDocument(makeFile())
-    // The workspace container carries the dark theme's tokens; the canvas colours still hold the light ones.
-    const container = createRuntimeContainer()
-    container.style.setProperty('--canvas-ruler-bg', '#2A2721')
-    await runtime.init(container)
-    try {
-      runtime.documentSurface.attachRulersTo(document.createElement('div'))
-      refreshCanvasColorCache(lightTheme)
-      runtime.documentSurface.showCanvasChrome()
-      expect(fills.at(-1)).toBe('#F3EEE3')
-      fills.length = 0
-
-      onTheme()
-
-      // No new frame came: the theme alone repaints both bands.
-      expect(fills).toEqual(['#2A2721', '#2A2721'])
-    } finally {
-      runtime.destroy()
-      refreshCanvasColorCache(lightTheme)
-      getContext.mockRestore()
-    }
-  })
-
   it('a reopen frames the Design inside the chrome insets reported before its first frame, as Fit to Design does', async () => {
     const runtime = stubbedRuntime()
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
@@ -3724,31 +3709,6 @@ describe('scene canvas runtime', () => {
     expect(layerLockState.value.zones).toBe(true)
 
     runtime.destroy()
-  })
-
-  it('edits guides through the scene edit history', () => {
-    const cleanState = createCleanStateAdapterProbe()
-    const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
-    const file = makeFile()
-    runtime.documentSurface.loadDocument(file)
-    runtime.documentSurface.captureForPersistence({ name: file.name }, file).acknowledgeSaved()
-    cleanState.setCanvasClean.mockClear()
-
-    ;(runtime as any)._addGuide('v', 42)
-
-    const serialized = runtime.documentSurface.captureForPersistence({ name: file.name }, file).content
-    // Ruler guides persist as a longitude (vertical) or latitude (horizontal).
-    const guideLon = runtime.querySurface.sessionPlane.value!.toGeo({ x: 42, y: 0 }).lon
-    expect(serialized.extra).toEqual({
-      guides: [{ id: expect.any(String), axis: 'v', lon: expect.closeTo(guideLon, 9) }],
-    })
-    const sceneGuides = () => (runtime as any)._sceneState.persisted.guides
-    expect(sceneGuides()).toEqual([{ id: expect.any(String), axis: 'v', position: 42 }])
-    expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
-
-    runtime.commandSurface.history.undo()
-    expect(runtime.documentSurface.captureForPersistence({ name: file.name }, file).content.extra).toEqual({})
-    expect(sceneGuides()).toEqual([])
   })
 
   it('marks the canvas dirty when only the species default color changes', () => {

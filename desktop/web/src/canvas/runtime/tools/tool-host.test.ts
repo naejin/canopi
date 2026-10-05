@@ -101,7 +101,7 @@ describe('ToolHost', () => {
       const h = harness({
         tool: 'polygon',
         viewport: { x: 0, y: 0, scale: 10 },
-        snapping: { grid: true, guides: false },
+        snapping: { grid: true },
       })
       const interval = gridInterval(10).interval
       const at = { x: 473, y: 191 }
@@ -126,7 +126,7 @@ describe('ToolHost', () => {
       const origin = { x: 0, y: 0 }
       const row = stubTool('plant-spacing', { constraint: () => ({ kind: 'direction', origin, stepDeg: 45 }) })
       useStubTools(row)
-      const h = harness({ tool: 'plant-spacing', viewport: { x: 0, y: 0, scale: 10 }, snapping: { grid: true, guides: true } })
+      const h = harness({ tool: 'plant-spacing', viewport: { x: 0, y: 0, scale: 10 }, snapping: { grid: true } })
       const at = { x: 473, y: 191 }
       const raw = h.world(at)
 
@@ -147,30 +147,22 @@ describe('ToolHost', () => {
     it('snapping follows the settings at each point', () => {
       const rectangle = stubTool('rectangle')
       useStubTools(rectangle)
-      const h = harness({
-        tool: 'rectangle',
-        scene: { guides: [{ id: 'g1', axis: 'v', position: 125 }] },
-        snapping: { grid: true, guides: false },
-      })
+      const h = harness({ tool: 'rectangle', snapping: { grid: true } })
       const at = { x: 123, y: 77 }
 
       h.hover(at)
       expect(rectangle.last('hover')!.point.snapped).toEqual(snapToGrid(123, 77, gridInterval(1).interval))
+      expect(rectangle.ctx().snap({ x: 124, y: 3 })).toEqual(snapToGrid(124, 3, gridInterval(1).interval))
 
-      h.snapping = { grid: false, guides: false }
+      h.snapping = { grid: false }
       h.hover(at)
       expect(rectangle.last('hover')!.point.snapped).toEqual(h.world(at))
-
-      h.snapping = { grid: false, guides: true }
-      h.hover(at)
-      expect(rectangle.last('hover')!.point.snapped).toEqual({ x: 125, y: 77 })
-      expect(rectangle.ctx().snap({ x: 124, y: 3 })).toEqual({ x: 125, y: 3 })
     })
 
     it('place-at is snapped and ignored in overview', () => {
       const stamp = stubTool('plant-stamp')
       useStubTools(stamp)
-      const h = harness({ snapping: { grid: true, guides: false } })
+      const h = harness({ snapping: { grid: true } })
 
       h.host.command({ kind: 'place-at', world: { x: 13.2, y: 27.9 } })
       expect(h.host.activeTool.peek()).toBe('plant-stamp')
@@ -748,29 +740,6 @@ describe('ToolHost', () => {
       expect(h.chrome.textEntry).toBeNull()
       expect(cancels).toHaveLength(1)
     })
-
-    it('a ruler drag reaches no tool and leaves the map\'s cursor alone', () => {
-      const rectangle: StubTool = stubTool('rectangle')
-      useStubTools(rectangle)
-      const h = harness()
-      h.arm('rectangle')
-      const pressesBefore = rectangle.count('press')
-      const cursor = h.chrome.cursor
-
-      // The session runs the drag and lands its guide (today's ruler listened beside the map).
-      expect(h.press({ x: 5, y: 0 }, { target: { kind: 'ruler', axis: 'h' } })).toEqual({})
-      expect(h.host.hasLiveGesture()).toBe(true)
-      h.move({ x: 5, y: 40 })
-      h.move({ x: 5, y: 60 })
-      // Today's drag cursor was the rulers' own: the map keeps the tool's.
-      expect(h.chrome.cursor).toBe(cursor)
-      expect(h.release({ x: 5, y: 90 })).toEqual({})
-      expect(h.host.hasLiveGesture()).toBe(false)
-      expect(rectangle.count('press')).toBe(pressesBefore)
-      expect(rectangle.count('drag-start')).toBe(0)
-      expect(h.chrome.cursor).toBe(cursor)
-    })
-
   })
 
   describe('raw presses', () => {
@@ -901,14 +870,13 @@ describe('ToolHost', () => {
       const h = harness({ tool: 'plant-stamp' })
 
       h.hover({ x: 50, y: 50 })
-      // Over a map button, a ruler or off the map, the lens keeps its point, as today's skips buttons, inputs, textareas,
+      // Over a map button or off the map, the lens keeps its point, as today's skips buttons, inputs, textareas,
       // contenteditable and [data-preserve-overlays] and hears no move off the host.
       h.hover({ x: 60, y: 60 }, {}, { kind: 'owned-chrome' })
-      h.hover({ x: 70, y: 0 }, {}, { kind: 'ruler', axis: 'h' })
       h.hover({ x: 80, y: 80 }, {}, { kind: 'foreign' })
       expect(h.record.pointerWorld).toEqual([h.world({ x: 50, y: 50 })])
       // Only the lens is fed by target: the tool hears every hover, as today.
-      expect(stamp.count('hover')).toBe(4)
+      expect(stamp.count('hover')).toBe(3)
 
       h.hover({ x: 90, y: 90 })
       h.leave()
@@ -1534,7 +1502,7 @@ describe('ToolHost', () => {
       expect(h.host.hasLiveGesture()).toBe(true)
     })
 
-    it('the release of a press the tool never heard runs it: a new note\'s committing click, a ruler drag', () => {
+    it('the release of a press the tool never heard runs it: a new note\'s committing click', () => {
       const text = stubTool('text', {
         gesture: (g) => {
           if (g.kind === 'press') {
@@ -1557,8 +1525,6 @@ describe('ToolHost', () => {
       h.click({ x: 40, y: 40 })
       expect(text.count('press')).toBe(1)
       expect(navigates()).toBe(1)
-      h.drag({ x: 10, y: 10 }, { x: 60, y: 60 }, { target: { kind: 'ruler', axis: 'h' } })
-      expect(navigates()).toBe(2)
     })
   })
 
@@ -1971,7 +1937,7 @@ describe('ToolHost', () => {
       for (const id of ['select', 'polygon', 'text', 'object-stamp', 'plant-spacing'] as const) {
         const armed = stubTool(id)
         useStubTools(armed, ...(id === 'select' ? [] : [stubTool('select')]))
-        const h = harness({ tool: id, snapping: { grid: true, guides: false } })
+        const h = harness({ tool: id, snapping: { grid: true } })
         const committed = committedEdits(h)
         const at = { x: 53, y: 67 }
         const interval = gridInterval(h.view.view().pixelsPerMetre).interval
@@ -1994,7 +1960,7 @@ describe('ToolHost', () => {
 
     it('a saved-stamp drop places its objects at the snapped point, selected, returns to Select and reports it', () => {
       useStubTools(stubTool('rectangle'), stubTool('select'))
-      const h = harness({ tool: 'rectangle', snapping: { grid: true, guides: false } })
+      const h = harness({ tool: 'rectangle', snapping: { grid: true } })
       const committed = committedEdits(h)
       const interval = gridInterval(h.view.view().pixelsPerMetre).interval
       const anchor = snapToGrid(83, 91, interval)
@@ -2080,7 +2046,7 @@ describe('ToolHost', () => {
 
     it('dragover shows the drop preview and dragleave, drop and overview clear it', () => {
       useStubTools(stubTool('rectangle'), stubTool('select'))
-      const h = harness({ tool: 'rectangle', snapping: { grid: true, guides: false } })
+      const h = harness({ tool: 'rectangle', snapping: { grid: true } })
       const at = { x: 83, y: 91 }
       const interval = gridInterval(h.view.view().pixelsPerMetre).interval
 

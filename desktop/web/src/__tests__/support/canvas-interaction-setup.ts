@@ -23,7 +23,7 @@ import {
   createTestCanvasKeyboardPort,
 } from './canvas-runtime-surfaces'
 import { createTestCanvasQuerySurface } from './canvas-query-surface'
-import { snapToGridEnabled, snapToGuidesEnabled } from '../../app/canvas-settings/signals'
+import { snapToGridEnabled } from '../../app/canvas-settings/signals'
 import { plantSpacingIntervalM, singleKeyShortcuts } from '../../app/settings/state'
 import type { KeyRouterHandle } from '../../app/keyboard/key-router'
 import { installCanvasKeyRouter } from './key-router'
@@ -318,7 +318,6 @@ export function createInteractionDeps(
     })) as SceneInteractionSessionDeps['setTool'],
     render,
     readSnapToGridEnabled: () => snapToGridEnabled.value,
-    readSnapToGuidesEnabled: () => snapToGuidesEnabled.value,
     readPlantSpacingIntervalMeters: overrides.readPlantSpacingIntervalMeters ?? (() => plantSpacingIntervalM.value),
     commitPlantSpacingIntervalMeters: overrides.commitPlantSpacingIntervalMeters ?? ((meters) => {
       plantSpacingIntervalM.value = meters
@@ -799,7 +798,6 @@ export function installSceneInteractionFixture(
     clearPlantStampSource()
     clearSavedObjectStampSource()
     snapToGridEnabled.value = false
-    snapToGuidesEnabled.value = false
     plantSpacingIntervalM.value = 0.5
     singleKeyShortcuts.value = true
     // The app's key router, with the canvas rows only: keys reach the latest session's port as they do in the workspace.
@@ -832,7 +830,6 @@ export function installSceneInteractionFixture(
     clearPlantStampSource()
     clearSavedObjectStampSource()
     snapToGridEnabled.value = false
-    snapToGuidesEnabled.value = false
     plantSpacingIntervalM.value = 0.5
     if (disposalErrors.length > 0) throw disposalErrors[0]
   })

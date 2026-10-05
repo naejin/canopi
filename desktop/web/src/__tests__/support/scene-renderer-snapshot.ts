@@ -35,7 +35,6 @@ export function createTestSceneRendererSnapshot(
     annotations: options.scene?.annotations ?? [],
     measurementGuides: options.scene?.measurementGuides ?? [],
     groups: options.scene?.groups ?? [],
-    guides: options.scene?.guides ?? [],
   }
   const selectedTargets = options.selectedTargets ?? []
   const singleSelectedPlant = selectedTargets.length === 1 && selectedTargets[0]?.kind === 'plant'

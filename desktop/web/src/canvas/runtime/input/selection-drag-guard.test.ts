@@ -31,7 +31,6 @@ function deps(): DomInputSourceDeps {
     keys: { physicalCtrl: () => false, lastKeyboardMenuAt: () => null },
     clock: () => 0,
     timers: { set: vi.fn(() => 1), clear: vi.fn() },
-    listensToRulers: false,
   }
 }
 

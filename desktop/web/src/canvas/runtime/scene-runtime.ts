@@ -1,9 +1,8 @@
 import { batch, effect, type ReadonlySignal } from '@preact/signals'
 import { setCanvasSelection, setCanvasToolGuidance } from '../session-state'
 import { refreshCanvasColorCache } from '../theme-refresh'
-import { setCanvasMapBackdrop } from './scene-visuals'
+import { getMapBackdropInk, setCanvasMapBackdrop } from './scene-visuals'
 import { DEFAULT_PLANT_DISPLAY, setCanvasPlantDisplay } from './plant-display'
-import { createUuid } from '../../utils/ids'
 import {
   createSceneInteractionSession,
   type SceneInteractionSession,
@@ -37,7 +36,7 @@ import { targets, speciesTarget } from '../../target'
 import { runCanvasRuntimeCleanups, throwCanvasRuntimeCleanupErrors } from './cleanup'
 import type { CameraDriverHost } from './view/camera-driver'
 
-type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
+type RuntimeInvalidationKind = 'scene' | 'viewport'
 
 export type SceneCanvasRuntimeOptions = SceneRuntimeConstructionOptions
 
@@ -47,6 +46,8 @@ export class SceneCanvasRuntime {
   /** Counts unmountRenderer calls, so a remount that an unmount overtook stops before editing mounts. */
   private _rendererUnmounts = 0
   private _cameraMode: 'site' | 'overview'
+  /** The Design's canvas chrome shows (document surface): the grid draws only while it does. */
+  private _chromeShown = false
 
   constructor(options: SceneCanvasRuntimeOptions = {}) {
     this._construction = createSceneRuntimeConstruction(options, {
@@ -58,8 +59,10 @@ export class SceneCanvasRuntime {
       syncCanvasSignalsFromScene: () => this._syncCanvasSignalsFromScene(),
       invalidate: (kind) => this._invalidate(kind),
       incrementSceneRevision: () => this._incrementSceneRevision(),
-      renderChrome: () => this._renderChrome(),
-      addGuide: (axis, worldPosition) => this._addGuide(axis, worldPosition),
+      setChromeShown: (shown) => {
+        this._chromeShown = shown
+        this._syncEditingAids()
+      },
       setHoveredTarget: (target, options) => this._setHoveredTarget(target, options),
       disposeInteraction: () => {
         const interaction = this._interaction
@@ -117,10 +120,6 @@ export class SceneCanvasRuntime {
 
   private get _presentation(): SceneRuntimeConstruction['presentation'] {
     return this._construction.presentation
-  }
-
-  private get _chrome(): SceneRuntimeConstruction['chrome'] {
-    return this._construction.chrome
   }
 
   private get _appAdapter(): SceneRuntimeConstruction['appAdapter'] {
@@ -221,7 +220,6 @@ export class SceneCanvasRuntime {
       setTool: (name) => this._commandSurface.tools.setTool(name),
       render: (kind) => this._invalidate(kind),
       readSnapToGridEnabled: () => this._appAdapter.settings.readSnapToGridEnabled(),
-      readSnapToGuidesEnabled: () => this._appAdapter.settings.readSnapToGuidesEnabled(),
       readScrollWheel: () => this._appAdapter.settings.readScrollWheel(),
       readPlantSpacingIntervalMeters: () => this._appAdapter.settings.readPlantSpacingIntervalMeters(),
       commitPlantSpacingIntervalMeters: (meters) =>
@@ -384,7 +382,6 @@ export class SceneCanvasRuntime {
         if (container) {
           refreshCanvasColorCache(container)
         }
-        this._renderChrome()
         this._construction.inspection.refresh()
         this._invalidate('scene')
       },
@@ -394,11 +391,11 @@ export class SceneCanvasRuntime {
         this._invalidate('scene')
       },
       onChromeOverlay: () => {
-        this._renderChrome()
+        this._syncEditingAids()
       },
       onMapBackdrop: (backdrop) => {
         if (!setCanvasMapBackdrop(backdrop)) return
-        this._renderChrome()
+        this._syncEditingAids()
         this._invalidate('scene')
       },
       onPlantDisplay: (display) => {
@@ -439,31 +436,14 @@ export class SceneCanvasRuntime {
     this._transientHistoryRevision.value = this._transientHistoryRevision.peek() + 1
   }
 
-  private _renderChrome(): void {
-    const container = this._rendering.container
-    if (!container) return
-    const chromeSettings = this._appAdapter.settings.readChromeOverlay()
-    const editingAids = this._chrome.update({
-      frame: this._construction.frames.viewFrame.peek(),
-      rulersVisible: chromeSettings.rulersVisible,
-      gridVisible: chromeSettings.gridVisible,
-      guidesVisible: chromeSettings.guidesVisible,
-      guides: this._sceneState.guides,
-    })
-    // The grid and ruler guides are scene content (spec §1.5): a change syncs the scene, since 'chrome' never does.
-    // Every chrome render passes here (settings, a new guide, an undo, showing or hiding the chrome); a frame changes nothing.
+  /**
+   * The grid the workspace map draws (spec §1.5): while the chrome shows and the grid is on, in the backdrop's ink. The
+   * grid is scene content, so a change syncs the scene; the same aids again change nothing.
+   */
+  private _syncEditingAids(): void {
+    const ink = this._chromeShown && this._appAdapter.settings.readChromeOverlay().gridVisible ? getMapBackdropInk() : null
+    const editingAids = ink ? { grid: { ink: ink.grid, majorInk: ink.gridMajor } } : null
     if (this._presentation.setEditingAids(editingAids)) this._invalidate('scene')
-  }
-
-  private _addGuide(axis: 'h' | 'v', position: number): void {
-    this._sceneCommands.run('guide-add', (tx) => {
-      tx.mutate((draft) => {
-        draft.guides.push({ id: createUuid(), axis, position })
-      })
-    }, {
-      invalidate: 'chrome',
-      onCommitted: () => this._renderChrome(),
-    })
   }
 
   private _resolveHighlightedTargets(scene: ScenePersistedState): { plantIds: readonly string[]; zoneIds: readonly string[] } {

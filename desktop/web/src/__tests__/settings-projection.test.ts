@@ -4,10 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BasemapStyle } from '../generated/contracts'
 import type { Settings, Theme } from '../types/settings'
 import type { SettingsProjectionInstallation } from '../app/settings/projection'
-import {
-  snapToGridEnabled,
-  snapToGuidesEnabled,
-} from '../app/canvas-settings/signals'
+import { snapToGridEnabled } from '../app/canvas-settings/signals'
 import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
 import { sidePanelWidth } from '../app/shell/state'
 import {
@@ -70,7 +67,6 @@ function resetProjectionSignals(): void {
   locale.value = 'en'
   theme.value = 'light'
   snapToGridEnabled.value = false
-  snapToGuidesEnabled.value = true
   sidePanelWidth.value = null
   mapLayers.value = createDefaultMapLayers()
   plantSpacingIntervalM.value = 0.5
@@ -171,7 +167,6 @@ describe('settings projection', () => {
     expect(locale.value).toBe('fr')
     expect(theme.value).toBe('dark')
     expect(snapToGridEnabled.value).toBe(true)
-    expect(snapToGuidesEnabled.value).toBe(false)
     expect(sidePanelWidth.value).toBe(460)
     expect(savedStampsFrameHeight.value).toBe(280)
     expect(mapLayers.value).toEqual({
@@ -192,7 +187,6 @@ describe('settings projection', () => {
       settings.locale = 'de'
       settings.theme = 'dark'
       settings.snapToGrid = true
-      settings.snapToGuides = false
       settings.sidePanel.width = 440
       settings.savedStamps.frameHeight = 260
       settings.mapLayers = {
@@ -209,7 +203,7 @@ describe('settings projection', () => {
       locale: 'de',
       theme: 'dark',
       snap_to_grid: true,
-      snap_to_guides: false,
+      snap_to_guides: true,
       side_panel_width: 440,
       saved_stamps_frame_height: 260,
       basemap_style: 'dark',
@@ -1023,7 +1017,7 @@ describe('settings projection', () => {
     for (const source of sources) {
       expect(source).toContain('settings/projection')
       expect(source).not.toContain('settings/persistence')
-      expect(source).not.toMatch(/\b(?:locale|theme|mapLayers|snapToGridEnabled|snapToGuidesEnabled|sidePanelWidth|googleMapsApiKey)\.value\s*=(?!=)/)
+      expect(source).not.toMatch(/\b(?:locale|theme|mapLayers|snapToGridEnabled|sidePanelWidth|googleMapsApiKey)\.value\s*=(?!=)/)
     }
 
     // The Layers presentation routes map rows through the map layer actions

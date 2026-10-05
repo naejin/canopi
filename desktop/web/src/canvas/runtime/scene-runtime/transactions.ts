@@ -24,7 +24,7 @@ import {
   type SceneCommandSnapshot,
 } from '../scene-commands'
 
-export type SceneEditInvalidationKind = 'scene' | 'viewport' | 'chrome'
+export type SceneEditInvalidationKind = 'scene' | 'viewport'
 
 export interface SceneEditTransaction {
   mutate(edit: (draft: ScenePersistedState) => void): void

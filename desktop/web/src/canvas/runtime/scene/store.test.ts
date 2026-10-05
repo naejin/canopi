@@ -11,19 +11,15 @@ import { createSceneGeoFrame } from './geo-frame'
 const TEST_FRAME_ORIGIN = { lon: 13, lat: 23 }
 
 describe('scene store', () => {
-  it('reads guides and whether it holds objects without cloning the full scene', () => {
+  it('reads whether it holds objects without cloning the full scene', () => {
     const store = new SceneStore()
     store.updatePersisted((draft) => {
-      draft.guides.push({ id: 'guide', axis: 'h', position: 7 })
       draft.annotations.push({ kind: 'annotation', id: 'a', locked: false,
         annotationType: 'text', position: { x: 3, y: 4 }, text: 'Note', fontSize: 12, rotationDeg: 0 })
     })
     const read = vi.spyOn(store, 'persisted', 'get')
     try {
       expect(store.hasObjects).toBe(true)
-      const guides = store.guides
-      guides[0]!.position = 99
-      expect(store.guides[0]!.position).toBe(7)
       store.updatePersisted((draft) => { draft.annotations = [] })
       expect(store.hasObjects).toBe(false)
       expect(read).not.toHaveBeenCalled()
@@ -35,18 +31,16 @@ describe('scene store', () => {
     let mutateEscapedGuide = (): void => {}
 
     store.updatePersisted((draft) => {
-      const guide = { id: 'guide-1', axis: 'h' as const, position: 10 }
-      draft.guides.push(guide)
+      const guide = { kind: 'measurement-guide' as const, id: 'guide-1', locked: false, start: { x: 0, y: 0 }, end: { x: 10, y: 0 } }
+      draft.measurementGuides.push(guide)
       mutateEscapedGuide = () => {
-        guide.position = 99
+        guide.end.x = 99
       }
     })
 
     mutateEscapedGuide()
 
-    expect(store.persisted.guides).toEqual([
-      { id: 'guide-1', axis: 'h', position: 10 },
-    ])
+    expect(store.persisted.measurementGuides.map((guide) => guide.end)).toEqual([{ x: 10, y: 0 }])
   })
 
   it('owns committed session drafts after the mutator returns', () => {
@@ -188,7 +182,8 @@ describe('scene store', () => {
     expect(roundTripped.layers).toEqual(file.layers)
     expect(roundTripped.plant_species_colors).toEqual(file.plant_species_colors)
     expect(roundTripped.plant_species_symbols).toEqual(file.plant_species_symbols)
-    expect(roundTripped.extra).toEqual({ guides: file.extra?.guides })
+    // `extra` is Design Edit's: a leftover key in the file never passes through the scene.
+    expect(roundTripped).not.toHaveProperty('extra')
     expect(roundTripped.name).toBe('Untitled')
     expect(roundTripped.description).toBeNull()
     expect(roundTripped.version).toBe(CURRENT_CANOPI_FILE_VERSION)
@@ -398,17 +393,11 @@ describe('scene store', () => {
     expect(serialized.plants[0]).not.toHaveProperty('canopySpreadM')
   })
 
-  it('serializes extra metadata under the extra key', () => {
-    const persisted = createDefaultScenePersistedState()
-    persisted.guides = [{ id: 'g-1', axis: 'h', position: 0 }, { id: 'g-2', axis: 'v', position: 0 }]
-
-    const file = serializeScenePersistedState(persisted, createSceneGeoFrame(TEST_FRAME_ORIGIN), {
+  it('writes no extra: the scene owns no extra key', () => {
+    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSceneGeoFrame(TEST_FRAME_ORIGIN), {
       now: new Date('2026-04-02T00:00:00.000Z'),
     })
 
-    expect(file.extra).toEqual({
-      guides: [{ id: 'g-1', axis: 'h', lat: 23 }, { id: 'g-2', axis: 'v', lon: 13 }],
-    })
-    expect('guides' in file).toBe(false)
+    expect(file).not.toHaveProperty('extra')
   })
 })

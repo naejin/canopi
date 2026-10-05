@@ -159,15 +159,13 @@
 
   /* Canvas — the garden (separate from the tool chrome) */
   --canvas-bg: #EFE9DD;                                /* paper behind lens previews */
-  --canvas-ruler-bg: #F3EEE3;
-  --canvas-ruler-text: #645A4C;
   --canvas-selection: rgba(156, 90, 22, 0.14);         /* band selection fill */
   --canvas-hover-stroke: rgba(156, 90, 22, 0.62);
   --canvas-selection-stroke: #9C5A16;                  /* ochre accent */
   --canvas-interaction-casing: #FFF8EC;                /* cream casing under hover, selection and lock strokes */
   --canvas-locked-object-stroke: rgba(100, 90, 76, 0.86);
   --canvas-locked-layer-stroke: rgba(168, 51, 42, 0.88);
-  --canvas-guide-line: #FFF3D6;                        /* guides and drawing previews over the map */
+  --canvas-guide-line: #FFF3D6;                        /* measurement guides and drawing previews over the map */
   --canvas-overlay-casing: rgba(20, 16, 10, 0.6);      /* dark casing under light overlay strokes */
   --canvas-zone-stroke: #FFF3D6;
   --canvas-zone-fill: rgba(255, 243, 214, 0.1);
@@ -234,8 +232,6 @@
   --color-scrim: rgba(0, 0, 0, 0.55);
 
   --canvas-bg: #161510;
-  --canvas-ruler-bg: #2A2721;
-  --canvas-ruler-text: #B5AC9D;
   --canvas-selection: rgba(227, 160, 76, 0.2);
   --canvas-hover-stroke: rgba(227, 160, 76, 0.66);
   --canvas-selection-stroke: #E3A04C;

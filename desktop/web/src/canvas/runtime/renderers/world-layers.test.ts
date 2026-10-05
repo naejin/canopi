@@ -32,7 +32,7 @@ function gridAid(): SceneEditingAids['grid'] {
   return { ink: ink.grid, majorInk: ink.gridMajor }
 }
 
-function aid(layers: ReturnType<typeof createWorldLayers>, label: 'grid' | 'ruler-guides'): Graphics {
+function aid(layers: ReturnType<typeof createWorldLayers>, label: 'grid'): Graphics {
   const graphics = layers.root.getChildByLabel(label, true)
   if (!(graphics instanceof Graphics)) throw new Error(`no ${label} graphics`)
   return graphics
@@ -103,39 +103,10 @@ describe('world layers', () => {
     expect(layers.root.children.flatMap((layer) => layer.children)).toHaveLength(2)
   })
 
-  it('a guide lands at worldToScreen', () => {
-    // INV-REN-14: the old Canvas2D drew guides in map coordinates inside the inset ruler overlay, off the ruler ticks.
-    const layers = createWorldLayers()
-    const view = createTestRendererView({ x: 12, y: 34, scale: 8 })
-    layers.syncScene(withAids({ grid: null, rulerGuides: [{ axis: 'v', position: 10 }, { axis: 'h', position: 5 }] }))
-    layers.setView(view)
-
-    const [casing, line] = strokedSegments(aid(layers, 'ruler-guides'))
-    expect(line).toEqual(casing)
-    const vertical = line!.filter(([start, end]) => start.x === end.x)
-    const horizontal = line!.filter(([start, end]) => start.y === end.y)
-    expect(vertical.length).toBeGreaterThan(0)
-    expect(horizontal.length).toBeGreaterThan(0)
-    for (const [start, end] of vertical) {
-      expect(onScreen(layers.root, start).x).toBeCloseTo(view.worldToScreen({ x: 10, y: 0 }).x, 6)
-      expect(onScreen(layers.root, end).x).toBeCloseTo(view.worldToScreen({ x: 10, y: 0 }).x, 6)
-    }
-    for (const [start] of horizontal) {
-      expect(onScreen(layers.root, start).y).toBeCloseTo(view.worldToScreen({ x: 0, y: 5 }).y, 6)
-    }
-    // The dashes run the whole height and width of the screen, flush to its edges.
-    const ys = vertical.flatMap(([start, end]) => [onScreen(layers.root, start).y, onScreen(layers.root, end).y])
-    expect(Math.min(...ys)).toBeLessThanOrEqual(0)
-    expect(Math.max(...ys)).toBeGreaterThanOrEqual(view.screen.height)
-    const xs = horizontal.flatMap(([start, end]) => [onScreen(layers.root, start).x, onScreen(layers.root, end).x])
-    expect(Math.min(...xs)).toBeLessThanOrEqual(0)
-    expect(Math.max(...xs)).toBeGreaterThanOrEqual(view.screen.width)
-  })
-
   it('the grid lines are the snap lattice', () => {
     const layers = createWorldLayers()
     const view = createTestRendererView({ x: 12, y: 34, scale: 8 })
-    layers.syncScene(withAids({ grid: gridAid(), rulerGuides: [] }))
+    layers.syncScene(withAids({ grid: gridAid() }))
     layers.setView(view)
 
     const interval = gridInterval(view.pixelsPerMetre).interval
@@ -147,7 +118,7 @@ describe('world layers', () => {
 
     // A point snapped to the grid lands on a drawn line, where the screen shows it.
     for (const pointer of [{ x: 37, y: 61 }, { x: 250.4, y: 190.2 }, { x: 399, y: 1 }]) {
-      const snapped = snapWorldPoint(view.screenToWorld(pointer), { grid: true, guides: false }, view.pixelsPerMetre, [])
+      const snapped = snapWorldPoint(view.screenToWorld(pointer), { grid: true }, view.pixelsPerMetre)
       const column = columns.find((x) => Math.abs(x - snapped.x) < 1e-9)
       const row = rows.find((y) => Math.abs(y - snapped.y) < 1e-9)
       expect(column, `column for ${pointer.x}`).toBeDefined()
@@ -160,7 +131,7 @@ describe('world layers', () => {
   it('the grid turns with the world root', () => {
     const layers = createWorldLayers()
     const view = createTestRendererView({ x: 120, y: 80, scale: 8 }, { bearingDeg: 30 })
-    layers.syncScene(withAids({ grid: gridAid(), rulerGuides: [{ axis: 'v', position: 10 }] }))
+    layers.syncScene(withAids({ grid: gridAid() }))
     layers.setView(view)
 
     // One affine for the zones and the grid: lines on world axes, turned on screen by the view.
@@ -179,9 +150,9 @@ describe('world layers', () => {
     expect(Math.max(...ys)).toBeGreaterThanOrEqual(box.maxY)
   })
 
-  it('a pan inside the margin traces nothing; leaving it retraces only the grid and guides', () => {
+  it('a pan inside the margin traces nothing; leaving it retraces only the grid', () => {
     const layers = createWorldLayers()
-    layers.syncScene(withAids({ grid: gridAid(), rulerGuides: [{ axis: 'v', position: 10 }] }, bedAndGuide()))
+    layers.syncScene(withAids({ grid: gridAid() }, bedAndGuide()))
     layers.setView(createTestRendererView({ x: 0, y: 0, scale: 30 }))
     const clear = vi.spyOn(Graphics.prototype, 'clear')
 
@@ -189,34 +160,32 @@ describe('world layers', () => {
     layers.setView(createTestRendererView({ x: 40, y: -40, scale: 30 }))
     expect(clear).not.toHaveBeenCalled()
 
-    // A screen-wide pan leaves it: the grid and the guides retrace, the zones keep their geometry.
+    // A screen-wide pan leaves it: the grid retraces, the zones keep their geometry.
     layers.setView(createTestRendererView({ x: -1200, y: 900, scale: 30 }))
-    expect(clear.mock.contexts).toHaveLength(2)
-    expect(new Set(clear.mock.contexts)).toEqual(new Set([aid(layers, 'grid'), aid(layers, 'ruler-guides')]))
+    expect(clear.mock.contexts).toEqual([aid(layers, 'grid')])
 
     // A scene sync with the same aids traces nothing either.
     clear.mockClear()
-    layers.syncScene(withAids({ grid: gridAid(), rulerGuides: [{ axis: 'v', position: 10 }] }, bedAndGuide()))
+    layers.syncScene(withAids({ grid: gridAid() }, bedAndGuide()))
     expect(clear).not.toHaveBeenCalled()
   })
 
-  it('draws no grid or guides without editing aids, as in a thumbnail', () => {
+  it('draws no grid without editing aids, as in a thumbnail', () => {
     const layers = createWorldLayers()
-    layers.syncScene(withAids({ grid: gridAid(), rulerGuides: [{ axis: 'v', position: 10 }] }))
+    layers.syncScene(withAids({ grid: gridAid() }))
     layers.setView(createTestRendererView({ x: 0, y: 0, scale: 30 }))
     expect(strokedSegments(aid(layers, 'grid'))).not.toEqual([])
 
     layers.syncScene(createTestSceneRendererSnapshot())
     expect(layers.root.getChildByLabel('grid', true)).toBeNull()
-    expect(layers.root.getChildByLabel('ruler-guides', true)).toBeNull()
   })
 
-  it('draws the grid and guides under the zones', () => {
+  it('draws the grid under the zones', () => {
     const layers = createWorldLayers()
-    layers.syncScene(withAids({ grid: gridAid(), rulerGuides: [{ axis: 'v', position: 10 }] }, bedAndGuide()))
+    layers.syncScene(withAids({ grid: gridAid() }, bedAndGuide()))
     layers.setView(createTestRendererView({ x: 0, y: 0, scale: 30 }))
     const aidsLayer = aid(layers, 'grid').parent!
     expect(layers.root.children[0]).toBe(aidsLayer)
-    expect(aidsLayer.children).toEqual([aid(layers, 'grid'), aid(layers, 'ruler-guides')])
+    expect(aidsLayer.children).toEqual([aid(layers, 'grid')])
   })
 })

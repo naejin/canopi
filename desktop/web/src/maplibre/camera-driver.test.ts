@@ -946,7 +946,6 @@ describe('screen-lock validation', () => {
       annotations: [],
       measurementGuides: [],
       groups: [],
-      guides: [],
     }
   }
 

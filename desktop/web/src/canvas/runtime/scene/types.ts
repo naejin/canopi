@@ -79,12 +79,6 @@ export interface SceneObjectGroupEntity {
   members: SceneObjectGroupMember[]
 }
 
-export interface SceneGuide {
-  id: string
-  axis: 'h' | 'v'
-  position: number
-}
-
 export interface ScenePersistedState {
   plantSpeciesColors: Record<string, string>
   plantSpeciesSymbols: Record<string, string>
@@ -95,7 +89,6 @@ export interface ScenePersistedState {
   annotations: SceneAnnotationEntity[]
   measurementGuides: SceneMeasurementGuideEntity[]
   groups: SceneObjectGroupEntity[]
-  guides: SceneGuide[]
 }
 
 export interface SceneSessionState {

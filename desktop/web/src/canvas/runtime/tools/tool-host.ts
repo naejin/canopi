@@ -71,7 +71,7 @@ const REFUSED_DRAGOVER: GestureOutcome = Object.freeze({ quarantine: true, dropE
 /** A species drag's cue: today's band box from the pointer, this many CSS px right and down. */
 const DROP_CUE_PX = 12
 const NO_HANDLES: readonly ToolHandle[] = Object.freeze([])
-const NO_SNAP: SnapSettings = Object.freeze({ grid: false, guides: false })
+const NO_SNAP: SnapSettings = Object.freeze({ grid: false })
 /** How near a zone's edge a pointer menu offers "Turn view to this edge" (spec §4.16). The keyboard menu has no point;
  *  phase 3 adds the long press's 22 px. */
 const MENU_EDGE_TOLERANCE_PX: Partial<Record<MenuSource, number>> = Object.freeze({
@@ -91,11 +91,10 @@ const ZONE_DRAFT_TOOLS: ReadonlySet<ToolId> = new Set<ToolId>(['line', 'rectangl
 /** A press the host routed, from press to release or cancel (today's _pointerGesture). */
 interface LiveGesture {
   readonly id: number
-  readonly kind: 'tool' | 'handle' | 'ruler'
+  readonly kind: 'tool' | 'handle'
   readonly pointer: PointerKind
-  /** The press as a world point, converted once at the press, so the drag start stays on the ground (plan §1, exception 1).
-   *  Null for a ruler press, whose drag and guide are the interaction session's. */
-  start: ToolPoint | null
+  /** The press as a world point, converted once at the press, so the drag start stays on the ground (plan §1, exception 1). */
+  start: ToolPoint
   readonly startHit: HitTarget | null
   readonly handle: ToolHandleId | null
   /** Where the pointer last was, re-emitted on a camera frame while the drag is live. */
@@ -385,7 +384,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   // ── Points ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
   function snap(point: WorldPoint, noSnap: boolean): WorldPoint {
-    return snapWorldPoint(point, noSnap ? NO_SNAP : deps.snapping(), frame().view.pixelsPerMetre, deps.scene.persisted.guides)
+    return snapWorldPoint(point, noSnap ? NO_SNAP : deps.snapping(), frame().view.pixelsPerMetre)
   }
 
   /** Modifiers by meaning (spec §2.3, the LEGACY and ROTATION column; phase 2 adds the V2 column). */
@@ -540,7 +539,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   // ── Gestures ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
   function hover(g: Extract<Gesture, { kind: 'hover' }>): GestureOutcome {
-    // The lens hears only moves over the map: not over the canvas's own chrome or a ruler, nor off the map (today's lens
+    // The lens hears only moves over the map: not over the canvas's own chrome, nor off the map (today's lens
     // skips buttons, inputs, textareas, contenteditable and [data-preserve-overlays], and hears no move off the host).
     if (g.target.kind === 'surface') {
       if (insideScreen(g.at, frame().view.screen)) publishPointer({ world: frame().view.screenToWorld(g.at), screen: g.at })
@@ -608,16 +607,11 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const commitsNote = pressCommitsNote
     pressCommitsNote = false
     // A pen or a finger reaches the map with no hover after a panel drag: its press shows the tool's draft again.
-    if (g.target.kind !== 'ruler') showDraftAfterDrop()
+    showDraftAfterDrop()
     if (!activeTool) return NOTHING
     if (live) guardCancellation(() => cancelLive('pointercancel'))
     // The pointer is pressed now: a frame re-emits its drag, not the hover before it.
     lastHover = null
-    if (g.target.kind === 'ruler') {
-      // The session runs the ruler drag and lands its guide, outside the scene's admission as today; the tool hears none of it.
-      live = liveGesture(g, 'ruler', null, null)
-      return NOTHING
-    }
     // Under LEGACY an overview press pans in the recogniser and never reaches the host; nothing here samples or edits.
     if (frame().mode === 'overview') return NOTHING
     let claimed = false
@@ -668,7 +662,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   function liveGesture(
     g: Extract<Gesture, { kind: 'press' }>,
     kind: LiveGesture['kind'],
-    start: ToolPoint | null,
+    start: ToolPoint,
     startHit: HitTarget | null,
   ): LiveGesture {
     const target: PressTarget = g.target
@@ -700,8 +694,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     gesture.lastScreen = g.at
     gesture.lastMods = g.mods
     const tool = activeTool
-    if (gesture.kind === 'ruler' || !tool) {
-      // A ruler drag's cursor and guide are the session's (its RulerPress): the map keeps the tool's cursor, as today.
+    if (!tool) {
       if (g.kind === 'drag-end') {
         endLive()
         releasedOutsideTool()
@@ -764,7 +757,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   function deliverDrag(tool: CanvasTool, gesture: LiveGesture, kind: 'drag-start' | 'drag-move' | 'drag-end'): void {
     const point = pointAt(gesture.lastScreen, gesture.lastMods, gesture.pointer, gesture.kind === 'handle')
     if (kind === 'drag-end') live = null
-    const start = gesture.start!
+    const start = gesture.start
     if (gesture.kind === 'handle') {
       const phase = kind === 'drag-end' ? 'end' : 'move'
       callTool(() => tool.gesture({ kind: 'handle-drag', phase, handle: gesture.handle!, point, start }))
@@ -792,7 +785,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     }
     if (gesture.id !== g.id) return NOTHING
     const tool = activeTool
-    if (gesture.kind === 'ruler' || !tool) {
+    if (!tool) {
       endLive()
       releasedOutsideTool()
       return NOTHING
@@ -802,7 +795,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       try {
         const point = pointAt(g.at, g.mods, g.pointer, gesture.kind === 'handle')
         if (gesture.kind === 'handle') {
-          callTool(() => tool.gesture({ kind: 'handle-drag', phase: 'end', handle: gesture.handle!, point, start: gesture.start! }))
+          callTool(() => tool.gesture({ kind: 'handle-drag', phase: 'end', handle: gesture.handle!, point, start: gesture.start }))
         } else {
           callTool(() => tool.gesture({ kind: 'tap', point, hit: hitAt(point.world), clickCount: g.clickCount }))
         }
@@ -955,7 +948,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (!gesture) return
     live = null
     const tool = activeTool
-    if (gesture.kind === 'ruler' || !tool) {
+    if (!tool) {
       resetCursor()
       return
     }
@@ -1016,7 +1009,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   /**
    * Today's pointerup cleanup after a release that ended no press of the tool's (ToolHost.released): the end or cancel of
-   * a pointer pan, a right-click release, a release off the map, a ruler drag's, a press the tool never heard. The series
+   * a pointer pan, a right-click release, a release off the map, a press the tool never heard. The series
    * commits, the drop preview and the passive hover clear, the tool's cancelTransient('navigate') runs, as after a pan
    * (Polygon keeps a draft with corners and drops a redo-only history; a stamp hides its ghost until the next hover), and
    * the cursor returns to the tool's. A press of the tool's that is still live ends on its own release instead.
@@ -1111,7 +1104,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (frame().mode !== 'site') return false
     const gesture = live
     if (gesture) {
-      if (gesture.kind === 'ruler' || !gesture.dragging) return false
+      if (!gesture.dragging) return false
       deliverDrag(tool, gesture, 'drag-move')
       return true
     }

@@ -14,7 +14,6 @@ export type MenuSource = 'mouse' | 'ctrl-click' | 'pen-barrel' | 'long-press' | 
 export type PressTarget =
   | { readonly kind: 'surface' }
   | { readonly kind: 'handle'; readonly id: ToolHandleId }
-  | { readonly kind: 'ruler'; readonly axis: 'h' | 'v' }
 
 export type Gesture =
   // editing: primary role only; the ToolHost converts to world space

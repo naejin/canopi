@@ -478,7 +478,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
   const timers = createHarnessTimers(() => now)
   const toolState = signal<ToolId>(options.tool ?? 'select')
   const scene = createToolScene(createToolSceneSource(store, { pixelsPerMetre: () => view.view().pixelsPerMetre }))
-  let snapping: SnapSettings = options.snapping ?? { grid: false, guides: false }
+  let snapping: SnapSettings = options.snapping ?? { grid: false }
 
   const host = createToolHost({
     frames: view.frames,

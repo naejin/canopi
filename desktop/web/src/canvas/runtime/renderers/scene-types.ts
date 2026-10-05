@@ -18,14 +18,11 @@ export type SceneRendererHoverTarget =
   | { kind: 'group'; id: string; state: SceneRendererHoverState }
 
 /**
- * The workspace map's editing aids (spec §1.5): the grid, null when off, and the ruler guides, drawn in the world root
- * under every billboard. The grid's interval follows the scale through `canvas/grid.ts`'s `gridInterval`, the lattice
- * snapping uses; its ink follows the map backdrop.
+ * The workspace map's editing aids (spec §1.5): the grid, drawn in the world root under every billboard. Its interval
+ * follows the scale through `canvas/grid.ts`'s `gridInterval`, the lattice snapping uses; its ink follows the map backdrop.
  */
 export interface SceneEditingAids {
-  readonly grid: { readonly ink: string; readonly majorInk: string } | null
-  /** World east-west lines at y = `position` (`h`) and north-south ones at x = `position` (`v`). */
-  readonly rulerGuides: readonly { readonly axis: 'h' | 'v'; readonly position: number }[]
+  readonly grid: { readonly ink: string; readonly majorInk: string }
 }
 
 export interface SceneRendererSnapshot {

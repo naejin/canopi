@@ -168,7 +168,7 @@ describe('Zone drag tools', () => {
   })
 
   it('the draft and the zone come from the snapped points', () => {
-    const h = harness({ tool: 'rectangle', viewport: { x: 0, y: 0, scale: 4 }, snapping: { grid: true, guides: false } })
+    const h = harness({ tool: 'rectangle', viewport: { x: 0, y: 0, scale: 4 }, snapping: { grid: true } })
 
     // At 4 px/m the grid is 5 m.
     h.press({ x: 43, y: 87 })

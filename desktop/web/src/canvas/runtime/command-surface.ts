@@ -46,7 +46,7 @@ import {
   type SettledSceneReader,
 } from './scene-runtime/transactions'
 
-type CommandInvalidationKind = 'scene' | 'chrome'
+type CommandInvalidationKind = 'scene'
 
 const DESIGN_OBJECTS_NOT_IMPORTED: CanvasDesignObjectImportReceipt = Object.freeze({
   committed: false,
@@ -110,7 +110,7 @@ interface SceneCanvasCommandSurfaceOptions {
   >
   readonly settings: Pick<
     CanvasRuntimeSettingsAdapter,
-    'toggleGridVisible' | 'toggleSnapToGrid' | 'toggleRulersVisible'
+    'toggleGridVisible' | 'toggleSnapToGrid'
   >
   readonly setInteractionTool: (name: string) => void
   /** The tool the interaction session has armed now, or null without a session. */
@@ -167,7 +167,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       plantRowSpacing: options.plantRowSpacing,
     }
     // View commands go to navigation as they are: every frame the camera publishes redraws the view and the chrome placed
-    // against it (rulers inside the visible map area, after new framing insets), so a refused move redraws nothing.
+    // against it, so a refused move redraws nothing.
     this.viewport = options.viewNavigation
     this.history = {
       canUndo,
@@ -204,7 +204,6 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     this.chrome = {
       toggleGrid: () => this.options.settings.toggleGridVisible(),
       toggleSnapToGrid: () => this.options.settings.toggleSnapToGrid(),
-      toggleRulers: () => this.toggleRulers(),
     }
     this.layers = {
       setSceneLayerVisibility: (name, visible) => this.setSceneLayerState(name, { visible }),
@@ -363,11 +362,6 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       if (this.options.transientHistory.redo()) return
       this.options.history.redo()
     }, undefined)
-  }
-
-  private toggleRulers(): void {
-    this.options.settings.toggleRulersVisible()
-    this.options.invalidate('chrome')
   }
 
   private setSceneLayerOpacity(name: string, opacity: number): boolean {

@@ -48,10 +48,6 @@ export interface DomInputSourceDeps {
   readonly keys: { readonly physicalCtrl: () => boolean; readonly lastKeyboardMenuAt: () => number | null }   // the keyboard port's, which the key router feeds
   readonly clock: () => number
   readonly timers: { set(atMs: number, cb: () => void): number; clear(id: number): void }
-  /** True when the session runs ruler drags: the source listens at document capture for ruler pointerdowns and hands them
-   *  on as presses on a 'ruler' target. The session finds the pressed ruler's overlay and lands its guide itself (north-up
-   *  only); the source carries no guide port. */
-  readonly listensToRulers: boolean
 }
 export interface DomInputSource {
   /** Installs the listeners; returns the disposer that removes every listener it added (tested: exactly once each) and
@@ -62,8 +58,6 @@ export interface DomInputSource {
   /** Applies effects to the event being handled: the recogniser's, and a GestureOutcome's as 'prevent-default',
    *  'stop-propagation' and 'drop-effect'. */
   apply(effects: readonly AdapterEffect[]): void
-  /** The DOM event being handled, or null: the session finds the pressed ruler's overlay from its target. */
-  currentEvent(): Event | null
 }
 
 /**
@@ -127,9 +121,9 @@ export interface ToolHostDeps {
   readonly guidance: (g: Partial<CanvasToolGuidance> | null) => void
   readonly toolState: { readonly active: ReadonlySignal<ToolId>; set(id: ToolId): void }   // the session's tool signal
   readonly settings: ToolSettingsPort
-  /** Settings › Canvas: Snap to grid and Snap to guides, read at each point (interaction-session.ts wires the runtime settings
-   *  adapter's readSnapToGridEnabled and readSnapToGuidesEnabled); the shape tools/snapping.ts takes. */
-  readonly snapping: () => { readonly grid: boolean; readonly guides: boolean }
+  /** Snap to grid, read at each point (interaction-session.ts wires the runtime settings adapter's readSnapToGridEnabled);
+   *  the shape tools/snapping.ts takes. */
+  readonly snapping: () => { readonly grid: boolean }
   readonly translate: ToolContext['translate']
   /** "Turn view to this edge" (§4.16): the menu entry's action on a zone-edge hit. */
   readonly navigation: Pick<ViewNavigation, 'turnToEdge'>
@@ -222,8 +216,7 @@ export interface ToolHost {
    * (pointercancel, lost capture, Esc) of a pointer pan (middle, Space, overview or the Pan tool's), or an up with no
    * press of the map's (a right-click release, a release off the map, after a press the scene or the probe refused); not
    * one while another pointer's press is live, in overview, or over the note editor, a handle or the Unlock affordance
-   * (today's _onPointerUp exceptions). The host's own tap and drag-end of a ruler drag, or of a press the tool never heard,
-   * do the same. Today's window pointerup ran _cancelTransientInteraction for each: the series commits, the drop preview
+   * (today's _onPointerUp exceptions). The host's own tap and drag-end of a press the tool never heard do the same. Today's window pointerup ran _cancelTransientInteraction for each: the series commits, the drop preview
    * and the passive hover clear, the active tool's cancelTransient('navigate') runs (a tool that keeps its draft through a
    * pan keeps it here too) and the cursor returns to the tool's. A press of the tool's still live is left to its own
    * release.
@@ -246,7 +239,7 @@ export interface ToolHost {
   refreshTranslations(): void                                   // re-publishes guidance and handle labels
   /** Every hover whose target is the map (`surface`), before the overview and hover-suppression filters; null on hover-end
    *  (the pointer left the map; from phase 2 also a move over owned chrome, the text entry or a handle, never the Unlock
-   *  affordance). A hover over owned chrome, a ruler or anything off the map publishes nothing, and a move over the text
+   *  affordance). A hover over owned chrome or anything off the map publishes nothing, and a move over the text
    *  entry, a handle or the Unlock affordance emits no gesture before phase 2, so the lens keeps its point there, as today's
    *  lens skips buttons, inputs, textareas, contenteditable and [data-preserve-overlays] (spec §1.4 "Hover", §2.2 "Hover").
    *  A hover made with a button held is published too: the interaction session's subscribePointerWorld drops it (its raw

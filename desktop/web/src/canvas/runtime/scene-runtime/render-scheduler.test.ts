@@ -36,7 +36,6 @@ function createScheduler(
       publish: () => createTestSceneRendererSnapshot(),
     }),
     placeOpenedDesign: () => {},
-    renderChrome: vi.fn(),
     ...overrides,
   })
 }
@@ -114,15 +113,13 @@ describe('SceneRuntimeRenderScheduler', () => {
 
   it('treats a resize as a camera-only update because MapLibre owns the surface size', async () => {
     const renderer = createRenderer()
-    const renderChrome = vi.fn()
-    const scheduler = createScheduler(definitionFor(renderer), { renderChrome })
+    const scheduler = createScheduler(definitionFor(renderer))
     await scheduler.initialize(document.createElement('div'))
 
     scheduler.resize(400, 300)
 
     expect(renderer.setView).toHaveBeenCalledExactlyOnceWith(VIEW)
     expect(renderer.syncScene).not.toHaveBeenCalled()
-    expect(renderChrome).toHaveBeenCalledOnce()
     scheduler.dispose()
   })
 

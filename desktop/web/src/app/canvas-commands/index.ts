@@ -65,7 +65,6 @@ export type CanvasCommandId =
   | 'canvas.tool.measurementGuide'
   | 'canvas.toggleGrid'
   | 'canvas.toggleSnapToGrid'
-  | 'canvas.toggleRulers'
   | 'canvas.cut'
   | 'canvas.copy'
   | 'canvas.paste'
@@ -98,7 +97,6 @@ export type CanvasCommandIntent =
   | { readonly type: 'redo' }
   | { readonly type: 'toggle-grid' }
   | { readonly type: 'toggle-snap-to-grid' }
-  | { readonly type: 'toggle-rulers' }
   | { readonly type: 'edit', readonly action: CanvasEditAction }
   | { readonly type: 'view', readonly action: CanvasViewAction }
 
@@ -121,7 +119,6 @@ export interface CanvasCommandProjectionState {
   readonly settingsAvailable: boolean
   readonly gridVisible: boolean
   readonly snapToGridEnabled: boolean
-  readonly rulersVisible: boolean
 }
 
 /** Which surface ran a canvas command: armCanvasTool focuses the map after every one but a shortcut. */
@@ -133,7 +130,6 @@ export interface CanvasCommandIntentAdapter {
   redo(): void
   toggleGrid(): void
   toggleSnapToGrid(): void
-  toggleRulers(): void
   edit(action: CanvasEditAction): void
   view(action: CanvasViewAction): void
 }
@@ -210,8 +206,8 @@ interface CanvasHistoryCommandDefinition extends CanvasCommandDefinitionBase {
 
 interface CanvasSettingsCommandDefinition extends CanvasCommandDefinitionBase {
   readonly kind: 'settings'
-  readonly id: 'grid' | 'snap' | 'rulers'
-  readonly stateKey: 'gridVisible' | 'snapToGridEnabled' | 'rulersVisible'
+  readonly id: 'grid' | 'snap'
+  readonly stateKey: 'gridVisible' | 'snapToGridEnabled'
 }
 
 export interface CanvasEditCommandDefinition extends CanvasCommandDefinitionBase {
@@ -407,16 +403,6 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     intent: { type: 'toggle-snap-to-grid' },
     stateKey: 'snapToGridEnabled',
   },
-  {
-    kind: 'settings',
-    id: 'rulers',
-    commandId: 'canvas.toggleRulers',
-    labelKey: 'canvas.grid.rulers',
-    shortcuts: ['Shift+R'],
-    palette: true,
-    intent: { type: 'toggle-rulers' },
-    stateKey: 'rulersVisible',
-  },
 ]
 
 const SELECTION_EDITS: ReadonlySet<CanvasEditAction> = new Set([
@@ -466,7 +452,6 @@ export function isCanvasCommandDisabled(
       return !state.canRedo
     case 'toggle-grid':
     case 'toggle-snap-to-grid':
-    case 'toggle-rulers':
       return !state.settingsAvailable
     case 'view':
       return !state.canvasAvailable
@@ -511,9 +496,6 @@ function dispatchCanvasActionIntent(
       return
     case 'toggle-snap-to-grid':
       adapter.toggleSnapToGrid()
-      return
-    case 'toggle-rulers':
-      adapter.toggleRulers()
       return
     case 'edit':
       adapter.edit(intent.action)

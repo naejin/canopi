@@ -102,7 +102,7 @@ describe('Place plants tool', () => {
   })
 
   it('place-at waits at its snapped point for the species, then places once', () => {
-    const h = stampHarness(null, { scale: 4, snapping: { grid: true, guides: false } })
+    const h = stampHarness(null, { scale: 4, snapping: { grid: true } })
 
     // Place plants here, from the menu: the host snaps the point (5 m grid at 4 px/m).
     expect(h.host.command({ kind: 'place-at', world: { x: 13.25, y: 16.75 } })).toBe('handled')

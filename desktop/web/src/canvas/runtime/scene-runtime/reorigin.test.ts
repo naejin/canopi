@@ -101,7 +101,7 @@ function makeFile(): CanopiFile {
     budget_currency: 'EUR',
     created_at: '2026-04-02T00:00:00.000Z',
     updated_at: '2026-04-02T00:00:00.000Z',
-    extra: { guides: [{ id: 'ruler-1', axis: 'h', lat: geoAt(0, 12).lat }] },
+    extra: {},
   }
 }
 
@@ -148,7 +148,6 @@ function savedScene(runtime: SceneCanvasRuntime, file: CanopiFile) {
     zones: content.zones,
     annotations: content.annotations,
     measurement_guides: content.measurement_guides,
-    extra: content.extra,
   }
 }
 

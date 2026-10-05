@@ -18,7 +18,6 @@ function intentAdapter(): CanvasCommandIntentAdapter {
     redo: vi.fn(),
     toggleGrid: vi.fn(),
     toggleSnapToGrid: vi.fn(),
-    toggleRulers: vi.fn(),
     edit: vi.fn(),
     view: vi.fn(),
   }
@@ -39,7 +38,6 @@ function state(overrides: Partial<CanvasCommandProjectionState> = {}): CanvasCom
     settingsAvailable: true,
     gridVisible: false,
     snapToGridEnabled: true,
-    rulersVisible: false,
     ...overrides,
   }
 }
@@ -183,11 +181,9 @@ describe('Canvas Command Projection', () => {
     expect(projection.settingsToggles.map((toggle) => [toggle.id, toggle.shortcut, toggle.pressed])).toEqual([
       ['grid', 'Shift G', true],
       ['snap', 'Shift S', false],
-      ['rulers', 'Shift R', false],
     ])
     projection.settingsToggles.forEach((toggle) => toggle.action())
     expect(intents.toggleGrid).toHaveBeenCalledOnce()
     expect(intents.toggleSnapToGrid).toHaveBeenCalledOnce()
-    expect(intents.toggleRulers).toHaveBeenCalledOnce()
   })
 })

@@ -14,8 +14,6 @@ import type { ScenePersistedState, ScenePoint, SceneZoneEntity } from './types'
 class SceneGeoLedger {
   private readonly _points = new Map<string, GeoPosition>()
   private readonly _ellipses = new Map<string, readonly [GeoPosition, GeoPosition]>()
-  private readonly _latitudes = new Map<number, number>()
-  private readonly _longitudes = new Map<number, number>()
 
   rememberPoint(plane: PlanePoint, geo: GeoPosition): void {
     this._points.set(pointKey(plane), geo)
@@ -31,22 +29,6 @@ class SceneGeoLedger {
 
   ellipse(center: PlanePoint, radii: PlanePoint): readonly [GeoPosition, GeoPosition] | undefined {
     return this._ellipses.get(ellipseKey(center, radii))
-  }
-
-  rememberLatitude(y: number, lat: number): void {
-    this._latitudes.set(y, lat)
-  }
-
-  latitude(y: number): number | undefined {
-    return this._latitudes.get(y)
-  }
-
-  rememberLongitude(x: number, lon: number): void {
-    this._longitudes.set(x, lon)
-  }
-
-  longitude(x: number): number | undefined {
-    return this._longitudes.get(x)
   }
 }
 
@@ -96,18 +78,6 @@ export function hydrateGeoEllipse(
   return [center, radii]
 }
 
-export function hydrateGeoLatitude(frame: SceneGeoFrame, lat: number): number {
-  const y = frame.plane.toPlane({ lon: frame.plane.origin.lon, lat }).y
-  frame.ledger.rememberLatitude(y, lat)
-  return y
-}
-
-export function hydrateGeoLongitude(frame: SceneGeoFrame, lon: number): number {
-  const x = frame.plane.toPlane({ lon, lat: frame.plane.origin.lat }).x
-  frame.ledger.rememberLongitude(x, lon)
-  return x
-}
-
 // --- serialize: plane -> lon/lat, canonical when unchanged -----------------
 
 export function serializeGeoPoint(frame: SceneGeoFrame, point: ScenePoint): GeoPosition {
@@ -127,16 +97,6 @@ export function serializeGeoEllipse(
     roundGeoPosition(frame.plane.toGeo({ x: center.x - radii.x, y: center.y - radii.y })),
     roundGeoPosition(frame.plane.toGeo({ x: center.x + radii.x, y: center.y + radii.y })),
   ]
-}
-
-export function serializeGeoLatitude(frame: SceneGeoFrame, y: number): number {
-  return frame.ledger.latitude(y)
-    ?? roundGeoDegrees(frame.plane.toGeo({ x: 0, y }).lat)
-}
-
-export function serializeGeoLongitude(frame: SceneGeoFrame, x: number): number {
-  return frame.ledger.longitude(x)
-    ?? roundGeoDegrees(frame.plane.toGeo({ x, y: 0 }).lon)
 }
 
 // --- re-origin --------------------------------------------------------------
@@ -159,12 +119,6 @@ export class ScenePlaneReprojector {
 
   ellipse(center: ScenePoint, radii: ScenePoint): [ScenePoint, ScenePoint] {
     return hydrateGeoEllipse(this.next, serializeGeoEllipse(this.previous, center, radii))
-  }
-
-  guide(axis: 'h' | 'v', position: number): number {
-    return axis === 'h'
-      ? hydrateGeoLatitude(this.next, serializeGeoLatitude(this.previous, position))
-      : hydrateGeoLongitude(this.next, serializeGeoLongitude(this.previous, position))
   }
 
   zone(zone: SceneZoneEntity): SceneZoneEntity {
@@ -193,9 +147,6 @@ export class ScenePlaneReprojector {
         start: this.point(guide.start),
         end: this.point(guide.end),
       }))
-    }
-    if (state.guides) {
-      next.guides = state.guides.map((guide) => ({ ...guide, position: this.guide(guide.axis, guide.position) }))
     }
     return next as T
   }

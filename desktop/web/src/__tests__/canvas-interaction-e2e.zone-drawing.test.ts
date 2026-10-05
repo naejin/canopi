@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { selectPlantStampSource } from '../canvas/plant-stamp-source'
 import { selectedObjectIds } from '../canvas/session-state'
-import { snapToGridEnabled, snapToGuidesEnabled } from '../app/canvas-settings/signals'
+import { snapToGridEnabled } from '../app/canvas-settings/signals'
 import { SceneStore, type ScenePoint } from '../canvas/runtime/scene'
 import type {
   SceneInteractionSession,
@@ -1170,46 +1170,6 @@ describe('SceneInteractionSession', () => {
       ],
     })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-rectangle')
-    session.dispose()
-  })
-
-  it('previews and commits rectangle zones from snap-adjusted guide points', () => {
-    testView.setViewport({ x: 0, y: 0, scale: 4 })
-    snapToGuidesEnabled.value = true
-    store.updatePersisted((draft) => {
-      draft.guides = [
-        { id: 'guide-v-start', axis: 'v', position: 12 },
-        { id: 'guide-h-start', axis: 'h', position: 22 },
-        { id: 'guide-v-end', axis: 'v', position: 36 },
-        { id: 'guide-h-end', axis: 'h', position: 61 },
-      ]
-    })
-
-    const deps = createInteractionDeps(container, store, testView)
-    const session = createTestSession(deps)
-    session.setTool('rectangle')
-
-    events.pointerDown({ x: 49, y: 85 }, { button: 0 })
-    events.pointerMove({ x: 142, y: 243 }, { button: 0 })
-
-    // Screen (48, 88) to (144, 244) at 4 px/m.
-    expect(draftOutline()).toMatchObject({
-      kind: 'polygon',
-      points: [{ x: 12, y: 22 }, { x: 36, y: 22 }, { x: 36, y: 61 }, { x: 12, y: 61 }],
-    })
-
-    events.pointerUp({ x: 142, y: 243 }, { button: 0 })
-
-    expect(store.persisted.zones[0]).toMatchObject({
-      zoneType: 'rect',
-      rotationDeg: 0,
-      points: [
-        { x: 12, y: 22 },
-        { x: 36, y: 22 },
-        { x: 36, y: 61 },
-        { x: 12, y: 61 },
-      ],
-    })
     session.dispose()
   })
 

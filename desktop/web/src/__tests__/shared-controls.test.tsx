@@ -149,7 +149,7 @@ describe('Switch', () => {
 
   it('stays controlled and cannot change while disabled', async () => {
     const onChange = vi.fn()
-    await act(async () => render(<Switch label="Rulers" checked disabled onChange={onChange} />, root))
+    await act(async () => render(<Switch label="Snap to grid" checked disabled onChange={onChange} />, root))
     const input = root.querySelector<HTMLInputElement>('input[role="switch"]')!
     expect(input.checked).toBe(true)
     expect(input.disabled).toBe(true)

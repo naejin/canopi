@@ -184,9 +184,7 @@
     "grid": {
       "grid": "グリッド",
       "snapToGrid": "グリッドにスナップ",
-      "rulers": "定規",
-      "zoom": "ズーム",
-      "rulersNorthUpOnly": "北が上のときに定規を表示します"
+      "zoom": "ズーム"
     },
     "overview": {
       "zoomInToEdit": "編集するには拡大してください。この縮尺では植物は表示されません。",

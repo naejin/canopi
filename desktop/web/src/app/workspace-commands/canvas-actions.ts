@@ -10,11 +10,7 @@ import {
   type CanvasEditAction,
   type CanvasViewAction,
 } from '../canvas-commands'
-import {
-  gridVisible,
-  rulersVisible,
-  snapToGridEnabled,
-} from '../canvas-settings/signals'
+import { gridVisible, snapToGridEnabled } from '../canvas-settings/signals'
 import { requestPlaceSearchFocus } from '../geocoding/place-search-ui'
 import { cyclePlantLabels } from '../plant-display/actions'
 import {
@@ -61,7 +57,6 @@ export function readWorkspaceCanvasProjectionState(): CanvasCommandProjectionSta
     settingsAvailable: canvasAvailable,
     gridVisible: gridVisible.value,
     snapToGridEnabled: snapToGridEnabled.value,
-    rulersVisible: rulersVisible.value,
   }
 }
 
@@ -131,7 +126,6 @@ export const workspaceCanvasIntentAdapter: CanvasCommandIntentAdapter = {
   redo: () => withCanvas((canvas) => { if (canvas.history.canRedo.peek()) canvas.history.redo() }),
   toggleGrid: () => withCanvas((canvas) => canvas.chrome.toggleGrid()),
   toggleSnapToGrid: () => withCanvas((canvas) => canvas.chrome.toggleSnapToGrid()),
-  toggleRulers: () => withCanvas((canvas) => canvas.chrome.toggleRulers()),
   edit: runCanvasEditAction,
   view: runCanvasViewAction,
 }

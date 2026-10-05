@@ -32,7 +32,7 @@ const boxes = new Map<Element, Box>()
 function emptyScene(from: { x: number; y: number }, to: { x: number; y: number }): ScenePersistedState {
   return {
     plantSpeciesColors: {}, plantSpeciesSymbols: {}, plantSpeciesCodes: {},
-    layers: [], plants: [], annotations: [], measurementGuides: [], groups: [], guides: [],
+    layers: [], plants: [], annotations: [], measurementGuides: [], groups: [],
     zones: [{
       kind: 'zone', locked: false, id: 'bed', name: 'bed', zoneType: 'rect', rotationDeg: 0, fillColor: null, notes: null,
       points: [from, { x: to.x, y: from.y }, to, { x: from.x, y: to.y }],
@@ -160,8 +160,7 @@ describe('visible map area', () => {
       { rect: rect(ZOOM_GROUP), side: 'bottom' },
     ])).toBe(608)
     expect(measureBottomBandRoom(rect(WINDOW), [])).toBe(1280)
-    // The rulers hint stands above the view chip, wider than it: wholly above the band, it takes none of its room, so
-    // turning the view never folds the credits.
+    // Chrome standing wholly above the band, wider than the view chip, takes none of its room.
     expect(measureBottomBandRoom(rect(WINDOW), [
       { rect: rect(viewChip), side: 'bottom' },
       { rect: rect({ left: 12, top: 700, width: 380, height: 36 }), side: 'bottom' },

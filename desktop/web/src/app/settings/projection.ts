@@ -1,6 +1,7 @@
 import { batch } from '@preact/signals'
 import type { LastView, SatelliteSource, ScrollWheel } from '../../generated/contracts'
 import { WEB_MERCATOR_MAX_LATITUDE_DEG } from '../../generated/canopi-design-format'
+import { DEFAULT_SETTINGS } from '../../generated/settings'
 import type { Locale, Settings, Theme } from '../../types/settings'
 import { storedBearing } from '../../canvas/session-plane'
 import { FALLBACK_PLANT_SPACING_INTERVAL_M } from '../../canvas/plant-spacing-interval'
@@ -11,10 +12,7 @@ import {
   normalizeMapLayers,
   type MapLayersState,
 } from '../map-layers/state'
-import {
-  snapToGridEnabled,
-  snapToGuidesEnabled,
-} from '../canvas-settings/signals'
+import { snapToGridEnabled } from '../canvas-settings/signals'
 import { sidePanelWidth } from '../shell/state'
 import {
   DEFAULT_SAVED_STAMPS_FRAME_HEIGHT,
@@ -43,7 +41,6 @@ export interface SettingsProjectionDraft {
   googleMapsApiKey: string | null
   satelliteSource: SatelliteSource
   snapToGrid: boolean
-  snapToGuides: boolean
   plantSpacingIntervalM: number
   lastView: LastView | null
   sidePanel: {
@@ -133,7 +130,6 @@ function createDraftFromProjection(): SettingsProjectionDraft {
     googleMapsApiKey: googleMapsApiKey.value,
     satelliteSource: satelliteSource.value,
     snapToGrid: snapToGridEnabled.value,
-    snapToGuides: snapToGuidesEnabled.value,
     plantSpacingIntervalM: plantSpacingIntervalM.value,
     lastView: lastView.value,
     sidePanel: {
@@ -173,7 +169,6 @@ function normalizeDraft(draft: SettingsProjectionDraft): SettingsProjectionDraft
     googleMapsApiKey: draft.googleMapsApiKey,
     satelliteSource: draft.satelliteSource === 'google_key' ? 'google_key' : 'free',
     snapToGrid: draft.snapToGrid,
-    snapToGuides: draft.snapToGuides,
     plantSpacingIntervalM: normalizePositiveMeters(
       draft.plantSpacingIntervalM,
       FALLBACK_PLANT_SPACING_INTERVAL_M,
@@ -207,7 +202,6 @@ function applyDraftToProjection(draft: SettingsProjectionDraft): void {
     googleMapsApiKey.value = draft.googleMapsApiKey
     satelliteSource.value = draft.satelliteSource
     snapToGridEnabled.value = draft.snapToGrid
-    snapToGuidesEnabled.value = draft.snapToGuides
     plantSpacingIntervalM.value = draft.plantSpacingIntervalM
     if (!sameLastView(lastView.value, draft.lastView)) lastView.value = draft.lastView
     sidePanelWidth.value = draft.sidePanel.width
@@ -226,7 +220,8 @@ function settingsFromDraft(draft: SettingsProjectionDraft): Settings {
     locale: draft.locale,
     theme: draft.theme,
     snap_to_grid: draft.snapToGrid,
-    snap_to_guides: draft.snapToGuides,
+    // Snap to guides is gone (U33): nothing reads the stored field, written at its default until settings drop it.
+    snap_to_guides: DEFAULT_SETTINGS.snap_to_guides,
     plant_spacing_interval_m: draft.plantSpacingIntervalM,
     last_view: draft.lastView,
     side_panel_width: draft.sidePanel.width,
@@ -307,7 +302,6 @@ function projectSettingsToSignals(settings: Settings): Settings {
     // A record from before the choice existed uses a saved key.
     satelliteSource: settings.satellite_source ?? (trimmedKey(settings.google_maps_api_key ?? null) ? 'google_key' : 'free'),
     snapToGrid: settings.snap_to_grid,
-    snapToGuides: settings.snap_to_guides,
     plantSpacingIntervalM: settings.plant_spacing_interval_m,
     lastView: settings.last_view ?? null,
     sidePanel: {

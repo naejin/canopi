@@ -2,8 +2,8 @@
 //
 // Owns every DOM listener for canvas input: the map host's pointer (hover moves included), wheel, contextmenu, drag and
 // focus events, WebKit's gesture events (only with trackpad gestures on a platform that has them), the window blur, the
-// window pointer listeners while it owns a pointer, the ruler presses at document capture and the copied GeoLibre
-// selection-drag guard on the host (keys are the key router's, app/keyboard). A press it delivers, on the map or a ruler, owns that pointer until
+// window pointer listeners while it owns a pointer and the copied GeoLibre selection-drag guard on the host (keys are
+// the key router's, app/keyboard). A press it delivers on the map owns that pointer until
 // its release, its cancel or a window blur: only then does it listen on window, and only to that pointer, so presses,
 // moves and releases that start elsewhere in the app reach the page untouched. It turns
 // each event into host-relative, classified fields for `normalise`, hands the raw input to the sink, and applies the
@@ -93,7 +93,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   const sessionRects = new Map<number, HostRect>()
   let sink: ((input: RawInput) => void) | null = null
   let tickTimer: number | null = null
-  /** Pointers pressed on the map or a ruler, until their release or cancel: the window listeners follow only these. */
+  /** Pointers pressed on the map, until their release or cancel: the window listeners follow only these. */
   const owned = new Set<number>()
   /** Installs the window pointer listeners (set while attached); returns their removal. */
   let listenOnWindow: (() => () => void) | null = null
@@ -146,15 +146,6 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     // Owned first: a sink that fails on the press may still have opened its session, whose release must reach it.
     own(event.pointerId)
     deliver(event, rect, pointerInput(event, 'pointerdown', rect), 'quarantine')
-  }
-  const onRulerPointerDown = (event: PointerEvent): void => {
-    // Presses inside the map are the host listener's; the rulers sit beside it.
-    if (event.target instanceof Node && host.contains(event.target)) return
-    if (classifyTarget(event.target, host).kind !== 'ruler') return
-    const rect = host.getBoundingClientRect()
-    own(event.pointerId)
-    // Today's ruler drag had no quarantine: a failure left its press to the app.
-    deliver(event, rect, pointerInput(event, 'pointerdown', rect))
   }
   /** A move of a pointer the source does not own, over the map: a hover (an owned pointer's moves come from window). */
   const onHostPointerMove = (event: PointerEvent): void => {
@@ -363,7 +354,6 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
         listen(host, 'dragleave', onDragLeave as EventListener)
         listen(host, 'drop', onDrop as EventListener)
         listen(host, 'focusout', onFocusOut as EventListener)
-        if (deps.listensToRulers) listen(document, 'pointerdown', onRulerPointerDown as EventListener, { capture: true })
         if (deps.bindings().trackpadGestures && deps.platform.gestureEvents) {
           for (const type of ['gesturestart', 'gesturechange', 'gestureend'] as const) listen(host, type, gestureHandler(type))
         }
@@ -439,10 +429,6 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
             break
         }
       }
-    },
-
-    currentEvent() {
-      return handling.at(-1)?.event ?? null
     },
   }
 }
@@ -532,9 +518,6 @@ function keepsTextSelection(target: EventTarget | null, host: HTMLElement): bool
 function classifyTarget(target: EventTarget | null, host: HTMLElement, mapControls: 'chrome' | 'surface' = 'chrome'): TargetClass {
   const element = elementOf(target)
   if (!element) return FOREIGN
-  const ruler = element.closest('[data-canvas-ruler]')
-  const axis = ruler?.getAttribute('data-canvas-ruler')
-  if (axis === 'h' || axis === 'v') return { kind: 'ruler', axis }
   if (!host.contains(element)) return FOREIGN
   if (closestInside(element, TEXT_ENTRY_SELECTOR, host)) return OWNED_TEXT
   const handle = handleIdOf(element, host)

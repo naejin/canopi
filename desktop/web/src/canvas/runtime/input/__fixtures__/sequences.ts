@@ -30,7 +30,6 @@ export const OWNED_CHROME: TargetClass = Object.freeze({ kind: 'owned-chrome' })
 export const UNLOCK_AFFORDANCE: TargetClass = Object.freeze({ kind: 'owned-chrome', lockedAffordance: true })
 export const FOREIGN: TargetClass = Object.freeze({ kind: 'foreign' })
 export const ROTATE_HANDLE: TargetClass = Object.freeze({ kind: 'handle', id: 'rotate' as ToolHandleId })
-export const HORIZONTAL_RULER: TargetClass = Object.freeze({ kind: 'ruler', axis: 'h' })
 
 export const HOST = Object.freeze({ width: 400, height: 300 })
 

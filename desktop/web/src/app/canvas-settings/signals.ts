@@ -12,8 +12,6 @@ export const layerVisibility = signal<Record<string, boolean>>(perNewDesignLayer
 export const activeLayerName = signal<string>('zones')
 export const snapToGridEnabled = signal<boolean>(DEFAULT_SETTINGS.snap_to_grid)
 export const gridVisible = signal<boolean>(true)
-export const rulersVisible = signal<boolean>(true)
-export const snapToGuidesEnabled = signal<boolean>(DEFAULT_SETTINGS.snap_to_guides)
 
 export const layerLockState = signal<Record<string, boolean>>(perNewDesignLayer((layer) => layer.locked))
 

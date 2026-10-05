@@ -22,7 +22,6 @@ import styles from './Panels.module.css'
 export function CanvasPanel() {
   const canvasAreaRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const rulerOverlayRef = useRef<HTMLDivElement>(null)
   const [basemapState, setBasemapState] = useState<MapLibreCanvasSurfaceState>(
     () => IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   )
@@ -31,7 +30,6 @@ export function CanvasPanel() {
   const { retryMap } = useCanvasDocumentSession({
     canvasAreaRef,
     containerRef,
-    rulerOverlayRef,
     onMapStateChange: setBasemapState,
   })
 
@@ -55,7 +53,6 @@ export function CanvasPanel() {
           className={styles.canvasContainer}
           data-map-active={mapNotice.mapSurfaceVisible ? 'true' : 'false'}
         />
-        <div ref={rulerOverlayRef} className={styles.rulerOverlay} />
         {hasDesign && (
           <CanvasChrome projection={appCommandGraphToolbarProjection.value} canvasRef={containerRef} stampChooser={StampChooser}>
             {/* Read-only raster inspection; nothing here is document state. */}

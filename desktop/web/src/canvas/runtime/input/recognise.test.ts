@@ -3,7 +3,6 @@ import { CURRENT_BINDINGS } from './bindings'
 import type { Gesture } from './gestures'
 import {
   FOREIGN,
-  HORIZONTAL_RULER,
   MAC_GESTURES,
   OWNED_CHROME,
   OWNED_TEXT,
@@ -20,7 +19,6 @@ import {
   keyState,
   lostCapture,
   move,
-  moves,
   reject,
   runSequence,
   seq,
@@ -662,12 +660,9 @@ describe('recognise: sessions', () => {
   it('a hover carries the target class it saw', () => {
     const result = run(seq('hover targets', WINDOWS, [
       move(50, 60),
-      move(54, 60, { target: HORIZONTAL_RULER }),
       move(56, 60, { target: FOREIGN }),
     ]))
-    expect(result.gestures.map((gesture) => gesture.kind === 'hover' ? gesture.target : null)).toEqual([
-      SURFACE, HORIZONTAL_RULER, FOREIGN,
-    ])
+    expect(result.gestures.map((gesture) => gesture.kind === 'hover' ? gesture.target : null)).toEqual([SURFACE, FOREIGN])
   })
 
   it('a move over owned chrome ends the hover, with the Unlock affordance keeping it', () => {
@@ -769,19 +764,6 @@ describe('recognise: sessions', () => {
     expect(result.effects).toEqual([])
   })
 
-  it('a ruler press is a primary press with no capture, whatever is held', () => {
-    const result = run(seq('ruler drag', WINDOWS, [
-      keyState(true),
-      down(100, 5, { target: HORIZONTAL_RULER }),
-      ...moves([100, 5], [100, 80], 2, { buttons: 1, target: FOREIGN }),
-      up(100, 80, { target: FOREIGN }),
-    ], { tool: 'hand' }))
-    expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'drag-move', 'drag-end'])
-    expect(result.gestures[0]).toMatchObject({ kind: 'press', target: { kind: 'ruler', axis: 'h' } })
-    expect(result.gestures[1]).toMatchObject({ kind: 'drag-start', target: { kind: 'ruler', axis: 'h' } })
-    expect(result.effects).toEqual([{ kind: 'prevent-default' }])
-  })
-
   it('a Pan-tool click reaches the host as a press and a tap', () => {
     const result = run(seq('Pan tool click', WINDOWS, [down(100, 100, { detail: 2 }), up(100, 100)], { tool: 'hand' }))
     expect(kinds(result.gestures)).toEqual(['press', 'pan:start', 'pan:end', 'tap'])
@@ -857,12 +839,10 @@ describe('recognise: cancel fences', () => {
     expect(kinds(leaving.gestures)).toEqual(['pan:start'])
   })
 
-  it('a lost capture ends only a session that holds capture', () => {
+  it('a lost capture ends the session that holds capture', () => {
     const captured = run(seq('lost capture', WINDOWS, [down(100, 100), lostCapture({ id: 1 })]))
     expect(kinds(captured.gestures)).toEqual(['press', 'cancel'])
     expect(captured.steps[1]!.effects).toEqual([])
-    const ruler = run(seq('lost capture on a ruler drag', WINDOWS, [down(100, 5, { target: HORIZONTAL_RULER }), lostCapture({ id: 1 })]))
-    expect(kinds(ruler.gestures)).toEqual(['press'])
   })
 
   it('a pointercancel for another pointer changes nothing; blur cancels and releases Space', () => {

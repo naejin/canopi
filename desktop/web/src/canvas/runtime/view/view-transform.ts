@@ -17,7 +17,7 @@ import type {
   WorldVector,
 } from './types'
 
-/** Under this angle from north the view reads as north-up (rulers, the compass hint). */
+/** Under this angle from north the view reads as north-up (the compass). */
 const NORTH_UP_TOLERANCE_DEG = 0.05
 
 /** Pitch 0: centre, zoom and bearing, through the plane's toPlane → similarity. Both drivers, the snapshot map's
