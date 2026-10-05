@@ -55,38 +55,25 @@ impl ResolvedCrs {
     }
 }
 
-/// Why a coordinate system is not placed: the one refusal (U31).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Unsupported {
-    Code(u32),
-    UserDefined,
-    Geocentric,
+/// The one refusal (U31): `subject` is not placed, and the supported
+/// systems are named.
+fn refused(subject: &str) -> String {
+    format!(
+        "{subject} is not a supported coordinate system. Canopi places LiDAR in {}.",
+        crs_table::SUPPORTED_SUMMARY
+    )
 }
 
-impl std::fmt::Display for Unsupported {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Unsupported::Code(code) => write!(f, "EPSG:{code}")?,
-            Unsupported::UserDefined => f.write_str("The raster's user-defined system")?,
-            Unsupported::Geocentric => f.write_str("A geocentric system")?,
-        }
-        write!(
-            f,
-            " is not a supported coordinate system. Canopi places LiDAR in {}.",
-            crs_table::SUPPORTED_SUMMARY
-        )
-    }
-}
-
-fn refused(why: Unsupported) -> String {
-    why.to_string()
+/// The refusal of keys that spell out a system no row matches.
+fn user_defined_refused() -> String {
+    refused("The raster's user-defined system")
 }
 
 /// Resolve a code, through the compound aliases.
 fn from_code(code: u32) -> Result<ResolvedCrs, String> {
     crs_table::row_of(code)
         .map(|row| ResolvedCrs { row })
-        .ok_or_else(|| refused(Unsupported::Code(code)))
+        .ok_or_else(|| refused(&format!("EPSG:{code}")))
 }
 
 /// Resolve a stored reference, `EPSG:n`.
@@ -217,7 +204,7 @@ fn registry_code(value: Option<u16>) -> Option<u32> {
 pub(super) fn from_geokeys(keys: &GeoKeyDirectory) -> Result<Option<ResolvedCrs>, String> {
     let model = short(keys, key::GTModelTypeGeoKey);
     if model == Some(3) {
-        return Err(refused(Unsupported::Geocentric));
+        return Err(refused("A geocentric system"));
     }
     let projected = short(keys, key::ProjectedCSTypeGeoKey);
     if let Some(code) = registry_code(projected) {
@@ -229,13 +216,13 @@ pub(super) fn from_geokeys(keys: &GeoKeyDirectory) -> Result<Option<ResolvedCrs>
     if let Some(code) = registry_code(short(keys, key::GeographicTypeGeoKey)) {
         let crs = from_code(code)?;
         if model == Some(1) && crs.kind() == CrsKind::Geographic {
-            return Err(refused(Unsupported::UserDefined));
+            return Err(user_defined_refused());
         }
         return Ok(Some(crs));
     }
     match model {
         None => Ok(None),
-        Some(_) => Err(refused(Unsupported::UserDefined)),
+        Some(_) => Err(user_defined_refused()),
     }
 }
 
@@ -460,7 +447,6 @@ fn stated_ellipsoid(keys: &GeoKeyDirectory) -> Option<Option<(f64, f64)>> {
 /// another prime meridian, or an ellipsoid that differs from every such row
 /// match nothing.
 fn user_defined(keys: &GeoKeyDirectory) -> Result<ResolvedCrs, String> {
-    let refusal = || refused(Unsupported::UserDefined);
     let unit_ok = |id: u16, expected: u16| {
         matches!(short(keys, id), None | Some(USER_DEFINED)) || short(keys, id) == Some(expected)
     };
@@ -472,9 +458,9 @@ fn user_defined(keys: &GeoKeyDirectory) -> Result<ResolvedCrs, String> {
         || !unit_ok(key::GeogAngularUnitsGeoKey, 9102)
         || !greenwich
     {
-        return Err(refusal());
+        return Err(user_defined_refused());
     }
-    let parameters = Parameters::of_keys(keys).ok_or_else(refusal)?;
+    let parameters = Parameters::of_keys(keys).ok_or_else(user_defined_refused)?;
     let ellipsoid = stated_ellipsoid(keys);
     // How far a row's ellipsoid sits from the stated one, if within the
     // tolerance. WGS 84 and GRS80 are 0.1 mm apart, so the nearest row wins
@@ -494,7 +480,7 @@ fn user_defined(keys: &GeoKeyDirectory) -> Result<ResolvedCrs, String> {
         .filter_map(|row| distance(row).map(|off| (row, off)))
         .min_by(|left, right| left.1.total_cmp(&right.1))
         .map(|(row, _)| ResolvedCrs { row })
-        .ok_or_else(refusal)
+        .ok_or_else(user_defined_refused)
 }
 
 fn short_entry(key_id: u16, value: u16) -> GeoKeyEntry {
@@ -654,7 +640,7 @@ mod tests {
     /// a range it names (the CC zones and the UTM zones).
     #[test]
     fn the_refusal_names_the_supported_systems() {
-        let message = refused(Unsupported::Code(2263));
+        let message = refused("EPSG:2263");
         assert!(message.starts_with("EPSG:2263 is not a supported coordinate system."));
         let ranges = [(3942, 3950), (32601, 32660), (32701, 32760), (25828, 25838)];
         for (first, last) in ranges {
