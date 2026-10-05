@@ -27,6 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.diff.outputs.code }}
+      packaging: ${{ steps.packaging.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,6 +43,24 @@ jobs:
           else
             echo "code=false" >> "$GITHUB_OUTPUT"
           fi
+      # Feature-branch pushes package Linux and Apple silicon only; pushes to
+      # main and pull requests package all four targets, as Release Candidate does.
+      - id: packaging
+        env:
+          FEATURE_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/feature/geolibre-adoption' }}
+        run: |
+          set -euo pipefail
+          all='[
+            {"os": "ubuntu-latest", "target": "x86_64-unknown-linux-gnu", "bundle_args": "--bundles deb"},
+            {"os": "macos-14", "target": "aarch64-apple-darwin", "bundle_args": ""},
+            {"os": "macos-15-intel", "target": "x86_64-apple-darwin", "bundle_args": ""},
+            {"os": "windows-latest", "target": "x86_64-pc-windows-msvc", "bundle_args": ""}
+          ]'
+          filter='.'
+          if [ "$FEATURE_PUSH" = true ]; then
+            filter='map(select(.os == "ubuntu-latest" or .os == "macos-14"))'
+          fi
+          echo "matrix=$(jq -c "$filter" <<<"$all")" >> "$GITHUB_OUTPUT"
 
   lint:
     runs-on: ubuntu-latest
@@ -197,7 +216,7 @@ jobs:
           cargo test -p canopi-desktop --lib --locked services::lidar -- --ignored --test-threads=1 --skip e2e_
 
   build:
-    needs: [lint, test]
+    needs: [changes, lint, test]
     if: >-
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
@@ -208,19 +227,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            bundle_args: --bundles deb
-          - os: macos-14
-            target: aarch64-apple-darwin
-            bundle_args: ""
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
-            bundle_args: ""
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            bundle_args: ""
+        include: ${{ fromJSON(needs.changes.outputs.packaging) }}
 
     runs-on: ${{ matrix.os }}
     steps:
