@@ -1627,7 +1627,7 @@
       "WrongInput": "Nécessite : {{expected}}.",
       "NotReady": "Nécessite des données dont l’import est terminé.",
       "ValuesNotMetres": "Nécessite des valeurs en mètres ; ces données sont en {{units}}.",
-      "GridNotProjectedMetres": "Nécessite une grille projetée en mètres.",
+      "GridNotProjectedMetres": "Nécessite une grille projetée en mètres au sol, pas en Web Mercator ni en longitude et latitude.",
       "EngineMissing": "Indisponible : le moteur GeoLibre est absent.",
       "NeedsDesktop": "Nécessite Canopi Desktop.",
       "AlreadyInLayers": "Déjà dans les Calques."

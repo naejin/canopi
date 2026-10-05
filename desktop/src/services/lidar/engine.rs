@@ -40,7 +40,8 @@ pub struct RasterProbe {
     pub mask_flags: Vec<String>,
     /// `[origin_x, pixel_w, rot_x, origin_y, rot_y, pixel_h]`.
     pub geotransform: [f64; 6],
-    /// The horizontal CRS as WKT, or empty when the file declares none.
+    /// The horizontal CRS as its canonical `EPSG:n` reference, or empty when
+    /// the file declares none (the test-only GDAL oracle reports WKT).
     pub crs_ref: String,
     /// Band 1's native block: `[tile_w, tile_h]` or `[width, rows_per_strip]`.
     pub block: [u32; 2],
@@ -68,7 +69,7 @@ pub struct RasterStatistics {
     pub valid_percent: f64,
 }
 
-/// Where an output raster sits: its grid and horizontal CRS (`EPSG:n` or WKT).
+/// Where an output raster sits: its grid and horizontal CRS (`EPSG:n`).
 #[derive(Debug, Clone, Copy)]
 pub struct RasterGeoref<'a> {
     pub grid: &'a RasterGrid,
@@ -160,8 +161,8 @@ pub trait RasterEngine: Send + Sync + std::fmt::Debug {
         cancel: &AtomicBool,
     ) -> Result<(), String>;
 
-    /// Transform `points` from `source_crs` to `target_crs` (`EPSG:n` or
-    /// WKT). A point the transform cannot place is `None`, never an error.
+    /// Transform `points` from `source_crs` to `target_crs` (`EPSG:n`). A
+    /// point the transform cannot place is `None`, never an error.
     fn transform_points(
         &self,
         source_crs: &str,

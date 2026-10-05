@@ -11,7 +11,8 @@
 //! 3.1 m for Krovak (5514), whose row takes PROJ's Czech shift (EPSG:1623)
 //! where PROJ takes its Slovak one in Slovakia, 3.02 m off at its eastern
 //! border; U31 allows 10 m. Every other code is refused by name. Adding a
-//! code is one row here plus a run of the script.
+//! code is one row here, a run of the script and its line in `display_cog.rs`'s
+//! `ROW_DIGESTS`.
 //!
 //! The definitions are derived from the EPSG Geodetic Parameter Dataset
 //! (IOGP), see `THIRD_PARTY_NOTICES.md`.

@@ -112,6 +112,18 @@ pub(super) fn write(
     written
 }
 
+/// How many reduced-resolution levels [`write`] builds over a `width` ×
+/// `height` base: one per halving while the longer side exceeds a tile. The
+/// display lattice snaps to 2^levels by the same rule (`warp.rs`).
+pub(super) fn overview_count(width: u64, height: u64) -> u32 {
+    let (mut side, mut levels) = (width.max(height), 0);
+    while side > u64::from(TILE) {
+        side /= 2;
+        levels += 1;
+    }
+    levels
+}
+
 fn write_inner(
     path: &Path,
     georef: CogGeoref<'_>,
@@ -131,7 +143,7 @@ fn write_inner(
     let mut level_dims = vec![(grid.width, grid.height)];
     if profile.overviews {
         let (mut width, mut height) = (grid.width, grid.height);
-        while width.max(height) > TILE {
+        for _ in 0..overview_count(u64::from(width), u64::from(height)) {
             width = (width / 2).max(1);
             height = (height / 2).max(1);
             level_dims.push((width, height));

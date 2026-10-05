@@ -115,8 +115,12 @@ pub(crate) fn check_named_source_bytes(name: &str, bytes: u64) -> Result<(), Str
 ///
 /// Import runs it on the user's files before anything is recorded, so the
 /// refusal shows in the dialog and leaves no item or job (canopi-try2). Retry
-/// runs it on the saved files after recording its job and fails that job with
-/// the refusal, so the reason stays on the item's row. `name_of` names each
+/// runs it on the saved files before recording a job and keeps a refusal as
+/// the failure of the item's latest import, so the reason stays on its row.
+/// Both first refuse at once while a raster job runs, since that job holds a
+/// Local slot for minutes and would fail the import on its lease anyway;
+/// otherwise they run this on the Local lane, beside short reads, never on
+/// UserData. `name_of` names each
 /// source in a refusal: [`source_name`] for the user's files, the imported
 /// file name for a managed original. Each source's header is read here and
 /// read again when staging probes its managed copy; that is cheap, and only

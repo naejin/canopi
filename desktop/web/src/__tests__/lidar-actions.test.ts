@@ -189,6 +189,13 @@ describe('Data Library actions', () => {
     expect(lidarStatusMessage.value).toBe('name is empty')
   })
 
+  it('refreshes the library after a refused Retry, so the row shows the refusal written onto its job', async () => {
+    retryImportMock.mockRejectedValueOnce(new Error('delft.tif cannot be found; choose the files again'))
+    await expect(retryLibraryImport('layer-2')).rejects.toThrow('delft.tif cannot be found')
+    expect(refreshMock).toHaveBeenCalledTimes(1)
+    expect(ensurePollingMock).not.toHaveBeenCalled()
+  })
+
   it('removes the deleted item from the Design that asked for the deletion', async () => {
     deleteItemMock.mockResolvedValue(undefined)
     await deleteLibraryItem('analysis-1')

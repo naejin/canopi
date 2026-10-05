@@ -281,6 +281,33 @@ impl HeavyJobLease {
     }
 }
 
+impl LidarLibrary {
+    /// Refuse a new import or Retry at once while a raster job holds the
+    /// heavy lease. That job also holds a Local slot for minutes, so the
+    /// header check would wait behind it only for the job to fail on the
+    /// lease; this answers the dialog first and records nothing. The job
+    /// still takes the lease itself, so a race only fails it as before.
+    pub fn refuse_while_raster_job_runs(&self) -> Result<(), String> {
+        let holder = self
+            .inner
+            .heavy_job
+            .lock()
+            .map_err(|_| "LiDAR heavy job lease poisoned".to_string())?;
+        if holder.is_some() {
+            return Err("another raster job is running; try again when it finishes".to_string());
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+impl LidarLibrary {
+    /// Hold the heavy lease as a running raster job does.
+    pub(crate) fn hold_heavy_lease(&self, job_id: &str) -> HeavyJobLease {
+        HeavyJobLease::acquire(self, job_id).unwrap()
+    }
+}
+
 impl Drop for HeavyJobLease {
     fn drop(&mut self) {
         if let Ok(mut holder) = self.inner.heavy_job.lock()
@@ -1223,7 +1250,37 @@ impl LidarLibrary {
         Ok(())
     }
 
-    /// Record and start one import as a new library item.
+    /// Import, first step, on the Local lane because it reads file headers:
+    /// a file Canopi cannot place is refused in the import dialog, before any
+    /// item or job exists (canopi-try2, U31).
+    pub fn check_import_selection(&self, paths: &[PathBuf]) -> Result<(), String> {
+        import::validate_source_selection(paths)?;
+        admission::check_sources_placeable(
+            self.inner.engine.as_ref(),
+            paths,
+            &admission::source_name,
+            &AtomicBool::new(false),
+        )
+    }
+
+    /// Import, second step, on the UserData lane: record the item and its job
+    /// and start the job. It reads no file header.
+    pub fn start_import(
+        &self,
+        name: &str,
+        quantity: RasterQuantity,
+        unit_label: Option<&str>,
+        unit_unknown: bool,
+        paths: Vec<PathBuf>,
+    ) -> Result<common_types::lidar::LidarImportReceipt, String> {
+        let (layer_id, job_id) =
+            self.record_import_item(name, quantity, unit_label, unit_unknown, &paths)?;
+        self.start_recorded_import(&layer_id, &job_id, paths)
+    }
+
+    /// Both import steps on the calling thread (the command splits them
+    /// across lanes).
+    #[cfg(test)]
     pub fn import_item(
         &self,
         name: &str,
@@ -1232,55 +1289,79 @@ impl LidarLibrary {
         unit_unknown: bool,
         paths: Vec<PathBuf>,
     ) -> Result<common_types::lidar::LidarImportReceipt, String> {
-        // A file Canopi cannot place is refused here, in the import dialog,
-        // before any item or job exists (canopi-try2, U31).
-        import::validate_source_selection(&paths)?;
-        admission::check_sources_placeable(
-            self.inner.engine.as_ref(),
-            &paths,
-            &admission::source_name,
-            &AtomicBool::new(false),
-        )?;
-        let (layer_id, job_id) =
-            self.record_import_item(name, quantity, unit_label, unit_unknown, &paths)?;
-        self.start_recorded_import(&layer_id, &job_id, paths)
+        self.check_import_selection(&paths)?;
+        self.start_import(name, quantity, unit_label, unit_unknown, paths)
     }
 
-    /// Retry a failed or cancelled unpublished import with its saved request.
-    pub fn retry_import(
-        &self,
-        layer_id: &str,
-    ) -> Result<common_types::lidar::LidarImportReceipt, String> {
-        // The saved files are checked as Import checks them before a job is
-        // recorded. A refusal adds no job: it becomes the latest import's
-        // failure, so the reason stays on the item's row.
+    /// Retry, first step, on the UserData lane: the saved selection of a
+    /// failed or cancelled unpublished import and the names its managed
+    /// originals were imported under.
+    pub fn retry_selection(&self, layer_id: &str) -> Result<RetrySelection, String> {
         let SavedRetry {
             latest_job, paths, ..
         } = {
             self.ensure_writable()?;
             saved_retry(&*self.catalogue()?, layer_id)?
         };
-        let checked = self.saved_source_names(&paths).and_then(|names| {
-            let name_of = |path: &std::path::Path| {
-                names
-                    .get(path)
-                    .cloned()
-                    .unwrap_or_else(|| admission::source_name(path))
-            };
-            import::validate_named_selection(&paths, &name_of)?;
-            admission::check_sources_placeable(
-                self.inner.engine.as_ref(),
-                &paths,
-                &name_of,
-                &AtomicBool::new(false),
-            )
-        });
+        match self.saved_source_names(&paths) {
+            Ok(names) => Ok(RetrySelection {
+                latest_job,
+                paths,
+                names,
+            }),
+            Err(error) => {
+                self.refuse_retry(&latest_job, &error);
+                Err(error)
+            }
+        }
+    }
+
+    /// Retry, second step, on the Local lane because it reads file headers:
+    /// the saved files are checked as Import checks them.
+    pub fn check_retry_selection(&self, selection: &RetrySelection) -> Result<(), String> {
+        let name_of = |path: &std::path::Path| {
+            selection
+                .names
+                .get(path)
+                .cloned()
+                .unwrap_or_else(|| admission::source_name(path))
+        };
+        import::validate_named_selection(&selection.paths, &name_of)?;
+        admission::check_sources_placeable(
+            self.inner.engine.as_ref(),
+            &selection.paths,
+            &name_of,
+            &AtomicBool::new(false),
+        )
+    }
+
+    /// Retry, last step, on the UserData lane. A refusal adds no job: it
+    /// becomes the latest import's failure, so the reason stays on the item's
+    /// row. Otherwise a new job is recorded and started.
+    pub fn finish_retry(
+        &self,
+        layer_id: &str,
+        selection: RetrySelection,
+        checked: Result<(), String>,
+    ) -> Result<common_types::lidar::LidarImportReceipt, String> {
         if let Err(error) = checked {
-            self.refuse_retry(&latest_job, &error);
+            self.refuse_retry(&selection.latest_job, &error);
             return Err(error);
         }
         let (layer_id, job_id, paths) = self.record_import_retry(layer_id)?;
         self.start_recorded_import(&layer_id, &job_id, paths)
+    }
+
+    /// The three retry steps on the calling thread (the command splits them
+    /// across lanes).
+    #[cfg(test)]
+    pub fn retry_import(
+        &self,
+        layer_id: &str,
+    ) -> Result<common_types::lidar::LidarImportReceipt, String> {
+        let selection = self.retry_selection(layer_id)?;
+        let checked = self.check_retry_selection(&selection);
+        self.finish_retry(layer_id, selection, checked)
     }
 
     /// The file names a saved selection's managed originals were imported
@@ -3327,6 +3408,14 @@ pub(crate) fn import_job_summary(
 }
 
 /// An unpublished item's latest import that may be retried.
+/// A Retry's saved selection, carried from its UserData read through the
+/// Local header check to its UserData record.
+pub struct RetrySelection {
+    latest_job: String,
+    paths: Vec<PathBuf>,
+    names: HashMap<PathBuf, String>,
+}
+
 struct SavedRetry {
     latest_job: String,
     request: String,

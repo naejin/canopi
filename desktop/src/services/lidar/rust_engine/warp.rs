@@ -146,17 +146,6 @@ fn latitude_nearest_equator(native: &ResolvedCrs, extent: [f64; 4]) -> Result<f6
     })
 }
 
-/// The overview levels `cog::write` builds over a `width` × `height` base:
-/// one per halving while the longer side exceeds a tile.
-fn overview_levels(width: i64, height: i64) -> u32 {
-    let (mut side, mut levels) = (width.max(height), 0);
-    while side > i64::from(cog::TILE) {
-        side /= 2;
-        levels += 1;
-    }
-    levels
-}
-
 /// Where a derivative sits on the lattice.
 struct Placement {
     grid: RasterGrid,
@@ -237,7 +226,11 @@ fn place(
             (footprint[2] + step - 1).div_euclid(step) * step,
             (footprint[3] + step - 1).div_euclid(step) * step,
         ];
-        let needed = 1i64 << overview_levels(snapped[2] - snapped[0], snapped[3] - snapped[1]);
+        let needed = 1i64
+            << cog::overview_count(
+                (snapped[2] - snapped[0]).unsigned_abs(),
+                (snapped[3] - snapped[1]).unsigned_abs(),
+            );
         if needed <= step {
             break snapped;
         }

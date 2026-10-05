@@ -613,10 +613,9 @@ describe('WorkspaceMapControls', () => {
   })
 
   it('rebuilds contribution layers after style reload on one map and clears them before removal', async () => {
-    const bounds = vi.fn()
     const states = vi.fn()
     const { controls, maps, observers } = createControls({
-      contributions: { publishViewBounds: bounds, onStateChange: states },
+      contributions: { onStateChange: states },
     })
     const acquisition = controls.createMap(new AbortController().signal)
     const input: WorkspaceMapContributionSnapshot = {
@@ -640,7 +639,6 @@ describe('WorkspaceMapControls', () => {
     expect(map.setPaintProperty).toHaveBeenLastCalledWith(MAPLIBRE_SATELLITE_LAYER_ID, 'raster-opacity', 0.4)
     map.remove.mockImplementation(() => {
       expect([...map.listeners.values()].every((listeners) => listeners.size === 0)).toBe(true)
-      expect(bounds).toHaveBeenLastCalledWith(null)
       expect(states.mock.lastCall?.[0].status).toBe('idle')
     })
     controls.releaseMap(admitted)

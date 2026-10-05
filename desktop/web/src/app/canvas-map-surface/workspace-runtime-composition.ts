@@ -149,7 +149,6 @@ export function createWorkspaceRuntimeComposition(
     contributions: {
       loadTerrainSupport: options.mapContributions.loadTerrainSupport,
       createRasterDisplay: options.mapContributions.createRasterDisplay,
-      publishViewBounds: options.mapContributions.publishViewBounds,
       onStateChange: publishMapState,
     },
   })

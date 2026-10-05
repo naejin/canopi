@@ -1627,7 +1627,7 @@
       "WrongInput": "Требуется: {{expected}}.",
       "NotReady": "Требуются данные с завершённым импортом.",
       "ValuesNotMetres": "Требуются значения в метрах; эти данные в {{units}}.",
-      "GridNotProjectedMetres": "Требуется проецированная сетка в метрах.",
+      "GridNotProjectedMetres": "Требуется проецированная сетка в метрах на местности, а не Web Mercator или долгота и широта.",
       "EngineMissing": "Недоступно: отсутствует движок GeoLibre.",
       "NeedsDesktop": "Требуется Canopi Desktop.",
       "AlreadyInLayers": "Уже в слоях."

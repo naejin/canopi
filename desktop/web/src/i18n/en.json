@@ -1627,7 +1627,7 @@
       "WrongInput": "Needs {{expected}}.",
       "NotReady": "Needs data that has finished importing.",
       "ValuesNotMetres": "Needs values in metres; this data is in {{units}}.",
-      "GridNotProjectedMetres": "Needs a projected grid in metres.",
+      "GridNotProjectedMetres": "Needs a projected grid in ground metres, not Web Mercator or longitude and latitude.",
       "EngineMissing": "Unavailable: the GeoLibre engine is missing.",
       "NeedsDesktop": "Needs Canopi Desktop.",
       "AlreadyInLayers": "Already in Layers."

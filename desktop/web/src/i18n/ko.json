@@ -1627,7 +1627,7 @@
       "WrongInput": "{{expected}}이(가) 필요합니다.",
       "NotReady": "가져오기가 완료된 데이터가 필요합니다.",
       "ValuesNotMetres": "미터 단위 값이 필요합니다. 이 데이터의 단위는 {{units}}입니다.",
-      "GridNotProjectedMetres": "미터 단위의 투영 격자가 필요합니다.",
+      "GridNotProjectedMetres": "지상 미터 단위의 투영 격자가 필요합니다. Web Mercator나 경위도는 사용할 수 없습니다.",
       "EngineMissing": "사용할 수 없음: GeoLibre 엔진이 없습니다.",
       "NeedsDesktop": "Canopi Desktop이 필요합니다.",
       "AlreadyInLayers": "이미 레이어에 있습니다."

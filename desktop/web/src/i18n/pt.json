@@ -1627,7 +1627,7 @@
       "WrongInput": "Precisa de: {{expected}}.",
       "NotReady": "Precisa de dados com a importação concluída.",
       "ValuesNotMetres": "Precisa de valores em metros; estes dados estão em {{units}}.",
-      "GridNotProjectedMetres": "Precisa de uma grade projetada em metros.",
+      "GridNotProjectedMetres": "Precisa de uma grade projetada em metros no terreno, não Web Mercator nem longitude e latitude.",
       "EngineMissing": "Indisponível: o motor GeoLibre está ausente.",
       "NeedsDesktop": "Precisa do Canopi Desktop.",
       "AlreadyInLayers": "Já está em Camadas."

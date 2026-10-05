@@ -1474,8 +1474,9 @@ fn the_run_rechecks_the_grid_with_the_rust_engine() {
         -9999.0,
     )
     .unwrap();
-    windowed::check_projected_metre_grid(&library, &AtomicBool::new(false), &mercator)
+    let error = windowed::check_projected_metre_grid(&library, &AtomicBool::new(false), &mercator)
         .expect_err("a Web Mercator grid is not a ground metre grid");
+    assert!(error.contains("ground metres"), "{error}");
     drop(library);
     let _ = std::fs::remove_dir_all(&root);
 }

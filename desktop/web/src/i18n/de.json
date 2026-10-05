@@ -1627,7 +1627,7 @@
       "WrongInput": "Benötigt: {{expected}}.",
       "NotReady": "Benötigt Daten mit abgeschlossenem Import.",
       "ValuesNotMetres": "Benötigt Werte in Metern; diese Daten sind in {{units}}.",
-      "GridNotProjectedMetres": "Benötigt ein projiziertes Raster in Metern.",
+      "GridNotProjectedMetres": "Benötigt ein projiziertes Raster in Metern am Boden, nicht Web Mercator oder Länge und Breite.",
       "EngineMissing": "Nicht verfügbar: Die GeoLibre-Engine fehlt.",
       "NeedsDesktop": "Benötigt Canopi Desktop.",
       "AlreadyInLayers": "Bereits in den Ebenen."

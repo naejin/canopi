@@ -1,12 +1,9 @@
-import { signal } from '@preact/signals'
 import { mapZoomToStageScale } from '../../canvas/projection'
 import {
   currentCanvasQuerySurface,
   getCurrentCanvasViewportCommandSurface,
 } from '../../canvas/session'
 import type { SessionPlane } from '../../canvas/session-plane'
-
-export const lidarMapViewBounds = signal<[number, number, number, number] | null>(null)
 
 function currentSessionPlane(): SessionPlane | null {
   return currentCanvasQuerySurface.value?.sessionPlane.value ?? null
@@ -37,12 +34,6 @@ export function viewDesignLocation(): boolean {
   if (!viewport) return false
   if (!viewport.returnFromTemporaryFocus()) viewport.returnToDesign()
   return true
-}
-
-export function publishLidarMapViewBounds(
-  bounds: [number, number, number, number] | null,
-): void {
-  lidarMapViewBounds.value = bounds
 }
 
 export function lidarBoundsToLocalWorld(
