@@ -52,11 +52,14 @@ jobs:
           else
             echo "code=false" >> "$GITHUB_OUTPUT"
           fi
-      # Feature-branch pushes package Linux and Apple silicon only; pushes to
-      # main and pull requests package all four targets, as Release Candidate does.
+      # Feature-branch pushes package Linux and Apple silicon only, unless they
+      # change a packaging input (manifests, build script, Tauri config, the
+      # sidecar and its smoke, the Windows manifest check, npm manifests, CI);
+      # then, like pushes to main, pull requests and Release Candidate, all four.
       - id: packaging
         env:
           FEATURE_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/feature/geolibre-adoption' }}
+          BASE: ${{ github.event.before }}
         run: |
           set -euo pipefail
           all='[
@@ -65,9 +68,13 @@ jobs:
             {"os": "macos-15-intel", "target": "x86_64-apple-darwin", "bundle_args": ""},
             {"os": "windows-latest", "target": "x86_64-pc-windows-msvc", "bundle_args": ""}
           ]'
+          inputs='^(Cargo\.lock$|desktop/Cargo\.toml$|desktop/build\.rs$|desktop/tauri[^/]*\.json$|desktop/tauri\.conf|desktop/binaries/|scripts/build-geolibre-cli\.sh$|scripts/smoke-bundled-sidecar\.sh$|scripts/check_windows_manifest\.py$|desktop/web/package[^/]*\.json$|\.github/)'
           filter='.'
-          if [ "$FEATURE_PUSH" = true ]; then
-            filter='map(select(.os == "ubuntu-latest" or .os == "macos-14"))'
+          if [ "$FEATURE_PUSH" = true ] && [ -n "$BASE" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            changed="$(git diff --name-only "$BASE" "$GITHUB_SHA")"
+            if ! grep -qE "$inputs" <<<"$changed"; then
+              filter='map(select(.os == "ubuntu-latest" or .os == "macos-14"))'
+            fi
           fi
           echo "matrix=$(jq -c "$filter" <<<"$all")" >> "$GITHUB_OUTPUT"
 
