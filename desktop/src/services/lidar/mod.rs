@@ -253,7 +253,8 @@ impl Drop for DisplayTicket {
 /// The lease is held for exactly as long as the work runs and released when
 /// the guard drops, so a queued submission is refused promptly instead of
 /// creating running work that would compete for the same disk, memory and
-/// in-process raster buffers.
+/// in-process raster buffers. Its key only tells holders apart: Import takes
+/// it before its item and job exist, so nothing is recorded on a busy library.
 pub(crate) struct HeavyJobLease {
     inner: Arc<LidarLibraryInner>,
     job_id: String,
@@ -266,12 +267,10 @@ impl HeavyJobLease {
             .heavy_job
             .lock()
             .map_err(|_| "LiDAR heavy job lease poisoned".to_string())?;
-        if let Some(current) = holder.as_deref()
-            && current != job_id
-        {
-            return Err(format!(
-                "another raster job is already running ({current}); retry when it finishes"
-            ));
+        if holder.as_deref().is_some_and(|current| current != job_id) {
+            return Err(
+                "another raster job is already running; retry when it finishes".to_string(),
+            );
         }
         *holder = Some(job_id.to_string());
         Ok(Self {
@@ -1224,8 +1223,9 @@ impl LidarLibrary {
     }
 
     /// Record and start one import as a new library item. A file Canopi
-    /// cannot place is refused here, in the import dialog, before any item or
-    /// job exists (canopi-try2, U31); only headers are read (U32).
+    /// cannot place, or a raster job already running, is refused here, in the
+    /// import dialog, before any item or job exists (canopi-try2, U31, U32);
+    /// only headers are read.
     pub fn import_item(
         &self,
         name: &str,
@@ -1240,16 +1240,18 @@ impl LidarLibrary {
             &paths,
             &admission::source_name,
         )?;
+        let lease = HeavyJobLease::acquire(self, &new_id("imp"))?;
         let (layer_id, job_id) =
             self.record_import_item(name, quantity, unit_label, unit_unknown, &paths)?;
-        self.start_recorded_import(&layer_id, &job_id, paths)
+        self.start_recorded_import(lease, &layer_id, &job_id, paths)
     }
 
     /// Retry a failed or cancelled unpublished import with its saved request.
     ///
     /// The saved files are checked as Import checks them before a job is
     /// recorded. A refusal adds no job: it becomes the latest import's
-    /// failure, so the reason stays on the item's row.
+    /// failure, so the reason stays on the item's row. A raster job already
+    /// running refuses Retry too, but is not the item's failure.
     pub fn retry_import(
         &self,
         layer_id: &str,
@@ -1274,8 +1276,9 @@ impl LidarLibrary {
             self.refuse_retry(&latest_job, &error);
             return Err(error);
         }
+        let lease = HeavyJobLease::acquire(self, &new_id("imp"))?;
         let (layer_id, job_id, paths) = self.record_import_retry(layer_id)?;
-        self.start_recorded_import(&layer_id, &job_id, paths)
+        self.start_recorded_import(lease, &layer_id, &job_id, paths)
     }
 
     /// The file names a saved selection's managed originals were imported
@@ -1316,11 +1319,12 @@ impl LidarLibrary {
 
     fn start_recorded_import(
         &self,
+        lease: HeavyJobLease,
         layer_id: &str,
         job_id: &str,
         paths: Vec<PathBuf>,
     ) -> Result<common_types::lidar::LidarImportReceipt, String> {
-        if let Err(error) = self.begin_import_sources(job_id, layer_id, paths) {
+        if let Err(error) = self.begin_import_sources(lease, job_id, layer_id, paths) {
             // A job that could not start is an honest failed operation.
             self.fail_import_job(job_id, &error);
             return Err(error);
@@ -1377,11 +1381,13 @@ impl LidarLibrary {
 
     /// Prepare and publish a new item's sources in one job.
     ///
-    /// Each selected source is prepared and validated in order under one
-    /// heavy-job lease, and the batch is published atomically as the item's
-    /// only generation. A pre-commit failure or cancellation publishes nothing.
-    pub fn begin_import_sources(
+    /// Each selected source is prepared and validated in order under the
+    /// caller's heavy-job lease, taken before the job was recorded, and the
+    /// batch is published atomically as the item's only generation. A
+    /// pre-commit failure or cancellation publishes nothing.
+    fn begin_import_sources(
         &self,
+        lease: HeavyJobLease,
         job_id: &str,
         layer_id: &str,
         source_paths: Vec<PathBuf>,
@@ -1398,7 +1404,6 @@ impl LidarLibrary {
                 );
             }
         }
-        let lease = HeavyJobLease::acquire(self, job_id)?;
         let executor = self.executor()?;
         let flag = self.register_cancel(job_id);
         let library = self.clone();
@@ -2058,33 +2063,22 @@ mod tests {
         let holding = library.record_import_job(&layer_id).unwrap();
         let competing = library.record_import_job(&layer_id).unwrap();
 
-        // One heavy job holds the library-wide lease...
+        // One heavy job holds the library-wide lease, so a competing
+        // submission is refused promptly instead of creating running work.
         let lease = HeavyJobLease::acquire(&library, &holding).unwrap();
-        // ...so a competing submission is refused promptly instead of creating
-        // running work.
-        let error = library
-            .begin_import_sources(&competing, &layer_id, Vec::new())
-            .expect_err("a competing heavy submission must be refused");
+        let error = HeavyJobLease::acquire(&library, &competing)
+            .err()
+            .expect("a competing heavy submission must be refused");
         assert!(error.contains("already running"), "{error}");
-        {
-            let connection = library.catalogue().unwrap();
-            let state: String = connection
-                .query_row(
-                    "SELECT state FROM lidar_import_jobs WHERE id = ?1",
-                    [&competing],
-                    |row| row.get(0),
-                )
-                .unwrap();
-            assert_eq!(state, "staging", "the refused job was left untouched");
-        }
 
         // Releasing admits the next holder, and an early failure releases the
-        // lease instead of wedging the library for the rest of the session.
+        // lease it was handed instead of wedging the library for the rest of
+        // the session.
         drop(lease);
-        drop(HeavyJobLease::acquire(&library, &competing).unwrap());
+        let lease = HeavyJobLease::acquire(&library, &competing).unwrap();
         assert!(
             library
-                .begin_import_sources(&holding, &layer_id, Vec::new())
+                .begin_import_sources(lease, &competing, &layer_id, Vec::new())
                 .is_err(),
             "no executor is attached in this fixture"
         );
