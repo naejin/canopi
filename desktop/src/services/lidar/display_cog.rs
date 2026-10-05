@@ -40,12 +40,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// startup prune drops derivatives of any other. v2: derivatives are warped
 /// to EPSG:3857 (U31), so every earlier one regenerates once.
 pub(super) const DISPLAY_PROFILE: &str = "display-cog-3857-v2";
-/// SHA-256 of what places and draws this profile's pixels (the CRS rows,
-/// proj4rs, the warp's lattices and the web fixture derivative); a test
+/// SHA-256 of what places and draws this profile's pixels beyond each CRS
+/// row's own definition (proj4rs, the Web Mercator and WGS84 rows, the
+/// warp's lattices for sample grids and the web fixture derivative); a test
 /// fails when any changes, so the profile is bumped with it.
 #[cfg(test)]
 const DISPLAY_PROFILE_DIGEST: &str =
-    "7dc66c4d67e0f39ac2e336500617017466416beda1b50dabd4e46df6ecfbbfa2";
+    "2e4ed2b2fa51a71af44dfece8b15ac2d6659dde5b45f95346ffb288553381a3d";
 /// Largest side of a composed part, in 1024-cell chunks: a part is composed
 /// in memory and converted whole, so 4×4 chunks keep it inside the engine's
 /// capacity limit (`import::MAX_RAW_EXTRACTION_CELLS`).
@@ -1360,62 +1361,91 @@ mod library_tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// Everything that decides a display pixel's place and value: the CRS
-    /// rows and proj4rs, the lattice the warp gives every row at four cell
-    /// sizes (its rung, edge and padding rules), and the bytes of the web
-    /// fixture derivative (its sampling, mesh and file layout). A change to
-    /// any must bump `DISPLAY_PROFILE` (and then this digest): derivatives
-    /// written before it would otherwise be served again beside new ones.
-    #[test]
-    fn the_profile_records_what_places_and_draws_display_pixels() {
-        use super::super::engine::RasterEngine as _;
-        use super::super::rust_engine::{RustRasterEngine, crs_table, display_lattice};
+    /// What decides a display pixel's place and value beyond each row's own
+    /// definition: proj4rs and the Web Mercator and WGS84 rows every
+    /// transform passes through, the lattice the warp gives fixed sample
+    /// grids in each kind of projection at four cell sizes (its rung, edge
+    /// and padding rules), and the bytes of the web fixture derivative (its
+    /// sampling, mesh and file layout). A change to any must bump
+    /// `DISPLAY_PROFILE` (and then the digest): derivatives written before
+    /// it would otherwise be served again beside new ones. Lattices are
+    /// whole pixel indices, so a last-bit difference in a platform's libm
+    /// cannot change them. Other rows stay out: each row's reference points
+    /// pin it within 1 cm of PROJ, and a new row moves no existing pixel.
+    fn profile_digest_inputs() -> String {
+        use super::super::rust_engine::{crs_table, display_lattice, display_zoom};
         use sha2::Digest as _;
-        let cancel = AtomicBool::new(false);
-        let (mut lattices, mut placed_count) = (String::new(), 0);
-        for row in crs_table::ROWS {
-            let reference = format!("EPSG:{}", row.code);
-            let [west, south, east, north] = row.area;
-            let centre = ((west + east) / 2.0, (south + north) / 2.0);
-            let corner = RustRasterEngine
-                .transform_points("EPSG:4326", &reference, &[centre], &cancel)
-                .map_err(|error| error.to_string())
-                .and_then(|points| points[0].ok_or_else(|| "unplaced".to_string()));
-            let unit = match row.kind() {
-                crs_table::CrsKind::Geographic => 1.0 / 111_320.0,
-                _ => 1.0,
-            };
+        const HALF_WORLD: f64 = 20_037_508.342_789_244;
+        // Top-left corners in native units, and a cell size unit.
+        let samples = [
+            ("EPSG:28992", 85_000.0, 447_500.0, 1.0),
+            ("EPSG:2154", 650_000.0, 6_862_000.0, 1.0),
+            ("EPSG:25833", 391_000.0, 5_820_000.0, 1.0),
+            ("EPSG:32633", 500_000.0, 7_770_000.0, 1.0),
+            ("EPSG:5514", -740_000.0, -1_045_000.0, 1.0),
+            ("EPSG:3035", 3_900_000.0, 3_200_000.0, 1.0),
+            ("EPSG:3857", 486_000.0, 6_802_000.0, 1.0),
+            ("EPSG:4326", 4.35, 52.0, 1.0 / 111_320.0),
+        ];
+        let mut lattices = String::new();
+        for (reference, x, y, unit) in samples {
             for cell in [0.5, 1.0, 5.0, 25.0] {
-                let placed = corner.clone().and_then(|(x, y)| {
-                    let grid = RasterGrid {
-                        width: 1500,
-                        height: 1100,
-                        geotransform: [x, cell * unit, 0.0, y, 0.0, -cell * unit],
-                    };
-                    super::super::rust_engine::display_zoom(&reference, [&grid])
-                        .and_then(|zoom| display_lattice(&grid, &reference, zoom))
-                        .map(|(lattice, _)| {
-                            let gt = lattice.geotransform;
-                            (lattice.width, lattice.height, gt[0], gt[1], gt[3])
-                        })
-                });
-                placed_count += usize::from(placed.is_ok());
-                lattices.push_str(&format!("{} {cell}: {placed:?}\n", row.code));
+                let grid = RasterGrid {
+                    width: 1500,
+                    height: 1100,
+                    geotransform: [x, cell * unit, 0.0, y, 0.0, -cell * unit],
+                };
+                let zoom = display_zoom(reference, [&grid]).expect("a sample has a zoom");
+                let (lattice, _) =
+                    display_lattice(&grid, reference, zoom).expect("a sample is placed");
+                let gt = lattice.geotransform;
+                let column = ((gt[0] + HALF_WORLD) / gt[1]).round() as i64;
+                let row = ((HALF_WORLD - gt[3]) / gt[1]).round() as i64;
+                lattices.push_str(&format!(
+                    "{reference} {cell}: z{zoom} {column} {row} {} {}\n",
+                    lattice.width, lattice.height
+                ));
             }
         }
-        assert_eq!(placed_count, crs_table::ROWS.len() * 4, "{lattices}");
         let fixture = std::fs::read(
             Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("web/src/maplibre/raster-display/fixtures/rust-display-cog.tif"),
         )
         .expect("the web display fixture");
-        let inputs = format!(
+        format!(
             "{:?}|{:?}|proj4rs {}|{lattices}|fixture {:x}",
-            crs_table::ROWS,
-            crs_table::ALIASES,
+            crs_table::row_of(3857),
+            crs_table::row_of(4326),
             super::super::rust_engine::PROJ4RS_VERSION,
             sha2::Sha256::digest(&fixture)
-        );
+        )
+    }
+
+    /// U31: adding a code later is one row plus a reference point. A row
+    /// moves no pixel of any other row's derivatives, so it stays out of the
+    /// profile digest, and adding one never regenerates every library's
+    /// display derivatives.
+    #[test]
+    fn a_crs_row_added_later_leaves_the_display_profile_alone() {
+        use super::super::rust_engine::crs_table;
+        let inputs = profile_digest_inputs();
+        for row in crs_table::ROWS
+            .iter()
+            .filter(|row| ![3857, 4326].contains(&row.code))
+        {
+            assert!(
+                !inputs.contains(row.proj),
+                "EPSG:{} enters the display profile digest",
+                row.code
+            );
+        }
+    }
+
+    /// The profile names everything in [`profile_digest_inputs`].
+    #[test]
+    fn the_profile_records_what_places_and_draws_display_pixels() {
+        use sha2::Digest as _;
+        let inputs = profile_digest_inputs();
         let digest = format!("{:x}", sha2::Sha256::digest(inputs.as_bytes()));
         assert_eq!(
             (DISPLAY_PROFILE, digest.as_str()),
