@@ -24,7 +24,7 @@ Read this file, then the one pattern file for the surface you touch:
 - Title bar (floating, 50 px): logo, menubar (File, Edit, View, Tools, Help), Design name (click to rename), save status with its one action, place search (Ctrl K), Help, Settings.
 - Left: tool rail (Select · Place plants, Plant a row, Place a stamp · Polygon, Rectangle, Ellipse, Line · Text note, Measure · Undo, Redo), labelled with keys until each tool is used once, then icons; in a short window the last tools fold into More tools, never Undo and Redo. Pan (H) is off the rail, in View and Tools.
 - Right: panel rail (Ctrl 1–9; folds into More in a short window) and one panel at a time: 380 px, or 440 px for Budget, Consortium and Stories; Calendar can Expand.
-- Bottom left: view chip with pressed toggles (Grid, Snap to grid, Rulers). Bottom right: attribution pill, then zoom group (scale bar, −, scale ratio menu, +, Fit to Design, compass).
+- Bottom left: view chip with pressed toggles (Grid, Snap to grid). Bottom right: attribution pill, then zoom group (scale bar, −, scale ratio menu, +, Fit to Design, compass).
 - Tool cards sit top-left beside the rail (320 px). Status chips (40 px) sit top- or bottom-centre of the visible map area.
 
 ## Tokens

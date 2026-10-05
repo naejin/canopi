@@ -20,7 +20,7 @@ Check every section in light and dark, English and French, and a 720 px tall win
 
 Items 1, 7 and 8 are canvas v2 ([plan](plans/canvas-v2-plan.md)); until phases 1–2 ship check today's: no turning, Shift arrows 1 m, menu at right press.
 
-1. Pan (right-, middle- and Space + drag), zoom, turn the view (Shift + right-drag, Shift + ← →, the compass) and search a place (Ctrl K): only the view moves; plant names stay upright; rulers hide with a hint; N resets north; reopening restores the turn. Fit to Design frames objects in the visible map area.
+1. Pan (right-, middle- and Space + drag), zoom, turn the view (Shift + right-drag, Shift + ← →, the compass) and search a place (Ctrl K): only the view moves; plant names stay upright; N resets north; reopening restores the turn. Fit to Design frames objects in the visible map area.
 2. Layers › Background: Satellite, Map (each style) and None; map and plant labels stay readable in both themes.
 3. Online elevation › Contour lines and Hillshading switch on and off.
 4. Every tool shows a tool card with its keys; Esc ends the tool, then clears the selection.
