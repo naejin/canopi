@@ -48,7 +48,7 @@ pub(super) const DISPLAY_PROFILE: &str = "display-cog-3857-v2";
 /// row needs no bump and an edited one does.
 #[cfg(test)]
 const DISPLAY_PROFILE_DIGEST: &str =
-    "e00cd648788208919af0819c86f4e02716b1cd524cd5c819f4377862ad9ff8d5";
+    "b1aa9c381fac462998b1f2013e1b74f7eca20e3541a04120f6455e4d4538ae4f";
 /// Largest side of a composed part, in 1024-cell chunks: a part is composed
 /// in memory and converted whole, so 4×4 chunks keep it inside the engine's
 /// capacity limit (`import::MAX_RAW_EXTRACTION_CELLS`).
@@ -521,11 +521,9 @@ impl LidarLibrary {
                 let bytes = std::fs::metadata(path)
                     .map_err(|e| format!("Display source {} is unavailable: {e}", path.display()))?
                     .len();
-                // Compressed output plus overviews never exceeds the
-                // uncompressed input by more than a third.
                 super::paths::require_free_space(
                     &staging,
-                    bytes.saturating_add(bytes / 3),
+                    display_free_bytes(bytes),
                     "Display preparation",
                 )?;
                 let converted = engine.write_display_cog(
@@ -603,7 +601,7 @@ impl LidarLibrary {
         let row_bytes = width * 4;
         super::paths::require_free_space(
             staged.parent().unwrap_or(staged),
-            (row_bytes * height) as u64 * 2,
+            display_free_bytes((row_bytes * height) as u64),
             "Display preparation",
         )?;
         let occupied: HashSet<(i64, i64)> = chunks.iter().copied().collect();
@@ -766,9 +764,141 @@ pub(super) fn prune_display_derivatives(library: &LidarLibrary) -> Result<(), St
     Ok(())
 }
 
+/// Free bytes a display derivative of a raw (uncompressed) source asset of
+/// `source_bytes` may need.
+fn display_free_bytes(source_bytes: u64) -> u64 {
+    // The Web Mercator rung is the finest whose pixel fits inside a cell as
+    // it lands there, so the source's pixels grow up to four times on an
+    // unrotated grid and up to sixteen times on one turned 45° (LAEA Europe
+    // near its edges). Repeated nearest-neighbour samples compress, but
+    // Deflate barely shrinks Float32 values: the worst supported case
+    // measured about 4.4 times the raw source with overviews (a test), so
+    // five times is the ceiling.
+    source_bytes.saturating_mul(5)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The free-space check before a derivative covers what the warp writes
+    /// at its worst: values Deflate cannot shrink, on a cell just above a
+    /// rung. An unrotated grid draws at up to four times its pixels (0.82 m
+    /// Lambert-93 cells near 46°N draw at zoom 18); a grid turned against
+    /// Web Mercator draws at up to sixteen times (LAEA Europe at 40°E 40°N,
+    /// and near its western edge at 80°N, where cells turn about 45°).
+    #[test]
+    fn the_free_space_asked_for_a_derivative_covers_the_finest_rung() {
+        for (crs, origin, cell, min_pixels) in [
+            ("EPSG:2154", [700_000.0, 6_600_000.0], 0.82, 3.5),
+            ("EPSG:3035", [6_820_000.0, 2_383_000.0], 0.5955, 11.0),
+            ("EPSG:3035", [3_503_900.0, 6_592_190.0], 0.5955, 16.0),
+        ] {
+            assert_derivative_fits(crs, origin, cell, min_pixels);
+        }
+    }
+
+    fn assert_derivative_fits(crs: &str, origin: [f64; 2], cell: f64, min_pixels: f64) {
+        use super::super::engine::{RasterEngine, RasterGeoref, RasterInput};
+        let engine = super::super::rust_engine::RustRasterEngine;
+        let cancel = AtomicBool::new(false);
+        let root = crate::test_scratch::TestScratch::new("canopi-display-free-space");
+        std::fs::create_dir_all(&root).unwrap();
+        let side = 512u32;
+        let mut state = 12_345u64;
+        let values: Vec<f32> = (0..side * side)
+            .map(|_| {
+                state = state
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+                // Random mantissa bits in [128, 256): nothing to compress.
+                f32::from_bits(((state >> 33) as u32 & 0x007f_ffff) | 0x4300_0000)
+            })
+            .collect();
+        let grid = RasterGrid {
+            width: side,
+            height: side,
+            geotransform: [origin[0], cell, 0.0, origin[1], 0.0, -cell],
+        };
+        let source = root.join("source.tif");
+        engine
+            .write_controlled_cog(
+                RasterInput::Samples {
+                    grid: &grid,
+                    values: &values,
+                },
+                &source,
+                Some(RasterGeoref { grid: &grid, crs }),
+                Some(-9999.0),
+                &cancel,
+            )
+            .unwrap();
+        let zoom = super::super::rust_engine::display_zoom(crs, [&grid]).unwrap();
+        let display = root.join("display.tif");
+        engine
+            .write_display_cog(
+                RasterInput::File(&source),
+                &display,
+                None,
+                Some(-9999.0),
+                zoom,
+                &cancel,
+            )
+            .unwrap();
+        let probe = engine.probe(&display, &cancel).unwrap();
+        let pixels = f64::from(probe.width) * f64::from(probe.height);
+        let source_bytes = std::fs::metadata(&source).unwrap().len();
+        let display_bytes = std::fs::metadata(&display).unwrap().len();
+        assert!(
+            pixels > min_pixels * f64::from(side * side),
+            "{crs}: the fixture draws at the finest rung: {pixels} pixels"
+        );
+        assert!(
+            display_bytes <= display_free_bytes(source_bytes),
+            "{crs}: {display_bytes} bytes written, {} asked for",
+            display_free_bytes(source_bytes)
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A result's display derivative is written at the same rung as a
+    /// per-file one, so its free-space check asks for the same ceiling.
+    #[test]
+    fn the_free_space_asked_for_a_result_part_covers_the_finest_rung() {
+        let root = crate::test_scratch::TestScratch::new("canopi-display-part-free-space");
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).unwrap();
+        let reader = WindowReader {
+            reader: generation::GenerationReader::Chunks(generation::GenerationChunkReader::new(
+                "gen-free",
+                generation::RESULT_ROLE,
+            )),
+            lattice: RasterGrid {
+                width: 1024,
+                height: 1024,
+                geotransform: [0.0, 1.0, 0.0, 0.0, 0.0, -1.0],
+            },
+            crs_ref: String::new(),
+        };
+        let _full = super::super::paths::capacity_probe::override_available(0);
+        let error = library
+            .write_part_windows(
+                &reader,
+                &[(0, 0)],
+                &root.join("part.tif"),
+                18,
+                &AtomicBool::new(false),
+            )
+            .unwrap_err();
+        let side = generation::CHUNK_SIDE as u64;
+        let raw = side * side * 4;
+        assert!(
+            error.contains(&format!("({} bytes)", display_free_bytes(raw))),
+            "{error}"
+        );
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn distant_chunks_form_separate_parts_without_the_gap_between() {

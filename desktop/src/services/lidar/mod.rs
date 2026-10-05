@@ -1362,7 +1362,10 @@ impl LidarLibrary {
     /// under, so a refusal never calls one "original" (a rebuilt item's saved
     /// selection holds only managed originals). A user's file is absent and
     /// keeps its own name.
-    fn saved_source_names(&self, paths: &[PathBuf]) -> Result<HashMap<PathBuf, String>, String> {
+    pub(super) fn saved_source_names(
+        &self,
+        paths: &[PathBuf],
+    ) -> Result<HashMap<PathBuf, String>, String> {
         let connection = self.catalogue()?;
         let mut names = HashMap::new();
         for path in paths {
