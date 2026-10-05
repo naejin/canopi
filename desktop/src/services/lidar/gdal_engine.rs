@@ -584,6 +584,7 @@ impl RasterEngine for GdalEngine {
         output: &Path,
         georef: Option<RasterGeoref<'_>>,
         nodata: Option<f32>,
+        zoom: u32,
         cancel: &AtomicBool,
     ) -> Result<(), String> {
         if georef.is_none() && matches!(input, RasterInput::Samples { .. }) {
@@ -604,7 +605,7 @@ impl RasterEngine for GdalEngine {
                 (grid, probe.crs_ref, probe.nodata)
             }
         };
-        let (lattice, definition) = super::rust_engine::display_lattice(&grid, &crs)?;
+        let (lattice, definition) = super::rust_engine::display_lattice(&grid, &crs, zoom)?;
         // Samples and an overridden placement are written as a placed GeoTIFF
         // first; gdalwarp reads the placement from its input.
         let placed = output.with_extension("placed.tif");
@@ -905,7 +906,7 @@ mod tests {
             geotransform: [85_000.0, 0.5, 0.0, 447_500.0, 0.0, -0.5],
         };
         let (lattice, definition) =
-            super::super::rust_engine::display_lattice(&grid, "EPSG:28992").unwrap();
+            super::super::rust_engine::display_lattice(&grid, "EPSG:28992", 18).unwrap();
         assert!(definition.contains("+towgs84=565.2369"), "{definition}");
         let args = display_warp_arguments(
             Path::new("in.tif"),

@@ -146,7 +146,9 @@ pub trait RasterEngine: Send + Sync + std::fmt::Debug {
     /// showing the native cell under it and every other pixel NoData (the
     /// input's tag, or [`DISPLAY_NODATA`] when it declares none); Float32,
     /// 256×256 tiles, Deflate, averaged valid-data overviews and the NoData
-    /// tag readers compare samples against. Same override rules as
+    /// tag readers compare samples against. `zoom` is the item's rung
+    /// (`rust_engine::display_zoom` over all its parts), so the parts of one
+    /// item share one lattice. Same override rules as
     /// [`RasterEngine::write_controlled_cog`].
     fn write_display_cog(
         &self,
@@ -154,6 +156,7 @@ pub trait RasterEngine: Send + Sync + std::fmt::Debug {
         output: &Path,
         georef: Option<RasterGeoref<'_>>,
         nodata: Option<f32>,
+        zoom: u32,
         cancel: &AtomicBool,
     ) -> Result<(), String>;
 

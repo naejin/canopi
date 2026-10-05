@@ -53,17 +53,27 @@ pub(crate) fn crs_kind(reference: &str) -> Option<CrsKind> {
     crs::from_reference(reference).ok().map(|crs| crs.kind())
 }
 
+/// The display zoom of an item whose parts are `grids` in `crs_ref`: every
+/// part's derivative is written at it, so the parts share one lattice (A2).
+pub(crate) fn display_zoom<'a>(
+    crs_ref: &str,
+    grids: impl IntoIterator<Item = &'a RasterGrid>,
+) -> Result<u32, String> {
+    warp::zoom(&crs::from_reference(crs_ref)?, grids)
+}
+
 /// The Web Mercator lattice grid a display derivative of `grid` in
-/// `crs_ref` is written on, and the row's definition: what the GDAL oracle
-/// warps with (A6).
+/// `crs_ref` is written on at `zoom`, and the row's definition: what the
+/// GDAL oracle warps with (A6).
 #[cfg(test)]
 pub(crate) fn display_lattice(
     grid: &RasterGrid,
     crs_ref: &str,
+    zoom: u32,
 ) -> Result<(RasterGrid, &'static str), String> {
     let native = crs::from_reference(crs_ref)?;
     let row = crs_table::row_of(native.code()).ok_or_else(|| format!("{crs_ref} has no row"))?;
-    Ok((warp::lattice(grid, &native)?, row.proj))
+    Ok((warp::lattice(grid, &native, zoom)?, row.proj))
 }
 
 /// What a manifest records as the engine that produced a numeric output.
@@ -176,6 +186,14 @@ enum PreparedBand<'a> {
     Source(source::Band),
 }
 
+/// What the one writer writes.
+enum Target {
+    /// The band in its own CRS with this profile.
+    Native(cog::CogProfile),
+    /// A display derivative warped to Web Mercator at the item's zoom.
+    Display { zoom: u32 },
+}
+
 impl RustRasterEngine {
     fn prepare<'a>(
         input: RasterInput<'a>,
@@ -250,12 +268,11 @@ impl RustRasterEngine {
     }
 
     /// Write a prepared band through the one writer, in row windows of at
-    /// most the capacity limit: in its own CRS with `profile`, or (`None`)
-    /// as a display derivative warped to Web Mercator.
+    /// most the capacity limit.
     fn write(
         prepared: Prepared<'_>,
         output: &Path,
-        profile: Option<cog::CogProfile>,
+        target: Target,
         cancel: &AtomicBool,
     ) -> Result<(), String> {
         let width = prepared.grid.width;
@@ -275,16 +292,20 @@ impl RustRasterEngine {
                 &mut reader
             }
         };
-        let Some(profile) = profile else {
-            return warp::write(
-                output,
-                &prepared.grid,
-                &prepared.crs,
-                band,
-                prepared.nodata.unwrap_or(DISPLAY_NODATA),
-                raw_extraction_cells(),
-                cancel,
-            );
+        let profile = match target {
+            Target::Native(profile) => profile,
+            Target::Display { zoom } => {
+                return warp::write(
+                    output,
+                    &prepared.grid,
+                    &prepared.crs,
+                    zoom,
+                    band,
+                    prepared.nodata.unwrap_or(DISPLAY_NODATA),
+                    raw_extraction_cells(),
+                    cancel,
+                );
+            }
         };
         cog::write(
             output,
@@ -406,7 +427,7 @@ impl RasterEngine for RustRasterEngine {
         Self::write(
             prepared,
             output,
-            Some(cog::CogProfile {
+            Target::Native(cog::CogProfile {
                 compression: Compression::Deflate,
                 overviews: false,
             }),
@@ -426,7 +447,7 @@ impl RasterEngine for RustRasterEngine {
         Self::write(
             prepared,
             output,
-            Some(cog::CogProfile {
+            Target::Native(cog::CogProfile {
                 compression: Compression::None,
                 overviews: false,
             }),
@@ -440,10 +461,11 @@ impl RasterEngine for RustRasterEngine {
         output: &Path,
         georef: Option<RasterGeoref<'_>>,
         nodata: Option<f32>,
+        zoom: u32,
         cancel: &AtomicBool,
     ) -> Result<(), String> {
         let prepared = Self::prepare(input, georef, nodata, "the display derivative", cancel)?;
-        Self::write(prepared, output, None, cancel)
+        Self::write(prepared, output, Target::Display { zoom }, cancel)
     }
 
     fn transform_points(
@@ -1040,6 +1062,7 @@ mod tests {
                     crs: "EPSG:3857",
                 }),
                 Some(-9999.0),
+                super::display_zoom("EPSG:3857", [&grid]).unwrap(),
                 &cancel(),
             )
             .unwrap();
@@ -1621,6 +1644,7 @@ mod tests {
                     crs: "EPSG:3857",
                 }),
                 None,
+                18,
                 &flag,
             )
             .unwrap_err();

@@ -310,11 +310,35 @@ fn compare_display(
     let c = cancel();
     let gdal_display = dir.join(format!("{label}-gdal-display.tif"));
     let rust_display = dir.join(format!("{label}-rust-display.tif"));
-    gdal.write_display_cog(RasterInput::File(source), &gdal_display, None, nodata, &c)
-        .expect("GDAL warps the display COG");
+    let probe = rust.probe(source, &c).expect("Rust probes the source");
+    let zoom = super::display_zoom(
+        &probe.crs_ref,
+        [&RasterGrid {
+            width: probe.width,
+            height: probe.height,
+            geotransform: probe.geotransform,
+        }],
+    )
+    .expect("the source has a display zoom");
+    gdal.write_display_cog(
+        RasterInput::File(source),
+        &gdal_display,
+        None,
+        nodata,
+        zoom,
+        &c,
+    )
+    .expect("GDAL warps the display COG");
     let started = std::time::Instant::now();
-    rust.write_display_cog(RasterInput::File(source), &rust_display, None, nodata, &c)
-        .expect("the Rust engine warps the display COG");
+    rust.write_display_cog(
+        RasterInput::File(source),
+        &rust_display,
+        None,
+        nodata,
+        zoom,
+        &c,
+    )
+    .expect("the Rust engine warps the display COG");
     let elapsed = started.elapsed();
     let a_probe = rust
         .probe(&gdal_display, &c)

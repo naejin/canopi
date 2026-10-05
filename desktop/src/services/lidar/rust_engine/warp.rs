@@ -3,15 +3,15 @@
 //! coordinate work of its own.
 //!
 //! **One global lattice** (A2). Pixels sit on the Web Mercator world grid:
-//! its origin is the world's north-west corner and its pixel the zoom-ladder
-//! rung (`2 × 20,037,508.34 m / 256 / 2^z`) just finer than one source cell
-//! measured in Web Mercator metres at the latitude of the CRS row's area
-//! nearest the equator, where that cell is smallest. Every part in one CRS
-//! and cell size therefore shares one rung, whatever its latitude, so
-//! adjacent parts line up pixel for pixel and a content-keyed derivative is
-//! reused anywhere. No pixel is coarser than the cell it shows, so every
-//! cell is drawn; data far poleward of that latitude is oversampled instead
-//! (1 m UTM cells at 60°N: 3.4 pixels per cell side).
+//! its origin is the world's north-west corner and its pixel a zoom-ladder
+//! rung (`2 × 20,037,508.34 m / 256 / 2^z`). An item's rung is chosen once,
+//! from its whole extent: the rung just finer than one cell measured in Web
+//! Mercator metres at the extent's latitude nearest the equator, where a
+//! cell is smallest. Every part of one item therefore shares one rung, so
+//! adjacent parts line up pixel for pixel, and the rung sits in the
+//! derivative's key. No pixel is coarser than the cell it shows, so every
+//! cell is drawn; an item spanning many latitudes is oversampled toward its
+//! poleward edge.
 //!
 //! **Footprint rule** (A2). A part writes only the pixels whose centres fall
 //! inside its native grid, half-open as hover's containing cell is; every
@@ -42,7 +42,7 @@ use super::super::prepared_raster::RasterWindow;
 use super::Cells;
 use super::cog::{self, BandSource};
 use super::crs::{self, ResolvedCrs, Transformer};
-use super::crs_table::{self, CrsKind};
+use super::crs_table::CrsKind;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use wbgeotiff::tags::Compression;
@@ -69,33 +69,79 @@ fn rung_at(zoom: u32) -> f64 {
     2.0 * HALF_WORLD / WORLD_PIXELS_AT_ZOOM_0 / f64::from(1u32 << zoom)
 }
 
-/// The rung just finer than one cell of `grid` in `native`, in Web Mercator
-/// metres at the latitude of the row's area nearest the equator, where a
-/// cell is smallest in Web Mercator metres.
-fn rung(native: &ResolvedCrs, grid: &RasterGrid) -> Result<f64, String> {
-    let gt = grid.geotransform;
-    let cell = gt[1].abs().min(gt[5].abs());
-    let row = crs_table::row_of(native.code())
-        .ok_or_else(|| format!("EPSG:{} has no row", native.code()))?;
-    let [_, south, _, north] = row.area;
-    let latitude = if south <= 0.0 && north >= 0.0 {
-        0.0
-    } else {
-        south.abs().min(north.abs())
-    };
+/// Points sampled along each edge of an item's extent to find its latitude
+/// nearest the equator.
+const EXTENT_EDGE_POINTS: u32 = 64;
+
+/// The rung for an item whose parts are `grids` in `native`: the zoom just
+/// finer than its finest cell in Web Mercator metres at the latitude of its
+/// extent nearest the equator, where a cell is smallest in Web Mercator
+/// metres.
+pub(super) fn zoom<'a>(
+    native: &ResolvedCrs,
+    grids: impl IntoIterator<Item = &'a RasterGrid>,
+) -> Result<u32, String> {
+    let (mut extent, mut cell) = (
+        [
+            f64::INFINITY,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::NEG_INFINITY,
+        ],
+        f64::INFINITY,
+    );
+    for grid in grids {
+        let [min_x, min_y, max_x, max_y] = grid.bounds();
+        extent = [
+            extent[0].min(min_x),
+            extent[1].min(min_y.min(max_y)),
+            extent[2].max(max_x),
+            extent[3].max(max_y.max(min_y)),
+        ];
+        let gt = grid.geotransform;
+        cell = cell.min(gt[1].abs().min(gt[5].abs()));
+    }
     let mercator = match native.kind() {
-        CrsKind::ProjectedMetre => cell / latitude.to_radians().cos(),
+        CrsKind::ProjectedMetre => {
+            cell / latitude_nearest_equator(native, extent)?.to_radians().cos()
+        }
         CrsKind::ProjectedOther => cell,
         CrsKind::Geographic => cell * METRES_PER_DEGREE,
     };
     if !(mercator.is_finite() && mercator > 0.0) {
         return Err("the raster's cell size cannot be drawn".to_string());
     }
-    Ok(rung_at(
-        (0..=MAX_ZOOM)
-            .find(|zoom| rung_at(*zoom) <= mercator)
-            .unwrap_or(MAX_ZOOM),
-    ))
+    Ok((0..=MAX_ZOOM)
+        .find(|zoom| rung_at(*zoom) <= mercator)
+        .unwrap_or(MAX_ZOOM))
+}
+
+/// The latitude of `extent` (native `[min_x, min_y, max_x, max_y]`) nearest
+/// the equator, from points along its edges; 0 when it spans the equator.
+fn latitude_nearest_equator(native: &ResolvedCrs, extent: [f64; 4]) -> Result<f64, String> {
+    let to_wgs84 = Transformer::new(native, &crs::from_reference("EPSG:4326")?)?;
+    let [min_x, min_y, max_x, max_y] = extent;
+    let (mut south, mut north) = (f64::INFINITY, f64::NEG_INFINITY);
+    for step in 0..=EXTENT_EDGE_POINTS {
+        let t = f64::from(step) / f64::from(EXTENT_EDGE_POINTS);
+        let (x, y) = (min_x + t * (max_x - min_x), min_y + t * (max_y - min_y));
+        for (x, y) in [(x, min_y), (x, max_y), (min_x, y), (max_x, y)] {
+            if let Ok((_, latitude)) = to_wgs84.apply(x, y)
+                && latitude.is_finite()
+            {
+                south = south.min(latitude);
+                north = north.max(latitude);
+            }
+        }
+    }
+    if !(south.is_finite() && north.is_finite()) {
+        return Err("the raster cannot be placed in Web Mercator".to_string());
+    }
+    Ok(if south <= 0.0 && north >= 0.0 {
+        0.0
+    } else {
+        south.abs().min(north.abs())
+    })
 }
 
 /// The overview levels `cog::write` builds over a `width` × `height` base:
@@ -210,14 +256,14 @@ fn place(
 /// The lattice grid a derivative of `grid` in `native` is written on (the
 /// GDAL oracle warps onto the same pixels).
 #[cfg(test)]
-pub(super) fn lattice(grid: &RasterGrid, native: &ResolvedCrs) -> Result<RasterGrid, String> {
+pub(super) fn lattice(
+    grid: &RasterGrid,
+    native: &ResolvedCrs,
+    zoom: u32,
+) -> Result<RasterGrid, String> {
     let mercator = crs::from_reference("EPSG:3857")?;
-    place(
-        grid,
-        &Transformer::new(native, &mercator)?,
-        rung(native, grid)?,
-    )
-    .map(|placement| placement.grid)
+    place(grid, &Transformer::new(native, &mercator)?, rung_at(zoom))
+        .map(|placement| placement.grid)
 }
 
 /// Native points of the mesh nodes over a block of lattice pixels.
@@ -391,12 +437,15 @@ impl BandSource for Filled<'_> {
 }
 
 /// Write the display derivative of `band` (on `grid` in `native`) to
-/// `output`: Web Mercator on the global lattice, Deflate, overviews, and
-/// `nodata` everywhere the footprint does not reach.
+/// `output`: Web Mercator on the global lattice at the item's `zoom`
+/// ([`zoom`]), Deflate, overviews, and `nodata` everywhere the footprint does
+/// not reach.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn write(
     output: &Path,
     grid: &RasterGrid,
     native: &ResolvedCrs,
+    zoom: u32,
     band: &mut dyn BandSource,
     nodata: f32,
     budget: u64,
@@ -411,11 +460,7 @@ pub(super) fn write(
         );
     }
     let mercator = crs::from_reference("EPSG:3857")?;
-    let placement = place(
-        grid,
-        &Transformer::new(native, &mercator)?,
-        rung(native, grid)?,
-    )?;
+    let placement = place(grid, &Transformer::new(native, &mercator)?, rung_at(zoom))?;
     let geo_keys = crs::geokeys_for(&mercator)?;
     let mut filled = Filled {
         warp: Warp {
@@ -454,8 +499,8 @@ mod tests {
     use std::sync::atomic::AtomicBool;
 
     const HALF_WORLD: f64 = 20_037_508.342_789_244;
-    /// Zoom 18's pixel: RD New's 0.5 m cell is 0.79 Web Mercator metres at
-    /// the row's southern edge (50.75°N), so this is the rung just finer.
+    /// Zoom 18's pixel: RD New's 0.5 m cell is 0.81 Web Mercator metres near
+    /// Delft (52°N), so this is the rung just finer.
     const ZOOM_18: f64 = 2.0 * HALF_WORLD / 256.0 / 262_144.0;
     /// -2^127, the NoData of a derivative whose input declares none.
     const FILL: f32 = -1.701_411_8e38;
@@ -518,6 +563,7 @@ mod tests {
                 output,
                 Some(RasterGeoref { grid, crs }),
                 nodata,
+                super::super::display_zoom(crs, [grid]).unwrap(),
                 &cancel(),
             )
             .unwrap();
@@ -567,7 +613,8 @@ mod tests {
         use super::super::crs::{Transformer, from_reference};
         let native = from_reference("EPSG:28992").unwrap();
         let mercator = from_reference("EPSG:3857").unwrap();
-        let resolution = super::rung(&native, &rd(85_000.0, 447_500.0, 1, 1)).unwrap();
+        let resolution =
+            super::rung_at(super::zoom(&native, [&rd(85_000.0, 447_500.0, 1, 1)]).unwrap());
         assert!((resolution - ZOOM_18).abs() < 1e-12);
         let to_native = Transformer::new(&mercator, &native).unwrap();
         let (column, row) = (
@@ -592,6 +639,35 @@ mod tests {
             worst < 1e-6,
             "the mesh is {worst} m from the exact transform"
         );
+    }
+
+    /// A2: the rung follows where the item's data lies, not its CRS row's
+    /// area. 1 m UTM 33N cells at 70°N are 2.92 Web Mercator metres, so they
+    /// draw at zoom 16 (2.39 m); the row's area reaches the equator, where
+    /// the same cells would need zoom 18 and 24 times the pixels.
+    #[test]
+    fn the_rung_follows_the_latitude_of_the_data() {
+        use super::super::crs::from_reference;
+        let native = from_reference("EPSG:32633").unwrap();
+        let far_north = RasterGrid {
+            width: 1000,
+            height: 1000,
+            geotransform: [500_000.0, 1.0, 0.0, 7_770_000.0, 0.0, -1.0],
+        };
+        let resolution = super::rung_at(super::zoom(&native, [&far_north]).unwrap());
+        assert!(
+            (resolution - ZOOM_18 * 4.0).abs() < 1e-9,
+            "{resolution} m is not zoom 16"
+        );
+        // An item's parts share the rung its lowest latitude needs: a part at
+        // 50°N (1.56 m cells, zoom 17) refines the far-north part with it.
+        let south = RasterGrid {
+            width: 1000,
+            height: 1000,
+            geotransform: [500_000.0, 1.0, 0.0, 5_540_000.0, 0.0, -1.0],
+        };
+        assert_eq!(super::zoom(&native, [&south]).unwrap(), 17);
+        assert_eq!(super::zoom(&native, [&far_north, &south]).unwrap(), 17);
     }
 
     /// A2: the derivative carries the Web Mercator code keys, its pixel is a
@@ -807,6 +883,7 @@ mod tests {
                 &cancel(),
             )
             .unwrap();
+        let zoom = super::super::display_zoom("EPSG:28992", [&grid]).unwrap();
         let whole = dir.join("whole.tif");
         engine
             .write_display_cog(
@@ -817,6 +894,7 @@ mod tests {
                 &whole,
                 Some(georef),
                 Some(-9999.0),
+                zoom,
                 &cancel(),
             )
             .unwrap();
@@ -825,7 +903,14 @@ mod tests {
             let _limit = super::super::super::import::extraction_limit_probe::set(LIMIT);
             high_water::reset();
             engine
-                .write_display_cog(RasterInput::File(&asset), &streamed, None, None, &cancel())
+                .write_display_cog(
+                    RasterInput::File(&asset),
+                    &streamed,
+                    None,
+                    None,
+                    zoom,
+                    &cancel(),
+                )
                 .unwrap();
             high_water::peak()
         };

@@ -45,7 +45,7 @@ pub(super) const DISPLAY_PROFILE: &str = "display-cog-3857-v2";
 /// fails when any changes, so the profile is bumped with it.
 #[cfg(test)]
 const DISPLAY_PROFILE_DIGEST: &str =
-    "103aa50bbd1afd0da9d97bb820120372e0d9a91988a55dc47681715b33b1dd95";
+    "7dc66c4d67e0f39ac2e336500617017466416beda1b50dabd4e46df6ecfbbfa2";
 /// Largest side of a composed part, in 1024-cell chunks: a part is composed
 /// in memory and converted whole, so 4×4 chunks keep it inside the engine's
 /// capacity limit (`import::MAX_RAW_EXTRACTION_CELLS`).
@@ -83,6 +83,8 @@ pub(super) struct DisplayPlan {
     entity_id: String,
     generation_id: String,
     crs_ref: String,
+    /// The item's display zoom: every part is drawn on its lattice.
+    zoom: u32,
     parts: Vec<PartSpec>,
 }
 
@@ -136,12 +138,17 @@ fn build_plan(
                 ));
             };
             let manifest = super::import::read_generation_manifest(&head.manifest_json)?;
-            let parts = collection::snapshot_members(library, &head.id, cancel)?
+            let members = collection::snapshot_members(library, &head.id, cancel)?;
+            let zoom = super::rust_engine::display_zoom(
+                &manifest.crs_ref,
+                members.iter().map(|member| &member.resolved.grid),
+            )?;
+            let parts = members
                 .into_iter()
                 .map(|member| {
                     let cog = &member.resolved.cog;
                     PartSpec {
-                        key: asset_key(&cog.sha256, member.resolved.nodata),
+                        key: asset_key(&cog.sha256, member.resolved.nodata, zoom),
                         source: PartSource::Asset {
                             path: cog.path.clone(),
                             nodata: member.resolved.nodata,
@@ -154,6 +161,7 @@ fn build_plan(
                 entity_id: entity_id.to_string(),
                 generation_id: head.id,
                 crs_ref: manifest.crs_ref,
+                zoom,
                 parts,
             })))
         }
@@ -177,6 +185,14 @@ fn build_plan(
                     generation::RESULT_ROLE,
                 )?
             };
+            let chunk_grids: Vec<RasterGrid> = coordinates
+                .iter()
+                .map(|(x, y)| generation::chunk_grid(&manifest.grid, *x, *y))
+                .collect();
+            let zoom = super::rust_engine::display_zoom(
+                &manifest.crs_ref,
+                std::iter::once(&manifest.grid).chain(&chunk_grids),
+            )?;
             let reader = Arc::new(WindowReader {
                 reader: generation::GenerationReader::Chunks(
                     generation::GenerationChunkReader::new(&result.id, generation::RESULT_ROLE),
@@ -194,15 +210,21 @@ fn build_plan(
                 entity_id: entity_id.to_string(),
                 generation_id: result.id,
                 crs_ref: manifest.crs_ref,
+                zoom,
                 parts,
             })))
         }
     }
 }
 
-/// The derivative key of one numeric COG under its NoData rule.
-fn asset_key(sha256: &str, nodata: Option<f32>) -> String {
-    format!("{DISPLAY_PROFILE}-asset-{sha256}-{}", nodata_tag(nodata))
+/// The derivative key of one numeric COG under its NoData rule, drawn at
+/// its item's zoom: an asset shared by items at different latitudes gets one
+/// derivative per zoom.
+fn asset_key(sha256: &str, nodata: Option<f32>, zoom: u32) -> String {
+    format!(
+        "{DISPLAY_PROFILE}-asset-{sha256}-{}-z{zoom}",
+        nodata_tag(nodata)
+    )
 }
 
 /// Group occupied chunks into parts of at most `PART_CHUNKS`² chunks.
@@ -474,7 +496,7 @@ impl LidarLibrary {
             if ready_part(self, &part.key)?.is_some() {
                 continue;
             }
-            let (prepared, bytes) = self.prepare_part(part, &plan.crs_ref, cancel)?;
+            let (prepared, bytes) = self.prepare_part(part, &plan.crs_ref, plan.zoom, cancel)?;
             let display = self.display()?;
             record(&display, &part.key, &prepared, bytes)?;
         }
@@ -485,6 +507,7 @@ impl LidarLibrary {
         &self,
         part: &PartSpec,
         crs_ref: &str,
+        zoom: u32,
         cancel: &AtomicBool,
     ) -> Result<(Prepared, u64), String> {
         let staging = self.inner.paths.display_cog_staging_dir();
@@ -511,6 +534,7 @@ impl LidarLibrary {
                     &staged,
                     None,
                     *nodata,
+                    zoom,
                     cancel,
                 );
                 if let Err(error) = converted {
@@ -519,7 +543,8 @@ impl LidarLibrary {
                 }
             }
             PartSource::Windows { reader, chunks } => {
-                let written = self.write_part_windows(reader, chunks, &staged, crs_ref, cancel);
+                let written =
+                    self.write_part_windows(reader, chunks, &staged, crs_ref, zoom, cancel);
                 match written {
                     Ok(true) => {}
                     Ok(false) => {
@@ -566,6 +591,7 @@ impl LidarLibrary {
         chunks: &[(i64, i64)],
         staged: &Path,
         crs_ref: &str,
+        zoom: u32,
         cancel: &AtomicBool,
     ) -> Result<bool, String> {
         let side = generation::CHUNK_SIDE;
@@ -654,6 +680,7 @@ impl LidarLibrary {
                 staged,
                 Some(RasterGeoref { grid: &grid, crs }),
                 Some(DISPLAY_NODATA),
+                zoom,
                 cancel,
             )
             .map(|_| true)
@@ -669,10 +696,25 @@ impl LidarLibrary {
         staging: &super::import::StagedImport,
         cancel: &AtomicBool,
     ) -> Result<(), String> {
+        // The whole batch is compatible (one CRS) and publishes as one item,
+        // so its zoom is the published plan's.
+        let Some(first) = staging.sources.first() else {
+            return Ok(());
+        };
+        let grids: Vec<RasterGrid> = staging
+            .sources
+            .iter()
+            .map(|source| RasterGrid {
+                width: source.width,
+                height: source.height,
+                geotransform: source.geotransform,
+            })
+            .collect();
+        let zoom = super::rust_engine::display_zoom(&first.crs_ref, &grids)?;
         for source in &staging.sources {
             let cog = &source.source_cog;
             let part = PartSpec {
-                key: asset_key(&cog.sha256, cog.nodata),
+                key: asset_key(&cog.sha256, cog.nodata, zoom),
                 source: PartSource::Asset {
                     path: cog.resolve(&self.inner.paths, &source.job_id)?,
                     nodata: cog.nodata,
@@ -681,7 +723,7 @@ impl LidarLibrary {
             if ready_part(self, &part.key)?.is_some() {
                 continue;
             }
-            let (prepared, bytes) = self.prepare_part(&part, &source.crs_ref, cancel)?;
+            let (prepared, bytes) = self.prepare_part(&part, &source.crs_ref, zoom, cancel)?;
             let display = self.display()?;
             record(&display, &part.key, &prepared, bytes)?;
         }
@@ -961,6 +1003,42 @@ mod library_tests {
             .map(|asset| std::fs::metadata(&asset.path).unwrap().modified().unwrap())
             .collect();
         assert_eq!(before, after);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The import job prepares the derivatives the published item's plan
+    /// asks for: every part is ready the moment the item appears, so the
+    /// first display regenerates nothing.
+    #[test]
+    fn derivatives_prepared_at_import_are_the_ones_the_item_displays() {
+        let root = crate::test_scratch::TestScratch::new("canopi-display-staged");
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let cancel = AtomicBool::new(false);
+        let west = plane_source(&library, &root, "west", 445_000.0);
+        let east = plane_source(&library, &root, "east", 445_600.0);
+        let layer_id = library
+            .create_layer("staged", RasterQuantity::GroundElevation, None, false)
+            .unwrap();
+        let job_id = library.record_import_job(&layer_id).unwrap();
+        super::super::import::stage_import(&library, &job_id, &layer_id, &[west, east], &cancel)
+            .unwrap();
+        let staging = super::super::import::read_staged_import(&library, &job_id).unwrap();
+        library.prepare_staged_display(&staging, &cancel).unwrap();
+        super::super::import::apply_import(&library, &staging, &cancel).unwrap();
+        let Planned::Plan(plan) =
+            build_plan(&library, LibraryItemRole::Source, &layer_id, &cancel).unwrap()
+        else {
+            panic!("a published item has a plan")
+        };
+        assert_eq!(plan.parts.len(), 2);
+        for part in &plan.parts {
+            assert!(
+                ready_part(&library, &part.key).unwrap().is_some(),
+                "{} was not prepared at import",
+                part.key
+            );
+        }
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -1314,10 +1392,12 @@ mod library_tests {
                         height: 1100,
                         geotransform: [x, cell * unit, 0.0, y, 0.0, -cell * unit],
                     };
-                    display_lattice(&grid, &reference).map(|(lattice, _)| {
-                        let gt = lattice.geotransform;
-                        (lattice.width, lattice.height, gt[0], gt[1], gt[3])
-                    })
+                    super::super::rust_engine::display_zoom(&reference, [&grid])
+                        .and_then(|zoom| display_lattice(&grid, &reference, zoom))
+                        .map(|(lattice, _)| {
+                            let gt = lattice.geotransform;
+                            (lattice.width, lattice.height, gt[0], gt[1], gt[3])
+                        })
                 });
                 placed_count += usize::from(placed.is_ok());
                 lattices.push_str(&format!("{} {cell}: {placed:?}\n", row.code));
