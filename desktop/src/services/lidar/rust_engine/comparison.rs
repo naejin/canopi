@@ -351,7 +351,6 @@ fn compare_display(
         })
         .collect();
     // How far each differing centre lies from the nearest native cell edge.
-    let native = rust.probe(source, &c).expect("Rust probes the source");
     let gt = b_probe.geotransform;
     let centres: Vec<(f64, f64)> = differing
         .iter()
@@ -367,9 +366,9 @@ fn compare_display(
         })
         .collect();
     let placed = rust
-        .transform_points("EPSG:3857", &native.crs_ref, &centres, &c)
+        .transform_points("EPSG:3857", &probe.crs_ref, &centres, &c)
         .expect("centres place");
-    let ngt = native.geotransform;
+    let ngt = probe.geotransform;
     let mut farthest = 0f64;
     for (index, point) in differing.iter().zip(placed) {
         let (x, y) = point.expect("a differing centre places natively");
@@ -398,7 +397,7 @@ fn compare_display(
     // the lattice, which also makes GDAL's weighting of partial source pixels
     // (on a level with an odd side) moot: the overviews compare cell by cell.
     let (mut width, mut height) = (b_probe.width, b_probe.height);
-    while width.max(height) > 256 {
+    for _ in 0..super::cog::overview_count(u64::from(width), u64::from(height)) {
         assert!(
             width % 2 == 0 && height % 2 == 0,
             "{label}: the {}x{} display halves an odd side ({width}x{height})",
