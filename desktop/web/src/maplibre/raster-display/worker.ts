@@ -2,7 +2,10 @@
  * Raster display worker lane.
  *
  * Hosts the pinned `cog-tiler-wasm` module off the UI thread: COG header
- * reads, block decode, reprojection and colorizing all happen here. The main
+ * reads, block decode and colorizing all happen here. Display COGs are written
+ * in EPSG:3857 by the Rust warp, so cog-tiler takes its affine path; a source it
+ * would warp itself (proj4js on the GeoTIFF keys, no datum shift) is refused at
+ * open rather than drawn metres to kilometres off. The main
  * thread only forwards requests through `pool.ts`, which presents this lane to
  * the upstream `LayerManager` as its public `loadCogTiler` module.
  *
@@ -119,7 +122,7 @@ function metadataOf(source: CogSource): RasterSourceMetadata {
   return {
     boundsLonLat: [...source.boundsLonLat],
     levels: source.levels.map((level) => ({ width: level.width, height: level.height })),
-    mode: source.mode,
+    mode: '3857',
     crsLabel: source.crsLabel,
     hasPalette: source.hasPalette,
   }
@@ -136,6 +139,9 @@ async function handle(request: RasterWorkerRequest): Promise<{ value: unknown; t
       const opening = (async () => {
         await init()
         const source = await openCog(request.url)
+        if (source.mode !== '3857') {
+          throw new Error(`raster display source opened in mode '${source.mode}' (${source.crsLabel}); display tiles must be EPSG:3857`)
+        }
         const upstream = source as unknown as { tileCache?: unknown }
         if (!(upstream.tileCache instanceof Map)) {
           throw new Error('cog-tiler-wasm no longer exposes its decoded tile cache; the lane budget cannot be enforced')
