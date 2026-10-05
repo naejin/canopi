@@ -523,10 +523,11 @@ fn row_message(library: &LidarLibrary, layer_id: &str) -> String {
     job.message.clone().unwrap_or_default()
 }
 
-/// A Retry whose saved file has gone is refused by name, and the refusal
-/// stays on the item's row as its failed import's message.
+/// A Retry whose saved file has gone is refused by name before a job is
+/// recorded: the refusal replaces the failed import's message on the item's
+/// row, and refusing again adds no job row.
 #[test]
-fn retrying_an_import_whose_file_is_gone_is_refused_and_the_reason_stays() {
+fn retrying_an_import_whose_file_is_gone_is_refused_on_its_item_without_a_new_job() {
     let root = scratch("retry-missing");
     let library = attached_library(&root);
     let layer_id = failed_import(&library, root.join("gone.tif"), "first failure");
@@ -534,6 +535,29 @@ fn retrying_an_import_whose_file_is_gone_is_refused_and_the_reason_stays() {
     assert!(error.contains("gone.tif cannot be found"), "{error}");
     assert!(!error.contains(&root.display().to_string()), "{error}");
     assert_eq!(row_message(&library, &layer_id), error);
+    assert_eq!(library.retry_import(&layer_id).unwrap_err(), error);
+    assert_eq!(count(&library, "SELECT COUNT(*) FROM lidar_import_jobs"), 1);
+}
+
+/// A cancelled import whose saved file has gone: the refused Retry turns its
+/// one job into a failed import carrying the refusal, with no new job row.
+#[test]
+fn retrying_a_cancelled_import_whose_file_is_gone_fails_that_import_with_the_reason() {
+    let root = scratch("retry-cancelled-missing");
+    let library = attached_library(&root);
+    let layer_id = failed_import(&library, root.join("gone.tif"), "first failure");
+    library
+        .catalogue()
+        .unwrap()
+        .execute(
+            "UPDATE lidar_import_jobs SET state = 'cancelled', message = NULL WHERE layer_id = ?1",
+            [&layer_id],
+        )
+        .unwrap();
+    let error = library.retry_import(&layer_id).unwrap_err();
+    assert!(error.contains("gone.tif cannot be found"), "{error}");
+    assert_eq!(row_message(&library, &layer_id), error);
+    assert_eq!(count(&library, "SELECT COUNT(*) FROM lidar_import_jobs"), 1);
 }
 
 /// A library the catalogue rebuild made: its one item, named "Orchard", is
@@ -584,6 +608,7 @@ fn retrying_a_rebuilt_item_in_a_refused_code_keeps_the_refusal_on_the_item() {
     let tile = plane_in_code(&attached_library(&workbench), &workbench, "tile", 65_000);
     let root = scratch("retry-refused-code");
     let (library, layer_id) = rebuilt_library(&root, &tile, "sha-refused");
+    let jobs = count(&library, "SELECT COUNT(*) FROM lidar_import_jobs");
     let error = library.retry_import(&layer_id).unwrap_err();
     assert!(
         error.contains("65000"),
@@ -596,6 +621,11 @@ fn retrying_a_rebuilt_item_in_a_refused_code_keeps_the_refusal_on_the_item() {
     assert!(!error.contains("original"), "no managed name in: {error}");
     assert!(!error.contains(&root.display().to_string()), "{error}");
     assert_eq!(row_message(&library, &layer_id), error);
+    assert_eq!(
+        count(&library, "SELECT COUNT(*) FROM lidar_import_jobs"),
+        jobs,
+        "the refusal adds no job row"
+    );
     assert!(
         library.record_import_retry(&layer_id).is_ok(),
         "the item still offers Retry"
