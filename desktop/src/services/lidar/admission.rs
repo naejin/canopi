@@ -3,7 +3,8 @@
 //! A **new** import or replacement is admitted only inside these bounds: at
 //! most 24 source files, at most 2 GiB per source, at most 2 GiB of selected
 //! sources, and at most 400,000,000 processing cells in the proposed active
-//! collection.
+//! collection. Only GeoTIFF sources are admitted, and a refusal names the
+//! user's file, never its folder.
 //!
 //! Processing cells charge the work actually proposed: each source
 //! occurrence's own full native grid, never the empty space between
@@ -21,7 +22,9 @@
 //! through the test-only [`limits_probe`]; nothing in a production build can,
 //! and no environment variable can enable a production bypass.
 
-use std::path::Path;
+use super::engine::RasterEngine;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 
 /// Most source files one import may select.
 pub(crate) const MAX_SOURCE_FILES_PER_IMPORT: usize = 24;
@@ -79,6 +82,13 @@ pub(crate) fn check_source_count(count: usize) -> Result<(), String> {
     Ok(())
 }
 
+/// How a refusal names a source: its file name, never the folder it lives in.
+pub(crate) fn source_name(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.display().to_string())
+}
+
 /// Refuse one source whose bytes exceed the per-source bound.
 ///
 /// Every place that learns a source's size — selection validation and the
@@ -89,11 +99,71 @@ pub(crate) fn check_source_bytes(path: &Path, bytes: u64) -> Result<(), String> 
     if bytes > limits.source_bytes {
         return Err(format!(
             "{} is larger than the {} MiB per-source limit",
-            path.display(),
+            source_name(path),
             limits.source_bytes / (1024 * 1024),
         ));
     }
     Ok(())
+}
+
+/// Refuse a selection Canopi cannot place: a source that is not a GeoTIFF,
+/// declares no coordinate system or one that is refused (U31).
+///
+/// Import and Retry run it on the user's files before anything is recorded, so
+/// the refusal shows in the dialog and leaves no item or job (canopi-try2).
+/// Each source's header is read here and read again when staging probes its
+/// managed copy; that is cheap, and only the header is read.
+pub(crate) fn check_sources_placeable(
+    engine: &dyn RasterEngine,
+    paths: &[PathBuf],
+    cancel: &AtomicBool,
+) -> Result<(), String> {
+    for path in paths {
+        check_source_format(path)?;
+        let name = source_name(path);
+        let probe = engine.probe(path, cancel).map_err(|error| {
+            // An engine message may spell out the whole path; the user sees
+            // the file name in its place.
+            let error = error.replace(&path.display().to_string(), &name);
+            if error.contains(&name) {
+                error
+            } else {
+                format!("{name}: {error}")
+            }
+        })?;
+        if probe.crs_ref.trim().is_empty() {
+            return Err(format!(
+                "{name} has no coordinate system; Canopi needs one to place it"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Refuse a source that does not start with a classic or BigTIFF signature.
+///
+/// Only GeoTIFF sources import, and this reads four bytes, so a file in
+/// another format is refused before any reader parses it whole.
+fn check_source_format(path: &Path) -> Result<(), String> {
+    use std::io::Read as _;
+    let name = source_name(path);
+    let unreadable = || format!("{name} cannot be read; choose the files again");
+    let mut file = std::fs::File::open(path).map_err(|_| unreadable())?;
+    let mut magic = [0u8; 4];
+    match file.read_exact(&mut magic) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => {}
+        Err(_) => return Err(unreadable()),
+    }
+    if matches!(
+        &magic,
+        b"II\x2a\x00" | b"MM\x00\x2a" | b"II\x2b\x00" | b"MM\x00\x2b"
+    ) {
+        return Ok(());
+    }
+    Err(format!(
+        "{name} is not a GeoTIFF; Canopi imports GeoTIFF rasters"
+    ))
 }
 
 /// Refuse a selection whose total bytes exceed the per-import bound.

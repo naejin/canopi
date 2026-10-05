@@ -373,3 +373,125 @@ fn renaming_a_result_changes_only_its_name() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// Asserts a refusal shown in the import dialog: it names the user's file and
+/// nothing about where it lives or how the system failed, and the refused
+/// import left no item and no job behind.
+/// A library wired like the app's, so an admitted import would start.
+fn attached_library(root: &Path) -> LidarLibrary {
+    let library = LidarLibrary::open(root).unwrap();
+    library.attach_executor(crate::native_operation::NativeOperationExecutor::production());
+    library
+}
+
+fn assert_refused_in_dialog(library: &LidarLibrary, root: &Path, error: &str, name: &str) {
+    assert!(error.contains(name), "the refusal names {name}: {error}");
+    let root = root.display().to_string();
+    assert!(!error.contains(&root), "no root path in: {error}");
+    assert!(!error.contains("os error"), "no system error in: {error}");
+    assert_eq!(
+        count(library, "SELECT COUNT(*) FROM lidar_source_layers"),
+        0,
+        "no item for a refused import"
+    );
+    assert_eq!(
+        count(library, "SELECT COUNT(*) FROM lidar_import_jobs"),
+        0,
+        "no job for a refused import"
+    );
+}
+
+/// The GeoTIFF `plane` writes, with its projected code key rewritten to
+/// `code`, a code no listed coordinate system has.
+fn plane_in_code(library: &LidarLibrary, root: &Path, name: &str, code: u16) -> PathBuf {
+    let path = plane(library, root, name, 445_000.0);
+    let mut bytes = std::fs::read(&path).unwrap();
+    // ProjectedCSTypeGeoKey (3072), stored in the directory itself, one
+    // value: EPSG:2154, little-endian.
+    let key: Vec<u8> = [3072u16, 0, 1, 2154]
+        .iter()
+        .flat_map(|value| value.to_le_bytes())
+        .collect();
+    let at: Vec<usize> = bytes
+        .windows(key.len())
+        .enumerate()
+        .filter(|(_, window)| *window == key.as_slice())
+        .map(|(index, _)| index)
+        .collect();
+    assert_eq!(at.len(), 1, "one projected code key in {}", path.display());
+    bytes[at[0] + 6..at[0] + 8].copy_from_slice(&code.to_le_bytes());
+    std::fs::write(&path, bytes).unwrap();
+    path
+}
+
+/// canopi-try2: a selected file that is gone is refused when Import is
+/// clicked, by name, and creates nothing.
+#[test]
+fn importing_a_missing_file_is_refused_by_name_and_creates_nothing() {
+    let root = scratch("import-missing");
+    let library = attached_library(&root);
+    let error = library
+        .import_item(
+            "Orchard",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            vec![root.join("gone.tif")],
+        )
+        .unwrap_err();
+    assert!(error.contains("cannot be found"), "{error}");
+    assert_refused_in_dialog(&library, &root, &error, "gone.tif");
+}
+
+/// U31: a GeoTIFF in a coordinate system Canopi cannot place is refused when
+/// Import is clicked with the typed refusal naming its code, and creates
+/// nothing.
+#[test]
+fn importing_a_geotiff_in_a_refused_code_is_refused_and_creates_nothing() {
+    let root = scratch("import-refused-code");
+    let library = attached_library(&root);
+    let source = plane_in_code(&library, &root, "elsewhere", 65_000);
+    let error = library
+        .import_item(
+            "Elsewhere",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            vec![source],
+        )
+        .unwrap_err();
+    assert!(
+        error.contains("65000"),
+        "the refusal names the code: {error}"
+    );
+    assert_refused_in_dialog(&library, &root, &error, "elsewhere.tif");
+}
+
+/// A file that is not a GeoTIFF is refused from its signature, before any
+/// reader parses it whole, and creates nothing.
+#[test]
+fn importing_a_file_that_is_not_a_geotiff_is_refused_before_it_is_read() {
+    let root = scratch("import-not-tiff");
+    let library = attached_library(&root);
+    let source = root.join("dem.asc");
+    std::fs::write(
+        &source,
+        "ncols 2\nnrows 2\nxllcorner 0\nyllcorner 0\ncellsize 1\nNODATA_value -9999\n1 2\n3 4\n",
+    )
+    .unwrap();
+    let error = library
+        .import_item(
+            "Grid",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            vec![source],
+        )
+        .unwrap_err();
+    assert!(error.contains("not a GeoTIFF"), "{error}");
+    assert!(
+        !error.contains("readable raster"),
+        "refused before a reader parsed it: {error}"
+    );
+    assert_refused_in_dialog(&library, &root, &error, "dem.asc");
+}

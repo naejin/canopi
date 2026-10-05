@@ -1258,6 +1258,14 @@ impl LidarLibrary {
         unit_unknown: bool,
         paths: Vec<PathBuf>,
     ) -> Result<common_types::lidar::LidarImportReceipt, String> {
+        // A file Canopi cannot place is refused here, in the import dialog,
+        // before any item or job exists (canopi-try2, U31).
+        import::validate_source_selection(&paths)?;
+        admission::check_sources_placeable(
+            self.inner.engine.as_ref(),
+            &paths,
+            &AtomicBool::new(false),
+        )?;
         let (layer_id, job_id) =
             self.record_import_item(name, quantity, unit_label, unit_unknown, &paths)?;
         self.start_recorded_import(&layer_id, &job_id, paths)
