@@ -108,20 +108,9 @@ pub(crate) fn check_source_bytes(name: &str, bytes: u64) -> Result<(), String> {
 }
 
 /// Refuse a selection Canopi cannot place: a source that is not a GeoTIFF,
-/// declares no coordinate system or one that is refused (U31).
-///
-/// Import runs it on the user's files before anything is recorded, so the
-/// refusal shows in the dialog and leaves no item or job (canopi-try2). Retry
-/// runs it on the saved files before recording a job and keeps a refusal as
-/// the failure of the item's latest import, so the reason stays on its row.
-/// Both first refuse at once while a raster job runs, since that job holds a
-/// Local slot for minutes and would fail the import on its lease anyway;
-/// otherwise they run this on the Local lane, beside short reads, never on
-/// UserData. `name_of` names each
-/// source in a refusal: [`source_name`] for the user's files, the imported
-/// file name for a managed original. Each source's header is read here and
-/// read again when staging probes its managed copy; that is cheap, and only
-/// the header is read.
+/// declares no coordinate system or one that is refused (U31). Each refusal
+/// names the source through `name_of`, never its folder. Only headers are
+/// read, so reading them again at staging is cheap.
 pub(crate) fn check_sources_placeable(
     engine: &dyn RasterEngine,
     paths: &[PathBuf],
