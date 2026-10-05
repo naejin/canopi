@@ -949,7 +949,7 @@ Doing contours before hydrology keeps each review small. Bead 3 proves the globa
   - out-of-range number, missing required choice;
   - points outside bounds, no outputs.
 - Offers per item: ground vs surface elevation, geographic grid, non-metre units, extent over the limit, engine missing.
-- Catalogue versions: a v20 library is deleted; a v22 catalogue is refused.
+- Catalogue versions: an older catalogue is set aside and rebuilt from its originals (ADR 0021); one newer than the catalogue version at that time is refused.
 - Lifecycle:
   - create inserts the definition, inputs, items and pinned job in one transaction;
   - multi-output publish is atomic: cancelling after the first output publishes nothing and cleans scratch;
