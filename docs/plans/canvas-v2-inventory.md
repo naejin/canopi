@@ -120,7 +120,7 @@ None of these changes the `.canopi` format. Settings gain one defaulted field, `
 |---|---|---|---|---|
 | INV-DATA-04 | `common-types/src/views.rs:199-220` | Story steps hold only a view id | keep (steps inherit the view's bearing) | — |
 | INV-DATA-11 | `common-types/src/settings.rs:77-79`, `:207-216` | `scroll_wheel: zoom \| pan` | keep the stored values; the UI becomes "Pointing device: Mouse / Trackpad" over the same field | 2 |
-| INV-DATA-16 | `canvas/runtime/scene/codec.ts:348-368` | Ruler guides stored as latitudes and longitudes in `extra.guides` | keep (no angle field; guides stay parallels and meridians) | — |
+| INV-DATA-16 | `canvas/runtime/scene/codec.ts:348-368` | Ruler guides stored as latitudes and longitudes in `extra.guides` | delete: ruler guides are removed (U33) | 2 (cut stage) |
 | INV-DATA-19 | `common-types/src/design.rs:14`; `generated/canopi-design-format.ts:18` | `north_bearing_deg` (v1 Design anchor) refused as a root key | keep refused; never reuse the name | — |
 
 ## 10. Documents, patterns, boards and locales (INV-DOC)

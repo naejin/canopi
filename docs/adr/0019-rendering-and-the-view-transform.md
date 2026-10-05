@@ -1,6 +1,6 @@
 # Rendering and the view transform
 
-Status: Accepted (2026-09-29, Canopi v2); amended 2026-10-01
+Status: Accepted (2026-09-29, Canopi v2); amended 2026-10-01 and 2026-10-05 (U33: no rulers, ruler guides or locked-object chip)
 
 Refines [ADR 0004](0004-one-renderer.md) (still one PixiJS renderer inside MapLibre) with how the renderer receives [ADR 0016](0016-one-view-transform.md)'s view transform. Product rules: [ADR 0015](0015-rotating-map-and-canvas-controls.md).
 
@@ -11,10 +11,11 @@ The scene snapshot carried a north-up viewport and per-plant screen points, so e
 ## Decision
 
 - **Two entries.** `syncScene(snapshot, changes)` for data, selection, hover, style and label admission, never called for a pan; `setView(view)` is the only per-frame entry. `setDraft` and `setSelectionPreview` carry tool output. The snapshot has no camera; presentation entries are world-space.
-- **World root.** Grid, zones, ruler and measurement guides and the selection preview are retained in metres under one container whose matrix comes from the transform's affine: one write per frame. World drafts use a second container with the same matrix, stacked above the billboards, so drafts stay on top of the scene as today's DOM previews are. The grid moves into this root and turns with the map.
+- **World root.** Grid, zones, measurement guides and the selection preview are retained in metres under one container whose matrix comes from the transform's affine: one write per frame. World drafts use a second container with the same matrix, stacked above the billboards, so drafts stay on top of the scene as today's DOM previews are. The grid moves into this root and turns with the map.
 - **Upright billboards.** Plants, rings, badges, notes and labels live in an identity root (draft billboards in their own identity root above the world drafts) and are placed each frame by bulk projection of world anchors (typed arrays, visible set only). Nothing upright sits under a rotating container. Note text is drawn at `rotationDeg − bearing`, so notes turn with the map. A selection preview moves both: world shapes in the world root, selected anchors (and note angles) before projection in the billboard root.
 - **Stored angles are clockwise from true north**; a null note angle reads as 0, as today.
-- **DOM overlays** (selection handles, the text-entry host, hover tooltip, locked-object affordance) stay DOM for focus and `aria-label`, follow the frame in the overlays frame phase (by `translate` from phase R; phase 0 places them by `left` and `top`), and rebuild only when their set changes. Canvas2D rulers draw only when north is up.
+- **DOM overlays** (selection handles, the text-entry host, hover tooltip) stay DOM for focus and `aria-label`, follow the frame in the overlays frame phase (by `translate` from phase R; phase 0 places them by `left` and `top`), and rebuild only when their set changes.
+- **No rulers, ruler guides or locked-object chip** (user, 2026-10-05, U33). The Canvas2D rulers and the guides pulled from them left the world root; a directly locked object shows its locked hover stroke and is unlocked from the canvas menu or Edit. Each was a special case in the input pipeline and the overlays for little use.
 - **Label admission** runs on the settled frame and on zoom-band change, with no admission cache (phase R; until then labels are admitted again on every scale change, as today).
 - **Retained rendering may quantise** stroke widths and glyph sizes per zoom band (about 12 % drift) as the p32r fix (convention).
 - **Pitch** later adds a projective world root when the affine is null; nothing is built for it now.
