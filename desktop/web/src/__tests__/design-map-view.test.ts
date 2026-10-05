@@ -393,6 +393,34 @@ describe('the view reaches the home only with a write that already happens (U30)
     expect(machine.continuousSave.hasPendingChanges()).toBe(false)
   })
 
+  it('a manual Save that the file refuses after panning only shows the error, then focus loss, switching and closing write and ask nothing', async () => {
+    const failures = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const { host, machine, writes, requestSaveDecision } = await openOnDesktop(orchard(), async () => {
+        throw new Error('EACCES: permission denied')
+      })
+      moveTheView(host)
+
+      await expect(machine.saveCurrentDesign()).resolves.toBe(false)
+      expect(machine.continuousSave.status.value, 'the refused Save shows').toBe('error')
+      expect(machine.continuousSave.hasPendingChanges(), 'nothing was edited').toBe(false)
+
+      await expect(machine.continuousSave.flush(), 'focus loss does not retry the Save').resolves.toBe(true)
+      await expect(machine.transitionDocument({
+        source: 'open-path',
+        dirtyGuard: 'flush',
+        session: host.surfaces.documents,
+        load: async () => ({ file: orchard(), path: '/designs/next.canopi', name: 'Next', fingerprint: 'fp-next' }),
+      })).resolves.toMatchObject({ status: 'applied' })
+      await expect(machine.closeDesign()).resolves.toMatchObject({ status: 'applied' })
+
+      expect(writes, 'only the Save tried to write').toHaveLength(1)
+      expect(requestSaveDecision).not.toHaveBeenCalled()
+    } finally {
+      failures.mockRestore()
+    }
+  })
+
   it('adding a clean Design with a file home to a notebook writes nothing, even after a pan', async () => {
     const { host, machine, writes, requestSaveDecision } = await openOnDesktop()
     moveTheView(host)

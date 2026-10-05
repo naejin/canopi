@@ -85,7 +85,10 @@ export interface ContinuousSave {
   hasPendingChanges(): boolean
   /** Write now; true when the home holds every committed change. */
   flush(): Promise<boolean>
-  /** A manual Save: write now even with nothing pending, so the home also holds the live view. */
+  /**
+   * A manual Save: write now even with nothing pending, so the home also holds the live view. It asks for one write
+   * and marks nothing: when a write with no edits fails, the error shows but nothing stays unsaved.
+   */
   save(): Promise<boolean>
   /** Resolve a conflict by overwriting the file with the Design of the session `token` names. */
   overwriteHome(token: object | null): Promise<boolean>
@@ -117,8 +120,10 @@ export function createContinuousSave({
   // The session whose write is in flight; another session's write never shows as its "Saving…".
   const writingSession = signal<object | null>(null)
   // Bumped whenever the home is marked behind; a write clears `writePending` only when no mark landed after it
-  // started, so a Save or overwrite made while a write is in flight gets a write of its own.
+  // started, so an overwrite made while a write is in flight gets a write of its own.
   let pendingMark = 0
+  // A manual Save asked for the next write even if nothing is pending; the write that starts consumes it.
+  let forceWrite = false
   let timer: ReturnType<typeof setTimeout> | null = null
   let active: Promise<boolean> | null = null
   let queued: Promise<boolean> | null = null
@@ -205,11 +210,13 @@ export function createContinuousSave({
   }
 
   function performWrite(): boolean | Promise<boolean> {
+    const force = forceWrite
+    forceWrite = false
     const session = peekRecord()
     const home = readHome()
     if (!session || !home || !store.hasCurrentDesign()) return !pending.peek()
     if (conflict.peek()) return false
-    if (!pending.peek()) return true
+    if (!pending.peek() && !force) return true
 
     const markAtStart = pendingMark
     if (store.designDirty.peek()) changed.value = true
@@ -269,15 +276,10 @@ export function createContinuousSave({
     return false
   }
 
-  function markWritePending(): void {
-    pendingMark += 1
-    writePending.value = true
-  }
-
   async function flush(): Promise<boolean> {
     clearTimer()
     if (!store.hasCurrentDesign()) return true
-    if (!pending.peek() && !active) return true
+    if (!pending.peek() && !active && !forceWrite) return true
     if (conflict.peek()) return false
     const written = await requestWrite()
     return written && !pending.peek() && !conflict.peek()
@@ -295,6 +297,7 @@ export function createContinuousSave({
       if (path) fingerprints.set(path, fingerprint)
       const current = store.readCurrentDesign()
       clearTimer()
+      forceWrite = false
       batch(() => {
         record.value = {
           identity: store.sessionIdentity.peek(),
@@ -357,8 +360,7 @@ export function createContinuousSave({
     flush,
 
     save() {
-      // The home no longer holds what the user sees (the view moves without an edit): write even if clean.
-      markWritePending()
+      forceWrite = true
       return flush()
     },
 
@@ -370,7 +372,8 @@ export function createContinuousSave({
       batch(() => {
         conflict.value = null
         // The file no longer holds this session's content: write even if clean.
-        markWritePending()
+        pendingMark += 1
+        writePending.value = true
       })
       return flush()
     },
