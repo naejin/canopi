@@ -86,7 +86,7 @@ export function beginPointHandleDrag<TEntity>(
         return
       }
       try {
-        tx.commit({ invalidate: 'scene' })
+        tx.commit()
         open = false
       } catch (error) {
         try {

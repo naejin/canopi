@@ -81,7 +81,7 @@ describe('SceneInteractionSession', () => {
 
   /**
    * The drag's Scene Edit with `hook` run first in its commit continuation, where the tool clears its draft (today the
-   * measurement overlay's replaceChildren): the fault point of the retained-cleanup tests.
+   * measurement overlay's replaceChildren): the fault point of the cleanup-fault test.
    */
   function withCommitContinuation(base: SceneEditCoordinator, type: string, hook: () => void): SceneEditCoordinator {
     return {
@@ -341,7 +341,7 @@ describe('SceneInteractionSession', () => {
   it.each([
     { label: 'Rectangle', tool: 'rectangle' },
     { label: 'Measurement Guide', tool: 'measurement-guide' },
-  ])('a retained $label cleanup is retried at once, leaving nothing open for the next drag', ({ tool }) => {
+  ])('a $label commit whose cleanup throws keeps the shape once, leaving nothing open for the next drag', ({ tool }) => {
     const history = new SceneHistory()
     const baseDeps = createInteractionDeps(container, store, testView)
     const coordinator = new SceneRuntimeEditCoordinator({
@@ -352,7 +352,7 @@ describe('SceneInteractionSession', () => {
       syncCanvasSignalsFromScene: () => {},
       invalidate: () => {},
     })
-    let cleanupFailures = 2
+    let cleanupFailures = 1
     const session = createTestSession({
       ...baseDeps,
       sceneEdits: withCommitContinuation(coordinator, `interaction-${tool}`, () => {
@@ -374,7 +374,7 @@ describe('SceneInteractionSession', () => {
         events.pointerUp({ x: 40, y: 60 }, { pointerId: 91 })
       })
 
-      // The host's own retry inside the failure has already finished the cleanup: nothing is left open.
+      // The commit ran each step once: the shape is kept, the cleanup is not run again, and nothing is left open.
       expect(errors).toHaveLength(1)
       expect(cleanupFailures).toBe(0)
       expect(coordinator.canUndo.value).toBe(true)

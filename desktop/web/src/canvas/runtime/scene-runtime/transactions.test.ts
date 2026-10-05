@@ -323,43 +323,6 @@ describe('Scene Edit single-writer admission', () => {
     })).toBe(true)
   })
 
-  it('retains ownership until a failed abort is retried successfully', () => {
-    let failNextSelection = false
-    const { coordinator, store } = createAdmissionHarness({
-      setSelection: (targets) => {
-        if (failNextSelection) {
-          failNextSelection = false
-          throw new Error('selection restore failed')
-        }
-        store.setSelection(targets)
-      },
-    })
-    store.setSelection([{ kind: 'plant', id: 'plant-1' }])
-    const active = coordinator.begin('interaction-drag')
-    active.mutate((draft) => {
-      draft.plants[0]!.position = { x: 99, y: 99 }
-    })
-    active.setSelection([{ kind: 'plant', id: 'plant-2' }])
-    failNextSelection = true
-
-    expect(() => active.abort()).toThrow('selection restore failed')
-
-    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
-    expect(store.session.selectedTargets).toEqual([{ kind: 'plant', id: 'plant-2' }])
-    const blockedEdit = vi.fn()
-    expect(coordinator.run('delete-selected', blockedEdit)).toBe(false)
-    expect(blockedEdit).not.toHaveBeenCalled()
-    expect(() => coordinator.begin('interaction-rotation'))
-      .toThrowError(SceneEditBusyError)
-
-    active.abort()
-
-    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
-    expect(store.session.selectedTargets).toEqual([{ kind: 'plant', id: 'plant-1' }])
-    const next = coordinator.begin('interaction-rotation')
-    next.abort()
-  })
-
   it('preserves hover Session state when a Scene Edit aborts', () => {
     const { coordinator, store } = createAdmissionHarness()
     const active = coordinator.begin('interaction-drag')
@@ -374,56 +337,6 @@ describe('Scene Edit single-writer admission', () => {
 
     expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
     expect(store.session.hoveredTarget).toEqual({ kind: 'plant', id: 'plant-2' })
-  })
-
-  it('retries committed publication without recording history twice or permitting abort', () => {
-    let failInvalidation = true
-    const { coordinator, store } = createAdmissionHarness({
-      invalidate: () => {
-        if (!failInvalidation) return
-        failInvalidation = false
-        throw new Error('invalidation failed')
-      },
-    })
-    const active = coordinator.begin('interaction-drag')
-    active.mutate((draft) => {
-      draft.plants[0]!.position = { x: 99, y: 99 }
-    })
-
-    expect(() => active.commit()).toThrow('invalidation failed')
-    expect(coordinator.canUndo.value).toBe(false)
-    expect(coordinator.run('blocked-during-finalization', vi.fn())).toBe(false)
-
-    active.abort()
-
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 99, y: 99 })
-    expect(coordinator.canUndo.value).toBe(true)
-    expect(coordinator.undo()).toBe(true)
-    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
-    expect(coordinator.undo()).toBe(false)
-  })
-
-  it('returns the committed outcome when an immediate edit publication succeeds on retry', () => {
-    let invalidationFailures = 1
-    const { coordinator, store, history } = createAdmissionHarness({
-      invalidate: () => {
-        if (invalidationFailures > 0) {
-          invalidationFailures -= 1
-          throw new Error('invalidation failed')
-        }
-      },
-    })
-
-    expect(coordinator.run('immediate-move', (tx) => {
-      tx.mutate((draft) => {
-        draft.plants[0]!.position = { x: 44, y: 55 }
-      })
-    })).toBe(true)
-
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 44, y: 55 })
-    expect(history.canUndo.value).toBe(true)
-    expect(coordinator.undo()).toBe(true)
-    expect(coordinator.undo()).toBe(false)
   })
 
   it('aborts an immediate edit when history rejects it before acceptance', () => {
@@ -444,27 +357,27 @@ describe('Scene Edit single-writer admission', () => {
     expect(history.canUndo.value).toBe(false)
   })
 
-  it('finishes an accepted immediate edit when history throws after acceptance', () => {
+  it('keeps an accepted immediate edit when history throws after acceptance, and rethrows', () => {
     const history = new SceneHistory()
     const record = history.record.bind(history)
-    vi.spyOn(history, 'record').mockImplementationOnce((command, token) => {
-      record(command, token)
+    vi.spyOn(history, 'record').mockImplementationOnce((command, accepted) => {
+      record(command, accepted)
       throw new Error('history publication failed after acceptance')
     }).mockImplementation(record)
     const { coordinator, store } = createAdmissionHarness({ history })
 
-    expect(coordinator.run('move', (tx) => {
+    expect(() => coordinator.run('move', (tx) => {
       tx.mutate((draft) => {
         draft.plants[0]!.position = { x: 44, y: 55 }
       })
-    })).toBe(true)
+    })).toThrow('history publication failed after acceptance')
 
     expect(store.persisted.plants[0]?.position).toEqual({ x: 44, y: 55 })
     expect(coordinator.undo()).toBe(true)
     expect(coordinator.undo()).toBe(false)
   })
 
-  it('retries accepted history clean-state publication without duplicating the command', () => {
+  it('records an edit once when its clean-state publication throws', () => {
     let cleanStateFailures = 1
     let publishedClean = true
     let cleanStatePublications = 0
@@ -480,16 +393,16 @@ describe('Scene Edit single-writer admission', () => {
     })
     const { coordinator, store } = createAdmissionHarness({ history })
 
-    expect(coordinator.run('move', (tx) => {
+    expect(() => coordinator.run('move', (tx) => {
       tx.mutate((draft) => {
         draft.plants[0]!.position = { x: 44, y: 55 }
       })
-    })).toBe(true)
+    })).toThrow('history clean-state publication failed')
 
     expect(store.persisted.plants[0]?.position).toEqual({ x: 44, y: 55 })
-    expect(cleanStatePublications).toBe(2)
-    expect(publishedClean).toBe(false)
+    expect(cleanStatePublications).toBe(1)
     expect(coordinator.undo()).toBe(true)
+    expect(publishedClean).toBe(true)
     expect(coordinator.undo()).toBe(false)
   })
 
@@ -514,49 +427,8 @@ describe('Scene Edit single-writer admission', () => {
     expect(coordinator.canRedo.value).toBe(false)
   })
 
-  it('quarantines a distinct same-type edit while settling a retained immediate commit', () => {
-    let invalidationFailures = 2
-    const { coordinator, store, history } = createAdmissionHarness({
-      invalidate: () => {
-        if (invalidationFailures > 0) {
-          invalidationFailures -= 1
-          throw new Error('invalidation failed')
-        }
-      },
-    })
-    const firstEdit = vi.fn((tx: SceneEditTransaction) => {
-      tx.mutate((draft) => {
-        draft.plants[0]!.position = { x: 44, y: 55 }
-      })
-    })
-
-    expect(() => coordinator.run('immediate-move', firstEdit)).toThrow('could not be settled')
-    expect(firstEdit).toHaveBeenCalledTimes(1)
-    expect(coordinator.canUndo.value).toBe(false)
-
-    const nextEdit = vi.fn((tx: SceneEditTransaction) => {
-      tx.mutate((draft) => {
-        draft.plants[1]!.position = { x: 77, y: 88 }
-      })
-    })
-    expect(coordinator.run('immediate-move', nextEdit)).toBe(false)
-    expect(nextEdit).not.toHaveBeenCalled()
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 44, y: 55 })
-    expect(history.canUndo.value).toBe(true)
-
-    expect(coordinator.run('immediate-move', nextEdit)).toBe(true)
-    expect(nextEdit).toHaveBeenCalledOnce()
-    expect(store.persisted.plants[1]?.position).toEqual({ x: 77, y: 88 })
-    expect(coordinator.undo()).toBe(true)
-    expect(store.persisted.plants[1]?.position).toEqual(plantStart(1))
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 44, y: 55 })
-    expect(coordinator.undo()).toBe(true)
-    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
-    expect(coordinator.undo()).toBe(false)
-  })
-
-  it('runs the original committed continuation before releasing retained authority', () => {
-    let invalidationFailures = 2
+  it('runs the committed continuation once, before release, when publication throws', () => {
+    let invalidationFailures = 1
     let coordinator: SceneRuntimeEditCoordinator
     const continuationReentry = vi.fn()
     const onCommitted = vi.fn(() => {
@@ -576,208 +448,14 @@ describe('Scene Edit single-writer admission', () => {
       tx.mutate((draft) => {
         draft.plants[0]!.position = { x: 44, y: 55 }
       })
-    }, { onCommitted })).toThrow('could not be settled')
-    expect(onCommitted).not.toHaveBeenCalled()
-
-    const distinctEdit = vi.fn()
-    expect(coordinator.run('distinct-command', distinctEdit)).toBe(false)
+    }, { onCommitted })).toThrow('invalidation failed')
 
     expect(onCommitted).toHaveBeenCalledOnce()
     expect(continuationReentry).toHaveBeenCalledWith(false)
-    expect(distinctEdit).not.toHaveBeenCalled()
     expect(harness.store.persisted.plants[0]?.position).toEqual({ x: 44, y: 55 })
-  })
-
-  it('keeps projection synchronization inside retryable commit settlement', () => {
-    let projectionFailures = 2
-    let projectionCalls = 0
-    const { coordinator, history } = createAdmissionHarness({
-      syncCanvasSignalsFromScene: () => {
-        projectionCalls += 1
-        if (projectionFailures > 0) {
-          projectionFailures -= 1
-          throw new Error('projection sync failed')
-        }
-      },
-    })
-
-    expect(() => coordinator.run('projection-move', (tx) => {
-      tx.mutate((draft) => {
-        draft.plants[0]!.position = { x: 44, y: 55 }
-      })
-    })).toThrow('could not be settled')
-    expect(history.canUndo.value).toBe(true)
-
-    const duplicateEdit = vi.fn()
-    expect(coordinator.run('projection-move', duplicateEdit)).toBe(false)
-    expect(duplicateEdit).not.toHaveBeenCalled()
-    expect(projectionCalls).toBe(3)
-    expect(coordinator.undo()).toBe(true)
-    expect(coordinator.undo()).toBe(false)
-  })
-
-  it('lets caller-shaped command admission settle an inaccessible immediate edit', () => {
-    let projectionFailures = 2
-    const { coordinator, history } = createAdmissionHarness({
-      syncCanvasSignalsFromScene: () => {
-        if (projectionFailures > 0) {
-          projectionFailures -= 1
-          throw new Error('projection sync failed')
-        }
-      },
-    })
-    expect(() => coordinator.run('projection-move', (tx) => {
-      tx.mutate((draft) => {
-        draft.plants[0]!.position = { x: 44, y: 55 }
-      })
-    })).toThrow('could not be settled')
-
-    const read = vi.fn(() => 'read')
-    expect(coordinator.runWhenSettled(read, 'busy')).toBe('busy')
-    expect(read).not.toHaveBeenCalled()
-    expect(coordinator.canUndo.value).toBe(false)
-
-    const nextCommand = vi.fn(() => 'next')
-    expect(coordinator.runWhenSettled(
-      nextCommand,
-      'busy',
-      { resumePending: true },
-    )).toBe('busy')
-    expect(nextCommand).not.toHaveBeenCalled()
-    expect(history.canUndo.value).toBe(true)
-    expect(coordinator.canUndo.value).toBe(true)
-  })
-
-  it('keeps settled reads observational when an immediate edit needs recovery', () => {
-    let projectionFailures = 2
-    let projectionCalls = 0
-    const { coordinator } = createAdmissionHarness({
-      syncCanvasSignalsFromScene: () => {
-        projectionCalls += 1
-        if (projectionFailures > 0) {
-          projectionFailures -= 1
-          throw new Error('projection sync failed')
-        }
-      },
-    })
-    expect(() => coordinator.run('projection-move', (tx) => {
-      tx.mutate((draft) => {
-        draft.plants[0]!.position = { x: 44, y: 55 }
-      })
-    })).toThrow('could not be settled')
-    const callsBeforeRead = projectionCalls
-    const read = vi.fn(() => 'read')
-
-    expect(coordinator.readWhenSettled(read, 'busy')).toBe('busy')
-
-    expect(read).not.toHaveBeenCalled()
-    expect(projectionCalls).toBe(callsBeforeRead)
-    expect(coordinator.runWhenSettled(
-      () => 'command',
-      'busy',
-      { resumePending: true },
-    )).toBe('busy')
-    expect(projectionCalls).toBeGreaterThan(callsBeforeRead)
-  })
-
-  it('keeps projection synchronization inside retryable abort settlement', () => {
-    let projectionFailures = 2
-    let projectionCalls = 0
-    const { coordinator, store, history } = createAdmissionHarness({
-      syncCanvasSignalsFromScene: () => {
-        projectionCalls += 1
-        if (projectionFailures > 0) {
-          projectionFailures -= 1
-          throw new Error('projection sync failed')
-        }
-      },
-    })
-
-    expect(() => coordinator.run('projection-abort', (tx) => {
-      tx.mutate((draft) => {
-        draft.plants[0]!.position = { x: 44, y: 55 }
-      })
-      throw new Error('edit failed')
-    })).toThrow('could not be settled')
-    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
-
-    const duplicateEdit = vi.fn()
-    expect(() => coordinator.run('projection-abort', duplicateEdit)).toThrow('edit failed')
-    expect(duplicateEdit).not.toHaveBeenCalled()
-    expect(projectionCalls).toBe(3)
-    expect(history.canUndo.value).toBe(false)
-  })
-
-  it('retries a once-failed immediate abort before reporting the edit error', () => {
-    let selectionRestoreFailures = 1
-    const { coordinator, store } = createAdmissionHarness({
-      setSelection: (targets) => {
-        const next = [...targets]
-        if (
-          next.some((target) => target.kind === 'plant' && target.id === 'plant-1')
-          && selectionRestoreFailures > 0
-        ) {
-          selectionRestoreFailures -= 1
-          throw new Error('selection restore failed')
-        }
-        store.setSelection(next)
-      },
-    })
-    store.setSelection([{ kind: 'plant', id: 'plant-1' }])
-
-    expect(() => coordinator.run('failing-immediate', (tx) => {
-      tx.mutate((draft) => {
-        draft.plants[0]!.position = { x: 44, y: 55 }
-      })
-      tx.setSelection([{ kind: 'plant', id: 'plant-2' }])
-      throw new Error('edit failed')
-    })).toThrow('edit failed')
-
-    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
-    expect(store.session.selectedTargets).toEqual([{ kind: 'plant', id: 'plant-1' }])
-    expect(coordinator.run('after-abort', (tx) => {
-      tx.mutate((draft) => {
-        draft.plants[1]!.position = { x: 31, y: 32 }
-      })
-    })).toBe(true)
-  })
-
-  it('keeps a twice-failed immediate abort reachable without rerunning the failed edit', () => {
-    let selectionRestoreFailures = 2
-    const { coordinator, store } = createAdmissionHarness({
-      setSelection: (targets) => {
-        const next = [...targets]
-        if (
-          next.some((target) => target.kind === 'plant' && target.id === 'plant-1')
-          && selectionRestoreFailures > 0
-        ) {
-          selectionRestoreFailures -= 1
-          throw new Error('selection restore failed')
-        }
-        store.setSelection(next)
-      },
-    })
-    store.setSelection([{ kind: 'plant', id: 'plant-1' }])
-    const failedEdit = vi.fn((tx: SceneEditTransaction) => {
-      tx.mutate((draft) => {
-        draft.plants[0]!.position = { x: 44, y: 55 }
-      })
-      tx.setSelection([{ kind: 'plant', id: 'plant-2' }])
-      throw new Error('edit failed')
-    })
-
-    expect(() => coordinator.run('failing-immediate', failedEdit)).toThrow('could not be settled')
-    expect(failedEdit).toHaveBeenCalledTimes(1)
-    const quarantinedEdit = vi.fn()
-    expect(() => coordinator.run('blocked-during-abort', quarantinedEdit)).toThrow('edit failed')
-    expect(quarantinedEdit).not.toHaveBeenCalled()
-    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
-    expect(store.session.selectedTargets).toEqual([{ kind: 'plant', id: 'plant-1' }])
-    expect(coordinator.run('after-abort', (tx) => {
-      tx.mutate((draft) => {
-        draft.plants[1]!.position = { x: 31, y: 32 }
-      })
-    })).toBe(true)
+    const distinctEdit = vi.fn()
+    expect(coordinator.run('distinct-command', distinctEdit)).toBe(false)
+    expect(distinctEdit).toHaveBeenCalledOnce()
   })
 
   it('forgets an immediate failure whose callback already aborted its transaction', () => {
@@ -790,115 +468,9 @@ describe('Scene Edit single-writer admission', () => {
 
     const active = coordinator.begin('interaction-drag')
     const blocked = vi.fn()
-    expect(coordinator.runWhenSettled(
-      blocked,
-      'busy',
-      { resumePending: true },
-    )).toBe('busy')
+    expect(coordinator.runWhenSettled(blocked, 'busy')).toBe('busy')
     expect(blocked).not.toHaveBeenCalled()
     active.abort()
-  })
-
-  it('quarantines a partially applied undo and redo until selection replay succeeds', () => {
-    let selectionFailures = 0
-    const { coordinator, store } = createAdmissionHarness({
-      setSelection: (targets) => {
-        if (selectionFailures > 0) {
-          selectionFailures -= 1
-          throw new Error('selection replay failed')
-        }
-        store.setSelection(targets)
-      },
-    })
-    expect(coordinator.run('move-and-select', (tx) => {
-      tx.mutate((draft) => {
-        draft.plants[0]!.position = { x: 44, y: 55 }
-      })
-      tx.setSelection([{ kind: 'plant', id: 'plant-2' }])
-    })).toBe(true)
-
-    selectionFailures = 1
-    expect(() => coordinator.undo()).toThrow('selection replay failed')
-    const blockedUndo = vi.fn()
-    expect(coordinator.run('blocked-during-undo', blockedUndo)).toBe(false)
-    expect(blockedUndo).not.toHaveBeenCalled()
-    expect(coordinator.undo()).toBe(true)
-    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
-    expect(store.session.selectedTargets).toEqual([])
-
-    selectionFailures = 1
-    expect(() => coordinator.redo()).toThrow('selection replay failed')
-    const blockedRedo = vi.fn()
-    expect(coordinator.run('blocked-during-redo', blockedRedo)).toBe(false)
-    expect(blockedRedo).not.toHaveBeenCalled()
-    expect(coordinator.redo()).toBe(true)
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 44, y: 55 })
-    expect(store.session.selectedTargets).toEqual([{ kind: 'plant', id: 'plant-2' }])
-  })
-
-  it('quarantines history after cursor movement until undo and redo publication succeeds', () => {
-    let invalidationFailures = 0
-    const { coordinator, store } = createAdmissionHarness({
-      invalidate: () => {
-        if (invalidationFailures > 0) {
-          invalidationFailures -= 1
-          throw new Error('history invalidation failed')
-        }
-      },
-    })
-    expect(coordinator.run('move', (tx) => {
-      tx.mutate((draft) => {
-        draft.plants[0]!.position = { x: 44, y: 55 }
-      })
-    })).toBe(true)
-
-    invalidationFailures = 1
-    expect(() => coordinator.undo()).toThrow('history invalidation failed')
-    const blockedUndo = vi.fn()
-    expect(coordinator.run('blocked-during-undo', blockedUndo)).toBe(false)
-    expect(blockedUndo).not.toHaveBeenCalled()
-    expect(coordinator.undo()).toBe(true)
-    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
-    expect(coordinator.undo()).toBe(false)
-
-    invalidationFailures = 1
-    expect(() => coordinator.redo()).toThrow('history invalidation failed')
-    const blockedRedo = vi.fn()
-    expect(coordinator.run('blocked-during-redo', blockedRedo)).toBe(false)
-    expect(blockedRedo).not.toHaveBeenCalled()
-    expect(coordinator.redo()).toBe(true)
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 44, y: 55 })
-    expect(coordinator.redo()).toBe(false)
-  })
-
-  it('retries the same history cursor after clean-state publication fails', () => {
-    let cleanStateFailures = 0
-    const history = new SceneHistory({
-      reportCleanState: () => {
-        if (cleanStateFailures > 0) {
-          cleanStateFailures -= 1
-          throw new Error('history clean-state publication failed')
-        }
-      },
-    })
-    const { coordinator, store } = createAdmissionHarness({ history })
-    expect(coordinator.run('move', (tx) => {
-      tx.mutate((draft) => {
-        draft.plants[0]!.position = { x: 44, y: 55 }
-      })
-    })).toBe(true)
-    cleanStateFailures = 1
-
-    expect(() => coordinator.undo()).toThrow('history clean-state publication failed')
-    const blocked = vi.fn()
-    expect(coordinator.run('blocked-during-history-publication', blocked)).toBe(false)
-    expect(blocked).not.toHaveBeenCalled()
-
-    expect(coordinator.undo()).toBe(true)
-    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
-    expect(coordinator.undo()).toBe(false)
-    expect(coordinator.redo()).toBe(true)
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 44, y: 55 })
   })
 
   it('does not reenter the same history settlement from a revision observer', () => {
@@ -930,72 +502,6 @@ describe('Scene Edit single-writer admission', () => {
     expect(coordinator.undo()).toBe(false)
   })
 
-  it('does not reenter a retained immediate settlement from its own publication callback', () => {
-    let coordinator: SceneRuntimeEditCoordinator
-    let invalidationFailures = 2
-    let invalidationCalls = 0
-    let reenterSettlement = false
-    const harness = createAdmissionHarness({
-      invalidate: () => {
-        invalidationCalls += 1
-        if (reenterSettlement) {
-          reenterSettlement = false
-          coordinator.runWhenSettled(() => undefined, undefined, { resumePending: true })
-        }
-        if (invalidationFailures > 0) {
-          invalidationFailures -= 1
-          throw new Error('invalidation failed')
-        }
-      },
-    })
-    coordinator = harness.coordinator
-    expect(() => coordinator.run('move', (tx) => {
-      tx.mutate((draft) => {
-        draft.plants[0]!.position = { x: 44, y: 55 }
-      })
-    })).toThrow('could not be settled')
-
-    reenterSettlement = true
-    expect(coordinator.runWhenSettled(
-      () => undefined,
-      undefined,
-      { resumePending: true },
-    )).toBeUndefined()
-
-    expect(invalidationCalls).toBe(3)
-    expect(coordinator.canUndo.value).toBe(true)
-  })
-
-  it('does not reenter the initial recovery of a retained immediate settlement', () => {
-    let coordinator: SceneRuntimeEditCoordinator
-    let invalidationCalls = 0
-    let reenteredResult: boolean | null = null
-    const reenteredEdit = vi.fn()
-    const harness = createAdmissionHarness({
-      invalidate: () => {
-        invalidationCalls += 1
-        if (invalidationCalls === 2) {
-          reenteredResult = coordinator.run('move', reenteredEdit)
-        }
-        if (invalidationCalls <= 2) throw new Error('invalidation failed')
-      },
-    })
-    coordinator = harness.coordinator
-
-    expect(() => coordinator.run('move', (tx) => {
-      tx.mutate((draft) => {
-        draft.plants[0]!.position = { x: 44, y: 55 }
-      })
-    })).toThrow('could not be settled')
-
-    expect(reenteredResult).toBe(false)
-    expect(reenteredEdit).not.toHaveBeenCalled()
-    expect(coordinator.run('move', reenteredEdit)).toBe(false)
-    expect(reenteredEdit).not.toHaveBeenCalled()
-    expect(coordinator.run('move', reenteredEdit)).toBe(false)
-    expect(reenteredEdit).toHaveBeenCalledOnce()
-  })
-
   it('publishes one Scene revision when an observer throws after the signal changes', () => {
     const revision = signal(0)
     let throwFromObserver = false
@@ -1012,13 +518,14 @@ describe('Scene Edit single-writer admission', () => {
     })
     throwFromObserver = true
 
-    expect(coordinator.run('move', (tx) => {
+    expect(() => coordinator.run('move', (tx) => {
       tx.mutate((draft) => {
         draft.plants[0]!.position = { x: 44, y: 55 }
       })
-    })).toBe(true)
+    })).toThrow('revision observer failed')
 
     expect(revision.value).toBe(1)
+    expect(coordinator.undo()).toBe(true)
     dispose()
   })
 
@@ -1044,7 +551,7 @@ describe('Scene Edit single-writer admission', () => {
     throwFromObserver = true
 
     expect(() => coordinator.undo()).toThrow('history revision observer failed')
-    expect(coordinator.undo()).toBe(true)
+    expect(coordinator.undo()).toBe(false)
 
     expect(revision.value).toBe(2)
     dispose()
@@ -1052,36 +559,6 @@ describe('Scene Edit single-writer admission', () => {
 })
 
 describe('Scene document hydration and replacement', () => {
-  it('quarantines a hydrated Scene until history clears', () => {
-    let cleanStateFailures = 0
-    const history = new SceneHistory({
-      reportCleanState: () => {
-        if (cleanStateFailures > 0) {
-          cleanStateFailures -= 1
-          throw new Error('clean-state publication failed')
-        }
-      },
-    })
-    const { coordinator, store } = createAdmissionHarness({ history })
-    const next = makeFile()
-    next.plants[0]!.position = geoAt(55, 66)
-    cleanStateFailures = 1
-
-    expect(() => coordinator.hydrate(next)).toThrow('clean-state publication failed')
-    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(55, 66))
-    const blocked = vi.fn()
-    expect(coordinator.run('blocked-during-hydration', blocked)).toBe(false)
-    expect(blocked).not.toHaveBeenCalled()
-
-    coordinator.hydrate(next)
-
-    expect(coordinator.run('after-hydration', (tx) => {
-      tx.mutate((draft) => {
-        draft.plants[1]!.position = { x: 31, y: 32 }
-      })
-    })).toBe(true)
-  })
-
   it('hydrates Scene content without introducing camera state into the Scene Session', () => {
     const { coordinator, store } = createAdmissionHarness()
     store.setSelection([{ kind: 'zone', id: 'shared-id' }])
@@ -1092,81 +569,6 @@ describe('Scene document hydration and replacement', () => {
     expect(store.session).not.toHaveProperty('viewport')
     expect(store.session.selectedTargets).toEqual([])
     expect(store.session.hoveredTarget).toBeNull()
-  })
-
-  it('retries the retained replacement finalizer without accepting a duplicate callback', () => {
-    const stageCalls = {
-      history: 0,
-      documentSignals: 0,
-      sceneSignals: 0,
-      invalidation: 0,
-      sceneRevision: 0,
-    }
-    const history = new SceneHistory({
-      reportCleanState: () => {
-        stageCalls.history += 1
-      },
-    })
-    const { coordinator, store } = createAdmissionHarness({
-      history,
-      syncCanvasSignalsFromScene: () => {
-        stageCalls.sceneSignals += 1
-      },
-      invalidate: () => {
-        stageCalls.invalidation += 1
-      },
-      incrementSceneRevision: () => {
-        stageCalls.sceneRevision += 1
-      },
-    })
-    const next = makeFile()
-    next.name = 'Finalizer-safe hydration'
-    next.plants[0]!.position = geoAt(55, 66)
-    const syncDocumentSignals = vi.fn(() => {
-      stageCalls.documentSignals += 1
-    })
-    let finalizerFailures = 1
-    const originalFinalizer = vi.fn(() => {
-      if (finalizerFailures > 0) {
-        finalizerFailures -= 1
-        throw new Error('replacement finalizer failed')
-      }
-    })
-    const retryFinalizer = vi.fn()
-    const prepare = vi.fn()
-    const replacementToken = createCanvasDocumentReplacementToken()
-
-    expect(() => coordinator.replaceDocument(next, {
-      token: replacementToken,
-      prepare,
-      syncDocumentSignals,
-      finalizeReplacement: originalFinalizer,
-    }))
-      .toThrow('replacement finalizer failed')
-    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(55, 66))
-    const blocked = vi.fn()
-    expect(coordinator.run('blocked-during-finalizer', blocked)).toBe(false)
-    expect(blocked).not.toHaveBeenCalled()
-
-    expect(coordinator.replaceDocument(JSON.parse(JSON.stringify(next)) as CanopiFile, {
-      token: replacementToken,
-      prepare,
-      finalizeReplacement: retryFinalizer,
-    })).toBe(false)
-
-    expect(stageCalls).toEqual({
-      history: 1,
-      documentSignals: 1,
-      sceneSignals: 1,
-      invalidation: 1,
-      sceneRevision: 1,
-    })
-    expect(originalFinalizer).toHaveBeenCalledTimes(2)
-    expect(retryFinalizer).not.toHaveBeenCalled()
-    expect(prepare).toHaveBeenCalledOnce()
-    const admitted = vi.fn()
-    expect(coordinator.runWhenSettled(admitted, undefined)).toBeUndefined()
-    expect(admitted).toHaveBeenCalledOnce()
   })
 
   it('does not let reentrant prepare replace an already reserved document successor', () => {
@@ -1204,52 +606,6 @@ describe('Scene document hydration and replacement', () => {
     })).toBe(true)
   })
 
-  it('settles but quarantines byte-equivalent replacement content with another token', () => {
-    let cleanStateFailures = 1
-    const history = new SceneHistory({
-      reportCleanState: () => {
-        if (cleanStateFailures > 0) {
-          cleanStateFailures -= 1
-          throw new Error('clean-state publication failed')
-        }
-      },
-    })
-    const { coordinator } = createAdmissionHarness({ history })
-    const file = makeFile()
-    file.name = 'Shared replacement contents'
-    const firstToken = createCanvasDocumentReplacementToken()
-    const competingToken = createCanvasDocumentReplacementToken()
-    const firstFinalizer = vi.fn()
-    const competingPrepare = vi.fn()
-    const competingFinalizer = vi.fn()
-
-    expect(() => coordinator.replaceDocument(file, {
-      token: firstToken,
-      prepare: () => {},
-      finalizeReplacement: firstFinalizer,
-    })).toThrow('clean-state publication failed')
-
-    expect(() => coordinator.replaceDocument(
-      JSON.parse(JSON.stringify(file)) as CanopiFile,
-      {
-        token: competingToken,
-        prepare: competingPrepare,
-        finalizeReplacement: competingFinalizer,
-      },
-    )).toThrowError(SceneEditBusyError)
-    expect(firstFinalizer).toHaveBeenCalledOnce()
-    expect(competingPrepare).not.toHaveBeenCalled()
-    expect(competingFinalizer).not.toHaveBeenCalled()
-
-    expect(coordinator.replaceDocument(file, {
-      token: competingToken,
-      prepare: competingPrepare,
-      finalizeReplacement: competingFinalizer,
-    })).toBe(true)
-    expect(competingPrepare).toHaveBeenCalledOnce()
-    expect(competingFinalizer).toHaveBeenCalledOnce()
-  })
-
   it('reports a preparation rejection as not admitted and releases the old Scene', () => {
     const { coordinator, store } = createAdmissionHarness()
     const next = makeFile()
@@ -1280,213 +636,36 @@ describe('Scene document hydration and replacement', () => {
     expect(store.persisted.plants[0]?.position).toEqual({ x: 44, y: 55 })
   })
 
-  it('settles and quarantines a retained immediate edit before replacing on retry', () => {
-    let invalidationFailures = 2
-    const { coordinator, store } = createAdmissionHarness({
-      invalidate: () => {
-        if (invalidationFailures > 0) {
-          invalidationFailures -= 1
-          throw new Error('immediate publication failed')
-        }
-      },
-    })
-    expect(() => coordinator.run('retained-before-hydration', (tx) => {
-      tx.mutate((draft) => {
-        draft.plants[0]!.position = { x: 44, y: 55 }
-      })
-    })).toThrow('could not be settled')
-    const next = makeFile()
-    next.name = 'After retained immediate'
-    next.plants[0]!.position = geoAt(77, 88)
-    const prepare = vi.fn()
-    const replacementToken = createCanvasDocumentReplacementToken()
-
-    expect(() => coordinator.replaceDocument(next, { token: replacementToken, prepare }))
-      .toThrowError(SceneEditBusyError)
-    expect(prepare).not.toHaveBeenCalled()
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 44, y: 55 })
-
-    coordinator.replaceDocument(next, { token: replacementToken, prepare })
-    expect(prepare).toHaveBeenCalledOnce()
-    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(77, 88))
-  })
-
-  it('settles and quarantines a retained history replay before replacing on retry', () => {
-    let invalidationFailures = 0
-    const { coordinator, store } = createAdmissionHarness({
-      invalidate: () => {
-        if (invalidationFailures > 0) {
-          invalidationFailures -= 1
-          throw new Error('history publication failed')
-        }
-      },
-    })
-    expect(coordinator.run('seed-history-before-hydration', (tx) => {
-      tx.mutate((draft) => {
-        draft.plants[0]!.position = { x: 44, y: 55 }
-      })
-    })).toBe(true)
-    invalidationFailures = 1
-    expect(() => coordinator.undo()).toThrow('history publication failed')
-    const next = makeFile()
-    next.name = 'After retained history'
-    next.plants[0]!.position = geoAt(77, 88)
-    const prepare = vi.fn()
-    const replacementToken = createCanvasDocumentReplacementToken()
-
-    expect(() => coordinator.replaceDocument(next, { token: replacementToken, prepare }))
-      .toThrowError(SceneEditBusyError)
-    expect(prepare).not.toHaveBeenCalled()
-    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
-
-    coordinator.replaceDocument(next, { token: replacementToken, prepare })
-    expect(prepare).toHaveBeenCalledOnce()
-    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(77, 88))
-  })
-
-  it('settles and quarantines a retained long-lived commit before replacing on retry', () => {
-    let invalidationFailures = 1
-    const { coordinator, store } = createAdmissionHarness({
-      invalidate: () => {
-        if (invalidationFailures > 0) {
-          invalidationFailures -= 1
-          throw new Error('long-lived publication failed')
-        }
-      },
-    })
-    const active = coordinator.begin('retained-gesture-commit')
-    active.mutate((draft) => {
-      draft.plants[0]!.position = { x: 44, y: 55 }
-    })
-    expect(() => active.commit()).toThrow('long-lived publication failed')
-    const next = makeFile()
-    next.name = 'After retained gesture commit'
-    next.plants[0]!.position = geoAt(77, 88)
-    const prepare = vi.fn()
-    const replacementToken = createCanvasDocumentReplacementToken()
-
-    expect(() => coordinator.replaceDocument(next, { token: replacementToken, prepare }))
-      .toThrowError(SceneEditBusyError)
-    expect(prepare).not.toHaveBeenCalled()
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 44, y: 55 })
-
-    coordinator.replaceDocument(next, { token: replacementToken, prepare })
-    expect(prepare).toHaveBeenCalledOnce()
-    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(77, 88))
-  })
-
-  it('resumes hydration when a retry supplies equivalent normalized document data', () => {
-    let cleanStateFailures = 1
-    const history = new SceneHistory({
-      reportCleanState: () => {
-        if (cleanStateFailures > 0) {
-          cleanStateFailures -= 1
-          throw new Error('clean-state publication failed')
-        }
-      },
-    })
-    const { coordinator, store } = createAdmissionHarness({ history })
-    const next = makeFile()
-    next.name = 'Equivalent hydration retry'
-    next.plants[0]!.position = geoAt(55, 66)
-
-    expect(() => coordinator.hydrate(next)).toThrow('clean-state publication failed')
-    coordinator.hydrate(JSON.parse(JSON.stringify(next)) as CanopiFile)
-
-    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(55, 66))
-    expect(coordinator.run('after-equivalent-hydration', (tx) => {
-      tx.mutate((draft) => {
-        draft.plants[1]!.position = { x: 31, y: 32 }
-      })
-    })).toBe(true)
-  })
-
-  it('rejects a competing hydration while preserving the first accepted snapshot', () => {
-    let cleanStateFailures = 1
-    const history = new SceneHistory({
-      reportCleanState: () => {
-        if (cleanStateFailures > 0) {
-          cleanStateFailures -= 1
-          throw new Error('clean-state publication failed')
-        }
-      },
-    })
-    const { coordinator, store } = createAdmissionHarness({ history })
-    const accepted = makeFile()
-    accepted.name = 'Accepted hydration'
-    accepted.plants[0]!.position = geoAt(55, 66)
-    const competing = makeFile()
-    competing.name = 'Competing hydration'
-    competing.plants[0]!.position = geoAt(99, 101)
-
-    expect(() => coordinator.hydrate(accepted)).toThrow('clean-state publication failed')
-
-    try {
-      coordinator.hydrate(competing)
-      throw new Error('Expected the competing hydration to stay quarantined')
-    } catch (error) {
-      expect(error).toBeInstanceOf(SceneEditBusyError)
-      expect((error as SceneEditBusyError).activeType).toBe('document-hydration')
-    }
-    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(55, 66))
-
-    coordinator.hydrate(JSON.parse(JSON.stringify(accepted)) as CanopiFile)
-
-    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(55, 66))
-    expect(coordinator.run('after-competing-hydration', (tx) => {
-      tx.mutate((draft) => {
-        draft.plants[1]!.position = { x: 31, y: 32 }
-      })
-    })).toBe(true)
-  })
-
-  it('hydrates from an owned snapshot when the caller mutates failed input', () => {
-    let cleanStateFailures = 1
-    const history = new SceneHistory({
-      reportCleanState: () => {
-        if (cleanStateFailures > 0) {
-          cleanStateFailures -= 1
-          throw new Error('clean-state publication failed')
-        }
-      },
-    })
-    const { coordinator, store } = createAdmissionHarness({ history })
+  it('hydrates from an owned snapshot the caller cannot change', () => {
+    const { coordinator, store } = createAdmissionHarness()
     const next = makeFile()
     next.name = 'Owned hydration snapshot'
     next.plants[0]!.position = geoAt(55, 66)
-    const equivalentRetry = JSON.parse(JSON.stringify(next)) as CanopiFile
-    const syncDocumentSignals = vi.fn<(hydratedFile: CanopiFile) => void>()
+    const syncDocumentSignals = vi.fn<(hydratedFile: CanopiFile) => void>(() => {
+      next.plants[0]!.position = geoAt(999, 999)
+    })
 
-    expect(() => coordinator.hydrate(next, syncDocumentSignals))
-      .toThrow('clean-state publication failed')
-    next.plants[0]!.position = geoAt(999, 999)
-
-    coordinator.hydrate(equivalentRetry)
+    coordinator.hydrate(next, syncDocumentSignals)
 
     expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(55, 66))
     expect(syncDocumentSignals.mock.calls[0]?.[0].plants[0]?.position)
       .toEqual(geoAt(55, 66))
   })
 
-  it('passes a fresh accepted snapshot to each hydration callback retry', () => {
+  it('passes the document callback its own copy of the Design', () => {
     const { coordinator, store } = createAdmissionHarness()
     const next = makeFile()
     next.name = 'Callback-safe hydration'
     next.plants[0]!.position = geoAt(55, 66)
-    let callbackAttempts = 0
     const projectedNames: string[] = []
     const syncDocumentSignals = (hydratedFile: CanopiFile): void => {
-      callbackAttempts += 1
       projectedNames.push(hydratedFile.name)
       hydratedFile.name = 'Mutated by callback'
-      if (callbackAttempts === 1) throw new Error('document projection failed')
     }
 
-    expect(() => coordinator.hydrate(next, syncDocumentSignals))
-      .toThrow('document projection failed')
-    coordinator.hydrate(JSON.parse(JSON.stringify(next)) as CanopiFile)
+    coordinator.hydrate(next, syncDocumentSignals)
 
-    expect(projectedNames).toEqual(['Callback-safe hydration', 'Callback-safe hydration'])
+    expect(projectedNames).toEqual(['Callback-safe hydration'])
     expect(next.name).toBe('Callback-safe hydration')
     expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(55, 66))
   })
@@ -1510,9 +689,118 @@ describe('Scene document hydration and replacement', () => {
     throwFromObserver = true
 
     expect(() => coordinator.hydrate(next)).toThrow('hydration revision observer failed')
-    coordinator.hydrate(JSON.parse(JSON.stringify(next)) as CanopiFile)
 
     expect(revision.value).toBe(1)
     dispose()
+  })
+})
+
+describe('A Scene operation runs its steps once', () => {
+  const moveFirstPlant = (tx: SceneEditTransaction) => {
+    tx.mutate((draft) => {
+      draft.plants[0]!.position = { x: 44, y: 55 }
+    })
+  }
+  const expectNextCommandRuns = (coordinator: SceneRuntimeEditCoordinator, store: SceneStore) => {
+    expect(coordinator.run('next-command', (tx) => {
+      tx.mutate((draft) => {
+        draft.plants[1]!.position = { x: 31, y: 32 }
+      })
+    })).toBe(true)
+    expect(store.persisted.plants[1]?.position).toEqual({ x: 31, y: 32 })
+  }
+
+  it('an edit that throws before history accepts restores the scene, rethrows, releases, and the next command runs', () => {
+    const { coordinator, store, history } = createAdmissionHarness()
+
+    expect(() => coordinator.run('move', (tx) => {
+      moveFirstPlant(tx)
+      throw new Error('edit failed')
+    })).toThrow('edit failed')
+
+    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
+    expect(history.canUndo.value).toBe(false)
+    expectNextCommandRuns(coordinator, store)
+  })
+
+  it('an edit whose publication throws after history accepts keeps the edit, rethrows, releases, and the next command runs', () => {
+    const invalidate = vi.fn<(kind: SceneEditInvalidationKind) => void>()
+      .mockImplementationOnce(() => { throw new Error('invalidation failed') })
+    const revisions = vi.fn()
+    const { coordinator, store } = createAdmissionHarness({ invalidate, incrementSceneRevision: revisions })
+
+    expect(() => coordinator.run('move', moveFirstPlant)).toThrow('invalidation failed')
+
+    expect(store.persisted.plants[0]?.position).toEqual({ x: 44, y: 55 })
+    expect(revisions).toHaveBeenCalledOnce()
+    expect(invalidate).toHaveBeenCalledOnce()
+    expectNextCommandRuns(coordinator, store)
+    expect(coordinator.undo()).toBe(true)
+    expect(coordinator.undo()).toBe(true)
+    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
+    expect(coordinator.undo()).toBe(false)
+  })
+
+  it('an undo whose publication throws keeps the step, rethrows, releases, and the next command runs', () => {
+    const invalidate = vi.fn<(kind: SceneEditInvalidationKind) => void>()
+    const { coordinator, store } = createAdmissionHarness({ invalidate })
+    expect(coordinator.run('move', moveFirstPlant)).toBe(true)
+    invalidate.mockImplementationOnce(() => { throw new Error('undo invalidation failed') })
+
+    expect(() => coordinator.undo()).toThrow('undo invalidation failed')
+
+    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
+    expect(coordinator.canUndo.value).toBe(false)
+    expect(coordinator.canRedo.value).toBe(true)
+    expectNextCommandRuns(coordinator, store)
+  })
+
+  it('an undo whose store update throws leaves the scene and cursor as before', () => {
+    const { coordinator, store } = createAdmissionHarness()
+    expect(coordinator.run('move', moveFirstPlant)).toBe(true)
+    const update = store.updatePersisted.bind(store)
+    vi.spyOn(store, 'updatePersisted')
+      .mockImplementationOnce(() => { throw new Error('store update failed') })
+      .mockImplementation(update)
+
+    expect(() => coordinator.undo()).toThrow('store update failed')
+
+    expect(store.persisted.plants[0]?.position).toEqual({ x: 44, y: 55 })
+    expect(coordinator.canUndo.value).toBe(true)
+    expect(coordinator.canRedo.value).toBe(false)
+    expect(coordinator.undo()).toBe(true)
+    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
+    expect(coordinator.undo()).toBe(false)
+  })
+
+  it('a hydration that throws releases and rethrows, and the next command runs', () => {
+    const invalidate = vi.fn<(kind: SceneEditInvalidationKind) => void>()
+      .mockImplementationOnce(() => { throw new Error('hydration invalidation failed') })
+    const { coordinator, store } = createAdmissionHarness({ invalidate })
+    const next = makeFile()
+    next.plants[0]!.position = geoAt(55, 66)
+
+    expect(() => coordinator.hydrate(next)).toThrow('hydration invalidation failed')
+
+    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(55, 66))
+    expect(invalidate).toHaveBeenCalledOnce()
+    expectNextCommandRuns(coordinator, store)
+  })
+
+  it('a replacement that throws releases and rethrows, and the next command runs', () => {
+    const { coordinator, store } = createAdmissionHarness()
+    const next = makeFile()
+    next.plants[0]!.position = geoAt(55, 66)
+    const finalizeReplacement = vi.fn(() => { throw new Error('replacement finalizer failed') })
+
+    expect(() => coordinator.replaceDocument(next, {
+      token: createCanvasDocumentReplacementToken(),
+      prepare: () => {},
+      finalizeReplacement,
+    })).toThrow('replacement finalizer failed')
+
+    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(55, 66))
+    expect(finalizeReplacement).toHaveBeenCalledOnce()
+    expectNextCommandRuns(coordinator, store)
   })
 })

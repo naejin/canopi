@@ -195,7 +195,7 @@ Also after an internal fault only: a cancellation that throws aborts the open ed
 - **0B-5 items 7 and 18, the "no tool armed" path** (INV-ENT-17): `setTool` is still `setTool(name: string)` (`runtime.ts`, `command-surface.ts`); typing it `ToolId` end to end is free: the 2.0 cleanup deleted the source-text pins in `__tests__/canvas-runtime-surfaces.test.ts` (T1). Taken by U33 (P28): phase 2's cut row 12 (A3).
 - **0B-5 item 9, the press-capture hold-back** (`heldCapture`/`_pressCapture`): kept, since `dom-input-source.ts` uses it to catch a synchronous `lostpointercapture` while capture is being taken (`tool-host.test.ts` "a press whose capture is lost while it is taken stops before the tool").
 - **0B-5 item 19, the session's construction rollback** (`interaction-session.ts`'s `own()`/`rollback`): not half-built; four tests rely on it to remove DOM nodes and listeners when a later dependency throws. Not a blind delete.
-- **The "one admission per press, resume once" detail** (`tool-host.ts`'s `runWhenSettled` with `resumePending`, `scene-runtime/transactions.ts`; audit section 3): cut by phase 2's cut stage (U33, P1).
+- **The document session's retained-replacement retry** (`app/document-session/{replacement,state-machine}.ts`, `web/browser-design-session.ts`): stays. Since phase 2's cut row 2 (P1) a Scene replacement runs once and never resumes, so the session's retry is a fresh `replaceDocument`; whether the session still needs its own retained request is canopi-224j's question.
 
 LiDAR's Return to Design keeps the exact view with the bookmark rules of exception 3 (U8, user): not an open choice.
 

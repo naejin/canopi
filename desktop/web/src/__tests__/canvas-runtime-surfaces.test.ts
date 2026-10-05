@@ -210,7 +210,6 @@ describe('canvas runtime surfaces', () => {
       expect(historyAvailabilitySource).toContain('options.settledReader.readWhenSettled(')
       expect(historyAvailabilitySource).not.toContain('commandAdmission')
       expect(historyAvailabilitySource).not.toContain('runWhenSettled')
-      expect(historyAvailabilitySource).not.toContain('resumePending')
     }
     expect(mutationsSource).toContain('settledReader: SettledSceneReader')
     expect(mutationsSource).toContain('this._settledReader.readWhenSettled(')

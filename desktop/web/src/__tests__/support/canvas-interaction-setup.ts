@@ -388,35 +388,6 @@ export function groupTarget(id: string): SceneDesignObjectTarget {
   return { kind: 'group', id }
 }
 
-export function createRecoveringCommandAdmission(): {
-  readonly admission: SceneCommandAdmission
-  readonly recoveryCalls: ReturnType<typeof vi.fn>
-} {
-  let pendingSettlement = true
-  const recoveryCalls = vi.fn()
-  return {
-    admission: {
-      revision: signal(0),
-      // As the scene's coordinator: a pending settlement answers busy to every admission, and only one that asks to
-      // resume it recovers it (the ToolHost's raw-press admission does not ask; the press's own admission does).
-      runWhenSettled<T>(
-        operation: () => T,
-        busyResult: T,
-        options: { resumePending?: boolean } = {},
-      ): T {
-        if (pendingSettlement) {
-          if (options.resumePending !== true) return busyResult
-          pendingSettlement = false
-          recoveryCalls(true)
-          return busyResult
-        }
-        return operation()
-      },
-    },
-    recoveryCalls,
-  }
-}
-
 export function createAbortFailingSceneEdits(
   base: SceneEditCoordinator,
   targetType: string,

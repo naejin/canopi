@@ -1382,7 +1382,7 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
-  it('retries a quarantined history replay through the public command surface', () => {
+  it('an undo whose render publication throws keeps its step through the public command surface', () => {
     const runtime = new SceneCanvasRuntime()
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
     const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
@@ -1398,19 +1398,15 @@ describe('scene canvas runtime', () => {
 
     expect(() => runtime.commandSurface.history.undo())
       .toThrow('history render publication failed')
-    expect(invalidate).toHaveBeenCalledTimes(1)
     expect(runtime.commandSurface.history.canUndo.value).toBe(false)
-    expect(runtime.commandSurface.history.canRedo.value).toBe(false)
-    expect(invalidate).toHaveBeenCalledTimes(1)
+    expect(runtime.commandSurface.history.canRedo.value).toBe(true)
     // A lone Plant frames the session plane at its origin.
     expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(0)
 
+    // Nothing waits to be resumed: a second undo has nothing left to undo.
     runtime.commandSurface.history.undo()
-
-    expect(invalidate).toHaveBeenCalledTimes(2)
-    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+    expect(invalidate).toHaveBeenCalledTimes(1)
     expect(runtime.commandSurface.history.canRedo.value).toBe(true)
-    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(0)
     invalidate.mockRestore()
     runtime.destroy()
   })

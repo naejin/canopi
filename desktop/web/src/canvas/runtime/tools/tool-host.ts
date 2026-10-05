@@ -594,7 +594,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (!activeTool || button === 'secondary') return
     if (live && live.id !== pointerId) return
     if (target.kind === 'owned-text' || (target.kind === 'owned-chrome' && target.lockedAffordance)) return
-    // Admission without resuming a pending edit: the press that follows resumes it, once, as today's one admission did.
+    // Runs only while the Scene is settled; a refused raw press does nothing, and the press that follows asks again.
     deps.admission.runWhenSettled(() => {
       deps.menu.close()
       // Today's Text took the click that found its note field open to commit the note, and placed nothing (spec §3.2).
@@ -624,7 +624,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const admitted = deps.admission.runWhenSettled(() => {
       claimed = pressWhenSettled(g, commitsNote)
       return true
-    }, false, { resumePending: true })
+    }, false)
     if (!admitted) return REFUSED_PRESS
     return claimed ? CLAIMED_PRESS : NOTHING
   }
@@ -734,7 +734,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const admitted = deps.admission.runWhenSettled(() => {
       cancelOnFailure(finish)
       return true
-    }, false, { resumePending: true })
+    }, false)
     if (admitted) return NOTHING
     cancelTransientInteraction('tool-change')
     return QUARANTINE
@@ -888,7 +888,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const admitted = deps.admission.runWhenSettled(() => {
       placeDrop(at, payload)
       return true
-    }, false, { resumePending: true })
+    }, false)
     return admitted ? NOTHING : QUARANTINE
   }
 
@@ -1282,7 +1282,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       const tool = activeTool
       if (!tool || currentId !== 'plant-stamp') return 'pass'
       return callTool(() => tool.command({ kind: 'place-at', world: snap(world, false) }))
-    }, 'pass' as ToolReply, { resumePending: true })
+    }, 'pass' as ToolReply)
   }
 
   // ── The host ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -1316,7 +1316,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       if (c.kind === 'place-at') return placeAt(c.world)
       const tool = activeTool
       if (!tool) return 'pass'
-      return deps.admission.runWhenSettled(() => callTool(() => tool.command(c)), 'pass' as ToolReply, { resumePending: true })
+      return deps.admission.runWhenSettled(() => callTool(() => tool.command(c)), 'pass' as ToolReply)
     },
     menuAt(at: ScreenPoint | 'selection', source: MenuSource): GestureOutcome {
       if (disposed) return NOTHING
@@ -1335,7 +1335,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         if (at === 'selection') deps.menu.open({ at, source, screen: null, hit: null })
         else openMenuAt(at, source)
         return true
-      }, false, { resumePending: true })
+      }, false)
       return !admitted || duringEdit ? QUARANTINE : NOTHING
     },
     setTool,

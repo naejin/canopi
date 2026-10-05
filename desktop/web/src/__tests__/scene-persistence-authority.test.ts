@@ -138,7 +138,7 @@ describe('Settled Scene persistence authority', () => {
     expect(history.isClean).toBe(false)
   })
 
-  it('rejects capture while a partially applied history replay is quarantined', () => {
+  it('captures the undone state at once after an undo whose selection replay throws', () => {
     const store = new SceneStore()
     const history = new SceneHistory()
     let selectionFailures = 0
@@ -166,9 +166,8 @@ describe('Settled Scene persistence authority', () => {
     selectionFailures = 1
     expect(() => authority.undo()).toThrow('selection replay failed')
     expect(store.persisted.plantSpeciesColors['Malus domestica']).toBeUndefined()
-    expect(() => authority.capturePersistence()).toThrow('scene-history-undo')
 
-    expect(authority.undo()).toBe(true)
+    // The undo kept its step and released the Scene: nothing waits to be resumed.
     const capture = authority.capturePersistence()
     expect(capture.acknowledgeSaved()).toBe('applied')
     expect(history.isClean).toBe(true)

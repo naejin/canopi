@@ -433,8 +433,8 @@ describe('ToolHost', () => {
       const h = harness({
         admission: {
           revision: signal(0),
-          runWhenSettled: <T,>(operation: () => T, busyResult: T, options?: { resumePending?: boolean }) => {
-            admitted.push(`${busy ? 'refused' : 'admitted'}:${options?.resumePending ?? false}`)
+          runWhenSettled: <T,>(operation: () => T, busyResult: T) => {
+            admitted.push(busy ? 'refused' : 'admitted')
             return busy ? busyResult : operation()
           },
         },
@@ -445,7 +445,7 @@ describe('ToolHost', () => {
       h.move({ x: 60, y: 40 })
       admitted.length = 0
       expect(h.release({ x: 80, y: 60 })).toEqual({})
-      expect(admitted).toEqual(['admitted:true'])
+      expect(admitted).toEqual(['admitted'])
       expect(select.count('drag-end')).toBe(1)
 
       // The scene is busy at the release: the tool is cancelled, as today's refused pointerup cancelled the transient.
@@ -454,7 +454,7 @@ describe('ToolHost', () => {
       busy = true
       admitted.length = 0
       expect(h.release({ x: 80, y: 60 })).toEqual({ quarantine: true })
-      expect(admitted).toEqual(['refused:true'])
+      expect(admitted).toEqual(['refused'])
       expect(select.count('drag-end')).toBe(1)
       expect(select.last('cancel')).toEqual({ kind: 'cancel', reason: 'tool-change' })
       expect(select.calls.at(-1)).toBe('cancelTransient:tool-change')

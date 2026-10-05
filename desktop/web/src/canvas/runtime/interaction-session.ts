@@ -940,7 +940,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         this._deps.commandAdmission.runWhenSettled(
           () => this._toolHost.sourceChanged(toolSourceFor('plant-stamp')),
           undefined,
-          { resumePending: true },
         )
       })
     })

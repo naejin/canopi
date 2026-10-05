@@ -224,8 +224,8 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('clears a committed text draft when a later event settles retained publication', () => {
-    let invalidationFailures = 2
+  it('keeps a committed note once when its publication throws, and the next press opens a new note', () => {
+    let invalidationFailures = 1
     const baseDeps = createInteractionDeps(container, store, testView)
     const sceneEdits = new SceneRuntimeEditCoordinator({
       sceneStore: store,
@@ -256,14 +256,13 @@ describe('SceneInteractionSession', () => {
 
     expect(errors).toHaveLength(1)
     expect(store.persisted.annotations).toHaveLength(1)
-    expect(noteEntry()).toBe(textarea)
-
-    const recoveryPointerDown = events.pointerDown({ x: 80, y: 90 }, { button: 0 })
-
-    expect(recoveryPointerDown.defaultPrevented).toBe(true)
-    expect(store.persisted.annotations).toHaveLength(1)
     expect(container.querySelector('textarea')).toBeNull()
-    textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+
+    // Nothing waits to be resumed: the next press is admitted and opens a new note.
+    events.pointerDown({ x: 80, y: 90 }, { button: 0 })
+
+    expect(noteEntry()).not.toBeNull()
+    expect(noteEntry()).not.toBe(textarea)
     expect(store.persisted.annotations).toHaveLength(1)
     session.dispose()
   })

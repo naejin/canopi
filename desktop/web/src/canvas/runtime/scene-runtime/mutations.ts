@@ -251,7 +251,6 @@ export class SceneRuntimeMutationController {
     return this._commandAdmission.runWhenSettled(
       operation,
       busyResult,
-      { resumePending: true },
     )
   }
 

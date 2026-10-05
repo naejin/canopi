@@ -197,14 +197,12 @@ export class SceneCanvasRuntime {
         this._sceneCommands.runWhenSettled(
           () => this._setSelection(targets),
           undefined,
-          { resumePending: true },
         )
       },
       clearSelection: () => {
         this._sceneCommands.runWhenSettled(
           () => this._setSelection([]),
           undefined,
-          { resumePending: true },
         )
       },
       sceneEdits: this._sceneCommands,

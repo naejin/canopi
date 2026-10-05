@@ -279,7 +279,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     if (!series) return
     this.nudge = null
     if (options.abort || (series.total.x === 0 && series.total.y === 0)) series.edit.abort()
-    else series.edit.commit({ invalidate: 'scene' })
+    else series.edit.commit()
     this.options.invalidate('scene')
   }
 
@@ -303,7 +303,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
         selection,
         localizedCommonNames: new Map(this.options.presentation.getLocalizedCommonNames()),
       })
-    }, undefined, { resumePending: true })
+    }, undefined)
   }
 
   // Hydrates through a frame at the runtime's own plane origin, so imported
@@ -343,7 +343,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
         historyType: 'import-design-objects',
       })
       return { committed: receipt.committed, createdCount: receipt.createdCount }
-    }, DESIGN_OBJECTS_NOT_IMPORTED, { resumePending: true })
+    }, DESIGN_OBJECTS_NOT_IMPORTED)
   }
 
   private runSpatialEdit(operation: () => void): void {
@@ -355,14 +355,14 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     this.options.commandAdmission.runWhenSettled(() => {
       if (this.options.transientHistory.undo()) return
       this.options.history.undo()
-    }, undefined, { resumePending: true })
+    }, undefined)
   }
 
   private redo(): void {
     this.options.commandAdmission.runWhenSettled(() => {
       if (this.options.transientHistory.redo()) return
       this.options.history.redo()
-    }, undefined, { resumePending: true })
+    }, undefined)
   }
 
   private toggleRulers(): void {
@@ -376,14 +376,13 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       return this.setSceneLayerStateWhenSettled(name, {
         opacity: Math.min(1, Math.max(0, opacity)),
       })
-    }, false, { resumePending: true })
+    }, false)
   }
 
   private setSceneLayerState(name: string, edit: SceneLayerEdit): boolean {
     return this.options.commandAdmission.runWhenSettled(
       () => this.setSceneLayerStateWhenSettled(name, edit),
       false,
-      { resumePending: true },
     )
   }
 

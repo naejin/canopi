@@ -37,7 +37,6 @@ import {
   annotationTarget,
   measurementGuideTarget,
   groupTarget,
-  createRecoveringCommandAdmission,
   createAbortFailingSceneEdits,
   plantHoverTooltip,
   nextAnimationFrame,
@@ -1503,76 +1502,6 @@ describe('SceneInteractionSession', () => {
       .toEqual({ x: 50, y: 60 })
     expect(onSceneEditCommit).toHaveBeenCalledOnce()
     session.dispose()
-  })
-
-  it('quarantines the pointerdown that recovers pending Scene settlement', () => {
-    store.updatePersisted((draft) => {
-      draft.plants = [
-        makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }),
-        makePlant('plant-2', 'Pyrus communis', { x: 120, y: 30 }),
-      ]
-    })
-    const { admission, recoveryCalls } = createRecoveringCommandAdmission()
-    const baseDeps = createInteractionDeps(container, store, testView)
-    const deps: SceneInteractionSessionDeps = {
-      ...baseDeps,
-      commandAdmission: admission,
-      setSelection: (ids) => admission.runWhenSettled(
-        () => baseDeps.setSelection(ids),
-        undefined,
-        { resumePending: true },
-      ),
-    }
-    const session = createTestSession(deps)
-    session.setTool('select')
-    baseDeps.setSelection([plantTarget('plant-1')])
-    const before = store.persisted
-
-    events.pointerDown({ x: 120, y: 30 }, { pointerId: 43 })
-    events.pointerMove({ x: 150, y: 60 }, { pointerId: 43 })
-    events.pointerUp({ x: 150, y: 60 }, { pointerId: 43 })
-
-    expect(recoveryCalls).toHaveBeenCalledOnce()
-    expect(recoveryCalls).toHaveBeenCalledWith(true)
-    expect(store.persisted).toEqual(before)
-    expect(store.session.selectedTargets).toEqual([plantTarget('plant-1')])
-  })
-
-  it('quarantines the contextmenu that recovers pending Scene settlement', () => {
-    store.updatePersisted((draft) => {
-      draft.plants = [
-        makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }),
-        makePlant('plant-2', 'Pyrus communis', { x: 120, y: 30 }),
-      ]
-    })
-    const { admission, recoveryCalls } = createRecoveringCommandAdmission()
-    const baseDeps = createInteractionDeps(container, store, testView)
-    const deps: SceneInteractionSessionDeps = {
-      ...baseDeps,
-      commandAdmission: admission,
-      setSelection: (ids) => admission.runWhenSettled(
-        () => baseDeps.setSelection(ids),
-        undefined,
-        { resumePending: true },
-      ),
-    }
-    const session = createTestSession(deps)
-    session.setTool('select')
-    baseDeps.setSelection([plantTarget('plant-1')])
-    const point = events.clientPoint({ x: 120, y: 30 })
-    const contextMenu = new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: point.x,
-      clientY: point.y,
-    })
-
-    container.dispatchEvent(contextMenu)
-
-    expect(recoveryCalls).toHaveBeenCalledOnce()
-    expect(recoveryCalls).toHaveBeenCalledWith(true)
-    expect(store.session.selectedTargets).toEqual([plantTarget('plant-1')])
-    expect(contextMenuHost.opened).toHaveLength(0)
   })
 
   it('opens the empty-map menu with Place plants here, Paste and Select all at the pointer', () => {

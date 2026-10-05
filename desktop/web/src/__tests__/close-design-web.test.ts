@@ -140,7 +140,7 @@ describe('Web Close Design', () => {
     const { store, appDataStore, controller, session } = setup()
     await controller.newDesign()
     editDesignSessionForTest(store, (design) => ({ ...design, description: 'last edit' }))
-    session.history.record({ type: 'test-edit' } as unknown as SceneCommand, {})
+    session.history.record({ type: 'test-edit' } as unknown as SceneCommand, () => {})
 
     await expect(controller.closeDesign()).resolves.toBe(true)
 

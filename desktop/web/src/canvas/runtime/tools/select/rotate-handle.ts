@@ -114,7 +114,7 @@ export function finishRotation(drag: RotationDrag, point: ToolPoint): void {
     return
   }
   try {
-    drag.tx.commit({ invalidate: 'scene' })
+    drag.tx.commit()
     drag.open = false
   } catch (error) {
     try {

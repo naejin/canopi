@@ -80,7 +80,7 @@ export function hasMoved(drag: MoveDrag): boolean {
 export function commitMoveDrag(drag: MoveDrag): void {
   if (!drag.open) return
   try {
-    drag.tx.commit({ invalidate: 'scene' })
+    drag.tx.commit()
     drag.open = false
   } catch (error) {
     try {
