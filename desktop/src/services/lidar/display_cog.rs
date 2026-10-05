@@ -43,7 +43,9 @@ pub(super) const DISPLAY_PROFILE: &str = "display-cog-3857-v2";
 /// SHA-256 of what places and draws this profile's pixels beyond each CRS
 /// row's own definition (proj4rs, the Web Mercator and WGS84 rows, the
 /// warp's lattices for sample grids and the web fixture derivative); a test
-/// fails when any changes, so the profile is bumped with it.
+/// fails when any changes, so the profile is bumped with it. Each row's
+/// definition is recorded on its own (`ROW_DIGESTS` in the tests), so a new
+/// row needs no bump and an edited one does.
 #[cfg(test)]
 const DISPLAY_PROFILE_DIGEST: &str =
     "2e4ed2b2fa51a71af44dfece8b15ac2d6659dde5b45f95346ffb288553381a3d";
@@ -1439,8 +1441,8 @@ mod library_tests {
     /// `DISPLAY_PROFILE` (and then the digest): derivatives written before
     /// it would otherwise be served again beside new ones. Lattices are
     /// whole pixel indices, so a last-bit difference in a platform's libm
-    /// cannot change them. Other rows stay out: each row's reference points
-    /// pin it within 1 cm of PROJ, and a new row moves no existing pixel.
+    /// cannot change them. Other rows stay out, since a new row moves no
+    /// existing pixel; each is recorded on its own in [`ROW_DIGESTS`].
     fn profile_digest_inputs() -> String {
         use super::super::rust_engine::{crs_table, display_lattice, display_zoom};
         use sha2::Digest as _;
@@ -1508,6 +1510,259 @@ mod library_tests {
                 row.code
             );
         }
+    }
+
+    /// Each readable code (rows and aliases) with the first 16 hex digits
+    /// of the SHA-256 of the PROJ definition it is read with, as recorded
+    /// under `DISPLAY_PROFILE`. A new code adds a line; an edited one moves
+    /// pixels in derivatives users already have, so it bumps the profile.
+    const ROW_DIGESTS: &str = "\
+2056 299374e00df0843b
+2100 4d3c4277d45710eb
+2154 6f46dcd489d2aa67
+2169 2717ba968a395c0d
+2972 f1aeba19af41bbd3
+2975 6bff6f711311c136
+3035 743cbe1b4e3347df
+3812 d63f383e5337736d
+3857 00ec30c2eb6aa0a6
+3942 8eca8f35f82dedb2
+3943 3d53495cd228b4f7
+3944 55afb61416b01786
+3945 a0dcb0c7334f98b8
+3946 c21003c2afed0c5d
+3947 cf5bd4e0406003b3
+3948 83d09ac7c306c754
+3949 1dd822049d6bcb4c
+3950 c9c156976d566b00
+4171 1b8468790c7a0b42
+4258 1b8468790c7a0b42
+4326 88239a63bf06662a
+4471 84411064ff67da9a
+4559 6ab54543cbf94783
+5490 6ab54543cbf94783
+5514 abc8796d8e59a6f0
+5698 6f46dcd489d2aa67
+5699 6f46dcd489d2aa67
+7415 a8b6ae08039fdc9e
+21781 87c280362e8e310d
+25828 9c865d877836d9e2
+25829 b8fa5243a310ed34
+25830 c6811a6321f1d601
+25831 e928142a05b9a7ed
+25832 a7fc0cbd6f210359
+25833 d5b7d9b7d5305c89
+25834 14c80471fa3fd33b
+25835 41c90776dcad89f0
+25836 8658975f732fcc6f
+25837 351b88d9e55367be
+25838 2210b236dbea82f6
+27572 5d2807918bb8f426
+27700 f0b39268d10f88ca
+28992 a8b6ae08039fdc9e
+31287 26aa002814c76c58
+31370 c488995a6e11d34c
+32601 6ca7c6de52a2cd96
+32602 3cfae13bc5729eaa
+32603 1def0cac9ef9fce4
+32604 269158898e087ee3
+32605 127d981e5fe9b68c
+32606 157acf2234bf4471
+32607 97135e2f4822c8f1
+32608 69458294f75d0bb4
+32609 e96db910a95e5c85
+32610 e240383c11a156c2
+32611 d25d0242aff9ecfa
+32612 dba0c69497ff16f5
+32613 f0c01871954ea3f2
+32614 75596be93acbf13b
+32615 9dca60c9a992bf74
+32616 df322022bd3fb02b
+32617 1b398697acf02751
+32618 028c9e724a0e1de7
+32619 70d586bd6896c797
+32620 b7162c880d1f92a4
+32621 62b79385619f535e
+32622 4aa230b9266b1e1b
+32623 fb7cd3519d640bb7
+32624 f0249443521a9691
+32625 8d6f106ff5c4f8dd
+32626 129b27e7d488b614
+32627 d1901902896ac420
+32628 ba3526568356b2d7
+32629 7ebc6ebff2b2adc5
+32630 6e615b79c3da0c94
+32631 d26c0354a6b514f4
+32632 c63ba2239d1d6ea3
+32633 46f994704f0c11d4
+32634 80a189a18cdb5100
+32635 7645c73e6caba198
+32636 aa7bc2849f32e299
+32637 8d4bf53f0c4594f0
+32638 18f301abe3901ff5
+32639 898398358c57fb0e
+32640 6b017f4b59c70fd8
+32641 577dcee5784bbb52
+32642 22f8b3afd36816e5
+32643 382e716b590fe613
+32644 03fca9b2d4948fe2
+32645 ee4a7c0690e91e70
+32646 e89559f5cd86228f
+32647 6e258504bba7e71d
+32648 9b9ab6902ee321b0
+32649 1398ec9ee40f07ed
+32650 058c3eabe5714255
+32651 fdb16ce4a89aa392
+32652 f3b40d2addd46e17
+32653 62dc8d4c983e8cc7
+32654 506d40f1e99a1462
+32655 87f1375587266407
+32656 2711d138c758bd4c
+32657 66924886430b7be4
+32658 67125e3332cd5f6e
+32659 27a1e553fd6e6a40
+32660 77ea6ad19b6c72f5
+32701 257895543bf23fc8
+32702 e3a78cb299975ab9
+32703 3b188721d7c44d4e
+32704 4678ed1863661d5f
+32705 6f60226226369fee
+32706 d6b5a421c2e622a6
+32707 c953f53d82464451
+32708 7f4f44f2ce254e49
+32709 53d55e131c41dbe3
+32710 56165b4ab2b35130
+32711 5d68607659943b33
+32712 30eda9f07f6ca830
+32713 0697e74b3fc8915b
+32714 8697ebbb7d5b549b
+32715 e8bd31ed39d2b7e3
+32716 8bfa602b88a8d372
+32717 6cfdc7a0c93555f4
+32718 81e898d02981e939
+32719 81a91fb4ce03e2a8
+32720 64e61e6c0520dda5
+32721 9ff3cdf277b582f1
+32722 efaf52eafb5deb63
+32723 7d156766a2c18fc1
+32724 e5ae864b91f141d8
+32725 a781a64ce312042f
+32726 e014df21f9f3d20f
+32727 164f8a2e6f71ab70
+32728 74634fe8d8be4424
+32729 65c77102467fb598
+32730 8b8b55204641aa0d
+32731 d737ee833137a69a
+32732 acb0d5fa1b1ab390
+32733 045b4ec6317f4119
+32734 aee61e30e085e1f6
+32735 e082169ec96f80f9
+32736 f543c886d145e8f4
+32737 d7a2e7bd3b717aba
+32738 716767141b066e76
+32739 97573a5a5bd22d62
+32740 01313080446c9665
+32741 256eb6ac2ec27109
+32742 544bed981a577078
+32743 762b2bd3be29bfa5
+32744 32aa236e2f1f5f43
+32745 8391a4b277f01d0a
+32746 2819f422a1325a97
+32747 a3d9ed3405becfde
+32748 5eac432ba2c6f002
+32749 6c9965affd1f82f5
+32750 41446ec67ba32508
+32751 8ab1146f9976f68f
+32752 6ffe971d672ee8fd
+32753 281be5d365d2082e
+32754 b738e7e4b6ffc649
+32755 dba577848a963f17
+32756 217c481d865c02fb
+32757 ddc7d755aaeb3ffc
+32758 64662f6a70656250
+32759 e7927d716867803a
+32760 2202ccee0a176760
+";
+
+    /// The current `code digest` lines of every readable code.
+    fn current_row_digests() -> BTreeMap<u32, String> {
+        use super::super::rust_engine::crs_table;
+        use sha2::Digest as _;
+        crs_table::ROWS
+            .iter()
+            .map(|row| row.code)
+            .chain(crs_table::ALIASES.iter().map(|(alias, _)| *alias))
+            .map(|code| {
+                let proj = crs_table::row_of(code).expect("a readable code").proj;
+                let digest = format!("{:x}", sha2::Sha256::digest(proj.as_bytes()));
+                (code, digest[..16].to_string())
+            })
+            .collect()
+    }
+
+    /// Codes whose definition changed since it was recorded, codes with no
+    /// record yet, and records of codes no longer read.
+    fn row_digest_changes(
+        recorded: &str,
+        current: &BTreeMap<u32, String>,
+    ) -> (Vec<u32>, Vec<u32>, Vec<u32>) {
+        let recorded: BTreeMap<u32, &str> = recorded
+            .lines()
+            .filter_map(|line| line.split_once(' '))
+            .map(|(code, digest)| (code.parse().expect("a recorded code"), digest))
+            .collect();
+        let edited = current
+            .iter()
+            .filter(|(code, digest)| recorded.get(code).is_some_and(|d| d != digest))
+            .map(|(code, _)| *code)
+            .collect();
+        let added = current
+            .keys()
+            .filter(|code| !recorded.contains_key(code))
+            .copied()
+            .collect();
+        let removed = recorded
+            .keys()
+            .filter(|code| !current.contains_key(code))
+            .copied()
+            .collect();
+        (edited, added, removed)
+    }
+
+    #[test]
+    fn an_edited_crs_row_is_told_apart_from_an_added_or_removed_one() {
+        let current = BTreeMap::from([
+            (2154, "aaaa".to_string()),
+            (28992, "bbbb".to_string()),
+            (32633, "cccc".to_string()),
+        ]);
+        assert_eq!(
+            row_digest_changes("2154 aaaa\n28992 ffff\n4559 dddd\n", &current),
+            (vec![28992], vec![32633], vec![4559])
+        );
+    }
+
+    /// The display profile digest leaves CRS rows out so a new code needs
+    /// no bump; an edited row or a re-pointed alias moves the pixels of its
+    /// items' derivatives, so it must bump `DISPLAY_PROFILE`.
+    #[test]
+    fn an_edited_crs_row_bumps_the_display_profile() {
+        let current = current_row_digests();
+        let (edited, added, removed) = row_digest_changes(ROW_DIGESTS, &current);
+        let table: String = current
+            .iter()
+            .map(|(code, digest)| format!("{code} {digest}\n"))
+            .collect();
+        assert!(
+            edited.is_empty(),
+            "the definition of {edited:?} changed: bump DISPLAY_PROFILE, then record \
+             ROW_DIGESTS as:\n{table}"
+        );
+        assert!(
+            added.is_empty() && removed.is_empty(),
+            "codes {added:?} added and {removed:?} removed: record ROW_DIGESTS as \
+             (no profile bump):\n{table}"
+        );
     }
 
     /// The profile names everything in [`profile_digest_inputs`].
