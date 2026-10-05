@@ -6,7 +6,7 @@
 //! factor and no datum on Web Mercator. A row's area bounds its reference
 //! points (`crs_reference_points.rs`, written by
 //! `scripts/gen_crs_reference_points.sh` from PROJ's `cs2cs`). The authority
-//! matches PROJ within 1 cm for the row's own shift, and its stated accuracy
+//! matches PROJ within 1 mm for the row's own shift, and its stated accuracy
 //! is how far PROJ's own choice of operation may sit from the row: 1 cm, and
 //! 3.1 m for Krovak (5514), whose row takes PROJ's Czech shift (EPSG:1623)
 //! where PROJ takes its Slovak one in Slovakia, 3.02 m off at its eastern

@@ -4,9 +4,10 @@
 //! Ignored by default and skipped cleanly when GDAL is not installed
 //! (`CANOPI_LIDAR_GDAL_BIN`, then `PATH`). It is the standing accuracy proof
 //! behind ADR 0014: probe facts, Float32 samples, the controlled profile, the
-//! display warp (against `gdalwarp` on the same lattice, A6), point
-//! transforms and statistics must agree within the tolerances stated beside
-//! each assertion. Run with
+//! display warp (against `gdalwarp` on the same lattice, A6) and statistics
+//! must agree within the tolerances stated beside each assertion. Point
+//! transforms are checked against PROJ on every `cargo test`
+//! (`crs::tests::every_row_matches_proj_on_its_reference_grid`). Run with
 //! `cargo test -p canopi-desktop --lib rust_engine::comparison -- --ignored --nocapture`;
 //! `CANOPI_LIDAR_REFERENCE_DIR` adds real tiles to the display comparison.
 
@@ -543,86 +544,6 @@ fn gdal_crs_class(wkt: &str) -> &'static str {
     }
 }
 
-/// Point transforms on a 9×9 lon/lat grid inside each table row's area of
-/// use (its inner 80%), in both directions, GDAL given the row's own PROJ
-/// definition, so the same Helmert shift whatever grids the machine's PROJ
-/// holds: forward within 1e-3 m, inverse within 1e-7 deg. How far PROJ's own
-/// choice of operation sits is the reference points' business
-/// (`crs::tests`).
-fn compare_transforms(report: &mut Report, gdal: &GdalEngine, rust: &RustRasterEngine) {
-    let c = cancel();
-    for row in super::crs_table::ROWS {
-        let code = &format!("EPSG:{}", row.code);
-        let [lon_min, lat_min, lon_max, lat_max] = row.area;
-        let mut geographic = Vec::new();
-        for i in 0..9 {
-            for j in 0..9 {
-                // Inset by a tenth, as the reference grids are: at an area's
-                // corners PROJ may have no shift to take.
-                let along = |n: i32| 0.1 + 0.8 * f64::from(n) / 8.0;
-                geographic.push((
-                    lon_min + (lon_max - lon_min) * along(i),
-                    lat_min + (lat_max - lat_min) * along(j),
-                ));
-            }
-        }
-        let a = gdal
-            .transform_points("EPSG:4326", row.proj, &geographic, &c)
-            .expect("GDAL forward");
-        let b = rust
-            .transform_points("EPSG:4326", code, &geographic, &c)
-            .expect("Rust forward");
-        let mut forward = 0f64;
-        let mut projected = Vec::new();
-        for (index, (x, y)) in a.iter().zip(&b).enumerate() {
-            let (Some(x), Some(y)) = (x, y) else {
-                panic!("{code}: point {index} placed by one engine only ({x:?} vs {y:?})");
-            };
-            forward = forward.max((x.0 - y.0).abs().max((x.1 - y.1).abs()));
-            projected.push(*x);
-        }
-        let a = gdal
-            .transform_points(row.proj, "EPSG:4326", &projected, &c)
-            .expect("GDAL inverse");
-        let b = rust
-            .transform_points(code, "EPSG:4326", &projected, &c)
-            .expect("Rust inverse");
-        let mut inverse = 0f64;
-        for (x, y) in a.iter().zip(&b) {
-            let (Some(x), Some(y)) = (x, y) else {
-                panic!("{code}: inverse placed by one engine only");
-            };
-            inverse = inverse.max((x.0 - y.0).abs().max((x.1 - y.1).abs()));
-        }
-        report.note(format!(
-            "{code}: forward max deviation {forward:.3e} m over {} points in [{lon_min}, {lon_max}]x[{lat_min}, {lat_max}], inverse {inverse:.3e} deg",
-            geographic.len()
-        ));
-        assert!(forward <= 1e-3, "{code}: forward deviation {forward} m");
-        assert!(inverse <= 1e-7, "{code}: inverse deviation {inverse} deg");
-    }
-    // Outside a UTM zone the transverse Mercator series diverges from PROJ's
-    // extended algorithm; recorded, not asserted, so the ADR's caveat has numbers.
-    let mut points = Vec::new();
-    for offset in [0.0, 3.0, 6.0, 9.0, 12.0, 15.0] {
-        points.push((9.0 + offset, 48.0));
-    }
-    let a = gdal
-        .transform_points("EPSG:4326", "EPSG:32632", &points, &c)
-        .expect("GDAL forward");
-    let b = rust
-        .transform_points("EPSG:4326", "EPSG:32632", &points, &c)
-        .expect("Rust forward");
-    for ((lon, _), (x, y)) in points.iter().zip(a.iter().zip(&b)) {
-        let (Some(x), Some(y)) = (x, y) else { continue };
-        report.note(format!(
-            "EPSG:32632 at {:.0} deg from the central meridian: deviation {:.3e} m (not asserted)",
-            lon - 9.0,
-            (x.0 - y.0).abs().max((x.1 - y.1).abs())
-        ));
-    }
-}
-
 fn write_raw(dir: &Path, name: &str, width: u32, height: u32) -> PathBuf {
     let values: Vec<f32> = (0..height)
         .flat_map(|y| (0..width).map(move |x| authored(x, y)))
@@ -803,7 +724,6 @@ fn the_rust_engine_matches_gdal_on_the_same_inputs() {
         report.note(format!("reference tile: {}", tile.display()));
         compare_display(&mut report, &label, &tile, &dir, &gdal, &rust, None);
     }
-    compare_transforms(&mut report, &gdal, &rust);
 
     println!("\n=== engine comparison report ===");
     for line in &report.lines {

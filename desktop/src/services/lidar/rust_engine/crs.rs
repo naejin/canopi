@@ -523,7 +523,8 @@ mod tests {
     }
 
     /// Each row against PROJ on its 3x3 reference grid, as a distance: within
-    /// 1 cm of PROJ with the row's own Helmert shift, within the row's stated
+    /// 1 mm of PROJ with the row's own Helmert shift (`cs2cs` prints nine
+    /// decimals; 1.05e-4 m measured), within the row's stated
     /// accuracy of PROJ's own operation, which no row puts beyond 10 m (U31),
     /// and back to the same longitude and latitude within 3e-8 deg (3 mm: a
     /// 2-D transform drops the ellipsoidal height a datum shift moves; 2.2e-8
@@ -556,7 +557,7 @@ mod tests {
                 );
             }
             assert!(
-                by_row <= 0.01,
+                by_row <= 1e-3,
                 "EPSG:{} is {by_row} m from PROJ with the same shift",
                 row.code
             );
