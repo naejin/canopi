@@ -767,11 +767,14 @@ pub(super) fn prune_display_derivatives(library: &LidarLibrary) -> Result<(), St
 /// Free bytes a display derivative of a raw (uncompressed) source asset of
 /// `source_bytes` may need.
 fn display_free_bytes(source_bytes: u64) -> u64 {
-    // The Web Mercator rung can hold about four times the source's pixels,
-    // and Deflate without a predictor barely shrinks Float32: values it
-    // cannot compress measured about twice the raw source with overviews
-    // (a test), so three times is the ceiling.
-    source_bytes.saturating_mul(3)
+    // The Web Mercator rung is the finest whose pixel fits inside a cell as
+    // it lands there, so the source's pixels grow up to four times on an
+    // unrotated grid and up to sixteen times on one turned 45° (LAEA Europe
+    // near its edges). Repeated nearest-neighbour samples compress, but
+    // Deflate barely shrinks Float32 values: the worst supported case
+    // measured about 4.4 times the raw source with overviews (a test), so
+    // five times is the ceiling.
+    source_bytes.saturating_mul(5)
 }
 
 #[cfg(test)]
@@ -779,11 +782,23 @@ mod tests {
     use super::*;
 
     /// The free-space check before a derivative covers what the warp writes
-    /// at its worst: values Deflate cannot shrink, at the rung that gives
-    /// about four times the source's pixels (0.82 m Lambert-93 cells near
-    /// 46°N draw at zoom 18).
+    /// at its worst: values Deflate cannot shrink, on a cell just above a
+    /// rung. An unrotated grid draws at up to four times its pixels (0.82 m
+    /// Lambert-93 cells near 46°N draw at zoom 18); a grid turned against
+    /// Web Mercator draws at up to sixteen times (LAEA Europe at 40°E 40°N,
+    /// and near its western edge at 80°N, where cells turn about 45°).
     #[test]
     fn the_free_space_asked_for_a_derivative_covers_the_finest_rung() {
+        for (crs, origin, cell, min_pixels) in [
+            ("EPSG:2154", [700_000.0, 6_600_000.0], 0.82, 3.5),
+            ("EPSG:3035", [6_820_000.0, 2_383_000.0], 0.5955, 11.0),
+            ("EPSG:3035", [3_503_900.0, 6_592_190.0], 0.5955, 16.0),
+        ] {
+            assert_derivative_fits(crs, origin, cell, min_pixels);
+        }
+    }
+
+    fn assert_derivative_fits(crs: &str, origin: [f64; 2], cell: f64, min_pixels: f64) {
         use super::super::engine::{RasterEngine, RasterGeoref, RasterInput};
         let engine = super::super::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
@@ -803,7 +818,7 @@ mod tests {
         let grid = RasterGrid {
             width: side,
             height: side,
-            geotransform: [700_000.0, 0.82, 0.0, 6_600_000.0, 0.0, -0.82],
+            geotransform: [origin[0], cell, 0.0, origin[1], 0.0, -cell],
         };
         let source = root.join("source.tif");
         engine
@@ -813,15 +828,12 @@ mod tests {
                     values: &values,
                 },
                 &source,
-                Some(RasterGeoref {
-                    grid: &grid,
-                    crs: "EPSG:2154",
-                }),
+                Some(RasterGeoref { grid: &grid, crs }),
                 Some(-9999.0),
                 &cancel,
             )
             .unwrap();
-        let zoom = super::super::rust_engine::display_zoom("EPSG:2154", [&grid]).unwrap();
+        let zoom = super::super::rust_engine::display_zoom(crs, [&grid]).unwrap();
         let display = root.join("display.tif");
         engine
             .write_display_cog(
@@ -835,15 +847,15 @@ mod tests {
             .unwrap();
         let probe = engine.probe(&display, &cancel).unwrap();
         let pixels = f64::from(probe.width) * f64::from(probe.height);
-        assert!(
-            pixels > 3.5 * f64::from(side * side),
-            "the fixture draws at the finest rung: {pixels} pixels"
-        );
         let source_bytes = std::fs::metadata(&source).unwrap().len();
         let display_bytes = std::fs::metadata(&display).unwrap().len();
         assert!(
+            pixels > min_pixels * f64::from(side * side),
+            "{crs}: the fixture draws at the finest rung: {pixels} pixels"
+        );
+        assert!(
             display_bytes <= display_free_bytes(source_bytes),
-            "{display_bytes} bytes written, {} asked for",
+            "{crs}: {display_bytes} bytes written, {} asked for",
             display_free_bytes(source_bytes)
         );
         let _ = std::fs::remove_dir_all(&root);
