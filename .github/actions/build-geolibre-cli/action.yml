@@ -5,8 +5,8 @@ description: >-
   bundles beside the application executable. The binary is downloaded from the
   release tagged geolibre-cli-<revision>; on a miss it is built from source and,
   when `publish` is true on a push to main or feature/geolibre-adoption, uploaded
-  to that release so later runs skip the build. The publishing job needs
-  `contents: write`.
+  to that release so later runs skip the build. Only Build & Test's geolibre-cli
+  job publishes; it alone has `contents: write`.
 
 inputs:
   publish:

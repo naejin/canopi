@@ -293,9 +293,6 @@ jobs:
       (github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository)
     timeout-minutes: 90
-    # Publishes a freshly built GeoLibre CLI to its revision's release (push only).
-    permissions:
-      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -356,8 +353,6 @@ jobs:
       # The sidecar must exist before `tauri build`: build.rs bundles it only
       # when desktop/binaries holds it for the target (the runner's host).
       - uses: ./.github/actions/build-geolibre-cli
-        with:
-          publish: "true"
 
       - name: Build Tauri app
         run: npx --prefix desktop/web @tauri-apps/cli build --target ${{ matrix.target }} ${{ matrix.bundle_args }} -- --locked
