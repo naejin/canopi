@@ -335,10 +335,11 @@ impl Mesh {
 }
 
 /// The derivative's band: each output window warped from the native window
-/// under it.
+/// under it, `nodata` everywhere the footprint does not reach.
 struct Warp<'a> {
     band: &'a mut dyn BandSource,
     native: RasterGrid,
+    nodata: f32,
     to_native: Transformer,
     placement: &'a Placement,
     /// Most native cells one read may hold.
@@ -424,13 +425,7 @@ impl Warp<'_> {
     }
 }
 
-/// The NoData every derivative pixel outside the footprint holds.
-struct Filled<'a> {
-    warp: Warp<'a>,
-    nodata: f32,
-}
-
-impl BandSource for Filled<'_> {
+impl BandSource for Warp<'_> {
     fn read(
         &mut self,
         window: RasterWindow,
@@ -438,8 +433,7 @@ impl BandSource for Filled<'_> {
         cancel: &AtomicBool,
     ) -> Result<(), String> {
         out.fill(self.nodata);
-        self.warp
-            .fill(window, window.x..window.x + window.width, out, cancel)
+        self.fill(window, window.x..window.x + window.width, out, cancel)
     }
 }
 
@@ -463,15 +457,13 @@ pub(super) fn write(
     let mercator = crs::from_reference("EPSG:3857")?;
     let placement = place(grid, &Transformer::new(native, &mercator), rung_at(zoom))?;
     let geo_keys = crs::geokeys_for(&mercator);
-    let mut filled = Filled {
-        warp: Warp {
-            band,
-            native: grid.clone(),
-            to_native: Transformer::new(&mercator, native),
-            placement: &placement,
-            budget: budget / 2,
-        },
+    let mut warp = Warp {
+        band,
+        native: grid.clone(),
         nodata,
+        to_native: Transformer::new(&mercator, native),
+        placement: &placement,
+        budget: budget / 2,
     };
     cog::write(
         output,
@@ -480,7 +472,7 @@ pub(super) fn write(
             geo_keys: Some(&geo_keys),
         },
         Some(nodata),
-        &mut filled,
+        &mut warp,
         cog::CogProfile {
             compression: Compression::Deflate,
             overviews: true,
