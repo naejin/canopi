@@ -206,16 +206,15 @@ jobs:
         with:
           ref: ${{ needs.preflight.outputs.head_sha }}
 
-      - id: rust-toolchain
-        uses: dtolnay/rust-toolchain@1.97.1
+      - uses: dtolnay/rust-toolchain@1.97.1
         with:
           targets: ${{ matrix.target }}
 
-      - uses: ./.github/actions/cache-rust
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          toolchain: ${{ steps.rust-toolchain.outputs.cachekey }}
-          workload: release
-          target: ${{ matrix.target }}
+          shared-key: release-${{ matrix.target }}
+          cache-on-failure: false
+          save-if: false
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'

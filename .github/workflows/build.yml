@@ -18,6 +18,9 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # Rust caches are saved only from main and the v2 branch, whose caches every
+  # PR and later push can restore; PR refs restore without adding copies.
+  SAVE_RUST_CACHE: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/geolibre-adoption') }}
   CANOPI_CORE_DB_RELEASE_TAG: canopi-core-db
 
 jobs:
@@ -75,14 +78,14 @@ jobs:
         run: |
           python3 -m unittest scripts.test_check_docs
           python3 scripts/check_docs.py
-      - id: rust-toolchain
-        uses: dtolnay/rust-toolchain@1.97.1
+      - uses: dtolnay/rust-toolchain@1.97.1
         with:
           components: rustfmt, clippy
-      - uses: ./.github/actions/cache-rust
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          toolchain: ${{ steps.rust-toolchain.outputs.cachekey }}
-          workload: lint
+          shared-key: lint
+          cache-on-failure: false
+          save-if: ${{ env.SAVE_RUST_CACHE == 'true' }}
 
       - name: Install Linux dependencies
         uses: ./.github/actions/install-linux-deps
@@ -136,14 +139,14 @@ jobs:
       CANOPI_SKIP_BUNDLED_DB: "1"
     steps:
       - uses: actions/checkout@v4
-      - id: rust-toolchain
-        uses: dtolnay/rust-toolchain@1.97.1
+      - uses: dtolnay/rust-toolchain@1.97.1
         with:
           components: llvm-tools-preview
-      - uses: ./.github/actions/cache-rust
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          toolchain: ${{ steps.rust-toolchain.outputs.cachekey }}
-          workload: test
+          shared-key: test
+          cache-on-failure: false
+          save-if: ${{ env.SAVE_RUST_CACHE == 'true' }}
 
       - name: Install Linux dependencies
         uses: ./.github/actions/install-linux-deps
@@ -198,12 +201,12 @@ jobs:
       CANOPI_SKIP_BUNDLED_DB: "1"
     steps:
       - uses: actions/checkout@v4
-      - id: rust-toolchain
-        uses: dtolnay/rust-toolchain@1.97.1
-      - uses: ./.github/actions/cache-rust
+      - uses: dtolnay/rust-toolchain@1.97.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          toolchain: ${{ steps.rust-toolchain.outputs.cachekey }}
-          workload: lidar-native
+          shared-key: lidar-native
+          cache-on-failure: false
+          save-if: ${{ env.SAVE_RUST_CACHE == 'true' }}
 
       - name: Install Linux dependencies
         uses: ./.github/actions/install-linux-deps
@@ -238,15 +241,14 @@ jobs:
       CANOPI_SKIP_BUNDLED_DB: "1"
     steps:
       - uses: actions/checkout@v4
-      - id: rust-toolchain
-        uses: dtolnay/rust-toolchain@1.97.1
+      - uses: dtolnay/rust-toolchain@1.97.1
         with:
           targets: ${{ matrix.target }}
-      - uses: ./.github/actions/cache-rust
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          toolchain: ${{ steps.rust-toolchain.outputs.cachekey }}
-          workload: platform-tests
-          target: ${{ matrix.target }}
+          shared-key: platform-tests-${{ matrix.target }}
+          cache-on-failure: false
+          save-if: ${{ env.SAVE_RUST_CACHE == 'true' }}
 
       - name: Rust tests on this platform
         shell: bash
@@ -276,15 +278,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - id: rust-toolchain
-        uses: dtolnay/rust-toolchain@1.97.1
+      - uses: dtolnay/rust-toolchain@1.97.1
         with:
           targets: ${{ matrix.target }}
-      - uses: ./.github/actions/cache-rust
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          toolchain: ${{ steps.rust-toolchain.outputs.cachekey }}
-          workload: release
-          target: ${{ matrix.target }}
+          shared-key: release-${{ matrix.target }}
+          cache-on-failure: false
+          save-if: ${{ env.SAVE_RUST_CACHE == 'true' }}
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
