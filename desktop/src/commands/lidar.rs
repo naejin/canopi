@@ -276,8 +276,6 @@ async fn import_item_with_executor(
     library: LidarLibrary,
     selection: ImportSelection,
 ) -> Result<common_types::lidar::LidarImportReceipt, String> {
-    // A running raster job holds Local for minutes; refuse before waiting.
-    library.refuse_while_raster_job_runs()?;
     // File headers are read on the Local lane, so the probes never
     // queue settings, favorites or the catalogue behind them on UserData.
     let checking = library.clone();
@@ -362,8 +360,6 @@ async fn retry_import_with_executor(
     library: LidarLibrary,
     layer_id: String,
 ) -> Result<common_types::lidar::LidarImportReceipt, String> {
-    // As Import: refused before waiting, and not kept as the item's failure.
-    library.refuse_while_raster_job_runs()?;
     let reading = library.clone();
     let read_id = layer_id.clone();
     let selection = executor
@@ -463,8 +459,7 @@ mod tests {
 
     /// Import reads file headers on the Local lane: a missing file is refused
     /// while the one-at-a-time UserData lane (settings, favorites, the
-    /// catalogue) is busy, and other Local work holds the check back (a
-    /// running raster job refuses it at once instead; test below).
+    /// catalogue) is busy, and other Local work holds the check back.
     #[test]
     fn import_checks_its_files_on_the_local_lane_and_only_records_on_user_data() {
         tauri::async_runtime::block_on(async {
@@ -489,95 +484,6 @@ mod tests {
             assert!(error.contains("local operations are busy"), "{error}");
             release.send(()).unwrap();
             blocker.await.unwrap().unwrap();
-            drop(library);
-            std::fs::remove_dir_all(&root).unwrap();
-        });
-    }
-
-    /// A raster job holds the library-wide heavy lease and a Local slot for
-    /// minutes. Import and Retry would only fail behind it, so both are refused
-    /// at once, before their header check waits for Local, and leave no row.
-    #[test]
-    fn import_and_retry_are_refused_at_once_while_a_raster_job_runs() {
-        tauri::async_runtime::block_on(async {
-            let root = crate::test_scratch::TestScratch::new("lidar-import-heavy-busy");
-            let library = LidarLibrary::open(&root).unwrap();
-            let (layer_id, job_id) = library
-                .record_import_item(
-                    "Delft",
-                    RasterQuantity::GroundElevation,
-                    None,
-                    false,
-                    &[root.join("gone.tif")],
-                )
-                .unwrap();
-            library
-                .catalogue()
-                .unwrap()
-                .execute(
-                    "UPDATE lidar_import_jobs SET state = 'failed', message = 'earlier' WHERE id = ?1",
-                    [&job_id],
-                )
-                .unwrap();
-            // Local admits a second operation but runs one: the raster job's.
-            let lane = NativeOperationClassLimits::new(8, 1);
-            let executor = NativeOperationExecutor::new(NativeOperationLimits::new(
-                lane,
-                lane,
-                NativeOperationClassLimits::new(2, 1),
-                lane,
-            ))
-            .unwrap();
-            let lease = library.hold_heavy_lease("imp-running");
-            let (release, blocker) = occupy(&executor, NativeOperationClass::Local);
-
-            let error = tokio::time::timeout(
-                WAIT_TIMEOUT,
-                import_item_with_executor(
-                    &executor,
-                    library.clone(),
-                    selection(vec![root.join("gone.tif")]),
-                ),
-            )
-            .await
-            .expect("Import must not wait behind the running raster job")
-            .unwrap_err();
-            assert!(error.contains("another raster job is running"), "{error}");
-            let error = tokio::time::timeout(
-                WAIT_TIMEOUT,
-                retry_import_with_executor(&executor, library.clone(), layer_id.clone()),
-            )
-            .await
-            .expect("Retry must not wait behind the running raster job")
-            .unwrap_err();
-            assert!(error.contains("another raster job is running"), "{error}");
-            {
-                let connection = library.catalogue().unwrap();
-                let count = |table: &str| -> i64 {
-                    connection
-                        .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
-                            row.get(0)
-                        })
-                        .unwrap()
-                };
-                assert_eq!(count("lidar_source_layers"), 1, "Import recorded no item");
-                assert_eq!(count("lidar_import_jobs"), 1, "neither recorded a job");
-                let message: String = connection
-                    .query_row(
-                        "SELECT message FROM lidar_import_jobs WHERE id = ?1",
-                        [&job_id],
-                        |row| row.get(0),
-                    )
-                    .unwrap();
-                assert_eq!(
-                    message, "earlier",
-                    "a busy library is not the item's failure"
-                );
-            }
-
-            release.send(()).unwrap();
-            blocker.await.unwrap().unwrap();
-            drop(lease);
             drop(library);
             std::fs::remove_dir_all(&root).unwrap();
         });

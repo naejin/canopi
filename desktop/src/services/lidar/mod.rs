@@ -281,33 +281,6 @@ impl HeavyJobLease {
     }
 }
 
-impl LidarLibrary {
-    /// Refuse a new import or Retry at once while a raster job holds the
-    /// heavy lease. That job also holds a Local slot for minutes, so the
-    /// header check would wait behind it only for the job to fail on the
-    /// lease; this answers the dialog first and records nothing. The job
-    /// still takes the lease itself, so a race only fails it as before.
-    pub fn refuse_while_raster_job_runs(&self) -> Result<(), String> {
-        let holder = self
-            .inner
-            .heavy_job
-            .lock()
-            .map_err(|_| "LiDAR heavy job lease poisoned".to_string())?;
-        if holder.is_some() {
-            return Err("another raster job is running; try again when it finishes".to_string());
-        }
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-impl LidarLibrary {
-    /// Hold the heavy lease as a running raster job does.
-    pub(crate) fn hold_heavy_lease(&self, job_id: &str) -> HeavyJobLease {
-        HeavyJobLease::acquire(self, job_id).unwrap()
-    }
-}
-
 impl Drop for HeavyJobLease {
     fn drop(&mut self) {
         if let Ok(mut holder) = self.inner.heavy_job.lock()
