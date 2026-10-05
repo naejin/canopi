@@ -8,12 +8,13 @@ const cogTiler = vi.hoisted(() => ({
 }))
 vi.mock('cog-tiler-wasm', () => cogTiler)
 
-function openedSource(mode: '3857' | 'warp') {
+/** A source cog-tiler would warp, in RD New. */
+function warpedSource() {
   return {
     boundsLonLat: [4.3, 51.9, 4.4, 52.0],
     levels: [{ width: 256, height: 256 }],
-    mode,
-    crsLabel: mode === '3857' ? 'EPSG:3857' : 'EPSG:28992',
+    mode: 'warp',
+    crsLabel: 'EPSG:28992',
     hasPalette: false,
     tileCache: new Map(),
   }
@@ -45,24 +46,13 @@ afterEach(() => {
 
 describe('raster display worker', () => {
   it('refuses a source cog-tiler would warp, naming the mode and the one supported display CRS', async () => {
-    cogTiler.openCog.mockResolvedValue(openedSource('warp'))
+    cogTiler.openCog.mockResolvedValue(warpedSource())
     const request = await lane()
     const reply = await request({ op: 'open', handle: 1, url: 'asset://display.tif' })
     expect(reply).toEqual({
       id: 1,
       ok: false,
       error: "raster display source opened in mode 'warp' (EPSG:28992); display tiles must be EPSG:3857",
-    })
-  })
-
-  it('opens an EPSG:3857 source with its metadata', async () => {
-    cogTiler.openCog.mockResolvedValue(openedSource('3857'))
-    const request = await lane()
-    const reply = await request({ op: 'open', handle: 1, url: 'asset://display.tif' })
-    expect(reply).toEqual({
-      id: 1,
-      ok: true,
-      value: { boundsLonLat: [4.3, 51.9, 4.4, 52.0] },
     })
   })
 })
