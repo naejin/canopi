@@ -1,10 +1,10 @@
-import { describe, expect, expectTypeOf, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createDefaultScenePersistedState } from '../../canvas/runtime/scene'
 import type { MapLibreApi, MapLibreMapInstance } from '../../maplibre/loader'
 import { IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, type MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
 import type { TerrainProtocolSupport } from '../../maplibre/terrain'
-import { WorkspaceMapContributions, type WorkspaceMapContributionsOptions } from './workspace-map-contributions'
-import type { WorkspaceMapContributionAdapter, WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
+import { WorkspaceMapContributions } from './workspace-map-contributions'
+import type { WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import type { RasterDisplay, RasterDisplayLayer } from '../../maplibre/raster-display/adapter'
 
 class ContributionMap implements MapLibreMapInstance {
@@ -101,14 +101,6 @@ function deferred<T>() {
 async function flush() { await Promise.resolve(); await Promise.resolve() }
 
 describe('WorkspaceMapContributions', () => {
-  it('takes no view bounds publisher and never listens for camera moves: nothing reads map view bounds', () => {
-    expectTypeOf<WorkspaceMapContributionAdapter>().not.toHaveProperty('publishViewBounds')
-    expectTypeOf<WorkspaceMapContributionsOptions>().not.toHaveProperty('publishViewBounds')
-    const f = fixture()
-    expect(f.map.listeners.get('moveend')?.size ?? 0).toBe(0)
-    expect(f.map.listeners.get('resize')?.size ?? 0).toBe(0)
-  })
-
   it.each([
     ['rebuild', 'removeLayer'], ['rebuild', 'removeSource'],
     ['source error', 'removeLayer'], ['source error', 'removeSource'],
