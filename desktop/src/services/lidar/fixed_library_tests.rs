@@ -373,3 +373,299 @@ fn renaming_a_result_changes_only_its_name() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// Asserts a refusal shown in the import dialog: it names the user's file and
+/// nothing about where it lives or how the system failed, and the refused
+/// import left no item and no job behind.
+/// A library wired like the app's, so an admitted import would start.
+fn attached_library(root: &Path) -> LidarLibrary {
+    let library = LidarLibrary::open(root).unwrap();
+    library.attach_executor(crate::native_operation::NativeOperationExecutor::production());
+    library
+}
+
+fn assert_refused_in_dialog(library: &LidarLibrary, root: &Path, error: &str, name: &str) {
+    assert!(error.contains(name), "the refusal names {name}: {error}");
+    let root = root.display().to_string();
+    assert!(!error.contains(&root), "no root path in: {error}");
+    assert!(!error.contains("os error"), "no system error in: {error}");
+    assert_eq!(
+        count(library, "SELECT COUNT(*) FROM lidar_source_layers"),
+        0,
+        "no item for a refused import"
+    );
+    assert_eq!(
+        count(library, "SELECT COUNT(*) FROM lidar_import_jobs"),
+        0,
+        "no job for a refused import"
+    );
+}
+
+/// The GeoTIFF `plane` writes, with its projected code key rewritten to
+/// `code`, a code no listed coordinate system has.
+fn plane_in_code(library: &LidarLibrary, root: &Path, name: &str, code: u16) -> PathBuf {
+    let path = plane(library, root, name, 445_000.0);
+    let mut bytes = std::fs::read(&path).unwrap();
+    // ProjectedCSTypeGeoKey (3072), stored in the directory itself, one
+    // value: EPSG:2154, little-endian.
+    let key: Vec<u8> = [3072u16, 0, 1, 2154]
+        .iter()
+        .flat_map(|value| value.to_le_bytes())
+        .collect();
+    let at: Vec<usize> = bytes
+        .windows(key.len())
+        .enumerate()
+        .filter(|(_, window)| *window == key.as_slice())
+        .map(|(index, _)| index)
+        .collect();
+    assert_eq!(at.len(), 1, "one projected code key in {}", path.display());
+    bytes[at[0] + 6..at[0] + 8].copy_from_slice(&code.to_le_bytes());
+    std::fs::write(&path, bytes).unwrap();
+    path
+}
+
+/// canopi-try2: a selected file that is gone is refused when Import is
+/// clicked, by name, and creates nothing.
+#[test]
+fn importing_a_missing_file_is_refused_by_name_and_creates_nothing() {
+    let root = scratch("import-missing");
+    let library = attached_library(&root);
+    let error = library
+        .import_item(
+            "Orchard",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            vec![root.join("gone.tif")],
+        )
+        .unwrap_err();
+    assert!(error.contains("cannot be found"), "{error}");
+    assert_refused_in_dialog(&library, &root, &error, "gone.tif");
+}
+
+/// U31: a GeoTIFF in a coordinate system Canopi cannot place is refused when
+/// Import is clicked with the typed refusal naming its code, and creates
+/// nothing.
+#[test]
+fn importing_a_geotiff_in_a_refused_code_is_refused_and_creates_nothing() {
+    let root = scratch("import-refused-code");
+    let library = attached_library(&root);
+    let source = plane_in_code(&library, &root, "elsewhere", 65_000);
+    let error = library
+        .import_item(
+            "Elsewhere",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            vec![source],
+        )
+        .unwrap_err();
+    assert!(
+        error.contains("65000"),
+        "the refusal names the code: {error}"
+    );
+    assert_refused_in_dialog(&library, &root, &error, "elsewhere.tif");
+}
+
+/// A file that is not a GeoTIFF is refused from its signature, before any
+/// reader parses it whole, and creates nothing.
+#[test]
+fn importing_a_file_that_is_not_a_geotiff_is_refused_before_it_is_read() {
+    let root = scratch("import-not-tiff");
+    let library = attached_library(&root);
+    let source = root.join("dem.asc");
+    std::fs::write(
+        &source,
+        "ncols 2\nnrows 2\nxllcorner 0\nyllcorner 0\ncellsize 1\nNODATA_value -9999\n1 2\n3 4\n",
+    )
+    .unwrap();
+    let error = library
+        .import_item(
+            "Grid",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            vec![source],
+        )
+        .unwrap_err();
+    assert!(error.contains("not a GeoTIFF"), "{error}");
+    assert!(
+        !error.contains("readable raster"),
+        "refused before a reader parsed it: {error}"
+    );
+    assert_refused_in_dialog(&library, &root, &error, "dem.asc");
+}
+
+/// The failed import Retry is offered on: its job's message is what the item's
+/// row shows.
+fn failed_import(library: &LidarLibrary, source: PathBuf, message: &str) -> String {
+    let (layer_id, job_id) = library
+        .record_import_item(
+            "Orchard",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            &[source],
+        )
+        .unwrap();
+    library.fail_import_job(&job_id, message);
+    layer_id
+}
+
+/// The message the item's row shows, once its latest import has failed.
+fn row_message(library: &LidarLibrary, layer_id: &str) -> String {
+    let snapshot = library.library_snapshot().unwrap();
+    let job = item(&snapshot.items, layer_id)
+        .import_job
+        .as_ref()
+        .expect("a retryable import");
+    assert_eq!(job.state, LidarImportJobState::Failed);
+    job.message.clone().unwrap_or_default()
+}
+
+/// A Retry whose saved file has gone is refused by name before a job is
+/// recorded: the refusal replaces the failed import's message on the item's
+/// row, and refusing again adds no job row.
+#[test]
+fn retrying_an_import_whose_file_is_gone_is_refused_on_its_item_without_a_new_job() {
+    let root = scratch("retry-missing");
+    let library = attached_library(&root);
+    let layer_id = failed_import(&library, root.join("gone.tif"), "first failure");
+    let error = library.retry_import(&layer_id).unwrap_err();
+    assert!(error.contains("gone.tif cannot be found"), "{error}");
+    assert!(!error.contains(&root.display().to_string()), "{error}");
+    assert_eq!(row_message(&library, &layer_id), error);
+    assert_eq!(library.retry_import(&layer_id).unwrap_err(), error);
+    assert_eq!(count(&library, "SELECT COUNT(*) FROM lidar_import_jobs"), 1);
+}
+
+/// A cancelled import whose saved file has gone: the refused Retry turns its
+/// one job into a failed import carrying the refusal, with no new job row.
+#[test]
+fn retrying_a_cancelled_import_whose_file_is_gone_fails_that_import_with_the_reason() {
+    let root = scratch("retry-cancelled-missing");
+    let library = attached_library(&root);
+    let layer_id = failed_import(&library, root.join("gone.tif"), "first failure");
+    library
+        .catalogue()
+        .unwrap()
+        .execute(
+            "UPDATE lidar_import_jobs SET state = 'cancelled', message = NULL WHERE layer_id = ?1",
+            [&layer_id],
+        )
+        .unwrap();
+    let error = library.retry_import(&layer_id).unwrap_err();
+    assert!(error.contains("gone.tif cannot be found"), "{error}");
+    assert_eq!(row_message(&library, &layer_id), error);
+    assert_eq!(count(&library, "SELECT COUNT(*) FROM lidar_import_jobs"), 1);
+}
+
+/// A refused Retry whose reason cannot be written onto its item still returns
+/// the refusal itself, not the failed write.
+#[test]
+fn a_refused_retry_returns_its_reason_when_the_row_cannot_be_updated() {
+    let root = scratch("retry-refused-write-fails");
+    let library = attached_library(&root);
+    let layer_id = failed_import(&library, root.join("gone.tif"), "first failure");
+    library
+        .catalogue()
+        .unwrap()
+        .execute_batch(
+            "CREATE TEMP TRIGGER jobs_read_only BEFORE UPDATE ON lidar_import_jobs
+             BEGIN SELECT RAISE(ABORT, 'jobs are read-only'); END;",
+        )
+        .unwrap();
+    let error = library.retry_import(&layer_id).unwrap_err();
+    assert!(error.contains("gone.tif cannot be found"), "{error}");
+    assert!(!error.contains("read-only"), "{error}");
+    assert_eq!(count(&library, "SELECT COUNT(*) FROM lidar_import_jobs"), 1);
+}
+
+/// A library the catalogue rebuild made: its one item, named "Orchard", is
+/// rebuilt from `source`'s bytes kept as the managed original of `sha256`, which
+/// was imported as `elsewhere.tif`. Returns the library and the item.
+fn rebuilt_library(root: &Path, source: &Path, sha256: &str) -> (LidarLibrary, String) {
+    let lidar = paths::library_root(root);
+    let dir = lidar.join("sources").join(sha256);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(source, dir.join("original")).unwrap();
+    let meta = source_meta::SourceMeta {
+        version: source_meta::META_VERSION,
+        sha256: sha256.to_string(),
+        original_filename: "elsewhere.tif".to_string(),
+        size_bytes: std::fs::metadata(source).unwrap().len(),
+        imported_at: "10".to_string(),
+        items: vec![source_meta::ItemMeta {
+            id: "lyr-rebuilt".to_string(),
+            name: "Orchard".to_string(),
+            quantity: RasterQuantity::GroundElevation.key().to_string(),
+            units: "m".to_string(),
+            created_at: "10".to_string(),
+            members: vec![sha256.to_string()],
+            analyses: Vec::new(),
+        }],
+    };
+    source_meta::write(&dir.join(source_meta::META_FILE), &meta).unwrap();
+    std::fs::write(lidar.join(paths::CATALOGUE_FILE), b"not a catalogue").unwrap();
+    let library = attached_library(root);
+    assert!(matches!(
+        library.open_status(),
+        recovery::LibraryOpenStatus::Recovered { items: 1, .. }
+    ));
+    assert_eq!(
+        row_message(&library, "lyr-rebuilt"),
+        recovery::RECOVERED_IMPORT_MESSAGE
+    );
+    (library, "lyr-rebuilt".to_string())
+}
+
+/// U31 on a rebuilt item: a Retry whose managed original is in a refused code
+/// is refused with the typed message, naming the file the user imported rather
+/// than the managed copy, and that message replaces the rebuild's "Retry
+/// prepares this item again" on the row instead of vanishing with the dialog.
+#[test]
+fn retrying_a_rebuilt_item_in_a_refused_code_keeps_the_refusal_on_the_item() {
+    let workbench = scratch("retry-refused-code-tile");
+    let tile = plane_in_code(&attached_library(&workbench), &workbench, "tile", 65_000);
+    let root = scratch("retry-refused-code");
+    let (library, layer_id) = rebuilt_library(&root, &tile, "sha-refused");
+    let jobs = count(&library, "SELECT COUNT(*) FROM lidar_import_jobs");
+    let error = library.retry_import(&layer_id).unwrap_err();
+    assert!(
+        error.contains("65000"),
+        "the refusal names the code: {error}"
+    );
+    assert!(
+        error.contains("elsewhere.tif"),
+        "the refusal names the imported file: {error}"
+    );
+    assert!(!error.contains("original"), "no managed name in: {error}");
+    assert!(!error.contains(&root.display().to_string()), "{error}");
+    assert_eq!(row_message(&library, &layer_id), error);
+    assert_eq!(
+        count(&library, "SELECT COUNT(*) FROM lidar_import_jobs"),
+        jobs,
+        "the refusal adds no job row"
+    );
+    assert!(
+        library.record_import_retry(&layer_id).is_ok(),
+        "the item still offers Retry"
+    );
+}
+
+/// A rebuilt item whose managed original has gone is refused under the name it
+/// was imported with, never as "original".
+#[test]
+fn retrying_a_rebuilt_item_whose_original_is_gone_names_the_imported_file() {
+    let workbench = scratch("retry-rebuilt-gone-tile");
+    let tile = plane(&attached_library(&workbench), &workbench, "tile", 445_000.0);
+    let root = scratch("retry-rebuilt-gone");
+    let (library, layer_id) = rebuilt_library(&root, &tile, "sha-gone");
+    std::fs::remove_file(library.inner.paths.source_original("sha-gone")).unwrap();
+    let error = library.retry_import(&layer_id).unwrap_err();
+    assert!(
+        error.starts_with("elsewhere.tif cannot be found"),
+        "{error}"
+    );
+    assert_eq!(row_message(&library, &layer_id), error);
+}

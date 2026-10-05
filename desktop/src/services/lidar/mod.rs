@@ -1150,33 +1150,7 @@ impl LidarLibrary {
     ) -> Result<(String, String, Vec<PathBuf>), String> {
         self.ensure_writable()?;
         let connection = self.catalogue()?;
-        catalogue::get_layer(&connection, layer_id)?
-            .ok_or_else(|| format!("Layer {layer_id} does not exist"))?;
-        if catalogue::head_generation(&connection, layer_id)?.is_some() {
-            return Err(
-                "this item is already published; import new files as a new item".to_string(),
-            );
-        }
-        let latest: Option<(String, Option<String>)> = connection
-            .query_row(
-                "SELECT state, request_json FROM lidar_import_jobs WHERE layer_id = ?1
-                 ORDER BY created_at DESC, rowid DESC LIMIT 1",
-                [layer_id],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .optional()
-            .map_err(|e| format!("Failed to read the import: {e}"))?;
-        let Some((state, request)) = latest else {
-            return Err("this item has no saved import to retry".to_string());
-        };
-        if !matches!(state.as_str(), "failed" | "cancelled") {
-            return Err("this import is still running".to_string());
-        }
-        let request = request.ok_or_else(|| {
-            "this import was recorded before its selection was saved; choose the files again"
-                .to_string()
-        })?;
-        let paths = parse_import_request(&request)?;
+        let SavedRetry { request, paths, .. } = saved_retry(&connection, layer_id)?;
         let job_id = new_id("imp");
         connection
             .execute(
@@ -1258,6 +1232,15 @@ impl LidarLibrary {
         unit_unknown: bool,
         paths: Vec<PathBuf>,
     ) -> Result<common_types::lidar::LidarImportReceipt, String> {
+        // A file Canopi cannot place is refused here, in the import dialog,
+        // before any item or job exists (canopi-try2, U31).
+        import::validate_source_selection(&paths)?;
+        admission::check_sources_placeable(
+            self.inner.engine.as_ref(),
+            &paths,
+            &admission::source_name,
+            &AtomicBool::new(false),
+        )?;
         let (layer_id, job_id) =
             self.record_import_item(name, quantity, unit_label, unit_unknown, &paths)?;
         self.start_recorded_import(&layer_id, &job_id, paths)
@@ -1268,19 +1251,69 @@ impl LidarLibrary {
         &self,
         layer_id: &str,
     ) -> Result<common_types::lidar::LidarImportReceipt, String> {
-        let (layer_id, job_id, paths) = self.record_import_retry(layer_id)?;
-        if let Some(missing) = paths.iter().find(|path| !path.is_file()) {
-            let message = format!(
-                "{} is no longer available; choose the files again",
-                missing
-                    .file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| missing.display().to_string())
-            );
-            self.fail_import_job(&job_id, &message);
-            return Err(message);
+        // The saved files are checked as Import checks them before a job is
+        // recorded. A refusal adds no job: it becomes the latest import's
+        // failure, so the reason stays on the item's row.
+        let SavedRetry {
+            latest_job, paths, ..
+        } = {
+            self.ensure_writable()?;
+            saved_retry(&*self.catalogue()?, layer_id)?
+        };
+        let checked = self.saved_source_names(&paths).and_then(|names| {
+            let name_of = |path: &std::path::Path| {
+                names
+                    .get(path)
+                    .cloned()
+                    .unwrap_or_else(|| admission::source_name(path))
+            };
+            import::validate_named_selection(&paths, &name_of)?;
+            admission::check_sources_placeable(
+                self.inner.engine.as_ref(),
+                &paths,
+                &name_of,
+                &AtomicBool::new(false),
+            )
+        });
+        if let Err(error) = checked {
+            self.refuse_retry(&latest_job, &error);
+            return Err(error);
         }
+        let (layer_id, job_id, paths) = self.record_import_retry(layer_id)?;
         self.start_recorded_import(&layer_id, &job_id, paths)
+    }
+
+    /// The file names a saved selection's managed originals were imported
+    /// under, so a refusal never calls one "original" (a rebuilt item's saved
+    /// selection holds only managed originals). A user's file is absent and
+    /// keeps its own name.
+    fn saved_source_names(&self, paths: &[PathBuf]) -> Result<HashMap<PathBuf, String>, String> {
+        let connection = self.catalogue()?;
+        let mut names = HashMap::new();
+        for path in paths {
+            let Some(sha256) = path
+                .parent()
+                .and_then(|dir| dir.file_name())
+                .and_then(|sha256| sha256.to_str())
+            else {
+                continue;
+            };
+            if *path != self.inner.paths.source_original(sha256) {
+                continue;
+            }
+            let name: Option<String> = connection
+                .query_row(
+                    "SELECT original_filename FROM lidar_sources WHERE sha256 = ?1",
+                    [sha256],
+                    |row| row.get(0),
+                )
+                .optional()
+                .map_err(|e| format!("Failed to read the source name: {e}"))?;
+            if let Some(name) = name {
+                names.insert(path.clone(), name);
+            }
+        }
+        Ok(names)
     }
 
     fn start_recorded_import(
@@ -1298,6 +1331,24 @@ impl LidarLibrary {
             layer_id: layer_id.to_string(),
             job_id: job_id.to_string(),
         })
+    }
+
+    /// A refused Retry's reason, kept as the failure of the item's latest
+    /// import (failed or cancelled) instead of a new job row. Best effort: the
+    /// caller returns the refusal whatever happens to this write.
+    fn refuse_retry(&self, latest_job: &str, message: &str) {
+        let written = self.catalogue().and_then(|connection| {
+            connection
+                .execute(
+                    "UPDATE lidar_import_jobs SET state = 'failed', message = ?2, updated_at = ?3
+                     WHERE id = ?1 AND state IN ('failed', 'cancelled')",
+                    rusqlite::params![latest_job, message, now_iso()],
+                )
+                .map_err(|e| e.to_string())
+        });
+        if let Err(error) = written {
+            tracing::warn!(job_id = latest_job, %error, "a refused retry's reason was not kept on its item");
+        }
     }
 
     fn fail_import_job(&self, job_id: &str, message: &str) {
@@ -3273,6 +3324,49 @@ pub(crate) fn import_job_summary(
         message: row.message,
         progress,
     }))
+}
+
+/// An unpublished item's latest import that may be retried.
+struct SavedRetry {
+    latest_job: String,
+    request: String,
+    paths: Vec<PathBuf>,
+}
+
+/// The latest import of an unpublished item that may be retried, with its
+/// saved selection: refused for a published item, a running import or an
+/// import recorded before its selection was saved.
+fn saved_retry(connection: &Connection, layer_id: &str) -> Result<SavedRetry, String> {
+    catalogue::get_layer(connection, layer_id)?
+        .ok_or_else(|| format!("Layer {layer_id} does not exist"))?;
+    if catalogue::head_generation(connection, layer_id)?.is_some() {
+        return Err("this item is already published; import new files as a new item".to_string());
+    }
+    let latest: Option<(String, String, Option<String>)> = connection
+        .query_row(
+            "SELECT id, state, request_json FROM lidar_import_jobs WHERE layer_id = ?1
+             ORDER BY created_at DESC, rowid DESC LIMIT 1",
+            [layer_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()
+        .map_err(|e| format!("Failed to read the import: {e}"))?;
+    let Some((latest_job, state, request)) = latest else {
+        return Err("this item has no saved import to retry".to_string());
+    };
+    if !matches!(state.as_str(), "failed" | "cancelled") {
+        return Err("this import is still running".to_string());
+    }
+    let request = request.ok_or_else(|| {
+        "this import was recorded before its selection was saved; choose the files again"
+            .to_string()
+    })?;
+    let paths = parse_import_request(&request)?;
+    Ok(SavedRetry {
+        latest_job,
+        request,
+        paths,
+    })
 }
 
 /// The saved selection of one import, in priority order.

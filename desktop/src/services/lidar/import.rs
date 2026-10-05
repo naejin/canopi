@@ -413,19 +413,39 @@ fn layer_lattice_grid(
 /// Returns the total selected bytes so callers reuse the counted value instead
 /// of re-deriving it. Every bound comes from `admission`, so an authorized
 /// representative run can raise it for its own thread and nothing else changes.
-fn validate_source_selection(source_paths: &[PathBuf]) -> Result<u64, String> {
+/// Import calls it before anything is recorded and Retry once its job is
+/// recorded, then each reads every header
+/// ([`admission::check_sources_placeable`]); staging calls it again and probes
+/// its managed copies. Refusals name the user's file only, never its folder or
+/// a system error.
+pub(super) fn validate_source_selection(source_paths: &[PathBuf]) -> Result<u64, String> {
+    validate_named_selection(source_paths, &admission::source_name)
+}
+
+/// [`validate_source_selection`] with each refusal naming a source through
+/// `name_of`, so Retry names a managed original by the file it was imported
+/// as.
+pub(super) fn validate_named_selection(
+    source_paths: &[PathBuf],
+    name_of: &dyn Fn(&Path) -> String,
+) -> Result<u64, String> {
     if source_paths.is_empty() {
         return Err("select at least one raster source".to_string());
     }
     admission::check_source_count(source_paths.len())?;
     let mut total_bytes = 0u64;
     for path in source_paths {
-        let metadata = std::fs::metadata(path)
-            .map_err(|e| format!("Failed to inspect {}: {e}", path.display()))?;
+        let name = name_of(path);
+        let metadata = std::fs::metadata(path).map_err(|error| match error.kind() {
+            std::io::ErrorKind::NotFound => {
+                format!("{name} cannot be found; choose the files again")
+            }
+            _ => format!("{name} cannot be read; choose the files again"),
+        })?;
         if !metadata.is_file() {
-            return Err(format!("{} is not a regular file", path.display()));
+            return Err(format!("{name} is not a file; choose the files again"));
         }
-        admission::check_source_bytes(path, metadata.len())?;
+        admission::check_named_source_bytes(&name, metadata.len())?;
         total_bytes = total_bytes
             .checked_add(metadata.len())
             .ok_or_else(|| "selected source sizes overflow the import budget".to_string())?;
