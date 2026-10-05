@@ -73,9 +73,9 @@ def topchip(inner):
 
 
 def chrome(active_tool='select', panel=None, name=ORCHARD, status='Saved', kind='ok', scale=SITE, labelled=False, hot=None, attrib='© Google',
-           bearing=0, grid=False, rulers=False, **tb):
+           bearing=0, grid=False, **tb):
     return (topbar(name, status, kind, hot=hot, **tb) + toolrail(active_tool, labelled=labelled) + panelrail(panel)
-            + viewchip(grid=grid, rulers=rulers) + zoombar(*scale, attrib=attrib, bearing=bearing))
+            + viewchip(grid=grid) + zoombar(*scale, attrib=attrib, bearing=bearing))
 
 
 SWATCHES = [('#AB5268', 'Raspberry'), ('#805878', 'Plum'), ('#B06045', 'Brick'), ('#B07A32', 'Ochre'), ('#887044', 'Bark'), ('#70814B', 'Olive'),

@@ -88,7 +88,7 @@ def rules():
                       'The Web Edition avoids keys browsers reserve (Ctrl N, W, Q, T).']),
         ('Moving and turning the map', ['Left click and left drag always select or draw. Right-drag, middle-drag and Space + drag pan in every tool; right- and middle-drag also pan mid-drawing; a still right-click opens the menu. Only the Pan tool (H) pans with a left drag.',
                                         'The map turns only on purpose: Shift + right-drag, Shift + middle-drag, the compass, Shift ← / →, two fingers, a trackpad twist. Add Ctrl (Cmd on Mac) during a turn drag for 15° steps. Within 7° of north a free turn settles on north.',
-                                        'Plant symbols, names, measurements and chrome stay upright; zones, notes and the grid turn with the map. Rulers show only when north is up.',
+                                        'Plant symbols, names, measurements and chrome stay upright; zones, notes and the grid turn with the map.',
                                         'The compass is always in the zoom group: click to reset north, drag to turn. N, Shift N and Shift ↑ reset north too.']),
         ('Focus and announcements', ['A blue 2 px focus ring on every control, never removed. Dialogs trap focus and return it to the control that opened them.',
                                      'Save status is a live region: changes of state are announced once (Saved → Couldn’t save), “Saving…” is not. Errors use alert.',

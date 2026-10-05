@@ -22,7 +22,7 @@ ROWS = [
     ('Foundations: tokens, components, icons and behavior rules', ['DesignSystem', 'DesignSystemDark', 'Rules']),
     ('Start a Design and find the site', ['Start', 'LocateSite', 'SiteFound', 'Overview']),
     ('The workspace on your orchard', ['Workspace', 'FindPlants', 'SelectedToList', 'NamesOnMap']),
-    ('Moving and turning the map: compass, rulers, pointing device', ['Navigation', 'NavigationSettings', 'NavigationPhone']),
+    ('Moving and turning the map: compass, pointing device', ['Navigation', 'NavigationSettings', 'NavigationPhone']),
     ('Designing: catalog and placing', ['Catalog', 'CatalogFilters', 'SpeciesDetail', 'PlacePlants', 'PlantRow', 'StampPlace']),
     ('Designing: selection, appearance, zones, notes', ['Selection', 'Appearance', 'ZoneDraw', 'ZoneSelected', 'MeasureText']),
     ('Site data: layers, import, analysis, library', ['Layers', 'AddDataMenu', 'AddData', 'ImportProgress', 'AnalyzeDialog', 'SlopeAnalysis', 'Library']),
