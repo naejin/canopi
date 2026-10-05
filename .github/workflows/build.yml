@@ -99,16 +99,20 @@ jobs:
       # Windows app manifest, icons, Tauri config, the sidecar and its smoke,
       # the Windows manifest check, npm manifests, CI);
       # then, like pushes to main, pull requests and Release Candidate, all four.
+      # Feature pushes build one installer per OS: Linux .deb (as everywhere)
+      # and Windows NSIS only, the one the sidecar smoke unpacks; no MSI.
       - id: packaging
         env:
           BASE: ${{ steps.base.outputs.sha }}
         run: |
           set -euo pipefail
+          windows_bundles=""
+          if [ "$FEATURE_PUSH" = true ]; then windows_bundles="--bundles nsis"; fi
           all='[
             {"os": "ubuntu-latest", "target": "x86_64-unknown-linux-gnu", "bundle_args": "--bundles deb"},
             {"os": "macos-14", "target": "aarch64-apple-darwin", "bundle_args": ""},
             {"os": "macos-15-intel", "target": "x86_64-apple-darwin", "bundle_args": ""},
-            {"os": "windows-latest", "target": "x86_64-pc-windows-msvc", "bundle_args": ""}
+            {"os": "windows-latest", "target": "x86_64-pc-windows-msvc", "bundle_args": "'"$windows_bundles"'"}
           ]'
           inputs='^(Cargo\.lock$|([^/]+/)?Cargo\.toml$|rust-toolchain\.toml$|desktop/build\.rs$|desktop/windows-app-manifest\.xml$|desktop/icons/|desktop/tauri[^/]*\.json$|desktop/tauri\.conf|desktop/binaries/|scripts/build-geolibre-cli\.sh$|scripts/smoke-bundled-sidecar\.sh$|scripts/check_windows_manifest\.py$|desktop/web/package[^/]*\.json$|\.github/)'
           filter='.'
