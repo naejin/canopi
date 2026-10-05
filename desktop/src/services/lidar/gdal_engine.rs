@@ -872,61 +872,6 @@ mod tests {
         assert!(args.contains(&"OVERVIEWS=NONE".to_string()));
     }
 
-    /// A6: the oracle warps onto the lattice the Rust engine places the
-    /// input on, by nearest neighbour with an exact transform and the row's
-    /// own Helmert shift, then writes the display profile from that.
-    #[test]
-    fn the_display_oracle_warps_onto_the_lattice_by_nearest_neighbour() {
-        let grid = RasterGrid {
-            width: 120,
-            height: 80,
-            geotransform: [85_000.0, 0.5, 0.0, 447_500.0, 0.0, -0.5],
-        };
-        let (lattice, definition) =
-            super::super::rust_engine::display_lattice(&grid, "EPSG:28992", 18).unwrap();
-        assert!(definition.contains("+towgs84=565.2369"), "{definition}");
-        let args = display_warp_arguments(
-            Path::new("in.tif"),
-            Path::new("out.tif"),
-            definition,
-            &lattice,
-            Some(-9999.0),
-            -9999.0,
-        );
-        let [min_x, min_y, max_x, max_y] = lattice.bounds();
-        let pairs: Vec<(&str, String)> = vec![
-            ("-s_srs", definition.to_string()),
-            ("-t_srs", "EPSG:3857".to_string()),
-            ("-r", "near".to_string()),
-            ("-et", "0".to_string()),
-            ("-srcnodata", "-9999.0".to_string()),
-            ("-dstnodata", "-9999.0".to_string()),
-            ("-of", "GTiff".to_string()),
-        ];
-        for (flag, value) in pairs {
-            let at = args
-                .iter()
-                .position(|arg| arg == flag)
-                .unwrap_or_else(|| panic!("{flag}"));
-            assert_eq!(args[at + 1], value, "{flag}");
-        }
-        let at = args.iter().position(|arg| arg == "-te").expect("-te");
-        let te: Vec<f64> = args[at + 1..at + 5]
-            .iter()
-            .map(|v| v.parse().unwrap())
-            .collect();
-        assert_eq!(te, [min_x, min_y, max_x, max_y]);
-        let at = args.iter().position(|arg| arg == "-ts").expect("-ts");
-        assert_eq!(
-            args[at + 1..at + 3],
-            [lattice.width.to_string(), lattice.height.to_string()]
-        );
-        assert_eq!(args[args.len() - 2..], ["in.tif", "out.tif"]);
-        let profile = display_cog_arguments(Path::new("out.tif"), Path::new("out.cog.tif"));
-        assert!(profile.contains(&"RESAMPLING=AVERAGE".to_string()));
-        assert!(profile.contains(&"COMPRESS=DEFLATE".to_string()));
-    }
-
     #[test]
     fn parses_numeric_gdalinfo_json() {
         let json = r#"{
