@@ -122,7 +122,7 @@ fn assert_probe_facts(label: &str, gdal: &RasterProbe, rust: &RasterProbe, facts
         );
     }
     assert_eq!(
-        super::super::analyses::crs_class(&gdal.crs_ref),
+        gdal_crs_class(&gdal.crs_ref),
         super::super::analyses::crs_class(&rust.crs_ref),
         "{label}: CRS class ({} vs {})",
         gdal.crs_ref,
@@ -445,47 +445,43 @@ fn compare_overviews(
     }
 }
 
-/// The EPSG area of use of each compared CRS, where Canopi rasters sit.
-/// `wbprojection` knows the UTM and Web Mercator boxes; the others are the
-/// registry's own extents.
-fn area_of_use(code: &str) -> (f64, f64, f64, f64) {
-    match code {
-        "EPSG:2154" => (-9.86, 41.15, 10.38, 51.56),
-        "EPSG:2056" => (5.96, 45.82, 10.49, 47.81),
-        "EPSG:3035" => (-16.1, 32.88, 40.18, 84.73),
-        "EPSG:3857" => (-20.0, -60.0, 40.0, 80.0),
-        other => {
-            let number: u32 = other.trim_start_matches("EPSG:").parse().expect("code");
-            let bbox = wbprojection::epsg_area_of_use(number).expect("area of use");
-            (bbox.lon_min, bbox.lat_min, bbox.lon_max, bbox.lat_max)
-        }
+/// The class of the WKT2 gdalinfo reports, in the catalogue's vocabulary.
+fn gdal_crs_class(wkt: &str) -> &'static str {
+    let wkt = wkt.trim_start();
+    if wkt.starts_with("GEOGCRS[") {
+        super::super::analyses::CRS_GEOGRAPHIC
+    } else if wkt.starts_with("PROJCRS[") && wkt.contains("LENGTHUNIT[\"metre\",1]") {
+        super::super::analyses::CRS_PROJECTED_METRE
+    } else {
+        "unknown"
     }
 }
 
-/// Point transforms on a 9×9 lon/lat grid inside each CRS's area of use, in
-/// both directions: forward within 1e-3 m, inverse within 1e-7 deg.
+/// Point transforms on a 9×9 lon/lat grid inside each table row's area of
+/// use (its inner 80%), in both directions, GDAL given the row's own PROJ
+/// definition, so the same Helmert shift whatever grids the machine's PROJ
+/// holds: forward within 1e-3 m, inverse within 1e-7 deg. How far PROJ's own
+/// choice of operation sits is the reference points' business
+/// (`crs::tests`).
 fn compare_transforms(report: &mut Report, gdal: &GdalEngine, rust: &RustRasterEngine) {
     let c = cancel();
-    for code in [
-        "EPSG:2154",
-        "EPSG:32632",
-        "EPSG:32633",
-        "EPSG:3857",
-        "EPSG:2056",
-        "EPSG:3035",
-    ] {
-        let (lon_min, lat_min, lon_max, lat_max) = area_of_use(code);
+    for row in super::crs_table::ROWS {
+        let code = &format!("EPSG:{}", row.code);
+        let [lon_min, lat_min, lon_max, lat_max] = row.area;
         let mut geographic = Vec::new();
         for i in 0..9 {
             for j in 0..9 {
+                // Inset by a tenth, as the reference grids are: at an area's
+                // corners PROJ may have no shift to take.
+                let along = |n: i32| 0.1 + 0.8 * f64::from(n) / 8.0;
                 geographic.push((
-                    lon_min + (lon_max - lon_min) * f64::from(i) / 8.0,
-                    lat_min + (lat_max - lat_min) * f64::from(j) / 8.0,
+                    lon_min + (lon_max - lon_min) * along(i),
+                    lat_min + (lat_max - lat_min) * along(j),
                 ));
             }
         }
         let a = gdal
-            .transform_points("EPSG:4326", code, &geographic, &c)
+            .transform_points("EPSG:4326", row.proj, &geographic, &c)
             .expect("GDAL forward");
         let b = rust
             .transform_points("EPSG:4326", code, &geographic, &c)
@@ -500,7 +496,7 @@ fn compare_transforms(report: &mut Report, gdal: &GdalEngine, rust: &RustRasterE
             projected.push(*x);
         }
         let a = gdal
-            .transform_points(code, "EPSG:4326", &projected, &c)
+            .transform_points(row.proj, "EPSG:4326", &projected, &c)
             .expect("GDAL inverse");
         let b = rust
             .transform_points(code, "EPSG:4326", &projected, &c)
@@ -641,8 +637,9 @@ fn gdal_fixtures(dir: &Path, gdal: &GdalEngine) -> Vec<(String, PathBuf, Facts)>
         &user_defined,
     );
     fixtures.push(("user-defined-lambert".to_string(), user_defined, TIFF_FACTS));
-    // Text formats: Esri ASCII with a .prj, and XYZ (which has no NoData notion
-    // in GDAL, so its NoData fact is not compared).
+    // Text formats: Esri ASCII and XYZ (which has no NoData notion in GDAL, so
+    // its NoData fact is not compared). Neither carries a CRS: the Rust engine
+    // reads one from GeoTIFF keys only (A8).
     let (aw, ah) = (6u32, 4u32);
     let mut ascii = format!(
         "ncols {aw}\nnrows {ah}\nxllcorner 600000\nyllcorner 6000000\ncellsize 25\nNODATA_value -1\n"
@@ -668,11 +665,6 @@ fn gdal_fixtures(dir: &Path, gdal: &GdalEngine) -> Vec<(String, PathBuf, Facts)>
     }
     let asc = dir.join("grid.asc");
     std::fs::write(&asc, ascii).expect("asc fixture");
-    std::fs::write(
-        dir.join("grid.prj"),
-        super::crs::from_epsg(3857).expect("3857").wkt,
-    )
-    .expect("prj sidecar");
     fixtures.push((
         "esri-ascii".to_string(),
         asc,

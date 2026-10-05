@@ -101,18 +101,14 @@ fn every_registry_entry_has_exactly_one_executor() {
     }
 }
 
+/// The class comes from the table row of the stored reference (A7, A9).
 #[test]
-fn crs_classes_are_read_from_the_stored_wkt() {
-    let lambert = r#"PROJCRS["RGF93 v1 / Lambert-93",BASEGEOGCRS["RGF93 v1",ANGLEUNIT["degree",0.0174532925199433]],CS[Cartesian,2],LENGTHUNIT["metre",1]]"#;
-    assert_eq!(crs_class(lambert), CRS_PROJECTED_METRE);
-    assert_eq!(
-        crs_class(r#"PROJCS["NAD27 / feet",UNIT["US survey foot",0.3048006]]"#),
-        "projected-other"
-    );
-    assert_eq!(
-        crs_class(r#"GEOGCRS["WGS 84",ANGLEUNIT["degree",0.0174532925199433]]"#),
-        "geographic"
-    );
+fn crs_classes_come_from_the_row_of_the_stored_reference() {
+    assert_eq!(crs_class("EPSG:2154"), CRS_PROJECTED_METRE);
+    assert_eq!(crs_class("EPSG:4471"), CRS_PROJECTED_METRE);
+    assert_eq!(crs_class("EPSG:4326"), "geographic");
+    assert_eq!(crs_class("EPSG:4171"), "geographic");
+    assert_eq!(crs_class("EPSG:2263"), "unknown", "feet are not a row");
     assert_eq!(crs_class(""), "unknown");
     assert!(values_in_metres(" Metres "));
     assert!(!values_in_metres("ft"));

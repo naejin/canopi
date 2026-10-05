@@ -38,28 +38,17 @@ pub(crate) const CRS_PROJECTED_OTHER: &str = "projected-other";
 pub(crate) const CRS_GEOGRAPHIC: &str = "geographic";
 const CRS_UNKNOWN: &str = "unknown";
 
-/// Classify a stored CRS for offers.
+/// Classify a stored CRS reference (`EPSG:n`) for offers, from its table row.
 ///
-/// Import records the class of the WKT the raster engine reported, so offers
-/// are computed from the catalogue on every poll without a raster read; a run
-/// rechecks the stored raster with the engine, which stays the projection
-/// authority.
-pub(crate) fn crs_class(wkt: &str) -> &'static str {
-    let upper = wkt.trim().to_ascii_uppercase();
-    if upper.is_empty() {
-        return CRS_UNKNOWN;
-    }
-    if !upper.contains("PROJCS[") && !upper.contains("PROJCRS[") {
-        return if upper.contains("GEOGCS[") || upper.contains("GEOGCRS[") {
-            CRS_GEOGRAPHIC
-        } else {
-            CRS_UNKNOWN
-        };
-    }
-    if upper.contains("METRE") || upper.contains("METER") {
-        CRS_PROJECTED_METRE
-    } else {
-        CRS_PROJECTED_OTHER
+/// Import records the class of the reference the raster engine reported, so
+/// offers are computed from the catalogue on every poll without a raster
+/// read; a run rechecks the stored raster with the engine, which stays the
+/// projection authority.
+pub(crate) fn crs_class(reference: &str) -> &'static str {
+    match super::rust_engine::crs_kind(reference) {
+        Some(super::rust_engine::CrsKind::ProjectedMetre) => CRS_PROJECTED_METRE,
+        Some(super::rust_engine::CrsKind::Geographic) => CRS_GEOGRAPHIC,
+        None => CRS_UNKNOWN,
     }
 }
 
