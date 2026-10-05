@@ -26,6 +26,14 @@ it('a notice keeps its buttons at the right edge when they wrap onto a second li
 it('a notice breaks a long word such as a file path and keeps a readable width before wrapping (canopi-6spu)', () => {
   const body = rule('.body')
   expect(body).toMatch(/overflow-wrap: anywhere;/)
-  expect(body).toMatch(/flex: 1 1 12rem;/)
+  expect(body).toMatch(/flex: 1 1 \d+px;/)
   expect(body).toMatch(/min-width: 0;/)
+})
+
+it('a notice keeps its text beside the icon at a large browser font size (canopi-6spu, root 24 px in a 320 px dock)', () => {
+  // Text is sized in px tokens; a rem flex-basis follows the browser default size and pushes the text under the icon.
+  const basis = /flex: 1 1 (?<px>\d+)px;/.exec(rule('.body'))?.groups?.px
+  expect(basis).toBeDefined()
+  // 320 px dock content (about 268 px) minus an 18 px icon and the 10 px gap.
+  expect(Number(basis)).toBeLessThanOrEqual(268 - 18 - 10)
 })
