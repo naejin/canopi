@@ -1276,7 +1276,7 @@ impl LidarLibrary {
             )
         });
         if let Err(error) = checked {
-            self.refuse_retry(&latest_job, &error)?;
+            self.refuse_retry(&latest_job, &error);
             return Err(error);
         }
         let (layer_id, job_id, paths) = self.record_import_retry(layer_id)?;
@@ -1334,16 +1334,21 @@ impl LidarLibrary {
     }
 
     /// A refused Retry's reason, kept as the failure of the item's latest
-    /// import (failed or cancelled) instead of a new job row.
-    fn refuse_retry(&self, latest_job: &str, message: &str) -> Result<(), String> {
-        self.catalogue()?
-            .execute(
-                "UPDATE lidar_import_jobs SET state = 'failed', message = ?2, updated_at = ?3
-                 WHERE id = ?1 AND state IN ('failed', 'cancelled')",
-                rusqlite::params![latest_job, message, now_iso()],
-            )
-            .map_err(|e| format!("Failed to record the refused retry: {e}"))?;
-        Ok(())
+    /// import (failed or cancelled) instead of a new job row. Best effort: the
+    /// caller returns the refusal whatever happens to this write.
+    fn refuse_retry(&self, latest_job: &str, message: &str) {
+        let written = self.catalogue().and_then(|connection| {
+            connection
+                .execute(
+                    "UPDATE lidar_import_jobs SET state = 'failed', message = ?2, updated_at = ?3
+                     WHERE id = ?1 AND state IN ('failed', 'cancelled')",
+                    rusqlite::params![latest_job, message, now_iso()],
+                )
+                .map_err(|e| e.to_string())
+        });
+        if let Err(error) = written {
+            tracing::warn!(job_id = latest_job, %error, "a refused retry's reason was not kept on its item");
+        }
     }
 
     fn fail_import_job(&self, job_id: &str, message: &str) {

@@ -560,6 +560,27 @@ fn retrying_a_cancelled_import_whose_file_is_gone_fails_that_import_with_the_rea
     assert_eq!(count(&library, "SELECT COUNT(*) FROM lidar_import_jobs"), 1);
 }
 
+/// A refused Retry whose reason cannot be written onto its item still returns
+/// the refusal itself, not the failed write.
+#[test]
+fn a_refused_retry_returns_its_reason_when_the_row_cannot_be_updated() {
+    let root = scratch("retry-refused-write-fails");
+    let library = attached_library(&root);
+    let layer_id = failed_import(&library, root.join("gone.tif"), "first failure");
+    library
+        .catalogue()
+        .unwrap()
+        .execute_batch(
+            "CREATE TEMP TRIGGER jobs_read_only BEFORE UPDATE ON lidar_import_jobs
+             BEGIN SELECT RAISE(ABORT, 'jobs are read-only'); END;",
+        )
+        .unwrap();
+    let error = library.retry_import(&layer_id).unwrap_err();
+    assert!(error.contains("gone.tif cannot be found"), "{error}");
+    assert!(!error.contains("read-only"), "{error}");
+    assert_eq!(count(&library, "SELECT COUNT(*) FROM lidar_import_jobs"), 1);
+}
+
 /// A library the catalogue rebuild made: its one item, named "Orchard", is
 /// rebuilt from `source`'s bytes kept as the managed original of `sha256`, which
 /// was imported as `elsewhere.tif`. Returns the library and the item.
