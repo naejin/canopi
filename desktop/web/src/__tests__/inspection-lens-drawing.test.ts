@@ -289,7 +289,6 @@ function createPlant(
     canonicalName: 'Malus domestica',
     commonName: 'Apple',
     color: null,
-    stratum: null,
     canopySpreadM: null,
     position: { x: 10, y: 10 },
     rotationDeg: null,

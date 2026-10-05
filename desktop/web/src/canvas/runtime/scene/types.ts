@@ -27,7 +27,7 @@ export interface ScenePlantEntity {
   color: string | null
   symbol?: string | null
   pinnedName?: boolean
-  stratum: string | null
+  /** The catalog width when the plant was placed (the file's `scale`); never filled in later. */
   canopySpreadM: number | null
   position: ScenePoint
   rotationDeg: number | null

@@ -152,7 +152,6 @@ describe('CanvasContextMenu', () => {
       canonicalName: 'Malus domestica',
       commonName: 'Apple',
       color: null,
-      stratum: null,
       canopySpreadM: null,
       position: { x: index, y: 0 },
       rotationDeg: null,

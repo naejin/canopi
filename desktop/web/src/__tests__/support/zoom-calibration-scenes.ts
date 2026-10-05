@@ -17,7 +17,7 @@ export function createZoomCalibrationScene(name: ZoomCalibrationScene): ScenePer
         kind: 'plant', id: `plant-${index}`, locked: index === 2,
         canonicalName: `Species ${index}`, commonName: names[index % names.length]!,
         color: null, symbol: symbols[index % symbols.length], pinnedName: index % 3 !== 0,
-        stratum: 'medium', canopySpreadM: null,
+        canopySpreadM: null,
         position: { x: 5 + column * spacing, y: 7 + row * spacing },
         rotationDeg: null, notes: null, plantedDate: null, quantity: null,
       })

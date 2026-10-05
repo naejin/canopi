@@ -101,6 +101,10 @@ describe('Place plants species chooser', () => {
     queries = createTestCanvasQuerySurface({
       scene: store.persisted,
       localizedNames: new Map([['Malus domestica', 'Pommier'], ['Ficus carica', null]]),
+      speciesCache: new Map([
+        ['Malus domestica', { canonical_name: 'Malus domestica', stratum: 'high' }],
+        ['Ficus carica', { canonical_name: 'Ficus carica', stratum: 'emergent' }],
+      ]),
     })
     setCurrentCanvasSession({
       commands: createTestCanvasCommandSurface(),
@@ -218,6 +222,12 @@ describe('Place plants species chooser', () => {
     expect(glyph('Malus domestica').querySelector('svg')?.getAttribute('data-plant-symbol')).toBe('round')
     expect(glyph('Malus domestica').style.color).not.toBe('')
     expect(glyph('Rubus idaeus').querySelector('svg')?.getAttribute('data-plant-symbol')).toBe('round')
+  })
+
+  it('the chooser swatch for a Design species shows the cached stratum colour', async () => {
+    const fig = options().find((option) => option.dataset.speciesOption === 'Ficus carica')!
+    // getStratumColor('emergent'), #1B5E20: the colour the canvas draws a Fig with no colour of its own.
+    expect(fig.querySelector<HTMLElement>('[data-species-glyph]')!.style.color).toBe('rgb(27, 94, 32)')
   })
 
   it('rings a species\' plants with the hover stroke only while its row is pointed at or focused', async () => {

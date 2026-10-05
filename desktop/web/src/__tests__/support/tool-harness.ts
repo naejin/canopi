@@ -82,7 +82,6 @@ export function plantEntity(
     canonicalName,
     commonName: canonicalName,
     color: null,
-    stratum: null,
     canopySpreadM: 2,
     position,
     rotationDeg: null,

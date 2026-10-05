@@ -30,7 +30,6 @@ import {
   createAbortFailingSceneEdits,
   withoutNativeRandomUUID,
   captureWindowErrors,
-  makePlant,
   installSceneInteractionFixture,
   enterOverview,
 } from './support/canvas-interaction-setup'
@@ -408,89 +407,6 @@ describe('SceneInteractionSession', () => {
     }
   })
 
-  it.each([
-    { label: 'Rectangle', tool: 'rectangle' },
-    { label: 'Measurement Guide', tool: 'measurement-guide' },
-  ])('a $label retained post-commit backfill failure is finished at once, with nothing left for a retry', ({ tool }) => {
-    store.updatePersisted((draft) => {
-      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 150, y: 150 }, {
-        stratum: null,
-        canopySpreadM: null,
-      })]
-    })
-    const history = new SceneHistory()
-    let invalidationCalls = 0
-    const baseDeps = createInteractionDeps(container, store, testView)
-    const coordinator = new SceneRuntimeEditCoordinator({
-      sceneStore: store,
-      history,
-      setSelection: baseDeps.setSelection,
-      incrementSceneRevision: () => {},
-      syncCanvasSignalsFromScene: () => {},
-      invalidate: () => {
-        invalidationCalls += 1
-        if (invalidationCalls === 2 || invalidationCalls === 3) {
-          throw new Error(`${tool} late backfill publication failed`)
-        }
-      },
-    })
-    let enqueueBackfill = true
-    const session = createTestSession({
-      ...baseDeps,
-      sceneEdits: withCommitContinuation(coordinator, `interaction-${tool}`, () => {
-        if (!enqueueBackfill) return
-        enqueueBackfill = false
-        const ticket = coordinator.issueTicket()
-        expect(coordinator.applyBackfills(ticket, [{
-          plantId: 'plant-1',
-          canonicalName: 'Malus domestica',
-          stratum: 'canopy',
-          canopySpreadM: 4,
-        }])).toBe('deferred')
-      }),
-      commandAdmission: coordinator,
-    })
-    session.setTool(tool)
-
-    events.pointerDown({ x: 10, y: 20 }, { pointerId: 94 })
-    events.pointerMove({ x: 40, y: 60 }, { pointerId: 94 })
-    if (draftChips().length === 0) throw new Error(`Expected ${tool} draft measurements`)
-
-    try {
-      const errors = captureWindowErrors(() => {
-        events.pointerUp({ x: 40, y: 60 }, { pointerId: 94 })
-      })
-
-      // The host's own retry inside the cancellation failure has already finished the backfill publication.
-      expect(errors).toHaveLength(1)
-      expect(store.persisted.plants[0]).toMatchObject({
-        stratum: 'canopy',
-        canopySpreadM: 4,
-      })
-      expect(coordinator.canUndo.value).toBe(true)
-      if (tool === 'rectangle') {
-        expect(store.persisted.zones).toHaveLength(1)
-      } else {
-        expect(store.persisted.measurementGuides).toHaveLength(1)
-      }
-
-      events.pointerDown({ x: 50, y: 70 }, { pointerId: 96 })
-      events.pointerMove({ x: 80, y: 100 }, { pointerId: 96 })
-      events.pointerUp({ x: 80, y: 100 }, { pointerId: 96 })
-
-      if (tool === 'rectangle') {
-        expect(store.persisted.zones).toHaveLength(2)
-      } else {
-        expect(store.persisted.measurementGuides).toHaveLength(2)
-      }
-      expect(coordinator.undo()).toBe(true)
-      expect(coordinator.undo()).toBe(true)
-      expect(coordinator.undo()).toBe(false)
-    } finally {
-      session.dispose()
-    }
-  })
-
   it('does not create rectangle zones on a locked Zones Layer', () => {
     store.updatePersisted((draft) => {
       draft.layers = draft.layers.map((layer) => (
@@ -824,7 +740,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 80, y: 80 },
         rotationDeg: null,

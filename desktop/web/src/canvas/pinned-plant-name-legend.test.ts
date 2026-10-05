@@ -12,9 +12,9 @@ import { SceneCanvasRuntime } from './runtime/scene-runtime'
 import type { SpeciesCacheEntry } from './runtime/species-cache'
 
 describe('pinned plant name legend through the runtime', () => {
-  // A20: an opened Design's plants carry no stratum (the codec hydrates `stratum: null`) and the canvas colours them
-  // from the species catalog. The runtime writes the catalog stratum into the Scene in the same publish that first
-  // draws them and bumps the scene revision DisplayLegend reads, so the legend, which reads only the Scene, matches.
+  // A20: a plant carries no stratum; the canvas colours one without its own colour from the species catalog entries
+  // the runtime loads before it first draws it. The legend reads the same entries, and the load advances the
+  // plant-names revision DisplayLegend reads, so the legend matches the canvas.
   it('shows an opened plant in the colour the canvas paints it once the species catalog loads', async () => {
     const speciesCache = new Map<string, SpeciesCacheEntry>()
     const renderer = { id: 'maplibre-pixi' as const, syncScene: vi.fn(), setView: vi.fn(), setDraft: vi.fn(), dispose: vi.fn() }
@@ -43,10 +43,9 @@ describe('pinned plant name legend through the runtime', () => {
     })
     runtime.documentSurface.loadDocument(openedDesignWithPinnedPlant())
     const legendColor = () => buildPinnedPlantNameLegendEntries(runtime.querySurface, DEFAULT_PLANT_DISPLAY)[0]?.color
-    // Before the first frame neither the canvas nor the Scene has the catalog stratum.
-    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.stratum).toBeNull()
+    // Before the first frame no catalog entry has loaded.
     expect(legendColor()).not.toBe(getStratumColor('high'))
-    const sceneRevision = runtime.querySurface.revision.scene.value
+    const plantNamesRevision = runtime.querySurface.revision.plantNames.value
     const host = document.createElement('div')
     Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
     Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
@@ -58,7 +57,7 @@ describe('pinned plant name legend through the runtime', () => {
     const canvasColor = resolvePlantDisplayColor(drawn.scene.plants[0]!, drawn.speciesCache, DEFAULT_PLANT_DISPLAY)
     expect(canvasColor).toBe(getStratumColor('high'))
     expect(legendColor()).toBe(canvasColor)
-    expect(runtime.querySurface.revision.scene.value).toBeGreaterThan(sceneRevision)
+    expect(runtime.querySurface.revision.plantNames.value).toBeGreaterThan(plantNamesRevision)
     runtime.destroy()
   })
 })

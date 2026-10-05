@@ -73,7 +73,6 @@ export function createPlantSpacingGeneratedPlants(
     color: source.color,
     ...(source.symbol != null ? { symbol: source.symbol } : {}),
     pinnedName: false,
-    stratum: source.stratum,
     canopySpreadM: source.canopySpreadM,
     position: { ...position },
     rotationDeg: source.rotationDeg,

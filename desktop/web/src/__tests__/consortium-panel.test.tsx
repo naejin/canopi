@@ -153,7 +153,6 @@ describe('Consortium panel', () => {
       canonicalName: 'Malus domestica',
       commonName: 'Pommier cultivé',
       color: '#3E8E4E',
-      stratum: null,
       canopySpreadM: null,
       position: { x: 0, y: 0 },
       rotationDeg: null,

@@ -103,7 +103,7 @@ let container: HTMLDivElement
 
 function plant(id: string, canonicalName: string): ScenePlantEntity {
   return {
-    kind: 'plant', id, locked: false, canonicalName, commonName: null, color: null, stratum: null,
+    kind: 'plant', id, locked: false, canonicalName, commonName: null, color: null,
     canopySpreadM: null, position: { x: 0, y: 0 }, rotationDeg: null, notes: null, plantedDate: null, quantity: 1,
   }
 }

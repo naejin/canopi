@@ -65,7 +65,6 @@ describe('Plants in this Design', () => {
         color: '#3e8e4e',
         symbol: 'herb',
         position: { x: plant.x, y: 0 },
-        stratum: null,
         canopySpreadM: null,
         rotationDeg: 0,
         scale: 1,

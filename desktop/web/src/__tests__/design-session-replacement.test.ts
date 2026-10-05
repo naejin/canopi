@@ -10,7 +10,6 @@ import {
 import { SceneHistory } from "../canvas/runtime/scene-history";
 import { SceneStore } from "../canvas/runtime/scene";
 import { SceneRuntimeEditCoordinator } from "../canvas/runtime/scene-runtime/transactions";
-import { geoAt } from "./support/geo-design";
 import type { CanopiFile } from "../types/design";
 import {
   editDesignSessionForTest,
@@ -420,97 +419,6 @@ describe("Design Session replacement", () => {
       .not.toBe(vi.mocked(canvas.replaceDocument).mock.calls[1]?.[1]);
     expect(vi.mocked(canvas.replaceDocument).mock.calls[1]?.[1])
       .toBe(vi.mocked(canvas.replaceDocument).mock.calls[2]?.[1]);
-  });
-
-  it("does not repeat completed Design finalization when late backfill publication retries", () => {
-    const events: string[] = [];
-    const store = createMemoryDesignSessionStore({
-      file: makeFile("Previous"),
-      path: "/previous.canopi",
-      name: "Previous",
-    });
-    const replaceState = vi.spyOn(store, "replaceCurrentDesignState");
-    const resetBaselines = vi.spyOn(store, "resetDirtyBaselines");
-    let invalidationCalls = 0;
-    const next = makeFile("Recovered");
-    next.layers = [{ name: "plants", visible: true, locked: false, opacity: 1 }];
-    next.plants = [{
-      id: "plant-1",
-      canonical_name: "Malus domestica",
-      common_name: "Apple",
-      color: null,
-      position: geoAt(10, 10),
-      rotation: null,
-      scale: null,
-      notes: null,
-      planted_date: null,
-      quantity: 1,
-      locked: false,
-    }];
-    const sceneStore = new SceneStore().hydrate(makeFile("Previous"));
-    const authority = new SceneRuntimeEditCoordinator({
-      sceneStore,
-      history: new SceneHistory(),
-      setSelection: (ids) => sceneStore.setSelection(ids),
-      incrementSceneRevision: () => {},
-      syncCanvasSignalsFromScene: () => {},
-      invalidate: () => {
-        invalidationCalls += 1;
-        if (invalidationCalls === 2) throw new Error("late backfill invalidation failed");
-      },
-    });
-    const canvas = makeCanvas(events);
-    vi.mocked(canvas.replaceDocument).mockImplementation((file, token, finalizeReplacement) => {
-      events.push("canvas.replace");
-      const callerFinalizerInvoked = authority.replaceDocument(file, {
-        token,
-        prepare: () => {},
-        finalizeReplacement: () => {
-          finalizeReplacement();
-          const ticket = authority.issueTicket();
-          expect(authority.applyBackfills(ticket, [{
-            plantId: "plant-1",
-            canonicalName: "Malus domestica",
-            stratum: "canopy",
-            canopySpreadM: 4,
-          }])).toBe("deferred");
-        },
-      });
-      return { callerFinalizerInvoked };
-    });
-    const replacement = createDesignSessionReplacement({
-      store,
-      workflowRunner: makeWorkflowRunner(events),
-    });
-    const input = {
-      file: next,
-      kind: "loaded" as const,
-      path: "/recovered.canopi",
-      name: "Recovered",
-    };
-
-    expect(() => replacement.replace(input, canvas, () => true))
-      .toThrow("late backfill invalidation failed");
-    expect(replaceState).toHaveBeenCalledOnce();
-    expect(resetBaselines).toHaveBeenCalledOnce();
-
-    editDesignSessionForTest(store, (design) => ({
-      ...design,
-      description: "Intervening field note",
-    }));
-    expect(store.isDesignDirty()).toBe(true);
-
-    const receipt = replacement.replace(input, canvas, () => true);
-
-    expect(replaceState).toHaveBeenCalledOnce();
-    expect(resetBaselines).toHaveBeenCalledOnce();
-    expect(store.readCurrentDesign()?.description).toBe("Intervening field note");
-    expect(store.isDesignDirty()).toBe(true);
-    expect(receipt.file?.description).toBe("Intervening field note");
-    expect(sceneStore.persisted.plants[0]).toMatchObject({
-      stratum: "canopy",
-      canopySpreadM: 4,
-    });
   });
 
   it("preserves edits made after Design identity applied but its publication threw", () => {

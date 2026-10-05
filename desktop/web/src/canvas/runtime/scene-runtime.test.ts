@@ -1870,7 +1870,7 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
-  it('publishes current cache changes while skipping stale persisted presentation backfills', async () => {
+  it('publishes current cache changes with one scene invalidation', async () => {
     const runtime = new SceneCanvasRuntime()
     runtime.documentSurface.loadDocument(makeFile())
     const invalidate = vi.spyOn(runtime as any, '_invalidate')
@@ -1884,21 +1884,10 @@ describe('scene canvas runtime', () => {
     const pending = runtime.commandSurface.plantPresentation.ensureSpeciesCacheEntries(['Malus domestica'], 'en')
     runtime.commandSurface.plantPresentation.setPlantColorForSpecies('Malus domestica', '#335577')
     const invalidationsBeforeRefresh = invalidate.mock.calls.length
-    resolveRefresh({
-      changed: true,
-      plantNamesRevision: 0,
-      backfills: [{
-        plantId: 'plant-1',
-        canonicalName: 'Malus domestica',
-        stratum: 'canopy',
-        canopySpreadM: 4,
-      }],
-      failure: null,
-    })
+    resolveRefresh({ changed: true, plantNamesRevision: 0, failure: null })
 
     await expect(pending).resolves.toBe(true)
     expect(invalidate.mock.calls.slice(invalidationsBeforeRefresh)).toEqual([['scene']])
-    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.stratum).toBeNull()
     invalidate.mockRestore()
     runtime.destroy()
   })
@@ -2115,7 +2104,7 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
-  it('does not publish deferred presentation backfills after runtime teardown', async () => {
+  it('does not publish a species load that lands after runtime teardown', async () => {
     const cache = new Map<string, Record<string, unknown>>()
     let resolveRefresh!: () => void
     const refresh = new Promise<void>((resolve) => {
@@ -2147,6 +2136,7 @@ describe('scene canvas runtime', () => {
     const initialize = runtime.init(container)
     await vi.waitFor(() => expect(ensureEntries).toHaveBeenCalledOnce())
     const sceneRevision = runtime.querySurface.revision.scene.value
+    const plantNamesRevision = runtime.querySurface.revision.plantNames.value
     const invalidate = vi.spyOn((runtime as any)._rendering, 'invalidate')
     invalidate.mockClear()
 
@@ -2154,11 +2144,9 @@ describe('scene canvas runtime', () => {
     resolveRefresh()
     await initialize
 
-    expect(runtime.querySurface.getSceneSnapshot().plants[0]).toMatchObject({
-      stratum: null,
-      canopySpreadM: null,
-    })
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.canopySpreadM).toBeNull()
     expect(runtime.querySurface.revision.scene.value).toBe(sceneRevision)
+    expect(runtime.querySurface.revision.plantNames.value).toBe(plantNamesRevision)
     expect(invalidate).not.toHaveBeenCalled()
   })
 
@@ -2201,10 +2189,7 @@ describe('scene canvas runtime', () => {
     resolveRefresh()
 
     await expect(publication).resolves.toBe(false)
-    expect(runtime.querySurface.getSceneSnapshot().plants[0]).toMatchObject({
-      stratum: null,
-      canopySpreadM: null,
-    })
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.canopySpreadM).toBeNull()
     expect(runtime.querySurface.revision.scene.value).toBe(sceneRevision)
     expect(invalidate).not.toHaveBeenCalled()
   })

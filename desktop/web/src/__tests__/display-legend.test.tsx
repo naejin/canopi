@@ -187,7 +187,6 @@ function plant(overrides: Partial<ScenePlantEntity> = {}): ScenePlantEntity {
     color: null,
     symbol: null,
     pinnedName: false,
-    stratum: 'tree',
     canopySpreadM: null,
     position: { x: 0, y: 0 },
     rotationDeg: null,

@@ -4,6 +4,8 @@ import {
   type ScenePersistedState,
 } from './scene'
 import { resolvePlantBaseColor } from './plant-presentation'
+import { normalizeHexColor } from '../plant-colors'
+import { getStratumColor } from '../plants'
 import type { SpeciesCacheEntry } from './species-cache'
 
 /** No catalog entries: colours come from the plant and the Design alone. */
@@ -18,7 +20,9 @@ export interface SpeciesAppearance {
 /**
  * The symbol and colour a new plant of this species takes in this Design:
  * the Design's species symbol and colour, else the default symbol and the
- * stratum colour. The same rules as a placed plant without overrides.
+ * stratum colour. The same rules as a placed plant without overrides. The
+ * stratum is the species source's: a Favorite or recent pick has no entry in
+ * the runtime's species cache, and a Design species' source reads it from there.
  */
 export function speciesPlacementAppearance(
   scene: Pick<ScenePersistedState, 'plantSpeciesSymbols' | 'plantSpeciesColors'>,
@@ -26,21 +30,7 @@ export function speciesPlacementAppearance(
 ): SpeciesAppearance {
   return {
     symbol: resolvePlantSymbolForPlant({ canonicalName: species.canonicalName }, scene.plantSpeciesSymbols),
-    color: resolvePlantBaseColor({
-      kind: 'plant',
-      id: '',
-      canonicalName: species.canonicalName,
-      commonName: null,
-      color: scene.plantSpeciesColors[species.canonicalName] ?? null,
-      stratum: species.stratum,
-      canopySpreadM: null,
-      position: { x: 0, y: 0 },
-      rotationDeg: null,
-      notes: null,
-      plantedDate: null,
-      quantity: 1,
-      locked: false,
-    }, EMPTY_SPECIES_CACHE),
+    color: normalizeHexColor(scene.plantSpeciesColors[species.canonicalName]) ?? getStratumColor(species.stratum),
   }
 }
 
@@ -143,6 +133,7 @@ export interface SpeciesKeyEntry {
 
 export function buildSpeciesKey(
   scene: ScenePersistedState,
+  speciesCache: ReadonlyMap<string, SpeciesCacheEntry>,
   localizedNames: ReadonlyMap<string, string | null>,
   englishFallbackNames: ReadonlyMap<string, string> = NO_ENGLISH_FALLBACKS,
 ): SpeciesKeyEntry[] {
@@ -175,7 +166,7 @@ export function buildSpeciesKey(
     }
     entry.count += 1
     const symbol = resolvePlantSymbolForPlant(plant, scene.plantSpeciesSymbols)
-    const color = resolvePlantBaseColor(plant, EMPTY_SPECIES_CACHE)
+    const color = resolvePlantBaseColor(plant, speciesCache)
     if (
       !entry.appearances.some(
         (appearance) =>

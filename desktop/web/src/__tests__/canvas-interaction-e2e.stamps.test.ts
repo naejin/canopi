@@ -69,7 +69,6 @@ describe('SceneInteractionSession', () => {
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: null,
-        stratum: null,
         canopySpreadM: 2,
         position: { x: 40, y: 40 },
         rotationDeg: null,
@@ -260,7 +259,7 @@ describe('SceneInteractionSession', () => {
       store.updatePersisted((draft) => {
         draft.plants = [{
           kind: 'plant', locked: false, id: 'plant-1', canonicalName: 'Malus domestica', commonName: 'Apple',
-          color: null, stratum: null, canopySpreadM: 2, position: { x: 50, y: 60 }, rotationDeg: null,
+          color: null, canopySpreadM: 2, position: { x: 50, y: 60 }, rotationDeg: null,
           notes: null, plantedDate: null, quantity: 1,
         }]
       })

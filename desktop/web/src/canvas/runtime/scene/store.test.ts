@@ -166,7 +166,6 @@ describe('scene store', () => {
 
     expect(store.session.selectedTargets).toContainEqual({ kind: 'plant', id: 'plant-1' })
     expect(store.persisted.plants[0]).toMatchObject({
-      stratum: null,
       canopySpreadM: 1.2,
     })
 
@@ -387,7 +386,6 @@ describe('scene store', () => {
     const store = new SceneStore().hydrate(file)
 
     store.updatePersisted((draft) => {
-      draft.plants[0]!.stratum = 'high'
       draft.plants[0]!.canopySpreadM = 2.4
     })
 
@@ -397,7 +395,6 @@ describe('scene store', () => {
       ...file.plants[0],
       scale: 2.4,
     })
-    expect(serialized.plants[0]).not.toHaveProperty('stratum')
     expect(serialized.plants[0]).not.toHaveProperty('canopySpreadM')
   })
 

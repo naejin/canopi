@@ -6,7 +6,7 @@ import { createTestRendererView, createTestSceneRendererSnapshot } from './suppo
 
 function plant(id: string, x: number, y: number): ScenePlantEntity {
   return { kind: 'plant', id, position: { x, y }, canonicalName: 'Mentha spicata', commonName: 'Menthe verte',
-    color: null, stratum: null, canopySpreadM: null, rotationDeg: null, notes: null,
+    color: null, canopySpreadM: null, rotationDeg: null, notes: null,
     plantedDate: null, quantity: null, locked: false, pinnedName: false }
 }
 

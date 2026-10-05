@@ -177,7 +177,6 @@ function hydratePlantEntity(plant: PlacedPlant, geo: SceneGeoFrame): ScenePlantE
     color: plant.color,
     symbol: plant.symbol ?? null,
     pinnedName: plant.pinned_name ?? false,
-    stratum: null,
     canopySpreadM: plant.scale,
     position: hydrateGeoPoint(geo, plant.position),
     rotationDeg: plant.rotation,

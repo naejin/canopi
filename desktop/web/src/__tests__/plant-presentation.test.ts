@@ -10,6 +10,7 @@ import {
   type PlantPresentationContext,
 } from '../canvas/runtime/plant-presentation'
 import { createTestRendererView } from './support/scene-renderer-snapshot'
+import { getStratumColor } from '../canvas/plants'
 
 /** The renderer's composition: entries, then layout and stack badges from them. */
 function buildPlantPresentationSnapshot(
@@ -32,7 +33,6 @@ function createPlant(overrides: Partial<ScenePlantEntity> = {}): ScenePlantEntit
     canonicalName: 'Malus domestica',
     commonName: 'Apple',
     color: null,
-    stratum: null,
     canopySpreadM: null,
     position: { x: 10, y: 20 },
     rotationDeg: null,
@@ -113,6 +113,15 @@ describe('plant presentation service', () => {
     expect(presentation.color).toBe('#C44230')
   })
 
+  it('a plant without its own colour takes its stratum colour from the species cache', () => {
+    const presentation = buildPlantPresentationEntries([createPlant()], {
+      pixelsPerMetre: 8,
+      speciesCache: new Map([['Malus domestica', { stratum: 'emergent' }]]),
+    }, new Set())[0]!
+
+    expect(presentation.baseColor).toBe(getStratumColor('emergent'))
+  })
+
   it('resolves Plant Symbols without changing the Visual Footprint', () => {
     const entries = buildPlantPresentationEntries([
       createPlant({ id: 'explicit', symbol: 'conifer' }),
@@ -152,10 +161,8 @@ describe('plant presentation service', () => {
 
     expect(canopyPresentation.radiusScreenPx).toBeCloseTo(4.05, 2)
     expect(canopyPresentation.radiusWorld).toBeCloseTo(4.05 / 16, 2)
-    expect(canopyPresentation.usesCanopyRadius).toBe(false)
     expect(fallbackPresentation.radiusScreenPx).toBeCloseTo(4.05, 2)
     expect(fallbackPresentation.radiusWorld).toBeCloseTo(4.05 / 16, 2)
-    expect(fallbackPresentation.usesCanopyRadius).toBe(false)
     expect(fallbackPresentation.symbol).toBe('conifer')
   })
 

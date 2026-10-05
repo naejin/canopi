@@ -13,7 +13,7 @@ function setup() {
     draft.plants = [0, 3].map((x, index) => ({
       kind: 'plant', id: String(index), locked: false,
       canonicalName: 'Malus domestica', commonName: null, color: null,
-      stratum: null, canopySpreadM: null, position: { x, y: 0 },
+      canopySpreadM: null, position: { x, y: 0 },
       rotationDeg: null, scale: null, notes: null, plantedDate: null, quantity: null,
     }))
   })

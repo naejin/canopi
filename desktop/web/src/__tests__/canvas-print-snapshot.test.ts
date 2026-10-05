@@ -34,7 +34,7 @@ describe('Canvas print capture', () => {
     const scene = createDefaultScenePersistedState()
     scene.plantSpeciesSymbols['Malus domestica'] = 'canopy'
     scene.plants.push({ kind: 'plant', id: 'apple', canonicalName: 'Malus domestica', commonName: 'Apple',
-      color: '#123456', pinnedName: true, locked: true, stratum: null, canopySpreadM: null,
+      color: '#123456', pinnedName: true, locked: true, canopySpreadM: null,
       position: { x: 12, y: -4 }, rotationDeg: 90, notes: null, plantedDate: null, quantity: 1 })
     const before = structuredClone(scene)
     const result = buildCanvasPrintSnapshot(scene, { pixelsPerMetre: 0.001, speciesCache: new Map() })
@@ -47,7 +47,7 @@ describe('Canvas print capture', () => {
   it('prints every symbol from the shared recipe: body in the plant colour, then its cut-outs', () => {
     const scene = createDefaultScenePersistedState()
     PLANT_SYMBOL_IDS.forEach((symbol, index) => scene.plants.push({ kind: 'plant', id: symbol, canonicalName: `Species ${index}`, commonName: null,
-      color: '#123456', symbol, locked: false, stratum: null, canopySpreadM: null,
+      color: '#123456', symbol, locked: false, canopySpreadM: null,
       position: { x: index, y: 0 }, rotationDeg: null, notes: null, plantedDate: null, quantity: 1 }))
     const result = buildCanvasPrintSnapshot(scene, { pixelsPerMetre: 1, speciesCache: new Map() })
     for (const plant of result.plants) {

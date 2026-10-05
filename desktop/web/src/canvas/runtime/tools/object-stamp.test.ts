@@ -73,7 +73,6 @@ const APPLE = plantEntity('plant-1', 'Malus domestica', { x: 50, y: 60 }, {
   commonName: 'Apple',
   color: '#C44230',
   symbol: 'triangle',
-  stratum: 'high',
   canopySpreadM: 4,
   rotationDeg: 15,
   notes: 'Source plant',
@@ -121,7 +120,6 @@ describe('object stamp tool', () => {
       commonName: 'Apple',
       color: '#C44230',
       symbol: 'triangle',
-      stratum: 'high',
       canopySpreadM: 4,
       position: { x: 96, y: 117 },
       rotationDeg: 15,
@@ -654,7 +652,6 @@ describe('object stamp tool', () => {
       plants: [plantEntity('plant-1', 'Malus domestica', { x: 40, y: 40 }, {
         commonName: 'Apple',
         color: '#C44230',
-        stratum: 'high',
         canopySpreadM: 4,
         rotationDeg: 15,
         notes: 'Tree',

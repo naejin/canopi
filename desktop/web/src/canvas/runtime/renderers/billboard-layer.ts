@@ -612,7 +612,7 @@ function drawPlantRing(ring: Graphics, entry: PlantPresentationEntry, state: Can
 }
 
 function resolveRenderedPlantSymbol(entry: PlantPresentationEntry): PlantSymbolId {
-  return entry.lod === 'dot' || entry.usesCanopyRadius ? 'round' : entry.symbol
+  return entry.lod === 'dot' ? 'round' : entry.symbol
 }
 
 /** The badge at its offset from the local origin, the plant's screen point. */

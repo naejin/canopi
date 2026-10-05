@@ -43,7 +43,6 @@ import {
   type SceneEditCoordinator,
   type SceneEditTransaction,
   type SceneHistoryCommands,
-  type ScenePresentationMaintenance,
   type SettledSceneReader,
 } from './scene-runtime/transactions'
 
@@ -101,7 +100,6 @@ interface SceneCanvasCommandSurfaceOptions {
     | 'setPlantSymbolForSpecies'
   >
   readonly sceneEdits: SceneEditCoordinator
-  readonly presentationMaintenance: ScenePresentationMaintenance
   readonly presentation: Pick<
     SceneRuntimePresentationController,
     | 'createPlantPresentationContext'
@@ -406,7 +404,6 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     activeLocale: string,
   ): Promise<boolean> {
     if (!this.options.isRuntimeActive()) return false
-    const ticket = this.options.presentationMaintenance.issueTicket()
     const result = await this.options.presentation.refreshSpeciesCacheEntries(canonicalNames, activeLocale)
     if (!this.options.isRuntimeActive()) {
       if (result.failure) throw result.failure.error
@@ -417,9 +414,8 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       if (result.changed || plantNamesPublished) this.options.invalidate('scene')
       throw result.failure.error
     }
-    const backfillResult = this.options.presentationMaintenance.applyBackfills(ticket, result.backfills)
     if (result.changed || plantNamesPublished) this.options.invalidate('scene')
-    return result.changed || plantNamesPublished || backfillResult === 'applied'
+    return result.changed || plantNamesPublished
   }
 }
 

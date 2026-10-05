@@ -21,6 +21,7 @@ import { MatchText, PlantFinder, StratumFormFilters } from '../shared/PlantFinde
 import { SpeciesCommonName } from '../shared/SpeciesIdentity'
 import { clearHoveredPanelTargets, setHoveredPanelTargets } from '../../app/panel-targets/presentation'
 import { speciesPlacementAppearance } from '../../canvas/runtime/species-key'
+import { cachedStratum } from '../../canvas/runtime/plant-presentation'
 import { speciesTarget } from '../../target'
 import { PlantSymbolGlyph } from './PlantSymbolGlyph'
 import row from '../shared/species-row.module.css'
@@ -241,6 +242,7 @@ function designSpecies(): readonly { source: PlantStampSource, englishName?: str
   if (!queries) return []
   const names = queries.getLocalizedCommonNames()
   const englishNames = queries.getEnglishFallbackNames()
+  const speciesCache = queries.getSpeciesCache()
   const bySpecies = new Map<string, { source: PlantStampSource, englishName?: string, count: number }>()
   for (const plant of queries.getSceneSnapshot().plants) {
     const current = bySpecies.get(plant.canonicalName)
@@ -255,7 +257,7 @@ function designSpecies(): readonly { source: PlantStampSource, englishName?: str
       source: {
         canonical_name: plant.canonicalName,
         common_name: localized ?? plant.commonName,
-        stratum: plant.stratum,
+        stratum: cachedStratum(speciesCache, plant.canonicalName),
         // The width the catalog gave when the species was placed.
         width_max_m: plant.canopySpreadM,
       },

@@ -12,6 +12,7 @@ import { geoAt } from '../../../__tests__/support/geo-design'
 import { SceneStore } from '../scene'
 import { CanvasPlantLabelResolver } from '../plant-labels'
 import { CanvasSpeciesCache } from '../species-cache'
+import { createDetachedCanvasPlantLabelSource } from '../presentation-data'
 import { SceneRuntimePresentationController } from './presentation'
 import { projectScenePlantLabels } from '../selection-labels'
 import { getCommonNames, getFlowerColorBatch, getSpeciesBatch } from '../../../ipc/species'
@@ -104,7 +105,7 @@ describe('scene runtime presentation controller', () => {
     vi.mocked(getFlowerColorBatch).mockResolvedValue([])
   })
 
-  it('hydrates labels and backfills plant presentation metadata', async () => {
+  it('loads labels and species data as one plant-names revision, leaving the Scene as saved', async () => {
     vi.mocked(getCommonNames).mockResolvedValue({
       'Malus domestica': 'Pommier',
     })
@@ -122,37 +123,41 @@ describe('scene runtime presentation controller', () => {
     } as never])
 
     const { controller, sceneStore, state } = createController()
+    const saved = sceneStore.persisted
 
     const result = await controller.refreshCurrentPresentationData()
     expect(state.namesChanged).toBe(0)
     controller.publishRefresh(result)
-    if (result.backfills) {
-      const byId = new Map(result.backfills.map((entry) => [entry.plantId, entry]))
-      sceneStore.updatePersisted((draft) => {
-        draft.plants = draft.plants.map((plant) => {
-          const next = byId.get(plant.id)
-          if (!next) return plant
-          return {
-            ...plant,
-            stratum: next.stratum,
-            canopySpreadM: next.canopySpreadM,
-          }
-        })
-      })
-    }
 
     expect(result.changed).toBe(true)
     expect(state.namesChanged).toBe(1)
     expect(controller.getLocalizedCommonNames().get('Malus domestica')).toBe('Pommier')
-    expect(sceneStore.persisted.plants[0]).toMatchObject({
-      stratum: 'canopy',
-      canopySpreadM: 4.5,
-    })
+    expect(sceneStore.persisted).toEqual(saved)
     expect(controller.getSpeciesCache().get('Malus domestica')).toMatchObject({
       resolved_flower_color: 'white',
       stratum: 'canopy',
       width_max_m: 4.5,
     })
+  })
+
+  it('counts a species-data load with no new names as a plant-names revision', async () => {
+    vi.mocked(getSpeciesBatch).mockResolvedValue([{ canonical_name: 'Malus domestica', stratum: 'canopy' } as never])
+    let namesChanged = 0
+    const controller = new SceneRuntimePresentationController({
+      sceneStore: new SceneStore().hydrate(makeFile()),
+      readPixelsPerMetre: () => 2,
+      getLocale: () => 'en',
+      resolveHighlightedTargets: () => ({ plantIds: [], zoneIds: [] }),
+      onPlantNamesChanged: () => { namesChanged += 1 },
+      plantLabels: createDetachedCanvasPlantLabelSource(),
+      speciesCache: new CanvasSpeciesCache(),
+    })
+
+    controller.publishRefresh(await controller.refreshCurrentPresentationData())
+
+    // Lists that colour plants by stratum (the species key, the legend) refresh on this revision.
+    expect(namesChanged).toBe(1)
+    expect(controller.getSpeciesCache().get('Malus domestica')).toMatchObject({ stratum: 'canopy' })
   })
 
   it('builds renderer snapshots from scene, viewport, and highlighted targets', async () => {
@@ -284,11 +289,7 @@ describe('scene runtime presentation controller', () => {
     vi.mocked(getCommonNames).mockResolvedValue({
       'Malus domestica': 'Pommier',
     })
-    const { controller, sceneStore, state } = createController()
-    sceneStore.updatePersisted((draft) => {
-      draft.plants[0]!.stratum = 'canopy'
-      draft.plants[0]!.canopySpreadM = 4
-    })
+    const { controller, state } = createController()
 
     const staleRefresh = await controller.refreshCurrentPresentationData()
     const currentRefresh = await controller.refreshCurrentPresentationData()

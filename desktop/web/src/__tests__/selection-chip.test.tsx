@@ -53,7 +53,6 @@ describe('Selection chip', () => {
         color: null,
         symbol: 'herb',
         position: { x: index * 5, y: 0 },
-        stratum: null,
         canopySpreadM: null,
         rotationDeg: 0,
         notes: null,

@@ -73,7 +73,6 @@ function plant(id: string, canonicalName: string, x: number, color: string | nul
     canonicalName,
     commonName: null,
     color,
-    stratum: null,
     canopySpreadM: null,
     position: { x, y: 0 },
     rotationDeg: null,

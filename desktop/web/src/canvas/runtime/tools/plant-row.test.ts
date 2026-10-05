@@ -168,7 +168,6 @@ describe('Plant a row tool', () => {
       intervalM: 2,
       plants: [sourcePlant({ x: 20, y: 30 }, {
         color: '#884422',
-        stratum: 'tree',
         canopySpreadM: 3,
         rotationDeg: 15,
         notes: 'Do not copy',
@@ -198,7 +197,6 @@ describe('Plant a row tool', () => {
       canonicalName: 'Malus domestica',
       commonName: 'Apple',
       color: '#884422',
-      stratum: 'tree',
       canopySpreadM: 3,
       rotationDeg: 15,
       notes: null,

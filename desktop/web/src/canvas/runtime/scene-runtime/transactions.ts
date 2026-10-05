@@ -14,7 +14,6 @@ import {
   type SceneDesignObjectTarget,
   type ScenePersistedState,
   type SceneGeoFrame,
-  type ScenePlantEntity,
   type SceneStore,
 } from '../scene'
 import {
@@ -24,7 +23,6 @@ import {
   type SceneCommandPatch,
   type SceneCommandSnapshot,
 } from '../scene-commands'
-import type { PlantPresentationBackfill } from './presentation'
 
 export type SceneEditInvalidationKind = 'scene' | 'viewport' | 'chrome'
 
@@ -88,22 +86,6 @@ export interface ScenePersistenceAuthority {
   disposePersistence(): void
 }
 
-declare const scenePresentationTicketBrand: unique symbol
-
-export interface ScenePresentationTicket {
-  readonly [scenePresentationTicketBrand]: true
-}
-
-export type SceneBackfillResult = 'applied' | 'unchanged' | 'deferred' | 'stale'
-
-export interface ScenePresentationMaintenance {
-  issueTicket(): ScenePresentationTicket
-  applyBackfills(
-    ticket: ScenePresentationTicket,
-    backfills: readonly PlantPresentationBackfill[] | null,
-  ): SceneBackfillResult
-}
-
 export interface SceneDocumentAuthority {
   hydrate(
     file: CanopiFile,
@@ -124,7 +106,6 @@ type SceneRuntimeAuthority = SceneEditCoordinator
   & SettledSceneReader
   & SceneHistoryCommands
   & ScenePersistenceAuthority
-  & ScenePresentationMaintenance
   & SceneDocumentAuthority
 
 export class SceneEditBusyError extends CanvasAuthorityBusyError {
@@ -142,25 +123,6 @@ interface SceneRuntimeEditCoordinatorOptions {
   syncCanvasSignalsFromScene(): void
   invalidate(kind: SceneEditInvalidationKind): void
 }
-
-interface PresentationTicketState {
-  readonly generation: number
-  readonly contentRevision: number
-  readonly plantLineage: ReadonlyMap<
-    string,
-    { readonly canonicalName: string; readonly presentationVersion: number }
-  >
-}
-
-interface DeferredBackfill {
-  readonly ticket: PresentationTicketState
-  readonly backfill: PlantPresentationBackfill
-}
-
-type MaintainedPlantPresentation = Pick<
-  ScenePlantEntity,
-  'canonicalName' | 'stratum' | 'canopySpreadM'
->
 
 interface SceneAuthorityOperation {
   readonly type: string
@@ -181,13 +143,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
   private readonly _syncCanvasSignalsFromScene: SceneRuntimeEditCoordinatorOptions['syncCanvasSignalsFromScene']
   private readonly _invalidate: SceneRuntimeEditCoordinatorOptions['invalidate']
   private readonly _admissionRevision = signal(0)
-  private readonly _tickets = new WeakMap<ScenePresentationTicket, PresentationTicketState>()
-  private readonly _deferredBackfills = new Map<string, DeferredBackfill>()
-  private readonly _plantPresentationVersions = new Map<string, number>()
-  private readonly _maintainedPlantPresentations = new Map<
-    string,
-    MaintainedPlantPresentation
-  >()
   private _active: SceneAuthorityOperation | null = null
   private _replacementHandoff: {
     readonly predecessor: SceneRuntimeEditTransaction
@@ -197,24 +152,16 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
   private _documentGeneration = 0
   private _persistenceEpoch = 0
   private _persistenceDisposed = false
-  private _persistenceProjectionRevision = 0
-  private _contentRevision = 0
-  private _backfillRevisionPending = false
-  private _backfillInvalidationPending = false
-  private _publishingBackfill = false
-  private _drainingDeferredBackfills = false
 
   readonly revision: ReadonlySignal<number> = this._admissionRevision
   readonly canUndo = computed(() => {
     void this._admissionRevision.value
     return this._active === null
-      && !this._isPresentationMaintenanceBusy()
       && this._history.canUndo.value
   })
   readonly canRedo = computed(() => {
     void this._admissionRevision.value
     return this._active === null
-      && !this._isPresentationMaintenanceBusy()
       && this._history.canRedo.value
   })
 
@@ -232,7 +179,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
     busyResult: T,
     options: { resumePending?: boolean } = {},
   ): T {
-    if (this._isPresentationMaintenanceExecuting()) return busyResult
     if (this._active) {
       if (options.resumePending) {
         if (this._pendingImmediate) {
@@ -243,13 +189,11 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       }
       return busyResult
     }
-    this._flushBackfillPublication()
-    if (this._active || this._isPresentationMaintenanceBusy()) return busyResult
     return operation()
   }
 
   readWhenSettled<T>(operation: () => T, busyResult: T): T {
-    if (this._active || this._isPresentationMaintenanceBusy()) return busyResult
+    if (this._active) return busyResult
     return operation()
   }
 
@@ -258,7 +202,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
     edit: (tx: SceneEditTransaction) => void,
     options: SceneEditRunOptions = {},
   ): boolean {
-    if (this._isPresentationMaintenanceExecuting()) return false
     if (this._active) {
       if (this._pendingImmediate) {
         this._resumePendingImmediate(this._pendingImmediate)
@@ -321,16 +264,7 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
   }
 
   private _begin(type: string, onCommitted: () => void = () => {}): SceneRuntimeEditTransaction {
-    if (this._isPresentationMaintenanceExecuting()) {
-      throw new SceneEditBusyError('presentation-backfill')
-    }
     if (this._active) throw new SceneEditBusyError(this._active.type)
-    this._flushBackfillPublication()
-    const reentrantActiveType = this._activeOperationType()
-    if (reentrantActiveType) throw new SceneEditBusyError(reentrantActiveType)
-    if (this._isPresentationMaintenanceBusy()) {
-      throw new SceneEditBusyError('presentation-backfill')
-    }
     const transaction = new SceneRuntimeEditTransaction({
       type,
       sceneStore: this._sceneStore,
@@ -340,13 +274,11 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
         this._history.record(command, token)
       },
       wasHistoryRecorded: (token) => this._history.hasRecorded(token),
-      noteCommitted: (command) => this._noteCommitted(command),
       syncCanvasSignalsFromScene: this._syncCanvasSignalsFromScene,
       incrementSceneRevision: this._incrementSceneRevision,
       invalidate: this._invalidate,
       onCommitted,
       restore: (snapshot) => this._restore(snapshot),
-      settleWithoutContentChange: () => this._drainDeferredBackfills(),
       release: (settled) => this._release(settled),
     })
     this._acquire(transaction)
@@ -354,15 +286,12 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
   }
 
   undo(): boolean {
-    if (this._isPresentationMaintenanceExecuting()) return false
     if (this._active) {
       return this._active instanceof SceneHistoryReplay
         && this._active.direction === 'undo'
         ? this._active.resume()
         : false
     }
-    this._flushBackfillPublication()
-    if (this._active || this._isPresentationMaintenanceBusy()) return false
     if (!this._history.canUndo.value) return false
     const replay = this._createHistoryReplay('undo')
     this._acquire(replay)
@@ -370,15 +299,12 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
   }
 
   redo(): boolean {
-    if (this._isPresentationMaintenanceExecuting()) return false
     if (this._active) {
       return this._active instanceof SceneHistoryReplay
         && this._active.direction === 'redo'
         ? this._active.resume()
         : false
     }
-    this._flushBackfillPublication()
-    if (this._active || this._isPresentationMaintenanceBusy()) return false
     if (!this._history.canRedo.value) return false
     const replay = this._createHistoryReplay('redo')
     this._acquire(replay)
@@ -396,7 +322,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       this._persistenceDisposed
       || this._active
       || this._replacementHandoff
-      || this._isPresentationMaintenanceBusy()
     ) return
     const reprojector = this._sceneStore.beginReorigin(origin)
     const reprojectPatch = (patch: SceneCommandPatch): SceneCommandPatch => patch.persisted
@@ -424,9 +349,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
     if (this._active && !(this._active instanceof SceneRuntimeEditTransaction)) {
       throw new SceneEditBusyError(this._active.type)
     }
-    if (this._isPresentationMaintenanceBusy()) {
-      throw new SceneEditBusyError('presentation-backfill')
-    }
 
     const scene = this._active instanceof SceneRuntimeEditTransaction
       && !this._history.hasRecorded(this._active)
@@ -435,12 +357,10 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
     const checkpoint = this._history.captureCheckpoint()
     const documentGeneration = this._documentGeneration
     const persistenceEpoch = this._persistenceEpoch
-    const persistenceProjectionRevision = this._persistenceProjectionRevision
     let acknowledgement: ScenePersistenceAcknowledgement | null = null
     const captureIsCurrent = () => !this._persistenceDisposed
       && documentGeneration === this._documentGeneration
       && persistenceEpoch === this._persistenceEpoch
-      && persistenceProjectionRevision === this._persistenceProjectionRevision
       && this._history.isCheckpointCurrent(checkpoint)
 
     return Object.freeze({
@@ -475,54 +395,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
     this._persistenceEpoch += 1
   }
 
-  issueTicket(): ScenePresentationTicket {
-    const ticket = Object.freeze({}) as ScenePresentationTicket
-    this._tickets.set(ticket, {
-      generation: this._documentGeneration,
-      contentRevision: this._contentRevision,
-      plantLineage: new Map(
-        this._sceneStore.persisted.plants.map((plant) => [
-          plant.id,
-          {
-            canonicalName: plant.canonicalName,
-            presentationVersion: this._plantPresentationVersions.get(plant.id) ?? 0,
-          },
-        ]),
-      ),
-    })
-    return ticket
-  }
-
-  applyBackfills(
-    ticket: ScenePresentationTicket,
-    backfills: readonly PlantPresentationBackfill[] | null,
-  ): SceneBackfillResult {
-    this._flushBackfillPublication()
-    const ticketState = this._tickets.get(ticket)
-    if (!ticketState || !this._isTicketCurrent(ticketState)) return 'stale'
-    if (!backfills || backfills.length === 0) return 'unchanged'
-    let currentBackfills = backfills.filter((backfill) =>
-      this._isBackfillCurrent(ticketState, backfill))
-    if (currentBackfills.length === 0) return 'stale'
-    if (this._active || this._isPresentationMaintenanceBusy()) {
-      currentBackfills = currentBackfills.filter((backfill) => {
-        const reserved = this._deferredBackfills.get(
-          plantPresentationIdentityKey(backfill.plantId, backfill.canonicalName),
-        )
-        return !reserved || reserved.ticket === ticketState
-      })
-      if (currentBackfills.length === 0) return 'stale'
-      for (const backfill of currentBackfills) {
-        this._deferredBackfills.set(
-          plantPresentationIdentityKey(backfill.plantId, backfill.canonicalName),
-          { ticket: ticketState, backfill },
-        )
-      }
-      return 'deferred'
-    }
-    return this._applyBackfillsNow(currentBackfills) ? 'applied' : 'unchanged'
-  }
-
   hydrate(
     file: CanopiFile,
     syncDocumentSignals: (file: CanopiFile) => void = () => {},
@@ -539,14 +411,7 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
     }
     const recoveredType = this._resumeRecoverableActive()
     if (recoveredType) throw new SceneEditBusyError(recoveredType)
-    if (this._isPresentationMaintenanceExecuting()) {
-      throw new SceneEditBusyError('presentation-backfill')
-    }
     if (this._active) throw new SceneEditBusyError(this._active.type)
-    if (this._isPresentationMaintenanceBusy()) {
-      this._flushBackfillPublication()
-      throw new SceneEditBusyError('presentation-backfill')
-    }
     const ownedFile = cloneDocument(file)
     const hydration = new SceneHydrationSettlement({
       type: 'document-hydration',
@@ -558,7 +423,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       syncCanvasSignalsFromScene: this._syncCanvasSignalsFromScene,
       invalidate: this._invalidate,
       incrementSceneRevision: this._incrementSceneRevision,
-      settleDeferredBackfills: () => this._drainDeferredBackfills(),
       release: (settled) => this._release(settled),
     })
     this._acquire(hydration)
@@ -585,13 +449,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
 
     const recoveredType = this._resumeRecoverableActive()
     if (recoveredType) throw new SceneEditBusyError(recoveredType)
-    if (this._isPresentationMaintenanceExecuting()) {
-      throw new SceneEditBusyError('presentation-backfill')
-    }
-    if (this._isPresentationMaintenanceBusy()) {
-      if (!this._active) this._flushBackfillPublication()
-      throw new SceneEditBusyError('presentation-backfill')
-    }
 
     const predecessor = this._active
     if (predecessor && !(predecessor instanceof SceneRuntimeEditTransaction)) {
@@ -611,7 +468,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       syncCanvasSignalsFromScene: this._syncCanvasSignalsFromScene,
       invalidate: this._invalidate,
       incrementSceneRevision: this._incrementSceneRevision,
-      settleDeferredBackfills: () => this._drainDeferredBackfills(),
       finalizeReplacement: stages.finalizeReplacement,
       release: (settled) => this._release(settled),
     })
@@ -681,190 +537,29 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
     if (rollback) this._applyPatch(rollback.before)
   }
 
-  private _applyPatch(
-    patch: SceneCommandPatch,
-    options: { preservePlantPresentation?: boolean } = {},
-  ): void {
+  private _applyPatch(patch: SceneCommandPatch): void {
     if (patch.persisted) {
-      const currentPlants = options.preservePlantPresentation
-        ? this._sceneStore.persisted.plants
-        : null
       this._sceneStore.updatePersisted((draft) => {
         applySceneCommandPersistedPatch(draft, patch)
-        if (patch.persisted?.plants && currentPlants) {
-          draft.plants = preserveCurrentPlantPresentation(
-            draft.plants,
-            currentPlants,
-            this._maintainedPlantPresentations,
-          )
-        }
       })
     }
     if (patch.selection) this._setSelection(patch.selection)
-  }
-
-  private _noteCommitted(command: SceneCommand): void {
-    // A command that changed persisted state (a re-origin keeps the patch present).
-    if (command.after.persisted !== undefined) {
-      this._contentRevision += 1
-      this._dropStaleDeferredBackfills()
-      return
-    }
-    this._drainDeferredBackfills()
-  }
-
-  private _isTicketCurrent(ticket: PresentationTicketState): boolean {
-    return ticket.generation === this._documentGeneration
-      && ticket.contentRevision === this._contentRevision
-  }
-
-  private _isBackfillCurrent(
-    ticket: PresentationTicketState,
-    backfill: PlantPresentationBackfill,
-  ): boolean {
-    const lineage = ticket.plantLineage.get(backfill.plantId)
-    return this._isTicketCurrent(ticket)
-      && lineage?.canonicalName === backfill.canonicalName
-      && lineage.presentationVersion
-        === (this._plantPresentationVersions.get(backfill.plantId) ?? 0)
-  }
-
-  private _dropStaleDeferredBackfills(): void {
-    for (const [identity, deferred] of this._deferredBackfills) {
-      if (!this._isTicketCurrent(deferred.ticket)) this._deferredBackfills.delete(identity)
-    }
-  }
-
-  private _drainDeferredBackfills(): void {
-    if (this._drainingDeferredBackfills) return
-    this._drainingDeferredBackfills = true
-    try {
-      this._flushBackfillPublication()
-      while (this._deferredBackfills.size > 0) {
-        const currentPlantIdentities = new Set(
-          this._sceneStore.persisted.plants.map((plant) =>
-            plantPresentationIdentityKey(plant.id, plant.canonicalName),
-          ),
-        )
-        const current = [...this._deferredBackfills.values()]
-          .filter((entry) => this._isBackfillCurrent(entry.ticket, entry.backfill))
-          .filter((entry) => currentPlantIdentities.has(plantPresentationIdentityKey(
-            entry.backfill.plantId,
-            entry.backfill.canonicalName,
-          )))
-          .map((entry) => entry.backfill)
-        this._deferredBackfills.clear()
-        if (current.length > 0) this._applyBackfillsNow(current)
-      }
-    } finally {
-      this._drainingDeferredBackfills = false
-    }
-  }
-
-  private _applyBackfillsNow(backfills: readonly PlantPresentationBackfill[]): boolean {
-    const byIdentity = new Map(backfills.map((entry) => [
-      plantPresentationIdentityKey(entry.plantId, entry.canonicalName),
-      entry,
-    ]))
-    const changedPlantIds = new Set<string>()
-    this._sceneStore.updatePersisted((draft) => {
-      draft.plants = draft.plants.map((plant) => {
-        const next = byIdentity.get(
-          plantPresentationIdentityKey(plant.id, plant.canonicalName),
-        )
-        if (!next) return plant
-        if (
-          next.stratum === plant.stratum
-          && next.canopySpreadM === plant.canopySpreadM
-        ) {
-          return plant
-        }
-        changedPlantIds.add(plant.id)
-        return {
-          ...plant,
-          stratum: next.stratum,
-          canopySpreadM: next.canopySpreadM,
-        }
-      })
-    })
-    if (changedPlantIds.size === 0) return false
-    this._persistenceProjectionRevision += 1
-    const currentPlantsById = new Map(
-      this._sceneStore.persisted.plants.map((plant) => [plant.id, plant]),
-    )
-    for (const plantId of changedPlantIds) {
-      const plant = currentPlantsById.get(plantId)!
-      const presentation = byIdentity.get(
-        plantPresentationIdentityKey(plant.id, plant.canonicalName),
-      )!
-      this._plantPresentationVersions.set(
-        plantId,
-        (this._plantPresentationVersions.get(plantId) ?? 0) + 1,
-      )
-      this._maintainedPlantPresentations.set(
-        plantPresentationIdentityKey(plantId, presentation.canonicalName),
-        {
-          canonicalName: presentation.canonicalName,
-          stratum: presentation.stratum,
-          canopySpreadM: presentation.canopySpreadM,
-        },
-      )
-    }
-    this._backfillRevisionPending = true
-    this._backfillInvalidationPending = true
-    this._flushBackfillPublication()
-    return true
-  }
-
-  private _flushBackfillPublication(): void {
-    if (this._publishingBackfill) return
-    if (!this._backfillRevisionPending && !this._backfillInvalidationPending) return
-    this._publishingBackfill = true
-    this._publishAdmissionRevision()
-    try {
-      if (this._backfillRevisionPending) {
-        this._backfillRevisionPending = false
-        this._incrementSceneRevision()
-      }
-      if (this._backfillInvalidationPending) {
-        this._invalidate('scene')
-        this._backfillInvalidationPending = false
-      }
-    } finally {
-      this._publishingBackfill = false
-    }
-    if (
-      !this._active
-      && !this._drainingDeferredBackfills
-      && this._deferredBackfills.size > 0
-    ) {
-      this._drainDeferredBackfills()
-    }
-    if (!this._active && !this._isPresentationMaintenanceBusy()) {
-      this._publishAdmissionRevision()
-    }
   }
 
   private _createHistoryReplay(direction: SceneHistoryReplayDirection): SceneHistoryReplay {
     return new SceneHistoryReplay({
       direction,
       history: this._history,
-      applyPatch: (patch) => this._applyPatch(patch, { preservePlantPresentation: true }),
-      noteHistoryChange: (command) => this._noteCommitted(command),
+      applyPatch: (patch) => this._applyPatch(patch),
       syncCanvasSignalsFromScene: this._syncCanvasSignalsFromScene,
       incrementSceneRevision: this._incrementSceneRevision,
       invalidate: this._invalidate,
-      settleDeferredBackfills: () => this._drainDeferredBackfills(),
       release: (settled) => this._release(settled),
     })
   }
 
   private _noteStoreHydrated(): void {
     this._documentGeneration += 1
-    this._contentRevision = 0
-    this._deferredBackfills.clear()
-    this._plantPresentationVersions.clear()
-    this._maintainedPlantPresentations.clear()
   }
 
   private _acquire(operation: SceneAuthorityOperation): void {
@@ -926,20 +621,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       // The signal value still advanced, so a later read sees the settled state.
     }
   }
-
-  private _isPresentationMaintenanceBusy(): boolean {
-    return this._isPresentationMaintenanceExecuting()
-      || this._backfillRevisionPending
-      || this._backfillInvalidationPending
-  }
-
-  private _isPresentationMaintenanceExecuting(): boolean {
-    return this._publishingBackfill || this._drainingDeferredBackfills
-  }
-
-  private _activeOperationType(): string | null {
-    return this._active?.type ?? null
-  }
 }
 
 type SceneHistoryReplayDirection = 'undo' | 'redo'
@@ -948,11 +629,9 @@ interface SceneHistoryReplayOptions {
   readonly direction: SceneHistoryReplayDirection
   readonly history: SceneHistory
   readonly applyPatch: (patch: SceneCommandPatch) => void
-  readonly noteHistoryChange: (command: SceneCommand) => void
   readonly syncCanvasSignalsFromScene: () => void
   readonly incrementSceneRevision: () => void
   readonly invalidate: (kind: SceneEditInvalidationKind) => void
-  readonly settleDeferredBackfills: () => void
   readonly release: (replay: SceneHistoryReplay) => void
 }
 
@@ -962,11 +641,9 @@ class SceneHistoryReplay implements SceneAuthorityOperation {
   private readonly _options: SceneHistoryReplayOptions
   private _command: SceneCommand | null = null
   private _historyApplied = false
-  private _contentNoted = false
   private _signalsSynced = false
   private _sceneRevisionIncremented = false
   private _invalidated = false
-  private _deferredBackfillsSettled = false
   private _closed = false
   private _resuming = false
 
@@ -997,10 +674,6 @@ class SceneHistoryReplay implements SceneAuthorityOperation {
 
       const command = this._command
       if (!command) throw new Error(`Scene history ${this.direction} completed without a command`)
-      if (!this._contentNoted) {
-        this._options.noteHistoryChange(command)
-        this._contentNoted = true
-      }
       if (!this._signalsSynced) {
         this._options.syncCanvasSignalsFromScene()
         this._signalsSynced = true
@@ -1012,10 +685,6 @@ class SceneHistoryReplay implements SceneAuthorityOperation {
       if (!this._invalidated) {
         this._options.invalidate('scene')
         this._invalidated = true
-      }
-      if (!this._deferredBackfillsSettled) {
-        this._options.settleDeferredBackfills()
-        this._deferredBackfillsSettled = true
       }
       this._close()
       return true
@@ -1041,7 +710,6 @@ interface SceneHydrationSettlementOptions {
   readonly syncCanvasSignalsFromScene: () => void
   readonly invalidate: (kind: SceneEditInvalidationKind) => void
   readonly incrementSceneRevision: () => void
-  readonly settleDeferredBackfills: () => void
   readonly finalizeReplacement?: () => void
   readonly release: (hydration: SceneHydrationSettlement) => void
 }
@@ -1057,8 +725,6 @@ class SceneHydrationSettlement implements SceneAuthorityOperation {
   private _sceneSignalsSynced = false
   private _invalidated = false
   private _sceneRevisionIncremented = false
-  private _deferredBackfillsSettled = false
-  private _postFinalizerBackfillsSettled = false
   private _replacementFinalized = false
   private _hydrationStarted = false
   private _closed = false
@@ -1121,17 +787,9 @@ class SceneHydrationSettlement implements SceneAuthorityOperation {
         this._sceneRevisionIncremented = true
         this._options.incrementSceneRevision()
       }
-      if (!this._deferredBackfillsSettled) {
-        this._options.settleDeferredBackfills()
-        this._deferredBackfillsSettled = true
-      }
       if (!this._replacementFinalized) {
         this._options.finalizeReplacement?.()
         this._replacementFinalized = true
-      }
-      if (!this._postFinalizerBackfillsSettled) {
-        this._options.settleDeferredBackfills()
-        this._postFinalizerBackfillsSettled = true
       }
       this._closed = true
       this._options.release(this)
@@ -1148,13 +806,11 @@ interface SceneRuntimeEditTransactionOptions {
   setSelection(targets: Iterable<SceneDesignObjectTarget>): void
   recordHistory(command: SceneCommand, token: object): void
   wasHistoryRecorded(token: object): boolean
-  noteCommitted(command: SceneCommand): void
   syncCanvasSignalsFromScene(): void
   incrementSceneRevision(): void
   invalidate(kind: SceneEditInvalidationKind): void
   onCommitted(): void
   restore(snapshot: SceneCommandSnapshot): void
-  settleWithoutContentChange(): void
   release(transaction: SceneRuntimeEditTransaction): void
 }
 
@@ -1170,13 +826,11 @@ class SceneRuntimeEditTransaction implements SceneEditTransaction {
   private _command: SceneCommand | null | undefined
   private _historyAccepted = false
   private _historyPublished = false
-  private _outcomeRecorded = false
+  private _restored = false
   private _signalsSynced = false
   private _sceneRevisionIncremented = false
   private _invalidated = false
-  private _deferredSettled = false
   private _committedContinuationSettled = false
-  private _postContinuationDeferredSettled = false
   private _committedChanged = false
   private _outcome: SceneTransactionOutcome | null = null
   private _invalidationKind: SceneEditInvalidationKind = 'scene'
@@ -1244,7 +898,7 @@ class SceneRuntimeEditTransaction implements SceneEditTransaction {
   abort(): void {
     if (this._phase === 'closed') return
     if (this._phase === 'committing') {
-      if (!this._historyAccepted && !this._outcomeRecorded && this._command) {
+      if (!this._historyAccepted && this._command) {
         this._phase = 'aborting'
         this._resumeAbort()
         return
@@ -1272,10 +926,6 @@ class SceneRuntimeEditTransaction implements SceneEditTransaction {
             throw error
           }
         }
-        if (!this._outcomeRecorded) {
-          this._options.noteCommitted(command)
-          this._outcomeRecorded = true
-        }
         if (!this._signalsSynced) {
           this._options.syncCanvasSignalsFromScene()
           this._signalsSynced = true
@@ -1289,17 +939,9 @@ class SceneRuntimeEditTransaction implements SceneEditTransaction {
           this._invalidated = true
         }
       }
-      if (!this._deferredSettled) {
-        this._options.settleWithoutContentChange()
-        this._deferredSettled = true
-      }
       if (command && !this._committedContinuationSettled) {
         this._options.onCommitted()
         this._committedContinuationSettled = true
-      }
-      if (!this._postContinuationDeferredSettled) {
-        this._options.settleWithoutContentChange()
-        this._postContinuationDeferredSettled = true
       }
       this._outcome = 'committed'
       this._close()
@@ -1312,17 +954,13 @@ class SceneRuntimeEditTransaction implements SceneEditTransaction {
     if (this._settling) return
     this._settling = true
     try {
-      if (!this._outcomeRecorded) {
+      if (!this._restored) {
         this._options.restore(this._before)
-        this._outcomeRecorded = true
+        this._restored = true
       }
       if (!this._signalsSynced) {
         this._options.syncCanvasSignalsFromScene()
         this._signalsSynced = true
-      }
-      if (!this._deferredSettled) {
-        this._options.settleWithoutContentChange()
-        this._deferredSettled = true
       }
       this._outcome = 'aborted'
       this._close()
@@ -1357,33 +995,4 @@ function stableDocumentKey(file: CanopiFile): string {
 
 function cloneDocument(file: CanopiFile): CanopiFile {
   return JSON.parse(JSON.stringify(file)) as CanopiFile
-}
-
-function plantPresentationIdentityKey(plantId: string, canonicalName: string): string {
-  return `${plantId}\u0000${canonicalName}`
-}
-
-function preserveCurrentPlantPresentation(
-  patchedPlants: readonly ScenePlantEntity[],
-  currentPlants: readonly ScenePlantEntity[],
-  maintainedPresentations: ReadonlyMap<string, MaintainedPlantPresentation>,
-): ScenePlantEntity[] {
-  const currentById = new Map(currentPlants.map((plant) => [plant.id, plant]))
-  return patchedPlants.map((plant) => {
-    const current = currentById.get(plant.id)
-    const maintained = maintainedPresentations.get(
-      plantPresentationIdentityKey(plant.id, plant.canonicalName),
-    )
-    const presentation = current?.canonicalName === plant.canonicalName
-      ? current
-      : maintained?.canonicalName === plant.canonicalName
-        ? maintained
-        : null
-    if (!presentation) return plant
-    return {
-      ...plant,
-      stratum: presentation.stratum,
-      canopySpreadM: presentation.canopySpreadM,
-    }
-  })
 }

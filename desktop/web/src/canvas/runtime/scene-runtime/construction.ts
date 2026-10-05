@@ -219,12 +219,10 @@ export function createSceneRuntimeConstruction(
           publish: () => presentation.buildRendererSnapshot({ overview: true }),
         }
       }
-      const ticket = sceneEdits.issueTicket()
       const refresh = await presentation.refreshCurrentPresentationData()
       return {
         publish: () => {
           presentation.publishRefresh(refresh)
-          if (!refresh.failure) sceneEdits.applyBackfills(ticket, refresh.backfills)
           return presentation.buildRendererSnapshot()
         },
       }
@@ -338,7 +336,6 @@ export function createSceneRuntimeConstruction(
     },
     mutations,
     sceneEdits,
-    presentationMaintenance: sceneEdits,
     presentation,
     settings: appAdapter.settings,
     setInteractionTool: callbacks.setInteractionTool,

@@ -527,7 +527,6 @@ export function makePlant(
     canonicalName,
     commonName: canonicalName,
     color: null,
-    stratum: null,
     canopySpreadM: 2,
     position,
     rotationDeg: null,

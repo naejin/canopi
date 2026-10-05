@@ -7,7 +7,7 @@ import '../../../__tests__/support/camera-tolerance'
 
 const plant: ScenePlantEntity = {
   kind: 'plant', id: 'mint', position: { x: 2, y: 3 }, canonicalName: 'Mentha spicata',
-  commonName: 'Mint', color: null, stratum: null, canopySpreadM: 1, rotationDeg: null,
+  commonName: 'Mint', color: null, canopySpreadM: 1, rotationDeg: null,
   notes: null, plantedDate: null, quantity: null, locked: false, pinnedName: true,
 }
 

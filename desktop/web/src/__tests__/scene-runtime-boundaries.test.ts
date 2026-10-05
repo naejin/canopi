@@ -72,8 +72,6 @@ describe('Scene runtime module boundaries', () => {
     const removedBypasses = [
       'historyRuntime',
       'SceneCommandRuntime',
-      'currentPresentationRevision',
-      'applyPresentationBackfillsIfCurrent',
     ]
 
     for (const { name, source } of runtimeSources) {

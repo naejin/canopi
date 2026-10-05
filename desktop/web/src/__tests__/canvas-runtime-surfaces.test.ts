@@ -67,6 +67,7 @@ function createQuerySurface() {
     getSettledDesignObjects: () => null,
     getLocalizedCommonNames: () => new Map<string, string | null>(),
     getEnglishFallbackNames: () => new Map<string, string>(),
+    getSpeciesCache: () => new Map(),
     subscribePointerWorld: () => () => {},
   } satisfies CanvasQuerySurface
 }

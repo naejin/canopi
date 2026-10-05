@@ -360,7 +360,6 @@ function plant(id: string, x: number, y: number): ScenePlantEntity {
     color: null,
     symbol: null,
     pinnedName: false,
-    stratum: null,
     canopySpreadM: null,
     position: { x, y },
     rotationDeg: null,

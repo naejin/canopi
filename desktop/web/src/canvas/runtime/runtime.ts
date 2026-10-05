@@ -22,6 +22,7 @@ import type { PointerWorld } from './interaction-ports'
 import type { Modifiers } from './interaction-types'
 import type { ViewCommandSurface, ViewReadSurface } from './view/read-surface'
 import type { ViewTransform } from './view/types'
+import type { SpeciesCacheEntry } from './species-cache'
 
 export interface CanvasRuntimeDocumentMetadata {
   name: string
@@ -239,6 +240,11 @@ export interface CanvasQuerySurface {
   /** Canonical lon/lat design objects, as a save would write them; null while busy. */
   getSettledDesignObjects(): CanvasDesignObjects | null
   getLocalizedCommonNames(): ReadonlyMap<string, string | null>
+  /**
+   * The catalog entries loaded for the Design's species (stratum, width): a plant without its own colour takes its
+   * stratum's from here, as the canvas draws it. A load advances `revision.plantNames`.
+   */
+  getSpeciesCache(): ReadonlyMap<string, SpeciesCacheEntry>
   /**
    * English catalog names for the Design's species with no name in the UI
    * language (empty in English). Lists show them marked as English.

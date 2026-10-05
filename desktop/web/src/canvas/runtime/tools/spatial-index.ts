@@ -118,7 +118,6 @@ function speciesPlant(canonicalName: string): ScenePlantEntity | null {
     canonicalName,
     commonName: null,
     color: null,
-    stratum: null,
     canopySpreadM: null,
     position: { x: 0, y: 0 },
     rotationDeg: null,
