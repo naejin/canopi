@@ -18,6 +18,7 @@ Paths are relative to `/home/daylon/projects/canopi`; use them absolute in comma
 - **Full**, at each merge and before a push: `/home/daylon/projects/canopi/.rq-scratch/tools/quiet-gates.sh <worktree> full`, the Frontend row of `AGENTS.md` (tsc, coverage as the suite, the policy tests, check:ui, both builds, docs). Add the Rust and shared-contract rows of `AGENTS.md` when those areas change.
 - **Web check** on any merge touching the renderer, camera, input or map: `cd desktop/web && npm run build:web`, then from the worktree root `docker run --rm --ipc=host -v "$PWD":/work -w /work/desktop/web --user $(id -u):$(id -g) -e HOME=/tmp mcr.microsoft.com/playwright:v1.63.0-noble npx playwright test e2e/canvas --reporter=line`.
 - **CI**: `Build & Test` and `Web Edition browsers` on every push; a push touching only `docs/`, `.beads/`, `.interface-design/` or Markdown runs lint (with the docs checks) and skips the tests, LiDAR lanes, installer builds and browsers; a newer push cancels the branch's older run (main always finishes), so check the newest commit's runs: `gh run list --branch feature/geolibre-adoption --event push`, then poll `gh run view <id> --json status,conclusion`.
+- **CI jobs**: code pushes run lint, the Linux tests, `lidar-native`, `platform-tests` (Rust tests on macOS arm and Intel and Windows) and packaging side by side. Packaging covers Linux and macOS arm on `feature/geolibre-adoption` pushes and all four targets on main, PRs and Release Candidate. Rust caches are saved only from pushes to main and the v2 branch.
 
 ## Review lenses
 

@@ -23,7 +23,8 @@ Rules for the Rust/Tauri backend (execution policy, files, network, redaction, t
 - Problem reports are Desktop-only, local-first, never uploaded; the bundle excludes Design contents, screenshots, raw paths, the Google key and personal libraries unless the off-by-default consent attaches the current Design (`services/problem_report` tests). Folder reveal admits only report, Drafts, Data library and Recent Designs folders (`folder_reveal` tests).
 - MCP bridge: `tauri-plugin-mcp-bridge` (=0.13.0) behind the opt-in `mcp-bridge` feature, for agent-driven `cargo tauri dev -f mcp-bridge` only. Only a debug build with the feature registers it (on `127.0.0.1`) and merges `withGlobalTauri: true` and the `mcp-bridge-dev` capability (`desktop/capabilities-dev/`); release builds never expose either (`global_tauri_api_and_bridge_capability_exist_only_for_the_debug_bridge`, `lib.rs`). Its WebSocket has no authentication or Origin check.
 - `desktop/THIRD_PARTY_NOTICES.md` names the raster packages and crates (`wbgeotiff` revision, `proj4rs`, the IOGP attribution of the CRS rows), the GeoLibre CLI and `whitebox-wasm` revisions, `wbspatialstats` (AGPL-3.0-or-later) and the Corresponding Source offer (`third-party-notices.test.ts`); `scripts/promote-release.sh` repeats the offer in every release body (`test_promote_release.py`).
-- The GeoLibre CLI is a Tauri sidecar (`bundle.externalBin` in `desktop/tauri.conf.json`): `scripts/build-geolibre-cli.sh` writes `desktop/binaries/geolibre-<triple>[.exe]` and `build.rs` bundles it exactly when that file exists, so lint, test and dev builds need no binary and a release build without it only warns. CI builds it before `tauri build` (`.github/actions/build-geolibre-cli`) and `scripts/smoke-bundled-sidecar.sh` runs the packaged `geolibre version` from each unpacked deb, AppImage, `.app` and NSIS installer.
+- The GeoLibre CLI is a Tauri sidecar (`bundle.externalBin` in `desktop/tauri.conf.json`): `scripts/build-geolibre-cli.sh` writes `desktop/binaries/geolibre-<triple>[.exe]` and `build.rs` bundles it exactly when that file exists, so lint, test and dev builds need no binary and a release build without it only warns.
+- CI sidecar (`.github/actions/build-geolibre-cli`): downloaded from the release `geolibre-cli-<revision in the script>`; on a miss built from source and, on pushes to main or the v2 branch, uploaded there, so a revision bump rebuilds once per host. `scripts/smoke-bundled-sidecar.sh` then runs the packaged `geolibre version` from each unpacked deb, AppImage, `.app` and NSIS installer.
 - Toolchain: `rust-toolchain.toml` pins the compiler and every `dtolnay/rust-toolchain` step matches it; CI builds `--locked`; `cargo cov` fails under the floors in `.cargo/config.toml`, raised and never lowered.
 
 ### Native operation executor
@@ -38,7 +39,7 @@ A full class returns its stable busy error before touching anything; admitted wo
 - Do not add a command without its frontend call site, or keep one after its last caller goes.
 - Do not add a second Tokio runtime or platform, rendering or shell crates; the frontend produces exports.
 - Do not use blocking dialogs, emit events in `setup()`, or grant a `default` capability set.
-- Do not add `rust-version` (the pin is not an MSRV), collapse the `cache-rust` keys, or run `npm audit fix --force` (it breaks the raster peer range the `image-size` and `fflate` overrides hold).
+- Do not add `rust-version` (the pin is not an MSRV), merge the per-workload `rust-cache` keys, save caches from PR refs, or run `npm audit fix --force` (it breaks the raster peer range the `image-size` and `fflate` overrides hold).
 - Do not stream `gh run watch`; poll `gh run view <id> --json status,conclusion,jobs` minutes apart.
 
 ## Commands
