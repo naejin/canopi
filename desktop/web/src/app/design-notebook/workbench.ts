@@ -15,7 +15,7 @@ import {
 import {
   openDesignFromPath,
   saveAsCurrentDesign,
-  saveCurrentDesign,
+  saveCurrentDesignEdits,
 } from '../document-session/actions'
 import { currentDesign as currentDesignSignal, designPath } from '../document-session/store'
 import type {
@@ -63,7 +63,7 @@ interface CreateDesignNotebookWorkbenchOptions {
   readonly loadNotebook?: typeof getDesignNotebook
   readonly loadRecentDesigns?: typeof getRecentFiles
   readonly openDesign?: typeof openDesignFromPath
-  readonly saveCurrent?: typeof saveCurrentDesign
+  readonly saveCurrent?: typeof saveCurrentDesignEdits
   readonly saveAsCurrent?: typeof saveAsCurrentDesign
   readonly addDesignReference?: typeof addDesignReferenceToNotebook
   readonly createSection?: typeof createNotebookSection
@@ -84,7 +84,7 @@ export function createDesignNotebookWorkbench(
   const loadNotebook = options.loadNotebook ?? getDesignNotebook
   const loadRecentDesignsAdapter = options.loadRecentDesigns ?? getRecentFiles
   const openDesign = options.openDesign ?? openDesignFromPath
-  const saveCurrent = options.saveCurrent ?? saveCurrentDesign
+  const saveCurrent = options.saveCurrent ?? saveCurrentDesignEdits
   const saveAsCurrent = options.saveAsCurrent ?? saveAsCurrentDesign
   const addDesignReferenceAdapter = options.addDesignReference ?? addDesignReferenceToNotebook
   const createSectionAdapter = options.createSection ?? createNotebookSection
@@ -218,7 +218,7 @@ export function createDesignNotebookWorkbench(
       let savedPath: string
       let savedDesign: CanopiFile
       if (admittedPath) {
-        // A file home: continuous save writes it; the reference names that file.
+        // A file home holds every edit once continuous save flushes (not a Save: a clean file is not rewritten).
         const written = await saveCurrent()
         if (!queue.isCurrent(admittedLifetime)) return false
         const design = currentDesign.value

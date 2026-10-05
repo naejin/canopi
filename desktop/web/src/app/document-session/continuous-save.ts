@@ -26,20 +26,6 @@ export type HomeWriteOutcome =
   | { readonly kind: 'stale' }
   | { readonly kind: 'conflict'; readonly fileGone: boolean }
 
-export interface HomeWriteOptions {
-  /**
-   * The write carries only a view that moved: the home already holds every
-   * edit. It is not an edit (a browser Draft keeps its `updatedAt`, so other
-   * tabs' stamps stay valid) and it is best effort (see `ContinuousSave.flush`).
-   */
-  readonly viewOnly: boolean
-}
-
-interface FlushOptions {
-  /** Also write a view that moved when nothing else is waiting (default true); focus loss writes edits only. */
-  readonly view?: boolean
-}
-
 interface ContinuousSaveConflict {
   /** The file was moved or deleted rather than changed. */
   readonly fileGone: boolean
@@ -69,12 +55,7 @@ export interface ContinuousSaveOptions {
    * A synchronous writer (browser Drafts) settles within the calling task, so
    * a page-hide flush completes before the page goes away.
    */
-  writeHome(home: DesignHome, options: HomeWriteOptions): HomeWriteOutcome | Promise<HomeWriteOutcome>
-  /**
-   * The live view moved from the one the home holds (`DesignSessionPersistence.viewMovedSinceSave`). A camera move marks nothing
-   * unsaved and schedules no write; Save, close, switching Designs and page hide flush it (U28).
-   */
-  readonly viewMoved?: () => boolean
+  writeHome(home: DesignHome): HomeWriteOutcome | Promise<HomeWriteOutcome>
   readonly delayMs?: number
   readonly logError?: (message?: unknown, ...optionalParams: unknown[]) => void
 }
@@ -102,17 +83,13 @@ export interface ContinuousSave {
   /** Change the draft home of the session `token` names; clears failure and conflict. */
   rehome(token: object | null, home: { readonly draftId: string | null }): void
   hasPendingChanges(): boolean
-  /** A flush would write: an edit is pending or the view moved. */
-  hasSomethingToWrite(): boolean
+  /** Write now; true when the home holds every committed change. */
+  flush(): Promise<boolean>
   /**
-   * Write now; true when the home holds every committed change. A write that
-   * carries only a moved view is best effort: when the home refuses it (a
-   * read-only file, a file or Draft changed elsewhere) it is logged, the
-   * status stays as it was, and the flush still succeeds. The writer's
-   * fingerprint or stamp check still applies, so it never overwrites a home
-   * that changed.
+   * A manual Save: write now even with nothing pending, so the home also holds the live view. It asks for one write
+   * and marks nothing: when a write with no edits fails, the error shows but nothing stays unsaved.
    */
-  flush(options?: FlushOptions): Promise<boolean>
+  save(): Promise<boolean>
   /** Resolve a conflict by overwriting the file with the Design of the session `token` names. */
   overwriteHome(token: object | null): Promise<boolean>
   /** Resolves when no write is in flight or queued. */
@@ -131,7 +108,6 @@ interface SessionHomeRecord {
 export function createContinuousSave({
   store,
   writeHome,
-  viewMoved = () => false,
   delayMs = CONTINUOUS_SAVE_DELAY_MS,
   logError = (message, ...rest) => console.error(message, ...rest),
 }: ContinuousSaveOptions): ContinuousSave {
@@ -143,11 +119,14 @@ export function createContinuousSave({
   const conflict = signal<ContinuousSaveConflict | null>(null)
   // The session whose write is in flight; another session's write never shows as its "Saving…".
   const writingSession = signal<object | null>(null)
+  // Bumped whenever the home is marked behind; a write clears `writePending` only when no mark landed after it
+  // started, so an overwrite made while a write is in flight gets a write of its own.
+  let pendingMark = 0
+  // A manual Save asked for the next write even if nothing is pending; the write that starts consumes it.
+  let forceWrite = false
   let timer: ReturnType<typeof setTimeout> | null = null
   let active: Promise<boolean> | null = null
   let queued: Promise<boolean> | null = null
-  // A flush asked for a moved view; the next write attempt takes the request.
-  let viewRequested = false
   let disposed = false
 
   const currentRecord = (): SessionHomeRecord | null => {
@@ -231,32 +210,28 @@ export function createContinuousSave({
   }
 
   function performWrite(): boolean | Promise<boolean> {
-    const withView = viewRequested
-    viewRequested = false
+    const force = forceWrite
+    forceWrite = false
     const session = peekRecord()
     const home = readHome()
     if (!session || !home || !store.hasCurrentDesign()) return !pending.peek()
     if (conflict.peek()) return false
-    if (!somethingToWrite(withView)) return true
-    const viewOnly = !pending.peek()
+    if (!pending.peek() && !force) return true
 
-    const pendingAtStart = writePending.peek()
+    const markAtStart = pendingMark
     if (store.designDirty.peek()) changed.value = true
-    const onSettled = viewOnly
-      ? (outcome: HomeWriteOutcome) => settleViewOnly(session, outcome)
-      : (outcome: HomeWriteOutcome) => settleOutcome(session, outcome, pendingAtStart)
-    const onThrown = viewOnly
-      ? (error: unknown) => settleViewOnlyFailure(session, error)
-      : (error: unknown) => settleFailure(session, error)
     let outcome: HomeWriteOutcome | Promise<HomeWriteOutcome>
     try {
-      outcome = writeHome(home, { viewOnly })
+      outcome = writeHome(home)
     } catch (error) {
-      return onThrown(error)
+      return settleFailure(session, error)
     }
-    if (!isPromise(outcome)) return onSettled(outcome)
+    if (!isPromise(outcome)) return settleOutcome(session, outcome, markAtStart)
     writingSession.value = session.identity
-    return outcome.then(onSettled, onThrown).finally(() => {
+    return outcome.then(
+      (settled) => settleOutcome(session, settled, markAtStart),
+      (error: unknown) => settleFailure(session, error),
+    ).finally(() => {
       if (writingSession.peek() === session.identity) writingSession.value = null
     })
   }
@@ -264,7 +239,7 @@ export function createContinuousSave({
   function settleOutcome(
     session: SessionHomeRecord,
     outcome: HomeWriteOutcome,
-    pendingAtStart: boolean,
+    markAtStart: number | null,
   ): boolean {
     if (peekRecord() !== session) return false
     if (outcome.kind === 'conflict') {
@@ -277,7 +252,7 @@ export function createContinuousSave({
       return false
     }
     batch(() => {
-      if (pendingAtStart) writePending.value = false
+      if (markAtStart === pendingMark) writePending.value = false
       failed.value = false
       failureReason.value = null
     })
@@ -291,7 +266,7 @@ export function createContinuousSave({
   function settleFailure(session: SessionHomeRecord, error: unknown): boolean {
     if (peekRecord() !== session) return false
     if (error instanceof DesignHomeConflictError) {
-      return settleOutcome(session, { kind: 'conflict', fileGone: error.fileGone }, false)
+      return settleOutcome(session, { kind: 'conflict', fileGone: error.fileGone }, null)
     }
     batch(() => {
       failed.value = true
@@ -301,37 +276,11 @@ export function createContinuousSave({
     return false
   }
 
-  /** A write that carried only a moved view: anything but a written home is dropped, never shown (U28). */
-  function settleViewOnly(session: SessionHomeRecord, outcome: HomeWriteOutcome | null): boolean {
-    if (peekRecord() !== session) return false
-    if (outcome?.kind === 'written') return settleOutcome(session, outcome, false)
-    // An edit made meanwhile writes on its own and meets the refusal there.
-    if (pending.peek()) {
-      schedule()
-      return false
-    }
-    return true
-  }
-
-  function settleViewOnlyFailure(session: SessionHomeRecord, error: unknown): boolean {
-    if (error instanceof DesignHomeConflictError) {
-      return settleViewOnly(session, { kind: 'conflict', fileGone: error.fileGone })
-    }
-    if (peekRecord() === session) logError('Writing the moved view failed:', error)
-    return settleViewOnly(session, null)
-  }
-
-  /** An edit is pending, or the caller asks for the view and it moved. */
-  function somethingToWrite(withView: boolean): boolean {
-    return pending.peek() || (withView && viewMoved())
-  }
-
-  async function flush({ view = true }: FlushOptions = {}): Promise<boolean> {
+  async function flush(): Promise<boolean> {
     clearTimer()
     if (!store.hasCurrentDesign()) return true
-    if (!active && !somethingToWrite(view)) return true
+    if (!pending.peek() && !active && !forceWrite) return true
     if (conflict.peek()) return false
-    if (view) viewRequested = true
     const written = await requestWrite()
     return written && !pending.peek() && !conflict.peek()
   }
@@ -348,6 +297,7 @@ export function createContinuousSave({
       if (path) fingerprints.set(path, fingerprint)
       const current = store.readCurrentDesign()
       clearTimer()
+      forceWrite = false
       batch(() => {
         record.value = {
           identity: store.sessionIdentity.peek(),
@@ -355,6 +305,7 @@ export function createContinuousSave({
           fingerprints,
           snapshot: current ? cloneDocument(current) : null,
         }
+        pendingMark += 1
         writePending.value = pendingWrite
         changed.value = false
         failed.value = false
@@ -406,9 +357,12 @@ export function createContinuousSave({
 
     hasPendingChanges: () => pending.peek(),
 
-    hasSomethingToWrite: () => somethingToWrite(true),
-
     flush,
+
+    save() {
+      forceWrite = true
+      return flush()
+    },
 
     async overwriteHome(token) {
       const current = peekRecord()
@@ -418,6 +372,7 @@ export function createContinuousSave({
       batch(() => {
         conflict.value = null
         // The file no longer holds this session's content: write even if clean.
+        pendingMark += 1
         writePending.value = true
       })
       return flush()

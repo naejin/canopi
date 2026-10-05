@@ -162,7 +162,6 @@ function createDocumentSurface() {
       return { callerFinalizerInvoked: true }
     },
     hasLoadedDocument: () => false,
-    viewMovedSinceSave: () => false,
     captureForPersistence: (metadata, doc) => ({
       content: { ...doc, name: metadata.name },
       isCurrent: () => true,

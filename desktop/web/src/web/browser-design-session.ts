@@ -8,7 +8,6 @@ import {
   DesignHomeConflictError,
   type ContinuousSave,
   type DesignHome,
-  type HomeWriteOptions,
   type HomeWriteOutcome,
 } from "../app/document-session/continuous-save";
 import {
@@ -153,7 +152,6 @@ export function createBrowserDesignSessionController({
   const continuousSave = createContinuousSave({
     store,
     writeHome: writeDraftHome,
-    viewMoved: () => persistence.viewMovedSinceSave(),
     delayMs: saveDelayMs,
   });
 
@@ -164,7 +162,7 @@ export function createBrowserDesignSessionController({
 
   // Web homes are always browser Design Drafts; a write is one synchronous
   // localStorage record update, so a page-hide flush completes before unload.
-  function writeDraftHome(home: DesignHome, { viewOnly }: HomeWriteOptions): HomeWriteOutcome {
+  function writeDraftHome(home: DesignHome): HomeWriteOutcome {
     if (home.kind !== "draft") throw new Error("Web Designs live in browser Drafts");
     const stamp = draftStamp?.id === home.id ? draftStamp : null;
     const settlement = persistence.beginBrowserDraft().executeImmediately(
@@ -176,7 +174,6 @@ export function createBrowserDesignSessionController({
             file: content,
             now: now().toISOString(),
             expectedUpdatedAt: stamp && !stamp.overwrite ? stamp.updatedAt : undefined,
-            keepUpdatedAt: viewOnly,
           });
           if (!result.ok) {
             if (result.error instanceof BrowserDraftChangedError) {
@@ -246,12 +243,11 @@ export function createBrowserDesignSessionController({
   }
 
   /**
-   * Write the current Design first, or only its view when that alone moved;
-   * ask only when that write fails. Resolves synchronously when there is
-   * nothing to write so a replacement keeps its turn.
+   * Write the current Design first; ask only when that write fails. Resolves
+   * synchronously when nothing is pending so a replacement keeps its turn.
    */
   function flushBeforeReplacement(intent: number): true | Promise<boolean> {
-    if (!continuousSave.hasSomethingToWrite()) return true;
+    if (!continuousSave.hasPendingChanges()) return true;
     // A retained Canvas replacement cannot be captured; the replacement
     // itself settles or quarantines it first.
     if (canvasSession && replacement.pendingCanvasReplacement(canvasSession)) return true;
@@ -499,9 +495,6 @@ export function createBrowserDesignSessionController({
       try {
         settlePendingReplacementForHandoff(session);
         if (session.hasLoadedDocument() && store.hasCurrentDesign()) {
-          // Only the attached canvas knows its view moved (U28): write it now,
-          // synchronously, as a Draft write is.
-          void continuousSave.flush().catch(logBrowserDesignSessionError);
           persistence.settleCanvasHandoff(session);
           store.markCanvasDetachedDirty(store.isCanvasDirty());
         }

@@ -70,6 +70,12 @@ export function saveCurrentDesign(
   return designSessionStateMachine.saveCurrentDesign(options);
 }
 
+export function saveCurrentDesignEdits(
+  options: SaveCurrentDesignOptions = {},
+): Promise<boolean> {
+  return designSessionStateMachine.saveCurrentDesignEdits(options);
+}
+
 export function resolveDesignSaveConflict(): Promise<DocumentTransitionResult | null> {
   return designSessionStateMachine.resolveSaveConflict();
 }
