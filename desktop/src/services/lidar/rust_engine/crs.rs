@@ -576,6 +576,25 @@ mod tests {
         );
     }
 
+    /// Krovak's stated accuracy holds where it is worst, in eastern Slovakia
+    /// by the Hungarian and Ukrainian border, outside its reference band:
+    /// PROJ 9.4.0's EPSG:4326 to EPSG:5514 (Slovak shift) at 22.18E 48.44N,
+    /// from `cs2cs` with grids kept out, sits 3.02 m from the row's Czech
+    /// shift. A sweep of Czechia and Slovakia at 0.02 deg found no point
+    /// further; Czech points are within 0.08 m.
+    #[test]
+    fn krovak_holds_its_stated_accuracy_at_its_worst_point() {
+        let row = crs_table::row_of(5514).unwrap();
+        let forward = Transformer::new(&wgs84_crs(), &from_code(5514).unwrap()).unwrap();
+        let (x, y) = forward.apply(22.18, 48.44).unwrap();
+        let distance = (x - -196_087.506_472).hypot(y - -1_273_498.060_529);
+        assert!(
+            distance > 3.0 && distance <= row.accuracy_m,
+            "{distance} m against a stated {} m",
+            row.accuracy_m
+        );
+    }
+
     /// The table's form, which proj4rs reads correctly: no `+pm` (ignored on
     /// the way through WGS84), no `+k_0` (proj4rs reads `+k`), a stated
     /// datum on every row but Web Mercator, which has none, and metres.
