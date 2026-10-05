@@ -24,7 +24,7 @@
 }
 
 .storyDropdown {
-  flex: 1 1 10rem;
+  flex: 1 1 160px;
   min-width: 0;
 }
 
@@ -41,7 +41,7 @@
 }
 
 .renameField {
-  flex: 1 1 10rem;
+  flex: 1 1 160px;
   min-width: 0;
   min-height: var(--control-size-xl);
   padding: 0 var(--space-3);

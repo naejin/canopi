@@ -113,7 +113,7 @@
 }
 
 .rowName {
-  flex: 1 1 12rem;
+  flex: 1 1 192px;
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -135,7 +135,7 @@
 }
 
 .rowField {
-  flex: 1 1 12rem;
+  flex: 1 1 192px;
   min-width: 0;
 }
 

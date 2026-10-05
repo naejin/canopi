@@ -24,7 +24,7 @@
 }
 
 .topTitle {
-  max-width: 18rem;
+  max-width: 288px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

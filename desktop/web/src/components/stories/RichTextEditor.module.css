@@ -102,7 +102,7 @@
 }
 
 .linkField {
-  flex: 1 1 10rem;
+  flex: 1 1 160px;
   min-width: 0;
   min-height: var(--control-size-md);
   padding: 0 var(--space-2);
