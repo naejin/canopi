@@ -69,7 +69,8 @@ jobs:
       # Rust-side: Rust sources and manifests, the toolchain, shared contracts,
       # the desktop shell outside desktop/web/, the scripts Rust or packaging
       # reads, the npm manifests (the Tauri CLI), the web fixtures Rust tests
-      # read, and CI.
+      # read, the web files that call invoke() (native_command_policy checks
+      # every command is still invoked; keep this list in step), and CI.
       - id: diff
         env:
           BASE: ${{ steps.base.outputs.sha }}
@@ -77,7 +78,7 @@ jobs:
           set -euo pipefail
           docs_paths='^(docs/|\.beads/|\.interface-design/)|\.md$'
           rust_paths='\.rs$|(^|/)Cargo\.toml$|^(Cargo\.lock|rust-toolchain\.toml|clippy\.toml)$|^(\.cargo|common-types|bindings-gen|desktop|\.github)/|^scripts/(build-geolibre-cli\.sh|smoke-bundled-sidecar\.sh|check_windows_manifest\.py|schema-contract\.json|species_catalog_contract\.py|species_search_normalization\.py|web_catalog_artifact_contract\.py)$'
-          web_rust_paths='^desktop/web/(package(-lock)?\.json$|src/maplibre/raster-display/fixtures/)'
+          web_rust_paths='^desktop/web/(package(-lock)?\.json$|src/maplibre/raster-display/fixtures/|src/ipc/|src/app/canvas-pdf/platform\.desktop\.ts$|src/app/shell/bootstrap\.ts$)'
           frontend_paths='^(desktop/web|\.github)/'
           if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
             code=true rust=true frontend=true
