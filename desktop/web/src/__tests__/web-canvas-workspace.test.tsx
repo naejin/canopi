@@ -851,7 +851,6 @@ function fakeRuntimeComposition(
       return { callerFinalizerInvoked: true }
     }),
     hasLoadedDocument: vi.fn(() => loaded),
-    viewMovedSinceSave: () => false,
     captureForPersistence: vi.fn((metadata, doc) => ({
       content: { ...doc, name: metadata.name },
       isCurrent: () => true,

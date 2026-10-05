@@ -62,8 +62,6 @@ class SceneCanvasDocumentRole implements SceneCanvasDocumentSurface {
   private _documentState: 'absent' | 'settling' | 'loaded' = 'absent'
   /** The view the open Design's file was saved with (`map_view`), or null. */
   private _savedMapView: SavedViewCamera | null = null
-  /** The view the home holds as this map stands at it: the open fit's placement, then each acknowledged save's capture. */
-  private _heldView: SavedViewCamera | null = null
   /** The open fit has placed the camera for the open Design: from then on the live view is the Design's view. */
   private _placed = false
   /** An open fit waits for the next scene render's publish step. */
@@ -126,7 +124,6 @@ class SceneCanvasDocumentRole implements SceneCanvasDocumentSurface {
     }
     this.options.viewNavigation.openAt(this.options.readOpeningBearing(), this._savedCamera())
     this._placed = true
-    this._heldView = this._mapViewForSave()
   }
 
   /** The camera the open Design was saved with, framed for the whole map now; null without one. */
@@ -144,8 +141,7 @@ class SceneCanvasDocumentRole implements SceneCanvasDocumentSurface {
 
   /**
    * The view a save writes (`map_view`): the live view once the open fit has placed the camera on a map with a size, else the
-   * view the file was saved with. A camera move never edits the Design: it reaches the file with the next flush
-   * (viewMovedSinceSave).
+   * view the file was saved with. A camera move never edits the Design: it reaches the file only with the next save.
    */
   private _mapViewForSave(): SavedViewCamera | null {
     const { view } = this.options.cameraHost.frames.viewFrame.peek()
@@ -156,7 +152,6 @@ class SceneCanvasDocumentRole implements SceneCanvasDocumentSurface {
   private _opened(file: CanopiFile): void {
     this._documentState = 'loaded'
     this._savedMapView = file.map_view ?? null
-    this._heldView = null
     this._placed = false
     this._openPending = false
     this.options.rendering.awaitPresentation()
@@ -201,12 +196,6 @@ class SceneCanvasDocumentRole implements SceneCanvasDocumentSurface {
     return this._documentState !== 'absent'
   }
 
-  viewMovedSinceSave(): boolean {
-    if (this._documentState !== 'loaded' || !this._placed) return false
-    const live = this._mapViewForSave()
-    return live !== null && !sameStandpoint(live, this._heldView)
-  }
-
   captureForPersistence(
     metadata: CanvasRuntimeDocumentMetadata,
     doc: CanopiFile,
@@ -214,17 +203,7 @@ class SceneCanvasDocumentRole implements SceneCanvasDocumentSurface {
     if (this._documentState === 'settling') {
       throw new CanvasAuthorityBusyError('document-settlement')
     }
-    const mapView = this._mapViewForSave()
-    const capture = this.options.documents.captureForPersistence(metadata, doc, mapView)
-    return Object.freeze({
-      content: capture.content,
-      isCurrent: () => capture.isCurrent(),
-      acknowledgeSaved: () => {
-        const acknowledged = capture.acknowledgeSaved()
-        if (acknowledged !== 'stale') this._heldView = mapView
-        return acknowledged
-      },
-    })
+    return this.options.documents.captureForPersistence(metadata, doc, this._mapViewForSave())
   }
 
   resize(width: number, height: number): void {
@@ -244,9 +223,4 @@ class SceneCanvasDocumentRole implements SceneCanvasDocumentSurface {
       () => this.options.rendering.dispose(),
     ], 'Scene Canvas document surface disposal failed')
   }
-}
-
-/** Two stored views stand at the same centre, zoom and bearing; the ground each frames follows its window, so it is not compared. */
-function sameStandpoint(a: SavedViewCamera, b: SavedViewCamera | null): boolean {
-  return b !== null && a.lon === b.lon && a.lat === b.lat && a.zoom === b.zoom && a.bearing === b.bearing
 }

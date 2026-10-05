@@ -96,8 +96,7 @@ export function registerCloseGuard(): CloseGuardLifetime {
   void currentWindow
     .onFocusChanged(({ payload: focused }) => {
       if (focused || closeGuard.disposed) return;
-      // Edits only: a view that moved waits for Save, close or a switch (U28), so Alt-Tab never rewrites the file.
-      void designContinuousSave.flush({ view: false }).catch((error: unknown) => {
+      void designContinuousSave.flush().catch((error: unknown) => {
         console.error("Failed to save the Design when the window lost focus:", error);
       });
     })

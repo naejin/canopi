@@ -1,9 +1,9 @@
-// U28: a Design keeps the view it was saved with (`map_view`, GeoLibre's mapView). Saving writes the live view; panning
-// alone neither edits the Design nor makes a replacement guard stale, but every flush (Save, close, switching Designs, page
-// hide) writes a view that moved. Driven through the real runtime and the real persistence, continuous-save and replacement paths.
+// U28 and U30: a Design keeps the view it was saved with (`map_view`, GeoLibre's mapView). Every write that happens anyway
+// (Save, Save As, continuous save after an edit, a Draft write) carries the live view; panning alone edits nothing and writes
+// nothing, so closing, switching Designs, page hide and focus loss write only what they would write without it. Driven through
+// the real runtime and the real persistence, continuous-save, replacement and session paths.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAppCanvasRuntimeAppAdapter } from '../app/canvas-runtime/app-adapter'
-import { createContinuousSave } from '../app/document-session/continuous-save'
 import { createDesignSessionPersistence } from '../app/document-session/persistence'
 import { createDesignSessionReplacement } from '../app/document-session/replacement'
 import { createDesignSessionStateMachine } from '../app/document-session/state-machine'
@@ -19,6 +19,8 @@ import { savedViewCameraOf, savedViewZoom } from '../canvas/saved-view-framing'
 import { geographicViewOfCamera } from '../canvas/session-plane'
 import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
 import type { CanopiFile } from '../types/design'
+import { createBrowserAppDataStore } from '../web/browser-app-data'
+import { createBrowserDesignSessionController } from '../web/browser-design-session'
 import { createLiveTestCanvasRuntimeHost, type CanvasRuntimeHost } from './support/live-canvas-runtime'
 
 const SITE = { lon: -1.5536, lat: 47.2184 }
@@ -143,66 +145,6 @@ describe('the view a Design is saved with', () => {
   })
 })
 
-/** Continuous save of the open orchard, wired as both editions wire it; `drafts` collects each write. */
-function draftContinuousSave(host: CanvasRuntimeHost, store: ReturnType<typeof createMemoryDesignSessionStore>) {
-  const persistence = createDesignSessionPersistence({ store })
-  persistence.attachCanvas(host.surfaces.documents)
-  const drafts: CanopiFile[] = []
-  const continuousSave = createContinuousSave({
-    store,
-    viewMoved: () => persistence.viewMovedSinceSave(),
-    writeHome: () => {
-      persistence.beginBrowserDraft().executeImmediately(prepareSynchronousDesignWriteDestination({
-        resource: 'browser-app-data:drafts',
-        write: (content) => { drafts.push(content) },
-      }))
-      return { kind: 'written' }
-    },
-  })
-  continuousSave.beginSession({ draftId: 'draft-1', fingerprint: null, writePending: false })
-  return { continuousSave, drafts }
-}
-
-describe('a view that moved since the last save', () => {
-  it('reaches the home with the next flush, though nothing reads as unsaved and no timer writes it', async () => {
-    vi.useFakeTimers()
-    try {
-      const { host, store } = openOrchard()
-      const { continuousSave, drafts } = draftContinuousSave(host, store)
-      const uninstall = continuousSave.install()
-      moveTheView(host)
-      const moved = liveMapView(host)
-
-      await vi.advanceTimersByTimeAsync(10_000)
-      expect(drafts, 'a camera move schedules no write').toEqual([])
-      expect(continuousSave.hasPendingChanges()).toBe(false)
-      expect(continuousSave.status.value, 'the file reads as saved').toBe('saved')
-
-      expect(await continuousSave.flush()).toBe(true)
-      expect(drafts.map((file) => file.map_view)).toEqual([moved])
-
-      expect(await continuousSave.flush()).toBe(true)
-      expect(drafts, 'the home holds that view now').toHaveLength(1)
-      uninstall()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('a reopened Design writes nothing until its view moves, even in a window of another size', async () => {
-    const file = savedOrchard()
-    const { host, store } = openOrchard(file, { width: 800, height: 600 })
-    const { continuousSave, drafts } = draftContinuousSave(host, store)
-
-    expect(await continuousSave.flush()).toBe(true)
-    expect(drafts).toEqual([])
-
-    host.cameraHost.current().apply({ kind: 'pan-by', deltaPx: { x: 30, y: 0 } })
-    expect(await continuousSave.flush()).toBe(true)
-    expect(drafts.map((saved) => saved.map_view)).toEqual([liveMapView(host)])
-  })
-})
-
 /** The orchard as saved after a pan, zoom and turn on a 1200 x 800 map. */
 function savedOrchard(): CanopiFile {
   const { host } = openOrchard()
@@ -321,6 +263,42 @@ async function openOnDesktop(file: CanopiFile = orchard()) {
   return { host, store, machine, writes, requestSaveDecision }
 }
 
+/** The orchard restored from its browser Draft on the Web, through the real browser session controller. */
+function openOnWeb() {
+  const values = new Map<string, string>()
+  const appDataStore = createBrowserAppDataStore({
+    storage: {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => { values.set(key, value) },
+      removeItem: (key) => { values.delete(key) },
+    },
+  })
+  appDataStore.saveDraft({ id: 'draft-orchard', file: orchard(), now: '2026-10-05T08:00:00.000Z' })
+  const store = createMemoryDesignSessionStore()
+  const host = liveHost(store)
+  const requestSaveDecision = vi.fn(async () => 'cancel')
+  const controller = createBrowserDesignSessionController({
+    store,
+    appDataStore,
+    now: () => new Date('2026-10-05T09:00:00.000Z'),
+    createDraftId: () => 'draft-next',
+    requestSaveDecision: requestSaveDecision as never,
+    workflowRunner: { install: vi.fn(), dispose: vi.fn() },
+  })
+  const detach = controller.attachCanvasSession(host.surfaces.documents)
+  expect(controller.restoreLatestDraft()).toBe(true)
+  const page = {
+    document: Object.assign(new EventTarget(), { visibilityState: 'visible' as DocumentVisibilityState }),
+    window: new EventTarget(),
+  }
+  const uninstall = controller.installContinuousSave(page)
+  const record = () => ({
+    file: appDataStore.loadDraft('draft-orchard'),
+    summary: appDataStore.listDrafts().find((draft) => draft.id === 'draft-orchard'),
+  })
+  return { host, store, controller, page, detach, uninstall, record, requestSaveDecision }
+}
+
 describe('the view reaches the home only with a write that already happens (U30)', () => {
   it('an edit, then a pan: the next continuous save writes the panned view, and reopening restores it', async () => {
     vi.useFakeTimers()
@@ -354,5 +332,55 @@ describe('the view reaches the home only with a write that already happens (U30)
     await expect(machine.saveAsCurrentDesign()).resolves.toMatchObject({ status: 'applied' })
     expect(writes.map((write) => write.path)).toEqual([PATH, SAVE_AS_PATH])
     expect(writes[1]?.content.map_view).toEqual(liveMapView(host))
+  })
+
+  it('on Desktop, panning only, then losing focus, switching Designs or closing writes nothing and asks nothing', async () => {
+    const { host, machine, writes, requestSaveDecision } = await openOnDesktop()
+    moveTheView(host)
+
+    expect(machine.continuousSave.status.value, 'nothing reads as unsaved').toBe('saved')
+    await expect(machine.continuousSave.flush(), 'focus loss flushes').resolves.toBe(true)
+    await expect(machine.transitionDocument({
+      source: 'open-path',
+      dirtyGuard: 'flush',
+      session: host.surfaces.documents,
+      load: async () => ({ file: orchard(), path: '/designs/next.canopi', name: 'Next', fingerprint: 'fp-next' }),
+    })).resolves.toMatchObject({ status: 'applied' })
+    moveTheView(host)
+    await expect(machine.closeDesign()).resolves.toMatchObject({ status: 'applied' })
+
+    expect(writes, 'the files keep their bytes and mtime').toEqual([])
+    expect(requestSaveDecision).not.toHaveBeenCalled()
+  })
+
+  it('on the Web, panning only, then page hide or closing leaves the Draft as it was', async () => {
+    const web = openOnWeb()
+    try {
+      const stored = web.record()
+      expect(stored.file).not.toBeNull()
+
+      moveTheView(web.host)
+      expect(web.controller.continuousSave.status.value, 'nothing reads as unsaved').toBe('draft')
+      web.page.window.dispatchEvent(new Event('pagehide'))
+      expect(web.record()).toEqual(stored)
+      await web.controller.closeDesign()
+      expect(web.record()).toEqual(stored)
+      expect(web.requestSaveDecision).not.toHaveBeenCalled()
+    } finally {
+      web.uninstall()
+    }
+  })
+
+  it('on the Web, panning only, then switching to a new Design leaves the Draft as it was', async () => {
+    const web = openOnWeb()
+    try {
+      const stored = web.record()
+      moveTheView(web.host)
+      await web.controller.newDesign()
+      expect(web.record()).toEqual(stored)
+      expect(web.requestSaveDecision).not.toHaveBeenCalled()
+    } finally {
+      web.uninstall()
+    }
   })
 })

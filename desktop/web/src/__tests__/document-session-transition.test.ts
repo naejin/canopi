@@ -126,7 +126,6 @@ function makeSession(): CanvasDocumentSurface {
       return { callerFinalizerInvoked: true };
     }),
     hasLoadedDocument: vi.fn(() => loaded),
-    viewMovedSinceSave: () => false,
     captureForPersistence: vi.fn((metadata, doc) => ({
       content: { ...doc, name: metadata.name },
       isCurrent: vi.fn(() => true),
@@ -178,7 +177,6 @@ function makeSettledSceneSession(
       return { callerFinalizerInvoked };
     }),
     hasLoadedDocument: vi.fn(() => loaded),
-    viewMovedSinceSave: () => false,
     captureForPersistence: vi.fn((metadata, document) => {
       if (settling) throw new CanvasAuthorityBusyError("document-settlement");
       const capture = authority.capturePersistence();
@@ -219,7 +217,6 @@ function makePostFinalizerFailureSession(): CanvasDocumentSurface {
       return { callerFinalizerInvoked: false };
     }),
     hasLoadedDocument: vi.fn(() => true),
-    viewMovedSinceSave: () => false,
     captureForPersistence: vi.fn((metadata, document) => {
       if (settling) throw new CanvasAuthorityBusyError("document-settlement");
       return {
@@ -248,7 +245,6 @@ function makePreFinalizerFailureSession(): CanvasDocumentSurface {
       throw new Error("pre-finalizer Scene publication failed");
     }),
     hasLoadedDocument: vi.fn(() => true),
-    viewMovedSinceSave: () => false,
     captureForPersistence: vi.fn((metadata, document) => {
       if (settling) throw new CanvasAuthorityBusyError("document-settlement");
       return {
@@ -1213,7 +1209,6 @@ describe("document session transition", () => {
         return { callerFinalizerInvoked: false };
       }),
       hasLoadedDocument: vi.fn(() => true),
-      viewMovedSinceSave: () => false,
       captureForPersistence: vi.fn((metadata, document) => {
         if (settling) throw new CanvasAuthorityBusyError("document-settlement");
         return {
@@ -1275,7 +1270,6 @@ describe("document session transition", () => {
       loadDocument: vi.fn(),
       replaceDocument,
       hasLoadedDocument: vi.fn(() => true),
-      viewMovedSinceSave: () => false,
       captureForPersistence: vi.fn((_metadata, document) => ({
         content: {
           ...document,
@@ -1355,7 +1349,6 @@ describe("document session transition", () => {
         return { callerFinalizerInvoked: false };
       }),
       hasLoadedDocument: vi.fn(() => true),
-      viewMovedSinceSave: () => false,
       captureForPersistence: vi.fn((metadata, document) => {
         if (settling) throw new CanvasAuthorityBusyError("document-settlement");
         return {

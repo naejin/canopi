@@ -805,7 +805,6 @@ function makeCanvas(events: string[]): CanvasDocumentSurface {
       return { callerFinalizerInvoked: true };
     }),
     hasLoadedDocument: vi.fn(() => loaded),
-    viewMovedSinceSave: () => false,
     captureForPersistence: vi.fn((_metadata, document) => ({
       content: document,
       isCurrent: () => true,

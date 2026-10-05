@@ -192,7 +192,6 @@ export class DesignSessionStateMachine {
     this.continuousSave = createContinuousSave({
       store: deps.store,
       writeHome: (home) => this.writeHome(home),
-      viewMoved: () => deps.persistence.viewMovedSinceSave(),
     });
   }
 
