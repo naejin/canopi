@@ -4,9 +4,10 @@
 //! numeric readers require. The renderer instead needs tiled, compressed files
 //! with overviews, so each displayed entity gets **display derivatives**: a
 //! versioned profile of DEFLATE, 256-pixel blocks and averaged valid-data
-//! overviews in the source CRS. They are regenerable display data only — never
-//! a source member, a head or a result — and every read of physical values
-//! keeps using the exact numeric generation.
+//! overviews, warped to EPSG:3857 on one global lattice by the engine, so the
+//! renderer does no coordinate work (U31). They are regenerable display data
+//! only — never a source member, a head or a result — and every read of
+//! physical values keeps using the exact numeric generation.
 //!
 //! One derivative is produced per display source, in the entity's saved
 //! priority order (top-first):
@@ -23,7 +24,7 @@
 //! read a partial derivative. Keys include the generation or content identity
 //! and the profile, so a newer generation never reuses an older URL.
 
-use super::engine::{RasterGeoref, RasterInput};
+use super::engine::{DISPLAY_NODATA, RasterGeoref, RasterInput};
 use super::grid::RasterGrid;
 use super::{LidarLibrary, catalogue, collection, generation};
 use common_types::library::LibraryItemRole;
@@ -36,8 +37,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Versioned display profile; every derivative key starts with it, and the
-/// startup prune drops derivatives of any other.
-pub(super) const DISPLAY_PROFILE: &str = "display-cog-deflate256-v1";
+/// startup prune drops derivatives of any other. v2: derivatives are warped
+/// to EPSG:3857 (U31), so every earlier one regenerates once.
+pub(super) const DISPLAY_PROFILE: &str = "display-cog-3857-v2";
 /// SHA-256 of the CRS rows and the proj4rs version this profile was written
 /// with; a test fails when either changes, so the profile is bumped with it.
 #[cfg(test)]
@@ -47,11 +49,6 @@ const DISPLAY_PROFILE_CRS_DIGEST: &str =
 /// in memory and converted whole, so 4×4 chunks keep it inside the engine's
 /// capacity limit (`import::MAX_RAW_EXTRACTION_CELLS`).
 const PART_CHUNKS: i64 = 4;
-/// Invalid cells in a composed part: -2^127, exactly representable in Float32
-/// and Float64 and written with a round-trip decimal, so every reader that
-/// compares samples with the tag in either precision sees the same value. No
-/// stored elevation, height or slope holds it.
-const PART_NODATA: f32 = -1.701_411_8e38;
 
 /// How one derivative is produced.
 #[derive(Clone)]
@@ -588,7 +585,7 @@ impl LidarLibrary {
         let occupied: HashSet<(i64, i64)> = chunks.iter().copied().collect();
         // The part is composed in memory: at most `PART_CHUNKS`² chunks, and
         // empty space between distant chunks is never part of one group.
-        let mut samples = vec![PART_NODATA; width * height];
+        let mut samples = vec![DISPLAY_NODATA; width * height];
         let mut any_valid = false;
         for chunk_y in min_y..=max_y {
             for chunk_x in min_x..=max_x {
@@ -655,7 +652,7 @@ impl LidarLibrary {
                 },
                 staged,
                 Some(RasterGeoref { grid: &grid, crs }),
-                Some(PART_NODATA),
+                Some(DISPLAY_NODATA),
                 cancel,
             )
             .map(|_| true)
@@ -761,11 +758,11 @@ mod tests {
 
     #[test]
     fn the_part_sentinel_round_trips_through_its_decimal_tag() {
-        assert_eq!(PART_NODATA, -(2.0_f32.powi(127)));
-        let tag = format!("{:?}", f64::from(PART_NODATA));
+        assert_eq!(DISPLAY_NODATA, -(2.0_f32.powi(127)));
+        let tag = format!("{:?}", f64::from(DISPLAY_NODATA));
         let parsed: f64 = tag.parse().unwrap();
-        assert_eq!(parsed, f64::from(PART_NODATA), "{tag}");
-        assert_eq!(parsed as f32, PART_NODATA);
+        assert_eq!(parsed, f64::from(DISPLAY_NODATA), "{tag}");
+        assert_eq!(parsed as f32, DISPLAY_NODATA);
     }
 
     #[test]
@@ -1035,6 +1032,255 @@ mod library_tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// A published RD New item near Delft: a ramp of distinct values with a
+    /// -9999 hole and a few NaN cells. Returns its id and generation.
+    fn publish_rd_item(
+        library: &LidarLibrary,
+        root: &Path,
+        name: &str,
+        width: u32,
+        height: u32,
+    ) -> (String, String) {
+        let engine = &library.inner.engine;
+        let cancel = AtomicBool::new(false);
+        let mut values = Vec::with_capacity((width * height) as usize);
+        for row in 0..height {
+            for column in 0..width {
+                values.push(if (row * 7 + column * 3) % 41 == 0 {
+                    -9999.0
+                } else if (row * 5 + column) % 97 == 0 {
+                    f32::NAN
+                } else {
+                    (row * width + column) as f32 * 0.25 + 1.0
+                });
+            }
+        }
+        let raw = root.join(format!("{name}.raw"));
+        super::super::import::write_f32_raw(&raw, &values).unwrap();
+        let source = root.join(format!("{name}.tif"));
+        super::super::import::raw_to_tif(
+            engine.as_ref(),
+            &cancel,
+            &raw,
+            &source,
+            &RasterGrid {
+                width,
+                height,
+                geotransform: [85_000.25, 0.5, 0.0, 447_499.75, 0.0, -0.5],
+            },
+            "EPSG:28992",
+            -9999.0,
+        )
+        .unwrap();
+        let layer_id = library
+            .create_layer(name, RasterQuantity::GroundElevation, None, false)
+            .unwrap();
+        let job_id = library.record_import_job(&layer_id).unwrap();
+        super::super::import::stage_and_publish(library, &job_id, &layer_id, &[source], &cancel)
+            .unwrap();
+        let generation_id = library
+            .library_snapshot()
+            .unwrap()
+            .items
+            .into_iter()
+            .find(|layer| layer.id == layer_id)
+            .and_then(|layer| layer.generation_id)
+            .expect("published head");
+        (layer_id, generation_id)
+    }
+
+    /// The one derivative of a published item, with its descriptor bounds.
+    fn prepared_asset(library: &LidarLibrary, layer_id: &str) -> (PathBuf, [f64; 4]) {
+        library
+            .prepare_display_now(LibraryItemRole::Source, layer_id)
+            .unwrap();
+        let descriptor = library
+            .display_descriptor(&LidarDisplayRequest {
+                kind: LibraryItemRole::Source,
+                entity_id: layer_id.to_string(),
+                expected_generation_id: None,
+                retry: false,
+            })
+            .unwrap();
+        assert_eq!(descriptor.state, LidarDisplayState::Ready, "{descriptor:?}");
+        assert_eq!(descriptor.assets.len(), 1);
+        let asset = &descriptor.assets[0];
+        (PathBuf::from(&asset.path), asset.bounds)
+    }
+
+    /// What hover reads at each Web Mercator point: the value, or `None`
+    /// for NoData.
+    fn hover(
+        library: &LidarLibrary,
+        layer_id: &str,
+        generation_id: &str,
+        points: &[(f64, f64)],
+    ) -> Vec<(f64, f64, Option<f64>)> {
+        use common_types::lidar::{LidarSampleOutcome, LidarSampleRequest};
+        let engine = library.inner.engine.as_ref();
+        let cancel = AtomicBool::new(false);
+        let placed = engine
+            .transform_points("EPSG:3857", "EPSG:4326", points, &cancel)
+            .unwrap();
+        placed
+            .into_iter()
+            .map(|point| {
+                let (longitude, latitude) = point.expect("a pixel centre places in WGS84");
+                let outcome = super::super::inspection::sample(
+                    library,
+                    engine,
+                    &cancel,
+                    &LidarSampleRequest {
+                        kind: LibraryItemRole::Source,
+                        entity_id: layer_id.to_string(),
+                        expected_generation_id: generation_id.to_string(),
+                        request_id: "pixel-centre".to_string(),
+                        longitude,
+                        latitude,
+                    },
+                )
+                .unwrap();
+                let value = match outcome {
+                    LidarSampleOutcome::Value { value, .. } => Some(value),
+                    LidarSampleOutcome::NoData { .. } => None,
+                    other => panic!("hover at ({longitude}, {latitude}): {other:?}"),
+                };
+                (longitude, latitude, value)
+            })
+            .collect()
+    }
+
+    /// The centre of pixel `(column, row)` of a derivative.
+    fn pixel_centre(
+        probe: &super::super::engine::RasterProbe,
+        column: u32,
+        row: u32,
+    ) -> (f64, f64) {
+        let gt = probe.geotransform;
+        (
+            gt[0] + (f64::from(column) + 0.5) * gt[1],
+            gt[3] + (f64::from(row) + 0.5) * gt[5],
+        )
+    }
+
+    /// A4: at the centre of a drawn Web Mercator pixel the display shows the
+    /// value hover reads there, NoData included.
+    #[test]
+    fn a_pixel_centre_shows_the_value_hover_reads_there() {
+        let root = crate::test_scratch::TestScratch::new("canopi-display-hover");
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let (layer_id, generation_id) = publish_rd_item(&library, &root, "delft", 120, 80);
+        let (path, _) = prepared_asset(&library, &layer_id);
+        let probe = info(&library, &path.display().to_string());
+        assert_eq!(probe.crs_ref, "EPSG:3857");
+        let drawn = library
+            .inner
+            .engine
+            .read_f32(&path, probe.width, probe.height, &AtomicBool::new(false))
+            .unwrap();
+        let pixels: Vec<(u32, u32)> = (0..probe.height)
+            .step_by(3)
+            .flat_map(|row| (0..probe.width).step_by(3).map(move |column| (column, row)))
+            .collect();
+        let centres: Vec<(f64, f64)> = pixels
+            .iter()
+            .map(|(column, row)| pixel_centre(&probe, *column, *row))
+            .collect();
+        let read = hover(&library, &layer_id, &generation_id, &centres);
+        let (mut values, mut empty) = (0usize, 0usize);
+        for ((column, row), (_, _, hovered)) in pixels.iter().zip(read) {
+            let shown = drawn[(row * probe.width + column) as usize];
+            let shown_value =
+                (shown.is_finite() && Some(shown) != probe.nodata).then_some(f64::from(shown));
+            assert_eq!(shown_value, hovered, "pixel ({column}, {row})");
+            if hovered.is_some() {
+                values += 1;
+            } else {
+                empty += 1;
+            }
+        }
+        assert!(
+            values > 1_000 && empty > 100,
+            "{values} values, {empty} NoData"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The web suite opens this derivative with the real cog-tiler-wasm
+    /// (`raster-display/rust-display-cog.test.ts`) and reads the probes back,
+    /// so the fixture must be what the engine writes now. Rewrite it with
+    /// `CANOPI_UPDATE_FIXTURES=1`.
+    #[test]
+    fn the_web_display_fixture_is_what_the_engine_writes() {
+        let root = crate::test_scratch::TestScratch::new("canopi-display-fixture");
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let (layer_id, generation_id) = publish_rd_item(&library, &root, "fixture", 24, 16);
+        let (path, bounds) = prepared_asset(&library, &layer_id);
+        let probe = info(&library, &path.display().to_string());
+        let pixels: Vec<(u32, u32)> = (0..probe.height)
+            .step_by(5)
+            .flat_map(|row| (0..probe.width).step_by(5).map(move |column| (column, row)))
+            .collect();
+        let centres: Vec<(f64, f64)> = pixels
+            .iter()
+            .map(|(column, row)| pixel_centre(&probe, *column, *row))
+            .collect();
+        let probes: Vec<serde_json::Value> = hover(&library, &layer_id, &generation_id, &centres)
+            .into_iter()
+            .map(|(longitude, latitude, value)| {
+                serde_json::json!({ "longitude": longitude, "latitude": latitude, "value": value })
+            })
+            .collect();
+        let expected = serde_json::json!({
+            "bounds": bounds,
+            "nodata": probe.nodata,
+            "width": probe.width,
+            "height": probe.height,
+            "probes": probes,
+        });
+        let fixtures =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("web/src/maplibre/raster-display/fixtures");
+        let tif = fixtures.join("rust-display-cog.tif");
+        let json = fixtures.join("rust-display-cog.json");
+        if std::env::var_os("CANOPI_UPDATE_FIXTURES").is_some() {
+            std::fs::create_dir_all(&fixtures).unwrap();
+            std::fs::copy(&path, &tif).unwrap();
+            std::fs::write(
+                &json,
+                serde_json::to_string_pretty(&expected).unwrap() + "\n",
+            )
+            .unwrap();
+        }
+        let stale =
+            "the web display fixture is stale: rerun this test with CANOPI_UPDATE_FIXTURES=1";
+        let committed: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&json).expect(stale)).expect(stale);
+        assert_eq!(committed, expected, "{stale}");
+        let engine = library.inner.engine.as_ref();
+        let cancel = AtomicBool::new(false);
+        let committed_probe = engine.probe(&tif, &cancel).expect(stale);
+        assert_eq!(
+            (
+                committed_probe.geotransform,
+                committed_probe.crs_ref.as_str()
+            ),
+            (probe.geotransform, probe.crs_ref.as_str()),
+            "{stale}"
+        );
+        let read = |raster: &Path| {
+            engine
+                .read_f32(raster, probe.width, probe.height, &cancel)
+                .expect(stale)
+                .into_iter()
+                .map(f32::to_bits)
+                .collect::<Vec<_>>()
+        };
+        assert!(read(&tif) == read(&path), "{stale}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     /// The display warp places pixels with the CRS rows and proj4rs, so a
     /// change to either must bump `DISPLAY_PROFILE` (and then this digest):
     /// derivatives written before it would otherwise be served again.
@@ -1116,19 +1362,24 @@ mod chunk_display_tests {
                 .engine
                 .probe(Path::new(&asset.path), &AtomicBool::new(false))
                 .unwrap();
-            assert_eq!(
-                (info.width, info.height),
-                (1024, 1024),
-                "a part covers its own chunk only"
+            // One 1024 m chunk near the equator spans about 0.0092 degrees.
+            let [west, south, east, north] = asset.bounds;
+            assert!(
+                east - west < 0.0095 && north - south < 0.0095,
+                "a part covers its own chunk only: {:?}",
+                asset.bounds
             );
             // A probe reports the tag at Float32 precision; the renderer parses
             // the TIFF tag itself, so check the stored text round-trips.
             assert_eq!(
                 info.nodata,
-                Some(PART_NODATA),
+                Some(DISPLAY_NODATA),
                 "invalid cells use the display sentinel"
             );
-            assert_eq!(stored_nodata_tag(&asset.path), Some(f64::from(PART_NODATA)));
+            assert_eq!(
+                stored_nodata_tag(&asset.path),
+                Some(f64::from(DISPLAY_NODATA))
+            );
         }
         // The far part starts 300 chunks east of the near one.
         let west: Vec<f64> = descriptor
