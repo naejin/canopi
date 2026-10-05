@@ -49,7 +49,7 @@ Every row re-implements `p·scale + t` or its inverse from a bearing-blind `{x, 
 | INV-TOOL-23 | `canvas/runtime/interaction/hit-testing.ts:228-251`, `:300-319` | Zones hit on the outline only; a band counts the interior | change; zone fill rules (canopi-f47t.2) | 2 |
 | INV-TOOL-26 | `canvas/contours.ts:158` | Hillshade `illumination-anchor: 'viewport'`: the light stays top-left as the map turns | keep (not decided by the design; a phase-1 convention, named at the phase-1 handoff (plan §8)) | — |
 | INV-TOOL-27 | `canvas/plants.ts:19-27` | Plant LOD bands at 0.5 and 5 px/m | keep; natural zoom bands for retained glyphs | R |
-| INV-TOOL-28 | `canvas/runtime/interaction/pointer-utils.ts:17-18` (used by `shared-gestures.ts:179`) | `hasAdditiveModifier`: Shift, Ctrl or Meta toggle the selection | change; additive is Shift or mod (on Mac a physical Ctrl is a right-click, never additive); Alt is subtractive (spec §2.3); the rule lives in `tools/tool-host.ts` modifier resolution (D1) | 2 |
+| INV-TOOL-28 | `canvas/runtime/interaction/pointer-utils.ts:17-18` (used by `shared-gestures.ts:179`) | `hasAdditiveModifier`: Shift, Ctrl or Meta toggle the selection | change; additive is Shift, Ctrl or Cmd; Alt is subtractive; resolved from the event's flags (spec §2.3), S2 | 2 |
 
 ## 4. Rendering, chrome and per-frame work (INV-REN)
 

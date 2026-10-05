@@ -2,7 +2,7 @@
 
 Trimmed 2026-10-02 at the phase-0 close (the full earlier text is at commit 76bd08a659d916069a340fc06e670e54e32f54c7) and 2026-10-03 at the phase-1 close (the text before it is at `da12600b`): §4.5, §4.11, §9.1 and §9.2, built and read by no later step, were deleted; section numbers are not reused, so code comments citing them resolve at that commit.
 
-Status: agreed (2026-09-29); phase 0 and phase F built (2026-10-02); phase 1 built (2026-10-03); amended 2026-10-05 for U33 (rulers, ruler guides and the locked chip removed; key admission; no last-bearing fallback; required ground size); 2, 3 and R build on it per docs/plans/canvas-v2-plan.md
+Status: agreed (2026-09-29); phase 0 and phase F built (2026-10-02); phase 1 built (2026-10-03); amended 2026-10-05 for U33 (rulers, ruler guides and the locked chip removed; key admission; no last-bearing fallback; required ground size), and 2026-10-06 for phase 2's design check and U34 (turns jump; the bearing-free floor; one `contextmenu` listener; one modifier source; the cut stage's rules); 2, 3 and R build on it per docs/plans/canvas-v2-plan.md
 
 This is the contract the canvas v2 work is built to. The phases, owners, gates and bead mapping are in `docs/plans/canvas-v2-plan.md`; what exists today and what happens to each piece is in `docs/plans/canvas-v2-inventory.md`. The reasons live in the ADRs: 0015 (rotating map and canvas controls; amends ADR 0010's control and shortcut rules), 0016 (one view transform), 0017 (input pipeline and gestures), 0018 (narrow tool interface), 0019 (rendering and the view transform), 0020 (focus and keyboard ownership). Delete this file with the plan at the 2.0 release close.
 
@@ -117,10 +117,10 @@ export interface ViewTransform {
 export interface ViewFrame {
   readonly view: ViewTransform
   readonly mode: 'site' | 'overview'         // overview below 0.1 px/m (canvas/workspace-camera-policy.ts)
-  readonly scaleBounds: { readonly min: number; readonly max: number }   // the effective bounds: policy zooms with the single-world floor at the live bearing (constrainCamera)
+  readonly scaleBounds: { readonly min: number; readonly max: number }   // the effective bounds: policy zooms with the bearing-free single-world floor (constrainCamera)
   readonly insets: ScreenInsets              // from the visible-map-area seam
   readonly attached: boolean
-  readonly moving: boolean                   // gesture, rotation session, tween or flight in flight
+  readonly moving: boolean                   // gesture, rotation session or flight in flight
   readonly revision: number
 }
 
@@ -155,7 +155,7 @@ export interface RotationSession {
    * roundToStep(start + totalDeltaDeg, 15): absolute multiples of 15°, not start + 15k.
    */
   update(totalDeltaDeg: number, options: { readonly step: boolean }): void
-  /** snapBearing: within 7° of north tweens to 0 in 300 ms about the session pivot; else keeps. */
+  /** snapBearing: within 7° of north jumps to 0 about the session pivot; else keeps. */
   end(): void
   /** Restores the full starting ViewCamera with animation 'none' (Esc during a rotate). */
   cancel(): void
@@ -213,7 +213,7 @@ export interface ViewCommandSurface {
 
 **How the view surfaces meet the session surfaces (§1.1a).** `ViewCommandSurface` is `CanvasCommandSurface.viewport` (`canvas/runtime/runtime.ts`); `ViewReadSurface` is `CanvasQuerySurface.view`. `CanvasQuerySurface.subscribePointerWorld` forwards `ToolHost.subscribePointerWorld` (the world and screen point, R1, so a hover readout over analysis results can call `queryRenderedFeatures` while P2 stays strict); the inspection lens component uses it instead of a map-host `pointermove`. The lens handle (`canvas/inspection.ts`) publishes `sourceQuad`, the lens footprint's four screen corners on the main map; phase 1's hand-off commit renames its `panBy(delta)` to `panByScreen(deltaPx: InspectionPoint)`, which View turns into ground at the lens's bearing (INV-WR-17, INV-KEY-21): the lens window moves by `deltaPx` in preview pixels, and a drag passes its start minus the current point. `CanvasOverview.tsx` places the overview pin from `ViewReadSurface.designPin`. App code (`app/**`, `components/**`, `web/**`) uses only these two surfaces, except `workspace-runtime-composition.ts` and `workspace-activation.ts`, which wire the driver host directly (Attachment, below); `ViewFrameSource` stays inside `canvas/runtime/**` and `maplibre/**` (P10).
 
-**Resize.** One owner changes the screen size: the MapLibre driver calls `map.resize()`, re-runs `constrainCamera` at the live bearing (the zoom floor depends on screen size and bearing, §4.14) and publishes one frame; the World map (no driver, exempt from P1) resizes itself. `setScreen` is a no-op when the size is unchanged. The runtime's two resize entries call the live driver's `setScreen` (`cameraHost.current().setScreen`) with `window.devicePixelRatio`. P1 forbids `resize` on a map outside the driver.
+**Resize.** One owner changes the screen size: the MapLibre driver calls `map.resize()`, re-runs `constrainCamera` (the zoom floor depends on the screen size only, §4.14) and publishes one frame; the World map (no driver, exempt from P1) resizes itself. `setScreen` is a no-op when the size is unchanged. The runtime's two resize entries call the live driver's `setScreen` (`cameraHost.current().setScreen`) with `window.devicePixelRatio`. P1 forbids `resize` on a map outside the driver.
 
 ```ts
 // canvas/runtime/view/camera-driver.ts  (types)
@@ -222,15 +222,11 @@ export type CameraMove =
   /** deltaPx is content movement: the ground under the pointer moves by deltaPx. New centre = unproject(screenCentre − deltaPx). */
   | { readonly kind: 'pan-by'; readonly deltaPx: ScreenPoint }
   | { readonly kind: 'zoom-around'; readonly anchorPx: ScreenPoint; readonly factor: number }
-  /**
-   * Keep the ground under anchorPx fixed while the bearing changes; the centre is an output.
-   * 'ease' runs a driver tween (VIEW_EASE_MS) about the same anchor.
-   */
+  /** Keep the ground under anchorPx fixed while the bearing changes; the centre is an output. Every turn jumps (U34). */
   | {
       readonly kind: 'rotate-around'
       readonly anchorPx: ScreenPoint | 'centre'
       readonly bearingDeg: number
-      readonly animation: 'none' | 'ease'
     }
   /** Go to a full camera. The centre is an input; no anchor. 'fly' is MapLibre flyTo. */
   | {
@@ -243,7 +239,7 @@ export interface CameraDriver {
   readonly frames: ViewFrameSource
   /** Synchronous for 'none' moves and the incremental kinds: `frames.viewFrame` is current on return (unless queued). */
   apply(move: CameraMove): void
-  /** The bearing a running tween or flight will end at, else the live bearing. */
+  /** The bearing a running flight will end at, else the live bearing. */
   bearingTarget(): number
   stopAnimation(): void
   /** The runtime's plane effect calls it on a re-origin and on any plane change while attached (a detached hydration goes
@@ -309,18 +305,17 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
 
 **Attachment** (`app/canvas-map-surface/workspace-activation.ts`). The activation builds each map's `MapLibreCameraDriver` and calls `attach`/`detach`, and subscribes to `CameraDriverHost.failure` to report the map as unavailable. Map notices (U22, C4, C5; 2.0 bug fixes, canopi-0p2n) use fixed localized strings, never engine text, from one shared component in both editions. A lost WebGL context reads "The map stopped drawing. Your Design is safe." with Retry; Retry rebuilds the map and keeps the view, selection and undo, can be pressed any number of times, and nothing restarts on its own. Without WebGL2, or when the renderer init destroyed the runtime, "Map unavailable" stays with no Retry. A failed basemap download reads "Basemap couldn't load. Check your connection." with Retry in the map's status chip, until the basemap loads, is hidden or Satellite is chosen; it ranks below a map error and above a skipped layer. A rotated camera is never a failure; a read-back pitch other than 0 is (`'map-error'`). The composition and the activation are the only two app modules that touch the driver host directly (P10 allows their type-only import of `camera-driver.ts`); everything else goes through the two surfaces above. The runtime builds its one host in `scene-runtime/construction.ts` (`SceneCanvasRuntime.cameraHost`) and follows the Scene's plane itself, through one plane effect there.
 
-**Driver rules** (ADR 0016, amended 2026-09-30). `MapLibreCameraDriver` and `HeadlessCameraDriver` both implement `CameraDriver` with the same `camera-math`, `constrainCamera` and `BearingTween`, and both build their frames with `buildViewTransform` from a geographic `ViewCamera`: the MapLibre driver's is MapLibre's own camera, the headless driver's its own; `view/camera-contract.test.ts` holds the transform to MapLibre's (1e-6 px), and tests compare with `toBeCloseTo`. The MapLibre driver is the only code that calls camera methods on the workspace and snapshot maps, always with explicit `jumpTo`/`flyTo` values; each publishes one frame from the read-back camera (bearing normalised to [0, 360)). A `CameraDriver.apply` made mid-dispatch is queued and applied once, after every listener ran. The map stays `interactive: false`, `dragRotate: false`, `touchZoomRotate: false`.
+**Driver rules** (ADR 0016, amended 2026-09-30). `MapLibreCameraDriver` and `HeadlessCameraDriver` both implement `CameraDriver` with the same `camera-math` and `constrainCamera`, and both build their frames with `buildViewTransform` from a geographic `ViewCamera`: the MapLibre driver's is MapLibre's own camera, the headless driver's its own; `view/camera-contract.test.ts` holds the transform to MapLibre's (1e-6 px), and tests compare with `toBeCloseTo`. The MapLibre driver is the only code that calls camera methods on the workspace and snapshot maps, always with explicit `jumpTo`/`flyTo` values; each publishes one frame from the read-back camera (bearing normalised to [0, 360)). A `CameraDriver.apply` made mid-dispatch is queued and applied once, after every listener ran. The map stays `interactive: false`, `dragRotate: false`, `touchZoomRotate: false`.
 
 | Move | Driver work | MapLibre call |
 |---|---|---|
-| `pan-by` | `panCamera`; during a tween, bearing = live tween frame | `jumpTo` |
+| `pan-by` | `panCamera` | `jumpTo` |
 | `zoom-around` | `zoomCameraAround` | `jumpTo` |
-| `rotate-around` / `none` | `rotateCameraAround` | `jumpTo` |
-| `rotate-around` / `ease` | starts a `BearingTween` about the anchor | `jumpTo` per animation frame |
+| `rotate-around` | `rotateCameraAround` | `jumpTo` |
 | `set` / `none` | `constrainCamera(target)` | `jumpTo` |
-| `set` / `fly` | `constrainCamera(target)`; guard arc = [live bearing, target bearing] for the whole flight | `flyTo({ center, zoom, bearing })` |
+| `set` / `fly` | `constrainCamera(target)` | `flyTo({ center, zoom, bearing })` |
 
-The map's `transformConstrain` is an adapter over `constrainCamera` whose bearing arc is a driver field set before each call (`[b, b]` for a jump, `[from, to]` for a flight); it never reads `map.getBearing()`. Tweens are not cancelled by other moves: a pan or zoom during a tween composes with it. A flight is stopped by any other move, and the interrupting `jumpTo` carries the flight's target bearing.
+The map's `transformConstrain` is an adapter over `constrainCamera`, which needs no bearing (U34), so the driver keeps no arc state. There are no bearing tweens: every turn is one `jumpTo` (U34; `bearing-tween.ts` and both animation-frame loops are deleted). A flight is stopped by any other move, and the interrupting `jumpTo` carries the flight's target bearing.
 
 ```ts
 // canvas/runtime/view/navigation-policy.ts  (pure; shared by both drivers)
@@ -336,22 +331,21 @@ export interface NavigationPolicy {
   readonly overviewPixelsPerMetre: number  // 0.1
   readonly referencePixelsPerMetre: number // 20 px/m = 100 %
   /** prefers-reduced-motion: reduce, a live matchMedia signal made in app/canvas-runtime/app-adapter.ts, declared on canvas/runtime/app-adapter.ts and
-   *  passed to createCameraDriverHost; app/saved-views/current-view.ts reads the same source. view/ never calls matchMedia (P4). Eases and tweens become 'none' moves while true. */
+   *  passed to createCameraDriverHost; app/saved-views/current-view.ts reads the same source. view/ never calls matchMedia (P4). Flights become jumps while true. */
   readonly reducedMotion: ReadonlySignal<boolean>
 }
 
 /**
- * Clamp zoom to [max(policy.minZoom, zoomFloorForArc(screen, policy, arc)), policy.maxZoom], the floor keeping one world copy
- * under the viewport rotated by every bearing in `bearingArc` (renderWorldCopies:false), then hold the rotated screen quad inside
- * one world: latitude inside ±85.05° and longitude inside ±180°. It replaces all of MapLibre's defaultConstrain (setConstrainOverride
- * replaces the zoom range and the longitude hold too). Idempotent. The zoom floor depends on the screen and the arc, never on the
- * centre, because MapLibre calls the guard on intermediate (old centre, new zoom) states.
+ * Clamp zoom to [max(policy.minZoom, worldZoomFloor(screen)), policy.maxZoom], then hold the screen centre at least half the
+ * screen diagonal (in px at that zoom) inside one world: latitude inside ±85.05° and longitude inside ±180°. Bearing-free (U34): the
+ * floor and the hold cover the viewport at every bearing, so a turn never changes them. It replaces all of MapLibre's
+ * defaultConstrain (setConstrainOverride replaces the zoom range and the longitude hold too). Idempotent. The floor depends on the
+ * screen only, never on the centre, because MapLibre calls the guard on intermediate (old centre, new zoom) states.
  */
-export function constrainCamera(camera: ViewCamera, screen: ViewScreen, policy: NavigationPolicy,
-  bearingArc?: { readonly fromDeg: number; readonly toDeg: number }): ViewCamera
+export function constrainCamera(camera: ViewCamera, screen: ViewScreen, policy: NavigationPolicy): ViewCamera
 export function createNavigationPolicy(base: WorkspaceCameraPolicy, reducedMotion: ReadonlySignal<boolean>): NavigationPolicy
-/** Zoom floor for a bearing arc: the maximum over the arc (largest near 45° + k·90°); for the arc [0, 0] it equals singleWorldEffectiveMinimumZoom. */
-export function zoomFloorForArc(screen: ViewScreen, policy: NavigationPolicy, fromDeg: number, toDeg: number): number
+/** The world floor: log2(hypot(width, height) / 512), so the screen diagonal never exceeds one world (U34). */
+export function worldZoomFloor(screen: ViewScreen): number
 
 /** Any angle to [0, 360); results ≥ 360 − 1e-9 become 0 (so normaliseBearing(-1e-14) === 0). */
 export function normaliseBearing(deg: number): number
@@ -367,7 +361,6 @@ export function nextStep(deg: number, direction: 1 | -1, stepDeg: 15): number
 export function shortestArc(fromDeg: number, toDeg: number): number
 export const ROTATE_DEG_PER_PX = 0.8                                  // MapLibre's rate
 export const SNAP_TO_NORTH_DEG = 7
-export const VIEW_EASE_MS = 300
 ```
 
 ```ts
@@ -382,18 +375,7 @@ export function screenToGeo(camera: ViewCamera, screen: ViewScreen, s: ScreenPoi
 export function geoToScreen(camera: ViewCamera, screen: ViewScreen, g: GeoPoint): ScreenPoint
 /** A placement to the camera it shows (createTestView's setViewport and reproject; the chrome's placement reads go the other way, planarCameraOf). */
 export function planarToViewCamera(camera: PlanarCamera, screen: ViewScreen, plane: SessionPlane): ViewCamera
-
-// canvas/runtime/view/bearing-tween.ts  (pure step function; the caller passes the time)
-export interface BearingTween {
-  readonly targetBearingDeg: number
-  readonly anchorPx: ScreenPoint | 'centre'
-  /** The camera for time t, computed from the LIVE camera (so pans and zooms during the tween compose). */
-  step(live: ViewCamera, screen: ViewScreen, nowMs: number): { readonly camera: ViewCamera; readonly done: boolean }
-}
-export function startBearingTween(from: ViewCamera, move: { readonly bearingDeg: number; readonly anchorPx: ScreenPoint | 'centre'; readonly durationMs: number }, nowMs: number): BearingTween
 ```
-
-A tween frame rotates the live camera about the anchor to the interpolated bearing (ease-out cubic, shortest arc). Every tween frame goes through `constrainCamera` with that frame's bearing.
 
 ```ts
 // canvas/runtime/view/navigation.ts  (the camera policy; the only mover of the camera, through the live driver, deps.driver.current();
@@ -512,47 +494,28 @@ export function detectPlatform(nav: Pick<Navigator, 'userAgent' | 'platform'>, w
 // when its deps carry none. Injected everywhere else.
 
 // canvas/runtime/input/bindings.ts  (data: one constant, edited in place by the phase that changes a field)
-export type PanContext = 'hand-tool' | 'overview'
 export interface Bindings {
-  readonly secondary: {
-    readonly click: 'menu-on-native' | 'menu-on-release'   // legacy: native contextmenu opens at once
-    readonly drag: 'none' | 'pan'
-    readonly shiftDrag: 'none' | 'rotate'
-  }
-  /** Shift+middle-drag. Plain middle-drag always pans. */
-  readonly auxiliaryShiftDrag: 'pan' | 'rotate'
-  /** Contexts in which a primary drag pans. */
-  readonly primaryDragPansIn: readonly PanContext[]
-  readonly macCtrlClick: 'primary' | 'secondary'
   // No navigateDuringPrimaryDrag: a second button during a primary drag is ignored in every phase (U2, 2026-10-01).
   readonly touch: { readonly gestures: boolean; readonly longPressMenu: boolean; readonly hostTouchActionNone: boolean }
-  readonly penBarrel: 'ignore' | 'secondary'
-  readonly trackpadGestures: boolean                       // WebKit gesture* rotation (the scale is ignored: the pinch arrives as Ctrl+wheel)
   readonly dragSlopPx: Readonly<Record<PointerKind, number>>
 }
 export const CURRENT_BINDINGS: Bindings     // the one constant; no ROTATION_BINDINGS, V2_BINDINGS or TOUCH_BINDINGS (audit 1.2)
 // F folded LEGACY_BINDINGS into CURRENT_BINDINGS (P11 tombstones the name) and hard-coded the hover end (no ownedHover field).
-// The header comment of bindings.ts still names describeBindings: the phase-1 or phase-2 Input row deletes that sentence.
+// Phase 2 hard-codes every field whose phase-2 value is final and deletes it (A19; no LEGACY branch stays): a still secondary
+// release opens the menu, a secondary drag pans (Shift at the press: rotates), Shift+middle rotates, only the Pan tool's primary
+// drag pans (PanContext goes), Mac Ctrl+click is secondary, the pen barrel is secondary, WebKit gesture rotation is on.
 // F1's gesture rows are a static list with three platform notes (Linux pinch, Mac Control-click, the pen button; §9.3), not generated
 // from the bindings (audit 1.7); GestureHelpRow and describeBindings are not written.
 ```
 
-The current constant's values, by the phase that sets them (each phase rewrites the fixtures whose outcome it changes and deletes the superseded expectations; the release close hard-codes the fields that end with one value):
+The constant's values (each phase rewrites the fixtures whose outcome it changes and deletes the superseded expectations; the release close hard-codes the rest):
 
-| Field | 0 | from F | from 1 | from 2 | from 3 |
-|---|---|---|---|---|---|
-| `secondary.click` | `menu-on-native` | same | same | `menu-on-release` | same |
-| `secondary.drag` | `none` | same | same | `pan` | same |
-| `secondary.shiftDrag` | `none` | same | same | `rotate` | same |
-| `auxiliaryShiftDrag` | `pan` | same | `rotate` | same | same |
-| `primaryDragPansIn` | `['hand-tool', 'overview']` | same | same | `['hand-tool']` | same |
-| `macCtrlClick` | `primary` | same | same | `secondary` | same |
-| `touch` (all three flags) | false | same | same | same | true |
-| `penBarrel` | `ignore` | same | same | `secondary` | same |
-| `trackpadGestures` | false | same | true | same | same |
-| `dragSlopPx` | 0 for mouse, pen and touch | mouse and pen 3 (U6) | same | same | touch 8 |
+| Field | from F | from 3 |
+|---|---|---|
+| `touch` (all three flags) | false | true |
+| `dragSlopPx` | mouse and pen 3 (U6), touch 0 | touch 8 |
 
-Primary slop compares `d >= slop && d > 0`, so under 0 any movement is a drag, as today; from F the mouse and pen slop is 3 px (U6, user 2026-10-01), so a click with a little jitter stays a click; the tools keep today's own thresholds (band and handles more than 2 px, measured at release through `ToolView.screenDistance`). Secondary slop is 3 px wherever the secondary drag pans (MapLibre's `clickTolerance`). A tool may override the primary slop through `configure`, which the session sends with `ToolHost.activeToolDragSlopPx()` on every tool change; Plant a row keeps slop 0 and measures today's 4 px itself through `ToolView.screenDistance`, like the band and handles, so the moves inside it still preview the row. In phase 2 `'overview'` leaves `PanContext`; `LEGACY_BINDINGS` is folded into `CURRENT_BINDINGS` and tombstoned in F's first Input commit; each LEGACY expectation is deleted or rewritten by the commit that changes its field, never kept to the release close.
+Primary slop compares `d >= slop && d > 0`, so under 0 any movement is a drag, as today; from F the mouse and pen slop is 3 px (U6, user 2026-10-01), so a click with a little jitter stays a click; the tools keep today's own thresholds (band and handles more than 2 px, measured at release through `ToolView.screenDistance`). Secondary slop is 3 px (MapLibre's `clickTolerance`). Every tool takes `tap` and `drag-end` from the recogniser's slop (P29, phase 2's cut stage): Plant a row's own 4 px rule, `CanvasTool.dragSlopPx` and `configure`'s `dragSlopPx` go, so its preview stays put for the first 3 px, then follows the drag; touch slop is 0 until phase 3, so touch jitter commits a row on lift (one release, U1). The band and handle checks wait for phase 3. Each LEGACY expectation is deleted or rewritten by the commit that changes its behaviour, never kept to the release close.
 
 ```ts
 // canvas/runtime/input/thresholds.ts  (plain numbers; tests may pass others)
@@ -560,8 +523,6 @@ export interface Thresholds {
   readonly longPressMs: number               // 500
   readonly multiClickMs: number              // today's double-click interval
   readonly multiClickSlopPx: number          // 6 (today's DOUBLE_CLICK_DISTANCE_PX)
-  readonly menuEchoMs: number                // 500: keyboard-menu echo
-  readonly windowsMenuTrailMs: number        // 250: WebView2 trailing contextmenu
   readonly twistStartArcPx: number           // 25: touch twist
   readonly trackpadTwistStartDeg: number     // 10: WebKit gesture rotation before any rotate is emitted
 }
@@ -589,13 +550,12 @@ export type RawInput =
   | At & { kind: 'leave' }                                                    // host pointerleave: hover-end (the host's passive hover; the tool decides on its preview)
   | At & { kind: 'focus-out' }                                                // host focusout: the host ends the nudge series
   | At & { kind: 'reject'; id: number }                                       // the session, on a GestureOutcome.rejectSession: ends that session with no gesture
-  | At & { kind: 'wheel'; at: ScreenPoint; dxPx: number; dyPx: number; mods: Modifiers; pinch: boolean; target: TargetClass }
-  | At & { kind: 'platform-gesture'; phase: 'start' | 'change' | 'end'; at: ScreenPoint; scale: number; rotationDeg: number }
-  | At & { kind: 'native-contextmenu'; at: ScreenPoint | null; fromKeyboard: boolean; target: TargetClass }
+  | At & { kind: 'wheel'; at: ScreenPoint; dxPx: number; dyPx: number; mods: Modifiers; target: TargetClass }
+  | At & { kind: 'platform-gesture'; phase: 'start' | 'change' | 'end'; at: ScreenPoint; rotationDeg: number }
   | At & { kind: 'key-state'; space: boolean; mods: Modifiers }               // from the KeyRouter
   | At & { kind: 'escape' }                                                   // from the Esc chain's 'gesture' layer
   | At & { kind: 'drop'; phase: 'over' | 'leave' | 'drop'; at: ScreenPoint; payload: CanvasDropPayload }
-  | At & { kind: 'configure'; context: { readonly tool: ToolId; readonly mode: 'site' | 'overview'; readonly pointingDevice: 'mouse' | 'trackpad'; readonly dragSlopPx?: number } }
+  | At & { kind: 'configure'; context: { readonly tool: ToolId; readonly mode: 'site' | 'overview'; readonly pointingDevice: 'mouse' | 'trackpad' } }
   | At & { kind: 'tick' }
 
 export interface RecogniserConfig {
@@ -614,12 +574,12 @@ export interface AdapterEffect {
 }
 /** Opaque to callers; the recogniser owns its shape. Plain data (structured-clone safe), so the property test can snapshot it. */
 export interface RecogniserState {
-  readonly sessions: ReadonlyMap<number, PointerSession>        // by pointerId: pointer kind, role, mode ('pending' | 'primary' | 'pan' | 'rotate' | 'ignored'), start, last point, press target, slop passed, capture held
+  readonly sessions: ReadonlyMap<number, PointerSession>        // by pointerId: pointer kind, role, mode ('pending' | 'primary' | 'pan' | 'rotate'), start, last point, press target, slop passed, capture held
   readonly touchPair: TouchPair | null                          // two touch ids, their start centroid, distance and angle, twist arc accumulated
-  readonly held: { readonly space: boolean; readonly mods: Modifiers }
+  readonly held: { readonly space: boolean }                    // the only gesture-state record of a held key (ADR 0017)
   readonly trackpadTwistDeg: number                             // WebKit gesture rotation accumulated before the 10° threshold
-  readonly deadlines: { readonly longPressAt: number | null; readonly menuEchoUntil: number | null; readonly windowsTrailUntil: number | null; readonly lastSecondaryEndAt: number | null }
-  readonly context: { readonly tool: ToolId; readonly mode: 'site' | 'overview'; readonly pointingDevice: 'mouse' | 'trackpad'; readonly dragSlopPx: number | null }
+  readonly deadlines: { readonly longPressAt: number | null }
+  readonly context: { readonly tool: ToolId; readonly mode: 'site' | 'overview'; readonly pointingDevice: 'mouse' | 'trackpad' }
 }
 
 // canvas/runtime/input/recognise.ts  (the recogniser: its state types and its two functions; raw-input.ts holds no function).
@@ -633,31 +593,30 @@ export function recognise(state: RecogniserState, input: RawInput, config: Recog
 /** The fields normalise reads; a DOM event satisfies it structurally, and fixtures pass literals. */
 export interface DomEventLike {
   readonly type: 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel' | 'lostpointercapture' | 'pointerleave' | 'focusout'
-    | 'wheel' | 'contextmenu' | 'gesturestart' | 'gesturechange' | 'gestureend' | 'dragover' | 'dragleave' | 'drop'
+    | 'wheel' | 'gesturestart' | 'gesturechange' | 'gestureend' | 'dragover' | 'dragleave' | 'drop'
   readonly timeStamp: number
   readonly clientX: number; readonly clientY: number          // converted to host-relative CSS px by the source before normalise
   readonly pointerId?: number; readonly pointerType?: string; readonly button?: number; readonly buttons?: number; readonly detail?: number
   readonly shiftKey: boolean; readonly ctrlKey: boolean; readonly altKey: boolean; readonly metaKey: boolean
   readonly deltaX?: number; readonly deltaY?: number; readonly deltaMode?: number
-  readonly scale?: number; readonly rotation?: number           // WebKit GestureEvent
+  readonly rotation?: number                                    // WebKit GestureEvent (its scale is never read: the pinch arrives as Ctrl+wheel)
   readonly target: TargetClass                                  // classified by the source from data attributes
-  readonly fromKeyboard?: boolean                               // contextmenu: set by the source from the KeyRouter's echo record
   readonly dropPayload?: CanvasDropPayload                      // drag events: read by the source from dataTransfer
 }
-export function normalise(e: DomEventLike, platform: InputPlatform, bindings: Bindings, keys: { readonly physicalCtrl: boolean },
+export function normalise(e: DomEventLike, platform: InputPlatform, bindings: Bindings,
   host: { readonly width: number; readonly height: number }): RawInput | null   // host: CSS px, for page-mode wheels
 ```
 
-Stages: `DomInputSource` (the only DOM listener owner for canvas input, including the document-capture `contextmenu` guard and, from phase F, the copied GeoLibre selection-drag guard) → `normalise` → `recognise` → `InputRouter` (navigation to `ViewNavigation`; menu requests, editing and drops to the `ToolHost`, the only opener of the context-menu port; a pointer-source pan's `at` to `ToolHost.notePointer`, §1.4 "Re-emit"). The router computes no geometry.
+Stages: `DomInputSource` (the only DOM listener owner for canvas input, including the one document-capture `contextmenu` listener (§2.2 "Native menu") and, from phase F, the copied GeoLibre selection-drag guard) → `normalise` → `recognise` → `InputRouter` (navigation to `ViewNavigation`; menu requests, editing and drops to the `ToolHost`, the only opener of the context-menu port; a pointer-source pan's `at` to `ToolHost.notePointer`, §1.4 "Re-emit"). The router computes no geometry.
 
-The way back: `route` returns the host's `GestureOutcome` (§1.2a); the source applies `quarantine` as `prevent-default` plus `stop-propagation`, `dropEffect` as `drop-effect`, and `rejectSession` by skipping the press's capture and feeding the recogniser `{ kind: 'reject', id }` (its later moves are hovers). A cancellation that throws with an edit open aborts the edit; the next press is still admitted. A sink that throws on a map-host press quarantines that event then rethrows; on any other event it rethrows and the event goes on. Every raw pointerdown also reaches `ToolHost.rawPress(button)` before routing (§1.4 "Raw presses"), so presses the host never sees as gestures still commit the nudge series and, for primary and middle, close the canvas menu and focus the map. See `input/dom-input-source.ts` and its tests for the exact fault matrix.
+The way back: `route` returns the host's `GestureOutcome` (§1.2a); the source applies `quarantine` as `prevent-default` plus `stop-propagation`, `dropEffect` as `drop-effect`, and `rejectSession` by skipping the press's capture and feeding the recogniser `{ kind: 'reject', id }` (its later moves are hovers). A tool call that throws follows the host's fault rule (§1.4 "Faults"); the next press is still admitted. A sink that throws on a map-host press quarantines that event then rethrows; on any other event it rethrows and the event goes on. Every raw pointerdown also reaches `ToolHost.rawPress(button)` before routing (§1.4 "Raw presses"), so presses the host never sees as gestures still commit the nudge series, close the canvas menu and focus the map, for every button (phase 2). See `input/dom-input-source.ts` and its tests for the exact fault matrix.
 
 The source has no key listeners: the key router (§1.6) owns them and feeds the canvas through `CanvasKeyboardPort` (F). Host `pointerleave` becomes `leave`, `focusout` becomes `focus-out`, window `blur` becomes `cancel('all', 'blur')`. Window `pointermove`/`pointerup`/`pointercancel` capture listeners exist only while a session is owned; a host `pointermove` carries hover moves (F).
 
 Normalisation rules:
-- Mouse `button` 0/1/2 → primary/auxiliary/secondary; 3 and 4 dropped. Pen tip → primary; barrel (2) → secondary when `penBarrel: 'secondary'`, else dropped; eraser (5) dropped. Touch → primary in every phase. These drop presses only: an `up` is never dropped, and one whose button no press takes (a mouse's 3 or 4, a pen's eraser, its barrel under `ignore`) is a primary `up`, so it ends its pointer's session whatever the button, as today's pointerup did (a pen drag whose tip lifts before its barrel commits).
-- On `os: 'mac'` with `macCtrlClick: 'secondary'`, mouse button 0 with `ctrlKey && !metaKey` becomes secondary with `ctrlConsumed: true`. For that session the recogniser ignores `ctrl` in `move` mods and `key-state`.
-- Wheel `deltaMode` is read before the deltas (16 px per line; a page is the host width for `deltaX` and the host height for `deltaY`). A wheel with `ctrlKey` and no physical Ctrl reported by the KeyRouter becomes `pinch: true`.
+- Mouse `button` 0/1/2 → primary/auxiliary/secondary; 3 and 4 dropped. Pen tip → primary; barrel (2) → secondary (phase 2); eraser (5) dropped. Touch → primary in every phase. These drop presses only: an `up` is never dropped, and one whose button no press takes (a mouse's 3 or 4, a pen's eraser) is a primary `up`, so it ends its pointer's session whatever the button, as today's pointerup did (a pen drag whose tip lifts before its barrel commits).
+- On `os: 'mac'` (phase 2), mouse button 0 with `ctrlKey && !metaKey` becomes secondary with `ctrlConsumed: true`. For that session the recogniser ignores `ctrl` in `move` mods and `key-state` (`ctrlConsumed` may also key §2.2's drag end on the physical bit).
+- Wheel `deltaMode` is read before the deltas (16 px per line; a page is the host width for `deltaX` and the host height for `deltaY`). A wheel with `ctrlKey`, a trackpad pinch or a physical Ctrl+wheel alike, zooms continuously like any wheel (P14): no pinch flag, no physical-Ctrl record and no notch detection.
 - Targets are classified from data attributes and selectors; from F the MapLibre attribution inside the host is `owned-chrome` through `.maplibregl-ctrl` in `OWNED_CHROME_SELECTOR` (no element carries `data-canvas-chrome`). The zoom group, compass, tool card and rail sit beside the host, so their presses are `foreign`.
 
 ### 1.2a Shared vocabulary and interaction ports (`canvas/runtime/interaction-types.ts`, `interaction-ports.ts`)
@@ -701,7 +660,6 @@ export interface DomInputSourceDeps {
   readonly host: HTMLElement                                    // the map host; listeners attach here, and on window only during an owned session
   readonly platform: InputPlatform
   readonly bindings: () => Bindings                             // CURRENT_BINDINGS in production
-  readonly keys: { readonly physicalCtrl: () => boolean; readonly lastKeyboardMenuAt: () => number | null }   // the session's keyboard port, fed by the key router's keyState from F
   readonly clock: () => number
   readonly timers: { set(atMs: number, cb: () => void): number; clear(id: number): void }
 }
@@ -726,11 +684,9 @@ export interface DomInputSource {
 export interface ContextMenuPort {
   open(request: {
     readonly at: WorldPoint | 'selection'
-    readonly source: MenuSource
     readonly screen: ScreenPoint | null
-    readonly hit: HitTarget | null
     readonly turnViewToEdge?: () => void                        // phase 1: a zone-edge hit within the source's tolerance (§4.16); no edge highlight (U4)
-    readonly finishShape?: () => void                           // phase 2: ToolHost.command({ kind: 'finish-shape' }) during a 3+ corner draft
+    readonly finishShape?: () => void                           // phase 2: set while the active tool's canFinish?() is true; runs ToolHost.command({ kind: 'confirm' })
   }): void
   close(): void
   readonly isOpen: () => boolean
@@ -755,7 +711,6 @@ export interface ToolHostDeps {
   readonly settled: SettledSceneReader                          // dragover reads
   /** History-free, dirty-free selection (today's deps.setSelection/clearSelection); backs ToolEffects.setSelection and the menu retarget. */
   readonly setSelection: (targets: readonly SceneDesignObjectTarget[]) => void
-  readonly plane: () => SessionPlane                            // CanvasTool.planeChanged when its identity changes
   readonly renderer: Pick<SceneRenderer, 'setDraft' | 'setSelectionPreview'>
   /** Redraw request after a tool call that mutated an open transaction or changed its draft or handles. */
   readonly invalidate: () => void
@@ -766,7 +721,7 @@ export interface ToolHostDeps {
      *  blur again; an entry that holds focus is left to that blur. A press or a menu calls it before focusing the map. */
     submitUnfocusedTextEntry(): void
     /** Today's hasActiveEditor(), read live wherever the host needs the entry's state (handles hidden while it is open, the
-     *  'text-entry-closed' focus reason on the next press); the host keeps no flag of its own. Esc in the entry stays the
+     *  re-origin hold); the host keeps no flag of its own. Esc in the entry stays the
      *  entry's own element handler, which calls the request's onCancel once the entry is gone. */
     isTextEntryOpen(): boolean
     setTooltip(t: { readonly at: ScreenPoint; readonly lines: readonly string[] } | null): void   // chrome/hover-tooltip.ts; this shape from phase R
@@ -783,7 +738,7 @@ export interface ToolHostDeps {
   readonly translate: ToolContext['translate']
   /** "Turn view to this edge" (§4.16); added by phase 1's hand-off commit. */
   readonly navigation: Pick<ViewNavigation, 'turnToEdge'>
-  // bindings and platform (modifier resolution) come in phase 2 with their first callers.
+  // Modifier resolution needs no bindings or platform (§2.3): a Mac Ctrl press never reaches a tool.
   /** Today's deps.nudge (the runtime's scene-edit commands); the host owns the series (nudge below). */
   readonly nudge: Pick<CanvasSceneEditCommandSurface, 'nudgeSelected' | 'endNudge'>
   readonly timers: { set(atMs: number, cb: () => void): number; clear(id: number): void; readonly clock: () => number }
@@ -829,14 +784,12 @@ export interface ToolHost {
   /** A new source for the armed tool (the session's read-model bridge): forwards to CanvasTool.sourceChanged. */
   sourceChanged(source: ToolSource | null): void
   readonly activeTool: ReadonlySignal<ToolId>
-  /** The active tool's dragSlopPx, sent in the recogniser's configure on every tool change. */
-  activeToolDragSlopPx(): number | null
   /**
    * Presses the host never sees as gestures: the session calls it for every raw pointerdown on the map host before routing it
    * (from the source's raw input, not a gesture; the down's role, 'auxiliary' as 'middle'). Commits the nudge series for any
-   * button. For an admitted primary or middle press outside the text entry ('owned-text'), with no
-   * live press from another pointer id, it also closes the canvas menu and focuses the map (so an open text
-   * entry commits on its blur): today's _onPointerDown conditions.
+   * button. For an admitted press of any button outside the text entry ('owned-text'), with no live press from another
+   * pointer id, it also closes the canvas menu and focuses the map (so an open text entry commits on its blur; phase 2: every
+   * button, so a double right-click replaces the menu).
    */
   rawPress(button: 'primary' | 'secondary' | 'middle', target: TargetClass, pointerId?: number): void
   /**
@@ -851,9 +804,11 @@ export interface ToolHost {
    *  end or cancel of a pointer pan, an up with no press of the map's. Runs today's pointerup cancellation with the tool's
    *  cancelTransient('navigate'); a press of the tool's still live is left to its own release. */
   released(): void
-  /** The open text entry's mode ('create': a new note's field, 'edit': the in-place editor), null with none open. The
-   *  keyboard port's Space hold reads it: a 'create' entry, focused or not, arms no pan (§1.4 "Releases"). */
-  openTextEntryMode(): 'create' | 'edit' | null
+  /** True while a note's text entry is open (one mode, phase 2). The keyboard port's Space hold reads it: an open entry,
+   *  focused or not, arms no pan (§1.4 "Releases"). */
+  textEntryOpen(): boolean
+  /** The re-origin hold (§4.19): a live press, the active tool's transient or an open text entry. */
+  holdsReorigin(): boolean
   // Esc chain queries (CanvasKeyboardPort reads these)
   hasLiveGesture(): boolean
   activeToolHasTransient(): boolean
@@ -872,7 +827,7 @@ export interface ToolHost {
   /**
    * Today's _cancelInterruptedInteraction, which the session calls on window blur after feeding the recogniser (which releases
    * Space and ends the live sessions): commits the nudge series, clears the passive hover and the tooltip, calls the active tool's cancelTransient('navigate') (a tool that keeps its draft through a pan keeps it
-   * here too) and resets the cursor to the tool's. A cancellation that throws with an edit open aborts the edit.
+   * here too) and resets the cursor to the tool's. A tool call that throws follows the fault rule (§1.4 "Faults").
    */
   interrupted(): void
   /** Transient history (today's canUndo/…TransientHistory): sends the active tool the 'undo-transient' and 'redo-transient' commands and
@@ -907,19 +862,14 @@ export interface CanvasKeyboardPortDeps {
   readonly frames: ViewFrameSource
   pointerSessionLive(): boolean              // arrows and the Menu key wait; Esc cancels it; keyState's hold and 'pass-live'
   overview(): boolean                        // Esc runs the interrupted cancel; the Menu key and the tool keys do nothing
-  spaceHeld(): boolean
+  spaceHeld(): boolean                       // the recogniser's held.space, the one record (ADR 0017)
   setHeldKeys(state: { readonly space: boolean; readonly mods: Modifiers }): void   // the recogniser's key state and the navigation cursor
   escapeGesture(): void                      // the recogniser's 'escape': cancels a live pointer session, releases Space
   requestTool(id: ToolId): void              // the Esc chain's Select (the runtime's setTool, as a tool's own request)
   clearSelection(): void                     // the Esc chain's last step: history-free, redrawn
 }
-/** The session's own view of the port: DomInputSourceDeps.keys and the blur release. */
-export interface SessionCanvasKeyboardPort extends CanvasKeyboardPort {
-  physicalCtrl(): boolean
-  lastKeyboardMenuAt(): number | null
-  releaseKeys(): void
-}
-export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionCanvasKeyboardPort
+export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): CanvasKeyboardPort
+// No physicalCtrl, releaseKeys or keyboard-menu echo record (P14, P2): modifiers are read from the event that carries them.
 ```
 
 Since F (§1.6; no legacy rebuild, U7) the key router feeds `CanvasKeyboardPort` in the target form: `keyState` first for every key, then the keymap's canvas rows through `command()` and the canvas Esc layers; the router applies the single-key gate (`KeyRouterDeps.singleKeys`) and the port the state gates (pointer session, overview, Select). An arrow still asks `ToolHost.nudge` first (never while a pointer session is live, fixture H25) and falls through to the arrow rule (§3.6) on `'pass'`. `workspace-runtime-composition.ts` exposes a forwarding `keyboard` port that reaches the session's port once `runtime.init` creates it.
@@ -928,10 +878,10 @@ Since F (§1.6; no legacy rebuild, U7) the key router feeds `CanvasKeyboardPort`
 
 ```ts
 export type NavigationSource =
-  | 'secondary-drag' | 'auxiliary-drag' | 'space-drag' | 'primary-drag'   // primary-drag: the Pan tool (and legacy overview)
-  | 'wheel' | 'trackpad-pinch' | 'trackpad-twist' | 'touch-two-finger'
+  | 'secondary-drag' | 'auxiliary-drag' | 'space-drag' | 'primary-drag'   // primary-drag: the Pan tool
+  | 'wheel' | 'trackpad-twist' | 'touch-two-finger'                         // a pinch is a 'wheel' (P14)
 
-export type MenuSource = 'mouse' | 'ctrl-click' | 'pen-barrel' | 'long-press' | 'keyboard' | 'native'
+export type MenuSource = 'mouse' | 'long-press' | 'keyboard'   // every pointer menu (right, Mac Ctrl+click, pen barrel) is 'mouse', 8 px
 // CancelReason, PointerKind, Modifiers, ToolHandleId, CanvasDropPayload: from ../interaction-types.ts (§1.2a); TargetClass: from ./raw-input.ts (§1.2)
 
 export type PressTarget =
@@ -982,17 +932,15 @@ export type Gesture =
 // forbid-transitive-imports follows. Tool implementations import these types from tool.ts, draft.ts or the same defining
 // modules. Any later type import must keep P5c true.
 
-/** Modifiers by meaning, resolved per platform and per phase by the ToolHost. */
+/** Modifiers by meaning, resolved by the ToolHost from the event's own flags, with no platform dependency (§2.3, ADR 0017). */
 export interface ToolModifiers {
-  /** Toggle into the selection: Shift, or mod (Cmd on Mac, Ctrl elsewhere). */
+  /** Toggle into the selection: Shift, Ctrl or Cmd (Meta). */
   readonly additive: boolean
   /** Remove from the selection: Alt (phase 2). */
   readonly subtractive: boolean
-  /** Shift. Every phase: Polygon and Plant a row 45° steps; the rotate handle's 15° steps from the press angle. Phase 2 adds square/circle for Rectangle and Ellipse and 45° screen steps for Line and Measure. */
+  /** Shift: Polygon, Plant a row, Line and Measure 45° screen steps; Rectangle and Ellipse square and circle (phase 2); handle drags (the rotate handle's 15° steps from the press angle). */
   readonly constrain: boolean
-  /** Alt, reserved (unused). */
-  readonly fromCentre: boolean
-  /** Plant a row only. LEGACY/ROTATION: Shift. Phase 2: mod held during the drag. */
+  /** Plant a row only: Ctrl or Cmd held (phase 2, every OS). */
   readonly noSnap: boolean
 }
 
@@ -1002,7 +950,7 @@ export interface ToolPoint {
   readonly free: WorldPoint
   /** world after the tool's constraint (CanvasTool.constraint, Shift): 'direction' turns origin → point to the step and keeps the length; 'rotation-delta' turns the point about the pivot so the angle since the press is a step multiple. Equals world when none applies. */
   readonly constrained: WorldPoint
-  /** The grid on world axes (user; no ruler guides, U33). Order per §2.3: LEGACY and ROTATION keep today's (Polygon snaps, then constrains; a Plant a row Shift is also no-snap); V2 constrains, then snaps the length along the ray. Equals constrained when snap is off, noSnap is held or the constraint is 'rotation-delta'. */
+  /** The grid on world axes (user; no ruler guides, U33). Order per §2.3, one for every tool from phase 2: constrain, then round the length along the ray to the grid interval. Equals constrained when snap is off, noSnap is held or the constraint is 'rotation-delta'. */
   readonly snapped: WorldPoint
   readonly modifiers: ToolModifiers
   readonly pointer: PointerKind
@@ -1012,11 +960,15 @@ export interface ToolPoint {
 export type HitTarget =
   | { readonly kind: 'object'; readonly target: SceneDesignObjectTarget }                          // scene/design-object-targets.ts
   | { readonly kind: 'zone-edge'; readonly zoneId: string; readonly edgeIndex: number; readonly distancePx: number }
-  | { readonly kind: 'guide'; readonly guideId: string }
 /** No filter is today's hitTestTopLevel exactly: interactive layers, a group as the top-level target, guides, the revealed
  *  (selected or hovered) note, and object-locked objects, which the caller rejects itself (Select selects them; Unlock is in the canvas menu and Edit, U33). */
 export interface HitFilter {
-  readonly kinds?: readonly SceneDesignObjectTarget['kind'][]
+  /** Overview (phase 2): plants are skipped inside hit testing (a layer predicate in hitTestTopLevelWithLayerFilter and
+   *  queryQuadTopLevel), so a zone or note under a plant still hits. No `kinds` post-filter. */
+  readonly overview?: true
+  /** Select and the overview selector only (phase 2, canopi-f47t.2): when nothing else hits, the topmost zone whose fill
+   *  contains the point (pointInPolygon; rectangle and ellipse polygons). Plain hitAt callers are unchanged. */
+  readonly fill?: true
   /** hitAt: also locked layers that are visible (today's hitTestVisibleTopLevel, the host's hover). hitInQuad: a phase-1
    *  feature; until then the façade throws a clear error (the band select skips locked layers). */
   readonly includeLocked?: boolean
@@ -1052,9 +1004,8 @@ export interface TextEntryRequest {
   readonly rotationDeg: number                     // stored note rotation; the host draws the textarea at rotationDeg − bearing
   readonly initialText: string
   readonly placeholderKey: string
-  /** 'create': today's new-note field (--text-base, line-height 1.4); 'edit': the in-place editor (the note's font size, line-height 1.25, select-all). */
-  readonly mode: 'create' | 'edit'
-  readonly fontSizePx?: number                     // 'edit': the note's stored font size
+  /** One mode (phase 2, U34): the field is drawn at the note's font size and line height, where the note will draw. */
+  readonly fontSizePx?: number                     // the note's stored font size; a new note's default 16 px
 }
 
 export type ToolGesture =
@@ -1068,12 +1019,11 @@ export type ToolGesture =
 // Drops are not tool gestures: the host's shared drop handler serves every tool (§1.4).
 
 export type ToolCommand =
-  | { readonly kind: 'escape' }                                    // only when the tool's Esc layer is top
-  | { readonly kind: 'confirm' }                                   // Enter (polygon: finish)
+  | { readonly kind: 'escape' }                                    // only when the tool's Esc layer is top: drops the transient, else 'pass' (the chain's tool layer leaves)
+  | { readonly kind: 'confirm' }                                   // Enter and the menu's "Finish shape" (polygon: finish)
   | { readonly kind: 'remove-last' }                               // Backspace
   | { readonly kind: 'rotate-held'; readonly stepDeg: 15 | -15 }   // [ ] while a stamp is held
   | { readonly kind: 'place-at'; readonly world: WorldPoint }      // context menu "Place plants here": snapped by the host; dropped in overview
-  | { readonly kind: 'finish-shape' }                              // phase 2: context menu "Finish shape" during a polygon draft, with its first caller
   | { readonly kind: 'delete-handle' }                             // Delete on a focused or selected zone corner (phase 2)
   | { readonly kind: 'edit-text' }                                 // Enter / F2 on one selected note
   | { readonly kind: 'undo-transient' } | { readonly kind: 'redo-transient' }
@@ -1148,7 +1098,6 @@ export interface ToolContext {
 
 export interface CanvasTool {
   readonly id: ToolId
-  readonly dragSlopPx?: number                    // per-tool threshold, sent through `configure` on every tool change (Plant a row: 0; it measures today's 4 px itself)
   /** True while the tool's next release must be admitted by the scene (Select's band: today's requiresSettledPointerUp). */
   settledRelease?(): boolean
   readonly clampsToView?: boolean                 // the host clamps the screen point to the view before converting (Plant a row)
@@ -1167,13 +1116,14 @@ export interface CanvasTool {
   command(c: ToolCommand): ToolReply
   /** Scene or selection changed outside the tool (undo, remote edit). */
   sceneChanged?(): void
-  /** The session plane changed (re-origin): re-project retained world points (corners, redo stack, row source) with reproject. */
-  planeChanged?(reproject: (p: WorldPoint) => WorldPoint): void
   /** A camera frame on which the host re-emitted nothing (the pointer off the map): rebuild a draft whose look depends on the
    *  scale, such as the polygon's edge chips hidden below 36 px (today's refreshViewportDependent). */
   viewChanged?(): void
-  /** True while the tool holds something Esc should drop first (draft, pick, row source). */
+  /** True while the tool holds something Esc should drop first (draft, pick, row source, Place plants' waiting point). It also
+   *  holds re-origin and blocks Delete and Ctrl+X (§4.19, §1.6 "Key admission"). */
   hasTransient(): boolean
+  /** True while the menu's "Finish shape" applies (Polygon: at least 3 corners); the entry sends `confirm`. */
+  canFinish?(): boolean
   /** Esc hint for the tool card, read by describeEscape. */
   escapeHint(): 'drop-transient' | 'leave-tool' | 'clear-selection' | null
   cancelTransient(reason: 'escape' | 'tool-change' | 'document-replaced' | 'navigate' | 'overview'): void   // 'overview': the map entered overview; drop what today's overview reset dropped (a stamp keeps its pick and hides only its ghost)
@@ -1244,23 +1194,25 @@ Tools never see screen coordinates in gestures; `ScreenPoint` appears only in `o
 
 The `ToolHost` (`tools/tool-host.ts`, interface in `interaction-ports.ts`) is the only code that builds `ToolGesture`s. Its duties, in order:
 
-- **Admission.** Presses, menus, drops and commands, and the releases of a tool whose `settledRelease()` answers true (Select's band), run inside `deps.admission.runWhenSettled` (dragover inside `deps.settled.readWhenSettled`); a refused press answers `{ quarantine, rejectSession }`, a refused settled release cancels the tool and answers `{ quarantine }`, a refused menu or drop `{ quarantine }`. A release or handle-press whose tool call throws after a Scene Edit opened runs the cancellation at once, closing the edit so the next press is admitted; if the cancellation itself fails with the edit open, the host aborts the open edits and the failing call's error is the one reported. A tool whose activation throws leaves Select armed and the error is rethrown. There is no quarantine outside the host.
-- **Raw presses** (`rawPress(button, target, pointerId)`): the session calls it for every raw pointerdown on the map host before routing it, including presses the host never sees as gestures (secondary, middle, Space and overview presses, presses on owned chrome). The host commits the nudge series for any button, and for an admitted primary or middle press (not in the text entry, no live press from another pointer id) also closes the canvas menu, submits an unfocused open text entry (`chrome.submitUnfocusedTextEntry()`) and focuses the map through `deps.focus`.
+- **Admission.** Presses, menus, drops and commands, and the releases of a tool whose `settledRelease()` answers true (Select's band), run inside `deps.admission.runWhenSettled` (dragover inside `deps.settled.readWhenSettled`); a refused press answers `{ quarantine, rejectSession }`, a refused settled release cancels the tool and answers `{ quarantine }`, a refused menu or drop `{ quarantine }`. There is no quarantine outside the host. A Scene operation runs its steps once and nothing resumes it (phase 2, P1): an edit that throws before history accepts restores its before-state; after acceptance each remaining publication step runs once, errors are collected (`throwCanvasRuntimeCleanupErrors`), the authority is released and the error rethrown. Undo and redo move the cursor first, then apply the patch as one store update, then publish: a store-update throw rolls the cursor back, a publication throw keeps the step. A hydrate or replace that throws releases and rethrows; the document surface stays `settling` (saves refused) until a later open or replace succeeds, and the document session's retry is a fresh `replaceDocument`. No `resumePending` path, once-per-token record or step flag exists; `capturePersistence` reads the active transaction's own `historyAccepted`.
+- **Faults** (phase 2, P18). At the outermost tool call only (`callDepth` 0), once: a tool call that throws aborts the host's open edits, ends the live press, arms a fresh instance of the current tool (Select if activation threw) and rethrows. A failure during the re-arm is not handled again; the host keeps a fresh Select. The faulted instance gets no `deactivate`; the re-arm closes an open text entry, and drops in-tool state such as an Object stamp pick. An aborted transaction is closed before the run-once restore, so the restore never applies twice. No tool keeps a commit-fault branch.
+- **Raw presses** (`rawPress(button, target, pointerId)`): the session calls it for every raw pointerdown on the map host before routing it, including presses the host never sees as gestures (secondary, middle, Space and overview presses, presses on owned chrome). The host commits the nudge series for any button, and for an admitted press of any button (phase 2; not in the text entry, no live press from another pointer id) also closes the canvas menu, submits an unfocused open text entry (`chrome.submitUnfocusedTextEntry()`) and focuses the map through `deps.focus`, so a double right-click replaces the menu.
 - **World conversion** at event time (a null `screenToWorld` drops hovers and cancels drags); a tool with `clampsToView` gets the screen point clamped to the view first.
-- **Constraint and snapping** once, filling `ToolPoint.free`, `.constrained` and `.snapped` in the order of §2.3: the active tool's `constraint()`, then the grid and guide snap (`tools/snapping.ts`, `deps.snapping()` read per point). `ToolContext.snap` exposes the same snapping; `place-at` arrives snapped and is dropped in overview.
+- **Constraint and snapping** once, filling `ToolPoint.free`, `.constrained` and `.snapped` in the order of §2.3: the active tool's `constraint()`, then the grid snap (`tools/snapping.ts`, `deps.snapping()` read per point). `ToolContext.snap` exposes the same snapping; `place-at` arrives snapped and is dropped in overview.
 - **Hits.** A handle target becomes `handle-drag`.
-- **Interceptors:** a press that committed an open `'create'` note entry reaches no tool (nor its drag or release); one that committed an `'edit'` entry goes on. An admitted press takes its capture first and stops if the capture was lost while taking it. The raster probe `deps.inspect` runs on a primary press after handles and pan and before the tool, never in overview or while Pan is armed (fixture J10, §3.8). An overview press reaches no tool; entering overview closes an `'edit'` entry, the menu and every transient (`cancelTransient('overview')`) and keeps a `'create'` entry for the next press there to commit.
+- **Interceptors:** while Text is armed, a press that committed an open note entry reaches no tool (nor its drag or release); otherwise it goes on. An admitted press takes its capture first and stops if the capture was lost while taking it. The raster probe `deps.inspect` runs on a primary press after handles and pan and before the tool, never in overview or while Pan is armed (fixture J10, §3.8). Entering overview commits and closes any open entry (U34), and closes the menu and every transient (`cancelTransient('overview')`).
+- **Overview** (phase 2). The host receives primary press, tap and drag in overview and selects only zones and notes, through `select/click.ts`'s `pressSelection` (`clickCount` 1, no last click; a `move` or `edit-note` outcome ends there) and the band, with `HitFilter.overview`; Alt removes, Shift or mod adds; drawing tools draw nothing; `menuAt` stays refused.
 - **Hover.** Every `hover` whose target is the map (`surface`) is published to `subscribePointerWorld` first, in overview too; `hover-end` publishes `null`. The interaction session's `subscribePointerWorld` drops the point of a move whose raw `buttonMask` has any bit set. A hover over owned chrome or anything off the map publishes nothing. Outside overview the tool then gets it: `'pass'` runs the passive hover (restyle, tooltip); `'handled'` clears and skips it. On `hover-end` the tool decides what to keep (Place plants hides its preview; the stamps keep their ghost; every other tool keeps its draft). A `drag-start`/`drag-move` the tool answers `'pass'` runs the passive hover too; one it answers `'handled'` runs no hover over its moves (Select's move and band, Text, Place plants, the zone drags).
 - **Drops.** One shared drop handler serves every tool: a species drop places with `tools/plant-stamp.ts`'s code, a saved stamp with `tools/saved-object-stamp.ts`'s; dragover answers `dropEffect` from the payload kind and the open layers. Dragover shows a drop preview merged with the decorations (a species payload: a small `quad`; a saved stamp: its `'objects'` ghosts at the snapped point), cleared on dragleave, drop, a refused dragover, overview, a cancellation or a document replacement. Any dragover hides the active tool's own draft; the next hover or press over the map shows it again. A drop places at the snapped point inside `deps.admission`; once its edit commits, the host requests Select, focuses the map and calls `ToolHostDeps.dropped(kind)`.
 - **Re-emit** of the live drag, or of the resting pointer, on every `onViewFrame('tools')`, so a draft, ghost or preview stays on the ground under a still pointer (plan §4, phase 0, exception 1). A pointer-source pan hands its `at` to `notePointer`, which moves the resting pointer and emits nothing (the next frame re-emits under it); wheel and key pans leave it where it is. With the pointer off the map the host calls the tool's `viewChanged?()` instead.
-- **Plane.** When `deps.plane()` changes identity (a re-origin), the host re-projects its own drag start and last hover through lon/lat, then calls the tool's `planeChanged(reproject)`.
+- **Re-origin hold** (phase 2, P8). `holdsReorigin()` is true while a press is live, the active tool has a transient or the text entry is open; re-origin waits and runs on the last frame when the hold clears (§4.19). On a plane change the host hides tool ghosts until the next hover; no tool hook re-projects anything.
 - **Drafts and decorations.** The host owns the selection decorations whatever tool is armed: the selected zone's W/H, edge and area chips (`tools/measure-labels.ts`), and the rotation handle and handles while Select is armed and the text entry is closed (`tools/select/reshape.ts`, `tools/select/guide-ends.ts`). These chips hide while an armed Line, Rectangle, Ellipse or Polygon draft carries its own measure labels. Rebuilt on every `onViewFrame('tools')` and on `sceneChanged()`, merged with the active tool's draft before `renderer.setDraft`. The host calls `deps.invalidate()` after any tool call that mutated an open transaction or changed its draft or handles: a tool call path that forgets this leaves a stale render.
 - **Arrow nudge** and its series (`nudge`, `hasNudgeSeries`, `endNudgeSeries`; `'handled'`, `'refused'` or `'pass'`, and on `'pass'` the keyboard port applies the arrow's rule; `focus-out` commits the series).
 - **Interruption** (`interrupted()`): on window blur the series commits, the passive hover and tooltip clear, the tool's `cancelTransient('navigate')` keeps a draft that survives pans, and the cursor returns to the tool's.
-- **Releases** (`released()`): the host hears a tool press's own release; for the rest the session calls `released()` after routing (the end of a pointer pan, an up with no press of the map's). It commits the series, clears the drop preview and passive hover, runs `cancelTransient('navigate')` and resets the cursor. A press of the tool's still live is left to its own release. `released()` does not run for: another pointer's still-live press, an up in overview (the recogniser swallows it), and an up over the note editor or a handle. The keyboard port's Space hold also reads `openTextEntryMode()`: while a `'create'` entry is open, Space arms no pan.
-- **Menus**: with the text entry open the map takes focus first; hit, retarget the selection through `deps.setSelection`, open through `ToolHostDeps.menu` (the only opener); `turnViewToEdge` on a zone-edge hit from phase 1 (§4.16, no edge highlight); `finishShape` first during a 3+ corner polygon draft from phase 2.
+- **Releases** (`released()`): the host hears a tool press's own release; for the rest the session calls `released()` after routing (the end of a pointer pan, an up with no press of the map's). It commits the series, clears the drop preview and passive hover, runs `cancelTransient('navigate')` and resets the cursor. A press of the tool's still live is left to its own release. `released()` does not run for: another pointer's still-live press, an up in overview (the recogniser swallows it), and an up over the note editor or a handle. The keyboard port's Space hold also reads `textEntryOpen()`: while an entry is open, Space arms no pan.
+- **Menus**: with the text entry open the map takes focus first; hit, retarget the selection through `deps.setSelection`, open through `ToolHostDeps.menu` (the only opener); `turnViewToEdge` on a zone-edge hit from phase 1 (§4.16, no edge highlight); `finishShape` first while the active tool's `canFinish?()` is true (a polygon draft of 3+ corners) from phase 2: it runs `command({ kind: 'confirm' })`, travelling through the controller's `openAtPointer` like `turnViewToEdge`.
 - **Transient history** (`transientHistory`, revision bumps after every tool call and after a deferred `onCommitted`, read by Edit › Undo through the runtime's own `transientHistory`). Tool calls run untracked and the bump itself reads nothing (`x.value = x.peek() + 1`), because the runtime refreshes the session from inside its effects, which must neither depend on what a tool reads nor loop on the bump.
-- **Esc queries** (`hasLiveGesture`, `activeToolHasTransient`, `activeToolIsSelect`, `escapeHint`); modifier resolution (§2.3); `activeToolDragSlopPx()` for the recogniser's `configure`.
+- **Esc queries** (`hasLiveGesture`, `activeToolHasTransient`, `activeToolIsSelect`, `escapeHint`); modifier resolution (§2.3).
 
 Every tool, drop and piece of chrome runs on the host and `chrome/*.ts`; tools decide what a navigation keeps by `cancelTransient`'s reason.
 
@@ -1281,7 +1233,7 @@ export interface SceneRendererSnapshot {
 }
 ```
 
-The presentation controller gains `setEditingAids(aids)`, the pattern of `presentLayers`; `scene-runtime.ts` calls it from `onChromeOverlay`, then `invalidate('scene')` (the `'chrome'` invalidation never syncs the scene). `world-layers.ts` traces the grid over a padded box around `visibleWorldQuad()` and retraces only it when the view leaves that box or the scale changes (zones keep the scale-only rule); the grid uses `snapping.ts`'s `gridInterval`, and its ink is part of the reuse key.
+The presentation controller gains `setEditingAids(aids)`, the pattern of `presentLayers`; `SceneCanvasRuntime` keeps `_chromeShown` and computes `editingAids = shown && gridVisible ? { grid: ink } : null`, recomputed by `onChromeOverlay` and `onMapBackdrop`, then `invalidate('scene')`. There is no `'chrome'` render kind, chrome coordinator or per-frame `renderChrome` (phase 2's cut stage). `world-layers.ts` traces the grid over a padded box around `visibleWorldQuad()` and retraces only it when the view leaves that box or the scale changes (zones keep the scale-only rule); the grid uses `snapping.ts`'s `gridInterval`, and its ink is part of the reuse key.
 
 ```ts
 export interface SceneChangeSet {
@@ -1330,12 +1282,11 @@ export interface CanvasKeyboardPort {
   /** What the next Esc will do, for the tool-card hint (same source as behaviour). */
   describeEscape(): CanvasEscapeLayer | null
   /** False when nothing consumed it. As today: confirm, remove-last, rotate-held, edit-text and context-menu return false in overview
-   *  (today's overview branch, keyboard-port.ts:278-286); edit-text only under Select; the other kinds are unchanged. context-menu
-   *  stamps the keyboard-menu echo (lastKeyboardMenuAt) with the time keyState recorded for a Menu key or Shift+F10, and only when
-   *  that was the last keydown, so a non-key caller never stamps a stale key. */
+   *  (today's overview branch, keyboard-port.ts:278-286); edit-text only under Select; the other kinds are unchanged. No keyboard-menu echo is recorded
+   *  (phase 2, P2: a native contextmenu never opens the canvas menu). */
   command(c: CanvasKeyCommand): boolean
   /** The key router's first call for every keydown (capture) and keyup: the nudge commit on any key but an arrow, a modifier or Esc,
-   *  the physical Ctrl, the Menu key's time and the Space hold (code Space, not text, and a live pointer session or not a control,
+   *  and the Space hold (code Space, not text, and a live pointer session or not a control,
    *  read with the port's own pointerSessionLive()). The verdict tells the router what to do; the port never touches the event
    *  (no KeyConsumer; the canvas Esc layers answer through their return value, §3.7). */
   keyState(k: CanvasKeyState): CanvasKeyVerdict
@@ -1343,10 +1294,9 @@ export interface CanvasKeyboardPort {
 }
 export interface CanvasKeyState {
   readonly type: 'keydown' | 'keyup'
-  readonly key: string             // 'Control' sets the physical Ctrl; arrows, modifiers and Escape keep a nudge series
+  readonly key: string             // arrows, modifiers and Escape keep a nudge series
   readonly code: string            // 'Space'
   readonly mods: Modifiers
-  readonly timeStamp: number       // KeyboardEvent.timeStamp: the clock of the contextmenu echo
   readonly text: boolean           // the target is a text field (isEditableTarget)
   readonly control: boolean        // the target is inside a control, field, menu or dialog (app/keyboard/target-class.ts)
 }
@@ -1373,7 +1323,7 @@ export interface CanvasRuntimeAppAdapter {
 // canvas/runtime/app-adapter.ts, continued (beside the focus? field; interaction-ports.ts and app/keyboard import it type-only)
 /** How a tool's focus request (ToolEffects.requestFocus) leaves the runtime. The FocusOwner implements it. */
 export interface CanvasFocusPort {
-  focusMap(reason: 'tool-requested' | 'text-entry-closed'): void
+  focusMap(): void                 // no reason (phase 2, P30)
   // focusToolCardField comes only with the first tool that asks for its card's field.
 }
 
@@ -1412,7 +1362,7 @@ export interface KeyRouterHandle { dispose(): void }
 /** Owns the only window key listeners: keydown in capture and bubble, keyup in capture. Installed once per edition: Desktop's
  *  platform/desktop.ts passes it to commands/registry.ts installDesktopKeyRouter(installKeyRouter, deps), which composes the Desktop
  *  keymap and keeps its sink private; Web's web/browser-shell-commands.ts installWebKeyRouter, which main.web.tsx calls (main.web.tsx
- *  may not import src/app/**). The keyboard port, not the router, keeps the physical Ctrl and the keyboard-menu time. */
+ *  may not import src/app/**). Nobody keeps a physical-Ctrl record or a keyboard-menu time (phase 2). */
 export function installKeyRouter(deps: KeyRouterDeps): KeyRouterHandle
 
 // app/keyboard/key-chord.ts
@@ -1428,7 +1378,7 @@ export interface KeyboardEventLike {
   stopPropagation(): void
   stopImmediatePropagation(): void
 }
-/** mod = Cmd on Mac, Ctrl elsewhere. A physical Ctrl on Mac is `ctrl`, never `mod`. */
+/** mod = Cmd on Mac, Ctrl elsewhere (`modKeyIsCmd`, input/platform.ts, the one definition; the recogniser's `stepsRotate` uses it too). A physical Ctrl on Mac is `ctrl`, never `mod`. */
 export interface KeyChord { readonly key: string; readonly mod: boolean; readonly ctrl: boolean; readonly shift: boolean; readonly alt: boolean }
 /** The Mac rule above; letters, digits and brackets fall back to event.code on non-Latin layouts; null for AltGr and while composing. */
 export function chordOf(e: KeyboardEventLike, platform: Pick<InputPlatform, 'os'>): KeyChord | null
@@ -1496,19 +1446,18 @@ export function armCanvasTool(
     /** Each caller passes its own: the rail, menus, palette and both editions' keys no longer share one 'command' value. They
      *  reach arming through shared dispatch, so F threads `from` as an argument through dispatchCanvasCommandIntent,
      *  CanvasCommandIntentAdapter.selectTool, runCatalogCommand and the projected action(from) to
-     *  app/workspace-commands/canvas-actions.ts. A drop arms in the runtime, with no from (FocusReason 'drop'). */
+     *  app/workspace-commands/canvas-actions.ts. A drop arms in the runtime, with no from. */
     readonly from: 'rail' | 'menu' | 'palette' | 'panel' | 'card' | 'shortcut' | 'start-card'
     readonly source?: ToolSource
   },
 ): boolean   // true when a canvas session took the tool
 
 // app/keyboard/focus-owner.ts
-export type FocusReason = 'tool-armed' | 'drop' | 'chooser-closed' | 'text-entry-closed' | 'menu-closed' | 'story-exit' | 'region-cycle' | 'user-opened' | 'tool-requested'
+// No FocusReason (phase 2, P30): focusMap and focusOnOpen take no reason; arming's `from` stays.
 export interface FocusOwner extends CanvasFocusPort {
-  focusMap(reason: FocusReason): void                  // the host itself, never a control inside it
-  focusRegion(region: 'title-bar' | 'tool-rail' | 'map' | 'dock', reason: FocusReason): void
+  focusMap(): void                                     // the host itself, never a control inside it
   /** A component opened by a user action focuses its first field through here; content-derived UI cannot. */
-  focusOnOpen(el: HTMLElement, reason: 'user-opened'): void
+  focusOnOpen(el: HTMLElement): void
   /** Replaces app/shell/focus-regions.ts registerFocusRegion (components/shared/useFocusRegion.ts re-points here in F). */
   registerRegion(region: 'title-bar' | 'tool-rail' | 'map' | 'dock', el: HTMLElement): () => void
   /** F6 and Shift+F6 (today's cycleFocusRegion); false while the modal layer is held. */
@@ -1525,7 +1474,7 @@ export interface FocusOwner extends CanvasFocusPort {
 | `panel`: `place-species.ts` | species | — | writes the source and recents, arms nothing | the map host |
 | `panel`: `FavoritesPanel.tsx`; `card`: `StampChooser.tsx` (both through `workbench.placeStamp(stamp, from)`) | saved-stamp | — | writes nothing, false | the map host (the card's `closeChooser` focus moves to the owner, INV-FOC-05) |
 | `card`: `StampChooser.tsx`'s `select`, then `object-stamp` (never short-circuits a same-id arm) | — | — | nothing | the map host |
-| a drop (no `from`) | — | — | — | the map host (no app caller: the runtime arms at a drop and focuses with `FocusReason 'drop'`) |
+| a drop (no `from`) | — | — | — | the map host (no app caller: the runtime arms at a drop and focuses the map) |
 
 F deletes `app/shell/focus-regions.ts` with today's `focusRegion(id)` and `focusMapSurface()` and moves their callers (`app/story-presentation/controller.ts`, `place-species.ts`, `FavoritesPanel.tsx`) to the owner in the same change; P11 tombstones them.
 
@@ -1538,7 +1487,7 @@ An **arrow-owning widget** is an element with role `listbox`, `menu`, `menubar`,
 Resolution order for one keydown. Capture listener:
 1. Composition (`isComposing || keyCode === 229`): return (phase F).
 2. Classify focus: `modal`, `text` (input, textarea, select, contenteditable, the text-entry host), `map` (map host or inside it), `other` (rail buttons, dock lists, menus, the compass). Nothing focused (`<body>`) is `map` when the last pointer press in the document landed in the map host and `other` otherwise, since a click on a dock panel's text also leaves focus on `<body>`; the router records the press at document capture.
-3. Held keys: track modifiers in every class (for `physicalCtrl`); track Space as held only in `map` or with nothing focused (wherever the last press landed), or while a canvas gesture is live; send `keyState` to the canvas port; clear on blur, `visibilitychange` and Meta keyup.
+3. Held keys: keep the keys held down so a lost keyup (Meta, blur, hidden page) releases them; modifiers are read from each event, never from this list (ADR 0017); track Space as held only in `map` or with nothing focused (wherever the last press landed), or while a canvas gesture is live; send `keyState` to the canvas port; clear on blur, `visibilitychange` and Meta keyup.
 4. While a pointer gesture or nudge series is live, the canvas port takes the key first whatever the focus (today `keyboard-port.ts:260-277`): Esc runs the `gesture` or `nudge-series` layer. F6 and Shift+F6 cycle regions (today in capture).
 
 Bubble listener, skipped for a key already `defaultPrevented` (an element handler of a focused widget handled it; a widget that calls `stopPropagation` hides the key from these steps, as it hides it from the shell rows today; today's widgets stop propagation on Escape (`InspectionLens.tsx:119`, `PlantColorMenu.tsx:243`, `PlantSymbolMenu.tsx:122`, `PdfPageEditor.tsx:105` and about 15 more), `ToolCard.tsx:240` also on Enter, `SegmentedControl.tsx:52-53` on arrows, Home and End):
@@ -1547,7 +1496,7 @@ Bubble listener, skipped for a key already `defaultPrevented` (an element handle
 7. Non-modal pushed scopes: the Stories Undo toast (Ctrl Z while the toast is on screen, today `app/stories/actions.ts` `runStoryUndoShortcut`). Popovers and menus are not scopes: their Esc is an Esc layer (step 8), and their arrows are handled by their own element (arrow-owning widgets).
 8. Esc runs the Esc chain (popovers 100, canvas menu 80, … §3.7). An open text entry never reaches this step: its own element handler cancels it first, and focus class `text` keeps the canvas layers off; the selection layer also needs focus class `map` (U10).
 9. Keymap match: `command` rows in `map` and `other`; `view-arrows` the same except in an arrow-owning widget; `outside-dock` the same except from the side-panel dock or phone sheet (focus there, or `<body>` after a press or focus there); `canvas-focus` only in `map`.
-10. Dispatch: `preventDefault` and `stopPropagation`; canvas commands through the port; a port `command()` that returns false runs the row's `fallback` through the platform's `CommandSink` (Desktop `commands/registry.ts`, Web `web/browser-shell-commands.ts`), and without a fallback the key is not consumed. Each chord has one row per scope; rows are never tried in turn (fixture H27).
+10. Dispatch: `preventDefault` and `stopPropagation`; canvas commands through the port; a port `command()` that returns false runs the row's `fallback` through the platform's `CommandSink` (Desktop `commands/registry.ts`, Web `web/browser-shell-commands.ts`), and without a fallback the key is not consumed. Key admission (U33, canopi-f47t.21) is one condition in the router's `runSink`, which every fallback also passes: while the port's `escapeLayers()` include `gesture` or `tool-transient`, a selection delete (Delete, Backspace's fallback, Ctrl+X) runs nothing and the key is consumed, from any focus. Each chord has one row per scope; rows are never tried in turn (fixture H27).
 
 Canvas-focus rows run only with focus on the map host, or on `<body>` after a press on the map, where no widget handler runs, so moving them from today's capture listener to bubble changes no outcome. A focused widget without a role that handles arrows (the scale button, `ZoomControls.tsx:138-143`) runs first and prevents the default, so Shift+↑ on it opens the scale menu and does not reset north. Fixtures I10, I11, I12, I12b and H23–H27 hold the outcomes (§5.8).
 
@@ -1600,17 +1549,11 @@ The layout modules (`overview.ts`, `field-layout.ts`, `layout.ts`, `overview-gui
 
 `LastView` (settings) keeps its centre and zoom; phase 1's `bearing` field goes in phase 2 (U33, P36).
 
-Stored data: `.canopi` gains the optional top-level `map_view`, the view a save writes (U28), and the required `SavedViewCamera.ground_size_m` (U33), loses `SavedView.extent` (§4.10) and stops reading and writing ruler guides (`extra.guides`, U33); the version stays 9 (ADR 0021). `SavedViewCamera.bearing` exists; writers normalise it to [0, 360), locally (P10). Settings lose `snap_to_guides` and `LastView.bearing` (U33). PDF setups are not persisted, so Map orientation and the layout angle live in memory only; `PdfPrintArea` gains no angle (U3; decided with the user, 2026-10-01). `scroll_wheel` keeps its field and values; only its UI is relabelled.
+Stored data: `.canopi` gains the optional top-level `map_view`, the view a save writes (U28), and the required `SavedViewCamera.ground_size_m` (U33), loses `SavedView.extent` (§4.10) and ruler guides (`extra.guides`) are no longer read or written by the scene: the scene owns no `extra` key, and a key left in a development file stays as unknown extra (ADR 0011, U33); new positions are written rounded to 1e-9° (§8); the version stays 9 (ADR 0021). `SavedViewCamera.bearing` exists; writers normalise it to [0, 360), locally (P10). Settings lose `snap_to_guides` and `LastView.bearing` (U33). PDF setups are not persisted, so Map orientation and the layout angle live in memory only; `PdfPrintArea` gains no angle (U3; decided with the user, 2026-10-01). `scroll_wheel` keeps its field and values; only its UI is relabelled.
 
 ### 1.8 Module layout: what later phases add
 
-Phase 0 built the modules of `canvas/runtime/{view,input,tools,renderers,chrome}/`, `interaction-types.ts`, `interaction-ports.ts`, `keyboard-port.ts`, `scene-extent.ts`, `scene-runtime/drag-state.ts`, `maplibre/camera-driver.ts` and the test supports (`test-view.ts`, `tool-harness.ts`, `recording-renderer.ts`, `canvas-interaction-setup.ts`); F built `app/keyboard/**` and `input/selection-drag-guard.ts`; phase 1 built `app/canvas-pdf/page-frame.ts` (§1.7), `components/canvas/Compass.tsx` (§4.2) and moved the grid into `renderers/world-layers.ts`; the tree under `desktop/web/src/` is their reference. `view/` imports only what policy P4 (plan §5) allows. Later phases add:
-
-```
-desktop/web/src/
-├─ canvas/runtime/input/
-│  └─ context-menu-gesture.ts           copy of GeoLibre @ b3d91de, MIT header, THIRD_PARTY_NOTICES row (phase 2)
-```
+Phase 0 built the modules of `canvas/runtime/{view,input,tools,renderers,chrome}/`, `interaction-types.ts`, `interaction-ports.ts`, `keyboard-port.ts`, `scene-extent.ts`, `scene-runtime/drag-state.ts`, `maplibre/camera-driver.ts` and the test supports (`test-view.ts`, `tool-harness.ts`, `recording-renderer.ts`, `canvas-interaction-setup.ts`); F built `app/keyboard/**` and `input/selection-drag-guard.ts`; phase 1 built `app/canvas-pdf/page-frame.ts` (§1.7), `components/canvas/Compass.tsx` (§4.2) and moved the grid into `renderers/world-layers.ts`; the tree under `desktop/web/src/` is their reference. `view/` imports only what policy P4 (plan §5) allows. Phase 2 adds no module: P2's secondary session lives in `recognise.ts` and its one `contextmenu` listener in `dom-input-source.ts` (no copied GeoLibre tracker, U33), and the overview selector is `tools/select/overview.ts` beside Select.
 
 Phase R retains billboard geometry per zoom band in `renderers/billboard-layer.ts` and admits labels on settle in `renderers/label-admission.ts`.
 
@@ -1622,10 +1565,12 @@ Phase 0's, F's and phase 1's deletions are done; P11 tombstones them. Left:
 |---|---|---|
 | Rulers, the rulers hint and the Rulers toggle (`chrome/rulers.ts`, `RulersNorthHint.tsx`, Shift+R, `rulersVisible`); ruler guides (`extra.guides`, the ruler `Guide` of `canvas/guides.ts`, `editingAids.rulerGuides`); Snap to guides (`snap_to_guides`); the `ruler` target and press kinds, `listensToRulers`, `currentEvent()` (U33) | nothing; measurement guides keep what they use | 2 (cut stage) |
 | `chrome/locked-affordance.ts`, `setLockedAffordance`, `lockedAffordance` (U33, P4) | the locked hover stroke; Unlock in the canvas menu and Edit | 2 (cut stage) |
-| `LastView.bearing` and the open-at-last-bearing fallback (U33, P36) | the live bearing | 2 (Keyboard) |
-| `'overview'` in `primaryDragPansIn` | nothing | 2 |
+| `LastView.bearing` and the open-at-last-bearing fallback (U33, P36) | the live bearing | 2 (cut stage) |
+| `view/bearing-tween.ts`, both animation-frame tween loops, the driver's bearing arc and `zoomFloorForArc` (U34, P7) | turns jump; the bearing-free floor (§4.14) | 2 (View) |
+| `secondary.*`, `auxiliaryShiftDrag`, `primaryDragPansIn` with `PanContext`, `macCtrlClick`, `penBarrel`, `trackpadGestures` | their phase-2 values, hard-coded (§1.2) | 2 |
+| The native-menu input path: the `native-contextmenu` RawInput, normalise's `contextmenu` case, `fromKeyboard`, `menuEchoMs`, `windowsMenuTrailMs`, the three dead deadlines, the `'ignored'` mode and the keyboard echo record (`lastKeyboardMenuAt`, `CanvasKeyState.timeStamp`) (U33 and U34, P2) | one `contextmenu` listener (§2.2); the Menu key and Shift+F10 | 2 |
 | `settings.scrollWheel*` UI strings | `settings.pointingDevice*` | 2 |
-| `Bindings`, `CURRENT_BINDINGS`, `PanContext`, `DomInputSourceDeps.bindings`: after phase 3 every field has one value (table in §1.2) | the end values, hard-coded in the recogniser and the source (no `ROTATION_BINDINGS`, `V2_BINDINGS` or `TOUCH_BINDINGS` is ever written); P11 tombstones the names | release close |
+| `Bindings`, `CURRENT_BINDINGS`, `DomInputSourceDeps.bindings`: after phase 3 `touch` and `dragSlopPx` have one value | the end values, hard-coded in the recogniser and the source (no `ROTATION_BINDINGS`, `V2_BINDINGS` or `TOUCH_BINDINGS` is ever written); P11 tombstones the names | release close |
 
 ## 2. Gesture vocabulary
 
@@ -1650,30 +1595,33 @@ Pinch and twist are sources, not kinds. Keys are not gestures: key-driven naviga
 
 - **Sessions.** One mouse or pen session at a time, by `pointerId`; touch keeps up to two touches and ignores a third. A `down` for a pointer id whose session is live ends that session first, and a `move` with buttons but no session is a hover (both happen in today's tests and after a lost `pointerup`). A press the host refuses (`rejectSession`) ends its session with no gesture (the session feeds `reject`, §1.2). In overview an `up` with no live session, from anywhere in the app, passes untouched (plan §4, phase 0, exception 4). A session's mode is fixed at start: pressing Shift mid-pan does not switch to rotate, and releasing Shift mid-rotate does not switch to pan. For a secondary, auxiliary or Mac Ctrl session only Shift held at the press decides the mode (rotate or pan), for all three buttons alike; Shift pressed after the press and before the 3 px slop is ignored; Space, Alt and mod at the press are ignored for the mode, and mod held later only steps a rotate (spec; fixture A18).
 - **Rotation sign (spec).** A pointer rotate turns the view by `ROTATE_DEG_PER_PX` × the horizontal travel since the start, and a rightward drag increases the bearing (MapLibre's convention: the map turns counter-clockwise on screen, as if the pointer pushed the top of the map to the left). Twists (touch two-finger, WebKit trackpad) make the ground follow the fingers: a clockwise twist of the fingers turns the map clockwise on screen, which lowers the bearing by the twist angle. The compass drag makes the needle follow the pointer around the compass centre: moving the pointer clockwise around the face turns the needle clockwise, which lowers the bearing by the same angle (§4.2).
-- **Primary.** `press` on down; `tap` on an up within slop, or `drag-start` past slop, then `drag-move`, `drag-end` (under LEGACY slop 0: any movement is a drag; §1.2). Space held at press turns it into `pan` (`space-drag`). Space pressed after a primary session started does not change it (a session's mode is fixed; spec): the drag, band or move continues, and Space is only recorded for the next press. In a `primaryDragPansIn` context a primary drag is `pan` (`primary-drag`). With the Pan tool its press still reaches the tool and ends with a `tap`, or after a drag with `cancel('navigate')` right after the `pan{end}`, so every press the host sees ends (the Pan tool ignores them); a legacy overview press never reaches the host.
+- **Primary.** `press` on down; `tap` on an up within slop, or `drag-start` past slop, then `drag-move`, `drag-end` (under LEGACY slop 0: any movement is a drag; §1.2). Space held at press turns it into `pan` (`space-drag`). Space pressed after a primary session started does not change it (a session's mode is fixed; spec): the drag, band or move continues, and Space is only recorded for the next press. With the Pan tool a primary drag is `pan` (`primary-drag`); its press still reaches the tool and ends with a `tap`, or after a drag with `cancel('navigate')` right after the `pan{end}`, so every press the host sees ends (the Pan tool ignores them). From phase 2 an overview primary press, tap and drag reach the host (band select, §1.4 "Overview").
 - **Hover.** A move with no live session, buttons or not, is a `hover` wherever the pointer is, carrying the target class it saw (only a `surface` target reaches `subscribePointerWorld`, §1.4 "Hover"), except over owned chrome, the text entry or a handle, where it emits `hover-end` (F, U6; hard-coded in `recognise.ts`, no bindings field).
-- **Auxiliary.** Drag → `pan`. With Shift at press and `auxiliaryShiftDrag: 'rotate'` the press opens a pending rotate: capture taken, default prevented, nothing emitted; `rotate{start}` comes only past the 3 px drag slop, with the total measured from the press (fixture G9), so a still Shift+middle click turns nothing (G9b). Shift is checked before the overview branch, so a Shift+middle-drag rotates in overview too (G9c). `step` = mod held live: a modifier change during a live rotate re-emits `rotate{move}` with the new step. A middle tap does nothing; `pointerdown` is always default-prevented (no autoscroll, no Linux paste).
-- **Secondary (legacy, `menu-on-native`).** The button is inert; a native `contextmenu` on the surface opens the menu at once, except in overview.
-- **Secondary (V2).** `down` → pending, capture taken, nothing emitted. Past 3 px with no Shift at the press → `pan`; with Shift at the press → `rotate` about the press point, `step` = mod held live (a consumed Mac Ctrl never counts). An `up` within 3 px → `menu-request` at the release point on every OS (convention). The document-capture `contextmenu` guard acts only on events whose target class is `surface`, `handle` or `owned-chrome`, or that arrive while a canvas secondary session is live or within 250 ms of its end (the WebView2 trail, which may be retargeted to `<html>` or the open menu, A8). There, every mouse and pen native `contextmenu` is prevented; one is honoured only when `fromKeyboard`, or when no secondary session exists and none ended in the last 250 ms and it is not a keyboard-menu echo within 500 ms; it then becomes `menu-request('selection', 'keyboard')`, except on `owned-chrome`, where it emits nothing. On `owned-text` and `foreign` targets the guard does nothing: the native menu (copy and paste in the note editor and panel fields) stays and no `menu-request` is emitted (spec, as today's `allowsNativeContextMenuTarget`, `pointer-utils.ts:27`).
-- **Drag end.** A drag ends when `buttons` loses its role on a `move`, on `up`, on lost capture, blur or `visibilitychange` (not under LEGACY, below).
+- **Auxiliary.** Drag → `pan`. With Shift at press the press opens a pending rotate: capture taken, default prevented, nothing emitted; `rotate{start}` comes only past the 3 px drag slop, with the total measured from the press (fixture G9), so a still Shift+middle click turns nothing (G9b). Shift is checked before the overview branch, so a Shift+middle-drag rotates in overview too (G9c). `step` = mod held live: a modifier change during a live rotate re-emits `rotate{move}` with the new step. A middle tap does nothing; `pointerdown` is always default-prevented (no autoscroll, no Linux paste).
+- **Secondary (V2).** `down` → pending, capture taken, nothing emitted. Past 3 px with no Shift at the press → `pan`; with Shift at the press → `rotate` about the press point, `step` = mod held live (a consumed Mac Ctrl never counts). An `up` within 3 px → `menu-request` (source `mouse`) at the release point on every OS (convention); a pen barrel and a Mac Ctrl+click follow the same rules.
+- **Native menu** (phase 2, P2; U34). The DOM source owns one document-capture `contextmenu` listener (on `host.ownerDocument`), which delivers nothing to the recogniser; ActionMenu keeps its own prevent. It prevents the default (1) over the map host, except over `owned-text` and `foreign` targets; (2) anywhere while the source owns a canvas session's pointer; (3) anywhere within 500 ms (`event.timeStamp`) of releasing a canvas session's pointer whose press normalised as secondary. A canvas session is a press whose target class was `surface`, `handle` or `owned-chrome`: presses on the note editor and map fields keep their native copy and paste menu, on all three orderings (press-time, release-time, Mac Ctrl+click). "Anywhere" is the event's own target, so the WebView2 trail retargeted to `<html>` or the open menu is still prevented. A native `contextmenu` with no right, pen-barrel or Mac Control press (a Windows pen's press-and-hold, VoiceOver's VO+Shift+M) opens nothing (user, 2026-10-06, U34); the Menu key and Shift+F10 reach the selection menu through the keymap. Known Web limitation: Firefox always shows its native menu on Shift+right-click (`dom.event.contextmenu.shift_suppresses_event`), at the press on Linux (taking over the rotate) and after the release on Windows; Shift+middle, the compass and Shift+←/→ turn the view there.
+- **Drag end.** A drag ends on `up`, lost capture, blur or `visibilitychange`. A navigation or pending-secondary session also ends when `buttons` loses its physical bit on a `move` (primary when `ctrlConsumed`), as MapLibre's `isValidMoveEvent`; a primary session does not, since a lost primary up already ends at the next down, so Mac Ctrl-drags are not cut short.
 - **A second button during a primary drag** is ignored for the rest of the session in every phase (U2, 2026-10-01): no nested pan or rotate, and from phase 2 its native `contextmenu` is prevented and no `menu-request` is emitted. Wheel zoom and key navigation stay live during a drag.
 - **Other chords.** A primary press during a secondary or auxiliary session is ignored for the rest of that session; its native menu is prevented.
 - **Touch before phase 3.** One touch is a primary pointer exactly as today; a second concurrent touch is ignored; no long press, no twist; host CSS unchanged.
 - **Touch (phase 3).** One finger is primary with 8 px slop. Still for 500 ms → `menu-request('long-press')` and the session ends (no `tap` on release). A second finger before slop withdraws the press (`cancel('multitouch')`); after a drag started, the drag is cancelled and its Scene Edit aborted (a polygon draft survives, as it does a pan). Two fingers: centroid → `pan`, distance ratio → `zoom` about the centroid, angle → `rotate` after 25 px of arc with the threshold subtracted. Lifting to one finger does not resume editing until every finger lifted. Android's native long-press `contextmenu` and the timer produce one menu.
-- **Pen.** Tip = primary with pen slop; barrel = secondary rules when `penBarrel: 'secondary'`; eraser ignored; hover works.
-- **WebKit gesture events** (`trackpadGestures`; the DOM source adds `gesturestart`, `gesturechange` and `gestureend` listeners only when `platform.gestureEvents` is also true, copies `rotation`, prevents the default and removes them on detach). Only the rotation is used: WKWebView already delivers the pinch as Ctrl+wheel, so the gesture's scale is ignored and Ctrl-wheels zoom as everywhere (phase-1 drop). Rotation is accumulated and emits nothing until |accumulated| exceeds 10°; then `rotate` (`trackpad-twist`) starts with the threshold subtracted. A live twist is a session in `sessions` under a reserved non-pointer id (mode `rotate`, navigation `trackpad-twist`, slop passed at 10°), so Esc, blur, `configure` and the gesture Esc layer cancel it like a pointer rotate. The session exists from `gesturestart`, but the keys count it as a live pointer session only once its slop has passed, so a plain pinch-zoom keeps Esc, the arrows, Enter, F2 and the Menu key (from 1). One session at a time: a twist is ignored while a pointer pan or rotate is live, and a pointer down during a twist is ignored. On iOS the pointer-based two-finger recogniser is the only source; `gesture*` is prevented and ignored.
+- **Pen.** Tip = primary with pen slop; barrel = secondary rules (from 2); eraser ignored; hover works.
+- **WebKit gesture events** (from phase 1; the DOM source adds `gesturestart`, `gesturechange` and `gestureend` listeners only when `platform.gestureEvents` is also true, copies `rotation`, prevents the default and removes them on detach). Only the rotation is used: WKWebView already delivers the pinch as Ctrl+wheel, so the gesture's scale is ignored and Ctrl-wheels zoom as everywhere (phase-1 drop). Rotation is accumulated and emits nothing until |accumulated| exceeds 10°; then `rotate` (`trackpad-twist`) starts with the threshold subtracted. A live twist is a session in `sessions` under a reserved non-pointer id (mode `rotate`, navigation `trackpad-twist`, slop passed at 10°), so Esc, blur, `configure` and the gesture Esc layer cancel it like a pointer rotate. The session exists from `gesturestart`, but the keys count it as a live pointer session only once its slop has passed, so a plain pinch-zoom keeps Esc, the arrows, Enter, F2 and the Menu key (from 1). One session at a time: a twist is ignored while a pointer pan or rotate is live, and a pointer down during a twist is ignored. On iOS the pointer-based two-finger recogniser is the only source; `gesture*` is prevented and ignored.
 - **Cancel fences.** `pointercancel`, lost capture, blur, `visibilitychange`, the Esc chain's `escape`, and a tool change (`configure`) emit `cancel`; a live rotate emits `rotate{cancel}`, which restores the starting camera. Under LEGACY the source listens to no `visibilitychange` and no `gesture*` event (today), so only blur releases Space and WebKit's Ctrl wheels zoom. After a window blur the session also calls `ToolHost.interrupted()` (§1.4).
 
 ### 2.3 Modifier resolution (ToolHost)
 
-| Meaning | Phase 0 to 1 | From phase 2 |
-|---|---|---|
-| `additive` | Shift, Ctrl or Cmd (today) | Shift or mod (on Mac: Shift or Cmd; Ctrl+click is a right click) |
-| `subtractive` | never | Alt |
-| `constrain` | Shift in Polygon, Plant a row (world axes before 1; screen axes from 1, identical at bearing 0) and on the rotate handle (15° steps from the press angle, as today) | Shift in every drawing tool (screen axes) and on the rotate handle (unchanged) |
-| constrain and snap order | today's, keyed by tool id in the host: Polygon snaps, then constrains (`zone-drawing-tool.ts:226`), so a Shift corner may be off-grid, and closes on its first corner by `ToolPoint.free`; Plant a row constrains the raw point (Shift is also no-snap) | constrain, then snap the length along the ray (Polygon changes in 2; spec) |
-| `noSnap` | Shift in Plant a row | mod held during a Plant a row drag |
-| `fromCentre` | never | never (reserved) |
+Gesture modifiers are read from the event that carries them (ADR 0017), with no platform dependency: a Mac Ctrl press is secondary in `normalise`, so it never reaches a tool.
+
+| Meaning | From phase 2 |
+|---|---|
+| `additive` | Shift, Ctrl or Cmd (Meta) |
+| `subtractive` | Alt |
+| `constrain` | Shift in Polygon, Plant a row, Line, Measure (45° screen steps), Rectangle (square, `screenAlignedRect`'s `square`), Ellipse (circle) and handle drags (the rotate handle's 15° steps from the press angle) |
+| constrain and snap order | one order for every tool, with no tool-id branch: the constraint, then the length along the ray rounded to `gridInterval(ppm).interval` when grid snap is on; `rotation-delta` is not snapped |
+| `noSnap` | Ctrl or Cmd during a Plant a row drag (so Super on Windows and Linux, and Ctrl during a Mac drag, also turn snapping off: accepted) |
+
+A modifier change while the pointer is still changes a draft at the next pointer move; only a live rotate re-steps at once (fixture A8). Drafts are not re-emitted on a key change.
 
 ## 3. Binding tables
 
@@ -1690,7 +1638,7 @@ Rows are pointer inputs whose meaning does not depend on the tool. "Every tool" 
 | Middle press, drag | pan | turn the view about the press point (from 1; before: pan) | pan; added during a Shift rotate: 15° steps (from 1) | pan | pan | pan |
 | Middle click | nothing (no autoscroll, no paste) | nothing | nothing | nothing | nothing | nothing |
 | Left press, drag | tool-dependent (§3.2) | tool-dependent | tool-dependent | tool-dependent | pan in every tool and in overview | see next row |
-| macOS Ctrl + left click | — | — | — | — | — | canvas menu at release, source `ctrl-click`; no selection change (from 2). Before 2: toggles the selection and the native menu opens (today) |
+| macOS Ctrl + left click | — | — | — | — | — | canvas menu at release, source `mouse`; no selection change (from 2). Before 2: toggles the selection and the native menu opens (today) |
 | macOS Ctrl + left drag | — | — | — | — | — | pan (from 2); with Shift at press: turn the view unstepped; adding Cmd steps 15° (from 2) |
 | Right or middle added during a left drag | ignored (U2): no pan; before 2 a right press's native `contextmenu` opens the menu unless a Scene Edit is live (today); from 2 no menu | ignored | as no modifier | as no modifier | n/a (Space-drag is already a pan) | as no modifier |
 | Space held at a left press, no movement | no press reaches the tool: Plant stamp places nothing and Polygon adds no corner (today, `beginPan` claims the press first, `scene-interaction.ts:600-606`) | — | — | — | — | — |
@@ -1699,9 +1647,9 @@ Rows are pointer inputs whose meaning does not depend on the tool. "Every tool" 
 | Left added during a right or middle drag | ignored for the rest of that drag; no press reaches the tool | same | same | same | same | same |
 | Double right-click | two menu requests; the second replaces the first | — | — | — | — | — |
 
-Known limitation (Linux desktop): on KDE, Xfce, Cinnamon and MATE the window manager takes Alt+left-drag (move the window) and Alt+right-drag (resize it) before WebKitGTK sees them, so Alt+click and Alt+right-drag can be unreliable there. Both actions stay reachable: Shift or mod click toggles an object, and Delete on a focused corner removes it (§3.2). The phase-2 Linux live check records the behaviour.
+Known limitation (Linux desktop): on KDE, Xfce, Cinnamon and MATE the window manager takes Alt+left-drag (move the window) and Alt+right-drag (resize it) before WebKitGTK sees them, so Alt+click and Alt+right-drag can be unreliable there. Both actions stay reachable: Shift or mod click toggles an object, and Delete on a focused or selected corner removes it (§3.2). The phase-2 Linux live check records the behaviour. Known Web limitation: Firefox shows its own menu on Shift+right-click (§2.2 "Native menu").
 
-Rotation from the pointer is never available without Shift (user: deliberate gestures only). Release of a free rotate drag within 7° of north tweens to north in 300 ms about the press point. Esc during any rotate drag restores the camera from before the drag.
+Rotation from the pointer is never available without Shift (user: deliberate gestures only). Release of a free rotate drag within 7° of north jumps to north about the press point (U34). Esc during any rotate drag restores the camera from before the drag.
 
 ### 3.2 Left button (pen tip, one finger) per tool
 
@@ -1709,10 +1657,10 @@ Rotation from the pointer is never available without Shift (user: deliberate ges
 
 | Tool (key) | Click | Drag | Double-click | Shift | mod | Alt |
 |---|---|---|---|---|---|---|
-| Select (V) | selects the hit object; empty ground clears; a locked object is selected (Unlock is in the canvas menu and Edit, U33). From 2: a click inside a zone's fill selects the zone when no plant or note is on top | from empty ground: band select; the band is a screen rectangle and hits in its world quad (from 1). From an object or the outline of a selected zone: moves the selection. From 2 a drag that starts inside a zone's fill bands, never moves the zone. From a handle: rotate, reshape corner or vertex, guide end | on a plant: selects every plant of that species; on a note: edits its text; on a zone edge: adds a corner (from 2) | click toggles the hit; drag from empty: adds the band to the selection (never box zoom); a drag that starts on an object toggles it on press and moves nothing (today, `shared-gestures.ts:233-237`); on the rotate handle: 15° object steps from the press angle (today, every phase) | as Shift for click and band (on Mac, Cmd) | click removes the hit from the selection (from 2); Alt+click on a selected corner handle removes the corner, minimum 3 (from 2); Alt+drag bands as without Alt (spec) |
+| Select (V) | selects the hit object; empty ground clears; a locked object is selected (Unlock is in the canvas menu and Edit, U33). From 2 (`HitFilter.fill`): a tap inside a zone's fill selects the topmost zone when no plant or note is on top (Shift or mod toggles, Alt removes); a press there clears unless additive | from empty ground: band select; the band is a screen rectangle and hits in its world quad (from 1). From an object or the outline of a selected zone: moves the selection. From 2 a drag that starts inside a zone's fill bands, never moves the zone. From a handle: rotate, reshape corner or vertex, guide end | on a plant: selects every plant of that species; on a note: edits its text; on a polygon edge: adds a corner (from 2, reusing `hitZoneEdge`) | click toggles the hit; drag from empty: adds the band to the selection (never box zoom); a drag that starts on an object toggles it on press and moves nothing (today, `shared-gestures.ts:233-237`); on the rotate handle: 15° object steps from the press angle (today, every phase) | as Shift for click and band (on Mac, Cmd) | click removes the hit from the selection (from 2); Alt+click on a corner handle removes the corner, minimum 3 (from 2, polygons only); Alt+drag bands as without Alt (spec) |
 | Pan (H) | nothing | pans (mouse, pen, touch); no handles show while Pan is armed (as today; only Select shows them), so a press never lands on one | nothing | ignored (a session's mode is fixed) | ignored | ignored |
 | Plant stamp (P) | places one plant of the chosen species at the snapped point; with no species the card asks to choose one | the press already placed; the drag does nothing more (today) | places a second plant (each press places one, today) | none | none | none |
-| Plant a row (W) | on a placed plant: chooses it as the row source | draws the row from the source along the drag (4 px, measured by the tool); plants at the spacing interval | nothing | 45° steps against the screen axes (from 1; before: world axes). Before 2 Shift also turns snapping off | no snapping while held (from 2) | none |
+| Plant a row (W) | on a placed plant: chooses it as the row source | draws the row from the source along the drag (past the recogniser's 3 px slop, P29); plants at the spacing interval | nothing | 45° steps against the screen axes (from 1; before: world axes). Before 2 Shift also turns snapping off | Ctrl or Cmd: no snapping while held (from 2, every OS) | none |
 | Object stamp (K) | first click on a plant, zone, note or group copies it (the pick); later clicks place the pick at its source's orientation, turned by [ and ] (§4.7, A13) | nothing more than the click | places twice | none | none | none |
 | Saved object stamp (no key) | places the saved stamp, level to the screen (from 1), then returns to Select (today); a drop from Favorites places it the same way (from 1) | nothing more | places once; the second press reaches Select (today) | none | none | none |
 | Text (T) | places a note and opens text entry; a note created on a rotated map is level to the screen (from 1) | nothing more | nothing more | none | none | none |
@@ -1721,7 +1669,7 @@ Rotation from the pointer is never available without Shift (user: deliberate ges
 | Rectangle (R) | nothing | draws a rectangle aligned to the screen, stored with `rotationDeg = bearing` (from 1) | nothing | square (from 2) | none | none |
 | Ellipse (E) | nothing | draws an ellipse aligned to the screen, stored with `rotationDeg = bearing` (from 1) | nothing | circle (from 2) | none | none |
 | Polygon (Z) | the press adds a corner (today); a press on the first corner finishes (3+ corners) | the press already added the corner; the drag moves nothing (today) | the second press of a double-click finishes instead of adding a corner (3+ corners, from 2) | 45° steps against the screen axes (from 1; before: world axes) | none | none |
-| Handle (any tool that shows handles) | focuses nothing; handles are DOM buttons | `handle-drag`; with Space held at the press: `handle-drag` today (the handle is hit before the pan check, `scene-interaction.ts:584-608`), `pan` from 2 | on an edge midpoint: adds a corner (from 2) | rotate handle: 15° steps from the press angle (today) | none | removes a selected corner (from 2) |
+| Handle (any tool that shows handles) | focuses nothing; handles are DOM buttons | `handle-drag`; with Space held at the press: `handle-drag` today (the handle is hit before the pan check, `scene-interaction.ts:584-608`), `pan` from 2 | on a polygon edge midpoint dot (smaller and fainter than a corner: radius 4, opacity 0.5, GeoLibre's edge marker; aria "Add a corner on edge {{index}}"): adds a corner (from 2) | rotate handle: 15° steps from the press angle (today); Shift constrains every handle drag (from 2) | none | removes the corner, minimum 3 (from 2, polygons only) |
 
 Cells the table leaves implicit:
 - **Select, mod at a drag that starts on an object:** as Shift: toggles the object on press and moves nothing (today: `hasAdditiveModifier` treats Ctrl and Cmd like Shift; on Mac from 2 only Cmd, since a physical Ctrl is a right-click).
@@ -1729,7 +1677,7 @@ Cells the table leaves implicit:
 - **Space+Shift+left-drag:** pans; Shift does nothing, since a session's mode is fixed at start (today).
 - **Space held at a press on a handle:** today and through phase 1 the handle drags (the handle is hit first); from 2 it pans, as Space at any press does (§3.1; convention), and the handle is not dragged. Fixture G3b pins today's order under LEGACY. The Pan tool has no such case: handles show only while Select is armed (`scene-interaction.ts:1283-1289`).
 - **Text, click while an entry is open:** commits the entry and places nothing (today, `text-annotation-tool.ts:38-41`); the next click places a note.
-- **Saved object stamp after the first Esc dropped the stamp:** the tool stays armed with no stamp; a click places nothing and the card offers "Choose a saved stamp" (from 2).
+- **Polygon corners (from 2, polygons only):** Select keeps `selectedCorner`, the last corner pressed without moving, shown as the handle layer's active handle; Delete removes it (or a focused corner: handles are tabbable), keeping at least 3. Rectangles, ellipses and lines keep their own reshape (corner insertion would need a new stored zone type).
 - **Plant a row with no source:** a click or drag on empty ground does nothing; the card asks for a placed plant (today).
 - **Polygon, a drag after a corner press:** `drag-start` and `drag-move` move the rubber band as hovers; neither a `tap` nor a `drag-end` adds a corner (the press did, today).
 - **Alt+click on Linux desktops:** may be taken by the window manager (known limitation, §3.1); Shift or mod click and Delete on a focused corner reach the same results.
@@ -1738,7 +1686,7 @@ Overview (below 0.1 px/m) replaces the rows above:
 
 | Input in overview | Behaviour |
 |---|---|
-| Left click | selects the hit zone or note (plants are hidden and not hit); empty ground clears (from 2; before: nothing) |
+| Left click | selects the hit zone or note (plants are hidden and skipped by hit testing, `HitFilter.overview`, so a zone under a plant still hits); empty ground clears (from 2; before: nothing) |
 | Left drag | band-selects zones and notes (from 2); before 2 it pans |
 | Shift, mod, Alt with a left click or drag | as in the Select row from 2: Shift or mod click toggles, Alt+click removes, Shift or mod band adds, Alt+drag bands as without Alt; a Mac Ctrl+left-drag pans as in site mode (before 2: every left drag pans) |
 | Left drag with the Pan tool, Space+drag, middle-drag | pan |
@@ -1757,16 +1705,16 @@ Overview (below 0.1 px/m) replaces the rows above:
 
 | Input | Pointing device: Mouse | Pointing device: Trackpad |
 |---|---|---|
-| Wheel or two-finger scroll, no modifier | zoom about the pointer, factor `exp(clamp(−dy × 0.002, ±1))`; from 2 one notch (`deltaMode` line, or \|dy\| = 100) is one zoom step, the same as the buttons | pan by (−dx, −dy) |
+| Wheel or two-finger scroll, no modifier | zoom about the pointer, factor `exp(clamp(−dy × 0.002, ±1))`, so a notch zooms ×1.22 as today; no notch detection (P14) | pan by (−dx, −dy) |
 | Shift + wheel | pan by (−dx, −dy) as delivered (today: no swap; Chromium on Windows and Linux and macOS already deliver a Shift+wheel notch as dx). WebKitGTK, the Linux desktop engine, is not verified: whether its notch arrives as dx or dy is recorded by the phase-2 live check; if it arrives as dy, Shift+wheel pans vertically on Linux desktop, a known limitation filed as a bead, never swapped by platform sniffing | horizontal pan: dy becomes x when dx is 0 (today, `scene-interaction.ts:847-849`); macOS's swapped axes are accepted, never swapped twice |
 | Ctrl or Cmd + wheel (physical) | zoom | zoom |
-| Pinch (Chromium and WebView2 synthetic Ctrl wheel; Firefox line-mode pinch) | zoom; no Ctrl is recorded as held | zoom |
+| Pinch (Chromium and WebView2 synthetic Ctrl wheel; Firefox line-mode pinch) | zoom continuously, by the same path as a physical Ctrl+wheel (P14) | zoom |
 | Alt + wheel | as without Alt (no rotation, convention) | as without Alt |
 | Space held + wheel | as without Space | as without Space |
 | macOS WebKit gesture: scale | ignored: WKWebView also delivers the pinch as Ctrl+wheel, which zooms (row above) | same |
 | macOS WebKit gesture: rotation | nothing until 10° accumulated, then turns the view with the 10° subtracted; release within 7° of north snaps; Esc cancels it (from 1) | same |
 | Linux WebKitGTK trackpad pinch | not delivered to the page (user): zoom with Ctrl + scroll or the buttons; the F1 gesture list shows the note on Linux | same |
-| Trackpad twist on Windows (WebView2), and in Chromium or Firefox on any OS (Web edition) | not delivered: no rotation event reaches the page (the user's "where available"); turn with Shift+right-drag, the compass or Shift+←/→. `trackpadGestures` is true only on WebKit (WKWebView and Safari), so F1 lists the twist only there | same |
+| Trackpad twist on Windows (WebView2), and in Chromium or Firefox on any OS (Web edition) | not delivered: no rotation event reaches the page (the user's "where available"); turn with Shift+right-drag, the compass or Shift+←/→. gesture events exist only on WebKit (WKWebView and Safari), so F1 lists the twist only there | same |
 | Wheel during a drawing, move or band drag | as above; the draft stays under the cursor (from 2, convention) | same |
 | Wheel or pinch during a pointer rotate session (Shift+middle-drag, Shift+right-drag) | ignored while the rotate owns the camera, so Esc restores exactly the camera at its press (from 1, convention; fixture F18) | same |
 | Wheel or pinch during a trackpad twist or a compass drag | as without them: the twist never zooms and Ctrl-wheels keep zooming; a compass drag composes with the wheel, and its cancel restores the whole starting camera | same |
@@ -1805,7 +1753,7 @@ Host CSS only when `touch.hostTouchActionNone` (from phase 3): `touch-action: no
 | Tip (contact) | primary, as the left-button rows of §3.2 | same |
 | Hover | `hover` | same |
 | Barrel button, drag | no pan; the native `contextmenu` the barrel fires opens the canvas menu (at press on Linux and macOS, at release on Windows), as the right button of §3.1 | pan; with Shift at press: turn the view |
-| Barrel button, tap | the native `contextmenu` opens the canvas menu (at press on Linux and macOS, at release on Windows), as the right button | canvas menu, source `pen-barrel` |
+| Barrel button, tap | the native `contextmenu` opens the canvas menu (at press on Linux and macOS, at release on Windows), as the right button | canvas menu at release, source `mouse` |
 | Eraser | ignored | ignored |
 | Tip drag with the Pan tool | pans | pans (the Pan tool exists for pens without a barrel button) |
 
@@ -1822,10 +1770,10 @@ Where the rotation rows live (phase 1): Shift+←/→ and Shift+↑ (`view-arrow
 | Key | Action | Scope | Switch | Phase |
 |---|---|---|---|---|
 | V, H, P, W, K, Z, R, E, L, T, M | arm Select, Pan, Plant stamp, Plant a row, Object stamp, Polygon, Rectangle, Ellipse, Line, Text, Measure | `command` | follows | unchanged |
-| N | reset north (300 ms) | `command` | follows | 1 (was cycle labels) |
-| Shift+N | reset north (300 ms) | `command` | always | 1 |
+| N | reset north (a jump) | `command` | follows | 1 (was cycle labels) |
+| Shift+N | reset north (a jump) | `command` | always | 1 |
 | Shift+L | cycle labels: none, codes, names | `command` | follows | 1 (moved from N, convention) |
-| Shift+← / Shift+→ | turn the view to the next 15° multiple left / right (300 ms, about the centre): from 22°, Shift+→ ends at 30°, not 37° (spec: the user said "rotates 15 degrees"; landing on the 15° grid is this document's reading) | `view-arrows` | n/a | 1 (was large nudge or large pan) |
+| Shift+← / Shift+→ | turn the view to the next 15° multiple left / right (a jump about the centre): from 22°, Shift+→ ends at 30°, not 37° (spec: the user said "rotates 15 degrees"; landing on the 15° grid is this document's reading) | `view-arrows` | n/a | 1 (was large nudge or large pan) |
 | Shift+↑ | reset north | `view-arrows` | n/a | 1 (was large nudge or large pan) |
 | Shift+↓ | unbound, reserved for tilt | — | — | 1 (convention) |
 | ← → ↑ ↓ | with a selection, the Select tool armed and site mode: nudge 10 cm along the screen direction (from 1; before: world axes); with a selection in another tool or in overview: nothing (today, every phase); with none: pan 64 px along the screen, in any tool and in overview. Never while a pointer session (drag, band, move, handle drag, pan or rotate) is live: the arrow does nothing (today, `keyboard-port.ts:146`; every phase; fixture H25) | `canvas-focus` | n/a | 1 |
@@ -1834,13 +1782,13 @@ Where the rotation rows live (phase 1): Shift+←/→ and Shift+↑ (`view-arrow
 | macOS Ctrl+arrows | not bound (Mission Control) | — | — | — |
 | Shift+G, Shift+S | grid, snap to grid (Shift+R is unbound: rulers are gone, U33) | `command` | follows | unchanged |
 | [ / ] | a held stamp: turn it −15° / +15°; otherwise send to back / bring to front | `command` | follows, except that a held stamp's turn also works on map focus with the switch off (today, `keyboard-port.ts:198-206`; fixture H24) | unchanged |
-| Delete, Backspace | delete the selection, never while a pointer session (a still drag, twist or rotate included) or a tool draft (`tool-transient`) is live: the key is consumed (pointer session from 1; draft from 2, U33, canopi-f47t.21; Ctrl+X follows the same condition). This one condition on today's denylist is the whole key admission; there is no allowlist of keys that act mid-gesture (U33 replaced U16's). Other keys stay live (U2). Backspace during a polygon draft removes the last corner instead. Delete on a focused or selected corner handle removes that corner (from 2) | `outside-dock` (Backspace in a draft: `canvas-focus`) | n/a | F (was `command`), corner from 2 |
+| Delete, Backspace | delete the selection, never while a pointer session (a still drag, twist or rotate included) or a tool draft (`tool-transient`) is live: the key is consumed (pointer session from 1; draft from 2, U33, canopi-f47t.21; Ctrl+X follows the same condition). This one condition on today's denylist (§1.6 step 10, `runSink`) is the whole key admission; there is no allowlist of keys that act mid-gesture (U33 replaced U16's). A row source, Place plants' waiting point and a held Object stamp pick are tool transients too, so Delete and Ctrl+X do nothing while one is held. Other keys stay live (U2). Backspace during a polygon draft removes the last corner instead. Delete on a focused or selected polygon corner removes that corner, keeping at least 3 (from 2; the `delete-handle` row falls back to `canvas.deleteSelected` through `runSink`) | `outside-dock` (Backspace in a draft: `canvas-focus`) | n/a | F (was `command`), corner from 2 |
 | Enter | Polygon draft: finish (3+ corners). One selected note: edit its text, never while a pointer session (a still twist or rotate included) is live (from 1). Compass focused: reset north | `canvas-focus` | n/a | unchanged; compass 1 |
 | F2 | one selected note with map focus: edit its text; otherwise rename the Design. While a pointer session is live on the map: nothing, and the key is consumed (from 1) | `canvas-focus`, then shell | n/a | unchanged |
 | Space (held) | a left drag pans in every tool | `canvas-focus` | n/a | unchanged |
 | Space (press) on a focused button | activates it (compass: reset north) | the button | n/a | compass 1 |
 | Esc | the Esc chain (§3.7) | chain | n/a | per §3.7 |
-| Menu key, Shift+F10 | canvas menu for the selection (beside its bounds, else mid-map) | `canvas-focus` | n/a | unchanged |
+| Menu key, Shift+F10 | canvas menu for the selection (beside its bounds, else mid-map); the keyboard's only route to the menu (a native `contextmenu` with no pointer press opens nothing, U34) | `canvas-focus` | n/a | unchanged |
 | + / − (no modifier) | zoom in / out one step | `canvas-focus` | n/a: like a held stamp's `[` `]`, they stay on with the switch off because they act only while the map has focus (WCAG 2.1.4 allows a shortcut active only on focus), and the Settings hint and the `settings.rs` doc comment say so from phase 2 | 2 |
 | Ctrl+Plus / Ctrl+Minus | zoom in / out one step | `command` | n/a | step unified in 2 |
 | Shift+F, Ctrl+0, Home | fit the Design at the current bearing | `command` (Home: `canvas-focus`, spec) | Shift+F follows | Home 2 |
@@ -1871,7 +1819,7 @@ Tool letters and where the tools live:
 
 Chords whose character needs Shift (spec): the router matches `+` by the produced key and ignores Shift for it (US QWERTY sends Shift+= as key `+`, shiftKey true), and matches Shift+2 by `code` `Digit2` with Shift on every layout (US QWERTY produces `@`, AZERTY `2`). Fixtures H20–H22.
 
-Moved keys, in one list: N (cycle labels → reset north); Shift+L (new: cycle labels); Shift+arrows (large nudge and pan → turn view and reset north; Shift+↓ unbound); large step (Shift+arrow → mod+arrow, on the canvas, in the PDF page editor and in the inspection lens); Plant a row no-snap (Shift → mod during the drag); Esc on a held stamp pick (leave the tool → drop the pick first; Plant a row already drops its source first today); Pan tool (main rail → View and Tools menus, palette, phone strip). Moved behaviour: Space held at a press on a rotate or vertex handle (the handle drags → the map pans, from 2).
+Moved keys, in one list: N (cycle labels → reset north); Shift+L (new: cycle labels); Shift+arrows (large nudge and pan → turn view and reset north; Shift+↓ unbound); large step (Shift+arrow → mod+arrow, on the canvas, in the PDF page editor and in the inspection lens); Plant a row no-snap (Shift → mod during the drag); Esc on a held Object stamp pick and on Place plants' waiting point (leave the tool → drop it first; Plant a row already drops its source first today); Pan tool (main rail → View and Tools menus, palette, phone strip). Moved behaviour: Space held at a press on a rotate or vertex handle (the handle drags → the map pans, from 2).
 
 ### 3.7 Esc per tool
 
@@ -1883,7 +1831,7 @@ The text entry (note editor, spacing field) is not a layer: its element handler 
 | 80 | canvas context menu | open |
 | 70 | live pointer gesture, including a rotate drag and a compass drag (the compass registers its own layer; both restore the starting camera) and, from 2, a pan (right-, middle- or Space-drag, the Pan tool: the pan ends where it is and the Esc is consumed; spec). | a drag, band, move, handle drag, pan or rotate is live |
 | 65 | nudge series (abort) | arrows moved the selection and the series is not committed |
-| 60 | tool transient | a polygon draft or a Plant a row source (today); from 2 also a held stamp pick |
+| 60 | tool transient | a polygon draft or a Plant a row source (today); from 2 also a held Object stamp pick and Place plants' waiting point. A tool's `escape` only drops its transient and answers `pass` otherwise; the tool layer (50) leaves |
 | 50 | non-Select tool → Select | any tool but Select is armed |
 | 30 | selection → clear | something is selected |
 | 25 | raster inspection → end | inspecting |
@@ -1897,10 +1845,11 @@ The priority table is built in F, the popover layers in the same window as the c
 | Select | clears the selection | — | — |
 | Pan | Select | clears the selection | — |
 | Plant stamp | Select ("Esc to stop placing") | clears | — |
+| Plant stamp, waiting placement (from 2) | drops the waiting point | Select | clears |
 | Plant a row, source chosen | drops the source (today, `plant-spacing-tool.ts:205-211`) | Select | clears |
 | Plant a row, during a drag (from F) | cancels the drag; the source stays | drops the source | Select |
-| Object stamp, pick held | drops the pick (from 2; before: Select at once) | Select | clears |
-| Saved object stamp | drops the saved stamp; the card offers "Choose a saved stamp" (from 2; before: Select) | Select | clears |
+| Object stamp, pick held | drops the pick; the card shows `stampPick` (from 2; before: Select at once) | Select | clears |
+| Saved object stamp | Select at once (today; a one-shot tool, so no first Esc drops the stamp) | clears | — |
 | Polygon, draft | drops the draft | Select | clears |
 | Line, Measure, Rectangle, Ellipse, during the drag | cancels the drag | Select | clears |
 | Text, entry open | cancels the entry | Select | clears |
@@ -1913,14 +1862,14 @@ The priority table is built in F, the popover layers in the same window as the c
 
 | Surface | Rule |
 |---|---|
-| Text entry (note editor, the tool-card spacing field) | Focus class `text`: letters type; single-key shortcuts, Delete, arrows, Shift+arrows, N and Shift+N do not reach the canvas; the rows with `worksInTextFields` (every shell shortcut but a single key, F2 included) still work. Enter commits, Shift+Enter adds a line, Esc cancels. From phase F both are IME-safe in the entry itself: `chrome/text-entry-host.ts` ignores Enter and Esc while `isComposing || keyCode === 229`, because its element listener runs before the key router's guard. Any press on the map outside the entry, primary, middle or right, commits it first (today: `_pointerDownWhenSettled` commits on buttons 0 and 1, then focuses the host; the map taking focus commits an entry that holds focus on its blur, and the host submits one whose blur commit was refused; every phase), so a middle- or right-drag pan or a Shift+right- or Shift+middle-drag turn closes it; a primary press that commits a new note's entry places no note and reaches no tool (today, §3.2). Space held in the entry types a space and arms no pan (fixture G11), so a Space-drag never starts from it; while a new note's entry is open without focus (the frame before it takes focus, or after a refused blur commit), Space reaching the map arms no pan either, as today's Text adapter (§1.4 "Releases"). A wheel over the map keeps the entry open and the entry follows its note; a key turn or reset cannot reach the map from the entry (focus class `text`). A still right-click (a `menu-request`) commits the entry first, then opens the menu. Esc in the entry is the entry's own element handler, which runs before the chain; no canvas pan or turn is live while it is open. Wheel over the entry itself is not handled. The textarea is drawn at `rotationDeg − bearing`. |
+| Text entry (note editor, the tool-card spacing field) | Focus class `text`: letters type; single-key shortcuts, Delete, arrows, Shift+arrows, N and Shift+N do not reach the canvas; the rows with `worksInTextFields` (every shell shortcut but a single key, F2 included) still work. Enter commits, Shift+Enter adds a line, Esc cancels. From phase F both are IME-safe in the entry itself: `chrome/text-entry-host.ts` ignores Enter and Esc while `isComposing || keyCode === 229`, because its element listener runs before the key router's guard. Any press on the map outside the entry, primary, middle or right, commits it first (`rawPress` on every button from 2; the map taking focus commits an entry that holds focus on its blur, and the host submits one whose blur commit was refused), so a middle- or right-drag pan or a Shift+right- or Shift+middle-drag turn closes it; while Text is armed a press that commits the entry places no note and reaches no tool (§3.2). Entering overview commits and closes any open entry (U34). One entry mode (U34): the field is drawn at the note's font size and line height. A right-click inside the entry keeps the native menu (§2.2). Space held in the entry types a space and arms no pan (fixture G11), so a Space-drag never starts from it; while an entry is open without focus (the frame before it takes focus, or after a refused blur commit), Space reaching the map arms no pan either (§1.4 "Releases"). A wheel over the map keeps the entry open and the entry follows its note; a key turn or reset cannot reach the map from the entry (focus class `text`). A still right-click (a `menu-request`) commits the entry first, then opens the menu. Esc in the entry is the entry's own element handler, which runs before the chain; no canvas pan or turn is live while it is open. Wheel over the entry itself is not handled. The textarea is drawn at `rotationDeg − bearing`. |
 | PDF page editor (`components/canvas-pdf/PdfPageEditor.tsx`) | A separate surface with its own pointer handling and its own element key handler (no pushed scope); the canvas input pipeline does not run there. See the table below. |
 | Modal dialogs | Only the modal's element handlers and `worksInModal` rows (§1.6 step 5). |
 | Story presenter | A modal (`StoryPresenter.tsx:36` holds the modal layer) whose own root `onKeyDown` handles its keys (no pushed scope): Space, arrows and Esc navigate the story; no canvas keys (fixture I12). Each step restores its bearing. |
 | Canvas context menu, popovers | Their own arrows; Esc closes one at a time. |
 | Arrow-owning widgets (lists, sliders, tabs, menus) | Plain and Shift+arrows stay with the widget; N, Shift+N and other `command` keys act on the canvas unless the widget claims them with `data-owns-keys`. |
 | Inspection lens preview | Arrow-owning: arrows move the lens along the screen; mod+arrow moves farther (spec, matching the canvas; was Shift); Shift+arrows move by the plain step (from 1). Drag is screen-relative. |
-| World map (template and place picker) | Its own MapLibre map: north-up, left-drag pans, wheel zooms, no rotation, no compass; `boxZoom: false` from 2 (convention). Its keyboard handler keeps arrow pans and +/− zoom but `disableRotation()` stops Shift+arrows turning and tilting it (from F, INV-CAM-46); its container declares `data-owns-keys="arrows"`, so Shift+←/→/↑ never reach the workspace view from it (from 1, fixture H26). |
+| World map (template and place picker) | Its own MapLibre map: north-up, left-drag pans, wheel zooms, no rotation, no compass; `boxZoom: false` from 2 (convention; Shift+drag box-zooms it until then). Its keyboard handler keeps arrow pans and +/− zoom but `disableRotation()` stops Shift+arrows turning and tilting it (from F); its container declares `data-owns-keys="arrows"`, so Shift+←/→/↑ never reach the workspace view from it (from 1, fixture H26). |
 | Inspecting a raster (Desktop LiDAR inspection) | A plain primary press (mouse left, pen tip, and a one-finger tap) anywhere on the map samples the point instead of reaching the tool, after handles and the pan check and before the tool (today, `scene-interaction.ts:609-614`; ToolHost `deps.inspect`, fixture J10). Shift, mod or Alt at the press still samples (today: the probe reads no modifier); the sampled press starts no drag, band or move. Space+drag and a Pan-tool drag pan (the pan check comes first), and a Pan-tool click does not sample (today); from phase 3 (`touch.gestures`) a touch probe runs when the held press resolves to a tap, never on a drag, a long press or a second finger. In overview the probe never runs (today: overview presses pan before 2; from 2 they select, convention). Right, middle and pen-barrel input, the canvas menu, wheel and every rotation input are unchanged; Esc layer 25 ends inspecting. |
 | Compass, zoom group, attribution | A press there never starts a canvas gesture: the zoom group and compass sit beside the host (`foreign`); the attribution inside it is `owned-chrome` through `.maplibregl-ctrl` and no longer starts a band (phase F). |
 
@@ -1953,19 +1902,19 @@ Rotation starts only from deliberate inputs (user): Shift+right-drag (from 2), S
 ### 4.2 Compass
 
 - **Place.** Always visible (at north too): in the zoom group on desktop and in the phone zoom column on the Web edition (from 1). As a button inside that group it inherits the group's layer on the stacking scale and its visible-map-area registration (`useMapOccluder` in `ZoomControls.tsx`); it adds no entry to `global.css` or the seam, and its size comes from the `.button` class `ZoomControls` passes in. Its look is set in `.interface-design/patterns/canvas-navigation.md`: a round button whose needle, an inline SVG coloured from the compass's CSS module (not a `ControlIcon` glyph), points to true north, turned by `−bearingDeg`. Its styling and description follow `northUp`.
-- **Click.** Tweens to north in 300 ms about the centre; at north it does nothing.
-- **Drag.** A primary drag anywhere on the compass face (the hit area is the whole button, though the copy says "ring"; past 3 px of travel for a mouse or pen and 8 px for a finger, the canvas's touch slop; under that it is a click) turns the view about the screen centre by the pointer's angle around the compass centre (`beginRotation('centre')`); the needle follows the pointer, so moving clockwise around the face lowers the bearing by the angle swept (§2.2, rotation sign). Shift steps to absolute 15° multiples while held, re-read on each move; release returns to the raw angle. Release within 7° of north snaps to north in 300 ms. The button takes focus at `pointerdown` (`focus({ preventScroll: true })`); `pointercancel`, `lostpointercapture` and blur cancel the drag. A wheel during the drag composes with it (§3.3). Works with mouse, pen and touch from phase 1 (the compass sets `touch-action: none`). While dragging, the face takes `--color-accent-soft` and a grabbing cursor (pattern).
+- **Click.** Jumps to north about the centre (U34); at north it does nothing.
+- **Drag.** A primary drag anywhere on the compass face (the hit area is the whole button, though the copy says "ring"; past 3 px of travel for a mouse or pen and 8 px for a finger, the canvas's touch slop; under that it is a click) turns the view about the screen centre by the pointer's angle around the compass centre (`beginRotation('centre')`); the needle follows the pointer, so moving clockwise around the face lowers the bearing by the angle swept (§2.2, rotation sign). Shift steps to absolute 15° multiples while held, re-read on each move; release returns to the raw angle. Release within 7° of north snaps to north (a jump). The button takes focus at `pointerdown` (`focus({ preventScroll: true })`); `pointercancel`, `lostpointercapture` and blur cancel the drag. A wheel during the drag composes with it (§3.3). Works with mouse, pen and touch from phase 1 (the compass sets `touch-action: none`). While dragging, the face takes `--color-accent-soft` and a grabbing cursor (pattern).
 - **Keyboard.** A focusable button: Enter or Space resets north; Shift+←/→ turn as anywhere; Esc during a compass drag restores the starting camera: while dragging, `Compass.tsx` registers an Esc layer at priority 70 (`registerEscapeLayer`, active while its `RotationSession` is live) that calls `cancel()`, because the compass drag runs outside the input pipeline and `ToolHost.hasLiveGesture()` cannot see it (fixture I9). An Esc before the drag threshold ends the press, so the release does not reset north.
 - **Words.** Action, label and shortcut come from Keyboard's `reset-north` command: `aria-label` is its label ("Reset north") and `aria-keyshortcuts` its `ariaShortcut`, which already holds N and Shift+N. The bearing text, "View turned {{degrees}}° from north" (Intl number) or "North is up", is a visually hidden span named by `aria-describedby` (not `aria-description`). No `title`: a `ButtonTooltip` shows "Reset north" with N and the hint as its second line (pattern `canvas-navigation.md`).
 
-### 4.3 Reset and the animation
+### 4.3 Reset and turns jump
 
-Reset north comes from N (follows the switch), Shift+N (always), Shift+↑, a compass click, View › Reset north (phones share the View menu) and the palette. Every reset and key step is a 300 ms ease-out cubic tween about the screen centre along the shortest arc; with `prefers-reduced-motion: reduce` it jumps to the target instead (the live `reducedMotion` signal of §1.1, injected from phase 1). A pan or zoom during it composes with it. Repeated key presses compute from `bearingTarget()`, so three Shift+→ presses within 300 ms end at 45°. A running flight is interrupted by any move, which lands at the flight's target bearing.
+Reset north comes from N (follows the switch), Shift+N (always), Shift+↑, a compass click, View › Reset north (phones share the View menu) and the palette. Every turn jumps, with no animation (user, 2026-10-06, U34): resets, key steps, a compass click, "Turn view to this edge" and the ≤7° snap to north are one `rotate-around` move about the screen centre (the snap about the gesture pivot). Three Shift+→ presses end at 45°. A running flight (saved views, stories) is interrupted by any move, which lands at the flight's target bearing.
 
 Turning while something else is live (convention):
 - **During a primary drag in phase 1** (a band, move, draw or handle drag): key turns, resets and a compass click apply, and the draft stays in world space, like a wheel zoom during a drag today; the ToolHost re-emits the drag on the camera frame. The trackpad twist starts no rotation while a primary session is live (one session at a time, §2.2). From phase 2 the same holds for every navigation input (§3.2).
 - **During a live rotate session** (Shift+right- or Shift+middle-drag, a trackpad twist, a compass drag), every phase: key turns, resets and compass clicks are ignored; the session owns the bearing until it ends.
-- **The snap to north after a rotate release** (300 ms) is a tween like a reset: a key turn or reset during it computes from `bearingTarget()`, a pan or zoom composes with it, and it is not an Esc layer (Esc does not restore the pre-release bearing).
+- **The snap to north after a rotate release** is a jump like a reset, and it is not an Esc layer (Esc after it does not restore the pre-release bearing).
 
 Fixtures: "Shift+→ during a left drag keeps the draft's start on the ground" in `tools/tool-host.test.ts`, through the tool harness (phase 1); "Shift+→ during a rotate drag does nothing" and "Esc during the snap to north does not restore the bearing" in `view/navigation.test.ts`.
 
@@ -1973,7 +1922,7 @@ Fixtures: "Shift+→ during a left drag keeps the draft's start on the ground" i
 
 | Rule | Applies to |
 |---|---|
-| Snap to north on release within 7° (`angularDistanceToNorth`), 300 ms tween about the gesture pivot | free gestures: pointer rotate drags, compass drag, touch twist, trackpad twist |
+| Snap to north on release within 7° (`angularDistanceToNorth`), a jump about the gesture pivot | free gestures: pointer rotate drags, compass drag, touch twist, trackpad twist |
 | 15° steps while held, absolute multiples (`roundToStep`), raw angle again when released | mod added during Shift+right-drag or Shift+middle-drag (recorded resolution: Shift is already held); Shift during a compass drag |
 | A Mac Ctrl that made the press a right click never steps | macOS Ctrl+Shift+left-drag; adding Cmd steps |
 | Next 15° multiple in the key's direction (22 → 15 → 0; 0 → 345) | Shift+← and Shift+→ |
@@ -1984,7 +1933,7 @@ Fixtures: "Shift+→ during a left drag keeps the draft's start on the ground" i
 
 - The grid, grid snapping and measurement guides stay on true east and north (world axes) and turn with the map (user). From phase 1 the grid is drawn in `worldRoot` under plants, notes, labels and drafts (convention), on the snap lattice (§1.5).
 - There are no rulers, ruler guides (the lines pulled out of rulers) or Snap to guides (user, 2026-10-05, U33): they go in the phase-2 cut stage with the rulers hint, the Rulers toggle and Shift+R. The scale bar stays.
-- Measurement guides (the Measure tool, PDF field dimensions, overview measurements) are world lines and turn with the map; their labels stay upright. Before it deletes, the cut stage checks that they depend on no ruler-guide code (the `Guide` type of `canvas/guides.ts`, snapping, PDF field dimensions) and moves anything they share into the measurement modules.
+- Measurement guides (the Measure tool, PDF field dimensions, overview measurements) are world lines and turn with the map; their labels stay upright. They depend on no ruler-guide code (checked at phase 2's design check: `getGuideLineVisual` and grid snapping already sit in neutral modules), so the cut stage deletes `canvas/guides.ts` whole.
 
 ### 4.7 Objects created on a rotated map
 
@@ -2010,7 +1959,7 @@ Hits are world-space and unaffected by bearing; pixel tolerances convert through
 ### 4.10 Saved views and stories
 
 - Capture writes `SavedViewCamera.bearing`, normalised locally (P10: rounded to 1e-6, 360 folded to 0), and the ground size of the framing rule below. `SavedView.extent` is deleted (no reader; C6), and recapture does not write it back.
-- User captures (Save view, story restore) record the live frame's camera (`captureView().camera`), including during a key-turn ease, never its `bearingTarget()` (convention, 2026-10-03). PDF open is the exception: it waits for a turn still easing and holds the bearing the turn ends at, so pages are never laid out at an angle the turn only passed through (`app/canvas-pdf/live.ts`, `canvas-pdf-workflow.test.ts`).
+- User captures (Save view, story restore) record the live frame's camera (`captureView().camera`), including mid-flight, never its `bearingTarget()` (convention, 2026-10-03). PDF open is the exception: it holds the bearing a running flight ends at, so pages are never laid out at an angle a flight only passed through (`app/canvas-pdf/live.ts`, `canvas-pdf-workflow.test.ts`).
 - One framing rule (U21 and U23, user 2026-10-03; built in the 2.0 bug fixes, canopi-f47t.17). `SavedViewCamera` gains an optional ground size, `ground_size_m {width, height}`: the visible ground in metres along the view's turned frame, positive, finite, at most 1e8 m, checked on both trust boundaries. It is required (U33): every saved view and `map_view` records it, capture clamps each side to the 1e8 m cap, and a zero-size map saves no view; only development files lacked it, so the format changes in place at version 9 (ADR 0021). Going to a saved view or story step fits that turned rectangle into the whole map at the saved bearing, including what floating panels and the story card cover (U23): `zoom = saved + min(0, log2(min(W·mpp/w, H·mpp/h)))`, with mpp from the stored zoom, and the saved zoom itself within 1e-6. The same window gives back the exact saved camera, a smaller one zooms out just enough that nothing framed is cut off, a larger one shows more and never zooms in past the saved zoom. Thumbnails use the same rule and show the framed area, with no redraw on resize. While presenting, the current step refits with a jump when the settled screen changes (full screen ends, the window resizes).
 - Story restore after presenting stores `captureView().camera` and returns through `showCamera`. Stories restore each step's bearing; restores are explicit targets and never snap.
 - `ViewSnapshotCamera` carries the bearing with its validation. `LastView` carries no bearing (U33).
@@ -2029,11 +1978,11 @@ Hits are world-space and unaffected by bearing; pixel tolerances convert through
 
 ### 4.13 Inspection lens
 
-The lens turns with the view (convention): its local transform is built at the live bearing, so the loupe matches what is under the pointer. Its plant glyphs are drawn in screen space at `lensView.worldToScreen(position)`, unrotated, so they stay upright; names, rings and the cull go through the same transform. The layout splits into `inspectionScale(…)` and `inspectionLayout(plants, lensView, …)`, and `inspection-lens.ts` builds the transform between the two calls. Its drags and arrows are screen-relative (`panByScreen`, §1.1a); mod is the large step.
+The lens turns with the view (convention): its local transform is built at the live bearing, so the loupe matches what is under the pointer. Its plant glyphs are drawn in screen space at `lensView.worldToScreen(position)`, unrotated, so they stay upright; names, rings and the cull go through the same transform. The layout splits into `inspectionScale(…)` and `inspectionLayout(plants, lensView, …)`, and `inspection-lens.ts` builds the transform between the two calls. Its drags and arrows are screen-relative (`panByScreen`, §1.1a); mod is the large step. It does not take focus when it opens (user, 2026-10-06, U34, canopi-f47t.24): while it shows, arrows nudge and Esc clears on the map, and its own keys (Esc closes it) work after a click or Tab into it.
 
 ### 4.14 Scale bar and zoom limits
 
-The scale bar and 1:N ratio read the ground resolution at the screen centre, which does not depend on the bearing at pitch 0. Rotation can raise the zoom floor at world zoom (the rotated viewport must stay inside one world copy); `zoomLimit` reports `min` at the floor for the live bearing, so the zoom-out button disables correctly.
+The scale bar and 1:N ratio read the ground resolution at the screen centre, which does not depend on the bearing at pitch 0. The zoom floor ignores the bearing (user, 2026-10-06, U34): zoom ≥ log2(hypot(w, h) / 512), so the screen diagonal fits in one world copy at any bearing, and the pan hold keeps the centre half the screen diagonal inside ±85.05° and ±180°. The world view therefore stops 0.14–0.5 zoom levels sooner than a north-up floor, cannot pan at the floor, and panning stops 43–749 px short at ±85° and ±180°; a turn never changes the zoom. `zoomLimit` reports `min` at the floor, so the zoom-out button disables correctly.
 
 ### 4.15 Opening a Design and the last view
 
@@ -2041,7 +1990,7 @@ Every open (the first load, a replace, the first generation) goes through `docum
 
 ### 4.16 Turn view to this edge
 
-A canvas-menu entry when the menu request's point lies within the edge tolerance of a polygon, rectangle or line zone's edge (convention; ADR 0015's "a zone edge"), locked zones included, since it only moves the view. In the empty-map menu it is its own first group; in the selection menu it sits before Lock. The edge is not highlighted while the entry is (user, 2026-10-01: no `highlightEdge` hook). Native sources (a mouse right-click, from 2 a Mac Ctrl+click, a pen-barrel tap) use 8 px; phase 3 adds the 22 px touch radius with its long press. The keyboard menu (the Menu key and Shift+F10) has no point, so it never offers it: the entry is pointer-only, a named exception to the keyboard-path rule of `system.md` (the keyboard turns the view with Shift+←/→). Ellipse zones have no edges and never offer it. It turns the view by the smaller angle that makes the edge horizontal on screen, as a 300 ms tween about the centre, never snapped. The bearing is saved with any saved view captured afterwards.
+A canvas-menu entry when the menu request's point lies within the edge tolerance of a polygon, rectangle or line zone's edge (convention; ADR 0015's "a zone edge"), locked zones included, since it only moves the view. In the empty-map menu it is its own first group; in the selection menu it sits before Lock. The edge is not highlighted while the entry is (user, 2026-10-01: no `highlightEdge` hook). Native sources (a mouse right-click, from 2 a Mac Ctrl+click, a pen-barrel tap) use 8 px; phase 3 adds the 22 px touch radius with its long press. The keyboard menu (the Menu key and Shift+F10) has no point, so it never offers it: the entry is pointer-only, a named exception to the keyboard-path rule of `system.md` (the keyboard turns the view with Shift+←/→). Ellipse zones have no edges and never offer it. It turns the view by the smaller angle that makes the edge horizontal on screen, as a jump about the centre (U34), never snapped. The bearing is saved with any saved view captured afterwards.
 
 ### 4.17 World map
 
@@ -2055,7 +2004,7 @@ North-up, no rotation, no compass; left-drag pans (a navigation-only picker); Sh
 
 ### 4.19 Re-origin
 
-The session plane stays north-aligned whatever the bearing. Re-origin runs on the settled frame when the ground under the screen centre is more than 10 km from the origin; the camera keeps its ground (the MapLibre driver's camera is geographic, and the headless driver applies the plane change to its `PlanarCamera` in plane terms, as today's reprojection does), so the map does not move. Drafts, gesture starts, handles and the temporary-focus bookmark survive it.
+The session plane stays north-aligned whatever the bearing. Re-origin runs on the settled frame when the ground under the screen centre is more than 10 km from the origin; the camera keeps its ground (the MapLibre driver's camera is geographic, and the headless driver applies the plane change to its `PlanarCamera` in plane terms, as today's reprojection does), so the map does not move. The temporary-focus bookmark and handles survive it. From phase 2 (P8) re-origin waits while the tool host holds it (`holdsReorigin()`: a live press, a tool transient such as a draft, a row source, a stamp pick or Place plants' waiting point, or an open text entry), checked in `observe()` and again in `reoriginAt()`; when the hold clears it re-runs `observe` on the last frame, so a long pan during a hold is not left at the old origin. A plane change hides tool ghosts until the next hover; no tool re-projects anything (`syncPlane`, `CanvasTool.planeChanged` and the tools' hooks go). Accepted (named at handoff): while a row source, a stamp pick or a waiting placement is held, the plane's metre scale drifts by tan(lat)·Δnorth/6371 km (0.16 % at 10 km and 45°, 0.8 % at 50 km, 7.8 % at 500 km; nothing east-west), and grid-snapped points, row spacing, typed rectangle sizes and stamp offsets made then keep it.
 
 ## 5. Synthetic event-sequence tests
 
@@ -2067,14 +2016,14 @@ A property test (`input/recognise.property.test.ts`) covers any interleaving of 
 
 | Id | Platform | Sequence | Expect (V2) | Expect (LEGACY) |
 |---|---|---|---|---|
-| A1 Windows right-click | windows/chromium | down(2) → up(2) within 1 px → contextmenu +66 ms | one `menu-request(release point, mouse)` on up; contextmenu prevented, emits nothing | contextmenu opens the menu |
-| A2 Windows right-drag | windows/chromium | down(2) → moves `buttons 2` to (+100, +80) → up → contextmenu | `pan` deltas summing to (100, 80), the first including the sub-slop offset; trailing contextmenu prevented; no menu | no pan; menu on the trailing contextmenu |
+| A1 Windows right-click | windows/chromium | down(2) → up(2) within 1 px → contextmenu +66 ms | one `menu-request(release point, mouse)` on up; the contextmenu is prevented by the source's listener and never reaches the recogniser | contextmenu opens the menu |
+| A2 Windows right-drag | windows/chromium | down(2) → moves `buttons 2` to (+100, +80) → up → contextmenu | `pan` deltas summing to (100, 80), the first including the sub-slop offset; the trailing contextmenu prevented (within 500 ms of the secondary release); no menu | no pan; menu on the trailing contextmenu |
 | A3 Linux right-click | linux/webkitgtk and chromium | down(2) → contextmenu → up(2) | contextmenu prevented; one menu on up | menu at the contextmenu |
 | A4 Linux or macOS right-drag | linux, mac | down(2) → contextmenu → moves → up | pan; no menu | menu at press; no pan |
 | A5 Right press, pointerup lost | linux | down(2) → contextmenu → move `buttons 0` | session ends silently; no pan from that move; no menu; next down starts fresh | — |
 | A6 WKWebView capture then nothing | mac/webkit | down(2) → contextmenu → lost capture | `cancel('lost-capture')`; no menu; nothing stuck | — |
 | A7 Right-drag then pointercancel | any | down(2) → moves → pointercancel | `cancel('pointercancel')`; the camera keeps the panned position; no menu | — |
-| A8 Windows retargeted late contextmenu | windows/chromium | down(2) → up(2) → contextmenu on `<html>` or the open menu | one menu; the retargeted contextmenu is prevented by the document guard | — |
+| A8 Windows retargeted late contextmenu | windows/chromium | down(2) → up(2) → contextmenu on `<html>` or the open menu | a `dom-input-source.test.ts` case (only the source sees it): one menu; the retargeted contextmenu is prevented by the listener's 500 ms rule | — |
 | A9 Right-drag in every tool | each of the 12 tools, polygon with 2 corners | A2 | `pan` only; the tool receives no press or drag; the polygon keeps its corners | — |
 | A10 Left pressed during a right-drag | any | down(2) → moves → move `buttons 3` → move `buttons 2` → up(2) | pan continues; no press reaches the tool; no selection change | — |
 | A11 Right pressed during a left drag | any | down(0) → moves `buttons 1` → move `buttons 3` → (linux) contextmenu → moves → move `buttons 1` → up(0) | ignored (U2): no pan; the band continues and commits; contextmenu prevented; no menu | no pan; the band continues and commits; the native contextmenu opens the menu unless a Scene Edit is live (today) |
@@ -2082,14 +2031,14 @@ A property test (`input/recognise.property.test.ts`) covers any interleaving of 
 | A14 Esc during a right rotate (spec) | any | A13 without mod → `escape` | `rotate{cancel}`; no menu | — |
 | A15 Right-click in the note editor (spec) | linux, windows | down(2) on the text-entry host (`owned-text`) → contextmenu → up(2) | contextmenu not prevented (native text menu); no `menu-request`; no session | same |
 | A16 Right-click on a dock input (spec) | any | down(2) on a panel field (`foreign`) → contextmenu → up(2) | nothing emitted; contextmenu not prevented | same |
-| A17 Esc during a right-drag pan (spec) | any | A2 until mid-drag → `escape` → more moves → up(2) | `pan{end}` at the escape; later moves emit nothing; no menu on up | — |
+| A17 Esc during a right-drag pan (spec) | any | A2 until mid-drag → `escape` → more moves → up(2) | `pan{end}` at the escape; no pan after the Esc (hovers only); no menu on up | — |
 | A18 Shift after the press (spec) | any | down(2) → key-state Shift → moves past 3 px → up(2) | `pan`, not `rotate` (Shift at the press decides) | no pan |
 
 ### 5.2 macOS Ctrl+click
 
 | Id | Platform | Sequence | Expect (V2) | Expect (LEGACY) |
 |---|---|---|---|---|
-| B1 macOS Ctrl+click | mac/webkit, chromium, gecko | down(0, ctrl) → contextmenu → up(0, ctrl) → (Safari, Firefox) click | `menu-request(at, ctrl-click)` on up; no selection toggle; click ignored | additive toggle and the native menu |
+| B1 macOS Ctrl+click | mac/webkit, chromium, gecko | down(0, ctrl) → contextmenu → up(0, ctrl) → (Safari, Firefox) click | `menu-request(at, mouse)` on up; no selection toggle; click ignored | additive toggle and the native menu |
 | B2 macOS Ctrl+drag | mac | down(0, ctrl) → contextmenu → moves → up | `pan`; no band; no menu | band with additive toggle; menu |
 | B3 Ctrl+click on Windows and Linux | windows, linux | B1 without contextmenu | `tap` with ctrl → additive toggle; no menu | same |
 | B4 macOS two-finger trackpad click | mac | down(2) → contextmenu → up(2) | as A3 | as A3 legacy |
@@ -2100,19 +2049,21 @@ B5 is not used.
 
 ### 5.3 Keyboard menu
 
+The keyboard menu comes only from the keymap row (phase 2, U34): a native `contextmenu` never opens a menu, so no echo is recorded.
+
 | Id | Sequence | Expect |
 |---|---|---|
-| C1 Menu key on Windows | focus map; keydown ContextMenu → keyup → contextmenu within 500 ms | one `menu-request('selection', keyboard)` on keydown; contextmenu prevented |
+| C1 Menu key on Windows | focus map; keydown ContextMenu → keyup → contextmenu on the map host | one `menu-request('selection', keyboard)` on keydown; the contextmenu is prevented and opens nothing |
 | C2 Shift+F10, both orders | keydown F10+Shift → contextmenu before or after keyup | one menu request |
 | C3 Menu key held | keydown, 3 repeats, keyup, contextmenu | one menu request |
 | C4 Menu key in the text entry | focus text | no request; native text menu allowed |
-| C5 Late echo | keydown at 0, contextmenu at 600 ms | V2: a keyboard-sourced contextmenu while a keyboard menu is open is ignored; LEGACY: today's behaviour pinned |
+| C5 Native menu with no press | contextmenu on the map host with no pointer press (a pen press-and-hold, VO+Shift+M) | prevented; no menu (U34) |
 
 ### 5.4 Pen
 
 | Id | Sequence | Expect (V2) | Expect (LEGACY) |
 |---|---|---|---|
-| D1 Pen barrel tap | pen down(2) → up(2) → contextmenu | one `menu-request(at, pen-barrel)`; contextmenu prevented | nothing from the barrel; native menu today |
+| D1 Pen barrel tap | pen down(2) → up(2) → contextmenu | one `menu-request(at, mouse)` on up; contextmenu prevented | nothing from the barrel; native menu today |
 | D2 Pen barrel drag | pen down(2) → moves → up | `pan` | nothing |
 | D3 Pen tip draw | pen down(0) → moves (coalesced samples) → up | primary drag; samples fall back to the event | same |
 | D4 Eraser | pen down(5, buttons 32) → up | nothing | nothing |
@@ -2143,10 +2094,10 @@ B5 is not used.
 
 | Id | Sequence | Expect |
 |---|---|---|
-| F1 Windows wheel notch, Mouse | wheel dy 100 | `zoom(pointer, exp(−0.2))`; from phase 2 one zoom step |
+| F1 Windows wheel notch, Mouse | wheel dy 100 | `zoom(pointer, exp(−0.2))`, ×1.22 as today, `source: 'wheel'` (no notch detection, P14) |
 | F2 Same, Trackpad | wheel dy 100 | `pan(0, −100)` |
 | F3 Firefox line mode | wheel deltaMode 1, dy 3 | dy normalised to 48 px; guard test that `deltaMode` is read first |
-| F4 Chromium pinch (synthetic Ctrl) | wheel ctrl, dy −2.3, no Control keydown | `zoom(factor > 1)` in both settings; no Ctrl recorded as held; default prevented |
+| F4 Chromium pinch (synthetic Ctrl) | wheel ctrl, dy −2.3, no Control keydown | `zoom(factor > 1)`, `source: 'wheel'`, in both settings: the same path as F5; default prevented |
 | F5 Real Ctrl + wheel | keydown Control → wheel ctrl dy 100 → keyup | zoom, same path, clamped |
 | F6 Trackpad scroll, Trackpad | wheel dx 3.5, dy −7.25 | `pan(−3.5, 7.25)` |
 | F7 Trackpad scroll, Mouse | same | zoom on dy; dx ignored (today) |
@@ -2155,7 +2106,7 @@ B5 is not used.
 | F10 Shift + wheel, Mouse | Mouse: wheel shift, dx 0, dy 100 | `pan(0, −100)` (LEGACY pins it: today's Mouse Shift+wheel pans as delivered, no swap) |
 | F10b Shift + wheel delivered as dx | Mouse: wheel shift, dx 100, dy 0 (Chromium, and WebKitGTK if the live check shows dx) | `pan(−100, 0)` |
 | F11 WKWebView pinch and rotate | gesturestart → change(1.2, 5°) → change(1.5, 12°) → end | no `zoom` from the scale; `rotate` starts only past 10° (total 2° at 12°) |
-| F12 WKWebView pinch with Ctrl wheels | gesturestart → wheel ctrl → change(1.1) → wheel ctrl → end | each Ctrl wheel zooms; the gesture's scale is ignored (phase-1 drop of gesture-scale zoom) |
+| F12 WKWebView pinch with Ctrl wheels | gesturestart → wheel ctrl → change(1.1) → wheel ctrl → end | each Ctrl wheel zooms, `source: 'wheel'`; the gesture's scale is never read (p1-7) |
 | F13 WebKitGTK pinch | no DOM events | none possible; a manual release check records the documented absence |
 | F14 Momentum tail | 20 small wheels at 16 ms, a pointerdown during the tail | wheels stay standalone; the press starts a fresh session |
 | F15 Wheel over owned text | wheel on the text-entry host | not prevented; no output |
@@ -2236,7 +2187,7 @@ These run in `app/keyboard/*.test.ts` with `KeyboardEventLike` literals.
 |---|---|---|
 | J1 Left-drag never pans | select: drag; hand: drag | band; `press`, `pan`, then `cancel('navigate')` after the `pan{end}` (J1_HAND: every press the host sees ends) |
 | J2 Shift+drag is not box zoom | down(0, Shift) → drag | additive band; never zoom |
-| J3 Legacy overview | LEGACY, overview: drag; still right-click | `pan`; contextmenu prevented, no menu |
+| J3 Overview right-click | overview: still right-click | contextmenu prevented, no menu (the overview left drag is G7) |
 | J9 Space with the Pan tool | hand armed, Space held, drag | `space-drag` pan (same result) |
 | J10 Inspection probe order (the host rows in `tools/tool-host.test.ts` with harness tools, the pan rows in `input/recognise.test.ts`) | LEGACY, an inspection claiming presses: down(0) on a rotate handle; Space held, down(0) → drag; Polygon armed, down(0, Shift) on empty ground; overview, down(0); Pan armed, down(0) → up | the handle drags; `pan`; the probe claims the press and Polygon adds no corner; `pan`, no probe; no probe (today's order: handles, pan, probe, tool; a pan never reaches the host) |
 
@@ -2273,7 +2224,7 @@ When pitch ships (this paragraph is the recipe; the main agent notes it on canop
 
 | Store | Change |
 |---|---|
-| `.canopi` | version stays 9. `SavedViewCamera.bearing` is now written (normalised); `SavedViewCamera.ground_size_m` added, required (U33), and `SavedView.extent` deleted (§4.10); optional top-level `map_view` added (U28, §4.15; ADR 0021, "Additive `.canopi` changes"); ruler guides (`extra.guides`) no longer read or written (U33). Notes, rectangles and ellipses created rotated store the bearing in their existing `rotationDeg`. |
+| `.canopi` | version stays 9. `SavedViewCamera.bearing` is now written (normalised); `SavedViewCamera.ground_size_m` added, required (U33), and `SavedView.extent` deleted (§4.10); optional top-level `map_view` added (U28, §4.15; ADR 0021, "Additive `.canopi` changes"); ruler guides (`extra.guides`) no longer read or written by the scene, a key left in a development file staying as unknown extra (U33, ADR 0011). Positions are written rounded to the 1e-9° grid, latitude clamped to ±85.051128779 (the largest grid value inside Web Mercator's limit): an unedited position on the grid is written unchanged after open, chained re-origins and save, one with more decimals is rounded once (phase 2, P26; the geo ledger goes). A plant without a saved width is no longer given the catalog's width on open and save (P3).  Notes, rectangles and ellipses created rotated store the bearing in their existing `rotationDeg`. |
 | Settings | `LastView.bearing` (phase 1) and `snap_to_guides` deleted (U33); older settings still load, since settings have no `deny_unknown_fields`. `scroll_wheel` values unchanged. |
 | PDF | `PdfSetup.mapOrientation?` (default North up), in memory only; one layout angle, the view's bearing read at each capture (`PdfInput.viewBearingDeg`), also in memory; Print Areas and offsets in plan metres, independent of the frame. `PdfPrintArea.rotationDeg` is dropped (user, 2026-10-01): no stored format replaces it, since PDF setups are not saved (plan §8). |
 | User DB, LiDAR catalogue, plant catalog | none |
@@ -2286,15 +2237,16 @@ Every new or changed key exists in all 11 locales (`desktop/web/src/i18n/*.json`
 
 | Key | English | Where |
 |---|---|---|
-| `settings.singleKeyShortcutsHint` | Tool keys such as V, P and Z, N to reset north, brackets and Shift G, S, R, L. Shift N always resets north. Off keeps {{mod}} shortcuts, Delete, Esc, arrows, F keys, and + and − on the map. | Settings › Keyboard (changed from its phase-1 text); the `settings.rs` doc comment adds "and + and − while the map has focus" in the same commit |
+| `settings.singleKeyShortcutsHint` | Tool keys such as V, P and Z, N to reset north, brackets and Shift G, S, L, 2. Shift N always resets north. Off keeps {{mod}} shortcuts, Delete, Esc, arrows, F keys, and + and − on the map. | Settings › Keyboard (changed from its phase-1 text); the `settings.rs` doc comment adds "and + and − while the map has focus" in the same commit |
 | `settings.pointingDevice` | Pointing device | Settings › Canvas (replaces `settings.scrollWheel`) |
 | `settings.pointingDeviceMouse` | Mouse: the wheel zooms | option, stored `zoom` (replaces `settings.scrollWheelZoom`) |
 | `settings.pointingDeviceTrackpad` | Trackpad: two fingers pan | option, stored `pan` (replaces `settings.scrollWheelPan`) |
 | `settings.pointingDeviceHint` | Pinch and Ctrl + wheel always zoom. Shift + wheel pans. | hint (replaces `settings.scrollWheelHint`) |
 | `canvas.contextMenu.finishShape` | Finish shape | canvas menu during a polygon draft |
+| `canvas.zoneEdgeMidpoint.label` | Add a corner on edge {{index}} | aria-label of a polygon's edge midpoint dot |
 | `menu` → `view.zoomToSelection` | Zoom to selection | View menu (Shift+2) |
 | `shortcutKeys.home` | Home | the Home key's name in menus, F1 and tooltips (`formatShortcut`, INV-KEY-25) |
-| `canvas.toolCard.escClearStamp` | Esc to clear the stamp | tool card while a pick or saved stamp is held |
+| `canvas.toolCard.escClearStamp` | Esc to clear the stamp | tool card while an Object stamp pick is held (kept only if that card uses it; the saved stamp's Esc leaves at once) |
 | `canvas.toolCard.escClearRow` | Esc to clear the row | tool card while a row source is held |
 | `canvas.toolCard.panHint` | Drag to move the map | Pan tool card, shown because Pan is off the rail (pattern) |
 | `canvas.toolCard.rectangleKeys` | Shift draws a square | Rectangle tool card (spec) |

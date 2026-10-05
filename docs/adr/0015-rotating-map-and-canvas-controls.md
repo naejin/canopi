@@ -1,6 +1,6 @@
 # Rotating map and canvas controls
 
-Status: Accepted (2026-09-29, Canopi v2); amended 2026-10-01, 2026-10-03 (phase-1 design check: stamp starts, line zones, Print Areas), 2026-10-04 (reopening restores the saved view, U28) and 2026-10-05 (U33: rulers removed; no last-bearing fallback)
+Status: Accepted (2026-09-29, Canopi v2); amended 2026-10-01, 2026-10-03 (phase-1 design check: stamp starts, line zones, Print Areas), 2026-10-04 (reopening restores the saved view, U28), 2026-10-05 (U33: rulers removed; no last-bearing fallback) and 2026-10-06 (U34: turns jump; a native menu with no pointer press opens nothing)
 
 Amends [ADR 0010](0010-map-first-interface.md) (single-key shortcut scope, compass in the zoom group) and [ADR 0001](0001-geolocated-map-canvas.md), [0004](0004-one-renderer.md), [0008](0008-canvas-pdf-export.md) and [0011](0011-analyses-provenance-and-stories.md) where they assumed north-up or a tool that switches navigation off. The architecture that carries these rules is in ADRs [0016](0016-one-view-transform.md) to [0020](0020-focus-and-keyboard-ownership.md).
 
@@ -13,7 +13,7 @@ The canvas was north-up and left-drag panned in some modes but selected in other
 **Rotation (user).**
 - The map rotates (bearing). Editing stays top-down; pitch, 3D and globe are not built now but the camera keeps a pitch slot. There is no setting to turn rotation off.
 - Rotation starts only from deliberate gestures: Shift+right-drag and Shift+middle-drag about the pointer, dragging the compass ring, two-finger twist past a threshold, the macOS trackpad rotate gesture past 10°, Shift+←/→ (15° steps). No Alt+wheel.
-- Reset north: compass click, N (follows the single-key switch), Shift+N (always on) and Shift+↑. Keys and compass animate about 300 ms.
+- Reset north: compass click, N (follows the single-key switch), Shift+N (always on) and Shift+↑. Every turn jumps, with no animation: keys, the compass, "Turn view to this edge" and the snap to north (user, 2026-10-06, U34, replacing "keys and compass animate about 300 ms").
 - Free gestures snap to north on release within 7°. While dragging, 15° absolute steps come from Ctrl (Cmd on Mac) added during a Shift+drag, and from Shift on the compass ring (recorded resolution: Shift is already held for the drag). Explicit targets (saved views, stories, "Turn view to this edge", a Design's saved view) are never snapped.
 - Grid, grid snapping and measurement guides stay on true east/north and turn with the map. There are no rulers, ruler guides or Snap to guides (user, 2026-10-05, U33, replacing "rulers only when north is up, else a hint"): their north-up-only rule, the hint and its pill, the ruler drag through the input pipeline and the guide store cost more than the few uses they had; the scale bar and measurement guides stay.
 - Zones and notes are map objects and turn with the map; a Print Area takes the PDF layout's one angle and stays level on its page (2026-10-03). Rectangles, ellipses and notes drawn on a rotated map are level with the screen and store the bearing as their rotation; polygons, lines and rows store their corners. Plant names, readouts, badges, handles and other labels stay upright.
@@ -23,7 +23,7 @@ The canvas was north-up and left-drag panned in some modes but selected in other
 
 **Controls (user).**
 - Left click and left drag always select or draw; left-drag never pans (the Pan tool excepted) and Shift+drag is never box zoom. Overview left-drag becomes band select.
-- Right-drag pans in every tool, as do middle-drag and Space+drag; a still right-click opens the canvas menu on release (release on every OS: convention). Wheel zoom and keys stay live during a drawing drag; a right or middle press during it is ignored (user, 2026-10-01).
+- Right-drag pans in every tool, as do middle-drag and Space+drag; a still right-click opens the canvas menu on release (release on every OS: convention). A native context menu with no right, pen-barrel or Mac Control press opens nothing; the Menu key and Shift+F10 reach the selection menu (user, 2026-10-06, U34). Wheel zoom and keys stay live during a drawing drag; a right or middle press during it is ignored (user, 2026-10-01).
 - The Pan tool (H) stays for barrel-less pens and one-finger users, off the main rail: View and Tools menus, palette, phone strip.
 - A "Pointing device: Mouse / Trackpad" setting reuses the stored `scroll_wheel` field. Linux trackpad pinch is unsupported for now (Ctrl+scroll zooms).
 - Single-key shortcuts work anywhere except text fields and modals, and stay switchable off. Esc belongs to the active tool first.
