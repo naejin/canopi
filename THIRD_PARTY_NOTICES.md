@@ -21,6 +21,16 @@ MIT License text:
 >
 > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+## EPSG Geodetic Parameter Dataset
+
+- Source: the EPSG Geodetic Parameter Dataset, as published in PROJ 9.4.0's `proj.db` (https://epsg.org)
+- Owner and terms: the International Association of Oil & Gas Producers (IOGP), used under its terms of use (https://epsg.org/terms-of-use.html)
+
+| Canopi file | EPSG data | Use |
+|---|---|---|
+| `desktop/src/services/lidar/rust_engine/crs_table.rs` | Names, PROJ definitions with their Helmert shift to WGS84, and areas of use of the supported codes | The raster engine's coordinate reference systems (adapted: the Paris meridian folded into the central meridian, the scale factor as `+k`) |
+| `desktop/src/services/lidar/rust_engine/crs_reference_points.rs` | Coordinates computed by PROJ's `cs2cs` from the same definitions | Reference points for the CRS tests |
+
 ## Map data shown at runtime
 
 - OpenFreeMap vector tiles and styles: "OpenFreeMap © OpenMapTiles Data from OpenStreetMap" (shown on the map).
