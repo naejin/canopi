@@ -1,13 +1,14 @@
 //! The GDAL command-line oracle of the engine comparison lane (test only).
 //!
 //! Canopi ships no GDAL and never runs it in production (ADR 0014). This
-//! adapter implements the raster engine seam on `gdalinfo`, `gdal_translate`
-//! and `gdaltransform` found on `PATH`, through the bounded child-process
+//! adapter implements the raster engine seam on `gdalinfo`, `gdal_translate`,
+//! `gdalwarp` and `gdaltransform` found on `PATH`, through the bounded child-process
 //! runner in `process.rs`, so `rust_engine::comparison` can hold the Rust
 //! engine to GDAL's answers on the same inputs. Without GDAL the lane skips.
 
 use super::engine::{
-    RasterEngine, RasterGeoref, RasterInput, RasterProbe, RasterStatistics, bounds_of,
+    DISPLAY_NODATA, RasterEngine, RasterGeoref, RasterInput, RasterProbe, RasterStatistics,
+    bounds_of,
 };
 #[cfg(test)]
 use super::grid::RasterGrid;
@@ -43,6 +44,7 @@ impl std::fmt::Debug for ArcDiscovery {
 pub struct DiscoveredTools {
     pub gdalinfo: PathBuf,
     pub gdal_translate: PathBuf,
+    pub gdalwarp: PathBuf,
     pub gdaltransform: PathBuf,
     pub version: String,
 }
@@ -51,6 +53,7 @@ pub struct DiscoveredTools {
 pub enum GdalProgram {
     Info,
     Translate,
+    Warp,
     Transform,
 }
 
@@ -89,6 +92,7 @@ impl GdalEngine {
         let mut tools = DiscoveredTools {
             gdalinfo: gdalinfo.clone(),
             gdal_translate: find("gdal_translate")?,
+            gdalwarp: find("gdalwarp")?,
             gdaltransform: find("gdaltransform")?,
             version: String::new(),
         };
@@ -111,6 +115,7 @@ impl GdalEngine {
         Ok(match program {
             GdalProgram::Info => tools.gdalinfo,
             GdalProgram::Translate => tools.gdal_translate,
+            GdalProgram::Warp => tools.gdalwarp,
             GdalProgram::Transform => tools.gdaltransform,
         })
     }
@@ -247,7 +252,9 @@ fn write_f32_raw(path: &Path, values: &[f32]) -> Result<(), String> {
 fn process_timeout(program: &GdalProgram) -> Duration {
     match program {
         GdalProgram::Info => INFO_PROCESS_TIMEOUT,
-        GdalProgram::Translate | GdalProgram::Transform => DEFAULT_PROCESS_TIMEOUT,
+        GdalProgram::Translate | GdalProgram::Warp | GdalProgram::Transform => {
+            DEFAULT_PROCESS_TIMEOUT
+        }
     }
 }
 
@@ -324,14 +331,64 @@ pub(super) fn controlled_cog_arguments(
     args
 }
 
-/// Fixed arguments of the display profile: Float32, 256-pixel Deflate blocks,
-/// averaged overviews, no statistics, no auxiliary metadata.
-pub(super) fn display_cog_arguments(
+/// The oracle's display warp (A6): `gdalwarp` onto the Rust engine's lattice
+/// grid by nearest neighbour, with an exact transform (`-et 0`) and the
+/// row's own `definition`, so both warps use the same Helmert shift and can
+/// be compared pixel by pixel. The result is a plain GeoTIFF that
+/// [`display_cog_arguments`] turns into the profile: written straight to a
+/// COG, gdalwarp would warp each overview from the source instead of
+/// averaging the level above it.
+pub(super) fn display_warp_arguments(
     input: &Path,
     output: &Path,
-    georef: Option<RasterGeoref<'_>>,
-    nodata: Option<f32>,
+    definition: &str,
+    lattice: &RasterGrid,
+    source_nodata: Option<f32>,
+    nodata: f32,
 ) -> Vec<String> {
+    let [min_x, min_y, max_x, max_y] = lattice.bounds();
+    let mut args: Vec<String> = [
+        "-q",
+        "-overwrite",
+        "-s_srs",
+        definition,
+        "-t_srs",
+        "EPSG:3857",
+        "-r",
+        "near",
+        "-et",
+        "0",
+        "-ot",
+        "Float32",
+        "-of",
+        "GTiff",
+        "--config",
+        "GDAL_PAM_ENABLED",
+        "NO",
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .collect();
+    args.push("-te".to_string());
+    args.extend([min_x, min_y, max_x, max_y].map(|value| format!("{value:?}")));
+    args.push("-ts".to_string());
+    args.push(lattice.width.to_string());
+    args.push(lattice.height.to_string());
+    if let Some(source_nodata) = source_nodata {
+        args.push("-srcnodata".to_string());
+        args.push(nodata_argument(source_nodata));
+    }
+    args.push("-dstnodata".to_string());
+    args.push(nodata_argument(nodata));
+    args.push(input.display().to_string());
+    args.push(output.display().to_string());
+    args
+}
+
+/// Fixed arguments of the display profile over a warped GeoTIFF: Float32,
+/// 256-pixel Deflate blocks, averaged overviews, no statistics, no auxiliary
+/// metadata.
+pub(super) fn display_cog_arguments(input: &Path, output: &Path) -> Vec<String> {
     let mut args: Vec<String> = [
         "-q",
         "-of",
@@ -359,13 +416,6 @@ pub(super) fn display_cog_arguments(
     .into_iter()
     .map(str::to_string)
     .collect();
-    if let Some(nodata) = nodata {
-        args.push("-a_nodata".to_string());
-        args.push(nodata_argument(nodata));
-    }
-    if let Some(georef) = georef {
-        args.extend(georef_arguments(georef));
-    }
     args.push(input.display().to_string());
     args.push(output.display().to_string());
     args
@@ -540,9 +590,60 @@ impl RasterEngine for GdalEngine {
             return Err("samples need a georeference to become a raster".to_string());
         }
         let staged = Self::stage_input(input, output)?;
-        let args = display_cog_arguments(&staged.path, output, georef, nodata);
-        self.run(GdalProgram::Translate, &args, Some(cancel))
-            .map(|_| ())
+        // The input's placement as the Rust engine reads it: the oracle checks
+        // the warp, not the key reading the authority's own tests cover.
+        let (grid, crs, file_nodata) = match georef {
+            Some(georef) => (georef.grid.clone(), georef.crs.to_string(), None),
+            None => {
+                let probe = super::rust_engine::RustRasterEngine.probe(&staged.path, cancel)?;
+                let grid = RasterGrid {
+                    width: probe.width,
+                    height: probe.height,
+                    geotransform: probe.geotransform,
+                };
+                (grid, probe.crs_ref, probe.nodata)
+            }
+        };
+        let (lattice, definition) = super::rust_engine::display_lattice(&grid, &crs)?;
+        // Samples and an overridden placement are written as a placed GeoTIFF
+        // first; gdalwarp reads the placement from its input.
+        let placed = output.with_extension("placed.tif");
+        let source = match georef {
+            Some(georef) => {
+                let mut args: Vec<String> = ["-q", "-ot", "Float32"]
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect();
+                args.extend(georef_arguments(georef));
+                args.push(staged.path.display().to_string());
+                args.push(placed.display().to_string());
+                self.run(GdalProgram::Translate, &args, Some(cancel))?;
+                placed.clone()
+            }
+            None => staged.path.clone(),
+        };
+        let warped = output.with_extension("warped.tif");
+        let args = display_warp_arguments(
+            &source,
+            &warped,
+            definition,
+            &lattice,
+            nodata,
+            nodata.or(file_nodata).unwrap_or(DISPLAY_NODATA),
+        );
+        let written = self
+            .run(GdalProgram::Warp, &args, Some(cancel))
+            .and_then(|_| {
+                self.run(
+                    GdalProgram::Translate,
+                    &display_cog_arguments(&warped, output),
+                    Some(cancel),
+                )
+            })
+            .map(|_| ());
+        let _ = std::fs::remove_file(&placed);
+        let _ = std::fs::remove_file(&warped);
+        written
     }
 
     fn transform_points(
@@ -791,6 +892,61 @@ mod tests {
         );
         assert!(args.contains(&"COMPRESS=NONE".to_string()));
         assert!(args.contains(&"OVERVIEWS=NONE".to_string()));
+    }
+
+    /// A6: the oracle warps onto the lattice the Rust engine places the
+    /// input on, by nearest neighbour with an exact transform and the row's
+    /// own Helmert shift, then writes the display profile from that.
+    #[test]
+    fn the_display_oracle_warps_onto_the_lattice_by_nearest_neighbour() {
+        let grid = RasterGrid {
+            width: 120,
+            height: 80,
+            geotransform: [85_000.0, 0.5, 0.0, 447_500.0, 0.0, -0.5],
+        };
+        let (lattice, definition) =
+            super::super::rust_engine::display_lattice(&grid, "EPSG:28992").unwrap();
+        assert!(definition.contains("+towgs84=565.2369"), "{definition}");
+        let args = display_warp_arguments(
+            Path::new("in.tif"),
+            Path::new("out.tif"),
+            definition,
+            &lattice,
+            Some(-9999.0),
+            -9999.0,
+        );
+        let [min_x, min_y, max_x, max_y] = lattice.bounds();
+        let pairs: Vec<(&str, String)> = vec![
+            ("-s_srs", definition.to_string()),
+            ("-t_srs", "EPSG:3857".to_string()),
+            ("-r", "near".to_string()),
+            ("-et", "0".to_string()),
+            ("-srcnodata", "-9999.0".to_string()),
+            ("-dstnodata", "-9999.0".to_string()),
+            ("-of", "GTiff".to_string()),
+        ];
+        for (flag, value) in pairs {
+            let at = args
+                .iter()
+                .position(|arg| arg == flag)
+                .unwrap_or_else(|| panic!("{flag}"));
+            assert_eq!(args[at + 1], value, "{flag}");
+        }
+        let at = args.iter().position(|arg| arg == "-te").expect("-te");
+        let te: Vec<f64> = args[at + 1..at + 5]
+            .iter()
+            .map(|v| v.parse().unwrap())
+            .collect();
+        assert_eq!(te, [min_x, min_y, max_x, max_y]);
+        let at = args.iter().position(|arg| arg == "-ts").expect("-ts");
+        assert_eq!(
+            args[at + 1..at + 3],
+            [lattice.width.to_string(), lattice.height.to_string()]
+        );
+        assert_eq!(args[args.len() - 2..], ["in.tif", "out.tif"]);
+        let profile = display_cog_arguments(Path::new("out.tif"), Path::new("out.cog.tif"));
+        assert!(profile.contains(&"RESAMPLING=AVERAGE".to_string()));
+        assert!(profile.contains(&"COMPRESS=DEFLATE".to_string()));
     }
 
     #[test]

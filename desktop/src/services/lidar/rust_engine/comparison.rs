@@ -3,10 +3,12 @@
 //!
 //! Ignored by default and skipped cleanly when GDAL is not installed
 //! (`CANOPI_LIDAR_GDAL_BIN`, then `PATH`). It is the standing accuracy proof
-//! behind ADR 0014: probe facts, Float32 samples, the controlled and display
-//! profiles, point transforms and statistics must agree within the
-//! tolerances stated beside each assertion. Run with
-//! `cargo test -p canopi-desktop --lib rust_engine::comparison -- --ignored --nocapture`.
+//! behind ADR 0014: probe facts, Float32 samples, the controlled profile, the
+//! display warp (against `gdalwarp` on the same lattice, A6), point
+//! transforms and statistics must agree within the tolerances stated beside
+//! each assertion. Run with
+//! `cargo test -p canopi-desktop --lib rust_engine::comparison -- --ignored --nocapture`;
+//! `CANOPI_LIDAR_REFERENCE_DIR` adds real tiles to the display comparison.
 
 use super::super::engine::{RasterEngine, RasterGeoref, RasterInput, RasterProbe};
 use super::super::gdal_engine::{GdalEngine, GdalProgram};
@@ -286,65 +288,157 @@ fn compare_source(
         TIFF_FACTS,
     );
 
-    // The display profile: full resolution identical, overviews within tolerance.
+    // The display warp, both engines from the same numeric COG.
+    compare_display(report, label, &rust_cog, dir, gdal, rust, nodata);
+}
+
+/// The display warp against `gdalwarp -r near` on the same Web Mercator
+/// lattice with the row's own Helmert shift (A6). Both pick, at each pixel
+/// centre, the native cell under it, so they differ only where the two
+/// transforms (within 1 cm of each other, A16) put the centre on either side
+/// of a cell edge: every differing pixel must lie within 1 cm of one.
+/// Overviews then agree within tolerance away from those pixels.
+fn compare_display(
+    report: &mut Report,
+    label: &str,
+    source: &Path,
+    dir: &Path,
+    gdal: &GdalEngine,
+    rust: &RustRasterEngine,
+    nodata: Option<f32>,
+) {
+    let c = cancel();
     let gdal_display = dir.join(format!("{label}-gdal-display.tif"));
     let rust_display = dir.join(format!("{label}-rust-display.tif"));
-    gdal.write_display_cog(
-        RasterInput::File(&gdal_cog),
-        &gdal_display,
-        None,
-        nodata,
-        &c,
-    )
-    .expect("GDAL writes the display COG");
-    rust.write_display_cog(
-        RasterInput::File(&rust_cog),
-        &rust_display,
-        None,
-        nodata,
-        &c,
-    )
-    .expect("the Rust engine writes the display COG");
-    let a = rust
-        .read_f32(&gdal_display, grid.width, grid.height, &c)
-        .expect("Rust reads GDAL's display COG");
-    let b = gdal
-        .read_f32(&rust_display, grid.width, grid.height, &c)
-        .expect("GDAL reads the Rust display COG");
-    let (deviation, nan_mismatch) = max_sample_deviation(&a, &b);
-    assert!(
-        deviation == 0.0 && nan_mismatch == 0,
-        "{label}: display full-resolution samples differ"
-    );
-    let a_probe = gdal
-        .probe(&rust_display, &c)
-        .expect("GDAL probes the Rust display COG");
-    let b_probe = rust
+    gdal.write_display_cog(RasterInput::File(source), &gdal_display, None, nodata, &c)
+        .expect("GDAL warps the display COG");
+    let started = std::time::Instant::now();
+    rust.write_display_cog(RasterInput::File(source), &rust_display, None, nodata, &c)
+        .expect("the Rust engine warps the display COG");
+    let elapsed = started.elapsed();
+    let a_probe = rust
         .probe(&gdal_display, &c)
         .expect("Rust probes GDAL's display COG");
+    let b_probe = rust
+        .probe(&rust_display, &c)
+        .expect("Rust probes its display COG");
+    assert_eq!(b_probe.crs_ref, "EPSG:3857", "{label}");
+    assert_eq!(a_probe.crs_ref, b_probe.crs_ref, "{label}: display CRS");
+    assert_eq!(
+        (a_probe.width, a_probe.height),
+        (b_probe.width, b_probe.height),
+        "{label}: display size"
+    );
+    for (a, b) in a_probe.geotransform.iter().zip(&b_probe.geotransform) {
+        assert!(
+            (a - b).abs() <= 1e-6,
+            "{label}: {:?} vs {:?}",
+            a_probe.geotransform,
+            b_probe.geotransform
+        );
+    }
+    assert_eq!(a_probe.nodata, b_probe.nodata, "{label}: display NoData");
     assert_eq!(
         a_probe.overview_count, b_probe.overview_count,
         "{label}: overview count"
     );
-    assert_eq!(a_probe.compression, "DEFLATE");
-    assert_eq!(a_probe.block, [256, 256]);
+    assert_eq!(b_probe.compression, "DEFLATE");
+    assert_eq!(b_probe.block, [256, 256]);
+    let a = rust
+        .read_f32(&gdal_display, a_probe.width, a_probe.height, &c)
+        .expect("Rust reads GDAL's display COG");
+    let mut b = rust
+        .read_f32(&rust_display, b_probe.width, b_probe.height, &c)
+        .expect("Rust reads its display COG");
+    let shown = |value: f32| valid(value, b_probe.nodata);
+    let differing: Vec<usize> = (0..a.len())
+        .filter(|index| {
+            let (x, y) = (a[*index], b[*index]);
+            shown(x) != shown(y) || (shown(x) && x != y)
+        })
+        .collect();
+    // How far each differing centre lies from the nearest native cell edge.
+    let native = rust.probe(source, &c).expect("Rust probes the source");
+    let gt = b_probe.geotransform;
+    let centres: Vec<(f64, f64)> = differing
+        .iter()
+        .map(|index| {
+            let (column, row) = (
+                index % b_probe.width as usize,
+                index / b_probe.width as usize,
+            );
+            (
+                gt[0] + (column as f64 + 0.5) * gt[1],
+                gt[3] + (row as f64 + 0.5) * gt[5],
+            )
+        })
+        .collect();
+    let placed = rust
+        .transform_points("EPSG:3857", &native.crs_ref, &centres, &c)
+        .expect("centres place");
+    let ngt = native.geotransform;
+    let mut farthest = 0f64;
+    for (index, point) in differing.iter().zip(placed) {
+        let (x, y) = point.expect("a differing centre places natively");
+        let edge = |coordinate: f64, origin: f64, cell: f64| {
+            let fraction = (coordinate - origin) / cell;
+            (fraction - fraction.round()).abs() * cell.abs()
+        };
+        let distance = edge(x, ngt[0], ngt[1]).min(edge(y, ngt[3], ngt[5]));
+        farthest = farthest.max(distance);
+        assert!(
+            distance <= 0.01,
+            "{label}: pixel {index} differs ({} vs {}) {distance} m from a native cell edge",
+            a[*index],
+            b[*index]
+        );
+        b[*index] = f32::NAN;
+    }
+    report.note(format!(
+        "{label}: display {}x{} on the lattice, {} of {} pixels differ, all within {farthest:.1e} m of a native cell edge; Rust warp {elapsed:.2?}",
+        b_probe.width,
+        b_probe.height,
+        differing.len(),
+        a.len()
+    ));
+    // GDAL (3.1 and later) weights the partial source pixels of a level
+    // whose side is odd; Canopi averages floor-division blocks. Cells are
+    // compared only when every level halves exactly.
+    let (mut width, mut height, mut exact) = (b_probe.width, b_probe.height, true);
+    while width.max(height) > 256 {
+        exact &= width % 2 == 0 && height % 2 == 0;
+        (width, height) = ((width / 2).max(1), (height / 2).max(1));
+    }
+    if !exact {
+        report.note(format!(
+            "{label}: display overviews not compared cell by cell ({}x{} halves an odd side)",
+            b_probe.width, b_probe.height
+        ));
+        return;
+    }
+    let display_grid = RasterGrid {
+        width: b_probe.width,
+        height: b_probe.height,
+        geotransform: b_probe.geotransform,
+    };
     compare_overviews(
         report,
         label,
         &gdal_display,
         &rust_display,
-        nodata,
-        &rust_samples,
-        &grid,
+        b_probe.nodata,
+        &b,
+        &display_grid,
     );
 }
 
 /// Overview samples: both engines average the valid samples of each block in
 /// double precision and store Float32, so cells agree bit for bit except
-/// where the source block holds a NaN or ±inf. GDAL propagates a non-finite
+/// where the source block holds a NaN or ±inf (or, in `full`, a pixel the two
+/// warps resolved differently, marked NaN). GDAL propagates a non-finite
 /// sample into the average; Canopi averages the finite samples, which is the
-/// display rule (`display-cog-deflate256-v1`). Those "poisoned" cells are
-/// counted and reported; every other cell must agree within 1e-3.
+/// display rule. Those "poisoned" cells are counted and reported; every
+/// other cell must agree within 1e-3.
 fn compare_overviews(
     report: &mut Report,
     label: &str,
@@ -688,6 +782,24 @@ fn gdal_fixtures(dir: &Path, gdal: &GdalEngine) -> Vec<(String, PathBuf, Facts)>
     fixtures
 }
 
+/// Real tiles in national grids whose display warp is compared too: every
+/// GeoTIFF in `CANOPI_LIDAR_REFERENCE_DIR` (the Delft AHN tile in RD New and
+/// the Paris IGN tile in spelled-out Lambert-93 keys, for instance).
+fn reference_tiles() -> Vec<PathBuf> {
+    let Some(dir) = std::env::var_os("CANOPI_LIDAR_REFERENCE_DIR") else {
+        return Vec::new();
+    };
+    let mut tiles: Vec<PathBuf> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|extension| extension == "tif"))
+        .collect();
+    tiles.sort();
+    tiles
+}
+
 fn ign_fixture() -> Option<PathBuf> {
     if let Some(explicit) = std::env::var_os("CANOPI_LIDAR_E2E_FIXTURE") {
         return Some(PathBuf::from(explicit)).filter(|path| path.is_file());
@@ -709,7 +821,7 @@ fn ign_fixture() -> Option<PathBuf> {
 }
 
 #[test]
-#[ignore = "cross-checks the Rust engine against GDAL (gdalinfo, gdal_translate, gdaltransform on PATH or CANOPI_LIDAR_GDAL_BIN); skipped cleanly without GDAL"]
+#[ignore = "cross-checks the Rust engine against GDAL (gdalinfo, gdal_translate, gdalwarp, gdaltransform on PATH or CANOPI_LIDAR_GDAL_BIN); skipped cleanly without GDAL"]
 fn the_rust_engine_matches_gdal_on_the_same_inputs() {
     let dir = crate::test_scratch::TestScratch::new("engine-comparison");
     let gdal_logs = dir.join("gdal-logs");
@@ -746,6 +858,14 @@ fn the_rust_engine_matches_gdal_on_the_same_inputs() {
             );
         }
         None => report.note("IGN fixture: not present, skipped".to_string()),
+    }
+    for tile in reference_tiles() {
+        let label = tile
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        report.note(format!("reference tile: {}", tile.display()));
+        compare_display(&mut report, &label, &tile, &dir, &gdal, &rust, None);
     }
     compare_transforms(&mut report, &gdal, &rust);
 

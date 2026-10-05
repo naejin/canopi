@@ -165,6 +165,19 @@ fn place(
     })
 }
 
+/// The lattice grid a derivative of `grid` in `native` is written on (the
+/// GDAL oracle warps onto the same pixels).
+#[cfg(test)]
+pub(super) fn lattice(grid: &RasterGrid, native: &ResolvedCrs) -> Result<RasterGrid, String> {
+    let mercator = crs::from_reference("EPSG:3857")?;
+    place(
+        grid,
+        &Transformer::new(native, &mercator)?,
+        rung(native, grid)?,
+    )
+    .map(|placement| placement.grid)
+}
+
 /// Native points of the mesh nodes over a block of lattice pixels.
 struct Mesh {
     /// Node index of the block's first node column and row.

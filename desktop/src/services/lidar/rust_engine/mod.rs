@@ -53,6 +53,19 @@ pub(crate) fn crs_kind(reference: &str) -> Option<CrsKind> {
     crs::from_reference(reference).ok().map(|crs| crs.kind())
 }
 
+/// The Web Mercator lattice grid a display derivative of `grid` in
+/// `crs_ref` is written on, and the row's definition: what the GDAL oracle
+/// warps with (A6).
+#[cfg(test)]
+pub(crate) fn display_lattice(
+    grid: &RasterGrid,
+    crs_ref: &str,
+) -> Result<(RasterGrid, &'static str), String> {
+    let native = crs::from_reference(crs_ref)?;
+    let row = crs_table::row_of(native.code()).ok_or_else(|| format!("{crs_ref} has no row"))?;
+    Ok((warp::lattice(grid, &native)?, row.proj))
+}
+
 /// What a manifest records as the engine that produced a numeric output.
 pub(super) fn engine_version() -> String {
     format!(
