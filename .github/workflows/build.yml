@@ -77,13 +77,17 @@ jobs:
         run: |
           set -euo pipefail
           docs_paths='^(docs/|\.beads/|\.interface-design/)|\.md$'
+          # Not docs: the app ships desktop/THIRD_PARTY_NOTICES.md and
+          # third-party-notices.test.ts reads both copies.
+          notices_paths='(^|/)THIRD_PARTY_NOTICES\.md$'
           rust_paths='\.rs$|(^|/)Cargo\.toml$|^(Cargo\.lock|rust-toolchain\.toml|clippy\.toml)$|^(\.cargo|common-types|bindings-gen|desktop|\.github)/|^scripts/(build-geolibre-cli\.sh|smoke-bundled-sidecar\.sh|check_windows_manifest\.py|schema-contract\.json|species_catalog_contract\.py|species_search_normalization\.py|web_catalog_artifact_contract\.py)$'
           web_rust_paths='^desktop/web/(package(-lock)?\.json$|src/maplibre/raster-display/fixtures/|src/ipc/|src/app/canvas-pdf/platform\.desktop\.ts$|src/app/shell/bootstrap\.ts$)'
-          frontend_paths='^(desktop/web|\.github)/'
+          frontend_paths='^(desktop/web|\.github)/|^THIRD_PARTY_NOTICES\.md$'
           if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
             code=true rust=true frontend=true
           else
-            changed="$(git diff --no-renames --name-only "$BASE" "$GITHUB_SHA" | grep -vE "$docs_paths" || true)"
+            all="$(git diff --no-renames --name-only "$BASE" "$GITHUB_SHA")"
+            changed="$({ grep -vE "$docs_paths" <<<"$all"; grep -E "$notices_paths" <<<"$all"; } || true)"
             code=false
             if [ -n "$changed" ]; then code=true; fi
             rust=$code frontend=$code
