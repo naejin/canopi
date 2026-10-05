@@ -1366,6 +1366,53 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    /// The overseas UTM rows sit on their own GRS80 systems, which GDAL names
+    /// in GeographicType when it spells the projection out: RGFG95, RGR92,
+    /// RGM04, RRAF 1991 and RGAF09. RRAF 1991 / UTM 20N (4559) has RGAF09 /
+    /// UTM 20N's definition, so either code places it the same.
+    #[test]
+    fn spelled_out_utm_keys_on_an_overseas_system_match_its_row() {
+        let dir = scratch("overseas-gcs");
+        let engine = RustRasterEngine;
+        let cases: [(u16, f64, f64, &[&str]); 5] = [
+            (4624, -51.0, 0.0, &["EPSG:2972"]),
+            (4627, 57.0, 10_000_000.0, &["EPSG:2975"]),
+            (4470, 45.0, 10_000_000.0, &["EPSG:4471"]),
+            (4558, -63.0, 0.0, &["EPSG:4559", "EPSG:5490"]),
+            (5489, -63.0, 0.0, &["EPSG:5490"]),
+        ];
+        for (geographic, lon_0, y_0, expected) in cases {
+            let utm = keys(
+                &[
+                    (1024, 1),
+                    (2048, geographic),
+                    (3072, 32767),
+                    (3075, 1),
+                    (3076, 9001),
+                ],
+                &[
+                    (3080, lon_0),
+                    (3081, 0.0),
+                    (3082, 500_000.0),
+                    (3083, y_0),
+                    (3092, 0.9996),
+                ],
+                None,
+            );
+            let path = dir.join(format!("utm-{geographic}.tif"));
+            tiff_with_keys(&path, (400_000.0, 1_000_000.0), utm);
+            let probe = engine.probe(&path, &cancel());
+            assert!(
+                probe
+                    .as_ref()
+                    .is_ok_and(|probe| expected.contains(&probe.crs_ref.as_str())),
+                "GeographicType {geographic}: {:?}",
+                probe.map(|probe| probe.crs_ref)
+            );
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     /// A projected model with only a geographic code, here ETRS89 and the
     /// GeoTIFF 1.0 ProjectionGeoKey for UTM 32N, names no projection
     /// Canopi reads, so it is refused rather than read as degrees.

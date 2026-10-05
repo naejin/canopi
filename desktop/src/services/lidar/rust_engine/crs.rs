@@ -405,11 +405,14 @@ fn ellipsoid_of_code(code: u16) -> Option<(f64, f64)> {
 }
 
 /// The ellipsoid code of the EPSG geographic systems the rows sit on, as a
-/// GeographicType key names them; Greenwich-based only.
+/// GeographicType key names them; Greenwich-based only. Swiss (4149,
+/// 4150) and S-JTSK (4156) are left out: their rows are not matched on keys.
 fn ellipsoid_of_geographic(code: u32) -> Option<u16> {
     Some(match code {
         4326 => 7030,
-        4258 | 4171 | 4121 => 7019,
+        // ETRS89, RGF93 v1, GGRS87 and the overseas RGFG95, RGR92, RGM04,
+        // RRAF 1991 and RGAF09.
+        4258 | 4171 | 4121 | 4624 | 4627 | 4470 | 4558 | 5489 => 7019,
         4289 | 4312 => 7004,
         4313 | 4181 => 7022,
         4277 => 7001,
