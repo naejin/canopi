@@ -46,19 +46,15 @@ impl Opened {
 
 /// Header facts of a GeoTIFF.
 pub(super) fn probe(path: &Path) -> Result<RasterProbe, String> {
-    probe_tiff(&read_header(path)?)
+    Ok(probe_tiff(&read_header(path)?)?.0)
 }
 
 /// Band 1 of a GeoTIFF: streamed when its chunks allow, otherwise loaded
 /// whole after the capacity check named `operation`.
 pub(super) fn open(path: &Path, operation: &str, cancel: &AtomicBool) -> Result<Opened, String> {
     let header = read_header(path)?;
-    let probe = probe_tiff(&header)?;
+    let (probe, crs) = probe_tiff(&header)?;
     let grid = grid_of(&probe);
-    let crs = match &header.geo_keys {
-        Some(keys) => crs::from_geokeys(keys)?,
-        None => None,
-    };
     let nodata = probe.nodata;
     let mut reader = tiff::BandReader::open(path, header.band_format(), nodata.unwrap_or(0.0))?;
     let band = if reader.streams() {
@@ -113,19 +109,19 @@ pub(super) fn grid_of(probe: &RasterProbe) -> RasterGrid {
     }
 }
 
-fn probe_tiff(header: &tiff::TiffHeader) -> Result<RasterProbe, String> {
+/// The header facts and the CRS they name, resolved once.
+fn probe_tiff(header: &tiff::TiffHeader) -> Result<(RasterProbe, Option<ResolvedCrs>), String> {
     let geotransform = header
         .geotransform
         .ok_or_else(|| "raster is not georeferenced (missing geotransform)".to_string())?;
     if geotransform[1] == 0.0 || geotransform[5] == 0.0 {
         return Err("raster has degenerate pixel size (zero geotransform scale)".to_string());
     }
-    let crs_ref = match &header.geo_keys {
-        Some(keys) => crs::from_geokeys(keys)?
-            .map(|resolved| resolved.reference())
-            .unwrap_or_default(),
-        None => String::new(),
+    let crs = match &header.geo_keys {
+        Some(keys) => crs::from_geokeys(keys)?,
+        None => None,
     };
+    let crs_ref = crs.map(|resolved| resolved.reference()).unwrap_or_default();
     let mut mask_flags = Vec::new();
     if header.has_mask {
         mask_flags.push("PER_DATASET".to_string());
@@ -137,7 +133,7 @@ fn probe_tiff(header: &tiff::TiffHeader) -> Result<RasterProbe, String> {
         tiff::Layout::Tiles { width, height, .. } => [*width, *height],
         tiff::Layout::Strips { rows_per_strip, .. } => [header.width, *rows_per_strip],
     };
-    Ok(RasterProbe {
+    let probe = RasterProbe {
         driver: "GTiff".to_string(),
         width: header.width,
         height: header.height,
@@ -153,5 +149,6 @@ fn probe_tiff(header: &tiff::TiffHeader) -> Result<RasterProbe, String> {
         block,
         compression: tiff::compression_name(header.compression_tag),
         overview_count: header.overview_count,
-    })
+    };
+    Ok((probe, crs))
 }
