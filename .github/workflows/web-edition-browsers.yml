@@ -24,6 +24,12 @@ concurrency:
 jobs:
   browsers:
     name: Chromium and WebKit
+    # A same-repo PR from main or the v2 branch (PR 33) runs nothing: the push
+    # run already drives its head commit.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name != github.repository ||
+      (github.head_ref != 'main' && github.head_ref != 'feature/geolibre-adoption')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # The same image run locally gives the same pixels, so baselines can be recorded with

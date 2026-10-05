@@ -13,37 +13,125 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
+  # Rust caches are saved only from main and the v2 branch, whose caches every
+  # PR and later push can restore; PR refs restore without adding copies.
+  SAVE_RUST_CACHE: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/geolibre-adoption') }}
   CANOPI_CORE_DB_RELEASE_TAG: canopi-core-db
 
 jobs:
-  # Docs, bead and design-board changes run only lint (which checks the docs);
-  # the tests, LiDAR lanes and installer builds run when anything else changed.
+  # Docs, bead and design-board changes run only the docs checks. On a v2
+  # feature push, the Rust-side jobs (Rust lint and tests, LiDAR lanes,
+  # platform tests, installers) run when a Rust-side path changed and the
+  # frontend tests and builds when a frontend or Rust-side path changed (Rust
+  # generates the frontend's contracts); main, PRs and an unknown base run all.
+  # A same-repo PR from main or the v2 branch (PR 33) runs nothing: the push
+  # run already checks its head commit and saves the caches a PR run cannot.
   changes:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name != github.repository ||
+      (github.head_ref != 'main' && github.head_ref != 'feature/geolibre-adoption')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    env:
+      FEATURE_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/feature/geolibre-adoption' }}
     outputs:
       code: ${{ steps.diff.outputs.code }}
+      rust: ${{ steps.diff.outputs.rust }}
+      frontend: ${{ steps.diff.outputs.frontend }}
+      packaging: ${{ steps.packaging.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      # A push diffs from the head of the branch's last successful push run, not
+      # from `before`: a newer push cancels the older run, so a docs-only push
+      # would otherwise hide the cancelled push's code. None found: run everything.
+      - id: base
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            sha="$PR_BASE"
+          else
+            sha="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build.yml --branch "$GITHUB_REF_NAME" \
+              --event push --status success --limit 1 --json headSha --jq '.[0].headSha // ""')" || sha=""
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      # Rust-side: Rust sources and manifests, the toolchain, shared contracts,
+      # the desktop shell outside desktop/web/, the scripts Rust or packaging
+      # reads, the npm manifests (the Tauri CLI), the web fixtures Rust tests
+      # read, the web files that call invoke() (native_command_policy checks
+      # every command is still invoked; keep this list in step), and CI.
       - id: diff
         env:
-          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          BASE: ${{ steps.base.outputs.sha }}
         run: |
+          set -euo pipefail
+          docs_paths='^(docs/|\.beads/|\.interface-design/)|\.md$'
+          # Not docs: the app ships desktop/THIRD_PARTY_NOTICES.md and
+          # third-party-notices.test.ts reads both copies.
+          notices_paths='(^|/)THIRD_PARTY_NOTICES\.md$'
+          rust_paths='\.rs$|(^|/)Cargo\.toml$|^(Cargo\.lock|rust-toolchain\.toml|clippy\.toml)$|^(\.cargo|common-types|bindings-gen|desktop|\.github)/|^scripts/(build-geolibre-cli\.sh|smoke-bundled-sidecar\.sh|check_windows_manifest\.py|schema-contract\.json|species_catalog_contract\.py|species_search_normalization\.py|web_catalog_artifact_contract\.py)$'
+          web_rust_paths='^desktop/web/(package(-lock)?\.json$|src/maplibre/raster-display/fixtures/|src/ipc/|src/app/canvas-pdf/platform\.desktop\.ts$|src/app/shell/bootstrap\.ts$)'
+          frontend_paths='^(desktop/web|\.github)/|^THIRD_PARTY_NOTICES\.md$'
           if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
-            echo "code=true" >> "$GITHUB_OUTPUT"
-          elif git diff --name-only "$BASE" "$GITHUB_SHA" | grep -qvE '^(docs/|\.beads/|\.interface-design/)|\.md$'; then
-            echo "code=true" >> "$GITHUB_OUTPUT"
+            code=true rust=true frontend=true
           else
-            echo "code=false" >> "$GITHUB_OUTPUT"
+            all="$(git diff --no-renames --name-only "$BASE" "$GITHUB_SHA")"
+            changed="$({ grep -vE "$docs_paths" <<<"$all"; grep -E "$notices_paths" <<<"$all"; } || true)"
+            code=false
+            if [ -n "$changed" ]; then code=true; fi
+            rust=$code frontend=$code
+            if [ "$FEATURE_PUSH" = true ]; then
+              outside_web="$(grep -vE '^desktop/web/' <<<"$changed" || true)"
+              rust=false frontend=false
+              if grep -qE "$rust_paths" <<<"$outside_web" || grep -qE "$web_rust_paths" <<<"$changed"; then rust=true; fi
+              if grep -qE "$frontend_paths" <<<"$changed"; then frontend=true; fi
+            fi
           fi
+          { echo "code=$code"; echo "rust=$rust"; echo "frontend=$frontend"; } >> "$GITHUB_OUTPUT"
+      # Feature-branch pushes package Linux and Apple silicon only, unless they
+      # change a packaging input (Cargo manifests and toolchain, build script,
+      # Windows app manifest, icons, Tauri config, the sidecar and its smoke,
+      # the Windows manifest check, npm manifests, CI);
+      # then, like pushes to main, pull requests and Release Candidate, all four.
+      # Feature pushes build one installer per OS: Linux .deb (as everywhere)
+      # and Windows NSIS only, the one the sidecar smoke unpacks; no MSI.
+      - id: packaging
+        env:
+          BASE: ${{ steps.base.outputs.sha }}
+        run: |
+          set -euo pipefail
+          windows_bundles=""
+          if [ "$FEATURE_PUSH" = true ]; then windows_bundles="--bundles nsis"; fi
+          all='[
+            {"os": "ubuntu-latest", "target": "x86_64-unknown-linux-gnu", "bundle_args": "--bundles deb"},
+            {"os": "macos-14", "target": "aarch64-apple-darwin", "bundle_args": ""},
+            {"os": "macos-15-intel", "target": "x86_64-apple-darwin", "bundle_args": ""},
+            {"os": "windows-latest", "target": "x86_64-pc-windows-msvc", "bundle_args": "'"$windows_bundles"'"}
+          ]'
+          inputs='^(Cargo\.lock$|([^/]+/)?Cargo\.toml$|rust-toolchain\.toml$|desktop/build\.rs$|desktop/windows-app-manifest\.xml$|desktop/icons/|desktop/tauri[^/]*\.json$|desktop/tauri\.conf|desktop/binaries/|scripts/build-geolibre-cli\.sh$|scripts/smoke-bundled-sidecar\.sh$|scripts/check_windows_manifest\.py$|desktop/web/package[^/]*\.json$|\.github/)'
+          filter='.'
+          if [ "$FEATURE_PUSH" = true ] && [ -n "$BASE" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            changed="$(git diff --no-renames --name-only "$BASE" "$GITHUB_SHA")"
+            if ! grep -qE "$inputs" <<<"$changed"; then
+              filter='map(select(.os == "ubuntu-latest" or .os == "macos-14"))'
+            fi
+          fi
+          echo "matrix=$(jq -c "$filter" <<<"$all")" >> "$GITHUB_OUTPUT"
 
-  lint:
+  docs:
+    needs: changes
     runs-on: ubuntu-latest
-    env:
-      CANOPI_SKIP_BUNDLED_DB: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -53,14 +141,23 @@ jobs:
         run: |
           python3 -m unittest scripts.test_check_docs
           python3 scripts/check_docs.py
-      - id: rust-toolchain
-        uses: dtolnay/rust-toolchain@1.97.1
+
+  lint-rust:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    env:
+      CANOPI_SKIP_BUNDLED_DB: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.1
         with:
           components: rustfmt, clippy
-      - uses: ./.github/actions/cache-rust
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          toolchain: ${{ steps.rust-toolchain.outputs.cachekey }}
-          workload: lint
+          shared-key: lint
+          cache-on-failure: false
+          save-if: ${{ env.SAVE_RUST_CACHE == 'true' }}
 
       - name: Install Linux dependencies
         uses: ./.github/actions/install-linux-deps
@@ -70,6 +167,25 @@ jobs:
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  # The Python and frontend checks; the bindings check runs the Rust generator.
+  lint:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    env:
+      CANOPI_SKIP_BUNDLED_DB: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@1.97.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: lint-bindings
+          cache-on-failure: false
+          save-if: ${{ env.SAVE_RUST_CACHE == 'true' }}
 
       - name: Unused crates
         run: |
@@ -106,22 +222,22 @@ jobs:
       - name: UI gallery TypeScript check
         run: npm run check:ui --prefix desktop/web
 
-  test:
+  test-rust:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     env:
       CANOPI_SKIP_BUNDLED_DB: "1"
     steps:
       - uses: actions/checkout@v4
-      - id: rust-toolchain
-        uses: dtolnay/rust-toolchain@1.97.1
+      - uses: dtolnay/rust-toolchain@1.97.1
         with:
           components: llvm-tools-preview
-      - uses: ./.github/actions/cache-rust
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          toolchain: ${{ steps.rust-toolchain.outputs.cachekey }}
-          workload: test
+          shared-key: test
+          cache-on-failure: false
+          save-if: ${{ env.SAVE_RUST_CACHE == 'true' }}
 
       - name: Install Linux dependencies
         uses: ./.github/actions/install-linux-deps
@@ -135,6 +251,12 @@ jobs:
       - name: Rust tests with coverage ratchet
         run: cargo cov
 
+  test-frontend:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -170,18 +292,18 @@ jobs:
     # comparison lane skips itself here, as CI installs no GDAL. Fixture e2e
     # lanes stay local: they need IGN tiles.
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-24.04
     env:
       CANOPI_SKIP_BUNDLED_DB: "1"
     steps:
       - uses: actions/checkout@v4
-      - id: rust-toolchain
-        uses: dtolnay/rust-toolchain@1.97.1
-      - uses: ./.github/actions/cache-rust
+      - uses: dtolnay/rust-toolchain@1.97.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          toolchain: ${{ steps.rust-toolchain.outputs.cachekey }}
-          workload: lidar-native
+          shared-key: lidar-native
+          cache-on-failure: false
+          save-if: ${{ env.SAVE_RUST_CACHE == 'true' }}
 
       - name: Install Linux dependencies
         uses: ./.github/actions/install-linux-deps
@@ -190,31 +312,59 @@ jobs:
 
       - name: LiDAR native lanes
         run: |
-          export CANOPI_GEOLIBRE_BIN="$PWD/desktop/binaries/geolibre-$(rustc -vV | sed -n 's/^host: //p')"
+          CANOPI_GEOLIBRE_BIN="$PWD/desktop/binaries/geolibre-$(rustc -vV | sed -n 's/^host: //p')"
+          export CANOPI_GEOLIBRE_BIN
           cargo test -p canopi-desktop --lib --locked services::lidar -- --ignored --test-threads=1 --skip e2e_
 
-  build:
-    needs: [lint, test]
-    if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository
-    timeout-minutes: 90
+  # test-rust runs the Rust suite on Linux only. File saving, atomic replace,
+  # directory sync, locking and paths differ on Windows and macOS, so the
+  # native tests run there too, on every Rust-side change, beside packaging.
+  platform-tests:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            bundle_args: --bundles deb
           - os: macos-14
             target: aarch64-apple-darwin
-            bundle_args: ""
           - os: macos-15-intel
             target: x86_64-apple-darwin
-            bundle_args: ""
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            bundle_args: ""
+    runs-on: ${{ matrix.os }}
+    env:
+      CANOPI_SKIP_BUNDLED_DB: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: platform-tests-${{ matrix.target }}
+          cache-on-failure: false
+          save-if: ${{ env.SAVE_RUST_CACHE == 'true' }}
+
+      - name: Rust tests on this platform
+        shell: bash
+        run: cargo test --workspace --locked --target ${{ matrix.target }}
+
+  # Packaging runs beside lint and the tests rather than after them, so CI
+  # artifacts do not wait for (or depend on) the test results; Release
+  # Candidate keeps its own preflight gate.
+  build:
+    needs: changes
+    if: >-
+      needs.changes.outputs.rust == 'true' &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.changes.outputs.packaging) }}
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -222,15 +372,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - id: rust-toolchain
-        uses: dtolnay/rust-toolchain@1.97.1
+      - uses: dtolnay/rust-toolchain@1.97.1
         with:
           targets: ${{ matrix.target }}
-      - uses: ./.github/actions/cache-rust
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          toolchain: ${{ steps.rust-toolchain.outputs.cachekey }}
-          workload: release
-          target: ${{ matrix.target }}
+          shared-key: release-${{ matrix.target }}
+          cache-on-failure: false
+          save-if: ${{ env.SAVE_RUST_CACHE == 'true' }}
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -268,14 +417,6 @@ jobs:
           python scripts/species_catalog_contract.py verify-db
           --profile prepared
           desktop/resources/canopi-core.db
-
-      # The test job runs the suite on Linux only. File saving, atomic
-      # replace, directory sync, locking and paths differ on Windows and
-      # macOS, so the native tests run on those runners too, before packaging.
-      - name: Rust tests on this platform
-        if: runner.os != 'Linux'
-        shell: bash
-        run: cargo test --workspace --locked --target ${{ matrix.target }}
 
       # The sidecar must exist before `tauri build`: build.rs bundles it only
       # when desktop/binaries holds it for the target (the runner's host).
