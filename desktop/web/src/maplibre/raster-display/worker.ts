@@ -133,9 +133,6 @@ async function handle(request: RasterWorkerRequest): Promise<{ value: unknown; t
       const opening = (async () => {
         await init()
         const source = await openCog(request.url)
-        if (source.mode !== '3857') {
-          throw new Error(`raster display source opened in mode '${source.mode}' (${source.crsLabel}); display tiles must be EPSG:3857`)
-        }
         const upstream = source as unknown as { tileCache?: unknown }
         if (!(upstream.tileCache instanceof Map)) {
           throw new Error('cog-tiler-wasm no longer exposes its decoded tile cache; the lane budget cannot be enforced')
