@@ -587,50 +587,28 @@ impl RasterEngine for GdalEngine {
         zoom: u32,
         cancel: &AtomicBool,
     ) -> Result<(), String> {
-        if georef.is_none() && matches!(input, RasterInput::Samples { .. }) {
-            return Err("samples need a georeference to become a raster".to_string());
+        if georef.is_some() || matches!(input, RasterInput::Samples { .. }) {
+            return Err("the display oracle warps files only".to_string());
         }
         let staged = Self::stage_input(input, output)?;
         // The input's placement as the Rust engine reads it: the oracle checks
         // the warp, not the key reading the authority's own tests cover.
-        let (grid, crs, file_nodata) = match georef {
-            Some(georef) => (georef.grid.clone(), georef.crs.to_string(), None),
-            None => {
-                let probe = super::rust_engine::RustRasterEngine.probe(&staged.path, cancel)?;
-                let grid = RasterGrid {
-                    width: probe.width,
-                    height: probe.height,
-                    geotransform: probe.geotransform,
-                };
-                (grid, probe.crs_ref, probe.nodata)
-            }
+        let probe = super::rust_engine::RustRasterEngine.probe(&staged.path, cancel)?;
+        let grid = RasterGrid {
+            width: probe.width,
+            height: probe.height,
+            geotransform: probe.geotransform,
         };
-        let (lattice, definition) = super::rust_engine::display_lattice(&grid, &crs, zoom)?;
-        // Samples and an overridden placement are written as a placed GeoTIFF
-        // first; gdalwarp reads the placement from its input.
-        let placed = output.with_extension("placed.tif");
-        let source = match georef {
-            Some(georef) => {
-                let mut args: Vec<String> = ["-q", "-ot", "Float32"]
-                    .into_iter()
-                    .map(str::to_string)
-                    .collect();
-                args.extend(georef_arguments(georef));
-                args.push(staged.path.display().to_string());
-                args.push(placed.display().to_string());
-                self.run(GdalProgram::Translate, &args, Some(cancel))?;
-                placed.clone()
-            }
-            None => staged.path.clone(),
-        };
+        let (lattice, definition) =
+            super::rust_engine::display_lattice(&grid, &probe.crs_ref, zoom)?;
         let warped = output.with_extension("warped.tif");
         let args = display_warp_arguments(
-            &source,
+            &staged.path,
             &warped,
             definition,
             &lattice,
             nodata,
-            nodata.or(file_nodata).unwrap_or(DISPLAY_NODATA),
+            nodata.or(probe.nodata).unwrap_or(DISPLAY_NODATA),
         );
         let written = self
             .run(GdalProgram::Warp, &args, Some(cancel))
@@ -642,7 +620,6 @@ impl RasterEngine for GdalEngine {
                 )
             })
             .map(|_| ());
-        let _ = std::fs::remove_file(&placed);
         let _ = std::fs::remove_file(&warped);
         written
     }
