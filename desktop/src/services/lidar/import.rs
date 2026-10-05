@@ -212,7 +212,7 @@ pub fn stage_import(
 ) -> Result<(), String> {
     let engine = library.inner.engine.as_ref();
     let paths = &library.inner.paths;
-    validate_source_selection(source_paths)?;
+    validate_selection(source_paths, &admission::source_name)?;
 
     let layer = {
         let connection = library.catalogue()?;
@@ -411,16 +411,11 @@ fn layer_lattice_grid(
 /// Validate a selection against the one admission policy.
 ///
 /// Every bound comes from `admission`, so an authorized representative run
-/// can raise it for its own thread and nothing else changes. Refusals name the
-/// user's file only, never its folder or a system error.
-pub(super) fn validate_source_selection(source_paths: &[PathBuf]) -> Result<(), String> {
-    validate_named_selection(source_paths, &admission::source_name)
-}
-
-/// [`validate_source_selection`] with each refusal naming a source through
-/// `name_of`, so Retry names a managed original by the file it was imported
-/// as.
-pub(super) fn validate_named_selection(
+/// can raise it for its own thread and nothing else changes. Refusals name a
+/// source through `name_of` ([`admission::source_name`] for the user's files;
+/// Retry names a managed original by the file it was imported as), never its
+/// folder or a system error.
+pub(super) fn validate_selection(
     source_paths: &[PathBuf],
     name_of: &dyn Fn(&Path) -> String,
 ) -> Result<(), String> {
@@ -440,7 +435,7 @@ pub(super) fn validate_named_selection(
         if !metadata.is_file() {
             return Err(format!("{name} is not a file; choose the files again"));
         }
-        admission::check_named_source_bytes(&name, metadata.len())?;
+        admission::check_source_bytes(&name, metadata.len())?;
         total_bytes = total_bytes
             .checked_add(metadata.len())
             .ok_or_else(|| "selected source sizes overflow the import budget".to_string())?;
@@ -493,7 +488,7 @@ fn stage_managed_original(
             total = total
                 .checked_add(read as u64)
                 .ok_or_else(|| "source byte count overflow".to_string())?;
-            admission::check_source_bytes(source_path, total)
+            admission::check_source_bytes(&admission::source_name(source_path), total)
                 .map_err(|error| format!("{error} while the managed original was being copied"))?;
             hasher.update(&buffer[..read]);
             target
@@ -557,7 +552,7 @@ fn hash_file_limited(path: &Path, cancel: &AtomicBool) -> Result<(String, u64), 
         total = total
             .checked_add(read as u64)
             .ok_or_else(|| "managed source size overflow".to_string())?;
-        admission::check_source_bytes(path, total)
+        admission::check_source_bytes(&admission::source_name(path), total)
             .map_err(|error| format!("{error} while the managed original was verified"))?;
         hasher.update(&buffer[..read]);
     }
@@ -1538,7 +1533,7 @@ mod tests {
     fn source_selection_caps_count_and_bytes_before_staging() {
         let too_many = vec![PathBuf::from("unused"); admission::MAX_SOURCE_FILES_PER_IMPORT + 1];
         assert!(
-            validate_source_selection(&too_many)
+            validate_selection(&too_many, &admission::source_name)
                 .unwrap_err()
                 .contains("at most")
         );
@@ -1547,7 +1542,8 @@ mod tests {
         let path = scratch.join("oversized-source");
         let file = std::fs::File::create(&path).unwrap();
         file.set_len(admission::MAX_SOURCE_FILE_BYTES + 1).unwrap();
-        let error = validate_source_selection(std::slice::from_ref(&path)).unwrap_err();
+        let error =
+            validate_selection(std::slice::from_ref(&path), &admission::source_name).unwrap_err();
         assert!(error.contains("per-source limit"));
         let _ = std::fs::remove_file(path);
     }

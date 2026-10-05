@@ -95,12 +95,8 @@ pub(crate) fn source_name(path: &Path) -> String {
 /// Every place that learns a source's size — selection validation and the
 /// managed-original copy/hash loop — reports through this one check, so an
 /// authorized run cannot be stopped by a second hard-coded ceiling.
-pub(crate) fn check_source_bytes(path: &Path, bytes: u64) -> Result<(), String> {
-    check_named_source_bytes(&source_name(path), bytes)
-}
-
-/// [`check_source_bytes`] for a source a caller names itself.
-pub(crate) fn check_named_source_bytes(name: &str, bytes: u64) -> Result<(), String> {
+/// `name` is how the refusal names the source ([`source_name`] for a path).
+pub(crate) fn check_source_bytes(name: &str, bytes: u64) -> Result<(), String> {
     let limits = limits();
     if bytes > limits.source_bytes {
         return Err(format!(
@@ -290,9 +286,9 @@ mod tests {
         assert_eq!(limits.import_bytes, 2 * 1024 * 1024 * 1024);
         assert!(check_source_count(limits.files).is_ok());
         assert!(check_source_count(limits.files + 1).is_err());
-        let path = Path::new("/library/source.tif");
-        assert!(check_source_bytes(path, limits.source_bytes).is_ok());
-        assert!(check_source_bytes(path, limits.source_bytes + 1).is_err());
+        let name = source_name(Path::new("/library/source.tif"));
+        assert!(check_source_bytes(&name, limits.source_bytes).is_ok());
+        assert!(check_source_bytes(&name, limits.source_bytes + 1).is_err());
         assert!(check_import_bytes(limits.import_bytes).is_ok());
         assert!(check_import_bytes(limits.import_bytes + 1).is_err());
     }
@@ -406,7 +402,7 @@ mod tests {
             };
             let _guard = limits_probe::set(lowered);
             assert_eq!(limits(), lowered);
-            assert!(check_source_bytes(Path::new("/library/big.tif"), 2048).is_err());
+            assert!(check_source_bytes(&source_name(Path::new("/library/big.tif")), 2048).is_err());
             assert!(
                 check_processing_budget(
                     [ProcessingCost {

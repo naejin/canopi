@@ -1254,7 +1254,7 @@ impl LidarLibrary {
     /// a file Canopi cannot place is refused in the import dialog, before any
     /// item or job exists (canopi-try2, U31).
     pub fn check_import_selection(&self, paths: &[PathBuf]) -> Result<(), String> {
-        import::validate_source_selection(paths)?;
+        import::validate_selection(paths, &admission::source_name)?;
         admission::check_sources_placeable(
             self.inner.engine.as_ref(),
             paths,
@@ -1325,7 +1325,7 @@ impl LidarLibrary {
                 .cloned()
                 .unwrap_or_else(|| admission::source_name(path))
         };
-        import::validate_named_selection(&selection.paths, &name_of)?;
+        import::validate_selection(&selection.paths, &name_of)?;
         admission::check_sources_placeable(self.inner.engine.as_ref(), &selection.paths, &name_of)
     }
 
