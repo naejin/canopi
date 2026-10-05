@@ -216,7 +216,7 @@ export function createContinuousSave({
     if (conflict.peek()) return false
     if (!pending.peek() && !force) return true
 
-    // Only a write that started with the home marked behind clears the mark; a write to an old Draft home does not.
+    // Only a write that started with the home marked behind clears the mark.
     const pendingAtStart = writePending.peek()
     if (store.designDirty.peek()) changed.value = true
     let outcome: HomeWriteOutcome | Promise<HomeWriteOutcome>
@@ -358,7 +358,8 @@ export function createContinuousSave({
     flush,
 
     save() {
-      forceWrite = true
+      // A Save that cannot write now (no Design, or a conflict) is not kept for a later write.
+      if (store.hasCurrentDesign() && !conflict.peek()) forceWrite = true
       return flush()
     },
 
