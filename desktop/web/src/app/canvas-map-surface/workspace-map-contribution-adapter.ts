@@ -26,7 +26,6 @@ export interface WorkspaceMapContributionAdapter {
     map: RasterDisplayMap,
     options: Pick<RasterDisplayOptions, 'onLayersChanged'>,
   ) => RasterDisplay
-  readonly publishViewBounds?: (bounds: [number, number, number, number] | null) => void
 }
 
 /**

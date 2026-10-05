@@ -23,7 +23,6 @@ describe('browser workspace map contribution adapter', () => {
     expect(adapter.read(runtime)).toBeNull()
     expect(runtime.getSceneSnapshot).not.toHaveBeenCalled()
     expect(adapter.loadTerrainSupport).toBeUndefined()
-    expect(adapter.publishViewBounds).toBeUndefined()
   })
 
   it('returns null until the runtime has a session plane', () => {

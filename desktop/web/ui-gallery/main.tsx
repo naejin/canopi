@@ -33,7 +33,6 @@ import { theme, locale } from '../src/app/settings/state'
 import { designFixture } from './fixtures'
 import { designSessionStore } from '../src/app/document-session/store'
 import { activity } from './memory-backend'
-import { lidarMapViewBounds } from '../src/app/lidar/camera-request'
 import { attachmentFailure, pendingAttachments } from '../src/app/lidar/actions'
 import { closeSiteDataDetails, dataDialog, openSiteDataDetails, selectSiteRow } from '../src/app/lidar/library-navigation'
 import { GalleryCanvasSurface } from './GalleryCanvasSurface'
@@ -81,9 +80,6 @@ const selectedSurface = signal<GallerySurface>(initial)
 const galleryCanvasReady = signal(false)
 const file = designFixture(fixtureState)
 if (initial !== 'start') designSessionStore.replaceCurrentDesignState(file, null, file.name)
-lidarMapViewBounds.value = fixtureState === 'located'
-  ? [0.02, 48.21, 0.05, 48.23]
-  : null
 // Layers-initiated work joining this Design, as its progress rows show it.
 if (fixtureState === 'lidar-progress') {
   const identity = designSessionStore.sessionIdentity.value

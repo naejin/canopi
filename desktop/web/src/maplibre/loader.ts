@@ -38,12 +38,6 @@ export interface MapLibreMapInstance {
   getZoom?(): number
   getCenter?(): { lng: number; lat: number }
   getCanvas?(): HTMLCanvasElement
-  getBounds?(): {
-    getWest(): number
-    getSouth(): number
-    getEast(): number
-    getNorth(): number
-  }
   loaded?(): boolean
   isStyleLoaded?(): boolean
   addSource(id: string, source: Record<string, unknown>): void

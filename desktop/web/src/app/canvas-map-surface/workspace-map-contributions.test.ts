@@ -1,10 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { createDefaultScenePersistedState } from '../../canvas/runtime/scene'
 import type { MapLibreApi, MapLibreMapInstance } from '../../maplibre/loader'
 import { IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, type MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
 import type { TerrainProtocolSupport } from '../../maplibre/terrain'
-import { WorkspaceMapContributions } from './workspace-map-contributions'
-import type { WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
+import { WorkspaceMapContributions, type WorkspaceMapContributionsOptions } from './workspace-map-contributions'
+import type { WorkspaceMapContributionAdapter, WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import type { RasterDisplay, RasterDisplayLayer } from '../../maplibre/raster-display/adapter'
 
 class ContributionMap implements MapLibreMapInstance {
@@ -29,7 +29,6 @@ class ContributionMap implements MapLibreMapInstance {
     this.order.splice(target < 0 ? this.order.length : target, 0, id)
   })
   readonly setPaintProperty = vi.fn()
-  readonly getBounds = () => ({ getWest: () => 1, getSouth: () => 2, getEast: () => 3, getNorth: () => 4 })
   on(type: string, listener: () => void) { const listeners = this.listeners.get(type) ?? new Set(); listeners.add(listener); this.listeners.set(type, listeners) }
   off(type: string, listener: () => void) { this.listeners.get(type)?.delete(listener) }
 }
@@ -80,17 +79,16 @@ function fixture(loadTerrainSupport = vi.fn(async () => terrainSupport)) {
   const identity = {}
   const map = new ContributionMap()
   const states: MapLibreCanvasSurfaceState[] = []
-  const bounds = vi.fn()
   const logError = vi.fn()
   const failure = vi.fn()
   let active = true
   let raster!: FakeRasterDisplay
   const manager = new WorkspaceMapContributions({
-    onFailure: failure, loadTerrainSupport, onStateChange: (state) => states.push(state), publishViewBounds: bounds, logError,
+    onFailure: failure, loadTerrainSupport, onStateChange: (state) => states.push(state), logError,
     createRasterDisplay: (_map, options) => { raster = new FakeRasterDisplay(map, options.onLayersChanged!); return raster },
   })
   manager.attach({ key: 'test', map, maplibre: {} as MapLibreApi, preservedViewState: null, lifetime: { on() {}, off() {}, addCleanup() {}, clear() {} }, isCurrent: () => active })
-  return { identity, map, states, failure, bounds, manager, loadTerrainSupport, logError, raster, expire: () => { active = false } }
+  return { identity, map, states, failure, manager, loadTerrainSupport, logError, raster, expire: () => { active = false } }
 }
 
 function deferred<T>() {
@@ -103,6 +101,14 @@ function deferred<T>() {
 async function flush() { await Promise.resolve(); await Promise.resolve() }
 
 describe('WorkspaceMapContributions', () => {
+  it('takes no view bounds publisher and never listens for camera moves: nothing reads map view bounds', () => {
+    expectTypeOf<WorkspaceMapContributionAdapter>().not.toHaveProperty('publishViewBounds')
+    expectTypeOf<WorkspaceMapContributionsOptions>().not.toHaveProperty('publishViewBounds')
+    const f = fixture()
+    expect(f.map.listeners.get('moveend')?.size ?? 0).toBe(0)
+    expect(f.map.listeners.get('resize')?.size ?? 0).toBe(0)
+  })
+
   it.each([
     ['rebuild', 'removeLayer'], ['rebuild', 'removeSource'],
     ['source error', 'removeLayer'], ['source error', 'removeSource'],
@@ -204,7 +210,6 @@ describe('WorkspaceMapContributions', () => {
     f.manager.restoreStyle()
     expect(f.raster.syncs.at(-1)).toEqual({ ids: ['lidar-b', 'lidar-a'], beforeId: 'canopi-shared-scene' })
     expect(f.states.at(-1)?.status).toBe('ready')
-    expect(f.bounds).toHaveBeenLastCalledWith([1, 2, 3, 4])
   })
 
   it('reorders renderer layers that arrive asynchronously into the band below the scene', () => {
@@ -370,7 +375,7 @@ describe('WorkspaceMapContributions', () => {
     expect(f.states.at(-1)?.status).toBe('idle')
   })
 
-  it('disposes overlays, terrain, rasters, listeners and bounds once with idle state', async () => {
+  it('disposes overlays, terrain, rasters and listeners once with idle state', async () => {
     const f = fixture()
     f.manager.update(snapshot(f.identity, { terrain: { ...snapshot(f.identity).terrain, hillshadeVisible: true } }))
     f.manager.restoreStyle()
@@ -384,7 +389,6 @@ describe('WorkspaceMapContributions', () => {
     expect(f.map.removeSource).toHaveBeenCalledTimes(mutations)
     expect(f.map.sources.size).toBe(0)
     expect([...f.map.listeners.values()].every((listeners) => listeners.size === 0)).toBe(true)
-    expect(f.bounds).toHaveBeenLastCalledWith(null)
     expect(f.states.at(-1)).toEqual(IDLE_MAPLIBRE_CANVAS_SURFACE_STATE)
   })
 

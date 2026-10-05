@@ -25,7 +25,6 @@ export interface WorkspaceMapContributionsOptions {
   readonly onFailure: (error: unknown) => void
   readonly loadTerrainSupport?: WorkspaceMapContributionAdapter['loadTerrainSupport']
   readonly createRasterDisplay?: WorkspaceMapContributionAdapter['createRasterDisplay']
-  readonly publishViewBounds?: WorkspaceMapContributionAdapter['publishViewBounds']
   readonly onStateChange?: (state: MapLibreCanvasSurfaceState) => void
   readonly logError?: (message?: unknown, ...args: unknown[]) => void
 }
@@ -62,13 +61,6 @@ export class WorkspaceMapContributions {
     this.raster = this.options.createRasterDisplay?.(context.map, {
       onLayersChanged: () => this.reorderAfterRasterChange(),
     }) ?? null
-    const publishBounds = () => {
-      if (this.live() && this.styleReady && this.snapshot) this.publishBounds()
-    }
-    for (const event of ['moveend', 'resize'] as const) {
-      context.map.on(event, publishBounds)
-      this.removeListeners.push(() => context.map.off(event, publishBounds))
-    }
     this.publishState({ ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE, status: 'loading' })
   }
 
@@ -181,8 +173,6 @@ export class WorkspaceMapContributions {
           this.syncOverlays(map, snapshot.overlays)
           this.reconcileOrder(map, snapshot)
           this.publishState({ ...this.state, status: 'ready', layerSkipped: this.layerSkipped() })
-          if (!this.current(revision)) continue
-          this.publishBounds()
           if (!this.current(revision)) continue
           void this.syncTerrain(map, snapshot, revision)
         } catch (error) {
@@ -346,7 +336,6 @@ export class WorkspaceMapContributions {
     if (this.revision !== revision) return
     this.terrain = null
     this.terrainTouched = false
-    this.attempt('Failed to clear map view bounds:', () => this.options.publishViewBounds?.(null))
   }
 
   private current(revision: number): boolean {
@@ -369,13 +358,6 @@ export class WorkspaceMapContributions {
           return result
         }
       },
-    })
-  }
-
-  private publishBounds(): void {
-    this.attempt('Map contribution bounds observer failed:', () => {
-      const bounds = this.context?.map.getBounds?.()
-      if (bounds) this.options.publishViewBounds?.([bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()])
     })
   }
 
