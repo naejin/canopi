@@ -164,8 +164,8 @@ pub(super) fn run(
 /// Recheck an input's requirements against the stored raster itself.
 ///
 /// Offers read facts recorded at import; the run asks the engine, which stays the
-/// projection authority, so a stored WKT the catalogue misclassified can never
-/// be computed on.
+/// projection authority, so a stored reference the catalogue misclassified can
+/// never be computed on.
 fn check_requirements(
     context: &RunContext<'_>,
     input_key: &str,
@@ -210,11 +210,11 @@ pub(super) fn check_projected_metre_grid(
     let probe = library.inner.engine.probe(raster, cancel)?;
     match crs_class(&probe.crs_ref) {
         super::CRS_PROJECTED_METRE => Ok(()),
-        super::CRS_PROJECTED_OTHER => {
-            Err("the grid is in Web Mercator, whose metres are not ground metres; \
+        super::CRS_PROJECTED_OTHER => Err(
+            "the grid is in Web Mercator, whose metres are not ground metres; \
                  a projected grid in ground metres is needed"
-                .to_string())
-        }
+                .to_string(),
+        ),
         super::CRS_GEOGRAPHIC => {
             Err("the grid is geographic; a projected metre grid is needed".to_string())
         }
