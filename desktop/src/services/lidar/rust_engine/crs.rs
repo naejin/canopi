@@ -444,9 +444,10 @@ fn stated_ellipsoid(keys: &GeoKeyDirectory) -> Option<Option<(f64, f64)>> {
     }
 }
 
-/// Match keys that spell a projection out to the first row they describe.
-/// Units other than metres and degrees, another prime meridian, or an
-/// ellipsoid that differs from the row's match nothing.
+/// Match keys that spell a projection out to the row they describe whose
+/// ellipsoid is nearest the stated one. Units other than metres and degrees,
+/// another prime meridian, or an ellipsoid that differs from every such row
+/// match nothing.
 fn user_defined(keys: &GeoKeyDirectory) -> Result<ResolvedCrs, String> {
     let refusal = || refused(Unsupported::UserDefined);
     let unit_ok = |id: u16, expected: u16| {
@@ -464,18 +465,24 @@ fn user_defined(keys: &GeoKeyDirectory) -> Result<ResolvedCrs, String> {
     }
     let parameters = Parameters::of_keys(keys).ok_or_else(refusal)?;
     let ellipsoid = stated_ellipsoid(keys);
+    // How far a row's ellipsoid sits from the stated one, if within the
+    // tolerance. WGS 84 and GRS80 are 0.1 mm apart, so the nearest row wins
+    // and table order only breaks a tie.
+    let distance = |row: &CrsRow| match ellipsoid {
+        None => Some(0.0),
+        Some(None) => None,
+        Some(Some((a, b))) => Proj::from_proj_string(row.proj).ok().and_then(|proj| {
+            let (row_a, row_b) = proj.ellipse_parameters();
+            let off = (row_a - a).abs().max((row_b - b).abs());
+            (off <= ORIGIN_TOLERANCE_M).then_some(off)
+        }),
+    };
     crs_table::ROWS
         .iter()
         .filter(|row| Parameters::of_row(row).is_some_and(|own| own.matches(&parameters)))
-        .find(|row| match ellipsoid {
-            None => true,
-            Some(None) => false,
-            Some(Some((a, b))) => Proj::from_proj_string(row.proj).is_ok_and(|proj| {
-                let (row_a, row_b) = proj.ellipse_parameters();
-                (row_a - a).abs() <= ORIGIN_TOLERANCE_M && (row_b - b).abs() <= ORIGIN_TOLERANCE_M
-            }),
-        })
-        .map(|row| ResolvedCrs { row })
+        .filter_map(|row| distance(row).map(|off| (row, off)))
+        .min_by(|left, right| left.1.total_cmp(&right.1))
+        .map(|(row, _)| ResolvedCrs { row })
         .ok_or_else(refusal)
 }
 
@@ -700,6 +707,53 @@ mod tests {
                 .unwrap_err()
                 .starts_with("A geocentric system is not a supported coordinate system")
         );
+    }
+
+    /// Spelled-out UTM keys land on the row whose ellipsoid is nearest the
+    /// stated one: WGS 84 and GRS80 differ by 0.1 mm in the semi-minor axis,
+    /// within the matcher's tolerance, so the first row in table order would
+    /// put WGS 84 keys on an ETRS89 or overseas row.
+    #[test]
+    fn spelled_out_utm_keys_match_the_row_on_their_own_ellipsoid() {
+        let utm = |geographic: u16, lon_0: f64| GeoKeyDirectory {
+            entries: vec![
+                short_entry(key::GTModelTypeGeoKey, 1),
+                short_entry(key::GeographicTypeGeoKey, geographic),
+                short_entry(key::ProjectedCSTypeGeoKey, USER_DEFINED),
+                short_entry(key::ProjCoordTransGeoKey, 1),
+                short_entry(key::ProjLinearUnitsGeoKey, 9001),
+                GeoKeyEntry {
+                    key_id: key::ProjNatOriginLongGeoKey,
+                    value: GeoKeyValue::Doubles(vec![lon_0]),
+                },
+                GeoKeyEntry {
+                    key_id: key::ProjNatOriginLatGeoKey,
+                    value: GeoKeyValue::Doubles(vec![0.0]),
+                },
+                GeoKeyEntry {
+                    key_id: key::ProjFalseEastingGeoKey,
+                    value: GeoKeyValue::Doubles(vec![500_000.0]),
+                },
+                GeoKeyEntry {
+                    key_id: key::ProjFalseNorthingGeoKey,
+                    value: GeoKeyValue::Doubles(vec![0.0]),
+                },
+                GeoKeyEntry {
+                    key_id: key::ProjScaleAtNatOriginGeoKey,
+                    value: GeoKeyValue::Doubles(vec![0.9996]),
+                },
+            ],
+            ..GeoKeyDirectory::default()
+        };
+        let code = |geographic, lon_0| {
+            from_geokeys(&utm(geographic, lon_0))
+                .unwrap()
+                .unwrap()
+                .code()
+        };
+        assert_eq!(code(4326, 3.0), 32631);
+        assert_eq!(code(4326, -63.0), 32620);
+        assert_eq!(code(4258, 3.0), 25831);
     }
 
     /// User-defined keys in feet match no row, whatever the projection.
