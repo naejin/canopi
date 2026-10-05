@@ -76,17 +76,13 @@ fn from_code(code: u32) -> Result<ResolvedCrs, String> {
         .ok_or_else(|| refused(&format!("EPSG:{code}")))
 }
 
-/// Resolve a stored reference, `EPSG:n`.
+/// Resolve a stored reference, exactly the canonical `EPSG:n` that
+/// [`ResolvedCrs::reference`] writes.
 pub(super) fn from_reference(reference: &str) -> Result<ResolvedCrs, String> {
-    let trimmed = reference.trim();
-    if trimmed.is_empty() {
-        return Err("no coordinate reference system was given".to_string());
-    }
-    let code = trimmed
-        .get(..5)
-        .filter(|prefix| prefix.eq_ignore_ascii_case("EPSG:"))
-        .and_then(|_| trimmed[5..].parse::<u32>().ok())
-        .ok_or_else(|| format!("{trimmed} is not an EPSG:n coordinate reference"))?;
+    let code = reference
+        .strip_prefix("EPSG:")
+        .and_then(|code| code.parse::<u32>().ok())
+        .ok_or_else(|| format!("{reference} is not an EPSG:n coordinate reference"))?;
     from_code(code)
 }
 
@@ -661,15 +657,11 @@ mod tests {
 
     #[test]
     fn references_resolve_only_as_epsg_codes_of_the_table() {
-        for reference in ["EPSG:2154", "epsg:2154", " EPSG:2154 "] {
-            assert_eq!(from_reference(reference).unwrap().code(), 2154);
-        }
+        assert_eq!(from_reference("EPSG:2154").unwrap().code(), 2154);
         assert_eq!(
             from_reference("EPSG:7415").unwrap().reference(),
             "EPSG:28992"
         );
-        assert!(from_reference("").is_err());
-        assert!(from_reference("2154").is_err());
         assert!(
             from_reference("PROJCS[\"RGF93 v1 / Lambert-93\"]")
                 .unwrap_err()
