@@ -1366,6 +1366,27 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    /// A projected model with only a geographic code, here ETRS89 and the
+    /// GeoTIFF 1.0 ProjectionGeoKey for UTM 32N, names no projection
+    /// Canopi reads, so it is refused rather than read as degrees.
+    #[test]
+    fn a_projected_model_with_only_a_geographic_row_is_refused() {
+        let dir = scratch("projected-geographic");
+        let engine = RustRasterEngine;
+        let path = dir.join("utm.tif");
+        tiff_with_keys(
+            &path,
+            (500_000.0, 5_800_000.0),
+            keys(&[(1024, 1), (2048, 4258), (3074, 16032)], &[], None),
+        );
+        let error = engine.probe(&path, &cancel()).unwrap_err();
+        assert!(
+            error.starts_with("The raster's user-defined system is not a supported"),
+            "{error}"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     /// Compound codes read as their horizontal part.
     #[test]
     fn compound_codes_read_as_their_horizontal_row() {

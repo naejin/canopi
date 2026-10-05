@@ -199,9 +199,10 @@ fn registry_code(value: Option<u16>) -> Option<u32> {
 /// Resolve the GeoTIFF keys of a file; `None` when the file declares no CRS.
 ///
 /// A projected code names the row; keys spelling a projection out are
-/// matched to a row; otherwise a geographic code names the row, whatever
-/// the model type says (wbgeotiff keys every 4xxx code, such as RGM04 / UTM
-/// 38S 4471, as geographic).
+/// matched to a row; otherwise a geographic code names the row, which may
+/// be projected under a geographic model (wbgeotiff keys every 4xxx code,
+/// such as RGM04 / UTM 38S 4471, as geographic), but not geographic under a
+/// projected model, which states a projection Canopi does not read.
 pub(super) fn from_geokeys(keys: &GeoKeyDirectory) -> Result<Option<ResolvedCrs>, String> {
     let model = short(keys, key::GTModelTypeGeoKey);
     if model == Some(3) {
@@ -215,7 +216,11 @@ pub(super) fn from_geokeys(keys: &GeoKeyDirectory) -> Result<Option<ResolvedCrs>
         return user_defined(keys).map(Some);
     }
     if let Some(code) = registry_code(short(keys, key::GeographicTypeGeoKey)) {
-        return from_code(code).map(Some);
+        let crs = from_code(code)?;
+        if model == Some(1) && crs.kind() == CrsKind::Geographic {
+            return Err(refused(Unsupported::UserDefined));
+        }
+        return Ok(Some(crs));
     }
     match model {
         None => Ok(None),
