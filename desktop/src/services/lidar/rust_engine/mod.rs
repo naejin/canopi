@@ -320,11 +320,11 @@ impl RasterEngine for RustRasterEngine {
 
     fn wgs84_extent(&self, raster: &Path, cancel: &AtomicBool) -> Result<[f64; 4], String> {
         let probe = self.probe(raster, cancel)?;
-        if probe.crs_wkt.is_empty() {
+        if probe.crs_ref.is_empty() {
             return Err("the raster has no geographic extent".to_string());
         }
         let placed = self.transform_points(
-            &probe.crs_wkt,
+            &probe.crs_ref,
             "EPSG:4326",
             &grid_corners(&source::grid_of(&probe)),
             cancel,
@@ -862,9 +862,9 @@ mod tests {
         assert_eq!(probe.compression, "DEFLATE");
         assert_eq!(probe.overview_count, 0);
         assert!(probe.mask_flags.is_empty());
-        assert!(probe.crs_wkt.contains("2154"), "{}", probe.crs_wkt);
+        assert!(probe.crs_ref.contains("2154"), "{}", probe.crs_ref);
         assert_eq!(
-            super::super::analyses::crs_class(&probe.crs_wkt),
+            super::super::analyses::crs_class(&probe.crs_ref),
             super::super::analyses::CRS_PROJECTED_METRE
         );
 
@@ -962,7 +962,7 @@ mod tests {
         let probe = engine.probe(&from_file, &cancel()).unwrap();
         assert_eq!(probe.geotransform, moved.geotransform);
         assert_eq!(probe.nodata, Some(-9999.0), "the input's tag is kept");
-        assert!(probe.crs_wkt.contains("3857"));
+        assert!(probe.crs_ref.contains("3857"));
         let mut reader = PreparedRaster::open_committed(&from_file, &moved, Some(-9999.0)).unwrap();
         let window = reader
             .read_window(
@@ -1216,7 +1216,7 @@ mod tests {
         assert_eq!((probe.width, probe.height), (3, 2));
         assert_eq!(probe.nodata, Some(-1.0));
         assert_eq!(probe.geotransform, [100.0, 10.0, 0.0, 220.0, 0.0, -10.0]);
-        assert_eq!(probe.crs_wkt, "", "an ASCII grid declares no CRS");
+        assert_eq!(probe.crs_ref, "", "an ASCII grid declares no CRS");
         let read = engine.read_f32(&path, 3, 2, &cancel()).unwrap();
         assert_eq!(read, vec![1.0, 2.0, -1.0, 4.5, 5.0, 6.0]);
         // Without a CRS a conversion needs a georeference; with one it works.

@@ -680,7 +680,7 @@ pub(super) fn parse_gdalinfo_json(json: &str) -> Result<RasterProbe, String> {
     if geotransform[1] == 0.0 || geotransform[5] == 0.0 {
         return Err("raster has degenerate pixel size (zero geotransform scale)".to_string());
     }
-    let crs_wkt = parsed
+    let crs_ref = parsed
         .coordinateSystem
         .and_then(|crs| crs.wkt)
         .unwrap_or_default();
@@ -701,7 +701,7 @@ pub(super) fn parse_gdalinfo_json(json: &str) -> Result<RasterProbe, String> {
             .map(|mask| mask.flags.clone())
             .unwrap_or_default(),
         geotransform,
-        crs_wkt,
+        crs_ref,
         block: first.block.unwrap_or([width, 1]),
         compression: parsed
             .metadata
@@ -865,7 +865,7 @@ mod tests {
             "bands": [{"type": "Float32"}]
         }"#;
         let probe = parse_gdalinfo_json(json).unwrap();
-        assert_eq!(probe.crs_wkt, "");
+        assert_eq!(probe.crs_ref, "");
         assert_eq!(probe.block, [4, 1]);
         assert_eq!(probe.compression, "NONE");
         assert_eq!(probe.overview_count, 0);

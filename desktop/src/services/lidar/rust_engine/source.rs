@@ -144,7 +144,7 @@ fn probe_tiff(header: &tiff::TiffHeader) -> Result<RasterProbe, String> {
     if geotransform[1] == 0.0 || geotransform[5] == 0.0 {
         return Err("raster has degenerate pixel size (zero geotransform scale)".to_string());
     }
-    let crs_wkt = match &header.geo_keys {
+    let crs_ref = match &header.geo_keys {
         Some(keys) => crs::from_geokeys(keys)?
             .map(|resolved| resolved.wkt)
             .unwrap_or_default(),
@@ -173,7 +173,7 @@ fn probe_tiff(header: &tiff::TiffHeader) -> Result<RasterProbe, String> {
         unit: header.unit.clone(),
         mask_flags,
         geotransform,
-        crs_wkt,
+        crs_ref,
         block,
         compression: tiff::compression_name(header.compression_tag),
         overview_count: header.overview_count,
@@ -290,7 +290,7 @@ fn probe_other(
             0.0,
             -raster.cell_size_y,
         ],
-        crs_wkt: crs.as_ref().map(|c| c.wkt.clone()).unwrap_or_default(),
+        crs_ref: crs.as_ref().map(|c| c.wkt.clone()).unwrap_or_default(),
         block: [width, 1],
         compression: "NONE".to_string(),
         overview_count: 0,

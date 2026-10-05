@@ -409,7 +409,7 @@ pub(crate) mod test_support {
             connection
                 .execute(
                     "INSERT INTO lidar_interpretations(
-                        id, source_sha256, band_index, quantity, units, scale, offset, crs_wkt,
+                        id, source_sha256, band_index, quantity, units, scale, offset, crs_ref,
                         vertical_ref, geotransform, width, height, interp_hash, valid_cells)
                      VALUES(?1, ?2, 1, ?3, ?4, 1, 0, 'EPSG:2154', 'unspecified', '0,1,0,0,0,-1', 1, 1, ?1, 1)",
                     rusqlite::params![interpretation_id, sha256, quantity, units],

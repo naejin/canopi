@@ -712,7 +712,7 @@ pub(super) fn cog_from_row(
 pub(super) fn asset_row(
     paths: &LidarPaths,
     asset: &CogAsset,
-    crs_wkt: &str,
+    crs_ref: &str,
 ) -> Result<catalogue::RasterAssetRow, String> {
     let rel_path = asset
         .path
@@ -728,7 +728,7 @@ pub(super) fn asset_row(
         width: i64::from(asset.grid.width),
         height: i64::from(asset.grid.height),
         geotransform: super::import::format_geotransform(asset.grid.geotransform),
-        crs_wkt: crs_wkt.to_string(),
+        crs_ref: crs_ref.to_string(),
         nodata: asset.nodata.map(f64::from),
     })
 }

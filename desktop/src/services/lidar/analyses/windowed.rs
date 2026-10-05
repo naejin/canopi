@@ -84,7 +84,7 @@ pub(super) fn run(
             tool,
             &occurrences,
             &manifest.grid,
-            &manifest.crs_wkt,
+            &manifest.crs_ref,
             halo,
             chunk_x,
             chunk_y,
@@ -117,7 +117,7 @@ pub(super) fn run(
             if let Some((asset, aggregate)) = &block.result {
                 catalogue::insert_raster_asset(
                     &connection,
-                    &generation::asset_row(paths, asset, &manifest.crs_wkt)?,
+                    &generation::asset_row(paths, asset, &manifest.crs_ref)?,
                 )?;
                 rows.push(catalogue::GenerationChunkRow {
                     role: generation::RESULT_ROLE.to_string(),
@@ -133,7 +133,7 @@ pub(super) fn run(
             if let Some(asset) = &block.quality {
                 catalogue::insert_raster_asset(
                     &connection,
-                    &generation::asset_row(paths, asset, &manifest.crs_wkt)?,
+                    &generation::asset_row(paths, asset, &manifest.crs_ref)?,
                 )?;
                 rows.push(catalogue::GenerationChunkRow {
                     role: generation::QUALITY_ROLE.to_string(),
@@ -153,7 +153,7 @@ pub(super) fn run(
         output_key: output.key,
         generation_id,
         grid: manifest.grid.clone(),
-        crs_wkt: manifest.crs_wkt.clone(),
+        crs_ref: manifest.crs_ref.clone(),
         crs_class: head.crs_class.clone(),
         bounds_3857: head.bounds_3857.clone(),
         coverage_cells,
@@ -208,7 +208,7 @@ pub(super) fn check_projected_metre_grid(
     raster: &Path,
 ) -> Result<(), String> {
     let probe = library.inner.engine.probe(raster, cancel)?;
-    match crs_class(&probe.crs_wkt) {
+    match crs_class(&probe.crs_ref) {
         super::CRS_PROJECTED_METRE => Ok(()),
         super::CRS_PROJECTED_OTHER => {
             Err("the grid declares horizontal units other than metres".to_string())
@@ -227,7 +227,7 @@ fn compute_block(
     tool: &WindowedTool,
     occurrences: &[generation::ResolvedMember],
     lattice: &RasterGrid,
-    crs_wkt: &str,
+    crs_ref: &str,
     halo: i64,
     chunk_x: i64,
     chunk_y: i64,
@@ -274,7 +274,7 @@ fn compute_block(
         &raw,
         &halo_path,
         &halo_grid,
-        crs_wkt,
+        crs_ref,
         STAGING_NODATA,
     );
     let _ = std::fs::remove_file(&raw);
@@ -367,7 +367,7 @@ fn compute_block(
                 scratch,
                 &stem,
                 &core_grid,
-                crs_wkt,
+                crs_ref,
                 Some(f32::NAN),
                 &values,
             )?,
@@ -382,7 +382,7 @@ fn compute_block(
             scratch,
             &format!("{stem}-quality"),
             &core_grid,
-            crs_wkt,
+            crs_ref,
             None,
             &quality,
         )?)

@@ -64,7 +64,7 @@ enum PartSource {
 struct WindowReader {
     reader: generation::GenerationReader,
     lattice: RasterGrid,
-    crs_wkt: String,
+    crs_ref: String,
 }
 
 #[derive(Clone)]
@@ -78,7 +78,7 @@ pub(super) struct DisplayPlan {
     kind: LibraryItemRole,
     entity_id: String,
     generation_id: String,
-    crs_wkt: String,
+    crs_ref: String,
     parts: Vec<PartSpec>,
 }
 
@@ -153,7 +153,7 @@ fn build_plan(
                 kind,
                 entity_id: entity_id.to_string(),
                 generation_id: head.id,
-                crs_wkt: manifest.crs_wkt,
+                crs_ref: manifest.crs_ref,
                 parts,
             })))
         }
@@ -182,14 +182,14 @@ fn build_plan(
                     generation::GenerationChunkReader::new(&result.id, generation::RESULT_ROLE),
                 ),
                 lattice: manifest.grid.clone(),
-                crs_wkt: manifest.crs_wkt.clone(),
+                crs_ref: manifest.crs_ref.clone(),
             });
             let parts = grouped_parts(&format!("gen-{}", result.id), &reader, coordinates);
             Ok(Planned::Plan(Arc::new(DisplayPlan {
                 kind,
                 entity_id: entity_id.to_string(),
                 generation_id: result.id,
-                crs_wkt: manifest.crs_wkt,
+                crs_ref: manifest.crs_ref,
                 parts,
             })))
         }
@@ -465,7 +465,7 @@ impl LidarLibrary {
             if ready_part(self, &part.key)?.is_some() {
                 continue;
             }
-            let (prepared, bytes) = self.prepare_part(part, &plan.crs_wkt, cancel)?;
+            let (prepared, bytes) = self.prepare_part(part, &plan.crs_ref, cancel)?;
             let display = self.display()?;
             record(&display, &part.key, &prepared, bytes)?;
         }
@@ -475,7 +475,7 @@ impl LidarLibrary {
     fn prepare_part(
         &self,
         part: &PartSpec,
-        crs_wkt: &str,
+        crs_ref: &str,
         cancel: &AtomicBool,
     ) -> Result<(Prepared, u64), String> {
         let staging = self.inner.paths.display_cog_staging_dir();
@@ -510,7 +510,7 @@ impl LidarLibrary {
                 }
             }
             PartSource::Windows { reader, chunks } => {
-                let written = self.write_part_windows(reader, chunks, &staged, crs_wkt, cancel);
+                let written = self.write_part_windows(reader, chunks, &staged, crs_ref, cancel);
                 match written {
                     Ok(true) => {}
                     Ok(false) => {
@@ -556,7 +556,7 @@ impl LidarLibrary {
         reader: &WindowReader,
         chunks: &[(i64, i64)],
         staged: &Path,
-        crs_wkt: &str,
+        crs_ref: &str,
         cancel: &AtomicBool,
     ) -> Result<bool, String> {
         let side = generation::CHUNK_SIDE;
@@ -630,10 +630,10 @@ impl LidarLibrary {
                 gt[5],
             ],
         };
-        let crs = if reader.crs_wkt.is_empty() {
-            crs_wkt
+        let crs = if reader.crs_ref.is_empty() {
+            crs_ref
         } else {
-            &reader.crs_wkt
+            &reader.crs_ref
         };
         self.inner
             .engine
@@ -672,7 +672,7 @@ impl LidarLibrary {
             if ready_part(self, &part.key)?.is_some() {
                 continue;
             }
-            let (prepared, bytes) = self.prepare_part(&part, &source.crs_wkt, cancel)?;
+            let (prepared, bytes) = self.prepare_part(&part, &source.crs_ref, cancel)?;
             let display = self.display()?;
             record(&display, &part.key, &prepared, bytes)?;
         }
@@ -729,7 +729,7 @@ mod tests {
                 height: 1024,
                 geotransform: [0.0, 1.0, 0.0, 0.0, 0.0, -1.0],
             },
-            crs_wkt: String::new(),
+            crs_ref: String::new(),
         });
         // Two adjacent chunks and one 200 chunks away.
         let parts = grouped_parts("gen-1", &reader, vec![(0, 0), (1, 0), (200, 3)]);
@@ -762,7 +762,7 @@ mod tests {
                 height: 1,
                 geotransform: [0.0, 1.0, 0.0, 0.0, 0.0, -1.0],
             },
-            crs_wkt: String::new(),
+            crs_ref: String::new(),
         });
         let parts = grouped_parts("gen-2", &reader, vec![(-1, -1), (0, 0)]);
         let keys: Vec<&str> = parts.iter().map(|part| part.key.as_str()).collect();

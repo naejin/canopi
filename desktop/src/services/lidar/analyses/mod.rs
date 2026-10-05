@@ -84,7 +84,7 @@ pub(crate) struct StagedRaster {
     pub output_key: &'static str,
     pub generation_id: String,
     pub grid: RasterGrid,
-    pub crs_wkt: String,
+    pub crs_ref: String,
     pub crs_class: String,
     pub bounds_3857: String,
     pub coverage_cells: u64,
@@ -166,7 +166,7 @@ pub(crate) struct DerivedManifest {
     pub output_key: String,
     pub grid: RasterGrid,
     /// CRS of the lattice, so the item can be sampled without its input.
-    pub crs_wkt: String,
+    pub crs_ref: String,
     /// `chunks`: sparse result and quality chunks.
     pub storage: String,
 }
@@ -702,7 +702,7 @@ fn publish(
                 item_id: item_id.clone(),
                 output_key: output.output_key.to_string(),
                 grid: output.grid.clone(),
-                crs_wkt: output.crs_wkt.clone(),
+                crs_ref: output.crs_ref.clone(),
                 storage: "chunks".to_string(),
             };
             let (min_value, max_value) = output.value_range.unzip();
@@ -971,7 +971,7 @@ pub(crate) mod test_support {
             r#"[{{"key":"dem","item_id":"{source_layer_id}","generation_id":"{source_generation_id}"}}]"#
         );
         let manifest = format!(
-            r#"{{"item_id":"{item_id}","output_key":"slope","grid":{{"width":1024,"height":1024,"geotransform":[0.0,1.0,0.0,0.0,0.0,-1.0]}},"crs_wkt":"EPSG:3857","storage":"chunks"}}"#
+            r#"{{"item_id":"{item_id}","output_key":"slope","grid":{{"width":1024,"height":1024,"geotransform":[0.0,1.0,0.0,0.0,0.0,-1.0]}},"crs_ref":"EPSG:3857","storage":"chunks"}}"#
         );
         let tool = r#"{"engine":"geolibre","version":"geolibre-cli 1.5.3","revision":"aac2b743978666f3c3119b5c93de1b30963b1493","tools":["slope"]}"#;
         connection

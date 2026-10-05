@@ -38,7 +38,7 @@ struct SampleTarget {
     generation_id: String,
     /// The lattice the target's cells are addressed in.
     grid: RasterGrid,
-    crs_wkt: String,
+    crs_ref: String,
     /// What one returned number means, in the target's own terms.
     units: String,
     read: TargetRead,
@@ -68,7 +68,7 @@ fn resolve_target(
             Ok(Some(SampleTarget {
                 generation_id: row.id,
                 grid: manifest.grid.clone(),
-                crs_wkt: manifest.crs_wkt.clone(),
+                crs_ref: manifest.crs_ref.clone(),
                 units,
                 read,
             }))
@@ -86,7 +86,7 @@ fn resolve_target(
             Ok(Some(SampleTarget {
                 generation_id: row.id,
                 grid: manifest.grid,
-                crs_wkt: manifest.crs_wkt,
+                crs_ref: manifest.crs_ref,
                 units: item.units,
                 read: TargetRead::Chunks,
             }))
@@ -101,15 +101,15 @@ fn resolve_target(
 fn transform_point(
     engine: &dyn RasterEngine,
     cancel: &AtomicBool,
-    crs_wkt: &str,
+    crs_ref: &str,
     longitude: f64,
     latitude: f64,
 ) -> Result<Option<(f64, f64)>, String> {
-    if crs_wkt.trim().is_empty() {
+    if crs_ref.trim().is_empty() {
         return Ok(None);
     }
     Ok(engine
-        .transform_points("EPSG:4326", crs_wkt, &[(longitude, latitude)], cancel)?
+        .transform_points("EPSG:4326", crs_ref, &[(longitude, latitude)], cancel)?
         .into_iter()
         .next()
         .flatten())
@@ -246,7 +246,7 @@ pub(super) fn sample(
     let Some((x, y)) = transform_point(
         engine,
         cancel,
-        &target.crs_wkt,
+        &target.crs_ref,
         request.longitude,
         request.latitude,
     )?

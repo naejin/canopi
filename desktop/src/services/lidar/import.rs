@@ -96,7 +96,7 @@ pub struct StagedSource {
     pub width: u32,
     pub height: u32,
     pub geotransform: GeoTransform,
-    pub crs_wkt: String,
+    pub crs_ref: String,
     pub nodata: Option<f32>,
     pub value_range: [f64; 2],
     pub size_bytes: u64,
@@ -263,10 +263,10 @@ pub fn stage_import(
         let anchor = staged
             .iter()
             .find(|source| source.compatible)
-            .map(|source| (grid_for_source(source), source.crs_wkt.clone()));
+            .map(|source| (grid_for_source(source), source.crs_ref.clone()));
         if let Some((anchor_grid, anchor_crs)) = anchor {
             for source in staged.iter_mut().filter(|source| source.compatible) {
-                if source.crs_wkt.trim() != anchor_crs.trim() {
+                if source.crs_ref.trim() != anchor_crs.trim() {
                     source.compatible = false;
                     source
                         .issues
@@ -382,14 +382,14 @@ fn layer_lattice_grid(
     connection: &rusqlite::Connection,
     layer_id: &str,
     anchor: &RasterGrid,
-    crs_wkt: &str,
+    crs_ref: &str,
 ) -> Result<RasterGrid, String> {
     let row = catalogue::LayerLatticeRow {
         origin_x: anchor.geotransform[0],
         origin_y: anchor.geotransform[3],
         pixel_x: anchor.geotransform[1],
         pixel_y: anchor.geotransform[5],
-        crs_wkt: crs_wkt.to_string(),
+        crs_ref: crs_ref.to_string(),
     };
     catalogue::record_layer_lattice(connection, layer_id, &row)?;
     let stored = catalogue::layer_lattice(connection, layer_id)?
@@ -590,7 +590,7 @@ fn stage_source(
 
     // Probe from the managed copy so the flow survives user-file changes.
     let probe = engine.probe(&managed_original, cancel)?;
-    if probe.crs_wkt.trim().is_empty() {
+    if probe.crs_ref.trim().is_empty() {
         return Err(
             "raster has no coordinate system; Canopi requires a horizontal CRS".to_string(),
         );
@@ -670,7 +670,7 @@ fn stage_source(
         cancel,
         &managed_original,
         &source_grid,
-        &probe.crs_wkt,
+        &probe.crs_ref,
         probe.nodata,
         job_dir,
         &sha256,
@@ -713,7 +713,7 @@ fn stage_source(
         .execute(
             "INSERT INTO lidar_interpretations(
                 id, source_sha256, band_index, quantity, units, scale, offset,
-                crs_wkt, vertical_ref, nodata, geotransform, width, height, interp_hash,
+                crs_ref, vertical_ref, nodata, geotransform, width, height, interp_hash,
                 valid_cells, min_value, max_value)
              VALUES(?1, ?2, 1, ?3, ?4, 1, 0, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
              ON CONFLICT(interp_hash) DO NOTHING",
@@ -722,7 +722,7 @@ fn stage_source(
                 sha256,
                 quantity,
                 units,
-                probe.crs_wkt,
+                probe.crs_ref,
                 vertical_ref,
                 probe.nodata,
                 format_geotransform(probe.geotransform),
@@ -743,7 +743,7 @@ fn stage_source(
         width: probe.width,
         height: probe.height,
         geotransform: probe.geotransform,
-        crs_wkt: probe.crs_wkt.clone(),
+        crs_ref: probe.crs_ref.clone(),
         nodata: probe.nodata,
         value_range,
         size_bytes,
@@ -768,7 +768,7 @@ fn stage_source_samples(
     cancel: &AtomicBool,
     input: &Path,
     grid: &RasterGrid,
-    crs_wkt: &str,
+    crs_ref: &str,
     nodata: Option<f32>,
     job_dir: &Path,
     sha256: &str,
@@ -779,7 +779,7 @@ fn stage_source_samples(
     // combined footprint is measured against the job scratch, which holds the
     // conversion until it is admitted.
     let asset = super::raster_assets::write_job_source_cog(
-        engine, cancel, job_dir, &stem, input, grid, crs_wkt, nodata,
+        engine, cancel, job_dir, &stem, input, grid, crs_ref, nodata,
     )?;
     let relative_path = asset
         .path
@@ -951,7 +951,7 @@ struct PromotedSourceCog {
     bytes: u64,
     nodata: Option<f32>,
     grid: RasterGrid,
-    crs_wkt: String,
+    crs_ref: String,
 }
 
 impl PromotedSourceCog {
@@ -1027,7 +1027,7 @@ fn promote_source_cogs(
             bytes: cog.bytes,
             nodata: cog.nodata,
             grid,
-            crs_wkt: source.crs_wkt.clone(),
+            crs_ref: source.crs_ref.clone(),
         });
     }
     Ok(promoted)
@@ -1045,7 +1045,7 @@ fn insert_promoted_references(
     for asset in promoted {
         catalogue::insert_raster_asset(
             connection,
-            &generation::asset_row(paths, &asset.asset(), &asset.crs_wkt)?,
+            &generation::asset_row(paths, &asset.asset(), &asset.crs_ref)?,
         )?;
         connection
             .execute(
@@ -1156,14 +1156,14 @@ pub fn apply_import(
         LidarImportProgressPhase::PreparingRaster,
         70,
     );
-    let crs_wkt = compatible[0].crs_wkt.clone();
+    let crs_ref = compatible[0].crs_ref.clone();
     let lattice = {
         let connection = library.catalogue()?;
         layer_lattice_grid(
             &connection,
             &layer_id,
             &grid_for_source(compatible[0]),
-            &crs_wkt,
+            &crs_ref,
         )?
     };
     // The first listed source is topmost.
@@ -1183,7 +1183,7 @@ pub fn apply_import(
     let plan = collection::SnapshotPlan {
         members,
         lattice,
-        crs_wkt,
+        crs_ref,
         nodata: staging.layer_nodata,
         manifest_members,
     };
@@ -1364,7 +1364,7 @@ fn publish_applied_snapshot(
 pub struct GenerationManifest {
     pub grid: RasterGrid,
     pub nodata: f32,
-    pub crs_wkt: String,
+    pub crs_ref: String,
     pub members: Vec<String>,
     pub engine_version: String,
     pub created_at: String,
@@ -1426,7 +1426,7 @@ pub fn raw_to_tif(
     raw: &Path,
     tif: &Path,
     grid: &RasterGrid,
-    crs_wkt: &str,
+    crs_ref: &str,
     nodata: f32,
 ) -> Result<(), String> {
     let bytes = std::fs::read(raw).map_err(|e| format!("Failed to read raw buffer: {e}"))?;
@@ -1444,7 +1444,7 @@ pub fn raw_to_tif(
         .collect();
     engine.write_geotiff(
         tif,
-        RasterGeoref { grid, crs: crs_wkt },
+        RasterGeoref { grid, crs: crs_ref },
         nodata,
         &values,
         cancel,
@@ -1456,10 +1456,10 @@ pub fn raster_bounds_3857(
     engine: &dyn RasterEngine,
     cancel: &AtomicBool,
     grid: &RasterGrid,
-    crs_wkt: &str,
+    crs_ref: &str,
 ) -> Result<[f64; 4], String> {
     let corners = super::engine::grid_corners(grid);
-    let placed = engine.transform_points(crs_wkt, "EPSG:3857", &corners, cancel)?;
+    let placed = engine.transform_points(crs_ref, "EPSG:3857", &corners, cancel)?;
     check_cancel(cancel)?;
     super::engine::bounds_of(&placed)
         .ok_or_else(|| "the raster's corners have no projected position".to_string())

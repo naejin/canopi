@@ -30,7 +30,7 @@ pub(super) struct SnapshotPlan {
     /// Top-first priority list: index 0 is the topmost source.
     pub members: Vec<SnapshotMember>,
     pub lattice: RasterGrid,
-    pub crs_wkt: String,
+    pub crs_ref: String,
     pub nodata: f32,
     /// Manifest `members` list: interpretation hashes, top-first.
     pub manifest_members: Vec<String>,
@@ -291,7 +291,7 @@ fn coverage_bounds(
 ) -> Result<[f64; 4], String> {
     let engine = library.inner.engine.as_ref();
     if chunks.is_empty() {
-        return import::raster_bounds_3857(engine, cancel, &plan.lattice, &plan.crs_wkt);
+        return import::raster_bounds_3857(engine, cancel, &plan.lattice, &plan.crs_ref);
     }
     let mut first = (i64::MAX, i64::MAX);
     let mut last = (i64::MIN, i64::MIN);
@@ -303,7 +303,7 @@ fn coverage_bounds(
         &generation::chunk_grid(&plan.lattice, first.0, first.1),
         &generation::chunk_grid(&plan.lattice, last.0, last.1),
     )?;
-    import::raster_bounds_3857(engine, cancel, &envelope, &plan.crs_wkt)
+    import::raster_bounds_3857(engine, cancel, &envelope, &plan.crs_ref)
 }
 
 /// The manifest of an ordered snapshot.
@@ -314,7 +314,7 @@ pub(super) fn manifest_for(
     let manifest = GenerationManifest {
         grid: plan.lattice.clone(),
         nodata: plan.nodata,
-        crs_wkt: plan.crs_wkt.clone(),
+        crs_ref: plan.crs_ref.clone(),
         members: plan.manifest_members.clone(),
         engine_version: import::engine_version(library.inner.engine.as_ref()),
         created_at: catalogue::now_iso(),
@@ -352,7 +352,7 @@ pub(super) fn insert_snapshot(
                 measurement.display_max_value,
                 super::display_basis_label(measurement.display_basis),
                 serde_json::to_string(&measurement.bounds_3857).map_err(|e| e.to_string())?,
-                super::analyses::crs_class(&plan.crs_wkt),
+                super::analyses::crs_class(&plan.crs_ref),
             ],
         )
         .map_err(|e| format!("Failed to record the collection generation: {e}"))?;

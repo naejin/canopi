@@ -570,6 +570,101 @@ mod tests {
         assert_eq!(utc_stamp(951_782_400), "20000229T000000Z");
     }
 
+    /// A v21 catalogue still stores the CRS in `crs_wkt` columns, which v22
+    /// renamed to `crs_ref`; opening it as is would fail on the first read, so
+    /// it is set aside and rebuilt from the originals with every id kept.
+    #[test]
+    fn a_v21_catalogue_is_set_aside_and_rebuilt_with_its_ids_kept() {
+        let root = crate::test_scratch::TestScratch::new("lidar-v21-library");
+        let paths = LidarPaths::open(&root).unwrap();
+        let connection = catalogue::open(&paths.catalogue_path()).unwrap();
+        source_meta::test_support::seed_published_item(
+            &connection,
+            "lyr-delft",
+            "Delft",
+            DEFAULT_QUANTITY_KEY,
+            "m",
+            &[("sha-delft", "delft.tif")],
+        );
+        std::fs::create_dir_all(paths.source_dir("sha-delft")).unwrap();
+        std::fs::write(paths.source_original("sha-delft"), b"tile").unwrap();
+        source_meta::refresh(&connection, &paths).unwrap();
+        // The v21 shape: every CRS column named `crs_wkt`, version 21.
+        for rename in [
+            "ALTER TABLE lidar_interpretations RENAME COLUMN crs_ref TO crs_wkt",
+            "ALTER TABLE lidar_layer_lattices RENAME COLUMN crs_ref TO crs_wkt",
+            "ALTER TABLE lidar_raster_assets RENAME COLUMN crs_ref TO crs_wkt",
+        ] {
+            let table = rename.split_whitespace().nth(2).unwrap();
+            if has_column(&connection, table, "crs_ref") {
+                connection.execute_batch(rename).unwrap();
+            }
+        }
+        connection
+            .execute(
+                "UPDATE lidar_catalogue_meta SET value = '21' WHERE key = 'schema_version'",
+                [],
+            )
+            .unwrap();
+        drop(connection);
+
+        let opened = open_catalogue(&paths).unwrap();
+        assert!(
+            matches!(
+                opened.status,
+                LibraryOpenStatus::Recovered {
+                    reason: RecoveryReason::OlderVersion(21),
+                    items: 1,
+                    generated: 0,
+                    ..
+                }
+            ),
+            "{:?}",
+            opened.status
+        );
+        let kept: Vec<PathBuf> = std::fs::read_dir(paths.set_aside_dir())
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == "sqlite"))
+            .collect();
+        assert_eq!(kept.len(), 1, "the v21 file is kept aside: {kept:?}");
+        assert_eq!(
+            catalogue::stored_version(&kept[0]).unwrap(),
+            Some(21),
+            "set aside as it was"
+        );
+        let ids: Vec<String> = opened
+            .connection
+            .prepare("SELECT id FROM lidar_source_layers")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(ids, vec!["lyr-delft".to_string()]);
+        assert!(has_column(
+            &opened.connection,
+            "lidar_interpretations",
+            "crs_ref"
+        ));
+        assert!(!has_column(
+            &opened.connection,
+            "lidar_interpretations",
+            "crs_wkt"
+        ));
+        drop(opened);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    fn has_column(connection: &Connection, table: &str, column: &str) -> bool {
+        connection
+            .prepare("SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2")
+            .unwrap()
+            .exists([table, column])
+            .unwrap()
+    }
+
     #[test]
     fn inspection_names_each_catalogue_state() {
         let root = crate::test_scratch::TestScratch::new("canopi-inspect");

@@ -122,11 +122,11 @@ fn assert_probe_facts(label: &str, gdal: &RasterProbe, rust: &RasterProbe, facts
         );
     }
     assert_eq!(
-        super::super::analyses::crs_class(&gdal.crs_wkt),
-        super::super::analyses::crs_class(&rust.crs_wkt),
+        super::super::analyses::crs_class(&gdal.crs_ref),
+        super::super::analyses::crs_class(&rust.crs_ref),
         "{label}: CRS class ({} vs {})",
-        gdal.crs_wkt,
-        rust.crs_wkt
+        gdal.crs_ref,
+        rust.crs_ref
     );
     // A tiled file's block is a fact of the file; for strips GDAL reports its
     // own access block (one row for a single whole-image strip), so only the
@@ -164,7 +164,7 @@ fn compare_source(
         height: rust_probe.height,
         geotransform: rust_probe.geotransform,
     };
-    let has_crs = !rust_probe.crs_wkt.is_empty();
+    let has_crs = !rust_probe.crs_ref.is_empty();
 
     if has_crs {
         let a = gdal.wgs84_extent(source, &c).expect("GDAL extent");
@@ -239,7 +239,7 @@ fn compare_source(
 
     // The controlled profile from each engine, read by the production reader.
     let crs = if has_crs {
-        rust_probe.crs_wkt.clone()
+        rust_probe.crs_ref.clone()
     } else {
         "EPSG:3857".to_string()
     };

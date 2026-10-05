@@ -387,7 +387,7 @@ fn stage_fake(library: &LidarLibrary, digest: &str) -> StagedRaster {
             width: 1,
             height: 1,
             geotransform: "[0,1,0,0,0,-1]".to_string(),
-            crs_wkt: "EPSG:3857".to_string(),
+            crs_ref: "EPSG:3857".to_string(),
             nodata: None,
         },
     )
@@ -415,7 +415,7 @@ fn stage_fake(library: &LidarLibrary, digest: &str) -> StagedRaster {
             height: 1024,
             geotransform: [0.0, 1.0, 0.0, 0.0, 0.0, -1.0],
         },
-        crs_wkt: "EPSG:3857".to_string(),
+        crs_ref: "EPSG:3857".to_string(),
         crs_class: CRS_PROJECTED_METRE.to_string(),
         bounds_3857: "[0,0,1,1]".to_string(),
         coverage_cells: 4,

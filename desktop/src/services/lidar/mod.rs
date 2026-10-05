@@ -1896,7 +1896,7 @@ mod tests {
                 .execute(
                     "INSERT INTO lidar_interpretations
                  (id, source_sha256, band_index, quantity, units, scale, offset,
-                  crs_wkt, vertical_ref, nodata, geotransform, width, height, interp_hash,
+                  crs_ref, vertical_ref, nodata, geotransform, width, height, interp_hash,
                   valid_cells)
                  VALUES ('interp-delete', 'sha-delete', 1, 'ground-elevation', 'm', 1, 0,
                          'test', 'unknown', -9999, '[0,1,0,1,0,-1]', 1, 1, 'hash-delete', 1)",
@@ -1939,7 +1939,7 @@ mod tests {
                 .execute(
                     "INSERT INTO lidar_raster_assets
                         (sha256, rel_path, bytes, profile, width, height, geotransform,
-                         crs_wkt, nodata, created_at)
+                         crs_ref, nodata, created_at)
                      VALUES ('sha-asset-delete', 'assets/sha-asset-delete/cog.tif', 4,
                              'cog-f32-t256-raw-v1', 1, 1, '[0,1,0,1,0,-1]', 'test', NULL, '0')",
                     [],
@@ -2399,7 +2399,7 @@ mod tests {
                 connection
                     .execute(
                         "INSERT INTO lidar_raster_assets(sha256, rel_path, bytes, profile,
-                            width, height, geotransform, crs_wkt, nodata, created_at)
+                            width, height, geotransform, crs_ref, nodata, created_at)
                          VALUES(?1, ?2, 1, 'test', 1, 1, '0,1,0,0,0,-1', '', NULL, '0')",
                         rusqlite::params![sha, format!("assets/{sha}/cog.tif")],
                     )

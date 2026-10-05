@@ -41,7 +41,7 @@ pub struct RasterProbe {
     /// `[origin_x, pixel_w, rot_x, origin_y, rot_y, pixel_h]`.
     pub geotransform: [f64; 6],
     /// The horizontal CRS as WKT, or empty when the file declares none.
-    pub crs_wkt: String,
+    pub crs_ref: String,
     /// Band 1's native block: `[tile_w, tile_h]` or `[width, rows_per_strip]`.
     pub block: [u32; 2],
     /// Compression in GDAL's vocabulary (`NONE`, `DEFLATE`, `LZW`, ...).
@@ -94,7 +94,7 @@ pub trait RasterEngine: Send + Sync + std::fmt::Debug {
     fn version(&self) -> Result<String, String>;
 
     /// Header facts of `raster`. Fails when the file is unreadable or not
-    /// georeferenced; a missing CRS leaves `crs_wkt` empty.
+    /// georeferenced; a missing CRS leaves `crs_ref` empty.
     fn probe(&self, raster: &Path, cancel: &AtomicBool) -> Result<RasterProbe, String>;
 
     /// Exact statistics over band 1's valid samples (test lanes only).

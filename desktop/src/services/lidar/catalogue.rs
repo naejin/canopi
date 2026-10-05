@@ -11,7 +11,7 @@ use rusqlite::{Connection, OptionalExtension};
 /// There is no migration ladder: an older or corrupt catalogue is set aside
 /// and rebuilt from the originals (`recovery.rs`, ADR 0021), and a newer one
 /// is refused so an older binary never writes rows it does not understand.
-pub const CATALOGUE_VERSION: i32 = 21;
+pub const CATALOGUE_VERSION: i32 = 22;
 
 /// Open (or create) the catalogue at `path`.
 ///
@@ -145,7 +145,7 @@ CREATE TABLE lidar_interpretations (
     units TEXT NOT NULL,
     scale REAL NOT NULL,
     offset REAL NOT NULL,
-    crs_wkt TEXT NOT NULL,
+    crs_ref TEXT NOT NULL,
     vertical_ref TEXT NOT NULL,
     nodata REAL,
     geotransform TEXT NOT NULL,
@@ -215,7 +215,7 @@ CREATE TABLE lidar_layer_lattices (
     origin_y REAL NOT NULL,
     pixel_x REAL NOT NULL,
     pixel_y REAL NOT NULL,
-    crs_wkt TEXT NOT NULL,
+    crs_ref TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
 
@@ -317,7 +317,7 @@ CREATE TABLE lidar_raster_assets (
     width INTEGER NOT NULL,
     height INTEGER NOT NULL,
     geotransform TEXT NOT NULL,
-    crs_wkt TEXT NOT NULL,
+    crs_ref TEXT NOT NULL,
     nodata REAL,
     created_at TEXT NOT NULL
 );
@@ -1186,7 +1186,7 @@ pub struct RasterAssetRow {
     pub width: i64,
     pub height: i64,
     pub geotransform: String,
-    pub crs_wkt: String,
+    pub crs_ref: String,
     pub nodata: Option<f64>,
 }
 
@@ -1197,7 +1197,7 @@ pub struct LayerLatticeRow {
     pub origin_y: f64,
     pub pixel_x: f64,
     pub pixel_y: f64,
-    pub crs_wkt: String,
+    pub crs_ref: String,
 }
 
 /// Record a layer's lattice the first time it is known, and never move it.
@@ -1212,7 +1212,7 @@ pub fn record_layer_lattice(
     connection
         .execute(
             "INSERT INTO lidar_layer_lattices(
-                layer_id, origin_x, origin_y, pixel_x, pixel_y, crs_wkt, created_at)
+                layer_id, origin_x, origin_y, pixel_x, pixel_y, crs_ref, created_at)
              VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)
              ON CONFLICT(layer_id) DO NOTHING",
             rusqlite::params![
@@ -1221,7 +1221,7 @@ pub fn record_layer_lattice(
                 lattice.origin_y,
                 lattice.pixel_x,
                 lattice.pixel_y,
-                lattice.crs_wkt,
+                lattice.crs_ref,
                 now_iso(),
             ],
         )
@@ -1236,7 +1236,7 @@ pub fn layer_lattice(
 ) -> Result<Option<LayerLatticeRow>, String> {
     connection
         .query_row(
-            "SELECT origin_x, origin_y, pixel_x, pixel_y, crs_wkt
+            "SELECT origin_x, origin_y, pixel_x, pixel_y, crs_ref
              FROM lidar_layer_lattices WHERE layer_id = ?1",
             [layer_id],
             |row| {
@@ -1245,7 +1245,7 @@ pub fn layer_lattice(
                     origin_y: row.get(1)?,
                     pixel_x: row.get(2)?,
                     pixel_y: row.get(3)?,
-                    crs_wkt: row.get(4)?,
+                    crs_ref: row.get(4)?,
                 })
             },
         )
@@ -1273,7 +1273,7 @@ pub fn insert_raster_asset(connection: &Connection, asset: &RasterAssetRow) -> R
         .execute(
             "INSERT INTO lidar_raster_assets(
                 sha256, rel_path, bytes, profile, width, height, geotransform,
-                crs_wkt, nodata, created_at)
+                crs_ref, nodata, created_at)
              VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
              ON CONFLICT(sha256) DO NOTHING",
             rusqlite::params![
@@ -1284,7 +1284,7 @@ pub fn insert_raster_asset(connection: &Connection, asset: &RasterAssetRow) -> R
                 asset.width,
                 asset.height,
                 asset.geotransform,
-                asset.crs_wkt,
+                asset.crs_ref,
                 asset.nodata,
                 now_iso(),
             ],
@@ -1302,7 +1302,7 @@ pub fn interpretation_cog(
     connection
         .query_row(
             "SELECT a.sha256, a.rel_path, a.bytes, a.profile, a.width, a.height,
-                    a.geotransform, a.crs_wkt, a.nodata, c.nodata
+                    a.geotransform, a.crs_ref, a.nodata, c.nodata
              FROM lidar_interpretation_cogs c
              JOIN lidar_raster_assets a ON a.sha256 = c.asset_sha256
              WHERE c.interpretation_id = ?1",
@@ -1322,7 +1322,7 @@ fn map_asset_row(row: &rusqlite::Row<'_>, offset: usize) -> rusqlite::Result<Ras
         width: row.get(offset + 4)?,
         height: row.get(offset + 5)?,
         geotransform: row.get(offset + 6)?,
-        crs_wkt: row.get(offset + 7)?,
+        crs_ref: row.get(offset + 7)?,
         nodata: row.get(offset + 8)?,
     })
 }
@@ -1381,7 +1381,7 @@ impl ChunkWindow {
 /// Chunk-record projection shared by the paged, keyed and listed readers.
 const CHUNK_ASSET_COLUMNS: &str = "SELECT g.role, g.chunk_x, g.chunk_y,
             a.sha256, a.rel_path, a.bytes, a.profile, a.width, a.height,
-            a.geotransform, a.crs_wkt, a.nodata, g.valid_cells, g.sum_value
+            a.geotransform, a.crs_ref, a.nodata, g.valid_cells, g.sum_value
      FROM lidar_generation_chunks g
      JOIN lidar_raster_assets a ON a.sha256 = g.asset_sha256";
 
@@ -1668,7 +1668,7 @@ mod tests {
         connection
             .execute(
                 "INSERT INTO lidar_raster_assets(
-                    sha256, rel_path, bytes, profile, width, height, geotransform, crs_wkt, nodata, created_at)
+                    sha256, rel_path, bytes, profile, width, height, geotransform, crs_ref, nodata, created_at)
                  VALUES('sha-chunk', 'assets/sha-chunk/cog.tif', 8, 'cog-f32-t256-raw-v1',
                     1024, 1024, '[0,1,0,0,0,-1]', 'EPSG:3857', NULL, '2026-01-01T00:00:00Z')",
                 [],
@@ -1715,7 +1715,7 @@ mod tests {
         connection
             .execute(
                 "INSERT INTO lidar_raster_assets(
-                    sha256, rel_path, bytes, profile, width, height, geotransform, crs_wkt, nodata, created_at)
+                    sha256, rel_path, bytes, profile, width, height, geotransform, crs_ref, nodata, created_at)
                  VALUES('sha-page', 'assets/sha-page/cog.tif', 8, 'cog-f32-t256-raw-v1',
                     1024, 1024, '[0,1,0,0,0,-1]', 'EPSG:3857', NULL, '2026-01-01T00:00:00Z')",
                 [],

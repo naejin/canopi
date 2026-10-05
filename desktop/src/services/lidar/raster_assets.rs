@@ -68,7 +68,7 @@ pub(super) fn write_cog_asset(
     scratch: &Path,
     stem: &str,
     grid: &RasterGrid,
-    crs_wkt: &str,
+    crs_ref: &str,
     nodata: Option<f32>,
     values: &[f32],
 ) -> Result<CogAsset, String> {
@@ -90,7 +90,7 @@ pub(super) fn write_cog_asset(
     let created = engine.write_controlled_cog(
         RasterInput::Samples { grid, values },
         &staged,
-        Some(RasterGeoref { grid, crs: crs_wkt }),
+        Some(RasterGeoref { grid, crs: crs_ref }),
         nodata,
         cancel,
     );
@@ -114,7 +114,7 @@ pub(super) fn write_job_source_cog(
     stem: &str,
     input: &Path,
     grid: &RasterGrid,
-    crs_wkt: &str,
+    crs_ref: &str,
     nodata: Option<f32>,
 ) -> Result<CogAsset, String> {
     let required = prepared_raster::required_free_bytes(grid.width, grid.height, 0)?;
@@ -123,7 +123,7 @@ pub(super) fn write_job_source_cog(
     let created = engine.write_controlled_cog(
         RasterInput::File(input),
         &staged,
-        Some(RasterGeoref { grid, crs: crs_wkt }),
+        Some(RasterGeoref { grid, crs: crs_ref }),
         nodata,
         cancel,
     );
@@ -357,7 +357,7 @@ mod tests {
         assert_eq!(probe.block, [256, 256]);
         assert_eq!(probe.geotransform[0], grid.geotransform[0]);
         assert_eq!(probe.geotransform[3], grid.geotransform[3]);
-        assert!(probe.crs_wkt.contains("3857"), "{}", probe.crs_wkt);
+        assert!(probe.crs_ref.contains("3857"), "{}", probe.crs_ref);
 
         // Quality asset: exact 0/1 samples with no NoData tag.
         let quality_values: Vec<f32> =
