@@ -662,6 +662,8 @@ mod tests {
             from_reference("EPSG:7415").unwrap().reference(),
             "EPSG:28992"
         );
+        assert!(from_reference("").is_err());
+        assert!(from_reference("2154").is_err());
         assert!(
             from_reference("PROJCS[\"RGF93 v1 / Lambert-93\"]")
                 .unwrap_err()
