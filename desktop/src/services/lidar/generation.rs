@@ -172,12 +172,6 @@ pub(super) struct CollectionReader {
     /// Stable occurrence identity of `members`, parallel to it.
     /// The layer's fixed lattice, which every member coordinate is relative to.
     lattice: RasterGrid,
-    /// The composition's occupied 1024-cell blocks, in lattice coordinates.
-    ///
-    /// Derived once from member extents: it is coordinates only, opens no
-    /// raster, and lets a reader answer "does this block hold coverage?" from
-    /// memory instead of consulting a store that does not exist.
-    occupied: Vec<(i64, i64)>,
 }
 
 impl CollectionReader {
@@ -190,14 +184,13 @@ impl CollectionReader {
         // Reverse into resolver iteration order and renumber the ordinals, so
         // the ascending-ordinal precondition holds: highest priority last.
         for (index, (_member_id, mut member)) in members.into_iter().rev().enumerate() {
+            lattice.compatible(&member.grid)?;
             member.ordinal = i64::try_from(index).unwrap_or(i64::MAX);
             ordered.push(member);
         }
-        let occupied = occupied_chunks(&ordered, &lattice)?;
         Ok(Self {
             members: ordered,
             lattice,
-            occupied,
         })
     }
 
@@ -213,8 +206,9 @@ impl CollectionReader {
     ///
     /// Arithmetic over member extents only: the empty space between separated
     /// sources never contributes, and no raster is opened.
+    #[cfg(test)]
     pub(super) fn occupied_chunks(&self) -> Result<Vec<(i64, i64)>, String> {
-        Ok(self.occupied.clone())
+        occupied_chunks(&self.members, &self.lattice)
     }
 
     /// Resolve one bounded window of the composed value.

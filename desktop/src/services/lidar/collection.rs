@@ -234,17 +234,7 @@ pub(super) fn measure(
         // Catalogue facts are collected here; the guard is released before any
         // bounds transform or reader work so unrelated catalogue reads proceed.
     };
-    // Display bounds are the envelope of what the members actually occupy: the
-    // reader is only asked for its occupied blocks, which is arithmetic over
-    // member extents and opens nothing.
-    let resolved: Vec<(String, ResolvedMember)> = plan
-        .members
-        .iter()
-        .map(|member| (member.member_id.clone(), member.resolved.clone()))
-        .collect();
-    let reader = CollectionReader::new(resolved, plan.lattice.clone())?;
-    let chunks = reader.occupied_chunks()?;
-    let bounds_3857 = coverage_bounds(library, plan, &chunks, cancel)?;
+    let bounds_3857 = coverage_bounds(library, plan, cancel)?;
     let (display_min_value, display_max_value) = if any_range {
         (display_min, display_max)
     } else {
@@ -280,29 +270,26 @@ fn member_facts(
     Ok((cells.max(0) as u64, min, max))
 }
 
-/// Display bounds: the envelope of the composition's occupied chunks.
+/// Display bounds: the envelope of the members' own extents.
 ///
-/// A composition with no valid cell keeps the lattice bounds.
+/// Arithmetic over member grids, opening nothing. It ends at the rasters'
+/// edges, not at their last 1024-cell chunk's, so Fit to data frames the data.
+/// A composition with no member keeps the lattice bounds.
 fn coverage_bounds(
     library: &LidarLibrary,
     plan: &SnapshotPlan,
-    chunks: &[(i64, i64)],
     cancel: &AtomicBool,
 ) -> Result<[f64; 4], String> {
     let engine = library.inner.engine.as_ref();
-    if chunks.is_empty() {
+    let mut grids = plan.members.iter().map(|member| &member.resolved.grid);
+    let Some(first) = grids.next() else {
         return import::raster_bounds_3857(engine, cancel, &plan.lattice, &plan.crs_ref);
+    };
+    plan.lattice.compatible(first)?;
+    let mut envelope = first.clone();
+    for grid in grids {
+        envelope = union_grid(&envelope, grid)?;
     }
-    let mut first = (i64::MAX, i64::MAX);
-    let mut last = (i64::MIN, i64::MIN);
-    for (chunk_x, chunk_y) in chunks {
-        first = (first.0.min(*chunk_x), first.1.min(*chunk_y));
-        last = (last.0.max(*chunk_x), last.1.max(*chunk_y));
-    }
-    let envelope = union_grid(
-        &generation::chunk_grid(&plan.lattice, first.0, first.1),
-        &generation::chunk_grid(&plan.lattice, last.0, last.1),
-    )?;
     import::raster_bounds_3857(engine, cancel, &envelope, &plan.crs_ref)
 }
 
