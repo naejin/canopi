@@ -149,10 +149,10 @@ fn latitude_nearest_equator(native: &ResolvedCrs, extent: [f64; 4]) -> Result<f6
 /// Where a derivative sits on the lattice.
 struct Placement {
     grid: RasterGrid,
-    /// Lattice column and row of the derivative's top-left pixel.
+    /// Lattice column and row of the derivative's top-left pixel; the
+    /// lattice resolution is `grid.geotransform[1]`.
     column: i64,
     row: i64,
-    resolution: f64,
 }
 
 /// The lattice pixels around `native`'s footprint, placed point by point
@@ -257,7 +257,6 @@ fn place(
         },
         column,
         row,
-        resolution,
     })
 }
 
@@ -375,7 +374,7 @@ impl Warp<'_> {
             ..self.placement.row + i64::from(window.y + window.height);
         let mesh = Mesh::over(
             &self.to_native,
-            self.placement.resolution,
+            self.placement.grid.geotransform[1],
             lattice_columns.clone(),
             lattice_rows.clone(),
         );
