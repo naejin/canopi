@@ -87,7 +87,8 @@ export interface ContinuousSave {
   flush(): Promise<boolean>
   /**
    * A manual Save: write now even with nothing pending, so the home also holds the live view. It asks for one write
-   * and marks nothing: when a write with no edits fails, the error shows but nothing stays unsaved.
+   * and marks nothing: when a write with no edits fails, the error shows but nothing stays unsaved. Retry in both
+   * editions is this Save (U30), so it writes even when an undo left nothing pending.
    */
   save(): Promise<boolean>
   /** Resolve a conflict by overwriting the file with the Design of the session `token` names. */

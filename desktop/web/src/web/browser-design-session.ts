@@ -94,7 +94,7 @@ interface BrowserDesignSessionControllerOptions {
 }
 
 export interface BrowserDesignSessionController {
-  readonly continuousSave: Pick<ContinuousSave, "status" | "revertAvailable" | "flush">;
+  readonly continuousSave: Pick<ContinuousSave, "status" | "revertAvailable" | "flush" | "save">;
   hasCurrentDesign(): boolean;
   readDesignIdentity(): BrowserShellDesignIdentity | null;
   newDesign(): Promise<void>;
