@@ -116,6 +116,9 @@ export function createContinuousSave({
   const conflict = signal<ContinuousSaveConflict | null>(null)
   // The session whose write is in flight; another session's write never shows as its "Saving…".
   const writingSession = signal<object | null>(null)
+  // Bumped whenever the home is marked behind; a write clears `writePending` only when no mark landed after it
+  // started, so a Save or overwrite made while a write is in flight gets a write of its own.
+  let pendingMark = 0
   let timer: ReturnType<typeof setTimeout> | null = null
   let active: Promise<boolean> | null = null
   let queued: Promise<boolean> | null = null
@@ -208,7 +211,7 @@ export function createContinuousSave({
     if (conflict.peek()) return false
     if (!pending.peek()) return true
 
-    const pendingAtStart = writePending.peek()
+    const markAtStart = pendingMark
     if (store.designDirty.peek()) changed.value = true
     let outcome: HomeWriteOutcome | Promise<HomeWriteOutcome>
     try {
@@ -216,10 +219,10 @@ export function createContinuousSave({
     } catch (error) {
       return settleFailure(session, error)
     }
-    if (!isPromise(outcome)) return settleOutcome(session, outcome, pendingAtStart)
+    if (!isPromise(outcome)) return settleOutcome(session, outcome, markAtStart)
     writingSession.value = session.identity
     return outcome.then(
-      (settled) => settleOutcome(session, settled, pendingAtStart),
+      (settled) => settleOutcome(session, settled, markAtStart),
       (error: unknown) => settleFailure(session, error),
     ).finally(() => {
       if (writingSession.peek() === session.identity) writingSession.value = null
@@ -229,7 +232,7 @@ export function createContinuousSave({
   function settleOutcome(
     session: SessionHomeRecord,
     outcome: HomeWriteOutcome,
-    pendingAtStart: boolean,
+    markAtStart: number | null,
   ): boolean {
     if (peekRecord() !== session) return false
     if (outcome.kind === 'conflict') {
@@ -242,7 +245,7 @@ export function createContinuousSave({
       return false
     }
     batch(() => {
-      if (pendingAtStart) writePending.value = false
+      if (markAtStart === pendingMark) writePending.value = false
       failed.value = false
       failureReason.value = null
     })
@@ -256,7 +259,7 @@ export function createContinuousSave({
   function settleFailure(session: SessionHomeRecord, error: unknown): boolean {
     if (peekRecord() !== session) return false
     if (error instanceof DesignHomeConflictError) {
-      return settleOutcome(session, { kind: 'conflict', fileGone: error.fileGone }, false)
+      return settleOutcome(session, { kind: 'conflict', fileGone: error.fileGone }, null)
     }
     batch(() => {
       failed.value = true
@@ -264,6 +267,11 @@ export function createContinuousSave({
     })
     logError('Continuous save failed:', error)
     return false
+  }
+
+  function markWritePending(): void {
+    pendingMark += 1
+    writePending.value = true
   }
 
   async function flush(): Promise<boolean> {
@@ -294,6 +302,7 @@ export function createContinuousSave({
           fingerprints,
           snapshot: current ? cloneDocument(current) : null,
         }
+        pendingMark += 1
         writePending.value = pendingWrite
         changed.value = false
         failed.value = false
@@ -349,7 +358,7 @@ export function createContinuousSave({
 
     save() {
       // The home no longer holds what the user sees (the view moves without an edit): write even if clean.
-      writePending.value = true
+      markWritePending()
       return flush()
     },
 
@@ -361,7 +370,7 @@ export function createContinuousSave({
       batch(() => {
         conflict.value = null
         // The file no longer holds this session's content: write even if clean.
-        writePending.value = true
+        markWritePending()
       })
       return flush()
     },

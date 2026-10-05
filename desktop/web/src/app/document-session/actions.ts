@@ -12,6 +12,7 @@ import {
   resolveDesignSaveConflict,
   revertDesignSessionToOpenedVersion,
   saveCurrentDesign,
+  saveCurrentDesignEdits,
   saveAsCurrentDesign,
 } from "./transition";
 import { presentDesignOpenFailure } from "./open-failure";
@@ -24,6 +25,7 @@ interface DocumentLoadOptions {
 export {
   consumeQueuedDocumentLoad,
   saveCurrentDesign,
+  saveCurrentDesignEdits,
   saveAsCurrentDesign,
 };
 

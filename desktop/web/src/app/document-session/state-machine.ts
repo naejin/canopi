@@ -277,15 +277,28 @@ export class DesignSessionStateMachine {
   }
 
   /** Save: write a file home now, with the live view; a draft home has no file yet, so Save As. */
-  async saveCurrentDesign(
-    options: SaveCurrentDesignOptions = {},
+  saveCurrentDesign(options: SaveCurrentDesignOptions = {}): Promise<boolean> {
+    return this.saveCurrent(options, true);
+  }
+
+  /**
+   * Make the home hold every edit (adding to a notebook): like Save, but a file home is written only when an edit
+   * is pending, so a clean Design's file keeps its bytes (only Save writes when nothing was edited, U30).
+   */
+  saveCurrentDesignEdits(options: SaveCurrentDesignOptions = {}): Promise<boolean> {
+    return this.saveCurrent(options, false);
+  }
+
+  private async saveCurrent(
+    options: SaveCurrentDesignOptions,
+    writeView: boolean,
   ): Promise<boolean> {
     if (this.continuousSave.conflict.peek()) {
       await this.resolveSaveConflict(options);
       return !this.continuousSave.hasPendingChanges();
     }
     if (this.continuousSave.readHome()?.kind === "file") {
-      return this.continuousSave.save();
+      return writeView ? this.continuousSave.save() : this.continuousSave.flush();
     }
     const settlement = await this.saveAsCurrentDesign(options);
     return settlement?.status === "applied";

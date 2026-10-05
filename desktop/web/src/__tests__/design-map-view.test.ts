@@ -373,6 +373,39 @@ describe('the view reaches the home only with a write that already happens (U30)
     expect(writes[1]?.content.map_view).toEqual(liveMapView(host))
   })
 
+  it('a second Save while a Save is writing follows it with the view moved since', async () => {
+    let release = () => {}
+    const held = new Promise<void>((resolve) => { release = resolve })
+    const { host, machine, writes } = await openOnDesktop(orchard(), () => held)
+    moveTheView(host)
+    const first = machine.saveCurrentDesign()
+    expect(writes).toHaveLength(1)
+    host.cameraHost.current().apply({ kind: 'pan-by', deltaPx: { x: -90, y: 45 } })
+    const panned = liveMapView(host)
+    expect(panned).not.toEqual(writes[0]?.content.map_view)
+
+    const second = machine.saveCurrentDesign()
+    release()
+
+    await first
+    await expect(second).resolves.toBe(true)
+    expect(writes.map((write) => write.content.map_view)).toEqual([writes[0]?.content.map_view, panned])
+    expect(machine.continuousSave.hasPendingChanges()).toBe(false)
+  })
+
+  it('adding a clean Design with a file home to a notebook writes nothing, even after a pan', async () => {
+    const { host, machine, writes, requestSaveDecision } = await openOnDesktop()
+    moveTheView(host)
+
+    await expect(machine.saveCurrentDesignEdits()).resolves.toBe(true)
+
+    expect(writes, 'only Save writes when nothing was edited').toEqual([])
+    expect(requestSaveDecision).not.toHaveBeenCalled()
+    editTheDesign(host)
+    await expect(machine.saveCurrentDesignEdits()).resolves.toBe(true)
+    expect(writes.map((write) => write.content.map_view)).toEqual([liveMapView(host)])
+  })
+
   it('on Desktop, panning only, then losing focus, switching Designs or closing writes nothing and asks nothing', async () => {
     const { host, machine, writes, requestSaveDecision } = await openOnDesktop()
     moveTheView(host)
