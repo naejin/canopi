@@ -87,36 +87,19 @@ fn read_controlled(path: &Path, grid: &RasterGrid, nodata: Option<f32>) -> (Vec<
     (samples, valid)
 }
 
-/// Which probe facts a text format leaves to the driver: GDAL types AAIGrid
-/// by inspecting the values and XYZ has no NoData notion at all.
-#[derive(Clone, Copy)]
-struct Facts {
-    band_type: bool,
-    nodata: bool,
-}
-
-const TIFF_FACTS: Facts = Facts {
-    band_type: true,
-    nodata: true,
-};
-
-fn assert_probe_facts(label: &str, gdal: &RasterProbe, rust: &RasterProbe, facts: Facts) {
+fn assert_probe_facts(label: &str, gdal: &RasterProbe, rust: &RasterProbe) {
     assert_eq!(
         (gdal.width, gdal.height),
         (rust.width, rust.height),
         "{label}: dims"
     );
     assert_eq!(gdal.band_count, rust.band_count, "{label}: bands");
-    if facts.band_type {
-        assert_eq!(gdal.band_type, rust.band_type, "{label}: band type");
-    }
-    if facts.nodata {
-        assert_eq!(
-            gdal.nodata.map(f32::to_bits),
-            rust.nodata.map(f32::to_bits),
-            "{label}: nodata"
-        );
-    }
+    assert_eq!(gdal.band_type, rust.band_type, "{label}: band type");
+    assert_eq!(
+        gdal.nodata.map(f32::to_bits),
+        rust.nodata.map(f32::to_bits),
+        "{label}: nodata"
+    );
     for (index, (a, b)) in gdal.geotransform.iter().zip(&rust.geotransform).enumerate() {
         assert!(
             (a - b).abs() <= 1e-9 * a.abs().max(1.0),
@@ -155,32 +138,27 @@ fn compare_source(
     dir: &Path,
     gdal: &GdalEngine,
     rust: &RustRasterEngine,
-    facts: Facts,
 ) {
     let c = cancel();
     let gdal_probe = gdal.probe(source, &c).expect("GDAL probes");
     let rust_probe = rust.probe(source, &c).expect("the Rust engine probes");
-    assert_probe_facts(label, &gdal_probe, &rust_probe, facts);
+    assert_probe_facts(label, &gdal_probe, &rust_probe);
     let grid = RasterGrid {
         width: rust_probe.width,
         height: rust_probe.height,
         geotransform: rust_probe.geotransform,
     };
-    let has_crs = !rust_probe.crs_ref.is_empty();
-
-    if has_crs {
-        let a = gdal.wgs84_extent(source, &c).expect("GDAL extent");
-        let b = rust.wgs84_extent(source, &c).expect("Rust extent");
-        let deviation = a
-            .iter()
-            .zip(&b)
-            .map(|(x, y)| (x - y).abs())
-            .fold(0f64, f64::max);
-        report.note(format!(
-            "{label}: WGS84 extent max deviation {deviation:.3e} deg"
-        ));
-        assert!(deviation <= 1e-6, "{label}: extent {a:?} vs {b:?}");
-    }
+    let a = gdal.wgs84_extent(source, &c).expect("GDAL extent");
+    let b = rust.wgs84_extent(source, &c).expect("Rust extent");
+    let deviation = a
+        .iter()
+        .zip(&b)
+        .map(|(x, y)| (x - y).abs())
+        .fold(0f64, f64::max);
+    report.note(format!(
+        "{label}: WGS84 extent max deviation {deviation:.3e} deg"
+    ));
+    assert!(deviation <= 1e-6, "{label}: extent {a:?} vs {b:?}");
 
     let gdal_samples = gdal
         .read_f32(source, grid.width, grid.height, &c)
@@ -240,14 +218,9 @@ fn compare_source(
     }
 
     // The controlled profile from each engine, read by the production reader.
-    let crs = if has_crs {
-        rust_probe.crs_ref.clone()
-    } else {
-        "EPSG:3857".to_string()
-    };
     let georef = RasterGeoref {
         grid: &grid,
-        crs: &crs,
+        crs: &rust_probe.crs_ref,
     };
     let nodata = rust_probe.nodata;
     let gdal_cog = dir.join(format!("{label}-gdal-controlled.tif"));
@@ -281,12 +254,7 @@ fn compare_source(
     // Each engine reads the other's controlled COG the same way.
     let cross = rust.probe(&gdal_cog, &c).expect("Rust probes GDAL's COG");
     let cross_back = gdal.probe(&rust_cog, &c).expect("GDAL probes the Rust COG");
-    assert_probe_facts(
-        &format!("{label} cross-probe"),
-        &cross_back,
-        &cross,
-        TIFF_FACTS,
-    );
+    assert_probe_facts(&format!("{label} cross-probe"), &cross_back, &cross);
 
     // The display warp, both engines from the same numeric COG.
     compare_display(report, label, &rust_cog, dir, gdal, rust, nodata);
@@ -672,7 +640,7 @@ fn write_raw(dir: &Path, name: &str, width: u32, height: u32) -> PathBuf {
 }
 
 /// GDAL-authored fixtures: one Float32 base and its layout and type variants.
-fn gdal_fixtures(dir: &Path, gdal: &GdalEngine) -> Vec<(String, PathBuf, Facts)> {
+fn gdal_fixtures(dir: &Path, gdal: &GdalEngine) -> Vec<(String, PathBuf)> {
     let c = cancel();
     let (width, height) = (300u32, 260u32);
     let raw = write_raw(dir, "base", width, height);
@@ -709,7 +677,7 @@ fn gdal_fixtures(dir: &Path, gdal: &GdalEngine) -> Vec<(String, PathBuf, Facts)>
         "PREDICTOR=3",
     ]);
     translate(&args, &raw, &base);
-    let mut fixtures = vec![("float32-tiled".to_string(), base.clone(), TIFF_FACTS)];
+    let mut fixtures = vec![("float32-tiled".to_string(), base.clone())];
     let variants: [(&str, &[&str]); 6] = [
         (
             "float32-striped",
@@ -739,7 +707,7 @@ fn gdal_fixtures(dir: &Path, gdal: &GdalEngine) -> Vec<(String, PathBuf, Facts)>
     for (name, extra) in variants {
         let output = dir.join(format!("{name}.tif"));
         translate(extra, &base, &output);
-        fixtures.push((name.to_string(), output, TIFF_FACTS));
+        fixtures.push((name.to_string(), output));
     }
     // A user-defined Lambert CRS spelled out without a registry code, as IGN
     // tiles carry it.
@@ -754,53 +722,7 @@ fn gdal_fixtures(dir: &Path, gdal: &GdalEngine) -> Vec<(String, PathBuf, Facts)>
         &base,
         &user_defined,
     );
-    fixtures.push(("user-defined-lambert".to_string(), user_defined, TIFF_FACTS));
-    // Text formats: Esri ASCII and XYZ (which has no NoData notion in GDAL, so
-    // its NoData fact is not compared). Neither carries a CRS: the Rust engine
-    // reads one from GeoTIFF keys only (A8).
-    let (aw, ah) = (6u32, 4u32);
-    let mut ascii = format!(
-        "ncols {aw}\nnrows {ah}\nxllcorner 600000\nyllcorner 6000000\ncellsize 25\nNODATA_value -1\n"
-    );
-    let mut xyz = String::new();
-    for y in 0..ah {
-        let mut row = Vec::new();
-        for x in 0..aw {
-            let value = if (x, y) == (2, 1) {
-                -1.0
-            } else {
-                f32::from(x as u8) * 1.5 + f32::from(y as u8)
-            };
-            row.push(format!("{value}"));
-            xyz.push_str(&format!(
-                "{} {} {value}\n",
-                600000.0 + 25.0 * (x as f64 + 0.5),
-                6000000.0 + 25.0 * (ah as f64 - y as f64 - 0.5)
-            ));
-        }
-        ascii.push_str(&row.join(" "));
-        ascii.push('\n');
-    }
-    let asc = dir.join("grid.asc");
-    std::fs::write(&asc, ascii).expect("asc fixture");
-    fixtures.push((
-        "esri-ascii".to_string(),
-        asc,
-        Facts {
-            band_type: false,
-            nodata: true,
-        },
-    ));
-    let xyz_path = dir.join("grid.xyz");
-    std::fs::write(&xyz_path, xyz).expect("xyz fixture");
-    fixtures.push((
-        "xyz".to_string(),
-        xyz_path,
-        Facts {
-            band_type: false,
-            nodata: false,
-        },
-    ));
+    fixtures.push(("user-defined-lambert".to_string(), user_defined));
     fixtures
 }
 
@@ -863,21 +785,13 @@ fn the_rust_engine_matches_gdal_on_the_same_inputs() {
         rust.version().expect("engine version")
     ));
 
-    for (label, path, facts) in gdal_fixtures(&dir, &gdal) {
-        compare_source(&mut report, &label, &path, &dir, &gdal, &rust, facts);
+    for (label, path) in gdal_fixtures(&dir, &gdal) {
+        compare_source(&mut report, &label, &path, &dir, &gdal, &rust);
     }
     match ign_fixture() {
         Some(fixture) => {
             report.note(format!("IGN fixture: {}", fixture.display()));
-            compare_source(
-                &mut report,
-                "ign-mnt",
-                &fixture,
-                &dir,
-                &gdal,
-                &rust,
-                TIFF_FACTS,
-            );
+            compare_source(&mut report, "ign-mnt", &fixture, &dir, &gdal, &rust);
         }
         None => report.note("IGN fixture: not present, skipped".to_string()),
     }

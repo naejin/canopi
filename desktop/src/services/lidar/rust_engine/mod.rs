@@ -1,7 +1,7 @@
 //! The pure-Rust raster engine (ADR 0014).
 //!
 //! In-process reading, conversion, statistics and reprojection: `wbgeotiff`
-//! for TIFF/COG primitives, `wbraster` for the other raster formats and the
+//! for TIFF/COG primitives (the engine reads GeoTIFF only) and the
 //! one CRS authority (`crs.rs` on `proj4rs` over the `crs_table.rs` rows).
 //! Nothing is bundled or discovered at run time; the engine is always
 //! available and its version names the crates.
@@ -11,8 +11,8 @@
 //! whatever its size; each overview level is averaged from the level before
 //! it, read back from the file being written. Beside the windows the writer
 //! holds one output tile and the reader one decoded chunk of at most
-//! `tiff::MAX_STREAMED_CHUNK_BYTES`. Other formats, and a GeoTIFF with a
-//! larger compressed chunk, are loaded whole after the capacity check, with
+//! `tiff::MAX_STREAMED_CHUNK_BYTES`. A GeoTIFF with a larger compressed
+//! chunk is loaded whole after the capacity check, with
 //! the same named reason every whole-raster read gives. Cancellation is
 //! honoured between windows, chunks and levels.
 
@@ -45,7 +45,6 @@ use wbgeotiff::tags::Compression;
 pub(super) const WBGEOTIFF_VERSION: &str = "0.1.2";
 pub(super) const WBGEOTIFF_REVISION: &str = "9c0ff4fdf3513f27b89c78e294610c3b418b3a4f";
 pub(crate) const PROJ4RS_VERSION: &str = "0.2.0";
-pub(super) const WBRASTER_VERSION: &str = "0.2.1";
 
 /// The kind of a stored reference's row; `None` for a reference Canopi
 /// does not place.
@@ -79,7 +78,7 @@ pub(crate) fn display_lattice(
 /// What a manifest records as the engine that produced a numeric output.
 pub(super) fn engine_version() -> String {
     format!(
-        "canopi-raster-engine (wbgeotiff {WBGEOTIFF_VERSION}@{}, proj4rs {PROJ4RS_VERSION}, wbraster {WBRASTER_VERSION})",
+        "canopi-raster-engine (wbgeotiff {WBGEOTIFF_VERSION}@{}, proj4rs {PROJ4RS_VERSION})",
         &WBGEOTIFF_REVISION[..7]
     )
 }
@@ -1542,10 +1541,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
-    /// A8: a format other than GeoTIFF reads no CRS, even with a sidecar,
-    /// so import refuses it as not GeoTIFF.
+    /// A8: a format other than GeoTIFF is refused from its signature, even
+    /// with a CRS sidecar, before any reader parses it.
     #[test]
-    fn a_non_tiff_source_reads_no_crs_even_with_a_prj_sidecar() {
+    fn a_non_tiff_source_is_refused_even_with_a_prj_sidecar() {
         let dir = scratch("non-tiff");
         let engine = RustRasterEngine;
         let path = dir.join("grid.asc");
@@ -1556,10 +1555,15 @@ mod tests {
         .unwrap();
         std::fs::write(
             dir.join("grid.prj"),
-            r#"PROJCS["RGF93 v1 / Lambert-93",GEOGCS["RGF93 v1",DATUM["Reseau_Geodesique_Francais_1993_v1",SPHEROID["GRS 1980",6378137,298.257222101]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]],PROJECTION["Lambert_Conformal_Conic_2SP"],PARAMETER["latitude_of_origin",46.5],PARAMETER["central_meridian",3],PARAMETER["standard_parallel_1",49],PARAMETER["standard_parallel_2",44],PARAMETER["false_easting",700000],PARAMETER["false_northing",6600000],UNIT["metre",1],AUTHORITY["EPSG","2154"]]"#,
+            r#"PROJCS["RGF93 v1 / Lambert-93",AUTHORITY["EPSG","2154"]]"#,
         )
         .unwrap();
-        assert_eq!(engine.probe(&path, &cancel()).unwrap().crs_ref, "");
+        for error in [
+            engine.probe(&path, &cancel()).unwrap_err(),
+            engine.read_f32(&path, 3, 2, &cancel()).unwrap_err(),
+        ] {
+            assert!(error.contains("is not a GeoTIFF"), "{error}");
+        }
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -1682,87 +1686,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
-    #[test]
-    fn other_formats_are_read_whole_through_wbraster() {
-        let dir = scratch("ascii");
-        let engine = RustRasterEngine;
-        let path = dir.join("grid.asc");
-        std::fs::write(
-            &path,
-            "ncols 3\nnrows 2\nxllcorner 100\nyllcorner 200\ncellsize 10\nNODATA_value -1\n1 2 -1\n4.5 5 6\n",
-        )
-        .unwrap();
-        let probe = engine.probe(&path, &cancel()).unwrap();
-        assert_eq!(probe.driver, "AAIGrid");
-        assert_eq!((probe.width, probe.height), (3, 2));
-        assert_eq!(probe.nodata, Some(-1.0));
-        assert_eq!(probe.geotransform, [100.0, 10.0, 0.0, 220.0, 0.0, -10.0]);
-        assert_eq!(probe.crs_ref, "", "an ASCII grid declares no CRS");
-        let read = engine.read_f32(&path, 3, 2, &cancel()).unwrap();
-        assert_eq!(read, vec![1.0, 2.0, -1.0, 4.5, 5.0, 6.0]);
-        // Without a CRS a conversion needs a georeference; with one it works.
-        let grid = RasterGrid {
-            width: 3,
-            height: 2,
-            geotransform: probe.geotransform,
-        };
-        let out = dir.join("grid.tif");
-        assert!(
-            engine
-                .write_controlled_cog(RasterInput::File(&path), &out, None, None, &cancel())
-                .unwrap_err()
-                .contains("no coordinate system")
-        );
-        engine
-            .write_controlled_cog(
-                RasterInput::File(&path),
-                &out,
-                Some(RasterGeoref {
-                    grid: &grid,
-                    crs: "EPSG:3857",
-                }),
-                None,
-                &cancel(),
-            )
-            .unwrap();
-        assert_eq!(engine.probe(&out, &cancel()).unwrap().nodata, Some(-1.0));
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn other_formats_keep_the_whole_raster_limit() {
-        let dir = scratch("ascii-limit");
-        let engine = RustRasterEngine;
-        let path = dir.join("grid.asc");
-        std::fs::write(
-            &path,
-            "ncols 3\nnrows 2\nxllcorner 100\nyllcorner 200\ncellsize 10\nNODATA_value -1\n1 2 -1\n4.5 5 6\n",
-        )
-        .unwrap();
-        let grid = RasterGrid {
-            width: 3,
-            height: 2,
-            geotransform: [100.0, 10.0, 0.0, 220.0, 0.0, -10.0],
-        };
-        let out = dir.join("grid.tif");
-        let _limit = super::super::import::extraction_limit_probe::set(5);
-        let error = engine
-            .write_controlled_cog(
-                RasterInput::File(&path),
-                &out,
-                Some(RasterGeoref {
-                    grid: &grid,
-                    crs: "EPSG:3857",
-                }),
-                None,
-                &cancel(),
-            )
-            .unwrap_err();
-        assert!(error.contains("whole-raster read"), "{error}");
-        assert!(!out.exists());
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
     /// The recorded crate versions are the ones the lockfile pins, so a bump
     /// cannot ship under a stale engine version.
     #[test]
@@ -1801,7 +1724,6 @@ mod tests {
             geotiff[0].1
         );
         assert_eq!(pinned("proj4rs")[0].0, PROJ4RS_VERSION);
-        assert_eq!(pinned("wbraster")[0].0, WBRASTER_VERSION);
         assert!(engine_version().contains("wbgeotiff 0.1.2@9c0ff4f"));
     }
 }

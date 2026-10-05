@@ -625,9 +625,6 @@ fn stage_source(
             probe.band_count
         ));
     }
-    if probe.driver != "GTiff" {
-        issues.push(format!("driver {} is not GeoTIFF", probe.driver));
-    }
     if probe.geotransform[1] <= 0.0
         || probe.geotransform[5] >= 0.0
         || probe.geotransform[2].abs() > 1e-12

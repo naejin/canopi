@@ -282,7 +282,7 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
       result = {
         items: lidarItems,
         engines: {
-          raster: { available: true, version: 'canopi-raster-engine (wbgeotiff, proj4rs, wbraster; gallery)', detail: null },
+          raster: { available: true, version: 'canopi-raster-engine (wbgeotiff, proj4rs; gallery)', detail: null },
           geolibre: { available: true, version: galleryTool.version, detail: null },
         },
       }; break
