@@ -9,13 +9,13 @@
 //! publishes a 0/1 quality chunk marking cells whose whole stencil input was
 //! valid; an all-zero quality chunk is absent.
 
-use super::{RunContext, StagedRaster, crs_class, values_in_metres};
+use super::{RunContext, StagedRaster, values_in_metres};
 use crate::services::lidar::catalogue::{self, new_id};
 use crate::services::lidar::grid::RasterGrid;
 use crate::services::lidar::{generation, import, raster_assets};
 use common_types::analysis_registry::{AnalysisLane, AnalysisOutputSpec, GridRequirement};
+use common_types::library::AnalysisUnavailable;
 use std::path::Path;
-use std::sync::atomic::AtomicBool;
 
 /// Finite staging marker for GeoLibre windows: -2^127, exact in Float32 and in
 /// its decimal tag. The pinned tools compare neighbour NoData by equality, so
@@ -68,7 +68,13 @@ pub(super) fn run(
     let reader =
         crate::services::lidar::collection::load_reader(library, &head.id, &manifest, cancel)?;
     let occurrences = reader.resolved().to_vec();
-    check_requirements(context, input_key, spec.requires, &head.id, &input.units)?;
+    check_requirements(
+        context,
+        input_key,
+        spec.requires,
+        &head.crs_class,
+        &input.units,
+    )?;
 
     let blocks = generation::occupied_chunks(&occurrences, &manifest.grid)?;
     let total = blocks.len();
@@ -161,16 +167,14 @@ pub(super) fn run(
     })
 }
 
-/// Recheck an input's requirements against the stored raster itself.
-///
-/// Offers read facts recorded at import; the run asks the engine, which stays the
-/// projection authority, so a stored reference the catalogue misclassified can
-/// never be computed on.
+/// Recheck an input's requirements against the pinned generation's catalogue
+/// facts, the ones its request was admitted on (`crs_class` comes from the
+/// table row, as the engine reads it).
 fn check_requirements(
     context: &RunContext<'_>,
     input_key: &str,
     requires: &[GridRequirement],
-    generation_id: &str,
+    crs_class: &str,
     units: &str,
 ) -> Result<(), String> {
     for requirement in requires {
@@ -184,42 +188,20 @@ fn check_requirements(
                 }
             }
             GridRequirement::ProjectedMetreGrid => {
-                // Every admitted source of an item shares its horizontal CRS.
-                let raster = crate::services::lidar::collection::snapshot_members(
-                    context.library,
-                    generation_id,
-                    context.cancel,
-                )?
-                .first()
-                .map(|member| member.resolved.cog.path.clone())
-                .ok_or_else(|| format!("input '{input_key}' has no source to analyse"))?;
-                check_projected_metre_grid(context.library, context.cancel, &raster)
-                    .map_err(|error| format!("{}: {error}", context.analysis.id))?;
+                if crs_class != super::CRS_PROJECTED_METRE {
+                    return Err(format!(
+                        "{}: {}",
+                        context.analysis.id,
+                        super::unavailable_message(
+                            input_key,
+                            &AnalysisUnavailable::GridNotProjectedMetres
+                        )
+                    ));
+                }
             }
         }
     }
     Ok(())
-}
-
-/// Refuse a raster whose engine-reported CRS is not projected in ground metres.
-pub(super) fn check_projected_metre_grid(
-    library: &crate::services::lidar::LidarLibrary,
-    cancel: &AtomicBool,
-    raster: &Path,
-) -> Result<(), String> {
-    let probe = library.inner.engine.probe(raster, cancel)?;
-    match crs_class(&probe.crs_ref) {
-        super::CRS_PROJECTED_METRE => Ok(()),
-        super::CRS_PROJECTED_OTHER => Err(
-            "the grid is in Web Mercator, whose metres are not ground metres; \
-                 a projected grid in ground metres is needed"
-                .to_string(),
-        ),
-        super::CRS_GEOGRAPHIC => {
-            Err("the grid is geographic; a projected metre grid is needed".to_string())
-        }
-        _ => Err("the grid reports no usable CRS; a projected metre grid is needed".to_string()),
-    }
 }
 
 /// Compute one core chunk through the bounded resolver.

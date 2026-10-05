@@ -12,7 +12,7 @@ class FakeLane implements RasterWorkerLike {
   postMessage(message: RasterWorkerRequest): void {
     this.requests.push(message)
     // Control messages answer immediately; renders wait for `answer`.
-    if (message.op === 'open') this.reply(message.id, { boundsLonLat: [0, 0, 1, 1], levels: [], mode: '3857', crsLabel: 'EPSG:3857', hasPalette: false })
+    if (message.op === 'open') this.reply(message.id, { boundsLonLat: [0, 0, 1, 1] })
     else if (message.op !== 'render' && message.op !== 'bbox') this.reply(message.id, true)
   }
 

@@ -121,7 +121,7 @@ pub(super) fn zoom<'a>(
 /// The latitude of `extent` (native `[min_x, min_y, max_x, max_y]`) nearest
 /// the equator, from points along its edges; 0 when it spans the equator.
 fn latitude_nearest_equator(native: &ResolvedCrs, extent: [f64; 4]) -> Result<f64, String> {
-    let to_wgs84 = Transformer::new(native, &crs::from_reference("EPSG:4326")?)?;
+    let to_wgs84 = Transformer::new(native, &crs::from_reference("EPSG:4326")?);
     let [min_x, min_y, max_x, max_y] = extent;
     let (mut south, mut north) = (f64::INFINITY, f64::NEG_INFINITY);
     for step in 0..=EXTENT_EDGE_POINTS {
@@ -149,10 +149,10 @@ fn latitude_nearest_equator(native: &ResolvedCrs, extent: [f64; 4]) -> Result<f6
 /// Where a derivative sits on the lattice.
 struct Placement {
     grid: RasterGrid,
-    /// Lattice column and row of the derivative's top-left pixel.
+    /// Lattice column and row of the derivative's top-left pixel; the
+    /// lattice resolution is `grid.geotransform[1]`.
     column: i64,
     row: i64,
-    resolution: f64,
 }
 
 /// The lattice pixels around `native`'s footprint, placed point by point
@@ -257,7 +257,6 @@ fn place(
         },
         column,
         row,
-        resolution,
     })
 }
 
@@ -270,8 +269,7 @@ pub(super) fn lattice(
     zoom: u32,
 ) -> Result<RasterGrid, String> {
     let mercator = crs::from_reference("EPSG:3857")?;
-    place(grid, &Transformer::new(native, &mercator)?, rung_at(zoom))
-        .map(|placement| placement.grid)
+    place(grid, &Transformer::new(native, &mercator), rung_at(zoom)).map(|placement| placement.grid)
 }
 
 /// Native points of the mesh nodes over a block of lattice pixels.
@@ -336,10 +334,11 @@ impl Mesh {
 }
 
 /// The derivative's band: each output window warped from the native window
-/// under it.
+/// under it, `nodata` everywhere the footprint does not reach.
 struct Warp<'a> {
     band: &'a mut dyn BandSource,
     native: RasterGrid,
+    nodata: f32,
     to_native: Transformer,
     placement: &'a Placement,
     /// Most native cells one read may hold.
@@ -375,7 +374,7 @@ impl Warp<'_> {
             ..self.placement.row + i64::from(window.y + window.height);
         let mesh = Mesh::over(
             &self.to_native,
-            self.placement.resolution,
+            self.placement.grid.geotransform[1],
             lattice_columns.clone(),
             lattice_rows.clone(),
         );
@@ -425,13 +424,7 @@ impl Warp<'_> {
     }
 }
 
-/// The NoData every derivative pixel outside the footprint holds.
-struct Filled<'a> {
-    warp: Warp<'a>,
-    nodata: f32,
-}
-
-impl BandSource for Filled<'_> {
+impl BandSource for Warp<'_> {
     fn read(
         &mut self,
         window: RasterWindow,
@@ -439,15 +432,15 @@ impl BandSource for Filled<'_> {
         cancel: &AtomicBool,
     ) -> Result<(), String> {
         out.fill(self.nodata);
-        self.warp
-            .fill(window, window.x..window.x + window.width, out, cancel)
+        self.fill(window, window.x..window.x + window.width, out, cancel)
     }
 }
 
 /// Write the display derivative of `band` (on `grid` in `native`) to
 /// `output`: Web Mercator on the global lattice at the item's `zoom`
 /// ([`zoom`]), Deflate, overviews, and `nodata` everywhere the footprint does
-/// not reach.
+/// not reach. `grid` is north-up: import refuses any other source, and Canopi
+/// writes north-up only.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn write(
     output: &Path,
@@ -460,25 +453,16 @@ pub(super) fn write(
     cancel: &AtomicBool,
 ) -> Result<(), String> {
     check_cancel(cancel)?;
-    let gt = grid.geotransform;
-    if gt[2] != 0.0 || gt[4] != 0.0 || gt[1] <= 0.0 || gt[5] >= 0.0 {
-        return Err(
-            "rotated, reflected, or south-up rasters are not supported by the display warp"
-                .to_string(),
-        );
-    }
     let mercator = crs::from_reference("EPSG:3857")?;
-    let placement = place(grid, &Transformer::new(native, &mercator)?, rung_at(zoom))?;
-    let geo_keys = crs::geokeys_for(&mercator)?;
-    let mut filled = Filled {
-        warp: Warp {
-            band,
-            native: grid.clone(),
-            to_native: Transformer::new(&mercator, native)?,
-            placement: &placement,
-            budget: budget / 2,
-        },
+    let placement = place(grid, &Transformer::new(native, &mercator), rung_at(zoom))?;
+    let geo_keys = crs::geokeys_for(&mercator);
+    let mut warp = Warp {
+        band,
+        native: grid.clone(),
         nodata,
+        to_native: Transformer::new(&mercator, native),
+        placement: &placement,
+        budget: budget / 2,
     };
     cog::write(
         output,
@@ -487,7 +471,7 @@ pub(super) fn write(
             geo_keys: Some(&geo_keys),
         },
         Some(nodata),
-        &mut filled,
+        &mut warp,
         cog::CogProfile {
             compression: Compression::Deflate,
             overviews: true,
@@ -624,7 +608,7 @@ mod tests {
         let resolution =
             super::rung_at(super::zoom(&native, [&rd(85_000.0, 447_500.0, 1, 1)]).unwrap());
         assert!((resolution - ZOOM_18).abs() < 1e-12);
-        let to_native = Transformer::new(&mercator, &native).unwrap();
+        let to_native = Transformer::new(&mercator, &native);
         let (column, row) = (
             ((486_208.0 + HALF_WORLD) / resolution) as i64,
             ((HALF_WORLD - 6_801_382.0) / resolution) as i64,

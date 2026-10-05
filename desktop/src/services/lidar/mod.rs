@@ -1254,12 +1254,11 @@ impl LidarLibrary {
     /// a file Canopi cannot place is refused in the import dialog, before any
     /// item or job exists (canopi-try2, U31).
     pub fn check_import_selection(&self, paths: &[PathBuf]) -> Result<(), String> {
-        import::validate_source_selection(paths)?;
+        import::validate_selection(paths, &admission::source_name)?;
         admission::check_sources_placeable(
             self.inner.engine.as_ref(),
             paths,
             &admission::source_name,
-            &AtomicBool::new(false),
         )
     }
 
@@ -1326,13 +1325,8 @@ impl LidarLibrary {
                 .cloned()
                 .unwrap_or_else(|| admission::source_name(path))
         };
-        import::validate_named_selection(&selection.paths, &name_of)?;
-        admission::check_sources_placeable(
-            self.inner.engine.as_ref(),
-            &selection.paths,
-            &name_of,
-            &AtomicBool::new(false),
-        )
+        import::validate_selection(&selection.paths, &name_of)?;
+        admission::check_sources_placeable(self.inner.engine.as_ref(), &selection.paths, &name_of)
     }
 
     /// Retry, last step, on the UserData lane. A refusal adds no job: it
@@ -3407,7 +3401,6 @@ pub(crate) fn import_job_summary(
     }))
 }
 
-/// An unpublished item's latest import that may be retried.
 /// A Retry's saved selection, carried from its UserData read through the
 /// Local header check to its UserData record.
 pub struct RetrySelection {

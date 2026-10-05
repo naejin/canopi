@@ -17,21 +17,16 @@ build pins.
 | geotiff-geokeys-to-proj4 | 2026.8.16 | https://github.com/matafokka/geotiff-geokeys-to-proj4 | BSD-3-Clause |
 | maplibre-gl | 6.10.0 | https://github.com/maplibre/maplibre-gl-js | BSD-3-Clause |
 | wbgeotiff | 0.1.2 at 9c0ff4fdf3513f27b89c78e294610c3b418b3a4f | https://github.com/opengeos/whitebox-wasm | MIT OR Apache-2.0 |
-| wbraster | 0.2.1 | https://github.com/jblindsay/whitebox_next_gen (crates.io) | MIT OR Apache-2.0 |
 | proj4rs | 0.2.0 | https://github.com/3liz/proj4rs | MIT OR Apache-2.0 |
-| wbprojection | 0.3.3 | https://github.com/jblindsay/whitebox_next_gen (crates.io, through wbraster) | MIT OR Apache-2.0 |
-| wbhdf | 0.1.0 | https://github.com/jblindsay/whitebox_next_gen (crates.io, through wbraster) | MIT OR Apache-2.0 |
 | geolibre-cli (geolibre-rust) | 1.5.3 at aac2b743978666f3c3119b5c93de1b30963b1493 | https://github.com/opengeos/geolibre-rust | MIT |
 | wbspatialstats | 0.1.0 at 9c0ff4fdf3513f27b89c78e294610c3b418b3a4f, in the GeoLibre CLI sidecar and the whitebox-wasm module, not the Canopi binary | https://github.com/opengeos/whitebox-wasm | AGPL-3.0-or-later |
 
 The Canopi binary compiles in the pure-Rust raster engine (`desktop/Cargo.toml`,
 ADR 0014): `wbgeotiff` from the `opengeos/whitebox-wasm` fork at the revision
-above, which a `[patch.crates-io]` entry also serves to `wbraster`, plus
-`wbraster` (with `wbprojection`) and `proj4rs`, the raster engine's coordinate
-reference system authority, from crates.io. Their notable transitive crates
-are `flate2`, `weezl`, `lz4_flex`, `ruzstd`, `zip`, `tar`, `png`,
-`jpeg-decoder`, `jpeg-encoder`, `rayon` and `wide` (each MIT and/or
-Apache-2.0; `zlib-rs` under Zlib, `zopfli` under Apache-2.0). The test
+above, plus `proj4rs`, the raster engine's coordinate reference system
+authority, from crates.io. Their notable transitive crates are `flate2`,
+`weezl`, `lz4_flex`, `png`, `jpeg-decoder`, `jpeg-encoder` and `rayon` (each
+MIT and/or Apache-2.0). The test
 `third-party-notices.test.ts` checks every `opengeos` crate in `Cargo.lock`
 has a row above.
 
@@ -54,9 +49,7 @@ registry, like the `whitebox-wasm` module the raster display loads, includes
 own `Cargo.toml` declares AGPL-3.0-or-later although the `whitebox-wasm`
 package README lists it under MIT OR Apache-2.0 (verified at
 9c0ff4fdf3513f27b89c78e294610c3b418b3a4f: `crates/wbspatialstats/Cargo.toml`;
-every other crate there, and `wbraster`, `wbprojection` and `wbhdf` on
-crates.io, declares MIT OR Apache-2.0, and none of the three depends on
-`wbspatialstats`). Canopi treats it as AGPL-3.0-or-later, which is compatible
+every other crate there declares MIT OR Apache-2.0). Canopi treats it as AGPL-3.0-or-later, which is compatible
 with Canopi's AGPL-3.0.
 
 Corresponding Source: the complete source of the GeoLibre CLI sidecar and the

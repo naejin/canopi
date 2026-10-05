@@ -44,57 +44,45 @@ impl ResolvedCrs {
         self.kind() != CrsKind::Geographic
     }
 
-    fn proj(&self) -> Result<Proj, String> {
-        Proj::from_proj_string(self.row.proj)
-            .map_err(|e| format!("EPSG:{} cannot be read: {e}", self.row.code))
+    /// Every row's definition is a static string that parses, which
+    /// `rows_are_written_in_the_form_proj4rs_reads` asserts for each row.
+    #[expect(
+        clippy::expect_used,
+        reason = "every row parses: rows_are_written_in_the_form_proj4rs_reads"
+    )]
+    fn proj(&self) -> Proj {
+        Proj::from_proj_string(self.row.proj).expect("every CRS row parses")
     }
 }
 
-/// Why a coordinate system is not placed: the one refusal (U31).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Unsupported {
-    Code(u32),
-    UserDefined,
-    Geocentric,
+/// The one refusal (U31): `subject` is not placed, and the supported
+/// systems are named.
+fn refused(subject: &str) -> String {
+    format!(
+        "{subject} is not a supported coordinate system. Canopi places LiDAR in {}.",
+        crs_table::SUPPORTED_SUMMARY
+    )
 }
 
-impl std::fmt::Display for Unsupported {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Unsupported::Code(code) => write!(f, "EPSG:{code}")?,
-            Unsupported::UserDefined => f.write_str("The raster's user-defined system")?,
-            Unsupported::Geocentric => f.write_str("A geocentric system")?,
-        }
-        write!(
-            f,
-            " is not a supported coordinate system. Canopi places LiDAR in {}.",
-            crs_table::SUPPORTED_SUMMARY
-        )
-    }
-}
-
-fn refused(why: Unsupported) -> String {
-    why.to_string()
+/// The refusal of keys that spell out a system no row matches.
+fn user_defined_refused() -> String {
+    refused("The raster's user-defined system")
 }
 
 /// Resolve a code, through the compound aliases.
 fn from_code(code: u32) -> Result<ResolvedCrs, String> {
     crs_table::row_of(code)
         .map(|row| ResolvedCrs { row })
-        .ok_or_else(|| refused(Unsupported::Code(code)))
+        .ok_or_else(|| refused(&format!("EPSG:{code}")))
 }
 
-/// Resolve a stored reference, `EPSG:n`.
+/// Resolve a stored reference, exactly the canonical `EPSG:n` that
+/// [`ResolvedCrs::reference`] writes.
 pub(super) fn from_reference(reference: &str) -> Result<ResolvedCrs, String> {
-    let trimmed = reference.trim();
-    if trimmed.is_empty() {
-        return Err("no coordinate reference system was given".to_string());
-    }
-    let code = trimmed
-        .get(..5)
-        .filter(|prefix| prefix.eq_ignore_ascii_case("EPSG:"))
-        .and_then(|_| trimmed[5..].parse::<u32>().ok())
-        .ok_or_else(|| format!("{trimmed} is not an EPSG:n coordinate reference"))?;
+    let code = reference
+        .strip_prefix("EPSG:")
+        .and_then(|code| code.parse::<u32>().ok())
+        .ok_or_else(|| format!("{reference} is not an EPSG:n coordinate reference"))?;
     from_code(code)
 }
 
@@ -103,6 +91,7 @@ pub(super) struct Transformer {
     source: Step,
     target: Step,
     identity: bool,
+    wgs84: Proj,
 }
 
 /// One side of the hub: `None` when the side is WGS84 itself.
@@ -112,21 +101,22 @@ struct Step {
 }
 
 impl Step {
-    fn of(crs: &ResolvedCrs) -> Result<Self, String> {
-        Ok(Self {
-            proj: (crs.code() != 4326).then(|| crs.proj()).transpose()?,
+    fn of(crs: &ResolvedCrs) -> Self {
+        Self {
+            proj: (crs.code() != 4326).then(|| crs.proj()),
             geographic: crs.kind() == CrsKind::Geographic,
-        })
+        }
     }
 }
 
 impl Transformer {
-    pub(super) fn new(source: &ResolvedCrs, target: &ResolvedCrs) -> Result<Self, String> {
-        Ok(Self {
-            source: Step::of(source)?,
-            target: Step::of(target)?,
+    pub(super) fn new(source: &ResolvedCrs, target: &ResolvedCrs) -> Self {
+        Self {
+            source: Step::of(source),
+            target: Step::of(target),
             identity: source.code() == target.code(),
-        })
+            wgs84: wgs84(),
+        }
     }
 
     /// One point; `Err` where a projection does not reach it.
@@ -134,7 +124,7 @@ impl Transformer {
         if self.identity {
             return Ok((x, y));
         }
-        let wgs84 = wgs84()?;
+        let wgs84 = &self.wgs84;
         let (lon, lat) = match &self.source.proj {
             None => (x, y),
             Some(proj) => {
@@ -143,7 +133,7 @@ impl Transformer {
                 } else {
                     (x, y, 0.0)
                 };
-                transform(proj, &wgs84, &mut point).map_err(|e| e.to_string())?;
+                transform(proj, wgs84, &mut point).map_err(|e| e.to_string())?;
                 (point.0.to_degrees(), point.1.to_degrees())
             }
         };
@@ -151,7 +141,7 @@ impl Transformer {
             None => Ok((lon, lat)),
             Some(proj) => {
                 let mut point = (lon.to_radians(), lat.to_radians(), 0.0);
-                transform(&wgs84, proj, &mut point).map_err(|e| e.to_string())?;
+                transform(wgs84, proj, &mut point).map_err(|e| e.to_string())?;
                 Ok(if self.target.geographic {
                     (point.0.to_degrees(), point.1.to_degrees())
                 } else {
@@ -162,8 +152,12 @@ impl Transformer {
     }
 }
 
-fn wgs84() -> Result<Proj, String> {
-    from_code(4326)?.proj()
+#[expect(
+    clippy::expect_used,
+    reason = "EPSG:4326 is a row: every_row_matches_proj_on_its_reference_grid"
+)]
+fn wgs84() -> Proj {
+    from_code(4326).expect("EPSG:4326 is a row").proj()
 }
 
 fn short(keys: &GeoKeyDirectory, id: u16) -> Option<u16> {
@@ -206,7 +200,7 @@ fn registry_code(value: Option<u16>) -> Option<u32> {
 pub(super) fn from_geokeys(keys: &GeoKeyDirectory) -> Result<Option<ResolvedCrs>, String> {
     let model = short(keys, key::GTModelTypeGeoKey);
     if model == Some(3) {
-        return Err(refused(Unsupported::Geocentric));
+        return Err(refused("A geocentric system"));
     }
     let projected = short(keys, key::ProjectedCSTypeGeoKey);
     if let Some(code) = registry_code(projected) {
@@ -218,13 +212,13 @@ pub(super) fn from_geokeys(keys: &GeoKeyDirectory) -> Result<Option<ResolvedCrs>
     if let Some(code) = registry_code(short(keys, key::GeographicTypeGeoKey)) {
         let crs = from_code(code)?;
         if model == Some(1) && crs.kind() == CrsKind::Geographic {
-            return Err(refused(Unsupported::UserDefined));
+            return Err(user_defined_refused());
         }
         return Ok(Some(crs));
     }
     match model {
         None => Ok(None),
-        Some(_) => Err(refused(Unsupported::UserDefined)),
+        Some(_) => Err(user_defined_refused()),
     }
 }
 
@@ -449,7 +443,6 @@ fn stated_ellipsoid(keys: &GeoKeyDirectory) -> Option<Option<(f64, f64)>> {
 /// another prime meridian, or an ellipsoid that differs from every such row
 /// match nothing.
 fn user_defined(keys: &GeoKeyDirectory) -> Result<ResolvedCrs, String> {
-    let refusal = || refused(Unsupported::UserDefined);
     let unit_ok = |id: u16, expected: u16| {
         matches!(short(keys, id), None | Some(USER_DEFINED)) || short(keys, id) == Some(expected)
     };
@@ -461,9 +454,9 @@ fn user_defined(keys: &GeoKeyDirectory) -> Result<ResolvedCrs, String> {
         || !unit_ok(key::GeogAngularUnitsGeoKey, 9102)
         || !greenwich
     {
-        return Err(refusal());
+        return Err(user_defined_refused());
     }
-    let parameters = Parameters::of_keys(keys).ok_or_else(refusal)?;
+    let parameters = Parameters::of_keys(keys).ok_or_else(user_defined_refused)?;
     let ellipsoid = stated_ellipsoid(keys);
     // How far a row's ellipsoid sits from the stated one, if within the
     // tolerance. WGS 84 and GRS80 are 0.1 mm apart, so the nearest row wins
@@ -483,7 +476,7 @@ fn user_defined(keys: &GeoKeyDirectory) -> Result<ResolvedCrs, String> {
         .filter_map(|row| distance(row).map(|off| (row, off)))
         .min_by(|left, right| left.1.total_cmp(&right.1))
         .map(|(row, _)| ResolvedCrs { row })
-        .ok_or_else(refusal)
+        .ok_or_else(user_defined_refused)
 }
 
 fn short_entry(key_id: u16, value: u16) -> GeoKeyEntry {
@@ -493,10 +486,10 @@ fn short_entry(key_id: u16, value: u16) -> GeoKeyEntry {
     }
 }
 
-/// The GeoTIFF keys of a written file: the code only.
-pub(super) fn geokeys_for(resolved: &ResolvedCrs) -> Result<GeoKeyDirectory, String> {
-    let code = u16::try_from(resolved.code())
-        .map_err(|_| format!("EPSG:{} cannot be written as GeoTIFF keys", resolved.code()))?;
+/// The GeoTIFF keys of a written file: the code only. Every row's code fits
+/// a GeoKey short (`rows_are_written_in_the_form_proj4rs_reads`).
+pub(super) fn geokeys_for(resolved: &ResolvedCrs) -> GeoKeyDirectory {
+    let code = resolved.code() as u16;
     let mut entries = vec![short_entry(key::GTRasterTypeGeoKey, 1)];
     if resolved.is_projected() {
         entries.push(short_entry(key::GTModelTypeGeoKey, 1));
@@ -508,12 +501,12 @@ pub(super) fn geokeys_for(resolved: &ResolvedCrs) -> Result<GeoKeyDirectory, Str
         entries.push(short_entry(key::GeogAngularUnitsGeoKey, 9102));
     }
     entries.sort_by_key(|entry| entry.key_id);
-    Ok(GeoKeyDirectory {
+    GeoKeyDirectory {
         version: 1,
         key_revision: 1,
         minor_revision: 0,
         entries,
-    })
+    }
 }
 
 #[cfg(test)]
@@ -526,7 +519,8 @@ mod tests {
     }
 
     /// Each row against PROJ on its 3x3 reference grid, as a distance: within
-    /// 1 cm of PROJ with the row's own Helmert shift, within the row's stated
+    /// 1 mm of PROJ with the row's own Helmert shift (`cs2cs` prints nine
+    /// decimals; 1.05e-4 m measured), within the row's stated
     /// accuracy of PROJ's own operation, which no row puts beyond 10 m (U31),
     /// and back to the same longitude and latitude within 3e-8 deg (3 mm: a
     /// 2-D transform drops the ellipsoidal height a datum shift moves; 2.2e-8
@@ -541,8 +535,8 @@ mod tests {
                 .collect();
             assert_eq!(points.len(), 9, "EPSG:{} has a reference grid", row.code);
             let crs = from_code(row.code).unwrap();
-            let forward = Transformer::new(&wgs84_crs(), &crs).unwrap();
-            let inverse = Transformer::new(&crs, &wgs84_crs()).unwrap();
+            let forward = Transformer::new(&wgs84_crs(), &crs);
+            let inverse = Transformer::new(&crs, &wgs84_crs());
             let geographic = crs.kind() == CrsKind::Geographic;
             // Degrees for a geographic row, as metres along a meridian.
             let scale = if geographic { 1.0 / 111_320.0 } else { 1.0 };
@@ -559,7 +553,7 @@ mod tests {
                 );
             }
             assert!(
-                by_row <= 0.01,
+                by_row <= 1e-3,
                 "EPSG:{} is {by_row} m from PROJ with the same shift",
                 row.code
             );
@@ -592,7 +586,7 @@ mod tests {
     #[test]
     fn krovak_holds_its_stated_accuracy_at_its_worst_point() {
         let row = crs_table::row_of(5514).unwrap();
-        let forward = Transformer::new(&wgs84_crs(), &from_code(5514).unwrap()).unwrap();
+        let forward = Transformer::new(&wgs84_crs(), &from_code(5514).unwrap());
         let (x, y) = forward.apply(22.18, 48.44).unwrap();
         let distance = (x - -196_087.506_472).hypot(y - -1_273_498.060_529);
         assert!(
@@ -610,6 +604,11 @@ mod tests {
         let mut codes = std::collections::HashSet::new();
         for row in crs_table::ROWS {
             assert!(codes.insert(row.code), "EPSG:{} is listed twice", row.code);
+            assert!(
+                row.code <= u32::from(u16::MAX),
+                "EPSG:{} does not fit a GeoKey",
+                row.code
+            );
             let proj = row.proj;
             assert!(!proj.contains("+pm="), "EPSG:{}: {proj}", row.code);
             assert!(!proj.contains("+k_0="), "EPSG:{}: {proj}", row.code);
@@ -638,7 +637,7 @@ mod tests {
     /// a range it names (the CC zones and the UTM zones).
     #[test]
     fn the_refusal_names_the_supported_systems() {
-        let message = refused(Unsupported::Code(2263));
+        let message = refused("EPSG:2263");
         assert!(message.starts_with("EPSG:2263 is not a supported coordinate system."));
         let ranges = [(3942, 3950), (32601, 32660), (32701, 32760), (25828, 25838)];
         for (first, last) in ranges {
@@ -658,9 +657,7 @@ mod tests {
 
     #[test]
     fn references_resolve_only_as_epsg_codes_of_the_table() {
-        for reference in ["EPSG:2154", "epsg:2154", " EPSG:2154 "] {
-            assert_eq!(from_reference(reference).unwrap().code(), 2154);
-        }
+        assert_eq!(from_reference("EPSG:2154").unwrap().code(), 2154);
         assert_eq!(
             from_reference("EPSG:7415").unwrap().reference(),
             "EPSG:28992"
@@ -683,7 +680,7 @@ mod tests {
     fn written_keys_are_code_keys_and_read_back_to_the_row() {
         for code in [2154u32, 3857, 4326, 32632, 2056, 3035, 4471, 28992] {
             let resolved = from_code(code).unwrap();
-            let keys = geokeys_for(&resolved).unwrap();
+            let keys = geokeys_for(&resolved);
             assert!(
                 keys.entries
                     .iter()

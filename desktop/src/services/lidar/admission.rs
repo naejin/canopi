@@ -23,6 +23,7 @@
 //! and no environment variable can enable a production bypass.
 
 use super::engine::RasterEngine;
+use super::rust_engine::is_tiff;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
@@ -94,12 +95,8 @@ pub(crate) fn source_name(path: &Path) -> String {
 /// Every place that learns a source's size — selection validation and the
 /// managed-original copy/hash loop — reports through this one check, so an
 /// authorized run cannot be stopped by a second hard-coded ceiling.
-pub(crate) fn check_source_bytes(path: &Path, bytes: u64) -> Result<(), String> {
-    check_named_source_bytes(&source_name(path), bytes)
-}
-
-/// [`check_source_bytes`] for a source a caller names itself.
-pub(crate) fn check_named_source_bytes(name: &str, bytes: u64) -> Result<(), String> {
+/// `name` is how the refusal names the source ([`source_name`] for a path).
+pub(crate) fn check_source_bytes(name: &str, bytes: u64) -> Result<(), String> {
     let limits = limits();
     if bytes > limits.source_bytes {
         return Err(format!(
@@ -111,30 +108,20 @@ pub(crate) fn check_named_source_bytes(name: &str, bytes: u64) -> Result<(), Str
 }
 
 /// Refuse a selection Canopi cannot place: a source that is not a GeoTIFF,
-/// declares no coordinate system or one that is refused (U31).
-///
-/// Import runs it on the user's files before anything is recorded, so the
-/// refusal shows in the dialog and leaves no item or job (canopi-try2). Retry
-/// runs it on the saved files before recording a job and keeps a refusal as
-/// the failure of the item's latest import, so the reason stays on its row.
-/// Both first refuse at once while a raster job runs, since that job holds a
-/// Local slot for minutes and would fail the import on its lease anyway;
-/// otherwise they run this on the Local lane, beside short reads, never on
-/// UserData. `name_of` names each
-/// source in a refusal: [`source_name`] for the user's files, the imported
-/// file name for a managed original. Each source's header is read here and
-/// read again when staging probes its managed copy; that is cheap, and only
-/// the header is read.
+/// declares no coordinate system or one that is refused (U31). Each refusal
+/// names the source through `name_of`, never its folder. Only headers are
+/// read, so reading them again at staging is cheap.
 pub(crate) fn check_sources_placeable(
     engine: &dyn RasterEngine,
     paths: &[PathBuf],
     name_of: &dyn Fn(&Path) -> String,
-    cancel: &AtomicBool,
 ) -> Result<(), String> {
+    // A header check no one can cancel.
+    let cancel = AtomicBool::new(false);
     for path in paths {
         let name = name_of(path);
         check_source_format(path, &name)?;
-        let probe = engine.probe(path, cancel).map_err(|error| {
+        let probe = engine.probe(path, &cancel).map_err(|error| {
             // An engine message may spell out the whole path; the user sees
             // the file name in its place.
             let error = error.replace(&path.display().to_string(), &name);
@@ -153,29 +140,19 @@ pub(crate) fn check_sources_placeable(
     Ok(())
 }
 
-/// Refuse a source that does not start with a classic or BigTIFF signature.
+/// Refuse a source that does not start with a classic or BigTIFF signature,
+/// the engine's own rule ([`is_tiff`]).
 ///
 /// Only GeoTIFF sources import, and this reads four bytes, so a file in
 /// another format is refused before any reader parses it whole.
 fn check_source_format(path: &Path, name: &str) -> Result<(), String> {
-    use std::io::Read as _;
-    let unreadable = || format!("{name} cannot be read; choose the files again");
-    let mut file = std::fs::File::open(path).map_err(|_| unreadable())?;
-    let mut magic = [0u8; 4];
-    match file.read_exact(&mut magic) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => {}
-        Err(_) => return Err(unreadable()),
+    match is_tiff(path) {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(format!(
+            "{name} is not a GeoTIFF; Canopi imports GeoTIFF rasters"
+        )),
+        Err(_) => Err(format!("{name} cannot be read; choose the files again")),
     }
-    if matches!(
-        &magic,
-        b"II\x2a\x00" | b"MM\x00\x2a" | b"II\x2b\x00" | b"MM\x00\x2b"
-    ) {
-        return Ok(());
-    }
-    Err(format!(
-        "{name} is not a GeoTIFF; Canopi imports GeoTIFF rasters"
-    ))
 }
 
 /// Refuse a selection whose total bytes exceed the per-import bound.
@@ -298,9 +275,9 @@ mod tests {
         assert_eq!(limits.import_bytes, 2 * 1024 * 1024 * 1024);
         assert!(check_source_count(limits.files).is_ok());
         assert!(check_source_count(limits.files + 1).is_err());
-        let path = Path::new("/library/source.tif");
-        assert!(check_source_bytes(path, limits.source_bytes).is_ok());
-        assert!(check_source_bytes(path, limits.source_bytes + 1).is_err());
+        let name = source_name(Path::new("/library/source.tif"));
+        assert!(check_source_bytes(&name, limits.source_bytes).is_ok());
+        assert!(check_source_bytes(&name, limits.source_bytes + 1).is_err());
         assert!(check_import_bytes(limits.import_bytes).is_ok());
         assert!(check_import_bytes(limits.import_bytes + 1).is_err());
     }
@@ -414,7 +391,7 @@ mod tests {
             };
             let _guard = limits_probe::set(lowered);
             assert_eq!(limits(), lowered);
-            assert!(check_source_bytes(Path::new("/library/big.tif"), 2048).is_err());
+            assert!(check_source_bytes(&source_name(Path::new("/library/big.tif")), 2048).is_err());
             assert!(
                 check_processing_budget(
                     [ProcessingCost {

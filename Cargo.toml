@@ -7,10 +7,3 @@ version = "2.0.0"
 edition = "2024"
 license = "AGPL-3.0-only"
 repository = "https://github.com/naejin/canopi"
-
-# The pinned GeoTIFF engine is the `opengeos/whitebox-wasm` fork of
-# `wbgeotiff`, which is ahead of the crates.io release (prefix-only COG layout
-# parsing, byte order, predictors). `wbraster` depends on the crates.io name,
-# so one copy serves both (ADR 0014).
-[patch.crates-io]
-wbgeotiff = { git = "https://github.com/opengeos/whitebox-wasm", rev = "9c0ff4fdf3513f27b89c78e294610c3b418b3a4f" }

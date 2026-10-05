@@ -587,50 +587,28 @@ impl RasterEngine for GdalEngine {
         zoom: u32,
         cancel: &AtomicBool,
     ) -> Result<(), String> {
-        if georef.is_none() && matches!(input, RasterInput::Samples { .. }) {
-            return Err("samples need a georeference to become a raster".to_string());
+        if georef.is_some() || matches!(input, RasterInput::Samples { .. }) {
+            return Err("the display oracle warps files only".to_string());
         }
         let staged = Self::stage_input(input, output)?;
         // The input's placement as the Rust engine reads it: the oracle checks
         // the warp, not the key reading the authority's own tests cover.
-        let (grid, crs, file_nodata) = match georef {
-            Some(georef) => (georef.grid.clone(), georef.crs.to_string(), None),
-            None => {
-                let probe = super::rust_engine::RustRasterEngine.probe(&staged.path, cancel)?;
-                let grid = RasterGrid {
-                    width: probe.width,
-                    height: probe.height,
-                    geotransform: probe.geotransform,
-                };
-                (grid, probe.crs_ref, probe.nodata)
-            }
+        let probe = super::rust_engine::RustRasterEngine.probe(&staged.path, cancel)?;
+        let grid = RasterGrid {
+            width: probe.width,
+            height: probe.height,
+            geotransform: probe.geotransform,
         };
-        let (lattice, definition) = super::rust_engine::display_lattice(&grid, &crs, zoom)?;
-        // Samples and an overridden placement are written as a placed GeoTIFF
-        // first; gdalwarp reads the placement from its input.
-        let placed = output.with_extension("placed.tif");
-        let source = match georef {
-            Some(georef) => {
-                let mut args: Vec<String> = ["-q", "-ot", "Float32"]
-                    .into_iter()
-                    .map(str::to_string)
-                    .collect();
-                args.extend(georef_arguments(georef));
-                args.push(staged.path.display().to_string());
-                args.push(placed.display().to_string());
-                self.run(GdalProgram::Translate, &args, Some(cancel))?;
-                placed.clone()
-            }
-            None => staged.path.clone(),
-        };
+        let (lattice, definition) =
+            super::rust_engine::display_lattice(&grid, &probe.crs_ref, zoom)?;
         let warped = output.with_extension("warped.tif");
         let args = display_warp_arguments(
-            &source,
+            &staged.path,
             &warped,
             definition,
             &lattice,
             nodata,
-            nodata.or(file_nodata).unwrap_or(DISPLAY_NODATA),
+            nodata.or(probe.nodata).unwrap_or(DISPLAY_NODATA),
         );
         let written = self
             .run(GdalProgram::Warp, &args, Some(cancel))
@@ -642,7 +620,6 @@ impl RasterEngine for GdalEngine {
                 )
             })
             .map(|_| ());
-        let _ = std::fs::remove_file(&placed);
         let _ = std::fs::remove_file(&warped);
         written
     }
@@ -893,61 +870,6 @@ mod tests {
         );
         assert!(args.contains(&"COMPRESS=NONE".to_string()));
         assert!(args.contains(&"OVERVIEWS=NONE".to_string()));
-    }
-
-    /// A6: the oracle warps onto the lattice the Rust engine places the
-    /// input on, by nearest neighbour with an exact transform and the row's
-    /// own Helmert shift, then writes the display profile from that.
-    #[test]
-    fn the_display_oracle_warps_onto_the_lattice_by_nearest_neighbour() {
-        let grid = RasterGrid {
-            width: 120,
-            height: 80,
-            geotransform: [85_000.0, 0.5, 0.0, 447_500.0, 0.0, -0.5],
-        };
-        let (lattice, definition) =
-            super::super::rust_engine::display_lattice(&grid, "EPSG:28992", 18).unwrap();
-        assert!(definition.contains("+towgs84=565.2369"), "{definition}");
-        let args = display_warp_arguments(
-            Path::new("in.tif"),
-            Path::new("out.tif"),
-            definition,
-            &lattice,
-            Some(-9999.0),
-            -9999.0,
-        );
-        let [min_x, min_y, max_x, max_y] = lattice.bounds();
-        let pairs: Vec<(&str, String)> = vec![
-            ("-s_srs", definition.to_string()),
-            ("-t_srs", "EPSG:3857".to_string()),
-            ("-r", "near".to_string()),
-            ("-et", "0".to_string()),
-            ("-srcnodata", "-9999.0".to_string()),
-            ("-dstnodata", "-9999.0".to_string()),
-            ("-of", "GTiff".to_string()),
-        ];
-        for (flag, value) in pairs {
-            let at = args
-                .iter()
-                .position(|arg| arg == flag)
-                .unwrap_or_else(|| panic!("{flag}"));
-            assert_eq!(args[at + 1], value, "{flag}");
-        }
-        let at = args.iter().position(|arg| arg == "-te").expect("-te");
-        let te: Vec<f64> = args[at + 1..at + 5]
-            .iter()
-            .map(|v| v.parse().unwrap())
-            .collect();
-        assert_eq!(te, [min_x, min_y, max_x, max_y]);
-        let at = args.iter().position(|arg| arg == "-ts").expect("-ts");
-        assert_eq!(
-            args[at + 1..at + 3],
-            [lattice.width.to_string(), lattice.height.to_string()]
-        );
-        assert_eq!(args[args.len() - 2..], ["in.tif", "out.tif"]);
-        let profile = display_cog_arguments(Path::new("out.tif"), Path::new("out.cog.tif"));
-        assert!(profile.contains(&"RESAMPLING=AVERAGE".to_string()));
-        assert!(profile.contains(&"COMPRESS=DEFLATE".to_string()));
     }
 
     #[test]

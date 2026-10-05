@@ -117,4 +117,41 @@ mod tests {
         assert!(!root.join("tile.tif.aux.xml").exists());
         let _ = std::fs::remove_dir_all(root);
     }
+
+    /// A chosen file that is not a GeoTIFF has no extent: it is counted
+    /// unreadable and the others still cover the site.
+    #[test]
+    fn a_file_that_is_not_a_geotiff_is_counted_unreadable() {
+        let root = crate::test_scratch::TestScratch::new("coverage-not-tiff");
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
+        let raster = root.join("tile.tif");
+        let grid = super::super::grid::RasterGrid {
+            width: 4,
+            height: 4,
+            geotransform: [11_000.0, 1.0, 0.0, 5_950_004.0, 0.0, -1.0],
+        };
+        let raw = root.join("tile.raw");
+        super::super::import::write_f32_raw(&raw, &[1.0; 16]).unwrap();
+        super::super::import::raw_to_tif(
+            &engine,
+            &AtomicBool::new(false),
+            &raw,
+            &raster,
+            &grid,
+            "EPSG:3857",
+            -9999.0,
+        )
+        .unwrap();
+        let ascii = root.join("dem.asc");
+        std::fs::write(
+            &ascii,
+            "ncols 2\nnrows 2\nxllcorner 0\nyllcorner 0\ncellsize 1\nNODATA_value -9999\n1 2\n3 4\n",
+        )
+        .unwrap();
+
+        let coverage = import_coverage(&engine, &[raster, ascii]).unwrap();
+        assert_eq!(coverage.unreadable_files, 1);
+        assert!(coverage.bounds.is_some());
+        let _ = std::fs::remove_dir_all(root);
+    }
 }

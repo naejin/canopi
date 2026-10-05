@@ -48,7 +48,7 @@ pub(super) const DISPLAY_PROFILE: &str = "display-cog-3857-v2";
 /// row needs no bump and an edited one does.
 #[cfg(test)]
 const DISPLAY_PROFILE_DIGEST: &str =
-    "2e4ed2b2fa51a71af44dfece8b15ac2d6659dde5b45f95346ffb288553381a3d";
+    "e00cd648788208919af0819c86f4e02716b1cd524cd5c819f4377862ad9ff8d5";
 /// Largest side of a composed part, in 1024-cell chunks: a part is composed
 /// in memory and converted whole, so 4×4 chunks keep it inside the engine's
 /// capacity limit (`import::MAX_RAW_EXTRACTION_CELLS`).
@@ -85,7 +85,6 @@ pub(super) struct DisplayPlan {
     kind: LibraryItemRole,
     entity_id: String,
     generation_id: String,
-    crs_ref: String,
     /// The item's display zoom: every part is drawn on its lattice.
     zoom: u32,
     parts: Vec<PartSpec>,
@@ -163,7 +162,6 @@ fn build_plan(
                 kind,
                 entity_id: entity_id.to_string(),
                 generation_id: head.id,
-                crs_ref: manifest.crs_ref,
                 zoom,
                 parts,
             })))
@@ -212,7 +210,6 @@ fn build_plan(
                 kind,
                 entity_id: entity_id.to_string(),
                 generation_id: result.id,
-                crs_ref: manifest.crs_ref,
                 zoom,
                 parts,
             })))
@@ -499,7 +496,7 @@ impl LidarLibrary {
             if ready_part(self, &part.key)?.is_some() {
                 continue;
             }
-            let (prepared, bytes) = self.prepare_part(part, &plan.crs_ref, plan.zoom, cancel)?;
+            let (prepared, bytes) = self.prepare_part(part, plan.zoom, cancel)?;
             let display = self.display()?;
             record(&display, &part.key, &prepared, bytes)?;
         }
@@ -509,7 +506,6 @@ impl LidarLibrary {
     fn prepare_part(
         &self,
         part: &PartSpec,
-        crs_ref: &str,
         zoom: u32,
         cancel: &AtomicBool,
     ) -> Result<(Prepared, u64), String> {
@@ -546,8 +542,7 @@ impl LidarLibrary {
                 }
             }
             PartSource::Windows { reader, chunks } => {
-                let written =
-                    self.write_part_windows(reader, chunks, &staged, crs_ref, zoom, cancel);
+                let written = self.write_part_windows(reader, chunks, &staged, zoom, cancel);
                 match written {
                     Ok(true) => {}
                     Ok(false) => {
@@ -593,7 +588,6 @@ impl LidarLibrary {
         reader: &WindowReader,
         chunks: &[(i64, i64)],
         staged: &Path,
-        crs_ref: &str,
         zoom: u32,
         cancel: &AtomicBool,
     ) -> Result<bool, String> {
@@ -668,11 +662,6 @@ impl LidarLibrary {
                 gt[5],
             ],
         };
-        let crs = if reader.crs_ref.is_empty() {
-            crs_ref
-        } else {
-            &reader.crs_ref
-        };
         self.inner
             .engine
             .write_display_cog(
@@ -681,7 +670,10 @@ impl LidarLibrary {
                     values: &samples,
                 },
                 staged,
-                Some(RasterGeoref { grid: &grid, crs }),
+                Some(RasterGeoref {
+                    grid: &grid,
+                    crs: &reader.crs_ref,
+                }),
                 Some(DISPLAY_NODATA),
                 zoom,
                 cancel,
@@ -726,7 +718,7 @@ impl LidarLibrary {
             if ready_part(self, &part.key)?.is_some() {
                 continue;
             }
-            let (prepared, bytes) = self.prepare_part(&part, &source.crs_ref, zoom, cancel)?;
+            let (prepared, bytes) = self.prepare_part(&part, zoom, cancel)?;
             let display = self.display()?;
             record(&display, &part.key, &prepared, bytes)?;
         }

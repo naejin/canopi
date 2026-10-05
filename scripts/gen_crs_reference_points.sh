@@ -38,7 +38,7 @@ ln -s "$db" "$data/proj.db"
 export PROJ_DATA=$data PROJ_NETWORK=OFF
 WGS84="+proj=longlat +datum=WGS84 +type=crs"
 
-rows=$(sed -nE 's/^ *row\(([0-9]+), "[^"]*", "([^"]*)", \[([^]]*)\], [0-9.]+\),$/\1|\2|\3/p' "$TABLE")
+rows=$(sed -nE 's#^ *row\(([0-9]+), "([^"]*)", \[([^]]*)\], [0-9.]+\),( *//.*)?$#\1|\2|\3#p' "$TABLE")
 [ -n "$rows" ] || { echo "no rows read from $TABLE" >&2; exit 1; }
 
 # Two columns from one cs2cs call over the "lon lat" points, the input put

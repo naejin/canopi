@@ -49,7 +49,6 @@ export class WorkspaceMapContributions {
   /** Target set whose overlay failed; skipped until the Targets change. */
   private skippedOverlayKey: string | null = null
   private rasterSkipped = false
-  private readonly removeListeners: Array<() => void> = []
 
   constructor(private readonly options: WorkspaceMapContributionsOptions) {}
 
@@ -139,7 +138,6 @@ export class WorkspaceMapContributions {
       ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
       status: error ? 'error' : 'idle',
     })
-    for (const remove of this.removeListeners.splice(0)) this.attempt('Failed to remove map contribution listener:', remove)
     this.clear()
     // Map-lifetime teardown: the manager's layers, sources, protocol and
     // listeners go, and its worker client rejects queued and in-flight work.

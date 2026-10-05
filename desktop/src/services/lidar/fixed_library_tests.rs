@@ -374,9 +374,6 @@ fn renaming_a_result_changes_only_its_name() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// Asserts a refusal shown in the import dialog: it names the user's file and
-/// nothing about where it lives or how the system failed, and the refused
-/// import left no item and no job behind.
 /// A library wired like the app's, so an admitted import would start.
 fn attached_library(root: &Path) -> LidarLibrary {
     let library = LidarLibrary::open(root).unwrap();
@@ -384,6 +381,9 @@ fn attached_library(root: &Path) -> LidarLibrary {
     library
 }
 
+/// Asserts a refusal shown in the import dialog: it names the user's file and
+/// nothing about where it lives or how the system failed, and the refused
+/// import left no item and no job behind.
 fn assert_refused_in_dialog(library: &LidarLibrary, root: &Path, error: &str, name: &str) {
     assert!(error.contains(name), "the refusal names {name}: {error}");
     let root = root.display().to_string();
@@ -494,6 +494,35 @@ fn importing_a_file_that_is_not_a_geotiff_is_refused_before_it_is_read() {
         "refused before a reader parsed it: {error}"
     );
     assert_refused_in_dialog(&library, &root, &error, "dem.asc");
+}
+
+/// A chosen file that cannot be opened is refused by name, without its
+/// folder or the system's error, and creates nothing.
+#[cfg(unix)]
+#[test]
+fn importing_a_file_that_cannot_be_opened_is_refused_by_name() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let root = scratch("import-unopenable");
+    let library = attached_library(&root);
+    let source = root.join("locked.tif");
+    std::fs::write(&source, b"II\x2a\x00 a locked GeoTIFF").unwrap();
+    std::fs::set_permissions(&source, std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::File::open(&source).is_ok() {
+        // Permissions do not bind this user (root): nothing to observe.
+        return;
+    }
+    let error = library
+        .import_item(
+            "Grid",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            vec![source.clone()],
+        )
+        .unwrap_err();
+    std::fs::set_permissions(&source, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert!(error.contains("cannot be read"), "{error}");
+    assert_refused_in_dialog(&library, &root, &error, "locked.tif");
 }
 
 /// The failed import Retry is offered on: its job's message is what the item's

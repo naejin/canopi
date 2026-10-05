@@ -212,7 +212,7 @@ pub fn stage_import(
 ) -> Result<(), String> {
     let engine = library.inner.engine.as_ref();
     let paths = &library.inner.paths;
-    validate_source_selection(source_paths)?;
+    validate_selection(source_paths, &admission::source_name)?;
 
     let layer = {
         let connection = library.catalogue()?;
@@ -410,25 +410,15 @@ fn layer_lattice_grid(
 
 /// Validate a selection against the one admission policy.
 ///
-/// Returns the total selected bytes so callers reuse the counted value instead
-/// of re-deriving it. Every bound comes from `admission`, so an authorized
-/// representative run can raise it for its own thread and nothing else changes.
-/// Import calls it before anything is recorded and Retry once its job is
-/// recorded, then each reads every header
-/// ([`admission::check_sources_placeable`]); staging calls it again and probes
-/// its managed copies. Refusals name the user's file only, never its folder or
-/// a system error.
-pub(super) fn validate_source_selection(source_paths: &[PathBuf]) -> Result<u64, String> {
-    validate_named_selection(source_paths, &admission::source_name)
-}
-
-/// [`validate_source_selection`] with each refusal naming a source through
-/// `name_of`, so Retry names a managed original by the file it was imported
-/// as.
-pub(super) fn validate_named_selection(
+/// Every bound comes from `admission`, so an authorized representative run
+/// can raise it for its own thread and nothing else changes. Refusals name a
+/// source through `name_of` ([`admission::source_name`] for the user's files;
+/// Retry names a managed original by the file it was imported as), never its
+/// folder or a system error.
+pub(super) fn validate_selection(
     source_paths: &[PathBuf],
     name_of: &dyn Fn(&Path) -> String,
-) -> Result<u64, String> {
+) -> Result<(), String> {
     if source_paths.is_empty() {
         return Err("select at least one raster source".to_string());
     }
@@ -445,13 +435,12 @@ pub(super) fn validate_named_selection(
         if !metadata.is_file() {
             return Err(format!("{name} is not a file; choose the files again"));
         }
-        admission::check_named_source_bytes(&name, metadata.len())?;
+        admission::check_source_bytes(&name, metadata.len())?;
         total_bytes = total_bytes
             .checked_add(metadata.len())
             .ok_or_else(|| "selected source sizes overflow the import budget".to_string())?;
     }
-    admission::check_import_bytes(total_bytes)?;
-    Ok(total_bytes)
+    admission::check_import_bytes(total_bytes)
 }
 
 pub(crate) fn validate_working_grid(grid: &RasterGrid, operation: &str) -> Result<(), String> {
@@ -499,7 +488,7 @@ fn stage_managed_original(
             total = total
                 .checked_add(read as u64)
                 .ok_or_else(|| "source byte count overflow".to_string())?;
-            admission::check_source_bytes(source_path, total)
+            admission::check_source_bytes(&admission::source_name(source_path), total)
                 .map_err(|error| format!("{error} while the managed original was being copied"))?;
             hasher.update(&buffer[..read]);
             target
@@ -563,7 +552,7 @@ fn hash_file_limited(path: &Path, cancel: &AtomicBool) -> Result<(String, u64), 
         total = total
             .checked_add(read as u64)
             .ok_or_else(|| "managed source size overflow".to_string())?;
-        admission::check_source_bytes(path, total)
+        admission::check_source_bytes(&admission::source_name(path), total)
             .map_err(|error| format!("{error} while the managed original was verified"))?;
         hasher.update(&buffer[..read]);
     }
@@ -624,9 +613,6 @@ fn stage_source(
             "source has {} bands; Canopi joins single-band numeric rasters",
             probe.band_count
         ));
-    }
-    if probe.driver != "GTiff" {
-        issues.push(format!("driver {} is not GeoTIFF", probe.driver));
     }
     if probe.geotransform[1] <= 0.0
         || probe.geotransform[5] >= 0.0
@@ -1547,7 +1533,7 @@ mod tests {
     fn source_selection_caps_count_and_bytes_before_staging() {
         let too_many = vec![PathBuf::from("unused"); admission::MAX_SOURCE_FILES_PER_IMPORT + 1];
         assert!(
-            validate_source_selection(&too_many)
+            validate_selection(&too_many, &admission::source_name)
                 .unwrap_err()
                 .contains("at most")
         );
@@ -1556,7 +1542,8 @@ mod tests {
         let path = scratch.join("oversized-source");
         let file = std::fs::File::create(&path).unwrap();
         file.set_len(admission::MAX_SOURCE_FILE_BYTES + 1).unwrap();
-        let error = validate_source_selection(std::slice::from_ref(&path)).unwrap_err();
+        let error =
+            validate_selection(std::slice::from_ref(&path), &admission::source_name).unwrap_err();
         assert!(error.contains("per-source limit"));
         let _ = std::fs::remove_file(path);
     }
@@ -2508,6 +2495,54 @@ mod tests {
         );
         assert!(
             refusal.contains("no valid samples"),
+            "and says why: {refusal}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A south-up GeoTIFF is refused at import by name: the display warp
+    /// and every reader take north-up grids only.
+    #[test]
+    fn a_south_up_source_is_refused_by_name() {
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
+        let cancel = AtomicBool::new(false);
+        let root = crate::test_scratch::TestScratch::new("canopi-south-up");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        // A positive pixel height is written as a negative ModelPixelScale y,
+        // which reads back as a south-up grid.
+        let south_up = root.join("south-up.tif");
+        wbgeotiff::GeoTiffWriter::new(4, 4, 1)
+            .geo_transform(wbgeotiff::GeoTransform::north_up(
+                650_000.0,
+                1.0,
+                6_862_000.0,
+                1.0,
+            ))
+            .epsg(2154)
+            .no_data(-9999.0)
+            .write_f32(&south_up, &[5.0; 16])
+            .unwrap();
+        let real = write_placed_fixture(&engine, &root, "real", 0.0, 4.0, 4, 4, -9999.0, 5.0);
+
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "south up",
+                common_types::library::RasterQuantity::GroundElevation,
+                None,
+                false,
+            )
+            .unwrap();
+        let job_id = library.record_import_job(&layer_id).expect("job recorded");
+        let refusal = stage_import(&library, &job_id, &layer_id, &[south_up, real], &cancel)
+            .expect_err("a south-up source is refused");
+        assert!(
+            refusal.contains("south-up.tif"),
+            "the refusal names the file: {refusal}"
+        );
+        assert!(
+            refusal.contains("rotated, reflected, or south-up"),
             "and says why: {refusal}"
         );
         let _ = std::fs::remove_dir_all(&root);

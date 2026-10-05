@@ -119,13 +119,7 @@ function sourceFor(handle: number): Promise<CogSource> {
 }
 
 function metadataOf(source: CogSource): RasterSourceMetadata {
-  return {
-    boundsLonLat: [...source.boundsLonLat],
-    levels: source.levels.map((level) => ({ width: level.width, height: level.height })),
-    mode: '3857',
-    crsLabel: source.crsLabel,
-    hasPalette: source.hasPalette,
-  }
+  return { boundsLonLat: [...source.boundsLonLat] }
 }
 
 async function handle(request: RasterWorkerRequest): Promise<{ value: unknown; transfer: Transferable[] }> {

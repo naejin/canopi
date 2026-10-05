@@ -64,10 +64,7 @@ describe('a display derivative the Rust engine wrote', () => {
     await vi.waitFor(() => expect(replies).toHaveLength(1), { timeout: 10_000 })
     const reply = replies[0]!
     if (!reply.ok) throw new Error(reply.error)
-    const metadata = reply.value as { mode: string; crsLabel: string; boundsLonLat: number[]; levels: { width: number; height: number }[] }
-    expect(metadata.mode).toBe('3857')
-    expect(metadata.crsLabel).toBe('EPSG:3857')
-    expect(metadata.levels[0]).toEqual({ width: fixture.width, height: fixture.height })
+    const metadata = reply.value as { boundsLonLat: number[] }
     metadata.boundsLonLat.forEach((value, index) => expect(value).toBeCloseTo(fixture.bounds[index]!, 9))
   })
 
@@ -76,6 +73,7 @@ describe('a display derivative the Rust engine wrote', () => {
     await init()
     const source = await openCog(tif)
     expect(source.mode).toBe('3857')
+    expect(source.levels[0]).toMatchObject({ width: fixture.width, height: fixture.height })
     const valued = fixture.probes.filter((probe) => probe.value !== null)
     expect(valued.length).toBeGreaterThan(5)
     expect(fixture.probes.length - valued.length).toBeGreaterThan(0)
