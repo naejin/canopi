@@ -11,7 +11,7 @@ use rusqlite::{Connection, OptionalExtension};
 /// There is no migration ladder: an older or corrupt catalogue is set aside
 /// and rebuilt from the originals (`recovery.rs`, ADR 0021), and a newer one
 /// is refused so an older binary never writes rows it does not understand.
-pub const CATALOGUE_VERSION: i32 = 23;
+pub const CATALOGUE_VERSION: i32 = 24;
 
 /// Open (or create) the catalogue at `path`.
 ///
