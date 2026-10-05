@@ -34,7 +34,7 @@ import { designFixture } from './fixtures'
 import { designSessionStore } from '../src/app/document-session/store'
 import { activity } from './memory-backend'
 import { lidarMapViewBounds } from '../src/app/lidar/camera-request'
-import { pendingAttachments } from '../src/app/lidar/actions'
+import { attachmentFailure, pendingAttachments } from '../src/app/lidar/actions'
 import { closeSiteDataDetails, dataDialog, openSiteDataDetails, selectSiteRow } from '../src/app/lidar/library-navigation'
 import { GalleryCanvasSurface } from './GalleryCanvasSurface'
 import { StampChooser } from '../src/components/canvas/StampChooser'
@@ -91,6 +91,13 @@ if (fixtureState === 'lidar-progress') {
     { key: 'import:lidar-canopy', kind: 'import', identity, itemIds: ['lidar-canopy'] },
     { key: 'lidar-slope-running-def', kind: 'analysis', identity, itemIds: ['lidar-slope-running'] },
   ]
+}
+// A failed attachment with a long path in its message, as the Site data notice shows it (canopi-6spu).
+if (fixtureState === 'lidar-failure') {
+  attachmentFailure.value = {
+    itemId: 'lidar-ground',
+    message: 'Failed to inspect /home/canopi/Documents/LiDAR/ign-mns-paris-2024/tiles/missing-tile-0652_6862.tif: No such file or directory (os error 2)',
+  }
 }
 const planningView = readPlanningViewState()
 planningView.calendarMonth.value = '2026-09-01'
@@ -150,7 +157,7 @@ function Gallery() {
         .map(([key, label]) => <button data-panel={key === 'key' ? 'species-key' : key === 'notebook' ? 'design-notebook' : key} aria-pressed={selectedSurface.value === key} onClick={() => selectGallerySurface(key as GallerySurface)}>{label}</button>)}
       <span>Edition:</span>
       {(['desktop', 'web'] as const).map((nextEdition) => <a aria-current={edition === nextEdition ? 'page' : undefined} href={editionUrl(nextEdition)}>{nextEdition}</a>)}
-      <span>State:</span>{['populated', 'empty', 'mixed', 'long', 'located', 'dense', 'planting', 'zone', 'overview', 'max-zoom', 'lidar-progress'].map(state => <a aria-current={fixtureState === state ? 'page' : undefined}
+      <span>State:</span>{['populated', 'empty', 'mixed', 'long', 'located', 'dense', 'planting', 'zone', 'overview', 'max-zoom', 'lidar-progress', 'lidar-failure'].map(state => <a aria-current={fixtureState === state ? 'page' : undefined}
         href={`?surface=${selectedSurface.value}&state=${state}&theme=${theme.value}&locale=${locale.value}${edition === 'web' ? '&edition=web' : ''}`}>{state}</a>)}
     </nav>
     {selectedSurface.value === 'workspace' && edition === 'desktop' ? <GalleryWorkspaceCommands panelProjection={panelProjection} /> : null}
