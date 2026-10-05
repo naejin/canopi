@@ -248,58 +248,18 @@ pub async fn lidar_import_item(
     unit_unknown: Option<bool>,
     paths: Vec<String>,
 ) -> Result<common_types::lidar::LidarImportReceipt, String> {
-    import_item_with_executor(
-        executor.inner(),
-        library.inner().clone(),
-        ImportSelection {
-            name,
-            quantity,
-            unit_label,
-            unit_unknown: unit_unknown.unwrap_or(false),
-            paths: paths.into_iter().map(std::path::PathBuf::from).collect(),
-        },
-    )
-    .await
-}
-
-/// What the import dialog submits.
-struct ImportSelection {
-    name: String,
-    quantity: RasterQuantity,
-    unit_label: Option<String>,
-    unit_unknown: bool,
-    paths: Vec<std::path::PathBuf>,
-}
-
-async fn import_item_with_executor(
-    executor: &NativeOperationExecutor,
-    library: LidarLibrary,
-    selection: ImportSelection,
-) -> Result<common_types::lidar::LidarImportReceipt, String> {
-    // File headers are read on the Local lane, so the probes never
-    // queue settings, favorites or the catalogue behind them on UserData.
-    let checking = library.clone();
-    let selection = executor
-        .run(
-            crate::native_operation::NativeOperationClass::Local,
-            "lidar import check",
-            move || {
-                checking.check_import_selection(&selection.paths)?;
-                Ok(selection)
-            },
-        )
-        .await?;
+    let library = library.inner().clone();
     executor
         .run(
             crate::native_operation::NativeOperationClass::UserData,
             "lidar import item",
             move || {
-                library.start_import(
-                    &selection.name,
-                    selection.quantity,
-                    selection.unit_label.as_deref(),
-                    selection.unit_unknown,
-                    selection.paths,
+                library.import_item(
+                    &name,
+                    quantity,
+                    unit_label.as_deref(),
+                    unit_unknown.unwrap_or(false),
+                    paths.into_iter().map(std::path::PathBuf::from).collect(),
                 )
             },
         )
@@ -352,40 +312,12 @@ pub async fn lidar_retry_import(
     executor: State<'_, NativeOperationExecutor>,
     layer_id: String,
 ) -> Result<common_types::lidar::LidarImportReceipt, String> {
-    retry_import_with_executor(executor.inner(), library.inner().clone(), layer_id).await
-}
-
-async fn retry_import_with_executor(
-    executor: &NativeOperationExecutor,
-    library: LidarLibrary,
-    layer_id: String,
-) -> Result<common_types::lidar::LidarImportReceipt, String> {
-    let reading = library.clone();
-    let read_id = layer_id.clone();
-    let selection = executor
-        .run(
-            crate::native_operation::NativeOperationClass::UserData,
-            "lidar retry selection",
-            move || reading.retry_selection(&read_id),
-        )
-        .await?;
-    // The saved files' headers are read on the Local lane, as Import's are.
-    let checking = library.clone();
-    let (selection, checked) = executor
-        .run(
-            crate::native_operation::NativeOperationClass::Local,
-            "lidar retry check",
-            move || {
-                let checked = checking.check_retry_selection(&selection);
-                Ok((selection, checked))
-            },
-        )
-        .await?;
+    let library = library.inner().clone();
     executor
         .run(
             crate::native_operation::NativeOperationClass::UserData,
             "lidar retry import",
-            move || library.finish_retry(&layer_id, selection, checked),
+            move || library.retry_import(&layer_id),
         )
         .await
 }
@@ -405,130 +337,4 @@ pub async fn lidar_dismiss_import(
             move || library.dismiss_import(&layer_id),
         )
         .await
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::native_operation::{
-        NativeOperationClass, NativeOperationClassLimits, NativeOperationLimits,
-    };
-    use std::{sync::mpsc, time::Duration};
-
-    const WAIT_TIMEOUT: Duration = Duration::from_secs(2);
-
-    fn one_at_a_time() -> NativeOperationExecutor {
-        let limits = NativeOperationClassLimits::new(1, 1);
-        NativeOperationExecutor::new(NativeOperationLimits::new(limits, limits, limits, limits))
-            .unwrap()
-    }
-
-    /// Holds one lane until the returned sender is dropped or sent to.
-    fn occupy(
-        executor: &NativeOperationExecutor,
-        class: NativeOperationClass,
-    ) -> (
-        mpsc::SyncSender<()>,
-        tauri::async_runtime::JoinHandle<Result<(), String>>,
-    ) {
-        let (started_tx, started_rx) = mpsc::sync_channel(1);
-        let (release_tx, release_rx) = mpsc::sync_channel::<()>(1);
-        let executor = executor.clone();
-        let blocker = tauri::async_runtime::spawn(async move {
-            executor
-                .run(class, "test lane blocker", move || {
-                    started_tx.send(()).unwrap();
-                    let _ = release_rx.recv();
-                    Ok(())
-                })
-                .await
-        });
-        started_rx.recv_timeout(WAIT_TIMEOUT).unwrap();
-        (release_tx, blocker)
-    }
-
-    fn selection(paths: Vec<std::path::PathBuf>) -> ImportSelection {
-        ImportSelection {
-            name: "Delft".to_string(),
-            quantity: RasterQuantity::GroundElevation,
-            unit_label: None,
-            unit_unknown: false,
-            paths,
-        }
-    }
-
-    /// Import reads file headers on the Local lane: a missing file is refused
-    /// while the one-at-a-time UserData lane (settings, favorites, the
-    /// catalogue) is busy, and other Local work holds the check back.
-    #[test]
-    fn import_checks_its_files_on_the_local_lane_and_only_records_on_user_data() {
-        tauri::async_runtime::block_on(async {
-            let root = crate::test_scratch::TestScratch::new("lidar-import-lanes");
-            let library = LidarLibrary::open(&root).unwrap();
-            let executor = one_at_a_time();
-            let missing = vec![root.join("gone.tif")];
-
-            let (release, blocker) = occupy(&executor, NativeOperationClass::UserData);
-            let error =
-                import_item_with_executor(&executor, library.clone(), selection(missing.clone()))
-                    .await
-                    .unwrap_err();
-            assert!(error.contains("gone.tif cannot be found"), "{error}");
-            release.send(()).unwrap();
-            blocker.await.unwrap().unwrap();
-
-            let (release, blocker) = occupy(&executor, NativeOperationClass::Local);
-            let error = import_item_with_executor(&executor, library.clone(), selection(missing))
-                .await
-                .unwrap_err();
-            assert!(error.contains("local operations are busy"), "{error}");
-            release.send(()).unwrap();
-            blocker.await.unwrap().unwrap();
-            drop(library);
-            std::fs::remove_dir_all(&root).unwrap();
-        });
-    }
-
-    /// Retry reads its saved selection and records on UserData, but checks
-    /// the files' headers on the Local lane, behind other Local work.
-    #[test]
-    fn retry_checks_its_saved_files_on_the_local_lane() {
-        tauri::async_runtime::block_on(async {
-            let root = crate::test_scratch::TestScratch::new("lidar-retry-lanes");
-            let library = LidarLibrary::open(&root).unwrap();
-            let (layer_id, job_id) = library
-                .record_import_item(
-                    "Delft",
-                    RasterQuantity::GroundElevation,
-                    None,
-                    false,
-                    &[root.join("gone.tif")],
-                )
-                .unwrap();
-            library
-                .catalogue()
-                .unwrap()
-                .execute(
-                    "UPDATE lidar_import_jobs SET state = 'failed' WHERE id = ?1",
-                    [&job_id],
-                )
-                .unwrap();
-            let executor = one_at_a_time();
-
-            let (release, blocker) = occupy(&executor, NativeOperationClass::Local);
-            let error = retry_import_with_executor(&executor, library.clone(), layer_id.clone())
-                .await
-                .unwrap_err();
-            assert!(error.contains("local operations are busy"), "{error}");
-            release.send(()).unwrap();
-            blocker.await.unwrap().unwrap();
-
-            let error = retry_import_with_executor(&executor, library.clone(), layer_id)
-                .await
-                .unwrap_err();
-            assert!(error.contains("gone.tif cannot be found"), "{error}");
-            drop(library);
-            std::fs::remove_dir_all(&root).unwrap();
-        });
-    }
 }
