@@ -2510,6 +2510,54 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// A south-up GeoTIFF is refused at import by name: the display warp
+    /// and every reader take north-up grids only.
+    #[test]
+    fn a_south_up_source_is_refused_by_name() {
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
+        let cancel = AtomicBool::new(false);
+        let root = crate::test_scratch::TestScratch::new("canopi-south-up");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        // A positive pixel height is written as a negative ModelPixelScale y,
+        // which reads back as a south-up grid.
+        let south_up = root.join("south-up.tif");
+        wbgeotiff::GeoTiffWriter::new(4, 4, 1)
+            .geo_transform(wbgeotiff::GeoTransform::north_up(
+                650_000.0,
+                1.0,
+                6_862_000.0,
+                1.0,
+            ))
+            .epsg(2154)
+            .no_data(-9999.0)
+            .write_f32(&south_up, &[5.0; 16])
+            .unwrap();
+        let real = write_placed_fixture(&engine, &root, "real", 0.0, 4.0, 4, 4, -9999.0, 5.0);
+
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "south up",
+                common_types::library::RasterQuantity::GroundElevation,
+                None,
+                false,
+            )
+            .unwrap();
+        let job_id = library.record_import_job(&layer_id).expect("job recorded");
+        let refusal = stage_import(&library, &job_id, &layer_id, &[south_up, real], &cancel)
+            .expect_err("a south-up source is refused");
+        assert!(
+            refusal.contains("south-up.tif"),
+            "the refusal names the file: {refusal}"
+        );
+        assert!(
+            refusal.contains("rotated, reflected, or south-up"),
+            "and says why: {refusal}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     /// P1-3: published statistics and the reopened samples are the same
     /// composition.
     ///

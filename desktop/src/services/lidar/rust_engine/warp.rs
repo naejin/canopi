@@ -446,7 +446,8 @@ impl BandSource for Filled<'_> {
 /// Write the display derivative of `band` (on `grid` in `native`) to
 /// `output`: Web Mercator on the global lattice at the item's `zoom`
 /// ([`zoom`]), Deflate, overviews, and `nodata` everywhere the footprint does
-/// not reach.
+/// not reach. `grid` is north-up: import refuses any other source, and Canopi
+/// writes north-up only.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn write(
     output: &Path,
@@ -459,13 +460,6 @@ pub(super) fn write(
     cancel: &AtomicBool,
 ) -> Result<(), String> {
     check_cancel(cancel)?;
-    let gt = grid.geotransform;
-    if gt[2] != 0.0 || gt[4] != 0.0 || gt[1] <= 0.0 || gt[5] >= 0.0 {
-        return Err(
-            "rotated, reflected, or south-up rasters are not supported by the display warp"
-                .to_string(),
-        );
-    }
     let mercator = crs::from_reference("EPSG:3857")?;
     let placement = place(grid, &Transformer::new(native, &mercator), rung_at(zoom))?;
     let geo_keys = crs::geokeys_for(&mercator);
