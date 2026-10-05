@@ -353,7 +353,7 @@ describe('the view reaches the home only with a write that already happens (U30)
     expect(requestSaveDecision).not.toHaveBeenCalled()
   })
 
-  it('on the Web, panning only, then page hide or closing leaves the Draft as it was', async () => {
+  it('on the Web, panning only, then page hide, detaching the canvas or closing leaves the Draft as it was', async () => {
     const web = openOnWeb()
     try {
       const stored = web.record()
@@ -363,6 +363,10 @@ describe('the view reaches the home only with a write that already happens (U30)
       expect(web.controller.continuousSave.status.value, 'nothing reads as unsaved').toBe('draft')
       web.page.window.dispatchEvent(new Event('pagehide'))
       expect(web.record()).toEqual(stored)
+      web.detach()
+      expect(web.record(), 'switching the primary surface to Templates').toEqual(stored)
+      web.controller.attachCanvasSession(web.host.surfaces.documents)
+      moveTheView(web.host)
       await web.controller.closeDesign()
       expect(web.record()).toEqual(stored)
       expect(web.requestSaveDecision).not.toHaveBeenCalled()
