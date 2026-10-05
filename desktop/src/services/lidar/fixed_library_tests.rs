@@ -495,3 +495,29 @@ fn importing_a_file_that_is_not_a_geotiff_is_refused_before_it_is_read() {
     );
     assert_refused_in_dialog(&library, &root, &error, "dem.asc");
 }
+
+/// Retry checks the saved selection before it records anything: a file that
+/// has gone since refuses the Retry by name and adds no job.
+#[test]
+fn retrying_an_import_whose_file_is_gone_is_refused_and_adds_no_job() {
+    let root = scratch("retry-missing");
+    let library = attached_library(&root);
+    let (layer_id, job_id) = library
+        .record_import_item(
+            "Orchard",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            &[root.join("gone.tif")],
+        )
+        .unwrap();
+    library.fail_import_job(&job_id, "gone.tif cannot be found");
+    let error = library.retry_import(&layer_id).unwrap_err();
+    assert!(error.contains("gone.tif cannot be found"), "{error}");
+    assert!(!error.contains(&root.display().to_string()), "{error}");
+    assert_eq!(
+        count(&library, "SELECT COUNT(*) FROM lidar_import_jobs"),
+        1,
+        "the refused Retry recorded no job"
+    );
+}
