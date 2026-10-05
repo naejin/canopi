@@ -40,11 +40,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// startup prune drops derivatives of any other. v2: derivatives are warped
 /// to EPSG:3857 (U31), so every earlier one regenerates once.
 pub(super) const DISPLAY_PROFILE: &str = "display-cog-3857-v2";
-/// SHA-256 of the CRS rows and the proj4rs version this profile was written
-/// with; a test fails when either changes, so the profile is bumped with it.
+/// SHA-256 of what places and draws this profile's pixels (the CRS rows,
+/// proj4rs, the warp's lattices and the web fixture derivative); a test
+/// fails when any changes, so the profile is bumped with it.
 #[cfg(test)]
-const DISPLAY_PROFILE_CRS_DIGEST: &str =
-    "2eb476696dd2abcd65d82152a708744fd077e7424e30421baba690fac88eca30";
+const DISPLAY_PROFILE_DIGEST: &str =
+    "103aa50bbd1afd0da9d97bb820120372e0d9a91988a55dc47681715b33b1dd95";
 /// Largest side of a composed part, in 1024-cell chunks: a part is composed
 /// in memory and converted whole, so 4×4 chunks keep it inside the engine's
 /// capacity limit (`import::MAX_RAW_EXTRACTION_CELLS`).
@@ -1281,23 +1282,65 @@ mod library_tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// The display warp places pixels with the CRS rows and proj4rs, so a
-    /// change to either must bump `DISPLAY_PROFILE` (and then this digest):
-    /// derivatives written before it would otherwise be served again.
+    /// Everything that decides a display pixel's place and value: the CRS
+    /// rows and proj4rs, the lattice the warp gives every row at four cell
+    /// sizes (its rung, edge and padding rules), and the bytes of the web
+    /// fixture derivative (its sampling, mesh and file layout). A change to
+    /// any must bump `DISPLAY_PROFILE` (and then this digest): derivatives
+    /// written before it would otherwise be served again beside new ones.
     #[test]
-    fn the_profile_records_the_crs_rows_and_the_projection_crate_it_warps_with() {
+    fn the_profile_records_what_places_and_draws_display_pixels() {
+        use super::super::engine::RasterEngine as _;
+        use super::super::rust_engine::{RustRasterEngine, crs_table, display_lattice};
         use sha2::Digest as _;
+        let cancel = AtomicBool::new(false);
+        let (mut lattices, mut placed_count) = (String::new(), 0);
+        for row in crs_table::ROWS {
+            let reference = format!("EPSG:{}", row.code);
+            let [west, south, east, north] = row.area;
+            let centre = ((west + east) / 2.0, (south + north) / 2.0);
+            let corner = RustRasterEngine
+                .transform_points("EPSG:4326", &reference, &[centre], &cancel)
+                .map_err(|error| error.to_string())
+                .and_then(|points| points[0].ok_or_else(|| "unplaced".to_string()));
+            let unit = match row.kind() {
+                crs_table::CrsKind::Geographic => 1.0 / 111_320.0,
+                _ => 1.0,
+            };
+            for cell in [0.5, 1.0, 5.0, 25.0] {
+                let placed = corner.clone().and_then(|(x, y)| {
+                    let grid = RasterGrid {
+                        width: 1500,
+                        height: 1100,
+                        geotransform: [x, cell * unit, 0.0, y, 0.0, -cell * unit],
+                    };
+                    display_lattice(&grid, &reference).map(|(lattice, _)| {
+                        let gt = lattice.geotransform;
+                        (lattice.width, lattice.height, gt[0], gt[1], gt[3])
+                    })
+                });
+                placed_count += usize::from(placed.is_ok());
+                lattices.push_str(&format!("{} {cell}: {placed:?}\n", row.code));
+            }
+        }
+        assert_eq!(placed_count, crs_table::ROWS.len() * 4, "{lattices}");
+        let fixture = std::fs::read(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("web/src/maplibre/raster-display/fixtures/rust-display-cog.tif"),
+        )
+        .expect("the web display fixture");
         let inputs = format!(
-            "{:?}|{:?}|proj4rs {}",
-            super::super::rust_engine::crs_table::ROWS,
-            super::super::rust_engine::crs_table::ALIASES,
-            super::super::rust_engine::PROJ4RS_VERSION
+            "{:?}|{:?}|proj4rs {}|{lattices}|fixture {:x}",
+            crs_table::ROWS,
+            crs_table::ALIASES,
+            super::super::rust_engine::PROJ4RS_VERSION,
+            sha2::Sha256::digest(&fixture)
         );
         let digest = format!("{:x}", sha2::Sha256::digest(inputs.as_bytes()));
         assert_eq!(
             (DISPLAY_PROFILE, digest.as_str()),
-            (DISPLAY_PROFILE, DISPLAY_PROFILE_CRS_DIGEST),
-            "the CRS rows or proj4rs changed: bump DISPLAY_PROFILE, then record the new digest"
+            (DISPLAY_PROFILE, DISPLAY_PROFILE_DIGEST),
+            "display placement or drawing changed: bump DISPLAY_PROFILE, then record the new digest"
         );
     }
 }
