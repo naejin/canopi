@@ -601,7 +601,7 @@ impl LidarLibrary {
         let row_bytes = width * 4;
         super::paths::require_free_space(
             staged.parent().unwrap_or(staged),
-            (row_bytes * height) as u64 * 2,
+            display_free_bytes((row_bytes * height) as u64),
             "Display preparation",
         )?;
         let occupied: HashSet<(i64, i64)> = chunks.iter().copied().collect();
@@ -846,6 +846,45 @@ mod tests {
             "{display_bytes} bytes written, {} asked for",
             display_free_bytes(source_bytes)
         );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A result's display derivative is written at the same rung as a
+    /// per-file one, so its free-space check asks for the same ceiling.
+    #[test]
+    fn the_free_space_asked_for_a_result_part_covers_the_finest_rung() {
+        let root = crate::test_scratch::TestScratch::new("canopi-display-part-free-space");
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).unwrap();
+        let reader = WindowReader {
+            reader: generation::GenerationReader::Chunks(generation::GenerationChunkReader::new(
+                "gen-free",
+                generation::RESULT_ROLE,
+            )),
+            lattice: RasterGrid {
+                width: 1024,
+                height: 1024,
+                geotransform: [0.0, 1.0, 0.0, 0.0, 0.0, -1.0],
+            },
+            crs_ref: String::new(),
+        };
+        let _full = super::super::paths::capacity_probe::override_available(0);
+        let error = library
+            .write_part_windows(
+                &reader,
+                &[(0, 0)],
+                &root.join("part.tif"),
+                18,
+                &AtomicBool::new(false),
+            )
+            .unwrap_err();
+        let side = generation::CHUNK_SIDE as u64;
+        let raw = side * side * 4;
+        assert!(
+            error.contains(&format!("({} bytes)", display_free_bytes(raw))),
+            "{error}"
+        );
+        drop(library);
         let _ = std::fs::remove_dir_all(&root);
     }
 
