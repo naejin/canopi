@@ -399,16 +399,25 @@ fn ellipsoid_of_code(code: u16) -> Option<(f64, f64)> {
     Some((a, a * (1.0 - 1.0 / inverse_flattening)))
 }
 
+/// The ellipsoid code of the EPSG geographic systems the rows sit on, as a
+/// GeographicType key names them; Greenwich-based only.
+fn ellipsoid_of_geographic(code: u32) -> Option<u16> {
+    Some(match code {
+        4326 => 7030,
+        4258 | 4171 | 4121 => 7019,
+        4289 | 4312 => 7004,
+        4313 | 4181 => 7022,
+        4277 => 7001,
+        4275 => 7011,
+        _ => return None,
+    })
+}
+
 /// The ellipsoid a key set states, if any: `Some(None)` when it states one
 /// Canopi cannot read, so no row can match.
 fn stated_ellipsoid(keys: &GeoKeyDirectory) -> Option<Option<(f64, f64)>> {
     if let Some(code) = registry_code(short(keys, key::GeographicTypeGeoKey)) {
-        let row = crs_table::row_of(code).filter(|row| row.kind() == CrsKind::Geographic);
-        return Some(row.and_then(|row| {
-            Proj::from_proj_string(row.proj)
-                .ok()
-                .map(|proj| proj.ellipse_parameters())
-        }));
+        return Some(ellipsoid_of_geographic(code).and_then(ellipsoid_of_code));
     }
     if let Some(a) = double(keys, key::GeogSemiMajorAxisGeoKey) {
         let b = match (

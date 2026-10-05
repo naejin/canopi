@@ -1326,6 +1326,46 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    /// GDAL's keys when only the geographic CRS has a code: the projection
+    /// spelled out, GeographicType naming the datum's code and no ellipsoid
+    /// keys. RD New on Amersfoort (4289) matches 28992; on BD72 (4313, the
+    /// International ellipsoid) it matches nothing.
+    #[test]
+    fn spelled_out_keys_on_a_coded_geographic_system_match_by_its_ellipsoid() {
+        let dir = scratch("coded-gcs");
+        let engine = RustRasterEngine;
+        let rd_new = |geographic: u16| {
+            keys(
+                &[
+                    (1024, 1),
+                    (2048, geographic),
+                    (3072, 32767),
+                    (3075, 16),
+                    (3076, 9001),
+                ],
+                &[
+                    (3080, 5.387_638_888_888_89),
+                    (3081, 52.156_160_555_555_55),
+                    (3082, 155_000.0),
+                    (3083, 463_000.0),
+                    (3092, 0.999_907_9),
+                ],
+                None,
+            )
+        };
+        let amersfoort = dir.join("rd-new-4289.tif");
+        tiff_with_keys(&amersfoort, (84_400.0, 447_500.0), rd_new(4289));
+        assert_eq!(
+            engine.probe(&amersfoort, &cancel()).unwrap().crs_ref,
+            "EPSG:28992"
+        );
+        let bd72 = dir.join("rd-new-4313.tif");
+        tiff_with_keys(&bd72, (84_400.0, 447_500.0), rd_new(4313));
+        let error = engine.probe(&bd72, &cancel()).unwrap_err();
+        assert!(error.contains("user-defined"), "{error}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     /// Compound codes read as their horizontal part.
     #[test]
     fn compound_codes_read_as_their_horizontal_row() {
