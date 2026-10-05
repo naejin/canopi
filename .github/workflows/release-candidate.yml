@@ -182,7 +182,9 @@ jobs:
 
   build:
     needs: preflight
-    timeout-minutes: 45
+    # Its Rust caches are restored, never saved: a target the dispatching ref
+    # has not packaged builds cold (the Windows app build alone took 26 minutes).
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
