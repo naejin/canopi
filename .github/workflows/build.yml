@@ -212,14 +212,55 @@ jobs:
 
       - name: LiDAR native lanes
         run: |
-          export CANOPI_GEOLIBRE_BIN="$PWD/desktop/binaries/geolibre-$(rustc -vV | sed -n 's/^host: //p')"
+          CANOPI_GEOLIBRE_BIN="$PWD/desktop/binaries/geolibre-$(rustc -vV | sed -n 's/^host: //p')"
+          export CANOPI_GEOLIBRE_BIN
           cargo test -p canopi-desktop --lib --locked services::lidar -- --ignored --test-threads=1 --skip e2e_
 
+  # The test job runs the suite on Linux only. File saving, atomic replace,
+  # directory sync, locking and paths differ on Windows and macOS, so the
+  # native tests run there too, on every code change, beside packaging.
+  platform-tests:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    env:
+      CANOPI_SKIP_BUNDLED_DB: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - id: rust-toolchain
+        uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          targets: ${{ matrix.target }}
+      - uses: ./.github/actions/cache-rust
+        with:
+          toolchain: ${{ steps.rust-toolchain.outputs.cachekey }}
+          workload: platform-tests
+          target: ${{ matrix.target }}
+
+      - name: Rust tests on this platform
+        shell: bash
+        run: cargo test --workspace --locked --target ${{ matrix.target }}
+
+  # Packaging runs beside lint and the tests rather than after them, so CI
+  # artifacts and a published GeoLibre CLI do not wait for (or depend on) the
+  # test results; Release Candidate keeps its own preflight gate.
   build:
-    needs: [changes, lint, test]
+    needs: changes
     if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository
+      needs.changes.outputs.code == 'true' &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     timeout-minutes: 90
     # Publishes a freshly built GeoLibre CLI to its revision's release (push only).
     permissions:
@@ -281,14 +322,6 @@ jobs:
           python scripts/species_catalog_contract.py verify-db
           --profile prepared
           desktop/resources/canopi-core.db
-
-      # The test job runs the suite on Linux only. File saving, atomic
-      # replace, directory sync, locking and paths differ on Windows and
-      # macOS, so the native tests run on those runners too, before packaging.
-      - name: Rust tests on this platform
-        if: runner.os != 'Linux'
-        shell: bash
-        run: cargo test --workspace --locked --target ${{ matrix.target }}
 
       # The sidecar must exist before `tauri build`: build.rs bundles it only
       # when desktop/binaries holds it for the target (the runner's host).
