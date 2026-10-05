@@ -290,7 +290,12 @@ fn an_import_publishes_one_fixed_item_with_display_ready_and_nothing_refreshes()
 
     // A published item's content is fixed, even for a stale caller.
     let refused = library
-        .begin_import_sources("imp-stale", &receipt.layer_id, vec![west])
+        .begin_import_sources(
+            HeavyJobLease::acquire(&library, "imp-stale").unwrap(),
+            "imp-stale",
+            &receipt.layer_id,
+            vec![west],
+        )
         .unwrap_err();
     assert!(refused.contains("published"), "{refused}");
     let head = catalogue::head_generation(&library.catalogue().unwrap(), &receipt.layer_id)
@@ -752,4 +757,49 @@ fn retrying_a_rebuilt_item_whose_original_is_gone_names_the_imported_file() {
         "{error}"
     );
     assert_eq!(row_message(&library, &layer_id), error);
+}
+
+/// While a raster job holds the heavy lease, Import and Retry are refused in
+/// the dialog with nothing recorded: no item, no job, and the item's earlier
+/// failure stays its message (a busy library is not the item's failure).
+#[test]
+fn import_and_retry_are_refused_with_nothing_recorded_while_a_raster_job_runs() {
+    let root = scratch("import-busy");
+    let library = attached_library(&root);
+    let tile = plane(&library, &root, "terrain", 445_000.0);
+    let layer_id = failed_import(&library, tile.clone(), "earlier");
+    let lease = HeavyJobLease::acquire(&library, "imp-running").unwrap();
+
+    let error = library
+        .import_item(
+            "Terrain",
+            RasterQuantity::GroundElevation,
+            None,
+            false,
+            vec![tile],
+        )
+        .unwrap_err();
+    assert!(error.contains("already running"), "{error}");
+    let error = library.retry_import(&layer_id).unwrap_err();
+    assert!(error.contains("already running"), "{error}");
+
+    assert_eq!(
+        count(&library, "SELECT COUNT(*) FROM lidar_source_layers"),
+        1,
+        "Import recorded no item"
+    );
+    assert_eq!(
+        count(&library, "SELECT COUNT(*) FROM lidar_import_jobs"),
+        1,
+        "neither recorded a job"
+    );
+    assert_eq!(row_message(&library, &layer_id), "earlier");
+
+    // The lease is the only obstacle: once the raster job ends, Retry runs.
+    drop(lease);
+    let receipt = library.retry_import(&layer_id).unwrap();
+    assert_eq!(
+        await_import(&library, &receipt.job_id),
+        LidarImportJobState::Complete
+    );
 }
