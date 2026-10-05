@@ -5,10 +5,13 @@
 //! **One global lattice** (A2). Pixels sit on the Web Mercator world grid:
 //! its origin is the world's north-west corner and its pixel the zoom-ladder
 //! rung (`2 × 20,037,508.34 m / 256 / 2^z`) just finer than one source cell
-//! measured in Web Mercator metres at the CRS row's reference latitude (the
-//! middle of the row's area). Every part in one CRS and cell size therefore
-//! shares one rung, whatever its latitude, so adjacent parts line up pixel
-//! for pixel and a content-keyed derivative is reused anywhere.
+//! measured in Web Mercator metres at the latitude of the CRS row's area
+//! nearest the equator, where that cell is smallest. Every part in one CRS
+//! and cell size therefore shares one rung, whatever its latitude, so
+//! adjacent parts line up pixel for pixel and a content-keyed derivative is
+//! reused anywhere. No pixel is coarser than the cell it shows, so every
+//! cell is drawn; data far poleward of that latitude is oversampled instead
+//! (1 m UTM cells at 60°N: 3.4 pixels per cell side).
 //!
 //! **Footprint rule** (A2). A part writes only the pixels whose centres fall
 //! inside its native grid, half-open as hover's containing cell is; every
@@ -63,15 +66,21 @@ fn rung_at(zoom: u32) -> f64 {
 }
 
 /// The rung just finer than one cell of `grid` in `native`, in Web Mercator
-/// metres at the row's reference latitude.
+/// metres at the latitude of the row's area nearest the equator, where a
+/// cell is smallest in Web Mercator metres.
 fn rung(native: &ResolvedCrs, grid: &RasterGrid) -> Result<f64, String> {
     let gt = grid.geotransform;
     let cell = gt[1].abs().min(gt[5].abs());
     let row = crs_table::row_of(native.code())
         .ok_or_else(|| format!("EPSG:{} has no row", native.code()))?;
-    let reference_latitude = (row.area[1] + row.area[3]) / 2.0;
+    let [_, south, _, north] = row.area;
+    let latitude = if south <= 0.0 && north >= 0.0 {
+        0.0
+    } else {
+        south.abs().min(north.abs())
+    };
     let mercator = match native.kind() {
-        CrsKind::ProjectedMetre => cell / reference_latitude.to_radians().cos(),
+        CrsKind::ProjectedMetre => cell / latitude.to_radians().cos(),
         CrsKind::ProjectedOther => cell,
         CrsKind::Geographic => cell * METRES_PER_DEGREE,
     };
@@ -412,8 +421,8 @@ mod tests {
     use std::sync::atomic::AtomicBool;
 
     const HALF_WORLD: f64 = 20_037_508.342_789_244;
-    /// Zoom 18's pixel: RD New's 0.5 m cell is 0.82 Web Mercator metres at
-    /// the row's reference latitude, so this is the rung just finer.
+    /// Zoom 18's pixel: RD New's 0.5 m cell is 0.79 Web Mercator metres at
+    /// the row's southern edge (50.75°N), so this is the rung just finer.
     const ZOOM_18: f64 = 2.0 * HALF_WORLD / 256.0 / 262_144.0;
     /// -2^127, the NoData of a derivative whose input declares none.
     const FILL: f32 = -1.701_411_8e38;
@@ -459,20 +468,42 @@ mod tests {
         values: &[f32],
         nodata: Option<f32>,
     ) -> (RasterProbe, Vec<f32>) {
+        display_in("EPSG:28992", output, grid, values, nodata)
+    }
+
+    fn display_in(
+        crs: &str,
+        output: &Path,
+        grid: &RasterGrid,
+        values: &[f32],
+        nodata: Option<f32>,
+    ) -> (RasterProbe, Vec<f32>) {
         let engine = RustRasterEngine;
         engine
             .write_display_cog(
                 RasterInput::Samples { grid, values },
                 output,
-                Some(RasterGeoref {
-                    grid,
-                    crs: "EPSG:28992",
-                }),
+                Some(RasterGeoref { grid, crs }),
                 nodata,
                 &cancel(),
             )
             .unwrap();
         read(output)
+    }
+
+    /// How many of `authored`'s valid cells some pixel of `samples` shows.
+    fn shown_cells(authored: &[f32], samples: &[f32], nodata: f32) -> (usize, usize) {
+        let valid: HashSet<u32> = authored
+            .iter()
+            .filter(|value| value.is_finite() && **value != nodata)
+            .map(|value| value.to_bits())
+            .collect();
+        let shown: HashSet<u32> = samples
+            .iter()
+            .map(|value| value.to_bits())
+            .filter(|bits| valid.contains(bits))
+            .collect();
+        (shown.len(), valid.len())
     }
 
     fn read(path: &Path) -> (RasterProbe, Vec<f32>) {
@@ -736,6 +767,33 @@ mod tests {
             std::fs::read(&whole).unwrap() == std::fs::read(&streamed).unwrap(),
             "the bounded warp differs from the whole one"
         );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// A2/A4: a CRS whose area spans a wide latitude band still gets a pixel
+    /// no coarser than its cells where the data lies. Berlin's 1 m ETRS89
+    /// UTM 33N cells (the row's area runs 46.4–84.42°N) are 1.64 Web
+    /// Mercator metres at 52.5°N; every cell shows at full resolution.
+    #[test]
+    fn every_cell_shows_in_a_crs_whose_area_spans_many_latitudes() {
+        let dir = scratch("wide-area");
+        let (width, height) = (120u32, 80u32);
+        let grid = RasterGrid {
+            width,
+            height,
+            geotransform: [391_000.0, 1.0, 0.0, 5_820_000.0, 0.0, -1.0],
+        };
+        let authored = ramp(width, height);
+        let (probe, samples) = display_in(
+            "EPSG:25833",
+            &dir.join("berlin.tif"),
+            &grid,
+            &authored,
+            Some(-9999.0),
+        );
+        assert_eq!(probe.crs_ref, "EPSG:3857");
+        let (shown, valid) = shown_cells(&authored, &samples, -9999.0);
+        assert!(shown * 100 >= valid * 99, "{shown} of {valid} cells shown");
         let _ = std::fs::remove_dir_all(dir);
     }
 
