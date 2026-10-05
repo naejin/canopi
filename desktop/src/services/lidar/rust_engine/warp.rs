@@ -16,6 +16,10 @@
 //! **Footprint rule** (A2). A part writes only the pixels whose centres fall
 //! inside its native grid, half-open as hover's containing cell is; every
 //! other pixel is NoData. Adjacent parts leave no gap and no double cover.
+//! A derivative's edges are padded with NoData to a multiple of 2^levels
+//! pixels, so each overview level halves exactly and its pixels sit on the
+//! lattice of that level: adjacent parts' overview pixels coincide, and the
+//! one straddling their seam shows either part's average of its own side.
 //!
 //! **Placement** (A4). A pixel centre goes Web Mercator → WGS84 → native
 //! through the CRS authority, on cog-tiler's mesh: nodes every [`MESH`]
@@ -94,6 +98,17 @@ fn rung(native: &ResolvedCrs, grid: &RasterGrid) -> Result<f64, String> {
     ))
 }
 
+/// The overview levels `cog::write` builds over a `width` × `height` base:
+/// one per halving while the longer side exceeds a tile.
+fn overview_levels(width: i64, height: i64) -> u32 {
+    let (mut side, mut levels) = (width.max(height), 0);
+    while side > i64::from(cog::TILE) {
+        side /= 2;
+        levels += 1;
+    }
+    levels
+}
+
 /// Where a derivative sits on the lattice.
 struct Placement {
     grid: RasterGrid,
@@ -145,10 +160,28 @@ fn place(
         return Err("the raster cannot be placed in Web Mercator".to_string());
     }
     let world = (2.0 * HALF_WORLD / resolution).round() as i64;
-    let column = (((bounds[0] + HALF_WORLD) / resolution).floor() as i64).clamp(0, world);
-    let end_column = (((bounds[2] + HALF_WORLD) / resolution).ceil() as i64).clamp(0, world);
-    let row = (((HALF_WORLD - bounds[3]) / resolution).floor() as i64).clamp(0, world);
-    let end_row = (((HALF_WORLD - bounds[1]) / resolution).ceil() as i64).clamp(0, world);
+    let footprint = [
+        (((bounds[0] + HALF_WORLD) / resolution).floor() as i64).clamp(0, world),
+        (((HALF_WORLD - bounds[3]) / resolution).floor() as i64).clamp(0, world),
+        (((bounds[2] + HALF_WORLD) / resolution).ceil() as i64).clamp(0, world),
+        (((HALF_WORLD - bounds[1]) / resolution).ceil() as i64).clamp(0, world),
+    ];
+    // Snap to a multiple of 2^levels so every overview level halves exactly
+    // on the global lattice; the world's side is a multiple of any such step.
+    let mut step = 1i64;
+    let [column, row, end_column, end_row] = loop {
+        let snapped = [
+            footprint[0].div_euclid(step) * step,
+            footprint[1].div_euclid(step) * step,
+            (footprint[2] + step - 1).div_euclid(step) * step,
+            (footprint[3] + step - 1).div_euclid(step) * step,
+        ];
+        let needed = 1i64 << overview_levels(snapped[2] - snapped[0], snapped[3] - snapped[1]);
+        if needed <= step {
+            break snapped;
+        }
+        step = needed;
+    };
     let size = |cells: i64| {
         u32::try_from(cells)
             .ok()
@@ -705,6 +738,44 @@ mod tests {
         }
         assert!(checked > 30_000, "{checked} pixels checked");
         assert!(seam_pixels > 300, "{seam_pixels} pixels along the seams");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// A2 at every overview level: each level of a derivative halves its
+    /// base exactly and starts on the global lattice of that level, so two
+    /// adjacent tiles' overview pixels coincide along their seam instead of
+    /// overlapping by a fraction of a pixel.
+    #[test]
+    fn overview_pixels_of_adjacent_tiles_sit_on_one_lattice() {
+        let dir = scratch("overview-lattice");
+        let mut levels_seen = 0;
+        for (index, x) in [85_000.0, 85_250.0].into_iter().enumerate() {
+            let grid = rd(x, 447_500.0, 500, 400);
+            let path = dir.join(format!("{index}.tif"));
+            let (probe, _) = display(&path, &grid, &vec![1.0; 200_000], None);
+            let (column, row) = lattice_origin(&probe);
+            let bytes = std::fs::read(&path).unwrap();
+            let layout = wbgeotiff::GeoTiff::parse_cog_layout(&bytes).unwrap();
+            assert_eq!(
+                (layout.levels[0].width, layout.levels[0].height),
+                (probe.width, probe.height)
+            );
+            for (level, dims) in layout.levels.iter().enumerate().skip(1) {
+                let scale = 1u32 << level;
+                assert_eq!(
+                    (dims.width * scale, dims.height * scale),
+                    (probe.width, probe.height),
+                    "tile {index} level {level} does not halve its base exactly"
+                );
+                assert_eq!(
+                    (column % i64::from(scale), row % i64::from(scale)),
+                    (0, 0),
+                    "tile {index} level {level} starts off its lattice at ({column}, {row})"
+                );
+            }
+            levels_seen = levels_seen.max(layout.levels.len() - 1);
+        }
+        assert!(levels_seen >= 2, "{levels_seen} overview levels");
         let _ = std::fs::remove_dir_all(dir);
     }
 

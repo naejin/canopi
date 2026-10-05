@@ -401,20 +401,18 @@ fn compare_display(
         differing.len(),
         a.len()
     ));
-    // GDAL (3.1 and later) weights the partial source pixels of a level
-    // whose side is odd; Canopi averages floor-division blocks. Cells are
-    // compared only when every level halves exactly.
-    let (mut width, mut height, mut exact) = (b_probe.width, b_probe.height, true);
+    // The warp pads a derivative so every overview level halves exactly on
+    // the lattice, which also makes GDAL's weighting of partial source pixels
+    // (on a level with an odd side) moot: the overviews compare cell by cell.
+    let (mut width, mut height) = (b_probe.width, b_probe.height);
     while width.max(height) > 256 {
-        exact &= width % 2 == 0 && height % 2 == 0;
-        (width, height) = ((width / 2).max(1), (height / 2).max(1));
-    }
-    if !exact {
-        report.note(format!(
-            "{label}: display overviews not compared cell by cell ({}x{} halves an odd side)",
-            b_probe.width, b_probe.height
-        ));
-        return;
+        assert!(
+            width % 2 == 0 && height % 2 == 0,
+            "{label}: the {}x{} display halves an odd side ({width}x{height})",
+            b_probe.width,
+            b_probe.height
+        );
+        (width, height) = (width / 2, height / 2);
     }
     let display_grid = RasterGrid {
         width: b_probe.width,
