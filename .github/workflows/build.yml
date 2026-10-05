@@ -213,9 +213,9 @@ jobs:
       - name: UI gallery TypeScript check
         run: npm run check:ui --prefix desktop/web
 
-  test:
+  test-rust:
     needs: changes
-    if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.frontend == 'true'
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     env:
       CANOPI_SKIP_BUNDLED_DB: "1"
@@ -242,6 +242,12 @@ jobs:
       - name: Rust tests with coverage ratchet
         run: cargo cov
 
+  test-frontend:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -301,7 +307,7 @@ jobs:
           export CANOPI_GEOLIBRE_BIN
           cargo test -p canopi-desktop --lib --locked services::lidar -- --ignored --test-threads=1 --skip e2e_
 
-  # The test job runs the suite on Linux only. File saving, atomic replace,
+  # test-rust runs the Rust suite on Linux only. File saving, atomic replace,
   # directory sync, locking and paths differ on Windows and macOS, so the
   # native tests run there too, on every Rust-side change, beside packaging.
   platform-tests:
