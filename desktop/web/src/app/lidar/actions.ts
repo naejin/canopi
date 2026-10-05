@@ -94,10 +94,17 @@ export async function importLibraryItem(
   return receipt
 }
 
-/** Retry a failed or cancelled import with its saved selection. */
+/**
+ * Retry a failed or cancelled import with its saved selection. A refused
+ * Retry still refreshes: the library writes the refusal onto the item's
+ * latest job, and polling has stopped, so only this read shows it.
+ */
 export async function retryLibraryImport(layerId: string): Promise<void> {
-  await withLidarError(() => lidarRetryImport(layerId))
-  await refreshLidarLibrary()
+  try {
+    await withLidarError(() => lidarRetryImport(layerId))
+  } finally {
+    await refreshLidarLibrary()
+  }
   ensureLidarPolling()
 }
 
