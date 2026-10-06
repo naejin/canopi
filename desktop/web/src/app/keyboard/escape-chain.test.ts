@@ -279,20 +279,6 @@ describe('the Esc chain', () => {
     expect(canvas.tool).toBe('polygon')
   })
 
-  it('Esc in overview clears the selection, after a live gesture and never leaving the tool (A20)', () => {
-    install()
-    canvas = { tool: 'polygon', transient: true, live: true, selected: true, overview: true }
-    host.focus()
-
-    expect(escape(host).defaultPrevented).toBe(true)
-    expect(ran).toEqual(['gesture'])
-    expect(canvas.selected).toBe(true)
-    expect(escape(host).defaultPrevented).toBe(true)
-    expect(ran).toEqual(['gesture', 'selection'])
-    expect(canvas.selected).toBe(false)
-    expect(canvas.tool).toBe('polygon')
-  })
-
   it('Esc in overview with a pan live ends the pan and keeps inspecting', () => {
     install()
     mount(h(InspectionStatus, {}))

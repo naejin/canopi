@@ -355,7 +355,7 @@ describe('SceneInteractionSession', () => {
       session.dispose()
     })
 
-    it('in overview Esc clears the selection and leaves the tool armed (A20)', () => {
+    it('in overview Esc keeps the selection and leaves the tool armed (U36)', () => {
       store.updatePersisted((draft) => {
         draft.zones = [makeRectZone('zone-1', [{ x: 20, y: 20 }, { x: 80, y: 20 }, { x: 80, y: 60 }, { x: 20, y: 60 }])]
       })
@@ -365,8 +365,8 @@ describe('SceneInteractionSession', () => {
       deps.setSelection([zoneTarget('zone-1')])
       container.focus()
 
-      expect(escapeOnMap().defaultPrevented).toBe(true)
-      expect(deps.clearSelection).toHaveBeenCalledOnce()
+      escapeOnMap()
+      expect(deps.clearSelection).not.toHaveBeenCalled()
       expect(tools).not.toContain('select')
       session.dispose()
     })

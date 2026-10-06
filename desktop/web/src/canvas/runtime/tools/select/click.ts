@@ -45,21 +45,14 @@ export interface ClickCandidate {
   readonly atMs: number
 }
 
-/** What selecting needs of the tool's context: Select's, or the host's overview selector's. */
-export type SelectionContext = Pick<ToolContext, 'scene' | 'view'> & { readonly effects: Pick<ToolContext['effects'], 'setSelection'> }
-
-/**
- * Selects for the press and says what follows. `lastClick` is the previous click that did not move. `filter` is the hit
- * filter of the press's fill query (overview's hides plants).
- */
+/** Selects for the press and says what follows. `lastClick` is the previous click that did not move. */
 export function pressSelection(
-  ctx: SelectionContext,
+  ctx: ToolContext,
   point: ToolPoint,
   rawHit: HitTarget | null,
   clickCount: number,
   lastClick: ClickCandidate | null,
   nowMs: number,
-  filter: { readonly overview?: true } = {},
 ): SelectPress {
   const scene = ctx.scene.persisted
   const target = rawHit?.kind === 'object' ? rawHit.target : null
@@ -69,7 +62,7 @@ export function pressSelection(
   const subtractive = point.modifiers.subtractive && !additive
 
   if (!hit) {
-    const fill = rawHit ? null : selectableFill(ctx, point.world, filter)
+    const fill = rawHit ? null : selectableFill(ctx, point.world)
     if (!additive && !(subtractive && fill)) ctx.effects.setSelection([])
     return { kind: 'band', additive, subtractive, fill }
   }
@@ -110,7 +103,7 @@ export function pressSelection(
 }
 
 /** The click of a press that did not move: a fill press selects its zone, an Alt press removes its target. */
-export function clickSelection(ctx: SelectionContext, press: SelectPress): void {
+export function clickSelection(ctx: ToolContext, press: SelectPress): void {
   if (press.kind === 'band' && press.fill) {
     ctx.effects.setSelection(clickedSelection(ctx.scene.selection(), press.fill, press.additive, press.subtractive))
   } else if (press.kind === 'move' && press.removeFrom) {
@@ -119,8 +112,8 @@ export function clickSelection(ctx: SelectionContext, press: SelectPress): void 
 }
 
 /** The zone (or its group) whose fill holds `world`, unless it is locked through its group or layer. */
-function selectableFill(ctx: SelectionContext, world: WorldPoint, filter: { readonly overview?: true }): SceneDesignObjectTarget | null {
-  const hit = ctx.scene.hitAt(world, { ...filter, fill: true })
+function selectableFill(ctx: ToolContext, world: WorldPoint): SceneDesignObjectTarget | null {
+  const hit = ctx.scene.hitAt(world, { fill: true })
   const target = hit?.kind === 'object' ? hit.target : null
   if (!target) return null
   const scene = ctx.scene.persisted
@@ -141,7 +134,7 @@ function clickedSelection(
 
 /** Select's own double-click on a note: the same note, within 500 ms and 6 px of the last click that did not move. */
 function isNoteDoubleClick(
-  ctx: SelectionContext,
+  ctx: ToolContext,
   previous: ClickCandidate | null,
   target: SceneDesignObjectTarget,
   world: WorldPoint,

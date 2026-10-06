@@ -39,7 +39,6 @@ export function hitTestTopLevel(
   getPlantContext: (viewportScale: number) => PlantPresentationContext,
   selection: SceneDesignObjectSelection = [],
   hoverTarget: SceneDesignObjectTarget | null = null,
-  plantsHidden = false,
 ): SceneDesignObjectTarget | null {
   return hitTestTopLevelWithLayerFilter(
     scene,
@@ -47,7 +46,7 @@ export function hitTestTopLevel(
     viewportScale,
     speciesCache,
     getPlantContext,
-    plantsHidden ? editableWithoutPlants : isSceneLayerEditable,
+    isSceneLayerEditable,
     getRevealedAnnotationId(selection),
     hoverTarget?.kind === 'annotation' ? hoverTarget.id : null,
   )
@@ -146,23 +145,16 @@ function hitTestTopLevelWithLayerFilter(
   return null
 }
 
-/** Overview hides plants (spec §3.2): they and every group with a plant member are skipped, so a zone under a plant hits. */
-function editableWithoutPlants(scene: ScenePersistedState, layerName: string): boolean {
-  return layerName !== 'plants' && isSceneLayerEditable(scene, layerName)
-}
-
 /**
  * The topmost filled zone (a polygon, rectangle or ellipse, not a line) whose fill contains `point`, on an interactive
  * layer, as its top-level target: the zone, or its group when the zone is a group member. Object-locked zones count (the
- * caller rejects them). Select's and the overview selector's fill click (spec §3.2, HitFilter.fill).
+ * caller rejects them). Select's fill click (spec §3.2, HitFilter.fill).
  */
 export function hitTestZoneFill(
   scene: ScenePersistedState,
   point: ScenePoint,
-  plantsHidden = false,
 ): SceneDesignObjectTarget | null {
-  const isLayerHitEligible = plantsHidden ? editableWithoutPlants : isSceneLayerEditable
-  if (!isLayerHitEligible(scene, 'zones')) return null
+  if (!isSceneLayerEditable(scene, 'zones')) return null
   for (let i = scene.zones.length - 1; i >= 0; i -= 1) {
     const zone = scene.zones[i]!
     const outline = zoneFillOutline(zone)
@@ -171,7 +163,7 @@ export function hitTestZoneFill(
     const group = scene.groups.find((entry) =>
       resolveSceneObjectGroupMembers(scene, entry).some((member) => sceneTargetKey(member) === sceneTargetKey(target)))
     if (!group) return target
-    return isGroupLayerHitEligible(scene, isLayerHitEligible, resolveSceneObjectGroupMembers(scene, group))
+    return isGroupLayerHitEligible(scene, isSceneLayerEditable, resolveSceneObjectGroupMembers(scene, group))
       ? { kind: 'group', id: group.id }
       : null
   }
@@ -208,9 +200,7 @@ export function queryQuadTopLevel(
   speciesCache: ReadonlyMap<string, SpeciesCacheEntry>,
   getPlantContext: (viewportScale: number) => PlantPresentationContext,
   selection: SceneDesignObjectSelection = [],
-  plantsHidden = false,
 ): SceneDesignObjectTarget[] {
-  const isLayerHitEligible = plantsHidden ? editableWithoutPlants : isSceneLayerEditable
   const targets: SceneDesignObjectTarget[] = []
   const baseContext = getPlantContext
   getPlantContext = (scale) => ({ ...baseContext(scale), plants: scene.plants })
@@ -220,7 +210,7 @@ export function queryQuadTopLevel(
 
   for (const group of scene.groups) {
     const members = resolveSceneObjectGroupMembers(scene, group)
-    if (!isGroupLayerHitEligible(scene, isLayerHitEligible, members)) continue
+    if (!isGroupLayerHitEligible(scene, isSceneLayerEditable, members)) continue
     const hit = members.some((member) => {
       const plant = member.kind === 'plant' ? scene.plants.find((entry) => entry.id === member.id) : null
       if (plant && plantIntersectsPolygon(plant, area, viewportScale, speciesCache, getPlantContext)) return true
@@ -236,14 +226,14 @@ export function queryQuadTopLevel(
 
   for (const plant of scene.plants) {
     if (groupedMemberKeys.has(sceneTargetKey({ kind: 'plant', id: plant.id }))) continue
-    if (!isLayerHitEligible(scene, 'plants')) continue
+    if (!isSceneLayerEditable(scene, 'plants')) continue
     if (plantIntersectsPolygon(plant, area, viewportScale, speciesCache, getPlantContext)) {
       targets.push({ kind: 'plant', id: plant.id })
     }
   }
 
   for (const guide of scene.measurementGuides) {
-    if (!isLayerHitEligible(scene, 'measurement-guides')) continue
+    if (!isSceneLayerEditable(scene, 'measurement-guides')) continue
     if (segmentIntersectsPolygon(guide.start, guide.end, area)) {
       targets.push({ kind: 'measurement-guide', id: guide.id })
     }
@@ -251,13 +241,13 @@ export function queryQuadTopLevel(
 
   for (const zone of scene.zones) {
     if (groupedMemberKeys.has(sceneTargetKey({ kind: 'zone', id: zone.id }))) continue
-    if (!isLayerHitEligible(scene, 'zones')) continue
+    if (!isSceneLayerEditable(scene, 'zones')) continue
     if (zoneIntersectsPolygon(zone, area)) targets.push({ kind: 'zone', id: zone.id })
   }
 
   for (const annotation of scene.annotations) {
     if (groupedMemberKeys.has(sceneTargetKey({ kind: 'annotation', id: annotation.id }))) continue
-    if (!isLayerHitEligible(scene, 'annotations')) continue
+    if (!isSceneLayerEditable(scene, 'annotations')) continue
     if (annotationIntersectsPolygon(annotation, area, viewportScale, annotation.id === getRevealedAnnotationId(selection), detail.annotationIds.has(annotation.id))) {
       targets.push({ kind: 'annotation', id: annotation.id })
     }

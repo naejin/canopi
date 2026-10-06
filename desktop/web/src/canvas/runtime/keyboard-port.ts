@@ -98,16 +98,12 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionC
   /**
    * The live layers, by the Esc chain's priority (spec §3.7): a live pointer session, a nudge series, the armed tool's draft
    * or row source, any tool but Select, the selection. The gesture runs above the tool's own Esc, so an Esc mid-drag in
-   * Plant a row cancels only the drag (plan §8). In overview the gesture runs, today's interrupted-gesture cancel, while a
-   * pointer session or a nudge series is live, then the selection, which an overview band may hold (A20); Esc never
-   * leaves the tool there, and with nothing to cancel or clear it reaches the raster inspection's layer (spec §3.7).
+   * Plant a row cancels only the drag (plan §8). In overview only the gesture runs, today's interrupted-gesture cancel,
+   * so Esc never leaves the tool or clears the selection there (U36); it is listed only while a pointer session or a
+   * nudge series is live, so with nothing to cancel the Esc reaches the raster inspection's layer (spec §3.7).
    */
   function escapeLayers(): readonly CanvasEscapeLayer[] {
-    if (session.overview()) {
-      const layers: CanvasEscapeLayer[] = session.pointerSessionLive() || toolHost.hasNudgeSeries() ? ['gesture'] : []
-      if (deps.hasSelection()) layers.push('selection')
-      return layers
-    }
+    if (session.overview()) return session.pointerSessionLive() || toolHost.hasNudgeSeries() ? ['gesture'] : []
     const layers: CanvasEscapeLayer[] = []
     if (session.pointerSessionLive()) layers.push('gesture')
     if (toolHost.hasNudgeSeries()) layers.push('nudge-series')
