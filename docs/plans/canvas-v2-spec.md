@@ -2,7 +2,7 @@
 
 Trimmed 2026-10-02 at the phase-0 close (the full earlier text is at commit 76bd08a659d916069a340fc06e670e54e32f54c7) and 2026-10-03 at the phase-1 close (the text before it is at `da12600b`): §4.5, §4.11, §9.1 and §9.2, built and read by no later step, were deleted; section numbers are not reused, so code comments citing them resolve at that commit.
 
-Status: agreed (2026-09-29); phase 0 and phase F built (2026-10-02); phase 1 built (2026-10-03); amended 2026-10-05 for U33 (rulers, ruler guides and the locked chip removed; key admission; no last-bearing fallback; required ground size), and 2026-10-06 for phase 2's design check and U34 (turns jump; the bearing-free floor; one `contextmenu` listener; one modifier source; the cut stage's rules), and for U36 (overview selects nothing; Shift steps only the rotate handle; the native-menu trail; key admission as built), and for U37 (Delete on a corner selects the next one; the trail follows a real chord and a lost secondary release), and for U38 (edge chips beside the midpoint dots; a wheel over a handle is a map wheel), and for U39 (no menu retarget, Cut or Delete during a gesture or tool transient), and for U40 (only a still press selects a corner); 2, 3 and R build on it per docs/plans/canvas-v2-plan.md
+Status: agreed (2026-09-29); phase 0 and phase F built (2026-10-02); phase 1 built (2026-10-03); amended 2026-10-05 for U33 (rulers, ruler guides and the locked chip removed; key admission; no last-bearing fallback; required ground size), and 2026-10-06 for phase 2's design check and U34 (turns jump; the bearing-free floor; one `contextmenu` listener; one modifier source; the cut stage's rules), and for U36 (overview selects nothing; Shift steps only the rotate handle; the native-menu trail; key admission as built), and for U37 (Delete on a corner selects the next one; the trail follows a real chord and a lost secondary release), and for U38 (edge chips beside the midpoint dots; a wheel over a handle is a map wheel), and for U39 (no menu retarget, Cut or Delete during a gesture or tool transient), and for U40 (only a still press selects a corner), and for U41, phase 3's design check (the recogniser holds every touch press; `Bindings` deleted; touch handles, feel values and phone chrome); 2, 3 and R build on it per docs/plans/canvas-v2-plan.md
 
 This is the contract the canvas v2 work is built to. The phases, owners, gates and bead mapping are in `docs/plans/canvas-v2-plan.md`; what exists today and what happens to each piece is in `docs/plans/canvas-v2-inventory.md`. The reasons live in the ADRs: 0015 (rotating map and canvas controls; amends ADR 0010's control and shortcut rules), 0016 (one view transform), 0017 (input pipeline and gestures), 0018 (narrow tool interface), 0019 (rendering and the view transform), 0020 (focus and keyboard ownership). Delete this file with the plan at the 2.0 release close.
 
@@ -12,7 +12,7 @@ Paths are relative to `desktop/web/src/` unless they start with `docs/`, `common
 
 - **(user)** marks a user decision (2026-09-29). **(convention)** marks a planner convention the user may overturn; the plan lists them for confirmation. **(spec)** marks a detail this specification settles that the design left implicit; the plan's handoff lists these too.
 - **mod** is Cmd on macOS and Ctrl elsewhere. On macOS a physical Ctrl is never mod: from phase 2 it turns a left click into a right click, and Ctrl+arrows belong to Mission Control.
-- **Phases.** All phases ship together as 2.0 (user, 2026-10-01). There is one bindings constant, edited in place by the phase that changes a field (§1.2); in this document LEGACY names its values before phase 1 (phase 0's behaviour with F's hover end and 3 px slop), ROTATION its values from phase 1, V2 from phase 2 and TOUCH from phase 3. These are names of expectation columns, never constants: tests run `CURRENT_BINDINGS`, and each phase rewrites the expectations it changes in place. "From 1" means the behaviour exists from that phase on; a cell without a phase is unchanged from today.
+- **Phases.** All phases ship together as 2.0 (user, 2026-10-01). There is no bindings constant: phase 2 hard-coded its final behaviour and phase 3 deletes `Bindings` (A7, U41), so touch behaviour is unconditional and the drag slop is a threshold (§1.2). In this document LEGACY names the behaviour before phase 1 (phase 0's with F's hover end and 3 px slop), ROTATION from phase 1, V2 from phase 2 and TOUCH from phase 3. These are names of expectation columns, never constants: each phase rewrites the expectations it changes in place. "From 1" means the behaviour exists from that phase on; a cell without a phase is unchanged from today.
 - **Decisions of 2026-10-01** (user; plan §1): one release; no second-button navigation during a drag; one map angle for the whole PDF layout; no edge highlight; a panel drag hides the tool's preview; the hover end lands in F; the keyboard is built once, in F; LiDAR's Return to Design keeps the exact view.
 - **Free gesture**: a rotation whose end angle the user did not choose exactly (pointer rotate drag, compass drag, touch twist, trackpad twist). **Explicit target**: a bearing Canopi was told (key step, reset, "Turn view to this edge", a saved view, a story step, the view a file was saved with, `map_view`).
 - Bearing: the compass direction that is up on screen, degrees clockwise from true north, normalised to [0, 360). Stored rotations (`rotationDeg` on zones, notes and stamps) are clockwise from true north, as today; Print Areas carry no angle (one layout angle, §4.12).
@@ -491,41 +491,28 @@ export interface InputPlatform {
   readonly engine: 'chromium' | 'webkit' | 'webkitgtk' | 'gecko'
   readonly gestureEvents: boolean          // WKWebView / Safari gesturestart/change/end
 }
-export function detectPlatform(nav: Pick<Navigator, 'userAgent' | 'platform'>, win: { readonly GestureEvent?: unknown }): InputPlatform
+export function detectPlatform(nav: Pick<Navigator, 'userAgent' | 'platform' | 'maxTouchPoints'>, win: { readonly GestureEvent?: unknown }): InputPlatform
+// iPadOS is 'ios': a Macintosh user agent with maxTouchPoints > 1 (GeoLibre isIpadDesktopUserAgent, attributed; phase 3, A8).
 // Called by platform/desktop.ts and web/browser-shell-commands.ts for KeyRouterDeps.platform, and by interaction-session.ts
 // when its deps carry none. Injected everywhere else.
 
-// canvas/runtime/input/bindings.ts  (data: one constant, edited in place by the phase that changes a field)
-export interface Bindings {
-  // No navigateDuringPrimaryDrag: a second button during a primary drag is ignored in every phase (U2, 2026-10-01).
-  readonly touch: { readonly gestures: boolean; readonly longPressMenu: boolean; readonly hostTouchActionNone: boolean }
-  readonly dragSlopPx: Readonly<Record<PointerKind, number>>
-}
-export const CURRENT_BINDINGS: Bindings     // the one constant; no ROTATION_BINDINGS, V2_BINDINGS or TOUCH_BINDINGS (audit 1.2)
-// F folded LEGACY_BINDINGS into CURRENT_BINDINGS (P11 tombstones the name) and hard-coded the hover end (no ownedHover field).
-// Phase 2 hard-codes every field whose phase-2 value is final and deletes it (A19; no LEGACY branch stays): a still secondary
-// release opens the menu, a secondary drag pans (Shift at the press: rotates), Shift+middle rotates, only the Pan tool's primary
-// drag pans (PanContext goes), Mac Ctrl+click is secondary, the pen barrel is secondary, WebKit gesture rotation is on.
-// F1's gesture rows are a static list with three platform notes (Linux pinch, Mac Control-click, the pen button; §9.3), not generated
-// from the bindings (audit 1.7); GestureHelpRow and describeBindings are not written.
+// No bindings constant (deleted in phase 3, A7; P11 tombstones `Bindings`, `CURRENT_BINDINGS`, `DomInputSourceDeps.bindings`
+// and F's `LEGACY_BINDINGS`). Phase 2 hard-coded its final fields (A19); phase 3 makes touch unconditional and moves the drag slop
+// into Thresholds. F1's gesture rows are a static list with three platform notes (Linux pinch, Mac Control-click, the pen button; §9.3)
+// and the Touch section (§9.4), not generated from bindings (audit 1.7).
 ```
 
-The constant's values (each phase rewrites the fixtures whose outcome it changes and deletes the superseded expectations; the release close hard-codes the rest):
-
-| Field | from F | from 3 |
-|---|---|---|
-| `touch` (all three flags) | false | true |
-| `dragSlopPx` | mouse and pen 3 (U6), touch 0 | touch 8 |
-
-Primary slop compares `d >= slop && d > 0`, so under 0 any movement is a drag, as today; from F the mouse and pen slop is 3 px (U6, user 2026-10-01), so a click with a little jitter stays a click; the tools keep today's own thresholds (band and handles more than 2 px, measured at release through `ToolView.screenDistance`). Secondary slop is 3 px (MapLibre's `clickTolerance`). Every tool takes `tap` and `drag-end` from the recogniser's slop (P29, phase 2's cut stage): Plant a row's own 4 px rule, `CanvasTool.dragSlopPx` and `configure`'s `dragSlopPx` go, so its preview stays put for the first 3 px, then follows the drag; touch slop is 0 until phase 3, so touch jitter commits a row on lift (one release, U1). The band and handle checks wait for phase 3. Each LEGACY expectation is deleted or rewritten by the commit that changes its behaviour, never kept to the release close.
+Primary slop compares `d >= slop && d > 0`: mouse and pen 3 px (U6, user 2026-10-01; MapLibre's click tolerance), so a click with a little jitter stays a click, and touch 8 px (phase 3). Secondary slop is 3 px. Every tool takes `tap` and `drag-end` from the recogniser's slop: Plant a row's own 4 px rule went in phase 2's cut stage (U33, P29), and phase 3 deletes the band's and point handles' 2 px release checks (A9), so the slop alone tells a tap from a drag. A handle tap ends its handle drag at the press point, so a jitter within slop moves nothing.
 
 ```ts
 // canvas/runtime/input/thresholds.ts  (plain numbers; tests may pass others)
 export interface Thresholds {
+  readonly dragSlopPx: Readonly<Record<PointerKind, number>>        // mouse 3, pen 3, touch 8 (from Bindings in phase 3, A7); the compass reads it (U17)
   readonly longPressMs: number               // 500
   readonly multiClickMs: number              // 500: a primary press this soon after the last one counts as its next click
-  readonly multiClickSlopPx: number          // 6: and this close to it (the recogniser's click count)
-  readonly twistStartArcPx: number           // 25: touch twist
+  readonly multiClickSlopPx: Readonly<Record<PointerKind, number>>  // and this close to it: 6, touch 30 (MapLibre tap_recognizer MAX_DIST; U41)
+  readonly twistStartArcPx: number           // 25 px of arc over the smallest finger diameter seen (MapLibre _isBelowThreshold, BSD-3; A12)
+  readonly pinchZoomStartLevels: number      // 0.1: a touch pinch zooms only past this zoom-level change (MapLibre defaultZoomThreshold; U41)
   readonly trackpadTwistStartDeg: number     // 10: WebKit gesture rotation before any rotate is emitted
 }
 export const DEFAULT_THRESHOLDS: Thresholds
@@ -562,7 +549,6 @@ export type RawInput =
 
 export interface RecogniserConfig {
   readonly platform: InputPlatform
-  readonly bindings: Bindings
   readonly thresholds: Thresholds
 }
 
@@ -577,7 +563,7 @@ export interface AdapterEffect {
 /** Opaque to callers; the recogniser owns its shape. Plain data (structured-clone safe), so the property test can snapshot it. */
 export interface RecogniserState {
   readonly sessions: ReadonlyMap<number, PointerSession>        // by pointerId: pointer kind, role, mode ('pending' | 'primary' | 'pan' | 'rotate'), start, last point, slop passed, capture held
-  readonly touchPair: TouchPair | null                          // two touch ids, their start centroid, distance and angle, twist arc accumulated
+  readonly touchPair: TouchPair | null                          // two touch ids, their last points, the smallest diameter seen, whether the twist is active (A12)
   readonly held: { readonly space: boolean }                    // the only gesture-state record of a held key (ADR 0017)
   readonly trackpadTwistDeg: number                             // WebKit gesture rotation accumulated before the 10° threshold
   readonly deadlines: { readonly longPressAt: number | null }
@@ -605,7 +591,7 @@ export interface DomEventLike {
   readonly target: TargetClass                                  // classified by the source from data attributes
   readonly dropPayload?: CanvasDropPayload                      // drag events: read by the source from dataTransfer
 }
-export function normalise(e: DomEventLike, platform: InputPlatform, bindings: Bindings,
+export function normalise(e: DomEventLike, platform: InputPlatform,
   host: { readonly width: number; readonly height: number }): RawInput | null   // host: CSS px, for page-mode wheels
 ```
 
@@ -629,7 +615,7 @@ Input and tools share a vocabulary; neither may import the other (P5). Both impo
 // canvas/runtime/interaction-types.ts  (types)
 export type PointerKind = 'mouse' | 'pen' | 'touch'
 export interface Modifiers { readonly shift: boolean; readonly ctrl: boolean; readonly alt: boolean; readonly meta: boolean }
-export type CancelReason = 'pointercancel' | 'lost-capture' | 'blur' | 'hidden' | 'escape' | 'multitouch' | 'chord' | 'tool-change'
+export type CancelReason = 'pointercancel' | 'lost-capture' | 'blur' | 'hidden' | 'escape' | 'multitouch' | 'tool-change'
   | 'navigate'                                                  // a Pan-tool press whose drag panned: after its pan end (spec §2.2)
 export type ToolId =
   | 'select' | 'hand' | 'plant-stamp' | 'text' | 'line' | 'measurement-guide' | 'rectangle' | 'ellipse'
@@ -661,9 +647,8 @@ export interface GestureOutcome {
 export interface DomInputSourceDeps {
   readonly host: HTMLElement                                    // the map host; listeners attach here, and on window only during an owned session
   readonly platform: InputPlatform
-  readonly bindings: () => Bindings                             // CURRENT_BINDINGS in production
   readonly clock: () => number
-  readonly timers: { set(atMs: number, cb: () => void): number; clear(id: number): void }
+  readonly timers: { set(atMs: number, cb: () => void): number; clear(id: number): void }   // a set-timer waits atMs minus the last delivered input's t (A1)
 }
 export interface DomInputSource {
   /** Installs the listeners; returns the disposer that removes every listener it added (tested: exactly once each) and
@@ -1175,7 +1160,7 @@ export interface ToolHandle {
   readonly id: ToolHandleId              // unique across objects: 'rotate', 'vertex:<zone id>:<index>', 'rect-corner:<id>:ne', 'guide-end:<id>:a', 'edge-mid:<zone id>:<index>'
   readonly anchor: WorldPoint
   readonly offsetPx?: ScreenPoint        // rotate handle: centred 28 px above the selection's projected hull
-  readonly hitRadiusPx: number           // 10 today; 22 on touch (44 px target, ADR 0010)
+  readonly hitRadiusPx: number           // 10 for mouse and pen; 22 after a touch (44 px target, ADR 0010): the kind that last pressed or hovered (U41)
   readonly glyph: 'vertex' | 'corner' | 'rotate' | 'midpoint'
   readonly label: string                 // aria-label, always translated: the rotate handle, "Zone control point N", "Measurement guide endpoint N" (C8)
   readonly readout?: string              // live chip beside the handle (the rotate handle's '+15°'); the host marks the dragged handle active
@@ -1573,7 +1558,7 @@ Phase 0's, F's and phase 1's deletions are done; P11 tombstones them. Left:
 | `secondary.*`, `auxiliaryShiftDrag`, `primaryDragPansIn` with `PanContext`, `macCtrlClick`, `penBarrel`, `trackpadGestures` | their phase-2 values, hard-coded (§1.2) | 2 |
 | The native-menu input path: the `native-contextmenu` RawInput, normalise's `contextmenu` case, `fromKeyboard`, `menuEchoMs`, `windowsMenuTrailMs`, the three dead deadlines, the `'ignored'` mode and the keyboard echo record (`lastKeyboardMenuAt`, `CanvasKeyState.timeStamp`) (U33 and U34, P2) | one `contextmenu` listener (§2.2); the Menu key and Shift+F10 | 2 |
 | `settings.scrollWheel*` UI strings | `settings.pointingDevice*` | 2 |
-| `Bindings`, `CURRENT_BINDINGS`, `DomInputSourceDeps.bindings`: after phase 3 `touch` and `dragSlopPx` have one value | the end values, hard-coded in the recogniser and the source (no `ROTATION_BINDINGS`, `V2_BINDINGS` or `TOUCH_BINDINGS` is ever written); P11 tombstones the names | release close |
+| `Bindings`, `CURRENT_BINDINGS`, `RecogniserConfig.bindings`, `DomInputSourceDeps.bindings` (A7) | touch behaviour unconditional; `dragSlopPx` in `Thresholds`; P11 tombstones the names | 3 |
 
 ## 2. Gesture vocabulary
 
@@ -1598,7 +1583,7 @@ Pinch and twist are sources, not kinds. Keys are not gestures: key-driven naviga
 
 - **Sessions.** One mouse or pen session at a time, by `pointerId`; touch keeps up to two touches and ignores a third. A `down` for a pointer id whose session is live ends that session first, and a `move` with buttons but no session is a hover (both happen in today's tests and after a lost `pointerup`). A press the host refuses (`rejectSession`) ends its session with no gesture (the session feeds `reject`, §1.2). In overview an `up` with no live session, from anywhere in the app, passes untouched (plan §4, phase 0, exception 4). A session's mode is fixed at start: pressing Shift mid-pan does not switch to rotate, and releasing Shift mid-rotate does not switch to pan. For a secondary, auxiliary or Mac Ctrl session only Shift held at the press decides the mode (rotate or pan), for all three buttons alike; Shift pressed after the press and before the 3 px slop is ignored; Space, Alt and mod at the press are ignored for the mode, and mod held later only steps a rotate (spec; fixture A18).
 - **Rotation sign (spec).** A pointer rotate turns the view by `ROTATE_DEG_PER_PX` × the horizontal travel since the start, and a rightward drag increases the bearing (MapLibre's convention: the map turns counter-clockwise on screen, as if the pointer pushed the top of the map to the left). Twists (touch two-finger, WebKit trackpad) make the ground follow the fingers: a clockwise twist of the fingers turns the map clockwise on screen, which lowers the bearing by the twist angle. The compass drag makes the needle follow the pointer around the compass centre: moving the pointer clockwise around the face turns the needle clockwise, which lowers the bearing by the same angle (§4.2).
-- **Primary.** `press` on down; `tap` on an up within slop, or `drag-start` past slop, then `drag-move`, `drag-end` (under LEGACY slop 0: any movement is a drag; §1.2). Space held at press turns it into `pan` (`space-drag`). Space pressed after a primary session started does not change it (a session's mode is fixed; spec): the drag, band or move continues, and Space is only recorded for the next press. With the Pan tool a primary drag is `pan` (`primary-drag`); its press still reaches the tool and ends with a `tap`, or after a drag with `cancel('navigate')` right after the `pan{end}`, so every press the host sees ends (the Pan tool ignores them). In overview a primary press pans (`primary-drag`) for every pointer, touch included, and never reaches the host (U36).
+- **Primary.** `press` on down; `tap` on an up within slop, or `drag-start` past slop, then `drag-move`, `drag-end`; a touch press is held ("Touch" below). Space held at press turns it into `pan` (`space-drag`). Space pressed after a primary session started does not change it (a session's mode is fixed; spec): the drag, band or move continues, and Space is only recorded for the next press. With the Pan tool a primary drag is `pan` (`primary-drag`); its press still reaches the tool and ends with a `tap`, or after a drag with `cancel('navigate')` right after the `pan{end}`, so every press the host sees ends (the Pan tool ignores them). In overview a primary press pans (`primary-drag`) for every pointer, touch included, and never reaches the host (U36).
 - **Hover.** A move with no live session, buttons or not, is a `hover` wherever the pointer is, carrying the target class it saw (only a `surface` target reaches `subscribePointerWorld`, §1.4 "Hover"), except over owned chrome, the text entry or a handle, where it emits `hover-end` (F, U6; hard-coded in `recognise.ts`, no bindings field).
 - **Auxiliary.** Drag → `pan`. With Shift at press the press opens a pending rotate: capture taken, default prevented, nothing emitted; `rotate{start}` comes only past the 3 px drag slop, with the total measured from the press (fixture G9), so a still Shift+middle click turns nothing (G9b). Shift is checked before the overview branch, so a Shift+middle-drag rotates in overview too (G9c). `step` = mod held live: a modifier change during a live rotate re-emits `rotate{move}` with the new step. A middle tap does nothing; `pointerdown` is always default-prevented (no autoscroll, no Linux paste).
 - **Secondary (V2).** `down` → pending, capture taken, nothing emitted. Past 3 px with no Shift at the press → `pan`; with Shift at the press → `rotate` about the press point, `step` = mod held live (a consumed Mac Ctrl never counts). An `up` within 3 px → `menu-request` (source `mouse`) at the release point on every OS (convention); a pen barrel and a Mac Ctrl+click follow the same rules.
@@ -1606,11 +1591,12 @@ Pinch and twist are sources, not kinds. Keys are not gestures: key-driven naviga
 - **Drag end.** A drag ends on `up`, lost capture, blur or `visibilitychange`. A navigation or pending-secondary session also ends when `buttons` loses its physical bit on a `move` (primary when `ctrlConsumed`), as MapLibre's `isValidMoveEvent`, and the DOM source then disowns the pointer (`disown`) with that move as its release, so the native-menu listener no longer treats it as a held canvas press, and a secondary press's trail starts at the move (a chorded right button released first while left is held, `buttons` 1; U37); a primary session does not, since a lost primary up already ends at the next down, so Mac Ctrl-drags are not cut short.
 - **A second button during a primary drag** is ignored for the rest of the session in every phase (U2, 2026-10-01): no nested pan or rotate, and from phase 2 its native `contextmenu` is prevented and no `menu-request` is emitted. Wheel zoom and key navigation stay live during a drag.
 - **Other chords.** A primary press during a secondary or auxiliary session is ignored for the rest of that session; its native menu is prevented.
-- **Touch before phase 3.** One touch is a primary pointer exactly as today; a second concurrent touch is ignored; no long press, no twist; host CSS unchanged.
-- **Touch (phase 3).** One finger is primary with 8 px slop. Still for 500 ms → `menu-request('long-press')` and the session ends (no `tap` on release). A second finger before slop withdraws the press (`cancel('multitouch')`); after a drag started, the drag is cancelled and its Scene Edit aborted (a polygon draft survives, as it does a pan). Two fingers: centroid → `pan`, distance ratio → `zoom` about the centroid, angle → `rotate` after 25 px of arc with the threshold subtracted. Lifting to one finger does not resume editing until every finger lifted. Android's native long-press `contextmenu` and the timer produce one menu.
+- **Touch (phase 3, A2; U41).** A touch `down` emits no `press`: the recogniser holds it in every tool. Past 8 px it emits `press` (at the down point, with the down's modifiers, target and click count), then `drag-start`; a lift within slop emits `press`, then `tap`; 500 ms still emits only `menu-request('long-press')`. A second finger before slop emits nothing and starts the pair, so a pinch never changes the selection or adds anything; a second finger after the drag started emits `cancel('multitouch')` (a polygon draft keeps its corners); a third finger is ignored; lifting back to one finger resumes nothing until every finger is up. The session routes a press resolved at an `up` as live, so a tap places at the lift (A3). In overview, past slop a pan starts whose first move carries the whole travel, and a lift or 500 ms emits nothing; with the Pan tool the pan starts the same way, a lift emits `press` and `tap`, and 500 ms opens the menu.
+- **Long press (A4).** After `menu-request('long-press')` the session stays alive and spent: it keeps its capture and ignores moves, the timer and extra fingers, and its `up` or `cancel` emits nothing, with `prevent-default` and `stop-propagation`, so the lift never reaches the open menu's outside-press close. The browser's own touch `contextmenu` is prevented while a canvas press is held (§2.2 "Native menu"), so one menu opens. Deadlines are base-free: the source schedules `atMs` minus the `t` of the last input it delivered, and the timer's `tick` carries `t: atMs` (A1).
+- **Pair (A5, A12, A14).** Per move: `pan` by the centroid's movement, `zoom` about the centroid by the distance ratio once it passes 0.1 zoom level, then `rotate` about the centroid once the arc passes 25 px over the smallest finger diameter seen, counted from the vector at the crossing (MapLibre's `pinchAround` order). Pair pans carry no `at`, so a touch never moves the resting hover. A pair's cancel (Esc, blur, `pointercancel`, `configure`) ends in place: `pan{end}` and `rotate{end}` with the 7° north snap, never `rotate{cancel}`.
 - **Pen.** Tip = primary with pen slop; barrel = secondary rules (from 2); eraser ignored; hover works.
 - **WebKit gesture events** (from phase 1; the DOM source adds `gesturestart`, `gesturechange` and `gestureend` listeners only when `platform.gestureEvents` is also true, copies `rotation`, prevents the default and removes them on detach). Only the rotation is used: WKWebView already delivers the pinch as Ctrl+wheel, so the gesture's scale is ignored and Ctrl-wheels zoom as everywhere (phase-1 drop). Rotation is accumulated and emits nothing until |accumulated| exceeds 10°; then `rotate` (`trackpad-twist`) starts with the threshold subtracted. A live twist is a session in `sessions` under a reserved non-pointer id (mode `rotate`, navigation `trackpad-twist`, slop passed at 10°), so Esc, blur, `configure` and the gesture Esc layer cancel it like a pointer rotate. The session exists from `gesturestart`, but the keys count it as a live pointer session only once its slop has passed, so a plain pinch-zoom keeps Esc, the arrows, Enter, F2 and the Menu key (from 1). One session at a time: a twist is ignored while a pointer pan or rotate is live, and a pointer down during a twist is ignored. On iOS the pointer-based two-finger recogniser is the only source; `gesture*` is prevented and ignored.
-- **Cancel fences.** `pointercancel`, lost capture, blur, `visibilitychange`, the Esc chain's `escape`, and a tool change (`configure`) emit `cancel`; a live rotate emits `rotate{cancel}`, which restores the starting camera. Under LEGACY the source listens to no `visibilitychange` and no `gesture*` event (today), so only blur releases Space and WebKit's Ctrl wheels zoom. After a window blur the session also calls `ToolHost.interrupted()` (§1.4).
+- **Cancel fences.** `pointercancel`, lost capture, blur, `visibilitychange`, the Esc chain's `escape`, and a tool change (`configure`) emit `cancel`; a live pointer rotate emits `rotate{cancel}`, which restores the starting camera, while a touch pair ends in place ("Pair" above, A6). After a window blur the session also calls `ToolHost.interrupted()` (§1.4).
 
 ### 2.3 Modifier resolution (ToolHost)
 
@@ -1660,7 +1646,7 @@ Rotation from the pointer is never available without Shift (user: deliberate ges
 
 | Tool (key) | Click | Drag | Double-click | Shift | mod | Alt |
 |---|---|---|---|---|---|---|
-| Select (V) | selects the hit object; empty ground clears; a locked object is selected (Unlock is in the canvas menu and Edit, U33). From 2 (`HitFilter.fill`): a tap inside a zone's fill selects the topmost zone when no plant or note is on top (Shift or mod toggles, Alt removes); a press there changes the selection only when it resolves: its click (a drag under the band's 2 px included) selects, its band replaces the selection, and a cancel keeps it | from empty ground: band select; the band is a screen rectangle and hits in its world quad (from 1). From an object or the outline of a selected zone: moves the selection. From 2 a drag that starts inside a zone's fill bands, never moves the zone. From a handle: rotate, reshape corner or vertex, guide end | on a plant: selects every plant of that species; on a note: edits its text; on a polygon edge: adds a corner (from 2, reusing `hitZoneEdge`) | click toggles the hit; drag from empty: adds the band to the selection (never box zoom); a drag that starts on an object toggles it on press and moves nothing (today, `shared-gestures.ts:233-237`); on the rotate handle: 15° object steps from the press angle (today, every phase) | as Shift for click and band (on Mac, Cmd) | click removes the hit from the selection (from 2); Alt+click on a corner handle removes the corner, minimum 3 (from 2, polygons only); Alt+drag bands as without Alt (spec) |
+| Select (V) | selects the hit object; empty ground clears; a locked object is selected (Unlock is in the canvas menu and Edit, U33). From 2 (`HitFilter.fill`): a tap inside a zone's fill selects the topmost zone when no plant or note is on top (Shift or mod toggles, Alt removes); a press there changes the selection only when it resolves: its click (an up within the recogniser's slop) selects, its band replaces the selection, and a cancel keeps it | from empty ground: band select; the band is a screen rectangle and hits in its world quad (from 1). From an object or the outline of a selected zone: moves the selection. From 2 a drag that starts inside a zone's fill bands, never moves the zone. From a handle: rotate, reshape corner or vertex, guide end | on a plant: selects every plant of that species; on a note: edits its text; on a polygon edge: adds a corner (from 2, reusing `hitZoneEdge`) | click toggles the hit; drag from empty: adds the band to the selection (never box zoom); a drag that starts on an object toggles it on press and moves nothing (today, `shared-gestures.ts:233-237`); on the rotate handle: 15° object steps from the press angle (today, every phase) | as Shift for click and band (on Mac, Cmd) | click removes the hit from the selection (from 2); Alt+click on a corner handle removes the corner, minimum 3 (from 2, polygons only); Alt+drag bands as without Alt (spec) |
 | Pan (H) | nothing | pans (mouse, pen, touch); no handles show while Pan is armed (as today; only Select shows them), so a press never lands on one | nothing | ignored (a session's mode is fixed) | ignored | ignored |
 | Plant stamp (P) | places one plant of the chosen species at the snapped point; with no species the card asks to choose one | the press already placed; the drag does nothing more (today) | places a second plant (each press places one, today) | none | none | none |
 | Plant a row (W) | on a placed plant: chooses it as the row source | draws the row from the source along the drag (past the recogniser's 3 px slop, P29); plants at the spacing interval | nothing | 45° steps against the screen axes (from 1; before: world axes). Before 2 Shift also turns snapping off | Ctrl or Cmd: no snapping while held (from 2, every OS) | none |
@@ -1671,8 +1657,8 @@ Rotation from the pointer is never available without Shift (user: deliberate ges
 | Measure (M) | nothing | measures; the line stays as a guide | nothing | 45° steps against the screen axes (from 2) | none | none |
 | Rectangle (R) | nothing | draws a rectangle aligned to the screen, stored with `rotationDeg = bearing` (from 1) | nothing | square (from 2) | none | none |
 | Ellipse (E) | nothing | draws an ellipse aligned to the screen, stored with `rotationDeg = bearing` (from 1) | nothing | circle (from 2) | none | none |
-| Polygon (Z) | the press adds a corner (today); a press on the first corner finishes (3+ corners) | the press already added the corner; the drag moves nothing (today) | the second press of a double-click finishes instead of adding a corner (3+ corners, from 2) | 45° steps against the screen axes (from 1; before: world axes) | none | none |
-| Handle (any tool that shows handles) | focuses nothing; handles are DOM buttons | `handle-drag`; with Space held at the press: `handle-drag` today (the handle is hit before the pan check, `scene-interaction.ts:584-608`), `pan` from 2 | on a polygon edge midpoint dot (smaller and fainter than a corner: radius 4, opacity 0.5, GeoLibre's edge marker; aria "Add a corner on edge {{index}}"; shown only on an edge at least 52 px long on screen, U36; while it shows, that edge's length chip sits beside it, just outside the edge, U38): adds a corner (from 2) | rotate handle: 15° steps from the press angle (today); point handles (corners, vertices, guide ends) ignore Shift and snap as usual (U36) | none | removes the corner, minimum 3 (from 2, polygons only) |
+| Polygon (Z) | the press adds a corner (today); a press on the first corner finishes (3+ corners; within 8 px, 22 px on touch from 3, U41) | the press already added the corner; the drag moves nothing (today) | the second press of a double-click finishes instead of adding a corner (3+ corners, from 2) | 45° steps against the screen axes (from 1; before: world axes) | none | none |
+| Handle (any tool that shows handles) | focuses nothing; handles are DOM buttons; the handle drag ends at the press point, so nothing moves (from 3, A9) | `handle-drag`; with Space held at the press: `handle-drag` today (the handle is hit before the pan check, `scene-interaction.ts:584-608`), `pan` from 2 | on a polygon edge midpoint dot (smaller and fainter than a corner: radius 4, opacity 0.5, GeoLibre's edge marker; aria "Add a corner on edge {{index}}"; shown only on an edge at least 52 px long on screen, U36; after a touch the dot is a 44 px target and shows on edges of 132 px or more, U41; while it shows, that edge's length chip sits beside it, just outside the edge, U38): adds a corner (from 2) | rotate handle: 15° steps from the press angle (today); point handles (corners, vertices, guide ends) ignore Shift and snap as usual (U36) | none | removes the corner, minimum 3 (from 2, polygons only) |
 
 Cells the table leaves implicit:
 - **Select, mod at a drag that starts on an object:** as Shift: toggles the object on press and moves nothing (today: `hasAdditiveModifier` treats Ctrl and Cmd like Shift; on Mac from 2 only Cmd, since a physical Ctrl is a right-click).
@@ -1725,30 +1711,31 @@ Overview (below 0.1 px/m) replaces the rows above:
 | Wheel over the text-entry host, the compass, the zoom group or any foreign target | not handled by the canvas | same |
 | Momentum tail | handled as ordinary wheel events | same |
 
-The Select tool card hint differs by setting (phase 2 copy in §9.3): Mouse "… right-drag pans · wheel zooms", Trackpad "… two fingers pan · pinch zooms".
+The Select tool card hint differs by setting (phase 2 copy in §9.3): Mouse "… right-drag pans · wheel zooms", Trackpad "… two fingers pan · pinch zooms"; on a coarse pointer it shows the Trackpad line whatever the setting (from 3, U41).
 
 ### 3.4 Touch
 
-Before phase 3 one touch is a primary pointer exactly as today (so it selects, draws or, in overview and with the Pan tool, pans) and a second touch is ignored.
+From phase 3 (U41; recogniser rules in §2.2 "Touch", "Long press" and "Pair"). Every touch press is held until 8 px, the lift or 500 ms, in every tool.
 
-| Input (from phase 3: the current constant's touch fields) | Every tool | Pan tool | Overview |
+| Input | Every tool | Pan tool | Overview |
 |---|---|---|---|
-| One-finger tap | `tap` as the left-click column of §3.2 | nothing | nothing (U36) |
-| One-finger drag | `drag` as the left-drag column of §3.2 (8 px slop) | pans | pans (U36) |
-| One-finger long press (500 ms still) | canvas menu at the finger, source `long-press`; no tap follows | menu | no menu |
-| Long press then move | no menu if the finger moved past slop before 500 ms (it is a drag) | — | — |
+| One-finger tap | `press` and `tap` at the lift, at the down point, as the left-click column of §3.2 | press and tap (the tool ignores them) | nothing (U36) |
+| One-finger drag | past 8 px, `press` at the down point and the drag, as the left-drag column of §3.2 | pans, the first move carrying the whole travel | same as the Pan tool (U36) |
+| One-finger double tap | `clickCount` 2 within 500 ms and 30 px (MapLibre) | — | — |
+| One-finger long press (500 ms still) | canvas menu at the finger, source `long-press`, with "Turn view to this edge" within 22 px (A11); no press reached the tool, and the lift emits nothing, so the menu stays open | menu | no menu |
+| Long press then move | no menu if the finger passed slop before 500 ms (it is a drag) | — | — |
 | Two-finger pan | pans by the centroid | same | same |
-| Two-finger pinch | zooms about the centroid | same | same |
-| Two-finger twist | turns the view after 25 px of arc, threshold subtracted; release within 7° of north snaps | same | same |
-| Held press (tools that act on `press`: Plant stamp places a plant, Polygon adds a corner) | from phase 3 (`touch.gestures`) the ToolHost holds a finger's `press` until the finger passes slop (then `press` and the drag), lifts (then `press` and `tap`), or the 500 ms long-press window ends still (then the menu, and the press is dropped); so a withdrawn press never reached the tool and nothing needs undoing | same | same |
-| Second finger before the first passed slop | the held press is withdrawn (`cancel('multitouch')`) before the tool saw it; the two-finger gesture starts | same | same |
-| Second finger after a one-finger drag started | the drag is cancelled and its edit aborted; a polygon draft keeps its corners; the two-finger gesture starts | same | same |
+| Two-finger pinch | zooms about the centroid past 0.1 zoom level | same | same |
+| Two-finger twist | turns the view about the centroid after 25 px of arc (MapLibre's rule); release within 7° of north snaps | same | same |
+| Second finger before the first passed slop | the tool sees nothing; the pair starts | same | same |
+| Second finger after a one-finger drag started | `cancel('multitouch')`: the drag is cancelled and its edit aborted; a polygon draft keeps its corners; the pair starts | same | same |
+| Pair cancel (Esc, blur, `pointercancel`) | the view stays where it is; a bearing within 7° of north snaps | same | same |
 | One finger lifted from two | nothing resumes until every finger is up | same | same |
 | Third finger | ignored | same | same |
-| Handles | 44 px targets (`hitRadiusPx` 22) | — | — |
-| Touch on the text entry (`owned-text`: the note editor, a child of the map host) | no canvas session: a tap moves the caret, a long press selects text with the native callout, a drag scrolls or selects inside the entry; the 500 ms timer never runs there, so no canvas menu | same | — |
+| Handles | after a touch press or hover, 44 px targets (`hitRadiusPx` 22) until a mouse or pen presses or hovers; the rotate handle keeps its 28 px look in a transparent 44 px box; a shape under about 44 px on screen can be reshaped but not moved by a finger (zoom in) | — | — |
+| Touch on the text entry (`owned-text`: the note editor, a child of the map host) | no canvas session: a tap moves the caret, a long press selects text with the native callout, a drag scrolls or selects inside the entry; no canvas menu. The entry focuses synchronously when it opens from a touch, so iOS shows the keyboard (A15) | same | — |
 
-Host CSS only when `touch.hostTouchActionNone` (from phase 3): `touch-action: none; -webkit-touch-callout: none; overscroll-behavior: none` on the map host, and `touch-action: auto; -webkit-touch-callout: default` on the text-entry host (the callout is inherited), both asserted by a DOM test.
+Host CSS, unconditional while attached (A13): `touch-action: none; -webkit-touch-callout: none` on the map host, and `-webkit-touch-callout: default` on the text-entry host (the callout is inherited; `touch-action` is not); `overscroll-behavior: none` on `html` (`styles/global.css`), which stops a drag on the Web top bar or strip from pulling to refresh and also turns off the Web desktop browser's two-finger history swipe.
 
 ### 3.5 Pen
 
@@ -1873,8 +1860,8 @@ Nothing reports which layer the next Esc runs: the tool card keeps its own "Esc 
 | Canvas context menu, popovers | Their own arrows; Esc closes one at a time. |
 | Arrow-owning widgets (lists, sliders, tabs, menus) | Plain and Shift+arrows stay with the widget; N, Shift+N and other `command` keys act on the canvas unless the widget claims them with `data-owns-keys`. |
 | Inspection lens preview | Arrow-owning: arrows move the lens along the screen; mod+arrow moves farther (spec, matching the canvas; was Shift); Shift+arrows move by the plain step (from 1). Drag is screen-relative. |
-| World map (template and place picker) | Its own MapLibre map: north-up, left-drag pans, wheel zooms, no rotation, no compass; `boxZoom: false` from 2 (convention; Shift+drag box-zooms it until then). Its keyboard handler keeps arrow pans and +/− zoom but `disableRotation()` stops Shift+arrows turning and tilting it (from F); its container declares `data-owns-keys="arrows"`, so Shift+←/→/↑ never reach the workspace view from it (from 1, fixture H26). |
-| Inspecting a raster (Desktop LiDAR inspection) | A plain primary press (mouse left, pen tip, and a one-finger tap) anywhere on the map samples the point instead of reaching the tool, after handles and the pan check and before the tool (today, `scene-interaction.ts:609-614`; ToolHost `deps.inspect`, fixture J10). Shift, mod or Alt at the press still samples (today: the probe reads no modifier); the sampled press starts no drag, band or move. Space+drag and a Pan-tool drag pan (the pan check comes first), and a Pan-tool click does not sample (today); from phase 3 (`touch.gestures`) a touch probe runs when the held press resolves to a tap, never on a drag, a long press or a second finger. In overview the probe never runs (overview presses pan, today; U36). Right, middle and pen-barrel input, the canvas menu, wheel and every rotation input are unchanged; Esc layer 25 ends inspecting. |
+| World map (template and place picker) | Its own MapLibre map: north-up, left-drag pans, wheel zooms, a touch pinch zooms with rotation disabled (from 3, U41), no rotation, no compass; `boxZoom: false` from 2 (convention; Shift+drag box-zooms it until then). Its keyboard handler keeps arrow pans and +/− zoom but `disableRotation()` stops Shift+arrows turning and tilting it (from F); its container declares `data-owns-keys="arrows"`, so Shift+←/→/↑ never reach the workspace view from it (from 1, fixture H26). |
+| Inspecting a raster (Desktop LiDAR inspection) | A plain primary press (mouse left, pen tip, and a one-finger tap) anywhere on the map samples the point instead of reaching the tool, after handles and the pan check and before the tool (today, `scene-interaction.ts:609-614`; ToolHost `deps.inspect`, fixture J10). Shift, mod or Alt at the press still samples (today: the probe reads no modifier); the sampled press starts no drag, band or move. Space+drag and a Pan-tool drag pan (the pan check comes first), and a Pan-tool click does not sample (today); from phase 3 a touch probe samples at the press the recogniser resolves (§3.4), as a mouse does; a long press or a pinch resolves no press and samples nothing (A16). In overview the probe never runs (overview presses pan, today; U36). Right, middle and pen-barrel input, the canvas menu, wheel and every rotation input are unchanged; Esc layer 25 ends inspecting. |
 | Compass, zoom group, attribution | A press there never starts a canvas gesture: the zoom group and compass sit beside the host (`foreign`); the attribution inside it is `owned-chrome` through `.maplibregl-ctrl` and no longer starts a band (phase F). |
 
 PDF page editor, every phase unless marked (today: `PdfPageEditor.tsx:60` accepts only button 0; `:106-107` arrows):
@@ -1907,7 +1894,7 @@ Rotation starts only from deliberate inputs (user): Shift+right-drag (from 2), S
 
 - **Place.** Always visible (at north too): in the zoom group on desktop and in the phone zoom column on the Web edition (from 1). As a button inside that group it inherits the group's layer on the stacking scale and its visible-map-area registration (`useMapOccluder` in `ZoomControls.tsx`); it adds no entry to `global.css` or the seam, and its size comes from the `.button` class `ZoomControls` passes in. Its look is set in `.interface-design/patterns/canvas-navigation.md`: a round button whose needle, an inline SVG coloured from the compass's CSS module (not a `ControlIcon` glyph), points to true north, turned by `−bearingDeg`. Its styling and description follow `northUp`.
 - **Click.** Jumps to north about the centre (U34); at north it does nothing.
-- **Drag.** A primary drag anywhere on the compass face (the hit area is the whole button, though the copy says "ring"; past 3 px of travel for a mouse or pen and 8 px for a finger, the canvas's touch slop; under that it is a click) turns the view about the screen centre by the pointer's angle around the compass centre (`beginRotation('centre')`); the needle follows the pointer, so moving clockwise around the face lowers the bearing by the angle swept (§2.2, rotation sign). Shift steps to absolute 15° multiples while held, re-read on each move; release returns to the raw angle. Release within 7° of north snaps to north (a jump). The button takes focus at `pointerdown` (`focus({ preventScroll: true })`); `pointercancel`, `lostpointercapture` and blur cancel the drag. A wheel during the drag composes with it (§3.3). Works with mouse, pen and touch from phase 1 (the compass sets `touch-action: none`). While dragging, the face takes `--color-accent-soft` and a grabbing cursor (pattern).
+- **Drag.** A primary drag anywhere on the compass face (the hit area is the whole button, though the copy says "ring"; past the canvas's drag slop, `DEFAULT_THRESHOLDS.dragSlopPx` (3 px for a mouse or pen, 8 px for a finger; U17, from 3); under that it is a click) turns the view about the screen centre by the pointer's angle around the compass centre (`beginRotation('centre')`); the needle follows the pointer, so moving clockwise around the face lowers the bearing by the angle swept (§2.2, rotation sign). Shift steps to absolute 15° multiples while held, re-read on each move; release returns to the raw angle. Release within 7° of north snaps to north (a jump). The button takes focus at `pointerdown` (`focus({ preventScroll: true })`); `pointercancel`, `lostpointercapture` and blur cancel the drag. A wheel during the drag composes with it (§3.3). Works with mouse, pen and touch from phase 1 (the compass sets `touch-action: none`). While dragging, the face takes `--color-accent-soft` and a grabbing cursor (pattern).
 - **Keyboard.** A focusable button: Enter or Space resets north; Shift+←/→ turn as anywhere; Esc during a compass drag restores the starting camera: while dragging, `Compass.tsx` registers an Esc layer at priority 70 (`registerEscapeLayer`, active while its `RotationSession` is live) that calls `cancel()`, because the compass drag runs outside the input pipeline and `ToolHost.hasLiveGesture()` cannot see it (fixture I9). An Esc before the drag threshold ends the press, so the release does not reset north.
 - **Words.** Action, label and shortcut come from Keyboard's `reset-north` command: `aria-label` is its label ("Reset north") and `aria-keyshortcuts` its `ariaShortcut`, which already holds N and Shift+N. The bearing text, "View turned {{degrees}}° from north" (Intl number) or "North is up", is a visually hidden span named by `aria-describedby` (not `aria-description`). No `title`: a `ButtonTooltip` shows "Reset north" with N and the hint as its second line (pattern `canvas-navigation.md`).
 
@@ -1994,7 +1981,7 @@ Every open (the first load, a replace, the first generation) goes through `docum
 
 ### 4.16 Turn view to this edge
 
-A canvas-menu entry when the menu request's point lies within the edge tolerance of a polygon, rectangle or line zone's edge (convention; ADR 0015's "a zone edge"), locked zones included, since it only moves the view. In the empty-map menu it is its own first group; in the selection menu it sits before Lock. The edge is not highlighted while the entry is (user, 2026-10-01: no `highlightEdge` hook). Native sources (a mouse right-click, from 2 a Mac Ctrl+click, a pen-barrel tap) use 8 px; phase 3 adds the 22 px touch radius with its long press. The keyboard menu (the Menu key and Shift+F10) has no point, so it never offers it: the entry is pointer-only, a named exception to the keyboard-path rule of `system.md` (the keyboard turns the view with Shift+←/→). Ellipse zones have no edges and never offer it. It turns the view by the smaller angle that makes the edge horizontal on screen, as a jump about the centre (U34), never snapped. The bearing is saved with any saved view captured afterwards.
+A canvas-menu entry when the menu request's point lies within the edge tolerance of a polygon, rectangle or line zone's edge (convention; ADR 0015's "a zone edge"), locked zones included, since it only moves the view. In the empty-map menu it is its own first group; in the selection menu it sits before Lock. The edge is not highlighted while the entry is (user, 2026-10-01: no `highlightEdge` hook). Native sources (a mouse right-click, from 2 a Mac Ctrl+click, a pen-barrel tap) use 8 px; a long press uses 22 px (from 3, A11). The keyboard menu (the Menu key and Shift+F10) has no point, so it never offers it: the entry is pointer-only, a named exception to the keyboard-path rule of `system.md` (the keyboard turns the view with Shift+←/→). Ellipse zones have no edges and never offer it. It turns the view by the smaller angle that makes the edge horizontal on screen, as a jump about the centre (U34), never snapped. The bearing is saved with any saved view captured afterwards.
 
 ### 4.17 World map
 
@@ -2004,7 +1991,7 @@ North-up, no rotation, no compass; left-drag pans (a navigation-only picker); Sh
 
 - Phase 1: the compass joins the phone zoom column after the ratio, and the View menu, which phones share, gains its three rotation rows (convention), so a phone user who opens a rotated Design (its `map_view`, a saved view, a story) can always return north. The compass ring turns the view by touch from phase 1.
 - The Pan tool stays in the phone strip in every phase.
-- Phase 3: two-finger pan, pinch and twist; long press opens the menu; one finger edits; 44 px handle targets; Fit joins the phone zoom column.
+- Phase 3 (U41): two-finger pan, pinch and twist; long press opens the menu; one finger edits; 44 px handle targets after a touch. The phone zoom column is zoom in, zoom out, Fit to Design and the compass: the ratio leaves phones, which have no scale bar either. On a touch screen (`hover: none`) a tooltip shows only on keyboard focus, and on a coarse pointer menu rows are at least `--control-size-touch` (44 px) tall.
 
 ### 4.19 Re-origin
 
@@ -2012,9 +1999,9 @@ The session plane stays north-aligned whatever the bearing. Re-origin runs on th
 
 ## 5. Synthetic event-sequence tests
 
-Recogniser fixtures live in `canvas/runtime/input/__fixtures__/sequences.ts` and run through `normalise` and `recognise` with an injected platform, clock and bindings. Each is named by its id and title, for example `seq('A1 Windows right-click', { os: 'windows', engine: 'chromium' })`. The "V2" column is the one current constant's values from phase 2 (touch fields from phase 3), "LEGACY" its values in phase 0 and F (§1.2); unless a row says otherwise a V2 expectation also holds from phase 3, and every LEGACY expectation pins today's behaviour. There is no per-constant matrix: the phase that changes a field rewrites the fixtures whose outcome changes and deletes the superseded expectations (audit 1.2), so after the release close only the end state remains.
+Recogniser fixtures live in `canvas/runtime/input/__fixtures__/sequences.ts` and run through `normalise` and `recognise` with an injected platform, clock and thresholds. Each is named by its id and title, for example `seq('A1 Windows right-click', { os: 'windows', engine: 'chromium' })`. "V2" names the behaviour from phase 2 (touch from phase 3), "LEGACY" the behaviour in phase 0 and F (§0); unless a row says otherwise a V2 expectation also holds from phase 3. The phase that changes a behaviour rewrites the fixtures whose outcome changes and deletes the superseded expectations (audit 1.2), so only the end state remains.
 
-A property test (`input/recognise.property.test.ts`) covers any interleaving of down, move (with changing `buttons`), up, cancel, reject, blur, escape and configure: every started session ends exactly once, every press the host sees ends with exactly one `tap`, `drag-end` or `cancel` (a Pan-tool drag's with `cancel('navigate')`; a reject ends its session with no gesture), and every `capture` effect is paired with a release.
+A property test (`input/recognise.property.test.ts`) covers any interleaving of down, move (with changing `buttons`), up, cancel, reject, blur, escape, configure, `tick` and touch moves and ups (A17): every started session ends exactly once, every press the host sees ends with exactly one `tap`, `drag-end` or `cancel` (a Pan-tool drag's with `cancel('navigate')`; a reject ends its session with no gesture), and every `capture` effect is paired with a release.
 
 ### 5.1 Secondary button
 
@@ -2079,20 +2066,20 @@ The keyboard menu comes only from the keymap row (phase 2, U34): a native `conte
 
 | Id | Sequence | Expect |
 |---|---|---|
-| E1 One-finger tap | touch down → up | `tap`; no hover left behind |
-| E2 One-finger drag | touch down → moves → up | from phase 3: primary drag (band or draw), never pan; host `touch-action: none` asserted by a DOM test |
+| E1 One-finger tap | touch down → up | from phase 3: `press` then `tap` at the up, at the down point (A2); no hover left behind |
+| E2 One-finger drag | touch down → moves → up | from phase 3: nothing until 8 px, then `press` at the down point and the drag (band or draw), never pan; host `touch-action: none` asserted by a DOM test |
 | E3 Browser steals the touch | touch down → 2 moves → pointercancel | `cancel('pointercancel')`; no half band committed |
-| E4 Two-finger pan, zoom, turn | id1 down, id2 down, both move, id2 up, id1 up | from phase 3: id1 cancelled (`multitouch`) before any commit; `pan` by centroid, `zoom` by distance ratio, `rotate` after 25 px of arc; after id2 up the remaining finger does not resume |
+| E4 Two-finger pan, zoom, turn | id1 down, id2 down, both move, id2 up, id1 up | from phase 3: nothing for id1 (its press was held); `pan` by centroid, `zoom` past 0.1 zoom level, `rotate` after 25 px of arc, all about the centroid; after id2 up the remaining finger does not resume |
 | E5 Second finger after a drag started | one-finger draw past slop, then id2 down | from phase 3: the draw is cancelled, not committed; a polygon draft keeps its corners |
-| E6 Long press on Android | touch down, hold 600 ms, contextmenu, up | from phase 3: exactly one `menu-request(long-press)` whichever arrives first; contextmenu prevented |
-| E7 Long press on iOS | touch down, hold 600 ms, up | from phase 3: `menu-request(long-press)` from the timer; no tap |
+| E7 Long press | touch down, hold 600 ms, up | from phase 3: `menu-request(long-press)` from the timer; no press or tap; the up emits nothing, with `prevent-default` and `stop-propagation` (A4). Android's `contextmenu` during a held press is prevented by the DOM source (a DOM test, which replaces E6) |
 | E8 Long press with movement | move past slop at 200 ms, hold, up | drag; no menu |
 | E9 Trackpad pinch with rotation drift | mac/webkit: gesturestart → changes with scale 1.2, 1.5 and rotation ±4° → gestureend | no `rotate`; no `zoom` from the gesture (the pinch zooms through WebKit's Ctrl wheels, F12) |
 | E10 Deliberate trackpad twist | mac/webkit: rotation 5°, 12°, 20° (WebKit `rotation` is clockwise-positive) | nothing at 5°; `rotate` starts at 12° with `totalDeltaDeg` −2°, then −10° (the ground follows the fingers: a clockwise twist lowers the bearing); snap on end if within 7° of north; defaults prevented |
-| E11 Touch under V2 behaves like today, overview included (a one-finger drag pans, G7) | V2: one touch down → moves → up; a second touch meanwhile | primary drag as today; the second touch is ignored; no long press |
-| E13 Press-acting tools under a pinch | from phase 3, Plant stamp armed: id1 down, id2 down 40 ms later, both move; Polygon armed: same | no plant placed; no corner added; `pan`/`zoom` only |
-| E14 Press-acting tools under a long press | from phase 3, Plant stamp armed, then Polygon armed: touch down, hold 600 ms, up | the menu opens; no plant placed; no corner added |
-| E12 iOS gesture events alongside pointers | from phase 3, ios: id1, id2 down → gesturestart → gesturechange(1.5, 10°) → pointer moves → gestureend | one source of truth (the pointer recogniser); `gesture*` prevented, not counted twice |
+| E13 A pinch with a tool armed | from phase 3, Plant stamp, Polygon or Select armed: id1 down, id2 down 40 ms later, both move | no `press` reaches the host: no plant, no corner, the selection unchanged; `pan`/`zoom` only |
+| E14 A long press with a tool armed | from phase 3, Plant stamp armed, then Polygon armed: touch down, hold 600 ms, up | the menu opens; no plant placed; no corner added |
+| E15 Touch in overview and the Pan tool | from phase 3: hold 600 ms; drag 120 px; pinch | overview: no menu, the pan carries the whole travel, the pinch zooms; Pan tool: the hold opens the menu, the drag pans |
+| E16 A third finger; a pair cancelled | from phase 3: a pair, then a third finger; a pinch-twist of 40°, then blur | the third finger is ignored; after the blur the view stays and a bearing within 7° snaps (A6) |
+| E12 iOS gesture events alongside pointers | from phase 3, ios (an iPad desktop user agent too, A8): id1, id2 down → gesturestart → gesturechange(1.5, 10°) → pointer moves → gestureend | one source of truth (the pointer recogniser); `gesture*` prevented, not counted twice |
 
 ### 5.6 Wheel and trackpad
 
@@ -2290,6 +2277,8 @@ Changed copy in phase 2:
 Deleted in phase 2: `settings.scrollWheel`, `settings.scrollWheelZoom`, `settings.scrollWheelPan`, `settings.scrollWheelHint`.
 
 ### 9.4 Phase 3 (touch)
+
+F1 shows a Touch section with these three rows on every device, after "Mouse, trackpad and pen" (U41). The coarse-pointer Select card reuses `canvas.toolCard.selectHintPan` (no new key).
 
 | Key | English | Where |
 |---|---|---|

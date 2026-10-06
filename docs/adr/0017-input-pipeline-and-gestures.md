@@ -1,6 +1,6 @@
 # Input pipeline and gestures
 
-Status: Accepted (2026-09-29, Canopi v2); amended 2026-09-30, 2026-10-01, 2026-10-05 (U33: key admission, no rulers) and 2026-10-06 (phase 2's design check and U34: one context-menu listener, one modifier source)
+Status: Accepted (2026-09-29, Canopi v2); amended 2026-09-30, 2026-10-01, 2026-10-05 (U33: key admission, no rulers) and 2026-10-06 (phase 2's design check and U34: one context-menu listener, one modifier source; phase 3's design check, U41: the held touch press, no bindings constant)
 
 Amends [ADR 0004](0004-one-renderer.md) (a tool's gesture no longer turns off map navigation). Product rules: [ADR 0015](0015-rotating-map-and-canvas-controls.md).
 
@@ -12,7 +12,8 @@ Pointer, wheel, context-menu and drag listeners were spread over the scene inter
 
 - **Stages.** `DomInputSource` (the only DOM listener and pointer-capture owner for canvas input) feeds a pure `normalise`, then a pure `recognise` reducer returning `{ state, gestures, effects }`, then a thin `InputRouter`. Clock and platform are injected; timers are inputs the source schedules because the recogniser asked; side effects (prevent default, stop propagation, capture, release, drop effect) are `AdapterEffect`s the source executes, including the tool host's answer to each gesture (quarantine, drop effect, reject the press), which the router returns.
 - **One screen-space gesture vocabulary.** Editing kinds (hover, press, tap, drag, drop) go to the tool host; navigation kinds (`pan`, `zoom`, `rotate`) go to view navigation and never reach tools; `menu-request` and `cancel` are requests. Pinch, twist, wheel and keys are sources of `zoom` and `rotate`, not kinds. Keys are not gestures: key navigation goes through the keyboard owner ([ADR 0020](0020-focus-and-keyboard-ownership.md)).
-- **Bindings are data.** One `Bindings` constant configures the recogniser; each phase edits the fields it changes in place; since everything ships as one release (2026-10-01), phase 2 hard-codes the fields whose phase-2 value is final and the release close the rest. F1's gesture list is a static list with per-platform notes.
+- **Rules are code, thresholds are data.** There is no bindings constant: phase 2 hard-coded its final behaviour and phase 3 deleted `Bindings` (2026-10-06). The recogniser reads one `Thresholds` record (drag slop per pointer kind, long press, multi-click, twist and pinch thresholds), which tests may replace. F1's gesture list is a static list with per-platform notes.
+- **Touch** (user, 2026-10-06, U41). The recogniser holds every touch press, in every tool, until 8 px, the lift or 500 ms: a tap acts at the lift at the down point, a pinch never changes the selection or adds anything, and a long press opens only the menu, which its lift cannot close. Two fingers pan, zoom and turn about their moving centroid with MapLibre's thresholds; a pair's cancel ends in place. Timers are base-free: a deadline is measured from the last input's time.
 - **Secondary button.** The recogniser's secondary session decides pan versus menu on one stream, with no copied tracker (U33): past 3 px it pans (Shift at the press: rotates); a still release opens the menu at the release point on every OS. On macOS Ctrl+click is secondary, and a pen barrel is too.
 - **Native menu.** The DOM source owns one `contextmenu` listener, which feeds the recogniser nothing: it prevents the native menu over the map host, during a canvas press and within 500 ms of a secondary release; the note editor and panel fields keep the native menu. A native menu with no right, pen-barrel or Mac Control press opens nothing (user, 2026-10-06, U34); the Menu key and Shift+F10 reach the selection menu. Firefox's own Shift+right-click menu cannot be prevented (a named Web limitation).
 - **No second button during a drag** (user, 2026-10-01). A secondary or auxiliary bit added during a primary drag is ignored for the rest of that session: no nested pan or rotate, no two-level Esc. Wheel zoom and keys stay live during a drag, and the tool host re-emits the drag in world space so the draft stays under the cursor.
@@ -31,7 +32,8 @@ Pointer, wheel, context-menu and drag listeners were spread over the scene inter
 - **Ignoring the wheel during a tool drag**: breaks the navigation-live convention.
 - **An allowlist of keys that act mid-gesture** (U16, 2026-10-01; dropped 2026-10-05, U33): every keymap row would need an admission class, a missed row becomes a dead key mid-drag, and it did not fix canopi-f47t.21, which happens between polygon clicks.
 - **A nested pan or rotate when a second button joins a drag**: rejected by the user (2026-10-01); it needed a frozen primary point, a two-level Esc and four fixtures for a gesture nobody asked for.
-- **One bindings constant per phase** (2026-09-29 design): with one release, a constant that lives one phase only doubles the fixtures.
+- **A bindings constant** (2026-09-29 design, then one constant edited in place): with one release every field ends with one value, so phase 3 deleted it.
+- **A held press in the tool host for the tools that act at press** (spec, 2026-09-29): Select still acted at press, so a pinch cleared the selection and a long press lost Cut and Delete; the recogniser's hold covers every tool.
 - **Unthresholded trackpad rotation**: every pinch carries a few degrees of twist; the map would wobble.
 - **Separate `pinch`/`twist` kinds, or one `navigate { intent }` kind**: tools never see them; intent would fold camera policy into input types.
 - **World-space gestures from the recogniser**: it stays camera-free; the tool host converts at event time.
@@ -41,7 +43,7 @@ Pointer, wheel, context-menu and drag listeners were spread over the scene inter
 
 - Recogniser fixtures cover about 60 sequences per platform (Windows release-time menus, Mac Ctrl+click, pen barrel, touch, wheel, ignored chords) without a browser; each phase rewrites the expectations it changes; a property test checks every session ends once and every capture is released.
 - Policy tests confine pointer capture and canvas `addEventListener` to the source and keep the input core browser-free.
-- A new gesture is a new bindings row and fixtures, not a new listener.
+- A new gesture is a recogniser rule and fixtures, not a new listener.
 - Details: [`canvas-v2-spec.md`](../plans/canvas-v2-spec.md).
 
 ## Amended 2026-09-30 and 2026-10-01

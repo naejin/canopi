@@ -7,7 +7,7 @@ Read the [design system](../system.md) first. Decisions: [ADR 0015](../../docs/a
 - Left click and left drag always select or draw; a left drag never pans, except with the Pan tool. Shift + drag is never box zoom.
 - Right-drag, middle-drag and Space + drag pan in every tool. A right or middle press during a drawing, move or band drag is ignored; the wheel and keys stay live; Space must be held before the press. A still right-click (under 3 px) opens the canvas menu on release; a right-drag never opens it. On a Mac, Control-click is a right-click and Control-drag pans.
 - Pointing device (Settings › Canvas): Mouse, the wheel zooms about the pointer and Shift + wheel pans; Trackpad, two fingers pan. Pinch and Ctrl + wheel always zoom. The wheel and a pinch zoom continuously; the zoom buttons and + / − change zoom by one step. On Linux a trackpad pinch does not reach the map; F1 says to use Ctrl + scroll.
-- Touch: one finger edits, two fingers pan, pinch and turn the view, press and hold opens the menu.
+- Touch: one finger edits, acting when it lifts; two fingers pan, pinch and turn the view and never change the selection; press and hold opens the menu, which stays open after the lift. Handles are 44 px targets after a touch, 20 px after a mouse or pen.
 - Pan tool (H) is for pens without a barrel button and one-finger use: a left drag pans. It is not on the main rail; it lives in View and Tools, the command palette and the phone tool strip. While it is armed no rail button is pressed and its tool card says "Drag to move the map" with the Esc line.
 
 ## Turning the map
@@ -38,8 +38,8 @@ One setting: Pointing device as a segmented Mouse: the wheel zooms / Trackpad: t
 
 - Keys: the tools heading reads "(anywhere except text fields)"; Map and workspace adds Turn the view 15° (Shift ← · Shift →), Reset north (N · Shift N · Shift ↑), nudge 10 cm on screen (arrows) and 1 m (Ctrl or Cmd + arrows), Labels (Shift L), zoom one step (+ · −), Fit the Design (Home · Shift F · Ctrl 0), Zoom to selection (Shift 2).
 - Mouse, trackpad and pen: Right-drag, middle-drag or Space + drag · Pan the map; Shift + right-drag or Shift + middle-drag · Turn the view, add Ctrl (Cmd on Mac) for 15° steps; Compass · Click to reset north, drag to turn the view; Right-click (Control-click on Mac) · Open the menu; Pinch or Ctrl + wheel · Zoom; Alt + click · Remove from the selection.
-- Touch (touch devices only): Two fingers · Pan, zoom and turn the view; Press and hold · Open the menu.
-- Notes under the lists: "Shift N works even when single-key shortcuts are off."; the Linux pinch note on Linux only. Rows come from the active bindings, so the dialog never lists a gesture the build does not have.
+- Touch, after Mouse, trackpad and pen on every device: One finger · Select or draw; with the Pan tool, pan; Two fingers · Pan, zoom and turn the view; Press and hold · Open the menu.
+- Notes under the lists: "Shift N works even when single-key shortcuts are off."; the Linux pinch note on Linux only. The rows are a static list, not read from bindings.
 
 ## Export planting plan
 
@@ -47,4 +47,4 @@ Map orientation, a segmented North up (default) / As on screen, sits under Plant
 
 ## Phones
 
-The zoom column holds zoom in, zoom out, Fit to Design and the compass as 44 px buttons; the phone View menu has Reset north. The tool strip keeps Pan. Two-finger twist turns the view; nothing on a phone turns it by accident.
+The zoom column holds zoom in, zoom out, Fit to Design and the compass as 44 px buttons, with no scale ratio (phones have no scale bar either); the phone View menu has Reset north. The tool strip keeps Pan. Two-finger twist turns the view; nothing on a phone turns it by accident.
