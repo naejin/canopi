@@ -1,5 +1,11 @@
 import { signal, type Signal } from '@preact/signals'
+import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createTestCanvasDocumentSurface, createTestCanvasRuntimeSurfaces } from '../../__tests__/support/canvas-runtime-surfaces'
+import type { CanvasInspectionHandle } from '../../canvas/inspection'
+import { setCurrentCanvasSession } from '../../canvas/session'
+import { InspectionLens } from '../../components/canvas/InspectionLens'
 import type { CanvasEscapeLayer, CanvasKeyboardPort, CanvasKeyCommand, CanvasKeyState, CanvasKeyVerdict } from '../../canvas/runtime/runtime'
 import { installKeyRouter, type KeyRouterDeps, type KeyRouterHandle } from './key-router'
 import { CANVAS_KEYMAP_ROWS, pushKeyScope, type KeymapRow } from './keymap'
@@ -592,6 +598,40 @@ describe('key router', () => {
 
     expect(fake.port.command).not.toHaveBeenCalled()
     expect(run).not.toHaveBeenCalled()
+  })
+
+  it('with the lens open and the host focused, ArrowUp nudges and Esc clears (canopi-f47t.24)', async () => {
+    install()
+    const root = document.createElement('div')
+    document.body.append(root)
+    const view = {
+      state: signal(null), sourceQuad: signal(null), inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(),
+      centerOnCanvas: vi.fn(), panByScreen: vi.fn(), zoomBy: vi.fn(), highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
+    } as unknown as CanvasInspectionHandle
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      documents: createTestCanvasDocumentSurface({ attachInspectionTo: () => view }),
+    }))
+    try {
+      await act(async () => render(h(InspectionLens, { canvasRef: { current: host } }), root))
+      host.focus()
+      host.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+      // The launcher's click opens the lens; the lens takes no focus on open, so the map keeps its keys.
+      await act(async () => root.querySelector<HTMLButtonElement>('button[aria-expanded]')!.click())
+      expect(root.querySelector('[data-inspection-frame]')).not.toBeNull()
+      expect(document.activeElement).toBe(host)
+      fake.state.command = (c) => c.kind === 'arrow'
+      fake.state.layers = ['selection']
+
+      press({ key: 'ArrowUp' }, document.activeElement!)
+      expect(fake.port.command).toHaveBeenCalledExactlyOnceWith({ kind: 'arrow', dir: 'up', large: false })
+      expect(view.panByScreen).not.toHaveBeenCalled()
+      press({ key: 'Escape' }, document.activeElement!)
+      expect(fake.port.escape).toHaveBeenCalledExactlyOnceWith('selection')
+      expect(root.querySelector('[data-inspection-frame]')).not.toBeNull()
+    } finally {
+      await act(async () => render(null, root))
+      setCurrentCanvasSession(null)
+    }
   })
 
   it('F2 falls through to the shell when the map has no note to edit (H27)', () => {
