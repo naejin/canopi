@@ -29,17 +29,9 @@ import {
   createSceneArrangementPlacement,
   type SceneArrangementPlacement,
   type SceneArrangementTemplate,
-  translatePoint,
-  translateZonePoints,
 } from '../scene-runtime/arrangement-placement'
 import type { WorldPoint } from '../view/types'
-import {
-  rotateArrangementTemplate,
-  rotateStampEntities,
-  stampGhostShapes,
-  turnStampRotation,
-  type StampEntities,
-} from './stamp-rotation'
+import { stampGhostShapes, stampTemplateAt, turnStampRotation } from './stamp-rotation'
 import type { CanvasTool, HitTarget, ToolContext } from './tool'
 
 interface ObjectStampPlantSource {
@@ -79,6 +71,8 @@ type ObjectStampSource =
   | ObjectStampAnnotationSource
   | ObjectStampGroupSource
 
+const ORIGIN: WorldPoint = Object.freeze({ x: 0, y: 0 })
+
 /** The layer a single picked object is placed on. */
 const SOURCE_LAYER = { plant: 'plants', zone: 'zones', annotation: 'annotations' } as const
 
@@ -114,8 +108,8 @@ export function createObjectStampTool(): CanvasTool {
     const source = objectStampSource
     if (!source || !placement || !canUseObjectStampSource(source)) return
     placement.place({
-      template: rotateArrangementTemplate(objectStampArrangementTemplate(source), source.anchorWorld, rotationDeg),
-      translateBy: objectStampDelta(source, anchorWorld),
+      template: stampTemplateAt(objectStampArrangementTemplate(source), source.anchorWorld, anchorWorld, rotationDeg),
+      translateBy: ORIGIN,
       historyType: 'interaction-object-stamp',
       onCommitted: () => showGhostAt(anchorWorld),
     })
@@ -140,8 +134,7 @@ export function createObjectStampTool(): CanvasTool {
       hideGhost()
       return
     }
-    const entities = objectStampEntities(source, objectStampDelta(source, anchorWorld))
-    const shapes = stampGhostShapes(rotateStampEntities(entities, anchorWorld, rotationDeg), anchorWorld, rotationDeg)
+    const shapes = stampGhostShapes(stampTemplateAt(objectStampArrangementTemplate(source), source.anchorWorld, anchorWorld, rotationDeg))
     ghostShown = true
     context().effects.setDraft({ shapes })
   }
@@ -339,13 +332,6 @@ function cloneGroupMembersForObjectStamp(
   return { plants, zones, annotations }
 }
 
-function objectStampDelta(source: ObjectStampSource, anchorWorld: WorldPoint): WorldPoint {
-  return {
-    x: anchorWorld.x - source.anchorWorld.x,
-    y: anchorWorld.y - source.anchorWorld.y,
-  }
-}
-
 function objectStampArrangementTemplate(source: ObjectStampSource): SceneArrangementTemplate {
   if (source.kind === 'plant') {
     return emptySceneArrangementTemplate({
@@ -395,29 +381,5 @@ function emptySceneArrangementTemplate(
     annotations: entries.annotations ?? [],
     measurementGuides: entries.measurementGuides ?? [],
     groups: entries.groups ?? [],
-  }
-}
-
-/** The stamp's objects moved by `delta`, as placement would add them. */
-function objectStampEntities(source: ObjectStampSource, delta: WorldPoint): StampEntities {
-  const plant = (entry: ScenePlantEntity): ScenePlantEntity => ({
-    ...clonePlantForObjectStamp(entry),
-    position: translatePoint(entry.position, delta),
-  })
-  const zone = (entry: SceneZoneEntity): SceneZoneEntity => ({
-    ...cloneZoneForObjectStamp(entry),
-    points: translateZonePoints(entry, delta),
-  })
-  const annotation = (entry: SceneAnnotationEntity): SceneAnnotationEntity => ({
-    ...cloneAnnotationForObjectStamp(entry),
-    position: translatePoint(entry.position, delta),
-  })
-  if (source.kind === 'plant') return { plants: [plant(source.plant)], zones: [], annotations: [] }
-  if (source.kind === 'zone') return { plants: [], zones: [zone(source.zone)], annotations: [] }
-  if (source.kind === 'annotation') return { plants: [], zones: [], annotations: [annotation(source.annotation)] }
-  return {
-    plants: source.plants.map(plant),
-    zones: source.zones.map(zone),
-    annotations: source.annotations.map(annotation),
   }
 }

@@ -1909,9 +1909,12 @@ describe('ToolHost', () => {
       return committed
     }
 
-    function ghostAnchors(h: ToolHarness): WorldPoint[] {
+    /** The first corner of each bed the saved stamps' ghosts draw (GUILD's bed corner is its anchor). */
+    function ghostBedCorners(h: ToolHarness): WorldPoint[] {
       return (h.renderer.lastDraft()?.shapes ?? []).flatMap((shape) =>
-        shape.kind === 'ghost' && shape.entity.kind === 'objects' ? [shape.entity.anchor] : [])
+        shape.kind === 'ghost' && shape.entity.kind === 'objects'
+          ? shape.entity.template.zones.map(({ entity }) => entity.points[0]!)
+          : [])
     }
 
     it('a species drop places a plant and returns to Select in any tool', () => {
@@ -1972,7 +1975,8 @@ describe('ToolHost', () => {
       // Its dragover ghost is the pick a click would make: turned by the bearing.
       h.drop('over', at, GUILD_DRAG)
       const ghost = (h.renderer.lastDraft()?.shapes ?? []).find((shape) => shape.kind === 'ghost' && shape.entity.kind === 'objects')
-      expect(ghost?.kind === 'ghost' && ghost.entity.kind === 'objects' ? ghost.entity.rotationDeg : null).toBe(30)
+      expect(ghost?.kind === 'ghost' && ghost.entity.kind === 'objects' ? ghost.entity.template.zones[0]!.entity.rotationDeg : null)
+        .toBe(30)
 
       h.drop('drop', at, GUILD_DRAG)
 
@@ -2045,7 +2049,7 @@ describe('ToolHost', () => {
 
       // A saved stamp: its ghosts with the anchor at the snapped point, as a placement would put them.
       h.drop('over', at, GUILD_DRAG)
-      expect(ghostAnchors(h)).toEqual([snapToGrid(83, 91, interval)])
+      expect(ghostBedCorners(h)).toEqual([snapToGrid(83, 91, interval)])
       h.drop('drop', at, { kind: 'unknown' })
       expect(h.renderer.lastDraft()).toBeNull()
 

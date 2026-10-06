@@ -13,22 +13,11 @@
 
 import type { SavedObjectStampPayload } from '../../saved-object-stamp-payload'
 import type { SceneAnnotationEntity, ScenePlantEntity, SceneZoneEntity } from '../scene/types'
-import {
-  createSceneArrangementPlacement,
-  type SceneArrangementTemplate,
-  translatePoint,
-  translateZonePoints,
-} from '../scene-runtime/arrangement-placement'
+import { createSceneArrangementPlacement, type SceneArrangementTemplate } from '../scene-runtime/arrangement-placement'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import type { WorldPoint } from '../view/types'
 import type { DraftShape } from './draft'
-import {
-  rotateArrangementTemplate,
-  rotateStampEntities,
-  stampGhostShapes,
-  turnStampRotation,
-  type StampEntities,
-} from './stamp-rotation'
+import { stampGhostShapes, stampTemplateAt, turnStampRotation } from './stamp-rotation'
 import type { CanvasTool, ToolContext, ToolScene, ToolSource } from './tool'
 
 const ORIGIN: WorldPoint = Object.freeze({ x: 0, y: 0 })
@@ -181,23 +170,6 @@ export function canPlaceSavedObjectStamp(scene: StampScene, stamp: SavedObjectSt
 }
 
 /**
- * The saved stamp's objects with its anchor at `at`, turned by `rotationDeg` about it: where a placement puts them (the
- * ghosts draw these).
- */
-function savedObjectStampEntities(
-  stamp: SavedObjectStampPayload,
-  at: WorldPoint,
-  rotationDeg = 0,
-): StampEntities {
-  const delta = stampDelta(stamp, at)
-  return rotateStampEntities({
-    plants: stamp.plants.map((plant) => scenePlantFromSavedPlant(plant, delta)),
-    zones: stamp.zones.map((zone) => sceneZoneFromSavedZone(zone, delta)),
-    annotations: stamp.annotations.map((annotation) => sceneAnnotationFromSavedAnnotation(annotation, delta)),
-  }, at, rotationDeg)
-}
-
-/**
  * The saved stamp's ghosts with its anchor at `at` (a snapped point), turned by `rotationDeg`; null when it cannot be
  * placed there. The tool's preview, and the drop route's dragover preview.
  */
@@ -208,7 +180,7 @@ export function savedObjectStampGhostShapes(
   rotationDeg = 0,
 ): DraftShape[] | null {
   if (!canPlaceSavedObjectStamp(scene, stamp)) return null
-  return stampGhostShapes(savedObjectStampEntities(stamp, at, rotationDeg), at, rotationDeg)
+  return stampGhostShapes(stampTemplateAt(savedObjectStampArrangementTemplate(stamp), stamp.anchor, at, rotationDeg))
 }
 
 /**
@@ -225,8 +197,8 @@ export function placeSavedObjectStamp(
 ): void {
   if (!canPlaceSavedObjectStamp(scene, stamp)) return
   createSceneArrangementPlacement({ sceneEdits: edits }).place({
-    template: rotateArrangementTemplate(savedObjectStampArrangementTemplate(stamp), stamp.anchor, options.rotationDeg ?? 0),
-    translateBy: stampDelta(stamp, at),
+    template: stampTemplateAt(savedObjectStampArrangementTemplate(stamp), stamp.anchor, at, options.rotationDeg ?? 0),
+    translateBy: ORIGIN,
     historyType: 'interaction-saved-object-stamp',
     onCommitted: options.onCommitted,
   })
@@ -244,15 +216,15 @@ function savedObjectStampArrangementTemplate(stamp: SavedObjectStampPayload): Sc
   return {
     plants: stamp.plants.map((plant) => ({
       sourceId: plant.id,
-      entity: scenePlantFromSavedPlant(plant, ORIGIN),
+      entity: scenePlantFromSavedPlant(plant),
     })),
     zones: stamp.zones.map((zone) => ({
       sourceId: zone.id,
-      entity: sceneZoneFromSavedZone(zone, ORIGIN),
+      entity: sceneZoneFromSavedZone(zone),
     })),
     annotations: stamp.annotations.map((annotation) => ({
       sourceId: annotation.id,
-      entity: sceneAnnotationFromSavedAnnotation(annotation, ORIGIN),
+      entity: sceneAnnotationFromSavedAnnotation(annotation),
     })),
     measurementGuides: [],
     groups: stamp.groups.map((group) => ({
@@ -270,7 +242,6 @@ function savedObjectStampArrangementTemplate(stamp: SavedObjectStampPayload): Sc
 
 function scenePlantFromSavedPlant(
   plant: SavedObjectStampPayload['plants'][number],
-  delta: WorldPoint,
 ): ScenePlantEntity {
   return {
     kind: 'plant',
@@ -281,7 +252,7 @@ function scenePlantFromSavedPlant(
     color: plant.color,
     symbol: plant.symbol ?? null,
     canopySpreadM: plant.scale,
-    position: translatePoint(plant.position, delta),
+    position: { ...plant.position },
     rotationDeg: plant.rotationDeg,
     notes: null,
     plantedDate: null,
@@ -292,7 +263,6 @@ function scenePlantFromSavedPlant(
 
 function sceneZoneFromSavedZone(
   zone: SavedObjectStampPayload['zones'][number],
-  delta: WorldPoint,
 ): SceneZoneEntity {
   return {
     kind: 'zone',
@@ -300,7 +270,7 @@ function sceneZoneFromSavedZone(
     name: zone.name,
     locked: false,
     zoneType: zone.zoneType,
-    points: translateZonePoints(zone, delta),
+    points: zone.points.map((point) => ({ ...point })),
     rotationDeg: zone.rotationDeg,
     fillColor: zone.fillColor,
     notes: null,
@@ -309,23 +279,15 @@ function sceneZoneFromSavedZone(
 
 function sceneAnnotationFromSavedAnnotation(
   annotation: SavedObjectStampPayload['annotations'][number],
-  delta: WorldPoint,
 ): SceneAnnotationEntity {
   return {
     kind: 'annotation',
     id: annotation.id,
     locked: false,
     annotationType: annotation.annotationType,
-    position: translatePoint(annotation.position, delta),
+    position: { ...annotation.position },
     text: annotation.text,
     fontSize: annotation.fontSize,
     rotationDeg: annotation.rotationDeg,
-  }
-}
-
-function stampDelta(stamp: SavedObjectStampPayload, at: WorldPoint): WorldPoint {
-  return {
-    x: at.x - stamp.anchor.x,
-    y: at.y - stamp.anchor.y,
   }
 }

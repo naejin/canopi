@@ -75,9 +75,9 @@ export type SelectionReadModel = CanvasDesignObjectSelectionModel
 export type SceneLayerKind = SceneLayerEntity['name']
 /**
  * A preview of what a placement would create, drawn with the draft by the scene's own drawing code (plan 0D1 "Ghosts").
- * The entities are already where a click would put them: the tool builds the plant as a click would (today plantEntityFromStampSource)
- * and applies the stamp's offset and held rotation to the template (today objectStampEntities and rotateStampEntities).
- * `anchor` and `rotationDeg` describe the pick for tests and guidance; the renderer never re-applies them.
+ * The entities are already where a click would put them: the tool builds the plant as a click would (plantEntityFromStampSource),
+ * and a stamp tool draws the template a press would add (stamp-rotation.ts stampTemplateAt: the held turn about the
+ * stamp's anchor, then the move to the pointer). The tool card reads the held turn from guidance, not from the ghost.
  * A plant ghost is the plant's mark only: the Place plants mature-width ring, its label and the nearest-plant guide are ellipse, label and polyline shapes.
  * mark 'symbol' (default) draws the plant's symbol; 'dot' draws Plant a row's look: a filled disc in the plant's display colour with a 2 px
  * border of the same colour, radius half the plant's world AABB (today's (a4c86d39) plant-spacing-overlay.ts:158-181; Plant a row emits
@@ -89,7 +89,7 @@ export type SceneLayerKind = SceneLayerEntity['name']
  */
 export type GhostEntity =
   | { readonly kind: 'plant'; readonly plant: ScenePlantEntity; readonly mark?: 'symbol' | 'dot'; readonly sizeFrom?: WorldPoint }
-  | { readonly kind: 'objects'; readonly anchor: WorldPoint; readonly rotationDeg: number; readonly template: SceneArrangementTemplate }  // stamp pick, saved stamp
+  | { readonly kind: 'objects'; readonly template: SceneArrangementTemplate }  // stamp pick, saved stamp
 /** A note's text entry; the host owns the textarea. The tool card's spacing field is not one (it sends spacing commands). */
 export interface TextEntryRequest {
   readonly anchor: WorldPoint

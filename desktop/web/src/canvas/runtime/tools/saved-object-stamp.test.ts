@@ -84,6 +84,20 @@ function templateOf(shape: GhostShape | undefined): SceneArrangementTemplate {
   return shape.entity.template
 }
 
+/** The held angle the ghost shows: the turn of the stamp's level note (drawn in the second ghost), as a placement stores it. */
+function ghostNoteRotation(h: ToolHarness): number | null {
+  return templateOf(ghosts(h)[1]).annotations[0]!.entity.rotationDeg
+}
+
+/** The mulch stamp's ghost with its anchor at `at`, turned by `degrees`: its plant saved 10 m east of the anchor turns with it. */
+function expectMulchGhostAt(h: ToolHarness, at: { x: number; y: number }, degrees: number): void {
+  const radians = (degrees * Math.PI) / 180
+  const plant = templateOf(ghosts(h)[0]).plants[0]!.entity
+  expect(plant.position.x).toBeCloseTo(at.x + 10 * Math.cos(radians), 6)
+  expect(plant.position.y).toBeCloseTo(at.y + 10 * Math.sin(radians), 6)
+  expect(ghostNoteRotation(h)).toBe(degrees)
+}
+
 const GUILD = stamp({
   anchor: { x: 12, y: 24 },
   plants: [{
@@ -287,7 +301,7 @@ describe('saved object stamp tool', () => {
       h.host.command({ kind: 'rotate-held', stepDeg: -15 })
       expect(h.record.guidance.at(-1)?.stampRotationDeg).toBe(90)
       // The ghost turns with it: the plant 10 m east of the anchor now shows 10 m south of the pointer.
-      expect(ghosts(h)[0]!.entity).toMatchObject({ anchor: { x: 100, y: 100 }, rotationDeg: 90 })
+      expect(ghostNoteRotation(h)).toBe(90)
       const ghostPlant = templateOf(ghosts(h)[0]).plants[0]!.entity
       expect(ghostPlant.position.x).toBeCloseTo(100, 6)
       expect(ghostPlant.position.y).toBeCloseTo(110, 6)
@@ -307,7 +321,7 @@ describe('saved object stamp tool', () => {
 
       h.hover({ x: 200, y: 150 })
       const anchor = h.world({ x: 200, y: 150 })
-      expect(ghosts(h)[0]!.entity).toMatchObject({ rotationDeg: 30 })
+      expect(ghostNoteRotation(h)).toBe(30)
       // Level to the screen: the plant saved 10 m east of the anchor shows 10 px right of the pointer.
       const right = h.world({ x: 210, y: 150 })
       const ghostPlant = templateOf(ghosts(h)[0]).plants[0]!.entity
@@ -317,11 +331,11 @@ describe('saved object stamp tool', () => {
       // ] turns it 15° from the pick's start: the card reads 15°, the copies are stored at 45°.
       h.host.command({ kind: 'rotate-held', stepDeg: 15 })
       expect(h.record.guidance.at(-1)?.stampRotationDeg).toBe(15)
-      expect(ghosts(h)[0]!.entity).toMatchObject({ rotationDeg: 45 })
+      expect(ghostNoteRotation(h)).toBe(45)
       h.host.command({ kind: 'rotate-held', stepDeg: -15 })
       h.host.command({ kind: 'rotate-held', stepDeg: -15 })
       expect(h.record.guidance.at(-1)?.stampRotationDeg).toBe(345)
-      expect(ghosts(h)[0]!.entity).toMatchObject({ rotationDeg: 15 })
+      expect(ghostNoteRotation(h)).toBe(15)
 
       // Another stamp starts at the bearing again.
       h.host.sourceChanged({ kind: 'saved-stamp', stamp: mulchStamp() })
@@ -347,7 +361,7 @@ describe('saved object stamp tool', () => {
       h.hover({ x: 200, y: 150 })
       // The card shows rotationDeg minus the pick's start; the ghost keeps the angle it was lined up at.
       expect(h.record.guidance.at(-1)?.stampRotationDeg).toBe(15)
-      expect(ghosts(h)[0]!.entity).toMatchObject({ rotationDeg: 45 })
+      expect(ghostNoteRotation(h)).toBe(45)
 
       h.click({ x: 200, y: 150 })
       expect(h.store.persisted.zones[0]?.rotationDeg).toBe(45)
@@ -361,7 +375,7 @@ describe('saved object stamp tool', () => {
       h.host.command({ kind: 'rotate-held', stepDeg: 15 })
       // The pointer moves onto the compass: the ghost stays where it was drawn.
       h.leave()
-      expect(ghosts(h)[0]!.entity).toMatchObject({ rotationDeg: 15 })
+      expect(ghostNoteRotation(h)).toBe(15)
 
       // The compass or "Turn view to this edge" turns the view to 30° with no pointer on the map.
       const { camera } = h.view.host.frames.viewFrame.peek().view
@@ -369,7 +383,7 @@ describe('saved object stamp tool', () => {
       h.advance(0)
 
       // After any frame runs, the parked ghost keeps the ground angle a click places.
-      expect(ghosts(h)[0]!.entity).toMatchObject({ anchor: { x: 200, y: 150 }, rotationDeg: 15 })
+      expectMulchGhostAt(h, { x: 200, y: 150 }, 15)
       expect(h.record.guidance.at(-1)?.stampRotationDeg).toBe(15)
     })
 
@@ -385,7 +399,7 @@ describe('saved object stamp tool', () => {
       // The turned ghost of the stamp it held goes; the new stamp shows at the next hover.
       expect(ghosts(h)).toEqual([])
       h.hover({ x: 100, y: 100 })
-      expect(ghosts(h)[0]!.entity).toMatchObject({ rotationDeg: 0 })
+      expect(ghostNoteRotation(h) ?? 0).toBe(0)
 
       h.host.sourceChanged(null)
       expect(h.record.guidance.at(-1)?.stampRotationDeg).toBeNull()
@@ -411,7 +425,7 @@ describe('saved object stamp tool', () => {
     h.view.setViewport({ x: 0, y: 0, scale: 1 })
     h.advance(0)
     h.hover({ x: 120, y: 120 })
-    expect(ghosts(h)[0]!.entity).toMatchObject({ anchor: { x: 120, y: 120 }, rotationDeg: 15 })
+    expectMulchGhostAt(h, { x: 120, y: 120 }, 15)
     h.click({ x: 120, y: 120 })
     expect(h.store.persisted.plants).toHaveLength(1)
   })
@@ -444,14 +458,14 @@ describe('saved object stamp tool', () => {
     h.blur()
     expect(ghosts(h)).toEqual([])
     h.hover({ x: 110, y: 100 })
-    expect(ghosts(h)[0]!.entity).toMatchObject({ anchor: { x: 110, y: 100 }, rotationDeg: 15 })
+    expectMulchGhostAt(h, { x: 110, y: 100 }, 15)
 
     // Today's setTool to the same tool ran the cancellation.
     h.arm('saved-object-stamp')
     expect(ghosts(h)).toEqual([])
     // A press that places nothing (an edit that does not commit) leaves the stamp; its release hides the ghost again.
     h.hover({ x: 120, y: 100 })
-    expect(ghosts(h)[0]!.entity).toMatchObject({ anchor: { x: 120, y: 100 }, rotationDeg: 15 })
+    expectMulchGhostAt(h, { x: 120, y: 100 }, 15)
     vi.spyOn(h.edits, 'run').mockReturnValueOnce(false)
     h.press({ x: 120, y: 100 })
     expect(h.store.persisted.plants).toHaveLength(0)
@@ -487,7 +501,7 @@ describe('saved object stamp tool', () => {
       expect(canPlaceSavedObjectStamp(scene, GUILD)).toBe(true)
       const preview = savedObjectStampGhostShapes(scene, GUILD, at)
       expect(ghostsIn(preview).map((shape) => shape.opacity)).toEqual([0.62, 0.68])
-      expect(ghostsIn(preview)[0]!.entity).toMatchObject({ anchor: at, rotationDeg: 0 })
+      expect(templateOf(ghostsIn(preview)[0]).plants[0]!.entity.position).toEqual(at)
 
       const onCommitted = vi.fn()
       placeSavedObjectStamp(h.edits, scene, GUILD, at, { onCommitted })

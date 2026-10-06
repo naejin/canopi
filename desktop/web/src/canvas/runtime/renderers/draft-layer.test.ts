@@ -146,8 +146,6 @@ function objectsGhost(opacity: number): DraftShape {
     opacity,
     entity: {
       kind: 'objects',
-      anchor: { x: 0, y: 0 },
-      rotationDeg: 0,
       template: {
         plants: [{ sourceId: 'stamp-plant', entity: createPlant({ id: 'stamp-plant', position: { x: 6, y: 1 } }) }],
         zones: [{ sourceId: 'bed', entity: createZone() }],
@@ -663,7 +661,7 @@ describe('draft layer', () => {
       measurementGuides: [],
       groups: [],
     }
-    layer.setDraft({ shapes: [{ kind: 'ghost', entity: { kind: 'objects', anchor: { x: 0, y: 0 }, rotationDeg: 0, template }, opacity: 0.62 }] })
+    layer.setDraft({ shapes: [{ kind: 'ghost', entity: { kind: 'objects', template }, opacity: 0.62 }] })
     layer.setView(at({ x: 0, y: 0 }, 20))
     expect(layer.worldDraftRoot.children).toEqual([])
     expect(layer.billboardDraftRoot.children).toEqual([])

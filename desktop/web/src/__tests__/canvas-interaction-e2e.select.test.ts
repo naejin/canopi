@@ -3470,7 +3470,7 @@ describe('SceneInteractionSession', () => {
     // scale and as its turned text closer in").
     const ghosts = () => draftShapes(deps).flatMap((shape) =>
       shape.kind === 'ghost' && shape.entity.kind === 'objects' ? [shape.entity] : [])
-    expect(ghosts().map((ghost) => ghost.anchor)).toEqual([{ x: 40, y: 45 }, { x: 40, y: 45 }])
+    expect(ghosts()).toHaveLength(2)
     const [objects, notes] = ghosts()
     expect(objects!.template.zones.map(({ entity }) => entity)).toEqual([expect.objectContaining({
       zoneType: 'rect',
@@ -3492,8 +3492,10 @@ describe('SceneInteractionSession', () => {
     const overviewViewport = testView.viewport()
     testView.setViewport({ ...overviewViewport, scale: 20 })
     container.dispatchEvent(dragOverEvent)
-    // Closer in, the ghosts follow the ground under the pointer.
-    expect(ghosts().map((ghost) => ghost.anchor)).toEqual([{ x: 4, y: 4.5 }, { x: 4, y: 4.5 }])
+    // Closer in, the ghosts follow the ground under the pointer: the bed's corner is the stamp's anchor.
+    const [closerObjects, closerNotes] = ghosts()
+    expect(closerObjects!.template.zones[0]!.entity.points[0]).toEqual({ x: 4, y: 4.5 })
+    expect(closerNotes!.template.annotations[0]!.entity.position).toEqual({ x: 6, y: -0.5 })
 
     testView.setViewport(overviewViewport)
     container.dispatchEvent(dragOverEvent)
