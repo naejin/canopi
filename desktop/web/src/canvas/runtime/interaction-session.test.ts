@@ -835,7 +835,7 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
     expect(rectangle.last('cancel')).toEqual({ kind: 'cancel', reason: 'tool-change' })
     expect(open()).toBe(false)
     expect(events.pointerCapture.has(15)).toBe(false)
-    expect(builtHosts.at(-1)?.activeTool.value).toBe('select')
+    expect(session.tool).toBe('select')
     expect(container.style.cursor).toBe('default')
   })
 
@@ -853,7 +853,7 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
 
     expect(() => session.setTool('rectangle')).toThrow('activation failed')
     failActivation = false
-    expect(builtHosts.at(-1)?.activeTool.value).toBe('select')
+    expect(session.tool).toBe('select')
     // Select is armed again: a drag selects, it does not draw a line.
     events.pointerDown({ x: 20, y: 30 })
     events.pointerMove({ x: 60, y: 30 }, { buttons: 1 })
@@ -862,7 +862,7 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
     expect(rectangle.count('press')).toBe(0)
 
     session.setTool('rectangle')
-    expect(builtHosts.at(-1)?.activeTool.value).toBe('rectangle')
+    expect(session.tool).toBe('rectangle')
   })
 
   it('a fallback to Select after a failed activation clears the tool left\'s source', () => {
@@ -880,7 +880,7 @@ describe('registered tools against today\'s session (0B-3 host rulings)', () => 
 
     expect(() => session.setTool('rectangle')).toThrow('activation failed')
     failActivation = false
-    expect(builtHosts.at(-1)?.activeTool.value).toBe('select')
+    expect(session.tool).toBe('select')
     expect(readPlantStampSource()).toBeNull()
   })
 

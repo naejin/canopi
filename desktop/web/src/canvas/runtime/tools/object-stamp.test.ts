@@ -334,7 +334,7 @@ describe('object stamp tool', () => {
     expect(h.host.activeToolHasTransient()).toBe(false)
     expect(h.host.command({ kind: 'escape' })).toBe('handled')
 
-    expect(h.host.activeTool.value).toBe('select')
+    expect(h.toolState.value).toBe('select')
     expect(ghosts(h)).toEqual([])
   })
 

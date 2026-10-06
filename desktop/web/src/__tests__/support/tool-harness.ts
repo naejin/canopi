@@ -5,7 +5,7 @@
 // frame scale, the species cache and the localised names through injected functions, as interaction-session.ts passes
 // the runtime's.
 
-import { signal } from '@preact/signals'
+import { signal, type ReadonlySignal } from '@preact/signals'
 import type { CanvasToolGuidance } from '../../canvas/session-state'
 import { createSessionPlane, type GeoPosition } from '../../canvas/session-plane'
 import type { Gesture, MenuSource, PressTarget } from '../../canvas/runtime/input/gestures'
@@ -370,6 +370,8 @@ export interface PressOptions {
 
 export interface ToolHarness {
   readonly host: ToolHost
+  /** The session's tool signal the host arms and reads (ToolHostDeps.toolState.active). */
+  readonly toolState: ReadonlySignal<ToolId>
   readonly view: TestView
   readonly store: SceneStore
   readonly history: SceneHistory
@@ -601,6 +603,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
 
   const harness: ToolHarness = {
     host,
+    toolState,
     view,
     store,
     history,

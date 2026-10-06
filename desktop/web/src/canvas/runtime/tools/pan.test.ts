@@ -58,7 +58,7 @@ describe('Pan tool', () => {
     expect(pressKey({ key: 'h' }).defaultPrevented).toBe(true)
     keys.dispose()
 
-    expect(h.host.activeTool.peek()).toBe('hand')
+    expect(h.toolState.peek()).toBe('hand')
     expect(h.chrome.cursor).toBe('grab')
 
     // The recogniser as the session configures it for the armed tool, and the router in front of the host.
@@ -72,7 +72,7 @@ describe('Pan tool', () => {
       move(110, 104, { buttons: 1 }),
       move(130, 120, { buttons: 1 }),
       up(130, 120),
-    ], { tool: h.host.activeTool.peek() }), CURRENT_BINDINGS)
+    ], { tool: h.toolState.peek() }), CURRENT_BINDINGS)
     h.host.rawPress('primary', { kind: 'surface' }, 1)
     for (const gesture of run.gestures as readonly Gesture[]) router.route(gesture)
 

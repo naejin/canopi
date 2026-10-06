@@ -166,7 +166,6 @@ export interface ToolHost {
   setTool(id: ToolId, source: ToolSource | null): void
   /** A new source for the armed tool (the session's read-model bridge): forwards to CanvasTool.sourceChanged. */
   sourceChanged(source: ToolSource | null): void
-  readonly activeTool: ReadonlySignal<ToolId>
   /**
    * Presses the host never sees as gestures: the session calls it for every raw pointerdown on the map host before routing it
    * (from the source's raw input, not a gesture; the down's role, 'auxiliary' as 'middle'). Commits the nudge series for any

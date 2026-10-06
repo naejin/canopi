@@ -135,7 +135,7 @@ describe('Plant a row tool', () => {
     expect(h.host.command({ kind: 'escape' })).toBe('handled')
     expect(row(h).phase).toBe('pick')
     expect(h.renderer.lastDraft()).toBeNull()
-    expect(h.host.activeTool.peek()).toBe('plant-spacing')
+    expect(h.toolState.peek()).toBe('plant-spacing')
 
     // Today's order: the source goes first even while a drag from it is live.
     h.press({ x: 20, y: 30 })
@@ -147,7 +147,7 @@ describe('Plant a row tool', () => {
     expect(added(h)).toEqual([])
 
     expect(h.host.command({ kind: 'escape' })).toBe('handled')
-    expect(h.host.activeTool.peek()).toBe('select')
+    expect(h.toolState.peek()).toBe('select')
   })
 
   it('a blur keeps the row source and its preview', () => {
@@ -454,7 +454,7 @@ describe('Plant a row tool', () => {
     expect(row(h).phase).toBe('pick')
     expect(h.renderer.lastDraft()).toBeNull()
     expect(h.record.focus.at(-1)).toBe('map')
-    expect(h.host.activeTool.peek()).toBe('plant-spacing')
+    expect(h.toolState.peek()).toBe('plant-spacing')
   })
 
   it('a clamped endpoint stays at the view\'s edge', () => {

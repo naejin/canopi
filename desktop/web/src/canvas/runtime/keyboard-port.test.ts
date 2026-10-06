@@ -58,7 +58,6 @@ function fixture(options: { readonly tool?: ToolId; readonly reply?: (c: ToolCom
   }
   const hostFake = {
     ...toolHost,
-    activeTool: tool,
     hasNudgeSeries: () => state.nudging,
     activeToolIsSelect: () => tool.peek() === 'select',
     activeToolHasTransient: () => state.transient,

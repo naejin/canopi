@@ -182,7 +182,7 @@ describe('saved object stamp tool', () => {
     h.click({ x: 100, y: 120 })
 
     expect(commits).toEqual(['interaction-saved-object-stamp'])
-    expect(h.host.activeTool.value).toBe('select')
+    expect(h.toolState.value).toBe('select')
     expect(ghosts(h)).toEqual([])
     // The second press of a double-click reaches Select, which places nothing.
     h.click({ x: 100, y: 120 })
@@ -271,7 +271,7 @@ describe('saved object stamp tool', () => {
 
     expect(h.store.persisted.zones).toHaveLength(0)
     expect(commits).toEqual([])
-    expect(h.host.activeTool.value).toBe('saved-object-stamp')
+    expect(h.toolState.value).toBe('saved-object-stamp')
   })
 
   describe('stamp rotation', () => {
@@ -458,7 +458,7 @@ describe('saved object stamp tool', () => {
     expect(ghosts(h)).toHaveLength(2)
     h.release()
     expect(ghosts(h)).toEqual([])
-    expect(h.host.activeTool.value).toBe('saved-object-stamp')
+    expect(h.toolState.value).toBe('saved-object-stamp')
 
     h.hover({ x: 130, y: 100 })
     h.click({ x: 130, y: 100 })
@@ -473,7 +473,7 @@ describe('saved object stamp tool', () => {
     expect(h.host.activeToolHasTransient()).toBe(false)
     expect(h.host.command({ kind: 'escape' })).toBe('handled')
 
-    expect(h.host.activeTool.value).toBe('select')
+    expect(h.toolState.value).toBe('select')
     expect(ghosts(h)).toEqual([])
   })
 

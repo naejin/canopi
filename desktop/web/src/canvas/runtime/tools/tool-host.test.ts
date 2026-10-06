@@ -194,14 +194,14 @@ describe('ToolHost', () => {
       const h = harness({ snapping: { grid: true } })
 
       h.host.command({ kind: 'place-at', world: { x: 13.2, y: 27.9 } })
-      expect(h.host.activeTool.peek()).toBe('plant-stamp')
+      expect(h.toolState.peek()).toBe('plant-stamp')
       expect(stamp.commands).toEqual([
         { kind: 'place-at', world: snapToGrid(13.2, 27.9, gridInterval(1).interval) },
       ])
 
       const overview = harness({ viewport: OVERVIEW })
       expect(overview.host.command({ kind: 'place-at', world: { x: 13.2, y: 27.9 } })).toBe('pass')
-      expect(overview.host.activeTool.peek()).toBe('select')
+      expect(overview.toolState.peek()).toBe('select')
       expect(stamp.commands).toHaveLength(1)
     })
   })
@@ -1931,7 +1931,7 @@ describe('ToolHost', () => {
         expect(plant, id).toMatchObject({ canonicalName: 'Pyrus communis', commonName: 'Pear', position: snapped, canopySpreadM: 3 })
         expect(h.store.session.selectedTargets, id).toEqual([{ kind: 'plant', id: plant.id }])
         expect(committed, id).toEqual(['interaction-drop'])
-        expect(h.host.activeTool.value, id).toBe('select')
+        expect(h.toolState.value, id).toBe('select')
         expect(h.record.focus, id).toEqual(['map'])
         expect(h.record.drops, id).toEqual(['species'])
         // A drop is no tool gesture.
@@ -1952,7 +1952,7 @@ describe('ToolHost', () => {
       expect(h.store.persisted.plants.map((plant) => plant.position)).toEqual([{ x: anchor.x + 4, y: anchor.y + 3 }])
       expect(h.store.session.selectedTargets).toHaveLength(2)
       expect(committed).toEqual(['interaction-saved-object-stamp'])
-      expect(h.host.activeTool.value).toBe('select')
+      expect(h.toolState.value).toBe('select')
       expect(h.record.focus).toEqual(['map'])
       expect(h.record.drops).toEqual(['saved-stamp'])
 
@@ -2017,7 +2017,7 @@ describe('ToolHost', () => {
       expect(h.drop('over', at, PEAR_OVER)).toEqual({ quarantine: true, dropEffect: 'none' })
       expect(h.drop('drop', at, PEAR_DROP)).toEqual({ quarantine: true })
       expect(h.store.persisted.plants).toHaveLength(0)
-      expect(h.host.activeTool.value).toBe('rectangle')
+      expect(h.toolState.value).toBe('rectangle')
 
       external.abort()
       expect(h.drop('over', at, PEAR_OVER)).toEqual({ dropEffect: 'copy' })
