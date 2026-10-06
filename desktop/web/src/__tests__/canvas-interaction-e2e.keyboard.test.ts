@@ -355,6 +355,22 @@ describe('SceneInteractionSession', () => {
       session.dispose()
     })
 
+    it('in overview Esc clears the selection and leaves the tool armed (A20)', () => {
+      store.updatePersisted((draft) => {
+        draft.zones = [makeRectZone('zone-1', [{ x: 20, y: 20 }, { x: 80, y: 20 }, { x: 80, y: 60 }, { x: 20, y: 60 }])]
+      })
+      const { session, deps, tools } = sessionWithToolLog()
+      session.setTool('rectangle')
+      enterOverview(testView)
+      deps.setSelection([zoneTarget('zone-1')])
+      container.focus()
+
+      expect(escapeOnMap().defaultPrevented).toBe(true)
+      expect(deps.clearSelection).toHaveBeenCalledOnce()
+      expect(tools).not.toContain('select')
+      session.dispose()
+    })
+
     it('cancels a polygon draft first, then returns to Select', () => {
       const { session, tools } = sessionWithToolLog()
       session.setTool('polygon')
