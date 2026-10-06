@@ -1801,7 +1801,13 @@
       "zoom": "Zoom",
       "altClick": "Alt + clic",
       "removeFromSelection": "Quitar de la selección",
-      "linuxPinch": "En Linux, el pellizco en el panel táctil aún no es compatible. Usa Ctrl + desplazamiento para hacer zoom."
+      "linuxPinch": "En Linux, el pellizco en el panel táctil aún no es compatible. Usa Ctrl + desplazamiento para hacer zoom.",
+      "touchHeading": "Táctil",
+      "oneFinger": "Un dedo",
+      "oneFingerAction": "Seleccionar o dibujar; con la herramienta Desplazar, desplazar el mapa",
+      "twoFingers": "Dos dedos",
+      "touchNavigate": "Desplazar, hacer zoom y girar la vista",
+      "longPress": "Mantener pulsado"
     }
   },
   "settings": {

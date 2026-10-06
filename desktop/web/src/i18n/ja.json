@@ -1801,7 +1801,13 @@
       "zoom": "ズーム",
       "altClick": "Alt + クリック",
       "removeFromSelection": "選択から外す",
-      "linuxPinch": "Linux ではトラックパッドのピンチにまだ対応していません。Ctrl + スクロールでズームしてください。"
+      "linuxPinch": "Linux ではトラックパッドのピンチにまだ対応していません。Ctrl + スクロールでズームしてください。",
+      "touchHeading": "タッチ",
+      "oneFinger": "指 1 本",
+      "oneFingerAction": "選択または描画。パンツールでは地図を移動",
+      "twoFingers": "指 2 本",
+      "touchNavigate": "移動、ズーム、ビューの回転",
+      "longPress": "長押し"
     }
   },
   "settings": {

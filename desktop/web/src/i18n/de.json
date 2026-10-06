@@ -1801,7 +1801,13 @@
       "zoom": "Zoomen",
       "altClick": "Alt + Klick",
       "removeFromSelection": "Aus der Auswahl entfernen",
-      "linuxPinch": "Unter Linux wird Zusammenziehen auf dem Trackpad noch nicht unterstützt. Zoomen Sie mit Strg + Scrollen."
+      "linuxPinch": "Unter Linux wird Zusammenziehen auf dem Trackpad noch nicht unterstützt. Zoomen Sie mit Strg + Scrollen.",
+      "touchHeading": "Touch",
+      "oneFinger": "Ein Finger",
+      "oneFingerAction": "Auswählen oder zeichnen; mit dem Werkzeug Verschieben die Karte verschieben",
+      "twoFingers": "Zwei Finger",
+      "touchNavigate": "Verschieben, zoomen und die Ansicht drehen",
+      "longPress": "Gedrückt halten"
     }
   },
   "settings": {

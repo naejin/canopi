@@ -1801,7 +1801,13 @@
       "zoom": "Zoomer",
       "altClick": "Alt + clic",
       "removeFromSelection": "Retirer de la sélection",
-      "linuxPinch": "Sous Linux, le pincement sur le pavé tactile n’est pas encore pris en charge. Utilisez Ctrl + défilement pour zoomer."
+      "linuxPinch": "Sous Linux, le pincement sur le pavé tactile n’est pas encore pris en charge. Utilisez Ctrl + défilement pour zoomer.",
+      "touchHeading": "Tactile",
+      "oneFinger": "Un doigt",
+      "oneFingerAction": "Sélectionner ou dessiner ; avec l’outil Déplacer la vue, déplacer la carte",
+      "twoFingers": "Deux doigts",
+      "touchNavigate": "Déplacer, zoomer et tourner la vue",
+      "longPress": "Appui long"
     }
   },
   "settings": {
