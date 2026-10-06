@@ -148,7 +148,9 @@ export function ContextMenu({ label, heading, entries, anchor, onClose }: {
       const element = target instanceof Element ? target : target instanceof Node ? target.parentElement : null
       return !!element?.closest(`[data-action-menu="${menuId}"]`)
     }
-    // The secondary button's own release follows the press that opened the menu.
+    // A secondary release never closes the menu: the canvas's own still right-click release opens it, or replaces it
+    // (a right press on the map has already closed the one before, ToolHost.rawPress), so a double right-click
+    // replaces the menu (spec §3.1).
     const outside = (event: PointerEvent) => { if (event.button !== 2 && !inside(event.target)) close.current(false) }
     const leave = (event: FocusEvent) => { if (!inside(event.target)) close.current(false) }
     const dismiss = (event: Event) => { if (!inside(event.target)) close.current(false) }
