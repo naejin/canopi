@@ -30,6 +30,8 @@ export interface TextEntryHost {
   open(request: TextEntryRequest, submit: (text: string) => 'close' | 'keep', onCancel?: () => void): void
   /** Discards the open entry without submitting it (no onCancel: the caller closed it). */
   close(): void
+  /** Discards the open entry and tells its opener (onCancel), as its own Esc does. */
+  cancel(): void
   /** Submits an open entry that does not hold focus (its blur commit was refused); one that holds focus is left to its blur. */
   submitUnfocused(): void
   isOpen(): boolean
@@ -100,9 +102,7 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
       if (event.key === 'Escape') {
         event.preventDefault()
         event.stopPropagation()
-        if (active !== entry) return
-        closeActive()
-        entry.onCancel?.()
+        if (active === entry) cancelActive()
       } else if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault()
         event.stopPropagation()
@@ -122,6 +122,13 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
     if (entry.submit(entry.textarea.value) === 'close' && active === entry) closeActive()
   }
 
+  function cancelActive(): void {
+    const entry = active
+    if (!entry) return
+    closeActive()
+    entry.onCancel?.()
+  }
+
   function closeActive(): void {
     const entry = active
     if (!entry) return
@@ -135,6 +142,7 @@ export function createTextEntryHost(options: TextEntryHostOptions): TextEntryHos
   return {
     open,
     close: closeActive,
+    cancel: cancelActive,
     submitUnfocused() {
       if (active && active.textarea !== document.activeElement) submitActive()
     },
@@ -206,13 +214,29 @@ function autosize({ textarea }: OpenEntry): void {
   textarea.style.height = `${Math.max(textarea.scrollHeight + topAndBottomBorders, MIN_HEIGHT_PX)}px`
 }
 
-/** The scroll width of the text, or of the placeholder held as the text for the measure while the field is empty. */
+/** The scroll width of the text or, while the field is empty, its placeholder's width with the field's padding, measured
+ *  in a hidden mirror of the field's font: writing the placeholder into the value would reset the field's undo history. */
 function contentWidth(textarea: HTMLTextAreaElement): number {
   if (textarea.value !== '' || textarea.placeholder === '') return textarea.scrollWidth
-  textarea.value = textarea.placeholder
-  const width = textarea.scrollWidth
-  textarea.value = ''
-  return width
+  const field = getComputedStyle(textarea)
+  const mirror = textarea.ownerDocument.createElement('span')
+  mirror.textContent = textarea.placeholder
+  Object.assign(mirror.style, {
+    position: 'absolute',
+    visibility: 'hidden',
+    whiteSpace: 'pre',
+    fontFamily: field.fontFamily,
+    fontSize: field.fontSize,
+    fontStyle: field.fontStyle,
+    fontWeight: field.fontWeight,
+    letterSpacing: field.letterSpacing,
+    paddingLeft: field.paddingLeft,
+    paddingRight: field.paddingRight,
+  })
+  textarea.ownerDocument.body.append(mirror)
+  const width = mirror.offsetWidth
+  mirror.remove()
+  return Math.max(width, textarea.clientWidth)
 }
 
 function noteFontSize(request: TextEntryRequest): number {

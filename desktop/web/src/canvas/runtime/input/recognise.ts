@@ -9,9 +9,10 @@
 // a secondary press (the right button, a Mac Control-click, a pen's barrel) pending until it passes 3 px: a still release
 // opens the menu at the release point (none in overview), a drag pans, and with Shift at the press it turns the view,
 // stepped while mod is held; no native contextmenu reaches it (the DOM source's listener prevents them); a middle drag, a
-// press with Space held (on a handle too) and the Pan tool's primary drag pan, a pointer pan carrying the pointer's point
-// and a Pan-tool press ending with cancel('navigate') after its drag; a primary press in overview reaching the host; a Shift+middle drag rotating about its press once it passes 3 px (silent
-// before, so a still click turns nothing), stepped while mod is held, with the wheel ignored while a pointer rotate lives;
+// press with Space held (on a handle too), a primary press in overview and the Pan tool's primary drag pan, a pointer pan
+// carrying the pointer's point and a Pan-tool press ending with cancel('navigate') after its drag; a Shift+middle drag
+// rotating about its press once it passes 3 px (silent before, so a still click turns nothing), stepped while mod is
+// held, with the wheel ignored while a pointer rotate lives;
 // a button-less move over owned chrome, the text entry or a handle ends the hover; wheels zoom or pan by the
 // pointing-device setting; a WebKit trackpad twist rotating past 10° as a session of its own; no touch gestures or pen
 // barrel. Touch gestures and the long press arrive in phase 3.
@@ -164,12 +165,15 @@ function down(step: Step, input: RawOf<'down'>): void {
     return
   }
 
-  // A primary press reaches the host in overview too (its band selects zones and notes, spec §1.4 "Overview").
   let navigation: NavigationSource | null = null
   let pressed = true
   if (input.role === 'auxiliary') {
     // A plain middle drag pans; a middle tap does nothing.
     navigation = 'auxiliary-drag'
+    pressed = false
+  } else if (context.mode === 'overview') {
+    // Overview draws no zones or notes, so a left press pans in every tool, for every pointer, and never reaches the host (U36).
+    navigation = 'primary-drag'
     pressed = false
   } else if (held.space) {
     // Space at the press pans, a press on a handle included (fixture G3b).
@@ -178,7 +182,7 @@ function down(step: Step, input: RawOf<'down'>): void {
   } else if (pressTarget.kind === 'handle') {
     // A handle drags before the Pan tool pans (today's order).
   } else if (context.tool === 'hand') {
-    // The Pan tool, in overview too: the drag pans, and the press and tap still reach the host.
+    // The Pan tool: the drag pans, and the press and tap still reach the host.
     navigation = 'primary-drag'
   }
 
@@ -506,6 +510,7 @@ function endSession(step: Step, session: PointerSession, reason: CancelReason): 
  *  restored; no menu opens; then cancel('pointercancel') ends any press of the host's (the Pan tool's). */
 function endWithLostRelease(step: Step, session: PointerSession): void {
   dropSession(step, session)
+  step.effects.push({ kind: 'disown', pointerId: session.pointerId })
   if (session.mode === 'pan' && session.navigation) step.gestures.push(panEndOf(session))
   if (session.mode === 'rotate' && session.slopPassed) step.gestures.push(rotateOf(session, 'end', session.last, false))
   step.gestures.push({ kind: 'cancel', reason: 'pointercancel' })

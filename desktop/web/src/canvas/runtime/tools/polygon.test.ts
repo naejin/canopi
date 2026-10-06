@@ -111,6 +111,22 @@ describe('Polygon tool', () => {
     expect(cornerMarkers(h)).toEqual([])
   })
 
+  it('a double-click whose first press closes the shape on the first corner: the second press starts nothing and keeps the zone selected', () => {
+    const h = harness()
+    h.click({ x: 10, y: 10 })
+    h.click({ x: 60, y: 10 })
+    h.click({ x: 60, y: 50 })
+
+    h.click({ x: 10, y: 10 })
+    h.click({ x: 10, y: 10 }, { clickCount: 2 })
+
+    expect(h.store.persisted.zones).toHaveLength(1)
+    const zoneId = h.store.persisted.zones[0]!.id
+    expect(h.store.session.selectedTargets).toEqual([{ kind: 'zone', id: zoneId }])
+    expect(cornerMarkers(h)).toEqual([])
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
+  })
+
   it('Finish shape is the first menu entry', () => {
     const h = harness()
     h.click({ x: 10, y: 10 })

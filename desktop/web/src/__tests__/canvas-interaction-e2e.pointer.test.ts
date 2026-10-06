@@ -1,5 +1,5 @@
 // The canvas interaction end to end through the session (canvas v2 plan §4): the native context menu and the overview's
-// primary drag, the pointer cases phase 2's right button and overview binding change.
+// primary drag, the pointer cases phase 2's right button changes.
 // Shared fakes, helpers and fixture: support/canvas-interaction-setup.ts.
 import { signal } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
@@ -13,7 +13,6 @@ import {
   captureWindowErrors,
   makePlant,
   makeRectZone,
-  makeTextAnnotation,
   rotationHandle,
   installSceneInteractionFixture,
   enterOverview,
@@ -321,7 +320,35 @@ describe('SceneInteractionSession', () => {
     expect(downstreamDrop).toHaveBeenCalled()
   })
 
-  it('G7: in overview a left drag no longer pans; it reaches the host, and a drawing tool draws nothing', () => {
+  it('a right press or middle pan whose release was lost leaves native menus off the map to the page (B4, A35)', () => {
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    const panel = document.createElement('div')
+    document.body.append(panel)
+    const pageMenu = () => {
+      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+      panel.dispatchEvent(event)
+      return event.defaultPrevented
+    }
+
+    // A still right press, then a move with no button: its up was lost.
+    events.pointerDown({ x: 100, y: 100 }, { button: 2, buttons: 2 })
+    expect(pageMenu()).toBe(true)
+    events.pointerMove({ x: 101, y: 100 }, { buttons: 0 })
+    expect(pageMenu()).toBe(false)
+
+    // A middle pan, then a move with no button.
+    events.pointerDown({ x: 100, y: 100 }, { button: 1, buttons: 4 })
+    events.pointerMove({ x: 140, y: 100 }, { buttons: 4 })
+    events.pointerMove({ x: 150, y: 100 }, { buttons: 0 })
+    expect(pageMenu()).toBe(false)
+    panel.remove()
+    session.dispose()
+  })
+
+  it('G7: in overview a left drag pans whatever the armed tool, selects nothing and draws nothing (U36)', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('bed', [{ x: 100, y: 100 }, { x: 500, y: 500 }])]
+    })
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
     const session = createTestSession(deps)
@@ -330,61 +357,26 @@ describe('SceneInteractionSession', () => {
     const scene = structuredClone(store.persisted)
     const before = testView.viewport()
 
+    // A click on the bed (at 0.05 px/m it spans (5, 5)–(25, 25) on screen) selects nothing; a drag pans.
+    events.pointerDown({ x: 15, y: 15 }, { button: 0 })
+    events.pointerUp({ x: 15, y: 15 }, { button: 0 })
+    expect(store.session.selectedTargets).toEqual([])
     events.pointerDown({ x: 100, y: 100 }, { button: 0 })
     events.pointerMove({ x: 140, y: 125 }, { buttons: 1 })
     events.pointerUp({ x: 140, y: 125 }, { button: 0 })
 
-    expect(testView.viewport()).toEqual(before)
+    const after = testView.viewport()
+    expect(after.x).toBeCloseTo(before.x + 40, 6)
+    expect(after.y).toBeCloseTo(before.y + 25, 6)
+    expect(after.scale).toBeCloseTo(before.scale, 9)
+    expect(store.session.selectedTargets).toEqual([])
     expect(store.persisted).toEqual(scene)
     expect(onSceneEditCommit).not.toHaveBeenCalled()
 
-    // The middle button and Space still pan there; a still right-click opens no menu.
-    events.pointerDown({ x: 100, y: 100 }, { button: 1 })
-    events.pointerMove({ x: 140, y: 125 }, { button: 1 })
-    events.pointerUp({ x: 140, y: 125 }, { button: 1 })
-    expect(testView.viewport().x).toBeCloseTo(before.x + 40, 6)
-    expect(testView.viewport().y).toBeCloseTo(before.y + 25, 6)
+    // A still right-click opens no menu there.
     const menu = openContextMenu({ x: 100, y: 100 })
     expect(menu.defaultPrevented).toBe(true)
     expect(contextMenuHost.opened).toHaveLength(0)
     session.dispose()
   })
-
-  it.each(['select', 'rectangle'] as const)(
-    'in overview a primary drag with %s armed band-selects the zones and the note, never a plant, and moves nothing',
-    (tool) => {
-      // At 0.05 px/m the bed spans (5, 5)–(25, 25) on screen, the pond (50, 5)–(70, 25) and the note sits at (150, 150).
-      store.updatePersisted((draft) => {
-        draft.zones = [
-          makeRectZone('bed', [{ x: 100, y: 100 }, { x: 500, y: 500 }]),
-          makeRectZone('pond', [{ x: 1000, y: 100 }, { x: 1400, y: 500 }]),
-        ]
-        draft.plants = [makePlant('apple', 'Malus domestica', { x: 300, y: 300 })]
-        draft.annotations = [makeTextAnnotation('note', { x: 3000, y: 3000 }, 'Gate')]
-      })
-      const onSceneEditCommit = vi.fn()
-      const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
-      const session = createTestSession(deps)
-      session.setTool(tool)
-      enterOverview(testView)
-      const scene = structuredClone(store.persisted)
-      const before = testView.viewport()
-
-      // From empty ground well clear of every outline, across all three objects.
-      events.pointerDown({ x: 190, y: 2 }, { button: 0 })
-      events.pointerMove({ x: 100, y: 100 }, { buttons: 1 })
-      events.pointerMove({ x: 0, y: 200 }, { buttons: 1 })
-      events.pointerUp({ x: 0, y: 200 }, { button: 0 })
-
-      expect(store.session.selectedTargets).toEqual([
-        { kind: 'zone', id: 'bed' },
-        { kind: 'zone', id: 'pond' },
-        { kind: 'annotation', id: 'note' },
-      ])
-      expect(store.persisted).toEqual(scene)
-      expect(testView.viewport()).toEqual(before)
-      expect(onSceneEditCommit).not.toHaveBeenCalled()
-      session.dispose()
-    },
-  )
 })

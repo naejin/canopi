@@ -69,6 +69,7 @@ function fixture(options: { readonly tool?: ToolId; readonly reply?: (c: ToolCom
   const session = {
     pointerSessionLive: () => state.live,
     overview: vi.fn(() => false),
+    handleFocused: () => false,
     spaceHeld: () => state.space,
     keyState: vi.fn((next: { readonly space: boolean }) => {
       state.space = next.space
@@ -299,19 +300,19 @@ describe('createCanvasKeyboardPort', () => {
     expect(f.port.holdsSelectionDeletes()).toBe(true)
   })
 
-  it('in overview a live or interrupted gesture, then the selection, are the Esc layers, and Space still holds', () => {
+  it('in overview only a live or interrupted gesture is an Esc layer, and Space still holds', () => {
     const f = fixture({ tool: 'polygon' })
     f.transient = true
     f.session.overview = vi.fn(() => true)
-    // Nothing to cancel: no canvas layer, so the Esc falls through to the raster inspection's.
+    // Nothing to cancel: no canvas layer, so the Esc falls through to the raster inspection's; a selection is kept (U36).
     expect(f.port.escapeLayers()).toEqual([])
     f.selected = true
-    expect(f.port.escapeLayers()).toEqual(['selection'])
+    expect(f.port.escapeLayers()).toEqual([])
     f.nudging = true
-    expect(f.port.escapeLayers()).toEqual(['gesture', 'selection'])
+    expect(f.port.escapeLayers()).toEqual(['gesture'])
     f.nudging = false
     f.live = true
-    expect(f.port.escapeLayers()).toEqual(['gesture', 'selection'])
+    expect(f.port.escapeLayers()).toEqual(['gesture'])
     f.port.escape('gesture')
     expect(f.session.escapeGesture).toHaveBeenCalledTimes(1)
     expect(f.toolHost.interrupted).toHaveBeenCalledTimes(1)

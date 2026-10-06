@@ -104,7 +104,8 @@ describe('recognise: 5.1 secondary button', () => {
   it('A5 Right press, pointerup lost: the move without its button ends the session, with no pan and no menu; the next press is fresh', () => {
     const result = run(SEQUENCES.A5)
     expect(result.steps[1]!.gestures).toEqual([{ kind: 'cancel', reason: 'pointercancel' }])
-    expect(result.steps[1]!.effects).toEqual([{ kind: 'release-capture', pointerId: 1 }])
+    // The source stops following the pointer, so its native menus are the page's again (B4).
+    expect(result.steps[1]!.effects).toEqual([{ kind: 'release-capture', pointerId: 1 }, { kind: 'disown', pointerId: 1 }])
     expect(kinds(result.steps[2]!.gestures)).toEqual(['press'])
     expect(kinds(result.steps[3]!.gestures)).toEqual(['tap'])
   })
@@ -623,12 +624,12 @@ describe('recognise: 5.7 middle button and Space', () => {
   it.each([
     ['mouse', SEQUENCES.G7],
     ['touch', SEQUENCES.G7_TOUCH],
-  ])('G7 Overview left drag (%s): a press and a drag reach the host (the band), never a pan', (_pointer, sequence) => {
+  ])('G7 Overview left drag (%s): a primary-drag pan; no press or tap reaches the host (U36)', (_pointer, sequence) => {
     const result = run(sequence)
-    expectNoNavigation(result.gestures)
-    expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'drag-move', 'drag-move', 'drag-end'])
+    expect(kinds(result.gestures)).toEqual(['pan:start', 'pan:move', 'pan:move', 'pan:move', 'pan:end'])
+    expect(pansOf(result.gestures)[0]!.source).toBe('primary-drag')
     const clicked = run(seq('overview click', WINDOWS, [down(100, 100), up(100, 100)], { mode: 'overview' }))
-    expect(kinds(clicked.gestures)).toEqual(['press', 'tap'])
+    expect(clicked.gestures.some((gesture) => gesture.kind === 'press' || gesture.kind === 'tap')).toBe(false)
   })
 
   it.each([
@@ -939,9 +940,8 @@ describe('recognise: cancel fences', () => {
     const leaving = run(seq('leave overview', WINDOWS, [
       down(100, 100),
       configure({ tool: 'select', mode: 'site', pointingDevice: 'mouse' }),
-      up(100, 100),
     ], { mode: 'overview' }))
-    expect(kinds(leaving.gestures)).toEqual(['press', 'tap'])
+    expect(kinds(leaving.gestures)).toEqual(['pan:start'])
   })
 
   it('a lost capture ends the session that holds capture', () => {

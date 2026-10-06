@@ -35,8 +35,6 @@ const PLANT_ROW_DENSE_WARNING_THRESHOLD = 100
 const PLANT_ROW_PREVIEW_POSITION_LIMIT = 250
 const PLANT_ROW_COMMIT_POSITION_LIMIT = 5_000
 const PLANT_ROW_GHOST_OPACITY = 0.35
-/** Two points closer than this on screen are the same pointer position (today's 0.001 px). */
-const SAME_POINTER_SCREEN_PX = 0.001
 const SOURCE_RING_STROKE: DraftStroke = Object.freeze({ token: 'selection', widthPx: 2 })
 /** Today's 2 px CSS dashed border, drawn as dashes and gaps of 3 × its width (convention). */
 const ROW_GUIDE_STROKE: DraftStroke = Object.freeze({ token: 'selection', widthPx: 2, dash: Object.freeze([6, 6]) })
@@ -50,19 +48,12 @@ interface PlantRowSource {
   readonly glyph: NonNullable<CanvasPlantRowGuidance['glyph']>
 }
 
-/** The last preview's pointer: a Shift release on the same spot commits the Shift-constrained row it showed. */
-interface PreviewPointer {
-  world: WorldPoint
-  readonly constrained: boolean
-}
-
 export function createPlantRowTool(): CanvasTool {
   let ctx: ToolContext | null = null
   let source: PlantRowSource | null = null
   let intervalText = ''
   let intervalValid = true
   let endpoint: WorldPoint | null = null
-  let previewPointer: PreviewPointer | null = null
   let generatedPositions: WorldPoint[] = []
   let generatedCount = 0
   let missed = false
@@ -146,7 +137,6 @@ export function createPlantRowTool(): CanvasTool {
   function clear(): void {
     source = null
     endpoint = null
-    previewPointer = null
     generatedPositions = []
     generatedCount = 0
     showSourcePicking()
@@ -219,7 +209,6 @@ export function createPlantRowTool(): CanvasTool {
 
   /** The row follows the pointer: its snapped point, which the host constrained under Shift. */
   function previewAt(point: ToolPoint): void {
-    previewPointer = { world: point.world, constrained: point.modifiers.constrain }
     updatePreview(point.snapped)
   }
 
@@ -261,23 +250,6 @@ export function createPlantRowTool(): CanvasTool {
         publish()
       },
     })
-  }
-
-  /**
-   * A drag's release: a Shift release on the spot of a Shift preview commits the row the preview showed (today's), else
-   * the release point's row.
-   */
-  function dragCommitEndpoint(point: ToolPoint): WorldPoint {
-    const last = previewPointer
-    if (
-      endpoint
-      && last?.constrained
-      && !point.modifiers.constrain
-      && context().view.screenDistance(last.world, point.world) < SAME_POINTER_SCREEN_PX
-    ) {
-      return endpoint
-    }
-    return point.snapped
   }
 
   // ── The tool card's spacing field ───────────────────────────────────────────────────────────────────────────────
@@ -342,7 +314,7 @@ export function createPlantRowTool(): CanvasTool {
           break
         case 'drag-end':
           if (!source) return 'pass'
-          commitPreview(dragCommitEndpoint(g.point))
+          commitPreview(g.point.snapped)
           break
         case 'tap':
           // The tap itself stays the host's, as before; only the field's focus request is published.

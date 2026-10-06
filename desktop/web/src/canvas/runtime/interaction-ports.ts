@@ -100,6 +100,9 @@ export interface ToolHostDeps {
   readonly chrome: {
     setHandles(h: readonly ToolHandle[], active: ToolHandleId | null): void; setCursor(c: string): void
     requestTextEntry(r: TextEntryRequest, submit: (text: string) => 'close' | 'keep', onCancel?: () => void): void; closeTextEntry(): void
+    /** Discards the open entry and tells its opener (onCancel), as the entry's own Esc does: entering overview with a
+     *  commit refused, so the tool resets. */
+    cancelTextEntry(): void
     /** Submits an open entry that no longer holds focus (its blur commit was refused), which the map taking focus cannot
      *  blur again; an entry that holds focus is left to that blur. A press or a menu calls it before focusing the map. */
     submitUnfocusedTextEntry(): void

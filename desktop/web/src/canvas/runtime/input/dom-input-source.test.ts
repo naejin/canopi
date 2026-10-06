@@ -497,6 +497,17 @@ describe('createDomInputSource', () => {
       dispose()
     })
 
+    it('a canvas pointer whose release reports the right or pen-barrel button starts the trail too (a chorded right button released last, U36)', () => {
+      const dispose = attachRecording(createDomInputSource(deps()))
+      // A left press on the map, the right button chorded and released last: the pointerup reports button 2.
+      pointer('pointerdown', host, 100, { button: 0, buttons: 1 })
+      pointer('pointerup', document.body, 200, { button: 2 })
+      expect(contextMenu(document.documentElement, 260).defaultPrevented).toBe(true)
+      expect(contextMenu(document.body, 699).defaultPrevented).toBe(true)
+      expect(contextMenu(document.body, 700).defaultPrevented).toBe(false)
+      dispose()
+    })
+
     it('B7: a Mac Control press on the map is secondary: its menu at the press is prevented, and its trail after the release', () => {
       const dispose = attachRecording(createDomInputSource(deps({ platform: { os: 'mac', gestureEvents: true } })))
       pointer('pointerdown', host, 100, { button: 0, buttons: 1, ctrlKey: true })

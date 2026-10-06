@@ -274,7 +274,7 @@ describe('Keyboard shortcuts dialog', () => {
       ['Turn the view; add Ctrl for 15° steps', 'Shift + right-drag or Shift + middle-drag'],
       ['Click to reset north, drag to turn the view', 'Compass'],
       ['Open the menu', 'Right-click'],
-      ['Zoom', 'Scroll wheel · Pinch or Ctrl + wheel'],
+      ['Zoom', 'Pinch or Ctrl + wheel'],
       ['Remove from the selection', 'Alt + click'],
       // The pen note: its side button drags to pan and taps for the menu.
       ['Pan the map · Open the menu', 'Pen side button: drag or tap'],

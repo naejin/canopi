@@ -50,6 +50,8 @@ const NO_RECT = Object.freeze({ left: 0, top: 0, width: 0, height: 0 })
 /** A secondary release's native menu may trail it this long (WebView2 sends it after the release, retargeted to <html> or
  *  to the menu just opened; Safari and Firefox after a Mac Control-click), measured on the events' own timeStamp. */
 const NATIVE_MENU_TRAIL_MS = 500
+/** PointerEvent.button for the right button and a pen's barrel. */
+const BUTTON_SECONDARY = 2
 
 type HostRect = Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>
 
@@ -94,7 +96,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   const owned = new Set<number>()
   /** The owned pointers whose press was a canvas press (not the note editor's, a field's or a menu's), each with whether
    *  it normalised as secondary: their native menus are prevented anywhere until NATIVE_MENU_TRAIL_MS after a secondary
-   *  release. */
+   *  release (a secondary press's, or one that reports the right or barrel button, U36). */
   const canvasPresses = new Map<number, boolean>()
   /** When the last canvas secondary press was released (its event's timeStamp). */
   let secondaryReleasedAt: number | null = null
@@ -107,13 +109,17 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     if (!removeWindowListeners && listenOnWindow) removeWindowListeners = listenOnWindow()
   }
 
-  function disown(pointerId: number | 'all', timeStamp: number | null = null): void {
+  /** `release` is the up or cancel that ends the pointer; a canvas press's secondary release starts the native-menu trail. */
+  function disown(pointerId: number | 'all', release: PointerEvent | null = null): void {
     if (pointerId === 'all') {
       owned.clear()
       canvasPresses.clear()
     } else {
       owned.delete(pointerId)
-      if (canvasPresses.get(pointerId) && timeStamp !== null) secondaryReleasedAt = timeStamp
+      const secondaryPress = canvasPresses.get(pointerId)
+      if (release && secondaryPress !== undefined && (secondaryPress || release.button === BUTTON_SECONDARY)) {
+        secondaryReleasedAt = release.timeStamp
+      }
       canvasPresses.delete(pointerId)
     }
     if (owned.size > 0 || !removeWindowListeners) return
@@ -173,7 +179,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     try {
       deliver(event, rect, pointerInput(event, 'pointerup', rect))
     } finally {
-      disown(event.pointerId, event.timeStamp)
+      disown(event.pointerId, event)
     }
   }
   const onPointerCancel = (event: PointerEvent): void => {
@@ -181,7 +187,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     try {
       deliver(event, null, pointerInput(event, 'pointercancel', NO_RECT))
     } finally {
-      disown(event.pointerId, event.timeStamp)
+      disown(event.pointerId, event)
     }
   }
   const onLostPointerCapture = (event: PointerEvent): void => {
@@ -232,7 +238,8 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
    * The one contextmenu listener (document capture): it opens nothing and reaches no sink. It prevents the native menu
    * (1) over the map, except over the note editor and the map's fields, menus and dialogs; (2) anywhere while a canvas
    * press is held (Linux and macOS send it at the press, a right press during a left drag included); (3) anywhere within
-   * NATIVE_MENU_TRAIL_MS of a canvas secondary release (Windows sends it after the release). "Anywhere" is the event's own
+   * NATIVE_MENU_TRAIL_MS of a canvas secondary release, or of a canvas release that reports the right or barrel button
+   * (Windows sends it after the release, a chorded right button released last included). "Anywhere" is the event's own
    * target, so the trail WebView2 retargets to <html> or to the menu just opened is prevented too.
    */
   const onContextMenu = (event: MouseEvent): void => {
@@ -393,6 +400,10 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
             break
           case 'release-capture':
             if (effect.pointerId !== undefined) release(effect.pointerId)
+            break
+          case 'disown':
+            // Its release was lost: no up will end it, so its native menus are the page's again (B4).
+            if (effect.pointerId !== undefined) disown(effect.pointerId)
             break
           case 'drop-effect': {
             const transfer = event && 'dataTransfer' in event ? (event as DragEvent).dataTransfer : null

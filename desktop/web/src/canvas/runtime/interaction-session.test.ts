@@ -1162,6 +1162,46 @@ describe('releases the tool did not hear (today\'s pointerup cleanup)', () => {
     expect(navigates()).toBe(1)
   })
 
+  it('a fault whose re-arm falls back to Select names Select as the session\'s tool (B6)', () => {
+    let activations = 0
+    const select = stubTool('select')
+    const rectangle = stubTool('rectangle', {
+      activate: () => {
+        activations += 1
+        if (activations > 1) throw new Error('re-arm failed')
+      },
+      gesture: (gesture) => {
+        if (gesture.kind === 'press') throw new Error('press failed')
+        return 'pass'
+      },
+    })
+    useStubTools(select, rectangle)
+    const { session } = createSession()
+    session.setTool('rectangle')
+
+    expect(captureWindowErrors(() => { events.pointerDown({ x: 20, y: 20 }) })).toHaveLength(1)
+    expect(select.calls).toContain('activate')
+    expect(session.tool).toBe('select')
+  })
+
+  it('an activation that throws while preparing a document replacement names Select as the session\'s tool (B6)', () => {
+    let activations = 0
+    const select = stubTool('select')
+    const rectangle = stubTool('rectangle', {
+      activate: () => {
+        activations += 1
+        if (activations > 1) throw new Error('activation failed')
+      },
+    })
+    useStubTools(select, rectangle)
+    const { session } = createSession()
+    session.setTool('rectangle')
+
+    expect(() => session.prepareForDocumentReplacement()).toThrow()
+    expect(select.calls).toContain('activate')
+    expect(session.tool).toBe('select')
+  })
+
   it('a tool whose overview cleanup throws still leaves the session in overview: the release is swallowed', () => {
     const rectangle = stubTool('rectangle', {
       cancelTransient: (reason) => {

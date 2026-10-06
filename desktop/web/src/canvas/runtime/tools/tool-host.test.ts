@@ -174,7 +174,7 @@ describe('ToolHost', () => {
       }
     })
 
-    it('Ctrl or Cmd is Plant a row\'s no-snap, and Shift constrains only the drawing tools and handle drags', () => {
+    it('Ctrl or Cmd is Plant a row\'s no-snap, and Shift constrains only the drawing tools and the rotate handle', () => {
       const row = stubTool('plant-spacing')
       const select = stubTool('select')
       useStubTools(row, select)
@@ -188,6 +188,25 @@ describe('ToolHost', () => {
       h.arm('select')
       h.hover(at, { shift: true, ctrl: true, alt: true })
       expect(select.last('hover')!.point.modifiers).toEqual({ additive: true, subtractive: true, constrain: false, noSnap: false })
+    })
+
+    it('Shift steps only the rotate handle: a point handle ignores it and snaps as usual (U36)', () => {
+      const select = stubTool('select')
+      useStubTools(select)
+      const h = harness({ viewport: { x: 0, y: 0, scale: 10 }, snapping: { grid: true } })
+      const at = { x: 473, y: 191 }
+      const interval = gridInterval(10).interval
+
+      h.press(at, { mods: { shift: true }, target: { kind: 'handle', id: 'zone-corner:z1:0' as ToolHandleId } })
+      h.move({ x: 481, y: 203 }, { shift: true })
+      const corner = select.last('handle-drag')!.point
+      expect(corner.modifiers.constrain).toBe(false)
+      expect(corner.snapped).toEqual(snapToGrid(48.1, 20.3, interval))
+      h.release()
+
+      h.press(at, { mods: { shift: true }, target: { kind: 'handle', id: 'rotate' as ToolHandleId } })
+      expect(select.last('handle-drag')!.point.modifiers.constrain).toBe(true)
+      h.release()
     })
 
     it('snapping follows the settings at each point', () => {
@@ -449,7 +468,7 @@ describe('ToolHost', () => {
       expect(polygon.count('press')).toBe(0)
       expect(h.host.hasLiveGesture()).toBe(false)
 
-      // Overview: the press selects through the host's overview selector; nothing samples it and no tool hears it.
+      // Overview: the press pans in the recogniser (U36); if one reached the host, nothing would sample or edit.
       const overview = harness({ tool: 'polygon', viewport: OVERVIEW, inspect })
       inspect.mockClear()
       overview.press({ x: 120, y: 80 })

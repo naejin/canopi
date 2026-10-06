@@ -1,6 +1,6 @@
 # Narrow tool interface
 
-Status: Accepted (2026-09-29, Canopi v2); amended 2026-09-30, 2026-10-03 (stamp picks), 2026-10-05 (U33: no ruler presses) and 2026-10-06 (phase 2's design check: run-once operations, one fault rule, the re-origin hold)
+Status: Accepted (2026-09-29, Canopi v2); amended 2026-09-30, 2026-10-03 (stamp picks), 2026-10-05 (U33: no ruler presses) and 2026-10-06 (phase 2's design check: run-once operations, one fault rule, the re-origin hold; U36: no overview band)
 
 Builds on [ADR 0016](0016-one-view-transform.md) and [ADR 0017](0017-input-pipeline-and-gestures.md). Product rules: [ADR 0015](0015-rotating-map-and-canvas-controls.md).
 
@@ -28,7 +28,7 @@ Tools implemented a wide `SceneToolAdapter`: raw pointer events, DOM predicates,
 - **Tools applying their own angle constraint** through a view query: the host's snapped point would then be wrong under Shift, and each tool would repeat the order of constraint and snapping.
 - **Global window events for arming** (GeoLibre): one arming function instead ([ADR 0020](0020-focus-and-keyboard-ownership.md)).
 - **Saved-stamp picks north-relative on a rotated map**: the ghost would appear turned against the screen, unlike rectangles and notes. (Narrowed 2026-10-03: an Object stamp pick starts at 0 and keeps its source's orientation, ADR 0015.)
-- **Overview left-drag inert**: reads as broken; it band-selects.
+- **Overview band select**: the overview draws no zones or notes, so a band there selects what the user cannot see; its left drag pans (user, 2026-10-06).
 - **Delete the Pan tool**: overruled by the user.
 
 ## Consequences

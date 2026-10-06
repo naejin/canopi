@@ -71,11 +71,12 @@ function CanvasChromeContent({ projection, canvasRef, stampChooser, children }: 
 /**
  * The one top-centre chip slot (canopi-23p2): the overview notice, the highlight chip and the labels chip stack in it as
  * flow children instead of covering each other, and it registers as chrome over the map's top edge, so fitting and
- * framing keep below it. SiteOnboarding places it: in the Start card's row while that card shows.
+ * framing keep below it; on a phone it does not, as the map notice (U36). SiteOnboarding places it: in the Start card's
+ * row while that card shows.
  */
 function TopChipSlot({ locating }: { readonly locating: boolean }) {
   const slot = useRef<HTMLDivElement>(null)
-  useMapOccluder(slot, 'top')
+  useMapOccluder(slot, 'top', phoneLayout.value === null)
   return (
     <div ref={slot} className={chipStyles.topSlot} data-top-chip-slot>
       {!locating && <OverviewNotice />}

@@ -64,11 +64,13 @@ export function createPolygonTool(): CanvasTool {
       drop()
       return
     }
-    // A press on the first corner, or the second press of a double-click, finishes a shape of 3 or more.
+    // A press on the first corner, or the second press of a double-click, finishes a shape of 3 or more; the second press
+    // of a double-click whose first finished the shape starts nothing.
     if (closesAt(point.free) || (clickCount >= 2 && corners.length >= 3)) {
       finish()
       return
     }
+    if (clickCount >= 2 && corners.length === 0) return
     const corner = point.snapped
     const last = corners[corners.length - 1]
     if (last && isSamePoint(last, corner)) {

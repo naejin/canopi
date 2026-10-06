@@ -72,6 +72,7 @@ function canvasPort(): CanvasKeyboardPort {
     session: {
       pointerSessionLive: () => canvas.live,
       overview: () => canvas.overview ?? false,
+      handleFocused: () => false,
       spaceHeld: () => false,
       keyState: () => {},
       escapeGesture: () => { canvas.live = false },
@@ -276,20 +277,6 @@ describe('the Esc chain', () => {
     expect(escape(outside('button')).defaultPrevented).toBe(true)
     expect(inspection.endInspection).toHaveBeenCalledTimes(2)
     expect(ran).toEqual([])
-    expect(canvas.tool).toBe('polygon')
-  })
-
-  it('Esc in overview clears the selection, after a live gesture and never leaving the tool (A20)', () => {
-    install()
-    canvas = { tool: 'polygon', transient: true, live: true, selected: true, overview: true }
-    host.focus()
-
-    expect(escape(host).defaultPrevented).toBe(true)
-    expect(ran).toEqual(['gesture'])
-    expect(canvas.selected).toBe(true)
-    expect(escape(host).defaultPrevented).toBe(true)
-    expect(ran).toEqual(['gesture', 'selection'])
-    expect(canvas.selected).toBe(false)
     expect(canvas.tool).toBe('polygon')
   })
 

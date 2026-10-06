@@ -340,6 +340,36 @@ describe('Zone drag tools', () => {
     expect(zone.points[1]).toEqual({ x: 45, y: 45 })
   })
 
+  it('a Shift change at the release applies at the next move, so a drag commits as its last preview drew it (B3, A17)', () => {
+    // Rectangle: square in the preview, Shift let go before the up: still a square.
+    const square = harness({ tool: 'rectangle' })
+    square.press({ x: 100, y: 100 })
+    square.move({ x: 220, y: 160 }, { shift: true })
+    square.release({ x: 220, y: 160 })
+    expectScreen(square, getRectangularZoneCorners(square.store.persisted.zones[0]!) ?? [], [
+      { x: 100, y: 100 }, { x: 220, y: 100 }, { x: 220, y: 220 }, { x: 100, y: 220 },
+    ])
+
+    // Ellipse: free in the preview, Shift pressed before the up: still free.
+    const ellipse = harness({ tool: 'ellipse' })
+    ellipse.press({ x: 100, y: 100 })
+    ellipse.move({ x: 140, y: 190 })
+    ellipse.release({ x: 140, y: 190 }, { shift: true })
+    expect(ellipse.store.persisted.zones[0]!.points[1]).toEqual({ x: 20, y: 45 })
+
+    // Line and measure: on 45° in the preview, Shift let go before the up: still level.
+    for (const tool of ['line', 'measurement-guide'] as const) {
+      const h = harness({ tool })
+      h.press({ x: 100, y: 100 })
+      h.move({ x: 180, y: 106 }, { shift: true })
+      h.release({ x: 180, y: 106 })
+      const ends = tool === 'line'
+        ? h.store.persisted.zones[0]!.points
+        : [h.store.persisted.measurementGuides[0]!.start, h.store.persisted.measurementGuides[0]!.end]
+      expectScreen(h, ends, [{ x: 100, y: 100 }, { x: 100 + Math.hypot(80, 6), y: 100 }])
+    }
+  })
+
   it('Shift keeps a line and a measure on 45° steps against the screen at 30', () => {
     for (const tool of ['line', 'measurement-guide'] as const) {
       const h = harness({ tool, camera: { bearingDeg: 30 } })

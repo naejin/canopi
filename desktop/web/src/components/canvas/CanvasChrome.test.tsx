@@ -23,6 +23,7 @@ vi.mock('../../app/site-onboarding/state', async () => {
   }
 })
 
+import { phoneLayout } from '../../app/shell/phone-layout'
 import { registerMapArea, visibleMapFrame } from '../../app/shell/visible-map-area'
 import { workspaceCanvasCommandProjection } from '../../app/workspace-commands/canvas-actions'
 import { setCurrentCanvasSession } from '../../canvas/session'
@@ -93,6 +94,26 @@ describe('the top-centre chip slot', () => {
       expect(visibleMapFrame.value.top).toBe(164)
     } finally {
       release()
+    }
+  })
+
+  it('on a phone layout the slot does not register as top chrome, as the map notice (U36)', async () => {
+    const area = document.createElement('div')
+    document.body.append(area)
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const box = this === area ? { left: 0, top: 0, width: 390, height: 800 }
+        : this.hasAttribute('data-top-chip-slot') ? { left: 15, top: 72, width: 360, height: 92 }
+          : { left: 0, top: 0, width: 0, height: 0 }
+      return { ...box, x: box.left, y: box.top, right: box.left + box.width, bottom: box.top + box.height, toJSON: () => ({}) } as DOMRect
+    })
+    phoneLayout.value = 'portrait'
+    const release = registerMapArea(area)
+    try {
+      await renderChrome()
+      expect(visibleMapFrame.value.top).toBe(0)
+    } finally {
+      release()
+      phoneLayout.value = null
     }
   })
 })

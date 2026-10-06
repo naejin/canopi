@@ -7,9 +7,7 @@
 // starts at the press's world point, and every camera frame re-emits the live drag or the resting pointer, which a
 // pointer pan moves (plan §1, exception 1). It holds re-origin while a press, a tool transient or the text entry is
 // open, and a plane change with no pointer resting on the map hides the tool's draft until the next hover, so no tool
-// re-projects a world point it keeps (spec §4.19). In overview a primary press reaches no tool: the host's overview
-// selector (select/overview.ts) selects zones and notes by click and band. The text entry's state is the chrome's, read
-// live. It owns the passive hover, the selection decorations, the arrow-nudge series, transient history and the Esc
+// re-projects a world point it keeps (spec §4.19). The text entry's state is the chrome's, read live. It owns the passive hover, the selection decorations, the arrow-nudge series, transient history and the Esc
 // queries, and merges the tool's draft with its decorations and the drop preview for the renderer. One drop route
 // serves every tool (spec §1.4 "Drops"): a species drop places a plant with Place plants' placement, a saved stamp with
 // the saved stamp's, then arms Select. Tools are plain objects listed in tools/registry.ts, which lists every tool id.
@@ -42,7 +40,7 @@ import { placePlantFromSpecies } from './plant-stamp'
 import { TOOL_REGISTRY } from './registry'
 import { placeSavedObjectStamp, savedObjectStampGhostShapes } from './saved-object-stamp'
 import { bandDraft } from './select/band'
-import { createOverviewSelector } from './select/overview'
+import { ROTATE_HANDLE_ID } from './select/rotate-handle'
 import { selectionScreenHull } from './select/selection-hull'
 import { snapAlongRay, snapWorldPoint, type SnapSettings } from './snapping'
 import type {
@@ -85,7 +83,7 @@ const NUDGE_STEP_M = 0.1
 const NUDGE_LARGE_STEP_M = 1
 /** A pause this long ends a nudge series, so its edit commits. */
 const NUDGE_SERIES_IDLE_MS = 800
-/** The tools whose points Shift constrains (spec §2.3); handle drags too. */
+/** The tools whose points Shift constrains (spec §2.3); of the handles, only the rotate handle (U36). */
 const SHIFT_CONSTRAINS: ReadonlySet<ToolId> = new Set<ToolId>([
   'polygon', 'plant-spacing', 'line', 'measurement-guide', 'rectangle', 'ellipse',
 ])
@@ -95,8 +93,7 @@ const ZONE_DRAFT_TOOLS: ReadonlySet<ToolId> = new Set<ToolId>(['line', 'rectangl
 /** A press the host routed, from press to release or cancel (today's _pointerGesture). */
 interface LiveGesture {
   readonly id: number
-  /** 'overview': a press in overview, which the host's overview selector owns whatever tool is armed (spec §3.2). */
-  readonly kind: 'tool' | 'handle' | 'overview'
+  readonly kind: 'tool' | 'handle'
   readonly pointer: PointerKind
   /** The press as a world point, converted once at the press, so the drag start stays on the ground (plan §1, exception 1). */
   start: ToolPoint
@@ -192,8 +189,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   let draftHidden = false
   /** What a drop would place, while a panel drag is over the map: a species' band cue or a saved stamp's ghosts. */
   let dropPreview: readonly DraftShape[] | null = null
-  /** The overview selector's band. */
-  let overviewDraft: DraftPresentation | null = null
   let nudging = false
   let nudgeTimer: number | null = null
   let callDepth = 0
@@ -214,23 +209,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   function frame(): ViewFrame {
     return deps.frames.viewFrame.peek()
   }
-
-  const overviewSelector = createOverviewSelector({
-    scene: deps.scene,
-    get view() {
-      return view
-    },
-    effects: {
-      setSelection(targets) {
-        deps.setSelection(targets)
-        notifySceneChanged()
-      },
-      setDraft(draft) {
-        overviewDraft = draft
-        changed()
-      },
-    },
-  })
 
   const view: ToolView = {
     /** In [0, 360) by the ViewCamera contract, so a tool can store it as a rotation (a note, a saved stamp's pick). */
@@ -299,9 +277,18 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     try {
       activate(id, id === currentId ? activeSource : null)
     } catch (failure) {
-      if (id !== 'select') activate('select', null)
+      if (id !== 'select') {
+        activate('select', null)
+        followArmedTool()
+      }
       throw failure
     }
+  }
+
+  /** A fault outside setTool armed Select: the session's tool signal follows it through the tool-request path, so the rail
+   *  and the card name the tool that runs (B6). setTool's own caller names its fallback itself. */
+  function followArmedTool(): void {
+    if (deps.toolState.active.peek() !== currentId) deps.toolState.set(currentId)
   }
 
   function afterToolCall(): void {
@@ -458,24 +445,24 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   /** Modifiers by meaning (spec §2.3), read from the event that carries them, with no platform dependency. */
-  function resolveModifiers(mods: Modifiers, handleDrag: boolean): ToolModifiers {
+  function resolveModifiers(mods: Modifiers, handle: ToolHandleId | null): ToolModifiers {
     return {
       additive: mods.shift || mods.ctrl || mods.meta,
       subtractive: mods.alt,
-      constrain: mods.shift && (handleDrag || SHIFT_CONSTRAINS.has(currentId)),
+      constrain: mods.shift && (handle === ROTATE_HANDLE_ID || SHIFT_CONSTRAINS.has(currentId)),
       noSnap: (mods.ctrl || mods.meta) && currentId === 'plant-spacing',
     }
   }
 
   /** The tool's point at a screen point of the current frame. */
-  function pointAt(screen: ScreenPoint, mods: Modifiers, pointer: PointerKind, handleDrag = false): ToolPoint {
+  function pointAt(screen: ScreenPoint, mods: Modifiers, pointer: PointerKind, handle: ToolHandleId | null = null): ToolPoint {
     const view = frame().view
     const at = activeTool.clampsToView ? clampToScreen(screen, view.screen) : screen
-    return resolvePoint(view.screenToWorld(at), mods, pointer, handleDrag)
+    return resolvePoint(view.screenToWorld(at), mods, pointer, handle)
   }
 
-  function resolvePoint(world: WorldPoint, mods: Modifiers, pointer: PointerKind, handleDrag: boolean): ToolPoint {
-    const modifiers = resolveModifiers(mods, handleDrag)
+  function resolvePoint(world: WorldPoint, mods: Modifiers, pointer: PointerKind, handle: ToolHandleId | null): ToolPoint {
+    const modifiers = resolveModifiers(mods, handle)
     const free = snap(world, modifiers.noSnap)
     const constraint = modifiers.constrain ? activeTool.constraint?.() ?? null : null
     if (!constraint) return { world, free, constrained: world, snapped: free, modifiers, pointer }
@@ -498,8 +485,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   /** The tool's draft, the drop preview and the host's decorations, merged for the renderer. */
   function publishDraft(): void {
-    // In overview the tool's draft is dropped and the overview selector's band takes its place.
-    const shownToolDraft = overviewDraft ?? (draftHidden ? null : toolDraft)
+    const shownToolDraft = draftHidden ? null : toolDraft
     const decorations = decorationShapes()
     const key = decorations.length > 0 ? JSON.stringify(decorations) : ''
     if (shownToolDraft === publishedToolDraft && dropPreview === publishedDropPreview && key === publishedDecorations) return
@@ -673,7 +659,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (live) cancelLive('pointercancel')
     // The pointer is pressed now: a frame re-emits its drag, not the hover before it.
     lastHover = null
-    if (frame().mode === 'overview') return overviewPress(g)
+    // An overview press pans in the recogniser and never reaches the host (U36); nothing here samples or edits.
+    if (frame().mode === 'overview') return NOTHING
     let claimed = false
     const admitted = deps.admission.runWhenSettled(() => {
       claimed = pressWhenSettled(g, commitsNote)
@@ -690,10 +677,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   function pressWhenSettled(g: Extract<Gesture, { kind: 'press' }>, commitsNote: boolean): boolean {
     const tool = activeTool
     if (!deps.capturePress(g.id)) return true
-    const handleDrag = g.target.kind === 'handle'
-    const point = pointAt(g.at, g.mods, g.pointer, handleDrag)
-    if (g.target.kind === 'handle') {
-      const handle = g.target.id
+    const handle = g.target.kind === 'handle' ? g.target.id : null
+    const point = pointAt(g.at, g.mods, g.pointer, handle)
+    if (handle) {
       live = liveGesture(g, 'handle', point, null)
       publishHandles()
       callTool(() => tool.gesture({ kind: 'handle-drag', phase: 'start', handle, point, start: point, clickCount: g.clickCount }))
@@ -709,37 +695,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     callTool(() => tool.gesture({ kind: 'press', point, hit, clickCount: g.clickCount }))
     clearPassiveHoverForEdit()
     return false
-  }
-
-  /** An overview press selects through the overview selector, inside the scene's admission; no tool hears it, nothing
-   *  samples it and handles do not show (spec §3.2). */
-  function overviewPress(g: Extract<Gesture, { kind: 'press' }>): GestureOutcome {
-    const admitted = deps.admission.runWhenSettled(() => {
-      if (!deps.capturePress(g.id)) return true
-      const point = pointAt(g.at, g.mods, g.pointer)
-      const hit = deps.scene.hitAt(point.world, { overview: true })
-      live = liveGesture(g, 'overview', point, hit)
-      overviewSelector.press(point, hit)
-      return true
-    }, false)
-    return admitted ? NOTHING : REFUSED_PRESS
-  }
-
-  /** The overview press's drag or release; a release runs when the scene is settled, as Select's band does. */
-  function overviewDrag(g: Extract<Gesture, { kind: 'drag-start' | 'drag-move' | 'drag-end' | 'tap' }>, gesture: LiveGesture): GestureOutcome {
-    const point = pointAt(g.at, g.mods, gesture.pointer)
-    if (g.kind === 'drag-start' || g.kind === 'drag-move') {
-      overviewSelector.drag(point)
-      return NOTHING
-    }
-    live = null
-    const admitted = deps.admission.runWhenSettled(() => {
-      overviewSelector.release(point, g.kind === 'drag-end')
-      return true
-    }, false)
-    if (!admitted) overviewSelector.cancel()
-    endLive()
-    return admitted ? NOTHING : QUARANTINE
   }
 
   /** A press that opened a Scene Edit (a move or a handle drag) clears the passive hover, as today's drag presentation did. */
@@ -781,8 +736,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (gesture.id !== g.id) return NOTHING
     gesture.dragging = true
     gesture.lastScreen = g.at
-    gesture.lastMods = g.mods
-    if (gesture.kind === 'overview') return overviewDrag(g, gesture)
+    // A modifier change applies at the next move (A17): the release commits with the modifiers its last preview drew.
+    if (g.kind !== 'drag-end') gesture.lastMods = g.mods
     const tool = activeTool
     if (g.kind !== 'drag-end') {
       deliverDrag(tool, gesture, g.kind)
@@ -818,7 +773,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   /** The drag at its last screen point, converted through the current frame; its start is the press's world point. */
   function deliverDrag(tool: CanvasTool, gesture: LiveGesture, kind: 'drag-start' | 'drag-move' | 'drag-end'): void {
-    const point = pointAt(gesture.lastScreen, gesture.lastMods, gesture.pointer, gesture.kind === 'handle')
+    const point = pointAt(gesture.lastScreen, gesture.lastMods, gesture.pointer, gesture.handle)
     if (kind === 'drag-end') live = null
     const start = gesture.start
     if (gesture.kind === 'handle') {
@@ -847,12 +802,11 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       return NOTHING
     }
     if (gesture.id !== g.id) return NOTHING
-    if (gesture.kind === 'overview') return overviewDrag(g, gesture)
     const tool = activeTool
     return release(tool, () => {
       live = null
       try {
-        const point = pointAt(g.at, g.mods, g.pointer, gesture.kind === 'handle')
+        const point = pointAt(g.at, g.mods, g.pointer, gesture.handle)
         if (gesture.kind === 'handle') {
           callTool(() => tool.gesture({
             kind: 'handle-drag', phase: 'end', handle: gesture.handle!, point, start: gesture.start, clickCount: gesture.clickCount,
@@ -1004,10 +958,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const gesture = live
     if (!gesture) return
     live = null
-    if (gesture.kind === 'overview') {
-      overviewSelector.cancel()
-      return
-    }
     const tool = activeTool
     callTool(() => tool.gesture({ kind: 'cancel', reason }))
   }
@@ -1069,8 +1019,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (deps.chrome.isTextEntryOpen()) deps.chrome.closeTextEntry()
   }
 
-  /** Entering overview commits and closes an open text entry (one whose commit is refused closes all the same), and drops
-   *  the menu and every transient. */
+  /** Entering overview commits and closes an open text entry (one whose commit is refused is discarded through its
+   *  opener's cancel, so the tool resets), and drops the menu and every transient. */
   function enterOverview(): void {
     lastHover = null
     setDropPreview(null)
@@ -1078,7 +1028,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       () => {
         if (!deps.chrome.isTextEntryOpen()) return
         focusMap()
-        closeTextEntry()
+        if (deps.chrome.isTextEntryOpen()) deps.chrome.cancelTextEntry()
       },
       () => cancelTransientInteraction('overview'),
       () => deps.menu.close(),
@@ -1099,8 +1049,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (next.mode !== mode) {
       mode = next.mode
       if (mode === 'overview') enterOverview()
-      // Leaving overview mid-press drops the overview selector's band; the release selects nothing.
-      else if (live?.kind === 'overview') cancelLive('tool-change')
     }
     refreshAtPointer(activeTool)
     flush()
@@ -1400,9 +1348,13 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         () => cancelTransientInteraction('document-replaced'),
         () => deps.menu.close(),
         () => {
-          const tool = activeTool
-          callTool(() => tool.deactivate('document-replaced'))
-          activate(currentId, null)
+          try {
+            const tool = activeTool
+            callTool(() => tool.deactivate('document-replaced'))
+            activate(currentId, null)
+          } finally {
+            followArmedTool()
+          }
         },
       ], 'Tool host document replacement preparation failed')
     },

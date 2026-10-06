@@ -1,6 +1,6 @@
 # Rotating map and canvas controls
 
-Status: Accepted (2026-09-29, Canopi v2); amended 2026-10-01, 2026-10-03 (phase-1 design check: stamp starts, line zones, Print Areas), 2026-10-04 (reopening restores the saved view, U28), 2026-10-05 (U33: rulers removed; no last-bearing fallback) and 2026-10-06 (U34: turns jump; a native menu with no pointer press opens nothing)
+Status: Accepted (2026-09-29, Canopi v2); amended 2026-10-01, 2026-10-03 (phase-1 design check: stamp starts, line zones, Print Areas), 2026-10-04 (reopening restores the saved view, U28), 2026-10-05 (U33: rulers removed; no last-bearing fallback) and 2026-10-06 (U34: turns jump; a native menu with no pointer press opens nothing; U36: overview left-drag pans)
 
 Amends [ADR 0010](0010-map-first-interface.md) (single-key shortcut scope, compass in the zoom group) and [ADR 0001](0001-geolocated-map-canvas.md), [0004](0004-one-renderer.md), [0008](0008-canvas-pdf-export.md) and [0011](0011-analyses-provenance-and-stories.md) where they assumed north-up or a tool that switches navigation off. The architecture that carries these rules is in ADRs [0016](0016-one-view-transform.md) to [0020](0020-focus-and-keyboard-ownership.md).
 
@@ -22,7 +22,7 @@ The canvas was north-up and left-drag panned in some modes but selected in other
 - One release (user, 2026-10-01): rotation, the controls and the architecture ship together as 2.0.
 
 **Controls (user).**
-- Left click and left drag always select or draw; left-drag never pans (the Pan tool excepted) and Shift+drag is never box zoom. Overview left-drag becomes band select.
+- Left click and left drag always select or draw; left-drag never pans (the Pan tool and overview excepted) and Shift+drag is never box zoom. Overview draws no zones or notes, so its left drag pans and nothing is selectable there (user, 2026-10-06, U36).
 - Right-drag pans in every tool, as do middle-drag and Space+drag; a still right-click opens the canvas menu on release (release on every OS: convention). A native context menu with no right, pen-barrel or Mac Control press opens nothing; the Menu key and Shift+F10 reach the selection menu (user, 2026-10-06, U34). Wheel zoom and keys stay live during a drawing drag; a right or middle press during it is ignored (user, 2026-10-01).
 - The Pan tool (H) stays for barrel-less pens and one-finger users, off the main rail: View and Tools menus, palette, phone strip.
 - A "Pointing device: Mouse / Trackpad" setting reuses the stored `scroll_wheel` field. Linux trackpad pinch is unsupported for now (Ctrl+scroll zooms).
@@ -46,6 +46,6 @@ The canvas was north-up and left-drag panned in some modes but selected in other
 
 ## Consequences
 
-- Moved bindings: Shift+arrows no longer nudge; N no longer cycles labels; Shift+right-drag no longer opens the menu; overview left-drag no longer pans; Mac Ctrl+click no longer toggles selection.
+- Moved bindings: Shift+arrows no longer nudge; N no longer cycles labels; Shift+right-drag no longer opens the menu; Mac Ctrl+click no longer toggles selection.
 - Stored data: `.canopi` gains the optional `map_view` (the view a Design was saved with, a saved-view camera; additive, version 9, 2026-10-04); settings `LastView.bearing` (2026-10-03) and `snap_to_guides` go, and ruler guides (`extra.guides`) are no longer read or written (2026-10-05, U33). Print Areas gain no angle; PDF setups stay in memory only, so the layout angle is not stored (2026-10-01).
 - Phases, strings and tests are in [`canvas-v2-plan.md`](../plans/canvas-v2-plan.md) and [`canvas-v2-spec.md`](../plans/canvas-v2-spec.md).

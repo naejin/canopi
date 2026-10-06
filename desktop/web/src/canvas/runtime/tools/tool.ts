@@ -37,7 +37,8 @@ export interface ToolModifiers {
   /** Remove from the selection: Alt. */
   readonly subtractive: boolean
   /** Shift: 45° screen steps for Polygon, Plant a row, Line and Measure; a square or a circle for Rectangle and Ellipse;
-   *  the rotate handle's 15° steps from the press angle, and every handle drag. */
+   *  the rotate handle's 15° steps from the press angle. Point handles (corners, vertices, guide ends) ignore Shift and snap
+   *  as usual (U36). */
   readonly constrain: boolean
   /** Plant a row only: Ctrl or Cmd held (on every OS). */
   readonly noSnap: boolean
@@ -70,11 +71,9 @@ export interface HitFilter {
   /** hitAt: answers only the nearest zone edge within this many CSS px ("Turn view to this edge", spec §4.16), converted at
    *  the frame's pixelsPerMetre. hitAt only: a band has no tolerance. */
   readonly toleranceScreenPx?: number
-  /** hitAt: when nothing else hits, the topmost zone whose fill holds the point (or its group). Read only by Select and the
-   *  overview selector (spec §3.2); plain hitAt callers (stamp pick, hover, menu target) keep outline hits. */
+  /** hitAt: when nothing else hits, the topmost zone whose fill holds the point (or its group). Read only by Select
+   *  (spec §3.2); plain hitAt callers (stamp pick, hover, menu target) keep outline hits. */
   readonly fill?: true
-  /** Overview hides plants: hitAt and hitInQuad skip them and every group with a plant member (spec §3.2). */
-  readonly overview?: true
 }
 /** The selection read model: today's CanvasDesignObjectSelectionModel (canvas/runtime/runtime.ts:48), unchanged. */
 export type SelectionReadModel = CanvasDesignObjectSelectionModel
