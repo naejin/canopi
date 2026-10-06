@@ -243,6 +243,22 @@ describe('SceneInteractionSession: touch', () => {
     session.dispose()
   })
 
+  it('a finger that drifts inside its slop before the second lands starts the pinch with no jump', () => {
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('select')
+    const before = testView.viewport()
+
+    touchDown({ x: 100, y: 100 }, 1, 0)
+    touchMove({ x: 107, y: 100 }, 1, 10)
+    touchDown({ x: 160, y: 100 }, 2, 20)
+    touchMove({ x: 108, y: 100 }, 1, 30)
+
+    // The centroid moved 0.5 px and the fingers 53 px to 52 px apart: under the 0.1 zoom-level start.
+    expect(testView.viewport().scale).toBeCloseTo(before.scale, 9)
+    expect(testView.viewport().x - before.x).toBeCloseTo(0.5, 6)
+    session.dispose()
+  })
+
   it('a finger\'s tap on a polygon gives it 44 px handle boxes and dots on 132 px edges; a mouse move makes them 20 px again (Q1, Q2, Q4)', () => {
     store.updatePersisted((draft) => {
       draft.zones = [{

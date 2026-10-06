@@ -618,6 +618,19 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
     expect(result.state.sessions.size).toBe(0)
   })
 
+  it('a finger drifting inside its slop seeds the pair where it is: the pinch starts with no jump', () => {
+    // Finger 1 drifts 7 px (inside the 8 px touch slop) before finger 2 lands, then moves 1 px.
+    const result = run(seq('drift then pinch', ANDROID, [
+      down(100, 100, { pointer: 'touch', id: 1 }),
+      move(107, 100, { pointer: 'touch', id: 1, buttons: 1 }),
+      down(160, 100, { pointer: 'touch', id: 2 }),
+      move(108, 100, { pointer: 'touch', id: 1, buttons: 1 }),
+    ]))
+    // The centroid moved 0.5 px, and 53 px to 52 px is under 0.1 zoom level.
+    expect(pansOf(result.gestures).filter((pan) => pan.phase === 'move').map((pan) => pan.deltaPx)).toEqual([{ x: 0.5, y: 0 }])
+    expect(zoomsOf(result.gestures)).toEqual([])
+  })
+
   it('E5 the pair starts after the cancelled drag', () => {
     const result = run(seq('drag then pinch', ANDROID, [
       down(100, 100, { pointer: 'touch', id: 1 }),

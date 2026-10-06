@@ -282,7 +282,11 @@ function move(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void 
     return
   }
   if (session.mode === 'held') {
-    if (!slopPassed) return
+    // Silent within its slop, but tracked: a second finger seeds the pair from where this one is.
+    if (!slopPassed) {
+      putSession(step, { ...session, last: input.at })
+      return
+    }
     if (session.navigation) {
       // Overview, the Pan tool or Space: the pan starts at the press, and its first move carries the whole travel so far.
       putSession(step, { ...session, mode: 'pan', last: input.at, slopPassed: true, heldPress: null })
