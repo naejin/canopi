@@ -116,7 +116,7 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionC
     const layers: CanvasEscapeLayer[] = []
     if (session.pointerSessionLive()) layers.push('gesture')
     if (toolHost.hasNudgeSeries()) layers.push('nudge-series')
-    if (toolHost.activeToolHasTransient()) layers.push('tool-transient')
+    if (toolHost.activeToolHasEscapeTransient()) layers.push('tool-transient')
     if (!toolHost.activeToolIsSelect()) layers.push('tool')
     if (deps.hasSelection()) layers.push('selection')
     return layers

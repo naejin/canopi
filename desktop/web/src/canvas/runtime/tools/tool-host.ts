@@ -1278,7 +1278,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     holdsReorigin: () => !disposed
       && (live !== null || activeTool.hasTransient() || deps.chrome.isTextEntryOpen()),
     hasLiveGesture: () => live !== null,
-    activeToolHasTransient: () => activeTool.hasTransient(),
+    activeToolHasEscapeTransient: () => activeTool.hasTransient() && !activeTool.escapeLeaves,
     activeToolIsSelect: () => currentId === 'select',
     nudge,
     hasNudgeSeries: () => nudging,

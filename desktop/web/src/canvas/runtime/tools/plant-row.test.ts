@@ -130,7 +130,7 @@ describe('Plant a row tool', () => {
     const { h } = rowHarness()
     h.click({ x: 20, y: 30 })
     expect(row(h).phase).toBe('row')
-    expect(h.host.activeToolHasTransient()).toBe(true)
+    expect(h.host.activeToolHasEscapeTransient()).toBe(true)
 
     expect(h.host.command({ kind: 'escape' })).toBe('handled')
     expect(row(h).phase).toBe('pick')

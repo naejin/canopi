@@ -87,7 +87,7 @@ describe('Polygon tool', () => {
     expect(selectionWrites).toHaveBeenCalledTimes(1)
     expect(shapes(h).every((shape) => shape.kind === 'label')).toBe(true)
     expect(h.host.transientHistory.canUndo()).toBe(false)
-    expect(h.host.activeToolHasTransient()).toBe(false)
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
     expect(h.undo()).toBe(true)
     expect(h.store.persisted.zones).toEqual([])
     expect(h.undo()).toBe(false)
@@ -248,12 +248,12 @@ describe('Polygon tool', () => {
     h.click({ x: 60, y: 10 })
     expect(h.host.command({ kind: 'escape' })).toBe('handled')
     expect(h.renderer.lastDraft()).toBeNull()
-    expect(h.host.activeToolHasTransient()).toBe(false)
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
 
     // Only a redo left: Esc still drops it first, as today.
     h.click({ x: 10, y: 10 })
     expect(h.host.transientHistory.undo()).toBe(true)
-    expect(h.host.activeToolHasTransient()).toBe(true)
+    expect(h.host.activeToolHasEscapeTransient()).toBe(true)
     expect(h.host.command({ kind: 'escape' })).toBe('handled')
     expect(h.host.transientHistory.canRedo()).toBe(false)
     expect(h.host.command({ kind: 'escape' })).toBe('pass')
@@ -285,7 +285,7 @@ describe('Polygon tool', () => {
     expect(h.host.transientHistory.canUndo()).toBe(true)
 
     h.view.setViewport({ x: 200, y: 150, scale: 0.05 })
-    expect(h.host.activeToolHasTransient()).toBe(false)
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
     expect(h.renderer.lastDraft()).toBeNull()
 
     h.view.setViewport({ x: 0, y: 0, scale: 1 })
@@ -311,7 +311,7 @@ describe('Polygon tool', () => {
     expect(h.host.transientHistory.canRedo()).toBe(true)
     h.blur()
     expect(h.host.transientHistory.canRedo()).toBe(false)
-    expect(h.host.activeToolHasTransient()).toBe(false)
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
   })
 
   it('a closed Zones layer drops the draft and commits nothing', () => {
@@ -325,7 +325,7 @@ describe('Polygon tool', () => {
     h.click({ x: 60, y: 50 })
 
     expect(h.renderer.lastDraft()).toBeNull()
-    expect(h.host.activeToolHasTransient()).toBe(false)
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
     expect(h.store.persisted.zones).toEqual([])
   })
 

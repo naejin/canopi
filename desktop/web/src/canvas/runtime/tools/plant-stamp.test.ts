@@ -130,18 +130,15 @@ describe('Place plants tool', () => {
     expect(h.store.persisted.plants).toHaveLength(1)
   })
 
-  it('the waiting point holds re-origin, and Esc leaves Place plants at once with it', () => {
+  it('the waiting point holds re-origin but is no Esc layer, and leaves with the tool', () => {
     const h = stampHarness(null)
-    expect(h.host.activeToolHasTransient()).toBe(false)
-
     h.host.command({ kind: 'place-at', world: { x: 30, y: 20 } })
-    expect(h.host.activeToolHasTransient()).toBe(true)
     expect(h.host.holdsReorigin()).toBe(true)
 
-    // The keyboard port's tool-transient layer sends the tool's Esc, which leaves for Select (U35).
-    expect(h.host.command({ kind: 'escape' })).toBe('handled')
-    expect(h.toolState.value).toBe('select')
-    expect(h.host.activeToolHasTransient()).toBe(false)
+    // The tool layer's Esc leaves for Select at once (U35); the tool takes no Esc of its own.
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
+    expect(h.host.command({ kind: 'escape' })).toBe('pass')
+    h.arm('select')
     expect(h.host.holdsReorigin()).toBe(false)
 
     // The point left with the tool: a pick no longer places there.

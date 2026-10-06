@@ -60,7 +60,7 @@ function canvasPort(): CanvasKeyboardPort {
     hasNudgeSeries: () => false,
     endNudgeSeries: () => {},
     activeToolIsSelect: () => canvas.tool === 'select',
-    activeToolHasTransient: () => canvas.transient,
+    activeToolHasEscapeTransient: () => canvas.transient,
     openTextEntryMode: () => null,
     interrupted: () => {},
   } as unknown as ToolHost

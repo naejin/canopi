@@ -189,7 +189,8 @@ export interface ToolHost {
   holdsReorigin(): boolean
   // Esc chain queries (CanvasKeyboardPort reads these)
   hasLiveGesture(): boolean
-  activeToolHasTransient(): boolean
+  /** The active tool holds a transient its Esc drops first (none whose tool `escapeLeaves`: Place plants' waiting point). */
+  activeToolHasEscapeTransient(): boolean
   activeToolIsSelect(): boolean
   /**
    * Arrow nudge, the one owner of the series: with a selection, the Select tool and site mode, turns the screen direction

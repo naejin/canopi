@@ -346,7 +346,7 @@ describe('object stamp tool', () => {
     const h = stampHarness({ plants: [smallApple({ x: 40, y: 40 })] })
 
     h.click({ x: 40, y: 40 })
-    expect(h.host.activeToolHasTransient()).toBe(false)
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
     expect(h.host.command({ kind: 'escape' })).toBe('handled')
 
     expect(h.toolState.value).toBe('select')

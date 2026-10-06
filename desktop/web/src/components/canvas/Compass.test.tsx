@@ -377,7 +377,7 @@ function selectPort(host: HTMLElement, canvas: { selected: boolean, tool: string
     hasNudgeSeries: () => false,
     endNudgeSeries: () => {},
     activeToolIsSelect: () => canvas.tool === 'select',
-    activeToolHasTransient: () => false,
+    activeToolHasEscapeTransient: () => false,
     textEntryOpen: () => false,
     interrupted: () => {},
   } as unknown as ToolHost

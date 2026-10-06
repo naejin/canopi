@@ -1308,6 +1308,29 @@ describe('SceneInteractionSession', () => {
       session.dispose()
     })
 
+    it('a waiting point is no Esc layer: Shift+Esc leaves nothing, and Esc leaves Place plants with the point (U35)', async () => {
+      const tools: string[] = []
+      const session = createTestSession(createInteractionDeps(container, store, testView, {
+        setTool: (name: string) => { tools.push(name) },
+      }))
+      session.setTool('select')
+      openContextMenu({ x: 30, y: 30 })
+      contextMenuCommand('place-plants-here').run()
+      expect(tools.at(-1)).toBe('plant-stamp')
+
+      // As with no point waiting, leaving the tool takes an Esc with no modifier.
+      events.keyDown({ key: 'Escape', shiftKey: true, target: container })
+      expect(tools.at(-1)).toBe('plant-stamp')
+
+      events.keyDown({ key: 'Escape', target: container })
+      expect(tools.at(-1)).toBe('select')
+      session.setTool('plant-stamp')
+      selectPlantStampSource(APPLE)
+      await Promise.resolve()
+      expect(store.persisted.plants).toHaveLength(0)
+      session.dispose()
+    })
+
     it('forgets the point when the user leaves Place plants before choosing', async () => {
       const session = createTestSession(createInteractionDeps(container, store, testView))
       session.setTool('select')

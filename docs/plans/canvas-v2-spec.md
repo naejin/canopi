@@ -810,7 +810,8 @@ export interface ToolHost {
   holdsReorigin(): boolean
   // Esc chain queries (CanvasKeyboardPort reads these)
   hasLiveGesture(): boolean
-  activeToolHasTransient(): boolean
+  /** The active tool holds a transient its Esc drops first (none whose tool `escapeLeaves`: Place plants' waiting point). */
+  activeToolHasEscapeTransient(): boolean
   activeToolIsSelect(): boolean
   /**
    * Arrow nudge, the one owner of the series: with a selection, the Select tool and site mode, turns the screen direction
@@ -1120,9 +1121,11 @@ export interface CanvasTool {
   /** A camera frame on which the host re-emitted nothing (the pointer off the map): rebuild a draft whose look depends on the
    *  scale, such as the polygon's edge chips hidden below 36 px (today's refreshViewportDependent). */
   viewChanged?(): void
-  /** True while the tool holds something Esc should drop first (draft, pick, row source) or Place plants' waiting point,
-   *  whose Esc leaves the tool (U35). It also holds re-origin and blocks Delete and Ctrl+X (§4.19, §1.6 "Key admission"). */
+  /** True while the tool holds a draft, pick, row source or Place plants' waiting point: Esc drops it first unless
+   *  `escapeLeaves`, and it holds re-origin and blocks Delete and Ctrl+X (§4.19, §1.6 "Key admission"). */
   hasTransient(): boolean
+  /** Esc leaves the tool even while it holds a transient, which is then no Esc layer (Place plants' waiting point, U35). */
+  readonly escapeLeaves?: true
   /** True while the menu's "Finish shape" applies (Polygon: at least 3 corners); the entry sends `confirm`. */
   canFinish?(): boolean
   cancelTransient(reason: 'escape' | 'tool-change' | 'document-replaced' | 'navigate' | 'overview'): void   // 'overview': the map entered overview; drop what today's overview reset dropped (a stamp keeps its pick and hides only its ghost)
@@ -1211,7 +1214,7 @@ The `ToolHost` (`tools/tool-host.ts`, interface in `interaction-ports.ts`) is th
 - **Releases** (`released()`): the host hears a tool press's own release; for the rest the session calls `released()` after routing (the end of a pointer pan, an up with no press of the map's). It commits the series, clears the drop preview and passive hover, runs `cancelTransient('navigate')` and resets the cursor. A press of the tool's still live is left to its own release. `released()` does not run for: another pointer's still-live press, an up in overview (the recogniser swallows it), and an up over the note editor or a handle. The keyboard port's Space hold also reads `textEntryOpen()`: while an entry is open, Space arms no pan.
 - **Menus**: with the text entry open the map takes focus first; hit, retarget the selection through `deps.setSelection`, open through `ToolHostDeps.menu` (the only opener); `turnViewToEdge` on a zone-edge hit from phase 1 (§4.16, no edge highlight); `finishShape` first while the active tool's `canFinish?()` is true (a polygon draft of 3+ corners) from phase 2: it runs `command({ kind: 'confirm' })`, travelling through the controller's `openAtPointer` like `turnViewToEdge`.
 - **Transient history** (`transientHistory`, revision bumps after every tool call and after a deferred `onCommitted`, read by Edit › Undo through the runtime's own `transientHistory`). Tool calls run untracked and the bump itself reads nothing (`x.value = x.peek() + 1`), because the runtime refreshes the session from inside its effects, which must neither depend on what a tool reads nor loop on the bump.
-- **Esc queries** (`hasLiveGesture`, `activeToolHasTransient`, `activeToolIsSelect`); modifier resolution (§2.3).
+- **Esc queries** (`hasLiveGesture`, `activeToolHasEscapeTransient`, `activeToolIsSelect`); modifier resolution (§2.3).
 
 Every tool, drop and piece of chrome runs on the host and `chrome/*.ts`; tools decide what a navigation keeps by `cancelTransient`'s reason.
 
@@ -1491,7 +1494,7 @@ Bubble listener, skipped for a key already `defaultPrevented` (an element handle
 7. Non-modal pushed scopes: the Stories Undo toast (Ctrl Z while the toast is on screen, today `app/stories/actions.ts` `runStoryUndoShortcut`). Popovers and menus are not scopes: their Esc is an Esc layer (step 8), and their arrows are handled by their own element (arrow-owning widgets).
 8. Esc runs the Esc chain (popovers 100, canvas menu 80, … §3.7). An open text entry never reaches this step: its own element handler cancels it first, and focus class `text` keeps the canvas layers off; the selection layer also needs focus class `map` (U10).
 9. Keymap match: `command` rows in `map` and `other`; `view-arrows` the same except in an arrow-owning widget; `outside-dock` the same except from the side-panel dock or phone sheet (focus there, or `<body>` after a press or focus there); `canvas-focus` only in `map`.
-10. Dispatch: `preventDefault` and `stopPropagation`; canvas commands through the port; a port `command()` that returns false runs the row's `fallback` through the platform's `CommandSink` (Desktop `commands/registry.ts`, Web `web/browser-shell-commands.ts`), and without a fallback the key is not consumed. Key admission (U33, canopi-f47t.21) is one condition in the router's `runSink`, which every fallback also passes: while the port's `escapeLayers()` include `gesture` or `tool-transient`, a selection delete (Delete, Backspace's fallback, Ctrl+X) runs nothing and the key is consumed, from any focus. Each chord has one row per scope; rows are never tried in turn (fixture H27).
+10. Dispatch: `preventDefault` and `stopPropagation`; canvas commands through the port; a port `command()` that returns false runs the row's `fallback` through the platform's `CommandSink` (Desktop `commands/registry.ts`, Web `web/browser-shell-commands.ts`), and without a fallback the key is not consumed. Key admission (U33, canopi-f47t.21) is one condition in the router's `runSink`, which every fallback also passes: while the port's `escapeLayers()` include `gesture` or the active tool holds a transient (`hasTransient`, the re-origin hold's; Place plants' waiting point is one, though no Esc layer, U35), a selection delete (Delete, Backspace's fallback, Ctrl+X) runs nothing and the key is consumed, from any focus. Each chord has one row per scope; rows are never tried in turn (fixture H27).
 
 Canvas-focus rows run only with focus on the map host, or on `<body>` after a press on the map, where no widget handler runs, so moving them from today's capture listener to bubble changes no outcome. A focused widget without a role that handles arrows (the scale button, `ZoomControls.tsx:138-143`) runs first and prevents the default, so Shift+↑ on it opens the scale menu and does not reset north. Fixtures I10, I11, I12, I12b and H23–H27 hold the outcomes (§5.8).
 
@@ -1777,7 +1780,7 @@ Where the rotation rows live (phase 1): Shift+←/→ and Shift+↑ (`view-arrow
 | macOS Ctrl+arrows | not bound (Mission Control) | — | — | — |
 | Shift+G, Shift+S | grid, snap to grid (Shift+R is unbound: rulers are gone, U33) | `command` | follows | unchanged |
 | [ / ] | a held stamp: turn it −15° / +15°; otherwise send to back / bring to front | `command` | follows, except that a held stamp's turn also works on map focus with the switch off (today, `keyboard-port.ts:198-206`; fixture H24) | unchanged |
-| Delete, Backspace | delete the selection, never while a pointer session (a still drag, twist or rotate included) or a tool draft (`tool-transient`) is live: the key is consumed (pointer session from 1; draft from 2, U33, canopi-f47t.21; Ctrl+X follows the same condition). This one condition on today's denylist (§1.6 step 10, `runSink`) is the whole key admission; there is no allowlist of keys that act mid-gesture (U33 replaced U16's). A row source, Place plants' waiting point and a held Object stamp pick are tool transients too, so Delete and Ctrl+X do nothing while one is held. Other keys stay live (U2). Backspace during a polygon draft removes the last corner instead. Delete on a focused or selected polygon corner removes that corner, keeping at least 3 (from 2; the `delete-handle` row falls back to `canvas.deleteSelected` through `runSink`) | `outside-dock` (Backspace in a draft: `canvas-focus`) | n/a | F (was `command`), corner from 2 |
+| Delete, Backspace | delete the selection, never while a pointer session (a still drag, twist or rotate included) or a tool transient (`hasTransient`) is live: the key is consumed (pointer session from 1; draft from 2, U33, canopi-f47t.21; Ctrl+X follows the same condition). This one condition on today's denylist (§1.6 step 10, `runSink`) is the whole key admission; there is no allowlist of keys that act mid-gesture (U33 replaced U16's). A row source, Place plants' waiting point and a held Object stamp pick are tool transients too, so Delete and Ctrl+X do nothing while one is held. Other keys stay live (U2). Backspace during a polygon draft removes the last corner instead. Delete on a focused or selected polygon corner removes that corner, keeping at least 3 (from 2; the `delete-handle` row falls back to `canvas.deleteSelected` through `runSink`) | `outside-dock` (Backspace in a draft: `canvas-focus`) | n/a | F (was `command`), corner from 2 |
 | Enter | Polygon draft: finish (3+ corners). One selected note: edit its text, never while a pointer session (a still twist or rotate included) is live (from 1). Compass focused: reset north | `canvas-focus` | n/a | unchanged; compass 1 |
 | F2 | one selected note with map focus: edit its text; otherwise rename the Design. While a pointer session is live on the map: nothing, and the key is consumed (from 1) | `canvas-focus`, then shell | n/a | unchanged |
 | Space (held) | a left drag pans in every tool | `canvas-focus` | n/a | unchanged |
@@ -1790,7 +1793,7 @@ Where the rotation rows live (phase 1): Shift+←/→ and Shift+↑ (`view-arrow
 | Shift+2 | zoom to the selection at the current bearing | `command` | follows (spec: like Shift+G) | 2 |
 | Ctrl+Alt+R | rotate the selection | `outside-dock` | n/a | F (was `command`) |
 | Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y | undo, redo; during a polygon draft they undo and redo corners | `command` | n/a | unchanged |
-| Ctrl+X, C, D, A, Shift+A, G, Shift+G, Shift+L | cut, copy, duplicate, select all, same species, group, ungroup, lock: they act on the map's selection from any focus but a text field and the dock or phone sheet, so a panel keeps the browser's copy and select all. Cut, which deletes the selection, does nothing while a pointer session (a still drag, twist or rotate included) or a tool draft (`tool-transient`) is live: the key is consumed (pointer session from 1; draft from 2, U33, canopi-f47t.21) | `outside-dock` | n/a | F (was `command`) |
+| Ctrl+X, C, D, A, Shift+A, G, Shift+G, Shift+L | cut, copy, duplicate, select all, same species, group, ungroup, lock: they act on the map's selection from any focus but a text field and the dock or phone sheet, so a panel keeps the browser's copy and select all. Cut, which deletes the selection, does nothing while a pointer session (a still drag, twist or rotate included) or a tool transient (`hasTransient`) is live: the key is consumed (pointer session from 1; draft from 2, U33, canopi-f47t.21) | `outside-dock` | n/a | F (was `command`) |
 | Ctrl+V | paste | `command` | n/a | unchanged |
 | Ctrl+K, Ctrl+S, F1, F6 | place search, save, shortcuts, next region; work in text fields, as every shell shortcut but a single key does (F2 included) | `global` | n/a | unchanged |
 | Tab, Shift+Tab | focus navigation | browser | n/a | unchanged |
@@ -1826,7 +1829,7 @@ The text entry (note editor, spacing field) is not a layer: its element handler 
 | 80 | canvas context menu | open |
 | 70 | live pointer gesture, including a rotate drag and a compass drag (the compass registers its own layer; both restore the starting camera) and, from 2, a pan (right-, middle- or Space-drag, the Pan tool: the pan ends where it is and the Esc is consumed; spec). | a drag, band, move, handle drag, pan or rotate is live |
 | 65 | nudge series (abort) | arrows moved the selection and the series is not committed |
-| 60 | tool transient | a polygon draft or a Plant a row source (today); from 2 also a held Object stamp pick and Place plants' waiting point. A tool's `escape` only drops its transient and answers `pass` otherwise; the tool layer (50) leaves. Place plants' `escape` leaves for Select at once, its waiting point with it (U35) |
+| 60 | tool transient | a polygon draft or a Plant a row source (today); from 2 also a held Object stamp pick. A tool's `escape` only drops its transient and answers `pass` otherwise; the tool layer (50) leaves. Place plants' waiting point is a transient but no layer (`escapeLeaves`): the tool layer's Esc leaves at once, the point with it (U35) |
 | 50 | non-Select tool → Select | any tool but Select is armed |
 | 30 | selection → clear | something is selected |
 | 25 | raster inspection → end | inspecting |

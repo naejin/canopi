@@ -100,6 +100,6 @@ describe('Pan tool', () => {
     expect(h.record.hovers).toContainEqual({ kind: 'plant', id: 'apple' })
     expect(h.store.session.selectedTargets).toEqual([])
     expect(h.renderer.lastDraft()).toBeNull()
-    expect(h.host.activeToolHasTransient()).toBe(false)
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
   })
 })

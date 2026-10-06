@@ -484,7 +484,7 @@ describe('saved object stamp tool', () => {
     holding(h, GUILD)
     h.hover({ x: 100, y: 120 })
 
-    expect(h.host.activeToolHasTransient()).toBe(false)
+    expect(h.host.activeToolHasEscapeTransient()).toBe(false)
     expect(h.host.command({ kind: 'escape' })).toBe('handled')
 
     expect(h.toolState.value).toBe('select')

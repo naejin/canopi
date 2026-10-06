@@ -136,11 +136,6 @@ export function createPlantStampTool(): CanvasTool {
       }
     },
     command(c) {
-      if (c.kind === 'escape') {
-        // Esc leaves for Select at once, the waiting point with it (U35, as the saved stamp's Esc).
-        context().effects.requestTool('select')
-        return 'handled'
-      }
       if (c.kind !== 'place-at') return 'pass'
       // The host snapped the point and drops the command in overview.
       speciesPrompted = species === null
@@ -156,8 +151,9 @@ export function createPlantStampTool(): CanvasTool {
     sceneChanged: showPreview,
     viewChanged: showPreview,
     // A waiting point is the tool's transient: it holds re-origin (spec §4.19), so it keeps its plane, and Delete and Ctrl+X
-    // delete nothing while it waits. Esc does not drop it first: Esc leaves the tool.
+    // delete nothing while it waits. It is no Esc layer: the tool layer's Esc leaves, and deactivate drops it (U35).
     hasTransient: () => pendingWorld !== null,
+    escapeLeaves: true,
     cancelTransient(reason) {
       // Only an overview entry hides the preview, as today's overview reset did. A pan, a blur and a re-arm of Place plants
       // keep it under the pointer; a real tool change and a document replacement deactivate.
