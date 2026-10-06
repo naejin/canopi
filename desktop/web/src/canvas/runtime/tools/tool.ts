@@ -60,16 +60,14 @@ export interface ToolPoint {
 export type HitTarget =
   | { readonly kind: 'object'; readonly target: SceneDesignObjectTarget }                          // scene/design-object-targets.ts
   | { readonly kind: 'zone-edge'; readonly zoneId: string; readonly edgeIndex: number; readonly distancePx: number }
-  | { readonly kind: 'guide'; readonly guideId: string }
 /** No filter is today's hitTestTopLevel exactly: interactive layers, a group as the top-level target, guides, the revealed
  *  (selected or hovered) note, and object-locked objects, which the caller rejects itself. */
 export interface HitFilter {
-  readonly kinds?: readonly SceneDesignObjectTarget['kind'][]
-  /** hitAt: also locked layers that are visible (today's hitTestVisibleTopLevel, the host's hover). hitInQuad: a phase-1
-   *  feature; the 0B façade throws a clear error (today's band select skips locked layers). */
+  /** hitAt: also locked layers that are visible (hitTestVisibleTopLevel, the host's hover). hitInQuad throws a clear error
+   *  (the band select skips locked layers). */
   readonly includeLocked?: boolean
   /** hitAt: answers only the nearest zone edge within this many CSS px ("Turn view to this edge", spec §4.16), converted at
-   *  the frame's pixelsPerMetre. hitInQuad throws a clear error (a band has no tolerance). */
+   *  the frame's pixelsPerMetre. hitAt only: a band has no tolerance. */
   readonly toleranceScreenPx?: number
 }
 /** The selection read model: today's CanvasDesignObjectSelectionModel (canvas/runtime/runtime.ts:48), unchanged. */

@@ -92,15 +92,6 @@ describe('ToolScene over today\'s hit tests', () => {
     }
   })
 
-  it('a kinds filter keeps only a top-level hit of those kinds', () => {
-    const scene = createToolScene(createToolSceneSource(orchardStore(), { pixelsPerMetre: () => 4 }))
-
-    expect(scene.hitAt({ x: 0, y: 0 }, { kinds: ['plant'] })).toEqual({ kind: 'object', target: { kind: 'plant', id: 'p1' } })
-    // A grouped plant is hit as its group, which a plant filter refuses.
-    expect(scene.hitAt({ x: 20, y: 20 }, { kinds: ['plant'] })).toBeNull()
-    expect(scene.hitAt({ x: 20, y: 20 }, { kinds: ['group'] })).toEqual({ kind: 'object', target: { kind: 'group', id: 'g1' } })
-  })
-
   it('reads the frame scale at every query, so screen-sized plants hit as drawn', () => {
     let pixelsPerMetre = 40
     const scene = createToolScene(createToolSceneSource(orchardStore(), { pixelsPerMetre: () => pixelsPerMetre }))
@@ -112,7 +103,7 @@ describe('ToolScene over today\'s hit tests', () => {
     expect(scene.hitAt(between)).not.toBeNull()
   })
 
-  it('with a pixel tolerance hitAt answers the nearest zone edge at the frame\'s scale, and hitInQuad refuses one', () => {
+  it('with a pixel tolerance hitAt answers the nearest zone edge at the frame\'s scale', () => {
     let pixelsPerMetre = 4
     const scene = createToolScene(createToolSceneSource(orchardStore(), { pixelsPerMetre: () => pixelsPerMetre }))
 
@@ -121,8 +112,6 @@ describe('ToolScene over today\'s hit tests', () => {
       .toEqual({ kind: 'zone-edge', zoneId: 'z1', edgeIndex: 0, distancePx: expect.closeTo(6, 6) })
     pixelsPerMetre = 8
     expect(scene.hitAt({ x: 10, y: 3.5 }, { toleranceScreenPx: 8 })).toBeNull()
-    expect(() => scene.hitInQuad([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }], { toleranceScreenPx: 8 }))
-      .toThrow(/toleranceScreenPx/)
   })
 
   it('a quad at 45 hits plants by their circles and shapes by their polygons, never a hidden layer', () => {
@@ -163,8 +152,11 @@ describe('ToolScene over today\'s hit tests', () => {
     store.updatePersisted((draft) => {
       draft.layers = draft.layers.map((layer) => layer.name === 'zones' ? { ...layer, visible: false } : layer)
     })
-    expect(scene.hitInQuad(diamond, { kinds: ['zone'] })).toEqual([])
-    expect(scene.hitInQuad(diamond, { kinds: ['plant'] })).toHaveLength(2)
+    expect(scene.hitInQuad(diamond)).toEqual([
+      { kind: 'object', target: { kind: 'plant', id: 'centre' } },
+      { kind: 'object', target: { kind: 'plant', id: 'circle-crosses' } },
+      { kind: 'object', target: { kind: 'measurement-guide', id: 'crossing' } },
+    ])
   })
 
   it('nearestPlant keeps the first plant in scene order on a tie, as Place plants does today, and skips excluded plants', () => {
