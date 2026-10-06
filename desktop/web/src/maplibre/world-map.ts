@@ -65,6 +65,8 @@ export function createWorldMapLibreMap(
     pitchWithRotate: false,
     dragRotate: false,
     touchZoomRotate: false,
+    // Shift+drag pans like any drag instead of drawing MapLibre's zoom box (spec §4.17).
+    boxZoom: false,
     transformRequest: options.transformRequest,
   }) as unknown as WorldMapLibreMap
 
