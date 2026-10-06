@@ -2576,6 +2576,33 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('a refused corner removal keeps the selected corner and the zone: a second Delete on a triangle deletes nothing', () => {
+    const triangle = [{ x: 20, y: 20 }, { x: 120, y: 20 }, { x: 70, y: 120 }]
+    store.updatePersisted((draft) => {
+      draft.zones = [{
+        kind: 'zone', locked: false, id: 'polygon-1', name: 'polygon-1', zoneType: 'polygon', rotationDeg: 0,
+        points: triangle, fillColor: null, notes: null,
+      }]
+    })
+    const deps = createInteractionDeps(container, store, testView)
+    const session = createTestSession(deps)
+    session.setTool('select')
+    events.pointerDown({ x: 70, y: 50 }, { button: 0 })
+    events.pointerUp({ x: 70, y: 50 }, { button: 0 })
+    const corner = container.querySelector<HTMLElement>('[data-canvas-handle="vertex:polygon-1:1"]')!
+    events.pointerDown({ x: 120, y: 20 }, { button: 0, target: corner })
+    events.pointerUp({ x: 120, y: 20 }, { button: 0 })
+    corner.blur()
+    container.focus()
+
+    for (const key of ['Delete', 'Delete', 'Backspace']) events.keyDown({ key, code: key, target: container })
+
+    expect(store.persisted.zones[0]!.points).toEqual(triangle)
+    expect(keyCommands).not.toHaveBeenCalledWith('canvas.deleteSelected')
+    expect(container.querySelector('[data-canvas-handle-active="true"]')?.getAttribute('data-canvas-handle')).toBe('vertex:polygon-1:1')
+    session.dispose()
+  })
+
   it("Backspace, the Mac's delete key, removes a focused or selected polygon corner, not the zone; with no corner it deletes the selection", () => {
     const pentagon = [{ x: 20, y: 20 }, { x: 120, y: 20 }, { x: 140, y: 80 }, { x: 70, y: 130 }, { x: 0, y: 80 }]
     store.updatePersisted((draft) => {

@@ -291,15 +291,17 @@ export function createSelectTool(): CanvasTool {
     refreshHandles()
   }
 
-  /** Delete or Backspace on the focused corner, else the selected one: removed, keeping at least 3; with neither, the key passes. */
+  /** Delete or Backspace on the focused corner, else the selected one: removed, keeping at least 3, and a refused removal
+   *  keeps the selected corner and the zone; with neither, the key passes. */
   function deleteCorner(): ToolReply {
     const focused = ctx().focusedHandle()
     const id = focused && reshapePoints.has(focused) ? focused : selectedCorner
     const corner = id ? reshapePoints.get(id) : undefined
     if (!corner || !isPolygonCorner(corner)) return 'pass'
-    selectedCorner = null
-    removePolygonCorner(ctx(), corner.zoneId, corner.index)
-    refreshHandles()
+    if (removePolygonCorner(ctx(), corner.zoneId, corner.index)) {
+      selectedCorner = null
+      refreshHandles()
+    }
     return 'handled'
   }
 
