@@ -3,8 +3,8 @@
 // Owns one MapLibre map's camera while it is attached (ADR 0016): the only code that calls camera methods (jumpTo, flyTo, stop,
 // resize) on the workspace and snapshot maps. Targets come from view/camera-math and constrainCamera; the map receives explicit
 // jumpTo values for every move but a flight (every turn jumps, U34) and flyTo for flights, and every frame is built from MapLibre's
-// read-backs. The map's
-// transformConstrain is an adapter over the same constrainCamera, which is bearing-free (U34), so it covers every flight frame.
+// read-backs. The map's transformConstrain is an adapter over the same constrainCamera, which is bearing-free (U34), so it covers
+// every flight frame.
 
 import { signal } from '@preact/signals'
 import type { SessionPlane } from '../canvas/session-plane'
