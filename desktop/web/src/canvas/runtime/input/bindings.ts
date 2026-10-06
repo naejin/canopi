@@ -8,11 +8,6 @@ import type { PointerKind } from '../interaction-types'
 
 export type PanContext = 'hand-tool' | 'overview'
 export interface Bindings {
-  readonly secondary: {
-    readonly click: 'menu-on-native' | 'menu-on-release'   // legacy: native contextmenu opens at once
-    readonly drag: 'none' | 'pan'
-    readonly shiftDrag: 'none' | 'rotate'
-  }
   /** Shift+middle-drag. Plain middle-drag always pans. */
   readonly auxiliaryShiftDrag: 'pan' | 'rotate'
   /** Contexts in which a primary drag pans. */
@@ -25,14 +20,12 @@ export interface Bindings {
 }
 
 /**
- * The right button is inert and the native contextmenu opens the canvas menu at once; a middle drag pans and a
- * Shift+middle drag rotates, as does a WebKit trackpad twist; the Pan tool and overview pan on a primary drag; no touch
+ * A middle drag pans and a Shift+middle drag rotates, as does a WebKit trackpad twist; the Pan tool and overview pan on a primary drag; no touch
  * gestures or pen barrel. A mouse or pen press starts a drag once it moves 3 px (U6), so a click with a little jitter
  * stays a click; touch keeps slop 0 until phase 3 (with `d >= slop && d > 0`, any movement is a drag). A tool may
  * override the slop through `configure` (Plant a row: 0), and the tools keep their own thresholds, measured at release.
  */
 export const CURRENT_BINDINGS: Bindings = Object.freeze({
-  secondary: Object.freeze({ click: 'menu-on-native', drag: 'none', shiftDrag: 'none' }),
   auxiliaryShiftDrag: 'rotate',
   primaryDragPansIn: Object.freeze(['hand-tool', 'overview'] as const),
   macCtrlClick: 'primary',

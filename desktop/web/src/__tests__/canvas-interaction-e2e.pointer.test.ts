@@ -90,7 +90,7 @@ describe('SceneInteractionSession', () => {
     outsidePanel.remove()
   })
 
-  it('does not admit a context-menu selection change during an active scene edit', () => {
+  it('A11: a right press during a plant move is ignored, with no pan and no menu, and the move commits', () => {
     store.updatePersisted((draft) => {
       draft.plants = [
         makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }),
@@ -102,34 +102,115 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
     session.setTool('select')
     deps.setSelection([plantTarget('plant-1')])
-    const downstreamContextMenu = vi.fn()
-    container.addEventListener('contextmenu', downstreamContextMenu)
+    const before = testView.viewport()
 
     events.pointerDown({ x: 20, y: 30 }, { pointerId: 31 })
-    events.pointerMove({ x: 40, y: 50 }, { pointerId: 31 })
+    events.pointerMove({ x: 40, y: 50 }, { pointerId: 31, buttons: 1 })
+    // The right button joins the left one's pointer (a chord: no pointerdown), and Linux sends its menu at the press.
+    events.pointerMove({ x: 45, y: 55 }, { pointerId: 31, buttons: 3 })
     const contextPoint = events.clientPoint({ x: 120, y: 30 })
-    const contextMenu = new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: contextPoint.x,
-      clientY: contextPoint.y,
-    })
+    const contextMenu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: contextPoint.x, clientY: contextPoint.y })
     container.dispatchEvent(contextMenu)
-    container.removeEventListener('contextmenu', downstreamContextMenu)
-
-    expect(contextMenu.defaultPrevented).toBe(true)
-    expect(downstreamContextMenu).not.toHaveBeenCalled()
-    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
-    expect(store.persisted.plants.find((plant) => plant.id === 'plant-1')?.position)
-      .toEqual({ x: 40, y: 50 })
-    expect(contextMenuHost.opened).toHaveLength(0)
-
-    events.pointerMove({ x: 50, y: 60 }, { pointerId: 31 })
+    events.pointerMove({ x: 50, y: 60 }, { pointerId: 31, buttons: 1 })
     events.pointerUp({ x: 50, y: 60 }, { pointerId: 31 })
 
-    expect(store.persisted.plants.find((plant) => plant.id === 'plant-1')?.position)
-      .toEqual({ x: 50, y: 60 })
+    expect(contextMenu.defaultPrevented).toBe(true)
+    expect(contextMenuHost.opened).toHaveLength(0)
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
+    expect(store.persisted.plants.find((plant) => plant.id === 'plant-1')?.position).toEqual({ x: 50, y: 60 })
     expect(onSceneEditCommit).toHaveBeenCalledOnce()
+    expect(testView.viewport()).toEqual(before)
+    session.dispose()
+  })
+
+  it('a still right-click on a plant opens its menu at the release, not at the press or the native contextmenu', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    session.setTool('select')
+
+    events.pointerDown({ x: 20, y: 30 }, { button: 2 })
+    const point = events.clientPoint({ x: 20, y: 30 })
+    // Linux and macOS send the native menu at the press.
+    const atPress = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: point.x, clientY: point.y })
+    container.dispatchEvent(atPress)
+    expect(atPress.defaultPrevented).toBe(true)
+    expect(contextMenuHost.current).toBeNull()
+    events.pointerUp({ x: 21, y: 30 }, { button: 2 })
+
+    expect(contextMenuHost.opened).toHaveLength(1)
+    expect(contextMenuHost.current?.anchor).toEqual({ left: 21, top: 30, right: 21, bottom: 30 })
+    expect(contextMenuHost.current?.selection?.editableTargets).toEqual([plantTarget('plant-1')])
+    expect(currentCanvasSelection.value).toEqual(new Set(['plant-1']))
+    session.dispose()
+  })
+
+  it.each([
+    'select', 'hand', 'plant-stamp', 'text', 'line', 'measurement-guide', 'rectangle', 'ellipse', 'polygon', 'object-stamp',
+    'saved-object-stamp', 'plant-spacing',
+  ] as const)('A9: a 150 px right-drag under %s pans the map, opens no menu and edits nothing', (tool) => {
+    const onSceneEditCommit = vi.fn()
+    const deps = createInteractionDeps(container, store, testView, { onSceneEditCommit })
+    const session = createTestSession(deps)
+    session.setTool(tool)
+    const scene = structuredClone(store.persisted)
+    const before = testView.viewport()
+
+    events.pointerDown({ x: 100, y: 100 }, { button: 2 })
+    events.pointerMove({ x: 102, y: 100 }, { buttons: 2 })
+    events.pointerMove({ x: 250, y: 100 }, { buttons: 2 })
+    events.pointerUp({ x: 250, y: 100 }, { button: 2 })
+    const trailing = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    container.dispatchEvent(trailing)
+
+    expect(testView.viewport().x).toBeCloseTo(before.x + 150, 6)
+    expect(testView.viewport().y).toBeCloseTo(before.y, 6)
+    expect(trailing.defaultPrevented).toBe(true)
+    expect(contextMenuHost.opened).toHaveLength(0)
+    expect(store.persisted).toEqual(scene)
+    expect(onSceneEditCommit).not.toHaveBeenCalled()
+    session.dispose()
+  })
+
+  it('A9: a polygon draft keeps its corners on the ground through a right-drag pan, and its next click adds the third', () => {
+    const deps = createInteractionDeps(container, store, testView)
+    const session = createTestSession(deps)
+    session.setTool('polygon')
+    events.pointerDown({ x: 20, y: 20 })
+    events.pointerUp({ x: 20, y: 20 })
+    events.pointerDown({ x: 80, y: 20 })
+    events.pointerUp({ x: 80, y: 20 })
+
+    events.pointerDown({ x: 100, y: 100 }, { button: 2 })
+    events.pointerMove({ x: 200, y: 100 }, { buttons: 2 })
+    events.pointerUp({ x: 200, y: 100 }, { button: 2 })
+    // The corners stayed on the ground: 100 px to the right on screen.
+    events.pointerDown({ x: 180, y: 80 })
+    events.pointerUp({ x: 180, y: 80 })
+    events.keyDown({ key: 'Enter', target: container })
+
+    expect(store.persisted.zones).toHaveLength(1)
+    const points = store.persisted.zones[0]!.points
+    expect(points.map((point) => [point.x, point.y])).toEqual([[20, 20], [80, 20], [80, 80]])
+    expect(contextMenuHost.opened).toHaveLength(0)
+    session.dispose()
+  })
+
+  it('A13: Shift+right-drag turns the view about the press, in 15° steps while mod is held', () => {
+    const session = createTestSession(createInteractionDeps(container, store, testView))
+    container.focus()
+    const bearing = () => testView.view().camera.bearingDeg
+
+    events.pointerDown({ x: 100, y: 100 }, { button: 2, shiftKey: true })
+    events.pointerMove({ x: 120, y: 100 }, { buttons: 2, shiftKey: true })
+    expect(bearing()).toBeCloseTo(16, 6)
+    events.keyDown({ key: 'Control', code: 'ControlLeft', ctrlKey: true, shiftKey: true, target: container })
+    expect(bearing()).toBeCloseTo(15, 6)
+    events.keyUp({ key: 'Control', code: 'ControlLeft', shiftKey: true, target: container })
+    expect(bearing()).toBeCloseTo(16, 6)
+    events.pointerUp({ x: 120, y: 100 }, { button: 2, shiftKey: true })
+    expect(contextMenuHost.opened).toHaveLength(0)
     session.dispose()
   })
 
@@ -173,8 +254,9 @@ describe('SceneInteractionSession', () => {
       container.dispatchEvent(drop)
     })
 
-    // Only a press on the map host is quarantined; a context menu and a drop rethrow and reach the app.
-    expect(errors).toEqual([admissionFailure, admissionFailure, admissionFailure])
+    // Only a press on the map host is quarantined; a drop rethrows and reaches the app. The context menu reaches no sink:
+    // the source prevents it (its press is owned) and it goes on to the app.
+    expect(errors).toEqual([admissionFailure, admissionFailure])
     expect(pointerDown.defaultPrevented).toBe(true)
     expect(downstreamPointerDown).not.toHaveBeenCalled()
     expect(downstreamContextMenu).toHaveBeenCalled()

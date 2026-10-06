@@ -63,7 +63,7 @@ function randomInput(random: () => number, t: number): RawInput {
   if (roll < 0.97) {
     return { kind: 'platform-gesture', t, phase: pick(['start', 'change', 'change', 'end'] as const), at, rotationDeg: random() * 60 - 30 }
   }
-  return { kind: 'native-contextmenu', t, at, fromKeyboard: random() < 0.3, target: pick(TARGETS) }
+  return { kind: 'leave', t }
 }
 
 const TERMINAL_EDITING = new Set(['tap', 'drag-end', 'cancel'])
@@ -130,6 +130,14 @@ function checkSessionLifecycle(seed: number): void {
         .toEqual({ editingEnds: 0, panEnds: 0, rotateEndsNow: 0 })
     } else if (input.kind === 'reject') {
       expect(gestures, `${at(index)}: a reject emits nothing`).toEqual([])
+    } else if (endedSession.mode === 'secondary') {
+      // A still secondary press ends with its menu on release, or with a fence's cancel.
+      const fenced = !endsNaturally(input)
+      expect({ editingEnds, panEnds, rotateEndsNow }, `${at(index)}: a secondary press ends once`).toEqual({
+        editingEnds: fenced ? 1 : 0,
+        panEnds: 0,
+        rotateEndsNow: 0,
+      })
     } else if (endedSession.mode === 'rotate') {
       const fenced = !endsNaturally(input)
       expect({ editingEnds, panEnds, rotateEndsNow }, `${at(index)}: a rotate session ends once`).toEqual({
@@ -150,10 +158,16 @@ function checkSessionLifecycle(seed: number): void {
       expect({ editingEnds, panEnds, rotateEndsNow }, at(index)).toEqual({ editingEnds: 1, panEnds: 0, rotateEndsNow: 0 })
     }
     const startedNow = [...after.keys()].filter((id) => !before.has(id) || endedSessions.some((session) => session.pointerId === id))
-    const silentStart = startedNow.length > 0 && startedNow.every((id) => after.get(id)!.mode === 'rotate')
-    if (silentStart) expect(starts, `${at(index)}: a pending rotate starts silently`).toBe(0)
+    const pending = (id: number) => after.get(id)!.mode === 'rotate' || after.get(id)!.mode === 'secondary'
+    const silentStart = startedNow.length > 0 && startedNow.every(pending)
+    // A still secondary press becomes a pan once it passes its slop: the pan starts then, on a move.
+    const panFromSecondary = [...after.values()].some((session) => session.mode === 'pan' && before.get(session.pointerId)?.mode === 'secondary')
+    if (silentStart) expect(starts, `${at(index)}: a pending rotate or secondary press starts silently`).toBe(0)
     else if (startedNow.length > 0) expect(starts, `${at(index)}: a session started silently`).toBeGreaterThan(0)
-    else expect(starts, `${at(index)}: a start gesture without a new session`).toBe(0)
+    else expect(starts, `${at(index)}: a start gesture without a new session`).toBe(panFromSecondary ? 1 : 0)
+    const menus = gestures.filter((gesture) => gesture.kind === 'menu-request').length
+    const stillSecondaryUp = input.kind === 'up' && endedSession?.role === 'secondary' && !endedSession.slopPassed
+    expect(menus, `${at(index)}: a menu only from a still secondary release`).toBeLessThanOrEqual(stillSecondaryUp ? 1 : 0)
     started += startedNow.length
     ended += endedSessions.length
 

@@ -1,7 +1,7 @@
 // canvas/runtime/keyboard-port.ts
 //
 // Owns the canvas's key handling behind CanvasKeyboardPort (spec §1.2a, §1.6, ADR 0020): the key router hands it every
-// key first (keyState: the nudge commit, the Menu key's time, the Space hold, the modifiers a live rotate steps by), runs its key commands (the arrow nudge and pan, mod for the large step; Shift+←/→ turning the view and
+// key first (keyState: the nudge commit, the Space hold, the modifiers a live rotate steps by), runs its key commands (the arrow nudge and pan, mod for the large step; Shift+←/→ turning the view and
 // Shift+↑ or Shift+N resetting north; Enter, Backspace, F2, `[` `]`, the Menu key) and lists and runs its Esc layers, which
 // app/keyboard/escape-chain.ts places in the Esc chain. The arrow nudge series is the ToolHost's; the port only reads its
 // outcome. It never touches a DOM event: the router acts on its answers.
@@ -54,19 +54,13 @@ interface CanvasKeySession {
   clearSelection(): void
 }
 
-/** The session's port: the router's CanvasKeyboardPort, with its deletes hold, plus the Menu key's time the DOM input source
- *  reads. */
+/** The session's port: the router's CanvasKeyboardPort, with its deletes hold. */
 interface SessionCanvasKeyboardPort extends CanvasKeyboardPort {
   holdsSelectionDeletes(): boolean
-  /** When the keyboard last opened the canvas menu (event time), for the contextmenu echo; null before. */
-  lastKeyboardMenuAt(): number | null
 }
 
 export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionCanvasKeyboardPort {
   const { host, toolHost, session } = deps
-  let lastMenuAt: number | null = null
-  /** The last keydown keyState saw: a Menu key or Shift+F10 stamps the keyboard menu's time. */
-  let lastKeyDown: CanvasKeyState | null = null
 
   /** The arrow's rule after the host's nudge (spec §3.6): a handled or refused nudge takes the key, and on 'pass' the map
    *  pans with nothing selected; otherwise a plain arrow goes on, and mod+arrow is taken anyway (Web Mac Cmd+← would go
@@ -93,11 +87,6 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionC
 
   function verdict(): CanvasKeyVerdict {
     return session.pointerSessionLive() ? 'pass-live' : 'pass'
-  }
-
-  function isMenuKey(k: CanvasKeyState): boolean {
-    return k.key === 'ContextMenu'
-      || (k.key === 'F10' && k.mods.shift && !k.mods.ctrl && !k.mods.meta && !k.mods.alt)
   }
 
   /** Esc in overview: today's interrupted-gesture cancel, Space released. */
@@ -185,7 +174,6 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionC
           return true
         case 'context-menu':
           if (overview || session.pointerSessionLive()) return false
-          if (lastKeyDown && isMenuKey(lastKeyDown)) lastMenuAt = lastKeyDown.timeStamp
           toolHost.menuAt('selection', 'keyboard')
           return true
       }
@@ -196,7 +184,6 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionC
         else if (MODIFIER_KEYS.has(k.key)) session.keyState({ space: session.spaceHeld(), mods: k.mods })
         return verdict()
       }
-      lastKeyDown = k
       // Any other key ends a nudge series (one undo step); Esc aborts it through its layer.
       if (toolHost.hasNudgeSeries() && !ARROW_KEYS.has(k.key) && !MODIFIER_KEYS.has(k.key) && k.key !== 'Escape') {
         toolHost.endNudgeSeries(true)
@@ -207,7 +194,6 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): SessionC
       return verdict()
     },
     holdsSelectionDeletes: () => session.pointerSessionLive() || toolHost.holdsReorigin(),
-    lastKeyboardMenuAt: () => lastMenuAt,
   }
 }
 

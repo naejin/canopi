@@ -38,10 +38,6 @@ function withoutHovers(gestures: readonly Gesture[]): readonly Gesture[] {
   return gestures.filter((gesture) => gesture.kind !== 'hover')
 }
 
-function effectKinds(sequence: Sequence): string[] {
-  return run(sequence).effects.map((effect) => effect.kind)
-}
-
 const NAVIGATION = new Set(['pan', 'zoom', 'rotate'])
 
 function expectNoNavigation(gestures: readonly Gesture[]): void {
@@ -57,90 +53,161 @@ function zoomsOf(gestures: readonly Gesture[]) {
 }
 
 describe('recognise: 5.1 secondary button', () => {
-  it('A1 Windows right-click: the button is inert and the contextmenu opens the menu', () => {
+  const menu = (x: number, y: number) => ({ kind: 'menu-request', at: { x, y }, source: 'mouse' })
+  const TOOLS = [
+    'select', 'hand', 'plant-stamp', 'text', 'line', 'measurement-guide', 'rectangle', 'ellipse', 'polygon', 'object-stamp',
+    'saved-object-stamp', 'plant-spacing',
+  ] as const
+
+  it('A1 Windows right-click: one menu at the release point on up, nothing at the press', () => {
     const result = run(SEQUENCES.A1)
-    expect(result.gestures).toEqual([{ kind: 'menu-request', at: { x: 101, y: 100 }, source: 'native' }])
-    expect(effectKinds(SEQUENCES.A1)).toEqual(['prevent-default'])
-    expect(result.steps[2]!.effects).toEqual([{ kind: 'prevent-default' }])
+    expect(result.steps[0]!.gestures).toEqual([])
+    expect(result.steps[0]!.effects).toEqual([{ kind: 'prevent-default' }, { kind: 'capture', pointerId: 1 }])
+    expect(result.steps[1]!.gestures).toEqual([menu(101, 100)])
+    expect(result.steps[1]!.effects).toEqual([{ kind: 'release-capture', pointerId: 1 }])
   })
 
-  it('A2 Windows right-drag: no pan; the menu on the trailing contextmenu', () => {
+  it('A2 Windows right-drag: a secondary-drag pan whose deltas sum to the travel, the first with the sub-slop offset; no menu', () => {
     const result = run(SEQUENCES.A2)
-    expectNoNavigation(result.gestures)
-    expect(kinds(withoutHovers(result.gestures))).toEqual(['menu-request'])
-    expect(effectKinds(SEQUENCES.A2)).toEqual(['prevent-default'])
+    expect(kinds(result.gestures)).toEqual(['pan:start', 'pan:move', 'pan:move', 'pan:move', 'pan:move', 'pan:move', 'pan:end'])
+    const pans = pansOf(result.gestures)
+    expect(pans.every((pan) => pan.source === 'secondary-drag')).toBe(true)
+    expect(pans[1]!.deltaPx).toEqual({ x: 20, y: 16 })
+    expect(pans.reduce((sum, pan) => ({ x: sum.x + pan.deltaPx.x, y: sum.y + pan.deltaPx.y }), { x: 0, y: 0 })).toEqual({ x: 100, y: 80 })
+    expect(pans[0]).toMatchObject({ phase: 'start', at: { x: 100, y: 100 } })
+    expect(result.gestures.some((gesture) => gesture.kind === 'press' || gesture.kind === 'menu-request')).toBe(false)
   })
 
-  it('A3 Linux right-click: the menu at the contextmenu', () => {
+  it('A2 nothing pans within 3 px; the drag starts at the move that passes it', () => {
+    const result = run(seq('right jitter then drag', WINDOWS, [
+      down(100, 100, { button: 2 }),
+      move(102, 100, { buttons: 2 }),
+      move(103, 100, { buttons: 2 }),
+      up(103, 100, { button: 2 }),
+    ]))
+    expect(result.steps[1]!.gestures).toEqual([])
+    expect(kinds(result.steps[2]!.gestures)).toEqual(['pan:start', 'pan:move'])
+    expect(kinds(result.gestures).at(-1)).toBe('pan:end')
+  })
+
+  it('A3 Linux right-click: as on Windows, one menu on up', () => {
     const result = run(SEQUENCES.A3)
-    expect(result.steps[1]!.gestures).toEqual([{ kind: 'menu-request', at: { x: 100, y: 100 }, source: 'native' }])
-    expect(result.gestures).toHaveLength(1)
+    expect(result.gestures).toEqual([menu(100, 100)])
+    expect(result.steps[1]!.gestures).toEqual([menu(100, 100)])
   })
 
   it.each([
     ['Linux', SEQUENCES.A4_LINUX],
     ['macOS', SEQUENCES.A4_MAC],
-  ])('A4 %s right-drag: the menu at the press, no pan', (_os, sequence) => {
+  ])('A4 %s right-drag: a pan, no menu', (_os, sequence) => {
     const result = run(sequence)
-    expectNoNavigation(result.gestures)
-    expect(result.steps[1]!.gestures).toEqual([{ kind: 'menu-request', at: { x: 100, y: 100 }, source: 'native' }])
-    expect(kinds(withoutHovers(result.gestures))).toEqual(['menu-request'])
+    expect(kinds(result.gestures)).toEqual(['pan:start', 'pan:move', 'pan:move', 'pan:move', 'pan:end'])
+    expect(result.gestures.some((gesture) => gesture.kind === 'menu-request')).toBe(false)
   })
 
-  it('A11 under LEGACY a right press during a left drag pans nothing and its contextmenu requests the menu', () => {
+  it('A6 WKWebView capture then nothing: cancel(lost-capture), no menu, nothing stuck', () => {
+    const result = run(SEQUENCES.A6)
+    expect(result.gestures).toEqual([{ kind: 'cancel', reason: 'lost-capture' }])
+    expect(result.state.sessions.size).toBe(0)
+  })
+
+  it('A7 Right-drag then pointercancel: the pan ends where it is, then cancel(pointercancel); no menu', () => {
+    const result = run(SEQUENCES.A7)
+    expect(kinds(result.gestures)).toEqual(['pan:start', 'pan:move', 'pan:move', 'pan:end', 'cancel'])
+    expect(result.gestures.at(-1)).toEqual({ kind: 'cancel', reason: 'pointercancel' })
+    expect(result.state.sessions.size).toBe(0)
+  })
+
+  it.each(TOOLS)('A9 Right-drag under %s: a pan only; the tool hears no press or drag', (tool) => {
+    const result = run(seq('A9', WINDOWS, SEQUENCES.A2.steps, { tool }))
+    expect(result.gestures).toEqual(run(SEQUENCES.A2).gestures)
+  })
+
+  it('A10 Left pressed during a right-drag: the pan continues and no press reaches the tool', () => {
+    const result = run(SEQUENCES.A10)
+    expect(kinds(result.gestures)).toEqual(['pan:start', 'pan:move', 'pan:move', 'pan:move', 'pan:move', 'pan:end'])
+  })
+
+  it('A11 a right press during a left drag is ignored: no pan and no menu; the band continues and commits', () => {
     const result = run(SEQUENCES.A11)
     expectNoNavigation(result.gestures)
     expect(kinds(result.gestures)).toEqual([
-      'press', 'drag-start', 'drag-move', 'drag-move', 'menu-request', 'drag-move', 'drag-move', 'drag-move', 'drag-end',
+      'press', 'drag-start', 'drag-move', 'drag-move', 'drag-move', 'drag-move', 'drag-move', 'drag-end',
     ])
     expect(result.gestures.at(-1)).toEqual({ kind: 'drag-end', id: 1, at: { x: 145, y: 122 }, mods: expect.any(Object) })
-    expect(effectKinds(SEQUENCES.A11)).toEqual(['prevent-default', 'capture', 'prevent-default', 'release-capture'])
   })
 
-  it('A12 Shift at the chord moment: no rotate, the band continues', () => {
-    const result = run(SEQUENCES.A12)
-    expectNoNavigation(result.gestures)
-    expect(kinds(result.gestures)).toEqual(kinds(run(SEQUENCES.A11).gestures))
-  })
-
-  it('A13 Shift+right-drag with mod steps: nothing but hovers', () => {
+  it('A13 Shift+right-drag rotates about the press, stepped while mod is held, rightward raising the bearing', () => {
     const result = run(SEQUENCES.A13)
-    expect(withoutHovers(result.gestures)).toEqual([])
-    expect(result.effects).toEqual([])
+    const rotates = result.gestures.flatMap((gesture) => gesture.kind === 'rotate' ? [gesture] : [])
+    expect(rotates.every((rotate) => rotate.source === 'secondary-drag' && rotate.anchorPx.x === 100 && rotate.anchorPx.y === 100)).toBe(true)
+    expect(rotates.map((rotate) => [rotate.phase, rotate.step])).toEqual([
+      ['start', false], ['move', false], ['move', false], ['move', false],
+      ['move', true], ['move', true], ['move', true], ['move', true],
+      ['move', false],
+      ['end', false],
+    ])
+    expect(rotates.at(-1)!.totalDeltaDeg).toBeGreaterThan(0)
+    expect(result.gestures.every((gesture) => gesture.kind === 'rotate')).toBe(true)
   })
 
-  it('A15 Right-click in the note editor: the native menu stays, nothing is emitted', () => {
+  it('A14 Esc during a right rotate: rotate{cancel}, no menu', () => {
+    const result = run(SEQUENCES.A14)
+    expect(kinds(result.gestures)).toEqual(['rotate:start', 'rotate:move', 'rotate:move', 'rotate:move', 'rotate:cancel', 'cancel'])
+    expect(result.gestures.at(-1)).toEqual({ kind: 'cancel', reason: 'escape' })
+    expect(result.steps.at(-1)!.gestures).toEqual([])
+  })
+
+  it('a still Shift+right click opens the menu: Shift matters only past the slop', () => {
+    const result = run(seq('still Shift+right click', WINDOWS, [
+      down(100, 100, { button: 2, shift: true }),
+      move(101, 101, { buttons: 2, shift: true }),
+      up(101, 100, { button: 2, shift: true }),
+    ]))
+    expect(result.gestures).toEqual([menu(101, 100)])
+  })
+
+  it('A15 Right-click in the note editor: nothing is emitted or prevented', () => {
     const result = run(SEQUENCES.A15)
     expect(result.gestures).toEqual([])
     expect(result.effects).toEqual([])
   })
 
-  it('A16 Right-click on a dock input: nothing is emitted, the contextmenu is not prevented', () => {
+  it('A16 Right-click on a dock input: nothing is emitted or prevented', () => {
     const result = run(SEQUENCES.A16)
     expect(result.gestures).toEqual([])
     expect(result.effects).toEqual([])
   })
 
-  it('A18 Shift after the press: no pan', () => {
+  it('A17 Esc during a right-drag pan: the pan ends at the Esc, the pointer only hovers after it, and the up opens no menu', () => {
+    const result = run(SEQUENCES.A17)
+    expect(result.steps[3]!.gestures).toEqual([
+      { kind: 'pan', phase: 'end', deltaPx: { x: 0, y: 0 }, source: 'secondary-drag', at: { x: 140, y: 120 } },
+      { kind: 'cancel', reason: 'escape' },
+    ])
+    expect(result.steps.slice(4, 6).map((step) => kinds(step.gestures))).toEqual([['hover'], ['hover']])
+    expect(result.steps.at(-1)!.gestures).toEqual([])
+  })
+
+  it('A18 Shift after the press: a pan, not a rotate', () => {
     const result = run(SEQUENCES.A18)
-    expect(withoutHovers(result.gestures)).toEqual([])
+    expect(kinds(result.gestures)).toEqual(['pan:start', 'pan:move', 'pan:move', 'pan:end'])
   })
 })
 
 describe('recognise: 5.2 macOS Ctrl+click', () => {
-  it('B1 macOS Ctrl+click: an additive tap and the native menu', () => {
+  it('B1 macOS Ctrl+click: an additive tap', () => {
     const result = run(SEQUENCES.B1)
-    expect(kinds(result.gestures)).toEqual(['press', 'menu-request', 'tap'])
-    const press = result.gestures[0]
-    expect(press).toMatchObject({ kind: 'press', mods: { ctrl: true, meta: false }, target: { kind: 'surface' } })
-    expect(result.gestures[2]).toMatchObject({ kind: 'tap', mods: { ctrl: true } })
+    expect(kinds(result.gestures)).toEqual(['press', 'tap'])
+    expect(result.gestures[0]).toMatchObject({ kind: 'press', mods: { ctrl: true, meta: false }, target: { kind: 'surface' } })
+    expect(result.gestures[1]).toMatchObject({ kind: 'tap', mods: { ctrl: true } })
   })
 
-  it('B2 macOS Ctrl+drag: an additive band and the menu', () => {
+  it('B2 macOS Ctrl+drag: an additive band', () => {
     const result = run(SEQUENCES.B2)
     expectNoNavigation(result.gestures)
-    expect(kinds(result.gestures)).toEqual(['press', 'menu-request', 'drag-start', 'drag-move', 'drag-move', 'drag-end'])
-    expect(result.gestures[2]).toMatchObject({ kind: 'drag-start', mods: { ctrl: true } })
+    expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'drag-move', 'drag-move', 'drag-end'])
+    expect(result.gestures[1]).toMatchObject({ kind: 'drag-start', mods: { ctrl: true } })
   })
 
   it.each([
@@ -162,37 +229,13 @@ describe('recognise: 5.2 macOS Ctrl+click', () => {
   })
 })
 
-describe('recognise: 5.3 keyboard menu', () => {
-  it.each([
-    ['C1 Menu key on Windows', SEQUENCES.C1],
-    ['C2 Shift+F10, contextmenu before keyup', SEQUENCES.C2_BEFORE_KEYUP],
-    ['C2 Shift+F10, contextmenu after keyup', SEQUENCES.C2_AFTER_KEYUP],
-    ['C3 Menu key held', SEQUENCES.C3],
-  ])('%s: the echo is prevented and requests nothing (the keydown opened the menu)', (_name, sequence) => {
-    const result = run(sequence)
-    expect(result.gestures).toEqual([])
-    expect(result.effects).toEqual([{ kind: 'prevent-default' }])
-  })
-
-  it('C4 Menu key in the text entry: the native text menu stays', () => {
-    const result = run(SEQUENCES.C4)
-    expect(result.gestures).toEqual([])
-    expect(result.effects).toEqual([])
-  })
-
-  it('C5 Late echo: past the echo window the contextmenu opens a menu at its point (today)', () => {
-    const result = run(SEQUENCES.C5)
-    expect(result.gestures).toEqual([{ kind: 'menu-request', at: { x: 200, y: 150 }, source: 'native' }])
-  })
-})
-
 describe('recognise: 5.4 pen', () => {
-  it('D1 Pen barrel tap: nothing from the barrel; the native menu', () => {
+  it('D1 Pen barrel tap: nothing from the barrel', () => {
     const result = run(SEQUENCES.D1)
     // The barrel's press is dropped; its up is kept (an up is never dropped) and ends no session.
     expect(result.steps[0]!.input).toBeNull()
     expect(result.steps[1]!.input).toMatchObject({ kind: 'up', pointer: 'pen', role: 'primary' })
-    expect(kinds(result.gestures)).toEqual(['menu-request'])
+    expect(result.gestures).toEqual([])
   })
 
   it('D2 Pen barrel drag: nothing but hovers', () => {
@@ -259,8 +302,8 @@ describe('recognise: 5.5 touch and trackpad gestures', () => {
     expect(kinds(result.gestures)).toEqual(['press', 'drag-start', 'drag-move', 'drag-move', 'drag-move', 'drag-end'])
   })
 
-  it('E6 Long press on Android: the native contextmenu opens the menu, the touch still ends in a tap', () => {
-    expect(kinds(run(SEQUENCES.E6).gestures)).toEqual(['press', 'menu-request', 'tap'])
+  it('E6 Long press on Android: no menu before phase 3 (the native contextmenu opens nothing), a tap', () => {
+    expect(kinds(run(SEQUENCES.E6).gestures)).toEqual(['press', 'tap'])
   })
 
   it('E7 Long press on iOS: no timer, a tap', () => {
@@ -619,13 +662,15 @@ describe('recognise: 5.9 precedence', () => {
     expect(result.gestures[0]).toMatchObject({ kind: 'press', mods: { shift: true } })
   })
 
-  it('J3 Legacy overview: a drag pans; a still right-click is prevented and opens no menu', () => {
+  it('J3 Legacy overview: a drag pans; a still right-click opens no menu; a right-drag pans', () => {
     const dragged = run(SEQUENCES.J3_DRAG)
     expect(kinds(dragged.gestures)).toEqual(['pan:start', 'pan:move', 'pan:move', 'pan:move', 'pan:end'])
     expect(pansOf(dragged.gestures)[0]!.source).toBe('primary-drag')
     const clicked = run(SEQUENCES.J3_RIGHT_CLICK)
     expect(clicked.gestures).toEqual([])
-    expect(clicked.steps[2]!.effects).toEqual([{ kind: 'prevent-default' }])
+    const rightDragged = run(SEQUENCES.J3_RIGHT_DRAG)
+    expect(kinds(rightDragged.gestures)).toEqual(['pan:start', 'pan:move', 'pan:move', 'pan:end'])
+    expect(pansOf(rightDragged.gestures)[0]!.source).toBe('secondary-drag')
   })
 
   it('J9 Space with the Pan tool: a space-drag pan', () => {

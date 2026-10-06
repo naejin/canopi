@@ -12,7 +12,7 @@ import type { ButtonRole, RawInput, TargetClass } from './raw-input'
 /** The fields normalise reads; a DOM event satisfies it structurally, and fixtures pass literals. */
 export interface DomEventLike {
   readonly type: 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel' | 'lostpointercapture' | 'pointerleave'
-    | 'wheel' | 'contextmenu' | 'gesturestart' | 'gesturechange' | 'gestureend' | 'dragover' | 'dragleave' | 'drop'
+    | 'wheel' | 'gesturestart' | 'gesturechange' | 'gestureend' | 'dragover' | 'dragleave' | 'drop'
   readonly timeStamp: number
   readonly clientX: number; readonly clientY: number          // converted to host-relative CSS px by the source before normalise
   readonly pointerId?: number; readonly pointerType?: string; readonly button?: number; readonly buttons?: number; readonly detail?: number
@@ -20,7 +20,6 @@ export interface DomEventLike {
   readonly deltaX?: number; readonly deltaY?: number; readonly deltaMode?: number
   readonly rotation?: number                                    // WebKit GestureEvent (its scale is never read: the pinch arrives as Ctrl+wheel)
   readonly target: TargetClass                                  // classified by the source from data attributes
-  readonly fromKeyboard?: boolean                               // contextmenu: set by the source from the KeyRouter's echo record
   readonly dropPayload?: CanvasDropPayload                      // drag events: read by the source from dataTransfer
 }
 
@@ -114,10 +113,6 @@ export function normalise(
         mods: modifiersOf(e),
         target: e.target,
       }
-    }
-    case 'contextmenu': {
-      const fromKeyboard = e.fromKeyboard ?? false
-      return { kind: 'native-contextmenu', t, at: fromKeyboard ? null : at, fromKeyboard, target: e.target }
     }
     case 'gesturestart':
     case 'gesturechange':

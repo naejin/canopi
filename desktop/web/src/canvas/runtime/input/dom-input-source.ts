@@ -1,16 +1,18 @@
 // canvas/runtime/input/dom-input-source.ts
 //
-// Owns every DOM listener for canvas input: the map host's pointer (hover moves included), wheel, contextmenu, drag and
-// focus events, WebKit's gesture events (only with trackpad gestures on a platform that has them), the window blur, the
-// window pointer listeners while it owns a pointer and the copied GeoLibre selection-drag guard on the host (keys are
-// the key router's, app/keyboard). A press it delivers on the map owns that pointer until
+// Owns every DOM listener for canvas input: the map host's pointer (hover moves included), wheel, drag and focus events,
+// the one document-capture contextmenu listener, WebKit's gesture events (only with trackpad gestures on a platform that
+// has them), the window blur, the window pointer listeners while it owns a pointer and the copied GeoLibre selection-drag
+// guard on the host (keys are the key router's, app/keyboard). A press it delivers on the map owns that pointer until
 // its release, its cancel or a window blur: only then does it listen on window, and only to that pointer, so presses,
 // moves and releases that start elsewhere in the app reach the page untouched. It turns
 // each event into host-relative, classified fields for `normalise`, hands the raw input to the sink, and applies the
 // effects the sink sends back to the event being handled: prevent-default, stop-propagation, pointer capture, the drop
-// effect. Detaching releases every capture it still holds. A sink that throws on a press on the map host quarantines that
-// event, then rethrows; on any other event it rethrows and leaves the event to the app. It is the one module of input/
-// that touches the browser (policy P7); the input core stays pure.
+// effect. The native contextmenu reaches no sink: the listener only prevents it where a canvas press made it, or over the
+// map (spec §2.2 "Native menu", U34), and the canvas menu opens from the secondary release instead. Detaching releases
+// every capture it still holds. A sink that throws on a press on the map host quarantines that event, then rethrows; on
+// any other event it rethrows and leaves the event to the app. It is the one module of input/ that touches the browser
+// (policy P7); the input core stays pure.
 
 import { hasPlantStampDragData, readPlantStampDropSource } from '../../plant-stamp-source'
 import {
@@ -25,7 +27,6 @@ import { isEditableTarget } from './editable-target'
 import { normalise, type DomEventLike } from './normalise'
 import type { AdapterEffect, RawInput, TargetClass } from './raw-input'
 import { installSelectionDragGuard } from './selection-drag-guard'
-import { DEFAULT_THRESHOLDS } from './thresholds'
 
 /** The note's text entry (chrome/text-entry-host.ts). */
 const TEXT_ENTRY_SELECTOR = '[data-canvas-text-entry]'
@@ -47,6 +48,9 @@ const OWNED_TEXT: TargetClass = Object.freeze({ kind: 'owned-text' })
 const OWNED_CHROME: TargetClass = Object.freeze({ kind: 'owned-chrome' })
 const FOREIGN: TargetClass = Object.freeze({ kind: 'foreign' })
 const NO_RECT = Object.freeze({ left: 0, top: 0, width: 0, height: 0 })
+/** A secondary release's native menu may trail it this long (WebView2 sends it after the release, retargeted to <html> or
+ *  to the menu just opened; Safari and Firefox after a Mac Control-click), measured on the events' own timeStamp. */
+const NATIVE_MENU_TRAIL_MS = 500
 
 type HostRect = Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>
 
@@ -56,10 +60,7 @@ interface HandledEvent {
   readonly rect: HostRect | null
 }
 
-/**
- * Today's rule for keeping the browser's own context menu (and wheel): text fields, menus and dialogs. The canvas menu
- * never opens over them.
- */
+/** The browser keeps its own context menu (and wheel) over text fields, menus and dialogs, in the map or not. */
 function allowsNativeContextMenuTarget(target: EventTarget | null): boolean {
   const element = target instanceof HTMLElement
     ? target
@@ -92,6 +93,12 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   let tickTimer: number | null = null
   /** Pointers pressed on the map, until their release or cancel: the window listeners follow only these. */
   const owned = new Set<number>()
+  /** The owned pointers whose press was a canvas press (not the note editor's, a field's or a menu's), each with whether
+   *  it normalised as secondary: their native menus are prevented anywhere until NATIVE_MENU_TRAIL_MS after a secondary
+   *  release. */
+  const canvasPresses = new Map<number, boolean>()
+  /** When the last canvas secondary press was released (its event's timeStamp). */
+  let secondaryReleasedAt: number | null = null
   /** Installs the window pointer listeners (set while attached); returns their removal. */
   let listenOnWindow: (() => () => void) | null = null
   let removeWindowListeners: (() => void) | null = null
@@ -101,9 +108,15 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     if (!removeWindowListeners && listenOnWindow) removeWindowListeners = listenOnWindow()
   }
 
-  function disown(pointerId: number | 'all'): void {
-    if (pointerId === 'all') owned.clear()
-    else owned.delete(pointerId)
+  function disown(pointerId: number | 'all', timeStamp: number | null = null): void {
+    if (pointerId === 'all') {
+      owned.clear()
+      canvasPresses.clear()
+    } else {
+      owned.delete(pointerId)
+      if (canvasPresses.get(pointerId) && timeStamp !== null) secondaryReleasedAt = timeStamp
+      canvasPresses.delete(pointerId)
+    }
     if (owned.size > 0 || !removeWindowListeners) return
     const remove = removeWindowListeners
     removeWindowListeners = null
@@ -138,9 +151,11 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
 
   const onPointerDown = (event: PointerEvent): void => {
     const rect = host.getBoundingClientRect()
+    const input = pointerInput(event, 'pointerdown', rect)
     // Owned first: a sink that fails on the press may still have opened its session, whose release must reach it.
     own(event.pointerId)
-    deliver(event, rect, pointerInput(event, 'pointerdown', rect), 'quarantine')
+    if (isCanvasPressTarget(event.target, host)) canvasPresses.set(event.pointerId, input?.kind === 'down' && input.role === 'secondary')
+    deliver(event, rect, input, 'quarantine')
   }
   /** A move of a pointer the source does not own, over the map: a hover (an owned pointer's moves come from window). */
   const onHostPointerMove = (event: PointerEvent): void => {
@@ -159,7 +174,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     try {
       deliver(event, rect, pointerInput(event, 'pointerup', rect))
     } finally {
-      disown(event.pointerId)
+      disown(event.pointerId, event.timeStamp)
     }
   }
   const onPointerCancel = (event: PointerEvent): void => {
@@ -167,7 +182,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     try {
       deliver(event, null, pointerInput(event, 'pointercancel', NO_RECT))
     } finally {
-      disown(event.pointerId)
+      disown(event.pointerId, event.timeStamp)
     }
   }
   const onLostPointerCapture = (event: PointerEvent): void => {
@@ -214,16 +229,17 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
     const rect = host.getBoundingClientRect()
     deliver(event, rect, normalise(domEventLike(event, 'wheel', rect, classifyTarget(event.target, host, 'surface')), deps.platform, deps.bindings(), rect))
   }
+  /**
+   * The one contextmenu listener (document capture): it opens nothing and reaches no sink. It prevents the native menu
+   * (1) over the map, except over the note editor and the map's fields, menus and dialogs; (2) anywhere while a canvas
+   * press is held (Linux and macOS send it at the press, a right press during a left drag included); (3) anywhere within
+   * NATIVE_MENU_TRAIL_MS of a canvas secondary release (Windows sends it after the release). "Anywhere" is the event's own
+   * target, so the trail WebView2 retargets to <html> or to the menu just opened is prevented too.
+   */
   const onContextMenu = (event: MouseEvent): void => {
-    if (allowsNativeContextMenuTarget(event.target)) return
-    const rect = host.getBoundingClientRect()
-    const lastKeyboardMenuAt = deps.keys.lastKeyboardMenuAt()
-    const like: DomEventLike = {
-      ...domEventLike(event, 'contextmenu', rect, classifyTarget(event.target, host)),
-      // The keyboard menu opened from keydown; its own contextmenu follows within the echo window.
-      fromKeyboard: lastKeyboardMenuAt !== null && event.timeStamp - lastKeyboardMenuAt < DEFAULT_THRESHOLDS.menuEchoMs,
-    }
-    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), rect))
+    const trailing = secondaryReleasedAt !== null && event.timeStamp - secondaryReleasedAt < NATIVE_MENU_TRAIL_MS
+    if (!trailing && canvasPresses.size === 0 && !isCanvasPressTarget(event.target, host)) return
+    if (event.cancelable) event.preventDefault()
   }
   const dragHandler = (type: 'dragover' | 'dragleave' | 'drop') => (event: DragEvent): void => {
     const rect = type === 'dragleave' ? NO_RECT : host.getBoundingClientRect()
@@ -337,12 +353,12 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
         listen(host, 'pointerleave', onPointerLeave as EventListener)
         listen(host, 'lostpointercapture', onLostPointerCapture as EventListener)
         listen(window, 'blur', onBlur)
-        listen(host, 'contextmenu', onContextMenu as EventListener)
         listen(host, 'wheel', onWheel as EventListener, { passive: false })
         listen(host, 'dragover', onDragOver as EventListener)
         listen(host, 'dragleave', onDragLeave as EventListener)
         listen(host, 'drop', onDrop as EventListener)
         listen(host, 'focusout', onFocusOut as EventListener)
+        listen(host.ownerDocument, 'contextmenu', onContextMenu as EventListener, { capture: true })
         if (deps.bindings().trackpadGestures && deps.platform.gestureEvents) {
           for (const type of ['gesturestart', 'gesturechange', 'gestureend'] as const) listen(host, type, gestureHandler(type))
         }
@@ -493,6 +509,13 @@ function dropPayloadOf(event: DragEvent, type: 'dragover' | 'dragleave' | 'drop'
   if (stamp) return { kind: 'saved-stamp', stamp }
   const species = readPlantStampDropSource(event)
   return species ? { kind: 'species', species } : { kind: 'unknown' }
+}
+
+/** A canvas press's target: the map's surface, a handle or its own chrome, but not the note editor nor a field, menu or
+ *  dialog in the map, whose native menu (copy and paste) stays. */
+function isCanvasPressTarget(target: EventTarget | null, host: HTMLElement): boolean {
+  const kind = classifyTarget(target, host).kind
+  return kind !== 'foreign' && kind !== 'owned-text' && !allowsNativeContextMenuTarget(target)
 }
 
 /** A text field in the map, the note editor included: its own selection and text drags stay the browser's. */

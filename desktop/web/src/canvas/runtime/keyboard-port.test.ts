@@ -122,7 +122,6 @@ function keyState(
     type: 'keydown',
     key: '',
     code: '',
-    timeStamp: 0,
     text: false,
     onCanvas: true,
     ...init,
@@ -319,23 +318,13 @@ describe('createCanvasKeyboardPort', () => {
     expect(keyState(f.port, { key: ' ', code: 'Space' })).toBe('held')
   })
 
-  it('the Menu key and Shift F10 open the selection\'s menu through the host and record the echo time', () => {
+  it('the Menu key and Shift F10 open the selection\'s menu through the host, never during a pointer session', () => {
     const f = fixture()
-    keyState(f.port, { key: 'ContextMenu', timeStamp: 120 })
     expect(f.port.command({ kind: 'context-menu' })).toBe(true)
     expect(f.toolHost.menuAt).toHaveBeenCalledExactlyOnceWith('selection', 'keyboard')
-    expect(f.port.lastKeyboardMenuAt()).toBe(120)
-    keyState(f.port, { key: 'F10', mods: { shift: true }, timeStamp: 240 })
-    f.port.command({ kind: 'context-menu' })
-    expect(f.toolHost.menuAt).toHaveBeenCalledTimes(2)
-    expect(f.port.lastKeyboardMenuAt()).toBe(240)
-    // A menu opened after another key records no echo time.
-    keyState(f.port, { key: 'a', timeStamp: 360 })
-    f.port.command({ kind: 'context-menu' })
-    expect(f.port.lastKeyboardMenuAt()).toBe(240)
     f.live = true
     expect(f.port.command({ kind: 'context-menu' })).toBe(false)
-    expect(f.toolHost.menuAt).toHaveBeenCalledTimes(3)
+    expect(f.toolHost.menuAt).toHaveBeenCalledOnce()
   })
 
   it('Enter confirms, then edits the selected note under Select; F2 only edits it', () => {

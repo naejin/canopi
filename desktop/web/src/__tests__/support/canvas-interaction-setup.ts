@@ -191,8 +191,8 @@ export function contextMenuCommand(id: CanvasContextMenuItemId): CanvasContextMe
   return entry
 }
 
-/** Right-clicks the map at a container point; returns the dispatched event. */
-export function dispatchContextMenu(container: HTMLElement, client: ScenePoint): MouseEvent {
+/** The native contextmenu at a client point on the map; returns the dispatched event. */
+function dispatchContextMenu(container: HTMLElement, client: ScenePoint): MouseEvent {
   const event = new MouseEvent('contextmenu', {
     bubbles: true,
     cancelable: true,
@@ -751,8 +751,13 @@ export function installSceneInteractionFixture(
     flushToolCard()
   }
 
+  /** A still right-click at a container point, as Windows sends it: the press, the release (which opens the canvas menu)
+   *  and the trailing native contextmenu, which the source prevents; returns the contextmenu. */
   function openContextMenu(screen: ScenePoint): MouseEvent {
-    return dispatchContextMenu(container, live().events.clientPoint(screen))
+    const harness = live().events
+    harness.pointerDown(screen, { button: 2 })
+    harness.pointerUp(screen, { button: 2 })
+    return dispatchContextMenu(container, harness.clientPoint(screen))
   }
 
   /** The Menu key while the map has focus: the menu for the current selection. */

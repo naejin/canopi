@@ -1083,13 +1083,9 @@ describe('scene canvas runtime', () => {
     const file = fileWithOnlyPlants('plant-1')
     runtime.documentSurface.loadDocument({ ...file, plants: file.plants.map((plant) => ({ ...plant, locked: true })) })
     setInteractionViewport(runtime)
-    const point = events.clientPoint({ x: 10, y: 10 })
-    container.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: point.x,
-      clientY: point.y,
-    }))
+    // A still right-click: the menu opens on its release.
+    events.pointerDown({ x: 10, y: 10 }, { button: 2 })
+    events.pointerUp({ x: 10, y: 10 }, { button: 2 })
     const request = canvasContextMenuRequest.value!
     const unlock = buildCanvasContextMenuEntries(request, {
       translate: (key) => key,
@@ -1119,13 +1115,8 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
     setInteractionViewport(runtime)
     runtime.commandSurface.sceneEdits.selectAll()
-    const point = events.clientPoint({ x: 200, y: 180 })
-    container.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: point.x,
-      clientY: point.y,
-    }))
+    events.pointerDown({ x: 200, y: 180 }, { button: 2 })
+    events.pointerUp({ x: 200, y: 180 }, { button: 2 })
     expect(canvasContextMenuRequest.value).not.toBeNull()
 
     runtime.documentSurface.replaceDocument(

@@ -4,7 +4,9 @@
 // `recognise` with an injected platform, clock (each step's timeStamp) and bindings constant. A sequence holds DOM-shaped
 // literals (`DomEventLike`, with host-relative points and classified targets, as the DOM source hands them over) and the
 // raw inputs that come from elsewhere (key state from the keyboard, escape from the Esc chain, the session's configure
-// and reject). The expectations live in recognise.test.ts, under CURRENT_BINDINGS.
+// and reject). A spec sequence's native contextmenu never reaches the recogniser (the source's one listener prevents it,
+// spec §2.2 "Native menu"), so the fixtures leave it out and dom-input-source.test.ts holds its orderings (A1, A3, A8,
+// A11, A15, B7, C1–C5, D1). The expectations live in recognise.test.ts, under CURRENT_BINDINGS.
 
 import type { CanvasDropPayload, ToolHandleId, ToolId } from '../../interaction-types'
 import type { Gesture } from '../gestures'
@@ -99,28 +101,6 @@ export const up = (x: number, y: number, options: PointerOptions = {}): FixtureS
 export const pointerCancel = (options: PointerOptions = {}): FixtureStep => pointer('pointercancel', 0, 0, options)
 export const lostCapture = (options: PointerOptions = {}): FixtureStep => pointer('lostpointercapture', 0, 0, options)
 export const leave = (options: PointerOptions = {}): FixtureStep => pointer('pointerleave', 0, 0, options)
-
-export function contextMenu(
-  x: number,
-  y: number,
-  options: { readonly target?: TargetClass; readonly fromKeyboard?: boolean; readonly t?: number } = {},
-): FixtureStep {
-  return {
-    t: options.t,
-    dom: {
-      type: 'contextmenu',
-      clientX: x,
-      clientY: y,
-      button: 2,
-      shiftKey: false,
-      ctrlKey: false,
-      altKey: false,
-      metaKey: false,
-      target: options.target ?? SURFACE,
-      fromKeyboard: options.fromKeyboard,
-    },
-  }
-}
 
 interface WheelOptions {
   readonly dx?: number
@@ -288,46 +268,47 @@ export const SEQUENCES = {
   A1: seq('A1 Windows right-click', WINDOWS, [
     down(100, 100, { button: 2 }),
     up(101, 100, { button: 2 }),
-    contextMenu(101, 100, { t: 100 }),
   ]),
   A2: seq('A2 Windows right-drag', WINDOWS, [
     down(100, 100, { button: 2 }),
     ...moves([100, 100], [200, 180], 5, { buttons: 2 }),
     up(200, 180, { button: 2 }),
-    contextMenu(200, 180),
   ]),
   A3: seq('A3 Linux right-click', LINUX, [
     down(100, 100, { button: 2 }),
-    contextMenu(100, 100),
     up(100, 100, { button: 2 }),
   ]),
   A4_LINUX: seq('A4 Linux right-drag', LINUX, [
     down(100, 100, { button: 2 }),
-    contextMenu(100, 100),
     ...moves([100, 100], [160, 100], 3, { buttons: 2 }),
     up(160, 100, { button: 2 }),
   ]),
   A4_MAC: seq('A4 macOS right-drag', MAC_GESTURES, [
     down(100, 100, { button: 2 }),
-    contextMenu(100, 100),
     ...moves([100, 100], [160, 100], 3, { buttons: 2 }),
     up(160, 100, { button: 2 }),
+  ]),
+  A6: seq('A6 WKWebView capture then nothing', MAC_GESTURES, [
+    down(100, 100, { button: 2 }),
+    lostCapture(),
+  ]),
+  A7: seq('A7 Right-drag then pointercancel', WINDOWS, [
+    down(100, 100, { button: 2 }),
+    ...moves([100, 100], [140, 120], 2, { buttons: 2 }),
+    pointerCancel(),
+  ]),
+  A10: seq('A10 Left pressed during a right-drag', WINDOWS, [
+    down(100, 100, { button: 2 }),
+    ...moves([100, 100], [130, 100], 2, { buttons: 2 }),
+    move(140, 100, { buttons: 3 }),
+    move(150, 100, { buttons: 2 }),
+    up(150, 100, { button: 2 }),
   ]),
   A11: seq('A11 Right pressed during a left drag', LINUX, [
     down(100, 100),
     ...moves([100, 100], [120, 110], 2, { buttons: 1 }),
     move(125, 112, { buttons: 3 }),
-    contextMenu(125, 112),
     ...moves([125, 112], [140, 120], 2, { buttons: 3 }),
-    move(145, 122, { buttons: 1 }),
-    up(145, 122),
-  ]),
-  A12: seq('A12 Shift at the chord moment', LINUX, [
-    down(100, 100),
-    ...moves([100, 100], [120, 110], 2, { buttons: 1 }),
-    move(125, 112, { buttons: 3, shift: true }),
-    contextMenu(125, 112),
-    ...moves([125, 112], [140, 120], 2, { buttons: 3, shift: true }),
     move(145, 122, { buttons: 1 }),
     up(145, 122),
   ]),
@@ -339,15 +320,26 @@ export const SEQUENCES = {
     keyState(false, { shift: true }),
     up(160, 100, { button: 2, shift: true }),
   ]),
+  A14: seq('A14 Esc during a right rotate', WINDOWS, [
+    down(100, 100, { button: 2, shift: true }),
+    ...moves([100, 100], [130, 100], 3, { buttons: 2, shift: true }),
+    escape(),
+    up(130, 100, { button: 2, shift: true }),
+  ]),
   A15: seq('A15 Right-click in the note editor', LINUX, [
     down(100, 100, { button: 2, target: OWNED_TEXT }),
-    contextMenu(100, 100, { target: OWNED_TEXT }),
     up(100, 100, { button: 2, target: OWNED_TEXT }),
   ]),
   A16: seq('A16 Right-click on a dock input', WINDOWS, [
     down(100, 100, { button: 2, target: FOREIGN }),
-    contextMenu(100, 100, { target: FOREIGN }),
     up(100, 100, { button: 2, target: FOREIGN }),
+  ]),
+  A17: seq('A17 Esc during a right-drag pan', WINDOWS, [
+    down(100, 100, { button: 2 }),
+    ...moves([100, 100], [140, 120], 2, { buttons: 2 }),
+    escape(),
+    ...moves([140, 120], [160, 130], 2, { buttons: 2 }),
+    up(160, 130, { button: 2 }),
   ]),
   A18: seq('A18 Shift after the press', WINDOWS, [
     down(100, 100, { button: 2 }),
@@ -359,12 +351,10 @@ export const SEQUENCES = {
   // 5.2 macOS Ctrl+click
   B1: seq('B1 macOS Ctrl+click', MAC_GESTURES, [
     down(100, 100, { ctrl: true }),
-    contextMenu(100, 100),
     up(100, 100, { ctrl: true }),
   ]),
   B2: seq('B2 macOS Ctrl+drag', MAC_GESTURES, [
     down(100, 100, { ctrl: true }),
-    contextMenu(100, 100),
     ...moves([100, 100], [150, 140], 3, { buttons: 1, ctrl: true }),
     up(150, 140, { ctrl: true }),
   ]),
@@ -378,7 +368,6 @@ export const SEQUENCES = {
   ]),
   B4: seq('B4 macOS two-finger trackpad click', MAC_GESTURES, [
     down(100, 100, { button: 2 }),
-    contextMenu(100, 100),
     up(100, 100, { button: 2 }),
   ]),
   B6: seq('B6 Mac Ctrl+Shift+click drag', MAC_GESTURES, [
@@ -388,19 +377,10 @@ export const SEQUENCES = {
     ...moves([120, 100], [140, 100], 2, { buttons: 1, ctrl: true, shift: true, meta: true }),
   ]),
 
-  // 5.3 Keyboard menu: the keydown is the keyboard's; the contextmenu arrives marked by the source's echo record.
-  C1: seq('C1 Menu key on Windows', WINDOWS, [contextMenu(200, 150, { fromKeyboard: true, t: 40 })]),
-  C2_BEFORE_KEYUP: seq('C2 Shift+F10, contextmenu before keyup', WINDOWS, [contextMenu(200, 150, { fromKeyboard: true, t: 20 })]),
-  C2_AFTER_KEYUP: seq('C2 Shift+F10, contextmenu after keyup', LINUX, [contextMenu(200, 150, { fromKeyboard: true, t: 120 })]),
-  C3: seq('C3 Menu key held', WINDOWS, [contextMenu(200, 150, { fromKeyboard: true, t: 300 })]),
-  C4: seq('C4 Menu key in the text entry', WINDOWS, [contextMenu(200, 150, { target: OWNED_TEXT, t: 40 })]),
-  C5: seq('C5 Late echo', WINDOWS, [contextMenu(200, 150, { fromKeyboard: false, t: 600 })]),
-
   // 5.4 Pen
   D1: seq('D1 Pen barrel tap', WINDOWS, [
     down(100, 100, { pointer: 'pen', button: 2 }),
     up(100, 100, { pointer: 'pen', button: 2 }),
-    contextMenu(100, 100),
   ]),
   D2: seq('D2 Pen barrel drag', WINDOWS, [
     down(100, 100, { pointer: 'pen', button: 2 }),
@@ -466,7 +446,6 @@ export const SEQUENCES = {
   E6: seq('E6 Long press on Android', ANDROID, [
     down(100, 100, { pointer: 'touch', t: 0 }),
     { t: 600, raw: { kind: 'tick' } },
-    contextMenu(100, 100, { t: 620 }),
     up(100, 100, { pointer: 'touch', t: 700 }),
   ]),
   E7: seq('E7 Long press on iOS', IOS, [
@@ -676,10 +655,14 @@ export const SEQUENCES = {
     ...moves([100, 100], [150, 130], 3, { buttons: 1 }),
     up(150, 130),
   ], { mode: 'overview' }),
-  J3_RIGHT_CLICK: seq('J3 Legacy overview right-click', WINDOWS, [
+  J3_RIGHT_CLICK: seq('J3 Overview right-click', WINDOWS, [
     down(100, 100, { button: 2 }),
     up(100, 100, { button: 2 }),
-    contextMenu(100, 100),
+  ], { mode: 'overview' }),
+  J3_RIGHT_DRAG: seq('J3 Overview right-drag', WINDOWS, [
+    down(100, 100, { button: 2 }),
+    ...moves([100, 100], [140, 130], 2, { buttons: 2 }),
+    up(140, 130, { button: 2 }),
   ], { mode: 'overview' }),
   J9: seq('J9 Space with the Pan tool', WINDOWS, [
     keyState(true),

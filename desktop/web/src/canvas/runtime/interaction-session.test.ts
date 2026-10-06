@@ -506,7 +506,7 @@ describe('the interaction session', () => {
     expect(session.keyboard.escapeLayers()).not.toContain('gesture')
     expect(session.keyboard.keyState({
       type: 'keydown', key: 'Shift', code: 'ShiftLeft', mods: { shift: true, ctrl: false, alt: false, meta: false },
-      timeStamp: 0, text: false, onCanvas: true,
+      text: false, onCanvas: true,
     })).toBe('pass')
     // Past 10° the twist turns the view and is live: Esc cancels it first.
     gesture('gesturechange', 14)

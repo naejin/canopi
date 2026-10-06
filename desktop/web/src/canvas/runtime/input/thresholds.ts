@@ -6,17 +6,12 @@
 
 export interface Thresholds {
   readonly longPressMs: number               // 500
-  readonly menuEchoMs: number                // 500: keyboard-menu echo
-  readonly windowsMenuTrailMs: number        // 250: WebView2 trailing contextmenu
   readonly twistStartArcPx: number           // 25: touch twist
   readonly trackpadTwistStartDeg: number     // 10: WebKit gesture rotation before any rotate is emitted
 }
 
 export const DEFAULT_THRESHOLDS: Thresholds = Object.freeze({
   longPressMs: 500,
-  // As before v2 (at a4c86d39, scene-interaction.ts KEYBOARD_CONTEXT_MENU_ECHO_MS).
-  menuEchoMs: 500,
-  windowsMenuTrailMs: 250,
   twistStartArcPx: 25,
   trackpadTwistStartDeg: 10,
 })

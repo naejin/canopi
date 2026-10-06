@@ -30,7 +30,6 @@ export type RawInput =
   | At & { kind: 'reject'; id: number }                                       // the session, on a GestureOutcome.rejectSession: ends that session with no gesture
   | At & { kind: 'wheel'; at: ScreenPoint; dxPx: number; dyPx: number; mods: Modifiers; target: TargetClass }
   | At & { kind: 'platform-gesture'; phase: 'start' | 'change' | 'end'; at: ScreenPoint; rotationDeg: number }
-  | At & { kind: 'native-contextmenu'; at: ScreenPoint | null; fromKeyboard: boolean; target: TargetClass }
   | At & { kind: 'key-state'; space: boolean; mods: Modifiers }               // from the KeyRouter
   | At & { kind: 'escape' }                                                   // from the Esc chain's 'gesture' layer
   | At & { kind: 'drop'; phase: 'over' | 'leave' | 'drop'; at: ScreenPoint; payload: CanvasDropPayload }
@@ -53,10 +52,10 @@ export interface AdapterEffect {
 }
 /** Opaque to callers; the recogniser owns its shape. Plain data (structured-clone safe), so the property test can snapshot it. */
 export interface RecogniserState {
-  readonly sessions: ReadonlyMap<number, PointerSession>        // by pointerId: pointer kind, role, mode ('pending' | 'primary' | 'pan' | 'rotate' | 'ignored'), start, last point, press target, slop passed, capture held
+  readonly sessions: ReadonlyMap<number, PointerSession>        // by pointerId: pointer kind, role, mode ('pending' | 'secondary' | 'primary' | 'pan' | 'rotate'), start, last point, slop passed, capture held
   readonly touchPair: TouchPair | null                          // two touch ids, their start centroid, distance and angle, twist arc accumulated
   readonly held: { readonly space: boolean }                    // the only gesture-state record of a held key (ADR 0017)
   readonly trackpadTwistDeg: number                             // WebKit gesture rotation accumulated before the 10° threshold
-  readonly deadlines: { readonly longPressAt: number | null; readonly menuEchoUntil: number | null; readonly windowsTrailUntil: number | null; readonly lastSecondaryEndAt: number | null }
+  readonly deadlines: { readonly longPressAt: number | null }
   readonly context: { readonly tool: ToolId; readonly mode: 'site' | 'overview'; readonly pointingDevice: 'mouse' | 'trackpad' }
 }

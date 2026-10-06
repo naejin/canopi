@@ -120,8 +120,6 @@ describe('normalise', () => {
     expect(raw({ type: 'pointercancel', pointerId: 2 })).toEqual({ kind: 'cancel', t: 10, id: 2, reason: 'pointercancel' })
     expect(raw({ type: 'lostpointercapture', pointerId: 2 })).toEqual({ kind: 'cancel', t: 10, id: 2, reason: 'lost-capture' })
     expect(raw({ type: 'pointerleave' })).toEqual({ kind: 'leave', t: 10 })
-    expect(raw({ type: 'contextmenu' })).toMatchObject({ kind: 'native-contextmenu', at: { x: 12, y: 34 }, fromKeyboard: false })
-    expect(raw({ type: 'contextmenu', fromKeyboard: true })).toMatchObject({ kind: 'native-contextmenu', at: null, fromKeyboard: true })
     expect(raw({ type: 'gesturechange', rotation: 12 })).toEqual({ kind: 'platform-gesture', t: 10, phase: 'change', at: { x: 12, y: 34 }, rotationDeg: 12 })
     expect(raw({ type: 'gesturestart' })).toMatchObject({ phase: 'start', rotationDeg: 0 })
     expect(raw({ type: 'gestureend' })).toMatchObject({ phase: 'end' })
