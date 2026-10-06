@@ -574,9 +574,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   /**
    * Whether this input ended no press of the tool's, so today's window pointerup (or a pan's pointercancel or lost
    * capture) would have run the cancellation (ToolHost.released): the up, cancel, Esc or lost release that ends a pointer
-   * pan or turn,
-   * or an up with no press of the map's at all, a still right-click's that opens the menu included. Today's exceptions hold for the latter: nothing while another pointer's press is
-   * live, in overview (the recogniser swallows the up), or over the note editor or a handle. The host handles the tap or drag-end of a press the tool never heard itself.
+   * pan or turn, or an up with no press of the map's at all, a still right-click's that opens the menu included. Today's
+   * exceptions hold for the latter: nothing while another pointer's press is live, in overview (a still right-click there
+   * opens nothing and cleans nothing), or over the note editor or a handle. The host handles the tap or drag-end of a
+   * press the tool never heard itself.
    */
   private _releasesOutsideTool(input: RawInput, gestures: readonly Gesture[]): boolean {
     // A move ends a pointer pan or turn whose release was lost (spec §2.2 "Drag end").
