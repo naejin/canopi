@@ -188,7 +188,7 @@ describe('SceneInteractionSession', () => {
     expect(rowSource('plant-1')).toBe(true)
     expect(toolCard()?.querySelector('b')?.textContent).toBe('Apple')
     expect(hud?.textContent).toContain('Apple')
-    expect(hud?.textContent).toContain('Esc to cancel')
+    expect(hud?.textContent).toContain('Esc to clear the row')
     expect(hud?.textContent).not.toContain('Source selected')
     expect(hud?.textContent).not.toContain('Plant Spacing')
     expect(hud?.querySelector('button')).toBeNull()
