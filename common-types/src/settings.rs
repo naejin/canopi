@@ -31,7 +31,6 @@ pub struct Settings {
     pub locale: Locale,
     pub theme: Theme,
     pub snap_to_grid: bool,
-    pub snap_to_guides: bool,
     pub side_panel_width: Option<u32>,
     pub saved_stamps_frame_height: Option<u32>,
     /// OpenFreeMap vector style of the Basemap row.
@@ -63,9 +62,8 @@ pub struct Settings {
     pub soften_background: bool,
     #[serde(default = "default_plant_spacing_interval_m")]
     pub plant_spacing_interval_m: f64,
-    /// The camera view last shown on a Design, on this device. The first
-    /// Design opened turns to its bearing; a new or empty Design opens at its
-    /// centre, zoomed out and north up.
+    /// The camera view last shown on a Design, on this device: a new or empty
+    /// Design opens at its centre, zoomed out and north up.
     pub last_view: Option<LastView>,
     /// Canvas tools used at least once on this device. The tool rail shows
     /// names and keys until every tool is in this list.
@@ -105,15 +103,12 @@ pub struct AppFolderLocations {
     pub data_library: String,
 }
 
-/// A geographic camera view: WGS84 centre, MapLibre zoom and bearing.
+/// A geographic camera position: WGS84 centre and MapLibre zoom.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
 pub struct LastView {
     pub lon: f64,
     pub lat: f64,
     pub zoom: f64,
-    /// Degrees clockwise from north; 0 when missing, normalised on read.
-    #[serde(default)]
-    pub bearing: f64,
 }
 
 impl Default for Settings {
@@ -122,7 +117,6 @@ impl Default for Settings {
             locale: Locale::En,
             theme: Theme::Light,
             snap_to_grid: true,
-            snap_to_guides: true,
             side_panel_width: None,
             saved_stamps_frame_height: None,
             basemap_style: BasemapStyle::Liberty,
@@ -240,7 +234,7 @@ mod tests {
     fn last_view_defaults_to_none_and_round_trips() {
         assert_eq!(Settings::default().last_view, None);
         let settings: Settings = serde_json::from_value(serde_json::json!({
-            "last_view": { "lon": 2.3522, "lat": 48.8566, "zoom": 17.5, "bearing": 0.0 }
+            "last_view": { "lon": 2.3522, "lat": 48.8566, "zoom": 17.5 }
         }))
         .expect("last view should load");
         assert_eq!(
@@ -249,34 +243,13 @@ mod tests {
                 lon: 2.3522,
                 lat: 48.8566,
                 zoom: 17.5,
-                bearing: 0.0
             })
         );
         let value = serde_json::to_value(&settings).expect("settings should serialize");
         assert_eq!(
             value["last_view"],
-            serde_json::json!({ "lon": 2.3522, "lat": 48.8566, "zoom": 17.5, "bearing": 0.0 })
+            serde_json::json!({ "lon": 2.3522, "lat": 48.8566, "zoom": 17.5 })
         );
-    }
-
-    #[test]
-    fn last_view_defaults_bearing_zero() {
-        let settings: Settings = serde_json::from_value(serde_json::json!({
-            "last_view": { "lon": 2.3522, "lat": 48.8566, "zoom": 17.5 }
-        }))
-        .expect("a last view saved without a bearing should load");
-        assert_eq!(settings.last_view.map(|view| view.bearing), Some(0.0));
-    }
-
-    #[test]
-    fn last_view_round_trips_bearing() {
-        let settings: Settings = serde_json::from_value(serde_json::json!({
-            "last_view": { "lon": 2.3522, "lat": 48.8566, "zoom": 17.5, "bearing": 30.0 }
-        }))
-        .expect("last view should load");
-        assert_eq!(settings.last_view.map(|view| view.bearing), Some(30.0));
-        let value = serde_json::to_value(&settings).expect("settings should serialize");
-        assert_eq!(value["last_view"]["bearing"], serde_json::json!(30.0));
     }
 
     #[test]

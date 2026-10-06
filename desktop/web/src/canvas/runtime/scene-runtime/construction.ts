@@ -243,16 +243,7 @@ export function createSceneRuntimeConstruction(
     getSnapshot: () => presentation.buildRendererSnapshot(),
     setHoveredTarget: callbacks.setHoveredTarget,
   })
-  // The opening bearing (spec §4.15): the stored last view's on the first Design opened, then the live target for later opens
-  // in the session, so the per-device last view carries over without waiting for it to settle and be written.
-  let lastViewBearingRead = false
-  const readOpeningBearing = () => {
-    if (lastViewBearingRead) return cameraHost.current().bearingTarget()
-    lastViewBearingRead = true
-    return appAdapter.settings.readLastView?.()?.bearing ?? 0
-  }
   const documentSurface = createSceneCanvasDocumentSurface({
-    readOpeningBearing,
     inspection,
     documents,
     cameraHost,

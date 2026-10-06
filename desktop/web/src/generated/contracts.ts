@@ -301,13 +301,11 @@ export type GeoResult = {
 	lon: number,
 };
 
-// A geographic camera view: WGS84 centre, MapLibre zoom and bearing.
+// A geographic camera position: WGS84 centre and MapLibre zoom.
 export type LastView = {
 	lon: number,
 	lat: number,
 	zoom: number,
-	// Degrees clockwise from north; 0 when missing, normalised on read.
-	bearing?: number,
 };
 
 export type Layer = {
@@ -913,7 +911,6 @@ export type Settings = {
 	locale: Locale,
 	theme: Theme,
 	snap_to_grid: boolean,
-	snap_to_guides: boolean,
 	side_panel_width: number | null,
 	saved_stamps_frame_height: number | null,
 	// OpenFreeMap vector style of the Basemap row.
@@ -950,9 +947,8 @@ export type Settings = {
 	soften_background: boolean,
 	plant_spacing_interval_m: number,
 	/**
-	 *  The camera view last shown on a Design, on this device. The first
-	 *  Design opened turns to its bearing; a new or empty Design opens at its
-	 *  centre, zoomed out and north up.
+	 *  The camera view last shown on a Design, on this device: a new or empty
+	 *  Design opens at its centre, zoomed out and north up.
 	 */
 	last_view: LastView | null,
 	/**

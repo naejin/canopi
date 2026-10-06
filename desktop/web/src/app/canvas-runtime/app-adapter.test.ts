@@ -259,7 +259,6 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     locale: 'en',
     theme: 'light',
     snap_to_grid: true,
-    snap_to_guides: true,
     side_panel_width: null,
     saved_stamps_frame_height: null,
     basemap_style: 'liberty',

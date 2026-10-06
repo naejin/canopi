@@ -75,8 +75,8 @@ describe('new Design view', () => {
     expect(viewport.scale).toBeCloseTo(Math.min(Math.max(scale, scaleBounds.min), scaleBounds.max), 12)
   })
 
-  it('remembers the settled view, its bearing included, as the last view', () => {
+  it('remembers the settled view\'s centre and zoom as the last view, not its bearing', () => {
     persistLastView({ lon: 2.3522, lat: 48.8566, zoom: 18.25, bearing: 30 })
-    expect(lastView.value).toEqual({ lon: 2.3522, lat: 48.8566, zoom: 18.25, bearing: 30 })
+    expect(lastView.value).toEqual({ lon: 2.3522, lat: 48.8566, zoom: 18.25 })
   })
 })

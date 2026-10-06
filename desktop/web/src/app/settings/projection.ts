@@ -1,9 +1,7 @@
 import { batch } from '@preact/signals'
 import type { LastView, SatelliteSource, ScrollWheel } from '../../generated/contracts'
 import { WEB_MERCATOR_MAX_LATITUDE_DEG } from '../../generated/canopi-design-format'
-import { DEFAULT_SETTINGS } from '../../generated/settings'
 import type { Locale, Settings, Theme } from '../../types/settings'
-import { storedBearing } from '../../canvas/session-plane'
 import { FALLBACK_PLANT_SPACING_INTERVAL_M } from '../../canvas/plant-spacing-interval'
 import { clampPlantSymbolScale } from '../../canvas/runtime/plant-display'
 import {
@@ -220,8 +218,6 @@ function settingsFromDraft(draft: SettingsProjectionDraft): Settings {
     locale: draft.locale,
     theme: draft.theme,
     snap_to_grid: draft.snapToGrid,
-    // Snap to guides is gone (U33): nothing reads the stored field, written at its default until settings drop it.
-    snap_to_guides: DEFAULT_SETTINGS.snap_to_guides,
     plant_spacing_interval_m: draft.plantSpacingIntervalM,
     last_view: draft.lastView,
     side_panel_width: draft.sidePanel.width,
@@ -260,14 +256,12 @@ function normalizeLastView(view: LastView | null): LastView | null {
   const { lon, lat, zoom } = view
   if (![lon, lat, zoom].every(Number.isFinite)) return null
   if (lon < -180 || lon > 180 || Math.abs(lat) > WEB_MERCATOR_MAX_LATITUDE_DEG) return null
-  // A view written before the bearing existed reads as north up.
-  return { lon, lat, zoom, bearing: storedBearing(view.bearing) }
+  return { lon, lat, zoom }
 }
 
 function sameLastView(left: LastView | null | undefined, right: LastView | null | undefined): boolean {
   if (!left || !right) return !left && !right
   return left.lon === right.lon && left.lat === right.lat && left.zoom === right.zoom
-    && storedBearing(left.bearing) === storedBearing(right.bearing)
 }
 
 function sameStrings(left: readonly string[], right: readonly string[]): boolean {

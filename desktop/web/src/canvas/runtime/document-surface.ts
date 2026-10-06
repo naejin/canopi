@@ -21,8 +21,6 @@ import type { ViewNavigation } from './view/navigation'
 import type { ViewCamera } from './view/types'
 
 interface SceneCanvasDocumentSurfaceOptions {
-  /** The bearing a loaded Design opens at; read once per open of a loaded Design (scene-runtime/construction.ts). */
-  readonly readOpeningBearing: () => number
   readonly inspection: Pick<SceneCanvasInspectionOwner, 'mount' | 'reset' | 'dispose'>
   readonly documents: Pick<
     SceneRuntimeDocumentBridge,
@@ -111,7 +109,8 @@ class SceneCanvasDocumentRole implements SceneCanvasDocumentSurface {
       this.options.viewNavigation.openAt(0)
       return
     }
-    this.options.viewNavigation.openAt(this.options.readOpeningBearing(), this._savedCamera())
+    // A Design without a saved view opens on the fit at the live bearing: north up on the runtime's first open (spec §4.15).
+    this.options.viewNavigation.openAt(this.options.cameraHost.current().bearingTarget(), this._savedCamera())
     this._placed = true
   }
 

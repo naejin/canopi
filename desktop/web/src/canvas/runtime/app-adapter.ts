@@ -133,9 +133,9 @@ export interface CanvasRuntimeSettingsAdapter {
   /** Settings › Canvas › Scroll wheel: what a plain wheel does; pinch and Ctrl wheel always zoom. */
   readScrollWheel(): CanvasScrollWheelSetting
   readPlantSpacingIntervalMeters(): number
-  /** The app's last view as stored, if any: the first Design opened turns to its bearing, and a new or empty Design opens at
-   *  its centre, zoomed out (spec §4.15; the clamp is the runtime's, scene-runtime/construction.ts). */
-  readLastView?(): { readonly lon: number; readonly lat: number; readonly zoom: number; readonly bearing?: number } | null
+  /** The app's last view as stored, if any: a new or empty Design opens at its centre, zoomed out (spec §4.15; the clamp
+   *  is the runtime's, scene-runtime/construction.ts). */
+  readLastView?(): { readonly lon: number; readonly lat: number; readonly zoom: number } | null
   commitPlantSpacingIntervalMeters(meters: number): void
   toggleGridVisible(): void
   toggleSnapToGrid(): void
