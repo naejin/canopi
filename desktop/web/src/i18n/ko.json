@@ -1769,9 +1769,31 @@
     "turnView": "보기를 15° 회전",
     "resetNorth": "북쪽을 위로",
     "resetNorthAlways": "{{shortcut}} 키는 한 키 단축키가 꺼져 있어도 작동합니다.",
+    "zoomStep": "한 단계 확대 또는 축소",
+    "fitHome": "디자인에 맞추기",
     "arrowKeys": "화살표 키",
     "singleKeysOn": "한 키 단축키는 설정 › 키보드에서 끌 수 있습니다.",
-    "singleKeysOff": "한 키 단축키가 꺼져 있습니다. 설정 › 키보드에서 켜세요."
+    "singleKeysOff": "한 키 단축키가 꺼져 있습니다. 설정 › 키보드에서 켜세요.",
+    "gestures": {
+      "heading": "마우스, 트랙패드, 펜",
+      "rightDrag": "오른쪽 드래그, 가운데 드래그 또는 Space + 드래그",
+      "pan": "지도 이동",
+      "shiftDrag": "Shift + 오른쪽 드래그 또는 Shift + 가운데 드래그",
+      "turnView": "보기 회전, {{mod}} 키를 더하면 15° 단위",
+      "trackpadTwist": "트랙패드에서 두 손가락 비틀기",
+      "compass": "나침반",
+      "compassAction": "클릭하면 북쪽을 위로, 드래그하면 보기 회전",
+      "rightClick": "오른쪽 클릭",
+      "macCtrlClick": "Control-클릭",
+      "menu": "메뉴 열기",
+      "penButton": "펜 측면 버튼: 드래그 또는 탭",
+      "wheel": "스크롤 휠",
+      "pinch": "핀치 또는 Ctrl + 휠",
+      "zoom": "확대/축소",
+      "altClick": "Alt + 클릭",
+      "removeFromSelection": "선택에서 제거",
+      "linuxPinch": "Linux에서는 아직 트랙패드 핀치를 지원하지 않습니다. Ctrl + 스크롤로 확대/축소하세요."
+    }
   },
   "settings": {
     "title": "설정",

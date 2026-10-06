@@ -1769,9 +1769,31 @@
     "turnView": "Ruota la vista di 15°",
     "resetNorth": "Ripristina il nord",
     "resetNorthAlways": "{{shortcut}} funziona anche quando le scorciatoie a un tasto sono disattivate.",
+    "zoomStep": "Ingrandire o ridurre di un passo",
+    "fitHome": "Adatta il progetto",
     "arrowKeys": "Frecce",
     "singleKeysOn": "Le scorciatoie a un tasto si possono disattivare in Impostazioni › Tastiera.",
-    "singleKeysOff": "Le scorciatoie a un tasto sono disattivate. Attivale in Impostazioni › Tastiera."
+    "singleKeysOff": "Le scorciatoie a un tasto sono disattivate. Attivale in Impostazioni › Tastiera.",
+    "gestures": {
+      "heading": "Mouse, trackpad e penna",
+      "rightDrag": "Trascina con il tasto destro, con quello centrale o Spazio + trascina",
+      "pan": "Spostare la mappa",
+      "shiftDrag": "Maiusc + trascina con il tasto destro o Maiusc + trascina con quello centrale",
+      "turnView": "Ruotare la vista; aggiungi {{mod}} per passi di 15°",
+      "trackpadTwist": "Ruota due dita sul trackpad",
+      "compass": "Bussola",
+      "compassAction": "Fai clic per ripristinare il nord, trascina per ruotare la vista",
+      "rightClick": "Clic destro",
+      "macCtrlClick": "Control-clic",
+      "menu": "Aprire il menu",
+      "penButton": "Tasto laterale della penna: trascina o tocca",
+      "wheel": "Rotellina di scorrimento",
+      "pinch": "Pizzico o Ctrl + rotellina",
+      "zoom": "Zoom",
+      "altClick": "Alt + clic",
+      "removeFromSelection": "Rimuovere dalla selezione",
+      "linuxPinch": "Su Linux il pizzico sul trackpad non è ancora supportato. Usa Ctrl + scorrimento per lo zoom."
+    }
   },
   "settings": {
     "title": "Impostazioni",

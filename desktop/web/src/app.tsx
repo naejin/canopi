@@ -8,6 +8,7 @@ import { SaveProblemDialog } from "./components/shared/SaveProblemDialog";
 import { ProblemReportDialog } from "./components/shared/ProblemReportDialog";
 import { SettingsDialog, type SettingsFoldersAdapter } from "./components/shared/SettingsDialog";
 import { KeyboardShortcutsDialog } from "./components/shared/KeyboardShortcutsDialog";
+import { detectPlatform } from "./canvas/runtime/input/platform";
 import { DesktopPanelRail } from "./components/panels/DesktopPanelRail";
 import { DesktopWorkspace } from "./components/workspace/DesktopWorkspace";
 import { WorkspaceDialogs } from "./components/workspace/WorkspaceComposition";
@@ -38,5 +39,7 @@ export function App() {
 
 function DesktopKeyboardShortcuts() {
   if (!keyboardShortcutsDialogOpen.value) return null;
-  return <KeyboardShortcutsDialog menus={appCommandGraphChromeProjection.value.menus} />;
+  // WebKitGTK delivers no trackpad pinch, so Linux gets the note.
+  const platform = detectPlatform(navigator, window as unknown as { readonly GestureEvent?: unknown });
+  return <KeyboardShortcutsDialog menus={appCommandGraphChromeProjection.value.menus} platform={platform} linuxPinchNote={platform.os === "linux"} />;
 }

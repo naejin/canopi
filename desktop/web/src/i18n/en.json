@@ -1769,9 +1769,31 @@
     "turnView": "Turn the view 15°",
     "resetNorth": "Reset north",
     "resetNorthAlways": "{{shortcut}} works even when single-key shortcuts are off.",
+    "zoomStep": "Zoom in or out one step",
+    "fitHome": "Fit the Design",
     "arrowKeys": "Arrow keys",
     "singleKeysOn": "Single-key shortcuts can be turned off in Settings › Keyboard.",
-    "singleKeysOff": "Single-key shortcuts are off. Turn them on in Settings › Keyboard."
+    "singleKeysOff": "Single-key shortcuts are off. Turn them on in Settings › Keyboard.",
+    "gestures": {
+      "heading": "Mouse, trackpad and pen",
+      "rightDrag": "Right-drag, middle-drag or Space + drag",
+      "pan": "Pan the map",
+      "shiftDrag": "Shift + right-drag or Shift + middle-drag",
+      "turnView": "Turn the view; add {{mod}} for 15° steps",
+      "trackpadTwist": "Twist two fingers on the trackpad",
+      "compass": "Compass",
+      "compassAction": "Click to reset north, drag to turn the view",
+      "rightClick": "Right-click",
+      "macCtrlClick": "Control-click",
+      "menu": "Open the menu",
+      "penButton": "Pen side button: drag or tap",
+      "wheel": "Scroll wheel",
+      "pinch": "Pinch or Ctrl + wheel",
+      "zoom": "Zoom",
+      "altClick": "Alt + click",
+      "removeFromSelection": "Remove from the selection",
+      "linuxPinch": "On Linux, trackpad pinch is not supported yet. Use Ctrl + scroll to zoom."
+    }
   },
   "settings": {
     "title": "Settings",

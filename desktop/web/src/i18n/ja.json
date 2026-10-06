@@ -1769,9 +1769,31 @@
     "turnView": "ビューを 15° 回転",
     "resetNorth": "北を上にする",
     "resetNorthAlways": "1 キーのショートカットがオフでも {{shortcut}} は使えます。",
+    "zoomStep": "1 段階拡大または縮小",
+    "fitHome": "デザインに合わせる",
     "arrowKeys": "矢印キー",
     "singleKeysOn": "1 キーのショートカットは「設定 › キーボード」でオフにできます。",
-    "singleKeysOff": "1 キーのショートカットはオフです。「設定 › キーボード」でオンにできます。"
+    "singleKeysOff": "1 キーのショートカットはオフです。「設定 › キーボード」でオンにできます。",
+    "gestures": {
+      "heading": "マウス、トラックパッド、ペン",
+      "rightDrag": "右ドラッグ、中ドラッグ、Space + ドラッグ",
+      "pan": "地図を移動",
+      "shiftDrag": "Shift + 右ドラッグ、Shift + 中ドラッグ",
+      "turnView": "ビューを回転。{{mod}} を加えると 15° 刻み",
+      "trackpadTwist": "トラックパッドで 2 本指をひねる",
+      "compass": "コンパス",
+      "compassAction": "クリックで北を上に、ドラッグでビューを回転",
+      "rightClick": "右クリック",
+      "macCtrlClick": "Control-クリック",
+      "menu": "メニューを開く",
+      "penButton": "ペンのサイドボタン: ドラッグまたはタップ",
+      "wheel": "スクロールホイール",
+      "pinch": "ピンチまたは Ctrl + ホイール",
+      "zoom": "ズーム",
+      "altClick": "Alt + クリック",
+      "removeFromSelection": "選択から外す",
+      "linuxPinch": "Linux ではトラックパッドのピンチにまだ対応していません。Ctrl + スクロールでズームしてください。"
+    }
   },
   "settings": {
     "title": "設定",

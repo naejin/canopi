@@ -1769,9 +1769,31 @@
     "turnView": "将视图旋转 15°",
     "resetNorth": "重置为正北",
     "resetNorthAlways": "即使单键快捷键已关闭，{{shortcut}} 仍然有效。",
+    "zoomStep": "放大或缩小一级",
+    "fitHome": "适应设计",
     "arrowKeys": "方向键",
     "singleKeysOn": "单键快捷键可在“设置 › 键盘”中关闭。",
-    "singleKeysOff": "单键快捷键已关闭。可在“设置 › 键盘”中开启。"
+    "singleKeysOff": "单键快捷键已关闭。可在“设置 › 键盘”中开启。",
+    "gestures": {
+      "heading": "鼠标、触控板和触控笔",
+      "rightDrag": "右键拖动、中键拖动或 Space + 拖动",
+      "pan": "平移地图",
+      "shiftDrag": "Shift + 右键拖动或 Shift + 中键拖动",
+      "turnView": "旋转视图；加 {{mod}} 以 15° 为步长",
+      "trackpadTwist": "在触控板上双指旋转",
+      "compass": "指南针",
+      "compassAction": "单击重置为正北，拖动旋转视图",
+      "rightClick": "右键单击",
+      "macCtrlClick": "Control-单击",
+      "menu": "打开菜单",
+      "penButton": "触控笔侧键：拖动或轻点",
+      "wheel": "滚轮",
+      "pinch": "捏合或 Ctrl + 滚轮",
+      "zoom": "缩放",
+      "altClick": "Alt + 单击",
+      "removeFromSelection": "从选择中移除",
+      "linuxPinch": "在 Linux 上暂不支持触控板捏合。请使用 Ctrl + 滚动进行缩放。"
+    }
   },
   "settings": {
     "title": "设置",

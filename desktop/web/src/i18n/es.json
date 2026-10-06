@@ -1769,9 +1769,31 @@
     "turnView": "Girar la vista 15°",
     "resetNorth": "Restablecer el norte",
     "resetNorthAlways": "{{shortcut}} funciona aunque los atajos de una tecla estén desactivados.",
+    "zoomStep": "Acercar o alejar un paso",
+    "fitHome": "Ajustar el diseño",
     "arrowKeys": "Flechas",
     "singleKeysOn": "Los atajos de una tecla se pueden desactivar en Ajustes › Teclado.",
-    "singleKeysOff": "Los atajos de una tecla están desactivados. Actívalos en Ajustes › Teclado."
+    "singleKeysOff": "Los atajos de una tecla están desactivados. Actívalos en Ajustes › Teclado.",
+    "gestures": {
+      "heading": "Ratón, panel táctil y lápiz",
+      "rightDrag": "Arrastrar con el botón derecho, con el central o Espacio + arrastrar",
+      "pan": "Desplazar el mapa",
+      "shiftDrag": "Mayús + arrastrar con el botón derecho o Mayús + arrastrar con el central",
+      "turnView": "Girar la vista; añade {{mod}} para pasos de 15°",
+      "trackpadTwist": "Girar dos dedos en el panel táctil",
+      "compass": "Brújula",
+      "compassAction": "Haz clic para restablecer el norte, arrastra para girar la vista",
+      "rightClick": "Clic derecho",
+      "macCtrlClick": "Control-clic",
+      "menu": "Abrir el menú",
+      "penButton": "Botón lateral del lápiz: arrastrar o tocar",
+      "wheel": "Rueda de desplazamiento",
+      "pinch": "Pellizcar o Ctrl + rueda",
+      "zoom": "Zoom",
+      "altClick": "Alt + clic",
+      "removeFromSelection": "Quitar de la selección",
+      "linuxPinch": "En Linux, el pellizco en el panel táctil aún no es compatible. Usa Ctrl + desplazamiento para hacer zoom."
+    }
   },
   "settings": {
     "title": "Ajustes",

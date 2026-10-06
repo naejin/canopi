@@ -1769,9 +1769,31 @@
     "turnView": "Tourner la vue de 15°",
     "resetNorth": "Rétablir le nord",
     "resetNorthAlways": "{{shortcut}} fonctionne même quand les raccourcis à une touche sont désactivés.",
+    "zoomStep": "Zoomer ou dézoomer d’un cran",
+    "fitHome": "Ajuster le Design",
     "arrowKeys": "Flèches",
     "singleKeysOn": "Les raccourcis à une touche peuvent être désactivés dans Réglages › Clavier.",
-    "singleKeysOff": "Les raccourcis à une touche sont désactivés. Activez-les dans Réglages › Clavier."
+    "singleKeysOff": "Les raccourcis à une touche sont désactivés. Activez-les dans Réglages › Clavier.",
+    "gestures": {
+      "heading": "Souris, pavé tactile et stylet",
+      "rightDrag": "Glisser avec le bouton droit, celui du milieu ou Espace + glisser",
+      "pan": "Déplacer la carte",
+      "shiftDrag": "Maj + glisser avec le bouton droit ou Maj + glisser avec celui du milieu",
+      "turnView": "Tourner la vue ; ajoutez {{mod}} pour des pas de 15°",
+      "trackpadTwist": "Tourner deux doigts sur le pavé tactile",
+      "compass": "Boussole",
+      "compassAction": "Cliquez pour rétablir le nord, glissez pour tourner la vue",
+      "rightClick": "Clic droit",
+      "macCtrlClick": "Contrôle-clic",
+      "menu": "Ouvrir le menu",
+      "penButton": "Bouton latéral du stylet : glisser ou toucher",
+      "wheel": "Molette de défilement",
+      "pinch": "Pincement ou Ctrl + molette",
+      "zoom": "Zoomer",
+      "altClick": "Alt + clic",
+      "removeFromSelection": "Retirer de la sélection",
+      "linuxPinch": "Sous Linux, le pincement sur le pavé tactile n’est pas encore pris en charge. Utilisez Ctrl + défilement pour zoomer."
+    }
   },
   "settings": {
     "title": "Réglages",

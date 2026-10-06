@@ -1769,9 +1769,31 @@
     "turnView": "Weergave 15° draaien",
     "resetNorth": "Noorden herstellen",
     "resetNorthAlways": "{{shortcut}} werkt ook als sneltoetsen met één toets uit staan.",
+    "zoomStep": "Eén stap in- of uitzoomen",
+    "fitHome": "Ontwerp passend maken",
     "arrowKeys": "Pijltjestoetsen",
     "singleKeysOn": "Sneltoetsen met één toets kun je uitzetten in Instellingen › Toetsenbord.",
-    "singleKeysOff": "Sneltoetsen met één toets staan uit. Zet ze aan in Instellingen › Toetsenbord."
+    "singleKeysOff": "Sneltoetsen met één toets staan uit. Zet ze aan in Instellingen › Toetsenbord.",
+    "gestures": {
+      "heading": "Muis, trackpad en pen",
+      "rightDrag": "Rechts slepen, middel slepen of Spatie + slepen",
+      "pan": "Kaart verschuiven",
+      "shiftDrag": "Shift + rechts slepen of Shift + middel slepen",
+      "turnView": "Weergave draaien; met {{mod}} in stappen van 15°",
+      "trackpadTwist": "Twee vingers draaien op de trackpad",
+      "compass": "Kompas",
+      "compassAction": "Klik om het noorden te herstellen, sleep om de weergave te draaien",
+      "rightClick": "Rechtsklik",
+      "macCtrlClick": "Control-klik",
+      "menu": "Menu openen",
+      "penButton": "Zijknop van de pen: slepen of tikken",
+      "wheel": "Scrolwiel",
+      "pinch": "Knijpen of Ctrl + wiel",
+      "zoom": "Zoomen",
+      "altClick": "Alt + klik",
+      "removeFromSelection": "Uit de selectie verwijderen",
+      "linuxPinch": "Op Linux wordt knijpen op de trackpad nog niet ondersteund. Zoom met Ctrl + scrollen."
+    }
   },
   "settings": {
     "title": "Instellingen",

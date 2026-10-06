@@ -1769,9 +1769,31 @@
     "turnView": "Ansicht um 15° drehen",
     "resetNorth": "Nach Norden ausrichten",
     "resetNorthAlways": "{{shortcut}} funktioniert auch, wenn Kurzbefehle mit einer Taste aus sind.",
+    "zoomStep": "Einen Schritt vergrößern oder verkleinern",
+    "fitHome": "Design einpassen",
     "arrowKeys": "Pfeiltasten",
     "singleKeysOn": "Kurzbefehle mit einer Taste lassen sich unter Einstellungen › Tastatur ausschalten.",
-    "singleKeysOff": "Kurzbefehle mit einer Taste sind aus. Schalten Sie sie unter Einstellungen › Tastatur ein."
+    "singleKeysOff": "Kurzbefehle mit einer Taste sind aus. Schalten Sie sie unter Einstellungen › Tastatur ein.",
+    "gestures": {
+      "heading": "Maus, Trackpad und Stift",
+      "rightDrag": "Rechts ziehen, mittig ziehen oder Leertaste + ziehen",
+      "pan": "Karte verschieben",
+      "shiftDrag": "Umschalt + rechts ziehen oder Umschalt + mittig ziehen",
+      "turnView": "Ansicht drehen; mit {{mod}} in 15°-Schritten",
+      "trackpadTwist": "Zwei Finger auf dem Trackpad drehen",
+      "compass": "Kompass",
+      "compassAction": "Klicken richtet nach Norden aus, Ziehen dreht die Ansicht",
+      "rightClick": "Rechtsklick",
+      "macCtrlClick": "Control-Klick",
+      "menu": "Menü öffnen",
+      "penButton": "Stift-Seitentaste: ziehen oder tippen",
+      "wheel": "Scrollrad",
+      "pinch": "Zusammenziehen oder Strg + Rad",
+      "zoom": "Zoomen",
+      "altClick": "Alt + Klick",
+      "removeFromSelection": "Aus der Auswahl entfernen",
+      "linuxPinch": "Unter Linux wird Zusammenziehen auf dem Trackpad noch nicht unterstützt. Zoomen Sie mit Strg + Scrollen."
+    }
   },
   "settings": {
     "title": "Einstellungen",

@@ -1769,9 +1769,31 @@
     "turnView": "Girar a vista 15°",
     "resetNorth": "Redefinir o norte",
     "resetNorthAlways": "{{shortcut}} funciona mesmo com os atalhos de uma tecla desativados.",
+    "zoomStep": "Ampliar ou reduzir um passo",
+    "fitHome": "Ajustar o design",
     "arrowKeys": "Setas",
     "singleKeysOn": "Os atalhos de uma tecla podem ser desativados em Configurações › Teclado.",
-    "singleKeysOff": "Os atalhos de uma tecla estão desativados. Ative-os em Configurações › Teclado."
+    "singleKeysOff": "Os atalhos de uma tecla estão desativados. Ative-os em Configurações › Teclado.",
+    "gestures": {
+      "heading": "Mouse, trackpad e caneta",
+      "rightDrag": "Arrastar com o botão direito, com o do meio ou Espaço + arrastar",
+      "pan": "Deslocar o mapa",
+      "shiftDrag": "Shift + arrastar com o botão direito ou Shift + arrastar com o do meio",
+      "turnView": "Girar a vista; adicione {{mod}} para passos de 15°",
+      "trackpadTwist": "Girar dois dedos no trackpad",
+      "compass": "Bússola",
+      "compassAction": "Clique para redefinir o norte, arraste para girar a vista",
+      "rightClick": "Clique com o botão direito",
+      "macCtrlClick": "Control-clique",
+      "menu": "Abrir o menu",
+      "penButton": "Botão lateral da caneta: arrastar ou tocar",
+      "wheel": "Roda de rolagem",
+      "pinch": "Pinçar ou Ctrl + roda",
+      "zoom": "Zoom",
+      "altClick": "Alt + clique",
+      "removeFromSelection": "Remover da seleção",
+      "linuxPinch": "No Linux, o gesto de pinça no trackpad ainda não é suportado. Use Ctrl + rolagem para dar zoom."
+    }
   },
   "settings": {
     "title": "Configurações",
