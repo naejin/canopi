@@ -20,7 +20,6 @@ function canvasProjection(): CanvasCommandProjection {
     state: {
       activeTool: 'select',
       canvasAvailable: false,
-      toolSelectionAvailable: false,
       spatialEditingAvailable: true,
       hasSelection: false,
       sameSpeciesSelectionAvailable: false,
@@ -28,7 +27,6 @@ function canvasProjection(): CanvasCommandProjection {
       lockedObjectsPresent: false,
       canUndo: false,
       canRedo: false,
-      settingsAvailable: false,
       gridVisible: false,
       snapToGridEnabled: true,
     },

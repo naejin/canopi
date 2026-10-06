@@ -104,7 +104,6 @@ export interface CanvasCommandProjectionState {
   readonly activeTool: string
   /** A canvas runtime is mounted. */
   readonly canvasAvailable: boolean
-  readonly toolSelectionAvailable: boolean
   /** False in overview, where Design objects are hidden and cannot change. */
   readonly spatialEditingAvailable: boolean
   readonly hasSelection: boolean
@@ -116,7 +115,6 @@ export interface CanvasCommandProjectionState {
   readonly lockedObjectsPresent: boolean
   readonly canUndo: boolean
   readonly canRedo: boolean
-  readonly settingsAvailable: boolean
   readonly gridVisible: boolean
   readonly snapToGridEnabled: boolean
 }
@@ -424,15 +422,14 @@ export function isCanvasCommandDisabled(
 ): boolean {
   switch (intent.type) {
     case 'select-tool':
-      return !state.toolSelectionAvailable
-        || (!state.spatialEditingAvailable && !isNavigationTool(intent.tool))
+      // Choosing a tool before the canvas mounts primes the tool it starts with.
+      return !state.spatialEditingAvailable && !isNavigationTool(intent.tool)
     case 'undo':
       return !state.canUndo
     case 'redo':
       return !state.canRedo
     case 'toggle-grid':
     case 'toggle-snap-to-grid':
-      return !state.settingsAvailable
     case 'view':
       return !state.canvasAvailable
     case 'edit': {

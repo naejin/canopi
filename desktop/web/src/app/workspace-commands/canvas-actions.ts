@@ -35,16 +35,13 @@ export function readWorkspaceCanvasProjectionState(): CanvasCommandProjectionSta
   const surface = currentCanvasCommandSurface.value
   const queries = currentCanvasQuerySurface.value
   void currentCanvasSelection.value
-  const canvasAvailable = surface !== null
   const hasSelection = currentCanvasHasSelection.value
   // Locks change with scene edits; the snapshot below is read on each one.
   void queries?.revision.scene.value
   const selection = hasSelection ? queries?.getDesignObjectSelection() ?? null : null
   return {
     activeTool: currentCanvasTool.value,
-    canvasAvailable,
-    // Choosing a tool before the canvas mounts primes the tool it starts with.
-    toolSelectionAvailable: true,
+    canvasAvailable: surface !== null,
     spatialEditingAvailable: queries?.view.mode.value !== 'overview',
     hasSelection,
     sameSpeciesSelectionAvailable: (selection?.sameSpeciesReferenceCanonicalName ?? null) !== null,
@@ -52,7 +49,6 @@ export function readWorkspaceCanvasProjectionState(): CanvasCommandProjectionSta
     lockedObjectsPresent: queries !== null && sceneHasLockedDesignObjects(queries.getSceneSnapshot()),
     canUndo: surface?.history.canUndo.value ?? false,
     canRedo: surface?.history.canRedo.value ?? false,
-    settingsAvailable: canvasAvailable,
     gridVisible: gridVisible.value,
     snapToGridEnabled: snapToGridEnabled.value,
   }

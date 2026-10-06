@@ -14,7 +14,6 @@ function state(overrides: Partial<CanvasCommandProjectionState> = {}): CanvasCom
   return {
     activeTool: 'select',
     canvasAvailable: true,
-    toolSelectionAvailable: true,
     spatialEditingAvailable: true,
     hasSelection: false,
     sameSpeciesSelectionAvailable: false,
@@ -22,7 +21,6 @@ function state(overrides: Partial<CanvasCommandProjectionState> = {}): CanvasCom
     lockedObjectsPresent: false,
     canUndo: false,
     canRedo: false,
-    settingsAvailable: true,
     gridVisible: false,
     snapToGridEnabled: true,
     ...overrides,
