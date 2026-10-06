@@ -6,6 +6,7 @@ import type {
 import type {
   ProjectedShellCommand,
   ShellChromeProjection,
+  ShellMenuProjection,
   ShellCommandId,
   ShellSubmenuId,
 } from './index'
@@ -50,16 +51,11 @@ interface MenuSubmenu {
   readonly items: readonly MenuAction[]
 }
 
-interface MenuLabel {
-  readonly type: 'label'
-  readonly label: string
-}
-
 interface MenuSeparator {
   readonly type: 'separator'
 }
 
-export type MenuEntry = MenuAction | MenuLabel | MenuSeparator | MenuSubmenu
+export type MenuEntry = MenuAction | MenuSeparator | MenuSubmenu
 
 export interface MenuDefinition {
   readonly id: WorkspaceMenuId
@@ -69,7 +65,7 @@ export interface MenuDefinition {
 
 export interface WorkspaceMenuInput<Id extends ShellCommandId> {
   readonly shell: ShellChromeProjection<Id>
-  /** Null while no canvas runtime is mounted: Edit and Tools still list their commands, disabled. */
+  /** With no canvas runtime mounted, Edit and Tools still list its commands, disabled. */
   readonly canvas: CanvasCommandProjection
   readonly translate: (key: string) => string
   /** View › Saved views ▸: one entry per saved view of the open Design. */
@@ -106,23 +102,32 @@ export function composeWorkspaceMenus<Id extends ShellCommandId>({
   fileInsertions = [],
 }: WorkspaceMenuInput<Id>): MenuDefinition[] {
   const shellMenu = (id: 'file' | 'edit' | 'view' | 'help') => shell.menus.find((menu) => menu.id === id)
+  // Both editions' catalogues fill File, View and Help, and View's three sections.
+  const requireMenu = (id: 'file' | 'view' | 'help') => {
+    const menu = shellMenu(id)
+    if (!menu) throw new Error(`Missing shell menu '${id}'`)
+    return menu
+  }
+  const requireSection = (menu: ShellMenuProjection<Id>, index: number) => {
+    const section = menu.sections[index]
+    if (!section) throw new Error(`Missing section ${index} of shell menu '${menu.id}'`)
+    return section
+  }
   const menus: MenuDefinition[] = []
 
-  const fileMenu = shellMenu('file')
-  if (fileMenu) {
-    menus.push({
-      id: 'file',
-      label: fileMenu.label,
-      items: joinSections(fileMenu.sections.map((section) =>
-        shellSectionEntries(section, translate).flatMap((entry) => {
-          const insertions = entry.type === 'action'
-            ? fileInsertions.filter((insertion) => insertion.after === entry.id).map((insertion) => insertion.entry)
-            : []
-          return [entry, ...insertions]
-        }),
-      )),
-    })
-  }
+  const fileMenu = requireMenu('file')
+  menus.push({
+    id: 'file',
+    label: fileMenu.label,
+    items: joinSections(fileMenu.sections.map((section) =>
+      shellSectionEntries(section, translate).flatMap((entry) => {
+        const insertions = entry.type === 'action'
+          ? fileInsertions.filter((insertion) => insertion.after === entry.id).map((insertion) => insertion.entry)
+          : []
+        return [entry, ...insertions]
+      }),
+    )),
+  })
 
   const editById = new Map(canvas.editActions.map((command) => [command.id, command]))
   const requireEdit = (id: string): CanvasToolbarActionCommand => {
@@ -146,33 +151,34 @@ export function composeWorkspaceMenus<Id extends ShellCommandId>({
     ]),
   })
 
-  const viewMenu = shellMenu('view')
-  const viewSections = viewMenu?.sections ?? []
+  const viewMenu = requireMenu('view')
   const panels = [...shell.panelBar.design, ...shell.panelBar.planning]
   const cycleLabels = canvas.viewActions.find((command) => command.id === 'cycle-labels')
+  if (!cycleLabels) throw new Error("Missing canvas view command 'cycle-labels'")
   const labelsSubmenu: MenuEntry[] = plantLabels.length > 0
     ? [{
-      ...submenu(cycleLabels?.commandId ?? 'view.labels', translate('menu.view.labels'), plantLabels),
-      shortcut: cycleLabels?.shortcut,
-      ariaShortcut: cycleLabels?.ariaShortcut,
+      ...submenu(cycleLabels.commandId, translate('menu.view.labels'), plantLabels),
+      shortcut: cycleLabels.shortcut,
+      ariaShortcut: cycleLabels.ariaShortcut,
     }]
     : []
   menus.push({
     id: 'view',
-    label: viewMenu?.label ?? translate('menu.view'),
+    label: viewMenu.label,
     items: joinSections([
       canvas.viewActions.filter((command) => command.id !== 'cycle-labels').map((command) => canvasAction(command)),
       // Saved views, then the commands that save and manage them (shell section 2).
-      viewSections[2]
-        ? [submenu('view.savedViews', translate('menu.view.savedViews'), savedViews), ...shellSectionEntries(viewSections[2], translate)]
-        : [],
+      [
+        submenu('view.savedViews', translate('menu.view.savedViews'), savedViews),
+        ...shellSectionEntries(requireSection(viewMenu, 2), translate),
+      ],
       [
         ...canvas.settingsToggles.map((command) => canvasAction(command, command.pressed ?? false)),
         ...labelsSubmenu,
-        ...shellSectionEntries(viewSections[0] ?? [], translate),
+        ...shellSectionEntries(requireSection(viewMenu, 0), translate),
       ],
       panels.map((command) => shellAction(command)),
-      shellSectionEntries(viewSections[1] ?? [], translate),
+      shellSectionEntries(requireSection(viewMenu, 1), translate),
     ]),
   })
 
@@ -182,14 +188,12 @@ export function composeWorkspaceMenus<Id extends ShellCommandId>({
     items: joinSections(canvas.toolGroups.map((group) => group.tools.map((command) => canvasAction(command)))),
   })
 
-  const helpMenu = shellMenu('help')
-  if (helpMenu) {
-    menus.push({
-      id: 'help',
-      label: helpMenu.label,
-      items: joinSections(helpMenu.sections.map((section) => shellSectionEntries(section, translate))),
-    })
-  }
+  const helpMenu = requireMenu('help')
+  menus.push({
+    id: 'help',
+    label: helpMenu.label,
+    items: joinSections(helpMenu.sections.map((section) => shellSectionEntries(section, translate))),
+  })
   return menus
 }
 

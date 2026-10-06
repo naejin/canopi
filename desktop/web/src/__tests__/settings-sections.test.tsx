@@ -218,14 +218,19 @@ describe('Settings › New Designs', () => {
 })
 
 describe('Settings › Canvas', () => {
-  it('chooses what the scroll wheel does and says pinch and Ctrl wheel always zoom', async () => {
+  it('chooses the pointing device, Mouse or Trackpad', async () => {
     await openSection('canvas')
-    expect(radio('Zooms the map').getAttribute('aria-checked')).toBe('true')
-    expect(dialog().textContent).toContain('Pinch and Ctrl + wheel always zoom.')
+    expect(dialog().querySelector('[role="radiogroup"]')!.getAttribute('aria-label')).toBe('Pointing device')
+    expect(radio('Mouse: the wheel zooms').getAttribute('aria-checked')).toBe('true')
+    expect(dialog().textContent).toContain('Pinch and Ctrl + wheel always zoom. Shift + wheel pans.')
+    expect(dialog().textContent).not.toContain('Scroll wheel')
 
-    await act(async () => { radio('Pans the map').click() })
+    // Trackpad is stored as the scroll-wheel choice `pan`, which makes the wheel pan.
+    await act(async () => { radio('Trackpad: two fingers pan').click() })
     expect(scrollWheel.value).toBe('pan')
-    expect(radio('Pans the map').getAttribute('aria-checked')).toBe('true')
+    expect(radio('Trackpad: two fingers pan').getAttribute('aria-checked')).toBe('true')
+    await act(async () => { radio('Mouse: the wheel zooms').click() })
+    expect(scrollWheel.value).toBe('zoom')
   })
 })
 

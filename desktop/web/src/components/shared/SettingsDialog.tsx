@@ -175,21 +175,24 @@ function MapSection() {
   </>
 }
 
-/** Settings › Canvas: how a plain wheel or two-finger scroll moves the map. */
+/**
+ * Settings › Canvas: the pointing device, stored as the scroll-wheel choice. Mouse (`zoom`): a plain wheel zooms about
+ * the pointer. Trackpad (`pan`): two fingers pan and a pinch zooms. The Select tool card follows it.
+ */
 function CanvasSection() {
   return <>
     <div className={styles.field}>
-      <span className={styles.label}>{t('settings.scrollWheel')}</span>
+      <span className={styles.label}>{t('settings.pointingDevice')}</span>
       <SegmentedControl<ScrollWheel>
-        label={t('settings.scrollWheel')}
+        label={t('settings.pointingDevice')}
         value={scrollWheel.value}
         options={[
-          { value: 'zoom', label: t('settings.scrollWheelZoom') },
-          { value: 'pan', label: t('settings.scrollWheelPan') },
+          { value: 'zoom', label: t('settings.pointingDeviceMouse') },
+          { value: 'pan', label: t('settings.pointingDeviceTrackpad') },
         ]}
         onChange={(next) => mutateSettingsProjection((settings) => { settings.scrollWheel = next }, { persist: 'immediate' })}
       />
-      <span className={styles.hint}>{t('settings.scrollWheelHint')}</span>
+      <span className={styles.hint}>{t('settings.pointingDeviceHint')}</span>
     </div>
   </>
 }

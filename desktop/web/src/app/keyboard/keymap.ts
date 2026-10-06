@@ -87,6 +87,12 @@ const CANVAS_KEY_ROWS: readonly KeymapRow[] = [
   keyRow({ kind: 'reset-north' }, ['Shift+ArrowUp'], { scope: 'view-arrows' }),
   // N follows the switch through its catalogue row (View › Reset north); Shift+N always resets.
   keyRow({ kind: 'reset-north' }, ['Shift+N'], { scope: 'command', singleKey: 'always-on' }),
+  // Plain + and − act only while the map has focus, so they stay on with the switch off (WCAG 2.1.4); `+` matches
+  // whatever Shift typed it (US Shift+=).
+  keyRow({ kind: 'zoom-step', direction: 1 }, ['Plus']),
+  keyRow({ kind: 'zoom-step', direction: -1 }, ['Minus']),
+  // Home fits only with the map focused: elsewhere it moves to a list's first item or a field's start.
+  { command: 'view.fitToDesign', chords: chordsOfShortcut('Home'), scope: 'canvas-focus', singleKey: 'n/a' },
 ]
 
 /**

@@ -304,6 +304,78 @@ describe('keymap', () => {
     expect(run.mock.calls.map(([c]) => c)).toEqual(['canvas.deleteSelected', 'canvas.deleteSelected'])
   })
 
+  /** A router over the canvas rows with a focusable map host and a rail button beside it. */
+  function canvasRouter(singleKeys: boolean) {
+    const run = vi.fn((_command: string) => true)
+    const command = vi.fn((_c: CanvasKeyCommand) => true)
+    const host = document.createElement('div')
+    host.tabIndex = 0
+    const rail = document.createElement('button')
+    document.body.append(host, rail)
+    router = installKeyRouter({
+      target: window,
+      keymap: CANVAS_KEYMAP_ROWS,
+      commands: { run },
+      canvas: () => ({ host, keyState: () => 'pass', command, escapeLayers: () => [], escape: () => {} }),
+      singleKeys: signal(singleKeys),
+      focus: { cycleRegion: () => false },
+      isModalOpen: () => false,
+      platform: TEST_KEY_PLATFORM,
+      document,
+    })
+    const press = (target: HTMLElement, init: KeyboardEventInit) => {
+      target.focus()
+      const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })
+      target.dispatchEvent(event)
+      return event.defaultPrevented
+    }
+    return { run, command, host, rail, press }
+  }
+
+  it('+ and − zoom one step with map focus', () => {
+    // They act only while the map has focus, so they stay on with single-key shortcuts off.
+    const { command, run, host, rail, press } = canvasRouter(false)
+
+    expect(press(host, { key: '+', code: 'Equal', shiftKey: true })).toBe(true)
+    expect(press(host, { key: '=', code: 'Equal' })).toBe(true)
+    expect(press(host, { key: '-', code: 'Minus' })).toBe(true)
+    expect(press(host, { key: '+', code: 'NumpadAdd' })).toBe(true)
+    expect(command.mock.calls.map(([c]) => c)).toEqual([
+      { kind: 'zoom-step', direction: 1 },
+      { kind: 'zoom-step', direction: 1 },
+      { kind: 'zoom-step', direction: -1 },
+      { kind: 'zoom-step', direction: 1 },
+    ])
+    // Away from the map they are left to the page.
+    expect(press(rail, { key: '+', code: 'Equal', shiftKey: true })).toBe(false)
+    expect(press(rail, { key: '-', code: 'Minus' })).toBe(false)
+    expect(command).toHaveBeenCalledTimes(4)
+    expect(run).not.toHaveBeenCalled()
+    // Ctrl+Plus and Ctrl+Minus stay View › Zoom in and Zoom out.
+    expect(rowsFor(CANVAS_KEYMAP_ROWS, keyLike('=', { ctrlKey: true })).map((row) => row.command)).toEqual(['view.zoomIn'])
+    expect(rowsFor(CANVAS_KEYMAP_ROWS, keyLike('-', { ctrlKey: true })).map((row) => row.command)).toEqual(['view.zoomOut'])
+  })
+
+  it('Shift+2 zooms to the selection', () => {
+    expect(rowsFor(CANVAS_KEYMAP_ROWS, keyLike('2', { code: 'Digit2', shiftKey: true })).map((row) => [row.command, row.scope, row.singleKey]))
+      .toEqual([['view.zoomToSelection', 'command', 'follows-switch']])
+    const { run, rail, press } = canvasRouter(true)
+    // From any focus but text, like Shift+G; AZERTY types 2 with Shift.
+    expect(press(rail, { key: '2', code: 'Digit2', shiftKey: true })).toBe(true)
+    expect(run.mock.calls.map(([c]) => c)).toEqual(['view.zoomToSelection'])
+  })
+
+  it('Home fits', () => {
+    expect(rowsFor(CANVAS_KEYMAP_ROWS, keyLike('Home')).map((row) => [row.command, row.scope, row.singleKey]))
+      .toEqual([['view.fitToDesign', 'canvas-focus', 'n/a']])
+    const { run, host, rail, press } = canvasRouter(false)
+    expect(press(host, { key: 'Home', code: 'Home' })).toBe(true)
+    expect(run.mock.calls.map(([c]) => c)).toEqual(['view.fitToDesign'])
+    // Elsewhere Home keeps its own meaning (a list's first item, a field's start).
+    expect(press(rail, { key: 'Home', code: 'Home' })).toBe(false)
+    expect(run).toHaveBeenCalledOnce()
+  })
+
   it('composes an edition\'s shell rows from its catalogue, F2 after the map, every row working in text fields', () => {
     const execute = () => undefined
     const catalog = composeShellCommandCatalog({

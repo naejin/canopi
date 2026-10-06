@@ -3,6 +3,7 @@ import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MapNoticeReadModel } from '../../app/canvas-map-surface/map-notice'
 import { locale } from '../../app/settings/state'
+import { mapAttributionFolded, registerMapArea, registerMapOccluder } from '../../app/shell/visible-map-area'
 import { MapNotice } from './MapNotice'
 
 const failed: MapNoticeReadModel = {
@@ -84,5 +85,39 @@ describe('MapNotice', () => {
     const status = container.querySelector('[role="status"]')!
     expect(status.textContent).toBe('The map stopped drawing. Your Design is safe.')
     expect(status.querySelector('button')).toBeNull()
+  })
+})
+
+describe('MapNotice over the map credits', () => {
+  it('folds the credits into (i) while it shows, as bottom chrome on the visible-map-area seam', async () => {
+    const container = document.createElement('div')
+    const area = document.createElement('div')
+    const viewChip = document.createElement('div')
+    const zoom = document.createElement('div')
+    document.body.append(area, viewChip, zoom, container)
+    const boxes = new Map<Element, { left: number; top: number; width: number; height: number }>([
+      [area, { left: 0, top: 0, width: 1280, height: 800 }],
+      [viewChip, { left: 12, top: 744, width: 280, height: 44 }],
+      [zoom, { left: 900, top: 744, width: 368, height: 44 }],
+    ])
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const box = boxes.get(this) ?? (this.hasAttribute('data-map-notice') ? { left: 460, top: 748, width: 360, height: 40 } : { left: 0, top: 0, width: 0, height: 0 })
+      return { ...box, x: box.left, y: box.top, right: box.left + box.width, bottom: box.top + box.height, toJSON: () => ({}) } as DOMRect
+    })
+    const releases = [registerMapArea(area), registerMapOccluder(viewChip, 'bottom'), registerMapOccluder(zoom, 'bottom')]
+    const canvasRef = { current: area }
+    try {
+      // 608 px between the view chip and the zoom group: the credits fit on one line.
+      expect(mapAttributionFolded.value).toBe(false)
+      await act(async () => { render(<MapNotice notice={failed} onRetry={() => {}} canvasRef={canvasRef} />, container) })
+      expect(mapAttributionFolded.value).toBe(true)
+      await act(async () => { render(<MapNotice notice={hidden} onRetry={() => {}} canvasRef={canvasRef} />, container) })
+      expect(mapAttributionFolded.value).toBe(false)
+    } finally {
+      await act(async () => { render(null, container) })
+      for (const release of releases.reverse()) release()
+      vi.restoreAllMocks()
+      document.body.innerHTML = ''
+    }
   })
 })

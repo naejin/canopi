@@ -43,6 +43,7 @@ export type CanvasViewAction =
   | 'zoom-in'
   | 'zoom-out'
   | 'fit-to-design'
+  | 'zoom-to-selection'
   | 'reset-north'
   | 'turn-view-left'
   | 'turn-view-right'
@@ -85,6 +86,7 @@ export type CanvasCommandId =
   | 'view.zoomIn'
   | 'view.zoomOut'
   | 'view.fitToDesign'
+  | 'view.zoomToSelection'
   | 'view.resetNorth'
   | 'view.turnViewLeft'
   | 'view.turnViewRight'
@@ -104,7 +106,6 @@ export interface CanvasCommandProjectionState {
   readonly activeTool: string
   /** A canvas runtime is mounted. */
   readonly canvasAvailable: boolean
-  readonly toolSelectionAvailable: boolean
   /** False in overview, where Design objects are hidden and cannot change. */
   readonly spatialEditingAvailable: boolean
   readonly hasSelection: boolean
@@ -116,7 +117,6 @@ export interface CanvasCommandProjectionState {
   readonly lockedObjectsPresent: boolean
   readonly canUndo: boolean
   readonly canRedo: boolean
-  readonly settingsAvailable: boolean
   readonly gridVisible: boolean
   readonly snapToGridEnabled: boolean
 }
@@ -124,15 +124,8 @@ export interface CanvasCommandProjectionState {
 /** Which surface ran a canvas command: armCanvasTool focuses the map after every one but a shortcut. */
 export type CanvasCommandFrom = 'rail' | 'menu' | 'palette' | 'shortcut'
 
-export interface CanvasCommandIntentAdapter {
-  selectTool(tool: CanvasToolId, from: CanvasCommandFrom): void
-  undo(): void
-  redo(): void
-  toggleGrid(): void
-  toggleSnapToGrid(): void
-  edit(action: CanvasEditAction): void
-  view(action: CanvasViewAction): void
-}
+/** Runs one intent; `from` reaches arming for a tool and is unused by the rest. */
+type CanvasIntentRunner = (intent: CanvasCommandIntent, from: CanvasCommandFrom) => void
 
 /** A command as chrome shows it: menus, the tool rail, the view chip, the palette. */
 export interface CanvasProjectedCommand {
@@ -149,7 +142,6 @@ export interface CanvasProjectedCommand {
 
 export interface CanvasToolbarToolCommand extends CanvasProjectedCommand {
   readonly tool: CanvasToolId
-  readonly group: CanvasToolGroupId
   readonly active: boolean
 }
 
@@ -187,7 +179,6 @@ interface CanvasCommandDefinitionBase {
    * when no live shortcut is left; `aria-keyshortcuts` lists every one.
    */
   readonly keyHints?: readonly string[]
-  readonly palette: boolean
   readonly intent: CanvasCommandIntent
   /** The shortcut also works while a text field has focus. */
   readonly worksInTextFields?: boolean
@@ -247,7 +238,6 @@ function tool(
     commandId,
     labelKey,
     shortcuts: [shortcut],
-    palette: true,
     intent: { type: 'select-tool', tool: toolId },
   }
 }
@@ -266,7 +256,6 @@ function edit(
     labelKey,
     shortcuts,
     ...(keyHints ? { keyHints } : {}),
-    palette: true,
     intent: { type: 'edit', action: id },
   }
 }
@@ -305,7 +294,6 @@ function view(
     labelKey,
     ...(keys.shortcuts ? { shortcuts: keys.shortcuts } : {}),
     ...(keys.keyHints ? { keyHints: keys.keyHints } : {}),
-    palette: true,
     intent: { type: 'view', action: id },
     worksInTextFields: keys.worksInTextFields ?? false,
   }
@@ -329,7 +317,6 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     commandId: 'edit.undo',
     labelKey: 'menu.edit.undo',
     shortcuts: ['Ctrl+Z'],
-    palette: true,
     intent: { type: 'undo' },
   },
   {
@@ -338,7 +325,6 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     commandId: 'edit.redo',
     labelKey: 'menu.edit.redo',
     shortcuts: ['Ctrl+Shift+Z', 'Ctrl+Y'],
-    palette: true,
     intent: { type: 'redo' },
   },
   edit('cut', 'canvas.cut', 'menu.edit.cut', ['Ctrl+X']),
@@ -360,7 +346,9 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
   edit('save-as-stamp', 'canvas.saveSelectionAsStamp', 'menu.edit.saveAsStamp'),
   view('zoom-in', 'view.zoomIn', 'menu.view.zoomIn', { shortcuts: ['Ctrl+Plus'] }),
   view('zoom-out', 'view.zoomOut', 'menu.view.zoomOut', { shortcuts: ['Ctrl+Minus'] }),
-  view('fit-to-design', 'view.fitToDesign', 'menu.view.fitToDesign', { shortcuts: ['Shift+F', 'Ctrl+0'] }),
+  // Home fits too, with the map focused: a canvas key row (app/keyboard/keymap.ts), shown here only.
+  view('fit-to-design', 'view.fitToDesign', 'menu.view.fitToDesign', { shortcuts: ['Shift+F', 'Ctrl+0'], keyHints: ['Home'] }),
+  view('zoom-to-selection', 'view.zoomToSelection', 'menu.view.zoomToSelection', { shortcuts: ['Shift+2'] }),
   // The rotation rows sit after Fit to Design, in the View menu's first section. Their routed chords (Shift+N, Shift+←,
   // Shift+→, Shift+↑) are canvas key rows, shown here only (spec §3.6).
   // N follows the single-key switch; Shift+N always resets (with the switch off menus show it).
@@ -376,7 +364,6 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     commandId: 'canvas.toggleGrid',
     labelKey: 'canvas.grid.grid',
     shortcuts: ['Shift+G'],
-    palette: true,
     intent: { type: 'toggle-grid' },
     stateKey: 'gridVisible',
   },
@@ -386,7 +373,6 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     commandId: 'canvas.toggleSnapToGrid',
     labelKey: 'canvas.grid.snapToGrid',
     shortcuts: ['Shift+S'],
-    palette: true,
     intent: { type: 'toggle-snap-to-grid' },
     stateKey: 'snapToGridEnabled',
   },
@@ -431,17 +417,17 @@ export function isCanvasCommandDisabled(
 ): boolean {
   switch (intent.type) {
     case 'select-tool':
-      return !state.toolSelectionAvailable
-        || (!state.spatialEditingAvailable && !isNavigationTool(intent.tool))
+      // Choosing a tool before the canvas mounts primes the tool it starts with.
+      return !state.spatialEditingAvailable && !isNavigationTool(intent.tool)
     case 'undo':
       return !state.canUndo
     case 'redo':
       return !state.canRedo
     case 'toggle-grid':
     case 'toggle-snap-to-grid':
-      return !state.settingsAvailable
-    case 'view':
       return !state.canvasAvailable
+    case 'view':
+      return !state.canvasAvailable || (intent.action === 'zoom-to-selection' && !state.hasSelection)
     case 'edit': {
       if (!state.canvasAvailable) return true
       if (MUTATING_EDITS.has(intent.action) && !state.spatialEditingAvailable) return true
@@ -457,44 +443,9 @@ function isNavigationTool(toolId: CanvasToolId): boolean {
   return toolId === 'select' || toolId === 'hand'
 }
 
-/** Runs one intent; `from` reaches arming for a tool and is unused by the rest. */
-export function dispatchCanvasCommandIntent(
-  intent: CanvasCommandIntent,
-  adapter: CanvasCommandIntentAdapter,
-  from: CanvasCommandFrom,
-): void {
-  if (intent.type === 'select-tool') adapter.selectTool(intent.tool, from)
-  else dispatchCanvasActionIntent(intent, adapter)
-}
-
-function dispatchCanvasActionIntent(
-  intent: Exclude<CanvasCommandIntent, { readonly type: 'select-tool' }>,
-  adapter: CanvasCommandIntentAdapter,
-): void {
-  switch (intent.type) {
-    case 'undo':
-      adapter.undo()
-      return
-    case 'redo':
-      adapter.redo()
-      return
-    case 'toggle-grid':
-      adapter.toggleGrid()
-      return
-    case 'toggle-snap-to-grid':
-      adapter.toggleSnapToGrid()
-      return
-    case 'edit':
-      adapter.edit(intent.action)
-      return
-    case 'view':
-      adapter.view(intent.action)
-  }
-}
-
 interface CreateCanvasCommandProjectionOptions {
   readonly state: CanvasCommandProjectionState
-  readonly intents: CanvasCommandIntentAdapter
+  readonly run: CanvasIntentRunner
   readonly translate: (key: string) => string
   /** Settings › Keyboard; false hides character-key shortcuts from every surface. */
   readonly characterKeys: boolean
@@ -502,7 +453,7 @@ interface CreateCanvasCommandProjectionOptions {
 
 export function createCanvasCommandProjection({
   state,
-  intents,
+  run,
   translate,
   characterKeys,
 }: CreateCanvasCommandProjectionOptions): CanvasCommandProjection {
@@ -517,8 +468,7 @@ export function createCanvasCommandProjection({
       ariaShortcut: canvasCommandAriaKeys(definition, characterKeys),
       disabled,
       action: (from) => {
-        if (disabled) return
-        dispatchCanvasCommandIntent(intent, intents, from)
+        if (!disabled) run(intent, from)
       },
     }
   }
@@ -529,13 +479,10 @@ export function createCanvasCommandProjection({
       | CanvasViewCommandDefinition,
   ): CanvasToolbarActionCommand => {
     const command = project(definition)
-    const { intent } = definition
     return {
       ...command,
-      action: () => {
-        if (command.disabled || intent.type === 'select-tool') return
-        dispatchCanvasActionIntent(intent, intents)
-      },
+      // Arms no tool, so its surface does not matter.
+      action: () => command.action('menu'),
       id: definition.id,
       ...(definition.kind === 'settings' ? { pressed: state[definition.stateKey] } : {}),
     }
@@ -543,6 +490,8 @@ export function createCanvasCommandProjection({
   const toolDefinitions = canvasCommandDefinitions.filter(
     (definition): definition is CanvasToolCommandDefinition => definition.kind === 'tool',
   )
+  const panTool = project(toolDefinitions.find((definition) => definition.tool === 'hand')!)
+  const viewPan: CanvasToolbarActionCommand = { ...panTool, id: 'pan', action: () => panTool.action('menu') }
 
   return {
     toolGroups: CANVAS_TOOL_GROUP_ORDER.map((group) => {
@@ -555,7 +504,6 @@ export function createCanvasCommandProjection({
           .map((definition) => ({
             ...project(definition),
             tool: definition.tool,
-            group: definition.group,
             active: state.activeTool === definition.tool,
           })),
       }
@@ -569,8 +517,12 @@ export function createCanvasCommandProjection({
     editActions: canvasCommandDefinitions
       .filter((definition): definition is CanvasEditCommandDefinition => definition.kind === 'edit')
       .map(projectAction),
+    // View › Pan is the Pan tool's own command, after the view turns: Pan is off the main rail, so View and Tools
+    // both list it.
     viewActions: canvasCommandDefinitions
       .filter((definition): definition is CanvasViewCommandDefinition => definition.kind === 'view')
-      .map(projectAction),
+      .flatMap((definition) => definition.id === 'turn-view-right'
+        ? [projectAction(definition), viewPan]
+        : [projectAction(definition)]),
   }
 }

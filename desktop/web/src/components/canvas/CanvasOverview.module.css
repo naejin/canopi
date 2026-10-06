@@ -1,19 +1,15 @@
+/* A chip in CanvasChrome's top-centre slot (SpeciesFocusChip.module.css `.topSlot`), which places it. */
 .notice {
-  position: absolute;
-  top: var(--chrome-rail-top);
-  left: 50%;
-  z-index: 35;
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  max-width: calc(100% - 2 * var(--chrome-rail-width) - 4 * var(--chrome-inset));
+  max-width: 100%;
   min-height: var(--control-size-3xl);
   padding: var(--space-1) var(--space-1) var(--space-1) var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-full);
   background: var(--color-glass);
   box-shadow: var(--shadow-float);
-  transform: translateX(-50%);
   backdrop-filter: blur(16px);
 }
 
@@ -81,11 +77,6 @@
 }
 
 @media (max-width: 760px) {
-  .notice {
-    top: calc(var(--chrome-rail-top) + var(--control-size-3xl) + var(--space-2));
-    max-width: calc(100% - 2 * var(--chrome-inset));
-  }
-
   .noticeText {
     font-size: var(--text-sm);
   }

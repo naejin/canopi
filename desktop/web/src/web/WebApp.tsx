@@ -21,6 +21,7 @@ import { WorkspaceDialogs } from "../components/workspace/WorkspaceComposition";
 import { SaveProblemDialog } from "../components/shared/SaveProblemDialog";
 import { SettingsDialog } from "../components/shared/SettingsDialog";
 import { KeyboardShortcutsDialog } from "../components/shared/KeyboardShortcutsDialog";
+import { detectPlatform } from "../canvas/runtime/input/platform";
 import { AboutCanopiDialog } from "../components/shared/AboutCanopiDialog";
 import { WebWorkspace } from "./WebWorkspace";
 import { createBrowserGeoJsonWorkflow } from "./browser-geojson";
@@ -119,7 +120,14 @@ export function WebApp({
       <WorkspaceDialogs />
       <SaveProblemDialog />
       <SettingsDialog />
-      {keyboardShortcutsDialogOpen.value && <KeyboardShortcutsDialog menus={commandProjection.workspaceMenus} />}
+      {keyboardShortcutsDialogOpen.value && (
+        // Browsers on Linux deliver a trackpad pinch as Ctrl + wheel: no Linux note.
+        <KeyboardShortcutsDialog
+          menus={commandProjection.workspaceMenus}
+          platform={detectPlatform(navigator, window as unknown as { readonly GestureEvent?: unknown })}
+          linuxPinchNote={false}
+        />
+      )}
       <AboutCanopiDialog />
     </div>
   );

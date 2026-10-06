@@ -3,7 +3,6 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
   canvasCommandDefinitions,
   canvasCommandDisplayKey,
-  dispatchCanvasCommandIntent,
   isCanvasCommandDisabled,
   type CanvasCommandDefinition,
   type CanvasCommandFrom,
@@ -42,7 +41,7 @@ import { createWorkspaceShellCapabilities } from '../../app/workspace-commands/c
 import {
   readWorkspaceCanvasProjectionState,
   workspaceCanvasCommandProjection,
-  workspaceCanvasIntentAdapter,
+  runCanvasIntent,
 } from '../../app/workspace-commands/canvas-actions'
 import { t } from '../../i18n'
 
@@ -123,8 +122,9 @@ function canvasAppCommandDefinition(
       const shortcut = canvasCommandDisplayKey(definition, singleKeyShortcuts.value)
       return shortcut ? formatShortcut(shortcut, t) : undefined
     },
-    palette: definition.palette,
-    run: (_state, from) => dispatchCanvasCommandIntent(definition.intent, workspaceCanvasIntentAdapter, from),
+    // Every canvas command is in the palette, Pan included.
+    palette: true,
+    run: (_state, from) => runCanvasIntent(definition.intent, from),
     disabled: () => isCanvasCommandDisabled(definition.intent, readWorkspaceCanvasProjectionState()),
   }
 }

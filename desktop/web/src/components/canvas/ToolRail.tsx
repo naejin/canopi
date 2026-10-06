@@ -5,6 +5,7 @@ import type {
   CanvasToolbarToolCommand,
 } from '../../app/canvas-commands'
 import { phoneLayout } from '../../app/shell/phone-layout'
+import { RAIL_TOOL_IDS } from '../../app/tool-rail/learning'
 import { toolRailRoom, visibleMapFrame } from '../../app/shell/visible-map-area'
 import { t } from '../../i18n'
 import { ActionMenu } from '../shared/ActionMenu'
@@ -22,8 +23,9 @@ interface ToolRailProps {
 }
 
 /**
- * The floating tool rail on the left: Select, Pan · Place plants, Plant a
- * row, Place a stamp · Zones · Text note, Measure · Undo, Redo. The active
+ * The floating tool rail on the left: Select · Place plants, Plant a row,
+ * Place a stamp · Zones · Text note, Measure · Undo, Redo (Pan is in View and
+ * Tools, the palette and H, not on the rail). The active
  * tool is pressed; arrow keys move between buttons (roving tabindex). When a
  * short window leaves too little room above the view chip (`toolRailRoom`),
  * the last tools fold, in order, into a More tools menu just before Undo and
@@ -36,7 +38,9 @@ export function ToolRail({ projection, showNames: namesWanted }: ToolRailProps) 
   useRail(rail, 'tool')
   useFocusRegion(rail, 'tool-rail')
   const phone = phoneLayout.value !== null
-  const tools = projection.toolGroups.flatMap((group) => group.tools)
+  // The phone strip keeps Pan; the main rail has none.
+  const onRail = (command: CanvasToolbarToolCommand) => phone || RAIL_TOOL_IDS.includes(command.tool)
+  const tools = projection.toolGroups.flatMap((group) => group.tools.filter(onRail))
 
   // A name cut off in the fixed-width labelled rail (a long German or Russian
   // label) is no name: the rail keeps to icons with labelled tooltips until
@@ -84,6 +88,7 @@ export function ToolRail({ projection, showNames: namesWanted }: ToolRailProps) 
     ...(folded.length > 0 ? [MORE_ID] : []),
     ...historyActions.map((command) => command.commandId),
   ]
+  // Pan armed from a menu or H is on no rail button: the first one keeps the tab stop.
   const active = tools.find((command) => command.active)
   const focusTarget = active && folded.includes(active) ? MORE_ID : active?.commandId ?? railCommands[0]
 

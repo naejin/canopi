@@ -299,7 +299,6 @@ export function MenuBar({ menus: fullMenus, label, compactLabel, onMenuOpen }: M
 
   function renderEntry(entry: MenuEntry, index: number, checkable: boolean, inlineSubmenus: boolean) {
     if (entry.type === 'separator') return <div key={`sep-${index}`} className={styles.separator} role="separator" />
-    if (entry.type === 'label') return <div key={`label-${index}`} className={styles.heading} role="presentation">{entry.label}</div>
     if (entry.type === 'action') return renderAction(entry, true, checkable)
     const submenuOpen = openSubmenuId.value === entry.id && !entry.disabled
     return (

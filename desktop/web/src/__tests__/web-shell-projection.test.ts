@@ -15,12 +15,13 @@ vi.mock('../app/budget/export', async (importOriginal) => ({
   exportCurrentBudgetCsv: budgetExport.exportCurrentBudgetCsv,
 }))
 
+const runCanvasIntent = vi.fn()
+
 function canvasProjection(): CanvasCommandProjection {
   return createCanvasCommandProjection({
     state: {
       activeTool: 'select',
       canvasAvailable: false,
-      toolSelectionAvailable: false,
       spatialEditingAvailable: true,
       hasSelection: false,
       sameSpeciesSelectionAvailable: false,
@@ -28,14 +29,10 @@ function canvasProjection(): CanvasCommandProjection {
       lockedObjectsPresent: false,
       canUndo: false,
       canRedo: false,
-      settingsAvailable: false,
       gridVisible: false,
       snapToGridEnabled: true,
     },
-    intents: {
-      selectTool: vi.fn(), undo: vi.fn(), redo: vi.fn(), toggleGrid: vi.fn(), toggleSnapToGrid: vi.fn(),
-      edit: vi.fn(), view: vi.fn(),
-    },
+    run: runCanvasIntent,
     translate: (key) => key,
     characterKeys: true,
   })
@@ -100,6 +97,20 @@ describe('Web Edition shell projection', () => {
     expect(projection.panelBar.planning.map((command) => command.id)).toEqual([
       'nav.calendar', 'nav.budget', 'nav.consortium', 'nav.stories',
     ])
+  })
+
+  it('View › Pan arms the Pan tool', () => {
+    runCanvasIntent.mockClear()
+    const view = project(capabilities()).workspaceMenus.find((menu) => menu.id === 'view')!
+    const pan = flattenMenuActions([view]).find((item) => item.id === 'canvas.tool.hand')!
+    expect(pan).toMatchObject({ label: 'canvas.tools.hand', disabled: false })
+    pan.action()
+    expect(runCanvasIntent).toHaveBeenCalledWith({ type: 'select-tool', tool: 'hand' }, 'menu')
+  })
+
+  it('the Tools menu still lists Pan', () => {
+    const tools = project(capabilities()).workspaceMenus.find((menu) => menu.id === 'tools')!
+    expect(flattenMenuActions([tools]).map((item) => item.id).slice(0, 2)).toEqual(['canvas.tool.select', 'canvas.tool.hand'])
   })
 
   it('does not show shortcuts a browser keeps for itself', () => {

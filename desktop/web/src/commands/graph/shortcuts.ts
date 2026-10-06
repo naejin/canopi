@@ -10,7 +10,7 @@ import {
   type KeymapRow,
 } from '../../app/keyboard/keymap'
 import { closeCommandPalette, commandPaletteOpen } from '../../app/shell/dialogs'
-import { getCurrentCanvasCommandSurface } from '../../canvas/session'
+import { dispatchWorkspaceCanvasIntent } from '../../app/workspace-commands/canvas-actions'
 import {
   DESKTOP_SHELL_COMMAND_CATALOG,
   runCatalogCommand,
@@ -29,9 +29,9 @@ const canvasDefinitionById = new Map<CanvasCommandId, CanvasCommandDefinition>(
 
 /**
  * Where a Desktop keymap row runs. A shell shortcut takes its key even when its command is disabled; a canvas command
- * needs a canvas, except a tool key, which before the canvas mounts primes the tool it starts with, and a disabled one
- * (Copy with nothing selected on the map) leaves its key to the page, as the Web sink does. The palette's own
- * key is the one row that runs in a modal: it closes the open palette and opens none over another dialog.
+ * runs through the same dispatch as the Web sink, so a disabled one (Copy with nothing selected, any command but a tool
+ * key before the canvas mounts) leaves its key to the page. The palette's own key is the one row that runs in a modal:
+ * it closes the open palette and opens none over another dialog.
  */
 export function createDesktopCommandSink(isModalOpen: () => boolean): CommandSink {
   return {
@@ -44,10 +44,10 @@ export function createDesktopCommandSink(isModalOpen: () => boolean): CommandSin
         if (isModalOpen()) return false
       }
       const canvas = canvasDefinitionById.get(command as CanvasCommandId)
-      if (canvas && canvas.kind !== 'tool' && !getCurrentCanvasCommandSurface()) return false
+      if (canvas) return dispatchWorkspaceCanvasIntent(canvas.intent, 'shortcut')
       // The Desktop keymap names only Desktop commands: its own catalogue's and the canvas rows'.
-      const ran = runCatalogCommand(command as AppCommandId, 'shortcut')
-      return canvas ? ran : true
+      runCatalogCommand(command as AppCommandId, 'shortcut')
+      return true
     },
   }
 }

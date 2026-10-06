@@ -19,6 +19,7 @@ import type { MenuDefinition } from '../app/shell-commands/menus'
 import { SettingsDialog } from '../components/shared/SettingsDialog'
 import { KeyboardShortcutsDialog } from '../components/shared/KeyboardShortcutsDialog'
 import { t } from '../i18n'
+import { setShortcutPlatform } from '../app/shell-commands/shortcut-text'
 
 describe('Settings dialog', () => {
   let container: HTMLDivElement
@@ -80,11 +81,19 @@ describe('Settings dialog', () => {
     opener.remove()
   })
 
-  it('the single-key hint names N and Shift L, says Shift N always resets north and names the mod key', () => {
+  it('the single-key hint names N, Shift L and Shift 2 (no Shift R), says Shift N always resets north and + and − stay on the map, and names the mod key', () => {
     expect(t('settings.singleKeyShortcutsHint', { mod: 'Cmd' })).toBe(
-      'Tool keys such as V, P and Z, N to reset north, brackets and Shift G, S, R, L. Shift N always resets north. '
-      + 'Off keeps Cmd shortcuts, Delete, Esc, arrows and F keys.',
+      'Tool keys such as V, P and Z, N to reset north, brackets and Shift G, S, L, 2. Shift N always resets north. '
+      + 'Off keeps Cmd shortcuts, Delete, Esc, arrows, F keys, and + and − on the map.',
     )
+    // Every language names Shift 2 and the map's + and −, and no longer Shift R.
+    for (const [code, messages] of Object.entries(import.meta.glob<{ settings: { singleKeyShortcutsHint: string } }>('../i18n/*.json', { eager: true }))) {
+      const hint = messages.settings.singleKeyShortcutsHint
+      expect(hint, code).toMatch(/L, 2|L・2|L、2/)
+      expect(hint, code).toContain('+')
+      expect(hint, code).toContain('−')
+      expect(hint, code).not.toMatch(/S, R|S・R|S、R/)
+    }
   })
 
   it('fills the single-key hint with the platform mod key', async () => {
@@ -184,11 +193,12 @@ describe('Keyboard shortcuts dialog', () => {
     expect(sections.map((section) => section.querySelector('h3')?.textContent)).toEqual([
       'Tools (anywhere except text fields)',
       'File',
+      'Mouse, trackpad and pen',
       'Map and workspace',
     ])
     expect(sections[1]!.textContent).toBe('FileNew DesignCtrl N')
     // Keys that are not menu commands: regions, nudges, map pans and turning a stamp.
-    expect([...sections[2]!.querySelectorAll('dt')].map((row) => row.textContent)).toEqual([
+    expect([...sections[3]!.querySelectorAll('dt')].map((row) => row.textContent)).toEqual([
       'Next area: title bar, tools, map, panel',
       'Previous area',
       'Nudge the selection 10 cm in the arrow\'s direction on screen',
@@ -197,7 +207,7 @@ describe('Keyboard shortcuts dialog', () => {
       'Pan the map farther when nothing is selected',
       'Turn the stamp you are placing by 15°',
     ])
-    expect([...sections[2]!.querySelectorAll('dd')].map((row) => row.textContent)).toEqual([
+    expect([...sections[3]!.querySelectorAll('dd')].map((row) => row.textContent)).toEqual([
       'F6', 'Shift F6', 'Arrow keys', 'Ctrl Arrow keys', 'Arrow keys', 'Ctrl Arrow keys', '[ ]',
     ])
     expect(container.textContent).toContain('Esc does one thing at a time')
@@ -207,7 +217,23 @@ describe('Keyboard shortcuts dialog', () => {
     expect(keyboardShortcutsDialogOpen.value).toBe(false)
   })
 
-  it('shows static rotation rows in View instead of the menu\'s, and that Shift N always resets north', async () => {
+  it('lists Pan once, under Tools, though View lists it too', async () => {
+    const pan = { type: 'action' as const, id: 'canvas.tool.hand', label: 'Pan', shortcut: 'H', disabled: false, action: vi.fn() }
+    const withPan: MenuDefinition[] = [
+      { ...viewMenu, items: [...viewMenu.items, pan] },
+      { id: 'tools', label: 'Tools', items: [...menus[0]!.items, pan] },
+    ]
+    await act(async () => { render(<KeyboardShortcutsDialog menus={withPan} />, container) })
+    await act(async () => { openKeyboardShortcutsDialog() })
+    const rows = [...container.querySelectorAll('section section')].map((section) => [
+      section.querySelector('h3')!.textContent,
+      [...section.querySelectorAll('dt')].map((row) => row.textContent),
+    ])
+    expect(rows.filter(([, labels]) => (labels as string[]).includes('Pan')).map(([heading]) => heading))
+      .toEqual(['Tools (anywhere except text fields)'])
+  })
+
+  it('shows static rotation, zoom-step and fit rows in View instead of the menu\'s, and that Shift N always resets north', async () => {
     await act(async () => { render(<KeyboardShortcutsDialog menus={[...menus, viewMenu]} />, container) })
     await act(async () => { openKeyboardShortcutsDialog() })
     const viewRows = () => {
@@ -216,7 +242,8 @@ describe('Keyboard shortcuts dialog', () => {
     }
 
     expect(viewRows()).toEqual([
-      ['Fit to Design', 'Shift F'],
+      ['Zoom in or out one step', '+ · −'],
+      ['Fit the Design', 'Home · Shift F · Ctrl 0'],
       ['Turn the view 15°', 'Shift ← · Shift →'],
       ['Reset north', 'N · Shift N · Shift ↑'],
       ['Grid', 'Shift G'],
@@ -227,10 +254,53 @@ describe('Keyboard shortcuts dialog', () => {
     await act(async () => { singleKeyShortcuts.value = false })
     try {
       expect(viewRows()).toContainEqual(['Reset north', 'Shift N · Shift ↑'])
+      expect(viewRows()).toContainEqual(['Fit the Design', 'Home · Ctrl 0'])
       expect(footnote()).toContain('Shift N works even when single-key shortcuts are off.')
     } finally {
       singleKeyShortcuts.value = true
     }
+  })
+
+  const gestureRows = () => {
+    const section = [...container.querySelectorAll('section section')].find((candidate) => candidate.querySelector('h3')?.textContent === 'Mouse, trackpad and pen')!
+    return [...section.querySelectorAll('dl > div')].map((row) => [row.querySelector('dt')!.textContent, row.querySelector('dd')!.textContent])
+  }
+
+  it('the gesture rows match the static list, with each platform\'s note', async () => {
+    await act(async () => { render(<KeyboardShortcutsDialog menus={menus} platform={{ os: 'windows', gestureEvents: false }} />, container) })
+    await act(async () => { openKeyboardShortcutsDialog() })
+    expect(gestureRows()).toEqual([
+      ['Pan the map', 'Right-drag, middle-drag or Space + drag'],
+      ['Turn the view; add Ctrl for 15° steps', 'Shift + right-drag or Shift + middle-drag'],
+      ['Click to reset north, drag to turn the view', 'Compass'],
+      ['Open the menu', 'Right-click'],
+      ['Zoom', 'Scroll wheel · Pinch or Ctrl + wheel'],
+      ['Remove from the selection', 'Alt + click'],
+      // The pen note: its side button drags to pan and taps for the menu.
+      ['Pan the map · Open the menu', 'Pen side button: drag or tap'],
+    ])
+    await act(async () => { closeKeyboardShortcutsDialog() })
+    render(null, container)
+
+    // A Mac adds Control-click and, where WebKit delivers it, the trackpad twist; mod reads Cmd.
+    setShortcutPlatform({ os: 'mac' })
+    try {
+      await act(async () => { render(<KeyboardShortcutsDialog menus={menus} platform={{ os: 'mac', gestureEvents: true }} />, container) })
+      await act(async () => { openKeyboardShortcutsDialog() })
+      expect(gestureRows()).toContainEqual(['Turn the view; add Cmd for 15° steps', 'Shift + right-drag or Shift + middle-drag · Twist two fingers on the trackpad'])
+      expect(gestureRows()).toContainEqual(['Open the menu', 'Right-click · Control-click'])
+    } finally {
+      setShortcutPlatform({ os: 'linux' })
+    }
+  })
+
+  it('the Linux pinch note shows on Linux', async () => {
+    const note = 'On Linux, trackpad pinch is not supported yet. Use Ctrl + scroll to zoom.'
+    await act(async () => { render(<KeyboardShortcutsDialog menus={menus} platform={{ os: 'linux', gestureEvents: false }} linuxPinchNote />, container) })
+    await act(async () => { openKeyboardShortcutsDialog() })
+    expect(container.textContent).toContain(note)
+    await act(async () => { render(<KeyboardShortcutsDialog menus={menus} platform={{ os: 'linux', gestureEvents: false }} linuxPinchNote={false} />, container) })
+    expect(container.textContent).not.toContain(note)
   })
 
   it('says where single-key shortcuts are turned off, and that they are off', async () => {

@@ -63,12 +63,13 @@
   background: var(--color-control-hover);
 }
 
-/* The Start card sits in the tool card slot; the found-place chip follows it. */
+/* The Start card sits in the tool card slot; the found-place chip and the top chips follow it, wrapping below it on a
+   narrow map. The row ends at the panel rail or the open dock (`--map-inset-right`, app/shell/visible-map-area.ts). */
 .startRow {
   position: absolute;
   top: var(--chrome-rail-top);
   left: var(--canvas-tool-card-left);
-  right: calc(2 * var(--chrome-inset) + var(--chrome-rail-width));
+  right: max(calc(2 * var(--chrome-inset) + var(--chrome-rail-width)), calc(var(--map-inset-right, 0px) + var(--space-4)));
   z-index: 35;
   display: flex;
   flex-wrap: wrap;

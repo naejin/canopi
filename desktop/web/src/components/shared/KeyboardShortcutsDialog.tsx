@@ -4,11 +4,23 @@ import { closeKeyboardShortcutsDialog, keyboardShortcutsDialogOpen } from '../..
 import { singleKeyShortcuts } from '../../app/settings/state'
 import { t } from '../../i18n'
 import { formatShortcut, modKeyName } from '../../app/shell-commands/shortcut-text'
+import type { InputPlatform } from '../../canvas/runtime/input/platform'
 import { WorkspaceDialog } from './WorkspaceDialog'
 import styles from './KeyboardShortcutsDialog.module.css'
 
-/** The View menu's rotation rows, which F1 shows as its two static rows instead (spec §9.1). */
+/** The View menu's rotation rows (app/canvas-commands/index.ts), which F1 shows as its two static rows instead. */
 const MENU_ROTATION_ROWS: ReadonlySet<string> = new Set(['view.resetNorth', 'view.turnViewLeft', 'view.turnViewRight'])
+
+/** View › Fit to Design, which F1 shows with every fit key (Home too) after a row for the map's + and −. */
+const MENU_FIT_ROW = 'view.fitToDesign'
+
+interface KeyboardShortcutsDialogProps {
+  readonly menus: readonly MenuDefinition[]
+  /** The platform the gesture rows describe: Control-click on a Mac, the trackpad twist where WebKit delivers it. */
+  readonly platform?: Pick<InputPlatform, 'os' | 'gestureEvents'>
+  /** Desktop on Linux: WebKitGTK delivers no trackpad pinch. */
+  readonly linuxPinchNote?: boolean
+}
 
 interface ShortcutRow {
   readonly id: string
@@ -19,31 +31,44 @@ interface ShortcutRow {
 /**
  * Help › Keyboard shortcuts (F1): every menu command that has a shortcut,
  * grouped by menu, generated from the same menus so it cannot drift, then the
- * keys that are not commands (F6 between areas, arrow-key nudges, turning a
- * stamp). View shows turning the view and Reset north as two static rows with
- * every chord, in place of the menu's three rotation rows. With
+ * mouse, trackpad and pen gestures as a static list (not generated from the
+ * input bindings), then the keys that are not commands (F6 between areas,
+ * arrow-key nudges, turning a stamp). View shows turning the view and Reset
+ * north as two static rows with every chord, in place of the menu's three
+ * rotation rows, and Fit the Design with Home after the map's + and −. With
  * Settings › Keyboard › Single-key shortcuts off, the menus drop those keys,
  * so the list does too (N leaves Reset north), and the footnote says how to
  * turn them back on and that Shift N still resets north.
  */
-export function KeyboardShortcutsDialog({ menus }: { readonly menus: readonly MenuDefinition[] }) {
+export function KeyboardShortcutsDialog({ menus, platform, linuxPinchNote = false }: KeyboardShortcutsDialogProps) {
   if (!keyboardShortcutsDialogOpen.value) return null
   const key = (shortcut: string) => formatShortcut(shortcut, t)
+  const single = singleKeyShortcuts.value
   const rotationRows: ShortcutRow[] = [
     { id: 'turn-view', label: t('shortcuts.turnView'), shortcut: [key('Shift+ArrowLeft'), key('Shift+ArrowRight')].join(' · ') },
     {
       id: 'reset-north',
       label: t('shortcuts.resetNorth'),
-      shortcut: [...singleKeyShortcuts.value ? [key('N')] : [], key('Shift+N'), key('Shift+ArrowUp')].join(' · '),
+      shortcut: [...single ? [key('N')] : [], key('Shift+N'), key('Shift+ArrowUp')].join(' · '),
     },
   ]
+  // + and − and Home act only with the map focused, so they stay with the switch off; Shift F follows it.
+  const fitRows: ShortcutRow[] = [
+    { id: 'zoom-step', label: t('shortcuts.zoomStep'), shortcut: [key('Plus'), key('Minus')].join(' · ') },
+    { id: 'fit-home', label: t('shortcuts.fitHome'), shortcut: [key('Home'), ...single ? [key('Shift+F')] : [], key('Ctrl+0')].join(' · ') },
+  ]
+  // A tool command View lists too (Pan) shows once, under Tools.
+  const toolIds = new Set(menus.filter((menu) => menu.id === 'tools').flatMap((menu) => menuRows(menu).map((row) => row.id)))
   const sections = menus
     .map((menu) => ({
       id: menu.id,
       label: menu.id === 'tools' ? t('shortcuts.toolsHeading', { menu: menu.label }) : menu.label,
-      rows: menu.id === 'view' ? withRotationRows(menuRows(menu), rotationRows) : menuRows(menu),
+      rows: menu.id === 'tools' ? menuRows(menu)
+        : menu.id === 'view' ? viewRows(menuRows(menu), rotationRows, fitRows).filter((row) => !toolIds.has(row.id))
+          : menuRows(menu),
     }))
     .filter((section) => section.rows.length > 0)
+  const gestures = { id: 'gestures', label: t('shortcuts.gestures.heading'), rows: gestureRows(platform) }
   // Keys that are not menu commands: moving between areas (F6), nudging or panning on the map and turning a stamp.
   const arrows = t('shortcuts.arrowKeys')
   // The large step is mod: Ctrl, or Cmd on macOS.
@@ -58,7 +83,7 @@ export function KeyboardShortcutsDialog({ menus }: { readonly menus: readonly Me
     // Place a stamp's [ and ]: while the map has focus even with single-key shortcuts off, like the arrows.
     { id: 'rotate-stamp', label: t('shortcuts.rotateStamp'), shortcut: '[ ]' },
   ]
-  const allSections = [...sections, { id: 'workspace', label: t('shortcuts.workspaceHeading'), rows: workspaceRows }]
+  const allSections = [...sections, gestures, { id: 'workspace', label: t('shortcuts.workspaceHeading'), rows: workspaceRows }]
 
   return (
     <WorkspaceDialog
@@ -91,6 +116,7 @@ export function KeyboardShortcutsDialog({ menus }: { readonly menus: readonly Me
                 </div>
               ))}
             </dl>
+            {section.id === 'gestures' && linuxPinchNote && <p className={styles.footnote}>{t('shortcuts.gestures.linuxPinch')}</p>}
           </section>
         ))}
       </div>
@@ -111,10 +137,36 @@ function menuRows(menu: MenuDefinition): ShortcutRow[] {
   ]
 }
 
-/** View's rows with the static rotation rows where the menu's first rotation row was, or last. */
-function withRotationRows(rows: readonly ShortcutRow[], rotation: readonly ShortcutRow[]): ShortcutRow[] {
+/**
+ * View's rows with the static rotation rows where the menu's first rotation row was (Reset north always shows a key),
+ * and the zoom-step and fit rows in place of Fit to Design.
+ */
+function viewRows(rows: readonly ShortcutRow[], rotation: readonly ShortcutRow[], fit: readonly ShortcutRow[]): ShortcutRow[] {
   const at = rows.findIndex((row) => MENU_ROTATION_ROWS.has(row.id))
   const kept = rows.filter((row) => !MENU_ROTATION_ROWS.has(row.id))
-  const index = at < 0 ? kept.length : at
-  return [...kept.slice(0, index), ...rotation, ...kept.slice(index)]
+  return [...kept.slice(0, at), ...rotation, ...kept.slice(at)]
+    .flatMap((row) => row.id === MENU_FIT_ROW ? fit : [row])
+}
+
+/**
+ * The mouse, trackpad and pen gestures: a static list, so it names only what the input pipeline does on every
+ * platform, plus a Mac's Control-click and, where WebKit delivers it, the trackpad twist. The pen row is a note: its
+ * side button drags to pan and taps for the menu.
+ */
+function gestureRows(platform: Pick<InputPlatform, 'os' | 'gestureEvents'> | undefined): ShortcutRow[] {
+  const g = (name: string) => t(`shortcuts.gestures.${name}`)
+  const mac = platform?.os === 'mac'
+  return [
+    { id: 'pan', label: g('pan'), shortcut: g('rightDrag') },
+    {
+      id: 'turn-view',
+      label: t('shortcuts.gestures.turnView', { mod: modKeyName(t) }),
+      shortcut: [g('shiftDrag'), ...platform?.gestureEvents && mac ? [g('trackpadTwist')] : []].join(' · '),
+    },
+    { id: 'compass', label: g('compassAction'), shortcut: g('compass') },
+    { id: 'menu', label: g('menu'), shortcut: [g('rightClick'), ...mac ? [g('macCtrlClick')] : []].join(' · ') },
+    { id: 'zoom', label: g('zoom'), shortcut: [g('wheel'), g('pinch')].join(' · ') },
+    { id: 'remove', label: g('removeFromSelection'), shortcut: g('altClick') },
+    { id: 'pen', label: `${g('pan')} · ${g('menu')}`, shortcut: g('penButton') },
+  ]
 }
