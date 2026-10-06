@@ -108,7 +108,7 @@ export interface SceneInteractionSessionDeps {
   setTool: (id: ToolId) => void
   render: (kind: 'scene' | 'viewport') => void
   readSnapToGridEnabled: () => boolean
-  /** Settings › Canvas › Scroll wheel. Pinch and Ctrl wheel zoom either way. */
+  /** Settings › Canvas › Pointing device (stored scrollWheel: 'zoom' is Mouse, 'pan' is Trackpad). Pinch and Ctrl wheel zoom either way. */
   readScrollWheel: () => CanvasScrollWheelSetting
   readPlantSpacingIntervalMeters: () => number
   commitPlantSpacingIntervalMeters: (meters: number) => void
@@ -693,7 +693,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
   }
 
-  /** Settings › Canvas › Scroll wheel, read before each wheel as today: 'pan' is the trackpad setting. */
+  /** Settings › Canvas › Pointing device, read before each wheel as today: 'pan' is Trackpad. */
   private _syncPointingDevice(): void {
     const next = this._readPointingDevice()
     if (next === this._pointingDevice) return

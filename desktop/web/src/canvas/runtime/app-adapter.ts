@@ -134,14 +134,14 @@ export interface CanvasRuntimeContextMenuAdapter {
   close(request: CanvasContextMenuRequest): void
 }
 
-/** Settings › Canvas › Scroll wheel: a plain wheel zooms or pans the map. */
+/** Settings › Canvas › Pointing device (stored scrollWheel): a plain wheel zooms (Mouse) or pans (Trackpad) the map. */
 export type CanvasScrollWheelSetting = 'zoom' | 'pan'
 
 export interface CanvasRuntimeSettingsAdapter {
   readLocale(): string
   readChromeOverlay(): CanvasRuntimeChromeSettingsSnapshot
   readSnapToGridEnabled(): boolean
-  /** Settings › Canvas › Scroll wheel: what a plain wheel does; pinch and Ctrl wheel always zoom. */
+  /** Settings › Canvas › Pointing device: what a plain wheel does; pinch and Ctrl wheel always zoom. */
   readScrollWheel(): CanvasScrollWheelSetting
   readPlantSpacingIntervalMeters(): number
   /** The app's last view as stored, if any: a new or empty Design opens at its centre, zoomed out (spec §4.15; the clamp
